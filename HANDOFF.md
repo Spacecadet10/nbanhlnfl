@@ -1,6 +1,6 @@
 # Current handoff
 
-Status: Milestone 4 implemented and reviewed; odds snapshots and local launchd automation configured. Courtside frontend redesign complete. No Git repo, no deployment, no purchases.
+Status: Milestone 4 implemented and reviewed; odds snapshots and local launchd automation configured. Courtside frontend redesign complete. Git baseline d96db86. Free sources only (ESPN; no keyed odds API, user decision 2026-09-30). No deployment, no purchases.
 Current owner: User (prospective daily operation). Final test was run once (2026-09-30T14:40:35Z); Elo is the frozen primary model.
 
 ## Established (M1–M3, reviewed)
