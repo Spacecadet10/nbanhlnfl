@@ -1,0 +1,49 @@
+{
+  "primary_model": "elo",
+  "elo_config": {
+    "k": 15,
+    "home_advantage": 50,
+    "carry": 0.75,
+    "mov": true
+  },
+  "selected_on": "validation",
+  "validation_report": "data/reports/validation-2026-09-30T143147Z/report.json",
+  "validation_dataset_version": "08fe2552c1aa4579",
+  "validation_seasons": [
+    2022,
+    2023,
+    2024
+  ],
+  "selection_rule": "replace Elo only if upper 95% bound of (candidate - Elo) Brier < 0; then lowest Brier",
+  "validation_candidate_comparisons": {
+    "elo_platt": {
+      "brier": 0.22087736344591027,
+      "diff_vs_elo": 0.0002015181621395714,
+      "ci95": [
+        -0.0002251218055629898,
+        0.0006576181856798396
+      ],
+      "eligible": false
+    },
+    "logistic": {
+      "brier": 0.22032854499842885,
+      "diff_vs_elo": -0.0003473002853418513,
+      "ci95": [
+        -0.0017121625314768147,
+        0.0010691521306571076
+      ],
+      "eligible": false
+    },
+    "logistic_platt": {
+      "brier": 0.22075961368056324,
+      "diff_vs_elo": 8.376839679253632e-05,
+      "ci95": [
+        -0.0012667739292842287,
+        0.0013627790320261484
+      ],
+      "eligible": false
+    }
+  },
+  "frozen_at": "2026-09-30T14:31:47Z",
+  "sha256": "fc51893b9e27169c4b0b2b7d6f96f52c2149be1b04dec4722b576d3cf92e989e"
+}
