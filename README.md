@@ -95,6 +95,8 @@ Run from `backend/`:
 .venv/bin/python -m app.cli import-team-box --from-season 2020 --to-season 2026 --historical-backfill   # possession inputs, completed seasons
 .venv/bin/python -m app.cli coverage                           # JSON coverage report
 .venv/bin/python -m app.cli backtest --period validation       # baselines + candidates (validation only)
+.venv/bin/python -m app.cli research-gbt                        # research only: tree candidate vs Elo and logistic_v2 (dev extra)
+.venv/bin/python -m app.cli research-stacking                   # research only: learned stackers and accuracy at fixed coverage
 ```
 Evaluation rules: [docs/EVALUATION_PLAN.md](docs/EVALUATION_PLAN.md); results: [docs/BASELINE_REPORT.md](docs/BASELINE_REPORT.md).
 The reserved final test has been run once (2026-09-30), and the primary model is fixed in the sealed

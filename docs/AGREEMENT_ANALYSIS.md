@@ -89,13 +89,55 @@ times (right 92), Elo 109 (53), logistic 70 (31) and logistic_v2 47 (19).
 | Mean of efficiency_margin + logistic_v2 | 64.5% | 0.22014 | 0.63033 | −0.00053 [−0.00153, +0.00048] | +0.00037 [−0.00046, +0.00126] |
 | Mean of logistic + logistic_v2 | 64.5% | 0.21992 | 0.63004 | −0.00076 [−0.00199, +0.00051] | +0.00015 [−0.00020, +0.00051] |
 
+## Paired accuracy on the same games (added 2026-10-01 after Codex review)
+Difference in winner accuracy against a reference model, counting only the games where the two disagree on the pick, with a week-block
+bootstrap interval (seed 20260930, 2,000 resamples). "83 vs 67" means the average alone was right in 83 games and the reference alone in 67.
+
+| Forecast | vs Elo | vs logistic_v2 |
+|---|---|---|
+| Mean of all four | +0.25 pts (103 vs 93) [−0.39, +0.88] | +0.18 pts (74 vs 67) [−0.33, +0.70] |
+| Mean of Elo + efficiency_margin | +0.03 pts (75 vs 74) [−0.56, +0.63] | −0.05 pts (146 vs 148) [−0.92, +0.81] |
+| Mean of Elo + logistic | +0.33 pts (89 vs 76) [−0.30, +0.95] | +0.25 pts (94 vs 84) [−0.27, +0.82] |
+| Mean of Elo + logistic_v2 | +0.48 pts (88 vs 69) [−0.05, +1.01] | +0.40 pts (83 vs 67) [−0.15, +0.99] |
+| Mean of efficiency_margin + logistic | +0.23 pts (133 vs 124) [−0.50, +0.99] | +0.15 pts (84 vs 78) [−0.40, +0.70] |
+| Mean of efficiency_margin + logistic_v2 | +0.20 pts (139 vs 131) [−0.58, +0.97] | +0.13 pts (79 vs 74) [−0.47, +0.73] |
+| Mean of logistic + logistic_v2 | +0.20 pts (157 vs 149) [−0.57, +0.97] | +0.13 pts (43 vs 38) [−0.36, +0.60] |
+| logistic_v2 alone | +0.08 pts (155 vs 152) [−0.67, +0.83] | – |
+
+Every paired accuracy interval includes 0. The largest observed difference is Elo + logistic_v2: 16 more correct picks than logistic_v2
+alone out of 3,962 games.
+
 ## Reading it
-- **No combination beats the sealed challenger.** Every average has a Brier score equal to or slightly worse than logistic_v2 alone, and
-  every interval against it includes 0. The best average (Elo + logistic_v2, 0.21980) is level with logistic_v2 (0.21977).
+- **By Brier score, no average beats the sealed challenger:** each is equal to or slightly worse than logistic_v2 alone, and every interval
+  against it includes 0. The best average (Elo + logistic_v2, 0.21980) is level with logistic_v2 (0.21977).
+- **By accuracy, Elo + logistic_v2 had the highest observed hit rate (64.8% against 64.4%), but that is not an established improvement:**
+  the paired difference is +0.40 points with an interval of −0.15 to +0.99.
 - Two averages have intervals against Elo that exclude 0 (all four; Elo + logistic_v2), by under 0.001 Brier. That is the same small
   edge logistic_v2 already showed, on the seasons used to tune and screen, and without adjustment for 14 comparisons.
-- Accuracy moves between 64.3% and 64.8%, which is within noise for 3,962 games (about ±1.5 points).
 - Voting adds nothing over the probabilities: agreement mostly marks the games that were already clear, and 3-1 or 2-2 games are close
   to coin flips whichever side is taken.
-- Consistent with the earlier ensemble decision: the models' errors are too similar for a blend to help. A model that uses
-  different information (for example player availability) is more likely to add something than another combination of these four.
+- The models' errors are highly correlated, which makes further averaging of these four less promising. It does not test whether a
+  different model class (for example a tree model with interactions) or new information (for example player availability) would help;
+  both remain open hypotheses.
+
+# Five-model agreement (descriptive, 2026-10-01)
+
+Command: `python3 scripts/agreement_analysis.py data/reports/research-stacking-2026-10-01T012557Z/predictions.csv --five`
+(output copied to `docs/evidence/research-stacking-2026-10-01/five_model_votes.json`). Voting models: Elo, efficiency_margin, logistic,
+logistic_v2, gbt_v1. Same 3,962 development games and the same limits as above: it describes the past on the seasons used for
+tuning, changes no model and is not part of promotion. The cuts were fixed in the script before computing.
+
+| Vote | Games | Share | Majority pick correct | 95% (Wilson) |
+|---|---|---|---|---|
+| 5-0 | 3,177 | 80.2% | 67.5% (2,145) | 65.9–69.1% |
+| 4-1 | 496 | 12.5% | 52.8% (262) | 48.4–57.2% |
+| 3-2 | 289 | 7.3% | 52.9% (153) | 47.2–58.6% |
+
+- By season, 5-0 games: 2021-22 67.7% (1,034), 2022-23 65.9% (1,040), 2023-24 68.9% (1,103). Week-block interval for all 5-0 games: 65.7–69.3%.
+- On the 785 games without full agreement, each model alone is right 49.0% to 52.5% of the time.
+- **Agreement combined with confidence, at 50% coverage (1,981 games):** logistic_v2's most confident half is right 72.8% (1,442);
+  taking only unanimous games and then logistic_v2's most confident gives 72.7% (1,441). The two selections share 1,956 of 1,981 games.
+
+Reading: with five models, full agreement covers 80% of games at 67.5%. When even one model dissents, the majority is right about 53% of
+the time, and the interval includes 50%. Requiring agreement on top of confidence selects almost the same games as confidence alone and
+gives the same accuracy.

@@ -59,6 +59,10 @@ def main(argv=None) -> int:
     sr = sub.add_parser("shadow-report", help="Shadow season report: coverage, job health and descriptive scores. "
                                               "--final applies the sealed promotion rule once, after the last play-in game")
     sr.add_argument("--final", action="store_true")
+    sub.add_parser("research-gbt", help="Research round 2: one gradient-boosted tree candidate vs Elo and logistic_v2 on "
+                                        "validation seasons (needs the dev extra; no ledger rows, no test access)")
+    sub.add_parser("research-stacking", help="Research round 3: two learned stackers vs Elo, logistic_v2 and the equal "
+                                             "average on validation seasons (needs the dev extra; no ledger rows)")
     bt = sub.add_parser("backtest", help="Walk-forward evaluation (docs/EVALUATION_PLAN.md)")
     bt.add_argument("--period", choices=("validation", "test"), required=True)
     bt.add_argument("--elo-config", help='Validation only: evaluate a fixed Elo JSON instead of running the grid.')
@@ -138,6 +142,21 @@ def main(argv=None) -> int:
         except shadow_report.ShadowReportError as exc:
             print(json.dumps({"error": str(exc)}))
             return 1
+    elif args.cmd == "research-gbt":
+        report = backtest.evaluate_research_gbt(conn)
+        keys = ("dataset_version", "box_version", "sklearn_version", "candidate_config", "fits", "comparisons",
+                "step4_screen_against_elo", "output_dir")
+        brief = {k: report[k] for k in keys}
+        brief["models"] = {n: {k: m[k] for k in ("n", "accuracy", "brier", "log_loss")}
+                           for n, m in report["models"].items()}
+        print(json.dumps(brief, indent=2))
+    elif args.cmd == "research-stacking":
+        report = backtest.evaluate_research_stacking(conn)
+        print(json.dumps({k: report[k] for k in ("dataset_version", "box_version", "definition", "fits", "comparisons",
+                                                 "step4_screen_against_elo", "selective_prediction", "agreement_filter",
+                                                 "output_dir")}
+                         | {"models": {n: {k: m[k] for k in ("n", "accuracy", "brier", "log_loss")}
+                                       for n, m in report["models"].items()}}, indent=2))
     elif args.cmd == "freeze-decision":
         from pathlib import Path
         report_path = Path(args.report).resolve()

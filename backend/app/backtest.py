@@ -228,6 +228,30 @@ def paired_bootstrap(a: list[dict], b: list[dict], seed: int = BOOTSTRAP_SEED, s
             "weeks": len(weeks), "games": len(all_d), "seed": seed, "samples": samples}
 
 
+def paired_accuracy_bootstrap(a: list[dict], b: list[dict], seed: int = BOOTSTRAP_SEED,
+                              samples: int = BOOTSTRAP_SAMPLES) -> dict:
+    """Winner-accuracy difference (a - b) on the same games, with the counts of games only one model got right and a
+    week-block bootstrap interval. Picks follow metrics.accuracy (home when p >= 0.5). Positive favours a."""
+    pb = {p["game_id"]: p for p in b}
+    blocks: dict[tuple, list[int]] = {}
+    only_a = only_b = 0
+    for p in a:
+        q = pb[p["game_id"]]
+        ra, rb = (p["p_home"] >= 0.5) == p["home_won"], (q["p_home"] >= 0.5) == q["home_won"]
+        only_a, only_b = only_a + (ra and not rb), only_b + (rb and not ra)
+        iso = datetime.strptime(p["cutoff_at"], "%Y-%m-%dT%H:%M:%SZ").isocalendar()
+        blocks.setdefault((iso[0], iso[1]), []).append(int(ra) - int(rb))
+    weeks = list(blocks.values())
+    rng, stats = random.Random(seed), []
+    for _ in range(samples):
+        pick = [weeks[rng.randrange(len(weeks))] for _ in weeks]
+        stats.append(sum(sum(w) for w in pick) / sum(len(w) for w in pick))
+    stats.sort()
+    return {"diff": (only_a - only_b) / len(a), "only_first_right": only_a, "only_second_right": only_b,
+            "ci95": [stats[int(0.025 * samples)], stats[int(0.975 * samples) - 1]], "games": len(a),
+            "weeks": len(weeks), "seed": seed, "samples": samples}
+
+
 def elo_grid() -> list[EloConfig]:
     keys = list(ELO_GRID)
     return [EloConfig(**dict(zip(keys, values))) for values in itertools.product(*ELO_GRID.values())]
@@ -342,6 +366,136 @@ def evaluate_screening(conn: sqlite3.Connection, *, decision_path: Optional[Path
                               for m in models if isinstance(m, EfficiencyMargin)}})
     out_dir = out_dir or config.data_dir() / "reports" / f"screening-{started.replace(':', '')}"
     return _finish(conn, report, models, preds, version, started, False, out_dir, log)
+
+
+def evaluate_research_gbt(conn: sqlite3.Connection, *, decision_path: Optional[Path] = None,
+                          out_dir: Optional[Path] = None, log: Callable[[str], None] = print) -> dict:
+    """Research round 2 (docs/EVALUATION_PLAN.md): one gradient-boosted tree candidate against Elo and logistic_v2
+    on identical validation games. Warm-up + validation seasons only, frozen Elo configuration, no tuning, no ledger
+    rows, no test access. Descriptive: nothing is selected, sealed or promoted here."""
+    import sklearn
+    from .models.gbt import GradientBoostedTrees   # research-only dependency, imported here and nowhere else
+    _, elo_cfg = load_frozen_decision(conn, decision_path)   # reads validation-loadable rows only
+    rows, events = load_rows(conn, "validation"), load_box_events(conn, "validation")
+    outside = ({r.game.season for r in rows} | {e.game.season for e in events}) - set(LOADABLE["validation"])
+    if outside:
+        raise ValueError(f"research evaluation received non-validation seasons {sorted(outside)}")
+    version, started = dataset_version(rows), utc_now()
+    models = [Constant(), HomeRate(), Elo(elo_cfg), LogisticV2(elo_cfg), GradientBoostedTrees(elo_cfg)]
+    preds = {m.name: in_period(run(m, rows, events), "validation") for m in models}
+    gbt = models[-1]
+    comparisons = {}
+    for ref in ("elo", "logistic_v2"):
+        brier = paired_bootstrap(preds[gbt.name], preds[ref])
+        comparisons[ref] = {"brier_diff": {k: brier[k] for k in ("mean_diff", "ci95", "weeks", "games")},
+                            "accuracy_diff": paired_accuracy_bootstrap(preds[gbt.name], preds[ref])}
+    s, e = summarize(preds[gbt.name]), summarize(preds["elo"])
+    report = _base_report("validation", started, version, models, preds)
+    report.update({
+        "kind": "research", "candidate": gbt.name, "feature_version": SCREEN_FEATURE_VERSION,
+        "box_version": box_version(events), "box_events": len(events), "elo_config": Elo(elo_cfg).config(),
+        "sklearn_version": sklearn.__version__, "candidate_config": gbt.config(), "fits": gbt.fits,
+        "comparisons": comparisons,
+        "step4_screen_against_elo": {
+            "rule": f"Brier below Elo's and paired 95% upper bound of (candidate - Elo) Brier < {SCREEN_UPPER_BOUND}",
+            "would_pass": s["brier"] < e["brier"] and comparisons["elo"]["brier_diff"]["ci95"][1] < SCREEN_UPPER_BOUND},
+        "note": "Development research only. Validation seasons were already used to tune Elo and screen three "
+                "candidates; this result cannot enter the sealed 2026-27 shadow experiment."})
+    out_dir = out_dir or config.data_dir() / "reports" / f"research-{gbt.name}-{started.replace(':', '')}"
+    return _finish(conn, report, models, preds, version, started, False, out_dir, log)
+
+
+def evaluate_research_stacking(conn: sqlite3.Connection, *, decision_path: Optional[Path] = None,
+                               out_dir: Optional[Path] = None, log: Callable[[str], None] = print) -> dict:
+    """Research round 3 (docs/EVALUATION_PLAN.md): two learned stackers over the five walk-forward base models,
+    against Elo, logistic_v2 and the equal average on identical validation games, plus accuracy at fixed coverage.
+    Warm-up + validation seasons only, frozen Elo configuration, no ledger rows, no test access. Descriptive."""
+    import sklearn
+    from .models import stacking
+    from .models.gbt import GradientBoostedTrees   # research-only dependency
+    _, elo_cfg = load_frozen_decision(conn, decision_path)   # reads validation-loadable rows only
+    rows, events = load_rows(conn, "validation"), load_box_events(conn, "validation")
+    outside = ({r.game.season for r in rows} | {e.game.season for e in events}) - set(LOADABLE["validation"])
+    if outside:
+        raise ValueError(f"research evaluation received non-validation seasons {sorted(outside)}")
+    version, started = dataset_version(rows), utc_now()
+    bases = [Elo(elo_cfg), EfficiencyMargin(), LogisticElo(elo_cfg), LogisticV2(elo_cfg), GradientBoostedTrees(elo_cfg)]
+    if tuple(m.name for m in bases) != stacking.BASE_MODELS:
+        raise ValueError("base models do not match the registered list")
+    base = {m.name: {p["game_id"]: p for p in run(m, rows, events)} for m in bases}
+    first_oos = PERIODS["warmup"][1]
+    not_ready = {m.name: m.first_fit_season for m in bases[1:] if m.first_fit_season != first_oos}
+    if not_ready:
+        raise ValueError(f"base models were not first fitted in season {first_oos}: {not_ready}")
+    v2 = bases[3]
+    context = {gid: f for _, f, _, gid in v2.examples}
+    context.update({gid: f for gid, (_, f) in v2.pending.items()})
+    available = {r.game.game_id: r.result_available_at for r in rows}
+    table = []
+    for gid, p in base["elo"].items():
+        table.append({**{k: p[k] for k in p if k != "p_home"}, **{name: base[name][gid]["p_home"] for name in base},
+                      "rest_diff": context[gid]["rest_diff"], "net_diff": context[gid]["net_diff"],
+                      "result_available_at": available[gid]})
+    seasons = PERIODS["validation"]
+    stack_a, fits_a = stacking.walk_forward(table, stacking.features_logit, seasons, first_oos)
+    stack_b, fits_b = stacking.walk_forward(table, stacking.features_conditional, seasons, first_oos)
+    keep = ("game_id", "season", "season_type", "tipoff_at", "cutoff_at", "home_team_id", "away_team_id", "neutral_site",
+            "home_won")
+    average = [{**{k: r[k] for k in keep}, "p_home": sum(r[m] for m in stacking.BASE_MODELS) / len(stacking.BASE_MODELS)}
+               for r in table if r["season"] in seasons]
+    order = {r["game_id"]: i for i, r in enumerate(average)}
+    preds = {name: in_period(list(base[name].values()), "validation") for name in stacking.BASE_MODELS}
+    preds.update({"equal_average": average, "stack_logit": stack_a, "stack_conditional": stack_b})
+    for name in preds:
+        preds[name] = sorted(preds[name], key=lambda p: order[p["game_id"]])
+        if len(preds[name]) != len(average):
+            raise ValueError(f"{name} does not cover the same games")
+    stackers, references = ("stack_logit", "stack_conditional"), ("logistic_v2", "elo", "equal_average")
+    comparisons = {s: {ref: {"brier_diff": {k: v for k, v in paired_bootstrap(preds[s], preds[ref]).items()
+                                            if k in ("mean_diff", "ci95", "weeks", "games")},
+                             "accuracy_diff": paired_accuracy_bootstrap(preds[s], preds[ref])}
+                       for ref in references} for s in stackers}
+    elo_brier = summarize(preds["elo"])["brier"]
+    methods = ("elo", "logistic_v2", "equal_average", *stackers)
+    by_id = {name: {p["game_id"]: p for p in preds[name]} for name in preds}
+    selective = {}
+    for coverage in (0.5, 0.7, 0.85, 1.0):
+        level = {m: stacking.accuracy_on(stacking.most_confident(preds[m], coverage)) for m in methods}
+        chosen = [p["game_id"] for p in stacking.most_confident(preds["stack_conditional"], coverage)]
+        level["base_models_on_stack_conditional_games"] = {
+            b: stacking.accuracy_on([by_id[b][g] for g in chosen]) for b in stacking.BASE_MODELS}
+        selective[str(coverage)] = level
+    agree = [g for g in order if len({by_id[b][g]["p_home"] >= 0.5 for b in stacking.BASE_MODELS}) == 1]
+    share = len(agree) / len(order)
+    agreement = {"coverage": share, "all_five_agree": stacking.accuracy_on([by_id["logistic_v2"][g] for g in agree]),
+                 "most_confident_at_same_coverage": {m: stacking.accuracy_on(stacking.most_confident(preds[m], share))
+                                                     for m in methods}}
+    report = {
+        "kind": "research", "experiment": "stacking", "period": "validation", "seasons": seasons, "generated_at": started,
+        "dataset_version": version, "feature_version": SCREEN_FEATURE_VERSION, "box_version": box_version(events),
+        "elo_config": Elo(elo_cfg).config(), "sklearn_version": sklearn.__version__,
+        "definition": {"base_models": stacking.BASE_MODELS, "clip": stacking.CLIP, "l2": stacking.L2,
+                       "interactions": stacking.INTERACTIONS, "first_training_season": first_oos},
+        "models": {name: {**summarize(preds[name]), "by_season": by_season(preds[name])} for name in preds},
+        "fits": {"stack_logit": fits_a, "stack_conditional": fits_b},
+        "comparisons": comparisons,
+        "step4_screen_against_elo": {s: summarize(preds[s])["brier"] < elo_brier
+                                     and comparisons[s]["elo"]["brier_diff"]["ci95"][1] < SCREEN_UPPER_BOUND for s in stackers},
+        "selective_prediction": selective, "agreement_filter": agreement,
+        "note": "Development research only. Rankings by confidence are made within the evaluated seasons. These seasons "
+                "were already used to tune Elo and examine five candidates; nothing here can enter the sealed shadow experiment."}
+    out_dir = out_dir or config.data_dir() / "reports" / f"research-stacking-{started.replace(':', '')}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    report["output_dir"] = str(out_dir)
+    (out_dir / "report.json").write_text(json.dumps(report, indent=2, default=str))
+    with (out_dir / "predictions.csv").open("w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["model", "game_id", "season", "cutoff_at", "p_home", "home_won"])
+        for name in preds:
+            for p in preds[name]:
+                w.writerow([name, p["game_id"], p["season"], p["cutoff_at"], f"{p['p_home']:.6f}", int(p["home_won"])])
+    log(f"Report written to {out_dir}")
+    return report
 
 
 def model_version(model: Model) -> str:

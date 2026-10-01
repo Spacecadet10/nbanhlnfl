@@ -125,3 +125,88 @@ validation was used to tune Elo and is the only data these candidates have seen.
   efficiency_margin|logistic 0.941, efficiency_margin|logistic_v2 0.956, logistic|logistic_v2 0.990.
 - Nothing was written to the ledger (27,744 rows before and after); `test_access.jsonl` still has 1 line; `frozen_decision.json` unchanged.
 - No market comparison (no historical odds).
+
+# Research round 2: gradient-boosted trees `gbt_v1` on validation 2021-22 to 2023-24 (run once, 2026-10-01T00:59:30Z)
+Command: `app.cli research-gbt`. Report `data/reports/research-gbt_v1-2026-10-01T005930Z` (copy of `report.json` in
+`docs/evidence/research-gbt_v1-2026-10-01/`). Definition recorded beforehand: EVALUATION_PLAN "Research round 2". Dataset
+`08fe2552c1aa4579`, box fingerprint `9ad11c5aa1590a46`, frozen Elo config, scikit-learn 1.9.1. Chronological refits at each season
+start: 1,143 games (2019-20) for 2020-21; 2,314 for 2021-22; 3,637 for 2022-23; 4,957 for 2023-24. Development research only; the test
+seasons were not loaded, nothing was written to the ledger, and neither sealed decision file changed.
+
+| Model (identical 3,962 games) | Accuracy | Brier ↓ | Log loss ↓ |
+|---|---|---|---|
+| Elo (frozen) | 64.34% | 0.22068 | 0.63158 |
+| logistic_v2 (sealed challenger) | 64.41% | 0.21977 | 0.62968 |
+| **gbt_v1** | **63.86%** | **0.22342** | **0.63819** |
+
+| gbt_v1 compared with | Brier difference (95% CI) | Accuracy difference (games only one got right) (95% CI) |
+|---|---|---|
+| Elo | +0.00274 [+0.00037, +0.00497] | −0.48 points (247 vs 266) [−1.58, +0.60] |
+| logistic_v2 | +0.00365 [+0.00167, +0.00555] | −0.56 points (193 vs 215) [−1.54, +0.41] |
+
+- **Result: gbt_v1 did not improve on either model.** Its Brier score is worse than Elo's and worse than logistic_v2's, and both
+  intervals exclude 0. Its accuracy is lower, with intervals that include 0. It would **not** pass the step 4 screen.
+- Per season (accuracy / Brier): 2021-22 63.5% / 0.2280, 2022-23 61.8% / 0.2299, 2023-24 66.3% / 0.2123. Elo: 64.6% / 0.2214,
+  63.2% / 0.2279, 65.2% / 0.2127. logistic_v2: 65.4% / 0.2212, 62.5% / 0.2275, 65.4% / 0.2106.
+- Calibration (predicted → observed, games): 0.164 → 0.239 (92) · 0.319 → 0.323 (790) · 0.504 → 0.543 (1,386) · 0.690 → 0.677 (1,386) ·
+  0.842 → 0.799 (308). It is overconfident at both ends, more than Elo or logistic_v2.
+- What this does and does not show: this one conservative configuration, on these features and this much training data, was worse. It does
+  not show that tree models cannot help with other settings, more seasons of training data or new inputs. The settings were fixed
+  beforehand and are not adjusted after this result; a second configuration would be a new dated experiment.
+- No market comparison (no historical odds).
+
+# Research round 3: learned stacking on validation 2021-22 to 2023-24 (run once, 2026-10-01T01:25:57Z)
+Command: `app.cli research-stacking`. Report `data/reports/research-stacking-2026-10-01T012557Z` (copy of `report.json` in
+`docs/evidence/research-stacking-2026-10-01/`). Definition recorded beforehand: EVALUATION_PLAN "Research round 3". Dataset
+`08fe2552c1aa4579`, box fingerprint `9ad11c5aa1590a46`, frozen Elo config. Stackers were fitted at each season start on base predictions
+from 2020-21 up to the previous season only: 1,171 games for 2021-22, 2,494 for 2022-23, 3,814 for 2023-24. Development research only; the
+test seasons were not loaded, nothing was written to the ledger, and neither sealed file changed.
+
+| Forecast (identical 3,962 games) | Accuracy | Brier ↓ | Log loss ↓ |
+|---|---|---|---|
+| Elo (frozen) | 64.34% | 0.22068 | 0.63158 |
+| logistic_v2 (sealed challenger) | 64.41% | 0.21977 | 0.62968 |
+| Equal average of the five base models | 64.34% | 0.21988 | 0.62980 |
+| **Stacker A `stack_logit`** | **64.44%** | **0.22057** | **0.63130** |
+| **Stacker B `stack_conditional`** | **64.31%** | **0.22122** | **0.63293** |
+
+| Stacker compared with | Brier difference (95% CI) | Accuracy difference (games only one got right) (95% CI) |
+|---|---|---|
+| A vs logistic_v2 | +0.00080 [−0.00014, +0.00172] | +0.03 pts (68 vs 67) [−0.58, +0.61] |
+| A vs Elo | −0.00011 [−0.00116, +0.00100] | +0.10 pts (130 vs 126) [−0.71, +0.88] |
+| A vs equal average | +0.00068 [−0.00031, +0.00169] | +0.10 pts (96 vs 92) [−0.64, +0.85] |
+| B vs logistic_v2 | +0.00145 [+0.00046, +0.00244] | −0.10 pts (54 vs 58) [−0.64, +0.44] |
+| B vs Elo | +0.00054 [−0.00051, +0.00163] | −0.03 pts (129 vs 130) [−0.85, +0.74] |
+| B vs equal average | +0.00134 [+0.00036, +0.00234] | −0.03 pts (85 vs 86) [−0.70, +0.62] |
+
+- **Result: neither learned stacker improved on logistic_v2.** Stacker A is level with Elo and slightly behind logistic_v2 and the equal
+  average on Brier (intervals include 0). Stacker B, with the disagreement, rest and efficiency-gap interactions, is worse than
+  logistic_v2 and the equal average on Brier (intervals exclude 0). Every paired accuracy interval includes 0.
+- Step 4 screen against Elo: A passes narrowly (Brier 0.22057 below Elo's 0.22068; upper bound +0.000997, limit +0.001); B fails.
+  A is still behind logistic_v2, so this does not make it a better candidate than the one already in shadow.
+- Fitted weights of A (standardised inputs; Elo, efficiency_margin, logistic, logistic_v2, gbt_v1): 2021-22 0.12, −0.02, 0.39, 0.35, −0.21;
+  2022-23 0.22, 0.03, 0.21, 0.38, −0.17; 2023-24 0.14, 0.06, 0.18, 0.38, −0.11. The weight on gbt_v1 is negative every season and the
+  split between the correlated models moves from year to year.
+- Per season (accuracy / Brier): A 65.1% / 0.2214, 62.8% / 0.2283, 65.4% / 0.2120; B 65.1% / 0.2228, 62.6% / 0.2281, 65.3% / 0.2128;
+  logistic_v2 65.4% / 0.2212, 62.5% / 0.2275, 65.4% / 0.2106.
+
+## Accuracy at fixed coverage (most confident games first; the ranking uses no outcome)
+| Coverage | Games | Elo | logistic_v2 | Equal average | Stacker A | Stacker B |
+|---|---|---|---|---|---|---|
+| 50% | 1,981 | 72.2% | 72.8% | 72.6% | 72.1% | 72.8% |
+| 70% | 2,773 | 68.7% | 68.9% | 69.0% | 68.5% | 68.3% |
+| 85% | 3,368 | 66.9% | 66.7% | 67.0% | 66.6% | 66.4% |
+| 100% | 3,962 | 64.3% | 64.4% | 64.3% | 64.4% | 64.3% |
+
+- Wilson 95% intervals are about ±2.0 points at 50% coverage and ±1.5 at 100%; every difference within a row is inside them.
+- On stacker B's own most confident half, the five base models score 72.5% to 72.8%: the selected games are the same easy games for all.
+- All five models agree on 3,177 games (80.2%), and that pick was right 67.5% of the time. Each method's most confident 80.2% scores
+  67.0% to 67.7%. **Filtering by agreement and filtering by one model's confidence give the same accuracy at the same coverage.**
+- These rankings were made within the evaluated seasons; an operational rule would need a threshold fixed on earlier data.
+
+## Reading
+- A higher win rate is available by skipping games: about 72–73% on the most confident half and about 67% on the most confident 80%, from
+  any of these forecasts, including the live Elo. That is selection, not a better model, and the skipped games are the close ones.
+- What this run shows: these two stackers, with these inputs and at most three seasons of training rows, did not beat logistic_v2. It does
+  not show that no learned combination could; settings were fixed beforehand and are not adjusted after this result.
+- No market comparison (no historical odds), so nothing here says whether a confident pick is priced favourably.

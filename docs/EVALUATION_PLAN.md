@@ -231,3 +231,55 @@ Implemented and tested on synthetic data only at the time of writing; no candida
     game is postponed or canceled; exactly 6 play-in games are final; and a postseason game is scheduled after the last play-in game. If any
     check fails, or the league's format differs from these numbers, the final report refuses to run and nothing is logged. The checks
     and what was found appear in every report.
+
+## Research round 2: one gradient-boosted tree candidate (recorded 2026-10-01, before the model is built or run)
+Authorised by the user on 2026-10-01 as an implementation round. It is research on development seasons only. It does **not** change the
+live Elo, the sealed `logistic_v2` shadow experiment, its promotion rule, or the ledger, and the result cannot join the 2026-27 shadow
+experiment. A good result would only justify proposing a separately sealed prospective test.
+
+- **Candidate `gbt_v1`:** scikit-learn `HistGradientBoostingClassifier` (version recorded in the report; `scikit-learn>=1.5,<2` added as a
+  dev dependency only: the API and the scheduled jobs never import it).
+- **Settings, fixed here, no sweep:** log-loss objective, learning_rate 0.05, max_iter 200, max_depth 3, max_leaf_nodes 8, min_samples_leaf 50,
+  l2_regularization 1.0, max_bins 255, early_stopping off, random_state 20260930. Monotonic increasing constraints on elo_diff, net_diff
+  and mov10_diff; none on the other features. No calibration step, no feature selection.
+- **Features (existing ones only, as captured at predict time):** elo_diff, mov10_diff, rest_diff, b2b_home, b2b_away, neutral (the
+  `TeamFeatures` used by `logistic`) and net_diff, net_home, net_away, pace, games_home, games_away (the fixed efficiency features). No scaling.
+- **Training:** chronological only. Refit at each season start on every labelled example from earlier seasons; before the first fit the
+  frozen Elo probability is returned. No random split, no cross-validation, no test-season rows.
+- **Evaluation, run once:** `backtest.run` walk-forward on warm-up + validation seasons with the same cutoff and box-delivery rules, frozen Elo
+  configuration, scored on the 3,962 validation games (2021-22 to 2023-24).
+- **Reported on identical games for Elo, logistic_v2 and gbt_v1:** accuracy, Brier, log loss, 5-bin calibration, per-season scores; paired
+  Brier difference against Elo and against logistic_v2 (ISO-week block bootstrap, seed 20260930, 2,000 resamples); paired accuracy
+  difference with the counts of games only one model got right and the same bootstrap interval.
+- **Reading fixed in advance:** the report states whether gbt_v1 would pass the step 4 screen against Elo (Brier below Elo's and the 95%
+  upper bound of Brier(gbt_v1 − Elo) below +0.001) and gives the same comparison against logistic_v2. Nothing is selected or promoted. These
+  seasons were already used to tune Elo and to screen three candidates, so any apparent gain is optimistic. Settings are not adjusted
+  after the result; any second configuration would be a new dated entry.
+
+## Research round 3: learned stacking (recorded 2026-10-01, before the stackers are built or run)
+Proposed in docs/STACKING_RESEARCH.md and authorised by the user on 2026-10-01. Development research only: it does not change the live
+Elo, the sealed `logistic_v2` shadow experiment or the ledger, and no result here can join the 2026-27 shadow experiment. A good result
+would only justify a separately sealed prospective test.
+
+- **Base models (all five, none dropped):** Elo (frozen config), efficiency_margin, logistic, logistic_v2, gbt_v1, each run once with
+  `backtest.run` on warm-up + validation seasons, exactly as already defined. Their predictions are walk-forward: every one was made before its game.
+- **Genuine out-of-sample base rows start in 2020-21.** In 2019-20 the fitted models only return the Elo probability (and efficiency_margin
+  its starting σ), so that season is dropped from stacker training. The run checks that each fitted base model's first fit is 2020-21.
+- **Stacker training, chronological:** at the start of each validation season S (2021-22, 2022-23, 2023-24) the stacker is fitted on the base
+  predictions and results of seasons 2020-21 … S−1 only, then predicts every game of season S. The run asserts that every training result
+  was available before the first cutoff of season S. No random split, no cross-validation, no test seasons.
+- **Stacker A (`stack_logit`):** L2-penalised logistic regression (existing `fit_logistic`, λ = 10, intercept unpenalised) on the five base
+  probabilities as logits, each probability clipped to [0.02, 0.98] first, each input standardised on the training rows only.
+- **Stacker B (`stack_conditional`):** A's five inputs plus three fixed interactions, with m = mean of the five clipped logits:
+  m × d (d = highest minus lowest base probability, the disagreement), m × |rest_diff| and m × |net_diff| (rest and efficiency gap as captured
+  pregame by logistic_v2). Same λ = 10 and standardisation. No other inputs, no feature search, no penalty search.
+- **Comparators on identical games (3,962 validation games):** Elo, logistic_v2 and the equal-weight average of the five base probabilities.
+- **Reported:** accuracy, Brier, log loss, 5-bin calibration, per-season scores; paired Brier and paired accuracy differences (ISO-week block
+  bootstrap, seed 20260930, 2,000 resamples) of each stacker against logistic_v2, Elo and the equal average; fitted weights per season.
+- **Selective prediction, fixed levels 50%, 70%, 85%, 100%:** for each method the most confident games (largest |p − 0.5|; ranking uses no
+  outcome) at each coverage, with accuracy and a Wilson 95% interval. Also the all-five-agree filter at its own coverage, against each
+  method's most confident games at that same coverage, and each base model's accuracy on stacker B's selected games. These rankings are made
+  within the evaluated seasons, so they describe the past; an operational threshold would have to be fixed on earlier data.
+- **Reading fixed in advance:** each stacker is reported against the step 4 screen versus Elo and against logistic_v2 directly. Nothing is
+  selected or promoted. These seasons have now been used to tune Elo and to examine five candidate models and several combinations, so any
+  apparent gain is optimistic. Run once; settings are not adjusted afterwards.
