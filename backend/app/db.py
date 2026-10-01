@@ -13,10 +13,15 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def connect(path: Optional[Path] = None, *, check_same_thread: bool = True) -> sqlite3.Connection:
+class StoreMismatch(RuntimeError):
+    pass
+
+
+def connect(path: Optional[Path] = None, *, check_same_thread: bool = True, sport: Optional[str] = None) -> sqlite3.Connection:
     """check_same_thread=False is for the API only: one connection per request, never shared concurrently, but
-    FastAPI may run the dependency and the endpoint on different thread-pool threads."""
-    path = Path(path) if path else config.db_path()
+    FastAPI may run the dependency and the endpoint on different thread-pool threads.
+    With `sport` and no path, opens that sport's store; call `claim_store` after migrating to bind and check its identity."""
+    path = Path(path) if path else config.db_path(sport or "nba")
     if str(path) != ":memory:":
         path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path, isolation_level=None, check_same_thread=check_same_thread)
@@ -71,3 +76,29 @@ def _split(sql: str) -> list[str]:
     if buf.strip():
         raise ValueError(f"Incomplete SQL statement in migration: {buf[:80]}")
     return out
+
+
+def store_sport(conn: sqlite3.Connection) -> Optional[str]:
+    """The sport this store belongs to, or None for a store that predates identities (or is not migrated)."""
+    if not has_table(conn, "store_identity"):
+        return None
+    row = conn.execute("SELECT sport FROM store_identity").fetchone()
+    return row["sport"] if row else None
+
+
+def has_table(conn: sqlite3.Connection, name: str) -> bool:
+    return conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone() is not None
+
+
+def claim_store(conn: sqlite3.Connection, sport: str) -> Optional[str]:
+    """Binds an unclaimed store to `sport` (once, append-only), or checks that it already belongs to it.
+    A store holding another sport's data is never used: that would mix leagues in one model or ledger."""
+    if not has_table(conn, "store_identity"):
+        return None   # a schema before 0012 (only migration rehearsals); every entry point migrates first
+    current = store_sport(conn)
+    if current is None:
+        conn.execute("INSERT INTO store_identity (sport, claimed_at) VALUES (?, ?)", (sport, utc_now()))
+        return sport
+    if current != sport:
+        raise StoreMismatch(f"This store holds {current!r} data, not {sport!r}")
+    return current

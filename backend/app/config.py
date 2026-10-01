@@ -9,8 +9,10 @@ def data_dir() -> Path:
     return Path(os.environ.get("NBA_DATA_DIR", REPO_ROOT / "data"))
 
 
-def db_path() -> Path:
-    return data_dir() / "nba.sqlite"
+def db_path(sport: str = "nba") -> Path:
+    """Each sport has its own store (docs/MULTISPORT_PLAN.md); the NBA store keeps its original file name."""
+    from . import sports
+    return data_dir() / sports.get(sport).db_file
 
 
 def raw_dir() -> Path:

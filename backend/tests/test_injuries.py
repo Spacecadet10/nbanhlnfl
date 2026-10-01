@@ -370,7 +370,7 @@ def test_migration_keeps_job_rows_and_allows_the_new_job(tmp_path):
     c.execute("INSERT INTO job_runs (job, started_at, status) VALUES ('shadow', '2026-10-01T00:00:00Z', 'success')")
     with pytest.raises(sqlite3.IntegrityError):
         c.execute("INSERT INTO job_runs (job, started_at, status) VALUES ('injuries', '2026-10-01T00:00:00Z', 'success')")
-    assert db.migrate(c) == ["0010_injury_report_attempts.sql", "0011_near_tipoff.sql"]
+    assert db.migrate(c, upto=11) == ["0010_injury_report_attempts.sql", "0011_near_tipoff.sql"]
     c.execute("INSERT INTO job_runs (job, started_at, status) VALUES ('injuries', '2026-10-01T00:01:00Z', 'success')")
     assert [r[0] for r in c.execute("SELECT job FROM job_runs ORDER BY run_id")] == ["shadow", "injuries"]
     c.close()

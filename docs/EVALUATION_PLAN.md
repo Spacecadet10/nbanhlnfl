@@ -304,3 +304,58 @@ A separate forecast for games starting soon, requested by the user. It does **no
 - **Scoring:** reported separately from the night-before record, on the latest near-tipoff forecast per game. Where both exist for the same
   game they are compared with the paired tools already used; no decision or promotion follows from it. A near-tipoff forecast has more
   information than a night-before one, so the two records are not interchangeable.
+
+## NHL evaluation plan (recorded 2026-09-30, before any NHL data is imported or any NHL model is run)
+Separate from every NBA rule above; no NBA parameter value or result is transferred. Store: `data/nhl.sqlite` (docs/MULTISPORT_PLAN.md).
+Before this was written, one NHL schedule week (2025-04-10) and the 2024-25 stats-REST game list were opened **for schema checks
+only** (field names, state codes, shootout scoring); no model, rate or accuracy was computed from them.
+
+- **Data:** NHL-owned stats REST season game lists (one request per season) for 2015-16 … 2025-26, all in the 3-on-3 overtime era.
+  Eligible: final regular-season and playoff games (`gameType` 2 and 3). Excluded: preseason, All-Star and other exhibitions
+  (types 19/20 and similar), and unplayed "if necessary" playoff games. Season = ending year (2016 = 2015-16).
+- **Decision type:** regular season `period` 3 = REG, 4 = OT, 5 = SO; playoffs: 3 = REG, > 3 = OT (no shootouts).
+- **Point in time:** as for the NBA: night-before cutoff 00:00 America/New_York on the game's Eastern date; historical results
+  available at the assumption tipoff + 4 h; a result updates a model only when available at or before the cutoff.
+  2020 playoff hub games (2020-08-01 … 2020-09-29, Toronto/Edmonton) are treated as neutral site.
+- **Franchise continuity:** Arizona → Utah (relocated player assets) carries the rating; expansion teams (Vegas 2017-18,
+  Seattle 2021-22) start at the initial rating. The exact team-id map is recorded in `app/sports.py` once verified from the source.
+
+| Period | Seasons | Use |
+|---|---|---|
+| Warm-up | 2015-16, 2016-17 | burn-in only, never scored |
+| Development | 2017-18 … 2020-21 | each candidate's own hyperparameter grid (fixed below) |
+| Validation | 2021-22, 2022-23, 2023-24 | choosing among the tuned candidates, once each |
+| Test (reserved) | 2024-25, 2025-26 | run once with the frozen choice; every access logged to `data/eval/test_access_nhl.jsonl` |
+| Prospective | 2026-27 | live night-before and near-tipoff record |
+
+- **Winner candidates:** constant 0.5; Laplace home rate; `hockey_elo` (own class; K ∈ {4, 6, 8, 10, 12}, H ∈ {0, 15, 30, 45, 60},
+  carry ∈ {0.5, 0.75, 1.0}, goal-margin multiplier off/on with `mult = ln(|margin| + 1) / ln 2`; criterion: development Brier;
+  ties → MOV off, carry 1.0, smallest K); `goals_poisson` (below; its winner probability).
+- **Goals model `goals_poisson`:** regulation goals are independent Poisson with `log λ_home = μ + h + att_home − def_away`,
+  `log λ_away = μ + att_away − def_home`; regulation score = final score minus the winner's deciding goal when the decision is OT/SO.
+  After each available result, one gradient step on the Poisson log-likelihood with rate η updates att/def; μ and h are running
+  league means (log scale). Between seasons att/def shrink by `carry`. Tied regulation → home wins OT/SO with a Laplace-smoothed
+  running share. The final-score distribution (truncated at 15 goals each) gives winner, `reg3`, puck line, totals and team totals.
+  Grid: η ∈ {0.005, 0.01, 0.02, 0.04}, carry ∈ {0.5, 0.75, 1.0}; criterion: development mean negative log-likelihood of the
+  regulation score; ties → smaller η, then carry 1.0. Reference: `league_poisson` = the same model with η = 0 (no team strength).
+- **Selection (validation, once):** the primary NHL winner model is the lower validation Brier of tuned `hockey_elo` and
+  `goals_poisson`, with Elo kept unless the goals model's paired 95% upper bound of (goals − Elo) Brier is below 0. Puck line,
+  totals and `reg3` use `goals_poisson` (the only distributional candidate); they are reported against `league_poisson` on
+  log loss / Brier of each market at standard lines (puck line ±1.5, totals 5.5 and 6.5).
+- **Metrics:** accuracy, Brier, log loss, 5-bin calibration, per season, paired week-block bootstrap (seed 20260930, 2,000
+  samples), coverage and exclusions. No historical odds exist: no market comparison is possible or claimed.
+- **Confidence filters:** NHL thresholds and records are computed from NHL forecasts only; NBA figures are never shown for NHL.
+
+## NBA spread and total research (recorded 2026-09-30, before the model is built or run)
+Development research only. It must not touch the sealed Elo, the `logistic_v2` shadow, or the spent 2024-25/2025-26 seasons.
+- **Model `points_normal`:** online offence/defence point ratings (`pts_home = μ + h/2 + off_home − def_away`, away likewise,
+  one gradient step of rate η per available result, `carry` between seasons). Margin and total are Normal with standard
+  deviations equal to running root-mean-square residuals of earlier available results; integer probabilities use a ±0.5
+  continuity correction; a tied margin goes to overtime and is removed from the winner probability. Team totals follow
+  from the same margin/total pair.
+- **Data:** warm-up 2019-20 and 2020-21 (burn-in); tuning on 2021-22 and 2022-23 (η ∈ {0.02, 0.05, 0.1}, carry ∈ {0.5, 0.75, 1.0},
+  criterion: mean Gaussian negative log-likelihood of margin plus total); 2023-24 reported once as a development holdout.
+  Reference: the same model with η = 0. Bound/sum/monotonicity checks are tested.
+- **Use:** model-only lines are labelled; prospective 2026-27 forecasts at the stored market line are the only independent
+  evidence. The rule for judging them is the plain report of win/loss/push counts, Brier and log loss against the de-vigged
+  market at the same line, with no promotion decision attached.

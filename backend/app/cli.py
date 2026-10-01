@@ -2,8 +2,13 @@
 import argparse
 import json
 
-from . import backtest, config, coverage, db, ingest, jobs
+from . import backtest, config, coverage, db, ingest, jobs, sports
 from .models.elo import EloConfig
+
+
+# Commands that work for every sport; everything else is NBA-only until generalised.
+SPORT_COMMANDS = {"migrate", "replay", "coverage", "ingest-nhl"}
+NHL_ONLY = {"ingest-nhl"}
 
 
 def _any_failed(result) -> bool:
@@ -18,8 +23,14 @@ def _any_failed(result) -> bool:
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="python -m app.cli", description=__doc__)
+    p.add_argument("--sport", choices=sports.SPORT_IDS, default="nba",
+                   help="Which sport's store to use (default nba). Each sport has its own SQLite file.")
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("migrate", help="Create/upgrade the SQLite schema")
+    nh = sub.add_parser("ingest-nhl", help="NHL only: import NHL stats season game lists (one request per season) and the team list")
+    nh.add_argument("--from-season", type=int, required=True, help="First season end year, e.g. 2016 = 2015-16")
+    nh.add_argument("--to-season", type=int, required=True)
+    nh.add_argument("--sleep", type=float, default=1.5, help="Seconds between requests")
     ing = sub.add_parser("ingest", help="Fetch ESPN scoreboard months into the raw cache and import them")
     ing.add_argument("--from", dest="start", required=True, help="First month, YYYYMM")
     ing.add_argument("--to", dest="end", required=True, help="Last month, YYYYMM")
@@ -80,10 +91,27 @@ def main(argv=None) -> int:
     bt.add_argument("--record", action="store_true", help="Also append predictions to the ledger as run_type=backtest")
     args = p.parse_args(argv)
 
-    conn = db.connect()
+    if args.sport != "nba" and args.cmd not in SPORT_COMMANDS:
+        p.error(f"`{args.cmd}` is NBA-only; it is not available with --sport {args.sport}")
+    if args.sport == "nba" and args.cmd in NHL_ONLY:
+        p.error(f"`{args.cmd}` needs --sport nhl")
+    conn = db.connect(sport=args.sport)
     applied = db.migrate(conn)
+    db.claim_store(conn, args.sport)
     if args.cmd == "migrate":
-        print(json.dumps({"db": str(config.db_path()), "applied": applied}))
+        print(json.dumps({"db": str(config.db_path(args.sport)), "sport": args.sport, "applied": applied}))
+    elif args.cmd == "ingest-nhl":
+        import time
+        results, failed = [], []
+        for i, season in enumerate([None, *range(args.from_season, args.to_season + 1)]):
+            if i and args.sleep:
+                time.sleep(args.sleep)
+            try:
+                results.append(ingest.ingest_nhl_teams(conn) if season is None else ingest.ingest_nhl_season(conn, season))
+            except Exception as exc:  # report and continue; nothing partial is committed for that request
+                failed.append({"season": season or "teams", "error": f"{type(exc).__name__}: {str(exc).splitlines()[0]}"})
+        print(json.dumps({"imports": results, "failed": failed}, indent=2))
+        return 1 if failed else 0
     elif args.cmd == "ingest":
         results = ingest.ingest_range(conn, args.start, args.end, sleep=args.sleep)
         failed = [r for r in results if "error" in r]

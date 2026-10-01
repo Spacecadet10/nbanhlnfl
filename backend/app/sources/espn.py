@@ -225,3 +225,84 @@ def parse_summary_box(payload: dict) -> SummaryBox:
             oreb=_stat_int(stats.get("offensiveRebounds")), dreb=_stat_int(stats.get("defensiveRebounds")),
             tov=_stat_int(stats.get("totalTurnovers"))))
     return SummaryBox(game_id=f"espn:{(payload.get('header') or {}).get('id')}", completed=completed, lines=lines)
+
+
+# --- Lines with prices (moneyline, point spread / puck line, total) for scheduled games, both sports. ---
+NHL_SOURCE = "espn_nhl"   # the NHL store caches ESPN NHL day scoreboards under its own source name
+NHL_ENDPOINT = "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard"
+LINES_IMPORTER_VERSION = "espn-lines-1"
+
+
+def fetch_nhl_day(yyyymmdd: str, timeout: float = 30) -> bytes:
+    return _get(day_request(yyyymmdd)[1], timeout, NHL_ENDPOINT)
+
+
+@dataclass
+class LineQuote:
+    """One bookmaker price pair for a scheduled game. `line` is the home handicap (spread) or the total; None for the
+    moneyline (market 'winner'). Sides follow docs/MARKETS.md: a = home / over, b = away / under."""
+    event_id: str
+    tipoff_at: str
+    home_name: str
+    away_name: str
+    provider: str
+    market: str
+    price_label: str
+    line: Optional[float]
+    price_a: int
+    price_b: int
+
+
+def _line_value(text) -> Optional[float]:
+    """'-1.5' / '+1.5' / 'o6.5' / 'u221.5' -> float; anything else -> None."""
+    if text is None:
+        return None
+    s = str(text).strip().lower().lstrip("ou")
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def parse_lines(payload: dict) -> tuple[list[LineQuote], dict]:
+    """Every complete price pair on scheduled games. Pairs whose two sides disagree on the line (spread home/away not
+    opposite, over/under totals different) or lack a price are skipped and counted, never repaired."""
+    quotes, skipped = [], {"incomplete": 0, "inconsistent_line": 0}
+    for ev in payload.get("events", []):
+        comp = ev["competitions"][0]
+        if STATUS.get(comp["status"]["type"]["name"], "other") != "scheduled":
+            continue
+        sides = {c["homeAway"]: c for c in comp["competitors"]}
+        if set(sides) != {"home", "away"}:
+            continue
+        names = {k: c["team"].get("displayName") or c["team"].get("name", "?") for k, c in sides.items()}
+        base = dict(event_id=str(ev["id"]), tipoff_at=normalize_time(ev["date"]),
+                    home_name=names["home"], away_name=names["away"])
+        for o in comp.get("odds") or []:
+            provider = (o.get("provider") or {}).get("name", "unknown")
+            for src_label, label in (("open", "open"), ("close", "current")):
+                specs = (("winner", o.get("moneyline") or {}, "home", "away"),
+                         ("spread", o.get("pointSpread") or {}, "home", "away"),
+                         ("total", o.get("total") or {}, "over", "under"))
+                for market, block, ka, kb in specs:
+                    qa = (block.get(ka) or {}).get(src_label) or {}
+                    qb = (block.get(kb) or {}).get(src_label) or {}
+                    if not qa and not qb:
+                        continue
+                    pa, pb = parse_american(qa.get("odds")), parse_american(qb.get("odds"))
+                    line = None
+                    if market != "winner":
+                        la, lb = _line_value(qa.get("line")), _line_value(qb.get("line"))
+                        if pa is None or pb is None or la is None or lb is None:
+                            skipped["incomplete"] += 1
+                            continue
+                        if (market == "spread" and abs(la + lb) > 1e-9) or (market == "total" and abs(la - lb) > 1e-9):
+                            skipped["inconsistent_line"] += 1
+                            continue
+                        line = la
+                    elif pa is None or pb is None:
+                        skipped["incomplete"] += 1
+                        continue
+                    quotes.append(LineQuote(**base, provider=provider, market=market, price_label=label, line=line,
+                                            price_a=pa, price_b=pb))
+    return quotes, skipped
