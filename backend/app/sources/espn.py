@@ -46,10 +46,10 @@ def day_request(yyyymmdd: str) -> tuple[str, dict]:
     return "&".join(f"{k}={v}" for k, v in sorted(params.items())), params
 
 
-def _get(params: dict, timeout: float) -> bytes:
+def _get(params: dict, timeout: float, endpoint: str = ENDPOINT) -> bytes:
     import httpx  # imported lazily so parsing/tests never need the network stack
 
-    resp = httpx.get(ENDPOINT, params=params, headers=HEADERS, timeout=timeout)
+    resp = httpx.get(endpoint, params=params, headers=HEADERS, timeout=timeout)
     resp.raise_for_status()
     return resp.content
 
@@ -158,3 +158,70 @@ def _odds(comp: dict) -> list[OddsRow]:
             if h is not None and a is not None:
                 rows.append(OddsRow(provider, label, h, a, round(devig_two_way(h, a)[0], 6)))
     return rows
+
+
+# --- Game summary: per-game team box score with the possession inputs the scoreboard lacks (in-season refresh). ---
+SUMMARY_SOURCE = "espn_summary"   # separate raw-cache source: these responses are not scoreboards
+SUMMARY_ENDPOINT = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary"
+SUMMARY_IMPORTER_VERSION = "espn-summary-box-1"
+
+
+def summary_request(game_id: str) -> tuple[str, dict]:
+    event = game_id.split(":", 1)[1] if game_id.startswith("espn:") else game_id
+    if not event.isdigit():
+        raise ValueError(f"Expected an ESPN event id, got {game_id!r}")
+    return f"event={event}", {"event": event}
+
+
+def fetch_summary(game_id: str, timeout: float = 30) -> bytes:
+    return _get(summary_request(game_id)[1], timeout, SUMMARY_ENDPOINT)
+
+
+@dataclass
+class SummaryLine:
+    team_id: str
+    is_home: int
+    points: Optional[int]
+    fga: Optional[int]
+    fta: Optional[int]
+    oreb: Optional[int]
+    dreb: Optional[int]
+    tov: Optional[int]
+
+
+@dataclass
+class SummaryBox:
+    game_id: str
+    completed: bool
+    lines: list[SummaryLine]
+
+
+def _stat_int(value: Optional[str], part: Optional[int] = None) -> Optional[int]:
+    """'12' -> 12; with part=1, '41-88' -> 88. Missing or malformed values are None, never guessed."""
+    try:
+        if value is None:
+            return None
+        return int(float(value.split("-")[part] if part is not None else value))
+    except (ValueError, IndexError):
+        return None
+
+
+def parse_summary_box(payload: dict) -> SummaryBox:
+    """Team lines from a summary response. `completed` is ESPN's own final flag; callers must not use the box of a
+    game that is not completed. tov is totalTurnovers (player + team), matching the backfill source."""
+    comp = ((payload.get("header") or {}).get("competitions") or [{}])[0]
+    scores = {c.get("id"): _stat_int(c.get("score")) for c in comp.get("competitors") or []}
+    completed = bool(((comp.get("status") or {}).get("type") or {}).get("completed"))
+    lines = []
+    for t in (payload.get("boxscore") or {}).get("teams") or []:
+        team, side = (t.get("team") or {}).get("id"), t.get("homeAway")
+        if team is None or side not in ("home", "away"):
+            continue
+        stats = {x.get("name"): x.get("displayValue") for x in t.get("statistics") or []}
+        lines.append(SummaryLine(
+            team_id=f"espn:{team}", is_home=int(side == "home"), points=scores.get(team),
+            fga=_stat_int(stats.get("fieldGoalsMade-fieldGoalsAttempted"), 1),
+            fta=_stat_int(stats.get("freeThrowsMade-freeThrowsAttempted"), 1),
+            oreb=_stat_int(stats.get("offensiveRebounds")), dreb=_stat_int(stats.get("defensiveRebounds")),
+            tov=_stat_int(stats.get("totalTurnovers"))))
+    return SummaryBox(game_id=f"espn:{(payload.get('header') or {}).get('id')}", completed=completed, lines=lines)

@@ -229,8 +229,9 @@ class RealProvider:
                                                brier_score=metrics.brier(bp, by), log_loss=metrics.log_loss(bp, by)))
         matched = []
         for r in rows:
+            # Fair comparison: only a quote the forecast could have seen (retrieved no later than its generation).
             q = self.conn.execute("SELECT home_prob_devig FROM odds_quotes WHERE game_id=? AND retrieved_at <= ? "
-                                  "ORDER BY retrieved_at DESC LIMIT 1", (r["game_id"], r["cutoff_at"])).fetchone()
+                                  "ORDER BY retrieved_at DESC LIMIT 1", (r["game_id"], r["generated_at"])).fetchone()
             if q:
                 matched.append((r["home_win_prob"], q[0], r["home_score"] > r["away_score"]))
         days = [eastern_date(r["tipoff_at"]) for r in rows]
@@ -240,8 +241,8 @@ class RealProvider:
                     "Not live forecasts. No historical odds, so no market comparison.")
         else:
             title = "Live forecasts"
-            note = ("Latest forecast per game recorded before its cutoff. Market comparison uses quotes retrieved "
-                    "before the cutoff, where available.")
+            note = ("Latest forecast per game recorded before its cutoff. Market comparison uses the latest quote "
+                    "retrieved no later than the forecast itself, where available.")
         return PerformanceResponse(
             mode="real", run_type=run_type, title=title, model_version=self.model_version, sample_size=len(rows),
             date_from=min(days, default=None), date_to=max(days, default=None),

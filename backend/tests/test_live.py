@@ -219,7 +219,9 @@ def test_odds_job_migration_keeps_existing_job_runs(tmp_path):
     conn.execute("INSERT INTO job_runs (job, started_at, status) VALUES ('refresh', '2026-09-30T00:00:00Z', 'success')")
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute("INSERT INTO job_runs (job, started_at, status) VALUES ('odds', '2026-09-30T00:00:00Z', 'success')")
-    assert db.migrate(conn) == ["0004_odds_job.sql"]
+    assert db.migrate(conn) == ["0004_odds_job.sql", "0005_team_possession_stats.sql",
+                                  "0006_possession_observations.sql", "0007_possession_fetch_events.sql", "0008_shadow_jobs.sql",
+         "0009_box_fetch_attempts.sql"]
     conn.execute("INSERT INTO job_runs (job, started_at, status) VALUES ('odds', '2026-09-30T00:01:00Z', 'success')")
     assert [r[0] for r in conn.execute("SELECT job FROM job_runs ORDER BY run_id")] == ["refresh", "odds"]
     conn.close()
@@ -296,7 +298,17 @@ def test_real_api_history_and_performance_keep_run_types_separate(store, client)
     assert row["correct"] == (row["home_win_prob"] >= 0.5) and row["cutoff_at"] == CUTOFF
     perf = client.get("/api/performance", params={"run_type": "live"}).json()
     assert perf["run_type"] == "live" and perf["sample_size"] == 1 and perf["baselines"] == []
-    assert perf["market"]["matched_games"] == 1  # quote retrieved 2026-10-19, before the cutoff
+    assert perf["market"]["matched_games"] == 1  # quote retrieved 2026-10-19T12:00Z, before the 15:00Z forecast
+
+
+def test_market_comparison_ignores_quotes_retrieved_after_the_forecast(store, client):
+    """A quote retrieved after the forecast (even if before the cutoff) holds information the forecast lacked."""
+    ingest_events(store, [event("g0", T_OTHER, "3", "4", odds=("-300", "+250"))], "2026-10-19T18:00:00Z")
+    live.predict(store, now="2026-10-19T15:00:00Z")  # g0 has no quote at 15:00Z; g1 has one from 12:00Z
+    ingest_events(store, [event("g0", T_OTHER, "3", "4", "STATUS_FINAL", 101, 99),
+                          event("g1", T_GAME, "1", "2", "STATUS_FINAL", 110, 100)], "2026-10-22T03:00:00Z")
+    perf = client.get("/api/performance", params={"run_type": "live"}).json()
+    assert perf["sample_size"] == 2 and perf["market"]["matched_games"] == 1
     bt = client.get("/api/performance", params={"run_type": "backtest"}).json()
     assert bt["run_type"] == "backtest" and bt["sample_size"] == 0 and "Final test" in bt["title"]
     assert client.get("/api/performance", params={"run_type": "demo"}).status_code == 422

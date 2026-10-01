@@ -6,10 +6,13 @@ from datetime import datetime
 from typing import Optional, Sequence
 
 from .base import PregameGame, Result
+from .efficiency import BoxEvent, EfficiencyRatings
 from .elo import Elo, EloConfig
 
 FEATURES = ("elo_diff", "mov10_diff", "rest_diff", "b2b_home", "b2b_away", "neutral")
 SCALED = ("elo_diff", "mov10_diff", "rest_diff")
+V2_FEATURES = ("elo_diff", "net_diff", "rest_diff", "b2b_home", "b2b_away", "neutral")
+V2_SCALED = ("elo_diff", "net_diff", "rest_diff")
 REST_CAP = 4.0
 
 
@@ -70,19 +73,21 @@ def fit_logistic(x: Sequence[Sequence[float]], y: Sequence[bool], l2: float = 1.
 class Standardizer:
     means: dict
     stds: dict
+    features: tuple = FEATURES
+    scaled: tuple = SCALED
 
     @classmethod
-    def fit(cls, examples: Sequence[dict]) -> "Standardizer":
+    def fit(cls, examples: Sequence[dict], features: tuple = FEATURES, scaled: tuple = SCALED) -> "Standardizer":
         means, stds = {}, {}
-        for f in SCALED:
+        for f in scaled:
             vals = [e[f] for e in examples]
             mu = sum(vals) / len(vals)
             sd = math.sqrt(sum((v - mu) ** 2 for v in vals) / len(vals)) or 1.0
             means[f], stds[f] = mu, sd
-        return cls(means, stds)
+        return cls(means, stds, features, scaled)
 
     def vector(self, feats: dict) -> list[float]:
-        return [(feats[f] - self.means[f]) / self.stds[f] if f in SCALED else feats[f] for f in FEATURES]
+        return [(feats[f] - self.means[f]) / self.stds[f] if f in self.scaled else feats[f] for f in self.features]
 
 
 def _hours(a: str, b: str) -> float:
@@ -125,6 +130,8 @@ class TeamFeatures:
 class LogisticElo:
     """Refit at each season start on labelled examples from earlier seasons (features captured at predict time)."""
     name = "logistic"
+    feature_names = FEATURES
+    scaled_names = SCALED
 
     def __init__(self, elo_cfg: EloConfig, l2: float = 1.0):
         self.elo_cfg, self.l2 = elo_cfg, l2
@@ -140,7 +147,7 @@ class LogisticElo:
         train = [(f, y) for s, f, y, _ in self.examples if s < season]
         if not train:
             return
-        self.scaler = Standardizer.fit([f for f, _ in train])
+        self.scaler = Standardizer.fit([f for f, _ in train], self.feature_names, self.scaled_names)
         self.weights = fit_logistic([self.scaler.vector(f) for f, _ in train], [y for _, y in train], self.l2)
         if self.first_fit_season is None:
             self.first_fit_season = season
@@ -149,12 +156,15 @@ class LogisticElo:
         if self.season is None or g.season > self.season:
             self.season = g.season
             self._refit(g.season)
-        feats = self.features.compute(g)
+        feats = self._features(g)
         self.pending[g.game_id] = (g.season, feats)
         if self.weights is None:  # warm-up season before the first fit
             return self.features.elo.predict(g)
         x = self.scaler.vector(feats)
         return sigmoid(self.weights[0] + sum(w * v for w, v in zip(self.weights[1:], x)))
+
+    def _features(self, g: PregameGame) -> dict:
+        return self.features.compute(g)
 
     def update(self, r: Result) -> None:
         self.features.update(r)
@@ -162,8 +172,28 @@ class LogisticElo:
         self.examples.append((season, feats, r.home_won, r.game.game_id))
 
     def config(self) -> dict:
-        return {"l2": self.l2, "features": "+".join(FEATURES), "elo": "k{k}-h{home_advantage}-c{carry}-mov{mov}".format(
+        return {"l2": self.l2, "features": "+".join(self.feature_names), "elo": "k{k}-h{home_advantage}-c{carry}-mov{mov}".format(
             **self.elo_cfg.__dict__)}
 
     def oos_from_season(self) -> Optional[int]:
         return self.first_fit_season
+
+
+class LogisticV2(LogisticElo):
+    """Candidate (c), docs/EVALUATION_PLAN.md: the same refit schedule, penalty and scaling rule as `logistic`, with the
+    last-10 margin replaced by the point-in-time efficiency net-rating difference. No feature search."""
+    name = "logistic_v2"
+    feature_names = V2_FEATURES
+    scaled_names = V2_SCALED
+
+    def __init__(self, elo_cfg: EloConfig, l2: float = 1.0):
+        super().__init__(elo_cfg, l2)
+        self.eff = EfficiencyRatings()
+
+    def _features(self, g: PregameGame) -> dict:
+        feats = self.features.compute(g)
+        feats["net_diff"] = self.eff.features(g)["net_diff"]
+        return feats
+
+    def update_box(self, e: BoxEvent) -> None:
+        self.eff.update_box(e)

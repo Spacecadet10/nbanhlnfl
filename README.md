@@ -61,6 +61,9 @@ Run from `backend/`:
 .venv/bin/python -m app.cli refresh      # ESPN months around today; retries 3×; max once per 30 min (--force to override)
 .venv/bin/python -m app.cli predict      # live Elo forecasts for eligible games whose cutoff is within 7 days
 .venv/bin/python -m app.cli score        # score the latest live forecasts against stored results (read-only)
+.venv/bin/python -m app.cli boxscores    # possession refresh: ESPN summaries for recent finals lacking a complete box (max 30/run)
+.venv/bin/python -m app.cli shadow-predict   # sealed challenger's shadow forecasts; a dry run unless --record
+.venv/bin/python -m app.cli shadow-report    # shadow season coverage and scores; --final applies the sealed rule once, after the play-in
 .venv/bin/python -m app.cli odds         # pregame odds snapshot: ESPN day scoreboards for games within 36 h; max once per 10 min
 .venv/bin/python -m app.cli scheduler --interval-minutes 360 --max-runs 4   # bounded loop (≥30 min interval)
 .venv/bin/python -m app.cli scheduler --job odds --interval-minutes 15 --max-runs 96   # 24 h of odds snapshots
@@ -74,6 +77,10 @@ Run from `backend/`:
   `data/odds-launchd.log` and `data/daily-launchd.log`. They run only while this Mac is awake and this checkout
   remains at the configured path. To stop/remove them, run `launchctl bootout gui/501 ~/Library/LaunchAgents/com.nba-predictor.odds.plist`
   and the same command with `com.nba-predictor.daily.plist`, then remove those two plist files.
+- Shadow challenger (`logistic_v2`, sealed in `backend/app/models/shadow_decision.json`): `daily` also runs `boxscores` and records
+  shadow forecasts only when `NBA_SHADOW_RECORDING=1` is set for the daily job. It is off by default in code and enabled on this Mac
+  since 2026-10-01 through `EnvironmentVariables` in `scripts/launchd/com.nba-predictor.daily.plist` (remove that key and reload the
+  agent to turn it off). The Elo forecast, scoring and the app are the same either way. Shadow rows share the ledger (run_type live, their own model_version) and are never shown in the app.
 - Odds (free, no key): each snapshot appends DraftKings moneylines with their retrieval time. The last quote confirmed
   before tipoff is our own closing snapshot (`coverage` → `closing_lines`, with minutes before tipoff). It is not a
   bookmaker-published close, and it exists only for games snapshotted while the collector was running.
@@ -85,6 +92,7 @@ Run from `backend/`:
 .venv/bin/python -m app.cli migrate                            # create/upgrade schema
 .venv/bin/python -m app.cli ingest --from 201910 --to 202610   # ESPN months, 1 req/s, ~2 min
 .venv/bin/python -m app.cli replay                             # rebuild rows from cache, no network
+.venv/bin/python -m app.cli import-team-box --from-season 2020 --to-season 2026 --historical-backfill   # possession inputs, completed seasons
 .venv/bin/python -m app.cli coverage                           # JSON coverage report
 .venv/bin/python -m app.cli backtest --period validation       # baselines + candidates (validation only)
 ```

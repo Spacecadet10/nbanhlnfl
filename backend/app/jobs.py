@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 from zoneinfo import ZoneInfo
 
-from . import ingest, live
+from . import config, ingest, live, shadow
 from .db import utc_now
 from .sources import espn
 
@@ -17,6 +17,10 @@ MIN_ODDS_INTERVAL = timedelta(minutes=10)      # quota: at most one successful o
 ODDS_WINDOW = timedelta(hours=36)              # snapshot days with a scheduled game tipping off this soon
 MAX_REQUESTS_PER_ODDS = 2                      # quota: day scoreboards fetched per snapshot
 SCHEDULER_MIN_INTERVAL = {"daily": 30, "odds": 10}  # minutes
+BOX_LOOKBACK = timedelta(days=14)             # only recent finals are refreshed; older gaps are reported, not chased
+BOX_RECHECK_AFTER = timedelta(hours=24)        # one re-check for boxes first seen sooner than this after tipoff
+MAX_BOX_REQUESTS = 30                          # quota: HTTP attempts per run, counting every retry and failure
+MAX_BOX_ATTEMPTS = 5                           # quota: HTTP attempts ever made per game, counting failures
 RETRIES = 3
 BACKOFF_SECONDS = (2, 8)
 
@@ -120,6 +124,110 @@ def odds_snapshot(conn: sqlite3.Connection, *, force: bool = False, fetch: Calla
     return _finish(conn, run_id, "success", attempts, {"dates": dates, "imports": results})
 
 
+def box_refresh_plan(conn: sqlite3.Connection, now: datetime) -> dict:
+    """Which recent eligible finals need a summary fetch. `missing`: no retrieval yet holds complete lines for both
+    teams. `recheck`: the latest complete retrieval came sooner than BOX_RECHECK_AFTER after tipoff and that time has
+    now passed (stat corrections). `gave_up`: still needed after MAX_BOX_ATTEMPTS fetches."""
+    since = _fmt(now - BOX_LOOKBACK)
+    types = live.ELIGIBLE_TYPES
+    games = conn.execute(
+        f"SELECT game_id, tipoff_at FROM games WHERE status='final' AND tipoff_at >= ? AND tipoff_at <= ? "
+        f"AND season_type IN ({', '.join('?' * len(types))}) ORDER BY tipoff_at, game_id",
+        (since, _fmt(now), *types)).fetchall()
+    plan = {"missing": [], "recheck": [], "gave_up": [], "window_start": since, "recent_finals": len(games)}
+    for g in games:
+        complete = conn.execute(
+            "SELECT MAX(h.observed_at) FROM team_possession_observations h JOIN team_possession_observations a "
+            "ON a.game_id = h.game_id AND a.fetch_id = h.fetch_id AND a.is_home = 0 WHERE h.game_id = ? AND h.is_home = 1 "
+            "AND h.points IS NOT NULL AND h.fga IS NOT NULL AND h.fta IS NOT NULL AND h.oreb IS NOT NULL AND h.tov IS NOT NULL "
+            "AND a.points IS NOT NULL AND a.fga IS NOT NULL AND a.fta IS NOT NULL AND a.oreb IS NOT NULL AND a.tov IS NOT NULL",
+            (g["game_id"],)).fetchone()[0]
+        recheck_at = _parse(g["tipoff_at"]) + BOX_RECHECK_AFTER
+        if complete is None:
+            kind = "missing"
+        elif _parse(complete) < recheck_at <= now:
+            kind = "recheck"
+        else:
+            continue
+        plan["gave_up" if box_attempts(conn, g["game_id"]) >= MAX_BOX_ATTEMPTS else kind].append(g["game_id"])
+    return plan
+
+
+def box_attempts(conn: sqlite3.Connection, game_id: str) -> int:
+    """HTTP attempts ever made for this game's summary by the refresh job (successes and failures)."""
+    return conn.execute("SELECT COUNT(*) FROM box_fetch_attempts WHERE game_id = ?", (game_id,)).fetchone()[0]
+
+
+def _log_box_attempt(conn: sqlite3.Connection, game_id: str, at: str, fetch_id: Optional[int] = None,
+                     error: Optional[str] = None) -> None:
+    conn.execute("INSERT INTO box_fetch_attempts (game_id, attempted_at, outcome, fetch_id, error) VALUES (?, ?, ?, ?, ?)",
+                 (game_id, at, "fetched" if fetch_id is not None else "failed", fetch_id, error))
+
+
+def boxscores(conn: sqlite3.Connection, *, fetch: Callable[[str], bytes] = espn.fetch_summary,
+              sleep: Callable[[float], None] = time.sleep, now: Optional[datetime] = None,
+              pause_seconds: float = 1.0, clock: Optional[Callable[[], str]] = None) -> dict:
+    """Possession refresh: fetches ESPN game summaries for recent finals that lack a complete box (then rechecks).
+
+    Budgets count actual HTTP attempts, including retries and failures: at most MAX_BOX_REQUESTS per run and
+    MAX_BOX_ATTEMPTS per game ever. Every attempt is logged in box_fetch_attempts before anything else happens with
+    its result, so a failed request or a failed import still uses its allowance. A game is retried at most RETRIES
+    times per run and never past either budget. One game failing does not stop the others; the job is 'failed' if
+    any game could not be fetched, and unresolved games are always listed.
+
+    Two times are kept per attempt: the attempt log holds when the request started, while the observation's
+    retrieval time (observed_at / available_at) is read from the clock only AFTER the response has arrived, so a
+    slow response can never appear available before it was actually received. `clock` and `now` are for tests."""
+    run_id = _start(conn, "boxscores")
+    if clock is None:
+        fixed = _fmt(now) if now else None
+        clock = (lambda: fixed) if fixed else utc_now
+    now = now or datetime.now(timezone.utc)
+    plan = box_refresh_plan(conn, now)
+    queue = plan["missing"] + plan["recheck"]
+    budget, fetched, failed, deferred = MAX_BOX_REQUESTS, [], [], []
+    for game_id in queue:
+        if budget <= 0:
+            deferred.append(game_id)
+            continue
+        if budget < MAX_BOX_REQUESTS and pause_seconds:
+            sleep(pause_seconds)
+        allowance, used, error, result = MAX_BOX_ATTEMPTS - box_attempts(conn, game_id), 0, None, None
+        while result is None and used < RETRIES and budget > 0 and allowance > 0:
+            if used:
+                sleep(BACKOFF_SECONDS[min(used - 1, len(BACKOFF_SECONDS) - 1)])
+            budget, allowance, used = budget - 1, allowance - 1, used + 1
+            started = clock()
+            try:
+                body = fetch(game_id)
+            except Exception as exc:  # network/HTTP failure: counted, then retried within the budgets
+                error = f"{type(exc).__name__}: {str(exc).splitlines()[0] if str(exc) else ''}"
+                _log_box_attempt(conn, game_id, started, error=error)
+                continue
+            received = clock()   # the retrieval time: taken only once the response is in hand
+            try:
+                result = ingest.ingest_box_summary(conn, game_id, fetch=lambda _g: body, retrieved_at=received)
+                _log_box_attempt(conn, game_id, started, fetch_id=result["fetch_id"])
+            except Exception as exc:  # parse/import failure: the request was made and counts; not retried this run
+                error = f"import {type(exc).__name__}: {str(exc).splitlines()[0] if str(exc) else ''}"
+                _log_box_attempt(conn, game_id, started, error=error)
+                break
+        if result is not None:
+            fetched.append({k: result[k] for k in ("game_id", "recorded", "complete_lines", "changed_vs_previous",
+                                                   "skipped_not_completed")})
+        else:
+            failed.append({"game_id": game_id, "error": error, "attempts": used})
+    after = box_refresh_plan(conn, now)
+    attempts = MAX_BOX_REQUESTS - budget
+    detail = {"recent_finals": plan["recent_finals"], "window_start": plan["window_start"],
+              "requested": len(fetched) + len(failed), "http_attempts": attempts, "attempt_budget": MAX_BOX_REQUESTS,
+              "deferred": len(deferred), "fetched": fetched, "failed": failed, "still_missing": after["missing"],
+              "gave_up": after["gave_up"]}
+    if not queue:
+        return _finish(conn, run_id, "skipped", 0, {**detail, "reason": "no recent final needs a box score"})
+    return _finish(conn, run_id, "failed" if failed else "success", attempts, detail)
+
+
 def predict(conn: sqlite3.Connection, **kw) -> dict:
     run_id = _start(conn, "predict")
     try:
@@ -136,10 +244,30 @@ def score(conn: sqlite3.Connection) -> dict:
         return _finish(conn, run_id, "failed", 1, {"error": f"{type(exc).__name__}: {exc}"})
 
 
+def shadow_forecasts(conn: sqlite3.Connection, **kw) -> dict:
+    """Records the sealed challenger's shadow forecasts (app/shadow.py). Stale-input skips make the job 'failed' so
+    they are visible; forecasts for other games are still recorded."""
+    run_id = _start(conn, "shadow")
+    try:
+        out = shadow.predict(conn, write=True, **kw)
+    except Exception as exc:
+        return _finish(conn, run_id, "failed", 1, {"error": f"{type(exc).__name__}: {exc}"})
+    out.pop("forecasts")
+    return _finish(conn, run_id, "failed" if out["skipped_stale_inputs"] else "success", 1, out)
+
+
 def daily(conn: sqlite3.Connection, *, force_refresh: bool = False, **refresh_kw) -> dict:
     """Refresh, then predict (even if the refresh failed or was skipped: forecasts then use the data already stored,
-    and the refresh status stays visible), then score."""
-    return {"refresh": refresh(conn, force=force_refresh, **refresh_kw), "predict": predict(conn), "score": score(conn)}
+    and the refresh status stays visible), then score. With config.shadow_enabled(), the possession refresh runs
+    before the Elo forecast and the shadow forecast after it; the Elo steps are identical either way."""
+    out = {"refresh": refresh(conn, force=force_refresh, **refresh_kw)}
+    if config.shadow_enabled():
+        out["boxscores"] = boxscores(conn)
+    out["predict"] = predict(conn)
+    if config.shadow_enabled():
+        out["shadow"] = shadow_forecasts(conn)
+    out["score"] = score(conn)
+    return out
 
 
 def scheduler(conn: sqlite3.Connection, *, interval_minutes: float, max_runs: int, job: str = "daily",

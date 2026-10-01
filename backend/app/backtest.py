@@ -22,8 +22,9 @@ from .ledger import Forecast, record
 from .models.base import Model, PregameGame, Result
 from .models.baselines import Constant, HomeRate
 from .models.calibration import PlattCalibrated
+from .models.efficiency import BoxEvent, BoxLine, EfficiencyMargin
 from .models.elo import Elo, EloConfig
-from .models.logistic import LogisticElo
+from .models.logistic import LogisticElo, LogisticV2
 
 EASTERN = ZoneInfo("America/New_York")
 SEASON_TYPES = ("regular", "play_in", "postseason")
@@ -74,13 +75,45 @@ def load_rows(conn: sqlite3.Connection, period: str) -> list[Row]:
         query = (f"SELECT * FROM games WHERE status = 'final' AND season_type IN ({', '.join('?' * len(SEASON_TYPES))}) "
                  f"AND season IN ({', '.join('?' * len(seasons))}) ORDER BY tipoff_at, game_id")
         params = (*SEASON_TYPES, *seasons)
-    rows = []
-    for r in conn.execute(query, params):
-        neutral = bool(r["neutral_site"]) or BUBBLE[0] <= r["tipoff_at"] < BUBBLE[1]
-        game = PregameGame(r["game_id"], r["season"], r["season_type"], r["tipoff_at"], r["home_team_id"],
-                           r["away_team_id"], neutral)
-        rows.append(Row(game, cutoff_for(r["tipoff_at"]), r["home_score"], r["away_score"], r["result_available_at"]))
-    return rows
+    return [Row(_pregame(r), cutoff_for(r["tipoff_at"]), r["home_score"], r["away_score"], r["result_available_at"])
+            for r in conn.execute(query, params)]
+
+
+def _pregame(r: sqlite3.Row) -> PregameGame:
+    neutral = bool(r["neutral_site"]) or BUBBLE[0] <= r["tipoff_at"] < BUBBLE[1]
+    return PregameGame(r["game_id"], r["season"], r["season_type"], r["tipoff_at"], r["home_team_id"],
+                       r["away_team_id"], neutral)
+
+
+def load_box_events(conn: sqlite3.Connection, period: str) -> list[BoxEvent]:
+    """Every possession observation (both teams from the same retrieval) for the games `period` may load, with the same
+    season isolation as load_rows. Delivered to models by `run` only once available at a cutoff."""
+    seasons = None if period == "live" else LOADABLE[period]
+    season_sql = "" if seasons is None else f"AND g.season IN ({', '.join('?' * len(seasons))})"
+    query = f"""
+        SELECT g.*, h.fetch_id, h.available_at AS box_available_at, h.observed_at AS box_observed_at,
+               h.points AS h_points, h.fga AS h_fga, h.fta AS h_fta, h.oreb AS h_oreb, h.tov AS h_tov,
+               a.points AS a_points, a.fga AS a_fga, a.fta AS a_fta, a.oreb AS a_oreb, a.tov AS a_tov
+        FROM games g
+        JOIN team_possession_observations h ON h.game_id = g.game_id AND h.team_id = g.home_team_id
+        JOIN team_possession_observations a ON a.game_id = g.game_id AND a.team_id = g.away_team_id
+                                           AND a.fetch_id = h.fetch_id
+        WHERE g.status = 'final' AND g.season_type IN ({', '.join('?' * len(SEASON_TYPES))}) {season_sql}
+        ORDER BY h.available_at, h.observed_at, h.fetch_id, g.game_id"""
+    events = []
+    for r in conn.execute(query, (*SEASON_TYPES, *(seasons or ()))):
+        line = lambda p: BoxLine(r[f"{p}_points"], r[f"{p}_fga"], r[f"{p}_fta"], r[f"{p}_oreb"], r[f"{p}_tov"])  # noqa: E731
+        events.append(BoxEvent(_pregame(r), r["box_available_at"], r["box_observed_at"],
+                               r["fetch_id"], line("h"), line("a")))
+    return events
+
+
+def box_version(events: Iterable[BoxEvent]) -> str:
+    """Fingerprint of the possession inputs a run used (recorded next to dataset_version)."""
+    h = hashlib.sha256()
+    for e in sorted(events, key=lambda e: (e.game.game_id, e.fetch_id)):
+        h.update(repr((e.game.game_id, e.fetch_id, e.available_at, e.observed_at, e.home, e.away)).encode())
+    return h.hexdigest()[:16]
 
 
 def dataset_version(rows: Iterable[Row]) -> str:
@@ -93,23 +126,56 @@ def dataset_version(rows: Iterable[Row]) -> str:
     return h.hexdigest()[:16]
 
 
-def run(model: Model, rows: list[Row]) -> list[dict]:
-    """Walk forward once over all rows; returns one prediction per row."""
+def run(model: Model, rows: list[Row], box_events: Optional[list[BoxEvent]] = None,
+        deliver_until: Optional[str] = None) -> list[dict]:
+    """Walk forward once over all rows; returns one prediction per row.
+
+    With `box_events`, each possession observation is passed to `model.update_box` only once BOTH its own
+    available_at and its game's result availability are at or before the current cutoff (effective availability =
+    the later of the two), so efficiency inputs never precede the completed result. Models without update_box ignore
+    them. A box score available at or before its own game's cutoff, or one with no matching row in `rows`, is a
+    LeakageError.
+
+    `deliver_until` (live forecasting only): after the walk, results and boxes whose (effective) availability is at
+    or before that time are delivered too, leaving the model in its state as of that moment."""
     results = sorted(rows, key=lambda r: (r.result_available_at, r.game.tipoff_at, r.game.game_id))
     games = sorted(rows, key=lambda r: (r.cutoff_at, r.game.tipoff_at, r.game.game_id))
-    out, j = [], 0
+    by_id = {r.game.game_id: r for r in rows}
+    boxes = []  # (effective availability, observed_at, fetch_id, game_id, event)
+    for e in box_events or []:
+        row = by_id.get(e.game.game_id)
+        if row is None:
+            raise LeakageError(f"{e.game.game_id}: box score without a matching eligible result")
+        if e.available_at <= row.cutoff_at:
+            raise LeakageError(f"{e.game.game_id}: box score available before its own cutoff")
+        boxes.append((max(e.available_at, row.result_available_at), e.observed_at, e.fetch_id, e.game.game_id, e))
+    boxes.sort(key=lambda b: b[:4])  # by effective availability, so a deferred event never blocks an eligible one
+    deliver_box = getattr(model, "update_box", None)
+    out, j, k = [], 0, 0
     for row in games:
         if row.result_available_at <= row.cutoff_at:
             raise LeakageError(f"{row.game.game_id}: result available before its own cutoff")
         while j < len(results) and results[j].result_available_at <= row.cutoff_at:
             model.update(results[j].result)
             j += 1
+        while k < len(boxes) and boxes[k][0] <= row.cutoff_at:
+            if deliver_box:
+                deliver_box(boxes[k][4])
+            k += 1
         p = model.predict(row.game)
         out.append({"game_id": row.game.game_id, "season": row.game.season, "season_type": row.game.season_type,
                     "tipoff_at": row.game.tipoff_at, "cutoff_at": row.cutoff_at,
                     "home_team_id": row.game.home_team_id, "away_team_id": row.game.away_team_id,
                     "neutral_site": row.game.neutral_site, "p_home": p,
                     "home_won": row.home_score > row.away_score})
+    if deliver_until is not None:
+        while j < len(results) and results[j].result_available_at <= deliver_until:
+            model.update(results[j].result)
+            j += 1
+        while k < len(boxes) and boxes[k][0] <= deliver_until:
+            if deliver_box:
+                deliver_box(boxes[k][4])
+            k += 1
     return out
 
 
@@ -202,6 +268,80 @@ def select_candidate(preds: dict[str, list[dict]]) -> dict:
     selected = min(eligible, key=lambda n: comparisons[n]["brier"]) if eligible else "elo"
     return {"rule": "replace Elo only if upper 95% bound of (candidate - Elo) Brier < 0; then lowest Brier",
             "elo_brier": summarize(preds["elo"])["brier"], "comparisons": comparisons, "selected": selected}
+
+
+# Prospective-candidate screening (docs/EVALUATION_PLAN.md "Prospective candidates"). Development only: it decides
+# which candidates enter the 2026-27 shadow season and is not evidence of improvement. It never touches the frozen
+# decision, the ledger or the test seasons.
+SCREEN_CANDIDATES = ("efficiency_margin", "logistic", "logistic_v2")
+SCREEN_UPPER_BOUND = 0.001      # paired 95% upper bound on Brier(candidate − Elo) must be below this
+SCREEN_CAP = 2
+ENSEMBLE_MAX_CORRELATION = 0.95
+SCREEN_FEATURE_VERSION = FEATURE_VERSION + "+possession-obs-v1"
+
+
+def screening_models(elo_cfg: EloConfig) -> list:
+    return [Constant(), HomeRate(), Elo(elo_cfg), EfficiencyMargin(), LogisticElo(elo_cfg), LogisticV2(elo_cfg)]
+
+
+def _loss_correlation(a: list[dict], b: list[dict]) -> float:
+    """Pearson correlation of per-game Brier losses on the same games."""
+    pb = {p["game_id"]: p for p in b}
+    xs = [(p["p_home"] - p["home_won"]) ** 2 for p in a]
+    ys = [(pb[p["game_id"]]["p_home"] - p["home_won"]) ** 2 for p in a]
+    mx, my = sum(xs) / len(xs), sum(ys) / len(ys)
+    cov = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
+    var = (sum((x - mx) ** 2 for x in xs) * sum((y - my) ** 2 for y in ys)) ** 0.5
+    return cov / var if var else 1.0
+
+
+def screen_candidates(preds: dict[str, list[dict]]) -> dict:
+    """Preregistered screen: Brier point estimate below Elo's AND paired 95% upper bound on (candidate − Elo) below
+    SCREEN_UPPER_BOUND; at most SCREEN_CAP go to shadow, by lowest validation Brier."""
+    elo = summarize(preds["elo"])
+    comparisons = {}
+    for name in SCREEN_CANDIDATES:
+        boot = paired_bootstrap(preds[name], preds["elo"])
+        s = summarize(preds[name])
+        comparisons[name] = {"brier": s["brier"], "log_loss": s["log_loss"], "accuracy": s["accuracy"],
+                             "diff_vs_elo": boot["mean_diff"], "ci95": boot["ci95"],
+                             "passed": s["brier"] < elo["brier"] and boot["ci95"][1] < SCREEN_UPPER_BOUND}
+    passed = sorted((n for n, c in comparisons.items() if c["passed"]), key=lambda n: comparisons[n]["brier"])
+    correlations = {f"{a}|{b}": _loss_correlation(preds[a], preds[b])
+                    for a, b in itertools.combinations(SCREEN_CANDIDATES, 2)}
+    eligible_pairs = [k for k, v in correlations.items()
+                      if v < ENSEMBLE_MAX_CORRELATION and all(n in passed for n in k.split("|"))]
+    return {"rule": f"Brier below Elo's and paired 95% upper bound of (candidate - Elo) Brier < {SCREEN_UPPER_BOUND}; "
+                    f"at most {SCREEN_CAP} by lowest validation Brier",
+            "elo": {"brier": elo["brier"], "log_loss": elo["log_loss"], "accuracy": elo["accuracy"]},
+            "comparisons": comparisons, "passed": passed, "shadow_shortlist": passed[:SCREEN_CAP],
+            "loss_correlations": correlations,
+            "ensemble_precondition": {"rule": f"at least 2 passed and per-game Brier loss correlation < "
+                                              f"{ENSEMBLE_MAX_CORRELATION}", "eligible_pairs": eligible_pairs,
+                                      "met": bool(eligible_pairs)}}
+
+
+def evaluate_screening(conn: sqlite3.Connection, *, decision_path: Optional[Path] = None,
+                       out_dir: Optional[Path] = None, log: Callable[[str], None] = print) -> dict:
+    """Runs the fixed candidate list on warm-up + validation seasons with the frozen Elo configuration (no tuning).
+    Writes a report and per-game predictions; records nothing in the ledger and logs no test access (none occurs)."""
+    _, elo_cfg = load_frozen_decision(conn, decision_path)  # reads validation-loadable rows only
+    rows = load_rows(conn, "validation")
+    events = load_box_events(conn, "validation")
+    outside = {r.game.season for r in rows} | {e.game.season for e in events}
+    if outside - set(LOADABLE["validation"]):
+        raise ValueError(f"screening received non-validation seasons {sorted(outside - set(LOADABLE['validation']))}")
+    version, started = dataset_version(rows), utc_now()
+    models = screening_models(elo_cfg)
+    preds = {m.name: in_period(run(m, rows, events), "validation") for m in models}
+    report = _base_report("validation", started, version, models, preds)
+    report.update({"kind": "screening", "feature_version": SCREEN_FEATURE_VERSION, "box_version": box_version(events),
+                   "box_events": len(events), "elo_config": Elo(elo_cfg).config(),
+                   "screening": screen_candidates(preds),
+                   "fitted": {m.name: {"sigma": m.sigma, "first_fit_season": m.first_fit_season}
+                              for m in models if isinstance(m, EfficiencyMargin)}})
+    out_dir = out_dir or config.data_dir() / "reports" / f"screening-{started.replace(':', '')}"
+    return _finish(conn, report, models, preds, version, started, False, out_dir, log)
 
 
 def model_version(model: Model) -> str:

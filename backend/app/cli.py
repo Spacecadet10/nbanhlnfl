@@ -24,6 +24,13 @@ def main(argv=None) -> int:
     ing.add_argument("--from", dest="start", required=True, help="First month, YYYYMM")
     ing.add_argument("--to", dest="end", required=True, help="Last month, YYYYMM")
     ing.add_argument("--sleep", type=float, default=1.0, help="Seconds between requests")
+    tb = sub.add_parser("import-team-box", help="Import possession inputs (TOV/OREB/DREB/FGA/FTA) from the digest-verified "
+                                                "sportsdataverse ESPN team box release, one CSV per season")
+    tb.add_argument("--from-season", type=int, required=True, help="First season end year, e.g. 2020 = 2019-20")
+    tb.add_argument("--to-season", type=int, required=True)
+    tb.add_argument("--historical-backfill", action="store_true",
+                    help="Assume availability with the result, only for games whose results were imported retrospectively "
+                         "(tipoff + 4 h). Without it, stats are usable only from their retrieval time.")
     sub.add_parser("replay", help="Re-import every cached response without network access")
     sub.add_parser("coverage", help="Print stored data coverage as JSON")
     rf = sub.add_parser("refresh", help="Fetch current ESPN months (retries; at most once per 30 min unless --force)")
@@ -41,6 +48,17 @@ def main(argv=None) -> int:
     sc.add_argument("--max-runs", type=int, required=True)
     fz = sub.add_parser("freeze-decision", help="Write the frozen decision from an existing validation report.json")
     fz.add_argument("--report", required=True, help="Path to a validation report.json")
+    sub.add_parser("screen-candidates", help="Screen the preregistered shadow candidates on validation seasons with the "
+                                             "frozen Elo config (no tuning, no ledger rows, no test access)")
+    sub.add_parser("boxscores", help="Possession refresh: ESPN game summaries for recent finals lacking a complete box "
+                                     "(max 30 requests per run; every retrieval timestamped)")
+    ss = sub.add_parser("seal-shadow", help="Seal the shadow challenger's definition and promotion rule from a screening report")
+    ss.add_argument("--report", required=True, help="Path to a screening report.json that shortlists the challenger")
+    sp = sub.add_parser("shadow-predict", help="Shadow forecasts of the sealed challenger; a dry run unless --record")
+    sp.add_argument("--record", action="store_true", help="Write the forecasts to the ledger (run_type live, own model_version)")
+    sr = sub.add_parser("shadow-report", help="Shadow season report: coverage, job health and descriptive scores. "
+                                              "--final applies the sealed promotion rule once, after the last play-in game")
+    sr.add_argument("--final", action="store_true")
     bt = sub.add_parser("backtest", help="Walk-forward evaluation (docs/EVALUATION_PLAN.md)")
     bt.add_argument("--period", choices=("validation", "test"), required=True)
     bt.add_argument("--elo-config", help='Validation only: evaluate a fixed Elo JSON instead of running the grid.')
@@ -59,6 +77,15 @@ def main(argv=None) -> int:
         results = ingest.ingest_range(conn, args.start, args.end, sleep=args.sleep)
         failed = [r for r in results if "error" in r]
         print(json.dumps({"months": len(results), "failed_months": [r["month"] for r in failed]}))
+        return 1 if failed else 0
+    elif args.cmd == "import-team-box":
+        results, failed = [], []
+        for season in range(args.from_season, args.to_season + 1):
+            try:
+                results.append(ingest.ingest_team_box(conn, season, historical_backfill=args.historical_backfill))
+            except Exception as exc:  # report and continue; nothing partial is committed for that season
+                failed.append({"season": season, "error": f"{type(exc).__name__}: {str(exc).splitlines()[0]}"})
+        print(json.dumps({"imports": results, "failed": failed}, indent=2))
         return 1 if failed else 0
     elif args.cmd == "replay":
         print(json.dumps(ingest.replay(conn)))
@@ -79,6 +106,38 @@ def main(argv=None) -> int:
         if "ledger_rows_created" in report:
             brief["ledger_rows_created"] = report["ledger_rows_created"]
         print(json.dumps(brief, indent=2))
+    elif args.cmd == "screen-candidates":
+        report = backtest.evaluate_screening(conn)
+        print(json.dumps({"dataset_version": report["dataset_version"], "box_version": report["box_version"],
+                          "screening": report["screening"], "fitted": report["fitted"],
+                          "output_dir": report["output_dir"]}, indent=2))
+    elif args.cmd == "boxscores":
+        result = jobs.boxscores(conn)
+        print(json.dumps(result, indent=2, default=str))
+        return 1 if _any_failed(result) else 0
+    elif args.cmd == "seal-shadow":
+        from pathlib import Path
+        from . import shadow
+        if shadow.SHADOW_DECISION_PATH.exists():
+            p.error(f"{shadow.SHADOW_DECISION_PATH} already exists; a sealed challenger is never overwritten")
+        report_path = Path(args.report).resolve()
+        shown = report_path.relative_to(config.REPO_ROOT) if report_path.is_relative_to(config.REPO_ROOT) else report_path
+        decision = shadow.build_decision(conn, json.loads(report_path.read_text()), str(shown))
+        shadow.SHADOW_DECISION_PATH.write_text(json.dumps(decision, indent=2) + "\n")
+        print(json.dumps({"written": str(shadow.SHADOW_DECISION_PATH), "model_version": decision["model_version"],
+                          "sha256": decision["sha256"]}))
+    elif args.cmd == "shadow-predict":
+        from . import shadow
+        result = jobs.shadow_forecasts(conn) if args.record else shadow.predict(conn)
+        print(json.dumps(result, indent=2, default=str))
+        return 1 if _any_failed(result) else 0
+    elif args.cmd == "shadow-report":
+        from . import shadow_report
+        try:
+            print(json.dumps(shadow_report.report(conn, final=args.final), indent=2, default=str))
+        except shadow_report.ShadowReportError as exc:
+            print(json.dumps({"error": str(exc)}))
+            return 1
     elif args.cmd == "freeze-decision":
         from pathlib import Path
         report_path = Path(args.report).resolve()

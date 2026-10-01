@@ -58,7 +58,9 @@ def test_migrations_are_idempotent(conn):
     assert db.migrate(conn) == []
     assert [r["name"] for r in conn.execute("SELECT name FROM schema_migrations")] == \
         ["0001_initial.sql", "0002_block_conflicting_inserts.sql", "0003_job_runs.sql",
-         "0004_odds_job.sql"]
+         "0004_odds_job.sql", "0005_team_possession_stats.sql", "0006_possession_observations.sql",
+         "0007_possession_fetch_events.sql", "0008_shadow_jobs.sql",
+         "0009_box_fetch_attempts.sql"]
 
 
 def test_repeated_ingestion_creates_no_duplicates(conn):

@@ -2,9 +2,15 @@
 import sqlite3
 from datetime import datetime
 
+from .ingest import POSSESSION_LATEST_SQL as POSSESSION_LATEST
+
 
 def report(conn: sqlite3.Connection) -> dict:
-    seasons = [dict(r) for r in conn.execute("""
+    seasons = [dict(r) for r in conn.execute(f"""
+        WITH complete_possession AS (
+            SELECT game_id FROM ({POSSESSION_LATEST}) p
+            WHERE p.fga IS NOT NULL AND p.fta IS NOT NULL AND p.oreb IS NOT NULL AND p.tov IS NOT NULL
+            GROUP BY game_id HAVING COUNT(*) = 2)
         SELECT g.season,
                SUM(g.season_type = 'regular')                        AS regular,
                SUM(g.season_type = 'play_in')                        AS play_in,
@@ -19,6 +25,10 @@ def report(conn: sqlite3.Connection) -> dict:
                SUM(g.result_availability_basis = 'assumed_tipoff_plus_4h') AS results_assumed_availability,
                SUM(g.result_availability_basis = 'observed_retrieval')     AS results_observed_availability,
                SUM(EXISTS (SELECT 1 FROM odds_quotes o WHERE o.game_id = g.game_id)) AS games_with_odds,
+               SUM(g.status = 'final' AND g.season_type IN ('regular', 'play_in', 'postseason')) AS final_competitive,
+               SUM(g.status = 'final' AND g.season_type IN ('regular', 'play_in', 'postseason')
+                   AND g.game_id IN (SELECT game_id FROM complete_possession))
+                                                                     AS final_competitive_with_possession_stats,
                MIN(substr(g.tipoff_at, 1, 10)) AS first_date,
                MAX(substr(g.tipoff_at, 1, 10)) AS last_date
         FROM games g GROUP BY g.season ORDER BY g.season""")]
@@ -27,6 +37,7 @@ def report(conn: sqlite3.Connection) -> dict:
         "teams": conn.execute("SELECT COUNT(*) FROM teams").fetchone()[0],
         "team_game_stats": conn.execute("SELECT COUNT(*) FROM team_game_stats").fetchone()[0],
         "odds_quotes": conn.execute("SELECT COUNT(*) FROM odds_quotes").fetchone()[0],
+        "team_possession_observations": conn.execute("SELECT COUNT(*) FROM team_possession_observations").fetchone()[0],
         "raw_responses": conn.execute("SELECT COUNT(*) FROM raw_responses").fetchone()[0],
         "raw_fetches": conn.execute("SELECT COUNT(*) FROM raw_fetches").fetchone()[0],
         "predictions": conn.execute("SELECT COUNT(*) FROM predictions").fetchone()[0],

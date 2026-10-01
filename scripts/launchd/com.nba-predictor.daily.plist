@@ -13,6 +13,11 @@
 	</array>
 	<key>WorkingDirectory</key>
 	<string>/Users/andry/Desktop/nba-predictor-sprint1/backend</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>NBA_SHADOW_RECORDING</key>
+		<string>1</string>
+	</dict>
 	<key>StartCalendarInterval</key>
 	<dict>
 		<key>Hour</key>

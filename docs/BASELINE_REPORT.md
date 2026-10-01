@@ -96,3 +96,32 @@ switch needs fresh, prospective evidence (e.g. 2026-27 shadow forecasts) under a
 - Elo ignores injuries, rosters, travel and rest. Regular season and playoffs are pooled (NBA Cup final included).
 - Elo's settings were tuned on validation, and the validation comparisons are exploratory with no multiple-comparison
   correction. The test result is the one independent check, over two seasons.
+
+# Shadow-candidate screening: validation 2021-22 to 2023-24 (run once, 2026-10-01T00:01:21Z)
+Command: `app.cli screen-candidates`. Report `data/reports/screening-2026-10-01T000121Z`. Dataset `08fe2552c1aa4579` (warm-up +
+validation seasons only), box fingerprint `9ad11c5aa1590a46` (6,270 box events), frozen Elo config (k 15, H 50, carry 0.75, MOV on),
+feature version `pregame-ids-v1+prior-day-et-cutoff+possession-obs-v1`. Definitions and rule were recorded beforehand
+(EVALUATION_PLAN "Prospective candidates" and "Step 4 candidate definitions"). **This is screening, not evidence of improvement:**
+validation was used to tune Elo and is the only data these candidates have seen. The test seasons were not loaded.
+
+| Model (3,962 games) | Accuracy | Brier ↓ | Log loss ↓ | Brier − Elo (95% CI) | Screen |
+|---|---|---|---|---|---|
+| Home-rate | 55.9% | 0.24664 | 0.68640 | – | – |
+| Elo (frozen reference) | 64.3% | 0.22068 | 0.63158 | – | – |
+| (a) efficiency_margin | 64.4% | 0.22205 | 0.63453 | +0.00138 [−0.00010, +0.00290] | **Fail** (worse than Elo) |
+| (b) logistic | 64.5% | 0.22033 | 0.63100 | −0.00035 [−0.00171, +0.00107] | **Fail** (upper bound 0.00107 ≥ 0.001) |
+| (c) logistic_v2 | 64.4% | 0.21977 | 0.62968 | −0.00091 [−0.00209, +0.00025] | **Pass** |
+
+- **Shortlist for the 2026-27 shadow season: `logistic_v2` only.** Its interval against Elo includes 0, so it is not shown to be better;
+  it passed a deliberately lenient screen. The point difference is about 0.4% of Elo's Brier.
+- Per season (accuracy / Brier): Elo 64.6% / 0.2214, 63.2% / 0.2279, 65.2% / 0.2127; logistic_v2 65.4% / 0.2212, 62.5% / 0.2275,
+  65.4% / 0.2106; efficiency_margin 64.7% / 0.2228, 63.2% / 0.2284, 65.2% / 0.2150.
+- logistic_v2 calibration (predicted → observed, games): 0.164 → 0.193 (88) · 0.318 → 0.316 (716) · 0.510 → 0.542 (1,566) ·
+  0.688 → 0.679 (1,278) · 0.844 → 0.812 (314).
+- efficiency_margin: last fitted σ = 13.68 points. It is too cautious at both ends (0.337 → 0.274 over 438 games; 0.830 → 0.866 over 112).
+  Its constants were fixed beforehand and are not adjusted after this result.
+- Elo and logistic reproduce the earlier validation report exactly (0.22068; 0.22033 with the same interval).
+- **Ensemble (step 5): not built.** The precondition needs at least 2 passing candidates; only one passed. Per-game Brier-loss correlations:
+  efficiency_margin|logistic 0.941, efficiency_margin|logistic_v2 0.956, logistic|logistic_v2 0.990.
+- Nothing was written to the ledger (27,744 rows before and after); `test_access.jsonl` still has 1 line; `frozen_decision.json` unchanged.
+- No market comparison (no historical odds).

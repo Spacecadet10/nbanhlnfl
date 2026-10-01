@@ -16,3 +16,8 @@ def db_path() -> Path:
 def raw_dir() -> Path:
     return data_dir() / "raw"
 
+
+
+def shadow_enabled() -> bool:
+    """Whether `daily` also refreshes possession stats and records shadow forecasts. Off unless NBA_SHADOW_RECORDING=1."""
+    return os.environ.get("NBA_SHADOW_RECORDING") == "1"

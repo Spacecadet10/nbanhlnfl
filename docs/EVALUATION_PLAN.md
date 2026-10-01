@@ -94,3 +94,140 @@ before any test access.
   and loading test rows. Elo is the primary model of the final report whatever the test scores. Other models appear only
   as descriptive comparisons. No retuning; historical predictions and ledger rows unchanged. No scored final-test
   evaluation has been reported.
+
+## Prospective candidates: 2026-27 shadow evaluation (recorded 2026-09-30, before any candidate is built or run)
+Goal: test whether additional systems improve on the frozen Elo. It is not a promise of better accuracy, and "no
+improvement found" is a valid outcome. Plan: docs/ACCURACY_PLAN.md (steps 0–7).
+
+**Frozen evidence, not reused.** The 2024-25 and 2025-26 test was accessed once (2026-09-30T14:40:35Z). It is historical
+evidence only: never used to tune, screen, select or justify a candidate. That includes logistic's descriptive test result. No further
+`--period test` runs. `data/eval/test_access.jsonl` must stay at exactly 1 line. Frozen Elo
+(`backend/app/models/frozen_decision.json`) remains the public live forecast unless the rule below promotes a candidate.
+
+**Candidates (fixed list).**
+- (a) Efficiency margin model: time-decayed, opponent-adjusted offensive/defensive points per 100 possessions and pace.
+  Predicted margin → P(home win) = Φ(margin / σ), with σ fitted on training data only.
+- (b) Existing `logistic` (as specified above).
+- (c) `logistic_v2`: elo_diff, net-rating diff, rest_diff, b2b_home, b2b_away, neutral. No feature search.
+- (d) Ensemble: only if at least 2 of (a)–(c) pass screening **and** their per-game validation Brier losses have a correlation < 0.95.
+  Weights are fitted walk-forward on earlier seasons only.
+
+(a) and (c) depend on possession data, and are built only if the source check passes (ESPN summary coverage of at least 95% of final games in
+every season 2019-20 to 2025-26; findings in DATA_SOURCES.md). Each model has leakage tests: same-day unfinished games,
+current-game labels, future rows, and preprocessing fitted on training data only.
+
+**Screening (development only; not evidence of improvement).** Walk-forward on warm-up 2019-21 and validation 2021-24
+(`load_rows(conn, "validation")`), with the same cutoff rule and bootstrap (ISO-week blocks, seed 20260930, 2,000 resamples).
+A candidate passes if its validation Brier point estimate is below Elo's **and** the upper end of its paired 95% interval on
+Brier(candidate − Elo) is below +0.001. This is deliberately lenient: validation favours Elo, which was tuned on it, and it
+can also flatter tuned candidates. At most 2 candidates go to shadow, chosen by lowest validation Brier. If none passes, no shadow
+candidate is recorded.
+
+**Prospective test (the evidence).**
+- Shadow candidates are sealed (config + this rule, SHA-256) before their first live forecast, ideally before opening night. Nothing
+  is recorded retroactively: if sealing is late, the shadow starts on the seal date.
+- Each records `run_type='live'` forecasts before the same cutoff as Elo, under its own `model_version`. There are no changes
+  mid-season; a deliberate change becomes a new version, reported separately.
+- **Decision set:** 2026-27 regular-season and play-in games where Elo and the candidate both have a forecast recorded
+  before the cutoff, and a final result. Games missing either forecast are excluded and counted.
+- **Baselines, scored on the same games:** constant 0.5, home-rate, frozen Elo, and DraftKings via ESPN (the last
+  `current` quote retrieved no later than the forecast's `generated_at`, with the bookmaker's cut removed proportionally; amended 2026-09-30
+  after Codex review, because a later quote holds information the forecast lacked). The pre-tipoff closing snapshot is reported separately. Market coverage is reported; missing quotes are
+  never filled in.
+- **Metrics:** accuracy, Brier score, log loss, 5-bin calibration, n, and date range. Paired per-game differences against Elo use the
+  same week-block bootstrap.
+- **Promotion rule (applied once, after the last play-in game):**
+  - A candidate replaces Elo only if the upper end of the Bonferroni-adjusted interval (97.5% with 2 candidates, 95% with 1)
+    on Brier(candidate − Elo) is below 0 **and** its log loss is not higher than Elo's.
+  - If both pass, the lower Brier wins.
+  - With fewer than 800 games in the decision set, the result is "inconclusive" and Elo stays.
+  - Interim reports are for operations only and are never used for decisions.
+- Market comparison is reported alongside but does not affect promotion.
+
+## Efficiency feature definition (recorded 2026-09-30, step 3, before any candidate is fitted or scored)
+Fixed in `backend/app/models/efficiency.py`; these constants are **not tuned** in step 4 (changing them is a new, dated amendment):
+- **Inputs:** `team_possession_observations`, delivered by `backtest.run(..., box_events)` only when `available_at <= cutoff`.
+  A game's own box score available at or before its cutoff raises `LeakageError`. Per game, the latest delivered observation is used
+  (the POSSESSION_AS_OF_SQL rule); incomplete lines are skipped and counted.
+- **Per game:** possessions = mean over both teams of FGA − OREB + TOV + 0.44·FTA; ORtg = 100·pts/poss, DRtg = 100·opp pts/poss,
+  pace = poss (overtime is not normalised).
+- **Per team at the game's tipoff date:** current-season games with weight 0.5^(age_days/30). Opponent- and home-adjusted by 20 fixed-point
+  rounds, then shrunk toward the team's previous-season rating (measured as of that season's last delivered game) with weight
+  10 games, or toward the league average if there is no previous season. Home edge per team per 100 possessions = the weighted
+  (home ORtg − away ORtg)/2 over non-neutral games, shrunk toward 1.25 with weight 100 home games.
+- **Features (home minus away):** net_diff, pace, home_edge_per100, margin_est = (net_diff + home edge)·pace/100, and games counts.
+- **Real-data check (validation load only, no outcomes examined):** 6,276 games / 6,270 box events (seasons 2019-20 to 2023-24; test
+  seasons not loaded), box_version 9ad11c5aa1590a46; all features finite; about 10 s. Frozen Elo validation Brier is unchanged with box events
+  passed (0.22068).
+- **2026-09-30 amendment (Codex step 3 review, before any candidate is fitted or scored):**
+  - *Delivery gate.* A box observation is delivered only when **both** its own `available_at` and its game's
+    `result_available_at` are at or before the cutoff (effective availability = the later of the two). Events are ordered by
+    effective availability. A box with no matching eligible result row, or one available at or before its own game's cutoff, raises `LeakageError`.
+  - *Missing data.* Features use the most recently observed **complete** observation among those delivered (last-complete policy).
+    An incomplete newer observation is counted, does not replace the active values and does not advance the freshness watermark
+    (the `(observed_at, fetch_id)` of complete observations only). The result depends on the set of delivered events, not their order.
+    This supersedes the "POSSESSION_AS_OF_SQL rule" wording above: that query and the coverage report use the latest observation, complete or not.
+  - *Step 4 scope.* `logistic_v2` keeps the registered features only: elo_diff, net-rating diff, rest_diff, b2b_home, b2b_away, neutral.
+    Travel, time-zone and altitude features are **not** included. They need verified venue and schedule data (actual venues, preceding
+    locations, neutral games, DST) and a written definition, as a separately specified candidate; travel is never inferred from home arenas.
+  - Real-data check after the change: the validation feature fingerprint is unchanged (6,276 games, box_version 9ad11c5aa1590a46),
+    because every stored observation's availability equals its result's availability (17,826 of 17,826).
+
+## Step 4 candidate definitions (recorded 2026-09-30, before the screening run on real data)
+Implemented and tested on synthetic data only at the time of writing; no candidate has been run on real games.
+- **Screening run:** `app.cli screen-candidates` → `backtest.evaluate_screening`. Loads warm-up + validation seasons only
+  (`load_rows` / `load_box_events` with period "validation"), uses the **frozen Elo configuration** read from
+  `frozen_decision.json` (no tuning, no grid), writes a report under `data/reports/screening-*`, records nothing in the ledger and
+  performs no test access. Scored on validation 2021-22 to 2023-24. The global `FEATURE_VERSION` is unchanged (live Elo is unaffected);
+  the screening report carries `pregame-ids-v1+prior-day-et-cutoff+possession-obs-v1` and the box fingerprint.
+- **(a) `efficiency_margin`:** P(home win) = Φ(margin_est / σ), with margin_est from the fixed efficiency features. σ is refit at each
+  season start as the root-mean-square of (actual home margin − margin_est) over all games of earlier seasons, using margin_est as
+  captured at predict time. Before the first fit (fewer than 50 earlier-season games) σ = 12.0. No other parameter.
+- **(b) `logistic`:** unchanged (the existing model and configuration).
+- **(c) `logistic_v2`:** the same procedure as `logistic` (L2 λ = 1.0 on standardised features, intercept unpenalised, refit at each season
+  start on all earlier seasons, Elo fallback before the first fit), with features elo_diff, net_diff (efficiency net-rating difference,
+  home minus away), rest_diff, b2b_home, b2b_away, neutral. elo_diff, net_diff and rest_diff are standardised on the refit's training examples only.
+- **Screening rule (as registered above):** passes if validation Brier is below Elo's and the paired week-block 95% upper bound on
+  Brier(candidate − Elo) is below +0.001; at most 2 by lowest validation Brier. The report also gives per-game Brier-loss correlations
+  for the ensemble precondition (at least 2 passed and correlation < 0.95). The ensemble itself is step 5 and is not built here.
+- **One run.** The screening is run once. Constants are not adjusted afterwards; any change is a new dated amendment and is reported as such.
+
+## Step 6: sealed challenger, in-season inputs and shadow recording (recorded 2026-10-01, before sealing; no shadow forecast exists)
+- **Shortlist:** `logistic_v2` only (BASELINE_REPORT "Shadow-candidate screening"). One candidate, so the promotion interval is 95%.
+  No ensemble (precondition not met).
+- **Seal:** `backend/app/models/shadow_decision.json`, written once by `app.cli seal-shadow --report <screening report>` (it refuses to
+  overwrite) and digest-sealed like the Elo decision. It holds the complete definition (logistic settings and features, frozen Elo config,
+  every efficiency constant, the missing-data, delivery and stale-input rules, cutoff, feature version), the promotion rule, the screening
+  evidence and the frozen Elo decision's digest. On every run `shadow.load_shadow_decision` rejects a broken seal, a different frozen Elo
+  decision, or code whose constants no longer equal the sealed definition. The ledger `model_version` is
+  `logistic_v2-shadow-<first 12 hex of the definition hash>`, so any changed definition is a new version, reported separately.
+- **Shadow forecasts** (`app/shadow.py`): `run_type='live'`, the sealed `model_version`, feature version
+  `pregame-ids-v1+prior-day-et-cutoff+possession-obs-v1`, generated before the same cutoff as Elo, append-only. The model state is rebuilt
+  each run by the backtest walk (results and boxes only once available), then advanced to the generation time. Every eligible game without
+  an available result is passed through in tipoff order so rest days match the backtest. The dataset version covers results, delivered
+  boxes and that schedule. The Elo job, Elo scoring and the app filter on the Elo `model_version` and never read shadow rows.
+- **In-season possession inputs:** `app.cli boxscores` fetches the ESPN game summary for eligible finals of the last 14 days that have no
+  retrieval with complete lines for both teams (at most 30 requests per run, 5 per game ever), and re-fetches once a box first seen sooner
+  than 24 h after tipoff. Each retrieval is an observation stamped with its own retrieval time (`observed_retrieval`, never backdated),
+  delivered only when the result is also available. A summary not marked completed records nothing. Failures, still-missing games and
+  games given up on are listed in the job result.
+- **Stale inputs (fixed before the season):** a game gets **no shadow forecast** from a run if either team lacks a complete delivered box
+  for any of its 5 most recent finals of the current season (results available at generation time). The skip is reported (the shadow job
+  is marked failed) and a later run before the cutoff may record the forecast. Older gaps are tolerated and counted. Games left without a
+  shadow forecast fall outside the decision set and are counted, as already registered.
+- **Enabling:** `daily` runs the possession refresh and the shadow forecast only when `NBA_SHADOW_RECORDING=1`. It is **off** until Codex
+  reviews this step; the Elo steps are identical either way.
+- **`shadow-report` (added 2026-10-01, before any shadow forecast exists):** interim mode is operational only (coverage, exclusions, job
+  health, descriptive scores) and never computes the interval against Elo or a verdict. `--final` is refused until all regular-season and
+  play-in games are finished, applies the sealed rule once, logs it to `data/eval/shadow_promotion.jsonl` and returns that record on later calls.
+  It changes no decision or forecast; a promotion would be a separate reviewed step.
+- **Refresh budget (amended 2026-10-01 after Codex review):** the 30-per-run and 5-per-game limits count every HTTP attempt, including retries,
+  network failures and failed imports, recorded in `box_fetch_attempts`.
+- **Amendments 2026-10-01 (Codex re-review, before any shadow forecast exists):**
+  - *Retrieval time.* The refresh stamps an observation's `observed_at`/`available_at` from the clock only after the response has
+    arrived; the attempt log keeps the request's start time. A response that arrives after a cutoff is never available before it.
+  - *Season completion for `--final`.* "After the last play-in game" is verified from positive evidence, never from the absence of pending
+    rows: all 30 teams have at least 82 final regular-season games; no regular-season or play-in game is scheduled or in progress; no play-in
+    game is postponed or canceled; exactly 6 play-in games are final; and a postseason game is scheduled after the last play-in game. If any
+    check fails, or the league's format differs from these numbers, the final report refuses to run and nothing is logged. The checks
+    and what was found appear in every report.

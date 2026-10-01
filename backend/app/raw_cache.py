@@ -12,9 +12,15 @@ class CacheIntegrityError(RuntimeError):
     pass
 
 
-def store(conn: sqlite3.Connection, *, source: str, endpoint: str, request_key: str, body: bytes,
-          retrieved_at: str, importer_version: str, cache_dir: Optional[Path] = None) -> int:
-    """Saves a response and logs the fetch. Identical bytes for the same request reuse the existing raw row."""
+def store(conn: sqlite3.Connection, **kw) -> int:
+    """Saves a response and logs the fetch; returns the raw_id (see store_fetch)."""
+    return store_fetch(conn, **kw)[0]
+
+
+def store_fetch(conn: sqlite3.Connection, *, source: str, endpoint: str, request_key: str, body: bytes,
+                retrieved_at: str, importer_version: str, cache_dir: Optional[Path] = None) -> tuple[int, int]:
+    """Saves a response and logs the fetch; returns (raw_id, fetch_id). Identical bytes for the same request reuse the
+    existing raw row, but every retrieval gets its own raw_fetches row, so a repeat of earlier content stays observable."""
     cache_dir = cache_dir or config.raw_dir()
     digest = hashlib.sha256(body).hexdigest()
     rel = f"{source}/{digest[:2]}/{digest}.json.gz"
@@ -33,8 +39,9 @@ def store(conn: sqlite3.Connection, *, source: str, endpoint: str, request_key: 
             "INSERT INTO raw_responses (source, endpoint, request_key, content_hash, byte_size, path, importer_version,"
             " first_retrieved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (source, endpoint, request_key, digest, len(body), rel, importer_version, retrieved_at)).lastrowid
-    conn.execute("INSERT INTO raw_fetches (raw_id, retrieved_at) VALUES (?, ?)", (raw_id, retrieved_at))
-    return raw_id
+    fetch_id = conn.execute("INSERT INTO raw_fetches (raw_id, retrieved_at) VALUES (?, ?)",
+                            (raw_id, retrieved_at)).lastrowid
+    return raw_id, fetch_id
 
 
 def load(conn: sqlite3.Connection, raw_id: int, cache_dir: Optional[Path] = None) -> bytes:
