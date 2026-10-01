@@ -108,7 +108,8 @@ def forecast(conn: sqlite3.Connection, *, now: Optional[str] = None, policy: str
 
 # --- Reading and settlement --------------------------------------------------------------------------------------
 LATEST_SQL = """
-    SELECT f.*, g.status, g.tipoff_at AS game_tipoff_at, g.home_score, g.away_score, d.decision,
+    SELECT f.*, g.status, g.tipoff_at AS game_tipoff_at, g.home_score, g.away_score, g.home_team_id, g.away_team_id,
+           d.decision,
            q.price_a, q.price_b, q.p_a_devig, q.p_b_devig, q.provider AS quote_provider, q.retrieved_at AS quote_retrieved_at
     FROM market_forecasts f
     JOIN games g ON g.game_id = f.game_id

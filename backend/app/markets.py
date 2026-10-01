@@ -255,3 +255,45 @@ def check_consistency(dist, market: str, lines: list[float]) -> None:
             if market != "spread" and pa > prev + 1e-12:
                 raise ValueError(f"{market}: P(over) rose as the line rose to {line}")
         prev = pa
+
+
+# --- What the app says next to each market (docs/NHL_BASELINE_REPORT.md, docs/EVALUATION_PLAN.md NBA research) ----------
+LIMITATIONS = {
+    "nhl": ["No goalie, injury or line-up information is used (no timestamped pregame source exists)."],
+    "nba": ["No injury or line-up information is used."],
+    ("nhl", "reg3"): "Regulation draws were under-predicted in the one-time test (about 16% predicted, 23% observed).",
+    ("nhl", "spread"): "Two-goal wins were under-predicted in testing (empty-net goals are not modelled).",
+    ("nhl", "total"): "Totals showed no skill over a league-average model in the one-time test.",
+    ("nhl", "team_total_home"): "Team totals were not tested separately.",
+    ("nhl", "team_total_away"): "Team totals were not tested separately.",
+    ("nba", "spread"): "Development research only (2023-24 holdout); no independent test yet.",
+    ("nba", "total"): "Development research only (2023-24 holdout); no independent test yet.",
+    ("nba", "team_total_home"): "Development research only; team totals were not tested separately.",
+    ("nba", "team_total_away"): "Development research only; team totals were not tested separately.",
+}
+MODEL_LINE_NOTE = "Model-only line: no bookmaker line had been retrieved when this forecast was made."
+
+
+def limitations(sport: str, market: str, line_source: Optional[str]) -> list[str]:
+    out = list(LIMITATIONS.get(sport, []))
+    if (sport, market) in LIMITATIONS:
+        out.append(LIMITATIONS[(sport, market)])
+    if line_source == "model":
+        out.append(MODEL_LINE_NOTE)
+    return out
+
+
+def side_labels(market: str, line: Optional[float], home: str, away: str) -> tuple[str, str, str]:
+    """Plain labels for sides a / mid / b, e.g. ('BOS -1.5', 'Push', 'CHI +1.5')."""
+    def num(x: float) -> str:
+        return f"{x:+g}" if x else "0"
+    if market == "winner":
+        return f"{home} win", "", f"{away} win"
+    if market == "reg3":
+        return f"{home} in regulation", "Tied after regulation", f"{away} in regulation"
+    if market == "spread":
+        return f"{home} {num(line)}", "Push", f"{away} {num(-line)}"
+    if market == "total":
+        return f"Over {line:g}", "Push", f"Under {line:g}"
+    team = home if market == "team_total_home" else away
+    return f"{team} over {line:g}", "Push", f"{team} under {line:g}"

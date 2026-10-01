@@ -14,7 +14,7 @@ client = TestClient(app)
 def test_health():
     r = client.get("/api/health")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "mode": "demo", "api_version": "0.2.0"}
+    assert r.json() == {"status": "ok", "mode": "demo", "api_version": "0.3.0"}
 
 
 def test_meta_lists_dates_and_teams():
@@ -148,7 +148,7 @@ def test_demo_slate_selection_counts_match_the_picks():
     day = fixtures.DEFAULT_DATE.isoformat()
     body = client.get("/api/games", params={"date": day, "min_confidence": 0.65}).json()
     picks = [g["slate_pick"] for g in body["games"]]
-    assert body["selection"] == {"policy": "pregame", "min_confidence": 0.65, "games": len(picks),
+    assert body["selection"] == {"market": "winner", "policy": "pregame", "min_confidence": 0.65, "games": len(picks),
                                  "with_forecast": sum(p is not None for p in picks),
                                  "selected": sum(bool(p and p["meets_confidence"]) for p in picks)}
     near = client.get("/api/games", params={"date": day, "policy": "near_tipoff"}).json()

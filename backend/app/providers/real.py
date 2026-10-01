@@ -8,13 +8,16 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from .. import backtest, metrics, near_tipoff
+import json
+
+from .. import backtest, config, live, market_live, markets, metrics, near_tipoff, sports
 from ..db import utc_now
 from ..live import HORIZON_DAYS, LATEST_LIVE_SQL
 from ..schemas import (BaselineScore, GameDetail, GamesResponse, GameSummary, HistoryResponse, Market,
-                       MarketComparison, Meta, NearTipoffForecast, Outcome, PerformanceResponse, Prediction, PredictionRecord,
-                       SourceStatus, Team, TeamStats, apply_slate_policy, confidence_record, meets_confidence,
-                       pick_confidence)
+                       MarketComparison, MarketForecastOut, MarketHistoryResponse, MarketInfo, MarketPerformanceResponse,
+                       MarketQuoteOut, MarketRecord, MarketRecordSummary, MarketSide, Meta, NearTipoffForecast, Outcome,
+                       PerformanceResponse, Prediction, PredictionRecord, SlateSelection, SourceStatus, SportInfo, Team,
+                       TeamStats, apply_slate_policy, confidence_record, meets_confidence, pick_confidence)
 
 EASTERN = ZoneInfo("America/New_York")
 FRANCHISE_IDS = tuple(f"espn:{i}" for i in range(1, 31))
@@ -45,10 +48,16 @@ class RealProvider:
     def __init__(self, conn: sqlite3.Connection, now: Optional[str] = None):
         self.conn = conn
         self.now = now or utc_now()
-        decision, cfg = backtest.load_frozen_decision(conn)
-        from ..models.elo import Elo
-        self.model_version = backtest.model_version(Elo(cfg))
-        self.near_version = near_tipoff.model_version(Elo(cfg))   # stored apart; default views never read it
+        self.eng = live.engine(conn)
+        self.sport = self.eng.sport
+        _, model = self.eng.primary(conn)
+        self.model_version = backtest.model_version(model)
+        self.near_version = near_tipoff.model_version(model)   # stored apart; default views never read it
+        if self.sport == "nhl":
+            from .. import nhl_eval
+            self.periods = nhl_eval.PERIODS
+        else:
+            self.periods = backtest.PERIODS
 
     # ---- helpers -------------------------------------------------------------------------------------------------
     def _team(self, team_id: str) -> Team:
@@ -90,10 +99,11 @@ class RealProvider:
 
     def _forecast_note(self, g: sqlite3.Row) -> str:
         cutoff = backtest.cutoff_for(g["tipoff_at"])
-        if g["season_type"] in UNSCORED_TYPES:
+        if g["season_type"] not in self.eng.eligible_types:
             return "No forecast: preseason and exhibition games are outside the model's scope."
-        if g["season"] in WARMUP_SEASONS:
-            return "No forecast: 2019-20 and 2020-21 were model warm-up seasons."
+        if g["season"] in self.periods["warmup"]:
+            seasons = " and ".join(f"{y - 1}-{str(y)[2:]}" for y in self.periods["warmup"])
+            return f"No forecast: {seasons} were model warm-up seasons."
         if g["status"] in ("postponed", "canceled"):
             return f"No forecast: game {g['status']}."
         if cutoff > self.now:
@@ -104,9 +114,15 @@ class RealProvider:
         return "No pregame forecast was recorded before the cutoff."
 
     def _market(self, game_id: str, tipoff: str) -> Optional[Market]:
-        row = self.conn.execute(
-            "SELECT * FROM odds_quotes WHERE game_id=? AND retrieved_at <= ? "
-            "ORDER BY retrieved_at DESC, price_label = 'current' DESC LIMIT 1", (game_id, tipoff)).fetchone()
+        if self.sport != "nba":   # NHL moneylines are stored with the other line quotes
+            row = self.conn.execute(
+                "SELECT provider, price_label, quote_time, retrieved_at, p_a_devig AS home_prob_devig FROM market_quotes "
+                "WHERE game_id=? AND market='winner' AND retrieved_at <= ? "
+                "ORDER BY retrieved_at DESC, price_label = 'current' DESC, quote_id DESC LIMIT 1", (game_id, tipoff)).fetchone()
+        else:
+            row = self.conn.execute(
+                "SELECT * FROM odds_quotes WHERE game_id=? AND retrieved_at <= ? "
+                "ORDER BY retrieved_at DESC, price_label = 'current' DESC LIMIT 1", (game_id, tipoff)).fetchone()
         if row is None:
             return None
         return Market(bookmaker=row["provider"], price_label=row["price_label"], quote_time=row["quote_time"],
@@ -128,9 +144,9 @@ class RealProvider:
     def _stats(self, team_id: str, season: int, tipoff: str, cutoff: str) -> TeamStats:
         rows = self.conn.execute(
             f"SELECT * FROM games WHERE season=? AND status='final' AND result_available_at <= ? "
-            f"AND season_type IN ({', '.join('?' * len(backtest.SEASON_TYPES))}) "
+            f"AND season_type IN ({', '.join('?' * len(self.eng.eligible_types))}) "
             "AND (home_team_id=? OR away_team_id=?) ORDER BY tipoff_at",
-            (season, cutoff, *backtest.SEASON_TYPES, team_id, team_id)).fetchall()
+            (season, cutoff, *self.eng.eligible_types, team_id, team_id)).fetchall()
         results = []
         for r in rows:
             home = r["home_team_id"] == team_id
@@ -156,9 +172,34 @@ class RealProvider:
         upcoming = [d for d in dates if d >= today]
         default = upcoming[0] if upcoming else (dates[-1] if dates else today)
         team_map = _teams(self.conn)
-        teams = sorted((team_map[t] for t in FRANCHISE_IDS if t in team_map), key=lambda t: t.abbr)
-        return Meta(mode="real", default_date=default, available_dates=dates, teams=teams,
-                    primary_model=self.model_version, last_refresh_at=self._last_refresh())
+        if self.sport == "nba":
+            ids = FRANCHISE_IDS
+        else:   # teams in eligible games of the latest season
+            types = self.eng.eligible_types
+            ids = [r[0] for r in self.conn.execute(
+                f"SELECT home_team_id FROM games WHERE season = (SELECT MAX(season) FROM games) "
+                f"AND season_type IN ({', '.join('?' * len(types))}) GROUP BY home_team_id", types)]
+        teams = sorted((team_map[t] for t in ids if t in team_map), key=lambda t: t.abbr)
+        return Meta(mode="real", sport=self.sport, sports=available_sports(), markets=self.market_infos(),
+                    score_unit="goals" if self.sport == "nhl" else "points", default_date=default,
+                    available_dates=dates, teams=teams, primary_model=self.model_version,
+                    last_refresh_at=self._last_refresh())
+
+    def market_infos(self) -> list[MarketInfo]:
+        out = []
+        for m in sports.get(self.sport).markets:
+            spec = markets.spec(self.sport, m)
+            if m == "winner":
+                available, note = True, f"Settles on the final result ({spec.overtime})."
+            else:
+                try:
+                    market_live.market_model(self.conn)
+                    available = True
+                except Exception:   # no sealed market model: say so instead of showing anything
+                    available = False
+                note = f"Settles on the final score ({spec.overtime}). " + " ".join(markets.limitations(self.sport, m, None))
+            out.append(MarketInfo(id=m, title=spec.title, available=available, note=note.strip()))
+        return out
 
     def sources(self) -> list[SourceStatus]:
         def fresh(ts: Optional[str]) -> str:
@@ -170,31 +211,147 @@ class RealProvider:
         odds = self.conn.execute("SELECT MAX(retrieved_at) FROM odds_quotes").fetchone()[0]
         predict = self.conn.execute("SELECT MAX(finished_at) FROM job_runs WHERE job='predict' AND status='success'"
                                     ).fetchone()[0]
+        lines = self.conn.execute("SELECT MAX(retrieved_at) FROM market_quotes").fetchone()[0]
+        if self.sport == "nhl":
+            schedule = SourceStatus(name="NHL schedule & results", kind="schedule", mode="real", last_updated=refresh,
+                                    freshness=fresh(refresh), note="NHL stats API season game list; refreshed by the daily job.")
+            odds, odds_note = lines, "DraftKings lines via ESPN for games in the next 36 h; no quote time published."
+        else:
+            schedule = SourceStatus(name="ESPN schedule & results", kind="schedule", mode="real", last_updated=refresh,
+                                    freshness=fresh(refresh), note="Unofficial ESPN scoreboard API; refreshed by the daily job.")
+            odds = max(filter(None, (odds, lines)), default=None)
+            odds_note = "Moneylines, spreads and totals for some upcoming games only; no quote time published."
+        markets_at = self.conn.execute("SELECT MAX(generated_at) FROM market_forecasts").fetchone()[0]
         return [
-            SourceStatus(name="ESPN schedule & results", kind="schedule", mode="real", last_updated=refresh,
-                         freshness=fresh(refresh), note="Unofficial ESPN scoreboard API; refreshed by the daily job."),
+            schedule,
             SourceStatus(name="Bookmaker odds (ESPN)", kind="odds", mode="real", last_updated=odds,
-                         freshness=fresh(odds), note="Moneylines for some upcoming games only; no quote time published."),
+                         freshness=fresh(odds), note=odds_note),
             SourceStatus(name="Elo forecasts", kind="forecasts", mode="real", last_updated=predict,
                          freshness=fresh(predict), note="Live forecasts recorded append-only before each game's cutoff."),
+            SourceStatus(name="Market forecasts", kind="forecasts", mode="real", last_updated=markets_at,
+                         freshness=fresh(markets_at), note="Spread/puck line, totals and team totals from the sealed "
+                                                           "score model, each at its exact line."),
         ]
 
-    def games(self, day: date, policy: str = "pregame", min_confidence: Optional[float] = None) -> GamesResponse:
+    def games(self, day: date, policy: str = "pregame", min_confidence: Optional[float] = None,
+              market: str = "winner") -> GamesResponse:
         start, end = _day_bounds(day)
         rows = self.conn.execute("SELECT * FROM games WHERE tipoff_at >= ? AND tipoff_at < ? ORDER BY tipoff_at, game_id",
                                  (start, end)).fetchall()
         games = [GameSummary(**self._summary(g)) for g in rows]
-        return GamesResponse(mode="real", date=day, sources=self.sources(), games=games,
-                             selection=apply_slate_policy(games, policy, min_confidence))
+        if market == "winner":
+            selection = apply_slate_policy(games, policy, min_confidence)
+        else:   # the selected market and policy only; no fallback to another market or policy
+            found = {r["game_id"]: r for r in market_live.latest(self.conn, policy=policy, market=market,
+                                                                 game_ids=[g.game_id for g in games])}
+            for g in games:
+                r = found.get(g.game_id)
+                g.market_forecast = None if r is None else self._market_out(r, g.home, g.away, min_confidence)
+            picks = [g.market_forecast for g in games if g.market_forecast is not None]
+            selection = SlateSelection(market=market, policy=policy, min_confidence=min_confidence, games=len(games),
+                                       with_forecast=len(picks), selected=sum(p.meets_confidence for p in picks))
+        return GamesResponse(mode="real", date=day, sources=self.sources(), games=games, selection=selection)
+
+    def _market_out(self, r, home: Team, away: Team, min_confidence: Optional[float] = None) -> MarketForecastOut:
+        labels = markets.side_labels(r["market"], r["line"], home.abbr, away.abbr)
+        side = market_live.pick(r)
+        conf = r["p_a"] if side == "a" else r["p_b"]
+        quote = None
+        if r["market_quote_id"] is not None:
+            quote = MarketQuoteOut(bookmaker=r["quote_provider"], retrieved_at=r["quote_retrieved_at"], line=r["line"],
+                                   price_a=r["price_a"], price_b=r["price_b"], prob_a=r["p_a_devig"], prob_b=r["p_b_devig"])
+        outcome = market_live.outcome(r)
+        result = {"a": "win" if side == "a" else "loss", "b": "win" if side == "b" else "loss", "mid": "push"}.get(outcome, outcome)
+        sides = [MarketSide(side="a", label=labels[0], probability=r["p_a"])]
+        if r["market"] == "reg3" or r["p_mid"] > 0:
+            sides.append(MarketSide(side="mid", label=labels[1], probability=r["p_mid"]))
+        sides.append(MarketSide(side="b", label=labels[2], probability=r["p_b"]))
+        return MarketForecastOut(
+            market=r["market"], title=markets.spec(self.sport, r["market"]).title, policy=r["policy"],
+            model_version=r["model_version"], generated_at=r["generated_at"], cutoff_at=r["cutoff_at"], line=r["line"],
+            line_source=r["line_source"], sides=sides, pick=side, pick_label=labels[0 if side == "a" else 2],
+            confidence=conf, meets_confidence=min_confidence is None or conf >= min_confidence - 1e-9, quote=quote,
+            result=result, limitations=markets.limitations(self.sport, r["market"], r["line_source"]))
 
     def game(self, game_id: str) -> Optional[GameDetail]:
         g = self.conn.execute("SELECT * FROM games WHERE game_id=?", (game_id,)).fetchone()
         if g is None:
             return None
         cutoff = backtest.cutoff_for(g["tipoff_at"])
-        return GameDetail(**self._summary(g), stats_as_of=cutoff, projected_score_available=False,
+        summary = self._summary(g)
+        forecasts = [self._market_out(r, summary["home"], summary["away"])
+                     for policy in market_live.POLICIES
+                     for r in market_live.latest(self.conn, policy=policy, game_ids=[game_id])]
+        return GameDetail(**summary, stats_as_of=cutoff, projected_score_available=False,
                           home_stats=self._stats(g["home_team_id"], g["season"], g["tipoff_at"], cutoff),
-                          away_stats=self._stats(g["away_team_id"], g["season"], g["tipoff_at"], cutoff))
+                          away_stats=self._stats(g["away_team_id"], g["season"], g["tipoff_at"], cutoff),
+                          market_forecasts=forecasts)
+
+    # ---- market history and performance ---------------------------------------------------------------------------
+    def _market_records(self, market: str, policy: str, min_confidence: Optional[float]) -> list[MarketRecord]:
+        out = []
+        for r in reversed(market_live.latest(self.conn, policy=policy, market=market)):
+            home, away = self._team(r["home_team_id"]), self._team(r["away_team_id"])
+            f = self._market_out(r, home, away, min_confidence)
+            if not f.meets_confidence:
+                continue
+            outcome = None
+            if r["status"] == "final":
+                outcome = Outcome(home_score=r["home_score"], away_score=r["away_score"],
+                                  home_won=r["home_score"] > r["away_score"])
+            out.append(MarketRecord(game_id=r["game_id"], game_date=eastern_date(r["game_tipoff_at"]),
+                                    tipoff=r["game_tipoff_at"], home=home, away=away, forecast=f, outcome=outcome))
+        return out
+
+    @staticmethod
+    def _record_summary(rows: list[MarketRecord], min_confidence: Optional[float]) -> MarketRecordSummary:
+        res = [r.forecast.result for r in rows]
+        wins, losses = res.count("win"), res.count("loss")
+        return MarketRecordSummary(min_confidence=min_confidence, selected=len(rows),
+                                   settled=wins + losses + res.count("push"), wins=wins, losses=losses,
+                                   pushes=res.count("push"), voids=res.count("void"),
+                                   pending=res.count("pending") + res.count("unscorable"),
+                                   win_rate=wins / (wins + losses) if wins + losses else None)
+
+    def market_predictions(self, market: str, policy: str, date_from: Optional[date], date_to: Optional[date],
+                           team: Optional[str], limit: int, min_confidence: Optional[float]) -> MarketHistoryResponse:
+        rows = [r for r in self._market_records(market, policy, min_confidence)
+                if not (date_from and r.game_date < date_from or date_to and r.game_date > date_to)
+                and not (team and team.upper() not in (r.home.abbr, r.away.abbr))]
+        return MarketHistoryResponse(mode="real", sport=self.sport, market=market, policy=policy, total=len(rows),
+                                     record=self._record_summary(rows, min_confidence), predictions=rows[:limit])
+
+    def market_performance(self, market: str, policy: str) -> MarketPerformanceResponse:
+        rows = self._market_records(market, policy, None)
+        settled = [r for r in rows if r.forecast.result in ("win", "loss", "push")]
+
+        def realised(r: MarketRecord) -> int:
+            if r.forecast.result == "push":
+                return 1
+            won_a = (r.forecast.result == "win") == (r.forecast.pick == "a")
+            return 0 if won_a else 2
+        vecs = [[next((s.probability for s in r.forecast.sides if s.side == k), 0.0) for k in ("a", "mid", "b")]
+                for r in settled]
+        real = [realised(r) for r in settled]
+        matched = [(v, k, r.forecast.quote) for v, k, r in zip(vecs, real, settled) if r.forecast.quote is not None]
+        sources: dict[str, int] = {}
+        for r in rows:
+            if r.forecast.line_source:
+                sources[r.forecast.line_source] = sources.get(r.forecast.line_source, 0) + 1
+        return MarketPerformanceResponse(
+            mode="real", sport=self.sport, market=market, policy=policy,
+            title=f"{markets.spec(self.sport, market).title}: live {'near-tipoff' if policy == 'near_tipoff' else 'night-before'} forecasts",
+            model_version=rows[0].forecast.model_version if rows else None, forecasts=len(rows),
+            record=self._record_summary(rows, None), brier_score=metrics.brier_multi(vecs, real),
+            log_loss=metrics.log_loss_multi(vecs, real), line_sources=sources, market_matched=len(matched),
+            model_log_loss_on_matched=metrics.log_loss_multi([m[0] for m in matched], [m[1] for m in matched]),
+            market_log_loss_on_matched=metrics.log_loss_multi(
+                [[q.prob_a, 0.0, q.prob_b] for _, _, q in matched], [k for _, k, _ in matched]),
+            reference=_market_reference(self.sport, market),
+            limitations=markets.limitations(self.sport, market, None),
+            note="Latest forecast per game recorded before its cutoff. The win rate excludes pushes and voids. The "
+                 "bookmaker comparison uses only forecasts made at the quoted line, with the quote retrieved no later "
+                 "than the forecast. Nothing here is a claim of betting value.")
 
     def _latest_rows(self, run_type: str, model_version: str) -> list[sqlite3.Row]:
         if run_type == "live":
@@ -238,7 +395,7 @@ class RealProvider:
         def scored(model_version: str) -> list[sqlite3.Row]:
             rows = [r for r in self._latest_rows(run_type, model_version) if r["status"] == "final"]
             if run_type == "backtest":
-                rows = [r for r in rows if r["season"] in backtest.PERIODS["test"]]
+                rows = [r for r in rows if r["season"] in self.periods["test"]]
             return rows
 
         def score(rows):
@@ -285,6 +442,33 @@ class RealProvider:
                 model_brier=metrics.brier([m[0] for m in matched], [m[2] for m in matched]),
                 market_brier=metrics.brier([m[1] for m in matched], [m[2] for m in matched])),
             note=note)
+
+
+def available_sports() -> list[SportInfo]:
+    out = []
+    for s in sports.SPORTS.values():
+        exists = config.db_path(s.id).is_file()
+        out.append(SportInfo(id=s.id, label=s.label, available=exists,
+                             note=None if exists else f"No {s.label} data store on this machine."))
+    return out
+
+
+def _market_reference(sport: str, market: str) -> Optional[dict]:
+    """The one-time historical test of an NHL market (local report), labelled; None when there is none."""
+    if sport != "nhl":
+        return None
+    reports = sorted((config.data_dir() / "reports").glob("nhl-test-*/report.json"))
+    if not reports:
+        return None
+    r = json.loads(reports[-1].read_text())
+    keys = {"reg3": ["reg3"], "spread": ["spread -1.5", "spread +1.5"], "total": ["total 5.5", "total 6.5"]}.get(market)
+    if not keys:
+        return None
+    return {"label": "One-time final test (2024-25 and 2025-26), standard lines, no bookmaker comparison",
+            "by_line": {k: {x: r["markets"][k]["goals_poisson"][x] for x in ("n", "log_loss", "brier",
+                                                                            "pick_accuracy_excluding_mid")}
+                        | {"league_reference_log_loss": r["markets"][k]["league_poisson"]["log_loss"]}
+                        for k in keys if k in r["markets"]}}
 
 
 def _cache_key(conn: sqlite3.Connection) -> tuple:

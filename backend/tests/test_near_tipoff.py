@@ -219,12 +219,12 @@ def test_codex_slate_filter_uses_only_the_selected_policy(ready, client):  # noq
                                    "2026-11-10T22:30:00Z", near_p))
     client.now = "2026-11-10T22:35:00Z"
     sel, picks = slate(client, policy="pregame", min_confidence=0.7)
-    assert sel == {"policy": "pregame", "min_confidence": 0.7, "games": 4, "with_forecast": 3, "selected": 2}
+    assert sel == {"market": "winner", "policy": "pregame", "min_confidence": 0.7, "games": 4, "with_forecast": 3, "selected": 2}
     assert {g: p and p["meets_confidence"] for g, p in picks.items()} == {"s1": False, "s2": True, "s3": None, "s4": True}
     assert picks["s4"]["pick"] == "away" and picks["s4"]["confidence"] == pytest.approx(0.70)      # away pick at exactly 70%
     assert all(p["policy"] == "pregame" for p in picks.values() if p)
     sel, picks = slate(client, policy="near_tipoff", min_confidence=0.7)
-    assert sel == {"policy": "near_tipoff", "min_confidence": 0.7, "games": 4, "with_forecast": 3, "selected": 2}
+    assert sel == {"market": "winner", "policy": "near_tipoff", "min_confidence": 0.7, "games": 4, "with_forecast": 3, "selected": 2}
     assert {g: p and p["meets_confidence"] for g, p in picks.items()} == {"s1": True, "s2": False, "s3": True, "s4": None}
     assert picks["s1"]["confidence"] == 0.80 and picks["s3"]["pick"] == "away"
     # No threshold: every game with a forecast under the policy is selected; the other policy never fills a gap.

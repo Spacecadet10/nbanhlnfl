@@ -14,6 +14,9 @@ Mode = Literal["real", "demo"]
 GameStatus = Literal["scheduled", "in_progress", "final", "postponed", "canceled", "other"]
 SeasonType = Literal["preseason", "regular", "play_in", "postseason", "other"]
 Freshness = Literal["fresh", "stale", "missing"]
+Sport = Literal["nba", "nhl"]
+MarketId = Literal["winner", "reg3", "spread", "total", "team_total_home", "team_total_away"]
+Settlement = Literal["win", "loss", "push", "void", "pending", "unscorable"]
 
 
 class Health(BaseModel):
@@ -36,8 +39,26 @@ class SourceStatus(BaseModel):
     note: str
 
 
+class SportInfo(BaseModel):
+    id: Sport
+    label: str
+    available: bool
+    note: Optional[str] = None
+
+
+class MarketInfo(BaseModel):
+    id: MarketId
+    title: str
+    available: bool = Field(description="Whether forecasts of this market are recorded for this sport.")
+    note: str = Field(description="What the market settles on, and its known limitations.")
+
+
 class Meta(BaseModel):
     mode: Mode
+    sport: Sport = "nba"
+    sports: list[SportInfo] = []
+    markets: list[MarketInfo] = []
+    score_unit: Literal["points", "goals"] = "points"
     default_date: date
     available_dates: list[date]
     teams: list[Team]
@@ -107,6 +128,8 @@ class GameSummary(BaseModel):
     slate_pick: Optional["SlatePick"] = Field(
         default=None, description="The pick under the slate's selected forecast policy, with whether it meets the "
                                   "requested confidence. Null when the game has no forecast under that policy.")
+    market_forecast: Optional["MarketForecastOut"] = Field(
+        default=None, description="The selected non-winner market's forecast under the selected policy, if any.")
 
 
 class SlatePick(BaseModel):
@@ -119,6 +142,7 @@ class SlatePick(BaseModel):
 
 
 class SlateSelection(BaseModel):
+    market: MarketId = "winner"
     policy: Policy
     min_confidence: Optional[float]
     games: int
@@ -152,6 +176,8 @@ class GameDetail(GameSummary):
     projected_score_available: bool = Field(
         description="False until a validated score model exists; the UI must not show projected scores."
     )
+    market_forecasts: list["MarketForecastOut"] = Field(
+        default=[], description="Latest forecast of every market and policy for this game (non-winner markets).")
 
 
 class PredictionRecord(BaseModel):
@@ -263,4 +289,94 @@ class PerformanceResponse(BaseModel):
     note: str
 
 
+class MarketSide(BaseModel):
+    side: Literal["a", "mid", "b"]
+    label: str
+    probability: float = Field(ge=0, le=1)
+
+
+class MarketQuoteOut(BaseModel):
+    """The bookmaker quote at the forecast's exact line, retrieved no later than the forecast."""
+    bookmaker: str
+    retrieved_at: datetime
+    line: Optional[float]
+    price_a: int
+    price_b: int
+    prob_a: float = Field(description="De-vigged (proportional, two-way) probability of side a.")
+    prob_b: float
+
+
+class MarketForecastOut(BaseModel):
+    market: MarketId
+    title: str
+    policy: Policy
+    model_version: str
+    generated_at: datetime
+    cutoff_at: datetime
+    line: Optional[float] = Field(description="Exact line of this forecast: home handicap (spread) or threshold.")
+    line_source: Optional[Literal["market", "model"]] = Field(
+        description="'market' = the bookmaker's line at generation; 'model' = no line was quoted, model-only line.")
+    sides: list[MarketSide]
+    pick: Literal["a", "b"]
+    pick_label: str
+    confidence: float = Field(ge=0, le=1, description="Model probability of the picked side (a push is never picked).")
+    meets_confidence: bool = True
+    quote: Optional[MarketQuoteOut]
+    result: Settlement
+    limitations: list[str]
+
+
+class MarketRecordSummary(BaseModel):
+    min_confidence: Optional[float]
+    selected: int
+    settled: int = Field(description="Win, loss or push.")
+    wins: int
+    losses: int
+    pushes: int
+    voids: int
+    pending: int
+    win_rate: Optional[float] = Field(description="wins / (wins + losses); pushes and voids excluded.")
+
+
+class MarketRecord(BaseModel):
+    game_id: str
+    game_date: date
+    tipoff: datetime
+    home: Team
+    away: Team
+    forecast: MarketForecastOut
+    outcome: Optional[Outcome]
+
+
+class MarketHistoryResponse(BaseModel):
+    mode: Mode
+    sport: Sport
+    market: MarketId
+    policy: Policy
+    total: int
+    record: MarketRecordSummary
+    predictions: list[MarketRecord]
+
+
+class MarketPerformanceResponse(BaseModel):
+    mode: Mode
+    sport: Sport
+    market: MarketId
+    policy: Policy
+    title: str
+    model_version: Optional[str]
+    forecasts: int
+    record: MarketRecordSummary
+    brier_score: Optional[float] = Field(description="Multi-outcome Brier (sides a / push-draw / b) on settled forecasts.")
+    log_loss: Optional[float]
+    line_sources: dict[str, int]
+    market_matched: int = Field(description="Settled forecasts made at a quoted bookmaker line.")
+    model_log_loss_on_matched: Optional[float]
+    market_log_loss_on_matched: Optional[float]
+    reference: Optional[dict] = Field(description="One-time historical test of this market, when one exists (labelled).")
+    limitations: list[str]
+    note: str
+
+
 GameSummary.model_rebuild()
+GameDetail.model_rebuild()

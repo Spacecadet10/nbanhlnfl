@@ -174,3 +174,16 @@ def test_poisson_market_vectors_match_settlement_frequencies():
     for market, line in (("spread", -1.5), ("total", 6.0), ("reg3", None)):
         for got, want in zip((c / n for c in counts[market]), grid.market(market, line)):
             assert abs(got - want) < 0.01
+
+
+def test_recording_the_test_report_is_idempotent(nhl_store, tmp_path):
+    path = tmp_path / "decision.json"
+    nhl_eval.evaluate_validation(nhl_store, decision_path=path, out_dir=tmp_path / "val", log=lambda _m: None)
+    nhl_eval.evaluate_test(nhl_store, decision_path=path, out_dir=tmp_path / "test", log=lambda _m: None)
+    first = nhl_eval.record_test_report(nhl_store, tmp_path / "test")
+    assert first["created"] > 0 and len(first["models"]) == 3
+    assert nhl_eval.record_test_report(nhl_store, tmp_path / "test") == {**first, "created": 0,
+                                                                        "already_recorded": first["created"]}
+    assert nhl_store.execute("SELECT DISTINCT run_type FROM predictions").fetchall()[0][0] == "backtest"
+    with pytest.raises(nhl_eval.NhlEvaluationError):
+        nhl_eval.record_test_report(nhl_store, tmp_path / "val")

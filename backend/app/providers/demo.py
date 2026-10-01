@@ -3,18 +3,28 @@ from datetime import date
 from typing import Optional
 
 from .. import fixtures, metrics
-from ..schemas import (GameDetail, GamesResponse, GameSummary, HistoryResponse, MarketComparison, Meta, PerformanceResponse,
-                       PredictionRecord, SourceStatus, apply_slate_policy, confidence_record, meets_confidence,
-                       pick_confidence)
+from .. import markets, sports
+from ..schemas import (GameDetail, GamesResponse, GameSummary, HistoryResponse, MarketComparison, MarketInfo, Meta,
+                       PerformanceResponse, PredictionRecord, SourceStatus, SportInfo, apply_slate_policy,
+                       confidence_record, meets_confidence, pick_confidence)
 
 SUMMARY_EXCLUDE = {"home_stats", "away_stats", "projected_score_available", "stats_as_of"}
 
 
 class DemoProvider:
     mode = "demo"
+    sport = "nba"
+
+    def market_infos(self) -> list[MarketInfo]:
+        return [MarketInfo(id=m, title=markets.spec("nba", m).title, available=m == "winner",
+                           note="Synthetic winner forecasts only." if m == "winner" else "Not part of the demo data.")
+                for m in sports.NBA.markets]
 
     def meta(self) -> Meta:
-        return Meta(mode="demo", default_date=fixtures.DEFAULT_DATE, available_dates=fixtures.demo_dates(),
+        return Meta(mode="demo", sport="nba", markets=self.market_infos(),
+                    sports=[SportInfo(id="nba", label="NBA", available=True),
+                            SportInfo(id="nhl", label="NHL", available=False, note="No NHL demo data.")],
+                    default_date=fixtures.DEFAULT_DATE, available_dates=fixtures.demo_dates(),
                     teams=sorted(fixtures.TEAMS.values(), key=lambda t: t.abbr), primary_model=fixtures.MODEL_VERSION,
                     last_refresh_at=None)
 

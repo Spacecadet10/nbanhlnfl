@@ -313,3 +313,24 @@ def _write(report, preds, models, out_dir, name, log) -> Path:
                             f"{p['p_home']:.6f}", int(p["home_won"]), p.get("lambda_home", ""), p.get("lambda_away", "")])
     log(f"Report written to {out_dir}")
     return out_dir
+
+
+def record_test_report(conn: sqlite3.Connection, report_dir: Path) -> dict:
+    """Appends the one-time test's per-game winner predictions (from its saved predictions.csv) to the ledger as
+    run_type 'backtest', so the app can show them. Nothing is re-evaluated; retries are idempotent."""
+    from .ledger import Forecast, record
+    report = json.loads((Path(report_dir) / "report.json").read_text())
+    if report.get("stage") != "test" or report.get("sport") != "nhl":
+        raise NhlEvaluationError("Only the NHL test report can be recorded")
+    keep = {m["model_version"] for n, m in report["winner_models"].items() if n in ("hockey_elo", "home_rate", "constant")}
+    created = existing = 0
+    with (Path(report_dir) / "predictions.csv").open() as f:
+        for row in csv.DictReader(f):
+            if row["model_version"] not in keep:
+                continue
+            _, new = record(conn, Forecast(row["game_id"], "backtest", row["model_version"], report["dataset_version"],
+                                                    report["feature_version"], row["cutoff_at"], report["generated_at"],
+                                                    float(row["p_home"])))
+            created += new
+            existing += not new
+    return {"created": created, "already_recorded": existing, "models": sorted(keep)}
