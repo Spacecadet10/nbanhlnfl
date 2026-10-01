@@ -1,7 +1,22 @@
 # Current handoff
 
-Status: Shadow recording ENABLED 2026-10-01 (daily launchd job). Milestone 4 implemented and reviewed; odds snapshots and local launchd automation configured. Courtside frontend redesign complete. Git baseline d96db86. Free sources only (ESPN; no keyed odds API, user decision 2026-09-30). No deployment, no purchases.
-Current owner: User (shadow season running: nightly Elo + sealed logistic_v2 shadow). Combination analysis done; tree-model research is a separate, not-yet-planned task. Final test was run once (2026-09-30T14:40:35Z); Elo is the frozen primary model.
+## Codex collector fix re-review and research status
+- Overwrite-check findings resolved in the reviewed code: HTTP failures are failed checks, replacement failures affect status, absent ETags trigger bounded hash comparison. Independently ran injury tests: 25 passed, existing dependency warning. No full readiness or scheduler verification in this scoped review; no production or schedule changes.
+- Read saved research-round-3 report: learned stacking HAS run. stack_logit 64.44% accuracy/Brier .22057; conditional 64.31%/.22122; logistic_v2 64.41%/.21977. Saved results are not an independent rerun or full stacking implementation review. Do not request a duplicate experiment based on older pasted messages.
+- Confidence-band findings describe selection, not new predictive information; calibration on reused development data does not establish that live probabilities can always be trusted. Further thresholds chosen using spent test outcomes would invalidate their use as independent confirmation.
+
+## Codex stacking research
+- User explicitly requested research into learned combinations. Sources and a bounded proposed experiment are in docs/STACKING_RESEARCH.md. Findings support testing learned/conditional stacking; earlier averaging failure does not settle it. NBA 83% paper uses random splits and is not a comparable benchmark.
+- Recommended next research: two fixed regularized stackers using chronological base forecasts, with matched-coverage confidence-filter comparisons. Existing development predictions are exploratory due to prior model-selection reuse. Preserve live/sealed experiments and spent test seasons. No model run, dependency installation, production writes or scheduling performed in this research task.
+
+Status: Shadow recording ENABLED 2026-10-01 (daily launchd job). Injury-report collector agent INSTALLED 2026-10-01. Milestone 4 implemented and reviewed; odds snapshots and local launchd automation configured. Courtside frontend redesign complete. Git baseline d96db86. Free sources only (ESPN; no keyed odds API, user decision 2026-09-30). No deployment, no purchases.
+Current owner: Codex review of research round 3, the collector overwrite-check fix (collector now INSTALLED at the user's instruction, before that review was recorded) and docs/AVAILABILITY_FEASIBILITY.md. Shadow season running unchanged. Final test was run once (2026-09-30T14:40:35Z); Elo is the frozen primary model.
+
+## Advisory review (Devin, 2026-09-30 session date)
+- Read the handoff, plan, evaluation rules and agreement analysis; Git working tree was clean. No code, data, scheduler or model changes; tests were not rerun for this advisory review.
+- Combination results show no demonstrated Brier improvement over the challenger, not proof that combinations cannot help accuracy. No verified accuracy ceiling or injury-feature uplift was established.
+- Recommended next task: a bounded audit of timestamped injury/roster/player-history availability before authorizing a new candidate. Preserve both sealed experiments; compare any later-cutoff candidate against a baseline generated at that same cutoff and report coverage and paired uncertainty.
+- Blocker to credible historical injury evaluation: source coverage and pregame availability have not been verified in this review. No new implementation authorized.
 
 ## Shadow recording enabled (Claude, 2026-10-01, after Codex Step 6 acceptance)
 - `scripts/launchd/com.nba-predictor.daily.plist` and the installed copy in `~/Library/LaunchAgents` now set
@@ -12,6 +27,143 @@ Current owner: User (shadow season running: nightly Elo + sealed logistic_v2 sha
   Ledger 27,744 rows, 0 live rows, test_access 1 line: unchanged. First forecasts are expected about 2026-10-13 (7-day window before the 10-20 openers).
 - To watch: `data/daily-launchd.log` each night; `app.cli shadow-report` for coverage. A stale-input skip makes the shadow job 'failed'
   and the nightly exit code 1 while Elo still runs.
+
+## Availability audit review (Devin; report/code review only)
+- Read the report, HEAD probe and paired-accuracy amendment. The split verdict is reasonable provisionally: prospective raw-file collection pilot is feasible; historical modeling remains gated. No implementation or scheduler change authorised.
+- Clarify AVAILABILITY_AUDIT gate 4: "file time" must use the report's publication timestamp with timezone and the legacy +30-minute naming offset, not the literal filename hour. Later revisions/missing metadata need an explicit conservative policy; historical availability remains assumed even after the gates pass.
+- Evidence verification BLOCKED: reads of all four files in data/reports/availability-audit-2026-10-01 were denied by ignore rules, including after request_scope granted read access. Counts, checksums, timestamp distributions and reported network results were not independently reproduced. User must make the audit evidence readable or supply it before numerical acceptance.
+- Reviewed paired-accuracy code: preserves all games in the denominator and resamples paired weekly blocks; saved numerical intervals were not rerun. No network requests, database access or tests in this review. Only HANDOFF.md edited; git diff --check passed.
+- Next: clarify the timestamp rule and unblock evidence review; then seek approval for a bounded raw-report collector plan, separate from parsers, player ratings and models.
+
+## Research round 2: gradient-boosted trees (Claude, 2026-10-01; user-authorised implementation round)
+- Definition recorded before building: EVALUATION_PLAN "Research round 2" (fixed settings, 12 existing features, monotonic constraints,
+  chronological season-start refits, one run, reading rule). No sweep, no random split, no test seasons.
+- Code: `backend/app/models/gbt.py` (`GradientBoostedTrees`, standalone: `logistic.py`, `efficiency.py`, `shadow.py` and `live.py` untouched);
+  `backtest.paired_accuracy_bootstrap`, `backtest.evaluate_research_gbt` (lazy scikit-learn import; frozen Elo config; validation rows/boxes
+  only; no ledger; no test access); CLI `research-gbt`. Dependency: `scikit-learn>=1.5,<2` in the **dev** extra only (installed 1.9.1 with
+  `uv pip install -e '.[dev]'`); a test asserts that importing app.main/jobs/shadow/shadow_report/cli does not import sklearn.
+- Tests `tests/test_gbt.py` (9): registered settings; future rows/boxes and own label/box leave predictions unchanged; fits use earlier seasons
+  only; warm-up = Elo; determinism; paired accuracy bootstrap; research run reads only "validation" and leaves ledger/decision/access log alone.
+- Result (BASELINE_REPORT "Research round 2"; evidence `docs/evidence/research-gbt_v1-2026-10-01/report.json`): gbt_v1 63.86% / Brier 0.22342
+  / log loss 0.63819 vs Elo 64.34% / 0.22068 / 0.63158 and logistic_v2 64.41% / 0.21977 / 0.62968 on the same 3,962 games. Brier difference
+  +0.00274 [+0.00037, +0.00497] vs Elo and +0.00365 [+0.00167, +0.00555] vs logistic_v2; accuracy −0.48 pts [−1.58, +0.60] and −0.56 pts
+  [−1.54, +0.41]. Fails the step 4 screen. Nothing tuned afterwards.
+- Invariants around the real run: ledger 27,744; test_access 1 line; frozen_decision and shadow_decision file hashes unchanged.
+- Injury/player data investigation requested in the same message: already delivered as docs/AVAILABILITY_AUDIT.md (+ docs/evidence/availability-audit-2026-10-01/);
+  not repeated. No accuracy gain is estimated there.
+- Uncommitted: this round's code, tests and docs, plus the earlier audit, collector plan and analysis amendment.
+
+## Injury collector installed + confidence ranges (Claude, 2026-10-01; user instruction)
+- Installed `~/Library/LaunchAgents/com.nba-predictor.injuries.plist` (copy of scripts/launchd/…; `plutil -lint` OK; `launchctl bootstrap gui/501`);
+  `launchctl print` shows NBA_INJURY_COLLECTION=1 and minutes 2 and 32. One real scheduler run (`kickstart`): exit 0, job_runs row
+  `injuries|skipped|0 attempts` (0 slots due: no game window until 2026-10-19T07:00Z). 0 attempt rows, ledger 27,744, test_access 1 line.
+  Installed on the user's explicit instruction; Codex's review of the overwrite-check fix was not yet recorded. To remove:
+  `launchctl bootout gui/501/com.nba-predictor.injuries` and delete the plist. It writes one 'skipped' job row per run while nothing is due.
+- docs/CONFIDENCE_RANGES.md (+ docs/evidence/confidence-ranges-2026-10-01/ranges.json; `scripts/agreement_analysis.py --ranges`): win rate by
+  stated-probability band, threshold, pick side and season phase on saved development predictions. Elo: ≥65% → 73.8% on 42.9% of games; ≥70% →
+  76.6% on 27.6%; ≥75% → 79.9% on 16.6%; ≥80% → 81.7% on 8.4%. Home/away pick and season phase show no difference beyond noise. Test-season
+  figures quoted there are recomputed from the calibration bins already published in BASELINE_REPORT (no new test access). Descriptive only.
+
+## Five-model agreement cut (Claude, 2026-10-01; user "try model agreement"; descriptive only)
+- `scripts/agreement_analysis.py --five` (reads the stacking run's saved predictions; new `vote_splits`); docs/AGREEMENT_ANALYSIS.md
+  "Five-model agreement"; evidence docs/evidence/research-stacking-2026-10-01/five_model_votes.json.
+- 5-0: 3,177 games (80.2%), 67.5% [65.9, 69.1]; 4-1: 496 (12.5%), 52.8%; 3-2: 289 (7.3%), 52.9%. At 50% coverage, confidence alone 72.8%,
+  unanimous-then-confidence 72.7%, 1,956 of 1,981 games shared. No model, rule or schedule changed.
+
+## Research round 3: learned stacking (Claude, 2026-10-01; user "go")
+- Definition recorded before building: EVALUATION_PLAN "Research round 3" (five base models, OOS rows from 2020-21, season-start fits on
+  earlier seasons, stacker A = L2 logistic on clipped logits, stacker B = A + three fixed interactions, λ 10, coverage levels 50/70/85/100%).
+- Code: `backend/app/models/stacking.py` (pure functions), `backtest.evaluate_research_stacking` (frozen Elo config; validation rows/boxes
+  only; checks base first-fit season and that training results precede the season; no ledger, no test access), CLI `research-stacking`.
+  Live, shadow, logistic and efficiency code untouched; scikit-learn still dev-only and lazily imported.
+- Tests `tests/test_stacking.py` (8): registered definition; features; season-by-season training sets; later and own-season results do not
+  change predictions; availability guard; weights favour the informative base; confidence ranking ignores outcomes; research run reads only
+  "validation" and leaves ledger/decision/access log alone. `--ready` exit 0: 200 passed, typecheck/build passed.
+- Result (BASELINE_REPORT "Research round 3"; evidence docs/evidence/research-stacking-2026-10-01/report.json): stack_logit 64.44% / 0.22057,
+  stack_conditional 64.31% / 0.22122, logistic_v2 64.41% / 0.21977, equal average 64.34% / 0.21988, Elo 64.34% / 0.22068. Neither stacker beats
+  logistic_v2 (A +0.00080 [−0.00014, +0.00172]; B +0.00145 [+0.00046, +0.00244]). A passes the lenient step 4 screen vs Elo by a hair
+  (upper bound +0.000997); B fails. At 50/70/85% coverage all methods are within about 1 point of each other (72–73%, 68–69%, 66–67%).
+  All-five agreement (80.2% coverage) 67.5% vs 67.0–67.7% for confidence filters at the same coverage. Nothing tuned afterwards.
+- Invariants: ledger 27,744; test_access 1 line; frozen_decision and shadow_decision hashes unchanged.
+
+## Injury feature feasibility (Claude, 2026-10-01; read-only sample study)
+- Report: docs/AVAILABILITY_FEASIBILITY.md; evidence docs/evidence/availability-feasibility-2026-10-01/feasibility.json; script
+  scripts/injury_feature_feasibility.py (pypdf from a scratch venv; no project dependency; reads the DB read-only/immutable).
+- Sample: 28 dates (4 per season, seed 20261002), 474 team-games, reports at 11:30 PM D−1 (A) and 5:30 PM D (B). 62 requests to the NBA host
+  in total (56 GET, 6 HEAD), 1 s apart.
+- Parsing: 48/48 reports, 6,176 entries, strict = loose count in every report, team and date on every entry; two producers (iTextSharp to
+  2022-23, GemBox from 2023-24, reversed page text). Header time = expected slot in 48/48; Last-Modified 0.03–0.47 min later.
+- Mapping: 3,708/3,735 resolved (99.3%), 26 unresolved (24 listed absent), 1 ambiguous. Team check vs box 2,225/2,295; 14 mismatches
+  inspected = trades/assignments/All-Star rows, 56 not inspected.
+- Timing: A missing in 2019-20 and 2020-21 (8:30 PM is the last evening report then); 16.9% of team-games not submitted at A; B covers 448/474
+  team-games before tipoff. Minutes listed absent rise from A to B in 43% of team-games.
+- Not established: predictive value (untested, no estimate), separation of new from long-standing absences, exhaustive coverage.
+- No model, schema, scheduler or dependency change.
+
+## Injury collector built (Claude, 2026-10-01; user instruction "build the injury collector"; plan steps 1–4)
+### Codex review
+- Independently ran readiness: 186 tests, typecheck/build passed; dependency deprecation and physical-core detection warnings only. git diff --check passed. Read saved GBT report and fitting code: gbt_v1 accuracy 63.86%, Brier .22342 versus logistic_v2 64.41%, .21977; no real research rerun.
+- P2 `injuries.run` overwrite branch: non-200 HEAD responses are recorded as changed_upstream and leave the job successful. Reproduced in temporary DB: two HTTP 500 responses yield status=success, changed=2, failed=0. Also the changed-file GET outcome is discarded, so failed replacement downloads do not affect job status. Distinguish failed/unknown checks from confirmed changes and propagate failed replacement downloads; test HTTP errors and changed-HEAD/failed-GET.
+- Missing HEAD validators must not establish unchanged content merely because tuples of missing metadata (or only equal length) match. Require a meaningful validator or bounded GET/hash comparison; preserve request limits and originals.
+- Review changed no production data or schedules. Fix these bounded overwrite-check cases before collector installation. Then proceed toward injury feature feasibility (publication times/player matching), not another repeat of the already completed tree experiment. Collector stores raw files only and does not yet improve predictions.
+### Claude fix for the overwrite-check findings — 2026-10-01
+- `injuries.run` overwrite branch rewritten. A HEAD that is not HTTP 200 (500, 403, 404, …) is recorded as `failed` ("state is unknown"),
+  never as a change, and makes the job `failed`. A change is concluded only from a meaningful validator: both ETags present and different.
+  The replacement download's outcome is now propagated: if it is not `stored`, the file is listed in `overwrite_check.redownload_failed` and
+  the job is `failed`; the original raw file is always kept.
+- Missing validator: if either side has no ETag, equal dates or lengths prove nothing. One budgeted GET is made and SHA-256 is compared with
+  the stored hash (same → `unchanged`; different → `changed_upstream`, new content already saved as a second raw file). With no budget left,
+  or if that GET fails, the check is `failed`. All requests still count against the run, slot and day budgets.
+- Tests (test_injuries.py, now 25): `test_codex_head_error_is_a_failed_check_not_a_change` (500/403/404),
+  `test_codex_changed_file_whose_download_fails_makes_the_job_fail`,
+  `test_missing_etag_is_settled_by_a_hash_comparison_not_by_matching_metadata`,
+  `test_missing_etag_without_budget_or_with_a_failed_download_is_a_failed_check`. `--ready` exit 0: 192 passed, typecheck/build passed.
+- Collector still not installed; waiting for the installation review.
+
+- Step 1 terms: no clause on automated access found in NBA.com ToU (automated summary of the page; personal non-commercial download
+  allowed; statistics not for gambling); host robots.txt read directly: path not disallowed, Crawl-Delay 1, no query strings. Recorded in DATA_SOURCES.md.
+- Code: `sources/nba_injury.py` (names, GET/HEAD, PDF validation; no content parsing), `injuries.py` (slots incl. DST, game-window rule,
+  plan, single logged download, budgets, daily overwrite check, summary), `jobs.injury_reports` (job 'injuries'; returns 'disabled' and
+  writes nothing unless NBA_INJURY_COLLECTION=1 or a dry run), CLI `injuries [--dry-run]`, `coverage` → `injury_reports`,
+  `raw_cache.store_fetch(suffix=)`, migration 0010 (`injury_report_attempts` append-only + job name), `config.injury_collection_enabled`.
+  Elo, shadow, jobs.daily, the daily/odds agents and their plists are untouched. No new dependency.
+- Retrieval time = clock read after the response body is in hand; request start kept separately. Deviation from the plan: none in rules;
+  report size is about 100 kB (season estimate about 0.8 GB, plan said 0.6 GB).
+- Tests `tests/test_injuries.py` (19): names and DST days; game window; slow response; outage vs run/slot/day budgets; budget exhausted
+  mid-retry; crawl delay; 403 then given up; bad bodies; rerun and late catch-up; overwrite check (unchanged, changed with first file kept,
+  never starving collection, HEAD failure); switch off; append-only incl. INSERT OR REPLACE; migration; coverage; replay.
+  `--ready` exit 0: 186 passed, typecheck/build passed; guard and diff check passed.
+- Real store: migration 0010 applied (31 job rows kept); `injuries --dry-run` → 0 due; `injuries` → disabled, no request; 0 attempt rows;
+  ledger 27,744; test_access 1 line. Dry runs with a fixed future clock: window opens 2026-10-19T07:00Z (36 h before the first tipoff).
+- Supervised trial in a scratch copy (3 GET + 1 HEAD to the NBA host): 2 reports stored and verified, 1 not_available (403), HEAD unchanged.
+- NOT done: step 5 (install `scripts/launchd/com.nba-predictor.injuries.plist`; file exists, `plutil -lint` OK, not installed) and step 6.
+- Review focus: slot/window rules, budget accounting, overwrite check order (after collection, only with spare budget), 403 handling
+  before the season's reports begin (up to 120 attempts a day until given up per slot).
+
+## Injury collector plan (Claude, 2026-10-01; plan only)
+- docs/INJURY_COLLECTOR_PLAN.md: raw-collection pilot for 2026-27 injury-report PDFs. Stores unchanged files in the raw cache plus an
+  append-only attempt log (request start, response-completion time, outcome, status, Last-Modified, ETag, hash). No parsing, mapping,
+  model, history download or dependency. Budgets count every attempt (8 per run, 4 per slot, 120 per day). Separate launchd agent, off by default.
+- Review focus: half-hour vs quarter-hour slots; game-window rule; budgets; the daily overwrite check; step 1 (NBA terms for automated
+  retrieval) not yet done; pilot success measures.
+- Nothing implemented. Uncommitted docs: this plan, AVAILABILITY_AUDIT.md, docs/evidence/, AGREEMENT_ANALYSIS.md amendment.
+
+## Availability data audit (Claude, 2026-10-01; read-only, bounded)
+- Follow-up to the audit review (2026-10-01): evidence copied to the non-ignored `docs/evidence/availability-audit-2026-10-01/` (4 files,
+  97 kB; no raw PDFs/CSVs) so it can be read; gate 4 rewritten as an explicit publication-time rule (header time in America/New_York, never
+  the file-name hour, later-of with Last-Modified, exclusion on missing metadata, still labelled assumed); "go" narrowed to a raw-collection
+  pilot. No collector plan written or authorised yet.
+- Report: docs/AVAILABILITY_AUDIT.md. Evidence: docs/evidence/availability-audit-2026-10-01/ (probe JSON, parse checks, player box checks).
+  Probe script: scripts/probe_availability_sources.py (stdlib, HEAD only). PDF text checks used pypdf in a scratch venv; no dependency added.
+- Verdicts: prospective collection = go; historical backtesting = not yet (conditional on four gates: exhaustive inventory, production
+  parser with reconciliation, cross-season alias table with an explicit unresolved category, written availability rule).
+- Injury reports: sampled 210 checks (10 dates × 3 times × 7 seasons): every date has a report; 200/210 found (misses: 1 PM/8 PM on five
+  2020 bubble dates). Two full days exhaustive (24/24, 96/96). Hourly names publish at :30 (176/176 files +30.0–30.4 min); format changed
+  2025-12-22. No sampled file modified after its slot. 0 network errors in about 560 requests. Timestamps are consistent but possibly from one process.
+- Name mapping on 534 entries from 4 reports: 510 same season, 17 other season (season-long absentees), 7 unresolved, 1 ambiguous.
+- Player box scores: all 7 seasons, digest-verified, exhaustive checks vs our final games (table in the report).
+- Also from the previous turn, uncommitted: paired accuracy table in docs/AGREEMENT_ANALYSIS.md and `scripts/agreement_analysis.py`.
+- No model, schema, scheduler or dependency change. Nothing committed in this step.
 
 ## Combination analysis (Claude, 2026-10-01; descriptive, separate from promotion)
 - `scripts/agreement_analysis.py --combinations` (extends the existing script; reuses `backtest.paired_bootstrap` and `app.metrics`);
