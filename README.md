@@ -52,6 +52,8 @@ The backend allows CORS from the Vite origin; override with `CORS_ORIGINS` (comm
 | `GET /api/games?date=YYYY-MM-DD` | Games on an Eastern date: prediction (or a `forecast_note` explaining why none), market, result |
 | `GET /api/games/{game_id}` | Detail plus point-in-time team stats as of the game's cutoff (404 if unknown) |
 | `GET /api/predictions?run_type=live\|backtest&date_from&date_to&team&min_confidence&limit` | History, latest version per game (422 if `date_from > date_to`). `min_confidence` (0.5–1) keeps picks whose model probability for the predicted winner, max(p_home, 1 − p_home), is at least that value. Each row has `pick` and `confidence`; `record` gives the selected count and the settled win/loss record (unscored games never count) |
+| `GET /api/games?date=…&policy=pregame\|near_tipoff&min_confidence` | The slate. `selection` gives the counts, and each game's `slate_pick` is its pick under the chosen policy only (never the other forecast), with `meets_confidence` |
+| `…/predictions` and `…/performance` `&policy=pregame\|near_tipoff` | Live forecasts only: the night-before record (default) or the near-tipoff record; never mixed (422 with `run_type=backtest`). Game payloads carry an optional `near_tipoff` object next to `prediction` |
 | `GET /api/performance?run_type=live\|backtest` | Live scoring, or the final-test backtest with baselines. Never mixed |
 
 ## Daily operation (milestone 4)
@@ -61,6 +63,8 @@ Run from `backend/`:
 .venv/bin/python -m app.cli refresh      # ESPN months around today; retries 3×; max once per 30 min (--force to override)
 .venv/bin/python -m app.cli predict      # live Elo forecasts for eligible games whose cutoff is within 7 days
 .venv/bin/python -m app.cli score        # score the latest live forecasts against stored results (read-only)
+.venv/bin/python -m app.cli predict-now [--dry-run]   # near-tipoff forecasts for games tipping off within 24 h (refreshes data first)
+.venv/bin/python -m app.cli score-near-tipoff         # score near-tipoff forecasts (read-only; separate from the night-before record)
 .venv/bin/python -m app.cli boxscores    # possession refresh: ESPN summaries for recent finals lacking a complete box (max 30/run)
 .venv/bin/python -m app.cli shadow-predict   # sealed challenger's shadow forecasts; a dry run unless --record
 .venv/bin/python -m app.cli shadow-report    # shadow season coverage and scores; --final applies the sealed rule once, after the play-in
@@ -78,6 +82,11 @@ Run from `backend/`:
   `data/odds-launchd.log` and `data/daily-launchd.log`. They run only while this Mac is awake and this checkout
   remains at the configured path. To stop/remove them, run `launchctl bootout gui/501 ~/Library/LaunchAgents/com.nba-predictor.odds.plist`
   and the same command with `com.nba-predictor.daily.plist`, then remove those two plist files.
+- Near-tipoff forecasts (`predict-now`): a separate forecast for games starting within 24 hours, made with the same frozen Elo from the
+  freshest stored results and stored under its own model version (`…-policy=near_tipoff`, cutoff = tipoff). It refreshes schedule/results,
+  odds and possession stats first, and refuses a game after tipoff, when the last successful results refresh is over 60 minutes old, or
+  while an earlier game of either team has no final result. It never replaces or changes the night-before forecast. Run it by hand; it is
+  not scheduled. Elo does not know about injuries or line-ups.
 - Shadow challenger (`logistic_v2`, sealed in `backend/app/models/shadow_decision.json`): `daily` also runs `boxscores` and records
   shadow forecasts only when `NBA_SHADOW_RECORDING=1` is set for the daily job. It is off by default in code and enabled on this Mac
   since 2026-10-01 through `EnvironmentVariables` in `scripts/launchd/com.nba-predictor.daily.plist` (remove that key and reload the

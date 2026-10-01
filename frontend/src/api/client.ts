@@ -1,5 +1,5 @@
 // The app's single API client. All screens fetch through here; there is no local fallback data.
-import type { GameDetail, GamesResponse, HistoryResponse, Meta, PerformanceResponse } from './types';
+import type { GameDetail, GamesResponse, HistoryResponse, Meta, PerformanceResponse, Policy } from './types';
 
 export class ApiError extends Error {
   constructor(message: string, readonly status?: number) {
@@ -34,15 +34,22 @@ async function get<T>(path: string, params?: Record<string, string | undefined>,
 
 export const api = {
   meta: (signal?: AbortSignal) => get<Meta>('/meta', undefined, signal),
-  games: (date: string, signal?: AbortSignal) => get<GamesResponse>('/games', { date }, signal),
+  games: (date: string, policy: Policy, minConfidence: number | null, signal?: AbortSignal) =>
+    get<GamesResponse>('/games', {
+      date, policy: policy === 'near_tipoff' ? 'near_tipoff' : undefined,
+      min_confidence: minConfidence == null ? undefined : String(minConfidence),
+    }, signal),
   game: (id: string, signal?: AbortSignal) => get<GameDetail>(`/games/${encodeURIComponent(id)}`, undefined, signal),
   predictions: (f: { run_type?: 'live' | 'backtest'; date_from?: string; date_to?: string; team?: string;
-    min_confidence?: number | null; limit?: number }, signal?: AbortSignal) =>
+    min_confidence?: number | null; limit?: number; policy?: Policy }, signal?: AbortSignal) =>
     get<HistoryResponse>('/predictions', {
       run_type: f.run_type, date_from: f.date_from, date_to: f.date_to, team: f.team,
+      policy: f.policy === 'near_tipoff' ? 'near_tipoff' : undefined,
       min_confidence: f.min_confidence == null ? undefined : String(f.min_confidence),
       limit: f.limit == null ? undefined : String(f.limit),
     }, signal),
-  performance: (runType: 'live' | 'backtest', signal?: AbortSignal) =>
-    get<PerformanceResponse>('/performance', { run_type: runType }, signal),
+  performance: (runType: 'live' | 'backtest', policy: Policy, signal?: AbortSignal) =>
+    get<PerformanceResponse>('/performance', {
+      run_type: runType, policy: policy === 'near_tipoff' && runType === 'live' ? 'near_tipoff' : undefined,
+    }, signal),
 };

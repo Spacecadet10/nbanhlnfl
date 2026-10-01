@@ -8,12 +8,13 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from .. import backtest, metrics
+from .. import backtest, metrics, near_tipoff
 from ..db import utc_now
 from ..live import HORIZON_DAYS, LATEST_LIVE_SQL
 from ..schemas import (BaselineScore, GameDetail, GamesResponse, GameSummary, HistoryResponse, Market,
-                       MarketComparison, Meta, Outcome, PerformanceResponse, Prediction, PredictionRecord,
-                       SourceStatus, Team, TeamStats, confidence_record, meets_confidence, pick_confidence)
+                       MarketComparison, Meta, NearTipoffForecast, Outcome, PerformanceResponse, Prediction, PredictionRecord,
+                       SourceStatus, Team, TeamStats, apply_slate_policy, confidence_record, meets_confidence,
+                       pick_confidence)
 
 EASTERN = ZoneInfo("America/New_York")
 FRANCHISE_IDS = tuple(f"espn:{i}" for i in range(1, 31))
@@ -47,6 +48,7 @@ class RealProvider:
         decision, cfg = backtest.load_frozen_decision(conn)
         from ..models.elo import Elo
         self.model_version = backtest.model_version(Elo(cfg))
+        self.near_version = near_tipoff.model_version(Elo(cfg))   # stored apart; default views never read it
 
     # ---- helpers -------------------------------------------------------------------------------------------------
     def _team(self, team_id: str) -> Team:
@@ -67,6 +69,24 @@ class RealProvider:
             return None
         return Prediction(model_version=row["model_version"], run_type=row["run_type"], generated_at=row["generated_at"],
                           cutoff_at=row["cutoff_at"], home_win_prob=row["home_win_prob"])
+
+    def _near_tipoff(self, g: sqlite3.Row) -> Optional[NearTipoffForecast]:
+        row = self.conn.execute(
+            f"SELECT l.*, n.results_refreshed_at, n.latest_result_available_at, n.results_used, n.market_home_prob, "
+            f"n.market_retrieved_at FROM ({LATEST_LIVE_SQL}) l LEFT JOIN near_tipoff_forecasts n "
+            f"ON n.prediction_id = l.prediction_id WHERE l.game_id = ?", (self.near_version, g["game_id"])).fetchone()
+        if row is None:
+            return None
+        p = row["home_win_prob"]
+        correct = None if g["status"] != "final" else (p >= 0.5) == (g["home_score"] > g["away_score"])
+        return NearTipoffForecast(
+            model_version=row["model_version"], generated_at=row["generated_at"], cutoff_at=row["cutoff_at"],
+            home_win_prob=p, pick="home" if p >= 0.5 else "away", confidence=pick_confidence(p),
+            minutes_before_tipoff=round((_parse(row["cutoff_at"]) - _parse(row["generated_at"])).total_seconds() / 60, 1),
+            results_refreshed_at=row["results_refreshed_at"], latest_result_available_at=row["latest_result_available_at"],
+            results_used=row["results_used"], market_home_prob=row["market_home_prob"],
+            market_retrieved_at=row["market_retrieved_at"], correct=correct,
+            limitation="Elo uses results only; it does not know about injuries, rest or line-ups.")
 
     def _forecast_note(self, g: sqlite3.Row) -> str:
         cutoff = backtest.cutoff_for(g["tipoff_at"])
@@ -102,7 +122,8 @@ class RealProvider:
                     status=g["status"], season_type=g["season_type"], home=self._team(g["home_team_id"]),
                     away=self._team(g["away_team_id"]), prediction=pred,
                     forecast_note=None if pred else self._forecast_note(g),
-                    market=self._market(g["game_id"], g["tipoff_at"]), outcome=outcome)
+                    market=self._market(g["game_id"], g["tipoff_at"]), outcome=outcome,
+                    near_tipoff=self._near_tipoff(g))
 
     def _stats(self, team_id: str, season: int, tipoff: str, cutoff: str) -> TeamStats:
         rows = self.conn.execute(
@@ -158,12 +179,13 @@ class RealProvider:
                          freshness=fresh(predict), note="Live forecasts recorded append-only before each game's cutoff."),
         ]
 
-    def games(self, day: date) -> GamesResponse:
+    def games(self, day: date, policy: str = "pregame", min_confidence: Optional[float] = None) -> GamesResponse:
         start, end = _day_bounds(day)
         rows = self.conn.execute("SELECT * FROM games WHERE tipoff_at >= ? AND tipoff_at < ? ORDER BY tipoff_at, game_id",
                                  (start, end)).fetchall()
-        return GamesResponse(mode="real", date=day, sources=self.sources(),
-                             games=[GameSummary(**self._summary(g)) for g in rows])
+        games = [GameSummary(**self._summary(g)) for g in rows]
+        return GamesResponse(mode="real", date=day, sources=self.sources(), games=games,
+                             selection=apply_slate_policy(games, policy, min_confidence))
 
     def game(self, game_id: str) -> Optional[GameDetail]:
         g = self.conn.execute("SELECT * FROM games WHERE game_id=?", (game_id,)).fetchone()
@@ -187,9 +209,9 @@ class RealProvider:
             (model_version,)).fetchall()
 
     def predictions(self, run_type: str, date_from: Optional[date], date_to: Optional[date], team: Optional[str],
-                    limit: int, min_confidence: Optional[float] = None) -> HistoryResponse:
+                    limit: int, min_confidence: Optional[float] = None, policy: str = "pregame") -> HistoryResponse:
         out = []
-        for r in self._latest_rows(run_type, self.model_version):
+        for r in self._latest_rows(run_type, self.near_version if policy == "near_tipoff" else self.model_version):
             if not meets_confidence(r["home_win_prob"], min_confidence):
                 continue
             day = eastern_date(r["tipoff_at"])
@@ -208,10 +230,11 @@ class RealProvider:
                 home_win_prob=r["home_win_prob"], pick="home" if r["home_win_prob"] >= 0.5 else "away",
                 confidence=pick_confidence(r["home_win_prob"]), outcome=outcome,
                 correct=None if outcome is None else (r["home_win_prob"] >= 0.5) == outcome.home_won))
-        return HistoryResponse(mode="real", run_type=run_type, total=len(out),
+        return HistoryResponse(mode="real", run_type=run_type, policy=policy, total=len(out),
                                record=confidence_record(out, min_confidence), predictions=out[:limit])
 
-    def performance(self, run_type: str) -> PerformanceResponse:
+    def performance(self, run_type: str, policy: str = "pregame") -> PerformanceResponse:
+        primary = self.near_version if policy == "near_tipoff" else self.model_version
         def scored(model_version: str) -> list[sqlite3.Row]:
             rows = [r for r in self._latest_rows(run_type, model_version) if r["status"] == "final"]
             if run_type == "backtest":
@@ -223,7 +246,7 @@ class RealProvider:
             ys = [r["home_score"] > r["away_score"] for r in rows]
             return probs, ys
 
-        rows = scored(self.model_version)
+        rows = scored(primary)
         probs, ys = score(rows)
         baselines = []
         if run_type == "backtest":
@@ -243,12 +266,17 @@ class RealProvider:
             title = "Final test: retrospective backtest, 2024-25 to 2025-26"
             note = ("Retrospective backtest of the model fixed on validation, evaluated once on held-out seasons. "
                     "Not live forecasts. No historical odds, so no market comparison.")
+        elif policy == "near_tipoff":
+            title = "Near-tipoff live forecasts"
+            note = ("Latest near-tipoff forecast per game, made before tipoff from the freshest stored results. Kept "
+                    "separate from the night-before record. Elo does not know about injuries or line-ups. Market "
+                    "comparison uses the latest quote retrieved no later than the forecast itself, where available.")
         else:
             title = "Live forecasts"
             note = ("Latest forecast per game recorded before its cutoff. Market comparison uses the latest quote "
                     "retrieved no later than the forecast itself, where available.")
         return PerformanceResponse(
-            mode="real", run_type=run_type, title=title, model_version=self.model_version, sample_size=len(rows),
+            mode="real", run_type=run_type, policy=policy, title=title, model_version=primary, sample_size=len(rows),
             date_from=min(days, default=None), date_to=max(days, default=None),
             accuracy=metrics.accuracy(probs, ys), brier_score=metrics.brier(probs, ys),
             log_loss=metrics.log_loss(probs, ys), calibration=metrics.calibration(probs, ys), baselines=baselines,

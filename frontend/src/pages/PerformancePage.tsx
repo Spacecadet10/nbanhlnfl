@@ -2,7 +2,7 @@ import { api } from '../api/client';
 import type { PerformanceResponse } from '../api/types';
 import { useApi } from '../api/useApi';
 import { RunBadge } from '../components/Badges';
-import { RunTypeToggle, useRunType } from '../components/RunTypeToggle';
+import { PolicyToggle, RunTypeToggle, usePolicy, useRunType } from '../components/RunTypeToggle';
 import { AsyncView, Empty } from '../components/States';
 import { calendarDate, FULL_DATE, num, pct } from '../format';
 
@@ -10,10 +10,19 @@ const SMALL_SAMPLE = 200;
 
 export function PerformancePage() {
   const [run, setRun] = useRunType();
-  const { state, retry } = useApi((s) => api.performance(run, s), [run]);
+  const [policyChoice, setPolicy] = usePolicy();
+  const policy = run === 'live' ? policyChoice : 'pregame';
+  const { state, retry } = useApi((s) => api.performance(run, policy, s), [run, policy]);
   return (
     <section>
-      <AsyncView state={state} retry={retry}>{(p) => <Report perf={p} run={run} setRun={setRun} />}</AsyncView>
+      <AsyncView state={state} retry={retry}>
+        {(p) => (
+          <>
+            {p.mode === 'real' && run === 'live' && <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} /></div>}
+            <Report perf={p} run={run} setRun={setRun} />
+          </>
+        )}
+      </AsyncView>
     </section>
   );
 }
@@ -29,7 +38,9 @@ function Report({ perf: p, run, setRun }: { perf: PerformanceResponse; run: 'liv
       <p className="notice" role="note">{p.note}</p>
       {p.sample_size === 0 ? (
         <Empty>
-          {p.run_type === 'live'
+          {p.policy === 'near_tipoff'
+            ? <>No near-tipoff forecasts have been scored yet. They are made with the predict-now command for games starting within 24 hours and scored after the final.</>
+            : p.run_type === 'live'
             ? <>No live forecasts have been scored yet. Live forecasts are recorded before regular-season and playoff games and scored after the final. <button type="button" className="link-btn" onClick={() => setRun('backtest')}>See the final test</button></>
             : 'No completed games have been scored yet.'}
         </Empty>

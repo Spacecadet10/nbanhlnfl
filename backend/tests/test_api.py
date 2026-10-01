@@ -142,3 +142,14 @@ def test_demo_history_supports_the_confidence_filter():
     assert body["record"] == {"min_confidence": 0.65, "selected": len(expected), "settled": len(settled), "wins": wins,
                               "losses": len(settled) - wins,
                               "win_rate": pytest.approx(wins / len(settled)) if settled else None}
+
+
+def test_demo_slate_selection_counts_match_the_picks():
+    day = fixtures.DEFAULT_DATE.isoformat()
+    body = client.get("/api/games", params={"date": day, "min_confidence": 0.65}).json()
+    picks = [g["slate_pick"] for g in body["games"]]
+    assert body["selection"] == {"policy": "pregame", "min_confidence": 0.65, "games": len(picks),
+                                 "with_forecast": sum(p is not None for p in picks),
+                                 "selected": sum(bool(p and p["meets_confidence"]) for p in picks)}
+    near = client.get("/api/games", params={"date": day, "policy": "near_tipoff"}).json()
+    assert near["selection"]["with_forecast"] == 0 and all(g["slate_pick"] is None for g in near["games"])

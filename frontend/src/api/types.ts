@@ -32,6 +32,19 @@ export interface Market {
 }
 export interface Outcome { home_score: number; away_score: number; home_won: boolean }
 
+export type Policy = 'pregame' | 'near_tipoff';
+
+/** A separate forecast made shortly before tipoff from the freshest stored results. Never replaces `prediction`. */
+export interface NearTipoffForecast {
+  model_version: string; generated_at: string; cutoff_at: string; home_win_prob: number;
+  pick: 'home' | 'away'; confidence: number; minutes_before_tipoff: number;
+  results_refreshed_at: string | null; latest_result_available_at: string | null; results_used: number | null;
+  market_home_prob: number | null; market_retrieved_at: string | null; correct: boolean | null; limitation: string;
+}
+
+export interface SlatePick { policy: Policy; home_win_prob: number; pick: 'home' | 'away'; confidence: number; meets_confidence: boolean }
+export interface SlateSelection { policy: Policy; min_confidence: number | null; games: number; with_forecast: number; selected: number }
+
 export interface GameSummary {
   game_id: string;
   mode: Mode;
@@ -45,9 +58,12 @@ export interface GameSummary {
   forecast_note: string | null;
   market: Market | null;
   outcome: Outcome | null;
+  near_tipoff: NearTipoffForecast | null;
+  /** The pick under the slate's selected forecast policy; null when the game has no forecast under it. */
+  slate_pick: SlatePick | null;
 }
 
-export interface GamesResponse { mode: Mode; date: string; games: GameSummary[]; sources: SourceStatus[] }
+export interface GamesResponse { mode: Mode; date: string; selection: SlateSelection; games: GameSummary[]; sources: SourceStatus[] }
 
 export interface TeamStats {
   wins: number; losses: number; last10_wins: number; last10_games: number;
@@ -75,7 +91,7 @@ export interface ConfidenceRecord {
 }
 
 export interface HistoryResponse {
-  mode: Mode; run_type: RunType; total: number; record: ConfidenceRecord; predictions: PredictionRecord[];
+  mode: Mode; run_type: RunType; policy: Policy; total: number; record: ConfidenceRecord; predictions: PredictionRecord[];
 }
 
 export interface CalibrationBin {
@@ -88,6 +104,7 @@ export interface BaselineScore { name: string; accuracy: number | null; brier_sc
 export interface PerformanceResponse {
   mode: Mode;
   run_type: RunType;
+  policy: Policy;
   title: string;
   model_version: string;
   sample_size: number;

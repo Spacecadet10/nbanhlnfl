@@ -61,6 +61,28 @@ class Market(BaseModel):
     home_win_prob: float = Field(ge=0, le=1, description="De-vigged implied probability.")
 
 
+Policy = Literal["pregame", "near_tipoff"]
+
+
+class NearTipoffForecast(BaseModel):
+    """A separate forecast made shortly before tipoff from the freshest stored results. Never replaces `prediction`."""
+    model_version: str
+    generated_at: datetime
+    cutoff_at: datetime = Field(description="The scheduled tipoff when the forecast was made.")
+    home_win_prob: float = Field(ge=0, le=1)
+    pick: Literal["home", "away"]
+    confidence: float = Field(ge=0.5, le=1)
+    minutes_before_tipoff: float
+    results_refreshed_at: Optional[datetime] = Field(description="Last successful schedule and results refresh used.")
+    latest_result_available_at: Optional[datetime] = Field(description="Newest result included in the model state.")
+    results_used: Optional[int]
+    market_home_prob: Optional[float] = Field(description="De-vigged market probability from the latest quote retrieved "
+                                                          "at or before the forecast; null when there was none.")
+    market_retrieved_at: Optional[datetime]
+    correct: Optional[bool] = Field(description="Whether the pick won; null until the game is final.")
+    limitation: str
+
+
 class Outcome(BaseModel):
     home_score: int
     away_score: int
@@ -80,11 +102,34 @@ class GameSummary(BaseModel):
     forecast_note: Optional[str] = Field(description="Why there is no prediction, when there is none.")
     market: Optional[Market]
     outcome: Optional[Outcome]
+    near_tipoff: Optional[NearTipoffForecast] = Field(
+        default=None, description="Near-tipoff forecast, when one was recorded. Separate from `prediction`.")
+    slate_pick: Optional["SlatePick"] = Field(
+        default=None, description="The pick under the slate's selected forecast policy, with whether it meets the "
+                                  "requested confidence. Null when the game has no forecast under that policy.")
+
+
+class SlatePick(BaseModel):
+    """One game's pick under one forecast policy. The slate filter and its counts use this and nothing else."""
+    policy: Policy
+    home_win_prob: float = Field(ge=0, le=1)
+    pick: Literal["home", "away"]
+    confidence: float = Field(ge=0.5, le=1)
+    meets_confidence: bool
+
+
+class SlateSelection(BaseModel):
+    policy: Policy
+    min_confidence: Optional[float]
+    games: int
+    with_forecast: int = Field(description="Games that have a forecast under this policy.")
+    selected: int = Field(description="Games whose pick under this policy meets the confidence level.")
 
 
 class GamesResponse(BaseModel):
     mode: Mode
     date: date
+    selection: SlateSelection
     games: list[GameSummary]
     sources: list[SourceStatus]
 
@@ -140,6 +185,7 @@ class ConfidenceRecord(BaseModel):
 class HistoryResponse(BaseModel):
     mode: Mode
     run_type: RunType
+    policy: Policy = Field(default="pregame", description="Which live forecast policy the rows belong to.")
     total: int
     record: ConfidenceRecord
     predictions: list[PredictionRecord]
@@ -154,6 +200,20 @@ def pick_confidence(home_win_prob: float) -> float:
 
 def meets_confidence(home_win_prob: float, min_confidence: Optional[float]) -> bool:
     return min_confidence is None or pick_confidence(home_win_prob) >= min_confidence - CONFIDENCE_TOLERANCE
+
+
+def apply_slate_policy(games: list[GameSummary], policy: str, min_confidence: Optional[float]) -> SlateSelection:
+    """Sets each game's `slate_pick` from the selected policy only (never falling back to the other forecast) and
+    returns the counts. `pregame` uses `prediction`; `near_tipoff` uses `near_tipoff`."""
+    for g in games:
+        source = g.near_tipoff if policy == "near_tipoff" else g.prediction
+        g.slate_pick = None if source is None else SlatePick(
+            policy=policy, home_win_prob=source.home_win_prob, pick="home" if source.home_win_prob >= 0.5 else "away",
+            confidence=pick_confidence(source.home_win_prob),
+            meets_confidence=meets_confidence(source.home_win_prob, min_confidence))
+    picks = [g.slate_pick for g in games if g.slate_pick is not None]
+    return SlateSelection(policy=policy, min_confidence=min_confidence, games=len(games), with_forecast=len(picks),
+                          selected=sum(p.meets_confidence for p in picks))
 
 
 def confidence_record(rows: list[PredictionRecord], min_confidence: Optional[float]) -> ConfidenceRecord:
@@ -188,6 +248,7 @@ class BaselineScore(BaseModel):
 class PerformanceResponse(BaseModel):
     mode: Mode
     run_type: RunType
+    policy: Policy = "pregame"
     title: str
     model_version: str
     sample_size: int
@@ -200,3 +261,6 @@ class PerformanceResponse(BaseModel):
     baselines: list[BaselineScore]
     market: MarketComparison
     note: str
+
+
+GameSummary.model_rebuild()

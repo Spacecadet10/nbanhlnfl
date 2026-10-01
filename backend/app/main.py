@@ -65,8 +65,11 @@ def sources(p=Depends(get_provider)):
 
 
 @app.get("/api/games", response_model=GamesResponse)
-def games(date: date = Query(description="Game date (US Eastern), YYYY-MM-DD"), p=Depends(get_provider)):
-    return p.games(date)
+def games(date: date = Query(description="Game date (US Eastern), YYYY-MM-DD"),
+          policy: str = Query("pregame", pattern="^(pregame|near_tipoff)$",
+                              description="Which forecast the slate's picks and confidence filter use."),
+          min_confidence: Optional[float] = Query(None, ge=0.5, le=1), p=Depends(get_provider)):
+    return p.games(date, policy, min_confidence)
 
 
 @app.get("/api/games/{game_id}", response_model=GameDetail)
@@ -83,12 +86,22 @@ def predictions(run_type: str = Query("live", pattern="^(live|backtest)$"), date
                 min_confidence: Optional[float] = Query(
                     None, ge=0.5, le=1, description="Keep only picks whose model probability for the predicted winner, "
                                                     "max(p_home, 1 - p_home), is at least this value."),
+                policy: str = Query("pregame", pattern="^(pregame|near_tipoff)$",
+                                    description="Live forecasts only: night-before (pregame) or near-tipoff."),
                 limit: int = Query(500, ge=1, le=5000), p=Depends(get_provider)):
     if date_from and date_to and date_from > date_to:
         raise HTTPException(status_code=422, detail="date_from must be on or before date_to")
-    return p.predictions(run_type, date_from, date_to, team, limit, min_confidence)
+    _check_policy(run_type, policy)
+    return p.predictions(run_type, date_from, date_to, team, limit, min_confidence, policy)
+
+
+def _check_policy(run_type: str, policy: str) -> None:
+    if policy == "near_tipoff" and run_type != "live":
+        raise HTTPException(status_code=422, detail="near_tipoff forecasts exist only as live forecasts")
 
 
 @app.get("/api/performance", response_model=PerformanceResponse)
-def performance(run_type: str = Query("live", pattern="^(live|backtest)$"), p=Depends(get_provider)):
-    return p.performance(run_type)
+def performance(run_type: str = Query("live", pattern="^(live|backtest)$"),
+                policy: str = Query("pregame", pattern="^(pregame|near_tipoff)$"), p=Depends(get_provider)):
+    _check_policy(run_type, policy)
+    return p.performance(run_type, policy)

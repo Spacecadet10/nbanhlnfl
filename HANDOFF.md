@@ -1,5 +1,30 @@
 # Current handoff
 
+## Codex near-tipoff review — fixes requested
+- Scoped code review and 12 near-tipoff tests passed independently (existing dependency warning); no real ingestion, scheduler changes or forecast writes. Full readiness/browser checks not repeated.
+- P2 near_tipoff.predict_now constructs its returned forecast metadata before ledger deduplication. Reproduced retry at 22:45 returning minutes_before_tipoff=45 while the retained forecast was generated at 22:30 for 23:30 tipoff (60 minutes). Odds can likewise be newly fetched in the command response while the app/scorer retain the original snapshot. On retries return the stored forecast identity, generated_at and associated metadata, or explicitly separate current calculation from retained prediction. Add odds-change-with-unchanged-results coverage.
+- P2 TodayPage filters using (g.prediction ?? g.near_tipoff), always preferring night-before when both exist, while displaying both picks. Thus night-before .65 / near-tipoff .80 disappears under default .70, while .80 / .65 displays a below-range near-tipoff pick. Add an explicit forecast-policy selection for the slate and apply the confidence filter/record to that policy consistently; preserve separate midnight records.
+- Resolve these bounded issues before accepting the near-tipoff flow. Preserve existing uncommitted work; this review did not commit it.
+### Claude fixes — 2026-10-01
+- Retry reporting: `near_tipoff.predict_now` now builds each returned forecast from the stored ledger row and its freshness record after
+  writing (status `created` or `already_recorded`, prediction_id, the retained generated_at, minutes before tipoff from that time, and the
+  market snapshot stored then). A dry run is labelled `dry_run` and is the only case that reports a fresh calculation. Regression:
+  `test_codex_retry_reports_the_retained_forecast_not_the_recomputed_one` (odds change with unchanged results at 22:40; retry at 22:45 still
+  reports 22:30 / 60 minutes / the original quote; the dry run reports 45 minutes and the new quote).
+- Slate policy: `/api/games` takes `policy` and `min_confidence`; `schemas.apply_slate_policy` sets each game's `slate_pick` from the chosen
+  policy only (pregame → `prediction`, near_tipoff → `near_tipoff`, no fallback) and returns `selection` counts. Today has an explicit
+  policy toggle (real mode); cards, the confidence filter, the count and the record lines all use that policy; the other forecast is shown
+  only as "not used by this view"; the Backtest record appears only under the night-before policy. The client-side filter rule was removed.
+  Regressions: `test_codex_slate_filter_uses_only_the_selected_policy` (65/80, 80/65, near-only, night-only, away pick at exactly 70%, 422s)
+  and `test_demo_slate_selection_counts_match_the_picks`.
+- `--ready` exit 0: 219 passed, typecheck and build passed; guard and diff check passed. Browser evidence: SMOKE_TEST "Near-tipoff review fixes".
+- No model, sealed-rule or scheduler change. Still unverified: a real upcoming-game forecast (first possible 2026-10-19/20).
+
+## Codex confidence-filter review
+- Reviewed commit 1666de4: winner confidence uses max(p, 1-p), inclusive threshold, default 70%, settled-only record before pagination, separate run types. No blocking findings in this scoped code review.
+- Independently ran API/live tests: 36 passed (existing dependency warning). Confirmed the four reported commits and initially clean tree; git diff --check passed. Did not repeat full readiness or desktop/mobile browser checks; those remain Claude's recorded evidence.
+- Backtest range record spans stored development and test seasons; it is not an independent-test-only statistic. No models, production data or schedules changed. This review note is the only new uncommitted change.
+
 ## Codex collector fix re-review and research status
 - Overwrite-check findings resolved in the reviewed code: HTTP failures are failed checks, replacement failures affect status, absent ETags trigger bounded hash comparison. Independently ran injury tests: 25 passed, existing dependency warning. No full readiness or scheduler verification in this scoped review; no production or schedule changes.
 - Read saved research-round-3 report: learned stacking HAS run. stack_logit 64.44% accuracy/Brier .22057; conditional 64.31%/.22122; logistic_v2 64.41%/.21977. Saved results are not an independent rerun or full stacking implementation review. Do not request a duplicate experiment based on older pasted messages.
@@ -10,7 +35,7 @@
 - Recommended next research: two fixed regularized stackers using chronological base forecasts, with matched-coverage confidence-filter comparisons. Existing development predictions are exploratory due to prior model-selection reuse. Preserve live/sealed experiments and spent test seasons. No model run, dependency installation, production writes or scheduling performed in this research task.
 
 Status: Shadow recording ENABLED 2026-10-01 (daily launchd job). Injury-report collector agent INSTALLED 2026-10-01. Milestone 4 implemented and reviewed; odds snapshots and local launchd automation configured. Courtside frontend redesign complete. Git baseline d96db86. Free sources only (ESPN; no keyed odds API, user decision 2026-09-30). No deployment, no purchases.
-Current owner: Codex review of the confidence-filter UI change (below). Shadow season and injury collector running unchanged. Final test was run once (2026-09-30T14:40:35Z); Elo is the frozen primary model.
+Current owner: Codex re-review of the two near-tipoff fixes (committed, see below). Shadow season and injury collector running unchanged. Final test was run once (2026-09-30T14:40:35Z); Elo is the frozen primary model.
 
 ## Advisory review (Devin, 2026-09-30 session date)
 - Read the handoff, plan, evaluation rules and agreement analysis; Git working tree was clean. No code, data, scheduler or model changes; tests were not rerun for this advisory review.
@@ -52,6 +77,28 @@ Current owner: Codex review of the confidence-filter UI change (below). Shadow s
 - Injury/player data investigation requested in the same message: already delivered as docs/AVAILABILITY_AUDIT.md (+ docs/evidence/availability-audit-2026-10-01/);
   not repeated. No accuracy gain is estimated there.
 - Uncommitted: this round's code, tests and docs, plus the earlier audit, collector plan and analysis amendment.
+
+## Near-tipoff forecast path (Claude, 2026-10-01; user "yes build it")
+- Policy recorded first: EVALUATION_PLAN "Near-tipoff forecast policy". Same frozen Elo; state uses every result available at generation;
+  stored as run_type live under `<elo version>-policy=near_tipoff`, feature version `pregame-ids-v1+tipoff-cutoff`, cutoff_at = tipoff.
+  The night-before Elo rows, LATEST_LIVE_SQL consumers, shadow report and default app views filter on the plain Elo version: untouched.
+- Code: `app/near_tipoff.py` (`predict_now`, refusals after_tipoff / stale_results (> 60 min since last successful refresh) / missing_result
+  (an earlier game of either team in the last 7 days not final), market quote at generation time, `latest_rows`, `score`);
+  migration 0011 (`near_tipoff_forecasts` append-only freshness record + job name; 42 job rows kept); `jobs.predict_now` (refresh → odds →
+  boxscores → forecast stamped after the refresh; 'failed' on stale/missing; dry run stores nothing); CLI `predict-now [--dry-run]`,
+  `score-near-tipoff`; API: `near_tipoff` object on game payloads, `policy=pregame|near_tipoff` on /predictions and /performance (422 with
+  backtest), `policy` in both responses; UI: Near-tipoff block on game cards and a card on the game page, policy toggle on History and
+  Performance (live only), badge. `live.py`, `shadow.py`, sealed files and scheduled jobs unchanged.
+- Tests `tests/test_near_tipoff.py` (12): freshness + market record; uses results the night-before forecast lacked; refused at/after tipoff and
+  by the ledger trigger; stale (61 min) vs fresh (60 min); missing result then resolved; 24-h window; rerun idempotent, new data = new
+  version, earlier forecast kept, append-only incl. INSERT OR REPLACE; dry run; night-before rows/scoring/default views byte-identical;
+  full chain to displayed pick and scored result; job wrapper statuses; demo API. `--ready` exit 0: 216 passed, typecheck and build passed; guard and diff check passed.
+- Real store: migration 0011 applied; `predict-now` dry and real runs → skipped (no game within 24 h; refresh skipped by quota because the 22:00
+  daily job had just refreshed); 0 forecasts; ledger 27,744; test_access 1 line. NOT yet exercised: a real refresh followed by a real forecast
+  on a live game. Scratch-copy rehearsal and browser evidence: docs/SMOKE_TEST.md "Near-tipoff forecasts".
+- Not built: a button or endpoint to trigger it from the app (CLI only), any schedule for it, injury inputs, a near-tipoff version of logistic_v2.
+- Also observed: the 22:00 daily launchd run on 2026-10-01T02:00Z succeeded with shadow enabled (refresh, boxscores, predict, shadow, score).
+- API preview server restarted to load this code (detached uvicorn :8000).
 
 ## Confidence filters in the app (Claude, 2026-10-01; user instruction via Codex)
 - Commits before this change (branch `shadow-season`): 7dc43b8 research rounds 2–3, audit and analyses; 1abd18d injury collector;

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 from zoneinfo import ZoneInfo
 
-from . import config, ingest, injuries, live, shadow
+from . import config, ingest, injuries, live, near_tipoff, shadow
 from .db import utc_now
 from .sources import espn
 
@@ -242,6 +242,26 @@ def injury_reports(conn: sqlite3.Connection, *, enabled: Optional[bool] = None, 
         return _finish(conn, run_id, "failed", 0, {"error": f"{type(exc).__name__}: {exc}"})
     status = out.pop("status")
     return _finish(conn, run_id, status, out["attempts"], out)
+
+
+def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optional[str] = None,
+                refresh_kw: Optional[dict] = None, odds_kw: Optional[dict] = None, box_kw: Optional[dict] = None) -> dict:
+    """Near-tipoff forecasts (app/near_tipoff.py): refresh schedule and results, odds and possession stats, then
+    forecast games tipping off within 24 hours with the frozen Elo, or refuse them with a reason. The forecast is
+    time-stamped after the refresh finishes. The possession refresh does not gate the Elo forecast (Elo does not use
+    it). Stale data or a missing result makes the job 'failed' so it is visible; a dry run stores no forecast."""
+    steps = {"refresh": refresh(conn, **(refresh_kw or {})), "odds": odds_snapshot(conn, **(odds_kw or {})),
+             "boxscores": boxscores(conn, **(box_kw or {}))}
+    run_id = None if dry_run else _start(conn, "near_tipoff")
+    try:
+        out = near_tipoff.predict_now(conn, now=now, write=not dry_run)
+    except Exception as exc:
+        error = {"error": f"{type(exc).__name__}: {exc}", "steps": {k: v.get("status") for k, v in steps.items()}}
+        return {"status": "failed", **error} if dry_run else _finish(conn, run_id, "failed", 1, error)
+    blocked = [r for r in out["refused"] if r["reason"] in ("stale_results", "missing_result")]
+    status = "failed" if blocked else "success" if out["forecasts"] else "skipped"
+    out["steps"] = {k: v.get("status") for k, v in steps.items()}
+    return {"status": status, **out} if dry_run else _finish(conn, run_id, status, 1, out)
 
 
 def predict(conn: sqlite3.Connection, **kw) -> dict:

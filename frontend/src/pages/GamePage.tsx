@@ -2,7 +2,7 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { GameDetail, TeamStats } from '../api/types';
 import { useApi } from '../api/useApi';
-import { ModeBadge, RunBadge } from '../components/Badges';
+import { ModeBadge, NearTipoffBadge, RunBadge } from '../components/Badges';
 import { ProbabilityBar } from '../components/ProbabilityBar';
 import { AsyncView } from '../components/States';
 import { calendarDate, dateTime, pct } from '../format';
@@ -76,6 +76,8 @@ function Detail({ game: g }: { game: GameDetail }) {
         </dl>
       </div>
 
+      {g.near_tipoff && <NearTipoffCard game={g} />}
+
       <div className="card">
         <h2>Team comparison</h2>
         <p className="small muted">This season, using only results known by {dateTime(g.stats_as_of)}.</p>
@@ -93,6 +95,40 @@ function Detail({ game: g }: { game: GameDetail }) {
         </table>
       </div>
     </>
+  );
+}
+
+function NearTipoffCard({ game: g }: { game: GameDetail }) {
+  const n = g.near_tipoff!;
+  return (
+    <div className="card">
+      <h2>Near-tipoff forecast <NearTipoffBadge /></h2>
+      <p className="small muted">
+        A separate forecast made shortly before the game from the freshest stored results. It does not replace the forecast above. {n.limitation}
+      </p>
+      <ProbabilityBar home={g.home} away={g.away} homeProb={n.home_win_prob} label="Near-tipoff win probability" />
+      <dl className="facts">
+        <dt>Pick</dt>
+        <dd>
+          <strong>{n.pick === 'home' ? g.home.abbr : g.away.abbr}</strong> · model confidence {pct(n.confidence, 1)}
+          {n.correct != null && (n.correct ? <span className="ok"> · Correct</span> : <span className="bad"> · Wrong</span>)}
+        </dd>
+        <dt>Made</dt><dd>{dateTime(n.generated_at)}, {Math.round(n.minutes_before_tipoff)} minutes before the scheduled tipoff</dd>
+        <dt>Data freshness</dt>
+        <dd>
+          {n.results_refreshed_at ? `Schedule and results refreshed ${dateTime(n.results_refreshed_at)}` : 'Refresh time not recorded'}
+          {n.results_used != null && ` · ${n.results_used} results used`}
+          {n.latest_result_available_at && ` · newest result from ${dateTime(n.latest_result_available_at)}`}
+        </dd>
+        <dt>Market at that time</dt>
+        <dd>
+          {n.market_home_prob != null && n.market_retrieved_at
+            ? `${g.home.abbr} ${pct(n.market_home_prob)} (quote retrieved ${dateTime(n.market_retrieved_at)})`
+            : <span className="warn">No market quote was available when this forecast was made</span>}
+        </dd>
+        <dt>Model version</dt><dd><code>{n.model_version}</code></dd>
+      </dl>
+    </div>
   );
 }
 

@@ -4,7 +4,7 @@ import type { PredictionRecord } from '../api/types';
 import { useApi } from '../api/useApi';
 import { RunBadge } from '../components/Badges';
 import { ConfidenceFilter, levelLabel, RecordLine, useConfidence } from '../components/ConfidenceFilter';
-import { RunTypeToggle, useRunType } from '../components/RunTypeToggle';
+import { PolicyToggle, RunTypeToggle, usePolicy, useRunType } from '../components/RunTypeToggle';
 import { AsyncView, Empty } from '../components/States';
 import { calendarDate, dateTime, FULL_DATE, pct } from '../format';
 
@@ -17,10 +17,12 @@ export function HistoryPage() {
   };
   const [run, setRun] = useRunType();
   const [level, setLevel] = useConfidence();
+  const [policyChoice, setPolicy] = usePolicy();
+  const policy = run === 'live' ? policyChoice : 'pregame';
   const meta = useApi((s) => api.meta(s), []);
   const realMode = meta.state.status === 'success' && meta.state.data.mode === 'real';
-  const { state, retry } = useApi((s) => api.predictions({ ...filters, run_type: run, min_confidence: level }, s),
-    [filters.date_from, filters.date_to, filters.team, run, level]);
+  const { state, retry } = useApi((s) => api.predictions({ ...filters, run_type: run, min_confidence: level, policy }, s),
+    [filters.date_from, filters.date_to, filters.team, run, level, policy]);
 
   const update = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -32,6 +34,7 @@ export function HistoryPage() {
     const next = new URLSearchParams();
     if (run !== 'live') next.set('run', run);
     if (params.get('conf')) next.set('conf', params.get('conf') as string);
+    if (params.get('policy')) next.set('policy', params.get('policy') as string);
     setParams(next);
   };
 
@@ -43,9 +46,11 @@ export function HistoryPage() {
       </div>
       <p className="muted small">
         {!realMode ? 'Demo predictions from synthetic fixtures.'
+          : run === 'live' && policy === 'near_tipoff' ? 'Near-tipoff forecasts, each made before tipoff from the freshest stored results (latest version per game). Kept separate from the night-before record. Elo does not know about injuries or line-ups.'
           : run === 'live' ? 'Live forecasts, each recorded before its cutoff (latest version per game). Outcomes are added after the game.'
             : 'Retrospective backtest predictions of the primary model, computed after the fact. These are not forecasts recorded before the games.'}
       </p>
+      {realMode && run === 'live' && <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} /></div>}
       <ConfidenceFilter value={level} onChange={setLevel} />
       <form className="filters" onSubmit={(e) => e.preventDefault()}>
         <label>From <input type="date" value={filters.date_from ?? ''} onChange={(e) => update('date_from', e.target.value)} /></label>
@@ -68,9 +73,10 @@ export function HistoryPage() {
         {(data) => data.predictions.length === 0
           ? <Empty>
               {level != null
-                ? <>No {data.run_type === 'demo' ? 'demo' : data.run_type} picks at {levelLabel(level)} model confidence{hasFilters ? ' match these filters' : ''}.{' '}
+                ? <>No {data.run_type === 'demo' ? 'demo' : data.policy === 'near_tipoff' ? 'near-tipoff' : data.run_type} picks at {levelLabel(level)} model confidence{hasFilters ? ' match these filters' : ''}.{' '}
                     <button type="button" className="link-btn" onClick={() => setLevel(null)}>Show all picks</button></>
                 : hasFilters ? 'No predictions match these filters.'
+                  : data.policy === 'near_tipoff' ? 'No near-tipoff forecasts recorded yet. They are made with the predict-now command for games starting within 24 hours.'
                   : data.run_type === 'live' ? 'No live forecasts recorded yet. The daily job records them within 7 days of each regular-season or playoff game.'
                     : 'No predictions recorded.'}
             </Empty>

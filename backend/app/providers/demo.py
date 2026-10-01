@@ -3,8 +3,9 @@ from datetime import date
 from typing import Optional
 
 from .. import fixtures, metrics
-from ..schemas import (GameDetail, GamesResponse, HistoryResponse, MarketComparison, Meta, PerformanceResponse,
-                       PredictionRecord, SourceStatus, confidence_record, meets_confidence, pick_confidence)
+from ..schemas import (GameDetail, GamesResponse, GameSummary, HistoryResponse, MarketComparison, Meta, PerformanceResponse,
+                       PredictionRecord, SourceStatus, apply_slate_policy, confidence_record, meets_confidence,
+                       pick_confidence)
 
 SUMMARY_EXCLUDE = {"home_stats", "away_stats", "projected_score_available", "stats_as_of"}
 
@@ -20,16 +21,17 @@ class DemoProvider:
     def sources(self) -> list[SourceStatus]:
         return fixtures.SOURCES
 
-    def games(self, day: date) -> GamesResponse:
-        return GamesResponse(mode="demo", date=day, sources=fixtures.SOURCES,
-                             games=[g.model_dump(exclude=SUMMARY_EXCLUDE) for g in fixtures.games() if g.game_date == day])
+    def games(self, day: date, policy: str = "pregame", min_confidence: Optional[float] = None) -> GamesResponse:
+        games = [GameSummary(**g.model_dump(exclude=SUMMARY_EXCLUDE)) for g in fixtures.games() if g.game_date == day]
+        return GamesResponse(mode="demo", date=day, sources=fixtures.SOURCES, games=games,
+                             selection=apply_slate_policy(games, policy, min_confidence))
 
     def game(self, game_id: str) -> Optional[GameDetail]:
         return next((g for g in fixtures.games() if g.game_id == game_id), None)
 
     def predictions(self, run_type: str, date_from: Optional[date], date_to: Optional[date], team: Optional[str],
-                    limit: int, min_confidence: Optional[float] = None) -> HistoryResponse:
-        rows = []
+                    limit: int, min_confidence: Optional[float] = None, policy: str = "pregame") -> HistoryResponse:
+        rows = []   # demo data has a single forecast per game; `policy` does not apply
         for g in fixtures.games():
             if not meets_confidence(g.prediction.home_win_prob, min_confidence):
                 continue
@@ -48,7 +50,7 @@ class DemoProvider:
         return HistoryResponse(mode="demo", run_type="demo", total=len(rows),
                                record=confidence_record(rows, min_confidence), predictions=rows[:limit])
 
-    def performance(self, run_type: str) -> PerformanceResponse:
+    def performance(self, run_type: str, policy: str = "pregame") -> PerformanceResponse:
         scored = [g for g in fixtures.games() if g.outcome is not None]
         probs = [g.prediction.home_win_prob for g in scored]
         ys = [g.outcome.home_won for g in scored]

@@ -142,3 +142,33 @@ Phone width (390 px): checked by loading the app in three 390-px-wide same-origi
   None of these games has a forecast yet." with "Show all 1 game".
 
 Not verified in a browser: demo mode (`NBA_API_MODE=demo`) with the filter (covered by an API test only); keyboard-only operation of the filter.
+
+## Near-tipoff forecasts (2026-10-01, Claude)
+Real store, real clock: `app.cli predict-now --dry-run` and `app.cli predict-now` both returned status `skipped` (no eligible game tips off
+within 24 hours; refresh, odds and boxscores steps were each skipped by their own rules: quota or nothing due). One `near_tipoff` job row,
+0 forecasts, ledger unchanged at 27,744. A real refresh-then-forecast on a live game has **not** happened yet (first possible 2026-10-19/20).
+
+Rehearsal on a scratch copy of the database (never the real store), fixed clock 2026-10-20T18:00Z, with a results refresh recorded at 17:50Z:
+- 3 forecasts created for the opening-night games (BOS@DET 60 min before tipoff, PHI@NY, OKC@SA), each with the market quote available then;
+  at 19:05Z the first game was refused `after_tipoff` and the others `stale_results`. The 43 night-before Elo rows were untouched.
+- A made-up final score for the first game (scratch only) gave: scored 1, record 1–0, same-game comparison with the night-before forecast and the market.
+
+Browser (temporary API on :8001 and Vite on :5174 pointed at the scratch copy; window about 514 px wide, plus 300-px frames):
+- Today `?date=2026-10-20&conf=all`: 3 cards, each with the night-before forecast and a separate "Near-tipoff" block ("made 60 min before
+  tipoff", pick, model confidence, "Correct" on the settled game). At 70%+ only PHI@NY is selected.
+- Game page: "Near-tipoff forecast" card with pick, time made, data freshness (refresh time, results used, newest result), market at that
+  time, model version and the injuries limitation; the night-before "Win probability" card is unchanged above it.
+- History `?policy=near_tipoff`: 3 rows under the near-tipoff model version, record "1–0 (1 settled)"; default History shows only the
+  night-before model version (43 rows). Performance `?policy=near_tipoff`: "Near-tipoff live forecasts", 1 scored game, small-sample warning.
+- No horizontal overflow at 514 px or in 300-px frames; no console errors. Not verified at full desktop width for these new blocks, in demo
+  mode, or with a keyboard only.
+
+## Near-tipoff review fixes (2026-10-01, Claude)
+Scratch copy again (temporary API :8001, Vite :5174), desktop window 1280 px, `/?date=2026-10-20`, with one scratch-only near-tipoff row added so
+the two policies differ (OKC@SA: night-before SA 57.9%, near-tipoff OKC 80.0%):
+- "Night-before forecasts" selected, 70%+: "1 of 3 games selected … (3 with a night-before forecast)"; one card (NY 77.9%), with the line
+  "Near-tipoff forecast (not used by this view): NY 77.9%"; Live and Backtest record lines.
+- "Near-tipoff forecasts" selected, 70%+: "2 of 3 games selected … (3 with a near-tipoff forecast)"; cards NY 77.9% and OKC 80.0% (an away
+  pick that the night-before view does not select), each showing "made N min before tipoff" and the night-before forecast as "not used by
+  this view"; only the Live near-tipoff record line (no Backtest line).
+- No horizontal overflow, no console errors. Not re-checked at phone width or in demo mode after this change.

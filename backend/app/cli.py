@@ -66,6 +66,10 @@ def main(argv=None) -> int:
     ij.add_argument("--dry-run", action="store_true", help="List the reports that would be requested; no request is made")
     sub.add_parser("research-stacking", help="Research round 3: two learned stackers vs Elo, logistic_v2 and the equal "
                                              "average on validation seasons (needs the dev extra; no ledger rows)")
+    pn = sub.add_parser("predict-now", help="Near-tipoff forecasts: refresh data, then forecast games tipping off within "
+                                            "24 h with the frozen Elo, or refuse them with a reason")
+    pn.add_argument("--dry-run", action="store_true", help="Refresh and show the forecasts without storing them")
+    sub.add_parser("score-near-tipoff", help="Score near-tipoff forecasts against results (read-only; separate record)")
     bt = sub.add_parser("backtest", help="Walk-forward evaluation (docs/EVALUATION_PLAN.md)")
     bt.add_argument("--period", choices=("validation", "test"), required=True)
     bt.add_argument("--elo-config", help='Validation only: evaluate a fixed Elo JSON instead of running the grid.')
@@ -164,6 +168,13 @@ def main(argv=None) -> int:
                                                  "output_dir")}
                          | {"models": {n: {k: m[k] for k in ("n", "accuracy", "brier", "log_loss")}
                                        for n, m in report["models"].items()}}, indent=2))
+    elif args.cmd == "predict-now":
+        result = jobs.predict_now(conn, dry_run=args.dry_run)
+        print(json.dumps(result, indent=2, default=str))
+        return 1 if _any_failed(result) else 0
+    elif args.cmd == "score-near-tipoff":
+        from . import near_tipoff
+        print(json.dumps(near_tipoff.score(conn), indent=2, default=str))
     elif args.cmd == "freeze-decision":
         from pathlib import Path
         report_path = Path(args.report).resolve()

@@ -12,6 +12,14 @@ export function RunBadge({ runType }: { runType: RunType }) {
   return <span className={`badge badge-${runType}`} title={RUN_TITLE[runType]}>{RUN_LABEL[runType]}</span>;
 }
 
+export function NearTipoffBadge() {
+  return (
+    <span className="badge badge-near" title="A separate forecast made shortly before tipoff from the freshest stored results. It does not replace the night-before forecast.">
+      Near-tipoff
+    </span>
+  );
+}
+
 /** Where the data comes from: synthetic fixtures or stored real NBA data. */
 export function ModeBadge({ mode }: { mode: Mode }) {
   return mode === 'demo'

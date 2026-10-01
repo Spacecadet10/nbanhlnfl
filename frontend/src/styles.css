@@ -226,3 +226,13 @@ button,input,select { min-height:44px; }
   .confidence-filter .segmented { width:100%; }
   .confidence-filter .segmented button { flex:1 1 30%; padding:0 6px; }
 }
+
+/* Near-tipoff forecasts */
+.badge-near { background:#2c2233; border:1px solid #5b4670; color:#d3b4ee; }
+.near-tipoff { border-top:1px dashed var(--border); margin-top:14px; padding-top:12px; }
+.near-tipoff-head { display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; }
+.near-tipoff .pick-line { margin-top:6px; }
+.policy-row { margin:14px 0 4px; }
+.policy-row .segmented { flex-wrap:wrap; max-width:100%; }
+.other-forecast { border-top:1px dashed var(--border); margin:12px 0 0; padding-top:10px; }
+.policy-row p { margin:6px 0 0; }

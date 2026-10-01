@@ -283,3 +283,24 @@ would only justify a separately sealed prospective test.
 - **Reading fixed in advance:** each stacker is reported against the step 4 screen versus Elo and against logistic_v2 directly. Nothing is
   selected or promoted. These seasons have now been used to tune Elo and to examine five candidate models and several combinations, so any
   apparent gain is optimistic. Run once; settings are not adjusted afterwards.
+
+## Near-tipoff forecast policy (recorded 2026-10-01, before the first such forecast exists)
+A separate forecast for games starting soon, requested by the user. It does **not** change the night-before Elo forecast, the sealed
+`logistic_v2` shadow experiment, their promotion rule or their records.
+
+- **Model:** the frozen Elo configuration, unchanged. Its state includes every result available at the moment of generation, instead of
+  stopping at midnight Eastern. It knows nothing about injuries or line-ups; the app says so next to every near-tipoff forecast.
+- **Separation:** stored as `run_type='live'` under its own `model_version` (`<Elo version>-policy=near_tipoff`) and feature version
+  `pregame-ids-v1+tipoff-cutoff`, with `cutoff_at` = the game's scheduled tipoff. The night-before queries, the shadow report and the app's
+  default views filter on the plain Elo version and never read these rows. Earlier forecasts are kept; nothing is overwritten.
+- **When:** only for scheduled regular-season, play-in or postseason games tipping off within 24 hours and strictly after the generation
+  time. The ledger additionally rejects any forecast generated after its cutoff or with a cutoff after tipoff.
+- **Refused, with the reason reported, never guessed:** after tipoff; when the last successful schedule and results refresh is more than
+  60 minutes old (`stale_results`); when either team has an earlier game that is not yet final in the store (`missing_result`).
+- **Freshness recorded per forecast** (`near_tipoff_forecasts`, append-only): generation time, tipoff, time of the results refresh used, newest
+  result included, number of results used, and the market quote available at that moment.
+- **Market comparison:** the latest `current` quote retrieved at or before the forecast's generation time, de-vigged proportionally. Coverage is
+  reported; a missing quote is "no market comparison".
+- **Scoring:** reported separately from the night-before record, on the latest near-tipoff forecast per game. Where both exist for the same
+  game they are compared with the paired tools already used; no decision or promotion follows from it. A near-tipoff forecast has more
+  information than a night-before one, so the two records are not interchangeable.
