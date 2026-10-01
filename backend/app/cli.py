@@ -7,8 +7,8 @@ from .models.elo import EloConfig
 
 
 # Commands that work for every sport; everything else is NBA-only until generalised.
-SPORT_COMMANDS = {"migrate", "replay", "coverage", "ingest-nhl"}
-NHL_ONLY = {"ingest-nhl"}
+SPORT_COMMANDS = {"migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test"}
+NHL_ONLY = {"ingest-nhl", "nhl-validate", "nhl-test"}
 
 
 def _any_failed(result) -> bool:
@@ -31,6 +31,10 @@ def main(argv=None) -> int:
     nh.add_argument("--from-season", type=int, required=True, help="First season end year, e.g. 2016 = 2015-16")
     nh.add_argument("--to-season", type=int, required=True)
     nh.add_argument("--sleep", type=float, default=1.5, help="Seconds between requests")
+    sub.add_parser("nhl-validate", help="NHL only: development grids, then the one-time validation comparison; seals "
+                                        "backend/app/models/nhl_frozen_decision.json (refuses to run twice)")
+    nt = sub.add_parser("nhl-test", help="NHL only: the one-time final test of the sealed decision (logged; refuses to rerun)")
+    nt.add_argument("--confirm-final-test", action="store_true", required=True)
     ing = sub.add_parser("ingest", help="Fetch ESPN scoreboard months into the raw cache and import them")
     ing.add_argument("--from", dest="start", required=True, help="First month, YYYYMM")
     ing.add_argument("--to", dest="end", required=True, help="Last month, YYYYMM")
@@ -112,6 +116,23 @@ def main(argv=None) -> int:
                 failed.append({"season": season or "teams", "error": f"{type(exc).__name__}: {str(exc).splitlines()[0]}"})
         print(json.dumps({"imports": results, "failed": failed}, indent=2))
         return 1 if failed else 0
+    elif args.cmd in ("nhl-validate", "nhl-test"):
+        from . import nhl_eval
+        try:
+            report = nhl_eval.evaluate_validation(conn) if args.cmd == "nhl-validate" else nhl_eval.evaluate_test(conn)
+        except nhl_eval.NhlEvaluationError as exc:
+            print(json.dumps({"error": str(exc)}))
+            return 1
+        brief = {k: report[k] for k in ("stage", "seasons", "dataset_version", "output_dir")}
+        brief["winner_models"] = {n: {k: m[k] for k in ("model_version", "n", "accuracy", "brier", "log_loss")}
+                                  for n, m in report["winner_models"].items()}
+        brief["markets"] = {k: {n: {x: v[n][x] for x in ("n", "brier", "log_loss")} for n in ("goals_poisson", "league_poisson")}
+                            | {"goals_minus_league_log_loss": {x: v["goals_minus_league_log_loss"][x] for x in ("mean", "ci95")}}
+                            for k, v in report["markets"].items()}
+        for key in ("winner_selection", "goals_vs_elo_brier", "primary_winner_model", "descriptive"):
+            if key in report:
+                brief[key] = report[key]
+        print(json.dumps(brief, indent=2, default=str))
     elif args.cmd == "ingest":
         results = ingest.ingest_range(conn, args.start, args.end, sleep=args.sleep)
         failed = [r for r in results if "error" in r]
@@ -126,6 +147,23 @@ def main(argv=None) -> int:
                 failed.append({"season": season, "error": f"{type(exc).__name__}: {str(exc).splitlines()[0]}"})
         print(json.dumps({"imports": results, "failed": failed}, indent=2))
         return 1 if failed else 0
+    elif args.cmd in ("nhl-validate", "nhl-test"):
+        from . import nhl_eval
+        try:
+            report = nhl_eval.evaluate_validation(conn) if args.cmd == "nhl-validate" else nhl_eval.evaluate_test(conn)
+        except nhl_eval.NhlEvaluationError as exc:
+            print(json.dumps({"error": str(exc)}))
+            return 1
+        brief = {k: report[k] for k in ("stage", "seasons", "dataset_version", "output_dir")}
+        brief["winner_models"] = {n: {k: m[k] for k in ("model_version", "n", "accuracy", "brier", "log_loss")}
+                                  for n, m in report["winner_models"].items()}
+        brief["markets"] = {k: {n: {x: v[n][x] for x in ("n", "brier", "log_loss")} for n in ("goals_poisson", "league_poisson")}
+                            | {"goals_minus_league_log_loss": {x: v["goals_minus_league_log_loss"][x] for x in ("mean", "ci95")}}
+                            for k, v in report["markets"].items()}
+        for key in ("winner_selection", "goals_vs_elo_brier", "primary_winner_model", "descriptive"):
+            if key in report:
+                brief[key] = report[key]
+        print(json.dumps(brief, indent=2, default=str))
     elif args.cmd == "replay":
         print(json.dumps(ingest.replay(conn)))
     elif args.cmd == "backtest":

@@ -1,0 +1,26 @@
+{
+  "sport": "nhl",
+  "winner_model": "hockey_elo",
+  "hockey_elo_config": {
+    "k": 4,
+    "home_advantage": 30,
+    "carry": 0.75,
+    "mov": true
+  },
+  "goals_config": {
+    "eta": 0.003,
+    "carry": 0.75
+  },
+  "market_model": "goals_poisson",
+  "validation_dataset_version": "dfa8a0b70fd2b799",
+  "validation_seasons": [
+    2022,
+    2023,
+    2024
+  ],
+  "selected_on": "validation",
+  "frozen_at": "2026-10-01T03:23:05Z",
+  "feature_version": "nhl-pregame-ids-v1+prior-day-et-cutoff",
+  "validation_report": "/Users/andry/Desktop/nba-predictor-sprint1/data/reports/nhl-validation-2026-10-01T032305Z",
+  "sha256": "d6f178ca2f2e4dfede46d4809c2bf88a559377c3ae11f087e2623e833f6b4bc4"
+}
