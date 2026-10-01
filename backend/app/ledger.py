@@ -81,7 +81,8 @@ class MarketForecast:
 
     @property
     def idempotency_key(self) -> str:
-        parts = (self.sport, self.game_id, self.market, repr(self.line), self.policy, self.run_type, self.model_version,
+        line = None if self.line is None else float(self.line) + 0.0   # -4 == -4.0 and -0.0 == 0.0: one forecast
+        parts = (self.sport, self.game_id, self.market, repr(line), self.policy, self.run_type, self.model_version,
                  self.dataset_version, self.feature_version, self.cutoff_at)
         return hashlib.sha256("\x1f".join(parts).encode()).hexdigest()
 

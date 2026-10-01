@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 
 from . import raw_cache
-from .db import transaction, utc_now
+from .db import claim_store, transaction, utc_now
 from .live import ELIGIBLE_TYPES
 from .sources import nba_injury
 
@@ -138,6 +138,7 @@ def _download(conn: sqlite3.Connection, slot: Slot, purpose: str, fetch: Callabl
         return "failed"
     try:
         with transaction(conn):
+            claim_store(conn, "nba")
             _, fetch_id = raw_cache.store_fetch(
                 conn, source=nba_injury.SOURCE, endpoint=nba_injury.BASE, request_key=nba_injury.request_key(slot.name),
                 body=resp.body, retrieved_at=completed, importer_version=nba_injury.IMPORTER_VERSION, suffix=".pdf")

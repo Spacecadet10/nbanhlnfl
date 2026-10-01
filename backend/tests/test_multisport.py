@@ -69,7 +69,9 @@ def test_quotes_and_forecasts_of_the_other_sport_are_rejected_by_the_store(store
     c = store()
     ingest.ingest_nhl_teams(c, fetch=lambda: TEAMS, retrieved_at=T0)
     nhl_ingest(c, nhl_season(nhl_game(state=1, hs=0, vs=0, period=1, start="2024-10-12T19:00:00")), T0)
-    f = _forecast(sport="nba", game_id="nhl:2024020001", market="total", line=5.5, p=(0.5, 0, 0.5))
+    f = _forecast(sport="nba", game_id="nhl:2024020001", market="total", line=5.5, p=(0.5, 0, 0.5),
+                  generated="2024-10-12T12:00:00Z", cutoff="2024-10-12T20:00:00Z")
+    f = ledger.MarketForecast(**{**f.__dict__, "tipoff_at": "2024-10-12T23:00:00Z"})
     with pytest.raises(sqlite3.IntegrityError, match="does not match this store"):
         ledger.record_market(c, f)
 

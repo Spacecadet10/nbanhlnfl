@@ -67,9 +67,9 @@ def decision(game_type: int, period: int) -> Optional[str]:
     if period == 3:
         return "REG"
     if period > 3:
-        if game_type == 2:
-            return {4: "OT", 5: "SO"}.get(period)
-        return "OT"   # playoffs: continuous overtime, no shootout
+        if game_type == 3:
+            return "OT"   # playoffs: continuous overtime, no shootout
+        return {4: "OT", 5: "SO"}.get(period)   # regular season, preseason and exhibitions: 5 = shootout
     return None
 
 

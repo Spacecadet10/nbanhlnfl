@@ -359,3 +359,8 @@ Development research only. It must not touch the sealed Elo, the `logistic_v2` s
 - **Use:** model-only lines are labelled; prospective 2026-27 forecasts at the stored market line are the only independent
   evidence. The rule for judging them is the plain report of win/loss/push counts, Brier and log loss against the de-vigged
   market at the same line, with no promotion decision attached.
+- **2026-09-30 amendment (development seasons only; validation and test not yet accessed):** the first development tuning on
+  real data (7,515 loadable games, 4,877 scored development games, 0 without a decision) chose grid-edge values for both
+  candidates: Elo K = 4 (smallest K; best Brier 0.24072, H = 30, carry 0.75, MOV on) and goals η = 0.005 (smallest η; NLL 3.8064).
+  The grids are extended downwards, as for the NBA home-advantage grid: Elo K ∈ {2, 3, 4, 6, 8, 10, 12} and goals
+  η ∈ {0.001, 0.002, 0.003, 0.005, 0.01, 0.02, 0.04}. Criteria and tie rules are unchanged. Home-rate development Brier 0.24841.

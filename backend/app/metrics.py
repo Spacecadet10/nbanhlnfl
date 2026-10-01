@@ -40,3 +40,16 @@ def calibration(probs: Sequence[float], outcomes: Sequence[bool], bins: int = 5)
             observed_rate=sum(float(y) for _, y in members) / len(members) if members else None,
         ))
     return out
+
+
+def brier_multi(vectors: Sequence[Sequence[float]], realised: Sequence[int]) -> Optional[float]:
+    """Multi-outcome Brier score: mean over games of sum_k (p_k - 1[k = realised])^2 (0 best, 2 worst)."""
+    if not vectors:
+        return None
+    return sum(sum((p - float(k == r)) ** 2 for k, p in enumerate(v)) for v, r in zip(vectors, realised)) / len(vectors)
+
+
+def log_loss_multi(vectors: Sequence[Sequence[float]], realised: Sequence[int]) -> Optional[float]:
+    if not vectors:
+        return None
+    return -sum(math.log(min(1 - EPS, max(EPS, v[r]))) for v, r in zip(vectors, realised)) / len(vectors)

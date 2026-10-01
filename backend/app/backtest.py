@@ -127,7 +127,7 @@ def dataset_version(rows: Iterable[Row]) -> str:
 
 
 def run(model: Model, rows: list[Row], box_events: Optional[list[BoxEvent]] = None,
-        deliver_until: Optional[str] = None) -> list[dict]:
+        deliver_until: Optional[str] = None, extra: Optional[Callable[[Model, PregameGame], dict]] = None) -> list[dict]:
     """Walk forward once over all rows; returns one prediction per row.
 
     With `box_events`, each possession observation is passed to `model.update_box` only once BOTH its own
@@ -137,7 +137,9 @@ def run(model: Model, rows: list[Row], box_events: Optional[list[BoxEvent]] = No
     LeakageError.
 
     `deliver_until` (live forecasting only): after the walk, results and boxes whose (effective) availability is at
-    or before that time are delivered too, leaving the model in its state as of that moment."""
+    or before that time are delivered too, leaving the model in its state as of that moment.
+    `extra(model, game)`, if given, is called right after each prediction (same model state) and its fields are added
+    to that game's output, e.g. a goals model's expected goals."""
     results = sorted(rows, key=lambda r: (r.result_available_at, r.game.tipoff_at, r.game.game_id))
     games = sorted(rows, key=lambda r: (r.cutoff_at, r.game.tipoff_at, r.game.game_id))
     by_id = {r.game.game_id: r for r in rows}
@@ -168,6 +170,8 @@ def run(model: Model, rows: list[Row], box_events: Optional[list[BoxEvent]] = No
                     "home_team_id": row.game.home_team_id, "away_team_id": row.game.away_team_id,
                     "neutral_site": row.game.neutral_site, "p_home": p,
                     "home_won": row.home_score > row.away_score})
+        if extra is not None:
+            out[-1].update(extra(model, row.game))
     if deliver_until is not None:
         while j < len(results) and results[j].result_available_at <= deliver_until:
             model.update(results[j].result)
@@ -250,6 +254,24 @@ def paired_accuracy_bootstrap(a: list[dict], b: list[dict], seed: int = BOOTSTRA
     return {"diff": (only_a - only_b) / len(a), "only_first_right": only_a, "only_second_right": only_b,
             "ci95": [stats[int(0.025 * samples)], stats[int(0.975 * samples) - 1]], "games": len(a),
             "weeks": len(weeks), "seed": seed, "samples": samples}
+
+
+def block_bootstrap(values: list[float], cutoffs: list[str], seed: int = BOOTSTRAP_SEED,
+                    samples: int = BOOTSTRAP_SAMPLES) -> dict:
+    """Mean of per-game values (e.g. loss differences) with the same seeded ISO-week block bootstrap as
+    paired_bootstrap, for any market or loss."""
+    blocks: dict[tuple, list[float]] = {}
+    for v, c in zip(values, cutoffs):
+        iso = datetime.strptime(c, "%Y-%m-%dT%H:%M:%SZ").isocalendar()
+        blocks.setdefault((iso[0], iso[1]), []).append(v)
+    weeks = list(blocks.values())
+    rng, stats = random.Random(seed), []
+    for _ in range(samples):
+        pick = [weeks[rng.randrange(len(weeks))] for _ in weeks]
+        stats.append(sum(sum(w) for w in pick) / sum(len(w) for w in pick))
+    stats.sort()
+    return {"mean": sum(values) / len(values), "ci95": [stats[int(0.025 * samples)], stats[int(0.975 * samples) - 1]],
+            "weeks": len(weeks), "games": len(values), "seed": seed, "samples": samples}
 
 
 def elo_grid() -> list[EloConfig]:

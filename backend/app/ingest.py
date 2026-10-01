@@ -11,11 +11,11 @@ from typing import Callable, Optional
 
 from . import raw_cache
 from .db import claim_store, has_table, transaction, utc_now
-from .sources import espn, nhl_stats, sdv_team_box
+from .sources import espn, nba_injury, nhl_stats, sdv_team_box
 from .odds import devig_two_way
 
 RESULT_ASSUMED_DELAY = timedelta(hours=4)
-SOURCE_SPORTS = {"nba": {espn.SOURCE, espn.SUMMARY_SOURCE, sdv_team_box.SOURCE},
+SOURCE_SPORTS = {"nba": {espn.SOURCE, espn.SUMMARY_SOURCE, sdv_team_box.SOURCE, nba_injury.SOURCE},
                  "nhl": {nhl_stats.SOURCE, espn.NHL_SOURCE}}
 OBSERVED_WINDOW = timedelta(hours=24)  # results first seen within this window of tipoff count as observed
 
@@ -250,30 +250,32 @@ def replay(conn: sqlite3.Connection, cache_dir: Optional[Path] = None) -> dict:
         if sources & own:
             with transaction(conn):
                 claim_store(conn, sport)   # raises if the cache holds the other sport's sources too
-    # A cached response without any logged retrieval (a cache copied without its log) replays once at first retrieval.
+    # One pass over every schedule/result and line retrieval in retrieval order, so each line quote is matched against
+    # the games as they were stored at its own retrieval, exactly as live ingestion matched it. A cached response without
+    # any logged retrieval (a cache copied without its log) replays once at its first retrieval.
+    sources = (espn.SOURCE, nhl_stats.SOURCE, espn.NHL_SOURCE)
     fetches = conn.execute(
         "SELECT f.fetch_id, f.raw_id, f.retrieved_at, r.source FROM raw_fetches f JOIN raw_responses r ON r.raw_id = f.raw_id "
-        "WHERE r.source IN (?, ?) "
+        "WHERE r.source IN (?, ?, ?) "
         "UNION ALL SELECT NULL, r.raw_id, r.first_retrieved_at, r.source FROM raw_responses r "
-        "WHERE r.source IN (?, ?) AND NOT EXISTS (SELECT 1 FROM raw_fetches f WHERE f.raw_id = r.raw_id) "
-        "ORDER BY 3, 2, 1", (espn.SOURCE, nhl_stats.SOURCE) * 2).fetchall()
+        "WHERE r.source IN (?, ?, ?) AND NOT EXISTS (SELECT 1 FROM raw_fetches f WHERE f.raw_id = r.raw_id) "
+        "ORDER BY 3, 1, 2", sources * 2).fetchall()
     for f in fetches:
         with transaction(conn):
             if f["source"] == espn.SOURCE:
                 s = import_raw(conn, f["raw_id"], cache_dir=cache_dir, retrieved_at=f["retrieved_at"])
-            elif f["fetch_id"] is not None:
+                if f["fetch_id"] is not None:
+                    totals["line_quotes"] += import_lines_fetch(conn, f["fetch_id"], "nba", cache_dir=cache_dir)["inserted"]
+            elif f["fetch_id"] is None:
+                continue
+            elif f["source"] == nhl_stats.SOURCE:
                 s = import_nhl_fetch(conn, f["fetch_id"], cache_dir=cache_dir)
             else:
+                totals["line_quotes"] += import_lines_fetch(conn, f["fetch_id"], "nhl", cache_dir=cache_dir)["inserted"]
                 continue
         totals["responses"] += 1
         totals["games_inserted"] += s["games_inserted"]
         totals["games_updated"] += s["games_updated"]
-    for f in conn.execute(
-            "SELECT f.fetch_id, r.source FROM raw_fetches f JOIN raw_responses r ON r.raw_id = f.raw_id "
-            "WHERE r.source IN (?, ?) ORDER BY f.retrieved_at, f.fetch_id", (espn.SOURCE, espn.NHL_SOURCE)).fetchall():
-        with transaction(conn):
-            totals["line_quotes"] += import_lines_fetch(conn, f["fetch_id"], "nba" if f["source"] == espn.SOURCE else "nhl",
-                                                        cache_dir=cache_dir)["inserted"]
     totals["responses"] += rebuild_team_box(conn, cache_dir=cache_dir)["fetches"]
     return totals
 

@@ -222,7 +222,7 @@ def test_odds_job_migration_keeps_existing_job_runs(tmp_path):
     assert db.migrate(conn) == ["0004_odds_job.sql", "0005_team_possession_stats.sql",
                                   "0006_possession_observations.sql", "0007_possession_fetch_events.sql", "0008_shadow_jobs.sql",
          "0009_box_fetch_attempts.sql", "0010_injury_report_attempts.sql", "0011_near_tipoff.sql",
-         "0012_markets.sql"]
+         "0012_markets.sql", "0013_market_forecast_checks.sql"]
     conn.execute("INSERT INTO job_runs (job, started_at, status) VALUES ('odds', '2026-09-30T00:01:00Z', 'success')")
     assert [r[0] for r in conn.execute("SELECT job FROM job_runs ORDER BY run_id")] == ["refresh", "odds"]
     conn.close()
