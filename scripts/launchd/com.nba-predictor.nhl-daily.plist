@@ -1,18 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- PREPARED FOR REVIEW, NOT INSTALLED (see HANDOFF.md "Scheduler review"). -->
+<!-- Installed 2026-10-01 at the user's request (22:15 local; odds snapshot first, then refresh, forecasts, markets, score). -->
 <plist version="1.0">
 <dict>
 	<key>Label</key>
 	<string>com.nba-predictor.nhl-daily</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/bin/python</string>
-		<string>-m</string>
-		<string>app.cli</string>
-		<string>--sport</string>
-		<string>nhl</string>
-		<string>daily</string>
+		<string>/bin/sh</string>
+		<string>-c</string>
+		<string>.venv/bin/python -m app.cli --sport nhl odds; .venv/bin/python -m app.cli --sport nhl daily</string>
 	</array>
 	<key>WorkingDirectory</key>
 	<string>/Users/andry/Desktop/nba-predictor-sprint1/backend</string>

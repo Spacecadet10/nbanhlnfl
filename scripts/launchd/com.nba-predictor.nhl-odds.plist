@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- PREPARED FOR REVIEW, NOT INSTALLED (see HANDOFF.md "Scheduler review"). -->
+<!-- Installed 2026-10-01 at the user's request (every 30 min). -->
 <plist version="1.0">
 <dict>
 	<key>Label</key>
@@ -19,7 +19,7 @@
 	<key>RunAtLoad</key>
 	<true/>
 	<key>StartInterval</key>
-	<integer>900</integer>
+	<integer>1800</integer>
 	<key>StandardOutPath</key>
 	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/nhl-odds-launchd.log</string>
 	<key>StandardErrorPath</key>

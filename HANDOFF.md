@@ -1,5 +1,27 @@
 # Current handoff
 
+## NHL jobs verified + NHL agreement research — Claude, 2026-10-01 11:30 UTC
+- **Running (checked directly):** `com.nba-predictor.nhl-odds` loaded, every 1,800 s; first run 11:20:54Z success (job_runs row 6, 2 requests,
+  dates 20261001-02; NHL store now 114 quotes). `com.nba-predictor.nhl-daily` loaded, 22:15 local, odds then daily; not run yet. Installed
+  files are identical to `scripts/launchd/` (committed here). NBA daily/odds/injuries unchanged. `nba-markets` NOT installed (my install attempt
+  was blocked by the Claude Code permission classifier; the user/Devin installed the NHL ones), so NBA market forecasts are still manual (`app.cli markets`).
+- **NHL agreement research** (preregistered in 8b61375 before computing; 1381d14): development seasons only, Elo vs goals model, unanimous,
+  averaging, agreement + thresholds vs matched-coverage confidence filters. Nothing met the rule; nothing frozen; live model unchanged.
+  Details and tables: docs/NHL_BASELINE_REPORT.md. Paired test check: Elo − home rate accuracy +1.9 points [+0.3, +3.6].
+- `--ready` exit 0 (281 passed).
+
+## NHL scheduled jobs installed — Devin, 2026-10-01 ~07:21 EDT
+- User explicitly requested installation of NHL daily and odds only. Initially neither plist existed in ~/Library/LaunchAgents and neither service was loaded. Installed unchanged copies of the currently prepared files; both source and installed files passed plutil -lint.
+- Both `launchctl bootstrap gui/501 /Users/andry/Library/LaunchAgents/com.nba-predictor.nhl-{daily,odds}.plist` calls exited 0 (run separately). `launchctl print` confirms daily at 22:15 local (Mac currently EDT), runs=0; odds RunAtLoad and 1800-second interval, runs=1, last exit code=0.
+- Original NBA daily, odds and injuries services remain loaded: all five expected services verified individually. NBA markets was NOT installed; no manual daily kickstart, model/code edits or commits.
+- Log read was denied by ignore rules for data/nhl-odds-launchd.log; fetch counts and database job rows were not verified. Scheduler exit 0 is process evidence only. No application tests rerun for this installation; git diff --check passed.
+- Next: inspect the first NHL odds log/job row and tonight's first scheduled daily run. Daily runs odds before daily using `;`, so daily still proceeds if odds fails and the shell exit status is the daily command's status. Existing source-plist edits and earlier handoff notes remain uncommitted.
+
+## Devin advisory after 907ebdf
+- Confirmed this checkout is at 907ebdf and was clean; read the current handoff and three prepared plists. No independent acceptance of the seven fixes or the reported 280-test run in this advisory.
+- Recommended next bounded task: re-review 907ebdf, browser-check the NHL History link, and review scheduler timing/order/quotas before installation. The calendar jobs specify 22:15 and 22:30 local time; verify their relationship to midnight Eastern and sleep/wake behavior. Separate jobs do not themselves guarantee odds-before-forecast ordering.
+- No jobs installed or invoked, no data/model changes. Only this note added; git diff --check passed. Stop before goalie inputs or additional model work pending explicit assignment.
+
 ## Multi-sport (NBA + NHL) and markets — Claude, 2026-09-30/10-01 (branch shadow-season; dev worktree multisport-dev)
 Plan/status: docs/MULTISPORT_PLAN.md. Markets: docs/MARKETS.md. NHL results: docs/NHL_BASELINE_REPORT.md. Sources: DATA_SOURCES "NHL and market sources".
 - **Works:** NHL store (`data/nhl.sqlite`, same schema; `store_identity` binds each store to one sport); NHL stats ingestion 2015-16 … 2026-27;
