@@ -50,12 +50,12 @@ export function HistoryPage() {
         {realMode && isWinner && <RunTypeToggle value={run} onChange={setRun} />}
       </div>
       {meta.state.status === 'success' && <MarketSelect value={market} markets={meta.state.data.markets} onChange={setMarket} />}
-      <p className="muted small">
+      {meta.state.status === 'success' && <p className="muted small">
         {!realMode ? 'Demo predictions from synthetic fixtures.'
           : run === 'live' && policy === 'near_tipoff' ? 'Near-tipoff forecasts, each made before tipoff from the freshest stored results (latest version per game). Kept separate from the night-before record. Elo does not know about injuries or line-ups.'
           : run === 'live' ? 'Live forecasts, each recorded before its cutoff (latest version per game). Outcomes are added after the game.'
             : 'Retrospective backtest predictions of the primary model, computed after the fact. These are not forecasts recorded before the games.'}
-      </p>
+      </p>}
       {realMode && run === 'live' && <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} /></div>}
       <ConfidenceFilter value={level} onChange={setLevel} levels={confidenceLevels(sport, market)} />
       <form className="filters" onSubmit={(e) => e.preventDefault()}>

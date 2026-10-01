@@ -170,3 +170,34 @@ ESPN.com's footer links to the Disney Terms of Use (`disneytermsofuse.com/englis
   HEAD re-check matched the stored ETag, Last-Modified and length. Reports in March 2026 are about 100 kB, so a season at 48 a day is
   nearer 0.8 GB than the plan's 0.6 GB estimate.
 - Installed 2026-10-01 as launchd agent `com.nba-predictor.injuries` (runs at :02 and :32). First run: skipped, 0 requests (no game window until 2026-10-19T07:00Z).
+
+## NHL and market sources (2026-09-30; probes from this machine, about 70 requests in total)
+Raw probe excerpts were kept in the session scratchpad, not the repository. One probe exceeded the intended size limit: a
+ranged request to MoneyPuck's `all_teams.csv` returned the whole 126.5 MB file. It was inspected and deleted.
+
+| Source | Access / cost | Coverage verified | Use |
+|---|---|---|---|
+| NHL stats REST `api.nhle.com/stats/rest/en/game?cayenneExp=season=YYYYYYYY` | NHL-owned, public, no key; undocumented | every game of a season in one request (2009-10 … 2026-27): type, Eastern start, final score incl. shootout goal, last period (REG/OT/SO); no neutral flag, no period scores | **Adopted**: schedule, results, decisions (`app/sources/nhl_stats.py`), 1 request per refresh |
+| NHL stats REST `/team`, `team/summary`, `team/realtime`, `team/powerplay`, `goalie/summary` (`isGame=true`) | same | team list with ids/franchise ids; per team-game shots, PP/PK; per goalie-game `gamesStarted` (2 per game in 2023-24) | team list adopted; the others are candidates for later features (actual starters are **post-game** facts) |
+| NHL `api-web.nhle.com/v1/...` (schedule, score, gamecenter right-rail/boxscore/landing/play-by-play) | same; `cache-control: max-age=1` | per-period goals and shots per game back to 2009 (one request per game); no probable-starter field | not used (per-game volume); period results available if period markets are built |
+| ESPN `site.api.espn.com/.../{nba,nhl}/scoreboard` | unofficial, no key | DraftKings moneyline, spread/puck line and total with open/current prices for scheduled games; NHL `probables` (expected/confirmed goalie) for upcoming games only, overwritten after the game; month payloads include quarter/period `linescores` | **Adopted** for line quotes (`market_quotes`, every retrieval kept); NBA lines were back-filled from already-cached day scoreboards (642 quotes, 26 games) |
+| ESPN core `.../events/{id}/competitions/{id}/odds/100/propBets` | unofficial, no key | upcoming NHL games only: team totals, period lines, player props, each with `lastUpdated`; 404 for past games | **not adopted yet**; the only free team-total/period line source found (forward snapshots only) |
+| MoneyPuck data (moneypuck.com/data.htm) | free for non-commercial use with credit; "non-approved scraping will be blocked" | 2008-2026 team game-by-game xG (126.5 MB file rebuilt daily, no version stamp) | optional later feature (lagged xG); would need dated snapshots |
+| sportsdataverse-data NHL releases | MIT repo; data from the NHL API | 2010-2026 schedules, team/goalie boxes; the `nhl_linescore` file has game totals only (release notes say per period) | not needed: the NHL API covers it |
+| hockeyR / hockeyR-data, fastRhockey | stale or unlicensed; R packages | – | rejected |
+| DailyFaceoff starting goalies | Cloudflare 403 on robots.txt | – | rejected (not bypassed) |
+| The Odds API | needs a key (free tier exists) | – | not used; would need your approval |
+
+Terms: NHL.com's terms limit use to "non-commercial, informational, personal use" and forbid unauthorized automated
+harvesting; the stats API has no separate terms. Request volume is kept to one season request per refresh (≥ 30 min apart) and
+≤ 2 ESPN day requests per odds snapshot. ESPN terms are as noted above (personal research decision, 2026-09-30).
+
+### Blockers by market (exact)
+- **Period/quarter markets:** results exist (ESPN month `linescores`, NHL right-rail), but no historical period prices exist for
+  free, and no period model or settlement rules have been built. Not implemented.
+- **Team totals:** forecasts are recorded at model-only lines; bookmaker team-total lines exist only as forward ESPN propBets
+  snapshots (not collected yet), so there is no bookmaker comparison.
+- **Starting goalies:** actual starters are known only after the game; ESPN `probables` are overwritten after the game and carry
+  no timestamp. Usable only if snapshotted prospectively (the ESPN NHL day scoreboards now cached by the odds job contain them,
+  but they are not parsed). No historical pregame goalie feature is possible.
+- **Player props:** no player identity mapping, participation model, DNP policy or historical prop lines. Not started.

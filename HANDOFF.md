@@ -1,5 +1,34 @@
 # Current handoff
 
+## Multi-sport (NBA + NHL) and markets — Claude, 2026-09-30/10-01 (branch shadow-season; dev worktree multisport-dev)
+Plan/status: docs/MULTISPORT_PLAN.md. Markets: docs/MARKETS.md. NHL results: docs/NHL_BASELINE_REPORT.md. Sources: DATA_SOURCES "NHL and market sources".
+- **Works:** NHL store (`data/nhl.sqlite`, same schema; `store_identity` binds each store to one sport); NHL stats ingestion 2015-16 … 2026-27;
+  NHL Elo (sealed, `models/nhl_frozen_decision.json`) and Poisson goals model; live NHL night-before winner + market forecasts recorded
+  2026-10-01T03:30Z (47 games, 235 market rows; 8 games at DraftKings lines); market quotes per retrieval for both sports; NBA spread/total/
+  team-total model sealed (`models/nba_market_decision.json`, development research only); API v0.3 with `sport`/`market`; frontend sport
+  toggle and market selector on all screens; NHL backtest rows (8,376) recorded from the saved test report.
+- **Measured:** NHL validation (once) Elo Brier 0.2334 vs goals 0.2358; NHL final test (once, logged `data/eval/test_access_nhl.jsonl`) Elo
+  56.2%, Brier 0.2432 vs home rate 0.2482; puck line and regulation 3-way beat the league reference, totals do not; regulation draws
+  under-predicted (16% vs 23%). NBA points model 2023-24 holdout: margin MAE 11.2, total MAE 14.5, intervals calibrated. No market
+  comparison is possible historically (no free historical odds).
+- **Fixed after independent review** of 4d28c3f: 6 findings, each with a regression test proven to fail on 4d28c3f. Also fixed: A → B → A
+  revisions were ignored by the importer (now applied at each retrieval's time; NBA replay rehearsal on a store copy reproduces games, teams,
+  stats, possession and odds exactly); NHL meta 19.8 s → 0.2 s.
+- **Process notes:** the installed launchd odds job runs this checkout every 15 min and migrates at start: it applied 0012 (03:06Z) and 0013
+  (03:21Z) to `data/nba.sqlite` minutes after the files were written (additive schema only; nothing else written). Further work was done in
+  the `../nba-predictor-dev` worktree and fast-forwarded here only at verified commits. Commit b151f4d was made with one failing test (exit
+  code hidden by a pipe); fixed in 098dd46.
+- **Checks:** `backend/.venv/bin/python scripts/check_project.py --ready` exit 0 (275 passed, typecheck and build passed); browser/API evidence in SMOKE_TEST "NBA + NHL and markets".
+- **Scheduler review needed (not installed):** `scripts/launchd/com.nba-predictor.nhl-daily.plist` (22:15 local: `--sport nhl daily`),
+  `…nhl-odds.plist` (every 15 min, ≤ 2 ESPN requests when a game is within 36 h; ~190 requests/day in season — consider 30 min),
+  `…nba-markets.plist` (22:30: NBA market forecasts). The installed NBA daily job is unchanged and does not record NBA market forecasts.
+  Until NHL jobs are installed, NHL forecasts happen only when `--sport nhl odds` + `--sport nhl daily` are run by hand before midnight ET.
+- **Blocked / not done:** period/quarter markets and player props (DATA_SOURCES blockers); team-total lines (forward ESPN propBets only, not
+  collected); no goalie/injury inputs (no timestamped pregame source); NHL draw-dependence candidate not started; `coverage` counts only NBA
+  moneylines in `games_with_odds`; keyboard-only and real-phone checks not done; no market forecast settled yet.
+- **Next:** review/install the three plists; run `--sport nhl odds` then `--sport nhl daily` each evening meanwhile; Codex review of
+  5e7b13a..HEAD (live/API/frontend); then an ESPN `probables` parser for prospective goalie snapshots.
+
 ## Color theme update
 - Updated `frontend/src/styles.css` to the second user-provided palette (Oiler Navy, Brilliant Blue, Ocean Water, Sunset Orange and Mango), with coordinated light and dark token sets.
 - Added a persistent light/dark toggle to the workspace header. Layout and app behavior are unchanged. `cd frontend && npm run build` passed.

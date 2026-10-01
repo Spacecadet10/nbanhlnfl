@@ -23,7 +23,9 @@ export function PerformancePage() {
     return (
       <section>
         <div className="page-head"><h1>Model performance <RunBadge runType="live" /></h1></div>
-        <MarketSelect value={market} markets={markets} onChange={setMarket} />
+        {meta.state.status === 'success'
+          ? <MarketSelect value={market} markets={markets} onChange={setMarket} />
+          : meta.state.status === 'error' ? <p className="warn small">Market list unavailable: {meta.state.error}</p> : null}
         <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} /></div>
         <MarketPerformance sport={sport} market={market} policy={policy} />
       </section>

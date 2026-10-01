@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- PREPARED FOR REVIEW, NOT INSTALLED (see HANDOFF.md "Scheduler review"). -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.nba-predictor.nhl-odds</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/bin/python</string>
+		<string>-m</string>
+		<string>app.cli</string>
+		<string>--sport</string>
+		<string>nhl</string>
+		<string>odds</string>
+	</array>
+	<key>WorkingDirectory</key>
+	<string>/Users/andry/Desktop/nba-predictor-sprint1/backend</string>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StartInterval</key>
+	<integer>900</integer>
+	<key>StandardOutPath</key>
+	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/nhl-odds-launchd.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/nhl-odds-launchd.log</string>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>ThrottleInterval</key>
+	<integer>60</integer>
+</dict>
+</plist>

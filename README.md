@@ -56,6 +56,30 @@ The backend allows CORS from the Vite origin; override with `CORS_ORIGINS` (comm
 | `…/predictions` and `…/performance` `&policy=pregame\|near_tipoff` | Live forecasts only: the night-before record (default) or the near-tipoff record; never mixed (422 with `run_type=backtest`). Game payloads carry an optional `near_tipoff` object next to `prediction` |
 | `GET /api/performance?run_type=live\|backtest` | Live scoring, or the final-test backtest with baselines. Never mixed |
 
+## NBA + NHL and markets (contract v3)
+Every endpoint takes `sport=nba|nhl` (default `nba`). Each sport has its own store (`data/nba.sqlite`, `data/nhl.sqlite`); a
+missing store or a store labelled with the other sport returns 503, never the other sport's data. Demo mode is NBA-only.
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/meta?sport=` | Also lists `sports`, `markets` (title, availability, settlement notes and limitations) and `score_unit` |
+| `GET /api/games?sport=&date=&market=&policy=&min_confidence=` | With `market` ≠ winner, each game carries `market_forecast` for that market and policy only |
+| `GET /api/games/{id}?sport=` | `market_forecasts`: every market × policy, each at its exact line |
+| `GET /api/market-predictions?sport=&market=&policy=…` | Market history; record = W–L–push, voids, pending |
+| `GET /api/market-performance?sport=&market=&policy=` | Multi-outcome Brier/log loss, line sources, bookmaker comparison at the same line, NHL one-time test |
+
+Markets and settlement: [docs/MARKETS.md](docs/MARKETS.md). Plan and status: [docs/MULTISPORT_PLAN.md](docs/MULTISPORT_PLAN.md).
+NHL results: [docs/NHL_BASELINE_REPORT.md](docs/NHL_BASELINE_REPORT.md). Run from `backend/`:
+```sh
+.venv/bin/python -m app.cli --sport nhl ingest-nhl --from-season 2016 --to-season 2027   # NHL stats season lists (13 requests)
+.venv/bin/python -m app.cli --sport nhl daily      # refresh (1 request) → Elo winner forecasts → market forecasts → score
+.venv/bin/python -m app.cli --sport nhl odds       # ESPN NHL day scoreboards: moneyline/puck line/total quotes, games within 36 h
+.venv/bin/python -m app.cli --sport nhl predict-now [--dry-run]   # near-tipoff winner + market forecasts (manual)
+.venv/bin/python -m app.cli --sport nhl score-markets              # settle and score market forecasts (read-only)
+.venv/bin/python -m app.cli markets [--dry-run]    # NBA market forecasts (spread, total, team totals); also --sport nhl
+```
+Run `odds` before `daily`/`markets` so forecasts use the bookmaker's line where one is quoted; otherwise the line is model-only and labelled.
+NHL and NBA-market jobs are **not scheduled**: plists are prepared in `scripts/launchd/` (`nhl-daily`, `nhl-odds`, `nba-markets`) for review.
+
 ## Daily operation (milestone 4)
 Run from `backend/`:
 ```sh

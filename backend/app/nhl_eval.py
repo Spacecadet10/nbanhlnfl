@@ -236,6 +236,9 @@ def evaluate_validation(conn: sqlite3.Connection, *, decision_path: Optional[Pat
     return report
 
 
+_CHECKED: dict = {}
+
+
 def load_decision(conn: Optional[sqlite3.Connection] = None, path: Optional[Path] = None, check_data: bool = True) -> dict:
     path = Path(path or DECISION_PATH)
     if not path.is_file():
@@ -244,7 +247,14 @@ def load_decision(conn: Optional[sqlite3.Connection] = None, path: Optional[Path
     if d.get("sha256") != seal(d)["sha256"]:
         raise NhlEvaluationError(f"{path} was modified after sealing")
     if check_data and conn is not None:
-        current = dataset_version(load_rows(conn, "validation"))
+        # The check reloads every validation game; it is cached per store state (file, game count, latest update), so a
+        # correction ingested into the store is checked again on the next call.
+        state = (str(path), d["sha256"], conn.execute("PRAGMA database_list").fetchone()["file"],
+                 *conn.execute("SELECT COUNT(*), MAX(updated_at) FROM games").fetchone(),
+                 conn.execute("SELECT COUNT(*) FROM game_decisions").fetchone()[0])
+        current = _CHECKED.get(state) or dataset_version(load_rows(conn, "validation"))
+        _CHECKED.clear()
+        _CHECKED[state] = current
         if current != d["validation_dataset_version"]:
             raise NhlEvaluationError(f"NHL validation data changed since sealing ({d['validation_dataset_version']} -> {current})")
     return d

@@ -25,16 +25,16 @@ Existing rules still apply: AGENTS.md guards, docs/EVALUATION_PLAN.md, the seale
 
 ## Phase checklist
 - [x] 1 Inventory and this plan
-- [ ] 2 Source probes and repository review → docs/DATA_SOURCES.md "NHL and market sources"
-- [ ] 3 Foundations: sport registry, store identity, market quote and market forecast tables, NHL adapter + ingest + replay
-- [ ] 4 Market specification and settlement (docs/MARKETS.md) with tests, before any market model
-- [ ] 5 NHL ingestion, coverage report, preregistered evaluation, baselines (constant, home rate, Elo, goals model)
-- [ ] 6 Spread/puck line and totals for both sports from score distributions; team totals; period markets only if data passes
-- [ ] 7 Bounded candidate research (preregistered; NBA historical work is development only)
-- [ ] 8 Evaluation reports; NHL final test logged once
-- [ ] 9 Operations: sport-aware refresh/odds/predict/score/near-tipoff; health; scheduler config prepared for review (not installed)
-- [ ] 10 Frontend: sport, market and policy selection consistent across Today, Game, History and Performance
-- [ ] 11 Failure-mode tests, scratch-store rehearsals, final handoff
+- [x] 2 Source probes and repository review → docs/DATA_SOURCES.md "NHL and market sources"
+- [x] 3 Foundations: sport registry, store identity, market quote and market forecast tables, NHL adapter + ingest + replay
+- [x] 4 Market specification and settlement (docs/MARKETS.md) with tests, before any market model
+- [x] 5 NHL ingestion, coverage report, preregistered evaluation, baselines (constant, home rate, Elo, goals model)
+- [~] 6 Spread/puck line and totals for both sports from score distributions; team totals; period markets only if data passes
+- [ ] 7 Bounded candidate research (not started: next would be an NHL draw-dependence candidate) (preregistered; NBA historical work is development only)
+- [x] 8 Evaluation reports; NHL final test logged once
+- [~] 9 Operations: sport-aware refresh/odds/predict/score/near-tipoff; health; scheduler config prepared for review (not installed)
+- [x] 10 Frontend: sport, market and policy selection consistent across Today, Game, History and Performance
+- [~] 11 Failure-mode tests, scratch-store rehearsals, final handoff
 
 ## Priorities and acceptance criteria
 A. **NHL game winner (incl. OT/SO)**: seasons imported with coverage report; replay rebuilds identical rows; walk-forward
@@ -57,3 +57,5 @@ E. **Player props**: feasibility note only unless identity, participation, prior
 
 ## Out of scope for this brief
 Paid or keyed sources, deployment, installing new persistent jobs without review, player-prop forecasts.
+
+Status key: [x] done, [~] partly done (see HANDOFF.md), [ ] not started.

@@ -187,16 +187,17 @@ class RealProvider:
 
     def market_infos(self) -> list[MarketInfo]:
         out = []
+        try:
+            market_live.market_model(self.conn)
+            model_ok = True
+        except Exception:   # no usable sealed market model: the markets are listed as not available
+            model_ok = False
         for m in sports.get(self.sport).markets:
             spec = markets.spec(self.sport, m)
             if m == "winner":
                 available, note = True, f"Settles on the final result ({spec.overtime})."
             else:
-                try:
-                    market_live.market_model(self.conn)
-                    available = True
-                except Exception:   # no sealed market model: say so instead of showing anything
-                    available = False
+                available = model_ok
                 note = f"Settles on the final score ({spec.overtime}). " + " ".join(markets.limitations(self.sport, m, None))
             out.append(MarketInfo(id=m, title=spec.title, available=available, note=note.strip()))
         return out
