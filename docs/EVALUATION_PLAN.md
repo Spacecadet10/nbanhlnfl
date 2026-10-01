@@ -394,3 +394,23 @@ Requested by the user. Development research; it does not change the live NHL mod
   frozen as a separate forward (shadow) experiment with its own model version; the live model is not changed.
 - **Result (2026-10-01):** no method met the rule (average − Elo Brier +0.0006 [+0.0001, +0.0010]; every agreement subset within ±0.6
   points of Elo's matched-coverage filter, all intervals including 0). Nothing frozen. Details: docs/NHL_BASELINE_REPORT.md.
+
+## NHL learned candidates: logistic and gradient-boosted trees (recorded 2026-10-01, before either is built or run)
+Requested by the user ("we need multiple models to test and learn from"). Development research; the live model stays `hockey_elo`.
+- **Features (pregame, point in time; no search):** `elo_diff` (sealed hockey_elo ratings / 100), `xg_diff` (sealed goals model expected
+  regulation goals home − away), `gd10_diff` (difference of the teams' mean goal differential over their last 10 available results),
+  `rest_diff` (days since previous game, capped at 4), `b2b_home`, `b2b_away` (previous game < 1.5 days earlier), `neutral`.
+- **`hockey_logistic`:** L2 logistic regression (λ = 1, the NBA setting, not tuned), scaled `elo_diff`, `xg_diff`, `gd10_diff`, `rest_diff`.
+- **`hockey_gbt`:** scikit-learn HistGradientBoosting with the NBA `gbt_v1` settings unchanged (depth 3, 8 leaves, 200 iterations, rate 0.05,
+  min leaf 50, L2 1.0, seed 20260930), monotonic increasing in `elo_diff`, `xg_diff`, `gd10_diff`.
+- **Fitting:** both refit at the start of each season on all earlier seasons' examples, features captured when the game was predicted and
+  labels added only when the result was available (the NBA walk-forward discipline). Before the first fit they return the Elo probability.
+- **Data:** warm-up 2015-16 and 2016-17, development 2017-18 … 2020-21 scored. Every development season is out of sample for the learners
+  (no hyperparameter tuning). Elo and goals configurations were tuned on these seasons, so the inputs carry that optimism.
+- **Compared with Elo on identical games (paired week-block bootstrap):** each learner; the equal average of Elo, goals, logistic and GBT;
+  four-model unanimous picks (probability = that average) against Elo's own confidence filter at the same coverage; each model's accuracy
+  and Brier on the exact unanimous subset.
+- **Decision rule:** a candidate passes screening if its paired Brier upper bound vs Elo is below 0 on development. A passing candidate is
+  then checked once on validation 2021-24 (labelled as reused: those seasons chose Elo over the goals model) and, if still better, frozen as
+  a separate NHL shadow experiment with its own version. The spent test seasons 2024-26 are never read. No candidate replaces Elo
+  without a prospective record.
