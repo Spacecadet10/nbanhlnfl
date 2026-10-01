@@ -392,3 +392,5 @@ Requested by the user. Development research; it does not change the live NHL mod
   below 0 on all games, or (b) an agreement subset's accuracy minus Elo's matched-coverage filter has a 95% lower bound above 0. One
   primary comparison per subset; with 4 subsets, chance findings are possible and are labelled as such. A promising combination is
   frozen as a separate forward (shadow) experiment with its own model version; the live model is not changed.
+- **Result (2026-10-01):** no method met the rule (average − Elo Brier +0.0006 [+0.0001, +0.0010]; every agreement subset within ±0.6
+  points of Elo's matched-coverage filter, all intervals including 0). Nothing frozen. Details: docs/NHL_BASELINE_REPORT.md.

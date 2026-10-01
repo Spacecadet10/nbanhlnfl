@@ -352,3 +352,124 @@ def record_test_report(conn: sqlite3.Connection, report_dir: Path) -> dict:
             created += new
             existing += not new
     return {"created": created, "already_recorded": existing, "models": sorted(keep)}
+
+
+# --- Agreement research (EVALUATION_PLAN "NHL agreement research"; development seasons only) ----------------------
+AGREEMENT_THRESHOLDS = (0.55, 0.60, 0.65)
+
+
+def _wilson(wins: int, n: int, z: float = 1.959964) -> Optional[list]:
+    if n == 0:
+        return None
+    p = wins / n
+    d = 1 + z * z / n
+    c = (p + z * z / (2 * n)) / d
+    h = z * ((p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5) / d
+    return [c - h, c + h]
+
+
+def _week(cutoff: str) -> tuple:
+    from datetime import datetime
+    iso = datetime.strptime(cutoff, "%Y-%m-%dT%H:%M:%SZ").isocalendar()
+    return iso[0], iso[1]
+
+
+def _subset_diff_bootstrap(a: list[dict], b: list[dict], key_a: str, key_b: str, seed: int = backtest.BOOTSTRAP_SEED,
+                           samples: int = backtest.BOOTSTRAP_SAMPLES) -> dict:
+    """Accuracy(a) − accuracy(b) for two subsets of possibly different games, resampling the same ISO weeks for both."""
+    import random
+    weeks: dict[tuple, list] = {}
+    for rows, key, slot in ((a, key_a, 0), (b, key_b, 1)):
+        for r in rows:
+            w = weeks.setdefault(_week(r["cutoff_at"]), [[0, 0], [0, 0]])
+            w[slot][0] += r[key]
+            w[slot][1] += 1
+    blocks = list(weeks.values())
+    rng, stats = random.Random(seed), []
+    for _ in range(samples):
+        pick = [blocks[rng.randrange(len(blocks))] for _ in blocks]
+        ca, na = sum(x[0][0] for x in pick), sum(x[0][1] for x in pick)
+        cb, nb = sum(x[1][0] for x in pick), sum(x[1][1] for x in pick)
+        if na and nb:
+            stats.append(ca / na - cb / nb)
+    stats.sort()
+    diff = sum(r[key_a] for r in a) / len(a) - sum(r[key_b] for r in b) / len(b)
+    return {"diff": diff, "ci95": [stats[int(0.025 * len(stats))], stats[int(0.975 * len(stats)) - 1]],
+            "weeks": len(blocks), "seed": seed, "samples": samples}
+
+
+def _score(rows: list[dict], pkey: str) -> dict:
+    probs, ys = [r[pkey] for r in rows], [r["home_won"] for r in rows]
+    wins = sum((p >= 0.5) == y for p, y in zip(probs, ys))
+    return {"n": len(rows), "wins": wins, "losses": len(rows) - wins, "accuracy": wins / len(rows) if rows else None,
+            "accuracy_ci95": _wilson(wins, len(rows)), "brier": metrics.brier(probs, ys),
+            "log_loss": metrics.log_loss(probs, ys)}
+
+
+def agreement_research(conn: sqlite3.Connection, decision_path: Optional[Path] = None, out_dir: Optional[Path] = None,
+                       log: Callable[[str], None] = print) -> dict:
+    d = load_decision(conn, decision_path)   # sealed configurations; the decision itself is not changed
+    rows = load_rows(conn, "development")
+    if any(r.game.season not in LOADABLE["development"] for r in rows):
+        raise NhlEvaluationError("Agreement research reads development seasons only")
+    models = models_from_decision(d)
+    elo = {p["game_id"]: p for p in in_period(backtest.run(models["hockey_elo"], rows), "development")}
+    goals = {p["game_id"]: p for p in in_period(backtest.run(models["goals_poisson"], rows), "development")}
+    games = []
+    for gid, e in sorted(elo.items(), key=lambda x: (x[1]["cutoff_at"], x[0])):
+        pe, pg = e["p_home"], goals[gid]["p_home"]
+        pa = (pe + pg) / 2
+        y = e["home_won"]
+        games.append({"game_id": gid, "cutoff_at": e["cutoff_at"], "season": e["season"], "home_won": y,
+                      "p_elo": pe, "p_goals": pg, "p_avg": pa,
+                      "c_elo": max(pe, 1 - pe), "c_goals": max(pg, 1 - pg), "c_avg": max(pa, 1 - pa),
+                      "ok_elo": int((pe >= 0.5) == y), "ok_goals": int((pg >= 0.5) == y), "ok_avg": int((pa >= 0.5) == y),
+                      "agree": pe != 0.5 and pg != 0.5 and (pe > 0.5) == (pg > 0.5)})
+    n = len(games)
+
+    def as_pred(rows, key):
+        return [{"game_id": g["game_id"], "cutoff_at": g["cutoff_at"], "p_home": g[key], "home_won": g["home_won"]} for g in rows]
+    report = {"sport": "nhl", "stage": "development agreement research", "generated_at": utc_now(),
+              "seasons": PERIODS["development"], "dataset_version": dataset_version(rows), "decision_sha256": d["sha256"],
+              "games": n, "abstentions": sum(g["p_elo"] == 0.5 or g["p_goals"] == 0.5 for g in games),
+              "caveat": "Configurations were tuned on these seasons; absolute figures are optimistic.",
+              "all_games": {k: _score(games, f"p_{k}") for k in ("elo", "goals", "avg")},
+              "average_vs_elo_brier": backtest.paired_bootstrap(as_pred(games, "p_avg"), as_pred(games, "p_elo")),
+              "average_vs_goals_brier": backtest.paired_bootstrap(as_pred(games, "p_avg"), as_pred(games, "p_goals")),
+              "goals_vs_elo_brier": backtest.paired_bootstrap(as_pred(games, "p_goals"), as_pred(games, "p_elo")),
+              "average_vs_elo_accuracy": backtest.paired_accuracy_bootstrap(as_pred(games, "p_avg"), as_pred(games, "p_elo"))}
+    disagree = [g for g in games if not g["agree"]]
+    report["disagreement"] = {"n": len(disagree), "coverage": len(disagree) / n,
+                              "elo": _score(disagree, "p_elo"), "goals": _score(disagree, "p_goals"),
+                              "avg": _score(disagree, "p_avg"),
+                              "home_win_rate": sum(g["home_won"] for g in disagree) / len(disagree) if disagree else None}
+    subsets = {"unanimous": [g for g in games if g["agree"]]}
+    for t in AGREEMENT_THRESHOLDS:
+        subsets[f"unanimous_avg_conf_{int(t * 100)}"] = [g for g in games if g["agree"] and g["c_avg"] >= t - 1e-12]
+    out = {}
+    for name, sub in subsets.items():
+        k = len(sub)
+        entry = {"n": k, "coverage": k / n,
+                 "selected_probability": "p_avg (agreement selects games; it does not make a probability)",
+                 "method": {**_score(sub, "p_avg")},
+                 "base_models_on_this_subset": {"elo": _score(sub, "p_elo"), "goals": _score(sub, "p_goals")},
+                 "matched_coverage_filters": {}}
+        for key in ("elo", "goals", "avg"):
+            top = sorted(games, key=lambda g: (-g[f"c_{key}"], g["game_id"]))[:k]
+            entry["matched_coverage_filters"][key] = {
+                **{x: v for x, v in _score(top, f"p_{key}").items()},
+                "subset_minus_filter_accuracy": _subset_diff_bootstrap(sub, top, "ok_avg", f"ok_{key}") if k else None}
+        out[name] = entry
+    report["subsets"] = out
+    primary = {name: e["matched_coverage_filters"]["elo"]["subset_minus_filter_accuracy"] for name, e in out.items()}
+    promising = [name for name, b in primary.items() if b and b["ci95"][0] > 0]
+    avg_better = report["average_vs_elo_brier"]["ci95"][1] < 0 and report["average_vs_goals_brier"]["ci95"][1] < 0
+    report["decision"] = {"rule": "EVALUATION_PLAN 'NHL agreement research'",
+                          "average_brier_better_than_both": avg_better, "promising_agreement_subsets": promising,
+                          "promising": bool(promising or avg_better)}
+    out_dir = Path(out_dir or config.data_dir() / "reports" / f"nhl-agreement-{report['generated_at'].replace(':', '')}")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    report["output_dir"] = str(out_dir)
+    (out_dir / "report.json").write_text(json.dumps(report, indent=2, default=str))
+    log(f"Report written to {out_dir}")
+    return report

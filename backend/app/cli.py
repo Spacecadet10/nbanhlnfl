@@ -7,9 +7,9 @@ from .models.elo import EloConfig
 
 
 # Commands that work for every sport; everything else is NBA-only until generalised.
-SPORT_COMMANDS = {"migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "refresh", "odds", "predict",
+SPORT_COMMANDS = {"migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "refresh", "odds", "predict",
                   "score", "daily", "scheduler", "predict-now", "score-near-tipoff", "markets", "score-markets"}
-NHL_ONLY = {"ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test"}
+NHL_ONLY = {"ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement"}
 
 
 def _any_failed(result) -> bool:
@@ -43,6 +43,7 @@ def main(argv=None) -> int:
                                         "backend/app/models/nhl_frozen_decision.json (refuses to run twice)")
     nt = sub.add_parser("nhl-test", help="NHL only: the one-time final test of the sealed decision (logged; refuses to rerun)")
     nt.add_argument("--confirm-final-test", action="store_true", required=True)
+    sub.add_parser("nhl-agreement", help="NHL only: development-season agreement research (Elo vs goals model; no live change)")
     rt = sub.add_parser("nhl-record-test", help="NHL only: append the saved one-time test predictions to the ledger as backtest rows")
     rt.add_argument("--report", required=True, help="data/reports/nhl-test-*/ directory")
     ing = sub.add_parser("ingest", help="Fetch ESPN scoreboard months into the raw cache and import them")
@@ -141,6 +142,11 @@ def main(argv=None) -> int:
     elif args.cmd == "score-markets":
         from . import market_live
         print(json.dumps({p: market_live.score(conn, policy=p) for p in market_live.POLICIES}, indent=2, default=str))
+    elif args.cmd == "nhl-agreement":
+        from . import nhl_eval
+        r = nhl_eval.agreement_research(conn)
+        print(json.dumps({k: r[k] for k in ("dataset_version", "games", "abstentions", "all_games", "average_vs_elo_brier",
+                                            "average_vs_goals_brier", "disagreement", "decision", "output_dir")}, indent=2, default=str))
     elif args.cmd == "nhl-record-test":
         from pathlib import Path
         from . import nhl_eval

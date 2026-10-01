@@ -187,3 +187,21 @@ def test_recording_the_test_report_is_idempotent(nhl_store, tmp_path):
     assert nhl_store.execute("SELECT DISTINCT run_type FROM predictions").fetchall()[0][0] == "backtest"
     with pytest.raises(nhl_eval.NhlEvaluationError):
         nhl_eval.record_test_report(nhl_store, tmp_path / "val")
+
+
+def test_agreement_research_reads_development_only_and_defines_its_probability(nhl_store, tmp_path, monkeypatch):
+    path = tmp_path / "decision.json"
+    nhl_eval.evaluate_validation(nhl_store, decision_path=path, out_dir=tmp_path / "val", log=lambda _m: None)
+    seen = []
+    real = nhl_eval.load_rows
+    monkeypatch.setattr(nhl_eval, "load_rows", lambda c, period: seen.append(period) or real(c, period))
+    r = nhl_eval.agreement_research(nhl_store, decision_path=path, out_dir=tmp_path / "agree", log=lambda _m: None)
+    assert set(seen) <= {"development", "validation"}          # 'validation' only inside the sealed-decision data check
+    assert seen.count("development") == 1
+    u = r["subsets"]["unanimous"]
+    assert u["n"] + r["disagreement"]["n"] == r["games"]
+    assert u["base_models_on_this_subset"]["elo"]["accuracy"] == u["base_models_on_this_subset"]["goals"]["accuracy"]
+    for e in r["subsets"].values():
+        for f in e["matched_coverage_filters"].values():
+            assert f["n"] == e["n"]                              # matched coverage
+    assert "p_avg" in u["selected_probability"] and "promising" in r["decision"]
