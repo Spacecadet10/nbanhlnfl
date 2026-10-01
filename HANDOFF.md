@@ -8,7 +8,12 @@
 - **NHL agreement research** (preregistered in 8b61375 before computing; 1381d14): development seasons only, Elo vs goals model, unanimous,
   averaging, agreement + thresholds vs matched-coverage confidence filters. Nothing met the rule; nothing frozen; live model unchanged.
   Details and tables: docs/NHL_BASELINE_REPORT.md. Paired test check: Elo − home rate accuracy +1.9 points [+0.3, +3.6].
-- `--ready` exit 0 (281 passed).
+- **NHL learned candidates** (preregistered 330475b; result 2026-10-01): logistic and gradient-boosted trees, season-boundary refits on earlier
+  seasons, development 2017-21. Logistic ≈ Elo (Brier −0.0002 [−0.0008, +0.0004]); trees and goals model worse; four-model average and unanimity
+  no better. Validation not accessed; nothing frozen; live Elo unchanged. docs/NHL_BASELINE_REPORT.md.
+- `--ready` exit 0 (283 passed).
+- **Next options:** install `nba-markets` (user action; NBA market forecasts are otherwise manual); prospective ESPN goalie-confirmation
+  snapshots, the one new NHL input with plausible signal, as a separately preregistered candidate.
 
 ## NHL scheduled jobs installed — Devin, 2026-10-01 ~07:21 EDT
 - User explicitly requested installation of NHL daily and odds only. Initially neither plist existed in ~/Library/LaunchAgents and neither service was loaded. Installed unchanged copies of the currently prepared files; both source and installed files passed plutil -lint.
