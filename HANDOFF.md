@@ -1,5 +1,10 @@
 # Current handoff
 
+## Codex near-tipoff fixes accepted
+- Reviewed cfd1c4f: retained forecast metadata is returned on retries; Today selection, picks and record use explicit policy with no fallback. Both previous findings resolved in this scoped review.
+- Independently ran near-tipoff/API tests: 28 passed (existing dependency warning); git diff --check passed. Commit and initially clean tree confirmed. Full readiness and browser checks not repeated; phone/demo recheck and real upcoming-game lifecycle remain unverified.
+- No models, production data or scheduler changes. This review note is the only new uncommitted change. Near-tipoff remains manually invoked via predict-now.
+
 ## Codex near-tipoff review — fixes requested
 - Scoped code review and 12 near-tipoff tests passed independently (existing dependency warning); no real ingestion, scheduler changes or forecast writes. Full readiness/browser checks not repeated.
 - P2 near_tipoff.predict_now constructs its returned forecast metadata before ledger deduplication. Reproduced retry at 22:45 returning minutes_before_tipoff=45 while the retained forecast was generated at 22:30 for 23:30 tipoff (60 minutes). Odds can likewise be newly fetched in the command response while the app/scorer retain the original snapshot. On retries return the stored forecast identity, generated_at and associated metadata, or explicitly separate current calculation from retained prediction. Add odds-change-with-unchanged-results coverage.
