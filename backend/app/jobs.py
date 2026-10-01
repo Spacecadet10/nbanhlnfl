@@ -6,9 +6,9 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 from zoneinfo import ZoneInfo
 
-from . import config, ingest, injuries, live, near_tipoff, shadow
-from .db import utc_now
-from .sources import espn
+from . import config, ingest, injuries, live, market_live, near_tipoff, shadow
+from .db import store_sport, utc_now
+from .sources import espn, nhl_stats
 
 EASTERN = ZoneInfo("America/New_York")
 MIN_REFRESH_INTERVAL = timedelta(minutes=30)   # quota: at most one successful refresh per 30 minutes
@@ -55,14 +55,35 @@ def refresh_months(now: datetime) -> list[str]:
     return ingest.months(f"{start:%Y%m}", f"{end:%Y%m}")
 
 
-def refresh(conn: sqlite3.Connection, *, force: bool = False, fetch: Callable[[str], bytes] = espn.fetch_month,
+def sport(conn: sqlite3.Connection) -> str:
+    return store_sport(conn) or "nba"
+
+
+def nhl_season_for(now: datetime) -> int:
+    """Season ending year of the NHL season running (or next to start) on this Eastern date: July onwards is next season."""
+    d = now.astimezone(EASTERN)
+    return d.year + 1 if d.month >= 7 else d.year
+
+
+def refresh(conn: sqlite3.Connection, *, force: bool = False, fetch: Optional[Callable] = None,
             sleep: Callable[[float], None] = time.sleep, now: Optional[datetime] = None) -> dict:
+    """Schedule and results refresh for this store's sport. NBA: ESPN months around today (≤ 3 requests). NHL: the
+    current season's NHL stats game list (1 request). Retries and the 30-minute quota are shared."""
     run_id = _start(conn, "refresh")
     now = now or datetime.now(timezone.utc)
     last = last_success(conn, "refresh")
     if last and not force and now - _parse(last) < MIN_REFRESH_INTERVAL:
         return _finish(conn, run_id, "skipped", 0, {"reason": f"last successful refresh {last} is under "
                                                               f"{MIN_REFRESH_INTERVAL} old (quota)"})
+    if sport(conn) == "nhl":
+        season = nhl_season_for(now)
+        fetch = fetch or nhl_stats.fetch_season
+        results, attempts, failure = _fetch_each([season], lambda y: ingest.ingest_nhl_season(conn, y, fetch=fetch), sleep)
+        if failure:
+            return _finish(conn, run_id, "failed", attempts, {"seasons": [season], "failed_season": failure[0],
+                                                              "error": failure[1], "completed": results})
+        return _finish(conn, run_id, "success", attempts, {"seasons": [season], "imports": results})
+    fetch = fetch or espn.fetch_month
     months = refresh_months(now)[:MAX_REQUESTS_PER_REFRESH]
     results, attempts, failure = _fetch_each(months, lambda m: ingest.ingest_month(conn, m, fetch=fetch), sleep)
     if failure:
@@ -103,7 +124,7 @@ def odds_dates(conn: sqlite3.Connection, now: datetime) -> list[str]:
     return dates[:MAX_REQUESTS_PER_ODDS]
 
 
-def odds_snapshot(conn: sqlite3.Connection, *, force: bool = False, fetch: Callable[[str], bytes] = espn.fetch_day,
+def odds_snapshot(conn: sqlite3.Connection, *, force: bool = False, fetch: Optional[Callable[[str], bytes]] = None,
                   sleep: Callable[[float], None] = time.sleep, now: Optional[datetime] = None) -> dict:
     """Pregame odds snapshot: re-fetches the ESPN day scoreboards of games starting soon, so quotes (each stamped
     with its retrieval time, append-only) accumulate up to tipoff. Also updates schedule/status for those days."""
@@ -117,7 +138,12 @@ def odds_snapshot(conn: sqlite3.Connection, *, force: bool = False, fetch: Calla
     if not dates:
         return _finish(conn, run_id, "skipped", 0, {"reason": f"no scheduled game tips off within "
                                                               f"{ODDS_WINDOW.total_seconds() / 3600:g} h"})
-    results, attempts, failure = _fetch_each(dates, lambda d: ingest.ingest_day(conn, d, fetch=fetch), sleep)
+    if sport(conn) == "nhl":   # ESPN NHL day scoreboards: line quotes only (schedule and results come from the NHL)
+        fetch = fetch or espn.fetch_nhl_day
+        results, attempts, failure = _fetch_each(dates, lambda d: ingest.ingest_nhl_day(conn, d, fetch=fetch), sleep)
+    else:
+        fetch = fetch or espn.fetch_day
+        results, attempts, failure = _fetch_each(dates, lambda d: ingest.ingest_day(conn, d, fetch=fetch), sleep)
     if failure:
         return _finish(conn, run_id, "failed", attempts, {"dates": dates, "failed_date": failure[0],
                                                           "error": failure[1], "completed": results})
@@ -250,8 +276,9 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
     forecast games tipping off within 24 hours with the frozen Elo, or refuse them with a reason. The forecast is
     time-stamped after the refresh finishes. The possession refresh does not gate the Elo forecast (Elo does not use
     it). Stale data or a missing result makes the job 'failed' so it is visible; a dry run stores no forecast."""
-    steps = {"refresh": refresh(conn, **(refresh_kw or {})), "odds": odds_snapshot(conn, **(odds_kw or {})),
-             "boxscores": boxscores(conn, **(box_kw or {}))}
+    steps = {"refresh": refresh(conn, **(refresh_kw or {})), "odds": odds_snapshot(conn, **(odds_kw or {}))}
+    if sport(conn) == "nba":
+        steps["boxscores"] = boxscores(conn, **(box_kw or {}))
     run_id = None if dry_run else _start(conn, "near_tipoff")
     try:
         out = near_tipoff.predict_now(conn, now=now, write=not dry_run)
@@ -262,6 +289,22 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
     status = "failed" if blocked else "success" if out["forecasts"] else "skipped"
     out["steps"] = {k: v.get("status") for k, v in steps.items()}
     return {"status": status, **out} if dry_run else _finish(conn, run_id, status, 1, out)
+
+
+def market_forecasts(conn: sqlite3.Connection, *, policy: str = "pregame", write: bool = True, **kw) -> dict:
+    """Market forecasts with the sport's sealed market model. A sport without one is 'skipped' with the reason
+    (never a fabricated forecast); any other error is 'failed'."""
+    run_id = _start(conn, "markets") if write else None
+    try:
+        out = market_live.forecast(conn, policy=policy, write=write, **kw)
+    except market_live.MarketModelUnavailable as exc:
+        detail = {"reason": str(exc)}
+        return _finish(conn, run_id, "skipped", 0, detail) if write else {"status": "skipped", **detail}
+    except Exception as exc:
+        detail = {"error": f"{type(exc).__name__}: {exc}"}
+        return _finish(conn, run_id, "failed", 1, detail) if write else {"status": "failed", **detail}
+    out.pop("forecasts")
+    return _finish(conn, run_id, "success", 1, out) if write else {"status": "dry_run", **out}
 
 
 def predict(conn: sqlite3.Connection, **kw) -> dict:
@@ -297,6 +340,11 @@ def daily(conn: sqlite3.Connection, *, force_refresh: bool = False, **refresh_kw
     and the refresh status stays visible), then score. With config.shadow_enabled(), the possession refresh runs
     before the Elo forecast and the shadow forecast after it; the Elo steps are identical either way."""
     out = {"refresh": refresh(conn, force=force_refresh, **refresh_kw)}
+    if sport(conn) == "nhl":   # no shadow or possession steps for the NHL
+        out["predict"] = predict(conn)
+        out["markets"] = market_forecasts(conn)
+        out["score"] = score(conn)
+        return out
     if config.shadow_enabled():
         out["boxscores"] = boxscores(conn)
     out["predict"] = predict(conn)

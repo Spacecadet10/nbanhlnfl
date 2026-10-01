@@ -1,0 +1,13 @@
+{
+  "sport": "nba",
+  "market_model": "points_normal",
+  "config": {
+    "eta": 0.05,
+    "carry": 0.5
+  },
+  "research_dataset_version": "08fe2552c1aa4579",
+  "sealed_at": "2026-10-01T03:29:04Z",
+  "research_report": "/Users/andry/Desktop/nba-predictor-sprint1/data/reports/nba-markets-2026-10-01T032904Z",
+  "status": "development research; prospective 2026-27 forecasts are the only independent evidence",
+  "sha256": "16af8472305819299f1b8fffa5fdac78f9cddd12b377e28e09cc8041625ed4ba"
+}

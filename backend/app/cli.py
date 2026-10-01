@@ -7,7 +7,8 @@ from .models.elo import EloConfig
 
 
 # Commands that work for every sport; everything else is NBA-only until generalised.
-SPORT_COMMANDS = {"migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test"}
+SPORT_COMMANDS = {"migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test", "refresh", "odds", "predict",
+                  "score", "daily", "scheduler", "predict-now", "score-near-tipoff", "markets", "score-markets"}
 NHL_ONLY = {"ingest-nhl", "nhl-validate", "nhl-test"}
 
 
@@ -31,6 +32,13 @@ def main(argv=None) -> int:
     nh.add_argument("--from-season", type=int, required=True, help="First season end year, e.g. 2016 = 2015-16")
     nh.add_argument("--to-season", type=int, required=True)
     nh.add_argument("--sleep", type=float, default=1.5, help="Seconds between requests")
+    nm = sub.add_parser("nba-market-research", help="NBA development research for spread/total/team-total distributions "
+                                                     "(seasons 2019-20 … 2023-24 only); --seal records the chosen model")
+    nm.add_argument("--seal", action="store_true")
+    mk = sub.add_parser("markets", help="Record market forecasts (spread/puck line, totals, team totals, NHL 3-way) for "
+                                        "games whose night-before cutoff is within 7 days")
+    mk.add_argument("--dry-run", action="store_true")
+    sub.add_parser("score-markets", help="Settle and score the latest market forecasts (read-only)")
     sub.add_parser("nhl-validate", help="NHL only: development grids, then the one-time validation comparison; seals "
                                         "backend/app/models/nhl_frozen_decision.json (refuses to run twice)")
     nt = sub.add_parser("nhl-test", help="NHL only: the one-time final test of the sealed decision (logged; refuses to rerun)")
@@ -116,6 +124,21 @@ def main(argv=None) -> int:
                 failed.append({"season": season or "teams", "error": f"{type(exc).__name__}: {str(exc).splitlines()[0]}"})
         print(json.dumps({"imports": results, "failed": failed}, indent=2))
         return 1 if failed else 0
+    elif args.cmd == "nba-market-research":
+        from . import nba_markets
+        report = nba_markets.research(conn)
+        out = {k: report[k] for k in ("dataset_version", "selected", "holdout", "holdout_nll_diff_vs_league", "output_dir")}
+        out["top_trials"] = report["trials"][:4]
+        if args.seal:
+            out["sealed"] = nba_markets.seal(report)
+        print(json.dumps(out, indent=2, default=str))
+    elif args.cmd == "markets":
+        result = jobs.market_forecasts(conn, write=not args.dry_run)
+        print(json.dumps(result, indent=2, default=str))
+        return 1 if _any_failed(result) else 0
+    elif args.cmd == "score-markets":
+        from . import market_live
+        print(json.dumps({p: market_live.score(conn, policy=p) for p in market_live.POLICIES}, indent=2, default=str))
     elif args.cmd in ("nhl-validate", "nhl-test"):
         from . import nhl_eval
         try:
@@ -147,6 +170,21 @@ def main(argv=None) -> int:
                 failed.append({"season": season, "error": f"{type(exc).__name__}: {str(exc).splitlines()[0]}"})
         print(json.dumps({"imports": results, "failed": failed}, indent=2))
         return 1 if failed else 0
+    elif args.cmd == "nba-market-research":
+        from . import nba_markets
+        report = nba_markets.research(conn)
+        out = {k: report[k] for k in ("dataset_version", "selected", "holdout", "holdout_nll_diff_vs_league", "output_dir")}
+        out["top_trials"] = report["trials"][:4]
+        if args.seal:
+            out["sealed"] = nba_markets.seal(report)
+        print(json.dumps(out, indent=2, default=str))
+    elif args.cmd == "markets":
+        result = jobs.market_forecasts(conn, write=not args.dry_run)
+        print(json.dumps(result, indent=2, default=str))
+        return 1 if _any_failed(result) else 0
+    elif args.cmd == "score-markets":
+        from . import market_live
+        print(json.dumps({p: market_live.score(conn, policy=p) for p in market_live.POLICIES}, indent=2, default=str))
     elif args.cmd in ("nhl-validate", "nhl-test"):
         from . import nhl_eval
         try:

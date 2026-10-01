@@ -46,15 +46,28 @@ def results_refreshed_at(conn: sqlite3.Connection, now: str) -> Optional[str]:
                         "AND finished_at <= ?", (now,)).fetchone()[0]
 
 
-def _market(conn: sqlite3.Connection, game_id: str, at: str) -> Optional[sqlite3.Row]:
-    return conn.execute("SELECT quote_id, home_prob_devig, retrieved_at, provider FROM odds_quotes WHERE game_id = ? "
-                        "AND price_label = 'current' AND retrieved_at <= ? ORDER BY retrieved_at DESC, quote_id DESC LIMIT 1",
-                        (game_id, at)).fetchone()
+def feature_version(eng) -> str:
+    return FEATURE_VERSION if eng.sport == "nba" else eng.feature_version.replace("prior-day-et-cutoff", "tipoff-cutoff")
+
+
+def _market(conn: sqlite3.Connection, game_id: str, at: str) -> Optional[dict]:
+    """Latest current moneyline retrieved at or before `at`. NBA: odds_quotes (its quote id is stored with the forecast).
+    NHL: market_quotes (append-only, so the same snapshot is found again from the forecast's generation time; the
+    freshness record keeps no quote id because its column refers to odds_quotes)."""
+    if live.engine(conn).sport == "nba":
+        row = conn.execute("SELECT quote_id, home_prob_devig, retrieved_at, provider FROM odds_quotes WHERE game_id = ? "
+                           "AND price_label = 'current' AND retrieved_at <= ? ORDER BY retrieved_at DESC, quote_id DESC LIMIT 1",
+                           (game_id, at)).fetchone()
+        return dict(row) if row else None
+    row = conn.execute("SELECT quote_id, p_a_devig AS home_prob_devig, retrieved_at, provider FROM market_quotes "
+                       "WHERE game_id = ? AND market = 'winner' AND price_label = 'current' AND retrieved_at <= ? "
+                       "ORDER BY retrieved_at DESC, quote_id DESC LIMIT 1", (game_id, at)).fetchone()
+    return {**dict(row), "quote_id": None, "stored": False} if row else None
 
 
 def _unfinished_earlier_games(conn: sqlite3.Connection, team_id: str, now: str) -> list[str]:
     """Eligible games of this team that tipped off in the last RESULT_LOOKBACK but are not final in the store."""
-    types = live.ELIGIBLE_TYPES
+    types = live.engine(conn).eligible_types
     return [r[0] for r in conn.execute(
         f"SELECT game_id FROM games WHERE (home_team_id = ? OR away_team_id = ?) AND tipoff_at <= ? AND tipoff_at > ? "
         f"AND status IN ('scheduled', 'in_progress') AND season_type IN ({', '.join('?' * len(types))}) ORDER BY tipoff_at",
@@ -77,7 +90,8 @@ def predict_now(conn: sqlite3.Connection, *, now: Optional[str] = None, write: b
     rows = live.available_rows(conn, now)
     for r in sorted(rows, key=lambda r: (r.result_available_at, r.game.tipoff_at, r.game.game_id)):
         model.update(r.result)
-    mv, data_version = model_version(model), backtest.dataset_version(rows)
+    eng = live.engine(conn)
+    mv, data_version = model_version(model), eng.dataset_version(rows)
     refreshed = results_refreshed_at(conn, now)
     stale = refreshed is None or _parse(now) - _parse(refreshed) > MAX_DATA_AGE
     out = {"as_of": now, "policy": POLICY, "model_version": mv, "dataset_version": data_version,
@@ -86,7 +100,7 @@ def predict_now(conn: sqlite3.Connection, *, now: Optional[str] = None, write: b
            "window_end": _fmt(_parse(now) + WINDOW), "written": write, "created": 0, "already_recorded": 0,
            "forecasts": [], "refused": [],
            "limitation": "Elo uses results only; it does not know about injuries, rest or line-ups."}
-    types = live.ELIGIBLE_TYPES
+    types = eng.eligible_types
     games = conn.execute(
         f"SELECT * FROM games WHERE status IN ('scheduled', 'in_progress') AND tipoff_at > ? AND tipoff_at <= ? "
         f"AND season_type IN ({', '.join('?' * len(types))}) ORDER BY tipoff_at, game_id",
@@ -107,13 +121,13 @@ def predict_now(conn: sqlite3.Connection, *, now: Optional[str] = None, write: b
             out["refused"].append({"game_id": g["game_id"], "tipoff_at": g["tipoff_at"], "reason": refusal[0],
                                    "detail": refusal[1]})
             continue
-        p = round(model.predict(backtest._pregame(g)), 9)
+        p = round(model.predict(eng.pregame(g)), 9)
         if not write:   # the current calculation only; nothing is stored and nothing stored is consulted
             quote = _market(conn, g["game_id"], now)
             out["forecasts"].append(_entry(g, now, p, quote["home_prob_devig"] if quote else None,
                                            quote["retrieved_at"] if quote else None, status="dry_run"))
             continue
-        prediction_id, new = record(conn, Forecast(g["game_id"], "live", mv, data_version, FEATURE_VERSION,
+        prediction_id, new = record(conn, Forecast(g["game_id"], "live", mv, data_version, feature_version(eng),
                                                    g["tipoff_at"], now, p))
         out["created"] += new
         out["already_recorded"] += not new
@@ -127,8 +141,9 @@ def predict_now(conn: sqlite3.Connection, *, now: Optional[str] = None, write: b
                     "results_refreshed_at, latest_result_available_at, results_used, market_quote_id, market_home_prob, "
                     "market_retrieved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (prediction_id, g["game_id"], stored_at, g["tipoff_at"], refreshed, out["latest_result_available_at"],
-                     len(rows), at_time["quote_id"] if at_time else None,
-                     at_time["home_prob_devig"] if at_time else None, at_time["retrieved_at"] if at_time else None))
+                     len(rows), at_time["quote_id"] if at_time and at_time.get("stored", True) else None,
+                     at_time["home_prob_devig"] if at_time and at_time.get("stored", True) else None,
+                     at_time["retrieved_at"] if at_time and at_time.get("stored", True) else None))
         # Report what is stored, not what was just recomputed: on a retry the retained forecast keeps its own
         # generation time and the market snapshot taken then.
         kept = conn.execute(

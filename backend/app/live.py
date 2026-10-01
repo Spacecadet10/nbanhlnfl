@@ -7,17 +7,61 @@ new results change the dataset version and create a new forecast version. The la
 the one shown and scored.
 """
 import sqlite3
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Callable, Optional
 
-from . import backtest
-from .db import utc_now
+from . import backtest, sports
+from .db import store_sport, utc_now
 from .ledger import Forecast, record
 from .models.base import PregameGame
 from .models.elo import Elo
 
 HORIZON_DAYS = 7
-ELIGIBLE_TYPES = backtest.SEASON_TYPES  # preseason and exhibitions are not forecast (the model excludes them)
+ELIGIBLE_TYPES = backtest.SEASON_TYPES  # NBA: preseason and exhibitions are not forecast (the model excludes them)
+
+
+@dataclass(frozen=True)
+class Engine:
+    """What the live winner forecast needs from a sport: its eligible games, results, sealed model and versions.
+    The NBA engine is exactly the functions used before multi-sport support; a store without an identity is NBA."""
+    sport: str
+    eligible_types: tuple
+    feature_version: str
+    load_rows: Callable[[sqlite3.Connection], list]
+    dataset_version: Callable[[list], str]
+    pregame: Callable[[sqlite3.Row], PregameGame]
+    primary: Callable[[sqlite3.Connection], tuple]
+
+
+def _nba_primary(conn: sqlite3.Connection) -> tuple[dict, Elo]:
+    decision, cfg = backtest.load_frozen_decision(conn)
+    return decision, Elo(cfg)
+
+
+def _nhl_engine() -> Engine:
+    from . import nhl_eval
+    from .models.hockey import HockeyElo, HockeyEloConfig
+
+    def primary(conn):
+        d = nhl_eval.load_decision(conn)
+        if d["winner_model"] != "hockey_elo":
+            raise nhl_eval.NhlEvaluationError(f"Unsupported NHL winner model {d['winner_model']!r}")
+        return d, HockeyElo(HockeyEloConfig(**d["hockey_elo_config"]), sports.NHL.rating_key)
+
+    def pregame(r):
+        return PregameGame(r["game_id"], r["season"], r["season_type"], r["tipoff_at"], r["home_team_id"],
+                           r["away_team_id"], sports.is_neutral(sports.NHL, bool(r["neutral_site"]), r["tipoff_at"]))
+    return Engine("nhl", sports.NHL.eligible_season_types, nhl_eval.FEATURE_VERSION,
+                  lambda c: nhl_eval.load_rows(c, "live"), nhl_eval.dataset_version, pregame, primary)
+
+
+NBA_ENGINE = Engine("nba", ELIGIBLE_TYPES, backtest.FEATURE_VERSION, lambda c: backtest.load_rows(c, "live"),
+                    backtest.dataset_version, backtest._pregame, _nba_primary)
+
+
+def engine(conn: sqlite3.Connection) -> Engine:
+    return _nhl_engine() if store_sport(conn) == "nhl" else NBA_ENGINE
 
 
 def _ts(dt: datetime) -> str:
@@ -30,13 +74,12 @@ def _parse(value: str) -> datetime:
 
 def available_rows(conn: sqlite3.Connection, as_of: str) -> list[backtest.Row]:
     """Every eligible final result available at `as_of` (all seasons; the final test is complete)."""
-    rows = backtest.load_rows(conn, "live")
+    rows = engine(conn).load_rows(conn)
     return [r for r in rows if r.result_available_at <= as_of]
 
 
 def primary_model(conn: sqlite3.Connection) -> tuple[dict, Elo]:
-    decision, cfg = backtest.load_frozen_decision(conn)
-    return decision, Elo(cfg)
+    return engine(conn).primary(conn)
 
 
 def predict(conn: sqlite3.Connection, *, now: Optional[str] = None, horizon_days: int = HORIZON_DAYS) -> dict:
@@ -44,29 +87,31 @@ def predict(conn: sqlite3.Connection, *, now: Optional[str] = None, horizon_days
     `now` is for tests; the CLI always uses the real clock."""
     now = now or utc_now()
     horizon = _ts(_parse(now) + timedelta(days=horizon_days))
-    _, model = primary_model(conn)
+    eng = engine(conn)
+    _, model = eng.primary(conn)
     rows = available_rows(conn, now)
-    version = backtest.dataset_version(rows)
+    version = eng.dataset_version(rows)
     for r in sorted(rows, key=lambda r: (r.result_available_at, r.game.tipoff_at, r.game.game_id)):
         model.update(r.result)
 
     upcoming = []
+    types = eng.eligible_types
     for g in conn.execute(
-            f"SELECT * FROM games WHERE status = 'scheduled' AND season_type IN ({', '.join('?' * len(ELIGIBLE_TYPES))}) "
-            "ORDER BY tipoff_at, game_id", ELIGIBLE_TYPES):
+            f"SELECT * FROM games WHERE status = 'scheduled' AND season_type IN ({', '.join('?' * len(types))}) "
+            "ORDER BY tipoff_at, game_id", types):
         cutoff = backtest.cutoff_for(g["tipoff_at"])
         if now < cutoff <= horizon:
-            neutral = bool(g["neutral_site"])
+            neutral = bool(g["neutral_site"]) if eng.sport == "nba" else eng.pregame(g).neutral_site
             upcoming.append((cutoff, PregameGame(g["game_id"], g["season"], g["season_type"], g["tipoff_at"],
                                                  g["home_team_id"], g["away_team_id"], neutral)))
     created = existing = 0
     mv = backtest.model_version(model)
     for cutoff, game in sorted(upcoming, key=lambda x: (x[0], x[1].tipoff_at, x[1].game_id)):
         p = round(model.predict(game), 9)
-        _, new = record(conn, Forecast(game.game_id, "live", mv, version, backtest.FEATURE_VERSION, cutoff, now, p))
+        _, new = record(conn, Forecast(game.game_id, "live", mv, version, eng.feature_version, cutoff, now, p))
         created += new
         existing += not new
-    return {"as_of": now, "horizon_end": horizon, "model_version": mv, "dataset_version": version,
+    return {"sport": eng.sport, "as_of": now, "horizon_end": horizon, "model_version": mv, "dataset_version": version,
             "results_used": len(rows), "eligible_games": len(upcoming), "created": created, "already_recorded": existing}
 
 

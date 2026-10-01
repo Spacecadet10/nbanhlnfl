@@ -364,3 +364,8 @@ Development research only. It must not touch the sealed Elo, the `logistic_v2` s
   candidates: Elo K = 4 (smallest K; best Brier 0.24072, H = 30, carry 0.75, MOV on) and goals η = 0.005 (smallest η; NLL 3.8064).
   The grids are extended downwards, as for the NBA home-advantage grid: Elo K ∈ {2, 3, 4, 6, 8, 10, 12} and goals
   η ∈ {0.001, 0.002, 0.003, 0.005, 0.01, 0.02, 0.04}. Criteria and tie rules are unchanged. Home-rate development Brier 0.24841.
+- **2026-10-01 result (development research, run once):** selected η 0.05, carry 0.5 (tuning NLL 8.3853 on 2,643 games; carry
+  is at the grid's lower edge; the grid was **not** extended because the 2023-24 holdout had already been viewed). Holdout
+  2023-24 (1,319 games): margin MAE 11.16 / RMSE 14.34, total MAE 14.50 / RMSE 18.12 (reference 12.52 / 15.72 and 15.95 / 19.94);
+  central 50%/80% interval coverage margin 0.52/0.80, total 0.48/0.81; NLL − reference −0.189 [−0.222, −0.155]. Dataset
+  08fe2552c1aa4579 (= the NBA validation dataset: no test-season rows). Sealed: `backend/app/models/nba_market_decision.json`.
