@@ -1,5 +1,8 @@
 // The app's single API client. All screens fetch through here; there is no local fallback data.
-import type { GameDetail, GamesResponse, HistoryResponse, Meta, PerformanceResponse, Policy } from './types';
+import type {
+  GameDetail, GamesResponse, HistoryResponse, MarketHistoryResponse, MarketId, MarketPerformanceResponse, Meta,
+  PerformanceResponse, Policy, Sport,
+} from './types';
 
 export class ApiError extends Error {
   constructor(message: string, readonly status?: number) {
@@ -32,24 +35,36 @@ async function get<T>(path: string, params?: Record<string, string | undefined>,
   return res.json() as Promise<T>;
 }
 
+// Every call names its sport explicitly; the API never substitutes another sport, market or policy.
+const policyParam = (policy?: Policy) => (policy === 'near_tipoff' ? 'near_tipoff' : undefined);
+const confParam = (c?: number | null) => (c == null ? undefined : String(c));
+
 export const api = {
-  meta: (signal?: AbortSignal) => get<Meta>('/meta', undefined, signal),
-  games: (date: string, policy: Policy, minConfidence: number | null, signal?: AbortSignal) =>
+  meta: (sport: Sport, signal?: AbortSignal) => get<Meta>('/meta', { sport }, signal),
+  games: (sport: Sport, date: string, policy: Policy, minConfidence: number | null, market: MarketId, signal?: AbortSignal) =>
     get<GamesResponse>('/games', {
-      date, policy: policy === 'near_tipoff' ? 'near_tipoff' : undefined,
-      min_confidence: minConfidence == null ? undefined : String(minConfidence),
+      sport, date, policy: policyParam(policy), min_confidence: confParam(minConfidence),
+      market: market === 'winner' ? undefined : market,
     }, signal),
-  game: (id: string, signal?: AbortSignal) => get<GameDetail>(`/games/${encodeURIComponent(id)}`, undefined, signal),
-  predictions: (f: { run_type?: 'live' | 'backtest'; date_from?: string; date_to?: string; team?: string;
+  game: (sport: Sport, id: string, signal?: AbortSignal) =>
+    get<GameDetail>(`/games/${encodeURIComponent(id)}`, { sport }, signal),
+  predictions: (sport: Sport, f: { run_type?: 'live' | 'backtest'; date_from?: string; date_to?: string; team?: string;
     min_confidence?: number | null; limit?: number; policy?: Policy }, signal?: AbortSignal) =>
     get<HistoryResponse>('/predictions', {
-      run_type: f.run_type, date_from: f.date_from, date_to: f.date_to, team: f.team,
-      policy: f.policy === 'near_tipoff' ? 'near_tipoff' : undefined,
-      min_confidence: f.min_confidence == null ? undefined : String(f.min_confidence),
+      sport, run_type: f.run_type, date_from: f.date_from, date_to: f.date_to, team: f.team,
+      policy: policyParam(f.policy), min_confidence: confParam(f.min_confidence),
       limit: f.limit == null ? undefined : String(f.limit),
     }, signal),
-  performance: (runType: 'live' | 'backtest', policy: Policy, signal?: AbortSignal) =>
+  performance: (sport: Sport, runType: 'live' | 'backtest', policy: Policy, signal?: AbortSignal) =>
     get<PerformanceResponse>('/performance', {
-      run_type: runType, policy: policy === 'near_tipoff' && runType === 'live' ? 'near_tipoff' : undefined,
+      sport, run_type: runType, policy: runType === 'live' ? policyParam(policy) : undefined,
     }, signal),
+  marketPredictions: (sport: Sport, market: MarketId, f: { policy?: Policy; date_from?: string; date_to?: string;
+    team?: string; min_confidence?: number | null; limit?: number }, signal?: AbortSignal) =>
+    get<MarketHistoryResponse>('/market-predictions', {
+      sport, market, policy: policyParam(f.policy), date_from: f.date_from, date_to: f.date_to, team: f.team,
+      min_confidence: confParam(f.min_confidence), limit: f.limit == null ? undefined : String(f.limit),
+    }, signal),
+  marketPerformance: (sport: Sport, market: MarketId, policy: Policy, signal?: AbortSignal) =>
+    get<MarketPerformanceResponse>('/market-performance', { sport, market, policy: policyParam(policy) }, signal),
 };

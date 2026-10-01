@@ -1,7 +1,9 @@
 import { api } from '../api/client';
-import type { PerformanceResponse } from '../api/types';
+import type { MarketId, PerformanceResponse, Policy, Sport } from '../api/types';
 import { useApi } from '../api/useApi';
 import { RunBadge } from '../components/Badges';
+import { MarketReport } from '../components/MarketView';
+import { MarketSelect, useMarket, useSport } from '../components/Selection';
 import { PolicyToggle, RunTypeToggle, usePolicy, useRunType } from '../components/RunTypeToggle';
 import { AsyncView, Empty } from '../components/States';
 import { calendarDate, FULL_DATE, num, pct } from '../format';
@@ -9,12 +11,27 @@ import { calendarDate, FULL_DATE, num, pct } from '../format';
 const SMALL_SAMPLE = 200;
 
 export function PerformancePage() {
+  const [sport] = useSport();
+  const [market, setMarket] = useMarket();
   const [run, setRun] = useRunType();
   const [policyChoice, setPolicy] = usePolicy();
-  const policy = run === 'live' ? policyChoice : 'pregame';
-  const { state, retry } = useApi((s) => api.performance(run, policy, s), [run, policy]);
+  const policy = run === 'live' || market !== 'winner' ? policyChoice : 'pregame';
+  const meta = useApi((s) => api.meta(sport, s), [sport]);
+  const { state, retry } = useApi((s) => api.performance(sport, run, policy, s), [sport, run, policy]);
+  const markets = meta.state.status === 'success' ? meta.state.data.markets : [];
+  if (market !== 'winner') {
+    return (
+      <section>
+        <div className="page-head"><h1>Model performance <RunBadge runType="live" /></h1></div>
+        <MarketSelect value={market} markets={markets} onChange={setMarket} />
+        <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} /></div>
+        <MarketPerformance sport={sport} market={market} policy={policy} />
+      </section>
+    );
+  }
   return (
     <section>
+      {markets.length > 0 && <MarketSelect value={market} markets={markets} onChange={setMarket} />}
       <AsyncView state={state} retry={retry}>
         {(p) => (
           <>
@@ -127,6 +144,11 @@ function Report({ perf: p, run, setRun }: { perf: PerformanceResponse; run: 'liv
       )}
     </>
   );
+}
+
+function MarketPerformance({ sport, market, policy }: { sport: Sport; market: MarketId; policy: Policy }) {
+  const { state, retry } = useApi((s) => api.marketPerformance(sport, market, policy, s), [sport, market, policy]);
+  return <AsyncView state={state} retry={retry}>{(p) => <MarketReport perf={p} />}</AsyncView>;
 }
 
 function Tile({ label, value, hint }: { label: string; value: string; hint: string }) {

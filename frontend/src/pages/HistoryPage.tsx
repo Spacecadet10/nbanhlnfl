@@ -1,9 +1,11 @@
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
-import type { PredictionRecord } from '../api/types';
+import type { MarketId, Policy, PredictionRecord, Sport } from '../api/types';
 import { useApi } from '../api/useApi';
 import { RunBadge } from '../components/Badges';
-import { ConfidenceFilter, levelLabel, RecordLine, useConfidence } from '../components/ConfidenceFilter';
+import { ConfidenceFilter, confidenceLevels, levelLabel, MarketRecordLine, RecordLine, useConfidence } from '../components/ConfidenceFilter';
+import { MarketHistoryTable } from '../components/MarketView';
+import { MarketSelect, useCarriedSearch, useMarket, useSport } from '../components/Selection';
 import { PolicyToggle, RunTypeToggle, usePolicy, useRunType } from '../components/RunTypeToggle';
 import { AsyncView, Empty } from '../components/States';
 import { calendarDate, dateTime, FULL_DATE, pct } from '../format';
@@ -15,14 +17,18 @@ export function HistoryPage() {
     date_to: params.get('date_to') ?? undefined,
     team: params.get('team') ?? undefined,
   };
-  const [run, setRun] = useRunType();
-  const [level, setLevel] = useConfidence();
+  const [sport] = useSport();
+  const [market, setMarket] = useMarket();
+  const isWinner = market === 'winner';
+  const [runChoice, setRun] = useRunType();
+  const run = isWinner ? runChoice : 'live';   // market forecasts are live only
+  const [level, setLevel] = useConfidence(sport, market);
   const [policyChoice, setPolicy] = usePolicy();
   const policy = run === 'live' ? policyChoice : 'pregame';
-  const meta = useApi((s) => api.meta(s), []);
+  const meta = useApi((s) => api.meta(sport, s), [sport]);
   const realMode = meta.state.status === 'success' && meta.state.data.mode === 'real';
-  const { state, retry } = useApi((s) => api.predictions({ ...filters, run_type: run, min_confidence: level, policy }, s),
-    [filters.date_from, filters.date_to, filters.team, run, level, policy]);
+  const { state, retry } = useApi((s) => api.predictions(sport, { ...filters, run_type: run, min_confidence: level, policy }, s),
+    [sport, filters.date_from, filters.date_to, filters.team, run, level, policy, isWinner]);
 
   const update = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -30,11 +36,10 @@ export function HistoryPage() {
     setParams(next);
   };
   const hasFilters = Boolean(filters.date_from || filters.date_to || filters.team);
+  const carried = useCarriedSearch();
   const clearFilters = () => {
-    const next = new URLSearchParams();
+    const next = new URLSearchParams(carried.slice(1));
     if (run !== 'live') next.set('run', run);
-    if (params.get('conf')) next.set('conf', params.get('conf') as string);
-    if (params.get('policy')) next.set('policy', params.get('policy') as string);
     setParams(next);
   };
 
@@ -42,8 +47,9 @@ export function HistoryPage() {
     <section>
       <div className="page-head">
         <h1>Prediction history</h1>
-        {realMode && <RunTypeToggle value={run} onChange={setRun} />}
+        {realMode && isWinner && <RunTypeToggle value={run} onChange={setRun} />}
       </div>
+      {meta.state.status === 'success' && <MarketSelect value={market} markets={meta.state.data.markets} onChange={setMarket} />}
       <p className="muted small">
         {!realMode ? 'Demo predictions from synthetic fixtures.'
           : run === 'live' && policy === 'near_tipoff' ? 'Near-tipoff forecasts, each made before tipoff from the freshest stored results (latest version per game). Kept separate from the night-before record. Elo does not know about injuries or line-ups.'
@@ -51,7 +57,7 @@ export function HistoryPage() {
             : 'Retrospective backtest predictions of the primary model, computed after the fact. These are not forecasts recorded before the games.'}
       </p>
       {realMode && run === 'live' && <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} /></div>}
-      <ConfidenceFilter value={level} onChange={setLevel} />
+      <ConfidenceFilter value={level} onChange={setLevel} levels={confidenceLevels(sport, market)} />
       <form className="filters" onSubmit={(e) => e.preventDefault()}>
         <label>From <input type="date" value={filters.date_from ?? ''} onChange={(e) => update('date_from', e.target.value)} /></label>
         <label>To <input type="date" value={filters.date_to ?? ''} onChange={(e) => update('date_to', e.target.value)} /></label>
@@ -69,7 +75,10 @@ export function HistoryPage() {
           <button type="button" className="link-btn" onClick={meta.retry}>Retry</button>
         </p>
       )}
-      <AsyncView state={state} retry={retry}>
+      {!isWinner ? (
+        <MarketHistory sport={sport} market={market} policy={policy} level={level} filters={filters} hasFilters={hasFilters}
+          showAll={() => setLevel(null)} />
+      ) : <AsyncView state={state} retry={retry}>
         {(data) => data.predictions.length === 0
           ? <Empty>
               {level != null
@@ -88,8 +97,35 @@ export function HistoryPage() {
               </p>
               <HistoryTable rows={data.predictions} />
             </>}
-      </AsyncView>
+      </AsyncView>}
     </section>
+  );
+}
+
+function MarketHistory({ sport, market, policy, level, filters, hasFilters, showAll }: {
+  sport: Sport; market: MarketId; policy: Policy; level: number | null; hasFilters: boolean; showAll: () => void;
+  filters: { date_from?: string; date_to?: string; team?: string };
+}) {
+  const { state, retry } = useApi((s) => api.marketPredictions(sport, market, { ...filters, policy, min_confidence: level }, s),
+    [sport, market, policy, level, filters.date_from, filters.date_to, filters.team]);
+  return (
+    <AsyncView state={state} retry={retry}>
+      {(data) => data.predictions.length === 0
+        ? <Empty>
+            {level != null
+              ? <>No picks at {levelLabel(level)} model confidence{hasFilters ? ' match these filters' : ''}. <button type="button" className="link-btn" onClick={showAll}>Show all picks</button></>
+              : hasFilters ? 'No forecasts match these filters.'
+                : `No ${policy === 'near_tipoff' ? 'near-tipoff' : 'night-before'} forecasts of this market have been recorded yet.`}
+          </Empty>
+        : <>
+            <MarketRecordLine record={data.record} />
+            <p className="small muted">
+              Each row is the latest forecast per game, at the exact line it was made against. Model-only lines had no bookmaker line when the forecast was made.
+              {data.total > data.predictions.length && ` Showing the latest ${data.predictions.length} of ${data.total}; the record covers all ${data.total}.`}
+            </p>
+            <MarketHistoryTable rows={data.predictions} />
+          </>}
+    </AsyncView>
   );
 }
 

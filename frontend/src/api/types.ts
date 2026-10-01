@@ -1,10 +1,15 @@
-// Mirrors backend/app/schemas.py (contract v2). Keep in sync with the API.
+// Mirrors backend/app/schemas.py (contract v3: sport and market selection). Keep in sync with the API.
 // `mode`: where data comes from (real = stored ESPN data + ledger; demo = synthetic fixtures).
 // Prediction `run_type`: live (recorded before cutoff), backtest (retrospective) or demo.
 export type RunType = 'demo' | 'backtest' | 'live';
 export type Mode = 'real' | 'demo';
 
 export interface Team { abbr: string; name: string }
+
+export type Sport = 'nba' | 'nhl';
+export type MarketId = 'winner' | 'reg3' | 'spread' | 'total' | 'team_total_home' | 'team_total_away';
+export interface SportInfo { id: Sport; label: string; available: boolean; note: string | null }
+export interface MarketInfo { id: MarketId; title: string; available: boolean; note: string }
 
 export interface SourceStatus {
   name: string;
@@ -17,6 +22,10 @@ export interface SourceStatus {
 
 export interface Meta {
   mode: Mode;
+  sport: Sport;
+  sports: SportInfo[];
+  markets: MarketInfo[];
+  score_unit: 'points' | 'goals';
   default_date: string;
   available_dates: string[];
   teams: Team[];
@@ -43,7 +52,7 @@ export interface NearTipoffForecast {
 }
 
 export interface SlatePick { policy: Policy; home_win_prob: number; pick: 'home' | 'away'; confidence: number; meets_confidence: boolean }
-export interface SlateSelection { policy: Policy; min_confidence: number | null; games: number; with_forecast: number; selected: number }
+export interface SlateSelection { market: MarketId; policy: Policy; min_confidence: number | null; games: number; with_forecast: number; selected: number }
 
 export interface GameSummary {
   game_id: string;
@@ -61,6 +70,8 @@ export interface GameSummary {
   near_tipoff: NearTipoffForecast | null;
   /** The pick under the slate's selected forecast policy; null when the game has no forecast under it. */
   slate_pick: SlatePick | null;
+  /** The selected non-winner market's forecast under the selected policy, if any. */
+  market_forecast: MarketForecast | null;
 }
 
 export interface GamesResponse { mode: Mode; date: string; selection: SlateSelection; games: GameSummary[]; sources: SourceStatus[] }
@@ -75,6 +86,32 @@ export interface GameDetail extends GameSummary {
   home_stats: TeamStats;
   away_stats: TeamStats;
   projected_score_available: boolean;
+  market_forecasts: MarketForecast[];
+}
+
+export type Settlement = 'win' | 'loss' | 'push' | 'void' | 'pending' | 'unscorable';
+export interface MarketSide { side: 'a' | 'mid' | 'b'; label: string; probability: number }
+export interface MarketQuote { bookmaker: string; retrieved_at: string; line: number | null; price_a: number; price_b: number; prob_a: number; prob_b: number }
+/** One forecast at one exact line. line_source 'model' = no bookmaker line existed; the line is model-only. */
+export interface MarketForecast {
+  market: MarketId; title: string; policy: Policy; model_version: string; generated_at: string; cutoff_at: string;
+  line: number | null; line_source: 'market' | 'model' | null; sides: MarketSide[]; pick: 'a' | 'b'; pick_label: string;
+  confidence: number; meets_confidence: boolean; quote: MarketQuote | null; result: Settlement; limitations: string[];
+}
+export interface MarketRecordSummary {
+  min_confidence: number | null; selected: number; settled: number; wins: number; losses: number; pushes: number;
+  voids: number; pending: number; win_rate: number | null;
+}
+export interface MarketRecord { game_id: string; game_date: string; tipoff: string; home: Team; away: Team; forecast: MarketForecast; outcome: Outcome | null }
+export interface MarketHistoryResponse {
+  mode: Mode; sport: Sport; market: MarketId; policy: Policy; total: number; record: MarketRecordSummary; predictions: MarketRecord[];
+}
+export interface MarketPerformanceResponse {
+  mode: Mode; sport: Sport; market: MarketId; policy: Policy; title: string; model_version: string | null; forecasts: number;
+  record: MarketRecordSummary; brier_score: number | null; log_loss: number | null; line_sources: Record<string, number>;
+  market_matched: number; model_log_loss_on_matched: number | null; market_log_loss_on_matched: number | null;
+  reference: { label: string; by_line: Record<string, { n: number; log_loss: number; brier: number; pick_accuracy_excluding_mid: number | null; league_reference_log_loss: number }> } | null;
+  limitations: string[]; note: string;
 }
 
 export interface PredictionRecord {

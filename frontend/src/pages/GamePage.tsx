@@ -6,13 +6,17 @@ import { ModeBadge, NearTipoffBadge, RunBadge } from '../components/Badges';
 import { ProbabilityBar } from '../components/ProbabilityBar';
 import { AsyncView } from '../components/States';
 import { calendarDate, dateTime, pct } from '../format';
+import { MarketForecastsCard } from '../components/MarketView';
+import { useCarriedSearch, useSport } from '../components/Selection';
 
 export function GamePage() {
   const { gameId = '' } = useParams();
-  const { state, retry } = useApi((s) => api.game(gameId, s), [gameId]);
+  const [sport] = useSport();
+  const carried = useCarriedSearch();
+  const { state, retry } = useApi((s) => api.game(sport, gameId, s), [sport, gameId]);
   return (
     <section>
-      {state.status === 'error' && <Link to="/" className="back">‹ Today's games</Link>}
+      {state.status === 'error' && <Link to={`/${carried}`} className="back">‹ Today's games</Link>}
       <AsyncView state={state} retry={retry}>{(g) => <Detail game={g} />}</AsyncView>
     </section>
   );
@@ -20,18 +24,22 @@ export function GamePage() {
 
 const avg = (v: number | null) => (v == null ? '—' : v.toFixed(1));
 
-const STAT_ROWS: { label: string; help?: string; value: (s: TeamStats) => string }[] = [
-  { label: 'Record', help: 'Regular-season wins and losses known at the stats cutoff.', value: (s) => `${s.wins}-${s.losses}` },
+const statRows = (unit: string): { label: string; help?: string; value: (s: TeamStats) => string }[] => [
+  { label: 'Record', help: 'Regular-season wins and losses known at the stats cutoff (NHL: overtime and shootout results count as wins or losses).', value: (s) => `${s.wins}-${s.losses}` },
   { label: 'Last 10', value: (s) => (s.last10_games ? `${s.last10_wins}-${s.last10_games - s.last10_wins}` : '—') },
-  { label: 'Points scored / game', value: (s) => avg(s.points_for_avg) },
-  { label: 'Points allowed / game', value: (s) => avg(s.points_against_avg) },
+  { label: `${unit} scored / game`, value: (s) => avg(s.points_for_avg) },
+  { label: `${unit} allowed / game`, value: (s) => avg(s.points_against_avg) },
   { label: 'Rest days', help: 'Days since the previous scheduled game this season.', value: (s) => (s.rest_days == null ? '—' : s.rest_days.toFixed(1)) },
 ];
 
 function Detail({ game: g }: { game: GameDetail }) {
+  const [sport] = useSport();
+  const carried = useCarriedSearch();
+  const back = new URLSearchParams(carried.slice(1));
+  back.set('date', g.game_date);
   return (
     <>
-      <Link to={`/?date=${g.game_date}`} className="back">‹ Games on {calendarDate(g.game_date)}</Link>
+      <Link to={`/?${back}`} className="back">‹ Games on {calendarDate(g.game_date)}</Link>
       <div className="page-head">
         <h1>{g.away.name} <span className="muted">@</span> {g.home.name} <ModeBadge mode={g.mode} /></h1>
       </div>
@@ -78,13 +86,15 @@ function Detail({ game: g }: { game: GameDetail }) {
 
       {g.near_tipoff && <NearTipoffCard game={g} />}
 
+      {g.mode === 'real' && <MarketForecastsCard forecasts={g.market_forecasts} />}
+
       <div className="card">
         <h2>Team comparison</h2>
         <p className="small muted">This season, using only results known by {dateTime(g.stats_as_of)}.</p>
         <table className="table compare">
           <thead><tr><th /><th>{g.away.abbr}</th><th>{g.home.abbr}</th></tr></thead>
           <tbody>
-            {STAT_ROWS.map((row) => (
+            {statRows(sport === 'nhl' ? 'Goals' : 'Points').map((row) => (
               <tr key={row.label}>
                 <th scope="row">{row.label}{row.help && <Help label={row.label}>{row.help}</Help>}</th>
                 <td>{row.value(g.away_stats)}</td>

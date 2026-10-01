@@ -1,16 +1,19 @@
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
-import type { GameSummary, Meta, Policy, SlateSelection } from '../api/types';
+import type { GameSummary, MarketId, Meta, Policy, SlateSelection } from '../api/types';
 import { useApi } from '../api/useApi';
 import { ModeBadge, NearTipoffBadge, RunBadge, SourceList } from '../components/Badges';
-import { ConfidenceFilter, levelLabel, RangeRecords, useConfidence } from '../components/ConfidenceFilter';
+import { ConfidenceFilter, confidenceLevels, levelLabel, RangeRecords, useConfidence } from '../components/ConfidenceFilter';
+import { MarketCard } from '../components/MarketView';
+import { MarketSelect, useCarriedSearch, useMarket, useSport } from '../components/Selection';
 import { PolicyToggle, usePolicy } from '../components/RunTypeToggle';
 import { ProbabilityBar } from '../components/ProbabilityBar';
 import { AsyncView, Empty } from '../components/States';
 import { calendarDate, FULL_DATE, pct, shiftDate, time } from '../format';
 
 export function TodayPage() {
-  const meta = useApi((s) => api.meta(s), []);
+  const [sport] = useSport();
+  const meta = useApi((s) => api.meta(sport, s), [sport]);
   return (
     <AsyncView state={meta.state} retry={meta.retry}>
       {(m) => <Slate meta={m} />}
@@ -27,10 +30,12 @@ function Slate({ meta }: { meta: Meta }) {
     next.set('date', d);
     setParams(next);
   };
-  const [level, setLevel] = useConfidence();
+  const sport = meta.sport;
+  const [market, setMarket] = useMarket();
+  const [level, setLevel] = useConfidence(sport, market);
   const [policyChoice, setPolicy] = usePolicy();
   const policy: Policy = meta.mode === 'real' ? policyChoice : 'pregame';
-  const { state, retry } = useApi((s) => api.games(date, policy, level, s), [date, policy, level]);
+  const { state, retry } = useApi((s) => api.games(sport, date, policy, level, market, s), [sport, date, policy, level, market]);
 
   return (
     <section>
@@ -60,8 +65,9 @@ function Slate({ meta }: { meta: Meta }) {
           </p>
         </div>
       )}
-      <ConfidenceFilter value={level} onChange={setLevel} />
-      <RangeRecords level={level} realMode={meta.mode === 'real'} policy={policy} />
+      <MarketSelect value={market} markets={meta.markets} onChange={setMarket} />
+      <ConfidenceFilter value={level} onChange={setLevel} levels={confidenceLevels(sport, market)} />
+      <RangeRecords sport={sport} market={market} level={level} realMode={meta.mode === 'real'} policy={policy} />
       <AsyncView state={state} retry={retry}>
         {(data) => (
           <>
@@ -73,7 +79,7 @@ function Slate({ meta }: { meta: Meta }) {
                 <button type="button" className="link-btn" onClick={() => setDate(meta.default_date)}>{meta.mode === 'demo' ? 'Go to demo today' : 'Go to the next games'}</button>
               </Empty>
             ) : (
-              <FilteredSlate games={data.games} selection={data.selection} showAll={() => setLevel(null)} />
+              <FilteredSlate games={data.games} selection={data.selection} showAll={() => setLevel(null)} market={market} />
             )}
           </>
         )}
@@ -85,9 +91,11 @@ function Slate({ meta }: { meta: Meta }) {
 const POLICY_NAME: Record<Policy, string> = { pregame: 'night-before', near_tipoff: 'near-tipoff' };
 
 /** The API decides which games are selected: only the chosen policy's forecast counts, never the other one. */
-function FilteredSlate({ games, selection: sel, showAll }: { games: GameSummary[]; selection: SlateSelection; showAll: () => void }) {
+function FilteredSlate({ games, selection: sel, showAll, market }: { games: GameSummary[]; selection: SlateSelection; showAll: () => void; market: MarketId }) {
   const level = sel.min_confidence;
-  const selected = level == null ? games : games.filter((g) => g.slate_pick?.meets_confidence);
+  const isWinner = market === 'winner';
+  const selected = level == null ? games
+    : games.filter((g) => (isWinner ? g.slate_pick?.meets_confidence : g.market_forecast?.meets_confidence));
   const noun = games.length === 1 ? 'game' : 'games';
   return (
     <>
@@ -104,7 +112,9 @@ function FilteredSlate({ games, selection: sel, showAll }: { games: GameSummary[
         </Empty>
       ) : (
         <ul className="game-grid">
-          {selected.map((g) => <GameCard key={g.game_id} game={g} policy={sel.policy} />)}
+          {selected.map((g) => (isWinner
+            ? <GameCard key={g.game_id} game={g} policy={sel.policy} />
+            : <MarketCard key={g.game_id} game={g} statusLabel={statusLabel(g)} />))}
         </ul>
       )}
     </>
@@ -123,6 +133,7 @@ function statusLabel(g: GameSummary) {
 }
 
 function GameCard({ game: g, policy }: { game: GameSummary; policy: Policy }) {
+  const carried = useCarriedSearch();
   const p = g.prediction;
   const n = g.near_tipoff;
   const near = policy === 'near_tipoff';
@@ -135,7 +146,7 @@ function GameCard({ game: g, policy }: { game: GameSummary; policy: Policy }) {
   const other = near ? p : n;
   return (
     <li className="card game-card">
-      <Link to={`/games/${g.game_id}`} className="card-link">
+      <Link to={`/games/${g.game_id}${carried}`} className="card-link">
         <div className="game-card-head">
           <span className="game-time">{statusLabel(g)}{SEASON_LABEL[g.season_type] && ` · ${SEASON_LABEL[g.season_type]}`}</span>
           {g.mode === 'demo' ? <RunBadge runType="demo" /> : near ? n && <NearTipoffBadge /> : p && <RunBadge runType={p.run_type} />}
