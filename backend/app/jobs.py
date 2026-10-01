@@ -288,6 +288,11 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
     blocked = [r for r in out["refused"] if r["reason"] in ("stale_results", "missing_result")]
     status = "failed" if blocked else "success" if out["forecasts"] else "skipped"
     out["steps"] = {k: v.get("status") for k, v in steps.items()}
+    accepted = [f["game_id"] for f in out["forecasts"]]
+    if accepted:   # market forecasts at the same moment for exactly the games the winner step accepted
+        m = market_forecasts(conn, policy="near_tipoff", write=not dry_run, now=out["as_of"], game_ids=accepted)
+        out["steps"]["markets"] = m.get("status")
+        out["markets"] = {k: m.get(k) for k in ("created", "already_recorded", "reason", "error") if k in m}
     return {"status": status, **out} if dry_run else _finish(conn, run_id, status, 1, out)
 
 

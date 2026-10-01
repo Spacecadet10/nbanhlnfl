@@ -150,8 +150,12 @@ def predict_now(conn: sqlite3.Connection, *, now: Optional[str] = None, write: b
             "SELECT p.generated_at, p.home_win_prob, n.market_home_prob, n.market_retrieved_at, n.results_refreshed_at "
             "FROM predictions p JOIN near_tipoff_forecasts n ON n.prediction_id = p.prediction_id "
             "WHERE p.prediction_id = ?", (prediction_id,)).fetchone()
+        market_prob, market_at = kept["market_home_prob"], kept["market_retrieved_at"]
+        if eng.sport != "nba":   # the NHL snapshot is not stored with the forecast; it is found again from generation time
+            snap = _market(conn, g["game_id"], kept["generated_at"])
+            market_prob, market_at = (snap["home_prob_devig"], snap["retrieved_at"]) if snap else (None, None)
         out["forecasts"].append({
-            **_entry(g, kept["generated_at"], kept["home_win_prob"], kept["market_home_prob"], kept["market_retrieved_at"],
+            **_entry(g, kept["generated_at"], kept["home_win_prob"], market_prob, market_at,
                      status="created" if new else "already_recorded"),
             "prediction_id": prediction_id, "results_refreshed_at": kept["results_refreshed_at"]})
     return out

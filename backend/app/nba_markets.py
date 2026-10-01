@@ -105,7 +105,8 @@ def research(conn: sqlite3.Connection, *, out_dir: Optional[Path] = None, log: C
     return report
 
 
-def seal(report: dict, path: Path = DECISION_PATH) -> dict:
+def seal(report: dict, path: Optional[Path] = None) -> dict:
+    path = Path(path or DECISION_PATH)
     if path.exists():
         raise NbaMarketError(f"{path} exists; a sealed NBA market model is never overwritten")
     decision = backtest.seal({"sport": "nba", "market_model": "points_normal", "config": report["selected"],
@@ -116,9 +117,10 @@ def seal(report: dict, path: Path = DECISION_PATH) -> dict:
     return decision
 
 
-def sealed_model(conn: sqlite3.Connection, path: Path = DECISION_PATH):
+def sealed_model(conn: sqlite3.Connection, path: Optional[Path] = None):
     """(model, base version) for live NBA market forecasts, or MarketModelUnavailable if nothing is sealed."""
     from .market_live import MarketModelUnavailable
+    path = Path(path or DECISION_PATH)
     if not path.is_file():
         raise MarketModelUnavailable("No sealed NBA market model (run `app.cli nba-market-research --seal`)")
     d = json.loads(path.read_text())

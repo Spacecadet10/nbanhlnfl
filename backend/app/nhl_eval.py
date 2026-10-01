@@ -185,9 +185,10 @@ def seal(decision: dict) -> dict:
     return backtest.seal(decision)
 
 
-def evaluate_validation(conn: sqlite3.Connection, *, decision_path: Path = DECISION_PATH, out_dir: Optional[Path] = None,
+def evaluate_validation(conn: sqlite3.Connection, *, decision_path: Optional[Path] = None, out_dir: Optional[Path] = None,
                         log: Callable[[str], None] = print) -> dict:
-    if Path(decision_path).exists():
+    decision_path = Path(decision_path or DECISION_PATH)
+    if decision_path.exists():
         raise NhlEvaluationError(f"{decision_path} exists: the validation stage has already been run and sealed")
     started = utc_now()
     dev_rows = load_rows(conn, "development")
@@ -235,8 +236,8 @@ def evaluate_validation(conn: sqlite3.Connection, *, decision_path: Path = DECIS
     return report
 
 
-def load_decision(conn: Optional[sqlite3.Connection] = None, path: Path = DECISION_PATH, check_data: bool = True) -> dict:
-    path = Path(path)
+def load_decision(conn: Optional[sqlite3.Connection] = None, path: Optional[Path] = None, check_data: bool = True) -> dict:
+    path = Path(path or DECISION_PATH)
     if not path.is_file():
         raise NhlEvaluationError(f"No sealed NHL decision at {path}; run the validation stage first")
     d = json.loads(path.read_text())
@@ -259,7 +260,7 @@ def test_access_path() -> Path:
     return config.data_dir() / "eval" / "test_access_nhl.jsonl"
 
 
-def evaluate_test(conn: sqlite3.Connection, *, decision_path: Path = DECISION_PATH, out_dir: Optional[Path] = None,
+def evaluate_test(conn: sqlite3.Connection, *, decision_path: Optional[Path] = None, out_dir: Optional[Path] = None,
                   log: Callable[[str], None] = print) -> dict:
     decision = load_decision(conn, decision_path)
     access = test_access_path()
