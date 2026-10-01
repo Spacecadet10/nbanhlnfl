@@ -232,3 +232,15 @@ def test_hockey_features_use_only_delivered_results():
     f.update(HockeyResult(g1, 5, 1, "REG"))
     after = f.compute(PregameGame("nhl:3", 2025, "regular", "2025-01-05T00:00:00Z", "nhl:6", "nhl:16", False))
     assert after["gd10_diff"] == 8 and after["elo_diff"] > 0 and after["xg_diff"] > second["xg_diff"]
+
+
+def test_agreement_exploration_partitions_games(nhl_store, tmp_path):
+    path = tmp_path / "decision.json"
+    nhl_eval.evaluate_validation(nhl_store, decision_path=path, out_dir=tmp_path / "val", log=lambda _m: None)
+    r = nhl_eval.agreement_exploration(nhl_store, decision_path=path, out_dir=tmp_path / "x", log=lambda _m: None)
+    splits = r["vote_splits"]
+    assert sum(s["majority_or_average"].get("n", 0) for s in splits.values()) == r["games"]
+    assert len(r["pairs"]) == 6
+    for key, e in r["agreement_x_confidence"].items():
+        if e.get("n"):
+            assert e["elo_filter"]["n"] == e["n"]

@@ -533,3 +533,109 @@ def learned_research(conn: sqlite3.Connection, decision_path: Optional[Path] = N
     (out_dir / "report.json").write_text(json.dumps(report, indent=2, default=str))
     log(f"Report written to {out_dir}")
     return report
+
+
+# --- Agreement exploration across all four NHL models (descriptive; development seasons only) ------------------------
+def _dev_model_predictions(conn: sqlite3.Connection, decision_path: Optional[Path] = None):
+    from .models.hockey import hockey_gbt, hockey_logistic
+    d = load_decision(conn, decision_path)
+    rows = load_rows(conn, "development")
+    if any(r.game.season not in LOADABLE["development"] for r in rows):
+        raise NhlEvaluationError("Agreement exploration reads development seasons only")
+    elo_cfg, goals_cfg = HockeyEloConfig(**d["hockey_elo_config"]), GoalsConfig(**d["goals_config"])
+    built = {"elo": candidate("hockey_elo", elo_cfg), "goals": candidate("goals_poisson", goals_cfg),
+             "logistic": hockey_logistic(elo_cfg, goals_cfg, SPORT.rating_key),
+             "gbt": hockey_gbt(elo_cfg, goals_cfg, SPORT.rating_key)}
+    preds = {n: {p["game_id"]: p for p in in_period(backtest.run(m, rows), "development")} for n, m in built.items()}
+    return d, rows, preds
+
+
+def agreement_exploration(conn: sqlite3.Connection, decision_path: Optional[Path] = None, out_dir: Optional[Path] = None,
+                          log: Callable[[str], None] = print) -> dict:
+    """Descriptive map of where the four NHL models agree and how often they are right there. Every subset is compared
+    with Elo's own confidence filter at the same coverage. Many subsets are examined: any single interval excluding 0 can
+    be chance. Nothing is selected or frozen here."""
+    from itertools import combinations
+    d, rows, preds = _dev_model_predictions(conn, decision_path)
+    names = list(preds)
+    ids = sorted(preds["elo"], key=lambda g: (preds["elo"][g]["cutoff_at"], g))
+    games = []
+    for g in ids:
+        p = {n: preds[n][g]["p_home"] for n in names}
+        y = preds["elo"][g]["home_won"]
+        home_votes = sum(v > 0.5 for v in p.values())
+        avg = sum(p.values()) / len(p)
+        games.append({"game_id": g, "cutoff_at": preds["elo"][g]["cutoff_at"], "season": preds["elo"][g]["season"],
+                      "home_won": y, "p": p, "avg": avg, "home_votes": home_votes,
+                      "split": {4: "4-0", 0: "4-0", 3: "3-1", 1: "3-1", 2: "2-2"}[home_votes],
+                      "c_elo": max(p["elo"], 1 - p["elo"]), "c_avg": max(avg, 1 - avg),
+                      "ok_elo": int((p["elo"] >= 0.5) == y), "ok_avg": int((avg >= 0.5) == y)})
+    n = len(games)
+
+    def rec(sub, prob_key="avg"):
+        k = len(sub)
+        if not k:
+            return {"n": 0}
+        if prob_key == "avg":
+            probs = [g["avg"] for g in sub]
+        else:
+            probs = [g["p"][prob_key] for g in sub]
+        ys = [g["home_won"] for g in sub]
+        wins = sum((q >= 0.5) == y for q, y in zip(probs, ys))
+        return {"n": k, "coverage": k / n, "wins": wins, "losses": k - wins, "accuracy": wins / k,
+                "accuracy_ci95": _wilson(wins, k), "brier": metrics.brier(probs, ys), "log_loss": metrics.log_loss(probs, ys)}
+
+    def vs_elo_filter(sub, ok_key="ok_avg"):
+        if not sub:
+            return None
+        top = sorted(games, key=lambda g: (-g["c_elo"], g["game_id"]))[:len(sub)]
+        return {"elo_filter": rec(top, "elo"), "subset_minus_elo_filter_accuracy": _subset_diff_bootstrap(sub, top, ok_key, "ok_elo")}
+
+    out = {"sport": "nhl", "stage": "development agreement exploration (descriptive)", "generated_at": utc_now(),
+           "seasons": PERIODS["development"], "dataset_version": dataset_version(rows), "games": n,
+           "models": names, "probability_rule": "a subset's probability is the equal average of the four models",
+           "caveat": "Exploratory: many subsets; Elo and goals configurations were tuned on these seasons."}
+    # 1. vote splits; in a 3-1 split, how often the lone dissenter is right
+    splits = {}
+    for s in ("4-0", "3-1", "2-2"):
+        sub = [g for g in games if g["split"] == s]
+        entry = {"majority_or_average": rec(sub), "each_model": {m: rec(sub, m) for m in names},
+                 "vs_elo_filter": vs_elo_filter(sub) if s != "2-2" else None}
+        if s == "3-1":
+            diss = {}
+            for m in names:
+                mine = [g for g in sub if (g["p"][m] > 0.5) != (g["home_votes"] >= 3)]
+                if mine:
+                    right = sum((g["p"][m] > 0.5) == g["home_won"] for g in mine)
+                    diss[m] = {"times_alone": len(mine), "dissenter_right": right, "rate": right / len(mine),
+                               "ci95": _wilson(right, len(mine))}
+            entry["lone_dissenter"] = diss
+        splits[s] = entry
+    out["vote_splits"] = splits
+    # 2. every pair of models
+    pairs = {}
+    for a, b in combinations(names, 2):
+        sub = [g for g in games if (g["p"][a] > 0.5) == (g["p"][b] > 0.5)]
+        pairs[f"{a}+{b}"] = {**rec(sub), **(vs_elo_filter(sub) or {})}
+    out["pairs"] = pairs
+    # 3. agreement level x confidence of the average
+    grid = {}
+    for level, test in (("4-0", lambda g: g["split"] == "4-0"), ("at_least_3-1", lambda g: g["split"] != "2-2")):
+        for t in (None, 0.55, 0.60, 0.65):
+            sub = [g for g in games if test(g) and (t is None or g["c_avg"] >= t - 1e-12)]
+            grid[f"{level}|avg>={t if t else 'all'}"] = {**rec(sub), **(vs_elo_filter(sub) or {})}
+    out["agreement_x_confidence"] = grid
+    # 4. per season: 4-0 subset vs Elo filter at the same coverage within that season
+    seasons = {}
+    for s in PERIODS["development"]:
+        sg = [g for g in games if g["season"] == s]
+        sub = [g for g in sg if g["split"] == "4-0"]
+        top = sorted(sg, key=lambda g: (-g["c_elo"], g["game_id"]))[:len(sub)]
+        seasons[s] = {"games": len(sg), "unanimous": rec(sub), "elo_filter_same_coverage": rec(top, "elo")}
+    out["by_season"] = seasons
+    out_dir = Path(out_dir or config.data_dir() / "reports" / f"nhl-agreement-explore-{out['generated_at'].replace(':', '')}")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out["output_dir"] = str(out_dir)
+    (out_dir / "report.json").write_text(json.dumps(out, indent=2, default=str))
+    log(f"Report written to {out_dir}")
+    return out

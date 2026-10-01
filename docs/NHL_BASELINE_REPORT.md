@@ -116,3 +116,27 @@ hyperparameters were fixed in advance, not tuned. 4,877 games.
 **Conclusion under the preregistered rule: no candidate passes screening.** The validation seasons were not accessed, nothing is frozen and the
 live model stays Elo. The learners are kept in the code for future features with real new information (goalie confirmations, shot quality)
 that would need their own preregistration; re-running these same candidates with tweaks would be a search, not evidence.
+
+## Agreement exploration across all four models (descriptive, development 2017-18 … 2020-21; 4,877 games)
+Command `--sport nhl nhl-agreement-explore`; report `data/reports/nhl-agreement-explore-2026-10-01T113057Z`. Models: Elo, goals model,
+logistic, gradient-boosted trees. A subset's probability is the four-model average. Every subset is compared with simply taking Elo's most
+confident games at the same coverage. Many subsets were examined, so a single interval excluding 0 can be chance.
+
+| How the models vote | Games (share) | W–L of majority/average pick | Accuracy | Elo's top games, same coverage | Difference [95%] |
+|---|---|---|---|---|---|
+| All 4 agree | 3,826 (78%) | 2,263–1,563 | 59.1% | 59.9% | −0.8 [−1.4, −0.1] |
+| 3 vs 1 | 772 (16%) | 409–363 | 53.0% | – | – |
+| 2 vs 2 | 279 (6%) | 154–125 | 55.2% (average) | – | – |
+
+- In 3–1 splits the lone dissenter was right less than half the time (Elo 24/55, logistic 32/69, goals 173/359, trees 138/289): dissent
+  does not reveal hidden information. In 2–2 splits Elo and the logistic were right 54-55%, the goals model 44% and the trees 47%.
+- Every pair of models: agreement covers 84-95% of games at 58.1-58.8% accuracy; Elo's top games at the same coverage score the same
+  (differences −0.2 to 0.0 points, all intervals include 0).
+- Agreement plus confidence (all four agree and the average ≥ 55 / 60 / 65%): 61.3% / 64.1% / 66.3% on 60% / 32% / 13% of games; Elo's top
+  games at the same coverage: 61.6% / 64.4% / 68.5%. "At least 3 of 4" gives the same picture.
+- Each season (2018-2021), the all-agree subset was 0.4-0.9 points below Elo's top games at the same coverage.
+
+**What it shows:** agreement works by removing near-coin-flip games, where the models split. Elo's own confidence already finds those games,
+equally well or slightly better, at every coverage, for every pair and in every season. With these four models, agreement adds no information
+beyond Elo's probability. That is what the data supports for these models; a model built on different information (for example confirmed
+starting goalies, collected from now on) could disagree with Elo in useful ways, and agreement should be re-checked if one is added.
