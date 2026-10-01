@@ -11,7 +11,9 @@
 - **NHL learned candidates** (preregistered 330475b; result 2026-10-01): logistic and gradient-boosted trees, season-boundary refits on earlier
   seasons, development 2017-21. Logistic ≈ Elo (Brier −0.0002 [−0.0008, +0.0004]); trees and goals model worse; four-model average and unanimity
   no better. Validation not accessed; nothing frozen; live Elo unchanged. docs/NHL_BASELINE_REPORT.md.
-- `--ready` exit 0 (283 passed).
+- **NHL agreement exploration** (user request; descriptive; development only): vote splits, lone dissenters, 6 pairs, agreement × confidence,
+  per season. Agreement never beat Elo's own top-confidence games at the same coverage. docs/NHL_BASELINE_REPORT.md.
+- `--ready` exit 0 (284 passed).
 - **Next options:** install `nba-markets` (user action; NBA market forecasts are otherwise manual); prospective ESPN goalie-confirmation
   snapshots, the one new NHL input with plausible signal, as a separately preregistered candidate.
 
