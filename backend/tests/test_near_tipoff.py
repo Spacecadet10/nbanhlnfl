@@ -247,7 +247,8 @@ def test_job_refreshes_first_and_reports_stale_data_as_failed(ready):
               odds_kw={"fetch": lambda d: empty, "sleep": lambda s: None, "now": at},
               box_kw={"fetch": lambda g: b"{}", "sleep": lambda s: None, "now": at})
     out = jobs.predict_now(ready, now=NOW, **kw)
-    assert out["status"] == "success" and out["created"] == 1 and set(out["steps"]) == {"refresh", "odds", "boxscores"}
+    assert out["status"] == "success" and out["created"] == 1 and set(out["steps"]) == {"refresh", "odds", "boxscores", "markets"}
+    assert out["steps"]["markets"] == "success" and out["markets"]["created"] == 4   # spread, total, two team totals
     assert [r[0] for r in ready.execute("SELECT status FROM job_runs WHERE job = 'near_tipoff'")] == ["success"]
     stale = jobs.predict_now(ready, now="2026-10-22T02:00:00Z", **kw)      # g1 has tipped off; nothing else is due
     assert stale["status"] == "skipped" or stale["refused"]
