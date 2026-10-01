@@ -172,3 +172,27 @@ the two policies differ (OKC@SA: night-before SA 57.9%, near-tipoff OKC 80.0%):
   pick that the night-before view does not select), each showing "made N min before tipoff" and the night-before forecast as "not used by
   this view"; only the Live near-tipoff record line (no Backtest line).
 - No horizontal overflow, no console errors. Not re-checked at phone width or in demo mode after this change.
+
+## Phone width and demo mode after the near-tipoff fixes (2026-10-01, Claude)
+Temporary servers, stopped afterwards: scratch copy on API :8001 / Vite :5174, demo mode (`NBA_API_MODE=demo`) on API :8002 / Vite :5175.
+Checked in 390-px-wide same-origin frames (the browser window does not shrink to phone width), `innerWidth` 390 in every frame.
+
+Scratch copy, `/?date=2026-10-20`:
+- Night-before, 70%+: "1 of 3 games selected … (3 with a night-before forecast)"; card NY 77.9% with "Near-tipoff forecast (not used by
+  this view): NY 77.9%"; Live record "15 picks at 70%+ · no settled games" and Backtest record "2027 picks · 1570–457 · 77.5%". With three
+  frames loading at once the record lines appeared a few seconds after the cards.
+- `&policy=near_tipoff`, 70%+: "2 of 3 games selected … (3 with a near-tipoff forecast)"; cards NY 77.9% (made 300 min before tipoff) and
+  OKC 80.0% (made 60 min before tipoff); only the Live record line. `&conf=80`: 1 of 3 selected (OKC 80.0%).
+- Policy toggle 303 px wide on one row; confidence filter wraps to two rows of 34-px buttons.
+
+Demo mode:
+- Today (default date 2026-10-30), 70%+: "2 of 4 games selected", picks BOS 77.7% and DEN 73.1%; one Demo record line "13 picks at 70%+ ·
+  9–2 (11 settled) · 81.8%" (synthetic data, not a model result); no policy toggle and no near-tipoff blocks.
+- `/?conf=all&policy=near_tipoff`: the policy is ignored in demo (4 games, "4 with a night-before forecast", Demo record 20–12 of 32 settled).
+- `/history?conf=65`: 15 rows, lowest confidence 67.9%, Demo record 10–3 (13 settled).
+
+No horizontal overflow in any frame (scroll width 390); no console errors. Desktop screenshots of the same scratch views (1512 px) were
+taken for the user and are not stored in the repository.
+
+Still not verified: keyboard-only operation; a real phone or real phone browser (frames only); a real near-tipoff forecast on a real
+upcoming game (first possible 2026-10-19/20).

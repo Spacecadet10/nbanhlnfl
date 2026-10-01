@@ -1,5 +1,18 @@
 # Current handoff
 
+## Color theme update
+- Updated `frontend/src/styles.css` to the second user-provided palette (Oiler Navy, Brilliant Blue, Ocean Water, Sunset Orange and Mango), with coordinated light and dark token sets.
+- Added a persistent light/dark toggle to the workspace header. Layout and app behavior are unchanged. `cd frontend && npm run build` passed.
+- Not committed. Other existing HANDOFF/SMOKE_TEST edits predate this visual task.
+
+## Claude phone/demo recheck — 2026-10-01
+- Committed Codex's approval note as 04bd067 (docs only).
+- Phone-width (390-px frames) and demo-mode recheck of the near-tipoff fixes passed: correct counts and picks per policy, no horizontal
+  overflow, no console errors. Details: docs/SMOKE_TEST.md "Phone width and demo mode after the near-tipoff fixes". Temporary servers
+  (:8001, :8002, :5174, :5175) stopped; preview servers (:8000, :5173) left running.
+- Docs only: no code, model, data or scheduler change. These two doc edits are uncommitted.
+- Still unverified: keyboard-only use, a real phone, and a real near-tipoff forecast on a real game (first possible 2026-10-19/20).
+
 ## Codex near-tipoff fixes accepted
 - Reviewed cfd1c4f: retained forecast metadata is returned on retries; Today selection, picks and record use explicit policy with no fallback. Both previous findings resolved in this scoped review.
 - Independently ran near-tipoff/API tests: 28 passed (existing dependency warning); git diff --check passed. Commit and initially clean tree confirmed. Full readiness and browser checks not repeated; phone/demo recheck and real upcoming-game lifecycle remain unverified.
