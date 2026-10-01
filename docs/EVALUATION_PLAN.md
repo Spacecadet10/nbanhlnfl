@@ -369,3 +369,26 @@ Development research only. It must not touch the sealed Elo, the `logistic_v2` s
   2023-24 (1,319 games): margin MAE 11.16 / RMSE 14.34, total MAE 14.50 / RMSE 18.12 (reference 12.52 / 15.72 and 15.95 / 19.94);
   central 50%/80% interval coverage margin 0.52/0.80, total 0.48/0.81; NLL − reference −0.189 [−0.222, −0.155]. Dataset
   08fe2552c1aa4579 (= the NBA validation dataset: no test-season rows). Sealed: `backend/app/models/nba_market_decision.json`.
+
+## NHL agreement research (recorded 2026-10-01, before any agreement figure was computed)
+Requested by the user. Development research; it does not change the live NHL model (`hockey_elo`, sealed).
+- **Data:** development seasons 2017-18 … 2020-21 only (warm-up 2015-16, 2016-17 for burn-in), walk-forward with the sealed configurations
+  (`hockey_elo` K 4, H 30, carry 0.75, MOV on; `goals_poisson` η 0.003, carry 0.75). Validation (2021-24) and the spent test seasons (2024-26)
+  are not read. Caveat: both configurations were tuned on these seasons, so every method here is optimistic in absolute terms; the
+  comparisons between methods use the same predictions.
+- **Methods (fixed):**
+  1. Elo alone; goals model alone (each picks its favoured side; confidence = max(p, 1 − p)).
+  2. **Average:** p_avg = (p_elo + p_goals) / 2. This is how agreement methods produce a probability: a selected game's probability is
+     p_avg; agreement itself does not create a probability.
+  3. **Unanimous:** games where both models pick the same side (p = 0.5 counts as no pick; none expected).
+  4. **Unanimous + threshold:** unanimous games with average confidence ≥ t, t ∈ {0.55, 0.60, 0.65}.
+  5. **Matched-coverage single-model filters:** for each subset in 3-4 with coverage c, the top-c share of development games ranked by
+     Elo confidence, by goals confidence and by average confidence (ties broken by game id).
+- **Reported:** games, coverage, wins, losses, accuracy with Wilson 95% interval; Brier and log loss for probability methods (Elo, goals,
+  average) on all games and on each subset; each base model's accuracy and Brier on each exact subset; both models on the disagreement
+  games. Uncertainty: paired week-block bootstrap (seed 20260930, 2,000) for identical-game comparisons; for subsets of different games,
+  a week-block bootstrap of the accuracy difference (both subsets recomputed from the same resampled weeks).
+- **Decision rule:** a combination is called promising only if (a) the average's paired Brier upper bound vs the better single model is
+  below 0 on all games, or (b) an agreement subset's accuracy minus Elo's matched-coverage filter has a 95% lower bound above 0. One
+  primary comparison per subset; with 4 subsets, chance findings are possible and are labelled as such. A promising combination is
+  frozen as a separate forward (shadow) experiment with its own model version; the live model is not changed.
