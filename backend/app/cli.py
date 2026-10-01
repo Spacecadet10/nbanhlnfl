@@ -176,42 +176,6 @@ def main(argv=None) -> int:
                 failed.append({"season": season, "error": f"{type(exc).__name__}: {str(exc).splitlines()[0]}"})
         print(json.dumps({"imports": results, "failed": failed}, indent=2))
         return 1 if failed else 0
-    elif args.cmd == "nba-market-research":
-        from . import nba_markets
-        report = nba_markets.research(conn)
-        out = {k: report[k] for k in ("dataset_version", "selected", "holdout", "holdout_nll_diff_vs_league", "output_dir")}
-        out["top_trials"] = report["trials"][:4]
-        if args.seal:
-            out["sealed"] = nba_markets.seal(report)
-        print(json.dumps(out, indent=2, default=str))
-    elif args.cmd == "markets":
-        result = jobs.market_forecasts(conn, write=not args.dry_run)
-        print(json.dumps(result, indent=2, default=str))
-        return 1 if _any_failed(result) else 0
-    elif args.cmd == "score-markets":
-        from . import market_live
-        print(json.dumps({p: market_live.score(conn, policy=p) for p in market_live.POLICIES}, indent=2, default=str))
-    elif args.cmd == "nhl-record-test":
-        from pathlib import Path
-        from . import nhl_eval
-        print(json.dumps(nhl_eval.record_test_report(conn, Path(args.report))))
-    elif args.cmd in ("nhl-validate", "nhl-test"):
-        from . import nhl_eval
-        try:
-            report = nhl_eval.evaluate_validation(conn) if args.cmd == "nhl-validate" else nhl_eval.evaluate_test(conn)
-        except nhl_eval.NhlEvaluationError as exc:
-            print(json.dumps({"error": str(exc)}))
-            return 1
-        brief = {k: report[k] for k in ("stage", "seasons", "dataset_version", "output_dir")}
-        brief["winner_models"] = {n: {k: m[k] for k in ("model_version", "n", "accuracy", "brier", "log_loss")}
-                                  for n, m in report["winner_models"].items()}
-        brief["markets"] = {k: {n: {x: v[n][x] for x in ("n", "brier", "log_loss")} for n in ("goals_poisson", "league_poisson")}
-                            | {"goals_minus_league_log_loss": {x: v["goals_minus_league_log_loss"][x] for x in ("mean", "ci95")}}
-                            for k, v in report["markets"].items()}
-        for key in ("winner_selection", "goals_vs_elo_brier", "primary_winner_model", "descriptive"):
-            if key in report:
-                brief[key] = report[key]
-        print(json.dumps(brief, indent=2, default=str))
     elif args.cmd == "replay":
         print(json.dumps(ingest.replay(conn)))
     elif args.cmd == "backtest":

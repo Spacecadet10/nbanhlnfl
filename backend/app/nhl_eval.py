@@ -239,6 +239,14 @@ def evaluate_validation(conn: sqlite3.Connection, *, decision_path: Optional[Pat
 _CHECKED: dict = {}
 
 
+def _decisions_digest(conn: sqlite3.Connection) -> str:
+    """Every stored decision value: a corrected decision (OT -> SO) changes no game row but must invalidate the cache."""
+    h = hashlib.sha256()
+    for r in conn.execute("SELECT game_id, decision, periods FROM game_decisions ORDER BY game_id"):
+        h.update(f"{r[0]}|{r[1]}|{r[2]}\n".encode())
+    return h.hexdigest()
+
+
 def load_decision(conn: Optional[sqlite3.Connection] = None, path: Optional[Path] = None, check_data: bool = True) -> dict:
     path = Path(path or DECISION_PATH)
     if not path.is_file():
@@ -251,7 +259,7 @@ def load_decision(conn: Optional[sqlite3.Connection] = None, path: Optional[Path
         # correction ingested into the store is checked again on the next call.
         state = (str(path), d["sha256"], conn.execute("PRAGMA database_list").fetchone()["file"],
                  *conn.execute("SELECT COUNT(*), MAX(updated_at) FROM games").fetchone(),
-                 conn.execute("SELECT COUNT(*) FROM game_decisions").fetchone()[0])
+                 _decisions_digest(conn))
         current = _CHECKED.get(state) or dataset_version(load_rows(conn, "validation"))
         _CHECKED.clear()
         _CHECKED[state] = current

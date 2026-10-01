@@ -91,10 +91,17 @@ def forecast(conn: sqlite3.Connection, *, now: Optional[str] = None, policy: str
                 line = quote["line"] if quote else markets.model_line(dist, market)
             pa, pmid, pb = (round(x, 9) for x in dist.market(market, line))
             pb = round(1 - pa - pmid, 9)
+            # The latest stored forecast for this game, market and policy: if its line differs, this is a line change. When
+            # the line returns to one forecast earlier (A -> B -> A), the new forecast gets its own identity, so the
+            # current line is shown as the latest instead of the earlier forecast being returned as a retry.
+            prev = conn.execute("SELECT line FROM market_forecasts WHERE game_id=? AND market=? AND policy=? AND run_type='live' "
+                                "AND model_version=? ORDER BY generated_at DESC, forecast_id DESC LIMIT 1",
+                                (g["game_id"], market, policy, mv)).fetchone()
+            revision = now if prev is not None and prev["line"] != line else ""
             f = MarketForecast(eng.sport, g["game_id"], market, line,
                                None if line is None else ("market" if quote else "model"),
                                quote["quote_id"] if quote else None, policy, "live", mv, version, fv, cutoff, now,
-                               g["tipoff_at"], pa, pmid, pb, json.dumps(dist.params, sort_keys=True))
+                               g["tipoff_at"], pa, pmid, pb, json.dumps(dist.params, sort_keys=True), revision)
             entry = {"game_id": g["game_id"], "market": market, "line": line, "line_source": f.line_source,
                      "p": [pa, pmid, pb]}
             if write:
@@ -126,6 +133,14 @@ LATEST_SQL = """
 def pick(row) -> str:
     """The side the forecast favours ('a' or 'b'); the middle (push/draw) is never a pick."""
     return "a" if row["p_a"] >= row["p_b"] else "b"
+
+
+def result_for_pick(market: str, side: str, settled: str) -> str:
+    """'win' / 'loss' / 'push' for the picked side. A push is a refunded line; a regulation draw (reg3 'mid') is a real
+    outcome the pick did not get, so it is a loss, never a push (docs/MARKETS.md)."""
+    if settled == "mid":
+        return "loss" if market == "reg3" else "push"
+    return "win" if settled == side else "loss"
 
 
 def outcome(row) -> str:
@@ -167,7 +182,7 @@ def score(conn: sqlite3.Connection, *, policy: str = "pregame", market: Optional
         if o in ("pending", "void", "unscorable"):
             m[o] += 1
             continue
-        m["push" if o == "mid" else "win" if o == side else "loss"] += 1
+        m[result_for_pick(r["market"], side, o)] += 1
         m["vectors"].append((r["p_a"], r["p_mid"], r["p_b"]))
         m["realised"].append({"a": 0, "mid": 1, "b": 2}[o])
     for m in by_market.values():

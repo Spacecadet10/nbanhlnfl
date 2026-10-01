@@ -78,12 +78,13 @@ class MarketForecast:
     p_mid: float
     p_b: float
     params: str = "{}"
+    revision: str = ""   # set to the generation time when the line returns to one already forecast (A -> B -> A)
 
     @property
     def idempotency_key(self) -> str:
         line = None if self.line is None else float(self.line) + 0.0   # -4 == -4.0 and -0.0 == 0.0: one forecast
         parts = (self.sport, self.game_id, self.market, repr(line), self.policy, self.run_type, self.model_version,
-                 self.dataset_version, self.feature_version, self.cutoff_at)
+                 self.dataset_version, self.feature_version, self.cutoff_at) + ((self.revision,) if self.revision else ())
         return hashlib.sha256("\x1f".join(parts).encode()).hexdigest()
 
 

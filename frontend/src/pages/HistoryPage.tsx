@@ -130,6 +130,7 @@ function MarketHistory({ sport, market, policy, level, filters, hasFilters, show
 }
 
 function HistoryTable({ rows }: { rows: PredictionRecord[] }) {
+  const carried = useCarriedSearch();   // keeps sport=nhl on the game link (the game is read from that sport's store)
   return (
     <table className="table history">
       <thead>
@@ -139,7 +140,7 @@ function HistoryTable({ rows }: { rows: PredictionRecord[] }) {
         {rows.map((r) => (
           <tr key={r.game_id}>
             <td data-label="Date">{calendarDate(r.game_date, FULL_DATE)}</td>
-            <td data-label="Game"><Link to={`/games/${r.game_id}`}>{r.away.abbr} @ {r.home.abbr}</Link> <RunBadge runType={r.run_type} /></td>
+            <td data-label="Game"><Link to={`/games/${r.game_id}${carried}`}>{r.away.abbr} @ {r.home.abbr}</Link> <RunBadge runType={r.run_type} /></td>
             <td data-label="Pick"><strong>{r.pick === 'home' ? r.home.abbr : r.away.abbr}</strong> <span className="muted small">({r.pick})</span></td>
             <td data-label="Model confidence">{pct(r.confidence, 1)}</td>
             <td data-label="Result">{r.outcome ? `${r.away.abbr} ${r.outcome.away_score} – ${r.outcome.home_score} ${r.home.abbr}` : <span className="muted">Pending</span>}</td>

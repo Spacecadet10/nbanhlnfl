@@ -9,6 +9,8 @@ from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import config, db
+from .backtest import FrozenDecisionError
+from .nhl_eval import NhlEvaluationError
 from .providers.demo import DemoProvider
 from .providers.real import RealProvider
 from .schemas import (GameDetail, GamesResponse, Health, HistoryResponse, MarketHistoryResponse, MarketPerformanceResponse,
@@ -55,6 +57,8 @@ def get_provider(mode: str = Depends(api_mode), sport: str = SPORT) -> Iterator:
         yield RealProvider(conn)
     except sqlite3.Error as exc:
         raise HTTPException(status_code=503, detail=f"Data store error: {exc}") from exc
+    except (FrozenDecisionError, NhlEvaluationError) as exc:   # missing, modified or out-of-date sealed model decision
+        raise HTTPException(status_code=503, detail=f"Sealed model decision unusable: {exc}") from exc
     finally:
         conn.close()
 

@@ -14,11 +14,15 @@ Plan/status: docs/MULTISPORT_PLAN.md. Markets: docs/MARKETS.md. NHL results: doc
 - **Fixed after independent review** of 4d28c3f: 6 findings, each with a regression test proven to fail on 4d28c3f. Also fixed: A → B → A
   revisions were ignored by the importer (now applied at each retrieval's time; NBA replay rehearsal on a store copy reproduces games, teams,
   stats, possession and odds exactly); NHL meta 19.8 s → 0.2 s.
+- **Second independent review** (66c0138..596d452): 7 findings, all fixed in the next commit; 5 backend regressions fail on 596d452 and
+  pass now: decision cache now covers decision values; a regulation draw is a loss for a 3-way pick (was a push, inflating the record); a
+  line that moves away and back is re-forecast so the current line is the latest; bookmaker comparison excludes pushes; a broken sealed
+  decision is a 503. Also: History winner links keep `sport`; dead duplicate CLI branches removed.
 - **Process notes:** the installed launchd odds job runs this checkout every 15 min and migrates at start: it applied 0012 (03:06Z) and 0013
   (03:21Z) to `data/nba.sqlite` minutes after the files were written (additive schema only; nothing else written). Further work was done in
   the `../nba-predictor-dev` worktree and fast-forwarded here only at verified commits. Commit b151f4d was made with one failing test (exit
   code hidden by a pipe); fixed in 098dd46.
-- **Checks:** `backend/.venv/bin/python scripts/check_project.py --ready` exit 0 (275 passed, typecheck and build passed); browser/API evidence in SMOKE_TEST "NBA + NHL and markets".
+- **Checks:** `backend/.venv/bin/python scripts/check_project.py --ready` exit 0 (280 passed, typecheck and build passed); browser/API evidence in SMOKE_TEST "NBA + NHL and markets".
 - **Scheduler review needed (not installed):** `scripts/launchd/com.nba-predictor.nhl-daily.plist` (22:15 local: `--sport nhl daily`),
   `…nhl-odds.plist` (every 15 min, ≤ 2 ESPN requests when a game is within 36 h; ~190 requests/day in season — consider 30 min),
   `…nba-markets.plist` (22:30: NBA market forecasts). The installed NBA daily job is unchanged and does not record NBA market forecasts.
@@ -27,7 +31,7 @@ Plan/status: docs/MULTISPORT_PLAN.md. Markets: docs/MARKETS.md. NHL results: doc
   collected); no goalie/injury inputs (no timestamped pregame source); NHL draw-dependence candidate not started; `coverage` counts only NBA
   moneylines in `games_with_odds`; keyboard-only and real-phone checks not done; no market forecast settled yet.
 - **Next:** review/install the three plists; run `--sport nhl odds` then `--sport nhl daily` each evening meanwhile; Codex review of
-  5e7b13a..HEAD (live/API/frontend); then an ESPN `probables` parser for prospective goalie snapshots.
+  the review fixes; then an ESPN `probables` parser for prospective goalie snapshots.
 
 ## Color theme update
 - Updated `frontend/src/styles.css` to the second user-provided palette (Oiler Navy, Brilliant Blue, Ocean Water, Sunset Orange and Mango), with coordinated light and dark token sets.

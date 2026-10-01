@@ -262,7 +262,7 @@ class RealProvider:
             quote = MarketQuoteOut(bookmaker=r["quote_provider"], retrieved_at=r["quote_retrieved_at"], line=r["line"],
                                    price_a=r["price_a"], price_b=r["price_b"], prob_a=r["p_a_devig"], prob_b=r["p_b_devig"])
         outcome = market_live.outcome(r)
-        result = {"a": "win" if side == "a" else "loss", "b": "win" if side == "b" else "loss", "mid": "push"}.get(outcome, outcome)
+        result = market_live.result_for_pick(r["market"], side, outcome) if outcome in ("a", "b", "mid") else outcome
         sides = [MarketSide(side="a", label=labels[0], probability=r["p_a"])]
         if r["market"] == "reg3" or r["p_mid"] > 0:
             sides.append(MarketSide(side="mid", label=labels[1], probability=r["p_mid"]))
@@ -324,17 +324,18 @@ class RealProvider:
 
     def market_performance(self, market: str, policy: str) -> MarketPerformanceResponse:
         rows = self._market_records(market, policy, None)
-        settled = [r for r in rows if r.forecast.result in ("win", "loss", "push")]
+        settled_side = {(x["game_id"], x["market"]): market_live.outcome(x)
+                        for x in market_live.latest(self.conn, policy=policy, market=market)}
+        settled = [r for r in rows if settled_side[(r.game_id, r.forecast.market)] in ("a", "mid", "b")]
 
         def realised(r: MarketRecord) -> int:
-            if r.forecast.result == "push":
-                return 1
-            won_a = (r.forecast.result == "win") == (r.forecast.pick == "a")
-            return 0 if won_a else 2
+            return {"a": 0, "mid": 1, "b": 2}[settled_side[(r.game_id, r.forecast.market)]]
         vecs = [[next((s.probability for s in r.forecast.sides if s.side == k), 0.0) for k in ("a", "mid", "b")]
                 for r in settled]
         real = [realised(r) for r in settled]
-        matched = [(v, k, r.forecast.quote) for v, k, r in zip(vecs, real, settled) if r.forecast.quote is not None]
+        # Same games for both: decided ones only. A push refunds both sides, and the two-way bookmaker price has no push
+        # probability, so including pushes would score the bookmaker unfairly.
+        matched = [(v, k, r.forecast.quote) for v, k, r in zip(vecs, real, settled) if r.forecast.quote is not None and k != 1]
         sources: dict[str, int] = {}
         for r in rows:
             if r.forecast.line_source:
@@ -345,14 +346,16 @@ class RealProvider:
             model_version=rows[0].forecast.model_version if rows else None, forecasts=len(rows),
             record=self._record_summary(rows, None), brier_score=metrics.brier_multi(vecs, real),
             log_loss=metrics.log_loss_multi(vecs, real), line_sources=sources, market_matched=len(matched),
-            model_log_loss_on_matched=metrics.log_loss_multi([m[0] for m in matched], [m[1] for m in matched]),
+            model_log_loss_on_matched=metrics.log_loss_multi(
+                [[m[0][0] / (m[0][0] + m[0][2]), 0.0, m[0][2] / (m[0][0] + m[0][2])] for m in matched], [m[1] for m in matched]),
             market_log_loss_on_matched=metrics.log_loss_multi(
                 [[q.prob_a, 0.0, q.prob_b] for _, _, q in matched], [k for _, k, _ in matched]),
             reference=_market_reference(self.sport, market),
             limitations=markets.limitations(self.sport, market, None),
-            note="Latest forecast per game recorded before its cutoff. The win rate excludes pushes and voids. The "
-                 "bookmaker comparison uses only forecasts made at the quoted line, with the quote retrieved no later "
-                 "than the forecast. Nothing here is a claim of betting value.")
+            note="Latest forecast per game recorded before its cutoff. The win rate excludes pushes and voids; a regulation "
+                 "draw counts as a loss for a 3-way pick. The bookmaker comparison uses only decided games forecast at the "
+                 "quoted line, with the quote retrieved no later than the forecast, and both sides' probabilities "
+                 "renormalised without the push. Nothing here is a claim of betting value.")
 
     def _latest_rows(self, run_type: str, model_version: str) -> list[sqlite3.Row]:
         if run_type == "live":
