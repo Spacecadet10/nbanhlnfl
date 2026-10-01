@@ -41,3 +41,61 @@ disagreement games.
   (BASELINE_REPORT). Four agreeing votes are much closer to one opinion than to four.
 - Limits: development seasons only (Elo was tuned on them); one sample of 3,388 games; no market comparison. Unanimous picks are
   mostly clear favourites, which is where bookmaker prices are shortest, so a higher win rate does not imply a profitable bet.
+
+# Combinations: pairwise agreement, majority vote, averaged probabilities (descriptive, 2026-10-01)
+
+Command: `backend/.venv/bin/python scripts/agreement_analysis.py data/reports/screening-2026-10-01T000121Z/predictions.csv --combinations`
+(output saved to `data/reports/agreement-2026-10-01/combinations.json`). Same 3,962 development games, same limits as above.
+The set was fixed in the script before anything was computed. No weights were fitted and nothing was selected. None of these
+combinations is part of the sealed shadow experiment, and none changes the live Elo. Fourteen intervals are reported without
+adjustment, so one or two looking notable is expected by chance.
+
+## Pairwise agreement (both models pick the same team)
+| Pair | Games agreeing | Share | Win rate | 95% (Wilson) | 95% (week-block) | Games disagreeing (wins by each model) |
+|---|---|---|---|---|---|---|
+| Elo + efficiency_margin | 3,621 | 91.4% | 65.7% (2,379) | 64.1–67.2% | 64.1–67.4% | 341 (170 / 171) |
+| Elo + logistic | 3,658 | 92.3% | 65.6% (2,401) | 64.1–67.2% | 63.9–67.4% | 304 (148 / 156) |
+| Elo + logistic_v2 | 3,655 | 92.3% | 65.6% (2,397) | 64.0–67.1% | 63.9–67.4% | 307 (152 / 155) |
+| efficiency_margin + logistic | 3,553 | 89.7% | 66.1% (2,349) | 64.5–67.7% | 64.5–67.8% | 409 (201 / 208) |
+| efficiency_margin + logistic_v2 | 3,602 | 90.9% | 65.8% (2,371) | 64.3–67.4% | 64.3–67.4% | 360 (179 / 181) |
+| logistic + logistic_v2 | 3,801 | 95.9% | 65.1% (2,474) | 63.6–66.6% | 63.4–66.8% | 161 (83 / 78) |
+
+Every pair lands between 65.1% and 66.1%, below the four-way 66.7%, with overlapping intervals. When two models disagree, each is right
+about half the time.
+
+## Majority vote (at least 3 of 4)
+| Vote | Games | Share | Majority pick correct | 95% (Wilson) | 95% (week-block) |
+|---|---|---|---|---|---|
+| Any majority (4-0 or 3-1) | 3,802 | 96.0% | 65.2% (2,478) | 63.6–66.7% | 63.6–66.9% |
+| 4-0 | 3,388 | 85.5% | 66.7% (2,259) | 65.1–68.2% | 64.9–68.5% |
+| 3-1 | 414 | 10.4% | 52.9% (219) | 48.1–57.7% | 47.7–58.2% |
+| 2-2 (no majority) | 160 | 4.0% | – (home team won 51.3%) | – | – |
+
+In 3-1 games the majority was right 52.9% of the time, and the interval includes 50%. The lone dissenter was efficiency_margin 188
+times (right 92), Elo 109 (53), logistic 70 (31) and logistic_v2 47 (19).
+
+## Averaged probabilities (equal weights), scored on all 3,962 games
+| Forecast | Accuracy | Brier ↓ | Log loss ↓ | Brier − Elo (95% CI) | Brier − logistic_v2 (95% CI) |
+|---|---|---|---|---|---|
+| Elo alone | 64.3% | 0.22068 | 0.63158 | – | – |
+| efficiency_margin alone | 64.4% | 0.22205 | 0.63453 | – | – |
+| logistic alone | 64.5% | 0.22033 | 0.63100 | – | – |
+| logistic_v2 alone (the sealed challenger) | 64.4% | 0.21977 | 0.62968 | – | – |
+| Mean of all four | 64.6% | 0.21988 | 0.62979 | −0.00080 [−0.00154, −0.00005] | +0.00011 [−0.00052, +0.00077] |
+| Mean of Elo + efficiency_margin | 64.4% | 0.22068 | 0.63149 | +0.00000 [−0.00074, +0.00077] | +0.00091 [−0.00037, +0.00220] |
+| Mean of Elo + logistic | 64.7% | 0.22009 | 0.63036 | −0.00059 [−0.00126, +0.00012] | +0.00032 [−0.00033, +0.00101] |
+| Mean of Elo + logistic_v2 | 64.8% | 0.21980 | 0.62968 | −0.00088 [−0.00149, −0.00031] | +0.00002 [−0.00056, +0.00063] |
+| Mean of efficiency_margin + logistic | 64.6% | 0.22031 | 0.63074 | −0.00037 [−0.00138, +0.00069] | +0.00054 [−0.00033, +0.00148] |
+| Mean of efficiency_margin + logistic_v2 | 64.5% | 0.22014 | 0.63033 | −0.00053 [−0.00153, +0.00048] | +0.00037 [−0.00046, +0.00126] |
+| Mean of logistic + logistic_v2 | 64.5% | 0.21992 | 0.63004 | −0.00076 [−0.00199, +0.00051] | +0.00015 [−0.00020, +0.00051] |
+
+## Reading it
+- **No combination beats the sealed challenger.** Every average has a Brier score equal to or slightly worse than logistic_v2 alone, and
+  every interval against it includes 0. The best average (Elo + logistic_v2, 0.21980) is level with logistic_v2 (0.21977).
+- Two averages have intervals against Elo that exclude 0 (all four; Elo + logistic_v2), by under 0.001 Brier. That is the same small
+  edge logistic_v2 already showed, on the seasons used to tune and screen, and without adjustment for 14 comparisons.
+- Accuracy moves between 64.3% and 64.8%, which is within noise for 3,962 games (about ±1.5 points).
+- Voting adds nothing over the probabilities: agreement mostly marks the games that were already clear, and 3-1 or 2-2 games are close
+  to coin flips whichever side is taken.
+- Consistent with the earlier ensemble decision: the models' errors are too similar for a blend to help. A model that uses
+  different information (for example player availability) is more likely to add something than another combination of these four.

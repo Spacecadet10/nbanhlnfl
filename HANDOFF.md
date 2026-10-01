@@ -1,7 +1,7 @@
 # Current handoff
 
 Status: Shadow recording ENABLED 2026-10-01 (daily launchd job). Milestone 4 implemented and reviewed; odds snapshots and local launchd automation configured. Courtside frontend redesign complete. Git baseline d96db86. Free sources only (ESPN; no keyed odds API, user decision 2026-09-30). No deployment, no purchases.
-Current owner: User (shadow season running: nightly Elo + sealed logistic_v2 shadow). Next agent task: descriptive combination analysis, then tree-model research as a separate plan. Final test was run once (2026-09-30T14:40:35Z); Elo is the frozen primary model.
+Current owner: User (shadow season running: nightly Elo + sealed logistic_v2 shadow). Combination analysis done; tree-model research is a separate, not-yet-planned task. Final test was run once (2026-09-30T14:40:35Z); Elo is the frozen primary model.
 
 ## Shadow recording enabled (Claude, 2026-10-01, after Codex Step 6 acceptance)
 - `scripts/launchd/com.nba-predictor.daily.plist` and the installed copy in `~/Library/LaunchAgents` now set
@@ -12,6 +12,15 @@ Current owner: User (shadow season running: nightly Elo + sealed logistic_v2 sha
   Ledger 27,744 rows, 0 live rows, test_access 1 line: unchanged. First forecasts are expected about 2026-10-13 (7-day window before the 10-20 openers).
 - To watch: `data/daily-launchd.log` each night; `app.cli shadow-report` for coverage. A stale-input skip makes the shadow job 'failed'
   and the nightly exit code 1 while Elo still runs.
+
+## Combination analysis (Claude, 2026-10-01; descriptive, separate from promotion)
+- `scripts/agreement_analysis.py --combinations` (extends the existing script; reuses `backtest.paired_bootstrap` and `app.metrics`);
+  write-up in docs/AGREEMENT_ANALYSIS.md "Combinations". Saved validation predictions only (3,962 games); the fixed set was written in the
+  script before running; no weights fitted; nothing added to the shadow experiment; live Elo and both sealed files untouched.
+- Pairwise agreement: 89.7–95.9% of games, 65.1–66.1% correct. Majority (≥3 of 4): 96.0% of games, 65.2%; 3-1 splits 52.9% (414 games,
+  interval includes 50%); 160 games 2-2. Equal-weight averages: best is Elo + logistic_v2 at Brier 0.21980 vs logistic_v2 alone 0.21977;
+  no average beats logistic_v2 (all intervals include 0); two averages beat Elo by < 0.001 Brier (unadjusted, 14 intervals).
+- Git: reviewed work committed on branch `shadow-season` (ef1579f); this analysis in the following commit. Data, .venv and .env are ignored.
 
 ## Codex Step 6 acceptance
 - Reviewed response-arrival timestamps and positive season-completion checks with their regression tests; both reported findings are resolved. No remaining blocking findings in this scoped re-review. Completion guard assumes the documented current season format.
