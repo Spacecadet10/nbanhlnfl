@@ -22,6 +22,8 @@ SETTINGS = {"loss": "log_loss", "learning_rate": 0.05, "max_iter": 200, "max_dep
 
 class GradientBoostedTrees:
     name = "gbt_v1"
+    feature_names = FEATURES
+    monotonic = MONOTONIC_INCREASING
 
     def __init__(self, elo_cfg: EloConfig):
         self.elo_cfg = elo_cfg
@@ -36,7 +38,7 @@ class GradientBoostedTrees:
 
     def _vector(self, g: PregameGame) -> list[float]:
         feats = {**self.team.compute(g), **self.eff.features(g)}
-        return [float(feats[f]) for f in FEATURES]
+        return [float(feats[f]) for f in self.feature_names]
 
     def _refit(self, season: int) -> None:
         train = [(x, y) for s, x, y in self.examples if s < season]
@@ -44,7 +46,7 @@ class GradientBoostedTrees:
             return
         from sklearn.ensemble import HistGradientBoostingClassifier
         self.model = HistGradientBoostingClassifier(
-            **SETTINGS, monotonic_cst=[1 if f in MONOTONIC_INCREASING else 0 for f in FEATURES])
+            **SETTINGS, monotonic_cst=[1 if f in self.monotonic else 0 for f in self.feature_names])
         self.model.fit([x for x, _ in train], [int(y) for _, y in train])
         self.fits.append({"season": season, "training_games": len(train),
                           "training_seasons": sorted({s for s, _, _ in self.examples if s < season})})
@@ -70,7 +72,7 @@ class GradientBoostedTrees:
         self.eff.update_box(e)
 
     def config(self) -> dict:
-        return {"features": "+".join(FEATURES), "monotonic": "+".join(MONOTONIC_INCREASING),
+        return {"features": "+".join(self.feature_names), "monotonic": "+".join(self.monotonic),
                 **{k: v for k, v in SETTINGS.items()},
                 "elo": "k{k}-h{home_advantage}-c{carry}-mov{mov}".format(**self.elo_cfg.__dict__)}
 

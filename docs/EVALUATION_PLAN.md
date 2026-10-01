@@ -414,3 +414,6 @@ Requested by the user ("we need multiple models to test and learn from"). Develo
   then checked once on validation 2021-24 (labelled as reused: those seasons chose Elo over the goals model) and, if still better, frozen as
   a separate NHL shadow experiment with its own version. The spent test seasons 2024-26 are never read. No candidate replaces Elo
   without a prospective record.
+- **Result (2026-10-01):** nothing passed (logistic − Elo Brier −0.0002 [−0.0008, +0.0004]; GBT +0.0027 [+0.0012, +0.0042]; four-model
+  average +0.0003 [−0.0003, +0.0008]; four-model unanimity 0.8 points below Elo's matched-coverage filter). Validation not accessed; nothing
+  frozen. Details: docs/NHL_BASELINE_REPORT.md.

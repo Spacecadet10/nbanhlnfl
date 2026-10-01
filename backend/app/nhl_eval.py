@@ -473,3 +473,63 @@ def agreement_research(conn: sqlite3.Connection, decision_path: Optional[Path] =
     (out_dir / "report.json").write_text(json.dumps(report, indent=2, default=str))
     log(f"Report written to {out_dir}")
     return report
+
+
+# --- Learned candidates (EVALUATION_PLAN "NHL learned candidates") ---------------------------------------------------
+def learned_research(conn: sqlite3.Connection, decision_path: Optional[Path] = None, out_dir: Optional[Path] = None,
+                     log: Callable[[str], None] = print) -> dict:
+    from .models.hockey import hockey_gbt, hockey_logistic
+    d = load_decision(conn, decision_path)
+    rows = load_rows(conn, "development")
+    if any(r.game.season not in LOADABLE["development"] for r in rows):
+        raise NhlEvaluationError("Learned-candidate screening reads development seasons only")
+    elo_cfg, goals_cfg = HockeyEloConfig(**d["hockey_elo_config"]), GoalsConfig(**d["goals_config"])
+    built = {"hockey_elo": candidate("hockey_elo", elo_cfg), "goals_poisson": candidate("goals_poisson", goals_cfg),
+             "hockey_logistic": hockey_logistic(elo_cfg, goals_cfg, SPORT.rating_key),
+             "hockey_gbt": hockey_gbt(elo_cfg, goals_cfg, SPORT.rating_key)}
+    preds = {n: {p["game_id"]: p for p in in_period(backtest.run(m, rows), "development")} for n, m in built.items()}
+    first_fit = {n: built[n].oos_from_season() for n in ("hockey_logistic", "hockey_gbt")}
+    if any(f is None or f > min(PERIODS["development"]) for f in first_fit.values()):
+        raise NhlEvaluationError(f"Learners must be fitted before the first development season: {first_fit}")
+    ids = sorted(preds["hockey_elo"], key=lambda g: (preds["hockey_elo"][g]["cutoff_at"], g))
+    avg = [{**preds["hockey_elo"][g], "p_home": sum(preds[n][g]["p_home"] for n in built) / len(built)} for g in ids]
+    series = {n: [preds[n][g] for g in ids] for n in built} | {"average_4": avg}
+    report = {"sport": "nhl", "stage": "development learned-candidate screening", "generated_at": utc_now(),
+              "seasons": PERIODS["development"], "dataset_version": dataset_version(rows), "decision_sha256": d["sha256"],
+              "learner_first_fit_season": first_fit,
+              "model_versions": {n: model_version(m) for n, m in built.items()},
+              "fits": {"hockey_gbt": built["hockey_gbt"].fits},
+              "logistic_weights_last_fit": dict(zip(("intercept",) + built["hockey_logistic"].feature_names,
+                                                    [round(w, 4) for w in built["hockey_logistic"].weights])),
+              "all_games": {n: _score(s, "p_home") for n, s in series.items()},
+              "by_season": {n: backtest.by_season(s) for n, s in series.items()},
+              "vs_elo_brier": {n: backtest.paired_bootstrap(s, series["hockey_elo"]) for n, s in series.items() if n != "hockey_elo"},
+              "vs_elo_accuracy": {n: backtest.paired_accuracy_bootstrap(s, series["hockey_elo"])
+                                  for n, s in series.items() if n != "hockey_elo"}}
+    # four-model unanimity (probability = the four-model average) vs Elo's own filter at the same coverage
+    games = []
+    for i, g in enumerate(ids):
+        ps = [preds[n][g]["p_home"] for n in built]
+        y = preds["hockey_elo"][g]["home_won"]
+        pa = avg[i]["p_home"]
+        games.append({"game_id": g, "cutoff_at": avg[i]["cutoff_at"], "home_won": y, "p_avg": pa,
+                      "p_elo": preds["hockey_elo"][g]["p_home"], "c_elo": max(ps[0], 1 - ps[0]),
+                      "ok_avg": int((pa >= 0.5) == y), "ok_elo": int((ps[0] >= 0.5) == y),
+                      "agree": all(p > 0.5 for p in ps) or all(p < 0.5 for p in ps)})
+    sub = [g for g in games if g["agree"]]
+    top = sorted(games, key=lambda g: (-g["c_elo"], g["game_id"]))[:len(sub)]
+    report["unanimous_4"] = {"n": len(sub), "coverage": len(sub) / len(games), "method": _score(sub, "p_avg"),
+                             "base_models_on_this_subset": {n: _score([{**preds[n][g["game_id"]]} for g in sub], "p_home")
+                                                            for n in built},
+                             "elo_filter_same_coverage": _score(top, "p_elo"),
+                             "subset_minus_elo_filter_accuracy": _subset_diff_bootstrap(sub, top, "ok_avg", "ok_elo")}
+    passing = [n for n, b in report["vs_elo_brier"].items() if b["ci95"][1] < 0]
+    report["decision"] = {"rule": "EVALUATION_PLAN 'NHL learned candidates'", "passes_screening": passing,
+                          "next": "validation check once, then a shadow experiment" if passing else
+                                  "nothing passes; no validation access, nothing frozen"}
+    out_dir = Path(out_dir or config.data_dir() / "reports" / f"nhl-learned-{report['generated_at'].replace(':', '')}")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    report["output_dir"] = str(out_dir)
+    (out_dir / "report.json").write_text(json.dumps(report, indent=2, default=str))
+    log(f"Report written to {out_dir}")
+    return report

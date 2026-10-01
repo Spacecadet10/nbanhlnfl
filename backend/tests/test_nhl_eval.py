@@ -205,3 +205,30 @@ def test_agreement_research_reads_development_only_and_defines_its_probability(n
         for f in e["matched_coverage_filters"].values():
             assert f["n"] == e["n"]                              # matched coverage
     assert "p_avg" in u["selected_probability"] and "promising" in r["decision"]
+
+
+def test_learned_candidates_fit_only_on_earlier_seasons(nhl_store, tmp_path):
+    path = tmp_path / "decision.json"
+    nhl_eval.evaluate_validation(nhl_store, decision_path=path, out_dir=tmp_path / "val", log=lambda _m: None)
+    r = nhl_eval.learned_research(nhl_store, decision_path=path, out_dir=tmp_path / "learned", log=lambda _m: None)
+    assert r["learner_first_fit_season"] == {"hockey_logistic": 2017, "hockey_gbt": 2017}
+    for fit in r["fits"]["hockey_gbt"]:
+        assert max(fit["training_seasons"]) < fit["season"]
+    n = r["all_games"]["hockey_elo"]["n"]
+    assert all(v["n"] == n for v in r["all_games"].values())
+    assert set(r["vs_elo_brier"]) == {"goals_poisson", "hockey_logistic", "hockey_gbt", "average_4"}
+    assert r["unanimous_4"]["elo_filter_same_coverage"]["n"] == r["unanimous_4"]["n"]
+
+
+def test_hockey_features_use_only_delivered_results():
+    from app.models.hockey import GoalsConfig, HockeyEloConfig, HockeyFeatures
+    f = HockeyFeatures(HockeyEloConfig(), GoalsConfig())
+    g1 = PregameGame("nhl:1", 2025, "regular", "2025-01-01T00:00:00Z", "nhl:6", "nhl:16", False)
+    g2 = PregameGame("nhl:2", 2025, "regular", "2025-01-02T00:00:00Z", "nhl:6", "nhl:16", False)
+    before = f.compute(g1)
+    assert before["gd10_diff"] == 0 and before["elo_diff"] == 0
+    second = f.compute(g2)                      # result of g1 not delivered yet: no rating or margin change
+    assert second["gd10_diff"] == 0 and second["elo_diff"] == 0 and second["b2b_home"] == 1.0
+    f.update(HockeyResult(g1, 5, 1, "REG"))
+    after = f.compute(PregameGame("nhl:3", 2025, "regular", "2025-01-05T00:00:00Z", "nhl:6", "nhl:16", False))
+    assert after["gd10_diff"] == 8 and after["elo_diff"] > 0 and after["xg_diff"] > second["xg_diff"]

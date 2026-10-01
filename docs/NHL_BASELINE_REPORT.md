@@ -92,3 +92,27 @@ already selects games at least as well at every coverage tested. Averaging adds 
 models disagree, Elo is right more often. No forward experiment was frozen; the live NHL model is unchanged. This matches the earlier NBA
 finding (docs/AGREEMENT_ANALYSIS.md). It does not rule out a different second model (for example one with goalie or shot-quality inputs)
 adding information; that would be a new, separately preregistered candidate.
+
+## Learned candidates: logistic regression and gradient-boosted trees (development 2017-18 … 2020-21)
+Plan recorded in EVALUATION_PLAN ("NHL learned candidates", 330475b) before building. Report `data/reports/nhl-learned-<timestamp>/`.
+Both learners refit at each season start on earlier seasons only (first fit 2016-17, so every scored season is out of sample for them);
+hyperparameters were fixed in advance, not tuned. 4,877 games.
+
+| Model | W–L | Accuracy | Brier | Log loss | Brier − Elo [95%] | Accuracy − Elo [95%] |
+|---|---|---|---|---|---|---|
+| Elo (live) | 2,814–2,063 | 57.7% | 0.2407 | 0.6743 | – | – |
+| Logistic | 2,814–2,063 | 57.7% | 0.2406 | 0.6739 | −0.0002 [−0.0008, +0.0004] | 0.0 [−0.6, +0.6] |
+| Gradient-boosted trees | 2,787–2,090 | 57.2% | 0.2435 | 0.6804 | +0.0027 [+0.0012, +0.0042] | −0.6 [−1.5, +0.5] |
+| Goals model | 2,777–2,100 | 56.9% | 0.2425 | 0.6781 | +0.0018 [+0.0008, +0.0028] | −0.8 [−1.6, +0.1] |
+| Average of all four | 2,826–2,051 | 57.9% | 0.2410 | 0.6749 | +0.0003 [−0.0003, +0.0008] | +0.3 [−0.4, +0.9] |
+
+- All four agree on 3,826 games (78.5%): 2,263–1,563, 59.1% (Brier 0.2390 with the average). Elo's own confidence filter at the same
+  coverage: 59.9% (Brier 0.2381). Agreement − Elo filter: −0.8 points [−1.4, −0.1] — worse.
+- The logistic's last fit (on 2015-16 … 2019-20) gives most weight to Elo; it also learned a back-to-back effect (home team on a back-to-back
+  −0.31, away team on a back-to-back +0.18, log-odds). That rest information is the only thing it adds, and it is not enough to beat Elo
+  measurably (interval includes 0).
+- The tree model is worse than Elo: with these few features and about 1,200 games per season it adds variance, not signal.
+
+**Conclusion under the preregistered rule: no candidate passes screening.** The validation seasons were not accessed, nothing is frozen and the
+live model stays Elo. The learners are kept in the code for future features with real new information (goalie confirmations, shot quality)
+that would need their own preregistration; re-running these same candidates with tweaks would be a search, not evidence.

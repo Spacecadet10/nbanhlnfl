@@ -148,3 +148,81 @@ def regulation_nll(lam_home: float, lam_away: float, reg: tuple[int, int]) -> fl
 
 
 INITIAL_RATING = INITIAL
+
+
+# --- Learned candidates (EVALUATION_PLAN "NHL learned candidates"); development research only ---------------------
+LEARNED_FEATURES = ("elo_diff", "xg_diff", "gd10_diff", "rest_diff", "b2b_home", "b2b_away", "neutral")
+LEARNED_SCALED = ("elo_diff", "xg_diff", "gd10_diff", "rest_diff")
+LEARNED_MONOTONIC = ("elo_diff", "xg_diff", "gd10_diff")
+
+
+class HockeyFeatures:
+    """Point-in-time NHL features with the TeamFeatures interface (compute / update / elo): ratings, expected goals and
+    recent goal differential change only through update() (available results); rest uses earlier scheduled tipoffs."""
+
+    def __init__(self, elo_cfg: HockeyEloConfig, goals_cfg: GoalsConfig, rating_key: Optional[dict] = None):
+        from collections import deque
+        self.elo = HockeyElo(elo_cfg, rating_key)
+        self.goals = GoalsPoisson(goals_cfg, rating_key)
+        self.margins: dict = defaultdict(lambda: deque(maxlen=10))
+        self.last_tipoff: dict = {}
+
+    def compute(self, g: PregameGame) -> dict:
+        from .logistic import REST_CAP, _hours
+        self.elo.predict(g)
+        lh, la = self.goals.rates(g)
+        rest = {}
+        for side, team in (("home", g.home_team_id), ("away", g.away_team_id)):
+            prev = self.last_tipoff.get((g.season, team))
+            rest[side] = REST_CAP if prev is None else min(REST_CAP, _hours(g.tipoff_at, prev) / 24)
+            self.last_tipoff[(g.season, team)] = g.tipoff_at
+        mh, ma = self.margins[self.elo._team(g.home_team_id)], self.margins[self.elo._team(g.away_team_id)]
+        return {"elo_diff": (self.elo.ratings[self.elo._team(g.home_team_id)] - self.elo.ratings[self.elo._team(g.away_team_id)]) / 100,
+                "xg_diff": lh - la,
+                "gd10_diff": (sum(mh) / len(mh) if mh else 0.0) - (sum(ma) / len(ma) if ma else 0.0),
+                "rest_diff": rest["home"] - rest["away"], "b2b_home": float(rest["home"] < 1.5),
+                "b2b_away": float(rest["away"] < 1.5), "neutral": float(g.neutral_site)}
+
+    def update(self, r: Result) -> None:
+        self.elo.update(r)
+        self.goals.update(r)
+        m = r.home_score - r.away_score
+        self.margins[self.elo._team(r.game.home_team_id)].append(m)
+        self.margins[self.elo._team(r.game.away_team_id)].append(-m)
+
+
+def hockey_logistic(elo_cfg: HockeyEloConfig, goals_cfg: GoalsConfig, rating_key: Optional[dict] = None):
+    from .logistic import LogisticElo
+
+    class HockeyLogistic(LogisticElo):
+        name = "hockey_logistic"
+        feature_names = LEARNED_FEATURES
+        scaled_names = LEARNED_SCALED
+
+        def config(self) -> dict:
+            return {"l2": self.l2, "features": "+".join(self.feature_names),
+                    "elo": "k{k}-h{home_advantage}-c{carry}-mov{mov}".format(**asdict(elo_cfg)),
+                    "goals": "eta{eta}-c{carry}".format(**asdict(goals_cfg))}
+    m = HockeyLogistic(elo_cfg)   # type: ignore[arg-type]
+    m.features = HockeyFeatures(elo_cfg, goals_cfg, rating_key)
+    return m
+
+
+def hockey_gbt(elo_cfg: HockeyEloConfig, goals_cfg: GoalsConfig, rating_key: Optional[dict] = None):
+    from .gbt import GradientBoostedTrees
+
+    class HockeyGBT(GradientBoostedTrees):
+        name = "hockey_gbt"
+        feature_names = LEARNED_FEATURES
+        monotonic = LEARNED_MONOTONIC
+
+        def _vector(self, g: PregameGame) -> list[float]:
+            feats = self.team.compute(g)
+            return [float(feats[f]) for f in self.feature_names]
+
+        def config(self) -> dict:
+            return {**super().config(), "elo": "k{k}-h{home_advantage}-c{carry}-mov{mov}".format(**asdict(elo_cfg)),
+                    "goals": "eta{eta}-c{carry}".format(**asdict(goals_cfg))}
+    m = HockeyGBT(elo_cfg)   # type: ignore[arg-type]
+    m.team = HockeyFeatures(elo_cfg, goals_cfg, rating_key)
+    return m
