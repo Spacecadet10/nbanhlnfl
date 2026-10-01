@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 from zoneinfo import ZoneInfo
 
-from . import config, ingest, live, shadow
+from . import config, ingest, injuries, live, shadow
 from .db import utc_now
 from .sources import espn
 
@@ -226,6 +226,22 @@ def boxscores(conn: sqlite3.Connection, *, fetch: Callable[[str], bytes] = espn.
     if not queue:
         return _finish(conn, run_id, "skipped", 0, {**detail, "reason": "no recent final needs a box score"})
     return _finish(conn, run_id, "failed" if failed else "success", attempts, detail)
+
+
+def injury_reports(conn: sqlite3.Connection, *, enabled: Optional[bool] = None, **kw) -> dict:
+    """Raw injury-report collection (app/injuries.py), logged as job 'injuries'. Makes no request and writes nothing
+    unless collection is switched on (config.injury_collection_enabled()). A dry run never needs the switch."""
+    if kw.get("dry_run"):
+        return injuries.run(conn, **kw)
+    if not (config.injury_collection_enabled() if enabled is None else enabled):
+        return {"status": "disabled", "reason": "NBA_INJURY_COLLECTION is not set to 1; no request was made"}
+    run_id = _start(conn, "injuries")
+    try:
+        out = injuries.run(conn, **kw)
+    except Exception as exc:
+        return _finish(conn, run_id, "failed", 0, {"error": f"{type(exc).__name__}: {exc}"})
+    status = out.pop("status")
+    return _finish(conn, run_id, status, out["attempts"], out)
 
 
 def predict(conn: sqlite3.Connection, **kw) -> dict:

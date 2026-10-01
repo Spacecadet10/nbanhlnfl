@@ -18,12 +18,14 @@ def store(conn: sqlite3.Connection, **kw) -> int:
 
 
 def store_fetch(conn: sqlite3.Connection, *, source: str, endpoint: str, request_key: str, body: bytes,
-                retrieved_at: str, importer_version: str, cache_dir: Optional[Path] = None) -> tuple[int, int]:
+                retrieved_at: str, importer_version: str, cache_dir: Optional[Path] = None,
+                suffix: str = ".json") -> tuple[int, int]:
     """Saves a response and logs the fetch; returns (raw_id, fetch_id). Identical bytes for the same request reuse the
-    existing raw row, but every retrieval gets its own raw_fetches row, so a repeat of earlier content stays observable."""
+    existing raw row, but every retrieval gets its own raw_fetches row, so a repeat of earlier content stays observable.
+    `suffix` names the cached file's type (".json" by default; ".pdf" for injury reports); the bytes are stored as given."""
     cache_dir = cache_dir or config.raw_dir()
     digest = hashlib.sha256(body).hexdigest()
-    rel = f"{source}/{digest[:2]}/{digest}.json.gz"
+    rel = f"{source}/{digest[:2]}/{digest}{suffix}.gz"
     path = cache_dir / rel
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)

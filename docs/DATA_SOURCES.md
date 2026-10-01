@@ -151,3 +151,22 @@ ESPN.com's footer links to the Disney Terms of Use (`disneytermsofuse.com/englis
   - Check against real data in a scratch copy of the database (3 requests, 2025-26 games): two games identical to the backfill on every
     field; for `espn:401810169` the summary supplies the turnovers the backfill file lacks (21), everything else identical.
   - The production store has no summary observation yet (no eligible final in the last 14 days; the job skipped with 0 requests).
+
+## NBA injury reports: raw collection pilot (built 2026-10-01; not scheduled yet)
+- **Terms check (plan step 1, 2026-10-01).** NBA.com Terms of Use (page dated July 13, 2026), as extracted by an automated summary of
+  the page: section 1 allows downloading displayed material "to any single computer only for your personal, noncommercial use" and forbids
+  use "for public or commercial purposes"; section 9 limits NBA Statistics to "legitimate news reporting or private, non-commercial
+  purposes" and excludes gambling and fantasy uses. No clause about automated access, scripts or scraping was found. The host's
+  `robots.txt` (`ak-static.cms.nba.com/robots.txt`, fetched directly) does not disallow `/referee/injury/`, sets `Crawl-Delay: 1` and
+  disallows URLs with a query string. This is not legal advice. Consequence: personal research only, at least 1 s between requests, never a
+  query string; nothing collected here may be published or sold.
+- **Collector:** `app.cli injuries` (`app/injuries.py`, `app/sources/nba_injury.py`, migration 0010). It saves the :00 and :30 reports for
+  half-hour slots inside a game window as unchanged PDFs in the raw cache (`data/raw/nba_injury_report/…​.pdf.gz`) and logs every HTTP
+  attempt in `injury_report_attempts` (request start, response-completion time, outcome, status, Last-Modified, ETag, size, hash).
+  The PDFs are not read. Budgets: 8 attempts per run, 4 per report, 120 per rolling 24 hours, counting retries, 403s and failures.
+  A daily HEAD check of 2 stored reports looks for upstream changes. Off unless `NBA_INJURY_COLLECTION=1`.
+- **Supervised trial (scratch copy of the database, 3 GET + 1 HEAD):** two published reports from 2026-03-10 stored (102,487 and 102,763
+  bytes, hashes verified, valid PDF headers, about 95 kB each on disk); a date with no report logged as `not_available` (HTTP 403); the
+  HEAD re-check matched the stored ETag, Last-Modified and length. Reports in March 2026 are about 100 kB, so a season at 48 a day is
+  nearer 0.8 GB than the plan's 0.6 GB estimate.
+- Installed 2026-10-01 as launchd agent `com.nba-predictor.injuries` (runs at :02 and :32). First run: skipped, 0 requests (no game window until 2026-10-19T07:00Z).

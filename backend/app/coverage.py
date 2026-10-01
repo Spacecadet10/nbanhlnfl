@@ -42,7 +42,9 @@ def report(conn: sqlite3.Connection) -> dict:
         "raw_fetches": conn.execute("SELECT COUNT(*) FROM raw_fetches").fetchone()[0],
         "predictions": conn.execute("SELECT COUNT(*) FROM predictions").fetchone()[0],
     }
-    return {"seasons": seasons, "totals": totals, "closing_lines": closing_summary(conn)}
+    from . import injuries
+    return {"seasons": seasons, "totals": totals, "closing_lines": closing_summary(conn),
+            "injury_reports": injuries.summary(conn)}
 
 
 NEAR_CLOSE_MINUTES = 60

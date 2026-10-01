@@ -64,6 +64,7 @@ Run from `backend/`:
 .venv/bin/python -m app.cli boxscores    # possession refresh: ESPN summaries for recent finals lacking a complete box (max 30/run)
 .venv/bin/python -m app.cli shadow-predict   # sealed challenger's shadow forecasts; a dry run unless --record
 .venv/bin/python -m app.cli shadow-report    # shadow season coverage and scores; --final applies the sealed rule once, after the play-in
+.venv/bin/python -m app.cli injuries [--dry-run]   # raw NBA injury-report PDFs for game windows (pilot; needs NBA_INJURY_COLLECTION=1)
 .venv/bin/python -m app.cli odds         # pregame odds snapshot: ESPN day scoreboards for games within 36 h; max once per 10 min
 .venv/bin/python -m app.cli scheduler --interval-minutes 360 --max-runs 4   # bounded loop (≥30 min interval)
 .venv/bin/python -m app.cli scheduler --job odds --interval-minutes 15 --max-runs 96   # 24 h of odds snapshots
@@ -81,6 +82,9 @@ Run from `backend/`:
   shadow forecasts only when `NBA_SHADOW_RECORDING=1` is set for the daily job. It is off by default in code and enabled on this Mac
   since 2026-10-01 through `EnvironmentVariables` in `scripts/launchd/com.nba-predictor.daily.plist` (remove that key and reload the
   agent to turn it off). The Elo forecast, scoring and the app are the same either way. Shadow rows share the ledger (run_type live, their own model_version) and are never shown in the app.
+- Injury-report pilot: collection is off by default. To schedule it, copy `scripts/launchd/com.nba-predictor.injuries.plist` to
+  `~/Library/LaunchAgents/` and `launchctl bootstrap gui/501` it (runs at :02 and :32, sets `NBA_INJURY_COLLECTION=1`). Installed on this Mac
+  on 2026-10-01 (remove with `launchctl bootout gui/501/com.nba-predictor.injuries`). Files are raw PDFs for personal research; nothing reads them yet (docs/INJURY_COLLECTOR_PLAN.md).
 - Odds (free, no key): each snapshot appends DraftKings moneylines with their retrieval time. The last quote confirmed
   before tipoff is our own closing snapshot (`coverage` → `closing_lines`, with minutes before tipoff). It is not a
   bookmaker-published close, and it exists only for games snapshotted while the collector was running.

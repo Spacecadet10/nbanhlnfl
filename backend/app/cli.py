@@ -61,6 +61,9 @@ def main(argv=None) -> int:
     sr.add_argument("--final", action="store_true")
     sub.add_parser("research-gbt", help="Research round 2: one gradient-boosted tree candidate vs Elo and logistic_v2 on "
                                         "validation seasons (needs the dev extra; no ledger rows, no test access)")
+    ij = sub.add_parser("injuries", help="Collect raw NBA injury-report PDFs for game windows (pilot; needs "
+                                         "NBA_INJURY_COLLECTION=1; at most 8 attempts per run)")
+    ij.add_argument("--dry-run", action="store_true", help="List the reports that would be requested; no request is made")
     sub.add_parser("research-stacking", help="Research round 3: two learned stackers vs Elo, logistic_v2 and the equal "
                                              "average on validation seasons (needs the dev extra; no ledger rows)")
     bt = sub.add_parser("backtest", help="Walk-forward evaluation (docs/EVALUATION_PLAN.md)")
@@ -150,6 +153,10 @@ def main(argv=None) -> int:
         brief["models"] = {n: {k: m[k] for k in ("n", "accuracy", "brier", "log_loss")}
                            for n, m in report["models"].items()}
         print(json.dumps(brief, indent=2))
+    elif args.cmd == "injuries":
+        result = jobs.injury_reports(conn, dry_run=True) if args.dry_run else jobs.injury_reports(conn)
+        print(json.dumps(result, indent=2, default=str))
+        return 1 if _any_failed(result) else 0
     elif args.cmd == "research-stacking":
         report = backtest.evaluate_research_stacking(conn)
         print(json.dumps({k: report[k] for k in ("dataset_version", "box_version", "definition", "fits", "comparisons",
