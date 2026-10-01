@@ -13,7 +13,7 @@ from ..db import utc_now
 from ..live import HORIZON_DAYS, LATEST_LIVE_SQL
 from ..schemas import (BaselineScore, GameDetail, GamesResponse, GameSummary, HistoryResponse, Market,
                        MarketComparison, Meta, Outcome, PerformanceResponse, Prediction, PredictionRecord,
-                       SourceStatus, Team, TeamStats)
+                       SourceStatus, Team, TeamStats, confidence_record, meets_confidence, pick_confidence)
 
 EASTERN = ZoneInfo("America/New_York")
 FRANCHISE_IDS = tuple(f"espn:{i}" for i in range(1, 31))
@@ -187,9 +187,11 @@ class RealProvider:
             (model_version,)).fetchall()
 
     def predictions(self, run_type: str, date_from: Optional[date], date_to: Optional[date], team: Optional[str],
-                    limit: int) -> HistoryResponse:
+                    limit: int, min_confidence: Optional[float] = None) -> HistoryResponse:
         out = []
         for r in self._latest_rows(run_type, self.model_version):
+            if not meets_confidence(r["home_win_prob"], min_confidence):
+                continue
             day = eastern_date(r["tipoff_at"])
             if date_from and day < date_from or date_to and day > date_to:
                 continue
@@ -203,9 +205,11 @@ class RealProvider:
             out.append(PredictionRecord(
                 game_id=r["game_id"], run_type=r["run_type"], game_date=day, tipoff=r["tipoff_at"], home=home,
                 away=away, model_version=r["model_version"], generated_at=r["generated_at"], cutoff_at=r["cutoff_at"],
-                home_win_prob=r["home_win_prob"], outcome=outcome,
+                home_win_prob=r["home_win_prob"], pick="home" if r["home_win_prob"] >= 0.5 else "away",
+                confidence=pick_confidence(r["home_win_prob"]), outcome=outcome,
                 correct=None if outcome is None else (r["home_win_prob"] >= 0.5) == outcome.home_won))
-        return HistoryResponse(mode="real", run_type=run_type, total=len(out), predictions=out[:limit])
+        return HistoryResponse(mode="real", run_type=run_type, total=len(out),
+                               record=confidence_record(out, min_confidence), predictions=out[:limit])
 
     def performance(self, run_type: str) -> PerformanceResponse:
         def scored(model_version: str) -> list[sqlite3.Row]:

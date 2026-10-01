@@ -341,3 +341,79 @@ def test_same_second_live_versions_resolve_to_one_forecast(store, client):
     assert (scored["live_forecasts"], scored["scored"]) == (2, 1)
     assert scored["brier"] == pytest.approx((0.72 - 1) ** 2)
     assert store.execute(live.LATEST_LIVE_SQL + " AND p.game_id = 'espn:g1'", (mv,)).fetchall()[0]["prediction_id"] == later_id
+
+
+# ---- confidence filter (max(p_home, 1 - p_home)) ------------------------------------------------------------------------
+
+def confidence_store(store):
+    """Six games with live forecasts at chosen probabilities; four are settled, two are still scheduled."""
+    from app.ledger import Forecast, record
+    mv = backtest.model_version(live.primary_model(store)[1])
+    games = [("c1", "1", "2", 0.70, (110, 100)),    # home pick at exactly 70%, wins
+             ("c2", "3", "4", 0.30, (110, 100)),    # away pick at exactly 70% (1 - 0.30), loses
+             ("c3", "5", "6", 0.6999, (110, 100)),  # just under the threshold
+             ("c4", "1", "3", 0.20, (90, 100)),     # away pick at 80%, wins
+             ("c5", "2", "4", 0.85, None),          # 85% home pick, not played yet
+             ("c6", "5", "1", 0.50, None)]          # coin flip, not played yet
+    ingest_events(store, [event(g, f"2026-11-{10 + i:02d}T00:30:00Z", h, a) for i, (g, h, a, _, _) in enumerate(games)],
+                  "2026-11-01T12:00:00Z", month="202611")
+    for i, (g, _, _, p, _) in enumerate(games):
+        tip = f"2026-11-{10 + i:02d}T00:30:00Z"
+        record(store, Forecast(f"espn:{g}", "live", mv, "d", backtest.FEATURE_VERSION, backtest.cutoff_for(tip),
+                               "2026-11-02T12:00:00Z", p))
+    ingest_events(store, [event(g, f"2026-11-{10 + i:02d}T00:30:00Z", h, a, "STATUS_FINAL", *score)
+                          for i, (g, h, a, _, score) in enumerate(games) if score], "2026-11-20T12:00:00Z", month="202611")
+
+
+def history(client, **params):
+    return client.get("/api/predictions", params={"run_type": "live", **params}).json()
+
+
+def test_confidence_filter_boundaries_for_home_and_away_picks(store, client):
+    confidence_store(store)
+    everything = history(client)
+    assert everything["total"] == 6 and everything["record"]["min_confidence"] is None
+    by_id = {r["game_id"]: r for r in everything["predictions"]}
+    assert (by_id["espn:c1"]["pick"], by_id["espn:c1"]["confidence"]) == ("home", 0.70)
+    assert by_id["espn:c2"]["pick"] == "away" and by_id["espn:c2"]["confidence"] == pytest.approx(0.70)
+    assert (by_id["espn:c6"]["pick"], by_id["espn:c6"]["confidence"]) == ("home", 0.5)
+
+    def selected(threshold):
+        return sorted(r["game_id"][5:] for r in history(client, min_confidence=threshold)["predictions"])
+    assert selected(0.70) == ["c1", "c2", "c4", "c5"]        # exactly 70% counts, on either side; 69.99% does not
+    assert selected(0.65) == ["c1", "c2", "c3", "c4", "c5"]
+    assert selected(0.75) == ["c4", "c5"] and selected(0.80) == ["c4", "c5"] and selected(0.60) == selected(0.65)
+    assert selected(0.5) == ["c1", "c2", "c3", "c4", "c5", "c6"] and selected(0.9) == []
+    assert client.get("/api/predictions", params={"min_confidence": 0.4}).status_code == 422
+    assert client.get("/api/predictions", params={"min_confidence": 1.1}).status_code == 422
+
+
+def test_confidence_record_counts_only_settled_games_and_ignores_the_row_limit(store, client):
+    confidence_store(store)
+    rec = history(client, min_confidence=0.70)["record"]
+    assert rec == {"min_confidence": 0.7, "selected": 4, "settled": 3, "wins": 2, "losses": 1,
+                   "win_rate": pytest.approx(2 / 3)}                       # c5 is selected but not settled
+    limited = history(client, min_confidence=0.70, limit=1)
+    assert len(limited["predictions"]) == 1 and limited["total"] == 4 and limited["record"] == rec
+    assert history(client)["record"] == {"min_confidence": None, "selected": 6, "settled": 4, "wins": 3, "losses": 1,
+                                         "win_rate": 0.75}
+    empty = history(client, min_confidence=0.9)
+    assert empty["total"] == 0 and empty["predictions"] == []
+    assert empty["record"] == {"min_confidence": 0.9, "selected": 0, "settled": 0, "wins": 0, "losses": 0, "win_rate": None}
+    unsettled = history(client, min_confidence=0.85)["record"]
+    assert (unsettled["selected"], unsettled["settled"], unsettled["win_rate"]) == (1, 0, None)
+
+
+def test_confidence_record_keeps_live_and_backtest_separate_and_predictions_unchanged(store, client):
+    from app.ledger import Forecast, record
+    confidence_store(store)
+    before = [dict(r) for r in store.execute("SELECT * FROM predictions ORDER BY prediction_id")]
+    mv = backtest.model_version(live.primary_model(store)[1])
+    record(store, Forecast("espn:c1", "backtest", mv, "d", backtest.FEATURE_VERSION, "2026-11-10T05:00:00Z",
+                           "2026-12-01T00:00:00Z", 0.90))
+    live_rec = history(client, min_confidence=0.70)["record"]
+    back = client.get("/api/predictions", params={"run_type": "backtest", "min_confidence": 0.70}).json()
+    assert live_rec["selected"] == 4 and back["run_type"] == "backtest"
+    assert back["record"] == {"min_confidence": 0.7, "selected": 1, "settled": 1, "wins": 1, "losses": 0, "win_rate": 1.0}
+    after = [dict(r) for r in store.execute("SELECT * FROM predictions WHERE run_type = 'live' ORDER BY prediction_id")]
+    assert after == before        # filtering reads forecasts; it never changes them

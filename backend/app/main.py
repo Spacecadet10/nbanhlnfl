@@ -80,10 +80,13 @@ def game(game_id: str, p=Depends(get_provider)):
 @app.get("/api/predictions", response_model=HistoryResponse)
 def predictions(run_type: str = Query("live", pattern="^(live|backtest)$"), date_from: Optional[date] = None,
                 date_to: Optional[date] = None, team: Optional[str] = None,
+                min_confidence: Optional[float] = Query(
+                    None, ge=0.5, le=1, description="Keep only picks whose model probability for the predicted winner, "
+                                                    "max(p_home, 1 - p_home), is at least this value."),
                 limit: int = Query(500, ge=1, le=5000), p=Depends(get_provider)):
     if date_from and date_to and date_from > date_to:
         raise HTTPException(status_code=422, detail="date_from must be on or before date_to")
-    return p.predictions(run_type, date_from, date_to, team, limit)
+    return p.predictions(run_type, date_from, date_to, team, limit, min_confidence)
 
 
 @app.get("/api/performance", response_model=PerformanceResponse)

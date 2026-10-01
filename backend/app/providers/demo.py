@@ -4,7 +4,7 @@ from typing import Optional
 
 from .. import fixtures, metrics
 from ..schemas import (GameDetail, GamesResponse, HistoryResponse, MarketComparison, Meta, PerformanceResponse,
-                       PredictionRecord, SourceStatus)
+                       PredictionRecord, SourceStatus, confidence_record, meets_confidence, pick_confidence)
 
 SUMMARY_EXCLUDE = {"home_stats", "away_stats", "projected_score_available", "stats_as_of"}
 
@@ -28,9 +28,11 @@ class DemoProvider:
         return next((g for g in fixtures.games() if g.game_id == game_id), None)
 
     def predictions(self, run_type: str, date_from: Optional[date], date_to: Optional[date], team: Optional[str],
-                    limit: int) -> HistoryResponse:
+                    limit: int, min_confidence: Optional[float] = None) -> HistoryResponse:
         rows = []
         for g in fixtures.games():
+            if not meets_confidence(g.prediction.home_win_prob, min_confidence):
+                continue
             if date_from and g.game_date < date_from or date_to and g.game_date > date_to:
                 continue
             if team and team.upper() not in (g.home.abbr, g.away.abbr):
@@ -39,10 +41,12 @@ class DemoProvider:
             rows.append(PredictionRecord(
                 game_id=g.game_id, run_type="demo", game_date=g.game_date, tipoff=g.tipoff, home=g.home, away=g.away,
                 model_version=p.model_version, generated_at=p.generated_at, cutoff_at=p.cutoff_at,
-                home_win_prob=p.home_win_prob, outcome=g.outcome,
+                home_win_prob=p.home_win_prob, pick="home" if p.home_win_prob >= 0.5 else "away",
+                confidence=pick_confidence(p.home_win_prob), outcome=g.outcome,
                 correct=None if g.outcome is None else (p.home_win_prob >= 0.5) == g.outcome.home_won))
         rows.sort(key=lambda r: r.tipoff, reverse=True)
-        return HistoryResponse(mode="demo", run_type="demo", total=len(rows), predictions=rows[:limit])
+        return HistoryResponse(mode="demo", run_type="demo", total=len(rows),
+                               record=confidence_record(rows, min_confidence), predictions=rows[:limit])
 
     def performance(self, run_type: str) -> PerformanceResponse:
         scored = [g for g in fixtures.games() if g.outcome is not None]

@@ -127,3 +127,18 @@ def test_team_stats_are_internally_consistent():
         for s in (g.home_stats, g.away_stats):
             assert 0 <= s.last10_wins <= min(10, s.wins)
             assert 10 - s.last10_wins <= s.losses
+
+
+def test_demo_history_supports_the_confidence_filter():
+    from app.schemas import pick_confidence
+    games = fixtures.games()
+    body = client.get("/api/predictions", params={"min_confidence": 0.65}).json()
+    expected = [g for g in games if pick_confidence(g.prediction.home_win_prob) >= 0.65 - 1e-9]
+    assert body["mode"] == "demo" and body["total"] == len(expected) and 0 < len(expected) < len(games)
+    assert all(r["confidence"] >= 0.65 - 1e-9 and r["pick"] in ("home", "away") for r in body["predictions"])
+    assert {r["pick"] for r in client.get("/api/predictions").json()["predictions"]} == {"home", "away"}
+    settled = [g for g in expected if g.outcome is not None]
+    wins = sum((g.prediction.home_win_prob >= 0.5) == g.outcome.home_won for g in settled)
+    assert body["record"] == {"min_confidence": 0.65, "selected": len(expected), "settled": len(settled), "wins": wins,
+                              "losses": len(settled) - wins,
+                              "win_rate": pytest.approx(wins / len(settled)) if settled else None}

@@ -120,15 +120,47 @@ class PredictionRecord(BaseModel):
     generated_at: datetime
     cutoff_at: datetime
     home_win_prob: float
+    pick: Literal["home", "away"] = Field(description="The predicted winner: home when home_win_prob >= 0.5.")
+    confidence: float = Field(ge=0.5, le=1, description="Model probability of the predicted winner: "
+                                                        "max(home_win_prob, 1 - home_win_prob).")
     outcome: Optional[Outcome]
     correct: Optional[bool]
+
+
+class ConfidenceRecord(BaseModel):
+    """Observed record of the picks selected by a confidence filter. Unscored games never count toward the win rate."""
+    min_confidence: Optional[float] = Field(description="The filter applied; null means all picks.")
+    selected: int = Field(description="Picks at or above the threshold, settled or not.")
+    settled: int = Field(description="Selected picks whose game has a final result.")
+    wins: int
+    losses: int
+    win_rate: Optional[float] = Field(description="wins / settled; null when nothing is settled.")
 
 
 class HistoryResponse(BaseModel):
     mode: Mode
     run_type: RunType
     total: int
+    record: ConfidenceRecord
     predictions: list[PredictionRecord]
+
+
+CONFIDENCE_TOLERANCE = 1e-9   # 1 - 0.3 must count as 0.7
+
+
+def pick_confidence(home_win_prob: float) -> float:
+    return max(home_win_prob, 1 - home_win_prob)
+
+
+def meets_confidence(home_win_prob: float, min_confidence: Optional[float]) -> bool:
+    return min_confidence is None or pick_confidence(home_win_prob) >= min_confidence - CONFIDENCE_TOLERANCE
+
+
+def confidence_record(rows: list[PredictionRecord], min_confidence: Optional[float]) -> ConfidenceRecord:
+    settled = [r for r in rows if r.correct is not None]
+    wins = sum(r.correct for r in settled)
+    return ConfidenceRecord(min_confidence=min_confidence, selected=len(rows), settled=len(settled), wins=wins,
+                            losses=len(settled) - wins, win_rate=wins / len(settled) if settled else None)
 
 
 class CalibrationBin(BaseModel):

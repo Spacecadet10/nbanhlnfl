@@ -10,7 +10,7 @@
 - Recommended next research: two fixed regularized stackers using chronological base forecasts, with matched-coverage confidence-filter comparisons. Existing development predictions are exploratory due to prior model-selection reuse. Preserve live/sealed experiments and spent test seasons. No model run, dependency installation, production writes or scheduling performed in this research task.
 
 Status: Shadow recording ENABLED 2026-10-01 (daily launchd job). Injury-report collector agent INSTALLED 2026-10-01. Milestone 4 implemented and reviewed; odds snapshots and local launchd automation configured. Courtside frontend redesign complete. Git baseline d96db86. Free sources only (ESPN; no keyed odds API, user decision 2026-09-30). No deployment, no purchases.
-Current owner: Codex review of research round 3, the collector overwrite-check fix (collector now INSTALLED at the user's instruction, before that review was recorded) and docs/AVAILABILITY_FEASIBILITY.md. Shadow season running unchanged. Final test was run once (2026-09-30T14:40:35Z); Elo is the frozen primary model.
+Current owner: Codex review of the confidence-filter UI change (below). Shadow season and injury collector running unchanged. Final test was run once (2026-09-30T14:40:35Z); Elo is the frozen primary model.
 
 ## Advisory review (Devin, 2026-09-30 session date)
 - Read the handoff, plan, evaluation rules and agreement analysis; Git working tree was clean. No code, data, scheduler or model changes; tests were not rerun for this advisory review.
@@ -52,6 +52,22 @@ Current owner: Codex review of research round 3, the collector overwrite-check f
 - Injury/player data investigation requested in the same message: already delivered as docs/AVAILABILITY_AUDIT.md (+ docs/evidence/availability-audit-2026-10-01/);
   not repeated. No accuracy gain is estimated there.
 - Uncommitted: this round's code, tests and docs, plus the earlier audit, collector plan and analysis amendment.
+
+## Confidence filters in the app (Claude, 2026-10-01; user instruction via Codex)
+- Commits before this change (branch `shadow-season`): 7dc43b8 research rounds 2–3, audit and analyses; 1abd18d injury collector;
+  ebde8a0 handoff. Commit 7dc43b8 was checked alone in a temporary worktree (175 tests passed). Tree was clean before the UI work.
+- API: `/api/predictions` takes `min_confidence` (0.5–1; inclusive, tolerance 1e-9 so 1 − 0.3 counts as 70%); rows gain `pick` and `confidence`
+  = max(p_home, 1 − p_home); response gains `record` {min_confidence, selected, settled, wins, losses, win_rate} computed over all filtered
+  rows (not the row limit); unsettled games never count. Helpers in `schemas.py`; both providers. No forecast, model or ledger change.
+- Frontend: `components/ConfidenceFilter.tsx` (All / 60 / 65 / 70 / 75 / 80%+, URL `?conf=`, default 70%+; `RecordLine`, `RangeRecords`);
+  History filters server-side and shows the record for the selected run type; Today filters the date's games client-side with the same
+  rule, shows "N of M selected", each card's pick and model confidence, and separate Live and Backtest record lines. Empty states offer "Show all".
+  Model confidence and observed win rate are labelled separately; no historical percentage is shown as a promise.
+- Tests: test_live.py (3 new: boundaries for home and away picks at every level incl. 422s; record counts only settled games and ignores the
+  limit; live and backtest records separate and forecasts unchanged) and test_api.py (demo filter). `--ready` exit 0: 204 passed, typecheck and build passed; structure guard and `git diff --check` passed.
+- Browser evidence: docs/SMOKE_TEST.md "Confidence filter" (desktop real mode; 390 px via same-origin frames). Not browser-verified: demo mode, keyboard-only use.
+- The API preview server was restarted to load this code (detached uvicorn on 127.0.0.1:8000, log data/api-preview.log).
+- Note: the Backtest record in the app covers every season in the ledger for Elo (2021-22 to 2025-26, 6,605 games), labelled Backtest.
 
 ## Injury collector installed + confidence ranges (Claude, 2026-10-01; user instruction)
 - Installed `~/Library/LaunchAgents/com.nba-predictor.injuries.plist` (copy of scripts/launchd/…; `plutil -lint` OK; `launchctl bootstrap gui/501`);

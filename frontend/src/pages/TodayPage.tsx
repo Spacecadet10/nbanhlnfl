@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import type { GameSummary, Meta } from '../api/types';
 import { useApi } from '../api/useApi';
 import { ModeBadge, RunBadge, SourceList } from '../components/Badges';
+import { ConfidenceFilter, confidenceOf, levelLabel, meetsConfidence, RangeRecords, useConfidence } from '../components/ConfidenceFilter';
 import { ProbabilityBar } from '../components/ProbabilityBar';
 import { AsyncView, Empty } from '../components/States';
 import { calendarDate, FULL_DATE, pct, shiftDate, time } from '../format';
@@ -19,7 +20,13 @@ export function TodayPage() {
 function Slate({ meta }: { meta: Meta }) {
   const [params, setParams] = useSearchParams();
   const date = params.get('date') ?? meta.default_date;
-  const setDate = (d: string) => d && setParams({ date: d });
+  const setDate = (d: string) => {
+    if (!d) return;
+    const next = new URLSearchParams(params);
+    next.set('date', d);
+    setParams(next);
+  };
+  const [level, setLevel] = useConfidence();
   const { state, retry } = useApi((s) => api.games(date, s), [date]);
 
   return (
@@ -40,6 +47,8 @@ function Slate({ meta }: { meta: Meta }) {
         </div>
       </div>
       <p className="muted">{calendarDate(date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>
+      <ConfidenceFilter value={level} onChange={setLevel} />
+      <RangeRecords level={level} realMode={meta.mode === 'real'} />
       <AsyncView state={state} retry={retry}>
         {(data) => (
           <>
@@ -51,14 +60,38 @@ function Slate({ meta }: { meta: Meta }) {
                 <button type="button" className="link-btn" onClick={() => setDate(meta.default_date)}>{meta.mode === 'demo' ? 'Go to demo today' : 'Go to the next games'}</button>
               </Empty>
             ) : (
-              <ul className="game-grid">
-                {data.games.map((g) => <GameCard key={g.game_id} game={g} />)}
-              </ul>
+              <FilteredSlate games={data.games} level={level} showAll={() => setLevel(null)} />
             )}
           </>
         )}
       </AsyncView>
     </section>
+  );
+}
+
+/** Games on the date whose forecast meets the confidence level. Games without a forecast only appear under All. */
+function FilteredSlate({ games, level, showAll }: { games: GameSummary[]; level: number | null; showAll: () => void }) {
+  const withForecast = games.filter((g) => g.prediction);
+  const selected = level == null ? games : withForecast.filter((g) => meetsConfidence(g.prediction!.home_win_prob, level));
+  return (
+    <>
+      <p className="small muted selection-count">
+        {level == null
+          ? <>{games.length} {games.length === 1 ? 'game' : 'games'}, {withForecast.length} with a forecast</>
+          : <><strong>{selected.length}</strong> of {games.length} {games.length === 1 ? 'game' : 'games'} selected at {levelLabel(level)} model confidence ({withForecast.length} with a forecast)</>}
+      </p>
+      {selected.length === 0 ? (
+        <Empty>
+          No picks at {levelLabel(level)} model confidence on this date.{' '}
+          {withForecast.length === 0 ? 'None of these games has a forecast yet. ' : ''}
+          <button type="button" className="link-btn" onClick={showAll}>Show all {games.length} {games.length === 1 ? 'game' : 'games'}</button>
+        </Empty>
+      ) : (
+        <ul className="game-grid">
+          {selected.map((g) => <GameCard key={g.game_id} game={g} />)}
+        </ul>
+      )}
+    </>
   );
 }
 
@@ -93,6 +126,10 @@ function GameCard({ game: g }: { game: GameSummary }) {
           <>
             <div className="card-section-label">{p.run_type === 'backtest' ? 'BACKTEST WIN PROBABILITY' : 'MODEL WIN PROBABILITY'}</div>
             <ProbabilityBar home={g.home} away={g.away} homeProb={p.home_win_prob} />
+            <p className="pick-line small">
+              Pick: <strong>{p.home_win_prob >= 0.5 ? g.home.abbr : g.away.abbr}</strong>
+              <span className="muted"> · model confidence {pct(confidenceOf(p.home_win_prob), 1)}</span>
+            </p>
           </>
         ) : (
           <p className="forecast-note">{g.forecast_note ?? 'No forecast available.'}</p>

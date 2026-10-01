@@ -64,10 +64,19 @@ export interface GameDetail extends GameSummary {
 export interface PredictionRecord {
   game_id: string; run_type: RunType; game_date: string; tipoff: string; home: Team; away: Team;
   model_version: string; generated_at: string; cutoff_at: string; home_win_prob: number;
+  /** The predicted winner and the model's probability for it: max(p_home, 1 - p_home). */
+  pick: 'home' | 'away'; confidence: number;
   outcome: Outcome | null; correct: boolean | null;
 }
 
-export interface HistoryResponse { mode: Mode; run_type: RunType; total: number; predictions: PredictionRecord[] }
+/** Observed record of the picks a confidence filter selects. Unscored games never count toward win_rate. */
+export interface ConfidenceRecord {
+  min_confidence: number | null; selected: number; settled: number; wins: number; losses: number; win_rate: number | null;
+}
+
+export interface HistoryResponse {
+  mode: Mode; run_type: RunType; total: number; record: ConfidenceRecord; predictions: PredictionRecord[];
+}
 
 export interface CalibrationBin {
   lower: number; upper: number; count: number;

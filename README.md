@@ -51,7 +51,7 @@ The backend allows CORS from the Vite origin; override with `CORS_ORIGINS` (comm
 | `GET /api/sources` | Freshness of schedule/results, odds, and forecasts |
 | `GET /api/games?date=YYYY-MM-DD` | Games on an Eastern date: prediction (or a `forecast_note` explaining why none), market, result |
 | `GET /api/games/{game_id}` | Detail plus point-in-time team stats as of the game's cutoff (404 if unknown) |
-| `GET /api/predictions?run_type=live\|backtest&date_from&date_to&team&limit` | History, latest version per game (422 if `date_from > date_to`) |
+| `GET /api/predictions?run_type=live\|backtest&date_from&date_to&team&min_confidence&limit` | History, latest version per game (422 if `date_from > date_to`). `min_confidence` (0.5–1) keeps picks whose model probability for the predicted winner, max(p_home, 1 − p_home), is at least that value. Each row has `pick` and `confidence`; `record` gives the selected count and the settled win/loss record (unscored games never count) |
 | `GET /api/performance?run_type=live\|backtest` | Live scoring, or the final-test backtest with baselines. Never mixed |
 
 ## Daily operation (milestone 4)

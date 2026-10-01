@@ -36,8 +36,13 @@ export const api = {
   meta: (signal?: AbortSignal) => get<Meta>('/meta', undefined, signal),
   games: (date: string, signal?: AbortSignal) => get<GamesResponse>('/games', { date }, signal),
   game: (id: string, signal?: AbortSignal) => get<GameDetail>(`/games/${encodeURIComponent(id)}`, undefined, signal),
-  predictions: (f: { run_type?: 'live' | 'backtest'; date_from?: string; date_to?: string; team?: string },
-    signal?: AbortSignal) => get<HistoryResponse>('/predictions', f, signal),
+  predictions: (f: { run_type?: 'live' | 'backtest'; date_from?: string; date_to?: string; team?: string;
+    min_confidence?: number | null; limit?: number }, signal?: AbortSignal) =>
+    get<HistoryResponse>('/predictions', {
+      run_type: f.run_type, date_from: f.date_from, date_to: f.date_to, team: f.team,
+      min_confidence: f.min_confidence == null ? undefined : String(f.min_confidence),
+      limit: f.limit == null ? undefined : String(f.limit),
+    }, signal),
   performance: (runType: 'live' | 'backtest', signal?: AbortSignal) =>
     get<PerformanceResponse>('/performance', { run_type: runType }, signal),
 };
