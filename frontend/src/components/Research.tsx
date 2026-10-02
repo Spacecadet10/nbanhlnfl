@@ -482,7 +482,7 @@ function ruleCell(v: SelectionRuleView | null) {
 
 function reviewCell(v: SelectionRuleView | null) {
   if (!v || v.status === 'no_decision') return <span className="muted">—</span>;
-  return <span className="small">selected {v.selected_at ? dateTime(v.selected_at) : '—'}<br />
+  return <span className="small">{v.rule ? 'selected' : 'decided'} {v.selected_at ? dateTime(v.selected_at) : '—'}<br />
     evidence to {v.evidence_until ? dateTime(v.evidence_until) : '—'}<br />next review {v.next_review ? dateTime(v.next_review) : '—'}<br />
     <span className="muted">{v.selector_version}{v.registry ? ` · registry ${v.registry}` : ''} · {v.evidence?.settled_cohorts ?? 0} settled</span></span>;
 }

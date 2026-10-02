@@ -165,3 +165,38 @@ NBA lines, core elsewhere), one canonical decision per game/market/rule; 19 are 
 (all `unqualified research`: highest-accuracy and top-lift rules). NBA winner rules containing `availability_two_hour` are
 prospective-only. Registry `backend/app/models/combination_rules.json` (sha256 in the file). Shown on Performance →
 "Combination rules" (selected / all registered; historical frontier labelled backtest; prospective record with matched baselines).
+
+## Gap-filling combination study `gapfill-v1` (2026-10-02 21:53–21:55 UTC; exploratory)
+Design: MODEL_SELECTION §16 (a87d802, before the run; code e18eb47). Command: `python -m app.cli gapfill-study` (reads saved
+out-of-sample tables only; no store opened, no refit). Inputs fingerprinted in the report: `oof-nhl-assess` (NHL 2022–26),
+`oof-nba-assess` (NBA 2025–26), `nba_evening` (2022–24, `avail_v1`). Evidence: docs/evidence/gapfill-v1/ (compact report,
+fold summaries, Bonferroni-corrected probability tables); full report `data/reports/gapfill-v1/report.json`.
+
+**Search consumed (configurations per market, budget 500):** NHL winner 497 (7 members; all 21 pairs, all 35 triples, 11 of 63
+larger subsets), reg3 366 (6 members; every subset), puck line 182 and away team total 182 (5 members; every subset); NBA winner
+497 (7 members; all pairs and triples, 11 of 63 larger), NBA spread/total/home TT/away TT 499 each (8 members; all 28 pairs,
+35 of 56 triples — the mixed candidate+existing triples first — 1 of 162 larger); NBA evening winner 366 (6 members incl.
+`avail_v1`; every subset, so the 7 untested `avail_v1` triples are now covered). NHL total and home team total: 0 (no shortlisted
+candidate; their 3 existing members were already fully covered). Omitted subsets are listed per market in the report.
+
+**Results**
+- **Pick rules: nothing qualified** in any market or fold (Bonferroni over this family plus every earlier rule for the market:
+  822–4,257). The frozen highest-accuracy / top-lift rules did not beat the best prior single's own top picks at matched
+  coverage on the later season in a consistent way (e.g. NBA winner 2025-26: `unanimous_min elo+logistic_v2 ≥0.80` 84.0% on 150
+  picks vs 86.0% for logistic_v2's top 150; NHL winner: frozen candidate triples 63.6–77.8% vs 69.1–83.3% for the best single).
+- **Probability level, vs the best single chosen on earlier seasons (Bonferroni over the subsets of each market):**
+  - NHL reg3: three candidate-only averages (`multinomial_l2` base or goalie + `poisson_draw:nhl_base`) −0.0017 to −0.0023
+    log loss. But `poisson_draw:nhl_base` **alone** is −0.0036 in 3 of 4 seasons against the same reference, so the
+    combination adds nothing beyond its strongest member (already a standalone pool source).
+  - NBA home team total: 45 of 65 averages beat the reference, because the earlier-season choice (`gbt_points`, best on
+    2024-25) was weak in 2025-26; this reflects an unstable single-model choice, not a combination effect. One season only.
+  - Every other market: no subset average beats the best prior single.
+- **Route B (with vs without a candidate):** adding a candidate often lowers the log loss of a weaker partner (e.g. NHL winner
+  40 of 56 comparisons, NBA evening `avail_v1` 29 of 31), but no candidate made any combination better than the best single
+  model at the same time, except as above. **No new combination-only source qualifies**; the sealed pool registry is unchanged.
+- **Answer:** across every compatible pair and triple tested (and the larger subsets within budget), no model subset, agreement
+  condition or confidence threshold improved later-season picks beyond the best single model's own confidence at the same
+  coverage. The supported probability gains remain the standalone ones already in the registry (NHL reg3 / puck line / away
+  total `poisson_draw:nhl_base`, `multinomial_l2`; NBA home total `avg:points_normal+cand:hetero_linear`).
+- Limits: all seasons spent before (exploratory); line markets at the model's own line (no historical bookmaker lines); NBA
+  has a single held-out season; 2-hour live cutoffs differ from the historical night-before/17:45 cutoffs.

@@ -1,5 +1,11 @@
 # Evidence audit matrix: NBA / NHL, every market (read-only audit, 2026-10-02)
 
+> **Update after the audit (2026-10-02 ~22:00 UTC):** the gaps listed in §3/§6 (candidates with members other than the
+> strongest and with each other; the 7 `avail_v1` triples; the 3 NHL xG triples) were evaluated by `gapfill-v1`
+> (MODEL_SELECTION §16; results in CHALLENGER_RESULTS "Gap-filling combination study"). Nothing qualified. Still not
+> evaluated: NBA line-market triples beyond the 35-per-market budget (21 per market) and most 4+-member subsets (listed in
+> docs/evidence/gapfill-v1/report-compact.json).
+
 Code audited: `/Users/andry/Desktop/nba-predictor-poolsel` (branch `pool-selector`, HEAD e6b6abd, **not merged**). The live checkout
 `/Users/andry/Desktop/nba-predictor-sprint1` is on branch `shadow-season` at 9d3e50e. It has no `candidates/selection.py`, no
 `pool_rules.json`, no migration 0020, and its `rule_tracking.py` does not have the P3 `studied_members` fix.
@@ -235,7 +241,7 @@ NBA winner triples never evaluated (`avail` = `avail_v1`, or `availability_two_h
 | # | Item |
 |---|---|
 | 7 | The NBA winner sealed registry was built with 6 members (rule_tracking.py:52-68). The studied 5-member all-set rules and the 5-member `stack(all)` are **absent**; they were replaced by 6-member versions marked prospective-only (365 prospective-only rules). The `nba_evening` family was skipped, so its `avail_v1` triples are not tracked. The live checkout also lacks P3 (`studied_members`). |
-| 8 | Pool selection, the P1-P14 fixes and migration 0020 exist only on unmerged `pool-selector`. On live, `market_live.score` still uses the 12 h void rule (HANDOFF). |
+| 8 | Pool selection, the P1-P14 fixes and migration 0020 existed only on unmerged `pool-selector` at audit time. Since 2026-10-02 ~22:00 UTC every settlement path voids on any start change (MODEL_SELECTION amendment; new core definition); the 12 h rule is retired. Merge status: HANDOFF. |
 | 9 | TRAINING_AUDIT gaps remain: the NBA market seal has no data-fingerprint check; numpy/scipy are undeclared; the research `definition` hash changes on any code edit. 6 NBA and 5 NHL definitions already exist, and each change restarted the selector's evidence. |
 
 ### Superseded or corrected claims
