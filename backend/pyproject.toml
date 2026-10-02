@@ -18,6 +18,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+research = ["catboost==1.2.10"]  # docs/MODEL_SELECTION.md §10; never imported by live paths
 
 [tool.setuptools.packages.find]
 include = ["app*"]

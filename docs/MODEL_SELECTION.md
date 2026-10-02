@@ -169,6 +169,25 @@ features, hyperparameters and data as the study in §5; only the refit schedule 
 - **Checks:** a wrapped member's training set at every refit contains only results available by that cutoff (test); `season`
   cadence reproduces the unwrapped member's forecasts exactly (test and real run).
 
+## 10. CatBoost challenger (recorded 2026-10-02, before any run)
+Bounded experiment; exploratory (development seasons already used). Code: `app/catboost_challenger.py`. Dependency: CatBoost
+1.2.10 (Apache-2.0; arm64/cp312 wheel; works with the pinned numpy 2.5.3 / scikit-learn 1.9.1), installed only in the research
+worktree environment as the optional extra `research`; not imported by any live path unless a candidate qualifies.
+- **Targets and features (unchanged inputs):** NBA winner on `gbt_v1` features (Logloss); NBA margin and total on
+  `ridge_points`/`gbt_points` features (RMSEWithUncertainty → per-game mean and variance); NHL winner on `hockey_gbt` features.
+  Pregame feature vectors are the ones those members record at forecast time in the walk-forward (identical inputs).
+- **Training:** season-start fits on all earlier seasons only, as the members it challenges. No random splits.
+- **Fixed search (8 configurations, no other tuning):** depth {4, 6} × learning_rate {0.03, 0.08} × l2_leaf_reg {3, 10};
+  500 iterations, no early stopping, random_seed 20260930, thread_count 4.
+- **Chronological folds:** configuration chosen by mean primary loss on tuning seasons (NBA 2022–2023; NHL 2018–2019), each
+  fitted on earlier seasons only; then frozen and scored once on held-out seasons (NBA 2024; NHL 2020–2021). No test season.
+- **Primary metrics:** winner log loss (Brier also reported); NBA margin Gaussian log score (total also reported).
+- **Comparators on identical held-out games:** the boosted-tree member it replaces (`gbt_v1`, `gbt_points`, `hockey_gbt`) and the
+  strongest eligible existing member, chosen by the same primary loss on the tuning seasons (earlier data).
+- **Qualifying rule:** held-out primary loss below both comparators **and** paired week-block 95% upper bound of
+  (CatBoost − strongest) below 0. A qualifier would only be proposed as a prospective shadow member; otherwise it is rejected
+  and its report kept.
+
 ## Amendments
 - **2026-10-02, before the study run:** `ridge_points` / `gbt_points` spreads have a floor of 1.0 point (`MIN_SD`), found with
   synthetic test data where every total was identical. Real residual spreads are about 12 (margin) and 18 (total) points, so the
