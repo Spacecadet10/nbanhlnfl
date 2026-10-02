@@ -76,8 +76,16 @@ def test_normal_head_spread_comes_from_earlier_out_of_sample_residuals():
     assert engine.residual_sd(res[:10], 2022) is None
 
 
-def test_ngboost_is_reproducible_and_validates_chronologically():
-    pytest.importorskip("ngboost")
+def test_ngboost_is_reproducible_or_reported_missing():
+    """NGBoost is an optional learner (the `research` extra, not installed in the live venv). Without it the candidate must be
+    reported unavailable; with it, fits must be reproducible."""
+    from app.candidates import registry
+    ng = [s for s in registry.SPECS if s.extra is not None]
+    try:
+        import ngboost  # noqa: F401
+    except ImportError:
+        assert ng and not any(registry.available(s) for s in ng)
+        return
     import numpy as np
     rng = np.random.default_rng(0)
     X = rng.normal(size=(600, 4))
