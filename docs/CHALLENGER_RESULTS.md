@@ -98,3 +98,70 @@ right; the one miss was an `expected` listing. A goalie-quality input is therefo
 our xG model on historical shots (goalie ids are in the cached raw play-by-play, so no new requests), joined to the latest
 listing before the forecast by name (exact-name match worked 16/16 here). It can only be judged on future games, because
 historical pregame listings do not exist. Not built today.
+
+## Selective-combination study `selective-v1` (§15; design 115885b; code cd36a40; run 17:32–17:33 UTC on saved tables)
+Reports `data/reports/selective-{nba,nhl}-20261002/report.json`; saved point-in-time member tables
+`data/research/tables/{nba,nba_evening,nhl}.json.gz` (fingerprinted; the final run reused them). All exploratory (reused seasons).
+The user's earlier ~83% system: no artifact exists in this project (the only "83%" reference is a random-split paper), so it
+could not be inspected or reproduced.
+
+### What has been tested (audit matrix)
+| Sport · market | Members (valid for that exact market) | §5 | §11 search | §14 expanded | §15 selective (new) |
+|---|---|---|---|---|---|
+| NBA winner | elo, logistic, logistic_v2, efficiency_margin, gbt_v1 | avg, stack, majority/unanimous, pairs w/ primary | 1,655 rules × 4 conditions | — | 895 rules incl. min-member confidence, ≤0.80 thresholds, disagreement condition |
+| NBA winner, 17:45 ET | + avail_v1 (injury report; assumed publication times) | — | — | — | 1,170 rules (first test of the injury model in combinations) |
+| NBA spread/total/team totals | points_normal, ridge, gbt, ridge@weekly, gbt@weekly | as above | 1,655 each | 27 each | 555 each |
+| NHL winner | hockey_elo, goals_poisson, hockey_logistic, hockey_gbt, **xG** | (4 members) | 925 (no xG) | 36 (xG subsets) | 895 incl. xG everywhere |
+| NHL reg3 / puck line / total / team totals | goals_poisson, goals_draw, goals_glm | yes | 345 / 405 | — | 255 / 195 each |
+Thresholds, conditions and evaluation periods are in MODEL_SELECTION §5/§11/§14/§15. Every rule of every study is in its report.
+`availability_two_hour` (live NBA injury member, two-hour cutoff) has no historical inputs at its own cutoff: the report
+*content* history exists (2019-20 … 2023-24, used here at 17:45 ET), but its *timing* is assumed from published file times.
+
+### Did any rule reach ~80–85%? (one canonical outcome per game; pushes counted separately, never as wins)
+- **NBA winner — yes, but from confidence, not agreement.** 160 rules (≥100 picks) are at or above 80% on 2022–2024; e.g.
+  "Elo and logistic_v2 both ≥ 75%": 565 picks (14% of games), 80.0% — the strongest single model's 565 most confident games
+  are also 80.0%. Only 7 of the 160 beat confidence by ≥2 points, and the best of those is one model alone
+  (efficiency_margin ≥ 75%: 358 picks, 83.5% vs 81.3%).
+  **Chronological procedure** (highest-accuracy rule with ≥100 picks chosen on earlier seasons, then frozen):
+  `logistic + gbt_v1 both ≥ 80%, models disagree` → 2023: 85.1% on selection → **79.4% (27–7) on 34 picks, 2.6% of games**;
+  → 2024: 83.7% on selection → **82.9% (63–13) on 76 picks, 5.8% of games**, but the strongest single's most confident 76 games
+  were 88.2%. So ~80–85% held up on later seasons at small coverage, and it is the accuracy of heavy favourites, not evidence of
+  agreement value or of betting value (such favourites are priced accordingly).
+- **NBA winner at 17:45 with the injury model:** frozen rule `stack(all six) ≥ 75%, disagree` → 2023: 77.8% (84–24) on 108
+  picks vs 82.4% for confidence alone; `avg(avail_v1 + efficiency_margin + gbt_v1) ≥ 80%, disagree` → 2024: **89.6% (95–11) on
+  106 picks, 8.7% of games** vs 85.8% for confidence alone (+3.8 points; one season, not significant after the family).
+- **NHL and every line market — no.** Best NHL winner bands: 73.3% at 6.5% coverage (stack ≥ 70%), 71.1% at 10.6%; the
+  frozen highest-accuracy rules gave 66–79% on 37–243 later picks. Line markets (at the primary's model line) peak at
+  60–66% on 5–10% coverage.
+
+### Accuracy–coverage frontier (best rule per coverage band, hindsight across all seasons; vs strongest single at the same count)
+| Market | ~5–10% | ~10–20% | ~20–35% | ~35–60% | 60%+ |
+|---|---|---|---|---|---|
+| NBA winner | 87.1% (224) vs 85.3% | 81.2% (447) vs 80.8% | 79.3% (892) vs 78.6% | 75.5% (1,398) vs 75.9% | 70.7% (2,396) vs 70.3% |
+| NBA winner 17:45 | 88.8% (187) vs 87.7% | 83.6% (403) vs 83.6% | 78.7% (761) vs 79.1% | 75.7% (1,347) vs 75.2% | 71.0% (2,213) vs 71.0% |
+| NHL winner | 73.3% (318) vs 71.4% | 71.1% (519) vs 71.9% | 67.3% (988) vs 67.3% | 64.7% (1,906) = xG alone | 59.2% (3,005) vs 61.7% |
+| NHL reg3 | 58.1% (289) vs 56.4% | 56.2% (589) vs 54.8% | 55.1% | 50.6% | 48.6% |
+Line markets: NBA spread 65.5% / total 59.4% / team totals 58.8–61.8% at 5–10%; NHL puck line 62.8%, total 60.0%, team totals
+61.8–61.9% at 5–10%. Their comparators are weak by construction (the primary is ~50/50 at its own line), so these numbers
+measure disagreement with the primary's line, not value against a bookmaker line.
+
+### Why nothing qualified (diagnosis, per the reports)
+- **No improvement over confidence filtering** is the dominant cause: of rule×fold scores with ≥100 picks, 792/1,105 (NBA
+  winner), 1,281/1,346 (NBA 17:45), 708/931 (NHL winner) did not beat the strongest single's most-confident games at the same
+  count; the best Bonferroni lower bounds were −0.02 to −0.06.
+- **Too few observations:** hundreds of rule×fold scores had positive lifts on <100 picks (e.g. 336 NHL winner, 144 NBA total);
+  detecting a +3-point lift at 80% needs well over 1,000 picks per side.
+- **Instability:** 1–4 frozen rules per market had a positive selection lift that was ≤ 0 on the next season.
+- **Calibration:** member reliability gaps are small for winners (≤ 0.05) but large for the score members' line probabilities
+  (ridge/gbt 0.14–0.24 at their own extremes), which makes their confidence thresholds unreliable; stacking fixes much of it (≤ 0.03).
+- **Missing information:** no historical bookmaker lines (line markets cannot be judged against the market), no historical
+  pregame goalie listings, assumed injury-report timing.
+- **Implementation:** none found by the checks (tests/test_selective_study.py, test_rule_tracking.py: outcome-blind rules,
+  earlier-only selection, pushes, three-way draws, missing members, retries, effective dates).
+
+### Tracked prospectively (from the registry seal; research only)
+All 5,365 registered rules across 11 markets are evaluated on the stored two-hour cohorts (expanded cohort for NHL winner and
+NBA lines, core elsewhere), one canonical decision per game/market/rule; 19 are flagged `selected` by the last chronological fold
+(all `unqualified research`: highest-accuracy and top-lift rules). NBA winner rules containing `availability_two_hour` are
+prospective-only. Registry `backend/app/models/combination_rules.json` (sha256 in the file). Shown on Performance →
+"Combination rules" (selected / all registered; historical frontier labelled backtest; prospective record with matched baselines).
