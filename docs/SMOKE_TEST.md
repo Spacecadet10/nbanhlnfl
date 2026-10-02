@@ -322,3 +322,13 @@ Worktree `../nba-predictor-selector` (branch `selector-dev`), merged into `shado
   rows next to the primary ones; the same query feeds primary market scoring and threshold tracking, so research rows would
   have counted as primary forecasts once they existed (none existed in the live stores yet). Fixed (1d0709c) with a regression
   test that fails without the fix; after the fix the Game page logs no console errors. Servers stopped, tab closed.
+
+## selective-v1 and combination-rule tracking — Claude, 2026-10-02 ~17:50 UTC
+- Studies: `app.cli --sport {nhl,nba} selective-study` (final run 17:32–17:33 UTC reused the saved tables; first build
+  17:07–17:31 UTC). Registry: `app.cli rules-registry` → `backend/app/models/combination_rules.json`, sha256 4ea80e59…,
+  5,365 rules / 11 markets / 19 selected (unqualified research).
+- API/browser on the rehearsal copy (branch code, clock pinned at 20:50Z, ports 8023/5193): `/api/research/rules` NHL winner —
+  1 canonical cohort, 895 rules, 30 pick on it, the selected rule abstains with "condition 'clear' not met" (that reason was
+  missing in the first check: out-of-condition games were not explained — fixed with a test). Performance → "Combination
+  rules": selected and all-registered views (900 table rows with all), historical frontier labelled "Backtest · reused
+  seasons", prospective record labelled "Live"; 390-px frame 386 = viewport; no console errors. Servers stopped, tab closed.

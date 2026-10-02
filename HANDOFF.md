@@ -1,5 +1,17 @@
 # Current handoff
 
+## Selective-combination study and rule tracking — Claude, 2026-10-02 ~16:55–18:00 UTC (branch retrain-cadence)
+- Design first (MODEL_SELECTION §15, 115885b). Audit matrix, 80–85% answer and diagnosis: docs/CHALLENGER_RESULTS.md
+  "Selective-combination study". No artifact of the user's earlier ~83% system exists in the project.
+- Saved point-in-time member tables `data/research/tables/{nba,nba_evening,nhl}.json.gz` (fingerprinted; reused on rerun).
+- Result (exploratory): nothing qualified in any market. NBA winner reaches ~80–85% at 3–14% coverage, and a frozen rule held
+  ~79–83% on later seasons, but confidence alone matches it (heavy favourites, not agreement). NHL max ~73%; lines ~60–66%.
+- Prospective: sealed registry `backend/app/models/combination_rules.json` (5,365 rules, 19 selected as unqualified research),
+  evaluated on stored cohorts (one canonical decision per game/market/rule), `/api/research/rules`, Performance → Combination rules.
+- Coordination: user assigned the expanded candidate pool to session -6b (worktree ../nba-predictor-candidates, migration 0019,
+  `pool-*` CLI); this session integrates afterwards (research_live, agreement, jobs, main, frontend, shared docs stay here).
+- Unverified: real prospective rule records (first NHL cohorts tonight; NBA from 2026-10-20).
+
 ## Expanded-combination experiment and fixes — Claude, 2026-10-02 ~16:00–16:35 UTC (merged; live checkout 1d0709c + docs)
 - Inventory (from reports): the §11 search included the weekly NBA members; it never tested `hockey_logistic_xg`;
   `availability_two_hour` is prospective-only. Separate experiment `expanded-v1` designed first (MODEL_SELECTION §14, 0f3b8d7).

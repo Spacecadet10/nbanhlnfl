@@ -62,3 +62,15 @@ def test_settled_outcomes_count_wins_and_compare_at_matched_coverage(game):
     single = next(r for r in rep["rules"] if r["id"].startswith("single|hockey_elo"))["prospective"]
     assert single["win"] + single["loss"] == 1 and single["pending"] == 0
     assert single["strongest_single_matched"]["games"] == 1
+
+
+def test_games_outside_a_rules_condition_record_the_reason(game, monkeypatch):
+    from app import selective_study
+    monkeypatch.setattr(selective_study, "CLEAR", 0.999)        # no game is a 'clear favourite'
+    reg = registry()
+    reg["markets"]["nhl:winner"]["rules"][0]["level"] = "clear"
+    reg["markets"]["nhl:winner"]["rules"][0]["id"] = "single|hockey_elo|0.5|clear"
+    run(game, "2026-10-12T21:30:00Z")
+    rep = rt.report(game, "nhl", "winner", "selected", rt.seal({k: v for k, v in reg.items() if k != "sha256"}))
+    r = next(x for x in rep["rules"] if x["level"] == "clear")["prospective"]
+    assert r["picks"] == 0 and r["recent"][0]["reason"] == "condition 'clear' not met"

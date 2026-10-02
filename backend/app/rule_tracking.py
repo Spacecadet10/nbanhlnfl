@@ -160,7 +160,12 @@ def report(conn, sport: str, market: str, show: str = "selected", reg: Optional[
         eligible = [i for i in items if in_level(i["row"], rule["level"])]
         res, recent, weeks = {"win": 0, "loss": 0, "push": 0, "void": 0, "pending": 0, "unscorable": 0}, [], {}
         picked = []
-        for i in eligible:
+        for i in items:
+            if not in_level(i["row"], rule["level"]):
+                if len(recent) < 10:
+                    recent.append({"game_id": i["cohort"]["game_id"], "decision": "abstain",
+                                   "reason": explain(rr, i["vectors"], market, i["row"]), "generated_at": i["cohort"]["generated_at"]})
+                continue
             s = side_of(rr, i["vectors"], market)
             if s is None:
                 if len(recent) < 10:
