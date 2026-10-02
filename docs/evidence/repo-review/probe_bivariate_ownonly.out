@@ -1,0 +1,5 @@
+synthetic corr(yh,ya)=0.073
+own BP: success=True nll=9944.08 lambda3=0.260 (true 0.2) hfa=0.037 (true 0.05) corr(att)=0.904 t=2.6s
+own DC: success=True nll=9953.59 rho=-0.037 hfa=0.037 t=0.2s
+independent Poisson nll=9954.36  LR(BP vs indep)=20.56  LR(DC vs indep)=1.54
+penaltyblog not available here: ModuleNotFoundError No module named 'penaltyblog'

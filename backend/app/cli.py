@@ -9,7 +9,8 @@ from .models.elo import EloConfig
 # Commands that work for every sport; everything else is NBA-only until generalised.
 SPORT_COMMANDS = {"nhl-pbp-import", "nhl-xg-research", "migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies", "refresh", "odds", "predict",
                   "score", "daily", "scheduler", "predict-now", "score-near-tipoff", "markets", "score-markets", "agreement", "thresholds",
-                  "combination-study", "selector-decide", "research-report", "retrain-cadence", "catboost-challenger", "combination-search", "expanded-search", "selective-study", "rules-registry"}
+                  "combination-study", "selector-decide", "research-report", "retrain-cadence", "catboost-challenger", "combination-search", "expanded-search", "selective-study", "rules-registry",
+                  "pool-screen", "pool-assess", "pool-record", "pool-roster"}
 NHL_ONLY = {"nhl-pbp-import", "nhl-xg-research", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies"}
 
 
@@ -94,6 +95,13 @@ def main(argv=None) -> int:
     rg.add_argument("--nba", required=True, help="NBA selective-study report.json")
     rg.add_argument("--nhl", required=True, help="NHL selective-study report.json")
     rg.add_argument("--effective-from", required=True)
+    # Candidate pool (docs/CANDIDATE_POOL.md)
+    ps = sub.add_parser("pool-screen", help="Candidate pool stage 1: screen every registry candidate on development seasons")
+    ps.add_argument("--dry-run", action="store_true", help="Score only a warm-up season; writes nothing")
+    sub.add_parser("pool-assess", help="Candidate pool stage 2: assess the frozen shortlist once on later seasons (logged)")
+    pr = sub.add_parser("pool-record", help="Two-hour candidate forecasts for winner/reg3 markets (lines come from the core cohort)")
+    pr.add_argument("--dry-run", action="store_true")
+    sub.add_parser("pool-roster", help="Read-only candidate roster")
     sub.add_parser("selector-decide", help="Write this week's selector decisions if due (normally run by the odds job)")
     rr = sub.add_parser("research-report", help="Read-only prospective research record for one market")
     rr.add_argument("--market", default="winner")
@@ -384,6 +392,20 @@ def main(argv=None) -> int:
         print(json.dumps({"path": str(rule_tracking.REGISTRY_PATH), "sha256": reg["sha256"],
                           "markets": {k: {"rules": len(m["rules"]), "selected": sum(1 for r in m["rules"] if r["selected"])}
                                       for k, m in reg["markets"].items()}}))
+    elif args.cmd in ("pool-screen", "pool-assess", "pool-record", "pool-roster"):
+        from .candidates import live as pool_live, study as pool_study
+        if args.cmd == "pool-screen":
+            r = pool_study.run_screen(conn, args.sport, dry=args.dry_run)
+            print(json.dumps({m: {"games": v.get("games"), "strongest": v.get("strongest_existing"),
+                                  "shortlist": v.get("shortlist")} for m, v in r["markets"].items()}))
+        elif args.cmd == "pool-assess":
+            r = pool_study.run_assess(conn, args.sport)
+            print(json.dumps({m: {"games": v.get("games")} for m, v in r["markets"].items()}))
+        elif args.cmd == "pool-record":
+            r = pool_live.record(conn, write=not args.dry_run)
+            print(json.dumps({k: v for k, v in r.items() if k != "forecasts"}, default=str))
+        else:
+            print(json.dumps(pool_live.roster(conn, args.sport), indent=1, default=str))
     elif args.cmd == "selector-decide":
         result = jobs.selector_decisions(conn)
         print(json.dumps(result, indent=2))

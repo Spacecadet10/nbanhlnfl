@@ -1,0 +1,4 @@
+statsmodels 0.15.0
+discrete NegativeBinomial: params=[1.057, 0.109, -0.088, 0.038, 0.057] (last=alpha) converged=True t=0.02s
+GLM NB(alpha fixed .05): params=[1.057, 0.109, -0.088, 0.038] t=0.00s
+Poisson GLM params [1.057, 0.109, -0.088, 0.038] Pearson chi2/df 1.164

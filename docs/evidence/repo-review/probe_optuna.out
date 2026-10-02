@@ -1,0 +1,6 @@
+optuna 5.0.0
+states: Counter({'PRUNED': 22, 'COMPLETE': 16, 'FAIL': 2}) best: {'x': 0.9164121529086853, 'depth': 5}
+seeded runs identical param sequence: True
+sqlite trials rows by study/state: [(1, 'COMPLETE', 16), (1, 'FAIL', 2), (1, 'PRUNED', 22), (2, 'COMPLETE', 16), (2, 'FAIL', 2), (2, 'PRUNED', 22)]
+sqlite intermediate values rows: 204 param rows: 160
+failed trial system_attrs: [('tpe:relative_params:0', '"{\\"depth\\": 6, \\"x\\": 3.787176976977442}"'), ('tpe:relative_params:0', '"{\\"depth\\": 6, \\"x\\": 0.9680655604179328}"'), ('tpe:relative_params:0', '"{\\"depth\\": 6, \\"x\\": 0.9785722256304931}"')]

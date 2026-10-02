@@ -1,0 +1,5 @@
+all_iters: sigma_corr=0.936 mean_sigma=10.33(true 11.23) cov80=0.750 NLL=3.8013
+best_iter: sigma_corr=0.938 mean_sigma=10.73(true 11.23) cov80=0.775 NLL=3.7970
+fit_time=3.1s best_itr=76 base_models=127
+same seed (seeded Base): max|dloc|= 0.0 max|dscale|= 0.0
+constant-SD baseline (same mean, SD from val resid=12.50): NLL=3.9731 cov80=0.838  oracle NLL=3.7484
