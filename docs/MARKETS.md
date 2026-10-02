@@ -50,10 +50,14 @@ Period/quarter markets and player props are **not implemented**; see docs/DATA_S
 - `P(over L)` is non-increasing in `L`; `P(home covers L)` is non-decreasing in `L`; `p_a + p_mid + p_b = 1`;
   half-point lines have `p_mid = 0`.
 - NBA `winner` forecasts in the existing ledger (frozen Elo) remain the primary NBA winner record. The distribution model's
-  own winner probability is stored as a separate model version and never replaces them.
+  own winner probability is **not stored** (corrected 2026-10-02: `market_forecasts` has no `winner` market) and never
+  replaces them.
 
 ## Changes
 - **2026-10-02, model-only line choice:** a model-only line is now the half-point line where the model's two sides are closest to 50/50
   (previously the median rounded down + 0.5). The old rule put NHL team totals at 3.5 goals with "under" near 70% for almost every team, so
   the pick reflected the line's placement, not the game. Forecasts already recorded keep their lines (append-only); new forecasts at a new
   line are separate rows. Market-quoted lines are unaffected.
+- **2026-10-02, research candidates:** each line / 3-way market now also has two research candidates and combinations
+  (docs/MODEL_SELECTION.md). They are recorded at exactly the primary forecast's line, line source and quote in the same run,
+  as `research-v3:<model>:<definition>-window=2h-policy=near_tipoff`; the primary market forecast is unchanged.

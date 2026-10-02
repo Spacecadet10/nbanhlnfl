@@ -46,7 +46,9 @@ def definition_hash(built):
     return h.hexdigest()[:16]
 
 
-def predict(conn, *, now=None, write=True, game_ids=None):
+def predict(conn, *, now=None, write=True, game_ids=None, collect=None):
+    """`collect`, if given, receives each model's walk-forward predictions ({name: [backtest rows]}) for the research
+    stacker (app/research_live.py); it is never part of the returned job detail."""
     fixed_clock = now is not None
     now = now or utc_now()
     eng = live.engine(conn)
@@ -79,6 +81,7 @@ def predict(conn, *, now=None, write=True, game_ids=None):
         [(m.name, getattr(m, "input_version", None)) for m in built],
         [(g['game_id'], g['tipoff_at'], g['home_team_id'], g['away_team_id'], g['neutral_site']) for g in schedule]],
         sort_keys=True).encode()).hexdigest()[:24]
+    out['dataset_version'], out['definition'] = dataset, digest
     recent = {}
     for r in sorted(rows, key=lambda r: r.game.tipoff_at, reverse=True):
         for team in (r.game.home_team_id, r.game.away_team_id):
@@ -90,7 +93,9 @@ def predict(conn, *, now=None, write=True, game_ids=None):
             from dataclasses import replace
             training = [replace(r, cutoff_at=live._ts(live._parse(r.game.tipoff_at)-near_tipoff.WINDOW))
                         for r in rows] if getattr(model, 'training_two_hour', False) else rows
-            backtest.run(model, training, events, deliver_until=now)
+            history = backtest.run(model, training, events, deliver_until=now)
+            if collect is not None:
+                collect[model.name] = history
             forecasts = []
             for g in schedule:
                 game = eng.pregame(g)
@@ -115,11 +120,13 @@ def predict(conn, *, now=None, write=True, game_ids=None):
                     out['skipped'].setdefault(model.name, []).append(f.game_id)
                     continue
                 f = replace(f, generated_at=completed_at)
+                pid = None
                 if write:
-                    _, new = record(conn, f)
+                    pid, new = record(conn, f)
                     out['created'] += new
                     out['already_recorded'] += not new
-                out['forecasts'].append(dict(game_id=f.game_id, model=model.name, home_win_prob=f.home_win_prob))
+                out['forecasts'].append(dict(game_id=f.game_id, model=model.name, home_win_prob=f.home_win_prob,
+                                             prediction_id=pid, generated_at=f.generated_at, model_version=f.model_version))
         except Exception as exc:
             out['errors'][model.name] = f"{type(exc).__name__}: {exc}"
     if out['errors'] or out['skipped']:

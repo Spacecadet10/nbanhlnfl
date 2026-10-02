@@ -181,3 +181,79 @@ export interface ThresholdReport {
       push: number; void: number; pending: number; unscorable: number; accuracy: number | null;
       coverage: number | null; interval: [number, number] | null }[] }[];
 }
+
+// --- Research: model agreement, combination and selection (backend app/research_live.py). Research/shadow only. ---
+export type Side = 'a' | 'mid' | 'b';
+export type Vector = [number, number, number];
+export interface ResearchRule { source: string; filter: 'none' | 'majority' | 'unanimous'; threshold: number }
+export interface ResearchDecision {
+  status: 'active' | 'abstain' | 'insufficient_evidence'; rule: ResearchRule | null; lower_bound: number | null; reason: string;
+  selector_version: string; evidence_until: string; effective_from: string; effective_until: string;
+}
+export interface ResearchSelection {
+  status: 'pick' | 'no_pick'; side: Side | null; probability: number | null; threshold: number | null; reason: string;
+  recommended: boolean; game_reason: string; generated_at: string; decision: ResearchDecision | null;
+}
+export interface ResearchAgreement {
+  picks: Record<string, Side | null>; votes: Partial<Record<Side, number>>; abstentions: number; expected: number;
+  available: number; complete: boolean; side: Side | null; agreeing: number; majority: boolean; unanimous: boolean;
+  pairs: { members: [string, string]; agree: boolean }[];
+}
+export interface ResearchMarket {
+  market: MarketId; line: number | null; line_source: 'market' | 'model' | null; line_label: string | null;
+  bookmaker: { p: Vector; provider: string; retrieved_at: string } | null; sides: Record<Side, string>;
+  primary: string; members: { name: string; p: Vector }[]; missing: Record<string, string>;
+  average: Vector | null; stack: Vector | null; stack_note: string; agreement: ResearchAgreement; definition: string;
+  generated_at: string; information_at: string; tipoff_at: string; minutes_before_start: number; start_changed: boolean;
+  selection: ResearchSelection | null;
+}
+export interface ResearchGame {
+  game_id: string; mode: Mode; status: 'unknown_game' | 'no_research_forecast' | 'recorded'; markets: ResearchMarket[];
+  recommendation: { market: MarketId; side: Side; label: string; line: number | null; probability: number } | null; note: string;
+}
+export type ResearchSlateEntry =
+  | { status: 'none' }
+  | { status: 'no_pick'; reasons: Record<string, string> }
+  | { status: 'pick'; market: MarketId; side: Side; label: string; line: number | null; probability: number };
+export interface ResearchSlate { mode: Mode; games: Record<string, ResearchSlateEntry> }
+export interface ResearchRecord { wins: number; losses: number; pushes: number; decided: number; accuracy: number | null; ci95: [number, number] | null }
+export interface ResearchSource extends ResearchRecord {
+  cohorts: number; coverage: number | null; log_loss: number | null; brier: number | null;
+  thresholds: (ResearchRecord & { threshold: number })[];
+}
+export interface ResearchGroup {
+  definition: string; cohorts: number; settled: number; pending: number; void: number;
+  line_sources: { market: number; model: number }; sources: Record<string, ResearchSource>;
+  agreement: Record<'majority' | 'unanimous', ResearchRecord & { cohorts: number; coverage: number | null; primary_confidence_same_count: ResearchRecord }>;
+  periods: { week: string; cohorts: number; primary: ResearchRecord; average: ResearchRecord }[];
+  bookmaker: { cohorts: number; primary_log_loss: number | null; bookmaker_log_loss: number | null; note: string };
+  selector: { selections: { pick: number; no_pick: number }; picks: ResearchRecord; pending: number; void: number; recommended_for_game: ResearchRecord };
+}
+export interface ResearchReport {
+  mode: Mode; sport: Sport; market: MarketId; as_of: string; groups: ResearchGroup[]; selector_version: string; note: string;
+  decisions: { decision_id: number; scheduled_for: string; decided_at: string; effective_until: string; status: ResearchDecision['status'];
+    rule: ResearchRule | null; lower_bound: number | null; reason: string; selector_version: string;
+    evidence: { settled_items: number; rules: number; z: number | null } }[];
+}
+export interface ResearchHistory {
+  mode: Mode; games_with_selection_run: number; games_without_pick: number; total: number;
+  record: ResearchRecord & { pending: number; void: number; unscorable: number };
+  rows: { game_id: string; tipoff_at: string; home: string; away: string; market: MarketId; line: number | null;
+    line_source: 'market' | 'model' | null; pick: string; probability: number; threshold: number | null; rule: ResearchRule | null;
+    selector_version: string | null; generated_at: string; minutes_before_start: number; result: string }[];
+}
+export interface Diff { diff: number; ci95: [number, number] }
+export interface RetroMarket {
+  games: number; seasons: number[]; members: string[]; primary: string; best_single_by_log_loss: string;
+  methods: Record<string, { n: number; accuracy: number | null; log_loss: number; brier: number }>;
+  stack: { seasons: number[]; games: number; methods: Record<string, { n: number; accuracy: number | null; log_loss: number }> | null };
+  log_loss_diff: Record<string, { mean: number; ci95: [number, number] }>;
+  agreement: { rule: string; coverage: number; accuracy: number | null; vs_primary_confidence: Diff | null; vs_average_confidence: Diff | null }[];
+  disagreement_vs_primary: Record<string, { disagreements: number; rate: number; primary_right: number; member_right: number; log_loss_correlation: number }>;
+  selector_simulation: { weeks: number; active_weeks: number; picks: number; coverage: number; accuracy: number | null; lift: number | null;
+    rule_changes: number; primary_confidence_same_count?: { accuracy: number | null; diff: Diff | null } };
+}
+export interface Retrospective {
+  mode: Mode; sport: Sport; status?: 'unavailable'; kind: string; generated_at: string; evaluated_seasons: number[]; design: string;
+  markets: Partial<Record<MarketId, RetroMarket>>; note: string;
+}

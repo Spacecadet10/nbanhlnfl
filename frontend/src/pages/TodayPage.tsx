@@ -1,7 +1,8 @@
 import { ModelAgreement } from '../components/ModelAgreement';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
-import type { GameSummary, MarketId, Meta, Policy, SlateSelection } from '../api/types';
+import type { GameSummary, MarketId, Meta, Policy, ResearchSlate, SlateSelection } from '../api/types';
+import { ResearchSlateLine } from '../components/Research';
 import { useApi } from '../api/useApi';
 import { ModeBadge, NearTipoffBadge, RunBadge, SourceList } from '../components/Badges';
 import { ConfidenceFilter, confidenceLevels, levelLabel, RangeRecords, useConfidence } from '../components/ConfidenceFilter';
@@ -37,6 +38,7 @@ function Slate({ meta }: { meta: Meta }) {
   const [policyChoice, setPolicy] = usePolicy();
   const policy: Policy = meta.mode === 'real' ? policyChoice : 'pregame';
   const { state, retry } = useApi((s) => api.games(sport, date, policy, level, market, s), [sport, date, policy, level, market]);
+  const research = useApi((s) => api.researchSlate(sport, date, s), [sport, date]);
 
   return (
     <section>
@@ -80,7 +82,11 @@ function Slate({ meta }: { meta: Meta }) {
                 <button type="button" className="link-btn" onClick={() => setDate(meta.default_date)}>{meta.mode === 'demo' ? 'Go to demo today' : 'Go to the next games'}</button>
               </Empty>
             ) : (
-              <FilteredSlate games={data.games} selection={data.selection} showAll={() => setLevel(null)} market={market} />
+              <>
+                {research.state.status === 'error' && <p className="warn small">Research selections unavailable: {research.state.error}</p>}
+                <FilteredSlate games={data.games} selection={data.selection} showAll={() => setLevel(null)} market={market}
+                  research={research.state.status === 'success' ? research.state.data.games : undefined} />
+              </>
             )}
           </>
         )}
@@ -92,7 +98,8 @@ function Slate({ meta }: { meta: Meta }) {
 const POLICY_NAME: Record<Policy, string> = { pregame: 'night-before', near_tipoff: 'near-tipoff' };
 
 /** The API decides which games are selected: only the chosen policy's forecast counts, never the other one. */
-function FilteredSlate({ games, selection: sel, showAll, market }: { games: GameSummary[]; selection: SlateSelection; showAll: () => void; market: MarketId }) {
+function FilteredSlate({ games, selection: sel, showAll, market, research }: { games: GameSummary[]; selection: SlateSelection; showAll: () => void;
+  market: MarketId; research?: ResearchSlate['games'] }) {
   const level = sel.min_confidence;
   const isWinner = market === 'winner';
   const selected = level == null ? games
@@ -114,7 +121,7 @@ function FilteredSlate({ games, selection: sel, showAll, market }: { games: Game
       ) : (
         <ul className="game-grid">
           {selected.map((g) => (isWinner
-            ? <GameCard key={g.game_id} game={g} policy={sel.policy} />
+            ? <GameCard key={g.game_id} game={g} policy={sel.policy} research={research?.[g.game_id]} />
             : <MarketCard key={g.game_id} game={g} statusLabel={statusLabel(g)} />))}
         </ul>
       )}
@@ -133,7 +140,7 @@ function statusLabel(g: GameSummary) {
   return time(g.tipoff);
 }
 
-function GameCard({ game: g, policy }: { game: GameSummary; policy: Policy }) {
+function GameCard({ game: g, policy, research }: { game: GameSummary; policy: Policy; research?: ResearchSlate['games'][string] }) {
   const carried = useCarriedSearch();
   const p = g.prediction;
   const n = g.near_tipoff;
@@ -177,6 +184,7 @@ function GameCard({ game: g, policy }: { game: GameSummary; policy: Policy }) {
           </p>
         )}
         <ModelAgreement game={g} />
+        <ResearchSlateLine entry={research} />
         <div className="card-bottom small muted">
           {g.market ? <>Market: {g.home.abbr} {pct(g.market.home_win_prob)}</> : <span className="warn">No market odds</span>}<span className="matchup-link">Matchup ↗</span>
         </div>

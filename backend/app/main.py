@@ -8,7 +8,7 @@ from typing import Iterator, Optional
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import config, db
+from . import config, db, sports
 from .backtest import FrozenDecisionError
 from .nhl_eval import NhlEvaluationError
 from .providers.demo import DemoProvider
@@ -173,3 +173,50 @@ def thresholds(p=Depends(get_provider)):
         return {"groups": [], "all_stored_rows": {"winner_rows": 0, "market_rows": 0}, "note": "No forward threshold research in demo mode."}
     from . import tracking
     return tracking.report(p.conn, p.now)
+
+
+# --- Research: model agreement, combination and selection (docs/MODEL_SELECTION.md). Research/shadow only. ------------------
+@app.get("/api/research/game/{game_id}")
+def research_game(game_id: str, p=Depends(get_provider)):
+    if p.mode != "real":
+        from . import research_demo
+        return research_demo.game_detail(game_id)
+    from . import research_live
+    return {**research_live.game_detail(p.conn, game_id, p.now), "mode": "real"}
+
+
+@app.get("/api/research/slate")
+def research_slate(date: date = Query(description="Game date (US Eastern), YYYY-MM-DD"), p=Depends(get_provider)):
+    ids = [g.game_id for g in p.games(date).games]
+    if p.mode != "real":
+        from . import research_demo
+        return {"mode": "demo", "games": research_demo.slate(ids)}
+    from . import research_live
+    return {"mode": "real", "games": research_live.slate(p.conn, ids, p.now)}
+
+
+@app.get("/api/research/performance")
+def research_performance(market: str = MARKET, p=Depends(get_provider)):
+    if p.mode != "real":
+        if market not in sports.NBA.markets:
+            raise HTTPException(status_code=404, detail=f"The {market} market is not defined for the demo sport.")
+        from . import research_demo
+        return research_demo.report(market)
+    _market_supported(p, market)
+    from . import research_live
+    return {**research_live.report(p.conn, market, p.now), "mode": "real"}
+
+
+@app.get("/api/research/retrospective")
+def research_retrospective(p=Depends(get_provider)):
+    from . import combination_research
+    return {**combination_research.compact(p.sport), "mode": p.mode}
+
+
+@app.get("/api/research/history")
+def research_history(limit: int = Query(200, ge=1, le=2000), p=Depends(get_provider)):
+    if p.mode != "real":
+        from . import research_demo
+        return research_demo.history()
+    from . import research_live
+    return {**research_live.history(p.conn, p.now, limit), "mode": "real"}

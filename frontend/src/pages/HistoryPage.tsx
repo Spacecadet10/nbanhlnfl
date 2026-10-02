@@ -5,6 +5,7 @@ import { useApi } from '../api/useApi';
 import { RunBadge } from '../components/Badges';
 import { ConfidenceFilter, confidenceLevels, levelLabel, MarketRecordLine, RecordLine, useConfidence } from '../components/ConfidenceFilter';
 import { MarketHistoryTable } from '../components/MarketView';
+import { ResearchHistoryTable } from '../components/Research';
 import { MarketSelect, useCarriedSearch, useMarket, useSport } from '../components/Selection';
 import { PolicyToggle, RunTypeToggle, usePolicy, useRunType } from '../components/RunTypeToggle';
 import { AsyncView, Empty } from '../components/States';
@@ -98,6 +99,7 @@ export function HistoryPage() {
               <HistoryTable rows={data.predictions} />
             </>}
       </AsyncView>}
+      <ResearchHistoryTable sport={sport} />
     </section>
   );
 }

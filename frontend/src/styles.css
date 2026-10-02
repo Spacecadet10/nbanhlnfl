@@ -276,3 +276,16 @@ button,input,select { min-height:44px; }
 .threshold-model { display: block; }
 .threshold-model select { display: block; max-width: 100%; width: 100%; margin: .5rem 0 1rem; }
 .table-wrap { overflow-x: auto; max-width: 100%; }
+
+/* Research / shadow model selection (components/Research.tsx) */
+.badge-research { background: var(--research-bg, #fef3c7); color: var(--research-text, #78350f); border: 1px solid var(--research-border, #f59e0b); }
+:root[data-theme="dark"] .badge-research { --research-bg: #3b2a0a; --research-text: #fde68a; --research-border: #b45309; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .badge-research { --research-bg: #3b2a0a; --research-text: #fde68a; --research-border: #b45309; } }
+.research-line { margin: 0.4rem 0 0; }
+.research-verdict { margin: 0.5rem 0 0.75rem; }
+.research-market { border-top: 1px solid var(--border); padding: 0.6rem 0; }
+.research-market > summary { cursor: pointer; list-style-position: inside; }
+.research-table td, .research-table th { white-space: nowrap; }
+.research-combined th, .research-combined td { font-style: italic; }
+.audit { margin-top: 0.4rem; }
+.retrospective > summary { cursor: pointer; }

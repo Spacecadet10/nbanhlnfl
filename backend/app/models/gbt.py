@@ -1,5 +1,5 @@
 """Research candidate `gbt_v1`: gradient-boosted trees on the existing pregame features
-(docs/EVALUATION_PLAN.md "Research round 2"). Development research only; never imported by the API or the jobs.
+(docs/EVALUATION_PLAN.md "Research round 2"). Also a member of the two-hour winner research cohort (app/agreement.py).
 
 Same walk-forward discipline as `logistic`: features are captured at predict time, the label joins the training set
 only when the result is delivered, and the model is refit at each season start on earlier seasons only. Before

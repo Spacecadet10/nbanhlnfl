@@ -9,6 +9,7 @@ import { AsyncView } from '../components/States';
 import { calendarDate, dateTime, pct } from '../format';
 import { MarketForecastsCard } from '../components/MarketView';
 import { useCarriedSearch, useSport } from '../components/Selection';
+import { ResearchGameCard } from '../components/Research';
 
 export function GamePage() {
   const { gameId = '' } = useParams();
@@ -54,6 +55,7 @@ function Detail({ game: g }: { game: GameDetail }) {
         <h2>Within 2 hours · Win probability</h2><p className="forecast-note">No two-hour forecast recorded. New forecasts are made only during the two hours before the scheduled start, when fresh inputs are available.</p>
       </div>)}
       <div className="card"><ModelAgreement game={g} detail /></div>
+      <ResearchGameCard sport={sport} gameId={g.game_id} />
       <div className="card">
         <h2>{g.mode === 'real' ? 'Archived night-before probability' : 'Win probability'} {g.prediction && <RunBadge runType={g.prediction.run_type} />}</h2>
         {g.prediction

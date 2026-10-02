@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 from zoneinfo import ZoneInfo
 
-from . import agreement, config, ingest, injuries, live, market_live, near_tipoff, shadow
+from . import agreement, config, ingest, injuries, live, market_live, near_tipoff, research_live, shadow
 from .db import store_sport, utc_now
 from .sources import espn, nhl_stats
 
@@ -299,9 +299,19 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
             status = "failed"
         out["markets"] = {k: m.get(k) for k in ("created", "already_recorded", "reason", "error") if k in m}
     if accepted:
-        out["agreement"] = research_forecasts(conn, write=not dry_run, now=now, game_ids=accepted)
+        collect = {} if research_live.enabled() else None
+        run = research_forecasts(conn, write=not dry_run, now=now, game_ids=accepted, collect=collect, keep=True)
+        winner = run.pop("forecasts", [])
+        out["agreement"] = run
         if out["agreement"].get("status") == "failed":
             status = "failed"
+        if collect is not None:   # research cohorts and selections; never blocks or changes the primary forecasts above
+            out["research"] = research_selection(conn, game_ids=accepted, winner_run={**run, "forecasts": winner},
+                                                 history=collect, now=now, write=not dry_run)
+            if out["research"].get("status") == "failed":
+                status = "failed"
+        else:
+            out["research"] = {"status": "disabled", "reason": "RESEARCH_SELECTION=0"}
     return {"status": status, **out} if dry_run else _finish(conn, run_id, status, 1, out)
 
 
@@ -349,13 +359,34 @@ def shadow_forecasts(conn: sqlite3.Connection, **kw) -> dict:
     return _finish(conn, run_id, "failed" if out["skipped_stale_inputs"] else "success", 1, out)
 
 
-def research_forecasts(conn: sqlite3.Connection, **kw) -> dict:
+def research_forecasts(conn: sqlite3.Connection, keep: bool = False, **kw) -> dict:
     # Daily JSON and exit status expose failures, independently of the primary forecast steps.
     try:
         result = agreement.predict(conn, **kw)
-        result.pop("forecasts", None)
+        if not keep:
+            result.pop("forecasts", None)
         return result
     except Exception as exc:
+        return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+
+
+def research_selection(conn: sqlite3.Connection, **kw) -> dict:
+    """Research cohorts and selections (app/research_live.py). Errors are visible here and never touch primary rows."""
+    try:
+        return research_live.record(conn, **kw)
+    except Exception as exc:
+        conn.rollback()
+        return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+
+
+def selector_decisions(conn: sqlite3.Connection, now: Optional[str] = None) -> dict:
+    """The weekly selector decisions (Monday 14:00 UTC), written by the first odds cycle after that time."""
+    if not research_live.enabled():
+        return {"status": "disabled", "reason": "RESEARCH_SELECTION=0"}
+    try:
+        return {"status": "success", **research_live.decide_due(conn, now=now)}
+    except Exception as exc:
+        conn.rollback()
         return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
 
 
@@ -373,6 +404,7 @@ def daily(conn: sqlite3.Connection, *, force_refresh: bool = False, **refresh_kw
 
 def forecast_due(conn: sqlite3.Connection) -> dict:
     """Called by the existing periodic odds command for both sports; no eligible games means no extra requests."""
+    decisions = selector_decisions(conn)
     now = utc_now()
     eng = live.engine(conn)
     end = near_tipoff._fmt(near_tipoff._parse(now) + near_tipoff.WINDOW)
@@ -384,9 +416,10 @@ def forecast_due(conn: sqlite3.Connection) -> dict:
                               "AND status IN ('scheduled','in_progress') LIMIT 1",
                               (now, near_tipoff._fmt(near_tipoff._parse(now) - near_tipoff.RECENT_TIPOFF))).fetchone()
         if recent:
-            return {"refresh": refresh(conn), "status": "skipped", "reason": "results refresh; no upcoming game within two hours"}
-        return {"status": "skipped", "reason": "no eligible game within two hours"}
-    return predict_now(conn)
+            return {"refresh": refresh(conn), "status": "skipped", "reason": "results refresh; no upcoming game within two hours",
+                    "selector": decisions}
+        return {"status": "skipped", "reason": "no eligible game within two hours", "selector": decisions}
+    return {**predict_now(conn), "selector": decisions}
 
 
 def scheduler(conn: sqlite3.Connection, *, interval_minutes: float, max_runs: int, job: str = "daily",

@@ -8,7 +8,8 @@ from .models.elo import EloConfig
 
 # Commands that work for every sport; everything else is NBA-only until generalised.
 SPORT_COMMANDS = {"migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies", "refresh", "odds", "predict",
-                  "score", "daily", "scheduler", "predict-now", "score-near-tipoff", "markets", "score-markets", "agreement", "thresholds"}
+                  "score", "daily", "scheduler", "predict-now", "score-near-tipoff", "markets", "score-markets", "agreement", "thresholds",
+                  "combination-study", "selector-decide", "research-report"}
 NHL_ONLY = {"ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies"}
 
 
@@ -71,6 +72,11 @@ def main(argv=None) -> int:
     rf.add_argument("--force", action="store_true")
     sub.add_parser("predict", help="Refresh and record supported forecasts only within two hours of tipoff")
     sub.add_parser("thresholds", help="Read-only two-hour threshold records for every stored market and model")
+    cs = sub.add_parser("combination-study", help="One-time retrospective combination/selection study (docs/MODEL_SELECTION.md §5)")
+    cs.add_argument("--out", help="Report directory (default data/reports/combination-<sport>-<time>)")
+    sub.add_parser("selector-decide", help="Write this week's selector decisions if due (normally run by the odds job)")
+    rr = sub.add_parser("research-report", help="Read-only prospective research record for one market")
+    rr.add_argument("--market", default="winner")
     ag = sub.add_parser("agreement", help="Record prospective research-model winner comparisons; primary models unchanged")
     ag.add_argument("--dry-run", action="store_true")
     sub.add_parser("score", help="Score the latest live forecasts against stored results (read-only)")
@@ -307,6 +313,18 @@ def main(argv=None) -> int:
         backtest.FROZEN_DECISION_PATH.write_text(json.dumps(decision, indent=2) + "\n")
         print(json.dumps({"written": str(backtest.FROZEN_DECISION_PATH), "primary_model": decision["primary_model"],
                           "elo_config": decision["elo_config"]}))
+    elif args.cmd == "combination-study":
+        from pathlib import Path
+        from . import combination_research
+        report = combination_research.run(conn, args.sport, out_dir=Path(args.out) if args.out else None)
+        print(json.dumps({"output_dir": report["output_dir"], "markets": list(report["markets"])}))
+    elif args.cmd == "selector-decide":
+        result = jobs.selector_decisions(conn)
+        print(json.dumps(result, indent=2))
+        return 1 if result["status"] == "failed" else 0
+    elif args.cmd == "research-report":
+        from . import research_live
+        print(json.dumps(research_live.report(conn, args.market), indent=2, default=str))
     elif args.cmd == "thresholds":
         from . import tracking
         print(json.dumps(tracking.report(conn), indent=2))
