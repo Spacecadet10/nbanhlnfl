@@ -218,7 +218,7 @@ export type ResearchSlateEntry =
 export interface ResearchSlate { mode: Mode; games: Record<string, ResearchSlateEntry> }
 export interface ResearchRecord { wins: number; losses: number; pushes: number; decided: number; accuracy: number | null; ci95: [number, number] | null }
 export interface ResearchSource extends ResearchRecord {
-  cohorts: number; coverage: number | null; log_loss: number | null; brier: number | null;
+  cohorts: number; coverage: number | null; log_loss: number | null; brier: number | null; ties: number;
   thresholds: (ResearchRecord & { threshold: number })[];
 }
 export interface ResearchGroup {

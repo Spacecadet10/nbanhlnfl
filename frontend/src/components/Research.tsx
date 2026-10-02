@@ -71,13 +71,13 @@ function ResearchMarketView({ m }: { m: ResearchMarket }) {
       {missing.length > 0 && <span className="warn"> · {missing.length} model(s) missing</span>}
     </summary>
     {m.start_changed && <p className="warn small">The scheduled start changed after this was recorded: it is void and not counted.</p>}
-    <p className="small">{sel ? sel.reason : 'Not evaluated by the selector.'}{sel && !sel.recommended && sel.status === 'pick' && <span className="muted"> · {sel.game_reason}</span>}</p>
+    <p className="small">{!sel ? 'Not evaluated by the selector.' : sel.status === 'pick' ? 'Passes the rule in force (below).' : sel.reason}{sel && !sel.recommended && sel.status === 'pick' && <span className="muted"> · {sel.game_reason}</span>}</p>
     <div className="table-wrap"><table className="table research-table">
       <thead><tr><th>Model</th>{sides.map((s) => <th key={s}>{m.sides[s]}</th>)}</tr></thead>
       <tbody>
         {m.members.map((x) => <tr key={x.name}><th scope="row">{modelName(x.name)}{x.name === m.primary && <span className="muted"> (primary)</span>}</th>
           {sides.map((s) => <td key={s}>{pct(x.p[sideIdx(s)], 1)}</td>)}</tr>)}
-        {missing.map(([n, why]) => <tr key={n} className="muted"><th scope="row">{modelName(n)}</th><td colSpan={sides.length} className="warn small">Missing: {why}</td></tr>)}
+        {missing.map(([n, why]) => <tr key={n} className="muted"><th scope="row">{modelName(n)}</th><td colSpan={sides.length} className="warn small wrap">Missing: {why}</td></tr>)}
         <Combined label="Equal average" v={m.average} sides={sides} note="needs every model" />
         <Combined label="Learned stacker" v={m.stack} sides={sides} note={m.stack_note} />
         {m.bookmaker && <Combined label={`Bookmaker (${m.bookmaker.provider}, de-vigged)`} v={m.bookmaker.p} sides={sides} note="" />}
@@ -131,7 +131,7 @@ function ReportBody({ r }: { r: ResearchReport }) {
         <div className="table-wrap"><table className="table">
           <thead><tr><th>Source</th><th>Games</th><th>Record</th><th>Accuracy (95%)</th><th>Log loss</th><th>Brier</th></tr></thead>
           <tbody>{Object.entries(g.sources).map(([n, s]) => <tr key={n}><th scope="row">{modelName(n)}{n === primary && <span className="muted"> (primary)</span>}</th>
-            <td>{s.cohorts}</td><td>{record(s)}</td><td>{pct(s.accuracy, 1)} <span className="muted small">{interval(s.ci95)}</span></td>
+            <td>{s.cohorts}</td><td>{record(s)}{s.ties > 0 && <span className="muted small"> · {s.ties} exact 50% (no pick)</span>}</td><td>{pct(s.accuracy, 1)} <span className="muted small">{interval(s.ci95)}</span></td>
             <td>{num(s.log_loss)}</td><td>{num(s.brier)}</td></tr>)}</tbody>
         </table></div>
         <h3>Agreement versus confidence at the same coverage</h3>

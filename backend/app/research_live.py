@@ -583,6 +583,7 @@ def report(conn, market: str, as_of: Optional[str] = None) -> dict:
             vecs, real = [i["vectors"][s] for i in have], [i["realised"] for i in have]
             from . import metrics
             per_source[s] = {"cohorts": len(have), "coverage": len(have) / len(settled) if settled else None, **_record(res),
+                             "ties": len(have) - len(res),
                              "log_loss": metrics.log_loss_multi(vecs, real), "brier": metrics.brier_multi(vecs, real),
                              "thresholds": [{"threshold": t, **_record([selector.outcome(market, side, i["realised"]) for i in have
                                                                         if (side := combine.pick(i["vectors"][s], market)) is not None

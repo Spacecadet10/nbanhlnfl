@@ -176,11 +176,17 @@ def thresholds(p=Depends(get_provider)):
 
 
 # --- Research: model agreement, combination and selection (docs/MODEL_SELECTION.md). Research/shadow only. ------------------
+def _research_store(p) -> None:
+    if not db.has_table(p.conn, "research_cohorts"):
+        raise HTTPException(status_code=503, detail="Research tables missing: run `python -m app.cli migrate` for this sport.")
+
+
 @app.get("/api/research/game/{game_id}")
 def research_game(game_id: str, p=Depends(get_provider)):
     if p.mode != "real":
         from . import research_demo
         return research_demo.game_detail(game_id)
+    _research_store(p)
     from . import research_live
     return {**research_live.game_detail(p.conn, game_id, p.now), "mode": "real"}
 
@@ -191,6 +197,7 @@ def research_slate(date: date = Query(description="Game date (US Eastern), YYYY-
     if p.mode != "real":
         from . import research_demo
         return {"mode": "demo", "games": research_demo.slate(ids)}
+    _research_store(p)
     from . import research_live
     return {"mode": "real", "games": research_live.slate(p.conn, ids, p.now)}
 
@@ -203,6 +210,7 @@ def research_performance(market: str = MARKET, p=Depends(get_provider)):
         from . import research_demo
         return research_demo.report(market)
     _market_supported(p, market)
+    _research_store(p)
     from . import research_live
     return {**research_live.report(p.conn, market, p.now), "mode": "real"}
 
@@ -218,5 +226,6 @@ def research_history(limit: int = Query(200, ge=1, le=2000), p=Depends(get_provi
     if p.mode != "real":
         from . import research_demo
         return research_demo.history()
+    _research_store(p)
     from . import research_live
     return {**research_live.history(p.conn, p.now, limit), "mode": "real"}
