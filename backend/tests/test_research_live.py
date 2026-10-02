@@ -428,3 +428,11 @@ def test_expanded_cohort_is_recorded_separately_and_never_selected(game):
     assert groups["core"]["selector"] is not None
     again = run(game, "2026-10-12T21:30:00Z")
     assert again["expanded_created"] == 0 and again["expanded_existing"] == 1
+
+
+def test_primary_market_reads_and_scores_never_include_research_member_rows(game):
+    run(game, "2026-10-12T21:30:00Z")
+    assert game.execute("SELECT count(*) FROM market_forecasts WHERE model_version LIKE 'research-%'").fetchone()[0] > 0
+    rows = market_live.latest(game, policy="near_tipoff")
+    assert rows and all(not r["model_version"].startswith("research-") for r in rows)
+    assert len({(r["game_id"], r["market"]) for r in rows}) == len(rows)       # one primary forecast per game and market

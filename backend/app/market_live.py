@@ -126,7 +126,7 @@ LATEST_SQL = """
     JOIN games g ON g.game_id = f.game_id
     LEFT JOIN game_decisions d ON d.game_id = f.game_id
     LEFT JOIN market_quotes q ON q.quote_id = f.market_quote_id
-    WHERE f.run_type = 'live' AND f.forecast_id = (
+    WHERE f.run_type = 'live' AND f.model_version NOT LIKE 'research-%' AND f.forecast_id = (
         SELECT x.forecast_id FROM market_forecasts x
         WHERE x.game_id = f.game_id AND x.market = f.market AND x.policy = f.policy AND x.run_type = 'live'
           AND x.model_version = f.model_version AND x.generated_at <= x.cutoff_at
