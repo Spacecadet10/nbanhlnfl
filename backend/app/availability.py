@@ -229,19 +229,33 @@ COLUMNS = ("Game Date", "Game Time", "Matchup", "Team", "Player Name", "Category
            "Previous Status")
 STATUS_SET = set(STATUSES.split("|"))
 NAME = re.compile(r"^([^,]+?)\s*,\s*(.+)$")
+_NW = r"[A-Za-z'’.\-]+"
+ROW_ENTRY = re.compile(rf"([A-Z]{_NW}(?:\s{{1,5}}{_NW}){{0,3}})\s*,\s*({_NW}(?:\s{{1,2}}{_NW})?)\s{{2,}}({STATUSES})\b")
+
+
+def _label_re(label: str) -> re.Pattern:
+    return re.compile(r"\b" + r"\s+".join(map(re.escape, label.split())) + r"\b")
+
+
+_LABELS = {label: _label_re(label) for label in COLUMNS}
+_HEADER_ROW = (_label_re("Player Name"), re.compile(r"\bStatus\b"))
+
+
+def is_header_row(line: str) -> bool:
+    return all(r.search(line) for r in _HEADER_ROW)
 
 
 def _columns(header: str) -> dict[str, int]:
-    """Start position of each column label found in a header row (layout text keeps positions)."""
+    """Start position of each column label found in a header row (labels may be spread with extra spaces)."""
     found = {}
-    for label in COLUMNS:
-        i = header.find(label)
-        if i >= 0 and not (label == "Status" and "Current Status" in header):
-            found[label] = i
-    if "Current Status" not in found:   # later layouts label the column just "Status"? keep both possibilities
-        i = re.search(r"(?<!Previous )\bStatus\b", header)
-        if i:
-            found["Current Status"] = i.start()
+    for label, rx in _LABELS.items():
+        m = rx.search(header)
+        if m:
+            found[label] = m.start()
+    if "Current Status" not in found:
+        m = re.search(r"(?<!Previous )\bStatus\b", header)
+        if m:
+            found["Current Status"] = m.start()
     return found
 
 
@@ -267,28 +281,38 @@ def parse_report(pdf: bytes, name: str, team_names: list[str]) -> ParsedReport:
     for page in reader.pages:
         lines = page.extract_text(extraction_mode="layout").splitlines()
         pages.append((" ".join(page.extract_text().split()), list(reversed(lines)) if reverse else lines))
-    out = parse_layout(pages, name, team_names)
+    out = parse_layout(pages, name, team_names, mode="rows" if reverse else "columns")
     out.producer = producer
     return out
 
 
-def parse_layout(pages: list[tuple[str, list[str]]], name: str, team_names: list[str]) -> ParsedReport:
+def parse_layout(pages: list[tuple[str, list[str]]], name: str, team_names: list[str], mode: str = "columns") -> ParsedReport:
     """`pages` = (plain page text for the header time, layout lines in reading order). Each page's header row gives the
-    column starts; game date and team carry down from the rows above. `loose_lines` counts rows with a valid status in the
-    status column (reconciliation: every such row must yield a parsed name)."""
+    column starts; game date and team carry down from the rows above. `loose_lines` counts, independently of the column
+    logic, every line with a "Last, First" name followed by a status word; reconciliation requires the parsed entries to
+    equal that count, so a page the column logic cannot read fails instead of passing with zero entries."""
     teams_by_key = {" ".join(t.split()).lower(): t for t in team_names}
+    team_re = re.compile("|".join(r"\s+".join(map(re.escape, t.split())) for t in sorted(team_names, key=len, reverse=True)))
     out = ParsedReport(name=name, header_published=None)
     game_date = team = None
+    cols: dict[str, int] = {}
     for plain, lines in pages:
         header = HEADER.search(plain)
         if header and out.header_published is None:
             mm, dd, yy, hh, mi, ap = header.groups()
             hour = int(hh) % 12 + (12 if ap == "PM" else 0)
             out.header_published = datetime(2000 + int(yy), int(mm), int(dd), hour, int(mi), tzinfo=ET).astimezone(timezone.utc)
-        cols: dict[str, int] = {}
+        # The header row gives the column starts; it can sit anywhere in the extracted text (GemBox pages come out
+        # reversed, so their header is last). Rows with a status are then counted independently (`loose_lines`).
+        header_rows = [line for line in lines if is_header_row(line)]
+        if header_rows:            # pages without a header row (GemBox continuation pages) keep the previous columns
+            cols = _columns(header_rows[0])
+        out.loose_lines += sum(1 for line in lines if LOOSE.search(line) and not is_header_row(line))
+        if mode == "rows":
+            game_date, team = _parse_rows(lines, out, team_re, teams_by_key, game_date, team)
+            continue
         for line in lines:
-            if "Player Name" in line and "Status" in line:
-                cols = _columns(line)
+            if is_header_row(line):
                 continue
             if not cols or not line.strip():
                 continue
@@ -305,12 +329,35 @@ def parse_layout(pages: list[tuple[str, list[str]]], name: str, team_names: list
             status = status_text.split(" ")[0] if status_text else ""
             if status not in STATUS_SET:
                 continue
-            out.loose_lines += 1
             m = NAME.match(" ".join(_field(line, cols, "Player Name").split()))
             if m:
                 out.entries.append({"game_date": game_date, "team": team, "last": m.group(1), "first": m.group(2),
                                     "status": status})
     return out
+
+
+def _parse_rows(lines, out: ParsedReport, team_re, teams_by_key, game_date, team):
+    """Row-pattern parsing (GemBox: continuation pages have no header and shifted columns). The team is a known team name
+    anywhere on the line; the player and status are searched only after it."""
+    for line in lines:
+        if not line.strip() or is_header_row(line) or HEADER.search(" ".join(line.split())):
+            continue
+        d = GAME_DATE.search(line)
+        if d:
+            game_date = f"{d.group(3)}-{d.group(1)}-{d.group(2)}"
+        rest = line
+        t = team_re.search(line)
+        if t:
+            team = teams_by_key[" ".join(t.group(0).split()).lower()]
+            rest = line[t.end():]
+        if "NOT YET SUBMITTED" in " ".join(line.upper().split()):
+            out.not_submitted.append({"game_date": game_date, "team": team})
+            continue
+        m = ROW_ENTRY.search(rest)
+        if m:
+            out.entries.append({"game_date": game_date, "team": team, "last": " ".join(m.group(1).split()),
+                                "first": " ".join(m.group(2).split()), "status": m.group(3)})
+    return game_date, team
 
 
 def publication_time(parsed: ParsedReport, last_modified: Optional[str]) -> tuple[Optional[datetime], str]:
@@ -472,6 +519,9 @@ def build_report_facts(conn: sqlite3.Connection, box: dict, *, log: Callable[[st
         season = season_of(day)
         for e in parsed.entries:
             if e["game_date"] != day:
+                continue
+            if e["team"] not in team_names:     # cannot be attributed to a team: counted, never guessed
+                cov["entries_without_team"] += 1
                 continue
             team = team_names[e["team"]]
             f.teams_on_report.add(team)

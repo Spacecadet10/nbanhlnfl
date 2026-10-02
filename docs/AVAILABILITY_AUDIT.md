@@ -144,3 +144,16 @@ final regular-season, play-in and postseason games:
 A 5:30 PM report already lists next-day games: on 2023-01-10 it covered four games of 2023-01-11, with 5 of those 8 teams still "NOT YET
 SUBMITTED". So some injury information exists before the current midnight cutoff, and its value should not be assumed to need a
 near-tipoff forecast. This is one report; it was not analysed further.
+
+## Gates 1-3 completed for the `avail_v1` research (2026-10-01; seasons 2019-20 … 2023-24 only)
+- **Inventory (gate 1):** one 5:30 PM ET report per date with an eligible game from 18:00 ET: 1,002 dates, 1,002 requests, 1,002 stored,
+  0 missing, 0 failures (`data/research/availability/attempts.jsonl`). All 1,002 have a readable header time within 2 minutes of
+  `Last-Modified`.
+- **Parser (gate 2):** 770 iTextSharp reports (column positions from each page's header row) and 232 GemBox reports (row patterns: continuation
+  pages have no header and shifted columns). Reconciliation against an independent count (every line with "Last, First" followed by a
+  status word): 1,002 of 1,002 reconcile; 83,022 entries; 5,778 "NOT YET SUBMITTED" rows; 18 entries without a team are counted and skipped.
+  An earlier version passed GemBox reports with zero entries because its check reused the column logic; the independent count found it.
+- **Mapping (gate 3):** reviewed alias table `backend/app/reference/nba_player_aliases.csv` (9 names, each with its reason; built from names
+  only, before any model result). Still unresolved and kept as such: players with no box-score row in these seasons (Gerald Green, Nene
+  Hilario, Darius Miller, Robert Franks, Ivan Rabb, Kenny Wooten, Ray Spalding, Omari Spellman, Justin Lewis, Azuolas Tubelis) and Daryl
+  Macon (two ESPN ids for the same Miami player). Per-season match levels are in the evaluation report.

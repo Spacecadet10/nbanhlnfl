@@ -44,7 +44,7 @@ def test_later_layout_and_an_unparseable_name_fails_reconciliation():
     lines = [H2024,
              row({"Game Date": "01/10/2024", "Team": "Boston Celtics", "Player Name": "Holiday, Jrue",
                   "Current Status": "Questionable", "Reason": "Injury/Illness - Ankle"}, H2024),
-             row({"Player Name": "NoCommaName", "Current Status": "Out"}, H2024)]
+             row({"Team": "Doe, John", "Current Status": "Out"}, H2024)]            # name outside its column
     r = av.parse_layout([("Injury Report: 01/10/24 05:30 PM", lines)], "x", TEAMS)
     assert [(e["last"], e["status"]) for e in r.entries] == [("Holiday", "Questionable")]
     assert r.loose_lines == 2 and not r.reconciled                         # excluded, never half-used
@@ -105,3 +105,18 @@ def test_evening_cutoff_and_season_guard():
     with pytest.raises(av.AvailabilityError):
         av.load_player_box(2025)                                            # spent test season
     assert av.report_name("2023-01-09") == "Injury-Report_2023-01-09_05PM.pdf"
+
+
+def test_continuation_pages_without_a_header_keep_the_columns():
+    first = [H2024, row({"Game Date": "01/10/2024", "Team": "Boston Celtics", "Player Name": "Holiday, Jrue",
+                         "Current Status": "Out"}, H2024)]
+    second = [row({"Player Name": "Horford, Al", "Current Status": "Questionable"}, H2024)]
+    r = av.parse_layout([("Injury Report: 01/10/24 05:30 PM", first), ("", second)], "x", TEAMS)
+    assert r.reconciled and [(e["team"], e["last"]) for e in r.entries] == [("Boston Celtics", "Holiday"),
+                                                                            ("Boston Celtics", "Horford")]
+
+
+def test_a_page_the_columns_cannot_read_fails_instead_of_passing_with_zero_entries():
+    lines = ["Player   Name text without a status label", "Holiday, Jrue          Out"]
+    r = av.parse_layout([("Injury Report: 01/10/24 05:30 PM", lines)], "x", TEAMS)
+    assert r.entries == [] and r.loose_lines == 1 and not r.reconciled

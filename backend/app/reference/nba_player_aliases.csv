@@ -1,1 +1,10 @@
 report_name,athlete_id,reviewed_note
+Nicolas Claxton,4278067,"Report uses 'Nicolas'; box score 'Nic Claxton', Brooklyn; single candidate"
+Charles Brown Jr.,4066508,"Box score 'Charlie Brown Jr.', Atlanta 2019-20; single candidate"
+Enes Kanter,6447,"Same ESPN athlete renamed 'Enes Freedom' in 2021; Boston 2019-20"
+Kenyon Martin Jr.,4431828,"Box score 'KJ Martin', Houston; single candidate"
+Marcos Louzada Silva,4423885,"Box score 'Didi Louzada', New Orleans; single candidate"
+Luca Vildoza,4231914,"Exact name in box scores; outside the team/season match window"
+John Wall,4237,"Exact name in later box scores (Houston 2020-21); out all of 2019-20"
+Dereck LivelyII,4683688,"Text extraction merged the suffix; box score 'Dereck Lively II', Dallas 2023-24"
+Wendell CarterJr.,4277847,"Text extraction merged the suffix; box score 'Wendell Carter Jr.', Orlando"
