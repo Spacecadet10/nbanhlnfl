@@ -69,7 +69,7 @@ strongest single, positive against every constituent). Best selection lower boun
 −0.010 to −0.072 (z 2.90). On the NHL the strongest single on earlier data was xG itself in every fold, and agreement of xG
 with other models matched xG's own most-confident games (lift −0.005 to 0.000), so the others added no selection value.
 
-**Probability averages and stackers (log loss, cadence − constituent, 95% week-block interval):**
+**Probability averages and stackers (log loss, combination − constituent, 95% week-block interval):**
 | Combination | vs its best constituent | Reading |
 |---|---|---|
 | NHL avg(xG + `hockey_elo`) | +0.0005 [−0.0007, +0.0016] vs xG | no gain over xG alone |
