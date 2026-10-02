@@ -87,6 +87,8 @@ export interface GameDetail extends GameSummary {
   away_stats: TeamStats;
   projected_score_available: boolean;
   market_forecasts: MarketForecast[];
+  /** NHL only: ESPN's latest probable-goalie listing per team, as retrieved; not used by any model. */
+  goalies: { side: 'home' | 'away'; player_name: string | null; source_status: string; source_status_label: string | null; retrieved_at: string }[];
 }
 
 export type Settlement = 'win' | 'loss' | 'push' | 'void' | 'pending' | 'unscorable';

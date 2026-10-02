@@ -306,3 +306,46 @@ def parse_lines(payload: dict) -> tuple[list[LineQuote], dict]:
                     quotes.append(LineQuote(**base, provider=provider, market=market, price_label=label, line=line,
                                             price_a=pa, price_b=pb))
     return quotes, skipped
+
+
+@dataclass
+class GoalieListing:
+    event_id: str
+    tipoff_at: str
+    home_name: str
+    away_name: str
+    side: str
+    status: str                  # the source's status type ('expected', 'confirmed', ...) or 'none_listed'
+    status_label: Optional[str]
+    espn_player_id: Optional[str]
+    player_name: Optional[str]
+
+
+def parse_goalies(payload: dict) -> list[GoalieListing]:
+    """Probable starting goalies for games that have not started, exactly as listed (one per team; a team without an
+    entry is 'none_listed'). Started or finished games are skipped: ESPN overwrites their `probables` afterwards."""
+    out = []
+    for ev in payload.get("events", []):
+        comp = ev["competitions"][0]
+        if STATUS.get(comp["status"]["type"]["name"], "other") != "scheduled":
+            continue
+        sides = {c["homeAway"]: c for c in comp["competitors"]}
+        if set(sides) != {"home", "away"}:
+            continue
+        names = {k: c["team"].get("displayName") or c["team"].get("name", "?") for k, c in sides.items()}
+        for side, c in sides.items():
+            listed = [p for p in c.get("probables") or [] if p.get("name") == "probableStartingGoalie"]
+            base = dict(event_id=str(ev["id"]), tipoff_at=normalize_time(ev["date"]), home_name=names["home"],
+                        away_name=names["away"], side=side)
+            if not listed:
+                out.append(GoalieListing(**base, status="none_listed", status_label=None, espn_player_id=None,
+                                         player_name=None))
+                continue
+            p = listed[0]
+            st = p.get("status") or {}
+            athlete = p.get("athlete") or {}
+            pid = p.get("playerId") or athlete.get("id")
+            out.append(GoalieListing(**base, status=str(st.get("type") or st.get("name") or "unknown").lower(),
+                                     status_label=st.get("name"), espn_player_id=None if pid is None else str(pid),
+                                     player_name=athlete.get("fullName") or athlete.get("displayName")))
+    return out

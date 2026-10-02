@@ -272,6 +272,8 @@ def replay(conn: sqlite3.Connection, cache_dir: Optional[Path] = None) -> dict:
                 s = import_nhl_fetch(conn, f["fetch_id"], cache_dir=cache_dir)
             else:
                 totals["line_quotes"] += import_lines_fetch(conn, f["fetch_id"], "nhl", cache_dir=cache_dir)["inserted"]
+                totals["goalie_snapshots"] = totals.get("goalie_snapshots", 0) + \
+                    import_goalies_fetch(conn, f["fetch_id"], cache_dir=cache_dir)["inserted"]
                 continue
         totals["responses"] += 1
         totals["games_inserted"] += s["games_inserted"]
@@ -465,7 +467,8 @@ def ingest_nhl_day(conn: sqlite3.Connection, yyyymmdd: str, *, fetch: Callable[[
                                             request_key=espn.day_request(yyyymmdd)[0], body=body,
                                             retrieved_at=retrieved_at, importer_version=espn.LINES_IMPORTER_VERSION,
                                             cache_dir=cache_dir)
-        return {"day": yyyymmdd, **import_lines_fetch(conn, fetch_id, "nhl", cache_dir=cache_dir)}
+        return {"day": yyyymmdd, **import_lines_fetch(conn, fetch_id, "nhl", cache_dir=cache_dir),
+                "goalies": import_goalies_fetch(conn, fetch_id, cache_dir=cache_dir)}
 
 
 def _name_key(name: str) -> str:
@@ -516,3 +519,50 @@ def import_lines_fetch(conn: sqlite3.Connection, fetch_id: int, sport: str, cach
                       round(pa, 6), round(1 - round(pa, 6), 6), f["retrieved_at"], fetch_id, f["raw_id"]))
         stats["inserted"] += 1
     return stats
+
+
+def import_goalies_fetch(conn: sqlite3.Connection, fetch_id: int, cache_dir: Optional[Path] = None) -> dict:
+    """Appends one goalie_snapshots row per team of each not-yet-started game in this ESPN NHL retrieval (idempotent; a
+    replay adds nothing). Must run inside a transaction. Games not matched to the NHL store are counted, never guessed."""
+    if not has_table(conn, "goalie_snapshots"):
+        return {"inserted": 0, "skipped": "schema_before_0014"}
+    f = conn.execute("SELECT raw_id, retrieved_at FROM raw_fetches WHERE fetch_id=?", (fetch_id,)).fetchone()
+    listings = espn.parse_goalies(json.loads(raw_cache.load(conn, f["raw_id"], cache_dir)))
+    stats = {"listings": len(listings), "inserted": 0, "already_recorded": 0, "unmatched": 0,
+             "by_status": {}}
+    for g in listings:
+        game_id = _match_game(conn, "nhl", espn.LineQuote(g.event_id, g.tipoff_at, g.home_name, g.away_name, "", "",
+                                                           "", None, 0, 0))
+        if game_id is None:
+            stats["unmatched"] += 1
+            continue
+        if conn.execute("SELECT 1 FROM goalie_snapshots WHERE game_id=? AND side=? AND fetch_id=?",
+                        (game_id, g.side, fetch_id)).fetchone():
+            stats["already_recorded"] += 1
+            continue
+        conn.execute("INSERT INTO goalie_snapshots (game_id, side, fetch_id, raw_id, retrieved_at, source_status, "
+                     "source_status_label, espn_player_id, player_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                     (game_id, g.side, fetch_id, f["raw_id"], f["retrieved_at"], g.status, g.status_label,
+                      g.espn_player_id, g.player_name))
+        stats["inserted"] += 1
+        stats["by_status"][g.status] = stats["by_status"].get(g.status, 0) + 1
+    return stats
+
+
+# Goalie listing known at a time: per game and side, the latest snapshot retrieved at or before `as_of`. Parameters: (as_of,).
+GOALIE_AS_OF_SQL = """
+    SELECT * FROM (
+        SELECT s.*, ROW_NUMBER() OVER (PARTITION BY s.game_id, s.side ORDER BY s.retrieved_at DESC, s.fetch_id DESC) AS rn
+        FROM goalie_snapshots s WHERE s.retrieved_at <= ?)
+    WHERE rn = 1"""
+
+
+def rebuild_goalies(conn: sqlite3.Connection, cache_dir: Optional[Path] = None) -> dict:
+    """Imports goalie listings from every cached ESPN NHL retrieval in retrieval order (idempotent)."""
+    totals = {"fetches": 0, "inserted": 0}
+    for f in conn.execute("SELECT f.fetch_id FROM raw_fetches f JOIN raw_responses r ON r.raw_id = f.raw_id "
+                          "WHERE r.source = ? ORDER BY f.retrieved_at, f.fetch_id", (espn.NHL_SOURCE,)).fetchall():
+        with transaction(conn):
+            totals["inserted"] += import_goalies_fetch(conn, f["fetch_id"], cache_dir=cache_dir)["inserted"]
+        totals["fetches"] += 1
+    return totals

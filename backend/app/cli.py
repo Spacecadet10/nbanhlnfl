@@ -7,9 +7,9 @@ from .models.elo import EloConfig
 
 
 # Commands that work for every sport; everything else is NBA-only until generalised.
-SPORT_COMMANDS = {"migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "refresh", "odds", "predict",
+SPORT_COMMANDS = {"migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies", "refresh", "odds", "predict",
                   "score", "daily", "scheduler", "predict-now", "score-near-tipoff", "markets", "score-markets"}
-NHL_ONLY = {"ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore"}
+NHL_ONLY = {"ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies"}
 
 
 def _any_failed(result) -> bool:
@@ -44,6 +44,7 @@ def main(argv=None) -> int:
     nt = sub.add_parser("nhl-test", help="NHL only: the one-time final test of the sealed decision (logged; refuses to rerun)")
     nt.add_argument("--confirm-final-test", action="store_true", required=True)
     sub.add_parser("nhl-learned", help="NHL only: development screening of the logistic and gradient-boosted candidates vs Elo")
+    sub.add_parser("rebuild-goalies", help="NHL only: import goalie listings from every cached ESPN NHL scoreboard (idempotent)")
     sub.add_parser("nhl-agreement-explore", help="NHL only: descriptive agreement map across the four models (development seasons)")
     sub.add_parser("nhl-agreement", help="NHL only: development-season agreement research (Elo vs goals model; no live change)")
     rt = sub.add_parser("nhl-record-test", help="NHL only: append the saved one-time test predictions to the ledger as backtest rows")
@@ -144,6 +145,8 @@ def main(argv=None) -> int:
     elif args.cmd == "score-markets":
         from . import market_live
         print(json.dumps({p: market_live.score(conn, policy=p) for p in market_live.POLICIES}, indent=2, default=str))
+    elif args.cmd == "rebuild-goalies":
+        print(json.dumps(ingest.rebuild_goalies(conn)))
     elif args.cmd == "nhl-agreement-explore":
         from . import nhl_eval
         r = nhl_eval.agreement_exploration(conn)

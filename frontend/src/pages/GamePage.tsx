@@ -86,6 +86,25 @@ function Detail({ game: g }: { game: GameDetail }) {
 
       {g.near_tipoff && <NearTipoffCard game={g} />}
 
+      {sport === 'nhl' && g.mode === 'real' && (
+        <div className="card">
+          <h2>Starting goalies (ESPN listing)</h2>
+          <p className="small muted">As listed by ESPN when we last checked before now. "Expected" is not "confirmed". Not used by any model yet; collected so it can be tested later.</p>
+          {g.goalies.length === 0 ? <p className="muted">No goalie listing has been retrieved for this game.</p> : (
+            <dl className="facts">
+              {g.goalies.map((x) => (
+                <div key={x.side}>
+                  <dt>{x.side === 'home' ? g.home.abbr : g.away.abbr}</dt>
+                  <dd>{x.source_status === 'none_listed' ? <span className="muted">No goalie listed</span>
+                    : <><strong>{x.player_name ?? 'Unnamed'}</strong> · {x.source_status_label ?? x.source_status}</>}
+                    <span className="muted"> (retrieved {dateTime(x.retrieved_at)})</span></dd>
+                </div>
+              ))}
+            </dl>
+          )}
+        </div>
+      )}
+
       {g.mode === 'real' && <MarketForecastsCard forecasts={g.market_forecasts} />}
 
       <div className="card">

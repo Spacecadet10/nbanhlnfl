@@ -13,7 +13,7 @@ import json
 from .. import backtest, config, live, market_live, markets, metrics, near_tipoff, sports
 from ..db import utc_now
 from ..live import HORIZON_DAYS, LATEST_LIVE_SQL
-from ..schemas import (BaselineScore, GameDetail, GamesResponse, GameSummary, HistoryResponse, Market,
+from ..schemas import (BaselineScore, GameDetail, GamesResponse, GoalieListingOut, GameSummary, HistoryResponse, Market,
                        MarketComparison, MarketForecastOut, MarketHistoryResponse, MarketInfo, MarketPerformanceResponse,
                        MarketQuoteOut, MarketRecord, MarketRecordSummary, MarketSide, Meta, NearTipoffForecast, Outcome,
                        PerformanceResponse, Prediction, PredictionRecord, SlateSelection, SourceStatus, SportInfo, Team,
@@ -283,7 +283,14 @@ class RealProvider:
         forecasts = [self._market_out(r, summary["home"], summary["away"])
                      for policy in market_live.POLICIES
                      for r in market_live.latest(self.conn, policy=policy, game_ids=[game_id])]
-        return GameDetail(**summary, stats_as_of=cutoff, projected_score_available=False,
+        goalies = []
+        if self.sport == "nhl" and self.conn.execute("SELECT 1 FROM sqlite_master WHERE name='goalie_snapshots'").fetchone():
+            from ..ingest import GOALIE_AS_OF_SQL
+            goalies = [GoalieListingOut(side=r["side"], player_name=r["player_name"], source_status=r["source_status"],
+                                        source_status_label=r["source_status_label"], retrieved_at=r["retrieved_at"])
+                       for r in self.conn.execute(f"SELECT * FROM ({GOALIE_AS_OF_SQL}) WHERE game_id = ? ORDER BY side DESC",
+                                                  (self.now, game_id))]
+        return GameDetail(**summary, stats_as_of=cutoff, projected_score_available=False, goalies=goalies,
                           home_stats=self._stats(g["home_team_id"], g["season"], g["tipoff_at"], cutoff),
                           away_stats=self._stats(g["away_team_id"], g["season"], g["tipoff_at"], cutoff),
                           market_forecasts=forecasts)

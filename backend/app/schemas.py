@@ -178,6 +178,7 @@ class GameDetail(GameSummary):
     )
     market_forecasts: list["MarketForecastOut"] = Field(
         default=[], description="Latest forecast of every market and policy for this game (non-winner markets).")
+    goalies: list["GoalieListingOut"] = Field(default=[], description="NHL only: latest goalie listing per team, if any.")
 
 
 class PredictionRecord(BaseModel):
@@ -287,6 +288,15 @@ class PerformanceResponse(BaseModel):
     baselines: list[BaselineScore]
     market: MarketComparison
     note: str
+
+
+class GoalieListingOut(BaseModel):
+    """ESPN's probable-starting-goalie listing as last retrieved before now (NHL). Not used by any model."""
+    side: Literal["home", "away"]
+    player_name: Optional[str]
+    source_status: str = Field(description="As published: 'expected', 'confirmed', ...; 'none_listed' when no goalie was listed.")
+    source_status_label: Optional[str]
+    retrieved_at: datetime = Field(description="When we retrieved this listing (the source publishes no announcement time).")
 
 
 class MarketSide(BaseModel):
