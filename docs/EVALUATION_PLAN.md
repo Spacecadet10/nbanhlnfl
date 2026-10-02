@@ -417,3 +417,59 @@ Requested by the user ("we need multiple models to test and learn from"). Develo
 - **Result (2026-10-01):** nothing passed (logistic − Elo Brier −0.0002 [−0.0008, +0.0004]; GBT +0.0027 [+0.0012, +0.0042]; four-model
   average +0.0003 [−0.0003, +0.0008]; four-model unanimity 0.8 points below Elo's matched-coverage filter). Validation not accessed; nothing
   frozen. Details: docs/NHL_BASELINE_REPORT.md.
+
+## NBA availability candidate `avail_v1` (recorded 2026-10-01, before any report is downloaded for it or any feature is computed)
+Requested by the user. A new, separately dated experiment: the frozen Elo, the sealed `logistic_v2` shadow and their rules are unchanged.
+Sources and checks: docs/AVAILABILITY_AUDIT.md (gates 1-4 apply), docs/AVAILABILITY_FEASIBILITY.md.
+
+**Forecast time (`evening` cutoff).** 17:45 America/New_York on the game's date. Only games tipping off at or after 18:00 ET are scored;
+earlier games are excluded and counted. Results are usable if available by the cutoff (historical assumption: tipoff + 4 h). The baselines
+are recomputed at this same cutoff, so every comparison has the same information time.
+
+**Report.** The official NBA injury report of 5:30 PM ET on the game date (file name per the published naming rule; never the literal
+hour as a time). Publication time = the header time read as ET; if `Last-Modified` differs by more than 2 minutes, the later of the two,
+flagged; a report without a readable header time or `Last-Modified` is excluded (counted). Usable only if published at or before 17:45 ET.
+Historical availability is therefore `assumed_published_time`, never observed. One request per game date (≤ 2 retries, ≥ 1.2 s apart),
+seasons 2019-20 … 2023-24 only. **The spent test seasons 2024-25 and 2025-26 are neither downloaded nor read.**
+
+**Parser and reconciliation.** One parser for both producers (iTextSharp; GemBox, whose page text is reversed), reading game date,
+matchup, team, player and status, and the "NOT YET SUBMITTED" marker. Every report is reconciled: entries parsed = name-plus-status lines
+found by a looser pattern; a report failing reconciliation is excluded and listed.
+
+**Player matching.** Report names ("Last, First") are normalised (accents, punctuation, suffixes Jr/Sr/II-V removed) and matched, in order, to
+sportsdataverse ESPN player-box athletes (SHA-verified files, 2019-20 … 2023-24): (1) same team, same season; (2) same team, any loaded season;
+(3) a unique league-wide match in the same or previous season; (4) a reviewed alias table committed with the code. Anything else, including
+ambiguous names, is **unresolved**: kept, counted per season, never treated as healthy.
+
+**Expected minutes.** Mean minutes over the player's last 10 games played (minutes > 0) before the game date in the same season if he has at
+least 3, otherwise his last 10 of the previous season, otherwise 0 (counted as `no_history`). Unresolved players contribute 0 minutes and are
+counted. Only box scores of earlier dates are used; who eventually played is never an input.
+
+**Status weights.** Out 1, Doubtful 1, Questionable 0.5, Probable 0, Available 0. A player not on the report is not assumed healthy if his
+team has "NOT YET SUBMITTED"; that team is marked unsubmitted.
+
+**Features (per game; positive favours home):** `new_absent_diff` = (away − home) of Σ weight × expected minutes over listed players who
+played in their team's most recent game before the date, / 48; `all_absent_diff` = the same over all listed players, / 48;
+`report_missing` = 1 if no usable report exists for the date or either team is unsubmitted (then both absence features are 0).
+
+**Candidate.** `avail_v1` = the sealed `logistic_v2` feature set plus the three features above: L2 logistic (λ = 1, the existing setting),
+continuous features scaled on the training window, refit at each season start on earlier seasons only, Elo before the first fit. No
+search over features, weights or thresholds.
+
+**Data periods.** Feature burn-in 2019-20; first fit at the start of 2020-21 (warm-up, not scored); scored 2021-22 … 2023-24. These seasons
+already selected Elo and screened `logistic_v2`, so every result is **exploratory development evidence**; independent evidence can only
+come from a forward record.
+
+**Comparisons (all on identical games, paired week-block bootstrap, seed 20260930, 2,000 resamples):**
+1. `avail_v1` vs `logistic_v2` (incremental value of availability) and vs Elo: Brier, log loss, accuracy, 5-bin calibration, per season.
+2. Combinations (fixed set): equal average of Elo and `avail_v1`; Elo and `avail_v1` both picking the same side (probability = their
+   average) against Elo's and `avail_v1`'s own confidence filters at the same coverage; `avail_v1`'s top 50% and top 25% most confident games
+   against Elo's at the same coverage. Each base model is reported on each exact subset.
+3. Diagnostics only (no gate): per-game Brier-loss correlation of `avail_v1` with Elo and with `logistic_v2`; how often they pick
+   different sides and who is right then.
+4. Coverage: dates with a usable report, unsubmitted teams, unresolved entries, `no_history` players, excluded early games.
+
+**Decision rule.** Availability is reported as adding measurable value only if the paired 95% upper bound of Brier(`avail_v1` −
+`logistic_v2`) is below 0. A combination is reported as adding value only if its comparison interval excludes 0 in its favour. Either result
+may be registered as a **separate forward candidate** with its own dated rule and model version, recorded from its registration date only;
+nothing is promoted from this development evidence. A null or negative result is reported as such.
