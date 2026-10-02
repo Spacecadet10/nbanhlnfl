@@ -42,8 +42,10 @@ def _fingerprint(rows) -> str:
     return hashlib.sha256("\n".join(sorted(r.game_id for r in rows)).encode()).hexdigest()[:16]
 
 
-def ensure_fit(spec, rows: list, season: int) -> Optional[dict]:
-    """The season-start fit for `season` (earlier seasons only), loaded from disk when its training set is unchanged."""
+def ensure_fit(spec, rows: list, season: int, adopt_before: Optional[str] = None,
+               adopted: Optional[list] = None) -> Optional[dict]:
+    """The season-start fit for `season` (earlier seasons only), loaded from disk when its training set is unchanged.
+    `adopt_before`: see _load_verified (legacy artifacts written before digests existed)."""
     train = [r for r in rows if r.season < season and r.y is not None]
     if len(train) < registry.MIN_TRAIN[spec.sport]:
         return None
@@ -51,8 +53,7 @@ def ensure_fit(spec, rows: list, season: int) -> Optional[dict]:
     fp = _fingerprint(train)
     path = artifact_dir(spec.sport) / spec.name.replace(":", "__") / f"{defn}-{season}-{fp}.pkl"
     if path.exists():
-        with path.open("rb") as fh:
-            return pickle.load(fh)
+        return _load_verified(path, adopt_before, adopted)
     model = engine.fit(spec, train)
     sd = None
     if spec.head == "normal":
@@ -63,11 +64,46 @@ def ensure_fit(spec, rows: list, season: int) -> Optional[dict]:
            "results_fingerprint": fp, "results_available_through": max(r.result_available_at for r in train),
            "artifact_sha256": hashlib.sha256(blob).hexdigest(), "info": model.info, "fitted_at": utc_now()}
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    with tmp.open("wb") as fh:
-        pickle.dump(art, fh)
+    data = pickle.dumps(art)
+    tmp, side = path.with_suffix(".tmp"), _sidecar(path)
+    side.write_text(hashlib.sha256(data).hexdigest() + "\n")       # written first: a file without its digest never loads
+    tmp.write_bytes(data)
     tmp.replace(path)
     return art
+
+
+class ArtifactIntegrityError(RuntimeError):
+    """A stored fit whose bytes do not match its recorded digest: the candidate is unavailable (never refit or replaced
+    silently, never a substitute model)."""
+
+
+def _sidecar(path: Path) -> Path:
+    return path.with_name(path.name + ".sha256")
+
+
+def _load_verified(path: Path, adopt_before: Optional[str] = None, adopted: Optional[list] = None) -> dict:
+    """Checks the file's sha256 against its sidecar BEFORE unpickling (a pickle round trip is not byte-stable, so the
+    whole stored file is what is verified). A file without a sidecar is an error, except a legacy artifact written before
+    digests existed (file time before `adopt_before`, the time migration 0020 was applied): it is adopted once — its
+    digest is written and the adoption reported — and verified from then on (trust on first use, disclosed)."""
+    data, side = path.read_bytes(), _sidecar(path)
+    digest = hashlib.sha256(data).hexdigest()
+    if not side.exists():
+        written = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).strftime(FMT)
+        if adopt_before is None or written >= adopt_before:
+            raise ArtifactIntegrityError(f"artifact {path.name}: no digest")
+        side.write_text(digest + "\n")
+        if adopted is not None:
+            adopted.append({"artifact": path.name, "written_at": written, "sha256": digest})
+    elif digest != side.read_text().strip():
+        raise ArtifactIntegrityError(f"artifact {path.name}: digest mismatch")
+    return pickle.loads(data)
+
+
+def digests_since(conn) -> Optional[str]:
+    """When artifact digests began: the time migration 0020 was applied to this store (None before it)."""
+    r = conn.execute("SELECT applied_at FROM schema_migrations WHERE version=20").fetchone() if _has(conn, "schema_migrations") else None
+    return r[0] if r else None
 
 
 def _register_fit(conn, sport, spec, art, now) -> Optional[int]:
@@ -210,7 +246,7 @@ def _record_spec(conn, eng, spec, history, upcoming, recent, rec, lines, now, fi
     for gid, (game, row) in upcoming.items():
         by_season.setdefault(game.season, []).append(gid)
     for season, gids in by_season.items():
-        art = ensure_fit(spec, history, season)
+        art = ensure_fit(spec, history, season, digests_since(conn), out.setdefault("artifacts_adopted", []))
         if art is None:
             for gid in gids:
                 out["skipped"].setdefault(spec.name, {})[gid] = "not trained: too few earlier-season games"
@@ -311,10 +347,18 @@ def held_out_gains(market_assess: dict, name: str) -> list:
 
 def roster(conn, sport: str, as_of: Optional[str] = None) -> dict:
     """Every registry candidate with training status, markets, latest fit, evaluation, prospective sample size,
-    combination participation and selection eligibility; plus the family audit."""
-    from .. import selector
+    combination participation and selection eligibility; plus the family audit. Eligibility is the sealed pool
+    registry's route (docs/CANDIDATE_POOL.md §7) and the pool decision in force, never a count on its own."""
+    from . import selection as pool_selection
     as_of = as_of or utc_now()
     ev = _evidence(sport)
+    try:
+        reg = pool_selection.load_registry()
+    except pool_selection.RegistryError as exc:
+        reg, reg_error = None, str(exc)
+    else:
+        reg_error = None
+    defn = pool_selection.core_definition(conn) if reg else None
     items = []
     for spec in registry.for_sport(sport):
         fit = conn.execute("SELECT * FROM model_fits WHERE sport=? AND member=? ORDER BY first_used_at DESC, fit_id DESC LIMIT 1",
@@ -345,21 +389,28 @@ def roster(conn, sport: str, as_of: Optional[str] = None) -> dict:
         shortlisted = any(e.get("shortlisted") for e in evaluation.values())
         status = ("dependency missing" if not registry.available(spec) else
                   "trained" if fit else "registered (trains at first eligible game)")
-        confirmed = bool(combos)
-        eligible = confirmed and settled >= selector.MIN_PICKS
+        state = pool_selection.candidate_state(conn, reg, sport, spec.name, as_of, defn) if reg else {}
+        alone = [m for m, st in state.items() if any(x["route"] == "standalone" for x in st["sources"])]
+        inside = sorted({x["source"] for st in state.values() for x in st["sources"] if x["route"] == "combination"})
+        selected = [f"{m}: {st['decision']['rule']['source']}" for m, st in state.items() if st["selected_now"]]
+        label = ("reference only (never selected)" if spec.role == "reference" else
+                 f"selected now ({'; '.join(selected)})" if selected else
+                 f"selectable alone in {', '.join(alone)} (standalone held-out value); picked only when the pool selector's "
+                 f"evidence thresholds are met" if alone else
+                 f"selectable only inside {', '.join(inside)} (incremental value in a combination); never alone" if inside else
+                 "shortlisted, but no supported standalone or combination value: research only" if shortlisted else
+                 "research only (no supported standalone or combination value)")
         items.append({"name": spec.name, "family": spec.family, "head": spec.head, "features": spec.features,
                       "role": spec.role, "why": spec.why, "markets": list(spec.markets), "refit": spec.refit,
                       "definition": registry.definition(spec), "training_status": status,
                       "latest_fit": dict(fit) if fit else None, "evaluation": evaluation,
                       "prospective": {"games": n, "settled": settled},
-                      "combination_participation": combos,
-                      "selection": ("eligible" if eligible else
-                                    f"selectable after {selector.MIN_PICKS} settled prospective picks (held-out gain in "
-                                    f"{', '.join(combos)})" if confirmed else
-                                    "reference only (never selected)" if spec.role == "reference" else
-                                    "shortlisted, but no held-out gain: recorded for complementarity only" if shortlisted else
-                                    "recorded for complementarity only (not shortlisted)")})
+                      "combination_participation": sorted(state) if reg else combos,
+                      "pool": state, "selection": label})
     return {"sport": sport, "pool": registry.POOL, "as_of": as_of, "candidates": items,
+            "registry": None if reg is None else {"id": pool_selection.registry_id(reg), "effective_from": reg["effective_from"],
+                                                  "routes": reg["routes"], "rule": reg["rule"]},
+            "registry_error": reg_error,
             "family_audit": list(registry.FAMILY_AUDIT),
             "note": "Research only. Evaluations are exploratory (spent seasons); only prospective forecasts can show "
                     "improvement. Candidates never vote and never replace the primary."}

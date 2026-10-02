@@ -271,3 +271,19 @@ def test_demo_api_accepts_the_policy_parameter():
         assert all(g["near_tipoff"] is None for g in c.get("/api/games", params={"date": c.get("/api/meta").json()["default_date"]}).json()["games"])
     finally:
         app.dependency_overrides.pop(get_provider, None)
+
+
+def test_rescheduled_game_is_void_in_every_near_tipoff_record(ready, client):  # noqa: F811
+    """Audit P11: a forecast made for a start that later changed is void — never scored as a win or loss."""
+    near_tipoff.predict_now(ready, now=NOW)
+    # The game is moved 90 minutes later after the forecast was made, then played.
+    moved = "2026-10-22T01:00:00Z"
+    ingest_events(ready, [event("g1", moved, "1", "2", "STATUS_FINAL", 110, 100)], "2026-10-22T04:00:00Z")
+    s = near_tipoff.score(ready)
+    assert s["forecasts"] == 1 and s["scored"]["games"] == 0 and s["start_changed"] == 1 and s["pending"] == 0
+    client.now = "2026-10-22T05:00:00Z"
+    assert client.get("/api/games/espn:g1").json()["near_tipoff"]["correct"] is None
+    hist = client.get("/api/predictions", params={"run_type": "live", "policy": "near_tipoff"}).json()
+    assert hist["total"] == 1 and hist["record"]["settled"] == 0 and hist["predictions"][0]["correct"] is None
+    perf = client.get("/api/performance", params={"run_type": "live", "policy": "near_tipoff"}).json()
+    assert perf["sample_size"] == 0

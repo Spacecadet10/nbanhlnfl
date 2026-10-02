@@ -74,3 +74,42 @@ def test_games_outside_a_rules_condition_record_the_reason(game, monkeypatch):
     rep = rt.report(game, "nhl", "winner", "selected", rt.seal({k: v for k, v in reg.items() if k != "sha256"}))
     r = next(x for x in rep["rules"] if x["level"] == "clear")["prospective"]
     assert r["picks"] == 0 and r["recent"][0]["reason"] == "condition 'clear' not met"
+
+
+def test_conditions_and_stack_constituents_use_the_studied_members():
+    """Audit P3/P5: the sealed NBA winner registry lists availability_two_hour, which the study never saw; conditions and
+    the stack's constituents use the five studied members (the live stacker's inputs), without editing the sealed file."""
+    from app import research_live
+    reg = rt.load_registry()
+    m = reg["markets"]["nba:winner"]
+    assert "availability_two_hour" in m["members"]
+    assert rt.studied_members(m) == list(research_live.CORE["nba"])
+    assert rt.studied_members(reg["markets"]["nhl:winner"])[:4] == list(research_live.CORE["nhl"])
+
+
+def test_recent_probability_is_the_rule_statistic():
+    """Audit P4: an average rule shows the averaged probability, a unanimous-minimum rule its minimum, not member[0]'s."""
+    v = {"a": (0.8, 0.0, 0.2), "b": (0.6, 0.0, 0.4), "stack": (0.7, 0.0, 0.3)}
+    assert rt.rule_statistic({"kind": "avg", "members": ["a", "b"]}, v, "winner", 0) == ("average probability", pytest.approx(0.7))
+    assert rt.rule_statistic({"kind": "unanimous_min", "members": ["a", "b"]}, v, "winner", 0)[1] == 0.6
+    assert rt.rule_statistic({"kind": "single", "members": ["b"]}, v, "winner", 0)[1] == 0.6
+    assert rt.rule_statistic({"kind": "stack", "members": ["a", "b"]}, v, "winner", 0)[1] == 0.7
+
+
+def test_stack_rule_report_compares_with_its_constituents(game):
+    from test_live_markets import add_upcoming
+    reg = registry()
+    body = {k: v for k, v in reg.items() if k != "sha256"}
+    body["markets"]["nhl:winner"]["rules"].append(
+        {"id": "stack|all|0.5|all", "kind": "stack", "members": body["markets"]["nhl:winner"]["members"][:4], "t": 0.5,
+         "level": "all", "selected": "unqualified research", "why": "test", "prospective_only": False, "historical": []})
+    run(game, "2026-10-12T21:30:00Z")
+    add_upcoming(game, start="2026-10-12T19:00:00", state=7, hs=4, vs=1, period=3, at="2026-10-13T02:00:00Z")
+    rep = rt.report(game, "nhl", "winner", "all", rt.seal(body))
+    stack = next(r for r in rep["rules"] if r["kind"] == "stack")["prospective"]
+    if stack["win"] + stack["loss"]:
+        assert [c["model"] for c in stack["constituents_matched"]] == rep["studied_members"]
+    else:                                   # no stacker in this small cohort: the reason is recorded, never a fallback
+        assert stack["recent"][0]["reason"] == "no stacker probability in this cohort"
+    # This fixture's non-stack rules were studied with hockey_elo and hockey_logistic_xg only.
+    assert "cutoff_note" in rep and rep["studied_members"] == ["hockey_elo", "hockey_logistic_xg"]

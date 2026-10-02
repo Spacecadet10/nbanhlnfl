@@ -311,7 +311,27 @@ export interface Candidate {
   name: string; family: string; head: string; features: string; role: string; why: string; markets: string[]; refit: string;
   definition: string; training_status: string; latest_fit: { first_used_at: string; training_games: number; results_available_through: string } | null;
   evaluation: Record<string, CandidateEval>; prospective: { games: number; settled: number }; combination_participation: string[];
-  selection: string;
+  pool?: Record<string, CandidatePoolState>; selection: string;
 }
+// Candidate-pool selection (backend app/candidates/selection.py, docs/CANDIDATE_POOL.md §7). Research only.
+export type PoolRoute = 'standalone' | 'combination';
+export interface PoolEvidence { file: string; key: string; comparison: string; seasons: number[] | null; mean: number | null;
+  ci95: [number, number] | null; games: number | null; weeks: number | null }
+export interface PoolSourceStats { filter: string; threshold: number; picks: number; wins: number; losses: number; pushes: number;
+  coverage: number | null; weeks: number; lift: number | null; lower: number | null; eligible: boolean }
+export interface PoolDecisionState { status: 'active' | 'abstain' | 'insufficient_evidence';
+  rule: { source: string; filter: string; threshold: number } | null; reason: string; evidence_until: string; effective_until: string }
+export interface CandidatePoolState {
+  sources: { source: string; route: PoolRoute; evidence: PoolEvidence; prospective: PoolSourceStats | null }[];
+  decision: PoolDecisionState | null; selected_now: boolean }
 export interface CandidateRoster { mode: Mode; sport: Sport; pool?: string; as_of?: string; candidates: Candidate[];
-  family_audit: unknown[]; note: string }
+  registry?: { id: string; effective_from: string; routes: Record<string, string>; rule: string } | null;
+  registry_error?: string | null; family_audit: unknown[]; note: string }
+export interface PoolSourceReport { source: string; kind: 'single' | 'average'; members: string[]; candidates: string[];
+  route: PoolRoute; evidence: PoolEvidence; settled_with_vector: number; best_rule: PoolSourceStats | null }
+export interface PoolReport { mode: Mode; sport: Sport; registry?: string; effective_from?: string; as_of?: string;
+  routes?: Record<string, string>; rule?: string;
+  markets: Record<string, { sources: PoolSourceReport[]; settled_cohorts: number;
+    decisions: { scheduled_for: string; decided_at: string; effective_until: string; status: string;
+                 rule: { source: string; filter: string; threshold: number } | null; lower_bound: number | null; reason: string }[] }>;
+  note: string }

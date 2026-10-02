@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { api } from '../api/client';
 import type {
-  CalibrationBin, Candidate, CandidateRoster, MarketId, RegisteredRule, ResearchExpanded, RuleReport, ResearchGame, ResearchMarket, ResearchRecord, ResearchReport, ResearchSlateEntry, Retrospective, RetroMarket, Side, Sport, Vector,
+  CalibrationBin, Candidate, CandidatePoolState, CandidateRoster, PoolReport, MarketId, RegisteredRule, ResearchExpanded, RuleReport, ResearchGame, ResearchMarket, ResearchRecord, ResearchReport, ResearchSlateEntry, Retrospective, RetroMarket, Side, Sport, Vector,
 } from '../api/types';
 import { useApi } from '../api/useApi';
 import { AsyncView, Empty } from './States';
@@ -244,7 +244,7 @@ function RosterBody({ r, market }: { r: CandidateRoster; market: MarketId }) {
     <p className="small muted">{r.note} Log-loss differences are against the strongest existing member (negative = better).</p>
     <div className="table-wrap"><table className="table small">
       <thead><tr><th>Candidate</th><th>Markets</th><th>Training</th><th>Latest fit</th><th>{MARKET[market]}: screen (backtest)</th>
-        <th>{MARKET[market]}: held-out (backtest)</th><th>Prospective games</th><th>Combinations</th><th>Selection</th></tr></thead>
+        <th>{MARKET[market]}: held-out (backtest)</th><th>Prospective games</th><th>{MARKET[market]}: pool sources</th><th>Selection</th></tr></thead>
       <tbody>{rows.map((c) => <CandidateRow key={c.name} c={c} market={market} />)}</tbody>
     </table></div>
   </>;
@@ -260,8 +260,58 @@ function CandidateRow({ c, market }: { c: Candidate; market: MarketId }) {
     <td>{e ? <>{llDiff(e.vs_strongest)}{e.shortlisted && <span className="ok"> · shortlisted</span>}</> : <span className="muted">—</span>}</td>
     <td>{e?.assess ? <>{llDiff(e.assess.vs_strongest)}{e.assess.confirmed_gains.length > 0 && <span className="ok"> · gain confirmed</span>}</> : <span className="muted">—</span>}</td>
     <td>{c.prospective.games} <span className="muted">({c.prospective.settled} settled)</span></td>
-    <td className="wrap">{c.combination_participation.length ? c.combination_participation.map((m) => MARKET[m] ?? m).join(', ') : '—'}</td>
-    <td className="wrap">{c.selection}</td></tr>;
+    <td className="wrap"><PoolSources st={c.pool?.[market]} /></td>
+    <td className="wrap">{c.selection}{c.pool?.[market]?.decision && <div className="muted">
+      {MARKET[market]} pool decision: {decisionLabel(c.pool[market].decision!)}</div>}</td></tr>;
+}
+
+const ROUTE: Record<string, string> = { standalone: 'standalone route', combination: 'combination route' };
+
+function decisionLabel(d: { status: string; rule: { source: string; filter: string; threshold: number } | null; reason: string }): string {
+  return d.status === 'active' && d.rule ? `${d.rule.source} / ${d.rule.filter} / ${d.rule.threshold.toFixed(2)}`
+    : d.status === 'insufficient_evidence' ? 'insufficient evidence' : d.status;
+}
+
+/** A candidate's selector sources in one market: the sealed route and, once decided, the prospective record. */
+function PoolSources({ st }: { st: CandidatePoolState | undefined }) {
+  if (!st || st.sources.length === 0) return <span className="muted">not a selector source</span>;
+  return <>{st.sources.map((x) => <div key={x.source}>{x.source} <span className="muted">({ROUTE[x.route] ?? x.route}
+    {x.prospective ? `; ${x.prospective.wins}-${x.prospective.losses} prospective` : ''})</span></div>)}</>;
+}
+
+/** Candidate-pool selector: sealed sources per market (standalone or in-combination value on held-out seasons), their
+ *  prospective record on settled cohorts, and the weekly pool decisions. Separate from the core selector. */
+export function PoolSelectionCard({ sport, market }: { sport: Sport; market: MarketId }) {
+  const { state, retry } = useApi((s) => api.researchPool(sport, s), [sport]);
+  return <div className="card">
+    <h2>Candidate-pool selector <span className="badge badge-research">Research</span></h2>
+    <AsyncView state={state} retry={retry}>{(r) => <PoolBody r={r} market={market} />}</AsyncView>
+  </div>;
+}
+
+function PoolBody({ r, market }: { r: PoolReport; market: MarketId }) {
+  const m = r.markets[market];
+  if (!m) return <Empty>{r.mode === 'demo' ? r.note : `No candidate-pool sources registered for ${MARKET[market] ?? market}.`}</Empty>;
+  const d = m.decisions[0];
+  return <>
+    <p className="small muted">Registry {r.registry} (effective {r.effective_from ? dateTime(r.effective_from) : '—'}). {r.rule}</p>
+    <p className="small">{d ? <>Pool decision for the week from {dateTime(d.scheduled_for)}: <strong>{decisionLabel(d)}</strong>
+      {d.status !== 'active' && <span className="muted"> — {d.reason}</span>}</> : <span className="muted">No pool decision written yet.</span>}
+      {' '}<span className="muted">· {m.settled_cohorts} settled cohorts</span></p>
+    <div className="table-wrap"><table className="table small">
+      <thead><tr><th>Source</th><th>Route</th><th>Held-out evidence (backtest)</th><th>Settled with vector</th><th>Best rule (prospective)</th></tr></thead>
+      <tbody>{m.sources.map((x) => <tr key={x.source}>
+        <th scope="row" className="wrap">{x.source}</th>
+        <td>{ROUTE[x.route] ?? x.route}</td>
+        <td className="wrap">{llDiff(x.evidence.mean)} {x.evidence.ci95 && <span className="muted">[{x.evidence.ci95.map((v) => v.toFixed(4)).join(', ')}]</span>}
+          <div className="muted">{x.evidence.comparison}</div></td>
+        <td>{x.settled_with_vector}</td>
+        <td className="wrap">{x.best_rule ? <>{x.best_rule.wins}-{x.best_rule.losses} at {x.best_rule.threshold.toFixed(2)} ({x.best_rule.filter})
+          {x.best_rule.lower != null && <span className="muted"> · lower bound {x.best_rule.lower.toFixed(3)}</span>}</> : <span className="muted">—</span>}</td>
+      </tr>)}</tbody>
+    </table></div>
+    <p className="small muted">{r.note}</p>
+  </>;
 }
 
 export function ResearchPerformance({ sport, market }: { sport: Sport; market: MarketId }) {

@@ -87,7 +87,8 @@ class RealProvider:
         if row is None:
             return None
         p = row["home_win_prob"]
-        correct = None if g["status"] != "final" else (p >= 0.5) == (g["home_score"] > g["away_score"])
+        void = row["cutoff_at"] != g["tipoff_at"]           # start changed after the forecast: void, never scored
+        correct = None if g["status"] != "final" or void else (p >= 0.5) == (g["home_score"] > g["away_score"])
         return NearTipoffForecast(
             model_version=row["model_version"], generated_at=row["generated_at"], cutoff_at=row["cutoff_at"],
             home_win_prob=p, pick="home" if p >= 0.5 else "away", confidence=pick_confidence(p),
@@ -262,7 +263,7 @@ class RealProvider:
         if r["market_quote_id"] is not None:
             quote = MarketQuoteOut(bookmaker=r["quote_provider"], retrieved_at=r["quote_retrieved_at"], line=r["line"],
                                    price_a=r["price_a"], price_b=r["price_b"], prob_a=r["p_a_devig"], prob_b=r["p_b_devig"])
-        outcome = market_live.outcome(r)
+        outcome = near_tipoff.market_outcome(r)
         result = market_live.result_for_pick(r["market"], side, outcome) if outcome in ("a", "b", "mid") else outcome
         sides = [MarketSide(side="a", label=labels[0], probability=r["p_a"])]
         if r["market"] == "reg3" or r["p_mid"] > 0:
@@ -332,7 +333,7 @@ class RealProvider:
 
     def market_performance(self, market: str, policy: str) -> MarketPerformanceResponse:
         rows = self._market_records(market, policy, None)
-        settled_side = {(x["game_id"], x["market"]): market_live.outcome(x)
+        settled_side = {(x["game_id"], x["market"]): near_tipoff.market_outcome(x)
                         for x in market_live.latest(self.conn, policy=policy, market=market)}
         settled = [r for r in rows if settled_side[(r.game_id, r.forecast.market)] in ("a", "mid", "b")]
 
@@ -390,7 +391,8 @@ class RealProvider:
             if team and team.upper() not in (home.abbr, away.abbr):
                 continue
             outcome = None
-            if r["status"] == "final":
+            moved = policy == "near_tipoff" and r["cutoff_at"] != r["tipoff_at"]    # void: made for a different start
+            if r["status"] == "final" and not moved:
                 outcome = Outcome(home_score=r["home_score"], away_score=r["away_score"],
                                   home_won=r["home_score"] > r["away_score"])
             out.append(PredictionRecord(
@@ -406,6 +408,8 @@ class RealProvider:
         primary = self.near_version if policy == "near_tipoff" else self.model_version
         def scored(model_version: str) -> list[sqlite3.Row]:
             rows = [r for r in self._latest_rows(run_type, model_version) if r["status"] == "final"]
+            if policy == "near_tipoff":     # a forecast made for a start that later changed is void
+                rows = [r for r in rows if r["cutoff_at"] == r["tipoff_at"]]
             if run_type == "backtest":
                 rows = [r for r in rows if r["season"] in self.periods["test"]]
             return rows

@@ -58,7 +58,7 @@ def report(conn, now=None):
             continue
         side = market_live.pick(r)
         conf = r['p_a'] if side == 'a' else r['p_b']
-        result = market_live.outcome(r)
+        result = near_tipoff.market_outcome(r)
         available = conn.execute('SELECT result_available_at FROM games WHERE game_id=?', (r['game_id'],)).fetchone()[0]
         if result not in ('pending', 'void') and (not available or available > now):
             result = 'pending'

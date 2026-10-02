@@ -242,6 +242,21 @@ def research_candidates(p=Depends(get_provider)):
     return {**pool_live.roster(p.conn, p.sport, p.now), "mode": "real"}
 
 
+@app.get("/api/research/pool")
+def research_pool(p=Depends(get_provider)):
+    """Candidate-pool selection (docs/CANDIDATE_POOL.md §7): the sealed registry's sources per market, their prospective
+    record and the pool decisions. Separate from the core selector. Research only."""
+    if p.mode != "real":
+        return {"mode": "demo", "sport": "nba", "markets": {}, "note": "The pool selector reads the real stores; none in demo mode."}
+    _research_store(p)
+    from .candidates import selection
+    try:
+        out = selection.report(p.conn, p.sport, p.now)
+    except selection.RegistryError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    return {**out, "mode": "real"}
+
+
 @app.get("/api/research/retrospective")
 def research_retrospective(p=Depends(get_provider)):
     from . import combination_research

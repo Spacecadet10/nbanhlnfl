@@ -1,7 +1,7 @@
 // The app's single API client. All screens fetch through here; there is no local fallback data.
 import type {
   ThresholdReport, AgreementPerformance, GameDetail, GamesResponse, HistoryResponse, MarketHistoryResponse, MarketId, MarketPerformanceResponse, Meta,
-  PerformanceResponse, Policy, ResearchGame, ResearchHistory, ResearchReport, ResearchSlate, Retrospective, RuleReport, CandidateRoster, Sport,
+  PerformanceResponse, Policy, ResearchGame, ResearchHistory, ResearchReport, ResearchSlate, Retrospective, RuleReport, CandidateRoster, PoolReport, Sport,
 } from './types';
 
 export class ApiError extends Error {
@@ -78,6 +78,7 @@ export const api = {
   researchRules: (sport: Sport, market: MarketId, show: 'selected' | 'all', signal?: AbortSignal) =>
     get<RuleReport>('/research/rules', { sport, market, show }, signal),
   researchCandidates: (sport: Sport, signal?: AbortSignal) => get<CandidateRoster>('/research/candidates', { sport }, signal),
+  researchPool: (sport: Sport, signal?: AbortSignal) => get<PoolReport>('/research/pool', { sport }, signal),
   researchHistory: (sport: Sport, signal?: AbortSignal) => get<ResearchHistory>('/research/history', { sport }, signal),
   researchRetrospective: (sport: Sport, signal?: AbortSignal) => get<Retrospective>('/research/retrospective', { sport }, signal),
 };

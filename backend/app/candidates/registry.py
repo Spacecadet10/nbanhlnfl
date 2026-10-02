@@ -1,6 +1,8 @@
 """Candidate registry (docs/CANDIDATE_POOL.md). Adding a candidate = one `Spec` line; the walk, fitting, study, live
-recording, cohorts, selector and roster all read this list. Nothing here is a mandatory voter: the pool selector may pick a
-single candidate, a registered combination, or no pick, using only evidence available before its decision.
+recording and roster read this list. Nothing here is a mandatory voter. The pool selector does not read this list directly:
+it reads the sealed pool registry (candidates/selection.py, pool_rules.json) frozen from the held-out evidence, in which a
+candidate is a source alone (standalone route), only inside a registered average (combination route), or not at all
+(research only). The selector then picks a source, a registered combination or no pick, using only earlier evidence.
 """
 import hashlib
 import json
@@ -108,12 +110,13 @@ FAMILY_AUDIT = (
                "pandas, matplotlib), so a dependency-free heteroscedastic linear model is registered beside it."},
     {"family": "Negative binomial goals", "decision": "rejected (evidence)",
      "detail": "NHL regulation goals given goals_poisson rates have Pearson dispersion 1.02 (home) and 0.96 (away), "
-               "2018–21, 4,877 games: no overdispersion for a negative binomial to model."},
+               "2018–21, 4,877 games: no overdispersion for a negative binomial to model "
+               "(docs/evidence/repo-review/probe_nhl_goal_dependence.py/.out)."},
     {"family": "Bivariate Poisson (shared component)", "decision": "rejected (evidence)",
-     "detail": "Residual home/away goal correlation is −0.05; a shared Poisson component can only add positive "
-               "correlation."},
+     "detail": "Residual home/away goal correlation is −0.05 (probe_nhl_goal_dependence); a shared Poisson component "
+               "can only add positive correlation."},
     {"family": "Dixon–Coles low-score correction", "decision": "rejected (covered)",
-     "detail": "Excess draws appear at every tied score (1-1 3.7% vs 2.7%, 2-2 7.1% vs 5.4%, 3-3 7.0% vs 4.8%), not "
+     "detail": "Excess draws appear at every tied score (probe_nhl_goal_dependence: 1-1 3.6% vs 2.7%, 2-2 7.1% vs 5.4%, 3-3 7.0% vs 4.8%), not "
                "only 0-0/1-1; the existing diagonal inflation (goals_draw) and the new poisson_draw cover this."},
     {"family": "NBA player / lineup impact", "decision": "deferred",
      "detail": "Lineups are postgame facts; the timestamped pregame input is the injury report, already used by "

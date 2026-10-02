@@ -121,6 +121,29 @@ def explain(rule: dict, vectors: dict, market: str, row: dict) -> str:
     return "probability below threshold"
 
 
+def studied_members(m: dict) -> list:
+    """Members the frozen rules were studied with, in registry order: the members of every rule not flagged
+    `prospective_only` (the sealed registry lists later members too, e.g. NBA availability_two_hour). Conditions
+    (disagreement, favourite) and the stack's constituents use this set, as the study did (audit P3)."""
+    studied = {x for r in m["rules"] if not r["prospective_only"] and r["kind"] != "stack" for x in r["members"]}
+    return [x for x in m["members"] if x in studied] or list(m["members"])
+
+
+def rule_statistic(rule: dict, vectors: dict, market: str, side: int) -> tuple[str, float]:
+    """(label, value) the rule compared with its threshold for the picked side, for display (audit P4)."""
+    kind = rule["kind"]
+    if kind == "stack":
+        return "stacker probability", vectors["stack"][side]
+    vecs = [vectors[x] for x in rule["members"]]
+    if kind == "single":
+        return "probability", vecs[0][side]
+    if kind == "avg":
+        return "average probability", combine.average(vecs)[side]
+    if kind == "unanimous_min":
+        return "minimum member probability", min(v[side] for v in vecs)
+    return "mean member probability", sum(v[side] for v in vecs) / len(vecs)
+
+
 def _state(row) -> str:
     from .research_live import state
     return state(row, "9999")
@@ -139,16 +162,17 @@ def report(conn, sport: str, market: str, show: str = "selected", reg: Optional[
         return {"sport": sport, "market": market, "status": "no_registered_rules", "rules": []}
     cohorts = [r for r in _cohorts(conn, market, m["cohort"] == "expanded") if r["generated_at"] >= reg["effective_from"]]
     fav = _favourites(conn)
+    studied = studied_members(m)
     items = []
     for r in cohorts:
         vectors = {x["name"]: x["p"] for x in json.loads(r["members"])}
         st = json.loads(r["stack"])
         if st and st.get("p"):
             vectors["stack"] = st["p"]
-        p0 = vectors.get(m["members"][0])
+        p0 = vectors.get(studied[0])
         row = {"favourite": fav.get(r["game_id"], max(p0[0], p0[2]) if p0 and market == "winner" else 0.5),
-               "disagreement": disagreement(vectors, [x for x in m["members"] if x in vectors], m["members"][0], market)
-               if all(x in vectors for x in m["members"]) else None}
+               "disagreement": disagreement(vectors, studied, studied[0], market)
+               if all(x in vectors for x in studied) else None}
         status = _state(r)
         realised = _realised(market, r) if status == "settled" else None
         items.append({"cohort": r, "vectors": vectors, "row": row, "status": status, "realised": realised,
@@ -186,9 +210,9 @@ def report(conn, sport: str, market: str, show: str = "selected", reg: Optional[
                 w = weeks.setdefault(i["week"], {"win": 0, "loss": 0, "push": 0})
                 w[o] += 1
             if len(recent) < 10:
-                recent.append({"game_id": i["cohort"]["game_id"], "decision": SIDE_NAMES[s], "probability": i["vectors"].get(
-                    rule["members"][0] if rule["kind"] == "single" else "stack" if rule["kind"] == "stack" else rule["members"][0])[s],
-                    "outcome": o, "line": i["cohort"]["line"], "generated_at": i["cohort"]["generated_at"],
+                label, value = rule_statistic(rr, i["vectors"], market, s)
+                recent.append({"game_id": i["cohort"]["game_id"], "decision": SIDE_NAMES[s], "probability": value,
+                    "statistic": label, "outcome": o, "line": i["cohort"]["line"], "generated_at": i["cohort"]["generated_at"],
                     "minutes_before_start": round((datetime.strptime(i["cohort"]["tipoff_at"], "%Y-%m-%dT%H:%M:%SZ")
                                                    - datetime.strptime(i["cohort"]["generated_at"], "%Y-%m-%dT%H:%M:%SZ")).total_seconds() / 60, 1)})
         decided = res["win"] + res["loss"]
@@ -208,7 +232,7 @@ def report(conn, sport: str, market: str, show: str = "selected", reg: Optional[
                 if len(flags) >= decided:
                     break
             return {"model": name, "games": len(flags), "accuracy": sum(flags) / len(flags) if flags else None}
-        cons = rule["members"] if rule["kind"] != "stack" else []
+        cons = rule["members"] if rule["kind"] != "stack" else studied      # the live stacker's inputs (audit P5)
         out.append({**rule, "prospective": {
             "eligible_games": len(eligible), "picks": len(picked), "coverage": len(picked) / len(eligible) if eligible else None,
             **res, "accuracy": res["win"] / decided if decided else None, "ci95": nhl_eval._wilson(res["win"], decided),
@@ -217,9 +241,13 @@ def report(conn, sport: str, market: str, show: str = "selected", reg: Optional[
             "weeks": [{"week": k, **v} for k, v in sorted(weeks.items())], "recent": recent}})
     return {"sport": sport, "market": market, "kind": "prospective research (combination rules)", "study": reg["study"],
             "registry_sha256": reg["sha256"], "effective_from": reg["effective_from"], "cohort_source": m["cohort"],
-            "members": m["members"], "comparator": m["comparator"], "cohorts": len(items), "show": show,
+            "members": m["members"], "studied_members": studied, "comparator": m["comparator"], "cohorts": len(items),
+            "show": show,
             "registered_rules": len(m["rules"]), "selected_rules": sum(1 for x in m["rules"] if x["selected"]),
             "frontier_historical": m["frontier"], "rules": out,
+            "cutoff_note": "Thresholds and conditions were frozen on night-before study tables; they are scored here on "
+                           "two-hour cohorts, which carry later information, so prospective results are not a like-for-like "
+                           "replication of the study (audit P6).",
             "note": "Historical numbers are exploratory (reused seasons). Prospective numbers count one canonical decision per "
                     "game, market and rule from cohorts recorded within two hours before the start. Research only: nothing here "
                     "is used by the selector, recommended or promoted."}

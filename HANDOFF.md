@@ -1,5 +1,42 @@
 # Current handoff
 
+## Pool selection + audit fixes P1–P14 — Claude (-b6, single writer), 2026-10-02 ~20:15–21:30 UTC (branch pool-selector)
+Worktree `../nba-predictor-poolsel`, branch `pool-selector` from 9d3e50e. **Not merged** into shadow-season (live): left for
+Codex review. -66 and -6b were paused (messages 20:1xZ; -6b confirmed; -66 blocked on its own prompt with a stand-down queued).
+- **Integrity first (each with a regression test that fails on the old code):** P11 a rescheduled game is void in every
+  near-tipoff winner record (`near_tipoff.score`, API correct/history/performance); P12 a two-hour market forecast is void
+  on any start change (`near_tipoff.market_outcome`, used by the API and tracking); P13 migration 0020 tightens the
+  candidate-forecast trigger (scheduled game, well-formed time); P14 `jobs.predict` / `jobs.market_forecasts(policy=
+  "pregame")` refuse before writing; P8 candidate artifacts verified by a sha256 sidecar before unpickling (mismatch →
+  that candidate unavailable, no refit/substitute; legacy files older than 0020 adopted once, reported); P9 exact-line join.
+- **P1 pool selection (`candidates/selection.py`, sealed `candidates/pool_rules.json` 99c3f7cf…, effective 20:22:45Z):**
+  routes standalone or combination (with/without the candidate, held-out, CI upper < 0, average beats the strongest);
+  combination-only candidates are sources only as their average (NBA `hetero_linear` → only
+  `avg:points_normal+cand:hetero_linear:nba_base`). Weekly `pool_decisions` (unchanged selector arithmetic and
+  thresholds, earlier-only settled core cohorts, frozen week) and `pool_selections` after `candidate_pool` in the cycle;
+  separate tables (0020) so v1 is untouched. `/api/research/pool`, `pool-rules`, `pool-report`; roster eligibility =
+  route + pool decision in force (P2); Performance → "Candidate-pool selector".
+- **Also:** P3 rule tracking uses the studied members (NBA winner: 5, not the 6 listed); P4 recent probability = the rule
+  statistic; P5 stack rules compared with constituents; P6 night-before vs two-hour disclosure; P7 experiment log lists
+  skipped/failed configs; P10 `docs/evidence/repo-review/probe_nhl_goal_dependence.py/.out` reproduces 4,877 games,
+  dispersion 1.015/0.961, residual corr −0.052, ties (1-1 is 3.6%, docs said 3.7%: corrected); REPO_REVIEW wording for
+  unkept sdv files, optuna verdict, nhle goalie probe cited.
+- **Acceptance (tests/test_pool_selection.py, synthetic stores through the real guards):** the selector picks an eligible
+  individual candidate; picks an eligible combination whose candidate is not selectable alone (a forged single rule →
+  "source unavailable"); < 100 picks → insufficient evidence; no better than reference → abstain; missing candidate →
+  no-pick, no substitute; research rows keep accumulating while evidence is insufficient; frozen weekly; idempotent.
+- **Verification:** see SMOKE_TEST "Pool selection, integrity fixes". New vs audited code on the same snapshot: every shared
+  table identical row-for-row; core definitions NBA 28b64a0bac80ca86 / NHL 5040a9e7ad2ab51c and selector-v1:e00a275e092a
+  unchanged. Upgrade of a copy of the current live store: 0020 applied, 9 legacy artifacts adopted, 63 candidate forecasts,
+  0 errors. Full suite 437 passed / 0 skipped; `backend/.venv/bin/python scripts/check_project.py --ready` exit 0 (structure, typecheck, build, 438 passed, 0 skipped; 21:3xZ).
+- **Unverified / remaining:** real settled prospective evidence (none exists; every pool decision is insufficient evidence,
+  correctly); phone-width browser check of the new card; `market_live.score` (CLI and daily summary) still uses the 12 h
+  void rule, because changing hashed `market_live.py`/`markets.py` would start a new core definition (user decision);
+  library functions `live.predict` / `market_live.forecast(policy="pregame")` remain callable directly (no job/CLI path).
+- **Before merging into live:** back up both stores (every CLI start runs `db.migrate`, so 0020 applies on the next job);
+  merge between two-hour cycles; first cycle afterwards should report `artifacts_adopted` (9 NHL) and no pool errors.
+- **Next:** Codex independent review of 9d3e50e..pool-selector.
+
 ## Candidate-pool integration — Claude, 2026-10-02 ~18:25–19:00 UTC
 - Integrated session -6b's pool-v1 (docs/CANDIDATE_POOL.md, CANDIDATE_POOL_RESULTS.md): migration 0019 `candidate_forecasts`,
   two-hour recording after the research cohorts (`jobs.candidate_pool`, non-fatal), roster API and Performance card.

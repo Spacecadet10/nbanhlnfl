@@ -1,0 +1,10 @@
+games: 4877 (regulation scores, seasons [2018, 2019, 2020, 2021], goals_poisson config {'eta': 0.003, 'carry': 0.75})
+pearson dispersion: home 1.015, away 0.961  (1 = Poisson; > 1 = overdispersion)
+residual home/away correlation (Pearson residuals): -0.052
+tied regulation scores, observed vs expected under independent Poisson with each game's rates:
+  0-0: observed 0.5%  expected 0.3%  ratio 1.30
+  1-1: observed 3.6%  expected 2.7%  ratio 1.35
+  2-2: observed 7.1%  expected 5.4%  ratio 1.32
+  3-3: observed 7.0%  expected 4.8%  ratio 1.45
+  4-4: observed 3.3%  expected 2.5%  ratio 1.32
+  any tie: observed 22.4%  expected 16.8%  ratio 1.34

@@ -352,3 +352,34 @@ Worktree `../nba-predictor-selector` (branch `selector-dev`), merged into `shado
   21 candidate forecasts in 37 s (`research-cand:` prefix; puck line at the core cohort's exact −1.5 line). Roster: 9 NHL
   candidates trained; `poisson_draw:nhl_base` held-out gains in reg3 / puck line / away team total, "selectable after 100
   settled prospective picks". Browser (ports 8024/5194, clock pinned): roster card renders, 386 = viewport at 390 px, no console errors.
+
+## Pool selection, integrity fixes (audit P1–P14) — Claude (-b6), 2026-10-02 ~20:15–21:30 UTC (worktree ../nba-predictor-poolsel, branch pool-selector)
+All runs on scratch copies of the live stores (SQLite backup API; scratchpad `dA` new code, `dB` audited 9d3e50e code, `dC`
+copy of the live store taken 20:53Z with its 9 legacy candidate artifacts). Network steps stubbed (refresh, odds, NHL pbp);
+everything else the real `jobs.selector_decisions` + `jobs.predict_now` wiring. Clock fixed.
+- **Core identities unchanged:** `research_live.definition` NBA `28b64a0bac80ca86`, NHL `5040a9e7ad2ab51c`, `selector-v1:e00a275e092a`
+  before and after; every hashed file (research_live, combine, markets, market_live, selector, models/*, retrain_cadence,
+  fit_register, agreement, backtest, availability*, candidates/{features,learners,engine,goalies}, combination_rules.json)
+  byte-identical to 9d3e50e (`git diff --quiet`).
+- **New vs audited code, same snapshot, now 2026-10-02T21:00Z (nhl:2026020017/18 in the window), two cycles:** identical row
+  counts AND rows (`SELECT *` compared) in predictions 8680, near_tipoff_forecasts 2, market_forecasts 510, research_cohorts
+  14, selector_decisions 30, research_selections 12, candidate_forecasts 42, model_fits 14. The second cycle wrote nothing
+  new in either. New code only: 0020 applied, pool_decisions 3 (reg3, spread, team_total_away: insufficient evidence, 0
+  settled cohorts, 210/198/198 rules), pool_selections 6 (no-pick "selector insufficient_evidence"; every registered source
+  joined — 9/6/6 vectors — from candidate forecasts whose line_ref names the same cohort at the same line; 0 of 16
+  line-market candidate rows lack a matching core-cohort reference).
+- **Guards on the copy:** candidate inserts 3 h before, at the start and with a malformed time rejected; a pool selection at
+  the start rejected; UPDATE pool_decisions / DELETE pool_selections rejected (append-only).
+- **Upgrade of the current live store (copy `dC`, schema 19, 7 real cohorts, 21 real candidate forecasts, 9 artifacts
+  without digests), now 22:10Z:** 0020 applied; the 9 legacy artifacts adopted once (digests written, listed in the
+  cycle output); 63 candidate forecasts, 9 pool selections, 0 errors; retry 0 new, 0 adopted.
+- **NBA copy:** 0020 applied; pool decision team_total_home insufficient evidence; v1 decisions still 30.
+- **Browser (API :8031 + Vite :5181 on `dA`, real clock after 21:00Z), desktop:** Performance → NHL → Regulation 3-way:
+  "Candidate-pool selector" card (registry 99c3f7cf1a080c6f, decision "insufficient evidence — no rule has 100+ settled
+  picks…", 9 sources with route and held-out CI); roster rows show per-market pool sources and "Regulation 3-way pool
+  decision: insufficient evidence"; 2 prospective games per candidate. NBA → Home team total: one source
+  `avg:points_normal+cand:hetero_linear:nba_base`; roster (same API) "selectable only inside … never alone". Route label
+  then changed from "in combination only" to "combination route" (typecheck passed; not re-screenshotted).
+  **Phone width: unverified** in this run (the window resize did not change the captured viewport); the card uses the
+  existing `table-wrap` pattern.
+- **Tests:** `backend/.venv/bin/python scripts/check_project.py --ready` exit 0: structure guard, typecheck, build, 438 passed, 0 skipped (4 min 15 s).

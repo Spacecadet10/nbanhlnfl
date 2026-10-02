@@ -15,7 +15,7 @@ Environment that resolved in `.venv` (one `uv pip install`, no conflicts): Pytho
 |---|---|---|---|---|---|---|---|
 | 1 | catboost/catboost | eb5a7d1 (2026-10-02) | Apache-2.0 | not re-installed (already rejected) | very active; 738 open issues+PRs; PyPI 1.2.10 (2026-02-18) | `RMSEWithUncertainty` = Gaussian NLL with diagonal-Newton leaves | **Reject** (retest only under a specific hypothesis, see §1) |
 | 2 | stanfordmlgroup/ngboost | 6aadc1f (2026-09-01) | Apache-2.0 | **yes**: 0.5.11 runs with sklearn 1.9.1, numpy 2.5.3 | active; 50 open; PyPI 0.5.11 (2026-06-26) | `NGBRegressor(Dist=Normal)`, a heteroscedastic Normal for margin/total | **Adopt (as an experiment)** with a seeded `Base` and a chronological `X_val` |
-| 3 | optuna/optuna | 5c8e50d (2026-09-30) | MIT | yes, 5.0.0 | very active; 19 open | TPESampler(seed) + MedianPruner + sqlite RDB storage | **Adopt** for bounded, logged searches |
+| 3 | optuna/optuna | 5c8e50d (2026-09-30) | MIT | yes, 5.0.0 | very active; 19 open | TPESampler(seed) + MedianPruner + sqlite RDB storage | **Adopt when a declared search is run** (not used in pool-v1: every setting declared, nothing searched) |
 | 4 | dblackrun/pbpstats | e7ccf2f (2024-04-16) | MIT | installs (only dep is requests) | stale since 2024-04; 16 open | possession/lineup parser (live S3 pbp source still works) | **Reference only** (lineups are postgame; the stats.nba.com `playbyplayv2` source returned an empty `{}`) |
 | 5 | sportsdataverse/fastRhockey | 5ce9fda (2026-09-30) | MIT (LICENSE.md) | R, not run | active; 0 open | loaders → sportsdataverse-data releases; XGBoost xG that has no training code | **Reference only** |
 | 6 | sportsdataverse/sportsdataverse-data | d15f769 (2026-10-01) | MIT (code); data terms not stated | parquet reads with pandas 3 / pyarrow 25 | very active (releases updated 2026-10-01) | `nhl_goalie_boxscores`, `nba_stats_player_boxscores`, `nba_player_impact`, `nhl_pbp_*` parquet | **Adapt** (backfill/cross-check only; season-aggregate tables leak) |
@@ -114,14 +114,15 @@ Environment that resolved in `.venv` (one `uv pip install`, no conflicts): Pytho
   - `R/zzz.R:16-19, 41-92` downloads three XGBoost JSON boosters from `raw.githubusercontent.com/sportsdataverse/fastRhockey-nhl-data/main/models/` on load.
   - `R/helpers_nhl.R:1-10` says the models were "trained on NHL PBP data from 2010-2024" and uses era dummies (`R/nhl_xg.R:27-31`).
   - **No training code or evaluation is in this repo**, and the release notes say "no publishing code exists in any public repository."
-  - The feature list (`docs/evidence/repo-review/sdv_dl/feats_5v5.txt`, 36 features) has era dummies, distance, angle, rebound, rush, time and distance since the last event, cross-ice, empty net, shot types and last-event dummies.
+  - The feature list (36 features; read from a downloaded `sdv_dl/feats_5v5.txt` that was **not kept** in the repository) has era dummies, distance, angle, rebound, rush, time and distance since the last event, cross-ice, empty net, shot types and last-event dummies.
+- Pregame starter: `probe_nhle_goalie.py`/`.out` (one schedule and one landing request): the api-web.nhle.com landing page for an upcoming game lists only season goalie leaders (`matchup.goalieComparison`), **no projected starter**. Pregame starters therefore come from the ESPN listings stored in `goalie_snapshots`.
 - Goalie fields: `R/nhl_game_feed.R:73-108` provides home/away goalie on ice, goalie ids and `goalie_in` flags. Lines 592-617 and 656-666 derive `event_goalie_id` from `details.goalieInNetId`, which is the same field available from api-web.nhle.com play-by-play.
 - **Leakage note:** the published xG boosters were fit on 2010–2024 shots, so using them to build features for any backtest season in 2010–2024 is in-sample. Our own xG model, refit chronologically, avoids this.
 - **Verdict: reference only.** The xG feature list (cross-ice, rush, last-event types) is a checklist for extending our xG model. Do not use their boosters in backtests.
 
 ## 6. sportsdataverse/sportsdataverse-data
 
-- HEAD `d15f7693a2d4d2cd9570e619c9d6df4fdea87c3c`, 2026-10-01. MIT (`LICENSE`, covering the R package code). 1 open. The repo itself is an R package. The data live in **377 GitHub releases**, listed through the unauthenticated API because `gh` is not logged in. Raw JSON is in `docs/evidence/repo-review/sdv_releases*.json`.
+- HEAD `d15f7693a2d4d2cd9570e619c9d6df4fdea87c3c`, 2026-10-01. MIT (`LICENSE`, covering the R package code). 1 open. The repo itself is an R package. The data live in **377 GitHub releases**, listed through the unauthenticated API because `gh` is not logged in. The raw listing JSON (`sdv_releases*.json`) was **not kept**; it is re-fetchable from `https://api.github.com/repos/sportsdataverse/sportsdataverse-data/releases`.
 - Relevant tags, with dates published or last written:
   - `nhl_goalie_boxscores`: 2010–2027, updated 2026-10-01.
   - `nhl_pbp_full`: 2010–2027, 8.8 GB.
@@ -131,7 +132,7 @@ Environment that resolved in `.venv` (one `uv pip install`, no conflicts): Pytho
   - `nba_stats_player_boxscores`, `nba_stats_game_lineups`, `nba_stats_pbp`, `nba_stats_possessions`: 1997–2026.
   - `nba_player_impact`: 1997–2026.
   - `espn_nba_injuries` and `espn_nba_depthcharts`: 2027 only.
-- **Probe** `docs/evidence/repo-review/probe_sdv_assets.py`. Downloads all returned HTTP 200 (`docs/evidence/repo-review/sdv_dl/`):
+- **Probe** `docs/evidence/repo-review/probe_sdv_assets.py` (output `probe_sdv_assets.out`). Downloads all returned HTTP 200; the files in `sdv_dl/` were **not kept**, so re-running the probe needs them downloaded again from `https://github.com/sportsdataverse/sportsdataverse-data/releases/download/<tag>/<file>`:
   - `goalie_box_2025.parquet` (78 KB), 5,592 × 24. Columns include `player_id, team_id, home_away, starter, decision, toi, shots_against, saves, goals_against, even_strength_/power_play_/shorthanded_ shots_against ("25/26" strings), save_pctg, game_id, game_date` covering 2024-10-04 → 2025-06-17. **Goalie identity: yes. Shot coordinates: no** (those come from `nhl_pbp_*`, which I did not download because it is 19–42 MB per season). The `starter` flag is the **actual** starter (postgame).
   - `player_boxscores_2025.parquet` (641 KB), 35,114 × 37. Has **`minutes` ("35:56") and `plus_minus_points`: yes**, plus person_id, comment (DNP reasons) and season_type_id 2–6.
   - `nba_player_impact_2025.parquet` (119 KB), 788 × 28. Columns are `o_rapm, d_rapm, rapm, adj_rapm, bpm, war, darko_*` and so on. These are **full-season aggregates**: joining them to games in the same season leaks future games. They are only usable as a prior-season input. The values look odd (for example LeBron James 2025 `rapm=-1.25` while `bpm=7.3`), and the method is undocumented ("scored through the hoopR model stack"; the build code is in another repo I did not inspect).

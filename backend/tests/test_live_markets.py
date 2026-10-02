@@ -138,5 +138,41 @@ def test_nba_markets_are_skipped_without_a_sealed_model(tmp_path, monkeypatch):
     c = db.connect(tmp_path / "nba.sqlite")
     db.migrate(c)
     db.claim_store(c, "nba")
-    out = jobs.market_forecasts(c)
+    out = jobs.market_forecasts(c)                     # two-hour policy by default
     assert out["status"] == "skipped" and "No sealed NBA market model" in out["reason"]
+
+
+def test_night_before_job_paths_refuse_before_writing(tmp_path, monkeypatch):
+    """Audit P14: the discontinued night-before job paths cannot write, even when called directly."""
+    monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path))
+    c = db.connect(tmp_path / "nba.sqlite")
+    db.migrate(c)
+    db.claim_store(c, "nba")
+    runs = c.execute("SELECT count(*) FROM job_runs").fetchone()[0]
+    with pytest.raises(ValueError, match="discontinued"):
+        jobs.market_forecasts(c, policy="pregame")
+    with pytest.raises(RuntimeError, match="discontinued"):
+        jobs.predict(c)
+    assert c.execute("SELECT count(*) FROM job_runs").fetchone()[0] == runs
+    assert c.execute("SELECT count(*) FROM predictions").fetchone()[0] == 0
+
+
+def test_near_tipoff_market_forecast_is_void_on_any_start_change(sealed):
+    """Audit P12: a two-hour market forecast is void when the start changes at all (here 30 minutes); a night-before row
+    keeps the 12-hour tolerance of markets.settle."""
+    add_upcoming(sealed, start="2026-10-10T19:00:00", at="2026-10-10T02:00:00Z")
+    pre = market_live.forecast(sealed, now="2026-10-10T03:00:00Z", game_ids=["nhl:2026020001"])  # night-before (pregame)
+    assert pre["created"] > 0
+    sealed.execute("INSERT INTO job_runs (job, started_at, finished_at, status) VALUES "
+                   "('refresh', '2026-10-10T21:30:00Z', '2026-10-10T21:30:00Z', 'success')")
+    quote(sealed, "2026-10-10T21:40:00Z", date="2026-10-10T23:00Z")
+    near = market_live.forecast(sealed, now="2026-10-10T22:00:00Z", policy="near_tipoff", game_ids=["nhl:2026020001"])
+    assert near["created"] == 5
+    # The start moves 30 minutes later; the game is then played (4-2 in regulation).
+    add_upcoming(sealed, start="2026-10-10T19:30:00", state=7, hs=4, vs=2, period=3, at="2026-10-11T03:00:00Z")
+    near_rows = market_live.latest(sealed, policy="near_tipoff")
+    night_rows = market_live.latest(sealed, policy="pregame")
+    assert near_rows and night_rows
+    assert {near_tipoff.market_outcome(r) for r in near_rows} == {"void"}
+    assert all(near_tipoff.market_outcome(r) not in ("void", "pending") for r in night_rows)
+    assert all(near_tipoff.market_outcome(r) == market_live.outcome(r) for r in night_rows)

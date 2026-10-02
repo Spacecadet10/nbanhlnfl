@@ -167,6 +167,22 @@ def predict_now(conn: sqlite3.Connection, *, now: Optional[str] = None, write: b
     return out
 
 
+def start_changed(row) -> bool:
+    """A near-tipoff forecast is made for the start known when it was generated (its cutoff). If the game's start has
+    changed since, the forecast is void: it is never scored, as research cohorts (research_live.state)."""
+    return row["cutoff_at"] != row["tipoff_at"]
+
+
+def market_outcome(row) -> str:
+    """market_live.outcome with the two-hour rule for near-tipoff market forecasts: any change of the start after the
+    forecast voids it (the 12-hour tolerance in markets.settle remains for night-before rows only). `row` is a
+    market_live.latest row (forecast `tipoff_at`, current `game_tipoff_at`)."""
+    from . import market_live
+    if row["policy"] == POLICY and row["status"] not in ("postponed", "canceled") and row["tipoff_at"] != row["game_tipoff_at"]:
+        return "void"
+    return market_live.outcome(row)
+
+
 def latest_rows(conn: sqlite3.Connection, version: Optional[str] = None) -> list[sqlite3.Row]:
     """Latest near-tipoff forecast per game with its freshness record and the game's result fields."""
     return conn.execute(
@@ -183,7 +199,7 @@ def score(conn: sqlite3.Connection) -> dict:
     those same games."""
     _, model = live.primary_model(conn)
     rows = latest_rows(conn, model_version(model))
-    final = [r for r in rows if r["status"] == "final"]
+    final = [r for r in rows if r["status"] == "final" and not start_changed(r)]
     ys = {r["game_id"]: r["home_score"] > r["away_score"] for r in final}
 
     def summary(pairs: list[tuple[float, bool]]) -> dict:
@@ -196,8 +212,9 @@ def score(conn: sqlite3.Connection) -> dict:
     priced = [r for r in final if r["market_home_prob"] is not None]
     return {
         "policy": POLICY, "model_version": model_version(model), "forecasts": len(rows),
-        "pending": sum(r["status"] in ("scheduled", "in_progress") for r in rows),
+        "pending": sum(r["status"] in ("scheduled", "in_progress") and not start_changed(r) for r in rows),
         "not_played": sum(r["status"] in ("postponed", "canceled") for r in rows),
+        "start_changed": sum(r["status"] not in ("postponed", "canceled") and start_changed(r) for r in rows),
         "scored": summary([(r["home_win_prob"], ys[r["game_id"]]) for r in final]),
         "same_games_as_night_before": {
             "near_tipoff": summary([(r["home_win_prob"], ys[r["game_id"]]) for r in both]),

@@ -331,14 +331,22 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
                                                  history=collect, now=now, write=not dry_run)
             # Candidate pool (docs/CANDIDATE_POOL.md): after the cohorts, so line markets use the core cohort's exact line.
             out["pool"] = candidate_pool(conn, game_ids=accepted, now=now, write=not dry_run)
+            # Pool selections: after the candidate forecasts of this cycle, under the pool decisions in force.
+            out["pool_selection"] = pool_selection(conn, game_ids=accepted, now=now, write=not dry_run,
+                                                   defn=(out["research"] or {}).get("definition"))
         else:
             out["research"] = {"status": "disabled", "reason": "RESEARCH_SELECTION=0"}
     return {"status": status, **out} if dry_run else _finish(conn, run_id, status, 1, out)
 
 
-def market_forecasts(conn: sqlite3.Connection, *, policy: str = "pregame", write: bool = True, **kw) -> dict:
+NIGHT_BEFORE_DISCONTINUED = "night-before forecasting is discontinued: new forecasts are made only within two hours of the start"
+
+
+def market_forecasts(conn: sqlite3.Connection, *, policy: str = "near_tipoff", write: bool = True, **kw) -> dict:
     """Market forecasts with the sport's sealed market model. A sport without one is 'skipped' with the reason
-    (never a fabricated forecast); any other error is 'failed'."""
+    (never a fabricated forecast); any other error is 'failed'. Only the two-hour policy may write (audit P14)."""
+    if policy != "near_tipoff":
+        raise ValueError(f"{NIGHT_BEFORE_DISCONTINUED} (policy {policy!r})")
     run_id = _start(conn, "markets") if write else None
     try:
         out = market_live.forecast(conn, policy=policy, write=write, **kw)
@@ -353,11 +361,8 @@ def market_forecasts(conn: sqlite3.Connection, *, policy: str = "pregame", write
 
 
 def predict(conn: sqlite3.Connection, **kw) -> dict:
-    run_id = _start(conn, "predict")
-    try:
-        return _finish(conn, run_id, "success", 1, live.predict(conn, **kw))
-    except Exception as exc:
-        return _finish(conn, run_id, "failed", 1, {"error": f"{type(exc).__name__}: {exc}"})
+    """Discontinued night-before Elo job (audit P14): refuses before writing anything. Two-hour forecasts: predict_now."""
+    raise RuntimeError(NIGHT_BEFORE_DISCONTINUED)
 
 
 def score(conn: sqlite3.Connection) -> dict:
@@ -412,15 +417,34 @@ def candidate_pool(conn: sqlite3.Connection, **kw) -> dict:
         return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
 
 
-def selector_decisions(conn: sqlite3.Connection, now: Optional[str] = None) -> dict:
-    """The weekly selector decisions (Monday 14:00 UTC), written by the first odds cycle after that time."""
-    if not research_live.enabled():
-        return {"status": "disabled", "reason": "RESEARCH_SELECTION=0"}
+def pool_selection(conn: sqlite3.Connection, **kw) -> dict:
+    """Candidate-pool selections (app/candidates/selection.py), separate tables; never touches core or primary rows."""
     try:
-        return {"status": "success", **research_live.decide_due(conn, now=now)}
+        from .candidates import selection
+        r = selection.select(conn, **kw)
+        return {k: v for k, v in r.items() if k != "selections"}
     except Exception as exc:
         conn.rollback()
         return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+
+
+def selector_decisions(conn: sqlite3.Connection, now: Optional[str] = None) -> dict:
+    """The weekly selector decisions (Monday 14:00 UTC), written by the first odds cycle after that time; then the pool
+    decisions for the same week (their failure never affects the core decisions)."""
+    if not research_live.enabled():
+        return {"status": "disabled", "reason": "RESEARCH_SELECTION=0"}
+    try:
+        out = {"status": "success", **research_live.decide_due(conn, now=now)}
+    except Exception as exc:
+        conn.rollback()
+        return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+    try:
+        from .candidates import selection
+        out["pool"] = {"status": "success", **selection.decide_due(conn, now=now, defn=out["definition"])}
+    except Exception as exc:
+        conn.rollback()
+        out["pool"] = {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+    return out
 
 
 def daily(conn: sqlite3.Connection, *, force_refresh: bool = False, **refresh_kw) -> dict:

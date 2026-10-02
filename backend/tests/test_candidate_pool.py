@@ -241,3 +241,71 @@ def test_selectable_only_with_a_held_out_gain_that_beats_the_strongest_member():
     assert pool_live.held_out_gains(m, "d") == ["alone vs strongest member"]
     m["combinations"][1]["with_minus_without"] = ci(-0.002, -0.0001)
     assert pool_live.held_out_gains(m, "c") == ["avg:s+c vs s"]
+
+
+def test_pool_trigger_rejects_malformed_times_and_games_no_longer_scheduled(upcoming):
+    """Audit P13 (migration 0020): the candidate-forecast guard matches the research-cohort guard."""
+    lines = {(GID, "spread"): {"line": -1.5, "source": "core_cohort", "ref": "cohort:1"}}
+    assert _record(upcoming, lines=lines)["created"] > 0
+    r = dict(upcoming.execute("SELECT * FROM candidate_forecasts LIMIT 1").fetchone())
+    r.pop("forecast_id")
+
+    def insert(**kw):
+        row = {**r, **kw}
+        upcoming.execute(f"INSERT INTO candidate_forecasts ({','.join(row)}) VALUES ({','.join('?' * len(row))})",
+                         list(row.values()))
+    for bad in ("2026-10-12 22:00:00", "2026-10-12T22:00:00", "2026-10-12T22:00:00.5Z"):     # in the window, but malformed
+        with pytest.raises(sqlite3.IntegrityError, match="two hours"):
+            insert(generated_at=bad, idempotency_key=f"m{bad}")
+    insert(generated_at="2026-10-12T22:30:00Z", idempotency_key="ok")                         # well formed: accepted
+    add_upcoming(upcoming, start="2026-10-12T19:00:00", state=7, hs=3, vs=1, period=3, at="2026-10-12T22:40:00Z")
+    assert upcoming.execute("SELECT status FROM games WHERE game_id=?", (GID,)).fetchone()[0] != "scheduled"
+    with pytest.raises(sqlite3.IntegrityError, match="two hours"):
+        insert(generated_at="2026-10-12T22:45:00Z", idempotency_key="final")
+
+
+def test_tampered_or_undigested_artifact_makes_only_that_candidate_unavailable(upcoming):
+    """Audit P8: a stored fit is verified before it is unpickled; a mismatch is an error for that candidate only (no refit,
+    no substitute), and the other candidates still record."""
+    lines = {(GID, "spread"): {"line": -1.5, "source": "core_cohort", "ref": "cohort:1"}}
+    first = _record(upcoming, lines=lines, write=False)
+    assert first["errors"] == {}
+    path = next(p for p in pool_live.artifact_dir("nhl").rglob("*.pkl") if "poisson_draw__nhl_base" in str(p))
+    assert pool_live._sidecar(path).exists()
+    path.write_bytes(path.read_bytes() + b"x")                                     # tampered
+    out = _record(upcoming, lines=lines)
+    assert "ArtifactIntegrityError" in out["errors"]["poisson_draw:nhl_base"] and "mismatch" in out["errors"]["poisson_draw:nhl_base"]
+    cands = {r["candidate"] for r in upcoming.execute("SELECT candidate FROM candidate_forecasts")}
+    assert "poisson_draw:nhl_base" not in cands and {"multinomial_l2:nhl_base", "logit_l2:nhl_goalie"} <= cands
+    assert path.read_bytes().endswith(b"x")                                         # never silently refit over
+    pool_live._sidecar(path).unlink()                                             # written after 0020: never adopted
+    assert "no digest" in _record(upcoming, lines=lines)["errors"]["poisson_draw:nhl_base"]
+
+
+def test_legacy_artifact_without_digest_is_adopted_once_and_then_verified(upcoming):
+    """Artifacts saved before migration 0020 (no digest yet) are adopted once — digest written, adoption reported — so
+    live research keeps recording after the upgrade; afterwards a change to the file is an error."""
+    import os
+    lines = {(GID, "spread"): {"line": -1.5, "source": "core_cohort", "ref": "cohort:1"}}
+    _record(upcoming, lines=lines, write=False)
+    path = next(p for p in pool_live.artifact_dir("nhl").rglob("*.pkl") if "poisson_draw__nhl_base" in str(p))
+    pool_live._sidecar(path).unlink()
+    os.utime(path, (946684800, 946684800))                                        # written in 2000: before 0020
+    out = _record(upcoming, lines=lines)
+    assert "poisson_draw:nhl_base" not in out["errors"] and [a["artifact"] for a in out["artifacts_adopted"]] == [path.name]
+    assert pool_live._sidecar(path).exists()
+    assert _record(upcoming, lines=lines)["artifacts_adopted"] == []               # once only
+    path.write_bytes(path.read_bytes() + b"x")
+    assert "mismatch" in _record(upcoming, lines=lines)["errors"]["poisson_draw:nhl_base"]
+
+
+def test_experiment_log_lists_skipped_and_failed_configurations(monkeypatch):
+    """Audit P7: every declared configuration appears in the experiment log, with a status and reason when it did not run."""
+    from app.candidates import study
+    not_run = {"ngboost:nba_base": {"status": "skipped", "reason": "optional dependency research not installed"},
+               "mlp:nba_base": {"status": "failed", "reason": "ValueError: boom"}}
+    rows = study.not_run_entries("nba", "total", not_run, {"at": "t", "stage": "screen"})
+    by = {r["candidate"]: r for r in rows}
+    assert by["ngboost:nba_base"]["status"] == "skipped" and "not installed" in by["ngboost:nba_base"]["reason"]
+    assert all(r["market"] == "total" and r["definition"] for r in rows)
+    assert ("mlp:nba_base" in by) == ("total" in registry.BY_NAME["mlp:nba_base"].markets)

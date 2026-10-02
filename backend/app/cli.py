@@ -10,7 +10,7 @@ from .models.elo import EloConfig
 SPORT_COMMANDS = {"nhl-pbp-import", "nhl-xg-research", "migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies", "refresh", "odds", "predict",
                   "score", "daily", "scheduler", "predict-now", "score-near-tipoff", "markets", "score-markets", "agreement", "thresholds",
                   "combination-study", "selector-decide", "research-report", "retrain-cadence", "catboost-challenger", "combination-search", "expanded-search", "selective-study", "rules-registry",
-                  "pool-screen", "pool-assess", "pool-record", "pool-roster"}
+                  "pool-screen", "pool-assess", "pool-record", "pool-roster", "pool-report"}
 NHL_ONLY = {"nhl-pbp-import", "nhl-xg-research", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies"}
 
 
@@ -102,6 +102,9 @@ def main(argv=None) -> int:
     pr = sub.add_parser("pool-record", help="Two-hour candidate forecasts for winner/reg3 markets (lines come from the core cohort)")
     pr.add_argument("--dry-run", action="store_true")
     sub.add_parser("pool-roster", help="Read-only candidate roster")
+    pr = sub.add_parser("pool-rules", help="Freeze the candidate-pool selection registry from the stage-2 evidence (CANDIDATE_POOL §7)")
+    pr.add_argument("--effective-from", required=True)
+    sub.add_parser("pool-report", help="Read-only prospective record of the pool registry's sources and pool decisions")
     sub.add_parser("selector-decide", help="Write this week's selector decisions if due (normally run by the odds job)")
     rr = sub.add_parser("research-report", help="Read-only prospective research record for one market")
     rr.add_argument("--market", default="winner")
@@ -392,6 +395,16 @@ def main(argv=None) -> int:
         print(json.dumps({"path": str(rule_tracking.REGISTRY_PATH), "sha256": reg["sha256"],
                           "markets": {k: {"rules": len(m["rules"]), "selected": sum(1 for r in m["rules"] if r["selected"])}
                                       for k, m in reg["markets"].items()}}))
+    elif args.cmd == "pool-rules":
+        from .candidates import selection
+        reg = selection.build_registry(args.effective_from)
+        selection.REGISTRY_PATH.write_text(json.dumps(reg, indent=1, sort_keys=True) + "\n")
+        print(json.dumps({"path": str(selection.REGISTRY_PATH), "sha256": reg["sha256"],
+                          "sources": {f"{sp}:{m}": [(e["source"], e["route"]) for e in es]
+                                      for sp, ms in reg["sports"].items() for m, es in ms.items()}}, indent=1))
+    elif args.cmd == "pool-report":
+        from .candidates import selection
+        print(json.dumps(selection.report(conn, args.sport), indent=1, default=str))
     elif args.cmd in ("pool-screen", "pool-assess", "pool-record", "pool-roster"):
         from .candidates import live as pool_live, study as pool_study
         if args.cmd == "pool-screen":

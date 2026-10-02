@@ -90,6 +90,14 @@ def _write_evidence(report: dict) -> str:
     return str(p)
 
 
+def not_run_entries(sport: str, market: str, not_run: dict, base: dict) -> list:
+    """Experiment-log rows for every registry candidate of `market` that was skipped or failed, with its reason, so the
+    log lists every configuration of the declared search, not only those that produced a result (audit P7)."""
+    return [{**base, "sport": sport, "market": market, "candidate": s.name, "definition": registry.definition(s),
+             "status": not_run[s.name]["status"], "reason": not_run[s.name]["reason"]}
+            for s in registry.for_sport(sport) if market in s.markets and s.name in not_run]
+
+
 def _log(entry: dict) -> None:
     p = experiment_log()
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -153,13 +161,19 @@ def add_candidates(sport, tables, first, rows, events, recorder, log) -> tuple[d
     walk = features.walk(recorder, rows, events)
     log(f"{sport}: feature walk {len(walk)} games in {time.time() - t0:.1f} s (table {features.table_version(walk)})")
     by_table = {m: {r["game_id"]: r for r in t} for m, t in tables.items()}
-    fits, runtimes = {}, {}
+    fits, runtimes, not_run = {}, {}, {}
     for spec in registry.for_sport(sport):
         if not registry.available(spec):
+            not_run[spec.name] = {"status": "skipped", "reason": f"optional dependency {spec.extra} not installed"}
             log(f"{spec.name}: skipped (optional dependency {spec.extra} not installed)")
             continue
         t0 = time.time()
-        out, fit_records, _ = engine.walk(spec, list(walk.values()))
+        try:
+            out, fit_records, _ = engine.walk(spec, list(walk.values()))
+        except Exception as exc:             # logged as a failed configuration; the other candidates still run
+            not_run[spec.name] = {"status": "failed", "reason": f"{type(exc).__name__}: {exc}"}
+            log(f"{spec.name}: FAILED ({type(exc).__name__}: {exc})")
+            continue
         runtimes[spec.name] = round(time.time() - t0, 1)
         fits[spec.name] = fit_records
         seasons = sorted({walk[g].season for g in out})
@@ -170,7 +184,7 @@ def add_candidates(sport, tables, first, rows, events, recorder, log) -> tuple[d
                 if row is not None:
                     row["vectors"][spec.name] = engine.vector(o, market, row["line"])
         log(f"{spec.name}: {len(out)} games, {len(fit_records)} fits, {runtimes[spec.name]} s")
-    return {"fits": fits, "runtime_s": runtimes, "feature_table": features.table_version(walk),
+    return {"fits": fits, "runtime_s": runtimes, "not_run": not_run, "feature_table": features.table_version(walk),
             "goalie_source": "actual starter (retrospective; assumes the pregame listing was right)" if sport == "nhl" else None}, walk
 
 
@@ -310,12 +324,16 @@ def run_screen(conn, sport: str, log: Callable[[str], None] = print, dry: bool =
         for c in cands + refs:
             v = res.get("candidates", {}).get(c)
             if v and not dry:
-                _log({"at": started, "stage": "screen", "sport": sport, "market": market, "candidate": c,
+                _log({"at": started, "stage": "screen", "sport": sport, "market": market, "candidate": c, "status": "evaluated",
                       "definition": report["definitions"][c], "dataset_version": dataset, "seasons": list(seasons),
                       "log_loss": v["summary"]["log_loss"], "minus_strongest": v["minus_strongest"]["mean"],
                       "pair_gain": v["pair_average_minus_strongest"]["mean"],
                       "stack_gain": (v["stack_with_minus_without"] or {}).get("mean"),
                       "runtime_s": cand["runtime_s"].get(c), "fits": cand["fits"].get(c)})
+        if not dry:
+            for e in not_run_entries(sport, market, cand["not_run"], {"at": started, "stage": "screen",
+                                                                      "dataset_version": dataset, "seasons": list(seasons)}):
+                _log(e)
     shortlist["frozen_at"] = utc_now()
     report["runtime_s"] = round(time.time() - t0, 1)
     if dry:
@@ -512,9 +530,12 @@ def run_assess(conn, sport: str, log: Callable[[str], None] = print) -> dict:
         for c in mplan["candidates"]:
             v = res.get("candidates", {}).get(c)
             if v:
-                _log({"at": started, "stage": "assess", "sport": sport, "market": market, "candidate": c,
+                _log({"at": started, "stage": "assess", "sport": sport, "market": market, "candidate": c, "status": "evaluated",
                       "definition": report["definitions"][c], "dataset_version": dataset, "seasons": list(seasons),
                       "log_loss": v["summary"]["log_loss"], "minus_strongest": v["minus_strongest"]["mean"]})
+        for e in not_run_entries(sport, market, {c: x for c, x in cand["not_run"].items() if c in mplan["candidates"]},
+                                 {"at": started, "stage": "assess", "dataset_version": dataset, "seasons": list(seasons)}):
+            _log(e)
     report["runtime_s"] = round(time.time() - t0, 1)
     report["oof"] = write_oof(sport, "assess", tables, seasons)
     report["evidence"] = _write_evidence(report)
