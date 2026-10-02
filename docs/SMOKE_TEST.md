@@ -306,3 +306,19 @@ Worktree `../nba-predictor-selector` (branch `selector-dev`), merged into `shado
   `agreement.predict` on a `.backup` copy at 2026-10-02T20:45Z for nhl:2026020017 (22:30Z): status success, no errors or skips,
   80 s; forecasts hockey_elo 0.532, goals_poisson 0.470, hockey_logistic 0.588, hockey_gbt 0.656, hockey_logistic_xg 0.620.
   First real cohorts with the shadow member: tonight's window (from 20:30 UTC) — unverified at the time of writing.
+
+## expanded-v1 and the primary-read fix — Claude, 2026-10-02 ~16:30 UTC (live checkout 1d0709c)
+- `check_project.py --ready` exit 0 (393 passed). Live checkout fast-forwarded; no migration needed.
+- Rehearsal on a `.backup` copy of the live NHL store (a `refresh` job row inserted into the copy only), full code path at
+  2026-10-02T20:45Z for nhl:2026020017: primary accepted; agreement success (no errors/skips); research success — 6 core
+  cohorts + 1 `expanded-v1` winner cohort; 94 s. Core winner: 4 voters (xG listed, not voting), average 0.561, stacker 0.579.
+  Expanded: 5 voters (4 of 5 home), average 0.573, stacker 0.612. `model_fits`: 5 learned members, 14,508 training results
+  through 2026-06-15T04:00Z.
+- Browser (rehearsal store, API clock pinned at 20:50Z, ports 8022/5192): Game page shows the core research card and a separate
+  "Expanded experiment · Recording only" section with all five members, the all-model average and stacker; Performance (NHL,
+  winner) shows "Core experiment" and "Expanded experiment (expanded-v1) · Recording only" groups, the latter with the eight
+  registered subset averages as sources and no selector section. 390-px frames: 386 = viewport on both pages.
+- Found during this check: the Game page logged duplicate React keys because `market_live.latest` returned research member
+  rows next to the primary ones; the same query feeds primary market scoring and threshold tracking, so research rows would
+  have counted as primary forecasts once they existed (none existed in the live stores yet). Fixed (1d0709c) with a regression
+  test that fails without the fix; after the fix the Game page logs no console errors. Servers stopped, tab closed.
