@@ -9,7 +9,7 @@ from .models.elo import EloConfig
 # Commands that work for every sport; everything else is NBA-only until generalised.
 SPORT_COMMANDS = {"nhl-pbp-import", "nhl-xg-research", "migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies", "refresh", "odds", "predict",
                   "score", "daily", "scheduler", "predict-now", "score-near-tipoff", "markets", "score-markets", "agreement", "thresholds",
-                  "combination-study", "selector-decide", "research-report", "retrain-cadence", "catboost-challenger", "combination-search"}
+                  "combination-study", "selector-decide", "research-report", "retrain-cadence", "catboost-challenger", "combination-search", "expanded-search"}
 NHL_ONLY = {"nhl-pbp-import", "nhl-xg-research", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies"}
 
 
@@ -86,6 +86,8 @@ def main(argv=None) -> int:
     pi.add_argument("--limit", type=int)
     xr = sub.add_parser("nhl-xg-research", help="Exploratory xG candidate on development seasons (MODEL_SELECTION §12)")
     xr.add_argument("--out")
+    ex = sub.add_parser("expanded-search", help="Expanded-combination experiment, retrospective part (MODEL_SELECTION §14)")
+    ex.add_argument("--out")
     sub.add_parser("selector-decide", help="Write this week's selector decisions if due (normally run by the odds job)")
     rr = sub.add_parser("research-report", help="Read-only prospective research record for one market")
     rr.add_argument("--market", default="winner")
@@ -355,6 +357,11 @@ def main(argv=None) -> int:
         from . import nhl_eval
         report = nhl_eval.xg_research(conn, out_dir=Path(args.out) if args.out else None)
         print(json.dumps({"output_dir": report["output_dir"], "qualifies_for_shadow": report["qualifies_for_shadow"]}))
+    elif args.cmd == "expanded-search":
+        from pathlib import Path
+        from . import expanded_search
+        report = expanded_search.run(conn, args.sport, out_dir=Path(args.out) if args.out else None)
+        print(json.dumps({"output_dir": report["output_dir"], "deploy_candidates": {m: a["deploy_candidates"] for m, a in report["markets"].items()}}))
     elif args.cmd == "selector-decide":
         result = jobs.selector_decisions(conn)
         print(json.dumps(result, indent=2))
