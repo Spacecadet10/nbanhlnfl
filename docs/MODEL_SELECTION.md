@@ -143,3 +143,14 @@ probability of its pick ≥ threshold and the filter holds.
 - scikit-learn 1.9.1 `PoissonRegressor` docs (L2 α, lbfgs, log link); `HistGradientBoostingRegressor` already used by `gbt_v1`.
 - scikit-learn StackingClassifier warning and Yao et al. stacking (docs/STACKING_RESEARCH.md): stacker trained only on held-out
   chronological predictions. No prediction repository copied.
+
+## Amendments
+- **2026-10-02, before the study run:** `ridge_points` / `gbt_points` spreads have a floor of 1.0 point (`MIN_SD`), found with
+  synthetic test data where every total was identical. Real residual spreads are about 12 (margin) and 18 (total) points, so the
+  floor never binds on real data. No other setting changed.
+- **2026-10-02, after the study (no effect on it):** NBA winner agreement keeps the registered expected set of six models
+  (`availability_two_hour` included), so an NBA winner cohort is "complete"/"unanimous" only when the injury-aware model ran; the
+  equal average and the stacker use the five core models. Exact 50% member forecasts are ties: they abstain and are counted as such.
+- **2026-10-02, operational detail:** stackers for line markets are trained at the primary's model-only line and applied at
+  whatever line the live cohort uses (often a bookmaker line). That shift is a known limitation; the prospective record measures
+  it rather than assuming it away.

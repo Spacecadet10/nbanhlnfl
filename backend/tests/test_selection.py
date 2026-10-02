@@ -274,3 +274,16 @@ def test_stacker_refuses_training_results_not_available_before_its_season():
     late["result_available_at"] = "2030-01-01T00:00:00Z"
     with pytest.raises(ValueError, match="not available"):
         cr._stack_walk("total", rows, ("goals_poisson", "goals_draw", "goals_glm"), first, (2020,))
+
+
+def test_regulation_draw_is_an_outcome_and_integer_lines_push():
+    assert selector.outcome("reg3", 0, 1) == "loss"          # picked home, regulation draw: a loss, never a refund
+    assert selector.outcome("reg3", 1, 1) == "win"           # a draw pick that lands
+    assert selector.outcome("total", 0, 1) == "push"         # integer line landed exactly
+    assert selector.outcome("spread", 2, 0) == "loss"
+    items = _items(400, 0.5, market="reg3")
+    for i in items:
+        i["vectors"] = {"p": (0.5, 0.3, 0.2)}
+        i["realised"] = 1
+    s = selector.evaluate(items, "reg3", ["p"])[0]
+    assert s["pushes"] == 0 and s["losses"] == 400

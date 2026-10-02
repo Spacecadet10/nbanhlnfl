@@ -105,6 +105,17 @@ Run from `backend/`:
 - NBA availability: `availability-prepare --seed-season 2026` prepares checksum-sealed facts from the existing development report cache and downloads one free, digest-verified prior-season player file. Current player minutes come from cached finished-game summaries. The two-hour cycle refreshes injury PDFs through the existing budgeted collector. A fresh, reconciled report and complete minute history are required; otherwise the injury-aware candidate skips while other models can run. This new timing variant has no claimed accuracy improvement. `pypdf` and scikit-learn are runtime dependencies.
 - Injury collection remains installed at :02/:32; source plists are in `scripts/launchd/`. Forecast cycles reuse the same request budgets and raw cache. Raw documents and every forecast version are retained. Source access is for the existing personal-research scope.
 - Performance → **Confidence thresholds · Two-hour record** shows per-market/model/version results at 50–90% thresholds, with samples, coverage, pending, pushes/voids and descriptive intervals. Read-only CLI: `.venv/bin/python -m app.cli thresholds` (or `--sport nhl thresholds`). Selecting a promising threshold is research, not proof; freeze a rule before assessing future games.
+- **Model agreement, combination and selection (research/shadow; docs/MODEL_SELECTION.md, results docs/COMBINATION_RESULTS.md).**
+  In the same two-hour cycle, every market gets a research cohort: the primary forecast plus two extra candidates per line /
+  3-way market (NBA `ridge_points`, `gbt_points`; NHL `goals_draw`, `goals_glm`) at exactly the primary's line and quote, the
+  winner research models, an equal average, an out-of-fold stacker and agreement counts (`research_cohorts`; members in the
+  existing ledgers). A frozen weekly selector (Monday 14:00 UTC, written by the first odds cycle after it) chooses a source /
+  agreement filter / threshold per market from settled prospective cohorts only, or abstains; one market at most is recommended
+  per game (`selector_decisions`, `research_selections`; all append-only and two-hour guarded). Recommendations are research
+  only: never the primary forecast, never betting advice, no profitability claim. Off switch: `RESEARCH_SELECTION=0` in the job
+  environment (primary forecasts unaffected). CLI: `selector-decide`, `research-report --market total`, `combination-study`
+  (the one-time retrospective study; already run, do not rerun for evaluation). The UI shows it on Today (research line),
+  Game (Model selection card), History (Research recommendations) and Performance (forward research + retrospective study).
 - Odds (free, no key): each snapshot appends DraftKings moneylines with their retrieval time. The last quote confirmed
   before tipoff is our own closing snapshot (`coverage` → `closing_lines`, with minutes before tipoff). It is not a
   bookmaker-published close, and it exists only for games snapshotted while the collector was running.

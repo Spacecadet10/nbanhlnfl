@@ -510,3 +510,6 @@ Full design: docs/MODEL_SELECTION.md (candidates per market, stacking protocol, 
 Bonferroni-adjusted lower bounds, minimum evidence of 100 picks / 10% coverage / 3 weeks, abstention, market choice, promotion and
 versioning). Retrospective study on NBA 2022-2024 and NHL 2018-2021 only (already-used development seasons: exploratory), at most two
 runs per sport. The live selector is research/shadow; it never replaces a primary model; promotion is a separate dated human decision.
+- **Result (2026-10-02, one run per sport):** docs/COMBINATION_RESULTS.md. Exploratory: agreement added nothing beyond the equal
+  average's own confidence ranking in any market; probability gains appeared only for NBA spread (ridge/stacker) and NHL regulation
+  3-way (draw-inflated/stacker). The live selector starts with empty prospective evidence; nothing was promoted.

@@ -229,3 +229,35 @@ Two readiness attempts encountered stale exact-key assertions in `test_daily_run
 - launchctl: NBA odds 900 seconds, NHL odds 1,800 seconds; both daily agents and injury agent loaded; all five last exit codes 0. Existing jobs invoke this checkout, so no duplicate agent or installation was added. Must remain awake/logged in.
 - Browser at http://127.0.0.1:5173: NBA Today at 1280×900 defaults to Within 2 hours; no horizontal overflow. NHL game `games/nhl:2026020017?sport=nhl` at 390×844 shows explicit no-two-hour-forecast, separate winner-agreement missing state, archived night-before probability. NHL Performance (reg3) shows two-hour empty market/threshold record and separate historical test; dark theme legible. NHL History at 390×844 shows Live + Within 2 hours, working controls and correct empty text; no horizontal overflow. Light theme restored and temporary viewport override reset; original game page restored.
 - Current limits: no eligible real game during verification, so no real two-hour forecast-to-final lifecycle or populated two-hour threshold table was browser-verified. Synthetic tests cover storage/settlement, but prospective accuracy is unknown. Demo API regression tests pass; demo mode was not separately browser-checked this turn. No paid source, deployment, new historical evaluation, model promotion or threshold tuning.
+
+## Model agreement, combination and selection (2026-10-02 UTC, Claude)
+Worktree `../nba-predictor-selector` (branch `selector-dev`), merged into `shadow-season` only after these checks.
+- **Tests:** `backend/.venv/bin/python -m pytest -q` from `backend/` — see HANDOFF for the final count. New: `tests/test_selection.py`
+  (candidates' leakage/own-label isolation, readiness, draw inflation equals the Poisson grid at w = 0, coherence, stacker,
+  selector minimum evidence / abstention / Bonferroni / class-balance reference / bookmaker reference / hysteresis / reasons,
+  study machinery, out-of-fold refusal, regulation draw and integer push), `tests/test_research_live.py` (every market at the
+  primary's exact line and quote, retries add nothing, not-ready members missing not substituted, missing primary market,
+  two-hour and start-time triggers, append-only, reschedule → void, calculation finishing after the start, frozen weekly decision
+  only used after it was written, evidence cutoff, one market per game with reasons, primary forecasts kept when research fails,
+  off switch, real API states), `tests/test_api_research.py` (demo contract). `npm run typecheck`, `npm run build` pass.
+- **Bug reinjection** (scratch copy of the backend): evidence ignoring its cutoff, stacker trained on its own season, a missing
+  member filled from the primary, the cohort two-hour lower bound removed, decisions recomputed within a week → each fails a test.
+  Regulation draw scored as a push was **not** caught at first; `test_regulation_draw_is_an_outcome_and_integer_lines_push` was
+  added and fails under that reinjection.
+- **Rehearsal with real data on scratch copies** (fixed clock, refresh/odds/box/injury network steps stubbed, a refresh row
+  inserted only in the copy): NHL `2026-10-02T21:00Z` → 2 games, primary 2 + 10 market rows, 8 winner research rows, 12 complete
+  cohorts (puck line and total at DraftKings lines, team totals at model-only lines), 12 selections "insufficient evidence".
+  NBA `2026-10-20T21:30Z` → 1 game, 5 cohorts, 169 s total; the injury-aware candidate reported missing (facts file not in the
+  scratch dir), never substituted. No real store was written.
+- **Browser** (Chrome; isolated servers: demo API :8011 + Vite :5181; real-mode API :8012 on migrated scratch copies + Vite :5182):
+  Today shows the research line per game (demo: "Selected: BOS win (Winner, 80.0%)"); Game → Model selection card with each
+  market's members, missing models with reasons, equal average, stacker, bookmaker (where quoted), agreement counts, line and
+  source, minutes before start, rule in force and an audit section; Performance → forward research (sources, agreement vs
+  confidence at matched count, selector record, thresholds, by week, bookmaker comparison, weekly decisions) and the collapsible
+  retrospective study labelled exploratory; History → Research recommendations. Real-mode NHL pages show explicit empty states
+  ("No research forecast for this game…", "No research selections recorded yet."). No console errors. Phone: the window cannot
+  shrink below 595 px, so 390-px layout was measured in a 390-px iframe of each screen: page scroll width 390 on Today, Game,
+  History and Performance (wide tables scroll inside their own containers); light theme checked visually at 390 px, dark at
+  desktop. Tab closed, window restored to 1280×900, temporary servers stopped.
+- **Fixed during the check:** raw rule text in the pick line, clipped missing-model reasons, an unexplained Elo denominator in
+  demo data (exact 50% forecasts abstain; now shown as "exact 50% (no pick)").
