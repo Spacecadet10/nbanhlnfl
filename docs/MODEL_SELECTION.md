@@ -144,7 +144,7 @@ probability of its pick ≥ threshold and the filter holds.
 - scikit-learn StackingClassifier warning and Yao et al. stacking (docs/STACKING_RESEARCH.md): stacker trained only on held-out
   chronological predictions. No prediction repository copied.
 
-## 9. Retraining-cadence comparison (recorded 2026-10-02 ~13:10 UTC, before any run)
+## 9. Retraining-cadence comparison (recorded 2026-10-02 12:57 UTC in 602aeab, before any run)
 Question: do the existing learned members forecast better when refit more often than at season start? Same definitions,
 features, hyperparameters and data as the study in §5; only the refit schedule changes. Code: `app/retrain_cadence.py`.
 - **Members (unchanged):** NBA `logistic`, `logistic_v2`, `gbt_v1`, `ridge_points`, `gbt_points`; NHL `hockey_logistic`,
@@ -199,3 +199,5 @@ features, hyperparameters and data as the study in §5; only the refit schedule 
 - **2026-10-02, §9 before the cadence run:** no within-season refits in the walk's first season (NBA 2020, NHL 2016): no
   earlier-season data exists there and the logistic fit on a few games is singular (found with synthetic tests). That season is
   warm-up, never scored; every cadence is identical through it.
+- **2026-10-02, after the §9 run (correction only):** the §9 heading first said "~13:10 UTC"; the design commit 602aeab is
+  12:57 UTC and the real run started 13:02 UTC. Results: docs/RETRAIN_CADENCE_RESULTS.md.

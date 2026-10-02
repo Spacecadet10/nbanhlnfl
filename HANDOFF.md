@@ -1,6 +1,19 @@
 # Current handoff
 
-## Gap closing 1–4 and 7 — Claude, 2026-10-02 ~13:30 UTC (current; review requested)
+## Retraining-cadence comparison — Claude, 2026-10-02 ~13:20 UTC (branch retrain-cadence, worktree ../nba-predictor-cadence; not merged)
+- Design first: docs/MODEL_SELECTION.md §9 (602aeab), first-season amendment (ae37db0), both before the real run.
+- Built `app/retrain_cadence.py` (wrapper refits existing members monthly/weekly on results delivered by the cutoff; no member
+  definition changed), CLI `retrain-cadence`, 11 tests (`tests/test_retrain_cadence.py`). No live code path, job, store or
+  schema changed; run on `.backup` copies; reports in `data/reports/retrain-cadence-{nba,nhl}-20261002/`.
+- Checks: 372 passed in the worktree; `scripts/check_project.py` structure guard passed (`--ready` not run: worktree has no
+  frontend install, frontend untouched). Season cadence reproduced all 9 members exactly on real data.
+- Result (exploratory, docs/RETRAIN_CADENCE_RESULTS.md): NHL no benefit; NBA winner models tiny gains within noise; NBA score
+  models improve, `gbt_points` meets the pre-set rule (weekly margin log score −0.008/game) but stays behind season-cadence
+  `ridge_points`.
+- Next (needs approval): review, then optionally record `gbt_points@weekly` / `ridge_points@weekly` as prospective shadow
+  members from 2026-10-20; then the CatBoost challenger.
+
+## Gap closing 1–4 and 7 — Claude, 2026-10-02 ~13:30 UTC (review requested)
 - User asked to close five reported gaps, keep abstention, add reliability tables only, choose the best single model on earlier
   data, keep old rows' missing provenance unknown, and show research per selected market. No new candidate, rule, threshold
   or experiment was added.
