@@ -12,6 +12,7 @@ const NAMES: Record<string, string> = {
   availability_two_hour: 'Injury-aware logistic', hockey_elo: 'Elo', goals_poisson: 'Goals model', hockey_logistic: 'Logistic',
   hockey_gbt: 'Boosted trees', points_normal: 'Points model', ridge_points: 'Ridge points', gbt_points: 'Boosted points',
   goals_draw: 'Goals + draw adjustment', goals_glm: 'Goals regression', average: 'Equal average', stack: 'Learned stacker',
+  'ridge_points@weekly': 'Ridge points (weekly refit, shadow)', 'gbt_points@weekly': 'Boosted points (weekly refit, shadow)',
 };
 export const modelName = (n: string) => NAMES[n] ?? n;
 const MARKET: Record<string, string> = { winner: 'Winner', reg3: 'Regulation 3-way', spread: 'Spread / puck line', total: 'Total',
