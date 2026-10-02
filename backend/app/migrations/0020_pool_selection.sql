@@ -73,7 +73,7 @@ BEGIN SELECT RAISE(ABORT, 'pool decision sport does not match this store'); END;
 CREATE TRIGGER pool_selections_guard BEFORE INSERT ON pool_selections
 WHEN NEW.sport IS NOT (SELECT sport FROM store_identity)
   OR NOT EXISTS (SELECT 1 FROM research_cohorts c WHERE c.cohort_id = NEW.cohort_id AND c.game_id = NEW.game_id
-                 AND c.market = NEW.market AND c.generated_at <= NEW.generated_at)
+                 AND c.market = NEW.market AND c.generated_at <= NEW.generated_at AND c.tipoff_at = NEW.tipoff_at)
   OR NEW.tipoff_at IS NOT (SELECT tipoff_at FROM games WHERE game_id = NEW.game_id)
   OR (SELECT status FROM games WHERE game_id = NEW.game_id) IS NOT 'scheduled'
   OR NEW.generated_at >= NEW.tipoff_at
@@ -86,3 +86,27 @@ WHEN NEW.sport IS NOT (SELECT sport FROM store_identity)
                           AND n.selector_version = d.selector_version AND n.definition = d.definition
                           AND n.registry = d.registry AND n.decided_at > d.decided_at AND n.decided_at <= NEW.generated_at)))
 BEGIN SELECT RAISE(ABORT, 'pool selection must use its cohort and a pool decision in force, within two hours before the start'); END;
+
+-- 4. Provenance of candidate artifacts saved before digests existed: never loaded, superseded by a deterministic refit;
+--    records whether the refit reproduced the content digest the earlier code registered. Append-only; `limitation`
+--    states what this cannot establish.
+CREATE TABLE artifact_adoptions (
+  adoption_id         INTEGER PRIMARY KEY,
+  candidate           TEXT NOT NULL,
+  artifact            TEXT NOT NULL,
+  legacy_sha256       TEXT NOT NULL,
+  legacy_file_written_at TEXT NOT NULL,
+  superseded_at       TEXT NOT NULL,
+  new_sha256          TEXT NOT NULL,
+  definition          TEXT NOT NULL,
+  trained_season      INTEGER NOT NULL,
+  training_games      INTEGER NOT NULL,
+  results_fingerprint TEXT NOT NULL,
+  content_digest      TEXT NOT NULL,
+  registered_fit_id   INTEGER REFERENCES model_fits(fit_id),
+  registered_digest_match INTEGER CHECK (registered_digest_match IN (0, 1)),
+  limitation          TEXT NOT NULL,
+  UNIQUE (artifact, legacy_sha256)
+);
+CREATE TRIGGER artifact_adoptions_no_update BEFORE UPDATE ON artifact_adoptions BEGIN SELECT RAISE(ABORT, 'artifact_adoptions are append-only'); END;
+CREATE TRIGGER artifact_adoptions_no_delete BEFORE DELETE ON artifact_adoptions BEGIN SELECT RAISE(ABORT, 'artifact_adoptions are append-only'); END;

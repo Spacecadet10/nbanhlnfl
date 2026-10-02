@@ -173,16 +173,6 @@ def start_changed(row) -> bool:
     return row["cutoff_at"] != row["tipoff_at"]
 
 
-def market_outcome(row) -> str:
-    """market_live.outcome with the two-hour rule for near-tipoff market forecasts: any change of the start after the
-    forecast voids it (the 12-hour tolerance in markets.settle remains for night-before rows only). `row` is a
-    market_live.latest row (forecast `tipoff_at`, current `game_tipoff_at`)."""
-    from . import market_live
-    if row["policy"] == POLICY and row["status"] not in ("postponed", "canceled") and row["tipoff_at"] != row["game_tipoff_at"]:
-        return "void"
-    return market_live.outcome(row)
-
-
 def latest_rows(conn: sqlite3.Connection, version: Optional[str] = None) -> list[sqlite3.Row]:
     """Latest near-tipoff forecast per game with its freshness record and the game's result fields."""
     return conn.execute(

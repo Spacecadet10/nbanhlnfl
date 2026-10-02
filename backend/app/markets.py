@@ -12,7 +12,6 @@ MID_LABEL = {"reg3": "draw", "spread": "push", "total": "push", "team_total_home
 SIDE_LABELS = {"winner": ("home", None, "away"), "reg3": ("home", "draw", "away"), "spread": ("home", "push", "away"),
                "total": ("over", "push", "under"), "team_total_home": ("over", "push", "under"),
                "team_total_away": ("over", "push", "under")}
-VOID_IF_MOVED_HOURS = 12
 SUM_TOLERANCE = 1e-6
 
 
@@ -58,9 +57,8 @@ def settle(market: str, line: Optional[float], *, status: str, home: Optional[in
     """Realised side 'a' / 'mid' / 'b', or 'pending' / 'void' / 'unscorable' (docs/MARKETS.md)."""
     if status in ("postponed", "canceled"):
         return "void"
-    if tipoff_at and forecast_tipoff_at and \
-            abs((_parse(tipoff_at) - _parse(forecast_tipoff_at)).total_seconds()) > VOID_IF_MOVED_HOURS * 3600:
-        return "void"
+    if tipoff_at and forecast_tipoff_at and _parse(tipoff_at) != _parse(forecast_tipoff_at):
+        return "void"          # any change of the start after the forecast: it was made for a different game time
     if status != "final":
         return "pending"
     if home is None or away is None:

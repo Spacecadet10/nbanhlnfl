@@ -181,14 +181,14 @@ def test_stale_inputs_skip_the_forecast_until_the_box_score_is_available(sealed)
     assert late["created"] == 1 and late["skipped_stale_inputs"] == []
 
 
-def test_shadow_job_is_logged_and_reports_stale_skips_as_failed(sealed):
-    ok = jobs.shadow_forecasts(sealed, now=NOW)
-    assert ok["status"] == "success" and ok["created"] == 2 and "forecasts" not in ok
-    ingest_events(sealed, [event("9001", "2026-10-19T23:00:00Z", "1", "5", "STATUS_FINAL", 110, 100)], "2026-10-20T05:00:00Z")
-    bad = jobs.shadow_forecasts(sealed, now="2026-10-20T12:00:00Z")
-    assert bad["status"] == "failed" and bad["skipped_stale_inputs"][0]["game_id"] == "espn:g1"
-    assert [r[0] for r in sealed.execute("SELECT status FROM job_runs WHERE job = 'shadow' ORDER BY run_id")] == \
-        ["success", "failed"]
+def test_discontinued_shadow_job_refuses_before_writing(sealed):
+    """Night-before shadow recording is discontinued under the two-hour policy (review finding 6): the job path refuses
+    before logging a run or writing a forecast. Stale-input reporting of shadow.predict itself is tested above."""
+    before = sealed.execute("SELECT COUNT(*) FROM predictions").fetchone()[0]
+    with pytest.raises(RuntimeError, match="discontinued"):
+        jobs.shadow_forecasts(sealed, now=NOW)
+    assert sealed.execute("SELECT COUNT(*) FROM job_runs WHERE job = 'shadow'").fetchone()[0] == 0
+    assert sealed.execute("SELECT COUNT(*) FROM predictions").fetchone()[0] == before
 
 
 def test_daily_runs_shadow_steps_only_when_enabled(sealed, monkeypatch):

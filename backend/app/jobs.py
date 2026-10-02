@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 from zoneinfo import ZoneInfo
 
-from . import agreement, config, ingest, injuries, live, market_live, near_tipoff, research_live, shadow
+from . import agreement, config, ingest, injuries, live, market_live, near_tipoff, research_live
 from .db import store_sport, utc_now
 from .sources import espn, nhl_stats
 
@@ -374,15 +374,9 @@ def score(conn: sqlite3.Connection) -> dict:
 
 
 def shadow_forecasts(conn: sqlite3.Connection, **kw) -> dict:
-    """Records the sealed challenger's shadow forecasts (app/shadow.py). Stale-input skips make the job 'failed' so
-    they are visible; forecasts for other games are still recorded."""
-    run_id = _start(conn, "shadow")
-    try:
-        out = shadow.predict(conn, write=True, **kw)
-    except Exception as exc:
-        return _finish(conn, run_id, "failed", 1, {"error": f"{type(exc).__name__}: {exc}"})
-    out.pop("forecasts")
-    return _finish(conn, run_id, "failed" if out["skipped_stale_inputs"] else "success", 1, out)
+    """Discontinued night-before shadow recording (as jobs.predict; review finding 6): refuses before writing anything.
+    The CLI `shadow-predict --record` is already disabled; existing shadow rows remain unchanged."""
+    raise RuntimeError(NIGHT_BEFORE_DISCONTINUED)
 
 
 def research_forecasts(conn: sqlite3.Connection, keep: bool = False, **kw) -> dict:

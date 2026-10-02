@@ -299,7 +299,10 @@ def test_settlement_pending_void_and_moved_games():
     assert markets.settle("total", 5.5, status="canceled", home=None, away=None) == "void"
     assert markets.settle("total", 5.5, status="final", home=3, away=2, tipoff_at="2024-01-17T00:00:00Z",
                           forecast_tipoff_at="2024-01-15T00:00:00Z") == "void"
-    assert markets.settle("total", 5.5, status="final", home=3, away=2, tipoff_at="2024-01-15T03:00:00Z",
+    # Any change of the start voids (audit P12; no 12-hour tolerance): 30 minutes, then an unchanged start.
+    assert markets.settle("total", 5.5, status="final", home=3, away=2, tipoff_at="2024-01-15T00:30:00Z",
+                          forecast_tipoff_at="2024-01-15T00:00:00Z") == "void"
+    assert markets.settle("total", 5.5, status="final", home=3, away=2, tipoff_at="2024-01-15T00:00:00Z",
                           forecast_tipoff_at="2024-01-15T00:00:00Z") == "b"
 
 

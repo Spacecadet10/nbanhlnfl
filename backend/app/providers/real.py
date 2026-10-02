@@ -263,7 +263,7 @@ class RealProvider:
         if r["market_quote_id"] is not None:
             quote = MarketQuoteOut(bookmaker=r["quote_provider"], retrieved_at=r["quote_retrieved_at"], line=r["line"],
                                    price_a=r["price_a"], price_b=r["price_b"], prob_a=r["p_a_devig"], prob_b=r["p_b_devig"])
-        outcome = near_tipoff.market_outcome(r)
+        outcome = market_live.outcome(r)
         result = market_live.result_for_pick(r["market"], side, outcome) if outcome in ("a", "b", "mid") else outcome
         sides = [MarketSide(side="a", label=labels[0], probability=r["p_a"])]
         if r["market"] == "reg3" or r["p_mid"] > 0:
@@ -333,7 +333,7 @@ class RealProvider:
 
     def market_performance(self, market: str, policy: str) -> MarketPerformanceResponse:
         rows = self._market_records(market, policy, None)
-        settled_side = {(x["game_id"], x["market"]): near_tipoff.market_outcome(x)
+        settled_side = {(x["game_id"], x["market"]): market_live.outcome(x)
                         for x in market_live.latest(self.conn, policy=policy, market=market)}
         settled = [r for r in rows if settled_side[(r.game_id, r.forecast.market)] in ("a", "mid", "b")]
 

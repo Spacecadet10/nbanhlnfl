@@ -561,8 +561,8 @@ def canonical_cohorts(conn, market: Optional[str] = None, definition_: Optional[
 
 
 def state(row, as_of: str) -> str:
-    """'settled', 'pending' or 'void' as known at `as_of`. Any change of the start time voids a cohort (stricter than the
-    12-hour market rule: the two-hour forecast was made for a different start)."""
+    """'settled', 'pending' or 'void' as known at `as_of`. Any change of the start time voids a cohort (the same rule as
+    markets.settle: the two-hour forecast was made for a different start)."""
     if row["status"] in ("postponed", "canceled") or row["game_tipoff_at"] != row["tipoff_at"]:
         return "void"
     if row["status"] != "final" or not row["result_available_at"] or row["result_available_at"] > as_of:

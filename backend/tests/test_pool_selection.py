@@ -64,7 +64,8 @@ def add_cohort(c, gid, tipoff, generated, line=-1.5, market="spread", defn=DEFN,
         "INSERT INTO research_cohorts (idempotency_key, sport, game_id, market, line, line_source, market_quote_id, bookmaker, "
         "definition, primary_name, information_at, generated_at, tipoff_at, members, missing, average, stack, agreement) "
         "VALUES (?,?,?,?,?,?,NULL,'null',?,?,?,?,?,?,'{}',?,?,?)",
-        (f"{gid}:{market}:{generated}:{defn}", "nhl", gid, market, line, "model", defn, "goals_poisson", generated,
+        (f"{gid}:{market}:{generated}:{defn}", "nhl", gid, market, line, None if line is None else "model", defn,
+         "goals_poisson", generated,
          generated, tipoff, json.dumps(members), json.dumps(list(members_p)), json.dumps({"p": None, "reason": "test"}),
          json.dumps(agree)))
     return cur.lastrowid
@@ -223,6 +224,18 @@ def test_a_candidate_no_better_than_the_reference_abstains(store):
     assert out["written"][0]["status"] == "abstain"
 
 
+def test_cohorts_made_before_the_registry_took_effect_are_not_evidence(store):
+    """The registry is frozen before the evidence it is judged on: the same 150 games that select the candidate when
+    the registry predates them leave only the 70 later cohorts (< 100 picks) when it took effect at game 80."""
+    end = history(store, 150)
+    reg = pool_registry(effective=ts(START + timedelta(hours=5 * 80 - 2)))
+    cutoff = monday_after(end)
+    assert len(selection.evidence(store, reg, "nhl", "spread", DEFN, cutoff)) == 70
+    assert len(selection.evidence(store, pool_registry(), "nhl", "spread", DEFN, cutoff)) == 150
+    out = selection.decide_due(store, now=cutoff, defn=DEFN, reg=reg)
+    assert out["written"][0]["status"] == "insufficient_evidence"
+
+
 def test_not_before_the_registry_takes_effect(store):
     end = history(store, 150)
     out = selection.decide_due(store, now=monday_after(end), defn=DEFN, reg=pool_registry(effective="2099-01-01T00:00:00Z"))
@@ -311,3 +324,68 @@ def test_roster_eligibility_is_the_registry_route_and_the_decision_in_force(stor
     combo = {c["name"]: c for c in pool_live.roster(store, "nhl", as_of=as_of)["candidates"]}
     assert combo[CAND_B]["selection"] == f"selectable only inside avg:goals_glm+cand:{CAND_B} (incremental value in a combination); never alone"
     assert "research only" in combo[CAND]["selection"]       # not in this registry: 150 games do not make it eligible
+
+
+# --- Review fixes (2026-10-02) ----------------------------------------------------------------------------------------
+def reg3_registry():
+    ev = {"file": "test", "key": "test", "mean": -0.01, "ci95": [-0.02, -0.005], "games": 1000, "weeks": 100}
+    return selection.seal({"registry": "pool-test", "effective_from": "2026-10-01T00:00:00Z", "selector": "selector-v1",
+                           "routes": {}, "rule": "test", "definitions": {CAND: registry.definition(registry.BY_NAME[CAND])},
+                           "sports": {"nhl": {"reg3": [{"source": f"cand:{CAND}", "kind": "single", "members": [f"cand:{CAND}"],
+                                                         "candidates": [CAND], "route": "standalone", "evidence": ev}]}}})
+
+
+def test_winner_and_reg3_vectors_follow_their_own_cohort(store):
+    """Review finding 1: a winner/reg3 candidate forecast names its core cohort; a later cohort is never joined with the
+    earlier (de-duplicated) forecast, and a forecast without a cohort reference is never joined."""
+    tip = START + timedelta(days=2)
+    tipoff = ts(tip)
+    add_game(store, "nhl:r", tipoff)
+    c1 = add_cohort(store, "nhl:r", tipoff, ts(tip - timedelta(minutes=110)), line=None, market="reg3")
+    add_candidate(store, CAND, "nhl:r", tipoff, ts(tip - timedelta(minutes=109)), (0.5, 0.2, 0.3), line=None, market="reg3")
+    f1 = add_candidate(store, CAND, "nhl:r", tipoff, ts(tip - timedelta(minutes=108)), (0.5, 0.2, 0.3), line=None,
+                       market="reg3", ref=f"research_cohorts:{c1}")
+    c2 = add_cohort(store, "nhl:r", tipoff, ts(tip - timedelta(minutes=50)), line=None, market="reg3")
+    assert pool_live.core_lines(store, ["nhl:r"], ts(tip - timedelta(minutes=49)))[("nhl:r", "reg3")] == \
+        {"line": None, "source": "none", "ref": f"research_cohorts:{c2}"}
+    row = lambda i: store.execute("SELECT * FROM research_cohorts WHERE cohort_id=?", (i,)).fetchone()
+    as_of = ts(tip - timedelta(minutes=10))
+    assert selection.pool_vectors(store, reg3_registry(), "nhl", row(c1), as_of)[1] == {f"cand:{CAND}": [f1]}
+    assert selection.pool_vectors(store, reg3_registry(), "nhl", row(c2), as_of) == ({}, {})   # not the c1 forecast
+    f2 = add_candidate(store, CAND, "nhl:r", tipoff, ts(tip - timedelta(minutes=48)), (0.4, 0.3, 0.3), line=None,
+                       market="reg3", ref=f"research_cohorts:{c2}")
+    assert selection.pool_vectors(store, reg3_registry(), "nhl", row(c2), as_of)[1] == {f"cand:{CAND}": [f2]}
+
+
+def test_a_rescheduled_game_is_skipped_and_never_blocks_the_others(store):
+    """Review finding 2: the old cohort of a rescheduled game is void and skipped; the other game is still selected."""
+    end = history(store, 150)
+    selection.decide_due(store, now=monday_after(end), defn=DEFN, reg=pool_registry())
+    now, cid, _ = upcoming(store)
+    tip = datetime(2026, 11, 10, 14, 30, tzinfo=timezone.utc)
+    add_game(store, "nhl:moved", ts(tip))
+    moved = add_cohort(store, "nhl:moved", ts(tip), ts(tip - timedelta(hours=1)))
+    add_candidate(store, CAND, "nhl:moved", ts(tip), ts(tip - timedelta(minutes=58)), (0.8, 0.0, 0.2),
+                  ref=f"research_cohorts:{moved}")
+    store.execute("UPDATE games SET tipoff_at=? WHERE game_id='nhl:moved'", (ts(tip + timedelta(minutes=30)),))
+    out = selection.select(store, game_ids=["nhl:moved", "nhl:u"], now=now, defn=DEFN, reg=pool_registry())
+    assert out["status"] == "success" and [s["game_id"] for s in out["selections"]] == ["nhl:u"]
+    assert store.execute("SELECT game_id FROM pool_selections").fetchall()[0][0] == "nhl:u"
+
+
+def test_report_counts_each_game_once_across_definitions(store):
+    """Review finding 5: a game with cohorts under two core definitions is counted once (the latest cohort)."""
+    end = history(store, 150)
+    reg = pool_registry()
+    selection.decide_due(store, now=monday_after(end), defn=DEFN, reg=reg)
+    for r in store.execute("SELECT * FROM research_cohorts WHERE definition=?", (DEFN,)).fetchall()[:10]:
+        store.execute("UPDATE games SET status='scheduled', home_score=NULL, away_score=NULL, result_available_at=NULL "
+                      "WHERE game_id=?", (r["game_id"],))
+        cid = add_cohort(store, r["game_id"], r["tipoff_at"], ts(datetime.strptime(r["generated_at"], FMT).replace(
+            tzinfo=timezone.utc) + timedelta(minutes=5)), defn="core-test-defn-2")
+        add_candidate(store, CAND, r["game_id"], r["tipoff_at"], ts(datetime.strptime(r["generated_at"], FMT).replace(
+            tzinfo=timezone.utc) + timedelta(minutes=6)), (0.8, 0.0, 0.2), ref=f"research_cohorts:{cid}")
+        settle(store, r["game_id"], r["tipoff_at"], 4, 1)
+    selection.decide_due(store, now=monday_after(end), defn="core-test-defn-2", reg=reg)
+    rep = selection.report(store, "nhl", as_of=monday_after(end), reg=reg)
+    assert rep["markets"]["spread"]["settled_cohorts"] == 150

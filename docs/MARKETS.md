@@ -22,8 +22,9 @@ Changes must be dated here. Nothing in this document claims a betting edge or ex
   de-vigged over its three prices only when all three are quoted; two-way normalisation is never applied to it.
 - **Outcomes.** `win` (side a), `loss` (side b), `push`/`draw` (mid), plus:
   - `pending`: the game is not final yet.
-  - `void`: the game was postponed or canceled, or its scheduled start moved by more than 12 hours after the forecast
-    was generated (the forecast's information no longer describes the game that is played). New forecasts are made for
+  - `void`: the game was postponed or canceled, or its scheduled start changed at all after the forecast was generated
+    (any amount; until 2026-10-02 the rule was "more than 12 hours"; no stored live forecast had a moved start then, so no
+    recorded settlement changed). The forecast's information no longer describes the game that is played. New forecasts are made for
     the rescheduled game.
   - `unscorable`: final, but data required for this market is missing (for example the NHL decision type); reported,
     never guessed.

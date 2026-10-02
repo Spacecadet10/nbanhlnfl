@@ -264,7 +264,7 @@ def test_pool_trigger_rejects_malformed_times_and_games_no_longer_scheduled(upco
         insert(generated_at="2026-10-12T22:45:00Z", idempotency_key="final")
 
 
-def test_tampered_or_undigested_artifact_makes_only_that_candidate_unavailable(upcoming):
+def test_tampered_artifact_makes_only_that_candidate_unavailable(upcoming):
     """Audit P8: a stored fit is verified before it is unpickled; a mismatch is an error for that candidate only (no refit,
     no substitute), and the other candidates still record."""
     lines = {(GID, "spread"): {"line": -1.5, "source": "core_cohort", "ref": "cohort:1"}}
@@ -278,25 +278,30 @@ def test_tampered_or_undigested_artifact_makes_only_that_candidate_unavailable(u
     cands = {r["candidate"] for r in upcoming.execute("SELECT candidate FROM candidate_forecasts")}
     assert "poisson_draw:nhl_base" not in cands and {"multinomial_l2:nhl_base", "logit_l2:nhl_goalie"} <= cands
     assert path.read_bytes().endswith(b"x")                                         # never silently refit over
-    pool_live._sidecar(path).unlink()                                             # written after 0020: never adopted
-    assert "no digest" in _record(upcoming, lines=lines)["errors"]["poisson_draw:nhl_base"]
 
 
-def test_legacy_artifact_without_digest_is_adopted_once_and_then_verified(upcoming):
-    """Artifacts saved before migration 0020 (no digest yet) are adopted once — digest written, adoption reported — so
-    live research keeps recording after the upgrade; afterwards a change to the file is an error."""
-    import os
+def test_artifact_without_digest_is_never_loaded_and_superseded_with_provenance(upcoming, monkeypatch):
+    """A file saved before digests existed is never unpickled: kept as .legacy, superseded by a deterministic refit whose
+    content digest is compared with the fit the earlier code registered; the provenance and its limitation are stored."""
     lines = {(GID, "spread"): {"line": -1.5, "source": "core_cohort", "ref": "cohort:1"}}
-    _record(upcoming, lines=lines, write=False)
+    assert _record(upcoming, lines=lines)["errors"] == {}                          # registers the fits (model_fits)
     path = next(p for p in pool_live.artifact_dir("nhl").rglob("*.pkl") if "poisson_draw__nhl_base" in str(p))
-    pool_live._sidecar(path).unlink()
-    os.utime(path, (946684800, 946684800))                                        # written in 2000: before 0020
-    out = _record(upcoming, lines=lines)
-    assert "poisson_draw:nhl_base" not in out["errors"] and [a["artifact"] for a in out["artifacts_adopted"]] == [path.name]
-    assert pool_live._sidecar(path).exists()
-    assert _record(upcoming, lines=lines)["artifacts_adopted"] == []               # once only
-    path.write_bytes(path.read_bytes() + b"x")
-    assert "mismatch" in _record(upcoming, lines=lines)["errors"]["poisson_draw:nhl_base"]
+    pool_live._sidecar(path).unlink()                                               # as the code before 0020 left it
+    legacy_bytes = path.read_bytes()
+    loaded = []
+    real_loads = pool_live.pickle.loads
+    monkeypatch.setattr(pool_live.pickle, "loads", lambda data, *a, **k: loaded.append(data) or real_loads(data, *a, **k))
+    out = _record(upcoming, lines=lines, now="2026-10-12T22:10:00Z")
+    assert legacy_bytes not in loaded                                               # the legacy file is never unpickled
+    assert "poisson_draw:nhl_base" not in out["errors"]
+    (rec,) = out["artifacts_adopted"]
+    assert rec["artifact"] == path.name and rec["registered_digest_match"] is True and rec["registered_fit"]["fit_id"]
+    assert path.with_name(path.name + ".legacy").read_bytes() == legacy_bytes and pool_live._sidecar(path).exists()
+    row = upcoming.execute("SELECT * FROM artifact_adoptions").fetchone()
+    assert row["candidate"] == "poisson_draw:nhl_base" and row["registered_digest_match"] == 1 and "not trusted" in row["limitation"]
+    assert _record(upcoming, lines=lines, now="2026-10-12T22:20:00Z").get("artifacts_adopted", []) == []   # once
+    with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+        upcoming.execute("DELETE FROM artifact_adoptions")
 
 
 def test_experiment_log_lists_skipped_and_failed_configurations(monkeypatch):

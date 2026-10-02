@@ -377,3 +377,10 @@ measured honestly against confidence alone. The user reported an earlier ~83% sy
   vote, never enter averages or stackers, and a shadow skip or error is reported (`partial`) without failing the run. Fix found
   while integrating: line-market agreement had counted the weekly shadow members' votes since 9fac164 (never deployed with
   cohorts: no NBA cohort exists before 2026-10-20); agreement now uses the registered members only (test added).
+- **2026-10-02 ~22:00 UTC, start-change voiding unified (new core definition):** `markets.settle` now voids a forecast on any
+  change of the start (was: more than 12 hours), so scoring, CLI, API, tracking and research cohorts apply one rule.
+  `markets.py` is part of the research identity, so the core research definition changes (NHL `5040a9e7ad2ab51c` →
+  `7f9821facdf5b8f9` on a store copy; NBA likewise). Earlier cohorts, selections and decisions are kept under their own
+  definition; the selector's prospective evidence restarts under the new one (it was 0 settled cohorts in every market, so
+  no evidence is lost). No stored live forecast had a moved start (NBA 0 / NHL 0 of 510 market forecasts), so no recorded
+  settlement changes.

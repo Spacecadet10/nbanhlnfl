@@ -158,8 +158,8 @@ def test_night_before_job_paths_refuse_before_writing(tmp_path, monkeypatch):
 
 
 def test_near_tipoff_market_forecast_is_void_on_any_start_change(sealed):
-    """Audit P12: a two-hour market forecast is void when the start changes at all (here 30 minutes); a night-before row
-    keeps the 12-hour tolerance of markets.settle."""
+    """Audit P12: a market forecast is void when the start changes at all (here 30 minutes), in every reader: the
+    settlement used by the API, tracking and the CLI/daily score (market_live.score)."""
     add_upcoming(sealed, start="2026-10-10T19:00:00", at="2026-10-10T02:00:00Z")
     pre = market_live.forecast(sealed, now="2026-10-10T03:00:00Z", game_ids=["nhl:2026020001"])  # night-before (pregame)
     assert pre["created"] > 0
@@ -173,6 +173,7 @@ def test_near_tipoff_market_forecast_is_void_on_any_start_change(sealed):
     near_rows = market_live.latest(sealed, policy="near_tipoff")
     night_rows = market_live.latest(sealed, policy="pregame")
     assert near_rows and night_rows
-    assert {near_tipoff.market_outcome(r) for r in near_rows} == {"void"}
-    assert all(near_tipoff.market_outcome(r) not in ("void", "pending") for r in night_rows)
-    assert all(near_tipoff.market_outcome(r) == market_live.outcome(r) for r in night_rows)
+    assert {market_live.outcome(r) for r in near_rows} == {"void"}
+    assert {market_live.outcome(r) for r in night_rows} == {"void"}               # same rule for the archive
+    daily = market_live.score(sealed, policy="near_tipoff")["markets"]              # CLI score-markets / daily summary
+    assert all(m["void"] == m["forecasts"] and m["win"] + m["loss"] + m["push"] == 0 for m in daily.values())

@@ -69,7 +69,8 @@ def build_registry(effective_from: str, assess: Optional[dict] = None) -> dict:
         per_market = {}
         for market, am in sorted((rep.get("markets") or {}).items()):
             strongest = am.get("strongest_existing")
-            combos = {c["combination"].split(" (ablation")[0]: (i, c) for i, c in enumerate(am.get("combinations") or [])}
+            combos = {(c["combination"].split(" (ablation")[0], c["combination"].split("remove ")[-1].rstrip(")")): (i, c)
+                      for i, c in enumerate(am.get("combinations") or []) if "(ablation: remove " in c["combination"]}
             entries = {}
             for spec in registry.for_sport(sport):
                 if spec.role == "reference" or market not in spec.markets:
@@ -90,7 +91,7 @@ def build_registry(effective_from: str, assess: Optional[dict] = None) -> dict:
                 for g in gains:
                     if g == STANDALONE:
                         continue
-                    i, combo = combos[g]
+                    i, combo = combos[(g, spec.name)]
                     names = _members(g)
                     source = "avg:" + "+".join(f"cand:{n}" if n in registry.BY_NAME else n for n in names)
                     ent = entries.setdefault(source, {
@@ -144,9 +145,10 @@ def registry_id(reg: dict) -> str:
 # --- Vectors for one core cohort ----------------------------------------------------------------------------------
 def pool_vectors(conn, reg: dict, sport: str, cohort, as_of: str) -> tuple[dict, dict]:
     """(source -> vector, source -> forecast ids used) for one core cohort row. A candidate vector is joined only from a
-    candidate forecast made for this exact cohort: same game, market and start; for line markets the same line AND
+    candidate forecast made for this exact cohort: same game, market and start; the same line (none for winner/reg3) and
     `line_ref` naming this cohort; the registry's pinned candidate identity; made at or after the cohort and before the
-    start, and known at `as_of`. Anything else leaves the source absent (no fallback)."""
+    start, and known at `as_of`. Anything else leaves the source absent (no fallback). Winner/reg3 forecasts name their
+    cohort too, so a later cycle's cohort is never joined with an earlier, de-duplicated forecast (review finding 1)."""
     ents = entries(reg, sport, cohort["market"])
     if not ents:
         return {}, {}
@@ -156,11 +158,9 @@ def pool_vectors(conn, reg: dict, sport: str, cohort, as_of: str) -> tuple[dict,
         sql = ("SELECT forecast_id, p_a, p_mid, p_b FROM candidate_forecasts WHERE game_id=? AND market=? AND candidate=? "
                "AND model_version=? AND tipoff_at=? AND generated_at<tipoff_at AND generated_at>=? AND generated_at<=?")
         params = [cohort["game_id"], cohort["market"], name, mv, cohort["tipoff_at"], cohort["generated_at"], as_of]
-        if cohort["line"] is not None:
-            sql += " AND line=? AND line_ref=?"
-            params += [cohort["line"], f"research_cohorts:{cohort['cohort_id']}"]
-        else:
-            sql += " AND line IS NULL"
+        # Every market: the forecast must name this cohort; line markets also the same line (winner/reg3: none).
+        sql += " AND line IS ? AND line_ref=?"
+        params += [cohort["line"], f"research_cohorts:{cohort['cohort_id']}"]
         r = conn.execute(sql + " ORDER BY generated_at DESC, forecast_id DESC LIMIT 1", params).fetchone()
         if r is not None:
             cand[f"cand:{name}"] = ((r["p_a"], r["p_mid"], r["p_b"]), r["forecast_id"])
@@ -184,9 +184,12 @@ def _item(conn, reg, sport, row, as_of, realised=None) -> tuple[dict, dict]:
 
 
 def evidence(conn, reg: dict, sport: str, market: str, defn: str, cutoff: str) -> list:
-    """As research_live.evidence (canonical core cohorts settled before `cutoff`), with pool vectors known at `cutoff`."""
+    """As research_live.evidence (canonical core cohorts settled before `cutoff`), with pool vectors known at `cutoff`.
+    Only cohorts made after the registry took effect count: the registry is frozen before the evidence it is judged on."""
     out = []
     for r in research_live.canonical_cohorts(conn, market, defn, as_of=cutoff):
+        if r["generated_at"] < reg["effective_from"]:
+            continue
         if r["tipoff_at"] >= cutoff or research_live.state(r, cutoff) != "settled":
             continue
         y = research_live._realised(market, r["line"], r, r["decision"])
@@ -283,51 +286,64 @@ def select(conn, *, game_ids: list, now: Optional[str] = None, write: bool = Tru
     stamp = lambda: now if fixed else utc_now()
     wanted, latest = set(game_ids), {}
     for r in research_live.canonical_cohorts(conn, None, defn, as_of=now):
-        if r["game_id"] in wanted and pool_sources(reg, sport, r["market"]) and r["tipoff_at"] > now:
+        # Only cohorts for the game's current start of a still-scheduled game (a rescheduled game's old cohort is void).
+        if (r["game_id"] in wanted and pool_sources(reg, sport, r["market"]) and r["tipoff_at"] > now
+                and r["status"] == "scheduled" and research_live.state(r, now) != "void"):
             latest.setdefault(r["game_id"], {})[r["market"]] = r
     for gid in game_ids:
         per_market = latest.get(gid, {})
         if not per_market:
             continue
-        generated = stamp()
-        drows = {m: decision_in_force(conn, sport, m, defn, rid, generated) for m in per_market}
-        context = research_live._key(sorted((m, r["cohort_id"], None if drows[m] is None else drows[m]["decision_id"])
-                                            for m, r in per_market.items()), "pool", rid)
-        cands, rows = {}, {}
-        for market, r in per_market.items():
-            drow = drows[market]
-            dec = None if drow is None else {"status": drow["status"], "rule": json.loads(drow["rule"]),
-                                             "lower": drow["lower_bound"], "reason": drow["reason"]}
-            it, used = _item(conn, reg, sport, r, generated)
-            s = selector.apply(dec, it, market)
-            cands[market] = (s, dec or {"lower": None})
-            rows[market] = (r, drow, s, used)
-        chosen, reasons = selector.choose_market(cands)
-        if chosen:
-            out["recommendations"].append({"game_id": gid, "market": chosen, "side": cands[chosen][0]["side"]})
-        for market, (r, drow, s, used) in rows.items():
-            if generated >= r["tipoff_at"]:
-                continue
-            rule = json.loads(drow["rule"]) if drow is not None and drow["status"] == "active" else None
-            entry = {"game_id": gid, "market": market, "status": s["status"], "side": s["side"], "reason": s["reason"],
-                     "source": rule["source"] if rule else None, "decision": None if drow is None else drow["status"]}
-            out["selections"].append(entry)
-            if not write:
-                continue
-            key = research_live._key("pool", r["cohort_id"], None if drow is None else drow["decision_id"], context)
-            with transaction(conn):
-                if conn.execute("SELECT 1 FROM pool_selections WHERE idempotency_key=?", (key,)).fetchone():
-                    continue
-                conn.execute(
-                    "INSERT INTO pool_selections (idempotency_key, cohort_id, decision_id, sport, game_id, market, generated_at, "
-                    "tipoff_at, context, status, source, side, probability, threshold, reason, inputs, recommended, game_reason) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                    (key, r["cohort_id"], None if drow is None else drow["decision_id"], sport, gid, market, generated,
-                     r["tipoff_at"], context, s["status"], rule["source"] if rule else None,
-                     None if s["status"] != "pick" else s["side"], s["probability"], rule["threshold"] if rule else None,
-                     s["reason"], json.dumps(used, sort_keys=True), int(market == chosen), reasons[market]))
-            out["selections_created"] += 1
+        try:
+            _select_game(conn, reg, sport, rid, gid, per_market, stamp, write, out)
+        except Exception as exc:         # one game's failure never withholds the others' selections
+            conn.rollback()
+            out["status"] = "partial"
+            out.setdefault("errors", {})[gid] = f"{type(exc).__name__}: {exc}"
     return out
+
+
+def _select_game(conn, reg, sport, rid, gid, per_market, stamp, write, out) -> None:
+    defn = next(iter(per_market.values()))["definition"]
+    generated = stamp()
+    drows = {m: decision_in_force(conn, sport, m, defn, rid, generated) for m in per_market}
+    context = research_live._key(sorted((m, r["cohort_id"], None if drows[m] is None else drows[m]["decision_id"])
+                                        for m, r in per_market.items()), "pool", rid)
+    cands, rows = {}, {}
+    for market, r in per_market.items():
+        drow = drows[market]
+        dec = None if drow is None else {"status": drow["status"], "rule": json.loads(drow["rule"]),
+                                         "lower": drow["lower_bound"], "reason": drow["reason"]}
+        it, used = _item(conn, reg, sport, r, generated)
+        s = selector.apply(dec, it, market)
+        cands[market] = (s, dec or {"lower": None})
+        rows[market] = (r, drow, s, used)
+    chosen, reasons = selector.choose_market(cands)
+    if chosen:
+        out["recommendations"].append({"game_id": gid, "market": chosen, "side": cands[chosen][0]["side"]})
+    for market, (r, drow, s, used) in rows.items():
+        if generated >= r["tipoff_at"]:
+            continue
+        rule = json.loads(drow["rule"]) if drow is not None and drow["status"] == "active" else None
+        entry = {"game_id": gid, "market": market, "status": s["status"], "side": s["side"], "reason": s["reason"],
+                 "source": rule["source"] if rule else None, "decision": None if drow is None else drow["status"]}
+        out["selections"].append(entry)
+        if not write:
+            continue
+        key = research_live._key("pool", r["cohort_id"], None if drow is None else drow["decision_id"], context,
+                                 sorted((k, sorted(v)) for k, v in used.items()))   # a later candidate row → new row
+        with transaction(conn):
+            if conn.execute("SELECT 1 FROM pool_selections WHERE idempotency_key=?", (key,)).fetchone():
+                continue
+            conn.execute(
+                "INSERT INTO pool_selections (idempotency_key, cohort_id, decision_id, sport, game_id, market, generated_at, "
+                "tipoff_at, context, status, source, side, probability, threshold, reason, inputs, recommended, game_reason) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (key, r["cohort_id"], None if drow is None else drow["decision_id"], sport, gid, market, generated,
+                 r["tipoff_at"], context, s["status"], rule["source"] if rule else None,
+                 None if s["status"] != "pick" else s["side"], s["probability"], rule["threshold"] if rule else None,
+                 s["reason"], json.dumps(used, sort_keys=True), int(market == chosen), reasons[market]))
+        out["selections_created"] += 1
 
 
 # --- Reports (prospective scoring of the registered pool sources) -------------------------------------------------
@@ -346,19 +362,25 @@ def report(conn, sport: str, as_of: Optional[str] = None, reg: Optional[dict] = 
         if not ents:
             continue
         extra = [e["source"] for e in ents]
-        items, joined, cohorts = [], {s: 0 for s in extra}, 0
+        items, joined = [], {s: 0 for s in extra}
+        # One cohort per game across core definitions (the latest made), so a definition change never counts a game twice.
+        per_game = {}
         for defn in defs:
             for r in research_live.canonical_cohorts(conn, market, defn, as_of=as_of):
-                if research_live.state(r, as_of) != "settled":
+                if r["generated_at"] < reg["effective_from"] or research_live.state(r, as_of) != "settled":
                     continue
-                y = research_live._realised(market, r["line"], r, r["decision"])
-                if y is None:
-                    continue
-                it = _item(conn, reg, sport, r, as_of, y)[0]
-                cohorts += 1
-                for s in extra:
-                    joined[s] += s in it["vectors"]
-                items.append(it)
+                cur = per_game.get(r["game_id"])
+                if cur is None or (r["generated_at"], r["cohort_id"]) > (cur["generated_at"], cur["cohort_id"]):
+                    per_game[r["game_id"]] = r
+        for r in sorted(per_game.values(), key=lambda r: (r["tipoff_at"], r["game_id"])):
+            y = research_live._realised(market, r["line"], r, r["decision"])
+            if y is None:
+                continue
+            it = _item(conn, reg, sport, r, as_of, y)[0]
+            for s in extra:
+                joined[s] += s in it["vectors"]
+            items.append(it)
+        cohorts = len(items)
         stats = selector.evaluate(items, market, extra) if items else []
         decisions = [dict(d) for d in conn.execute(
             "SELECT scheduled_for, decided_at, effective_until, status, rule, lower_bound, reason, definition FROM pool_decisions "

@@ -81,7 +81,7 @@ Fitted artifacts are persisted with training cutoff, input and model fingerprint
 missing or stale input skips that candidate for that game with a reason; it never blocks the primary, the core cohort or
 other candidates. The pool selector is specified in §7.
 
-## 7. Pool selection (sealed registry `pool-v1`, 2026-10-02 20:22Z, before any prospective pool data)
+## 7. Pool selection (sealed registry `pool-v1`, 2026-10-02 20:22:45Z, from historical evidence only)
 Implemented in `backend/app/candidates/selection.py`; registry `backend/app/candidates/pool_rules.json` (sealed sha256,
 `python -m app.cli pool-rules --effective-from <time>`; frozen from the committed stage-2 evidence, never from live results).
 - **Two qualifying routes**, judged once on the held-out (stage-2) seasons with `held_out_gains`:
@@ -99,15 +99,25 @@ Implemented in `backend/app/candidates/selection.py`; registry `backend/app/cand
 - **Weekly pool decisions** (`pool_decisions`, migration 0020): the unchanged selector-v1 arithmetic (`selector.decide`:
   ≥ 100 settled picks, ≥ 10% coverage, ≥ 3 weeks, Bonferroni lower bound of lift > 0 over every rule of core + pool
   sources, hysteresis), same Monday schedule and evidence cutoff as the core decisions, frozen for the week. Items are the
-  canonical core cohorts settled before the cutoff; each pool source's vector is joined only from a candidate forecast made
-  for that exact cohort (same game, market and start; same line and `line_ref = research_cohorts:<id>`; the registry's
-  pinned candidate identity; made at or after the cohort and before the start). Anything else leaves the source absent
+  canonical core cohorts settled before the cutoff **and made after the registry took effect** (the registry is frozen
+  before the evidence it is judged on); each pool source's vector is joined only from a candidate forecast made for that
+  exact cohort (same game, market and start; same line — none for winner/reg3 — and `line_ref = research_cohorts:<id>`
+  for every market; the registry's pinned candidate identity; made at or after the cohort and before the start). Anything else leaves the source absent
   ("source unavailable", no fallback). Registry membership only makes a source selectable; it is never selected without the
   selector's own evidence.
 - **Live pool selections** (`pool_selections`): written in the two-hour cycle after the candidate forecasts, under the pool
   decision in force, with the candidate forecast ids each source used. Core (v1) decisions, selections, recommendations,
   cohort definitions and the selector version are unchanged (separate tables; no hashed file edited).
-- **Reports:** `/api/research/pool` and `pool-report` score every pool source prospectively (win/loss/push on settled
+- **Live selections skip** a rescheduled game's old cohort (void) and games no longer scheduled; one game's failure never
+  withholds the others'.
+- **Artifacts:** each candidate fit is stored with a sha256 digest, verified before it is unpickled (a mismatch makes that
+  candidate unavailable; never a substitute); writes are locked per artifact and atomic. A file saved before digests
+  existed is **never loaded**: it is kept as `.legacy` and superseded by a deterministic refit from the same earlier-season
+  data, and `artifact_adoptions` records whether the refit reproduced the content digest the earlier code registered in
+  `model_fits` (all 9 live NHL fits did, checked on a store copy), with the limitation that this does not establish the
+  legacy file's bytes afterwards (they are no longer used).
+- **Reports:** `/api/research/pool` and `pool-report` score every pool source prospectively (one cohort per game across
+  core definitions; win/loss/push on settled
   canonical cohorts; void and pending excluded) beside the decision history; the roster shows each candidate's route per
   market and the pool decision in force.
 

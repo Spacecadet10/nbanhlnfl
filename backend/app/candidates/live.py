@@ -6,9 +6,13 @@ append-only `candidate_forecasts` table under model_version 'research-cand:<name
 vote, average or stacker can see them. Fitted artifacts are persisted per (candidate, definition, season) with their
 training cutoff and fingerprints and refit only on the declared schedule (season start).
 """
+import fcntl
 import hashlib
 import json
+import os
 import pickle
+import time
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -42,34 +46,76 @@ def _fingerprint(rows) -> str:
     return hashlib.sha256("\n".join(sorted(r.game_id for r in rows)).encode()).hexdigest()[:16]
 
 
-def ensure_fit(spec, rows: list, season: int, adopt_before: Optional[str] = None,
-               adopted: Optional[list] = None) -> Optional[dict]:
-    """The season-start fit for `season` (earlier seasons only), loaded from disk when its training set is unchanged.
-    `adopt_before`: see _load_verified (legacy artifacts written before digests existed)."""
+def ensure_fit(spec, rows: list, season: int, adopted: Optional[list] = None) -> Optional[dict]:
+    """The season-start fit for `season` (earlier seasons only), loaded from disk when its training set is unchanged and
+    its bytes match their digest. A stored file without a digest (saved before digests existed) is never loaded: it is
+    kept as `<name>.legacy` and superseded by a deterministic refit, whose provenance goes to `adopted`."""
     train = [r for r in rows if r.season < season and r.y is not None]
     if len(train) < registry.MIN_TRAIN[spec.sport]:
         return None
     defn = registry.definition(spec)
     fp = _fingerprint(train)
     path = artifact_dir(spec.sport) / spec.name.replace(":", "__") / f"{defn}-{season}-{fp}.pkl"
-    if path.exists():
-        return _load_verified(path, adopt_before, adopted)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with _locked(path):                  # one writer per artifact: the file and its digest always belong together
+        if path.exists() and _sidecar(path).exists():
+            return _load_verified(path)
+        legacy = None
+        if path.exists():                # no digest: never unpickled
+            data = path.read_bytes()
+            legacy = {"artifact": path.name, "legacy_sha256": hashlib.sha256(data).hexdigest(),
+                      "legacy_file_written_at": datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).strftime(FMT)}
+            path.replace(path.with_name(path.name + ".legacy"))
+        art = _fit(spec, train, season, defn, fp)
+        _write(path, art)
+        if legacy is not None and adopted is not None:
+            adopted.append({**legacy, "superseded_at": utc_now(), "new_sha256": _sidecar(path).read_text().strip(),
+                            "definition": defn, "season": season, "training_games": len(train), "results_fingerprint": fp,
+                            "content_digest": art["artifact_sha256"]})
+        return art
+
+
+def _fit(spec, train: list, season: int, defn: str, fp: str) -> dict:
     model = engine.fit(spec, train)
     sd = None
     if spec.head == "normal":
         _, _, residuals = engine.walk(spec, train)
         sd = engine.residual_sd(residuals, season)
     blob = pickle.dumps(model.objects)
-    art = {"model": model, "sd": sd, "season": season, "definition": defn, "training_games": len(train),
-           "results_fingerprint": fp, "results_available_through": max(r.result_available_at for r in train),
-           "artifact_sha256": hashlib.sha256(blob).hexdigest(), "info": model.info, "fitted_at": utc_now()}
-    path.parent.mkdir(parents=True, exist_ok=True)
+    return {"model": model, "sd": sd, "season": season, "definition": defn, "training_games": len(train),
+            "results_fingerprint": fp, "results_available_through": max(r.result_available_at for r in train),
+            "artifact_sha256": hashlib.sha256(blob).hexdigest(), "info": model.info, "fitted_at": utc_now()}
+
+
+def _write(path: Path, art: dict) -> None:
+    """Data first, then its digest, each via a unique temporary file and an atomic rename (a crash in between leaves a
+    file without a digest, which is superseded by a refit, never loaded)."""
     data = pickle.dumps(art)
-    tmp, side = path.with_suffix(".tmp"), _sidecar(path)
-    side.write_text(hashlib.sha256(data).hexdigest() + "\n")       # written first: a file without its digest never loads
+    tag = f".{os.getpid()}.{time.monotonic_ns()}.tmp"
+    tmp, side = path.with_name(path.name + tag), _sidecar(path)
     tmp.write_bytes(data)
     tmp.replace(path)
-    return art
+    stmp = side.with_name(side.name + tag)
+    stmp.write_text(hashlib.sha256(data).hexdigest() + "\n")
+    stmp.replace(side)
+
+
+@contextmanager
+def _locked(path: Path):
+    with open(path.with_name(path.name + ".lock"), "w") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
+
+
+ADOPTION_LIMITATION = (
+    "The legacy file had no digest, so it was not trusted or loaded; it is kept beside the artifact as '.legacy'. It was "
+    "superseded by a deterministic refit from the same earlier-season data (same definition, season and training-set "
+    "fingerprint). When the refit's content digest equals the digest the earlier code registered in model_fits at first "
+    "use, the forecasts recorded before came from a model with identical content. This does not establish that the "
+    "legacy file's bytes were unmodified afterwards (they are no longer used).")
 
 
 class ArtifactIntegrityError(RuntimeError):
@@ -81,29 +127,37 @@ def _sidecar(path: Path) -> Path:
     return path.with_name(path.name + ".sha256")
 
 
-def _load_verified(path: Path, adopt_before: Optional[str] = None, adopted: Optional[list] = None) -> dict:
-    """Checks the file's sha256 against its sidecar BEFORE unpickling (a pickle round trip is not byte-stable, so the
-    whole stored file is what is verified). A file without a sidecar is an error, except a legacy artifact written before
-    digests existed (file time before `adopt_before`, the time migration 0020 was applied): it is adopted once — its
-    digest is written and the adoption reported — and verified from then on (trust on first use, disclosed)."""
-    data, side = path.read_bytes(), _sidecar(path)
-    digest = hashlib.sha256(data).hexdigest()
-    if not side.exists():
-        written = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).strftime(FMT)
-        if adopt_before is None or written >= adopt_before:
-            raise ArtifactIntegrityError(f"artifact {path.name}: no digest")
-        side.write_text(digest + "\n")
-        if adopted is not None:
-            adopted.append({"artifact": path.name, "written_at": written, "sha256": digest})
-    elif digest != side.read_text().strip():
+def _load_verified(path: Path) -> dict:
+    """Checks the file's sha256 against its digest BEFORE unpickling (a pickle round trip is not byte-stable, so the whole
+    stored file is what is verified)."""
+    data = path.read_bytes()
+    if hashlib.sha256(data).hexdigest() != _sidecar(path).read_text().strip():
         raise ArtifactIntegrityError(f"artifact {path.name}: digest mismatch")
     return pickle.loads(data)
 
 
-def digests_since(conn) -> Optional[str]:
-    """When artifact digests began: the time migration 0020 was applied to this store (None before it)."""
-    r = conn.execute("SELECT applied_at FROM schema_migrations WHERE version=20").fetchone() if _has(conn, "schema_migrations") else None
-    return r[0] if r else None
+def _record_adoption(conn, spec, rec: dict, write: bool) -> None:
+    """Links a superseded legacy artifact to the fit the earlier code registered for the same identity (definition,
+    season, training-set fingerprint) and records whether the refit reproduced its content digest (append-only)."""
+    rec["candidate"] = spec.name
+    # Looked up before this cycle registers its own fit, so a match was registered by the earlier code.
+    fit = conn.execute("SELECT fit_id, first_used_at, params_digest FROM model_fits WHERE member=? AND definition=? "
+                       "AND trained_season=? AND results_fingerprint=? ORDER BY first_used_at, fit_id LIMIT 1",
+                       (f"cand:{spec.name}", rec["definition"], rec["season"], rec["results_fingerprint"])).fetchone() \
+        if _has(conn, "model_fits") else None
+    rec["registered_fit"] = None if fit is None else {"fit_id": fit[0], "first_used_at": fit[1], "params_digest": fit[2]}
+    rec["registered_digest_match"] = None if fit is None else fit[2] == rec["content_digest"][:24]
+    rec["limitation"] = ADOPTION_LIMITATION
+    if write and _has(conn, "artifact_adoptions"):
+        with transaction(conn):
+            conn.execute(
+                "INSERT INTO artifact_adoptions (candidate, artifact, legacy_sha256, legacy_file_written_at, superseded_at, "
+                "new_sha256, definition, trained_season, training_games, results_fingerprint, content_digest, "
+                "registered_fit_id, registered_digest_match, limitation) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (spec.name, rec["artifact"], rec["legacy_sha256"], rec["legacy_file_written_at"], rec["superseded_at"],
+                 rec["new_sha256"], rec["definition"], rec["season"], rec["training_games"], rec["results_fingerprint"],
+                 rec["content_digest"], None if fit is None else fit[0],
+                 None if fit is None else int(rec["registered_digest_match"]), rec["limitation"]))
 
 
 def _register_fit(conn, sport, spec, art, now) -> Optional[int]:
@@ -181,13 +235,15 @@ def record(conn, *, game_ids: Optional[list] = None, now: Optional[str] = None, 
 
 def core_lines(conn, game_ids, now: str) -> dict:
     """(game_id, market) -> the exact line of the latest core research cohort generated at or before `now` (never the
-    expanded experiment's), with its cohort id as the reference. Used when the caller passes no lines."""
+    expanded experiment's), with its cohort id as the reference — for every market, so a winner/reg3 forecast also names
+    the cohort it was made against (a new cohort gives a new candidate row). Used when the caller passes no lines."""
     out = {}
     for gid in game_ids:
-        for r in conn.execute("SELECT cohort_id, market, line, line_source FROM research_cohorts WHERE game_id=? AND line IS NOT NULL "
+        for r in conn.execute("SELECT cohort_id, market, line, line_source FROM research_cohorts WHERE game_id=? "
                               "AND generated_at<=? AND definition NOT LIKE '%:expanded-v1' ORDER BY generated_at, cohort_id",
                               (gid, now)):
-            out[(gid, r["market"])] = {"line": r["line"], "source": f"core_cohort:{r['line_source']}", "ref": f"research_cohorts:{r['cohort_id']}"}
+            out[(gid, r["market"])] = {"line": r["line"], "source": f"core_cohort:{r['line_source']}" if r["line"] is not None
+                                       else "none", "ref": f"research_cohorts:{r['cohort_id']}"}
     return out
 
 
@@ -246,7 +302,11 @@ def _record_spec(conn, eng, spec, history, upcoming, recent, rec, lines, now, fi
     for gid, (game, row) in upcoming.items():
         by_season.setdefault(game.season, []).append(gid)
     for season, gids in by_season.items():
-        art = ensure_fit(spec, history, season, digests_since(conn), out.setdefault("artifacts_adopted", []))
+        adopted: list = []
+        art = ensure_fit(spec, history, season, adopted)
+        for entry in adopted:
+            _record_adoption(conn, spec, entry, write)
+            out.setdefault("artifacts_adopted", []).append(entry)
         if art is None:
             for gid in gids:
                 out["skipped"].setdefault(spec.name, {})[gid] = "not trained: too few earlier-season games"
@@ -268,7 +328,8 @@ def _record_spec(conn, eng, spec, history, upcoming, recent, rec, lines, now, fi
                 continue
             for market in spec.markets:
                 if market in ("winner", "reg3"):
-                    line, source, ref = None, "none", None
+                    ln = lines.get((game.game_id, market))
+                    line, source, ref = None, "none", ln.get("ref") if ln else None
                 else:
                     ln = lines.get((game.game_id, market))
                     if ln is None:
