@@ -155,7 +155,7 @@ def record(conn, *, game_ids: list, winner_run: Optional[dict], history: Optiona
         out["line_state"] = data["source"]
     except Exception as exc:
         out["errors"]["line_members"] = f"{type(exc).__name__}: {exc}"
-        models, current, stacks, reasons, data, known = [], {}, {}, {}, {}, set()
+        models, current, stacks, reasons, data, known = [], {}, {}, {}, {}, {}
     if models:
         _, base = market_live.market_model(conn)
         primary_mv = market_live.model_version(base, "near_tipoff")
@@ -222,11 +222,11 @@ def record(conn, *, game_ids: list, winner_run: Optional[dict], history: Optiona
 
 
 def _params(dist, info: Optional[dict], known, now: str) -> dict:
-    """Distribution parameters, plus the fit identity of a cadence member: the fit in force and the results it could use
-    (all results available at its trigger cutoff, or at `now` when the trigger was a game not yet played)."""
+    """Distribution parameters, plus the fit identity of a cadence member: the fit in force and the results it used, up to the
+    availability time of the last of them (`known`: game id -> result availability)."""
     if info is None:
         return dict(dist.params)
-    through = info["trigger_cutoff"] if info["trigger_game"] in known else now
+    through = known.get(info["last_result"]) if info.get("last_result") else None
     return {**dist.params, "fit": {**info, "results_available_through": through}}
 
 
@@ -429,7 +429,7 @@ def _line_state(conn, eng, models, games, now, defn):
             idents[m.name] = fit_register.identity(mm, rows, now)
         except Exception:
             idents[m.name] = None          # identity is a record, never a reason to withhold a forecast
-    return current, state["stacks"], state["reasons"], {"digest": digest, "source": source, "known": set(known),
+    return current, state["stacks"], state["reasons"], {"digest": digest, "source": source, "known": {g: r.result_available_at for g, r in known.items()},
                                                    "fits": fits, "identities": idents}
 
 

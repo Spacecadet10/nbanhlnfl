@@ -75,7 +75,7 @@ class Cadenced:
         if self.last_fit is None:
             return None
         ids = self.delivered[:self.last_fit["delivered_results"]]
-        return {**self.last_fit, "cadence": self.cadence,
+        return {**self.last_fit, "cadence": self.cadence, "last_result": ids[-1] if ids else None,
                 "results_fingerprint": hashlib.sha256("\n".join(sorted(ids)).encode()).hexdigest()[:16]}
 
     def predict(self, g) -> float:

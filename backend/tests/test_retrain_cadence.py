@@ -95,7 +95,7 @@ def test_live_weekly_fit_uses_exactly_the_results_available_now_and_is_recorded(
     assert info["trigger_game"] == nxt.game.game_id and info["delivered_results"] == len(available)
     assert len(m.member.examples) == len(available)
     assert info["results_fingerprint"] == hashlib.sha256("\n".join(available).encode()).hexdigest()[:16]
-    p = research_live._params(d, info, {r.game.game_id for r in past}, now)
-    assert p["fit"]["results_available_through"] == now and p["fit"]["cadence"] == "weekly" and "margin" in p
+    p = research_live._params(d, info, {r.game.game_id: r.result_available_at for r in past}, now)
+    assert p["fit"]["results_available_through"] == max(r.result_available_at for r in past if r.result_available_at <= now) and p["fit"]["cadence"] == "weekly" and "margin" in p
     # a later result never changes a forecast already made: the member is refit only at the next week's first forecast
-    assert research_live._params(d, None, set(), now) == d.params
+    assert research_live._params(d, None, {}, now) == d.params

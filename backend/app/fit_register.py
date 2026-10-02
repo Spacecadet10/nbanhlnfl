@@ -28,8 +28,8 @@ def identity(model, rows, now: str) -> Optional[dict]:
         return None
     info = model.fit_info() if hasattr(model, "fit_info") else None
     if info is not None:
-        known = {r.game.game_id for r in rows}
-        ids_through = info["trigger_cutoff"] if info["trigger_game"] in known else now
+        avail = {r.game.game_id: r.result_available_at for r in rows}
+        ids_through = avail.get(info.get("last_result")) or now
         return {"schedule": info["cadence"], "fit_kind": info["kind"], "trained_season": getattr(inner, "season", None),
                 "training_games": info["delivered_results"], "results_fingerprint": info["results_fingerprint"],
                 "results_available_through": ids_through, "params_digest": _digest(fitted)}
