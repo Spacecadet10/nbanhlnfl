@@ -13,7 +13,9 @@
 - **4 Storage:** winner cohorts record quote table + id (NBA `odds_quotes`, NHL `market_quotes`); decisions record
   `settlement_version` in evidence; reports expose it. Rows written before this change stay unknown; no migration, no backfill.
 - **7 Today:** research line for the selected market in every market view (line, source, status/reason, missing inputs, minutes).
-- **Review checklist:** `git diff 30b689e..HEAD`; SMOKE_TEST "Gap closing 1–4 and 7"; MODEL_SELECTION amendment of the same date.
+- **Merged** into `shadow-season` as 7bc48c1 after committing Codex's uncommitted advisory unchanged (41fd211, user's choice);
+  live-checkout `scripts/check_project.py --ready` exit 0 (structure, typecheck, build, 361 passed).
+- **Review checklist:** `git diff 30b689e..7bc48c1`; SMOKE_TEST "Gap closing 1–4 and 7"; MODEL_SELECTION amendment of the same date.
 - **Still pending:** first live research cohort → settlement → weekly decision (NHL window tonight; decision Mon 2026-10-05 14:00 UTC).
 
 ## Training-repository advisory — Codex, 2026-10-02
@@ -21,7 +23,7 @@
 - Reviewed upstream READMEs/docs: github.com/catboost/catboost (candidate learner), stanfordmlgroup/ngboost (probabilistic learner), optuna/optuna (bounded tuning), dblackrun/pbpstats (NBA possessions/lineups), sportsdataverse/fastRhockey (NHL play-by-play/goalie data access). Recommendations only, not installed, benchmarked or source-access verified locally.
 - Next proposal: finish current gap fixes, then register a bounded CatBoost challenger and retraining-cadence comparison; audit richer NBA/NHL inputs. No application, model, database or scheduler changes; no tests rerun for this advisory.
 
-## Model agreement, combination and shadow selection — Claude, 2026-10-02 (current)
+## Model agreement, combination and shadow selection — Claude, 2026-10-02
 - **Design first:** docs/MODEL_SELECTION.md (5ea11f5, before any run): audit inventory, candidates, stacking protocol, threshold
   grids, weekly selector (Mon 14:00 UTC), lift-over-reference metric with Bonferroni bound, minimum evidence 100 picks / 10% / 3
   weeks, abstention, one market per game, manual promotion criteria, versioning, off switch. Amendments dated in the same file.
