@@ -201,3 +201,19 @@ harvesting; the stats API has no separate terms. Request volume is kept to one s
   no timestamp. Usable only if snapshotted prospectively (the ESPN NHL day scoreboards now cached by the odds job contain them,
   but they are not parsed). No historical pregame goalie feature is possible.
 - **Player props:** no player identity mapping, participation model, DNP policy or historical prop lines. Not started.
+
+## Feasibility probes — 2026-10-02 (read-only; scratch venv, ~30 requests, 2 files downloaded; nothing ingested)
+| Source | Probe (actual) | Adds beyond current inputs | Coverage verified | Timing | Licence / terms | Cost |
+|---|---|---|---|---|---|---|
+| pbpstats (MIT, last release 2024-04) | stats.nba.com pbp v2/v3: timeout 25 s; cdn.nba.com: 403; data.nba.com 2025-26: empty stub; NBA S3 `liveData` pbp 2019-20/2023-24/2025-26 games: 200; pbpstats `live` provider parsed 0022300061 (191 possessions, lineups) | real possessions, 5-man lineups, shot zones, on/off | single games only | postgame; `Last-Modified` is last rewrite, not first publication | NBA.com terms; package unmaintained; S3 path undocumented | M |
+| SportsDataverse releases (MIT repo; ESPN/NBA content) | `nba_stats_possessions/nba_possessions_2026.parquet` 200 (3.8 MB): 278,341 possessions, 1,400 games incl. all 1,230 regular 2025-26, 0 missing lineups; `nba_lineups_2026.parquet` 200 | as above, historical backfill without hitting stats.nba.com | 2025-26 only (2019-20…2024-25 claimed, not downloaded) | no publication time; possessions release not refreshed in season (last write 2026-08-13) | MIT repo; data owner terms | S backfill, M in-season |
+| NHL api-web pbp (used by fastRhockey) | `/v1/gamecenter/2024020001/play-by-play` 200; `2015020001` 200 | shot x/y, shot type, zone, goalie in net, strength state (`situationCode`), penalties | one game in 2015-16 and 2024-25 | postgame; no availability header | NHL.com terms | M (own xG model, ~1,312 requests/season) |
+| fastRhockey (R, MIT + file, v1.0.0) | read DESCRIPTION/source; not run (R) | wraps the sources above; sdv NHL release files incl. pbp, shifts, xG boosters | not downloaded | — | MIT + file (earlier "unlicensed" note outdated) | reuse sources only |
+| NGBoost 0.5.11 (Apache-2.0) | fit Normal/Bernoulli on synthetic data with sklearn 1.9.1, numpy 2.5.3 | predictive distributions | — | — | Apache-2.0; pulls lifelines, pandas, matplotlib | S, heavy deps |
+| CatBoost 1.2.10 (Apache-2.0) | arm64/cp312 wheel installs with numpy 2.5.3; Logloss and RMSEWithUncertainty fit | learner only | — | — | Apache-2.0; ~88 MB + pandas, matplotlib, plotly | S |
+| Optuna 5.0.0 (MIT) | 20-trial study ran | tuning only | — | — | MIT; sqlalchemy, alembic | S (not needed for a small fixed grid) |
+
+Ranking (Claude): NHL lagged team shot-quality (xG) features from api-web play-by-play are the highest-value feasible addition
+— shots carry far more signal than goals in hockey, the source is free and open now, and in-season refresh is one request per
+finished game. NBA real possessions largely duplicate our possession estimate; lineup-weighted ratings are higher value but
+need an undocumented in-season feed (L). Goalie quality cannot be used pregame (starters known only after the game).
