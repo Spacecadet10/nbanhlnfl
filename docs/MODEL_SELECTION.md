@@ -261,6 +261,41 @@ change an issued forecast (append-only ledger and cohort tables) and never rewri
 - **Known limit:** the research `definition` digest includes source files, so any code change starts a new research identity
   and prospective evidence restarts for that definition. Changes should therefore be batched and infrequent.
 
+## 14. Expanded-combination experiment `expanded-v1` (recorded 2026-10-02 ~16:05 UTC, before any run)
+Question: do the members with genuinely new information add value in combination? The core experiment (§4–§7, §11) is
+unchanged; this is a separate, versioned experiment.
+- **Inventory of the completed §11 search (from its reports):** NBA winner `elo, logistic, logistic_v2, efficiency_margin,
+  gbt_v1`; NBA lines `points_normal, ridge_points, gbt_points, ridge_points@weekly, gbt_points@weekly` (the weekly members
+  WERE included, in every subset family and the stacker); NHL winner `hockey_elo, goals_poisson, hockey_logistic, hockey_gbt`;
+  NHL reg3/lines `goals_poisson, goals_draw, goals_glm`. **Not tested:** `hockey_logistic_xg` (built after the search) and
+  `availability_two_hour` (no historical inputs; prospective only). The live core cohorts exclude all shadow members.
+- **Registered rules (small and fixed; no condition levels; t ∈ {0.55, 0.60, 0.65}):**
+  - *NHL winner* (members `hockey_elo, goals_poisson, hockey_logistic, hockey_gbt, hockey_logistic_xg`): subsets containing xG —
+    the 4 pairs with each existing member, 3 triples (`xg+hockey_elo+hockey_logistic`: ratings + form; `xg+hockey_elo+goals_poisson`:
+    ratings + scoring rates; `xg+hockey_logistic+hockey_gbt`: learned models), and all five. Per subset `unanimous(S)` and
+    `avg(S) ≥ t`; plus `majority(all five)` and an out-of-fold stacker over all five `≥ t`. 36 rules.
+  - *NBA line markets* (spread, total, team totals; members as §11): subsets containing a weekly member — `points_normal +
+    ridge@weekly`, `points_normal + gbt@weekly`, `ridge@weekly + gbt@weekly`, the triple of those three, and all five. Per subset
+    `unanimous(S)` and `avg(S) ≥ t`; plus `majority(all five)`, and stackers over the triple and over all five `≥ t`. 27 rules
+    per market. **Caveat:** these NBA rules were already inside the 1,655-rule §11 family whose results I have seen, so the NBA
+    part is not blind; the NHL xG part is (xG's individual result is known; no combination involving it was run).
+- **Evaluation:** §5 tables (identical outcome, line, settlement and night-before cutoff; shots delivered only to the xG member,
+  §12 rule). Rolling origin as §11 (NBA assess 2023, 2024; NHL 2019, 2020, 2021), selection on earlier evaluated seasons only.
+  Per rule: picks, coverage, W/L/P, accuracy with Wilson interval; matched-coverage comparison against the strongest single
+  (chosen on selection seasons) AND each constituent. Probability quality per subset average and stacker: log loss, Brier,
+  reliability, per season, with paired week-block bootstrap against each constituent.
+- **Qualifying rule (not weakened):** same as §11 — ≥ 100 decided picks, coverage ≥ 5%, Bonferroni (over this family's rules
+  in that sport·market·fold, α = 0.05) lower bound of lift vs the strongest single > 0 — plus a positive point lift against
+  every constituent. Deployable as a recommendation candidate only if it qualifies and stays positive in every later
+  assessment; even then it only enters prospective evaluation (no promotion).
+- **Prospective recording (regardless of the retrospective result):** each two-hour cycle also writes an `expanded-v1` cohort
+  (definition `<core definition>:expanded-v1`) for NHL winner and NBA line markets: all members incl. shadows with their stored
+  forecast references, the all-member average, the expanded stacker (out-of-fold, last two completed seasons) and all-member
+  agreement. Recording only: no selector decision, selection or recommendation uses it; the core record, its definition and
+  its selector are unchanged. Reported in the app as its own group, labelled as recording-only research.
+- **Goalies (assessment only, §15 of this note in docs/CHALLENGER_RESULTS.md):** prospective probable/confirmed goalie
+  snapshots (migration 0014) carry our retrieval time and are usable going forward; assess coverage, lead time and status.
+
 ## Amendments
 - **2026-10-02, before the study run:** `ridge_points` / `gbt_points` spreads have a floor of 1.0 point (`MIN_SD`), found with
   synthetic test data where every total was identical. Real residual spreads are about 12 (margin) and 18 (total) points, so the
