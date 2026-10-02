@@ -300,3 +300,9 @@ Worktree `../nba-predictor-selector` (branch `selector-dev`), merged into `shado
   section empty state and weekly decisions table), History render; no console errors; 390-px frames: page width 386 = viewport
   on all three. New member labels render only once NBA cohorts exist (from 2026-10-20) — unverified in the browser until then.
   Servers stopped, tab closed.
+- **NHL xG shadow (after merge of 7a674f1):** shot import complete in the live NHL store — 14,524 eligible games 2016–2027
+  (1,247,967 unblocked attempts; 8 recent games `observed`, the rest `historical_backfill`; 0 errors, 0 incomplete, 0 pending).
+  One run hit the 2-hour background limit and was resumed (imports are per game and idempotent). Dry run (write=False) of
+  `agreement.predict` on a `.backup` copy at 2026-10-02T20:45Z for nhl:2026020017 (22:30Z): status success, no errors or skips,
+  80 s; forecasts hockey_elo 0.532, goals_poisson 0.470, hockey_logistic 0.588, hockey_gbt 0.656, hockey_logistic_xg 0.620.
+  First real cohorts with the shadow member: tonight's window (from 20:30 UTC) — unverified at the time of writing.
