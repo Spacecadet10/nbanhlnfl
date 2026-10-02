@@ -1,5 +1,32 @@
 # Current handoff
 
+## Combination objective: fixes, audit, gap-fill study, daily-refit test, selection status — Claude (Opus 5.5), 2026-10-02 ~21:35–23:00 UTC
+Single writer (user confirmed other sessions paused). Worktree `../nba-predictor-poolsel`, branch `pool-selector`, commits
+a3a597c..d948a49 on top of e6b6abd. **Corrects the entry below:** the 12 h void rule is retired everywhere (`markets.settle`
+voids on any start change; `near_tipoff.market_outcome` removed), so the core research definition changed (NHL
+`5040a9e7…` → `7f9821fa…`; evidence restarts, old rows kept; no recorded settlement changed: 0 moved starts in either
+store). Legacy candidate artifacts are never loaded (superseded by refits, provenance in `artifact_adoptions`).
+- **Integrity (Phase 1):** review fixes for e6b6abd (8 tests fail on e6b6abd). Independent review of a3a597c (Opus 5.5,
+  read-only): 1 HIGH (dry run destroyed legacy provenance), 3 MEDIUM (clock-dependent candidate idempotency, one game
+  blocking a candidate, stale docs) → fixed in e0961c7/d948a49 (3 tests fail on a3a597c); re-review: all RESOLVED,
+  remaining LOW items listed under Remaining.
+- **Audit (Phase 2):** docs/EVIDENCE_AUDIT.md (per sport × market: implemented / evaluated / recording / eligible / selected).
+- **gapfill-v1 (MODEL_SELECTION §16, registered a87d802 before the run):** 10 markets, ≤ 500 configurations each, from saved
+  out-of-sample tables (no refit). No pick rule qualified; no new combination-only source; NHL reg3 candidate averages do
+  not beat `poisson_draw:nhl_base` alone. CHALLENGER_RESULTS "Gap-filling combination study"; docs/evidence/gapfill-v1/.
+- **daily-v1 (§17, registered 931e85a):** NHL — no member supports daily refits (all Bonferroni intervals span 0; `goals_glm`
+  slightly worse than season-start). NBA — see RETRAIN_CADENCE_RESULTS "Daily refits". Nothing changes live.
+- **App:** `/api/research/status` + Performance "Selection status by market" (rule = exact model/subset, agreement
+  requirement, threshold, versions, decided/evidence/next-review dates, record, status, missing inputs). Daily job reports
+  newly settled results per fit (`training_check`, never refits).
+- **Checks:** see SMOKE_TEST "Review fixes, gap-fill study, selection status" (rehearsal on store copies, browser desktop +
+  390 px emulation; no real phone). `scripts/check_project.py --ready` on d948a49: exit 0 (structure, typecheck, build, 452 passed).
+- **Remaining:** LOW review items — goalie-listing changes without feature changes do not create a new candidate row;
+  `live.score` (discontinued night-before winner records) has no start-change void; `daily-cadence` migrates the store it
+  opens (run on copies only); training check counts all non-preseason finals. Untested: 21 NBA line triples per market and
+  most 4+-member subsets (listed in the gapfill report); line markets never at historical bookmaker lines. No settled
+  prospective evidence yet, so every market shows insufficient evidence (correct).
+
 ## Pool selection + audit fixes P1–P14 — Claude (-b6, single writer), 2026-10-02 ~20:15–21:30 UTC (branch pool-selector)
 Worktree `../nba-predictor-poolsel`, branch `pool-selector` from 9d3e50e. **Not merged** into shadow-season (live): left for
 Codex review. -66 and -6b were paused (messages 20:1xZ; -6b confirmed; -66 blocked on its own prompt with a stand-down queued).
