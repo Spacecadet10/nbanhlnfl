@@ -383,3 +383,20 @@ everything else the real `jobs.selector_decisions` + `jobs.predict_now` wiring. 
   **Phone width: unverified** in this run (the window resize did not change the captured viewport); the card uses the
   existing `table-wrap` pattern.
 - **Tests:** `backend/.venv/bin/python scripts/check_project.py --ready` exit 0: structure guard, typecheck, build, 438 passed, 0 skipped (4 min 15 s).
+
+## Review fixes, gap-fill study, selection status — Claude, 2026-10-02 ~21:40–22:30 UTC (worktree ../nba-predictor-poolsel)
+- **Scratch rehearsal** (scratchpad `rehA`: SQLite-backup copies of both live stores taken 21:41:56Z + `data/research` copy;
+  network steps stubbed; `jobs.selector_decisions` + `jobs.predict_now` with fixed clocks), code a3a597c, NHL:
+  - 21:50Z: 0020 applied; core definition `7f9821facdf5b8f9` (was `5040a9e7ad2ab51c`: `markets.py` changed); 6 new core
+    decisions + 3 pool decisions (all insufficient evidence; earlier 30 decisions kept); 12 cohorts, 12 selections,
+    42 candidate forecasts, 6 pool selections; 9 legacy artifacts superseded with `registered_digest_match = true`.
+  - Same clock again: 0 new rows anywhere (idempotent). 22:20Z: refused `stale_results` (refresh stubbed) — correct.
+  - Read-only counts on the live stores: 0 of 510 NHL market forecasts and 0 NBA have a moved start, so the new void rule
+    changes no recorded settlement.
+- **Regression tests proven on old code:** 8 tests fail on e6b6abd and pass on a3a597c; 3 tests for the independent review
+  of a3a597c (dry run, clock-independent idempotency, per-game isolation) fail on a3a597c and pass on e0961c7.
+- **Browser (API :8041 on `rehA`, Vite :5191), Performance → NHL:** "Selection status by market" card lists all six markets
+  (status, core and pool selector state with reasons, 9 / 6 / 6 eligible pool sources for reg3 / puck line / away total,
+  decided / evidence-to / next-review dates, versions, last cohort time). Desktop 1538 px. Narrow width by **emulation only**
+  (same-origin 390 px iframe; the window resize did not change the captured viewport): page width 388 = viewport (no
+  horizontal page scroll), table scrolls inside `table-wrap` (442 vs 314 px); no console errors. **No real phone test.**
