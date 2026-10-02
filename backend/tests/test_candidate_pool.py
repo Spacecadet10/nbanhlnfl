@@ -268,15 +268,20 @@ def test_tampered_artifact_makes_only_that_candidate_unavailable(upcoming):
     """Audit P8: a stored fit is verified before it is unpickled; a mismatch is an error for that candidate only (no refit,
     no substitute), and the other candidates still record."""
     lines = {(GID, "spread"): {"line": -1.5, "source": "core_cohort", "ref": "cohort:1"}}
-    first = _record(upcoming, lines=lines, write=False)
+    first = _record(upcoming, lines=lines)          # a real cycle saves the artifacts (a dry run never touches disk)
     assert first["errors"] == {}
     path = next(p for p in pool_live.artifact_dir("nhl").rglob("*.pkl") if "poisson_draw__nhl_base" in str(p))
     assert pool_live._sidecar(path).exists()
     path.write_bytes(path.read_bytes() + b"x")                                     # tampered
-    out = _record(upcoming, lines=lines)
+    count = lambda: dict(upcoming.execute("SELECT candidate, count(*) FROM candidate_forecasts GROUP BY candidate").fetchall())
+    before = count()
+    out = _record(upcoming, lines={(GID, "spread"): {"line": -1.5, "source": "core_cohort", "ref": "cohort:2"}})
     assert "ArtifactIntegrityError" in out["errors"]["poisson_draw:nhl_base"] and "mismatch" in out["errors"]["poisson_draw:nhl_base"]
-    cands = {r["candidate"] for r in upcoming.execute("SELECT candidate FROM candidate_forecasts")}
-    assert "poisson_draw:nhl_base" not in cands and {"multinomial_l2:nhl_base", "logit_l2:nhl_goalie"} <= cands
+    after = count()
+    assert after["poisson_draw:nhl_base"] == before["poisson_draw:nhl_base"]       # nothing recorded from a tampered fit
+    produced = {f["candidate"] for f in out["forecasts"]}                           # the others still forecast (rows exist)
+    assert {"multinomial_l2:nhl_base", "logit_l2:nhl_goalie"} <= produced and "poisson_draw:nhl_base" not in produced
+    assert all(after[c] >= 1 for c in ("multinomial_l2:nhl_base", "logit_l2:nhl_goalie"))
     assert path.read_bytes().endswith(b"x")                                         # never silently refit over
 
 
@@ -296,7 +301,8 @@ def test_artifact_without_digest_is_never_loaded_and_superseded_with_provenance(
     assert "poisson_draw:nhl_base" not in out["errors"]
     (rec,) = out["artifacts_adopted"]
     assert rec["artifact"] == path.name and rec["registered_digest_match"] is True and rec["registered_fit"]["fit_id"]
-    assert path.with_name(path.name + ".legacy").read_bytes() == legacy_bytes and pool_live._sidecar(path).exists()
+    (kept,) = path.parent.glob(path.name + ".legacy*")
+    assert kept.read_bytes() == legacy_bytes and pool_live._sidecar(path).exists()
     row = upcoming.execute("SELECT * FROM artifact_adoptions").fetchone()
     assert row["candidate"] == "poisson_draw:nhl_base" and row["registered_digest_match"] == 1 and "not trusted" in row["limitation"]
     assert _record(upcoming, lines=lines, now="2026-10-12T22:20:00Z").get("artifacts_adopted", []) == []   # once
@@ -314,3 +320,52 @@ def test_experiment_log_lists_skipped_and_failed_configurations(monkeypatch):
     assert by["ngboost:nba_base"]["status"] == "skipped" and "not installed" in by["ngboost:nba_base"]["reason"]
     assert all(r["market"] == "total" and r["definition"] for r in rows)
     assert ("mlp:nba_base" in by) == ("total" in registry.BY_NAME["mlp:nba_base"].markets)
+
+
+def test_dry_run_never_touches_artifacts_and_provenance_is_recorded_later(upcoming):
+    """Review (a3a597c) HIGH: a dry run must not rename or refit on disk; a failed adoption insert is retried next cycle."""
+    lines = {(GID, "spread"): {"line": -1.5, "source": "core_cohort", "ref": "cohort:1"}}
+    _record(upcoming, lines=lines)
+    path = next(p for p in pool_live.artifact_dir("nhl").rglob("*.pkl") if "poisson_draw__nhl_base" in str(p))
+    pool_live._sidecar(path).unlink()
+    legacy = path.read_bytes()
+    dry = _record(upcoming, lines=lines, now="2026-10-12T22:10:00Z", write=False)
+    assert any(a.get("dry_run") for a in dry["artifacts_adopted"])
+    assert path.read_bytes() == legacy and not pool_live._sidecar(path).exists()            # disk untouched
+    assert not list(path.parent.glob(path.name + ".legacy*"))
+    real = pool_live._record_adoption
+    pool_live._record_adoption = lambda *a, **k: (_ for _ in ()).throw(sqlite3.OperationalError("disk I/O"))
+    try:
+        out = _record(upcoming, lines=lines, now="2026-10-12T22:15:00Z")                     # adoption insert fails
+    finally:
+        pool_live._record_adoption = real
+    assert "poisson_draw:nhl_base" in out["errors"] or out.get("artifacts_adopted", []) == []
+    assert upcoming.execute("SELECT count(*) FROM artifact_adoptions").fetchone()[0] == 0
+    again = _record(upcoming, lines=lines, now="2026-10-12T22:20:00Z")                       # retried, recorded once
+    assert [a["legacy_sha256"] for a in again["artifacts_adopted"]] == [pool_live.hashlib.sha256(legacy).hexdigest()]
+    assert upcoming.execute("SELECT count(*) FROM artifact_adoptions").fetchone()[0] == 1
+
+
+def test_a_retry_on_the_real_clock_with_unchanged_inputs_writes_nothing(upcoming):
+    """Review (a3a597c) MEDIUM: the key no longer contains the clock-dependent feature-table digest."""
+    lines = {(GID, "spread"): {"line": -1.5, "source": "core_cohort", "ref": "cohort:1"}}
+    first = _record(upcoming, lines=lines, now="2026-10-12T21:40:00Z")
+    second = _record(upcoming, lines=lines, now="2026-10-12T21:45:00Z")
+    assert first["created"] > 0 and second["created"] == 0 and second["already_recorded"] == first["created"]
+
+
+def test_one_games_failure_never_withholds_a_candidates_other_markets_or_games(upcoming, monkeypatch):
+    """Review (a3a597c) MEDIUM: errors are isolated per game and reported with the game."""
+    lines = {(GID, "spread"): {"line": -1.5, "source": "core_cohort", "ref": "cohort:1"}}
+    real = pool_live._record_game
+    calls = []
+
+    def flaky(conn, spec, *a, **k):
+        calls.append(spec.name)
+        if spec.name == "multinomial_l2:nhl_base":
+            raise RuntimeError("boom")
+        return real(conn, spec, *a, **k)
+    monkeypatch.setattr(pool_live, "_record_game", flaky)
+    out = _record(upcoming, lines=lines)
+    assert out["errors"] == {f"multinomial_l2:nhl_base:{GID}": "RuntimeError: boom"}
+    assert any(f["candidate"] == "poisson_draw:nhl_base" for f in out["forecasts"])

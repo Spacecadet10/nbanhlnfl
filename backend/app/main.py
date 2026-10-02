@@ -257,6 +257,18 @@ def research_pool(p=Depends(get_provider)):
     return {**out, "mode": "real"}
 
 
+@app.get("/api/research/status")
+def research_status(p=Depends(get_provider)):
+    """Per market: the selected model or exact subset, agreement requirement, threshold, versions, selection date, evidence
+    cutoff, next review, evidence and status, from the core and pool decisions in force (app/selection_status.py)."""
+    if p.mode != "real":
+        return {"mode": "demo", "sport": "nba", "markets": [],
+                "note": "Selection status reads the real stores' decisions; none in demo mode."}
+    _research_store(p)
+    from . import selection_status
+    return {**selection_status.status(p.conn, p.now), "mode": "real"}
+
+
 @app.get("/api/research/retrospective")
 def research_retrospective(p=Depends(get_provider)):
     from . import combination_research

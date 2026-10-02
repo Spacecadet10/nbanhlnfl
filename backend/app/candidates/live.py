@@ -46,33 +46,49 @@ def _fingerprint(rows) -> str:
     return hashlib.sha256("\n".join(sorted(r.game_id for r in rows)).encode()).hexdigest()[:16]
 
 
-def ensure_fit(spec, rows: list, season: int, adopted: Optional[list] = None) -> Optional[dict]:
+def ensure_fit(spec, rows: list, season: int, adopted: Optional[list] = None, write: bool = True) -> Optional[dict]:
     """The season-start fit for `season` (earlier seasons only), loaded from disk when its training set is unchanged and
     its bytes match their digest. A stored file without a digest (saved before digests existed) is never loaded: it is
-    kept as `<name>.legacy` and superseded by a deterministic refit, whose provenance goes to `adopted`."""
+    kept as `<name>.legacy-<sha12>` and superseded by a deterministic refit, whose provenance goes to `adopted`.
+    With `write=False` (dry run) nothing on disk is touched: a missing or undigested artifact is fitted in memory only."""
     train = [r for r in rows if r.season < season and r.y is not None]
     if len(train) < registry.MIN_TRAIN[spec.sport]:
         return None
     defn = registry.definition(spec)
     fp = _fingerprint(train)
     path = artifact_dir(spec.sport) / spec.name.replace(":", "__") / f"{defn}-{season}-{fp}.pkl"
+    if not write:
+        if path.exists() and _sidecar(path).exists():
+            return _load_verified(path)
+        if path.exists() and adopted is not None:
+            adopted.append({"artifact": path.name, "dry_run": True, "action": "would be superseded by a refit (not done: dry run)"})
+        return {**_fit(spec, train, season, defn, fp), "artifact_path": None}
     path.parent.mkdir(parents=True, exist_ok=True)
     with _locked(path):                  # one writer per artifact: the file and its digest always belong together
         if path.exists() and _sidecar(path).exists():
-            return _load_verified(path)
-        legacy = None
+            return {**_load_verified(path), "artifact_path": str(path)}
         if path.exists():                # no digest: never unpickled
-            data = path.read_bytes()
-            legacy = {"artifact": path.name, "legacy_sha256": hashlib.sha256(data).hexdigest(),
-                      "legacy_file_written_at": datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).strftime(FMT)}
-            path.replace(path.with_name(path.name + ".legacy"))
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            path.replace(path.with_name(f"{path.name}.legacy-{digest[:12]}"))
         art = _fit(spec, train, season, defn, fp)
         _write(path, art)
-        if legacy is not None and adopted is not None:
-            adopted.append({**legacy, "superseded_at": utc_now(), "new_sha256": _sidecar(path).read_text().strip(),
-                            "definition": defn, "season": season, "training_games": len(train), "results_fingerprint": fp,
-                            "content_digest": art["artifact_sha256"]})
-        return art
+        return {**art, "artifact_path": str(path)}
+
+
+def legacy_files(art: dict) -> list:
+    """Superseded legacy files beside this artifact (kept, never loaded), with what is known about each."""
+    if not art.get("artifact_path"):
+        return []
+    path = Path(art["artifact_path"])
+    out = []
+    for f in sorted(path.parent.glob(path.name + ".legacy*")):
+        data = f.read_bytes()
+        out.append({"artifact": path.name, "legacy_file": f.name, "legacy_sha256": hashlib.sha256(data).hexdigest(),
+                    "legacy_file_written_at": datetime.fromtimestamp(f.stat().st_mtime, timezone.utc).strftime(FMT),
+                    "new_sha256": _sidecar(path).read_text().strip(), "definition": art["definition"],
+                    "season": art["season"], "training_games": art["training_games"],
+                    "results_fingerprint": art["results_fingerprint"], "content_digest": art["artifact_sha256"]})
+    return out
 
 
 def _fit(spec, train: list, season: int, defn: str, fp: str) -> dict:
@@ -136,7 +152,7 @@ def _load_verified(path: Path) -> dict:
     return pickle.loads(data)
 
 
-def _record_adoption(conn, spec, rec: dict, write: bool) -> None:
+def _record_adoption(conn, spec, rec: dict) -> bool:
     """Links a superseded legacy artifact to the fit the earlier code registered for the same identity (definition,
     season, training-set fingerprint) and records whether the refit reproduced its content digest (append-only)."""
     rec["candidate"] = spec.name
@@ -148,9 +164,12 @@ def _record_adoption(conn, spec, rec: dict, write: bool) -> None:
     rec["registered_fit"] = None if fit is None else {"fit_id": fit[0], "first_used_at": fit[1], "params_digest": fit[2]}
     rec["registered_digest_match"] = None if fit is None else fit[2] == rec["content_digest"][:24]
     rec["limitation"] = ADOPTION_LIMITATION
-    if write and _has(conn, "artifact_adoptions"):
-        with transaction(conn):
-            conn.execute(
+    if not _has(conn, "artifact_adoptions") or conn.execute(
+            "SELECT 1 FROM artifact_adoptions WHERE artifact=? AND legacy_sha256=?", (rec["artifact"], rec["legacy_sha256"])).fetchone():
+        return False
+    rec["superseded_at"] = utc_now()
+    with transaction(conn):
+        conn.execute(
                 "INSERT INTO artifact_adoptions (candidate, artifact, legacy_sha256, legacy_file_written_at, superseded_at, "
                 "new_sha256, definition, trained_season, training_games, results_fingerprint, content_digest, "
                 "registered_fit_id, registered_digest_match, limitation) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -158,6 +177,7 @@ def _record_adoption(conn, spec, rec: dict, write: bool) -> None:
                  rec["new_sha256"], rec["definition"], rec["season"], rec["training_games"], rec["results_fingerprint"],
                  rec["content_digest"], None if fit is None else fit[0],
                  None if fit is None else int(rec["registered_digest_match"]), rec["limitation"]))
+    return True
 
 
 def _register_fit(conn, sport, spec, art, now) -> Optional[int]:
@@ -240,8 +260,9 @@ def core_lines(conn, game_ids, now: str) -> dict:
     out = {}
     for gid in game_ids:
         for r in conn.execute("SELECT cohort_id, market, line, line_source FROM research_cohorts WHERE game_id=? "
-                              "AND generated_at<=? AND definition NOT LIKE '%:expanded-v1' ORDER BY generated_at, cohort_id",
-                              (gid, now)):
+                              "AND generated_at<=? AND definition NOT LIKE '%:expanded-v1' "
+                              "AND tipoff_at = (SELECT tipoff_at FROM games WHERE game_id=?) ORDER BY generated_at, cohort_id",
+                              (gid, now, gid)):
             out[(gid, r["market"])] = {"line": r["line"], "source": f"core_cohort:{r['line_source']}" if r["line"] is not None
                                        else "none", "ref": f"research_cohorts:{r['cohort_id']}"}
     return out
@@ -303,10 +324,12 @@ def _record_spec(conn, eng, spec, history, upcoming, recent, rec, lines, now, fi
         by_season.setdefault(game.season, []).append(gid)
     for season, gids in by_season.items():
         adopted: list = []
-        art = ensure_fit(spec, history, season, adopted)
-        for entry in adopted:
-            _record_adoption(conn, spec, entry, write)
-            out.setdefault("artifacts_adopted", []).append(entry)
+        art = ensure_fit(spec, history, season, adopted, write=write)
+        out.setdefault("artifacts_adopted", []).extend(adopted)      # dry run: reported only
+        if write and art is not None:
+            for entry in legacy_files(art):  # retried each cycle until recorded (a failed insert never loses provenance)
+                if _record_adoption(conn, spec, entry):
+                    out.setdefault("artifacts_adopted", []).append(entry)
         if art is None:
             for gid in gids:
                 out["skipped"].setdefault(spec.name, {})[gid] = "not trained: too few earlier-season games"
@@ -320,48 +343,60 @@ def _record_spec(conn, eng, spec, history, upcoming, recent, rec, lines, now, fi
         todo = [upcoming[g] for g in gids]
         outputs = engine.outputs(spec, art["model"], [r for _, r in todo], art["sd"])
         for (game, row), o in zip(todo, outputs):
-            reason = _stale(eng, rec, game, recent)
-            if reason is None and not engine.ready(o):
-                reason = "not ready: no out-of-sample residual spread yet"
-            if reason:
-                out["skipped"].setdefault(spec.name, {})[game.game_id] = reason
+            try:
+                _record_game(conn, spec, mv, art, fit_id, game, row, o, rec, recent, lines, now, fixed, write, dataset,
+                             table, eng, out)
+            except Exception as exc:     # one game's failure (e.g. a start change mid-cycle) never withholds the others
+                conn.rollback()
+                out["errors"][f"{spec.name}:{game.game_id}"] = f"{type(exc).__name__}: {exc}"
+
+
+def _record_game(conn, spec, mv, art, fit_id, game, row, o, rec, recent, lines, now, fixed, write, dataset, table, eng, out):
+    reason = _stale(eng, rec, game, recent)
+    if reason is None and not engine.ready(o):
+        reason = "not ready: no out-of-sample residual spread yet"
+    if reason:
+        out["skipped"].setdefault(spec.name, {})[game.game_id] = reason
+        return
+    for market in spec.markets:
+        if market in ("winner", "reg3"):
+            ln = lines.get((game.game_id, market))
+            line, source, ref = None, "none", ln.get("ref") if ln else None
+        else:
+            ln = lines.get((game.game_id, market))
+            if ln is None:
+                out["skipped"].setdefault(spec.name, {})[f"{game.game_id}:{market}"] = "no exact line from the core cohort"
                 continue
-            for market in spec.markets:
-                if market in ("winner", "reg3"):
-                    ln = lines.get((game.game_id, market))
-                    line, source, ref = None, "none", ln.get("ref") if ln else None
-                else:
-                    ln = lines.get((game.game_id, market))
-                    if ln is None:
-                        out["skipped"].setdefault(spec.name, {})[f"{game.game_id}:{market}"] = "no exact line from the core cohort"
-                        continue
-                    line, source, ref = ln["line"], ln.get("source", "core_cohort"), ln.get("ref")
-                vec = engine.vector(o, market, line)
-                if vec is None:
-                    continue
-                pa, pm = round(vec[0], 9), round(vec[1], 9)
-                pb = round(1 - pa - pm, 9)
-                params = {k: (round(v, 6) if isinstance(v, float) else v) for k, v in o.items()}
-                inputs = {"feature_table": table, "features": {k: round(float(v), 6) for k, v in row.x.items()}, **row.meta}
-                key = _key(mv, game.game_id, market, line, ref, dataset, art["artifact_sha256"], params)
-                generated = now if fixed else utc_now()
-                if generated >= game.tipoff_at:
-                    out["skipped"].setdefault(spec.name, {})[f"{game.game_id}:{market}"] = "calculation finished at or after tipoff"
-                    continue
-                item = {"game_id": game.game_id, "candidate": spec.name, "market": market, "line": line,
-                        "p": [pa, pm, pb], "model_version": mv, "generated_at": generated}
-                if write:
-                    with transaction(conn):
-                        cur = conn.execute(
-                            "INSERT OR IGNORE INTO candidate_forecasts (game_id, candidate, model_version, market, line, "
-                            "line_source, line_ref, p_a, p_mid, p_b, params, inputs, fit_id, artifact_sha256, training_cutoff, "
-                            "dataset_version, tipoff_at, generated_at, idempotency_key) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                            (game.game_id, spec.name, mv, market, line, source, ref, pa, pm, pb, json.dumps(params, sort_keys=True),
-                             json.dumps(inputs, sort_keys=True, default=str), fit_id, art["artifact_sha256"],
-                             art["results_available_through"], dataset, game.tipoff_at, generated, key))
-                    new = cur.rowcount == 1
-                    out["created" if new else "already_recorded"] += 1
-                out["forecasts"].append(item)
+            line, source, ref = ln["line"], ln.get("source", "core_cohort"), ln.get("ref")
+        vec = engine.vector(o, market, line)
+        if vec is None:
+            continue
+        pa, pm = round(vec[0], 9), round(vec[1], 9)
+        pb = round(1 - pa - pm, 9)
+        params = {k: (round(v, 6) if isinstance(v, float) else v) for k, v in o.items()}
+        inputs = {"feature_table": table, "features": {k: round(float(v), 6) for k, v in row.x.items()}, **row.meta}
+        # Same fit, same inputs and outputs for the same cohort line → the same row (a retry on the real clock is a
+        # no-op); `dataset` is not in the key because its feature-table digest includes the cycle's cutoff time.
+        key = _key(mv, game.game_id, market, line, ref, game.tipoff_at, art["artifact_sha256"], params,
+                   inputs["features"])
+        generated = now if fixed else utc_now()
+        if generated >= game.tipoff_at:
+            out["skipped"].setdefault(spec.name, {})[f"{game.game_id}:{market}"] = "calculation finished at or after tipoff"
+            continue
+        item = {"game_id": game.game_id, "candidate": spec.name, "market": market, "line": line,
+                "p": [pa, pm, pb], "model_version": mv, "generated_at": generated}
+        if write:
+            with transaction(conn):
+                cur = conn.execute(
+                    "INSERT OR IGNORE INTO candidate_forecasts (game_id, candidate, model_version, market, line, "
+                    "line_source, line_ref, p_a, p_mid, p_b, params, inputs, fit_id, artifact_sha256, training_cutoff, "
+                    "dataset_version, tipoff_at, generated_at, idempotency_key) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (game.game_id, spec.name, mv, market, line, source, ref, pa, pm, pb, json.dumps(params, sort_keys=True),
+                     json.dumps(inputs, sort_keys=True, default=str), fit_id, art["artifact_sha256"],
+                     art["results_available_through"], dataset, game.tipoff_at, generated, key))
+            new = cur.rowcount == 1
+            out["created" if new else "already_recorded"] += 1
+        out["forecasts"].append(item)
 
 
 # --- Reads ----------------------------------------------------------------------------------------------------------
