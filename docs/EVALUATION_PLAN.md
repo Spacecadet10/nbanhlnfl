@@ -480,3 +480,17 @@ nothing is promoted from this development evidence. A null or negative result is
   always get `report_missing = 1` and zero absence features. Also fixed: the season of a report date is the stored season of its games, not
   the calendar (the 2020 bubble ran August-October 2020 in season 2019-20). No definition, feature, weight, threshold or comparison changed;
   the evaluation is rerun once with the fixes and that run is the recorded result.
+- **Result (2026-10-02, corrected run):** passes the rule: avail_v1 − logistic_v2 Brier −0.0022 [−0.0040, −0.0004]; details
+  docs/AVAILABILITY_RESULTS.md.
+
+## Forward candidate `avail_v1` (registered 2026-10-02; separate from the sealed logistic_v2 shadow, which is unchanged)
+- **Definition:** exactly the code at commit 46272ee (`availability.avail_v1`, sealed logistic_v2 settings + the three features), refit at
+  each season start on earlier seasons; model version `avail_v1-evening` plus the definition hash recorded with the first forecast.
+- **When:** the `evening` policy, 17:45 ET on game day, using the 5:30 PM report as retrieved live (availability = our download-completion
+  time, never the printed time); games from 18:00 ET. Frozen Elo and logistic_v2 are recorded at the same cutoff as baselines.
+- **Recording starts only when** the live pipeline exists and is reviewed: (1) current-season player minutes from game summaries collected by
+  the existing box-score job (not yet parsed), (2) an evening job that refreshes, parses the report and records the three forecasts
+  (a new persistent job: needs the user's installation approval). Nothing is backfilled.
+- **Report:** regular season and play-in games with all three forecasts and a final result; paired Brier and log loss vs logistic_v2 and Elo
+  with week-block 95% intervals; coverage and missing-report counts. Fewer than 800 games is inconclusive. No promotion follows
+  automatically; any switch of the live model is a separate decision.
