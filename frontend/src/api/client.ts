@@ -1,6 +1,6 @@
 // The app's single API client. All screens fetch through here; there is no local fallback data.
 import type {
-  GameDetail, GamesResponse, HistoryResponse, MarketHistoryResponse, MarketId, MarketPerformanceResponse, Meta,
+  ThresholdReport, AgreementPerformance, GameDetail, GamesResponse, HistoryResponse, MarketHistoryResponse, MarketId, MarketPerformanceResponse, Meta,
   PerformanceResponse, Policy, Sport,
 } from './types';
 
@@ -40,6 +40,8 @@ const policyParam = (policy?: Policy) => (policy === 'near_tipoff' ? 'near_tipof
 const confParam = (c?: number | null) => (c == null ? undefined : String(c));
 
 export const api = {
+  thresholds: (sport: Sport, signal?: AbortSignal) => get<ThresholdReport>('/thresholds', { sport }, signal),
+  agreementPerformance: (sport: Sport, signal?: AbortSignal) => get<AgreementPerformance>('/agreement-performance', { sport }, signal),
   meta: (sport: Sport, signal?: AbortSignal) => get<Meta>('/meta', { sport }, signal),
   games: (sport: Sport, date: string, policy: Policy, minConfidence: number | null, market: MarketId, signal?: AbortSignal) =>
     get<GamesResponse>('/games', {

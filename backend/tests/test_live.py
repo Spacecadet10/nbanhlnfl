@@ -126,14 +126,15 @@ def test_refresh_retries_then_succeeds_and_logs(store):
     assert skipped["status"] == "skipped" and "quota" in skipped["reason"]
 
 
-def test_refresh_fails_after_retries_and_predict_still_runs(store, monkeypatch):
+def test_nightly_refresh_failure_is_visible_without_early_forecasts(store, monkeypatch):
     def down(_m):
         raise ConnectionError("down")
     out = jobs.daily(store, fetch=down, sleep=lambda _s: None)
     assert out["refresh"]["status"] == "failed" and out["refresh"]["attempts"] == jobs.RETRIES * 1
-    assert out["predict"]["status"] == "success" and out["score"]["status"] == "success"
+    assert "predict" not in out and out["score"]["status"] == "success"
     statuses = [r[0] for r in store.execute("SELECT status FROM job_runs ORDER BY run_id")]
-    assert statuses == ["failed", "success", "success"]
+    assert statuses == ["failed", "success"]
+    assert "markets" not in out and "agreement" not in out
 
 
 def test_refresh_months_cover_late_results_and_next_week():
@@ -223,7 +224,7 @@ def test_odds_job_migration_keeps_existing_job_runs(tmp_path):
                                   "0006_possession_observations.sql", "0007_possession_fetch_events.sql", "0008_shadow_jobs.sql",
          "0009_box_fetch_attempts.sql", "0010_injury_report_attempts.sql", "0011_near_tipoff.sql",
          "0012_markets.sql", "0013_market_forecast_checks.sql",
-         "0014_goalie_snapshots.sql"]
+         "0014_goalie_snapshots.sql", "0015_two_hour_forecasts.sql"]
     conn.execute("INSERT INTO job_runs (job, started_at, status) VALUES ('odds', '2026-09-30T00:01:00Z', 'success')")
     assert [r[0] for r in conn.execute("SELECT job FROM job_runs ORDER BY run_id")] == ["refresh", "odds"]
     conn.close()

@@ -53,7 +53,7 @@ The backend allows CORS from the Vite origin; override with `CORS_ORIGINS` (comm
 | `GET /api/games/{game_id}` | Detail plus point-in-time team stats as of the game's cutoff (404 if unknown) |
 | `GET /api/predictions?run_type=live\|backtest&date_from&date_to&team&min_confidence&limit` | History, latest version per game (422 if `date_from > date_to`). `min_confidence` (0.5–1) keeps picks whose model probability for the predicted winner, max(p_home, 1 − p_home), is at least that value. Each row has `pick` and `confidence`; `record` gives the selected count and the settled win/loss record (unscored games never count) |
 | `GET /api/games?date=…&policy=pregame\|near_tipoff&min_confidence` | The slate. `selection` gives the counts, and each game's `slate_pick` is its pick under the chosen policy only (never the other forecast), with `meets_confidence` |
-| `…/predictions` and `…/performance` `&policy=pregame\|near_tipoff` | Live forecasts only: the night-before record (default) or the near-tipoff record; never mixed (422 with `run_type=backtest`). Game payloads carry an optional `near_tipoff` object next to `prediction` |
+| `…/predictions` and `…/performance` `&policy=pregame\|near_tipoff` | Live forecasts only: the night-before archive (API compatibility default) or the two-hour record (frontend default); never mixed (422 with `run_type=backtest`). Game payloads carry an optional `near_tipoff` object next to `prediction` |
 | `GET /api/performance?run_type=live\|backtest` | Live scoring, or the final-test backtest with baselines. Never mixed |
 
 ## NBA + NHL and markets (contract v3)
@@ -85,39 +85,26 @@ Run from `backend/`:
 ```sh
 .venv/bin/python -m app.cli daily        # refresh → predict → score; exit code 1 if a job failed
 .venv/bin/python -m app.cli refresh      # ESPN months around today; retries 3×; max once per 30 min (--force to override)
-.venv/bin/python -m app.cli predict      # live Elo forecasts for eligible games whose cutoff is within 7 days
+.venv/bin/python -m app.cli predict      # guarded two-hour forecasts; also records supported markets and research candidates
 .venv/bin/python -m app.cli score        # score the latest live forecasts against stored results (read-only)
-.venv/bin/python -m app.cli predict-now [--dry-run]   # near-tipoff forecasts for games tipping off within 24 h (refreshes data first)
+.venv/bin/python -m app.cli predict-now [--dry-run]   # near-tipoff forecasts for games tipping off within 2 h (refreshes data first)
 .venv/bin/python -m app.cli score-near-tipoff         # score near-tipoff forecasts (read-only; separate from the night-before record)
 .venv/bin/python -m app.cli boxscores    # possession refresh: ESPN summaries for recent finals lacking a complete box (max 30/run)
-.venv/bin/python -m app.cli shadow-predict   # sealed challenger's shadow forecasts; a dry run unless --record
-.venv/bin/python -m app.cli shadow-report    # shadow season coverage and scores; --final applies the sealed rule once, after the play-in
+.venv/bin/python -m app.cli shadow-predict   # archived protocol; recording discontinued
+.venv/bin/python -m app.cli shadow-report    # archived shadow protocol report; not the new two-hour research record
 .venv/bin/python -m app.cli injuries [--dry-run]   # raw NBA injury-report PDFs for game windows (pilot; needs NBA_INJURY_COLLECTION=1)
 .venv/bin/python -m app.cli odds         # pregame odds snapshot: ESPN day scoreboards for games within 36 h; max once per 10 min
 .venv/bin/python -m app.cli scheduler --interval-minutes 360 --max-runs 4   # bounded loop (≥30 min interval)
 .venv/bin/python -m app.cli scheduler --job odds --interval-minutes 15 --max-runs 96   # 24 h of odds snapshots
 ```
-- A game on Eastern date D has its cutoff at 00:00 ET on D. Live forecasts must be recorded before it, so run `daily` at
-  least once in the evening before each game day. Preseason and exhibition games are not forecast.
-- Reruns are safe: unchanged data returns the stored forecast. New results create a new forecast version, and the latest
-  version before the cutoff is shown and scored. Every job run goes to `job_runs`, and the app shows the last successful refresh.
-- On this Mac, user LaunchAgents `com.nba-predictor.odds` and `com.nba-predictor.daily` run odds at load and every
-  15 minutes, and run `daily` at 22:00 local time. Their source plists are in `scripts/launchd/`; logs are
-  `data/odds-launchd.log` and `data/daily-launchd.log`. They run only while this Mac is awake and this checkout
-  remains at the configured path. To stop/remove them, run `launchctl bootout gui/501 ~/Library/LaunchAgents/com.nba-predictor.odds.plist`
-  and the same command with `com.nba-predictor.daily.plist`, then remove those two plist files.
-- Near-tipoff forecasts (`predict-now`): a separate forecast for games starting within 24 hours, made with the same frozen Elo from the
-  freshest stored results and stored under its own model version (`…-policy=near_tipoff`, cutoff = tipoff). It refreshes schedule/results,
-  odds and possession stats first, and refuses a game after tipoff, when the last successful results refresh is over 60 minutes old, or
-  while an earlier game of either team has no final result. It never replaces or changes the night-before forecast. Run it by hand; it is
-  not scheduled. Elo does not know about injuries or line-ups.
-- Shadow challenger (`logistic_v2`, sealed in `backend/app/models/shadow_decision.json`): `daily` also runs `boxscores` and records
-  shadow forecasts only when `NBA_SHADOW_RECORDING=1` is set for the daily job. It is off by default in code and enabled on this Mac
-  since 2026-10-01 through `EnvironmentVariables` in `scripts/launchd/com.nba-predictor.daily.plist` (remove that key and reload the
-  agent to turn it off). The Elo forecast, scoring and the app are the same either way. Shadow rows share the ledger (run_type live, their own model_version) and are never shown in the app.
-- Injury-report pilot: collection is off by default. To schedule it, copy `scripts/launchd/com.nba-predictor.injuries.plist` to
-  `~/Library/LaunchAgents/` and `launchctl bootstrap gui/501` it (runs at :02 and :32, sets `NBA_INJURY_COLLECTION=1`). Installed on this Mac
-  on 2026-10-01 (remove with `launchctl bootout gui/501/com.nba-predictor.injuries`). Files are raw PDFs for personal research; nothing reads them yet (docs/INJURY_COLLECTOR_PLAN.md).
+- **Current policy:** new forecasts are generated only in the two hours before scheduled tipoff, never after start. NBA and NHL use the same rule for all supported markets. Night-before forecasts remain an archive; nightly `daily` no longer records predictions. Preseason/exhibition games remain excluded.
+- Existing periodic `odds` jobs now refresh and record winner, supported market and research-model forecasts when games enter that window (NBA every 15 minutes; NHL every 30). The Mac must be awake, logged in, and the checkout must stay at its configured path. The daily jobs maintain schedules/results and score records. No extra scheduler is needed.
+- `predict-now` (also `predict`, `markets`, `agreement`) performs the same guarded refresh-and-forecast cycle manually. Use `--sport nhl` before the command for NHL. Stale results, unresolved earlier results, started games, and calculations finishing after tipoff are refused. Retries retain the original prediction and quote; changed inputs/lines receive separate immutable records.
+- Frozen primary Elo settings remain unchanged. Research agreement compares six NBA candidates (including a separately defined injury-aware candidate) or four NHL candidates. Missing/untrained/stale candidates are explicit, never replaced with an Elo vote; a partial cohort does not qualify for the agreement performance record. Winner agreement does not apply to spread/total picks.
+- The previous midnight `logistic_v2` shadow protocol is discontinued by this timing change. Its sealed files/history stay intact; `shadow-predict --record` now skips. The newer two-hour research records cannot be promoted under the old rule.
+- NBA availability: `availability-prepare --seed-season 2026` prepares checksum-sealed facts from the existing development report cache and downloads one free, digest-verified prior-season player file. Current player minutes come from cached finished-game summaries. The two-hour cycle refreshes injury PDFs through the existing budgeted collector. A fresh, reconciled report and complete minute history are required; otherwise the injury-aware candidate skips while other models can run. This new timing variant has no claimed accuracy improvement. `pypdf` and scikit-learn are runtime dependencies.
+- Injury collection remains installed at :02/:32; source plists are in `scripts/launchd/`. Forecast cycles reuse the same request budgets and raw cache. Raw documents and every forecast version are retained. Source access is for the existing personal-research scope.
+- Performance → **Confidence thresholds · Two-hour record** shows per-market/model/version results at 50–90% thresholds, with samples, coverage, pending, pushes/voids and descriptive intervals. Read-only CLI: `.venv/bin/python -m app.cli thresholds` (or `--sport nhl thresholds`). Selecting a promising threshold is research, not proof; freeze a rule before assessing future games.
 - Odds (free, no key): each snapshot appends DraftKings moneylines with their retrieval time. The last quote confirmed
   before tipoff is our own closing snapshot (`coverage` → `closing_lines`, with minutes before tipoff). It is not a
   bookmaker-published close, and it exists only for games snapshotted while the collector was running.

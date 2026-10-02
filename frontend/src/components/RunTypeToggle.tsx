@@ -24,13 +24,13 @@ export function RunTypeToggle({ value, onChange }: { value: ViewRunType; onChang
   );
 }
 
-/** Which live forecast: the night-before one (default) or the near-tipoff one (?policy=near_tipoff). Never mixed. */
+/** Which live forecast: the two-hour one (default) or the night-before archive (?policy=pregame). Never mixed. */
 export function usePolicy(): [Policy, (p: Policy) => void] {
   const [params, setParams] = useSearchParams();
-  const policy: Policy = params.get('policy') === 'near_tipoff' ? 'near_tipoff' : 'pregame';
+  const policy: Policy = params.get('policy') === 'pregame' ? 'pregame' : 'near_tipoff';
   const set = (p: Policy) => {
     const next = new URLSearchParams(params);
-    if (p === 'pregame') next.delete('policy'); else next.set('policy', p);
+    next.set('policy', p);
     setParams(next);
   };
   return [policy, set];
@@ -39,8 +39,8 @@ export function usePolicy(): [Policy, (p: Policy) => void] {
 export function PolicyToggle({ value, onChange }: { value: Policy; onChange: (p: Policy) => void }) {
   return (
     <div className="segmented" role="group" aria-label="Live forecast timing">
-      <button type="button" aria-pressed={value === 'pregame'} onClick={() => onChange('pregame')}>Night-before forecasts</button>
-      <button type="button" aria-pressed={value === 'near_tipoff'} onClick={() => onChange('near_tipoff')}>Near-tipoff forecasts</button>
+      <button type="button" aria-pressed={value === 'pregame'} onClick={() => onChange('pregame')}>Night-before archive</button>
+      <button type="button" aria-pressed={value === 'near_tipoff'} onClick={() => onChange('near_tipoff')}>Within 2 hours</button>
     </div>
   );
 }

@@ -38,7 +38,7 @@ def test_forecast_is_recorded_before_tipoff_with_its_freshness_and_market(ready)
     (row,) = near_rows(ready)
     assert (row["run_type"], row["cutoff_at"], row["generated_at"]) == ("live", T_GAME, NOW)
     assert row["model_version"] == near_tipoff.current_version(ready) != backtest.model_version(live.primary_model(ready)[1])
-    assert row["feature_version"] == "pregame-ids-v1+tipoff-cutoff"
+    assert row["feature_version"] == "pregame-ids-v1+tipoff-cutoff+two-hour-v1"
     detail = dict(ready.execute("SELECT * FROM near_tipoff_forecasts").fetchone())
     assert detail["prediction_id"] == row["prediction_id"] and detail["results_refreshed_at"] == REFRESHED
     assert detail["latest_result_available_at"] == "2026-10-21T03:00:00Z" and detail["market_quote_id"] is not None
@@ -90,11 +90,11 @@ def test_refused_while_a_teams_earlier_result_is_missing(ready):
     assert near_tipoff.predict_now(ready, now=NOW)["created"] == 1
 
 
-def test_only_games_within_24_hours_and_not_preseason(ready):
+def test_only_games_within_two_hours_and_not_preseason(ready):
     ingest_events(ready, [event("9002", "2026-10-22T23:00:00Z", "3", "4"),        # 24.5 h away
                           event("9003", "2026-10-22T02:00:00Z", "5", "6")], "2026-10-21T12:00:00Z")   # 3.5 h away
     out = near_tipoff.predict_now(ready, now=NOW)
-    assert sorted(f["game_id"] for f in out["forecasts"]) == ["espn:9003", "espn:g1"] and out["refused"] == []
+    assert sorted(f["game_id"] for f in out["forecasts"]) == ["espn:g1"] and out["refused"] == []
 
 
 def test_rerun_keeps_the_first_forecast_and_new_data_adds_a_version(ready):
@@ -162,7 +162,7 @@ def test_night_before_forecast_scoring_and_default_views_are_untouched(ready, cl
     assert live.predict(ready, now="2026-10-21T03:45:00Z")["created"] == 0
     game = client.get("/api/games/espn:g1").json()
     assert game["prediction"]["model_version"] == mv                    # the night-before forecast is still the forecast
-    assert game["near_tipoff"]["model_version"] == mv + "-policy=near_tipoff"
+    assert game["near_tipoff"]["model_version"] == mv + "-window=2h-policy=near_tipoff"
 
 
 def test_full_chain_fresh_data_to_displayed_pick_to_scored_result(ready, client):  # noqa: F811
@@ -247,15 +247,15 @@ def test_job_refreshes_first_and_reports_stale_data_as_failed(ready):
               odds_kw={"fetch": lambda d: empty, "sleep": lambda s: None, "now": at},
               box_kw={"fetch": lambda g: b"{}", "sleep": lambda s: None, "now": at})
     out = jobs.predict_now(ready, now=NOW, **kw)
-    assert out["status"] == "success" and out["created"] == 1 and set(out["steps"]) == {"refresh", "odds", "boxscores", "markets"}
+    assert out["status"] == "failed" and out["created"] == 1 and out["agreement"]["status"] == "failed" and set(out["steps"]) == {"refresh", "odds", "boxscores", "markets"}
     assert out["steps"]["markets"] == "success" and out["markets"]["created"] == 4   # spread, total, two team totals
-    assert [r[0] for r in ready.execute("SELECT status FROM job_runs WHERE job = 'near_tipoff'")] == ["success"]
+    assert [r[0] for r in ready.execute("SELECT status FROM job_runs WHERE job = 'near_tipoff'")] == ["failed"]
     stale = jobs.predict_now(ready, now="2026-10-22T02:00:00Z", **kw)      # g1 has tipped off; nothing else is due
     assert stale["status"] == "skipped" or stale["refused"]
     ingest_events(ready, [event("9003", "2026-10-23T02:00:00Z", "5", "6")], "2026-10-22T12:00:00Z")
-    blocked = jobs.predict_now(ready, now="2026-10-22T20:00:00Z", **kw)    # last successful refresh is a day old
+    blocked = jobs.predict_now(ready, now="2026-10-23T01:00:00Z", **kw)    # last successful refresh is a day old
     assert blocked["status"] == "failed" and blocked["refused"][0]["reason"] == "stale_results"
-    dry = jobs.predict_now(ready, dry_run=True, now="2026-10-22T20:00:00Z", **kw)
+    dry = jobs.predict_now(ready, dry_run=True, now="2026-10-23T01:00:00Z", **kw)
     assert dry["status"] == "failed" and ready.execute("SELECT COUNT(*) FROM job_runs WHERE job = 'near_tipoff'").fetchone()[0] == 3
 
 

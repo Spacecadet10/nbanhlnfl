@@ -62,7 +62,7 @@ def test_migrations_are_idempotent(conn):
          "0007_possession_fetch_events.sql", "0008_shadow_jobs.sql",
          "0009_box_fetch_attempts.sql", "0010_injury_report_attempts.sql", "0011_near_tipoff.sql",
          "0012_markets.sql", "0013_market_forecast_checks.sql",
-         "0014_goalie_snapshots.sql"]
+         "0014_goalie_snapshots.sql", "0015_two_hour_forecasts.sql"]
 
 
 def test_repeated_ingestion_creates_no_duplicates(conn):

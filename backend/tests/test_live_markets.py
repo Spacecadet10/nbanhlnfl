@@ -100,15 +100,15 @@ def test_settlement_win_loss_push_and_void(sealed):
 
 
 def test_nhl_near_tipoff_forecast_and_market_snapshot(sealed):
-    add_upcoming(sealed, start="2026-10-10T19:00:00", at="2026-10-10T14:30:00Z")
+    add_upcoming(sealed, start="2026-10-10T19:00:00", at="2026-10-10T21:30:00Z")
     sealed.execute("INSERT INTO job_runs (job, started_at, finished_at, status) VALUES "
-                   "('refresh', '2026-10-10T14:30:00Z', '2026-10-10T14:30:00Z', 'success')")
-    quote(sealed, "2026-10-10T14:40:00Z", date="2026-10-10T23:00Z")
-    out = near_tipoff.predict_now(sealed, now="2026-10-10T15:00:00Z")
+                   "('refresh', '2026-10-10T21:30:00Z', '2026-10-10T21:30:00Z', 'success')")
+    quote(sealed, "2026-10-10T21:40:00Z", date="2026-10-10T23:00Z")
+    out = near_tipoff.predict_now(sealed, now="2026-10-10T22:00:00Z")
     assert out["created"] == 1 and out["model_version"].endswith("-policy=near_tipoff")
     row = sealed.execute("SELECT * FROM predictions WHERE model_version LIKE '%near_tipoff'").fetchone()
-    assert row["cutoff_at"] == "2026-10-10T23:00:00Z" and row["feature_version"].endswith("tipoff-cutoff")
-    near = market_live.forecast(sealed, now="2026-10-10T15:00:00Z", policy="near_tipoff", game_ids=["nhl:2026020001"])
+    assert row["cutoff_at"] == "2026-10-10T23:00:00Z" and row["feature_version"].endswith("tipoff-cutoff+two-hour-v1")
+    near = market_live.forecast(sealed, now="2026-10-10T22:00:00Z", policy="near_tipoff", game_ids=["nhl:2026020001"])
     assert near["created"] == 5 and all(f["line_source"] in (None, "market", "model") for f in near["forecasts"])
     assert sealed.execute("SELECT count(*) FROM market_forecasts WHERE policy='near_tipoff' AND cutoff_at=?",
                           ("2026-10-10T23:00:00Z",)).fetchone()[0] == 5

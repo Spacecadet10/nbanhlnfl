@@ -1,3 +1,4 @@
+import { ModelAgreement } from '../components/ModelAgreement';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { GameDetail, TeamStats } from '../api/types';
@@ -49,8 +50,12 @@ function Detail({ game: g }: { game: GameDetail }) {
           : <>Tipoff {dateTime(g.tipoff)}</>}
       </p>
 
+      {g.mode === 'real' && (g.near_tipoff ? <NearTipoffCard game={g} /> : <div className="card">
+        <h2>Within 2 hours · Win probability</h2><p className="forecast-note">No two-hour forecast recorded. New forecasts are made only during the two hours before the scheduled start, when fresh inputs are available.</p>
+      </div>)}
+      <div className="card"><ModelAgreement game={g} detail /></div>
       <div className="card">
-        <h2>Win probability {g.prediction && <RunBadge runType={g.prediction.run_type} />}</h2>
+        <h2>{g.mode === 'real' ? 'Archived night-before probability' : 'Win probability'} {g.prediction && <RunBadge runType={g.prediction.run_type} />}</h2>
         {g.prediction
           ? <ProbabilityBar home={g.home} away={g.away} homeProb={g.prediction.home_win_prob} />
           : <p className="forecast-note">{g.forecast_note ?? 'No forecast available.'}</p>}
@@ -84,7 +89,6 @@ function Detail({ game: g }: { game: GameDetail }) {
         </dl>
       </div>
 
-      {g.near_tipoff && <NearTipoffCard game={g} />}
 
       {sport === 'nhl' && g.mode === 'real' && (
         <div className="card">
@@ -131,9 +135,9 @@ function NearTipoffCard({ game: g }: { game: GameDetail }) {
   const n = g.near_tipoff!;
   return (
     <div className="card">
-      <h2>Near-tipoff forecast <NearTipoffBadge /></h2>
+      <h2>Within 2 hours · Win probability <NearTipoffBadge /></h2>
       <p className="small muted">
-        A separate forecast made shortly before the game from the freshest stored results. It does not replace the forecast above. {n.limitation}
+        The current forecast policy uses the freshest stored results within two hours of the scheduled start. {n.limitation}
       </p>
       <ProbabilityBar home={g.home} away={g.away} homeProb={n.home_win_prob} label="Near-tipoff win probability" />
       <dl className="facts">

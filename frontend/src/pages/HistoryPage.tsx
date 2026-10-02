@@ -85,8 +85,8 @@ export function HistoryPage() {
                 ? <>No {data.run_type === 'demo' ? 'demo' : data.policy === 'near_tipoff' ? 'near-tipoff' : data.run_type} picks at {levelLabel(level)} model confidence{hasFilters ? ' match these filters' : ''}.{' '}
                     <button type="button" className="link-btn" onClick={() => setLevel(null)}>Show all picks</button></>
                 : hasFilters ? 'No predictions match these filters.'
-                  : data.policy === 'near_tipoff' ? 'No near-tipoff forecasts recorded yet. They are made with the predict-now command for games starting within 24 hours.'
-                  : data.run_type === 'live' ? 'No live forecasts recorded yet. The daily job records them within 7 days of each regular-season or playoff game.'
+                  : data.policy === 'near_tipoff' ? 'No two-hour forecasts recorded yet. The scheduled odds jobs record them within two hours before eligible games start.'
+                  : data.run_type === 'live' ? 'No archived night-before forecasts in this view. New forecasts use the Within 2 hours policy.'
                     : 'No predictions recorded.'}
             </Empty>
           : <>

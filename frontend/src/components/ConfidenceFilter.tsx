@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { AsyncView, Empty } from './States';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { ConfidenceRecord, MarketId, MarketRecordSummary, Policy, RunType, Sport } from '../api/types';
@@ -133,4 +135,32 @@ export function RangeRecords({ sport = 'nba', market = 'winner', level, realMode
       </p>
     </div>
   );
+}
+
+
+export function ThresholdResearch({ sport, market }: { sport: Sport; market: MarketId }) {
+  const { state, retry } = useApi(s => api.thresholds(sport, s), [sport]);
+  const [selected, setSelected] = useState('');
+  return <div className="card"><h2>Confidence thresholds · Two-hour record</h2>
+    <AsyncView state={state} retry={retry}>{p => {
+      const groups = p.groups.filter(g => g.market === market);
+      const key = (g: typeof groups[number]) => `${g.model_version}|${g.line_source}`;
+      const group = groups.find(g => key(g) === selected) ?? groups[0];
+      return <>
+        <p className="small muted">Every forecast version is retained: {p.all_stored_rows.winner_rows.toLocaleString()} winner rows and {p.all_stored_rows.market_rows.toLocaleString()} market rows across this sport's archive.</p>
+        {!group ? <Empty>No two-hour forecasts recorded for this market yet.</Empty> : <>
+          <label className="threshold-model">Model and line source <select value={key(group)} onChange={e => setSelected(e.target.value)}>
+            {groups.map(g => <option key={key(g)} value={key(g)}>{g.model_version} · {g.line_source}</option>)}
+          </select></label>
+          <div className="table-wrap"><table className="table"><thead><tr><th>Minimum</th><th>W–L</th><th>Win rate</th><th>95% range</th><th>Coverage</th><th>Pending</th><th>Push / void</th></tr></thead>
+            <tbody>{group.thresholds.map(r => <tr key={r.threshold}><th scope="row">{pct(r.threshold)}+</th>
+              <td>{r.win}–{r.loss}</td><td>{pct(r.accuracy, 1)}</td>
+              <td>{r.interval ? `${pct(r.interval[0], 1)}–${pct(r.interval[1], 1)}` : '—'}</td>
+              <td>{pct(r.coverage, 1)}</td><td>{r.pending}</td><td>{r.push} / {r.void}</td>
+            </tr>)}</tbody></table></div>
+        </>}
+        <p className="small muted">{p.note}</p>
+      </>;
+    }}</AsyncView>
+  </div>;
 }

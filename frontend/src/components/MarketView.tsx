@@ -1,3 +1,4 @@
+import { ModelAgreement } from './ModelAgreement';
 import { Link } from 'react-router-dom';
 import type { GameSummary, MarketForecast, MarketPerformanceResponse, MarketRecord, Settlement } from '../api/types';
 import { RunBadge, NearTipoffBadge } from './Badges';
@@ -78,6 +79,7 @@ export function MarketCard({ game: g, statusLabel }: { game: GameSummary; status
         ) : (
           <p className="forecast-note">No forecast of this market under this policy for this game.</p>
         )}
+        <ModelAgreement game={g} />
       </Link>
     </li>
   );

@@ -157,3 +157,19 @@ def performance(run_type: str = Query("live", pattern="^(live|backtest)$"),
                 policy: str = Query("pregame", pattern="^(pregame|near_tipoff)$"), p=Depends(get_provider)):
     _check_policy(run_type, policy)
     return p.performance(run_type, policy)
+
+
+@app.get("/api/agreement-performance")
+def agreement_performance(policy: str = Query("near_tipoff", pattern="^(pregame|near_tipoff)$"), p=Depends(get_provider)):
+    if p.mode != "real":
+        return {"groups": [], "partial_games": 0, "note": "Research agreement is unavailable in demo mode."}
+    from . import agreement
+    return agreement.performance(p.conn, p.now, policy)
+
+
+@app.get("/api/thresholds")
+def thresholds(p=Depends(get_provider)):
+    if p.mode != "real":
+        return {"groups": [], "all_stored_rows": {"winner_rows": 0, "market_rows": 0}, "note": "No forward threshold research in demo mode."}
+    from . import tracking
+    return tracking.report(p.conn, p.now)

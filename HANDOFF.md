@@ -1,5 +1,21 @@
 # Current handoff
 
+## Two-hour policy + forward tracking — Codex, 2026-10-02 (current; supersedes timing notes below)
+- User authorized takeover (Claude paused) and requires **all new predictions within two hours before game time**, NBA/NHL, all supported markets. Implemented CLI/periodic-job routing, model namespaces, migration 0015 guards and actual calculation-completion timestamps. Existing frozen settings/files and historical rows retained.
+- Existing NBA/NHL odds agents now run refresh → primary winner → supported markets → research agreement inside the window. Daily is maintenance/scoring only. Previous night-before shadow recording is discontinued, not relabelled; CLI `shadow-predict --record` skips. No extra job installed.
+- `app/agreement.py`: five existing NBA models plus separate `availability_two_hour`; four NHL models. Point-in-time training, stale-input skips, no learner fallback counted as a vote, exact-50% abstentions, same-cohort votes, majority/unanimous records separated by definition. Agreement only concerns winner markets; score-distribution models still supply other markets.
+- `app/availability_live.py`: prepared checksum-sealed historical facts without new scoring; 2026 free player-minute seed digest verified, 591 players. Current-season player minutes parsed from cached final ESPN summaries; joint observed availability, missing-history/report/unsubmitted/unknown-player failures visible. Live injury report must have arrived AND been published within 60 minutes. This separately versioned two-hour variant does not inherit the old 17:45 accuracy claim.
+- `app/tracking.py`, `/api/thresholds`, Performance panel: fixed 50–90% threshold tables, W/L, sample/coverage, pending/push/void, descriptive intervals, split by sport/market/model/line source. All versions retained; report latest pregame version per game within each model definition. No automatic tuning/promotion.
+- UI defaults Within 2 hours, night-before archive explicit. Game detail shows current policy first and per-model winner agreement; Today/History/Performance use selected policy. Phone/desktop, dark/light checked; temporary phone viewport reset.
+- Verification: **321 tests**, typecheck/build pass; final copy-only build passes; exact commands/evidence in SMOKE_TEST. Early readiness failures were stale expectations for newly added daily scoring output, corrected in both test branches; no tests disabled.
+- Real stores: every pre-change row unchanged vs SQLite backups; NBA 27,744 winner/0 market; NHL 8,668 winner/480 market (includes 196 earlier research forecasts now archived). Zero new two-hour rows because none eligible during verification. No test-period evaluation rerun.
+- Five existing launchd agents loaded, last exit 0; NBA/NHL odds interval 15/30 min. App/API preview running on localhost. NBA fresh injury report absent now, candidate correctly refuses. No paid sources or public deployment.
+- Remaining verification: first real two-hour forecast → final lifecycle, injury-aware candidate with a fresh real report, populated threshold panels. No claim of live accuracy or bookmaker edge. See README and dated EVALUATION_PLAN amendment.
+
+---
+Older handoff entries below are historical; their nightly prediction instructions are superseded.
+
+
 ## NHL goalie snapshots + NBA availability experiment — Claude, 2026-10-02 02:00 UTC
 - **NHL goalies (live):** migration 0014 `goalie_snapshots`; the installed NHL odds job now records ESPN's probable goalie per team per retrieval
   of not-yet-started games, status as published (expected / confirmed), `none_listed` when absent, available at our download time. Backfilled

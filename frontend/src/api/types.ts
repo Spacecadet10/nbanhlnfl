@@ -54,7 +54,16 @@ export interface NearTipoffForecast {
 export interface SlatePick { policy: Policy; home_win_prob: number; pick: 'home' | 'away'; confidence: number; meets_confidence: boolean }
 export interface SlateSelection { market: MarketId; policy: Policy; min_confidence: number | null; games: number; with_forecast: number; selected: number }
 
+export interface AgreementSummary {
+  policy: Policy;
+  status: 'unavailable' | 'partial' | 'complete'; expected: number; available: number;
+  agreeing: number; pick: 'home' | 'away' | null; home_votes: number; away_votes: number;
+  abstentions: number; missing: string[]; generated_at: string | null;
+  models: { name: string; model_version: string; home_win_prob: number; generated_at: string }[];
+}
+
 export interface GameSummary {
+  agreement?: AgreementSummary | null;
   game_id: string;
   mode: Mode;
   game_date: string;
@@ -156,4 +165,19 @@ export interface PerformanceResponse {
   baselines: BaselineScore[];
   market: { matched_games: number; coverage: number; model_brier: number | null; market_brier: number | null };
   note: string;
+}
+
+export interface AgreementPerformance {
+  partial_games: number; note: string;
+  groups: { definition: string; games: number; pending: number; excluded: number;
+    majority: AgreementRecord; unanimous: AgreementRecord }[];
+}
+export interface AgreementRecord { picks: number; wins: number; losses: number; accuracy: number | null; coverage: number | null }
+
+export interface ThresholdReport {
+  all_stored_rows: { winner_rows: number; market_rows: number }; note: string;
+  groups: { market: MarketId; model_version: string; line_source: string;
+    thresholds: { threshold: number; forecasts: number; settled: number; win: number; loss: number;
+      push: number; void: number; pending: number; unscorable: number; accuracy: number | null;
+      coverage: number | null; interval: [number, number] | null }[] }[];
 }

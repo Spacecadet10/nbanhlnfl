@@ -15,7 +15,7 @@ from .sources import espn, nba_injury, nhl_stats, sdv_team_box
 from .odds import devig_two_way
 
 RESULT_ASSUMED_DELAY = timedelta(hours=4)
-SOURCE_SPORTS = {"nba": {espn.SOURCE, espn.SUMMARY_SOURCE, sdv_team_box.SOURCE, nba_injury.SOURCE},
+SOURCE_SPORTS = {"nba": {espn.SOURCE, espn.SUMMARY_SOURCE, sdv_team_box.SOURCE, nba_injury.SOURCE, "nba_player_minutes_live"},
                  "nhl": {nhl_stats.SOURCE, espn.NHL_SOURCE}}
 OBSERVED_WINDOW = timedelta(hours=24)  # results first seen within this window of tipoff count as observed
 

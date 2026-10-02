@@ -1,3 +1,4 @@
+import { ThresholdResearch } from '../components/ConfidenceFilter';
 import { api } from '../api/client';
 import type { MarketId, PerformanceResponse, Policy, Sport } from '../api/types';
 import { useApi } from '../api/useApi';
@@ -28,6 +29,7 @@ export function PerformancePage() {
           : meta.state.status === 'error' ? <p className="warn small">Market list unavailable: {meta.state.error}</p> : null}
         <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} /></div>
         <MarketPerformance sport={sport} market={market} policy={policy} />
+        {policy === 'near_tipoff' && <ThresholdResearch sport={sport} market={market} />}
       </section>
     );
   }
@@ -42,6 +44,7 @@ export function PerformancePage() {
           </>
         )}
       </AsyncView>
+      {run === 'live' && policy === 'near_tipoff' && <><AgreementReport sport={sport} /><ThresholdResearch sport={sport} market={market} /></>}
     </section>
   );
 }
@@ -58,7 +61,7 @@ function Report({ perf: p, run, setRun }: { perf: PerformanceResponse; run: 'liv
       {p.sample_size === 0 ? (
         <Empty>
           {p.policy === 'near_tipoff'
-            ? <>No near-tipoff forecasts have been scored yet. They are made with the predict-now command for games starting within 24 hours and scored after the final.</>
+            ? <>No two-hour forecasts have been scored yet. The scheduled odds jobs record them within two hours before eligible games; results are scored after the final.</>
             : p.run_type === 'live'
             ? <>No live forecasts have been scored yet. Live forecasts are recorded before regular-season and playoff games and scored after the final. <button type="button" className="link-btn" onClick={() => setRun('backtest')}>See the final test</button></>
             : 'No completed games have been scored yet.'}
@@ -161,4 +164,23 @@ function Tile({ label, value, hint }: { label: string; value: string; hint: stri
       <div className="tile-hint">{hint}</div>
     </div>
   );
+}
+
+function AgreementReport({ sport }: { sport: Sport }) {
+  const { state, retry } = useApi((s) => api.agreementPerformance(sport, s), [sport]);
+  return <div className="card"><h2>Winner agreement · Forward research</h2>
+    <AsyncView state={state} retry={retry}>{p => <>
+      <p className="small muted">{p.note}</p>
+      {p.groups.length === 0 && <Empty>No complete model comparisons recorded yet.</Empty>}
+      {p.groups.map(g => <div key={g.definition}>
+        <p className="small muted">Definition {g.definition.slice(0, 8)} · {g.pending} pending · {g.excluded} excluded</p>
+        <div className="table-wrap"><table className="table"><thead><tr><th>Rule</th><th>Record</th><th>Accuracy</th><th>Coverage</th></tr></thead>
+          <tbody>{(['majority', 'unanimous'] as const).map(rule => <tr key={rule}>
+            <th scope="row">{rule === 'majority' ? 'Strict majority' : 'All models agree'}</th>
+            <td>{g[rule].wins}–{g[rule].losses} ({g[rule].picks} games)</td>
+            <td>{pct(g[rule].accuracy, 1)}</td><td>{pct(g[rule].coverage, 1)}</td>
+          </tr>)}</tbody></table></div>
+      </div>)}
+      <p className="small muted">{p.partial_games} games with incomplete model coverage. This descriptive record does not establish that agreement beats confidence filtering.</p>
+    </>}</AsyncView></div>;
 }

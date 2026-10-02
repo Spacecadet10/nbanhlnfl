@@ -36,7 +36,7 @@ def market_model(conn: sqlite3.Connection):
 
 
 def model_version(base: str, policy: str) -> str:
-    return base if policy == "pregame" else f"{base}-policy={policy}"
+    return base if policy == "pregame" else f"{base}-window=2h-policy={policy}"
 
 
 def feature_version(eng, policy: str) -> str:
@@ -56,6 +56,7 @@ def forecast(conn: sqlite3.Connection, *, now: Optional[str] = None, policy: str
     the horizon. `near_tipoff`: exactly `game_ids` (games the near-tipoff winner step accepted), cutoff = tipoff."""
     if policy not in POLICIES:
         raise ValueError(policy)
+    fixed_clock = now is not None
     now = now or utc_now()
     eng = live.engine(conn)
     model, base = market_model(conn)
@@ -76,7 +77,7 @@ def forecast(conn: sqlite3.Connection, *, now: Optional[str] = None, policy: str
             cutoff = backtest.cutoff_for(g["tipoff_at"])
             if now < cutoff <= end:
                 chosen.append((g, cutoff))
-        elif g["game_id"] in (game_ids or []):
+        elif g["game_id"] in (game_ids or []) and live._parse(g["tipoff_at"]) - live._parse(now) <= timedelta(hours=2):
             chosen.append((g, g["tipoff_at"]))
     out = {"sport": eng.sport, "policy": policy, "as_of": now, "model_version": mv, "dataset_version": version,
            "results_used": len(rows), "games": len(chosen), "created": 0, "already_recorded": 0, "forecasts": []}
@@ -97,10 +98,13 @@ def forecast(conn: sqlite3.Connection, *, now: Optional[str] = None, policy: str
             prev = conn.execute("SELECT line FROM market_forecasts WHERE game_id=? AND market=? AND policy=? AND run_type='live' "
                                 "AND model_version=? ORDER BY generated_at DESC, forecast_id DESC LIMIT 1",
                                 (g["game_id"], market, policy, mv)).fetchone()
-            revision = now if prev is not None and prev["line"] != line else ""
+            generated = now if fixed_clock else utc_now()
+            if generated >= cutoff:
+                continue
+            revision = generated if prev is not None and prev["line"] != line else ""
             f = MarketForecast(eng.sport, g["game_id"], market, line,
                                None if line is None else ("market" if quote else "model"),
-                               quote["quote_id"] if quote else None, policy, "live", mv, version, fv, cutoff, now,
+                               quote["quote_id"] if quote else None, policy, "live", mv, version, fv, cutoff, generated,
                                g["tipoff_at"], pa, pmid, pb, json.dumps(dist.params, sort_keys=True), revision)
             entry = {"game_id": g["game_id"], "market": market, "line": line, "line_source": f.line_source,
                      "p": [pa, pmid, pb]}

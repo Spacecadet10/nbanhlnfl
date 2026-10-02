@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 from zoneinfo import ZoneInfo
 
-from . import config, ingest, injuries, live, market_live, near_tipoff, shadow
+from . import agreement, config, ingest, injuries, live, market_live, near_tipoff, shadow
 from .db import store_sport, utc_now
 from .sources import espn, nhl_stats
 
@@ -271,14 +271,17 @@ def injury_reports(conn: sqlite3.Connection, *, enabled: Optional[bool] = None, 
 
 
 def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optional[str] = None,
-                refresh_kw: Optional[dict] = None, odds_kw: Optional[dict] = None, box_kw: Optional[dict] = None) -> dict:
+                refresh_kw: Optional[dict] = None, odds_kw: Optional[dict] = None, box_kw: Optional[dict] = None, injury_kw: Optional[dict] = None) -> dict:
     """Near-tipoff forecasts (app/near_tipoff.py): refresh schedule and results, odds and possession stats, then
-    forecast games tipping off within 24 hours with the frozen Elo, or refuse them with a reason. The forecast is
+    forecast games tipping off within two hours with the frozen Elo, or refuse them with a reason. The forecast is
     time-stamped after the refresh finishes. The possession refresh does not gate the Elo forecast (Elo does not use
     it). Stale data or a missing result makes the job 'failed' so it is visible; a dry run stores no forecast."""
     steps = {"refresh": refresh(conn, **(refresh_kw or {})), "odds": odds_snapshot(conn, **(odds_kw or {}))}
     if sport(conn) == "nba":
         steps["boxscores"] = boxscores(conn, **(box_kw or {}))
+        from . import availability
+        if (availability.research_dir() / 'forward-facts.json').exists():
+            steps["injuries"] = injury_reports(conn, enabled=True, **(injury_kw or {}))
     run_id = None if dry_run else _start(conn, "near_tipoff")
     try:
         out = near_tipoff.predict_now(conn, now=now, write=not dry_run)
@@ -290,9 +293,15 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
     out["steps"] = {k: v.get("status") for k, v in steps.items()}
     accepted = [f["game_id"] for f in out["forecasts"]]
     if accepted:   # market forecasts at the same moment for exactly the games the winner step accepted
-        m = market_forecasts(conn, policy="near_tipoff", write=not dry_run, now=out["as_of"], game_ids=accepted)
+        m = market_forecasts(conn, policy="near_tipoff", write=not dry_run, now=now, game_ids=accepted)
         out["steps"]["markets"] = m.get("status")
+        if m.get("status") == "failed":
+            status = "failed"
         out["markets"] = {k: m.get(k) for k in ("created", "already_recorded", "reason", "error") if k in m}
+    if accepted:
+        out["agreement"] = research_forecasts(conn, write=not dry_run, now=now, game_ids=accepted)
+        if out["agreement"].get("status") == "failed":
+            status = "failed"
     return {"status": status, **out} if dry_run else _finish(conn, run_id, status, 1, out)
 
 
@@ -340,23 +349,44 @@ def shadow_forecasts(conn: sqlite3.Connection, **kw) -> dict:
     return _finish(conn, run_id, "failed" if out["skipped_stale_inputs"] else "success", 1, out)
 
 
+def research_forecasts(conn: sqlite3.Connection, **kw) -> dict:
+    # Daily JSON and exit status expose failures, independently of the primary forecast steps.
+    try:
+        result = agreement.predict(conn, **kw)
+        result.pop("forecasts", None)
+        return result
+    except Exception as exc:
+        return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+
+
 def daily(conn: sqlite3.Connection, *, force_refresh: bool = False, **refresh_kw) -> dict:
-    """Refresh, then predict (even if the refresh failed or was skipped: forecasts then use the data already stored,
-    and the refresh status stays visible), then score. With config.shadow_enabled(), the possession refresh runs
-    before the Elo forecast and the shadow forecast after it; the Elo steps are identical either way."""
+    """Nightly maintenance only. User policy: new forecasts are made within two hours of tipoff by odds cycles."""
     out = {"refresh": refresh(conn, force=force_refresh, **refresh_kw)}
-    if sport(conn) == "nhl":   # no shadow or possession steps for the NHL
-        out["predict"] = predict(conn)
-        out["markets"] = market_forecasts(conn)
-        out["score"] = score(conn)
-        return out
-    if config.shadow_enabled():
+    if sport(conn) == "nba" and config.shadow_enabled():
         out["boxscores"] = boxscores(conn)
-    out["predict"] = predict(conn)
-    if config.shadow_enabled():
-        out["shadow"] = shadow_forecasts(conn)
     out["score"] = score(conn)
+    out["two_hour_score"] = near_tipoff.score(conn)
+    out["market_score"] = market_live.score(conn, policy="near_tipoff")
+    out["forecast_policy"] = "two-hour-v1; night-before and sealed night-before shadow recording discontinued"
     return out
+
+
+def forecast_due(conn: sqlite3.Connection) -> dict:
+    """Called by the existing periodic odds command for both sports; no eligible games means no extra requests."""
+    now = utc_now()
+    eng = live.engine(conn)
+    end = near_tipoff._fmt(near_tipoff._parse(now) + near_tipoff.WINDOW)
+    exists = conn.execute(f"SELECT 1 FROM games WHERE status='scheduled' AND tipoff_at>? AND tipoff_at<=? "
+        f"AND season_type IN ({','.join('?' for _ in eng.eligible_types)}) LIMIT 1",
+        (now, end, *eng.eligible_types)).fetchone()
+    if not exists:
+        recent = conn.execute("SELECT 1 FROM games WHERE tipoff_at<=? AND tipoff_at>? "
+                              "AND status IN ('scheduled','in_progress') LIMIT 1",
+                              (now, near_tipoff._fmt(near_tipoff._parse(now) - near_tipoff.RECENT_TIPOFF))).fetchone()
+        if recent:
+            return {"refresh": refresh(conn), "status": "skipped", "reason": "results refresh; no upcoming game within two hours"}
+        return {"status": "skipped", "reason": "no eligible game within two hours"}
+    return predict_now(conn)
 
 
 def scheduler(conn: sqlite3.Connection, *, interval_minutes: float, max_runs: int, job: str = "daily",
@@ -373,9 +403,9 @@ def scheduler(conn: sqlite3.Connection, *, interval_minutes: float, max_runs: in
             sleep(interval_minutes * 60)
         if job == "daily":
             result = daily(conn)
-            log(json.dumps({k: v.get("status") for k, v in result.items()}))
+            log(json.dumps({k: v.get("status") for k, v in result.items() if isinstance(v, dict)}))
         else:
-            result = odds_snapshot(conn)
-            log(json.dumps({"odds": result.get("status"), "dates": result.get("dates")}))
+            result = {"odds": odds_snapshot(conn), "forecasts": forecast_due(conn)}
+            log(json.dumps({"odds": result["odds"].get("status"), "forecasts": result["forecasts"].get("status")}))
         out.append(result)
     return out

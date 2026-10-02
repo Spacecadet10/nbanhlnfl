@@ -110,7 +110,30 @@ class Outcome(BaseModel):
     home_won: bool
 
 
+class AgreementModel(BaseModel):
+    name: str
+    model_version: str
+    home_win_prob: float
+    generated_at: datetime
+
+
+class AgreementSummary(BaseModel):
+    policy: Policy
+    status: Literal["unavailable", "partial", "complete"]
+    expected: int
+    available: int
+    agreeing: int
+    pick: Optional[Literal["home", "away"]]
+    home_votes: int
+    away_votes: int
+    abstentions: int
+    models: list[AgreementModel]
+    missing: list[str]
+    generated_at: Optional[datetime]
+
+
 class GameSummary(BaseModel):
+    agreement: Optional[AgreementSummary] = None
     game_id: str
     mode: Mode
     game_date: date = Field(description="US Eastern calendar date.")

@@ -1,6 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap');
 :root { color-scheme:dark; --bg:#101a3e; --surface:#19244e; --surface-raised:#202f66; --text:#f5f7f2; --muted:#b8c5dc; --border:#34477a; --brand:#f36b2e; --accent:#f36b2e; --home:#55cbed; --away:#f59a1e; --ok:#82d9b0; --bad:#ff929c; --warn:#ffd07a; --demo-bg:#1d2b5a; --demo-border:#465a9a; --shell:#141f47; --nav-hover:#1e3068; --nav-active:#253c96; --card-start:#202f66; --card-end:#19244e; --radius:14px; font-family:'DM Sans',system-ui,sans-serif; color:var(--text); background:var(--bg); line-height:1.5; font-synthesis:none; }
-:root[data-theme='light'] { color-scheme:light; --bg:#f3f8f7; --surface:#ffffff; --surface-raised:#e6f2f1; --text:#19244e; --muted:#536681; --border:#c7dcdf; --brand:#e85c25; --accent:#e85c25; --home:#253c96; --away:#f36b2e; --demo-bg:#e5f3f1; --demo-border:#b4d5d6; --shell:#e5f1f0; --nav-hover:#dcebea; --nav-active:#d6e2f6; --card-start:#ffffff; --card-end:#edf5f4; }
+:root[data-theme='light'] { color-scheme:light; --bg:#f3f8f7; --surface:#ffffff; --surface-raised:#e6f2f1; --text:#19244e; --muted:#536681; --border:#c7dcdf; --brand:#e85c25; --accent:#e85c25; --home:#253c96; --away:#f36b2e; --demo-bg:#e5f3f1; --demo-border:#b4d5d6; --shell:#e5f1f0; --nav-hover:#dcebea; --nav-active:#d6e2f6; --card-start:#ffffff; --card-end:#edf5f4; --ok:#176746; --bad:#b02540; --warn:#865500; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); }
 a { color: var(--home); }
@@ -269,3 +269,10 @@ button,input,select { min-height:44px; }
   .market-select select { min-width:0; width:100%; }
   .header-tools { flex-wrap:wrap; justify-content:flex-end; }
 }
+
+.model-agreement { border-top: 1px solid var(--border); margin-top: 1rem; padding-top: .7rem; }
+.model-agreement p { margin: .35rem 0; }
+
+.threshold-model { display: block; }
+.threshold-model select { display: block; max-width: 100%; width: 100%; margin: .5rem 0 1rem; }
+.table-wrap { overflow-x: auto; max-width: 100%; }

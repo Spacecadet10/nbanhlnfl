@@ -16,8 +16,8 @@ from .ledger import Forecast, record
 from .models.elo import Elo
 
 POLICY = "near_tipoff"
-FEATURE_VERSION = "pregame-ids-v1+tipoff-cutoff"
-WINDOW = timedelta(hours=24)            # only games tipping off this soon
+FEATURE_VERSION = "pregame-ids-v1+tipoff-cutoff+two-hour-v1"
+WINDOW = timedelta(hours=2)            # only games tipping off this soon
 MAX_DATA_AGE = timedelta(minutes=60)    # the last successful results refresh must be at most this old
 RECENT_TIPOFF = timedelta(hours=6)      # games that started this recently are listed as refused, for visibility
 RESULT_LOOKBACK = timedelta(days=7)     # an earlier game without a final result blocks a forecast for this long
@@ -33,7 +33,7 @@ def _fmt(dt: datetime) -> str:
 
 
 def model_version(elo: Elo) -> str:
-    return f"{backtest.model_version(elo)}-policy={POLICY}"
+    return f"{backtest.model_version(elo)}-window=2h-policy={POLICY}"
 
 
 def current_version(conn: sqlite3.Connection) -> str:
@@ -47,7 +47,7 @@ def results_refreshed_at(conn: sqlite3.Connection, now: str) -> Optional[str]:
 
 
 def feature_version(eng) -> str:
-    return FEATURE_VERSION if eng.sport == "nba" else eng.feature_version.replace("prior-day-et-cutoff", "tipoff-cutoff")
+    return FEATURE_VERSION if eng.sport == "nba" else eng.feature_version.replace("prior-day-et-cutoff", "tipoff-cutoff+two-hour-v1")
 
 
 def _market(conn: sqlite3.Connection, game_id: str, at: str) -> Optional[dict]:
@@ -85,6 +85,7 @@ def _entry(g: sqlite3.Row, generated_at: str, p: float, market_home_prob: Option
 def predict_now(conn: sqlite3.Connection, *, now: Optional[str] = None, write: bool = True) -> dict:
     """Forecasts every eligible game tipping off within WINDOW of `now`, or refuses it with a reason. Makes no network
     request: the caller refreshes the data first (jobs.predict_now). `now` is for tests; real runs use the clock."""
+    fixed_clock = now is not None
     now = now or utc_now()
     _, model = live.primary_model(conn)
     rows = live.available_rows(conn, now)
@@ -122,13 +123,18 @@ def predict_now(conn: sqlite3.Connection, *, now: Optional[str] = None, write: b
                                    "detail": refusal[1]})
             continue
         p = round(model.predict(eng.pregame(g)), 9)
+        generated = now if fixed_clock else utc_now()
+        if generated >= g['tipoff_at']:
+            out['refused'].append(dict(game_id=g['game_id'], tipoff_at=g['tipoff_at'], reason='after_tipoff',
+                                       detail='calculation completed after tipoff'))
+            continue
         if not write:   # the current calculation only; nothing is stored and nothing stored is consulted
             quote = _market(conn, g["game_id"], now)
-            out["forecasts"].append(_entry(g, now, p, quote["home_prob_devig"] if quote else None,
+            out["forecasts"].append(_entry(g, generated, p, quote["home_prob_devig"] if quote else None,
                                            quote["retrieved_at"] if quote else None, status="dry_run"))
             continue
         prediction_id, new = record(conn, Forecast(g["game_id"], "live", mv, data_version, feature_version(eng),
-                                                   g["tipoff_at"], now, p))
+                                                   g["tipoff_at"], generated, p))
         out["created"] += new
         out["already_recorded"] += not new
         with transaction(conn):

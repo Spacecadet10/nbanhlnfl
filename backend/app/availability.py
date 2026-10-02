@@ -104,28 +104,32 @@ class Appearance:
 def load_player_box(season: int) -> tuple[dict, dict]:
     """(appearances by athlete id in date order, {(athlete id): display name}). Rows without an athlete id are skipped."""
     _check_season(season)
+    with player_box_path(season).open(newline="") as f:
+        return parse_player_rows(csv.DictReader(f), season)
+
+
+def parse_player_rows(rows, season: int) -> tuple[dict, dict]:
+    """Shared CSV parser. Research loader above retains its explicit season restriction."""
     apps: dict[str, list[Appearance]] = defaultdict(list)
     names: dict[str, str] = {}
-    with player_box_path(season).open(newline="") as f:
-        for r in csv.DictReader(f):
-            pid = r.get("athlete_id")
-            if not pid or pid == "NA":
-                continue
-            dnp = str(r.get("did_not_play", "")).lower() == "true"
-            raw_min = r.get("minutes") or ""
-            try:
-                minutes = 0.0 if dnp or raw_min in ("", "NA") else float(raw_min)
-            except ValueError:
-                minutes = 0.0
-            tip = datetime.fromisoformat(r["game_date_time"].replace("Z", "+00:00")) if r.get("game_date_time") \
-                else datetime.fromisoformat(r["game_date"])
-            day = (tip.astimezone(ET) if tip.tzinfo else tip).strftime("%Y-%m-%d")
-            apps[pid].append(Appearance(day, season, str(r.get("team_id", "")), minutes, minutes > 0))
-            names[pid] = r.get("athlete_display_name") or names.get(pid, "")
+    for r in rows:
+        pid = r.get("athlete_id")
+        if not pid or pid == "NA":
+            continue
+        dnp = str(r.get("did_not_play", "")).lower() == "true"
+        raw_min = r.get("minutes") or ""
+        try:
+            minutes = 0.0 if dnp or raw_min in ("", "NA") else float(raw_min)
+        except ValueError:
+            minutes = 0.0
+        tip = datetime.fromisoformat(r["game_date_time"].replace("Z", "+00:00")) if r.get("game_date_time") \
+            else datetime.fromisoformat(r["game_date"])
+        day = (tip.astimezone(ET) if tip.tzinfo else tip).strftime("%Y-%m-%d")
+        apps[pid].append(Appearance(day, season, str(r.get("team_id", "")), minutes, minutes > 0))
+        names[pid] = r.get("athlete_display_name") or names.get(pid, "")
     for v in apps.values():
         v.sort(key=lambda a: a.date)
     return apps, names
-
 
 # --- Reports ------------------------------------------------------------------------------------------------------
 def report_name(day: str) -> str:
@@ -552,9 +556,9 @@ def build_report_facts(conn: sqlite3.Connection, box: dict, *, log: Callable[[st
     return facts, {"coverage": dict(cov), "match_levels": {s: dict(v) for s, v in match_levels.items()}}
 
 
-def game_features(facts: dict, g) -> dict:
+def game_features(facts: dict, g, *, allow_early: bool = False) -> dict:
     """The three availability features for a PregameGame (positive favours home)."""
-    if evening_cutoff(g.tipoff_at) is None:
+    if not allow_early and evening_cutoff(g.tipoff_at) is None:
         # Tips off before the 5:30 PM report could be used (review finding): no report, in training as in scoring.
         return {"new_absent_diff": 0.0, "all_absent_diff": 0.0, "report_missing": 1.0}
     day = datetime.strptime(g.tipoff_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).astimezone(ET).strftime("%Y-%m-%d")

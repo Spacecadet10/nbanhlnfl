@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 import json
 
-from .. import backtest, config, live, market_live, markets, metrics, near_tipoff, sports
+from .. import agreement, backtest, config, live, market_live, markets, metrics, near_tipoff, sports
 from ..db import utc_now
 from ..live import HORIZON_DAYS, LATEST_LIVE_SQL
 from ..schemas import (BaselineScore, GameDetail, GamesResponse, GoalieListingOut, GameSummary, HistoryResponse, Market,
@@ -128,7 +128,7 @@ class RealProvider:
         return Market(bookmaker=row["provider"], price_label=row["price_label"], quote_time=row["quote_time"],
                       retrieved_at=row["retrieved_at"], home_win_prob=row["home_prob_devig"])
 
-    def _summary(self, g: sqlite3.Row) -> dict:
+    def _summary(self, g: sqlite3.Row, policy: str = "near_tipoff") -> dict:
         pred = self._prediction(g["game_id"])
         outcome = None
         if g["status"] == "final":
@@ -139,7 +139,8 @@ class RealProvider:
                     away=self._team(g["away_team_id"]), prediction=pred,
                     forecast_note=None if pred else self._forecast_note(g),
                     market=self._market(g["game_id"], g["tipoff_at"]), outcome=outcome,
-                    near_tipoff=self._near_tipoff(g))
+                    near_tipoff=self._near_tipoff(g),
+                    agreement=agreement.summary(self.conn, g["game_id"], self.sport, self.now, policy))
 
     def _stats(self, team_id: str, season: int, tipoff: str, cutoff: str) -> TeamStats:
         rows = self.conn.execute(
@@ -239,7 +240,7 @@ class RealProvider:
         start, end = _day_bounds(day)
         rows = self.conn.execute("SELECT * FROM games WHERE tipoff_at >= ? AND tipoff_at < ? ORDER BY tipoff_at, game_id",
                                  (start, end)).fetchall()
-        games = [GameSummary(**self._summary(g)) for g in rows]
+        games = [GameSummary(**self._summary(g, policy)) for g in rows]
         if market == "winner":
             selection = apply_slate_policy(games, policy, min_confidence)
         else:   # the selected market and policy only; no fallback to another market or policy

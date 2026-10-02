@@ -1,3 +1,4 @@
+import { ModelAgreement } from '../components/ModelAgreement';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { GameSummary, MarketId, Meta, Policy, SlateSelection } from '../api/types';
@@ -60,7 +61,7 @@ function Slate({ meta }: { meta: Meta }) {
           <PolicyToggle value={policy} onChange={setPolicy} />
           <p className="small muted">
             {policy === 'near_tipoff'
-              ? 'Showing near-tipoff forecasts. Picks, the confidence filter and the record below all use them.'
+              ? 'Forecasts appear within two hours of game time. Picks, confidence filters and records use this timing policy.'
               : 'Showing night-before forecasts. Picks, the confidence filter and the record below all use them.'}
           </p>
         </div>
@@ -167,7 +168,7 @@ function GameCard({ game: g, policy }: { game: GameSummary; policy: Policy }) {
             </p>
           </>
         ) : (
-          <p className="forecast-note">{near ? 'No near-tipoff forecast was recorded for this game.' : g.forecast_note ?? 'No forecast available.'}</p>
+          <p className="forecast-note">{near ? 'No forecast recorded yet. Forecasts are made within two hours of game time.' : g.forecast_note ?? 'No forecast available.'}</p>
         )}
         {other && (
           <p className="other-forecast small muted">
@@ -175,6 +176,7 @@ function GameCard({ game: g, policy }: { game: GameSummary; policy: Policy }) {
             {other.home_win_prob >= 0.5 ? g.home.abbr : g.away.abbr} {pct(Math.max(other.home_win_prob, 1 - other.home_win_prob), 1)}
           </p>
         )}
+        <ModelAgreement game={g} />
         <div className="card-bottom small muted">
           {g.market ? <>Market: {g.home.abbr} {pct(g.market.home_win_prob)}</> : <span className="warn">No market odds</span>}<span className="matchup-link">Matchup ↗</span>
         </div>

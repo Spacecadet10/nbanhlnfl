@@ -263,7 +263,7 @@ def check_consistency(dist, market: str, lines: list[float]) -> None:
 
 # --- What the app says next to each market (docs/NHL_BASELINE_REPORT.md, docs/EVALUATION_PLAN.md NBA research) ----------
 LIMITATIONS = {
-    "nhl": ["No goalie, injury or line-up information is used (no timestamped pregame source exists)."],
+    "nhl": ["Goalie listings are collected, but this model does not yet use goalies, injuries or line-ups."],
     "nba": ["No injury or line-up information is used."],
     ("nhl", "reg3"): "Regulation draws were under-predicted in the one-time test (about 16% predicted, 23% observed).",
     ("nhl", "spread"): "Two-goal wins were under-predicted in testing (empty-net goals are not modelled).",

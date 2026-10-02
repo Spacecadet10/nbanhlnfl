@@ -8,7 +8,7 @@ from .models.elo import EloConfig
 
 # Commands that work for every sport; everything else is NBA-only until generalised.
 SPORT_COMMANDS = {"migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies", "refresh", "odds", "predict",
-                  "score", "daily", "scheduler", "predict-now", "score-near-tipoff", "markets", "score-markets"}
+                  "score", "daily", "scheduler", "predict-now", "score-near-tipoff", "markets", "score-markets", "agreement", "thresholds"}
 NHL_ONLY = {"ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies"}
 
 
@@ -36,7 +36,7 @@ def main(argv=None) -> int:
                                                      "(seasons 2019-20 … 2023-24 only); --seal records the chosen model")
     nm.add_argument("--seal", action="store_true")
     mk = sub.add_parser("markets", help="Record market forecasts (spread/puck line, totals, team totals, NHL 3-way) for "
-                                        "games whose night-before cutoff is within 7 days")
+                                        "games starting within two hours")
     mk.add_argument("--dry-run", action="store_true")
     sub.add_parser("score-markets", help="Settle and score the latest market forecasts (read-only)")
     sub.add_parser("nhl-validate", help="NHL only: development grids, then the one-time validation comparison; seals "
@@ -46,6 +46,8 @@ def main(argv=None) -> int:
     sub.add_parser("nhl-learned", help="NHL only: development screening of the logistic and gradient-boosted candidates vs Elo")
     na = sub.add_parser("nba-availability", help="NBA availability research (avail_v1): download data, or evaluate once "
                                                  "(development seasons 2019-24 only; needs the dev extra)")
+    ap = sub.add_parser("availability-prepare", help="Prepare checksum-sealed historical facts and optional prior-season live minutes; no evaluation")
+    ap.add_argument("--seed-season", type=int)
     na.add_argument("step", choices=("download", "evaluate"))
     sub.add_parser("rebuild-goalies", help="NHL only: import goalie listings from every cached ESPN NHL scoreboard (idempotent)")
     sub.add_parser("nhl-agreement-explore", help="NHL only: descriptive agreement map across the four models (development seasons)")
@@ -67,9 +69,12 @@ def main(argv=None) -> int:
     sub.add_parser("coverage", help="Print stored data coverage as JSON")
     rf = sub.add_parser("refresh", help="Fetch current ESPN months (retries; at most once per 30 min unless --force)")
     rf.add_argument("--force", action="store_true")
-    sub.add_parser("predict", help="Record live Elo forecasts for eligible games whose cutoff is within 7 days")
+    sub.add_parser("predict", help="Refresh and record supported forecasts only within two hours of tipoff")
+    sub.add_parser("thresholds", help="Read-only two-hour threshold records for every stored market and model")
+    ag = sub.add_parser("agreement", help="Record prospective research-model winner comparisons; primary models unchanged")
+    ag.add_argument("--dry-run", action="store_true")
     sub.add_parser("score", help="Score the latest live forecasts against stored results (read-only)")
-    dl = sub.add_parser("daily", help="refresh, then predict, then score")
+    dl = sub.add_parser("daily", help="Nightly data maintenance and scoring; forecasts run through periodic odds jobs")
     dl.add_argument("--force-refresh", action="store_true")
     od = sub.add_parser("odds", help="Snapshot pregame odds for games tipping off within 36 h "
                                      "(ESPN day scoreboards; at most once per 10 min unless --force)")
@@ -99,7 +104,7 @@ def main(argv=None) -> int:
     sub.add_parser("research-stacking", help="Research round 3: two learned stackers vs Elo, logistic_v2 and the equal "
                                              "average on validation seasons (needs the dev extra; no ledger rows)")
     pn = sub.add_parser("predict-now", help="Near-tipoff forecasts: refresh data, then forecast games tipping off within "
-                                            "24 h with the frozen Elo, or refuse them with a reason")
+                                            "two hours with the frozen Elo, or refuse them with a reason")
     pn.add_argument("--dry-run", action="store_true", help="Refresh and show the forecasts without storing them")
     sub.add_parser("score-near-tipoff", help="Score near-tipoff forecasts against results (read-only; separate record)")
     bt = sub.add_parser("backtest", help="Walk-forward evaluation (docs/EVALUATION_PLAN.md)")
@@ -142,12 +147,18 @@ def main(argv=None) -> int:
             out["sealed"] = nba_markets.seal(report)
         print(json.dumps(out, indent=2, default=str))
     elif args.cmd == "markets":
-        result = jobs.market_forecasts(conn, write=not args.dry_run)
+        result = jobs.predict_now(conn, dry_run=args.dry_run)
         print(json.dumps(result, indent=2, default=str))
         return 1 if _any_failed(result) else 0
     elif args.cmd == "score-markets":
         from . import market_live
         print(json.dumps({p: market_live.score(conn, policy=p) for p in market_live.POLICIES}, indent=2, default=str))
+    elif args.cmd == "availability-prepare":
+        from . import availability_live
+        out = {"facts": availability_live.prepare(conn)}
+        if args.seed_season:
+            out["minutes"] = availability_live.seed_minutes(conn, args.seed_season)
+        print(json.dumps(out, indent=2, default=str))
     elif args.cmd == "nba-availability":
         from . import availability
         if args.step == "download":
@@ -252,7 +263,7 @@ def main(argv=None) -> int:
                           "sha256": decision["sha256"]}))
     elif args.cmd == "shadow-predict":
         from . import shadow
-        result = jobs.shadow_forecasts(conn) if args.record else shadow.predict(conn)
+        result = {"status": "skipped", "reason": "Night-before shadow recording discontinued under the two-hour policy; existing rows remain unchanged."} if args.record else shadow.predict(conn)
         print(json.dumps(result, indent=2, default=str))
         return 1 if _any_failed(result) else 0
     elif args.cmd == "shadow-report":
@@ -296,13 +307,21 @@ def main(argv=None) -> int:
         backtest.FROZEN_DECISION_PATH.write_text(json.dumps(decision, indent=2) + "\n")
         print(json.dumps({"written": str(backtest.FROZEN_DECISION_PATH), "primary_model": decision["primary_model"],
                           "elo_config": decision["elo_config"]}))
+    elif args.cmd == "thresholds":
+        from . import tracking
+        print(json.dumps(tracking.report(conn), indent=2))
+    elif args.cmd == "agreement":
+        from . import agreement
+        result = jobs.predict_now(conn, dry_run=args.dry_run)
+        print(json.dumps(result, indent=2))
+        return 1 if result["status"] == "failed" else 0
     elif args.cmd in ("refresh", "odds", "predict", "score", "daily", "scheduler"):
         if args.cmd == "refresh":
             result = jobs.refresh(conn, force=args.force)
         elif args.cmd == "odds":
-            result = jobs.odds_snapshot(conn, force=args.force)
+            result = {"odds": jobs.odds_snapshot(conn, force=args.force), "forecasts": jobs.forecast_due(conn)}
         elif args.cmd == "predict":
-            result = jobs.predict(conn)
+            result = jobs.predict_now(conn)
         elif args.cmd == "score":
             result = jobs.score(conn)
         elif args.cmd == "daily":
