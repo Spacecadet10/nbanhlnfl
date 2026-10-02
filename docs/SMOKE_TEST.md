@@ -285,3 +285,18 @@ Worktree `../nba-predictor-selector` (branch `selector-dev`), merged into `shado
   reliability tables (labelled "no calibration is fitted"), settlement-rules version per decision (unknown for older rows),
   retrospective best-single-by-earlier-season line. 390-px frames: page width ≤ 390 on Performance, Today (winner and total
   views) and Game. Tab closed; temporary servers (8011-8013, 5181-5183) stopped.
+
+## Improvement pipeline (weekly shadows, fit register, studies) — Claude, 2026-10-02 ~14:10 UTC
+- Live checkout fast-forwarded to 99e6c1c (branch `retrain-cadence`) after backups `data/backups/{nba-before-0017-0018,
+  nhl-before-0017,nhl-before-0018}-20261002.sqlite`; migrations 0017 (NHL shots) and 0018 (fit register) applied to both
+  stores. `scripts/check_project.py --ready` in the live checkout with the live venv: exit 0 (structure, typecheck, build,
+  385 passed). The research worktree venv (same pinned numpy 2.5.3 / scikit-learn 1.9.1 / scipy 1.18.1, plus CatBoost) also passes.
+- Real-data member check (a `.backup` copy of the NBA store, `research_live._line_state` at 2026-10-20T17:30Z before the first
+  NBA game, 229 s cold, 2 s cached): `ridge_points@weekly` and `gbt_points@weekly` return distributions (margin 2.08 / 2.15,
+  total 219.3 / 218.6) and fit identities (8,919 training results, fingerprint 04d04c8fadd461a5, params digests distinct from
+  the season members because their residual SDs differ). Season and weekly members are identical in means on opening day, as
+  expected (same training data).
+- Browser (temporary servers 8021/5191 from the live checkout, real mode): Game day, Performance (Total market, research
+  section empty state and weekly decisions table), History render; no console errors; 390-px frames: page width 386 = viewport
+  on all three. New member labels render only once NBA cohorts exist (from 2026-10-20) — unverified in the browser until then.
+  Servers stopped, tab closed.
