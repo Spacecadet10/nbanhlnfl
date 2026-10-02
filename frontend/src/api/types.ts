@@ -302,3 +302,16 @@ export interface RuleReport {
   cohort_source?: 'core' | 'expanded'; members?: string[]; comparator?: string; cohorts?: number; registered_rules?: number;
   selected_rules?: number; frontier_historical?: FrontierBand[]; rules: RegisteredRule[]; note?: string;
 }
+
+// --- Candidate pool roster (backend app/candidates/live.py, docs/CANDIDATE_POOL.md). Research only. ---
+export interface CandidateEval { stage: string; seasons: number[] | null; log_loss: number; vs_strongest: Record<string, unknown> | number | null;
+  strongest: string | null; shortlisted: boolean;
+  assess?: { seasons: number[] | null; log_loss: number; vs_strongest: Record<string, unknown> | number | null; confirmed_gains: unknown[] } }
+export interface Candidate {
+  name: string; family: string; head: string; features: string; role: string; why: string; markets: string[]; refit: string;
+  definition: string; training_status: string; latest_fit: { first_used_at: string; training_games: number; results_available_through: string } | null;
+  evaluation: Record<string, CandidateEval>; prospective: { games: number; settled: number }; combination_participation: string[];
+  selection: string;
+}
+export interface CandidateRoster { mode: Mode; sport: Sport; pool?: string; as_of?: string; candidates: Candidate[];
+  family_audit: unknown[]; note: string }

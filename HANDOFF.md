@@ -1,5 +1,12 @@
 # Current handoff
 
+## Candidate-pool integration — Claude, 2026-10-02 ~18:25–19:00 UTC
+- Integrated session -6b's pool-v1 (docs/CANDIDATE_POOL.md, CANDIDATE_POOL_RESULTS.md): migration 0019 `candidate_forecasts`,
+  two-hour recording after the research cohorts (`jobs.candidate_pool`, non-fatal), roster API and Performance card.
+- Held-out (exploratory) value only for NHL `poisson_draw:nhl_base` (reg3/puck line/away total) and `multinomial_l2` (reg3);
+  nothing for NBA; goalie inputs, MLP, extra trees, NGBoost no value. Candidates never vote; selectable after 100 settled picks.
+- Gap: prospective combination rules involving candidates are not in the sealed registry (v1); a v2 registry is needed for that.
+
 ## Candidate pool `pool-v1` and repository research — Claude (-6b), 2026-10-02 16:55–~19:20 UTC (branch candidates-v3)
 - **Repos inspected (code, commits, licences, probes):** docs/REPO_REVIEW.md + docs/evidence/repo-review/. NGBoost adopted as
   an optional learner (fixes: seeded base tree, chronological early stopping); optuna not needed (nothing searched);

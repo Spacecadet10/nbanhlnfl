@@ -231,6 +231,17 @@ def research_rules(market: str = MARKET, show: str = Query("selected", pattern="
     return {**out, "mode": "real"}
 
 
+@app.get("/api/research/candidates")
+def research_candidates(p=Depends(get_provider)):
+    """Candidate-pool roster (docs/CANDIDATE_POOL.md): training status, markets, latest fit, evaluation, prospective sample,
+    combination participation and selection eligibility. Research only."""
+    if p.mode != "real":
+        return {"mode": "demo", "sport": "nba", "candidates": [], "family_audit": [],
+                "note": "The candidate roster reads the real stores; none in demo mode."}
+    from .candidates import live as pool_live
+    return {**pool_live.roster(p.conn, p.sport, p.now), "mode": "real"}
+
+
 @app.get("/api/research/retrospective")
 def research_retrospective(p=Depends(get_provider)):
     from . import combination_research

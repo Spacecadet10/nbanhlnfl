@@ -436,3 +436,21 @@ def test_primary_market_reads_and_scores_never_include_research_member_rows(game
     rows = market_live.latest(game, policy="near_tipoff")
     assert rows and all(not r["model_version"].startswith("research-") for r in rows)
     assert len({(r["game_id"], r["market"]) for r in rows}) == len(rows)       # one primary forecast per game and market
+
+
+# --- Candidate pool integration (docs/CANDIDATE_POOL.md) ---------------------------------------------------------------------
+def test_predict_now_records_the_candidate_pool_after_cohorts_and_its_failure_never_fails_the_run(game, monkeypatch):
+    from app.candidates import live as pool_live
+    monkeypatch.setattr(jobs, "refresh", lambda conn, **kw: {"status": "skipped"})
+    monkeypatch.setattr(jobs, "odds_snapshot", lambda conn, **kw: {"status": "skipped"})
+    seen = {}
+
+    def fake(conn, **kw):
+        seen["cohorts_before"] = conn.execute("SELECT count(*) FROM research_cohorts").fetchone()[0]
+        seen.update(kw)
+        raise RuntimeError("pool down")
+    monkeypatch.setattr(pool_live, "record", fake)
+    out = jobs.predict_now(game, now="2026-10-12T21:30:00Z")
+    assert seen["cohorts_before"] > 0 and seen["game_ids"] == [GID] and seen["now"] == "2026-10-12T21:30:00Z"
+    assert out["pool"]["status"] == "failed" and "pool down" in out["pool"]["error"]
+    assert out["status"] == "success" and out["research"]["cohorts_created"] > 0

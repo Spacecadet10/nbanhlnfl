@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { api } from '../api/client';
 import type {
-  CalibrationBin, MarketId, RegisteredRule, ResearchExpanded, RuleReport, ResearchGame, ResearchMarket, ResearchRecord, ResearchReport, ResearchSlateEntry, Retrospective, RetroMarket, Side, Sport, Vector,
+  CalibrationBin, Candidate, CandidateRoster, MarketId, RegisteredRule, ResearchExpanded, RuleReport, ResearchGame, ResearchMarket, ResearchRecord, ResearchReport, ResearchSlateEntry, Retrospective, RetroMarket, Side, Sport, Vector,
 } from '../api/types';
 import { useApi } from '../api/useApi';
 import { AsyncView, Empty } from './States';
@@ -221,6 +221,47 @@ function RuleRow({ x }: { x: RegisteredRule }) {
     <td>{p.strongest_single_matched ? pct(p.strongest_single_matched.accuracy, 1) : '—'}</td>
     <td>{bestMember ? <>{pct(bestMember.accuracy, 1)} <span className="muted">({modelName(bestMember.model)})</span></> : '—'}</td>
     <td>{p.pending}{p.void ? ` · ${p.void} void` : ''}</td></tr>;
+}
+
+const llDiff = (v: unknown): string => {
+  const x = typeof v === 'number' ? v : (v && typeof v === 'object' && 'mean' in v ? (v as { mean: number }).mean : null);
+  return x == null ? '—' : `${x >= 0 ? '+' : ''}${x.toFixed(4)}`;
+};
+
+/** Candidate pool: every registered candidate with its status, evidence and whether it may be selected. */
+export function CandidateRosterCard({ sport, market }: { sport: Sport; market: MarketId }) {
+  const { state, retry } = useApi((s) => api.researchCandidates(sport, s), [sport]);
+  return <div className="card">
+    <h2>Candidate pool <span className="badge badge-research">Research</span></h2>
+    <AsyncView state={state} retry={retry}>{(r) => <RosterBody r={r} market={market} />}</AsyncView>
+  </div>;
+}
+
+function RosterBody({ r, market }: { r: CandidateRoster; market: MarketId }) {
+  if (r.candidates.length === 0) return <Empty>{r.note}</Empty>;
+  const rows = [...r.candidates].sort((a, b) => Number(b.markets.includes(market)) - Number(a.markets.includes(market)));
+  return <>
+    <p className="small muted">{r.note} Log-loss differences are against the strongest existing member (negative = better).</p>
+    <div className="table-wrap"><table className="table small">
+      <thead><tr><th>Candidate</th><th>Markets</th><th>Training</th><th>Latest fit</th><th>{MARKET[market]}: screen (backtest)</th>
+        <th>{MARKET[market]}: held-out (backtest)</th><th>Prospective games</th><th>Combinations</th><th>Selection</th></tr></thead>
+      <tbody>{rows.map((c) => <CandidateRow key={c.name} c={c} market={market} />)}</tbody>
+    </table></div>
+  </>;
+}
+
+function CandidateRow({ c, market }: { c: Candidate; market: MarketId }) {
+  const e = c.evaluation[market];
+  return <tr className={c.markets.includes(market) ? '' : 'muted'}>
+    <th scope="row" className="wrap">{c.name}<div className="muted">{c.family} · {c.role}</div></th>
+    <td className="wrap">{c.markets.map((m) => MARKET[m] ?? m).join(', ')}</td>
+    <td className="wrap">{c.training_status}</td>
+    <td className="wrap">{c.latest_fit ? <>{dateTime(c.latest_fit.first_used_at)} · {c.latest_fit.training_games} games</> : '—'}</td>
+    <td>{e ? <>{llDiff(e.vs_strongest)}{e.shortlisted && <span className="ok"> · shortlisted</span>}</> : <span className="muted">—</span>}</td>
+    <td>{e?.assess ? <>{llDiff(e.assess.vs_strongest)}{e.assess.confirmed_gains.length > 0 && <span className="ok"> · gain confirmed</span>}</> : <span className="muted">—</span>}</td>
+    <td>{c.prospective.games} <span className="muted">({c.prospective.settled} settled)</span></td>
+    <td className="wrap">{c.combination_participation.length ? c.combination_participation.map((m) => MARKET[m] ?? m).join(', ') : '—'}</td>
+    <td className="wrap">{c.selection}</td></tr>;
 }
 
 export function ResearchPerformance({ sport, market }: { sport: Sport; market: MarketId }) {

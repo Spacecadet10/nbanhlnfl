@@ -344,3 +344,11 @@ Worktree `../nba-predictor-selector` (branch `selector-dev`), merged into `shado
   NBA espn:401909088 (2026-10-20 19:00Z): 10 winner rows; first run 129 s (trains and stores all season-2027 artifacts), retry 15 s.
 - Tests: `pytest tests/test_candidate_pool.py` 12 passed; `backend/.venv/bin/python scripts/check_project.py --ready` exit 0 (414 passed; 2 migration-list expectations updated for 0019).
 - Not done here: jobs wiring, roster UI and browser check (integration session); no real prospective candidate rows yet.
+
+## Candidate-pool integration (pool-v1 from session -6b, 2aecf4a) — Claude, 2026-10-02 ~18:50 UTC
+- Merged candidates-v3 (fast-forward, rebased on b0ac762); wired `jobs.candidate_pool` into `predict_now` after the research
+  cohorts (never fails the run; test with a raising pool), `/api/research/candidates`, Performance → "Candidate pool".
+- Rehearsal copy (migration 0019 applied to the copy): `candidate_pool` at 2026-10-02T20:46Z for nhl:2026020017 — success,
+  21 candidate forecasts in 37 s (`research-cand:` prefix; puck line at the core cohort's exact −1.5 line). Roster: 9 NHL
+  candidates trained; `poisson_draw:nhl_base` held-out gains in reg3 / puck line / away team total, "selectable after 100
+  settled prospective picks". Browser (ports 8024/5194, clock pinned): roster card renders, 386 = viewport at 390 px, no console errors.

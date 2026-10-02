@@ -329,6 +329,8 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
             # Reported in the detail (and the CLI exit code); the primary run's status is not downgraded by research.
             out["research"] = research_selection(conn, game_ids=accepted, winner_run={**run, "forecasts": winner},
                                                  history=collect, now=now, write=not dry_run)
+            # Candidate pool (docs/CANDIDATE_POOL.md): after the cohorts, so line markets use the core cohort's exact line.
+            out["pool"] = candidate_pool(conn, game_ids=accepted, now=now, write=not dry_run)
         else:
             out["research"] = {"status": "disabled", "reason": "RESEARCH_SELECTION=0"}
     return {"status": status, **out} if dry_run else _finish(conn, run_id, status, 1, out)
@@ -393,6 +395,18 @@ def research_selection(conn: sqlite3.Connection, **kw) -> dict:
     """Research cohorts and selections (app/research_live.py). Errors are visible here and never touch primary rows."""
     try:
         return research_live.record(conn, **kw)
+    except Exception as exc:
+        conn.rollback()
+        return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+
+
+def candidate_pool(conn: sqlite3.Connection, **kw) -> dict:
+    """Two-hour candidate-pool forecasts (research only; never votes, never touches primary or cohort rows). The pool's
+    own record() never raises; this guard also covers its import."""
+    try:
+        from .candidates import live as pool_live
+        r = pool_live.record(conn, **kw)
+        return {k: v for k, v in r.items() if k != "forecasts"}
     except Exception as exc:
         conn.rollback()
         return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
