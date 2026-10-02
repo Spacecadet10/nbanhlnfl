@@ -236,10 +236,14 @@ class MarginTotalNormal:
 
 
 def model_line(dist, market: str) -> float:
-    """A model-only line next to the distribution's median, always on a half point (x.5), so it can never push.
-    Spread lines are the home handicap: minus the median margin."""
+    """A model-only line: the half-point line (x.5, so it can never push) at which the model's two sides are closest to
+    50/50. Changed 2026-10-02: the earlier rule (median rounded down + 0.5) put low-scoring team totals at 3.5 goals with
+    'under' near 70%, so the pick reflected where the line was placed, not the game (docs/MARKETS.md).
+    Spread lines are the home handicap."""
     med = dist.median(market)
-    return math.floor(-med if market == "spread" else med) + 0.5
+    centre = math.floor(-med if market == "spread" else med) + 0.5
+    candidates = [centre + k for k in range(-3, 4)]
+    return min(candidates, key=lambda line: (abs(dist.market(market, line)[0] - 0.5), abs(line - centre)))
 
 
 def check_consistency(dist, market: str, lines: list[float]) -> None:

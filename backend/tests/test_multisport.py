@@ -328,3 +328,13 @@ def test_nhl_regulation_three_way_is_consistent_with_the_winner():
     assert abs(home - away) < 1e-12 and 0.15 < draw < 0.3 and abs(home + draw + away - 1) < 1e-12
     w = g.winner()[0]
     assert abs(w - (home + 0.5 * draw)) < 1e-9       # winner = regulation win + OT/SO share of draws
+
+
+@pytest.mark.parametrize("dist", [markets.poisson_grid(3.0, 2.6, 0.52), markets.MarginTotalNormal(4.0, 12.5, 226.0, 18.0)])
+def test_model_only_lines_sit_where_the_model_is_closest_to_even(dist):
+    for market in ("spread", "total", "team_total_home", "team_total_away"):
+        line = markets.model_line(dist, market)
+        pa = dist.market(market, line)[0]
+        for other in (line - 1, line + 1):
+            assert abs(pa - 0.5) <= abs(dist.market(market, other)[0] - 0.5) + 1e-12
+        assert line % 1 == 0.5

@@ -51,3 +51,9 @@ Period/quarter markets and player props are **not implemented**; see docs/DATA_S
   half-point lines have `p_mid = 0`.
 - NBA `winner` forecasts in the existing ledger (frozen Elo) remain the primary NBA winner record. The distribution model's
   own winner probability is stored as a separate model version and never replaces them.
+
+## Changes
+- **2026-10-02, model-only line choice:** a model-only line is now the half-point line where the model's two sides are closest to 50/50
+  (previously the median rounded down + 0.5). The old rule put NHL team totals at 3.5 goals with "under" near 70% for almost every team, so
+  the pick reflected the line's placement, not the game. Forecasts already recorded keep their lines (append-only); new forecasts at a new
+  line are separate rows. Market-quoted lines are unaffected.
