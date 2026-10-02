@@ -44,6 +44,9 @@ def main(argv=None) -> int:
     nt = sub.add_parser("nhl-test", help="NHL only: the one-time final test of the sealed decision (logged; refuses to rerun)")
     nt.add_argument("--confirm-final-test", action="store_true", required=True)
     sub.add_parser("nhl-learned", help="NHL only: development screening of the logistic and gradient-boosted candidates vs Elo")
+    na = sub.add_parser("nba-availability", help="NBA availability research (avail_v1): download data, or evaluate once "
+                                                 "(development seasons 2019-24 only; needs the dev extra)")
+    na.add_argument("step", choices=("download", "evaluate"))
     sub.add_parser("rebuild-goalies", help="NHL only: import goalie listings from every cached ESPN NHL scoreboard (idempotent)")
     sub.add_parser("nhl-agreement-explore", help="NHL only: descriptive agreement map across the four models (development seasons)")
     sub.add_parser("nhl-agreement", help="NHL only: development-season agreement research (Elo vs goals model; no live change)")
@@ -145,6 +148,18 @@ def main(argv=None) -> int:
     elif args.cmd == "score-markets":
         from . import market_live
         print(json.dumps({p: market_live.score(conn, policy=p) for p in market_live.POLICIES}, indent=2, default=str))
+    elif args.cmd == "nba-availability":
+        from . import availability
+        if args.step == "download":
+            out = {"player_box": [availability.download_player_box(y) for y in availability.SEASONS
+                                  if not availability.player_box_path(y).exists()],
+                   "reports": availability.download_reports(conn, log=print)}
+            print(json.dumps(out, indent=2))
+        else:
+            r = availability.evaluate(conn)
+            print(json.dumps({k: r[k] for k in ("scored_games", "excluded_early_tipoffs", "report_coverage",
+                                                "avail_minus_logistic_v2_brier", "avail_minus_elo_brier", "decision",
+                                                "output_dir")}, indent=2, default=str))
     elif args.cmd == "rebuild-goalies":
         print(json.dumps(ingest.rebuild_goalies(conn)))
     elif args.cmd == "nhl-agreement-explore":

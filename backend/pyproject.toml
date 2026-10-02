@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "scikit-learn>=1.5,<2"]  # scikit-learn: research candidates only; the API and jobs never import it
+dev = ["pytest>=8", "scikit-learn>=1.5,<2", "pypdf>=4,<6"]  # research only (candidates, injury-report parsing); the API and jobs never import them
 
 [tool.setuptools.packages.find]
 include = ["app*"]
