@@ -452,6 +452,11 @@ def daily(conn: sqlite3.Connection, *, force_refresh: bool = False, **refresh_kw
     out["two_hour_score"] = near_tipoff.score(conn)
     out["market_score"] = market_live.score(conn, policy="near_tipoff")
     out["forecast_policy"] = "two-hour-v1; night-before and sealed night-before shadow recording discontinued"
+    try:                     # reports newly settled results per fit and input freshness; never refits (non-fatal)
+        from . import training_monitor
+        out["training_check"] = training_monitor.status(conn)
+    except Exception as exc:
+        out["training_check"] = {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
     return out
 
 
