@@ -208,8 +208,14 @@ export interface ResearchMarket {
   generated_at: string; information_at: string; tipoff_at: string; minutes_before_start: number; start_changed: boolean;
   selection: ResearchSelection | null;
 }
+export interface ResearchExpanded {
+  market: MarketId; line: number | null; members: { name: string; p: Vector }[]; missing: Record<string, string>;
+  average: Vector | null; stack: Vector | null; agreement: ResearchMarket['agreement']; definition: string; generated_at: string;
+  minutes_before_start: number;
+}
 export interface ResearchGame {
   game_id: string; mode: Mode; status: 'unknown_game' | 'no_research_forecast' | 'recorded'; markets: ResearchMarket[];
+  expanded?: ResearchExpanded[]; expanded_note?: string;
   recommendation: { market: MarketId; side: Side; label: string; line: number | null; probability: number } | null; note: string;
 }
 export interface ResearchSlateMarket {
@@ -237,7 +243,8 @@ export interface ResearchGroup {
     best_single: string | null; best_single_basis: string; best_single_confidence_same_count: ResearchRecord | null }>;
   periods: { week: string; cohorts: number; primary: ResearchRecord; average: ResearchRecord }[];
   bookmaker: { cohorts: number; primary_log_loss: number | null; bookmaker_log_loss: number | null; note: string };
-  selector: { selections: { pick: number; no_pick: number }; picks: ResearchRecord; pending: number; void: number; recommended_for_game: ResearchRecord };
+  selector: { selections: { pick: number; no_pick: number }; picks: ResearchRecord; pending: number; void: number; recommended_for_game: ResearchRecord } | null;
+  experiment?: 'core' | 'expanded-v1'; recording_only?: boolean;
 }
 export interface ResearchReport {
   mode: Mode; sport: Sport; market: MarketId; as_of: string; groups: ResearchGroup[]; selector_version: string; note: string;

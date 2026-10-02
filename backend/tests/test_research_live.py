@@ -36,7 +36,9 @@ def run(conn, now, write=True):
 
 
 def cohorts(conn):
-    return {r["market"]: r for r in conn.execute("SELECT * FROM research_cohorts ORDER BY cohort_id")}
+    """Core cohorts only (the expanded-v1 experiment is tested separately)."""
+    return {r["market"]: r for r in conn.execute("SELECT * FROM research_cohorts WHERE definition NOT LIKE '%:expanded-v1' "
+                                                 "ORDER BY cohort_id")}
 
 
 def test_cohorts_cover_every_market_at_the_primary_line_and_retries_add_nothing(game):
@@ -399,3 +401,30 @@ def test_line_shadow_members_never_vote_or_enter_the_average():
                               research_live.LINE_MEMBERS["nba"], None, None)
     assert c["agreement"]["unanimous"] and set(c["agreement"]["picks"]) == set(research_live.LINE_MEMBERS["nba"])
     assert abs(c["average"][0] - 0.6) < 1e-9
+
+
+# --- Expanded-combination experiment expanded-v1 (docs/MODEL_SELECTION.md §14) ----------------------------------------------
+def test_expanded_cohort_is_recorded_separately_and_never_selected(game):
+    from app import nhl_shots
+    from test_nhl_xg import fake_fetch
+    nhl_shots.import_pending(game, None, pause=0, fetch=fake_fetch(game), log=lambda *_: None)
+    out = run(game, "2026-10-12T21:30:00Z")
+    assert out["expanded_created"] == 1 and out["cohorts_created"] == 6        # winner only for the NHL (xG is a winner member)
+    rows = game.execute("SELECT * FROM research_cohorts WHERE market='winner' ORDER BY cohort_id").fetchall()
+    core, x = rows
+    assert x["definition"] == research_live.expanded_definition(core["definition"])
+    ax = json.loads(x["agreement"])
+    assert ax["expected"] == 5 and "hockey_logistic_xg" in ax["picks"]       # the new member votes here, not in the core
+    assert json.loads(core["agreement"])["expected"] == 4
+    assert len(json.loads(x["average"])) == 3 and json.loads(x["average"]) != json.loads(core["average"])
+    sel = game.execute("SELECT cohort_id FROM research_selections").fetchall()
+    assert x["cohort_id"] not in {s[0] for s in sel}                         # recording only: never selected
+    d = research_live.game_detail(game, GID, "2026-10-12T21:35:00Z")
+    assert all(not research_live.is_expanded(m["definition"]) for m in d["markets"]) and len(d["markets"]) == 6
+    assert [e["market"] for e in d["expanded"]] == ["winner"] and research_live.is_expanded(d["expanded"][0]["definition"])
+    rep = research_live.report(game, "winner", "2026-10-12T21:35:00Z")
+    groups = {g["experiment"]: g for g in rep["groups"]}
+    assert groups["expanded-v1"]["recording_only"] and groups["expanded-v1"]["selector"] is None
+    assert groups["core"]["selector"] is not None
+    again = run(game, "2026-10-12T21:30:00Z")
+    assert again["expanded_created"] == 0 and again["expanded_existing"] == 1

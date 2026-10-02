@@ -24,6 +24,21 @@ LINE_MEMBERS = {"nba": ("points_normal", "ridge_points", "gbt_points"), "nhl": (
 # Separately versioned shadow members (docs/MODEL_SELECTION.md §9): recorded and scored as sources, never part of the
 # average, the stacker or agreement, so the core cohort definition is unchanged.
 SHADOW_LINE_MEMBERS = {"nba": ("ridge_points@weekly", "gbt_points@weekly"), "nhl": ()}
+# Separate, versioned expanded-combination experiment (docs/MODEL_SELECTION.md §14): every member incl. shadows. Recording only:
+# never read by the selector, selections or recommendations; the core cohort and definition are unchanged.
+EXPANDED = "expanded-v1"
+
+
+def expanded_definition(defn: str) -> str:
+    return f"{defn}:{EXPANDED}"
+
+
+def is_expanded(defn: str) -> bool:
+    return defn.endswith(f":{EXPANDED}")
+
+
+def shadows(sport: str, market: str) -> tuple:
+    return agreement.SHADOW[sport] if market == "winner" else SHADOW_LINE_MEMBERS[sport]
 CORE = {"nba": agreement.NAMES["nba"][:5], "nhl": agreement.NAMES["nhl"]}
 FMT = "%Y-%m-%dT%H:%M:%SZ"
 SIDE = {"a": 0, "mid": 1, "b": 2}
@@ -118,6 +133,8 @@ def record(conn, *, game_ids: list, winner_run: Optional[dict], history: Optiona
 
     # Winner cohorts from the agreement step of this same run.
     winner_stack, reason = _winner_stack(conn, sport, history, games, now)
+    winner_stack_x, reason_x = (_winner_stack(conn, sport, history, games, now, list(CORE[sport]) + list(agreement.SHADOW[sport]))
+                                if agreement.SHADOW[sport] else (None, None))
     for gid in game_ids:
         fc = [f for f in (winner_run or {}).get("forecasts", []) if f["game_id"] == gid]
         if not fc:
@@ -140,6 +157,17 @@ def record(conn, *, game_ids: list, winner_run: Optional[dict], history: Optiona
         c = _cohort(sport, games[gid], "winner", None, None, None, book, defn, CORE[sport][0], now, stamp(), members, missing,
                     CORE[sport], stack, reason)
         _store(conn, c, cohorts, out, write)
+        if agreement.SHADOW[sport]:
+            names_x = list(CORE[sport]) + list(agreement.SHADOW[sport])
+            stack_x = None
+            if winner_stack_x is not None and all(n in {m["name"] for m in members} for n in names_x):
+                vecs = [next(m["p"] for m in members if m["name"] == n) for n in names_x]
+                stack_x = {"p": list(combine.stack(winner_stack_x, vecs)), "weights": winner_stack_x["weights"],
+                           "training_games": winner_stack_x["n"], "members": names_x}
+            cx = _cohort(sport, games[gid], "winner", None, None, None, book, expanded_definition(defn), CORE[sport][0], now,
+                         stamp(), members, missing, names_x, stack_x, reason_x,
+                         voters=list(expected(sport, "winner")) + list(agreement.SHADOW[sport]))
+            _store_expanded(conn, cx, out, write)
 
     # Line and 3-way markets: the same line, line source and quote as the primary market forecast in this run.
     try:
@@ -215,6 +243,17 @@ def record(conn, *, game_ids: list, winner_run: Optional[dict], history: Optiona
                 c = _cohort(sport, g, market, line, source, quote, book, defn, models[0].name, now, stamp(), members, missing,
                             LINE_MEMBERS[sport], stack, reasons.get(market))
                 _store(conn, c, cohorts, out, write)
+                if SHADOW_LINE_MEMBERS[sport]:
+                    names_x = list(LINE_MEMBERS[sport]) + list(SHADOW_LINE_MEMBERS[sport])
+                    stx = data.get("stacks_x", {}).get(market)
+                    stack_x = None
+                    if stx is not None and not missing:
+                        stack_x = {"p": list(combine.stack(stx, [m["p"] for m in members])), "weights": stx["weights"],
+                                   "training_games": stx["n"], "members": [m["name"] for m in members]}
+                    cx = _cohort(sport, g, market, line, source, quote, book, expanded_definition(defn), models[0].name, now,
+                                 stamp(), members, missing, names_x, stack_x, data.get("reasons_x", {}).get(market),
+                                 voters=names_x)
+                    _store_expanded(conn, cx, out, write)
     if write:
         _select(conn, sport, defn, cohorts, out, stamp)
     if out["errors"] or any(v for v in out["skipped"].values()):
@@ -266,11 +305,11 @@ def settlement_version() -> str:
 
 
 def _cohort(sport, g, market, line, source, quote, book, defn, primary, info_at, generated, members, missing, exp, stack,
-            stack_reason) -> dict:
+            stack_reason, voters=None) -> dict:
     vecs = {m["name"]: m["p"] for m in members}
     complete = all(n in vecs for n in exp)
     avg = list(combine.average([vecs[n] for n in exp])) if complete else None
-    exp_all = list(expected(sport, market))
+    exp_all = list(voters if voters is not None else expected(sport, market))
     agree = combine.agreement({n: v for n, v in vecs.items() if n in exp_all}, exp_all, market)   # shadows never vote
     if stack is None:
         stack_note = "incomplete cohort" if not complete else (stack_reason or "no stacker")
@@ -308,24 +347,33 @@ def _store(conn, c, cohorts, out, write):
     cohorts[c["game_id"]][c["market"]] = (cur.lastrowid, c)
 
 
+def _store_expanded(conn, c, out, write):
+    """Expanded-experiment cohort: stored like a core cohort but counted separately and never passed to the selector."""
+    sink = {"skipped": out["skipped"], "cohorts_created": 0, "cohorts_existing": 0}
+    _store(conn, c, {c["game_id"]: {}}, sink, write)
+    out["expanded_created"] = out.get("expanded_created", 0) + sink["cohorts_created"]
+    out["expanded_existing"] = out.get("expanded_existing", 0) + sink["cohorts_existing"]
+
+
 def _train_seasons(rows, games) -> list:
     current = min(g["season"] for g in games.values())
     return sorted({r.game.season for r in rows if r.game.season < current})[-STACK_SEASONS:]
 
 
-def _winner_stack(conn, sport, history, games, now):
-    """Stacker over the core winner members, fitted on their walk-forward (out-of-fold) predictions of the last two completed
-    seasons, as collected from this run's agreement step. None with a reason when not possible."""
-    if not history or any(n not in history for n in CORE[sport]):
+def _winner_stack(conn, sport, history, games, now, names=None):
+    """Stacker over the core winner members (or `names`), fitted on their walk-forward (out-of-fold) predictions of the last
+    two completed seasons, as collected from this run's agreement step. None with a reason when not possible."""
+    names = list(names or CORE[sport])
+    if not history or any(n not in history for n in names):
         return None, "member walk-forward history unavailable"
     rows = live.available_rows(conn, now)
     seasons = _train_seasons(rows, games)
     real = {r.game.game_id: (0 if r.home_score > r.away_score else 2) for r in rows}
-    by = {n: {p["game_id"]: p for p in history[n]} for n in CORE[sport]}
+    by = {n: {p["game_id"]: p for p in history[n]} for n in names}
     train = []
-    for gid, p in by[CORE[sport][0]].items():
-        if p["season"] in seasons and gid in real and all(gid in by[n] for n in CORE[sport]):
-            train.append(([(by[n][gid]["p_home"], 0.0, 1 - by[n][gid]["p_home"]) for n in CORE[sport]], real[gid]))
+    for gid, p in by[names[0]].items():
+        if p["season"] in seasons and gid in real and all(gid in by[n] for n in names):
+            train.append(([(by[n][gid]["p_home"], 0.0, 1 - by[n][gid]["p_home"]) for n in names], real[gid]))
     if len(train) < STACK_MIN_TRAIN:
         return None, f"only {len(train)} out-of-fold training games"
     return combine.fit_stack(train, "winner"), None
@@ -432,7 +480,8 @@ def _line_state(conn, eng, models, games, now, defn):
         except Exception:
             idents[m.name] = None          # identity is a record, never a reason to withhold a forecast
     return current, state["stacks"], state["reasons"], {"digest": digest, "source": source, "known": {g: r.result_available_at for g, r in known.items()},
-                                                   "fits": fits, "identities": idents}
+                                                   "fits": fits, "identities": idents,
+                                                   "stacks_x": state.get("stacks_x", {}), "reasons_x": state.get("reasons_x", {})}
 
 
 def _fit_line_state(models, rows, events, now, seasons, eng) -> dict:
@@ -445,9 +494,17 @@ def _fit_line_state(models, rows, events, now, seasons, eng) -> dict:
             fitted[m.name] = m
         except Exception as exc:
             errors[m.name] = f"error: {type(exc).__name__}: {exc}"
-    stacks, reasons = {}, {}
-    names = [m.name for m in models if m.name not in SHADOW_LINE_MEMBERS[eng.sport]]   # stackers: core members only
     line_markets = [mk for mk in sports.get(eng.sport).markets if mk != "winner"]
+    core = [m.name for m in models if m.name not in SHADOW_LINE_MEMBERS[eng.sport]]   # core stackers: core members only
+    stacks, reasons = _line_stacks(core, hist, rows, seasons, line_markets, errors)
+    out = {"models": _dumps(fitted), "errors": errors, "stacks": stacks, "reasons": reasons}
+    if SHADOW_LINE_MEMBERS[eng.sport]:          # expanded experiment: every member, in model order
+        out["stacks_x"], out["reasons_x"] = _line_stacks([m.name for m in models], hist, rows, seasons, line_markets, errors)
+    return out
+
+
+def _line_stacks(names, hist, rows, seasons, line_markets, errors):
+    stacks, reasons = {}, {}
     if errors:
         reasons = {mk: "member walk-forward failed" for mk in line_markets}
     else:
@@ -469,7 +526,7 @@ def _fit_line_state(models, rows, events, now, seasons, eng) -> dict:
                 reasons[market] = f"only {len(train)} out-of-fold training games"
                 continue
             stacks[market] = combine.fit_stack(train, market)
-    return {"models": _dumps(fitted), "errors": errors, "stacks": stacks, "reasons": reasons}
+    return stacks, reasons
 
 
 # --- Decisions -------------------------------------------------------------------------------------------------------
@@ -661,7 +718,8 @@ def game_detail(conn, game_id: str, as_of: Optional[str] = None) -> dict:
     for r in conn.execute(
             "SELECT c.* FROM research_cohorts c WHERE c.game_id=? AND c.generated_at<=? AND c.cohort_id = (SELECT x.cohort_id "
             "FROM research_cohorts x WHERE x.game_id=c.game_id AND x.market=c.market AND x.generated_at<=? "
-            "ORDER BY x.generated_at DESC, x.cohort_id DESC LIMIT 1) ORDER BY c.market", (game_id, as_of, as_of)):
+            "AND x.definition NOT LIKE ? ORDER BY x.generated_at DESC, x.cohort_id DESC LIMIT 1) ORDER BY c.market",
+            (game_id, as_of, as_of, f"%:{EXPANDED}")):
         s = sels.get(r["market"])
         if s is not None and s["cohort_id"] != r["cohort_id"]:
             s = None          # a newer cohort was recorded but not (yet) evaluated by the selector
@@ -690,7 +748,18 @@ def game_detail(conn, game_id: str, as_of: Optional[str] = None) -> dict:
                     "minutes_before_start": _minutes(r["tipoff_at"], r["generated_at"]),
                     "start_changed": g["tipoff_at"] != r["tipoff_at"], "selection": selection})
     rec = next((m for m in out if m["selection"] and m["selection"]["recommended"]), None)
-    return {"game_id": game_id, "kind": "research", "markets": out,
+    expanded = [{"market": r["market"], "line": r["line"], "members": json.loads(r["members"]), "missing": json.loads(r["missing"]),
+                 "average": json.loads(r["average"]), "stack": json.loads(r["stack"]).get("p"),
+                 "agreement": json.loads(r["agreement"]), "definition": r["definition"], "generated_at": r["generated_at"],
+                 "minutes_before_start": _minutes(r["tipoff_at"], r["generated_at"])}
+                for r in conn.execute(
+                    "SELECT c.* FROM research_cohorts c WHERE c.game_id=? AND c.generated_at<=? AND c.cohort_id = (SELECT x.cohort_id "
+                    "FROM research_cohorts x WHERE x.game_id=c.game_id AND x.market=c.market AND x.generated_at<=? AND x.definition LIKE ? "
+                    "ORDER BY x.generated_at DESC, x.cohort_id DESC LIMIT 1) ORDER BY c.market",
+                    (game_id, as_of, as_of, f"%:{EXPANDED}"))]
+    return {"game_id": game_id, "kind": "research", "markets": out, "expanded": expanded,
+            "expanded_note": f"{EXPANDED}: separate recording-only experiment with every member incl. shadows; never used for "
+                             "selections or recommendations.",
             "recommendation": None if rec is None else {"market": rec["market"], "side": rec["selection"]["side"],
                                                          "label": rec["sides"][rec["selection"]["side"]], "line": rec["line"],
                                                          "probability": rec["selection"]["probability"]},
@@ -757,6 +826,15 @@ def report(conn, market: str, as_of: Optional[str] = None) -> dict:
                 else:
                     settled.append(item(r, y) | {"line_source": r["line_source"], "tipoff_at": r["tipoff_at"]})
         srcs = sources(sport, market)
+        if is_expanded(defn):     # the registered expanded subsets (docs/MODEL_SELECTION.md §14) as probability sources
+            from .expanded_search import nba_subsets, nhl_subsets
+            members_x = list(expected(sport, market)) + list(shadows(sport, market))
+            subsets = (nhl_subsets(members_x) if sport == "nhl" else nba_subsets(members_x))[0] if shadows(sport, market) else []
+            for i in settled:
+                for sub in subsets:
+                    if all(n in i["vectors"] for n in sub):
+                        i["vectors"]["avg:" + "+".join(sub)] = list(combine.average([i["vectors"][n] for n in sub]))
+            srcs = srcs + ["avg:" + "+".join(sub) for sub in subsets]
         per_source = {}
         for s in srcs:
             have = [i for i in settled if s in i["vectors"]]
@@ -810,7 +888,8 @@ def report(conn, market: str, as_of: Optional[str] = None) -> dict:
                        "unscorable": unscorable,
                        "line_sources": {k: sum(r["line_source"] == k for r in rs) for k in ("market", "model")},
                        "sources": per_source, "agreement": agree, "periods": periods, "bookmaker": bookmaker,
-                       "selector": _selector_record(conn, market, defn, as_of, primary)})
+                       "experiment": EXPANDED if is_expanded(defn) else "core", "recording_only": is_expanded(defn),
+                       "selector": None if is_expanded(defn) else _selector_record(conn, market, defn, as_of, primary)})
     # Decisions written before settlement versions were recorded keep None ("unknown"); nothing is backfilled.
     decisions = [dict(d) | {"rule": json.loads(d["rule"]), "evidence": json.loads(d["evidence"]),
                             "settlement_version": json.loads(d["evidence"]).get("settlement_version")} for d in conn.execute(

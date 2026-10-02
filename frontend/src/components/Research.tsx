@@ -1,7 +1,7 @@
 // Research / shadow model selection (docs/MODEL_SELECTION.md). Never the primary forecast; never betting advice.
 import { api } from '../api/client';
 import type {
-  CalibrationBin, MarketId, ResearchGame, ResearchMarket, ResearchRecord, ResearchReport, ResearchSlateEntry, Retrospective, RetroMarket, Side, Sport, Vector,
+  CalibrationBin, MarketId, ResearchExpanded, ResearchGame, ResearchMarket, ResearchRecord, ResearchReport, ResearchSlateEntry, Retrospective, RetroMarket, Side, Sport, Vector,
 } from '../api/types';
 import { useApi } from '../api/useApi';
 import { AsyncView, Empty } from './States';
@@ -15,7 +15,8 @@ const NAMES: Record<string, string> = {
   'ridge_points@weekly': 'Ridge points (weekly refit, shadow)', 'gbt_points@weekly': 'Boosted points (weekly refit, shadow)',
   hockey_logistic_xg: 'Logistic + shot quality (shadow)',
 };
-export const modelName = (n: string) => NAMES[n] ?? n;
+export const modelName = (n: string) => n.startsWith('avg:')
+  ? `Average: ${n.slice(4).split('+').map((m) => NAMES[m] ?? m).join(' + ')}` : NAMES[n] ?? n;
 const MARKET: Record<string, string> = { winner: 'Winner', reg3: 'Regulation 3-way', spread: 'Spread / puck line', total: 'Total',
   team_total_home: 'Home team total', team_total_away: 'Away team total' };
 const FILTER: Record<string, string> = { none: 'no agreement filter', majority: 'strict majority agrees', unanimous: 'all models agree' };
@@ -74,7 +75,32 @@ function ResearchGameBody({ r }: { r: ResearchGame }) {
       ? <>Selected market: <strong>{MARKET[rec.market]} · {rec.label}</strong> <span className="muted">({pct(rec.probability, 1)} from the rule's source)</span></>
       : <><strong>No pick.</strong> <span className="muted">No market passed its frozen selection rule for this game.</span></>}</p>
     {r.markets.map((m) => <ResearchMarketView key={m.market} m={m} />)}
+    {r.expanded && r.expanded.length > 0 && <>
+      <h3>Expanded experiment <span className="badge badge-research">Recording only</span></h3>
+      <p className="small muted">{r.expanded_note}</p>
+      {r.expanded.map((x) => <ExpandedView key={x.market} x={x} core={r.markets.find((m) => m.market === x.market)} />)}
+    </>}
   </>;
+}
+
+function ExpandedView({ x, core }: { x: ResearchExpanded; core: ResearchMarket | undefined }) {
+  const labels = core?.sides ?? { a: 'Home / over', mid: null, b: 'Away / under' };
+  const sides = SIDES.filter((s) => s !== 'mid' || labels.mid);
+  const missing = Object.entries(x.missing);
+  return <details className="research-market">
+    <summary><strong>{MARKET[x.market]}</strong>{x.line != null && <> · line {x.line}</>} · all {x.agreement.expected} models incl. new ones
+      {' · '}{x.agreement.side ? <>{x.agreement.agreeing} of {x.agreement.expected} pick {labels[x.agreement.side]}{x.agreement.unanimous ? ' (unanimous)' : ''}</> : 'split'}</summary>
+    <div className="table-wrap"><table className="table research-table">
+      <thead><tr><th>Model</th>{sides.map((s) => <th key={s}>{labels[s]}</th>)}</tr></thead>
+      <tbody>
+        {x.members.map((m) => <tr key={m.name}><th scope="row">{modelName(m.name)}</th>{sides.map((s) => <td key={s}>{pct(m.p[sideIdx(s)], 1)}</td>)}</tr>)}
+        {missing.map(([n, why]) => <tr key={n} className="muted"><th scope="row">{modelName(n)}</th><td colSpan={sides.length} className="warn small wrap">Missing: {why}</td></tr>)}
+        <Combined label="Equal average (all models)" v={x.average} sides={sides} note="needs every model" />
+        <Combined label="Learned stacker (all models)" v={x.stack} sides={sides} note="not fitted for this cohort" />
+      </tbody>
+    </table></div>
+    <p className="small muted">Made {dateTime(x.generated_at)}, {Math.round(x.minutes_before_start)} min before the start · <code>{x.definition.slice(-24)}</code></p>
+  </details>;
 }
 
 function ResearchMarketView({ m }: { m: ResearchMarket }) {
@@ -146,6 +172,8 @@ function ReportBody({ r }: { r: ResearchReport }) {
     {r.groups.map((g) => {
       const primary = Object.keys(g.sources)[0];
       return <div key={g.definition}>
+        <h3>{g.recording_only ? <>Expanded experiment ({g.experiment}) <span className="badge badge-research">Recording only</span></> : 'Core experiment'}</h3>
+        {g.recording_only && <p className="small warn">Every model including the new ones. Recorded and scored for research; never used for selections, recommendations or promotion.</p>}
         <p className="small muted">Definition <code>{g.definition.slice(0, 10)}</code> · {g.cohorts} games · {g.settled} settled · {g.pending} pending · {g.void} void{g.unscorable > 0 && ` · ${g.unscorable} unscorable`}
           {' · lines: '}{g.line_sources.market} bookmaker, {g.line_sources.model} model-only</p>
         <h3>Individual models and combinations</h3>
@@ -170,10 +198,10 @@ function ReportBody({ r }: { r: ResearchReport }) {
           <div className="table-wrap"><table className="table"><thead><tr><th>Source</th><th>Bins</th></tr></thead>
             <tbody>{Object.entries(g.sources).map(([n, s]) => <tr key={n}><th scope="row">{modelName(n)}</th><td className="wrap"><Calibration bins={s.calibration} /></td></tr>)}</tbody>
           </table></div><p className="muted">A table only: no calibration is fitted to these results.</p></details>
-        <h3>Selector (shadow)</h3>
+        {g.selector && <><h3>Selector (shadow)</h3>
         <p className="small">Selections {g.selector.selections.pick} picks / {g.selector.selections.no_pick} no-picks · settled picks {record(g.selector.picks)}
           {' '}({pct(g.selector.picks.accuracy, 1)}, {interval(g.selector.picks.ci95)}) · recommended for the game {record(g.selector.recommended_for_game)}
-          {' · '}{g.selector.pending} pending · {g.selector.void} void</p>
+          {' · '}{g.selector.pending} pending · {g.selector.void} void</p></>}
         <details className="small"><summary>Confidence thresholds (descriptive, not tuned)</summary>
           <div className="table-wrap"><table className="table">
             <thead><tr><th>Source</th>{g.sources[primary].thresholds.map((t) => <th key={t.threshold}>≥{pct(t.threshold)}</th>)}</tr></thead>

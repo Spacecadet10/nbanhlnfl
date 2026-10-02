@@ -53,3 +53,48 @@ policy `historical_backfill`, i.e. assumed available with each result). Evaluate
   scored as a research source, never a vote, average or stacker input; skipped with a reason when no shots have been valued
   or a team's last 3 current-season finals lack shots; shots for new finals are imported in the two-hour cycle and the nightly
   NHL job (≤ 60 games per cycle). Promotion only by the written rule after prospective evidence.
+
+## Expanded-combination experiment `expanded-v1` (§14; design 0f3b8d7, code a27b521, run 16:02–16:06 UTC)
+**Inventory of the earlier §11 search (verified from its reports):** NBA winner `elo, logistic, logistic_v2, efficiency_margin,
+gbt_v1`; NBA lines `points_normal, ridge_points, gbt_points, ridge_points@weekly, gbt_points@weekly` — the weekly members
+*were* in every §11 line family and stacker; NHL winner `hockey_elo, goals_poisson, hockey_logistic, hockey_gbt`; NHL
+reg3/lines `goals_poisson, goals_draw, goals_glm`. Never tested before today: `hockey_logistic_xg`; `availability_two_hour`
+cannot be tested historically (no historical inputs) and is prospective only. The live *core* cohorts exclude every shadow.
+
+**Registered family:** NHL winner 36 rules (every subset contains xG); NBA spread/total/team totals 27 rules each (every
+subset contains a weekly member). Reports `data/reports/expanded-{nba,nhl}-20261002/report.json`.
+
+**Pick rules — nothing qualified** (same criteria as §11: ≥100 picks, ≥5% coverage, Bonferroni lower bound > 0 vs the
+strongest single, positive against every constituent). Best selection lower bounds: NHL −0.038 to −0.058 (z 2.99); NBA
+−0.010 to −0.072 (z 2.90). On the NHL the strongest single on earlier data was xG itself in every fold, and agreement of xG
+with other models matched xG's own most-confident games (lift −0.005 to 0.000), so the others added no selection value.
+
+**Probability averages and stackers (log loss, cadence − constituent, 95% week-block interval):**
+| Combination | vs its best constituent | Reading |
+|---|---|---|
+| NHL avg(xG + `hockey_elo`) | +0.0005 [−0.0007, +0.0016] vs xG | no gain over xG alone |
+| NHL avg(xG + `hockey_logistic`) | +0.0006 [−0.0003, +0.0015] vs xG | no gain |
+| NHL stacker (all five) | +0.0008 [−0.0005, +0.0022] vs xG | no gain; it improves on every other member |
+| NBA total: stacker(`points_normal + ridge@weekly + gbt@weekly`) | −0.0027 [−0.0054, −0.00002] vs `points_normal` | **better than every constituent** (2023–24, 2,639 games) |
+| NBA away team total: stacker (triple / all five) | −0.0020 [−0.0040, −0.0002] vs `points_normal` | better than the primary; vs `ridge@weekly` interval spans 0 |
+| NBA spread: averages/stackers | ≥ −0.0006 vs `ridge@weekly` | no gain over `ridge@weekly` |
+| NBA home team total | ≈ 0 vs `points_normal` | no gain |
+So: xG's information is not improved by mixing in the existing NHL winner models; NBA totals show small genuine complementary
+value at the probability level (the stacker of the primary with the weekly members), not a selection rule. All exploratory.
+
+**Prospective recording (from merge):** every two-hour cycle writes an `expanded-v1` cohort next to the unchanged core cohort —
+NHL winner (5 members incl. xG) and NBA spread/total/team totals (5 members incl. weekly) — with member forecast references,
+all-member average, all-member out-of-fold stacker and all-member agreement. The app shows it on the Game page and as its own
+"Expanded experiment · Recording only" group on Performance, with the registered subset averages as sources. No selector
+decision, selection or recommendation reads it.
+
+## Goalies — corrected assessment (2026-10-02)
+My earlier note that goalie quality "cannot be used pregame" was too broad. Historical *starters* are postgame information, but
+the app has recorded prospective ESPN probable/confirmed goalie snapshots with our retrieval time since 2026-10-01 03:30 UTC:
+1,252 snapshots, 26 regular-season games, every team-game listed before the start (expected: median 36 h before;
+confirmed for 18 of 52 team-games, median 7.6 h before). Checked against the actual starter in the play-by-play (first goalie in
+net) for the 8 finished games: the last pre-start listing was right for 15 of 16 teams; every `confirmed` listing (14/14) was
+right; the one miss was an `expected` listing. A goalie-quality input is therefore feasible prospectively: goalie ratings from
+our xG model on historical shots (goalie ids are in the cached raw play-by-play, so no new requests), joined to the latest
+listing before the forecast by name (exact-name match worked 16/16 here). It can only be judged on future games, because
+historical pregame listings do not exist. Not built today.
