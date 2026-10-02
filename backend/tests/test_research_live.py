@@ -342,3 +342,13 @@ def test_fit_register_identifies_each_learned_fit_once_and_is_append_only(game):
     assert game.execute("SELECT count(*) FROM model_fits").fetchone()[0] == len(fits)
     with pytest.raises(sqlite3.IntegrityError, match="append-only"):
         game.execute("UPDATE model_fits SET training_games = 0")
+
+
+def test_a_fit_register_failure_never_blocks_forecasts_or_cohorts(game, monkeypatch):
+    from app import fit_register
+
+    def broken(*a, **k):
+        raise RuntimeError("register unavailable")
+    monkeypatch.setattr(fit_register, "record", broken)
+    out = run(game, "2026-10-12T21:30:00Z")
+    assert out["cohorts_created"] > 0 and "line_members" not in out["errors"] and out["fit_register_errors"]

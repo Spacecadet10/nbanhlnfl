@@ -148,7 +148,10 @@ def record(conn, *, game_ids: list, winner_run: Optional[dict], history: Optiona
         if write:
             from . import fit_register
             for name, ident in data["identities"].items():
-                fit_register.record(conn, sport, name, defn, ident, now)
+                try:     # a record only; never blocks the cohorts
+                    fit_register.record(conn, sport, name, defn, ident, now)
+                except Exception as exc:
+                    out.setdefault("fit_register_errors", {})[name] = f"{type(exc).__name__}: {exc}"
         out["line_state"] = data["source"]
     except Exception as exc:
         out["errors"]["line_members"] = f"{type(exc).__name__}: {exc}"

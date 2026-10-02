@@ -129,7 +129,10 @@ def predict(conn, *, now=None, write=True, game_ids=None, collect=None):
                                              prediction_id=pid, generated_at=f.generated_at, model_version=f.model_version))
             if write and forecasts:
                 from . import fit_register
-                fit_register.record(conn, eng.sport, model.name, digest, fit_register.identity(model, rows, now), now)
+                try:     # a record of the fit in force; never a reason to withhold or fail a forecast
+                    fit_register.record(conn, eng.sport, model.name, digest, fit_register.identity(model, rows, now), now)
+                except Exception as exc:
+                    out.setdefault('fit_register_errors', {})[model.name] = f"{type(exc).__name__}: {exc}"
         except Exception as exc:
             out['errors'][model.name] = f"{type(exc).__name__}: {exc}"
     if out['errors'] or out['skipped']:
