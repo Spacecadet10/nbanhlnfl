@@ -1,5 +1,10 @@
 # Current handoff
 
+## Training-repository advisory — Codex, 2026-10-02
+- Read-only code inspection confirms logistic/GBT and NBA score candidates fit earlier-season examples at season boundaries; weekly rule selection is a different process from model refitting. No training-capacity ceiling established.
+- Reviewed upstream READMEs/docs: github.com/catboost/catboost (candidate learner), stanfordmlgroup/ngboost (probabilistic learner), optuna/optuna (bounded tuning), dblackrun/pbpstats (NBA possessions/lineups), sportsdataverse/fastRhockey (NHL play-by-play/goalie data access). Recommendations only, not installed, benchmarked or source-access verified locally.
+- Next proposal: finish current gap fixes, then register a bounded CatBoost challenger and retraining-cadence comparison; audit richer NBA/NHL inputs. No application, model, database or scheduler changes; no tests rerun for this advisory.
+
 ## Model agreement, combination and shadow selection — Claude, 2026-10-02 (current)
 - **Design first:** docs/MODEL_SELECTION.md (5ea11f5, before any run): audit inventory, candidates, stacking protocol, threshold
   grids, weekly selector (Mon 14:00 UTC), lift-over-reference metric with Bonferroni bound, minimum evidence 100 picks / 10% / 3
