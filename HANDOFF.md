@@ -1,17 +1,38 @@
 # Current handoff
 
-## Retraining-cadence comparison — Claude, 2026-10-02 ~13:20 UTC (branch retrain-cadence, worktree ../nba-predictor-cadence; not merged)
-- Design first: docs/MODEL_SELECTION.md §9 (602aeab), first-season amendment (ae37db0), both before the real run.
-- Built `app/retrain_cadence.py` (wrapper refits existing members monthly/weekly on results delivered by the cutoff; no member
-  definition changed), CLI `retrain-cadence`, 11 tests (`tests/test_retrain_cadence.py`). No live code path, job, store or
-  schema changed; run on `.backup` copies; reports in `data/reports/retrain-cadence-{nba,nhl}-20261002/`.
-- Checks: 372 passed in the worktree; `scripts/check_project.py` structure guard passed (`--ready` not run: worktree has no
-  frontend install, frontend untouched). Season cadence reproduced all 9 members exactly on real data.
-- Result (exploratory, docs/RETRAIN_CADENCE_RESULTS.md): NHL no benefit; NBA winner models tiny gains within noise; NBA score
-  models improve, `gbt_points` meets the pre-set rule (weekly margin log score −0.008/game) but stays behind season-cadence
-  `ridge_points`.
-- Next (needs approval): review, then optionally record `gbt_points@weekly` / `ridge_points@weekly` as prospective shadow
-  members from 2026-10-20; then the CatBoost challenger.
+## Improvement pipeline A–F — Claude, 2026-10-02 12:57–~16:00 UTC (merged; live checkout at 7a674f1 + handoff commits)
+Worktree `../nba-predictor-cadence`, branch `retrain-cadence`, fast-forwarded into `shadow-season`. Each design was committed
+in docs/MODEL_SELECTION.md (§9–§13) before its run. Every study is exploratory (spent development seasons). Write-ups:
+docs/RETRAIN_CADENCE_RESULTS.md, docs/CHALLENGER_RESULTS.md, docs/TRAINING_AUDIT.md, DATA_SOURCES "Feasibility probes".
+- **Correction:** I wrongly said CatBoost would be the first ML dependency; scikit-learn was already declared (TRAINING_AUDIT).
+- **A. Weekly shadows (live):** `ridge_points@weekly`, `gbt_points@weekly`, separately versioned NBA line members with a
+  per-forecast fit identity. They never vote, average or stack, and are scored as research sources. Real-data check before
+  the first NBA game is OK (SMOKE_TEST). The voting bug they briefly introduced is fixed.
+- **B. Audit:** docs/TRAINING_AUDIT.md (what learns, when, schedule, gaps).
+- **C. CatBoost (rejected):** worse than or equal to existing members on held-out seasons for NBA winner, NBA margin/total
+  and NHL winner. Installed only in the worktree venv (optional extra `research`); the live venv is unchanged.
+- **D. Sources:** read-only probes in DATA_SOURCES. Built the NHL shot-quality candidate `hockey_logistic_xg`:
+  - Imported all ~14.3k eligible NHL games' shots into the live NHL store (migration 0017, append-only, raw cached).
+  - **Qualified** on its pre-set rule: Brier −0.0011 [−0.0019, −0.0002] vs `hockey_logistic`, better in all 4 seasons.
+  - Now a prospective shadow winner member. A bounded shot import runs in the two-hour cycle and the nightly NHL job.
+- **E. Combination search (nothing qualified):** 1,655 rules per NBA market (345–925 per NHL market) × pregame conditions,
+  rolling-origin selection. No rule cleared its Bonferroni bound, and best-by-point rules did not hold up. Nothing deployed.
+- **F. Fit register (migration 0018 `model_fits`):** params digest, results fingerprint, results-available-through,
+  libraries and first use for every learned research member, plus the declared schedule (§13). Writes are non-fatal.
+- **Live changes:**
+  - Backups taken: `data/backups/{nba-before-0017-0018,nhl-before-0017,nhl-before-0018}-20261002.sqlite`.
+  - Migrations 0017/0018 applied to both stores.
+  - No launchd change; no primary or sealed config changed.
+  - The research definition digest changed, so prospective research evidence starts under the new definition.
+- **Checks:**
+  - `check_project.py --ready` exit 0 in the live checkout (389 passed).
+  - Browser: 3 pages, phone-width frames, no console errors.
+  - A tests-wide guard blocks real NHL play-by-play requests (`tests/conftest.py`).
+- **Unverified / next:**
+  - First real NHL cohorts with the xG member: tonight's window (from 20:30 UTC).
+  - NBA weekly members: from 2026-10-20.
+  - New research labels in the browser once cohorts exist.
+  - Codex review of d69e466..7a674f1 and the shot-import availability assumption.
 
 ## Gap closing 1–4 and 7 — Claude, 2026-10-02 ~13:30 UTC (review requested)
 - User asked to close five reported gaps, keep abstention, add reliability tables only, choose the best single model on earlier
