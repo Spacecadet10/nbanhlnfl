@@ -215,6 +215,29 @@ already used); anything that survives is only a prospective research candidate. 
   season is deployed as a separately versioned research candidate (member forecasts and selection reasons recorded); otherwise
   rejected, report retained.
 
+## 12. NHL shot-quality candidate `hockey_logistic_xg` (recorded 2026-10-02, before any data was fetched)
+Highest-value feasible feature addition from the 2026-10-02 probes (docs/DATA_SOURCES.md). Separately versioned candidate;
+exploratory on development seasons; never replaces anything without the prospective promotion rule.
+- **Source:** api-web.nhle.com `/v1/gamecenter/{id}/play-by-play` (free, no key; NHL.com terms, personal non-commercial),
+  stored in the raw cache (source `nhl_api_web`) with every retrieval logged. Parsed unblocked shot attempts (shot-on-goal,
+  missed-shot, goal) of regular-season and playoff games, shootouts excluded: side (home/away), period, seconds, x, y, zone,
+  shot type, situation code, goal, empty net (no `goalieInNetId`).
+- **Availability:** as the NBA box backfill. Retrievals more than 24 h after the start are `historical_backfill`, assumed
+  available with the game's result (`result_available_at`); otherwise `observed` (retrieval time). A game's shots reach a model
+  only once both its shots and its result are available at the cutoff (backtest.run box-event rule).
+- **xG model:** L2 logistic regression (scikit-learn, C = 1) of goal on distance and angle to the attacked net (net at ±89 ft,
+  side from the zone code), their product, shot-type indicators, rebound (unblocked attempt by the same team ≤ 3 s earlier,
+  same period) and strength (even / own power play / short-handed). Empty-net attempts excluded. Fitted at each season start on
+  all earlier seasons' attempts; a season's attempts are valued only by the fit made before it.
+- **Team inputs (lagged, point-in-time):** for each team the last 20 games with shots (carried across seasons): even-strength
+  (5v5, both goalies in) xG share = xGF / (xGF + xGA), and special-teams net xG per game = power-play xGF − short-handed xGA.
+- **Candidate:** `hockey_logistic` (same features, l2, scaling and season-start refit) plus `ev_xg_share_diff` and
+  `st_xg_net_diff` (home − away), both standardised. No feature or hyperparameter search.
+- **Evaluation:** development seasons (warm-up 2016–2017; scored 2018–2021; 2016 has no earlier xG fit, so xG features start in
+  2017) against `hockey_logistic` and the primary `hockey_elo`, identical games, winner Brier and log loss, paired week-block
+  bootstrap. **Qualifies** for prospective shadow recording only if its Brier is below both and the paired 95% upper bound of
+  Brier(candidate − `hockey_logistic`) is below 0. Otherwise rejected with its report kept; the shot backfill stays available.
+
 ## Amendments
 - **2026-10-02, before the study run:** `ridge_points` / `gbt_points` spreads have a floor of 1.0 point (`MIN_SD`), found with
   synthetic test data where every total was identical. Real residual spreads are about 12 (margin) and 18 (total) points, so the
