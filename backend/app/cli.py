@@ -89,6 +89,9 @@ def main(argv=None) -> int:
     xr.add_argument("--out")
     ex = sub.add_parser("expanded-search", help="Expanded-combination experiment, retrospective part (MODEL_SELECTION §14)")
     ex.add_argument("--out")
+    gfp = sub.add_parser("gapfill-study", help="Gap-filling combination study from saved out-of-sample tables, both sports; "
+                                               "opens no store (MODEL_SELECTION §16)")
+    gfp.add_argument("--out")
     sv = sub.add_parser("selective-study", help="Market-specific selective-combination study (MODEL_SELECTION §15)")
     sv.add_argument("--out")
     rg = sub.add_parser("rules-registry", help="Freeze the selective-v1 rule registry from the two study reports (MODEL_SELECTION §15)")
@@ -153,6 +156,13 @@ def main(argv=None) -> int:
                     help="Required for --period test; the access is logged to data/eval/test_access.jsonl")
     bt.add_argument("--record", action="store_true", help="Also append predictions to the ledger as run_type=backtest")
     args = p.parse_args(argv)
+    if args.cmd == "gapfill-study":      # reads saved tables only; no store is opened or migrated
+        from pathlib import Path
+        from . import gapfill_study
+        report = gapfill_study.run(out_dir=Path(args.out) if args.out else None)
+        print(json.dumps({"output_dir": report["output_dir"], "qualified": {m: [len(f["qualified"]) for f in a.get("folds", [])]
+                                                                            for m, a in report["markets"].items()}}))
+        return 0
 
     if args.sport != "nba" and args.cmd not in SPORT_COMMANDS:
         p.error(f"`{args.cmd}` is NBA-only; it is not available with --sport {args.sport}")
