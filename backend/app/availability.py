@@ -137,14 +137,20 @@ def report_name(day: str) -> str:
 
 def report_dates(conn: sqlite3.Connection) -> list[str]:
     """ET dates with at least one eligible game tipping off at or after 18:00 ET, in the research seasons."""
-    days = set()
-    for r in conn.execute(f"SELECT tipoff_at FROM games WHERE status = 'final' AND season IN ({', '.join('?' * len(SEASONS))}) "
+    return sorted(date_seasons(conn))
+
+
+def date_seasons(conn: sqlite3.Connection) -> dict[str, int]:
+    """{ET date: the stored season of its eligible evening games}. The calendar is not used: the 2020 bubble ran from
+    August to October 2020 and belongs to 2019-20 (review finding)."""
+    days: dict[str, int] = {}
+    for r in conn.execute(f"SELECT tipoff_at, season FROM games WHERE status = 'final' AND season IN ({', '.join('?' * len(SEASONS))}) "
                           f"AND season_type IN ({', '.join('?' * len(backtest.SEASON_TYPES))})",
                           (*SEASONS, *backtest.SEASON_TYPES)):
         local = datetime.strptime(r[0], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).astimezone(ET)
         if (local.hour, local.minute) >= EARLIEST_TIPOFF:
-            days.add(local.strftime("%Y-%m-%d"))
-    return sorted(days)
+            days[local.strftime("%Y-%m-%d")] = r[1]
+    return days
 
 
 def download_reports(conn: sqlite3.Connection, *, fetch: Callable[[str], nba_injury.Response] = nba_injury.fetch,
@@ -452,9 +458,9 @@ class MinutesHistory:
         for t in self.team_dates:
             self.team_dates[t] = sorted(set(self.team_dates[t]))
 
-    def expected(self, pid: str, day: str) -> tuple[float, str]:
+    def expected(self, pid: str, day: str, season: Optional[int] = None) -> tuple[float, str]:
         """Last-10 mean minutes (games played) before `day`: this season if ≥ 3, else previous season, else 0."""
-        season = season_of(day)
+        season = season if season is not None else season_of(day)
         before = [a for a in self.apps.get(pid, []) if a.date < day and a.played]
         this = [a.minutes for a in before if a.season == season][-10:]
         if len(this) >= 3:
@@ -489,7 +495,8 @@ def build_report_facts(conn: sqlite3.Connection, box: dict, *, log: Callable[[st
     match_levels = defaultdict(lambda: defaultdict(int))
     facts = {}
     rdir = research_dir() / "reports"
-    for day in report_dates(conn):
+    seasons = date_seasons(conn)
+    for day in sorted(seasons):
         cov["dates"] += 1
         name = report_name(day)
         path = rdir / name
@@ -516,7 +523,7 @@ def build_report_facts(conn: sqlite3.Connection, box: dict, *, log: Callable[[st
         for ns in parsed.not_submitted:
             if ns["game_date"] == day and ns["team"] in team_names:
                 f.unsubmitted.add(team_names[ns["team"]])
-        season = season_of(day)
+        season = seasons[day]
         for e in parsed.entries:
             if e["game_date"] != day:
                 continue
@@ -534,7 +541,7 @@ def build_report_facts(conn: sqlite3.Connection, box: dict, *, log: Callable[[st
             if pid is None:
                 slot["unresolved"] += 1
                 continue
-            minutes, basis_m = hist.expected(pid, day)
+            minutes, basis_m = hist.expected(pid, day, season)
             if basis_m == "no_history":
                 slot["no_history"] += 1
             slot["all"] += w * minutes
@@ -547,6 +554,9 @@ def build_report_facts(conn: sqlite3.Connection, box: dict, *, log: Callable[[st
 
 def game_features(facts: dict, g) -> dict:
     """The three availability features for a PregameGame (positive favours home)."""
+    if evening_cutoff(g.tipoff_at) is None:
+        # Tips off before the 5:30 PM report could be used (review finding): no report, in training as in scoring.
+        return {"new_absent_diff": 0.0, "all_absent_diff": 0.0, "report_missing": 1.0}
     day = datetime.strptime(g.tipoff_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).astimezone(ET).strftime("%Y-%m-%d")
     f = facts.get(day)
     h, a = g.home_team_id.split(":", 1)[1], g.away_team_id.split(":", 1)[1]

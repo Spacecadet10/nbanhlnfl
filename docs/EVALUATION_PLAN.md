@@ -473,3 +473,10 @@ come from a forward record.
 `logistic_v2`) is below 0. A combination is reported as adding value only if its comparison interval excludes 0 in its favour. Either result
 may be registered as a **separate forward candidate** with its own dated rule and model version, recorded from its registration date only;
 nothing is promoted from this development evidence. A null or negative result is reported as such.
+- **2026-10-02 amendment (after the first run, before the corrected rerun):** the first run
+  (`data/reports/nba-availability-2026-10-02T014517Z`, avail_v1 − logistic_v2 Brier −0.0023 [−0.0041, −0.0005]) is **superseded**. An
+  independent leakage review found that games tipping off before 18:00 ET (unscored, kept at the night-before cutoff) still received that
+  date's 5:30 PM report as a training feature: about 7% of training rows used a report published after their tipoff. Fixed: such games
+  always get `report_missing = 1` and zero absence features. Also fixed: the season of a report date is the stored season of its games, not
+  the calendar (the 2020 bubble ran August-October 2020 in season 2019-20). No definition, feature, weight, threshold or comparison changed;
+  the evaluation is rerun once with the fixes and that run is the recorded result.

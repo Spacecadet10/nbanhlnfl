@@ -120,3 +120,19 @@ def test_a_page_the_columns_cannot_read_fails_instead_of_passing_with_zero_entri
     lines = ["Player   Name text without a status label", "Holiday, Jrue          Out"]
     r = av.parse_layout([("Injury Report: 01/10/24 05:30 PM", lines)], "x", TEAMS)
     assert r.entries == [] and r.loose_lines == 1 and not r.reconciled
+
+
+def test_games_before_the_report_never_get_report_features():
+    """Review finding (P2): an early game on a date with a usable report must not use it, in training or scoring."""
+    early = PregameGame("espn:1", 2023, "regular", "2023-01-09T20:00:00Z", "espn:2", "espn:3", False)   # 3 PM ET
+    ok = av.ReportFacts(True, "ok", "2023-01-09T22:30:00Z", absent={"2": {"new": 30.0, "all": 60.0}})
+    assert av.game_features({"2023-01-09": ok}, early) == {"new_absent_diff": 0.0, "all_absent_diff": 0.0,
+                                                           "report_missing": 1.0}
+
+
+def test_expected_minutes_use_the_stored_season_not_the_calendar():
+    """Review finding (P3): a 2020 bubble date (August, season 2019-20) must read 2019-20 minutes as 'this season'."""
+    box = {2020: ({"1": [_app("2020-03-01", 2020, "2", 30), _app("2020-03-03", 2020, "2", 32), _app("2020-03-05", 2020, "2", 34)]}, {})}
+    h = av.MinutesHistory(box)
+    assert h.expected("1", "2020-08-01", 2020) == (32.0, "this_season")
+    assert h.expected("1", "2020-08-01")[1] == "previous_season"            # the calendar rule would call it next season
