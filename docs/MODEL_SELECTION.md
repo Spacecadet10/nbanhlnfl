@@ -196,3 +196,6 @@ features, hyperparameters and data as the study in §5; only the refit schedule 
   Rows written before this change keep these as unknown (not backfilled); (4) the slate API and Today show each selected market's
   research status with its exact line, missing-input reasons and timing; (5) abstention when evidence is insufficient is kept as
   designed (the previous rule is not carried forward).
+- **2026-10-02, §9 before the cadence run:** no within-season refits in the walk's first season (NBA 2020, NHL 2016): no
+  earlier-season data exists there and the logistic fit on a few games is singular (found with synthetic tests). That season is
+  warm-up, never scored; every cadence is identical through it.
