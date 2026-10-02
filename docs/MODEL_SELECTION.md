@@ -144,6 +144,31 @@ probability of its pick ≥ threshold and the filter holds.
 - scikit-learn StackingClassifier warning and Yao et al. stacking (docs/STACKING_RESEARCH.md): stacker trained only on held-out
   chronological predictions. No prediction repository copied.
 
+## 9. Retraining-cadence comparison (recorded 2026-10-02 ~13:10 UTC, before any run)
+Question: do the existing learned members forecast better when refit more often than at season start? Same definitions,
+features, hyperparameters and data as the study in §5; only the refit schedule changes. Code: `app/retrain_cadence.py`.
+- **Members (unchanged):** NBA `logistic`, `logistic_v2`, `gbt_v1`, `ridge_points`, `gbt_points`; NHL `hockey_logistic`,
+  `hockey_gbt`, `goals_glm`, `goals_draw`. Online-rating models (Elo, `goals_poisson`, efficiency) already update every result
+  and are not part of this comparison.
+- **Cadences:** `season` (existing: first forecast of each season); `monthly` (also at the first forecast whose Eastern tipoff
+  date is in a new calendar month); `weekly` (also at the first forecast in a new ISO week). Every refit trains on every result
+  the walk-forward had delivered by that forecast's cutoff (backtest.run rule), current season included; nothing else changes
+  (residual spreads and the draw weight are refit with the weights). Games sharing a cutoff share one fit.
+- **Data:** NBA warm-up 2020–2021, evaluated 2022–2024; NHL warm-up 2016–2017, evaluated 2018–2021. These seasons were already
+  used for selection, so results are **exploratory**. No test/validation-reserved season is read.
+- **Metrics (per game, paired on games every cadence forecast):** winner Brier (all members); NBA score members also the
+  Gaussian log score of the observed margin and of the observed total; NHL score members also regulation 3-way log loss.
+- **Comparison:** monthly − season and weekly − season, mean per-game difference pooled over the evaluated seasons, with the
+  ISO-week block bootstrap (seed 20260930, 20,000 resamples): 95% interval and a Bonferroni interval over the 18
+  member × cadence comparisons of each member's primary metric (winner Brier for winner members; margin log score for NBA score
+  members; regulation 3-way log loss for NHL score members). Per-season point estimates reported.
+- **Reading rule (fixed now):** a cadence "supports a prospective trial" for a member only if the Bonferroni upper bound of its
+  primary-metric difference is below 0 **and** the per-season difference is ≤ 0 in at least 2 of 3 NBA / 3 of 4 NHL seasons.
+  Otherwise "no evidence of improvement". Either way nothing is promoted or changed live; a supported cadence would only be
+  proposed as a separately recorded shadow member, judged on future games.
+- **Checks:** a wrapped member's training set at every refit contains only results available by that cutoff (test); `season`
+  cadence reproduces the unwrapped member's forecasts exactly (test and real run).
+
 ## Amendments
 - **2026-10-02, before the study run:** `ridge_points` / `gbt_points` spreads have a floor of 1.0 point (`MIN_SD`), found with
   synthetic test data where every total was identical. Real residual spreads are about 12 (margin) and 18 (total) points, so the
