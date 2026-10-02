@@ -63,7 +63,7 @@ def definition(conn) -> str:
     h = hashlib.sha256(agreement.definition_hash(agreement.models(conn)).encode())
     root = Path(__file__).parent
     for name in ("combine.py", "research_live.py", "markets.py", "market_live.py", "models/score_candidates.py",
-                 "retrain_cadence.py"):
+                 "retrain_cadence.py", "fit_register.py"):
         h.update(name.encode())
         h.update((root / name).read_bytes())
     h.update(json.dumps([(m.name, m.config()) for m in line_models(conn)], sort_keys=True, default=str).encode())
@@ -145,6 +145,10 @@ def record(conn, *, game_ids: list, winner_run: Optional[dict], history: Optiona
         models = line_models(conn)
         current, stacks, reasons, data = _line_state(conn, eng, models, games, now, defn)
         known = data["known"]
+        if write:
+            from . import fit_register
+            for name, ident in data["identities"].items():
+                fit_register.record(conn, sport, name, defn, ident, now)
         out["line_state"] = data["source"]
     except Exception as exc:
         out["errors"]["line_members"] = f"{type(exc).__name__}: {exc}"
@@ -401,7 +405,7 @@ def _line_state(conn, eng, models, games, now, defn):
         f"SELECT * FROM games WHERE status='scheduled' AND tipoff_at > ? AND tipoff_at <= ? "
         f"AND season_type IN ({','.join('?' for _ in eng.eligible_types)}) ORDER BY tipoff_at, game_id",
         (now, horizon, *eng.eligible_types)) if g["game_id"] not in known]
-    current, fits = {}, {}
+    current, fits, idents = {}, {}, {}
     for m in models:
         if m.name in state["errors"]:
             current[m.name] = {gid: state["errors"][m.name] for gid in games}
@@ -417,8 +421,13 @@ def _line_state(conn, eng, models, games, now, defn):
         except Exception as exc:
             cur = {gid: f"error: {type(exc).__name__}: {exc}" for gid in games}
         current[m.name] = cur
+        try:
+            from . import fit_register
+            idents[m.name] = fit_register.identity(mm, rows, now)
+        except Exception:
+            idents[m.name] = None          # identity is a record, never a reason to withhold a forecast
     return current, state["stacks"], state["reasons"], {"digest": digest, "source": source, "known": set(known),
-                                                   "fits": fits}
+                                                   "fits": fits, "identities": idents}
 
 
 def _fit_line_state(models, rows, events, now, seasons, eng) -> dict:

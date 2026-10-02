@@ -327,3 +327,18 @@ def test_slate_reports_each_market_with_line_missing_inputs_and_timing(sealed):
     assert t["line_source"] == "model" and t["line"] is not None and t["minutes_before_start"] == 90.0
     assert set(t["missing"]) == {"goals_draw", "goals_glm"} and t["status"] == "no_pick"
     assert set(s["markets"]) == {"winner", "reg3", "spread", "total", "team_total_home", "team_total_away"}
+
+
+# --- Fit register (docs/MODEL_SELECTION.md §13) ----------------------------------------------------------------------------
+def test_fit_register_identifies_each_learned_fit_once_and_is_append_only(game):
+    run(game, "2026-10-12T21:30:00Z")
+    fits = {r["member"]: dict(r) for r in game.execute("SELECT * FROM model_fits")}
+    assert {"hockey_logistic", "hockey_gbt"} <= set(fits), fits.keys()
+    assert "hockey_elo" not in fits and "goals_poisson" not in fits          # online ratings only: no learned fit
+    for f in fits.values():
+        assert f["schedule"] == "season_start" and f["results_available_through"] <= "2026-10-12T21:30:00Z"
+        assert f["training_games"] > 0 and len(f["params_digest"]) == 24 and json.loads(f["libraries"])["scikit-learn"]
+    run(game, "2026-10-12T21:40:00Z")                                        # same data, same fits: no new rows
+    assert game.execute("SELECT count(*) FROM model_fits").fetchone()[0] == len(fits)
+    with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+        game.execute("UPDATE model_fits SET training_games = 0")

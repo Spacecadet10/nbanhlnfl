@@ -127,6 +127,9 @@ def predict(conn, *, now=None, write=True, game_ids=None, collect=None):
                     out['already_recorded'] += not new
                 out['forecasts'].append(dict(game_id=f.game_id, model=model.name, home_win_prob=f.home_win_prob,
                                              prediction_id=pid, generated_at=f.generated_at, model_version=f.model_version))
+            if write and forecasts:
+                from . import fit_register
+                fit_register.record(conn, eng.sport, model.name, digest, fit_register.identity(model, rows, now), now)
         except Exception as exc:
             out['errors'][model.name] = f"{type(exc).__name__}: {exc}"
     if out['errors'] or out['skipped']:

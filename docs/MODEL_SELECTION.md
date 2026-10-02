@@ -238,6 +238,29 @@ exploratory on development seasons; never replaces anything without the prospect
   bootstrap. **Qualifies** for prospective shadow recording only if its Brier is below both and the paired 95% upper bound of
   Brier(candidate − `hockey_logistic`) is below 0. Otherwise rejected with its report kept; the shot backfill stays available.
 
+## 13. Controlled ongoing learning — declared schedule (recorded 2026-10-02)
+The learning *procedure* is fixed and versioned; model *parameters* learn from new games on this schedule. New outcomes never
+change an issued forecast (append-only ledger and cohort tables) and never rewrite an earlier decision or fit record.
+| Component | Learns from new finals | Schedule | Identity recorded |
+|---|---|---|---|
+| Primary `elo` / `hockey_elo`, `points_normal` / `goals_poisson` | ratings, online | every result, replayed each run | sealed config + `dataset_version`; near-tipoff rows `latest_result_available_at` |
+| Research winner members (`logistic*`, `gbt_v1`, `hockey_*`, `efficiency_margin` σ) | weights | first forecast of each season, on all earlier seasons | `model_fits` row (params digest, results fingerprint, results available through, libraries, first used) |
+| Research line members (`ridge_points`, `gbt_points`, `goals_draw`, `goals_glm`) | weights | season start | `model_fits` |
+| Shadow line members `ridge_points@weekly`, `gbt_points@weekly` | weights | season start + first forecast of each ISO week (Eastern) | `model_fits` + per-forecast `params.fit` |
+| Stackers | pooling weights | each run, on the last two completed seasons (identical within a season) | weights in each cohort's `stack` JSON |
+| Selector | which rule to follow (no parameters) | Monday 14:00 UTC, settled live cohorts | `selector_decisions` (append-only) |
+| Thresholds | none chosen automatically | — | — |
+| Studies (cadence §9, CatBoost §10, combinations §11, xG §12) | — | re-run at most once per season, after the season ends, each design-first; no in-season search | reports under `data/reports/` |
+- **Forecast timing (unchanged):** training/refits may run any time before the window; time-sensitive inputs are refreshed and
+  forecasts issued only within two hours before the start and strictly before it (code checks + triggers, migrations 0015/0016).
+- **Primary stability:** the primaries change only through the written prospective promotion rules (§6 "Promotion",
+  EVALUATION_PLAN promotion rules), applied manually; research recommendations adapt only through the frozen, versioned selector.
+- **Candidate lifecycle:** design recorded → exploratory study on spent seasons → if it meets its pre-set rule, prospective
+  shadow recording under its own version → promotion only by the written rule. Rejected candidates keep their report and code
+  path out of the live run (no runtime cost).
+- **Known limit:** the research `definition` digest includes source files, so any code change starts a new research identity
+  and prospective evidence restarts for that definition. Changes should therefore be batched and infrequent.
+
 ## Amendments
 - **2026-10-02, before the study run:** `ridge_points` / `gbt_points` spreads have a floor of 1.0 point (`MIN_SD`), found with
   synthetic test data where every total was identical. Real residual spreads are about 12 (margin) and 18 (total) points, so the
