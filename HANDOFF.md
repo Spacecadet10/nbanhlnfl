@@ -1,5 +1,17 @@
 # Current handoff
 
+## Expanded-combination experiment and fixes — Claude, 2026-10-02 ~16:00–16:35 UTC (merged; live checkout 1d0709c + docs)
+- Inventory (from reports): the §11 search included the weekly NBA members; it never tested `hockey_logistic_xg`;
+  `availability_two_hour` is prospective-only. Separate experiment `expanded-v1` designed first (MODEL_SELECTION §14, 0f3b8d7).
+- Retrospective (exploratory; CHALLENGER_RESULTS): 36 NHL-winner and 27-per-NBA-line-market registered rules; nothing
+  qualified. NHL: no combination improves on xG alone. NBA totals: stacker(points_normal + weekly members) beats every
+  constituent in log loss (−0.0027 [−0.0054, −0.00002] vs points_normal), a probability-level gain, not a pick rule.
+- Live: each two-hour cycle also writes `expanded-v1` cohorts (NHL winner; NBA spread/total/team totals) next to the
+  unchanged core; recording only (no selector/selections/recommendations); shown on Game and Performance.
+- Fixed: primary market reads/scoring excluded research member rows only after 1d0709c (none existed in live stores before).
+- Goalies: corrected assessment (prospective snapshots usable; 15/16 last listings and 14/14 confirmed matched the starter).
+- Rehearsal + browser evidence in SMOKE_TEST. Unverified: tonight's first real NHL cohorts (from 20:30 UTC); NBA from 10-20.
+
 ## Improvement pipeline A–F — Claude, 2026-10-02 12:57–~16:00 UTC (merged; live checkout at 7a674f1 + handoff commits)
 Worktree `../nba-predictor-cadence`, branch `retrain-cadence`, fast-forwarded into `shadow-season`. Each design was committed
 in docs/MODEL_SELECTION.md (§9–§13) before its run. Every study is exploratory (spent development seasons). Write-ups:
