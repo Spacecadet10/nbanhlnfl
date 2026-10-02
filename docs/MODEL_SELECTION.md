@@ -164,3 +164,10 @@ probability of its pick ≥ threshold and the filter holds.
   void and honour `as_of`; (7) the retrospective simulation follows the live incumbent and tie-break rules (study run 2).
   Known limitations kept: `game_decisions` has no availability time of its own (the decision arrives with the final result);
   the winner cohort's bookmaker quote is looked up at the research step's start, which can be a few minutes after the primary's.
+- **2026-10-02, gap closing (user-directed; no new candidate, rule, threshold or experiment):** (1) the strongest single member
+  used in comparisons is chosen on earlier data only: per evaluated season from earlier out-of-sample seasons in the study; for the
+  live report, from the retrospective study (all earlier than any live game); (2) reliability tables only, no fitted calibration;
+  (3) a winner cohort's bookmaker record now names its quote table and id; every decision records the settlement-rules version.
+  Rows written before this change keep these as unknown (not backfilled); (4) the slate API and Today show each selected market's
+  research status with its exact line, missing-input reasons and timing; (5) abstention when evidence is insufficient is kept as
+  designed (the previous rule is not carried forward).

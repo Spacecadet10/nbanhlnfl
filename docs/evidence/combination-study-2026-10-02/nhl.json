@@ -1,7 +1,7 @@
 {
  "kind": "retrospective exploratory study",
  "sport": "nhl",
- "generated_at": "2026-10-02T11:30:47Z",
+ "generated_at": "2026-10-02T12:36:37Z",
  "dataset_version": "5da8e01fc710d6a2",
  "evaluated_seasons": [
   2018,
@@ -500,6 +500,42 @@
     }
    },
    "best_single_by_log_loss": "hockey_logistic",
+   "best_single_prior": {
+    "2018": {
+     "model": "hockey_elo",
+     "games": 1317,
+     "seasons": [
+      2017
+     ]
+    },
+    "2019": {
+     "model": "hockey_elo",
+     "games": 2672,
+     "seasons": [
+      2017,
+      2018
+     ]
+    },
+    "2020": {
+     "model": "hockey_elo",
+     "games": 4030,
+     "seasons": [
+      2017,
+      2018,
+      2019
+     ]
+    },
+    "2021": {
+     "model": "hockey_elo",
+     "games": 5242,
+     "seasons": [
+      2017,
+      2018,
+      2019,
+      2020
+     ]
+    }
+   },
    "log_loss_diff": {
     "average-hockey_elo": {
      "mean": 0.000608796844165333,
@@ -568,6 +604,7 @@
       "accuracy": 0.5802522836015659
      },
      "vs_hockey_elo_confidence": {
+      "games": 4598,
       "accuracy": 0.5804697694649847,
       "diff": {
        "diff": -0.00021748586341885368,
@@ -581,12 +618,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 4598,
       "accuracy": 0.5828621139625925,
       "diff": {
        "diff": -0.002609830361026577,
        "ci95": [
         -0.006225782559769577,
         0.0008734641735670401
+       ],
+       "weeks": 133,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 4598,
+      "accuracy": 0.5804697694649847,
+      "diff": {
+       "diff": -0.00021748586341885368,
+       "ci95": [
+        -0.0051749120264955595,
+        0.004632521340828588
        ],
        "weeks": 133,
        "seed": 20260930,
@@ -604,6 +656,7 @@
       "accuracy": 0.6134763660744217
      },
      "vs_hockey_elo_confidence": {
+      "games": 2983,
       "accuracy": 0.6151525310090513,
       "diff": {
        "diff": -0.0016761649346296315,
@@ -617,12 +670,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 2983,
       "accuracy": 0.6131411330874958,
       "diff": {
        "diff": 0.00033523298692583747,
        "ci95": [
         -0.0001653439695513681,
         0.0009680542110358514
+       ],
+       "weeks": 132,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 2983,
+      "accuracy": 0.6151525310090513,
+      "diff": {
+       "diff": -0.0016761649346296315,
+       "ci95": [
+        -0.009194023968962406,
+        0.0056848192008308596
        ],
        "weeks": 132,
        "seed": 20260930,
@@ -640,6 +708,7 @@
       "accuracy": 0.6413393432066967
      },
      "vs_hockey_elo_confidence": {
+      "games": 1553,
       "accuracy": 0.6445589182227945,
       "diff": {
        "diff": -0.00321957501609782,
@@ -653,6 +722,7 @@
       }
      },
      "vs_average_confidence": {
+      "games": 1553,
       "accuracy": 0.6413393432066967,
       "diff": {
        "diff": 0.0,
@@ -661,6 +731,20 @@
         0.0
        ],
        "weeks": 118,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 1553,
+      "accuracy": 0.6445589182227945,
+      "diff": {
+       "diff": -0.00321957501609782,
+       "ci95": [
+        -0.014537774483126431,
+        0.007510465402610245
+       ],
+       "weeks": 119,
        "seed": 20260930,
        "samples": 2000
       }
@@ -676,6 +760,7 @@
       "accuracy": 0.5914793518034501
      },
      "vs_hockey_elo_confidence": {
+      "games": 3826,
       "accuracy": 0.5990590695243073,
       "diff": {
        "diff": -0.007579717720857193,
@@ -689,12 +774,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 3826,
       "accuracy": 0.5925248301097752,
       "diff": {
        "diff": -0.001045478306325065,
        "ci95": [
         -0.006360847125843505,
         0.004705094328995685
+       ],
+       "weeks": 133,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 3826,
+      "accuracy": 0.5990590695243073,
+      "diff": {
+       "diff": -0.007579717720857193,
+       "ci95": [
+        -0.013989564006840483,
+        -0.0011377341960627785
        ],
        "weeks": 133,
        "seed": 20260930,
@@ -712,6 +812,7 @@
       "accuracy": 0.6130790190735694
      },
      "vs_hockey_elo_confidence": {
+      "games": 2936,
       "accuracy": 0.6158038147138964,
       "diff": {
        "diff": -0.0027247956403270157,
@@ -725,12 +826,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 2936,
       "accuracy": 0.614441416893733,
       "diff": {
        "diff": -0.0013623978201635634,
        "ci95": [
         -0.004852089513749047,
         0.0017110546408720673
+       ],
+       "weeks": 132,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 2936,
+      "accuracy": 0.6158038147138964,
+      "diff": {
+       "diff": -0.0027247956403270157,
+       "ci95": [
+        -0.010276268134490452,
+        0.005408362203817019
        ],
        "weeks": 132,
        "seed": 20260930,
@@ -748,6 +864,7 @@
       "accuracy": 0.6412903225806451
      },
      "vs_hockey_elo_confidence": {
+      "games": 1550,
       "accuracy": 0.6438709677419355,
       "diff": {
        "diff": -0.002580645161290418,
@@ -761,6 +878,7 @@
       }
      },
      "vs_average_confidence": {
+      "games": 1550,
       "accuracy": 0.6412903225806451,
       "diff": {
        "diff": 0.0,
@@ -769,6 +887,20 @@
         0.0010721180748745063
        ],
        "weeks": 118,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 1550,
+      "accuracy": 0.6438709677419355,
+      "diff": {
+       "diff": -0.002580645161290418,
+       "ci95": [
+        -0.013889202084967245,
+        0.008454193942528332
+       ],
+       "weeks": 119,
        "seed": 20260930,
        "samples": 2000
       }
@@ -784,6 +916,7 @@
       "accuracy": 0.5835283107159569
      },
      "vs_hockey_elo_confidence": {
+      "games": 4274,
       "accuracy": 0.5865699578848853,
       "diff": {
        "diff": -0.0030416471689284075,
@@ -797,12 +930,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 4274,
       "accuracy": 0.5882077678989237,
       "diff": {
        "diff": -0.004679457182966806,
        "ci95": [
         -0.010912337255436055,
         0.001549688879928346
+       ],
+       "weeks": 133,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 4274,
+      "accuracy": 0.5865699578848853,
+      "diff": {
+       "diff": -0.0030416471689284075,
+       "ci95": [
+        -0.008428435009262158,
+        0.002592505302851711
        ],
        "weeks": 133,
        "seed": 20260930,
@@ -820,6 +968,7 @@
       "accuracy": 0.5810839991362556
      },
      "vs_hockey_elo_confidence": {
+      "games": 4631,
       "accuracy": 0.5812999352191751,
       "diff": {
        "diff": -0.00021593608291947675,
@@ -833,12 +982,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 4631,
       "accuracy": 0.5825955517166919,
       "diff": {
        "diff": -0.0015115525804362262,
        "ci95": [
         -0.007086016105174897,
         0.0034692488934089383
+       ],
+       "weeks": 133,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 4631,
+      "accuracy": 0.5812999352191751,
+      "diff": {
+       "diff": -0.00021593608291947675,
+       "ci95": [
+        -0.003901266559571348,
+        0.0034041827651126733
        ],
        "weeks": 133,
        "seed": 20260930,
@@ -856,6 +1020,7 @@
       "accuracy": 0.5844610359309379
      },
      "vs_hockey_elo_confidence": {
+      "games": 4286,
       "accuracy": 0.5858609426038264,
       "diff": {
        "diff": -0.0013999066728884735,
@@ -869,12 +1034,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 4286,
       "accuracy": 0.5881941203919738,
       "diff": {
        "diff": -0.0037330844610359293,
        "ci95": [
         -0.00899785172033396,
         0.0017022079338753215
+       ],
+       "weeks": 133,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 4286,
+      "accuracy": 0.5858609426038264,
+      "diff": {
+       "diff": -0.0013999066728884735,
+       "ci95": [
+        -0.007357909752984559,
+        0.004816790153809536
        ],
        "weeks": 133,
        "seed": 20260930,
@@ -1271,6 +1451,8 @@
       "{\"filter\": \"unanimous\", \"source\": \"hockey_elo\", \"threshold\": 0.6}"
      ],
      "primary_confidence_same_count": {
+      "model": "hockey_elo",
+      "games": 1014,
       "accuracy": 0.6479289940828402,
       "diff": {
        "diff": 0.0039447731755424265,
@@ -1282,7 +1464,23 @@
        "seed": 20260930,
        "samples": 2000
       },
-      "note": "primary ranked within the same span, which uses the span's own confidence distribution (descriptive)"
+      "note": "ranked within the same span, using the span's own confidence distribution (descriptive)"
+     },
+     "best_single_confidence_same_count": {
+      "model": "best_prior",
+      "games": 1014,
+      "accuracy": 0.6479289940828402,
+      "diff": {
+       "diff": 0.0039447731755424265,
+       "ci95": [
+        -0.012683514003820284,
+        0.02142572739346771
+       ],
+       "weeks": 98,
+       "seed": 20260930,
+       "samples": 2000
+      },
+      "note": "ranked within the same span, using the span's own confidence distribution (descriptive); the best single member of each season is chosen on earlier seasons only"
      }
     },
     "decisions": [
@@ -3783,6 +3981,42 @@
     }
    },
    "best_single_by_log_loss": "goals_draw",
+   "best_single_prior": {
+    "2018": {
+     "model": "goals_draw",
+     "games": 1317,
+     "seasons": [
+      2017
+     ]
+    },
+    "2019": {
+     "model": "goals_draw",
+     "games": 2672,
+     "seasons": [
+      2017,
+      2018
+     ]
+    },
+    "2020": {
+     "model": "goals_draw",
+     "games": 4030,
+     "seasons": [
+      2017,
+      2018,
+      2019
+     ]
+    },
+    "2021": {
+     "model": "goals_draw",
+     "games": 5242,
+     "seasons": [
+      2017,
+      2018,
+      2019,
+      2020
+     ]
+    }
+   },
    "log_loss_diff": {
     "average-goals_poisson": {
      "mean": -0.007287207597093723,
@@ -3851,6 +4085,7 @@
       "accuracy": 0.4551978675415214
      },
      "vs_goals_poisson_confidence": {
+      "games": 4877,
       "accuracy": 0.4551978675415214,
       "diff": {
        "diff": 0.0,
@@ -3864,12 +4099,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 4877,
       "accuracy": 0.45437769120360877,
       "diff": {
        "diff": 0.0008201763379126481,
        "ci95": [
         -0.004745470232959459,
         0.006342062193125997
+       ],
+       "weeks": 133,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 4877,
+      "accuracy": 0.4551978675415214,
+      "diff": {
+       "diff": 0.0,
+       "ci95": [
+        0.0,
+        0.0
        ],
        "weeks": 133,
        "seed": 20260930,
@@ -3887,6 +4137,7 @@
       "accuracy": 0.49338577046835896
      },
      "vs_goals_poisson_confidence": {
+      "games": 2797,
       "accuracy": 0.4858777261351448,
       "diff": {
        "diff": 0.00750804433321417,
@@ -3900,12 +4151,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 2797,
       "accuracy": 0.49338577046835896,
       "diff": {
        "diff": 0.0,
        "ci95": [
         0.0,
         0.0
+       ],
+       "weeks": 132,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 2797,
+      "accuracy": 0.4858777261351448,
+      "diff": {
+       "diff": 0.00750804433321417,
+       "ci95": [
+        0.0006258890469416634,
+        0.014455477361097702
        ],
        "weeks": 132,
        "seed": 20260930,
@@ -3923,6 +4189,7 @@
       "accuracy": 0.5212177121771218
      },
      "vs_goals_poisson_confidence": {
+      "games": 1084,
       "accuracy": 0.5175276752767528,
       "diff": {
        "diff": 0.0036900369003689537,
@@ -3936,6 +4203,7 @@
       }
      },
      "vs_average_confidence": {
+      "games": 1084,
       "accuracy": 0.5212177121771218,
       "diff": {
        "diff": 0.0,
@@ -3944,6 +4212,20 @@
         0.0
        ],
        "weeks": 110,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 1084,
+      "accuracy": 0.5175276752767528,
+      "diff": {
+       "diff": 0.0036900369003689537,
+       "ci95": [
+        -0.012087942187938294,
+        0.019534578826614246
+       ],
+       "weeks": 111,
        "seed": 20260930,
        "samples": 2000
       }
@@ -3959,6 +4241,7 @@
       "accuracy": 0.4666030534351145
      },
      "vs_goals_poisson_confidence": {
+      "games": 4192,
       "accuracy": 0.4661259541984733,
       "diff": {
        "diff": 0.0004770992366411875,
@@ -3972,12 +4255,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 4192,
       "accuracy": 0.46946564885496184,
       "diff": {
        "diff": -0.002862595419847347,
        "ci95": [
         -0.008764419413325841,
         0.002686603525078435
+       ],
+       "weeks": 133,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 4192,
+      "accuracy": 0.4661259541984733,
+      "diff": {
+       "diff": 0.0004770992366411875,
+       "ci95": [
+        -0.006043579130631027,
+        0.006625856530679652
        ],
        "weeks": 133,
        "seed": 20260930,
@@ -3995,6 +4293,7 @@
       "accuracy": 0.4937208467886616
      },
      "vs_goals_poisson_confidence": {
+      "games": 2787,
       "accuracy": 0.4861858629350556,
       "diff": {
        "diff": 0.007534983853606014,
@@ -4008,12 +4307,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 2787,
       "accuracy": 0.493362038033728,
       "diff": {
        "diff": 0.00035880875493360387,
        "ci95": [
         -0.0013081319757952126,
         0.0022078195440025095
+       ],
+       "weeks": 132,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 2787,
+      "accuracy": 0.4861858629350556,
+      "diff": {
+       "diff": 0.007534983853606014,
+       "ci95": [
+        0.00036716548661086534,
+        0.014861503727946923
        ],
        "weeks": 132,
        "seed": 20260930,
@@ -4031,6 +4345,7 @@
       "accuracy": 0.5212177121771218
      },
      "vs_goals_poisson_confidence": {
+      "games": 1084,
       "accuracy": 0.5175276752767528,
       "diff": {
        "diff": 0.0036900369003689537,
@@ -4044,6 +4359,7 @@
       }
      },
      "vs_average_confidence": {
+      "games": 1084,
       "accuracy": 0.5212177121771218,
       "diff": {
        "diff": 0.0,
@@ -4052,6 +4368,20 @@
         0.0
        ],
        "weeks": 110,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 1084,
+      "accuracy": 0.5175276752767528,
+      "diff": {
+       "diff": 0.0036900369003689537,
+       "ci95": [
+        -0.012087942187938294,
+        0.019534578826614246
+       ],
+       "weeks": 111,
        "seed": 20260930,
        "samples": 2000
       }
@@ -4067,6 +4397,7 @@
       "accuracy": 0.4551978675415214
      },
      "vs_goals_poisson_confidence": {
+      "games": 4877,
       "accuracy": 0.4551978675415214,
       "diff": {
        "diff": 0.0,
@@ -4080,12 +4411,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 4877,
       "accuracy": 0.45437769120360877,
       "diff": {
        "diff": 0.0008201763379126481,
        "ci95": [
         -0.004745470232959459,
         0.006342062193125997
+       ],
+       "weeks": 133,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 4877,
+      "accuracy": 0.4551978675415214,
+      "diff": {
+       "diff": 0.0,
+       "ci95": [
+        0.0,
+        0.0
        ],
        "weeks": 133,
        "seed": 20260930,
@@ -4103,6 +4449,7 @@
       "accuracy": 0.4666030534351145
      },
      "vs_goals_poisson_confidence": {
+      "games": 4192,
       "accuracy": 0.4661259541984733,
       "diff": {
        "diff": 0.0004770992366411875,
@@ -4116,12 +4463,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 4192,
       "accuracy": 0.46946564885496184,
       "diff": {
        "diff": -0.002862595419847347,
        "ci95": [
         -0.008764419413325841,
         0.002686603525078435
+       ],
+       "weeks": 133,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 4192,
+      "accuracy": 0.4661259541984733,
+      "diff": {
+       "diff": 0.0004770992366411875,
+       "ci95": [
+        -0.006043579130631027,
+        0.006625856530679652
        ],
        "weeks": 133,
        "seed": 20260930,
@@ -4397,6 +4759,8 @@
       "{\"filter\": \"none\", \"source\": \"goals_glm\", \"threshold\": 0.5}"
      ],
      "primary_confidence_same_count": {
+      "model": "goals_poisson",
+      "games": 898,
       "accuracy": 0.5244988864142539,
       "diff": {
        "diff": 0.020044543429844075,
@@ -4408,7 +4772,23 @@
        "seed": 20260930,
        "samples": 2000
       },
-      "note": "primary ranked within the same span, which uses the span's own confidence distribution (descriptive)"
+      "note": "ranked within the same span, using the span's own confidence distribution (descriptive)"
+     },
+     "best_single_confidence_same_count": {
+      "model": "best_prior",
+      "games": 898,
+      "accuracy": 0.5244988864142539,
+      "diff": {
+       "diff": 0.020044543429844075,
+       "ci95": [
+        -0.01375577340854739,
+        0.05289385229772714
+       ],
+       "weeks": 95,
+       "seed": 20260930,
+       "samples": 2000
+      },
+      "note": "ranked within the same span, using the span's own confidence distribution (descriptive); the best single member of each season is chosen on earlier seasons only"
      }
     },
     "decisions": [
@@ -6847,6 +7227,42 @@
     }
    },
    "best_single_by_log_loss": "goals_glm",
+   "best_single_prior": {
+    "2018": {
+     "model": "goals_glm",
+     "games": 1317,
+     "seasons": [
+      2017
+     ]
+    },
+    "2019": {
+     "model": "goals_glm",
+     "games": 2672,
+     "seasons": [
+      2017,
+      2018
+     ]
+    },
+    "2020": {
+     "model": "goals_glm",
+     "games": 4030,
+     "seasons": [
+      2017,
+      2018,
+      2019
+     ]
+    },
+    "2021": {
+     "model": "goals_glm",
+     "games": 5242,
+     "seasons": [
+      2017,
+      2018,
+      2019,
+      2020
+     ]
+    }
+   },
    "log_loss_diff": {
     "average-goals_poisson": {
      "mean": -0.0006078987220645608,
@@ -6915,6 +7331,7 @@
       "accuracy": 0.5593602624564281
      },
      "vs_goals_poisson_confidence": {
+      "games": 4877,
       "accuracy": 0.5597703506253845,
       "diff": {
        "diff": -0.00041008816895637956,
@@ -6928,12 +7345,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 4877,
       "accuracy": 0.5616157473856879,
       "diff": {
        "diff": -0.0022554849292597545,
        "ci95": [
         -0.008187890540831688,
         0.0035349567949725103
+       ],
+       "weeks": 133,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 4877,
+      "accuracy": 0.5607955710477752,
+      "diff": {
+       "diff": -0.0014353085913471064,
+       "ci95": [
+        -0.011880376894715328,
+        0.00937571461239417
        ],
        "weeks": 133,
        "seed": 20260930,
@@ -6951,6 +7383,7 @@
       "accuracy": 0.5942084942084942
      },
      "vs_goals_poisson_confidence": {
+      "games": 2590,
       "accuracy": 0.594980694980695,
       "diff": {
        "diff": -0.0007722007722007485,
@@ -6964,12 +7397,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 2590,
       "accuracy": 0.5942084942084942,
       "diff": {
        "diff": 0.0,
        "ci95": [
         0.0,
         0.0
+       ],
+       "weeks": 132,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 2590,
+      "accuracy": 0.6042471042471043,
+      "diff": {
+       "diff": -0.010038610038610063,
+       "ci95": [
+        -0.021013319104852157,
+        -0.00029622659834183107
        ],
        "weeks": 132,
        "seed": 20260930,
@@ -6987,6 +7435,7 @@
       "accuracy": 0.5831265508684863
      },
      "vs_goals_poisson_confidence": {
+      "games": 806,
       "accuracy": 0.5942928039702233,
       "diff": {
        "diff": -0.011166253101737023,
@@ -7000,6 +7449,7 @@
       }
      },
      "vs_average_confidence": {
+      "games": 806,
       "accuracy": 0.5831265508684863,
       "diff": {
        "diff": 0.0,
@@ -7008,6 +7458,20 @@
         0.0
        ],
        "weeks": 107,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 806,
+      "accuracy": 0.607940446650124,
+      "diff": {
+       "diff": -0.02481389578163773,
+       "ci95": [
+        -0.04727500592758194,
+        -0.0025734225065425775
+       ],
+       "weeks": 110,
        "seed": 20260930,
        "samples": 2000
       }
@@ -7023,6 +7487,7 @@
       "accuracy": 0.5698975946653965
      },
      "vs_goals_poisson_confidence": {
+      "games": 4199,
       "accuracy": 0.5708502024291497,
       "diff": {
        "diff": -0.000952607763753277,
@@ -7036,12 +7501,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 4199,
       "accuracy": 0.5739461776613479,
       "diff": {
        "diff": -0.004048582995951455,
        "ci95": [
         -0.008908423819033007,
         0.0009197675967663743
+       ],
+       "weeks": 133,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 4199,
+      "accuracy": 0.5748987854251012,
+      "diff": {
+       "diff": -0.005001190759704732,
+       "ci95": [
+        -0.011423179147340146,
+        0.001708111707874882
        ],
        "weeks": 133,
        "seed": 20260930,
@@ -7059,6 +7539,7 @@
       "accuracy": 0.5939675174013921
      },
      "vs_goals_poisson_confidence": {
+      "games": 2586,
       "accuracy": 0.5955143078112916,
       "diff": {
        "diff": -0.0015467904098994678,
@@ -7072,12 +7553,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 2586,
       "accuracy": 0.594354215003867,
       "diff": {
        "diff": -0.0003866976024748947,
        "ci95": [
         -0.0015344657180257348,
         0.0006326816906364607
+       ],
+       "weeks": 132,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 2586,
+      "accuracy": 0.6047950502706884,
+      "diff": {
+       "diff": -0.010827532869296275,
+       "ci95": [
+        -0.021540619597349653,
+        -0.0011016289489671482
        ],
        "weeks": 132,
        "seed": 20260930,
@@ -7095,6 +7591,7 @@
       "accuracy": 0.5831265508684863
      },
      "vs_goals_poisson_confidence": {
+      "games": 806,
       "accuracy": 0.5942928039702233,
       "diff": {
        "diff": -0.011166253101737023,
@@ -7108,6 +7605,7 @@
       }
      },
      "vs_average_confidence": {
+      "games": 806,
       "accuracy": 0.5831265508684863,
       "diff": {
        "diff": 0.0,
@@ -7116,6 +7614,20 @@
         0.0
        ],
        "weeks": 107,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 806,
+      "accuracy": 0.607940446650124,
+      "diff": {
+       "diff": -0.02481389578163773,
+       "ci95": [
+        -0.04727500592758194,
+        -0.0025734225065425775
+       ],
+       "weeks": 110,
        "seed": 20260930,
        "samples": 2000
       }
@@ -7131,6 +7643,7 @@
       "accuracy": 0.5598184818481848
      },
      "vs_goals_poisson_confidence": {
+      "games": 4848,
       "accuracy": 0.5600247524752475,
       "diff": {
        "diff": -0.00020627062706268795,
@@ -7144,12 +7657,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 4848,
       "accuracy": 0.5610561056105611,
       "diff": {
        "diff": -0.0012376237623762387,
        "ci95": [
         -0.006916996984579593,
         0.004494213519666168
+       ],
+       "weeks": 133,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 4848,
+      "accuracy": 0.5616749174917491,
+      "diff": {
+       "diff": -0.0018564356435643026,
+       "ci95": [
+        -0.011918997778649687,
+        0.008579542645161586
        ],
        "weeks": 133,
        "seed": 20260930,
@@ -7167,6 +7695,7 @@
       "accuracy": 0.5698669201520913
      },
      "vs_goals_poisson_confidence": {
+      "games": 4208,
       "accuracy": 0.5703422053231939,
       "diff": {
        "diff": -0.000475285171102624,
@@ -7180,12 +7709,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 4208,
       "accuracy": 0.5739068441064639,
       "diff": {
        "diff": -0.004039923954372582,
        "ci95": [
         -0.008886394298933786,
         0.0008477393934752664
+       ],
+       "weeks": 133,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 4208,
+      "accuracy": 0.5746197718631179,
+      "diff": {
+       "diff": -0.004752851711026573,
+       "ci95": [
+        -0.010951254775672825,
+        0.0019014754040636017
        ],
        "weeks": 133,
        "seed": 20260930,
@@ -7482,6 +8026,8 @@
       "{\"filter\": \"unanimous\", \"source\": \"goals_glm\", \"threshold\": 0.55}"
      ],
      "primary_confidence_same_count": {
+      "model": "goals_poisson",
+      "games": 2281,
       "accuracy": 0.5953529153879877,
       "diff": {
        "diff": 0.006576063130206089,
@@ -7493,7 +8039,23 @@
        "seed": 20260930,
        "samples": 2000
       },
-      "note": "primary ranked within the same span, which uses the span's own confidence distribution (descriptive)"
+      "note": "ranked within the same span, using the span's own confidence distribution (descriptive)"
+     },
+     "best_single_confidence_same_count": {
+      "model": "best_prior",
+      "games": 2281,
+      "accuracy": 0.6058746163963175,
+      "diff": {
+       "diff": -0.003945637878123631,
+       "ci95": [
+        -0.012755730219081385,
+        0.004287147333048358
+       ],
+       "weeks": 120,
+       "seed": 20260930,
+       "samples": 2000
+      },
+      "note": "ranked within the same span, using the span's own confidence distribution (descriptive); the best single member of each season is chosen on earlier seasons only"
      }
     },
     "decisions": [
@@ -9984,6 +10546,42 @@
     }
    },
    "best_single_by_log_loss": "goals_draw",
+   "best_single_prior": {
+    "2018": {
+     "model": "goals_draw",
+     "games": 1317,
+     "seasons": [
+      2017
+     ]
+    },
+    "2019": {
+     "model": "goals_draw",
+     "games": 2672,
+     "seasons": [
+      2017,
+      2018
+     ]
+    },
+    "2020": {
+     "model": "goals_draw",
+     "games": 4030,
+     "seasons": [
+      2017,
+      2018,
+      2019
+     ]
+    },
+    "2021": {
+     "model": "goals_draw",
+     "games": 5242,
+     "seasons": [
+      2017,
+      2018,
+      2019,
+      2020
+     ]
+    }
+   },
    "log_loss_diff": {
     "average-goals_poisson": {
      "mean": 0.0013788448775960273,
@@ -10052,6 +10650,7 @@
       "accuracy": 0.5288086938691818
      },
      "vs_goals_poisson_confidence": {
+      "games": 4877,
       "accuracy": 0.5298339142915727,
       "diff": {
        "diff": -0.0010252204223908379,
@@ -10065,12 +10664,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 4877,
       "accuracy": 0.5259380766864876,
       "diff": {
        "diff": 0.002870617182694213,
        "ci95": [
         -0.0066238458450421644,
         0.011589766017931269
+       ],
+       "weeks": 133,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 4877,
+      "accuracy": 0.5292187820381382,
+      "diff": {
+       "diff": -0.00041008816895637956,
+       "ci95": [
+        -0.003111629716063824,
+        0.002175331738090036
        ],
        "weeks": 133,
        "seed": 20260930,
@@ -10088,6 +10702,7 @@
       "accuracy": 0.539568345323741
      },
      "vs_goals_poisson_confidence": {
+      "games": 1529,
       "accuracy": 0.55134074558535,
       "diff": {
        "diff": -0.011772400261608973,
@@ -10101,12 +10716,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 1529,
       "accuracy": 0.538914323086985,
       "diff": {
        "diff": 0.0006540222367560355,
        "ci95": [
         -0.0011392679551609497,
         0.0025472112428633897
+       ],
+       "weeks": 130,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 1529,
+      "accuracy": 0.5441465009810333,
+      "diff": {
+       "diff": -0.00457815565729236,
+       "ci95": [
+        -0.02760617485016814,
+        0.017687517342927395
        ],
        "weeks": 130,
        "seed": 20260930,
@@ -10124,6 +10754,7 @@
       "accuracy": 0.7023809523809523
      },
      "vs_goals_poisson_confidence": {
+      "games": 84,
       "accuracy": 0.5952380952380952,
       "diff": {
        "diff": 0.1071428571428571,
@@ -10137,6 +10768,7 @@
       }
      },
      "vs_average_confidence": {
+      "games": 84,
       "accuracy": 0.7023809523809523,
       "diff": {
        "diff": 0.0,
@@ -10145,6 +10777,20 @@
         0.0
        ],
        "weeks": 40,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 84,
+      "accuracy": 0.6071428571428571,
+      "diff": {
+       "diff": 0.09523809523809523,
+       "ci95": [
+        0.006578947368421018,
+        0.1927400468384075
+       ],
+       "weeks": 50,
        "seed": 20260930,
        "samples": 2000
       }
@@ -10160,6 +10806,7 @@
       "accuracy": 0.526418152350081
      },
      "vs_goals_poisson_confidence": {
+      "games": 3085,
       "accuracy": 0.540356564019449,
       "diff": {
        "diff": -0.013938411669367934,
@@ -10173,12 +10820,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 3085,
       "accuracy": 0.5306320907617504,
       "diff": {
        "diff": -0.004213938411669393,
        "ci95": [
         -0.014387906220778679,
         0.004973531874491788
+       ],
+       "weeks": 132,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 3085,
+      "accuracy": 0.5413290113452188,
+      "diff": {
+       "diff": -0.014910858995137777,
+       "ci95": [
+        -0.030660255210901988,
+        -0.0002492458295471067
        ],
        "weeks": 132,
        "seed": 20260930,
@@ -10196,6 +10858,7 @@
       "accuracy": 0.5376984126984127
      },
      "vs_goals_poisson_confidence": {
+      "games": 1512,
       "accuracy": 0.5522486772486772,
       "diff": {
        "diff": -0.014550264550264536,
@@ -10209,12 +10872,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 1512,
       "accuracy": 0.5376984126984127,
       "diff": {
        "diff": 0.0,
        "ci95": [
         -0.00364601360482697,
         0.003698609553970833
+       ],
+       "weeks": 130,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 1512,
+      "accuracy": 0.5462962962962963,
+      "diff": {
+       "diff": -0.008597883597883604,
+       "ci95": [
+        -0.03185965764456711,
+        0.013946960104695205
        ],
        "weeks": 130,
        "seed": 20260930,
@@ -10232,6 +10910,7 @@
       "accuracy": 0.7023809523809523
      },
      "vs_goals_poisson_confidence": {
+      "games": 84,
       "accuracy": 0.5952380952380952,
       "diff": {
        "diff": 0.1071428571428571,
@@ -10245,6 +10924,7 @@
       }
      },
      "vs_average_confidence": {
+      "games": 84,
       "accuracy": 0.7023809523809523,
       "diff": {
        "diff": 0.0,
@@ -10253,6 +10933,20 @@
         0.0
        ],
        "weeks": 40,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 84,
+      "accuracy": 0.6071428571428571,
+      "diff": {
+       "diff": 0.09523809523809523,
+       "ci95": [
+        0.006578947368421018,
+        0.1927400468384075
+       ],
+       "weeks": 50,
        "seed": 20260930,
        "samples": 2000
       }
@@ -10268,6 +10962,7 @@
       "accuracy": 0.5299625468164794
      },
      "vs_goals_poisson_confidence": {
+      "games": 4806,
       "accuracy": 0.5307948397836039,
       "diff": {
        "diff": -0.0008322929671245038,
@@ -10281,12 +10976,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 4806,
       "accuracy": 0.5260091552226384,
       "diff": {
        "diff": 0.003953391593841005,
        "ci95": [
         -0.00571732126683,
         0.013003727260492814
+       ],
+       "weeks": 133,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 4806,
+      "accuracy": 0.5305867665418227,
+      "diff": {
+       "diff": -0.0006242197253433224,
+       "ci95": [
+        -0.002492106535599836,
+        0.0011843875246819735
        ],
        "weeks": 133,
        "seed": 20260930,
@@ -10304,6 +11014,7 @@
       "accuracy": 0.5256614599936245
      },
      "vs_goals_poisson_confidence": {
+      "games": 3137,
       "accuracy": 0.5416002550207204,
       "diff": {
        "diff": -0.015938795027095942,
@@ -10317,12 +11028,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 3137,
       "accuracy": 0.5329933057060886,
       "diff": {
        "diff": -0.007331845712464147,
        "ci95": [
         -0.01689244923857869,
         0.0012218075718203325
+       ],
+       "weeks": 132,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 3137,
+      "accuracy": 0.5409627032196366,
+      "diff": {
+       "diff": -0.015301243226012118,
+       "ci95": [
+        -0.03045041924152858,
+        -0.000798318809409504
        ],
        "weeks": 132,
        "seed": 20260930,
@@ -10615,6 +11341,8 @@
       "{\"filter\": \"majority\", \"source\": \"stack\", \"threshold\": 0.5}"
      ],
      "primary_confidence_same_count": {
+      "model": "goals_poisson",
+      "games": 2638,
       "accuracy": 0.5329795299469295,
       "diff": {
        "diff": -0.006823351023502733,
@@ -10626,7 +11354,23 @@
        "seed": 20260930,
        "samples": 2000
       },
-      "note": "primary ranked within the same span, which uses the span's own confidence distribution (descriptive)"
+      "note": "ranked within the same span, using the span's own confidence distribution (descriptive)"
+     },
+     "best_single_confidence_same_count": {
+      "model": "best_prior",
+      "games": 2638,
+      "accuracy": 0.5314632297194845,
+      "diff": {
+       "diff": -0.005307050796057644,
+       "ci95": [
+        -0.015068102863421196,
+        0.004251437796387925
+       ],
+       "weeks": 87,
+       "seed": 20260930,
+       "samples": 2000
+      },
+      "note": "ranked within the same span, using the span's own confidence distribution (descriptive); the best single member of each season is chosen on earlier seasons only"
      }
     },
     "decisions": [
@@ -12900,6 +13644,42 @@
     }
    },
    "best_single_by_log_loss": "goals_poisson",
+   "best_single_prior": {
+    "2018": {
+     "model": "goals_glm",
+     "games": 1317,
+     "seasons": [
+      2017
+     ]
+    },
+    "2019": {
+     "model": "goals_poisson",
+     "games": 2672,
+     "seasons": [
+      2017,
+      2018
+     ]
+    },
+    "2020": {
+     "model": "goals_poisson",
+     "games": 4030,
+     "seasons": [
+      2017,
+      2018,
+      2019
+     ]
+    },
+    "2021": {
+     "model": "goals_poisson",
+     "games": 5242,
+     "seasons": [
+      2017,
+      2018,
+      2019,
+      2020
+     ]
+    }
+   },
    "log_loss_diff": {
     "average-goals_poisson": {
      "mean": 0.0010609401687202103,
@@ -12946,6 +13726,7 @@
       "accuracy": 0.5696124666803363
      },
      "vs_goals_poisson_confidence": {
+      "games": 4877,
       "accuracy": 0.5702275989337707,
       "diff": {
        "diff": -0.0006151322534344583,
@@ -12959,12 +13740,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 4877,
       "accuracy": 0.5665368054131639,
       "diff": {
        "diff": 0.0030756612671724026,
        "ci95": [
         -0.0029222676797194813,
         0.009035511662113915
+       ],
+       "weeks": 133,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 4877,
+      "accuracy": 0.5677670699200328,
+      "diff": {
+       "diff": 0.001845396760303486,
+       "ci95": [
+        -0.0038175224279441977,
+        0.007356122890523564
        ],
        "weeks": 133,
        "seed": 20260930,
@@ -12982,6 +13778,7 @@
       "accuracy": 0.5827740492170023
      },
      "vs_goals_poisson_confidence": {
+      "games": 3576,
       "accuracy": 0.5917225950782998,
       "diff": {
        "diff": -0.008948545861297563,
@@ -12995,6 +13792,7 @@
       }
      },
      "vs_average_confidence": {
+      "games": 3576,
       "accuracy": 0.5830536912751678,
       "diff": {
        "diff": -0.0002796420581655523,
@@ -13003,6 +13801,20 @@
         0.0003195665099390288
        ],
        "weeks": 132,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 3576,
+      "accuracy": 0.5911633109619687,
+      "diff": {
+       "diff": -0.008389261744966459,
+       "ci95": [
+        -0.016462436931522717,
+        -0.00034653954998242753
+       ],
+       "weeks": 133,
        "seed": 20260930,
        "samples": 2000
       }
@@ -13018,6 +13830,7 @@
       "accuracy": 0.5961352657004831
      },
      "vs_goals_poisson_confidence": {
+      "games": 1035,
       "accuracy": 0.6009661835748792,
       "diff": {
        "diff": -0.004830917874396046,
@@ -13031,12 +13844,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 1035,
       "accuracy": 0.5961352657004831,
       "diff": {
        "diff": 0.0,
        "ci95": [
         0.0,
         0.0
+       ],
+       "weeks": 123,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 1035,
+      "accuracy": 0.5845410628019324,
+      "diff": {
+       "diff": 0.011594202898550732,
+       "ci95": [
+        -0.015551404818408887,
+        0.03735956658112349
        ],
        "weeks": 123,
        "seed": 20260930,
@@ -13054,6 +13882,7 @@
       "accuracy": 0.5743613138686131
      },
      "vs_goals_poisson_confidence": {
+      "games": 4384,
       "accuracy": 0.5798357664233577,
       "diff": {
        "diff": -0.005474452554744547,
@@ -13067,6 +13896,7 @@
       }
      },
      "vs_average_confidence": {
+      "games": 4384,
       "accuracy": 0.5768704379562044,
       "diff": {
        "diff": -0.002509124087591297,
@@ -13075,6 +13905,20 @@
         0.0014876381578782238
        ],
        "weeks": 132,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 4384,
+      "accuracy": 0.5773266423357665,
+      "diff": {
+       "diff": -0.002965328467153361,
+       "ci95": [
+        -0.009014264020145157,
+        0.0032606623969163584
+       ],
+       "weeks": 133,
        "seed": 20260930,
        "samples": 2000
       }
@@ -13090,6 +13934,7 @@
       "accuracy": 0.5838718741219444
      },
      "vs_goals_poisson_confidence": {
+      "games": 3559,
       "accuracy": 0.5923012082045518,
       "diff": {
        "diff": -0.008429334082607376,
@@ -13103,6 +13948,7 @@
       }
      },
      "vs_average_confidence": {
+      "games": 3559,
       "accuracy": 0.5835908963191908,
       "diff": {
        "diff": 0.0002809778027536014,
@@ -13111,6 +13957,20 @@
         0.0019188596491227505
        ],
        "weeks": 132,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 3559,
+      "accuracy": 0.5925821860073054,
+      "diff": {
+       "diff": -0.008710311885360977,
+       "ci95": [
+        -0.016792600243811462,
+        -0.0006307719354942121
+       ],
+       "weeks": 133,
        "seed": 20260930,
        "samples": 2000
       }
@@ -13126,6 +13986,7 @@
       "accuracy": 0.5961352657004831
      },
      "vs_goals_poisson_confidence": {
+      "games": 1035,
       "accuracy": 0.6009661835748792,
       "diff": {
        "diff": -0.004830917874396046,
@@ -13139,12 +14000,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 1035,
       "accuracy": 0.5961352657004831,
       "diff": {
        "diff": 0.0,
        "ci95": [
         0.0,
         0.0
+       ],
+       "weeks": 123,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 1035,
+      "accuracy": 0.5845410628019324,
+      "diff": {
+       "diff": 0.011594202898550732,
+       "ci95": [
+        -0.015551404818408887,
+        0.03735956658112349
        ],
        "weeks": 123,
        "seed": 20260930,
@@ -13162,6 +14038,7 @@
       "accuracy": 0.5719958202716824
      },
      "vs_goals_poisson_confidence": {
+      "games": 4785,
       "accuracy": 0.5707419017763845,
       "diff": {
        "diff": 0.0012539184952978788,
@@ -13175,12 +14052,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 4785,
       "accuracy": 0.5684430512016719,
       "diff": {
        "diff": 0.003552769070010453,
        "ci95": [
         -0.002560377480277931,
         0.009913612215077028
+       ],
+       "weeks": 133,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 4785,
+      "accuracy": 0.567398119122257,
+      "diff": {
+       "diff": 0.0045977011494253706,
+       "ci95": [
+        -0.0012786688014096992,
+        0.010373594162966016
        ],
        "weeks": 133,
        "seed": 20260930,
@@ -13198,6 +14090,7 @@
       "accuracy": 0.5733121163900886
      },
      "vs_goals_poisson_confidence": {
+      "games": 4399,
       "accuracy": 0.5792225505796772,
       "diff": {
        "diff": -0.005910434189588587,
@@ -13211,6 +14104,7 @@
       }
      },
      "vs_average_confidence": {
+      "games": 4399,
       "accuracy": 0.5767219822686974,
       "diff": {
        "diff": -0.0034098658786088087,
@@ -13219,6 +14113,20 @@
         0.0006336205702253128
        ],
        "weeks": 132,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 4399,
+      "accuracy": 0.5769493066606047,
+      "diff": {
+       "diff": -0.003637190270516122,
+       "ci95": [
+        -0.009588749200937552,
+        0.002001952604952506
+       ],
+       "weeks": 133,
        "seed": 20260930,
        "samples": 2000
       }
@@ -13513,6 +14421,8 @@
       "{\"filter\": \"unanimous\", \"source\": \"goals_poisson\", \"threshold\": 0.55}"
      ],
      "primary_confidence_same_count": {
+      "model": "goals_poisson",
+      "games": 2915,
       "accuracy": 0.5982847341337907,
       "diff": {
        "diff": -0.007547169811320753,
@@ -13524,7 +14434,23 @@
        "seed": 20260930,
        "samples": 2000
       },
-      "note": "primary ranked within the same span, which uses the span's own confidence distribution (descriptive)"
+      "note": "ranked within the same span, using the span's own confidence distribution (descriptive)"
+     },
+     "best_single_confidence_same_count": {
+      "model": "best_prior",
+      "games": 2915,
+      "accuracy": 0.5955403087478559,
+      "diff": {
+       "diff": -0.004802744425385974,
+       "ci95": [
+        -0.013601115914806616,
+        0.0040344146029531736
+       ],
+       "weeks": 120,
+       "seed": 20260930,
+       "samples": 2000
+      },
+      "note": "ranked within the same span, using the span's own confidence distribution (descriptive); the best single member of each season is chosen on earlier seasons only"
      }
     },
     "decisions": [
@@ -16011,6 +16937,42 @@
     }
    },
    "best_single_by_log_loss": "goals_draw",
+   "best_single_prior": {
+    "2018": {
+     "model": "goals_glm",
+     "games": 1317,
+     "seasons": [
+      2017
+     ]
+    },
+    "2019": {
+     "model": "goals_glm",
+     "games": 2672,
+     "seasons": [
+      2017,
+      2018
+     ]
+    },
+    "2020": {
+     "model": "goals_draw",
+     "games": 4030,
+     "seasons": [
+      2017,
+      2018,
+      2019
+     ]
+    },
+    "2021": {
+     "model": "goals_draw",
+     "games": 5242,
+     "seasons": [
+      2017,
+      2018,
+      2019,
+      2020
+     ]
+    }
+   },
    "log_loss_diff": {
     "average-goals_poisson": {
      "mean": -0.0003867931487007503,
@@ -16079,6 +17041,7 @@
       "accuracy": 0.5550543366823867
      },
      "vs_goals_poisson_confidence": {
+      "games": 4877,
       "accuracy": 0.5548492925979086,
       "diff": {
        "diff": 0.00020504408447807876,
@@ -16092,12 +17055,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 4877,
       "accuracy": 0.5568997334426902,
       "diff": {
        "diff": -0.001845396760303486,
        "ci95": [
         -0.007550822846079441,
         0.0041008816895633515
+       ],
+       "weeks": 133,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 4877,
+      "accuracy": 0.5474677055566947,
+      "diff": {
+       "diff": 0.007586631125692023,
+       "ci95": [
+        -0.004392048081368394,
+        0.019820187985288173
        ],
        "weeks": 133,
        "seed": 20260930,
@@ -16115,6 +17093,7 @@
       "accuracy": 0.5869249394673124
      },
      "vs_goals_poisson_confidence": {
+      "games": 2065,
       "accuracy": 0.5907990314769975,
       "diff": {
        "diff": -0.0038740920096851372,
@@ -16128,6 +17107,7 @@
       }
      },
      "vs_average_confidence": {
+      "games": 2065,
       "accuracy": 0.5869249394673124,
       "diff": {
        "diff": 0.0,
@@ -16136,6 +17116,20 @@
         0.0
        ],
        "weeks": 130,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 2065,
+      "accuracy": 0.5898305084745763,
+      "diff": {
+       "diff": -0.0029055690072639084,
+       "ci95": [
+        -0.017179086919143938,
+        0.011035754379013718
+       ],
+       "weeks": 132,
        "seed": 20260930,
        "samples": 2000
       }
@@ -16151,6 +17145,7 @@
       "accuracy": 0.606280193236715
      },
      "vs_goals_poisson_confidence": {
+      "games": 414,
       "accuracy": 0.5700483091787439,
       "diff": {
        "diff": 0.036231884057971064,
@@ -16164,6 +17159,7 @@
       }
      },
      "vs_average_confidence": {
+      "games": 414,
       "accuracy": 0.606280193236715,
       "diff": {
        "diff": 0.0,
@@ -16172,6 +17168,20 @@
         0.0
        ],
        "weeks": 105,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 414,
+      "accuracy": 0.5748792270531401,
+      "diff": {
+       "diff": 0.03140096618357491,
+       "ci95": [
+        -0.016928601408385036,
+        0.07768047581305138
+       ],
+       "weeks": 109,
        "seed": 20260930,
        "samples": 2000
       }
@@ -16187,6 +17197,7 @@
       "accuracy": 0.5674220963172805
      },
      "vs_goals_poisson_confidence": {
+      "games": 3530,
       "accuracy": 0.5679886685552408,
       "diff": {
        "diff": -0.0005665722379603055,
@@ -16200,12 +17211,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 3530,
       "accuracy": 0.569971671388102,
       "diff": {
        "diff": -0.0025495750708215414,
        "ci95": [
         -0.01055709149978512,
         0.005651725231627824
+       ],
+       "weeks": 132,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 3530,
+      "accuracy": 0.5611898016997167,
+      "diff": {
+       "diff": 0.006232294617563805,
+       "ci95": [
+        -0.004082955076059158,
+        0.01699814517545928
        ],
        "weeks": 132,
        "seed": 20260930,
@@ -16223,6 +17249,7 @@
       "accuracy": 0.5889328063241107
      },
      "vs_goals_poisson_confidence": {
+      "games": 2024,
       "accuracy": 0.5879446640316206,
       "diff": {
        "diff": 0.0009881422924901129,
@@ -16236,6 +17263,7 @@
       }
      },
      "vs_average_confidence": {
+      "games": 2024,
       "accuracy": 0.5859683794466403,
       "diff": {
        "diff": 0.0029644268774704496,
@@ -16244,6 +17272,20 @@
         0.006704980842911823
        ],
        "weeks": 130,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 2024,
+      "accuracy": 0.5899209486166008,
+      "diff": {
+       "diff": -0.0009881422924901129,
+       "ci95": [
+        -0.014982949015949099,
+        0.012550728957713808
+       ],
+       "weeks": 132,
        "seed": 20260930,
        "samples": 2000
       }
@@ -16259,6 +17301,7 @@
       "accuracy": 0.606280193236715
      },
      "vs_goals_poisson_confidence": {
+      "games": 414,
       "accuracy": 0.5700483091787439,
       "diff": {
        "diff": 0.036231884057971064,
@@ -16272,6 +17315,7 @@
       }
      },
      "vs_average_confidence": {
+      "games": 414,
       "accuracy": 0.606280193236715,
       "diff": {
        "diff": 0.0,
@@ -16280,6 +17324,20 @@
         0.0
        ],
        "weeks": 105,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 414,
+      "accuracy": 0.5748792270531401,
+      "diff": {
+       "diff": 0.03140096618357491,
+       "ci95": [
+        -0.016928601408385036,
+        0.07768047581305138
+       ],
+       "weeks": 109,
        "seed": 20260930,
        "samples": 2000
       }
@@ -16295,6 +17353,7 @@
       "accuracy": 0.5542610571736786
      },
      "vs_goals_poisson_confidence": {
+      "games": 4635,
       "accuracy": 0.5566343042071198,
       "diff": {
        "diff": -0.002373247033441217,
@@ -16308,12 +17367,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 4635,
       "accuracy": 0.5605177993527508,
       "diff": {
        "diff": -0.006256742179072239,
        "ci95": [
         -0.012968318448116856,
         0.0009387832932374884
+       ],
+       "weeks": 133,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 4635,
+      "accuracy": 0.5497303128371089,
+      "diff": {
+       "diff": 0.0045307443365696365,
+       "ci95": [
+        -0.007779888665296442,
+        0.017300937078047585
        ],
        "weeks": 133,
        "seed": 20260930,
@@ -16331,6 +17405,7 @@
       "accuracy": 0.5685060565275909
      },
      "vs_goals_poisson_confidence": {
+      "games": 3715,
       "accuracy": 0.5660834454912517,
       "diff": {
        "diff": 0.0024226110363392284,
@@ -16344,12 +17419,27 @@
       }
      },
      "vs_average_confidence": {
+      "games": 3715,
       "accuracy": 0.5685060565275909,
       "diff": {
        "diff": 0.0,
        "ci95": [
         -0.007507353129084016,
         0.007305441796089496
+       ],
+       "weeks": 132,
+       "seed": 20260930,
+       "samples": 2000
+      }
+     },
+     "vs_best_prior_confidence": {
+      "games": 3715,
+      "accuracy": 0.5617765814266488,
+      "diff": {
+       "diff": 0.006729475100942128,
+       "ci95": [
+        -0.004021912488731738,
+        0.01774541361294424
        ],
        "weeks": 132,
        "seed": 20260930,
@@ -16643,6 +17733,8 @@
       "{\"filter\": \"none\", \"source\": \"stack\", \"threshold\": 0.6}"
      ],
      "primary_confidence_same_count": {
+      "model": "goals_poisson",
+      "games": 1545,
       "accuracy": 0.5896440129449838,
       "diff": {
        "diff": -0.014886731391585806,
@@ -16654,7 +17746,23 @@
        "seed": 20260930,
        "samples": 2000
       },
-      "note": "primary ranked within the same span, which uses the span's own confidence distribution (descriptive)"
+      "note": "ranked within the same span, using the span's own confidence distribution (descriptive)"
+     },
+     "best_single_confidence_same_count": {
+      "model": "best_prior",
+      "games": 1545,
+      "accuracy": 0.5889967637540453,
+      "diff": {
+       "diff": -0.014239482200647302,
+       "ci95": [
+        -0.031703397612488526,
+        0.0036544850498339
+       ],
+       "weeks": 110,
+       "seed": 20260930,
+       "samples": 2000
+      },
+      "note": "ranked within the same span, using the span's own confidence distribution (descriptive); the best single member of each season is chosen on earlier seasons only"
      }
     },
     "decisions": [

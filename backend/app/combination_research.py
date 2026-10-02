@@ -159,15 +159,20 @@ def _flags(market, rows, key, side_of=None):
     return out
 
 
-def _vs_confidence(market, rows, chosen, side_of, primary, label):
-    """Agreement-selected games against primary's and the average's most-confident games at the same coverage."""
-    sel = _flags(market, chosen, None, side_of)
-    out = {"rule": label, "games": len(chosen), "coverage": len(chosen) / len(rows) if rows else None,
-           "record": {"wins": sum(f["win"] for f in sel), "decided": len(sel),
-                      "accuracy": sum(f["win"] for f in sel) / len(sel) if sel else None}}
-    for ref in (primary, "average"):
-        top = _flags(market, _top(market, rows, ref, len(chosen)), ref)
-        out[f"vs_{ref}_confidence"] = {"accuracy": sum(f["win"] for f in top) / len(top) if top else None,
+def _vs_confidence(market, rows, chosen, side_of, primary, label, best="best_prior"):
+    """Agreement-selected games against the most-confident games of the primary, the average and the best single member at
+    the same coverage. The best single member for a season is chosen on EARLIER seasons only (`best_prior`); comparisons with
+    it use only the games that have such a choice."""
+    out = {"rule": label, "games": len(chosen), "coverage": len(chosen) / len(rows) if rows else None}
+    for ref in dict.fromkeys((primary, "average", best)):
+        base = [r for r in rows if ref in r["vectors"]]
+        mine = [r for r in chosen if ref in r["vectors"]]
+        sel = _flags(market, mine, None, side_of)
+        top = _flags(market, _top(market, base, ref, len(mine)), ref)
+        if ref == primary:
+            out["record"] = {"wins": sum(f["win"] for f in sel), "decided": len(sel),
+                             "accuracy": sum(f["win"] for f in sel) / len(sel) if sel else None}
+        out[f"vs_{ref}_confidence"] = {"games": len(mine), "accuracy": sum(f["win"] for f in top) / len(top) if top else None,
                                        "diff": nhl_eval._subset_diff_bootstrap(sel, top, "win", "win") if sel and top else None}
     return out
 
@@ -181,7 +186,7 @@ def _agreement_side(market, members):
     return f
 
 
-def _simulate(market, rows, sources, members):
+def _simulate(market, rows, sources, members, best=None):
     """Weekly selector over the evaluated seasons, evidence starting empty. Returns per-game selections and a summary."""
     from datetime import datetime, timedelta
     items = []
@@ -229,14 +234,22 @@ def _simulate(market, rows, sources, members):
                "accuracy_ci95": nhl_eval._wilson(wins, len(decided)),
                "rules_used": sorted({json.dumps(d["rule"], sort_keys=True) for d in decisions if d["rule"]})}
     if decided:
-        # Primary's most-confident games over the same weeks at the same count: does selection beat confidence alone?
+        # Most-confident games over the same weeks at the same count: does selection beat confidence alone?
         span = [r for r in rows if picks[0]["cutoff_at"] <= r["tipoff_at"]]
-        top = _flags(market, _top(market, span, sources[0], len(picks)), sources[0])
-        summary["primary_confidence_same_count"] = {
-            "accuracy": sum(f["win"] for f in top) / len(top) if top else None,
-            "diff": nhl_eval._subset_diff_bootstrap([{"cutoff_at": p["cutoff_at"], "win": int(p["result"] == "win")} for p in decided],
-                                                    top, "win", "win") if top else None,
-            "note": "primary ranked within the same span, which uses the span's own confidence distribution (descriptive)"}
+        mine = [{"cutoff_at": p["cutoff_at"], "win": int(p["result"] == "win")} for p in decided]
+        have = {r["game_id"] for r in rows if best and best in r["vectors"]}
+        for name, ref in (("primary", sources[0]), ("best_single", best)):
+            if ref is None:
+                continue
+            base = span if name == "primary" else [r for r in span if r["game_id"] in have]
+            sel = mine if name == "primary" else [{"cutoff_at": p["cutoff_at"], "win": int(p["result"] == "win")}
+                                                  for p in decided if p["game_id"] in have]
+            top = _flags(market, _top(market, base, ref, len(sel)), ref)
+            summary[f"{name}_confidence_same_count"] = {
+                "model": ref, "games": len(sel), "accuracy": sum(f["win"] for f in top) / len(top) if top else None,
+                "diff": nhl_eval._subset_diff_bootstrap(sel, top, "win", "win") if top and sel else None,
+                "note": "ranked within the same span, using the span's own confidence distribution (descriptive)"
+                        + ("; the best single member of each season is chosen on earlier seasons only" if name == "best_single" else "")}
     return {"summary": summary, "decisions": decisions}, picks
 
 
@@ -246,6 +259,19 @@ def analyse(market, table, members, first, seasons):
     for r in complete:
         r["vectors"]["average"] = combine.average([r["vectors"][m] for m in members])
     fits = _stack_walk(market, complete, members, first, seasons)
+    # Strongest single member per season, chosen by log loss on EARLIER out-of-sample seasons only (never the evaluated one).
+    oos = max(first[m] for m in members)
+    best_prior = {}
+    for s_ in seasons:
+        prior = [r for r in complete if oos <= r["season"] < s_]
+        if not prior:
+            best_prior[s_] = {"model": None, "games": 0}
+            continue
+        b = min(members, key=lambda m: (sum(combine.log_loss(r["vectors"][m], r["realised"]) for r in prior), members.index(m)))
+        best_prior[s_] = {"model": b, "games": len(prior), "seasons": sorted({r["season"] for r in prior})}
+        for r in complete:
+            if r["season"] == s_:
+                r["vectors"]["best_prior"] = r["vectors"][b]
     rows = [r for r in complete if r["season"] in seasons]
     stack_rows = [r for r in rows if "stack" in r["vectors"]]
     methods = list(members) + ["average"]
@@ -255,7 +281,8 @@ def analyse(market, table, members, first, seasons):
            "stack": {"fits": fits, "seasons": sorted({r["season"] for r in stack_rows}), "games": len(stack_rows),
                      "methods_on_stack_games": {m: _summary(market, stack_rows, m) for m in methods + ["stack"]} if stack_rows else None}}
     best = min(members, key=lambda m: out["methods"][m]["log_loss"])
-    out["best_single_by_log_loss"] = best
+    out["best_single_by_log_loss"] = best          # descriptive only (hindsight); comparisons use best_prior
+    out["best_single_prior"] = best_prior
     paired = {}
     for a, b, rs in (("average", primary, rows), (best, primary, rows), ("stack", primary, stack_rows),
                      ("stack", "average", stack_rows), ("stack", best, stack_rows)):
@@ -296,7 +323,7 @@ def analyse(market, table, members, first, seasons):
     # Fixed-threshold tables (descriptive) and the weekly selector simulation.
     out["thresholds"] = {m: _thresholds(market, rows, m) for m in methods}
     sources = list(members) + ["average", "stack"]
-    sim, picks = _simulate(market, rows, sources, members)
+    sim, picks = _simulate(market, rows, sources, members, "best_prior")
     out["selector_simulation"] = sim
     return out, picks
 
@@ -362,15 +389,18 @@ def compact(sport: str) -> dict:
     for market, m in r["markets"].items():
         out[market] = {
             "games": m["games"], "seasons": m["seasons"], "members": m["members"], "primary": m["primary"],
-            "best_single_by_log_loss": m["best_single_by_log_loss"],
-            "methods": {k: {x: v[x] for x in ("n", "accuracy", "log_loss", "brier")} for k, v in m["methods"].items()},
+            "best_single_by_log_loss": m["best_single_by_log_loss"], "best_single_prior": m.get("best_single_prior"),
+            "methods": {k: {x: v[x] for x in ("n", "accuracy", "log_loss", "brier", "calibration")} for k, v in m["methods"].items()},
             "stack": {"seasons": m["stack"]["seasons"], "games": m["stack"]["games"],
                       "methods": None if not m["stack"]["methods_on_stack_games"] else
                       {k: {x: v[x] for x in ("n", "accuracy", "log_loss")} for k, v in m["stack"]["methods_on_stack_games"].items()}},
             "log_loss_diff": {k: {"mean": v["mean"], "ci95": v["ci95"]} for k, v in m["log_loss_diff"].items()},
             "agreement": [{"rule": a["rule"], "coverage": a["coverage"], "accuracy": a["record"]["accuracy"],
                            "vs_primary_confidence": (a.get(f"vs_{m['primary']}_confidence") or {}).get("diff"),
-                           "vs_average_confidence": (a.get("vs_average_confidence") or {}).get("diff")} for a in m["agreement"]],
+                           "vs_average_confidence": (a.get("vs_average_confidence") or {}).get("diff"),
+                           "vs_best_prior_confidence": (a.get("vs_best_prior_confidence") or {}).get("diff"),
+                           "best_prior_games": (a.get("vs_best_prior_confidence") or {}).get("games")}
+                          for a in m["agreement"]],
             "disagreement_vs_primary": m["disagreement_vs_primary"],
             "selector_simulation": {k: v for k, v in m["selector_simulation"]["summary"].items()},
         }

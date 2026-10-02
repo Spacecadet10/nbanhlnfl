@@ -1,3 +1,5 @@
+import { ResearchSlateLine } from './Research';
+import type { MarketId, ResearchSlateEntry } from '../api/types';
 import { ModelAgreement } from './ModelAgreement';
 import { Link } from 'react-router-dom';
 import type { GameSummary, MarketForecast, MarketPerformanceResponse, MarketRecord, Settlement } from '../api/types';
@@ -52,7 +54,7 @@ function QuoteLine({ f }: { f: MarketForecast }) {
 }
 
 /** A slate card for one game's forecast of the selected market. */
-export function MarketCard({ game: g, statusLabel }: { game: GameSummary; statusLabel: string }) {
+export function MarketCard({ game: g, statusLabel, research, market }: { game: GameSummary; statusLabel: string; research?: ResearchSlateEntry; market: MarketId }) {
   const f = g.market_forecast;
   const carried = useCarriedSearch();
   return (
@@ -80,6 +82,7 @@ export function MarketCard({ game: g, statusLabel }: { game: GameSummary; status
           <p className="forecast-note">No forecast of this market under this policy for this game.</p>
         )}
         <ModelAgreement game={g} />
+        <ResearchSlateLine entry={research} market={market} />
       </Link>
     </li>
   );
