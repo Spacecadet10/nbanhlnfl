@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { api } from '../api/client';
 import type {
-  CalibrationBin, Candidate, CandidatePoolState, CandidateRoster, PoolReport, MarketId, RegisteredRule, ResearchExpanded, RuleReport, ResearchGame, ResearchMarket, ResearchRecord, ResearchReport, ResearchSlateEntry, Retrospective, RetroMarket, Side, Sport, Vector,
+  CalibrationBin, Candidate, CandidatePoolState, CandidateRoster, PoolReport, SelectionRuleView, SelectionStatus, MarketId, RegisteredRule, ResearchExpanded, RuleReport, ResearchGame, ResearchMarket, ResearchRecord, ResearchReport, ResearchSlateEntry, Retrospective, RetroMarket, Side, Sport, Vector,
 } from '../api/types';
 import { useApi } from '../api/useApi';
 import { AsyncView, Empty } from './States';
@@ -458,4 +458,52 @@ export function ResearchHistoryTable({ sport }: { sport: Sport }) {
         </table></div>
       </>}</AsyncView>
   </details>;
+}
+
+/** One row per market: the rule the selectors have in force (exact model or subset, agreement requirement, threshold),
+ * its version, selection date, evidence cutoff, next review and evidence, or why none is selected. */
+export function SelectionStatusCard({ sport, market }: { sport: Sport; market: MarketId }) {
+  const { state, retry } = useApi((s) => api.researchStatus(sport, s), [sport]);
+  return <div className="card">
+    <h2>Selection status by market <span className="badge badge-research">Research</span></h2>
+    <AsyncView state={state} retry={retry}>{(r) => <StatusBody r={r} market={market} />}</AsyncView>
+  </div>;
+}
+
+function ruleCell(v: SelectionRuleView | null) {
+  if (!v) return <span className="muted">no pool sources</span>;
+  if (!v.rule) return <><strong>{v.label}</strong>{v.reason && <div className="muted">{v.reason}</div>}</>;
+  const rec = v.evidence?.record;
+  return <><strong>{modelName(v.rule.source)}</strong>
+    <div>{v.rule.agreement}; confidence ≥ {pct(v.rule.threshold, 0)}</div>
+    {rec && <div className="muted">{rec.wins}–{rec.losses}{rec.pushes ? `–${rec.pushes}P` : ''} on {rec.picks} picks
+      ({pct(rec.coverage, 0)} coverage, {rec.weeks} weeks); lift lower bound {rec.lower.toFixed(3)}</div>}</>;
+}
+
+function reviewCell(v: SelectionRuleView | null) {
+  if (!v || v.status === 'no_decision') return <span className="muted">—</span>;
+  return <span className="small">selected {v.selected_at ? dateTime(v.selected_at) : '—'}<br />
+    evidence to {v.evidence_until ? dateTime(v.evidence_until) : '—'}<br />next review {v.next_review ? dateTime(v.next_review) : '—'}<br />
+    <span className="muted">{v.selector_version}{v.registry ? ` · registry ${v.registry}` : ''} · {v.evidence?.settled_cohorts ?? 0} settled</span></span>;
+}
+
+function StatusBody({ r, market }: { r: SelectionStatus; market: MarketId }) {
+  if (r.mode === 'demo' || !r.markets.length) return <Empty>{r.note}</Empty>;
+  return <>
+    <p className="small muted">Research definition {r.definition} · {r.selector_version}{r.pool_registry ? ` · pool registry ${r.pool_registry}` : ''}
+      {r.pool_registry_error && <span className="warn"> · pool registry unavailable: {r.pool_registry_error}</span>}</p>
+    <div className="table-wrap"><table className="table small">
+      <thead><tr><th>Market</th><th>Status</th><th>Core selector</th><th>Candidate-pool selector</th><th>Decision</th><th>Recording</th></tr></thead>
+      <tbody>{r.markets.map((m) => <tr key={m.market} className={m.market === market ? 'row-selected' : undefined}>
+        <th scope="row">{MARKET[m.market] ?? m.market}</th>
+        <td>{m.status}</td>
+        <td className="wrap">{ruleCell(m.core)}</td>
+        <td className="wrap">{ruleCell(m.pool)}{m.pool?.eligible_sources && <div className="muted">{m.pool.eligible_sources.length} eligible sources</div>}</td>
+        <td>{reviewCell(m.pool?.rule ? m.pool : m.core)}</td>
+        <td className="wrap">{m.recording.latest_cohort_at ? <>last {dateTime(m.recording.latest_cohort_at)}</> : <span className="muted">none yet</span>}
+          {Object.entries(m.recording.missing).map(([k, why]) => <div key={k} className="muted">{modelName(k)} missing: {why}</div>)}</td>
+      </tr>)}</tbody>
+    </table></div>
+    <p className="small muted">{r.note}</p>
+  </>;
 }

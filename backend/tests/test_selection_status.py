@@ -9,6 +9,7 @@ from app.candidates import selection
 from app.main import api_mode, app
 from test_live_markets import sealed  # noqa: F401
 from test_nhl_eval import nhl_store  # noqa: F401
+from test_research_contract import fields
 
 DECIDED, AS_OF, LATER = "2026-10-05T14:05:00Z", "2026-10-06T12:00:00Z", "2026-10-12T14:05:00Z"
 
@@ -63,5 +64,7 @@ def test_markets_select_different_combinations_and_the_api_shows_the_same_rule(s
     for k in ("winner", "reg3"):
         for sel in ("core", "pool"):
             assert (am[k][sel] or {}).get("rule") == (m[k][sel] or {}).get("rule")
+    assert fields("SelectionStatusMarket") <= set(am["winner"]) and fields("SelectionStatus") <= set(api)
+    assert fields("SelectionRuleView") - {"eligible_sources"} <= set(am["winner"]["core"])       # the frontend's declared fields
     later = {x["market"]: x for x in selection_status.status(sealed, "2026-10-13T00:00:00Z")["markets"]}
     assert later["winner"]["core"]["rule"]["source"] == "stack"

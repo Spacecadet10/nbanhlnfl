@@ -335,3 +335,20 @@ export interface PoolReport { mode: Mode; sport: Sport; registry?: string; effec
     decisions: { scheduled_for: string; decided_at: string; effective_until: string; status: string;
                  rule: { source: string; filter: string; threshold: number } | null; lower_bound: number | null; reason: string }[] }>;
   note: string }
+
+export interface SelectionRuleView { selector: 'core' | 'pool'; status: string; label: string; decision_id?: number;
+  selector_version?: string; definition?: string; registry?: string | null; selected_at?: string; evidence_until?: string;
+  next_review?: string; reason?: string; lower_bound?: number | null;
+  rule: { source: string; filter: string; threshold: number; members: string[]; agreement: string } | null;
+  evidence?: { settled_cohorts: number | null; rules_compared: number | null; eligible_rules: number | null; min_picks: number | null;
+    min_coverage: number | null; min_weeks: number | null;
+    record: { picks: number; wins: number; losses: number; pushes: number; coverage: number; weeks: number; accuracy: number;
+              lift: number; lower: number } | null };
+  eligible_sources?: { source: string; route: string; members: string[] }[]
+}
+export interface SelectionStatusMarket { market: MarketId; status: string; core: SelectionRuleView; pool: SelectionRuleView | null;
+  research_sources: string[]; recording: { latest_cohort_at: string | null; members?: unknown; missing: Record<string, string> }
+}
+export interface SelectionStatus { mode: Mode; sport: Sport; as_of?: string; definition?: string; selector_version?: string;
+  pool_registry?: string | null; pool_registry_error?: string | null; markets: SelectionStatusMarket[]; note: string
+}
