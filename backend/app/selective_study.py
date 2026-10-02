@@ -255,6 +255,7 @@ def score_rule(market, rows, rule, curves, best) -> dict:
     eligible = sum(1 for r in rows if in_level(r, rule["level"]))
     res = outcomes(market, rows, rule)
     s = stats(res, eligible)
+    s["coverage_all"] = len(res) / len(rows) if rows else 0.0     # share of every game, not only the condition's games
     lv = rule["level"]
     cmp_rate, cmp_n = matched(curves[(lv, best)], s["picks"])
     s["comparator"], s["comparator_n"] = best, cmp_n
@@ -326,7 +327,7 @@ def frontier(market, rows, members, rules) -> dict:
     bands = [(0.05, 0.10), (0.10, 0.20), (0.20, 0.35), (0.35, 0.60), (0.60, 1.01)]
     out = []
     for lo, hi in bands:
-        cand = [(r, s) for r, s in scored if lo <= s["coverage"] < hi]
+        cand = [(r, s) for r, s in scored if lo <= s["coverage_all"] < hi]
         if not cand:
             out.append({"band": [lo, hi], "rule": None})
             continue
@@ -336,14 +337,17 @@ def frontier(market, rows, members, rules) -> dict:
             st = stats(outcomes(market, [r for r in rows if r["season"] == se], rule),
                        sum(1 for r in rows if r["season"] == se and in_level(r, rule["level"])))
             per[str(se)] = {k: st[k] for k in ("picks", "accuracy", "coverage")}
-        out.append({"band": [lo, hi], "rule": rule["id"], **{k: s[k] for k in ("picks", "wins", "losses", "pushes", "coverage",
+        out.append({"band": [lo, hi], "rule": rule["id"], **{k: s[k] for k in ("picks", "wins", "losses", "pushes", "coverage", "coverage_all",
                                                                                   "accuracy", "ci95", "comparator_accuracy",
                                                                                   "vs_constituents", "lift")},
                     "comparator": best, "per_season": per})
-    high = [{"rule": r["id"], "picks": s["picks"], "coverage": s["coverage"], "accuracy": s["accuracy"],
-             "comparator_accuracy": s["comparator_accuracy"]} for r, s in scored if s["accuracy"] >= 0.80]
+    high = [{"rule": r["id"], "picks": s["picks"], "coverage": s["coverage"], "coverage_all": s["coverage_all"],
+             "accuracy": s["accuracy"], "comparator_accuracy": s["comparator_accuracy"]} for r, s in scored if s["accuracy"] >= 0.80]
+    beats = [h for h in high if h["comparator_accuracy"] is not None and h["accuracy"] - h["comparator_accuracy"] >= 0.02]
     return {"strongest_single_hindsight": best, "bands": out, "rules_with_100_picks": len(scored),
-            "rules_at_or_above_80pct": sorted(high, key=lambda h: -h["picks"])[:20], "count_at_or_above_80pct": len(high)}
+            "rules_at_or_above_80pct": sorted(high, key=lambda h: -h["picks"])[:20], "count_at_or_above_80pct": len(high),
+            "count_at_or_above_80pct_beating_confidence_by_2pts": len(beats),
+            "at_or_above_80pct_beating_confidence": sorted(beats, key=lambda h: -h["picks"])[:10]}
 
 
 def calibration_gap(market, rows, key) -> Optional[float]:
