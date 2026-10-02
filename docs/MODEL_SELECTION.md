@@ -188,6 +188,33 @@ worktree environment as the optional extra `research`; not imported by any live 
   (CatBoost − strongest) below 0. A qualifier would only be proposed as a prospective shadow member; otherwise it is rejected
   and its report kept.
 
+## 11. Combination search (recorded 2026-10-02, before any run)
+Goal: find agreement or combination rules that add predictive value beyond confidence alone. Exploratory (development seasons
+already used); anything that survives is only a prospective research candidate. Code: `app/combination_search.py`.
+- **Inputs:** the §5 study tables (identical outcome, market line and night-before information cutoff for every member; line
+  markets at the primary's model-only line, no historical bookmaker lines). Members: NBA winner `elo, logistic, logistic_v2,
+  efficiency_margin, gbt_v1`; NBA lines `points_normal, ridge_points, gbt_points, ridge_points@weekly, gbt_points@weekly`;
+  NHL winner `hockey_elo, goals_poisson, hockey_logistic, hockey_gbt`; NHL lines/reg3 `goals_poisson, goals_draw, goals_glm`.
+  Winner agreement is never used for another market.
+- **Rule registry (fixed; every rule is reported):** for every member subset S of size 2, 3 and all members:
+  `avg(S) ≥ t`; `unanimous(S)`; `unanimous(S) & avg(S) ≥ t`; `unanimous(S) & similar(S)` (chosen-side probabilities within
+  0.05 of each other); `majority(all)`; plus `single(m) ≥ t` per member and `stack ≥ t` (§5 out-of-fold stacker).
+  t ∈ selector thresholds (2-way 0.50–0.75; reg3 0.40–0.60).
+- **Pregame conditions (fixed, 2 × 2 levels, each rule also evaluated within each level):** favourite strength from the
+  primary winner probability (`close` < 0.60 ≤ `clear`); season phase (`early` = before 1 December of the season's start
+  year, else `late`). No other subsets.
+- **Selection then frozen assessment (rolling origin):** for each assessment season s (NBA 2023, 2024; NHL 2019, 2020, 2021)
+  rules are scored only on earlier evaluated seasons. Score = lift = rule win rate − win rate of the strongest single member's
+  most-confident games at the same count (strongest single = lowest log loss on the same earlier seasons). A rule qualifies on
+  selection data with ≥ 100 decided picks, coverage ≥ 5% and a Bonferroni (all rules in that sport·market·fold) lower bound of
+  lift > 0 (normal approximation). Qualifiers — and, for transparency, the single best rule by point lift — are frozen and
+  scored once on season s against the same matched-coverage comparator, plus the primary's and the average's.
+- **Probability quality:** log loss, Brier and reliability of `avg(S)` for every S and of the stacker, per season, against the
+  strongest single; a weaker member counts as complementary if adding it to a subset lowers the subset average's log loss.
+- **Deployment rule:** only a rule that qualifies on selection data **and** keeps a positive lift in every later assessment
+  season is deployed as a separately versioned research candidate (member forecasts and selection reasons recorded); otherwise
+  rejected, report retained.
+
 ## Amendments
 - **2026-10-02, before the study run:** `ridge_points` / `gbt_points` spreads have a floor of 1.0 point (`MIN_SD`), found with
   synthetic test data where every total was identical. Real residual spreads are about 12 (margin) and 18 (total) points, so the
