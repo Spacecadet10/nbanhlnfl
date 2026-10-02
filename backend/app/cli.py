@@ -9,7 +9,7 @@ from .models.elo import EloConfig
 # Commands that work for every sport; everything else is NBA-only until generalised.
 SPORT_COMMANDS = {"migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies", "refresh", "odds", "predict",
                   "score", "daily", "scheduler", "predict-now", "score-near-tipoff", "markets", "score-markets", "agreement", "thresholds",
-                  "combination-study", "selector-decide", "research-report", "retrain-cadence", "catboost-challenger"}
+                  "combination-study", "selector-decide", "research-report", "retrain-cadence", "catboost-challenger", "combination-search"}
 NHL_ONLY = {"ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies"}
 
 
@@ -79,6 +79,8 @@ def main(argv=None) -> int:
     rc.add_argument("--member", action="append", help="Limit to these members (repeatable)")
     cb = sub.add_parser("catboost-challenger", help="Exploratory bounded CatBoost challenger (docs/MODEL_SELECTION.md §10)")
     cb.add_argument("--out", help="Report directory (default data/reports/catboost-<sport>-<time>)")
+    cz = sub.add_parser("combination-search", help="Exploratory predefined combination search (docs/MODEL_SELECTION.md §11)")
+    cz.add_argument("--out", help="Report directory (default data/reports/combination-search-<sport>-<time>)")
     sub.add_parser("selector-decide", help="Write this week's selector decisions if due (normally run by the odds job)")
     rr = sub.add_parser("research-report", help="Read-only prospective research record for one market")
     rr.add_argument("--market", default="winner")
@@ -333,6 +335,11 @@ def main(argv=None) -> int:
         from . import catboost_challenger
         report = catboost_challenger.run(conn, args.sport, out_dir=Path(args.out) if args.out else None)
         print(json.dumps({"output_dir": report["output_dir"], "qualifies": {t["task"]: t["qualifies"] for t in report["tasks"]}}))
+    elif args.cmd == "combination-search":
+        from pathlib import Path
+        from . import combination_search
+        report = combination_search.run(conn, args.sport, out_dir=Path(args.out) if args.out else None)
+        print(json.dumps({"output_dir": report["output_dir"], "deploy": {m: a["deploy"] for m, a in report["markets"].items()}}))
     elif args.cmd == "selector-decide":
         result = jobs.selector_decisions(conn)
         print(json.dumps(result, indent=2))
