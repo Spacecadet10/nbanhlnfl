@@ -296,6 +296,50 @@ unchanged; this is a separate, versioned experiment.
 - **Goalies (assessment only, §15 of this note in docs/CHALLENGER_RESULTS.md):** prospective probable/confirmed goalie
   snapshots (migration 0014) carry our retrieval time and are usable going forward; assess coverage, lead time and status.
 
+## 15. Market-specific selective-combination study `selective-v1` (recorded 2026-10-02 ~17:00 UTC, before any run)
+Purpose: where, if anywhere, does model agreement add value per sport and market — including selective, high-accuracy subsets —
+measured honestly against confidence alone. The user reported an earlier ~83% system; no artifact of it exists in this project
+(the only "83%" reference is a published paper with random splits, HANDOFF 2026-10-01), so it is not reproduced here.
+- **Audit (what was already done; reused, not rerun as new):** §5 study (members, average, stacker, majority/unanimous,
+  pair-with-primary agreement); §11 search (1,655/925/405/345 rules incl. pairs/triples, avg ≥ t, unanimous+avg, unanimous within
+  0.05, conditions close/clear/early/late); §14 expanded (xG and weekly subsets: unanimous, avg ≥ t, stackers). See
+  docs/CHALLENGER_RESULTS.md for the matrix.
+- **Genuinely untested before this study:** (1) agreement with a *minimum member confidence* (every member ≥ t on the agreed
+  side); (2) a *model-disagreement* condition; (3) thresholds up to 0.80 for winners (the high-accuracy region); (4) xG inside
+  the full family with conditions; (5) the injury-aware member at its own cutoff in combinations; (6) the chronological
+  "highest-accuracy" procedure and an explicit accuracy–coverage frontier.
+- **Point-in-time tables (saved for reuse):** `data/research/tables/{nba,nba_evening,nhl}.json.gz` with dataset fingerprints.
+  `nba`: night-before cutoff, winner members `elo, logistic, logistic_v2, efficiency_margin, gbt_v1`, line members
+  `points_normal, ridge_points, gbt_points, ridge_points@weekly, gbt_points@weekly`. `nba_evening`: 17:45 ET cutoff (the
+  injury report's), winner members as `nba` plus `avail_v1`, same rows/results/boxes for all (historical report times are
+  *assumed* from the published file time; content history exists for 2019-20 … 2023-24). `nhl`: winner `hockey_elo,
+  goals_poisson, hockey_logistic, hockey_gbt, hockey_logistic_xg`; reg3/puck line/total/team totals `goals_poisson,
+  goals_draw, goals_glm` (xG gives winner probabilities only). Every member is compared at the same game, line (the primary's
+  model line for line markets), settlement and cutoff.
+- **Registered family per market** (thresholds: winner 0.60/0.65/0.70/0.75/0.80; reg3 0.45/0.50/0.55/0.60; lines 0.55/0.60/0.65):
+  `single(m) ≥ t`; every pair: `unanimous_min(pair) ≥ t`, `avg(pair) ≥ t`; registered triples: `unanimous_min ≥ t`,
+  `avg ≥ t`, `unanimous & max disagreement ≤ d` (d 0.03, 0.06); all members (n ≥ 3): `majority`, `unanimous_min ≥ t`,
+  `avg ≥ t`, `unanimous & max disagreement ≤ d`; `stack(all) ≥ t` (out-of-fold). Triples: NBA winner `elo+logistic_v2+gbt_v1`,
+  `elo+efficiency_margin+logistic`, `logistic_v2+efficiency_margin+gbt_v1`; NBA evening `elo+logistic_v2+avail_v1`,
+  `avail_v1+efficiency_margin+gbt_v1`, `elo+logistic+avail_v1`; NBA lines `points_normal+ridge_points+gbt_points`,
+  `points_normal+ridge@weekly+gbt@weekly`, `points_normal+ridge@weekly+gbt_points`; NHL winner `xg+hockey_elo+hockey_logistic`,
+  `xg+hockey_elo+goals_poisson`, `xg+hockey_logistic+hockey_gbt`; NHL 3-member markets: the full set only.
+- **Conditions (2, fixed):** favourite strength from the primary winner probability (`close` < 0.60 ≤ `clear`); model
+  disagreement = max − min of all members' probabilities for the primary's picked side (`low` ≤ 0.05 < `high`). Every rule is
+  scored under all / close / clear / low / high. Every rule and condition is logged.
+- **Chronological procedure (rolling origin as §11):** select on earlier evaluated seasons only, freeze, assess once on the next.
+  Frozen per fold: (a) qualifiers (unchanged §14 bar: ≥ 100 decided picks, ≥ 5% coverage, Bonferroni lower bound of lift vs
+  the strongest single's matched-coverage confidence > 0, positive vs each constituent); (b) the highest-accuracy rule with
+  ≥ 100 picks and ≥ 5% coverage (answers the 80–85% question by procedure, not hindsight); (c) the top point-lift rule.
+- **Reported:** per market an accuracy–coverage frontier (exploratory, all evaluated seasons; with the strongest single and each
+  constituent at matched coverage), per-fold assessments, the 80–85% answer, and a failure diagnosis (too few picks / no gain
+  over confidence / unstable / calibration / missing information / implementation).
+- **Prospective tracking:** the registered family is frozen in `backend/app/models/combination_rules.json` (sha256, effective
+  from its merge) and evaluated on the stored two-hour cohorts (expanded cohort where one exists, else core), one canonical
+  decision per game/market/rule (latest cohort before the start). Rules frozen by the last fold are flagged `selected`
+  (`qualified` or `unqualified research`). Live NBA winner uses `availability_two_hour` (a different cutoff) in place of
+  `avail_v1`; such rules are prospective-only. Nothing is promoted; the core experiment and selector are unchanged.
+
 ## Amendments
 - **2026-10-02, before the study run:** `ridge_points` / `gbt_points` spreads have a floor of 1.0 point (`MIN_SD`), found with
   synthetic test data where every total was identical. Real residual spreads are about 12 (margin) and 18 (total) points, so the
