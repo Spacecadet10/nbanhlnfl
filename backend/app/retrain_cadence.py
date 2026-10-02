@@ -5,6 +5,7 @@ itself; with a monthly or weekly cadence the wrapper also refits it at the first
 member's `_refit(s)` trains on its examples from seasons before `s`, and examples join only when backtest.run delivers a
 result available by the current cutoff, so `_refit(current season + 1)` trains on exactly the results delivered so far.
 """
+import hashlib
 import json
 import math
 import random
@@ -40,10 +41,14 @@ class Cadenced:
         self.key: Optional[tuple] = None
         self.first_season: Optional[int] = None
         self.refits: list[dict] = []   # within-season refits: cutoff and training size
+        self.delivered: list[str] = []  # game ids of results delivered so far, in delivery order (append-only)
+        self.last_fit: Optional[dict] = None
 
     def _maybe_refit(self, g) -> None:
         if self.first_season is None:
             self.first_season = g.season
+        if getattr(self.member, "season", None) is not None and g.season > self.member.season:
+            self._log("season_start", g)   # the member's own refit at this forecast trains on every delivered result
         if self.cadence == "season" or g.season == self.first_season:
             return   # no within-season refits in the walk's first season: no earlier-season data exists yet
         key = (g.season, *period_key(self.cadence, g.tipoff_at))
@@ -59,6 +64,19 @@ class Cadenced:
                 setattr(self.member, a, g.season)
         self.refits.append({"cutoff_at": backtest.cutoff_for(g.tipoff_at), "season": g.season,
                             "training_games": len(self.member.examples)})
+        self._log(self.cadence, g)
+
+    def _log(self, kind: str, g) -> None:
+        self.last_fit = {"kind": kind, "trigger_game": g.game_id, "trigger_cutoff": backtest.cutoff_for(g.tipoff_at),
+                         "delivered_results": len(self.delivered)}
+
+    def fit_info(self) -> Optional[dict]:
+        """Identity of the fit in force: what triggered it and a fingerprint of the delivered results it could use."""
+        if self.last_fit is None:
+            return None
+        ids = self.delivered[:self.last_fit["delivered_results"]]
+        return {**self.last_fit, "cadence": self.cadence,
+                "results_fingerprint": hashlib.sha256("\n".join(sorted(ids)).encode()).hexdigest()[:16]}
 
     def predict(self, g) -> float:
         self._maybe_refit(g)
@@ -70,6 +88,7 @@ class Cadenced:
 
     def update(self, r) -> None:
         self.member.update(r)
+        self.delivered.append(r.game.game_id)
 
     def update_box(self, e) -> None:
         if hasattr(self.member, "update_box"):

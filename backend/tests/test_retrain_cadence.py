@@ -1,6 +1,9 @@
 """Retraining-cadence wrapper (docs/MODEL_SELECTION.md §9): leakage guards and reproduction (synthetic data)."""
 import pytest
 
+import hashlib
+
+from app import research_live
 from app.backtest import run
 from app.models.logistic import LogisticElo, LogisticV2
 from app.models.score_candidates import RidgePoints
@@ -74,3 +77,25 @@ def test_compare_pairs_games_and_applies_the_reading_rule():
     assert out["weekly"]["brier"]["mean"] == 0 and out["weekly"]["supports_trial"] is False
     walks["monthly"] = walk({2022: 0.10, 2023: 0.26, 2024: 0.26})   # better overall but worse in 2 of 3 seasons
     assert compare(walks, "brier", (2022, 2023, 2024))["monthly"]["supports_trial"] is False
+
+
+def test_live_weekly_fit_uses_exactly_the_results_available_now_and_is_recorded():
+    """Live path: walk with deliver_until=now, then forecast an unplayed game in a new week (as research_live does)."""
+    rows = synthetic_rows(per_season=120)                 # enough games and residuals for a ready member
+    season = sorted((r for r in rows if r.game.season == 2026), key=lambda r: r.cutoff_at)
+    nxt = next(r for r in season[10:] if period_key("weekly", r.game.tipoff_at) != period_key("weekly", season[season.index(r) - 1].game.tipoff_at))
+    now = nxt.cutoff_at                                  # first game of a new week, forecast at its cutoff
+    past = [r for r in rows if r.cutoff_at < now]
+    m = Cadenced(RidgePoints(FROZEN), "weekly")
+    run(m, past, boxes(past), deliver_until=now)
+    d = m.distribution(nxt.game)
+    assert d is not None
+    info = m.fit_info()
+    available = sorted(r.game.game_id for r in past if r.result_available_at <= now)
+    assert info["trigger_game"] == nxt.game.game_id and info["delivered_results"] == len(available)
+    assert len(m.member.examples) == len(available)
+    assert info["results_fingerprint"] == hashlib.sha256("\n".join(available).encode()).hexdigest()[:16]
+    p = research_live._params(d, info, {r.game.game_id for r in past}, now)
+    assert p["fit"]["results_available_through"] == now and p["fit"]["cadence"] == "weekly" and "margin" in p
+    # a later result never changes a forecast already made: the member is refit only at the next week's first forecast
+    assert research_live._params(d, None, set(), now) == d.params

@@ -21,6 +21,9 @@ PREFIX = "research-v3"
 STACK_SEASONS = 2
 STACK_MIN_TRAIN = 300
 LINE_MEMBERS = {"nba": ("points_normal", "ridge_points", "gbt_points"), "nhl": ("goals_poisson", "goals_draw", "goals_glm")}
+# Separately versioned shadow members (docs/MODEL_SELECTION.md §9): recorded and scored as sources, never part of the
+# average, the stacker or agreement, so the core cohort definition is unchanged.
+SHADOW_LINE_MEMBERS = {"nba": ("ridge_points@weekly", "gbt_points@weekly"), "nhl": ()}
 CORE = {"nba": agreement.NAMES["nba"][:5], "nhl": agreement.NAMES["nhl"]}
 FMT = "%Y-%m-%dT%H:%M:%SZ"
 SIDE = {"a": 0, "mid": 1, "b": 2}
@@ -50,15 +53,17 @@ def line_models(conn) -> list:
         d = nhl_eval.load_decision(conn)
         key = sports.NHL.rating_key
         return [primary, GoalsDraw(GoalsConfig(**d["goals_config"]), key), GoalsGlm(HockeyEloConfig(**d["hockey_elo_config"]), key)]
+    from .retrain_cadence import Cadenced
     _, cfg = backtest.load_frozen_decision(conn)
-    return [primary, RidgePoints(cfg), GbtPoints(cfg)]
+    return [primary, RidgePoints(cfg), GbtPoints(cfg), Cadenced(RidgePoints(cfg), "weekly"), Cadenced(GbtPoints(cfg), "weekly")]
 
 
 def definition(conn) -> str:
     """Research identity: winner members (agreement digest), line members, combination and selection code, library version."""
     h = hashlib.sha256(agreement.definition_hash(agreement.models(conn)).encode())
     root = Path(__file__).parent
-    for name in ("combine.py", "research_live.py", "markets.py", "market_live.py", "models/score_candidates.py"):
+    for name in ("combine.py", "research_live.py", "markets.py", "market_live.py", "models/score_candidates.py",
+                 "retrain_cadence.py"):
         h.update(name.encode())
         h.update((root / name).read_bytes())
     h.update(json.dumps([(m.name, m.config()) for m in line_models(conn)], sort_keys=True, default=str).encode())
@@ -67,7 +72,7 @@ def definition(conn) -> str:
 
 
 def sources(sport: str, market: str) -> list[str]:
-    members = list(agreement.NAMES[sport]) if market == "winner" else list(LINE_MEMBERS[sport])
+    members = list(agreement.NAMES[sport]) if market == "winner" else list(LINE_MEMBERS[sport] + SHADOW_LINE_MEMBERS[sport])
     return members + ["average", "stack"]
 
 
@@ -139,10 +144,11 @@ def record(conn, *, game_ids: list, winner_run: Optional[dict], history: Optiona
     try:
         models = line_models(conn)
         current, stacks, reasons, data = _line_state(conn, eng, models, games, now, defn)
+        known = data["known"]
         out["line_state"] = data["source"]
     except Exception as exc:
         out["errors"]["line_members"] = f"{type(exc).__name__}: {exc}"
-        models, current, stacks, reasons, data = [], {}, {}, {}, {}
+        models, current, stacks, reasons, data, known = [], {}, {}, {}, {}, set()
     if models:
         _, base = market_live.market_model(conn)
         primary_mv = market_live.model_version(base, "near_tipoff")
@@ -176,7 +182,8 @@ def record(conn, *, game_ids: list, winner_run: Optional[dict], history: Optiona
                                             "ORDER BY generated_at DESC, forecast_id DESC LIMIT 1", (gid, market, mv)).fetchone()
                         f = MarketForecast(sport, gid, market, line, source, quote, "near_tipoff", "live", mv,
                                            data["digest"], prim["feature_version"], g["tipoff_at"], generated,
-                                           g["tipoff_at"], *vec, json.dumps(d.params, sort_keys=True),
+                                           g["tipoff_at"], *vec, json.dumps(_params(d, data["fits"].get(m.name, {}).get(gid), known, now),
+                                                      sort_keys=True),
                                            generated if prev is not None and prev["line"] != line else "")
                         fid = None
                         if write:
@@ -193,9 +200,10 @@ def record(conn, *, game_ids: list, winner_run: Optional[dict], history: Optiona
                             "retrieved_at": qr["retrieved_at"], "quote_table": "market_quotes", "quote_id": quote}
                 st = stacks.get(market)
                 stack = None
-                if st is not None and not missing:
-                    stack = {"p": list(combine.stack(st, [m["p"] for m in members])), "weights": st["weights"],
-                             "training_games": st["n"], "members": [m["name"] for m in members]}
+                core = [m for m in members if m["name"] in LINE_MEMBERS[sport]]
+                if st is not None and not any(n in LINE_MEMBERS[sport] for n in missing):
+                    stack = {"p": list(combine.stack(st, [m["p"] for m in core])), "weights": st["weights"],
+                             "training_games": st["n"], "members": [m["name"] for m in core]}
                 c = _cohort(sport, g, market, line, source, quote, book, defn, models[0].name, now, stamp(), members, missing,
                             LINE_MEMBERS[sport], stack, reasons.get(market))
                 _store(conn, c, cohorts, out, write)
@@ -204,6 +212,15 @@ def record(conn, *, game_ids: list, winner_run: Optional[dict], history: Optiona
     if out["errors"] or any(v for v in out["skipped"].values()):
         out["status"] = "partial"
     return out
+
+
+def _params(dist, info: Optional[dict], known, now: str) -> dict:
+    """Distribution parameters, plus the fit identity of a cadence member: the fit in force and the results it could use
+    (all results available at its trigger cutoff, or at `now` when the trigger was a game not yet played)."""
+    if info is None:
+        return dict(dist.params)
+    through = info["trigger_cutoff"] if info["trigger_game"] in known else now
+    return {**dist.params, "fit": {**info, "results_available_through": through}}
 
 
 def _winner_quote(conn, sport: str, game_id: str, at: str) -> Optional[dict]:
@@ -384,7 +401,7 @@ def _line_state(conn, eng, models, games, now, defn):
         f"SELECT * FROM games WHERE status='scheduled' AND tipoff_at > ? AND tipoff_at <= ? "
         f"AND season_type IN ({','.join('?' for _ in eng.eligible_types)}) ORDER BY tipoff_at, game_id",
         (now, horizon, *eng.eligible_types)) if g["game_id"] not in known]
-    current = {}
+    current, fits = {}, {}
     for m in models:
         if m.name in state["errors"]:
             current[m.name] = {gid: state["errors"][m.name] for gid in games}
@@ -395,10 +412,13 @@ def _line_state(conn, eng, models, games, now, defn):
                 d = mm.distribution(eng.pregame(g))
                 if g["game_id"] in games:
                     cur[g["game_id"]] = d if d is not None else "not_ready: no out-of-sample fit yet"
+                    if hasattr(mm, "fit_info"):
+                        fits.setdefault(m.name, {})[g["game_id"]] = mm.fit_info()
         except Exception as exc:
             cur = {gid: f"error: {type(exc).__name__}: {exc}" for gid in games}
         current[m.name] = cur
-    return current, state["stacks"], state["reasons"], {"digest": digest, "source": source}
+    return current, state["stacks"], state["reasons"], {"digest": digest, "source": source, "known": set(known),
+                                                   "fits": fits}
 
 
 def _fit_line_state(models, rows, events, now, seasons, eng) -> dict:
@@ -412,7 +432,7 @@ def _fit_line_state(models, rows, events, now, seasons, eng) -> dict:
         except Exception as exc:
             errors[m.name] = f"error: {type(exc).__name__}: {exc}"
     stacks, reasons = {}, {}
-    names = [m.name for m in models]
+    names = [m.name for m in models if m.name not in SHADOW_LINE_MEMBERS[eng.sport]]   # stackers: core members only
     line_markets = [mk for mk in sports.get(eng.sport).markets if mk != "winner"]
     if errors:
         reasons = {mk: "member walk-forward failed" for mk in line_markets}

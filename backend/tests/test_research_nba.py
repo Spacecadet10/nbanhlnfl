@@ -25,7 +25,7 @@ def test_nba_markets_are_recorded_inside_the_two_hour_window_only(store):
     win = json.loads(got["winner"]["bookmaker"])
     assert win["quote_table"] == "odds_quotes" and win["quote_id"]
     missing = json.loads(got["total"]["missing"])
-    assert set(missing) <= {"ridge_points", "gbt_points"} and all(v for v in missing.values())
+    assert set(missing) <= {"ridge_points", "gbt_points", "ridge_points@weekly", "gbt_points@weekly"} and all(v for v in missing.values())
     row = dict(got["total"])
     row.pop("cohort_id")
     row.update(idempotency_key="early", information_at="2026-10-21T21:29:59Z")
