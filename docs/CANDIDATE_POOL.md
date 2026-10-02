@@ -81,3 +81,12 @@ Fitted artifacts are persisted with training cutoff, input and model fingerprint
 missing or stale input skips that candidate for that game with a reason; it never blocks the primary, the core cohort or
 other candidates. The pool selector (selector-v1 arithmetic over pool sources, weekly, frozen for the next week) and the
 roster UI are integrated by the selective-v1 owner (session -66) per the user's split.
+
+## Amendments
+- **2026-10-02, before any scored run:** NGBoost uses a seeded base tree and chronological early stopping on the latest
+  training season (repository review: the default base tree is unseeded and the built-in validation split is random); dry
+  runs on warm-up seasons only (NBA 2021, NHL 2017) exercised the code; NHL shots go only to `hockey_logistic_xg` among the
+  existing members (as expanded_search). Live line markets default to the latest core cohort's exact line.
+- **2026-10-02, after stage 2 (results: docs/CANDIDATE_POOL_RESULTS.md):** selection eligibility narrowed to held-out
+  confirmed gains (`candidates.live.held_out_gains`); the shortlist itself is unchanged and every candidate keeps recording.
+  The pool selector simulation started with empty evidence at stage 2 (the pool stacker exists only there).

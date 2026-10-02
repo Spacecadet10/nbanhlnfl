@@ -332,3 +332,15 @@ Worktree `../nba-predictor-selector` (branch `selector-dev`), merged into `shado
   missing in the first check: out-of-condition games were not explained — fixed with a test). Performance → "Combination
   rules": selected and all-registered views (900 table rows with all), historical frontier labelled "Backtest · reused
   seasons", prospective record labelled "Live"; 390-px frame 386 = viewport; no console errors. Servers stopped, tab closed.
+
+## Candidate pool pool-v1 — Claude (-6b), 2026-10-02 ~17:00–19:20 UTC (worktree ../nba-predictor-candidates)
+- Data: `.backup` copies of both live stores (16:56 UTC) in the session scratch directory via `NBA_DATA_DIR`; live stores untouched.
+- Dry runs (warm-up seasons only): `app.cli --sport {nhl,nba} pool-screen --dry-run` exit 0.
+- Stage 1: `pool-screen` NHL (started 17:21:32Z, 322 s; shortlist frozen 17:26:54Z) and NBA (17:32:21Z, 1,118 s; frozen
+  17:51:00Z) exit 0. Stage 2 (once, access logged): `pool-assess` NHL (17:32:28Z, 699 s) and NBA (17:57:26Z, 952 s) exit 0. Compact evidence docs/evidence/candidate-pool/.
+- Rehearsal of `candidates.live.record` on the store copies (fixed clock, 70 min before start):
+  NHL nhl:2026020017/18 (2026-10-02 22:30/23:00Z): 26 rows, 0 errors, retry 0 new; goalie listings matched by name
+  (expected/confirmed, retrieved 16:36Z); line markets skipped with "no exact line from the core cohort" (no cohorts in the copy).
+  NBA espn:401909088 (2026-10-20 19:00Z): 10 winner rows; first run 129 s (trains and stores all season-2027 artifacts), retry 15 s.
+- Tests: `pytest tests/test_candidate_pool.py` 12 passed; `backend/.venv/bin/python scripts/check_project.py --ready` exit 0 (414 passed; 2 migration-list expectations updated for 0019).
+- Not done here: jobs wiring, roster UI and browser check (integration session); no real prospective candidate rows yet.

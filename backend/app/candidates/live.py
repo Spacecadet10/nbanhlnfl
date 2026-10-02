@@ -293,6 +293,22 @@ def _evidence(sport: str) -> dict:
     return out
 
 
+def held_out_gains(market_assess: dict, name: str) -> list:
+    """Stage-2 comparisons where adding the candidate helped with a 95% upper bound below zero: the candidate against the
+    strongest member, or the same pair/triple average with versus without it — counted only when that combination is also
+    better than the strongest member alone (repairing a weak combination is not a gain)."""
+    out = []
+    c = (market_assess.get("candidates") or {}).get(name) or {}
+    if c and c["minus_strongest"]["ci95"][1] < 0:
+        out.append("alone vs strongest member")
+    strongest = (market_assess.get("existing") or {}).get(market_assess.get("strongest_existing"), {}).get("log_loss")
+    for combo in market_assess.get("combinations") or []:
+        if (combo["combination"].endswith(f"(ablation: remove {name})") and combo["with_minus_without"]["ci95"][1] < 0
+                and strongest is not None and combo["log_loss_with"] < strongest):
+            out.append(combo["combination"].split(" (ablation")[0])
+    return out
+
+
 def roster(conn, sport: str, as_of: Optional[str] = None) -> dict:
     """Every registry candidate with training status, markets, latest fit, evaluation, prospective sample size,
     combination participation and selection eligibility; plus the family audit."""
@@ -321,14 +337,16 @@ def roster(conn, sport: str, as_of: Optional[str] = None) -> dict:
             am = ((ev["assess"] or {}).get("markets") or {}).get(market) or {}
             a = (am.get("candidates") or {}).get(spec.name)
             if a:
+                confirmed = held_out_gains(am, spec.name)
                 evaluation[market]["assess"] = {"seasons": am.get("seasons"), "log_loss": a["log_loss"],
-                                                "vs_strongest": a["minus_strongest"]}
-            if evaluation.get(market, {}).get("shortlisted"):
-                combos.append(market)
+                                                "vs_strongest": a["minus_strongest"], "confirmed_gains": confirmed}
+                if confirmed:
+                    combos.append(market)
+        shortlisted = any(e.get("shortlisted") for e in evaluation.values())
         status = ("dependency missing" if not registry.available(spec) else
                   "trained" if fit else "registered (trains at first eligible game)")
-        shortlisted = bool(combos)
-        eligible = shortlisted and settled >= selector.MIN_PICKS
+        confirmed = bool(combos)
+        eligible = confirmed and settled >= selector.MIN_PICKS
         items.append({"name": spec.name, "family": spec.family, "head": spec.head, "features": spec.features,
                       "role": spec.role, "why": spec.why, "markets": list(spec.markets), "refit": spec.refit,
                       "definition": registry.definition(spec), "training_status": status,
@@ -336,10 +354,11 @@ def roster(conn, sport: str, as_of: Optional[str] = None) -> dict:
                       "prospective": {"games": n, "settled": settled},
                       "combination_participation": combos,
                       "selection": ("eligible" if eligible else
-                                    f"shortlisted; needs {selector.MIN_PICKS} settled picks of prospective evidence"
-                                    if shortlisted else
+                                    f"selectable after {selector.MIN_PICKS} settled prospective picks (held-out gain in "
+                                    f"{', '.join(combos)})" if confirmed else
                                     "reference only (never selected)" if spec.role == "reference" else
-                                    "recorded for complementarity; not in the selectable shortlist")})
+                                    "shortlisted, but no held-out gain: recorded for complementarity only" if shortlisted else
+                                    "recorded for complementarity only (not shortlisted)")})
     return {"sport": sport, "pool": registry.POOL, "as_of": as_of, "candidates": items,
             "family_audit": list(registry.FAMILY_AUDIT),
             "note": "Research only. Evaluations are exploratory (spent seasons); only prospective forecasts can show "

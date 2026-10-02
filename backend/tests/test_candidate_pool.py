@@ -219,3 +219,17 @@ def test_artifacts_are_reused_and_roster_reports_every_candidate(upcoming):
     assert names["poisson_draw:nhl_base"]["latest_fit"]["trained_season"] == 2027
     assert names["logit_l2:nhl_base"]["selection"] == "reference only (never selected)"
     assert r["family_audit"] and "Research only" in r["note"]
+
+
+def test_selectable_only_with_a_held_out_gain_that_beats_the_strongest_member():
+    ci = lambda lo, hi: {"mean": (lo + hi) / 2, "ci95": [lo, hi]}
+    m = {"strongest_existing": "s", "existing": {"s": {"log_loss": 0.660}},
+         "candidates": {"c": {"minus_strongest": ci(-0.001, 0.001)}, "d": {"minus_strongest": ci(-0.003, -0.001)}},
+         "combinations": [
+             {"combination": "avg:s+x+c vs avg:s+x (ablation: remove c)", "log_loss_with": 0.662,      # repairs a weak triple
+              "with_minus_without": ci(-0.002, -0.001)},
+             {"combination": "avg:s+c vs s (ablation: remove c)", "log_loss_with": 0.659, "with_minus_without": ci(-0.002, 0.0001)}]}
+    assert pool_live.held_out_gains(m, "c") == []
+    assert pool_live.held_out_gains(m, "d") == ["alone vs strongest member"]
+    m["combinations"][1]["with_minus_without"] = ci(-0.002, -0.0001)
+    assert pool_live.held_out_gains(m, "c") == ["avg:s+c vs s"]

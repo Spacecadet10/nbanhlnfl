@@ -1,5 +1,28 @@
 # Current handoff
 
+## Candidate pool `pool-v1` and repository research — Claude (-6b), 2026-10-02 16:55–~19:20 UTC (branch candidates-v3)
+- **Repos inspected (code, commits, licences, probes):** docs/REPO_REVIEW.md + docs/evidence/repo-review/. NGBoost adopted as
+  an optional learner (fixes: seeded base tree, chronological early stopping); optuna not needed (nothing searched);
+  pbpstats/nba_data/fastRhockey reference only (lineups postgame; stats.nba.com pbp returns `{}`); XGBoost/LightGBM duplicate
+  HistGBT and need libomp; NB, bivariate Poisson, Dixon–Coles rejected with our own data (dispersion 1.02/0.96, residual
+  goal correlation −0.05, excess draws at every tie).
+- **Registry** `backend/app/candidates/` (19 configs: logistic/multinomial, elastic net, RF/ET, MLP, NGBoost,
+  heteroscedastic linear, Poisson+xG+draw joint score, goalie GSAx inputs) on one shared point-in-time walk; `ridge:nba_base`
+  reproduces `ridge_points` exactly. Design committed before runs (docs/CANDIDATE_POOL.md, 6ec4978 → rebased dbe2797).
+- **Results (exploratory; docs/CANDIDATE_POOL_RESULTS.md):** held-out gains only on NHL lines — `poisson_draw:nhl_base` reg3
+  −0.0073 [−0.0091, −0.0053], puck line −0.0049 [−0.0065, −0.0032], better in all 5 held-out seasons; puck-line ≥ 0.65
+  70.6% vs 62.9% for the strongest member's top games at the same count. Nothing helps NBA/NHL winners; goalie inputs,
+  NGBoost, bagged trees and MLPs add nothing. 80–85%: NBA winner yes, by `logistic_v2`'s own confidence (84.9% on its top
+  20%, 2025–26), not by combining; NHL winner only ~6% coverage; lines never.
+- **Prospective (built, rehearsed on store copies, NOT wired into jobs):** `candidates.live.record` → append-only
+  `candidate_forecasts` (migration 0019; two-hour trigger; `research-cand:` prefix; core cohort's exact line; artifacts +
+  `model_fits`); `candidates.live.roster` (status, markets, fit, evaluation, prospective n, participation, eligibility).
+- **Checks:** `scripts/check_project.py --ready` exit 0 (structure, typecheck, build, 414 passed; 0019 added to two migration-list tests).
+  Study outputs copied to `data/reports/pool-*`, `data/research/candidates/`, `data/eval/pool_assess_access_*.jsonl`.
+- **Next (integration owner -66):** call `candidates.live.record(conn, game_ids=ids, now=now)` after `research_live.record`
+  in the two-hour cycle (never fails it); apply 0019 (backup first); roster API/UI; decide whether to install
+  `ngboost==0.5.11` in the live venv (otherwise NGBoost is skipped with a reason). Unverified: real prospective rows.
+
 ## Selective-combination study and rule tracking — Claude, 2026-10-02 ~16:55–18:00 UTC (branch retrain-cadence)
 - Design first (MODEL_SELECTION §15, 115885b). Audit matrix, 80–85% answer and diagnosis: docs/CHALLENGER_RESULTS.md
   "Selective-combination study". No artifact of the user's earlier ~83% system exists in the project.
