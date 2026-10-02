@@ -1,5 +1,20 @@
 # Current handoff
 
+## NHL goalie snapshots + NBA availability experiment — Claude, 2026-10-02 02:00 UTC
+- **NHL goalies (live):** migration 0014 `goalie_snapshots`; the installed NHL odds job now records ESPN's probable goalie per team per retrieval
+  of not-yet-started games, status as published (expected / confirmed), `none_listed` when absent, available at our download time. Backfilled
+  716 rows from 57 cached retrievals (rerun adds 0). Shown on NHL game pages; used by no model yet.
+- **NBA availability (`avail_v1`), preregistered 145361c:** 1,002 official 5:30 PM injury reports for 2019-24 (0 failures; research cache
+  `data/research/availability/`, test seasons never requested), two-layout parser with independent reconciliation (1,002/1,002), reviewed
+  alias table, expected minutes from earlier box scores. Corrected result (independent leakage review; first run superseded, amendment in
+  EVALUATION_PLAN): avail_v1 66.0% / Brier 0.2177 vs logistic_v2 64.5% / 0.2199 and Elo 64.3% / 0.2209 on 3,667 games at 17:45 ET;
+  avail_v1 − logistic_v2 Brier −0.0022 [−0.0040, −0.0004]. Agreement adds nothing beyond avail_v1's own confidence. Exploratory
+  (spent seasons). docs/AVAILABILITY_RESULTS.md.
+- **Registered as a separate forward candidate** (EVALUATION_PLAN). Not recording: needs current-season player minutes (parse ESPN summaries
+  from the box-score job) and an evening job (new persistent job → user approval). Sealed Elo and logistic_v2 shadow unchanged.
+- `pypdf` added to the dev extra (installed in backend/.venv with uv). `--ready` exit 0 (301 passed).
+- **Next:** build the live evening pipeline for avail_v1 (minutes from summaries, report parse at 17:45, three forecasts) and ask for the job install.
+
 ## NHL jobs verified + NHL agreement research — Claude, 2026-10-01 11:30 UTC
 - **Running (checked directly):** `com.nba-predictor.nhl-odds` loaded, every 1,800 s; first run 11:20:54Z success (job_runs row 6, 2 requests,
   dates 20261001-02; NHL store now 114 quotes). `com.nba-predictor.nhl-daily` loaded, 22:15 local, odds then daily; not run yet. Installed
