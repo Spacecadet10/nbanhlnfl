@@ -340,6 +340,42 @@ measured honestly against confidence alone. The user reported an earlier ~83% sy
   (`qualified` or `unqualified research`). Live NBA winner uses `availability_two_hour` (a different cutoff) in place of
   `avail_v1`; such rules are prospective-only. Nothing is promoted; the core experiment and selector are unchanged.
 
+## 16. Gap-filling combination study `gapfill-v1` (recorded 2026-10-02 ~22:20 UTC, before any run)
+Purpose: test the compatible subsets the audit (docs/EVIDENCE_AUDIT.md) found never evaluated, in particular candidates combined
+with members other than the strongest and with each other, the NBA winner triples with `avail_v1`, and the NHL winner xG
+triples. Exploratory: every season used was already spent. Nothing here grants eligibility by itself.
+- **Data (saved, chronological out-of-sample; no refit, 0 of the 24 retraining configurations used):**
+  `data/research/candidates/oof-{nhl,nba}-assess.json.gz` (NHL 2022–26, NBA 2025–26; every member and candidate fitted on
+  earlier seasons only) and `data/research/tables/nba_evening.json.gz` (2022–24, 17:45 ET cutoff with `avail_v1`). Fingerprints
+  recorded in the report. Lines are the primary's model line (no historical bookmaker lines): line-market lifts are
+  measured there only.
+- **Members per market:** existing members + the stage-1 shortlist (`data/reports/pool-*/shortlist.json`, frozen from the
+  earlier screen seasons). NHL total and home team total have no shortlisted candidate and every subset of their 3 members was
+  already covered (§11, §15): 0 new configurations. NBA evening winner: the 6 members of `nba_evening`.
+- **Family per market (deterministic budget ≤ 500 configurations; condition level `all`):** thresholds T: winner 0.60/0.70/0.80,
+  reg3 0.45/0.50/0.55, lines 0.55/0.60/0.65. In this order until the budget is reached:
+  1. full member set: `avg≥t` (3), `unanimous_min≥t` (3), `majority` (1; exact ties and no strict majority abstain),
+     `unanimous_maxdis≤d` d 0.03/0.06 (2), regularised stacker `stack≥t` (3; out-of-fold, refitted at each season start on
+     earlier seasons only) = 12;
+  2. every pair: `avg≥t`, `unanimous_min≥t` = 6 each;
+  3. triples, those mixing ≥ 1 candidate and ≥ 1 existing member first, each group in a seeded order (seed 20261002):
+     `avg≥t`, `unanimous_min≥t`, `majority`, `unanimous_maxdis≤d` = 9 each;
+  4. 4+-member subsets by size, seeded order: `avg≥t`, `majority` = 4 each.
+  Every evaluated and omitted subset is listed in the report; a truncated family is never called exhaustive.
+- **Procedure (as §15):** rolling origin; select on all earlier seasons of the table, assess the next season once (NHL 4
+  folds, NBA 1 fold, NBA evening 2 folds). The best single member is chosen by log loss on the selection seasons only.
+- **Primary metric (pick rules):** accuracy lift over the best single's own most-confident picks at matched coverage.
+  Qualifies: ≥ 100 picks, ≥ 5% coverage, Bonferroni lower bound > 0 with α = 0.05 / (this family + every rule previously
+  evaluated for that market in §11/§14/§15/pool stage 2), and better than every constituent at matched coverage.
+  Frozen per fold: qualified + highest-accuracy + top-lift rules; assessed once on the next season against the best prior
+  single, the primary, the strongest constituent, the all-member average and confidence-only filtering, all at matched coverage.
+- **Probability level (secondary):** for every evaluated subset's equal average, log loss minus the best prior single on the
+  assess seasons, 95% week-block bootstrap (1,000, seed 20261002). **Route B (combination-only value):** for every candidate
+  c and evaluated subset S ∋ c with |S| ≥ 2, log loss of avg(S) − avg(S \ {c}) pooled over assess seasons, with the same
+  bootstrap; reported per season too. A combination supported here may be proposed for a new sealed pool registry
+  (prospective evidence only); it never makes c eligible alone or in other combinations.
+- **Compute:** one process on scratch copies, ≤ 2 h wall-clock; stop and report if exceeded.
+
 ## Amendments
 - **2026-10-02, before the study run:** `ridge_points` / `gbt_points` spreads have a floor of 1.0 point (`MIN_SD`), found with
   synthetic test data where every total was identical. Real residual spreads are about 12 (margin) and 18 (total) points, so the
