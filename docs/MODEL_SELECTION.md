@@ -376,6 +376,22 @@ triples. Exploratory: every season used was already spent. Nothing here grants e
   (prospective evidence only); it never makes c eligible alone or in other combinations.
 - **Compute:** one process on scratch copies, ≤ 2 h wall-clock; stop and report if exceeded.
 
+## 17. Daily-refit comparison `daily-v1` (recorded 2026-10-02 ~22:45 UTC, before any run)
+- **Question:** does refitting the trainable members daily beat the existing season-start and weekly cadences? Not assumed.
+- **Members (9 retraining configurations: NBA 5, NHL 4 of the 24 allowed per sport):** the §9 members, unchanged
+  configurations: NBA `logistic`, `logistic_v2`, `gbt_v1`, `ridge_points`, `gbt_points`; NHL `hockey_logistic`, `hockey_gbt`,
+  `goals_glm`, `goals_draw`. Online models (Elo, `points_normal`, `goals_poisson`) already update after every result.
+- **Daily cadence:** refit at the first forecast of each Eastern calendar date, only if newly settled results were delivered
+  since the previous fit (otherwise skipped and counted); never in a walk's first season (as §9). Code
+  `backend/app/cadence_daily.py` (separate from the hashed `retrain_cadence.py`), CLI `--sport X daily-cadence`.
+- **Data, metrics, statistics:** exactly §9 (NBA validation seasons 2022–24 with warm-up; NHL development 2018–21; primary
+  metric per member as §9; paired on games every cadence forecast; ISO-week block bootstrap 20,000, Bonferroni over 18 =
+  9 members × {daily − season, daily − weekly}).
+- **Reading rule (as §9):** "supports a trial" only if the Bonferroni interval is below 0 and the member is not worse in at
+  least 2 of the 3 (NBA) / 3 of the 4 (NHL) seasons. Even then the only permitted follow-up is a separately versioned
+  prospective shadow; sealed members and live schedules are not changed by this study.
+- Runs on scratch store copies only.
+
 ## Amendments
 - **2026-10-02, before the study run:** `ridge_points` / `gbt_points` spreads have a floor of 1.0 point (`MIN_SD`), found with
   synthetic test data where every total was identical. Real residual spreads are about 12 (margin) and 18 (total) points, so the

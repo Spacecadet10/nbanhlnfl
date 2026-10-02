@@ -10,7 +10,7 @@ from .models.elo import EloConfig
 SPORT_COMMANDS = {"nhl-pbp-import", "nhl-xg-research", "migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies", "refresh", "odds", "predict",
                   "score", "daily", "scheduler", "predict-now", "score-near-tipoff", "markets", "score-markets", "agreement", "thresholds",
                   "combination-study", "selector-decide", "research-report", "retrain-cadence", "catboost-challenger", "combination-search", "expanded-search", "selective-study", "rules-registry",
-                  "pool-screen", "pool-assess", "pool-record", "pool-roster", "pool-report"}
+                  "daily-cadence", "pool-screen", "pool-assess", "pool-record", "pool-roster", "pool-report"}
 NHL_ONLY = {"nhl-pbp-import", "nhl-xg-research", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies"}
 
 
@@ -92,6 +92,8 @@ def main(argv=None) -> int:
     gfp = sub.add_parser("gapfill-study", help="Gap-filling combination study from saved out-of-sample tables, both sports; "
                                                "opens no store (MODEL_SELECTION §16)")
     gfp.add_argument("--out")
+    dc = sub.add_parser("daily-cadence", help="Daily vs weekly vs season-start refits of the §9 members (MODEL_SELECTION §17)")
+    dc.add_argument("--out")
     sv = sub.add_parser("selective-study", help="Market-specific selective-combination study (MODEL_SELECTION §15)")
     sv.add_argument("--out")
     rg = sub.add_parser("rules-registry", help="Freeze the selective-v1 rule registry from the two study reports (MODEL_SELECTION §15)")
@@ -389,6 +391,11 @@ def main(argv=None) -> int:
         from . import expanded_search
         report = expanded_search.run(conn, args.sport, out_dir=Path(args.out) if args.out else None)
         print(json.dumps({"output_dir": report["output_dir"], "deploy_candidates": {m: a["deploy_candidates"] for m, a in report["markets"].items()}}))
+    elif args.cmd == "daily-cadence":
+        from pathlib import Path
+        from . import cadence_daily
+        report = cadence_daily.run(conn, args.sport, out_dir=Path(args.out) if args.out else None)
+        print(json.dumps({"output_dir": report["output_dir"]}))
     elif args.cmd == "selective-study":
         from pathlib import Path
         from . import selective_study
