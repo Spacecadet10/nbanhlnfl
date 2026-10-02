@@ -104,5 +104,9 @@ WHEN NEW.sport IS NOT (SELECT sport FROM store_identity)
   OR NEW.generated_at < strftime('%Y-%m-%dT%H:%M:%SZ', NEW.tipoff_at, '-2 hours')
   OR (NEW.decision_id IS NOT NULL AND NOT EXISTS (
         SELECT 1 FROM selector_decisions d WHERE d.decision_id = NEW.decision_id AND d.market = NEW.market
-          AND d.decided_at <= NEW.generated_at AND NEW.generated_at < d.effective_until))
+          AND d.decided_at <= NEW.generated_at
+          AND NEW.generated_at < strftime('%Y-%m-%dT%H:%M:%SZ', d.effective_until, '+7 days')
+          AND NOT EXISTS (SELECT 1 FROM selector_decisions n WHERE n.sport = d.sport AND n.market = d.market
+                          AND n.selector_version = d.selector_version AND n.definition = d.definition
+                          AND n.decided_at > d.decided_at AND n.decided_at <= NEW.generated_at)))
 BEGIN SELECT RAISE(ABORT, 'research selection must use its cohort and a decision in force, within two hours before the start'); END;

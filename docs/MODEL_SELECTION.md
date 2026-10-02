@@ -154,3 +154,13 @@ probability of its pick ≥ threshold and the filter holds.
 - **2026-10-02, operational detail:** stackers for line markets are trained at the primary's model-only line and applied at
   whatever line the live cohort uses (often a bookmaker line). That shift is a known limitation; the prospective record measures
   it rather than assuming it away.
+- **2026-10-02, after the self-review (code review by a separate agent in this session; not independent):** (1) research member
+  forecasts' identity now includes the research run's own input digest (results, box observations, training seasons, definition),
+  so a refetched box score can no longer collide with an earlier member under one key; (2) the fitted line-member walk-forward
+  state is cached on disk per input digest (it cost about 216 s per NBA cycle); (3) the previous weekly decision stays in force
+  until the new one is written (at most one week past its interval), as §6 intended; (4) a selection "context" now includes the
+  decisions, and the game page reads the game's latest context, so one game never shows two recommendations; (5) a research
+  failure is reported but no longer marks the primary forecast run as failed; (6) reports count unscorable games separately from
+  void and honour `as_of`; (7) the retrospective simulation follows the live incumbent and tie-break rules (study run 2).
+  Known limitations kept: `game_decisions` has no availability time of its own (the decision arrives with the final result);
+  the winner cohort's bookmaker quote is looked up at the research step's start, which can be a few minutes after the primary's.

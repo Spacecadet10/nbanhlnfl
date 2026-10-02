@@ -125,7 +125,7 @@ function ReportBody({ r }: { r: ResearchReport }) {
     {r.groups.map((g) => {
       const primary = Object.keys(g.sources)[0];
       return <div key={g.definition}>
-        <p className="small muted">Definition <code>{g.definition.slice(0, 10)}</code> · {g.cohorts} games · {g.settled} settled · {g.pending} pending · {g.void} void
+        <p className="small muted">Definition <code>{g.definition.slice(0, 10)}</code> · {g.cohorts} games · {g.settled} settled · {g.pending} pending · {g.void} void{g.unscorable > 0 && ` · ${g.unscorable} unscorable`}
           {' · lines: '}{g.line_sources.market} bookmaker, {g.line_sources.model} model-only</p>
         <h3>Individual models and combinations</h3>
         <div className="table-wrap"><table className="table">
@@ -136,7 +136,7 @@ function ReportBody({ r }: { r: ResearchReport }) {
         </table></div>
         <h3>Agreement versus confidence at the same coverage</h3>
         <div className="table-wrap"><table className="table">
-          <thead><tr><th>Rule</th><th>Coverage</th><th>Record</th><th>Accuracy</th><th>Primary's most confident, same count</th></tr></thead>
+          <thead><tr><th>Rule</th><th>Coverage</th><th>Record</th><th>Accuracy</th><th>Primary's most confident, same count (ranked within these games; descriptive)</th></tr></thead>
           <tbody>{(['majority', 'unanimous'] as const).map((k) => { const a = g.agreement[k]; return <tr key={k}>
             <th scope="row">{k === 'majority' ? 'Strict majority' : 'Unanimous'}</th><td>{pct(a.coverage, 0)}</td><td>{record(a)}</td>
             <td>{pct(a.accuracy, 1)}</td><td>{pct(a.primary_confidence_same_count.accuracy, 1)} ({record(a.primary_confidence_same_count)})</td></tr>; })}</tbody>
@@ -212,7 +212,7 @@ function RetroBody({ r, market }: { r: Retrospective; market: MarketId }) {
     </table></div>
     <p className="small">Simulated weekly selector: {m.selector_simulation.picks} picks ({pct(m.selector_simulation.coverage, 0)} coverage),
       accuracy {pct(m.selector_simulation.accuracy, 1)}, active {m.selector_simulation.active_weeks}/{m.selector_simulation.weeks} weeks;
-      primary's most confident games, same count: {pct(m.selector_simulation.primary_confidence_same_count?.accuracy, 1)}
+      primary's most confident games, same count (ranked within the same span, in hindsight; descriptive): {pct(m.selector_simulation.primary_confidence_same_count?.accuracy, 1)}
       {' '}({diff(m.selector_simulation.primary_confidence_same_count?.diff)}).</p>
   </>;
 }

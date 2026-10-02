@@ -1,7 +1,10 @@
 # Combination and selection study — results (2026-10-02)
 
-Design: docs/MODEL_SELECTION.md (committed 5ea11f5 before any run). One run per sport (2026-10-02 10:46 UTC, scratch copies of the
-stores; no second run was needed). Evidence: `docs/evidence/combination-study-2026-10-02/` (`nba.json`, `nhl.json`, `summary.txt`).
+Design: docs/MODEL_SELECTION.md (committed 5ea11f5 before any run). Two runs per sport, the budgeted maximum, both on scratch
+copies of the stores: run 1 at 10:46 UTC; run 2 after the self-review found the selector *simulation* did not follow the live rules
+(it kept the previous rule through abstention weeks, and broke cross-market ties by the last market name instead of the first).
+Run 2 reproduced every model, combination and agreement figure exactly; the only change was one rule-change count (NBA home team
+total 2 → 1). The evidence files are run 2. Evidence: `docs/evidence/combination-study-2026-10-02/` (`nba.json`, `nhl.json`, `summary.txt`).
 
 **Status: retrospective and exploratory.** NBA 2022-2024 and NHL 2018-2021 were already used to choose the primary models. Line
 markets are scored at the primary's model-only line (no historical bookmaker lines exist), so nothing here measures performance

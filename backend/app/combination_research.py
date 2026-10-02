@@ -204,10 +204,10 @@ def _simulate(market, rows, sources, members):
         d = selector.decide(evidence, market, sources, incumbent) if evidence else None
         week_items = [i for i in items if cut <= i["tipoff_at"] < nxt]
         status = d["status"] if d else "insufficient_evidence"
+        if d and d["status"] == "active" and incumbent and d["rule"] != incumbent:
+            changes += 1
+        incumbent = d["rule"] if d else None          # as live: the previous decision's rule, none after an abstention
         if d and d["status"] == "active":
-            if incumbent and (d["rule"] != incumbent):
-                changes += 1
-            incumbent = d["rule"]
             rates = selector.reference_rates(evidence, market)
             for i in week_items:
                 s = selector.apply(d, i, market)
@@ -318,7 +318,7 @@ def _market_choice(per_market_picks):
     for m, picks in per_market_picks.items():
         for p in picks:
             by_game.setdefault(p["game_id"], []).append((p["lower"], m, p))
-    chosen = [max(v, key=lambda x: (x[0], x[1]))[1:] for v in by_game.values()]
+    chosen = [max(v, key=lambda x: (x[0], -sorted(per_market_picks).index(x[1])))[1:] for v in by_game.values()]   # = selector.choose_market
     decided = [(m, p) for m, p in chosen if p["result"] != "push"]
     wins = sum(p["result"] == "win" for _, p in decided)
     return {"games_with_recommendation": len(chosen), "by_market": {m: sum(1 for c, _ in chosen if c == m) for m in per_market_picks},

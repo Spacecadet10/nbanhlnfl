@@ -306,10 +306,9 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
         if out["agreement"].get("status") == "failed":
             status = "failed"
         if collect is not None:   # research cohorts and selections; never blocks or changes the primary forecasts above
+            # Reported in the detail (and the CLI exit code); the primary run's status is not downgraded by research.
             out["research"] = research_selection(conn, game_ids=accepted, winner_run={**run, "forecasts": winner},
                                                  history=collect, now=now, write=not dry_run)
-            if out["research"].get("status") == "failed":
-                status = "failed"
         else:
             out["research"] = {"status": "disabled", "reason": "RESEARCH_SELECTION=0"}
     return {"status": status, **out} if dry_run else _finish(conn, run_id, status, 1, out)

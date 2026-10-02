@@ -222,7 +222,7 @@ export interface ResearchSource extends ResearchRecord {
   thresholds: (ResearchRecord & { threshold: number })[];
 }
 export interface ResearchGroup {
-  definition: string; cohorts: number; settled: number; pending: number; void: number;
+  definition: string; cohorts: number; settled: number; pending: number; void: number; unscorable: number;
   line_sources: { market: number; model: number }; sources: Record<string, ResearchSource>;
   agreement: Record<'majority' | 'unanimous', ResearchRecord & { cohorts: number; coverage: number | null; primary_confidence_same_count: ResearchRecord }>;
   periods: { week: string; cohorts: number; primary: ResearchRecord; average: ResearchRecord }[];

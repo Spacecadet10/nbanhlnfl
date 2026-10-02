@@ -174,7 +174,14 @@ def test_selections_choose_one_market_and_record_reasons(game, monkeypatch):
     assert rows["spread"]["recommended"] == 1 and rows["total"]["recommended"] == 0 and "outranked" in rows["total"]["game_reason"]
     assert rows["winner"]["status"] == "no_pick" and "below threshold" in rows["winner"]["reason"]
     assert rows["reg3"]["status"] == "no_pick" and "no selector decision" in rows["reg3"]["reason"]
-    assert rows["reg3"]["generated_at"] == "2026-10-12T21:30:00Z"       # unchanged selection: a retry, not a new row
+    # The new decisions changed this run's context, so every market has a row in it: one complete, consistent set.
+    assert rows["reg3"]["generated_at"] == "2026-10-12T21:45:00Z" and rows["reg3"]["context"] == rows["spread"]["context"]
+    detail = research_live.game_detail(game, GID, "2026-10-12T21:50:00Z")
+    assert detail["recommendation"]["market"] == "spread"
+    assert sum(m["selection"]["recommended"] for m in detail["markets"]) == 1
+    earlier = research_live.game_detail(game, GID, "2026-10-12T21:40:00Z")      # as known before the new run
+    assert earlier["recommendation"] is None and all(m["selection"]["generated_at"] == "2026-10-12T21:30:00Z"
+                                                     for m in earlier["markets"])
 
 
 def test_jobs_keep_primary_forecasts_when_research_fails_and_respect_the_off_switch(game, monkeypatch):
@@ -183,6 +190,7 @@ def test_jobs_keep_primary_forecasts_when_research_fails_and_respect_the_off_swi
     monkeypatch.setattr(research_live, "record", lambda conn, **kw: (_ for _ in ()).throw(RuntimeError("research down")))
     out = jobs.predict_now(game, now="2026-10-12T21:30:00Z")
     assert out["research"]["status"] == "failed" and "research down" in out["research"]["error"]
+    assert out["status"] == "success"                   # the primary run is not reported as failed because research failed
     assert game.execute("SELECT count(*) FROM predictions WHERE model_version LIKE '%near_tipoff'").fetchone()[0] == 1
     assert game.execute("SELECT count(*) FROM market_forecasts WHERE model_version NOT LIKE 'research-%'").fetchone()[0] == 5
     monkeypatch.setenv("RESEARCH_SELECTION", "0")
@@ -210,3 +218,21 @@ def test_real_api_shows_recorded_research_and_explicit_empty_states(game, monkey
     assert total["selection"]["status"] == "no_pick"
     perf = c.get("/api/research/performance", params={"sport": "nhl", "market": "reg3"}).json()
     assert perf["groups"][0]["pending"] == 1 and perf["groups"][0]["settled"] == 0
+
+
+def test_cached_line_state_reproduces_the_computed_members_and_tracks_inputs(game):
+    first = run(game, "2026-10-12T21:30:00Z")
+    assert first["line_state"] == "computed" and research_live._cache_path("nhl").is_file()
+    before = {r["market"]: r["members"] for r in game.execute("SELECT market, members FROM research_cohorts")}
+    again = run(game, "2026-10-12T21:40:00Z")
+    assert again["line_state"] == "cache" and again["cohorts_created"] == 0      # identical members, so identical cohorts
+    research_live._cache_path("nhl").unlink()
+    fresh = run(game, "2026-10-12T21:45:00Z")
+    assert fresh["line_state"] == "computed" and fresh["cohorts_created"] == 0
+    assert {r["market"]: r["members"] for r in game.execute("SELECT market, members FROM research_cohorts")} == before
+    # A new result changes the inputs: the cache is not reused and member identities change (no ledger conflict).
+    add_upcoming(game, gid=2026020002, start="2026-10-12T12:00:00", state=7, hs=3, vs=1, period=3, at="2026-10-12T21:50:00Z")
+    game.execute("INSERT INTO job_runs (job, started_at, finished_at, status) VALUES "
+                 "('refresh', '2026-10-12T21:50:00Z', '2026-10-12T21:50:00Z', 'success')")
+    new = run(game, "2026-10-12T21:55:00Z")
+    assert new["line_state"] == "computed" and not new["errors"], new

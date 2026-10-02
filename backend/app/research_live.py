@@ -97,7 +97,10 @@ def record(conn, *, game_ids: list, winner_run: Optional[dict], history: Optiona
     if not game_ids:
         out["status"] = "skipped"
         return out
-    defn = definition(conn)
+    try:
+        defn = definition(conn)
+    except Exception as exc:     # visible; never touches primary rows
+        return {**out, "status": "failed", "error": f"definition unavailable: {type(exc).__name__}: {exc}"}
     out["definition"] = defn
     games = {g["game_id"]: g for g in conn.execute(
         f"SELECT * FROM games WHERE game_id IN ({','.join('?' * len(game_ids))})", list(game_ids))}
@@ -137,10 +140,11 @@ def record(conn, *, game_ids: list, winner_run: Optional[dict], history: Optiona
     # Line and 3-way markets: the same line, line source and quote as the primary market forecast in this run.
     try:
         models = line_models(conn)
-        current, stacks, reasons = _line_state(conn, eng, models, games, now)
+        current, stacks, reasons, data = _line_state(conn, eng, models, games, now, defn)
+        out["line_state"] = data["source"]
     except Exception as exc:
         out["errors"]["line_members"] = f"{type(exc).__name__}: {exc}"
-        models, current, stacks, reasons = [], {}, {}, {}
+        models, current, stacks, reasons, data = [], {}, {}, {}, {}
     if models:
         _, base = market_live.market_model(conn)
         primary_mv = market_live.model_version(base, "near_tipoff")
@@ -173,7 +177,7 @@ def record(conn, *, game_ids: list, winner_run: Optional[dict], history: Optiona
                         prev = conn.execute("SELECT line FROM market_forecasts WHERE game_id=? AND market=? AND model_version=? "
                                             "ORDER BY generated_at DESC, forecast_id DESC LIMIT 1", (gid, market, mv)).fetchone()
                         f = MarketForecast(sport, gid, market, line, source, quote, "near_tipoff", "live", mv,
-                                           prim["dataset_version"], prim["feature_version"], g["tipoff_at"], generated,
+                                           data["digest"], prim["feature_version"], g["tipoff_at"], generated,
                                            g["tipoff_at"], *vec, json.dumps(d.params, sort_keys=True),
                                            generated if prev is not None and prev["line"] != line else "")
                         fid = None
@@ -181,7 +185,7 @@ def record(conn, *, game_ids: list, winner_run: Optional[dict], history: Optiona
                             fid, new = record_market(conn, f)
                             out["members_created"] += new
                         members.append({"name": m.name, "ref": {"table": "market_forecasts", "id": fid}, "p": list(vec)})
-                    except Exception as exc:
+                    except Exception as exc:    # incl. a ledger conflict: reported, never overwritten or substituted
                         missing[m.name] = f"error: {type(exc).__name__}: {exc}"
                         out["errors"].setdefault(m.name, f"{type(exc).__name__}: {exc}")
                 book = None
@@ -200,7 +204,7 @@ def record(conn, *, game_ids: list, winner_run: Optional[dict], history: Optiona
     if write:
         _select(conn, sport, defn, cohorts, out, stamp)
     if out["errors"] or any(v for v in out["skipped"].values()):
-        out["status"] = "partial" if out["cohorts_created"] + out["cohorts_existing"] else "failed"
+        out["status"] = "partial"
     return out
 
 
@@ -269,56 +273,137 @@ def _winner_stack(conn, sport, history, games, now):
     return combine.fit_stack(train, "winner"), None
 
 
-def _line_state(conn, eng, models, games, now):
+def _rebuild_defaultdict(kind, arg, items):
+    from collections import defaultdict, deque
+    from functools import partial
+    factory = partial(deque, maxlen=arg) if kind == "deque" else partial(_constant, arg)
+    return defaultdict(factory, items)
+
+
+def _constant(value):
+    return value
+
+
+def _dumps(obj) -> bytes:
+    """Pickle that also stores the models' defaultdicts, whose factories are lambdas returning a constant or a bounded deque;
+    each is rebuilt with an equivalent picklable factory. Anything else unpicklable raises (the cache is then skipped)."""
+    import io
+    import pickle
+    from collections import defaultdict, deque
+
+    class P(pickle.Pickler):
+        def reducer_override(self, o):
+            if type(o) is defaultdict and o.default_factory is not None:
+                sample = o.default_factory()
+                if isinstance(sample, deque) and not sample:
+                    return _rebuild_defaultdict, ("deque", sample.maxlen, dict(o))
+                if isinstance(sample, (int, float)):
+                    return _rebuild_defaultdict, ("const", sample, dict(o))
+                raise pickle.PicklingError(f"unsupported defaultdict factory {o.default_factory!r}")
+            return NotImplemented
+    buf = io.BytesIO()
+    P(buf, protocol=pickle.HIGHEST_PROTOCOL).dump(obj)
+    return buf.getvalue()
+
+
+def _cache_path(sport: str) -> Path:
+    from . import config
+    return config.data_dir() / "research" / f"line-state-{sport}.pkl"
+
+
+def _line_state(conn, eng, models, games, now, defn):
     """Walk-forward of every line member over all results available now; current distributions for the eligible games and
-    one stacker per market trained on the last two completed seasons at the primary's model-only line."""
+    one stacker per market trained on the last two completed seasons at the primary's model-only line.
+
+    The fitted state after the walk (before any scheduled game is touched) and the stackers depend only on the delivered
+    results, box observations, training seasons and the research definition, so they are cached on disk under that key and
+    reused by later cycles of the same evening. Returns (current, stacks, reasons, data) where data["digest"] identifies the
+    inputs and is part of each member forecast's identity."""
+    import pickle
     rows = live.available_rows(conn, now)
     known = {r.game.game_id: r for r in rows}
     events = [] if eng.sport == "nhl" else [e for e in backtest.load_box_events(conn, "live")
               if e.game.game_id in known and max(e.available_at, known[e.game.game_id].result_available_at) <= now]
     seasons = set(_train_seasons(rows, games))
+    digest = hashlib.sha256(json.dumps([eng.dataset_version(rows), backtest.box_version(events), sorted(seasons), defn])
+                            .encode()).hexdigest()[:24]
+    path = _cache_path(eng.sport)
+    state, source = None, "computed"
+    try:
+        if path.is_file():
+            cached = pickle.loads(path.read_bytes())
+            if cached.get("digest") == digest:
+                state, source = cached, "cache"
+    except Exception:
+        state = None
+    if state is None:
+        state = _fit_line_state(models, rows, events, now, seasons, eng)
+        state["digest"] = digest
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".tmp")
+            tmp.write_bytes(_dumps(state))
+            tmp.replace(path)
+        except Exception:
+            pass                         # caching is an optimisation only
+    fitted = pickle.loads(state["models"]) if state.get("models") else {}
     horizon = max(g["tipoff_at"] for g in games.values())
     schedule = [g for g in conn.execute(
         f"SELECT * FROM games WHERE status='scheduled' AND tipoff_at > ? AND tipoff_at <= ? "
         f"AND season_type IN ({','.join('?' for _ in eng.eligible_types)}) ORDER BY tipoff_at, game_id",
         (now, horizon, *eng.eligible_types)) if g["game_id"] not in known]
-    hist, current = {}, {}
+    current = {}
+    for m in models:
+        if m.name in state["errors"]:
+            current[m.name] = {gid: state["errors"][m.name] for gid in games}
+            continue
+        mm, cur = fitted[m.name], {}
+        try:
+            for g in schedule:              # every earlier scheduled game, in order, so rest features match the schedule
+                d = mm.distribution(eng.pregame(g))
+                if g["game_id"] in games:
+                    cur[g["game_id"]] = d if d is not None else "not_ready: no out-of-sample fit yet"
+        except Exception as exc:
+            cur = {gid: f"error: {type(exc).__name__}: {exc}" for gid in games}
+        current[m.name] = cur
+    return current, state["stacks"], state["reasons"], {"digest": digest, "source": source}
+
+
+def _fit_line_state(models, rows, events, now, seasons, eng) -> dict:
+    hist, errors, fitted = {}, {}, {}
     for m in models:
         try:
             out = backtest.run(m, rows, events, deliver_until=now,
                                extra=lambda mm, g: {"dist": mm.distribution(g)} if g.season in seasons else {})
             hist[m.name] = {p["game_id"]: p.get("dist") for p in out}
-            cur = {}
-            for g in schedule:              # every earlier scheduled game, in order, so rest features match the schedule
-                d = m.distribution(eng.pregame(g))
-                if g["game_id"] in games:
-                    cur[g["game_id"]] = d if d is not None else "not_ready: no out-of-sample fit yet"
-            current[m.name] = cur
+            fitted[m.name] = m
         except Exception as exc:
-            current[m.name] = {gid: f"error: {type(exc).__name__}: {exc}" for gid in games}
+            errors[m.name] = f"error: {type(exc).__name__}: {exc}"
     stacks, reasons = {}, {}
     names = [m.name for m in models]
-    if any(n not in hist for n in names):
-        return current, stacks, {mk: "member walk-forward failed" for mk in sports.get(eng.sport).markets}
-    for market in [m for m in sports.get(eng.sport).markets if m != "winner"]:
-        train = []
-        for r in rows:
-            if r.game.season not in seasons:
+    line_markets = [mk for mk in sports.get(eng.sport).markets if mk != "winner"]
+    if errors:
+        reasons = {mk: "member walk-forward failed" for mk in line_markets}
+    else:
+        for market in line_markets:
+            train = []
+            for r in rows:
+                if r.game.season not in seasons:
+                    continue
+                ds = [hist[n].get(r.game.game_id) for n in names]
+                if any(d is None for d in ds):
+                    continue
+                line = None if market == "reg3" else markets.model_line(ds[0], market)
+                s = markets.settle(market, line, status="final", home=r.home_score, away=r.away_score,
+                                   decision=getattr(r, "decision", None))
+                if s not in SIDE:
+                    continue
+                train.append(([d.market(market, line) for d in ds], SIDE[s]))
+            if len(train) < STACK_MIN_TRAIN:
+                reasons[market] = f"only {len(train)} out-of-fold training games"
                 continue
-            ds = [hist[n].get(r.game.game_id) for n in names]
-            if any(d is None for d in ds):
-                continue
-            line = None if market == "reg3" else markets.model_line(ds[0], market)
-            s = markets.settle(market, line, status="final", home=r.home_score, away=r.away_score,
-                               decision=getattr(r, "decision", None))
-            if s not in SIDE:
-                continue
-            train.append(([d.market(market, line) for d in ds], SIDE[s]))
-        if len(train) < STACK_MIN_TRAIN:
-            reasons[market] = f"only {len(train)} out-of-fold training games"
-            continue
-        stacks[market] = combine.fit_stack(train, market)
-    return current, stacks, reasons
+            stacks[market] = combine.fit_stack(train, market)
+    return {"models": _dumps(fitted), "errors": errors, "stacks": stacks, "reasons": reasons}
 
 
 # --- Decisions -------------------------------------------------------------------------------------------------------
@@ -335,13 +420,14 @@ def _realised(market, line, g, decision):
     return SIDE.get(s)
 
 
-def canonical_cohorts(conn, market: Optional[str] = None, definition_: Optional[str] = None) -> list:
-    """One cohort per game, market and definition: the latest made before the start it was made for."""
+def canonical_cohorts(conn, market: Optional[str] = None, definition_: Optional[str] = None, as_of: str = "9999") -> list:
+    """One cohort per game, market and definition: the latest made before the start it was made for, as known at `as_of`."""
     sql = ("SELECT c.*, g.status, g.home_score, g.away_score, g.result_available_at, g.tipoff_at AS game_tipoff_at, "
            "d.decision FROM research_cohorts c JOIN games g ON g.game_id=c.game_id LEFT JOIN game_decisions d ON d.game_id=c.game_id "
            "WHERE c.cohort_id = (SELECT x.cohort_id FROM research_cohorts x WHERE x.game_id=c.game_id AND x.market=c.market "
-           "AND x.definition=c.definition AND x.generated_at < x.tipoff_at ORDER BY x.generated_at DESC, x.cohort_id DESC LIMIT 1)")
-    params = []
+           "AND x.definition=c.definition AND x.generated_at < x.tipoff_at AND x.generated_at <= ? "
+           "ORDER BY x.generated_at DESC, x.cohort_id DESC LIMIT 1)")
+    params = [as_of]
     if market:
         sql += " AND c.market=?"
         params.append(market)
@@ -379,7 +465,7 @@ def item(row, realised=None) -> dict:
 
 def evidence(conn, market: str, defn: str, cutoff: str) -> list:
     out = []
-    for r in canonical_cohorts(conn, market, defn):
+    for r in canonical_cohorts(conn, market, defn, as_of=cutoff):
         if r["tipoff_at"] >= cutoff or state(r, cutoff) != "settled":
             continue
         y = _realised(market, r["line"], r, r["decision"])
@@ -425,10 +511,17 @@ def decide_due(conn, *, now: Optional[str] = None, write: bool = True, defn: Opt
     return out
 
 
+CARRY_OVER = "+7 days"
+
+
 def decision_in_force(conn, sport: str, market: str, defn: str, at: str):
+    """The latest decision written at or before `at`. Between a scheduled Monday time and the write of the new decision the
+    previous one stays in force (never the new one retroactively); a decision is carried at most one week past its interval,
+    after which, with no newer decision written, there is none."""
     return conn.execute("SELECT * FROM selector_decisions WHERE sport=? AND market=? AND selector_version=? AND definition=? "
-                        "AND decided_at<=? AND effective_until>? ORDER BY decided_at DESC LIMIT 1",
-                        (sport, market, selector.version(), defn, at, at)).fetchone()
+                        "AND decided_at<=? AND ? < strftime('%Y-%m-%dT%H:%M:%SZ', effective_until, ?) "
+                        "ORDER BY decided_at DESC, decision_id DESC LIMIT 1",
+                        (sport, market, selector.version(), defn, at, at, CARRY_OVER)).fetchone()
 
 
 def _select(conn, sport, defn, cohorts, out, stamp):
@@ -436,10 +529,13 @@ def _select(conn, sport, defn, cohorts, out, stamp):
         if not per_market:
             continue
         generated = stamp()
-        context = _key(sorted(cid for cid, _ in per_market.values()))
+        drows = {market: decision_in_force(conn, sport, market, defn, generated) for market in per_market}
+        # One context = the cohorts AND decisions compared in this run, so a run with any change writes a complete new set.
+        context = _key(sorted((m, cid, None if drows[m] is None else drows[m]["decision_id"])
+                              for m, (cid, _) in per_market.items()))
         candidates, rows = {}, {}
         for market, (cid, c) in per_market.items():
-            drow = decision_in_force(conn, sport, market, defn, generated)
+            drow = drows[market]
             dec = None if drow is None else {"status": drow["status"], "rule": json.loads(drow["rule"]),
                                              "lower": drow["lower_bound"], "reason": drow["reason"]}
             it = item({"members": json.dumps(c["members"]), "average": json.dumps(c["average"]), "stack": json.dumps(c["stack"]),
@@ -474,11 +570,15 @@ def _minutes(tipoff: str, at: str) -> float:
     return round((_parse(tipoff) - _parse(at)).total_seconds() / 60, 1)
 
 
-def _latest_selection(conn, cohort_id: int):
-    return conn.execute("SELECT s.*, d.selector_version, d.scheduled_for, d.decided_at, d.effective_until, d.status AS decision_status, "
-                        "d.rule, d.lower_bound, d.reason AS decision_reason FROM research_selections s "
-                        "LEFT JOIN selector_decisions d ON d.decision_id=s.decision_id WHERE s.cohort_id=? "
-                        "ORDER BY s.generated_at DESC, s.selection_id DESC LIMIT 1", (cohort_id,)).fetchone()
+def _context_selections(conn, game_id: str, as_of: str) -> dict:
+    """market -> selection row of the game's latest selection run (context) made at or before `as_of`."""
+    rows = conn.execute(
+        "SELECT s.*, d.selector_version, d.scheduled_for, d.decided_at, d.effective_until, d.status AS decision_status, "
+        "d.rule, d.lower_bound, d.reason AS decision_reason FROM research_selections s "
+        "LEFT JOIN selector_decisions d ON d.decision_id=s.decision_id WHERE s.game_id=? AND s.generated_at<=? "
+        "AND s.context = (SELECT x.context FROM research_selections x WHERE x.game_id=s.game_id AND x.generated_at<=? "
+        "ORDER BY x.generated_at DESC, x.selection_id DESC LIMIT 1)", (game_id, as_of, as_of)).fetchall()
+    return {r["market"]: r for r in rows}
 
 
 def game_detail(conn, game_id: str, as_of: Optional[str] = None) -> dict:
@@ -489,16 +589,19 @@ def game_detail(conn, game_id: str, as_of: Optional[str] = None) -> dict:
         return {"game_id": game_id, "markets": [], "status": "unknown_game"}
     abbr = {t["team_id"]: t["abbr"] for t in conn.execute("SELECT team_id, abbr FROM teams WHERE team_id IN (?, ?)",
                                                             (g["home_team_id"], g["away_team_id"]))}
+    sels = _context_selections(conn, game_id, as_of)
     out = []
     for r in conn.execute(
             "SELECT c.* FROM research_cohorts c WHERE c.game_id=? AND c.generated_at<=? AND c.cohort_id = (SELECT x.cohort_id "
             "FROM research_cohorts x WHERE x.game_id=c.game_id AND x.market=c.market AND x.generated_at<=? "
             "ORDER BY x.generated_at DESC, x.cohort_id DESC LIMIT 1) ORDER BY c.market", (game_id, as_of, as_of)):
-        s = _latest_selection(conn, r["cohort_id"])
+        s = sels.get(r["market"])
+        if s is not None and s["cohort_id"] != r["cohort_id"]:
+            s = None          # a newer cohort was recorded but not (yet) evaluated by the selector
         stack = json.loads(r["stack"])
         book = json.loads(r["bookmaker"])
         selection = None
-        if s is not None and s["generated_at"] <= as_of:
+        if s is not None:
             selection = {"status": s["status"], "side": s["side"], "probability": s["probability"], "threshold": s["threshold"],
                          "reason": s["reason"], "recommended": bool(s["recommended"]), "game_reason": s["game_reason"],
                          "generated_at": s["generated_at"],
@@ -555,13 +658,13 @@ def report(conn, market: str, as_of: Optional[str] = None) -> dict:
     game-level recommendations, by definition. Descriptive; retries never add games (one canonical cohort per game)."""
     as_of = as_of or utc_now()
     sport = live.engine(conn).sport
-    rows = [r for r in canonical_cohorts(conn, market) if r["generated_at"] <= as_of]
+    rows = canonical_cohorts(conn, market, as_of=as_of)
     by_def: dict = {}
     for r in rows:
         by_def.setdefault(r["definition"], []).append(r)
     groups = []
     for defn, rs in by_def.items():
-        settled, pending, void = [], 0, 0
+        settled, pending, void, unscorable = [], 0, 0, 0
         for r in rs:
             st = state(r, as_of)
             if st == "void":
@@ -570,8 +673,8 @@ def report(conn, market: str, as_of: Optional[str] = None) -> dict:
                 pending += 1
             else:
                 y = _realised(market, r["line"], r, r["decision"])
-                if y is None:
-                    void += 1
+                if y is None:          # final, but data needed to settle is missing (e.g. NHL decision type): never guessed
+                    unscorable += 1
                 else:
                     settled.append(item(r, y) | {"line_source": r["line_source"], "tipoff_at": r["tipoff_at"]})
         srcs = sources(sport, market)
@@ -616,6 +719,7 @@ def report(conn, market: str, as_of: Optional[str] = None) -> dict:
                      "bookmaker_log_loss": metrics.log_loss_multi([i["bookmaker"] for i in book], [i["realised"] for i in book]),
                      "note": "Same games, same exact line, quote retrieved before the forecast. De-vigged prices; no profit claim."}
         groups.append({"definition": defn, "cohorts": len(rs), "settled": len(settled), "pending": pending, "void": void,
+                       "unscorable": unscorable,
                        "line_sources": {k: sum(r["line_source"] == k for r in rs) for k in ("market", "model")},
                        "sources": per_source, "agreement": agree, "periods": periods, "bookmaker": bookmaker,
                        "selector": _selector_record(conn, market, defn, as_of, primary)})
@@ -636,9 +740,10 @@ def _selector_record(conn, market, defn, as_of, primary):
         "g.result_available_at, g.tipoff_at AS game_tipoff_at, d.decision FROM research_selections s "
         "JOIN research_cohorts c ON c.cohort_id=s.cohort_id JOIN games g ON g.game_id=s.game_id "
         "LEFT JOIN game_decisions d ON d.game_id=s.game_id WHERE s.market=? AND c.definition=? AND s.generated_at<=? "
-        "AND s.selection_id=(SELECT x.selection_id FROM research_selections x WHERE x.game_id=s.game_id AND x.market=s.market "
+        "AND s.selection_id=(SELECT x.selection_id FROM research_selections x JOIN research_cohorts cx ON cx.cohort_id=x.cohort_id "
+        "WHERE x.game_id=s.game_id AND x.market=s.market AND cx.definition=? AND x.generated_at<=? "
         "AND x.generated_at < x.tipoff_at ORDER BY x.generated_at DESC, x.selection_id DESC LIMIT 1)",
-        (market, defn, as_of)).fetchall()
+        (market, defn, as_of, defn, as_of)).fetchall()
     picks, rec, statuses = [], [], {"pick": 0, "no_pick": 0}
     pending = void = 0
     for r in rows:

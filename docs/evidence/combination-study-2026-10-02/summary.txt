@@ -91,7 +91,7 @@
    pair:points_normal+gbt_points    cov 0.527 acc 0.5335 vsPrimConf +0.023 [+0.005,+0.043] vsAvgConf -0.000 [-0.019,+0.019]
    disagree ridge_points: rate 0.457 prim right 906 member right 903 llcorr 0.097
    disagree gbt_points: rate 0.473 prim right 950 member right 924 llcorr 0.075
-   SELECTOR weeks 141 active 65 changes 2 picks 861 cov 0.217 acc 0.5145180023228804 lift 0.01881697670691132 rules ['{"filter": "majority", "source": "stack", "threshold": 0.5}', '{"filter": "unanimous", "source": "gbt_points", "threshold": 0.55}']
+   SELECTOR weeks 141 active 65 changes 1 picks 861 cov 0.217 acc 0.5145180023228804 lift 0.01881697670691132 rules ['{"filter": "majority", "source": "stack", "threshold": 0.5}', '{"filter": "unanimous", "source": "gbt_points", "threshold": 0.55}']
      vs primary conf same count 0.5203252032520326 [-0.04407084348519197, 0.03101311600517126]
 --- team_total_away: games 3962 seasons [2022, 2023, 2024] excluded 0 best points_normal
    points_normal      n3962 acc 0.5023 ll 0.6931 br 0.4999 push 0
