@@ -1,7 +1,7 @@
 // Research / shadow model selection (docs/MODEL_SELECTION.md). Never the primary forecast; never betting advice.
 import { api } from '../api/client';
 import type {
-  MarketId, ResearchGame, ResearchMarket, ResearchRecord, ResearchReport, ResearchSlateEntry, Retrospective, RetroMarket, Side, Sport, Vector,
+  CalibrationBin, MarketId, ResearchGame, ResearchMarket, ResearchRecord, ResearchReport, ResearchSlateEntry, Retrospective, RetroMarket, Side, Sport, Vector,
 } from '../api/types';
 import { useApi } from '../api/useApi';
 import { AsyncView, Empty } from './States';
@@ -14,7 +14,7 @@ const NAMES: Record<string, string> = {
   goals_draw: 'Goals + draw adjustment', goals_glm: 'Goals regression', average: 'Equal average', stack: 'Learned stacker',
 };
 export const modelName = (n: string) => NAMES[n] ?? n;
-const MARKET: Record<string, string> = { winner: 'Winner', reg3: 'Regulation 3-way', spread: 'Spread', total: 'Total',
+const MARKET: Record<string, string> = { winner: 'Winner', reg3: 'Regulation 3-way', spread: 'Spread / puck line', total: 'Total',
   team_total_home: 'Home team total', team_total_away: 'Away team total' };
 const FILTER: Record<string, string> = { none: 'no agreement filter', majority: 'strict majority agrees', unanimous: 'all models agree' };
 const STATUS: Record<string, string> = { active: 'Active rule', abstain: 'Abstaining', insufficient_evidence: 'Insufficient evidence' };
@@ -24,15 +24,32 @@ const sideIdx = (s: Side) => SIDES.indexOf(s);
 const record = (r: ResearchRecord) => `${r.wins}–${r.losses}${r.pushes ? `–${r.pushes}P` : ''}`;
 const interval = (ci: [number, number] | null) => (ci ? `${pct(ci[0], 0)}–${pct(ci[1], 0)}` : '—');
 
-/** Compact research line for a Today card. */
-export function ResearchSlateLine({ entry }: { entry: ResearchSlateEntry | undefined }) {
+/** Research line for a Today card: the selected market's own research status, its exact line, missing inputs and timing,
+ * plus the game-level recommendation when that is a different market. */
+export function ResearchSlateLine({ entry, market }: { entry: ResearchSlateEntry | undefined; market: MarketId }) {
   if (!entry || entry.status === 'none') return null;
-  return <p className="research-line small">
+  const m = entry.markets[market];
+  const missing = m ? Object.entries(m.missing) : [];
+  return <div className="research-line small">
     <span className="badge badge-research">Research</span>{' '}
-    {entry.status === 'pick'
-      ? <>Selected: <strong>{entry.label}</strong> <span className="muted">({MARKET[entry.market]}, {pct(entry.probability, 1)})</span></>
-      : <span className="muted">No pick: no market passed its rule</span>}
-  </p>;
+    {!m ? <span className="muted">{MARKET[market]}: no research cohort recorded for this market.</span> : <>
+      <strong>{MARKET[market]}</strong>{m.line != null && <> {m.line}</>}
+      {m.line_source && <span className="muted"> ({m.line_source === 'market' ? 'bookmaker line' : 'model-only line'})</span>}
+      {': '}{m.status === 'pick'
+        ? <><strong>{m.pick}</strong> <span className="muted">({pct(m.probability, 1)}{m.threshold != null && `, threshold ${pct(m.threshold)}`})</span>
+            {m.recommended && <span className="ok"> · game recommendation</span>}</>
+        : <span className="muted">no pick · {m.reason}</span>}
+      <span className="muted"> · made {Math.round(m.minutes_before_start)} min before start</span>
+      {m.start_changed && <span className="warn"> · start time changed: void</span>}
+      {missing.length > 0 && <div className="warn">Missing: {missing.map(([n, why]) => `${modelName(n)} (${why})`).join('; ')}</div>}
+    </>}
+    {entry.status === 'pick' && entry.market !== market && <div className="muted">Game recommendation: {entry.label} ({MARKET[entry.market]})</div>}
+  </div>;
+}
+
+function Calibration({ bins }: { bins: CalibrationBin[] | undefined }) {
+  if (!bins || bins.length === 0) return <span className="muted">—</span>;
+  return <>{bins.map((b, i) => <span key={i} className="calib-bin">{pct(b.mean_p, 0)}→{pct(b.win_rate, 0)} <span className="muted">({b.n})</span>{i < bins.length - 1 ? ' · ' : ''}</span>)}</>;
 }
 
 export function ResearchGameCard({ sport, gameId }: { sport: Sport; gameId: string }) {
@@ -98,6 +115,8 @@ function ResearchMarketView({ m }: { m: ResearchMarket }) {
           <dt>Effective</dt><dd>{dateTime(d.effective_from)} until {dateTime(d.effective_until)} · evidence up to {dateTime(d.evidence_until)}</dd>
           <dt>Selector</dt><dd><code>{d.selector_version}</code></dd></>}
         <dt>Research definition</dt><dd><code>{m.definition}</code></dd>
+        {m.bookmaker && <><dt>Bookmaker quote</dt><dd>{m.bookmaker.provider}, retrieved {dateTime(m.bookmaker.retrieved_at)} ·
+          {m.bookmaker.quote_id != null ? <> <code>{m.bookmaker.quote_table}#{m.bookmaker.quote_id}</code></> : ' quote id unknown (not recorded for this row)'}</dd></>}
         <dt>Information time</dt><dd>{dateTime(m.information_at)}</dd>
         {m.agreement.pairs.length > 0 && <><dt>Pairs</dt><dd>{m.agreement.pairs.map((p) => `${modelName(p.members[0])} + ${modelName(p.members[1])}: ${p.agree ? 'agree' : 'differ'}`).join(' · ')}</dd></>}
       </dl>
@@ -136,11 +155,19 @@ function ReportBody({ r }: { r: ResearchReport }) {
         </table></div>
         <h3>Agreement versus confidence at the same coverage</h3>
         <div className="table-wrap"><table className="table">
-          <thead><tr><th>Rule</th><th>Coverage</th><th>Record</th><th>Accuracy</th><th>Primary's most confident, same count (ranked within these games; descriptive)</th></tr></thead>
+          <thead><tr><th>Rule</th><th>Coverage</th><th>Record</th><th>Accuracy</th><th>Primary's most confident</th><th>Average's most confident</th>
+            <th>Best single model's most confident</th></tr></thead>
           <tbody>{(['majority', 'unanimous'] as const).map((k) => { const a = g.agreement[k]; return <tr key={k}>
             <th scope="row">{k === 'majority' ? 'Strict majority' : 'Unanimous'}</th><td>{pct(a.coverage, 0)}</td><td>{record(a)}</td>
-            <td>{pct(a.accuracy, 1)}</td><td>{pct(a.primary_confidence_same_count.accuracy, 1)} ({record(a.primary_confidence_same_count)})</td></tr>; })}</tbody>
+            <td>{pct(a.accuracy, 1)}</td><td>{pct(a.primary_confidence_same_count.accuracy, 1)}</td>
+            <td>{pct(a.average_confidence_same_count.accuracy, 1)}</td>
+            <td>{a.best_single && a.best_single_confidence_same_count ? <>{pct(a.best_single_confidence_same_count.accuracy, 1)} <span className="muted small">({modelName(a.best_single)})</span></> : <span className="muted">unavailable</span>}</td></tr>; })}</tbody>
         </table></div>
+        <p className="small muted">Same number of games, ranked within these games (descriptive). The best single model is chosen on earlier seasons (retrospective study), never on these results.</p>
+        <details className="small"><summary>Reliability (predicted probability of the pick → observed win rate, games per bin)</summary>
+          <div className="table-wrap"><table className="table"><thead><tr><th>Source</th><th>Bins</th></tr></thead>
+            <tbody>{Object.entries(g.sources).map(([n, s]) => <tr key={n}><th scope="row">{modelName(n)}</th><td className="wrap"><Calibration bins={s.calibration} /></td></tr>)}</tbody>
+          </table></div><p className="muted">A table only: no calibration is fitted to these results.</p></details>
         <h3>Selector (shadow)</h3>
         <p className="small">Selections {g.selector.selections.pick} picks / {g.selector.selections.no_pick} no-picks · settled picks {record(g.selector.picks)}
           {' '}({pct(g.selector.picks.accuracy, 1)}, {interval(g.selector.picks.ci95)}) · recommended for the game {record(g.selector.recommended_for_game)}
@@ -161,11 +188,12 @@ function ReportBody({ r }: { r: ResearchReport }) {
     })}
     <h3>Weekly decisions</h3>
     {r.decisions.length === 0 ? <p className="small muted">No decision yet. Decisions are made every Monday 14:00 UTC from results known by then.</p>
-      : <div className="table-wrap"><table className="table small"><thead><tr><th>Evidence to</th><th>Status</th><th>Rule</th><th>Lower bound</th><th>Effective</th></tr></thead>
+      : <div className="table-wrap"><table className="table small"><thead><tr><th>Evidence to</th><th>Status</th><th>Rule</th><th>Lower bound</th><th>Effective</th><th>Settlement rules</th></tr></thead>
         <tbody>{r.decisions.map((d) => <tr key={d.decision_id}><th scope="row">{dateTime(d.scheduled_for)}</th><td>{STATUS[d.status]}</td>
           <td>{d.rule ? `${modelName(d.rule.source)} · ${FILTER[d.rule.filter]} · ≥${pct(d.rule.threshold)}` : <span className="muted">{d.reason}</span>}</td>
           <td>{d.lower_bound == null ? '—' : `${d.lower_bound >= 0 ? '+' : ''}${num(d.lower_bound)}`}</td>
-          <td>{dateTime(d.decided_at)} – {dateTime(d.effective_until)}</td></tr>)}</tbody></table></div>}
+          <td>{dateTime(d.decided_at)} – {dateTime(d.effective_until)}</td>
+          <td>{d.settlement_version ? <code>{d.settlement_version}</code> : <span className="muted">unknown (not recorded then)</span>}</td></tr>)}</tbody></table></div>}
   </>;
 }
 
@@ -206,14 +234,22 @@ function RetroBody({ r, market }: { r: Retrospective; market: MarketId }) {
     <p className="small">Paired log-loss differences (negative = better, week-block 95%):</p>
     <ul className="small">{Object.entries(m.log_loss_diff).map(([k, v]) => <li key={k}>{k.split('-').map(modelName).join(' − ')}: {diff(v, 4)}</li>)}</ul>
     <div className="table-wrap"><table className="table small">
-      <thead><tr><th>Agreement rule</th><th>Coverage</th><th>Accuracy</th><th>vs primary's confidence</th><th>vs average's confidence</th></tr></thead>
+      <thead><tr><th>Agreement rule</th><th>Coverage</th><th>Accuracy</th><th>vs primary's confidence</th><th>vs average's confidence</th><th>vs best single (chosen on earlier seasons)</th></tr></thead>
       <tbody>{m.agreement.map((a) => <tr key={a.rule}><th scope="row">{ruleLabel(a.rule)}</th>
-        <td>{pct(a.coverage, 0)}</td><td>{pct(a.accuracy, 1)}</td><td>{diff(a.vs_primary_confidence)}</td><td>{diff(a.vs_average_confidence)}</td></tr>)}</tbody>
+        <td>{pct(a.coverage, 0)}</td><td>{pct(a.accuracy, 1)}</td><td>{diff(a.vs_primary_confidence)}</td><td>{diff(a.vs_average_confidence)}</td>
+        <td>{diff(a.vs_best_prior_confidence)}{a.best_prior_games != null && <span className="muted small"> ({a.best_prior_games} games)</span>}</td></tr>)}</tbody>
     </table></div>
+    {m.best_single_prior && <p className="small muted">Best single model per season, chosen on earlier seasons only: {Object.entries(m.best_single_prior)
+      .map(([season, b]) => `${season}: ${b.model ? modelName(b.model) : 'none (no earlier out-of-sample season)'}`).join(' · ')}.</p>}
+    <details className="small"><summary>Reliability (predicted probability of the pick → observed win rate)</summary>
+      <div className="table-wrap"><table className="table"><tbody>{Object.entries(m.methods).map(([n, s]) => <tr key={n}><th scope="row">{modelName(n)}</th>
+        <td className="wrap"><Calibration bins={s.calibration} /></td></tr>)}</tbody></table></div></details>
     <p className="small">Simulated weekly selector: {m.selector_simulation.picks} picks ({pct(m.selector_simulation.coverage, 0)} coverage),
       accuracy {pct(m.selector_simulation.accuracy, 1)}, active {m.selector_simulation.active_weeks}/{m.selector_simulation.weeks} weeks;
       primary's most confident games, same count (ranked within the same span, in hindsight; descriptive): {pct(m.selector_simulation.primary_confidence_same_count?.accuracy, 1)}
-      {' '}({diff(m.selector_simulation.primary_confidence_same_count?.diff)}).</p>
+      {' '}({diff(m.selector_simulation.primary_confidence_same_count?.diff)}); best single model chosen on earlier seasons, same count:
+      {' '}{pct(m.selector_simulation.best_single_confidence_same_count?.accuracy, 1)} ({diff(m.selector_simulation.best_single_confidence_same_count?.diff)}
+      {m.selector_simulation.best_single_confidence_same_count && `, ${m.selector_simulation.best_single_confidence_same_count.games} games`}).</p>
   </>;
 }
 

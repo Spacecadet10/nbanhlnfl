@@ -236,3 +236,94 @@ def test_cached_line_state_reproduces_the_computed_members_and_tracks_inputs(gam
                  "('refresh', '2026-10-12T21:50:00Z', '2026-10-12T21:50:00Z', 'success')")
     new = run(game, "2026-10-12T21:55:00Z")
     assert new["line_state"] == "computed" and not new["errors"], new
+
+
+# --- Gap-closing tests (2026-10-02 follow-up) ----------------------------------------------------------------------------
+def test_line_a_b_a_keeps_every_revision_and_the_current_line_is_latest(game):
+    run(game, "2026-10-12T21:30:00Z")                                              # A: home -1.5
+    quote(game, "2026-10-12T21:35:00Z", spread=("+1.5", "-1.5"), date="2026-10-12T23:00Z")
+    run(game, "2026-10-12T21:40:00Z")                                              # B: home +1.5
+    quote(game, "2026-10-12T21:45:00Z", spread=("-1.5", "+1.5"), date="2026-10-12T23:00Z")
+    run(game, "2026-10-12T21:50:00Z")                                              # A again
+    rows = game.execute("SELECT line, market_quote_id, generated_at FROM research_cohorts WHERE market='spread' "
+                        "ORDER BY generated_at").fetchall()
+    assert [r["line"] for r in rows] == [-1.5, 1.5, -1.5] and len({r["market_quote_id"] for r in rows}) == 3
+    members = game.execute("SELECT line FROM market_forecasts WHERE market='spread' AND model_version LIKE 'research-v3:goals_draw:%' "
+                           "ORDER BY generated_at").fetchall()
+    assert [m["line"] for m in members] == [-1.5, 1.5, -1.5]                       # the A forecast is a new revision, not a retry
+    assert research_live.canonical_cohorts(game, "spread")[0]["line"] == -1.5
+    assert research_live.game_detail(game, GID, "2026-10-12T21:55:00Z")["markets"][-1]["market"]
+
+
+def test_quotes_retrieved_after_the_information_time_are_never_used(game):
+    quote(game, "2026-10-12T21:35:00Z", spread=("+1.5", "-1.5"), total=("o6.5", "u6.5"), ml=("+120", "-140"),
+          date="2026-10-12T23:00Z")
+    run(game, "2026-10-12T21:30:00Z")
+    c = cohorts(game)
+    early = game.execute("SELECT quote_id FROM market_quotes WHERE market='spread' AND retrieved_at='2026-10-12T21:05:00Z'").fetchone()[0]
+    assert c["spread"]["line"] == -1.5 and c["spread"]["market_quote_id"] == early
+    win = json.loads(c["winner"]["bookmaker"])
+    assert win["retrieved_at"] == "2026-10-12T21:05:00Z" and win["quote_table"] == "market_quotes" and win["quote_id"]
+    late = game.execute("SELECT quote_id FROM market_quotes WHERE market='spread' AND retrieved_at='2026-10-12T21:35:00Z'").fetchone()[0]
+    r = dict(c["spread"])
+    r.pop("cohort_id")
+    r.update(idempotency_key="late-quote", market_quote_id=late, line=1.5)
+    with pytest.raises(sqlite3.IntegrityError, match="quote does not match"):
+        game.execute(f"INSERT INTO research_cohorts ({','.join(r)}) VALUES ({','.join('?' * len(r))})", list(r.values()))
+
+
+def test_a_slow_download_that_ends_after_the_start_records_nothing(game, monkeypatch):
+    from app import agreement as ag, market_live as ml, near_tipoff as nt
+    clock = {"now": "2026-10-12T22:58:00Z"}
+    for mod in (nt, ml, ag, research_live):
+        monkeypatch.setattr(mod, "utc_now", lambda: clock["now"])
+
+    def slow_refresh(conn, **kw):        # the download finishes after the scheduled start
+        clock["now"] = "2026-10-12T23:00:05Z"
+        conn.execute("INSERT INTO job_runs (job, started_at, finished_at, status) VALUES ('refresh', ?, ?, 'success')",
+                     ("2026-10-12T22:58:00Z", clock["now"]))
+        return {"status": "success"}
+    monkeypatch.setattr(jobs, "refresh", slow_refresh)
+    monkeypatch.setattr(jobs, "odds_snapshot", lambda conn, **kw: {"status": "skipped"})
+    out = jobs.predict_now(game)
+    assert out["forecasts"] == [] and all(r["reason"] == "after_tipoff" for r in out["refused"])
+    for table in ("research_cohorts", "research_selections", "market_forecasts"):
+        assert game.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0
+    assert game.execute("SELECT count(*) FROM predictions WHERE run_type='live'").fetchone()[0] == 0
+
+
+def test_definition_changes_are_reported_as_separate_groups(game, monkeypatch):
+    monkeypatch.setattr(research_live, "definition", lambda conn: "defA")
+    run(game, "2026-10-12T21:30:00Z")
+    monkeypatch.setattr(research_live, "definition", lambda conn: "defB")
+    run(game, "2026-10-12T21:40:00Z")
+    rep = research_live.report(game, "total", "2026-10-12T21:45:00Z")
+    assert sorted(g["definition"] for g in rep["groups"]) == ["defA", "defB"]
+    assert all(g["cohorts"] == 1 for g in rep["groups"])                        # one canonical cohort per game and definition
+    assert rep["settlement_version"].startswith("settle-")
+
+
+def test_old_rows_without_quote_id_or_settlement_version_stay_unknown(game):
+    research_live.decide_due(game, now="2026-10-12T21:00:00Z")
+    row = game.execute("SELECT evidence FROM selector_decisions LIMIT 1").fetchone()
+    assert json.loads(row["evidence"])["settlement_version"].startswith("settle-")
+    # A decision row recorded before settlement versions existed: reported as unknown, never backfilled.
+    game.execute("INSERT INTO selector_decisions (idempotency_key, sport, market, selector_version, definition, scheduled_for, "
+                 "decided_at, effective_until, status, rule, lower_bound, reason, evidence) VALUES "
+                 "('old', 'nhl', 'reg3', 'selector-v1:old', 'old', '2026-10-05T14:00:00Z', '2026-10-05T15:00:00Z', "
+                 "'2026-10-12T14:00:00Z', 'insufficient_evidence', 'null', NULL, 'r', '{}')")
+    rep = research_live.report(game, "reg3", "2026-10-12T21:05:00Z")
+    old = next(d for d in rep["decisions"] if d["selector_version"] == "selector-v1:old")
+    assert old["settlement_version"] is None
+
+
+def test_slate_reports_each_market_with_line_missing_inputs_and_timing(sealed):
+    add_upcoming(sealed, start="2026-10-12T19:00:00", at="2026-10-12T20:30:00Z")
+    sealed.execute("INSERT INTO job_runs (job, started_at, finished_at, status) VALUES "
+                   "('refresh', '2026-10-12T21:00:00Z', '2026-10-12T21:00:00Z', 'success')")
+    run(sealed, "2026-10-12T21:30:00Z")                    # candidates not ready: missing with reasons
+    s = research_live.slate(sealed, [GID], "2026-10-12T21:35:00Z")[GID]
+    t = s["markets"]["total"]
+    assert t["line_source"] == "model" and t["line"] is not None and t["minutes_before_start"] == 90.0
+    assert set(t["missing"]) == {"goals_draw", "goals_glm"} and t["status"] == "no_pick"
+    assert set(s["markets"]) == {"winner", "reg3", "spread", "total", "team_total_home", "team_total_away"}

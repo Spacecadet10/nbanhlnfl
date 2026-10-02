@@ -122,7 +122,7 @@ function FilteredSlate({ games, selection: sel, showAll, market, research }: { g
         <ul className="game-grid">
           {selected.map((g) => (isWinner
             ? <GameCard key={g.game_id} game={g} policy={sel.policy} research={research?.[g.game_id]} />
-            : <MarketCard key={g.game_id} game={g} statusLabel={statusLabel(g)} />))}
+            : <MarketCard key={g.game_id} game={g} statusLabel={statusLabel(g)} research={research?.[g.game_id]} market={market} />))}
         </ul>
       )}
     </>
@@ -184,7 +184,7 @@ function GameCard({ game: g, policy, research }: { game: GameSummary; policy: Po
           </p>
         )}
         <ModelAgreement game={g} />
-        <ResearchSlateLine entry={research} />
+        <ResearchSlateLine entry={research} market="winner" />
         <div className="card-bottom small muted">
           {g.market ? <>Market: {g.home.abbr} {pct(g.market.home_win_prob)}</> : <span className="warn">No market odds</span>}<span className="matchup-link">Matchup ↗</span>
         </div>

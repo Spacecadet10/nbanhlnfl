@@ -114,7 +114,8 @@ Run from `backend/`:
   per game (`selector_decisions`, `research_selections`; all append-only and two-hour guarded). Recommendations are research
   only: never the primary forecast, never betting advice, no profitability claim. Off switch: `RESEARCH_SELECTION=0` in the job
   environment (primary forecasts unaffected). CLI: `selector-decide`, `research-report --market total`, `combination-study`
-  (the one-time retrospective study; already run, do not rerun for evaluation). The UI shows it on Today (research line),
+  (the one-time retrospective study; already run, do not rerun for evaluation). The UI shows it on Today (research line for the
+  selected market: exact line, status, missing inputs, minutes before start),
   Game (Model selection card), History (Research recommendations) and Performance (forward research + retrospective study).
 - Odds (free, no key): each snapshot appends DraftKings moneylines with their retrieval time. The last quote confirmed
   before tipoff is our own closing snapshot (`coverage` → `closing_lines`, with minutes before tipoff). It is not a

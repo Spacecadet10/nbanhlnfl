@@ -269,3 +269,19 @@ Worktree `../nba-predictor-selector` (branch `selector-dev`), merged into `shado
   `.claude/scheduled_tasks.lock`, a Claude Code scheduler lock created by this session; removed, guard unchanged).
 - **Not verified live yet:** a real research cohort → settlement → weekly decision lifecycle (first NHL window tonight from
   ~20:30 UTC; first scheduled decision 2026-10-05 14:00 UTC).
+
+### Gap closing 1–4 and 7 (2026-10-02 ~13:30 UTC, Claude)
+- **Tests:** `pytest -q` from `backend/` → **361 passed** (was 353). New: line A → B → A keeps three cohorts and three research
+  member revisions with the current line latest; quotes retrieved after the information time are never used (trigger + winner
+  quote table/id); a slow download ending after the start records nothing (primary, markets, cohorts, selections); definition
+  changes reported as separate groups; old decision rows without a settlement version stay unknown; per-market slate entries
+  (line, missing inputs, timing); NBA path through the same two-hour trigger (`tests/test_research_nba.py`); frontend type ↔ API
+  field contract for every research screen (`tests/test_research_contract.py`). `npm run typecheck` and `npm run build` pass.
+- **Supplementary study pass** (scratch copies; user-approved): every run-2 figure reproduced exactly; adds the earlier-seasons
+  best-single comparison and reliability tables (docs/COMBINATION_RESULTS.md).
+- **Browser:** demo Today winner view shows per-market research lines with timing and missing-input reasons; NHL puck line /
+  total views checked against the NHL rehearsal scratch store served with its clock pinned to the rehearsal time (port 8013,
+  scratch only) — exact bookmaker line, status, reason, minutes before start. Performance shows average and best-single columns,
+  reliability tables (labelled "no calibration is fitted"), settlement-rules version per decision (unknown for older rows),
+  retrospective best-single-by-earlier-season line. 390-px frames: page width ≤ 390 on Performance, Today (winner and total
+  views) and Game. Tab closed; temporary servers (8011-8013, 5181-5183) stopped.

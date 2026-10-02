@@ -125,9 +125,7 @@ def record(conn, *, game_ids: list, winner_run: Optional[dict], history: Optiona
                 continue
             err = (winner_run or {}).get("errors", {}).get(name)
             missing[name] = f"error: {err}" if err else "skipped: stale or unavailable input, or not fitted"
-        q = near_tipoff._market(conn, gid, now)
-        book = None if q is None else {"p": [q["home_prob_devig"], 0.0, 1 - q["home_prob_devig"]],
-                                       "provider": q["provider"], "retrieved_at": q["retrieved_at"]}
+        book = _winner_quote(conn, sport, gid, now)
         stack = None
         if winner_stack is not None and all(n in {m["name"] for m in members} for n in CORE[sport]):
             vecs = [next(m["p"] for m in members if m["name"] == n) for n in CORE[sport]]
@@ -192,7 +190,7 @@ def record(conn, *, game_ids: list, winner_run: Optional[dict], history: Optiona
                 if quote is not None:
                     qr = conn.execute("SELECT * FROM market_quotes WHERE quote_id=?", (quote,)).fetchone()
                     book = {"p": [qr["p_a_devig"], qr["p_mid_devig"] or 0.0, qr["p_b_devig"]], "provider": qr["provider"],
-                            "retrieved_at": qr["retrieved_at"], "quote_id": quote}
+                            "retrieved_at": qr["retrieved_at"], "quote_table": "market_quotes", "quote_id": quote}
                 st = stacks.get(market)
                 stack = None
                 if st is not None and not missing:
@@ -206,6 +204,40 @@ def record(conn, *, game_ids: list, winner_run: Optional[dict], history: Optiona
     if out["errors"] or any(v for v in out["skipped"].values()):
         out["status"] = "partial"
     return out
+
+
+def _winner_quote(conn, sport: str, game_id: str, at: str) -> Optional[dict]:
+    """Latest current moneyline retrieved at or before `at`, with the table and id of the stored quote."""
+    if sport == "nba":
+        q = conn.execute("SELECT quote_id, home_prob_devig AS p, retrieved_at, provider FROM odds_quotes WHERE game_id=? "
+                         "AND price_label='current' AND retrieved_at<=? ORDER BY retrieved_at DESC, quote_id DESC LIMIT 1",
+                         (game_id, at)).fetchone()
+        table = "odds_quotes"
+    else:
+        q = conn.execute("SELECT quote_id, p_a_devig AS p, retrieved_at, provider FROM market_quotes WHERE game_id=? "
+                         "AND market='winner' AND price_label='current' AND retrieved_at<=? "
+                         "ORDER BY retrieved_at DESC, quote_id DESC LIMIT 1", (game_id, at)).fetchone()
+        table = "market_quotes"
+    if q is None:
+        return None
+    return {"p": [q["p"], 0.0, 1 - q["p"]], "provider": q["provider"], "retrieved_at": q["retrieved_at"],
+            "quote_table": table, "quote_id": q["quote_id"]}
+
+
+def prior_best(sport: str, market: str) -> Optional[str]:
+    """Strongest single member chosen on EARLIER data: lowest log loss in the recorded retrospective study (development
+    seasons, all before any live game). Never chosen on the live results it is compared with. None if unavailable."""
+    from .combination_research import compact
+    m = compact(sport).get("markets", {}).get(market)
+    return m["best_single_by_log_loss"] if m else None
+
+
+def settlement_version() -> str:
+    """Identity of the rules that turn a stored cohort into win / loss / push / void / unscorable: markets.settle, the
+    research void rule and the pick outcome rule. Recorded with every decision and report."""
+    import inspect
+    src = inspect.getsource(markets.settle) + inspect.getsource(state) + inspect.getsource(selector.outcome)
+    return "settle-" + hashlib.sha256(src.encode()).hexdigest()[:12]
 
 
 def _cohort(sport, g, market, line, source, quote, book, defn, primary, info_at, generated, members, missing, exp, stack,
@@ -499,6 +531,7 @@ def decide_due(conn, *, now: Optional[str] = None, write: bool = True, defn: Opt
         summary = {k: d[k] for k in ("settled_items", "rules", "z", "min_picks", "min_coverage", "min_weeks", "eligible_rules")}
         top = sorted([s for s in d["stats"] if s["lower"] is not None], key=lambda s: -s["lower"])[:10]
         ev = {**summary, "evidence_until": sched, "sources": sources(sport, market), "top_rules": top,
+              "settlement_version": settlement_version(),
               "weeks": sorted({i["week"] for i in items})}
         if write:
             conn.execute(
@@ -632,17 +665,29 @@ def game_detail(conn, game_id: str, as_of: Optional[str] = None) -> dict:
 
 
 def slate(conn, game_ids: list, as_of: Optional[str] = None) -> dict:
-    """Per game: the current research recommendation, 'no_pick', or 'none' when no research cohort exists."""
+    """Per game: the current research recommendation, 'no_pick', or 'none' when no research cohort exists; plus, per market,
+    its own research status with the exact line, missing-input reasons and timing."""
     out = {}
     for gid in game_ids:
         d = game_detail(conn, gid, as_of)
+        per = {}
+        for m in d["markets"]:
+            sel = m["selection"]
+            per[m["market"]] = {
+                "status": "not_evaluated" if sel is None else sel["status"],
+                "pick": m["sides"][sel["side"]] if sel and sel["side"] else None,
+                "probability": sel["probability"] if sel else None, "threshold": sel["threshold"] if sel else None,
+                "recommended": bool(sel and sel["recommended"]),
+                "reason": "recorded but not yet evaluated by the selector" if sel is None else sel["reason"],
+                "line": m["line"], "line_source": m["line_source"], "line_label": m["line_label"],
+                "missing": m["missing"], "generated_at": m["generated_at"],
+                "minutes_before_start": m["minutes_before_start"], "start_changed": m["start_changed"]}
         if not d["markets"]:
-            out[gid] = {"status": "none"}
+            out[gid] = {"status": "none", "markets": {}}
         elif d["recommendation"]:
-            out[gid] = {"status": "pick", **d["recommendation"]}
+            out[gid] = {"status": "pick", **d["recommendation"], "markets": per}
         else:
-            reasons = {m["market"]: (m["selection"] or {}).get("reason", "no selection") for m in d["markets"]}
-            out[gid] = {"status": "no_pick", "reasons": reasons}
+            out[gid] = {"status": "no_pick", "reasons": {k: v["reason"] for k, v in per.items()}, "markets": per}
     return out
 
 
@@ -685,23 +730,32 @@ def report(conn, market: str, as_of: Optional[str] = None) -> dict:
                    if (side := combine.pick(i["vectors"][s], market)) is not None]
             vecs, real = [i["vectors"][s] for i in have], [i["realised"] for i in have]
             from . import metrics
+            from .combination_research import _summary as _calib
             per_source[s] = {"cohorts": len(have), "coverage": len(have) / len(settled) if settled else None, **_record(res),
                              "ties": len(have) - len(res),
+                             "calibration": _calib(market, have, s)["calibration"] if have else [],
                              "log_loss": metrics.log_loss_multi(vecs, real), "brier": metrics.brier_multi(vecs, real),
                              "thresholds": [{"threshold": t, **_record([selector.outcome(market, side, i["realised"]) for i in have
                                                                         if (side := combine.pick(i["vectors"][s], market)) is not None
                                                                         and i["vectors"][s][side] + 1e-9 >= t])}
                                             for t in selector.thresholds(market)]}
         primary = srcs[0]
+        best = prior_best(sport, market)
+
+        def top_record(src, count):
+            have = [i for i in settled if src in i["vectors"]]
+            top = sorted(have, key=lambda i: -max(i["vectors"][src][k] for k in combine.sides(market)))[:count]
+            return _record([selector.outcome(market, combine.pick(i["vectors"][src], market), i["realised"])
+                            for i in top if combine.pick(i["vectors"][src], market) is not None])
         agree = {}
         for kind in ("majority", "unanimous"):
             chosen = [i for i in settled if i["agreement"][f"{kind}_side"]]
             res = [selector.outcome(market, SIDE[i["agreement"][f"{kind}_side"]], i["realised"]) for i in chosen]
-            have = [i for i in settled if primary in i["vectors"]]
-            top = sorted(have, key=lambda i: -max(i["vectors"][primary][k] for k in combine.sides(market)))[:len(chosen)]
             agree[kind] = {**_record(res), "cohorts": len(chosen), "coverage": len(chosen) / len(settled) if settled else None,
-                           "primary_confidence_same_count": _record([selector.outcome(market, combine.pick(i["vectors"][primary], market), i["realised"])
-                                                                     for i in top if combine.pick(i["vectors"][primary], market) is not None])}
+                           "primary_confidence_same_count": top_record(primary, len(chosen)),
+                           "average_confidence_same_count": top_record("average", len(chosen)),
+                           "best_single": best, "best_single_basis": "lowest log loss in the retrospective study (earlier seasons)",
+                           "best_single_confidence_same_count": top_record(best, len(chosen)) if best else None}
         weeks: dict = {}
         for i in settled:
             w = weeks.setdefault(i["week"], {"week": i["week"], "cohorts": 0, "primary": [], "average": []})
@@ -723,11 +777,13 @@ def report(conn, market: str, as_of: Optional[str] = None) -> dict:
                        "line_sources": {k: sum(r["line_source"] == k for r in rs) for k in ("market", "model")},
                        "sources": per_source, "agreement": agree, "periods": periods, "bookmaker": bookmaker,
                        "selector": _selector_record(conn, market, defn, as_of, primary)})
-    decisions = [dict(d) | {"rule": json.loads(d["rule"]), "evidence": json.loads(d["evidence"])} for d in conn.execute(
+    # Decisions written before settlement versions were recorded keep None ("unknown"); nothing is backfilled.
+    decisions = [dict(d) | {"rule": json.loads(d["rule"]), "evidence": json.loads(d["evidence"]),
+                            "settlement_version": json.loads(d["evidence"]).get("settlement_version")} for d in conn.execute(
         "SELECT * FROM selector_decisions WHERE market=? AND decided_at<=? ORDER BY scheduled_for DESC, decision_id DESC LIMIT 12",
         (market, as_of))]
     return {"sport": sport, "market": market, "as_of": as_of, "kind": "prospective research", "groups": groups,
-            "decisions": decisions, "selector_version": selector.version(),
+            "decisions": decisions, "selector_version": selector.version(), "settlement_version": settlement_version(),
             "note": "Two-hour forward research only, separate from primary records and from the retrospective study. One canonical "
                     "cohort per game and definition. Intervals are Wilson 95%, not adjusted for game dependence or for "
                     "looking at many rows; the selector's own rule uses a Bonferroni-adjusted bound."}
@@ -805,7 +861,8 @@ def history(conn, as_of: Optional[str] = None, limit: int = 200) -> dict:
                      "threshold": rec["threshold"], "rule": json.loads(rec["rule"]) if rec["rule"] else None,
                      "selector_version": rec["selector_version"], "generated_at": rec["generated_at"],
                      "minutes_before_start": _minutes(rec["tipoff_at"], rec["generated_at"]), "result": result})
-    return {"kind": "research", "games_with_selection_run": len(games), "games_without_pick": no_pick,
+    return {"kind": "research", "settlement_version": settlement_version(),
+            "games_with_selection_run": len(games), "games_without_pick": no_pick,
             "record": {**_record([r for r in results if r in ("win", "loss", "push")]),
                        "pending": results.count("pending"), "void": results.count("void"), "unscorable": results.count("unscorable")},
             "rows": rows[:limit], "total": len(rows)}

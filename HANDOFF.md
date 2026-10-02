@@ -1,5 +1,21 @@
 # Current handoff
 
+## Gap closing 1–4 and 7 — Claude, 2026-10-02 ~13:30 UTC (current; review requested)
+- User asked to close five reported gaps, keep abstention, add reliability tables only, choose the best single model on earlier
+  data, keep old rows' missing provenance unknown, and show research per selected market. No new candidate, rule, threshold
+  or experiment was added.
+- **1 Best single at matched coverage:** study picks it per season from earlier out-of-sample seasons only (`best_prior`); the live
+  report uses the study's choice (earlier seasons). Supplementary study pass reproduced every earlier figure; conclusion
+  unchanged (docs/COMBINATION_RESULTS.md "Comparison with the strongest single model").
+- **2 Reliability tables** for every source (live report and study), labelled; no calibration fitted.
+- **3 Tests:** 8 new (A → B → A, late quotes, slow download past start, definition groups, unknown settlement version, slate per
+  market, NBA two-hour path, frontend/API contract). **361 passed.**
+- **4 Storage:** winner cohorts record quote table + id (NBA `odds_quotes`, NHL `market_quotes`); decisions record
+  `settlement_version` in evidence; reports expose it. Rows written before this change stay unknown; no migration, no backfill.
+- **7 Today:** research line for the selected market in every market view (line, source, status/reason, missing inputs, minutes).
+- **Review checklist:** `git diff 30b689e..HEAD`; SMOKE_TEST "Gap closing 1–4 and 7"; MODEL_SELECTION amendment of the same date.
+- **Still pending:** first live research cohort → settlement → weekly decision (NHL window tonight; decision Mon 2026-10-05 14:00 UTC).
+
 ## Training-repository advisory — Codex, 2026-10-02
 - Read-only code inspection confirms logistic/GBT and NBA score candidates fit earlier-season examples at season boundaries; weekly rule selection is a different process from model refitting. No training-capacity ceiling established.
 - Reviewed upstream READMEs/docs: github.com/catboost/catboost (candidate learner), stanfordmlgroup/ngboost (probabilistic learner), optuna/optuna (bounded tuning), dblackrun/pbpstats (NBA possessions/lineups), sportsdataverse/fastRhockey (NHL play-by-play/goalie data access). Recommendations only, not installed, benchmarked or source-access verified locally.
