@@ -65,6 +65,7 @@ class XgInputs:
         self.fits: dict[int, object] = {}
         self.games: dict[str, deque] = defaultdict(lambda: deque(maxlen=WINDOW))
         self.valued = self.unvalued = 0
+        self.lines: set = set()                            # games whose shots were delivered (stale-input check)
 
     def _fit(self, season: int):
         if season not in self.fits:
@@ -79,6 +80,7 @@ class XgInputs:
 
     def update_box(self, e) -> None:
         g = e.game
+        self.lines.add(g.game_id)
         vs = vectors(e.shots)
         model = self._fit(g.season)        # fitted before this game's own shots are added
         self.shots[g.season].extend((v, s.goal) for s, v in vs)

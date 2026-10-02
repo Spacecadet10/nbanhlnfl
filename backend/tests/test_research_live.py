@@ -352,3 +352,50 @@ def test_a_fit_register_failure_never_blocks_forecasts_or_cohorts(game, monkeypa
     monkeypatch.setattr(fit_register, "record", broken)
     out = run(game, "2026-10-12T21:30:00Z")
     assert out["cohorts_created"] > 0 and "line_members" not in out["errors"] and out["fit_register_errors"]
+
+
+# --- NHL xG shadow member (docs/MODEL_SELECTION.md §12) ---------------------------------------------------------------------
+def test_xg_shadow_member_is_recorded_but_never_votes(game):
+    from app import nhl_shots
+    from test_nhl_xg import fake_fetch
+    nhl_shots.import_pending(game, None, pause=0, fetch=fake_fetch(game), log=lambda *_: None)
+    out = run(game, "2026-10-12T21:30:00Z")
+    c = cohorts(game)["winner"]
+    members = {m["name"] for m in json.loads(c["members"])}
+    assert "hockey_logistic_xg" in members, (members, out)
+    agree = json.loads(c["agreement"])
+    assert "hockey_logistic_xg" not in agree["picks"] and agree["expected"] == 4
+    assert "hockey_logistic_xg" in research_live.sources("nhl", "winner")
+    row = game.execute("SELECT model_version FROM predictions WHERE model_version LIKE 'research-v2:hockey_logistic_xg:%'").fetchone()
+    assert row is not None
+    assert game.execute("SELECT count(*) FROM model_fits WHERE member='hockey_logistic_xg'").fetchone()[0] == 1
+
+
+def test_xg_member_skips_when_recent_shots_are_missing(game, monkeypatch):
+    from app import agreement as ag
+    monkeypatch.setattr(ag, "STALE_SHOT_GAMES", 3)
+    # no shots imported at all: the member is skipped with a reason, every other member still records
+    add_upcoming(game, gid=2026020002, start="2026-10-11T19:00:00", state=7, hs=3, vs=1, period=3, at="2026-10-12T20:00:00Z")
+    out = run(game, "2026-10-12T21:30:00Z")
+    c = cohorts(game)["winner"]
+    assert "hockey_logistic_xg" in json.loads(c["missing"])
+    assert {m["name"] for m in json.loads(c["members"])} >= {"hockey_elo", "goals_poisson"}
+
+
+def test_predict_now_imports_nhl_shots_in_a_bounded_step(game, monkeypatch):
+    from test_nhl_xg import fake_fetch
+    monkeypatch.setattr(jobs, "refresh", lambda conn, **kw: {"status": "skipped"})
+    monkeypatch.setattr(jobs, "odds_snapshot", lambda conn, **kw: {"status": "skipped"})
+    out = jobs.predict_now(game, now="2026-10-12T21:30:00Z", pbp_kw={"fetch": fake_fetch(game), "limit": 5})
+    assert out["steps"]["nhl_pbp"] == "success"
+    assert game.execute("SELECT count(*) FROM nhl_pbp_imports").fetchone()[0] == 5
+
+
+def test_line_shadow_members_never_vote_or_enter_the_average():
+    g = {"game_id": "g", "tipoff_at": "2026-10-21T23:00:00Z"}
+    core = [{"name": n, "ref": {}, "p": [0.6, 0.0, 0.4]} for n in research_live.LINE_MEMBERS["nba"]]
+    shadow = [{"name": n, "ref": {}, "p": [0.1, 0.0, 0.9]} for n in research_live.SHADOW_LINE_MEMBERS["nba"]]
+    c = research_live._cohort("nba", g, "total", 220.5, "model", None, None, "d", "points_normal", "t", "t", core + shadow, {},
+                              research_live.LINE_MEMBERS["nba"], None, None)
+    assert c["agreement"]["unanimous"] and set(c["agreement"]["picks"]) == set(research_live.LINE_MEMBERS["nba"])
+    assert abs(c["average"][0] - 0.6) < 1e-9

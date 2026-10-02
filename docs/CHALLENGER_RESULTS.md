@@ -32,3 +32,24 @@ games at the same count.
   So weaker members add at most small probability information; agreement selection added none beyond confidence.
 - **Limit:** line markets are scored at the primary's model-only line (no historical bookmaker lines), so "agreement against
   the bookmaker" can be measured only prospectively — which the live research cohorts now record.
+
+## NHL shot-quality candidate `hockey_logistic_xg` (§12; design dc14004 before any fetch; code 8b29127; run 14:50 UTC) — **qualifies; prospective shadow**
+Shots for all 7,515 eligible development-season games (2016–2021) imported from api-web.nhle.com into the live NHL store
+(append-only `nhl_pbp_imports` / `nhl_shots`, raw responses cached; 0 errors, 0 incomplete; 641,168 unblocked attempts;
+policy `historical_backfill`, i.e. assumed available with each result). Evaluated on a `.backup` copy; report
+`data/reports/nhl-xg-20261002/report.json` (dataset 5da8e01fc710d6a2). 2016 has no earlier xG fit (1,321 games unvalued, warm-up).
+| Development games 2018–2021 (4,877) | Brier | Log loss | Accuracy |
+|---|---|---|---|
+| `hockey_elo` (primary) | 0.24072 | 0.67427 | 57.7% |
+| `hockey_logistic` | 0.24055 | 0.67391 | 57.7% |
+| `hockey_logistic_xg` | **0.23945** | **0.67162** | 58.5% |
+- Brier(candidate − `hockey_logistic`) −0.0011, 95% [−0.0019, −0.0002]; vs `hockey_elo` −0.0013 [−0.0023, −0.0002]
+  (133 week blocks). Better in each season: 2018 0.2386 vs 0.2395, 2019 0.2415 vs 0.2427, 2020 0.2429 vs 0.2441, 2021
+  0.2333 vs 0.2344. Accuracy +0.8 points, interval includes 0. Last-fit weights: `ev_xg_share_diff` +0.12,
+  `st_xg_net_diff` +0.05 (standardised), while the goals-based `xg_diff` fell to −0.03.
+- Caveats: development seasons were used before for other selection; the historical availability time is an assumption
+  (same as the results); single pre-set candidate, no search. This is a reason to record it prospectively, not a promotion.
+- **Live (from merge):** separately versioned winner member `research-v2:hockey_logistic_xg:<definition>`; recorded and
+  scored as a research source, never a vote, average or stacker input; skipped with a reason when no shots have been valued
+  or a team's last 3 current-season finals lack shots; shots for new finals are imported in the two-hour cycle and the nightly
+  NHL job (≤ 60 games per cycle). Promotion only by the written rule after prospective evidence.

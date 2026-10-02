@@ -61,7 +61,8 @@ def import_game(conn, g, body: bytes, retrieved_at: str) -> dict:
 
 
 def import_pending(conn, seasons=None, limit: Optional[int] = None, pause: float = 0.25,
-                   fetch: Callable = nhl_pbp.fetch, log: Callable[[str], None] = print) -> dict:
+                   fetch: Optional[Callable] = None, log: Callable[[str], None] = print) -> dict:
+    fetch = fetch or nhl_pbp.fetch
     todo = pending(conn, seasons)[:limit] if limit else pending(conn, seasons)
     out = {"pending": len(todo), "imported": 0, "incomplete": 0, "errors": {}}
     for i, g in enumerate(todo):

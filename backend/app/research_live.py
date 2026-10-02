@@ -72,7 +72,8 @@ def definition(conn) -> str:
 
 
 def sources(sport: str, market: str) -> list[str]:
-    members = list(agreement.NAMES[sport]) if market == "winner" else list(LINE_MEMBERS[sport] + SHADOW_LINE_MEMBERS[sport])
+    members = (list(agreement.NAMES[sport] + agreement.SHADOW[sport]) if market == "winner"
+               else list(LINE_MEMBERS[sport] + SHADOW_LINE_MEMBERS[sport]))
     return members + ["average", "stack"]
 
 
@@ -125,7 +126,7 @@ def record(conn, *, game_ids: list, winner_run: Optional[dict], history: Optiona
         members = [{"name": f["model"], "ref": {"table": "predictions", "id": f.get("prediction_id")},
                     "p": [f["home_win_prob"], 0.0, 1 - f["home_win_prob"]]} for f in fc]
         missing = {}
-        for name in expected(sport, "winner"):
+        for name in expected(sport, "winner") + agreement.SHADOW[sport]:
             if name in {m["name"] for m in members}:
                 continue
             err = (winner_run or {}).get("errors", {}).get(name)
@@ -269,7 +270,8 @@ def _cohort(sport, g, market, line, source, quote, book, defn, primary, info_at,
     vecs = {m["name"]: m["p"] for m in members}
     complete = all(n in vecs for n in exp)
     avg = list(combine.average([vecs[n] for n in exp])) if complete else None
-    agree = combine.agreement(vecs, list(expected(sport, market)), market)
+    exp_all = list(expected(sport, market))
+    agree = combine.agreement({n: v for n, v in vecs.items() if n in exp_all}, exp_all, market)   # shadows never vote
     if stack is None:
         stack_note = "incomplete cohort" if not complete else (stack_reason or "no stacker")
     return {"sport": sport, "game_id": g["game_id"], "market": market, "line": line, "line_source": source,

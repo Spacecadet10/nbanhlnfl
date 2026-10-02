@@ -293,3 +293,8 @@ change an issued forecast (append-only ledger and cohort tables) and never rewri
   warm-up, never scored; every cadence is identical through it.
 - **2026-10-02, after the §9 run (correction only):** the §9 heading first said "~13:10 UTC"; the design commit 602aeab is
   12:57 UTC and the real run started 13:02 UTC. Results: docs/RETRAIN_CADENCE_RESULTS.md.
+- **2026-10-02, §12 result and integration (after the run):** the candidate met its rule (docs/CHALLENGER_RESULTS.md) and is
+  recorded prospectively as a shadow winner member (`agreement.SHADOW`). Shadow members (NBA weekly line members, NHL xG) never
+  vote, never enter averages or stackers, and a shadow skip or error is reported (`partial`) without failing the run. Fix found
+  while integrating: line-market agreement had counted the weekly shadow members' votes since 9fac164 (never deployed with
+  cohorts: no NBA cohort exists before 2026-10-20); agreement now uses the registered members only (test added).

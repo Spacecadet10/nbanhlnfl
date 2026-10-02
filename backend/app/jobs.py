@@ -254,6 +254,23 @@ def boxscores(conn: sqlite3.Connection, *, fetch: Callable[[str], bytes] = espn.
     return _finish(conn, run_id, "failed" if failed else "success", attempts, detail)
 
 
+NHL_PBP_PER_RUN = 60          # bounded per cycle; a backlog is worked off over later cycles
+
+
+def nhl_pbp(conn: sqlite3.Connection, *, fetch: Optional[Callable] = None, limit: int = NHL_PBP_PER_RUN) -> dict:
+    """NHL shot import for finals of the latest two seasons that have none yet (docs/MODEL_SELECTION.md §12), reported as
+    a step of the calling job. Feeds only the xG research member; never gates a primary forecast."""
+    from . import nhl_shots
+    seasons = [r[0] for r in conn.execute("SELECT DISTINCT season FROM games WHERE status='final' ORDER BY season DESC LIMIT 2")]
+    try:
+        kw = {"fetch": fetch} if fetch else {}
+        out = nhl_shots.import_pending(conn, seasons, limit=limit, log=lambda _m: None, **kw)
+    except Exception as exc:
+        return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+    status = "failed" if out["errors"] and not out["imported"] else "success" if out["imported"] else "skipped"
+    return {"status": status, **out, "errors": dict(list(out["errors"].items())[:10]), "seasons": seasons}
+
+
 def injury_reports(conn: sqlite3.Connection, *, enabled: Optional[bool] = None, **kw) -> dict:
     """Raw injury-report collection (app/injuries.py), logged as job 'injuries'. Makes no request and writes nothing
     unless collection is switched on (config.injury_collection_enabled()). A dry run never needs the switch."""
@@ -271,7 +288,8 @@ def injury_reports(conn: sqlite3.Connection, *, enabled: Optional[bool] = None, 
 
 
 def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optional[str] = None,
-                refresh_kw: Optional[dict] = None, odds_kw: Optional[dict] = None, box_kw: Optional[dict] = None, injury_kw: Optional[dict] = None) -> dict:
+                refresh_kw: Optional[dict] = None, odds_kw: Optional[dict] = None, box_kw: Optional[dict] = None, injury_kw: Optional[dict] = None,
+                pbp_kw: Optional[dict] = None) -> dict:
     """Near-tipoff forecasts (app/near_tipoff.py): refresh schedule and results, odds and possession stats, then
     forecast games tipping off within two hours with the frozen Elo, or refuse them with a reason. The forecast is
     time-stamped after the refresh finishes. The possession refresh does not gate the Elo forecast (Elo does not use
@@ -282,6 +300,8 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
         from . import availability
         if (availability.research_dir() / 'forward-facts.json').exists():
             steps["injuries"] = injury_reports(conn, enabled=True, **(injury_kw or {}))
+    elif research_live.enabled():
+        steps["nhl_pbp"] = nhl_pbp(conn, **(pbp_kw or {}))
     run_id = None if dry_run else _start(conn, "near_tipoff")
     try:
         out = near_tipoff.predict_now(conn, now=now, write=not dry_run)
@@ -394,6 +414,8 @@ def daily(conn: sqlite3.Connection, *, force_refresh: bool = False, **refresh_kw
     out = {"refresh": refresh(conn, force=force_refresh, **refresh_kw)}
     if sport(conn) == "nba" and config.shadow_enabled():
         out["boxscores"] = boxscores(conn)
+    if sport(conn) == "nhl" and research_live.enabled():
+        out["nhl_pbp"] = nhl_pbp(conn)
     out["score"] = score(conn)
     out["two_hour_score"] = near_tipoff.score(conn)
     out["market_score"] = market_live.score(conn, policy="near_tipoff")

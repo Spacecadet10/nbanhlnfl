@@ -16,6 +16,9 @@ FEATURE_VERSION = "agreement-research-v2:two-hour"
 ARCHIVE_FEATURE = "agreement-research-v1:pregame"
 NAMES = {"nba": ("elo", "logistic", "logistic_v2", "efficiency_margin", "gbt_v1", "availability_two_hour"),
          "nhl": ("hockey_elo", "goals_poisson", "hockey_logistic", "hockey_gbt")}
+# Separately versioned shadow members (docs/MODEL_SELECTION.md §12): recorded and scored, never votes, averages or stacker inputs.
+SHADOW = {"nba": (), "nhl": ("hockey_logistic_xg",)}
+STALE_SHOT_GAMES = 3      # a team's most recent current-season finals that must have imported shots (xG member)
 
 
 def models(conn):
@@ -23,10 +26,12 @@ def models(conn):
     decision, primary = eng.primary(conn)
     if eng.sport == "nhl":
         from .models.hockey import GoalsConfig, GoalsPoisson, hockey_logistic, hockey_gbt
+        from .models.hockey_xg import hockey_logistic_xg
         gc = GoalsConfig(**decision["goals_config"])
         return [primary, GoalsPoisson(gc, sports.NHL.rating_key),
                 hockey_logistic(primary.cfg, gc, sports.NHL.rating_key),
-                hockey_gbt(primary.cfg, gc, sports.NHL.rating_key)]
+                hockey_gbt(primary.cfg, gc, sports.NHL.rating_key),
+                hockey_logistic_xg(primary.cfg, gc, sports.NHL.rating_key)]
     from .models.logistic import LogisticElo, LogisticV2
     from .models.efficiency import EfficiencyMargin
     from .models.gbt import GradientBoostedTrees
@@ -69,6 +74,11 @@ def predict(conn, *, now=None, write=True, game_ids=None, collect=None):
         if e.game.game_id in known and max(e.available_at, known[e.game.game_id].result_available_at) <= now]
     built = models(conn)
     ids = {g['game_id'] for g in eligible}
+    shots = []
+    if eng.sport == 'nhl':     # shots reach only the xG member, once both they and the result were available
+        from . import nhl_shots
+        shots = [e for e in nhl_shots.load_events(conn, rows)
+                 if max(e.available_at, known[e.game.game_id].result_available_at) <= now]
     if eng.sport == 'nba' and len(built) == 5:
         try:
             from .availability_live import build
@@ -77,7 +87,8 @@ def predict(conn, *, now=None, write=True, game_ids=None, collect=None):
             out['errors']['availability_two_hour'] = f"{type(exc).__name__}: {exc}"
     # Identity does not change merely because an input is missing on one run.
     digest = definition_hash(models(conn))
-    dataset = hashlib.sha256(json.dumps([eng.dataset_version(rows), backtest.box_version(events), digest,
+    shots_version = hashlib.sha256(json.dumps(sorted((e.game.game_id, e.fetch_id) for e in shots)).encode()).hexdigest()[:16]
+    dataset = hashlib.sha256(json.dumps([eng.dataset_version(rows), backtest.box_version(events), shots_version, digest,
         [(m.name, getattr(m, "input_version", None)) for m in built],
         [(g['game_id'], g['tipoff_at'], g['home_team_id'], g['away_team_id'], g['neutral_site']) for g in schedule]],
         sort_keys=True).encode()).hexdigest()[:24]
@@ -93,7 +104,7 @@ def predict(conn, *, now=None, write=True, game_ids=None, collect=None):
             from dataclasses import replace
             training = [replace(r, cutoff_at=live._ts(live._parse(r.game.tipoff_at)-near_tipoff.WINDOW))
                         for r in rows] if getattr(model, 'training_two_hour', False) else rows
-            history = backtest.run(model, training, events, deliver_until=now)
+            history = backtest.run(model, training, shots if hasattr(model, 'xg') else events, deliver_until=now)
             if collect is not None:
                 collect[model.name] = history
             forecasts = []
@@ -106,6 +117,12 @@ def predict(conn, *, now=None, write=True, game_ids=None, collect=None):
                 if eng.sport == 'nba' and eff is not None and any(
                     gid not in eff.lines for team in (game.home_team_id, game.away_team_id)
                     for gid in recent.get((game.season, team), [])[:shadow.STALE_RECENT_GAMES]):
+                    out['skipped'].setdefault(model.name, []).append(game.game_id)
+                    continue
+                xg = getattr(model, 'xg', None)
+                if xg is not None and (xg.valued == 0 or any(
+                    gid not in xg.lines for team in (game.home_team_id, game.away_team_id)
+                    for gid in recent.get((game.season, team), [])[:STALE_SHOT_GAMES])):
                     out['skipped'].setdefault(model.name, []).append(game.game_id)
                     continue
                 if hasattr(model, 'oos_from_season') and model.oos_from_season() is None:
@@ -135,8 +152,11 @@ def predict(conn, *, now=None, write=True, game_ids=None, collect=None):
                     out.setdefault('fit_register_errors', {})[model.name] = f"{type(exc).__name__}: {exc}"
         except Exception as exc:
             out['errors'][model.name] = f"{type(exc).__name__}: {exc}"
-    if out['errors'] or out['skipped']:
+    core = lambda d: [k for k in d if k not in SHADOW[eng.sport]]   # a shadow member is reported, never fails the run
+    if core(out['errors']) or core(out['skipped']):
         out['status'] = 'failed'
+    elif out['errors'] or out['skipped']:
+        out['status'] = 'partial'
     return out
 
 
