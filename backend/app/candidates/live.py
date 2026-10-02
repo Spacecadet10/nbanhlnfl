@@ -157,8 +157,12 @@ def _record_adoption(conn, spec, rec: dict) -> bool:
     season, training-set fingerprint) and records whether the refit reproduced its content digest (append-only)."""
     rec["candidate"] = spec.name
     # Looked up before this cycle registers its own fit, so a match was registered by the earlier code.
+    # Only a fit registered before digests existed (before migration 0020) can be the earlier code's: a retried adoption
+    # must never compare the refit with its own registration.
     fit = conn.execute("SELECT fit_id, first_used_at, params_digest FROM model_fits WHERE member=? AND definition=? "
-                       "AND trained_season=? AND results_fingerprint=? ORDER BY first_used_at, fit_id LIMIT 1",
+                       "AND trained_season=? AND results_fingerprint=? AND first_used_at < "
+                       "COALESCE((SELECT applied_at FROM schema_migrations WHERE version=20), '9999') "
+                       "ORDER BY first_used_at, fit_id LIMIT 1",
                        (f"cand:{spec.name}", rec["definition"], rec["season"], rec["results_fingerprint"])).fetchone() \
         if _has(conn, "model_fits") else None
     rec["registered_fit"] = None if fit is None else {"fit_id": fit[0], "first_used_at": fit[1], "params_digest": fit[2]}

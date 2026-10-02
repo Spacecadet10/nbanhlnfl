@@ -292,6 +292,8 @@ def test_artifact_without_digest_is_never_loaded_and_superseded_with_provenance(
     assert _record(upcoming, lines=lines)["errors"] == {}                          # registers the fits (model_fits)
     path = next(p for p in pool_live.artifact_dir("nhl").rglob("*.pkl") if "poisson_draw__nhl_base" in str(p))
     pool_live._sidecar(path).unlink()                                               # as the code before 0020 left it
+    upcoming.execute("UPDATE schema_migrations SET applied_at='2026-10-12T22:05:00Z' WHERE version=20")  # 0020 came later
+    upcoming.commit()
     legacy_bytes = path.read_bytes()
     loaded = []
     real_loads = pool_live.pickle.loads
