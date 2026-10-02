@@ -535,6 +535,50 @@ def learned_research(conn: sqlite3.Connection, decision_path: Optional[Path] = N
     return report
 
 
+def xg_research(conn: sqlite3.Connection, decision_path: Optional[Path] = None, out_dir: Optional[Path] = None,
+                log: Callable[[str], None] = print) -> dict:
+    """docs/MODEL_SELECTION.md §12: `hockey_logistic_xg` against `hockey_logistic` and `hockey_elo` on identical development
+    games. Shots are delivered with the box-event leakage rule. Exploratory; no ledger rows."""
+    from . import nhl_shots
+    from .models.hockey import hockey_logistic
+    from .models.hockey_xg import hockey_logistic_xg
+    d = load_decision(conn, decision_path)
+    rows = load_rows(conn, "development")
+    if any(r.game.season not in LOADABLE["development"] for r in rows):
+        raise NhlEvaluationError("xG research reads development seasons only")
+    events = nhl_shots.load_events(conn, rows)
+    elo_cfg, goals_cfg = HockeyEloConfig(**d["hockey_elo_config"]), GoalsConfig(**d["goals_config"])
+    built = {"hockey_elo": candidate("hockey_elo", elo_cfg), "hockey_logistic": hockey_logistic(elo_cfg, goals_cfg, SPORT.rating_key),
+             "hockey_logistic_xg": hockey_logistic_xg(elo_cfg, goals_cfg, SPORT.rating_key)}
+    preds = {n: {p["game_id"]: p for p in in_period(backtest.run(m, rows, events), "development")} for n, m in built.items()}
+    ids = sorted(preds["hockey_elo"], key=lambda g: (preds["hockey_elo"][g]["cutoff_at"], g))
+    series = {n: [preds[n][g] for g in ids] for n in built}
+    xg = built["hockey_logistic_xg"]
+    cov = {s: {"games": sum(r.game.season == s for r in rows),
+               "with_shots": len({e.game.game_id for e in events if e.game.season == s})} for s in LOADABLE["development"]}
+    s_x, s_l, s_e = (_score(series[n], "p_home") for n in ("hockey_logistic_xg", "hockey_logistic", "hockey_elo"))
+    vs = {ref: backtest.paired_bootstrap(series["hockey_logistic_xg"], series[ref]) for ref in ("hockey_logistic", "hockey_elo")}
+    qualifies = s_x["brier"] < s_l["brier"] and s_x["brier"] < s_e["brier"] and vs["hockey_logistic"]["ci95"][1] < 0
+    report = {"sport": "nhl", "stage": "xG candidate (MODEL_SELECTION §12)", "generated_at": utc_now(), "exploratory": True,
+              "seasons": PERIODS["development"], "dataset_version": dataset_version(rows), "decision_sha256": d["sha256"],
+              "shot_events": len(events), "shots": sum(len(e.shots) for e in events), "coverage_by_season": cov,
+              "xg_games_valued": xg.xg.valued, "xg_games_unvalued": xg.xg.unvalued,
+              "model_versions": {n: model_version(m) for n, m in built.items()},
+              "logistic_weights_last_fit": dict(zip(("intercept",) + xg.feature_names, [round(w, 4) for w in xg.weights])),
+              "all_games": {n: _score(s, "p_home") for n, s in series.items()},
+              "by_season": {n: backtest.by_season(s) for n, s in series.items()},
+              "candidate_minus_brier": vs,
+              "candidate_minus_accuracy": {ref: backtest.paired_accuracy_bootstrap(series["hockey_logistic_xg"], series[ref])
+                                           for ref in ("hockey_logistic", "hockey_elo")},
+              "qualifies_for_shadow": qualifies}
+    out_dir = Path(out_dir or config.data_dir() / "reports" / f"nhl-xg-{report['generated_at'].replace(':', '')}")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    report["output_dir"] = str(out_dir)
+    (out_dir / "report.json").write_text(json.dumps(report, indent=2, default=str))
+    log(f"Report written to {out_dir}")
+    return report
+
+
 # --- Agreement exploration across all four NHL models (descriptive; development seasons only) ------------------------
 def _dev_model_predictions(conn: sqlite3.Connection, decision_path: Optional[Path] = None):
     from .models.hockey import hockey_gbt, hockey_logistic

@@ -7,10 +7,10 @@ from .models.elo import EloConfig
 
 
 # Commands that work for every sport; everything else is NBA-only until generalised.
-SPORT_COMMANDS = {"migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies", "refresh", "odds", "predict",
+SPORT_COMMANDS = {"nhl-pbp-import", "nhl-xg-research", "migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies", "refresh", "odds", "predict",
                   "score", "daily", "scheduler", "predict-now", "score-near-tipoff", "markets", "score-markets", "agreement", "thresholds",
                   "combination-study", "selector-decide", "research-report", "retrain-cadence", "catboost-challenger", "combination-search"}
-NHL_ONLY = {"ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies"}
+NHL_ONLY = {"nhl-pbp-import", "nhl-xg-research", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies"}
 
 
 def _any_failed(result) -> bool:
@@ -81,6 +81,11 @@ def main(argv=None) -> int:
     cb.add_argument("--out", help="Report directory (default data/reports/catboost-<sport>-<time>)")
     cz = sub.add_parser("combination-search", help="Exploratory predefined combination search (docs/MODEL_SELECTION.md §11)")
     cz.add_argument("--out", help="Report directory (default data/reports/combination-search-<sport>-<time>)")
+    pi = sub.add_parser("nhl-pbp-import", help="Import NHL play-by-play shots for final games (api-web.nhle.com)")
+    pi.add_argument("--season", type=int, action="append", help="Limit to these seasons (end year; repeatable)")
+    pi.add_argument("--limit", type=int)
+    xr = sub.add_parser("nhl-xg-research", help="Exploratory xG candidate on development seasons (MODEL_SELECTION §12)")
+    xr.add_argument("--out")
     sub.add_parser("selector-decide", help="Write this week's selector decisions if due (normally run by the odds job)")
     rr = sub.add_parser("research-report", help="Read-only prospective research record for one market")
     rr.add_argument("--market", default="winner")
@@ -340,6 +345,16 @@ def main(argv=None) -> int:
         from . import combination_search
         report = combination_search.run(conn, args.sport, out_dir=Path(args.out) if args.out else None)
         print(json.dumps({"output_dir": report["output_dir"], "deploy": {m: a["deploy"] for m, a in report["markets"].items()}}))
+    elif args.cmd == "nhl-pbp-import":
+        from . import nhl_shots
+        result = nhl_shots.import_pending(conn, args.season, args.limit)
+        print(json.dumps({k: (v if k != "errors" else dict(list(v.items())[:20])) for k, v in result.items()}, indent=2))
+        return 1 if result["errors"] and not result["imported"] else 0
+    elif args.cmd == "nhl-xg-research":
+        from pathlib import Path
+        from . import nhl_eval
+        report = nhl_eval.xg_research(conn, out_dir=Path(args.out) if args.out else None)
+        print(json.dumps({"output_dir": report["output_dir"], "qualifies_for_shadow": report["qualifies_for_shadow"]}))
     elif args.cmd == "selector-decide":
         result = jobs.selector_decisions(conn)
         print(json.dumps(result, indent=2))
