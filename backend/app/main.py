@@ -215,6 +215,22 @@ def research_performance(market: str = MARKET, p=Depends(get_provider)):
     return {**research_live.report(p.conn, market, p.now), "mode": "real"}
 
 
+@app.get("/api/research/rules")
+def research_rules(market: str = MARKET, show: str = Query("selected", pattern="^(selected|all)$"), p=Depends(get_provider)):
+    """Registered combination rules (docs/MODEL_SELECTION.md §15): historical exploration and prospective record."""
+    if p.mode != "real":
+        return {"mode": "demo", "sport": "nba", "market": market, "status": "demo", "rules": [],
+                "note": "Combination-rule tracking uses recorded research cohorts; none exist in demo mode."}
+    _market_supported(p, market)
+    _research_store(p)
+    from . import rule_tracking
+    try:
+        out = rule_tracking.report(p.conn, p.sport, market, show)
+    except rule_tracking.RegistryError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    return {**out, "mode": "real"}
+
+
 @app.get("/api/research/retrospective")
 def research_retrospective(p=Depends(get_provider)):
     from . import combination_research

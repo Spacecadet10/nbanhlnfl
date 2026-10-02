@@ -1,7 +1,8 @@
 // Research / shadow model selection (docs/MODEL_SELECTION.md). Never the primary forecast; never betting advice.
+import { useState } from 'react';
 import { api } from '../api/client';
 import type {
-  CalibrationBin, MarketId, ResearchExpanded, ResearchGame, ResearchMarket, ResearchRecord, ResearchReport, ResearchSlateEntry, Retrospective, RetroMarket, Side, Sport, Vector,
+  CalibrationBin, MarketId, RegisteredRule, ResearchExpanded, RuleReport, ResearchGame, ResearchMarket, ResearchRecord, ResearchReport, ResearchSlateEntry, Retrospective, RetroMarket, Side, Sport, Vector,
 } from '../api/types';
 import { useApi } from '../api/useApi';
 import { AsyncView, Empty } from './States';
@@ -155,6 +156,71 @@ function ResearchMarketView({ m }: { m: ResearchMarket }) {
 function Combined({ label, v, sides, note }: { label: string; v: Vector | null; sides: Side[]; note: string }) {
   return <tr className="research-combined"><th scope="row">{label}</th>
     {v ? sides.map((s) => <td key={s}>{pct(v[sideIdx(s)], 1)}</td>) : <td colSpan={sides.length} className="muted small">Not available{note ? `: ${note}` : ''}</td>}</tr>;
+}
+
+const KIND: Record<string, string> = { single: 'alone', unanimous_min: 'all agree, each at least', avg: 'average at least',
+  unanimous_maxdis: 'all agree, probabilities within', majority: 'strict majority', stack: 'learned stacker at least' };
+const LEVEL: Record<string, string> = { all: 'all games', close: 'close games (favourite < 60%)', clear: 'clear favourite (≥ 60%)',
+  low: 'models within 5 points', high: 'models more than 5 points apart' };
+export const combinationLabel = (r: Pick<RegisteredRule, 'kind' | 'members' | 't' | 'level'>) =>
+  `${r.members.map(modelName).join(' + ')} · ${KIND[r.kind] ?? r.kind}${r.t != null ? ` ${pct(r.t, 0)}` : ''} · ${LEVEL[r.level] ?? r.level}`;
+
+/** Registered combination rules for one sport and market: historical exploration next to the prospective record. */
+export function CombinationRules({ sport, market }: { sport: Sport; market: MarketId }) {
+  const [show, setShow] = useState<'selected' | 'all'>('selected');
+  const { state, retry } = useApi((s) => api.researchRules(sport, market, show, s), [sport, market, show]);
+  return <div className="card">
+    <h2>Combination rules <span className="badge badge-research">Research</span></h2>
+    <div className="segmented small" role="group" aria-label="Rules shown">
+      <button type="button" aria-pressed={show === 'selected'} onClick={() => setShow('selected')}>Selected</button>
+      <button type="button" aria-pressed={show === 'all'} onClick={() => setShow('all')}>All registered</button>
+    </div>
+    <AsyncView state={state} retry={retry}>{(r) => <RulesBody r={r} />}</AsyncView>
+  </div>;
+}
+
+function RulesBody({ r }: { r: RuleReport }) {
+  if (r.status === 'no_registered_rules' || r.mode === 'demo') return <Empty>{r.note ?? 'No combination rules are registered for this market.'}</Empty>;
+  return <>
+    <p className="small muted">{r.note}</p>
+    <p className="small">{r.registered_rules} registered rules ({r.selected_rules} selected by the chronological procedure) · members {r.members?.map(modelName).join(', ')}
+      {' · '}cohorts: {r.cohort_source === 'expanded' ? 'expanded experiment' : 'core experiment'} · {r.cohorts} games recorded since {r.effective_from && dateTime(r.effective_from)}
+      {' · '}comparator: {r.comparator && modelName(r.comparator)} · registry <code>{r.registry_sha256?.slice(0, 10)}</code></p>
+    <h3>Historical exploration <span className="badge">Backtest · reused seasons</span></h3>
+    <div className="table-wrap"><table className="table small">
+      <thead><tr><th>Coverage band</th><th>Best rule (hindsight)</th><th>Picks</th><th>Accuracy</th><th>Strongest single, same count</th><th>By season</th></tr></thead>
+      <tbody>{(r.frontier_historical ?? []).map((b) => <tr key={b.band[0]}><th scope="row">{pct(b.band[0], 0)}–{pct(Math.min(1, b.band[1]), 0)}</th>
+        {b.rule ? <><td className="wrap">{combinationLabel(parseRule(b.rule))}</td><td>{b.picks} ({pct(b.coverage ?? null, 0)})</td><td>{pct(b.accuracy ?? null, 1)}</td>
+          <td>{pct(b.comparator_accuracy ?? null, 1)} <span className="muted">({b.comparator && modelName(b.comparator)})</span></td>
+          <td className="wrap">{Object.entries(b.per_season ?? {}).map(([s, x]) => `${s}: ${pct(x.accuracy, 0)} on ${x.picks}`).join(' · ')}</td></>
+          : <td colSpan={5} className="muted">no rule with 100+ picks in this band</td>}</tr>)}</tbody>
+    </table></div>
+    <p className="small muted">Chosen with hindsight across all reused seasons — descriptive only. Selection for tracking used earlier seasons only.</p>
+    <h3>Prospective record <span className="badge badge-live">Live</span></h3>
+    {r.rules.length === 0 ? <Empty>No rules to show.</Empty> : <div className="table-wrap"><table className="table small">
+      <thead><tr><th>Rule</th><th>Status</th><th>Later-season check (backtest)</th><th>Picks / coverage</th><th>Record</th><th>Accuracy (95%)</th>
+        <th>Strongest single, same count</th><th>Best member, same count</th><th>Pending</th></tr></thead>
+      <tbody>{r.rules.map((x) => <RuleRow key={x.id} x={x} />)}</tbody>
+    </table></div>}
+  </>;
+}
+
+function parseRule(id: string) {
+  const [kind, members, t, level] = id.split('|');
+  return { kind, members: members.split('+'), t: t === 'None' ? null : Number(t), level };
+}
+
+function RuleRow({ x }: { x: RegisteredRule }) {
+  const p = x.prospective;
+  const bestMember = p.constituents_matched.filter((c) => c.accuracy != null).sort((a, b) => (b.accuracy ?? 0) - (a.accuracy ?? 0))[0];
+  return <tr><th scope="row" className="wrap">{combinationLabel(x)}{x.prospective_only && <span className="muted"> (prospective only)</span>}</th>
+    <td>{x.selected ? <span className={x.selected === 'qualified' ? 'ok' : 'warn'}>{x.selected}</span> : <span className="muted">tracked</span>}{x.why && <div className="muted">{x.why}</div>}</td>
+    <td className="wrap">{x.historical.length ? x.historical.map((h) => `${h.assess_season}: ${pct(h.accuracy, 0)} on ${h.picks}`).join(' · ') : <span className="muted">—</span>}</td>
+    <td>{p.picks} / {pct(p.coverage, 0)}</td><td>{p.win}–{p.loss}{p.push ? `–${p.push}P` : ''}</td>
+    <td>{pct(p.accuracy, 1)} <span className="muted">{interval(p.ci95)}</span></td>
+    <td>{p.strongest_single_matched ? pct(p.strongest_single_matched.accuracy, 1) : '—'}</td>
+    <td>{bestMember ? <>{pct(bestMember.accuracy, 1)} <span className="muted">({modelName(bestMember.model)})</span></> : '—'}</td>
+    <td>{p.pending}{p.void ? ` · ${p.void} void` : ''}</td></tr>;
 }
 
 export function ResearchPerformance({ sport, market }: { sport: Sport; market: MarketId }) {

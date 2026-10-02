@@ -278,3 +278,27 @@ export interface Retrospective {
   mode: Mode; sport: Sport; status?: 'unavailable'; kind: string; generated_at: string; evaluated_seasons: number[]; design: string;
   markets: Partial<Record<MarketId, RetroMarket>>; note: string;
 }
+
+// --- Registered combination rules (backend app/rule_tracking.py, docs/MODEL_SELECTION.md §15). Research only. ---
+export interface RuleMatched { model: string; games: number; accuracy: number | null }
+export interface RuleHistorical { assess_season: number; why: string; picks: number; coverage: number; accuracy: number | null;
+  lift: number | null; selection_accuracy: number | null }
+export interface RuleProspective {
+  eligible_games: number; picks: number; coverage: number | null; win: number; loss: number; push: number; void: number;
+  pending: number; unscorable: number; accuracy: number | null; ci95: [number, number] | null;
+  strongest_single_matched: RuleMatched | null; constituents_matched: RuleMatched[];
+  weeks: { week: string; win: number; loss: number; push: number }[];
+  recent: { game_id: string; decision: string; reason?: string; probability?: number; outcome?: string; line?: number | null;
+    generated_at: string; minutes_before_start?: number }[];
+}
+export interface RegisteredRule {
+  id: string; kind: string; members: string[]; t: number | null; level: string; selected: string | null; why: string | null;
+  prospective_only: boolean; historical: RuleHistorical[]; prospective: RuleProspective;
+}
+export interface FrontierBand { band: [number, number]; rule: string | null; picks?: number; coverage?: number; accuracy?: number | null;
+  comparator?: string; comparator_accuracy?: number | null; per_season?: Record<string, { picks: number; accuracy: number | null }> }
+export interface RuleReport {
+  mode: Mode; sport: Sport; market: MarketId; status?: string; study?: string; registry_sha256?: string; effective_from?: string;
+  cohort_source?: 'core' | 'expanded'; members?: string[]; comparator?: string; cohorts?: number; registered_rules?: number;
+  selected_rules?: number; frontier_historical?: FrontierBand[]; rules: RegisteredRule[]; note?: string;
+}

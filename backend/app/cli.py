@@ -9,7 +9,7 @@ from .models.elo import EloConfig
 # Commands that work for every sport; everything else is NBA-only until generalised.
 SPORT_COMMANDS = {"nhl-pbp-import", "nhl-xg-research", "migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies", "refresh", "odds", "predict",
                   "score", "daily", "scheduler", "predict-now", "score-near-tipoff", "markets", "score-markets", "agreement", "thresholds",
-                  "combination-study", "selector-decide", "research-report", "retrain-cadence", "catboost-challenger", "combination-search", "expanded-search", "selective-study"}
+                  "combination-study", "selector-decide", "research-report", "retrain-cadence", "catboost-challenger", "combination-search", "expanded-search", "selective-study", "rules-registry"}
 NHL_ONLY = {"nhl-pbp-import", "nhl-xg-research", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies"}
 
 
@@ -90,6 +90,10 @@ def main(argv=None) -> int:
     ex.add_argument("--out")
     sv = sub.add_parser("selective-study", help="Market-specific selective-combination study (MODEL_SELECTION §15)")
     sv.add_argument("--out")
+    rg = sub.add_parser("rules-registry", help="Freeze the selective-v1 rule registry from the two study reports (MODEL_SELECTION §15)")
+    rg.add_argument("--nba", required=True, help="NBA selective-study report.json")
+    rg.add_argument("--nhl", required=True, help="NHL selective-study report.json")
+    rg.add_argument("--effective-from", required=True)
     sub.add_parser("selector-decide", help="Write this week's selector decisions if due (normally run by the odds job)")
     rr = sub.add_parser("research-report", help="Read-only prospective research record for one market")
     rr.add_argument("--market", default="winner")
@@ -370,6 +374,16 @@ def main(argv=None) -> int:
         report = selective_study.run(conn, args.sport, out_dir=Path(args.out) if args.out else None)
         print(json.dumps({"output_dir": report["output_dir"], "qualified": {m: [len(f["qualified"]) for f in a["folds"]]
                                                                             for m, a in report["markets"].items()}}))
+    elif args.cmd == "rules-registry":
+        from pathlib import Path
+        from . import rule_tracking
+        reports = {k: {**json.loads(Path(v).read_text()), "output_dir": str(Path(v).parent)}
+                   for k, v in (("nba", args.nba), ("nhl", args.nhl))}
+        reg = rule_tracking.build_registry(reports, args.effective_from)
+        rule_tracking.REGISTRY_PATH.write_text(json.dumps(reg, indent=1, sort_keys=True) + "\n")
+        print(json.dumps({"path": str(rule_tracking.REGISTRY_PATH), "sha256": reg["sha256"],
+                          "markets": {k: {"rules": len(m["rules"]), "selected": sum(1 for r in m["rules"] if r["selected"])}
+                                      for k, m in reg["markets"].items()}}))
     elif args.cmd == "selector-decide":
         result = jobs.selector_decisions(conn)
         print(json.dumps(result, indent=2))
