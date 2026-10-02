@@ -261,3 +261,11 @@ Worktree `../nba-predictor-selector` (branch `selector-dev`), merged into `shado
   desktop. Tab closed, window restored to 1280×900, temporary servers stopped.
 - **Fixed during the check:** raw rule text in the pick line, clipped missing-model reasons, an unexplained Elo denominator in
   demo data (exact 50% forecasts abstain; now shown as "exact 50% (no pick)").
+- **Integration (live checkout, 2026-10-02 ~11:42 UTC):** backups `data/backups/{nba,nhl}-before-0016-20261002.sqlite`, fast-forward
+  to 4a3fce4, `app.cli --sport {nba,nhl} migrate` applied 0016; all 18 pre-existing tables compared row by row: identical except
+  schema_migrations (+1). First real NBA odds run on the new code (11:50 UTC): success; forecasts skipped, "no eligible game
+  within two hours"; 5 selector decisions written with "insufficient evidence". Readiness: `backend/.venv/bin/python
+  scripts/check_project.py --ready` exit 0 — structure guard, typecheck, build, **353 passed** (the first attempt failed on
+  `.claude/scheduled_tasks.lock`, a Claude Code scheduler lock created by this session; removed, guard unchanged).
+- **Not verified live yet:** a real research cohort → settlement → weekly decision lifecycle (first NHL window tonight from
+  ~20:30 UTC; first scheduled decision 2026-10-05 14:00 UTC).

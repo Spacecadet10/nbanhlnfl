@@ -1,5 +1,32 @@
 # Current handoff
 
+## Model agreement, combination and shadow selection — Claude, 2026-10-02 (current)
+- **Design first:** docs/MODEL_SELECTION.md (5ea11f5, before any run): audit inventory, candidates, stacking protocol, threshold
+  grids, weekly selector (Mon 14:00 UTC), lift-over-reference metric with Bonferroni bound, minimum evidence 100 picks / 10% / 3
+  weeks, abstention, one market per game, manual promotion criteria, versioning, off switch. Amendments dated in the same file.
+- **Built:** `models/score_candidates.py` (NBA ridge_points, gbt_points; NHL goals_draw, goals_glm), `combine.py` (agreement,
+  average, out-of-fold log-linear stacker), `selector.py`, `research_live.py` (cohorts at the primary's exact line/quote, weekly
+  decisions, selections, reports; cached line-member state), migration 0016 (`research_cohorts`, `selector_decisions`,
+  `research_selections`; append-only, two-hour and start-time triggers), jobs integration (`RESEARCH_SELECTION=0` disables),
+  CLI `selector-decide`, `research-report`, `combination-study`, API `/api/research/{game,slate,performance,history,retrospective}`,
+  UI on Today/Game/History/Performance. Demo mode uses an in-memory synthetic store run through the real code.
+- **Results (exploratory, development seasons, docs/COMBINATION_RESULTS.md):** agreement added nothing beyond the average's own
+  confidence in any market; probability gains only for NBA spread (ridge/stacker) and NHL regulation 3-way (draw-inflated/stacker).
+  Nothing promoted; the live selector starts with empty prospective evidence.
+- **Self-review** (separate agent in this session, not independent): 1 high, 4 medium, 6 low findings; fixed in 4a3fce4 (details in
+  MODEL_SELECTION amendments); study rerun once (run 2, identical figures except one rule-change count). Bug reinjection: 6 checks,
+  one initially uncaught (draw scored as push) → test added.
+- **Integrated:** `shadow-season` fast-forwarded to 4a3fce4 at ~11:42 UTC; migration 0016 applied to both real stores after
+  backups `data/backups/{nba,nhl}-before-0016-20261002.sqlite`; all 18 pre-existing tables identical except schema_migrations.
+  Existing launchd jobs now record research cohorts; no new job installed. First real run on the new code: NBA odds
+  11:50 UTC success, forecasts "skipped: no eligible game within two hours", 5 decisions written (insufficient evidence, effective
+  to 2026-10-05 14:00 UTC). `scripts/check_project.py --ready` exit 0 (structure, typecheck, build, 353 passed) after removing
+  `.claude/scheduled_tasks.lock`, a Claude Code scheduler lock from this session that tripped the structure guard.
+- **Remaining:** first real research cohort → settlement → weekly decision lifecycle (first NHL two-hour window tonight, 2026-10-02
+  ~20:30 UTC; first decision Monday 2026-10-05 14:00 UTC; NBA from 2026-10-20). Rehearsed on scratch copies only. Runtime: NBA
+  cycle ~164 s first, ~76 s cached (remainder is the existing agreement walk). No bookmaker history, so no betting-value claim.
+
+---
 ## Two-hour policy + forward tracking — Codex, 2026-10-02 (current; supersedes timing notes below)
 - User authorized takeover (Claude paused) and requires **all new predictions within two hours before game time**, NBA/NHL, all supported markets. Implemented CLI/periodic-job routing, model namespaces, migration 0015 guards and actual calculation-completion timestamps. Existing frozen settings/files and historical rows retained.
 - Existing NBA/NHL odds agents now run refresh → primary winner → supported markets → research agreement inside the window. Daily is maintenance/scoring only. Previous night-before shadow recording is discontinued, not relabelled; CLI `shadow-predict --record` skips. No extra job installed.
