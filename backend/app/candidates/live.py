@@ -130,15 +130,28 @@ def _key(*parts) -> str:
 def record(conn, *, game_ids: Optional[list] = None, now: Optional[str] = None, lines: Optional[dict] = None,
            write: bool = True, specs: Optional[list] = None) -> dict:
     """Two-hour candidate forecasts for eligible games. `lines` maps (game_id, market) -> {"line", "source", "ref"}: the
-    exact line the core cohort used; a line market without one is skipped (never a substitute line)."""
+    exact line the core cohort used (default: read from the latest core cohort at `now`); a line market without one is
+    skipped (never a substitute line)."""
     out = {"status": "success", "created": 0, "already_recorded": 0, "skipped": {}, "errors": {}, "forecasts": []}
     try:
-        _record(conn, game_ids, now, lines or {}, write, specs, out)
+        _record(conn, game_ids, now, lines, write, specs, out)
     except Exception as exc:         # never fails the caller's cycle
         out["status"] = "failed"
         out["errors"]["pool"] = f"{type(exc).__name__}: {exc}"
     if out["status"] == "success" and (out["errors"] or out["skipped"]):
         out["status"] = "partial"
+    return out
+
+
+def core_lines(conn, game_ids, now: str) -> dict:
+    """(game_id, market) -> the exact line of the latest core research cohort generated at or before `now` (never the
+    expanded experiment's), with its cohort id as the reference. Used when the caller passes no lines."""
+    out = {}
+    for gid in game_ids:
+        for r in conn.execute("SELECT cohort_id, market, line, line_source FROM research_cohorts WHERE game_id=? AND line IS NOT NULL "
+                              "AND generated_at<=? AND definition NOT LIKE '%:expanded-v1' ORDER BY generated_at, cohort_id",
+                              (gid, now)):
+            out[(gid, r["market"])] = {"line": r["line"], "source": f"core_cohort:{r['line_source']}", "ref": f"research_cohorts:{r['cohort_id']}"}
     return out
 
 
@@ -160,6 +173,8 @@ def _record(conn, game_ids, now, lines, write, specs, out) -> None:
     if not eligible:
         return
     ids = {g["game_id"] for g in eligible}
+    if lines is None:
+        lines = core_lines(conn, ids, now) if _has(conn, "research_cohorts") else {}
     rec = _recorder(conn, eng, ids, now)
     events = _events(conn, eng, rows, known, now)
     walk = features.walk(rec, rows, events, deliver_until=now)

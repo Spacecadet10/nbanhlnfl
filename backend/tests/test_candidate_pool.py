@@ -157,6 +157,26 @@ def test_live_record_is_research_only_two_hour_append_only_and_idempotent(upcomi
     assert {f["member"] for f in fits} == {f"cand:{s}" for s in SPECS} and all(f["trained_season"] == 2027 for f in fits)
 
 
+def test_lines_default_to_the_latest_core_cohort(upcoming):
+    def cohort(market, line, at, defn="d"):
+        upcoming.execute("INSERT INTO research_cohorts (idempotency_key, sport, game_id, market, line, line_source, definition, "
+                         "primary_name, information_at, generated_at, tipoff_at, members, agreement) VALUES "
+                         "(?,?,?,?,?,?,?,?,?,?,?,?,?)", (f"{market}{line}{at}{defn}", "nhl", GID, market, line, "model", defn,
+                                                         "goals_poisson", at, at, TIPOFF, "[]", "{}"))
+    cohort("total", 5.5, "2026-10-12T21:30:00Z")
+    cohort("total", 6.5, "2026-10-12T21:50:00Z")
+    cohort("total", 7.5, "2026-10-12T21:55:00Z", defn="d:expanded-v1")       # the expanded experiment is never used
+    cohort("spread", -1.5, "2026-10-12T22:30:00Z")                            # after `now`: not yet known
+    lines = pool_live.core_lines(upcoming, [GID], NOW)
+    assert lines[(GID, "total")]["line"] == 6.5 and lines[(GID, "total")]["ref"].startswith("research_cohorts:")
+    assert (GID, "spread") not in lines
+    out = _record(upcoming)
+    rows = upcoming.execute("SELECT market, line, line_source FROM candidate_forecasts WHERE candidate='poisson_draw:nhl_base' "
+                            "AND line IS NOT NULL").fetchall()
+    assert [(r["market"], r["line"], r["line_source"]) for r in rows] == [("total", 6.5, "core_cohort:model")]
+    assert "no exact line" in out["skipped"]["poisson_draw:nhl_base"][f"{GID}:spread"]
+
+
 def test_a_failing_candidate_never_blocks_the_others(upcoming, monkeypatch):
     real = engine.fit
 
