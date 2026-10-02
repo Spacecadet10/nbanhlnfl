@@ -327,7 +327,7 @@ def publication_time(parsed: ParsedReport, last_modified: Optional[str]) -> tupl
 
 
 # --- Player matching ----------------------------------------------------------------------------------------------
-ALIAS_PATH = Path(__file__).parent / "data" / "nba_player_aliases.csv"
+ALIAS_PATH = Path(__file__).parent / "reference" / "nba_player_aliases.csv"
 _SUFFIX = re.compile(r"\b(jr|sr|ii|iii|iv|v)\b\.?")
 
 
