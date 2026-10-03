@@ -12,6 +12,11 @@ SCHEDULE_NOTE = {"season_start": "refits at the first forecast of a new season o
                  "weekly": "refits at the first forecast of each ISO week (and at season start)"}
 
 
+def _expanded() -> str:
+    from .research_live import EXPANDED     # the one definition suffix of the expanded experiment
+    return EXPANDED
+
+
 def _has(conn, table: str) -> bool:
     return conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone() is not None
 
@@ -136,9 +141,10 @@ def _monitoring(conn, now: str, window: int = 100) -> dict:
     rows = conn.execute(
         "SELECT c.*, g.status AS g_status, g.home_score, g.away_score, g.result_available_at, g.tipoff_at AS game_tipoff_at, "
         "d.decision FROM research_cohorts c JOIN games g ON g.game_id=c.game_id LEFT JOIN game_decisions d ON d.game_id=c.game_id "
-        "WHERE c.market IN ('winner', 'reg3') AND c.definition NOT LIKE '%:expanded-v1' AND c.cohort_id = (SELECT x.cohort_id "
-        "FROM research_cohorts x WHERE x.game_id=c.game_id AND x.market=c.market AND x.definition NOT LIKE '%:expanded-v1' "
-        "AND x.generated_at < x.tipoff_at ORDER BY x.generated_at DESC, x.cohort_id DESC LIMIT 1) ORDER BY c.tipoff_at").fetchall()
+        "WHERE c.market IN ('winner', 'reg3') AND c.definition NOT LIKE ? AND c.cohort_id = (SELECT x.cohort_id "
+        "FROM research_cohorts x WHERE x.game_id=c.game_id AND x.market=c.market AND x.definition NOT LIKE ? "
+        "AND x.generated_at < x.tipoff_at ORDER BY x.generated_at DESC, x.cohort_id DESC LIMIT 1) ORDER BY c.tipoff_at",
+        (f"%:{_expanded()}", f"%:{_expanded()}")).fetchall()
     series, missing = {}, {}
     for r in rows:
         for name, why in json.loads(r["missing"]).items():

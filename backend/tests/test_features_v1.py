@@ -88,3 +88,22 @@ def test_prop_snapshots_are_raw_bounded_and_never_fail_the_caller(nhl_store):
     far = pc.collect(conn, "nhl", now=datetime(2026, 10, 12, 18, 0, tzinfo=timezone.utc), fetch=fake)
     assert far["targets"] == 0                                                          # start more than two hours away
 
+
+
+
+def test_recently_fetched_games_never_use_a_slot_so_later_games_are_not_starved(monkeypatch):
+    """Reconciliation review: the per-run cap is applied after skipping recently fetched games."""
+    from datetime import datetime, timezone
+    from app import props_collect as pc
+    monkeypatch.setattr(pc, "MAX_PER_RUN", 1)
+    monkeypatch.setattr(pc, "targets", lambda conn, sport, now: [("g1", "1"), ("g2", "2"), ("g3", "3")])
+    monkeypatch.setattr(pc, "_recent", lambda conn, sport, eid, now: eid == "1")
+    stored = []
+    monkeypatch.setattr(pc.raw_cache, "store_fetch", lambda conn, **kw: stored.append(kw["request_key"]))
+
+    class _Tx:
+        def __enter__(self): return None
+        def __exit__(self, *a): return False
+    monkeypatch.setattr(pc, "transaction", lambda conn: _Tx())
+    out = pc.collect(None, "nhl", now=datetime(2026, 10, 12, 21, 30, tzinfo=timezone.utc), fetch=lambda u: b"{}")
+    assert stored == ["nhl:2"] and out["recent"] == 1 and out["deferred"] == 1

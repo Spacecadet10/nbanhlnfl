@@ -361,3 +361,26 @@ def test_reporting_grid_covers_50_to_90_and_nhl_three_way_lower_bands_without_ch
     summ = at.summarise(g("single", "m"), many, at._Ranked({"anchor": anchor}, "winner"), "winner", "anchor")
     board = at.leaderboard([summ], "winner", 100)
     assert board and {r["threshold"] for r in board} <= set(at.THRESHOLDS["winner"])          # 0.50, 0.85, 0.90 never ranked
+
+
+def test_game_card_counts_only_the_latest_cohort_of_each_market(monkeypatch):
+    """Reconciliation review: when the newest cohort lacks a group's row, the card must not fill it from an older cohort
+    (which can be at another line)."""
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE research_cohorts (cohort_id INTEGER PRIMARY KEY, generated_at TEXT)")
+    conn.execute("CREATE TABLE agreement_observations (observation_id INTEGER PRIMARY KEY, registry TEXT, game_id TEXT, "
+                 "market TEXT, group_id TEXT, cohort_id INT, source_cohort_id INT, line REAL, status TEXT, side TEXT, "
+                 "statistic REAL, kind TEXT, votes TEXT, missing TEXT, recorded_at TEXT, definition TEXT)")
+    conn.executemany("INSERT INTO research_cohorts VALUES (?, ?)", [(1, "2026-10-12T21:30:00Z"), (2, "2026-10-12T22:00:00Z")])
+    rows = [(1, "single|a", 1, 5.5, "a"), (1, "single|b", 1, 5.5, "a"), (2, "single|a", 2, 6.5, "b")]
+    for i, (coh, gid, src, line, side) in enumerate(rows):
+        conn.execute("INSERT INTO agreement_observations (registry, game_id, market, group_id, cohort_id, source_cohort_id, "
+                     "line, status, side, statistic, kind, votes, missing, recorded_at, definition) VALUES "
+                     "('R', 'g', 'total', ?, ?, ?, ?, 'pick', ?, 0.6, 'single', '{}', '{}', ?, 'd')",
+                     (gid, coh, src, line, side, f"2026-10-12T2{1 + coh}:00:0{i}Z"))
+    monkeypatch.setattr(at, "_has", lambda c, t: True)
+    monkeypatch.setattr(at, "reg_sport", lambda c: "nhl")
+    out = at.game_observations(conn, "g", reg={"sha256": "R"})
+    (m,) = out["markets"]
+    assert m["groups"] == 1 and m["line"] == 6.5 and m["counts"] == {"b": 1}        # single|b from cohort 1 is not mixed in

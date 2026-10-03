@@ -926,9 +926,14 @@ def game_observations(conn, game_id: str, reg: Optional[dict] = None) -> dict:
         "SELECT o.* FROM agreement_observations o JOIN research_cohorts c ON c.cohort_id=o.source_cohort_id "
         "WHERE o.registry=? AND o.game_id=? ORDER BY c.generated_at, o.source_cohort_id, o.observation_id",
         (reg["sha256"], game_id)).fetchall()
+    # One cohort per market: the market's latest core cohort with observations, so counts never mix cohorts or lines.
+    newest = {}
+    for r in rows:
+        newest[r["market"]] = r["cohort_id"]
     latest: dict = {}
     for r in rows:
-        latest[(r["market"], r["group_id"])] = r
+        if r["cohort_id"] == newest[r["market"]]:
+            latest[(r["market"], r["group_id"])] = r
     markets = defaultdict(list)
     for (market, _), r in latest.items():
         markets[market].append(r)

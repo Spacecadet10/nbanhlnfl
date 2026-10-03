@@ -78,14 +78,15 @@ def collect(conn: sqlite3.Connection, sport: str, *, now: Optional[datetime] = N
     try:
         tg = targets(conn, sport, now)
         out["targets"] = len(tg)
-        out["deferred"] = max(0, len(tg) - MAX_PER_RUN)
-        for gid, eid in tg[:MAX_PER_RUN]:
-            if time.monotonic() - t0 > BUDGET_SECONDS:
-                out["deferred"] += 1
-                continue
-            if _recent(conn, sport, eid, now):
+        fetched = 0
+        for gid, eid in tg:
+            if _recent(conn, sport, eid, now):    # checked before the per-run cap: recent games never use a slot
                 out["recent"] += 1
                 continue
+            if fetched >= MAX_PER_RUN or time.monotonic() - t0 > BUDGET_SECONDS:
+                out["deferred"] += 1
+                continue
+            fetched += 1
             try:
                 body = fetch(endpoint(sport, eid))
             except Exception as exc:
