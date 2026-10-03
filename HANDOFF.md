@@ -1,5 +1,19 @@
 # Current handoff
 
+## Tooling audit + Optuna tuning `tuning-v1` — Claude (Opus 5.5), 2026-10-03 ~01:45–02:15 UTC
+Branch `pool-selector` (worktree), commits 942676c..e22d1b3; **not merged into live** (same as the entry below).
+- Audit (MODEL_SELECTION §19, from REPO_REVIEW/§10/FAMILY_AUDIT only): sklearn HGB/ExtraTrees/RF used with fixed settings;
+  NGBoost used; CatBoost tested and rejected; Optuna missing → **adopted** (`optuna==5.0.0` in the `research` extra, worktree
+  venv only; live venv unchanged); LightGBM/XGBoost deferred (same algorithm as sklearn HGB; need system libomp).
+- `app/tuning_study.py` (no hashed pool file edited; live candidate identities unchanged): 8 learners (HGB binary/normal/
+  reg3/goals, ExtraTrees binary/normal) tuned per season on earlier seasons only, 25 TPE trials; predictions, trials, fits
+  saved; CLI `tuning-study` (store copies only), `tuning-evaluate`.
+- Result (CHALLENGER_RESULTS "Tooling adoption and bounded tuning"): tuned learners are worse than the best existing member
+  alone in every market and no better than their untuned counterparts; inside combinations no rule qualified and with/
+  without differences are within ±2 points with mixed signs. Nothing proposed for live recording.
+- Checks: `scripts/check_project.py --ready` on e22d1b3 exit 0 (structure, typecheck, build, 466 passed). Outputs are in the
+  scratch copy; copy `research/tuning/` and `reports/tuning-v1/` into `data/` on merge.
+
 ## Historical training + combination discovery and tracking — Claude (Opus 5.5), 2026-10-03 ~00:00–02:10 UTC
 Worktree `../nba-predictor-poolsel`, branch `pool-selector`, commits 2e55096..384868b on top of 31c19af (live). **Not merged
 into live** (the previous merge-note commit was blocked as a production deploy; merge left to the user).
