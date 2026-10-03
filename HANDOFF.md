@@ -1,5 +1,28 @@
 # Current handoff
 
+## Injury collector newest-first, release moved to `948f1be` — Claude (Fable 5.1), 2026-10-03 19:30–20:00 UTC
+- At the user's request ("commit, review, release move"). `injuries.py`: pending report slots are collected newest first
+  (`_newest_first`; budgets unchanged), so missing older slots cannot delay the latest report the injury-aware forecast
+  needs within 60 minutes. Not identity-hashed; NBA only. Commits `0e9c6d5` + `948f1be` (review follow-ups).
+- **Review:** independent read-only review (general-purpose subagent, no code run): PASS. Follow-ups applied: exact order
+  assertion restored in `test_injuries.py`, stale comment, `docs/INJURY_COLLECTOR_PLAN.md` now says newest first. Noted
+  trade-off (reasoned, not executed): after a gap of ~21 h or more on a game day, a few of the oldest slots can age past the
+  24 h lookback before they are requested.
+- **Checks:** `NBA_DATA_DIR=<scratch> … scripts/check_project.py --ready` on the code of `0e9c6d5`: exit 0, **565 passed**,
+  typecheck + build ok. After the follow-ups (tests/docs only): 53 targeted tests pass. The new starvation test fails
+  against the previous `injuries.py` in a scratch copy.
+- **Release move 19:57:28 UTC:** both job locks free, no CLI job running, first game 23:00 UTC. `git -C ../nba-predictor-live
+  merge --ff-only 948f1be`; `release-check` exit 0 for both sports: no problems, schema 23 = 23, definitions unchanged
+  (NHL `3e2504c4d655c41b`, NBA `1215f3641ad63e4f`), release checkout clean. No identity-hashed file differs from `9fc202c`.
+  Roll back: `git -C ../nba-predictor-live checkout -B release 9fc202c`.
+- **Also:** the unused worktree `../nba-predictor-release` was mine (created 19:26 UTC to test a pinned checkout) and is
+  removed. :8000 restarted 19:56 UTC on the deadlock fix: 60 concurrent requests all 200 in 1.35 s, health ok. The earlier
+  clean pass on `8e4ff1d` was 555 passed. Tree-model outputs are bit-identical across runs and 1/4/default threads
+  (scratch test), so the float ledger-conflict hypothesis is not supported.
+- **Still open:** NBA backtest record scope (History 6,605 vs Performance 2,643, unlabelled); horizon-band breakdown
+  registered in EVALUATION_PLAN but not built; "Test joint rules on later seasons" wording; stale preview pair on
+  :8032/:5182; the winner/line schedule mismatch (identity-hashed, frozen tonight).
+
 ## Pinned release for the scheduled jobs — Claude (Opus 5.5), 2026-10-03 19:45–20:00 UTC
 - **Live jobs now run `../nba-predictor-live` (branch `release` @ `9fc202c`), not this checkout.** All five installed plists
   (`daily`, `injuries`, `nhl-daily`, `nhl-odds`, `odds`) point there, with `NBA_DATA_DIR` set to this checkout's `data/`,
