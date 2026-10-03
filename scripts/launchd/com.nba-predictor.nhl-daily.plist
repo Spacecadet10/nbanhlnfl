@@ -1,18 +1,30 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- Installed 2026-10-01 at the user's request (22:15 local; odds snapshot first, then refresh, forecasts, markets, score). -->
 <plist version="1.0">
 <dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>NBA_DATA_DIR</key>
+		<string>/Users/andry/Desktop/nba-predictor-sprint1/data</string>
+		<key>NBA_RELEASE_GUARD</key>
+		<string>1</string>
+		<key>NBA_RELEASE_ROOT</key>
+		<string>/Users/andry/Desktop/nba-predictor-live</string>
+	</dict>
 	<key>Label</key>
 	<string>com.nba-predictor.nhl-daily</string>
+	<key>ProcessType</key>
+	<string>Background</string>
 	<key>ProgramArguments</key>
 	<array>
 		<string>/bin/sh</string>
 		<string>-c</string>
-		<string>.venv/bin/python -m app.cli --sport nhl odds; .venv/bin/python -m app.cli --sport nhl daily</string>
+		<string>/Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/bin/python -m app.cli --sport nhl odds; /Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/bin/python -m app.cli --sport nhl daily</string>
 	</array>
-	<key>WorkingDirectory</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/backend</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/nhl-daily-launchd.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/nhl-daily-launchd.log</string>
 	<key>StartCalendarInterval</key>
 	<dict>
 		<key>Hour</key>
@@ -20,13 +32,9 @@
 		<key>Minute</key>
 		<integer>15</integer>
 	</dict>
-	<key>StandardOutPath</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/nhl-daily-launchd.log</string>
-	<key>StandardErrorPath</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/nhl-daily-launchd.log</string>
-	<key>ProcessType</key>
-	<string>Background</string>
 	<key>ThrottleInterval</key>
 	<integer>60</integer>
+	<key>WorkingDirectory</key>
+	<string>/Users/andry/Desktop/nba-predictor-live/backend</string>
 </dict>
 </plist>

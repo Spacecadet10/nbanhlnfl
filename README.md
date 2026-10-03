@@ -121,6 +121,33 @@ Run from `backend/`:
   before tipoff is our own closing snapshot (`coverage` → `closing_lines`, with minutes before tipoff). It is not a
   bookmaker-published close, and it exists only for games snapshotted while the collector was running.
 
+## Pinned release for the scheduled jobs
+The launchd jobs (`scripts/launchd/`, installed in `~/Library/LaunchAgents/`) never run this development checkout. They run
+the git worktree `../nba-predictor-live` on branch `release`, with the shared venv (`backend/.venv`) and the shared data folder
+(`NBA_DATA_DIR`). With `NBA_RELEASE_GUARD=1` every scheduled command first checks that the code comes from that clean release
+checkout and that the store's schema equals the release's; otherwise it refuses before any request, lock or migration and
+records a failed job run. Every job run records its release commit (`job_runs.detail.release`). Editing this checkout never
+reaches the live jobs or changes a research definition until the release is moved deliberately.
+
+```sh
+# 1. In this checkout: commit, then run the readiness checks
+backend/.venv/bin/python scripts/check_project.py --ready
+# 2. Between cycles (no game within 2 h; never mid-evening if an identity-hashed file changed): move the release
+git -C ../nba-predictor-live merge --ff-only <commit>
+# 3. Verify (read-only; exit 0, no problems, expected research_definition) for both sports
+cd ../nba-predictor-live/backend && NBA_RELEASE_GUARD=1 NBA_RELEASE_ROOT=$PWD/.. \
+  NBA_DATA_DIR=/Users/andry/Desktop/nba-predictor-sprint1/data \
+  /Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/bin/python -m app.cli --sport nhl release-check
+```
+- A release with a new migration is refused until the store is migrated deliberately from the release checkout (the same
+  environment as step 3, command `migrate`, for each sport), between cycles and after a backup.
+- Roll back: `git -C ../nba-predictor-live checkout -B release <previous commit>`. Restore the pre-release launchd setup:
+  copy `data/backups/launchd-before-release-20261003/*.plist` to `~/Library/LaunchAgents/`, then `launchctl bootout` and
+  `launchctl bootstrap gui/$(id -u) <plist>` for each job.
+- The venv is shared: installing or upgrading packages in `backend/.venv` reaches the live jobs immediately (and a
+  scikit-learn version change starts new research definitions).
+- The API on :8000 and the Vite app still run from this checkout; only the scheduled jobs are pinned.
+
 ## Data store
 SQLite at `data/nba.sqlite`, raw responses in `data/raw/` (both gitignored; override with `NBA_DATA_DIR`).
 Run from `backend/`:

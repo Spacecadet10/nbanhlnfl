@@ -1,5 +1,25 @@
 # Current handoff
 
+## Pinned release for the scheduled jobs — Claude (Opus 5.5), 2026-10-03 19:45–20:00 UTC
+- **Live jobs now run `../nba-predictor-live` (branch `release` @ `9fc202c`), not this checkout.** All five installed plists
+  (`daily`, `injuries`, `nhl-daily`, `nhl-odds`, `odds`) point there, with `NBA_DATA_DIR` set to this checkout's `data/`,
+  `NBA_RELEASE_ROOT`, `NBA_RELEASE_GUARD=1` and the shared venv (absolute path; `nhl-daily`'s relative `.venv` fixed). Same
+  labels, schedules, logs and existing env. Originals: `data/backups/launchd-before-release-20261003/`. Repo copies in
+  `scripts/launchd/` updated (`nba-markets` too, still not installed). Update / rollback: README "Pinned release".
+- **Guard (`app/release.py`, `cli.py`, `jobs.py`; not identity-hashed):** scheduled commands refuse unless the imported code
+  is the clean release checkout and the store schema equals the release's (failed job run, before any request/lock/migration);
+  each job run records `release`. `release-check` is read-only. Tests `tests/test_release_guard.py` (6); full suite 565 passed.
+- **Verified:** dry run with launchd's minimal environment: app imported from the release, clean, schema 23 = 23, research
+  definitions unchanged (NHL `3e2504c4d655c41b`, NBA `1215f3641ad63e4f`). Switched at 19:51:25 UTC with both store locks free
+  and no CLI job running. First cycles: NHL odds run 152 success (release `9fc202c…`, forecasts skipped: no game within 2 h,
+  selector success under `3e2504c4…`, props after); NBA odds run 417 skipped by the 10-minute quota (release recorded). No new
+  definition rows; the release checkout stayed clean.
+- **Not mine:** an undocumented, unused worktree `../nba-predictor-release` (detached at `8e4ff1d`, created 19:26 UTC by another
+  agent) was left untouched. `injuries.py` / `test_injuries.py` edits by another writer remain uncommitted and are NOT in the
+  release; they reach the jobs only via a reviewed commit and a release move.
+- **Next:** one writer at a time; move the release only between cycles (README steps); no identity-hashed edit before
+  tonight's NHL games finish (~05:00 UTC).
+
 ## API deadlock fix — Claude (Opus 5.5, took over at the user's request), 2026-10-03 19:25–20:05 UTC
 - **Critical bug in `6e70a4e`:** `get_provider` took a process-wide `threading.Lock` inside FastAPI's worker pool. A burst
   larger than the pool (40 threads) parked every worker on the lock while the holder needed one for its endpoint: on a store

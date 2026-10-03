@@ -1,10 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- Installed 2026-10-01 at the user's request (every 30 min). -->
 <plist version="1.0">
 <dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>NBA_DATA_DIR</key>
+		<string>/Users/andry/Desktop/nba-predictor-sprint1/data</string>
+		<key>NBA_RELEASE_GUARD</key>
+		<string>1</string>
+		<key>NBA_RELEASE_ROOT</key>
+		<string>/Users/andry/Desktop/nba-predictor-live</string>
+	</dict>
 	<key>Label</key>
 	<string>com.nba-predictor.nhl-odds</string>
+	<key>ProcessType</key>
+	<string>Background</string>
 	<key>ProgramArguments</key>
 	<array>
 		<string>/Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/bin/python</string>
@@ -14,19 +24,17 @@
 		<string>nhl</string>
 		<string>odds</string>
 	</array>
-	<key>WorkingDirectory</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/backend</string>
 	<key>RunAtLoad</key>
 	<true/>
-	<key>StartInterval</key>
-	<integer>1800</integer>
-	<key>StandardOutPath</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/nhl-odds-launchd.log</string>
 	<key>StandardErrorPath</key>
 	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/nhl-odds-launchd.log</string>
-	<key>ProcessType</key>
-	<string>Background</string>
+	<key>StandardOutPath</key>
+	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/nhl-odds-launchd.log</string>
+	<key>StartInterval</key>
+	<integer>1800</integer>
 	<key>ThrottleInterval</key>
 	<integer>60</integer>
+	<key>WorkingDirectory</key>
+	<string>/Users/andry/Desktop/nba-predictor-live/backend</string>
 </dict>
 </plist>

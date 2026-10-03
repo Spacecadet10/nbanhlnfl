@@ -518,3 +518,11 @@ Scope: extended `agreement_tracking`, its API and the existing Performance compo
 - `tests/test_api_concurrency.py`: the 8-request/3-thread case hangs on `6e70a4e` (killed at 90 s, exit 142) and passes now.
   Limitation: on a regression it hangs rather than failing fast (the test client waits for stuck requests on exit).
 - Full suite with `NBA_DATA_DIR=<empty scratch>`: 559 passed; `tsc --noEmit` ok. Temporary server stopped.
+
+
+## Pinned release switch — 2026-10-03 19:45–20:00 UTC (Claude Opus 5.5)
+- `release-check` from `../nba-predictor-live/backend` under `env -i` (launchd-like) for nba and nhl: exit 0, problems [],
+  app = release checkout, schema 23/23, definitions NBA `1215f3641ad63e4f`, NHL `3e2504c4d655c41b`.
+- Locks free and no CLI process before `launchctl bootout`/`bootstrap` of the five jobs (19:51:25 UTC). All five plists'
+  WorkingDirectory = release. First runs: NHL run 152 success with release `9fc202c…`; NBA run 417 skipped (quota) with release.
+  No guard refusals in either log; no new selector definition rows; release checkout `git status` empty afterwards.
