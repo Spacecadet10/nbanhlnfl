@@ -1,5 +1,30 @@
 # Current handoff
 
+## Review fixes (market price, 3-way filter, forecast note, card agreement, injury-member refusal) — Claude (Fable 5.1), 2026-10-03 18:03–18:20 UTC
+- At the user's request, from Opus's read-only logic review. All changes are outside the identity-hashed files; the live
+  definition is still `8d60d7aebdb6a68d`. Committed on their own (see `git log`); the first scheduled NBA cycle on the
+  edited `jobs.py` (18:21 UTC) finished with every step success/skipped and no traceback.
+- `providers/real.py`: (1) NBA Performance market comparison orders by `price_label = 'current'` at equal retrieval times
+  (the old query returned the current price only by index order: latent, not wrong on stored data); (3) forecast notes no
+  longer say the daily job will record a forecast; (4) `_agreement`: a game card's winner agreement uses one research
+  definition (the newest) when the latest cohort would mix definitions. `agreement.py` itself is unchanged (hashed).
+- `ConfidenceFilter.tsx`: (2) the 3-way regulation market offers All / 40 / 45 / 50 / 55 / 60%.
+- Tests: new `tests/test_review3_fixes.py` (5). All 5 fail against HEAD `real.py` + `jobs.py` in a scratch copy (the price test stores the opening row under a provider
+  name that sorts first, which makes the old query return the opening price).
+  `NBA_DATA_DIR=<scratch> OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 backend/.venv/bin/python scripts/check_project.py --ready`:
+  exit 0, typecheck + build ok, **539 passed** (final run, after the jobs.py change).
+- Live: :8000 restarted 18:08 UTC (no job running). NBA Oct 20 cards show the new note; NHL 3-way archive: 40%+ 57 picks,
+  45%+ 34, 50%+ 13, 55%+ 2, 60%+ 0 (browser matches API); spread levels unchanged.
+- `jobs.py` (not hashed; **scheduled jobs run this file from the working tree**): `_refusal_is_not_failure` — when the
+  agreement step failed ONLY because `availability_two_hour` raised its own `AvailabilityError` (no usable injury report,
+  unmatched player, …), the step is 'partial' with the reason under `refused`, and the two-hour run is no longer 'failed'.
+  The error stays in `errors`, so cohorts still record the member as missing and Training status still lists it. Any other
+  member error, a crash of that member (another exception type) or a skipped core member still fails the run. NBA only in
+  effect (NHL has no refusing member). Both new tests for it fail against HEAD `jobs.py` in a scratch copy.
+- **Not done, needs the user's decision:** (5) a corrected final score keeps the original result time (`ingest.py:358-359`) —
+  needs a migration and touches the timing rules. The three small inconsistencies (3-way draw picks, plurality on the card,
+  exactly-50% picks) were left as they are; aligning them means editing hashed files.
+
 ## Record counts and pre-game archive labels — Claude (Opus 5.5, sole writer), 2026-10-03 16:20–16:50 UTC
 - **Approved scope only:** explicit record counts and "Pre-game archive" wording. Also on this branch: `2bcab94` (B0, docs-only
   horizon-band registration in EVALUATION_PLAN.md). Nothing else from the audit plan was started.

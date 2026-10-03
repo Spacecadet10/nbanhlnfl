@@ -12,8 +12,11 @@ import { RunBadge } from './Badges';
  * is never applied to the NHL or to other markets, which default to all picks. null = all picks. */
 export const CONFIDENCE_LEVELS: (number | null)[] = [null, 0.6, 0.65, 0.7, 0.75, 0.8];
 const MARKET_LEVELS: (number | null)[] = [null, 0.55, 0.6, 0.65, 0.7];
+// Three outcomes split the probability: a 3-way pick is rarely above 55%, so its levels start lower (as the research grid).
+const THREE_WAY_LEVELS: (number | null)[] = [null, 0.4, 0.45, 0.5, 0.55, 0.6];
 
 export function confidenceLevels(sport: Sport, market: MarketId): (number | null)[] {
+  if (market === 'reg3') return THREE_WAY_LEVELS;
   return sport === 'nba' && market === 'winner' ? CONFIDENCE_LEVELS : MARKET_LEVELS;
 }
 

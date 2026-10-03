@@ -329,7 +329,7 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
         collect = {} if research_live.enabled() else None
         run = research_forecasts(conn, write=not dry_run, now=now, game_ids=accepted, collect=collect, keep=True)
         winner = run.pop("forecasts", [])
-        out["agreement"] = run
+        out["agreement"] = _refusal_is_not_failure(run)
         if out["agreement"].get("status") == "failed":
             status = "failed"
         if collect is not None:   # research cohorts and selections; never blocks or changes the primary forecasts above
@@ -346,6 +346,25 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
         else:
             out["research"] = {"status": "disabled", "reason": "RESEARCH_SELECTION=0"}
     return {"status": status, **out} if dry_run else _finish(conn, run_id, status, 1, out)
+
+
+# Members that refuse by design when their input is not usable (README: the injury-aware member skips while the others
+# run). Their refusal is reported per member and never makes the run 'failed'; any other error or skip still does.
+REFUSING_MEMBERS = {"availability_two_hour": "AvailabilityError:"}
+
+
+def _refusal_is_not_failure(run: dict) -> dict:
+    """The agreement step's result with status 'partial' instead of 'failed' when the ONLY problem is a refusing member's
+    own refusal. The member's error stays in `errors` (cohorts record it as missing) and is repeated in `refused`."""
+    errors, skipped = run.get("errors") or {}, run.get("skipped") or {}
+    if run.get("status") != "failed" or "error" in run or not errors:
+        return run
+    shadow = agreement.SHADOW.get(run.get("sport"), ())
+    refused = all(str(errors[m]).startswith(REFUSING_MEMBERS.get(m, "\0")) for m in errors if m not in shadow)
+    refusals = {m: errors[m] for m in errors if m in REFUSING_MEMBERS}
+    if not refused or not refusals or any(m not in shadow for m in skipped):
+        return run
+    return {**run, "status": "partial", "refused": refusals}
 
 
 NIGHT_BEFORE_DISCONTINUED = "night-before forecasting is discontinued: new forecasts are made only within two hours of the start"

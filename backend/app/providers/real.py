@@ -12,7 +12,7 @@ import json
 
 from .. import agreement, backtest, config, live, market_live, markets, metrics, near_tipoff, sports
 from ..db import utc_now
-from ..live import HORIZON_DAYS, LATEST_LIVE_SQL
+from ..live import LATEST_LIVE_SQL
 from ..schemas import (BaselineScore, MarketModelVersion, GameDetail, GamesResponse, GoalieListingOut, GameSummary, HistoryResponse, Market,
                        MarketComparison, MarketForecastOut, MarketHistoryResponse, MarketInfo, MarketPerformanceResponse,
                        MarketQuoteOut, MarketRecord, MarketRecordSummary, MarketSide, Meta, NearTipoffForecast, Outcome,
@@ -108,12 +108,10 @@ class RealProvider:
             return f"No forecast: {seasons} were model warm-up seasons."
         if g["status"] in ("postponed", "canceled"):
             return f"No forecast: game {g['status']}."
-        if cutoff > self.now:
-            horizon = (_parse(self.now) + timedelta(days=HORIZON_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
-            if cutoff > horizon:
-                return f"Forecasts are recorded within {HORIZON_DAYS} days of the game by the daily job."
-            return "Forecast not recorded yet; the daily job records it before the cutoff."
-        return "No pregame forecast was recorded before the cutoff."
+        if cutoff > self.now:   # the daily job that filled the pre-game archive is discontinued: nothing more will be recorded
+            return ("No pre-game archive forecast: the daily job that recorded them is discontinued. "
+                    "New forecasts are recorded within two hours before the start.")
+        return "No pre-game archive forecast was recorded before the cutoff."
 
     def _market(self, game_id: str, tipoff: str) -> Optional[Market]:
         if self.sport != "nba":   # NHL moneylines are stored with the other line quotes
@@ -142,7 +140,17 @@ class RealProvider:
                     forecast_note=None if pred else self._forecast_note(g),
                     market=self._market(g["game_id"], g["tipoff_at"]), outcome=outcome,
                     near_tipoff=self._near_tipoff(g),
-                    agreement=agreement.summary(self.conn, g["game_id"], self.sport, self.now, policy))
+                    agreement=self._agreement(g["game_id"], policy))
+
+    def _agreement(self, game_id: str, policy: str) -> dict:
+        """Winner agreement for a game card, from ONE research definition: if the latest cohort's members come from more
+        than one definition (a code change on unchanged data), only the newest definition's members are shown."""
+        out = agreement.summary(self.conn, game_id, self.sport, self.now, policy)
+        definitions = {m["model_version"].rsplit(":", 1)[-1] for m in out["models"]}
+        if len(definitions) > 1:
+            newest = max(out["models"], key=lambda m: m["generated_at"])["model_version"].rsplit(":", 1)[-1]
+            out = agreement.summary(self.conn, game_id, self.sport, self.now, policy, definition=newest)
+        return out
 
     def _stats(self, team_id: str, season: int, tipoff: str, cutoff: str) -> TeamStats:
         rows = self.conn.execute(
@@ -470,7 +478,8 @@ class RealProvider:
             # Fair comparison: only a quote the forecast could have seen (retrieved no later than its generation).
             q = self.conn.execute(
                 "SELECT home_prob_devig FROM odds_quotes WHERE game_id=? AND retrieved_at <= ? "
-                "ORDER BY retrieved_at DESC LIMIT 1" if self.sport == "nba" else     # NHL moneylines: market_quotes
+                "ORDER BY retrieved_at DESC, price_label = 'current' DESC, quote_id DESC LIMIT 1"
+                if self.sport == "nba" else     # NHL moneylines: market_quotes
                 "SELECT p_a_devig FROM market_quotes WHERE game_id=? AND market='winner' AND retrieved_at <= ? "
                 "ORDER BY retrieved_at DESC, price_label = 'current' DESC, quote_id DESC LIMIT 1",
                 (r["game_id"], r["generated_at"])).fetchone()
