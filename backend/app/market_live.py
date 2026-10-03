@@ -166,12 +166,23 @@ def latest(conn: sqlite3.Connection, *, policy: str = "pregame", market: Optiona
     return conn.execute(sql + " ORDER BY g.tipoff_at, f.game_id, f.market", params).fetchall()
 
 
+def latest_current(conn: sqlite3.Connection, *, policy: str = "pregame", **kw) -> list[sqlite3.Row]:
+    """`latest` under the CURRENT sealed market model only: after a re-seal, forecasts of an earlier model version stay
+    stored but are never mixed into, or counted twice in, the current record. Without a sealed model: every row."""
+    rows = latest(conn, policy=policy, **kw)
+    try:
+        current = model_version(market_model(conn)[1], policy)
+    except MarketModelUnavailable:
+        return rows
+    return [r for r in rows if r["model_version"] == current]
+
+
 def score(conn: sqlite3.Connection, *, policy: str = "pregame", market: Optional[str] = None,
           min_confidence: Optional[float] = None) -> dict:
     """Win / loss / push / void / pending counts relative to each forecast's pick, plus multi-outcome Brier and log loss
     on settled forecasts, per market. `min_confidence` keeps forecasts whose picked side has at least that probability."""
     by_market: dict[str, dict] = {}
-    for r in latest(conn, policy=policy, market=market):
+    for r in latest_current(conn, policy=policy, market=market):
         side = pick(r)
         conf = r["p_a"] if side == "a" else r["p_b"]
         if min_confidence is not None and conf + 1e-9 < min_confidence:

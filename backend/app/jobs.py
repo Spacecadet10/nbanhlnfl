@@ -500,22 +500,29 @@ def forecast_due(conn: sqlite3.Connection) -> dict:
 
 
 def scheduler(conn: sqlite3.Connection, *, interval_minutes: float, max_runs: int, job: str = "daily",
-              log: Callable[[str], None] = print, sleep: Callable[[float], None] = time.sleep) -> list[dict]:
-    """Runs `daily` or `odds` at a fixed interval, a bounded number of times (no unbounded background process)."""
+              log: Callable[[str], None] = print, sleep: Callable[[float], None] = time.sleep,
+              lock: Optional[Callable] = None) -> list[dict]:
+    """Runs `daily` or `odds` at a fixed interval, a bounded number of times (no unbounded background process). `lock`, if
+    given, returns the store's job lock: it is held per iteration, never through the sleep between iterations."""
     if job not in SCHEDULER_MIN_INTERVAL:
         raise ValueError(f"job must be one of {sorted(SCHEDULER_MIN_INTERVAL)}")
     minimum = SCHEDULER_MIN_INTERVAL[job]
     if max_runs < 1 or interval_minutes < minimum:
         raise ValueError(f"max_runs must be >= 1 and interval_minutes >= {minimum} ({job} quota)")
+    from contextlib import nullcontext
     out = []
     for i in range(max_runs):
         if i:
             sleep(interval_minutes * 60)
-        if job == "daily":
-            result = daily(conn)
-            log(json.dumps({k: v.get("status") for k, v in result.items() if isinstance(v, dict)}))
-        else:
-            result = {"odds": odds_snapshot(conn), "forecasts": forecast_due(conn)}
-            log(json.dumps({"odds": result["odds"].get("status"), "forecasts": result["forecasts"].get("status")}))
+        with (lock() if lock else nullcontext(True)) as held:
+            if not held:
+                result = {"status": "skipped", "reason": "another job is running on this store"}
+                log(json.dumps(result))
+            elif job == "daily":
+                result = daily(conn)
+                log(json.dumps({k: v.get("status") for k, v in result.items() if isinstance(v, dict)}))
+            else:
+                result = {"odds": odds_snapshot(conn), "forecasts": forecast_due(conn)}
+                log(json.dumps({"odds": result["odds"].get("status"), "forecasts": result["forecasts"].get("status")}))
         out.append(result)
     return out

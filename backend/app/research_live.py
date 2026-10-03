@@ -696,17 +696,21 @@ def _select(conn, sport, defn, cohorts, out, stamp):
             if generated >= c["tipoff_at"]:
                 continue
             key = _key(cid, None if drow is None else drow["decision_id"], context)
-            with transaction(conn):
-                if conn.execute("SELECT 1 FROM research_selections WHERE idempotency_key=?", (key,)).fetchone():
-                    continue
-                conn.execute(
-                    "INSERT INTO research_selections (idempotency_key, cohort_id, decision_id, sport, game_id, market, generated_at, "
-                    "tipoff_at, context, status, side, probability, threshold, reason, recommended, game_reason) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                    (key, cid, None if drow is None else drow["decision_id"], sport, gid, market, generated, c["tipoff_at"],
-                     context, s["status"], None if s["status"] != "pick" else s["side"], s["probability"],
-                     None if drow is None or drow["status"] != "active" else json.loads(drow["rule"])["threshold"],
-                     s["reason"], int(market == chosen), reasons[market]))
+            try:
+                with transaction(conn):
+                    if conn.execute("SELECT 1 FROM research_selections WHERE idempotency_key=?", (key,)).fetchone():
+                        continue
+                    conn.execute(
+                        "INSERT INTO research_selections (idempotency_key, cohort_id, decision_id, sport, game_id, market, generated_at, "
+                        "tipoff_at, context, status, side, probability, threshold, reason, recommended, game_reason) "
+                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (key, cid, None if drow is None else drow["decision_id"], sport, gid, market, generated, c["tipoff_at"],
+                         context, s["status"], None if s["status"] != "pick" else s["side"], s["probability"],
+                         None if drow is None or drow["status"] != "active" else json.loads(drow["rule"])["threshold"],
+                         s["reason"], int(market == chosen), reasons[market]))
+            except sqlite3.IntegrityError as exc:     # refused by the guard (e.g. the start changed mid-cycle): a skip
+                out["skipped"].setdefault(market, []).append({"game_id": gid, "reason": f"selection refused: {exc}"})
+                continue
             out["selections_created"] += 1
 
 

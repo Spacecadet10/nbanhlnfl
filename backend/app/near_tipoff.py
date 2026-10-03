@@ -207,7 +207,9 @@ def score(conn: sqlite3.Connection) -> dict:
         wins = sum((p >= 0.5) == y for p, y in pairs)
         return {"games": len(pairs), "wins": wins, "losses": len(pairs) - wins, "accuracy": metrics.accuracy(probs, outcomes),
                 "brier": metrics.brier(probs, outcomes), "log_loss": metrics.log_loss(probs, outcomes)}
-    night = {r["game_id"]: r["home_win_prob"] for r in conn.execute(live.LATEST_LIVE_SQL, (backtest.model_version(model),))}
+    night = {r["game_id"]: r["home_win_prob"] for r in conn.execute(      # a night-before forecast for another date is void
+        f"SELECT l.*, g.tipoff_at FROM ({live.LATEST_LIVE_SQL}) l JOIN games g ON g.game_id = l.game_id",
+        (backtest.model_version(model),)) if not live.day_changed(r)}
     both = [r for r in final if r["game_id"] in night]
     quoted = {r["game_id"]: market_at(conn, r)[0] for r in final}
     priced = [r for r in final if quoted[r["game_id"]] is not None]

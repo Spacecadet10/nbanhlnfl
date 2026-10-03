@@ -58,6 +58,8 @@ def test_night_before_winner_forecast_is_void_when_the_game_moves_to_another_day
     final(sealed, "2026-10-12T19:00:00", at="2026-10-13T03:00:00Z")      # moved one day later, then played
     s = live.score(sealed)
     assert s["scored"] == 0 and s["start_changed"] == 1
+    sealed.execute("INSERT INTO job_runs (job, started_at, finished_at, status) VALUES "
+                   "('refresh', '2026-10-12T21:30:00Z', '2026-10-12T21:30:00Z', 'success')")
     p = RealProvider(sealed, now="2026-10-13T05:00:00Z")
     hist = p.predictions("live", None, None, None, 50)
     assert hist.total == 1 and hist.record.settled == 0
@@ -116,6 +118,7 @@ def test_overlapping_jobs_on_one_store_do_not_run_together(tmp_path, monkeypatch
 def test_the_periodic_odds_command_skips_while_another_job_holds_the_store(tmp_path, monkeypatch, capsys):
     from app import cli
     monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(cli, "ODDS_LOCK_WAIT_SECONDS", 0.2)          # a short job is waited out; a long one is not
     with db.store_lock("nhl"):
         assert cli.main(["--sport", "nhl", "odds"]) == 0
     out = json.loads(capsys.readouterr().out)
@@ -137,4 +140,35 @@ def test_market_records_count_a_game_once_after_the_market_model_is_resealed(sea
     hist = p.market_predictions("total", "pregame", None, None, None, 50, None)
     assert hist.total == 1 and hist.record.selected == 1 and hist.predictions[0].forecast.model_version == r["model_version"]
     assert p.market_performance("total", "pregame").forecasts == 1
+    assert market_live.score(sealed, policy="pregame", market="total")["markets"]["total"]["forecasts"] == 1
     assert [f.model_version for f in p.game(GID).market_forecasts if f.market == "total" and f.policy == "pregame"] == [r["model_version"]]
+
+
+def test_two_hour_score_never_compares_with_a_void_night_before_forecast(sealed):
+    add_upcoming(sealed, start="2026-10-10T19:00:00", at="2026-10-09T12:00:00Z")
+    live.predict(sealed, now="2026-10-09T15:00:00Z")                       # night-before forecast for 10 October
+    add_upcoming(sealed, start="2026-10-11T19:00:00", at="2026-10-11T21:30:00Z")   # moved to 11 October
+    sealed.execute("INSERT INTO job_runs (job, started_at, finished_at, status) VALUES "
+                   "('refresh', '2026-10-11T21:30:00Z', '2026-10-11T21:30:00Z', 'success')")
+    assert near_tipoff.predict_now(sealed, now="2026-10-11T22:00:00Z")["created"] == 1
+    final(sealed, "2026-10-11T19:00:00", at="2026-10-12T03:00:00Z")
+    s = near_tipoff.score(sealed)
+    assert s["scored"]["games"] == 1 and s["same_games_as_night_before"]["night_before"]["games"] == 0
+
+
+def test_the_scheduler_takes_the_store_lock_per_iteration_not_through_its_sleep(tmp_path, monkeypatch):
+    from app import jobs
+    monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path))
+    seen = []
+
+    def sleep(_seconds):                                  # while the scheduler sleeps, another job can take the store
+        with db.store_lock("nhl", wait_seconds=0) as free:
+            seen.append(free)
+    monkeypatch.setattr(jobs, "daily", lambda conn: {"refresh": {"status": "skipped"}})
+    out = jobs.scheduler(None, interval_minutes=30, max_runs=2, job="daily", log=lambda _m: None, sleep=sleep,
+                         lock=lambda: db.store_lock("nhl", wait_seconds=0))
+    assert seen == [True] and len(out) == 2
+    with db.store_lock("nhl"):                            # and an iteration that finds the store busy is skipped, visibly
+        out = jobs.scheduler(None, interval_minutes=30, max_runs=1, job="daily", log=lambda _m: None,
+                             lock=lambda: db.store_lock("nhl", wait_seconds=0))
+    assert out == [{"status": "skipped", "reason": "another job is running on this store"}]

@@ -134,6 +134,7 @@ def test_historical_statistics_never_round_up_across_a_threshold():
     assert at._stored(0.599996) < 0.6 and at._stored(0.6) == 0.6 and at._stored(0.35) == 0.35
     assert at._stored(0.5999999995) == 0.6                # inside the documented 1e-9 boundary tolerance
     assert at._stored(None) is None
+    assert at._stored(1 / 3) >= 1 / 3 and at._stored(0.333335) >= 1 / 3 and at._stored(0.33332) < 1 / 3   # three-way floor
 
 
 # --- Goalie sources: historical evidence used the actual starter (a postgame fact) --------------------------------------
@@ -149,6 +150,7 @@ def test_goalie_pool_sources_are_suspended_without_editing_the_sealed_registry()
     assert len(suspended) == 9 and all("_goalie" in s["source"] and s["reason"] for s in suspended)
     assert not any("_goalie" in s for s in selection.all_sources(reg, "nhl", "reg3"))
     assert selection.registry_id(reg) != sealed_reg["sha256"][:16]     # decisions after the suspension have their own identity
+    assert reg["suspensions"]["suspended_at"] <= "2026-10-03T04:30:00Z"
 
 
 def test_a_suspension_list_for_another_registry_is_refused(tmp_path):
@@ -158,3 +160,38 @@ def test_a_suspension_list_for_another_registry_is_refused(tmp_path):
     path.write_text(json.dumps(other))
     with pytest.raises(selection.RegistryError):
         selection.apply_suspensions(json.loads(selection.REGISTRY_PATH.read_text()), path)
+
+
+def test_a_game_whose_latest_cohort_has_no_observation_is_not_scored_from_an_older_one(game, monkeypatch):
+    run(game, NOW)
+    reg = small_registry()
+    at.record(game, game_ids=[GID], now="2026-10-12T21:35:00Z", reg=reg)
+    from test_live_markets import add_upcoming
+    add_upcoming(game, gid=2026020099, start="2026-10-11T19:00:00", state=7, hs=3, vs=1, period=3, at="2026-10-12T21:40:00Z",
+                 home=1, away=2)
+    run(game, "2026-10-12T21:45:00Z")                     # a newer core cohort, never observed (recording failed)
+    items = at.prospective_items(game, reg, "nhl", "winner")
+    assert not any(GID in v for v in items.values())
+
+
+def test_goalie_groups_are_not_ranked_in_the_historical_leaderboard():
+    m = {"candidates": ["cand:poisson_draw:nhl_goalie", "cand:poisson_draw:nhl_base"],
+         "groups": [g("single", "cand:poisson_draw:nhl_goalie"), g("single", "cand:poisson_draw:nhl_base"),
+                    g("avg", "goals_draw", "cand:poisson_draw:nhl_goalie"), {**g("single", "x"), "kind": "stack_pool", "id": "stack_pool|x"}]}
+    assert at._optimistic(m) == {"single|cand:poisson_draw:nhl_goalie", "avg|goals_draw+cand:poisson_draw:nhl_goalie", "stack_pool|x"}
+    cell = {"threshold": 0.6, "sealed": True, "decided": 500, "coverage": 0.5, "win_rate": 0.7, "ci95": [0.6, 0.8],
+            "matched": [{"model": "a", "win_rate": 0.5, "games": 500}]}
+    groups = [{"id": i, "kind": "single", "members": [i], "thresholds": [cell]} for i in ("single|cand:poisson_draw:nhl_goalie", "single|b")]
+    assert [r["id"] for r in at.leaderboard(groups, "spread", 10, at._optimistic(m))] == ["single|b"]
+
+
+def test_a_selection_refused_by_the_database_is_a_skip_not_an_aborted_step(game, monkeypatch):
+    real = research_live._select
+
+    def moved(conn, *a, **k):                             # the start changes after the cohorts were written
+        conn.execute("UPDATE games SET tipoff_at='2026-10-13T00:00:00Z' WHERE game_id=?", (GID,))
+        return real(conn, *a, **k)
+    monkeypatch.setattr(research_live, "_select", moved)
+    out = run(game, NOW)
+    assert out["selections_created"] == 0 and out["status"] == "partial"
+    assert any("selection refused" in s["reason"] for v in out["skipped"].values() for s in v)

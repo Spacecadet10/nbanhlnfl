@@ -1,7 +1,7 @@
 {
  "finding": "audit 2026-10-03 (HANDOFF.md): historical goalie inputs used a postgame fact",
  "registry": "99c3f7cf1a080c6f363a2d8a8459c8753fe86251b0474c4f5d6bf48540ff5764",
- "sha256": "83c0c563f05ef4cf6aa2db7b834ab102b9dda7aa3c86eb8b46646a7af64b31df",
+ "sha256": "44725dda990b1899b4ef518fbd9325cc9c7b09843060798a475b547530d3a27d",
  "sources": [
   {
    "candidates": [
@@ -94,6 +94,6 @@
    "sport": "nhl"
   }
  ],
- "suspended_at": "2026-10-03T05:30:00Z",
+ "suspended_at": "2026-10-03T04:10:00Z",
  "version": 1
 }

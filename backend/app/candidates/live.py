@@ -494,7 +494,10 @@ def roster(conn, sport: str, as_of: Optional[str] = None) -> dict:
         alone = [m for m, st in state.items() if any(x["route"] == "standalone" for x in st["sources"])]
         inside = sorted({x["source"] for st in state.values() for x in st["sources"] if x["route"] == "combination"})
         selected = [f"{m}: {st['decision']['rule']['source']}" for m, st in state.items() if st["selected_now"]]
+        off = sorted(m for m, st in state.items() if st.get("suspended"))
         label = ("reference only (never selected)" if spec.role == "reference" else
+                 f"suspended in {', '.join(off)}: registered on evidence that used the actual starting goalie (known only "
+                 f"after the start); recorded, never selectable" if off and not alone and not inside else
                  f"selected now ({'; '.join(selected)})" if selected else
                  f"selectable alone in {', '.join(alone)} (standalone held-out value); picked only when the pool selector's "
                  f"evidence thresholds are met" if alone else
@@ -506,7 +509,7 @@ def roster(conn, sport: str, as_of: Optional[str] = None) -> dict:
                       "definition": registry.definition(spec), "training_status": status,
                       "latest_fit": dict(fit) if fit else None, "evaluation": evaluation,
                       "prospective": {"games": n, "settled": settled},
-                      "combination_participation": sorted(state) if reg else combos,
+                      "combination_participation": sorted(m for m, st in state.items() if st["sources"]) if reg else combos,
                       "pool": state, "selection": label})
     return {"sport": sport, "pool": registry.POOL, "as_of": as_of, "candidates": items,
             "registry": None if reg is None else {"id": pool_selection.registry_id(reg), "effective_from": reg["effective_from"],
