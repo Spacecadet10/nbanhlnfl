@@ -92,6 +92,9 @@ def main(argv=None) -> int:
     tsp = sub.add_parser("tuning-study", help="Bounded chronological Optuna tuning of HGB / ExtraTrees learners on both stores "
                                               "(MODEL_SELECTION §19); run on store copies")
     tsp.add_argument("--out")
+    tev = sub.add_parser("tuning-evaluate", help="Evaluate tuning-v1 predictions alone and inside combinations (saved tables "
+                                                 "only; opens no store)")
+    tev.add_argument("--out")
     dsp = sub.add_parser("discovery-study", help="Historical training and combination discovery from saved chronological "
                                                  "tables; opens no store (MODEL_SELECTION §18)")
     dsp.add_argument("--out")
@@ -164,6 +167,12 @@ def main(argv=None) -> int:
                     help="Required for --period test; the access is logged to data/eval/test_access.jsonl")
     bt.add_argument("--record", action="store_true", help="Also append predictions to the ledger as run_type=backtest")
     args = p.parse_args(argv)
+    if args.cmd == "tuning-evaluate":
+        from pathlib import Path
+        from . import tuning_study
+        report = tuning_study.evaluate(out_dir=Path(args.out) if args.out else None)
+        print(json.dumps({"output_dir": report["output_dir"], "markets": list(report["markets"])}))
+        return 0
     if args.cmd == "tuning-study":       # opens (and migrates) both stores: run on copies
         from pathlib import Path
         from . import tuning_study

@@ -248,3 +248,139 @@ def run(conn_for: Callable, out_dir: Optional[Path] = None, sports_: tuple = ("n
     (out_dir / "report.json").write_text(json.dumps(report, indent=1, default=float))
     report["output_dir"] = str(out_dir)
     return report
+
+
+# --- Evaluation (alone and inside combinations) --------------------------------------------------------------------------
+COUNTERPART = {"et_tuned:nba_base": "extra_trees:nba_base", "et_tuned:nba_base:normal": "extra_trees:nba_base:normal",
+               "et_tuned:nhl_base": "extra_trees:nhl_base", "hgb_tuned:nba_base": "gbt_v1",
+               "hgb_tuned:nba_base:normal": "gbt_points", "hgb_tuned:nhl_base": "hockey_gbt",
+               "hgb_tuned:nhl_base:reg3": "multinomial_l2:nhl_base", "hgb_tuned:nhl_base:goals": "poisson_draw:nhl_base"}
+
+
+def _week_boot(diffs: list, weeks: list, n: int = 2000) -> dict:
+    import random
+    by: dict = {}
+    for d, w in zip(diffs, weeks):
+        by.setdefault(w, []).append(d)
+    ks = sorted(by)
+    rng = random.Random(SEED)
+    means = []
+    for _ in range(n):
+        tot = cnt = 0
+        for _k in ks:
+            b = by[ks[rng.randrange(len(ks))]]
+            tot += sum(b)
+            cnt += len(b)
+        means.append(tot / cnt)
+    means.sort()
+    return {"mean": float(np.mean(diffs)), "ci95": [means[int(0.025 * n)], means[int(0.975 * n) - 1]], "games": len(diffs),
+            "weeks": len(ks)}
+
+
+def evaluate(out_dir: Optional[Path] = None, budget: Optional[int] = None, log: Callable = print) -> dict:
+    from . import discovery_study as ds
+    root = config.data_dir()
+    tdir = root / "research" / "tuning"
+    out_dir = out_dir or root / "reports" / "tuning-v1"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    report = {"study": STUDY, "started_at": utc_now(), "markets": {}}
+    for sport in ("nhl", "nba"):
+        tuned = json.loads(gzip.decompress((tdir / f"oof-{sport}.json.gz").read_bytes()))["markets"]
+        tables, _ = ds.load(root, sport)
+        for market, rows in tables.items():
+            tv = tuned.get(market, {})
+            names = sorted({n for v in tv.values() for n in v})
+            if not names:
+                continue
+            aug = []
+            for r in rows:
+                if r["game_id"] in tv and all(n in tv[r["game_id"]] for n in names):
+                    aug.append({**r, "vectors": {**r["vectors"], **{n: tuple(v) for n, v in tv[r["game_id"]].items()}}})
+            base_members = ds.members_for(sport, rows)
+            ar = ds.Arrays(market, aug, base_members + names)
+            seasons = sorted(set(ar.season.tolist()))
+            real = ar.realised
+            ok = np.ones(ar.n, bool) if market == "reg3" else real != 1
+
+            def ll(m):
+                P = ar.P[m]
+                return -np.log(np.clip(P[np.arange(ar.n), np.clip(real, 0, 2)], 1e-15, 1))
+            losses = {m: ll(m) for m in base_members + names}
+            alone = {}
+            for n in names:
+                diffs_best, diffs_cp, weeks, per = [], [], [], {}
+                for s in seasons[1:]:
+                    prior = (ar.season < s) & ok
+                    cur = (ar.season == s) & ok
+                    best = min(base_members, key=lambda m: (losses[m][prior].mean(), base_members.index(m)))
+                    d = losses[n][cur] - losses[best][cur]
+                    cp = COUNTERPART.get(n)
+                    per[str(s)] = {"best_prior_existing": best, "minus_best": float(d.mean()),
+                                   "minus_counterpart": float((losses[n][cur] - losses[cp][cur]).mean()) if cp in losses else None}
+                    diffs_best += d.tolist()
+                    weeks += ar.week[cur].tolist()
+                    if cp in losses:
+                        diffs_cp += (losses[n][cur] - losses[cp][cur]).tolist()
+                alone[n] = {"log_loss_minus_best_prior_existing": _week_boot(diffs_best, weeks),
+                            "counterpart": COUNTERPART.get(n),
+                            "log_loss_minus_untuned_counterpart": _week_boot(diffs_cp, weeks) if diffs_cp else None,
+                            "per_season": per}
+            t0 = time.time()
+            kw = {"budget": budget} if budget else {}
+            base, _ = ds.analyse(sport, market, [{**r, "vectors": {k: v for k, v in r["vectors"].items() if k not in names}}
+                                                 for r in aug], log=lambda *_: None, **kw)
+            withm, tab = ds.analyse(sport, market, aug, log=lambda *_: None, **kw)
+            pooled = {}
+            for label, rep in (("without_tuned", base), ("with_tuned", withm)):
+                agg = {}
+                for f in rep["folds"]:
+                    for x in f["assessed"]:
+                        st = x["assess"]
+                        nn = st["wins"] + st["losses"]
+                        b = st["matched"]["best_prior_single"]
+                        if nn and b is not None:
+                            g = agg.setdefault(f"{x['threshold']:.2f}", [0, 0, 0.0, 0.0])
+                            g[0] += st["wins"]
+                            g[1] += nn
+                            g[2] += b * nn
+                            g[3] += (st["matched"]["all_member_average"] or 0) * nn
+                pooled[label] = {t: {"win_rate": w / nn, "decided": nn, "best_prior_single": bs / nn, "all_member_average": av / nn}
+                                 for t, (w, nn, bs, av) in sorted(agg.items())}
+            # with / without each tuned member, for every frozen rule that contains one (same assess season, same threshold)
+            route_b = []
+            for f in withm["folds"]:
+                a = f["assess_season"]
+                for x in f["assessed"]:
+                    meth, mem = x["group"].split("|")
+                    members = mem.split("+")
+                    for n in names:
+                        if n not in members:
+                            continue
+                        rest = [m for m in members if m != n]
+                        st = x["assess"]
+                        row = {"assess_season": a, "rule": x["group"], "threshold": x["threshold"], "why": x["why"],
+                               "with": {"decided": st["wins"] + st["losses"], "win_rate": st["win_rate"]}}
+                        if rest and meth in ("avg", "unanimous_min", "majority", "single") and (meth != "majority" or len(rest) >= 3):
+                            m2 = meth if len(rest) > 1 else "single"
+                            side, conf, _, _ = ds.side_conf(ar, {}, {"method": m2, "members": rest})
+                            out = ar.outcome(side)
+                            sel = (side >= 0) & (conf + 1e-9 >= x["threshold"]) & (ar.season == a)
+                            o = out[sel]
+                            w, l = int((o == 1).sum()), int((o == 0).sum())
+                            row["without"] = {"rule": f"{m2}|{'+'.join(rest)}", "decided": w + l, "win_rate": w / (w + l) if w + l else None}
+                        else:
+                            row["without"] = None
+                        route_b.append(row)
+            report["markets"][f"{sport}:{market}"] = {
+                "tuned_members": names, "games": ar.n, "seasons": seasons, "alone": alone,
+                "frozen_pooled": pooled, "qualified": {"without_tuned": [q for f in base["folds"] for q in f["qualified"]],
+                                                       "with_tuned": [q for f in withm["folds"] for q in f["qualified"]]},
+                "frozen_rules_with_tuned_member": route_b,
+                "registry_with_tuned": withm["prospective_registry"], "configurations": withm["plan"]["configurations"]}
+            with gzip.open(out_dir / f"groups-{sport}-{market}.json.gz", "wt") as fh:
+                json.dump(tab, fh, default=float)
+            log(f"{sport}:{market}: {ar.n} games, tuned {names}, {time.time() - t0:.0f} s")
+    report["finished_at"] = utc_now()
+    (out_dir / "evaluation.json").write_text(json.dumps(report, indent=1, default=float))
+    report["output_dir"] = str(out_dir)
+    return report
