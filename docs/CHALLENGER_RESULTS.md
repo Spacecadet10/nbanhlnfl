@@ -202,7 +202,7 @@ candidate; their 3 existing members were already fully covered). Omitted subsets
   has a single held-out season; 2-hour live cutoffs differ from the historical night-before/17:45 cutoffs.
 
 ## Feature tranche `features-v1` (MODEL_SELECTION §19; run 2026-10-03 00:34–00:35 UTC on scratch store copies; exploratory)
-Evidence: docs/evidence/features-v1/ (both reports and the experiment log: 4 configurations, all succeeded, none skipped).
+Evidence: docs/evidence/features-v1/ (both reports and the experiment log: 4 configurations, all succeeded, none skipped; the NHL walk ran twice — the second run only added the anchor comparison).
 **NBA — player-quality-weighted absences** (3,667 games 2022–24 at the 17:45 ET cutoff; report times assumed as `avail_v1`):
 | Model | Log loss | Brier | Accuracy |
 |---|---|---|---|
@@ -223,5 +223,12 @@ Evidence: docs/evidence/features-v1/ (both reports and the experiment log: 4 con
 | winner · poisson_draw | −0.0005 [−0.0014, +0.0005] | −0.0005 [−0.0012, +0.0002] |
 | reg3 · poisson_draw | −0.0002 [−0.0013, +0.0009] | −0.0005 [−0.0013, +0.0003] |
 | puck line · poisson_draw | −0.0004 [−0.0015, +0.0006] | −0.0006 [−0.0013, +0.0001] |
-- Every interval spans 0 → **no evidence of added information**; point estimates are consistently slightly negative for the
-  goal-rate learner, so this is a weak, unconfirmed lead, not a result. Not recorded live.
+- Every standalone interval spans 0 → **no evidence of added information** under the registered reading rule.
+- **With/without in the average with the market's anchor** (the §19 metric added after the independent review found it
+  missing; rerun 01:01 UTC, same walk; special − base inside `average(anchor, X)`), assess 2022–26:
+  winner (anchor xG) −0.0002 [−0.0008, +0.0003] (logit) / −0.0002 [−0.0006, +0.0001] (goal rates);
+  **reg3 (anchor goals_draw) −0.00055 [−0.00095, −0.00015]**; **puck line (anchor goals_glm) −0.0005 [−0.00086, −0.00013]**
+  (intervals Bonferroni over 4; still below 0 over all 8 comparisons). A small **combination-only lead** on reused seasons:
+  the inputs may help an average without qualifying alone. The registered rule gates on standalone value, so nothing is
+  recorded live from this study; a prospective test would need its own registration (combination-only source, as the pool's
+  combination route).
