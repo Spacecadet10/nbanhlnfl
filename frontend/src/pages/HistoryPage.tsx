@@ -160,6 +160,7 @@ function HistoryTable({ rows }: { rows: PredictionRecord[] }) {
             <td data-label="Model confidence">{pct(r.confidence, 1)}</td>
             <td data-label="Result">{r.outcome ? `${r.away.abbr} ${r.outcome.away_score} – ${r.outcome.home_score} ${r.home.abbr}`
               : r.void ? <span className="muted" title="The start changed after the forecast, or the game was postponed or cancelled: not scored">Void</span>
+              : r.unscorable ? <span className="warn" title="The game is final but has no usable result: not scored">Not scorable</span>
               : <span className="muted">Pending</span>}</td>
             <td data-label="Outcome of pick">
               {r.correct == null ? <span className="muted">—</span> : r.correct ? <span className="ok">Correct</span> : <span className="bad">Wrong</span>}

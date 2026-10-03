@@ -16,10 +16,17 @@
   results: docs/SMOKE_TEST.md (latest section).
 - **Self-review fix:** demo mode wrongly showed archive wording (Game page sentence, Today slate); fixed and re-verified in a
   temporary demo API; readiness rerun exit 0, 534 passed (SMOKE_TEST).
-- **Not done / remaining:** the running :8000 API (Devin's) and :5173 were NOT restarted, so the live app shows the new fields
-  only after a restart. README API table and main.py's `policy` description still say night-before (pre-existing uncommitted
-  files, out of scope). Nothing committed. Freshness, backtest scope, concurrency, joint explorer, demo, release isolation:
-  separate batches, not started.
+- **Independent review and follow-up — Claude (Fable 5.1), 2026-10-03 16:35–18:10 UTC:** PASS. Reviewer checks: 72 targeted
+  tests pass in temporary stores; the 4 new tests fail against the pre-change `real.py`/`schemas.py` in a scratch copy. The
+  user asked for the :8000 restart: done 16:49 UTC (no job running; same command, `NBA_API_MODE=real`; definition still
+  `8d60d7aebdb6a68d`). Live browser: NHL History/Today read "57 picks · 4–9 (13 settled) · 44 pending · 0 void · 0 unscorable";
+  two-hour puck line "5 picks · 5–0–0 · 0 pending"; no "night-before" text. Small fixes by the reviewer at the user's request:
+  winner History row shows "Not scorable" for an unscorable row (matches the record); `main.py` policy description and three
+  README lines now say pre-game archive. The batch was committed by Opus as `d66bebc` while this review was finishing; these reviewer fixes are the commit after it.
+- **Remaining:** the earlier joint agreement/confidence work (agreement_tracking.py, the joint endpoint in main.py, Tracking.tsx,
+  client.ts, PerformancePage.tsx, styles.css, test_joint_agreement.py, MODEL_SELECTION.md and its HANDOFF/SMOKE/README sections)
+  is still uncommitted and awaits its own review. No void or unscorable case exists in real data (synthetic tests only); the
+  frontend has no test runner. Freshness, backtest scope, concurrency, joint explorer, demo, release isolation: not started.
 
 
 ## Reconciliation of parallel work (option 1) — Claude (Opus 5.5, session andry-03), 2026-10-03 02:09–03:40 UTC

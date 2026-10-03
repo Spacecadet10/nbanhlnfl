@@ -476,3 +476,10 @@ everything else the real `jobs.selector_decisions` + `jobs.predict_now` wiring. 
   "No demo picks at 80%+ model confidence on this date"; demo record 36 = 32 settled + 4 pending + 0 + 0; 0 px overflow. Real
   snapshot API re-checked: slate "13 games, 13 with a pre-game archive forecast", game page keeps the archive sentence, no
   "night-before". Readiness rerun (isolated): **exit 0, 534 passed**. Temporary servers stopped.
+- **Reviewer checks (Claude Fable 5.1, 16:35–18:10 UTC):** `PYTHONDONTWRITEBYTECODE=1 NBA_DATA_DIR=<scratch> backend/.venv/bin/python
+  -m pytest -p no:cacheprovider --basetemp=<scratch> tests/test_record_counts.py tests/test_live.py tests/test_api.py
+  tests/test_api_markets.py tests/test_live_markets.py tests/test_near_tipoff.py`: **72 passed**. The same new test file against a
+  scratch copy with HEAD `real.py` + `schemas.py`: **4 failed**. Before the restart the live page showed blank counts
+  ("· pending · void · unscorable") because :8000 still ran the old code; after the user-requested restart (16:49 UTC) the live
+  NHL History and Today record lines show "44 pending · 0 void · 0 unscorable" and match the API. Demo-mode rendering was not
+  rechecked by the reviewer (no demo service running).

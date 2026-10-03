@@ -53,7 +53,7 @@ The backend allows CORS from the Vite origin; override with `CORS_ORIGINS` (comm
 | `GET /api/games/{game_id}` | Detail plus point-in-time team stats as of the game's cutoff (404 if unknown) |
 | `GET /api/predictions?run_type=live\|backtest&date_from&date_to&team&min_confidence&limit` | History, latest version per game (422 if `date_from > date_to`). `min_confidence` (0.5–1) keeps picks whose model probability for the predicted winner, max(p_home, 1 − p_home), is at least that value. Each row has `pick` and `confidence`; `record` gives the selected count and the settled win/loss record (unscored games never count) |
 | `GET /api/games?date=…&policy=pregame\|near_tipoff&min_confidence` | The slate. `selection` gives the counts, and each game's `slate_pick` is its pick under the chosen policy only (never the other forecast), with `meets_confidence` |
-| `…/predictions` and `…/performance` `&policy=pregame\|near_tipoff` | Live forecasts only: the night-before archive (API compatibility default) or the two-hour record (frontend default); never mixed (422 with `run_type=backtest`). Game payloads carry an optional `near_tipoff` object next to `prediction` |
+| `…/predictions` and `…/performance` `&policy=pregame\|near_tipoff` | Live forecasts only: the pre-game archive of the discontinued daily job, some made several days before the game (API compatibility default) or the two-hour record (frontend default); never mixed (422 with `run_type=backtest`). Game payloads carry an optional `near_tipoff` object next to `prediction` |
 | `GET /api/performance?run_type=live\|backtest` | Live scoring, or the final-test backtest with baselines. Never mixed |
 
 ## NBA + NHL and markets (contract v3)
@@ -88,7 +88,7 @@ Run from `backend/`:
 .venv/bin/python -m app.cli predict      # guarded two-hour forecasts; also records supported markets and research candidates
 .venv/bin/python -m app.cli score        # score the latest live forecasts against stored results (read-only)
 .venv/bin/python -m app.cli predict-now [--dry-run]   # near-tipoff forecasts for games tipping off within 2 h (refreshes data first)
-.venv/bin/python -m app.cli score-near-tipoff         # score near-tipoff forecasts (read-only; separate from the night-before record)
+.venv/bin/python -m app.cli score-near-tipoff         # score near-tipoff forecasts (read-only; separate from the pre-game archive)
 .venv/bin/python -m app.cli boxscores    # possession refresh: ESPN summaries for recent finals lacking a complete box (max 30/run)
 .venv/bin/python -m app.cli shadow-predict   # archived protocol; recording discontinued
 .venv/bin/python -m app.cli shadow-report    # archived shadow protocol report; not the new two-hour research record
@@ -97,7 +97,7 @@ Run from `backend/`:
 .venv/bin/python -m app.cli scheduler --interval-minutes 360 --max-runs 4   # bounded loop (≥30 min interval)
 .venv/bin/python -m app.cli scheduler --job odds --interval-minutes 15 --max-runs 96   # 24 h of odds snapshots
 ```
-- **Current policy:** new forecasts are generated only in the two hours before scheduled tipoff, never after start. NBA and NHL use the same rule for all supported markets. Night-before forecasts remain an archive; nightly `daily` no longer records predictions. Preseason/exhibition games remain excluded.
+- **Current policy:** new forecasts are generated only in the two hours before scheduled tipoff, never after start. NBA and NHL use the same rule for all supported markets. Forecasts of the discontinued daily job remain as the pre-game archive (some were made several days before the game); nightly `daily` no longer records predictions. Preseason/exhibition games remain excluded.
 - Existing periodic `odds` jobs now refresh and record winner, supported market and research-model forecasts when games enter that window (NBA every 15 minutes; NHL every 30). The Mac must be awake, logged in, and the checkout must stay at its configured path. The daily jobs maintain schedules/results and score records. No extra scheduler is needed.
 - `predict-now` (also `predict`, `markets`, `agreement`) performs the same guarded refresh-and-forecast cycle manually. Use `--sport nhl` before the command for NHL. Stale results, unresolved earlier results, started games, and calculations finishing after tipoff are refused. Retries retain the original prediction and quote; changed inputs/lines receive separate immutable records.
 - Frozen primary Elo settings remain unchanged. Research agreement compares six NBA candidates (including a separately defined injury-aware candidate) or four NHL candidates. Missing/untrained/stale candidates are explicit, never replaced with an Elo vote; a partial cohort does not qualify for the agreement performance record. Winner agreement does not apply to spread/total picks.

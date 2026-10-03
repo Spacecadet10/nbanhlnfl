@@ -117,7 +117,7 @@ def predictions(run_type: str = Query("live", pattern="^(live|backtest)$"), date
                     None, ge=0.5, le=1, description="Keep only picks whose model probability for the predicted winner, "
                                                     "max(p_home, 1 - p_home), is at least this value."),
                 policy: str = Query("pregame", pattern="^(pregame|near_tipoff)$",
-                                    description="Live forecasts only: night-before (pregame) or near-tipoff."),
+                                    description="Live forecasts only: the pre-game archive (pregame) or near-tipoff."),
                 limit: int = Query(500, ge=1, le=5000), p=Depends(get_provider)):
     if date_from and date_to and date_from > date_to:
         raise HTTPException(status_code=422, detail="date_from must be on or before date_to")
