@@ -24,7 +24,9 @@ export function LineLabel({ f }: { f: MarketForecast }) {
   const line = f.market === 'spread' && f.line > 0 ? `+${f.line}` : f.line;   // a sign only for handicaps, never totals
   return f.line_source === 'market'
     ? <span title="The bookmaker's line when the forecast was made">Line {line} · bookmaker</span>
-    : <span className="warn" title="No bookmaker line had been retrieved when this forecast was made">Line {line} · model-only</span>;
+    : f.earlier_line_rule
+      ? <span className="warn" title="No bookmaker line had been retrieved, and the line was set by the rule used before Oct 2, 2026, which could place it far from an even split">Line {line} · model-only · earlier line rule</span>
+      : <span className="warn" title="No bookmaker line had been retrieved when this forecast was made">Line {line} · model-only</span>;
 }
 
 export function SideBars({ f }: { f: MarketForecast }) {
@@ -46,10 +48,13 @@ function QuoteLine({ f }: { f: MarketForecast }) {
   const q = f.quote;
   const a = f.sides.find((s) => s.side === 'a');
   const b = f.sides.find((s) => s.side === 'b');
+  // A whole-number line can push: the two-way bookmaker pair has no push, the model's sides do (as Performance compares).
+  const push = f.market === 'reg3' ? 0 : f.sides.find((s) => s.side === 'mid')?.probability ?? 0;
   return (
     <span>
       {q.bookmaker} at this line, de-vigged: {a?.label} {pct(q.prob_a)} · {b?.label} {pct(q.prob_b)}
       <span className="muted"> (retrieved {dateTime(q.retrieved_at)})</span>
+      {push > 0 && a && b && <span className="muted"> · The bookmaker pair leaves out the push; on the same basis the model is {a.label} {pct(a.probability / (a.probability + b.probability))} · {b.label} {pct(b.probability / (a.probability + b.probability))}.</span>}
     </span>
   );
 }
@@ -176,7 +181,7 @@ export function MarketReport({ perf: p }: { perf: MarketPerformanceResponse }) {
       ) : (
         <div className="tiles">
           <div className="tile"><div className="tile-label">Settled</div><div className="tile-value">{p.record.settled}</div><div className="tile-hint">Wins, losses and pushes.</div></div>
-          <div className="tile"><div className="tile-label">Brier score</div><div className="tile-value">{num(p.brier_score)}</div><div className="tile-hint">Over sides and push/draw; lower is better.</div></div>
+          <div className="tile"><div className="tile-label">Brier score</div><div className="tile-value">{num(p.brier_score)}</div><div className="tile-hint">Summed over sides and push/draw (0–2 scale); lower is better.</div></div>
           <div className="tile"><div className="tile-label">Log loss</div><div className="tile-value">{num(p.log_loss)}</div><div className="tile-hint">Lower is better.</div></div>
         </div>
       )}

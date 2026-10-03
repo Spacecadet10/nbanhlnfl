@@ -1,5 +1,5 @@
 // Research / shadow model selection (docs/MODEL_SELECTION.md). Never the primary forecast; never betting advice.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import type {
   CalibrationBin, Candidate, CandidatePoolState, CandidateRoster, PoolReport, SelectionRuleView, SelectionStatus, MarketId, RegisteredRule, ResearchExpanded, RuleReport, ResearchGame, ResearchMarket, ResearchRecord, ResearchReport, ResearchSlateEntry, Retrospective, RetroMarket, Side, Sport, Vector,
@@ -168,14 +168,24 @@ export const combinationLabel = (r: Pick<RegisteredRule, 'kind' | 'members' | 't
 /** Registered combination rules for one sport and market: historical exploration next to the prospective record. */
 export function CombinationRules({ sport, market }: { sport: Sport; market: MarketId }) {
   const [show, setShow] = useState<'selected' | 'all'>('selected');
-  const { state, retry } = useApi((s) => api.researchRules(sport, market, show, s), [sport, market, show]);
+  const [definition, setDefinition] = useState('');     // '' = the newest research version with recorded games
+  useEffect(() => setDefinition(''), [sport, market]);
+  const { state, retry } = useApi((s) => api.researchRules(sport, market, show, s, definition), [sport, market, show, definition]);
   return <div className="card">
     <h2>Combination rules <span className="badge badge-research">Research</span></h2>
     <div className="segmented small" role="group" aria-label="Rules shown">
       <button type="button" aria-pressed={show === 'selected'} onClick={() => setShow('selected')}>Selected</button>
       <button type="button" aria-pressed={show === 'all'} onClick={() => setShow('all')}>All registered</button>
     </div>
-    <AsyncView state={state} retry={retry}>{(r) => <RulesBody r={r} />}</AsyncView>
+    <AsyncView state={state} retry={retry}>{(r) => <>
+      {(r.definitions?.length ?? 0) > 0 && <label className="small">Research version{' '}
+        <select value={r.definition ?? ''} onChange={(e) => setDefinition(e.target.value)}>
+          {r.definitions!.map((d) => <option key={d.definition} value={d.definition}>{d.definition} · {d.games} {d.games === 1 ? 'game' : 'games'} · last {dateTime(d.last_at)}</option>)}
+        </select>
+        <span className="muted"> One record per research version: results under different model code are never pooled.</span>
+      </label>}
+      <RulesBody r={r} />
+    </>}</AsyncView>
   </div>;
 }
 
@@ -337,7 +347,7 @@ function ReportBody({ r }: { r: ResearchReport }) {
           {' · lines: '}{g.line_sources.market} bookmaker, {g.line_sources.model} model-only</p>
         <h3>Individual models and combinations</h3>
         <div className="table-wrap"><table className="table">
-          <thead><tr><th>Source</th><th>Games</th><th>Record</th><th>Accuracy (95%)</th><th>Log loss</th><th>Brier</th></tr></thead>
+          <thead><tr><th>Source</th><th>Games</th><th>Record</th><th>Accuracy (95%)</th><th>Log loss</th><th title="Summed over all outcomes, so it runs from 0 to 2. For a two-way result it is twice the 0–1 Brier score on the main Performance tiles (always 50% = 0.5 here, 0.25 there).">Brier (0–2 scale)</th></tr></thead>
           <tbody>{Object.entries(g.sources).map(([n, s]) => <tr key={n}><th scope="row">{modelName(n)}{n === primary && <span className="muted"> (primary)</span>}</th>
             <td>{s.cohorts}</td><td>{record(s)}{s.ties > 0 && <span className="muted small"> · {s.ties} exact 50% (no pick)</span>}</td><td>{pct(s.accuracy, 1)} <span className="muted small">{interval(s.ci95)}</span></td>
             <td>{num(s.log_loss)}</td><td>{num(s.brier)}</td></tr>)}</tbody>
@@ -414,7 +424,7 @@ function RetroBody({ r, market }: { r: Retrospective; market: MarketId }) {
   return <>
     <p className="notice small" role="note">{r.note} Seasons {m.seasons.join(', ')}; computed {dateTime(r.generated_at)}. Not live performance.</p>
     <div className="table-wrap"><table className="table small">
-      <thead><tr><th>Method</th><th>Games</th><th>Accuracy</th><th>Log loss</th><th>Brier</th></tr></thead>
+      <thead><tr><th>Method</th><th>Games</th><th>Accuracy</th><th>Log loss</th><th title="Summed over all outcomes, so it runs from 0 to 2. For a two-way result it is twice the 0–1 Brier score on the main Performance tiles (always 50% = 0.5 here, 0.25 there).">Brier (0–2 scale)</th></tr></thead>
       <tbody>{Object.entries(m.methods).map(([n, s]) => <tr key={n}><th scope="row">{modelName(n)}{n === m.primary && <span className="muted"> (primary)</span>}</th>
         <td>{s.n}</td><td>{pct(s.accuracy, 1)}</td><td>{num(s.log_loss, 4)}</td><td>{num(s.brier, 4)}</td></tr>)}
         {m.stack.methods?.stack && <tr><th scope="row">Learned stacker <span className="muted">(seasons {m.stack.seasons.join(', ')})</span></th>

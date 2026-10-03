@@ -5,6 +5,7 @@ import json
 import math
 import random
 from datetime import datetime, timedelta, timezone
+import threading
 from functools import lru_cache
 from pathlib import Path
 
@@ -65,8 +66,17 @@ def _cohorts(conn, gid, tip, win, dists, book, stacks):
     return cohorts[gid]
 
 
-@lru_cache(maxsize=1)
+_BUILD = threading.Lock()      # the synthetic store is built once, even when several requests arrive together
+USE = threading.RLock()        # and its single in-memory connection serves one request at a time
+
+
 def store():
+    with _BUILD:
+        return _store()
+
+
+@lru_cache(maxsize=1)
+def _store():
     conn = db.connect(Path(":memory:"), check_same_thread=False)
     db.migrate(conn)
     db.claim_store(conn, "nba")
@@ -123,18 +133,23 @@ def store():
 
 
 def game_detail(game_id: str) -> dict:
-    out = research_live.game_detail(store(), game_id, AS_OF)
+    with USE:
+        out = research_live.game_detail(store(), game_id, AS_OF)
     return {**out, "mode": "demo", "note": "Demo: synthetic research data, not a model or a real game."}
 
 
 def slate(game_ids: list) -> dict:
-    return research_live.slate(store(), game_ids, AS_OF)
+    with USE:
+        return research_live.slate(store(), game_ids, AS_OF)
 
 
 def report(market: str) -> dict:
-    return {**research_live.report(store(), market, AS_OF), "mode": "demo",
+    with USE:
+        out = research_live.report(store(), market, AS_OF)
+    return {**out, "mode": "demo",
             "note": "Demo: synthetic research data run through the real selector code; not evidence of anything."}
 
 
 def history() -> dict:
-    return {**research_live.history(store(), AS_OF), "mode": "demo"}
+    with USE:
+        return {**research_live.history(store(), AS_OF), "mode": "demo"}

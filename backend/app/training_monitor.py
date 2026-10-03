@@ -46,9 +46,15 @@ def status(conn, now: Optional[str] = None) -> dict:
             r = conn.execute("SELECT finished_at FROM job_runs WHERE job=? AND status='success' ORDER BY finished_at DESC LIMIT 1",
                              (job,)).fetchone()
             last = r[0] if r else None
-            stale = last is None or datetime.strptime(last, FMT).replace(tzinfo=timezone.utc) < \
+            # A run that finished 'skipped' because nothing was due (no game near, quota) is a healthy check; a skip
+            # because the store lock was busy is not.
+            c = conn.execute("SELECT finished_at FROM job_runs WHERE job=? AND finished_at IS NOT NULL AND (status='success' OR "
+                             "(status='skipped' AND COALESCE(detail, '') NOT LIKE '%\"lock_busy\": true%')) "
+                             "ORDER BY finished_at DESC LIMIT 1", (job,)).fetchone()
+            checked = c[0] if c else None
+            stale = checked is None or datetime.strptime(checked, FMT).replace(tzinfo=timezone.utc) < \
                 datetime.strptime(now, FMT).replace(tzinfo=timezone.utc) - timedelta(hours=hours)
-            jobs[job] = {"last_success": last, "stale": stale, "stale_after_hours": hours}
+            jobs[job] = {"last_success": last, "last_checked": checked, "stale": stale, "stale_after_hours": hours}
     for f in fits:
         f.update(_versions_and_next(conn, f, now))
     return {"as_of": now, "fits": fits, "inputs": jobs, "online": _online(conn, now), "updates": _update_events(conn),

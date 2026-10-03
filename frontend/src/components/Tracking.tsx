@@ -1,5 +1,5 @@
 // Persistent agreement tracking tracking-v2 (docs/MODEL_SELECTION.md §18). Research only; never betting advice.
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client';
 import type {
   MarketId, Sport, TrackingCell, TrackingCheck, TrackingEvidence, TrackingGame, TrackingGroup, TrackingKind, TrackingReport,
@@ -49,6 +49,7 @@ export function AgreementTracking({ sport, market }: { sport: Sport; market: Mar
     version: version.trim() || undefined,
   }, s), [sport, market, evidence, kind, member, line, from, to, version]);
   return <div className="card tracking">
+    <JointAgreement key={`${sport}:${market}`} sport={sport} market={market} />
     <h2>Agreement tracking <span className="badge badge-research">Research</span></h2>
     <p className="small muted">Every registered model, pair, triple and larger subset with each agreement rule, by confidence
       threshold and band. Research records continue even when no recommendation is made. Sparse groups stay visible as
@@ -142,7 +143,7 @@ function TrackingBody({ r, sport, market, f }: { r: TrackingReport; sport: Sport
     <h3>All groups</h3>
     {r.groups.length === 0 ? <Empty>No group matches these filters.</Empty> : <div className="table-wrap"><table className="table small tracking-table">
       <thead><tr><th>Group</th><th>Eligible</th><th>Selected (coverage)</th><th>Pending</th><th>Record</th><th>Win rate (95%)</th>
-        <th>Mean confidence</th><th>Brier / log loss</th><th>Anchor, same count{f.view.type === 'band' ? ' (thresholds only)' : ''}</th><th>Evidence</th></tr></thead>
+        <th>Mean confidence</th><th title="Brier summed over all outcomes (0 to 2): twice the 0–1 Brier score on the main Performance tiles for a two-way result.">Brier (0–2 scale) / log loss</th><th>Anchor, same count{f.view.type === 'band' ? ' (thresholds only)' : ''}</th><th>Evidence</th></tr></thead>
       <tbody>{shown.map(({ g, c }) => <tr key={g.id}>
         <th scope="row" className="wrap">{groupLabel(g)}<div className="muted">{g.cohort === 'expanded' ? 'expanded cohort' : 'core cohort'} · {g.priority}</div>
           {Object.keys(g.missing_reasons).length > 0 && <div className="warn">incomplete {g.status_counts.incomplete ?? 0}×: {Object.keys(g.missing_reasons).map(modelName).join(', ')}</div>}
@@ -210,4 +211,105 @@ export function TrackingGameCard({ sport, gameId }: { sport: Sport; gameId: stri
         {m.incomplete.length > 0 && <p className="small warn">Incomplete: {m.incomplete.map((x) => `${x.group} (${Object.keys(x.missing).join(', ')})`).join('; ')}</p>}
       </details>)}<p className="small muted">{t.note}</p></>}</AsyncView>
   </div>;
+}
+
+
+function JointAgreement({ sport, market }: { sport: Sport; market: MarketId }) {
+  const [members, setMembers] = useState<string[]>([]);
+  const [evidence, setEvidence] = useState('historical');
+  const [confidence, setConfidence] = useState('supporters_mean');
+  const [agreementMin, setAgreementMin] = useState('0.6');
+  const [agreementMax, setAgreementMax] = useState('');
+  const [confidenceMin, setConfidenceMin] = useState('0.65');
+  const [confidenceMax, setConfidenceMax] = useState('');
+  const [line, setLine] = useState('');
+  const [version, setVersion] = useState('');
+  const [evaluate, setEvaluate] = useState(false);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const params = { members: members.join(','), evidence, confidence, agreement_min: agreementMin,
+    agreement_max: agreementMax || undefined, confidence_min: confidenceMin, confidence_max: confidenceMax || undefined,
+    line: line || undefined, version: version || undefined, evaluate: String(evaluate),
+    date_from: dateFrom || undefined, date_to: dateTo || undefined };
+  const { state, retry } = useApi((signal) => api.jointTracking(sport, market, params, signal),
+    [sport, market, members.join(','), evidence, confidence, agreementMin, agreementMax, confidenceMin, confidenceMax, line, version, evaluate, dateFrom, dateTo]);
+  const fractions = Array.from({ length: 21 }, (_, i) => (i / 20).toFixed(2));
+  // An upper bound must exceed its lower bound: options at or below it are disabled, and raising a lower bound past the
+  // chosen upper bound clears that upper bound, so the controls can never send a range the API rejects.
+  const range = (label: string, value: string, set: (x: string) => void, upper = false, lower?: string) =>
+    <label>{label}<select value={value} onChange={(e) => { setEvaluate(false); set(e.target.value); }}>
+      {upper && <option value="">No upper limit</option>}
+      {fractions.map((x) => <option key={x} value={x} disabled={upper && lower != null && Number(x) <= Number(lower)}>{pct(Number(x), 0)}</option>)}
+    </select></label>;
+  const setMin = (set: (x: string) => void, max: string, clearMax: (x: string) => void) => (x: string) => {
+    if (max && Number(max) <= Number(x)) clearMax('');
+    set(x);
+  };
+  // The model list stays mounted while results load (keyboard focus stays on the checkbox just toggled).
+  const [options, setOptions] = useState<string[]>([]);
+  useEffect(() => { if (state.status === 'success') setOptions(state.data.options ?? []); }, [state]);
+  // Match select values to their two-decimal options.
+  return <section className="joint-research" id="joint-agreement">
+    <h2>Explore agreement + confidence <span className="badge badge-research">Research</span></h2>
+    <p>Choose an exact model subset. Agreement is the fraction voting for the same outcome; confidence is a separate probability filter.
+      For example, four of five votes is 80% agreement, even if their average confidence is 67%.</p>
+    <div className="filters tracking-filters">
+      <label>Results<select value={evidence} onChange={(e) => { setEvaluate(false); setEvidence(e.target.value); setVersion(''); }}>
+        <option value="historical">Historical out-of-sample</option><option value="prospective">Recorded live</option>
+      </select></label>
+      {range('Minimum agreement (inclusive)', Number(agreementMin).toFixed(2), setMin(setAgreementMin, agreementMax, setAgreementMax))}
+      {range('Maximum agreement (exclusive)', agreementMax ? Number(agreementMax).toFixed(2) : '', setAgreementMax, true, agreementMin)}
+      <label>Confidence definition<select value={confidence} onChange={(e) => { setEvaluate(false); setConfidence(e.target.value); }}>
+        <option value="supporters_mean">Agreeing models: mean</option><option value="supporters_min">Agreeing models: minimum</option>
+        <option value="all_mean">All models: mean (includes dissenters)</option>
+      </select></label>
+      {range('Minimum confidence (inclusive)', Number(confidenceMin).toFixed(2), setMin(setConfidenceMin, confidenceMax, setConfidenceMax))}
+      {range('Maximum confidence (exclusive)', confidenceMax ? Number(confidenceMax).toFixed(2) : '', setConfidenceMax, true, confidenceMin)}
+      <label>From (Eastern date)<input type="date" value={dateFrom} onChange={(e) => { setEvaluate(false); setDateFrom(e.target.value); }} /></label>
+      <label>Through (Eastern date)<input type="date" value={dateTo} onChange={(e) => { setEvaluate(false); setDateTo(e.target.value); }} /></label>
+      {evidence === 'prospective' && <label>Research definition<input value={version} placeholder="optional definition prefix"
+        onChange={(e) => { setEvaluate(false); setVersion(e.target.value); }} /></label>}
+    </div>
+    {state.status === 'error' && <button type="button" onClick={() => {
+      setMembers([]); setLine(''); setVersion(''); setEvaluate(false); setDateFrom(''); setDateTo('');
+      setAgreementMin('0.6'); setAgreementMax(''); setConfidenceMin('0.65'); setConfidenceMax(''); retry();
+    }}>Reset research filters</button>}
+    {options.length > 0 && <fieldset className="joint-models"><legend>Exact subset: choose 2–8 models ({members.length} selected)</legend>
+      {options.map((m) => <label key={m}><input type="checkbox" checked={members.includes(m)}
+        disabled={!members.includes(m) && members.length >= 8} onChange={(e) => { setEvaluate(false);
+          setMembers(e.target.checked ? [...members, m] : members.filter((x) => x !== m)); }} />{modelName(m)}</label>)}
+    </fieldset>}
+    <AsyncView state={state} retry={retry}>{(r) => <>
+      <div className="filters">
+        {!!r.lines?.length && <label>Exact line<select value={line} onChange={(e) => { setLine(e.target.value); setEvaluate(false); }}>
+          <option value="">All lines (pooled)</option>{r.lines.map((x) => <option key={x} value={String(x)}>{x}</option>)}
+        </select></label>}
+      </div>
+      <p className="small muted">{r.note} Upper bounds are exclusive. Ties and missing members produce no pick.</p>
+      {r.status === 'invalid_historical_inputs' && <p role="alert" className="warn">Historical evaluation unavailable for this goalie subset.</p>}
+      {members.length < 2 && <p>Select at least two models to compare their joint rule.</p>}
+      <div className="table-wrap"><table><thead><tr><th>Method / member versions</th><th>Eligible</th><th>Selected</th><th>Record</th>
+        <th>Coverage</th><th>Win rate (95% interval)</th><th>Pending</th><th>Missing members</th></tr></thead><tbody>
+        {(r.by_definition ?? []).map((g) => <tr key={g.definition}><td><code title={g.definition}>{g.definition}</code></td>
+          <td>{g.games}</td><td>{g.cell.selected}</td><td>{rec(g.cell)}</td><td>{pct(g.cell.coverage)}</td>
+          <td>{pct(g.cell.win_rate)} {ci(g.cell.ci95)}<div className="small muted">{g.cell.evidence}</div></td>
+          <td>{g.cell.pending}</td><td>{g.status_counts.incomplete ?? 0}</td></tr>)}
+      </tbody></table></div>
+      {r.status === 'no_records' && <p>No recorded cohorts for this filter yet. No synthetic forecasts are substituted.</p>}
+      {evidence === 'historical' && members.length >= 2 && r.status === 'available' && <>
+        <button type="button" onClick={() => setEvaluate(true)}>Test joint rules on later seasons</button>
+        <p className="small muted">Searches feasible agreement ranges and confidence thresholds/bands for this subset. Freezes the rule and best constituent on earlier seasons. Changing the controls does not change live recommendations.</p>
+      </>}
+      {r.walk && <><h3>Later-season evaluation</h3><p className="small muted">{r.walk.configurations} configurations · {r.walk.note}</p>
+        <div className="table-wrap"><table><thead><tr><th>Season</th><th>Earlier-selected rule</th><th>Later picks</th><th>Win rate</th><th>Earlier-selected single, matched coverage</th></tr></thead>
+          <tbody>{r.walk.folds.map((f) => <tr key={f.season}><td>{f.season}</td><td>{f.chosen
+            ? `Agreement ≥ ${pct(f.chosen.agreement_min)}${f.chosen.agreement_max ? ` and < ${pct(f.chosen.agreement_max)}` : ''}, confidence ≥ ${pct(f.chosen.confidence_min)}${f.chosen.confidence_max ? ` and < ${pct(f.chosen.confidence_max)}` : ''}` : f.reason}</td>
+            <td>{f.later?.decided ?? '—'}</td><td>{pct(f.later?.win_rate ?? null)}</td>
+            <td>{f.matched ? `${modelName(f.matched.model)}: ${pct(f.matched.win_rate)} (${f.matched.games})` : '—'}</td></tr>)}</tbody></table></div></>}
+      {!!r.recent?.length && <details><summary>Inspect last 20 classifications</summary><div className="table-wrap"><table>
+        <thead><tr><th>Game</th><th>Line</th><th>Votes</th><th>Agreement</th><th>Confidence</th><th>Matches filters</th><th>Status</th></tr></thead>
+        <tbody>{r.recent.map((x) => <tr key={x.game_id}><td>{x.game_id}</td><td>{x.line ?? '—'}</td><td>{JSON.stringify(x.votes)}</td>
+          <td>{pct(x.agreement)}</td><td>{pct(x.statistic)}</td><td>{x.matches_filter ? 'Yes' : 'No'}</td><td>{x.status} · {x.state}</td></tr>)}</tbody></table></div></details>}
+    </>}</AsyncView>
+  </section>;
 }

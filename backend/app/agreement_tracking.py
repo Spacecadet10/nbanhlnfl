@@ -1027,3 +1027,170 @@ def game_observations(conn, game_id: str, reg: Optional[dict] = None) -> dict:
 
 def reg_sport(conn) -> str:
     return conn.execute("SELECT sport FROM store_identity").fetchone()[0]
+
+
+# Joint exploration reuses original vectors; old sealed classifications and decisions are unchanged.
+JOINT_CALC = "joint-1"
+
+
+def joint_classify(vectors, members, market, confidence="supporters_mean"):
+    missing = [m for m in members if m not in vectors]
+    out = {"status": "incomplete", "side": None, "statistic": None, "vector": None,
+           "agreement": None, "votes": {}, "missing": {m: "member forecast missing" for m in missing}}
+    if missing:
+        return out
+    vecs = [vectors[m] for m in members]
+    if any(len(v) != 3 or any(not math.isfinite(x) or x < 0 or x > 1 for x in v)
+           or abs(sum(v) - 1) > 1e-5 for v in vecs):
+        return {**out, "missing": {"probabilities": "invalid probability vector"}}
+    picks = [combine.pick(v, market) for v in vecs]
+    counts = {s: picks.count(s) for s in combine.sides(market)}
+    top = max(counts.values())
+    leaders = [s for s, n in counts.items() if n == top]
+    out["votes"] = {SIDE_NAMES[s]: n for s, n in counts.items()} | {"n": len(members), "abstain": picks.count(None)}
+    out["agreement"] = top / len(members)
+    if len(leaders) != 1 or top <= len(members) / 2:
+        return {**out, "status": "no_majority"}
+    side = leaders[0]
+    support = [v for v, pick in zip(vecs, picks) if pick == side]
+    values = [v[side] for v in (vecs if confidence == "all_mean" else support)]
+    stat = min(values) if confidence == "supporters_min" else sum(values) / len(values)
+    return {**out, "status": "pick", "side": side, "statistic": stat,
+            "vector": combine.average(vecs), "missing": {}}
+
+
+def joint_rows(conn, sport, market, evidence, version=None, line=None, date_from=None, date_to=None):
+    """Original OOF vectors or latest per-game core cohort with its exact paired inputs. No writes."""
+    lo, hi = day_bounds(date_from, date_to)
+    if evidence == "historical":
+        rows = [{**r, "state": "settled", "definition": "historical-oof"} for r in _oof(sport).get(market, [])]
+    else:
+        rows = []
+        if not _has(conn, "research_cohorts"):
+            return rows
+        canonical = _canonical_cohorts(conn, market, version)
+        for gid, cid in canonical.items():
+            c = conn.execute("SELECT * FROM research_cohorts WHERE cohort_id=?", (cid,)).fetchone()
+            if version and not c["definition"].startswith(version):
+                continue
+            if not 0 < (_parse_joint(c["tipoff_at"]) - _parse_joint(c["generated_at"])).total_seconds() <= 7200:
+                continue
+            e = conn.execute("SELECT * FROM research_cohorts WHERE game_id=? AND market=? AND line IS ? "
+                             "AND information_at=? AND definition=? AND tipoff_at=? AND generated_at < tipoff_at "
+                             "ORDER BY generated_at DESC,cohort_id DESC LIMIT 1",
+                             (gid, market, c["line"], c["information_at"], c["definition"] + ":expanded-v1", c["tipoff_at"])).fetchone()
+            vectors, info, _ = _inputs(conn, c, e, utc_now())
+            game = conn.execute("SELECT * FROM games WHERE game_id=?", (gid,)).fetchone()
+            state = _state({"status": game["status"], "game_tipoff_at": game["tipoff_at"],
+                            "tipoff_at": c["tipoff_at"], "result_available_at": game["result_available_at"]})
+            realised = None
+            if state == "settled":
+                from . import markets as mk
+                d = conn.execute("SELECT decision FROM game_decisions WHERE game_id=?", (gid,)).fetchone()
+                result = mk.settle(market, c["line"], status=game["status"], home=game["home_score"],
+                                   away=game["away_score"], decision=d[0] if d else None)
+                realised = {"a": 0, "mid": 1, "b": 2}.get(result)
+            rows.append({"game_id": gid, "tipoff_at": c["tipoff_at"], "season": game["season"], "line": c["line"],
+                         "vectors": vectors, "state": state, "realised": realised, "definition": c["definition"],
+                         "versions": {m: x["version"] for m, x in info.items()}, "cohort_id": cid})
+    return [r for r in rows if (line is None or r["line"] == line)
+            and (lo is None or r["tipoff_at"] >= lo) and (hi is None or r["tipoff_at"] < hi)]
+
+
+def _parse_joint(value):
+    from datetime import datetime
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def joint_cell(items, market, agreement_min, agreement_max, confidence_min, confidence_max):
+    filtered = [i for i in items if i["agreement"] is not None and i["agreement"] + 1e-9 >= agreement_min
+                and (agreement_max is None or i["agreement"] < agreement_max - 1e-9)]
+    return _Picks(filtered, market, "majority").cell(confidence_min, confidence_max, len(items))
+
+
+def joint_walk(items, rows, members, market):
+    """Freeze both comparator and joint rule on earlier seasons; evaluate the unchanged rule later."""
+    seasons = sorted({r["season"] for r in rows})
+    fractions = [k / len(members) for k in range(len(members) // 2 + 1, len(members) + 1)]
+    agreement_ranges = [(lo, hi) for i, lo in enumerate(fractions) for hi in [*fractions[i + 1:], None]]
+    rules = [(a, b, lo, None if hi is not None and hi > 1 else hi) for a, b in agreement_ranges
+             for lo, hi in [(t, None) for t in report_thresholds(market)] + report_bands(market)]
+    singles = {m: [{**r, **classify({"kind": "single", "members": [m]}, r["vectors"], market)}
+                   for r in rows] for m in members}
+    folds = []
+    for season in seasons[2:]:
+        earlier = [i for i in items if i["season"] < season]
+        later = [i for i in items if i["season"] == season]
+        # Compare on the universe where all requested members were available, including disagreement games.
+        eligible = {i["game_id"] for i in earlier if i["status"] != "incomplete"}
+        ranks = _Ranked({m: {i["game_id"]: i for i in rs if i["season"] < season and i["game_id"] in eligible}
+                         for m, rs in singles.items()}, market)
+        refs = [(ranks.matched(m, len(eligible), eligible), m) for m in members]
+        valid = [(r, m) for r, m in refs if r["games"]]
+        if not valid:
+            folds.append({"season": season, "chosen": None, "reason": "no earlier complete evidence"})
+            continue
+        _, best = max(valid, key=lambda x: (x[0]["win_rate"], x[1]))
+        choices = []
+        # Cache each vote band once; confidence thresholds then use the existing suffix-sum index.
+        indexed = {(a, b): _Picks([i for i in earlier if i["agreement"] is not None and
+                    i["agreement"] + 1e-9 >= a and (b is None or i["agreement"] < b - 1e-9)], market, "majority")
+                   for a, b in agreement_ranges}
+        for a, b, lo, hi in rules:
+            cell = indexed[a, b].cell(lo, hi, len(earlier))
+            ref = ranks.matched(best, cell["decided"], eligible) if cell["decided"] else None
+            if cell["decided"] >= MIN_EVIDENCE and (cell["coverage"] or 0) >= MIN_COVERAGE and ref and ref["games"] == cell["decided"]:
+                choices.append((cell["win_rate"] - ref["win_rate"], cell["decided"], a, b, lo, hi, cell))
+        if not choices:
+            folds.append({"season": season, "chosen": None, "reason": "insufficient earlier evidence"})
+            continue
+        _, _, a, b, lo, hi, train = max(choices, key=lambda x: (*x[:3], x[3] or 2, x[4], x[5] or 2))
+        test = joint_cell(later, market, a, b, lo, hi)
+        games = {i["game_id"] for i in later if i["status"] != "incomplete"}
+        rank = _Ranked({best: {i["game_id"]: i for i in singles[best] if i["season"] == season}}, market)
+        ref = rank.matched(best, test["decided"], games) if test["decided"] else {"model": best, "games": 0, "win_rate": None}
+        folds.append({"season": season, "chosen": {"agreement_min": a, "agreement_max": b, "confidence_min": lo,
+                      "confidence_max": hi, "comparator": best}, "earlier": train, "later": test, "matched": ref})
+    return {"folds": folds, "configurations": len(rules), "note": "Exploratory reused seasons; rules and comparator chosen on earlier seasons. Not a live recommendation."}
+
+
+def joint_report(conn, sport, market, *, evidence="historical", members=None, confidence="supporters_mean",
+                 agreement_min=0.5, agreement_max=None, confidence_min=0.5, confidence_max=None,
+                 version=None, line=None, date_from=None, date_to=None, evaluate=False):
+    if confidence not in ("supporters_mean", "all_mean", "supporters_min"):
+        raise ValueError("Unknown confidence definition")
+    rows = joint_rows(conn, sport, market, evidence, version, line, date_from, date_to)
+    options = sorted({m for r in rows for m in r["vectors"] if not m.startswith("stack")})
+    reg = load_registry()["markets"].get(f"{sport}:{market}", {})
+    options = sorted(set(options) | set(reg.get("core", [])) | set(reg.get("shadow", [])) | set(reg.get("candidates", [])))
+    members = list(dict.fromkeys(members or []))
+    base = {"calculation": JOINT_CALC, "sport": sport, "market": market, "evidence": evidence, "members": members,
+            "options": options, "lines": sorted({r["line"] for r in rows if r["line"] is not None}),
+            "definitions": sorted({r["definition"] for r in rows}), "confidence": confidence,
+            "agreement_min": agreement_min, "agreement_max": agreement_max, "confidence_min": confidence_min,
+            "confidence_max": confidence_max, "games": len(rows), "recommendation": False,
+            "note": "Agreement counts votes; confidence is a separate probability filter. Derived from original forecasts; no new predictions. " +
+                    ("Historical OOF results are exploratory on reused seasons and model-defined lines, not bookmaker lines." if evidence == "historical" else
+                     "Latest pregame cohort per game. Research classifications, not pre-registered recommendations. Definitions remain separate below.")}
+    if len(members) < 2:
+        return {**base, "status": "choose_models", "by_definition": [], "recent": []}
+    if not 2 <= len(members) <= 8 or any(m not in options for m in members):
+        raise ValueError("Choose between 2 and 8 available models")
+    if evidence == "historical" and any("goalie" in m for m in members):
+        return {**base, "status": "invalid_historical_inputs", "by_definition": [], "recent": [],
+                "note": "This subset uses actual-starter historical goalie inputs. Historical evaluation is refused; prospective tracking remains available."}
+    items = [{**r, **joint_classify(r["vectors"], members, market, confidence)} for r in rows]
+    # Never pool distinct live method definitions or member versions into one win-rate.
+    for i in items:
+        i["series"] = i["definition"] if evidence == "historical" else i["definition"] + ":" + _key_digest(
+            [(m, i.get("versions", {}).get(m)) for m in members])[:12]
+    groups = []
+    for definition in sorted({i["series"] for i in items}):
+        part = [i for i in items if i["series"] == definition]
+        groups.append({"definition": definition, "games": len(part), "status_counts": dict(Counter(i["status"] for i in part)),
+                       "cell": joint_cell(part, market, agreement_min, agreement_max, confidence_min, confidence_max)})
+    recent = [{**{k: i.get(k) for k in ("game_id", "tipoff_at", "line", "state", "status", "side", "agreement", "statistic", "votes", "missing", "series")},
+               "matches_filter": bool(joint_cell([i], market, agreement_min, agreement_max, confidence_min, confidence_max)["selected"])}
+              for i in sorted(items, key=lambda i: (i["tipoff_at"], i["game_id"]))[-20:]]
+    return {**base, "status": "available" if items else "no_records", "by_definition": groups, "recent": recent,
+            "walk": joint_walk(items, rows, members, market) if evaluate and evidence == "historical" else None}

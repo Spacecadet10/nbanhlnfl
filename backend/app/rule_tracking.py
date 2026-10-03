@@ -78,23 +78,41 @@ def build_registry(reports: dict, effective_from: str) -> dict:
 
 
 # --- Evaluation on stored cohorts -------------------------------------------------------------------------------------
-def _cohorts(conn, market: str, expanded: bool) -> list:
+def _stored(definition: str, expanded: bool) -> str:
     from .research_live import EXPANDED
-    like = f"%:{EXPANDED}"
-    op = "LIKE" if expanded else "NOT LIKE"
+    return f"{definition}:{EXPANDED}" if expanded else definition
+
+
+def definitions(conn, market: str, expanded: bool, since: str = "") -> list:
+    """Research definitions with cohorts for this market, newest first: a record never pools two of them (different
+    model code or settings), as the selector evidence and tracking-v2."""
+    from .research_live import EXPANDED
+    suffix = f":{EXPANDED}"
+    rows = conn.execute("SELECT definition, COUNT(DISTINCT game_id) AS games, MIN(generated_at) AS first_at, "
+                        "MAX(generated_at) AS last_at FROM research_cohorts WHERE market=? AND generated_at < tipoff_at "
+                        "AND generated_at >= ? GROUP BY definition", (market, since)).fetchall()
+    out = [{"definition": r["definition"][:-len(suffix)] if expanded else r["definition"], "games": r["games"],
+            "first_at": r["first_at"], "last_at": r["last_at"]}
+           for r in rows if r["definition"].endswith(suffix) == expanded]
+    return sorted(out, key=lambda r: r["last_at"], reverse=True)
+
+
+def _cohorts(conn, market: str, expanded: bool, definition: str) -> list:
+    """Each game's latest pregame cohort of ONE research definition."""
+    stored = _stored(definition, expanded)
     return conn.execute(
         "SELECT c.*, g.status, g.home_score, g.away_score, g.result_available_at, g.tipoff_at AS game_tipoff_at, d.decision "
         "FROM research_cohorts c JOIN games g ON g.game_id=c.game_id LEFT JOIN game_decisions d ON d.game_id=c.game_id "
-        f"WHERE c.market=? AND c.definition {op} ? AND c.cohort_id = (SELECT x.cohort_id FROM research_cohorts x "
-        f"WHERE x.game_id=c.game_id AND x.market=c.market AND x.definition {op} ? AND x.generated_at < x.tipoff_at "
+        "WHERE c.market=? AND c.definition = ? AND c.cohort_id = (SELECT x.cohort_id FROM research_cohorts x "
+        "WHERE x.game_id=c.game_id AND x.market=c.market AND x.definition = ? AND x.generated_at < x.tipoff_at "
         "ORDER BY x.generated_at DESC, x.cohort_id DESC LIMIT 1) ORDER BY c.tipoff_at, c.game_id",
-        (market, like, like)).fetchall()
+        (market, stored, stored)).fetchall()
 
 
-def _favourites(conn) -> dict:
+def _favourites(conn, definition: str) -> dict:
     """Primary winner probability per game from its canonical core winner cohort (the same pregame information)."""
     out = {}
-    for r in _cohorts(conn, "winner", False):
+    for r in _cohorts(conn, "winner", False, definition):
         m = json.loads(r["members"])
         if m:
             p = m[0]["p"]
@@ -154,14 +172,21 @@ def _realised(market, row):
     return realised(market, row["line"], row, row["decision"])
 
 
-def report(conn, sport: str, market: str, show: str = "selected", reg: Optional[dict] = None) -> dict:
+def report(conn, sport: str, market: str, show: str = "selected", reg: Optional[dict] = None,
+           definition: Optional[str] = None) -> dict:
+    """The prospective record of each registered rule under ONE research definition: `definition`, or the newest one with
+    cohorts. `definitions` lists every one, so earlier records stay reachable and are never pooled."""
     reg = reg or load_registry()
     key = f"{sport}:{market}"
     m = reg["markets"].get(key)
     if m is None:
         return {"sport": sport, "market": market, "status": "no_registered_rules", "rules": []}
-    cohorts = [r for r in _cohorts(conn, market, m["cohort"] == "expanded") if r["generated_at"] >= reg["effective_from"]]
-    fav = _favourites(conn)
+    expanded = m["cohort"] == "expanded"
+    versions = definitions(conn, market, expanded, reg["effective_from"])
+    chosen = definition or (versions[0]["definition"] if versions else None)
+    cohorts = [] if chosen is None else [r for r in _cohorts(conn, market, expanded, chosen)
+                                         if r["generated_at"] >= reg["effective_from"]]
+    fav = {} if chosen is None else _favourites(conn, chosen)
     studied = studied_members(m)
     items = []
     for r in cohorts:
@@ -243,6 +268,7 @@ def report(conn, sport: str, market: str, show: str = "selected", reg: Optional[
     return {"sport": sport, "market": market, "kind": "prospective research (combination rules)", "study": reg["study"],
             "registry_sha256": reg["sha256"], "effective_from": reg["effective_from"], "cohort_source": m["cohort"],
             "members": m["members"], "studied_members": studied, "comparator": m["comparator"], "cohorts": len(items),
+            "definition": chosen, "definitions": versions,
             "show": show,
             "registered_rules": len(m["rules"]), "selected_rules": sum(1 for x in m["rules"] if x["selected"]),
             "frontier_historical": m["frontier"], "rules": out,

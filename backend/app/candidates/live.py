@@ -43,7 +43,15 @@ def artifact_dir(sport: str) -> Path:
 
 
 def _fingerprint(rows) -> str:
+    """Training set identity as first used: game ids only. Kept so artifacts fitted under it are still found."""
     return hashlib.sha256("\n".join(sorted(r.game_id for r in rows)).encode()).hexdigest()[:16]
+
+
+def _results_fingerprint(rows) -> str:
+    """Training set identity including each game's labels, so a later score correction gives a new fit instead of
+    silently reusing the artifact trained on the old score. Used for every new fit (prefix r2)."""
+    body = "\n".join(f"{r.game_id}|{json.dumps(r.y, sort_keys=True, default=str)}" for r in sorted(rows, key=lambda r: r.game_id))
+    return "r2" + hashlib.sha256(body.encode()).hexdigest()[:14]
 
 
 def ensure_fit(spec, rows: list, season: int, adopted: Optional[list] = None, write: bool = True) -> Optional[dict]:
@@ -55,8 +63,14 @@ def ensure_fit(spec, rows: list, season: int, adopted: Optional[list] = None, wr
     if len(train) < registry.MIN_TRAIN[spec.sport]:
         return None
     defn = registry.definition(spec)
-    fp = _fingerprint(train)
-    path = artifact_dir(spec.sport) / spec.name.replace(":", "__") / f"{defn}-{season}-{fp}.pkl"
+    fp = _results_fingerprint(train)
+    folder = artifact_dir(spec.sport) / spec.name.replace(":", "__")
+    path = folder / f"{defn}-{season}-{fp}.pkl"
+    # An artifact fitted before results were part of the fingerprint is kept in force (its training results cannot be
+    # re-checked, and refitting every candidate mid-season would change every fit at once); new fits use the new name.
+    earlier = folder / f"{defn}-{season}-{_fingerprint(train)}.pkl"
+    if not path.exists() and earlier.exists() and _sidecar(earlier).exists():
+        path = earlier
     if not write:
         if path.exists() and _sidecar(path).exists():
             return _load_verified(path)

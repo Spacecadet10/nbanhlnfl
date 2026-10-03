@@ -334,7 +334,11 @@ def _upsert_game(conn: sqlite3.Connection, g: espn.GameRow, raw_id: int, retriev
               "home_team_id": g.home.team_id, "away_team_id": g.away.team_id, "neutral_site": int(g.neutral_site),
               "status": g.status, "home_score": g.home_score, "away_score": g.away_score}
     if g.status == "final":
-        observed = _ts(retrieved_at) - _ts(g.tipoff_at) <= OBSERVED_WINDOW
+        # Observed: seen within a day of the start, or a game this store already tracked before it started (a result that
+        # arrives late after an outage is stamped with the time it was actually learned, never backdated). Only a game
+        # first met already finished (historical backfill) gets the assumed start + 4 h.
+        tracked = row is not None and row["status"] != "final" and row["first_seen_at"] < g.tipoff_at
+        observed = tracked or _ts(retrieved_at) - _ts(g.tipoff_at) <= OBSERVED_WINDOW
         availability = {
             "result_first_seen_at": retrieved_at,
             "result_available_at": retrieved_at if observed else _fmt(_ts(g.tipoff_at) + RESULT_ASSUMED_DELAY),
@@ -356,7 +360,11 @@ def _upsert_game(conn: sqlite3.Connection, g: espn.GameRow, raw_id: int, retriev
         return None
     changes = {k: v for k, v in fields.items() if row[k] != v}
     if row["status"] == "final":
-        availability = {}  # first observation of a result is kept; availability is not rewritten
+        # First observation of a result is kept; availability is not rewritten, unless the score itself was corrected:
+        # the corrected result was only knowable from this retrieval on (result_first_seen_at keeps the first sighting).
+        corrected = "home_score" in changes or "away_score" in changes
+        availability = ({"result_available_at": retrieved_at, "result_availability_basis": "observed_retrieval"}
+                        if corrected and row["result_available_at"] < retrieved_at else {})
     else:
         availability = {k: v for k, v in availability.items() if row[k] != v}
     if not changes and not availability:

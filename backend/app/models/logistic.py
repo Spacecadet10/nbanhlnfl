@@ -103,14 +103,17 @@ class TeamFeatures:
         self.elo = Elo(elo_cfg)
         self.margins: dict[str, deque] = defaultdict(lambda: deque(maxlen=10))
         self.last_tipoff: dict[tuple[int, str], str] = {}
+        self.rest_seen: dict[str, dict] = {}     # game_id -> rest days: a game predicted again never rests "0 days"
 
     def compute(self, g: PregameGame) -> dict:
         self.elo.predict(g)  # applies any between-season rating carry before reading ratings
-        rest = {}
-        for side, team in (("home", g.home_team_id), ("away", g.away_team_id)):
-            prev = self.last_tipoff.get((g.season, team))
-            rest[side] = REST_CAP if prev is None else min(REST_CAP, _hours(g.tipoff_at, prev) / 24)
-            self.last_tipoff[(g.season, team)] = g.tipoff_at
+        rest = self.rest_seen.get(g.game_id)
+        if rest is None:
+            rest = self.rest_seen[g.game_id] = {}
+            for side, team in (("home", g.home_team_id), ("away", g.away_team_id)):
+                prev = self.last_tipoff.get((g.season, team))
+                rest[side] = REST_CAP if prev is None else min(REST_CAP, _hours(g.tipoff_at, prev) / 24)
+                self.last_tipoff[(g.season, team)] = g.tipoff_at
         mh, ma = self.margins[g.home_team_id], self.margins[g.away_team_id]
         return {
             "elo_diff": (self.elo.ratings[g.home_team_id] - self.elo.ratings[g.away_team_id]) / 100,

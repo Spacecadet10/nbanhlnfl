@@ -304,7 +304,7 @@ class MarketComparison(BaseModel):
 
 class BaselineScore(BaseModel):
     name: str
-    accuracy: Optional[float]
+    accuracy: Optional[float] = Field(description="Picked-winner rate; null for a baseline that never picks a side (always 50%).")
     brier_score: Optional[float]
     log_loss: Optional[float]
 
@@ -364,6 +364,8 @@ class MarketForecastOut(BaseModel):
     line: Optional[float] = Field(description="Exact line of this forecast: home handicap (spread) or threshold.")
     line_source: Optional[Literal["market", "model"]] = Field(
         description="'market' = the bookmaker's line at generation; 'model' = no line was quoted, model-only line.")
+    earlier_line_rule: bool = Field(default=False, description="A model-only line set by the rule used before 2026-10-02 "
+                                                                "(could sit far from an even split). Label only.")
     sides: list[MarketSide]
     pick: Literal["a", "b"]
     pick_label: str

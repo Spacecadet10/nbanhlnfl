@@ -14,8 +14,28 @@ SPORT_COMMANDS = {"nhl-pbp-import", "nhl-xg-research", "migrate", "replay", "cov
 NHL_ONLY = {"nhl-pbp-import", "nhl-xg-research", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies"}
 
 
+# Commands that only read the store: they run on a query-only connection without the job lock or a migration, so a long
+# report can never make a scheduled two-hour cycle wait, skip or miss a game. (`score` is not here: it records a job run.)
+READ_ONLY_COMMANDS = {"score-markets", "score-near-tipoff", "thresholds", "research-report", "pool-report", "pool-roster",
+                      "tracking-report", "coverage"}
 LOCK_WAIT_SECONDS = 45 * 60     # longer than any two-hour cycle (NHL ~13 minutes); a job still waiting then fails visibly
 ODDS_LOCK_WAIT_SECONDS = 120    # the periodic cycle waits out a short job (daily, injuries), not another full cycle
+
+
+def _record_lock_busy(sport: str, reason: str):
+    """job_runs row for an odds cycle skipped because the store lock was busy; None if it could not be written (no store
+    yet, or the running job holds the database). Never raises and never creates or migrates a store."""
+    import sqlite3
+    if not config.db_path(sport).is_file():
+        return None
+    try:
+        conn = db.connect(sport=sport)
+        try:
+            return jobs.record_lock_busy(conn, "odds", reason) if db.has_table(conn, "job_runs") else None
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return None
 
 
 def _any_failed(result) -> bool:
@@ -140,7 +160,7 @@ def main(argv=None) -> int:
     rr.add_argument("--market", default="winner")
     ag = sub.add_parser("agreement", help="Record prospective research-model winner comparisons; primary models unchanged")
     ag.add_argument("--dry-run", action="store_true")
-    sub.add_parser("score", help="Score the latest live forecasts against stored results (read-only)")
+    sub.add_parser("score", help="Score the latest live forecasts against stored results (records a job run; takes the job lock)")
     dl = sub.add_parser("daily", help="Nightly data maintenance and scoring; forecasts run through periodic odds jobs")
     dl.add_argument("--force-refresh", action="store_true")
     od = sub.add_parser("odds", help="Snapshot pregame odds for games tipping off within 36 h "
@@ -236,6 +256,14 @@ def main(argv=None) -> int:
         p.error(f"`{args.cmd}` is NBA-only; it is not available with --sport {args.sport}")
     if args.sport == "nba" and args.cmd in NHL_ONLY:
         p.error(f"`{args.cmd}` needs --sport nhl")
+    if args.cmd in READ_ONLY_COMMANDS:
+        try:
+            conn = db.connect_readonly(args.sport)
+        except FileNotFoundError as exc:
+            p.error(f"{exc}; run `migrate` and the ingest command first")
+        if not db.has_table(conn, "job_runs") or db.store_sport(conn) not in (args.sport, None):
+            p.error(f"the {args.sport} store is not migrated or holds another sport's data")
+        return _run(args, p, conn, [])
     # One job per store at a time: every command below opens (and migrates) the sport's store. The periodic odds cycle
     # waits out a short job but does not queue behind another full cycle (that cycle is doing the same work; the next
     # interval follows); other commands wait, then fail visibly. `scheduler` holds the lock per iteration, not while asleep.
@@ -243,6 +271,8 @@ def main(argv=None) -> int:
         if not held:
             busy = {"status": "skipped" if args.cmd == "odds" else "failed",
                     "reason": f"another job is running on the {args.sport} store"}
+            if args.cmd == "odds":       # leave a trace: a cycle that never ran is otherwise invisible
+                busy["run_id"] = _record_lock_busy(args.sport, busy["reason"])
             print(json.dumps(busy))
             return 0 if args.cmd == "odds" else 1
         conn = db.connect(sport=args.sport)
@@ -560,7 +590,9 @@ def _run(args, p, conn, applied) -> int:
         if args.cmd == "refresh":
             result = jobs.refresh(conn, force=args.force)
         elif args.cmd == "odds":
-            result = {"odds": jobs.odds_snapshot(conn, force=args.force), "forecasts": jobs.forecast_due(conn)}
+            snap = jobs.odds_snapshot(conn, force=args.force, props=False)
+            result = {"odds": snap, "forecasts": jobs.forecast_due(conn)}
+            snap["props"] = jobs.collect_props(conn, snap)       # after the time-critical forecasts, never before them
         elif args.cmd == "predict":
             result = jobs.predict_now(conn)
         elif args.cmd == "score":

@@ -33,6 +33,18 @@ def connect(path: Optional[Path] = None, *, check_same_thread: bool = True, spor
     return conn
 
 
+def connect_readonly(sport: str) -> sqlite3.Connection:
+    """A connection that cannot write (`query_only`): no migration, no journal change, no job lock. For commands that only
+    read, so they never block or delay a scheduled cycle. The store must already exist."""
+    path = config.db_path(sport)
+    if not path.is_file():
+        raise FileNotFoundError(f"No {sport} store at {path}")
+    conn = sqlite3.connect(path, isolation_level=None)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA query_only = ON")
+    return conn
+
+
 class transaction:
     def __init__(self, conn: sqlite3.Connection):
         self.conn = conn

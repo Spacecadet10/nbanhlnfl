@@ -38,6 +38,11 @@ def _start(conn: sqlite3.Connection, job: str) -> int:
                         (job, utc_now())).lastrowid
 
 
+def record_lock_busy(conn: sqlite3.Connection, job: str, reason: str) -> int:
+    """A cycle that gave up waiting for the store lock leaves a 'skipped' row, so a missed forecast window is visible."""
+    return _finish(conn, _start(conn, job), "skipped", 0, {"reason": reason, "lock_busy": True})["run_id"]
+
+
 def _finish(conn: sqlite3.Connection, run_id: int, status: str, attempts: int, detail: dict) -> dict:
     conn.execute("UPDATE job_runs SET finished_at=?, status=?, attempts=?, detail=? WHERE run_id=?",
                  (utc_now(), status, attempts, json.dumps(detail, default=str), run_id))
@@ -124,8 +129,27 @@ def odds_dates(conn: sqlite3.Connection, now: datetime) -> list[str]:
     return dates[:MAX_REQUESTS_PER_ODDS]
 
 
+def collect_props(conn: sqlite3.Connection, odds_run: Optional[dict] = None, now: Optional[datetime] = None) -> dict:
+    """Forward raw prop-line snapshots (collection only, docs/MARKETS.md). Never raises and never affects another job's
+    status. With `odds_run` (a successful odds snapshot of this cycle) the outcome is added to that run's stored detail, so
+    the periodic cycle can collect props AFTER the time-critical two-hour forecasts and still leave its trace."""
+    try:
+        from . import props_collect
+        out = props_collect.collect(conn, sport(conn), now=now)
+    except Exception as exc:
+        conn.rollback()
+        out = {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+    if odds_run and odds_run.get("status") == "success" and odds_run.get("run_id") is not None:
+        row = conn.execute("SELECT detail FROM job_runs WHERE run_id=?", (odds_run["run_id"],)).fetchone()
+        detail = {**json.loads(row["detail"] or "{}"), "props": out} if row else None
+        if detail is not None:
+            conn.execute("UPDATE job_runs SET detail=? WHERE run_id=?", (json.dumps(detail, default=str), odds_run["run_id"]))
+    return out
+
+
 def odds_snapshot(conn: sqlite3.Connection, *, force: bool = False, fetch: Optional[Callable[[str], bytes]] = None,
-                  sleep: Callable[[float], None] = time.sleep, now: Optional[datetime] = None) -> dict:
+                  sleep: Callable[[float], None] = time.sleep, now: Optional[datetime] = None,
+                  props: bool = True) -> dict:
     """Pregame odds snapshot: re-fetches the ESPN day scoreboards of games starting soon, so quotes (each stamped
     with its retrieval time, append-only) accumulate up to tipoff. Also updates schedule/status for those days."""
     run_id = _start(conn, "odds")
@@ -148,12 +172,8 @@ def odds_snapshot(conn: sqlite3.Connection, *, force: bool = False, fetch: Optio
         return _finish(conn, run_id, "failed", attempts, {"dates": dates, "failed_date": failure[0],
                                                           "error": failure[1], "completed": results})
     detail = {"dates": dates, "imports": results}
-    try:   # forward raw prop-line snapshots (collection only, docs/MARKETS.md); never affects the odds job's status
-        from . import props_collect
-        detail["props"] = props_collect.collect(conn, sport(conn), now=now)
-    except Exception as exc:
-        conn.rollback()
-        detail["props"] = {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+    if props:   # the periodic cycle passes props=False and collects them after its forecasts (collect_props)
+        detail["props"] = collect_props(conn, now=now)
     return _finish(conn, run_id, "success", attempts, detail)
 
 
@@ -301,7 +321,8 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
     forecast games tipping off within two hours with the frozen Elo, or refuse them with a reason. The forecast is
     time-stamped after the refresh finishes. The possession refresh does not gate the Elo forecast (Elo does not use
     it). Stale data or a missing result makes the job 'failed' so it is visible; a dry run stores no forecast."""
-    steps = {"refresh": refresh(conn, **(refresh_kw or {})), "odds": odds_snapshot(conn, **(odds_kw or {}))}
+    # Prop lines are never collected in front of the forecasts (up to ~50 s of requests): the odds cycle does it afterwards.
+    steps = {"refresh": refresh(conn, **(refresh_kw or {})), "odds": odds_snapshot(conn, **{"props": False, **(odds_kw or {})})}
     if sport(conn) == "nba":
         steps["boxscores"] = boxscores(conn, **(box_kw or {}))
         from . import availability

@@ -55,7 +55,8 @@ def report(conn, now=None):
             outcome = 'void'
         elif g['status'] == 'final' and g['result_available_at'] and g['result_available_at'] <= now:
             outcome = 'win' if (r['home_win_prob'] >= .5) == (g['home_score'] > g['away_score']) else 'loss'
-        buckets[('winner', r['model_version'], 'not_applicable')].append((max(r['home_win_prob'], 1-r['home_win_prob']), outcome))
+        if r['home_win_prob'] != .5:      # exactly 50% picks no side (as the research rows below)
+            buckets[('winner', r['model_version'], 'not_applicable')].append((max(r['home_win_prob'], 1-r['home_win_prob']), outcome))
     for r in market_live.latest(conn, policy='near_tipoff'):
         if '-window=2h-' not in r['model_version'] or r['generated_at'] > now:
             continue

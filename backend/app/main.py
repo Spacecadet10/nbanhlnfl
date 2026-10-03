@@ -2,6 +2,7 @@
 `real` (default: SQLite store + prediction ledger) or `demo` (synthetic fixtures, always labelled Demo)."""
 import os
 import sqlite3
+import threading
 from datetime import date
 from typing import Iterator, Optional
 
@@ -36,7 +37,18 @@ def api_mode() -> str:
     return mode
 
 
+# One store-backed request at a time. Each request is a few milliseconds of small SQLite reads; run concurrently in the
+# thread pool they contend so badly that 13 requests took ~9 s instead of ~0.25 s (measured on a store copy, 2026-10-03:
+# the time is in the reads themselves, not in opening, the journal pragma or closing). Serialising them is the fix.
+_STORE_REQUESTS = threading.Lock()
+
+
 def get_provider(mode: str = Depends(api_mode), sport: str = SPORT) -> Iterator:
+    with _STORE_REQUESTS:      # a plain Lock: FastAPI may finish the dependency on another pool thread than it started on
+        yield from _provider(mode, sport)
+
+
+def _provider(mode: str, sport: str) -> Iterator:
     if mode == "demo":
         if sport != "nba":
             raise HTTPException(status_code=404, detail=f"Demo data exists only for the NBA; there is no {sport.upper()} "
@@ -219,7 +231,10 @@ def research_performance(market: str = MARKET, p=Depends(get_provider)):
 
 
 @app.get("/api/research/rules")
-def research_rules(market: str = MARKET, show: str = Query("selected", pattern="^(selected|all)$"), p=Depends(get_provider)):
+def research_rules(market: str = MARKET, show: str = Query("selected", pattern="^(selected|all)$"),
+                   definition: Optional[str] = Query(None, max_length=64, pattern="^[0-9a-f]+$",
+                                                     description="A research definition; default: the newest with cohorts."),
+                   p=Depends(get_provider)):
     """Registered combination rules (docs/MODEL_SELECTION.md §15): historical exploration and prospective record."""
     if p.mode != "real":
         return {"mode": "demo", "sport": "nba", "market": market, "status": "demo", "rules": [],
@@ -228,7 +243,7 @@ def research_rules(market: str = MARKET, show: str = Query("selected", pattern="
     _research_store(p)
     from . import rule_tracking
     try:
-        out = rule_tracking.report(p.conn, p.sport, market, show)
+        out = rule_tracking.report(p.conn, p.sport, market, show, definition=definition)
     except rule_tracking.RegistryError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     return {**out, "mode": "real"}
@@ -328,6 +343,10 @@ def research_status(p=Depends(get_provider)):
 
 @app.get("/api/research/retrospective")
 def research_retrospective(p=Depends(get_provider)):
+    if p.mode != "real":      # the recorded study uses real results: never shown under the Demo label
+        return {"mode": "demo", "sport": "nba", "status": "unavailable", "kind": "retrospective study (withheld in demo)",
+                "generated_at": "", "evaluated_seasons": [], "design": "", "markets": {},
+                "note": "The retrospective study uses real results; it is not part of the demo data."}
     from . import combination_research
     return {**combination_research.compact(p.sport), "mode": p.mode}
 
@@ -340,3 +359,29 @@ def research_history(limit: int = Query(200, ge=1, le=2000), p=Depends(get_provi
     _research_store(p)
     from . import research_live
     return {**research_live.history(p.conn, p.now, limit), "mode": "real"}
+
+
+@app.get("/api/research/tracking/joint")
+def research_tracking_joint(market: str = MARKET, evidence: str = Query("historical", pattern="^(historical|prospective)$"),
+                            members: str = Query("", max_length=1000),
+                            confidence: str = Query("supporters_mean", pattern="^(supporters_mean|all_mean|supporters_min)$"),
+                            agreement_min: float = Query(0.5, ge=0, le=1), agreement_max: Optional[float] = Query(None, ge=0, le=1),
+                            confidence_min: float = Query(0.5, ge=0, le=1), confidence_max: Optional[float] = Query(None, ge=0, le=1),
+                            version: Optional[str] = Query(None, max_length=150), line: Optional[float] = None,
+                            date_from: Optional[date] = None, date_to: Optional[date] = None, evaluate: bool = False,
+                            p=Depends(get_provider)):
+    from . import agreement_tracking as at
+    if p.mode != "real":
+        return {"status": "demo", "options": [], "by_definition": [], "recent": [], "note": "Joint research requires real recorded forecasts."}
+    _market_supported(p, market)
+    if ((agreement_max is not None and agreement_max <= agreement_min) or
+            (confidence_max is not None and confidence_max <= confidence_min) or
+            (date_from and date_to and date_from > date_to)):
+        raise HTTPException(status_code=422, detail="Upper bounds must exceed lower bounds; dates must be ordered")
+    try:
+        return at.joint_report(p.conn, p.sport, market, evidence=evidence, members=[m for m in members.split(",") if m],
+                               confidence=confidence, agreement_min=agreement_min, agreement_max=agreement_max,
+                               confidence_min=confidence_min, confidence_max=confidence_max, version=version, line=line,
+                               date_from=date_from, date_to=date_to, evaluate=evaluate)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))

@@ -106,7 +106,7 @@ export interface MarketQuote { bookmaker: string; retrieved_at: string; line: nu
 /** One forecast at one exact line. line_source 'model' = no bookmaker line existed; the line is model-only. */
 export interface MarketForecast {
   market: MarketId; title: string; policy: Policy; model_version: string; current_version?: boolean; generated_at: string; cutoff_at: string;
-  line: number | null; line_source: 'market' | 'model' | null; sides: MarketSide[]; pick: 'a' | 'b'; pick_label: string;
+  line: number | null; line_source: 'market' | 'model' | null; earlier_line_rule?: boolean; sides: MarketSide[]; pick: 'a' | 'b'; pick_label: string;
   confidence: number; meets_confidence: boolean; quote: MarketQuote | null; result: Settlement; limitations: string[];
 }
 export interface MarketRecordSummary {
@@ -304,6 +304,7 @@ export interface RuleReport {
   mode: Mode; sport: Sport; market: MarketId; status?: string; study?: string; registry_sha256?: string; effective_from?: string;
   cohort_source?: 'core' | 'expanded'; members?: string[]; comparator?: string; cohorts?: number; registered_rules?: number;
   selected_rules?: number; frontier_historical?: FrontierBand[]; rules: RegisteredRule[]; note?: string;
+  definition?: string | null; definitions?: { definition: string; games: number; first_at: string; last_at: string }[];
 }
 
 // --- Candidate pool roster (backend app/candidates/live.py, docs/CANDIDATE_POOL.md). Research only. ---
@@ -415,4 +416,14 @@ export interface TrainingStatus {
   monitoring: { members: { market: string; member: string; settled: number; recent_log_loss: number; previous_log_loss: number | null;
     missing_rate: number; status?: string; difference?: number }[]; alerts: { member: string; market: string; alert: string }[]; note?: string };
   note: string;
+}
+
+export interface JointReport {
+  status: string; note: string; options: string[]; lines: number[]; definitions: string[]; games: number;
+  by_definition: { definition: string; games: number; status_counts: Record<string, number>; cell: TrackingCell }[];
+  recent: { game_id: string; tipoff_at: string; line: number | null; state: string; status: string;
+    side: number | null; agreement: number | null; statistic: number | null; votes: Record<string, number>; missing: Record<string, string>; matches_filter: boolean }[];
+  walk?: { configurations: number; note: string; folds: { season: string; reason?: string;
+    chosen: { agreement_min: number; agreement_max: number | null; confidence_min: number; confidence_max: number | null; comparator: string } | null;
+    later?: TrackingCell; matched?: { model: string; games: number; win_rate: number | null } }[] } | null;
 }

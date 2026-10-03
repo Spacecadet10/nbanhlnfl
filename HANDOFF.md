@@ -1,5 +1,70 @@
 # Current handoff
 
+## "Fix them all" batch — Claude (Fable 5.1), 2026-10-03 18:58–19:25 UTC. **Uncommitted. RESEARCH DEFINITIONS CHANGED.**
+- **Research identity reset (user asked for the latent hashed-file fix):** `models/logistic.py`, `models/hockey.py`,
+  `models/score_candidates.py` now compute a game's rest days once (`rest_seen`), so predicting a game twice no longer reads
+  as a back-to-back. Applied in one step at 19:10:10 UTC. New definitions: **NHL `3e2504c4d655c41b`** (was `8d60d7aebdb6a68d`,
+  which had 0 cohorts), **NBA `1215f3641ad63e4f`** (was `21025be327b4f408`). Single-prediction walks are unchanged: the full
+  suite passed on a scratch copy before applying (548 + the 3 path-bound tests) and after.
+- `ingest.py`: a result that arrives late for a game the store already tracked before its start is stamped with its retrieval
+  time (never backdated to start + 4 h; first-met-final backfill unchanged); a corrected final score becomes available at
+  the correction's retrieval time (`result_first_seen_at` keeps the first sighting). Existing rows are not rewritten.
+- `candidates/live.py`: new fits are named by a fingerprint that includes training labels (`r2…`), so a corrected score
+  gives a new fit; artifacts fitted under the ids-only name stay in force (no mass refit).
+- `rule_tracking.py` + `/api/research/rules?definition=`: the combination-rule record covers ONE research definition (newest
+  with cohorts by default), lists the others, and the card has a version selector. Live: `7f9821fa…` 3 games, `5040a9e7…` 3.
+- `main.py`: store-backed requests are served one at a time (`_STORE_REQUESTS`). Root cause reproduced on a store copy
+  (`scratchpad/perf_probe.py`): 13 concurrent requests 9.2 s vs 0.23 s serial; the time is in the reads (provider init +
+  endpoint), NOT in open/journal pragma/close, and a shorter switch interval does not help. Live burst 7.3 s → ~1.0 s;
+  Performance page settles in ~2 s (was 16–30 s). Demo `/api/research/retrospective` returns a stub (no real study in demo).
+- `providers/real.py` sources: "Elo forecasts" is stale only when an eligible game started in the last 24 h without a
+  two-hour forecast; no eligible game is fresh. `training_monitor.py`: odds is not stale after a healthy skip
+  (`last_checked`), a lock-busy skip does not count. `tracking.py`: exactly 50% is no pick in the threshold table.
+- `jobs.py`/`cli.py`: prop lines are collected after the two-hour forecasts (`collect_props`, merged into the odds run's
+  detail), never in front of them. `research_demo.py`: the demo store is built once under a lock and its connection serves
+  one request at a time.
+- Frontend: joint explorer keeps the model list mounted (focus stays) and disables/clears invalid upper bounds; market cards
+  show the model's push-free pair next to a bookmaker pair when the line can push; `Research.tsx` version selector.
+- Tests: `tests/test_review3_fixes.py` now 21 tests; the 15 for uncommitted work fail against HEAD backend code in a scratch
+  copy. `test_api_research.py` updated for the demo stub. `NBA_DATA_DIR=<scratch> … check_project.py --ready`: exit 0,
+  typecheck + build ok, **555 passed**. API restarted 19:19 UTC. NBA cycle 19:13 UTC ran clean on the new code.
+- **Deliberately not done:** F (injury collector newest-first) — four existing tests encode oldest-first as designed and the
+  starvation is unverified off-season; reverted, needs an in-season check or an explicit design decision. Schedule mismatch
+  between winner and line research models — unreachable (the forecast refuses a team with an unfinished earlier game).
+  Float ledger conflicts — no occurrence in any log; the ledger tolerance was not loosened. Pinned release runtime for the
+  scheduled jobs — an operational launchd switch, not done inside tonight's forecast window.
+
+## Read-only CLI commands, lock-busy trace, Brier scale labels — Claude (Fable 5.1), 2026-10-03 18:50–19:05 UTC
+- At the user's request (Opus's findings A and B). No identity-hashed file, migration or stored forecast changed; live
+  definition still `8d60d7aebdb6a68d`. **Uncommitted.** `cli.py`/`jobs.py`/`db.py` are what the scheduled jobs run.
+- **A.** `cli.py` `READ_ONLY_COMMANDS` (score-markets, score-near-tipoff, thresholds, research-report, pool-report,
+  pool-roster, tracking-report, coverage) now run on `db.connect_readonly` (`PRAGMA query_only`, no journal change), with
+  no job lock and no migration, so a long report can no longer make a two-hour cycle wait or skip. `score` records a job
+  run, so it still takes the lock (help text corrected). An `odds` cycle that gives up on a busy lock now writes a
+  `job_runs` row (`odds`, `skipped`, `lock_busy: true`) via `jobs.record_lock_busy`; it never creates or migrates a store.
+  Not changed: research/backtest commands that write still hold the lock for their whole run — run those on store copies.
+- **B.** Research and tracking tables label their Brier column "Brier (0–2 scale)" with a tooltip (it is the multi-outcome
+  sum: twice the 0–1 Brier on the Performance tiles for a two-way result); the market Performance tile hint says the same.
+- Tests: 2 added to `tests/test_review3_fixes.py` (9 total); both fail against HEAD `cli.py`/`db.py`/`jobs.py` in a scratch
+  copy. `NBA_DATA_DIR=<scratch> … scripts/check_project.py --ready`: exit 0, typecheck + build ok, **543 passed**.
+- Live: `python -m app.cli --sport nhl score-near-tipoff` ran read-only against the live store (5 forecasts, 0–5).
+- **Not fixed (low, need a decision):** C — a corrected past score does not refit a candidate artifact (fingerprint hashes
+  game ids only); D — a result first seen more than 24 h late is backdated to start + 4 h (timing rule).
+
+## Label-only fixes: earlier line rule, always-50% baseline — Claude (Fable 5.1), 2026-10-03 18:38–18:50 UTC
+- At the user's request (Opus's two new findings). No identity-hashed file, stored row, line or score changed; live
+  definition still `8d60d7aebdb6a68d`. **Uncommitted.**
+- `providers/real.py` + `schemas.py`: a market forecast with a model-only line generated before `MODEL_LINE_RULE_SINCE`
+  (2026-10-02T03:18:53Z, commit 2df4f75) carries `earlier_line_rule: true` and an extra limitation sentence; market
+  Performance adds a limitation with the count. The always-50% baseline's `accuracy` is null (it never picks a side); its
+  Brier score and log loss are unchanged.
+- Frontend: `MarketView.tsx` shows "model-only · earlier line rule"; `PerformancePage.tsx` explains the dash; `types.ts` field.
+- Tests: 2 added to `tests/test_review3_fixes.py` (7 total); both fail against HEAD `real.py` + `schemas.py` in a scratch copy.
+  `NBA_DATA_DIR=<scratch> … scripts/check_project.py --ready`: exit 0, typecheck + build ok, **541 passed**.
+- Live (:8000 restarted 18:42 UTC, no job running): NHL pre-game archive, latest row per game: 202 labelled (spread 44, total
+  44, home goals 57, away goals 57), two-hour rows 0 labelled, every record unchanged. Browser: History home goals shows the
+  label on all 57 rows; backtest Performance shows "Always 50% — 0.250 0.693" with the note.
+
 ## Review fixes (market price, 3-way filter, forecast note, card agreement, injury-member refusal) — Claude (Fable 5.1), 2026-10-03 18:03–18:20 UTC
 - At the user's request, from Opus's read-only logic review. All changes are outside the identity-hashed files; the live
   definition is still `8d60d7aebdb6a68d`. Committed on their own (see `git log`); the first scheduled NBA cycle on the
@@ -53,6 +118,37 @@
   is still uncommitted and awaits its own review. No void or unscorable case exists in real data (synthetic tests only); the
   frontend has no test runner. Freshness, backtest scope, concurrency, joint explorer, demo, release isolation: not started.
 
+## Count clarification — Devin, 2026-10-03
+- User asked why All shows ~57 picks but only ~12 settled. Verified the running NHL night-before (`pregame`) winner API:
+  57 selected, now 13 settled (4 wins / 9 losses), 44 without recorded outcomes (Oct 3–8), 0 voids. All removes the
+  confidence filter; it does not mean all games have settled. No app changes/check reruns needed. Next tasks unchanged below.
+
+## Joint agreement/confidence completion — Devin, 2026-10-03
+- Continued Codex's uncommitted feature on `838f879`; preserved his existing edits. Performance now has exact 2–8-model
+  subsets, independent agreement/confidence ranges, historical vs recorded-live classifications and earlier-only rule
+  selection/next-season comparison. Research only: no live recommendation, model, selector or forecast-ledger change.
+- Fixed the joint search's top confidence band excluding exactly 100% (new failing-then-passing regression in
+  `backend/tests/test_joint_agreement.py`). Fixed Research definition losing focus after one typed character, and added
+  an error-state filter reset in `Tracking.tsx`.
+- Codex's saved readiness log had 527 passed / 2 missing-Optuna failures. Installed existing pinned `optuna==5.0.0`
+  with `uv pip install --python backend/.venv/bin/python 'optuna==5.0.0' --exclude-newer 2026-09-26`; documented the
+  prerequisite in README. No dependency declarations changed and no training/ingestion/forecast job was run.
+- Verification: structure passed; joint tests **13 passed**. Final
+  `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 backend/.venv/bin/python scripts/check_project.py --ready`: **exit 0**,
+  typecheck/build passed, **530 tests passed**, one existing Starlette/httpx warning. `git diff --check` clean.
+- Running API: **11/11** market paths checked; NBA 6,605 historical games/3 later folds, NHL 11,870/7 per market.
+  Live: 0 NBA, 5 NHL rows per market; NHL has two separate method/member-version groups. Both historical tracking tables
+  serve current calculation results. No exhaustive subset search or prospective-performance claim.
+- Browser: NBA/NHL joint feature at 1280×900 and 390×844 passed selections, chronological evaluation, research/live
+  separation, loading/error/empty/retry/reset, typing and overflow checks; no JS page errors. Desktop three-way/line/sport
+  switches and demo navigation/labels also checked. Exact commands and limitations: `docs/SMOKE_TEST.md` completion section.
+- **Remaining:** extra demo navigation harness failed while awaiting existing `/api/research/slate`; direct curl also
+  timed out after 15 s (exit 28). Root cause unconfirmed; that harness's phone navigation/market checks remain unverified.
+  The joint feature's phone tests passed separately. No physical-phone test. Historical results remain exploratory.
+- Real API restarted with current code on :8000; frontend remains http://127.0.0.1:5173 (Performance → Explore model
+  agreement + confidence ranges). Temporary demo API stopped. Changes left uncommitted; nothing pushed/deployed.
+- **Next:** Codex independent review of the uncommitted feature and follow-up fixes; separate investigation of demo
+  research initialization timeout, then finish the additional navigation smoke run. Do not retrain or promote rules.
 
 ## Reconciliation of parallel work (option 1) — Claude (Opus 5.5, session andry-03), 2026-10-03 02:09–03:40 UTC
 Single writer established: sessions -09 and -92 confirmed they made no commits; -c7 confirmed it made 803cee0..aa1e1b4 and

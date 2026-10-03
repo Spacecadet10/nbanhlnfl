@@ -20,4 +20,5 @@ def test_demo_research_endpoints_are_labelled_and_populated(monkeypatch):
     assert perf["mode"] == "demo" and perf["groups"][0]["settled"] > 100 and perf["decisions"]
     assert c.get("/api/research/performance", params={"market": "reg3"}).status_code == 404
     retro = c.get("/api/research/retrospective").json()
-    assert retro["kind"].startswith("retrospective") and "winner" in retro["markets"]
+    # The recorded study uses real results: under the Demo label it is withheld, never shown as demo data.
+    assert retro["mode"] == "demo" and retro["status"] == "unavailable" and retro["markets"] == {}

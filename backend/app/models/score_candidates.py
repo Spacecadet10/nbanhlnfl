@@ -289,6 +289,7 @@ class GoalsGlm:
         self.gf: dict = defaultdict(lambda: deque(maxlen=10))
         self.ga: dict = defaultdict(lambda: deque(maxlen=10))
         self.last_tipoff: dict = {}
+        self.rest_seen: dict = {}     # game_id -> rest days: a game predicted again never rests "0 days"
         self.pending: dict[str, tuple] = {}
         self.examples: list[tuple] = []     # (season, x, home reg goals, away reg goals, reg tie, home won)
         self.season: Optional[int] = None
@@ -302,11 +303,13 @@ class GoalsGlm:
 
     def _vector(self, g: PregameGame) -> list[float]:
         self.elo.predict(g)
-        rest = {}
-        for side, team in (("home", g.home_team_id), ("away", g.away_team_id)):
-            prev = self.last_tipoff.get((g.season, self._team(team)))
-            rest[side] = REST_CAP if prev is None else min(REST_CAP, _hours(g.tipoff_at, prev) / 24)
-            self.last_tipoff[(g.season, self._team(team))] = g.tipoff_at
+        rest = self.rest_seen.get(g.game_id)
+        if rest is None:
+            rest = self.rest_seen[g.game_id] = {}
+            for side, team in (("home", g.home_team_id), ("away", g.away_team_id)):
+                prev = self.last_tipoff.get((g.season, self._team(team)))
+                rest[side] = REST_CAP if prev is None else min(REST_CAP, _hours(g.tipoff_at, prev) / 24)
+                self.last_tipoff[(g.season, self._team(team))] = g.tipoff_at
         h, a = self._team(g.home_team_id), self._team(g.away_team_id)
         mean = lambda d: sum(d) / len(d) if d else 3.0
         f = {"elo_diff": (self.elo.ratings[h] - self.elo.ratings[a]) / 100, "gf10_home": mean(self.gf[h]),

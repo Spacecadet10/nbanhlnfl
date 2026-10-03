@@ -32,6 +32,7 @@ export function PerformancePage() {
           ? <MarketSelect value={market} markets={markets} onChange={setMarket} />
           : meta.state.status === 'error' ? <p className="warn small">Market list unavailable: {meta.state.error}</p> : null}
         <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} /></div>
+        <p><a href="#joint-agreement">Explore model agreement + confidence ranges</a></p>
         <MarketPerformance sport={sport} market={market} policy={policy} />
         {policy === 'near_tipoff' && <ThresholdResearch sport={sport} market={market} />}
         <SelectionStatusCard sport={sport} market={market} />
@@ -48,6 +49,7 @@ export function PerformancePage() {
   return (
     <section>
       {markets.length > 0 && <MarketSelect value={market} markets={markets} onChange={setMarket} />}
+      <p><a href="#joint-agreement">Explore model agreement + confidence ranges</a></p>
       <AsyncView state={state} retry={retry}>
         {(p) => (
           <>
@@ -112,6 +114,7 @@ function Report({ perf: p, run, setRun }: { perf: PerformanceResponse; run: 'liv
                   ))}
                 </tbody>
               </table>
+              {p.baselines.some((b) => b.accuracy == null) && <p className="small muted">— : a baseline that always says 50% never picks a winner, so it has no picked-winner rate. Compare it on Brier score and log loss.</p>}
             </div>
           )}
 

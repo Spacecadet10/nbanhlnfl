@@ -140,7 +140,17 @@ The reserved final test has been run once (2026-09-30), and the primary model is
 The prediction ledger (`app/ledger.py`) is append-only.
 
 ## Checks
+The full suite also tests the optional tuning study and needs its pinned Optuna dependency, even when no research jobs are run. With the backend environment already installed, run `uv pip install --python backend/.venv/bin/python 'optuna==5.0.0'` (or the equivalent pip command) before readiness checks. This installs the existing research dependency; it does not enable live training.
+
 ```sh
 python3 scripts/check_project.py                           # structure guard
 backend/.venv/bin/python scripts/check_project.py --ready  # + typecheck, build, pytest
 ```
+
+### Explore agreement and confidence together
+
+On **Performance**, use **Explore model agreement + confidence ranges**. Choose the sport and market, then any exact subset of 2–8 available models. Agreement is votes for the same outcome divided by the full subset size; confidence is a separate filter. You can require, for example, at least 80% agreement and 65–70% mean confidence among the agreeing models. Ties and missing members produce no pick. Upper bounds are exclusive; leave the upper bound empty to include 100%.
+
+Historical results use saved out-of-sample forecasts. **Test joint rules on later seasons** searches agreement ranges and confidence thresholds/bands for the selected subset, freezes the choice on earlier seasons, and reports its next-season record against an earlier-selected constituent at matched coverage. This does not search every possible subset automatically, retrain models, or change live recommendations. These reused historical seasons provide exploratory evidence, not a fresh independent test. Historical totals/spreads use model-defined lines, not bookmaker lines.
+
+**Recorded live** derives the same classifications from the stored two-hour cohorts and exact cohort-linked model inputs. Method definitions and member versions have separate records; missing models, voids and pending outcomes remain visible. Use exact-line, date and definition filters to inspect coverage. New filters are retrospective classifications, not retroactively recorded bets or recommendations.

@@ -1,6 +1,6 @@
 // The app's single API client. All screens fetch through here; there is no local fallback data.
 import type {
-  ThresholdReport, AgreementPerformance, GameDetail, GamesResponse, HistoryResponse, MarketHistoryResponse, MarketId, MarketPerformanceResponse, Meta,
+  JointReport, ThresholdReport, AgreementPerformance, GameDetail, GamesResponse, HistoryResponse, MarketHistoryResponse, MarketId, MarketPerformanceResponse, Meta,
   PerformanceResponse, Policy, ResearchGame, ResearchHistory, ResearchReport, ResearchSlate, Retrospective, RuleReport, CandidateRoster, PoolReport, SelectionStatus, Sport,
   TrainingStatus, TrackingCheck, TrackingEvidence, TrackingGame, TrackingKind, TrackingReport,
 } from './types';
@@ -41,6 +41,9 @@ const policyParam = (policy?: Policy) => (policy === 'near_tipoff' ? 'near_tipof
 const confParam = (c?: number | null) => (c == null ? undefined : String(c));
 
 export const api = {
+  jointTracking: (sport: Sport, market: MarketId, params: Record<string, string | undefined>, signal?: AbortSignal) =>
+    get<JointReport>('/research/tracking/joint', { sport, market, ...params }, signal),
+
   thresholds: (sport: Sport, signal?: AbortSignal) => get<ThresholdReport>('/thresholds', { sport }, signal),
   agreementPerformance: (sport: Sport, signal?: AbortSignal) => get<AgreementPerformance>('/agreement-performance', { sport }, signal),
   meta: (sport: Sport, signal?: AbortSignal) => get<Meta>('/meta', { sport }, signal),
@@ -77,8 +80,8 @@ export const api = {
   researchSlate: (sport: Sport, date: string, signal?: AbortSignal) => get<ResearchSlate>('/research/slate', { sport, date }, signal),
   researchPerformance: (sport: Sport, market: MarketId, signal?: AbortSignal) =>
     get<ResearchReport>('/research/performance', { sport, market }, signal),
-  researchRules: (sport: Sport, market: MarketId, show: 'selected' | 'all', signal?: AbortSignal) =>
-    get<RuleReport>('/research/rules', { sport, market, show }, signal),
+  researchRules: (sport: Sport, market: MarketId, show: 'selected' | 'all', signal?: AbortSignal, definition?: string) =>
+    get<RuleReport>('/research/rules', { sport, market, show, definition: definition || undefined }, signal),
   researchCandidates: (sport: Sport, signal?: AbortSignal) => get<CandidateRoster>('/research/candidates', { sport }, signal),
   researchPool: (sport: Sport, signal?: AbortSignal) => get<PoolReport>('/research/pool', { sport }, signal),
   researchTracking: (sport: Sport, market: MarketId, f: { evidence: TrackingEvidence; kind?: TrackingKind | ''; member?: string;

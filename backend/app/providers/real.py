@@ -25,6 +25,12 @@ FRESH_FOR = timedelta(hours=24)
 BASELINE_NAMES = {"home_rate-smoothing=laplace": "Home-win rate", "constant-p=0.5": "Always 50%"}
 UNSCORED_TYPES = ("preseason", "other")
 WARMUP_SEASONS = backtest.PERIODS["warmup"]
+# Model-only lines made before this moment (commit 2df4f75) used the earlier rule: median rounded down + 0.5, which put low
+# team totals where 'under' was near 70%. Those rows keep their stored line and score; they are labelled, never changed.
+MODEL_LINE_RULE_SINCE = "2026-10-02T03:18:53Z"
+EARLIER_LINE_RULE_NOTE = ("Earlier line rule: this model-only line was set by the rule used before 2026-10-02 (median rounded "
+                          "down + 0.5), which could place the line far from an even split, so the pick partly reflects "
+                          "where the line was placed.")
 
 
 def _parse(value: str) -> datetime:
@@ -221,8 +227,22 @@ class RealProvider:
         last_fetch = self.conn.execute("SELECT MAX(retrieved_at) FROM raw_fetches").fetchone()[0]
         refresh = self._last_refresh() or last_fetch
         odds = self.conn.execute("SELECT MAX(retrieved_at) FROM odds_quotes").fetchone()[0]
-        predict = self.conn.execute("SELECT MAX(finished_at) FROM job_runs WHERE job='predict' AND status='success'"
-                                    ).fetchone()[0]
+        # Winner forecasts are made only within two hours of a start, so "stale" is never the age of a job run: it means an
+        # eligible game started in the last 24 h without a two-hour forecast. No eligible game is a healthy state.
+        predict = self.conn.execute("SELECT MAX(generated_at) FROM predictions WHERE run_type='live' "
+                                    "AND model_version IN (?, ?)", (self.model_version, self.near_version)).fetchone()[0]
+        types = self.eng.eligible_types
+        since = (_parse(self.now) - FRESH_FOR).strftime("%Y-%m-%dT%H:%M:%SZ")
+        started, covered = self.conn.execute(
+            f"SELECT COUNT(*), COALESCE(SUM(EXISTS(SELECT 1 FROM predictions p WHERE p.game_id=g.game_id AND p.run_type='live' "
+            f"AND p.model_version=?)), 0) FROM games g WHERE g.tipoff_at > ? AND g.tipoff_at <= ? "
+            f"AND g.status NOT IN ('postponed', 'canceled') AND g.season_type IN ({', '.join('?' * len(types))})",
+            (self.near_version, since, self.now, *types)).fetchone()
+        if started:
+            forecast_note = f"{covered} of {started} eligible games that started in the last 24 h had a two-hour forecast."
+        else:
+            forecast_note = "No eligible game started in the last 24 h; forecasts are made within two hours of a start."
+        forecast_state = "stale" if started > covered else "fresh" if predict or not started else "missing"
         lines = self.conn.execute("SELECT MAX(retrieved_at) FROM market_quotes").fetchone()[0]
         if self.sport == "nhl":
             schedule = SourceStatus(name="NHL schedule & results", kind="schedule", mode="real", last_updated=refresh,
@@ -239,7 +259,7 @@ class RealProvider:
             SourceStatus(name="Bookmaker odds (ESPN)", kind="odds", mode="real", last_updated=odds,
                          freshness=fresh(odds), note=odds_note),
             SourceStatus(name="Elo forecasts", kind="forecasts", mode="real", last_updated=predict,
-                         freshness=fresh(predict), note="Live forecasts recorded append-only before each game's cutoff."),
+                         freshness=forecast_state, note="Live forecasts recorded append-only. " + forecast_note),
             SourceStatus(name="Market forecasts", kind="forecasts", mode="real", last_updated=markets_at,
                          freshness=fresh(markets_at), note="Spread/puck line, totals and team totals from the sealed "
                                                            "score model, each at its exact line."),
@@ -282,14 +302,17 @@ class RealProvider:
         if r["market"] == "reg3" or r["p_mid"] > 0:
             sides.append(MarketSide(side="mid", label=labels[1], probability=r["p_mid"]))
         sides.append(MarketSide(side="b", label=labels[2], probability=r["p_b"]))
+        earlier_rule = r["line_source"] == "model" and r["generated_at"] < MODEL_LINE_RULE_SINCE
         return MarketForecastOut(
             market=r["market"], title=markets.spec(self.sport, r["market"]).title, policy=r["policy"],
             model_version=r["model_version"],
             current_version=r["model_version"] == (self._current_market_version(r["policy"]) or r["model_version"]),
             generated_at=r["generated_at"], cutoff_at=r["cutoff_at"], line=r["line"],
-            line_source=r["line_source"], sides=sides, pick=side, pick_label=labels[0 if side == "a" else 2],
+            line_source=r["line_source"], earlier_line_rule=earlier_rule,
+            sides=sides, pick=side, pick_label=labels[0 if side == "a" else 2],
             confidence=conf, meets_confidence=min_confidence is None or conf >= min_confidence - 1e-9, quote=quote,
-            result=result, limitations=markets.limitations(self.sport, r["market"], r["line_source"]))
+            result=result, limitations=markets.limitations(self.sport, r["market"], r["line_source"])
+            + ([EARLIER_LINE_RULE_NOTE] if earlier_rule else []))
 
     def game(self, game_id: str) -> Optional[GameDetail]:
         g = self.conn.execute("SELECT * FROM games WHERE game_id=?", (game_id,)).fetchone()
@@ -385,6 +408,12 @@ class RealProvider:
         for r in rows:
             if r.forecast.line_source:
                 sources[r.forecast.line_source] = sources.get(r.forecast.line_source, 0) + 1
+        earlier = sum(r.forecast.earlier_line_rule for r in rows)
+        limits = markets.limitations(self.sport, market, None)
+        if earlier:
+            limits = limits + [f"{earlier} of these {len(rows)} forecasts used model-only lines set by the earlier line rule "
+                               "(before 2026-10-02), which could place the line far from an even split; their win rate "
+                               "partly reflects where the line was placed."]
         return MarketPerformanceResponse(
             mode="real", sport=self.sport, market=market, policy=policy,
             title=f"{markets.spec(self.sport, market).title}: live {'near-tipoff forecasts' if policy == 'near_tipoff' else 'pre-game archive forecasts'}",
@@ -397,7 +426,7 @@ class RealProvider:
             market_log_loss_on_matched=metrics.log_loss_multi(
                 [[q.prob_a, 0.0, q.prob_b] for _, _, q in matched], [k for _, k, _ in matched]),
             reference=_market_reference(self.sport, market),
-            limitations=markets.limitations(self.sport, market, None),
+            limitations=limits,
             note="Latest forecast per game recorded before its cutoff. The win rate excludes pushes and voids; a regulation "
                  "draw counts as a loss for a 3-way pick. The bookmaker comparison uses only decided games forecast at the "
                  "quoted line, with the quote retrieved no later than the forecast, and both sides' probabilities "
@@ -471,7 +500,8 @@ class RealProvider:
         if run_type == "backtest":
             for mv, name in BASELINE_NAMES.items():
                 bp, by = score(scored(mv))
-                baselines.append(BaselineScore(name=name, accuracy=metrics.accuracy(bp, by),
+                no_pick = bool(bp) and all(p == 0.5 for p in bp)     # exactly 50% everywhere: no side is ever picked
+                baselines.append(BaselineScore(name=name, accuracy=None if no_pick else metrics.accuracy(bp, by),
                                                brier_score=metrics.brier(bp, by), log_loss=metrics.log_loss(bp, by)))
         matched = []
         for r in rows:
