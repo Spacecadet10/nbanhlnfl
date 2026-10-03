@@ -24,7 +24,7 @@ Candidate fitting itself took ≤ 42 s per configuration.
 | pbpstats, nba_data, nba-on-court, RAPM tutorial | reference only / deferred | lineups are postgame facts; stats.nba.com `playbyplayv2` now returns `{}`; nba-on-court breaks on numpy 2 |
 | fastRhockey, sportsdataverse-data | reference / backfill only | their xG boosters were trained on 2010–24 shots (in-sample for backtests); goalie boxscores free but starters are postgame |
 | penaltyblog (Dixon–Coles, bivariate Poisson) | rejected for our data | residual home/away goal correlation −0.05 (a shared component only adds positive correlation); excess draws at every tied score, covered by diagonal inflation |
-| XGBoost / LightGBM | rejected | duplicate of sklearn HistGBT; need a system libomp on this Mac |
+| XGBoost / LightGBM | **deferred/untested** (amended 2026-10-03, MODEL_SELECTION §21) | distinct implementations, not ruled out by the sklearn HistGBT results; adoption needs a compatible libomp |
 | Negative binomial | rejected | Pearson dispersion 1.02 / 0.96 given `goals_poisson` rates |
 | kyleskom NBA betting repo | rejected (leakage example) | features joined to same-day season stats; an earlier version kept the best of 300 random splits |
 

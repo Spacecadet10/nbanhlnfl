@@ -267,8 +267,10 @@ triples, 102 of 848 larger). Thresholds 50–90% (reg3 35–70%); bands reported
   (≈ 54–63% at higher confidence). That is relative to a model line, not a bookmaker line; no betting claim.
 - **Learned combiners:** L1 stackers keep 1–4 members (e.g. NHL lines: `poisson_draw` only; NBA winner: logistic_v2,
   gbt_v1, elastic net, mlp:normal) and match, not beat, their strongest member.
-- **Registered for prospective tracking:** 75 rules (5–9 per market: best lift per threshold, top lift, highest accuracy;
-  none qualified), shown as "registered" in Performance → Combination discovery and tracking.
+- **Final selection on all seasons:** 75 rules (5–9 per market: best lift per threshold, top lift, highest accuracy; none
+  qualified), saved in the report (`prospective_registry`). **Not tracked prospectively:** the card that showed them was
+  removed at reconciliation as a duplicate of tracking-v2 (MODEL_SELECTION §18); registering any of them for prospective
+  recording would need a new sealed tracking registry version.
 - **Answer within what was tested:** across all pairs and triples (and the bounded larger subsets) at 50–90% thresholds, no
   subset, agreement rule or threshold beat the best single model chosen on earlier seasons on later seasons, in any market,
   apart from line-market gains that the plain average of all members already provides. Untested: the omitted larger subsets

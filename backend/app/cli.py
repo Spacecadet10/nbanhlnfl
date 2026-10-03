@@ -187,6 +187,9 @@ def main(argv=None) -> int:
         return 0
     if args.cmd == "tuning-study":       # opens (and migrates) both stores: run on copies
         from pathlib import Path
+        import importlib.util
+        if importlib.util.find_spec("optuna") is None:      # refuse before any store is opened or migrated
+            p.error("tuning-study needs the research extra (optuna==5.0.0); install it in a research venv, not the live one")
         from . import tuning_study
 
         def conn_for(sport):

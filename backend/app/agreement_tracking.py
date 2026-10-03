@@ -844,7 +844,10 @@ def _precomputed(sport: str, sha: str, part: str = "markets") -> Optional[dict]:
     if not p.is_file():
         return None
     d = _summaries(str(p), p.stat().st_mtime)
-    return d.get(part) if d.get("registry_sha256") == sha and d.get("grid") == GRID else None    # stale grid: recompute
+    if d.get("registry_sha256") != sha:
+        return None
+    # Summaries depend on the reporting grid; the chronological check uses sealed thresholds only and stays valid.
+    return d.get(part) if part == "checks" or d.get("grid") == GRID else None
 
 
 def precomputed_check(sport: str, market: str) -> dict:

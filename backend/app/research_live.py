@@ -8,6 +8,7 @@ the equal average and the stacker (both only for complete cohorts) and the agree
 import hashlib
 import json
 import os
+import sqlite3
 from datetime import datetime, timedelta, timezone
 from importlib.metadata import version as pkg_version
 from pathlib import Path
@@ -202,6 +203,10 @@ def record(conn, *, game_ids: list, winner_run: Optional[dict], history: Optiona
                 members = [{"name": models[0].name, "ref": {"table": "market_forecasts", "id": prim["forecast_id"]},
                             "p": [prim["p_a"], prim["p_mid"], prim["p_b"]]}]
                 missing = {}
+                still = conn.execute("SELECT status, tipoff_at FROM games WHERE game_id=?", (gid,)).fetchone()
+                if still is None or still["status"] != "scheduled" or still["tipoff_at"] != g["tipoff_at"]:
+                    skip(market, gid, "game no longer scheduled at its forecast start: no member forecasts written")
+                    continue
                 for m in models[1:]:
                     d = current.get(m.name, {}).get(gid)
                     if isinstance(d, str):
@@ -327,32 +332,38 @@ def _store(conn, c, cohorts, out, write):
     if c["generated_at"] >= c["tipoff_at"]:
         out["skipped"].setdefault(c["market"], []).append({"game_id": c["game_id"], "reason": "finished after the start"})
         return
-    cur_g = conn.execute("SELECT status, tipoff_at FROM games WHERE game_id=?", (c["game_id"],)).fetchone()
-    if cur_g is None or cur_g["status"] != "scheduled" or cur_g["tipoff_at"] != c["tipoff_at"]:
-        # The game started, was rescheduled or is no longer scheduled during this cycle: no cohort (the database would
-        # refuse it anyway); a skip with a reason, never an error that withholds the other games' cohorts.
-        out["skipped"].setdefault(c["market"], []).append(
-            {"game_id": c["game_id"], "reason": "game no longer scheduled at its forecast start when the cohort was written"})
-        return
+    gone = {"game_id": c["game_id"], "reason": "game no longer scheduled at its forecast start when the cohort was written"}
     key = _key(c["sport"], c["game_id"], c["market"], c["line"], c["line_source"], c["market_quote_id"], c["definition"],
                c["primary_name"], [(m["name"], m["ref"], m["p"]) for m in c["members"]], c["missing"])
     if not write:
         cohorts[c["game_id"]][c["market"]] = (None, c)
         return
-    with transaction(conn):
-        row = conn.execute("SELECT cohort_id FROM research_cohorts WHERE idempotency_key=?", (key,)).fetchone()
-        if row:
-            out["cohorts_existing"] += 1
-            cohorts[c["game_id"]][c["market"]] = (row[0], c)
-            return
-        cur = conn.execute(
-            "INSERT INTO research_cohorts (idempotency_key, sport, game_id, market, line, line_source, market_quote_id, bookmaker, "
-            "definition, primary_name, information_at, generated_at, tipoff_at, members, missing, average, stack, agreement) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (key, c["sport"], c["game_id"], c["market"], c["line"], c["line_source"], c["market_quote_id"],
-             json.dumps(c["bookmaker"]), c["definition"], c["primary_name"], c["information_at"], c["generated_at"],
-             c["tipoff_at"], json.dumps(c["members"]), json.dumps(c["missing"]), json.dumps(c["average"]),
-             json.dumps(c["stack"]), json.dumps(c["agreement"])))
+    try:
+        with transaction(conn):
+            row = conn.execute("SELECT cohort_id FROM research_cohorts WHERE idempotency_key=?", (key,)).fetchone()
+            if row:
+                out["cohorts_existing"] += 1
+                cohorts[c["game_id"]][c["market"]] = (row[0], c)
+                return
+            # Checked in the same transaction as the insert: a game that started, was rescheduled or left the schedule
+            # during this cycle gets no cohort and a skip with a reason, never an error that withholds other games.
+            cur_g = conn.execute("SELECT status, tipoff_at FROM games WHERE game_id=?", (c["game_id"],)).fetchone()
+            if cur_g is None or cur_g["status"] != "scheduled" or cur_g["tipoff_at"] != c["tipoff_at"]:
+                out["skipped"].setdefault(c["market"], []).append(gone)
+                return
+            cur = conn.execute(
+                "INSERT INTO research_cohorts (idempotency_key, sport, game_id, market, line, line_source, market_quote_id, bookmaker, "
+                "definition, primary_name, information_at, generated_at, tipoff_at, members, missing, average, stack, agreement) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (key, c["sport"], c["game_id"], c["market"], c["line"], c["line_source"], c["market_quote_id"],
+                 json.dumps(c["bookmaker"]), c["definition"], c["primary_name"], c["information_at"], c["generated_at"],
+                 c["tipoff_at"], json.dumps(c["members"]), json.dumps(c["missing"]), json.dumps(c["average"]),
+                 json.dumps(c["stack"]), json.dumps(c["agreement"])))
+    except sqlite3.IntegrityError as exc:
+        if "two hours before the current scheduled start" not in str(exc):
+            raise
+        out["skipped"].setdefault(c["market"], []).append(gone)       # refused by the trigger: same skip, never an abort
+        return
     out["cohorts_created"] += 1
     cohorts[c["game_id"]][c["market"]] = (cur.lastrowid, c)
 

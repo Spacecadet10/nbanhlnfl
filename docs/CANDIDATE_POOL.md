@@ -19,7 +19,7 @@ regulation 3-way classifier; NHL count models lack shot quality (`goals_glm` use
 | Multinomial logistic | implemented (NHL reg3) | no direct 3-way classifier exists |
 | Ridge / Elastic Net | ridge exists (reference); elastic net implemented | tests whether sparsity matters on 12 correlated features |
 | Random Forest / Extra Trees | implemented | bagging absent; errors may differ from boosted trees |
-| XGBoost / LightGBM | rejected (duplicate) | sklearn HistGBT already implements histogram boosting (LightGBM's algorithm); CatBoost rejected 2026-10-02 |
+| XGBoost / LightGBM | **deferred/untested** (amended 2026-10-03, MODEL_SELECTION §21) | related to but distinct from sklearn HistGBT; not ruled out by any HistGBT result; CatBoost rejected 2026-10-02 |
 | NGBoost | implemented (optional `research` extra) | per-game spread is a real gap; heavy deps → a dependency-free heteroscedastic linear model registered too |
 | Negative binomial | rejected (evidence) | NHL regulation goals given `goals_poisson` rates: Pearson dispersion 1.02 / 0.96 (2018–21, 4,877 games; `docs/evidence/repo-review/probe_nhl_goal_dependence.py`/`.out`) |
 | Bivariate Poisson (shared λ3) | rejected (evidence) | residual home/away goal correlation −0.05 (same probe); a shared component only adds positive correlation |

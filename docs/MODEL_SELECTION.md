@@ -514,7 +514,7 @@ environments only; no other repository accessed):
 | NGBoost 0.5.11 | installed in research venvs, **used** (pool-v1, NBA lines) | CANDIDATE_POOL_RESULTS | keep; no change |
 | CatBoost 1.2.10 | research extra, **tested and rejected** (§10: worse or equal in every task) | CHALLENGER_RESULTS §10 | not retested (no new hypothesis) |
 | Optuna 5.0.0 | **missing** (resolved in the review venv; never used: every setting was declared) | REPO_REVIEW #3 | **adopt** for bounded chronological tuning |
-| LightGBM 4.7.0 / XGBoost 3.4.1 | **missing**; imports failed without the system `libomp` (no Homebrew) | REPO_REVIEW "+" row | **deferred/untested**: related to but distinct from sklearn HistGradientBoosting (different split finding, regularisation, categorical handling and defaults); the sklearn result below does not rule them out; adoption needs a new system library |
+| LightGBM 4.7.0 / XGBoost 3.4.1 | **missing** in the project venvs (REPO_REVIEW's throwaway venv resolved them; its note says a libomp is needed) | REPO_REVIEW "+" row | **deferred/untested**: related to but distinct from sklearn HistGradientBoosting (different split finding, regularisation, categorical handling and defaults); the sklearn result below does not rule them out; adoption needs a new system library |
 | statsmodels (negative binomial) | missing | REPO_REVIEW; dispersion 1.02/0.96 | rejected (no overdispersion) |
 The concrete gap addressed here is that **no learner was ever tuned**: every setting was declared. This experiment tunes
 sklearn HistGradientBoosting (already a dependency) and ExtraTrees; it says nothing about LightGBM or XGBoost, which stay
@@ -596,6 +596,10 @@ sklearn, which overstated the equivalence).
   `AttributeError`; the cohort trigger also refused the insert and aborted the step). `research_live.py` is part of the
   research identity, so the core research definition changes again; earlier cohorts, observations, selections and decisions
   keep their definition and nothing is relabelled. Regression test: `test_a_game_that_starts_during_the_cycle_is_a_member_skip_not_an_error`.
+  Until the next weekly decision (Monday 14:00 UTC) is written under the new definition, the core and pool selectors have
+  no decision in force for it, so every selection is "no decision" (research recording continues). The same check now
+  runs inside the cohort insert transaction, a trigger refusal is a skip, and line-member forecasts are not written for a
+  game that is no longer scheduled at its forecast start (review L5/L6).
 - **2026-10-03 ~02:50 UTC, §18 tracking-v2 reporting grid (reconciliation):** summaries now also report the user's required
   descriptive grid — cumulative 50–90% (reg3 35–70%) and 5-point non-overlapping bands, including the NHL three-way bands
   [1/3, 0.35) and [0.35, 0.40) — derived from each stored statistic when read (`REPORT_THRESHOLDS`, `report_bands`, grid id

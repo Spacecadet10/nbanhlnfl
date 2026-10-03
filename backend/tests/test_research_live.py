@@ -470,3 +470,17 @@ def test_a_game_that_starts_during_the_cycle_is_a_member_skip_not_an_error(game)
     res = research_live.record(game, game_ids=ids, winner_run=winner, history=collect, now=now)
     assert not any("AttributeError" in str(v) for v in res["errors"].values()), res["errors"]
     assert all("AttributeError" not in json.dumps(r) for r in res.get("skipped", {}).values())
+
+
+def test_a_cohort_refused_by_the_database_is_a_skip_not_an_aborted_step(game):
+    """Reconciliation review L5: if the guard trigger refuses a cohort (e.g. a race with a start change), the step reports
+    a skip with a reason and keeps going; it never raises out of record()."""
+    run(game, "2026-10-12T21:30:00Z")
+    c = dict(game.execute("SELECT * FROM research_cohorts WHERE market='winner' LIMIT 1").fetchone())
+    cohort = {k: (json.loads(c[k]) if k in ("members", "missing", "average", "stack", "agreement", "bookmaker") else c[k])
+              for k in c}
+    cohort["generated_at"] = cohort["information_at"] = "2026-10-12T20:00:00Z"      # 3 h before the start: trigger refuses
+    cohort["line_source"] = "model-x"                                                 # a new idempotency key
+    out = {"skipped": {}, "cohorts_created": 0, "cohorts_existing": 0}
+    research_live._store(game, cohort, {GID: {}}, out, True)
+    assert out["cohorts_created"] == 0 and out["skipped"]["winner"][0]["reason"].startswith("game no longer scheduled")

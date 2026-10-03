@@ -69,9 +69,8 @@ into live** (the previous merge-note commit was blocked as a production deploy; 
   Performance → "Combination discovery and tracking". 75 rules registered (final selection on all seasons) for prospective
   evaluation. No prediction rows are copied per threshold.
 - **Checks:** SMOKE_TEST "Discovery tracking"; `scripts/check_project.py --ready` on 384868b exit 0 (structure, typecheck, build, 464 passed).
-- **To go live (user):** fast-forward `shadow-season` to this branch between cycles, then copy the scratch
-  `reports/discovery-v1/` to `data/reports/discovery-v1/` (the API reads it there). Pending write-up from the earlier
-  blocked commit: daily-v1 results (reports in `data/reports/daily-v1-*`).
+- ~~To go live: fast-forward `shadow-season` to this branch~~ **Superseded by the reconciliation entry at the top: never
+  fast-forward live to `pool-selector`; its discovery tracking card/API was removed as a duplicate of tracking-v2.**
 
 ## Combination objective: fixes, audit, gap-fill study, daily-refit test, selection status — Claude (Opus 5.5), 2026-10-02 ~21:35–23:00 UTC
 Single writer (user confirmed other sessions paused). Worktree `../nba-predictor-poolsel`, branch `pool-selector`, commits

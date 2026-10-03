@@ -431,6 +431,9 @@ everything else the real `jobs.selector_decisions` + `jobs.predict_now` wiring. 
   `check_project.py --ready` on ba6ad92: exit 0, 477 passed.
 
 ## Discovery tracking — Claude, 2026-10-03 ~02:00 UTC (worktree ../nba-predictor-poolsel)
+> **Superseded at reconciliation (2026-10-03):** the Discovery card and `/api/research/discovery` were removed as a duplicate of
+> tracking-v2 (`/api/research/tracking`, Performance → Agreement tracking), which stays canonical. The evidence below describes
+> the removed card on branch `pool-selector` (backup `backup/pool-selector-20f27fe`); the discovery-v1 study results are kept.
 - API :8041 on the scratch copy `rehA` (store copies from 2026-10-02 21:41Z + discovery-v1 outputs), Vite :5191.
 - `/api/research/discovery?sport=nhl&market=reg3&method=avg&level=>=0.55`: 0.1 s; historical groups pooled over seasons
   with Wilson intervals, matched best earlier single, log loss/Brier for probability groups; prospective groups from 2
