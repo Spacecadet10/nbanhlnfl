@@ -1,5 +1,20 @@
 # Current handoff
 
+## Scheduled release move to `5534c34` after tonight's games — Claude (Fable 5.1), 2026-10-03 20:50 UTC
+- The user plugged the Mac in and asked for the release to be moved after the games finish. A one-off script is running
+  detached: `~/nba-predictor-backups/move-release.sh` (under `caffeinate -i -s`), log `~/nba-predictor-backups/release-move.log`.
+- **It waits** (checks every 5 minutes) until all 13 NHL games of 2026-10-03 are final in the release API, no non-preseason
+  game of either sport starts within 3 hours, and no `app.cli` job is running; it never moves after 13:00 UTC Oct 4.
+- **Then:** holds both job locks, `git -C ~/nba-predictor-live merge --ff-only 5534c34`, `npm run build` (no `npm ci`:
+  package files are unchanged), kickstarts `api` and `web`, runs `release-check` for both sports (must report definitions
+  NHL `3e2504c4d655c41b`, NBA `1215f3641ad63e4f`) and checks the API serves the new `parts` field.
+- **On any failure** it rolls back to the previous commit, rebuilds, restarts and logs `ROLLED BACK` (or `ROLLBACK NEEDS
+  ATTENTION`). To cancel before it acts: `pkill -f move-release.sh`.
+- Before scheduling: `check_project.py --ready` on `5534c34` in an empty scratch data dir: exit 0, **569 passed**. No
+  identity-hashed file or migration differs between `948f1be` and `5534c34`; `requirements-release.txt` was added in
+  `64b7b2c` and is the file the release venv was built from (no sync needed). The script's `ready` and `check` functions
+  were dry-run at 20:48 UTC (not ready; check ok). **Next reader: read the log to see whether the move happened.**
+
 ## Tonight's safeguards — Claude (Fable 5.1), 2026-10-03 20:38 UTC
 - **Power risk (needs the user):** the Mac was on battery (48%, ~5 h) with a 1-minute idle sleep, kept awake only by the
   agents' short `caffeinate` calls. Started `caffeinate -i -m -t 43200` (pid 15242, 12 h, no sudo) so it does not idle-sleep
