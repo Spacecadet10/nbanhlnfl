@@ -123,6 +123,12 @@ def main(argv=None) -> int:
     tev = sub.add_parser("tuning-evaluate", help="Evaluate tuning-v1 predictions alone and inside combinations (saved tables "
                                                  "only; opens no store)")
     tev.add_argument("--out")
+    dlp = sub.add_parser("deep-study", help="PyTorch and TensorFlow/Keras networks on the point-in-time feature walk "
+                                            "(MODEL_SELECTION §22); needs the deep extra; run on store copies")
+    dlp.add_argument("--out")
+    dle = sub.add_parser("deep-evaluate", help="Evaluate deep-v1 predictions against existing members (saved tables only; "
+                                               "opens no store)")
+    dle.add_argument("--out")
     dsp = sub.add_parser("discovery-study", help="Historical training and combination discovery from saved chronological "
                                                  "tables; opens no store (MODEL_SELECTION §20)")
     dsp.add_argument("--out")
@@ -226,6 +232,27 @@ def main(argv=None) -> int:
             db.claim_store(c, sport)
             return c
         report = tuning_study.run(conn_for, out_dir=Path(args.out) if args.out else None)
+        print(json.dumps({"output_dir": report["output_dir"], "games": {s: v["games_per_market"] for s, v in report["sports"].items()}}))
+        return 0
+    if args.cmd == "deep-evaluate":      # reads saved tables only; no store is opened or migrated
+        from pathlib import Path
+        from . import deep_study
+        report = deep_study.evaluate(out_dir=Path(args.out) if args.out else None)
+        print(json.dumps({"output_dir": report["output_dir"], "markets": list(report["markets"])}))
+        return 0
+    if args.cmd == "deep-study":         # opens (and migrates) both stores: run on copies
+        from pathlib import Path
+        import importlib.util
+        if any(importlib.util.find_spec(m) is None for m in ("torch", "tensorflow")):   # refuse before any store is opened
+            p.error("deep-study needs the deep extra (torch, tensorflow); install it in a research venv, not the live one")
+        from . import deep_study
+
+        def conn_for(sport):
+            c = db.connect(sport=sport)
+            db.migrate(c)
+            db.claim_store(c, sport)
+            return c
+        report = deep_study.run(conn_for, out_dir=Path(args.out) if args.out else None)
         print(json.dumps({"output_dir": report["output_dir"], "games": {s: v["games_per_market"] for s, v in report["sports"].items()}}))
         return 0
     if args.cmd == "discovery-study":    # reads saved tables only; no store is opened or migrated

@@ -88,6 +88,12 @@ def fit(family: str, head: str, rows: list, names: tuple, p: dict) -> learners.F
         return learners.Fitted("reg3", mu, sd, m, {"training_rows": len(keep), "ot_home_share": ot, "params": p})
     mh = _model(family, head, p, "poisson").fit(Zk, np.array([r[0] for r in reg], dtype=float))
     ma = _model(family, head, p, "poisson").fit(Zk, np.array([r[1] for r in reg], dtype=float))
+    return goals_fitted(mu, sd, mh, ma, Zk, reg, ot, len(keep), p)
+
+
+def goals_fitted(mu, sd, mh, ma, Zk, reg: list, ot: float, training_rows: int, p: dict) -> learners.Fitted:
+    """The pool's goals head around two fitted rate models (home, away): the draw weight is the grid value that maximises the
+    training likelihood of the regulation scores. Shared by every study that fits its own rate models (tuning-v1, deep-v1)."""
     lh, la = mh.predict(Zk), ma.predict(Zk)
     stats = []
     for (h, w), a, b in zip(reg, lh, la):
@@ -97,8 +103,8 @@ def fit(family: str, head: str, rows: list, names: tuple, p: dict) -> learners.F
         stats.append((ph[h] * pa[w], sum(ph[k] * pa[k] for k in range(16)), h == w))
     weight = max(learners.DRAW_GRID, key=lambda w: (sum(math.log(max(1e-300, (1 - w) * pp + (w * pp / d if tie else 0.0)))
                                                         for pp, d, tie in stats), -w))
-    return learners.Fitted("goals", mu, sd, (mh, ma), {"training_rows": len(keep), "ot_home_share": ot, "draw_weight": weight,
-                                                       "params": p})
+    return learners.Fitted("goals", mu, sd, (mh, ma), {"training_rows": training_rows, "ot_home_share": ot,
+                                                       "draw_weight": weight, "params": p})
 
 
 def score(head: str, model: learners.Fitted, rows: list, names: tuple) -> float:
