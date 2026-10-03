@@ -608,3 +608,18 @@ sklearn, which overstated the equivalence).
   unchanged. Correction to the §18 text: the lowest band starts at 0.0 ("below …"), not at the floor, because a majority's
   mean over all members can fall below it. Precomputed historical summaries carry the grid id and are rebuilt
   (`tracking-historical`); stale files are ignored.
+
+## Audit corrections — 2026-10-03 (§18, §21)
+- **§18 recording:** since migration 0022 a cohort can have more than one observation row per group (one per distinct set of
+  stored inputs). The canonical row for a game is the latest observation of the game's latest core cohort; a group with no
+  observation at that cohort has none for the game (it is never taken from an older cohort or line).
+- **§18 bands:** the lowest descriptive band starts at 0 ("below 0.50", or "below 0.33" for the three-way market), not at the
+  floor; the registry's `bands` field is not read by any report.
+- **§18 statistics:** in two-way markets the majority statistic (mean probability of the majority side over all members) equals
+  the average statistic whenever both pick the same side; in line markets the statistic is the unconditional probability of the
+  side (push mass not removed), so it can be below 0.50. A value within 1e-9 below a threshold counts as reaching it.
+- **§18 tie rule:** the leaderboard orders by adjusted lower bound, then decided picks, then group id; equal thresholds of one
+  group resolve to the lowest threshold.
+- **§18 uncertainty:** intervals treat a group and its anchor, and the same game in several groups or markets, as independent.
+  They are descriptive and exploratory; nothing is selected from them.
+- **§21 comparator:** "strongest existing member" is the best earlier member of the saved table, pool candidates included.

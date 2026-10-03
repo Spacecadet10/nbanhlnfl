@@ -15,7 +15,7 @@ CatBoost's per-game variance (RMSEWithUncertainty) was poorly calibrated: tuning
 these features, simple regularised linear models remain best. Not deployed; the code stays as a research command only.
 
 ## Combination search (§11; design 826983d; run 13:35–13:41 UTC) — **nothing qualified, nothing deployed**
-1,655 predefined rules per NBA market and fold (925 NHL winner, 345 reg3, 405 other NHL markets), each also within four
+1,655 predefined rule-and-condition combinations per NBA market and fold (331 rules × 5 pregame condition levels; 925 NHL winner, 345 reg3, 405 other NHL markets, counted the same way — corrected 2026-10-03, the earlier text counted the conditions twice), i.e. each rule within four
 pregame condition levels. Rolling origin: NBA select 2022 → assess 2023, select 2022–23 → assess 2024; NHL select earlier
 seasons → assess 2019, 2020, 2021. Comparator: the strongest single member chosen on the selection seasons, most-confident
 games at the same count.
@@ -108,7 +108,7 @@ could not be inspected or reproduced.
 ### What has been tested (audit matrix)
 | Sport · market | Members (valid for that exact market) | §5 | §11 search | §14 expanded | §15 selective (new) |
 |---|---|---|---|---|---|
-| NBA winner | elo, logistic, logistic_v2, efficiency_margin, gbt_v1 | avg, stack, majority/unanimous, pairs w/ primary | 1,655 rules × 4 conditions | — | 895 rules incl. min-member confidence, ≤0.80 thresholds, disagreement condition |
+| NBA winner | elo, logistic, logistic_v2, efficiency_margin, gbt_v1 | avg, stack, majority/unanimous, pairs w/ primary | 1,655 rule × condition combinations (331 rules × 5 levels) | — | 895 rules incl. min-member confidence, ≤0.80 thresholds, disagreement condition |
 | NBA winner, 17:45 ET | + avail_v1 (injury report; assumed publication times) | — | — | — | 1,170 rules (first test of the injury model in combinations) |
 | NBA spread/total/team totals | points_normal, ridge, gbt, ridge@weekly, gbt@weekly | as above | 1,655 each | 27 each | 555 each |
 | NHL winner | hockey_elo, goals_poisson, hockey_logistic, hockey_gbt, **xG** | (4 members) | 925 (no xG) | 36 (xG subsets) | 895 incl. xG everywhere |
@@ -302,3 +302,25 @@ NBA 4 folds; full per-threshold table in docs/evidence/tuning-v1/summary.txt):
 - Final selection on all seasons includes a tuned member in 1–5 rules per market (registered nowhere live; research only).
 - **Conclusion within what was tested:** bounded Optuna tuning of boosted trees and ExtraTrees did not improve any market
   alone or inside a combination. Nothing is proposed for live recording; current live recording is unchanged.
+
+## Audit corrections — 2026-10-03
+Found by the correctness audit (HANDOFF.md); the figures in the saved reports are unchanged.
+- **§11 search size:** 1,655 (NBA) / 925 / 345 / 405 (NHL) are rules × pregame condition levels (`combination_search.registry`:
+  331 rules × 5 levels for NBA), not rules that were each tested again under four conditions. Corrected above.
+- **tuning-v1 comparator:** "best earlier existing member" is the best earlier member of the whole saved table, which includes
+  candidate-pool members (`evaluation.json`: `elastic_net:nba_base`, `poisson_draw:nhl_base`, `hetero_linear:nba_base`), not only
+  the live core members.
+- **tuning-v1 coverage:** NBA line markets cover seasons 2023–2026 (5,282 games), not 2022–2026: the normal head has no residual
+  spread in its first fitted season. NBA winner covers 2022–2026 (6,605 games); NHL 2018–2026 (11,870).
+- **Matched-coverage tie rule:** equal confidences at the cut are ordered by game id in the §11/§15/§16 studies and by
+  (cutoff, game id) in discovery-v1; the live report (`research_live.report`) keeps start-time order. None used an outcome.
+- **Goalie candidates (gap-fill and pool studies):** every historical goalie input is the game's actual starter, known only
+  after the start (no pregame listing was collected before 2026-10-01). Results for `*:nhl_goalie` members, alone or inside the
+  gapfill-v1 NHL reg3 / puck line / away-total families, are upper bounds, not out-of-sample evidence. No goalie member beat its
+  base twin, so no conclusion above changes; the nine pool sources registered on that evidence are suspended
+  (docs/CANDIDATE_POOL.md "Audit corrections").
+- **Bagged trees:** `extra_trees:*` and `random_forest:nba_base` are fitted with `n_jobs=-1` and reproduce only to about 3e-15,
+  not bit for bit. No conclusion depends on it.
+- **tracking-v2 historical tables:** statistics were stored rounded to five decimals, which moved 18–114 group-game picks per
+  market (of roughly 290k–900k) up across a threshold. They are now rounded down and the tables rebuilt; leaderboard order is
+  unaffected in practice.
