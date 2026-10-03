@@ -63,13 +63,14 @@ export const api = {
       sport, run_type: runType, policy: runType === 'live' ? policyParam(policy) : undefined,
     }, signal),
   marketPredictions: (sport: Sport, market: MarketId, f: { policy?: Policy; date_from?: string; date_to?: string;
-    team?: string; min_confidence?: number | null; limit?: number }, signal?: AbortSignal) =>
+    team?: string; min_confidence?: number | null; limit?: number; model_version?: string }, signal?: AbortSignal) =>
     get<MarketHistoryResponse>('/market-predictions', {
       sport, market, policy: policyParam(f.policy), date_from: f.date_from, date_to: f.date_to, team: f.team,
+      model_version: f.model_version || undefined,
       min_confidence: confParam(f.min_confidence), limit: f.limit == null ? undefined : String(f.limit),
     }, signal),
-  marketPerformance: (sport: Sport, market: MarketId, policy: Policy, signal?: AbortSignal) =>
-    get<MarketPerformanceResponse>('/market-performance', { sport, market, policy: policyParam(policy) }, signal),
+  marketPerformance: (sport: Sport, market: MarketId, policy: Policy, signal?: AbortSignal, model_version?: string) =>
+    get<MarketPerformanceResponse>('/market-performance', { sport, market, policy: policyParam(policy), model_version: model_version || undefined }, signal),
   // Research / shadow selection: never the primary forecast.
   researchGame: (sport: Sport, id: string, signal?: AbortSignal) =>
     get<ResearchGame>(`/research/game/${encodeURIComponent(id)}`, { sport }, signal),

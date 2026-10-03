@@ -141,7 +141,9 @@ def test_market_records_count_a_game_once_after_the_market_model_is_resealed(sea
     assert hist.total == 1 and hist.record.selected == 1 and hist.predictions[0].forecast.model_version == r["model_version"]
     assert p.market_performance("total", "pregame").forecasts == 1
     assert market_live.score(sealed, policy="pregame", market="total")["markets"]["total"]["forecasts"] == 1
-    assert [f.model_version for f in p.game(GID).market_forecasts if f.market == "total" and f.policy == "pregame"] == [r["model_version"]]
+    # The game page lists each version's forecast, labelled (Codex review): the current one first, never merged into a record.
+    assert [(f.model_version, f.current_version) for f in p.game(GID).market_forecasts
+            if f.market == "total" and f.policy == "pregame"] == [(r["model_version"], True), (r["model_version"] + "-earlier-seal", False)]
 
 
 def test_two_hour_score_never_compares_with_a_void_night_before_forecast(sealed):
@@ -172,3 +174,55 @@ def test_the_scheduler_takes_the_store_lock_per_iteration_not_through_its_sleep(
         out = jobs.scheduler(None, interval_minutes=30, max_runs=1, job="daily", log=lambda _m: None,
                              lock=lambda: db.store_lock("nhl", wait_seconds=0))
     assert out == [{"status": "skipped", "reason": "another job is running on this store"}]
+
+
+# --- Codex review 2026-10-03: older market-model forecasts stay reachable -------------------------------------------------
+def _older_version_forecast(c, market="total", generated="2026-10-10T16:00:00Z"):
+    from app.ledger import MarketForecast, record_market
+    r = dict(c.execute("SELECT * FROM market_forecasts WHERE market=? AND policy='pregame' ORDER BY forecast_id LIMIT 1",
+                       (market,)).fetchone())
+    old = r["model_version"] + "-earlier-seal"
+    record_market(c, MarketForecast(r["sport"], r["game_id"], r["market"], r["line"], r["line_source"], r["market_quote_id"],
+                                    r["policy"], "live", old, r["dataset_version"], r["feature_version"], r["cutoff_at"],
+                                    generated, r["tipoff_at"], 0.2, 0.0, 0.8, r["params"], ""))
+    return r["model_version"], old
+
+
+def test_an_earlier_market_model_versions_forecasts_are_reachable_by_version(sealed):
+    add_upcoming(sealed, start="2026-10-11T19:00:00")
+    market_live.forecast(sealed, now="2026-10-10T15:00:00Z")
+    current, old = _older_version_forecast(sealed)
+    final(sealed, "2026-10-11T19:00:00", at="2026-10-12T03:00:00Z")
+    p = RealProvider(sealed, now="2026-10-12T05:00:00Z")
+    default = p.market_predictions("total", "pregame", None, None, None, 50, None)
+    assert default.model_version == current and default.total == 1
+    assert [(v.model_version, v.current, v.games) for v in default.versions] == [(current, True, 1), (old, False, 1)]
+    archive = p.market_predictions("total", "pregame", None, None, None, 50, None, model_version=old)
+    assert archive.model_version == old and archive.total == 1 and archive.record.selected == 1
+    assert archive.predictions[0].forecast.model_version == old and archive.predictions[0].forecast.current_version is False
+    perf = p.market_performance("total", "pregame", model_version=old)
+    assert perf.model_version == old and perf.forecasts == 1 and [v.model_version for v in perf.versions] == [current, old]
+    shown = [(f.model_version, f.current_version) for f in p.game(GID).market_forecasts if f.market == "total" and f.policy == "pregame"]
+    assert shown == [(current, True), (old, False)]          # every version on the game page, labelled; counted in neither twice
+
+
+def test_a_game_forecast_only_by_an_earlier_model_version_is_still_shown(sealed, monkeypatch):
+    add_upcoming(sealed, start="2026-10-11T19:00:00")
+    market_live.forecast(sealed, now="2026-10-10T15:00:00Z")
+    stored = sealed.execute("SELECT DISTINCT model_version FROM market_forecasts").fetchone()[0]
+    # The market model is re-sealed afterwards: the stored forecasts now belong to an earlier version.
+    monkeypatch.setattr(market_live, "model_version", lambda base, policy: f"resealed-{policy}")
+    final(sealed, "2026-10-11T19:00:00", at="2026-10-12T03:00:00Z")
+    p = RealProvider(sealed, now="2026-10-12T05:00:00Z")
+    default = p.market_predictions("total", "pregame", None, None, None, 50, None)
+    assert default.total == 0 and [(v.model_version, v.current, v.games) for v in default.versions] == [(stored, False, 1)]
+    assert p.market_predictions("total", "pregame", None, None, None, 50, None, model_version=stored).total == 1
+    game = [f for f in p.game(GID).market_forecasts if f.market == "total"]
+    assert len(game) == 1 and game[0].model_version == stored and game[0].current_version is False
+    slate = p.games(game_date(sealed), "pregame", None, "total").games[0].market_forecast
+    assert slate is not None and slate.current_version is False
+
+
+def game_date(c):
+    from app.providers.real import eastern_date
+    return eastern_date(c.execute("SELECT tipoff_at FROM games WHERE game_id=?", (GID,)).fetchone()[0])

@@ -660,6 +660,13 @@ def _optimistic(m: dict) -> set:
     return {g["id"] for g in m["groups"] if any("_goalie" in x for x in g["members"]) or (goalie and g["kind"] == "stack_pool")}
 
 
+# Identity of how the historical artifacts are calculated (stored statistic, leaderboard membership). Tables, summaries and
+# chronological checks carry it; an artifact built under another calculation is rejected, never mixed with this one.
+# calc-2 (2026-10-03): statistics rounded down (calc-1 rounded to nearest and could lift a pick across a threshold); goalie
+# groups and the pool stacker excluded from the historical leaderboard and chronological check.
+CALC = "calc-2"
+
+
 def _stored(statistic):
     """A statistic as kept in the historical tables: 5 decimals, rounded DOWN (after the 1e-9 boundary tolerance of
     `_Picks.cell`), so a stored value never moves a pick up across a threshold or into a higher band."""
@@ -778,7 +785,7 @@ def report(conn, sport: str, market: str, *, evidence: str = "prospective", kind
         pre = _precomputed(sport, reg["sha256"]) if not (date_from or date_to or line is not None) else None
         full = pre[market] if pre and market in pre else _historical_full(sport, market, date_from, date_to, line, reg["sha256"], p.stat().st_mtime if p.is_file() else 0.0) \
             if reg is load_registry() else _full(_by_line(historical_items(sport, market, reg, date_from, date_to), line), m, market, historical=True)
-        status = "available" if full["games"] else "no_historical_table"
+        status = "available" if full["games"] else "historical_table_outdated" if _outdated(p, reg) else "no_historical_table"
     else:
         full = _full(_by_line(prospective_items(conn, reg, sport, market, date_from, date_to, version), line), m, market)
         status = "recording" if full["games"] else "no_observations_yet"
@@ -859,14 +866,14 @@ def build_historical(sport: str, reg: Optional[dict] = None, log=print) -> Path:
             groups[g["id"]] = cls
         mp = historical_path(sport, market)
         mp.parent.mkdir(parents=True, exist_ok=True)
-        body = {"study": STUDY, "registry_sha256": reg["sha256"], "sport": sport, "market": market,
+        body = {"study": STUDY, "registry_sha256": reg["sha256"], "calc": CALC, "sport": sport, "market": market,
                 "built_at": payload["built_at"], "games": games, "groups": groups, "stack_fits": fits}
         mp.with_suffix(".tmp").write_bytes(gzip.compress(json.dumps(body, separators=(",", ":")).encode(), mtime=0))
         mp.with_suffix(".tmp").replace(mp)
         built.append(market)
         log(f"{sport}:{market}: {len(games)} games, {len(groups)} groups")
     _historical.cache_clear()
-    summaries = {"registry_sha256": reg["sha256"], "grid": GRID, "markets": {}, "checks": {}}
+    summaries = {"registry_sha256": reg["sha256"], "calc": CALC, "grid": GRID, "markets": {}, "checks": {}}
     for market in built:     # unfiltered summaries and the chronological check, so the API needs no recomputation
         summaries["markets"][market] = _full(historical_items(sport, market, reg), reg["markets"][f"{sport}:{market}"], market, historical=True)
         summaries["checks"][market] = chronological_check(sport, market, reg)
@@ -892,7 +899,7 @@ def _precomputed(sport: str, sha: str, part: str = "markets") -> Optional[dict]:
     if not p.is_file():
         return None
     d = _summaries(str(p), p.stat().st_mtime)
-    if d.get("registry_sha256") != sha:
+    if d.get("registry_sha256") != sha or d.get("calc") != CALC:      # another registry or an earlier calculation: stale
         return None
     # Summaries depend on the reporting grid; the chronological check uses sealed thresholds only and stays valid.
     return d.get(part) if part == "checks" or d.get("grid") == GRID else None
@@ -903,6 +910,15 @@ def precomputed_check(sport: str, market: str) -> dict:
     reg = load_registry()
     checks = _precomputed(sport, reg["sha256"], "checks") or {}
     return checks.get(market) or {"status": "no_historical_table", "folds": []}
+
+
+def _outdated(p: Path, reg: dict) -> bool:
+    """A table file exists but was built for another registry or under an earlier calculation: rebuild it
+    (`tracking-historical`); it is never read."""
+    if not p.is_file():
+        return False
+    mk = _historical(str(p), p.stat().st_mtime)
+    return mk.get("registry_sha256") != reg["sha256"] or mk.get("calc") != CALC
 
 
 @lru_cache(maxsize=1)
@@ -918,7 +934,7 @@ def historical_items(sport: str, market: str, reg: dict, date_from=None, date_to
     if not p.is_file():
         return {}
     mk = _historical(str(p), p.stat().st_mtime)
-    if mk.get("registry_sha256") != reg["sha256"]:
+    if mk.get("registry_sha256") != reg["sha256"] or mk.get("calc") != CALC:
         return {}
     lo, hi = day_bounds(date_from, date_to)
     keep = [i for i, g in enumerate(mk["games"]) if (lo is None or g["tipoff_at"] >= lo) and (hi is None or g["tipoff_at"] < hi)]

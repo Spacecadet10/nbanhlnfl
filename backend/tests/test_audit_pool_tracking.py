@@ -195,3 +195,36 @@ def test_a_selection_refused_by_the_database_is_a_skip_not_an_aborted_step(game,
     out = run(game, NOW)
     assert out["selections_created"] == 0 and out["status"] == "partial"
     assert any("selection refused" in s["reason"] for v in out["skipped"].values() for s in v)
+
+
+# --- Codex review 2026-10-03: historical artifacts are versioned by calculation ------------------------------------------
+def test_historical_tables_and_summaries_from_an_earlier_calculation_are_rejected(tmp_path, monkeypatch):
+    import gzip
+    monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path))
+    reg = at.load_registry()
+    market = "winner"
+    m = reg["markets"][f"nhl:{market}"]
+    gid = m["groups"][0]["id"]
+    table = {"study": at.STUDY, "registry_sha256": reg["sha256"], "sport": "nhl", "market": market, "built_at": "x",
+             "games": [{"game_id": "g1", "season": 2024, "tipoff_at": "2024-01-01T00:00:00Z", "line": None, "realised": 0}],
+             "groups": {gid: [["p", 0, 0.7, [0.7, 0.0, 0.3], None]]}, "stack_fits": {}}
+    summaries = {"registry_sha256": reg["sha256"], "grid": at.GRID, "markets": {market: {"summaries": [], "leaderboard": [],
+                 "games": 1, "lines": []}}, "checks": {market: {"status": "ok", "folds": []}}}
+
+    def write(calc):
+        for path, body in ((at.historical_path("nhl", market), table), (at.summaries_path("nhl"), summaries)):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(gzip.compress(json.dumps({**body, **({"calc": calc} if calc else {})}).encode()))
+        at._historical.cache_clear()
+        at._summaries.cache_clear()
+        at._historical_full.cache_clear()
+    write(None)                                           # built before the calculation was versioned (pre-audit rounding)
+    assert at.historical_items("nhl", market, reg) == {}
+    assert at._precomputed("nhl", reg["sha256"]) is None and at._precomputed("nhl", reg["sha256"], "checks") is None
+    assert at.precomputed_check("nhl", market)["status"] == "no_historical_table"
+    rep = at.report(None, "nhl", market, evidence="historical")
+    assert rep["status"] == "historical_table_outdated" and rep["games"] == 0 and rep["leaderboard"] == []
+    assert at.chronological_check("nhl", market)["status"] == "no_historical_table"
+    write(at.CALC)                                        # rebuilt under the current calculation: accepted
+    assert list(at.historical_items("nhl", market, reg)[gid]) == ["g1"]
+    assert at._precomputed("nhl", reg["sha256"], "checks")[market]["status"] == "ok"

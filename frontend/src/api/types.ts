@@ -105,7 +105,7 @@ export interface MarketSide { side: 'a' | 'mid' | 'b'; label: string; probabilit
 export interface MarketQuote { bookmaker: string; retrieved_at: string; line: number | null; price_a: number; price_b: number; prob_a: number; prob_b: number }
 /** One forecast at one exact line. line_source 'model' = no bookmaker line existed; the line is model-only. */
 export interface MarketForecast {
-  market: MarketId; title: string; policy: Policy; model_version: string; generated_at: string; cutoff_at: string;
+  market: MarketId; title: string; policy: Policy; model_version: string; current_version?: boolean; generated_at: string; cutoff_at: string;
   line: number | null; line_source: 'market' | 'model' | null; sides: MarketSide[]; pick: 'a' | 'b'; pick_label: string;
   confidence: number; meets_confidence: boolean; quote: MarketQuote | null; result: Settlement; limitations: string[];
 }
@@ -114,11 +114,12 @@ export interface MarketRecordSummary {
   voids: number; pending: number; win_rate: number | null;
 }
 export interface MarketRecord { game_id: string; game_date: string; tipoff: string; home: Team; away: Team; forecast: MarketForecast; outcome: Outcome | null }
+export interface MarketModelVersion { model_version: string; current: boolean; games: number; first_at: string; last_at: string }
 export interface MarketHistoryResponse {
-  mode: Mode; sport: Sport; market: MarketId; policy: Policy; total: number; record: MarketRecordSummary; predictions: MarketRecord[];
+  mode: Mode; sport: Sport; market: MarketId; policy: Policy; model_version?: string | null; versions?: MarketModelVersion[]; total: number; record: MarketRecordSummary; predictions: MarketRecord[];
 }
 export interface MarketPerformanceResponse {
-  mode: Mode; sport: Sport; market: MarketId; policy: Policy; title: string; model_version: string | null; forecasts: number;
+  mode: Mode; sport: Sport; market: MarketId; policy: Policy; title: string; model_version: string | null; versions?: MarketModelVersion[]; forecasts: number;
   record: MarketRecordSummary; brier_score: number | null; log_loss: number | null; line_sources: Record<string, number>;
   market_matched: number; model_log_loss_on_matched: number | null; market_log_loss_on_matched: number | null;
   reference: { label: string; by_line: Record<string, { n: number; log_loss: number; brier: number; pick_accuracy_excluding_mid: number | null; league_reference_log_loss: number }> } | null;

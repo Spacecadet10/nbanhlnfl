@@ -77,6 +77,7 @@ function cellOf(g: TrackingGroup, view: View): TrackingCell {
 function TrackingBody({ r, sport, market, f }: { r: TrackingReport; sport: Sport; market: MarketId; f: Filters }) {
   const members = useMemo(() => Array.from(new Set(r.groups.flatMap((g) => g.members))).sort(), [r.groups]);
   if (r.mode === 'demo') return <Empty>{r.note}</Empty>;
+  if (r.status === 'historical_table_outdated') return <Empty><span className="warn">The saved historical table was built under an earlier calculation and is not used. Rebuild it with <code>tracking-historical</code>.</span></Empty>;
   const rows = [...r.groups].map((g) => ({ g, c: cellOf(g, f.view) })).sort((a, b) =>
     f.sort === 'evidence' ? b.c.decided - a.c.decided || (b.c.win_rate ?? -1) - (a.c.win_rate ?? -1)
       : f.sort === 'win_rate' ? (b.c.win_rate ?? -1) - (a.c.win_rate ?? -1) || b.c.decided - a.c.decided

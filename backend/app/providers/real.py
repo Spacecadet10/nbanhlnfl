@@ -13,7 +13,7 @@ import json
 from .. import agreement, backtest, config, live, market_live, markets, metrics, near_tipoff, sports
 from ..db import utc_now
 from ..live import HORIZON_DAYS, LATEST_LIVE_SQL
-from ..schemas import (BaselineScore, GameDetail, GamesResponse, GoalieListingOut, GameSummary, HistoryResponse, Market,
+from ..schemas import (BaselineScore, MarketModelVersion, GameDetail, GamesResponse, GoalieListingOut, GameSummary, HistoryResponse, Market,
                        MarketComparison, MarketForecastOut, MarketHistoryResponse, MarketInfo, MarketPerformanceResponse,
                        MarketQuoteOut, MarketRecord, MarketRecordSummary, MarketSide, Meta, NearTipoffForecast, Outcome,
                        PerformanceResponse, Prediction, PredictionRecord, SlateSelection, SourceStatus, SportInfo, Team,
@@ -246,8 +246,9 @@ class RealProvider:
         if market == "winner":
             selection = apply_slate_policy(games, policy, min_confidence)
         else:   # the selected market and policy only; no fallback to another market or policy
-            found = {r["game_id"]: r for r in market_live.latest_current(self.conn, policy=policy, market=market,
-                                                                 game_ids=[g.game_id for g in games])}
+            found = {}     # the current model's forecast; else the latest of an earlier version (labelled, never both)
+            for r in self._market_all_versions(policy, market=market, game_ids=[g.game_id for g in games]):
+                found.setdefault(r["game_id"], r)
             for g in games:
                 r = found.get(g.game_id)
                 g.market_forecast = None if r is None else self._market_out(r, g.home, g.away, min_confidence)
@@ -272,7 +273,9 @@ class RealProvider:
         sides.append(MarketSide(side="b", label=labels[2], probability=r["p_b"]))
         return MarketForecastOut(
             market=r["market"], title=markets.spec(self.sport, r["market"]).title, policy=r["policy"],
-            model_version=r["model_version"], generated_at=r["generated_at"], cutoff_at=r["cutoff_at"], line=r["line"],
+            model_version=r["model_version"],
+            current_version=r["model_version"] == (self._current_market_version(r["policy"]) or r["model_version"]),
+            generated_at=r["generated_at"], cutoff_at=r["cutoff_at"], line=r["line"],
             line_source=r["line_source"], sides=sides, pick=side, pick_label=labels[0 if side == "a" else 2],
             confidence=conf, meets_confidence=min_confidence is None or conf >= min_confidence - 1e-9, quote=quote,
             result=result, limitations=markets.limitations(self.sport, r["market"], r["line_source"]))
@@ -283,9 +286,9 @@ class RealProvider:
             return None
         cutoff = backtest.cutoff_for(g["tipoff_at"])
         summary = self._summary(g)
-        forecasts = [self._market_out(r, summary["home"], summary["away"])
+        forecasts = [self._market_out(r, summary["home"], summary["away"])      # every version, labelled; current first
                      for policy in market_live.POLICIES
-                     for r in market_live.latest_current(self.conn, policy=policy, game_ids=[game_id])]
+                     for r in self._market_all_versions(policy, game_ids=[game_id])]
         goalies = []
         if self.sport == "nhl" and self.conn.execute("SELECT 1 FROM sqlite_master WHERE name='goalie_snapshots'").fetchone():
             from ..ingest import GOALIE_AS_OF_SQL
@@ -299,9 +302,27 @@ class RealProvider:
                           market_forecasts=forecasts)
 
     # ---- market history and performance ---------------------------------------------------------------------------
-    def _market_records(self, market: str, policy: str, min_confidence: Optional[float]) -> list[MarketRecord]:
+    def _current_market_version(self, policy: str) -> Optional[str]:
+        cache = self.__dict__.setdefault("_market_versions", {})          # once per request and policy
+        if policy not in cache:
+            cache[policy] = market_live.current_version(self.conn, policy)
+        return cache[policy]
+
+    def _market_all_versions(self, policy: str, **kw) -> list:
+        """Latest forecast per game, market and model version: the current version's rows first, then earlier versions
+        (newest first). For display of single games only; records always use one version (`latest_current`)."""
+        current = self._current_market_version(policy)
+        rows = market_live.latest(self.conn, policy=policy, **kw)
+        return sorted(rows, key=lambda r: (r["game_id"], r["market"], r["model_version"] != current,
+                                           tuple(-ord(c) for c in r["generated_at"])))
+
+    def _versions(self, market: str, policy: str) -> list[MarketModelVersion]:
+        return [MarketModelVersion(**v) for v in market_live.versions(self.conn, policy=policy, market=market)]
+
+    def _market_records(self, market: str, policy: str, min_confidence: Optional[float],
+                        model_version: Optional[str] = None) -> list[MarketRecord]:
         out = []
-        for r in reversed(market_live.latest_current(self.conn, policy=policy, market=market)):
+        for r in reversed(market_live.latest_current(self.conn, policy=policy, market=market, version=model_version)):
             home, away = self._team(r["home_team_id"]), self._team(r["away_team_id"])
             f = self._market_out(r, home, away, min_confidence)
             if not f.meets_confidence:
@@ -325,17 +346,20 @@ class RealProvider:
                                    win_rate=wins / (wins + losses) if wins + losses else None)
 
     def market_predictions(self, market: str, policy: str, date_from: Optional[date], date_to: Optional[date],
-                           team: Optional[str], limit: int, min_confidence: Optional[float]) -> MarketHistoryResponse:
-        rows = [r for r in self._market_records(market, policy, min_confidence)
+                           team: Optional[str], limit: int, min_confidence: Optional[float],
+                           model_version: Optional[str] = None) -> MarketHistoryResponse:
+        rows = [r for r in self._market_records(market, policy, min_confidence, model_version)
                 if not (date_from and r.game_date < date_from or date_to and r.game_date > date_to)
                 and not (team and team.upper() not in (r.home.abbr, r.away.abbr))]
         return MarketHistoryResponse(mode="real", sport=self.sport, market=market, policy=policy, total=len(rows),
+                                     model_version=model_version or market_live.current_version(self.conn, policy),
+                                     versions=self._versions(market, policy),
                                      record=self._record_summary(rows, min_confidence), predictions=rows[:limit])
 
-    def market_performance(self, market: str, policy: str) -> MarketPerformanceResponse:
-        rows = self._market_records(market, policy, None)
+    def market_performance(self, market: str, policy: str, model_version: Optional[str] = None) -> MarketPerformanceResponse:
+        rows = self._market_records(market, policy, None, model_version)
         settled_side = {(x["game_id"], x["market"]): market_live.outcome(x)
-                        for x in market_live.latest_current(self.conn, policy=policy, market=market)}
+                        for x in market_live.latest_current(self.conn, policy=policy, market=market, version=model_version)}
         settled = [r for r in rows if settled_side[(r.game_id, r.forecast.market)] in ("a", "mid", "b")]
 
         def realised(r: MarketRecord) -> int:
@@ -353,7 +377,8 @@ class RealProvider:
         return MarketPerformanceResponse(
             mode="real", sport=self.sport, market=market, policy=policy,
             title=f"{markets.spec(self.sport, market).title}: live {'near-tipoff' if policy == 'near_tipoff' else 'night-before'} forecasts",
-            model_version=rows[0].forecast.model_version if rows else None, forecasts=len(rows),
+            model_version=model_version or market_live.current_version(self.conn, policy),
+            versions=self._versions(market, policy), forecasts=len(rows),
             record=self._record_summary(rows, None), brier_score=metrics.brier_multi(vecs, real),
             log_loss=metrics.log_loss_multi(vecs, real), line_sources=sources, market_matched=len(matched),
             model_log_loss_on_matched=metrics.log_loss_multi(

@@ -348,6 +348,7 @@ class MarketForecastOut(BaseModel):
     title: str
     policy: Policy
     model_version: str
+    current_version: bool = Field(default=True, description="False: made by an earlier market model version (archive).")
     generated_at: datetime
     cutoff_at: datetime
     line: Optional[float] = Field(description="Exact line of this forecast: home handicap (spread) or threshold.")
@@ -385,11 +386,21 @@ class MarketRecord(BaseModel):
     outcome: Optional[Outcome]
 
 
+class MarketModelVersion(BaseModel):
+    model_version: str
+    current: bool = Field(description="The sport's sealed market model now; records default to it.")
+    games: int
+    first_at: datetime
+    last_at: datetime
+
+
 class MarketHistoryResponse(BaseModel):
     mode: Mode
     sport: Sport
     market: MarketId
     policy: Policy
+    model_version: Optional[str] = Field(default=None, description="The one model version these rows and the record cover.")
+    versions: list[MarketModelVersion] = Field(default_factory=list, description="Every stored version (archive views).")
     total: int
     record: MarketRecordSummary
     predictions: list[MarketRecord]
@@ -402,6 +413,7 @@ class MarketPerformanceResponse(BaseModel):
     policy: Policy
     title: str
     model_version: Optional[str]
+    versions: list[MarketModelVersion] = Field(default_factory=list)
     forecasts: int
     record: MarketRecordSummary
     brier_score: Optional[float] = Field(description="Multi-outcome Brier (sides a / push-draw / b) on settled forecasts.")
