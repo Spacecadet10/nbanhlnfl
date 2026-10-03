@@ -1,5 +1,28 @@
 # Current handoff
 
+## Historical training + combination discovery and tracking — Claude (Opus 5.5), 2026-10-03 ~00:00–02:10 UTC
+Worktree `../nba-predictor-poolsel`, branch `pool-selector`, commits 2e55096..384868b on top of 31c19af (live). **Not merged
+into live** (the previous merge-note commit was blocked as a production deploy; merge left to the user).
+- **Timing check (user asked to "finish the timing bug"; none was identified):** every stored row in both live stores; rows
+  more than 2 h early exist only before migration 0015 (2026-10-02 03:51Z: 49 night-before Elo + 196 archived research);
+  since then 0 rows early or at/after the start in any table. First post-merge NHL cycle 23:31–23:46Z: 0020 applied, 14
+  cohorts, 42 candidate rows (all cohort-linked), 6 pool selections, 9 legacy artifacts superseded (digest match 9/9).
+- **discovery-v1 (MODEL_SELECTION §18, registered 2e55096 before code):** chained chronological out-of-sample tables
+  (NHL 2018–26, 11,870 games; NBA 2022–26, 6,605), 22 newly trained combiners (`stack_l2`, `stack_l1`, refitted each season),
+  ≤ 6,000 configurations per market, 50–90% thresholds (reg3 35–70%) plus bands, rules chosen on earlier seasons and
+  assessed on the next (68 market-folds). One rule qualified once and failed on the later season; no subset beat the best
+  earlier single model; NBA line gains are matched by the all-member average (points model ~50/50 at its own line).
+  Results: CHALLENGER_RESULTS "Historical training and combination discovery"; inventory docs/TRAINING_INVENTORY.md;
+  evidence docs/evidence/discovery-v1/; outputs in the scratch copy (copy to `data/reports/discovery-v1/` on merge).
+- **Tracking:** `app/discovery_tracking.py`, `/api/research/discovery` (filters: models, agreement method, threshold or band,
+  registered only; historical vs prospective separately; exact lines prospectively, labelled cross-line pooling),
+  Performance → "Combination discovery and tracking". 75 rules registered (final selection on all seasons) for prospective
+  evaluation. No prediction rows are copied per threshold.
+- **Checks:** see SMOKE_TEST "Discovery tracking"; readiness on 384868b: see below.
+- **To go live (user):** fast-forward `shadow-season` to this branch between cycles, then copy the scratch
+  `reports/discovery-v1/` to `data/reports/discovery-v1/` (the API reads it there). Pending write-up from the earlier
+  blocked commit: daily-v1 results (reports in `data/reports/daily-v1-*`).
+
 ## Combination objective: fixes, audit, gap-fill study, daily-refit test, selection status — Claude (Opus 5.5), 2026-10-02 ~21:35–23:00 UTC
 Single writer (user confirmed other sessions paused). Worktree `../nba-predictor-poolsel`, branch `pool-selector`, commits
 a3a597c..d948a49 on top of e6b6abd. **Corrects the entry below:** the 12 h void rule is retired everywhere (`markets.settle`
