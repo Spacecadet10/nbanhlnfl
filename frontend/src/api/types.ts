@@ -48,7 +48,7 @@ export interface NearTipoffForecast {
   model_version: string; generated_at: string; cutoff_at: string; home_win_prob: number;
   pick: 'home' | 'away'; confidence: number; minutes_before_tipoff: number;
   results_refreshed_at: string | null; latest_result_available_at: string | null; results_used: number | null;
-  market_home_prob: number | null; market_retrieved_at: string | null; correct: boolean | null; limitation: string;
+  market_home_prob: number | null; market_retrieved_at: string | null; correct: boolean | null; void?: boolean; limitation: string;
 }
 
 export interface SlatePick { policy: Policy; home_win_prob: number; pick: 'home' | 'away'; confidence: number; meets_confidence: boolean }
@@ -130,7 +130,7 @@ export interface PredictionRecord {
   model_version: string; generated_at: string; cutoff_at: string; home_win_prob: number;
   /** The predicted winner and the model's probability for it: max(p_home, 1 - p_home). */
   pick: 'home' | 'away'; confidence: number;
-  outcome: Outcome | null; correct: boolean | null;
+  outcome: Outcome | null; correct: boolean | null; void?: boolean;
 }
 
 /** Observed record of the picks a confidence filter selects. Unscored games never count toward win_rate. */

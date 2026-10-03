@@ -24,7 +24,7 @@ export function NearTipoffBadge() {
 export function ModeBadge({ mode }: { mode: Mode }) {
   return mode === 'demo'
     ? <RunBadge runType="demo" />
-    : <span className="badge badge-real" title="Real NBA schedule and results (ESPN, unofficial API)">Real data</span>;
+    : <span className="badge badge-real" title="Real schedule and results (NBA: ESPN; NHL: NHL stats; unofficial APIs)">Real data</span>;
 }
 
 export function SourceList({ sources }: { sources: SourceStatus[] }) {

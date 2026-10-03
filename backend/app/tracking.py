@@ -5,6 +5,9 @@ from . import agreement, live, market_live, near_tipoff
 from .db import utc_now
 
 THRESHOLDS = (0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9)
+# A three-way pick can be the most probable side well below 50%: its table starts at 35% (as tracking-v2), so the first row
+# is not a small fraction of the picks.
+THRESHOLDS_3WAY = (0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7)
 
 
 def interval(wins, n):
@@ -19,10 +22,10 @@ def interval(wins, n):
     return [max(0, centre-half), min(1, centre+half)]
 
 
-def table(rows):
+def table(rows, market=None):
     base = sum(outcome in ('win', 'loss') for _, outcome in rows)
     out = []
-    for threshold in THRESHOLDS:
+    for threshold in (THRESHOLDS_3WAY if market == 'reg3' else THRESHOLDS):
         selected = [(p, result) for p, result in rows if p + 1e-9 >= threshold]
         counts = {k: sum(result == k for _, result in selected)
                   for k in ('win', 'loss', 'push', 'pending', 'void', 'unscorable')}
@@ -83,7 +86,7 @@ def report(conn, now=None):
     totals = dict(winner_rows=conn.execute('SELECT COUNT(*) FROM predictions').fetchone()[0],
                   market_rows=conn.execute('SELECT COUNT(*) FROM market_forecasts').fetchone()[0])
     return dict(sport=eng.sport, policy='two-hour-v1', all_stored_rows=totals,
-        groups=[dict(market=k[0], model_version=k[1], line_source=k[2], thresholds=table(v)) for k,v in buckets.items()],
+        groups=[dict(market=k[0], model_version=k[1], line_source=k[2], thresholds=table(v, k[0])) for k,v in buckets.items()],
         note='All forecast versions remain stored. Tables count the latest forecast per game/model/market, not retries. '
              'Markets, model definitions and model-only/bookmaker lines are separate. Intervals are descriptive Wilson 95%; '
              'they do not account for game dependence or searching many thresholds. Choose rules on research data, then freeze '

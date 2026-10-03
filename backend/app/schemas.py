@@ -101,6 +101,8 @@ class NearTipoffForecast(BaseModel):
                                                           "at or before the forecast; null when there was none.")
     market_retrieved_at: Optional[datetime]
     correct: Optional[bool] = Field(description="Whether the pick won; null until the game is final.")
+    void: bool = Field(default=False, description="The start changed after the forecast, or the game was postponed or "
+                                                  "cancelled: the forecast is never scored.")
     limitation: str
 
 
@@ -220,6 +222,8 @@ class PredictionRecord(BaseModel):
                                                         "max(home_win_prob, 1 - home_win_prob).")
     outcome: Optional[Outcome]
     correct: Optional[bool]
+    void: bool = Field(default=False, description="The start (two-hour) or game date (night-before) changed after the "
+                                                  "forecast, or the game was postponed or cancelled: never scored.")
 
 
 class ConfidenceRecord(BaseModel):

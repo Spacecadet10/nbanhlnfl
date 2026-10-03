@@ -21,9 +21,10 @@ export function ResultLabel({ result }: { result: Settlement }) {
 /** The exact line a forecast was made against, and where the line came from. */
 export function LineLabel({ f }: { f: MarketForecast }) {
   if (f.line == null) return <span className="muted">No line (3-way)</span>;
+  const line = f.market === 'spread' && f.line > 0 ? `+${f.line}` : f.line;   // a sign only for handicaps, never totals
   return f.line_source === 'market'
-    ? <span title="The bookmaker's line when the forecast was made">Line {f.line > 0 ? `+${f.line}` : f.line} · bookmaker</span>
-    : <span className="warn" title="No bookmaker line had been retrieved when this forecast was made">Line {f.line > 0 ? `+${f.line}` : f.line} · model-only</span>;
+    ? <span title="The bookmaker's line when the forecast was made">Line {line} · bookmaker</span>
+    : <span className="warn" title="No bookmaker line had been retrieved when this forecast was made">Line {line} · model-only</span>;
 }
 
 export function SideBars({ f }: { f: MarketForecast }) {
