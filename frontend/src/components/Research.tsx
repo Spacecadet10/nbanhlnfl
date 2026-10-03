@@ -295,6 +295,8 @@ function PoolBody({ r, market }: { r: PoolReport; market: MarketId }) {
   const d = m.decisions[0];
   return <>
     <p className="small muted">Registry {r.registry} (effective {r.effective_from ? dateTime(r.effective_from) : '—'}). {r.rule}</p>
+    {!!r.suspended?.length && <p className="small warn">Suspended sources (recorded, never selectable):{' '}
+      {r.suspended.map((s) => `${s.market}: ${s.source}`).join('; ')}. {r.suspended[0].reason}</p>}
     <p className="small">{d ? <>Pool decision for the week from {dateTime(d.scheduled_for)}: <strong>{decisionLabel(d)}</strong>
       {d.status !== 'active' && <span className="muted"> — {d.reason}</span>}</> : <span className="muted">No pool decision written yet.</span>}
       {' '}<span className="muted">· {m.settled_cohorts} settled cohorts</span></p>

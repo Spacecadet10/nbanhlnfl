@@ -510,7 +510,8 @@ def roster(conn, sport: str, as_of: Optional[str] = None) -> dict:
                       "pool": state, "selection": label})
     return {"sport": sport, "pool": registry.POOL, "as_of": as_of, "candidates": items,
             "registry": None if reg is None else {"id": pool_selection.registry_id(reg), "effective_from": reg["effective_from"],
-                                                  "routes": reg["routes"], "rule": reg["rule"]},
+                                                  "routes": reg["routes"], "rule": reg["rule"],
+                                                  "suspended": pool_selection.suspended(reg)},
             "registry_error": reg_error,
             "family_audit": list(registry.FAMILY_AUDIT),
             "note": "Research only. Evaluations are exploratory (spent seasons); only prospective forecasts can show "

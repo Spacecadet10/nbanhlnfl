@@ -134,3 +134,27 @@ def test_historical_statistics_never_round_up_across_a_threshold():
     assert at._stored(0.599996) < 0.6 and at._stored(0.6) == 0.6 and at._stored(0.35) == 0.35
     assert at._stored(0.5999999995) == 0.6                # inside the documented 1e-9 boundary tolerance
     assert at._stored(None) is None
+
+
+# --- Goalie sources: historical evidence used the actual starter (a postgame fact) --------------------------------------
+def test_goalie_pool_sources_are_suspended_without_editing_the_sealed_registry():
+    reg = selection.load_registry()
+    sealed_reg = json.loads(selection.REGISTRY_PATH.read_text())
+    assert reg["sports"] == sealed_reg["sports"] and reg["sha256"] == sealed_reg["sha256"]      # the seal is untouched
+    live = [(sp, m, e["source"]) for sp, ms in reg["sports"].items() for m in ms for e in selection.entries(reg, sp, m)]
+    assert live and not any("_goalie" in s for _, _, s in live)
+    assert ("nhl", "spread", "cand:poisson_draw:nhl_base") in live                               # base twins stay eligible
+    assert ("nba", "team_total_home", "avg:points_normal+cand:hetero_linear:nba_base") in live
+    suspended = selection.suspended(reg)
+    assert len(suspended) == 9 and all("_goalie" in s["source"] and s["reason"] for s in suspended)
+    assert not any("_goalie" in s for s in selection.all_sources(reg, "nhl", "reg3"))
+    assert selection.registry_id(reg) != sealed_reg["sha256"][:16]     # decisions after the suspension have their own identity
+
+
+def test_a_suspension_list_for_another_registry_is_refused(tmp_path):
+    import pytest
+    other = selection.seal({"registry": "0" * 64, "version": 1, "suspended_at": "2026-10-03T05:00:00Z", "sources": []})
+    path = tmp_path / "s.json"
+    path.write_text(json.dumps(other))
+    with pytest.raises(selection.RegistryError):
+        selection.apply_suspensions(json.loads(selection.REGISTRY_PATH.read_text()), path)

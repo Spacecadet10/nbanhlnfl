@@ -329,7 +329,8 @@ export interface CandidateRoster { mode: Mode; sport: Sport; pool?: string; as_o
   registry_error?: string | null; family_audit: unknown[]; note: string }
 export interface PoolSourceReport { source: string; kind: 'single' | 'average'; members: string[]; candidates: string[];
   route: PoolRoute; evidence: PoolEvidence; settled_with_vector: number; best_rule: PoolSourceStats | null }
-export interface PoolReport { mode: Mode; sport: Sport; registry?: string; effective_from?: string; as_of?: string;
+export interface PoolSuspension { sport: Sport; market: MarketId; source: string; reason: string }
+export interface PoolReport { mode: Mode; sport: Sport; registry?: string; effective_from?: string; as_of?: string; suspended?: PoolSuspension[];
   routes?: Record<string, string>; rule?: string;
   markets: Record<string, { sources: PoolSourceReport[]; settled_cohorts: number;
     decisions: { scheduled_for: string; decided_at: string; effective_until: string; status: string;

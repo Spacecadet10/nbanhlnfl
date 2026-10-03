@@ -1,0 +1,99 @@
+{
+ "finding": "audit 2026-10-03 (HANDOFF.md): historical goalie inputs used a postgame fact",
+ "registry": "99c3f7cf1a080c6f363a2d8a8459c8753fe86251b0474c4f5d6bf48540ff5764",
+ "sha256": "83c0c563f05ef4cf6aa2db7b834ab102b9dda7aa3c86eb8b46646a7af64b31df",
+ "sources": [
+  {
+   "candidates": [
+    "multinomial_l2:nhl_goalie"
+   ],
+   "market": "reg3",
+   "reason": "Registered on stage-2 evidence that gave the model each game's actual starting goalie, a fact known only after the start (candidates/goalies.py actual_starters; no pregame goalie listing exists before 2026-10-01). The evidence does not show a pregame gain, so the source is not selectable. Forecasts keep being recorded with pregame listings; eligibility needs new evidence that uses only listings retrieved before the start.",
+   "route": "standalone",
+   "source": "cand:multinomial_l2:nhl_goalie",
+   "sport": "nhl"
+  },
+  {
+   "candidates": [
+    "multinomial_l2:nhl_goalie"
+   ],
+   "market": "reg3",
+   "reason": "Registered on stage-2 evidence that gave the model each game's actual starting goalie, a fact known only after the start (candidates/goalies.py actual_starters; no pregame goalie listing exists before 2026-10-01). The evidence does not show a pregame gain, so the source is not selectable. Forecasts keep being recorded with pregame listings; eligibility needs new evidence that uses only listings retrieved before the start.",
+   "route": "combination",
+   "source": "avg:goals_draw+cand:multinomial_l2:nhl_goalie",
+   "sport": "nhl"
+  },
+  {
+   "candidates": [
+    "multinomial_l2:nhl_goalie"
+   ],
+   "market": "reg3",
+   "reason": "Registered on stage-2 evidence that gave the model each game's actual starting goalie, a fact known only after the start (candidates/goalies.py actual_starters; no pregame goalie listing exists before 2026-10-01). The evidence does not show a pregame gain, so the source is not selectable. Forecasts keep being recorded with pregame listings; eligibility needs new evidence that uses only listings retrieved before the start.",
+   "route": "combination",
+   "source": "avg:goals_draw+goals_poisson+cand:multinomial_l2:nhl_goalie",
+   "sport": "nhl"
+  },
+  {
+   "candidates": [
+    "poisson_draw:nhl_goalie"
+   ],
+   "market": "spread",
+   "reason": "Registered on stage-2 evidence that gave the model each game's actual starting goalie, a fact known only after the start (candidates/goalies.py actual_starters; no pregame goalie listing exists before 2026-10-01). The evidence does not show a pregame gain, so the source is not selectable. Forecasts keep being recorded with pregame listings; eligibility needs new evidence that uses only listings retrieved before the start.",
+   "route": "standalone",
+   "source": "cand:poisson_draw:nhl_goalie",
+   "sport": "nhl"
+  },
+  {
+   "candidates": [
+    "poisson_draw:nhl_goalie"
+   ],
+   "market": "spread",
+   "reason": "Registered on stage-2 evidence that gave the model each game's actual starting goalie, a fact known only after the start (candidates/goalies.py actual_starters; no pregame goalie listing exists before 2026-10-01). The evidence does not show a pregame gain, so the source is not selectable. Forecasts keep being recorded with pregame listings; eligibility needs new evidence that uses only listings retrieved before the start.",
+   "route": "combination",
+   "source": "avg:goals_glm+cand:poisson_draw:nhl_goalie",
+   "sport": "nhl"
+  },
+  {
+   "candidates": [
+    "poisson_draw:nhl_goalie"
+   ],
+   "market": "spread",
+   "reason": "Registered on stage-2 evidence that gave the model each game's actual starting goalie, a fact known only after the start (candidates/goalies.py actual_starters; no pregame goalie listing exists before 2026-10-01). The evidence does not show a pregame gain, so the source is not selectable. Forecasts keep being recorded with pregame listings; eligibility needs new evidence that uses only listings retrieved before the start.",
+   "route": "combination",
+   "source": "avg:goals_glm+goals_poisson+cand:poisson_draw:nhl_goalie",
+   "sport": "nhl"
+  },
+  {
+   "candidates": [
+    "poisson_draw:nhl_goalie"
+   ],
+   "market": "team_total_away",
+   "reason": "Registered on stage-2 evidence that gave the model each game's actual starting goalie, a fact known only after the start (candidates/goalies.py actual_starters; no pregame goalie listing exists before 2026-10-01). The evidence does not show a pregame gain, so the source is not selectable. Forecasts keep being recorded with pregame listings; eligibility needs new evidence that uses only listings retrieved before the start.",
+   "route": "standalone",
+   "source": "cand:poisson_draw:nhl_goalie",
+   "sport": "nhl"
+  },
+  {
+   "candidates": [
+    "poisson_draw:nhl_goalie"
+   ],
+   "market": "team_total_away",
+   "reason": "Registered on stage-2 evidence that gave the model each game's actual starting goalie, a fact known only after the start (candidates/goalies.py actual_starters; no pregame goalie listing exists before 2026-10-01). The evidence does not show a pregame gain, so the source is not selectable. Forecasts keep being recorded with pregame listings; eligibility needs new evidence that uses only listings retrieved before the start.",
+   "route": "combination",
+   "source": "avg:goals_draw+cand:poisson_draw:nhl_goalie",
+   "sport": "nhl"
+  },
+  {
+   "candidates": [
+    "poisson_draw:nhl_goalie"
+   ],
+   "market": "team_total_away",
+   "reason": "Registered on stage-2 evidence that gave the model each game's actual starting goalie, a fact known only after the start (candidates/goalies.py actual_starters; no pregame goalie listing exists before 2026-10-01). The evidence does not show a pregame gain, so the source is not selectable. Forecasts keep being recorded with pregame listings; eligibility needs new evidence that uses only listings retrieved before the start.",
+   "route": "combination",
+   "source": "avg:goals_draw+goals_poisson+cand:poisson_draw:nhl_goalie",
+   "sport": "nhl"
+  }
+ ],
+ "suspended_at": "2026-10-03T05:30:00Z",
+ "version": 1
+}
