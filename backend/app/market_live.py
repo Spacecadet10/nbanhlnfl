@@ -166,12 +166,43 @@ def latest(conn: sqlite3.Connection, *, policy: str = "pregame", market: Optiona
     return conn.execute(sql + " ORDER BY g.tipoff_at, f.game_id, f.market", params).fetchall()
 
 
+def current_version(conn: sqlite3.Connection, policy: str) -> Optional[str]:
+    """Model version of the sport's sealed market model under `policy`; None without a sealed model."""
+    try:
+        return model_version(market_model(conn)[1], policy)
+    except MarketModelUnavailable:
+        return None
+
+
+def latest_current(conn: sqlite3.Connection, *, policy: str = "pregame", version: Optional[str] = None, **kw) -> list[sqlite3.Row]:
+    """`latest` for ONE model version: the current sealed market model, or `version` (an earlier one, kept as an archive).
+    A record therefore never mixes versions or counts a game once per version. Without a sealed model and without
+    `version`: every row."""
+    rows = latest(conn, policy=policy, **kw)
+    version = version or current_version(conn, policy)
+    return rows if version is None else [r for r in rows if r["model_version"] == version]
+
+
+def versions(conn: sqlite3.Connection, *, policy: str = "pregame", market: Optional[str] = None) -> list[dict]:
+    """Every stored primary model version for this policy (and market), current first, then newest: nothing is hidden by
+    the current-version default of the records."""
+    current = current_version(conn, policy)
+    sql = ("SELECT model_version, COUNT(DISTINCT game_id) AS games, MIN(generated_at) AS first_at, MAX(generated_at) AS last_at "
+           "FROM market_forecasts WHERE run_type='live' AND policy=? AND model_version NOT LIKE 'research-%'")
+    params = [policy]
+    if market:
+        sql += " AND market=?"
+        params.append(market)
+    rows = [dict(r) | {"current": r["model_version"] == current} for r in conn.execute(sql + " GROUP BY model_version", params)]
+    return sorted(rows, key=lambda r: (r["current"], r["last_at"]), reverse=True)
+
+
 def score(conn: sqlite3.Connection, *, policy: str = "pregame", market: Optional[str] = None,
           min_confidence: Optional[float] = None) -> dict:
     """Win / loss / push / void / pending counts relative to each forecast's pick, plus multi-outcome Brier and log loss
     on settled forecasts, per market. `min_confidence` keeps forecasts whose picked side has at least that probability."""
     by_market: dict[str, dict] = {}
-    for r in latest(conn, policy=policy, market=market):
+    for r in latest_current(conn, policy=policy, market=market):
         side = pick(r)
         conf = r["p_a"] if side == "a" else r["p_b"]
         if min_confidence is not None and conf + 1e-9 < min_confidence:

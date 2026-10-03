@@ -48,7 +48,7 @@ export interface NearTipoffForecast {
   model_version: string; generated_at: string; cutoff_at: string; home_win_prob: number;
   pick: 'home' | 'away'; confidence: number; minutes_before_tipoff: number;
   results_refreshed_at: string | null; latest_result_available_at: string | null; results_used: number | null;
-  market_home_prob: number | null; market_retrieved_at: string | null; correct: boolean | null; limitation: string;
+  market_home_prob: number | null; market_retrieved_at: string | null; correct: boolean | null; void?: boolean; limitation: string;
 }
 
 export interface SlatePick { policy: Policy; home_win_prob: number; pick: 'home' | 'away'; confidence: number; meets_confidence: boolean }
@@ -105,7 +105,7 @@ export interface MarketSide { side: 'a' | 'mid' | 'b'; label: string; probabilit
 export interface MarketQuote { bookmaker: string; retrieved_at: string; line: number | null; price_a: number; price_b: number; prob_a: number; prob_b: number }
 /** One forecast at one exact line. line_source 'model' = no bookmaker line existed; the line is model-only. */
 export interface MarketForecast {
-  market: MarketId; title: string; policy: Policy; model_version: string; generated_at: string; cutoff_at: string;
+  market: MarketId; title: string; policy: Policy; model_version: string; current_version?: boolean; generated_at: string; cutoff_at: string;
   line: number | null; line_source: 'market' | 'model' | null; sides: MarketSide[]; pick: 'a' | 'b'; pick_label: string;
   confidence: number; meets_confidence: boolean; quote: MarketQuote | null; result: Settlement; limitations: string[];
 }
@@ -114,11 +114,12 @@ export interface MarketRecordSummary {
   voids: number; pending: number; win_rate: number | null;
 }
 export interface MarketRecord { game_id: string; game_date: string; tipoff: string; home: Team; away: Team; forecast: MarketForecast; outcome: Outcome | null }
+export interface MarketModelVersion { model_version: string; current: boolean; games: number; first_at: string; last_at: string }
 export interface MarketHistoryResponse {
-  mode: Mode; sport: Sport; market: MarketId; policy: Policy; total: number; record: MarketRecordSummary; predictions: MarketRecord[];
+  mode: Mode; sport: Sport; market: MarketId; policy: Policy; model_version?: string | null; versions?: MarketModelVersion[]; total: number; record: MarketRecordSummary; predictions: MarketRecord[];
 }
 export interface MarketPerformanceResponse {
-  mode: Mode; sport: Sport; market: MarketId; policy: Policy; title: string; model_version: string | null; forecasts: number;
+  mode: Mode; sport: Sport; market: MarketId; policy: Policy; title: string; model_version: string | null; versions?: MarketModelVersion[]; forecasts: number;
   record: MarketRecordSummary; brier_score: number | null; log_loss: number | null; line_sources: Record<string, number>;
   market_matched: number; model_log_loss_on_matched: number | null; market_log_loss_on_matched: number | null;
   reference: { label: string; by_line: Record<string, { n: number; log_loss: number; brier: number; pick_accuracy_excluding_mid: number | null; league_reference_log_loss: number }> } | null;
@@ -130,7 +131,7 @@ export interface PredictionRecord {
   model_version: string; generated_at: string; cutoff_at: string; home_win_prob: number;
   /** The predicted winner and the model's probability for it: max(p_home, 1 - p_home). */
   pick: 'home' | 'away'; confidence: number;
-  outcome: Outcome | null; correct: boolean | null;
+  outcome: Outcome | null; correct: boolean | null; void?: boolean;
 }
 
 /** Observed record of the picks a confidence filter selects. Unscored games never count toward win_rate. */
@@ -329,7 +330,8 @@ export interface CandidateRoster { mode: Mode; sport: Sport; pool?: string; as_o
   registry_error?: string | null; family_audit: unknown[]; note: string }
 export interface PoolSourceReport { source: string; kind: 'single' | 'average'; members: string[]; candidates: string[];
   route: PoolRoute; evidence: PoolEvidence; settled_with_vector: number; best_rule: PoolSourceStats | null }
-export interface PoolReport { mode: Mode; sport: Sport; registry?: string; effective_from?: string; as_of?: string;
+export interface PoolSuspension { sport: Sport; market: MarketId; source: string; reason: string }
+export interface PoolReport { mode: Mode; sport: Sport; registry?: string; effective_from?: string; as_of?: string; suspended?: PoolSuspension[];
   routes?: Record<string, string>; rule?: string;
   markets: Record<string, { sources: PoolSourceReport[]; settled_cohorts: number;
     decisions: { scheduled_for: string; decided_at: string; effective_until: string; status: string;

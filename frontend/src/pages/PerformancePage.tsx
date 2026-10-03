@@ -1,9 +1,10 @@
+import { useEffect, useState } from 'react';
 import { ThresholdResearch } from '../components/ConfidenceFilter';
 import { api } from '../api/client';
 import type { MarketId, PerformanceResponse, Policy, Sport } from '../api/types';
 import { useApi } from '../api/useApi';
 import { RunBadge } from '../components/Badges';
-import { MarketReport } from '../components/MarketView';
+import { MarketReport, MarketVersionSelect } from '../components/MarketView';
 import { AgreementTracking } from '../components/Tracking';
 import { TrainingStatusCard } from '../components/Training';
 import { CandidateRosterCard, CombinationRules, PoolSelectionCard, SelectionStatusCard, ResearchPerformance, RetrospectiveStudy } from '../components/Research';
@@ -171,8 +172,13 @@ function Report({ perf: p, run, setRun }: { perf: PerformanceResponse; run: 'liv
 }
 
 function MarketPerformance({ sport, market, policy }: { sport: Sport; market: MarketId; policy: Policy }) {
-  const { state, retry } = useApi((s) => api.marketPerformance(sport, market, policy, s), [sport, market, policy]);
-  return <AsyncView state={state} retry={retry}>{(p) => <MarketReport perf={p} />}</AsyncView>;
+  const [version, setVersion] = useState('');     // '' = current sealed market model
+  useEffect(() => setVersion(''), [sport, market, policy]);
+  const { state, retry } = useApi((s) => api.marketPerformance(sport, market, policy, s, version), [sport, market, policy, version]);
+  return <AsyncView state={state} retry={retry}>{(p) => <>
+    <MarketVersionSelect versions={p.versions ?? []} value={version} onChange={setVersion} />
+    <MarketReport perf={p} />
+  </>}</AsyncView>;
 }
 
 function Tile({ label, value, hint }: { label: string; value: string; hint: string }) {

@@ -1,10 +1,11 @@
+import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { MarketId, Policy, PredictionRecord, Sport } from '../api/types';
 import { useApi } from '../api/useApi';
 import { RunBadge } from '../components/Badges';
 import { ConfidenceFilter, confidenceLevels, levelLabel, MarketRecordLine, RecordLine, useConfidence } from '../components/ConfidenceFilter';
-import { MarketHistoryTable } from '../components/MarketView';
+import { MarketHistoryTable, MarketVersionSelect } from '../components/MarketView';
 import { ResearchHistoryTable } from '../components/Research';
 import { MarketSelect, useCarriedSearch, useMarket, useSport } from '../components/Selection';
 import { PolicyToggle, RunTypeToggle, usePolicy, useRunType } from '../components/RunTypeToggle';
@@ -108,11 +109,15 @@ function MarketHistory({ sport, market, policy, level, filters, hasFilters, show
   sport: Sport; market: MarketId; policy: Policy; level: number | null; hasFilters: boolean; showAll: () => void;
   filters: { date_from?: string; date_to?: string; team?: string };
 }) {
-  const { state, retry } = useApi((s) => api.marketPredictions(sport, market, { ...filters, policy, min_confidence: level }, s),
-    [sport, market, policy, level, filters.date_from, filters.date_to, filters.team]);
+  const [version, setVersion] = useState('');     // '' = the current sealed market model; otherwise an earlier version (archive)
+  useEffect(() => setVersion(''), [sport, market, policy]);
+  const { state, retry } = useApi((s) => api.marketPredictions(sport, market, { ...filters, policy, min_confidence: level, model_version: version }, s),
+    [sport, market, policy, level, filters.date_from, filters.date_to, filters.team, version]);
   return (
     <AsyncView state={state} retry={retry}>
-      {(data) => data.predictions.length === 0
+      {(data) => <>
+        <MarketVersionSelect versions={data.versions ?? []} value={version} onChange={setVersion} />
+        {data.predictions.length === 0
         ? <Empty>
             {level != null
               ? <>No picks at {levelLabel(level)} model confidence{hasFilters ? ' match these filters' : ''}. <button type="button" className="link-btn" onClick={showAll}>Show all picks</button></>
@@ -127,6 +132,7 @@ function MarketHistory({ sport, market, policy, level, filters, hasFilters, show
             </p>
             <MarketHistoryTable rows={data.predictions} />
           </>}
+      </>}
     </AsyncView>
   );
 }
@@ -145,7 +151,9 @@ function HistoryTable({ rows }: { rows: PredictionRecord[] }) {
             <td data-label="Game"><Link to={`/games/${r.game_id}${carried}`}>{r.away.abbr} @ {r.home.abbr}</Link> <RunBadge runType={r.run_type} /></td>
             <td data-label="Pick"><strong>{r.pick === 'home' ? r.home.abbr : r.away.abbr}</strong> <span className="muted small">({r.pick})</span></td>
             <td data-label="Model confidence">{pct(r.confidence, 1)}</td>
-            <td data-label="Result">{r.outcome ? `${r.away.abbr} ${r.outcome.away_score} – ${r.outcome.home_score} ${r.home.abbr}` : <span className="muted">Pending</span>}</td>
+            <td data-label="Result">{r.outcome ? `${r.away.abbr} ${r.outcome.away_score} – ${r.outcome.home_score} ${r.home.abbr}`
+              : r.void ? <span className="muted" title="The start changed after the forecast, or the game was postponed or cancelled: not scored">Void</span>
+              : <span className="muted">Pending</span>}</td>
             <td data-label="Outcome of pick">
               {r.correct == null ? <span className="muted">—</span> : r.correct ? <span className="ok">Correct</span> : <span className="bad">Wrong</span>}
             </td>

@@ -14,6 +14,10 @@ SPORT_COMMANDS = {"nhl-pbp-import", "nhl-xg-research", "migrate", "replay", "cov
 NHL_ONLY = {"nhl-pbp-import", "nhl-xg-research", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies"}
 
 
+LOCK_WAIT_SECONDS = 45 * 60     # longer than any two-hour cycle (NHL ~13 minutes); a job still waiting then fails visibly
+ODDS_LOCK_WAIT_SECONDS = 120    # the periodic cycle waits out a short job (daily, injuries), not another full cycle
+
+
 def _any_failed(result) -> bool:
     """True if any job result (nested dicts/lists) has status 'failed'."""
     if isinstance(result, list):
@@ -232,9 +236,24 @@ def main(argv=None) -> int:
         p.error(f"`{args.cmd}` is NBA-only; it is not available with --sport {args.sport}")
     if args.sport == "nba" and args.cmd in NHL_ONLY:
         p.error(f"`{args.cmd}` needs --sport nhl")
-    conn = db.connect(sport=args.sport)
-    applied = db.migrate(conn)
-    db.claim_store(conn, args.sport)
+    # One job per store at a time: every command below opens (and migrates) the sport's store. The periodic odds cycle
+    # waits out a short job but does not queue behind another full cycle (that cycle is doing the same work; the next
+    # interval follows); other commands wait, then fail visibly. `scheduler` holds the lock per iteration, not while asleep.
+    with db.store_lock(args.sport, wait_seconds=ODDS_LOCK_WAIT_SECONDS if args.cmd == "odds" else LOCK_WAIT_SECONDS) as held:
+        if not held:
+            busy = {"status": "skipped" if args.cmd == "odds" else "failed",
+                    "reason": f"another job is running on the {args.sport} store"}
+            print(json.dumps(busy))
+            return 0 if args.cmd == "odds" else 1
+        conn = db.connect(sport=args.sport)
+        applied = db.migrate(conn)
+        db.claim_store(conn, args.sport)
+        if args.cmd != "scheduler":
+            return _run(args, p, conn, applied)
+    return _run(args, p, conn, applied)
+
+
+def _run(args, p, conn, applied) -> int:
     if args.cmd == "migrate":
         print(json.dumps({"db": str(config.db_path(args.sport)), "sport": args.sport, "applied": applied}))
     elif args.cmd == "ingest-nhl":
@@ -549,7 +568,8 @@ def main(argv=None) -> int:
         elif args.cmd == "daily":
             result = jobs.daily(conn, force_refresh=args.force_refresh)
         else:
-            result = jobs.scheduler(conn, interval_minutes=args.interval_minutes, max_runs=args.max_runs, job=args.job)
+            result = jobs.scheduler(conn, interval_minutes=args.interval_minutes, max_runs=args.max_runs, job=args.job,
+                                    lock=lambda: db.store_lock(args.sport, wait_seconds=ODDS_LOCK_WAIT_SECONDS))
         print(json.dumps(result, indent=2, default=str))
         return 1 if _any_failed(result) else 0
     elif args.cmd == "coverage":

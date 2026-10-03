@@ -167,6 +167,16 @@ def predict_now(conn: sqlite3.Connection, *, now: Optional[str] = None, write: b
     return out
 
 
+def market_at(conn: sqlite3.Connection, row) -> tuple[Optional[float], Optional[str]]:
+    """(de-vigged home probability, retrieval time) of the moneyline a stored forecast could see. NBA: the snapshot stored
+    with the forecast. NHL: the freshness record keeps no quote, so it is the latest current quote retrieved at or before
+    the forecast's generation time (quotes are append-only, so this is the snapshot taken then)."""
+    if live.engine(conn).sport == "nba":
+        return row["market_home_prob"], row["market_retrieved_at"]
+    snap = _market(conn, row["game_id"], row["generated_at"])
+    return (snap["home_prob_devig"], snap["retrieved_at"]) if snap else (None, None)
+
+
 def start_changed(row) -> bool:
     """A near-tipoff forecast is made for the start known when it was generated (its cutoff). If the game's start has
     changed since, the forecast is void: it is never scored, as research cohorts (research_live.state)."""
@@ -197,9 +207,12 @@ def score(conn: sqlite3.Connection) -> dict:
         wins = sum((p >= 0.5) == y for p, y in pairs)
         return {"games": len(pairs), "wins": wins, "losses": len(pairs) - wins, "accuracy": metrics.accuracy(probs, outcomes),
                 "brier": metrics.brier(probs, outcomes), "log_loss": metrics.log_loss(probs, outcomes)}
-    night = {r["game_id"]: r["home_win_prob"] for r in conn.execute(live.LATEST_LIVE_SQL, (backtest.model_version(model),))}
+    night = {r["game_id"]: r["home_win_prob"] for r in conn.execute(      # a night-before forecast for another date is void
+        f"SELECT l.*, g.tipoff_at FROM ({live.LATEST_LIVE_SQL}) l JOIN games g ON g.game_id = l.game_id",
+        (backtest.model_version(model),)) if not live.day_changed(r)}
     both = [r for r in final if r["game_id"] in night]
-    priced = [r for r in final if r["market_home_prob"] is not None]
+    quoted = {r["game_id"]: market_at(conn, r)[0] for r in final}
+    priced = [r for r in final if quoted[r["game_id"]] is not None]
     return {
         "policy": POLICY, "model_version": model_version(model), "forecasts": len(rows),
         "pending": sum(r["status"] in ("scheduled", "in_progress") and not start_changed(r) for r in rows),
@@ -212,6 +225,6 @@ def score(conn: sqlite3.Connection) -> dict:
         "same_games_as_market": {
             "coverage": len(priced) / len(final) if final else 0.0,
             "near_tipoff": summary([(r["home_win_prob"], ys[r["game_id"]]) for r in priced]),
-            "market": summary([(r["market_home_prob"], ys[r["game_id"]]) for r in priced])},
+            "market": summary([(quoted[r["game_id"]], ys[r["game_id"]]) for r in priced])},
         "note": "Descriptive only. A near-tipoff forecast has more information than a night-before one; no decision follows.",
     }

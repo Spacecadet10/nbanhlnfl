@@ -26,6 +26,7 @@ from ..db import transaction, utc_now
 from . import live as pool_live, registry
 
 REGISTRY_PATH = Path(__file__).with_name("pool_rules.json")
+SUSPENSIONS_PATH = Path(__file__).with_name("pool_suspensions.json")
 EVIDENCE = "docs/evidence/candidate-pool/{sport}-assess.json"
 STANDALONE = "alone vs strongest member"
 
@@ -47,7 +48,26 @@ def load_registry(path: Optional[Path] = None) -> dict:
     reg = json.loads(p.read_text())
     if seal(reg)["sha256"] != reg.get("sha256"):
         raise RegistryError("pool registry does not match its seal")
-    return reg
+    return apply_suspensions(reg) if path is None else reg
+
+
+def apply_suspensions(reg: dict, path: Optional[Path] = None) -> dict:
+    """The sealed registry is never edited. Sources whose registered evidence was later found invalid are listed in a
+    separate sealed, versioned file bound to this registry: they stop being selector sources (`entries`), their candidate
+    forecasts keep being recorded, and decisions made after the suspension carry their own registry identity."""
+    p = path or SUSPENSIONS_PATH
+    if not p.is_file():
+        return reg
+    s = json.loads(p.read_text())
+    if seal(s)["sha256"] != s.get("sha256"):
+        raise RegistryError("pool suspension list does not match its seal")
+    if s.get("registry") != reg["sha256"]:
+        raise RegistryError("pool suspension list belongs to another registry")
+    return {**reg, "suspensions": s}
+
+
+def suspended(reg: dict) -> list:
+    return list((reg.get("suspensions") or {}).get("sources", []))
 
 
 def _members(combination: str) -> list:
@@ -126,7 +146,9 @@ def build_registry(effective_from: str, assess: Optional[dict] = None) -> dict:
 
 
 def entries(reg: dict, sport: str, market: str) -> list:
-    return list((reg.get("sports", {}).get(sport) or {}).get(market) or [])
+    """The market's selectable sources: the sealed registry's entries minus suspended ones."""
+    off = {s["source"] for s in suspended(reg) if (s["sport"], s["market"]) == (sport, market)}
+    return [e for e in (reg.get("sports", {}).get(sport) or {}).get(market) or [] if e["source"] not in off]
 
 
 def pool_sources(reg: dict, sport: str, market: str) -> list:
@@ -139,6 +161,8 @@ def all_sources(reg: dict, sport: str, market: str) -> list:
 
 
 def registry_id(reg: dict) -> str:
+    if reg.get("suspensions"):
+        return hashlib.sha256((reg["sha256"] + reg["suspensions"]["sha256"]).encode()).hexdigest()[:16]
     return reg["sha256"][:16]
 
 
@@ -354,8 +378,10 @@ def report(conn, sport: str, as_of: Optional[str] = None, reg: Optional[dict] = 
     as_of = as_of or utc_now()
     reg = reg or load_registry()
     rid = registry_id(reg)
-    defs = [r[0] for r in conn.execute("SELECT DISTINCT definition FROM pool_decisions WHERE registry=? ORDER BY definition",
-                                       (rid,))]
+    # Every core definition with cohorts (not only those that already have a pool decision): a settled game is reported
+    # before the first decision and after a definition change.
+    defs = [r[0] for r in conn.execute("SELECT DISTINCT definition FROM research_cohorts WHERE definition NOT LIKE ? "
+                                       "ORDER BY definition", (f"%:{research_live.EXPANDED}",))]
     markets_out = {}
     for market in sports.get(sport).markets:
         ents = entries(reg, sport, market)
@@ -394,6 +420,7 @@ def report(conn, sport: str, as_of: Optional[str] = None, reg: Optional[dict] = 
             "settled_cohorts": cohorts, "decisions": decisions}
     return {"sport": sport, "registry": rid, "effective_from": reg["effective_from"], "as_of": as_of,
             "routes": reg["routes"], "rule": reg["rule"], "markets": markets_out,
+            "sealed_registry": reg["sha256"][:16], "suspended": suspended(reg),
             "note": "Research only. Registry routes come from exploratory held-out seasons; only prospective settled "
                     "cohorts can show value, and the selector requires its own thresholds before any pick."}
 
@@ -409,9 +436,12 @@ def core_definition(conn) -> Optional[str]:
 def candidate_state(conn, reg: dict, sport: str, name: str, as_of: str, defn: Optional[str]) -> dict:
     """For the roster: the candidate's registry route per market and the pool decision in force there."""
     out = {}
-    for market, ents in (reg.get("sports", {}).get(sport) or {}).items():
-        mine = [e for e in ents if name in e["candidates"]]
+    for market in (reg.get("sports", {}).get(sport) or {}):
+        mine = [e for e in entries(reg, sport, market) if name in e["candidates"]]
+        off = [s for s in suspended(reg) if (s["sport"], s["market"]) == (sport, market) and name in s["candidates"]]
         if not mine:
+            if off:
+                out[market] = {"sources": [], "decision": None, "selected_now": False, "suspended": off}
             continue
         drow = decision_in_force(conn, sport, market, defn, registry_id(reg), as_of) if defn and _has_pool(conn) else None
         rule = json.loads(drow["rule"]) if drow is not None and drow["status"] == "active" else None

@@ -417,26 +417,29 @@ def record(conn, *, game_ids: list, now: Optional[str] = None, write: bool = Tru
                     out["errors"][f"{core['game_id']}:{core['market']}"] = "an input is not earlier than the start"
                     continue
                 for g in m["groups"]:
-                    src = exp if g["cohort"] == "expanded" else core
-                    if src is None:
-                        res = {"status": "incomplete", "side": None, "statistic": None, "vector": None, "votes": None,
-                               "missing": {"expanded_cohort": "no expanded cohort recorded with this core cohort"}}
-                        src = core
-                    else:
-                        res = classify(g, vectors, core["market"], m.get("pool_stacker"))
-                    names = [x for x in g["members"] if x in info] if g["kind"] != "stack" else []
-                    mem = [info[x] for x in names]
-                    sig = _key_digest(sorted((x["name"], x["version"]) for x in mem), g["kind"],
-                                      src["definition"] if g["kind"] == "stack" else None)
-                    inputs = _key_digest(sorted((x["name"], json.dumps(x["ref"], sort_keys=True)) for x in mem),
-                                         sorted(res["missing"]))
-                    info_at = max([src["information_at"], core["information_at"]] +
-                                  [x["generated_at"] for x in mem if x["ref"] and x["ref"].get("table") == "candidate_forecasts"])
-                    rows.append((reg["sha256"], g["id"], sport, core["game_id"], core["market"], core["line"], core["line_source"],
-                                 core["cohort_id"], src["cohort_id"], src["definition"], g["kind"], json.dumps(mem),
-                                 json.dumps(res["missing"], sort_keys=True), sig, inputs, res["status"],
-                                 None if res["side"] is None else SIDE_NAMES[res["side"]], res["statistic"],
-                                 json.dumps(res["vector"]), json.dumps(res["votes"]), info_at, core["tipoff_at"], now))
+                    try:
+                        src = exp if g["cohort"] == "expanded" else core
+                        if src is None:
+                            res = {"status": "incomplete", "side": None, "statistic": None, "vector": None, "votes": None,
+                                   "missing": {"expanded_cohort": "no expanded cohort recorded with this core cohort"}}
+                            src = core
+                        else:
+                            res = classify(g, vectors, core["market"], m.get("pool_stacker"))
+                        names = [x for x in g["members"] if x in info] if g["kind"] != "stack" else []
+                        mem = [info[x] for x in names]
+                        sig = _key_digest(sorted((x["name"], x["version"]) for x in mem), g["kind"],
+                                          src["definition"] if g["kind"] == "stack" else None)
+                        inputs = _key_digest(sorted((x["name"], json.dumps(x["ref"], sort_keys=True)) for x in mem),
+                                             sorted(res["missing"]))
+                        info_at = max([src["information_at"], core["information_at"]] +
+                                      [x["generated_at"] for x in mem if x["ref"] and x["ref"].get("table") == "candidate_forecasts"])
+                        rows.append((reg["sha256"], g["id"], sport, core["game_id"], core["market"], core["line"], core["line_source"],
+                                     core["cohort_id"], src["cohort_id"], src["definition"], g["kind"], json.dumps(mem),
+                                     json.dumps(res["missing"], sort_keys=True), sig, inputs, res["status"],
+                                     None if res["side"] is None else SIDE_NAMES[res["side"]], res["statistic"],
+                                     json.dumps(res["vector"]), json.dumps(res["votes"]), info_at, core["tipoff_at"], now))
+                    except Exception as exc:     # one group never blocks the other groups of its cohort
+                        out["errors"][f"{core['game_id']}:{core['market']}:{g['id']}"] = f"{type(exc).__name__}: {exc}"
             except Exception as exc:     # one cohort never blocks the others
                 out["errors"][f"{core['game_id']}:{core['market']}"] = f"{type(exc).__name__}: {exc}"
         if write and rows:
@@ -447,12 +450,19 @@ def record(conn, *, game_ids: list, now: Optional[str] = None, write: bool = Tru
                 try:
                     with transaction(conn):
                         for r in batch:
-                            cur = conn.execute(
-                                "INSERT OR IGNORE INTO agreement_observations (registry, group_id, sport, game_id, market, "
-                                "line, line_source, cohort_id, source_cohort_id, definition, kind, members, missing, "
-                                "version_sig, inputs_digest, status, side, statistic, vector, votes, information_at, "
-                                "tipoff_at, recorded_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", r)
-                            out["created" if cur.rowcount else "already_recorded"] += 1
+                            if conn.execute("SELECT 1 FROM agreement_observations WHERE registry=? AND group_id=? AND "
+                                            "source_cohort_id=? AND inputs_digest=?", (r[0], r[1], r[8], r[14])).fetchone():
+                                out["already_recorded"] += 1
+                                continue
+                            try:     # a plain insert: a row refused by a constraint is reported, never counted as a retry
+                                conn.execute(
+                                    "INSERT INTO agreement_observations (registry, group_id, sport, game_id, market, "
+                                    "line, line_source, cohort_id, source_cohort_id, definition, kind, members, missing, "
+                                    "version_sig, inputs_digest, status, side, statistic, vector, votes, information_at, "
+                                    "tipoff_at, recorded_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", r)
+                                out["created"] += 1
+                            except sqlite3.IntegrityError as exc:
+                                out["errors"][f"{key[0]}:{key[1]}:{r[1]}"] = f"{type(exc).__name__}: {exc}"
                 except sqlite3.DatabaseError as exc:
                     out["errors"][f"{key[0]}:{key[1]}"] = f"{type(exc).__name__}: {exc}"
         elif not write:
@@ -588,7 +598,7 @@ def summarise(group: dict, items: list, ranked: "_Ranked", market: str, anchor: 
             "probabilistic": prob, "versions": dict(Counter(i.get("version_sig") for i in items if i.get("version_sig")))}
 
 
-def leaderboard(groups: list, market: str, searched: int) -> list:
+def leaderboard(groups: list, market: str, searched: int, exclude=frozenset()) -> list:
     """Exploratory ranking of (group, threshold) configurations with ≥ MIN_EVIDENCE decided picks and ≥ 5% coverage by the
     Bonferroni lower bound (over every configuration searched in the market) of the win-rate difference against the
     market's anchor model at matched coverage. Never a recommendation."""
@@ -596,6 +606,8 @@ def leaderboard(groups: list, market: str, searched: int) -> list:
     z = NormalDist().inv_cdf(1 - 0.05 / max(1, searched))
     out = []
     for g in groups:
+        if g["id"] in exclude:
+            continue
         for cell in g["thresholds"]:
             if not cell.get("sealed", True):        # descriptive grid cells never enter the search count or ranking
                 continue
@@ -630,6 +642,41 @@ def day_bounds(date_from=None, date_to=None) -> tuple[Optional[str], Optional[st
     return lo, hi
 
 
+def _canonical_cohorts(conn, market: str, version=None) -> dict:
+    """game_id -> its latest core cohort made before the start it was made for. With a `version` naming a research
+    definition, the latest cohort of that definition (a version that names only member versions does not narrow it)."""
+    sql = ("SELECT game_id, cohort_id, definition FROM research_cohorts WHERE market=? AND definition NOT LIKE '%:expanded-v1' "
+           "AND generated_at < tipoff_at ORDER BY generated_at, cohort_id")
+    rows = conn.execute(sql, (market,)).fetchall()
+    if version and any(r["definition"].startswith(version) for r in rows):
+        rows = [r for r in rows if r["definition"].startswith(version)]
+    return {r["game_id"]: r["cohort_id"] for r in rows}
+
+
+def _optimistic(m: dict) -> set:
+    """Groups whose HISTORICAL inputs include a goalie candidate (the saved tables gave it the actual starter, a postgame
+    fact): shown with their note, never ranked in the historical leaderboard or chosen by the chronological check."""
+    goalie = any("_goalie" in c for c in m.get("candidates", []))
+    return {g["id"] for g in m["groups"] if any("_goalie" in x for x in g["members"]) or (goalie and g["kind"] == "stack_pool")}
+
+
+# Identity of how the historical artifacts are calculated (stored statistic, leaderboard membership). Tables, summaries and
+# chronological checks carry it; an artifact built under another calculation is rejected, never mixed with this one.
+# calc-2 (2026-10-03): statistics rounded down (calc-1 rounded to nearest and could lift a pick across a threshold); goalie
+# groups and the pool stacker excluded from the historical leaderboard and chronological check.
+CALC = "calc-2"
+
+
+def _stored(statistic):
+    """A statistic as kept in the historical tables: 5 decimals, rounded DOWN (after the 1e-9 boundary tolerance of
+    `_Picks.cell`), so a stored value never moves a pick up across a threshold or into a higher band."""
+    import math
+    if statistic is None:
+        return None
+    kept = math.floor((statistic + 1e-9) * 1e5) / 1e5
+    return 0.33334 if kept < 1 / 3 <= statistic + 1e-9 else kept      # 1/3 (the three-way floor) is not on the 1e-5 grid
+
+
 # --- Prospective report ---------------------------------------------------------------------------------------------
 def _state(row) -> str:
     if row["status"] in ("postponed", "canceled") or row["game_tipoff_at"] != row["tipoff_at"]:
@@ -660,7 +707,13 @@ def prospective_items(conn, reg: dict, sport: str, market: str, date_from=None, 
         sql += " AND (o.definition LIKE ? OR o.version_sig = ?)"
         params += [f"{version}%", version]
     out: dict = defaultdict(dict)
-    for r in conn.execute(sql + " ORDER BY c.generated_at, o.source_cohort_id, o.observation_id", params):
+    rows = conn.execute(sql + " ORDER BY c.generated_at, o.source_cohort_id, o.observation_id", params).fetchall()
+    # Canonical cohort per game: its latest pregame core cohort (independent of which observations exist). A group without
+    # an observation at that cohort has none for the game; it is never scored from an older cohort (another line or inputs).
+    canonical = _canonical_cohorts(conn, market, version)
+    for r in rows:
+        if r["cohort_id"] != canonical.get(r["game_id"]):
+            continue
         row = {"status": r["g_status"], "game_tipoff_at": r["game_tipoff_at"], "tipoff_at": r["tipoff_at"],
                "result_available_at": r["result_available_at"]}
         state = _state(row)
@@ -690,7 +743,8 @@ def _filter_groups(groups: list, kind=None, member=None, group_id=None) -> list:
 
 
 HISTORICAL_NOTE = ("Historical exploratory results: night-before out-of-sample forecasts on reused seasons (candidate pool "
-                   "stages 1–2), at the primary's model-only line; goalie candidates used the actual starter (optimistic). "
+                   "stages 1–2), at the primary's model-only line. Goalie candidates used the actual starter, known only after the "
+                   "start: groups containing them (and the pool stacker) are shown but excluded from the leaderboard. "
                    "These were never recorded live forecasts.")
 PROSPECTIVE_NOTE = ("Prospective research: one canonical observation per game (latest cohort made within two hours before the "
                     "start). Research only — nothing here is a recommendation.")
@@ -699,11 +753,12 @@ LEADERBOARD_NOTE = ("Exploratory leaderboard: ranked by the multiplicity-adjuste
                     "active recommendations come only from the weekly selectors (Selection status).")
 
 
-def _full(per: dict, m: dict, market: str) -> dict:
+def _full(per: dict, m: dict, market: str, historical: bool = False) -> dict:
     """Every registered group's summary and the leaderboard for one set of items."""
     ranked = _Ranked({g["members"][0]: per.get(g["id"], {}) for g in m["groups"] if g["kind"] == "single"}, market)
     summaries = [summarise(g, list(per.get(g["id"], {}).values()), ranked, market, m["anchor"]) for g in m["groups"]]
-    return {"summaries": summaries, "leaderboard": leaderboard(summaries, market, m["configurations"]),
+    return {"summaries": summaries,
+            "leaderboard": leaderboard(summaries, market, m["configurations"], _optimistic(m) if historical else frozenset()),
             "games": len({gid for items in per.values() for gid in items}),
             "lines": sorted({v.get("line") for items in per.values() for v in items.values() if v.get("line") is not None})}
 
@@ -716,7 +771,7 @@ def _by_line(per: dict, line) -> dict:
 def _historical_full(sport: str, market: str, date_from, date_to, line, sha: str, mtime: float) -> dict:
     reg = load_registry()
     per = _by_line(historical_items(sport, market, reg, date_from=date_from, date_to=date_to), line)
-    return _full(per, reg["markets"][f"{sport}:{market}"], market)
+    return _full(per, reg["markets"][f"{sport}:{market}"], market, historical=True)
 
 
 def report(conn, sport: str, market: str, *, evidence: str = "prospective", kind=None, member=None, group_id=None,
@@ -729,8 +784,8 @@ def report(conn, sport: str, market: str, *, evidence: str = "prospective", kind
         p = historical_path(sport, market)
         pre = _precomputed(sport, reg["sha256"]) if not (date_from or date_to or line is not None) else None
         full = pre[market] if pre and market in pre else _historical_full(sport, market, date_from, date_to, line, reg["sha256"], p.stat().st_mtime if p.is_file() else 0.0) \
-            if reg is load_registry() else _full(_by_line(historical_items(sport, market, reg, date_from, date_to), line), m, market)
-        status = "available" if full["games"] else "no_historical_table"
+            if reg is load_registry() else _full(_by_line(historical_items(sport, market, reg, date_from, date_to), line), m, market, historical=True)
+        status = "available" if full["games"] else "historical_table_outdated" if _outdated(p, reg) else "no_historical_table"
     else:
         full = _full(_by_line(prospective_items(conn, reg, sport, market, date_from, date_to, version), line), m, market)
         status = "recording" if full["games"] else "no_observations_yet"
@@ -806,21 +861,21 @@ def build_historical(sport: str, reg: Optional[dict] = None, log=print) -> Path:
                                           for k in res["missing"]}
                 vec = res["vector"]
                 cls.append([res["status"][0] if res["status"] != "no_majority" else "n", res["side"],
-                            None if res["statistic"] is None else round(res["statistic"], 5),
+                            _stored(res["statistic"]),
                             None if vec is None else [round(x, 5) for x in vec], sorted(res["missing"]) or None])
             groups[g["id"]] = cls
         mp = historical_path(sport, market)
         mp.parent.mkdir(parents=True, exist_ok=True)
-        body = {"study": STUDY, "registry_sha256": reg["sha256"], "sport": sport, "market": market,
+        body = {"study": STUDY, "registry_sha256": reg["sha256"], "calc": CALC, "sport": sport, "market": market,
                 "built_at": payload["built_at"], "games": games, "groups": groups, "stack_fits": fits}
         mp.with_suffix(".tmp").write_bytes(gzip.compress(json.dumps(body, separators=(",", ":")).encode(), mtime=0))
         mp.with_suffix(".tmp").replace(mp)
         built.append(market)
         log(f"{sport}:{market}: {len(games)} games, {len(groups)} groups")
     _historical.cache_clear()
-    summaries = {"registry_sha256": reg["sha256"], "grid": GRID, "markets": {}, "checks": {}}
+    summaries = {"registry_sha256": reg["sha256"], "calc": CALC, "grid": GRID, "markets": {}, "checks": {}}
     for market in built:     # unfiltered summaries and the chronological check, so the API needs no recomputation
-        summaries["markets"][market] = _full(historical_items(sport, market, reg), reg["markets"][f"{sport}:{market}"], market)
+        summaries["markets"][market] = _full(historical_items(sport, market, reg), reg["markets"][f"{sport}:{market}"], market, historical=True)
         summaries["checks"][market] = chronological_check(sport, market, reg)
     _historical.cache_clear()
     path = historical_path(sport, built[0]) if built else historical_path(sport)
@@ -844,7 +899,7 @@ def _precomputed(sport: str, sha: str, part: str = "markets") -> Optional[dict]:
     if not p.is_file():
         return None
     d = _summaries(str(p), p.stat().st_mtime)
-    if d.get("registry_sha256") != sha:
+    if d.get("registry_sha256") != sha or d.get("calc") != CALC:      # another registry or an earlier calculation: stale
         return None
     # Summaries depend on the reporting grid; the chronological check uses sealed thresholds only and stays valid.
     return d.get(part) if part == "checks" or d.get("grid") == GRID else None
@@ -854,7 +909,21 @@ def precomputed_check(sport: str, market: str) -> dict:
     """The chronological check saved when the historical tables were built (computing it needs the whole table)."""
     reg = load_registry()
     checks = _precomputed(sport, reg["sha256"], "checks") or {}
-    return checks.get(market) or {"status": "no_historical_table", "folds": []}
+    return checks.get(market) or {"status": _missing_status(sport, market, reg), "folds": []}
+
+
+def _missing_status(sport: str, market: str, reg: dict) -> str:
+    """Why no historical result is served: no table at all, or one that is outdated (visible, never an empty result)."""
+    return "historical_table_outdated" if _outdated(historical_path(sport, market), reg) else "no_historical_table"
+
+
+def _outdated(p: Path, reg: dict) -> bool:
+    """A table file exists but was built for another registry or under an earlier calculation: rebuild it
+    (`tracking-historical`); it is never read."""
+    if not p.is_file():
+        return False
+    mk = _historical(str(p), p.stat().st_mtime)
+    return mk.get("registry_sha256") != reg["sha256"] or mk.get("calc") != CALC
 
 
 @lru_cache(maxsize=1)
@@ -870,7 +939,7 @@ def historical_items(sport: str, market: str, reg: dict, date_from=None, date_to
     if not p.is_file():
         return {}
     mk = _historical(str(p), p.stat().st_mtime)
-    if mk.get("registry_sha256") != reg["sha256"]:
+    if mk.get("registry_sha256") != reg["sha256"] or mk.get("calc") != CALC:
         return {}
     lo, hi = day_bounds(date_from, date_to)
     keep = [i for i, g in enumerate(mk["games"]) if (lo is None or g["tipoff_at"] >= lo) and (hi is None or g["tipoff_at"] < hi)]
@@ -894,7 +963,7 @@ def chronological_check(sport: str, market: str, reg: Optional[dict] = None) -> 
     m = reg["markets"].get(f"{sport}:{market}")
     per = historical_items(sport, market, reg)
     if not m or not per:
-        return {"status": "no_historical_table", "folds": []}
+        return {"status": _missing_status(sport, market, reg), "folds": []}
     seasons = sorted({i["season"] for items in per.values() for i in items.values()})
     folds = []
     for s in seasons[2:]:
@@ -902,7 +971,7 @@ def chronological_check(sport: str, market: str, reg: Optional[dict] = None) -> 
         later = {gid: {k: v for k, v in items.items() if v["season"] == s} for gid, items in per.items()}
         singles_e = _Ranked({g["members"][0]: earlier.get(g["id"], {}) for g in m["groups"] if g["kind"] == "single"}, market)
         board = leaderboard([summarise(g, list(earlier.get(g["id"], {}).values()), singles_e, market, m["anchor"])
-                             for g in m["groups"]], market, m["configurations"])
+                             for g in m["groups"]], market, m["configurations"], _optimistic(m))
         if not board:
             folds.append({"season": s, "chosen": None, "reason": "no configuration with enough earlier evidence"})
             continue

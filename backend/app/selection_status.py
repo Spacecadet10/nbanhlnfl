@@ -10,7 +10,29 @@ from .db import utc_now
 FILTER_LABEL = {"none": "no agreement requirement", "majority": "majority of members agree", "unanimous": "all members agree"}
 
 
-def _rule_view(row, kind: str) -> dict:
+def _core_stats(conn, sport: str):
+    """Recomputes one rule's record from the decision's own evidence (same cohorts, cutoff and arithmetic as the decision).
+    Used when the rule in force is not among the ten stored top rules, e.g. an incumbent kept by hysteresis."""
+    def stats(row, rule):
+        items = research_live.evidence(conn, row["market"], row["definition"], row["scheduled_for"])
+        return _find(selector.evaluate(items, row["market"], research_live.sources(sport, row["market"])), rule)
+    return stats
+
+
+def _pool_stats(conn, reg, sport: str):
+    def stats(row, rule):
+        from .candidates import selection
+        items = selection.evidence(conn, reg, sport, row["market"], row["definition"], row["scheduled_for"])
+        return _find(selector.evaluate(items, row["market"], selection.all_sources(reg, sport, row["market"])), rule)
+    return stats
+
+
+def _find(stats: list, rule: dict):
+    return next((s for s in stats if (s.get("source"), s.get("filter"), s.get("threshold"))
+                 == (rule["source"], rule["filter"], rule["threshold"])), None)
+
+
+def _rule_view(row, kind: str, recompute=None) -> dict:
     """A decision row (core or pool) as shown: status, rule and its own evidence."""
     if row is None:
         return {"selector": kind, "status": "no_decision", "label": "no decision in force", "rule": None}
@@ -18,8 +40,9 @@ def _rule_view(row, kind: str) -> dict:
     ev = json.loads(row["evidence"]) if row["evidence"] else {}
     stats = None
     if rule is not None:
-        stats = next((s for s in ev.get("top_rules", []) if (s.get("source"), s.get("filter"), s.get("threshold"))
-                      == (rule["source"], rule["filter"], rule["threshold"])), None)
+        stats = _find(ev.get("top_rules", []), rule)
+        if stats is None and recompute is not None:
+            stats = recompute(row, rule)
     label = {"active": "selected", "abstain": "no rule beats the reference (abstain)",
              "insufficient_evidence": "insufficient evidence"}.get(row["status"], row["status"])
     return {"selector": kind, "status": row["status"], "label": label, "decision_id": row["decision_id"],
@@ -58,10 +81,11 @@ def status(conn, as_of: Optional[str] = None) -> dict:
         reg_error = None
     markets = []
     for market in sports.get(sport).markets:
-        core = _rule_view(research_live.decision_in_force(conn, sport, market, defn, as_of), "core")
+        core = _rule_view(research_live.decision_in_force(conn, sport, market, defn, as_of), "core", _core_stats(conn, sport))
         pool = None
         if reg is not None and selection.pool_sources(reg, sport, market):
-            pool = _rule_view(selection.decision_in_force(conn, sport, market, defn, rid, as_of), "pool")
+            pool = _rule_view(selection.decision_in_force(conn, sport, market, defn, rid, as_of), "pool",
+                              _pool_stats(conn, reg, sport))
             pool["eligible_sources"] = [{"source": e["source"], "route": e["route"], "members": e["members"]}
                                         for e in selection.entries(reg, sport, market)]
         coh = _latest_cohort(conn, market, defn, as_of)

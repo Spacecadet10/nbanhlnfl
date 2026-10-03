@@ -13,7 +13,7 @@ import json
 from .. import agreement, backtest, config, live, market_live, markets, metrics, near_tipoff, sports
 from ..db import utc_now
 from ..live import HORIZON_DAYS, LATEST_LIVE_SQL
-from ..schemas import (BaselineScore, GameDetail, GamesResponse, GoalieListingOut, GameSummary, HistoryResponse, Market,
+from ..schemas import (BaselineScore, MarketModelVersion, GameDetail, GamesResponse, GoalieListingOut, GameSummary, HistoryResponse, Market,
                        MarketComparison, MarketForecastOut, MarketHistoryResponse, MarketInfo, MarketPerformanceResponse,
                        MarketQuoteOut, MarketRecord, MarketRecordSummary, MarketSide, Meta, NearTipoffForecast, Outcome,
                        PerformanceResponse, Prediction, PredictionRecord, SlateSelection, SourceStatus, SportInfo, Team,
@@ -89,13 +89,14 @@ class RealProvider:
         p = row["home_win_prob"]
         void = row["cutoff_at"] != g["tipoff_at"]           # start changed after the forecast: void, never scored
         correct = None if g["status"] != "final" or void else (p >= 0.5) == (g["home_score"] > g["away_score"])
+        market_prob, market_at = near_tipoff.market_at(self.conn, row)
         return NearTipoffForecast(
             model_version=row["model_version"], generated_at=row["generated_at"], cutoff_at=row["cutoff_at"],
             home_win_prob=p, pick="home" if p >= 0.5 else "away", confidence=pick_confidence(p),
             minutes_before_tipoff=round((_parse(row["cutoff_at"]) - _parse(row["generated_at"])).total_seconds() / 60, 1),
             results_refreshed_at=row["results_refreshed_at"], latest_result_available_at=row["latest_result_available_at"],
-            results_used=row["results_used"], market_home_prob=row["market_home_prob"],
-            market_retrieved_at=row["market_retrieved_at"], correct=correct,
+            results_used=row["results_used"], market_home_prob=market_prob,
+            market_retrieved_at=market_at, correct=correct, void=void or g["status"] in ("postponed", "canceled"),
             limitation="Elo uses results only; it does not know about injuries, rest or line-ups.")
 
     def _forecast_note(self, g: sqlite3.Row) -> str:
@@ -245,12 +246,16 @@ class RealProvider:
         if market == "winner":
             selection = apply_slate_policy(games, policy, min_confidence)
         else:   # the selected market and policy only; no fallback to another market or policy
-            found = {r["game_id"]: r for r in market_live.latest(self.conn, policy=policy, market=market,
-                                                                 game_ids=[g.game_id for g in games])}
+            found = {}     # the current model's forecast; else the latest of an earlier version (labelled, never both)
+            for r in self._market_all_versions(policy, market=market, game_ids=[g.game_id for g in games]):
+                found.setdefault(r["game_id"], r)
             for g in games:
                 r = found.get(g.game_id)
                 g.market_forecast = None if r is None else self._market_out(r, g.home, g.away, min_confidence)
-            picks = [g.market_forecast for g in games if g.market_forecast is not None]
+                if g.market_forecast is not None and not g.market_forecast.current_version:
+                    g.market_forecast.meets_confidence = False     # display only: never a pick of the current model
+            # Counts and the confidence filter cover the current model only; an earlier version's forecast is shown, labelled.
+            picks = [g.market_forecast for g in games if g.market_forecast is not None and g.market_forecast.current_version]
             selection = SlateSelection(market=market, policy=policy, min_confidence=min_confidence, games=len(games),
                                        with_forecast=len(picks), selected=sum(p.meets_confidence for p in picks))
         return GamesResponse(mode="real", date=day, sources=self.sources(), games=games, selection=selection)
@@ -271,7 +276,9 @@ class RealProvider:
         sides.append(MarketSide(side="b", label=labels[2], probability=r["p_b"]))
         return MarketForecastOut(
             market=r["market"], title=markets.spec(self.sport, r["market"]).title, policy=r["policy"],
-            model_version=r["model_version"], generated_at=r["generated_at"], cutoff_at=r["cutoff_at"], line=r["line"],
+            model_version=r["model_version"],
+            current_version=r["model_version"] == (self._current_market_version(r["policy"]) or r["model_version"]),
+            generated_at=r["generated_at"], cutoff_at=r["cutoff_at"], line=r["line"],
             line_source=r["line_source"], sides=sides, pick=side, pick_label=labels[0 if side == "a" else 2],
             confidence=conf, meets_confidence=min_confidence is None or conf >= min_confidence - 1e-9, quote=quote,
             result=result, limitations=markets.limitations(self.sport, r["market"], r["line_source"]))
@@ -282,9 +289,9 @@ class RealProvider:
             return None
         cutoff = backtest.cutoff_for(g["tipoff_at"])
         summary = self._summary(g)
-        forecasts = [self._market_out(r, summary["home"], summary["away"])
+        forecasts = [self._market_out(r, summary["home"], summary["away"])      # every version, labelled; current first
                      for policy in market_live.POLICIES
-                     for r in market_live.latest(self.conn, policy=policy, game_ids=[game_id])]
+                     for r in self._market_all_versions(policy, game_ids=[game_id])]
         goalies = []
         if self.sport == "nhl" and self.conn.execute("SELECT 1 FROM sqlite_master WHERE name='goalie_snapshots'").fetchone():
             from ..ingest import GOALIE_AS_OF_SQL
@@ -298,9 +305,27 @@ class RealProvider:
                           market_forecasts=forecasts)
 
     # ---- market history and performance ---------------------------------------------------------------------------
-    def _market_records(self, market: str, policy: str, min_confidence: Optional[float]) -> list[MarketRecord]:
+    def _current_market_version(self, policy: str) -> Optional[str]:
+        cache = self.__dict__.setdefault("_market_versions", {})          # once per request and policy
+        if policy not in cache:
+            cache[policy] = market_live.current_version(self.conn, policy)
+        return cache[policy]
+
+    def _market_all_versions(self, policy: str, **kw) -> list:
+        """Latest forecast per game, market and model version: the current version's rows first, then earlier versions
+        (newest first). For display of single games only; records always use one version (`latest_current`)."""
+        current = self._current_market_version(policy)
+        rows = market_live.latest(self.conn, policy=policy, **kw)
+        return sorted(rows, key=lambda r: (r["game_id"], r["market"], r["model_version"] != current,
+                                           tuple(-ord(c) for c in r["generated_at"])))
+
+    def _versions(self, market: str, policy: str) -> list[MarketModelVersion]:
+        return [MarketModelVersion(**v) for v in market_live.versions(self.conn, policy=policy, market=market)]
+
+    def _market_records(self, market: str, policy: str, min_confidence: Optional[float],
+                        model_version: Optional[str] = None) -> list[MarketRecord]:
         out = []
-        for r in reversed(market_live.latest(self.conn, policy=policy, market=market)):
+        for r in reversed(market_live.latest_current(self.conn, policy=policy, market=market, version=model_version)):
             home, away = self._team(r["home_team_id"]), self._team(r["away_team_id"])
             f = self._market_out(r, home, away, min_confidence)
             if not f.meets_confidence:
@@ -324,17 +349,20 @@ class RealProvider:
                                    win_rate=wins / (wins + losses) if wins + losses else None)
 
     def market_predictions(self, market: str, policy: str, date_from: Optional[date], date_to: Optional[date],
-                           team: Optional[str], limit: int, min_confidence: Optional[float]) -> MarketHistoryResponse:
-        rows = [r for r in self._market_records(market, policy, min_confidence)
+                           team: Optional[str], limit: int, min_confidence: Optional[float],
+                           model_version: Optional[str] = None) -> MarketHistoryResponse:
+        rows = [r for r in self._market_records(market, policy, min_confidence, model_version)
                 if not (date_from and r.game_date < date_from or date_to and r.game_date > date_to)
                 and not (team and team.upper() not in (r.home.abbr, r.away.abbr))]
         return MarketHistoryResponse(mode="real", sport=self.sport, market=market, policy=policy, total=len(rows),
+                                     model_version=model_version or market_live.current_version(self.conn, policy),
+                                     versions=self._versions(market, policy),
                                      record=self._record_summary(rows, min_confidence), predictions=rows[:limit])
 
-    def market_performance(self, market: str, policy: str) -> MarketPerformanceResponse:
-        rows = self._market_records(market, policy, None)
+    def market_performance(self, market: str, policy: str, model_version: Optional[str] = None) -> MarketPerformanceResponse:
+        rows = self._market_records(market, policy, None, model_version)
         settled_side = {(x["game_id"], x["market"]): market_live.outcome(x)
-                        for x in market_live.latest(self.conn, policy=policy, market=market)}
+                        for x in market_live.latest_current(self.conn, policy=policy, market=market, version=model_version)}
         settled = [r for r in rows if settled_side[(r.game_id, r.forecast.market)] in ("a", "mid", "b")]
 
         def realised(r: MarketRecord) -> int:
@@ -352,7 +380,8 @@ class RealProvider:
         return MarketPerformanceResponse(
             mode="real", sport=self.sport, market=market, policy=policy,
             title=f"{markets.spec(self.sport, market).title}: live {'near-tipoff' if policy == 'near_tipoff' else 'night-before'} forecasts",
-            model_version=rows[0].forecast.model_version if rows else None, forecasts=len(rows),
+            model_version=model_version or market_live.current_version(self.conn, policy),
+            versions=self._versions(market, policy), forecasts=len(rows),
             record=self._record_summary(rows, None), brier_score=metrics.brier_multi(vecs, real),
             log_loss=metrics.log_loss_multi(vecs, real), line_sources=sources, market_matched=len(matched),
             model_log_loss_on_matched=metrics.log_loss_multi(
@@ -378,6 +407,14 @@ class RealProvider:
             f"FROM ({sql}) l JOIN games g ON g.game_id = l.game_id ORDER BY g.tipoff_at DESC, l.game_id",
             (model_version,)).fetchall()
 
+    @staticmethod
+    def _moved(r, run_type: str, policy: str) -> bool:
+        """A live forecast is void once the game leaves what it was made for: the exact start (two-hour policy) or the
+        Eastern game date (night-before policy). Backtest rows are computed from final schedules and never void."""
+        if run_type != "live":
+            return False
+        return near_tipoff.start_changed(r) if policy == "near_tipoff" else live.day_changed(r)
+
     def predictions(self, run_type: str, date_from: Optional[date], date_to: Optional[date], team: Optional[str],
                     limit: int, min_confidence: Optional[float] = None, policy: str = "pregame") -> HistoryResponse:
         out = []
@@ -391,7 +428,7 @@ class RealProvider:
             if team and team.upper() not in (home.abbr, away.abbr):
                 continue
             outcome = None
-            moved = policy == "near_tipoff" and r["cutoff_at"] != r["tipoff_at"]    # void: made for a different start
+            moved = self._moved(r, run_type, policy)                # void: made for a different start or game date
             if r["status"] == "final" and not moved:
                 outcome = Outcome(home_score=r["home_score"], away_score=r["away_score"],
                                   home_won=r["home_score"] > r["away_score"])
@@ -400,16 +437,16 @@ class RealProvider:
                 away=away, model_version=r["model_version"], generated_at=r["generated_at"], cutoff_at=r["cutoff_at"],
                 home_win_prob=r["home_win_prob"], pick="home" if r["home_win_prob"] >= 0.5 else "away",
                 confidence=pick_confidence(r["home_win_prob"]), outcome=outcome,
-                correct=None if outcome is None else (r["home_win_prob"] >= 0.5) == outcome.home_won))
+                correct=None if outcome is None else (r["home_win_prob"] >= 0.5) == outcome.home_won,
+                void=moved or r["status"] in ("postponed", "canceled")))
         return HistoryResponse(mode="real", run_type=run_type, policy=policy, total=len(out),
                                record=confidence_record(out, min_confidence), predictions=out[:limit])
 
     def performance(self, run_type: str, policy: str = "pregame") -> PerformanceResponse:
         primary = self.near_version if policy == "near_tipoff" else self.model_version
         def scored(model_version: str) -> list[sqlite3.Row]:
-            rows = [r for r in self._latest_rows(run_type, model_version) if r["status"] == "final"]
-            if policy == "near_tipoff":     # a forecast made for a start that later changed is void
-                rows = [r for r in rows if r["cutoff_at"] == r["tipoff_at"]]
+            rows = [r for r in self._latest_rows(run_type, model_version)
+                    if r["status"] == "final" and not self._moved(r, run_type, policy)]
             if run_type == "backtest":
                 rows = [r for r in rows if r["season"] in self.periods["test"]]
             return rows
@@ -430,8 +467,12 @@ class RealProvider:
         matched = []
         for r in rows:
             # Fair comparison: only a quote the forecast could have seen (retrieved no later than its generation).
-            q = self.conn.execute("SELECT home_prob_devig FROM odds_quotes WHERE game_id=? AND retrieved_at <= ? "
-                                  "ORDER BY retrieved_at DESC LIMIT 1", (r["game_id"], r["generated_at"])).fetchone()
+            q = self.conn.execute(
+                "SELECT home_prob_devig FROM odds_quotes WHERE game_id=? AND retrieved_at <= ? "
+                "ORDER BY retrieved_at DESC LIMIT 1" if self.sport == "nba" else     # NHL moneylines: market_quotes
+                "SELECT p_a_devig FROM market_quotes WHERE game_id=? AND market='winner' AND retrieved_at <= ? "
+                "ORDER BY retrieved_at DESC, price_label = 'current' DESC, quote_id DESC LIMIT 1",
+                (r["game_id"], r["generated_at"])).fetchone()
             if q:
                 matched.append((r["home_win_prob"], q[0], r["home_score"] > r["away_score"]))
         days = [eastern_date(r["tipoff_at"]) for r in rows]

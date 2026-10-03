@@ -64,7 +64,8 @@ def test_migrations_are_idempotent(conn):
          "0012_markets.sql", "0013_market_forecast_checks.sql",
          "0014_goalie_snapshots.sql", "0015_two_hour_forecasts.sql",
          "0016_research_selection.sql", "0017_nhl_shots.sql", "0018_model_fits.sql",
-         "0019_candidate_forecasts.sql", "0020_pool_selection.sql", "0021_agreement_observations.sql", "0022_agreement_observation_inputs.sql"]
+         "0019_candidate_forecasts.sql", "0020_pool_selection.sql", "0021_agreement_observations.sql", "0022_agreement_observation_inputs.sql",
+         "0023_two_hour_guards.sql"]
 
 
 def test_repeated_ingestion_creates_no_duplicates(conn):

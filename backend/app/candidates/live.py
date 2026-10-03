@@ -391,14 +391,15 @@ def _record_game(conn, spec, mv, art, fit_id, game, row, o, rec, recent, lines, 
                 "p": [pa, pm, pb], "model_version": mv, "generated_at": generated}
         if write:
             with transaction(conn):
-                cur = conn.execute(
-                    "INSERT OR IGNORE INTO candidate_forecasts (game_id, candidate, model_version, market, line, "
-                    "line_source, line_ref, p_a, p_mid, p_b, params, inputs, fit_id, artifact_sha256, training_cutoff, "
-                    "dataset_version, tipoff_at, generated_at, idempotency_key) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                    (game.game_id, spec.name, mv, market, line, source, ref, pa, pm, pb, json.dumps(params, sort_keys=True),
-                     json.dumps(inputs, sort_keys=True, default=str), fit_id, art["artifact_sha256"],
-                     art["results_available_through"], dataset, game.tipoff_at, generated, key))
-            new = cur.rowcount == 1
+                new = conn.execute("SELECT 1 FROM candidate_forecasts WHERE idempotency_key=?", (key,)).fetchone() is None
+                if new:      # a plain insert: a row refused by a constraint raises and is reported, never counted as a retry
+                    conn.execute(
+                        "INSERT INTO candidate_forecasts (game_id, candidate, model_version, market, line, "
+                        "line_source, line_ref, p_a, p_mid, p_b, params, inputs, fit_id, artifact_sha256, training_cutoff, "
+                        "dataset_version, tipoff_at, generated_at, idempotency_key) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (game.game_id, spec.name, mv, market, line, source, ref, pa, pm, pb, json.dumps(params, sort_keys=True),
+                         json.dumps(inputs, sort_keys=True, default=str), fit_id, art["artifact_sha256"],
+                         art["results_available_through"], dataset, game.tipoff_at, generated, key))
             out["created" if new else "already_recorded"] += 1
         out["forecasts"].append(item)
 
@@ -493,7 +494,10 @@ def roster(conn, sport: str, as_of: Optional[str] = None) -> dict:
         alone = [m for m, st in state.items() if any(x["route"] == "standalone" for x in st["sources"])]
         inside = sorted({x["source"] for st in state.values() for x in st["sources"] if x["route"] == "combination"})
         selected = [f"{m}: {st['decision']['rule']['source']}" for m, st in state.items() if st["selected_now"]]
+        off = sorted(m for m, st in state.items() if st.get("suspended"))
         label = ("reference only (never selected)" if spec.role == "reference" else
+                 f"suspended in {', '.join(off)}: registered on evidence that used the actual starting goalie (known only "
+                 f"after the start); recorded, never selectable" if off and not alone and not inside else
                  f"selected now ({'; '.join(selected)})" if selected else
                  f"selectable alone in {', '.join(alone)} (standalone held-out value); picked only when the pool selector's "
                  f"evidence thresholds are met" if alone else
@@ -505,11 +509,12 @@ def roster(conn, sport: str, as_of: Optional[str] = None) -> dict:
                       "definition": registry.definition(spec), "training_status": status,
                       "latest_fit": dict(fit) if fit else None, "evaluation": evaluation,
                       "prospective": {"games": n, "settled": settled},
-                      "combination_participation": sorted(state) if reg else combos,
+                      "combination_participation": sorted(m for m, st in state.items() if st["sources"]) if reg else combos,
                       "pool": state, "selection": label})
     return {"sport": sport, "pool": registry.POOL, "as_of": as_of, "candidates": items,
             "registry": None if reg is None else {"id": pool_selection.registry_id(reg), "effective_from": reg["effective_from"],
-                                                  "routes": reg["routes"], "rule": reg["rule"]},
+                                                  "routes": reg["routes"], "rule": reg["rule"],
+                                                  "suspended": pool_selection.suspended(reg)},
             "registry_error": reg_error,
             "family_audit": list(registry.FAMILY_AUDIT),
             "note": "Research only. Evaluations are exploratory (spent seasons); only prospective forecasts can show "

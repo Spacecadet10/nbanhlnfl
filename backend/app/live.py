@@ -127,17 +127,24 @@ LATEST_LIVE_SQL = """
 """
 
 
+def day_changed(row) -> bool:
+    """A night-before forecast is made for the game's Eastern date (its cutoff is that date's midnight). If the game has
+    moved to another date since, the forecast is void: it is never scored (as near_tipoff.start_changed and markets.settle)."""
+    return backtest.cutoff_for(row["tipoff_at"]) != row["cutoff_at"]
+
+
 def score(conn: sqlite3.Connection) -> dict:
     """Read-only postgame scoring of the latest live forecast per game against stored final results."""
     from . import metrics
     _, model = primary_model(conn)
     mv = backtest.model_version(model)
-    rows = conn.execute(f"SELECT l.game_id, l.home_win_prob, g.status, g.home_score, g.away_score "
+    rows = conn.execute(f"SELECT l.game_id, l.home_win_prob, l.cutoff_at, g.tipoff_at, g.status, g.home_score, g.away_score "
                         f"FROM ({LATEST_LIVE_SQL}) l JOIN games g ON g.game_id = l.game_id", (mv,)).fetchall()
-    final = [r for r in rows if r["status"] == "final"]
+    final = [r for r in rows if r["status"] == "final" and not day_changed(r)]
     probs = [r["home_win_prob"] for r in final]
     ys = [r["home_score"] > r["away_score"] for r in final]
     return {"model_version": mv, "live_forecasts": len(rows), "scored": len(final),
             "pending": sum(r["status"] == "scheduled" for r in rows),
             "not_played": sum(r["status"] in ("postponed", "canceled") for r in rows),
+            "start_changed": sum(r["status"] not in ("postponed", "canceled") and day_changed(r) for r in rows),
             "brier": metrics.brier(probs, ys), "accuracy": metrics.accuracy(probs, ys)}

@@ -2,7 +2,7 @@ import { ResearchSlateLine } from './Research';
 import type { MarketId, ResearchSlateEntry } from '../api/types';
 import { ModelAgreement } from './ModelAgreement';
 import { Link } from 'react-router-dom';
-import type { GameSummary, MarketForecast, MarketPerformanceResponse, MarketRecord, Settlement } from '../api/types';
+import type { GameSummary, MarketForecast, MarketModelVersion, MarketPerformanceResponse, MarketRecord, Settlement } from '../api/types';
 import { RunBadge, NearTipoffBadge } from './Badges';
 import { MarketRecordLine } from './ConfidenceFilter';
 import { useCarriedSearch } from './Selection';
@@ -21,9 +21,10 @@ export function ResultLabel({ result }: { result: Settlement }) {
 /** The exact line a forecast was made against, and where the line came from. */
 export function LineLabel({ f }: { f: MarketForecast }) {
   if (f.line == null) return <span className="muted">No line (3-way)</span>;
+  const line = f.market === 'spread' && f.line > 0 ? `+${f.line}` : f.line;   // a sign only for handicaps, never totals
   return f.line_source === 'market'
-    ? <span title="The bookmaker's line when the forecast was made">Line {f.line > 0 ? `+${f.line}` : f.line} · bookmaker</span>
-    : <span className="warn" title="No bookmaker line had been retrieved when this forecast was made">Line {f.line > 0 ? `+${f.line}` : f.line} · model-only</span>;
+    ? <span title="The bookmaker's line when the forecast was made">Line {line} · bookmaker</span>
+    : <span className="warn" title="No bookmaker line had been retrieved when this forecast was made">Line {line} · model-only</span>;
 }
 
 export function SideBars({ f }: { f: MarketForecast }) {
@@ -69,6 +70,7 @@ export function MarketCard({ game: g, statusLabel, research, market }: { game: G
         {f ? (
           <>
             <div className="card-section-label">{f.title.toUpperCase()} · <LineLabel f={f} /></div>
+            {f.current_version === false && <p className="warn small">Earlier model version (archive): shown for reference, not a pick of the current model and not in its counts or record.</p>}
             <SideBars f={f} />
             <p className="pick-line small">
               Pick: <strong>{f.pick_label}</strong><span className="muted"> · model confidence {pct(f.confidence, 1)}</span>
@@ -102,8 +104,9 @@ export function MarketForecastsCard({ forecasts }: { forecasts: MarketForecast[]
         <div key={p} className="market-block">
           <h3>{p === 'near_tipoff' ? 'Near-tipoff' : 'Night-before'} forecasts</h3>
           {forecasts.filter((f) => f.policy === p).map((f) => (
-            <div key={`${f.market}-${f.policy}`} className="market-row">
-              <div className="market-row-head"><strong>{f.title}</strong> <LineLabel f={f} /> {f.result !== 'pending' && <ResultLabel result={f.result} />}</div>
+            <div key={`${f.market}-${f.policy}-${f.model_version}`} className="market-row">
+              <div className="market-row-head"><strong>{f.title}</strong> <LineLabel f={f} /> {f.result !== 'pending' && <ResultLabel result={f.result} />}
+                {f.current_version === false && <span className="warn small"> · earlier model version (archive)</span>}</div>
               <SideBars f={f} />
               <p className="small"><QuoteLine f={f} /></p>
               <p className="small muted">Made {dateTime(f.generated_at)} · cutoff {dateTime(f.cutoff_at)} · <code>{f.model_version}</code></p>
@@ -113,6 +116,26 @@ export function MarketForecastsCard({ forecasts }: { forecasts: MarketForecast[]
         </div>
       ))}
     </div>
+  );
+}
+
+/** Records cover one market-model version: the current sealed model by default, an earlier one as an archive view. */
+export function MarketVersionSelect({ versions, value, onChange }: {
+  versions: MarketModelVersion[]; value: string; onChange: (v: string) => void;
+}) {
+  const earlier = versions.filter((v) => !v.current);
+  if (earlier.length === 0) return null;
+  return (
+    <p className="small">
+      <label>Model version{' '}
+        <select value={value} onChange={(e) => onChange(e.target.value)}>
+          <option value="">Current sealed model{versions.some((v) => v.current) ? '' : ' (no forecasts yet)'}</option>
+          {earlier.map((v) => <option key={v.model_version} value={v.model_version}>Earlier: {v.model_version} ({v.games} games)</option>)}
+        </select>
+      </label>{' '}
+      <span className="muted">{value ? 'Archive: forecasts of an earlier market model version, kept separate from the current record.'
+        : `${earlier.length} earlier version${earlier.length > 1 ? 's' : ''} stored; each has its own record.`}</span>
+    </p>
   );
 }
 

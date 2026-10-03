@@ -101,6 +101,8 @@ class NearTipoffForecast(BaseModel):
                                                           "at or before the forecast; null when there was none.")
     market_retrieved_at: Optional[datetime]
     correct: Optional[bool] = Field(description="Whether the pick won; null until the game is final.")
+    void: bool = Field(default=False, description="The start changed after the forecast, or the game was postponed or "
+                                                  "cancelled: the forecast is never scored.")
     limitation: str
 
 
@@ -220,6 +222,8 @@ class PredictionRecord(BaseModel):
                                                         "max(home_win_prob, 1 - home_win_prob).")
     outcome: Optional[Outcome]
     correct: Optional[bool]
+    void: bool = Field(default=False, description="The start (two-hour) or game date (night-before) changed after the "
+                                                  "forecast, or the game was postponed or cancelled: never scored.")
 
 
 class ConfidenceRecord(BaseModel):
@@ -344,6 +348,7 @@ class MarketForecastOut(BaseModel):
     title: str
     policy: Policy
     model_version: str
+    current_version: bool = Field(default=True, description="False: made by an earlier market model version (archive).")
     generated_at: datetime
     cutoff_at: datetime
     line: Optional[float] = Field(description="Exact line of this forecast: home handicap (spread) or threshold.")
@@ -381,11 +386,21 @@ class MarketRecord(BaseModel):
     outcome: Optional[Outcome]
 
 
+class MarketModelVersion(BaseModel):
+    model_version: str
+    current: bool = Field(description="The sport's sealed market model now; records default to it.")
+    games: int
+    first_at: datetime
+    last_at: datetime
+
+
 class MarketHistoryResponse(BaseModel):
     mode: Mode
     sport: Sport
     market: MarketId
     policy: Policy
+    model_version: Optional[str] = Field(default=None, description="The one model version these rows and the record cover.")
+    versions: list[MarketModelVersion] = Field(default_factory=list, description="Every stored version (archive views).")
     total: int
     record: MarketRecordSummary
     predictions: list[MarketRecord]
@@ -398,6 +413,7 @@ class MarketPerformanceResponse(BaseModel):
     policy: Policy
     title: str
     model_version: Optional[str]
+    versions: list[MarketModelVersion] = Field(default_factory=list)
     forecasts: int
     record: MarketRecordSummary
     brier_score: Optional[float] = Field(description="Multi-outcome Brier (sides a / push-draw / b) on settled forecasts.")

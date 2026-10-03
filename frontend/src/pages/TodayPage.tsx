@@ -172,6 +172,7 @@ function GameCard({ game: g, policy, research }: { game: GameSummary; policy: Po
               <span className="muted"> · model confidence {pct(pick.confidence, 1)}</span>
               {near && n && <span className="muted"> · made {Math.round(n.minutes_before_tipoff)} min before tipoff</span>}
               {near && n?.correct != null && (n.correct ? <span className="ok"> · Correct</span> : <span className="bad"> · Wrong</span>)}
+              {near && n?.void && <span className="muted"> · Void</span>}
             </p>
           </>
         ) : (

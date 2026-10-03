@@ -129,3 +129,21 @@ Implemented in `backend/app/candidates/selection.py`; registry `backend/app/cand
 - **2026-10-02, after stage 2 (results: docs/CANDIDATE_POOL_RESULTS.md):** selection eligibility narrowed to held-out
   confirmed gains (`candidates.live.held_out_gains`); the shortlist itself is unchanged and every candidate keeps recording.
   The pool selector simulation started with empty evidence at stage 2 (the pool stacker exists only there).
+
+## Audit corrections — 2026-10-03
+- **Suspended sources (§7).** The stage-2 evidence for the goalie candidates used the actual starter (§4), which is known only
+  after the start, so it cannot justify eligibility. The nine registry entries containing `multinomial_l2:nhl_goalie` (reg3) or
+  `poisson_draw:nhl_goalie` (puck line, away team total), alone or inside an average, are suspended by
+  `backend/app/candidates/pool_suspensions.json` (sealed, bound to registry 99c3f7cf…; `selection.entries` removes them).
+  `pool_rules.json` is not edited. Their forecasts keep being recorded with pregame listings; they can become selectable only
+  through a new registry version whose evidence uses listings retrieved before the start. Pool decisions made after the
+  suspension have the registry identity `sha256(registry + suspension list)`; earlier decisions (all "insufficient evidence")
+  stay stored under the old identity.
+- **§6 wording.** The two-hour cycle records every registry candidate (all nine NHL and ten NBA specifications), not only the
+  shortlist and references.
+- **§7 wording.** "One cohort per game across core definitions" is now true of the pool report (it previously read only
+  definitions that already had a pool decision). Weekly decisions remain per definition by design.
+- **Refits.** A candidate is refitted at season start and whenever the set of earlier-season results changes (new fingerprint),
+  not only at season start.
+- **Known, not fixed:** an NHL dry run still extends the derived goalie cache file (`research/candidates/goalies-v1.json.gz`);
+  fixing it would change `goalies.py`, which is part of every candidate's identity. No store row is written by a dry run.

@@ -77,6 +77,7 @@ function cellOf(g: TrackingGroup, view: View): TrackingCell {
 function TrackingBody({ r, sport, market, f }: { r: TrackingReport; sport: Sport; market: MarketId; f: Filters }) {
   const members = useMemo(() => Array.from(new Set(r.groups.flatMap((g) => g.members))).sort(), [r.groups]);
   if (r.mode === 'demo') return <Empty>{r.note}</Empty>;
+  if (r.status === 'historical_table_outdated') return <Empty><span className="warn">The saved historical table was built under an earlier calculation and is not used. Rebuild it with <code>tracking-historical</code>.</span></Empty>;
   const rows = [...r.groups].map((g) => ({ g, c: cellOf(g, f.view) })).sort((a, b) =>
     f.sort === 'evidence' ? b.c.decided - a.c.decided || (b.c.win_rate ?? -1) - (a.c.win_rate ?? -1)
       : f.sort === 'win_rate' ? (b.c.win_rate ?? -1) - (a.c.win_rate ?? -1) || b.c.decided - a.c.decided
@@ -174,7 +175,9 @@ function ChronologicalCheck({ sport, market }: { sport: Sport; market: MarketId 
 
 function CheckBody({ sport, market }: { sport: Sport; market: MarketId }) {
   const { state, retry } = useApi((s) => api.researchTrackingCheck(sport, market, s), [sport, market]);
-  return <AsyncView state={state} retry={retry}>{(c: TrackingCheck) => c.folds.length === 0 ? <Empty>No historical table.</Empty> : <>
+  return <AsyncView state={state} retry={retry}>{(c: TrackingCheck) => c.folds.length === 0 ? <Empty>{c.status === 'historical_table_outdated'
+    ? <span className="warn">The saved historical table was built under an earlier calculation and is not used. Rebuild it with <code>tracking-historical</code>.</span>
+    : 'No historical table.'}</Empty> : <>
     <div className="table-wrap"><table className="table small">
       <thead><tr><th>Season</th><th>First on earlier seasons</th><th>Earlier</th><th>Next season</th><th>Anchor, same count</th></tr></thead>
       <tbody>{c.folds.map((x) => <tr key={x.season}><th scope="row">{x.season}</th>

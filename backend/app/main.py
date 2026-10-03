@@ -134,22 +134,25 @@ def _check_policy(run_type: str, policy: str) -> None:
 def market_predictions(market: str = MARKET, policy: str = Query("pregame", pattern="^(pregame|near_tipoff)$"),
                        date_from: Optional[date] = None, date_to: Optional[date] = None, team: Optional[str] = None,
                        min_confidence: Optional[float] = Query(None, ge=0, le=1),
-                       limit: int = Query(500, ge=1, le=5000), p=Depends(get_provider)):
+                       limit: int = Query(500, ge=1, le=5000),
+                       model_version: Optional[str] = Query(None, description="An earlier market model version (archive); "
+                                                                                  "default: the current sealed model."),
+                       p=Depends(get_provider)):
     if market == "winner":
         raise HTTPException(status_code=422, detail="Use /api/predictions for the winner market")
     if date_from and date_to and date_from > date_to:
         raise HTTPException(status_code=422, detail="date_from must be on or before date_to")
     _market_supported(p, market)
-    return p.market_predictions(market, policy, date_from, date_to, team, limit, min_confidence)
+    return p.market_predictions(market, policy, date_from, date_to, team, limit, min_confidence, model_version)
 
 
 @app.get("/api/market-performance", response_model=MarketPerformanceResponse)
 def market_performance(market: str = MARKET, policy: str = Query("pregame", pattern="^(pregame|near_tipoff)$"),
-                       p=Depends(get_provider)):
+                       model_version: Optional[str] = None, p=Depends(get_provider)):
     if market == "winner":
         raise HTTPException(status_code=422, detail="Use /api/performance for the winner market")
     _market_supported(p, market)
-    return p.market_performance(market, policy)
+    return p.market_performance(market, policy, model_version)
 
 
 @app.get("/api/performance", response_model=PerformanceResponse)

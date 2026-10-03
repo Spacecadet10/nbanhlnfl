@@ -149,6 +149,7 @@ function NearTipoffCard({ game: g }: { game: GameDetail }) {
         <dd>
           <strong>{n.pick === 'home' ? g.home.abbr : g.away.abbr}</strong> · model confidence {pct(n.confidence, 1)}
           {n.correct != null && (n.correct ? <span className="ok"> · Correct</span> : <span className="bad"> · Wrong</span>)}
+          {n.void && <span className="muted"> · Void (start changed, postponed or cancelled: not scored)</span>}
         </dd>
         <dt>Made</dt><dd>{dateTime(n.generated_at)}, {Math.round(n.minutes_before_tipoff)} minutes before the scheduled tipoff</dd>
         <dt>Data freshness</dt>
