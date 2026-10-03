@@ -1,6 +1,12 @@
 # Current handoff
 
-## "Fix them all" batch — Claude (Fable 5.1), 2026-10-03 18:58–19:25 UTC. **Uncommitted. RESEARCH DEFINITIONS CHANGED.**
+## "Fix them all" batch — Claude (Fable 5.1), 2026-10-03 18:58–19:25 UTC. **Committed as `6e70a4e` (tree clean). RESEARCH DEFINITIONS CHANGED.**
+- **FREEZE until tonight's NHL games finish (~05:00 UTC Oct 4):** no edits to identity-hashed files (`models/*.py`,
+  `backtest.py`, `agreement.py`, `availability*.py`, `combine.py`, `research_live.py`, `markets.py`, `market_live.py`,
+  `retrain_cadence.py`, `fit_register.py`), or tonight's games split across two research definitions. The scheduled jobs
+  run this checkout, so any backend edit is live at the next cycle. The one test Opus saw fail mid-edit
+  (`test_two_hour_cycle_records_tracking_after_the_pool`) passes alone and in the final full run (555 passed, no file
+  changed afterwards except this handoff).
 - **Research identity reset (user asked for the latent hashed-file fix):** `models/logistic.py`, `models/hockey.py`,
   `models/score_candidates.py` now compute a game's rest days once (`rest_seen`), so predicting a game twice no longer reads
   as a back-to-back. Applied in one step at 19:10:10 UTC. New definitions: **NHL `3e2504c4d655c41b`** (was `8d60d7aebdb6a68d`,
