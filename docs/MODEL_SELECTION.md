@@ -482,3 +482,6 @@ prospective evaluation. Every season used was spent before: **exploratory, not a
   definition; the selector's prospective evidence restarts under the new one (it was 0 settled cohorts in every market, so
   no evidence is lost). No stored live forecast had a moved start (NBA 0 / NHL 0 of 510 market forecasts), so no recorded
   settlement changes.
+- **2026-10-03 ~01:40 UTC, discovery-v1 amendment (after run 1):** added the final selection step the §18 pipeline names
+  ("record them prospectively"): the same selection procedure on every historical season, no assessment, saved as
+  `prospective_registry` per market. It changes no evaluated figure (same seed, same folds); run 2 reproduces run 1's folds.

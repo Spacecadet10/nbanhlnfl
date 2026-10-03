@@ -294,9 +294,10 @@ def analyse(sport: str, market: str, rows: list, budget: int = BUDGET, log: Call
         P = ar.P[m][mask & (ar.realised != 1 if market != "reg3" else mask)]
         return float(-np.log(np.clip(P[np.arange(len(r)), r], 1e-15, 1)).mean())
 
-    folds = []
-    for a in seasons[1:]:
-        selm, assm = ar.season < a, ar.season == a
+    folds, registry = [], None
+    for a in [*seasons[1:], None]:          # None: the final selection on every season, registered for prospective use
+        selm = ar.season < a if a is not None else np.ones(ar.n, dtype=bool)
+        assm = ar.season == a if a is not None else np.zeros(ar.n, dtype=bool)
         best = min(members, key=lambda m: (logloss(m, selm), members.index(m)))
         cur_sel = {m: _curve(singles[m][1], singles[m][4], selm) for m in members}
         cur_ass = {m: _curve(singles[m][1], singles[m][4], assm) for m in members}
@@ -345,9 +346,17 @@ def analyse(sport: str, market: str, rows: list, budget: int = BUDGET, log: Call
             if at:
                 b = max(at, key=lambda x: (x[4], x[2]))
                 frozen.setdefault((gid(b[0]), t), f"best lift at ≥{t:.2f}")
-        assessed = []
         by = {gid(g): g for g in groups}
         sel_by = {(gid(x[0]), x[1]): x for x in scored}
+        if a is None:
+            registry = {"selected_on_seasons": seasons, "best_single": best, "bonferroni_count": plan["configurations"] + prior,
+                        "rules": [{"group": key, "method": by[key]["method"], "members": by[key]["members"], "threshold": t,
+                                   "why": why, "selection": {"decided": sel_by[(key, t)][2], "win_rate": sel_by[(key, t)][3],
+                                                             "lift": sel_by[(key, t)][4], "lower": sel_by[(key, t)][5]}}
+                                  for (key, t), why in frozen.items()],
+                        "note": "Selected on every historical season (exploratory); evaluated only prospectively from now on."}
+            continue
+        assessed = []
         for (key, t), why in frozen.items():
             g = by[key]
             side, conf, V, votes, out = computed[key]
@@ -391,6 +400,7 @@ def analyse(sport: str, market: str, rows: list, budget: int = BUDGET, log: Call
     report = {"sport": sport, "market": market, "kind": k, "members": members, "candidates": sorted(cands),
               "primary": prim, "games": ar.n, "seasons": seasons, "plan": plan, "stackers": fit_log,
               "thresholds": list(ts), "bands": [list(b) for b in bands(market)], "folds": folds,
+              "prospective_registry": registry,
               "line": None if market in ("winner", "reg3") else "pregame research line (the primary model's own line)"}
     log(f"{sport}:{market}: {ar.n} games, {len(members)} members, {plan['configurations']} configurations, "
         f"qualified per fold {[len(f['qualified']) for f in folds]}, {len(table)} group rows")
