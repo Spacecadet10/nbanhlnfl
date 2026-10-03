@@ -11,15 +11,15 @@
 		<key>NBA_RELEASE_GUARD</key>
 		<string>1</string>
 		<key>NBA_RELEASE_ROOT</key>
-		<string>/Users/andry/Desktop/nba-predictor-live</string>
+		<string>/Users/andry/nba-predictor-live</string>
 	</dict>
 	<key>Label</key>
 	<string>com.nba-predictor.injuries</string>
 	<key>ProcessType</key>
-	<string>Background</string>
+	<string>Standard</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/bin/python</string>
+		<string>/Users/andry/nba-predictor-live/backend/.venv/bin/python</string>
 		<string>-m</string>
 		<string>app.cli</string>
 		<string>injuries</string>
@@ -42,6 +42,6 @@
 	<key>ThrottleInterval</key>
 	<integer>60</integer>
 	<key>WorkingDirectory</key>
-	<string>/Users/andry/Desktop/nba-predictor-live/backend</string>
+	<string>/Users/andry/nba-predictor-live/backend</string>
 </dict>
 </plist>

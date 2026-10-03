@@ -526,3 +526,11 @@ Scope: extended `agreement_tracking`, its API and the existing Performance compo
 - Locks free and no CLI process before `launchctl bootout`/`bootstrap` of the five jobs (19:51:25 UTC). All five plists'
   WorkingDirectory = release. First runs: NHL run 152 success with release `9fc202c…`; NBA run 417 skipped (quota) with release.
   No guard refusals in either log; no new selector definition rows; release checkout `git status` empty afterwards.
+
+
+## Release venv, always-on API/app, worktree moved — 2026-10-03 20:20–20:35 UTC (Claude Opus 5.5)
+- Release venv vs dev venv: `uv pip freeze` diff empty (43 packages). `release-check` (env -i) nba/nhl: problems [], definitions
+  NBA 1215f3641ad63e4f / NHL 3e2504c4d655c41b; release suite with the release venv: 565 passed; checkout clean.
+- `web` (vite preview from ~/Desktop) hung in state U with an empty log; after `git worktree move` to ~/nba-predictor-live:
+  :4173 200, /history 200, /api via proxy 200 (57/13/44); :8100 health 200. kill -9 of api and web: restarted in ~2 s.
+- Jobs after the switch: NBA 422 and NHL 155 skipped by quota with release 948f1bec; no guard refusals in either log.

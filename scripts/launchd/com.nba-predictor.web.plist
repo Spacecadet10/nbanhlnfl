@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>API_PROXY_TARGET</key>
+		<string>http://127.0.0.1:8100</string>
+		<key>PATH</key>
+		<string>/Users/andry/.local/share/fnm/node-versions/v22.23.2/installation/bin:/usr/bin:/bin</string>
+	</dict>
+	<key>KeepAlive</key>
+	<true/>
+	<key>Label</key>
+	<string>com.nba-predictor.web</string>
+	<key>ProcessType</key>
+	<string>Standard</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/andry/.local/share/fnm/node-versions/v22.23.2/installation/bin/node</string>
+		<string>/Users/andry/nba-predictor-live/frontend/node_modules/vite/bin/vite.js</string>
+		<string>preview</string>
+		<string>--host</string>
+		<string>127.0.0.1</string>
+		<string>--port</string>
+		<string>4173</string>
+		<string>--strictPort</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/web-release.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/web-release.log</string>
+	<key>ThrottleInterval</key>
+	<integer>10</integer>
+	<key>WorkingDirectory</key>
+	<string>/Users/andry/nba-predictor-live/frontend</string>
+</dict>
+</plist>

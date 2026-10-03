@@ -9,17 +9,17 @@
 		<key>NBA_RELEASE_GUARD</key>
 		<string>1</string>
 		<key>NBA_RELEASE_ROOT</key>
-		<string>/Users/andry/Desktop/nba-predictor-live</string>
+		<string>/Users/andry/nba-predictor-live</string>
 	</dict>
 	<key>Label</key>
 	<string>com.nba-predictor.nhl-daily</string>
 	<key>ProcessType</key>
-	<string>Background</string>
+	<string>Standard</string>
 	<key>ProgramArguments</key>
 	<array>
 		<string>/bin/sh</string>
 		<string>-c</string>
-		<string>/Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/bin/python -m app.cli --sport nhl odds; /Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/bin/python -m app.cli --sport nhl daily</string>
+		<string>/Users/andry/nba-predictor-live/backend/.venv/bin/python -m app.cli --sport nhl odds; /Users/andry/nba-predictor-live/backend/.venv/bin/python -m app.cli --sport nhl daily</string>
 	</array>
 	<key>StandardErrorPath</key>
 	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/nhl-daily-launchd.log</string>
@@ -35,6 +35,6 @@
 	<key>ThrottleInterval</key>
 	<integer>60</integer>
 	<key>WorkingDirectory</key>
-	<string>/Users/andry/Desktop/nba-predictor-live/backend</string>
+	<string>/Users/andry/nba-predictor-live/backend</string>
 </dict>
 </plist>

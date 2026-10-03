@@ -1,5 +1,21 @@
 # Current handoff
 
+## Release isolation completed: own venv, always-on API + app, moved off Desktop — Claude (Opus 5.5), 2026-10-03 20:20–20:35 UTC
+- **Release worktree moved** `~/Desktop/nba-predictor-live` -> **`~/nba-predictor-live`** (`git worktree move`; still `release` @
+  `948f1be`, clean). Reason: the new `web` service's `node` hung in state `U` reading the Desktop checkout (macOS privacy
+  permission never granted to that binary); after the move it started at once.
+- **Own venv** `~/nba-predictor-live/backend/.venv` from `backend/requirements-release.txt` (43 packages, `uv pip freeze` of the
+  dev venv, identical versions verified by diff). With it: `release-check` nba/nhl no problems, definitions unchanged (NBA
+  `1215f3641ad63e4f`, NHL `3e2504c4d655c41b`), the release commit's full suite **565 passed** (isolated).
+- **Always-on services** (`scripts/launchd/com.nba-predictor.{api,web}.plist`, KeepAlive + RunAtLoad): API :8100 and built app
+  :4173 (proxies /api to :8100) from the release. Checked: health 200, app 200, deep link 200, proxied record 57/13/44; each
+  killed once with -9 and restarted by launchd in ~2 s. The five jobs now use the release venv and `ProcessType` Standard
+  (Background had deferred the NHL cycle ~7 min). First runs after the switch: NBA 422 / NHL 155 recorded release `948f1bec`
+  (quota skips). Plist backups: `data/backups/launchd-before-release-venv-20261003/`. README "Pinned release" updated.
+- **Items 3–4 were already done by Fable** (injury collector newest-first in `948f1be`, reviewed correct by me; stray worktree
+  removed). The release lags `4a153e8` (presentation only) until the next deliberate move.
+- **Open:** always-on host (user chose option A: a server; provider not chosen yet). The Mac must be awake until then.
+
 ## Open presentation items closed — Claude (Fable 5.1), 2026-10-03 20:05–20:30 UTC
 - At the user's request ("fix the still open items"). API/frontend only: `providers/real.py`, `schemas.py`,
   `agreement_tracking.py` (output flags only), frontend. No identity-hashed file, job path, migration or stored row changed;

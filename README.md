@@ -121,32 +121,38 @@ Run from `backend/`:
   before tipoff is our own closing snapshot (`coverage` → `closing_lines`, with minutes before tipoff). It is not a
   bookmaker-published close, and it exists only for games snapshotted while the collector was running.
 
-## Pinned release for the scheduled jobs
-The launchd jobs (`scripts/launchd/`, installed in `~/Library/LaunchAgents/`) never run this development checkout. They run
-the git worktree `../nba-predictor-live` on branch `release`, with the shared venv (`backend/.venv`) and the shared data folder
-(`NBA_DATA_DIR`). With `NBA_RELEASE_GUARD=1` every scheduled command first checks that the code comes from that clean release
-checkout and that the store's schema equals the release's; otherwise it refuses before any request, lock or migration and
-records a failed job run. Every job run records its release commit (`job_runs.detail.release`). Editing this checkout never
-reaches the live jobs or changes a research definition until the release is moved deliberately.
+## Pinned release: scheduled jobs and the always-on app
+Everything that runs unattended uses the release worktree `~/nba-predictor-live` (branch `release`), never this development
+checkout. It lives outside `~/Desktop` on purpose: macOS asks before a background process may read Desktop, and the web
+service's `node` hung waiting for that permission. Only the data folder stays here (`NBA_DATA_DIR`). The release has its own
+Python environment (`~/nba-predictor-live/backend/.venv`), built from `backend/requirements-release.txt` (exact versions of this
+checkout's venv), so installing packages here never reaches it.
 
+| launchd label | What | Where |
+|---|---|---|
+| `odds`, `nhl-odds`, `injuries`, `daily`, `nhl-daily` | scheduled jobs (`ProcessType` Standard, not deferred) | `release-check` guarded |
+| `api` | read-only API, always on (KeepAlive) | http://127.0.0.1:8100 |
+| `web` | the built app (`vite preview`, proxies `/api` to :8100), always on | http://127.0.0.1:4173 |
+
+With `NBA_RELEASE_GUARD=1` every scheduled command checks that the code comes from the clean release checkout and that the
+store's schema equals the release's; otherwise it refuses before any request, lock or migration and records a failed job run.
+Every job run records its release commit (`job_runs.detail.release`). The dev servers (:8000 API, :5173 Vite) are unaffected.
+
+Move the release only between cycles (no game within 2 h; never mid-evening if an identity-hashed file changed):
 ```sh
-# 1. In this checkout: commit, then run the readiness checks
-backend/.venv/bin/python scripts/check_project.py --ready
-# 2. Between cycles (no game within 2 h; never mid-evening if an identity-hashed file changed): move the release
-git -C ../nba-predictor-live merge --ff-only <commit>
-# 3. Verify (read-only; exit 0, no problems, expected research_definition) for both sports
-cd ../nba-predictor-live/backend && NBA_RELEASE_GUARD=1 NBA_RELEASE_ROOT=$PWD/.. \
-  NBA_DATA_DIR=/Users/andry/Desktop/nba-predictor-sprint1/data \
-  /Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/bin/python -m app.cli --sport nhl release-check
+backend/.venv/bin/python scripts/check_project.py --ready                    # 1. in this checkout, after committing
+git -C ~/nba-predictor-live merge --ff-only <commit>                         # 2. move the release
+uv pip sync --python ~/nba-predictor-live/backend/.venv/bin/python backend/requirements-release.txt   # only if it changed
+(cd ~/nba-predictor-live/frontend && npm ci && npm run build)                # 3. rebuild the app (node from fnm v22.23.2)
+launchctl kickstart -k gui/$(id -u)/com.nba-predictor.api; launchctl kickstart -k gui/$(id -u)/com.nba-predictor.web
+cd ~/nba-predictor-live/backend && NBA_RELEASE_GUARD=1 NBA_RELEASE_ROOT=$HOME/nba-predictor-live \
+  NBA_DATA_DIR=/Users/andry/Desktop/nba-predictor-sprint1/data .venv/bin/python -m app.cli --sport nhl release-check   # 4. and nba
 ```
-- A release with a new migration is refused until the store is migrated deliberately from the release checkout (the same
-  environment as step 3, command `migrate`, for each sport), between cycles and after a backup.
-- Roll back: `git -C ../nba-predictor-live checkout -B release <previous commit>`. Restore the pre-release launchd setup:
-  copy `data/backups/launchd-before-release-20261003/*.plist` to `~/Library/LaunchAgents/`, then `launchctl bootout` and
-  `launchctl bootstrap gui/$(id -u) <plist>` for each job.
-- The venv is shared: installing or upgrading packages in `backend/.venv` reaches the live jobs immediately (and a
-  scikit-learn version change starts new research definitions).
-- The API on :8000 and the Vite app still run from this checkout; only the scheduled jobs are pinned.
+- A release with a new migration is refused until the store is migrated deliberately from the release checkout (same
+  environment as step 4, command `migrate`, each sport), between cycles and after a backup.
+- Roll back: `git -C ~/nba-predictor-live checkout -B release <previous commit>`, then steps 3–4. Pre-release launchd files:
+  `data/backups/launchd-before-release-20261003/` (dev checkout) and `…-before-release-venv-20261003/` (shared venv, Desktop path).
+- The release runs only while this Mac is awake: closing a laptop lid sleeps it. An always-on host is the planned next step.
 
 ## Data store
 SQLite at `data/nba.sqlite`, raw responses in `data/raw/` (both gitignored; override with `NBA_DATA_DIR`).
