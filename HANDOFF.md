@@ -972,3 +972,28 @@ References: PLAN.md; README.md (operation); docs/{EVALUATION_PLAN,BASELINE_REPOR
 
 ## Agreement-objective advisory — Codex, 2026-10-02
 Read the delivery attachment and inspected agreement.py/research_live.py plus CHALLENGER_RESULTS/DATA_SOURCES. New NHL xG and weekly NBA members are explicitly excluded from core votes/averages/stacks. Preserving the old protocol is correct, but a separately registered expanded-combination experiment is still needed to address the user’s main objective. The failed search does not establish that all combinations fail. The report’s broad goalie claim conflates unavailable historical starting-goalie knowledge with existing prospective ESPN probable/confirmed snapshots. No implementation or independent validation of the reported 389 tests performed; no jobs/data changed. Next: inspect exact search universe and add a bounded, separately versioned combination study using the new inputs, without altering the existing core record.
+
+## Independent focused review — Codex, 2026-10-03
+Reviewed audit worktree at 05f085b (suspension timestamp also has an uncommitted change); live remains ab0f190. No implementation, live store, scheduler or model changes; this note only.
+- Confirmed nine goalie sources, including dependent registered combinations, are excluded by selection.entries; zero goalie entries remain selectable.
+- P2 reproduced: providers/real.py:302 filters every market-history/game-detail query to the current sealed version; a game with only an older forecast returns no row. Market APIs provide no version/archive parameter. Preserve version-specific history while avoiding double counting.
+- P2 reproduced: agreement_tracking._stored changes 0.699999 serialization from 0.70000 to 0.69999, but historical tables/summaries keep the same registry/grid validation. _precomputed accepts a pre-fix summary. Version the calculation artifacts and rebuild/validate both tables and summaries before rollout; old chronological checks also require invalidation.
+- Verification: audit worktree backend `.venv/bin/python -m pytest tests/test_audit_pool_tracking.py tests/test_audit_fixes.py -q`: 19 passed in 78.49s; physical-core discovery and sandbox pytest-cache warnings. Two standalone mocked reproductions confirmed the above reporting behaviors; no real-data incidence claim. No full readiness or browser checks in this focused review.
+- Next: current Claude writer fixes these reporting gaps, finishes its review/rehearsals, and verifies final live cycle. Keep one writer; no new model search needed for these fixes.
+
+## Scheduled-loop verification — Claude, 2026-10-03 (read-only; no code, store or scheduler change)
+Checked launchd, `jobs.py`, `research_live.decide_due` and both stores (query_only).
+- Wired and running: 5 LaunchAgents loaded, last exit 0 (odds 15 min: 209 runs; nhl-odds 30 min: 73; daily 22:00: 4; nhl-daily 22:15: 2; injuries: 103). `odds` → `forecast_due` → weekly decisions, two-hour forecasts, markets, cohorts, selections, pool, tracking. Settlement is derived at read time from refreshed results (no separate job).
+- Seen on real NHL data (launchd log holds runs 108 and 113): 5 games forecast, 580 market forecasts, 60 selections all `no_pick`, decisions all `insufficient_evidence` (0 settled cohorts); run 108 failed, run 113 succeeded 43 min later.
+- Not demonstrated: an active rule applied to a game; a decision using settled results; any NBA cycle (preseason only until 10-20; 0 forecasts/cohorts); a live NBA weekly refit; the 2026-10-05 Monday decision.
+- Gap: `definition()` hashes source files and `evidence()` filters by definition, so each edit to those files restarts selector evidence. 8 NBA / 7 NHL definitions since 10-02; the 5 NHL games' cohorts sit under two older definitions, current definition has 0 cohorts.
+- Gap: tracking-v2 observations exist for 1 of the 5 games (recording began 01:12Z). No failure alert beyond job_runs/logs. Runs only while the Mac is awake; a missed Monday decision is not written retroactively (previous carried one week).
+- Next: freeze the hashed files (or decide how evidence carries across definitions) before evidence accrues; re-verify after 10-05 14:00Z and after the first NBA regular-season cycle.
+
+## Old-project source lessons — Codex, 2026-10-03
+User explicitly authorized reading unified_sports_platform; inspected temporary clone at 37d9a0d (no execution, model deserialization or changes to that repository). Focused source review only; no current-app implementation changes.
+- smart_consensus.py:384 tests agreeing pairs, triple majority and triple unanimity; ranks the supplied outcomes without an independent later-period evaluation inside that method.
+- adaptive_consensus.py:307 searches agreement fractions 50–95% per sport/market, separate from probability; maximizes accuracy*sqrt(coverage) on the same supplied outcomes. Useful behavior concept, not validated performance.
+- threshold_optimizer.py:218 learns separate agreement/probability ranges on earlier records, but test block at :317 evaluates edge caps rather than the complete learned agreement/probability rule. Do not port its validation claim.
+- Key requirement to reconcile after current audit: exact subset × sport/market/line × vote-agreement fraction/range × probability-confidence range. These are distinct axes; keep majority ties and missing members explicit. Evaluate the complete frozen conjunction on later games; keep historical starting policy separate from prospective evidence.
+- No tests or accuracy reproduction for old project; no old performance claim endorsed. Next: current writer maps these concepts to existing tracking/selector before implementing anything additional. Preserve one writer.
