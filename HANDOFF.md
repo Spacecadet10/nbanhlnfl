@@ -1,5 +1,26 @@
 # Current handoff
 
+## API deadlock fix — Claude (Opus 5.5, took over at the user's request), 2026-10-03 19:25–20:05 UTC
+- **Critical bug in `6e70a4e`:** `get_provider` took a process-wide `threading.Lock` inside FastAPI's worker pool. A burst
+  larger than the pool (40 threads) parked every worker on the lock while the holder needed one for its endpoint: on a store
+  copy, 60 concurrent `/api/meta` requests all timed out (40 s) and `/api/health` stopped answering until a restart. The live
+  :8000 (restarted 19:18:53 UTC on that code) was exposed; two dev-mode Performance tabs (~28 requests each) could hang it.
+- **Fix (`main.py`, not identity-hashed):** the same process-wide turn, but waited for on a thread of its own capacity
+  limiter (never the shared pool); release guaranteed in `finally` even if the request is cancelled after acquiring; a
+  request whose client already hung up while queued is not served (499), so abandoned heavy requests no longer block the
+  queue (20 hung-up joint-evaluate requests had delayed the next request > 10 s; now 0.83 s).
+- **Tests:** `tests/test_api_concurrency.py` (3): 8 concurrent requests with a 3-thread pool (hung, killed after 90 s, on
+  `6e70a4e`; passes now), abandoned-while-queued -> 499 and the turn freed, store error inside an endpoint -> 503 and the turn
+  freed. Fable's `test_store_backed_requests_are_served_one_at_a_time` still passes. Full isolated suite: **559 passed**,
+  typecheck ok. Store-copy server: 60 and 120 concurrent requests all 200 (1.3 s / 2.3 s), health ok, page burst 0.9–1.0 s.
+- **Fable's `6e70a4e` otherwise verified:** 16 of its 21 new tests fail on `9386f80` (the other 5 cover earlier fixes; the
+  opening-price one can never fail: SQLite's index returns 'current' first). Fixes reviewed correct: read-only CLI, lock-busy
+  trace, late/corrected result stamping, one-definition rule record, freshness as missed games, earlier-line-rule label,
+  50% no-pick, Brier 0–2 labels, push-free quote basis, demo store lock, props after forecasts (except `jobs.scheduler`'s odds
+  loop, still props-first; launchd does not use it). Candidate fingerprint fix is partial by design (existing artifacts kept).
+- **Not mine, left uncommitted:** `injuries.py` / `test_injuries.py` (newest report first) — another writer was editing them
+  at 19:30 UTC. Live :8000 needs a restart to load this fix.
+
 ## "Fix them all" batch — Claude (Fable 5.1), 2026-10-03 18:58–19:25 UTC. **Committed as `6e70a4e` (tree clean). RESEARCH DEFINITIONS CHANGED.**
 - **FREEZE until tonight's NHL games finish (~05:00 UTC Oct 4):** no edits to identity-hashed files (`models/*.py`,
   `backtest.py`, `agreement.py`, `availability*.py`, `combine.py`, `research_live.py`, `markets.py`, `market_live.py`,

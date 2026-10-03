@@ -3,10 +3,13 @@
 import os
 import sqlite3
 import threading
+from contextlib import contextmanager
 from datetime import date
-from typing import Iterator, Optional
+from typing import AsyncIterator, Iterator, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+import anyio
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import config, db, sports
@@ -40,12 +43,37 @@ def api_mode() -> str:
 # One store-backed request at a time. Each request is a few milliseconds of small SQLite reads; run concurrently in the
 # thread pool they contend so badly that 13 requests took ~9 s instead of ~0.25 s (measured on a store copy, 2026-10-03:
 # the time is in the reads themselves, not in opening, the journal pragma or closing). Serialising them is the fix.
-_STORE_REQUESTS = threading.Lock()
+# Waiting for the turn must never occupy the shared worker pool (40 threads): a waiter blocked inside a pool thread is a
+# thread the request holding the turn cannot get for its endpoint, so a burst larger than the pool deadlocked the whole API
+# (2026-10-03). The wait therefore runs on a thread of its own capacity limiter; the turn is one process-wide lock, so it
+# holds across event loops too.
+_STORE_TURN = threading.Lock()
 
 
-def get_provider(mode: str = Depends(api_mode), sport: str = SPORT) -> Iterator:
-    with _STORE_REQUESTS:      # a plain Lock: FastAPI may finish the dependency on another pool thread than it started on
-        yield from _provider(mode, sport)
+async def get_provider(request: Request, mode: str = Depends(api_mode), sport: str = SPORT) -> AsyncIterator:
+    held = {"turn": False}
+
+    def take_turn() -> None:
+        _STORE_TURN.acquire()
+        held["turn"] = True          # set in the thread: a request cancelled after acquiring still releases in `finally`
+
+    try:
+        await anyio.to_thread.run_sync(take_turn, limiter=anyio.CapacityLimiter(1))
+        if await request.is_disconnected():
+            # The client gave up while queued: serving it anyway would make every later request wait for abandoned work.
+            raise HTTPException(status_code=499, detail="Client closed the request before it was served")
+        cm = contextmanager(_provider)(mode, sport)
+        provider = await run_in_threadpool(cm.__enter__)          # opens the store off the event loop
+        try:
+            yield provider
+        except BaseException as exc:                              # e.g. a store error inside the endpoint -> 503
+            if not await run_in_threadpool(cm.__exit__, type(exc), exc, exc.__traceback__):
+                raise
+        else:
+            await run_in_threadpool(cm.__exit__, None, None, None)
+    finally:
+        if held["turn"]:
+            _STORE_TURN.release()
 
 
 def _provider(mode: str, sport: str) -> Iterator:

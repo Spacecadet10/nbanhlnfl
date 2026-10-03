@@ -508,3 +508,13 @@ Scope: extended `agreement_tracking`, its API and the existing Performance compo
   ("· pending · void · unscorable") because :8000 still ran the old code; after the user-requested restart (16:49 UTC) the live
   NHL History and Today record lines show "44 pending · 0 void · 0 unscorable" and match the API. Demo-mode rendering was not
   rechecked by the reviewer (no demo service running).
+
+
+## API deadlock fix — 2026-10-03 19:25–20:05 UTC (Claude Opus 5.5)
+- Reproduced on `6e70a4e` with a temporary API on a store backup copy (`NBA_DATA_DIR=<scratch snapshot> uvicorn ... --port 8093`):
+  60 concurrent `/api/meta` -> 60 × timeout (curl exit 28, 40 s), then `/api/health` no answer.
+- After the fix, same server setup: 60 concurrent -> 60 × 200 in 1.31 s; 120 -> 120 × 200 in 2.3 s; health 200; 14-request
+  Performance burst 0.91–0.99 s; 20 clients hanging up mid-request on joint evaluate, then `/api/meta` 200 in 0.83 s.
+- `tests/test_api_concurrency.py`: the 8-request/3-thread case hangs on `6e70a4e` (killed at 90 s, exit 142) and passes now.
+  Limitation: on a regression it hangs rather than failing fast (the test client waits for stuck requests on exit).
+- Full suite with `NBA_DATA_DIR=<empty scratch>`: 559 passed; `tsc --noEmit` ok. Temporary server stopped.
