@@ -1,5 +1,32 @@
 # Current handoff
 
+## Reconciliation of parallel work (option 1) — Claude (Opus 5.5, session andry-03), 2026-10-03 02:09–03:40 UTC
+Single writer established: sessions -09 and -92 confirmed they made no commits; -c7 confirmed it made 803cee0..aa1e1b4 and
+went read-only; all three stay read-only until reassigned (Codex process not reachable; no Codex commits seen). Branches
+preserved: `backup/shadow-season-aa1e1b4`, `backup/pool-selector-20f27fe`. Live fast-forwarded aa1e1b4 → 914c827 at
+03:23:24Z (no job running; backups `data/backups/{nba,nhl}-before-reconcile-20261003.sqlite`, integrity ok, schema 22).
+- **Canonical:** tracking-v2 (`agreement_tracking`, sealed registry f07a54a0…, migrations 0021/0022) and the training
+  status (`training_monitor`, `/api/research/training`). Removed as duplicates: `discovery_tracking.py`,
+  `/api/research/discovery`, DiscoveryCard. **Never fast-forward live to `pool-selector`.**
+- **Kept with original identities:** discovery-v1 (MODEL_SELECTION §20, registered as §18 in 2e55096), tuning-v1 (§21,
+  registered as §19 in 942676c), gap-fill, daily-v1; outputs copied to `data/reports/{discovery-v1,discovery-v1-run1,
+  tuning-v1,gapfill-v1,daily-v1-*}` and `data/research/tuning/`. Their results are not relabelled as tracking-v2 results.
+- **Ported behaviour:** tracking-v2 reports the required descriptive grid (cumulative 50–90%, reg3 35–70%, 5-point bands
+  incl. NHL [1/3,0.35) and [0.35,0.40)); `sealed` cells only in the leaderboard and checks; summaries rebuilt
+  (`tracking-historical`, grid `report-grid-v1`, 03:23–03:26Z).
+- **Fixes (each with a test that fails on aa1e1b4):** timing bug (live run 108: a game starting mid-cycle → skip, no
+  `AttributeError`, trigger refusal = skip, no member forecasts for a started game; new core research definition, selectors
+  have no decision in force until Monday 14:00Z); game card latest cohort per market; prop collection starvation;
+  monitoring suffix constant. Tooling report corrected: LightGBM/XGBoost deferred/untested.
+- **Verification:** `check_project.py --ready` on 914c827 exit 0 (490 passed). Rehearsals on fresh copies of the live
+  stores (schema 22), final code: NHL 8 games → 48 cohorts, 168 candidate rows, 24 pool selections, 1,976 tracking rows, 0
+  errors; NBA 1 game → 5 cohorts, 29 candidate rows, 583 tracking rows; second identical cycle 0 new rows in every table
+  for both. Independent read-only review (Opus 5.5): 0 critical/high; 4 medium + 6 low → all resolved on re-review.
+  Live after merge: NHL odds/refresh 03:26Z and NBA odds 03:33Z success; tracking report serves the new grid.
+- **Remaining:** first live research cycle on the new code is the NHL window ~21:00Z today (unverified until then);
+  the API preview on :8000 (started by -c7) still runs the old code until restarted; LOW: trigger refusal matched by
+  message text; a plain-read window before member writes (guarded by the ledger); NGBoost not installed live.
+
 ## Agreement tracking tracking-v2, feature tranche, training status, prop collection — Claude (Opus 5.5), 2026-10-03 00:00–01:30 UTC
 Single writer. Live checkout `shadow-season` (backend code changes developed in worktree `../nba-predictor-features`, branch
 `features-v1`, fast-forwarded after tests). Commits 803cee0..(this handoff) on top of 31c19af.
