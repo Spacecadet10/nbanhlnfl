@@ -102,3 +102,10 @@ def test_frontend_types_match_the_tracking_rows(tmp_path, monkeypatch):
     g = dt.historical("nhl", "spread")["groups"][0]
     optional = {"mean_conf", "log_loss", "brier", "best_prior_single_matched", "seasons", "lines", "line_label"}
     assert fields("DiscoveryGroup") - optional <= set(g)
+
+
+def test_registered_only_counts_the_registered_groups(store, tmp_path, monkeypatch):  # noqa: F811
+    write_tables(tmp_path, monkeypatch, [hrow(2025, ">=0.60", 200, 120, 70), hrow(2025, ">=0.65", 100, 60, 35)],
+                 [{"group": GROUP["group"], "threshold": 0.65, "why": "top point lift"}])
+    out = dt.report(store, "nhl", "spread", "2026-10-12T12:00:00Z", registered_only=True)
+    assert out["historical"]["groups_matched"] == 1 and out["historical"]["groups"][0]["level"] == ">=0.65"

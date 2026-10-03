@@ -290,3 +290,9 @@ button,input,select { min-height:44px; }
 .research-combined th, .research-combined td { font-style: italic; }
 .audit { margin-top: 0.4rem; }
 .retrospective > summary { cursor: pointer; }
+
+.model-chips { display:flex; flex-wrap:wrap; gap:6px 14px; border:1px solid var(--border); border-radius:10px; padding:10px 14px; margin:0 0 14px; }
+.model-chips legend { padding:0 6px; color:var(--muted); }
+.model-chips label { display:inline-flex; align-items:center; gap:6px; }
+.model-chips input[type=checkbox] { min-height:0; width:16px; height:16px; }
+.model-chips .registered-only { flex-basis:100%; font-weight:600; }

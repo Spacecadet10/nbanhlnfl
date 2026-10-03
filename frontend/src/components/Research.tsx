@@ -535,15 +535,16 @@ function DiscoveryBody(p: { r: DiscoveryReport; models: string[]; setModels: (m:
   return <>
     <p className="small muted">{r.note} {r.registered_rules ?? 0} rules registered for prospective evaluation (selected on every
       historical season).</p>
-    <div className="filters small">
+    <div className="filters">
       <label>Agreement / combination <select value={p.method} onChange={(e) => p.setMethod(e.target.value)}>
-        <option value="">All</option>{(r.methods ?? []).map((m) => <option key={m} value={m}>{METHOD[m] ?? m}</option>)}</select></label>{' '}
+        <option value="">All</option>{(r.methods ?? []).map((m) => <option key={m} value={m}>{METHOD[m] ?? m}</option>)}</select></label>
       <label>Confidence <select value={p.level} onChange={(e) => p.setLevel(e.target.value)}>
-        <option value="">All thresholds and bands</option>{(r.levels ?? []).map((l) => <option key={l} value={l}>{levelLabel(l)}</option>)}</select></label>{' '}
-      <label><input type="checkbox" checked={p.registered} onChange={(e) => p.setRegistered(e.target.checked)} /> Registered rules only</label>
-      <div className="chips">Models (all must be in the group): {(r.members ?? []).map((m) =>
-        <label key={m} className="chip"><input type="checkbox" checked={p.models.includes(m)} onChange={() => toggle(m)} /> {modelName(m)}</label>)}</div>
+        <option value="">All thresholds and bands</option>{(r.levels ?? []).map((l) => <option key={l} value={l}>{levelLabel(l)}</option>)}</select></label>
     </div>
+    <fieldset className="model-chips small"><legend>Models (the group must contain every model ticked)</legend>
+      {(r.members ?? []).map((m) => <label key={m}><input type="checkbox" checked={p.models.includes(m)} onChange={() => toggle(m)} /> {modelName(m)}</label>)}
+      <label className="registered-only"><input type="checkbox" checked={p.registered} onChange={(e) => p.setRegistered(e.target.checked)} /> Registered rules only</label>
+    </fieldset>
     {p.method && r.confidence?.[p.method] && <p className="small muted">Confidence for this rule: {r.confidence[p.method]}.</p>}
     <h3>Historical (exploratory)</h3>
     {r.historical && <DiscoveryTable part={r.historical} prospective={false} />}

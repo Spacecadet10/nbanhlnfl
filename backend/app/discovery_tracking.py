@@ -231,6 +231,7 @@ def report(conn, sport: str, market: str, as_of: str, *, models=None, method=Non
     if registered_only:
         for part in ("historical", "prospective"):
             if part in out and "groups" in out[part]:
-                out[part]["groups"] = [g for g in out[part]["groups"] if g.get("registered")][:limit]
+                kept = [g for g in out[part]["groups"] if g.get("registered")]
+                out[part]["groups_matched"], out[part]["groups"] = len(kept), kept[:limit]
     out["registered_rules"] = len(registered(sport, market))
     return out
