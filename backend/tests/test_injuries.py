@@ -123,7 +123,8 @@ def test_run_budget_exhausted_mid_retry(conn, monkeypatch):
     monkeypatch.setattr(injuries, "MAX_ATTEMPTS_PER_RUN", 3)
     calls = []
     out = collect(conn, down(calls))
-    assert calls == [NAMES[0], NAMES[0], NAMES[1]] and out["attempts"] == 3 and out["deferred"] == 1
+    # Newest report first: the latest slot is retried, then the next newest; the oldest waits for the next run.
+    assert calls == [NAMES[2], NAMES[2], NAMES[1]] and out["attempts"] == 3 and out["deferred"] == 1
 
 
 def test_requests_are_spaced_by_the_crawl_delay_or_backoff(conn):
@@ -148,7 +149,7 @@ def test_not_available_is_retried_on_later_runs_then_given_up(conn):
         calls.append(name)
         return ok(pdf(name)) if name != NAMES[2] or len(calls) > 9 else Response(403, None, None, None)
     first = collect(conn, fetch)
-    assert first["stored"] == NAMES[:2] and first["not_available"] == [NAMES[2]] and first["status"] == "success"
+    assert sorted(first["stored"]) == NAMES[:2] and first["not_available"] == [NAMES[2]] and first["status"] == "success"
     assert calls.count(NAMES[2]) == 1          # a 403 is not retried within the same run
     for _ in range(3):
         out = collect(conn, lambda n: Response(403, None, None, None))
@@ -177,12 +178,12 @@ def test_rerun_stores_nothing_twice_and_late_catch_up_keeps_its_true_time(conn):
     collect(conn, lambda n: ok(pdf(n)))
     again = collect(conn, lambda n: ok(pdf(n)))
     assert again["attempts"] == 0 and again["already_stored"] == 3 and len(attempts(conn)) == 3
-    assert [r[0] for r in conn.execute("SELECT late FROM injury_report_attempts")] == [1, 1, 0]   # 61, 31 and 1 min after
+    assert [r[0] for r in conn.execute("SELECT late FROM injury_report_attempts")] == [0, 1, 1]   # newest first: 1, 31 and 61 min after
     # The machine was asleep: the 12:30Z to 14:00Z reports are fetched at 14:01Z, each stamped 14:01Z.
     later = collect(conn, lambda n: ok(pdf(n)), now=datetime(2026, 10, 19, 14, 1, tzinfo=UTC))
     rows = conn.execute("SELECT slot_at, completed_at, late FROM injury_report_attempts ORDER BY attempt_id").fetchall()[3:]
     assert len(later["stored"]) == 4 and all(r["completed_at"] == "2026-10-19T14:01:00Z" for r in rows)
-    assert [(r["slot_at"][11:16], r["late"]) for r in rows] == [("12:30", 1), ("13:00", 1), ("13:30", 1), ("14:00", 0)]
+    assert [(r["slot_at"][11:16], r["late"]) for r in rows] == [("14:00", 0), ("13:30", 1), ("13:00", 1), ("12:30", 1)]
 
 
 # ---- 7. overwrite check --------------------------------------------------------------------------------------------
@@ -333,10 +334,10 @@ def test_nothing_is_collected_while_the_switch_is_off(conn, monkeypatch):
     assert out["status"] == "disabled" and calls == [] and attempts(conn) == []
     assert conn.execute("SELECT COUNT(*) FROM job_runs").fetchone()[0] == 0
     dry = jobs.injury_reports(conn, dry_run=True, now=EARLY, fetch=lambda n: calls.append(n) or ok(pdf()))
-    assert dry["dry_run"] and dry["would_request"] == NAMES and calls == [] and attempts(conn) == []
+    assert dry["dry_run"] and dry["would_request"] == NAMES[::-1] and calls == [] and attempts(conn) == []
     monkeypatch.setenv("NBA_INJURY_COLLECTION", "1")
     on = jobs.injury_reports(conn, now=EARLY, fetch=lambda n: ok(pdf(n)), sleep=lambda _s: None)
-    assert on["status"] == "success" and on["attempts"] == 3 and on["stored"] == NAMES
+    assert on["status"] == "success" and on["attempts"] == 3 and on["stored"] == NAMES[::-1]
     assert [tuple(r) for r in conn.execute("SELECT job, status, attempts FROM job_runs")] == [("injuries", "success", 3)]
     bad = jobs.injury_reports(conn, enabled=True, now=datetime(2026, 10, 19, 12, 31, tzinfo=UTC), fetch=down([]),
                               sleep=lambda _s: None)
@@ -389,3 +390,16 @@ def test_coverage_summary_and_replay_leave_the_collection_alone(conn, monkeypatc
     before = attempts(conn, "*")
     ingest.replay(conn)                                   # nothing to parse for this source
     assert attempts(conn, "*") == before
+
+
+def test_missing_older_reports_never_delay_the_newest_one(conn, monkeypatch):
+    """With the run's budget smaller than the queue, the newest due report is fetched in the first run even though older
+    slots are missing (the injury-aware forecast needs the latest report within 60 minutes)."""
+    monkeypatch.setattr(injuries, "MAX_ATTEMPTS_PER_RUN", 1)
+    calls = []
+
+    def fetch(name):
+        calls.append(name)
+        return ok(pdf(name)) if name == NAMES[2] else Response(404, None, None, None)
+    out = collect(conn, fetch)
+    assert calls == [NAMES[2]] and out["stored"] == [NAMES[2]] and out["deferred"] == 2

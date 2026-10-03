@@ -102,6 +102,13 @@ def plan(conn: sqlite3.Connection, now: datetime) -> dict:
     return out
 
 
+def _newest_first(pending: list) -> list:
+    """Collection order: the newest due report first. A missing (404) older slot costs one attempt per run until it is
+    given up; with several of them ahead in the queue the latest report, the one the injury-aware forecast needs within
+    60 minutes, could wait for runs. Older slots are still collected with the rest of the run's budget."""
+    return sorted(pending, key=lambda slot: slot.at, reverse=True)
+
+
 def attempts_since(conn: sqlite3.Connection, since: datetime) -> int:
     return conn.execute("SELECT COUNT(*) FROM injury_report_attempts WHERE started_at > ?", (_fmt(since),)).fetchone()[0]
 
@@ -178,7 +185,7 @@ def run(conn: sqlite3.Connection, *, now: Optional[datetime] = None, dry_run: bo
            "deferred": 0, "attempts": 0, "overwrite_check": {"checked": 0, "unchanged": 0, "changed": [], "failed": 0, "redownload_failed": []},
            "budgets": {"per_run": MAX_ATTEMPTS_PER_RUN, "per_slot": MAX_ATTEMPTS_PER_SLOT, "per_day": MAX_ATTEMPTS_PER_DAY}}
     if dry_run:
-        return {**out, "dry_run": True, "would_request": [s.name for s in p["pending"]][:MAX_ATTEMPTS_PER_RUN]}
+        return {**out, "dry_run": True, "would_request": [s.name for s in _newest_first(p["pending"])][:MAX_ATTEMPTS_PER_RUN]}
     budget = max(0, min(MAX_ATTEMPTS_PER_RUN, MAX_ATTEMPTS_PER_DAY - attempts_since(conn, now - timedelta(hours=24))))
 
     def spend(wait: float) -> None:
@@ -189,7 +196,7 @@ def run(conn: sqlite3.Connection, *, now: Optional[datetime] = None, dry_run: bo
         budget -= 1
         out["attempts"] += 1
 
-    for slot in p["pending"]:
+    for slot in _newest_first(p["pending"]):
         if budget <= 0:
             out["deferred"] += 1
             continue
