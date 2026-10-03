@@ -131,7 +131,7 @@ function TrackingBody({ r, sport, market, f }: { r: TrackingReport; sport: Sport
           <th scope="row" className="wrap">{groupLabel(l)}</th><td>{l.threshold == null ? 'every pick' : pct(l.threshold, 0)}</td>
           <td>{l.decided} ({pct(l.coverage, 0)})</td><td>{pct(l.win_rate, 1)} <span className="muted">{ci(l.ci95)}</span></td>
           <td>{pct(l.anchor_win_rate, 1)} <span className="muted">({modelName(l.anchor)})</span></td>
-          <td>{(l.lift * 100).toFixed(1)} pts</td><td className={l.lower_adjusted > 0 ? 'ok' : 'muted'}>{(l.lower_adjusted * 100).toFixed(1)} pts</td></tr>)}</tbody>
+          <td>{(l.lift * 100).toFixed(1)} pts</td><td className={l.lower_adjusted > 0 && r.evidence === 'prospective' ? 'ok' : 'muted'}>{(l.lower_adjusted * 100).toFixed(1)} pts</td></tr>)}</tbody>
       </table></div>}
     <h3>All groups</h3>
     {r.groups.length === 0 ? <Empty>No group matches these filters.</Empty> : <div className="table-wrap"><table className="table small tracking-table">
@@ -193,11 +193,12 @@ export function TrackingGameCard({ sport, gameId }: { sport: Sport; gameId: stri
         <summary><strong>{m.market}</strong>{m.line != null && ` ${m.line}`} — {m.groups} groups:{' '}
           {Object.entries(m.counts).map(([k, n]) => `${n} ${SIDE[k] ?? STATUS[k] ?? k}`).join(' · ')}</summary>
         <p className="small muted">Recorded {dateTime(m.recorded_at)} · definition {m.definition.slice(0, 16)}</p>
-        {m.picks.length > 0 && <div className="table-wrap"><table className="table small">
-          <thead><tr><th>Group (most confident first)</th><th>Pick</th><th>Confidence</th></tr></thead>
+        {m.picks.length > 0 && <details className="small"><summary>Classifications by group (research; not picks, regardless of evidence)</summary>
+          <div className="table-wrap"><table className="table small">
+          <thead><tr><th>Group (highest rule statistic first)</th><th>Side</th><th>Rule statistic</th></tr></thead>
           <tbody>{m.picks.map((p) => <tr key={p.group}><th scope="row" className="wrap">{p.group}</th><td>{SIDE[p.side] ?? p.side}</td>
             <td>{pct(p.statistic, 1)}{p.votes && <span className="muted"> ({p.votes.a ?? 0}–{p.votes.b ?? 0}{p.votes.mid ? `–${p.votes.mid}` : ''} votes)</span>}</td></tr>)}</tbody>
-        </table></div>}
+        </table></div></details>}
         {m.incomplete.length > 0 && <p className="small warn">Incomplete: {m.incomplete.map((x) => `${x.group} (${Object.keys(x.missing).join(', ')})`).join('; ')}</p>}
       </details>)}<p className="small muted">{t.note}</p></>}</AsyncView>
   </div>;

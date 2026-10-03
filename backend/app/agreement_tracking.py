@@ -23,6 +23,7 @@ import hashlib
 import importlib.util
 import json
 import math
+import sqlite3
 from bisect import bisect_left
 from collections import Counter, defaultdict
 from functools import lru_cache
@@ -72,9 +73,9 @@ def bands(market: str) -> list[list[float]]:
 
 
 def band_label(market: str, lo: float, hi: float) -> str:
-    floor = 1 / 3 if market == "reg3" else 0.5
-    left = f"{floor:.2f}" if lo == 0.0 else f"{lo:.2f}"
-    return f"{left}–{hi:.2f}" if hi <= 1.0 else f"≥ {lo:.2f}"
+    if lo == 0.0:      # also holds majority confidences below the floor (dissenters lower the mean)
+        return f"below {hi:.2f}"
+    return f"{lo:.2f}–{hi:.2f}" if hi <= 1.0 else f"≥ {lo:.2f}"
 
 
 # --- Registry -------------------------------------------------------------------------------------------------------
@@ -283,7 +284,9 @@ def classify(group: dict, vectors: dict, market: str, pool_model: Optional[dict]
         out["votes"] = {SIDE_NAMES[i]: c for i, c in counts.items()} | {"abstain": picks.count(None), "n": len(picks)}
         top = max(counts.values())
         leaders = [i for i, c in counts.items() if c == top]
-        if len(leaders) > 1:
+        if top == 0:
+            out["status"] = "no_majority"           # every member abstained
+        elif len(leaders) > 1:
             out["status"] = "tie"
         elif top <= len(picks) / 2:
             out["status"] = "no_majority"
@@ -314,7 +317,7 @@ def _has(conn, table: str) -> bool:
     return conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone() is not None
 
 
-def _inputs(conn, core_row, expanded_row) -> tuple[dict, dict, str]:
+def _inputs(conn, core_row, expanded_row, now: str = "9999") -> tuple[dict, dict, str]:
     """Member vectors for one cohort: core members, shadows/expanded stacker from the paired expanded cohort, the core
     stacker, and the latest candidate forecast made against this core cohort (same exact line) before the start."""
     vectors, info = {}, {}
@@ -337,11 +340,11 @@ def _inputs(conn, core_row, expanded_row) -> tuple[dict, dict, str]:
     if _has(conn, "candidate_forecasts"):
         for r in conn.execute(
                 "SELECT * FROM candidate_forecasts f WHERE f.game_id=? AND f.market=? AND f.line_ref=? AND f.line IS ? "
-                "AND f.tipoff_at=? AND f.generated_at < f.tipoff_at AND f.forecast_id = (SELECT x.forecast_id FROM "
+                "AND f.tipoff_at=? AND f.generated_at < f.tipoff_at AND f.generated_at <= ? AND f.forecast_id = (SELECT x.forecast_id FROM "
                 "candidate_forecasts x WHERE x.game_id=f.game_id AND x.market=f.market AND x.line_ref=f.line_ref "
-                "AND x.candidate=f.candidate AND x.generated_at < x.tipoff_at ORDER BY x.generated_at DESC, x.forecast_id DESC LIMIT 1)",
+                "AND x.candidate=f.candidate AND x.generated_at < x.tipoff_at AND x.generated_at <= ? ORDER BY x.generated_at DESC, x.forecast_id DESC LIMIT 1)",
                 (core_row["game_id"], core_row["market"], f"research_cohorts:{core_row['cohort_id']}", core_row["line"],
-                 core_row["tipoff_at"])):
+                 core_row["tipoff_at"], now, now)):
             vectors[r["candidate"]] = (r["p_a"], r["p_mid"], r["p_b"])
             info[r["candidate"]] = {"name": r["candidate"], "ref": {"table": "candidate_forecasts", "id": r["forecast_id"]},
                                     "version": r["model_version"], "p": [r["p_a"], r["p_mid"], r["p_b"]],
@@ -377,8 +380,9 @@ def record(conn, *, game_ids: list, now: Optional[str] = None, write: bool = Tru
     try:
         reg = reg or load_registry()
         out["registry"] = reg["sha256"][:16]
-        if not _has(conn, "agreement_observations"):
-            return {**out, "status": "skipped", "reason": "migration 0021 not applied"}
+        if not _has(conn, "agreement_observations") or "inputs_digest" not in \
+                {r[1] for r in conn.execute("PRAGMA table_info(agreement_observations)")}:
+            return {**out, "status": "skipped", "reason": "migrations 0021/0022 not applied to this store"}
         sport = conn.execute("SELECT sport FROM store_identity").fetchone()[0]
         rows = []
         for core, exp in _pairs(conn, game_ids, now):
@@ -387,7 +391,7 @@ def record(conn, *, game_ids: list, now: Optional[str] = None, write: bool = Tru
                 continue
             out["cohorts"] += 1
             try:
-                vectors, info, latest = _inputs(conn, core, exp)
+                vectors, info, latest = _inputs(conn, core, exp, now)
                 if latest >= core["tipoff_at"]:
                     out["errors"][f"{core['game_id']}:{core['market']}"] = "an input is not earlier than the start"
                     continue
@@ -415,14 +419,21 @@ def record(conn, *, game_ids: list, now: Optional[str] = None, write: bool = Tru
             except Exception as exc:     # one cohort never blocks the others
                 out["errors"][f"{core['game_id']}:{core['market']}"] = f"{type(exc).__name__}: {exc}"
         if write and rows:
-            with transaction(conn):
-                for r in rows:
-                    cur = conn.execute(
-                        "INSERT OR IGNORE INTO agreement_observations (registry, group_id, sport, game_id, market, line, "
-                        "line_source, cohort_id, source_cohort_id, definition, kind, members, missing, version_sig, inputs_digest, status, "
-                        "side, statistic, vector, votes, information_at, tipoff_at, recorded_at) VALUES "
-                        "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", r)
-                    out["created" if cur.rowcount else "already_recorded"] += 1
+            by_cohort = defaultdict(list)
+            for r in rows:
+                by_cohort[(r[3], r[4], r[7])].append(r)
+            for key, batch in by_cohort.items():      # one transaction per cohort: a rejected row never drops the others
+                try:
+                    with transaction(conn):
+                        for r in batch:
+                            cur = conn.execute(
+                                "INSERT OR IGNORE INTO agreement_observations (registry, group_id, sport, game_id, market, "
+                                "line, line_source, cohort_id, source_cohort_id, definition, kind, members, missing, "
+                                "version_sig, inputs_digest, status, side, statistic, vector, votes, information_at, "
+                                "tipoff_at, recorded_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", r)
+                            out["created" if cur.rowcount else "already_recorded"] += 1
+                except sqlite3.DatabaseError as exc:
+                    out["errors"][f"{key[0]}:{key[1]}"] = f"{type(exc).__name__}: {exc}"
         elif not write:
             out["would_write"] = len(rows)
         if out["errors"]:
@@ -577,6 +588,23 @@ def leaderboard(groups: list, market: str, searched: int) -> list:
     return sorted(out, key=lambda r: (-r["lower_adjusted"], -r["decided"], r["id"]))[:25]
 
 
+def day_bounds(date_from=None, date_to=None) -> tuple[Optional[str], Optional[str]]:
+    """US Eastern calendar days (the app's game dates) as UTC [start, end) bounds."""
+    from datetime import date as _date, datetime as _dt, time as _time, timedelta as _td
+    from zoneinfo import ZoneInfo
+    et = ZoneInfo("America/New_York")
+
+    def start(d):
+        d = d if isinstance(d, _date) else _date.fromisoformat(str(d))
+        return _dt.combine(d, _time(0), et).astimezone(__import__("datetime").timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    lo = start(date_from) if date_from else None
+    hi = None
+    if date_to:
+        d = date_to if isinstance(date_to, _date) else _date.fromisoformat(str(date_to))
+        hi = start(d + _td(days=1))
+    return lo, hi
+
+
 # --- Prospective report ---------------------------------------------------------------------------------------------
 def _state(row) -> str:
     if row["status"] in ("postponed", "canceled") or row["game_tipoff_at"] != row["tipoff_at"]:
@@ -596,12 +624,13 @@ def prospective_items(conn, reg: dict, sport: str, market: str, date_from=None, 
            "JOIN research_cohorts c ON c.cohort_id=o.source_cohort_id LEFT JOIN game_decisions d ON d.game_id=o.game_id "
            "WHERE o.registry=? AND o.market=?")
     params = [reg["sha256"], market]
-    if date_from:
+    lo, hi = day_bounds(date_from, date_to)
+    if lo:
         sql += " AND o.tipoff_at >= ?"
-        params.append(f"{date_from}T00:00:00Z")
-    if date_to:
-        sql += " AND o.tipoff_at <= ?"
-        params.append(f"{date_to}T23:59:59Z")
+        params.append(lo)
+    if hi:
+        sql += " AND o.tipoff_at < ?"
+        params.append(hi)
     if version:
         sql += " AND (o.definition LIKE ? OR o.version_sig = ?)"
         params += [f"{version}%", version]
@@ -672,7 +701,7 @@ def report(conn, sport: str, market: str, *, evidence: str = "prospective", kind
     if m is None:
         return {"sport": sport, "market": market, "status": "no_registered_groups", "groups": []}
     if evidence == "historical":
-        p = historical_path(sport)
+        p = historical_path(sport, market)
         pre = _precomputed(sport, reg["sha256"]) if not (date_from or date_to or line is not None) else None
         full = pre[market] if pre and market in pre else _historical_full(sport, market, date_from, date_to, line, reg["sha256"], p.stat().st_mtime if p.is_file() else 0.0) \
             if reg is load_registry() else _full(_by_line(historical_items(sport, market, reg, date_from, date_to), line), m, market)
@@ -693,8 +722,10 @@ def report(conn, sport: str, market: str, *, evidence: str = "prospective", kind
 
 
 # --- Historical (exploratory) ---------------------------------------------------------------------------------------
-def historical_path(sport: str) -> Path:
-    return config.data_dir() / "research" / "tracking" / f"historical-{sport}.json.gz"
+def historical_path(sport: str, market: Optional[str] = None) -> Path:
+    """One file per market (loading a market never parses the others' tables)."""
+    d = config.data_dir() / "research" / "tracking"
+    return d / (f"historical-{sport}-{market}.json.gz" if market else f"historical-{sport}.json.gz")
 
 
 def _walk_stack(rows: list, members: list, market: str, key: str) -> dict:
@@ -718,6 +749,7 @@ def build_historical(sport: str, reg: Optional[dict] = None, log=print) -> Path:
     reg = reg or load_registry()
     oof = _oof(sport)
     payload = {"study": STUDY, "registry_sha256": reg["sha256"], "sport": sport, "built_at": utc_now(), "markets": {}}
+    built = []
     for market, rows in oof.items():
         m = reg["markets"].get(f"{sport}:{market}")
         if m is None:
@@ -752,17 +784,21 @@ def build_historical(sport: str, reg: Optional[dict] = None, log=print) -> Path:
                             None if res["statistic"] is None else round(res["statistic"], 5),
                             None if vec is None else [round(x, 5) for x in vec], sorted(res["missing"]) or None])
             groups[g["id"]] = cls
-        payload["markets"][market] = {"games": games, "groups": groups, "stack_fits": fits}
+        mp = historical_path(sport, market)
+        mp.parent.mkdir(parents=True, exist_ok=True)
+        body = {"study": STUDY, "registry_sha256": reg["sha256"], "sport": sport, "market": market,
+                "built_at": payload["built_at"], "games": games, "groups": groups, "stack_fits": fits}
+        mp.with_suffix(".tmp").write_bytes(gzip.compress(json.dumps(body, separators=(",", ":")).encode(), mtime=0))
+        mp.with_suffix(".tmp").replace(mp)
+        built.append(market)
         log(f"{sport}:{market}: {len(games)} games, {len(groups)} groups")
-    path = historical_path(sport)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_bytes(gzip.compress(json.dumps(payload, separators=(",", ":")).encode(), mtime=0))
-    tmp.replace(path)
     _historical.cache_clear()
-    summaries = {"registry_sha256": reg["sha256"], "markets": {}}
-    for market in payload["markets"]:     # unfiltered summaries, so the API needs no recomputation
+    summaries = {"registry_sha256": reg["sha256"], "markets": {}, "checks": {}}
+    for market in built:     # unfiltered summaries and the chronological check, so the API needs no recomputation
         summaries["markets"][market] = _full(historical_items(sport, market, reg), reg["markets"][f"{sport}:{market}"], market)
+        summaries["checks"][market] = chronological_check(sport, market, reg)
+    _historical.cache_clear()
+    path = historical_path(sport, built[0]) if built else historical_path(sport)
     sp = summaries_path(sport)
     sp.with_suffix(".tmp").write_bytes(gzip.compress(json.dumps(summaries, separators=(",", ":")).encode(), mtime=0))
     sp.with_suffix(".tmp").replace(sp)
@@ -778,15 +814,22 @@ def _summaries(path: str, mtime: float) -> dict:
     return json.loads(gzip.decompress(Path(path).read_bytes()))
 
 
-def _precomputed(sport: str, sha: str) -> Optional[dict]:
+def _precomputed(sport: str, sha: str, part: str = "markets") -> Optional[dict]:
     p = summaries_path(sport)
     if not p.is_file():
         return None
     d = _summaries(str(p), p.stat().st_mtime)
-    return d["markets"] if d.get("registry_sha256") == sha else None
+    return d.get(part) if d.get("registry_sha256") == sha else None
 
 
-@lru_cache(maxsize=2)
+def precomputed_check(sport: str, market: str) -> dict:
+    """The chronological check saved when the historical tables were built (computing it needs the whole table)."""
+    reg = load_registry()
+    checks = _precomputed(sport, reg["sha256"], "checks") or {}
+    return checks.get(market) or {"status": "no_historical_table", "folds": []}
+
+
+@lru_cache(maxsize=1)
 def _historical(path: str, mtime: float) -> dict:
     return json.loads(gzip.decompress(Path(path).read_bytes()))
 
@@ -795,17 +838,14 @@ STATUS_CODE = {"p": "pick", "d": "disagree", "t": "tie", "n": "no_majority", "i"
 
 
 def historical_items(sport: str, market: str, reg: dict, date_from=None, date_to=None) -> dict:
-    p = historical_path(sport)
+    p = historical_path(sport, market)
     if not p.is_file():
         return {}
-    d = _historical(str(p), p.stat().st_mtime)
-    if d.get("registry_sha256") != reg["sha256"]:
+    mk = _historical(str(p), p.stat().st_mtime)
+    if mk.get("registry_sha256") != reg["sha256"]:
         return {}
-    mk = d["markets"].get(market)
-    if not mk:
-        return {}
-    keep = [i for i, g in enumerate(mk["games"]) if (not date_from or g["tipoff_at"] >= f"{date_from}T00:00:00Z")
-            and (not date_to or g["tipoff_at"] <= f"{date_to}T23:59:59Z")]
+    lo, hi = day_bounds(date_from, date_to)
+    keep = [i for i, g in enumerate(mk["games"]) if (lo is None or g["tipoff_at"] >= lo) and (hi is None or g["tipoff_at"] < hi)]
     out = {}
     for gid, cls in mk["groups"].items():
         items = {}

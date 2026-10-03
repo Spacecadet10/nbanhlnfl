@@ -157,7 +157,7 @@ def _monitoring(conn, now: str, window: int = 100) -> dict:
         recent, prev = ll[-window:], ll[-2 * window:-window]
         item = {"market": market, "member": name, "settled": len(ll), "recent_log_loss": sum(recent) / len(recent),
                 "previous_log_loss": sum(prev) / len(prev) if prev else None, "window": window,
-                "missing_rate": len(missing.get((market, name), [])) / max(1, len(rows))}
+                "missing_rate": len(missing.get((market, name), [])) / max(1, sum(1 for r in rows if r["market"] == market))}
         if len(recent) == window and len(prev) == window:
             def var(x):
                 m = sum(x) / len(x)

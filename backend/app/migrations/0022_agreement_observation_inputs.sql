@@ -1,7 +1,8 @@
 -- tracking-v2: a cohort observed again with a different set of stored inputs (e.g. a candidate forecast made against that
 -- cohort's line after the first observation) gets a NEW row; earlier rows are never changed. Identity becomes
 -- (registry, group, source cohort, inputs digest). Rebuilds the 0021 table (SQLite cannot drop a UNIQUE constraint);
--- existing rows are copied unchanged with the digest of their own recorded inputs ('0021' marks pre-0022 rows).
+-- existing rows are copied unchanged with the fixed marker '0021' as their digest, so the first cycle after 0022 adds one
+-- identical row per cohort observed before it (the canonical latest row is unchanged by that).
 CREATE TABLE agreement_observations_new (
   observation_id  INTEGER PRIMARY KEY,
   registry        TEXT NOT NULL,

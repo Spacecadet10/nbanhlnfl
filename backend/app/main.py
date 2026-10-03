@@ -3,7 +3,6 @@
 import os
 import sqlite3
 from datetime import date
-from functools import lru_cache
 from typing import Iterator, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query
@@ -264,19 +263,7 @@ def research_tracking_check(market: str = MARKET, p=Depends(get_provider)):
         return {"mode": "demo", "status": "demo", "folds": []}
     _market_supported(p, market)
     from . import agreement_tracking as at
-    return {**_tracking_check(p.sport, market), "mode": "real"}
-
-
-@lru_cache(maxsize=16)
-def _tracking_check_cached(sport: str, market: str, sha: str, mtime: float) -> dict:
-    from . import agreement_tracking as at
-    return at.chronological_check(sport, market)
-
-
-def _tracking_check(sport: str, market: str) -> dict:
-    from . import agreement_tracking as at
-    path = at.historical_path(sport)
-    return _tracking_check_cached(sport, market, at.load_registry()["sha256"], path.stat().st_mtime if path.is_file() else 0.0)
+    return {**at.precomputed_check(p.sport, market), "mode": "real"}
 
 
 @app.get("/api/research/tracking/game/{game_id}")

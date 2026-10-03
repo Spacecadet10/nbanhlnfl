@@ -69,18 +69,22 @@ def test_prop_snapshots_are_raw_bounded_and_never_fail_the_caller(nhl_store):
     def fake(url):
         calls.append(url)
         return b'{"items": []}'
+    boom = pc.collect(conn, "nhl", now=datetime(2026, 10, 12, 21, 5, tzinfo=timezone.utc),
+                      fetch=lambda u: (_ for _ in ()).throw(RuntimeError("down")))
+    assert boom["status"] == "partial" and boom["failed"] and boom["stored"] == 0      # a failure is retried later
     now = datetime(2026, 10, 12, 21, 30, tzinfo=timezone.utc)
     out = pc.collect(conn, "nhl", now=now, fetch=fake)
     assert out["targets"] == 1 and out["stored"] == 1 and "propBets" in calls[0]
     again = pc.collect(conn, "nhl", now=now, fetch=fake)
     assert again["stored"] == 0 and again["recent"] == 1 and len(calls) == 1           # once per game per 55 min
     later = datetime(2026, 10, 12, 22, 30, tzinfo=timezone.utc)
-    assert pc.collect(conn, "nhl", now=later, fetch=lambda u: None)["not_listed"] == 1  # 404: counted, not stored
-    boom = pc.collect(conn, "nhl", now=datetime(2026, 10, 12, 22, 45, tzinfo=timezone.utc),
-                      fetch=lambda u: (_ for _ in ()).throw(RuntimeError("down")))
-    assert boom["status"] == "partial" and boom["failed"]
+    assert pc.collect(conn, "nhl", now=later, fetch=lambda u: None)["not_listed"] == 1  # 404: counted, marker stored
+    assert pc.collect(conn, "nhl", now=later, fetch=fake)["recent"] == 1              # the marker stops a re-request
+    stamps = [r[0] for r in conn.execute("SELECT f.retrieved_at FROM raw_fetches f JOIN raw_responses r USING (raw_id) "
+                                         "WHERE r.source='espn_props' ORDER BY f.fetch_id")]
+    assert stamps == ["2026-10-12T21:30:00Z", "2026-10-12T22:30:00Z"]
     n = conn.execute("SELECT count(*) FROM raw_responses WHERE source='espn_props'").fetchone()[0]
-    assert n == 1
+    assert n == 2                                # the snapshot and one "not listed" marker
     far = pc.collect(conn, "nhl", now=datetime(2026, 10, 12, 18, 0, tzinfo=timezone.utc), fetch=fake)
     assert far["targets"] == 0                                                          # start more than two hours away
 

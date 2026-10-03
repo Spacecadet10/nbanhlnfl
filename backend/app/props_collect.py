@@ -3,7 +3,9 @@
 For games starting within the next two hours, the ESPN core `propBets` resource is fetched at most once per game per
 PER_GAME_INTERVAL and stored unparsed in the raw cache (source `espn_props`). Nothing here parses props, forecasts or
 shows them: the snapshots exist to measure which player/team prop lines are available, and when, before any model is
-considered. A 404 (no props listed) is counted, not stored. Failures never affect the odds job that calls this.
+considered. A 404 (no props listed) is stored as a small marker response so the game is not asked again within the interval; a
+failed request is counted and retried on a later run. Each snapshot is stamped with its own fetch time. The whole run has a
+time budget (it sits in front of the two-hour forecasts). Failures never affect the odds job that calls this.
 """
 import json
 import sqlite3
@@ -18,7 +20,9 @@ SOURCE = "espn_props"
 IMPORTER = "espn-props-raw-1"
 WINDOW = timedelta(hours=2)
 PER_GAME_INTERVAL = timedelta(minutes=55)
-MAX_PER_RUN = 20
+MAX_PER_RUN = 12
+BUDGET_SECONDS = 45
+NOT_LISTED = b'{"status": 404, "note": "no prop lines listed (marker written by props_collect)"}'
 PATHS = {"nba": "basketball/leagues/nba", "nhl": "hockey/leagues/nhl"}
 FMT = "%Y-%m-%dT%H:%M:%SZ"
 
@@ -28,7 +32,7 @@ def endpoint(sport: str, event_id: str) -> str:
             f"/odds/100/propBets")
 
 
-def _fetch(url: str, timeout: float = 20) -> Optional[bytes]:
+def _fetch(url: str, timeout: float = 8) -> Optional[bytes]:
     import httpx
     resp = httpx.get(url, params={"limit": 1000}, headers=espn.HEADERS, timeout=timeout)
     if resp.status_code == 404:
@@ -65,12 +69,20 @@ def _recent(conn, sport: str, event_id: str, now: datetime) -> bool:
 
 def collect(conn: sqlite3.Connection, sport: str, *, now: Optional[datetime] = None,
             fetch: Callable[[str], Optional[bytes]] = _fetch) -> dict:
+    import time
+    from .db import utc_now
+    clock = utc_now if now is None else (lambda: now.strftime(FMT))
     now = now or datetime.now(timezone.utc)
-    out = {"status": "success", "targets": 0, "stored": 0, "not_listed": 0, "recent": 0, "failed": {}}
+    out = {"status": "success", "targets": 0, "stored": 0, "not_listed": 0, "recent": 0, "failed": {}, "deferred": 0}
+    t0 = time.monotonic()
     try:
         tg = targets(conn, sport, now)
         out["targets"] = len(tg)
+        out["deferred"] = max(0, len(tg) - MAX_PER_RUN)
         for gid, eid in tg[:MAX_PER_RUN]:
+            if time.monotonic() - t0 > BUDGET_SECONDS:
+                out["deferred"] += 1
+                continue
             if _recent(conn, sport, eid, now):
                 out["recent"] += 1
                 continue
@@ -81,11 +93,11 @@ def collect(conn: sqlite3.Connection, sport: str, *, now: Optional[datetime] = N
                 continue
             if body is None:
                 out["not_listed"] += 1
-                continue
             with transaction(conn):
                 raw_cache.store_fetch(conn, source=SOURCE, endpoint=endpoint(sport, eid), request_key=f"{sport}:{eid}",
-                                      body=body, retrieved_at=now.strftime(FMT), importer_version=IMPORTER)
-            out["stored"] += 1
+                                      body=NOT_LISTED if body is None else body, retrieved_at=clock(),
+                                      importer_version=IMPORTER)
+            out["stored"] += body is not None
         if out["failed"]:
             out["status"] = "partial"
     except Exception as exc:

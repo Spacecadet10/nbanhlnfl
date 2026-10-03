@@ -49,6 +49,8 @@ def test_majority_records_votes_abstentions_ties_and_its_defined_confidence():
     r = at.classify(g("majority", "a", "b", "c", "d", "e"),
                     {**v, "d": (0.5, 0.0, 0.5), "e": (0.5, 0.0, 0.5)}, "winner")
     assert r["status"] == "no_majority"                                     # 2 of 5 leads but is not > 2.5
+    r = at.classify(g("majority", "a", "b"), {"a": (0.5, 0.0, 0.5), "b": (0.5, 0.0, 0.5)}, "winner")
+    assert r["status"] == "no_majority" and r["votes"]["abstain"] == 2      # every member abstained
 
 
 def test_a_missing_member_makes_the_group_incomplete_never_a_subset():
@@ -66,8 +68,8 @@ def test_nhl_three_way_can_pick_the_regulation_draw_and_line_markets_never_pick_
     assert r["side"] == 1 and r["statistic"] == pytest.approx(0.36)
     r = at.classify(g("single", "x"), {"x": (0.30, 0.40, 0.30)}, "total")
     assert r["status"] == "tie"                                             # the middle is not a side in a line market
-    assert at.bands("reg3")[0] == [0.0, 0.40] and at.band_label("reg3", 0.0, 0.40) == "0.33–0.40"
-    assert at.band_label("winner", 0.0, 0.55) == "0.50–0.55" and at.band_label("winner", 0.80, 1.0 + 1e-9) == "≥ 0.80"
+    assert at.bands("reg3")[0] == [0.0, 0.40] and at.band_label("reg3", 0.0, 0.40) == "below 0.40"
+    assert at.band_label("winner", 0.0, 0.55) == "below 0.55" and at.band_label("winner", 0.80, 1.0 + 1e-9) == "≥ 0.80"
 
 
 def items_from(stats, market="winner", realised=0, state="settled"):
@@ -321,3 +323,16 @@ def test_tracking_and_training_api_match_the_frontend_types(game):
             assert fields("TrainingFit") <= set(tr["fits"][0])
     finally:
         main.app.dependency_overrides.pop(main.get_provider, None)
+
+
+def test_us_eastern_date_filters():
+    lo, hi = at.day_bounds("2026-10-12", "2026-10-12")
+    assert (lo, hi) == ("2026-10-12T04:00:00Z", "2026-10-13T04:00:00Z")     # a 10:30 PM ET game belongs to the 12th
+
+
+def test_record_on_a_store_without_0022_is_skipped_not_failed(game):
+    run(game, NOW)
+    game.execute("DROP TABLE agreement_observations")
+    game.execute("CREATE TABLE agreement_observations (observation_id INTEGER PRIMARY KEY, registry TEXT)")
+    out = at.record(game, game_ids=[GID], now="2026-10-12T21:40:00Z", reg=small_registry())
+    assert out["status"] == "skipped" and "0022" in out["reason"]

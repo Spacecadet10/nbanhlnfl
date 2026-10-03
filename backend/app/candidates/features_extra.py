@@ -3,8 +3,8 @@
 Three inputs from our own play-by-play shots of games delivered before the cutoff (20-game team window, carried across
 seasons like the xG inputs): all-situation shot-attempt share (shots on goal, missed, blocked and goals), power-play goals
 for per game and short-handed goals against per game (goals conceded while the team had fewer skaters). They extend the
-`nhl_base` features; the existing feature sets and every existing candidate are unchanged (this module is hashed only into
-the identities of specs that use `nhl_special`).
+`nhl_base` features; the existing feature sets and every existing candidate are unchanged. This module is NOT part of
+`candidates.registry.definition`: if an `nhl_special` spec is ever registered, that function must hash this file too.
 """
 import json
 import math
@@ -93,7 +93,8 @@ def evaluate(conn, log: Callable[[str], None] = print, out_dir=None) -> dict:
     from .registry import Spec
     d = nhl_eval.load_decision(conn)
     rows = nhl_eval.load_rows(conn, "test")           # every season; all spent (exploratory), access logged
-    _log({"study": "features-v1", "part": "nhl_special", "access": "nhl_eval.load_rows('test') on a scratch store copy"})
+    store = conn.execute("PRAGMA database_list").fetchone()[2]
+    _log({"study": "features-v1", "part": "nhl_special", "access": "nhl_eval.load_rows('test')", "store": store})
     events = nhl_shots.load_events(conn, rows)
     rec = NhlSpecialRecorder(HockeyEloConfig(**d["hockey_elo_config"]), GoalsConfig(**d["goals_config"]), sports.NHL.rating_key)
     walk = list(features.walk(rec, rows, events).values())
@@ -115,6 +116,9 @@ def evaluate(conn, log: Callable[[str], None] = print, out_dir=None) -> dict:
             raise
     by = {r.game_id: r for r in walk}
     pl = {r["game_id"]: r["line"] for r in _oof_lines("spread")}
+    from .. import agreement_tracking
+    anchors = {m: agreement_tracking.load_registry()["markets"][f"nhl:{m}"]["anchor"] for m in ("winner", "reg3", "spread")}
+    anchor_vec = {m: {r["game_id"]: r["vectors"].get(anchors[m]) for r in _oof_lines(m)} for m in anchors}
     tests = [("winner", "logit_l2"), ("winner", "poisson_draw"), ("reg3", "poisson_draw"), ("spread", "poisson_draw")]
     z = NormalDist().inv_cdf(1 - 0.05 / 2 / len(tests))
     results = {}
@@ -122,6 +126,8 @@ def evaluate(conn, log: Callable[[str], None] = print, out_dir=None) -> dict:
         a, b = outs[f"{fam}:nhl_special"], outs[f"{fam}:nhl_base"]
         diffs = {"screen": [], "assess": []}
         cut = {"screen": [], "assess": []}
+        adiffs = {"screen": [], "assess": []}         # with/without in the average with the market's anchor (§19)
+        acut = {"screen": [], "assess": []}
         for gid in sorted(set(a) & set(b), key=lambda g: (by[g].cutoff_at, g)):
             r = by[gid]
             if r.season < 2018 or r.y is None:
@@ -139,6 +145,11 @@ def evaluate(conn, log: Callable[[str], None] = print, out_dir=None) -> dict:
             part = "screen" if r.season <= 2021 else "assess"
             diffs[part].append(combine.log_loss(va, realised) - combine.log_loss(vb, realised))
             cut[part].append(r.cutoff_at)
+            av = anchor_vec[market].get(gid)
+            if av is not None and (market != "spread" or pl.get(gid) is not None):
+                adiffs[part].append(combine.log_loss(combine.average([av, va]), realised)
+                                    - combine.log_loss(combine.average([av, vb]), realised))
+                acut[part].append(r.cutoff_at)
         res = {}
         for part in diffs:
             if not diffs[part]:
@@ -146,6 +157,12 @@ def evaluate(conn, log: Callable[[str], None] = print, out_dir=None) -> dict:
             bs = backtest.block_bootstrap(diffs[part], cut[part])
             sd = (bs["ci95"][1] - bs["ci95"][0]) / (2 * 1.959964)
             res[part] = {**bs, "games": len(diffs[part]), "bonferroni_interval": [bs["mean"] - z * sd, bs["mean"] + z * sd]}
+        for part in adiffs:
+            if adiffs[part]:
+                bs = backtest.block_bootstrap(adiffs[part], acut[part])
+                sd = (bs["ci95"][1] - bs["ci95"][0]) / (2 * 1.959964)
+                res[f"{part}_with_anchor_{anchors[market]}"] = {**bs, "games": len(adiffs[part]),
+                                                                "bonferroni_interval": [bs["mean"] - z * sd, bs["mean"] + z * sd]}
         results[f"{market}:{fam}"] = res
     report = {"study": "features-v1", "part": "NHL nhl_special", "exploratory": True, "generated_at": utc_now(),
               "walk_games": len(walk), "comparison": "special − base log loss (negative favours the new inputs)",
