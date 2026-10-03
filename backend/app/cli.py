@@ -1,8 +1,9 @@
 """Explicit data commands. Run from backend/: `.venv/bin/python -m app.cli <command>`."""
 import argparse
 import json
+import os
 
-from . import backtest, config, coverage, db, ingest, jobs, sports
+from . import backtest, config, coverage, db, ingest, jobs, release, sports
 from .models.elo import EloConfig
 
 
@@ -10,14 +11,15 @@ from .models.elo import EloConfig
 SPORT_COMMANDS = {"nhl-pbp-import", "nhl-xg-research", "migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies", "refresh", "odds", "predict",
                   "score", "daily", "scheduler", "predict-now", "score-near-tipoff", "markets", "score-markets", "agreement", "thresholds",
                   "combination-study", "selector-decide", "research-report", "retrain-cadence", "catboost-challenger", "combination-search", "expanded-search", "selective-study", "rules-registry",
-                  "daily-cadence", "features-nhl", "tracking-report", "tracking-record", "pool-screen", "pool-assess", "pool-record", "pool-roster", "pool-report"}
+                  "daily-cadence", "features-nhl", "tracking-report", "tracking-record", "pool-screen", "pool-assess", "pool-record", "pool-roster", "pool-report",
+                  "release-check"}
 NHL_ONLY = {"nhl-pbp-import", "nhl-xg-research", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies"}
 
 
 # Commands that only read the store: they run on a query-only connection without the job lock or a migration, so a long
 # report can never make a scheduled two-hour cycle wait, skip or miss a game. (`score` is not here: it records a job run.)
 READ_ONLY_COMMANDS = {"score-markets", "score-near-tipoff", "thresholds", "research-report", "pool-report", "pool-roster",
-                      "tracking-report", "coverage"}
+                      "tracking-report", "coverage", "release-check"}
 LOCK_WAIT_SECONDS = 45 * 60     # longer than any two-hour cycle (NHL ~13 minutes); a job still waiting then fails visibly
 ODDS_LOCK_WAIT_SECONDS = 120    # the periodic cycle waits out a short job (daily, injuries), not another full cycle
 
@@ -93,6 +95,8 @@ def main(argv=None) -> int:
                          "(tipoff + 4 h). Without it, stats are usable only from their retrieval time.")
     sub.add_parser("replay", help="Re-import every cached response without network access")
     sub.add_parser("coverage", help="Print stored data coverage as JSON")
+    sub.add_parser("release-check", help="Read-only: the release commit, schema, research definition and every reason the "
+                                         "scheduled jobs would refuse to run from this checkout (docs: HANDOFF, operations)")
     rf = sub.add_parser("refresh", help="Fetch current ESPN months (retries; at most once per 30 min unless --force)")
     rf.add_argument("--force", action="store_true")
     sub.add_parser("predict", help="Refresh and record supported forecasts only within two hours of tipoff")
@@ -256,6 +260,15 @@ def main(argv=None) -> int:
         p.error(f"`{args.cmd}` is NBA-only; it is not available with --sport {args.sport}")
     if args.sport == "nba" and args.cmd in NHL_ONLY:
         p.error(f"`{args.cmd}` needs --sport nhl")
+    if release.enabled() and args.cmd in release.GUARDED:
+        # Pinned release (app/release.py): refuse before any request, lock or migration if this is not a clean release
+        # checkout using the shared data folder at the schema it ships. The refusal is a failed job run, never silent.
+        info = release.check(args.sport)
+        if info["problems"]:
+            print(json.dumps({"status": "failed", "reason": "release guard", **info,
+                              "run_id": release.record_refusal(args.sport, args.cmd, info)}))
+            return 1
+        os.environ[release.COMMIT_ENV] = info["commit"]          # recorded in every job run of this command
     if args.cmd in READ_ONLY_COMMANDS:
         try:
             conn = db.connect_readonly(args.sport)
@@ -606,6 +619,13 @@ def _run(args, p, conn, applied) -> int:
         return 1 if _any_failed(result) else 0
     elif args.cmd == "coverage":
         print(json.dumps(coverage.report(conn), indent=2))
+    elif args.cmd == "release-check":
+        from . import research_live, selector
+        info = release.check(args.sport)
+        print(json.dumps({**info, "app": str(release.code_root() / "backend" / "app"),
+                          "research_definition": research_live.definition(conn), "selector": selector.version(),
+                          "guard_enabled": release.enabled()}, indent=1))
+        return 1 if info["problems"] else 0
     return 0
 
 

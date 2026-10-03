@@ -1,5 +1,6 @@
 """Bounded operational jobs: refresh → predict → score, with retries, request quotas and a job_runs log."""
 import json
+import os
 import sqlite3
 import time
 from datetime import datetime, timedelta, timezone
@@ -44,6 +45,8 @@ def record_lock_busy(conn: sqlite3.Connection, job: str, reason: str) -> int:
 
 
 def _finish(conn: sqlite3.Connection, run_id: int, status: str, attempts: int, detail: dict) -> dict:
+    if os.environ.get("NBA_RELEASE_COMMIT"):        # set by the release guard (app/release.py): which commit ran this job
+        detail = {**detail, "release": os.environ["NBA_RELEASE_COMMIT"]}
     conn.execute("UPDATE job_runs SET finished_at=?, status=?, attempts=?, detail=? WHERE run_id=?",
                  (utc_now(), status, attempts, json.dumps(detail, default=str), run_id))
     return {"run_id": run_id, "status": status, "attempts": attempts, **detail}
