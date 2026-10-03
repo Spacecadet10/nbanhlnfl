@@ -392,6 +392,52 @@ triples. Exploratory: every season used was already spent. Nothing here grants e
   prospective shadow; sealed members and live schedules are not changed by this study.
 - Runs on scratch store copies only.
 
+## 18. Historical training and combination discovery `discovery-v1` (recorded 2026-10-03 ~00:20 UTC, before any run)
+Pipeline: historical data → models trained at each season start on earlier seasons only → chronological out-of-sample
+predictions → search of subsets × agreement rules × thresholds per market → rules chosen on earlier seasons, evaluated once
+on the next season, repeated → results kept for tracking (historical, exploratory) and the frozen rules recorded for
+prospective evaluation. Every season used was spent before: **exploratory, not an independent test.**
+- **Reused trained models (no refit):** the chained pool-v1 out-of-sample tables `oof-{sport}-screen` + `oof-{sport}-assess`
+  (identical members, no overlapping games, same night-before cutoffs; every member refitted at each season start on
+  earlier seasons): **NHL 2018–2026 (9 seasons, 11,870 games), NBA 2022–2026 (5 seasons, 6,605 games).** Inventory of
+  models, features and training windows: docs/TRAINING_INVENTORY.md.
+- **Members per market:** existing members + candidates, excluding the two pool *reference* re-expressions (`logit_l2:nba_base`,
+  `ridge:nba_base`: duplicates of existing members) and every `*_goalie` candidate (historical inputs used the actual starter,
+  an optimistic input not available pregame). NHL winner 10, reg3 5, NHL lines 4; NBA winner 13, NBA lines 10.
+- **Newly trained challengers (22 configurations: NHL 12, NBA 10, within 24 per sport):** two learned combiners per market,
+  refitted at every season start on the earlier seasons' out-of-sample member predictions only: `stack_l2` (L2 logistic /
+  multinomial on clipped log-probabilities of all members, C = 0.1) and `stack_l1` (L1, C = 0.05, sparse: selects members).
+  No fit in a table's first season. Code `backend/app/discovery_study.py`.
+- **Lines:** historical lines are the primary model's own pregame line stored with each game (points model / goals model),
+  labelled **"pregame research line"**; never derived from final scores; not bookmaker lines; the primary is ~50/50 there by
+  construction. Prospective tracking uses the exact bookmaker or model line recorded with each cohort. No profit claim.
+- **Confidence definitions (never mixed):** `single` = the member's probability of its pick; `avg` = equal-weight average
+  probability of its pick; `unanimous_min` = every member picks the same outcome, confidence = the minimum member probability
+  of that outcome; `majority` = more than half the members pick the same outcome (ties and no strict majority abstain),
+  confidence = mean probability of the supporting members, votes k/n recorded; `stack` = stacker probability of its pick.
+  A pick is the most probable allowed outcome (draw allowed only in reg3).
+- **Thresholds:** cumulative 50–90% in 5-point steps (two-way markets, 9 levels); reg3 35–70% (8 levels). **Bands**
+  (non-overlapping, descriptive, never used for selection): two-way [50,55) … [85,90), [90,100]; reg3 [33.3,35), [35,40) …
+  [65,70), [70,100].
+- **Search family (cumulative thresholds only), order and budget:** singles (members + stackers); every pair (`avg`,
+  `unanimous_min`); triples (`avg`, `unanimous_min`, `majority`; mixed candidate + existing first, seeded 20261003); larger
+  subsets (`avg`, `majority`; by size, seeded) until **6,000 configurations per market** (raised from 500 because the 50–90%
+  grid multiplies thresholds by 9; recorded here before the run). Omitted subsets are listed.
+- **Chronological procedure:** for each assess season after the first, select on all earlier seasons, assess once on that
+  season (NHL 8 folds, 2019–26; NBA 4 folds, 2023–26). Best single = lowest log loss on the selection seasons. Frozen per
+  fold: qualified rules; top point lift; highest accuracy (≥ 100 picks, ≥ 5% coverage); and for each cumulative threshold the
+  rule with the highest lift at that threshold (≥ 100 picks). Assessed against the best prior single, the primary, the
+  strongest constituent (prior), the all-member average and confidence-only filtering, at matched coverage.
+- **Qualification:** ≥ 100 picks, ≥ 5% coverage, Bonferroni lower bound of lift > 0 over this family plus every rule
+  previously evaluated for the market, better than every constituent at matched coverage.
+- **Reporting per group** (every evaluated subset × method × threshold or band, per season and pooled): eligible games,
+  selected games, coverage, wins / losses / pushes / voids / pending, win rate with Wilson 95% interval, mean confidence
+  (calibration gap), Brier and log loss of the group's probability on its picks where it has one, and the best prior single's
+  win rate on the same number of its most confident picks. Groups with < 50 decided picks are labelled "insufficient
+  evidence". Saved compactly for the Performance tracking view; underlying predictions stay in the saved tables (no
+  per-threshold rows).
+- **Compute:** ≤ 2 h wall-clock, scratch copies only, one process per market in parallel.
+
 ## Amendments
 - **2026-10-02, before the study run:** `ridge_points` / `gbt_points` spreads have a floor of 1.0 point (`MIN_SD`), found with
   synthetic test data where every total was identical. Real residual spreads are about 12 (margin) and 18 (total) points, so the
