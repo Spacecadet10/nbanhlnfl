@@ -200,3 +200,44 @@ candidate; their 3 existing members were already fully covered). Omitted subsets
   total `poisson_draw:nhl_base`, `multinomial_l2`; NBA home total `avg:points_normal+cand:hetero_linear`).
 - Limits: all seasons spent before (exploratory); line markets at the model's own line (no historical bookmaker lines); NBA
   has a single held-out season; 2-hour live cutoffs differ from the historical night-before/17:45 cutoffs.
+
+## Historical training and combination discovery `discovery-v1` (2026-10-03 01:31–01:45 UTC; exploratory)
+Design MODEL_SELECTION §18 (2e55096, before code; code bb1f9d1, before the run; amendment adding the final selection step,
+run 2 reproduces run 1's folds exactly). Command `python -m app.cli discovery-study` (saved tables only; no store opened).
+Full outputs `data/reports/discovery-v1/` (report.json, per-group tables `groups-<sport>-<market>.json.gz`); compact:
+docs/evidence/discovery-v1/. Models, features and training windows: docs/TRAINING_INVENTORY.md.
+
+**What ran:** NHL 2018–26 (11,870 games, 8 chronological folds) and NBA 2022–26 (6,605 games, 4 folds), all members
+fitted at season start on earlier seasons (reused); 22 newly trained combiners (`stack_l2`, `stack_l1`, refitted each season).
+Configurations per market: NHL winner 5,994 (all pairs and triples, 102 of 848 larger subsets), reg3 552, NHL lines 288
+each (every subset); NBA winner 5,994 (all pairs, 165 of 286 triples, no larger), NBA lines 5,994 each (all pairs and
+triples, 102 of 848 larger). Thresholds 50–90% (reg3 35–70%); bands reported for every group.
+
+**Results (frozen rules, pooled over every later season they were assessed on; matched coverage)**
+| Market | Frozen rules vs best earlier single model, by threshold | Reading |
+|---|---|---|
+| NHL winner | ≥60%: 66.2% vs 66.6%; ≥70%: 74.0% vs 75.3%; ≥80%: 80.4% vs 84.1% | no improvement |
+| NHL reg3 | ≥50%: 56.9% vs 57.2%; ≥60%: 63.6% vs 63.4%; ≥65%: 68.3% vs 67.4% (n 218) | no improvement beyond noise |
+| NHL puck line | ≥60%: 63.0% vs 63.8%; ≥65%: 69.8% vs 71.4% | no improvement |
+| NHL total | ≥60%: 73.1% vs 66.7% (n 297) but the all-member average 73.4% | no subset beats the plain average |
+| NHL home / away TT | ≥60%: 62.2% vs 59.5% / 63.1% vs 61.5%; ≥65% worse | inconsistent across thresholds |
+| NBA winner | ≥70%: 81.4% vs 81.0%; ≥80%: 85.5% vs 85.5%; ≥85%: 86.8% vs 88.2% | no improvement |
+| NBA spread | ≥60%: 58.8% vs 61.4% | worse |
+| NBA total / team totals | e.g. total ≥70%: 63.2% vs 53.8%; TT away ≥70%: 68.4% vs 53.5% | see note |
+
+- **Qualified rules:** one in 44 folds — NBA total 2025-26 fold, `unanimous_min(extra_trees:normal + ngboost) ≥ 0.70`
+  (selection 64.1%, lower bound +0.002); on 2025-26 it went 29–19 (60.4%) vs 70.8% for the best earlier single model.
+  It did not hold up. The final selection on all seasons qualifies nothing.
+- **Note on NBA lines:** the historical line is the points model's own pregame line, where that model is ~50/50; whenever it is
+  the "best single" its matched win rate is ~50%, so lifts against it are not meaningful. Against the pre-registered
+  all-member average at matched coverage, frozen subsets are no better (total ≥70%: 63.2% vs 60.5%; TT home ≥70%: 59.2% vs
+  59.2%). What the data do show: the other models predict the side of the points model's own line better than chance
+  (≈ 54–63% at higher confidence). That is relative to a model line, not a bookmaker line; no betting claim.
+- **Learned combiners:** L1 stackers keep 1–4 members (e.g. NHL lines: `poisson_draw` only; NBA winner: logistic_v2,
+  gbt_v1, elastic net, mlp:normal) and match, not beat, their strongest member.
+- **Registered for prospective tracking:** 75 rules (5–9 per market: best lift per threshold, top lift, highest accuracy;
+  none qualified), shown as "registered" in Performance → Combination discovery and tracking.
+- **Answer within what was tested:** across all pairs and triples (and the bounded larger subsets) at 50–90% thresholds, no
+  subset, agreement rule or threshold beat the best single model chosen on earlier seasons on later seasons, in any market,
+  apart from line-market gains that the plain average of all members already provides. Untested: the omitted larger subsets
+  and NBA winner triples listed in the report; bookmaker lines; goalie-aware NHL models with pregame starters.

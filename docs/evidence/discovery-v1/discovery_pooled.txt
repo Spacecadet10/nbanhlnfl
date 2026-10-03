@@ -1,0 +1,74 @@
+== nhl:winner best singles by fold: ['hockey_logistic_xg']
+   >=0.50 n=10515 wr=0.592 [0.583,0.602] best=0.592 strongest=0.594 avg=0.591 primary=0.583
+   >=0.55 n=6499 wr=0.630 [0.618,0.642] best=0.634 strongest=0.632 avg=0.630 primary=0.625
+   >=0.60 n=3727 wr=0.662 [0.647,0.677] best=0.666 strongest=0.666 avg=0.658 primary=0.655
+   >=0.65 n=1759 wr=0.727 [0.706,0.747] best=0.728 strongest=0.741 avg=0.723 primary=0.700
+   >=0.70 n=1556 wr=0.740 [0.718,0.762] best=0.753 strongest=0.756 avg=0.737 primary=0.714
+   >=0.75 n=394 wr=0.789 [0.746,0.827] best=0.815 strongest=0.797 avg=0.797 primary=0.772
+   >=0.80 n=107 wr=0.804 [0.719,0.868] best=0.841 strongest=0.804 avg=0.822 primary=0.832
+== nhl:reg3 best singles by fold: ['multinomial_l2:nhl_base', 'poisson_draw:nhl_base']
+   >=0.35 n=10374 wr=0.476 [0.466,0.486] best=0.476 strongest=0.476 avg=0.475 primary=0.468
+   >=0.40 n=10293 wr=0.477 [0.468,0.487] best=0.477 strongest=0.477 avg=0.475 primary=0.468
+   >=0.45 n=5912 wr=0.519 [0.506,0.531] best=0.521 strongest=0.521 avg=0.517 primary=0.504
+   >=0.50 n=3254 wr=0.569 [0.552,0.586] best=0.572 strongest=0.569 avg=0.565 primary=0.545
+   >=0.55 n=1880 wr=0.602 [0.579,0.623] best=0.610 strongest=0.594 avg=0.605 primary=0.572
+   >=0.60 n=1254 wr=0.636 [0.609,0.662] best=0.634 strongest=0.641 avg=0.616 primary=0.595
+   >=0.65 n=218 wr=0.683 [0.619,0.742] best=0.674 strongest=0.646 avg=0.665 primary=0.642
+   >=0.70 n=4 wr=0.500 [0.150,0.850] best=0.750 strongest=0.500 avg=0.750 primary=0.500
+== nhl:spread best singles by fold: ['poisson_draw:nhl_base']
+   >=0.50 n=10515 wr=0.568 [0.559,0.577] best=0.568 strongest=0.568 avg=0.562 primary=0.559
+   >=0.55 n=5712 wr=0.603 [0.590,0.615] best=0.605 strongest=0.604 avg=0.595 primary=0.587
+   >=0.60 n=2034 wr=0.630 [0.609,0.651] best=0.638 strongest=0.620 avg=0.620 primary=0.606
+   >=0.65 n=553 wr=0.698 [0.658,0.735] best=0.714 strongest=0.713 avg=0.669 primary=0.613
+== nhl:total best singles by fold: ['goals_draw', 'goals_poisson']
+   >=0.50 n=10515 wr=0.530 [0.521,0.540] best=0.530 strongest=0.530 avg=0.530 primary=0.529
+   >=0.55 n=2728 wr=0.566 [0.547,0.584] best=0.556 strongest=0.569 avg=0.541 primary=0.557
+   >=0.60 n=297 wr=0.731 [0.677,0.778] best=0.667 strongest=0.680 avg=0.734 primary=0.653
+   >=0.65 n=188 wr=0.670 [0.600,0.733] best=0.660 strongest=0.670 avg=0.702 primary=0.644
+== nhl:team_total_home best singles by fold: ['goals_draw', 'goals_poisson']
+   >=0.50 n=10265 wr=0.555 [0.545,0.564] best=0.554 strongest=0.554 avg=0.556 primary=0.554
+   >=0.55 n=5437 wr=0.589 [0.576,0.602] best=0.583 strongest=0.591 avg=0.591 primary=0.583
+   >=0.60 n=2848 wr=0.622 [0.604,0.639] best=0.595 strongest=0.600 avg=0.618 primary=0.594
+   >=0.65 n=483 wr=0.590 [0.546,0.633] best=0.625 strongest=0.582 avg=0.619 primary=0.621
+== nhl:team_total_away best singles by fold: ['poisson_draw:nhl_base']
+   >=0.50 n=9973 wr=0.571 [0.561,0.580] best=0.572 strongest=0.572 avg=0.570 primary=0.561
+   >=0.55 n=4927 wr=0.603 [0.590,0.617] best=0.604 strongest=0.600 avg=0.595 primary=0.592
+   >=0.60 n=2068 wr=0.631 [0.610,0.652] best=0.615 strongest=0.605 avg=0.595 primary=0.596
+   >=0.65 n=478 wr=0.596 [0.552,0.639] best=0.609 strongest=0.598 avg=0.577 primary=0.590
+== nba:winner best singles by fold: ['elastic_net:nba_base', 'logistic_v2']
+   >=0.50 n=5222 wr=0.661 [0.648,0.674] best=0.660 strongest=0.659 avg=0.661 primary=0.658
+   >=0.55 n=3909 wr=0.698 [0.684,0.713] best=0.700 strongest=0.699 avg=0.700 primary=0.695
+   >=0.60 n=3253 wr=0.727 [0.711,0.742] best=0.725 strongest=0.726 avg=0.729 primary=0.713
+   >=0.65 n=1927 wr=0.781 [0.762,0.799] best=0.776 strongest=0.779 avg=0.781 primary=0.770
+   >=0.70 n=1281 wr=0.814 [0.792,0.835] best=0.810 strongest=0.818 avg=0.814 primary=0.807
+   >=0.75 n=637 wr=0.832 [0.801,0.859] best=0.841 strongest=0.837 avg=0.834 primary=0.840
+   >=0.80 n=1046 wr=0.855 [0.832,0.875] best=0.855 strongest=0.853 avg=0.858 primary=0.847
+   >=0.85 n=152 wr=0.868 [0.805,0.913] best=0.882 strongest=0.882 avg=0.855 primary=0.882
+== nba:spread best singles by fold: ['extra_trees:nba_base:normal', 'hetero_linear:nba_base', 'ridge_points@weekly']
+   >=0.50 n=5282 wr=0.546 [0.532,0.559] best=0.545 strongest=0.544 avg=0.541 primary=0.503
+   >=0.55 n=1239 wr=0.575 [0.548,0.603] best=0.584 strongest=0.587 avg=0.578 primary=0.515
+   >=0.60 n=650 wr=0.588 [0.549,0.625] best=0.614 strongest=0.618 avg=0.628 primary=0.528
+   >=0.65 n=202 wr=0.589 [0.520,0.655] best=0.619 strongest=0.619 avg=0.644 primary=0.525
+   >=0.70 n=38 wr=0.500 [0.348,0.652] best=0.658 strongest=0.500 avg=0.632 primary=0.605
+== nba:total best singles by fold: ['points_normal']
+   >=0.50 n=1932 wr=0.539 [0.517,0.561] best=0.516 strongest=0.516 avg=0.543 primary=0.516
+   >=0.55 n=1168 wr=0.552 [0.524,0.581] best=0.515 strongest=0.519 avg=0.553 primary=0.515
+   >=0.60 n=328 wr=0.573 [0.519,0.626] best=0.530 strongest=0.530 avg=0.607 primary=0.530
+   >=0.65 n=249 wr=0.602 [0.541,0.661] best=0.514 strongest=0.514 avg=0.610 primary=0.514
+   >=0.70 n=574 wr=0.632 [0.592,0.671] best=0.538 strongest=0.568 avg=0.605 primary=0.538
+   >=0.75 n=102 wr=0.627 [0.531,0.715] best=0.451 strongest=0.588 avg=0.637 primary=0.451
+   >=0.80 n=10 wr=0.600 [0.313,0.832] best=0.800 strongest=0.600 avg=0.300 primary=0.800
+== nba:team_total_home best singles by fold: ['points_normal']
+   >=0.50 n=2517 wr=0.542 [0.522,0.561] best=0.507 strongest=0.507 avg=0.551 primary=0.507
+   >=0.55 n=2193 wr=0.557 [0.536,0.578] best=0.507 strongest=0.541 avg=0.552 primary=0.507
+   >=0.60 n=535 wr=0.535 [0.492,0.576] best=0.520 strongest=0.512 avg=0.553 primary=0.520
+   >=0.65 n=293 wr=0.556 [0.499,0.612] best=0.509 strongest=0.505 avg=0.573 primary=0.509
+   >=0.70 n=353 wr=0.592 [0.540,0.642] best=0.501 strongest=0.589 avg=0.592 primary=0.501
+   >=0.75 n=54 wr=0.630 [0.496,0.746] best=0.444 strongest=0.611 avg=0.648 primary=0.444
+== nba:team_total_away best singles by fold: ['points_normal']
+   >=0.50 n=4808 wr=0.537 [0.522,0.551] best=0.510 strongest=0.529 avg=0.532 primary=0.510
+   >=0.55 n=1808 wr=0.553 [0.530,0.576] best=0.509 strongest=0.530 avg=0.561 primary=0.509
+   >=0.60 n=687 wr=0.584 [0.546,0.620] best=0.525 strongest=0.525 avg=0.591 primary=0.525
+   >=0.65 n=835 wr=0.571 [0.537,0.604] best=0.509 strongest=0.576 avg=0.594 primary=0.509
+   >=0.70 n=114 wr=0.684 [0.594,0.762] best=0.535 strongest=0.667 avg=0.623 primary=0.535
+   >=0.75 n=33 wr=0.455 [0.298,0.620] best=0.455 strongest=0.455 avg=0.576 primary=0.455
