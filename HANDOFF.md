@@ -18,7 +18,7 @@ into live** (the previous merge-note commit was blocked as a production deploy; 
   registered only; historical vs prospective separately; exact lines prospectively, labelled cross-line pooling),
   Performance → "Combination discovery and tracking". 75 rules registered (final selection on all seasons) for prospective
   evaluation. No prediction rows are copied per threshold.
-- **Checks:** see SMOKE_TEST "Discovery tracking"; readiness on 384868b: see below.
+- **Checks:** SMOKE_TEST "Discovery tracking"; `scripts/check_project.py --ready` on 384868b exit 0 (structure, typecheck, build, 464 passed).
 - **To go live (user):** fast-forward `shadow-season` to this branch between cycles, then copy the scratch
   `reports/discovery-v1/` to `data/reports/discovery-v1/` (the API reads it there). Pending write-up from the earlier
   blocked commit: daily-v1 results (reports in `data/reports/daily-v1-*`).
