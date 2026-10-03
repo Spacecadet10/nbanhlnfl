@@ -36,6 +36,43 @@ Single writer. Live checkout `shadow-season` (backend code changes developed in 
 - **Next:** Codex review of 31c19af..HEAD; after games settle, read `/api/research/tracking` prospective; decide whether to
   register a prospective combination-only test of the NHL special inputs.
 
+## Tooling audit + Optuna tuning `tuning-v1` — Claude (Opus 5.5), 2026-10-03 ~01:45–02:15 UTC
+Branch `pool-selector` (worktree), commits 942676c..e22d1b3; **not merged into live** (same as the entry below).
+- Audit (MODEL_SELECTION §21, from REPO_REVIEW/§10/FAMILY_AUDIT only): sklearn HGB/ExtraTrees/RF used with fixed settings;
+  NGBoost used; CatBoost tested and rejected; Optuna missing → **adopted** (`optuna==5.0.0` in the `research` extra, worktree
+  venv only; live venv unchanged); LightGBM/XGBoost **deferred/untested** (distinct implementations, not ruled out by the sklearn HGB result; need system libomp).
+- `app/tuning_study.py` (no hashed pool file edited; live candidate identities unchanged): 8 learners (HGB binary/normal/
+  reg3/goals, ExtraTrees binary/normal) tuned per season on earlier seasons only, 25 TPE trials; predictions, trials, fits
+  saved; CLI `tuning-study` (store copies only), `tuning-evaluate`.
+- Result (CHALLENGER_RESULTS "Tooling adoption and bounded tuning"): tuned learners are worse than the best existing member
+  alone in every market and no better than their untuned counterparts; inside combinations no rule qualified and with/
+  without differences are within ±2 points with mixed signs. Nothing proposed for live recording.
+- Checks: `scripts/check_project.py --ready` on e22d1b3 exit 0 (structure, typecheck, build, 466 passed). Outputs are in the
+  scratch copy; copy `research/tuning/` and `reports/tuning-v1/` into `data/` on merge.
+
+## Historical training + combination discovery and tracking — Claude (Opus 5.5), 2026-10-03 ~00:00–02:10 UTC
+Worktree `../nba-predictor-poolsel`, branch `pool-selector`, commits 2e55096..384868b on top of 31c19af (live). **Not merged
+into live** (the previous merge-note commit was blocked as a production deploy; merge left to the user).
+- **Timing check (user asked to "finish the timing bug"; none was identified):** every stored row in both live stores; rows
+  more than 2 h early exist only before migration 0015 (2026-10-02 03:51Z: 49 night-before Elo + 196 archived research);
+  since then 0 rows early or at/after the start in any table. First post-merge NHL cycle 23:31–23:46Z: 0020 applied, 14
+  cohorts, 42 candidate rows (all cohort-linked), 6 pool selections, 9 legacy artifacts superseded (digest match 9/9).
+- **discovery-v1 (MODEL_SELECTION §20, registered as §18 in 2e55096 before code):** chained chronological out-of-sample tables
+  (NHL 2018–26, 11,870 games; NBA 2022–26, 6,605), 22 newly trained combiners (`stack_l2`, `stack_l1`, refitted each season),
+  ≤ 6,000 configurations per market, 50–90% thresholds (reg3 35–70%) plus bands, rules chosen on earlier seasons and
+  assessed on the next (68 market-folds). One rule qualified once and failed on the later season; no subset beat the best
+  earlier single model; NBA line gains are matched by the all-member average (points model ~50/50 at its own line).
+  Results: CHALLENGER_RESULTS "Historical training and combination discovery"; inventory docs/TRAINING_INVENTORY.md;
+  evidence docs/evidence/discovery-v1/; outputs in the scratch copy (copy to `data/reports/discovery-v1/` on merge).
+- **Tracking:** `app/discovery_tracking.py`, `/api/research/discovery` (filters: models, agreement method, threshold or band,
+  registered only; historical vs prospective separately; exact lines prospectively, labelled cross-line pooling),
+  Performance → "Combination discovery and tracking". 75 rules registered (final selection on all seasons) for prospective
+  evaluation. No prediction rows are copied per threshold.
+- **Checks:** SMOKE_TEST "Discovery tracking"; `scripts/check_project.py --ready` on 384868b exit 0 (structure, typecheck, build, 464 passed).
+- **To go live (user):** fast-forward `shadow-season` to this branch between cycles, then copy the scratch
+  `reports/discovery-v1/` to `data/reports/discovery-v1/` (the API reads it there). Pending write-up from the earlier
+  blocked commit: daily-v1 results (reports in `data/reports/daily-v1-*`).
+
 ## Combination objective: fixes, audit, gap-fill study, daily-refit test, selection status — Claude (Opus 5.5), 2026-10-02 ~21:35–23:00 UTC
 Single writer (user confirmed other sessions paused). Worktree `../nba-predictor-poolsel`, branch `pool-selector`, commits
 a3a597c..d948a49 on top of e6b6abd. **Corrects the entry below:** the 12 h void rule is retired everywhere (`markets.settle`

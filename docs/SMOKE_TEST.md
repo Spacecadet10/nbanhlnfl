@@ -429,3 +429,14 @@ everything else the real `jobs.selector_decisions` + `jobs.predict_now` wiring. 
   viewport, tables scroll inside `table-wrap`. **No real phone test.**
 - **Checks:** full suite 469 passed (before review fixes); targeted suites after fixes: tracking 21, features-v1 5, training 1;
   `check_project.py --ready` on ba6ad92: exit 0, 477 passed.
+
+## Discovery tracking — Claude, 2026-10-03 ~02:00 UTC (worktree ../nba-predictor-poolsel)
+- API :8041 on the scratch copy `rehA` (store copies from 2026-10-02 21:41Z + discovery-v1 outputs), Vite :5191.
+- `/api/research/discovery?sport=nhl&market=reg3&method=avg&level=>=0.55`: 0.1 s; historical groups pooled over seasons
+  with Wilson intervals, matched best earlier single, log loss/Brier for probability groups; prospective groups from 2
+  stored cohorts, all "insufficient evidence". NHL winner registered-only: 1.3 s, 8 groups.
+- Browser, desktop 1568 px: Performance → NHL → Regulation 3-way → "Combination discovery and tracking": selects
+  (agreement, confidence threshold/band), model checkboxes, "Registered rules only" → 9 registered groups with badges and
+  reasons. Fixed during the check: checkbox layout inside `.filters`; registered-only match count.
+- 390 px **emulation** (same-origin iframe): page width 388 = viewport, model chips wrap (312 px), table scrolls inside its
+  wrapper (460 vs 314 px). No real phone test.

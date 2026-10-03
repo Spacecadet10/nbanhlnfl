@@ -1,0 +1,12 @@
+inputs {'oof-nhl-screen': 'bd4824b99f882a83a68a6bfa', 'oof-nhl-assess': '69b587f71047f5772960fc74', 'oof-nba-screen': '70699e2fa2f175be2c0993a9', 'oof-nba-assess': 'fdf536466fb40ca49cda1359'}
+nhl:winner: 8 season fits each (2019–2026); last fit 10476 games, seasons 2018–2025; L1 keeps ['hockey_logistic_xg', 'logit_l2:nhl_base']
+nhl:reg3: 8 season fits each (2019–2026); last fit 10476 games, seasons 2018–2025; L1 keeps ['multinomial_l2:nhl_base']
+nhl:spread: 8 season fits each (2019–2026); last fit 10476 games, seasons 2018–2025; L1 keeps ['poisson_draw:nhl_base']
+nhl:total: 8 season fits each (2019–2026); last fit 10476 games, seasons 2018–2025; L1 keeps ['goals_poisson', 'poisson_draw:nhl_base']
+nhl:team_total_home: 8 season fits each (2019–2026); last fit 10476 games, seasons 2018–2025; L1 keeps ['poisson_draw:nhl_base']
+nhl:team_total_away: 8 season fits each (2019–2026); last fit 10476 games, seasons 2018–2025; L1 keeps ['poisson_draw:nhl_base']
+nba:winner: 4 season fits each (2023–2026); last fit 5283 games, seasons 2022–2025; L1 keeps ['logistic_v2', 'gbt_v1', 'elastic_net:nba_base', 'mlp:nba_base:normal']
+nba:spread: 4 season fits each (2023–2026); last fit 5283 games, seasons 2022–2025; L1 keeps ['ridge_points@weekly', 'gbt_points@weekly', 'extra_trees:nba_base:normal', 'mlp:nba_base:normal']
+nba:total: 4 season fits each (2023–2026); last fit 5283 games, seasons 2022–2025; L1 keeps ['extra_trees:nba_base:normal', 'ngboost:nba_base']
+nba:team_total_home: 4 season fits each (2023–2026); last fit 5283 games, seasons 2022–2025; L1 keeps ['ngboost:nba_base']
+nba:team_total_away: 4 season fits each (2023–2026); last fit 5283 games, seasons 2022–2025; L1 keeps ['extra_trees:nba_base:normal']

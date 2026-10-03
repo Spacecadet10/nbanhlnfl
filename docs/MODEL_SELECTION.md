@@ -458,6 +458,91 @@ Every run is logged (data/research/features-v1/experiments.jsonl: success, failu
   minutes source); PP/PK opportunity counts (penalties are not in the stored shot data; NHL REST `team/powerplay` is a
   post-game per team-game source, assessed but not integrated).
 
+## 20. Historical training and combination discovery `discovery-v1` (recorded 2026-10-03 01:29 UTC in commit 2e55096, before any run; registered as "§18" on branch pool-selector, renumbered at reconciliation)
+Pipeline: historical data → models trained at each season start on earlier seasons only → chronological out-of-sample
+predictions → search of subsets × agreement rules × thresholds per market → rules chosen on earlier seasons, evaluated once
+on the next season, repeated → results kept for tracking (historical, exploratory) and the frozen rules recorded for
+prospective evaluation. Every season used was spent before: **exploratory, not an independent test.**
+- **Reused trained models (no refit):** the chained pool-v1 out-of-sample tables `oof-{sport}-screen` + `oof-{sport}-assess`
+  (identical members, no overlapping games, same night-before cutoffs; every member refitted at each season start on
+  earlier seasons): **NHL 2018–2026 (9 seasons, 11,870 games), NBA 2022–2026 (5 seasons, 6,605 games).** Inventory of
+  models, features and training windows: docs/TRAINING_INVENTORY.md.
+- **Members per market:** existing members + candidates, excluding the two pool *reference* re-expressions (`logit_l2:nba_base`,
+  `ridge:nba_base`: duplicates of existing members) and every `*_goalie` candidate (historical inputs used the actual starter,
+  an optimistic input not available pregame). NHL winner 10, reg3 5, NHL lines 4; NBA winner 13, NBA lines 10.
+- **Newly trained challengers (22 configurations: NHL 12, NBA 10, within 24 per sport):** two learned combiners per market,
+  refitted at every season start on the earlier seasons' out-of-sample member predictions only: `stack_l2` (L2 logistic /
+  multinomial on clipped log-probabilities of all members, C = 0.1) and `stack_l1` (L1, C = 0.05, sparse: selects members).
+  No fit in a table's first season. Code `backend/app/discovery_study.py`.
+- **Lines:** historical lines are the primary model's own pregame line stored with each game (points model / goals model),
+  labelled **"pregame research line"**; never derived from final scores; not bookmaker lines; the primary is ~50/50 there by
+  construction. Prospective tracking uses the exact bookmaker or model line recorded with each cohort. No profit claim.
+- **Confidence definitions (never mixed):** `single` = the member's probability of its pick; `avg` = equal-weight average
+  probability of its pick; `unanimous_min` = every member picks the same outcome, confidence = the minimum member probability
+  of that outcome; `majority` = more than half the members pick the same outcome (ties and no strict majority abstain),
+  confidence = mean probability of the supporting members, votes k/n recorded; `stack` = stacker probability of its pick.
+  A pick is the most probable allowed outcome (draw allowed only in reg3).
+- **Thresholds:** cumulative 50–90% in 5-point steps (two-way markets, 9 levels); reg3 35–70% (8 levels). **Bands**
+  (non-overlapping, descriptive, never used for selection): two-way [50,55) … [85,90), [90,100]; reg3 [33.3,35), [35,40) …
+  [65,70), [70,100].
+- **Search family (cumulative thresholds only), order and budget:** singles (members + stackers); every pair (`avg`,
+  `unanimous_min`); triples (`avg`, `unanimous_min`, `majority`; mixed candidate + existing first, seeded 20261003); larger
+  subsets (`avg`, `majority`; by size, seeded) until **6,000 configurations per market** (raised from 500 because the 50–90%
+  grid multiplies thresholds by 9; recorded here before the run). Omitted subsets are listed.
+- **Chronological procedure:** for each assess season after the first, select on all earlier seasons, assess once on that
+  season (NHL 8 folds, 2019–26; NBA 4 folds, 2023–26). Best single = lowest log loss on the selection seasons. Frozen per
+  fold: qualified rules; top point lift; highest accuracy (≥ 100 picks, ≥ 5% coverage); and for each cumulative threshold the
+  rule with the highest lift at that threshold (≥ 100 picks). Assessed against the best prior single, the primary, the
+  strongest constituent (prior), the all-member average and confidence-only filtering, at matched coverage.
+- **Qualification:** ≥ 100 picks, ≥ 5% coverage, Bonferroni lower bound of lift > 0 over this family plus every rule
+  previously evaluated for the market, better than every constituent at matched coverage.
+- **Reporting per group** (every evaluated subset × method × threshold or band, per season and pooled): eligible games,
+  selected games, coverage, wins / losses / pushes / voids / pending, win rate with Wilson 95% interval, mean confidence
+  (calibration gap), Brier and log loss of the group's probability on its picks where it has one, and the best prior single's
+  win rate on the same number of its most confident picks. Groups with < 50 decided picks are labelled "insufficient
+  evidence". Saved compactly for the Performance tracking view; underlying predictions stay in the saved tables (no
+  per-threshold rows).
+- **Compute:** ≤ 2 h wall-clock, scratch copies only, one process per market in parallel.
+
+## 21. Tooling audit and bounded tuning `tuning-v1` (recorded 2026-10-03 01:52 UTC in commit 942676c, before any install or run; registered as "§19" on branch pool-selector, renumbered at reconciliation)
+**Tooling audit** (from docs/REPO_REVIEW.md, CHALLENGER_RESULTS §10, `candidates/registry.FAMILY_AUDIT` and this repository's
+environments only; no other repository accessed):
+| Tool | Status before this step | Evidence | Decision |
+|---|---|---|---|
+| scikit-learn 1.9.1 HistGradientBoosting | installed, **used** with fixed settings (`gbt_v1`, `gbt_points`, `hockey_gbt`) | TRAINING_AUDIT | reuse; tune (below) as a pool learner |
+| scikit-learn ExtraTrees / RandomForest | installed, **used** (pool-v1 candidates, fixed settings) | CANDIDATE_POOL | reuse; tune ExtraTrees (below) |
+| NGBoost 0.5.11 | installed in research venvs, **used** (pool-v1, NBA lines) | CANDIDATE_POOL_RESULTS | keep; no change |
+| CatBoost 1.2.10 | research extra, **tested and rejected** (§10: worse or equal in every task) | CHALLENGER_RESULTS §10 | not retested (no new hypothesis) |
+| Optuna 5.0.0 | **missing** (resolved in the review venv; never used: every setting was declared) | REPO_REVIEW #3 | **adopt** for bounded chronological tuning |
+| LightGBM 4.7.0 / XGBoost 3.4.1 | **missing**; imports failed without the system `libomp` (no Homebrew) | REPO_REVIEW "+" row | **deferred/untested**: related to but distinct from sklearn HistGradientBoosting (different split finding, regularisation, categorical handling and defaults); the sklearn result below does not rule them out; adoption needs a new system library |
+| statsmodels (negative binomial) | missing | REPO_REVIEW; dispersion 1.02/0.96 | rejected (no overdispersion) |
+The concrete gap addressed here is that **no learner was ever tuned**: every setting was declared. This experiment tunes
+sklearn HistGradientBoosting (already a dependency) and ExtraTrees; it says nothing about LightGBM or XGBoost, which stay
+untested (correction recorded at reconciliation, 2026-10-03; the original text called LightGBM's algorithm available through
+sklearn, which overstated the equivalence).
+
+**tuning-v1 design**
+- **Dependency:** `optuna==5.0.0` in the optional `research` extra, installed in the worktree venv only; the live venv and every
+  live candidate identity are unchanged (new code in `backend/app/tuning_study.py`; the hashed pool files are not edited).
+- **Configurations (8 retraining configurations, ≤ 24 per sport):** NBA `hgb_tuned` binary (winner) and normal (margin/total
+  → spread, total, team totals); `et_tuned` binary and normal. NHL `hgb_tuned` binary, reg3 (multiclass) and goals (Poisson
+  loss, home/away, fitted draw inflation → every NHL market); `et_tuned` binary. Features: `nba_base` / `nhl_base` (no goalie
+  inputs). Same point-in-time feature walk as pool-v1.
+- **Chronological tuning:** for each season s of the evaluated tables (NHL 2018–2026, NBA 2022–2026): Optuna TPE
+  (seed 20261003, 25 trials, fixed search space below) trains on seasons < s−1 and scores season s−1 (binary/reg3: log loss;
+  normal: margin + total MSE scaled by their variances; goals: Poisson deviance); the best setting is refitted on every season
+  < s and predicts season s only. Season s outcomes are never seen by its own tuning. All trials are saved.
+  Search spaces: HGB learning_rate 0.02–0.2 (log), max_iter 100–600, max_leaf_nodes 8–64, min_samples_leaf 20–300,
+  l2_regularization 0.001–10 (log); ExtraTrees (300 trees) min_samples_leaf 10–300, max_features 0.2–1.0, max_depth 4–30.
+- **Predictions saved:** per-game vectors at each table row's line, `data/research/tuning/oof-{sport}.json.gz`, with the
+  per-season best settings and fit records.
+- **Evaluation:** (a) **alone:** per market, log loss minus the strongest existing member and minus the untuned pool
+  counterpart (`extra_trees:*`), per season and pooled with a 95% week-block bootstrap; (b) **inside combinations:** the
+  discovery-v1 procedure (§20, unchanged code and budget) rerun with the tuned members added, rules chosen on earlier seasons,
+  assessed on the next, reported by market and threshold, plus with/without-the-tuned-member comparisons.
+- Exploratory (spent seasons). Compute ≤ 2 h on scratch copies. Nothing changes live; a tuned learner could only enter live
+  recording later as a separately versioned candidate.
+
 ## Amendments
 - **2026-10-02, before the study run:** `ridge_points` / `gbt_points` spreads have a floor of 1.0 point (`MIN_SD`), found with
   synthetic test data where every total was identical. Real residual spreads are about 12 (margin) and 18 (total) points, so the
@@ -502,3 +587,6 @@ Every run is logged (data/research/features-v1/experiments.jsonl: success, failu
   definition; the selector's prospective evidence restarts under the new one (it was 0 settled cohorts in every market, so
   no evidence is lost). No stored live forecast had a moved start (NBA 0 / NHL 0 of 510 market forecasts), so no recorded
   settlement changes.
+- **2026-10-03 ~01:40 UTC, discovery-v1 amendment (after run 1):** added the final selection step the §20 pipeline names
+  ("record them prospectively"): the same selection procedure on every historical season, no assessment, saved as
+  `prospective_registry` per market. It changes no evaluated figure (same seed, same folds); run 2 reproduces run 1's folds.

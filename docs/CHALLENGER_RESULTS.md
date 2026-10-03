@@ -232,3 +232,71 @@ Evidence: docs/evidence/features-v1/ (both reports and the experiment log: 4 con
   the inputs may help an average without qualifying alone. The registered rule gates on standalone value, so nothing is
   recorded live from this study; a prospective test would need its own registration (combination-only source, as the pool's
   combination route).
+
+## Historical training and combination discovery `discovery-v1` (2026-10-03 01:31–01:45 UTC; exploratory)
+Design MODEL_SELECTION §20 (registered as §18 in 2e55096, before code; code bb1f9d1, before the run; amendment adding the final selection step,
+run 2 reproduces run 1's folds exactly). Command `python -m app.cli discovery-study` (saved tables only; no store opened).
+Full outputs `data/reports/discovery-v1/` (report.json, per-group tables `groups-<sport>-<market>.json.gz`); compact:
+docs/evidence/discovery-v1/. Models, features and training windows: docs/TRAINING_INVENTORY.md.
+
+**What ran:** NHL 2018–26 (11,870 games, 8 chronological folds) and NBA 2022–26 (6,605 games, 4 folds), all members
+fitted at season start on earlier seasons (reused); 22 newly trained combiners (`stack_l2`, `stack_l1`, refitted each season).
+Configurations per market: NHL winner 5,994 (all pairs and triples, 102 of 848 larger subsets), reg3 552, NHL lines 288
+each (every subset); NBA winner 5,994 (all pairs, 165 of 286 triples, no larger), NBA lines 5,994 each (all pairs and
+triples, 102 of 848 larger). Thresholds 50–90% (reg3 35–70%); bands reported for every group.
+
+**Results (frozen rules, pooled over every later season they were assessed on; matched coverage)**
+| Market | Frozen rules vs best earlier single model, by threshold | Reading |
+|---|---|---|
+| NHL winner | ≥60%: 66.2% vs 66.6%; ≥70%: 74.0% vs 75.3%; ≥80%: 80.4% vs 84.1% | no improvement |
+| NHL reg3 | ≥50%: 56.9% vs 57.2%; ≥60%: 63.6% vs 63.4%; ≥65%: 68.3% vs 67.4% (n 218) | no improvement beyond noise |
+| NHL puck line | ≥60%: 63.0% vs 63.8%; ≥65%: 69.8% vs 71.4% | no improvement |
+| NHL total | ≥60%: 73.1% vs 66.7% (n 297) but the all-member average 73.4% | no subset beats the plain average |
+| NHL home / away TT | ≥60%: 62.2% vs 59.5% / 63.1% vs 61.5%; ≥65% worse | inconsistent across thresholds |
+| NBA winner | ≥70%: 81.4% vs 81.0%; ≥80%: 85.5% vs 85.5%; ≥85%: 86.8% vs 88.2% | no improvement |
+| NBA spread | ≥60%: 58.8% vs 61.4% | worse |
+| NBA total / team totals | e.g. total ≥70%: 63.2% vs 53.8%; TT away ≥70%: 68.4% vs 53.5% | see note |
+
+- **Qualified rules:** one in 68 market-folds — NBA total 2025-26 fold, `unanimous_min(extra_trees:normal + ngboost) ≥ 0.70`
+  (selection 64.1%, lower bound +0.002); on 2025-26 it went 29–19 (60.4%) vs 70.8% for the best earlier single model.
+  It did not hold up. The final selection on all seasons qualifies nothing.
+- **Note on NBA lines:** the historical line is the points model's own pregame line, where that model is ~50/50; whenever it is
+  the "best single" its matched win rate is ~50%, so lifts against it are not meaningful. Against the pre-registered
+  all-member average at matched coverage, frozen subsets are no better (total ≥70%: 63.2% vs 60.5%; TT home ≥70%: 59.2% vs
+  59.2%). What the data do show: the other models predict the side of the points model's own line better than chance
+  (≈ 54–63% at higher confidence). That is relative to a model line, not a bookmaker line; no betting claim.
+- **Learned combiners:** L1 stackers keep 1–4 members (e.g. NHL lines: `poisson_draw` only; NBA winner: logistic_v2,
+  gbt_v1, elastic net, mlp:normal) and match, not beat, their strongest member.
+- **Registered for prospective tracking:** 75 rules (5–9 per market: best lift per threshold, top lift, highest accuracy;
+  none qualified), shown as "registered" in Performance → Combination discovery and tracking.
+- **Answer within what was tested:** across all pairs and triples (and the bounded larger subsets) at 50–90% thresholds, no
+  subset, agreement rule or threshold beat the best single model chosen on earlier seasons on later seasons, in any market,
+  apart from line-market gains that the plain average of all members already provides. Untested: the omitted larger subsets
+  and NBA winner triples listed in the report; bookmaker lines; goalie-aware NHL models with pregame starters.
+
+## Tooling adoption and bounded tuning `tuning-v1` (2026-10-03 01:53–02:05 UTC; exploratory)
+Design and tooling audit: MODEL_SELECTION §21 (registered as §19 in 942676c, before install). Code a291d54 / 6f829d7 (before each run).
+Commands (scratch store copies): `python -m app.cli tuning-study` (01:53–01:59 UTC), `python -m app.cli tuning-evaluate`.
+Predictions `data/research/tuning/oof-{nhl,nba}.json.gz` (sha256 prefixes bc221a73…, f753cca2…), every trial
+`trials-{sport}.json`, per-season settings and fits `report.json`; evaluation `data/reports/tuning-v1/evaluation.json` and
+per-group tables; compact copies docs/evidence/tuning-v1/.
+
+| Tool | Purpose | Implementation | Experiment | Result |
+|---|---|---|---|---|
+| **Optuna 5.0.0** (adopted; pinned in the `research` extra, worktree venv only) | bounded hyperparameter tuning, none existed | `app/tuning_study.py`: TPE seed 20261003, 25 trials per learner and season, tuned on seasons < s−1 against s−1, refitted on < s, predicts s | 8 learners × every season (NHL 2018–26, NBA 2022–26); 25/25 distinct objective values per study | tuning works; the most regularised settings win; the tuned learners do not beat the existing members (below) |
+| **sklearn HistGradientBoosting** (histogram gradient boosting, related to but not the same implementation as LightGBM; used before with fixed settings) | tuned boosted trees as a pool learner: NBA winner, margin/total; NHL winner, reg3, goals | same module, built as `candidates.learners.Fitted` so the pool engine produces vectors at each game's line | as above | alone **worse** than the best earlier existing member in every market (e.g. NBA winner +0.0081 log loss [+0.0045, +0.0118], NHL reg3 +0.0150 [+0.0115, +0.0188]); vs the untuned counterparts: NBA winner +0.0043 vs `gbt_v1`, NHL winner +0.0003 vs `hockey_gbt` |
+| **sklearn ExtraTrees** (existing pool family) | tuned variant | same | NBA winner, margin/total; NHL winner | ≈ untuned (−0.0023…+0.0006, intervals span 0); worse than the best existing member (+0.0021…+0.0097) |
+| LightGBM 4.7.0 / XGBoost 3.4.1 | — | not installed | — | **deferred/untested**: distinct implementations; the HistGradientBoosting result does not rule them out; adoption needs the system `libomp` |
+| CatBoost 1.2.10 | — | research extra (existing) | §10, 2026-10-02 | rejected earlier; not retested |
+
+**Inside combinations** (discovery-v1 procedure rerun on the same games with and without the tuned members; NHL 8 folds,
+NBA 4 folds; full per-threshold table in docs/evidence/tuning-v1/summary.txt):
+- **No rule qualified** with or without the tuned members in any market.
+- Frozen rules pooled over later seasons, e.g. NHL winner ≥70%: 74.4% with vs 74.0% without (best single 75.4%); NBA
+  winner ≥70%: 81.5% vs 81.4% (best single 80.9%); NHL reg3 ≥60%: 61.4% vs 63.6%; NBA team total home ≥70%: 61.5% vs 59.6%
+  (n ≈ 100). Differences are within ±2 points and change sign across thresholds.
+- Same rule with vs without its tuned member (same season, same threshold): NHL winner 63.5% vs 63.2% (19 rules), reg3
+  51.2% vs 51.0% (26), NBA winner 70.6% vs 69.8% (7), NBA lines and NHL lines within ±2 points — no consistent help.
+- Final selection on all seasons includes a tuned member in 1–5 rules per market (registered nowhere live; research only).
+- **Conclusion within what was tested:** bounded Optuna tuning of boosted trees and ExtraTrees did not improve any market
+  alone or inside a combination. Nothing is proposed for live recording; current live recording is unchanged.

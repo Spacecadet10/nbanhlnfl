@@ -1,0 +1,224 @@
+
+== nhl:winner: members ['hockey_elo', 'goals_poisson', 'hockey_logistic', 'hockey_gbt', 'hockey_logistic_xg', 'extra_trees:nhl_base', 'logit_l2:nhl_base', 'mlp:nhl_base', 'multinomial_l2:nhl_base', 'poisson_draw:nhl_base'] | configs 5994 evaluated {single:12, pair:45, triple:120, larger:102} omitted {larger:746}
+   stackers last fit members used: l2 ['hockey_elo', 'goals_poisson', 'hockey_logistic', 'hockey_gbt', 'hockey_logistic_xg', 'extra_trees:nhl_base', 'logit_l2:nhl_base', 'mlp:nhl_base', 'multinomial_l2:nhl_base', 'poisson_draw:nhl_base'] | l1 ['hockey_logistic_xg', 'logit_l2:nhl_base']
+  fold ->2019 best hockey_logistic_xg bonf 8387 qualified []
+    highest accuracy avg|goals_poisson+hockey_logistic_xg+poisson_draw:nhl_base   >=0.65 sel wr 0.696 lift 0.052 lo -0.219 | assess n 105 cov 0.077 wr 0.676 vs best 0.676 strongest 0.676 avg 0.714 prim 0.714
+  fold ->2020 best hockey_logistic_xg bonf 8387 qualified []
+    highest accuracy avg|extra_trees:nhl_base+multinomial_l2:nhl_base+poisson_dra >=0.65 sel wr 0.702 lift 0.038 lo -0.150 | assess n 94 cov 0.078 wr 0.755 vs best 0.755 strongest 0.766 avg 0.755 prim 0.723
+  fold ->2021 best hockey_logistic_xg bonf 8387 qualified []
+    highest accuracy avg|extra_trees:nhl_base+mlp:nhl_base+multinomial_l2:nhl_bas >=0.65 sel wr 0.718 lift 0.008 lo -0.133 | assess n 131 cov 0.138 wr 0.771 vs best 0.748 strongest 0.763 avg 0.756 prim 0.710
+    top point lift   avg|extra_trees:nhl_base+multinomial_l2:nhl_base+poisson_dra >=0.65 sel wr 0.717 lift 0.027 lo -0.128 | assess n 119 cov 0.125 wr 0.765 vs best 0.748 strongest 0.773 avg 0.765 prim 0.714
+  fold ->2022 best hockey_logistic_xg bonf 8387 qualified []
+    highest accuracy avg|hockey_logistic_xg+logit_l2:nhl_base+multinomial_l2:nhl_ >=0.70 sel wr 0.732 lift 0.016 lo -0.157 | assess n 191 cov 0.136 wr 0.754 vs best 0.749 strongest 0.749 avg 0.733 prim 0.728
+    top point lift   unanimous_min|hockey_elo+hockey_logistic_xg+multinomial_l2:n >=0.65 sel wr 0.728 lift 0.026 lo -0.109 | assess n 250 cov 0.178 wr 0.728 vs best 0.728 strongest 0.728 avg 0.736 prim 0.736
+  fold ->2023 best hockey_logistic_xg bonf 8387 qualified []
+    highest accuracy stack|stack_l1                                               >=0.65 sel wr 0.751 lift 0.026 lo -0.121 | assess n 378 cov 0.270 wr 0.698 vs best 0.706 strongest - avg 0.690 prim 0.667
+  fold ->2024 best hockey_logistic_xg bonf 8387 qualified []
+    highest accuracy unanimous_min|hockey_logistic+logit_l2:nhl_base+mlp:nhl_base >=0.70 sel wr 0.779 lift 0.007 lo -0.120 | assess n 152 cov 0.109 wr 0.783 vs best 0.776 strongest 0.770 avg 0.763 prim 0.770
+    top point lift   avg|goals_poisson+multinomial_l2:nhl_base                    >=0.65 sel wr 0.731 lift 0.015 lo -0.072 | assess n 293 cov 0.209 wr 0.744 vs best 0.754 strongest 0.758 avg 0.717 prim 0.724
+  fold ->2025 best hockey_logistic_xg bonf 8387 qualified []
+    highest accuracy avg|hockey_elo+extra_trees:nhl_base+multinomial_l2:nhl_base  >=0.70 sel wr 0.788 lift 0.004 lo -0.113 | assess n 107 cov 0.077 wr 0.766 vs best 0.776 strongest 0.766 avg 0.757 prim 0.729
+    top point lift   avg|hockey_logistic_xg+extra_trees:nhl_base+logit_l2:nhl_bas >=0.70 sel wr 0.760 lift 0.009 lo -0.088 | assess n 153 cov 0.109 wr 0.745 vs best 0.758 strongest 0.758 avg 0.739 prim 0.706
+  fold ->2026 best hockey_logistic_xg bonf 8387 qualified []
+    highest accuracy stack|stack_l1                                               >=0.70 sel wr 0.785 lift 0.008 lo -0.094 | assess n 83 cov 0.060 wr 0.675 vs best 0.675 strongest - avg 0.651 prim 0.627
+    top point lift   unanimous_min|hockey_logistic+logit_l2:nhl_base+mlp:nhl_base >=0.70 sel wr 0.782 lift 0.012 lo -0.087 | assess n 54 cov 0.039 wr 0.648 vs best 0.685 strongest 0.685 avg 0.704 prim 0.593
+   frozen rules pooled over folds by threshold: >=0.50: 6230/10515 = 0.592 vs best single 0.592; >=0.55: 4094/6499 = 0.630 vs best single 0.634; >=0.60: 2468/3727 = 0.662 vs best single 0.666; >=0.65: 1279/1759 = 0.727 vs best single 0.728; >=0.70: 1152/1556 = 0.740 vs best single 0.753; >=0.75: 311/394 = 0.789 vs best single 0.815; >=0.80: 86/107 = 0.804 vs best single 0.841
+
+== nhl:reg3: members ['goals_poisson', 'goals_draw', 'goals_glm', 'multinomial_l2:nhl_base', 'poisson_draw:nhl_base'] | configs 552 evaluated {single:7, pair:10, triple:10, larger:6} omitted {}
+   stackers last fit members used: l2 ['goals_poisson', 'goals_draw', 'goals_glm', 'multinomial_l2:nhl_base', 'poisson_draw:nhl_base'] | l1 ['multinomial_l2:nhl_base']
+  fold ->2019 best poisson_draw:nhl_base bonf 1560 qualified []
+    highest accuracy single|multinomial_l2:nhl_base                               >=0.55 sel wr 0.553 lift 0.035 lo -0.152 | assess n 172 cov 0.127 wr 0.599 vs best 0.593 strongest 0.599 avg 0.570 prim 0.517
+  fold ->2020 best poisson_draw:nhl_base bonf 1560 qualified []
+    highest accuracy single|multinomial_l2:nhl_base                               >=0.60 sel wr 0.577 lift 0.029 lo -0.210 | assess n 56 cov 0.046 wr 0.607 vs best 0.589 strongest 0.607 avg 0.643 prim 0.589
+  fold ->2021 best poisson_draw:nhl_base bonf 1560 qualified []
+    highest accuracy unanimous_min|goals_poisson+goals_glm+poisson_draw:nhl_base  >=0.50 sel wr 0.580 lift 0.011 lo -0.120 | assess n 165 cov 0.173 wr 0.630 vs best 0.636 strongest 0.636 avg 0.648 prim 0.600
+    top point lift   avg|multinomial_l2:nhl_base+poisson_draw:nhl_base            >=0.50 sel wr 0.549 lift 0.023 lo -0.072 | assess n 264 cov 0.277 wr 0.580 vs best 0.595 strongest 0.595 avg 0.587 prim 0.557
+  fold ->2022 best poisson_draw:nhl_base bonf 1560 qualified []
+    highest accuracy stack|stack_l1                                               >=0.50 sel wr 0.631 lift 0.030 lo -0.128 | assess n 379 cov 0.271 wr 0.607 vs best 0.588 strongest - avg 0.596 prim 0.578
+  fold ->2023 best multinomial_l2:nhl_base bonf 1560 qualified []
+    highest accuracy single|multinomial_l2:nhl_base                               >=0.60 sel wr 0.623 lift 0.000 lo -0.127 | assess n 237 cov 0.169 wr 0.646 vs best 0.646 strongest 0.646 avg 0.620 prim 0.582
+    top point lift   unanimous_min|goals_poisson+goals_glm+poisson_draw:nhl_base  >=0.50 sel wr 0.598 lift 0.010 lo -0.079 | assess n 355 cov 0.254 wr 0.569 vs best 0.617 strongest 0.606 avg 0.589 prim 0.555
+  fold ->2024 best poisson_draw:nhl_base bonf 1560 qualified []
+    highest accuracy stack|stack_l1                                               >=0.55 sel wr 0.640 lift 0.000 lo -0.119 | assess n 264 cov 0.189 wr 0.606 vs best 0.621 strongest - avg 0.610 prim 0.591
+    top point lift   single|multinomial_l2:nhl_base                               >=0.60 sel wr 0.631 lift 0.014 lo -0.089 | assess n 210 cov 0.150 wr 0.633 vs best 0.619 strongest 0.633 avg 0.624 prim 0.600
+  fold ->2025 best multinomial_l2:nhl_base bonf 1560 qualified []
+    highest accuracy avg|multinomial_l2:nhl_base+poisson_draw:nhl_base            >=0.60 sel wr 0.659 lift 0.006 lo -0.115 | assess n 89 cov 0.064 wr 0.596 vs best 0.596 strongest 0.596 avg 0.584 prim 0.573
+    top point lift   stack|stack_l2                                               >=0.60 sel wr 0.651 lift 0.009 lo -0.108 | assess n 123 cov 0.088 wr 0.593 vs best 0.569 strongest - avg 0.561 prim 0.577
+  fold ->2026 best poisson_draw:nhl_base bonf 1560 qualified []
+    highest accuracy avg|multinomial_l2:nhl_base+poisson_draw:nhl_base            >=0.60 sel wr 0.649 lift 0.007 lo -0.105 | assess n 38 cov 0.027 wr 0.632 vs best 0.684 strongest 0.684 avg 0.579 prim 0.605
+    top point lift   avg|multinomial_l2:nhl_base+poisson_draw:nhl_base            >=0.50 sel wr 0.563 lift 0.009 lo -0.040 | assess n 353 cov 0.253 wr 0.518 vs best 0.516 strongest 0.516 avg 0.504 prim 0.487
+   frozen rules pooled over folds by threshold: >=0.35: 4937/10374 = 0.476 vs best single 0.476; >=0.40: 4912/10293 = 0.477 vs best single 0.477; >=0.45: 3066/5912 = 0.519 vs best single 0.521; >=0.50: 1851/3254 = 0.569 vs best single 0.572; >=0.55: 1131/1880 = 0.602 vs best single 0.610; >=0.60: 797/1254 = 0.636 vs best single 0.634; >=0.65: 149/218 = 0.683 vs best single 0.674; >=0.70: 2/4 = 0.500 vs best single 0.750
+
+== nhl:spread: members ['goals_poisson', 'goals_draw', 'goals_glm', 'poisson_draw:nhl_base'] | configs 288 evaluated {single:6, pair:6, triple:4, larger:1} omitted {}
+   stackers last fit members used: l2 ['goals_poisson', 'goals_draw', 'goals_glm', 'poisson_draw:nhl_base'] | l1 ['poisson_draw:nhl_base']
+  fold ->2019 best poisson_draw:nhl_base bonf 1110 qualified []
+    highest accuracy single|goals_glm                                             >=0.55 sel wr 0.623 lift 0.003 lo -0.097 | assess n 710 cov 0.523 wr 0.599 vs best 0.610 strongest 0.599 avg 0.594 prim 0.587
+    top point lift   single|goals_glm                                             >=0.60 sel wr 0.621 lift 0.030 lo -0.135 | assess n 272 cov 0.200 wr 0.577 vs best 0.603 strongest 0.577 avg 0.581 prim 0.577
+  fold ->2020 best poisson_draw:nhl_base bonf 1110 qualified []
+    highest accuracy single|poisson_draw:nhl_base                                 >=0.65 sel wr 0.613 lift 0.000 lo -0.208 | assess n 70 cov 0.058 wr 0.714 vs best 0.714 strongest 0.714 avg 0.671 prim 0.686
+    top point lift   avg|goals_glm+poisson_draw:nhl_base                          >=0.60 sel wr 0.601 lift 0.007 lo -0.109 | assess n 229 cov 0.189 wr 0.638 vs best 0.620 strongest 0.620 avg 0.633 prim 0.629
+  fold ->2021 best poisson_draw:nhl_base bonf 1110 qualified []
+    highest accuracy single|poisson_draw:nhl_base                                 >=0.65 sel wr 0.643 lift 0.000 lo -0.172 | assess n 44 cov 0.046 wr 0.705 vs best 0.705 strongest 0.705 avg 0.568 prim 0.591
+    top point lift   avg|goals_poisson+goals_glm+poisson_draw:nhl_base            >=0.60 sel wr 0.612 lift 0.010 lo -0.093 | assess n 182 cov 0.191 wr 0.610 vs best 0.626 strongest 0.626 avg 0.604 prim 0.588
+  fold ->2022 best poisson_draw:nhl_base bonf 1110 qualified []
+    highest accuracy single|poisson_draw:nhl_base                                 >=0.65 sel wr 0.652 lift 0.000 lo -0.157 | assess n 109 cov 0.078 wr 0.679 vs best 0.679 strongest 0.679 avg 0.633 prim 0.615
+    top point lift   avg|goals_poisson+goals_glm+poisson_draw:nhl_base            >=0.60 sel wr 0.612 lift 0.006 lo -0.086 | assess n 344 cov 0.246 wr 0.625 vs best 0.642 strongest 0.642 avg 0.634 prim 0.631
+  fold ->2023 best poisson_draw:nhl_base bonf 1110 qualified []
+    highest accuracy single|poisson_draw:nhl_base                                 >=0.65 sel wr 0.660 lift 0.000 lo -0.133 | assess n 85 cov 0.061 wr 0.706 vs best 0.706 strongest 0.706 avg 0.682 prim 0.565
+    top point lift   stack|stack_l1                                               >=0.55 sel wr 0.628 lift 0.009 lo -0.070 | assess n 762 cov 0.544 wr 0.605 vs best 0.606 strongest - avg 0.592 prim 0.593
+  fold ->2024 best poisson_draw:nhl_base bonf 1110 qualified []
+    highest accuracy stack|stack_l1                                               >=0.60 sel wr 0.693 lift 0.016 lo -0.116 | assess n 241 cov 0.172 wr 0.647 vs best 0.656 strongest - avg 0.627 prim 0.606
+  fold ->2025 best poisson_draw:nhl_base bonf 1110 qualified []
+    highest accuracy stack|stack_l1                                               >=0.60 sel wr 0.675 lift 0.005 lo -0.099 | assess n 263 cov 0.188 wr 0.646 vs best 0.646 strongest - avg 0.627 prim 0.586
+  fold ->2026 best poisson_draw:nhl_base bonf 1110 qualified []
+    highest accuracy single|poisson_draw:nhl_base                                 >=0.65 sel wr 0.677 lift 0.000 lo -0.104 | assess n 48 cov 0.034 wr 0.771 vs best 0.771 strongest 0.771 avg 0.729 prim 0.604
+    top point lift   unanimous_min|goals_glm+poisson_draw:nhl_base                >=0.55 sel wr 0.609 lift 0.001 lo -0.038 | assess n 582 cov 0.418 wr 0.586 vs best 0.588 strongest 0.588 avg 0.562 prim 0.557
+   frozen rules pooled over folds by threshold: >=0.50: 5973/10515 = 0.568 vs best single 0.568; >=0.55: 3442/5712 = 0.603 vs best single 0.605; >=0.60: 1281/2034 = 0.630 vs best single 0.638; >=0.65: 386/553 = 0.698 vs best single 0.714
+
+== nhl:total: members ['goals_poisson', 'goals_draw', 'goals_glm', 'poisson_draw:nhl_base'] | configs 288 evaluated {single:6, pair:6, triple:4, larger:1} omitted {}
+   stackers last fit members used: l2 ['goals_poisson', 'goals_draw', 'goals_glm', 'poisson_draw:nhl_base'] | l1 ['goals_poisson', 'poisson_draw:nhl_base']
+  fold ->2019 best goals_poisson bonf 1110 qualified []
+    highest accuracy majority|goals_draw+goals_glm+poisson_draw:nhl_base          >=0.60 sel wr 0.580 lift 0.071 lo -0.141 | assess n 89 cov 0.066 wr 0.629 vs best 0.674 strongest 0.674 avg 0.663 prim 0.674
+  fold ->2020 best goals_poisson bonf 1110 qualified []
+    highest accuracy avg|goals_poisson+goals_glm                                  >=0.60 sel wr 0.638 lift 0.022 lo -0.206 | assess n 12 cov 0.010 wr 0.500 vs best 0.500 strongest 0.500 avg 0.500 prim 0.500
+    top point lift   majority|goals_poisson+goals_glm+poisson_draw:nhl_base       >=0.60 sel wr 0.602 lift 0.034 lo -0.134 | assess n 10 cov 0.008 wr 0.400 vs best 0.500 strongest 0.500 avg 0.400 prim 0.500
+  fold ->2021 best goals_draw bonf 1110 qualified []
+    highest accuracy avg|goals_draw+goals_glm+poisson_draw:nhl_base               >=0.60 sel wr 0.599 lift 0.029 lo -0.161 | assess n 23 cov 0.024 wr 0.870 vs best 0.739 strongest 0.739 avg 0.870 prim 0.652
+    top point lift   single|poisson_draw:nhl_base                                 >=0.60 sel wr 0.577 lift 0.038 lo -0.105 | assess n 25 cov 0.026 wr 0.840 vs best 0.720 strongest 0.840 avg 0.840 prim 0.640
+  fold ->2022 best goals_draw bonf 1110 qualified []
+    highest accuracy avg|goals_poisson+goals_glm+poisson_draw:nhl_base            >=0.60 sel wr 0.618 lift 0.039 lo -0.131 | assess n 35 cov 0.025 wr 0.829 vs best 0.657 strongest 0.686 avg 0.829 prim 0.686
+  fold ->2023 best goals_draw bonf 1110 qualified []
+    highest accuracy majority|goals_poisson+goals_glm+poisson_draw:nhl_base       >=0.60 sel wr 0.639 lift 0.052 lo -0.097 | assess n 14 cov 0.010 wr 0.714 vs best 0.714 strongest 0.714 avg 0.714 prim 0.714
+  fold ->2024 best goals_draw bonf 1110 qualified []
+    highest accuracy unanimous_min|goals_glm+poisson_draw:nhl_base                >=0.60 sel wr 0.620 lift 0.037 lo -0.094 | assess n 0 cov 0.000 wr - vs best - strongest - avg - prim -
+  fold ->2025 best goals_draw bonf 1110 qualified []
+    highest accuracy avg|goals_glm+poisson_draw:nhl_base                          >=0.60 sel wr 0.580 lift 0.007 lo -0.088 | assess n 8 cov 0.006 wr 0.750 vs best 0.125 strongest 0.625 avg 0.375 prim 0.125
+    top point lift   stack|stack_l2                                               >=0.55 sel wr 0.574 lift 0.013 lo -0.065 | assess n 372 cov 0.266 wr 0.586 vs best 0.556 strongest - avg 0.562 prim 0.570
+  fold ->2026 best goals_poisson bonf 1110 qualified []
+    highest accuracy avg|goals_glm+poisson_draw:nhl_base                          >=0.60 sel wr 0.581 lift 0.013 lo -0.082 | assess n 8 cov 0.006 wr 0.750 vs best 0.875 strongest 0.375 avg 0.750 prim 0.875
+    top point lift   stack|stack_l2                                               >=0.55 sel wr 0.576 lift 0.016 lo -0.053 | assess n 383 cov 0.275 wr 0.577 vs best 0.538 strongest - avg 0.517 prim 0.538
+   frozen rules pooled over folds by threshold: >=0.50: 5574/10515 = 0.530 vs best single 0.530; >=0.55: 1543/2728 = 0.566 vs best single 0.556; >=0.60: 217/297 = 0.731 vs best single 0.667; >=0.65: 126/188 = 0.670 vs best single 0.660
+
+== nhl:team_total_home: members ['goals_poisson', 'goals_draw', 'goals_glm', 'poisson_draw:nhl_base'] | configs 288 evaluated {single:6, pair:6, triple:4, larger:1} omitted {}
+   stackers last fit members used: l2 ['goals_poisson', 'goals_draw', 'goals_glm', 'poisson_draw:nhl_base'] | l1 ['poisson_draw:nhl_base']
+  fold ->2019 best goals_draw bonf 1110 qualified []
+    highest accuracy unanimous_min|goals_poisson+goals_draw+goals_glm             >=0.55 sel wr 0.595 lift 0.028 lo -0.080 | assess n 720 cov 0.530 wr 0.610 vs best 0.610 strongest 0.610 avg 0.606 prim 0.610
+    top point lift   single|goals_glm                                             >=0.65 sel wr 0.579 lift 0.034 lo -0.118 | assess n 236 cov 0.174 wr 0.568 vs best 0.653 strongest 0.568 avg 0.623 prim 0.644
+  fold ->2020 best goals_poisson bonf 1110 qualified []
+    highest accuracy unanimous_min|goals_poisson+goals_draw+poisson_draw:nhl_base >=0.60 sel wr 0.642 lift 0.004 lo -0.171 | assess n 109 cov 0.090 wr 0.606 vs best 0.651 strongest 0.651 avg 0.578 prim 0.651
+    top point lift   unanimous_min|goals_poisson+goals_draw+goals_glm             >=0.55 sel wr 0.603 lift 0.015 lo -0.058 | assess n 689 cov 0.568 wr 0.608 vs best 0.620 strongest 0.620 avg 0.623 prim 0.620
+  fold ->2021 best goals_poisson bonf 1110 qualified []
+    highest accuracy stack|stack_l2                                               >=0.60 sel wr 0.632 lift -0.004 lo -0.176 | assess n 167 cov 0.175 wr 0.635 vs best 0.605 strongest - avg 0.623 prim 0.605
+    top point lift   avg|goals_draw+poisson_draw:nhl_base                         >=0.60 sel wr 0.603 lift 0.011 lo -0.076 | assess n 158 cov 0.166 wr 0.652 vs best 0.601 strongest 0.601 avg 0.614 prim 0.601
+  fold ->2022 best goals_poisson bonf 1110 qualified []
+    highest accuracy stack|stack_l2                                               >=0.60 sel wr 0.633 lift -0.010 lo -0.141 | assess n 189 cov 0.135 wr 0.598 vs best 0.556 strongest - avg 0.587 prim 0.556
+    top point lift   avg|goals_draw+poisson_draw:nhl_base                         >=0.60 sel wr 0.610 lift 0.017 lo -0.064 | assess n 244 cov 0.174 wr 0.594 vs best 0.537 strongest 0.566 avg 0.549 prim 0.537
+  fold ->2023 best goals_poisson bonf 1110 qualified []
+    highest accuracy stack|stack_l2                                               >=0.60 sel wr 0.622 lift 0.008 lo -0.102 | assess n 164 cov 0.117 wr 0.610 vs best 0.543 strongest - avg 0.616 prim 0.543
+    top point lift   avg|goals_draw+poisson_draw:nhl_base                         >=0.60 sel wr 0.607 lift 0.023 lo -0.050 | assess n 257 cov 0.184 wr 0.580 vs best 0.588 strongest 0.560 avg 0.619 prim 0.588
+  fold ->2024 best goals_poisson bonf 1110 qualified []
+    highest accuracy stack|stack_l2                                               >=0.60 sel wr 0.619 lift 0.020 lo -0.078 | assess n 188 cov 0.134 wr 0.681 vs best 0.638 strongest - avg 0.654 prim 0.638
+  fold ->2025 best goals_poisson bonf 1110 qualified []
+    highest accuracy stack|stack_l2                                               >=0.60 sel wr 0.632 lift 0.024 lo -0.063 | assess n 198 cov 0.142 wr 0.596 vs best 0.571 strongest - avg 0.621 prim 0.571
+  fold ->2026 best goals_poisson bonf 1110 qualified []
+    highest accuracy stack|stack_l2                                               >=0.60 sel wr 0.625 lift 0.013 lo -0.066 | assess n 216 cov 0.155 wr 0.630 vs best 0.602 strongest - avg 0.648 prim 0.602
+    top point lift   avg|goals_poisson+goals_draw+goals_glm+poisson_draw:nhl_base >=0.60 sel wr 0.609 lift 0.021 lo -0.037 | assess n 301 cov 0.216 wr 0.648 vs best 0.598 strongest 0.598 avg 0.648 prim 0.598
+   frozen rules pooled over folds by threshold: >=0.50: 5694/10265 = 0.555 vs best single 0.554; >=0.55: 3204/5437 = 0.589 vs best single 0.583; >=0.60: 1771/2848 = 0.622 vs best single 0.595; >=0.65: 285/483 = 0.590 vs best single 0.625
+
+== nhl:team_total_away: members ['goals_poisson', 'goals_draw', 'goals_glm', 'poisson_draw:nhl_base'] | configs 288 evaluated {single:6, pair:6, triple:4, larger:1} omitted {}
+   stackers last fit members used: l2 ['goals_poisson', 'goals_draw', 'goals_glm', 'poisson_draw:nhl_base'] | l1 ['poisson_draw:nhl_base']
+  fold ->2019 best poisson_draw:nhl_base bonf 1110 qualified []
+    highest accuracy single|poisson_draw:nhl_base                                 >=0.60 sel wr 0.635 lift 0.000 lo -0.206 | assess n 178 cov 0.131 wr 0.596 vs best 0.596 strongest 0.596 avg 0.596 prim 0.601
+    top point lift   avg|goals_draw+poisson_draw:nhl_base                         >=0.55 sel wr 0.594 lift 0.031 lo -0.085 | assess n 631 cov 0.465 wr 0.575 vs best 0.569 strongest 0.569 avg 0.569 prim 0.574
+  fold ->2020 best poisson_draw:nhl_base bonf 1110 qualified []
+    highest accuracy stack|stack_l2                                               >=0.60 sel wr 0.642 lift 0.033 lo -0.185 | assess n 112 cov 0.092 wr 0.607 vs best 0.536 strongest - avg 0.545 prim 0.580
+  fold ->2021 best poisson_draw:nhl_base bonf 1110 qualified []
+    highest accuracy stack|stack_l2                                               >=0.60 sel wr 0.627 lift 0.046 lo -0.121 | assess n 116 cov 0.122 wr 0.621 vs best 0.621 strongest - avg 0.647 prim 0.612
+  fold ->2022 best poisson_draw:nhl_base bonf 1110 qualified []
+    highest accuracy stack|stack_l2                                               >=0.60 sel wr 0.625 lift 0.037 lo -0.102 | assess n 212 cov 0.151 wr 0.660 vs best 0.637 strongest - avg 0.585 prim 0.642
+  fold ->2023 best poisson_draw:nhl_base bonf 1110 qualified []
+    highest accuracy stack|stack_l2                                               >=0.60 sel wr 0.638 lift 0.044 lo -0.067 | assess n 179 cov 0.128 wr 0.626 vs best 0.598 strongest - avg 0.581 prim 0.603
+  fold ->2024 best poisson_draw:nhl_base bonf 1110 qualified []
+    highest accuracy stack|stack_l2                                               >=0.60 sel wr 0.635 lift 0.035 lo -0.062 | assess n 196 cov 0.140 wr 0.673 vs best 0.622 strongest - avg 0.592 prim 0.551
+    top point lift   unanimous_min|goals_draw+poisson_draw:nhl_base               >=0.60 sel wr 0.616 lift 0.050 lo -0.083 | assess n 107 cov 0.076 wr 0.579 vs best 0.645 strongest 0.645 avg 0.589 prim 0.533
+  fold ->2025 best poisson_draw:nhl_base bonf 1110 qualified []
+    highest accuracy stack|stack_l2                                               >=0.60 sel wr 0.643 lift 0.036 lo -0.050 | assess n 234 cov 0.167 wr 0.628 vs best 0.624 strongest - avg 0.615 prim 0.598
+  fold ->2026 best poisson_draw:nhl_base bonf 1110 qualified []
+    highest accuracy stack|stack_l2                                               >=0.60 sel wr 0.640 lift 0.029 lo -0.048 | assess n 248 cov 0.178 wr 0.653 vs best 0.641 strongest - avg 0.605 prim 0.613
+   frozen rules pooled over folds by threshold: >=0.50: 5690/9973 = 0.571 vs best single 0.572; >=0.55: 2973/4927 = 0.603 vs best single 0.604; >=0.60: 1305/2068 = 0.631 vs best single 0.615; >=0.65: 285/478 = 0.596 vs best single 0.609
+
+== nba:winner: members ['elo', 'logistic', 'logistic_v2', 'efficiency_margin', 'gbt_v1', 'elastic_net:nba_base', 'extra_trees:nba_base', 'extra_trees:nba_base:normal', 'hetero_linear:nba_base', 'mlp:nba_base', 'mlp:nba_base:normal', 'ngboost:nba_base', 'random_forest:nba_base'] | configs 5994 evaluated {single:15, pair:78, triple:165} omitted {triple:121, larger:7814}
+   stackers last fit members used: l2 ['elo', 'logistic', 'logistic_v2', 'efficiency_margin', 'gbt_v1', 'elastic_net:nba_base', 'extra_trees:nba_base', 'extra_trees:nba_base:normal', 'hetero_linear:nba_base', 'mlp:nba_base', 'mlp:nba_base:normal', 'ngboost:nba_base'] | l1 ['logistic_v2', 'gbt_v1', 'elastic_net:nba_base', 'mlp:nba_base:normal']
+  fold ->2023 best logistic_v2 bonf 10617 qualified []
+    highest accuracy avg|efficiency_margin+gbt_v1+random_forest:nba_base          >=0.80 sel wr 0.849 lift 0.028 lo -0.197 | assess n 50 cov 0.038 wr 0.780 vs best 0.820 strongest 0.800 avg 0.800 prim 0.780
+    top point lift   avg|logistic_v2+elastic_net:nba_base                         >=0.80 sel wr 0.833 lift 0.040 lo -0.177 | assess n 56 cov 0.042 wr 0.786 vs best 0.821 strongest 0.821 avg 0.786 prim 0.786
+  fold ->2024 best elastic_net:nba_base bonf 10617 qualified []
+    highest accuracy unanimous_min|logistic+gbt_v1                                >=0.80 sel wr 0.836 lift 0.029 lo -0.174 | assess n 91 cov 0.069 wr 0.857 vs best 0.901 strongest 0.868 avg 0.912 prim 0.868
+    top point lift   avg|elo+gbt_v1                                               >=0.80 sel wr 0.811 lift 0.039 lo -0.138 | assess n 132 cov 0.100 wr 0.879 vs best 0.871 strongest 0.886 avg 0.864 prim 0.886
+  fold ->2025 best elastic_net:nba_base bonf 10617 qualified []
+    highest accuracy avg|logistic_v2+efficiency_margin                            >=0.80 sel wr 0.871 lift 0.013 lo -0.130 | assess n 117 cov 0.089 wr 0.872 vs best 0.846 strongest 0.855 avg 0.863 prim 0.880
+    top point lift   unanimous_min|elo+efficiency_margin                          >=0.75 sel wr 0.842 lift 0.041 lo -0.089 | assess n 152 cov 0.115 wr 0.855 vs best 0.868 strongest 0.875 avg 0.868 prim 0.875
+  fold ->2026 best elastic_net:nba_base bonf 10617 qualified []
+    highest accuracy avg|elo+gbt_v1+extra_trees:nba_base:normal                   >=0.80 sel wr 0.873 lift 0.024 lo -0.095 | assess n 169 cov 0.128 wr 0.852 vs best 0.834 strongest 0.834 avg 0.840 prim 0.834
+    top point lift   unanimous_min|logistic_v2+elastic_net:nba_base+mlp:nba_base  >=0.80 sel wr 0.868 lift 0.026 lo -0.099 | assess n 150 cov 0.113 wr 0.840 vs best 0.847 strongest 0.847 avg 0.867 prim 0.827
+   frozen rules pooled over folds by threshold: >=0.50: 3452/5222 = 0.661 vs best single 0.660; >=0.55: 2730/3909 = 0.698 vs best single 0.700; >=0.60: 2365/3253 = 0.727 vs best single 0.725; >=0.65: 1505/1927 = 0.781 vs best single 0.776; >=0.70: 1043/1281 = 0.814 vs best single 0.810; >=0.75: 530/637 = 0.832 vs best single 0.841; >=0.80: 894/1046 = 0.855 vs best single 0.855; >=0.85: 132/152 = 0.868 vs best single 0.882
+
+== nba:spread: members ['points_normal', 'ridge_points', 'gbt_points', 'ridge_points@weekly', 'gbt_points@weekly', 'elastic_net:nba_base', 'extra_trees:nba_base:normal', 'hetero_linear:nba_base', 'mlp:nba_base:normal', 'ngboost:nba_base'] | configs 5994 evaluated {single:12, pair:45, triple:120, larger:102} omitted {larger:746}
+   stackers last fit members used: l2 ['points_normal', 'ridge_points', 'gbt_points', 'ridge_points@weekly', 'gbt_points@weekly', 'elastic_net:nba_base', 'extra_trees:nba_base:normal', 'hetero_linear:nba_base', 'mlp:nba_base:normal', 'ngboost:nba_base'] | l1 ['ridge_points@weekly', 'gbt_points@weekly', 'extra_trees:nba_base:normal', 'mlp:nba_base:normal']
+  fold ->2023 best extra_trees:nba_base:normal bonf 8786 qualified []
+    highest accuracy majority|gbt_points+mlp:nba_base:normal+ngboost:nba_base     >=0.65 sel wr 0.681 lift 0.060 lo -0.214 | assess n 15 cov 0.011 wr 0.600 vs best 0.467 strongest 0.667 avg 0.667 prim 0.467
+    top point lift   majority|ridge_points@weekly+gbt_points@weekly+extra_trees:n >=0.60 sel wr 0.659 lift 0.094 lo -0.162 | assess n 101 cov 0.077 wr 0.663 vs best 0.594 strongest 0.594 avg 0.624 prim 0.564
+  fold ->2024 best ridge_points@weekly bonf 8786 qualified []
+    highest accuracy majority|points_normal+ridge_points@weekly+gbt_points@weekly >=0.60 sel wr 0.682 lift 0.041 lo -0.201 | assess n 84 cov 0.064 wr 0.583 vs best 0.643 strongest 0.643 avg 0.679 prim 0.536
+    top point lift   avg|ridge_points@weekly+gbt_points@weekly+extra_trees:nba_ba >=0.60 sel wr 0.674 lift 0.056 lo -0.146 | assess n 121 cov 0.092 wr 0.603 vs best 0.653 strongest 0.653 avg 0.686 prim 0.562
+  fold ->2025 best ridge_points@weekly bonf 8786 qualified []
+    highest accuracy unanimous_min|ridge_points+ridge_points@weekly+hetero_linear >=0.60 sel wr 0.660 lift 0.029 lo -0.163 | assess n 113 cov 0.086 wr 0.655 vs best 0.646 strongest 0.646 avg 0.637 prim 0.504
+  fold ->2026 best hetero_linear:nba_base bonf 8786 qualified []
+    highest accuracy unanimous_min|ridge_points+gbt_points                        >=0.60 sel wr 0.672 lift 0.038 lo -0.144 | assess n 97 cov 0.073 wr 0.505 vs best 0.557 strongest 0.567 avg 0.557 prim 0.505
+   frozen rules pooled over folds by threshold: >=0.50: 2883/5282 = 0.546 vs best single 0.545; >=0.55: 713/1239 = 0.575 vs best single 0.584; >=0.60: 382/650 = 0.588 vs best single 0.614; >=0.65: 119/202 = 0.589 vs best single 0.619; >=0.70: 19/38 = 0.500 vs best single 0.658
+
+== nba:total: members ['points_normal', 'ridge_points', 'gbt_points', 'ridge_points@weekly', 'gbt_points@weekly', 'elastic_net:nba_base', 'extra_trees:nba_base:normal', 'hetero_linear:nba_base', 'mlp:nba_base:normal', 'ngboost:nba_base'] | configs 5994 evaluated {single:12, pair:45, triple:120, larger:102} omitted {larger:746}
+   stackers last fit members used: l2 ['points_normal', 'ridge_points', 'gbt_points', 'ridge_points@weekly', 'gbt_points@weekly', 'elastic_net:nba_base', 'extra_trees:nba_base:normal', 'hetero_linear:nba_base', 'mlp:nba_base:normal', 'ngboost:nba_base'] | l1 ['extra_trees:nba_base:normal', 'ngboost:nba_base']
+  fold ->2023 best points_normal bonf 8786 qualified []
+    highest accuracy majority|points_normal+ridge_points@weekly+hetero_linear:nba >=0.65 sel wr 0.667 lift 0.157 lo -0.142 | assess n 19 cov 0.014 wr 0.684 vs best 0.474 strongest 0.474 avg 0.737 prim 0.474
+    top point lift   majority|points_normal+extra_trees:nba_base:normal+ngboost:n >=0.70 sel wr 0.649 lift 0.185 lo -0.061 | assess n 50 cov 0.038 wr 0.700 vs best 0.440 strongest 0.440 avg 0.680 prim 0.440
+  fold ->2024 best points_normal bonf 8786 qualified []
+    highest accuracy avg|elastic_net:nba_base+extra_trees:nba_base:normal+ngboost >=0.70 sel wr 0.665 lift 0.209 lo -0.031 | assess n 155 cov 0.118 wr 0.652 vs best 0.548 strongest 0.600 avg 0.574 prim 0.548
+    top point lift   majority|points_normal+gbt_points@weekly+extra_trees:nba_bas >=0.70 sel wr 0.662 lift 0.221 lo -0.038 | assess n 90 cov 0.068 wr 0.667 vs best 0.556 strongest 0.556 avg 0.644 prim 0.556
+  fold ->2025 best points_normal bonf 8786 qualified []
+    highest accuracy majority|points_normal+gbt_points@weekly+extra_trees:nba_bas >=0.70 sel wr 0.664 lift 0.164 lo -0.037 | assess n 55 cov 0.042 wr 0.636 vs best 0.455 strongest 0.455 avg 0.600 prim 0.455
+    top point lift   majority|gbt_points@weekly+extra_trees:nba_base:normal+mlp:n >=0.70 sel wr 0.664 lift 0.166 lo -0.039 | assess n 28 cov 0.021 wr 0.607 vs best 0.321 strongest 0.536 avg 0.607 prim 0.321
+  fold ->2026 best points_normal bonf 8786 qualified ['unanimous_min|extra_trees:nba_base:normal+ngboost:nba_base@0.7']
+    qualified        unanimous_min|extra_trees:nba_base:normal+ngboost:nba_base   >=0.70 sel wr 0.641 lift 0.134 lo 0.002 | assess n 48 cov 0.036 wr 0.604 vs best 0.708 strongest 0.583 avg 0.562 prim 0.708
+    highest accuracy majority|points_normal+gbt_points@weekly+extra_trees:nba_bas >=0.70 sel wr 0.658 lift 0.167 lo -0.013 | assess n 32 cov 0.024 wr 0.594 vs best 0.656 strongest 0.656 avg 0.562 prim 0.656
+   frozen rules pooled over folds by threshold: >=0.50: 1042/1932 = 0.539 vs best single 0.516; >=0.55: 645/1168 = 0.552 vs best single 0.515; >=0.60: 188/328 = 0.573 vs best single 0.530; >=0.65: 150/249 = 0.602 vs best single 0.514; >=0.70: 363/574 = 0.632 vs best single 0.538; >=0.75: 64/102 = 0.627 vs best single 0.451; >=0.80: 6/10 = 0.600 vs best single 0.800
+
+== nba:team_total_home: members ['points_normal', 'ridge_points', 'gbt_points', 'ridge_points@weekly', 'gbt_points@weekly', 'elastic_net:nba_base', 'extra_trees:nba_base:normal', 'hetero_linear:nba_base', 'mlp:nba_base:normal', 'ngboost:nba_base'] | configs 5994 evaluated {single:12, pair:45, triple:120, larger:102} omitted {larger:746}
+   stackers last fit members used: l2 ['points_normal', 'ridge_points', 'gbt_points', 'ridge_points@weekly', 'gbt_points@weekly', 'elastic_net:nba_base', 'extra_trees:nba_base:normal', 'hetero_linear:nba_base', 'mlp:nba_base:normal', 'ngboost:nba_base'] | l1 ['ngboost:nba_base']
+  fold ->2023 best points_normal bonf 8786 qualified []
+    highest accuracy majority|extra_trees:nba_base:normal+mlp:nba_base:normal+ngb >=0.70 sel wr 0.636 lift 0.107 lo -0.169 | assess n 39 cov 0.030 wr 0.564 vs best 0.538 strongest 0.564 avg 0.590 prim 0.538
+    top point lift   majority|gbt_points@weekly+extra_trees:nba_base:normal+heter >=0.65 sel wr 0.623 lift 0.132 lo -0.105 | assess n 44 cov 0.033 wr 0.568 vs best 0.523 strongest 0.523 avg 0.591 prim 0.523
+  fold ->2024 best points_normal bonf 8786 qualified []
+    highest accuracy unanimous_min|extra_trees:nba_base:normal+ngboost:nba_base   >=0.70 sel wr 0.626 lift 0.075 lo -0.176 | assess n 118 cov 0.089 wr 0.593 vs best 0.500 strongest 0.602 avg 0.568 prim 0.500
+  fold ->2025 best points_normal bonf 8786 qualified []
+    highest accuracy avg|points_normal+extra_trees:nba_base:normal+ngboost:nba_ba >=0.65 sel wr 0.620 lift 0.087 lo -0.115 | assess n 38 cov 0.029 wr 0.632 vs best 0.447 strongest 0.447 avg 0.579 prim 0.447
+    top point lift   majority|extra_trees:nba_base:normal+mlp:nba_base:normal+ngb >=0.70 sel wr 0.619 lift 0.093 lo -0.101 | assess n 29 cov 0.022 wr 0.621 vs best 0.448 strongest 0.621 avg 0.621 prim 0.448
+  fold ->2026 best points_normal bonf 8786 qualified []
+    highest accuracy avg|points_normal+extra_trees:nba_base:normal+ngboost:nba_ba >=0.65 sel wr 0.622 lift 0.131 lo -0.056 | assess n 30 cov 0.023 wr 0.600 vs best 0.500 strongest 0.500 avg 0.600 prim 0.500
+   frozen rules pooled over folds by threshold: >=0.50: 1363/2517 = 0.542 vs best single 0.507; >=0.55: 1222/2193 = 0.557 vs best single 0.507; >=0.60: 286/535 = 0.535 vs best single 0.520; >=0.65: 163/293 = 0.556 vs best single 0.509; >=0.70: 209/353 = 0.592 vs best single 0.501; >=0.75: 34/54 = 0.630 vs best single 0.444
+
+== nba:team_total_away: members ['points_normal', 'ridge_points', 'gbt_points', 'ridge_points@weekly', 'gbt_points@weekly', 'elastic_net:nba_base', 'extra_trees:nba_base:normal', 'hetero_linear:nba_base', 'mlp:nba_base:normal', 'ngboost:nba_base'] | configs 5994 evaluated {single:12, pair:45, triple:120, larger:102} omitted {larger:746}
+   stackers last fit members used: l2 ['points_normal', 'ridge_points', 'gbt_points', 'ridge_points@weekly', 'gbt_points@weekly', 'elastic_net:nba_base', 'extra_trees:nba_base:normal', 'hetero_linear:nba_base', 'mlp:nba_base:normal', 'ngboost:nba_base'] | l1 ['extra_trees:nba_base:normal']
+  fold ->2023 best points_normal bonf 8786 qualified []
+    highest accuracy majority|points_normal+ridge_points@weekly+gbt_points@weekly >=0.65 sel wr 0.612 lift 0.010 lo -0.289 | assess n 24 cov 0.018 wr 0.667 vs best 0.583 strongest 0.583 avg 0.708 prim 0.583
+    top point lift   majority|gbt_points+extra_trees:nba_base:normal+ngboost:nba_ >=0.65 sel wr 0.584 lift 0.028 lo -0.144 | assess n 145 cov 0.110 wr 0.579 vs best 0.552 strongest 0.579 avg 0.579 prim 0.552
+  fold ->2024 best points_normal bonf 8786 qualified []
+    highest accuracy majority|gbt_points@weekly+extra_trees:nba_base:normal+heter >=0.65 sel wr 0.619 lift 0.044 lo -0.141 | assess n 206 cov 0.156 wr 0.573 vs best 0.466 strongest 0.597 avg 0.597 prim 0.466
+    top point lift   majority|extra_trees:nba_base:normal+hetero_linear:nba_base+ >=0.65 sel wr 0.605 lift 0.063 lo -0.097 | assess n 225 cov 0.171 wr 0.582 vs best 0.471 strongest 0.591 avg 0.600 prim 0.471
+  fold ->2025 best points_normal bonf 8786 qualified []
+    highest accuracy majority|points_normal+ridge_points@weekly+ngboost:nba_base  >=0.65 sel wr 0.627 lift 0.058 lo -0.145 | assess n 68 cov 0.051 wr 0.485 vs best 0.485 strongest 0.485 avg 0.588 prim 0.485
+    top point lift   avg|points_normal+ridge_points@weekly+elastic_net:nba_base+n >=0.60 sel wr 0.607 lift 0.085 lo -0.053 | assess n 168 cov 0.127 wr 0.577 vs best 0.524 strongest 0.524 avg 0.589 prim 0.524
+  fold ->2026 best points_normal bonf 8786 qualified []
+    highest accuracy unanimous_min|ridge_points+elastic_net:nba_base+ngboost:nba_ >=0.65 sel wr 0.619 lift 0.067 lo -0.105 | assess n 56 cov 0.042 wr 0.571 vs best 0.571 strongest 0.536 avg 0.589 prim 0.571
+    top point lift   unanimous_min|ridge_points+elastic_net:nba_base+hetero_linea >=0.65 sel wr 0.607 lift 0.087 lo -0.068 | assess n 76 cov 0.057 wr 0.605 vs best 0.579 strongest 0.579 avg 0.566 prim 0.579
+   frozen rules pooled over folds by threshold: >=0.50: 2580/4808 = 0.537 vs best single 0.510; >=0.55: 1000/1808 = 0.553 vs best single 0.509; >=0.60: 401/687 = 0.584 vs best single 0.525; >=0.65: 477/835 = 0.571 vs best single 0.509; >=0.70: 78/114 = 0.684 vs best single 0.535; >=0.75: 15/33 = 0.455 vs best single 0.455

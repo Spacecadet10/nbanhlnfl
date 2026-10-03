@@ -1,0 +1,744 @@
+{
+ "study": "tuning-v1",
+ "started_at": "2026-10-03T01:53:54Z",
+ "trials": 25,
+ "seed": 20261003,
+ "sports": {
+  "nhl": {
+   "feature_table": "52c436fa49c3ac21",
+   "oof_sha256_24": "bc221a73393fda6839d07979",
+   "fits": {
+    "hgb_tuned:nhl_base": [
+     {
+      "season": 2018,
+      "training_games": 2638,
+      "results_through": "2017-06-12T04:00:00Z",
+      "params": {
+       "learning_rate": 0.039239607776493844,
+       "max_iter": 108,
+       "max_leaf_nodes": 21,
+       "min_samples_leaf": 295,
+       "l2_regularization": 0.0023242837179096175
+      },
+      "seconds": 3.5
+     },
+     {
+      "season": 2019,
+      "training_games": 3993,
+      "results_through": "2018-06-08T04:00:00Z",
+      "params": {
+       "learning_rate": 0.025466325206525635,
+       "max_iter": 281,
+       "max_leaf_nodes": 31,
+       "min_samples_leaf": 296,
+       "l2_regularization": 0.01579978110870548
+      },
+      "seconds": 5.3
+     },
+     {
+      "season": 2020,
+      "training_games": 5351,
+      "results_through": "2019-06-13T04:00:00Z",
+      "params": {
+       "learning_rate": 0.023807951590691732,
+       "max_iter": 104,
+       "max_leaf_nodes": 21,
+       "min_samples_leaf": 98,
+       "l2_regularization": 0.2095764802354754
+      },
+      "seconds": 7.5
+     },
+     {
+      "season": 2021,
+      "training_games": 6563,
+      "results_through": "2020-09-29T04:00:00Z",
+      "params": {
+       "learning_rate": 0.024695860948342894,
+       "max_iter": 168,
+       "max_leaf_nodes": 9,
+       "min_samples_leaf": 144,
+       "l2_regularization": 0.015121227492906354
+      },
+      "seconds": 9.2
+     },
+     {
+      "season": 2022,
+      "training_games": 7515,
+      "results_through": "2021-07-08T04:00:00Z",
+      "params": {
+       "learning_rate": 0.029055575935379864,
+       "max_iter": 142,
+       "max_leaf_nodes": 14,
+       "min_samples_leaf": 163,
+       "l2_regularization": 0.07874488212874675
+      },
+      "seconds": 10.2
+     },
+     {
+      "season": 2023,
+      "training_games": 8916,
+      "results_through": "2022-06-27T04:00:00Z",
+      "params": {
+       "learning_rate": 0.029055575935379864,
+       "max_iter": 142,
+       "max_leaf_nodes": 14,
+       "min_samples_leaf": 163,
+       "l2_regularization": 0.07874488212874675
+      },
+      "seconds": 10.2
+     },
+     {
+      "season": 2024,
+      "training_games": 10316,
+      "results_through": "2023-06-14T04:00:00Z",
+      "params": {
+       "learning_rate": 0.024695860948342894,
+       "max_iter": 168,
+       "max_leaf_nodes": 9,
+       "min_samples_leaf": 144,
+       "l2_regularization": 0.015121227492906354
+      },
+      "seconds": 11.9
+     },
+     {
+      "season": 2025,
+      "training_games": 11716,
+      "results_through": "2024-06-25T04:00:00Z",
+      "params": {
+       "learning_rate": 0.023940410814437287,
+       "max_iter": 312,
+       "max_leaf_nodes": 9,
+       "min_samples_leaf": 207,
+       "l2_regularization": 0.012814657987486896
+      },
+      "seconds": 13.4
+     },
+     {
+      "season": 2026,
+      "training_games": 13114,
+      "results_through": "2025-06-18T04:00:00Z",
+      "params": {
+       "learning_rate": 0.032282822757484265,
+       "max_iter": 184,
+       "max_leaf_nodes": 11,
+       "min_samples_leaf": 152,
+       "l2_regularization": 0.022549557581127498
+      },
+      "seconds": 13.9
+     }
+    ],
+    "hgb_tuned:nhl_base:reg3": [
+     {
+      "season": 2018,
+      "training_games": 2638,
+      "results_through": "2017-06-12T04:00:00Z",
+      "params": {
+       "learning_rate": 0.02166155067519976,
+       "max_iter": 272,
+       "max_leaf_nodes": 12,
+       "min_samples_leaf": 297,
+       "l2_regularization": 0.0031626835187296715
+      },
+      "seconds": 9.0
+     },
+     {
+      "season": 2019,
+      "training_games": 3993,
+      "results_through": "2018-06-08T04:00:00Z",
+      "params": {
+       "learning_rate": 0.02166155067519976,
+       "max_iter": 272,
+       "max_leaf_nodes": 12,
+       "min_samples_leaf": 297,
+       "l2_regularization": 0.0031626835187296715
+      },
+      "seconds": 15.3
+     },
+     {
+      "season": 2020,
+      "training_games": 5351,
+      "results_through": "2019-06-13T04:00:00Z",
+      "params": {
+       "learning_rate": 0.03300960430991098,
+       "max_iter": 145,
+       "max_leaf_nodes": 20,
+       "min_samples_leaf": 281,
+       "l2_regularization": 0.011941592101247015
+      },
+      "seconds": 21.6
+     },
+     {
+      "season": 2021,
+      "training_games": 6563,
+      "results_through": "2020-09-29T04:00:00Z",
+      "params": {
+       "learning_rate": 0.029055575935379864,
+       "max_iter": 142,
+       "max_leaf_nodes": 14,
+       "min_samples_leaf": 163,
+       "l2_regularization": 0.07874488212874675
+      },
+      "seconds": 29.4
+     },
+     {
+      "season": 2022,
+      "training_games": 7515,
+      "results_through": "2021-07-08T04:00:00Z",
+      "params": {
+       "learning_rate": 0.022469364316387453,
+       "max_iter": 118,
+       "max_leaf_nodes": 23,
+       "min_samples_leaf": 206,
+       "l2_regularization": 0.028830725849686
+      },
+      "seconds": 23.8
+     },
+     {
+      "season": 2023,
+      "training_games": 8916,
+      "results_through": "2022-06-27T04:00:00Z",
+      "params": {
+       "learning_rate": 0.023940410814437287,
+       "max_iter": 312,
+       "max_leaf_nodes": 9,
+       "min_samples_leaf": 207,
+       "l2_regularization": 0.012814657987486896
+      },
+      "seconds": 20.3
+     },
+     {
+      "season": 2024,
+      "training_games": 10316,
+      "results_through": "2023-06-14T04:00:00Z",
+      "params": {
+       "learning_rate": 0.029055575935379864,
+       "max_iter": 142,
+       "max_leaf_nodes": 14,
+       "min_samples_leaf": 163,
+       "l2_regularization": 0.07874488212874675
+      },
+      "seconds": 21.1
+     },
+     {
+      "season": 2025,
+      "training_games": 11716,
+      "results_through": "2024-06-25T04:00:00Z",
+      "params": {
+       "learning_rate": 0.03421425586270845,
+       "max_iter": 204,
+       "max_leaf_nodes": 9,
+       "min_samples_leaf": 214,
+       "l2_regularization": 0.06871008041975112
+      },
+      "seconds": 21.1
+     },
+     {
+      "season": 2026,
+      "training_games": 13114,
+      "results_through": "2025-06-18T04:00:00Z",
+      "params": {
+       "learning_rate": 0.024695860948342894,
+       "max_iter": 168,
+       "max_leaf_nodes": 9,
+       "min_samples_leaf": 144,
+       "l2_regularization": 0.015121227492906354
+      },
+      "seconds": 19.7
+     }
+    ],
+    "hgb_tuned:nhl_base:goals": [
+     {
+      "season": 2018,
+      "training_games": 2638,
+      "results_through": "2017-06-12T04:00:00Z",
+      "params": {
+       "learning_rate": 0.030806450850192763,
+       "max_iter": 116,
+       "max_leaf_nodes": 38,
+       "min_samples_leaf": 259,
+       "l2_regularization": 0.0028695310575979167
+      },
+      "seconds": 7.1
+     },
+     {
+      "season": 2019,
+      "training_games": 3993,
+      "results_through": "2018-06-08T04:00:00Z",
+      "params": {
+       "learning_rate": 0.022184446586038253,
+       "max_iter": 114,
+       "max_leaf_nodes": 44,
+       "min_samples_leaf": 165,
+       "l2_regularization": 0.023416660399662226
+      },
+      "seconds": 11.5
+     },
+     {
+      "season": 2020,
+      "training_games": 5351,
+      "results_through": "2019-06-13T04:00:00Z",
+      "params": {
+       "learning_rate": 0.02400520599242622,
+       "max_iter": 125,
+       "max_leaf_nodes": 18,
+       "min_samples_leaf": 221,
+       "l2_regularization": 0.034930402862470095
+      },
+      "seconds": 16.9
+     },
+     {
+      "season": 2021,
+      "training_games": 6563,
+      "results_through": "2020-09-29T04:00:00Z",
+      "params": {
+       "learning_rate": 0.023940410814437287,
+       "max_iter": 312,
+       "max_leaf_nodes": 9,
+       "min_samples_leaf": 207,
+       "l2_regularization": 0.012814657987486896
+      },
+      "seconds": 22.7
+     },
+     {
+      "season": 2022,
+      "training_games": 7515,
+      "results_through": "2021-07-08T04:00:00Z",
+      "params": {
+       "learning_rate": 0.023940410814437287,
+       "max_iter": 312,
+       "max_leaf_nodes": 9,
+       "min_samples_leaf": 207,
+       "l2_regularization": 0.012814657987486896
+      },
+      "seconds": 26.4
+     },
+     {
+      "season": 2023,
+      "training_games": 8916,
+      "results_through": "2022-06-27T04:00:00Z",
+      "params": {
+       "learning_rate": 0.032282822757484265,
+       "max_iter": 184,
+       "max_leaf_nodes": 11,
+       "min_samples_leaf": 152,
+       "l2_regularization": 0.022549557581127498
+      },
+      "seconds": 21.8
+     },
+     {
+      "season": 2024,
+      "training_games": 10316,
+      "results_through": "2023-06-14T04:00:00Z",
+      "params": {
+       "learning_rate": 0.029055575935379864,
+       "max_iter": 142,
+       "max_leaf_nodes": 14,
+       "min_samples_leaf": 163,
+       "l2_regularization": 0.07874488212874675
+      },
+      "seconds": 20.5
+     },
+     {
+      "season": 2025,
+      "training_games": 11716,
+      "results_through": "2024-06-25T04:00:00Z",
+      "params": {
+       "learning_rate": 0.021444253920666654,
+       "max_iter": 210,
+       "max_leaf_nodes": 9,
+       "min_samples_leaf": 219,
+       "l2_regularization": 0.0040885744515058685
+      },
+      "seconds": 21.9
+     },
+     {
+      "season": 2026,
+      "training_games": 13114,
+      "results_through": "2025-06-18T04:00:00Z",
+      "params": {
+       "learning_rate": 0.032282822757484265,
+       "max_iter": 184,
+       "max_leaf_nodes": 11,
+       "min_samples_leaf": 152,
+       "l2_regularization": 0.022549557581127498
+      },
+      "seconds": 21.6
+     }
+    ],
+    "et_tuned:nhl_base": [
+     {
+      "season": 2018,
+      "training_games": 2638,
+      "results_through": "2017-06-12T04:00:00Z",
+      "params": {
+       "min_samples_leaf": 39,
+       "max_features": 0.885445850961258,
+       "max_depth": 20
+      },
+      "seconds": 4.2
+     },
+     {
+      "season": 2019,
+      "training_games": 3993,
+      "results_through": "2018-06-08T04:00:00Z",
+      "params": {
+       "min_samples_leaf": 52,
+       "max_features": 0.731135883772103,
+       "max_depth": 19
+      },
+      "seconds": 5.7
+     },
+     {
+      "season": 2020,
+      "training_games": 5351,
+      "results_through": "2019-06-13T04:00:00Z",
+      "params": {
+       "min_samples_leaf": 22,
+       "max_features": 0.37935046989178434,
+       "max_depth": 22
+      },
+      "seconds": 6.6
+     },
+     {
+      "season": 2021,
+      "training_games": 6563,
+      "results_through": "2020-09-29T04:00:00Z",
+      "params": {
+       "min_samples_leaf": 50,
+       "max_features": 0.9655407119760342,
+       "max_depth": 5
+      },
+      "seconds": 9.8
+     },
+     {
+      "season": 2022,
+      "training_games": 7515,
+      "results_through": "2021-07-08T04:00:00Z",
+      "params": {
+       "min_samples_leaf": 16,
+       "max_features": 0.5264652475413412,
+       "max_depth": 29
+      },
+      "seconds": 12.8
+     },
+     {
+      "season": 2023,
+      "training_games": 8916,
+      "results_through": "2022-06-27T04:00:00Z",
+      "params": {
+       "min_samples_leaf": 25,
+       "max_features": 0.9953742967757849,
+       "max_depth": 24
+      },
+      "seconds": 16.7
+     },
+     {
+      "season": 2024,
+      "training_games": 10316,
+      "results_through": "2023-06-14T04:00:00Z",
+      "params": {
+       "min_samples_leaf": 37,
+       "max_features": 0.8610324506574887,
+       "max_depth": 7
+      },
+      "seconds": 15.3
+     },
+     {
+      "season": 2025,
+      "training_games": 11716,
+      "results_through": "2024-06-25T04:00:00Z",
+      "params": {
+       "min_samples_leaf": 40,
+       "max_features": 0.9445030403943523,
+       "max_depth": 9
+      },
+      "seconds": 20.9
+     },
+     {
+      "season": 2026,
+      "training_games": 13114,
+      "results_through": "2025-06-18T04:00:00Z",
+      "params": {
+       "min_samples_leaf": 26,
+       "max_features": 0.40488106629918713,
+       "max_depth": 24
+      },
+      "seconds": 15.2
+     }
+    ]
+   },
+   "games_per_market": {
+    "winner": 11870,
+    "reg3": 11870,
+    "spread": 11870,
+    "total": 11870,
+    "team_total_home": 11870,
+    "team_total_away": 11870
+   },
+   "seconds": 220.7
+  },
+  "nba": {
+   "feature_table": "8d95c301a1e9bcfd",
+   "oof_sha256_24": "f753cca234433b79f2610e97",
+   "fits": {
+    "hgb_tuned:nba_base": [
+     {
+      "season": 2022,
+      "training_games": 2314,
+      "results_through": "2021-07-21T05:00:00Z",
+      "params": {
+       "learning_rate": 0.02224944449058844,
+       "max_iter": 117,
+       "max_leaf_nodes": 59,
+       "min_samples_leaf": 256,
+       "l2_regularization": 1.0929167621061697
+      },
+      "seconds": 3.3
+     },
+     {
+      "season": 2023,
+      "training_games": 3637,
+      "results_through": "2022-06-17T05:00:00Z",
+      "params": {
+       "learning_rate": 0.023807951590691732,
+       "max_iter": 104,
+       "max_leaf_nodes": 21,
+       "min_samples_leaf": 98,
+       "l2_regularization": 0.2095764802354754
+      },
+      "seconds": 4.7
+     },
+     {
+      "season": 2024,
+      "training_games": 4957,
+      "results_through": "2023-06-13T04:30:00Z",
+      "params": {
+       "learning_rate": 0.026447488329986533,
+       "max_iter": 121,
+       "max_leaf_nodes": 24,
+       "min_samples_leaf": 217,
+       "l2_regularization": 0.5920128814953642
+      },
+      "seconds": 5.9
+     },
+     {
+      "season": 2025,
+      "training_games": 6276,
+      "results_through": "2024-06-18T04:30:00Z",
+      "params": {
+       "learning_rate": 0.025594344113526735,
+       "max_iter": 289,
+       "max_leaf_nodes": 10,
+       "min_samples_leaf": 155,
+       "l2_regularization": 0.015090111175613563
+      },
+      "seconds": 9.1
+     },
+     {
+      "season": 2026,
+      "training_games": 7597,
+      "results_through": "2025-06-23T04:00:00Z",
+      "params": {
+       "learning_rate": 0.04135130965215738,
+       "max_iter": 146,
+       "max_leaf_nodes": 13,
+       "min_samples_leaf": 257,
+       "l2_regularization": 0.12906606861441686
+      },
+      "seconds": 10.5
+     }
+    ],
+    "hgb_tuned:nba_base:normal": [
+     {
+      "season": 2022,
+      "training_games": 2314,
+      "results_through": "2021-07-21T05:00:00Z",
+      "params": {
+       "learning_rate": 0.023133814969931173,
+       "max_iter": 120,
+       "max_leaf_nodes": 28,
+       "min_samples_leaf": 145,
+       "l2_regularization": 0.004406144519878841
+      },
+      "seconds": 6.4
+     },
+     {
+      "season": 2023,
+      "training_games": 3637,
+      "results_through": "2022-06-17T05:00:00Z",
+      "params": {
+       "learning_rate": 0.023807951590691732,
+       "max_iter": 104,
+       "max_leaf_nodes": 21,
+       "min_samples_leaf": 98,
+       "l2_regularization": 0.2095764802354754
+      },
+      "seconds": 10.7
+     },
+     {
+      "season": 2024,
+      "training_games": 4957,
+      "results_through": "2023-06-13T04:30:00Z",
+      "params": {
+       "learning_rate": 0.029055575935379864,
+       "max_iter": 142,
+       "max_leaf_nodes": 14,
+       "min_samples_leaf": 163,
+       "l2_regularization": 0.07874488212874675
+      },
+      "seconds": 16.1
+     },
+     {
+      "season": 2025,
+      "training_games": 6276,
+      "results_through": "2024-06-18T04:30:00Z",
+      "params": {
+       "learning_rate": 0.024695860948342894,
+       "max_iter": 168,
+       "max_leaf_nodes": 9,
+       "min_samples_leaf": 144,
+       "l2_regularization": 0.015121227492906354
+      },
+      "seconds": 10.0
+     },
+     {
+      "season": 2026,
+      "training_games": 7597,
+      "results_through": "2025-06-23T04:00:00Z",
+      "params": {
+       "learning_rate": 0.032282822757484265,
+       "max_iter": 184,
+       "max_leaf_nodes": 11,
+       "min_samples_leaf": 152,
+       "l2_regularization": 0.022549557581127498
+      },
+      "seconds": 11.3
+     }
+    ],
+    "et_tuned:nba_base": [
+     {
+      "season": 2022,
+      "training_games": 2314,
+      "results_through": "2021-07-21T05:00:00Z",
+      "params": {
+       "min_samples_leaf": 60,
+       "max_features": 0.9412380944254659,
+       "max_depth": 7
+      },
+      "seconds": 4.2
+     },
+     {
+      "season": 2023,
+      "training_games": 3637,
+      "results_through": "2022-06-17T05:00:00Z",
+      "params": {
+       "min_samples_leaf": 101,
+       "max_features": 0.9190840624938397,
+       "max_depth": 10
+      },
+      "seconds": 5.2
+     },
+     {
+      "season": 2024,
+      "training_games": 4957,
+      "results_through": "2023-06-13T04:30:00Z",
+      "params": {
+       "min_samples_leaf": 17,
+       "max_features": 0.6612373006338064,
+       "max_depth": 24
+      },
+      "seconds": 8.1
+     },
+     {
+      "season": 2025,
+      "training_games": 6276,
+      "results_through": "2024-06-18T04:30:00Z",
+      "params": {
+       "min_samples_leaf": 29,
+       "max_features": 0.74936352196296,
+       "max_depth": 30
+      },
+      "seconds": 11.3
+     },
+     {
+      "season": 2026,
+      "training_games": 7597,
+      "results_through": "2025-06-23T04:00:00Z",
+      "params": {
+       "min_samples_leaf": 53,
+       "max_features": 0.8012346694460003,
+       "max_depth": 28
+      },
+      "seconds": 13.8
+     }
+    ],
+    "et_tuned:nba_base:normal": [
+     {
+      "season": 2022,
+      "training_games": 2314,
+      "results_through": "2021-07-21T05:00:00Z",
+      "params": {
+       "min_samples_leaf": 17,
+       "max_features": 0.6801338813954476,
+       "max_depth": 7
+      },
+      "seconds": 5.7
+     },
+     {
+      "season": 2023,
+      "training_games": 3637,
+      "results_through": "2022-06-17T05:00:00Z",
+      "params": {
+       "min_samples_leaf": 13,
+       "max_features": 0.49086513164879786,
+       "max_depth": 14
+      },
+      "seconds": 8.9
+     },
+     {
+      "season": 2024,
+      "training_games": 4957,
+      "results_through": "2023-06-13T04:30:00Z",
+      "params": {
+       "min_samples_leaf": 15,
+       "max_features": 0.9543314230819268,
+       "max_depth": 27
+      },
+      "seconds": 14.8
+     },
+     {
+      "season": 2025,
+      "training_games": 6276,
+      "results_through": "2024-06-18T04:30:00Z",
+      "params": {
+       "min_samples_leaf": 28,
+       "max_features": 0.9840327053579069,
+       "max_depth": 15
+      },
+      "seconds": 19.6
+     },
+     {
+      "season": 2026,
+      "training_games": 7597,
+      "results_through": "2025-06-23T04:00:00Z",
+      "params": {
+       "min_samples_leaf": 25,
+       "max_features": 0.9953742967757849,
+       "max_depth": 24
+      },
+      "seconds": 24.8
+     }
+    ]
+   },
+   "games_per_market": {
+    "winner": 6605,
+    "spread": 5282,
+    "total": 5282,
+    "team_total_home": 5282,
+    "team_total_away": 5282
+   },
+   "seconds": 90.5
+  }
+ },
+ "finished_at": "2026-10-03T01:59:05Z"
+}

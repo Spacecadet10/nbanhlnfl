@@ -89,6 +89,15 @@ def main(argv=None) -> int:
     xr.add_argument("--out")
     ex = sub.add_parser("expanded-search", help="Expanded-combination experiment, retrospective part (MODEL_SELECTION §14)")
     ex.add_argument("--out")
+    tsp = sub.add_parser("tuning-study", help="Bounded chronological Optuna tuning of HGB / ExtraTrees learners on both stores "
+                                              "(MODEL_SELECTION §21); run on store copies")
+    tsp.add_argument("--out")
+    tev = sub.add_parser("tuning-evaluate", help="Evaluate tuning-v1 predictions alone and inside combinations (saved tables "
+                                                 "only; opens no store)")
+    tev.add_argument("--out")
+    dsp = sub.add_parser("discovery-study", help="Historical training and combination discovery from saved chronological "
+                                                 "tables; opens no store (MODEL_SELECTION §20)")
+    dsp.add_argument("--out")
     gfp = sub.add_parser("gapfill-study", help="Gap-filling combination study from saved out-of-sample tables, both sports; "
                                                "opens no store (MODEL_SELECTION §16)")
     gfp.add_argument("--out")
@@ -170,6 +179,31 @@ def main(argv=None) -> int:
                     help="Required for --period test; the access is logged to data/eval/test_access.jsonl")
     bt.add_argument("--record", action="store_true", help="Also append predictions to the ledger as run_type=backtest")
     args = p.parse_args(argv)
+    if args.cmd == "tuning-evaluate":
+        from pathlib import Path
+        from . import tuning_study
+        report = tuning_study.evaluate(out_dir=Path(args.out) if args.out else None)
+        print(json.dumps({"output_dir": report["output_dir"], "markets": list(report["markets"])}))
+        return 0
+    if args.cmd == "tuning-study":       # opens (and migrates) both stores: run on copies
+        from pathlib import Path
+        from . import tuning_study
+
+        def conn_for(sport):
+            c = db.connect(sport=sport)
+            db.migrate(c)
+            db.claim_store(c, sport)
+            return c
+        report = tuning_study.run(conn_for, out_dir=Path(args.out) if args.out else None)
+        print(json.dumps({"output_dir": report["output_dir"], "games": {s: v["games_per_market"] for s, v in report["sports"].items()}}))
+        return 0
+    if args.cmd == "discovery-study":    # reads saved tables only; no store is opened or migrated
+        from pathlib import Path
+        from . import discovery_study
+        report = discovery_study.run(out_dir=Path(args.out) if args.out else None)
+        print(json.dumps({"output_dir": report["output_dir"], "qualified": {m: [len(f["qualified"]) for f in a["folds"]]
+                                                                            for m, a in report["markets"].items()}}))
+        return 0
     if args.cmd == "gapfill-study":      # reads saved tables only; no store is opened or migrated
         from pathlib import Path
         from . import gapfill_study
