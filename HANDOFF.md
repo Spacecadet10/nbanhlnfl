@@ -1,5 +1,22 @@
 # Current handoff
 
+## Ledger: quote attached when the bookmaker later posts the model's line — Claude (Fable 5.1), 2026-10-03 21:25 UTC
+- **Dev checkout only; NOT in the release and NOT in tonight's scheduled move (target stays `5534c34`).** It changes how the
+  market-forecast ledger decides "same forecast", so it should get an independent review before a release move.
+- `ledger.py` `record_market` (not identity-hashed): the idempotency key never included `line_source`, so when the first
+  two-hour cycle had no bookmaker line and the bookmaker later quoted the same number, the retry returned the stored
+  model-only row and the game stayed out of the bookmaker comparison. Now, only in that case (stored row `model`, new row
+  `market`, same key), the quoted forecast is recorded once under `sha256(key + "\x1fline_source=market")`. Existing keys are
+  unchanged, so no existing row is re-recorded; a retry returns the quoted row; the model-only row stays.
+- Test `test_a_quote_posted_later_at_the_models_own_line_is_recorded_once_with_the_quote` fails on the previous
+  `ledger.py` in a scratch copy. Full backend suite run directly (empty scratch data dir): **570 passed**; frontend
+  typecheck and build ok. **`check_project.py --ready` itself exits 1 right now** at its structure guard, before any test:
+  "Unexpected top-level directory: .claude" (`.claude/scheduled_tasks.lock`, created 21:09 UTC by a Claude session's
+  scheduler, not by this change). The guard was not edited; the folder was left alone. Until it is removed or allowed,
+  every `--ready` run fails for that reason.
+- Not changed: the goal-model regularisation (`GLM_ALPHA`, `poisson_draw` alpha). That is a modelling choice in
+  identity-hashed files; evaluate on earlier seasons first and batch it with any other hashed edit.
+
 ## Scheduled release move to `5534c34` after tonight's games — Claude (Fable 5.1), 2026-10-03 20:50 UTC
 - The user plugged the Mac in and asked for the release to be moved after the games finish. A one-off script is running
   detached: `~/nba-predictor-backups/move-release.sh` (under `caffeinate -i -s`), log `~/nba-predictor-backups/release-move.log`.

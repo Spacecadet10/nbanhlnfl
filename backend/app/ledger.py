@@ -92,8 +92,16 @@ def record_market(conn: sqlite3.Connection, f: MarketForecast) -> tuple[int, boo
     """Stores a market forecast; returns (forecast_id, created). A retry returns the stored row; different
     probabilities under the same identity are a conflict, never an overwrite."""
     with transaction(conn):
-        existing = conn.execute("SELECT forecast_id, p_a, p_mid, p_b FROM market_forecasts WHERE idempotency_key=?",
-                                (f.idempotency_key,)).fetchone()
+        key = f.idempotency_key
+        existing = conn.execute("SELECT forecast_id, p_a, p_mid, p_b, line_source FROM market_forecasts WHERE idempotency_key=?",
+                                (key,)).fetchone()
+        if existing and existing["line_source"] == "model" and f.line_source == "market":
+            # The bookmaker has since quoted the very line the model-only forecast was made at. Same line, same
+            # probabilities, but this forecast carries the quote: it is recorded once under its own identity, so the game
+            # enters the bookmaker comparison. The model-only row stays; a retry returns this row, never a third.
+            key = hashlib.sha256((key + "\x1fline_source=market").encode()).hexdigest()
+            existing = conn.execute("SELECT forecast_id, p_a, p_mid, p_b, line_source FROM market_forecasts "
+                                    "WHERE idempotency_key=?", (key,)).fetchone()
         if existing:
             if any(abs(existing[k] - getattr(f, k)) > PROB_TOLERANCE for k in ("p_a", "p_mid", "p_b")):
                 raise LedgerConflict(f"Market forecast {f.idempotency_key[:12]} already stored with other probabilities")
@@ -101,6 +109,6 @@ def record_market(conn: sqlite3.Connection, f: MarketForecast) -> tuple[int, boo
         cols = ("idempotency_key", "sport", "game_id", "market", "line", "line_source", "market_quote_id", "policy",
                 "run_type", "model_version", "dataset_version", "feature_version", "cutoff_at", "generated_at",
                 "tipoff_at", "p_a", "p_mid", "p_b", "params")
-        values = [f.idempotency_key] + [getattr(f, c) for c in cols[1:]]
+        values = [key] + [getattr(f, c) for c in cols[1:]]
         cur = conn.execute(f"INSERT INTO market_forecasts ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})", values)
         return cur.lastrowid, True

@@ -450,3 +450,30 @@ def test_research_folds_in_reserved_test_seasons_are_flagged():
     folds = at._flag_reserved([{"season": 2024}, {"season": 2025}, {"season": 2026, "chosen": None}], "nhl")
     assert [f["reserved_test_season"] for f in folds] == [s in nhl_eval.PERIODS["test"] for s in (2024, 2025, 2026)] == [False, True, True]
     assert at.reserved_seasons("nba") == set(backtest.PERIODS["test"])
+
+
+# --- Ledger: a bookmaker quote at the model's own line is attached once, never duplicated -------------------------------
+def test_a_quote_posted_later_at_the_models_own_line_is_recorded_once_with_the_quote(sealed):
+    from dataclasses import replace
+    from app import market_live
+    from app.ledger import MarketForecast, record_market
+    from test_live_markets import add_upcoming, quote
+    gid, tip = "nhl:2026020001", "2026-10-11T23:00:00Z"
+    add_upcoming(sealed, gid=2026020001, start="2026-10-11T19:00:00", at="2026-10-11T20:00:00Z")
+    model = MarketForecast("nhl", gid, "total", 6.5, "model", None, "near_tipoff", "live", "m-window=2h-policy=near_tipoff",
+                           "d", "f", tip, "2026-10-11T21:10:00Z", tip, 0.48, 0.0, 0.52)
+    first, created = record_market(sealed, model)
+    assert created and record_market(sealed, replace(model, generated_at="2026-10-11T21:15:00Z")) == (first, False)   # plain retry
+    quote(sealed, "2026-10-11T21:20:00Z")                                    # the bookmaker now quotes total 6.5
+    q = market_live.latest_quote(sealed, gid, "total", "2026-10-11T21:30:00Z")
+    assert q is not None and q["line"] == 6.5
+    quoted = replace(model, line_source="market", market_quote_id=q["quote_id"], generated_at="2026-10-11T21:40:00Z")
+    second, created = record_market(sealed, quoted)
+    assert created and second != first                                       # recorded with its quote (the old code returned `first`)
+    assert record_market(sealed, replace(quoted, generated_at="2026-10-11T21:50:00Z")) == (second, False)   # never a third row
+    assert record_market(sealed, replace(model, generated_at="2026-10-11T21:55:00Z")) == (first, False)     # model row untouched
+    rows = sealed.execute("SELECT line_source, market_quote_id FROM market_forecasts WHERE game_id=? AND market='total' "
+                          "ORDER BY forecast_id", (gid,)).fetchall()
+    assert [tuple(r) for r in rows] == [("model", None), ("market", q["quote_id"])]
+    latest = [r for r in market_live.latest(sealed, policy="near_tipoff", market="total", game_ids=[gid])]
+    assert len(latest) == 1 and latest[0]["line_source"] == "market" and latest[0]["p_a_devig"] is not None   # shown with its quote
