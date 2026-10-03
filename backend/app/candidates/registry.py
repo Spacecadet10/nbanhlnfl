@@ -84,6 +84,19 @@ SPECS = (
          "Goal-rate GLMs with shot-quality inputs and a fitted draw inflation (joint score); goals_glm lacks xG."),
     Spec("poisson_draw:nhl_goalie", "nhl", "poisson_draw", "goals", "nhl_goalie", "candidate",
          "As above with goalie inputs: the only candidate carrying goalie information to puck lines and totals."),
+    # Deep networks (MODEL_SELECTION §22, candidates/deep.py): recorded at the user's request to build a prospective record.
+    # deep-v1 found no gain over existing members; research only, in no sealed pool or tracking registry.
+    Spec("torch_mlp:nba_base", "nba", "torch_mlp", "binary", "nba_base", "candidate",
+         "PyTorch network (64-32 units, dropout, 5 seeds; epochs chosen on the latest earlier season).", extra="deep"),
+    Spec("keras_mlp:nba_base", "nba", "keras_mlp", "binary", "nba_base", "candidate",
+         "The same network in TensorFlow/Keras: a cross-check between the two libraries.", extra="deep"),
+    Spec("torch_mlp:nba_base:normal", "nba", "torch_mlp", "normal", "nba_base", "candidate",
+         "PyTorch margin and total networks; in deep-v1 better than gbt_points on spreads, not than the best member.",
+         extra="deep"),
+    Spec("torch_mlp:nhl_base", "nhl", "torch_mlp", "binary", "nhl_base", "candidate",
+         "PyTorch network (64-32 units, dropout, 5 seeds; epochs chosen on the latest earlier season).", extra="deep"),
+    Spec("keras_mlp:nhl_base", "nhl", "keras_mlp", "binary", "nhl_base", "candidate",
+         "The same network in TensorFlow/Keras: a cross-check between the two libraries.", extra="deep"),
 )
 BY_NAME = {s.name: s for s in SPECS}
 
@@ -121,8 +134,10 @@ FAMILY_AUDIT = (
     {"family": "NBA player / lineup impact", "decision": "deferred",
      "detail": "Lineups are postgame facts; the timestamped pregame input is the injury report, already used by "
                "availability_two_hour. See the repository review for data-access results."},
-    {"family": "Larger neural networks", "decision": "rejected",
-     "detail": "≤ 11k games per sport and 12–16 tabular features; only a small, strongly regularised MLP is screened."},
+    {"family": "Larger neural networks (PyTorch, TensorFlow/Keras)", "decision": "recorded as research (no gain in deep-v1)",
+     "detail": "≤ 11k games per sport and 12–16 tabular features. deep-v1 (MODEL_SELECTION §22) fitted 64-32 networks in "
+               "both libraries: level with the best existing member on winners, worse on totals. Recorded prospectively at "
+               "the user's request; never a voter and in no sealed registry."},
 )
 
 
@@ -147,10 +162,18 @@ def definition(spec: Spec) -> str:
     for name in ("features.py", "learners.py", "engine.py", "goalies.py"):
         h.update(name.encode())
         h.update((root / name).read_bytes())
+    if spec.extra == "deep":       # deep candidates only: existing candidates' identities are unchanged
+        from . import deep
+        h.update(deep.identity())
     return h.hexdigest()[:16]
 
 
 def available(spec: Spec) -> bool:
+    """Whether this environment can FIT the candidate. A deep candidate without its library can still be applied from a
+    stored artifact (candidates/deep.py); the live loop handles that case."""
+    if spec.extra == "deep":
+        from . import deep
+        return deep.libraries_present(spec)
     return spec.extra is None or _lib("ngboost") is not None
 
 

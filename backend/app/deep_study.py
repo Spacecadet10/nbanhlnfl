@@ -256,7 +256,7 @@ def deep_walk(sport: str, name: str, lib: str, head: str, rows: list, log: Calla
             if engine.ready(o):
                 out[r.game_id] = o
         log(f"{name} {s}: {len(train)} training games, epochs {fits[-1]['epochs']}, {fits[-1]['seconds']} s")
-    return {"name": name, "head": head, "outputs": out, "fits": fits}
+    return {"name": name, "head": head, "outputs": out, "fits": fits, "residuals": residuals}
 
 
 def versions() -> dict:

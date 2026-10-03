@@ -7,7 +7,7 @@ from dataclasses import replace
 import pytest
 
 from app import backtest, nhl_eval, nhl_shots
-from app.candidates import engine, features, goalies, learners, live as pool_live, registry
+from app.candidates import deep, engine, features, goalies, learners, live as pool_live, registry
 from app.models.hockey import GoalsConfig, HockeyEloConfig
 from test_live_markets import add_upcoming, sealed  # noqa: F401  (fixture)
 from test_nhl_eval import nhl_store  # noqa: F401  (fixture)
@@ -22,7 +22,9 @@ def test_registry_names_settings_and_audit():
     names = [s.name for s in registry.SPECS]
     assert len(names) == len(set(names))
     for s in registry.SPECS:
-        assert s.family in learners.SETTINGS and s.features in features.FEATURE_SETS and s.head in registry.HEAD_MARKETS
+        # deep families (candidates/deep.py) keep their settings outside learners.py, which is part of every identity
+        assert (s.family in learners.SETTINGS or s.family in deep.FAMILIES) and s.features in features.FEATURE_SETS \
+            and s.head in registry.HEAD_MARKETS
         assert s.role in ("reference", "candidate") and s.why
         assert len(registry.definition(s)) == 16
     audited = " ".join(a["family"] for a in registry.FAMILY_AUDIT).lower()
@@ -80,7 +82,7 @@ def test_ngboost_is_reproducible_or_reported_missing():
     """NGBoost is an optional learner (the `research` extra, not installed in the live venv). Without it the candidate must be
     reported unavailable; with it, fits must be reproducible."""
     from app.candidates import registry
-    ng = [s for s in registry.SPECS if s.extra is not None]
+    ng = [s for s in registry.SPECS if s.extra == "research"]
     try:
         import ngboost  # noqa: F401
     except ImportError:

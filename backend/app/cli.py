@@ -123,6 +123,9 @@ def main(argv=None) -> int:
     tev = sub.add_parser("tuning-evaluate", help="Evaluate tuning-v1 predictions alone and inside combinations (saved tables "
                                                  "only; opens no store)")
     tev.add_argument("--out")
+    sub.add_parser("pool-fit-deep", help="Research environment only (needs torch / tensorflow): fit this season's deep "
+                                         "candidates on the store's point-in-time history and write their artifacts; "
+                                         "the store itself is opened read-only")
     dlp = sub.add_parser("deep-study", help="PyTorch and TensorFlow/Keras networks on the point-in-time feature walk "
                                             "(MODEL_SELECTION §22); needs the deep extra; run on store copies")
     dlp.add_argument("--out")
@@ -234,6 +237,11 @@ def main(argv=None) -> int:
         report = tuning_study.run(conn_for, out_dir=Path(args.out) if args.out else None)
         print(json.dumps({"output_dir": report["output_dir"], "games": {s: v["games_per_market"] for s, v in report["sports"].items()}}))
         return 0
+    if args.cmd == "pool-fit-deep":      # query-only store, no job lock, no migration; writes artifact files only
+        from .candidates import live as pool_live
+        report = pool_live.fit_deep_artifacts(db.connect_readonly(args.sport))
+        print(json.dumps(report, indent=1, default=str))
+        return 0 if report["artifacts"] and all(report["artifacts"].values()) else 1
     if args.cmd == "deep-evaluate":      # reads saved tables only; no store is opened or migrated
         from pathlib import Path
         from . import deep_study

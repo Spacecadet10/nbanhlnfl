@@ -19,7 +19,7 @@ from typing import Optional
 
 from .. import backtest, config, live
 from ..db import transaction, utc_now
-from . import engine, features, registry
+from . import deep, engine, features, registry
 
 PREFIX = "research-cand"
 WINDOW = timedelta(hours=2)
@@ -106,10 +106,11 @@ def legacy_files(art: dict) -> list:
 
 
 def _fit(spec, train: list, season: int, defn: str, fp: str) -> dict:
-    model = engine.fit(spec, train)
+    is_deep = deep.is_deep(spec)       # fitted with torch / tensorflow, stored as NumPy weights (candidates/deep.py)
+    model = deep.fit(spec, train) if is_deep else engine.fit(spec, train)
     sd = None
     if spec.head == "normal":
-        _, _, residuals = engine.walk(spec, train)
+        residuals = deep.residuals(spec, train) if is_deep else engine.walk(spec, train)[2]
         sd = engine.residual_sd(residuals, season)
     blob = pickle.dumps(model.objects)
     return {"model": model, "sd": sd, "season": season, "definition": defn, "training_games": len(train),
@@ -271,6 +272,33 @@ def record(conn, *, game_ids: Optional[list] = None, now: Optional[str] = None, 
     return out
 
 
+def fit_deep_artifacts(conn, now: Optional[str] = None, write: bool = True) -> dict:
+    """Fits (or finds) the current season's artifact of every deep candidate of this store's sport, on the same
+    point-in-time history a live cycle would build now. Run in the research environment; it reads the store and writes only
+    artifact files, so the release can then apply them without torch or tensorflow."""
+    now = now or utc_now()
+    eng = live.engine(conn)
+    rows = live.available_rows(conn, now)
+    known = {r.game.game_id: r for r in rows}
+    walk = features.walk(_recorder(conn, eng, set(), now), rows, _events(conn, eng, rows, known, now), deliver_until=now)
+    history = list(walk.values())
+    types = eng.eligible_types
+    nxt = conn.execute(f"SELECT season FROM games WHERE status='scheduled' AND tipoff_at > ? AND season_type IN "
+                       f"({','.join('?' * len(types))}) ORDER BY tipoff_at LIMIT 1", (now, *types)).fetchone()
+    out = {"sport": eng.sport, "as_of": now, "season": nxt["season"] if nxt else None, "artifacts": {}}
+    if nxt is None:
+        return out
+    for spec in registry.for_sport(eng.sport):
+        if not deep.is_deep(spec):
+            continue
+        art = ensure_fit(spec, history, nxt["season"], write=write)
+        out["artifacts"][spec.name] = None if art is None else {
+            "definition": art["definition"], "training_games": art["training_games"], "artifact_sha256": art["artifact_sha256"],
+            "results_fingerprint": art["results_fingerprint"], "epochs": art["info"].get("epochs"),
+            "path": art.get("artifact_path")}
+    return out
+
+
 def core_lines(conn, game_ids, now: str) -> dict:
     """(game_id, market) -> the exact line of the latest core research cohort generated at or before `now` (never the
     expanded experiment's), with its cohort id as the reference — for every market, so a winner/reg3 forecast also names
@@ -327,10 +355,12 @@ def _record(conn, game_ids, now, lines, write, specs, out) -> None:
     out["dataset_version"], out["feature_table"] = dataset, table
     for spec in specs or registry.for_sport(eng.sport):
         try:
-            if not registry.available(spec):
+            if not registry.available(spec) and not deep.is_deep(spec):
                 out["skipped"][spec.name] = {"all": f"optional dependency {spec.extra} not installed"}
                 continue
             _record_spec(conn, eng, spec, history, upcoming, recent, rec, lines, now, fixed, write, dataset, table, out)
+        except deep.DependencyMissing as exc:      # no stored artifact for this season and no library here: skipped, visible
+            out["skipped"][spec.name] = {"all": str(exc)}
         except Exception as exc:
             out["errors"][spec.name] = f"{type(exc).__name__}: {exc}"
 
@@ -502,8 +532,8 @@ def roster(conn, sport: str, as_of: Optional[str] = None) -> dict:
                 if confirmed:
                     combos.append(market)
         shortlisted = any(e.get("shortlisted") for e in evaluation.values())
-        status = ("dependency missing" if not registry.available(spec) else
-                  "trained" if fit else "registered (trains at first eligible game)")
+        status = ("trained" if fit else "awaiting a fit in the research environment" if deep.is_deep(spec) else
+                  "dependency missing" if not registry.available(spec) else "registered (trains at first eligible game)")
         state = pool_selection.candidate_state(conn, reg, sport, spec.name, as_of, defn) if reg else {}
         alone = [m for m, st in state.items() if any(x["route"] == "standalone" for x in st["sources"])]
         inside = sorted({x["source"] for st in state.values() for x in st["sources"] if x["route"] == "combination"})
