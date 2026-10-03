@@ -5,6 +5,7 @@ import pytest
 
 from app import availability_quality as aq
 from app.candidates import features, features_extra as fx, registry
+from test_nhl_eval import nhl_store  # noqa: F401  (fixture)
 
 
 def test_game_score_is_hollinger_and_tolerates_missing_fields():
@@ -54,3 +55,32 @@ def test_new_feature_set_leaves_existing_sets_and_candidate_identities_unchanged
     assert features.FEATURE_SETS["nhl_special"] == features.NHL_BASE + fx.SPECIAL
     assert features.FEATURE_SETS["nhl_base"] == features.NHL_BASE
     assert all(s.features != "nhl_special" for s in registry.SPECS)      # nothing new is recorded live from this study
+
+
+def test_prop_snapshots_are_raw_bounded_and_never_fail_the_caller(nhl_store):
+    from datetime import datetime, timezone
+    from app import props_collect as pc
+    from test_live_markets import add_upcoming, quote
+    conn = nhl_store
+    add_upcoming(conn, start="2026-10-12T19:00:00", at="2026-10-12T20:30:00Z")
+    quote(conn, "2026-10-12T21:05:00Z", date="2026-10-12T23:00Z")
+    calls = []
+
+    def fake(url):
+        calls.append(url)
+        return b'{"items": []}'
+    now = datetime(2026, 10, 12, 21, 30, tzinfo=timezone.utc)
+    out = pc.collect(conn, "nhl", now=now, fetch=fake)
+    assert out["targets"] == 1 and out["stored"] == 1 and "propBets" in calls[0]
+    again = pc.collect(conn, "nhl", now=now, fetch=fake)
+    assert again["stored"] == 0 and again["recent"] == 1 and len(calls) == 1           # once per game per 55 min
+    later = datetime(2026, 10, 12, 22, 30, tzinfo=timezone.utc)
+    assert pc.collect(conn, "nhl", now=later, fetch=lambda u: None)["not_listed"] == 1  # 404: counted, not stored
+    boom = pc.collect(conn, "nhl", now=datetime(2026, 10, 12, 22, 45, tzinfo=timezone.utc),
+                      fetch=lambda u: (_ for _ in ()).throw(RuntimeError("down")))
+    assert boom["status"] == "partial" and boom["failed"]
+    n = conn.execute("SELECT count(*) FROM raw_responses WHERE source='espn_props'").fetchone()[0]
+    assert n == 1
+    far = pc.collect(conn, "nhl", now=datetime(2026, 10, 12, 18, 0, tzinfo=timezone.utc), fetch=fake)
+    assert far["targets"] == 0                                                          # start more than two hours away
+

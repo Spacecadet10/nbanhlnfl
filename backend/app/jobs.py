@@ -147,7 +147,14 @@ def odds_snapshot(conn: sqlite3.Connection, *, force: bool = False, fetch: Optio
     if failure:
         return _finish(conn, run_id, "failed", attempts, {"dates": dates, "failed_date": failure[0],
                                                           "error": failure[1], "completed": results})
-    return _finish(conn, run_id, "success", attempts, {"dates": dates, "imports": results})
+    detail = {"dates": dates, "imports": results}
+    try:   # forward raw prop-line snapshots (collection only, docs/MARKETS.md); never affects the odds job's status
+        from . import props_collect
+        detail["props"] = props_collect.collect(conn, sport(conn), now=now)
+    except Exception as exc:
+        conn.rollback()
+        detail["props"] = {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+    return _finish(conn, run_id, "success", attempts, detail)
 
 
 def box_refresh_plan(conn: sqlite3.Connection, now: datetime) -> dict:
