@@ -400,3 +400,53 @@ def test_store_backed_requests_are_served_one_at_a_time(api, sealed, monkeypatch
     assert codes == [200] * 6 and state["max"] == 1
     assert api.get("/api/games/nhl:nope", params={"sport": "nhl"}).status_code == 404      # an error releases the lock
     assert api.get("/api/meta", params={"sport": "nhl"}).status_code == 200
+
+
+# --- Records split without dropping anything: lead-time bands, backtest periods; bookmaker-implied rate; reserved seasons --
+def test_pre_game_archive_record_is_split_by_registered_lead_bands_and_the_parts_add_up(store, client):
+    live.predict(store, now="2026-10-19T15:00:00Z")                  # two days (Eastern) before g1 on 2026-10-21
+    body = client.get("/api/predictions", params={"run_type": "live"}).json()
+    assert [p["key"] for p in body["parts"]] == ["1_day", "2_days", "3_7_days"]
+    assert sum(p["record"]["selected"] for p in body["parts"]) == body["record"]["selected"] == body["total"]
+    g1 = next(r for r in body["predictions"] if r["game_id"] == "espn:g1")
+    assert g1["lead_days"] == 2 and g1["horizon_hours"] == pytest.approx(56.5)
+    assert next(p for p in body["parts"] if p["key"] == "2_days")["record"]["selected"] >= 1
+    assert client.get("/api/predictions", params={"run_type": "live", "policy": "near_tipoff"}).json()["parts"] == []
+
+
+def test_backtest_record_is_split_by_period_and_the_test_part_equals_performance(store, client):
+    primary = backtest.model_version(live.primary_model(store)[1])
+    v = store.execute("SELECT game_id, tipoff_at FROM games WHERE status='final' AND season IN (2022, 2023, 2024) "
+                      "ORDER BY tipoff_at LIMIT 1").fetchone()        # an existing validation-season game (data unchanged)
+    ingest_events(store, [event("t1", "2026-03-10T23:00:00Z", "1", "2", "STATUS_FINAL", 110, 100, season=2026),
+                          event("t2", "2026-03-11T23:00:00Z", "3", "4", "STATUS_FINAL", 90, 100, season=2026)],
+                  "2026-03-12T12:00:00Z", month="202603")
+    for gid, tip in ((v["game_id"], v["tipoff_at"]), ("espn:t1", "2026-03-10T23:00:00Z"), ("espn:t2", "2026-03-11T23:00:00Z")):
+        record(store, Forecast(gid, "backtest", primary, "d", backtest.FEATURE_VERSION, backtest.cutoff_for(tip),
+                               "2026-09-30T00:00:00Z", 0.7))
+    body = client.get("/api/predictions", params={"run_type": "backtest"}).json()
+    parts = {p["key"]: p["record"] for p in body["parts"]}
+    assert set(parts) == {"validation", "test"} and body["record"]["selected"] == 3           # no row hidden
+    assert parts["validation"]["selected"] == 1 and parts["test"]["selected"] == 2
+    assert {r["game_id"]: r["period"] for r in body["predictions"]} == {v["game_id"]: "validation", "espn:t1": "test", "espn:t2": "test"}
+    perf = client.get("/api/performance", params={"run_type": "backtest"}).json()
+    assert perf["sample_size"] == parts["test"]["settled"] == 2                                # same population as Performance
+
+
+def test_market_record_reports_what_the_bookmaker_implied_for_quoted_picks(settled_markets):
+    get = lambda m: settled_markets.get("/api/market-predictions", params={"sport": "nhl", "market": m}).json()
+    quoted = [get(m)["record"] for m in ("spread", "total")]
+    assert any(r["quoted_decided"] == 1 for r in quoted)                    # game 1 was forecast at the bookmaker's line
+    for r in quoted:
+        if r["quoted_decided"]:
+            assert 0 < r["mean_implied"] < 1 and 0 <= r["quoted_wins"] <= r["quoted_decided"] <= r["wins"] + r["losses"]
+    home = get("team_total_home")
+    assert home["record"]["quoted_decided"] == 0 and home["record"]["mean_implied"] is None     # model-only lines: no claim
+    assert sum(p["record"]["selected"] for p in home["parts"]) == home["record"]["selected"]
+
+
+def test_research_folds_in_reserved_test_seasons_are_flagged():
+    from app import agreement_tracking as at, nhl_eval
+    folds = at._flag_reserved([{"season": 2024}, {"season": 2025}, {"season": 2026, "chosen": None}], "nhl")
+    assert [f["reserved_test_season"] for f in folds] == [s in nhl_eval.PERIODS["test"] for s in (2024, 2025, 2026)] == [False, True, True]
+    assert at.reserved_seasons("nba") == set(backtest.PERIODS["test"])

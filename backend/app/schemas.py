@@ -223,6 +223,11 @@ class PredictionRecord(BaseModel):
     outcome: Optional[Outcome]
     correct: Optional[bool]
     unscorable: bool = Field(default=False, description="Final but without a usable result; never counted as pending.")
+    lead_days: Optional[int] = Field(default=None, description="Live rows: the game's Eastern date minus the Eastern date "
+                                                               "the forecast was generated (the registered horizon rule).")
+    horizon_hours: Optional[float] = Field(default=None, description="Live rows: scheduled start minus generation, in hours.")
+    period: Optional[str] = Field(default=None, description="Backtest rows: 'validation' (seasons used to choose the "
+                                                            "model), 'test' (held-out) or another evaluation period.")
     void: bool = Field(default=False, description="The start (two-hour) or game date (pre-game archive) changed after the "
                                                   "forecast, or the game was postponed or cancelled: never scored.")
 
@@ -242,12 +247,21 @@ class ConfidenceRecord(BaseModel):
     win_rate: Optional[float] = Field(description="wins / settled; null when nothing is settled.")
 
 
+class RecordPart(BaseModel):
+    """One part of a record that is also reported whole: nothing is dropped, the parts add up to the full record."""
+    key: str
+    label: str
+    record: ConfidenceRecord
+
+
 class HistoryResponse(BaseModel):
     mode: Mode
     run_type: RunType
     policy: Policy = Field(default="pregame", description="Which live forecast policy the rows belong to.")
     total: int
     record: ConfidenceRecord
+    parts: list[RecordPart] = Field(default_factory=list, description="The same record split by lead time (pre-game "
+                                    "archive; bands registered in docs/EVALUATION_PLAN.md) or by evaluation period (backtest).")
     predictions: list[PredictionRecord]
 
 
@@ -387,6 +401,10 @@ class MarketRecordSummary(BaseModel):
     pending: int = Field(description="Awaiting a final result.")
     unscorable: int = Field(description="Final but cannot be settled (e.g. no regulation decision for the 3-way market). "
                                         "selected = wins + losses + pushes + voids + pending + unscorable.")
+    quoted_decided: int = Field(default=0, description="Decided picks (win or loss) that had a bookmaker quote at their line.")
+    quoted_wins: int = Field(default=0, description="Wins among those quoted, decided picks.")
+    mean_implied: Optional[float] = Field(default=None, description="Mean de-vigged bookmaker probability of the picked side "
+                                          "on those picks: what the bookmaker expected the win rate to be.")
     win_rate: Optional[float] = Field(description="wins / (wins + losses); pushes and voids excluded.")
 
 
@@ -398,6 +416,8 @@ class MarketRecord(BaseModel):
     away: Team
     forecast: MarketForecastOut
     outcome: Optional[Outcome]
+    lead_days: Optional[int] = Field(default=None, description="Game's Eastern date minus the forecast's Eastern generation date.")
+    horizon_hours: Optional[float] = None
 
 
 class MarketModelVersion(BaseModel):
@@ -417,7 +437,17 @@ class MarketHistoryResponse(BaseModel):
     versions: list[MarketModelVersion] = Field(default_factory=list, description="Every stored version (archive views).")
     total: int
     record: MarketRecordSummary
+    parts: list["MarketRecordPart"] = Field(default_factory=list, description="The record split by lead time (pre-game archive).")
     predictions: list[MarketRecord]
+
+
+class MarketRecordPart(BaseModel):
+    key: str
+    label: str
+    record: MarketRecordSummary
+
+
+MarketHistoryResponse.model_rebuild()
 
 
 class MarketPerformanceResponse(BaseModel):

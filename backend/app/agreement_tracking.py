@@ -905,11 +905,26 @@ def _precomputed(sport: str, sha: str, part: str = "markets") -> Optional[dict]:
     return d.get(part) if part == "checks" or d.get("grid") == GRID else None
 
 
+def reserved_seasons(sport: str) -> set:
+    """The sport's reserved final-test seasons. A research fold in one of them reuses those seasons: it is exploratory and
+    never a second final test (the frozen primary model's one-time test is separate and unaffected)."""
+    if sport == "nhl":
+        return set(nhl_eval.PERIODS["test"])
+    from . import backtest
+    return set(backtest.PERIODS["test"])
+
+
+def _flag_reserved(folds: list, sport: str) -> list:
+    reserved = reserved_seasons(sport)
+    return [{**f, "reserved_test_season": f.get("season") in reserved} for f in folds]
+
+
 def precomputed_check(sport: str, market: str) -> dict:
     """The chronological check saved when the historical tables were built (computing it needs the whole table)."""
     reg = load_registry()
     checks = _precomputed(sport, reg["sha256"], "checks") or {}
-    return checks.get(market) or {"status": _missing_status(sport, market, reg), "folds": []}
+    out = checks.get(market) or {"status": _missing_status(sport, market, reg), "folds": []}
+    return {**out, "folds": _flag_reserved(out.get("folds", []), sport)}
 
 
 def _missing_status(sport: str, market: str, reg: dict) -> str:
@@ -1192,5 +1207,7 @@ def joint_report(conn, sport, market, *, evidence="historical", members=None, co
     recent = [{**{k: i.get(k) for k in ("game_id", "tipoff_at", "line", "state", "status", "side", "agreement", "statistic", "votes", "missing", "series")},
                "matches_filter": bool(joint_cell([i], market, agreement_min, agreement_max, confidence_min, confidence_max)["selected"])}
               for i in sorted(items, key=lambda i: (i["tipoff_at"], i["game_id"]))[-20:]]
-    return {**base, "status": "available" if items else "no_records", "by_definition": groups, "recent": recent,
-            "walk": joint_walk(items, rows, members, market) if evaluate and evidence == "historical" else None}
+    walk = joint_walk(items, rows, members, market) if evaluate and evidence == "historical" else None
+    if walk:
+        walk = {**walk, "folds": _flag_reserved(walk["folds"], sport)}
+    return {**base, "status": "available" if items else "no_records", "by_definition": groups, "recent": recent, "walk": walk}

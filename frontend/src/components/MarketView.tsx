@@ -161,7 +161,7 @@ export function MarketHistoryTable({ rows }: { rows: MarketRecord[] }) {
             <td data-label="Model confidence">{pct(r.forecast.confidence, 1)}</td>
             <td data-label="Result">{r.outcome ? `${r.away.abbr} ${r.outcome.away_score} – ${r.outcome.home_score} ${r.home.abbr}` : <span className="muted">Pending</span>}</td>
             <td data-label="Outcome of pick"><ResultLabel result={r.forecast.result} /></td>
-            <td data-label="Recorded">{dateTime(r.forecast.generated_at)}</td>
+            <td data-label="Recorded">{dateTime(r.forecast.generated_at)}{r.lead_days != null && r.lead_days >= 2 && <span className="warn small"> · {r.lead_days} days before</span>}</td>
           </tr>
         ))}
       </tbody>

@@ -1,5 +1,27 @@
 # Current handoff
 
+## Open presentation items closed — Claude (Fable 5.1), 2026-10-03 20:05–20:30 UTC
+- At the user's request ("fix the still open items"). API/frontend only: `providers/real.py`, `schemas.py`,
+  `agreement_tracking.py` (output flags only), frontend. No identity-hashed file, job path, migration or stored row changed;
+  the release stays at `948f1be` (nothing here needs a release move). Definition still NHL `3e2504c4d655c41b`.
+- **Pre-game archive lead-time bands (registered in EVALUATION_PLAN) are now built:** `parts` on `/api/predictions`
+  (live, pregame) and `/api/market-predictions` (pregame): 1 day / 2 days / 3–7 days by Eastern-date lead; rows carry
+  `lead_days` and `horizon_hours`. Nothing dropped; parts add up. Live NHL winner: 13 / 13 / 31 = 57 (the registered counts).
+- **NBA backtest scope:** backtest rows carry `period`; the record is also split into validation (seasons used to choose the
+  model) and held-out test. Live: 6,605 = 3,962 validation (64.3%) + 2,643 test (67.2%); the test part equals Performance.
+- **Bookmaker-implied rate:** market records add `quoted_decided`, `quoted_wins`, `mean_implied`. Live two-hour puck line:
+  5–0, bookmaker-implied 63.7% on those five picks, shown under the record.
+- **Reserved seasons:** folds of the chronological check and the joint later-season evaluation carry
+  `reserved_test_season`; the UI marks them "reused test season"; the button reads "Explore joint rules on later seasons
+  (not a validation)". The frozen primary model's one-time test is unchanged and still labelled as such.
+- **Cards:** a finished game without a two-hour forecast says so (no "yet"); the market figure shows its quote time.
+- **Stale preview stopped:** the :8032 API (pid 58379) and :5182 Vite (pid 57970) left from the morning are killed.
+- Tests: 4 added to `tests/test_review3_fixes.py` (25). `NBA_DATA_DIR=<scratch> … check_project.py --ready`: exit 0,
+  typecheck + build ok, **569 passed**. :8000 restarted 20:21 UTC; browser (desktop) shows the three archive bands, the
+  NBA backtest split, the implied-rate sentence, the finished-game note (8 of 8 Oct 1 games) and quote times. Not seen in a
+  browser: the "reused test season" flag (the API returns it for 2025 and 2026); phone width.
+- **Still open:** the winner/line schedule mismatch (identity-hashed; frozen until ~05:00 UTC, and unreachable today).
+
 ## Injury collector newest-first, release moved to `948f1be` — Claude (Fable 5.1), 2026-10-03 19:30–20:00 UTC
 - At the user's request ("commit, review, release move"). `injuries.py`: pending report slots are collected newest first
   (`_newest_first`; budgets unchanged), so missing older slots cannot delay the latest report the injury-aware forecast

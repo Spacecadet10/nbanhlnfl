@@ -41,6 +41,21 @@ def eastern_date(ts: str) -> date:
     return _parse(ts).astimezone(EASTERN).date()
 
 
+# Lead-time bands of the pre-game archive, registered in docs/EVALUATION_PLAN.md before the multi-day rows settled: the
+# game's Eastern date minus the forecast's Eastern generation date, in whole days. Nothing is dropped; the bands add up.
+HORIZON_BANDS = (("1_day", "Made the day before (or the same day)", lambda d: d <= 1),
+                 ("2_days", "Made 2 days before", lambda d: d == 2),
+                 ("3_7_days", "Made 3–7 days before", lambda d: d >= 3))
+PERIOD_LABELS = {"validation": "Seasons used to choose the model (validation)", "test": "Held-out test seasons",
+                 "development": "Development seasons", "warmup": "Warm-up seasons"}
+
+
+def lead(tipoff_at: str, generated_at: str) -> tuple[int, float]:
+    """(whole Eastern days between generation and the game's date, hours between generation and the scheduled start)."""
+    return ((eastern_date(tipoff_at) - eastern_date(generated_at)).days,
+            round((_parse(tipoff_at) - _parse(generated_at)).total_seconds() / 3600, 1))
+
+
 def _day_bounds(day: date) -> tuple[str, str]:
     start = datetime(day.year, day.month, day.day, tzinfo=EASTERN)
     fmt = "%Y-%m-%dT%H:%M:%SZ"
@@ -365,15 +380,23 @@ class RealProvider:
             if r["status"] == "final":
                 outcome = Outcome(home_score=r["home_score"], away_score=r["away_score"],
                                   home_won=r["home_score"] > r["away_score"])
+            days, hours = lead(r["game_tipoff_at"], r["generated_at"])
             out.append(MarketRecord(game_id=r["game_id"], game_date=eastern_date(r["game_tipoff_at"]),
-                                    tipoff=r["game_tipoff_at"], home=home, away=away, forecast=f, outcome=outcome))
+                                    tipoff=r["game_tipoff_at"], home=home, away=away, forecast=f, outcome=outcome,
+                                    lead_days=days, horizon_hours=hours))
         return out
 
     @staticmethod
     def _record_summary(rows: list[MarketRecord], min_confidence: Optional[float]) -> MarketRecordSummary:
         res = [r.forecast.result for r in rows]
         wins, losses = res.count("win"), res.count("loss")
-        return MarketRecordSummary(min_confidence=min_confidence, selected=len(rows),
+        # What the bookmaker expected of these picks: its de-vigged probability of the picked side, on decided picks that
+        # were made at a quoted line. A high win rate on heavily favoured sides is not skill by itself.
+        quoted = [(r.forecast.quote.prob_a if r.forecast.pick == "a" else r.forecast.quote.prob_b, r.forecast.result == "win")
+                  for r in rows if r.forecast.quote is not None and r.forecast.result in ("win", "loss")]
+        implied = dict(quoted_decided=len(quoted), quoted_wins=sum(w for _, w in quoted),
+                       mean_implied=sum(p for p, _ in quoted) / len(quoted) if quoted else None)
+        return MarketRecordSummary(**implied, min_confidence=min_confidence, selected=len(rows),
                                    settled=wins + losses + res.count("push"), wins=wins, losses=losses,
                                    pushes=res.count("push"), voids=res.count("void"),
                                    pending=res.count("pending"), unscorable=res.count("unscorable"),
@@ -388,7 +411,12 @@ class RealProvider:
         return MarketHistoryResponse(mode="real", sport=self.sport, market=market, policy=policy, total=len(rows),
                                      model_version=model_version or market_live.current_version(self.conn, policy),
                                      versions=self._versions(market, policy),
-                                     record=self._record_summary(rows, min_confidence), predictions=rows[:limit])
+                                     record=self._record_summary(rows, min_confidence),
+                                     parts=[] if policy != "pregame" else [
+                                         {"key": k, "label": label, "record": self._record_summary(
+                                             [r for r in rows if keep(r.lead_days)], min_confidence)}
+                                         for k, label, keep in HORIZON_BANDS],
+                                     predictions=rows[:limit])
 
     def market_performance(self, market: str, policy: str, model_version: Optional[str] = None) -> MarketPerformanceResponse:
         rows = self._market_records(market, policy, None, model_version)
@@ -476,9 +504,25 @@ class RealProvider:
                 confidence=pick_confidence(r["home_win_prob"]), outcome=outcome,
                 correct=None if outcome is None else (r["home_win_prob"] >= 0.5) == outcome.home_won,
                 unscorable=r["status"] == "final" and not moved and outcome is None,
+                lead_days=lead(r["tipoff_at"], r["generated_at"])[0] if run_type == "live" else None,
+                horizon_hours=lead(r["tipoff_at"], r["generated_at"])[1] if run_type == "live" else None,
+                period=self._period(r["season"]) if run_type == "backtest" else None,
                 void=moved or r["status"] in ("postponed", "canceled")))
+        if run_type == "backtest":      # every row is kept; the record is also shown per evaluation period
+            order = [p for p in ("validation", "test", "development", "warmup") if any(x.period == p for x in out)]
+            parts = [{"key": p, "label": PERIOD_LABELS[p], "record": confidence_record([x for x in out if x.period == p], min_confidence)}
+                     for p in order]
+            parts = parts if len(parts) > 1 or (parts and parts[0]["key"] != "test") else []
+        elif policy == "pregame":       # the registered lead-time bands of the pre-game archive
+            parts = [{"key": k, "label": label, "record": confidence_record([x for x in out if keep(x.lead_days)], min_confidence)}
+                     for k, label, keep in HORIZON_BANDS]
+        else:
+            parts = []
         return HistoryResponse(mode="real", run_type=run_type, policy=policy, total=len(out),
-                               record=confidence_record(out, min_confidence), predictions=out[:limit])
+                               record=confidence_record(out, min_confidence), parts=parts, predictions=out[:limit])
+
+    def _period(self, season: int) -> Optional[str]:
+        return next((name for name, seasons in self.periods.items() if season in seasons), None)
 
     def performance(self, run_type: str, policy: str = "pregame") -> PerformanceResponse:
         primary = self.near_version if policy == "near_tipoff" else self.model_version

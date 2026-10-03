@@ -181,7 +181,7 @@ function CheckBody({ sport, market }: { sport: Sport; market: MarketId }) {
     : 'No historical table.'}</Empty> : <>
     <div className="table-wrap"><table className="table small">
       <thead><tr><th>Season</th><th>First on earlier seasons</th><th>Earlier</th><th>Next season</th><th>Anchor, same count</th></tr></thead>
-      <tbody>{c.folds.map((x) => <tr key={x.season}><th scope="row">{x.season}</th>
+      <tbody>{c.folds.map((x) => <tr key={x.season}><th scope="row">{x.season}{x.reserved_test_season && <span className="warn small" title="This season is one of the reserved final-test seasons and has been reused by research: exploratory only"> · reused test season</span>}</th>
         {x.chosen && x.earlier && x.later ? <><td className="wrap">{x.chosen} · ≥ {pct(x.threshold ?? null, 0)}</td>
           <td>{pct(x.earlier.win_rate, 1)} on {x.earlier.decided}</td>
           <td>{pct(x.later.win_rate, 1)} on {x.later.decided} <span className="muted">{ci(x.later.ci95)}</span></td>
@@ -297,12 +297,12 @@ function JointAgreement({ sport, market }: { sport: Sport; market: MarketId }) {
       </tbody></table></div>
       {r.status === 'no_records' && <p>No recorded cohorts for this filter yet. No synthetic forecasts are substituted.</p>}
       {evidence === 'historical' && members.length >= 2 && r.status === 'available' && <>
-        <button type="button" onClick={() => setEvaluate(true)}>Test joint rules on later seasons</button>
+        <button type="button" onClick={() => setEvaluate(true)}>Explore joint rules on later seasons (not a validation)</button>
         <p className="small muted">Searches feasible agreement ranges and confidence thresholds/bands for this subset. Freezes the rule and best constituent on earlier seasons. Changing the controls does not change live recommendations.</p>
       </>}
       {r.walk && <><h3>Later-season evaluation</h3><p className="small muted">{r.walk.configurations} configurations · {r.walk.note}</p>
         <div className="table-wrap"><table><thead><tr><th>Season</th><th>Earlier-selected rule</th><th>Later picks</th><th>Win rate</th><th>Earlier-selected single, matched coverage</th></tr></thead>
-          <tbody>{r.walk.folds.map((f) => <tr key={f.season}><td>{f.season}</td><td>{f.chosen
+          <tbody>{r.walk.folds.map((f) => <tr key={f.season}><td>{f.season}{f.reserved_test_season && <span className="warn small" title="This season is one of the reserved final-test seasons and has been reused by research: exploratory only"> · reused test season</span>}</td><td>{f.chosen
             ? `Agreement ≥ ${pct(f.chosen.agreement_min)}${f.chosen.agreement_max ? ` and < ${pct(f.chosen.agreement_max)}` : ''}, confidence ≥ ${pct(f.chosen.confidence_min)}${f.chosen.confidence_max ? ` and < ${pct(f.chosen.confidence_max)}` : ''}` : f.reason}</td>
             <td>{f.later?.decided ?? '—'}</td><td>{pct(f.later?.win_rate ?? null)}</td>
             <td>{f.matched ? `${modelName(f.matched.model)}: ${pct(f.matched.win_rate)} (${f.matched.games})` : '—'}</td></tr>)}</tbody></table></div></>}

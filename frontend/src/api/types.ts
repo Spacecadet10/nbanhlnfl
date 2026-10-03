@@ -112,11 +112,14 @@ export interface MarketForecast {
 export interface MarketRecordSummary {
   min_confidence: number | null; selected: number; settled: number; wins: number; losses: number; pushes: number;
   voids: number; pending: number; unscorable: number; win_rate: number | null;
+  quoted_decided?: number; quoted_wins?: number; mean_implied?: number | null;
 }
-export interface MarketRecord { game_id: string; game_date: string; tipoff: string; home: Team; away: Team; forecast: MarketForecast; outcome: Outcome | null }
+export interface MarketRecord { game_id: string; game_date: string; tipoff: string; home: Team; away: Team; forecast: MarketForecast; outcome: Outcome | null;
+  lead_days?: number | null; horizon_hours?: number | null }
 export interface MarketModelVersion { model_version: string; current: boolean; games: number; first_at: string; last_at: string }
 export interface MarketHistoryResponse {
   mode: Mode; sport: Sport; market: MarketId; policy: Policy; model_version?: string | null; versions?: MarketModelVersion[]; total: number; record: MarketRecordSummary; predictions: MarketRecord[];
+  parts?: { key: string; label: string; record: MarketRecordSummary }[];
 }
 export interface MarketPerformanceResponse {
   mode: Mode; sport: Sport; market: MarketId; policy: Policy; title: string; model_version: string | null; versions?: MarketModelVersion[]; forecasts: number;
@@ -132,6 +135,7 @@ export interface PredictionRecord {
   /** The predicted winner and the model's probability for it: max(p_home, 1 - p_home). */
   pick: 'home' | 'away'; confidence: number;
   outcome: Outcome | null; correct: boolean | null; void?: boolean; unscorable?: boolean;
+  lead_days?: number | null; horizon_hours?: number | null; period?: string | null;
 }
 
 /** Observed record of the picks a confidence filter selects. Unscored games never count toward win_rate. */
@@ -143,6 +147,8 @@ export interface ConfidenceRecord {
 
 export interface HistoryResponse {
   mode: Mode; run_type: RunType; policy: Policy; total: number; record: ConfidenceRecord; predictions: PredictionRecord[];
+  /** The same record split by lead time (pre-game archive) or evaluation period (backtest); the parts add up to it. */
+  parts?: { key: string; label: string; record: ConfidenceRecord }[];
 }
 
 export interface CalibrationBin {
@@ -388,7 +394,7 @@ export interface TrackingReport {
 }
 export interface TrackingCheck {
   mode: Mode; status: string; note?: string;
-  folds: { season: number; chosen: string | null; threshold?: number | null; reason?: string;
+  folds: { season: number; chosen: string | null; threshold?: number | null; reason?: string; reserved_test_season?: boolean;
     earlier?: { decided: number; coverage: number | null; win_rate: number; lift: number; lower_adjusted: number };
     later?: { decided: number; coverage: number | null; win_rate: number | null; ci95: [number, number] | null; matched: TrackingMatched[] } }[];
 }
@@ -423,7 +429,7 @@ export interface JointReport {
   by_definition: { definition: string; games: number; status_counts: Record<string, number>; cell: TrackingCell }[];
   recent: { game_id: string; tipoff_at: string; line: number | null; state: string; status: string;
     side: number | null; agreement: number | null; statistic: number | null; votes: Record<string, number>; missing: Record<string, string>; matches_filter: boolean }[];
-  walk?: { configurations: number; note: string; folds: { season: string; reason?: string;
+  walk?: { configurations: number; note: string; folds: { season: string; reason?: string; reserved_test_season?: boolean;
     chosen: { agreement_min: number; agreement_max: number | null; confidence_min: number; confidence_max: number | null; comparator: string } | null;
     later?: TrackingCell; matched?: { model: string; games: number; win_rate: number | null } }[] } | null;
 }

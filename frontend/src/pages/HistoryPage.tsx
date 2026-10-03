@@ -92,7 +92,7 @@ export function HistoryPage() {
                     : 'No predictions recorded.'}
             </Empty>
           : <>
-              <RecordLine record={data.record} runType={data.run_type} scope={scopeLabel(filters)} />
+              <RecordLine record={data.record} runType={data.run_type} scope={scopeLabel(filters)} parts={data.parts} />
               <p className="small muted">
                 Model confidence is the forecast probability for the predicted winner; the observed win rate counts settled games only.
                 {data.total > data.predictions.length && ` Showing the latest ${data.predictions.length} of ${data.total}; the record covers all ${data.total}.`}
@@ -125,7 +125,7 @@ function MarketHistory({ sport, market, policy, level, filters, hasFilters, show
                 : `No ${policy === 'near_tipoff' ? 'near-tipoff' : 'pre-game archive'} forecasts of this market have been recorded yet.`}
           </Empty>
         : <>
-            <MarketRecordLine record={data.record} scope={scopeLabel(filters)} />
+            <MarketRecordLine record={data.record} scope={scopeLabel(filters)} parts={data.parts} />
             <p className="small muted">
               Each row is the latest forecast per game, at the exact line it was made against. Model-only lines had no bookmaker line when the forecast was made.
               {data.total > data.predictions.length && ` Showing the latest ${data.predictions.length} of ${data.total}; the record covers all ${data.total}.`}
@@ -165,7 +165,7 @@ function HistoryTable({ rows }: { rows: PredictionRecord[] }) {
             <td data-label="Outcome of pick">
               {r.correct == null ? <span className="muted">—</span> : r.correct ? <span className="ok">Correct</span> : <span className="bad">Wrong</span>}
             </td>
-            <td data-label="Recorded / computed">{dateTime(r.generated_at)}</td>
+            <td data-label="Recorded / computed">{dateTime(r.generated_at)}{r.lead_days != null && r.lead_days >= 2 && <span className="warn small"> · {r.lead_days} days before</span>}{r.period && r.period !== 'test' && <span className="muted small"> · {r.period} season</span>}</td>
             <td data-label="Model"><code>{r.model_version}</code></td>
           </tr>
         ))}

@@ -225,6 +225,8 @@ button,input,select { min-height:44px; }
 .range-records { margin:6px 0 14px; }
 .record-line { display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; margin:6px 0; font-size:0.9rem; }
 .record-sep { color:var(--muted); }
+.record-parts { margin:0 0 8px 0; padding-left:18px; color:var(--muted); }
+.record-parts li { margin:2px 0; }
 .selection-count { margin:10px 0; }
 .pick-line { margin:10px 0 0; }
 @media (max-width: 480px) {

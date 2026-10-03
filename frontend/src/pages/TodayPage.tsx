@@ -11,7 +11,7 @@ import { MarketSelect, useCarriedSearch, useMarket, useSport } from '../componen
 import { PolicyToggle, usePolicy } from '../components/RunTypeToggle';
 import { ProbabilityBar } from '../components/ProbabilityBar';
 import { AsyncView, Empty } from '../components/States';
-import { calendarDate, FULL_DATE, pct, shiftDate, time } from '../format';
+import { calendarDate, FULL_DATE, pct, shiftDate, time, dateTime } from '../format';
 
 export function TodayPage() {
   const [sport] = useSport();
@@ -179,7 +179,9 @@ function GameCard({ game: g, policy, research }: { game: GameSummary; policy: Po
             </p>
           </>
         ) : (
-          <p className="forecast-note">{near ? 'No forecast recorded yet. Forecasts are made within two hours of game time.' : g.forecast_note ?? 'No forecast available.'}</p>
+          <p className="forecast-note">{near ? (g.status === 'scheduled' && new Date(g.tipoff).getTime() > Date.now()
+            ? 'No forecast recorded yet. Forecasts are made within two hours of game time.'
+            : 'No two-hour forecast was recorded for this game.') : g.forecast_note ?? 'No forecast available.'}</p>
         )}
         {other && (
           <p className="other-forecast small muted">
@@ -190,7 +192,7 @@ function GameCard({ game: g, policy, research }: { game: GameSummary; policy: Po
         <ModelAgreement game={g} />
         <ResearchSlateLine entry={research} market="winner" />
         <div className="card-bottom small muted">
-          {g.market ? <>Market: {g.home.abbr} {pct(g.market.home_win_prob)}</> : <span className="warn">No market odds</span>}<span className="matchup-link">Matchup ↗</span>
+          {g.market ? <span title="The latest bookmaker quote retrieved before the start; it may be newer than the forecast above">Market: {g.home.abbr} {pct(g.market.home_win_prob)} <span className="muted small">(quote {dateTime(g.market.retrieved_at)})</span></span> : <span className="warn">No market odds</span>}<span className="matchup-link">Matchup ↗</span>
         </div>
       </Link>
     </li>
