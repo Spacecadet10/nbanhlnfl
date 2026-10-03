@@ -246,7 +246,7 @@ class RealProvider:
         if market == "winner":
             selection = apply_slate_policy(games, policy, min_confidence)
         else:   # the selected market and policy only; no fallback to another market or policy
-            found = {r["game_id"]: r for r in market_live.latest(self.conn, policy=policy, market=market,
+            found = {r["game_id"]: r for r in self._market_latest(policy=policy, market=market,
                                                                  game_ids=[g.game_id for g in games])}
             for g in games:
                 r = found.get(g.game_id)
@@ -285,7 +285,7 @@ class RealProvider:
         summary = self._summary(g)
         forecasts = [self._market_out(r, summary["home"], summary["away"])
                      for policy in market_live.POLICIES
-                     for r in market_live.latest(self.conn, policy=policy, game_ids=[game_id])]
+                     for r in self._market_latest(policy=policy, game_ids=[game_id])]
         goalies = []
         if self.sport == "nhl" and self.conn.execute("SELECT 1 FROM sqlite_master WHERE name='goalie_snapshots'").fetchone():
             from ..ingest import GOALIE_AS_OF_SQL
@@ -299,9 +299,20 @@ class RealProvider:
                           market_forecasts=forecasts)
 
     # ---- market history and performance ---------------------------------------------------------------------------
+    def _market_latest(self, *, policy: str, **kw) -> list:
+        """Latest market forecast per game and market under the CURRENT sealed market model only, as the winner views do
+        with theirs: after a re-seal, forecasts of an earlier model version stay stored but are not mixed into (or counted
+        twice in) the current record."""
+        rows = market_live.latest(self.conn, policy=policy, **kw)
+        try:
+            current = market_live.model_version(market_live.market_model(self.conn)[1], policy)
+        except market_live.MarketModelUnavailable:
+            return rows
+        return [r for r in rows if r["model_version"] == current]
+
     def _market_records(self, market: str, policy: str, min_confidence: Optional[float]) -> list[MarketRecord]:
         out = []
-        for r in reversed(market_live.latest(self.conn, policy=policy, market=market)):
+        for r in reversed(self._market_latest(policy=policy, market=market)):
             home, away = self._team(r["home_team_id"]), self._team(r["away_team_id"])
             f = self._market_out(r, home, away, min_confidence)
             if not f.meets_confidence:
@@ -335,7 +346,7 @@ class RealProvider:
     def market_performance(self, market: str, policy: str) -> MarketPerformanceResponse:
         rows = self._market_records(market, policy, None)
         settled_side = {(x["game_id"], x["market"]): market_live.outcome(x)
-                        for x in market_live.latest(self.conn, policy=policy, market=market)}
+                        for x in self._market_latest(policy=policy, market=market)}
         settled = [r for r in rows if settled_side[(r.game_id, r.forecast.market)] in ("a", "mid", "b")]
 
         def realised(r: MarketRecord) -> int:

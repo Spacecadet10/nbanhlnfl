@@ -121,3 +121,20 @@ def test_the_periodic_odds_command_skips_while_another_job_holds_the_store(tmp_p
     out = json.loads(capsys.readouterr().out)
     assert out["status"] == "skipped" and "another job" in out["reason"]
     assert not (tmp_path / "nhl.sqlite").exists()                    # nothing was opened or migrated
+
+
+def test_market_records_count_a_game_once_after_the_market_model_is_resealed(sealed):
+    from app.ledger import MarketForecast, record_market
+    add_upcoming(sealed, start="2026-10-11T19:00:00")
+    market_live.forecast(sealed, now="2026-10-10T15:00:00Z")
+    r = dict(sealed.execute("SELECT * FROM market_forecasts WHERE market='total' AND policy='pregame'").fetchone())
+    record_market(sealed, MarketForecast(                       # the same game forecast by an earlier model version
+        r["sport"], r["game_id"], r["market"], r["line"], r["line_source"], r["market_quote_id"], r["policy"], "live",
+        r["model_version"] + "-earlier-seal", r["dataset_version"], r["feature_version"], r["cutoff_at"],
+        "2026-10-10T16:00:00Z", r["tipoff_at"], 0.2, 0.0, 0.8, r["params"], ""))
+    final(sealed, "2026-10-11T19:00:00", at="2026-10-12T03:00:00Z")
+    p = RealProvider(sealed, now="2026-10-12T05:00:00Z")
+    hist = p.market_predictions("total", "pregame", None, None, None, 50, None)
+    assert hist.total == 1 and hist.record.selected == 1 and hist.predictions[0].forecast.model_version == r["model_version"]
+    assert p.market_performance("total", "pregame").forecasts == 1
+    assert [f.model_version for f in p.game(GID).market_forecasts if f.market == "total" and f.policy == "pregame"] == [r["model_version"]]
