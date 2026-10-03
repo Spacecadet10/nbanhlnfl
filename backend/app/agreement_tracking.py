@@ -39,6 +39,13 @@ REGISTRY_PATH = Path(__file__).parent / "models" / "tracking_groups.json"
 CAP = 500                                   # new rule configurations (groups × thresholds) per sport and market
 THRESHOLDS = {"winner": (0.55, 0.60, 0.65, 0.70, 0.75, 0.80), "reg3": (0.40, 0.45, 0.50, 0.55, 0.60),
               "line": (0.55, 0.60, 0.65, 0.70)}
+# Descriptive reporting grid (reconciliation 2026-10-03): the user's required cumulative 50–90% thresholds (reg3 35–70%) and
+# 5-point non-overlapping bands, incl. the NHL three-way lower bands. Derived from the stored statistic when read; the sealed
+# registry's thresholds above stay the only ones the exploratory leaderboard and checks use (cells carry `sealed`).
+REPORT_THRESHOLDS = {"winner": tuple(round(0.50 + 0.05 * i, 2) for i in range(9)),
+                     "line": tuple(round(0.50 + 0.05 * i, 2) for i in range(9)),
+                     "reg3": tuple(round(0.35 + 0.05 * i, 2) for i in range(8))}
+GRID = "report-grid-v1"
 MIN_EVIDENCE = 100                          # decided picks before a result is more than "insufficient evidence"
 MIN_COVERAGE = 0.05
 STACK_MIN_TRAIN = 300
@@ -69,6 +76,20 @@ def bands(market: str) -> list[list[float]]:
     """Non-overlapping confidence bands [lo, hi): below the first threshold, between thresholds, at or above the last."""
     t = THRESHOLDS[kind_of(market)]
     edges = [0.0, *t, 1.0 + 1e-9]
+    return [[edges[i], edges[i + 1]] for i in range(len(edges) - 1)]
+
+
+def report_thresholds(market: str) -> tuple:
+    k = kind_of(market)
+    return tuple(sorted(set(THRESHOLDS[k]) | set(REPORT_THRESHOLDS[k])))
+
+
+def report_bands(market: str) -> list[list[float]]:
+    """Descriptive non-overlapping bands: below the floor (1/3 for reg3, where only a majority's mean can fall), then 5-point
+    bands up to the last threshold, then at or above it."""
+    k = kind_of(market)
+    floor = [1 / 3] if k == "reg3" else []
+    edges = [0.0, *floor, *REPORT_THRESHOLDS[k], 1.0 + 1e-9]
     return [[edges[i], edges[i + 1]] for i in range(len(edges) - 1)]
 
 
@@ -543,13 +564,15 @@ def summarise(group: dict, items: list, ranked: "_Ranked", market: str, anchor: 
     comparators = list(dict.fromkeys(([anchor] if anchor else []) + [m for m in group["members"] if m in ranked.singles]))
     picks = _Picks(items, market, group["kind"])
     cum = []
-    for t in (None, *THRESHOLDS[kind_of(market)]):
+    sealed = set(THRESHOLDS[kind_of(market)])
+    for t in (None, *report_thresholds(market)):
         cell = picks.cell(-1.0 if t is None else t, None, eligible)
         cell["threshold"] = t
+        cell["sealed"] = t is None or t in sealed
         cell["matched"] = [ranked.matched(x, cell["decided"], games) for x in comparators] if cell["decided"] else []
         cum.append(cell)
     bnd = []
-    for lo, hi in bands(market):
+    for lo, hi in report_bands(market):
         cell = picks.cell(-1.0 if lo == 0.0 else lo, None if hi > 1.0 else hi, eligible)
         cell["band"], cell["label"] = [lo, min(hi, 1.0)], band_label(market, lo, hi)
         bnd.append(cell)
@@ -574,6 +597,8 @@ def leaderboard(groups: list, market: str, searched: int) -> list:
     out = []
     for g in groups:
         for cell in g["thresholds"]:
+            if not cell.get("sealed", True):        # descriptive grid cells never enter the search count or ranking
+                continue
             n = cell["decided"]
             if n < MIN_EVIDENCE or (cell["coverage"] or 0) < MIN_COVERAGE or not cell["matched"]:
                 continue
@@ -712,8 +737,8 @@ def report(conn, sport: str, market: str, *, evidence: str = "prospective", kind
     keep = {g["id"] for g in _filter_groups(m["groups"], kind, member, group_id)}
     return {"sport": sport, "market": market, "evidence": evidence, "status": status, "study": reg["study"],
             "registry_sha256": reg["sha256"], "effective_from": reg["effective_from"], "anchor": m["anchor"],
-            "thresholds": m["thresholds"],
-            "bands": [{"band": [lo, min(hi, 1.0)], "label": band_label(market, lo, hi)} for lo, hi in m["bands"]],
+            "thresholds": list(report_thresholds(market)), "sealed_thresholds": m["thresholds"], "grid": GRID,
+            "bands": [{"band": [lo, min(hi, 1.0)], "label": band_label(market, lo, hi)} for lo, hi in report_bands(market)],
             "registered_groups": len(m["groups"]), "configurations_searched": m["configurations"],
             "skipped_allocation": len(m["skipped"]), "games": full["games"], "lines": full["lines"], "kinds": reg["kinds"],
             "min_evidence": MIN_EVIDENCE, "groups": [g for g in full["summaries"] if g["id"] in keep],
@@ -793,7 +818,7 @@ def build_historical(sport: str, reg: Optional[dict] = None, log=print) -> Path:
         built.append(market)
         log(f"{sport}:{market}: {len(games)} games, {len(groups)} groups")
     _historical.cache_clear()
-    summaries = {"registry_sha256": reg["sha256"], "markets": {}, "checks": {}}
+    summaries = {"registry_sha256": reg["sha256"], "grid": GRID, "markets": {}, "checks": {}}
     for market in built:     # unfiltered summaries and the chronological check, so the API needs no recomputation
         summaries["markets"][market] = _full(historical_items(sport, market, reg), reg["markets"][f"{sport}:{market}"], market)
         summaries["checks"][market] = chronological_check(sport, market, reg)
@@ -819,7 +844,7 @@ def _precomputed(sport: str, sha: str, part: str = "markets") -> Optional[dict]:
     if not p.is_file():
         return None
     d = _summaries(str(p), p.stat().st_mtime)
-    return d.get(part) if d.get("registry_sha256") == sha else None
+    return d.get(part) if d.get("registry_sha256") == sha and d.get("grid") == GRID else None    # stale grid: recompute
 
 
 def precomputed_check(sport: str, market: str) -> dict:

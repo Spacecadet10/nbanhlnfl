@@ -361,7 +361,7 @@ export interface TrackingCell {
   selected: number; settled: number; pending: number; wins: number; losses: number; pushes: number; voids: number;
   unscorable: number; coverage: number | null; decided: number; win_rate: number | null; ci95: [number, number] | null;
   mean_confidence: number | null; brier: number | null; log_loss: number | null; evidence: 'sufficient' | 'insufficient evidence';
-  threshold?: number | null; matched?: TrackingMatched[]; band?: [number, number]; label?: string;
+  threshold?: number | null; matched?: TrackingMatched[]; band?: [number, number]; label?: string; sealed?: boolean;
 }
 export interface TrackingGroup {
   id: string; kind: TrackingKind; members: string[]; cohort: 'core' | 'expanded'; priority: string; eligible: number;
@@ -375,7 +375,7 @@ export interface TrackingLeader {
 }
 export interface TrackingReport {
   mode: Mode; sport: Sport; market: MarketId; evidence: TrackingEvidence; status: string; study?: string;
-  registry_sha256?: string; effective_from?: string; anchor?: string; thresholds?: number[];
+  registry_sha256?: string; effective_from?: string; anchor?: string; thresholds?: number[]; sealed_thresholds?: number[]; grid?: string;
   bands?: { band: [number, number]; label: string }[]; registered_groups?: number; configurations_searched?: number;
   skipped_allocation?: number; games?: number; lines?: number[]; kinds?: Record<string, string>; min_evidence?: number;
   groups: TrackingGroup[]; leaderboard: TrackingLeader[]; note: string; leaderboard_note?: string;

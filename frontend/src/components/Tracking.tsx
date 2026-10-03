@@ -100,7 +100,7 @@ function TrackingBody({ r, sport, market, f }: { r: TrackingReport; sport: Sport
           : { type: 'band', index: Number(v.slice(1)) });
       }}>
         <option value="all">every pick</option>
-        <optgroup label="At least (cumulative)">{(r.thresholds ?? []).map((t) => <option key={t} value={`t${t}`}>≥ {pct(t, 0)}</option>)}</optgroup>
+        <optgroup label="At least (cumulative)">{(r.thresholds ?? []).map((t) => <option key={t} value={`t${t}`}>≥ {pct(t, 0)}{r.sealed_thresholds && !r.sealed_thresholds.includes(t) ? ' (descriptive)' : ''}</option>)}</optgroup>
         <optgroup label="Band (non-overlapping)">{(r.bands ?? []).map((b, i) => <option key={b.label} value={`b${i}`}>{b.label}</option>)}</optgroup>
       </select></label>
       {market !== 'winner' && market !== 'reg3' && <label>Exact line<select value={f.line} onChange={(e) => f.setLine(e.target.value)}>

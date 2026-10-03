@@ -83,7 +83,7 @@ def test_threshold_and_band_boundaries_are_inclusive_below_and_exclusive_above()
     cum = {c["threshold"]: c["selected"] for c in s["thresholds"]}
     assert cum[0.55] == 6 and cum[0.60] == 4 and cum[0.65] == 3 and cum[0.80] == 2      # 0.599 is below 0.60
     band = {tuple(b["band"]): b["selected"] for b in s["bands"]}
-    assert band[(0.55, 0.60)] == 2 and band[(0.60, 0.65)] == 1 and band[(0.80, 1.0)] == 2
+    assert band[(0.55, 0.60)] == 2 and band[(0.60, 0.65)] == 1 and band[(0.80, 0.85)] == 2
     assert sum(b["selected"] for b in s["bands"]) == s["all_picks"]["selected"] == 6       # bands never overlap
     assert s["thresholds"][0]["evidence"] == "insufficient evidence"                     # sparse but visible
     assert s["probabilistic"]["games"] == 6 and s["thresholds"][0]["brier"] is not None
@@ -307,7 +307,8 @@ def test_tracking_and_training_api_match_the_frontend_types(game):
         assert fields("TrackingGroup") <= set(g)
         assert fields("TrackingCell") - {"threshold", "matched", "band", "label"} <= set(g["thresholds"][0])
         assert {"band", "label"} <= set(g["bands"][0]) and "threshold" in g["thresholds"][0]
-        assert len(g["bands"]) == len(at.THRESHOLDS["winner"]) + 1
+        assert len(g["bands"]) == len(at.report_bands("winner")) and r["sealed_thresholds"] == list(at.THRESHOLDS["winner"])
+        assert [c["threshold"] for c in g["thresholds"]] == list(at.report_thresholds("winner"))
         # Filters: rule kind and member narrow the groups; the leaderboard stays exploratory and empty without evidence.
         maj = c.get("/api/research/tracking", params={"sport": "nhl", "market": "winner", "kind": "majority"}).json()
         assert maj["groups"] and all(x["kind"] == "majority" for x in maj["groups"]) and maj["leaderboard"] == []
@@ -336,3 +337,27 @@ def test_record_on_a_store_without_0022_is_skipped_not_failed(game):
     game.execute("CREATE TABLE agreement_observations (observation_id INTEGER PRIMARY KEY, registry TEXT)")
     out = at.record(game, game_ids=[GID], now="2026-10-12T21:40:00Z", reg=small_registry())
     assert out["status"] == "skipped" and "0022" in out["reason"]
+
+
+
+def test_reporting_grid_covers_50_to_90_and_nhl_three_way_lower_bands_without_changing_the_sealed_search():
+    """Reconciliation: the user's required grid (cumulative 50–90%, reg3 35–70%, 5-point bands incl. NHL three-way lower
+    bands) is descriptive; the sealed thresholds alone feed the leaderboard and its search count."""
+    assert at.report_thresholds("winner")[0] == 0.50 and at.report_thresholds("winner")[-1] == 0.90
+    assert at.report_thresholds("reg3")[0] == 0.35 and at.report_thresholds("reg3")[-1] == 0.70
+    rb = at.report_bands("reg3")
+    assert rb[0] == [0.0, 1 / 3] and rb[1] == [1 / 3, 0.35] and rb[2] == [0.35, 0.40]
+    items = items_from([0.34, 0.36, 0.52, 0.71], market="reg3", realised=0)
+    s = at.summarise(g("single", "m"), items, at._Ranked({}, "reg3"), "reg3", None)
+    band = {tuple(round(x, 4) for x in b["band"]): b["selected"] for b in s["bands"]}
+    assert band[(0.3333, 0.35)] == 1 and band[(0.35, 0.4)] == 1 and band[(0.5, 0.55)] == 1 and band[(0.7, 1.0)] == 1
+    assert sum(b["selected"] for b in s["bands"]) == s["all_picks"]["selected"] == 4
+    sealed = {c["threshold"]: c["sealed"] for c in s["thresholds"]}
+    assert sealed[0.40] and sealed[0.60] and not sealed[0.35] and not sealed[0.65] and not sealed[0.70]
+    many = items_from([0.9] * 150)
+    for i, it in enumerate(many):
+        it["game_id"] = f"m{i}"
+    anchor = {it["game_id"]: {**it, "statistic": 0.6} for it in many}
+    summ = at.summarise(g("single", "m"), many, at._Ranked({"anchor": anchor}, "winner"), "winner", "anchor")
+    board = at.leaderboard([summ], "winner", 100)
+    assert board and {r["threshold"] for r in board} <= set(at.THRESHOLDS["winner"])          # 0.50, 0.85, 0.90 never ranked

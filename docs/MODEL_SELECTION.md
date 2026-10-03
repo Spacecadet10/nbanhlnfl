@@ -596,3 +596,11 @@ sklearn, which overstated the equivalence).
   `AttributeError`; the cohort trigger also refused the insert and aborted the step). `research_live.py` is part of the
   research identity, so the core research definition changes again; earlier cohorts, observations, selections and decisions
   keep their definition and nothing is relabelled. Regression test: `test_a_game_that_starts_during_the_cycle_is_a_member_skip_not_an_error`.
+- **2026-10-03 ~02:50 UTC, §18 tracking-v2 reporting grid (reconciliation):** summaries now also report the user's required
+  descriptive grid — cumulative 50–90% (reg3 35–70%) and 5-point non-overlapping bands, including the NHL three-way bands
+  [1/3, 0.35) and [0.35, 0.40) — derived from each stored statistic when read (`REPORT_THRESHOLDS`, `report_bands`, grid id
+  `report-grid-v1`). Every cell carries `sealed`; only the sealed registry's thresholds enter the exploratory leaderboard,
+  its Bonferroni count and the chronological check, so the sealed registry (f07a54a0…) and recorded observations are
+  unchanged. Correction to the §18 text: the lowest band starts at 0.0 ("below …"), not at the floor, because a majority's
+  mean over all members can fall below it. Precomputed historical summaries carry the grid id and are rebuilt
+  (`tracking-historical`); stale files are ignored.
