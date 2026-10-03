@@ -428,6 +428,36 @@ triples. Exploratory: every season used was already spent. Nothing here grants e
   (over the market's configurations) of the win-rate difference against the anchor at matched coverage. Historical check:
   rank on earlier seasons only, then report the first-ranked configuration on the next season.
 
+## 19. Feature tranche `features-v1` (recorded 2026-10-03 ~00:45 UTC, before any code or result)
+Allocation for this tranche (brief §8): at most 12 new model/training configurations per sport; used here: **NBA 2, NHL 2**.
+Every run is logged (data/research/features-v1/experiments.jsonl: success, failure, skip). Reused seasons ⇒ exploratory.
+- **NBA `avail_q` — player-quality-weighted absences.** *Hypothesis:* `avail_v1` weights an absent player by expected minutes
+  only; weighting by the player's recent production per minute (Hollinger game score per minute, last 20 played games before
+  the report date, centred on the previous season's league mean per minute) carries more of the strength change and so
+  diversifies errors from the team-rating members. *Configurations:* (1) `avail_q_v1` = `avail_v1` features +
+  quality-weighted new/all absence differences; (2) `avail_q_only` = `logistic_v2` features + quality-weighted differences
+  + `report_missing` (no minutes-only terms). *Data:* the same 2022–24 scored games, 17:45 ET cutoff and official reports as
+  `avail_v1` (publication times assumed from the PDF header/Last-Modified — the same limitation); player box scores strictly
+  before the report date. *Metrics:* paired log loss and Brier vs `avail_v1` and `logistic_v2` (week-block bootstrap, 20,000;
+  Bonferroni over 4 comparisons); incremental value: average(elo, X) vs average(elo, avail_v1) and accuracy of the top 25% by
+  confidence at matched coverage. *Reading rule:* "adds information" only if the Bonferroni interval of log loss vs
+  `avail_v1` is below 0; then the only permitted follow-up is prospective recording (live inputs exist: official report,
+  ESPN summary box scores); nothing live changes from this study.
+- **NHL `nhl_special` — shot volume and special-teams finishing.** *Hypothesis:* the shot-quality inputs (xG share at even
+  strength, special-teams xG net) miss shot volume (all-situation shot-attempt share) and finishing on the power play / penalty
+  kill (power-play goals for and short-handed goals against per game), which may diversify errors. Computed from our own
+  play-by-play shots of games delivered before the cutoff (20-game window, as xG). *Configurations:* (3)
+  `logit_l2:nhl_special`, (4) `poisson_draw:nhl_special` (the candidate learners with `nhl_base` + the three inputs).
+  *Data/metrics:* the candidate-pool walk (screen 2018–21, assess 2022–26: reused seasons), paired log loss vs the same learner
+  on `nhl_base` (winner and reg3 / puck line, Bonferroni over the markets tested), and with/without in the tracking groups'
+  average with the anchor. *Reading rule:* "adds information" only if the Bonferroni interval vs `nhl_base` is below 0 in
+  the assess seasons; then prospective recording as a candidate; otherwise recorded as a negative result.
+- **Not done in this tranche (inputs not established before the cutoff):** goalie confirmation *time* as a feature (ESPN
+  publishes no announcement time; our snapshots give a status at retrieval only, collected prospectively since 2026-10-01 —
+  shown as an input with its retrieval time, not backfilled); NBA expected minutes beyond last-10 means (no free projected
+  minutes source); PP/PK opportunity counts (penalties are not in the stored shot data; NHL REST `team/powerplay` is a
+  post-game per team-game source, assessed but not integrated).
+
 ## Amendments
 - **2026-10-02, before the study run:** `ridge_points` / `gbt_points` spreads have a floor of 1.0 point (`MIN_SD`), found with
   synthetic test data where every total was identical. Real residual spreads are about 12 (margin) and 18 (total) points, so the
