@@ -44,7 +44,7 @@ is saved as `.pdf.gz` instead of `.json.gz`; existing rows and paths are untouch
 
 ## Request budget (counts every attempt, including retries, 403s and failures)
 - At most **8 attempts per run**, **4 attempts per slot ever**, **120 attempts per day**. All three are counted from `injury_report_attempts`.
-- Each run takes the unfinished slots of the last 24 hours, oldest first, and stops the moment a budget is used up. Slots not reached are reported as deferred.
+- Each run takes the unfinished slots of the last 24 hours, newest first (changed 2026-10-03: missing older slots must not delay the latest report, which the live forecast needs within 60 minutes), and stops the moment a budget is used up. Slots not reached are reported as deferred. Trade-off: after a gap of roughly 21 hours or more on a game day, a few of the oldest slots can age past the 24-hour lookback before they are requested.
 - A slot still `not_available` or `failed` after 4 attempts is marked given up and listed; it is not retried.
 - At most 2 attempts per slot per run, with the existing 2 s / 8 s backoff. One slot failing does not stop the others.
 

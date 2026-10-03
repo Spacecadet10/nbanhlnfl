@@ -107,7 +107,7 @@ def test_outage_never_exceeds_the_run_slot_or_day_budgets(conn, monkeypatch):
     calls = []
     first = collect(conn, down(calls), now=now)
     assert first["due"] == 48 and len(calls) == 8 == first["attempts"] and first["status"] == "failed"
-    assert len(first["failed"]) == 4 and first["deferred"] == 44      # 2 attempts on each of the 4 oldest slots
+    assert len(first["failed"]) == 4 and first["deferred"] == 44      # 2 attempts on each of the 4 newest slots
     second = collect(conn, down(calls), now=now)
     assert len(calls) == 16 and len(second["given_up"]) == 4          # those 4 slots have used their 4 attempts
     third = collect(conn, down(calls), now=now)
@@ -149,7 +149,7 @@ def test_not_available_is_retried_on_later_runs_then_given_up(conn):
         calls.append(name)
         return ok(pdf(name)) if name != NAMES[2] or len(calls) > 9 else Response(403, None, None, None)
     first = collect(conn, fetch)
-    assert sorted(first["stored"]) == NAMES[:2] and first["not_available"] == [NAMES[2]] and first["status"] == "success"
+    assert first["stored"] == [NAMES[1], NAMES[0]] and first["not_available"] == [NAMES[2]] and first["status"] == "success"
     assert calls.count(NAMES[2]) == 1          # a 403 is not retried within the same run
     for _ in range(3):
         out = collect(conn, lambda n: Response(403, None, None, None))
