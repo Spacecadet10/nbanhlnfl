@@ -392,7 +392,9 @@ export interface TrackingGameMarket {
   picks: { group: string; kind: TrackingKind; side: Side; statistic: number; votes: Record<string, number> | null }[];
   incomplete: { group: string; missing: Record<string, string> }[];
 }
-export interface TrackingGame { mode: Mode; game_id: string; status: string; registry_sha256?: string; markets: TrackingGameMarket[]; note?: string }
+export interface TrackingGame {
+  mode: Mode; game_id: string; status: string; registry_sha256?: string; markets: TrackingGameMarket[]; note?: string;
+}
 
 // --- Training and update status (training_monitor). Never refits anything. ---------------------------------------------
 export interface TrainingFit {

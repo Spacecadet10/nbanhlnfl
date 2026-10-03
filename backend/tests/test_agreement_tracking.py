@@ -276,3 +276,48 @@ def test_two_hour_cycle_records_tracking_after_the_pool(game, monkeypatch):
     import inspect
     src = inspect.getsource(jobs.predict_now)
     assert src.index("candidate_pool(") < src.index("pool_selection(") < src.index("agreement_tracking(")
+
+
+def test_tracking_and_training_api_match_the_frontend_types(game):
+    """API/frontend consistency on a real store: every field the TypeScript types declare is in the JSON."""
+    from fastapi.testclient import TestClient
+    from app import main
+    from app.providers.real import RealProvider
+    from test_research_contract import fields
+    run(game, NOW)
+    at.record(game, game_ids=[GID], now="2026-10-12T21:40:00Z")              # the sealed registry
+    from app import db
+    game.commit()
+    path = game.execute("PRAGMA database_list").fetchone()["file"]
+
+    def provider():                     # like production: a fresh connection per request
+        conn = db.connect(path, check_same_thread=False)
+        try:
+            yield RealProvider(conn, now="2026-10-12T21:45:00Z")
+        finally:
+            conn.close()
+    main.app.dependency_overrides[main.get_provider] = provider
+    try:
+        c = TestClient(main.app)
+        r = c.get("/api/research/tracking", params={"sport": "nhl", "market": "winner"}).json()
+        assert fields("TrackingReport") - {"recommendation"} <= set(r) and r["status"] == "recording" and r["games"] == 1
+        g = r["groups"][0]
+        assert fields("TrackingGroup") <= set(g)
+        assert fields("TrackingCell") - {"threshold", "matched", "band", "label"} <= set(g["thresholds"][0])
+        assert {"band", "label"} <= set(g["bands"][0]) and "threshold" in g["thresholds"][0]
+        assert len(g["bands"]) == len(at.THRESHOLDS["winner"]) + 1
+        # Filters: rule kind and member narrow the groups; the leaderboard stays exploratory and empty without evidence.
+        maj = c.get("/api/research/tracking", params={"sport": "nhl", "market": "winner", "kind": "majority"}).json()
+        assert maj["groups"] and all(x["kind"] == "majority" for x in maj["groups"]) and maj["leaderboard"] == []
+        mem = c.get("/api/research/tracking", params={"sport": "nhl", "market": "winner", "member": "hockey_elo,hockey_gbt"}).json()
+        assert all({"hockey_elo", "hockey_gbt"} <= set(x["members"]) for x in mem["groups"])
+        hist = c.get("/api/research/tracking", params={"sport": "nhl", "market": "winner", "evidence": "historical"}).json()
+        assert hist["evidence"] == "historical" and "never recorded live" in hist["note"]
+        gm = c.get(f"/api/research/tracking/game/{GID}", params={"sport": "nhl"}).json()
+        assert fields("TrackingGame") <= set(gm) and fields("TrackingGameMarket") <= set(gm["markets"][0])
+        tr = c.get("/api/research/training", params={"sport": "nhl"}).json()
+        assert fields("TrainingStatus") <= set(tr)
+        if tr["fits"]:
+            assert fields("TrainingFit") <= set(tr["fits"][0])
+    finally:
+        main.app.dependency_overrides.pop(main.get_provider, None)
