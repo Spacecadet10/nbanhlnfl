@@ -334,6 +334,8 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
             # Pool selections: after the candidate forecasts of this cycle, under the pool decisions in force.
             out["pool_selection"] = pool_selection(conn, game_ids=accepted, now=now, write=not dry_run,
                                                    defn=(out["research"] or {}).get("definition"))
+            # Agreement tracking (tracking-v2): one observation per registered group and cohort; never raises.
+            out["tracking"] = agreement_tracking(conn, game_ids=accepted, now=now, write=not dry_run)
         else:
             out["research"] = {"status": "disabled", "reason": "RESEARCH_SELECTION=0"}
     return {"status": status, **out} if dry_run else _finish(conn, run_id, status, 1, out)
@@ -406,6 +408,16 @@ def candidate_pool(conn: sqlite3.Connection, **kw) -> dict:
         from .candidates import live as pool_live
         r = pool_live.record(conn, **kw)
         return {k: v for k, v in r.items() if k != "forecasts"}
+    except Exception as exc:
+        conn.rollback()
+        return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+
+
+def agreement_tracking(conn: sqlite3.Connection, **kw) -> dict:
+    """tracking-v2 observations (app/agreement_tracking.py), research only; record() never raises, the import is guarded."""
+    try:
+        from . import agreement_tracking as at
+        return at.record(conn, **kw)
     except Exception as exc:
         conn.rollback()
         return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}

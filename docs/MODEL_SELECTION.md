@@ -392,6 +392,42 @@ triples. Exploratory: every season used was already spent. Nothing here grants e
   prospective shadow; sealed members and live schedules are not changed by this study.
 - Runs on scratch store copies only.
 
+## 18. Persistent agreement tracking `tracking-v2` (recorded 2026-10-03 ~00:10 UTC, before any result was computed)
+- **Purpose:** keep a permanent, versioned record of how every registered model subset and agreement rule classifies each
+  game, by sport × market × exact line × subset/member versions × rule × confidence threshold/band, including research-only
+  combinations that can never be recommended. Tracking only: it selects, recommends and promotes nothing. The weekly
+  selectors (core v1, pool) remain the only source of active recommendations.
+- **Groups (sealed `backend/app/models/tracking_groups.json`, built by `agreement_tracking.build_registry`):** per market, in
+  priority order until the allocation cap: every single member and candidate; the core set (average, unanimous, majority,
+  cohort stacker; NBA winner also the six registered voters); the expanded set incl. shadows (average, unanimous, majority,
+  expanded stacker); a pool stacker over every member and candidate present in the saved out-of-sample tables (weights
+  fitted once on those tables, all seasons earlier than any live game, L2 = 1, frozen in the registry); every pair of
+  cohort members (unanimous, average); triples (least-evaluated first: those containing a shadow or a member without
+  historical inputs); candidate + the market's anchor (the sealed comparator of `combination_rules.json`); candidate + other
+  members; candidate pairs (average); triple majorities; 4-member subsets. NGBoost is excluded while it is not installed
+  (it is never recorded live).
+- **Allocation (registered now):** ≤ 500 rule configurations per sport/market, configuration = group × cumulative threshold.
+  Thresholds: winner 0.55–0.80 (6), NHL regulation 3-way 0.40–0.60 (5), lines 0.55–0.70 (4). Bands are the non-overlapping
+  intervals between them (lowest band from the floor: 0.50, or 1/3 for 3-way), derived from the same statistic, not new
+  configurations. Groups beyond the cap are listed in the registry as skipped (allocation cap). No new model/training
+  configuration is used (0 of 12 per sport).
+- **Confidence semantics:** single = member probability of its pick; unanimous = minimum member probability for the agreed
+  outcome; average = average probability of its most probable outcome; stack/pool stack = stacker probability; majority =
+  strict majority of all members (an exact member tie is an abstention, equal leading counts a tie), confidence = mean
+  probability of the majority outcome over all members, vote counts recorded.
+- **Recording:** migration 0021 `agreement_observations`, append-only, one row per group and research cohort, written in the
+  two-hour cycle after the candidate pool, before the start (trigger); candidates only from forecasts made against that
+  cohort's exact line; a missing member makes the observation `incomplete` (never computed on a subset). Thresholds are
+  never stored per row. Canonical evidence = the latest pregame cohort per game.
+- **Reporting:** per group and threshold/band: eligible, selected, pending, settled, coverage, wins/losses/pushes/voids, win
+  rate with Wilson 95% interval, Brier/log loss for rules that output probabilities, mean confidence (calibration by band),
+  matched-coverage comparison with the anchor and each constituent; "insufficient evidence" below 100 decided picks (shown,
+  never hidden). Historical (exploratory, night-before out-of-sample tables of the candidate pool, model-only lines,
+  goalie candidates with the actual starter) and prospective records are always separate.
+- **Exploratory leaderboard:** configurations with ≥ 100 decided picks and ≥ 5% coverage ranked by the Bonferroni lower bound
+  (over the market's configurations) of the win-rate difference against the anchor at matched coverage. Historical check:
+  rank on earlier seasons only, then report the first-ranked configuration on the next season.
+
 ## Amendments
 - **2026-10-02, before the study run:** `ridge_points` / `gbt_points` spreads have a floor of 1.0 point (`MIN_SD`), found with
   synthetic test data where every total was identical. Real residual spreads are about 12 (margin) and 18 (total) points, so the

@@ -10,7 +10,7 @@ from .models.elo import EloConfig
 SPORT_COMMANDS = {"nhl-pbp-import", "nhl-xg-research", "migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies", "refresh", "odds", "predict",
                   "score", "daily", "scheduler", "predict-now", "score-near-tipoff", "markets", "score-markets", "agreement", "thresholds",
                   "combination-study", "selector-decide", "research-report", "retrain-cadence", "catboost-challenger", "combination-search", "expanded-search", "selective-study", "rules-registry",
-                  "daily-cadence", "pool-screen", "pool-assess", "pool-record", "pool-roster", "pool-report"}
+                  "daily-cadence", "tracking-report", "tracking-record", "pool-screen", "pool-assess", "pool-record", "pool-roster", "pool-report"}
 NHL_ONLY = {"nhl-pbp-import", "nhl-xg-research", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies"}
 
 
@@ -100,6 +100,16 @@ def main(argv=None) -> int:
     rg.add_argument("--nba", required=True, help="NBA selective-study report.json")
     rg.add_argument("--nhl", required=True, help="NHL selective-study report.json")
     rg.add_argument("--effective-from", required=True)
+    # Persistent agreement tracking tracking-v2 (MODEL_SELECTION §18)
+    tg = sub.add_parser("tracking-registry", help="Seal the tracking-v2 group registry (refuses to replace an existing one)")
+    tg.add_argument("--effective-from", required=True)
+    sub.add_parser("tracking-historical", help="Classify every tracking-v2 group on the saved out-of-sample tables (exploratory; no store)")
+    tr = sub.add_parser("tracking-report", help="Read-only tracking-v2 report for one market")
+    tr.add_argument("--market", required=True)
+    tr.add_argument("--evidence", choices=("prospective", "historical"), default="prospective")
+    tr.add_argument("--check", action="store_true", help="Historical: chronological selection check (earlier → later seasons)")
+    tc = sub.add_parser("tracking-record", help="Record tracking-v2 observations for games with pregame cohorts (normally the two-hour cycle)")
+    tc.add_argument("--dry-run", action="store_true")
     # Candidate pool (docs/CANDIDATE_POOL.md)
     ps = sub.add_parser("pool-screen", help="Candidate pool stage 1: screen every registry candidate on development seasons")
     ps.add_argument("--dry-run", action="store_true", help="Score only a warm-up season; writes nothing")
@@ -164,6 +174,19 @@ def main(argv=None) -> int:
         report = gapfill_study.run(out_dir=Path(args.out) if args.out else None)
         print(json.dumps({"output_dir": report["output_dir"], "qualified": {m: [len(f["qualified"]) for f in a.get("folds", [])]
                                                                             for m, a in report["markets"].items()}}))
+        return 0
+
+    if args.cmd in ("tracking-registry", "tracking-historical"):     # no store is opened or migrated
+        from . import agreement_tracking as at
+        if args.cmd == "tracking-registry":
+            if at.REGISTRY_PATH.exists():
+                p.error(f"{at.REGISTRY_PATH.name} exists and is sealed; a new registry needs a new study version")
+            reg = at.build_registry(args.effective_from)
+            at.REGISTRY_PATH.write_text(json.dumps(reg, indent=1, sort_keys=True) + "\n")
+            print(json.dumps({"sha256": reg["sha256"], "markets": {k: {"groups": len(m["groups"]), "configurations":
+                              m["configurations"], "skipped": len(m["skipped"])} for k, m in reg["markets"].items()}}, indent=1))
+        else:
+            print(json.dumps({"path": str(at.build_historical(args.sport))}))
         return 0
 
     if args.sport != "nba" and args.cmd not in SPORT_COMMANDS:
@@ -402,6 +425,19 @@ def main(argv=None) -> int:
         report = selective_study.run(conn, args.sport, out_dir=Path(args.out) if args.out else None)
         print(json.dumps({"output_dir": report["output_dir"], "qualified": {m: [len(f["qualified"]) for f in a["folds"]]
                                                                             for m, a in report["markets"].items()}}))
+    elif args.cmd == "tracking-report":
+        from . import agreement_tracking as at
+        if args.check:
+            print(json.dumps(at.chronological_check(args.sport, args.market), indent=1, default=str))
+        else:
+            r = at.report(conn, args.sport, args.market, evidence=args.evidence)
+            print(json.dumps({k: r[k] for k in r if k not in ("groups", "kinds")} | {"groups": [
+                {"id": g["id"], "eligible": g["eligible"], "all_picks": {k: g["all_picks"][k] for k in ("decided", "win_rate")},
+                 "status_counts": g["status_counts"]} for g in r["groups"]]}, indent=1, default=str))
+    elif args.cmd == "tracking-record":
+        from . import agreement_tracking as at
+        ids = [r[0] for r in conn.execute("SELECT DISTINCT game_id FROM research_cohorts")]
+        print(json.dumps(at.record(conn, game_ids=ids, write=not args.dry_run), indent=1))
     elif args.cmd == "rules-registry":
         from pathlib import Path
         from . import rule_tracking
