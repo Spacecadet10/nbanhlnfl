@@ -417,26 +417,29 @@ def record(conn, *, game_ids: list, now: Optional[str] = None, write: bool = Tru
                     out["errors"][f"{core['game_id']}:{core['market']}"] = "an input is not earlier than the start"
                     continue
                 for g in m["groups"]:
-                    src = exp if g["cohort"] == "expanded" else core
-                    if src is None:
-                        res = {"status": "incomplete", "side": None, "statistic": None, "vector": None, "votes": None,
-                               "missing": {"expanded_cohort": "no expanded cohort recorded with this core cohort"}}
-                        src = core
-                    else:
-                        res = classify(g, vectors, core["market"], m.get("pool_stacker"))
-                    names = [x for x in g["members"] if x in info] if g["kind"] != "stack" else []
-                    mem = [info[x] for x in names]
-                    sig = _key_digest(sorted((x["name"], x["version"]) for x in mem), g["kind"],
-                                      src["definition"] if g["kind"] == "stack" else None)
-                    inputs = _key_digest(sorted((x["name"], json.dumps(x["ref"], sort_keys=True)) for x in mem),
-                                         sorted(res["missing"]))
-                    info_at = max([src["information_at"], core["information_at"]] +
-                                  [x["generated_at"] for x in mem if x["ref"] and x["ref"].get("table") == "candidate_forecasts"])
-                    rows.append((reg["sha256"], g["id"], sport, core["game_id"], core["market"], core["line"], core["line_source"],
-                                 core["cohort_id"], src["cohort_id"], src["definition"], g["kind"], json.dumps(mem),
-                                 json.dumps(res["missing"], sort_keys=True), sig, inputs, res["status"],
-                                 None if res["side"] is None else SIDE_NAMES[res["side"]], res["statistic"],
-                                 json.dumps(res["vector"]), json.dumps(res["votes"]), info_at, core["tipoff_at"], now))
+                    try:
+                        src = exp if g["cohort"] == "expanded" else core
+                        if src is None:
+                            res = {"status": "incomplete", "side": None, "statistic": None, "vector": None, "votes": None,
+                                   "missing": {"expanded_cohort": "no expanded cohort recorded with this core cohort"}}
+                            src = core
+                        else:
+                            res = classify(g, vectors, core["market"], m.get("pool_stacker"))
+                        names = [x for x in g["members"] if x in info] if g["kind"] != "stack" else []
+                        mem = [info[x] for x in names]
+                        sig = _key_digest(sorted((x["name"], x["version"]) for x in mem), g["kind"],
+                                          src["definition"] if g["kind"] == "stack" else None)
+                        inputs = _key_digest(sorted((x["name"], json.dumps(x["ref"], sort_keys=True)) for x in mem),
+                                             sorted(res["missing"]))
+                        info_at = max([src["information_at"], core["information_at"]] +
+                                      [x["generated_at"] for x in mem if x["ref"] and x["ref"].get("table") == "candidate_forecasts"])
+                        rows.append((reg["sha256"], g["id"], sport, core["game_id"], core["market"], core["line"], core["line_source"],
+                                     core["cohort_id"], src["cohort_id"], src["definition"], g["kind"], json.dumps(mem),
+                                     json.dumps(res["missing"], sort_keys=True), sig, inputs, res["status"],
+                                     None if res["side"] is None else SIDE_NAMES[res["side"]], res["statistic"],
+                                     json.dumps(res["vector"]), json.dumps(res["votes"]), info_at, core["tipoff_at"], now))
+                    except Exception as exc:     # one group never blocks the other groups of its cohort
+                        out["errors"][f"{core['game_id']}:{core['market']}:{g['id']}"] = f"{type(exc).__name__}: {exc}"
             except Exception as exc:     # one cohort never blocks the others
                 out["errors"][f"{core['game_id']}:{core['market']}"] = f"{type(exc).__name__}: {exc}"
         if write and rows:
@@ -447,12 +450,19 @@ def record(conn, *, game_ids: list, now: Optional[str] = None, write: bool = Tru
                 try:
                     with transaction(conn):
                         for r in batch:
-                            cur = conn.execute(
-                                "INSERT OR IGNORE INTO agreement_observations (registry, group_id, sport, game_id, market, "
-                                "line, line_source, cohort_id, source_cohort_id, definition, kind, members, missing, "
-                                "version_sig, inputs_digest, status, side, statistic, vector, votes, information_at, "
-                                "tipoff_at, recorded_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", r)
-                            out["created" if cur.rowcount else "already_recorded"] += 1
+                            if conn.execute("SELECT 1 FROM agreement_observations WHERE registry=? AND group_id=? AND "
+                                            "source_cohort_id=? AND inputs_digest=?", (r[0], r[1], r[8], r[14])).fetchone():
+                                out["already_recorded"] += 1
+                                continue
+                            try:     # a plain insert: a row refused by a constraint is reported, never counted as a retry
+                                conn.execute(
+                                    "INSERT INTO agreement_observations (registry, group_id, sport, game_id, market, "
+                                    "line, line_source, cohort_id, source_cohort_id, definition, kind, members, missing, "
+                                    "version_sig, inputs_digest, status, side, statistic, vector, votes, information_at, "
+                                    "tipoff_at, recorded_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", r)
+                                out["created"] += 1
+                            except sqlite3.IntegrityError as exc:
+                                out["errors"][f"{key[0]}:{key[1]}:{r[1]}"] = f"{type(exc).__name__}: {exc}"
                 except sqlite3.DatabaseError as exc:
                     out["errors"][f"{key[0]}:{key[1]}"] = f"{type(exc).__name__}: {exc}"
         elif not write:
@@ -630,6 +640,13 @@ def day_bounds(date_from=None, date_to=None) -> tuple[Optional[str], Optional[st
     return lo, hi
 
 
+def _stored(statistic):
+    """A statistic as kept in the historical tables: 5 decimals, rounded DOWN (after the 1e-9 boundary tolerance of
+    `_Picks.cell`), so a stored value never moves a pick up across a threshold or into a higher band."""
+    import math
+    return None if statistic is None else math.floor((statistic + 1e-9) * 1e5) / 1e5
+
+
 # --- Prospective report ---------------------------------------------------------------------------------------------
 def _state(row) -> str:
     if row["status"] in ("postponed", "canceled") or row["game_tipoff_at"] != row["tipoff_at"]:
@@ -660,7 +677,13 @@ def prospective_items(conn, reg: dict, sport: str, market: str, date_from=None, 
         sql += " AND (o.definition LIKE ? OR o.version_sig = ?)"
         params += [f"{version}%", version]
     out: dict = defaultdict(dict)
-    for r in conn.execute(sql + " ORDER BY c.generated_at, o.source_cohort_id, o.observation_id", params):
+    rows = conn.execute(sql + " ORDER BY c.generated_at, o.source_cohort_id, o.observation_id", params).fetchall()
+    # Canonical cohort per game: the core cohort of its latest observation. A group without an observation at that cohort
+    # has none for the game; it is never scored from an older cohort (another line or other inputs).
+    canonical = {r["game_id"]: r["cohort_id"] for r in sorted(rows, key=lambda r: (r["cohort_id"], r["observation_id"]))}
+    for r in rows:
+        if r["cohort_id"] != canonical[r["game_id"]]:
+            continue
         row = {"status": r["g_status"], "game_tipoff_at": r["game_tipoff_at"], "tipoff_at": r["tipoff_at"],
                "result_available_at": r["result_available_at"]}
         state = _state(row)
@@ -806,7 +829,7 @@ def build_historical(sport: str, reg: Optional[dict] = None, log=print) -> Path:
                                           for k in res["missing"]}
                 vec = res["vector"]
                 cls.append([res["status"][0] if res["status"] != "no_majority" else "n", res["side"],
-                            None if res["statistic"] is None else round(res["statistic"], 5),
+                            _stored(res["statistic"]),
                             None if vec is None else [round(x, 5) for x in vec], sorted(res["missing"]) or None])
             groups[g["id"]] = cls
         mp = historical_path(sport, market)

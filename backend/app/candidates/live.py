@@ -391,14 +391,15 @@ def _record_game(conn, spec, mv, art, fit_id, game, row, o, rec, recent, lines, 
                 "p": [pa, pm, pb], "model_version": mv, "generated_at": generated}
         if write:
             with transaction(conn):
-                cur = conn.execute(
-                    "INSERT OR IGNORE INTO candidate_forecasts (game_id, candidate, model_version, market, line, "
-                    "line_source, line_ref, p_a, p_mid, p_b, params, inputs, fit_id, artifact_sha256, training_cutoff, "
-                    "dataset_version, tipoff_at, generated_at, idempotency_key) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                    (game.game_id, spec.name, mv, market, line, source, ref, pa, pm, pb, json.dumps(params, sort_keys=True),
-                     json.dumps(inputs, sort_keys=True, default=str), fit_id, art["artifact_sha256"],
-                     art["results_available_through"], dataset, game.tipoff_at, generated, key))
-            new = cur.rowcount == 1
+                new = conn.execute("SELECT 1 FROM candidate_forecasts WHERE idempotency_key=?", (key,)).fetchone() is None
+                if new:      # a plain insert: a row refused by a constraint raises and is reported, never counted as a retry
+                    conn.execute(
+                        "INSERT INTO candidate_forecasts (game_id, candidate, model_version, market, line, "
+                        "line_source, line_ref, p_a, p_mid, p_b, params, inputs, fit_id, artifact_sha256, training_cutoff, "
+                        "dataset_version, tipoff_at, generated_at, idempotency_key) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (game.game_id, spec.name, mv, market, line, source, ref, pa, pm, pb, json.dumps(params, sort_keys=True),
+                         json.dumps(inputs, sort_keys=True, default=str), fit_id, art["artifact_sha256"],
+                         art["results_available_through"], dataset, game.tipoff_at, generated, key))
             out["created" if new else "already_recorded"] += 1
         out["forecasts"].append(item)
 

@@ -354,8 +354,10 @@ def report(conn, sport: str, as_of: Optional[str] = None, reg: Optional[dict] = 
     as_of = as_of or utc_now()
     reg = reg or load_registry()
     rid = registry_id(reg)
-    defs = [r[0] for r in conn.execute("SELECT DISTINCT definition FROM pool_decisions WHERE registry=? ORDER BY definition",
-                                       (rid,))]
+    # Every core definition with cohorts (not only those that already have a pool decision): a settled game is reported
+    # before the first decision and after a definition change.
+    defs = [r[0] for r in conn.execute("SELECT DISTINCT definition FROM research_cohorts WHERE definition NOT LIKE ? "
+                                       "ORDER BY definition", (f"%:{research_live.EXPANDED}",))]
     markets_out = {}
     for market in sports.get(sport).markets:
         ents = entries(reg, sport, market)
