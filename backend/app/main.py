@@ -3,6 +3,7 @@
 import os
 import sqlite3
 from datetime import date
+from functools import lru_cache
 from typing import Iterator, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query
@@ -229,6 +230,61 @@ def research_rules(market: str = MARKET, show: str = Query("selected", pattern="
     except rule_tracking.RegistryError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     return {**out, "mode": "real"}
+
+
+@app.get("/api/research/tracking")
+def research_tracking(market: str = MARKET, evidence: str = Query("prospective", pattern="^(prospective|historical)$"),
+                      kind: Optional[str] = Query(None, pattern="^(single|unanimous|avg|majority|stack|stack_pool)$"),
+                      member: Optional[str] = Query(None, max_length=400, description="Comma-separated: groups containing all"),
+                      group: Optional[str] = Query(None, max_length=600), version: Optional[str] = Query(None, max_length=64),
+                      line: Optional[float] = None, date_from: Optional[date] = None, date_to: Optional[date] = None,
+                      p=Depends(get_provider)):
+    """Persistent agreement tracking tracking-v2 (docs/MODEL_SELECTION.md §18): every registered group by threshold and band,
+    prospective or historical (exploratory) evidence, exploratory leaderboard. Research only."""
+    if p.mode != "real":
+        return {"mode": "demo", "sport": "nba", "market": market, "evidence": evidence, "status": "demo", "groups": [],
+                "leaderboard": [], "note": "Agreement tracking reads the real stores; none in demo mode."}
+    _market_supported(p, market)
+    from . import agreement_tracking as at, selection_status
+    try:
+        out = at.report(p.conn, p.sport, market, evidence=evidence, kind=kind, member=member, group_id=group,
+                        date_from=date_from, date_to=date_to, version=version, line=line)
+    except at.RegistryError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    rec = None
+    if db.has_table(p.conn, "research_cohorts"):
+        rec = next((m for m in selection_status.status(p.conn, p.now).get("markets", []) if m.get("market") == market), None)
+    return {**out, "recommendation": rec, "mode": "real"}
+
+
+@app.get("/api/research/tracking/check")
+def research_tracking_check(market: str = MARKET, p=Depends(get_provider)):
+    """Historical, exploratory: the configuration ranked first on earlier seasons, evaluated on the next season."""
+    if p.mode != "real":
+        return {"mode": "demo", "status": "demo", "folds": []}
+    _market_supported(p, market)
+    from . import agreement_tracking as at
+    return {**_tracking_check(p.sport, market), "mode": "real"}
+
+
+@lru_cache(maxsize=16)
+def _tracking_check_cached(sport: str, market: str, sha: str, mtime: float) -> dict:
+    from . import agreement_tracking as at
+    return at.chronological_check(sport, market)
+
+
+def _tracking_check(sport: str, market: str) -> dict:
+    from . import agreement_tracking as at
+    path = at.historical_path(sport)
+    return _tracking_check_cached(sport, market, at.load_registry()["sha256"], path.stat().st_mtime if path.is_file() else 0.0)
+
+
+@app.get("/api/research/tracking/game/{game_id}")
+def research_tracking_game(game_id: str, p=Depends(get_provider)):
+    if p.mode != "real":
+        return {"mode": "demo", "game_id": game_id, "status": "demo", "markets": []}
+    from . import agreement_tracking as at
+    return {**at.game_observations(p.conn, game_id), "mode": "real"}
 
 
 @app.get("/api/research/candidates")

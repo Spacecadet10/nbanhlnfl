@@ -23,6 +23,7 @@ import hashlib
 import importlib.util
 import json
 import math
+from bisect import bisect_left
 from collections import Counter, defaultdict
 from functools import lru_cache
 from itertools import combinations
@@ -368,8 +369,9 @@ def _pairs(conn, game_ids: list, now: str) -> list:
 
 
 def record(conn, *, game_ids: list, now: Optional[str] = None, write: bool = True, reg: Optional[dict] = None) -> dict:
-    """Observations for every registered group and every pregame core cohort of the games not yet observed. Idempotent
-    (UNIQUE registry, group, source cohort); immutable (triggers). Never raises: failures are reported."""
+    """Observations for every registered group and every pregame core cohort of the games. Idempotent (UNIQUE registry,
+    group, source cohort, inputs digest): the same stored inputs never add a row; a cohort whose available inputs changed
+    (a candidate forecast made against its line later) gets a new row, earlier rows untouched (triggers). Never raises."""
     now = now or utc_now()
     out = {"status": "success", "registry": None, "created": 0, "already_recorded": 0, "cohorts": 0, "errors": {}}
     try:
@@ -401,11 +403,13 @@ def record(conn, *, game_ids: list, now: Optional[str] = None, write: bool = Tru
                     mem = [info[x] for x in names]
                     sig = _key_digest(sorted((x["name"], x["version"]) for x in mem), g["kind"],
                                       src["definition"] if g["kind"] == "stack" else None)
+                    inputs = _key_digest(sorted((x["name"], json.dumps(x["ref"], sort_keys=True)) for x in mem),
+                                         sorted(res["missing"]))
                     info_at = max([src["information_at"], core["information_at"]] +
                                   [x["generated_at"] for x in mem if x["ref"] and x["ref"].get("table") == "candidate_forecasts"])
                     rows.append((reg["sha256"], g["id"], sport, core["game_id"], core["market"], core["line"], core["line_source"],
                                  core["cohort_id"], src["cohort_id"], src["definition"], g["kind"], json.dumps(mem),
-                                 json.dumps(res["missing"], sort_keys=True), sig, res["status"],
+                                 json.dumps(res["missing"], sort_keys=True), sig, inputs, res["status"],
                                  None if res["side"] is None else SIDE_NAMES[res["side"]], res["statistic"],
                                  json.dumps(res["vector"]), json.dumps(res["votes"]), info_at, core["tipoff_at"], now))
             except Exception as exc:     # one cohort never blocks the others
@@ -415,9 +419,9 @@ def record(conn, *, game_ids: list, now: Optional[str] = None, write: bool = Tru
                 for r in rows:
                     cur = conn.execute(
                         "INSERT OR IGNORE INTO agreement_observations (registry, group_id, sport, game_id, market, line, "
-                        "line_source, cohort_id, source_cohort_id, definition, kind, members, missing, version_sig, status, side, "
-                        "statistic, vector, votes, information_at, tipoff_at, recorded_at) VALUES "
-                        "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", r)
+                        "line_source, cohort_id, source_cohort_id, definition, kind, members, missing, version_sig, inputs_digest, status, "
+                        "side, statistic, vector, votes, information_at, tipoff_at, recorded_at) VALUES "
+                        "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", r)
                     out["created" if cur.rowcount else "already_recorded"] += 1
         elif not write:
             out["would_write"] = len(rows)
@@ -437,71 +441,105 @@ def _scores(vec, realised):
     return combine.brier(vec, realised), combine.log_loss(vec, realised)
 
 
-def _cell(items: list, eligible: int, market: str, kind: str, select) -> dict:
-    """items: per game {state, realised, side, statistic, vector}; `select` decides membership (threshold or band)."""
-    chosen = [i for i in items if i["side"] is not None and select(i["statistic"])]
-    c = Counter()
-    briers, lls, confs = [], [], []
-    for i in chosen:
-        if i["state"] == "void":
-            c["voids"] += 1
-        elif i["state"] != "settled":
-            c["pending"] += 1
-        elif i["realised"] is None:
-            c["unscorable"] += 1
-        else:
-            o = selector.outcome(market, i["side"], i["realised"])
-            c[{"win": "wins", "loss": "losses", "push": "pushes"}[o]] += 1
-            if o != "push":
-                confs.append((i["statistic"], o == "win"))
-            if kind in PROBABILISTIC and i.get("vector"):
-                b, ll = _scores(i["vector"], i["realised"])
-                briers.append(b)
-                lls.append(ll)
-    n = c["wins"] + c["losses"]
-    return {"selected": len(chosen), "settled": c["wins"] + c["losses"] + c["pushes"], "pending": c["pending"],
-            "wins": c["wins"], "losses": c["losses"], "pushes": c["pushes"], "voids": c["voids"], "unscorable": c["unscorable"],
-            "coverage": len(chosen) / eligible if eligible else None, "decided": n,
-            "win_rate": c["wins"] / n if n else None, "ci95": nhl_eval._wilson(c["wins"], n),
-            "mean_confidence": sum(p for p, _ in confs) / len(confs) if confs else None,
-            "brier": sum(briers) / len(briers) if briers else None, "log_loss": sum(lls) / len(lls) if lls else None,
-            "evidence": "sufficient" if n >= MIN_EVIDENCE else "insufficient evidence"}
+_FIELDS = ("wins", "losses", "pushes", "voids", "pending", "unscorable", "brier_n", "brier", "log_loss", "conf_n", "conf")
 
 
-def _matched(singles: dict, name: str, decided: int, market: str, games: set) -> dict:
-    """The single model's `decided` most confident settled, decided games among the same eligible games."""
-    ranked = sorted((i for gid, i in singles.get(name, {}).items() if gid in games and i["side"] is not None
-                     and i["state"] == "settled" and i["realised"] is not None),
-                    key=lambda i: (-i["statistic"], i["game_id"]))
-    flags = []
-    for i in ranked:
-        o = selector.outcome(market, i["side"], i["realised"])
-        if o == "push":
-            continue
-        flags.append(o == "win")
-        if len(flags) >= decided:
-            break
-    return {"model": name, "games": len(flags), "win_rate": sum(flags) / len(flags) if flags else None}
+class _Picks:
+    """A group's picks sorted by statistic with suffix sums, so every cumulative threshold and band is O(log n)."""
+
+    def __init__(self, items: list, market: str, kind: str):
+        rows = []
+        for i in items:
+            if i["side"] is None:
+                continue
+            r = dict.fromkeys(_FIELDS, 0.0)
+            if i["state"] == "void":
+                r["voids"] = 1
+            elif i["state"] != "settled":
+                r["pending"] = 1
+            elif i["realised"] is None:
+                r["unscorable"] = 1
+            else:
+                o = selector.outcome(market, i["side"], i["realised"])
+                r[{"win": "wins", "loss": "losses", "push": "pushes"}[o]] = 1
+                if o != "push":
+                    r["conf_n"], r["conf"] = 1, i["statistic"]
+                if kind in PROBABILISTIC and i.get("vector"):
+                    b, ll = _scores(i["vector"], i["realised"])
+                    r["brier_n"], r["brier"], r["log_loss"] = 1, b, ll
+            rows.append((i["statistic"], r))
+        rows.sort(key=lambda x: x[0])
+        self.stats = [x[0] for x in rows]
+        self.suffix = [dict.fromkeys(_FIELDS, 0.0) for _ in range(len(rows) + 1)]
+        for k in range(len(rows) - 1, -1, -1):
+            nxt, cur = self.suffix[k + 1], rows[k][1]
+            self.suffix[k] = {f: nxt[f] + cur[f] for f in _FIELDS}
+
+    def _from(self, x: float) -> int:
+        return bisect_left(self.stats, x)
+
+    def cell(self, lo: float, hi: Optional[float], eligible: int) -> dict:
+        """Picks with lo ≤ statistic (< hi when given); a 1e-9 tolerance keeps 0.60 inside the 0.60 threshold."""
+        i = self._from(lo - 1e-9)
+        j = len(self.stats) if hi is None else self._from(hi - 1e-9)
+        a, b = self.suffix[i], self.suffix[j]
+        c = {f: a[f] - b[f] for f in _FIELDS}
+        wins, losses, pushes = (int(round(c[k])) for k in ("wins", "losses", "pushes"))
+        n = wins + losses
+        has_conf, has_prob = c["conf_n"] >= 0.5, c["brier_n"] >= 0.5
+        return {"selected": j - i, "settled": n + pushes, "pending": int(round(c["pending"])),
+                "wins": wins, "losses": losses, "pushes": pushes, "voids": int(round(c["voids"])),
+                "unscorable": int(round(c["unscorable"])), "coverage": (j - i) / eligible if eligible else None, "decided": n,
+                "win_rate": wins / n if n else None, "ci95": nhl_eval._wilson(wins, n),
+                "mean_confidence": c["conf"] / c["conf_n"] if has_conf else None,
+                "brier": c["brier"] / c["brier_n"] if has_prob else None,
+                "log_loss": c["log_loss"] / c["brier_n"] if has_prob else None,
+                "evidence": "sufficient" if n >= MIN_EVIDENCE else "insufficient evidence"}
 
 
-def summarise(group: dict, items: list, singles: dict, market: str, anchor: str) -> dict:
+class _Ranked:
+    """Per single model: its settled, decided picks ranked by confidence (sorted once per report)."""
+
+    def __init__(self, singles: dict, market: str):
+        self.market, self.singles, self.cache = market, singles, {}
+
+    def matched(self, name: str, decided: int, games: set) -> dict:
+        """The single model's `decided` most confident settled, decided games among the same eligible games."""
+        if name not in self.cache:
+            ranked = []
+            for gid, i in self.singles.get(name, {}).items():
+                if i["side"] is None or i["state"] != "settled" or i["realised"] is None:
+                    continue
+                o = selector.outcome(self.market, i["side"], i["realised"])
+                if o != "push":
+                    ranked.append((-i["statistic"], gid, o == "win"))
+            self.cache[name] = sorted(ranked)
+        flags = []
+        for _, gid, win in self.cache[name]:
+            if gid in games:
+                flags.append(win)
+                if len(flags) >= decided:
+                    break
+        return {"model": name, "games": len(flags), "win_rate": sum(flags) / len(flags) if flags else None}
+
+
+def summarise(group: dict, items: list, ranked: "_Ranked", market: str, anchor: str) -> dict:
     """Per group: status counts, missing reasons, cumulative thresholds, bands, probabilistic scores, matched singles."""
-    t_list = THRESHOLDS[kind_of(market)]
     eligible = len(items)
     st = Counter(i["status"] for i in items)
     miss = Counter(k for i in items for k in (i.get("missing") or {}))
     games = {i["game_id"] for i in items}
-    comparators = list(dict.fromkeys(([anchor] if anchor else []) + [m for m in group["members"] if m in singles]))
-    floor = 1 / 3 if market == "reg3" else 0.5
+    comparators = list(dict.fromkeys(([anchor] if anchor else []) + [m for m in group["members"] if m in ranked.singles]))
+    picks = _Picks(items, market, group["kind"])
     cum = []
-    for t in (floor, *t_list):
-        cell = _cell(items, eligible, market, group["kind"], lambda s, t=t: s + 1e-9 >= t)
-        cell["threshold"] = None if t == floor else t
-        cell["matched"] = [_matched(singles, x, cell["decided"], market, games) for x in comparators] if cell["decided"] else []
+    for t in (None, *THRESHOLDS[kind_of(market)]):
+        cell = picks.cell(-1.0 if t is None else t, None, eligible)
+        cell["threshold"] = t
+        cell["matched"] = [ranked.matched(x, cell["decided"], games) for x in comparators] if cell["decided"] else []
         cum.append(cell)
     bnd = []
     for lo, hi in bands(market):
-        cell = _cell(items, eligible, market, group["kind"], lambda s, lo=lo, hi=hi: lo - 1e-9 <= s < hi - 1e-9)
+        cell = picks.cell(-1.0 if lo == 0.0 else lo, None if hi > 1.0 else hi, eligible)
         cell["band"], cell["label"] = [lo, min(hi, 1.0)], band_label(market, lo, hi)
         bnd.append(cell)
     prob = None
@@ -568,7 +606,7 @@ def prospective_items(conn, reg: dict, sport: str, market: str, date_from=None, 
         sql += " AND (o.definition LIKE ? OR o.version_sig = ?)"
         params += [f"{version}%", version]
     out: dict = defaultdict(dict)
-    for r in conn.execute(sql + " ORDER BY c.generated_at, o.source_cohort_id", params):
+    for r in conn.execute(sql + " ORDER BY c.generated_at, o.source_cohort_id, o.observation_id", params):
         row = {"status": r["g_status"], "game_tipoff_at": r["game_tipoff_at"], "tipoff_at": r["tipoff_at"],
                "result_available_at": r["result_available_at"]}
         state = _state(row)
@@ -577,7 +615,7 @@ def prospective_items(conn, reg: dict, sport: str, market: str, date_from=None, 
             s = mk.settle(market, r["line"], status=r["g_status"], home=r["home_score"], away=r["away_score"], decision=r["decision"])
             realised = {"a": 0, "mid": 1, "b": 2}.get(s)
         vec = json.loads(r["vector"])
-        out[r["group_id"]][r["game_id"]] = {      # later cohorts overwrite earlier ones: the canonical latest pregame cohort
+        out[r["group_id"]][r["game_id"]] = {      # later rows overwrite earlier ones: the latest pregame cohort and inputs
             "game_id": r["game_id"], "status": r["status"], "side": None if r["side"] is None else SIDE_NAMES.index(r["side"]),
             "statistic": r["statistic"], "vector": vec, "missing": json.loads(r["missing"]), "state": state, "realised": realised,
             "line": r["line"], "tipoff_at": r["tipoff_at"], "version_sig": r["version_sig"], "definition": r["definition"],
@@ -597,43 +635,61 @@ def _filter_groups(groups: list, kind=None, member=None, group_id=None) -> list:
     return out
 
 
+HISTORICAL_NOTE = ("Historical exploratory results: night-before out-of-sample forecasts on reused seasons (candidate pool "
+                   "stages 1–2), at the primary's model-only line; goalie candidates used the actual starter (optimistic). "
+                   "These were never recorded live forecasts.")
+PROSPECTIVE_NOTE = ("Prospective research: one canonical observation per game (latest cohort made within two hours before the "
+                    "start). Research only — nothing here is a recommendation.")
+LEADERBOARD_NOTE = ("Exploratory leaderboard: ranked by the multiplicity-adjusted lower bound of the win-rate difference against "
+                    "the anchor model at matched coverage (≥ 100 decided picks, ≥ 5% coverage). It is not a recommendation; "
+                    "active recommendations come only from the weekly selectors (Selection status).")
+
+
+def _full(per: dict, m: dict, market: str) -> dict:
+    """Every registered group's summary and the leaderboard for one set of items."""
+    ranked = _Ranked({g["members"][0]: per.get(g["id"], {}) for g in m["groups"] if g["kind"] == "single"}, market)
+    summaries = [summarise(g, list(per.get(g["id"], {}).values()), ranked, market, m["anchor"]) for g in m["groups"]]
+    return {"summaries": summaries, "leaderboard": leaderboard(summaries, market, m["configurations"]),
+            "games": len({gid for items in per.values() for gid in items}),
+            "lines": sorted({v.get("line") for items in per.values() for v in items.values() if v.get("line") is not None})}
+
+
+def _by_line(per: dict, line) -> dict:
+    return per if line is None else {gid: {k: v for k, v in items.items() if v.get("line") == line} for gid, items in per.items()}
+
+
+@lru_cache(maxsize=32)
+def _historical_full(sport: str, market: str, date_from, date_to, line, sha: str, mtime: float) -> dict:
+    reg = load_registry()
+    per = _by_line(historical_items(sport, market, reg, date_from=date_from, date_to=date_to), line)
+    return _full(per, reg["markets"][f"{sport}:{market}"], market)
+
+
 def report(conn, sport: str, market: str, *, evidence: str = "prospective", kind=None, member=None, group_id=None,
            date_from=None, date_to=None, version=None, line=None, reg: Optional[dict] = None) -> dict:
     reg = reg or load_registry()
-    key = f"{sport}:{market}"
-    m = reg["markets"].get(key)
+    m = reg["markets"].get(f"{sport}:{market}")
     if m is None:
         return {"sport": sport, "market": market, "status": "no_registered_groups", "groups": []}
     if evidence == "historical":
-        per = historical_items(sport, market, reg, date_from=date_from, date_to=date_to)
-        note = ("Historical exploratory results: night-before out-of-sample forecasts on reused seasons (candidate pool "
-                "stages 1–2), at the primary's model-only line; goalie candidates used the actual starter (optimistic). "
-                "These were never recorded live forecasts.")
+        p = historical_path(sport)
+        pre = _precomputed(sport, reg["sha256"]) if not (date_from or date_to or line is not None) else None
+        full = pre[market] if pre and market in pre else _historical_full(sport, market, date_from, date_to, line, reg["sha256"], p.stat().st_mtime if p.is_file() else 0.0) \
+            if reg is load_registry() else _full(_by_line(historical_items(sport, market, reg, date_from, date_to), line), m, market)
+        status = "available" if full["games"] else "no_historical_table"
     else:
-        per = prospective_items(conn, reg, sport, market, date_from, date_to, version)
-        note = ("Prospective research: one canonical observation per game (latest cohort made within two hours before the "
-                "start). Research only — nothing here is a recommendation.")
-    if line is not None:
-        per = {gid: {k: v for k, v in items.items() if v.get("line") == line} for gid, items in per.items()}
-    lines = sorted({v.get("line") for items in per.values() for v in items.values() if v.get("line") is not None})
-    singles = {g["members"][0]: per.get(g["id"], {}) for g in m["groups"] if g["kind"] == "single"}
-    selected = _filter_groups(m["groups"], kind, member, group_id)
-    groups = [summarise(g, list(per.get(g["id"], {}).values()), singles, market, m["anchor"]) for g in selected]
-    searched = m["configurations"]
-    games = len({gid for items in per.values() for gid in items})
-    return {"sport": sport, "market": market, "evidence": evidence, "study": reg["study"], "registry_sha256": reg["sha256"],
-            "effective_from": reg["effective_from"], "anchor": m["anchor"], "thresholds": m["thresholds"],
+        full = _full(_by_line(prospective_items(conn, reg, sport, market, date_from, date_to, version), line), m, market)
+        status = "recording" if full["games"] else "no_observations_yet"
+    keep = {g["id"] for g in _filter_groups(m["groups"], kind, member, group_id)}
+    return {"sport": sport, "market": market, "evidence": evidence, "status": status, "study": reg["study"],
+            "registry_sha256": reg["sha256"], "effective_from": reg["effective_from"], "anchor": m["anchor"],
+            "thresholds": m["thresholds"],
             "bands": [{"band": [lo, min(hi, 1.0)], "label": band_label(market, lo, hi)} for lo, hi in m["bands"]],
-            "registered_groups": len(m["groups"]), "configurations_searched": searched, "skipped_allocation": len(m["skipped"]),
-            "games": games, "lines": lines, "kinds": reg["kinds"], "min_evidence": MIN_EVIDENCE,
-            "groups": groups, "leaderboard": leaderboard(groups if not (kind or member or group_id) else
-                                                         [summarise(g, list(per.get(g["id"], {}).values()), singles, market, m["anchor"])
-                                                          for g in m["groups"]], market, searched),
-            "note": note,
-            "leaderboard_note": ("Exploratory leaderboard: ranked by the multiplicity-adjusted lower bound of the win-rate "
-                                 "difference against the anchor model at matched coverage (≥ 100 decided picks, ≥ 5% "
-                                 "coverage). It is not a recommendation; active recommendations come only from the weekly "
-                                 "selectors (Selection status).")}
+            "registered_groups": len(m["groups"]), "configurations_searched": m["configurations"],
+            "skipped_allocation": len(m["skipped"]), "games": full["games"], "lines": full["lines"], "kinds": reg["kinds"],
+            "min_evidence": MIN_EVIDENCE, "groups": [g for g in full["summaries"] if g["id"] in keep],
+            "leaderboard": full["leaderboard"], "note": HISTORICAL_NOTE if evidence == "historical" else PROSPECTIVE_NOTE,
+            "leaderboard_note": LEADERBOARD_NOTE}
 
 
 # --- Historical (exploratory) ---------------------------------------------------------------------------------------
@@ -703,7 +759,31 @@ def build_historical(sport: str, reg: Optional[dict] = None, log=print) -> Path:
     tmp = path.with_suffix(".tmp")
     tmp.write_bytes(gzip.compress(json.dumps(payload, separators=(",", ":")).encode(), mtime=0))
     tmp.replace(path)
+    _historical.cache_clear()
+    summaries = {"registry_sha256": reg["sha256"], "markets": {}}
+    for market in payload["markets"]:     # unfiltered summaries, so the API needs no recomputation
+        summaries["markets"][market] = _full(historical_items(sport, market, reg), reg["markets"][f"{sport}:{market}"], market)
+    sp = summaries_path(sport)
+    sp.with_suffix(".tmp").write_bytes(gzip.compress(json.dumps(summaries, separators=(",", ":")).encode(), mtime=0))
+    sp.with_suffix(".tmp").replace(sp)
     return path
+
+
+def summaries_path(sport: str) -> Path:
+    return config.data_dir() / "research" / "tracking" / f"summaries-{sport}.json.gz"
+
+
+@lru_cache(maxsize=2)
+def _summaries(path: str, mtime: float) -> dict:
+    return json.loads(gzip.decompress(Path(path).read_bytes()))
+
+
+def _precomputed(sport: str, sha: str) -> Optional[dict]:
+    p = summaries_path(sport)
+    if not p.is_file():
+        return None
+    d = _summaries(str(p), p.stat().st_mtime)
+    return d["markets"] if d.get("registry_sha256") == sha else None
 
 
 @lru_cache(maxsize=2)
@@ -752,7 +832,7 @@ def chronological_check(sport: str, market: str, reg: Optional[dict] = None) -> 
     for s in seasons[2:]:
         earlier = {gid: {k: v for k, v in items.items() if v["season"] < s} for gid, items in per.items()}
         later = {gid: {k: v for k, v in items.items() if v["season"] == s} for gid, items in per.items()}
-        singles_e = {g["members"][0]: earlier.get(g["id"], {}) for g in m["groups"] if g["kind"] == "single"}
+        singles_e = _Ranked({g["members"][0]: earlier.get(g["id"], {}) for g in m["groups"] if g["kind"] == "single"}, market)
         board = leaderboard([summarise(g, list(earlier.get(g["id"], {}).values()), singles_e, market, m["anchor"])
                              for g in m["groups"]], market, m["configurations"])
         if not board:
@@ -760,7 +840,7 @@ def chronological_check(sport: str, market: str, reg: Optional[dict] = None) -> 
             continue
         top = board[0]
         g = next(x for x in m["groups"] if x["id"] == top["id"])
-        singles_l = {x["members"][0]: later.get(x["id"], {}) for x in m["groups"] if x["kind"] == "single"}
+        singles_l = _Ranked({x["members"][0]: later.get(x["id"], {}) for x in m["groups"] if x["kind"] == "single"}, market)
         res = summarise(g, list(later.get(g["id"], {}).values()), singles_l, market, m["anchor"])
         cell = next(c for c in res["thresholds"] if c["threshold"] == top["threshold"])
         folds.append({"season": s, "chosen": top["id"], "threshold": top["threshold"],
@@ -769,3 +849,39 @@ def chronological_check(sport: str, market: str, reg: Optional[dict] = None) -> 
                                 "ci95": cell["ci95"], "matched": cell["matched"][:1]}})
     return {"status": "ok", "folds": folds,
             "note": "Exploratory (reused seasons). Shows whether a configuration chosen on earlier seasons held up later."}
+
+
+def game_observations(conn, game_id: str, reg: Optional[dict] = None) -> dict:
+    """The canonical (latest pregame cohort) tracking-v2 observations of one game, per market: how many groups pick each
+    side, abstain or are incomplete, and the groups' picks with their rule statistic. Research only."""
+    reg = reg or load_registry()
+    if not _has(conn, "agreement_observations"):
+        return {"game_id": game_id, "status": "migration 0021 not applied", "markets": []}
+    rows = conn.execute(
+        "SELECT o.* FROM agreement_observations o JOIN research_cohorts c ON c.cohort_id=o.source_cohort_id "
+        "WHERE o.registry=? AND o.game_id=? ORDER BY c.generated_at, o.source_cohort_id, o.observation_id",
+        (reg["sha256"], game_id)).fetchall()
+    latest: dict = {}
+    for r in rows:
+        latest[(r["market"], r["group_id"])] = r
+    markets = defaultdict(list)
+    for (market, _), r in latest.items():
+        markets[market].append(r)
+    out = []
+    for market, rs in markets.items():
+        counts = Counter(r["side"] if r["status"] == "pick" else r["status"] for r in rs)
+        picks = sorted((r for r in rs if r["status"] == "pick"), key=lambda r: -r["statistic"])
+        out.append({"market": market, "line": rs[0]["line"], "groups": len(rs), "counts": dict(counts),
+                    "recorded_at": max(r["recorded_at"] for r in rs), "definition": rs[0]["definition"],
+                    "picks": [{"group": r["group_id"], "kind": r["kind"], "side": r["side"], "statistic": r["statistic"],
+                               "votes": json.loads(r["votes"])} for r in picks[:12]],
+                    "incomplete": [{"group": r["group_id"], "missing": json.loads(r["missing"])}
+                                   for r in rs if r["status"] == "incomplete"][:12]})
+    order = {m: i for i, m in enumerate(sports.get(reg_sport(conn)).markets)}
+    return {"game_id": game_id, "registry_sha256": reg["sha256"], "status": "recorded" if out else "no_observations",
+            "markets": sorted(out, key=lambda x: order.get(x["market"], 99)),
+            "note": "Research classifications from member forecasts stored before the start; not recommendations."}
+
+
+def reg_sport(conn) -> str:
+    return conn.execute("SELECT sport FROM store_identity").fetchone()[0]
