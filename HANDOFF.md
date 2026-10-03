@@ -1,5 +1,28 @@
 # Current handoff
 
+## Deep candidates recording live (after tonight's release move) — Claude (Fable 5.1), 2026-10-03 22:10–22:35 UTC
+- **User decision:** "just do it" — record the PyTorch / TensorFlow networks live as research models to find out, with no
+  promise of an edge. Research only: never a voter, in no sealed pool or tracking registry, no selector change.
+- **Branch `deep-v1` (worktree `~/nba-predictor-deep`), commit `76e324c` + this handoff.** Five candidates:
+  `torch_mlp:nba_base`, `keras_mlp:nba_base`, `torch_mlp:nba_base:normal`, `torch_mlp:nhl_base`, `keras_mlp:nhl_base`.
+  Fitted with torch 2.14.1 / tensorflow 2.21.0 in the research venv (`~/nba-predictor-deep/backend/.venv`), stored as NumPy
+  weights (`candidates/deep.py` `NumpyMLP`), so **the release venv needs neither library** to apply them.
+- **Identities:** existing candidates' definitions are unchanged (learners/engine/features/goalies untouched; tested). The
+  research definitions (NHL `3e2504c4d655c41b`, NBA `1215f3641ad63e4f`) are unchanged: no identity-hashed file edited.
+- **Artifacts fitted 22:20 UTC** on the live point-in-time history (store opened query-only; files only), season 2027:
+  NHL 14,508 training games, NBA 8,919; under `data/research/candidates/artifacts/<sport>/{torch,keras}_mlp__*`.
+  Refit needed only at the next season start or after a corrected past score: run
+  `NBA_DATA_DIR=<live data> ~/nba-predictor-deep/backend/.venv/bin/python -m app.cli --sport <sport> pool-fit-deep` from
+  `~/nba-predictor-deep/backend`. Without an artifact the release skips the candidate with that reason.
+- **Checks:** 580 passed in the research venv; 570 passed in the release venv without torch/tensorflow (deep-study tests
+  excluded there). Read-only dry run in the release venv on tonight's 10 eligible NHL games: both networks produced
+  forecasts, no skip, no error.
+- **Go-live:** the scheduled move script (`~/nba-predictor-backups/move-release.sh`) was restarted with the tip of this
+  branch as its target; it still waits for tonight's games to finish and rolls back on any failed check.
+- **For the next writer:** `shadow-season` (main checkout) does not contain this branch yet. Merge `deep-v1` into it before
+  the next release move from there, or that move will not be a fast-forward. The dev venv needs
+  `uv pip install torch==2.14.1 tensorflow==2.21.0` for `tests/test_deep_study.py` (the `deep` extra).
+
 ## Deep-learning study deep-v1 (PyTorch + TensorFlow/Keras) — Claude (Fable 5.1), 2026-10-03 21:48–22:10 UTC
 - **Where:** worktree `~/nba-predictor-deep`, branch `deep-v1` (from `e900cc7`), with its own venv (release pins + torch 2.14.1
   + tensorflow 2.21.0). Built there because another writer had ~29 files mid-edit in the main checkout. **Not merged; nothing
