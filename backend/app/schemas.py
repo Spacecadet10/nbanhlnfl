@@ -222,17 +222,23 @@ class PredictionRecord(BaseModel):
                                                         "max(home_win_prob, 1 - home_win_prob).")
     outcome: Optional[Outcome]
     correct: Optional[bool]
-    void: bool = Field(default=False, description="The start (two-hour) or game date (night-before) changed after the "
+    unscorable: bool = Field(default=False, description="Final but without a usable result; never counted as pending.")
+    void: bool = Field(default=False, description="The start (two-hour) or game date (pre-game archive) changed after the "
                                                   "forecast, or the game was postponed or cancelled: never scored.")
 
 
 class ConfidenceRecord(BaseModel):
     """Observed record of the picks selected by a confidence filter. Unscored games never count toward the win rate."""
     min_confidence: Optional[float] = Field(description="The filter applied; null means all picks.")
-    selected: int = Field(description="Picks at or above the threshold, settled or not.")
-    settled: int = Field(description="Selected picks whose game has a final result.")
+    selected: int = Field(description="Picks at or above the threshold, settled or not. "
+                                      "selected = settled + pending + void + unscorable.")
+    settled: int = Field(description="Selected picks whose game has a final result (wins + losses).")
     wins: int
     losses: int
+    pending: int = Field(description="Awaiting a final result (scheduled or in progress).")
+    void: int = Field(description="Never scored: the game moved after the forecast, or was postponed or cancelled.")
+    unscorable: int = Field(description="Final but without a usable result. The store requires scores on a final game, "
+                                        "so this is 0 for the winner market; it is reported so the identity is explicit.")
     win_rate: Optional[float] = Field(description="wins / settled; null when nothing is settled.")
 
 
@@ -271,10 +277,14 @@ def apply_slate_policy(games: list[GameSummary], policy: str, min_confidence: Op
 
 
 def confidence_record(rows: list[PredictionRecord], min_confidence: Optional[float]) -> ConfidenceRecord:
+    """Each row is exactly one of settled (scored), void, unscorable (final but unscored) or pending (no final result)."""
     settled = [r for r in rows if r.correct is not None]
     wins = sum(r.correct for r in settled)
+    void = sum(r.correct is None and r.void for r in rows)
+    unscorable = sum(r.correct is None and not r.void and r.unscorable for r in rows)
     return ConfidenceRecord(min_confidence=min_confidence, selected=len(rows), settled=len(settled), wins=wins,
-                            losses=len(settled) - wins, win_rate=wins / len(settled) if settled else None)
+                            losses=len(settled) - wins, pending=len(rows) - len(settled) - void - unscorable, void=void,
+                            unscorable=unscorable, win_rate=wins / len(settled) if settled else None)
 
 
 class CalibrationBin(BaseModel):
@@ -372,7 +382,9 @@ class MarketRecordSummary(BaseModel):
     losses: int
     pushes: int
     voids: int
-    pending: int
+    pending: int = Field(description="Awaiting a final result.")
+    unscorable: int = Field(description="Final but cannot be settled (e.g. no regulation decision for the 3-way market). "
+                                        "selected = wins + losses + pushes + voids + pending + unscorable.")
     win_rate: Optional[float] = Field(description="wins / (wins + losses); pushes and voids excluded.")
 
 

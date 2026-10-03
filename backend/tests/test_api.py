@@ -140,8 +140,8 @@ def test_demo_history_supports_the_confidence_filter():
     settled = [g for g in expected if g.outcome is not None]
     wins = sum((g.prediction.home_win_prob >= 0.5) == g.outcome.home_won for g in settled)
     assert body["record"] == {"min_confidence": 0.65, "selected": len(expected), "settled": len(settled), "wins": wins,
-                              "losses": len(settled) - wins,
-                              "win_rate": pytest.approx(wins / len(settled)) if settled else None}
+                              "losses": len(settled) - wins, "pending": len(expected) - len(settled), "void": 0,
+                              "unscorable": 0, "win_rate": pytest.approx(wins / len(settled)) if settled else None}
 
 
 def test_demo_slate_selection_counts_match_the_picks():

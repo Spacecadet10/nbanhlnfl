@@ -54,8 +54,8 @@ export function HistoryPage() {
       {meta.state.status === 'success' && <MarketSelect value={market} markets={meta.state.data.markets} onChange={setMarket} />}
       {meta.state.status === 'success' && <p className="muted small">
         {!realMode ? 'Demo predictions from synthetic fixtures.'
-          : run === 'live' && policy === 'near_tipoff' ? 'Near-tipoff forecasts, each made before tipoff from the freshest stored results (latest version per game). Kept separate from the night-before record. Elo does not know about injuries or line-ups.'
-          : run === 'live' ? 'Live forecasts, each recorded before its cutoff (latest version per game). Outcomes are added after the game.'
+          : run === 'live' && policy === 'near_tipoff' ? 'Near-tipoff forecasts, each made before tipoff from the freshest stored results (latest version per game). Kept separate from the pre-game archive. Elo does not know about injuries or line-ups.'
+          : run === 'live' ? 'Pre-game archive: forecasts the discontinued daily job recorded before each game\'s cutoff (midnight Eastern on the game date), some several days before the game. Compare the recorded time with the game date. Latest version per game; outcomes are added after the game.'
             : 'Retrospective backtest predictions of the primary model, computed after the fact. These are not forecasts recorded before the games.'}
       </p>}
       {realMode && run === 'live' && <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} /></div>}
@@ -88,11 +88,11 @@ export function HistoryPage() {
                     <button type="button" className="link-btn" onClick={() => setLevel(null)}>Show all picks</button></>
                 : hasFilters ? 'No predictions match these filters.'
                   : data.policy === 'near_tipoff' ? 'No two-hour forecasts recorded yet. The scheduled odds jobs record them within two hours before eligible games start.'
-                  : data.run_type === 'live' ? 'No archived night-before forecasts in this view. New forecasts use the Within 2 hours policy.'
+                  : data.run_type === 'live' ? 'No pre-game archive forecasts in this view. New forecasts use the Within 2 hours policy.'
                     : 'No predictions recorded.'}
             </Empty>
           : <>
-              <RecordLine record={data.record} runType={data.run_type} />
+              <RecordLine record={data.record} runType={data.run_type} scope={scopeLabel(filters)} />
               <p className="small muted">
                 Model confidence is the forecast probability for the predicted winner; the observed win rate counts settled games only.
                 {data.total > data.predictions.length && ` Showing the latest ${data.predictions.length} of ${data.total}; the record covers all ${data.total}.`}
@@ -122,10 +122,10 @@ function MarketHistory({ sport, market, policy, level, filters, hasFilters, show
             {level != null
               ? <>No picks at {levelLabel(level)} model confidence{hasFilters ? ' match these filters' : ''}. <button type="button" className="link-btn" onClick={showAll}>Show all picks</button></>
               : hasFilters ? 'No forecasts match these filters.'
-                : `No ${policy === 'near_tipoff' ? 'near-tipoff' : 'night-before'} forecasts of this market have been recorded yet.`}
+                : `No ${policy === 'near_tipoff' ? 'near-tipoff' : 'pre-game archive'} forecasts of this market have been recorded yet.`}
           </Empty>
         : <>
-            <MarketRecordLine record={data.record} />
+            <MarketRecordLine record={data.record} scope={scopeLabel(filters)} />
             <p className="small muted">
               Each row is the latest forecast per game, at the exact line it was made against. Model-only lines had no bookmaker line when the forecast was made.
               {data.total > data.predictions.length && ` Showing the latest ${data.predictions.length} of ${data.total}; the record covers all ${data.total}.`}
@@ -135,6 +135,13 @@ function MarketHistory({ sport, market, policy, level, filters, hasFilters, show
       </>}
     </AsyncView>
   );
+}
+
+/** The record covers every row matching the filters (not only the rows shown): name its date and team scope. */
+function scopeLabel(f: { date_from?: string; date_to?: string; team?: string }): string {
+  const dates = f.date_from && f.date_to ? `${calendarDate(f.date_from, FULL_DATE)} – ${calendarDate(f.date_to, FULL_DATE)}`
+    : f.date_from ? `From ${calendarDate(f.date_from, FULL_DATE)}` : f.date_to ? `Through ${calendarDate(f.date_to, FULL_DATE)}` : 'All dates';
+  return f.team ? `${dates} · ${f.team}` : dates;
 }
 
 function HistoryTable({ rows }: { rows: PredictionRecord[] }) {

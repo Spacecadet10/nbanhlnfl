@@ -9,7 +9,7 @@ export function ModelAgreement({ game: g, detail = false }: { game: GameSummary;
   const a = g.agreement;
   const side = a?.pick === 'home' ? g.home.abbr : g.away.abbr;
   return <section className="model-agreement" aria-label="Research model agreement">
-    <p className="small"><strong>Winner agreement</strong> <span className="muted">· Research · {a?.policy === 'pregame' ? 'Night-before archive' : 'Within 2 hours'}</span></p>
+    <p className="small"><strong>Winner agreement</strong> <span className="muted">· Research · {a?.policy === 'pregame' ? 'Pre-game archive' : 'Within 2 hours'}</span></p>
     {!a || !a.available ? <p className="small muted">Not recorded for this game.</p> : <>
       <p><strong>{a.pick ? `${a.agreeing} of ${a.available} pick ${side}` : 'Models are split'}</strong>
         {a.status === 'partial' && <span className="warn"> · {a.available}/{a.expected} models available</span>}</p>

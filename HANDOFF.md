@@ -1,5 +1,27 @@
 # Current handoff
 
+## Record counts and pre-game archive labels — Claude (Opus 5.5, sole writer), 2026-10-03 16:20–16:50 UTC
+- **Approved scope only:** explicit record counts and "Pre-game archive" wording. Also on this branch: `2bcab94` (B0, docs-only
+  horizon-band registration in EVALUATION_PLAN.md). Nothing else from the audit plan was started.
+- **API (additive, contract compatible):** winner `record` adds `pending`, `void`, `unscorable`
+  (selected = settled + pending + void + unscorable; settled = wins + losses; the `games` CHECK makes winner unscorable 0).
+  Market `record` adds `unscorable` and no longer folds it into `pending`
+  (selected = W + L + push + voids + pending + unscorable). PredictionRecord gains `unscorable`. Policy id `pregame` unchanged;
+  no stored row, population or filter changed. Titles/notes say "pre-game archive" (some forecasts made several days ahead).
+- **UI:** record lines show pending · void · unscorable and a scope ("All dates", or the History date/team filter). The archive
+  toggle, cards, game page, market blocks and agreement line say "Pre-game archive"; History/Today/Game explain lead times.
+- **Identity:** no hashed file touched (changed: schemas.py, providers/real.py, frontend, tests). Live definition unchanged.
+- **Checks:** new `tests/test_record_counts.py` 4 tests failed before the fix, pass after. Isolated readiness
+  (`NBA_DATA_DIR=<empty scratch>` …`check_project.py --ready`): exit 0, typecheck/build ok, **534 passed**. Snapshot API/browser
+  results: docs/SMOKE_TEST.md (latest section).
+- **Self-review fix:** demo mode wrongly showed archive wording (Game page sentence, Today slate); fixed and re-verified in a
+  temporary demo API; readiness rerun exit 0, 534 passed (SMOKE_TEST).
+- **Not done / remaining:** the running :8000 API (Devin's) and :5173 were NOT restarted, so the live app shows the new fields
+  only after a restart. README API table and main.py's `policy` description still say night-before (pre-existing uncommitted
+  files, out of scope). Nothing committed. Freshness, backtest scope, concurrency, joint explorer, demo, release isolation:
+  separate batches, not started.
+
+
 ## Reconciliation of parallel work (option 1) — Claude (Opus 5.5, session andry-03), 2026-10-03 02:09–03:40 UTC
 Single writer established: sessions -09 and -92 confirmed they made no commits; -c7 confirmed it made 803cee0..aa1e1b4 and
 went read-only; all three stay read-only until reassigned (Codex process not reachable; no Codex commits seen). Branches

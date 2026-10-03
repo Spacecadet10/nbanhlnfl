@@ -14,7 +14,7 @@ export function RunBadge({ runType }: { runType: RunType }) {
 
 export function NearTipoffBadge() {
   return (
-    <span className="badge badge-near" title="A separate forecast made shortly before tipoff from the freshest stored results. It does not replace the night-before forecast.">
+    <span className="badge badge-near" title="A separate forecast made shortly before tipoff from the freshest stored results. It is kept separate from the pre-game archive.">
       Near-tipoff
     </span>
   );

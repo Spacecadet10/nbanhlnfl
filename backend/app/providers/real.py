@@ -345,7 +345,7 @@ class RealProvider:
         return MarketRecordSummary(min_confidence=min_confidence, selected=len(rows),
                                    settled=wins + losses + res.count("push"), wins=wins, losses=losses,
                                    pushes=res.count("push"), voids=res.count("void"),
-                                   pending=res.count("pending") + res.count("unscorable"),
+                                   pending=res.count("pending"), unscorable=res.count("unscorable"),
                                    win_rate=wins / (wins + losses) if wins + losses else None)
 
     def market_predictions(self, market: str, policy: str, date_from: Optional[date], date_to: Optional[date],
@@ -379,7 +379,7 @@ class RealProvider:
                 sources[r.forecast.line_source] = sources.get(r.forecast.line_source, 0) + 1
         return MarketPerformanceResponse(
             mode="real", sport=self.sport, market=market, policy=policy,
-            title=f"{markets.spec(self.sport, market).title}: live {'near-tipoff' if policy == 'near_tipoff' else 'night-before'} forecasts",
+            title=f"{markets.spec(self.sport, market).title}: live {'near-tipoff forecasts' if policy == 'near_tipoff' else 'pre-game archive forecasts'}",
             model_version=model_version or market_live.current_version(self.conn, policy),
             versions=self._versions(market, policy), forecasts=len(rows),
             record=self._record_summary(rows, None), brier_score=metrics.brier_multi(vecs, real),
@@ -410,7 +410,7 @@ class RealProvider:
     @staticmethod
     def _moved(r, run_type: str, policy: str) -> bool:
         """A live forecast is void once the game leaves what it was made for: the exact start (two-hour policy) or the
-        Eastern game date (night-before policy). Backtest rows are computed from final schedules and never void."""
+        Eastern game date (pre-game archive policy). Backtest rows are computed from final schedules and never void."""
         if run_type != "live":
             return False
         return near_tipoff.start_changed(r) if policy == "near_tipoff" else live.day_changed(r)
@@ -438,6 +438,7 @@ class RealProvider:
                 home_win_prob=r["home_win_prob"], pick="home" if r["home_win_prob"] >= 0.5 else "away",
                 confidence=pick_confidence(r["home_win_prob"]), outcome=outcome,
                 correct=None if outcome is None else (r["home_win_prob"] >= 0.5) == outcome.home_won,
+                unscorable=r["status"] == "final" and not moved and outcome is None,
                 void=moved or r["status"] in ("postponed", "canceled")))
         return HistoryResponse(mode="real", run_type=run_type, policy=policy, total=len(out),
                                record=confidence_record(out, min_confidence), predictions=out[:limit])
@@ -483,12 +484,13 @@ class RealProvider:
         elif policy == "near_tipoff":
             title = "Near-tipoff live forecasts"
             note = ("Latest near-tipoff forecast per game, made before tipoff from the freshest stored results. Kept "
-                    "separate from the night-before record. Elo does not know about injuries or line-ups. Market "
+                    "separate from the pre-game archive. Elo does not know about injuries or line-ups. Market "
                     "comparison uses the latest quote retrieved no later than the forecast itself, where available.")
         else:
-            title = "Live forecasts"
-            note = ("Latest forecast per game recorded before its cutoff. Market comparison uses the latest quote "
-                    "retrieved no later than the forecast itself, where available.")
+            title = "Pre-game archive: live forecasts"
+            note = ("Archive of the discontinued daily forecast job: the latest forecast per game recorded before its "
+                    "cutoff (midnight Eastern on the game date). Some were generated several days before the game. "
+                    "Market comparison uses the latest quote retrieved no later than the forecast itself, where available.")
         return PerformanceResponse(
             mode="real", run_type=run_type, policy=policy, title=title, model_version=primary, sample_size=len(rows),
             date_from=min(days, default=None), date_to=max(days, default=None),

@@ -443,3 +443,36 @@ everything else the real `jobs.selector_decisions` + `jobs.predict_now` wiring. 
   reasons. Fixed during the check: checkbox layout inside `.filters`; registered-only match count.
 - 390 px **emulation** (same-origin iframe): page width 388 = viewport, model chips wrap (312 px), table scrolls inside its
   wrapper (460 vs 314 px). No real phone test.
+
+## Record counts and pre-game archive labels — 2026-10-03 16:20–16:50 UTC (Claude, sole writer)
+- **Isolation:** tests ran with `NBA_DATA_DIR` set to an empty scratch dir (it stayed empty); API/browser used a consistent
+  snapshot made with SQLite's backup API from `mode=ro` + `query_only` connections at 16:28:50Z (WAL content included;
+  `integrity_check` ok), plus copies of `reports/`, `research/`, `eval/`. Temporary API `127.0.0.1:8091`
+  (`NBA_DATA_DIR=<snapshot> NBA_API_MODE=real .venv/bin/uvicorn app.main:app --port 8091`) and Vite `127.0.0.1:5191`
+  (`API_PROXY_TARGET=http://127.0.0.1:8091`); both stopped afterwards. Live stores and running services untouched.
+- **Tests:** `tests/test_record_counts.py` (4) failed on the old code (missing fields; reg3 final without a decision counted as
+  pending), pass now; 63 targeted tests pass. `NBA_DATA_DIR=<scratch> OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+  backend/.venv/bin/python scripts/check_project.py --ready`: **exit 0**, typecheck + build passed, **534 passed** (1 existing
+  Starlette warning). Existing exact-dict record assertions in test_live.py/test_api.py were extended with the new fields.
+- **API identities on the snapshot:** every winner record (2 sports × live pregame/near-tipoff/backtest × All/60/70%) and every
+  market history + performance record (both sports, both policies) satisfies its identity: **0 failures**; market history and
+  performance records are identical. NHL pre-game archive winner: 57 = 13 settled (4–9) + 44 pending + 0 void + 0 unscorable;
+  two-hour: 5 = 5 settled (0–5). NBA live: 0. Populations equal those before the change.
+- **Browser:** desktop viewport measured 952 CSS px (window 1280×900; resizing the window did not change it). Phone checked by
+  390 px iframe emulation (386 px inner width), not a real device: History winner, History reg3, Today spread, Today winner,
+  Performance total (archive), Game page, NBA History (empty state "No pre-game archive forecasts in this view…") and an invalid
+  date range (error state "422: date_from must be on or before date_to" with Try again): **0 px horizontal overflow** on all,
+  no "night-before" text. Record lines read e.g. "All dates · 57 picks … Settled record 4–9 (13 settled) … 44 pending · 0 void ·
+  0 unscorable"; History with filters reads "Oct 2, 2026 – Oct 3, 2026 · VGK · 1 pick … 0 pending". Today shows the all-dates
+  record separately from "13 games, 13 with a pre-game archive forecast". Loading state observed. Console errors not captured
+  (tracking started after loads): unverified.
+- **Limitations:** no void or unscorable case exists in real data (covered by synthetic tests only); the frontend has no test
+  runner, so UI behaviour is browser-checked, not unit-tested; the running :8000 app needs a restart to show the change.
+- **Self-review fix (16:55–17:10 UTC):** two wording bugs from this batch appeared in demo mode only: the Game page told demo
+  users their forecast came from "the discontinued daily job", and the demo Today slate said "with a pre-game archive forecast".
+  Fixed in GamePage.tsx (sentence only for `run_type === 'live'`) and TodayPage.tsx (`policyName`: demo slates say "demo").
+  Verified on a temporary demo API (`NBA_API_MODE=demo`, scratch `NBA_DATA_DIR`, port 8092, Vite 5192) at 1280 and 390 px iframe
+  widths: Today/Game/History contain no "archive"/"discontinued daily job" text; "4 games, 4 with a demo forecast"; empty state
+  "No demo picks at 80%+ model confidence on this date"; demo record 36 = 32 settled + 4 pending + 0 + 0; 0 px overflow. Real
+  snapshot API re-checked: slate "13 games, 13 with a pre-game archive forecast", game page keeps the archive sentence, no
+  "night-before". Readiness rerun (isolated): **exit 0, 534 passed**. Temporary servers stopped.

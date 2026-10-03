@@ -56,11 +56,32 @@ export function ConfidenceFilter({ value, onChange, levels = CONFIDENCE_LEVELS }
   );
 }
 
+/** Every selected pick is settled, pending (no final result yet), void (moved, postponed or cancelled) or unscorable
+ * (final but without a usable result). The counts always add up to the picks shown. */
+function Unsettled({ pending, voids, unscorable }: { pending: number; voids: number; unscorable: number }) {
+  return (
+    <>
+      <span className="record-sep" aria-hidden>·</span>
+      <span>{pending} pending</span>
+      <span className="record-sep" aria-hidden>·</span>
+      <span>{voids} void</span>
+      <span className="record-sep" aria-hidden>·</span>
+      <span>{unscorable} unscorable</span>
+    </>
+  );
+}
+
+/** Which games a record covers; records are never per-day slates unless they say so. */
+function Scope({ scope }: { scope: string }) {
+  return <><strong className="record-scope">{scope}</strong><span className="record-sep" aria-hidden>·</span></>;
+}
+
 /** Observed record for one run type. Model confidence (a forecast) and observed win rate (results) are labelled apart. */
-export function RecordLine({ record, runType }: { record: ConfidenceRecord; runType: RunType }) {
+export function RecordLine({ record, runType, scope }: { record: ConfidenceRecord; runType: RunType; scope: string }) {
   return (
     <p className="record-line">
       <RunBadge runType={runType} />{' '}
+      <Scope scope={scope} />
       <span>
         <strong>{record.selected}</strong> {record.selected === 1 ? 'pick' : 'picks'}{' '}
         {record.min_confidence == null ? '(all confidence levels)' : `at ${levelLabel(record.min_confidence)}`}
@@ -73,15 +94,17 @@ export function RecordLine({ record, runType }: { record: ConfidenceRecord; runT
             <span className="record-sep" aria-hidden>·</span>
             <span>Observed win rate <strong>{pct(record.win_rate, 1)}</strong></span>
           </>}
+      <Unsettled pending={record.pending} voids={record.void} unscorable={record.unscorable} />
     </p>
   );
 }
 
 /** Record of a non-winner market's picks: pushes and voids are shown, never counted as wins or losses. */
-export function MarketRecordLine({ record }: { record: MarketRecordSummary }) {
+export function MarketRecordLine({ record, scope }: { record: MarketRecordSummary; scope: string }) {
   return (
     <p className="record-line">
       <RunBadge runType="live" />{' '}
+      <Scope scope={scope} />
       <span><strong>{record.selected}</strong> {record.selected === 1 ? 'pick' : 'picks'} {record.min_confidence == null ? '(all confidence levels)' : `at ${levelLabel(record.min_confidence)}`}</span>
       <span className="record-sep" aria-hidden>·</span>
       {record.wins + record.losses + record.pushes === 0
@@ -91,7 +114,7 @@ export function MarketRecordLine({ record }: { record: MarketRecordSummary }) {
             <span className="record-sep" aria-hidden>·</span>
             <span>Win rate excl. pushes <strong>{pct(record.win_rate, 1)}</strong></span>
           </>}
-      {record.voids > 0 && <><span className="record-sep" aria-hidden>·</span><span className="muted">{record.voids} void</span></>}
+      <Unsettled pending={record.pending} voids={record.voids} unscorable={record.unscorable} />
     </p>
   );
 }
@@ -102,17 +125,17 @@ function FetchedRecord({ sport, runType, level, policy }: { sport: Sport; runTyp
     [sport, runType, level, policy]);
   if (state.status === 'loading') return <p className="record-line muted">Loading record…</p>;
   if (state.status === 'error') return <p className="record-line warn">Record unavailable: {state.error}</p>;
-  return <RecordLine record={state.data.record} runType={state.data.run_type} />;
+  return <RecordLine record={state.data.record} runType={state.data.run_type} scope="All dates" />;
 }
 
 /** Records for the selected forecast policy. Live and backtest stay separate; backtests exist only for the
- * night-before policy. Demo mode has a single demo record. */
+ * pre-game archive policy. Demo mode has a single demo record. */
 function FetchedMarketRecord({ sport, market, level, policy }: { sport: Sport; market: MarketId; level: number | null; policy: Policy }) {
   const { state } = useApi((s) => api.marketPredictions(sport, market, { min_confidence: level, limit: 1, policy }, s),
     [sport, market, level, policy]);
   if (state.status === 'loading') return <p className="record-line muted">Loading record…</p>;
   if (state.status === 'error') return <p className="record-line warn">Record unavailable: {state.error}</p>;
-  return <MarketRecordLine record={state.data.record} />;
+  return <MarketRecordLine record={state.data.record} scope="All dates" />;
 }
 
 export function RangeRecords({ sport = 'nba', market = 'winner', level, realMode, policy }: {

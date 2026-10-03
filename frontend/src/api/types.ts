@@ -111,7 +111,7 @@ export interface MarketForecast {
 }
 export interface MarketRecordSummary {
   min_confidence: number | null; selected: number; settled: number; wins: number; losses: number; pushes: number;
-  voids: number; pending: number; win_rate: number | null;
+  voids: number; pending: number; unscorable: number; win_rate: number | null;
 }
 export interface MarketRecord { game_id: string; game_date: string; tipoff: string; home: Team; away: Team; forecast: MarketForecast; outcome: Outcome | null }
 export interface MarketModelVersion { model_version: string; current: boolean; games: number; first_at: string; last_at: string }
@@ -131,12 +131,14 @@ export interface PredictionRecord {
   model_version: string; generated_at: string; cutoff_at: string; home_win_prob: number;
   /** The predicted winner and the model's probability for it: max(p_home, 1 - p_home). */
   pick: 'home' | 'away'; confidence: number;
-  outcome: Outcome | null; correct: boolean | null; void?: boolean;
+  outcome: Outcome | null; correct: boolean | null; void?: boolean; unscorable?: boolean;
 }
 
 /** Observed record of the picks a confidence filter selects. Unscored games never count toward win_rate. */
+/** selected = settled + pending + void + unscorable; settled = wins + losses. */
 export interface ConfidenceRecord {
-  min_confidence: number | null; selected: number; settled: number; wins: number; losses: number; win_rate: number | null;
+  min_confidence: number | null; selected: number; settled: number; wins: number; losses: number;
+  pending: number; void: number; unscorable: number; win_rate: number | null;
 }
 
 export interface HistoryResponse {

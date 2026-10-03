@@ -397,15 +397,16 @@ def test_confidence_filter_boundaries_for_home_and_away_picks(store, client):
 def test_confidence_record_counts_only_settled_games_and_ignores_the_row_limit(store, client):
     confidence_store(store)
     rec = history(client, min_confidence=0.70)["record"]
-    assert rec == {"min_confidence": 0.7, "selected": 4, "settled": 3, "wins": 2, "losses": 1,
-                   "win_rate": pytest.approx(2 / 3)}                       # c5 is selected but not settled
+    assert rec == {"min_confidence": 0.7, "selected": 4, "settled": 3, "wins": 2, "losses": 1, "pending": 1, "void": 0,
+                   "unscorable": 0, "win_rate": pytest.approx(2 / 3)}                       # c5 is selected but not settled
     limited = history(client, min_confidence=0.70, limit=1)
     assert len(limited["predictions"]) == 1 and limited["total"] == 4 and limited["record"] == rec
     assert history(client)["record"] == {"min_confidence": None, "selected": 6, "settled": 4, "wins": 3, "losses": 1,
-                                         "win_rate": 0.75}
+                                         "pending": 2, "void": 0, "unscorable": 0, "win_rate": 0.75}
     empty = history(client, min_confidence=0.9)
     assert empty["total"] == 0 and empty["predictions"] == []
-    assert empty["record"] == {"min_confidence": 0.9, "selected": 0, "settled": 0, "wins": 0, "losses": 0, "win_rate": None}
+    assert empty["record"] == {"min_confidence": 0.9, "selected": 0, "settled": 0, "wins": 0, "losses": 0, "pending": 0, "void": 0,
+                               "unscorable": 0, "win_rate": None}
     unsettled = history(client, min_confidence=0.85)["record"]
     assert (unsettled["selected"], unsettled["settled"], unsettled["win_rate"]) == (1, 0, None)
 
@@ -420,6 +421,7 @@ def test_confidence_record_keeps_live_and_backtest_separate_and_predictions_unch
     live_rec = history(client, min_confidence=0.70)["record"]
     back = client.get("/api/predictions", params={"run_type": "backtest", "min_confidence": 0.70}).json()
     assert live_rec["selected"] == 4 and back["run_type"] == "backtest"
-    assert back["record"] == {"min_confidence": 0.7, "selected": 1, "settled": 1, "wins": 1, "losses": 0, "win_rate": 1.0}
+    assert back["record"] == {"min_confidence": 0.7, "selected": 1, "settled": 1, "wins": 1, "losses": 0, "pending": 0, "void": 0,
+                              "unscorable": 0, "win_rate": 1.0}
     after = [dict(r) for r in store.execute("SELECT * FROM predictions WHERE run_type = 'live' ORDER BY prediction_id")]
     assert after == before        # filtering reads forecasts; it never changes them

@@ -59,7 +59,7 @@ function Detail({ game: g }: { game: GameDetail }) {
       <ResearchGameCard sport={sport} gameId={g.game_id} />
       <TrackingGameCard sport={sport} gameId={g.game_id} />
       <div className="card">
-        <h2>{g.mode === 'real' ? 'Archived night-before probability' : 'Win probability'} {g.prediction && <RunBadge runType={g.prediction.run_type} />}</h2>
+        <h2>{g.mode === 'real' ? 'Pre-game archive probability' : 'Win probability'} {g.prediction && <RunBadge runType={g.prediction.run_type} />}</h2>
         {g.prediction
           ? <ProbabilityBar home={g.home} away={g.away} homeProb={g.prediction.home_win_prob} />
           : <p className="forecast-note">{g.forecast_note ?? 'No forecast available.'}</p>}
@@ -182,7 +182,7 @@ function PredictionFacts({ prediction: p }: { prediction: NonNullable<GameDetail
   }
   return (
     <>
-      <dt>Prediction made</dt><dd>{dateTime(p.generated_at)} (before the {dateTime(p.cutoff_at)} cutoff)</dd>
+      <dt>Prediction made</dt><dd>{dateTime(p.generated_at)} (before the {dateTime(p.cutoff_at)} cutoff).{p.run_type === 'live' && ' Pre-game archive forecasts come from the discontinued daily job and may have been made several days before the game.'}</dd>
       <dt>Model version</dt><dd><code>{p.model_version}</code></dd>
     </>
   );

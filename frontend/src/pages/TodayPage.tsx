@@ -64,7 +64,7 @@ function Slate({ meta }: { meta: Meta }) {
           <p className="small muted">
             {policy === 'near_tipoff'
               ? 'Forecasts appear within two hours of game time. Picks, confidence filters and records use this timing policy.'
-              : 'Showing night-before forecasts. Picks, the confidence filter and the record below all use them.'}
+              : 'Showing the pre-game archive: forecasts the discontinued daily job recorded before midnight Eastern on the game date, some several days before the game. Picks, the confidence filter and the records use them.'}
           </p>
         </div>
       )}
@@ -95,7 +95,9 @@ function Slate({ meta }: { meta: Meta }) {
   );
 }
 
-const POLICY_NAME: Record<Policy, string> = { pregame: 'night-before', near_tipoff: 'near-tipoff' };
+const POLICY_NAME: Record<Policy, string> = { pregame: 'pre-game archive', near_tipoff: 'near-tipoff' };
+/** Demo games carry one synthetic forecast each: never call it an archive or a timing policy. */
+const policyName = (policy: Policy, demo: boolean) => (demo ? 'demo' : POLICY_NAME[policy]);
 
 /** The API decides which games are selected: only the chosen policy's forecast counts, never the other one. */
 function FilteredSlate({ games, selection: sel, showAll, market, research }: { games: GameSummary[]; selection: SlateSelection; showAll: () => void;
@@ -105,17 +107,18 @@ function FilteredSlate({ games, selection: sel, showAll, market, research }: { g
   const selected = level == null ? games
     : games.filter((g) => (isWinner ? g.slate_pick?.meets_confidence : g.market_forecast?.meets_confidence));
   const noun = games.length === 1 ? 'game' : 'games';
+  const name = policyName(sel.policy, games.some((g) => g.mode === 'demo'));
   return (
     <>
       <p className="small muted selection-count">
         {level == null
-          ? <>{sel.games} {noun}, {sel.with_forecast} with a {POLICY_NAME[sel.policy]} forecast</>
-          : <><strong>{sel.selected}</strong> of {sel.games} {noun} selected at {levelLabel(level)} model confidence ({sel.with_forecast} with a {POLICY_NAME[sel.policy]} forecast)</>}
+          ? <>{sel.games} {noun}, {sel.with_forecast} with a {name} forecast</>
+          : <><strong>{sel.selected}</strong> of {sel.games} {noun} selected at {levelLabel(level)} model confidence ({sel.with_forecast} with a {name} forecast)</>}
       </p>
       {selected.length === 0 ? (
         <Empty>
-          No {POLICY_NAME[sel.policy]} picks at {levelLabel(level)} model confidence on this date.{' '}
-          {sel.with_forecast === 0 ? `None of these games has a ${POLICY_NAME[sel.policy]} forecast yet. ` : ''}
+          No {name} picks at {levelLabel(level)} model confidence on this date.{' '}
+          {sel.with_forecast === 0 ? `None of these games has a ${name} forecast yet. ` : ''}
           <button type="button" className="link-btn" onClick={showAll}>Show all {sel.games} {noun}</button>
         </Empty>
       ) : (
@@ -180,7 +183,7 @@ function GameCard({ game: g, policy, research }: { game: GameSummary; policy: Po
         )}
         {other && (
           <p className="other-forecast small muted">
-            {near ? 'Night-before forecast' : 'Near-tipoff forecast'} (not used by this view):{' '}
+            {near ? 'Pre-game archive forecast' : 'Near-tipoff forecast'} (not used by this view):{' '}
             {other.home_win_prob >= 0.5 ? g.home.abbr : g.away.abbr} {pct(Math.max(other.home_win_prob, 1 - other.home_win_prob), 1)}
           </p>
         )}

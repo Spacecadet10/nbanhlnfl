@@ -102,7 +102,7 @@ export function MarketForecastsCard({ forecasts }: { forecasts: MarketForecast[]
       <p className="small muted">Each forecast is shown at the exact line it was made against. Later line moves do not change it.</p>
       {policies.map((p) => (
         <div key={p} className="market-block">
-          <h3>{p === 'near_tipoff' ? 'Near-tipoff' : 'Night-before'} forecasts</h3>
+          <h3>{p === 'near_tipoff' ? 'Near-tipoff forecasts' : 'Pre-game archive forecasts'}</h3>
           {forecasts.filter((f) => f.policy === p).map((f) => (
             <div key={`${f.market}-${f.policy}-${f.model_version}`} className="market-row">
               <div className="market-row-head"><strong>{f.title}</strong> <LineLabel f={f} /> {f.result !== 'pending' && <ResultLabel result={f.result} />}
@@ -170,9 +170,9 @@ export function MarketReport({ perf: p }: { perf: MarketPerformanceResponse }) {
       <p className="muted">{p.title}</p>
       <p className="notice" role="note">{p.note}</p>
       {p.limitations.length > 0 && <ul className="limitations small">{p.limitations.map((x) => <li key={x}>{x}</li>)}</ul>}
-      <MarketRecordLine record={p.record} />
+      <MarketRecordLine record={p.record} scope="All dates" />
       {p.record.settled === 0 ? (
-        <Empty>No forecasts of this market have been settled yet ({p.forecasts} recorded, {p.record.pending} pending{p.record.voids ? `, ${p.record.voids} void` : ''}).</Empty>
+        <Empty>No forecasts of this market have been settled yet ({p.forecasts} recorded, {p.record.pending} pending, {p.record.voids} void, {p.record.unscorable} unscorable).</Empty>
       ) : (
         <div className="tiles">
           <div className="tile"><div className="tile-label">Settled</div><div className="tile-value">{p.record.settled}</div><div className="tile-hint">Wins, losses and pushes.</div></div>
