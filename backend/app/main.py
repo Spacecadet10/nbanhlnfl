@@ -269,6 +269,23 @@ def research_status(p=Depends(get_provider)):
     return {**selection_status.status(p.conn, p.now), "mode": "real"}
 
 
+@app.get("/api/research/discovery")
+def research_discovery(market: str, models: str = "", method: str = "", level: str = "", period: str = "both",
+                       registered: bool = False, limit: int = 200, p=Depends(get_provider)):
+    """Every evaluated discovery-v1 group (MODEL_SELECTION §18): historical (exploratory) and prospective (stored two-hour
+    cohorts at exact lines), filtered by models, agreement method and threshold or band. Research only."""
+    if period not in ("both", "historical", "prospective") or not 1 <= limit <= 2000:
+        raise HTTPException(status_code=422, detail="period must be both, historical or prospective; limit 1-2000")
+    if p.mode != "real":
+        return {"mode": "demo", "sport": "nba", "market": market, "note": "Discovery tracking reads the real stores and the "
+                "saved study tables; none in demo mode."}
+    _research_store(p)
+    from . import discovery_tracking
+    ms = [m for m in models.split(",") if m] or None
+    return {**discovery_tracking.report(p.conn, p.sport, market, p.now, models=ms, method=method or None, level=level or None,
+                                        period=period, limit=limit, registered_only=registered), "mode": "real"}
+
+
 @app.get("/api/research/retrospective")
 def research_retrospective(p=Depends(get_provider)):
     from . import combination_research

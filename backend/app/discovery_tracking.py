@@ -56,6 +56,16 @@ def _load(sport: str, market: str) -> Optional[list]:
         return json.load(fh)["rows"]
 
 
+def registered(sport: str, market: str) -> dict:
+    """(group, level) -> why, for the rules the final discovery selection registered for prospective evaluation."""
+    p = discovery_dir() / "report.json"
+    if not p.is_file():
+        return {}
+    rep = json.loads(p.read_text())["markets"].get(f"{sport}:{market}") or {}
+    reg = rep.get("prospective_registry") or {}
+    return {(r["group"], f">={r['threshold']:.2f}"): r["why"] for r in reg.get("rules", [])}
+
+
 def historical(sport: str, market: str, *, models=None, method=None, level=None, limit: int = 200) -> dict:
     rows = _load(sport, market)
     if rows is None:
@@ -84,15 +94,16 @@ def historical(sport: str, market: str, *, models=None, method=None, level=None,
                                           "best_prior_single_matched": r.get("best_prior_single_matched"),
                                           **({"votes": r["votes"]} if "votes" in r else {})}
     out = []
+    reg = registered(sport, market)
     for p in pooled.values():
         n = p["wins"] + p["losses"]
-        out.append({k: v for k, v in p.items() if not k.startswith("_") and k not in ("matched_wins", "matched_n")} | {
+        out.append({"registered": reg.get((p["group"], p["level"]))} | {k: v for k, v in p.items() if not k.startswith("_") and k not in ("matched_wins", "matched_n")} | {
             "coverage": p["selected"] / p["eligible"] if p["eligible"] else 0.0, "win_rate": p["wins"] / n if n else None,
             "ci95": _wilson(p["wins"], n), "mean_conf": p["_conf"] / p["selected"] if p["selected"] else None,
             "log_loss": p["_ll"] / p["_pn"] if p["_pn"] else None, "brier": p["_br"] / p["_pn"] if p["_pn"] else None,
             "best_prior_single_matched": p["matched_wins"] / p["matched_n"] if p["matched_n"] else None,
             "status": "ok" if n >= MIN_REPORT else "insufficient evidence"})
-    out.sort(key=lambda g: (-(g["wins"] + g["losses"]), g["group"], g["level"]))
+    out.sort(key=lambda g: (g["registered"] is None, -(g["wins"] + g["losses"]), g["group"], g["level"]))
     return {"status": "ok", "kind": "historical (exploratory: spent seasons; every group is shown, so the best rows are "
             "selected with hindsight)", "groups_matched": len(out), "groups": out[:limit],
             "line": None if market in ("winner", "reg3") else "pregame research line (the primary model's own line), "
@@ -163,6 +174,7 @@ def prospective(conn, sport: str, market: str, as_of: str, *, models=None, metho
         items.append((c, _vectors(conn, c), st, y))
     lv = [x for x in levels(market) if not level or x[0] == level]
     out = []
+    reg = registered(sport, market)
     for key, (meth, members) in defs.items():
         if any(m in NOT_LIVE for m in members):
             continue
@@ -185,20 +197,22 @@ def prospective(conn, sport: str, market: str, as_of: str, *, models=None, metho
                 else:
                     l += 1
             n = w + l
-            out.append({"group": key, "method": meth, "members": members, "level": lab, "eligible": len(base),
+            out.append({"registered": reg.get((key, lab)), "group": key, "method": meth, "members": members, "level": lab,
+                        "eligible": len(base),
                         "selected": len(sel), "coverage": len(sel) / len(base) if base else 0.0, "wins": w, "losses": l,
                         "pushes": p, "voids": void, "pending": pend, "win_rate": w / n if n else None, "ci95": _wilson(w, n),
                         "lines": lines, "line_label": None if three or market == "winner" else
                         ("exact line" if len(lines) <= 1 else "across exact lines (each cohort at its own exact line)"),
                         "status": "ok" if n >= MIN_REPORT else "insufficient evidence"})
-    out.sort(key=lambda g: (-(g["selected"]), g["group"], g["level"]))
+    out.sort(key=lambda g: (g["registered"] is None, -(g["selected"]), g["group"], g["level"]))
     return {"status": "ok", "kind": "prospective (two-hour cohorts, exact lines)", "as_of": as_of,
             "cohorts": len(items), "settled": sum(1 for x in items if x[2] == "settled"),
             "not_recorded_live": [k for k, (m, ms) in defs.items() if any(x in NOT_LIVE for x in ms)][:20],
             "groups_matched": len(out), "groups": out[:limit]}
 
 
-def report(conn, sport: str, market: str, as_of: str, *, models=None, method=None, level=None, period="both", limit=200) -> dict:
+def report(conn, sport: str, market: str, as_of: str, *, models=None, method=None, level=None, period="both", limit=200,
+           registered_only: bool = False) -> dict:
     out = {"sport": sport, "market": market, "levels": [x[0] for x in levels(market)],
            "methods": ["single", "avg", "unanimous_min", "majority", "stack"],
            "confidence": {"single": "the model's probability of its pick", "avg": "equal-weight average probability of the pick",
@@ -210,7 +224,13 @@ def report(conn, sport: str, market: str, as_of: str, *, models=None, method=Non
     rows = _load(sport, market)
     out["members"] = sorted({m for r in rows for m in r["members"]}) if rows else []
     if period in ("both", "historical"):
-        out["historical"] = historical(sport, market, models=models, method=method, level=level, limit=limit)
+        out["historical"] = historical(sport, market, models=models, method=method, level=level, limit=100000 if registered_only else limit)
     if period in ("both", "prospective"):
-        out["prospective"] = prospective(conn, sport, market, as_of, models=models, method=method, level=level, limit=limit)
+        out["prospective"] = prospective(conn, sport, market, as_of, models=models, method=method, level=level,
+                                         limit=100000 if registered_only else limit)
+    if registered_only:
+        for part in ("historical", "prospective"):
+            if part in out and "groups" in out[part]:
+                out[part]["groups"] = [g for g in out[part]["groups"] if g.get("registered")][:limit]
+    out["registered_rules"] = len(registered(sport, market))
     return out

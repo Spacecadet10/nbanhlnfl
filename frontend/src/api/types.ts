@@ -352,3 +352,19 @@ export interface SelectionStatusMarket { market: MarketId; status: string; core:
 export interface SelectionStatus { mode: Mode; sport: Sport; as_of?: string; definition?: string; selector_version?: string;
   pool_registry?: string | null; pool_registry_error?: string | null; markets: SelectionStatusMarket[]; note: string
 }
+
+export interface DiscoveryGroup { registered: string | null; group: string; method: string; members: string[]; level: string;
+  eligible: number; selected: number; coverage: number; wins: number; losses: number; pushes: number; voids: number;
+  pending: number; win_rate: number | null; ci95: [number, number] | null; status: string; mean_conf?: number | null;
+  log_loss?: number | null; brier?: number | null; best_prior_single_matched?: number | null;
+  seasons?: Record<string, { selected: number; coverage: number; win_rate: number | null; best_prior_single?: string | null;
+    best_prior_single_matched?: number | null; votes?: Record<string, number> }>;
+  lines?: Record<string, number>; line_label?: string | null
+}
+export interface DiscoveryPart { status: string; kind?: string; groups_matched?: number; groups: DiscoveryGroup[]; line?: string | null;
+  cohorts?: number; settled?: number; note?: string
+}
+export interface DiscoveryReport { mode: Mode; sport: Sport; market: string; levels?: string[]; methods?: string[];
+  members?: string[]; confidence?: Record<string, string>; registered_rules?: number; historical?: DiscoveryPart;
+  prospective?: DiscoveryPart; note: string
+}

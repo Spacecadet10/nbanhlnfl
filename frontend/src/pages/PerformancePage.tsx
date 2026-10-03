@@ -4,7 +4,7 @@ import type { MarketId, PerformanceResponse, Policy, Sport } from '../api/types'
 import { useApi } from '../api/useApi';
 import { RunBadge } from '../components/Badges';
 import { MarketReport } from '../components/MarketView';
-import { CandidateRosterCard, CombinationRules, PoolSelectionCard, SelectionStatusCard, ResearchPerformance, RetrospectiveStudy } from '../components/Research';
+import { CandidateRosterCard, CombinationRules, PoolSelectionCard, SelectionStatusCard, DiscoveryCard, ResearchPerformance, RetrospectiveStudy } from '../components/Research';
 import { MarketSelect, useMarket, useSport } from '../components/Selection';
 import { PolicyToggle, RunTypeToggle, usePolicy, useRunType } from '../components/RunTypeToggle';
 import { AsyncView, Empty } from '../components/States';
@@ -32,6 +32,8 @@ export function PerformancePage() {
         <MarketPerformance sport={sport} market={market} policy={policy} />
         {policy === 'near_tipoff' && <ThresholdResearch sport={sport} market={market} />}
         <SelectionStatusCard sport={sport} market={market} />
+      <DiscoveryCard sport={sport} market={market} />
+        <DiscoveryCard sport={sport} market={market} />
         <ResearchPerformance sport={sport} market={market} />
         <CombinationRules sport={sport} market={market} />
         <CandidateRosterCard sport={sport} market={market} />

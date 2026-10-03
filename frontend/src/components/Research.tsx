@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { api } from '../api/client';
 import type {
-  CalibrationBin, Candidate, CandidatePoolState, CandidateRoster, PoolReport, SelectionRuleView, SelectionStatus, MarketId, RegisteredRule, ResearchExpanded, RuleReport, ResearchGame, ResearchMarket, ResearchRecord, ResearchReport, ResearchSlateEntry, Retrospective, RetroMarket, Side, Sport, Vector,
+  CalibrationBin, Candidate, CandidatePoolState, CandidateRoster, PoolReport, SelectionRuleView, SelectionStatus, DiscoveryGroup, DiscoveryReport, MarketId, RegisteredRule, ResearchExpanded, RuleReport, ResearchGame, ResearchMarket, ResearchRecord, ResearchReport, ResearchSlateEntry, Retrospective, RetroMarket, Side, Sport, Vector,
 } from '../api/types';
 import { useApi } from '../api/useApi';
 import { AsyncView, Empty } from './States';
@@ -505,5 +505,78 @@ function StatusBody({ r, market }: { r: SelectionStatus; market: MarketId }) {
       </tr>)}</tbody>
     </table></div>
     <p className="small muted">{r.note}</p>
+  </>;
+}
+
+const METHOD: Record<string, string> = { single: 'Single model', avg: 'Average probability', unanimous_min: 'All agree (lowest member probability)',
+  majority: 'Majority (mean of supporting members)', stack: 'Learned combiner' };
+
+/** Every evaluated discovery group (MODEL_SELECTION §18): sport × market × model subset × agreement rule × threshold or band.
+ * Historical rows are exploratory (spent seasons); prospective rows are classified from stored two-hour cohorts. */
+export function DiscoveryCard({ sport, market }: { sport: Sport; market: MarketId }) {
+  const [models, setModels] = useState<string[]>([]);
+  const [method, setMethod] = useState('');
+  const [level, setLevel] = useState('');
+  const [registered, setRegistered] = useState(false);
+  const f = { models: models.join(','), method, level, registered };
+  const { state, retry } = useApi((s) => api.researchDiscovery(sport, market, f, s), [sport, market, f.models, method, level, registered]);
+  return <div className="card">
+    <h2>Combination discovery and tracking <span className="badge badge-research">Research</span></h2>
+    <AsyncView state={state} retry={retry}>{(r) => <DiscoveryBody r={r} models={models} setModels={setModels} method={method}
+      setMethod={setMethod} level={level} setLevel={setLevel} registered={registered} setRegistered={setRegistered} />}</AsyncView>
+  </div>;
+}
+
+function DiscoveryBody(p: { r: DiscoveryReport; models: string[]; setModels: (m: string[]) => void; method: string;
+  setMethod: (m: string) => void; level: string; setLevel: (l: string) => void; registered: boolean; setRegistered: (b: boolean) => void }) {
+  const { r } = p;
+  if (r.mode === 'demo' || !r.levels) return <Empty>{r.note}</Empty>;
+  const toggle = (m: string) => p.setModels(p.models.includes(m) ? p.models.filter((x) => x !== m) : [...p.models, m]);
+  return <>
+    <p className="small muted">{r.note} {r.registered_rules ?? 0} rules registered for prospective evaluation (selected on every
+      historical season).</p>
+    <div className="filters small">
+      <label>Agreement / combination <select value={p.method} onChange={(e) => p.setMethod(e.target.value)}>
+        <option value="">All</option>{(r.methods ?? []).map((m) => <option key={m} value={m}>{METHOD[m] ?? m}</option>)}</select></label>{' '}
+      <label>Confidence <select value={p.level} onChange={(e) => p.setLevel(e.target.value)}>
+        <option value="">All thresholds and bands</option>{(r.levels ?? []).map((l) => <option key={l} value={l}>{levelLabel(l)}</option>)}</select></label>{' '}
+      <label><input type="checkbox" checked={p.registered} onChange={(e) => p.setRegistered(e.target.checked)} /> Registered rules only</label>
+      <div className="chips">Models (all must be in the group): {(r.members ?? []).map((m) =>
+        <label key={m} className="chip"><input type="checkbox" checked={p.models.includes(m)} onChange={() => toggle(m)} /> {modelName(m)}</label>)}</div>
+    </div>
+    {p.method && r.confidence?.[p.method] && <p className="small muted">Confidence for this rule: {r.confidence[p.method]}.</p>}
+    <h3>Historical (exploratory)</h3>
+    {r.historical && <DiscoveryTable part={r.historical} prospective={false} />}
+    <h3>Prospective (two-hour cohorts)</h3>
+    {r.prospective && <><p className="small muted">{r.prospective.cohorts ?? 0} games recorded, {r.prospective.settled ?? 0} settled.</p>
+      <DiscoveryTable part={r.prospective} prospective /></>}
+  </>;
+}
+
+const levelLabel = (l: string) => l.startsWith('>=') ? `${pct(Number(l.slice(2)), 0)}+ (cumulative)` :
+  (() => { const [a, b] = l.slice(1, -1).split(',').map(Number); return `${pct(a, 1)}–${b > 1 ? '100%' : pct(b, 0)} (band)`; })();
+
+function DiscoveryTable({ part, prospective }: { part: DiscoveryReport['historical'] & object; prospective: boolean }) {
+  if (part.status !== 'ok') return <Empty>{part.note ?? 'Not available.'}</Empty>;
+  if (!part.groups.length) return <Empty>No group matches these filters.</Empty>;
+  return <>
+    <p className="small muted">{part.kind}{part.line ? ` · Lines: ${part.line}` : ''} · {part.groups_matched} groups match; first
+      {' '}{part.groups.length} shown.</p>
+    <div className="table-wrap"><table className="table small">
+      <thead><tr><th>Group</th><th>Confidence</th><th>Selected / eligible</th><th>W–L–P{prospective ? ' · pending · void' : ''}</th>
+        <th>Win rate (95%)</th>{!prospective && <th>Best earlier single, same count</th>}{!prospective && <th>Log loss / Brier</th>}<th>Status</th></tr></thead>
+      <tbody>{part.groups.map((g: DiscoveryGroup) => <tr key={g.group + g.level}>
+        <th scope="row" className="wrap">{METHOD[g.method] ?? g.method}: {g.members.map(modelName).join(' + ')}
+          {g.registered && <div><span className="badge badge-research">registered</span> <span className="muted">{g.registered}</span></div>}</th>
+        <td>{levelLabel(g.level)}</td>
+        <td>{g.selected} / {g.eligible} ({pct(g.coverage, 0)})</td>
+        <td>{g.wins}–{g.losses}–{g.pushes}{prospective ? ` · ${g.pending} · ${g.voids}` : ''}</td>
+        <td>{g.win_rate == null ? '—' : pct(g.win_rate, 1)} {g.ci95 && <span className="muted">[{pct(g.ci95[0], 0)}–{pct(g.ci95[1], 0)}]</span>}</td>
+        {!prospective && <td>{g.best_prior_single_matched == null ? '—' : pct(g.best_prior_single_matched, 1)}</td>}
+        {!prospective && <td>{g.log_loss == null ? '—' : `${num(g.log_loss, 3)} / ${num(g.brier ?? 0, 3)}`}</td>}
+        <td>{g.status === 'ok' ? 'ok' : <span className="muted">insufficient evidence</span>}
+          {g.line_label && <div className="muted">{g.line_label}</div>}</td>
+      </tr>)}</tbody>
+    </table></div>
   </>;
 }
