@@ -113,7 +113,7 @@ function TrackingBody({ r, sport, market, f }: { r: TrackingReport; sport: Sport
     <p className="small"><strong>{r.evidence === 'historical' ? 'Historical, exploratory' : 'Prospective'}</strong>: {r.games ?? 0} games ·
       {' '}{r.registered_groups} registered groups, {r.configurations_searched} rule configurations ({r.skipped_allocation} more held back by the
       allocation cap) · anchor {r.anchor && modelName(r.anchor)} · registry <code>{r.registry_sha256?.slice(0, 10)}</code>
-      {r.effective_from && <> · since {dateTime(r.effective_from)}</>}</p>
+      {r.evidence === 'prospective' && r.effective_from && <> · recording since {dateTime(r.effective_from)}</>}</p>
     <p className={r.evidence === 'historical' ? 'small warn' : 'small muted'}>{r.note}</p>
     <div className="tracking-reco small">
       <strong>Active recommendation:</strong>{' '}
@@ -136,7 +136,7 @@ function TrackingBody({ r, sport, market, f }: { r: TrackingReport; sport: Sport
     <h3>All groups</h3>
     {r.groups.length === 0 ? <Empty>No group matches these filters.</Empty> : <div className="table-wrap"><table className="table small tracking-table">
       <thead><tr><th>Group</th><th>Eligible</th><th>Selected (coverage)</th><th>Pending</th><th>Record</th><th>Win rate (95%)</th>
-        <th>Mean confidence</th><th>Brier / log loss</th><th>Anchor, same count</th><th>Evidence</th></tr></thead>
+        <th>Mean confidence</th><th>Brier / log loss</th><th>Anchor, same count{f.view.type === 'band' ? ' (thresholds only)' : ''}</th><th>Evidence</th></tr></thead>
       <tbody>{shown.map(({ g, c }) => <tr key={g.id}>
         <th scope="row" className="wrap">{groupLabel(g)}<div className="muted">{g.cohort === 'expanded' ? 'expanded cohort' : 'core cohort'} · {g.priority}</div>
           {Object.keys(g.missing_reasons).length > 0 && <div className="warn">incomplete {g.status_counts.incomplete ?? 0}×: {Object.keys(g.missing_reasons).map(modelName).join(', ')}</div>}

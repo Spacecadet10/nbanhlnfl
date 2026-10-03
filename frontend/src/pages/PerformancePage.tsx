@@ -36,10 +36,8 @@ export function PerformancePage() {
         <SelectionStatusCard sport={sport} market={market} />
         <ResearchPerformance sport={sport} market={market} />
         <AgreementTracking sport={sport} market={market} />
-        <AgreementTracking sport={sport} market={market} />
-      <CombinationRules sport={sport} market={market} />
+        <CombinationRules sport={sport} market={market} />
         <CandidateRosterCard sport={sport} market={market} />
-      <TrainingStatusCard sport={sport} />
         <TrainingStatusCard sport={sport} />
         <PoolSelectionCard sport={sport} market={market} />
         <RetrospectiveStudy sport={sport} market={market} />
@@ -60,8 +58,10 @@ export function PerformancePage() {
       {run === 'live' && policy === 'near_tipoff' && <><AgreementReport sport={sport} /><ThresholdResearch sport={sport} market={market} /></>}
       <SelectionStatusCard sport={sport} market={market} />
       <ResearchPerformance sport={sport} market={market} />
+      <AgreementTracking sport={sport} market={market} />
       <CombinationRules sport={sport} market={market} />
       <CandidateRosterCard sport={sport} market={market} />
+      <TrainingStatusCard sport={sport} />
       <PoolSelectionCard sport={sport} market={market} />
       <RetrospectiveStudy sport={sport} market={market} />
     </section>
