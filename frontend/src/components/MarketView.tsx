@@ -70,6 +70,7 @@ export function MarketCard({ game: g, statusLabel, research, market }: { game: G
         {f ? (
           <>
             <div className="card-section-label">{f.title.toUpperCase()} · <LineLabel f={f} /></div>
+            {f.current_version === false && <p className="warn small">Earlier model version (archive): shown for reference, not a pick of the current model and not in its counts or record.</p>}
             <SideBars f={f} />
             <p className="pick-line small">
               Pick: <strong>{f.pick_label}</strong><span className="muted"> · model confidence {pct(f.confidence, 1)}</span>

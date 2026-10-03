@@ -909,7 +909,12 @@ def precomputed_check(sport: str, market: str) -> dict:
     """The chronological check saved when the historical tables were built (computing it needs the whole table)."""
     reg = load_registry()
     checks = _precomputed(sport, reg["sha256"], "checks") or {}
-    return checks.get(market) or {"status": "no_historical_table", "folds": []}
+    return checks.get(market) or {"status": _missing_status(sport, market, reg), "folds": []}
+
+
+def _missing_status(sport: str, market: str, reg: dict) -> str:
+    """Why no historical result is served: no table at all, or one that is outdated (visible, never an empty result)."""
+    return "historical_table_outdated" if _outdated(historical_path(sport, market), reg) else "no_historical_table"
 
 
 def _outdated(p: Path, reg: dict) -> bool:
@@ -958,7 +963,7 @@ def chronological_check(sport: str, market: str, reg: Optional[dict] = None) -> 
     m = reg["markets"].get(f"{sport}:{market}")
     per = historical_items(sport, market, reg)
     if not m or not per:
-        return {"status": "no_historical_table", "folds": []}
+        return {"status": _missing_status(sport, market, reg), "folds": []}
     seasons = sorted({i["season"] for items in per.values() for i in items.values()})
     folds = []
     for s in seasons[2:]:

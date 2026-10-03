@@ -219,8 +219,17 @@ def test_a_game_forecast_only_by_an_earlier_model_version_is_still_shown(sealed,
     assert p.market_predictions("total", "pregame", None, None, None, 50, None, model_version=stored).total == 1
     game = [f for f in p.game(GID).market_forecasts if f.market == "total"]
     assert len(game) == 1 and game[0].model_version == stored and game[0].current_version is False
-    slate = p.games(game_date(sealed), "pregame", None, "total").games[0].market_forecast
-    assert slate is not None and slate.current_version is False
+    # On the slate the earlier version's forecast is display-only: labelled, never a pick of the current model, and outside
+    # its counts, confidence filter and performance (only the explicit version view above scores it).
+    for level in (None, 0.5):
+        resp = p.games(game_date(sealed), "pregame", level, "total")
+        shown = resp.games[0].market_forecast
+        assert shown is not None and shown.current_version is False and shown.meets_confidence is False
+        assert (resp.selection.with_forecast, resp.selection.selected) == (0, 0)
+    perf = p.market_performance("total", "pregame")
+    assert perf.forecasts == 0 and perf.record.selected == 0 and perf.model_version == "resealed-pregame"
+    assert market_live.score(sealed, policy="pregame", market="total")["markets"] == {}
+    assert p.market_predictions("total", "pregame", None, None, None, 50, 0.5).record.selected == 0
 
 
 def game_date(c):

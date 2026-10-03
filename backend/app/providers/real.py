@@ -252,7 +252,10 @@ class RealProvider:
             for g in games:
                 r = found.get(g.game_id)
                 g.market_forecast = None if r is None else self._market_out(r, g.home, g.away, min_confidence)
-            picks = [g.market_forecast for g in games if g.market_forecast is not None]
+                if g.market_forecast is not None and not g.market_forecast.current_version:
+                    g.market_forecast.meets_confidence = False     # display only: never a pick of the current model
+            # Counts and the confidence filter cover the current model only; an earlier version's forecast is shown, labelled.
+            picks = [g.market_forecast for g in games if g.market_forecast is not None and g.market_forecast.current_version]
             selection = SlateSelection(market=market, policy=policy, min_confidence=min_confidence, games=len(games),
                                        with_forecast=len(picks), selected=sum(p.meets_confidence for p in picks))
         return GamesResponse(mode="real", date=day, sources=self.sources(), games=games, selection=selection)

@@ -221,10 +221,11 @@ def test_historical_tables_and_summaries_from_an_earlier_calculation_are_rejecte
     write(None)                                           # built before the calculation was versioned (pre-audit rounding)
     assert at.historical_items("nhl", market, reg) == {}
     assert at._precomputed("nhl", reg["sha256"]) is None and at._precomputed("nhl", reg["sha256"], "checks") is None
-    assert at.precomputed_check("nhl", market)["status"] == "no_historical_table"
+    assert at.precomputed_check("nhl", market) == {"status": "historical_table_outdated", "folds": []}    # visible, not empty
     rep = at.report(None, "nhl", market, evidence="historical")
     assert rep["status"] == "historical_table_outdated" and rep["games"] == 0 and rep["leaderboard"] == []
-    assert at.chronological_check("nhl", market)["status"] == "no_historical_table"
+    assert at.chronological_check("nhl", market)["status"] == "historical_table_outdated"
+    assert at.precomputed_check("nhl", "reg3")["status"] == "no_historical_table"                          # no file at all
     write(at.CALC)                                        # rebuilt under the current calculation: accepted
     assert list(at.historical_items("nhl", market, reg)[gid]) == ["g1"]
     assert at._precomputed("nhl", reg["sha256"], "checks")[market]["status"] == "ok"
