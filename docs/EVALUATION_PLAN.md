@@ -513,3 +513,27 @@ runs per sport. The live selector is research/shadow; it never replaces a primar
 - **Result (2026-10-02, one run per sport):** docs/COMBINATION_RESULTS.md. Exploratory: agreement added nothing beyond the equal
   average's own confidence ranking in any market; probability gains appeared only for NBA spread (ridge/stacker) and NHL regulation
   3-way (draw-inflated/stacker). The live selector starts with empty prospective evidence; nothing was promoted.
+
+## Earlier-archive horizon bands — recorded 2026-10-03 ~16:20 UTC, before any of the 44 pending archive games has started
+The discontinued night-before job (live `predictions`, policy `pregame`) recorded forecasts up to `HORIZON_DAYS = 7` ahead, and
+recording stopped on 2026-10-02, so the archive's latest row per game is not always a night-before forecast. This rule fixes, before
+the pending games settle, how that archive will be described. Nothing is excluded, deleted or relabelled in the ledger.
+- **Row:** the latest live row per game for the primary night-before model version, generated no later than its cutoff (the row the
+  archive already shows and scores; `live.LATEST_LIVE_SQL`).
+- **Lead:** the game's US Eastern date minus the US Eastern date of that row's `generated_at`, in whole days.
+- **Bands:** `1 day` (true night-before), `2 days`, `3–7 days`. The exact horizon in hours (scheduled start − `generated_at`) is shown
+  per row as well, and is not a banding input.
+- **Reporting:** the all-horizons record stays the headline; the band breakdown is shown with it, never instead of it. Voids follow
+  the existing rule (a game moved off its Eastern date is void). No band, threshold or edge may be changed after results are known.
+- **Counts at registration (NHL winner, `hockey_elo-carry=0.75-home_advantage=30-k=4-mov=True`):** 57 games — `1 day` 13 (all
+  final), `2 days` 13 (scheduled), `3–7 days` 31 (scheduled); horizons 19.49–167.75 h. NBA has no live archive rows. The NHL market
+  archives (policy `pregame`) use the same rule with their own latest row per game and market.
+- **Reproduce** (read-only, `file:data/nhl.sqlite?mode=ro`, `PRAGMA query_only=ON`):
+  ```sql
+  SELECT g.tipoff_at, p.generated_at, g.status FROM predictions p JOIN games g USING(game_id)
+  WHERE p.run_type='live' AND p.model_version='hockey_elo-carry=0.75-home_advantage=30-k=4-mov=True'
+    AND p.prediction_id=(SELECT q.prediction_id FROM predictions q WHERE q.run_type='live' AND q.game_id=p.game_id
+      AND q.model_version=p.model_version AND q.generated_at<=q.cutoff_at
+      ORDER BY q.generated_at DESC, q.prediction_id DESC LIMIT 1);
+  ```
+  then band each row by (Eastern date of `tipoff_at`) − (Eastern date of `generated_at`): ≤ 1 → `1 day`, 2 → `2 days`, ≥ 3 → `3–7 days`.
