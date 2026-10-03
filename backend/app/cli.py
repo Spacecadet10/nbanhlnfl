@@ -14,6 +14,9 @@ SPORT_COMMANDS = {"nhl-pbp-import", "nhl-xg-research", "migrate", "replay", "cov
 NHL_ONLY = {"nhl-pbp-import", "nhl-xg-research", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies"}
 
 
+LOCK_WAIT_SECONDS = 45 * 60     # longer than any two-hour cycle (NHL ~13 minutes); a job still waiting then fails visibly
+
+
 def _any_failed(result) -> bool:
     """True if any job result (nested dicts/lists) has status 'failed'."""
     if isinstance(result, list):
@@ -232,6 +235,18 @@ def main(argv=None) -> int:
         p.error(f"`{args.cmd}` is NBA-only; it is not available with --sport {args.sport}")
     if args.sport == "nba" and args.cmd in NHL_ONLY:
         p.error(f"`{args.cmd}` needs --sport nhl")
+    # One job per store at a time: every command below opens (and migrates) the sport's store. The periodic odds cycle
+    # does not queue behind a running job (its next interval follows); other commands wait, then fail visibly.
+    with db.store_lock(args.sport, wait_seconds=0 if args.cmd == "odds" else LOCK_WAIT_SECONDS) as held:
+        if not held:
+            busy = {"status": "skipped" if args.cmd == "odds" else "failed",
+                    "reason": f"another job is running on the {args.sport} store"}
+            print(json.dumps(busy))
+            return 0 if args.cmd == "odds" else 1
+        return _run(args, p)
+
+
+def _run(args, p) -> int:
     conn = db.connect(sport=args.sport)
     applied = db.migrate(conn)
     db.claim_store(conn, args.sport)

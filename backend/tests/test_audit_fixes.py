@@ -79,3 +79,45 @@ def test_threshold_table_for_the_three_way_market_starts_below_fifty_percent():
     reg3 = tracking.table(rows, "reg3")
     assert reg3[0]["threshold"] == 0.35 and reg3[0]["settled"] == 3 and reg3[0]["win"] == 1
     assert [t["threshold"] for t in tracking.table(rows, "spread")][0] == 0.5
+
+
+# --- Storage guards and job overlap ---------------------------------------------------------------------------------
+def _market_row(tipoff, generated="2026-10-10T21:30:00Z", line=6.5):
+    from app.ledger import MarketForecast
+    return MarketForecast("nhl", GID, "total", line, "model", None, "near_tipoff", "live", "m-window=2h-policy=near_tipoff",
+                          "d", "f", tipoff, generated, tipoff, 0.5, 0.0, 0.5)
+
+
+def test_two_hour_market_forecast_must_match_the_games_current_scheduled_start(sealed):
+    import sqlite3
+    from app.ledger import record_market
+    add_upcoming(sealed, start="2026-10-10T19:00:00", at="2026-10-10T21:00:00Z")           # 23:00Z, scheduled
+    with pytest.raises(sqlite3.IntegrityError, match="current scheduled start"):
+        record_market(sealed, _market_row("2026-10-10T22:30:00Z"))                         # not the game's start
+    assert record_market(sealed, _market_row("2026-10-10T23:00:00Z"))[1] is True
+    add_upcoming(sealed, start="2026-10-10T19:00:00", state=3, at="2026-10-10T21:10:00Z")  # no longer scheduled (live state)
+    assert sealed.execute("SELECT status FROM games WHERE game_id=?", (GID,)).fetchone()[0] == "in_progress"
+    with pytest.raises(sqlite3.IntegrityError, match="current scheduled start"):
+        record_market(sealed, _market_row("2026-10-10T23:00:00Z", generated="2026-10-10T21:40:00Z", line=7.5))
+
+
+def test_overlapping_jobs_on_one_store_do_not_run_together(tmp_path, monkeypatch):
+    monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path))
+    with db.store_lock("nhl") as first:
+        assert first is True
+        with db.store_lock("nhl", wait_seconds=0) as second:          # a second job on the same store: refused, not queued
+            assert second is False
+        with db.store_lock("nba", wait_seconds=0) as other:           # another sport's store is independent
+            assert other is True
+    with db.store_lock("nhl", wait_seconds=0) as again:               # released when the first job ends
+        assert again is True
+
+
+def test_the_periodic_odds_command_skips_while_another_job_holds_the_store(tmp_path, monkeypatch, capsys):
+    from app import cli
+    monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path))
+    with db.store_lock("nhl"):
+        assert cli.main(["--sport", "nhl", "odds"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["status"] == "skipped" and "another job" in out["reason"]
+    assert not (tmp_path / "nhl.sqlite").exists()                    # nothing was opened or migrated

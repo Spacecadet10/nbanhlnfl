@@ -46,6 +46,42 @@ class transaction:
         return False
 
 
+class store_lock:
+    """One writing job per store at a time (advisory lock on a file next to the store, released when the job ends or its
+    process dies). Entering returns True when the lock is held, False when another job still holds it after `wait_seconds`
+    (None waits without limit; 0 does not wait). Overlapping scheduled jobs therefore never migrate, refresh or forecast
+    on the same store together; the two sports' stores are independent."""
+
+    def __init__(self, sport: str, wait_seconds: Optional[float] = None, poll_seconds: float = 2.0):
+        self.path = config.data_dir() / f".{sport}-jobs.lock"
+        self.wait, self.poll, self.fd = wait_seconds, poll_seconds, None
+
+    def __enter__(self) -> bool:
+        import fcntl
+        import os
+        import time
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o644)
+        deadline = None if self.wait is None else time.monotonic() + self.wait
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                self.fd = fd
+                return True
+            except BlockingIOError:
+                if deadline is not None and time.monotonic() >= deadline:
+                    os.close(fd)
+                    return False
+                time.sleep(self.poll if deadline is None else max(0.0, min(self.poll, deadline - time.monotonic())))
+
+    def __exit__(self, *_):
+        import os
+        if self.fd is not None:
+            os.close(self.fd)          # closing the descriptor releases the lock
+            self.fd = None
+        return False
+
+
 def migrate(conn: sqlite3.Connection, upto: Optional[int] = None) -> list[str]:
     """Applies pending migrations in order (optionally only through version `upto`); returns the names applied."""
     conn.execute("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)")
