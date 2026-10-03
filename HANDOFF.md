@@ -1,5 +1,19 @@
 # Current handoff
 
+## Tonight's safeguards — Claude (Fable 5.1), 2026-10-03 20:38 UTC
+- **Power risk (needs the user):** the Mac was on battery (48%, ~5 h) with a 1-minute idle sleep, kept awake only by the
+  agents' short `caffeinate` calls. Started `caffeinate -i -m -t 43200` (pid 15242, 12 h, no sudo) so it does not idle-sleep
+  when the agents stop. It does NOT survive a closed lid on battery or an empty battery: plug the Mac in. A sleeping Mac
+  records no two-hour forecasts and they cannot be backfilled.
+- **Local backup (same disk, not off-site):** `~/nba-predictor-backups/2026-10-03/`: `nba-predictor-all-branches.bundle`
+  (`git bundle --all`, verified) and `nba.sqlite` / `nhl.sqlite` taken with SQLite's backup API from query-only connections
+  (integrity ok; row counts and schema 23 equal the live stores at 20:38 UTC). The repository still has no remote.
+- **Verified Opus's `64b7b2c`:** release `~/nba-predictor-live` @ `948f1be`, clean; five jobs + `api` (:8100) + `web` (:4173)
+  loaded; `release-check` exit 0 for both sports under the release venv; definitions unchanged; scikit-learn 1.9.1 in both
+  venvs. Not re-checked: the 43-package pin, the 565-test run in the release venv.
+- **Deliberately not done:** moving the release to `4a153e8` (presentation fixes) inside tonight's forecast window. Do it
+  after the NHL games finish (~05:00 UTC), with the README "Pinned release" steps; no identity-hashed file is involved.
+
 ## Release isolation completed: own venv, always-on API + app, moved off Desktop — Claude (Opus 5.5), 2026-10-03 20:20–20:35 UTC
 - **Release worktree moved** `~/Desktop/nba-predictor-live` -> **`~/nba-predictor-live`** (`git worktree move`; still `release` @
   `948f1be`, clean). Reason: the new `web` service's `node` hung in state `U` reading the Desktop checkout (macOS privacy
@@ -52,7 +66,8 @@
 - **Release move 19:57:28 UTC:** both job locks free, no CLI job running, first game 23:00 UTC. `git -C ../nba-predictor-live
   merge --ff-only 948f1be`; `release-check` exit 0 for both sports: no problems, schema 23 = 23, definitions unchanged
   (NHL `3e2504c4d655c41b`, NBA `1215f3641ad63e4f`), release checkout clean. No identity-hashed file differs from `9fc202c`.
-  Roll back: `git -C ../nba-predictor-live checkout -B release 9fc202c`.
+  Roll back: `git -C ~/nba-predictor-live checkout -B release 9fc202c` (the release checkout moved to `~/nba-predictor-live`
+  at 20:2x UTC; `../nba-predictor-live` in this entry is its earlier location).
 - **Also:** the unused worktree `../nba-predictor-release` was mine (created 19:26 UTC to test a pinned checkout) and is
   removed. :8000 restarted 19:56 UTC on the deadlock fix: 60 concurrent requests all 200 in 1.35 s, health ok. The earlier
   clean pass on `8e4ff1d` was 555 passed. Tree-model outputs are bit-identical across runs and 1/4/default threads
