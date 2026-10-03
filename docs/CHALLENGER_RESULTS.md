@@ -241,3 +241,30 @@ triples, 102 of 848 larger). Thresholds 50–90% (reg3 35–70%); bands reported
   subset, agreement rule or threshold beat the best single model chosen on earlier seasons on later seasons, in any market,
   apart from line-market gains that the plain average of all members already provides. Untested: the omitted larger subsets
   and NBA winner triples listed in the report; bookmaker lines; goalie-aware NHL models with pregame starters.
+
+## Tooling adoption and bounded tuning `tuning-v1` (2026-10-03 01:53–02:05 UTC; exploratory)
+Design and tooling audit: MODEL_SELECTION §19 (942676c, before install). Code a291d54 / 6f829d7 (before each run).
+Commands (scratch store copies): `python -m app.cli tuning-study` (01:53–01:59 UTC), `python -m app.cli tuning-evaluate`.
+Predictions `data/research/tuning/oof-{nhl,nba}.json.gz` (sha256 prefixes bc221a73…, f753cca2…), every trial
+`trials-{sport}.json`, per-season settings and fits `report.json`; evaluation `data/reports/tuning-v1/evaluation.json` and
+per-group tables; compact copies docs/evidence/tuning-v1/.
+
+| Tool | Purpose | Implementation | Experiment | Result |
+|---|---|---|---|---|
+| **Optuna 5.0.0** (adopted; pinned in the `research` extra, worktree venv only) | bounded hyperparameter tuning, none existed | `app/tuning_study.py`: TPE seed 20261003, 25 trials per learner and season, tuned on seasons < s−1 against s−1, refitted on < s, predicts s | 8 learners × every season (NHL 2018–26, NBA 2022–26); 25/25 distinct objective values per study | tuning works; the most regularised settings win; the tuned learners do not beat the existing members (below) |
+| **sklearn HistGradientBoosting** (LightGBM's algorithm; used before with fixed settings) | tuned boosted trees as a pool learner: NBA winner, margin/total; NHL winner, reg3, goals | same module, built as `candidates.learners.Fitted` so the pool engine produces vectors at each game's line | as above | alone **worse** than the best earlier existing member in every market (e.g. NBA winner +0.0081 log loss [+0.0045, +0.0118], NHL reg3 +0.0150 [+0.0115, +0.0188]); vs the untuned counterparts: NBA winner +0.0043 vs `gbt_v1`, NHL winner +0.0003 vs `hockey_gbt` |
+| **sklearn ExtraTrees** (existing pool family) | tuned variant | same | NBA winner, margin/total; NHL winner | ≈ untuned (−0.0023…+0.0006, intervals span 0); worse than the best existing member (+0.0021…+0.0097) |
+| LightGBM 4.7.0 / XGBoost 3.4.1 | — | not installed | — | **deferred**: same algorithm as HistGradientBoosting (tested above); needs the system `libomp` |
+| CatBoost 1.2.10 | — | research extra (existing) | §10, 2026-10-02 | rejected earlier; not retested |
+
+**Inside combinations** (discovery-v1 procedure rerun on the same games with and without the tuned members; NHL 8 folds,
+NBA 4 folds; full per-threshold table in docs/evidence/tuning-v1/summary.txt):
+- **No rule qualified** with or without the tuned members in any market.
+- Frozen rules pooled over later seasons, e.g. NHL winner ≥70%: 74.4% with vs 74.0% without (best single 75.4%); NBA
+  winner ≥70%: 81.5% vs 81.4% (best single 80.9%); NHL reg3 ≥60%: 61.4% vs 63.6%; NBA team total home ≥70%: 61.5% vs 59.6%
+  (n ≈ 100). Differences are within ±2 points and change sign across thresholds.
+- Same rule with vs without its tuned member (same season, same threshold): NHL winner 63.5% vs 63.2% (19 rules), reg3
+  51.2% vs 51.0% (26), NBA winner 70.6% vs 69.8% (7), NBA lines and NHL lines within ±2 points — no consistent help.
+- Final selection on all seasons includes a tuned member in 1–5 rules per market (registered nowhere live; research only).
+- **Conclusion within what was tested:** bounded Optuna tuning of boosted trees and ExtraTrees did not improve any market
+  alone or inside a combination. Nothing is proposed for live recording; current live recording is unchanged.

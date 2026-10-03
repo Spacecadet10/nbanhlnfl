@@ -1,0 +1,6021 @@
+{
+ "study": "tuning-v1",
+ "started_at": "2026-10-03T01:59:17Z",
+ "markets": {
+  "nhl:winner": {
+   "tuned_members": [
+    "et_tuned:nhl_base",
+    "hgb_tuned:nhl_base",
+    "hgb_tuned:nhl_base:goals",
+    "hgb_tuned:nhl_base:reg3"
+   ],
+   "games": 11870,
+   "seasons": [
+    2018,
+    2019,
+    2020,
+    2021,
+    2022,
+    2023,
+    2024,
+    2025,
+    2026
+   ],
+   "alone": {
+    "et_tuned:nhl_base": {
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.003019883534856738,
+      "ci95": [
+       0.0014653121127954562,
+       0.004563114717685294
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "counterpart": "extra_trees:nhl_base",
+     "log_loss_minus_untuned_counterpart": {
+      "mean": 0.00032708834642855827,
+      "ci95": [
+       -0.00040635447124514934,
+       0.001070508046273295
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "per_season": {
+      "2019": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.003048244912458482,
+       "minus_counterpart": 0.0004966675048323667
+      },
+      "2020": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.0012864919889371545,
+       "minus_counterpart": -0.0004087739838276282
+      },
+      "2021": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.003563472467879569,
+       "minus_counterpart": 0.0001865458015851546
+      },
+      "2022": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.003457264773786911,
+       "minus_counterpart": -0.0018126968648890058
+      },
+      "2023": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.008083636964956595,
+       "minus_counterpart": 0.0037170867269159438
+      },
+      "2024": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.0013077283136265524,
+       "minus_counterpart": -0.0012634841460781934
+      },
+      "2025": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.004390589479036117,
+       "minus_counterpart": 0.0014157365339426257
+      },
+      "2026": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": -0.001052136823455923,
+       "minus_counterpart": 0.00014924460294749603
+      }
+     }
+    },
+    "hgb_tuned:nhl_base": {
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.007358203541569533,
+      "ci95": [
+       0.0052953377747270314,
+       0.0095378424739738
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "counterpart": "hockey_gbt",
+     "log_loss_minus_untuned_counterpart": {
+      "mean": 0.0002557620734038122,
+      "ci95": [
+       -0.0022394175139993726,
+       0.0029062297724944935
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "per_season": {
+      "2019": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.018504651090341113,
+       "minus_counterpart": 0.006808768132703941
+      },
+      "2020": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.008175042199513597,
+       "minus_counterpart": 0.0002022092105121763
+      },
+      "2021": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.00316613273451968,
+       "minus_counterpart": 0.0007463093322405526
+      },
+      "2022": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.007265935080186899,
+       "minus_counterpart": 0.0022466376995296795
+      },
+      "2023": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.004662080532169324,
+       "minus_counterpart": -0.005433091302728776
+      },
+      "2024": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.0027329290584627345,
+       "minus_counterpart": -0.003504694004820746
+      },
+      "2025": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.008304154988833032,
+       "minus_counterpart": 0.0011604401637778942
+      },
+      "2026": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.005149273602031471,
+       "minus_counterpart": 0.00016537424301443703
+      }
+     }
+    },
+    "hgb_tuned:nhl_base:goals": {
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.005915063121229021,
+      "ci95": [
+       0.0038229937401454183,
+       0.008084005421509046
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "counterpart": "poisson_draw:nhl_base",
+     "log_loss_minus_untuned_counterpart": {
+      "mean": 0.0036471135352612516,
+      "ci95": [
+       0.0021727024225736487,
+       0.005181439722569029
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "per_season": {
+      "2019": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.006535661222023449,
+       "minus_counterpart": 0.005011055283058016
+      },
+      "2020": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.00507630040225974,
+       "minus_counterpart": 0.0037800557269220634
+      },
+      "2021": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.006014891138213193,
+       "minus_counterpart": 0.000698032220095684
+      },
+      "2022": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.013256986637902125,
+       "minus_counterpart": 0.005132648852839572
+      },
+      "2023": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.0063581487651114925,
+       "minus_counterpart": 0.003428316363424007
+      },
+      "2024": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.006740746064911899,
+       "minus_counterpart": 0.0036861487781703023
+      },
+      "2025": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.004763846494970106,
+       "minus_counterpart": 0.004013453084366881
+      },
+      "2026": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": -0.0015269297794865814,
+       "minus_counterpart": 0.002536966916293739
+      }
+     }
+    },
+    "hgb_tuned:nhl_base:reg3": {
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.007754072198196698,
+      "ci95": [
+       0.005504766098981663,
+       0.01023934261373868
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "counterpart": "multinomial_l2:nhl_base",
+     "log_loss_minus_untuned_counterpart": {
+      "mean": 0.007829221832116227,
+      "ci95": [
+       0.005736403535326932,
+       0.010144961677324342
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "per_season": {
+      "2019": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.01751098987747896,
+       "minus_counterpart": 0.017637436323099533
+      },
+      "2020": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.008948049184154126,
+       "minus_counterpart": 0.008529135511572394
+      },
+      "2021": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.00884092458879907,
+       "minus_counterpart": 0.008932095971607913
+      },
+      "2022": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.012076784443665887,
+       "minus_counterpart": 0.009846948314893198
+      },
+      "2023": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.00431327921100063,
+       "minus_counterpart": 0.005200643247292281
+      },
+      "2024": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.00566382450246694,
+       "minus_counterpart": 0.005264077954913135
+      },
+      "2025": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": 0.00784428536916638,
+       "minus_counterpart": 0.007636940317979266
+      },
+      "2026": {
+       "best_prior_existing": "hockey_logistic_xg",
+       "minus_best": -0.0024112496842430306,
+       "minus_counterpart": 0.00029364031287555697
+      }
+     }
+    }
+   },
+   "frozen_pooled": {
+    "without_tuned": {
+     "0.50": {
+      "win_rate": 0.5924869234427009,
+      "decided": 10515,
+      "best_prior_single": 0.5917261055634807,
+      "all_member_average": 0.5912505943889681
+     },
+     "0.55": {
+      "win_rate": 0.629943068164333,
+      "decided": 6499,
+      "best_prior_single": 0.6336359439913833,
+      "all_member_average": 0.6300969379904601
+     },
+     "0.60": {
+      "win_rate": 0.6621947947410786,
+      "decided": 3727,
+      "best_prior_single": 0.6664877917896431,
+      "all_member_average": 0.6584384223235846
+     },
+     "0.65": {
+      "win_rate": 0.7271176805002842,
+      "decided": 1759,
+      "best_prior_single": 0.7276861853325753,
+      "all_member_average": 0.7225696418419557
+     },
+     "0.70": {
+      "win_rate": 0.7403598971722365,
+      "decided": 1556,
+      "best_prior_single": 0.7532133676092545,
+      "all_member_average": 0.7365038560411311
+     },
+     "0.75": {
+      "win_rate": 0.7893401015228426,
+      "decided": 394,
+      "best_prior_single": 0.8147208121827412,
+      "all_member_average": 0.7969543147208121
+     },
+     "0.80": {
+      "win_rate": 0.8037383177570093,
+      "decided": 107,
+      "best_prior_single": 0.8411214953271028,
+      "all_member_average": 0.822429906542056
+     }
+    },
+    "with_tuned": {
+     "0.50": {
+      "win_rate": 0.5908701854493581,
+      "decided": 10515,
+      "best_prior_single": 0.5917261055634807,
+      "all_member_average": 0.5922967189728958
+     },
+     "0.55": {
+      "win_rate": 0.6331313775510204,
+      "decided": 6272,
+      "best_prior_single": 0.6367984693877551,
+      "all_member_average": 0.6334502551020408
+     },
+     "0.60": {
+      "win_rate": 0.6609947643979057,
+      "decided": 3820,
+      "best_prior_single": 0.6664921465968586,
+      "all_member_average": 0.662041884816754
+     },
+     "0.65": {
+      "win_rate": 0.7150050352467271,
+      "decided": 1986,
+      "best_prior_single": 0.716012084592145,
+      "all_member_average": 0.7084592145015106
+     },
+     "0.70": {
+      "win_rate": 0.7442596991290578,
+      "decided": 1263,
+      "best_prior_single": 0.7537608867775138,
+      "all_member_average": 0.7395091053048297
+     },
+     "0.75": {
+      "win_rate": 0.7834549878345499,
+      "decided": 411,
+      "best_prior_single": 0.8102189781021898,
+      "all_member_average": 0.7907542579075426
+     },
+     "0.80": {
+      "win_rate": 0.7909090909090909,
+      "decided": 110,
+      "best_prior_single": 0.8454545454545455,
+      "all_member_average": 0.8545454545454545
+     }
+    }
+   },
+   "qualified": {
+    "without_tuned": [],
+    "with_tuned": []
+   },
+   "frozen_rules_with_tuned_member": [
+    {
+     "assess_season": 2019,
+     "rule": "avg|hockey_logistic+hockey_logistic_xg+hgb_tuned:nhl_base",
+     "threshold": 0.65,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 265,
+      "win_rate": 0.630188679245283
+     },
+     "without": {
+      "rule": "avg|hockey_logistic+hockey_logistic_xg",
+      "decided": 218,
+      "win_rate": 0.6651376146788991
+     }
+    },
+    {
+     "assess_season": 2019,
+     "rule": "unanimous_min|hockey_logistic_xg+et_tuned:nhl_base+hgb_tuned:nhl_base",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 645,
+      "win_rate": 0.6155038759689923
+     },
+     "without": {
+      "rule": "unanimous_min|hockey_logistic_xg+hgb_tuned:nhl_base",
+      "decided": 736,
+      "win_rate": 0.6100543478260869
+     }
+    },
+    {
+     "assess_season": 2019,
+     "rule": "unanimous_min|hockey_logistic_xg+et_tuned:nhl_base+hgb_tuned:nhl_base",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 645,
+      "win_rate": 0.6155038759689923
+     },
+     "without": {
+      "rule": "unanimous_min|hockey_logistic_xg+et_tuned:nhl_base",
+      "decided": 757,
+      "win_rate": 0.6142668428005285
+     }
+    },
+    {
+     "assess_season": 2019,
+     "rule": "unanimous_min|hockey_elo+hgb_tuned:nhl_base",
+     "threshold": 0.6,
+     "why": "best lift at \u22650.60",
+     "with": {
+      "decided": 325,
+      "win_rate": 0.6123076923076923
+     },
+     "without": {
+      "rule": "single|hockey_elo",
+      "decided": 406,
+      "win_rate": 0.603448275862069
+     }
+    },
+    {
+     "assess_season": 2019,
+     "rule": "avg|hockey_gbt+hockey_logistic_xg+et_tuned:nhl_base",
+     "threshold": 0.7,
+     "why": "best lift at \u22650.70",
+     "with": {
+      "decided": 85,
+      "win_rate": 0.6823529411764706
+     },
+     "without": {
+      "rule": "avg|hockey_gbt+hockey_logistic_xg",
+      "decided": 130,
+      "win_rate": 0.6538461538461539
+     }
+    },
+    {
+     "assess_season": 2020,
+     "rule": "avg|hockey_logistic+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.65,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 71,
+      "win_rate": 0.7887323943661971
+     },
+     "without": {
+      "rule": "avg|hockey_logistic+poisson_draw:nhl_base",
+      "decided": 90,
+      "win_rate": 0.7222222222222222
+     }
+    },
+    {
+     "assess_season": 2020,
+     "rule": "avg|hockey_elo+hgb_tuned:nhl_base:goals+logit_l2:nhl_base",
+     "threshold": 0.5,
+     "why": "best lift at \u22650.50",
+     "with": {
+      "decided": 1212,
+      "win_rate": 0.5684818481848185
+     },
+     "without": {
+      "rule": "avg|hockey_elo+logit_l2:nhl_base",
+      "decided": 1212,
+      "win_rate": 0.5643564356435643
+     }
+    },
+    {
+     "assess_season": 2020,
+     "rule": "unanimous_min|hockey_logistic+hockey_logistic_xg+hgb_tuned:nhl_base",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 566,
+      "win_rate": 0.6007067137809188
+     },
+     "without": {
+      "rule": "unanimous_min|hockey_logistic+hockey_logistic_xg",
+      "decided": 669,
+      "win_rate": 0.5904334828101644
+     }
+    },
+    {
+     "assess_season": 2021,
+     "rule": "majority|hockey_logistic+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.65,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 118,
+      "win_rate": 0.7711864406779662
+     },
+     "without": null
+    },
+    {
+     "assess_season": 2021,
+     "rule": "avg|hockey_elo+hgb_tuned:nhl_base:goals+logit_l2:nhl_base",
+     "threshold": 0.5,
+     "why": "best lift at \u22650.50",
+     "with": {
+      "decided": 952,
+      "win_rate": 0.6071428571428571
+     },
+     "without": {
+      "rule": "avg|hockey_elo+logit_l2:nhl_base",
+      "decided": 952,
+      "win_rate": 0.6113445378151261
+     }
+    },
+    {
+     "assess_season": 2021,
+     "rule": "unanimous_min|hockey_logistic_xg+et_tuned:nhl_base",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 545,
+      "win_rate": 0.6458715596330276
+     },
+     "without": {
+      "rule": "single|hockey_logistic_xg",
+      "decided": 657,
+      "win_rate": 0.6316590563165906
+     }
+    },
+    {
+     "assess_season": 2021,
+     "rule": "unanimous_min|hockey_logistic_xg+et_tuned:nhl_base+extra_trees:nhl_base",
+     "threshold": 0.6,
+     "why": "best lift at \u22650.60",
+     "with": {
+      "decided": 270,
+      "win_rate": 0.6962962962962963
+     },
+     "without": {
+      "rule": "unanimous_min|hockey_logistic_xg+extra_trees:nhl_base",
+      "decided": 292,
+      "win_rate": 0.6952054794520548
+     }
+    },
+    {
+     "assess_season": 2021,
+     "rule": "unanimous_min|hockey_elo+hgb_tuned:nhl_base:goals+logit_l2:nhl_base",
+     "threshold": 0.65,
+     "why": "best lift at \u22650.65",
+     "with": {
+      "decided": 79,
+      "win_rate": 0.759493670886076
+     },
+     "without": {
+      "rule": "unanimous_min|hockey_elo+logit_l2:nhl_base",
+      "decided": 124,
+      "win_rate": 0.75
+     }
+    },
+    {
+     "assess_season": 2022,
+     "rule": "majority|hockey_logistic+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.65,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 234,
+      "win_rate": 0.7307692307692307
+     },
+     "without": null
+    },
+    {
+     "assess_season": 2023,
+     "rule": "avg|hockey_elo+hockey_logistic_xg+hgb_tuned:nhl_base",
+     "threshold": 0.7,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 239,
+      "win_rate": 0.7364016736401674
+     },
+     "without": {
+      "rule": "avg|hockey_elo+hockey_logistic_xg",
+      "decided": 201,
+      "win_rate": 0.7412935323383084
+     }
+    },
+    {
+     "assess_season": 2024,
+     "rule": "unanimous_min|hockey_logistic_xg+et_tuned:nhl_base+poisson_draw:nhl_base",
+     "threshold": 0.6,
+     "why": "best lift at \u22650.60",
+     "with": {
+      "decided": 484,
+      "win_rate": 0.6880165289256198
+     },
+     "without": {
+      "rule": "unanimous_min|hockey_logistic_xg+poisson_draw:nhl_base",
+      "decided": 510,
+      "win_rate": 0.6843137254901961
+     }
+    },
+    {
+     "assess_season": 2024,
+     "rule": "avg|hockey_logistic_xg+hgb_tuned:nhl_base+multinomial_l2:nhl_base",
+     "threshold": 0.7,
+     "why": "best lift at \u22650.70",
+     "with": {
+      "decided": 209,
+      "win_rate": 0.7607655502392344
+     },
+     "without": {
+      "rule": "avg|hockey_logistic_xg+multinomial_l2:nhl_base",
+      "decided": 231,
+      "win_rate": 0.7705627705627706
+     }
+    },
+    {
+     "assess_season": 2024,
+     "rule": "avg|hockey_logistic+hgb_tuned:nhl_base",
+     "threshold": 0.75,
+     "why": "best lift at \u22650.75",
+     "with": {
+      "decided": 74,
+      "win_rate": 0.8108108108108109
+     },
+     "without": {
+      "rule": "single|hockey_logistic",
+      "decided": 89,
+      "win_rate": 0.7640449438202247
+     }
+    },
+    {
+     "assess_season": 2025,
+     "rule": "avg|et_tuned:nhl_base+logit_l2:nhl_base",
+     "threshold": 0.6,
+     "why": "best lift at \u22650.60",
+     "with": {
+      "decided": 638,
+      "win_rate": 0.6630094043887147
+     },
+     "without": {
+      "rule": "single|logit_l2:nhl_base",
+      "decided": 657,
+      "win_rate": 0.6636225266362252
+     }
+    },
+    {
+     "assess_season": 2025,
+     "rule": "unanimous_min|hockey_logistic+et_tuned:nhl_base+multinomial_l2:nhl_base",
+     "threshold": 0.75,
+     "why": "best lift at \u22650.75",
+     "with": {
+      "decided": 33,
+      "win_rate": 0.8484848484848485
+     },
+     "without": {
+      "rule": "unanimous_min|hockey_logistic+multinomial_l2:nhl_base",
+      "decided": 40,
+      "win_rate": 0.85
+     }
+    },
+    {
+     "assess_season": 2026,
+     "rule": "avg|hockey_logistic+hgb_tuned:nhl_base:goals",
+     "threshold": 0.75,
+     "why": "best lift at \u22650.75",
+     "with": {
+      "decided": 10,
+      "win_rate": 0.9
+     },
+     "without": {
+      "rule": "single|hockey_logistic",
+      "decided": 19,
+      "win_rate": 0.631578947368421
+     }
+    }
+   ],
+   "registry_with_tuned": {
+    "selected_on_seasons": [
+     2018,
+     2019,
+     2020,
+     2021,
+     2022,
+     2023,
+     2024,
+     2025,
+     2026
+    ],
+    "best_single": "hockey_logistic_xg",
+    "bonferroni_count": 8387,
+    "rules": [
+     {
+      "group": "avg|hockey_elo+extra_trees:nhl_base+multinomial_l2:nhl_base",
+      "method": "avg",
+      "members": [
+       "hockey_elo",
+       "extra_trees:nhl_base",
+       "multinomial_l2:nhl_base"
+      ],
+      "threshold": 0.7,
+      "why": "highest accuracy (\u2265100 picks, \u22655%)",
+      "selection": {
+       "decided": 626,
+       "win_rate": 0.7779552715654952,
+       "lift": 0.0015974440894568342,
+       "lower": -0.10140674749717014
+      }
+     },
+     {
+      "group": "avg|goals_poisson+multinomial_l2:nhl_base",
+      "method": "avg",
+      "members": [
+       "goals_poisson",
+       "multinomial_l2:nhl_base"
+      ],
+      "threshold": 0.65,
+      "why": "top point lift",
+      "selection": {
+       "decided": 1651,
+       "win_rate": 0.7310720775287705,
+       "lift": 0.012719563900666309,
+       "lower": -0.05534911610366311
+      }
+     },
+     {
+      "group": "avg|hockey_logistic_xg+extra_trees:nhl_base",
+      "method": "avg",
+      "members": [
+       "hockey_logistic_xg",
+       "extra_trees:nhl_base"
+      ],
+      "threshold": 0.5,
+      "why": "best lift at \u22650.50",
+      "selection": {
+       "decided": 11870,
+       "win_rate": 0.5942712721145745,
+       "lift": 0.002106149957876946,
+       "lower": -0.0258160932079193
+      }
+     },
+     {
+      "group": "avg|multinomial_l2:nhl_base+poisson_draw:nhl_base",
+      "method": "avg",
+      "members": [
+       "multinomial_l2:nhl_base",
+       "poisson_draw:nhl_base"
+      ],
+      "threshold": 0.55,
+      "why": "best lift at \u22650.55",
+      "selection": {
+       "decided": 7571,
+       "win_rate": 0.630167745344076,
+       "lift": 0.0017170783251881927,
+       "lower": -0.03265844394050121
+      }
+     },
+     {
+      "group": "unanimous_min|hockey_gbt+hockey_logistic_xg+et_tuned:nhl_base",
+      "method": "unanimous_min",
+      "members": [
+       "hockey_gbt",
+       "hockey_logistic_xg",
+       "et_tuned:nhl_base"
+      ],
+      "threshold": 0.6,
+      "why": "best lift at \u22650.60",
+      "selection": {
+       "decided": 3789,
+       "win_rate": 0.6748482449195038,
+       "lift": 0.0034309844286091185,
+       "lower": -0.0437600534149473
+      }
+     },
+     {
+      "group": "single|logit_l2:nhl_base",
+      "method": "single",
+      "members": [
+       "logit_l2:nhl_base"
+      ],
+      "threshold": 0.7,
+      "why": "best lift at \u22650.70",
+      "selection": {
+       "decided": 1283,
+       "win_rate": 0.7404520654715511,
+       "lift": 0.008573655494933718,
+       "lower": -0.06761818386470025
+      }
+     },
+     {
+      "group": "avg|hockey_elo+hockey_logistic+poisson_draw:nhl_base",
+      "method": "avg",
+      "members": [
+       "hockey_elo",
+       "hockey_logistic",
+       "poisson_draw:nhl_base"
+      ],
+      "threshold": 0.75,
+      "why": "best lift at \u22650.75",
+      "selection": {
+       "decided": 122,
+       "win_rate": 0.8524590163934426,
+       "lift": 0.040983606557376984,
+       "lower": -0.16833394457083356
+      }
+     },
+     {
+      "group": "avg|hockey_gbt+logit_l2:nhl_base+multinomial_l2:nhl_base",
+      "method": "avg",
+      "members": [
+       "hockey_gbt",
+       "logit_l2:nhl_base",
+       "multinomial_l2:nhl_base"
+      ],
+      "threshold": 0.8,
+      "why": "best lift at \u22650.80",
+      "selection": {
+       "decided": 103,
+       "win_rate": 0.8543689320388349,
+       "lift": 0.04854368932038833,
+       "lower": -0.18013514446060436
+      }
+     }
+    ],
+    "note": "Selected on every historical season (exploratory); evaluated only prospectively from now on."
+   },
+   "configurations": 5994
+  },
+  "nhl:reg3": {
+   "tuned_members": [
+    "hgb_tuned:nhl_base:goals",
+    "hgb_tuned:nhl_base:reg3"
+   ],
+   "games": 11870,
+   "seasons": [
+    2018,
+    2019,
+    2020,
+    2021,
+    2022,
+    2023,
+    2024,
+    2025,
+    2026
+   ],
+   "alone": {
+    "hgb_tuned:nhl_base:goals": {
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.004500247691669111,
+      "ci95": [
+       0.0026415894425645017,
+       0.006415147634622849
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "counterpart": "poisson_draw:nhl_base",
+     "log_loss_minus_untuned_counterpart": {
+      "mean": 0.005275667025501271,
+      "ci95": [
+       0.0035076739149801574,
+       0.007109015678555457
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "per_season": {
+      "2019": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.009794621217573246,
+       "minus_counterpart": 0.009794621217573246
+      },
+      "2020": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.005194659390000296,
+       "minus_counterpart": 0.005194659390000296
+      },
+      "2021": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.005089453670821607,
+       "minus_counterpart": 0.005089453670821607
+      },
+      "2022": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.007346129675007388,
+       "minus_counterpart": 0.007346129675007388
+      },
+      "2023": {
+       "best_prior_existing": "multinomial_l2:nhl_base",
+       "minus_best": 0.0015760390491880154,
+       "minus_counterpart": 0.0037635788940145634
+      },
+      "2024": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.00454662800759449,
+       "minus_counterpart": 0.00454662800759449
+      },
+      "2025": {
+       "best_prior_existing": "multinomial_l2:nhl_base",
+       "minus_best": 0.0008445308055442504,
+       "minus_counterpart": 0.004486146336651546
+      },
+      "2026": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.002032716046486362,
+       "minus_counterpart": 0.002032716046486362
+      }
+     }
+    },
+    "hgb_tuned:nhl_base:reg3": {
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.0150279776470686,
+      "ci95": [
+       0.011459862536647986,
+       0.018768323334505656
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "counterpart": "multinomial_l2:nhl_base",
+     "log_loss_minus_untuned_counterpart": {
+      "mean": 0.015719492946249924,
+      "ci95": [
+       0.012322788164426378,
+       0.019407672030045797
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "per_season": {
+      "2019": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.023907128580790398,
+       "minus_counterpart": 0.023049824075979858
+      },
+      "2020": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.02255044111511068,
+       "minus_counterpart": 0.022801911299047996
+      },
+      "2021": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.014258326585766052,
+       "minus_counterpart": 0.019251227412123144
+      },
+      "2022": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.013751593218801208,
+       "minus_counterpart": 0.018005661333135446
+      },
+      "2023": {
+       "best_prior_existing": "multinomial_l2:nhl_base",
+       "minus_best": 0.022453374044866827,
+       "minus_counterpart": 0.022453374044866827
+      },
+      "2024": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.012227435562451287,
+       "minus_counterpart": 0.014097720094908402
+      },
+      "2025": {
+       "best_prior_existing": "multinomial_l2:nhl_base",
+       "minus_best": 0.00781715749189402,
+       "minus_counterpart": 0.00781715749189402
+      },
+      "2026": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.004232956299566616,
+       "minus_counterpart": 0.0005020607939555141
+      }
+     }
+    }
+   },
+   "frozen_pooled": {
+    "without_tuned": {
+     "0.35": {
+      "win_rate": 0.4759012916907654,
+      "decided": 10374,
+      "best_prior_single": 0.47619047619047616,
+      "all_member_average": 0.474937343358396
+     },
+     "0.40": {
+      "win_rate": 0.47721752647430293,
+      "decided": 10293,
+      "best_prior_single": 0.47721752647430293,
+      "all_member_average": 0.47527445836976584
+     },
+     "0.45": {
+      "win_rate": 0.5186062246278755,
+      "decided": 5912,
+      "best_prior_single": 0.5206359945872802,
+      "all_member_average": 0.5167456021650879
+     },
+     "0.50": {
+      "win_rate": 0.568838352796558,
+      "decided": 3254,
+      "best_prior_single": 0.5719114935464045,
+      "all_member_average": 0.5645359557467732
+     },
+     "0.55": {
+      "win_rate": 0.6015957446808511,
+      "decided": 1880,
+      "best_prior_single": 0.6095744680851064,
+      "all_member_average": 0.6053191489361702
+     },
+     "0.60": {
+      "win_rate": 0.6355661881977671,
+      "decided": 1254,
+      "best_prior_single": 0.6339712918660287,
+      "all_member_average": 0.6156299840510366
+     },
+     "0.65": {
+      "win_rate": 0.6834862385321101,
+      "decided": 218,
+      "best_prior_single": 0.6743119266055045,
+      "all_member_average": 0.6651376146788991
+     },
+     "0.70": {
+      "win_rate": 0.5,
+      "decided": 4,
+      "best_prior_single": 0.75,
+      "all_member_average": 0.75
+     }
+    },
+    "with_tuned": {
+     "0.35": {
+      "win_rate": 0.4747768723321692,
+      "decided": 10308,
+      "best_prior_single": 0.47729918509895225,
+      "all_member_average": 0.4743888242142026
+     },
+     "0.40": {
+      "win_rate": 0.4762043795620438,
+      "decided": 10275,
+      "best_prior_single": 0.4775669099756691,
+      "all_member_average": 0.4738686131386861
+     },
+     "0.45": {
+      "win_rate": 0.5259987954226059,
+      "decided": 4981,
+      "best_prior_single": 0.5245934551294921,
+      "all_member_average": 0.5235896406344107
+     },
+     "0.50": {
+      "win_rate": 0.5521561771561772,
+      "decided": 3432,
+      "best_prior_single": 0.5600233100233101,
+      "all_member_average": 0.5515734265734266
+     },
+     "0.55": {
+      "win_rate": 0.6059870550161812,
+      "decided": 2472,
+      "best_prior_single": 0.6209546925566343,
+      "all_member_average": 0.6047734627831716
+     },
+     "0.60": {
+      "win_rate": 0.6139489194499018,
+      "decided": 1018,
+      "best_prior_single": 0.6316306483300589,
+      "all_member_average": 0.6365422396856582
+     },
+     "0.65": {
+      "win_rate": 0.6709677419354839,
+      "decided": 310,
+      "best_prior_single": 0.667741935483871,
+      "all_member_average": 0.6709677419354839
+     },
+     "0.70": {
+      "win_rate": 0.5,
+      "decided": 4,
+      "best_prior_single": 0.75,
+      "all_member_average": 0.75
+     }
+    }
+   },
+   "qualified": {
+    "without_tuned": [],
+    "with_tuned": []
+   },
+   "frozen_rules_with_tuned_member": [
+    {
+     "assess_season": 2019,
+     "rule": "unanimous_min|hgb_tuned:nhl_base:goals+hgb_tuned:nhl_base:reg3",
+     "threshold": 0.55,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 54,
+      "win_rate": 0.5370370370370371
+     },
+     "without": {
+      "rule": "single|hgb_tuned:nhl_base:reg3",
+      "decided": 302,
+      "win_rate": 0.44370860927152317
+     }
+    },
+    {
+     "assess_season": 2019,
+     "rule": "unanimous_min|hgb_tuned:nhl_base:goals+hgb_tuned:nhl_base:reg3",
+     "threshold": 0.55,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 54,
+      "win_rate": 0.5370370370370371
+     },
+     "without": {
+      "rule": "single|hgb_tuned:nhl_base:goals",
+      "decided": 65,
+      "win_rate": 0.5384615384615384
+     }
+    },
+    {
+     "assess_season": 2019,
+     "rule": "avg|hgb_tuned:nhl_base:reg3+multinomial_l2:nhl_base",
+     "threshold": 0.5,
+     "why": "top point lift",
+     "with": {
+      "decided": 468,
+      "win_rate": 0.49572649572649574
+     },
+     "without": {
+      "rule": "single|multinomial_l2:nhl_base",
+      "decided": 415,
+      "win_rate": 0.5349397590361445
+     }
+    },
+    {
+     "assess_season": 2019,
+     "rule": "avg|goals_poisson+goals_draw+goals_glm+hgb_tuned:nhl_base:goals+hgb_tuned:nhl_base:reg3+multinomial_l2:nhl_base",
+     "threshold": 0.35,
+     "why": "best lift at \u22650.35",
+     "with": {
+      "decided": 1358,
+      "win_rate": 0.46023564064801176
+     },
+     "without": {
+      "rule": "avg|goals_poisson+goals_draw+goals_glm+hgb_tuned:nhl_base:reg3+multinomial_l2:nhl_base",
+      "decided": 1358,
+      "win_rate": 0.46023564064801176
+     }
+    },
+    {
+     "assess_season": 2019,
+     "rule": "avg|goals_poisson+goals_draw+goals_glm+hgb_tuned:nhl_base:goals+hgb_tuned:nhl_base:reg3+multinomial_l2:nhl_base",
+     "threshold": 0.35,
+     "why": "best lift at \u22650.35",
+     "with": {
+      "decided": 1358,
+      "win_rate": 0.46023564064801176
+     },
+     "without": {
+      "rule": "avg|goals_poisson+goals_draw+goals_glm+hgb_tuned:nhl_base:goals+multinomial_l2:nhl_base",
+      "decided": 1358,
+      "win_rate": 0.4653902798232695
+     }
+    },
+    {
+     "assess_season": 2019,
+     "rule": "avg|goals_poisson+goals_draw+hgb_tuned:nhl_base:reg3+multinomial_l2:nhl_base+poisson_draw:nhl_base",
+     "threshold": 0.4,
+     "why": "best lift at \u22650.40",
+     "with": {
+      "decided": 1276,
+      "win_rate": 0.4647335423197492
+     },
+     "without": {
+      "rule": "avg|goals_poisson+goals_draw+multinomial_l2:nhl_base+poisson_draw:nhl_base",
+      "decided": 1288,
+      "win_rate": 0.4720496894409938
+     }
+    },
+    {
+     "assess_season": 2019,
+     "rule": "unanimous_min|hgb_tuned:nhl_base:reg3+multinomial_l2:nhl_base+poisson_draw:nhl_base",
+     "threshold": 0.45,
+     "why": "best lift at \u22650.45",
+     "with": {
+      "decided": 431,
+      "win_rate": 0.5290023201856149
+     },
+     "without": {
+      "rule": "unanimous_min|multinomial_l2:nhl_base+poisson_draw:nhl_base",
+      "decided": 543,
+      "win_rate": 0.5193370165745856
+     }
+    },
+    {
+     "assess_season": 2019,
+     "rule": "single|hgb_tuned:nhl_base:reg3",
+     "threshold": 0.6,
+     "why": "best lift at \u22650.60",
+     "with": {
+      "decided": 116,
+      "win_rate": 0.43103448275862066
+     },
+     "without": null
+    },
+    {
+     "assess_season": 2020,
+     "rule": "unanimous_min|hgb_tuned:nhl_base:reg3+poisson_draw:nhl_base",
+     "threshold": 0.45,
+     "why": "best lift at \u22650.45",
+     "with": {
+      "decided": 425,
+      "win_rate": 0.5270588235294118
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 519,
+      "win_rate": 0.5048169556840078
+     }
+    },
+    {
+     "assess_season": 2020,
+     "rule": "avg|goals_glm+hgb_tuned:nhl_base:goals",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 35,
+      "win_rate": 0.6857142857142857
+     },
+     "without": {
+      "rule": "single|goals_glm",
+      "decided": 53,
+      "win_rate": 0.6226415094339622
+     }
+    },
+    {
+     "assess_season": 2021,
+     "rule": "avg|goals_poisson+goals_glm+hgb_tuned:nhl_base:reg3+multinomial_l2:nhl_base+poisson_draw:nhl_base",
+     "threshold": 0.55,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 129,
+      "win_rate": 0.627906976744186
+     },
+     "without": {
+      "rule": "avg|goals_poisson+goals_glm+multinomial_l2:nhl_base+poisson_draw:nhl_base",
+      "decided": 104,
+      "win_rate": 0.6634615384615384
+     }
+    },
+    {
+     "assess_season": 2021,
+     "rule": "majority|goals_draw+hgb_tuned:nhl_base:goals+multinomial_l2:nhl_base+poisson_draw:nhl_base",
+     "threshold": 0.35,
+     "why": "best lift at \u22650.35",
+     "with": {
+      "decided": 886,
+      "win_rate": 0.4762979683972912
+     },
+     "without": {
+      "rule": "majority|goals_draw+multinomial_l2:nhl_base+poisson_draw:nhl_base",
+      "decided": 952,
+      "win_rate": 0.4726890756302521
+     }
+    },
+    {
+     "assess_season": 2021,
+     "rule": "unanimous_min|hgb_tuned:nhl_base:reg3+poisson_draw:nhl_base",
+     "threshold": 0.45,
+     "why": "best lift at \u22650.45",
+     "with": {
+      "decided": 385,
+      "win_rate": 0.5454545454545454
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 460,
+      "win_rate": 0.5347826086956522
+     }
+    },
+    {
+     "assess_season": 2021,
+     "rule": "avg|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 91,
+      "win_rate": 0.6813186813186813
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 59,
+      "win_rate": 0.7288135593220338
+     }
+    },
+    {
+     "assess_season": 2022,
+     "rule": "avg|goals_glm+hgb_tuned:nhl_base:goals",
+     "threshold": 0.55,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 188,
+      "win_rate": 0.6223404255319149
+     },
+     "without": {
+      "rule": "single|goals_glm",
+      "decided": 179,
+      "win_rate": 0.5977653631284916
+     }
+    },
+    {
+     "assess_season": 2022,
+     "rule": "unanimous_min|hgb_tuned:nhl_base:reg3+poisson_draw:nhl_base",
+     "threshold": 0.45,
+     "why": "best lift at \u22650.45",
+     "with": {
+      "decided": 679,
+      "win_rate": 0.5640648011782032
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 785,
+      "win_rate": 0.554140127388535
+     }
+    },
+    {
+     "assess_season": 2022,
+     "rule": "single|hgb_tuned:nhl_base:reg3",
+     "threshold": 0.65,
+     "why": "best lift at \u22650.65",
+     "with": {
+      "decided": 97,
+      "win_rate": 0.6597938144329897
+     },
+     "without": null
+    },
+    {
+     "assess_season": 2023,
+     "rule": "avg|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.55,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 255,
+      "win_rate": 0.6235294117647059
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 209,
+      "win_rate": 0.6507177033492823
+     }
+    },
+    {
+     "assess_season": 2023,
+     "rule": "avg|goals_glm+hgb_tuned:nhl_base:reg3+multinomial_l2:nhl_base",
+     "threshold": 0.55,
+     "why": "top point lift",
+     "with": {
+      "decided": 384,
+      "win_rate": 0.5755208333333334
+     },
+     "without": {
+      "rule": "avg|goals_glm+multinomial_l2:nhl_base",
+      "decided": 326,
+      "win_rate": 0.6012269938650306
+     }
+    },
+    {
+     "assess_season": 2024,
+     "rule": "unanimous_min|hgb_tuned:nhl_base:reg3+poisson_draw:nhl_base",
+     "threshold": 0.45,
+     "why": "best lift at \u22650.45",
+     "with": {
+      "decided": 696,
+      "win_rate": 0.5459770114942529
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 779,
+      "win_rate": 0.5314505776636713
+     }
+    },
+    {
+     "assess_season": 2024,
+     "rule": "avg|hgb_tuned:nhl_base:reg3+multinomial_l2:nhl_base+poisson_draw:nhl_base",
+     "threshold": 0.5,
+     "why": "best lift at \u22650.50",
+     "with": {
+      "decided": 559,
+      "win_rate": 0.5652951699463328
+     },
+     "without": {
+      "rule": "avg|multinomial_l2:nhl_base+poisson_draw:nhl_base",
+      "decided": 536,
+      "win_rate": 0.5652985074626866
+     }
+    },
+    {
+     "assess_season": 2024,
+     "rule": "avg|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 219,
+      "win_rate": 0.639269406392694
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 222,
+      "win_rate": 0.6351351351351351
+     }
+    },
+    {
+     "assess_season": 2025,
+     "rule": "unanimous_min|hgb_tuned:nhl_base:goals+multinomial_l2:nhl_base+poisson_draw:nhl_base",
+     "threshold": 0.55,
+     "why": "top point lift",
+     "with": {
+      "decided": 128,
+      "win_rate": 0.5546875
+     },
+     "without": {
+      "rule": "unanimous_min|multinomial_l2:nhl_base+poisson_draw:nhl_base",
+      "decided": 153,
+      "win_rate": 0.5751633986928104
+     }
+    },
+    {
+     "assess_season": 2025,
+     "rule": "unanimous_min|goals_glm+hgb_tuned:nhl_base:goals+hgb_tuned:nhl_base:reg3",
+     "threshold": 0.6,
+     "why": "best lift at \u22650.60",
+     "with": {
+      "decided": 41,
+      "win_rate": 0.6585365853658537
+     },
+     "without": {
+      "rule": "unanimous_min|goals_glm+hgb_tuned:nhl_base:reg3",
+      "decided": 47,
+      "win_rate": 0.6382978723404256
+     }
+    },
+    {
+     "assess_season": 2025,
+     "rule": "unanimous_min|goals_glm+hgb_tuned:nhl_base:goals+hgb_tuned:nhl_base:reg3",
+     "threshold": 0.6,
+     "why": "best lift at \u22650.60",
+     "with": {
+      "decided": 41,
+      "win_rate": 0.6585365853658537
+     },
+     "without": {
+      "rule": "unanimous_min|goals_glm+hgb_tuned:nhl_base:goals",
+      "decided": 44,
+      "win_rate": 0.6590909090909091
+     }
+    },
+    {
+     "assess_season": 2026,
+     "rule": "majority|hgb_tuned:nhl_base:reg3+multinomial_l2:nhl_base+poisson_draw:nhl_base",
+     "threshold": 0.5,
+     "why": "top point lift",
+     "with": {
+      "decided": 376,
+      "win_rate": 0.5
+     },
+     "without": null
+    },
+    {
+     "assess_season": 2026,
+     "rule": "unanimous_min|hgb_tuned:nhl_base:reg3+poisson_draw:nhl_base",
+     "threshold": 0.45,
+     "why": "best lift at \u22650.45",
+     "with": {
+      "decided": 574,
+      "win_rate": 0.45818815331010454
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 645,
+      "win_rate": 0.4573643410852713
+     }
+    },
+    {
+     "assess_season": 2026,
+     "rule": "majority|goals_poisson+hgb_tuned:nhl_base:reg3+multinomial_l2:nhl_base",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 156,
+      "win_rate": 0.5384615384615384
+     },
+     "without": null
+    },
+    {
+     "assess_season": 2026,
+     "rule": "unanimous_min|goals_glm+hgb_tuned:nhl_base:goals+hgb_tuned:nhl_base:reg3",
+     "threshold": 0.6,
+     "why": "best lift at \u22650.60",
+     "with": {
+      "decided": 16,
+      "win_rate": 0.5625
+     },
+     "without": {
+      "rule": "unanimous_min|goals_glm+hgb_tuned:nhl_base:reg3",
+      "decided": 17,
+      "win_rate": 0.5294117647058824
+     }
+    },
+    {
+     "assess_season": 2026,
+     "rule": "unanimous_min|goals_glm+hgb_tuned:nhl_base:goals+hgb_tuned:nhl_base:reg3",
+     "threshold": 0.6,
+     "why": "best lift at \u22650.60",
+     "with": {
+      "decided": 16,
+      "win_rate": 0.5625
+     },
+     "without": {
+      "rule": "unanimous_min|goals_glm+hgb_tuned:nhl_base:goals",
+      "decided": 17,
+      "win_rate": 0.5294117647058824
+     }
+    }
+   ],
+   "registry_with_tuned": {
+    "selected_on_seasons": [
+     2018,
+     2019,
+     2020,
+     2021,
+     2022,
+     2023,
+     2024,
+     2025,
+     2026
+    ],
+    "best_single": "poisson_draw:nhl_base",
+    "bonferroni_count": 3280,
+    "rules": [
+     {
+      "group": "avg|multinomial_l2:nhl_base+poisson_draw:nhl_base",
+      "method": "avg",
+      "members": [
+       "multinomial_l2:nhl_base",
+       "poisson_draw:nhl_base"
+      ],
+      "threshold": 0.6,
+      "why": "highest accuracy (\u2265100 picks, \u22655%)",
+      "selection": {
+       "decided": 617,
+       "win_rate": 0.6482982171799028,
+       "lift": 0.0016207455429497752,
+       "lower": -0.11179909153168578
+      }
+     },
+     {
+      "group": "majority|hgb_tuned:nhl_base:reg3+multinomial_l2:nhl_base+poisson_draw:nhl_base",
+      "method": "majority",
+      "members": [
+       "hgb_tuned:nhl_base:reg3",
+       "multinomial_l2:nhl_base",
+       "poisson_draw:nhl_base"
+      ],
+      "threshold": 0.5,
+      "why": "top point lift",
+      "selection": {
+       "decided": 3957,
+       "win_rate": 0.5519332827899924,
+       "lift": 0.010361384887541125,
+       "lower": -0.03630303947302079
+      }
+     },
+     {
+      "group": "majority|goals_poisson+multinomial_l2:nhl_base+poisson_draw:nhl_base",
+      "method": "majority",
+      "members": [
+       "goals_poisson",
+       "multinomial_l2:nhl_base",
+       "poisson_draw:nhl_base"
+      ],
+      "threshold": 0.35,
+      "why": "best lift at \u22650.35",
+      "selection": {
+       "decided": 11870,
+       "win_rate": 0.47523167649536646,
+       "lift": 0.0016006739679865212,
+       "lower": -0.025426763120689307
+      }
+     },
+     {
+      "group": "majority|goals_poisson+multinomial_l2:nhl_base+poisson_draw:nhl_base",
+      "method": "majority",
+      "members": [
+       "goals_poisson",
+       "multinomial_l2:nhl_base",
+       "poisson_draw:nhl_base"
+      ],
+      "threshold": 0.4,
+      "why": "best lift at \u22650.40",
+      "selection": {
+       "decided": 11686,
+       "win_rate": 0.47663871298990246,
+       "lift": 0.0014547321581379613,
+       "lower": -0.025788672056769567
+      }
+     },
+     {
+      "group": "unanimous_min|hgb_tuned:nhl_base:reg3+multinomial_l2:nhl_base+poisson_draw:nhl_base",
+      "method": "unanimous_min",
+      "members": [
+       "hgb_tuned:nhl_base:reg3",
+       "multinomial_l2:nhl_base",
+       "poisson_draw:nhl_base"
+      ],
+      "threshold": 0.45,
+      "why": "best lift at \u22650.45",
+      "selection": {
+       "decided": 4993,
+       "win_rate": 0.5327458441818546,
+       "lift": 0.006208692169036634,
+       "lower": -0.03544425025840483
+      }
+     },
+     {
+      "group": "unanimous_min|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+      "method": "unanimous_min",
+      "members": [
+       "hgb_tuned:nhl_base:goals",
+       "poisson_draw:nhl_base"
+      ],
+      "threshold": 0.55,
+      "why": "best lift at \u22650.55",
+      "selection": {
+       "decided": 747,
+       "win_rate": 0.6331994645247657,
+       "lift": 0.0013386880856760541,
+       "lower": -0.10268209693775318
+      }
+     },
+     {
+      "group": "unanimous_min|goals_glm+hgb_tuned:nhl_base:reg3+poisson_draw:nhl_base",
+      "method": "unanimous_min",
+      "members": [
+       "goals_glm",
+       "hgb_tuned:nhl_base:reg3",
+       "poisson_draw:nhl_base"
+      ],
+      "threshold": 0.6,
+      "why": "best lift at \u22650.60",
+      "selection": {
+       "decided": 165,
+       "win_rate": 0.6909090909090909,
+       "lift": 0.030303030303030276,
+       "lower": -0.18447514273700164
+      }
+     },
+     {
+      "group": "avg|goals_glm+multinomial_l2:nhl_base",
+      "method": "avg",
+      "members": [
+       "goals_glm",
+       "multinomial_l2:nhl_base"
+      ],
+      "threshold": 0.65,
+      "why": "best lift at \u22650.65",
+      "selection": {
+       "decided": 158,
+       "win_rate": 0.7215189873417721,
+       "lift": 0.05696202531645567,
+       "lower": -0.1590073123394225
+      }
+     },
+     {
+      "group": "single|multinomial_l2:nhl_base",
+      "method": "single",
+      "members": [
+       "multinomial_l2:nhl_base"
+      ],
+      "threshold": 0.7,
+      "why": "best lift at \u22650.70",
+      "selection": {
+       "decided": 104,
+       "win_rate": 0.6923076923076923,
+       "lift": -0.009615384615384581,
+       "lower": -0.27530823406400523
+      }
+     }
+    ],
+    "note": "Selected on every historical season (exploratory); evaluated only prospectively from now on."
+   },
+   "configurations": 2272
+  },
+  "nhl:spread": {
+   "tuned_members": [
+    "hgb_tuned:nhl_base:goals"
+   ],
+   "games": 11870,
+   "seasons": [
+    2018,
+    2019,
+    2020,
+    2021,
+    2022,
+    2023,
+    2024,
+    2025,
+    2026
+   ],
+   "alone": {
+    "hgb_tuned:nhl_base:goals": {
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.0039133134304024045,
+      "ci95": [
+       0.002413901436044475,
+       0.005435057694167182
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "counterpart": "poisson_draw:nhl_base",
+     "log_loss_minus_untuned_counterpart": {
+      "mean": 0.0039133134304024045,
+      "ci95": [
+       0.002413901436044475,
+       0.005435057694167182
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "per_season": {
+      "2019": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.004866433155937713,
+       "minus_counterpart": 0.004866433155937713
+      },
+      "2020": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.004163197859564437,
+       "minus_counterpart": 0.004163197859564437
+      },
+      "2021": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": -0.0004007650486646524,
+       "minus_counterpart": -0.0004007650486646524
+      },
+      "2022": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.008259899999816711,
+       "minus_counterpart": 0.008259899999816711
+      },
+      "2023": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.0023400082031308656,
+       "minus_counterpart": 0.0023400082031308656
+      },
+      "2024": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.004452589967543829,
+       "minus_counterpart": 0.004452589967543829
+      },
+      "2025": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.004016012453633613,
+       "minus_counterpart": 0.004016012453633613
+      },
+      "2026": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.0022808208512101486,
+       "minus_counterpart": 0.0022808208512101486
+      }
+     }
+    }
+   },
+   "frozen_pooled": {
+    "without_tuned": {
+     "0.50": {
+      "win_rate": 0.5680456490727532,
+      "decided": 10515,
+      "best_prior_single": 0.5680456490727532,
+      "all_member_average": 0.5621493105087969
+     },
+     "0.55": {
+      "win_rate": 0.6025910364145658,
+      "decided": 5712,
+      "best_prior_single": 0.6053921568627451,
+      "all_member_average": 0.5947128851540616
+     },
+     "0.60": {
+      "win_rate": 0.6297935103244838,
+      "decided": 2034,
+      "best_prior_single": 0.6376597836774828,
+      "all_member_average": 0.6204523107177975
+     },
+     "0.65": {
+      "win_rate": 0.6980108499095841,
+      "decided": 553,
+      "best_prior_single": 0.7142857142857143,
+      "all_member_average": 0.6690777576853526
+     }
+    },
+    "with_tuned": {
+     "0.50": {
+      "win_rate": 0.5671897289586305,
+      "decided": 10515,
+      "best_prior_single": 0.5680456490727532,
+      "all_member_average": 0.5622444127436995
+     },
+     "0.55": {
+      "win_rate": 0.6039456936784048,
+      "decided": 4714,
+      "best_prior_single": 0.6035214255409419,
+      "all_member_average": 0.5982180738226559
+     },
+     "0.60": {
+      "win_rate": 0.631021897810219,
+      "decided": 2740,
+      "best_prior_single": 0.6368613138686131,
+      "all_member_average": 0.6153284671532847
+     },
+     "0.65": {
+      "win_rate": 0.694620253164557,
+      "decided": 632,
+      "best_prior_single": 0.7120253164556962,
+      "all_member_average": 0.6550632911392406
+     },
+     "0.70": {
+      "win_rate": 0.7424242424242424,
+      "decided": 66,
+      "best_prior_single": 0.803030303030303,
+      "all_member_average": 0.7878787878787878
+     }
+    }
+   },
+   "qualified": {
+    "without_tuned": [],
+    "with_tuned": []
+   },
+   "frozen_rules_with_tuned_member": [
+    {
+     "assess_season": 2019,
+     "rule": "unanimous_min|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.55,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 610,
+      "win_rate": 0.6114754098360655
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 756,
+      "win_rate": 0.6044973544973545
+     }
+    },
+    {
+     "assess_season": 2019,
+     "rule": "unanimous_min|goals_poisson+hgb_tuned:nhl_base:goals",
+     "threshold": 0.6,
+     "why": "top point lift",
+     "with": {
+      "decided": 157,
+      "win_rate": 0.5605095541401274
+     },
+     "without": {
+      "rule": "single|goals_poisson",
+      "decided": 231,
+      "win_rate": 0.5541125541125541
+     }
+    },
+    {
+     "assess_season": 2019,
+     "rule": "avg|goals_glm+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.5,
+     "why": "best lift at \u22650.50",
+     "with": {
+      "decided": 1358,
+      "win_rate": 0.5699558173784978
+     },
+     "without": {
+      "rule": "avg|goals_glm+poisson_draw:nhl_base",
+      "decided": 1358,
+      "win_rate": 0.56480117820324
+     }
+    },
+    {
+     "assess_season": 2020,
+     "rule": "unanimous_min|goals_glm+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.55,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 456,
+      "win_rate": 0.6206140350877193
+     },
+     "without": {
+      "rule": "unanimous_min|goals_glm+poisson_draw:nhl_base",
+      "decided": 519,
+      "win_rate": 0.6184971098265896
+     }
+    },
+    {
+     "assess_season": 2020,
+     "rule": "avg|goals_glm+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.5,
+     "why": "best lift at \u22650.50",
+     "with": {
+      "decided": 1212,
+      "win_rate": 0.5495049504950495
+     },
+     "without": {
+      "rule": "avg|goals_glm+poisson_draw:nhl_base",
+      "decided": 1212,
+      "win_rate": 0.556930693069307
+     }
+    },
+    {
+     "assess_season": 2020,
+     "rule": "avg|goals_draw+goals_glm+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.6,
+     "why": "best lift at \u22650.60",
+     "with": {
+      "decided": 219,
+      "win_rate": 0.6210045662100456
+     },
+     "without": {
+      "rule": "avg|goals_draw+goals_glm+poisson_draw:nhl_base",
+      "decided": 196,
+      "win_rate": 0.6326530612244898
+     }
+    },
+    {
+     "assess_season": 2021,
+     "rule": "avg|goals_poisson+hgb_tuned:nhl_base:goals",
+     "threshold": 0.6,
+     "why": "top point lift",
+     "with": {
+      "decided": 231,
+      "win_rate": 0.6320346320346321
+     },
+     "without": {
+      "rule": "single|goals_poisson",
+      "decided": 176,
+      "win_rate": 0.5965909090909091
+     }
+    },
+    {
+     "assess_season": 2021,
+     "rule": "unanimous_min|goals_glm+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 401,
+      "win_rate": 0.6059850374064838
+     },
+     "without": {
+      "rule": "unanimous_min|goals_glm+poisson_draw:nhl_base",
+      "decided": 433,
+      "win_rate": 0.6073903002309469
+     }
+    },
+    {
+     "assess_season": 2022,
+     "rule": "avg|goals_poisson+hgb_tuned:nhl_base:goals",
+     "threshold": 0.6,
+     "why": "top point lift",
+     "with": {
+      "decided": 358,
+      "win_rate": 0.611731843575419
+     },
+     "without": {
+      "rule": "single|goals_poisson",
+      "decided": 280,
+      "win_rate": 0.625
+     }
+    },
+    {
+     "assess_season": 2022,
+     "rule": "unanimous_min|goals_glm+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 595,
+      "win_rate": 0.6252100840336134
+     },
+     "without": {
+      "rule": "unanimous_min|goals_glm+poisson_draw:nhl_base",
+      "decided": 686,
+      "win_rate": 0.6282798833819242
+     }
+    },
+    {
+     "assess_season": 2023,
+     "rule": "unanimous_min|goals_glm+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 599,
+      "win_rate": 0.5993322203672788
+     },
+     "without": {
+      "rule": "unanimous_min|goals_glm+poisson_draw:nhl_base",
+      "decided": 702,
+      "win_rate": 0.6011396011396012
+     }
+    },
+    {
+     "assess_season": 2023,
+     "rule": "single|hgb_tuned:nhl_base:goals",
+     "threshold": 0.7,
+     "why": "best lift at \u22650.70",
+     "with": {
+      "decided": 33,
+      "win_rate": 0.7272727272727273
+     },
+     "without": null
+    },
+    {
+     "assess_season": 2024,
+     "rule": "unanimous_min|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 725,
+      "win_rate": 0.5986206896551725
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 825,
+      "win_rate": 0.5987878787878788
+     }
+    },
+    {
+     "assess_season": 2024,
+     "rule": "single|hgb_tuned:nhl_base:goals",
+     "threshold": 0.7,
+     "why": "best lift at \u22650.70",
+     "with": {
+      "decided": 11,
+      "win_rate": 0.6363636363636364
+     },
+     "without": null
+    },
+    {
+     "assess_season": 2025,
+     "rule": "single|hgb_tuned:nhl_base:goals",
+     "threshold": 0.7,
+     "why": "best lift at \u22650.70",
+     "with": {
+      "decided": 6,
+      "win_rate": 0.6666666666666666
+     },
+     "without": null
+    },
+    {
+     "assess_season": 2026,
+     "rule": "unanimous_min|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 648,
+      "win_rate": 0.5848765432098766
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 741,
+      "win_rate": 0.5775978407557355
+     }
+    },
+    {
+     "assess_season": 2026,
+     "rule": "single|hgb_tuned:nhl_base:goals",
+     "threshold": 0.7,
+     "why": "best lift at \u22650.70",
+     "with": {
+      "decided": 16,
+      "win_rate": 0.875
+     },
+     "without": null
+    }
+   ],
+   "registry_with_tuned": {
+    "selected_on_seasons": [
+     2018,
+     2019,
+     2020,
+     2021,
+     2022,
+     2023,
+     2024,
+     2025,
+     2026
+    ],
+    "best_single": "poisson_draw:nhl_base",
+    "bonferroni_count": 1443,
+    "rules": [
+     {
+      "group": "single|poisson_draw:nhl_base",
+      "method": "single",
+      "members": [
+       "poisson_draw:nhl_base"
+      ],
+      "threshold": 0.65,
+      "why": "highest accuracy (\u2265100 picks, \u22655%)",
+      "selection": {
+       "decided": 670,
+       "win_rate": 0.6835820895522388,
+       "lift": 0.0,
+       "lower": -0.10109788027448909
+      }
+     },
+     {
+      "group": "majority|goals_poisson+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+      "method": "majority",
+      "members": [
+       "goals_poisson",
+       "hgb_tuned:nhl_base:goals",
+       "poisson_draw:nhl_base"
+      ],
+      "threshold": 0.6,
+      "why": "top point lift",
+      "selection": {
+       "decided": 2705,
+       "win_rate": 0.6280961182994454,
+       "lift": 0.0022181146025878062,
+       "lower": -0.050100958975876825
+      }
+     },
+     {
+      "group": "single|poisson_draw:nhl_base",
+      "method": "single",
+      "members": [
+       "poisson_draw:nhl_base"
+      ],
+      "threshold": 0.5,
+      "why": "best lift at \u22650.50",
+      "selection": {
+       "decided": 11870,
+       "win_rate": 0.5696714406065712,
+       "lift": 0.0,
+       "lower": -0.02557057732265943
+      }
+     },
+     {
+      "group": "unanimous_min|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+      "method": "unanimous_min",
+      "members": [
+       "hgb_tuned:nhl_base:goals",
+       "poisson_draw:nhl_base"
+      ],
+      "threshold": 0.55,
+      "why": "best lift at \u22650.55",
+      "selection": {
+       "decided": 5776,
+       "win_rate": 0.6073407202216067,
+       "lift": 0.0010387811634349209,
+       "lower": -0.03512427620108369
+      }
+     },
+     {
+      "group": "stack|stack_l1",
+      "method": "stack",
+      "members": [
+       "stack_l1"
+      ],
+      "threshold": 0.65,
+      "why": "best lift at \u22650.65",
+      "selection": {
+       "decided": 113,
+       "win_rate": 0.7433628318584071,
+       "lift": 0.10619469026548678,
+       "lower": -0.1369331626803423
+      }
+     },
+     {
+      "group": "single|hgb_tuned:nhl_base:goals",
+      "method": "single",
+      "members": [
+       "hgb_tuned:nhl_base:goals"
+      ],
+      "threshold": 0.7,
+      "why": "best lift at \u22650.70",
+      "selection": {
+       "decided": 210,
+       "win_rate": 0.6619047619047619,
+       "lift": -0.033333333333333326,
+       "lower": -0.21455379641164998
+      }
+     }
+    ],
+    "note": "Selected on every historical season (exploratory); evaluated only prospectively from now on."
+   },
+   "configurations": 621
+  },
+  "nhl:total": {
+   "tuned_members": [
+    "hgb_tuned:nhl_base:goals"
+   ],
+   "games": 11870,
+   "seasons": [
+    2018,
+    2019,
+    2020,
+    2021,
+    2022,
+    2023,
+    2024,
+    2025,
+    2026
+   ],
+   "alone": {
+    "hgb_tuned:nhl_base:goals": {
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.0013345443710096922,
+      "ci95": [
+       -0.0005587008862780005,
+       0.003201988156517361
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "counterpart": "poisson_draw:nhl_base",
+     "log_loss_minus_untuned_counterpart": {
+      "mean": -0.0004230173416891513,
+      "ci95": [
+       -0.002088275873512576,
+       0.001210698543017836
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "per_season": {
+      "2019": {
+       "best_prior_existing": "goals_poisson",
+       "minus_best": 0.0035057557621134736,
+       "minus_counterpart": -0.002025029698355284
+      },
+      "2020": {
+       "best_prior_existing": "goals_poisson",
+       "minus_best": -0.0015961043237964418,
+       "minus_counterpart": -0.004069367739942833
+      },
+      "2021": {
+       "best_prior_existing": "goals_draw",
+       "minus_best": 0.0031577335450532636,
+       "minus_counterpart": 0.004661337636186425
+      },
+      "2022": {
+       "best_prior_existing": "goals_draw",
+       "minus_best": 0.0022783154793416757,
+       "minus_counterpart": -0.0008280295646563318
+      },
+      "2023": {
+       "best_prior_existing": "goals_draw",
+       "minus_best": 0.005690296289564491,
+       "minus_counterpart": 0.001493431453269419
+      },
+      "2024": {
+       "best_prior_existing": "goals_draw",
+       "minus_best": 0.0011029057126885123,
+       "minus_counterpart": 0.0016823918159597627
+      },
+      "2025": {
+       "best_prior_existing": "goals_draw",
+       "minus_best": -0.0025035867106169164,
+       "minus_counterpart": -0.0014976486546418965
+      },
+      "2026": {
+       "best_prior_existing": "goals_poisson",
+       "minus_best": -0.000718905829628443,
+       "minus_counterpart": -0.0017187425279638982
+      }
+     }
+    }
+   },
+   "frozen_pooled": {
+    "without_tuned": {
+     "0.50": {
+      "win_rate": 0.5300998573466477,
+      "decided": 10515,
+      "best_prior_single": 0.5295292439372326,
+      "all_member_average": 0.5300047551117452
+     },
+     "0.55": {
+      "win_rate": 0.5656158357771262,
+      "decided": 2728,
+      "best_prior_single": 0.5557184750733137,
+      "all_member_average": 0.5414222873900293
+     },
+     "0.60": {
+      "win_rate": 0.7306397306397306,
+      "decided": 297,
+      "best_prior_single": 0.6666666666666666,
+      "all_member_average": 0.734006734006734
+     },
+     "0.65": {
+      "win_rate": 0.6702127659574468,
+      "decided": 188,
+      "best_prior_single": 0.6595744680851063,
+      "all_member_average": 0.7021276595744681
+     }
+    },
+    "with_tuned": {
+     "0.50": {
+      "win_rate": 0.52943414170233,
+      "decided": 10515,
+      "best_prior_single": 0.5295292439372326,
+      "all_member_average": 0.5295292439372326
+     },
+     "0.55": {
+      "win_rate": 0.558693733451015,
+      "decided": 1133,
+      "best_prior_single": 0.5578111209179171,
+      "all_member_average": 0.5622241835834069
+     },
+     "0.60": {
+      "win_rate": 0.7396825396825397,
+      "decided": 315,
+      "best_prior_single": 0.6698412698412698,
+      "all_member_average": 0.7365079365079366
+     },
+     "0.65": {
+      "win_rate": 0.6781609195402298,
+      "decided": 174,
+      "best_prior_single": 0.6781609195402298,
+      "all_member_average": 0.7011494252873564
+     }
+    }
+   },
+   "qualified": {
+    "without_tuned": [],
+    "with_tuned": []
+   },
+   "frozen_rules_with_tuned_member": [
+    {
+     "assess_season": 2019,
+     "rule": "majority|goals_poisson+goals_draw+goals_glm+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.6,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 50,
+      "win_rate": 0.62
+     },
+     "without": {
+      "rule": "majority|goals_poisson+goals_draw+goals_glm+poisson_draw:nhl_base",
+      "decided": 25,
+      "win_rate": 0.72
+     }
+    },
+    {
+     "assess_season": 2019,
+     "rule": "unanimous_min|goals_poisson+goals_glm+hgb_tuned:nhl_base:goals",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 116,
+      "win_rate": 0.6551724137931034
+     },
+     "without": {
+      "rule": "unanimous_min|goals_poisson+goals_glm",
+      "decided": 155,
+      "win_rate": 0.5935483870967742
+     }
+    },
+    {
+     "assess_season": 2020,
+     "rule": "majority|goals_poisson+goals_draw+goals_glm+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.6,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 14,
+      "win_rate": 0.5
+     },
+     "without": {
+      "rule": "majority|goals_poisson+goals_draw+goals_glm+poisson_draw:nhl_base",
+      "decided": 10,
+      "win_rate": 0.4
+     }
+    },
+    {
+     "assess_season": 2020,
+     "rule": "avg|goals_poisson+goals_draw+goals_glm+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.6,
+     "why": "best lift at \u22650.60",
+     "with": {
+      "decided": 14,
+      "win_rate": 0.5
+     },
+     "without": {
+      "rule": "avg|goals_poisson+goals_draw+goals_glm+poisson_draw:nhl_base",
+      "decided": 10,
+      "win_rate": 0.4
+     }
+    },
+    {
+     "assess_season": 2020,
+     "rule": "avg|goals_glm+hgb_tuned:nhl_base:goals",
+     "threshold": 0.65,
+     "why": "best lift at \u22650.65",
+     "with": {
+      "decided": 8,
+      "win_rate": 0.375
+     },
+     "without": {
+      "rule": "single|goals_glm",
+      "decided": 20,
+      "win_rate": 0.45
+     }
+    },
+    {
+     "assess_season": 2021,
+     "rule": "majority|goals_draw+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.6,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 30,
+      "win_rate": 0.7666666666666667
+     },
+     "without": null
+    },
+    {
+     "assess_season": 2021,
+     "rule": "majority|goals_poisson+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.6,
+     "why": "top point lift",
+     "with": {
+      "decided": 29,
+      "win_rate": 0.7931034482758621
+     },
+     "without": null
+    },
+    {
+     "assess_season": 2021,
+     "rule": "avg|goals_poisson+hgb_tuned:nhl_base:goals",
+     "threshold": 0.5,
+     "why": "best lift at \u22650.50",
+     "with": {
+      "decided": 952,
+      "win_rate": 0.5367647058823529
+     },
+     "without": {
+      "rule": "single|goals_poisson",
+      "decided": 952,
+      "win_rate": 0.5430672268907563
+     }
+    },
+    {
+     "assess_season": 2021,
+     "rule": "unanimous_min|goals_poisson+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 113,
+      "win_rate": 0.584070796460177
+     },
+     "without": {
+      "rule": "unanimous_min|goals_poisson+poisson_draw:nhl_base",
+      "decided": 153,
+      "win_rate": 0.5620915032679739
+     }
+    },
+    {
+     "assess_season": 2021,
+     "rule": "avg|goals_poisson+goals_draw+goals_glm+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.6,
+     "why": "best lift at \u22650.60",
+     "with": {
+      "decided": 26,
+      "win_rate": 0.8461538461538461
+     },
+     "without": {
+      "rule": "avg|goals_poisson+goals_draw+goals_glm+poisson_draw:nhl_base",
+      "decided": 23,
+      "win_rate": 0.8695652173913043
+     }
+    },
+    {
+     "assess_season": 2021,
+     "rule": "avg|goals_glm+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.65,
+     "why": "best lift at \u22650.65",
+     "with": {
+      "decided": 20,
+      "win_rate": 0.85
+     },
+     "without": {
+      "rule": "avg|goals_glm+poisson_draw:nhl_base",
+      "decided": 23,
+      "win_rate": 0.8695652173913043
+     }
+    },
+    {
+     "assess_season": 2022,
+     "rule": "majority|goals_poisson+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.6,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 38,
+      "win_rate": 0.8157894736842105
+     },
+     "without": null
+    },
+    {
+     "assess_season": 2022,
+     "rule": "majority|goals_draw+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.6,
+     "why": "top point lift",
+     "with": {
+      "decided": 39,
+      "win_rate": 0.8205128205128205
+     },
+     "without": null
+    },
+    {
+     "assess_season": 2022,
+     "rule": "avg|goals_poisson+hgb_tuned:nhl_base:goals",
+     "threshold": 0.5,
+     "why": "best lift at \u22650.50",
+     "with": {
+      "decided": 1401,
+      "win_rate": 0.5417558886509636
+     },
+     "without": {
+      "rule": "single|goals_poisson",
+      "decided": 1401,
+      "win_rate": 0.5339043540328337
+     }
+    },
+    {
+     "assess_season": 2022,
+     "rule": "unanimous_min|goals_poisson+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 95,
+      "win_rate": 0.6631578947368421
+     },
+     "without": {
+      "rule": "unanimous_min|goals_poisson+poisson_draw:nhl_base",
+      "decided": 114,
+      "win_rate": 0.6140350877192983
+     }
+    },
+    {
+     "assess_season": 2022,
+     "rule": "majority|goals_poisson+goals_draw+goals_glm+hgb_tuned:nhl_base:goals",
+     "threshold": 0.6,
+     "why": "best lift at \u22650.60",
+     "with": {
+      "decided": 36,
+      "win_rate": 0.8333333333333334
+     },
+     "without": {
+      "rule": "majority|goals_poisson+goals_draw+goals_glm",
+      "decided": 34,
+      "win_rate": 0.8235294117647058
+     }
+    },
+    {
+     "assess_season": 2022,
+     "rule": "avg|goals_glm+hgb_tuned:nhl_base:goals",
+     "threshold": 0.65,
+     "why": "best lift at \u22650.65",
+     "with": {
+      "decided": 39,
+      "win_rate": 0.8205128205128205
+     },
+     "without": {
+      "rule": "single|goals_glm",
+      "decided": 39,
+      "win_rate": 0.8205128205128205
+     }
+    },
+    {
+     "assess_season": 2023,
+     "rule": "avg|goals_poisson+hgb_tuned:nhl_base:goals",
+     "threshold": 0.5,
+     "why": "best lift at \u22650.50",
+     "with": {
+      "decided": 1400,
+      "win_rate": 0.5157142857142857
+     },
+     "without": {
+      "rule": "single|goals_poisson",
+      "decided": 1400,
+      "win_rate": 0.5321428571428571
+     }
+    },
+    {
+     "assess_season": 2023,
+     "rule": "unanimous_min|goals_poisson+goals_draw+hgb_tuned:nhl_base:goals",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 58,
+      "win_rate": 0.5689655172413793
+     },
+     "without": {
+      "rule": "unanimous_min|goals_poisson+goals_draw",
+      "decided": 141,
+      "win_rate": 0.6170212765957447
+     }
+    },
+    {
+     "assess_season": 2024,
+     "rule": "majority|goals_poisson+goals_draw+hgb_tuned:nhl_base:goals",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 213,
+      "win_rate": 0.5164319248826291
+     },
+     "without": null
+    },
+    {
+     "assess_season": 2024,
+     "rule": "avg|goals_poisson+goals_draw+goals_glm+hgb_tuned:nhl_base:goals",
+     "threshold": 0.6,
+     "why": "best lift at \u22650.60",
+     "with": {
+      "decided": 0,
+      "win_rate": null
+     },
+     "without": {
+      "rule": "avg|goals_poisson+goals_draw+goals_glm",
+      "decided": 0,
+      "win_rate": null
+     }
+    },
+    {
+     "assess_season": 2025,
+     "rule": "avg|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.6,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 3,
+      "win_rate": 0.6666666666666666
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 0,
+      "win_rate": null
+     }
+    },
+    {
+     "assess_season": 2025,
+     "rule": "majority|goals_poisson+goals_draw+hgb_tuned:nhl_base:goals",
+     "threshold": 0.55,
+     "why": "top point lift",
+     "with": {
+      "decided": 205,
+      "win_rate": 0.5317073170731708
+     },
+     "without": null
+    },
+    {
+     "assess_season": 2025,
+     "rule": "avg|goals_draw+hgb_tuned:nhl_base:goals",
+     "threshold": 0.5,
+     "why": "best lift at \u22650.50",
+     "with": {
+      "decided": 1398,
+      "win_rate": 0.5507868383404864
+     },
+     "without": {
+      "rule": "single|goals_draw",
+      "decided": 1398,
+      "win_rate": 0.5400572246065808
+     }
+    },
+    {
+     "assess_season": 2026,
+     "rule": "avg|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.6,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 8,
+      "win_rate": 0.625
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 1,
+      "win_rate": 1.0
+     }
+    },
+    {
+     "assess_season": 2026,
+     "rule": "avg|goals_draw+hgb_tuned:nhl_base:goals",
+     "threshold": 0.5,
+     "why": "best lift at \u22650.50",
+     "with": {
+      "decided": 1394,
+      "win_rate": 0.5322812051649928
+     },
+     "without": {
+      "rule": "single|goals_draw",
+      "decided": 1394,
+      "win_rate": 0.5265423242467718
+     }
+    },
+    {
+     "assess_season": 2026,
+     "rule": "unanimous_min|goals_poisson+hgb_tuned:nhl_base:goals",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 69,
+      "win_rate": 0.5507246376811594
+     },
+     "without": {
+      "rule": "single|goals_poisson",
+      "decided": 169,
+      "win_rate": 0.5384615384615384
+     }
+    }
+   ],
+   "registry_with_tuned": {
+    "selected_on_seasons": [
+     2018,
+     2019,
+     2020,
+     2021,
+     2022,
+     2023,
+     2024,
+     2025,
+     2026
+    ],
+    "best_single": "goals_poisson",
+    "bonferroni_count": 1443,
+    "rules": [
+     {
+      "group": "avg|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+      "method": "avg",
+      "members": [
+       "hgb_tuned:nhl_base:goals",
+       "poisson_draw:nhl_base"
+      ],
+      "threshold": 0.6,
+      "why": "highest accuracy (\u2265100 picks, \u22655%)",
+      "selection": {
+       "decided": 616,
+       "win_rate": 0.6055194805194806,
+       "lift": 0.02759740259740262,
+       "lower": -0.08378820229359021
+      }
+     },
+     {
+      "group": "avg|goals_draw+hgb_tuned:nhl_base:goals",
+      "method": "avg",
+      "members": [
+       "goals_draw",
+       "hgb_tuned:nhl_base:goals"
+      ],
+      "threshold": 0.5,
+      "why": "best lift at \u22650.50",
+      "selection": {
+       "decided": 11870,
+       "win_rate": 0.5318449873631003,
+       "lift": 0.0029486099410278577,
+       "lower": -0.02282609397338316
+      }
+     },
+     {
+      "group": "unanimous_min|goals_poisson+hgb_tuned:nhl_base:goals",
+      "method": "unanimous_min",
+      "members": [
+       "goals_poisson",
+       "hgb_tuned:nhl_base:goals"
+      ],
+      "threshold": 0.55,
+      "why": "best lift at \u22650.55",
+      "selection": {
+       "decided": 1128,
+       "win_rate": 0.5824468085106383,
+       "lift": 0.02659574468085113,
+       "lower": -0.05633564378549828
+      }
+     },
+     {
+      "group": "majority|goals_poisson+goals_draw+goals_glm",
+      "method": "majority",
+      "members": [
+       "goals_poisson",
+       "goals_draw",
+       "goals_glm"
+      ],
+      "threshold": 0.6,
+      "why": "best lift at \u22650.60",
+      "selection": {
+       "decided": 134,
+       "win_rate": 0.7388059701492538,
+       "lift": 0.18656716417910446,
+       "lower": -0.04148401708339158
+      }
+     },
+     {
+      "group": "avg|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+      "method": "avg",
+      "members": [
+       "hgb_tuned:nhl_base:goals",
+       "poisson_draw:nhl_base"
+      ],
+      "threshold": 0.65,
+      "why": "best lift at \u22650.65",
+      "selection": {
+       "decided": 135,
+       "win_rate": 0.7111111111111111,
+       "lift": 0.16296296296296298,
+       "lower": -0.06753939534472925
+      }
+     }
+    ],
+    "note": "Selected on every historical season (exploratory); evaluated only prospectively from now on."
+   },
+   "configurations": 621
+  },
+  "nhl:team_total_home": {
+   "tuned_members": [
+    "hgb_tuned:nhl_base:goals"
+   ],
+   "games": 11870,
+   "seasons": [
+    2018,
+    2019,
+    2020,
+    2021,
+    2022,
+    2023,
+    2024,
+    2025,
+    2026
+   ],
+   "alone": {
+    "hgb_tuned:nhl_base:goals": {
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.00020070933320905348,
+      "ci95": [
+       -0.00221811820958846,
+       0.0026717410728355857
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "counterpart": "poisson_draw:nhl_base",
+     "log_loss_minus_untuned_counterpart": {
+      "mean": 0.0014860824812963156,
+      "ci95": [
+       -9.749879537070056e-05,
+       0.0031574069309078367
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "per_season": {
+      "2019": {
+       "best_prior_existing": "goals_draw",
+       "minus_best": 0.009171467423927663,
+       "minus_counterpart": 0.0025313292814829226
+      },
+      "2020": {
+       "best_prior_existing": "goals_poisson",
+       "minus_best": -0.003684974289655959,
+       "minus_counterpart": -0.003263316852668524
+      },
+      "2021": {
+       "best_prior_existing": "goals_poisson",
+       "minus_best": 0.003930773798121976,
+       "minus_counterpart": 0.005389446674395287
+      },
+      "2022": {
+       "best_prior_existing": "goals_poisson",
+       "minus_best": 0.00010127980460486905,
+       "minus_counterpart": 0.001852343596769341
+      },
+      "2023": {
+       "best_prior_existing": "goals_poisson",
+       "minus_best": 0.0019229207861621944,
+       "minus_counterpart": 0.0036128223847072135
+      },
+      "2024": {
+       "best_prior_existing": "goals_poisson",
+       "minus_best": -0.0026703763693057504,
+       "minus_counterpart": 0.0014494138615931578
+      },
+      "2025": {
+       "best_prior_existing": "goals_poisson",
+       "minus_best": -0.0010095802394344288,
+       "minus_counterpart": 0.000743214616173671
+      },
+      "2026": {
+       "best_prior_existing": "goals_poisson",
+       "minus_best": -0.005239859365043599,
+       "minus_counterpart": 0.0002092688383656581
+      }
+     }
+    }
+   },
+   "frozen_pooled": {
+    "without_tuned": {
+     "0.50": {
+      "win_rate": 0.5547004383828543,
+      "decided": 10265,
+      "best_prior_single": 0.5539210910862153,
+      "all_member_average": 0.5555772040915733
+     },
+     "0.55": {
+      "win_rate": 0.5892955674084973,
+      "decided": 5437,
+      "best_prior_single": 0.5828581938569064,
+      "all_member_average": 0.5909508920360493
+     },
+     "0.60": {
+      "win_rate": 0.6218398876404494,
+      "decided": 2848,
+      "best_prior_single": 0.5951544943820225,
+      "all_member_average": 0.6179775280898876
+     },
+     "0.65": {
+      "win_rate": 0.5900621118012422,
+      "decided": 483,
+      "best_prior_single": 0.6252587991718427,
+      "all_member_average": 0.6190476190476191
+     }
+    },
+    "with_tuned": {
+     "0.50": {
+      "win_rate": 0.5566829268292683,
+      "decided": 10250,
+      "best_prior_single": 0.5541463414634147,
+      "all_member_average": 0.5562926829268293
+     },
+     "0.55": {
+      "win_rate": 0.5874949248883475,
+      "decided": 4926,
+      "best_prior_single": 0.5836378400324808,
+      "all_member_average": 0.5933820544051969
+     },
+     "0.60": {
+      "win_rate": 0.6270270270270271,
+      "decided": 2775,
+      "best_prior_single": 0.5953153153153153,
+      "all_member_average": 0.6277477477477478
+     },
+     "0.65": {
+      "win_rate": 0.6125,
+      "decided": 560,
+      "best_prior_single": 0.6285714285714286,
+      "all_member_average": 0.6660714285714285
+     },
+     "0.70": {
+      "win_rate": 0.6739130434782609,
+      "decided": 92,
+      "best_prior_single": 0.6086956521739131,
+      "all_member_average": 0.6630434782608695
+     }
+    }
+   },
+   "qualified": {
+    "without_tuned": [],
+    "with_tuned": []
+   },
+   "frozen_rules_with_tuned_member": [
+    {
+     "assess_season": 2019,
+     "rule": "unanimous_min|goals_poisson+goals_draw+hgb_tuned:nhl_base:goals",
+     "threshold": 0.6,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 95,
+      "win_rate": 0.6947368421052632
+     },
+     "without": {
+      "rule": "unanimous_min|goals_poisson+goals_draw",
+      "decided": 197,
+      "win_rate": 0.6649746192893401
+     }
+    },
+    {
+     "assess_season": 2019,
+     "rule": "avg|goals_draw+hgb_tuned:nhl_base:goals",
+     "threshold": 0.6,
+     "why": "top point lift",
+     "with": {
+      "decided": 344,
+      "win_rate": 0.6511627906976745
+     },
+     "without": {
+      "rule": "single|goals_draw",
+      "decided": 259,
+      "win_rate": 0.6486486486486487
+     }
+    },
+    {
+     "assess_season": 2019,
+     "rule": "unanimous_min|goals_poisson+goals_glm+hgb_tuned:nhl_base:goals",
+     "threshold": 0.5,
+     "why": "best lift at \u22650.50",
+     "with": {
+      "decided": 1155,
+      "win_rate": 0.5792207792207792
+     },
+     "without": {
+      "rule": "unanimous_min|goals_poisson+goals_glm",
+      "decided": 1228,
+      "win_rate": 0.5781758957654723
+     }
+    },
+    {
+     "assess_season": 2020,
+     "rule": "unanimous_min|goals_poisson+goals_draw+hgb_tuned:nhl_base:goals",
+     "threshold": 0.6,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 86,
+      "win_rate": 0.6511627906976745
+     },
+     "without": {
+      "rule": "unanimous_min|goals_poisson+goals_draw",
+      "decided": 162,
+      "win_rate": 0.6049382716049383
+     }
+    },
+    {
+     "assess_season": 2020,
+     "rule": "avg|goals_poisson+hgb_tuned:nhl_base:goals",
+     "threshold": 0.6,
+     "why": "top point lift",
+     "with": {
+      "decided": 293,
+      "win_rate": 0.6552901023890785
+     },
+     "without": {
+      "rule": "single|goals_poisson",
+      "decided": 166,
+      "win_rate": 0.6144578313253012
+     }
+    },
+    {
+     "assess_season": 2020,
+     "rule": "unanimous_min|goals_poisson+goals_glm+hgb_tuned:nhl_base:goals",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 570,
+      "win_rate": 0.6175438596491228
+     },
+     "without": {
+      "rule": "unanimous_min|goals_poisson+goals_glm",
+      "decided": 689,
+      "win_rate": 0.6081277213352685
+     }
+    },
+    {
+     "assess_season": 2020,
+     "rule": "single|hgb_tuned:nhl_base:goals",
+     "threshold": 0.7,
+     "why": "best lift at \u22650.70",
+     "with": {
+      "decided": 19,
+      "win_rate": 0.8421052631578947
+     },
+     "without": null
+    },
+    {
+     "assess_season": 2021,
+     "rule": "avg|goals_draw+hgb_tuned:nhl_base:goals",
+     "threshold": 0.6,
+     "why": "top point lift",
+     "with": {
+      "decided": 211,
+      "win_rate": 0.6113744075829384
+     },
+     "without": {
+      "rule": "single|goals_draw",
+      "decided": 155,
+      "win_rate": 0.6
+     }
+    },
+    {
+     "assess_season": 2021,
+     "rule": "unanimous_min|goals_poisson+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 442,
+      "win_rate": 0.5950226244343891
+     },
+     "without": {
+      "rule": "unanimous_min|goals_poisson+poisson_draw:nhl_base",
+      "decided": 558,
+      "win_rate": 0.5985663082437276
+     }
+    },
+    {
+     "assess_season": 2021,
+     "rule": "avg|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.65,
+     "why": "best lift at \u22650.65",
+     "with": {
+      "decided": 25,
+      "win_rate": 0.72
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 3,
+      "win_rate": 1.0
+     }
+    },
+    {
+     "assess_season": 2021,
+     "rule": "single|hgb_tuned:nhl_base:goals",
+     "threshold": 0.7,
+     "why": "best lift at \u22650.70",
+     "with": {
+      "decided": 7,
+      "win_rate": 0.42857142857142855
+     },
+     "without": null
+    },
+    {
+     "assess_season": 2022,
+     "rule": "avg|goals_poisson+hgb_tuned:nhl_base:goals",
+     "threshold": 0.6,
+     "why": "top point lift",
+     "with": {
+      "decided": 311,
+      "win_rate": 0.5755627009646302
+     },
+     "without": {
+      "rule": "single|goals_poisson",
+      "decided": 162,
+      "win_rate": 0.5617283950617284
+     }
+    },
+    {
+     "assess_season": 2022,
+     "rule": "unanimous_min|goals_poisson+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 596,
+      "win_rate": 0.5570469798657718
+     },
+     "without": {
+      "rule": "unanimous_min|goals_poisson+poisson_draw:nhl_base",
+      "decided": 681,
+      "win_rate": 0.5580029368575624
+     }
+    },
+    {
+     "assess_season": 2022,
+     "rule": "avg|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.65,
+     "why": "best lift at \u22650.65",
+     "with": {
+      "decided": 81,
+      "win_rate": 0.654320987654321
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 44,
+      "win_rate": 0.6590909090909091
+     }
+    },
+    {
+     "assess_season": 2022,
+     "rule": "single|hgb_tuned:nhl_base:goals",
+     "threshold": 0.7,
+     "why": "best lift at \u22650.70",
+     "with": {
+      "decided": 29,
+      "win_rate": 0.6206896551724138
+     },
+     "without": null
+    },
+    {
+     "assess_season": 2023,
+     "rule": "avg|goals_poisson+hgb_tuned:nhl_base:goals",
+     "threshold": 0.6,
+     "why": "top point lift",
+     "with": {
+      "decided": 285,
+      "win_rate": 0.5929824561403508
+     },
+     "without": {
+      "rule": "single|goals_poisson",
+      "decided": 160,
+      "win_rate": 0.54375
+     }
+    },
+    {
+     "assess_season": 2023,
+     "rule": "avg|goals_poisson+hgb_tuned:nhl_base:goals",
+     "threshold": 0.5,
+     "why": "best lift at \u22650.50",
+     "with": {
+      "decided": 1400,
+      "win_rate": 0.5357142857142857
+     },
+     "without": {
+      "rule": "single|goals_poisson",
+      "decided": 1400,
+      "win_rate": 0.5378571428571428
+     }
+    },
+    {
+     "assess_season": 2023,
+     "rule": "unanimous_min|goals_draw+goals_glm+hgb_tuned:nhl_base:goals",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 539,
+      "win_rate": 0.5695732838589982
+     },
+     "without": {
+      "rule": "unanimous_min|goals_draw+goals_glm",
+      "decided": 690,
+      "win_rate": 0.5521739130434783
+     }
+    },
+    {
+     "assess_season": 2023,
+     "rule": "single|hgb_tuned:nhl_base:goals",
+     "threshold": 0.7,
+     "why": "best lift at \u22650.70",
+     "with": {
+      "decided": 17,
+      "win_rate": 0.7647058823529411
+     },
+     "without": null
+    },
+    {
+     "assess_season": 2024,
+     "rule": "avg|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.65,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 42,
+      "win_rate": 0.6666666666666666
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 26,
+      "win_rate": 0.6153846153846154
+     }
+    },
+    {
+     "assess_season": 2024,
+     "rule": "avg|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.5,
+     "why": "best lift at \u22650.50",
+     "with": {
+      "decided": 1400,
+      "win_rate": 0.5585714285714286
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 1400,
+      "win_rate": 0.5607142857142857
+     }
+    },
+    {
+     "assess_season": 2024,
+     "rule": "unanimous_min|goals_draw+goals_glm+hgb_tuned:nhl_base:goals",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 604,
+      "win_rate": 0.5927152317880795
+     },
+     "without": {
+      "rule": "unanimous_min|goals_draw+goals_glm",
+      "decided": 760,
+      "win_rate": 0.5855263157894737
+     }
+    },
+    {
+     "assess_season": 2024,
+     "rule": "unanimous_min|goals_poisson+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.6,
+     "why": "best lift at \u22650.60",
+     "with": {
+      "decided": 81,
+      "win_rate": 0.654320987654321
+     },
+     "without": {
+      "rule": "unanimous_min|goals_poisson+poisson_draw:nhl_base",
+      "decided": 124,
+      "win_rate": 0.6774193548387096
+     }
+    },
+    {
+     "assess_season": 2024,
+     "rule": "single|hgb_tuned:nhl_base:goals",
+     "threshold": 0.7,
+     "why": "best lift at \u22650.70",
+     "with": {
+      "decided": 13,
+      "win_rate": 0.5384615384615384
+     },
+     "without": null
+    },
+    {
+     "assess_season": 2025,
+     "rule": "avg|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.65,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 37,
+      "win_rate": 0.6486486486486487
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 20,
+      "win_rate": 0.8
+     }
+    },
+    {
+     "assess_season": 2025,
+     "rule": "avg|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.5,
+     "why": "best lift at \u22650.50",
+     "with": {
+      "decided": 1398,
+      "win_rate": 0.5436337625178826
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 1398,
+      "win_rate": 0.5393419170243204
+     }
+    },
+    {
+     "assess_season": 2025,
+     "rule": "unanimous_min|goals_poisson+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 707,
+      "win_rate": 0.5544554455445545
+     },
+     "without": {
+      "rule": "unanimous_min|goals_poisson+poisson_draw:nhl_base",
+      "decided": 792,
+      "win_rate": 0.5505050505050505
+     }
+    },
+    {
+     "assess_season": 2025,
+     "rule": "single|hgb_tuned:nhl_base:goals",
+     "threshold": 0.7,
+     "why": "best lift at \u22650.70",
+     "with": {
+      "decided": 2,
+      "win_rate": 0.5
+     },
+     "without": null
+    },
+    {
+     "assess_season": 2026,
+     "rule": "avg|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.65,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 40,
+      "win_rate": 0.675
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 17,
+      "win_rate": 0.7647058823529411
+     }
+    },
+    {
+     "assess_season": 2026,
+     "rule": "avg|goals_poisson+hgb_tuned:nhl_base:goals",
+     "threshold": 0.6,
+     "why": "top point lift",
+     "with": {
+      "decided": 269,
+      "win_rate": 0.6096654275092936
+     },
+     "without": {
+      "rule": "single|goals_poisson",
+      "decided": 214,
+      "win_rate": 0.602803738317757
+     }
+    },
+    {
+     "assess_season": 2026,
+     "rule": "avg|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.5,
+     "why": "best lift at \u22650.50",
+     "with": {
+      "decided": 1394,
+      "win_rate": 0.5767575322812052
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 1394,
+      "win_rate": 0.5738880918220947
+     }
+    },
+    {
+     "assess_season": 2026,
+     "rule": "unanimous_min|goals_poisson+goals_glm+hgb_tuned:nhl_base:goals",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 748,
+      "win_rate": 0.6029411764705882
+     },
+     "without": {
+      "rule": "unanimous_min|goals_poisson+goals_glm",
+      "decided": 907,
+      "win_rate": 0.5887541345093715
+     }
+    },
+    {
+     "assess_season": 2026,
+     "rule": "single|hgb_tuned:nhl_base:goals",
+     "threshold": 0.7,
+     "why": "best lift at \u22650.70",
+     "with": {
+      "decided": 5,
+      "win_rate": 0.8
+     },
+     "without": null
+    }
+   ],
+   "registry_with_tuned": {
+    "selected_on_seasons": [
+     2018,
+     2019,
+     2020,
+     2021,
+     2022,
+     2023,
+     2024,
+     2025,
+     2026
+    ],
+    "best_single": "poisson_draw:nhl_base",
+    "bonferroni_count": 1443,
+    "rules": [
+     {
+      "group": "avg|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+      "method": "avg",
+      "members": [
+       "hgb_tuned:nhl_base:goals",
+       "poisson_draw:nhl_base"
+      ],
+      "threshold": 0.65,
+      "why": "highest accuracy (\u2265100 picks, \u22655%)",
+      "selection": {
+       "decided": 684,
+       "win_rate": 0.6447368421052632,
+       "lift": 0.020467836257309968,
+       "lower": -0.08311462166983821
+      }
+     },
+     {
+      "group": "unanimous_min|goals_poisson+goals_glm+hgb_tuned:nhl_base:goals",
+      "method": "unanimous_min",
+      "members": [
+       "goals_poisson",
+       "goals_glm",
+       "hgb_tuned:nhl_base:goals"
+      ],
+      "threshold": 0.6,
+      "why": "top point lift",
+      "selection": {
+       "decided": 610,
+       "win_rate": 0.6377049180327868,
+       "lift": 0.022950819672131084,
+       "lower": -0.087237544563194
+      }
+     },
+     {
+      "group": "avg|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+      "method": "avg",
+      "members": [
+       "hgb_tuned:nhl_base:goals",
+       "poisson_draw:nhl_base"
+      ],
+      "threshold": 0.5,
+      "why": "best lift at \u22650.50",
+      "selection": {
+       "decided": 11870,
+       "win_rate": 0.5594776748104465,
+       "lift": 0.0033698399326032025,
+       "lower": -0.022279434659928852
+      }
+     },
+     {
+      "group": "avg|goals_draw+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+      "method": "avg",
+      "members": [
+       "goals_draw",
+       "hgb_tuned:nhl_base:goals",
+       "poisson_draw:nhl_base"
+      ],
+      "threshold": 0.55,
+      "why": "best lift at \u22650.55",
+      "selection": {
+       "decided": 8128,
+       "win_rate": 0.578863188976378,
+       "lift": 0.0028297244094488416,
+       "lower": -0.02799906221809497
+      }
+     },
+     {
+      "group": "stack|stack_l1",
+      "method": "stack",
+      "members": [
+       "stack_l1"
+      ],
+      "threshold": 0.6,
+      "why": "best lift at \u22650.60",
+      "selection": {
+       "decided": 369,
+       "win_rate": 0.6612466124661247,
+       "lift": 0.05420054200542013,
+       "lower": -0.08666357117202103
+      }
+     },
+     {
+      "group": "single|hgb_tuned:nhl_base:goals",
+      "method": "single",
+      "members": [
+       "hgb_tuned:nhl_base:goals"
+      ],
+      "threshold": 0.7,
+      "why": "best lift at \u22650.70",
+      "selection": {
+       "decided": 201,
+       "win_rate": 0.6119402985074627,
+       "lift": 0.01990049751243783,
+       "lower": -0.17432553019470143
+      }
+     }
+    ],
+    "note": "Selected on every historical season (exploratory); evaluated only prospectively from now on."
+   },
+   "configurations": 621
+  },
+  "nhl:team_total_away": {
+   "tuned_members": [
+    "hgb_tuned:nhl_base:goals"
+   ],
+   "games": 11870,
+   "seasons": [
+    2018,
+    2019,
+    2020,
+    2021,
+    2022,
+    2023,
+    2024,
+    2025,
+    2026
+   ],
+   "alone": {
+    "hgb_tuned:nhl_base:goals": {
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.002782742461699934,
+      "ci95": [
+       0.0014009804636773374,
+       0.004168535246097648
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "counterpart": "poisson_draw:nhl_base",
+     "log_loss_minus_untuned_counterpart": {
+      "mean": 0.002782742461699934,
+      "ci95": [
+       0.0014009804636773374,
+       0.004168535246097648
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "per_season": {
+      "2019": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.003036451605431177,
+       "minus_counterpart": 0.003036451605431177
+      },
+      "2020": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.008687969256527466,
+       "minus_counterpart": 0.008687969256527466
+      },
+      "2021": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.0027647911193931117,
+       "minus_counterpart": 0.0027647911193931117
+      },
+      "2022": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.002790036555357505,
+       "minus_counterpart": 0.002790036555357505
+      },
+      "2023": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.0026554015931690195,
+       "minus_counterpart": 0.0026554015931690195
+      },
+      "2024": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.0016500818514126297,
+       "minus_counterpart": 0.0016500818514126297
+      },
+      "2025": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": 0.0021739241785891923,
+       "minus_counterpart": 0.0021739241785891923
+      },
+      "2026": {
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "minus_best": -0.0007177390373831596,
+       "minus_counterpart": -0.0007177390373831596
+      }
+     }
+    }
+   },
+   "frozen_pooled": {
+    "without_tuned": {
+     "0.50": {
+      "win_rate": 0.5705404592399479,
+      "decided": 9973,
+      "best_prior_single": 0.572144790935526,
+      "all_member_average": 0.5697382933921589
+     },
+     "0.55": {
+      "win_rate": 0.6034097828293079,
+      "decided": 4927,
+      "best_prior_single": 0.604221635883905,
+      "all_member_average": 0.5950882890196875
+     },
+     "0.60": {
+      "win_rate": 0.6310444874274661,
+      "decided": 2068,
+      "best_prior_single": 0.6146034816247582,
+      "all_member_average": 0.5947775628626693
+     },
+     "0.65": {
+      "win_rate": 0.5962343096234309,
+      "decided": 478,
+      "best_prior_single": 0.608786610878661,
+      "all_member_average": 0.5774058577405857
+     }
+    },
+    "with_tuned": {
+     "0.50": {
+      "win_rate": 0.5698278496485688,
+      "decided": 9817,
+      "best_prior_single": 0.5726800448202098,
+      "all_member_average": 0.5679942956096568
+     },
+     "0.55": {
+      "win_rate": 0.5995096946735012,
+      "decided": 4487,
+      "best_prior_single": 0.6026298194784935,
+      "all_member_average": 0.5975039001560063
+     },
+     "0.60": {
+      "win_rate": 0.6281221091581869,
+      "decided": 2162,
+      "best_prior_single": 0.6123959296947271,
+      "all_member_average": 0.6073080481036077
+     },
+     "0.65": {
+      "win_rate": 0.5845697329376854,
+      "decided": 337,
+      "best_prior_single": 0.6053412462908012,
+      "all_member_average": 0.5905044510385756
+     }
+    }
+   },
+   "qualified": {
+    "without_tuned": [],
+    "with_tuned": []
+   },
+   "frozen_rules_with_tuned_member": [
+    {
+     "assess_season": 2019,
+     "rule": "avg|goals_poisson+goals_draw+hgb_tuned:nhl_base:goals",
+     "threshold": 0.6,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 161,
+      "win_rate": 0.5590062111801242
+     },
+     "without": {
+      "rule": "avg|goals_poisson+goals_draw",
+      "decided": 123,
+      "win_rate": 0.5853658536585366
+     }
+    },
+    {
+     "assess_season": 2019,
+     "rule": "unanimous_min|goals_draw+hgb_tuned:nhl_base:goals",
+     "threshold": 0.55,
+     "why": "top point lift",
+     "with": {
+      "decided": 482,
+      "win_rate": 0.5975103734439834
+     },
+     "without": {
+      "rule": "single|goals_draw",
+      "decided": 726,
+      "win_rate": 0.5661157024793388
+     }
+    },
+    {
+     "assess_season": 2019,
+     "rule": "unanimous_min|goals_draw+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.5,
+     "why": "best lift at \u22650.50",
+     "with": {
+      "decided": 980,
+      "win_rate": 0.55
+     },
+     "without": {
+      "rule": "unanimous_min|goals_draw+poisson_draw:nhl_base",
+      "decided": 1125,
+      "win_rate": 0.5555555555555556
+     }
+    },
+    {
+     "assess_season": 2020,
+     "rule": "unanimous_min|goals_draw+hgb_tuned:nhl_base:goals",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 417,
+      "win_rate": 0.5755395683453237
+     },
+     "without": {
+      "rule": "single|goals_draw",
+      "decided": 617,
+      "win_rate": 0.5753646677471637
+     }
+    },
+    {
+     "assess_season": 2020,
+     "rule": "avg|goals_glm+hgb_tuned:nhl_base:goals",
+     "threshold": 0.65,
+     "why": "best lift at \u22650.65",
+     "with": {
+      "decided": 59,
+      "win_rate": 0.5254237288135594
+     },
+     "without": {
+      "rule": "single|goals_glm",
+      "decided": 74,
+      "win_rate": 0.581081081081081
+     }
+    },
+    {
+     "assess_season": 2021,
+     "rule": "unanimous_min|goals_draw+hgb_tuned:nhl_base:goals",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 347,
+      "win_rate": 0.6512968299711815
+     },
+     "without": {
+      "rule": "single|goals_draw",
+      "decided": 476,
+      "win_rate": 0.6218487394957983
+     }
+    },
+    {
+     "assess_season": 2022,
+     "rule": "unanimous_min|goals_poisson+goals_draw+hgb_tuned:nhl_base:goals",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 526,
+      "win_rate": 0.5874524714828897
+     },
+     "without": {
+      "rule": "unanimous_min|goals_poisson+goals_draw",
+      "decided": 677,
+      "win_rate": 0.5612998522895125
+     }
+    },
+    {
+     "assess_season": 2023,
+     "rule": "unanimous_min|goals_draw+hgb_tuned:nhl_base:goals",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 600,
+      "win_rate": 0.5516666666666666
+     },
+     "without": {
+      "rule": "single|goals_draw",
+      "decided": 850,
+      "win_rate": 0.5447058823529412
+     }
+    },
+    {
+     "assess_season": 2023,
+     "rule": "unanimous_min|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.65,
+     "why": "best lift at \u22650.65",
+     "with": {
+      "decided": 19,
+      "win_rate": 0.5263157894736842
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 37,
+      "win_rate": 0.4864864864864865
+     }
+    },
+    {
+     "assess_season": 2024,
+     "rule": "unanimous_min|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 639,
+      "win_rate": 0.6025039123630673
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 787,
+      "win_rate": 0.602287166454892
+     }
+    },
+    {
+     "assess_season": 2024,
+     "rule": "unanimous_min|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.65,
+     "why": "best lift at \u22650.65",
+     "with": {
+      "decided": 12,
+      "win_rate": 0.75
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 32,
+      "win_rate": 0.78125
+     }
+    },
+    {
+     "assess_season": 2025,
+     "rule": "unanimous_min|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 646,
+      "win_rate": 0.608359133126935
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 764,
+      "win_rate": 0.6086387434554974
+     }
+    },
+    {
+     "assess_season": 2025,
+     "rule": "unanimous_min|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.65,
+     "why": "best lift at \u22650.65",
+     "with": {
+      "decided": 13,
+      "win_rate": 0.38461538461538464
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 17,
+      "win_rate": 0.5294117647058824
+     }
+    },
+    {
+     "assess_season": 2026,
+     "rule": "unanimous_min|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+     "threshold": 0.65,
+     "why": "best lift at \u22650.65",
+     "with": {
+      "decided": 16,
+      "win_rate": 0.75
+     },
+     "without": {
+      "rule": "single|poisson_draw:nhl_base",
+      "decided": 43,
+      "win_rate": 0.6744186046511628
+     }
+    }
+   ],
+   "registry_with_tuned": {
+    "selected_on_seasons": [
+     2018,
+     2019,
+     2020,
+     2021,
+     2022,
+     2023,
+     2024,
+     2025,
+     2026
+    ],
+    "best_single": "poisson_draw:nhl_base",
+    "bonferroni_count": 1443,
+    "rules": [
+     {
+      "group": "stack|stack_l2",
+      "method": "stack",
+      "members": [
+       "stack_l2"
+      ],
+      "threshold": 0.6,
+      "why": "highest accuracy (\u2265100 picks, \u22655%)",
+      "selection": {
+       "decided": 1538,
+       "win_rate": 0.6391417425227568,
+       "lift": 0.021456436931079237,
+       "lower": -0.0478575805764318
+      }
+     },
+     {
+      "group": "unanimous_min|goals_draw+hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+      "method": "unanimous_min",
+      "members": [
+       "goals_draw",
+       "hgb_tuned:nhl_base:goals",
+       "poisson_draw:nhl_base"
+      ],
+      "threshold": 0.6,
+      "why": "top point lift",
+      "selection": {
+       "decided": 620,
+       "win_rate": 0.6209677419354839,
+       "lift": 0.030645161290322576,
+       "lower": -0.07973649067909028
+      }
+     },
+     {
+      "group": "single|poisson_draw:nhl_base",
+      "method": "single",
+      "members": [
+       "poisson_draw:nhl_base"
+      ],
+      "threshold": 0.5,
+      "why": "best lift at \u22650.50",
+      "selection": {
+       "decided": 11870,
+       "win_rate": 0.5689974726200505,
+       "lift": 0.0,
+       "lower": -0.025575451068913624
+      }
+     },
+     {
+      "group": "stack|stack_l1",
+      "method": "stack",
+      "members": [
+       "stack_l1"
+      ],
+      "threshold": 0.55,
+      "why": "best lift at \u22650.55",
+      "selection": {
+       "decided": 3406,
+       "win_rate": 0.6112742219612448,
+       "lift": 0.007633587786259444,
+       "lower": -0.03944455277395021
+      }
+     },
+     {
+      "group": "stack|stack_l1",
+      "method": "stack",
+      "members": [
+       "stack_l1"
+      ],
+      "threshold": 0.6,
+      "why": "best lift at \u22650.60",
+      "selection": {
+       "decided": 462,
+       "win_rate": 0.6558441558441559,
+       "lift": 0.04978354978354982,
+       "lower": -0.07636826701893198
+      }
+     },
+     {
+      "group": "unanimous_min|hgb_tuned:nhl_base:goals+poisson_draw:nhl_base",
+      "method": "unanimous_min",
+      "members": [
+       "hgb_tuned:nhl_base:goals",
+       "poisson_draw:nhl_base"
+      ],
+      "threshold": 0.65,
+      "why": "best lift at \u22650.65",
+      "selection": {
+       "decided": 169,
+       "win_rate": 0.6035502958579881,
+       "lift": 0.023668639053254448,
+       "lower": -0.189009158341941
+      }
+     }
+    ],
+    "note": "Selected on every historical season (exploratory); evaluated only prospectively from now on."
+   },
+   "configurations": 621
+  },
+  "nba:winner": {
+   "tuned_members": [
+    "et_tuned:nba_base",
+    "hgb_tuned:nba_base"
+   ],
+   "games": 6605,
+   "seasons": [
+    2022,
+    2023,
+    2024,
+    2025,
+    2026
+   ],
+   "alone": {
+    "et_tuned:nba_base": {
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.002135881776973925,
+      "ci95": [
+       1.0101123793996702e-06,
+       0.004396791083138613
+      ],
+      "games": 5282,
+      "weeks": 140
+     },
+     "counterpart": "extra_trees:nba_base",
+     "log_loss_minus_untuned_counterpart": {
+      "mean": -0.0001868124069586541,
+      "ci95": [
+       -0.0013380206677031307,
+       0.0009262467334291611
+      ],
+      "games": 5282,
+      "weeks": 140
+     },
+     "per_season": {
+      "2023": {
+       "best_prior_existing": "logistic_v2",
+       "minus_best": -0.0003950371979474501,
+       "minus_counterpart": 0.00020140565421155392
+      },
+      "2024": {
+       "best_prior_existing": "elastic_net:nba_base",
+       "minus_best": 0.005750295394466307,
+       "minus_counterpart": -0.0015511495969036744
+      },
+      "2025": {
+       "best_prior_existing": "elastic_net:nba_base",
+       "minus_best": 0.00343893350356865,
+       "minus_counterpart": 9.877492251400032e-05
+      },
+      "2026": {
+       "best_prior_existing": "elastic_net:nba_base",
+       "minus_best": -0.0002453057006417102,
+       "minus_counterpart": 0.0005014266630560436
+      }
+     }
+    },
+    "hgb_tuned:nba_base": {
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.008096459628883652,
+      "ci95": [
+       0.004505154788410073,
+       0.011768685669169682
+      ],
+      "games": 5282,
+      "weeks": 140
+     },
+     "counterpart": "gbt_v1",
+     "log_loss_minus_untuned_counterpart": {
+      "mean": 0.00431453849172683,
+      "ci95": [
+       0.0007676844433189936,
+       0.007971577665833814
+      ],
+      "games": 5282,
+      "weeks": 140
+     },
+     "per_season": {
+      "2023": {
+       "best_prior_existing": "logistic_v2",
+       "minus_best": 0.00961718801925716,
+       "minus_counterpart": 0.004467182402840466
+      },
+      "2024": {
+       "best_prior_existing": "elastic_net:nba_base",
+       "minus_best": 0.01368521837391012,
+       "minus_counterpart": 0.00906697312928761
+      },
+      "2025": {
+       "best_prior_existing": "elastic_net:nba_base",
+       "minus_best": 0.00935360716611149,
+       "minus_counterpart": 0.002627472789010285
+      },
+      "2026": {
+       "best_prior_existing": "elastic_net:nba_base",
+       "minus_best": -0.00025424094347710344,
+       "minus_counterpart": 0.0011062650754453509
+      }
+     }
+    }
+   },
+   "frozen_pooled": {
+    "without_tuned": {
+     "0.50": {
+      "win_rate": 0.6610494063577174,
+      "decided": 5222,
+      "best_prior_single": 0.6599004212945232,
+      "all_member_average": 0.6612409038682497
+     },
+     "0.55": {
+      "win_rate": 0.6983883346124329,
+      "decided": 3909,
+      "best_prior_single": 0.699667434126375,
+      "all_member_average": 0.7001790739319519
+     },
+     "0.60": {
+      "win_rate": 0.7270212111896711,
+      "decided": 3253,
+      "best_prior_single": 0.724869351367968,
+      "all_member_average": 0.7294804795573316
+     },
+     "0.65": {
+      "win_rate": 0.7810067462376752,
+      "decided": 1927,
+      "best_prior_single": 0.7763362740010379,
+      "all_member_average": 0.7810067462376752
+     },
+     "0.70": {
+      "win_rate": 0.8142076502732241,
+      "decided": 1281,
+      "best_prior_single": 0.8095238095238095,
+      "all_member_average": 0.8142076502732241
+     },
+     "0.75": {
+      "win_rate": 0.8320251177394035,
+      "decided": 637,
+      "best_prior_single": 0.8414442700156985,
+      "all_member_average": 0.8335949764521193
+     },
+     "0.80": {
+      "win_rate": 0.8546845124282982,
+      "decided": 1046,
+      "best_prior_single": 0.8546845124282982,
+      "all_member_average": 0.8575525812619503
+     },
+     "0.85": {
+      "win_rate": 0.868421052631579,
+      "decided": 152,
+      "best_prior_single": 0.881578947368421,
+      "all_member_average": 0.8552631578947368
+     }
+    },
+    "with_tuned": {
+     "0.50": {
+      "win_rate": 0.6648851939825812,
+      "decided": 5052,
+      "best_prior_single": 0.6631037212984956,
+      "all_member_average": 0.6652810768012668
+     },
+     "0.55": {
+      "win_rate": 0.6987616881475865,
+      "decided": 3957,
+      "best_prior_single": 0.7000252716704575,
+      "all_member_average": 0.6997725549658832
+     },
+     "0.60": {
+      "win_rate": 0.725115562403698,
+      "decided": 3245,
+      "best_prior_single": 0.7260400616332819,
+      "all_member_average": 0.7278890600924499
+     },
+     "0.65": {
+      "win_rate": 0.7679425837320574,
+      "decided": 2090,
+      "best_prior_single": 0.7736842105263158,
+      "all_member_average": 0.7751196172248804
+     },
+     "0.70": {
+      "win_rate": 0.8153364632237872,
+      "decided": 1278,
+      "best_prior_single": 0.809076682316119,
+      "all_member_average": 0.8098591549295775
+     },
+     "0.75": {
+      "win_rate": 0.8389380530973451,
+      "decided": 565,
+      "best_prior_single": 0.8389380530973451,
+      "all_member_average": 0.8371681415929203
+     },
+     "0.80": {
+      "win_rate": 0.8550135501355014,
+      "decided": 738,
+      "best_prior_single": 0.8536585365853658,
+      "all_member_average": 0.8617886178861789
+     },
+     "0.85": {
+      "win_rate": 0.890625,
+      "decided": 128,
+      "best_prior_single": 0.890625,
+      "all_member_average": 0.8828125
+     }
+    }
+   },
+   "qualified": {
+    "without_tuned": [],
+    "with_tuned": []
+   },
+   "frozen_rules_with_tuned_member": [
+    {
+     "assess_season": 2023,
+     "rule": "unanimous_min|logistic_v2+hgb_tuned:nba_base+mlp:nba_base:normal",
+     "threshold": 0.5,
+     "why": "best lift at \u22650.50",
+     "with": {
+      "decided": 1090,
+      "win_rate": 0.6605504587155964
+     },
+     "without": {
+      "rule": "unanimous_min|logistic_v2+mlp:nba_base:normal",
+      "decided": 1193,
+      "win_rate": 0.6429170159262364
+     }
+    },
+    {
+     "assess_season": 2023,
+     "rule": "unanimous_min|logistic+hetero_linear:nba_base+hgb_tuned:nba_base",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 814,
+      "win_rate": 0.6781326781326781
+     },
+     "without": {
+      "rule": "unanimous_min|logistic+hetero_linear:nba_base",
+      "decided": 943,
+      "win_rate": 0.6712619300106044
+     }
+    },
+    {
+     "assess_season": 2023,
+     "rule": "avg|elo+hgb_tuned:nba_base+ngboost:nba_base",
+     "threshold": 0.6,
+     "why": "best lift at \u22650.60",
+     "with": {
+      "decided": 706,
+      "win_rate": 0.6784702549575071
+     },
+     "without": {
+      "rule": "avg|elo+ngboost:nba_base",
+      "decided": 713,
+      "win_rate": 0.6760168302945302
+     }
+    },
+    {
+     "assess_season": 2023,
+     "rule": "avg|logistic_v2+extra_trees:nba_base:normal+hgb_tuned:nba_base",
+     "threshold": 0.65,
+     "why": "best lift at \u22650.65",
+     "with": {
+      "decided": 478,
+      "win_rate": 0.698744769874477
+     },
+     "without": {
+      "rule": "avg|logistic_v2+extra_trees:nba_base:normal",
+      "decided": 471,
+      "win_rate": 0.7112526539278131
+     }
+    },
+    {
+     "assess_season": 2024,
+     "rule": "unanimous_min|elo+gbt_v1+et_tuned:nba_base",
+     "threshold": 0.75,
+     "why": "top point lift",
+     "with": {
+      "decided": 158,
+      "win_rate": 0.8544303797468354
+     },
+     "without": {
+      "rule": "unanimous_min|elo+gbt_v1",
+      "decided": 192,
+      "win_rate": 0.8385416666666666
+     }
+    },
+    {
+     "assess_season": 2026,
+     "rule": "avg|efficiency_margin+gbt_v1+et_tuned:nba_base",
+     "threshold": 0.8,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 156,
+      "win_rate": 0.8461538461538461
+     },
+     "without": {
+      "rule": "avg|efficiency_margin+gbt_v1",
+      "decided": 146,
+      "win_rate": 0.8424657534246576
+     }
+    },
+    {
+     "assess_season": 2026,
+     "rule": "unanimous_min|logistic_v2+elastic_net:nba_base+et_tuned:nba_base",
+     "threshold": 0.65,
+     "why": "best lift at \u22650.65",
+     "with": {
+      "decided": 574,
+      "win_rate": 0.7926829268292683
+     },
+     "without": {
+      "rule": "unanimous_min|logistic_v2+elastic_net:nba_base",
+      "decided": 606,
+      "win_rate": 0.7838283828382838
+     }
+    }
+   ],
+   "registry_with_tuned": {
+    "selected_on_seasons": [
+     2022,
+     2023,
+     2024,
+     2025,
+     2026
+    ],
+    "best_single": "logistic_v2",
+    "bonferroni_count": 10608,
+    "rules": [
+     {
+      "group": "avg|mlp:nba_base:normal+ngboost:nba_base",
+      "method": "avg",
+      "members": [
+       "mlp:nba_base:normal",
+       "ngboost:nba_base"
+      ],
+      "threshold": 0.8,
+      "why": "highest accuracy (\u2265100 picks, \u22655%)",
+      "selection": {
+       "decided": 366,
+       "win_rate": 0.8825136612021858,
+       "lift": 0.002732240437158473,
+       "lower": -0.10324064903725289
+      }
+     },
+     {
+      "group": "avg|efficiency_margin+ngboost:nba_base",
+      "method": "avg",
+      "members": [
+       "efficiency_margin",
+       "ngboost:nba_base"
+      ],
+      "threshold": 0.7,
+      "why": "top point lift",
+      "selection": {
+       "decided": 1241,
+       "win_rate": 0.8243352135374697,
+       "lift": 0.014504431909750148,
+       "lower": -0.05423541994541117
+      }
+     },
+     {
+      "group": "avg|logistic+mlp:nba_base:normal",
+      "method": "avg",
+      "members": [
+       "logistic",
+       "mlp:nba_base:normal"
+      ],
+      "threshold": 0.5,
+      "why": "best lift at \u22650.50",
+      "selection": {
+       "decided": 6605,
+       "win_rate": 0.6626797880393641,
+       "lift": 0.006964420893262657,
+       "lower": -0.029571645853508695
+      }
+     },
+     {
+      "group": "unanimous_min|logistic+mlp:nba_base:normal+random_forest:nba_base",
+      "method": "unanimous_min",
+      "members": [
+       "logistic",
+       "mlp:nba_base:normal",
+       "random_forest:nba_base"
+      ],
+      "threshold": 0.55,
+      "why": "best lift at \u22650.55",
+      "selection": {
+       "decided": 4485,
+       "win_rate": 0.7148272017837235,
+       "lift": 0.006911928651059052,
+       "lower": -0.03547528654790199
+      }
+     },
+     {
+      "group": "avg|gbt_v1+mlp:nba_base:normal",
+      "method": "avg",
+      "members": [
+       "gbt_v1",
+       "mlp:nba_base:normal"
+      ],
+      "threshold": 0.6,
+      "why": "best lift at \u22650.60",
+      "selection": {
+       "decided": 4212,
+       "win_rate": 0.7224596391263058,
+       "lift": 0.009496676163342932,
+       "lower": -0.03395075224328104
+      }
+     },
+     {
+      "group": "unanimous_min|logistic_v2+elastic_net:nba_base+hetero_linear:nba_base",
+      "method": "unanimous_min",
+      "members": [
+       "logistic_v2",
+       "elastic_net:nba_base",
+       "hetero_linear:nba_base"
+      ],
+      "threshold": 0.65,
+      "why": "best lift at \u22650.65",
+      "selection": {
+       "decided": 2690,
+       "win_rate": 0.7698884758364313,
+       "lift": 0.0033457249070631967,
+       "lower": -0.047624304810556364
+      }
+     },
+     {
+      "group": "unanimous_min|elo+logistic+extra_trees:nba_base:normal",
+      "method": "unanimous_min",
+      "members": [
+       "elo",
+       "logistic",
+       "extra_trees:nba_base:normal"
+      ],
+      "threshold": 0.75,
+      "why": "best lift at \u22650.75",
+      "selection": {
+       "decided": 699,
+       "win_rate": 0.8469241773962805,
+       "lift": 0.012875536480686733,
+       "lower": -0.07387441771502011
+      }
+     },
+     {
+      "group": "avg|efficiency_margin+mlp:nba_base:normal+ngboost:nba_base",
+      "method": "avg",
+      "members": [
+       "efficiency_margin",
+       "mlp:nba_base:normal",
+       "ngboost:nba_base"
+      ],
+      "threshold": 0.8,
+      "why": "best lift at \u22650.80",
+      "selection": {
+       "decided": 306,
+       "win_rate": 0.8888888888888888,
+       "lift": 0.016339869281045694,
+       "lower": -0.09970246327478126
+      }
+     },
+     {
+      "group": "avg|elo+elastic_net:nba_base+extra_trees:nba_base:normal",
+      "method": "avg",
+      "members": [
+       "elo",
+       "elastic_net:nba_base",
+       "extra_trees:nba_base:normal"
+      ],
+      "threshold": 0.85,
+      "why": "best lift at \u22650.85",
+      "selection": {
+       "decided": 126,
+       "win_rate": 0.9126984126984127,
+       "lift": 0.023809523809523836,
+       "lower": -0.1429010927289583
+      }
+     }
+    ],
+    "note": "Selected on every historical season (exploratory); evaluated only prospectively from now on."
+   },
+   "configurations": 5985
+  },
+  "nba:spread": {
+   "tuned_members": [
+    "et_tuned:nba_base:normal",
+    "hgb_tuned:nba_base:normal"
+   ],
+   "games": 5282,
+   "seasons": [
+    2023,
+    2024,
+    2025,
+    2026
+   ],
+   "alone": {
+    "et_tuned:nba_base:normal": {
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.0026359132518364086,
+      "ci95": [
+       9.737466463854806e-05,
+       0.005391942198701981
+      ],
+      "games": 3962,
+      "weeks": 105
+     },
+     "counterpart": "extra_trees:nba_base:normal",
+     "log_loss_minus_untuned_counterpart": {
+      "mean": 0.0006175341018216546,
+      "ci95": [
+       -0.0016326005100579003,
+       0.002795151492165516
+      ],
+      "games": 3962,
+      "weeks": 105
+     },
+     "per_season": {
+      "2024": {
+       "best_prior_existing": "elastic_net:nba_base",
+       "minus_best": 0.002409519039131884,
+       "minus_counterpart": 0.0008810672750798814
+      },
+      "2025": {
+       "best_prior_existing": "elastic_net:nba_base",
+       "minus_best": 0.0027025813096006983,
+       "minus_counterpart": -0.0009251935095156588
+      },
+      "2026": {
+       "best_prior_existing": "hetero_linear:nba_base",
+       "minus_best": 0.00279517608258576,
+       "minus_counterpart": 0.0018961596079101481
+      }
+     }
+    },
+    "hgb_tuned:nba_base:normal": {
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.005097721122601731,
+      "ci95": [
+       0.0019453537196706964,
+       0.008436099918883243
+      ],
+      "games": 3962,
+      "weeks": 105
+     },
+     "counterpart": "gbt_points",
+     "log_loss_minus_untuned_counterpart": {
+      "mean": -0.0012858153390505444,
+      "ci95": [
+       -0.00340764195380819,
+       0.0008119235049612848
+      ],
+      "games": 3962,
+      "weeks": 105
+     },
+     "per_season": {
+      "2024": {
+       "best_prior_existing": "elastic_net:nba_base",
+       "minus_best": 0.004032055046427517,
+       "minus_counterpart": -0.004727408348426286
+      },
+      "2025": {
+       "best_prior_existing": "elastic_net:nba_base",
+       "minus_best": 0.00445022348204077,
+       "minus_counterpart": -0.0011758997640378451
+      },
+      "2026": {
+       "best_prior_existing": "hetero_linear:nba_base",
+       "minus_best": 0.00680797674866438,
+       "minus_counterpart": 0.002038135269704998
+      }
+     }
+    }
+   },
+   "frozen_pooled": {
+    "without_tuned": {
+     "0.50": {
+      "win_rate": 0.5421504290762241,
+      "decided": 3962,
+      "best_prior_single": 0.5456839979808178,
+      "all_member_average": 0.5376072690560323
+     },
+     "0.55": {
+      "win_rate": 0.5662751677852349,
+      "decided": 1192,
+      "best_prior_single": 0.5830536912751678,
+      "all_member_average": 0.5763422818791947
+     },
+     "0.60": {
+      "win_rate": 0.5983333333333334,
+      "decided": 600,
+      "best_prior_single": 0.6233333333333333,
+      "all_member_average": 0.615
+     },
+     "0.65": {
+      "win_rate": 0.5882352941176471,
+      "decided": 102,
+      "best_prior_single": 0.6568627450980392,
+      "all_member_average": 0.6078431372549019
+     }
+    },
+    "with_tuned": {
+     "0.50": {
+      "win_rate": 0.5431600201918223,
+      "decided": 3962,
+      "best_prior_single": 0.5456839979808178,
+      "all_member_average": 0.5398788490661283
+     },
+     "0.55": {
+      "win_rate": 0.5592948717948718,
+      "decided": 1248,
+      "best_prior_single": 0.5849358974358975,
+      "all_member_average": 0.5793269230769231
+     },
+     "0.60": {
+      "win_rate": 0.5967479674796748,
+      "decided": 615,
+      "best_prior_single": 0.6227642276422765,
+      "all_member_average": 0.6048780487804878
+     },
+     "0.65": {
+      "win_rate": 0.5798319327731093,
+      "decided": 119,
+      "best_prior_single": 0.6386554621848739,
+      "all_member_average": 0.5966386554621849
+     }
+    }
+   },
+   "qualified": {
+    "without_tuned": [],
+    "with_tuned": []
+   },
+   "frozen_rules_with_tuned_member": [
+    {
+     "assess_season": 2024,
+     "rule": "avg|ridge_points@weekly+gbt_points@weekly+et_tuned:nba_base:normal",
+     "threshold": 0.6,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 140,
+      "win_rate": 0.6
+     },
+     "without": {
+      "rule": "avg|ridge_points@weekly+gbt_points@weekly",
+      "decided": 156,
+      "win_rate": 0.6089743589743589
+     }
+    },
+    {
+     "assess_season": 2024,
+     "rule": "unanimous_min|gbt_points@weekly+et_tuned:nba_base:normal+mlp:nba_base:normal",
+     "threshold": 0.55,
+     "why": "top point lift",
+     "with": {
+      "decided": 314,
+      "win_rate": 0.5796178343949044
+     },
+     "without": {
+      "rule": "unanimous_min|gbt_points@weekly+mlp:nba_base:normal",
+      "decided": 397,
+      "win_rate": 0.5566750629722922
+     }
+    },
+    {
+     "assess_season": 2026,
+     "rule": "avg|gbt_points+et_tuned:nba_base:normal+hetero_linear:nba_base",
+     "threshold": 0.55,
+     "why": "top point lift",
+     "with": {
+      "decided": 595,
+      "win_rate": 0.5361344537815126
+     },
+     "without": {
+      "rule": "avg|gbt_points+hetero_linear:nba_base",
+      "decided": 586,
+      "win_rate": 0.5426621160409556
+     }
+    },
+    {
+     "assess_season": 2026,
+     "rule": "majority|gbt_points+gbt_points@weekly+hgb_tuned:nba_base:normal",
+     "threshold": 0.65,
+     "why": "best lift at \u22650.65",
+     "with": {
+      "decided": 59,
+      "win_rate": 0.559322033898305
+     },
+     "without": null
+    }
+   ],
+   "registry_with_tuned": {
+    "selected_on_seasons": [
+     2023,
+     2024,
+     2025,
+     2026
+    ],
+    "best_single": "hetero_linear:nba_base",
+    "bonferroni_count": 8777,
+    "rules": [
+     {
+      "group": "majority|points_normal+ridge_points@weekly+mlp:nba_base:normal",
+      "method": "majority",
+      "members": [
+       "points_normal",
+       "ridge_points@weekly",
+       "mlp:nba_base:normal"
+      ],
+      "threshold": 0.6,
+      "why": "highest accuracy (\u2265100 picks, \u22655%)",
+      "selection": {
+       "decided": 310,
+       "win_rate": 0.632258064516129,
+       "lift": 0.003225806451612856,
+       "lower": -0.16691175208590908
+      }
+     },
+     {
+      "group": "avg|gbt_points+ridge_points@weekly+et_tuned:nba_base:normal",
+      "method": "avg",
+      "members": [
+       "gbt_points",
+       "ridge_points@weekly",
+       "et_tuned:nba_base:normal"
+      ],
+      "threshold": 0.55,
+      "why": "top point lift",
+      "selection": {
+       "decided": 2230,
+       "win_rate": 0.5869955156950672,
+       "lift": 0.015695067264573925,
+       "lower": -0.0491864824497993
+      }
+     },
+     {
+      "group": "avg|points_normal+elastic_net:nba_base+hetero_linear:nba_base",
+      "method": "avg",
+      "members": [
+       "points_normal",
+       "elastic_net:nba_base",
+       "hetero_linear:nba_base"
+      ],
+      "threshold": 0.5,
+      "why": "best lift at \u22650.50",
+      "selection": {
+       "decided": 5282,
+       "win_rate": 0.5528209011737978,
+       "lift": 0.002839833396440672,
+       "lower": -0.039634932749642915
+      }
+     },
+     {
+      "group": "avg|points_normal+gbt_points+hetero_linear:nba_base",
+      "method": "avg",
+      "members": [
+       "points_normal",
+       "gbt_points",
+       "hetero_linear:nba_base"
+      ],
+      "threshold": 0.6,
+      "why": "best lift at \u22650.60",
+      "selection": {
+       "decided": 109,
+       "win_rate": 0.6605504587155964,
+       "lift": 0.00917431192660556,
+       "lower": -0.27323414525326273
+      }
+     },
+     {
+      "group": "avg|gbt_points@weekly+elastic_net:nba_base+ngboost:nba_base",
+      "method": "avg",
+      "members": [
+       "gbt_points@weekly",
+       "elastic_net:nba_base",
+       "ngboost:nba_base"
+      ],
+      "threshold": 0.65,
+      "why": "best lift at \u22650.65",
+      "selection": {
+       "decided": 100,
+       "win_rate": 0.67,
+       "lift": 0.040000000000000036,
+       "lower": -0.2557859938203595
+      }
+     }
+    ],
+    "note": "Selected on every historical season (exploratory); evaluated only prospectively from now on."
+   },
+   "configurations": 5985
+  },
+  "nba:total": {
+   "tuned_members": [
+    "et_tuned:nba_base:normal",
+    "hgb_tuned:nba_base:normal"
+   ],
+   "games": 5282,
+   "seasons": [
+    2023,
+    2024,
+    2025,
+    2026
+   ],
+   "alone": {
+    "et_tuned:nba_base:normal": {
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.009672517912856093,
+      "ci95": [
+       0.0032989010567985454,
+       0.01688221352334021
+      ],
+      "games": 3962,
+      "weeks": 105
+     },
+     "counterpart": "extra_trees:nba_base:normal",
+     "log_loss_minus_untuned_counterpart": {
+      "mean": -0.0021881672508498114,
+      "ci95": [
+       -0.0050159046754945005,
+       0.000692512991891716
+      ],
+      "games": 3962,
+      "weeks": 105
+     },
+     "per_season": {
+      "2024": {
+       "best_prior_existing": "hetero_linear:nba_base",
+       "minus_best": 0.005197432800545451,
+       "minus_counterpart": -0.003944049470837194
+      },
+      "2025": {
+       "best_prior_existing": "points_normal",
+       "minus_best": 0.01247919195348946,
+       "minus_counterpart": -0.0030521011621035357
+      },
+      "2026": {
+       "best_prior_existing": "points_normal",
+       "minus_best": 0.011332896774778233,
+       "minus_counterpart": 0.00042701077103334163
+      }
+     }
+    },
+    "hgb_tuned:nba_base:normal": {
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.009818197140632775,
+      "ci95": [
+       0.0034422275066580336,
+       0.016969625326070242
+      ],
+      "games": 3962,
+      "weeks": 105
+     },
+     "counterpart": "gbt_points",
+     "log_loss_minus_untuned_counterpart": {
+      "mean": 0.0005304878297602713,
+      "ci95": [
+       -0.0018764913091851806,
+       0.0028617557052809796
+      ],
+      "games": 3962,
+      "weeks": 105
+     },
+     "per_season": {
+      "2024": {
+       "best_prior_existing": "hetero_linear:nba_base",
+       "minus_best": 0.004069867164749149,
+       "minus_counterpart": 0.0013272662314533891
+      },
+      "2025": {
+       "best_prior_existing": "points_normal",
+       "minus_best": 0.008787972062035857,
+       "minus_counterpart": -0.0005685321493131978
+      },
+      "2026": {
+       "best_prior_existing": "points_normal",
+       "minus_best": 0.016582928280585146,
+       "minus_counterpart": 0.0008337061962677082
+      }
+     }
+    }
+   },
+   "frozen_pooled": {
+    "without_tuned": {
+     "0.50": {
+      "win_rate": 0.5204918032786885,
+      "decided": 2928,
+      "best_prior_single": 0.5150273224043715,
+      "all_member_average": 0.5201502732240437
+     },
+     "0.55": {
+      "win_rate": 0.5424795468848332,
+      "decided": 1589,
+      "best_prior_single": 0.5235997482693517,
+      "all_member_average": 0.5355569540591567
+     },
+     "0.60": {
+      "win_rate": 0.5588865096359743,
+      "decided": 467,
+      "best_prior_single": 0.5289079229122056,
+      "all_member_average": 0.5460385438972163
+     },
+     "0.65": {
+      "win_rate": 0.5805243445692884,
+      "decided": 267,
+      "best_prior_single": 0.5842696629213483,
+      "all_member_average": 0.5617977528089888
+     },
+     "0.70": {
+      "win_rate": 0.5978552278820375,
+      "decided": 373,
+      "best_prior_single": 0.5817694369973191,
+      "all_member_average": 0.5764075067024129
+     },
+     "0.75": {
+      "win_rate": 0.5238095238095238,
+      "decided": 42,
+      "best_prior_single": 0.4523809523809524,
+      "all_member_average": 0.5238095238095238
+     }
+    },
+    "with_tuned": {
+     "0.50": {
+      "win_rate": 0.5204918032786885,
+      "decided": 2928,
+      "best_prior_single": 0.5150273224043715,
+      "all_member_average": 0.5215163934426229
+     },
+     "0.55": {
+      "win_rate": 0.5424795468848332,
+      "decided": 1589,
+      "best_prior_single": 0.5235997482693517,
+      "all_member_average": 0.539332913782253
+     },
+     "0.60": {
+      "win_rate": 0.5370813397129187,
+      "decided": 836,
+      "best_prior_single": 0.5370813397129187,
+      "all_member_average": 0.5490430622009569
+     },
+     "0.65": {
+      "win_rate": 0.5735294117647058,
+      "decided": 272,
+      "best_prior_single": 0.5882352941176471,
+      "all_member_average": 0.5625
+     },
+     "0.70": {
+      "win_rate": 0.6012461059190031,
+      "decided": 321,
+      "best_prior_single": 0.5700934579439252,
+      "all_member_average": 0.5700934579439252
+     },
+     "0.75": {
+      "win_rate": 0.6304347826086957,
+      "decided": 46,
+      "best_prior_single": 0.4782608695652174,
+      "all_member_average": 0.5434782608695652
+     }
+    }
+   },
+   "qualified": {
+    "without_tuned": [],
+    "with_tuned": []
+   },
+   "frozen_rules_with_tuned_member": [
+    {
+     "assess_season": 2024,
+     "rule": "unanimous_min|ridge_points+et_tuned:nba_base:normal+hetero_linear:nba_base",
+     "threshold": 0.6,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 374,
+      "win_rate": 0.5320855614973262
+     },
+     "without": {
+      "rule": "unanimous_min|ridge_points+hetero_linear:nba_base",
+      "decided": 480,
+      "win_rate": 0.5354166666666667
+     }
+    },
+    {
+     "assess_season": 2024,
+     "rule": "majority|points_normal+ridge_points@weekly+et_tuned:nba_base:normal",
+     "threshold": 0.6,
+     "why": "top point lift",
+     "with": {
+      "decided": 399,
+      "win_rate": 0.5413533834586466
+     },
+     "without": null
+    },
+    {
+     "assess_season": 2025,
+     "rule": "single|et_tuned:nba_base:normal",
+     "threshold": 0.75,
+     "why": "best lift at \u22650.75",
+     "with": {
+      "decided": 32,
+      "win_rate": 0.65625
+     },
+     "without": null
+    },
+    {
+     "assess_season": 2026,
+     "rule": "majority|points_normal+et_tuned:nba_base:normal+ngboost:nba_base",
+     "threshold": 0.7,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 29,
+      "win_rate": 0.6551724137931034
+     },
+     "without": null
+    },
+    {
+     "assess_season": 2026,
+     "rule": "avg|points_normal+ridge_points@weekly+et_tuned:nba_base:normal",
+     "threshold": 0.65,
+     "why": "best lift at \u22650.65",
+     "with": {
+      "decided": 18,
+      "win_rate": 0.4444444444444444
+     },
+     "without": {
+      "rule": "avg|points_normal+ridge_points@weekly",
+      "decided": 0,
+      "win_rate": null
+     }
+    },
+    {
+     "assess_season": 2026,
+     "rule": "unanimous_min|et_tuned:nba_base:normal+ngboost:nba_base",
+     "threshold": 0.75,
+     "why": "best lift at \u22650.75",
+     "with": {
+      "decided": 14,
+      "win_rate": 0.5714285714285714
+     },
+     "without": {
+      "rule": "single|ngboost:nba_base",
+      "decided": 17,
+      "win_rate": 0.5294117647058824
+     }
+    }
+   ],
+   "registry_with_tuned": {
+    "selected_on_seasons": [
+     2023,
+     2024,
+     2025,
+     2026
+    ],
+    "best_single": "points_normal",
+    "bonferroni_count": 8777,
+    "rules": [
+     {
+      "group": "majority|ridge_points+et_tuned:nba_base:normal+extra_trees:nba_base:normal",
+      "method": "majority",
+      "members": [
+       "ridge_points",
+       "et_tuned:nba_base:normal",
+       "extra_trees:nba_base:normal"
+      ],
+      "threshold": 0.7,
+      "why": "highest accuracy (\u2265100 picks, \u22655%)",
+      "selection": {
+       "decided": 307,
+       "win_rate": 0.6547231270358306,
+       "lift": 0.12052117263843642,
+       "lower": -0.05209513122759468
+      }
+     },
+     {
+      "group": "avg|ridge_points+et_tuned:nba_base:normal+extra_trees:nba_base:normal",
+      "method": "avg",
+      "members": [
+       "ridge_points",
+       "et_tuned:nba_base:normal",
+       "extra_trees:nba_base:normal"
+      ],
+      "threshold": 0.7,
+      "why": "top point lift",
+      "selection": {
+       "decided": 301,
+       "win_rate": 0.654485049833887,
+       "lift": 0.12292358803986703,
+       "lower": -0.051450033099264714
+      }
+     },
+     {
+      "group": "unanimous_min|points_normal+gbt_points@weekly+extra_trees:nba_base:normal",
+      "method": "unanimous_min",
+      "members": [
+       "points_normal",
+       "gbt_points@weekly",
+       "extra_trees:nba_base:normal"
+      ],
+      "threshold": 0.5,
+      "why": "best lift at \u22650.50",
+      "selection": {
+       "decided": 2146,
+       "win_rate": 0.5447343895619757,
+       "lift": 0.03215284249767003,
+       "lower": -0.03469452523753014
+      }
+     },
+     {
+      "group": "avg|points_normal+ngboost:nba_base",
+      "method": "avg",
+      "members": [
+       "points_normal",
+       "ngboost:nba_base"
+      ],
+      "threshold": 0.55,
+      "why": "best lift at \u22650.55",
+      "selection": {
+       "decided": 2047,
+       "win_rate": 0.5593551538837322,
+       "lift": 0.0464093795798729,
+       "lower": -0.021930051242253917
+      }
+     },
+     {
+      "group": "avg|points_normal+ridge_points",
+      "method": "avg",
+      "members": [
+       "points_normal",
+       "ridge_points"
+      ],
+      "threshold": 0.6,
+      "why": "best lift at \u22650.60",
+      "selection": {
+       "decided": 200,
+       "win_rate": 0.61,
+       "lift": 0.08499999999999996,
+       "lower": -0.13163374501445751
+      }
+     },
+     {
+      "group": "avg|points_normal+gbt_points@weekly+elastic_net:nba_base",
+      "method": "avg",
+      "members": [
+       "points_normal",
+       "gbt_points@weekly",
+       "elastic_net:nba_base"
+      ],
+      "threshold": 0.65,
+      "why": "best lift at \u22650.65",
+      "selection": {
+       "decided": 108,
+       "win_rate": 0.6296296296296297,
+       "lift": 0.20370370370370372,
+       "lower": -0.08818948504708418
+      }
+     },
+     {
+      "group": "majority|gbt_points+elastic_net:nba_base+mlp:nba_base:normal",
+      "method": "majority",
+      "members": [
+       "gbt_points",
+       "elastic_net:nba_base",
+       "mlp:nba_base:normal"
+      ],
+      "threshold": 0.7,
+      "why": "best lift at \u22650.70",
+      "selection": {
+       "decided": 105,
+       "win_rate": 0.6666666666666666,
+       "lift": 0.23809523809523808,
+       "lower": -0.05463912530126985
+      }
+     },
+     {
+      "group": "unanimous_min|gbt_points+extra_trees:nba_base:normal",
+      "method": "unanimous_min",
+      "members": [
+       "gbt_points",
+       "extra_trees:nba_base:normal"
+      ],
+      "threshold": 0.75,
+      "why": "best lift at \u22650.75",
+      "selection": {
+       "decided": 105,
+       "win_rate": 0.6666666666666666,
+       "lift": 0.23809523809523808,
+       "lower": -0.05463912530126985
+      }
+     }
+    ],
+    "note": "Selected on every historical season (exploratory); evaluated only prospectively from now on."
+   },
+   "configurations": 5985
+  },
+  "nba:team_total_home": {
+   "tuned_members": [
+    "et_tuned:nba_base:normal",
+    "hgb_tuned:nba_base:normal"
+   ],
+   "games": 5282,
+   "seasons": [
+    2023,
+    2024,
+    2025,
+    2026
+   ],
+   "alone": {
+    "et_tuned:nba_base:normal": {
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.003223697702646941,
+      "ci95": [
+       -0.002888055841743277,
+       0.009403444977508585
+      ],
+      "games": 3962,
+      "weeks": 105
+     },
+     "counterpart": "extra_trees:nba_base:normal",
+     "log_loss_minus_untuned_counterpart": {
+      "mean": -0.0019356403019039434,
+      "ci95": [
+       -0.004462721628216819,
+       0.0005050101842906094
+      ],
+      "games": 3962,
+      "weeks": 105
+     },
+     "per_season": {
+      "2024": {
+       "best_prior_existing": "hetero_linear:nba_base",
+       "minus_best": 0.0055418094339534955,
+       "minus_counterpart": -0.005215832753258738
+      },
+      "2025": {
+       "best_prior_existing": "points_normal",
+       "minus_best": 0.002860225565066138,
+       "minus_counterpart": -0.002980871881749277
+      },
+      "2026": {
+       "best_prior_existing": "points_normal",
+       "minus_best": 0.001274043633169558,
+       "minus_counterpart": 0.0023815493806321076
+      }
+     }
+    },
+    "hgb_tuned:nba_base:normal": {
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.004292190953482111,
+      "ci95": [
+       -0.001395044494900873,
+       0.010005456946177396
+      ],
+      "games": 3962,
+      "weeks": 105
+     },
+     "counterpart": "gbt_points",
+     "log_loss_minus_untuned_counterpart": {
+      "mean": 0.0007066542944743299,
+      "ci95": [
+       -0.0012733311423154205,
+       0.0027409433560269367
+      ],
+      "games": 3962,
+      "weeks": 105
+     },
+     "per_season": {
+      "2024": {
+       "best_prior_existing": "hetero_linear:nba_base",
+       "minus_best": 0.0031829566109475506,
+       "minus_counterpart": -0.0007277036931735686
+      },
+      "2025": {
+       "best_prior_existing": "points_normal",
+       "minus_best": -0.00038237265589079834,
+       "minus_counterpart": 0.00245861614759814
+      },
+      "2026": {
+       "best_prior_existing": "points_normal",
+       "minus_best": 0.010069935753621823,
+       "minus_counterpart": 0.0003871206921528652
+      }
+     }
+    }
+   },
+   "frozen_pooled": {
+    "without_tuned": {
+     "0.50": {
+      "win_rate": 0.5181219110378913,
+      "decided": 2428,
+      "best_prior_single": 0.49835255354200986,
+      "all_member_average": 0.5383031301482701
+     },
+     "0.55": {
+      "win_rate": 0.5363155363155363,
+      "decided": 2079,
+      "best_prior_single": 0.49254449254449256,
+      "all_member_average": 0.5406445406445406
+     },
+     "0.60": {
+      "win_rate": 0.5264550264550265,
+      "decided": 756,
+      "best_prior_single": 0.503968253968254,
+      "all_member_average": 0.5224867724867724
+     },
+     "0.65": {
+      "win_rate": 0.55,
+      "decided": 460,
+      "best_prior_single": 0.49130434782608695,
+      "all_member_average": 0.5369565217391304
+     },
+     "0.70": {
+      "win_rate": 0.5964912280701754,
+      "decided": 114,
+      "best_prior_single": 0.43859649122807015,
+      "all_member_average": 0.631578947368421
+     },
+     "0.75": {
+      "win_rate": 0.5882352941176471,
+      "decided": 17,
+      "best_prior_single": 0.47058823529411764,
+      "all_member_average": 0.5882352941176471
+     }
+    },
+    "with_tuned": {
+     "0.50": {
+      "win_rate": 0.5226824457593688,
+      "decided": 2028,
+      "best_prior_single": 0.49457593688362916,
+      "all_member_average": 0.5379684418145957
+     },
+     "0.55": {
+      "win_rate": 0.5371549893842887,
+      "decided": 1884,
+      "best_prior_single": 0.49044585987261147,
+      "all_member_average": 0.5392781316348195
+     },
+     "0.60": {
+      "win_rate": 0.5452436194895591,
+      "decided": 431,
+      "best_prior_single": 0.4965197215777262,
+      "all_member_average": 0.5382830626450116
+     },
+     "0.65": {
+      "win_rate": 0.5586734693877551,
+      "decided": 392,
+      "best_prior_single": 0.4642857142857143,
+      "all_member_average": 0.548469387755102
+     },
+     "0.70": {
+      "win_rate": 0.6153846153846154,
+      "decided": 104,
+      "best_prior_single": 0.46153846153846156,
+      "all_member_average": 0.6057692307692307
+     },
+     "0.75": {
+      "win_rate": 0.5882352941176471,
+      "decided": 17,
+      "best_prior_single": 0.47058823529411764,
+      "all_member_average": 0.6470588235294118
+     }
+    }
+   },
+   "qualified": {
+    "without_tuned": [],
+    "with_tuned": []
+   },
+   "frozen_rules_with_tuned_member": [
+    {
+     "assess_season": 2024,
+     "rule": "unanimous_min|et_tuned:nba_base:normal+extra_trees:nba_base:normal",
+     "threshold": 0.65,
+     "why": "best lift at \u22650.65",
+     "with": {
+      "decided": 229,
+      "win_rate": 0.5458515283842795
+     },
+     "without": {
+      "rule": "single|extra_trees:nba_base:normal",
+      "decided": 327,
+      "win_rate": 0.5229357798165137
+     }
+    },
+    {
+     "assess_season": 2025,
+     "rule": "avg|ridge_points+et_tuned:nba_base:normal+extra_trees:nba_base:normal",
+     "threshold": 0.7,
+     "why": "best lift at \u22650.70",
+     "with": {
+      "decided": 36,
+      "win_rate": 0.6388888888888888
+     },
+     "without": {
+      "rule": "avg|ridge_points+extra_trees:nba_base:normal",
+      "decided": 33,
+      "win_rate": 0.6666666666666666
+     }
+    },
+    {
+     "assess_season": 2026,
+     "rule": "avg|points_normal+extra_trees:nba_base:normal+hgb_tuned:nba_base:normal",
+     "threshold": 0.65,
+     "why": "best lift at \u22650.65",
+     "with": {
+      "decided": 25,
+      "win_rate": 0.6
+     },
+     "without": {
+      "rule": "avg|points_normal+extra_trees:nba_base:normal",
+      "decided": 5,
+      "win_rate": 0.6
+     }
+    },
+    {
+     "assess_season": 2026,
+     "rule": "avg|ridge_points+extra_trees:nba_base:normal+hgb_tuned:nba_base:normal",
+     "threshold": 0.7,
+     "why": "best lift at \u22650.70",
+     "with": {
+      "decided": 32,
+      "win_rate": 0.59375
+     },
+     "without": {
+      "rule": "avg|ridge_points+extra_trees:nba_base:normal",
+      "decided": 31,
+      "win_rate": 0.6774193548387096
+     }
+    }
+   ],
+   "registry_with_tuned": {
+    "selected_on_seasons": [
+     2023,
+     2024,
+     2025,
+     2026
+    ],
+    "best_single": "points_normal",
+    "bonferroni_count": 8777,
+    "rules": [
+     {
+      "group": "unanimous_min|gbt_points@weekly+elastic_net:nba_base+mlp:nba_base:normal",
+      "method": "unanimous_min",
+      "members": [
+       "gbt_points@weekly",
+       "elastic_net:nba_base",
+       "mlp:nba_base:normal"
+      ],
+      "threshold": 0.6,
+      "why": "highest accuracy (\u2265100 picks, \u22655%)",
+      "selection": {
+       "decided": 321,
+       "win_rate": 0.616822429906542,
+       "lift": 0.11526479750778817,
+       "lower": -0.05556987758569257
+      }
+     },
+     {
+      "group": "majority|gbt_points@weekly+hetero_linear:nba_base+mlp:nba_base:normal",
+      "method": "majority",
+      "members": [
+       "gbt_points@weekly",
+       "hetero_linear:nba_base",
+       "mlp:nba_base:normal"
+      ],
+      "threshold": 0.65,
+      "why": "top point lift",
+      "selection": {
+       "decided": 272,
+       "win_rate": 0.6029411764705882,
+       "lift": 0.12867647058823528,
+       "lower": -0.057364625649284795
+      }
+     },
+     {
+      "group": "unanimous_min|points_normal+extra_trees:nba_base:normal+ngboost:nba_base",
+      "method": "unanimous_min",
+      "members": [
+       "points_normal",
+       "extra_trees:nba_base:normal",
+       "ngboost:nba_base"
+      ],
+      "threshold": 0.5,
+      "why": "best lift at \u22650.50",
+      "selection": {
+       "decided": 2555,
+       "win_rate": 0.5452054794520548,
+       "lift": 0.038747553816047,
+       "lower": -0.022520782589453267
+      }
+     },
+     {
+      "group": "avg|points_normal+ngboost:nba_base",
+      "method": "avg",
+      "members": [
+       "points_normal",
+       "ngboost:nba_base"
+      ],
+      "threshold": 0.55,
+      "why": "best lift at \u22650.55",
+      "selection": {
+       "decided": 1827,
+       "win_rate": 0.5686918445539135,
+       "lift": 0.05856595511767926,
+       "lower": -0.013688699702152016
+      }
+     },
+     {
+      "group": "avg|points_normal+gbt_points@weekly+mlp:nba_base:normal",
+      "method": "avg",
+      "members": [
+       "points_normal",
+       "gbt_points@weekly",
+       "mlp:nba_base:normal"
+      ],
+      "threshold": 0.6,
+      "why": "best lift at \u22650.60",
+      "selection": {
+       "decided": 234,
+       "win_rate": 0.6111111111111112,
+       "lift": 0.12820512820512825,
+       "lower": -0.07209074206808322
+      }
+     },
+     {
+      "group": "avg|points_normal+gbt_points@weekly+ngboost:nba_base",
+      "method": "avg",
+      "members": [
+       "points_normal",
+       "gbt_points@weekly",
+       "ngboost:nba_base"
+      ],
+      "threshold": 0.65,
+      "why": "best lift at \u22650.65",
+      "selection": {
+       "decided": 123,
+       "win_rate": 0.6341463414634146,
+       "lift": 0.14634146341463417,
+       "lower": -0.12835947138520792
+      }
+     },
+     {
+      "group": "avg|ridge_points+extra_trees:nba_base:normal+hgb_tuned:nba_base:normal",
+      "method": "avg",
+      "members": [
+       "ridge_points",
+       "extra_trees:nba_base:normal",
+       "hgb_tuned:nba_base:normal"
+      ],
+      "threshold": 0.7,
+      "why": "best lift at \u22650.70",
+      "selection": {
+       "decided": 170,
+       "win_rate": 0.6176470588235294,
+       "lift": 0.1470588235294118,
+       "lower": -0.08743536994046211
+      }
+     },
+     {
+      "group": "single|extra_trees:nba_base:normal",
+      "method": "single",
+      "members": [
+       "extra_trees:nba_base:normal"
+      ],
+      "threshold": 0.75,
+      "why": "best lift at \u22650.75",
+      "selection": {
+       "decided": 136,
+       "win_rate": 0.6397058823529411,
+       "lift": 0.13970588235294112,
+       "lower": -0.12116359485263795
+      }
+     }
+    ],
+    "note": "Selected on every historical season (exploratory); evaluated only prospectively from now on."
+   },
+   "configurations": 5985
+  },
+  "nba:team_total_away": {
+   "tuned_members": [
+    "et_tuned:nba_base:normal",
+    "hgb_tuned:nba_base:normal"
+   ],
+   "games": 5282,
+   "seasons": [
+    2023,
+    2024,
+    2025,
+    2026
+   ],
+   "alone": {
+    "et_tuned:nba_base:normal": {
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.006323902907644482,
+      "ci95": [
+       0.00047051204428995297,
+       0.012487753052242517
+      ],
+      "games": 3962,
+      "weeks": 105
+     },
+     "counterpart": "extra_trees:nba_base:normal",
+     "log_loss_minus_untuned_counterpart": {
+      "mean": -0.0022607544242426287,
+      "ci95": [
+       -0.005058904337903417,
+       0.00042601099652313923
+      ],
+      "games": 3962,
+      "weeks": 105
+     },
+     "per_season": {
+      "2024": {
+       "best_prior_existing": "hetero_linear:nba_base",
+       "minus_best": 0.004514591385602036,
+       "minus_counterpart": -0.0037583145177987757
+      },
+      "2025": {
+       "best_prior_existing": "points_normal",
+       "minus_best": 0.008289639356330912,
+       "minus_counterpart": -0.0033860234032711246
+      },
+      "2026": {
+       "best_prior_existing": "points_normal",
+       "minus_best": 0.006164859071683218,
+       "minus_counterpart": 0.00035782506493830846
+      }
+     }
+    },
+    "hgb_tuned:nba_base:normal": {
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.006137207113126892,
+      "ci95": [
+       0.00027694395322376927,
+       0.012473506187010827
+      ],
+      "games": 3962,
+      "weeks": 105
+     },
+     "counterpart": "gbt_points",
+     "log_loss_minus_untuned_counterpart": {
+      "mean": -0.00279382002057685,
+      "ci95": [
+       -0.005077209770582146,
+       -0.00032812938085563596
+      ],
+      "games": 3962,
+      "weeks": 105
+     },
+     "per_season": {
+      "2024": {
+       "best_prior_existing": "hetero_linear:nba_base",
+       "minus_best": 0.00577030098740468,
+       "minus_counterpart": -0.0023221349020986757
+      },
+      "2025": {
+       "best_prior_existing": "points_normal",
+       "minus_best": 0.007431904955719755,
+       "minus_counterpart": -0.00569153698911869
+      },
+      "2026": {
+       "best_prior_existing": "points_normal",
+       "minus_best": 0.0052095621280757775,
+       "minus_counterpart": -0.000368909699721282
+      }
+     }
+    }
+   },
+   "frozen_pooled": {
+    "without_tuned": {
+     "0.50": {
+      "win_rate": 0.5342837746096402,
+      "decided": 2946,
+      "best_prior_single": 0.5237610319076714,
+      "all_member_average": 0.5349626612355737
+     },
+     "0.55": {
+      "win_rate": 0.5467289719626168,
+      "decided": 1498,
+      "best_prior_single": 0.5240320427236315,
+      "all_member_average": 0.5487316421895861
+     },
+     "0.60": {
+      "win_rate": 0.5669456066945606,
+      "decided": 478,
+      "best_prior_single": 0.5774058577405857,
+      "all_member_average": 0.5794979079497908
+     },
+     "0.65": {
+      "win_rate": 0.570902394106814,
+      "decided": 543,
+      "best_prior_single": 0.5543278084714549,
+      "all_member_average": 0.578268876611418
+     },
+     "0.70": {
+      "win_rate": 0.5915492957746479,
+      "decided": 71,
+      "best_prior_single": 0.5070422535211268,
+      "all_member_average": 0.5774647887323944
+     },
+     "0.75": {
+      "win_rate": 0.5,
+      "decided": 8,
+      "best_prior_single": 0.625,
+      "all_member_average": 0.5
+     }
+    },
+    "with_tuned": {
+     "0.50": {
+      "win_rate": 0.5321756894790602,
+      "decided": 2937,
+      "best_prior_single": 0.5236636023152877,
+      "all_member_average": 0.5352400408580184
+     },
+     "0.55": {
+      "win_rate": 0.5479814692256784,
+      "decided": 1511,
+      "best_prior_single": 0.5228325612177366,
+      "all_member_average": 0.5446724023825281
+     },
+     "0.60": {
+      "win_rate": 0.5654205607476636,
+      "decided": 428,
+      "best_prior_single": 0.5771028037383178,
+      "all_member_average": 0.5794392523364486
+     },
+     "0.65": {
+      "win_rate": 0.5572289156626506,
+      "decided": 332,
+      "best_prior_single": 0.5632530120481928,
+      "all_member_average": 0.5873493975903614
+     },
+     "0.70": {
+      "win_rate": 0.5111111111111111,
+      "decided": 90,
+      "best_prior_single": 0.5333333333333333,
+      "all_member_average": 0.5444444444444444
+     },
+     "0.75": {
+      "win_rate": 0.5,
+      "decided": 8,
+      "best_prior_single": 0.625,
+      "all_member_average": 0.5
+     }
+    }
+   },
+   "qualified": {
+    "without_tuned": [],
+    "with_tuned": []
+   },
+   "frozen_rules_with_tuned_member": [
+    {
+     "assess_season": 2024,
+     "rule": "avg|gbt_points@weekly+et_tuned:nba_base:normal+ngboost:nba_base",
+     "threshold": 0.65,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 197,
+      "win_rate": 0.5786802030456852
+     },
+     "without": {
+      "rule": "avg|gbt_points@weekly+ngboost:nba_base",
+      "decided": 184,
+      "win_rate": 0.5652173913043478
+     }
+    },
+    {
+     "assess_season": 2024,
+     "rule": "avg|ridge_points+et_tuned:nba_base:normal+extra_trees:nba_base:normal",
+     "threshold": 0.55,
+     "why": "best lift at \u22650.55",
+     "with": {
+      "decided": 861,
+      "win_rate": 0.5365853658536586
+     },
+     "without": {
+      "rule": "avg|ridge_points+extra_trees:nba_base:normal",
+      "decided": 851,
+      "win_rate": 0.5346650998824912
+     }
+    },
+    {
+     "assess_season": 2025,
+     "rule": "unanimous_min|gbt_points@weekly+et_tuned:nba_base:normal+hetero_linear:nba_base",
+     "threshold": 0.5,
+     "why": "best lift at \u22650.50",
+     "with": {
+      "decided": 1035,
+      "win_rate": 0.527536231884058
+     },
+     "without": {
+      "rule": "unanimous_min|gbt_points@weekly+hetero_linear:nba_base",
+      "decided": 1085,
+      "win_rate": 0.5327188940092166
+     }
+    },
+    {
+     "assess_season": 2025,
+     "rule": "avg|points_normal+et_tuned:nba_base:normal+extra_trees:nba_base:normal",
+     "threshold": 0.65,
+     "why": "best lift at \u22650.65",
+     "with": {
+      "decided": 45,
+      "win_rate": 0.5555555555555556
+     },
+     "without": {
+      "rule": "avg|points_normal+extra_trees:nba_base:normal",
+      "decided": 7,
+      "win_rate": 0.42857142857142855
+     }
+    },
+    {
+     "assess_season": 2025,
+     "rule": "unanimous_min|et_tuned:nba_base:normal+hgb_tuned:nba_base:normal",
+     "threshold": 0.7,
+     "why": "best lift at \u22650.70",
+     "with": {
+      "decided": 52,
+      "win_rate": 0.5576923076923077
+     },
+     "without": {
+      "rule": "single|hgb_tuned:nba_base:normal",
+      "decided": 67,
+      "win_rate": 0.5223880597014925
+     }
+    },
+    {
+     "assess_season": 2025,
+     "rule": "unanimous_min|et_tuned:nba_base:normal+hgb_tuned:nba_base:normal",
+     "threshold": 0.7,
+     "why": "best lift at \u22650.70",
+     "with": {
+      "decided": 52,
+      "win_rate": 0.5576923076923077
+     },
+     "without": {
+      "rule": "single|et_tuned:nba_base:normal",
+      "decided": 74,
+      "win_rate": 0.6486486486486487
+     }
+    },
+    {
+     "assess_season": 2026,
+     "rule": "single|et_tuned:nba_base:normal",
+     "threshold": 0.7,
+     "why": "highest accuracy (\u2265100 picks, \u22655%)",
+     "with": {
+      "decided": 31,
+      "win_rate": 0.41935483870967744
+     },
+     "without": null
+    },
+    {
+     "assess_season": 2026,
+     "rule": "unanimous_min|gbt_points@weekly+et_tuned:nba_base:normal+extra_trees:nba_base:normal",
+     "threshold": 0.5,
+     "why": "best lift at \u22650.50",
+     "with": {
+      "decided": 1017,
+      "win_rate": 0.543756145526057
+     },
+     "without": {
+      "rule": "unanimous_min|gbt_points@weekly+extra_trees:nba_base:normal",
+      "decided": 1068,
+      "win_rate": 0.5421348314606742
+     }
+    },
+    {
+     "assess_season": 2026,
+     "rule": "avg|points_normal+et_tuned:nba_base:normal",
+     "threshold": 0.6,
+     "why": "best lift at \u22650.60",
+     "with": {
+      "decided": 29,
+      "win_rate": 0.4482758620689655
+     },
+     "without": {
+      "rule": "single|points_normal",
+      "decided": 0,
+      "win_rate": null
+     }
+    },
+    {
+     "assess_season": 2026,
+     "rule": "avg|points_normal+et_tuned:nba_base:normal+extra_trees:nba_base:normal",
+     "threshold": 0.65,
+     "why": "best lift at \u22650.65",
+     "with": {
+      "decided": 14,
+      "win_rate": 0.5
+     },
+     "without": {
+      "rule": "avg|points_normal+extra_trees:nba_base:normal",
+      "decided": 2,
+      "win_rate": 0.5
+     }
+    }
+   ],
+   "registry_with_tuned": {
+    "selected_on_seasons": [
+     2023,
+     2024,
+     2025,
+     2026
+    ],
+    "best_single": "points_normal",
+    "bonferroni_count": 8777,
+    "rules": [
+     {
+      "group": "single|et_tuned:nba_base:normal",
+      "method": "single",
+      "members": [
+       "et_tuned:nba_base:normal"
+      ],
+      "threshold": 0.7,
+      "why": "highest accuracy (\u2265100 picks, \u22655%)",
+      "selection": {
+       "decided": 272,
+       "win_rate": 0.6286764705882353,
+       "lift": 0.09926470588235292,
+       "lower": -0.08559958925688868
+      }
+     },
+     {
+      "group": "avg|points_normal+ridge_points@weekly+et_tuned:nba_base:normal",
+      "method": "avg",
+      "members": [
+       "points_normal",
+       "ridge_points@weekly",
+       "et_tuned:nba_base:normal"
+      ],
+      "threshold": 0.6,
+      "why": "top point lift",
+      "selection": {
+       "decided": 468,
+       "win_rate": 0.6132478632478633,
+       "lift": 0.10470085470085477,
+       "lower": -0.036891893861620534
+      }
+     },
+     {
+      "group": "unanimous_min|points_normal+gbt_points@weekly+hetero_linear:nba_base",
+      "method": "unanimous_min",
+      "members": [
+       "points_normal",
+       "gbt_points@weekly",
+       "hetero_linear:nba_base"
+      ],
+      "threshold": 0.5,
+      "why": "best lift at \u22650.50",
+      "selection": {
+       "decided": 2275,
+       "win_rate": 0.5476923076923077,
+       "lift": 0.03472527472527476,
+       "lower": -0.030180732080703584
+      }
+     },
+     {
+      "group": "avg|points_normal+hetero_linear:nba_base",
+      "method": "avg",
+      "members": [
+       "points_normal",
+       "hetero_linear:nba_base"
+      ],
+      "threshold": 0.55,
+      "why": "best lift at \u22650.55",
+      "selection": {
+       "decided": 1295,
+       "win_rate": 0.5722007722007721,
+       "lift": 0.06254826254826251,
+       "lower": -0.023232010406439463
+      }
+     },
+     {
+      "group": "avg|points_normal+extra_trees:nba_base:normal+hetero_linear:nba_base",
+      "method": "avg",
+      "members": [
+       "points_normal",
+       "extra_trees:nba_base:normal",
+       "hetero_linear:nba_base"
+      ],
+      "threshold": 0.65,
+      "why": "best lift at \u22650.65",
+      "selection": {
+       "decided": 105,
+       "win_rate": 0.638095238095238,
+       "lift": 0.10476190476190472,
+       "lower": -0.19192469257236705
+      }
+     },
+     {
+      "group": "majority|gbt_points+extra_trees:nba_base:normal+mlp:nba_base:normal",
+      "method": "majority",
+      "members": [
+       "gbt_points",
+       "extra_trees:nba_base:normal",
+       "mlp:nba_base:normal"
+      ],
+      "threshold": 0.7,
+      "why": "best lift at \u22650.70",
+      "selection": {
+       "decided": 109,
+       "win_rate": 0.6605504587155964,
+       "lift": 0.12844036697247707,
+       "lower": -0.16073394706049254
+      }
+     },
+     {
+      "group": "single|extra_trees:nba_base:normal",
+      "method": "single",
+      "members": [
+       "extra_trees:nba_base:normal"
+      ],
+      "threshold": 0.75,
+      "why": "best lift at \u22650.75",
+      "selection": {
+       "decided": 126,
+       "win_rate": 0.6190476190476191,
+       "lift": 0.0714285714285714,
+       "lower": -0.20046190326164248
+      }
+     }
+    ],
+    "note": "Selected on every historical season (exploratory); evaluated only prospectively from now on."
+   },
+   "configurations": 5985
+  }
+ },
+ "finished_at": "2026-10-03T02:00:26Z"
+}
