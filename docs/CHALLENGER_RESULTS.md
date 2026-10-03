@@ -200,3 +200,28 @@ candidate; their 3 existing members were already fully covered). Omitted subsets
   total `poisson_draw:nhl_base`, `multinomial_l2`; NBA home total `avg:points_normal+cand:hetero_linear`).
 - Limits: all seasons spent before (exploratory); line markets at the model's own line (no historical bookmaker lines); NBA
   has a single held-out season; 2-hour live cutoffs differ from the historical night-before/17:45 cutoffs.
+
+## Feature tranche `features-v1` (MODEL_SELECTION §19; run 2026-10-03 00:34–00:35 UTC on scratch store copies; exploratory)
+Evidence: docs/evidence/features-v1/ (both reports and the experiment log: 4 configurations, all succeeded, none skipped).
+**NBA — player-quality-weighted absences** (3,667 games 2022–24 at the 17:45 ET cutoff; report times assumed as `avail_v1`):
+| Model | Log loss | Brier | Accuracy |
+|---|---|---|---|
+| elo | 0.6320 | 0.2209 | 64.3% |
+| logistic_v2 | 0.6300 | 0.2199 | 64.5% |
+| avail_v1 (minutes only) | 0.6251 | 0.2177 | 66.0% |
+| avail_q_v1 (minutes + quality) | 0.6235 | 0.2170 | 65.7% |
+| avail_q_only (quality, no minutes terms) | 0.6266 | 0.2185 | 64.2% |
+- `avail_q_v1 − avail_v1` log loss −0.0016, Bonferroni interval [−0.0037, +0.0005] → **no evidence of information beyond
+  `avail_v1`** (the registered reading rule). Both variants beat `logistic_v2` (−0.0065 [−0.0124, −0.0006]; −0.0033
+  [−0.0061, −0.0006]): the injury report matters, the quality weighting adds no demonstrable increment.
+- Incremental check, average with Elo: top-25% accuracy 77.5% (avail_v1) vs 78.4% (avail_q_v1) vs 78.8% (avail_q_only), 917
+  games each — differences within noise. Nothing changes live; `avail_q` is not recorded prospectively.
+**NHL — shot volume and special-teams finishing** (same learner, same walk; special − base log loss, Bonferroni over 4):
+| Market · learner | 2018–21 (4,877) | 2022–26 (6,993) |
+|---|---|---|
+| winner · logit_l2 | +0.00001 [−0.0015, +0.0015] | −0.0001 [−0.0013, +0.0010] |
+| winner · poisson_draw | −0.0005 [−0.0014, +0.0005] | −0.0005 [−0.0012, +0.0002] |
+| reg3 · poisson_draw | −0.0002 [−0.0013, +0.0009] | −0.0005 [−0.0013, +0.0003] |
+| puck line · poisson_draw | −0.0004 [−0.0015, +0.0006] | −0.0006 [−0.0013, +0.0001] |
+- Every interval spans 0 → **no evidence of added information**; point estimates are consistently slightly negative for the
+  goal-rate learner, so this is a weak, unconfirmed lead, not a result. Not recorded live.

@@ -1,0 +1,145 @@
+{
+ "study": "features-v1",
+ "part": "NHL nhl_special",
+ "exploratory": true,
+ "generated_at": "2026-10-03T00:35:05Z",
+ "walk_games": 14508,
+ "comparison": "special \u2212 base log loss (negative favours the new inputs)",
+ "results": {
+  "winner:logit_l2": {
+   "screen": {
+    "mean": 1.082085166306524e-05,
+    "ci95": [
+     -0.0011585660870634944,
+     0.0011458451656996397
+    ],
+    "weeks": 133,
+    "games": 4877,
+    "seed": 20260930,
+    "samples": 2000,
+    "bonferroni_interval": [
+     -0.0014575072914364906,
+     0.0014791489947626212
+    ]
+   },
+   "assess": {
+    "mean": -0.00014239037372774192,
+    "ci95": [
+     -0.0009909321711909767,
+     0.0007470839859618344
+    ],
+    "weeks": 183,
+    "games": 6993,
+    "seed": 20260930,
+    "samples": 2000,
+    "bonferroni_interval": [
+     -0.0012498220587836236,
+     0.0009650413113281397
+    ]
+   }
+  },
+  "winner:poisson_draw": {
+   "screen": {
+    "mean": -0.0004911884207511504,
+    "ci95": [
+     -0.0012214117947006826,
+     0.00025933479285426543
+    ],
+    "weeks": 133,
+    "games": 4877,
+    "seed": 20260930,
+    "samples": 2000,
+    "bonferroni_interval": [
+     -0.0014346927039812084,
+     0.00045231586247890764
+    ]
+   },
+   "assess": {
+    "mean": -0.0005091365988919374,
+    "ci95": [
+     -0.0010416747741965081,
+     3.431276962833727e-05
+    ],
+    "weeks": 183,
+    "games": 6993,
+    "seed": 20260930,
+    "samples": 2000,
+    "bonferroni_interval": [
+     -0.0011947359207700025,
+     0.00017646272298612773
+    ]
+   }
+  },
+  "reg3:poisson_draw": {
+   "screen": {
+    "mean": -0.00021661974629754244,
+    "ci95": [
+     -0.0011039597311902757,
+     0.0006190304540471981
+    ],
+    "weeks": 133,
+    "games": 4877,
+    "seed": 20260930,
+    "samples": 2000,
+    "bonferroni_interval": [
+     -0.0013144771605220964,
+     0.0008812376679270115
+    ]
+   },
+   "assess": {
+    "mean": -0.0005163687202122704,
+    "ci95": [
+     -0.001135551748957835,
+     0.0001280856614593678
+    ],
+    "weeks": 183,
+    "games": 6993,
+    "seed": 20260930,
+    "samples": 2000,
+    "bonferroni_interval": [
+     -0.0013215350594081238,
+     0.00028879761898358296
+    ]
+   }
+  },
+  "spread:poisson_draw": {
+   "screen": {
+    "mean": -0.00043768103059432133,
+    "ci95": [
+     -0.001238385830753748,
+     0.0003535359481991056
+    ],
+    "weeks": 133,
+    "games": 4877,
+    "seed": 20260930,
+    "samples": 2000,
+    "bonferroni_interval": [
+     -0.0014520240853970697,
+     0.000576662024208427
+    ]
+   },
+   "assess": {
+    "mean": -0.0006040294987269231,
+    "ci95": [
+     -0.0011495885391539552,
+     -2.847828348549717e-05
+    ],
+    "weeks": 183,
+    "games": 6993,
+    "seed": 20260930,
+    "samples": 2000,
+    "bonferroni_interval": [
+     -0.0013183801763421658,
+     0.00011032117888831966
+    ]
+   }
+  }
+ },
+ "reading": {
+  "winner:logit_l2": "no evidence of added information",
+  "winner:poisson_draw": "no evidence of added information",
+  "reg3:poisson_draw": "no evidence of added information",
+  "spread:poisson_draw": "no evidence of added information"
+ },
+ "note": "Same learner, same walk; only the three inputs differ. Seasons were spent before (exploratory)."
+}

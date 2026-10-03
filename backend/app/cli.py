@@ -10,7 +10,7 @@ from .models.elo import EloConfig
 SPORT_COMMANDS = {"nhl-pbp-import", "nhl-xg-research", "migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies", "refresh", "odds", "predict",
                   "score", "daily", "scheduler", "predict-now", "score-near-tipoff", "markets", "score-markets", "agreement", "thresholds",
                   "combination-study", "selector-decide", "research-report", "retrain-cadence", "catboost-challenger", "combination-search", "expanded-search", "selective-study", "rules-registry",
-                  "daily-cadence", "tracking-report", "tracking-record", "pool-screen", "pool-assess", "pool-record", "pool-roster", "pool-report"}
+                  "daily-cadence", "features-nhl", "tracking-report", "tracking-record", "pool-screen", "pool-assess", "pool-record", "pool-roster", "pool-report"}
 NHL_ONLY = {"nhl-pbp-import", "nhl-xg-research", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies"}
 
 
@@ -100,6 +100,8 @@ def main(argv=None) -> int:
     rg.add_argument("--nba", required=True, help="NBA selective-study report.json")
     rg.add_argument("--nhl", required=True, help="NHL selective-study report.json")
     rg.add_argument("--effective-from", required=True)
+    sub.add_parser("features-nhl", help="features-v1 NHL: shot volume and special-teams finishing (MODEL_SELECTION §19; exploratory)")
+    sub.add_parser("features-nba", help="features-v1 NBA: player-quality-weighted absences (MODEL_SELECTION §19; exploratory)")
     # Persistent agreement tracking tracking-v2 (MODEL_SELECTION §18)
     tg = sub.add_parser("tracking-registry", help="Seal the tracking-v2 group registry (refuses to replace an existing one)")
     tg.add_argument("--effective-from", required=True)
@@ -425,6 +427,17 @@ def main(argv=None) -> int:
         report = selective_study.run(conn, args.sport, out_dir=Path(args.out) if args.out else None)
         print(json.dumps({"output_dir": report["output_dir"], "qualified": {m: [len(f["qualified"]) for f in a["folds"]]
                                                                             for m, a in report["markets"].items()}}))
+    elif args.cmd == "features-nhl":
+        from .candidates import features_extra
+        r = features_extra.evaluate(conn)
+        print(json.dumps({k: r[k] for k in ("walk_games", "reading", "output_dir")} | {"results": {k: {p: {"mean": x["mean"],
+              "games": x["games"], "bonferroni": x["bonferroni_interval"]} for p, x in v.items()} for k, v in r["results"].items()}},
+              indent=1, default=str))
+    elif args.cmd == "features-nba":
+        from . import availability_quality
+        r = availability_quality.evaluate(conn)
+        print(json.dumps({k: r[k] for k in ("scored_games", "reading", "output_dir")} | {"comparisons": {k: {"mean": v["mean"],
+              "bonferroni": v["bonferroni_interval"]} for k, v in r["comparisons"].items()}}, indent=1, default=str))
     elif args.cmd == "tracking-report":
         from . import agreement_tracking as at
         if args.check:
