@@ -225,7 +225,7 @@ triples, 102 of 848 larger). Thresholds 50–90% (reg3 35–70%); bands reported
 | NBA spread | ≥60%: 58.8% vs 61.4% | worse |
 | NBA total / team totals | e.g. total ≥70%: 63.2% vs 53.8%; TT away ≥70%: 68.4% vs 53.5% | see note |
 
-- **Qualified rules:** one in 44 folds — NBA total 2025-26 fold, `unanimous_min(extra_trees:normal + ngboost) ≥ 0.70`
+- **Qualified rules:** one in 68 market-folds — NBA total 2025-26 fold, `unanimous_min(extra_trees:normal + ngboost) ≥ 0.70`
   (selection 64.1%, lower bound +0.002); on 2025-26 it went 29–19 (60.4%) vs 70.8% for the best earlier single model.
   It did not hold up. The final selection on all seasons qualifies nothing.
 - **Note on NBA lines:** the historical line is the points model's own pregame line, where that model is ~50/50; whenever it is
