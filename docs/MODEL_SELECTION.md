@@ -590,3 +590,9 @@ sklearn, which overstated the equivalence).
 - **2026-10-03 ~01:40 UTC, discovery-v1 amendment (after run 1):** added the final selection step the §20 pipeline names
   ("record them prospectively"): the same selection procedure on every historical season, no assessment, saved as
   `prospective_registry` per market. It changes no evaluated figure (same seed, same folds); run 2 reproduces run 1's folds.
+- **2026-10-03 ~02:40 UTC, timing fix (reconciliation; user's "finish the timing bug"):** a game accepted at the start of a
+  two-hour cycle that starts, is rescheduled or leaves the schedule before its cohort is written is now skipped with a
+  reason (and a line member without state is recorded as missing) instead of raising (live run 108: `goals_draw`/`goals_glm`
+  `AttributeError`; the cohort trigger also refused the insert and aborted the step). `research_live.py` is part of the
+  research identity, so the core research definition changes again; earlier cohorts, observations, selections and decisions
+  keep their definition and nothing is relabelled. Regression test: `test_a_game_that_starts_during_the_cycle_is_a_member_skip_not_an_error`.

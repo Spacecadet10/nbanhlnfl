@@ -207,6 +207,9 @@ def record(conn, *, game_ids: list, winner_run: Optional[dict], history: Optiona
                     if isinstance(d, str):
                         missing[m.name] = d
                         continue
+                    if d is None:    # the game started or left the schedule before this member's state was computed
+                        missing[m.name] = "no member state: the game was no longer scheduled before the start"
+                        continue
                     try:
                         vec = _vec(d.market(market, line))
                         mv = f"{PREFIX}:{m.name}:{defn}-window=2h-policy=near_tipoff"
@@ -323,6 +326,13 @@ def _cohort(sport, g, market, line, source, quote, book, defn, primary, info_at,
 def _store(conn, c, cohorts, out, write):
     if c["generated_at"] >= c["tipoff_at"]:
         out["skipped"].setdefault(c["market"], []).append({"game_id": c["game_id"], "reason": "finished after the start"})
+        return
+    cur_g = conn.execute("SELECT status, tipoff_at FROM games WHERE game_id=?", (c["game_id"],)).fetchone()
+    if cur_g is None or cur_g["status"] != "scheduled" or cur_g["tipoff_at"] != c["tipoff_at"]:
+        # The game started, was rescheduled or is no longer scheduled during this cycle: no cohort (the database would
+        # refuse it anyway); a skip with a reason, never an error that withholds the other games' cohorts.
+        out["skipped"].setdefault(c["market"], []).append(
+            {"game_id": c["game_id"], "reason": "game no longer scheduled at its forecast start when the cohort was written"})
         return
     key = _key(c["sport"], c["game_id"], c["market"], c["line"], c["line_source"], c["market_quote_id"], c["definition"],
                c["primary_name"], [(m["name"], m["ref"], m["p"]) for m in c["members"]], c["missing"])

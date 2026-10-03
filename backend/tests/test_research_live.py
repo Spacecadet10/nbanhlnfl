@@ -454,3 +454,19 @@ def test_predict_now_records_the_candidate_pool_after_cohorts_and_its_failure_ne
     assert seen["cohorts_before"] > 0 and seen["game_ids"] == [GID] and seen["now"] == "2026-10-12T21:30:00Z"
     assert out["pool"]["status"] == "failed" and "pool down" in out["pool"]["error"]
     assert out["status"] == "success" and out["research"]["cohorts_created"] > 0
+
+
+def test_a_game_that_starts_during_the_cycle_is_a_member_skip_not_an_error(game):
+    """Timing bug (live run 108): a game accepted at the start of a cycle that starts (status no longer 'scheduled') before
+    the line members' state is computed must be reported as missing members with a reason, never an AttributeError."""
+    now = "2026-10-12T21:30:00Z"
+    out = near_tipoff.predict_now(game, now=now)
+    ids = [f["game_id"] for f in out["forecasts"]]
+    market_live.forecast(game, now=now, policy="near_tipoff", game_ids=ids)
+    collect = {}
+    winner = agreement.predict(game, now=now, game_ids=ids, collect=collect)
+    game.execute("UPDATE games SET status='in_progress' WHERE game_id=?", (GID,))     # the game started mid-cycle
+    game.commit()
+    res = research_live.record(game, game_ids=ids, winner_run=winner, history=collect, now=now)
+    assert not any("AttributeError" in str(v) for v in res["errors"].values()), res["errors"]
+    assert all("AttributeError" not in json.dumps(r) for r in res.get("skipped", {}).values())
