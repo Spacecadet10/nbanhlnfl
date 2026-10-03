@@ -352,3 +352,61 @@ export interface SelectionStatusMarket { market: MarketId; status: string; core:
 export interface SelectionStatus { mode: Mode; sport: Sport; as_of?: string; definition?: string; selector_version?: string;
   pool_registry?: string | null; pool_registry_error?: string | null; markets: SelectionStatusMarket[]; note: string
 }
+
+// --- Persistent agreement tracking tracking-v2 (docs/MODEL_SELECTION.md §18). Research only. ---------------------------
+export type TrackingKind = 'single' | 'unanimous' | 'avg' | 'majority' | 'stack' | 'stack_pool';
+export type TrackingEvidence = 'prospective' | 'historical';
+export interface TrackingMatched { model: string; games: number; win_rate: number | null }
+export interface TrackingCell {
+  selected: number; settled: number; pending: number; wins: number; losses: number; pushes: number; voids: number;
+  unscorable: number; coverage: number | null; decided: number; win_rate: number | null; ci95: [number, number] | null;
+  mean_confidence: number | null; brier: number | null; log_loss: number | null; evidence: 'sufficient' | 'insufficient evidence';
+  threshold?: number | null; matched?: TrackingMatched[]; band?: [number, number]; label?: string;
+}
+export interface TrackingGroup {
+  id: string; kind: TrackingKind; members: string[]; cohort: 'core' | 'expanded'; priority: string; eligible: number;
+  complete: number; status_counts: Record<string, number>; missing_reasons: Record<string, number>;
+  all_picks: TrackingCell; thresholds: TrackingCell[]; bands: TrackingCell[];
+  probabilistic: { games: number; brier: number | null; log_loss: number | null } | null; versions: Record<string, number>;
+}
+export interface TrackingLeader {
+  id: string; kind: TrackingKind; members: string[]; threshold: number | null; decided: number; coverage: number | null;
+  win_rate: number; ci95: [number, number] | null; anchor: string; anchor_win_rate: number; lift: number; lower_adjusted: number;
+}
+export interface TrackingReport {
+  mode: Mode; sport: Sport; market: MarketId; evidence: TrackingEvidence; status: string; study?: string;
+  registry_sha256?: string; effective_from?: string; anchor?: string; thresholds?: number[];
+  bands?: { band: [number, number]; label: string }[]; registered_groups?: number; configurations_searched?: number;
+  skipped_allocation?: number; games?: number; lines?: number[]; kinds?: Record<string, string>; min_evidence?: number;
+  groups: TrackingGroup[]; leaderboard: TrackingLeader[]; note: string; leaderboard_note?: string;
+  recommendation?: SelectionStatusMarket | null;
+}
+export interface TrackingCheck {
+  mode: Mode; status: string; note?: string;
+  folds: { season: number; chosen: string | null; threshold?: number | null; reason?: string;
+    earlier?: { decided: number; coverage: number | null; win_rate: number; lift: number; lower_adjusted: number };
+    later?: { decided: number; coverage: number | null; win_rate: number | null; ci95: [number, number] | null; matched: TrackingMatched[] } }[];
+}
+export interface TrackingGameMarket {
+  market: MarketId; line: number | null; groups: number; counts: Record<string, number>; recorded_at: string; definition: string;
+  picks: { group: string; kind: TrackingKind; side: Side; statistic: number; votes: Record<string, number> | null }[];
+  incomplete: { group: string; missing: Record<string, string> }[];
+}
+export interface TrackingGame { mode: Mode; game_id: string; status: string; registry_sha256?: string; markets: TrackingGameMarket[]; note?: string }
+
+// --- Training and update status (training_monitor). Never refits anything. ---------------------------------------------
+export interface TrainingFit {
+  member: string; schedule: string; schedule_note: string | null; fit_kind: string; trained_season: number | null;
+  training_games: number; results_available_through: string; params_digest: string; fit_in_force_since: string;
+  new_settled_results_since_fit: number; action: string; next_update: { when: string | null; rule: string };
+  versions: { definition: string | null; libraries: string | null; params: string; calibration: string };
+}
+export interface TrainingStatus {
+  mode: Mode; as_of?: string; fits: TrainingFit[];
+  online: { member: string; schedule: string; last_update_input: string | null; next_update: string }[];
+  updates: { run_id: number; at: string; step: string; member: string | null; outcome: 'failed' | 'skipped'; reason: string }[];
+  inputs: Record<string, { last_success: string | null; stale: boolean; stale_after_hours: number }>;
+  monitoring: { members: { market: string; member: string; settled: number; recent_log_loss: number; previous_log_loss: number | null;
+    missing_rate: number; status?: string; difference?: number }[]; alerts: { member: string; market: string; alert: string }[]; note?: string };
+  note: string;
+}

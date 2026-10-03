@@ -287,6 +287,17 @@ def research_tracking_game(game_id: str, p=Depends(get_provider)):
     return {**at.game_observations(p.conn, game_id), "mode": "real"}
 
 
+@app.get("/api/research/training")
+def research_training(p=Depends(get_provider)):
+    """Training and update status per member: fit in force, training cutoff, new results since, next scheduled update,
+    versions, skipped/failed updates with reasons, input freshness and rolling-loss monitoring. Never refits anything."""
+    if p.mode != "real":
+        return {"mode": "demo", "fits": [], "online": [], "updates": [], "inputs": {}, "monitoring": {"members": [], "alerts": []},
+                "note": "Training status reads the real stores; none in demo mode."}
+    from . import training_monitor
+    return {**training_monitor.status(p.conn, p.now), "mode": "real"}
+
+
 @app.get("/api/research/candidates")
 def research_candidates(p=Depends(get_provider)):
     """Candidate-pool roster (docs/CANDIDATE_POOL.md): training status, markets, latest fit, evaluation, prospective sample,

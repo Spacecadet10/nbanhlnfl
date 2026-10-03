@@ -2,6 +2,7 @@
 import type {
   ThresholdReport, AgreementPerformance, GameDetail, GamesResponse, HistoryResponse, MarketHistoryResponse, MarketId, MarketPerformanceResponse, Meta,
   PerformanceResponse, Policy, ResearchGame, ResearchHistory, ResearchReport, ResearchSlate, Retrospective, RuleReport, CandidateRoster, PoolReport, SelectionStatus, Sport,
+  TrainingStatus, TrackingCheck, TrackingEvidence, TrackingGame, TrackingKind, TrackingReport,
 } from './types';
 
 export class ApiError extends Error {
@@ -79,6 +80,15 @@ export const api = {
     get<RuleReport>('/research/rules', { sport, market, show }, signal),
   researchCandidates: (sport: Sport, signal?: AbortSignal) => get<CandidateRoster>('/research/candidates', { sport }, signal),
   researchPool: (sport: Sport, signal?: AbortSignal) => get<PoolReport>('/research/pool', { sport }, signal),
+  researchTracking: (sport: Sport, market: MarketId, f: { evidence: TrackingEvidence; kind?: TrackingKind | ''; member?: string;
+    line?: string; date_from?: string; date_to?: string; version?: string }, signal?: AbortSignal) =>
+    get<TrackingReport>('/research/tracking', { sport, market, evidence: f.evidence, kind: f.kind || undefined, member: f.member,
+      line: f.line, date_from: f.date_from, date_to: f.date_to, version: f.version }, signal),
+  researchTrackingCheck: (sport: Sport, market: MarketId, signal?: AbortSignal) =>
+    get<TrackingCheck>('/research/tracking/check', { sport, market }, signal),
+  researchTrackingGame: (sport: Sport, id: string, signal?: AbortSignal) =>
+    get<TrackingGame>(`/research/tracking/game/${encodeURIComponent(id)}`, { sport }, signal),
+  researchTraining: (sport: Sport, signal?: AbortSignal) => get<TrainingStatus>('/research/training', { sport }, signal),
   researchStatus: (sport: Sport, signal?: AbortSignal) => get<SelectionStatus>('/research/status', { sport }, signal),
   researchHistory: (sport: Sport, signal?: AbortSignal) => get<ResearchHistory>('/research/history', { sport }, signal),
   researchRetrospective: (sport: Sport, signal?: AbortSignal) => get<Retrospective>('/research/retrospective', { sport }, signal),

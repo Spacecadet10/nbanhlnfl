@@ -10,6 +10,7 @@ import { calendarDate, dateTime, pct } from '../format';
 import { MarketForecastsCard } from '../components/MarketView';
 import { useCarriedSearch, useSport } from '../components/Selection';
 import { ResearchGameCard } from '../components/Research';
+import { TrackingGameCard } from '../components/Tracking';
 
 export function GamePage() {
   const { gameId = '' } = useParams();
@@ -56,6 +57,7 @@ function Detail({ game: g }: { game: GameDetail }) {
       </div>)}
       <div className="card"><ModelAgreement game={g} detail /></div>
       <ResearchGameCard sport={sport} gameId={g.game_id} />
+      <TrackingGameCard sport={sport} gameId={g.game_id} />
       <div className="card">
         <h2>{g.mode === 'real' ? 'Archived night-before probability' : 'Win probability'} {g.prediction && <RunBadge runType={g.prediction.run_type} />}</h2>
         {g.prediction

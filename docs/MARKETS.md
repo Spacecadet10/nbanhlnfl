@@ -54,6 +54,32 @@ Period/quarter markets and player props are **not implemented**; see docs/DATA_S
   own winner probability is **not stored** (corrected 2026-10-02: `market_forecasts` has no `winner` market) and never
   replaces them.
 
+## Tracking audit (2026-10-03)
+| Sport · market | Settlement (code) | Push / void | Distribution source | Prospective records | tracking-v2 groups |
+|---|---|---|---|---|---|
+| NBA winner | `markets.settle` → `a`/`b` from the final incl. OT | void on postponement/start change; no push | primary: frozen Elo (ledger); not the points distribution | core cohort (6 voters; average/stacker on 5) | 83 (cap 500 / 6 thresholds) |
+| NBA spread, total, team totals | `home − away + line`, `home + away − line`, `team − line` | exact line hit = push (`mid`), never a win or loss; void as above | one `points_normal` margin/total normal per game ⇒ spread/total/team totals consistent | core + expanded (weekly shadows) cohorts at the primary's exact line | 125 each (cap 500 / 4) |
+| NHL winner (incl. OT/SO) | final incl. the shootout goal | no push; void as above | primary: `hockey_elo` (two-way); the goals distribution's own winner is a research member | core + expanded (xG) cohorts | 83 |
+| NHL regulation 3-way | decision REG → home/away; OT/SO → draw (`mid`) | a draw is an outcome (a `mid` pick can win); never a push | `goals_poisson` regulation grid | core cohort | 48 (cap 500 / 5) |
+| NHL puck line, total, team totals | as NBA lines, finals incl. the shootout goal | push only on whole-number lines (rare: lines are ±1.5 / x.5) | one `goals_poisson` score grid per game ⇒ all line markets consistent | core cohort | 29 each |
+
+Consistency across *different* models is not guaranteed and not claimed: the NBA winner primary (Elo) and the points
+distribution can disagree, and each research member has its own distribution. Within any one model's distribution the
+checks above hold (tests: `test_live_markets.py`, `test_research_live.py`). Every tracking-v2 observation carries its
+cohort's exact line; reports filter by exact line and never merge lines (`agreement_tracking.report(line=…)`).
+
+## Player props: prerequisites (2026-10-03) — not implemented
+A bounded pilot needs all five; none is complete, so no prop forecast is made or shown.
+| Prerequisite | Status | Missing input |
+|---|---|---|
+| Player identity | partial | No player table. ESPN athlete ids exist in the research player box files (NBA 2019-24), the live NBA ESPN summary box (minutes path) and NHL goalie listings; no cross-source id map, no NHL skater ids stored. |
+| Minutes / role inputs before the cutoff | partial (NBA) | NBA expected minutes = last-10 mean of games played (availability research); no projected minutes or confirmed lineups (lineups are post-game facts). NHL: no TOI or line combinations stored. |
+| Reliable outcomes | partial | NBA player box stats arrive with ESPN summaries after the game (stored for minutes only, not as outcomes). NHL skater/goalie stat outcomes are not stored. |
+| Available lines | not collected | The only free source found is ESPN core `propBets` (upcoming NHL games only, 404 after the game; NBA coverage unverified until the season starts). No historical prop lines exist anywhere free, so every evaluation would be prospective. |
+| Settlement rules | not written | Needs: DNP / did-not-dress = void, overtime counts, whole-number lines push, stat corrections cut-off time, scratched-after-quote handling. |
+Next authorised free step: raw forward snapshots of ESPN `propBets` for games inside the two-hour window (raw cache only, no
+forecast), so line availability and timing can be measured before any model is built.
+
 ## Changes
 - **2026-10-02, model-only line choice:** a model-only line is now the half-point line where the model's two sides are closest to 50/50
   (previously the median rounded down + 0.5). The old rule put NHL team totals at 3.5 goals with "under" near 70% for almost every team, so
