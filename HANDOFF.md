@@ -1,5 +1,41 @@
 # Current handoff
 
+## Agreement tracking tracking-v2, feature tranche, training status, prop collection — Claude (Opus 5.5), 2026-10-03 00:00–01:30 UTC
+Single writer. Live checkout `shadow-season` (backend code changes developed in worktree `../nba-predictor-features`, branch
+`features-v1`, fast-forwarded after tests). Commits 803cee0..(this handoff) on top of 31c19af.
+- **Running now:** every two-hour cycle records `agreement_observations` (migrations 0021+0022, append-only, one row per
+  registered group × research cohort × stored-input set; thresholds/bands derived when read). First live rows: run 108,
+  nhl:2026020021, 247 observations. Odds jobs also store raw ESPN prop-line snapshots for games ≤ 2 h away (collection only).
+- **Built:** sealed group registry `models/tracking_groups.json` (MODEL_SELECTION §18, registered before any result; ≤ 500
+  configurations per sport/market: NBA winner 83 groups×6 thresholds, NBA lines 125×4, NHL winner 83×6, reg3 48×5, NHL lines 29×4;
+  skipped groups listed). Rules: single, unanimous (min member prob), average, majority (votes, ties, abstentions; mean prob of
+  the majority side over all members), cohort/expanded stacker, pool stacker (frozen weights fitted on saved OOF tables).
+  Historical exploratory results from the candidate-pool OOF tables (no refit), always separate. API `/api/research/tracking`
+  (+`/check`, `/game/{id}`), `/api/research/training`; Performance "Agreement tracking" (filters: sport, market, rule, model,
+  threshold/band, exact line, version, ET dates, historical vs prospective; exploratory leaderboard vs active recommendation) and
+  "Training and updates"; Game page tracking card. docs/MARKETS.md tracking audit + player-prop prerequisites.
+- **Features (MODEL_SELECTION §19, registered ffe6a87 before code; 4 of 12 configurations per sport used):** NBA
+  quality-weighted absences: no evidence beyond `avail_v1` (−0.0016 [−0.0037, +0.0005]); NHL shot volume / PP / SH goals: no
+  standalone evidence; inside the average with the anchor, a small combination-only lead for reg3 and puck line (≈ −0.0005,
+  intervals below 0; reused seasons). Nothing changes live. Results: docs/CHALLENGER_RESULTS.md "Feature tranche".
+- **What each model consumes:** unchanged this session — table in docs/EVIDENCE_AUDIT.md §1 plus: NBA injury report only in
+  `availability_two_hour` (minutes-weighted); NHL goalie inputs only in `*:nhl_goalie` candidates; PP/PK only as special-teams xG;
+  shot volume, goalie confirmation time and player-quality absence weights are not used by any live model.
+- **Schedules:** online members update after every result; learned members refit at season start (weekly shadows weekly);
+  daily refits not adopted (daily-v1); no new challenger qualified, so no cadence registered for one. Weekly selection
+  (Monday 14:00 UTC) unchanged and separate from training; tracking never selects.
+- **Checks:** full suite 469 passed (before review fixes); targeted after fixes; `backend/.venv/bin/python scripts/check_project.py --ready` on ba6ad92: exit 0 (structure, typecheck, build, 477 passed); the later side-label change: typecheck exit 0.
+  Independent read-only review (Opus 5.5 subagent): 0 critical/high, 6 medium, 15 low → fixed in c71d387/ba6ad92 (props
+  budget/timestamps/markers, per-cohort transactions, per-market historical files, ET dates, band labels, docs); remaining LOW:
+  L7 (expanded groups take core-member vectors from the core cohort; same information time), L14 (leaderboard SE treats shared
+  games as independent). Evidence: docs/SMOKE_TEST.md (latest section).
+- **Remaining / limitations:** no settled prospective evidence yet (all "insufficient evidence"); pre-existing: a game starting
+  during a 13-minute NHL cycle gets research skipped and `goals_draw`/`goals_glm` AttributeError (hashed `research_live` code;
+  fixing restarts the research definition — needs your decision); historical tracking is night-before, model-only lines, reused
+  seasons; NGBoost absent from live candidates; player props not modelled (prerequisites listed); no real phone test.
+- **Next:** Codex review of 31c19af..HEAD; after games settle, read `/api/research/tracking` prospective; decide whether to
+  register a prospective combination-only test of the NHL special inputs.
+
 ## Combination objective: fixes, audit, gap-fill study, daily-refit test, selection status — Claude (Opus 5.5), 2026-10-02 ~21:35–23:00 UTC
 Single writer (user confirmed other sessions paused). Worktree `../nba-predictor-poolsel`, branch `pool-selector`, commits
 a3a597c..d948a49 on top of e6b6abd. **Corrects the entry below:** the 12 h void rule is retired everywhere (`markets.settle`

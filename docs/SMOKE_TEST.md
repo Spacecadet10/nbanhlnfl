@@ -400,3 +400,32 @@ everything else the real `jobs.selector_decisions` + `jobs.predict_now` wiring. 
   decided / evidence-to / next-review dates, versions, last cohort time). Desktop 1538 px. Narrow width by **emulation only**
   (same-origin 390 px iframe; the window resize did not change the captured viewport): page width 388 = viewport (no
   horizontal page scroll), table scrolls inside `table-wrap` (442 vs 314 px); no console errors. **No real phone test.**
+
+## tracking-v2, features-v1, training status, prop snapshots — Claude, 2026-10-03 ~00:00–01:30 UTC (live checkout + worktree ../nba-predictor-features)
+- **Post-merge cycle (previous session's code):** NHL run 98 (2026-10-02 23:31Z): 9 legacy candidate artifacts adopted, agreement /
+  research / pool / pool selection `success`, 0 errors.
+- **Live tracking:** migration 0021 applied by the 00:16Z jobs (backups `data/backups/{nba,nhl}-before-0021-20261003.sqlite`,
+  `…-before-0022-…`). Run 103 (00:16Z) tracking `failed`: it imported the new `agreement_tracking.py` (inputs digest) against a
+  store migrated to 0021 only — non-fatal, reported; fixed by 0022 at the next start. Run 108 (00:59–01:12Z): 0022 applied,
+  tracking `success`, **247 observations** for nhl:2026020021 (winner 83, reg3 48, each line market 29; all `pick`), 2 prop
+  snapshots stored (`espn_props`, ~390 KB each). Run 108 status `failed` for a pre-existing reason: nhl:2026020020 started at
+  01:00Z inside the 13-minute cycle, so its research steps finished after the start (skipped, correct) and `goals_draw` /
+  `goals_glm` raised `AttributeError: 'NoneType' object has no attribute 'market'` for that game (hashed research code, not changed).
+- **Scratch rehearsals** (`.backup` copies + `data/research` copies; network steps stubbed; fixed clocks): NHL 2026-10-03T22:00Z —
+  research, pool, pool selection and tracking success; same clock again adds nothing. NBA 2026-10-20T22:00Z — 1 forecast, 5 cohorts,
+  29 candidate forecasts, **583 observations** (winner 50 pick / 33 incomplete = every group containing `availability_two_hour`,
+  which refused: "No injury report actually received in the last 60 minutes" — the injury fetch was stubbed; visible, not
+  invented); run status `failed` from that refusal (expected in a rehearsal).
+- **Studies:** features-v1 NBA and NHL on scratch copies (docs/CHALLENGER_RESULTS.md "Feature tranche"); tracking historical
+  tables rebuilt per market (`data/research/tracking/historical-{sport}-{market}.json.gz`, summaries + chronological checks).
+- **API** (uvicorn :8000 on the live stores, restarted on ba6ad92): `/api/research/tracking` NHL winner prospective `recording`
+  (0.06 s), historical with a date filter 1.25 s, `/tracking/check` precomputed 0.17 s, `/tracking/game/nhl:2026020021` 6 markets,
+  `/api/research/training` 14 fits, 12 skipped/failed update events; API RSS ≈ 475 MB after one historical market load.
+- **Browser** (Vite :5173): Performance → NHL winner: Agreement tracking card (filters rule / model / confidence threshold and band /
+  exact line / dates / version / sort; prospective vs historical; active recommendation strip "none … exploratory"; leaderboard;
+  all groups with "insufficient evidence"); selecting majority + band ≥ 0.80 and ≥ 60% changed the table as expected; Training and
+  updates card. Game page nhl:2026020021: tracking card per market with collapsed classifications. Desktop 1366 px by headless
+  Chrome screenshots (the extension window could not be resized); 390 px by same-origin iframe emulation: page width 388 =
+  viewport, tables scroll inside `table-wrap`. **No real phone test.**
+- **Checks:** full suite 469 passed (before review fixes); targeted suites after fixes: tracking 21, features-v1 5, training 1;
+  `check_project.py --ready` on ba6ad92: exit 0, 477 passed.

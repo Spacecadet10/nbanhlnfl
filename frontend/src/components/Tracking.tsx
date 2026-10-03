@@ -14,6 +14,11 @@ const KIND: Record<TrackingKind, string> = {
   stack: 'learned stacker', stack_pool: 'pool stacker',
 };
 const SIDE: Record<string, string> = { a: 'home / over', mid: 'draw / push', b: 'away / under' };
+const sideName = (market: string, side: string) => {
+  if (market === 'winner' || market === 'reg3') return ({ a: 'home', mid: 'regulation draw', b: 'away' } as Record<string, string>)[side];
+  if (market === 'spread') return ({ a: 'home covers', mid: 'push', b: 'away covers' } as Record<string, string>)[side];
+  return ({ a: 'over', mid: 'push', b: 'under' } as Record<string, string>)[side];
+};
 const STATUS: Record<string, string> = { pick: 'pick', disagree: 'members disagree', tie: 'tie', no_majority: 'no majority', incomplete: 'incomplete' };
 const ci = (c: [number, number] | null) => (c ? `${pct(c[0], 0)}–${pct(c[1], 0)}` : '');
 const rec = (c: TrackingCell) => `${c.wins}–${c.losses}${c.pushes ? `–${c.pushes}P` : ''}${c.voids ? ` · ${c.voids} void` : ''}`;
@@ -191,12 +196,12 @@ export function TrackingGameCard({ sport, gameId }: { sport: Sport; gameId: stri
         : 'No tracking observations for this game (they are recorded during the two hours before the start).'}</Empty>
       : <>{t.markets.map((m) => <details key={m.market} className="tracking-game">
         <summary><strong>{m.market}</strong>{m.line != null && ` ${m.line}`} — {m.groups} groups:{' '}
-          {Object.entries(m.counts).map(([k, n]) => `${n} ${SIDE[k] ?? STATUS[k] ?? k}`).join(' · ')}</summary>
+          {Object.entries(m.counts).map(([k, n]) => `${n} ${sideName(m.market, k) ?? STATUS[k] ?? k}`).join(' · ')}</summary>
         <p className="small muted">Recorded {dateTime(m.recorded_at)} · definition {m.definition.slice(0, 16)}</p>
         {m.picks.length > 0 && <details className="small"><summary>Classifications by group (research; not picks, regardless of evidence)</summary>
           <div className="table-wrap"><table className="table small">
           <thead><tr><th>Group (highest rule statistic first)</th><th>Side</th><th>Rule statistic</th></tr></thead>
-          <tbody>{m.picks.map((p) => <tr key={p.group}><th scope="row" className="wrap">{p.group}</th><td>{SIDE[p.side] ?? p.side}</td>
+          <tbody>{m.picks.map((p) => <tr key={p.group}><th scope="row" className="wrap">{p.group}</th><td>{sideName(m.market, p.side) ?? SIDE[p.side] ?? p.side}</td>
             <td>{pct(p.statistic, 1)}{p.votes && <span className="muted"> ({p.votes.a ?? 0}–{p.votes.b ?? 0}{p.votes.mid ? `–${p.votes.mid}` : ''} votes)</span>}</td></tr>)}</tbody>
         </table></div></details>}
         {m.incomplete.length > 0 && <p className="small warn">Incomplete: {m.incomplete.map((x) => `${x.group} (${Object.keys(x.missing).join(', ')})`).join('; ')}</p>}
