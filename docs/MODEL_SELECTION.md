@@ -438,6 +438,43 @@ prospective evaluation. Every season used was spent before: **exploratory, not a
   per-threshold rows).
 - **Compute:** ≤ 2 h wall-clock, scratch copies only, one process per market in parallel.
 
+## 19. Tooling audit and bounded tuning `tuning-v1` (recorded 2026-10-03 ~02:30 UTC, before any install or run)
+**Tooling audit** (from docs/REPO_REVIEW.md, CHALLENGER_RESULTS §10, `candidates/registry.FAMILY_AUDIT` and this repository's
+environments only; no other repository accessed):
+| Tool | Status before this step | Evidence | Decision |
+|---|---|---|---|
+| scikit-learn 1.9.1 HistGradientBoosting | installed, **used** with fixed settings (`gbt_v1`, `gbt_points`, `hockey_gbt`) | TRAINING_AUDIT | reuse; tune (below) as a pool learner |
+| scikit-learn ExtraTrees / RandomForest | installed, **used** (pool-v1 candidates, fixed settings) | CANDIDATE_POOL | reuse; tune ExtraTrees (below) |
+| NGBoost 0.5.11 | installed in research venvs, **used** (pool-v1, NBA lines) | CANDIDATE_POOL_RESULTS | keep; no change |
+| CatBoost 1.2.10 | research extra, **tested and rejected** (§10: worse or equal in every task) | CHALLENGER_RESULTS §10 | not retested (no new hypothesis) |
+| Optuna 5.0.0 | **missing** (resolved in the review venv; never used: every setting was declared) | REPO_REVIEW #3 | **adopt** for bounded chronological tuning |
+| LightGBM 4.7.0 / XGBoost 3.4.1 | **missing**; imports failed without the system `libomp` (no Homebrew) | REPO_REVIEW "+" row | **deferred**: same histogram-boosting algorithm as sklearn HistGradientBoosting, which is tuned here instead; adoption would need a new system library |
+| statsmodels (negative binomial) | missing | REPO_REVIEW; dispersion 1.02/0.96 | rejected (no overdispersion) |
+The concrete gap is not a missing library but that **no learner was ever tuned**: every setting was declared. LightGBM's
+algorithm is available through sklearn HistGradientBoosting, so the tuned challenger uses that (no system dependency).
+
+**tuning-v1 design**
+- **Dependency:** `optuna==5.0.0` in the optional `research` extra, installed in the worktree venv only; the live venv and every
+  live candidate identity are unchanged (new code in `backend/app/tuning_study.py`; the hashed pool files are not edited).
+- **Configurations (8 retraining configurations, ≤ 24 per sport):** NBA `hgb_tuned` binary (winner) and normal (margin/total
+  → spread, total, team totals); `et_tuned` binary and normal. NHL `hgb_tuned` binary, reg3 (multiclass) and goals (Poisson
+  loss, home/away, fitted draw inflation → every NHL market); `et_tuned` binary. Features: `nba_base` / `nhl_base` (no goalie
+  inputs). Same point-in-time feature walk as pool-v1.
+- **Chronological tuning:** for each season s of the evaluated tables (NHL 2018–2026, NBA 2022–2026): Optuna TPE
+  (seed 20261003, 25 trials, fixed search space below) trains on seasons < s−1 and scores season s−1 (binary/reg3: log loss;
+  normal: margin + total MSE scaled by their variances; goals: Poisson deviance); the best setting is refitted on every season
+  < s and predicts season s only. Season s outcomes are never seen by its own tuning. All trials are saved.
+  Search spaces: HGB learning_rate 0.02–0.2 (log), max_iter 100–600, max_leaf_nodes 8–64, min_samples_leaf 20–300,
+  l2_regularization 0.001–10 (log); ExtraTrees (300 trees) min_samples_leaf 10–300, max_features 0.2–1.0, max_depth 4–30.
+- **Predictions saved:** per-game vectors at each table row's line, `data/research/tuning/oof-{sport}.json.gz`, with the
+  per-season best settings and fit records.
+- **Evaluation:** (a) **alone:** per market, log loss minus the strongest existing member and minus the untuned pool
+  counterpart (`extra_trees:*`), per season and pooled with a 95% week-block bootstrap; (b) **inside combinations:** the
+  discovery-v1 procedure (§18, unchanged code and budget) rerun with the tuned members added, rules chosen on earlier seasons,
+  assessed on the next, reported by market and threshold, plus with/without-the-tuned-member comparisons.
+- Exploratory (spent seasons). Compute ≤ 2 h on scratch copies. Nothing changes live; a tuned learner could only enter live
+  recording later as a separately versioned candidate.
+
 ## Amendments
 - **2026-10-02, before the study run:** `ridge_points` / `gbt_points` spreads have a floor of 1.0 point (`MIN_SD`), found with
   synthetic test data where every total was identical. Real residual spreads are about 12 (margin) and 18 (total) points, so the
