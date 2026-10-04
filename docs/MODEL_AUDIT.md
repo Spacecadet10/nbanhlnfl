@@ -106,3 +106,35 @@ report (`sources.<source>.coverage`, `calibration`).
 4. **Measure the deep networks inside combinations** with the research venv on the shared walk, before keeping them live.
 5. **Surface the audit in the app** (Codex item 1): per game and market, primary, contributors, missing members and why the
    selector picked or abstained — extending the existing Game page research card, not a new screen.
+
+## 8. Calibration study `calibration-v1` (registered in docs/MODEL_SELECTION.md before any code; results)
+Same store copies and definitions. Every member, every market: `raw`, `platt` (two-way logistic map / 3-way temperature)
+and `shrink` (toward 50/50, 3-way toward 1/3), each refit at every season start on that member's earlier out-of-sample
+seasons only (≥ 300 games; a test shows a season's fit is unchanged when that season's outcomes are flipped). Compared
+on identical later games and lines: NHL 2018–21, 4,877 games (mechanism: 3,522); NBA winner 2022–24, 3,962 (2,639); NBA
+lines 2023–24, 2,639 (mechanism: 2024 only, 1,319). Log-loss differences with 95% week-block intervals; negative = better.
+
+- **Calibration helps only the members that were miscalibrated.**
+  - NBA totals and team totals (platt): `ridge_points` −0.0118 (total) and −0.0081 (home team total), intervals below 0;
+    away team total −0.0052 [−0.0110, +0.0002], not clear. `gbt_points` −0.0126 to −0.0164, all below 0. Their
+    calibration error falls from 0.044–0.070 to 0.003–0.022.
+  - NHL 3-way: `goals_poisson` −0.0069 [−0.0104, −0.0037], `goals_glm` −0.0056 [−0.0086, −0.0028];
+    NHL total `goals_glm` −0.0048 [−0.0069, −0.0028]; NBA winner `efficiency_margin` −0.0017 [−0.0033, −0.0002].
+  - Well-calibrated members do not gain and sometimes lose: NBA spread `ridge_points` +0.0015 [+0.0004, +0.0026]
+    (platt), NHL total `goals_poisson` +0.0005 [+0.0001, +0.0008] (shrink); the NBA winner members are unchanged or
+    slightly worse.
+- **Is the NBA totals combination gain calibration? Supported by the registered reading.** The raw best member is worse
+  than the average (total +0.0169, team totals +0.0136 / +0.0080, intervals above 0); its calibrated version is not
+  (platt −0.0051 [−0.0118, +0.0012], −0.0032 [−0.0091, +0.0029], −0.0035 [−0.0086, +0.0012]). That is consistent with the
+  combination's gain coming from correcting overconfidence; it does not prove no other information is involved, and it rests
+  on one season (1,319 games). Even calibrated, NBA totals models are barely better than 50/50 at the primary's line
+  (log loss ~0.692 vs 0.693).
+- **Elsewhere the question does not arise:** the raw best single member is not worse than the average in any NHL market
+  or on NBA winner/spread.
+- **Averaging calibrated members:** better than averaging raw ones on NHL 3-way (−0.0021) and NHL total (−0.0009), worse on
+  NBA spread (+0.0025 [+0.0009, +0.0042]); no clear difference elsewhere.
+
+**Reading for the next step:** a calibrated research member is worth registering only where this study shows a clear member
+gain (NBA totals/team totals ridge/gbt points, NHL 3-way goals_poisson/goals_glm, NHL total goals_glm), as a new
+separately versioned shadow member that never votes, evaluated prospectively against its raw version. Calibrating
+everything would make some members worse. Nothing has been changed live.

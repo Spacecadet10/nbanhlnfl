@@ -8,6 +8,24 @@
 - Checks: audit + historical selection **17 passed (5.65 s)**; `python3 scripts/check_project.py` passed. Release environment: `PYTHONPATH=backend /Users/andry/nba-predictor-live/backend/.venv/bin/python -m pytest backend/tests/test_candidate_pool.py backend/tests/test_candidates.py backend/tests/test_research_live.py backend/tests/test_agreement_live.py -q`: **70 passed, 2 warnings (186.87 s)** (Starlette deprecation and physical-core detection fallback). Initial invocation from repo root failed collection (`No module named app`); rerun uses `PYTHONPATH=backend`.
 - No implementation, live-data, release, or deployment changes. Full readiness/browser checks were not independently repeated; this is not blanket release approval. Next: correct audit findings, then calibration experiment and review.
 
+## Audit corrections + calibration study `calibration-v1` — Claude (Opus 5.5), 2026-10-04 19:45–20:40 UTC
+- Branch `model-audit` (still from `rc-20261004` @ `804d8e2`, unchanged). **Codex's three audit corrections done**
+  (`6c61270`): matched coverage counts only picks (an exact 50/50 is an abstention; none occurs in the data, so no figure
+  changed — verified by rerunning and diffing); no "effective members" count (forecast correlation + pick disagreement
+  only); the NBA totals explanation was stated as unproven until tested.
+- **calibration-v1 registered before code (`0337a09`, MODEL_SELECTION last section), then run** (`app/calibration_study.py`,
+  CLI `calibration-study`, read-only, store copies 17:45 UTC; ~3 min both sports). Raw vs platt vs shrink-toward-50% vs the
+  existing average/stacker/average-of-platt, each refit per season on earlier seasons only, identical later games/lines.
+  Results in docs/MODEL_AUDIT.md §8: calibration clearly helps only miscalibrated members (NBA totals/team totals
+  ridge/gbt points, NHL 3-way goals_poisson/goals_glm, NHL total goals_glm, NBA efficiency_margin) and hurts some
+  well-calibrated ones (NBA spread ridge_points +0.0015). Registered reading on NBA totals/team totals: **supported**
+  (raw best worse than the average; calibrated best not) — one season, 1,319 games. Not applicable elsewhere.
+- Tests: `tests/test_calibration_study.py` (2: recovers known overconfidence; a season's fit is unchanged when that
+  season's outcomes are flipped). `NBA_DATA_DIR=<empty scratch> ~/nba-predictor-deep/backend/.venv/bin/python
+  scripts/check_project.py --ready`: **exit 0, 610 passed**. Nothing live changed; no identity-hashed file edited.
+- **Next (needs review/decision):** register calibrated shadow members only for the markets/members with a clear gain,
+  never voting, evaluated prospectively against their raw versions; then the per-game decision view on the Game page.
+
 ## Decision and model-contribution audit on `rc-20261004` — Claude (Opus 5.5), 2026-10-04 18:45–19:40 UTC
 - **Branch `model-audit`** (from `rc-20261004` @ `804d8e2`, which stays unchanged for Codex's review). Read-only:
   `app/model_audit.py`, CLI `model-audit` (query-only store; writes `data/reports/model-audit-<sport>/report.json`),
