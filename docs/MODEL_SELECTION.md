@@ -690,3 +690,22 @@ directory. Research only: it never replaces a primary forecast, a core or pool s
   is reported apart from the live selector's, and the bookmaker's implied probability of the same picks apart from the
   win/loss record. A definition change (model code change) leaves the frozen policy describing the earlier definition;
   a new one must be built. The historical seasons were used to choose the models: exploratory, not held-out evidence.
+
+## Calibration study `calibration-v1` — registered by Claude, 2026-10-04, before any code or result
+Question (from the model-contribution audit, docs/MODEL_AUDIT.md): do the research members gain from recalibration, and
+is the NBA totals combination gain explained by calibration? Research only: nothing here changes a forecast, a member, a
+selector, an identity or a stored row; any live use needs its own registration and review.
+- **Data:** walk-forward forecasts of the live members' own code and settings (`historical_start._history`), NBA
+  validation 2022–24, NHL development 2018–21 (already used; exploratory). Line markets at the primary's model-only line.
+- **Variants per member, every market:** `raw`; `platt` (two-way: logistic map of logit P(side a) on decided games;
+  3-way: one temperature on the log probabilities); `shrink` (two-way: 0.5 + λ(p − 0.5); 3-way: toward the uniform
+  1/3 each; λ on a 0.00–1.50 grid). Each fitted at every season start on that member's out-of-sample forecasts from
+  earlier seasons only (≥ 300 decided games, else that season is not evaluated for the variant).
+- **Combinations:** the existing equal average and live-parity stacker of raw members, and the equal average of
+  `platt` members.
+- **Comparison set:** identical later games: evaluated seasons with every variant of every member and the stacker present,
+  same line per game. Paired log loss differences with the week-block bootstrap (95%), plus ECE (10 bins) and accuracy.
+- **Pre-stated readings:** a variant "improves the member" if `variant − raw` has its 95% interval below 0. The
+  calibration explanation of a combination gain is "supported" if the earlier-chosen best member's `platt` or `shrink`
+  variant is not worse than the average (interval of `variant − average` not entirely above 0) while the raw best member
+  is worse; "not supported" otherwise. All markets and members are reported, including no-gain and losses.
