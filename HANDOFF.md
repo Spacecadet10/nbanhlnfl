@@ -1,5 +1,13 @@
 # Current handoff
 
+## Codex review of model-audit `6788ec2` and RC integration — 2026-10-04
+- Audit needs corrections before its recommendations are treated as established: `_coverage` counts a tied/no-pick forecast as a loss (reproduced: summary accuracy `None`, coverage accuracy `0.0` for `(0.5, 0, 0.5)`). Report actual pick coverage and abstentions consistently.
+- `effective_members` derives from correlation of forecast logits across games; this is descriptive overlap, not a validated count of independent evidence. Do not present 1.04/1.08 as independent-model counts. The asserted calibration-only cause of NBA total gains also needs a calibrated-single and simple-shrinkage comparison; current evidence suggests that explanation but does not isolate it. No detectable improvement is not proof of equivalence.
+- Calibration next: separately versioned research experiment, fit calibrators only on earlier out-of-sample forecasts whose outcomes were available; compare raw/calibrated/shrinkage/combination on identical later games and lines. Keep reused historical seasons exploratory; preserve existing live forecasts and identities.
+- Verified installed `~/Library/LaunchAgents/com.nba-predictor.api.plist` invokes release Python with `-m uvicorn`; missing launcher script is not a startup blocker. RC retains `candidates/deep.py` and `registry.py` unchanged from `f1e0181`.
+- Checks: audit + historical selection **17 passed (5.65 s)**; `python3 scripts/check_project.py` passed. Release environment: `PYTHONPATH=backend /Users/andry/nba-predictor-live/backend/.venv/bin/python -m pytest backend/tests/test_candidate_pool.py backend/tests/test_candidates.py backend/tests/test_research_live.py backend/tests/test_agreement_live.py -q`: **70 passed, 2 warnings (186.87 s)** (Starlette deprecation and physical-core detection fallback). Initial invocation from repo root failed collection (`No module named app`); rerun uses `PYTHONPATH=backend`.
+- No implementation, live-data, release, or deployment changes. Full readiness/browser checks were not independently repeated; this is not blanket release approval. Next: correct audit findings, then calibration experiment and review.
+
 ## Decision and model-contribution audit on `rc-20261004` — Claude (Opus 5.5), 2026-10-04 18:45–19:40 UTC
 - **Branch `model-audit`** (from `rc-20261004` @ `804d8e2`, which stays unchanged for Codex's review). Read-only:
   `app/model_audit.py`, CLI `model-audit` (query-only store; writes `data/reports/model-audit-<sport>/report.json`),

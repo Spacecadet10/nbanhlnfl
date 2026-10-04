@@ -35,7 +35,7 @@ def test_overlap_uses_forecasts_not_the_shared_outcome():
     assert o["pairs"]["good|same"]["forecast_corr"] == pytest.approx(1.0)
     assert o["pairs"]["good|same"]["pick_disagreement"] == 0
     assert o["pairs"]["good|noisy"]["forecast_corr"] < 0.9
-    assert 1.0 < o["effective_members"] < 3.0
+    assert "effective_members" not in o and o["pick_disagreement_range"][0] == 0
 
 
 def test_two_way_scoring_removes_the_push_and_matched_coverage_ranks_by_confidence():
@@ -47,3 +47,7 @@ def test_two_way_scoring_removes_the_push_and_matched_coverage_ranks_by_confiden
     cov = ma._coverage("winner", rows, "good")
     assert cov["0.10"]["games"] == 60 and cov["1.00"]["games"] == 600
     assert cov["0.10"]["accuracy"] >= cov["1.00"]["accuracy"]
+    # An exact 50/50 forecast is an abstention: not counted as a loss.
+    flat = [dict(r, vectors={"coin": (0.5, 0.0, 0.5)}) for r in rows]
+    c = ma._coverage("winner", flat, "coin")["1.00"]
+    assert c["abstentions"] == 600 and c["picks"] == 0 and c["accuracy"] is None

@@ -39,9 +39,12 @@ would need to detect the observed difference (80% power, games treated as indepe
 | NBA team total home | **−0.0136 [−0.0215, −0.0066]** | **−0.0188 [−0.0311, −0.0084]** | combination helps |
 | NBA team total away | **−0.0080 [−0.0128, −0.0037]** | **−0.0107 [−0.0189, −0.0031]** | combination helps |
 
-The NBA total gains are a calibration effect, not new information: at the primary's own model line the primary is ~50/50
-by construction, while `ridge_points`/`gbt_points` are overconfident there (mean confidence 0.575/0.592 vs accuracy
-0.520/0.522; calibration error 0.055/0.070). Averaging with the ~50/50 primary shrinks them toward a calibrated forecast.
+**Possible explanation, not established:** at the primary's own model line the primary is ~50/50 by construction, while
+`ridge_points`/`gbt_points` are overconfident there (mean confidence 0.575/0.592 vs accuracy 0.520/0.522; calibration
+error 0.055/0.070). Averaging with the ~50/50 primary shrinks them toward 50%, which would improve log loss even with no
+new information. This audit does not isolate that cause; the calibration study (calibration-v1) tests it by comparing
+each raw member, the member recalibrated or shrunk toward 50% on earlier seasons only, and the existing combination on
+identical later games.
 
 ## 3. What each model adds (equal average without it vs with it)
 
@@ -52,9 +55,11 @@ by construction, while `ridge_points`/`gbt_points` are overconfident there (mean
   hurts (overconfident, calibration error 0.050).
 - **NBA winner:** only `logistic_v2` adds detectably; the others are interchangeable. **NBA lines:** the primary
   `points_normal` is what makes the average work on totals (calibration), `ridge_points` on spreads.
-- **Overlap:** forecasts are highly correlated. Effective independent members: NHL winner 1.08 of 4, NBA winner 1.04
-  of 5, NHL lines 1.07–1.41 of 3; NBA lines 1.8–2.0 of 3. Winner members disagree on the pick in 4–16% of games. Five
-  winner models agreeing is close to one model agreeing with itself: **agreement counts are not independent confirmations.**
+- **Overlap (descriptive):** mean pairwise correlation of the members' forecasts (logit scale) and the share of games where
+  two members pick different sides: NHL winner 0.90 (5–16%), NBA winner 0.95 (4–14%), NHL 3-way / puck line / team
+  totals 0.85–0.90 (0–25%), NHL total 0.57 (2–35%), NBA spread / totals / team totals 0.26–0.34 (22–48%). Winner members
+  move closely together, so "4 of 4 agree" carries less information than four unrelated opinions would; these figures do
+  not give a count of "independent" models. (An earlier draft reported an effective-member count; withdrawn.)
 
 ## 4. Candidates and deep networks
 
@@ -71,7 +76,8 @@ by construction, while `ridge_points`/`gbt_points` are overconfident there (mean
 
 ## 5. Probability quality and comparable coverage
 
-Calibration error (ECE, 10 bins) of the primary models is small (NHL winner `hockey_elo` 0.009, NBA winner `elo` 0.015).
+Matched-coverage accuracy counts only picks: an exact 50/50 forecast is an abstention (fixed after Codex's review; no
+abstention occurred in this data, so no figure changed). Calibration error (ECE, 10 bins) of the primary models is small (NHL winner `hockey_elo` 0.009, NBA winner `elo` 0.015).
 At matched coverage (most confident 10% / 25% / 50% of games), the best single model is as good as the average or stacker
 on winners (NHL 10%: `hockey_logistic` 0.703 vs average 0.682; NBA 10%: `logistic_v2` 0.811 vs average 0.821). High win
 rates on the top 10% reflect confident favourites, not skill beyond the stated probability. Full tables per source in the
@@ -90,11 +96,10 @@ report (`sources.<source>.coverage`, `calibration`).
 
 ## 7. Recommended next steps (ordered)
 
-1. **Fix the overconfident line members before combining more models.** NBA `ridge_points`/`gbt_points` and NHL `goals_glm`
-   (totals) are miscalibrated at the primary's line; a season-start calibration step fitted on earlier seasons only, as a
-   new versioned member, is the cheapest likely gain. Test it on the walk before any live change.
-2. **Stop treating agreement counts as independent evidence.** Show the effective number of members next to "4 of 4 agree"
-   and prefer the average's probability over vote counts in selection rules.
+1. **Test calibration of the overconfident line members** (calibration-v1, research only): raw vs recalibrated vs shrunk
+   toward 50% vs the existing combination, fitted on earlier seasons only, on identical later games and lines.
+2. **Do not read agreement counts as independent evidence.** Show forecast correlation and pick disagreement next to
+   "4 of 4 agree", and prefer the average's probability over vote counts in selection rules.
 3. **Prune or reweight:** members that add nothing (NHL `goals_poisson`/`hockey_gbt` in the winner average,
    `goals_poisson` in the 3-way average) could be dropped from averages as a registered new version; the stacker should
    not be used where it is worse (NBA winner, NHL team total home).

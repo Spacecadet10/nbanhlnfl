@@ -79,9 +79,11 @@ def _coverage(market: str, rows: list, src: str) -> dict:
     out = {}
     for q in COVERAGES:
         top = ranked[:max(1, int(round(q * len(ranked))))]
-        res = [combine.pick(_vec(market, r["vectors"][src]), market) == r["realised"] for r in top]
+        picks = [(combine.pick(_vec(market, r["vectors"][src]), market), r["realised"]) for r in top]
+        res = [p == y for p, y in picks if p is not None]          # an exact tie is no pick, never a loss
         w = sum(res)
-        out[f"{q:.2f}"] = {"games": len(res), "accuracy": w / len(res), "ci95": nhl_eval._wilson(w, len(res))}
+        out[f"{q:.2f}"] = {"games": len(top), "picks": len(res), "abstentions": len(top) - len(res),
+                           "accuracy": w / len(res) if res else None, "ci95": nhl_eval._wilson(w, len(res))}
     return out
 
 
@@ -102,10 +104,9 @@ def _paired(market: str, rows: list, a: str, b: str) -> Optional[dict]:
 
 
 def _residual_corr(market: str, rows: list, members: list) -> dict:
-    """How much the members' forecasts overlap. Correlating errors against the shared outcome is dominated by that outcome
-    (every model looks ~1.0), so this uses the forecasts themselves: pairwise correlation of each member's logit P(side a)
-    across games, the share of games where two members pick different sides, and the effective number of independent
-    members k / (1 + (k − 1)·mean correlation). Members that move together are not independent confirmations."""
+    """How much the members' forecasts overlap: pairwise correlation of each member's logit P(side a) across games and the
+    share of games where two members pick different sides. Descriptive only: correlated forecasts do not by themselves
+    give a number of "independent" models (no effective-member count is derived)."""
     def logit(v):
         p = min(1 - 1e-9, max(1e-9, _vec(market, v)[0]))
         return math.log(p / (1 - p))
@@ -120,8 +121,9 @@ def _residual_corr(market: str, rows: list, members: list) -> dict:
             vals.append(c)
     mean = sum(vals) / len(vals) if vals else None
     k = len(members)
+    dis = [v["pick_disagreement"] for v in pairs.values() if v["pick_disagreement"] is not None]
     return {"pairs": pairs, "mean_forecast_corr": mean, "members": k,
-            "effective_members": k / (1 + (k - 1) * max(0.0, mean)) if mean is not None else None}
+            "pick_disagreement_range": [min(dis), max(dis)] if dis else None}
 
 
 def _corr(a, b) -> float:
