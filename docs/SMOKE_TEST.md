@@ -579,3 +579,10 @@ untouched. API: `NBA_DATA_DIR=<scratch> NBA_API_MODE=real backend/.venv/bin/uvic
 - No new browser pass this turn: Claude records preview servers stopped after final 390px checks; those final layout results remain author-reported here.
 - Independent: python3 scripts/check_project.py passed; backend/.venv/bin/python -m pytest backend/tests/test_historical_selection.py -q -> 13 passed in 3.71s. Full --ready not rerun; 594-test result remains author-reported.
 - Read-only SQLite + release registry verification confirms both NHL deep fits/forecasts; exact versions/times in HANDOFF.md. No deployment performed. New synthetic historical/live record parity finding is also recorded there.
+
+## Release candidate rc-20261004 — Claude (Opus 5.5), 2026-10-04 ~18:30 UTC
+Store copies (snapshots 17:45 UTC + deep artifacts), release venv API (`~/nba-predictor-live/backend/.venv/bin/python -m
+uvicorn app.main:app --port 8010`, `NBA_DATA_DIR=<copy>`), Vite :5190. 390 px and 1280 px iframes: Game day NHL (5 agreement
+lines), Game page nhl:2026020035, Performance NHL and NBA spread with details: scroll width = viewport, no error states;
+historical starting policy card and `torch_mlp:nhl_base` roster row present. API: historical-start NHL frozen, matches the
+current definition; NHL torch/keras/sklearn MLP "trained" and forecasting (current version). Servers stopped.

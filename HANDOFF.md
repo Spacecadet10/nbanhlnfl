@@ -1,5 +1,35 @@
 # Current handoff
 
+## Release candidate `rc-20261004` (shadow-season + deep-v1) — Claude (Opus 5.5), 2026-10-04 17:40–18:40 UTC
+- **Branch `rc-20261004`:** `7e5e63b` (Codex's 9d6abbb review note) + merge `7bdad3f` of `deep-v1` (`f1e0181`) into
+  `9d6abbb`; HANDOFF.md hand-merged (both sides kept), no other conflict; the auto-merged `candidates/live.py`, `study.py`,
+  `cli.py`, MODEL_SELECTION touch disjoint hunks. Candidate commit: the commit that adds this entry. **Release untouched**
+  (`~/nba-predictor-live` still `f1e0181`, clean). `shadow-season` and `deep-v1` unchanged.
+- **Readiness, research venv** (`~/nba-predictor-deep/backend/.venv`, torch 2.14.1 / tensorflow 2.21.0; the dev venv has
+  neither): `NBA_DATA_DIR=<empty scratch> … check_project.py --ready` **exit 0, 605 passed**, typecheck + build ok.
+  **Release venv** (no torch/tensorflow), pytest without `tests/test_deep_study.py`: **595 passed** (605 − 10 deep-study).
+- **Identities on store copies (snapshots 17:45 UTC, release venv):** research definitions NHL `cb194620c0e6a3c6`, NBA
+  `ff7e0e9199ca0cf7` (= shadow-season: the merge changes none); agreement digests NHL `cca41b18443002bd`, NBA
+  `c6ac226c54fcbc4b`; selector `selector-v1:d472eb466923`. Deep candidate definitions unchanged by the merge and equal to the
+  live fit rows: `torch_mlp:nhl_base` `8ef967a42e0a86c9`, `keras_mlp:nhl_base` `d81f97601998ca57` (NBA: `65165870…`,
+  `f23ed910…`, `ce4faa25…`; artifacts present). A move to this candidate therefore restarts core research/agreement/selector
+  identities (expected, model changes) but keeps the deep and other candidate identities and their artifacts.
+- **Forecast recording (copy, release venv, `jobs.predict_now(now=16:05Z)`, game nhl:2026020035 at 17:00):** success; the
+  primary forecast was already recorded by the release at 15:56 (0 created, not duplicated); cohorts in all 6 markets +
+  expanded winner under `cb194620…`; all 11 NHL candidates forecast, incl. torch/keras from stored weights without the
+  libraries; refits recorded under the new identities (hockey_logistic/gbt/xg, goals_draw/glm); 247 agreement observations;
+  6 selections, all no_pick (no decision in force). A first attempt at 20:45Z was correctly refused (`stale_results`).
+- **Historical policies (copy):** `historical-start-v2` frozen for both definitions (NHL: all markets active; NBA: winner,
+  spread active; totals/team totals no rule qualified). API: `matches_current_definition` true; the 16:05 cohort counts as
+  "before freeze", correctly not in the policy's record. Not built in the live data dir (needs the release move first).
+- **Browser** (preview on the copy, release venv API :8010 + Vite :5190, stopped): Game day, Game page, NHL/NBA Performance
+  with details, 390 px and 1280 px: no overflow, no error states, agreement lines shown, historical card and deep roster rows.
+- **Gaps:** NBA deep candidates show "awaiting a fit in the research environment" although their artifacts exist (the fit row is
+  written at first use; first NBA game 10-20) — wording from deep-v1, not changed. Release venv has no `uvicorn` launcher
+  script (`python -m uvicorn` works; the launchd plist path was not checked here). **Next:** Codex review of this candidate,
+  then a deliberate release move (README steps), then `historical-start` for both sports on the live data, then the
+  model-contribution audit on this version.
+
 ## Historical record keeps picks at lines without a base rate — Claude (Opus 5.5), 2026-10-04 ~17:30 UTC
 - Codex finding on `262d8fb` (confirmed): `combination_research._simulate` dropped picks at lines with too few reference
   games from the win–loss record (they only lack a baseline). Now every pick counts in picks/W–L/accuracy; only the
