@@ -138,7 +138,8 @@ def _market(market: str, table: list, members: list, first: dict, seasons, sport
                                     # Calibration of the picks: a high win rate on confident favourites is expected, and
                                     # beats the side's base rate without any skill beyond the model's own probability.
                                     "mean_probability": sum(x["p"] for x in decided) / len(decided) if decided else None,
-                                    "mean_reference": sum(x["reference"] for x in decided) / len(decided) if decided else None}}
+                                    "mean_reference": (lambda j: sum(j) / len(j) if j else None)(
+                                        [x["reference"] for x in decided if x["reference"] is not None])}}
 
 
 def build(conn, sport: str, log: Callable[[str], None] = print) -> dict:

@@ -337,7 +337,7 @@ export interface HistoricalStartMarket { status: 'active' | 'abstain' | 'insuffi
   games: number; seasons?: number[]; from?: string; until?: string; rules_compared?: number; eligible_rules?: number;
   chronological_check?: { weeks: number; active_weeks: number; rule_changes: number; games: number; picks: number; pushes: number;
     coverage: number; wins: number; losses: number; accuracy: number | null; lift: number | null; accuracy_ci95: [number, number] | null;
-    mean_probability?: number | null; mean_reference?: number | null } }
+    mean_probability?: number | null; mean_reference?: number | null; unjudged_picks?: number; judged_decided?: number } }
 export interface HistoricalStartLive { cohorts_after_freeze: number; cohorts_before_freeze: number; picks: number; wins: number;
   losses: number; pushes: number; pending: number; void: number; unscorable: number; accuracy: number | null;
   bookmaker: { quoted_decided: number; quoted_wins: number; mean_implied: number | null; note: string };

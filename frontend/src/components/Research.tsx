@@ -327,7 +327,7 @@ function HistoricalStartBody({ r }: { r: HistoricalStart }) {
     <p className="small muted">{d.reason}. {d.games} games, {d.from} to {d.until} ({d.rules_compared} rules compared, {d.eligible_rules} with enough picks). Reference: {r.reference}.</p>
     {Object.keys(d.excluded).length > 0 && <p className="small muted">Not offered: {Object.entries(d.excluded).map(([k, v]) => `${modelName(k)} (${v})`).join('; ')}.</p>}
     {c && <p className="small">Chronological check (each week chosen on earlier games only; seasons already used to choose the models, so exploratory):{' '}
-      {c.picks} picks, {c.wins}–{c.losses}{c.pushes ? `–${c.pushes}` : ''} ({pct(c.accuracy, 1)}), lift over the base rate {c.lift == null ? '—' : `${(c.lift * 100).toFixed(1)} pts`}, active {c.active_weeks} of {c.weeks} weeks.
+      {c.picks} picks, {c.wins}–{c.losses}{c.pushes ? `–${c.pushes}` : ''} ({pct(c.accuracy, 1)}), lift over the base rate {c.lift == null ? '—' : `${(c.lift * 100).toFixed(1)} pts`}{c.unjudged_picks ? ` (on the ${c.judged_decided} decided picks at lines with a base rate; ${c.unjudged_picks} picks at other lines count in the record only)` : ''}, active {c.active_weeks} of {c.weeks} weeks.
       {c.mean_probability != null && <> The picks' average model probability was {pct(c.mean_probability, 1)} and their base rate {pct(c.mean_reference ?? null, 1)}: winning near the model's own probability is calibration, not an edge over a bookmaker.</>}</p>}
     <h3>Since frozen <span className="muted small">({r.frozen_at && dateTime(r.frozen_at)})</span></h3>
     {!l || l.picks === 0 ? <p className="small muted">No picks yet on two-hour research cohorts made after the policy was frozen ({l?.cohorts_after_freeze ?? 0} cohorts).</p> : <>

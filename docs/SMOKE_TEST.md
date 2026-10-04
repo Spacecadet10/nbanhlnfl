@@ -574,3 +574,8 @@ untouched. API: `NBA_DATA_DIR=<scratch> NBA_API_MODE=real backend/.venv/bin/uvic
   list in the Candidate-pool selector card), NHL 3-way, NBA, Game page, Game day: all 386 px after `select { max-width:
   100% }` and `.card { overflow-wrap: break-word }`. Desktop: NBA total shows "No rule qualified"; "Models in use" shows
   current-version fits/forecasts with earlier versions listed apart. Preview servers stopped.
+
+## Re-review evidence limits — Codex, 2026-10-04 (262d8fb)
+- No new browser pass this turn: Claude records preview servers stopped after final 390px checks; those final layout results remain author-reported here.
+- Independent: python3 scripts/check_project.py passed; backend/.venv/bin/python -m pytest backend/tests/test_historical_selection.py -q -> 13 passed in 3.71s. Full --ready not rerun; 594-test result remains author-reported.
+- Read-only SQLite + release registry verification confirms both NHL deep fits/forecasts; exact versions/times in HANDOFF.md. No deployment performed. New synthetic historical/live record parity finding is also recorded there.

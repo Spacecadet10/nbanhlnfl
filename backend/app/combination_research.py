@@ -237,15 +237,16 @@ def _simulate(market, rows, sources, members, best=None, filters=selector.FILTER
         decisions.append({"at": cut, "status": status, "rule": d["rule"] if d else None,
                           "lower": d.get("lower") if d else None, "games": len(week_items)})
         t += timedelta(days=7)
-    unjudged = sum(p["reference"] is None for p in picks)
-    picks = [p for p in picks if p["reference"] is not None]      # a pick at an unsupported line is not judged
     decided = [p for p in picks if p["result"] != "push"]
     wins = sum(p["result"] == "win" for p in decided)
-    summary = {"unjudged_picks": unjudged, "reference": HISTORICAL_REFERENCE, "weeks": len(decisions), "active_weeks": sum(d["status"] == "active" for d in decisions),
+    # Every pick counts in the record; only the base-rate comparison is limited to lines with enough reference games.
+    judged = [p for p in decided if p["reference"] is not None]
+    summary = {"unjudged_picks": sum(p["reference"] is None for p in picks), "judged_decided": len(judged),
+               "reference": HISTORICAL_REFERENCE, "weeks": len(decisions), "active_weeks": sum(d["status"] == "active" for d in decisions),
                "rule_changes": changes, "games": len(items), "picks": len(picks), "pushes": len(picks) - len(decided),
                "coverage": len(picks) / len(items), "wins": wins, "losses": len(decided) - wins,
                "accuracy": wins / len(decided) if decided else None,
-               "lift": (sum(p["result"] == "win" for p in decided) - sum(p["reference"] for p in decided)) / len(decided) if decided else None,
+               "lift": (sum(p["result"] == "win" for p in judged) - sum(p["reference"] for p in judged)) / len(judged) if judged else None,
                "accuracy_ci95": nhl_eval._wilson(wins, len(decided)),
                "rules_used": sorted({json.dumps(d["rule"], sort_keys=True) for d in decisions if d["rule"]})}
     if decided:
@@ -366,7 +367,8 @@ def _market_choice(per_market_picks):
     return {"games_with_recommendation": len(chosen), "by_market": {m: sum(1 for c, _ in chosen if c == m) for m in per_market_picks},
             "wins": wins, "losses": len(decided) - wins, "pushes": len(chosen) - len(decided),
             "accuracy": wins / len(decided) if decided else None,
-            "lift": (wins - sum(p["reference"] for _, p in decided)) / len(decided) if decided else None}
+            "lift": (lambda j: (sum(p["result"] == "win" for p in j) - sum(p["reference"] for p in j)) / len(j) if j else None)(
+                [p for _, p in decided if p["reference"] is not None])}
 
 
 def run(conn, sport: str, out_dir: Optional[Path] = None, log: Callable[[str], None] = print) -> dict:

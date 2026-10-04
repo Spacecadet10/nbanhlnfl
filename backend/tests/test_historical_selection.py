@@ -250,3 +250,27 @@ def test_roster_reports_earlier_version_activity_apart_from_the_current(store, m
     draw = m[("line and 3-way markets", "goals_draw")]
     assert draw["fit_register"] is None and draw["earlier_fit"]["definition"] == "older-defn"
     assert draw["forecasting"] is False and draw["earlier_forecast_at"] is not None
+
+
+def test_picks_at_lines_without_a_base_rate_still_count_in_the_record():
+    """A pick at a line with too few reference games keeps its win or loss; only the base-rate lift leaves it out."""
+    rnd = random.Random(17)
+    t0 = datetime(2019, 10, 1, tzinfo=timezone.utc)
+    rows = []
+    for i in range(1000):
+        tip = t0 + timedelta(hours=8 * i)
+        sparse = i >= 500 and i % 10 == 0              # 50 later games spread over 25 one-off lines: never 50 at a line
+        line = 10.5 + (i % 250) if sparse else -1.5
+        realised = 2 if sparse else (0 if rnd.random() < 0.5 else 2)
+        good = realised if sparse or rnd.random() < 0.8 else 2 - realised
+        vec = (0.8, 0.0, 0.2) if (0 if sparse else good) == 0 else (0.2, 0.0, 0.8)   # sparse: always picks home, loses
+        rows.append({"game_id": f"g{i}", "season": 2019, "tipoff_at": tip.strftime(FMT), "cutoff_at": tip.strftime(FMT),
+                     "result_available_at": (tip + timedelta(hours=3)).strftime(FMT), "line": line, "realised": realised,
+                     "vectors": {"a": vec}})
+    sim, picks = cr._simulate("spread", rows, ["a"], ["a"])
+    s = sim["summary"]
+    sparse_losses = sum(1 for p in picks if p["reference"] is None and p["result"] == "loss")
+    assert sparse_losses > 0 and s["unjudged_picks"] >= sparse_losses
+    assert s["wins"] + s["losses"] + s["pushes"] == s["picks"] == len(picks)       # nothing dropped from the record
+    assert s["judged_decided"] == s["wins"] + s["losses"] - s["unjudged_picks"]
+    assert s["accuracy"] == pytest.approx(s["wins"] / (s["wins"] + s["losses"]))
