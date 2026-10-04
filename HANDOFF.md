@@ -1,5 +1,22 @@
 # Current handoff
 
+## Decision and model-contribution audit on `rc-20261004` — Claude (Opus 5.5), 2026-10-04 18:45–19:40 UTC
+- **Branch `model-audit`** (from `rc-20261004` @ `804d8e2`, which stays unchanged for Codex's review). Read-only:
+  `app/model_audit.py`, CLI `model-audit` (query-only store; writes `data/reports/model-audit-<sport>/report.json`),
+  `tests/test_model_audit.py` (3). No identity-hashed file, model, forecast or stored row changed. **Findings:
+  docs/MODEL_AUDIT.md.**
+- Run on store copies (17:45 UTC snapshots, definitions NHL `cb194620…`, NBA `ff7e0e91…`): NHL 50 s, NBA ~2 min.
+  Headline: combining models does not beat the best single model on NHL markets or NBA winner/spread; the stacker is worse
+  on NBA winner and NHL home team total; NBA totals/team totals gain 0.008–0.024 log loss from averaging/stacking, a
+  calibration effect (ridge/gbt points members overconfident at the primary's line). Members overlap heavily (effective
+  independent members ~1.04–1.1 of 4–5 on winners). Deep networks: no standalone gain (deep-v1); never measured inside a
+  combination. Prospective: 13 settled NHL cohorts, too few for any comparison.
+- Fixed during the run (my own first version): error correlation against the shared outcome gave ~0.996 everywhere (an
+  artefact) → now forecast correlation + pick disagreement; "missed games" counted openers before two-hour recording began.
+- Checks: `NBA_DATA_DIR=<empty scratch> ~/nba-predictor-deep/backend/.venv/bin/python scripts/check_project.py --ready`:
+  **exit 0, 608 passed**, typecheck + build ok. No UI change. **Next:** Codex review of `rc-20261004` and of the audit's
+  method; recommended order in docs/MODEL_AUDIT.md §7 (calibrate overconfident line members as a versioned member first).
+
 ## Release candidate `rc-20261004` (shadow-season + deep-v1) — Claude (Opus 5.5), 2026-10-04 17:40–18:40 UTC
 - **Branch `rc-20261004`:** `7e5e63b` (Codex's 9d6abbb review note) + merge `7bdad3f` of `deep-v1` (`f1e0181`) into
   `9d6abbb`; HANDOFF.md hand-merged (both sides kept), no other conflict; the auto-merged `candidates/live.py`, `study.py`,

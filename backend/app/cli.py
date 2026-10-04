@@ -12,14 +12,14 @@ SPORT_COMMANDS = {"nhl-pbp-import", "nhl-xg-research", "migrate", "replay", "cov
                   "score", "daily", "scheduler", "predict-now", "score-near-tipoff", "markets", "score-markets", "agreement", "thresholds",
                   "combination-study", "selector-decide", "research-report", "retrain-cadence", "catboost-challenger", "combination-search", "expanded-search", "selective-study", "rules-registry",
                   "daily-cadence", "features-nhl", "tracking-report", "tracking-record", "pool-screen", "pool-assess", "pool-record", "pool-roster", "pool-report",
-                  "release-check", "diagnostics", "historical-start"}
+                  "release-check", "diagnostics", "historical-start", "model-audit"}
 NHL_ONLY = {"nhl-pbp-import", "nhl-xg-research", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies"}
 
 
 # Commands that only read the store: they run on a query-only connection without the job lock or a migration, so a long
 # report can never make a scheduled two-hour cycle wait, skip or miss a game. (`score` is not here: it records a job run.)
 READ_ONLY_COMMANDS = {"score-markets", "score-near-tipoff", "thresholds", "research-report", "pool-report", "pool-roster",
-                      "tracking-report", "coverage", "release-check", "diagnostics", "historical-start"}
+                      "tracking-report", "coverage", "release-check", "diagnostics", "historical-start", "model-audit"}
 LOCK_WAIT_SECONDS = 45 * 60     # longer than any two-hour cycle (NHL ~13 minutes); a job still waiting then fails visibly
 ODDS_LOCK_WAIT_SECONDS = 120    # the periodic cycle waits out a short job (daily, injuries), not another full cycle
 
@@ -153,6 +153,9 @@ def main(argv=None) -> int:
     sub.add_parser("historical-start", help="Freeze the separately labelled historical starting policy for the current "
                                             "research definition (walk-forward history, outcome base-rate reference; reads "
                                             "the store only, writes data/research/historical-start/; refuses to overwrite)")
+    sub.add_parser("model-audit", help="Read-only decision and model-contribution audit (historical walk-forward of the live "
+                                       "members, candidates, deep study, prospective cohorts, inputs); writes "
+                                       "data/reports/model-audit-<sport>/report.json")
     sub.add_parser("features-nba", help="features-v1 NBA: player-quality-weighted absences (MODEL_SELECTION §19; exploratory)")
     # Persistent agreement tracking tracking-v2 (MODEL_SELECTION §18)
     tg = sub.add_parser("tracking-registry", help="Seal the tracking-v2 group registry (refuses to replace an existing one)")
@@ -578,6 +581,11 @@ def _run(args, p, conn, applied) -> int:
         r = availability_quality.evaluate(conn)
         print(json.dumps({k: r[k] for k in ("scored_games", "reading", "output_dir")} | {"comparisons": {k: {"mean": v["mean"],
               "bonferroni": v["bonferroni_interval"]} for k, v in r["comparisons"].items()}}, indent=1, default=str))
+    elif args.cmd == "model-audit":
+        from . import model_audit
+        r = model_audit.run(conn, args.sport)
+        print(json.dumps({"output_dir": r["output_dir"], "markets": {m: {k: (v or {}).get("verdict") for k, v in
+                          x["historical"]["comparisons"].items()} for m, x in r["markets"].items()}}, indent=1))
     elif args.cmd == "historical-start":
         from . import historical_start
         doc = historical_start.build(conn, args.sport)
