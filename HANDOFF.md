@@ -145,6 +145,44 @@
   toggle on/off; History NHL backtest "Show 500 more" requested limit=1000; Performance 10 calibration bins, research collapsed.
 - Not done (not in the user's list): markets-review LOWs (unmapped ESPN statuses, duplicate row after a line change, provider pin,
   near-tipoff two-transaction write), raw 503 text. Next: independent review, then commit and a deliberate release move.
+## Deep candidates recording live (after tonight's release move) — Claude (Fable 5.1), 2026-10-03 22:10–22:35 UTC
+- **User decision:** "just do it" — record the PyTorch / TensorFlow networks live as research models to find out, with no
+  promise of an edge. Research only: never a voter, in no sealed pool or tracking registry, no selector change.
+- **Branch `deep-v1` (worktree `~/nba-predictor-deep`), commit `76e324c` + this handoff.** Five candidates:
+  `torch_mlp:nba_base`, `keras_mlp:nba_base`, `torch_mlp:nba_base:normal`, `torch_mlp:nhl_base`, `keras_mlp:nhl_base`.
+  Fitted with torch 2.14.1 / tensorflow 2.21.0 in the research venv (`~/nba-predictor-deep/backend/.venv`), stored as NumPy
+  weights (`candidates/deep.py` `NumpyMLP`), so **the release venv needs neither library** to apply them.
+- **Identities:** existing candidates' definitions are unchanged (learners/engine/features/goalies untouched; tested). The
+  research definitions (NHL `3e2504c4d655c41b`, NBA `1215f3641ad63e4f`) are unchanged: no identity-hashed file edited.
+- **Artifacts fitted 22:20 UTC** on the live point-in-time history (store opened query-only; files only), season 2027:
+  NHL 14,508 training games, NBA 8,919; under `data/research/candidates/artifacts/<sport>/{torch,keras}_mlp__*`.
+  Refit needed only at the next season start or after a corrected past score: run
+  `NBA_DATA_DIR=<live data> ~/nba-predictor-deep/backend/.venv/bin/python -m app.cli --sport <sport> pool-fit-deep` from
+  `~/nba-predictor-deep/backend`. Without an artifact the release skips the candidate with that reason.
+- **Checks:** 580 passed in the research venv; 570 passed in the release venv without torch/tensorflow (deep-study tests
+  excluded there). Read-only dry run in the release venv on tonight's 10 eligible NHL games: both networks produced
+  forecasts, no skip, no error.
+- **Go-live:** the scheduled move script (`~/nba-predictor-backups/move-release.sh`) was restarted with the tip of this
+  branch as its target; it still waits for tonight's games to finish and rolls back on any failed check.
+- **For the next writer:** `shadow-season` (main checkout) does not contain this branch yet. Merge `deep-v1` into it before
+  the next release move from there, or that move will not be a fast-forward. The dev venv needs
+  `uv pip install torch==2.14.1 tensorflow==2.21.0` for `tests/test_deep_study.py` (the `deep` extra).
+
+## Deep-learning study deep-v1 (PyTorch + TensorFlow/Keras) — Claude (Fable 5.1), 2026-10-03 21:48–22:10 UTC
+- **Where:** worktree `~/nba-predictor-deep`, branch `deep-v1` (from `e900cc7`), with its own venv (release pins + torch 2.14.1
+  + tensorflow 2.21.0). Built there because another writer had ~29 files mid-edit in the main checkout. **Not merged; nothing
+  in the release or the dev venv changed.** Data: copies in `~/nba-predictor-deep-data` (stores from the 20:38 UTC backup).
+- **Commits:** `87b8a06` registration (MODEL_SELECTION §22, before any fit), `3bf0451` code + tests, then results/docs.
+- **Code:** `app/deep_study.py` (TorchNet, KerasNet, per-season walk, evaluate), CLI `deep-study` / `deep-evaluate`,
+  `pyproject` extra `deep`, `tuning_study.goals_fitted` shared helper. No identity-hashed file edited.
+- **Checks:** `tests/test_deep_study.py` 6 passed (no leakage, reproducible, engine-compatible heads); full suite in that
+  worktree: **576 passed** (pytest directly, empty scratch data dir).
+- **Result:** no network qualifies under the registered rule; all are within ~0.001 log loss of the best existing member on
+  winners, worse on totals (docs/CHALLENGER_RESULTS.md "Deep-learning study"; evidence docs/evidence/deep-v1/).
+- **To merge:** `git merge deep-v1` into `shadow-season` when the main checkout is clean (expect a HANDOFF.md conflict only);
+  tests then need torch/tensorflow in the dev venv (`uv pip install torch==2.14.1 tensorflow==2.21.0`), as with optuna.
+- **Open decision for the user:** record these networks live as research candidates anyway (needs registry entries, a
+  one-time identity change for every candidate, and torch/tensorflow pinned in the release venv), or keep them as a study.
 
 ## Ledger: quote attached when the bookmaker later posts the model's line — Claude (Fable 5.1), 2026-10-03 21:25 UTC
 - **Dev checkout only; NOT in the release and NOT in tonight's scheduled move (target stays `5534c34`).** It changes how the

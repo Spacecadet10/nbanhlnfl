@@ -13,7 +13,7 @@ from typing import Callable, Optional
 
 from .. import backtest, combination_research as cr, combine, config, nhl_eval, selector
 from ..db import utc_now
-from . import engine, features, registry
+from . import deep, engine, features, registry
 
 STAGES = {"nba": {"screen": ("validation", (2022, 2023, 2024)), "assess": ("test", (2025, 2026))},
           "nhl": {"screen": ("development", (2018, 2019, 2020, 2021)), "assess": ("test", (2022, 2023, 2024, 2025, 2026))}}
@@ -163,6 +163,9 @@ def add_candidates(sport, tables, first, rows, events, recorder, log) -> tuple[d
     by_table = {m: {r["game_id"]: r for r in t} for m, t in tables.items()}
     fits, runtimes, not_run = {}, {}, {}
     for spec in registry.for_sport(sport):
+        if deep.is_deep(spec):               # screened by its own registered study, not by the pool screen
+            not_run[spec.name] = {"status": "skipped", "reason": "deep candidate: evaluated in deep-v1 (MODEL_SELECTION §22)"}
+            continue
         if not registry.available(spec):
             not_run[spec.name] = {"status": "skipped", "reason": f"optional dependency {spec.extra} not installed"}
             log(f"{spec.name}: skipped (optional dependency {spec.extra} not installed)")
@@ -309,7 +312,7 @@ def run_screen(conn, sport: str, log: Callable[[str], None] = print, dry: bool =
     for market in ("winner",) + LINE_MARKETS[sport]:
         existing = members["winner"] if market == "winner" else members["lines"]
         cands = [s.name for s in registry.for_sport(sport) if market in s.markets and s.role == "candidate"
-                 and registry.available(s)]
+                 and registry.available(s) and not deep.is_deep(s)]
         refs = [s.name for s in registry.for_sport(sport) if market in s.markets and s.role == "reference"
                 and registry.available(s)]
         res = screen_market(market, tables[market], existing, cands + refs, first, seasons)

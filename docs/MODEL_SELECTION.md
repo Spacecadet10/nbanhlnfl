@@ -543,6 +543,37 @@ sklearn, which overstated the equivalence).
 - Exploratory (spent seasons). Compute ≤ 2 h on scratch copies. Nothing changes live; a tuned learner could only enter live
   recording later as a separately versioned candidate.
 
+## 22. Deep-learning study `deep-v1` (registered 2026-10-03 ~22:00 UTC, before any deep model was fitted on project data)
+**Why.** The user asked for neural networks built with PyTorch and TensorFlow/Keras. The pool already has one small
+scikit-learn network (`mlp`); this study measures whether deeper networks trained with those libraries add anything, under
+the same point-in-time rules as every other study. Exploratory: it selects nothing for live use.
+
+**Inputs.** The pool-v1 point-in-time feature walk (`candidates/features.py`, base feature sets only; no goalie inputs, which
+are optimistic historically). Stores are read from copies. No new data source.
+
+**Models (fixed before fitting; at most 4 per sport).** Standardised inputs; every network is an average of 5 seeds.
+- `torch_mlp:<sport>_base` — PyTorch, binary winner: 64-32 hidden units, ReLU, dropout 0.2, AdamW (lr 1e-3, weight decay 1e-3),
+  batch 128.
+- `keras_mlp:<sport>_base` — TensorFlow/Keras, binary winner: the same architecture and optimiser settings.
+- NBA `torch_mlp:nba_base:normal` — PyTorch regression of margin and total (two networks, MSE).
+- NHL `torch_goals:nhl_base` — PyTorch Poisson regression of home and away regulation goals (log link, Poisson loss), with the
+  pool's draw weight and overtime share.
+
+**Training rule (no tuning on the evaluated season).** For season s: training rows are those whose results were available
+before the season's first cutoff (`engine.training_rows`). The latest training season is held out to choose the number of
+epochs (early stopping, patience 15, at most 200 epochs); the network is then refitted on all training rows for that many
+epochs and predicts season s only. A season without an earlier validation season is skipped. Fixed seeds; single-threaded.
+
+**Evaluation.** Per market, on games where every compared forecast exists: log loss, multi-outcome Brier and pick accuracy,
+per season and pooled; difference in log loss against (a) the best existing member chosen on earlier seasons only and (b) the
+scikit-learn counterpart (`mlp:<sport>_base`, `gbt_points` / `poisson_draw:nhl_base` for the score heads), with a
+week-block bootstrap 95% interval. Seasons 2025 and 2026 are the reserved test seasons, already reused by research: their rows
+are reported and flagged, and nothing here is a second final test.
+
+**Decision rule.** A deep model is proposed for prospective recording as a research candidate only if its pooled log-loss
+difference against the best prior existing member has an interval entirely below 0. Otherwise it stays a study result. No
+model, selector, registry or live forecast changes as part of this study.
+
 ## Amendments
 - **2026-10-02, before the study run:** `ridge_points` / `gbt_points` spreads have a floor of 1.0 point (`MIN_SD`), found with
   synthetic test data where every total was identical. Real residual spreads are about 12 (margin) and 18 (total) points, so the

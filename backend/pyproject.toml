@@ -19,6 +19,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8"]
 research = ["catboost==1.2.10", "ngboost==0.5.11", "optuna==5.0.0"]  # MODEL_SELECTION §10, §21, CANDIDATE_POOL §1; research only
+deep = ["torch==2.14.1", "tensorflow==2.21.0"]  # MODEL_SELECTION §22 (deep-v1); research venv only, never the release venv
 
 [tool.setuptools.packages.find]
 include = ["app*"]

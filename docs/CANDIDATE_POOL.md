@@ -147,3 +147,12 @@ Implemented in `backend/app/candidates/selection.py`; registry `backend/app/cand
   not only at season start.
 - **Known, not fixed:** an NHL dry run still extends the derived goalie cache file (`research/candidates/goalies-v1.json.gz`);
   fixing it would change `goalies.py`, which is part of every candidate's identity. No store row is written by a dry run.
+
+## Deep candidates (added 2026-10-03, MODEL_SELECTION §22)
+Five networks are recorded prospectively at the user's request: `torch_mlp` and `keras_mlp` on the NBA and NHL winner, and
+`torch_mlp:nba_base:normal` for NBA margin and total. deep-v1 found no gain over existing members, so they are research
+candidates only: in no sealed pool registry, no tracking group and no selector rule. They are fitted with PyTorch /
+TensorFlow in the research environment (`pool-fit-deep`) and stored as plain NumPy weights; the release applies a stored
+artifact without either library and skips the candidate, with the reason, when no artifact exists for the season. Their
+code lives in `candidates/deep.py`, outside the files that define every other candidate's identity.
+

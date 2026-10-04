@@ -324,3 +324,39 @@ Found by the correctness audit (HANDOFF.md); the figures in the saved reports ar
 - **tracking-v2 historical tables:** statistics were stored rounded to five decimals, which moved 18–114 group-game picks per
   market (of roughly 290k–900k) up across a threshold. They are now rounded down and the tables rebuilt; leaderboard order is
   unaffected in practice.
+
+## Deep-learning study `deep-v1` (PyTorch, TensorFlow/Keras) — 2026-10-03
+Registered in MODEL_SELECTION §22 (commit 87b8a06) before any network was fitted. Exploratory; reused seasons (2025 and 2026
+are the reserved test seasons and are flagged per season in the report). Evidence: `docs/evidence/deep-v1/`.
+
+**What was built.** `app/deep_study.py`: a PyTorch MLP (binary winner, margin/total regression, Poisson goals) and the same
+binary MLP in TensorFlow/Keras, 64-32 hidden units, dropout 0.2, AdamW, 5-seed averages. For each season the number of epochs
+is chosen by early stopping on the latest earlier season, then the network is refitted on every earlier game and predicts
+that season only. torch 2.14.1, tensorflow 2.21.0, keras 3.15.1. Run on copies of the stores (feature tables
+`52c436fa49c3ac21` NHL, `8d95c301a1e9bcfd` NBA).
+
+**Result: no network qualifies.** Log-loss difference against the best existing member chosen on earlier seasons (negative
+would be better; 95% week-block bootstrap interval):
+
+| Sport, market | Network | Games | Pick accuracy (best existing) | Log-loss difference | vs scikit-learn counterpart |
+|---|---|---|---|---|---|
+| NHL winner | torch_mlp | 10,515 | 59.2% (59.2%) | +0.0007 [-0.0004, +0.0017] | mlp: +0.0005 [-0.0002, +0.0011] |
+| NHL winner | keras_mlp | 10,515 | 59.2% (59.2%) | +0.0009 [-0.0003, +0.0021] | mlp: +0.0007 [-0.0001, +0.0016] |
+| NHL winner | torch_goals | 10,515 | 59.0% (59.2%) | +0.0020 [+0.0004, +0.0037] | poisson_draw: -0.0002 [-0.0012, +0.0008] |
+| NHL 3-way | torch_goals | 10,515 | 47.3% (47.5%) | -0.0000 [-0.0013, +0.0013] | poisson_draw: +0.0008 [-0.0004, +0.0019] |
+| NHL puck line | torch_goals | 10,515 | 56.7% (56.8%) | +0.0000 [-0.0010, +0.0011] | poisson_draw: +0.0000 [-0.0010, +0.0011] |
+| NHL total | torch_goals | 10,515 | 51.5% (53.0%) | +0.0044 [+0.0029, +0.0059] | poisson_draw: +0.0026 [+0.0015, +0.0037] |
+| NBA winner | torch_mlp | 5,282 | 66.1% (65.7%) | +0.0001 [-0.0018, +0.0021] | mlp: +0.0006 [-0.0004, +0.0017] |
+| NBA winner | keras_mlp | 5,282 | 65.9% (65.7%) | +0.0011 [-0.0010, +0.0031] | mlp: +0.0016 [+0.0005, +0.0027] |
+| NBA spread | torch_mlp normal | 3,962 | 54.4% (54.6%) | +0.0014 [-0.0006, +0.0033] | gbt_points: -0.0050 [-0.0079, -0.0021] |
+| NBA total | torch_mlp normal | 3,962 | 51.6% (51.3%) | +0.0082 [+0.0017, +0.0149] | gbt_points: -0.0011 [-0.0051, +0.0025] |
+
+(NHL and NBA team totals are in the report: none qualifies.) The networks match the existing models to within about 0.001
+log loss on winners and are worse on totals. The one clear relative gain is the PyTorch margin network over the boosted-tree
+points model on the NBA spread, but it still does not beat the best existing member. This agrees with tuning-v1 and the
+pool screens: with the current inputs, the learner is not the limit.
+
+**Decision (per the registered rule).** Nothing is proposed for prospective recording on evidence. Recording these networks
+live as research candidates would be a separate, deliberate step: it adds them to the candidate registry (which changes
+every candidate's identity once) and needs torch/tensorflow pinned in the release environment.
+

@@ -1,0 +1,451 @@
+{
+ "study": "deep-v1",
+ "started_at": "2026-10-03T21:53:07Z",
+ "settings": {
+  "hidden": [
+   64,
+   32
+  ],
+  "dropout": 0.2,
+  "learning_rate": 0.001,
+  "weight_decay": 0.001,
+  "batch": 128,
+  "max_epochs": 200,
+  "patience": 15,
+  "seeds": 5
+ },
+ "seeds": [
+  20261003,
+  20261004,
+  20261005,
+  20261006,
+  20261007
+ ],
+ "libraries": {
+  "torch": "2.14.1",
+  "tensorflow": "2.21.0",
+  "keras": "3.15.1"
+ },
+ "sports": {
+  "nhl": {
+   "feature_table": "52c436fa49c3ac21",
+   "oof_sha256_24": "b0a4fe20b38787421e9846f2",
+   "fits": {
+    "torch_mlp:nhl_base": [
+     {
+      "season": 2018,
+      "training_games": 2638,
+      "results_through": "2017-06-12T04:00:00Z",
+      "validation_season": 2017,
+      "epochs": 14,
+      "seconds": 2.4
+     },
+     {
+      "season": 2019,
+      "training_games": 3993,
+      "results_through": "2018-06-08T04:00:00Z",
+      "validation_season": 2018,
+      "epochs": 6,
+      "seconds": 0.3
+     },
+     {
+      "season": 2020,
+      "training_games": 5351,
+      "results_through": "2019-06-13T04:00:00Z",
+      "validation_season": 2019,
+      "epochs": 14,
+      "seconds": 0.7
+     },
+     {
+      "season": 2021,
+      "training_games": 6563,
+      "results_through": "2020-09-29T04:00:00Z",
+      "validation_season": 2020,
+      "epochs": 6,
+      "seconds": 0.5
+     },
+     {
+      "season": 2022,
+      "training_games": 7515,
+      "results_through": "2021-07-08T04:00:00Z",
+      "validation_season": 2021,
+      "epochs": 8,
+      "seconds": 0.7
+     },
+     {
+      "season": 2023,
+      "training_games": 8916,
+      "results_through": "2022-06-27T04:00:00Z",
+      "validation_season": 2022,
+      "epochs": 8,
+      "seconds": 0.8
+     },
+     {
+      "season": 2024,
+      "training_games": 10316,
+      "results_through": "2023-06-14T04:00:00Z",
+      "validation_season": 2023,
+      "epochs": 5,
+      "seconds": 0.8
+     },
+     {
+      "season": 2025,
+      "training_games": 11716,
+      "results_through": "2024-06-25T04:00:00Z",
+      "validation_season": 2024,
+      "epochs": 19,
+      "seconds": 2.2
+     },
+     {
+      "season": 2026,
+      "training_games": 13114,
+      "results_through": "2025-06-18T04:00:00Z",
+      "validation_season": 2025,
+      "epochs": 7,
+      "seconds": 1.2
+     }
+    ],
+    "keras_mlp:nhl_base": [
+     {
+      "season": 2018,
+      "training_games": 2638,
+      "results_through": "2017-06-12T04:00:00Z",
+      "validation_season": 2017,
+      "epochs": 3,
+      "seconds": 2.5
+     },
+     {
+      "season": 2019,
+      "training_games": 3993,
+      "results_through": "2018-06-08T04:00:00Z",
+      "validation_season": 2018,
+      "epochs": 4,
+      "seconds": 2.7
+     },
+     {
+      "season": 2020,
+      "training_games": 5351,
+      "results_through": "2019-06-13T04:00:00Z",
+      "validation_season": 2019,
+      "epochs": 30,
+      "seconds": 6.5
+     },
+     {
+      "season": 2021,
+      "training_games": 6563,
+      "results_through": "2020-09-29T04:00:00Z",
+      "validation_season": 2020,
+      "epochs": 2,
+      "seconds": 2.6
+     },
+     {
+      "season": 2022,
+      "training_games": 7515,
+      "results_through": "2021-07-08T04:00:00Z",
+      "validation_season": 2021,
+      "epochs": 12,
+      "seconds": 4.2
+     },
+     {
+      "season": 2023,
+      "training_games": 8916,
+      "results_through": "2022-06-27T04:00:00Z",
+      "validation_season": 2022,
+      "epochs": 3,
+      "seconds": 3.3
+     },
+     {
+      "season": 2024,
+      "training_games": 10316,
+      "results_through": "2023-06-14T04:00:00Z",
+      "validation_season": 2023,
+      "epochs": 13,
+      "seconds": 5.5
+     },
+     {
+      "season": 2025,
+      "training_games": 11716,
+      "results_through": "2024-06-25T04:00:00Z",
+      "validation_season": 2024,
+      "epochs": 13,
+      "seconds": 7.2
+     },
+     {
+      "season": 2026,
+      "training_games": 13114,
+      "results_through": "2025-06-18T04:00:00Z",
+      "validation_season": 2025,
+      "epochs": 3,
+      "seconds": 4.0
+     }
+    ],
+    "torch_goals:nhl_base": [
+     {
+      "season": 2018,
+      "training_games": 2638,
+      "results_through": "2017-06-12T04:00:00Z",
+      "validation_season": 2017,
+      "epochs": {
+       "home": 70,
+       "away": 38
+      },
+      "seconds": 3.0
+     },
+     {
+      "season": 2019,
+      "training_games": 3993,
+      "results_through": "2018-06-08T04:00:00Z",
+      "validation_season": 2018,
+      "epochs": {
+       "home": 27,
+       "away": 33
+      },
+      "seconds": 2.5
+     },
+     {
+      "season": 2020,
+      "training_games": 5351,
+      "results_through": "2019-06-13T04:00:00Z",
+      "validation_season": 2019,
+      "epochs": {
+       "home": 20,
+       "away": 30
+      },
+      "seconds": 2.9
+     },
+     {
+      "season": 2021,
+      "training_games": 6563,
+      "results_through": "2020-09-29T04:00:00Z",
+      "validation_season": 2020,
+      "epochs": {
+       "home": 37,
+       "away": 47
+      },
+      "seconds": 6.1
+     },
+     {
+      "season": 2022,
+      "training_games": 7515,
+      "results_through": "2021-07-08T04:00:00Z",
+      "validation_season": 2021,
+      "epochs": {
+       "home": 12,
+       "away": 28
+      },
+      "seconds": 3.4
+     },
+     {
+      "season": 2023,
+      "training_games": 8916,
+      "results_through": "2022-06-27T04:00:00Z",
+      "validation_season": 2022,
+      "epochs": {
+       "home": 49,
+       "away": 29
+      },
+      "seconds": 7.4
+     },
+     {
+      "season": 2024,
+      "training_games": 10316,
+      "results_through": "2023-06-14T04:00:00Z",
+      "validation_season": 2023,
+      "epochs": {
+       "home": 29,
+       "away": 18
+      },
+      "seconds": 5.6
+     },
+     {
+      "season": 2025,
+      "training_games": 11716,
+      "results_through": "2024-06-25T04:00:00Z",
+      "validation_season": 2024,
+      "epochs": {
+       "home": 39,
+       "away": 27
+      },
+      "seconds": 8.5
+     },
+     {
+      "season": 2026,
+      "training_games": 13114,
+      "results_through": "2025-06-18T04:00:00Z",
+      "validation_season": 2025,
+      "epochs": {
+       "home": 19,
+       "away": 34
+      },
+      "seconds": 7.8
+     }
+    ]
+   },
+   "games_per_market": {
+    "winner": 11870,
+    "reg3": 11870,
+    "spread": 11870,
+    "total": 11870,
+    "team_total_home": 11870,
+    "team_total_away": 11870
+   },
+   "seconds": 138.0
+  },
+  "nba": {
+   "feature_table": "8d95c301a1e9bcfd",
+   "oof_sha256_24": "91826ba33ced0790e9832d1e",
+   "fits": {
+    "torch_mlp:nba_base": [
+     {
+      "season": 2022,
+      "training_games": 2314,
+      "results_through": "2021-07-21T05:00:00Z",
+      "validation_season": 2021,
+      "epochs": 6,
+      "seconds": 0.2
+     },
+     {
+      "season": 2023,
+      "training_games": 3637,
+      "results_through": "2022-06-17T05:00:00Z",
+      "validation_season": 2022,
+      "epochs": 7,
+      "seconds": 0.3
+     },
+     {
+      "season": 2024,
+      "training_games": 4957,
+      "results_through": "2023-06-13T04:30:00Z",
+      "validation_season": 2023,
+      "epochs": 17,
+      "seconds": 1.0
+     },
+     {
+      "season": 2025,
+      "training_games": 6276,
+      "results_through": "2024-06-18T04:30:00Z",
+      "validation_season": 2024,
+      "epochs": 6,
+      "seconds": 0.5
+     },
+     {
+      "season": 2026,
+      "training_games": 7597,
+      "results_through": "2025-06-23T04:00:00Z",
+      "validation_season": 2025,
+      "epochs": 19,
+      "seconds": 1.7
+     }
+    ],
+    "keras_mlp:nba_base": [
+     {
+      "season": 2022,
+      "training_games": 2314,
+      "results_through": "2021-07-21T05:00:00Z",
+      "validation_season": 2021,
+      "epochs": 4,
+      "seconds": 3.2
+     },
+     {
+      "season": 2023,
+      "training_games": 3637,
+      "results_through": "2022-06-17T05:00:00Z",
+      "validation_season": 2022,
+      "epochs": 7,
+      "seconds": 3.9
+     },
+     {
+      "season": 2024,
+      "training_games": 4957,
+      "results_through": "2023-06-13T04:30:00Z",
+      "validation_season": 2023,
+      "epochs": 14,
+      "seconds": 7.2
+     },
+     {
+      "season": 2025,
+      "training_games": 6276,
+      "results_through": "2024-06-18T04:30:00Z",
+      "validation_season": 2024,
+      "epochs": 11,
+      "seconds": 6.3
+     },
+     {
+      "season": 2026,
+      "training_games": 7597,
+      "results_through": "2025-06-23T04:00:00Z",
+      "validation_season": 2025,
+      "epochs": 5,
+      "seconds": 4.1
+     }
+    ],
+    "torch_mlp:nba_base:normal": [
+     {
+      "season": 2022,
+      "training_games": 2314,
+      "results_through": "2021-07-21T05:00:00Z",
+      "validation_season": 2021,
+      "epochs": {
+       "margin": 6,
+       "total": 16
+      },
+      "seconds": 0.6
+     },
+     {
+      "season": 2023,
+      "training_games": 3637,
+      "results_through": "2022-06-17T05:00:00Z",
+      "validation_season": 2022,
+      "epochs": {
+       "margin": 3,
+       "total": 5
+      },
+      "seconds": 0.4
+     },
+     {
+      "season": 2024,
+      "training_games": 4957,
+      "results_through": "2023-06-13T04:30:00Z",
+      "validation_season": 2023,
+      "epochs": {
+       "margin": 6,
+       "total": 26
+      },
+      "seconds": 1.8
+     },
+     {
+      "season": 2025,
+      "training_games": 6276,
+      "results_through": "2024-06-18T04:30:00Z",
+      "validation_season": 2024,
+      "epochs": {
+       "margin": 4,
+       "total": 11
+      },
+      "seconds": 1.1
+     },
+     {
+      "season": 2026,
+      "training_games": 7597,
+      "results_through": "2025-06-23T04:00:00Z",
+      "validation_season": 2025,
+      "epochs": {
+       "margin": 20,
+       "total": 7
+      },
+      "seconds": 2.3
+     }
+    ]
+   },
+   "games_per_market": {
+    "winner": 6605,
+    "spread": 5282,
+    "total": 5282,
+    "team_total_home": 5282,
+    "team_total_away": 5282
+   },
+   "seconds": 54.9
+  }
+ },
+ "finished_at": "2026-10-03T21:56:24Z"
+}
