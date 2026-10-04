@@ -35,11 +35,33 @@ export function useMarket(): [MarketId, (m: MarketId) => void] {
   return [market, set];
 }
 
+/** Research detail (other timing policy, research lines, research cards) is hidden unless ?details=1, so the default
+ * view answers: the pick, how sure, whether the models agree, and the bookmaker. Model agreement is always shown. */
+export function useDetails(): [boolean, (on: boolean) => void] {
+  const [params, setParams] = useSearchParams();
+  const on = params.get('details') === '1';
+  const set = (v: boolean) => {
+    const next = new URLSearchParams(params);
+    if (v) next.set('details', '1'); else next.delete('details');
+    setParams(next, { replace: true });
+  };
+  return [on, set];
+}
+
+export function DetailsToggle() {
+  const [on, set] = useDetails();
+  return (
+    <label className="details-toggle small">
+      <input type="checkbox" checked={on} onChange={(e) => set(e.target.checked)} /> Show research details
+    </label>
+  );
+}
+
 /** The query string to keep when moving between screens: the selection, not per-screen filters. */
 export function useCarriedSearch(): string {
   const [params] = useSearchParams();
   const keep = new URLSearchParams();
-  for (const k of ['sport', 'market', 'policy', 'conf']) {
+  for (const k of ['sport', 'market', 'policy', 'conf', 'details']) {
     const v = params.get(k);
     if (v) keep.set(k, v);
   }

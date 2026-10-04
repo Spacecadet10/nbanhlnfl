@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
-import type { MarketId, Policy, PredictionRecord, Sport } from '../api/types';
+import type { HistoryResponse, MarketId, Policy, PredictionRecord, Sport } from '../api/types';
 import { useApi } from '../api/useApi';
 import { RunBadge } from '../components/Badges';
 import { ConfidenceFilter, confidenceLevels, levelLabel, MarketRecordLine, RecordLine, useConfidence } from '../components/ConfidenceFilter';
@@ -11,6 +11,17 @@ import { MarketSelect, useCarriedSearch, useMarket, useSport } from '../componen
 import { PolicyToggle, RunTypeToggle, usePolicy, useRunType } from '../components/RunTypeToggle';
 import { AsyncView, Empty } from '../components/States';
 import { calendarDate, dateTime, FULL_DATE, pct } from '../format';
+
+const PAGE = 500;
+const MAX_ROWS = 5000;   // the API's largest limit
+
+/** "Show more" for a table capped at `limit` rows; the record above it always covers every matching row. */
+function MoreRows({ shown, total, onMore }: { shown: number; total: number; onMore: () => void }) {
+  if (total <= shown) return null;
+  return shown < MAX_ROWS
+    ? <p><button type="button" className="link-btn" onClick={onMore}>Show {Math.min(PAGE, total - shown)} more ({shown} of {total} shown)</button></p>
+    : <p className="small muted">Showing the latest {shown} of {total}; narrow the dates or team to see older rows.</p>;
+}
 
 export function HistoryPage() {
   const [params, setParams] = useSearchParams();
@@ -29,8 +40,12 @@ export function HistoryPage() {
   const policy = run === 'live' ? policyChoice : 'pregame';
   const meta = useApi((s) => api.meta(sport, s), [sport]);
   const realMode = meta.state.status === 'success' && meta.state.data.mode === 'real';
-  const { state, retry } = useApi((s) => api.predictions(sport, { ...filters, run_type: run, min_confidence: level, policy }, s),
-    [sport, filters.date_from, filters.date_to, filters.team, run, level, policy, isWinner]);
+  const [limit, setLimit] = useState(PAGE);
+  useEffect(() => setLimit(PAGE), [sport, filters.date_from, filters.date_to, filters.team, run, level, policy, market]);
+  // Other markets have their own history (MarketHistory): the winner list is fetched only when it is shown.
+  const { state, retry } = useApi((s): Promise<HistoryResponse | null> => (isWinner
+    ? api.predictions(sport, { ...filters, run_type: run, min_confidence: level, policy, limit }, s) : Promise.resolve(null)),
+    [sport, filters.date_from, filters.date_to, filters.team, run, level, policy, isWinner, limit]);
 
   const update = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -81,7 +96,7 @@ export function HistoryPage() {
         <MarketHistory sport={sport} market={market} policy={policy} level={level} filters={filters} hasFilters={hasFilters}
           showAll={() => setLevel(null)} />
       ) : <AsyncView state={state} retry={retry}>
-        {(data) => data.predictions.length === 0
+        {(data) => data == null ? null : data.predictions.length === 0
           ? <Empty>
               {level != null
                 ? <>No {data.run_type === 'demo' ? 'demo' : data.policy === 'near_tipoff' ? 'near-tipoff' : data.run_type} picks at {levelLabel(level)} model confidence{hasFilters ? ' match these filters' : ''}.{' '}
@@ -98,6 +113,7 @@ export function HistoryPage() {
                 {data.total > data.predictions.length && ` Showing the latest ${data.predictions.length} of ${data.total}; the record covers all ${data.total}.`}
               </p>
               <HistoryTable rows={data.predictions} />
+              <MoreRows shown={data.predictions.length} total={data.total} onMore={() => setLimit((n) => Math.min(MAX_ROWS, n + PAGE))} />
             </>}
       </AsyncView>}
       <ResearchHistoryTable sport={sport} />
@@ -111,8 +127,10 @@ function MarketHistory({ sport, market, policy, level, filters, hasFilters, show
 }) {
   const [version, setVersion] = useState('');     // '' = the current sealed market model; otherwise an earlier version (archive)
   useEffect(() => setVersion(''), [sport, market, policy]);
-  const { state, retry } = useApi((s) => api.marketPredictions(sport, market, { ...filters, policy, min_confidence: level, model_version: version }, s),
-    [sport, market, policy, level, filters.date_from, filters.date_to, filters.team, version]);
+  const [limit, setLimit] = useState(PAGE);
+  useEffect(() => setLimit(PAGE), [sport, market, policy, level, filters.date_from, filters.date_to, filters.team, version]);
+  const { state, retry } = useApi((s) => api.marketPredictions(sport, market, { ...filters, policy, min_confidence: level, model_version: version, limit }, s),
+    [sport, market, policy, level, filters.date_from, filters.date_to, filters.team, version, limit]);
   return (
     <AsyncView state={state} retry={retry}>
       {(data) => <>
@@ -131,6 +149,7 @@ function MarketHistory({ sport, market, policy, level, filters, hasFilters, show
               {data.total > data.predictions.length && ` Showing the latest ${data.predictions.length} of ${data.total}; the record covers all ${data.total}.`}
             </p>
             <MarketHistoryTable rows={data.predictions} />
+            <MoreRows shown={data.predictions.length} total={data.total} onMore={() => setLimit((n) => Math.min(MAX_ROWS, n + PAGE))} />
           </>}
       </>}
     </AsyncView>

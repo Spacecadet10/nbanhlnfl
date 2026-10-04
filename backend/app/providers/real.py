@@ -137,7 +137,8 @@ class RealProvider:
     def _market(self, game_id: str, tipoff: str) -> Optional[Market]:
         if self.sport != "nba":   # NHL moneylines are stored with the other line quotes
             row = self.conn.execute(
-                "SELECT provider, price_label, quote_time, retrieved_at, p_a_devig AS home_prob_devig FROM market_quotes "
+                "SELECT provider, price_label, quote_time, retrieved_at, p_a_devig AS home_prob_devig, price_a AS home_american, "
+                "price_b AS away_american FROM market_quotes "
                 "WHERE game_id=? AND market='winner' AND retrieved_at <= ? "
                 "ORDER BY retrieved_at DESC, price_label = 'current' DESC, quote_id DESC LIMIT 1", (game_id, tipoff)).fetchone()
         else:
@@ -147,7 +148,8 @@ class RealProvider:
         if row is None:
             return None
         return Market(bookmaker=row["provider"], price_label=row["price_label"], quote_time=row["quote_time"],
-                      retrieved_at=row["retrieved_at"], home_win_prob=row["home_prob_devig"])
+                      retrieved_at=row["retrieved_at"], home_win_prob=row["home_prob_devig"],
+                      home_price=row["home_american"], away_price=row["away_american"])
 
     def _summary(self, g: sqlite3.Row, policy: str = "near_tipoff") -> dict:
         pred = self._prediction(g["game_id"])
@@ -453,7 +455,7 @@ class RealProvider:
                 [[m[0][0] / (m[0][0] + m[0][2]), 0.0, m[0][2] / (m[0][0] + m[0][2])] for m in matched], [m[1] for m in matched]),
             market_log_loss_on_matched=metrics.log_loss_multi(
                 [[q.prob_a, 0.0, q.prob_b] for _, _, q in matched], [k for _, k, _ in matched]),
-            reference=_market_reference(self.sport, market),
+            reference=_market_reference(self.sport, market, market_live.current_version(self.conn, policy)),
             limitations=limits,
             note="Latest forecast per game recorded before its cutoff. The win rate excludes pushes and voids; a regulation "
                  "draw counts as a loss for a 3-way pick. The bookmaker comparison uses only decided games forecast at the "
@@ -578,7 +580,7 @@ class RealProvider:
             mode="real", run_type=run_type, policy=policy, title=title, model_version=primary, sample_size=len(rows),
             date_from=min(days, default=None), date_to=max(days, default=None),
             accuracy=metrics.accuracy(probs, ys), brier_score=metrics.brier(probs, ys),
-            log_loss=metrics.log_loss(probs, ys), calibration=metrics.calibration(probs, ys), baselines=baselines,
+            log_loss=metrics.log_loss(probs, ys), calibration=metrics.calibration(probs, ys, metrics.API_CALIBRATION_BINS), baselines=baselines,
             market=MarketComparison(
                 matched_games=len(matched), coverage=len(matched) / len(rows) if rows else 0.0,
                 model_brier=metrics.brier([m[0] for m in matched], [m[2] for m in matched]),
@@ -595,8 +597,10 @@ def available_sports() -> list[SportInfo]:
     return out
 
 
-def _market_reference(sport: str, market: str) -> Optional[dict]:
-    """The one-time historical test of an NHL market (local report), labelled; None when there is none."""
+def _market_reference(sport: str, market: str, live_version: Optional[str] = None) -> Optional[dict]:
+    """The one-time historical test of an NHL market (local report), labelled; None when there is none. That test scored
+    the plain Poisson score grid (nhl_eval.market_scores); a live model with the empty-net adjustment is a different
+    model, so the reference says so instead of passing as the live model's backtest."""
     if sport != "nhl":
         return None
     reports = sorted((config.data_dir() / "reports").glob("nhl-test-*/report.json"))
@@ -606,11 +610,22 @@ def _market_reference(sport: str, market: str) -> Optional[dict]:
     keys = {"reg3": ["reg3"], "spread": ["spread -1.5", "spread +1.5"], "total": ["total 5.5", "total 6.5"]}.get(market)
     if not keys:
         return None
+    same = live_version is not None and "empty_net" not in live_version
     return {"label": "One-time final test (2024-25 and 2025-26), standard lines, no bookmaker comparison",
+            "tested_model": nhl_eval_grid(),
+            "matches_live_model": same,
+            "model_note": None if same else (
+                "Earlier model version: this test scored the score grid without the empty-net adjustment. The live model "
+                "now adds it, so these figures describe the earlier version, not the current forecasts."),
             "by_line": {k: {x: r["markets"][k]["goals_poisson"][x] for x in ("n", "log_loss", "brier",
                                                                             "pick_accuracy_excluding_mid")}
                         | {"league_reference_log_loss": r["markets"][k]["league_poisson"]["log_loss"]}
                         for k in keys if k in r["markets"]}}
+
+
+def nhl_eval_grid() -> str:
+    from .. import nhl_eval
+    return nhl_eval.MARKET_GRID
 
 
 def _cache_key(conn: sqlite3.Connection) -> tuple:

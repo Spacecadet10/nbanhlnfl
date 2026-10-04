@@ -331,6 +331,20 @@ def research_training(p=Depends(get_provider)):
     return {**training_monitor.status(p.conn, p.now), "mode": "real"}
 
 
+@app.get("/api/research/historical-start")
+def research_historical_start(market: str = MARKET, p=Depends(get_provider)):
+    """Separately labelled historical starting policy (app/historical_start.py): the frozen rule chosen on walk-forward
+    history against the outcome base rate, and its record on later two-hour research cohorts. Never the primary forecast
+    and never part of the live selector's record."""
+    if p.mode != "real":
+        return {"mode": "demo", "sport": "nba", "market": market, "status": "demo",
+                "note": "The historical starting policy is built from the real stores; none in demo mode."}
+    _market_supported(p, market)
+    _research_store(p)
+    from . import historical_start
+    return {**historical_start.report(p.conn, p.sport, market, p.now), "mode": "real"}
+
+
 @app.get("/api/research/candidates")
 def research_candidates(p=Depends(get_provider)):
     """Candidate-pool roster (docs/CANDIDATE_POOL.md): training status, markets, latest fit, evaluation, prospective sample,

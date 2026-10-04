@@ -7,8 +7,8 @@ import { RunBadge } from '../components/Badges';
 import { MarketReport, MarketVersionSelect } from '../components/MarketView';
 import { AgreementTracking } from '../components/Tracking';
 import { TrainingStatusCard } from '../components/Training';
-import { CandidateRosterCard, CombinationRules, PoolSelectionCard, SelectionStatusCard, ResearchPerformance, RetrospectiveStudy } from '../components/Research';
-import { MarketSelect, useMarket, useSport } from '../components/Selection';
+import { CandidateRosterCard, HistoricalStartCard, CombinationRules, PoolSelectionCard, SelectionStatusCard, ResearchPerformance, RetrospectiveStudy } from '../components/Research';
+import { DetailsToggle, MarketSelect, useDetails, useMarket, useSport } from '../components/Selection';
 import { PolicyToggle, RunTypeToggle, usePolicy, useRunType } from '../components/RunTypeToggle';
 import { AsyncView, Empty } from '../components/States';
 import { calendarDate, FULL_DATE, num, pct } from '../format';
@@ -20,6 +20,7 @@ export function PerformancePage() {
   const [market, setMarket] = useMarket();
   const [run, setRun] = useRunType();
   const [policyChoice, setPolicy] = usePolicy();
+  const [details] = useDetails();
   const policy = run === 'live' || market !== 'winner' ? policyChoice : 'pregame';
   const meta = useApi((s) => api.meta(sport, s), [sport]);
   const { state, retry } = useApi((s) => api.performance(sport, run, policy, s), [sport, run, policy]);
@@ -32,24 +33,14 @@ export function PerformancePage() {
           ? <MarketSelect value={market} markets={markets} onChange={setMarket} />
           : meta.state.status === 'error' ? <p className="warn small">Market list unavailable: {meta.state.error}</p> : null}
         <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} /></div>
-        <p><a href="#joint-agreement">Explore model agreement + confidence ranges</a></p>
         <MarketPerformance sport={sport} market={market} policy={policy} />
-        {policy === 'near_tipoff' && <ThresholdResearch sport={sport} market={market} />}
-        <SelectionStatusCard sport={sport} market={market} />
-        <ResearchPerformance sport={sport} market={market} />
-        <AgreementTracking sport={sport} market={market} />
-        <CombinationRules sport={sport} market={market} />
-        <CandidateRosterCard sport={sport} market={market} />
-        <TrainingStatusCard sport={sport} />
-        <PoolSelectionCard sport={sport} market={market} />
-        <RetrospectiveStudy sport={sport} market={market} />
+        <ResearchSection sport={sport} market={market} show={details} thresholds={policy === 'near_tipoff'} />
       </section>
     );
   }
   return (
     <section>
       {markets.length > 0 && <MarketSelect value={market} markets={markets} onChange={setMarket} />}
-      <p><a href="#joint-agreement">Explore model agreement + confidence ranges</a></p>
       <AsyncView state={state} retry={retry}>
         {(p) => (
           <>
@@ -58,16 +49,35 @@ export function PerformancePage() {
           </>
         )}
       </AsyncView>
-      {run === 'live' && policy === 'near_tipoff' && <><AgreementReport sport={sport} /><ThresholdResearch sport={sport} market={market} /></>}
-      <SelectionStatusCard sport={sport} market={market} />
-      <ResearchPerformance sport={sport} market={market} />
-      <AgreementTracking sport={sport} market={market} />
-      <CombinationRules sport={sport} market={market} />
-      <CandidateRosterCard sport={sport} market={market} />
-      <TrainingStatusCard sport={sport} />
-      <PoolSelectionCard sport={sport} market={market} />
-      <RetrospectiveStudy sport={sport} market={market} />
+      {run === 'live' && policy === 'near_tipoff' && <AgreementReport sport={sport} />}
+      <ResearchSection sport={sport} market={market} show={details} thresholds={run === 'live' && policy === 'near_tipoff'} />
     </section>
+  );
+}
+
+/** Research and model-selection cards: loaded only when research details are shown, so the default page is the record. */
+function ResearchSection({ sport, market, show, thresholds }: { sport: Sport; market: MarketId; show: boolean; thresholds: boolean }) {
+  return (
+    <>
+      <div className="card">
+        <h2>Research</h2>
+        <p className="small muted">Model agreement, confidence thresholds, candidate models and the research selector. Research only: none of it is the primary forecast or a betting recommendation.</p>
+        <DetailsToggle />
+        {show && <p><a href="#joint-agreement">Explore model agreement + confidence ranges</a></p>}
+      </div>
+      <HistoricalStartCard sport={sport} market={market} />
+      {show && <>
+        {thresholds && <ThresholdResearch sport={sport} market={market} />}
+        <SelectionStatusCard sport={sport} market={market} />
+        <ResearchPerformance sport={sport} market={market} />
+        <AgreementTracking sport={sport} market={market} />
+        <CombinationRules sport={sport} market={market} />
+        <CandidateRosterCard sport={sport} market={market} />
+        <TrainingStatusCard sport={sport} />
+        <PoolSelectionCard sport={sport} market={market} />
+        <RetrospectiveStudy sport={sport} market={market} />
+      </>}
+    </>
   );
 }
 

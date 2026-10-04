@@ -78,11 +78,15 @@ def definition(conn) -> str:
     """Research identity: winner members (agreement digest), line members, combination and selection code, library version."""
     h = hashlib.sha256(agreement.definition_hash(agreement.models(conn)).encode())
     root = Path(__file__).parent
-    for name in ("combine.py", "research_live.py", "markets.py", "market_live.py", "models/score_candidates.py",
-                 "retrain_cadence.py", "fit_register.py"):
+    lines = line_models(conn)
+    fixed = ["combine.py", "research_live.py", "markets.py", "market_live.py", "retrain_cadence.py", "fit_register.py"]
+    # Line members' own model files (agreement.model_files), not every candidate file: an edit to the other sport's
+    # line model no longer restarts this sport's research identity.
+    used = [str(f.relative_to(root)) for f in agreement.model_files(lines)]
+    for name in sorted(set(used) - set(fixed)) + fixed:
         h.update(name.encode())
         h.update((root / name).read_bytes())
-    h.update(json.dumps([(m.name, m.config()) for m in line_models(conn)], sort_keys=True, default=str).encode())
+    h.update(json.dumps([(m.name, m.config()) for m in lines], sort_keys=True, default=str).encode())
     h.update(pkg_version("scikit-learn").encode())
     return h.hexdigest()[:16]
 

@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import type {
-  CalibrationBin, Candidate, CandidatePoolState, CandidateRoster, PoolReport, SelectionRuleView, SelectionStatus, MarketId, RegisteredRule, ResearchExpanded, RuleReport, ResearchGame, ResearchMarket, ResearchRecord, ResearchReport, ResearchSlateEntry, Retrospective, RetroMarket, Side, Sport, Vector,
+  CalibrationBin, Candidate, CoreMemberCoverage, HistoricalStart, HistoricalStartRule, CandidatePoolState, CandidateRoster, PoolReport, SelectionRuleView, SelectionStatus, MarketId, RegisteredRule, ResearchExpanded, RuleReport, ResearchGame, ResearchMarket, ResearchRecord, ResearchReport, ResearchSlateEntry, Retrospective, RetroMarket, Side, Sport, Vector,
 } from '../api/types';
 import { useApi } from '../api/useApi';
 import { AsyncView, Empty } from './States';
@@ -251,10 +251,28 @@ function RosterBody({ r, market }: { r: CandidateRoster; market: MarketId }) {
   if (r.candidates.length === 0) return <Empty>{r.note}</Empty>;
   const rows = [...r.candidates].sort((a, b) => Number(b.markets.includes(market)) - Number(a.markets.includes(market)));
   return <>
+    <h3>Models in use</h3>
+    <p className="small muted">{r.coverage_note}</p>
+    <div className="table-wrap"><table className="table small">
+      <thead><tr><th>Model</th><th>Fitted</th><th>Forecasting</th><th>Agreement</th><th>Selectable</th></tr></thead>
+      <tbody>
+        {(r.members ?? []).map((m) => <MemberCoverageRow key={`${m.markets}-${m.name}`} m={m} />)}
+        {rows.filter((c) => c.coverage).map((c) => { const v = c.coverage!; return <tr key={`cand-${c.name}`}>
+          <th scope="row" className="wrap">{c.name}<div className="muted">candidate · {c.markets.map((x) => MARKET[x] ?? x).join(', ')}</div></th>
+          <td>{v.fitted ? 'yes' : <span className="muted">{v.earlier_fit ? 'earlier version only' : 'no'}</span>}</td>
+          <td>{v.latest_forecast_at ? <>{v.forecasting ? 'yes' : 'not recently'}<div className="muted">{dateTime(v.latest_forecast_at)}</div></> : <span className="muted">no</span>}
+            {v.earlier_forecast_at && <div className="muted">earlier version: {dateTime(v.earlier_forecast_at)}</div>}</td>
+          <td className="wrap">{v.in_agreement_tracking.length ? <>tracked ({v.in_agreement_tracking.map((x) => MARKET[x] ?? x).join(', ')}), never votes</> : <span className="muted">not tracked</span>}</td>
+          <td className="wrap">{v.selectable.alone.length ? `alone: ${v.selectable.alone.map((x) => MARKET[x] ?? x).join(', ')}` : ''}
+            {v.selectable.inside.length ? <div>inside: {v.selectable.inside.join(', ')}</div> : null}
+            {!v.selectable.alone.length && !v.selectable.inside.length && <span className="muted">no</span>}</td></tr>; })}
+      </tbody>
+    </table></div>
+    <h3>Candidates</h3>
     <p className="small muted">{r.note} Log-loss differences are against the strongest existing member (negative = better).</p>
     <div className="table-wrap"><table className="table small">
       <thead><tr><th>Candidate</th><th>Markets</th><th>Training</th><th>Latest fit</th><th>{MARKET[market]}: screen (backtest)</th>
-        <th>{MARKET[market]}: held-out (backtest)</th><th>Prospective games</th><th>{MARKET[market]}: pool sources</th><th>Selection</th></tr></thead>
+        <th title="Judged on seasons that include the reserved final-test seasons, reused after the one-time test: exploratory, not held-out">{MARKET[market]}: reused test seasons (backtest)</th><th>Prospective games</th><th>{MARKET[market]}: pool sources</th><th>Selection</th></tr></thead>
       <tbody>{rows.map((c) => <CandidateRow key={c.name} c={c} market={market} />)}</tbody>
     </table></div>
   </>;
@@ -275,6 +293,50 @@ function CandidateRow({ c, market }: { c: Candidate; market: MarketId }) {
       {MARKET[market]} pool decision: {decisionLabel(c.pool[market].decision!)}</div>}</td></tr>;
 }
 
+function MemberCoverageRow({ m }: { m: CoreMemberCoverage }) {
+  return <tr>
+    <th scope="row" className="wrap">{modelName(m.name)}<div className="muted">{m.role} · {m.markets}</div></th>
+    <td className="wrap">{m.fit_register ? <>{dateTime(m.fit_register.first_used_at)} · {m.fit_register.training_games} games</> : <span className="muted">no fit row for the current version (rating or online model, or not fitted yet)</span>}
+      {m.earlier_fit && <div className="muted">earlier version: {dateTime(m.earlier_fit.first_used_at)}</div>}</td>
+    <td>{m.latest_forecast_at ? <>yes<div className="muted">{dateTime(m.latest_forecast_at)}</div></> : <span className="muted">none in 7 days (current version)</span>}
+      {m.earlier_forecast_at && <div className="muted">earlier version: {dateTime(m.earlier_forecast_at)}</div>}</td>
+    <td>{m.votes ? 'votes' : 'recorded, never votes'}</td>
+    <td>{m.selectable ? 'yes (core selector source)' : 'no'}</td></tr>;
+}
+
+const ruleText = (r: HistoricalStartRule) => `${modelName(r.source)}${r.filter === 'none' ? '' : ` + ${r.filter} agreement`} at ${pct(r.threshold, 0)}+`;
+
+/** Separately labelled historical starting policy: a frozen rule chosen on walk-forward history (outcome base rate, no odds)
+ *  and its record on later two-hour research cohorts. Never the live selector's record, never a bookmaker comparison. */
+export function HistoricalStartCard({ sport, market }: { sport: Sport; market: MarketId }) {
+  const { state, retry } = useApi((s) => api.researchHistoricalStart(sport, market, s), [sport, market]);
+  return <div className="card">
+    <h2>Historical starting policy <span className="badge badge-research">Research · historical</span></h2>
+    <AsyncView state={state} retry={retry}>{(r) => <HistoricalStartBody r={r} />}</AsyncView>
+  </div>;
+}
+
+function HistoricalStartBody({ r }: { r: HistoricalStart }) {
+  if (r.status !== 'frozen' || !r.decision) return <Empty>{r.note}</Empty>;
+  const d = r.decision, c = d.chronological_check, l = r.live;
+  return <>
+    <p className="small muted">{r.label}</p>
+    {r.matches_current_policy === false && <p className="warn small">Frozen under an earlier policy version ({r.frozen_policy}); build the current version.</p>}
+    {r.matches_current_definition === false && <p className="warn small">Built for an earlier research definition: current forecasts use changed model code, so none are counted here.</p>}
+    <p><strong>{d.status === 'active' && d.rule ? ruleText(d.rule) : d.status === 'abstain' ? 'No rule qualified' : 'Not enough history'}</strong></p>
+    <p className="small muted">{d.reason}. {d.games} games, {d.from} to {d.until} ({d.rules_compared} rules compared, {d.eligible_rules} with enough picks). Reference: {r.reference}.</p>
+    {Object.keys(d.excluded).length > 0 && <p className="small muted">Not offered: {Object.entries(d.excluded).map(([k, v]) => `${modelName(k)} (${v})`).join('; ')}.</p>}
+    {c && <p className="small">Chronological check (each week chosen on earlier games only; seasons already used to choose the models, so exploratory):{' '}
+      {c.picks} picks, {c.wins}–{c.losses}{c.pushes ? `–${c.pushes}` : ''} ({pct(c.accuracy, 1)}), lift over the base rate {c.lift == null ? '—' : `${(c.lift * 100).toFixed(1)} pts`}, active {c.active_weeks} of {c.weeks} weeks.
+      {c.mean_probability != null && <> The picks' average model probability was {pct(c.mean_probability, 1)} and their base rate {pct(c.mean_reference ?? null, 1)}: winning near the model's own probability is calibration, not an edge over a bookmaker.</>}</p>}
+    <h3>Since frozen <span className="muted small">({r.frozen_at && dateTime(r.frozen_at)})</span></h3>
+    {!l || l.picks === 0 ? <p className="small muted">No picks yet on two-hour research cohorts made after the policy was frozen ({l?.cohorts_after_freeze ?? 0} cohorts).</p> : <>
+      <p>{l.picks} picks · {l.wins}–{l.losses}{l.pushes ? `–${l.pushes}` : ''} · {l.pending} pending · {l.void} void{l.accuracy != null && <> · {pct(l.accuracy, 1)}</>}</p>
+      <p className="small muted">Bookmaker view of the same picks (separate from the record): {l.bookmaker.quoted_decided} quoted and decided{l.bookmaker.mean_implied != null && <>, implied {pct(l.bookmaker.mean_implied, 1)} on average, {l.bookmaker.quoted_wins} won</>}.</p>
+    </>}
+  </>;
+}
+
 const ROUTE: Record<string, string> = { standalone: 'standalone route', combination: 'combination route' };
 
 function decisionLabel(d: { status: string; rule: { source: string; filter: string; threshold: number } | null; reason: string }): string {
@@ -289,7 +351,7 @@ function PoolSources({ st }: { st: CandidatePoolState | undefined }) {
     {x.prospective ? `; ${x.prospective.wins}-${x.prospective.losses} prospective` : ''})</span></div>)}</>;
 }
 
-/** Candidate-pool selector: sealed sources per market (standalone or in-combination value on held-out seasons), their
+/** Candidate-pool selector: sealed sources per market (standalone or in-combination value on reused test seasons), their
  *  prospective record on settled cohorts, and the weekly pool decisions. Separate from the core selector. */
 export function PoolSelectionCard({ sport, market }: { sport: Sport; market: MarketId }) {
   const { state, retry } = useApi((s) => api.researchPool(sport, s), [sport]);

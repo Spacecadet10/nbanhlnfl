@@ -630,3 +630,32 @@ Authorized successor to the one-axis view. Research calculation `joint-1` uses s
 Historical evaluation reuses chronological OOF tables (exploratory, previously reused seasons). Goalie-source subsets are refused for historical evaluation because their pregame identity was not established. Live evaluation reads original cohort-linked vectors and never synthesizes forecasts. New query combinations are retrospective classifications of recorded forecasts, not pre-registered live recommendations. Exact lines, dates and definitions remain filterable. No live prediction/model/selector definition is changed by this research view.
 
 For a requested subset and confidence definition, search all contiguous ranges of feasible strict-majority vote fractions (k/n, exclusive upper bound or no upper limit) plus cumulative probability thresholds and disjoint 5-point bands. Rank on earlier seasons by win-rate lift over an earlier-chosen best constituent at matched coverage; minimum 100 decided and 5% coverage. Freeze the rule and comparator for the next season. All later results, including losses, are shown. This bounded, per-subset exploratory check makes no significance or profitability claim and cannot automatically promote a rule. Historical line results remain model-line results, not bookmaker backtests.
+
+## Historical starting policy `historical-start-v2` and the selector's reference bases — Claude, 2026-10-04
+Recorded with the code (`backend/app/historical_start.py`, `selector.py`), before any policy was frozen from the live data
+directory. Research only: it never replaces a primary forecast, a core or pool selector decision, or their records.
+
+- **Two reference bases in `selector`, never mixed in one evaluation.** `bookmaker` (live, unchanged rule): a quoted market
+  is judged against the de-vigged bookmaker probability; an unquoted two-way game is not judged and no longer counts in
+  coverage (neither its picks nor its pushes). `historical` (no historical odds exist): every settled item is judged
+  against the outcome base rate of the picked side among the evaluated items at the same line; a line with fewer than
+  50 such items is not judged and not counted in coverage (lines are never pooled; winner/3-way are one stratum) — never
+  a flat 50%. (v1, superseded the same morning after Codex's review, pooled sparse lines and fitted the stacker on all
+  earlier seasons; its scratch files are kept, never relabelled.) Lift on this basis is "beats the base rate"; it implies no
+  betting value and, for the winner market, mostly reflects picking favourites (reported with the picks' mean model
+  probability).
+- **Sources:** the live research members' own classes and configurations (`agreement.models`, `research_live.line_models`)
+  replayed walk-forward on already-used seasons (NBA validation 2022–24, NHL development 2018–21; never the reserved test
+  seasons). Each member alone; the equal average and the stacker only where they can be formed and only when the live
+  combination has the same members. The stacker is refit as the live cohorts fit it: at each season start, on the last
+  `research_live.STACK_SEASONS` (2) completed seasons, at least `STACK_MIN_TRAIN` (300) games. Agreement filters only when the historical voters equal the live voters (NBA winner:
+  `availability_two_hour` has no history, so filters are not offered). A missing combination never removes a game for the
+  single members.
+- **Procedure:** a weekly chronological check (each week decided on earlier games only, Bonferroni bound over every rule,
+  minimum picks/coverage/weeks unchanged), then one decision on all historical games, frozen once per research
+  definition and selector version (`data/research/historical-start/<sport>-<definition>-<selector>-<policy>.json`; never
+  overwritten). "No rule qualified" is a valid outcome.
+- **Live use:** applied at read time to two-hour research cohorts of the same definition made after freezing. Its record
+  is reported apart from the live selector's, and the bookmaker's implied probability of the same picks apart from the
+  win/loss record. A definition change (model code change) leaves the frozen policy describing the earlier definition;
+  a new one must be built. The historical seasons were used to choose the models: exploratory, not held-out evidence.

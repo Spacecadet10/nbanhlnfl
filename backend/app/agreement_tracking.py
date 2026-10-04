@@ -62,6 +62,9 @@ KIND_SEMANTICS = {
 
 
 EXTRA_MODULES = {"research": "ngboost"}      # optional dependency group -> importable module (candidates/registry.py)
+# Only the groups above can be tracking members. Any other optional group (e.g. deep networks applied from stored weights)
+# is excluded on purpose: the sealed group registry was frozen without it, so it is recorded as a candidate, never tracked.
+UNTRACKED_EXTRA = "optional dependency group not in the sealed tracking registry"
 
 
 class RegistryError(ValueError):
@@ -135,7 +138,9 @@ def candidates_for(sport: str, market: str, live_ok: bool = True) -> list:
     for s in registry.SPECS:
         if s.sport != sport or market not in s.markets:
             continue
-        if live_ok and s.extra and importlib.util.find_spec(EXTRA_MODULES.get(s.extra, s.extra)) is None:
+        if s.extra and s.extra not in EXTRA_MODULES:
+            continue          # UNTRACKED_EXTRA: explicit, never a member (live or historical)
+        if live_ok and s.extra and importlib.util.find_spec(EXTRA_MODULES[s.extra]) is None:
             continue          # optional dependency absent: the candidate is never recorded live, so it cannot be a member
         out.append(s.name)
     return out

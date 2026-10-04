@@ -1,5 +1,141 @@
 # Current handoff
 
+## Historical selection, starting policy, NHL draw parity, identities, agreement visibility — Claude (Opus 5.5), 2026-10-04 05:40–07:00 UTC
+- Scope from Codex's 2026-10-04 notes, then **its REQUEST CHANGES review (bottom of this file) addressed: all three
+  findings and both browser gaps fixed** (below). **Dev checkout only, uncommitted, not deployed; no stored forecast or
+  store row written.** Builds on the uncommitted review-fix batch (kept). Identity-hashed edits (`selector.py`,
+  `agreement.py`, `research_live.py`, `models/score_candidates.py`): selector/agreement/research identities restart when
+  this reaches the release (they restart anyway with the batch). Needs Codex re-review.
+- **Historical selection (HIGH fixed):** `selector` has two explicit bases: `bookmaker` (live rule unchanged) and
+  `historical` (no odds): base rate of the picked side at the SAME line. **Review P1 fixed:** a line with < 50 settled games
+  is not judged and not in coverage — lines are never pooled (Codex's reproduction is now a test: 0 judged picks, not
+  active). `combination_research._simulate` uses `historical`, carries `line`, counts unjudged picks apart; a missing
+  member/combination is "source unavailable" (`history_items`). Pool assessment no longer requires `stack:pool` everywhere.
+  **Coverage:** live coverage counts only judgeable (quoted / 3-way) games and their pushes.
+- **Historical starting policy `historical-start-v2`** (`app/historical_start.py`, CLI `historical-start` (query-only
+  store; writes `data/research/historical-start/<sport>-<definition>-<selector>-<policy>.json` once, never overwrites),
+  API `/api/research/historical-start`, Performance card by default, MODEL_SELECTION last section). Live members'
+  classes/configs replayed walk-forward on NBA validation / NHL development seasons; singles, plus average/stack only when
+  the live combination matches; agreement filters only when voters match. **Review P1 fixed:** the stacker is refit as live
+  (season start, last 2 completed seasons, ≥300 games; `_live_stack_walk`, tested). Weekly chronological check, then a
+  frozen decision ("no rule qualified" shown). Applied at read time only to same-definition cohorts made after freezing;
+  bookmaker-implied rate beside, never inside, its record. v1 scratch files kept, flagged by `matches_current_policy`.
+  Store copies, final code: NHL (def `cb194620…`) every market active, e.g. winner stack ≥65% (chronological 622–338,
+  64.8% won vs 64.9% mean model probability: calibration, not edge), total stack+majority ≥50% (lift +0.8 pts only);
+  NBA (def `ff7e0e91…`) winner stack ≥75%, spread ridge+majority ≥55%, totals and team totals: no rule qualified.
+  **Not built in the live data dir** (definition must match the running release): build after a release move.
+- **NHL draw parity:** `GoalsDraw._refit` fits w on the predicted grid (`_draw_fit_terms`, exact to 1e-17); the old fit
+  fails the new test. **Older backtests:** NHL market reference has `tested_model`, `matches_live_model`, `model_note`.
+- **Fewer identity resets:** `agreement.model_files` hashes only what members use: MRO + held objects (wrappers),
+  module-level imports, imports inside member class bodies; `models/` followed, app modules imported by models hashed;
+  study helpers reached from `retrain_cadence` are not (found and fixed during this session: the first version pulled
+  `combination_research`/`nhl_eval`/`hockey.py` into NBA). NBA winner no longer hashes `hockey.py`/`markets.py`/
+  `score_candidates.py`; NBA lines no longer `hockey.py`. `agreement_tracking`: only `EXTRA_MODULES` groups trackable
+  (deep excluded explicitly).
+- **Agreement visible:** cards, Game page and the Performance agreement report without "Show research details".
+  **"Models in use"** (roster): **review P2 fixed** — fit rows and forecasts count only for the current version (winner:
+  agreement digest; lines/cohorts: research definition; candidates: candidate identity, `as_of` cutoff added to the roster
+  fit query); earlier-version activity listed apart ("earlier version: …").
+- **Deep models (read-only, live stores 06:12 UTC):** the scheduled script moved the release to `f1e0181` at 06:08 UTC
+  (SUCCESS in its log; not done by me). No torch/keras fit row or forecast yet in either store (NHL next game 17:00 UTC, NBA
+  10-20). Not agreement voters, not tracked, not selectable (in no sealed registry). This checkout lacks deep-v1, so its
+  roster cannot list them until merged. sklearn `mlp:nhl_base`: fitted, 44 forecasts. **Next:** after today's first NHL
+  two-hour cycle, confirm deep `model_fits` rows and forecasts in the live store.
+- **Checks:** `tests/test_historical_selection.py` (13). First readiness (before the review fixes): exit 0, 591 passed.
+  Final readiness on the final code (`NBA_DATA_DIR=<empty scratch> backend/.venv/bin/python scripts/check_project.py
+  --ready`): **exit 0, 594 passed**, typecheck + build ok. Browser (desktop 1280 + 390 px iframes, details on and off): docs/SMOKE_TEST.md.
+- **Not done:** retrospective combination-study / pool-assessment evidence files were produced with the old reference and
+  not rerun; History "Show 500 more" remount and pool tests for unquoted cohorts (review LOWs); deep-v1 merge.
+
+## Review of `e900cc7` (ledger quote fix) and deep-v1 merge status — Claude (Opus 5.5), 2026-10-03 22:35 UTC
+- **`e900cc7` reviewed: pass; the release move can keep target `f1e0181`.** The derived key only applies when the stored row is
+  model-only and the new one is quoted. Every reader of `market_forecasts` (records, two-hour thresholds, near-tipoff research)
+  takes the latest row per game/market/policy/model version, so the extra row is never counted twice; its test passes. Known
+  edge, acceptable: if a quote is later withdrawn, the model-only retry returns the old row and the quoted row stays latest.
+- **Independent audit of the 948f1be -> f1e0181 move (read-only, 23:00 UTC): no blocker.** Verified: non-deep candidate
+  definitions hash identically at 948f1be/e900cc7/f1e0181; release venv has no torch/tensorflow and app imports without them;
+  the 5 weight files load as NumpyMLP with matching definition hashes; no leakage; 29 deep/pool tests pass. Follow-ups for
+  the deep-v1 owner (not done here): (1) `move-release.sh` only checks the roster text, which lists unfitted candidates too:
+  after the first two-hour cycle, confirm each deep candidate has a `model_fits` row; (2) a corrected pre-2027 score changes
+  the results fingerprint and silently disables the networks until `pool-fit-deep` is rerun from ~/nba-predictor-deep (no
+  alert); (3) torch binary nets early-stopped at 2 epochs for the live fit — checked 2026-10-04 05:30 UTC, **no fix needed**: the
+  chosen epoch is noisy in every season for both libraries (torch 5–19, keras 2–30 in deep-v1's run.log: a flat validation
+  curve), and out of sample the torch nets match keras and the sklearn MLP (log-loss vs sklearn MLP: NBA +0.0006
+  [−0.0004, 0.0017], NHL +0.0005 [−0.0002, 0.0011]). Changing the stopping rule now would alter a preregistered study
+  after its results and replace tonight's artifacts; if wanted, register it as a new study version;
+  (4) deep candidates are kept out of agreement tracking only because `EXTRA_MODULES` has no `deep` entry: make it explicit.
+  Not verified: that today's live history reproduces the training fingerprints (rests on the author's dry run).
+- **deep-v1 not merged here yet.** It fast-forwards from `e900cc7`, but this checkout has uncommitted work (the review-fix batch +
+  diagnostics) in `HANDOFF.md` and `backend/app/cli.py`, which deep-v1 also changes. Trial merge of `cli.py`: no conflict;
+  `HANDOFF.md` needs a hand merge. Order: review and commit the uncommitted work, then merge deep-v1 before the next release move.
+
+## Audit of the uncommitted "Review fixes" batch — independent read-only review, 2026-10-03 23:00 UTC: REQUEST CHANGES
+- **HIGH (confirmed):** `selector.reference` now returns None for unquoted two-way markets; `combination_research._simulate`
+  passes `"bookmaker": None` for every historical item (`combination_research.py:199`), so `combination-study` and the pool
+  assessment's selector section (`candidates/study.py:489`) would pick nothing for winner/spread/total/team totals. Fix: keep the
+  base-rate reference for historical simulations (flag or explicit rates) or document both studies as void for two-way markets.
+- MEDIUM: "Winner/3-way unchanged" is wrong for the live market model (the 0.97 rate scale moves draw 15.08% -> 15.37% at
+  λ=(3.6, 2.5)); `markets.py:291` limitation text is stale. `goals_draw` fits its draw weight on plain Poisson but applies it to the
+  scaled empty-net grid. `EMPTY_NET` has no committed fitting script/test (fit and "test seasons unused" not reproducible).
+  NHL market backtest (`nhl_eval.market_scores`) still uses the plain grid, so it no longer describes the live model. Selector
+  coverage counts unquoted games and their pushes (`selector.py:141`).
+- LOW: History "Show 500 more" remounts the table (scroll jump, full refetch); pool selection tests no longer cover unquoted
+  cohorts; research-cohort identity also restarts; GLM alpha effect not measured apart from empty-net.
+- Verified fine: default grid bit-identical; API contract consistent; 56 targeted tests pass; typecheck clean.
+  Not fixed here (another session's work); its owner should address the HIGH item before committing.
+
+## Read-only model diagnostics command — Claude (Opus 5.5), 2026-10-03 22:15 UTC
+- At the user's request (course-derived list). **Dev checkout only, uncommitted; no identity-hashed file, model, job, migration,
+  stored row or API changed.** New: `app/diagnostics.py`, `tests/test_diagnostics.py` (5); `cli.py` adds read-only
+  `diagnostics` (both sports, query-only connection); `metrics.py` appends `regression_errors` (MAE/RMSE/MedAE/bias/R²) and
+  `confusion` (independent audit 22:50 UTC: imputer recovered the 0.0 default via goalie_diff — fixed; F1 of 0 returned None —
+  fixed; skipped-game counts, postponed games and docstring write note added; 6 tests) (the `API_CALIBRATION_BINS` hunk in that file is the earlier review-fix entry's, not this one).
+- `python -m app.cli --sport {nba,nhl} diagnostics` (~16–20 s) writes `data/reports/diagnostics-<sport>/report.{json,html}`:
+  permutation importance and learning curves (last non-test season, registry reference learners on the shared walk),
+  walk-forward score errors + winner confusion matrix, NHL goalie IterativeImputer(BayesianRidge) vs the 0.0 default (fitted on
+  training seasons only), data checks (duplicate games excl. preseason/All-Star, finals without scores, name encoding/spellings).
+  NBA loads the validation period, NHL the development period; test seasons are never loaded.
+- Real-data readings (exploratory, not model changes): NBA ridge totals: adding 2022 and 2020 to training made 2024 total MAE
+  worse (+0.19, +0.11; intervals exclude 0; adding 2021 helped, −0.06) and 2024 total bias is −4.1 (over-predicted); pace dominates totals. NHL: goalie
+  inputs show ~0 permutation importance on 2021 in both models; imputation (after the audit fix that also masks goalie_diff) is slightly worse, not significant: +0.0057 log loss on
+  the 9 affected games, interval [−0.003, +0.015]; no games skipped in walk-forward errors. Data checks clean
+  (one NBA flag was the All-Star tournament, now excluded).
+- Not done: Kaggle backfill (needs a Kaggle account token: user decision), NLP injury text, RandomForest/StandardScaler (already
+  exist: `random_forest:nba_base`, `learners._scale`). Checks: `NBA_DATA_DIR=<scratch> backend/.venv/bin/python scripts/check_project.py --ready`
+  exit 0: typecheck + build ok, **580 passed** (18 min). The report now charts every measure per model; that small render change
+  came after the full run and was re-checked with `tests/test_diagnostics.py` (5 passed) plus a real NBA run. Next: Codex review.
+
+## Review fixes: NHL goal models, selector reference, labels, UI simplification — Claude (Opus 5.5), 2026-10-03 22:30 UTC
+- At the user's request ("fix them all") after a four-part read-only review. **Dev checkout only, uncommitted; release untouched**
+  (the scheduled move still targets `5534c34`). Changes identity-hashed files (`models/*.py`, `selector.py`): agreement and
+  selector identities restart when this reaches the release (NBA
+  live record is 0 games; NHL ~2 days). NHL market model_version changes (`empty_net=l1=0.29-l2=0.42-s=0.97`); earlier rows show
+  as "earlier model version".
+- **Goal GLM penalty:** `GLM_ALPHA` 1.0 -> 0.01 (sklearn penalises mean deviance; 1.0 shrank coefficients ~25%, simulated).
+  **Sealed pool candidates left as sealed:** editing `candidates/learners.py`/`engine.py` changes every definition pinned in
+  `pool_rules.json` (9 pool tests failed); reverted. Pool `poisson_draw` keeps alpha 1.0 and no empty-net step; a corrected
+  pool goal model must qualify as a new candidate. Validation 2022-24 log loss improves in every market (e.g. puck line -1.5 0.6134 -> 0.6109).
+- **Empty-net goals:** `markets.EMPTY_NET` + `empty_net()`; `poisson_grid(..., empty_net_goals=False)` default is bit-identical
+  (sealed evaluations reproduce). Fit by MLE on development 2018-21 (sealed goals_poisson rates), checked on validation 2022-24:
+  regulation-score NLL 3.852 -> 3.799; favourite -1.5 cover was 32.9% predicted vs 36.4% observed. Used by the live market
+  model (`market_live`, `GoalsConfig(empty_net=True)`), `goals_draw` and `goals_glm` (not the sealed pool candidates). Winner/3-way
+  unchanged by the move; 0.97 rate scale keeps the mean total (6.07 vs 6.06 observed). Test seasons not used.
+- **Selector:** quoted markets are judged against the bookmaker only; unquoted games are not scored (3-way keeps base rates).
+  Tests updated to that rule + one new test; pool-test cohorts now carry a real quote row (`add_cohort(book=...)`). **Labels:** pool evidence "reused test seasons" (API note, Research table header).
+- **API:** calibration 10 bins on `/api/performance` (`metrics.API_CALIBRATION_BINS`; stored reports keep 5); winner `market`
+  carries `home_price`/`away_price` (American). Puck-line limitation text updated.
+- **UI:** "Show research details" (`?details=1`, carried) hides agreement/research/other-policy lines on cards, research cards on
+  Game and Performance (Performance no longer loads ~13 research endpoints by default); odds shown as American prices; one-decimal
+  probabilities wherever a threshold applies; source list no longer says "missing" for fresh/no-timestamp; History "Show 500
+  more" (winner + markets) and no winner fetch on other markets; 422 messages name the parameter; tipoff shows weekday when the
+  viewer's date differs from the Eastern slate date; projected-score text no longer inverted.
+- **Checks:** `tests/test_goal_model_fixes.py` (4) added. `NBA_DATA_DIR=<scratch> backend/.venv/bin/python scripts/check_project.py
+  --ready`: exit 0, **580 passed**, typecheck + build ok (first run: 9 pool failures, fixed as above).
+  Browser (preview API :8010 + Vite :5190 on real data): NHL slate shows odds (BUF -230 / CHI +190) and 1-decimal bars; details
+  toggle on/off; History NHL backtest "Show 500 more" requested limit=1000; Performance 10 calibration bins, research collapsed.
+- Not done (not in the user's list): markets-review LOWs (unmapped ESPN statuses, duplicate row after a line change, provider pin,
+  near-tipoff two-transaction write), raw 503 text. Next: independent review, then commit and a deliberate release move.
+
 ## Ledger: quote attached when the bookmaker later posts the model's line — Claude (Fable 5.1), 2026-10-03 21:25 UTC
 - **Dev checkout only; NOT in the release and NOT in tonight's scheduled move (target stays `5534c34`).** It changes how the
   market-forecast ledger decides "same forecast", so it should get an independent review before a release move.
@@ -1302,3 +1438,26 @@ User explicitly authorized reading unified_sports_platform; inspected temporary 
 - threshold_optimizer.py:218 learns separate agreement/probability ranges on earlier records, but test block at :317 evaluates edge caps rather than the complete learned agreement/probability rule. Do not port its validation claim.
 - Key requirement to reconcile after current audit: exact subset × sport/market/line × vote-agreement fraction/range × probability-confidence range. These are distinct axes; keep majority ties and missing members explicit. Evaluate the complete frozen conjunction on later games; keep historical starting policy separate from prospective evidence.
 - No tests or accuracy reproduction for old project; no old performance claim endorsed. Next: current writer maps these concepts to existing tracking/selector before implementing anything additional. Preserve one writer.
+
+## Pasted-results / missing-agreement review — Codex, 2026-10-04
+- Reviewed current uncommitted diff and user's pasted two-hour results. No implementation edits: relevant selector/UI files already belong to the pending review-fix batch; preserve one writer. Running release and its fit records were not inspected.
+- Confirmed HIGH regression: selector.reference returns None for unquoted two-way rows, while combination_research._simulate always supplies bookmaker=None. Synthetic reproduction: 300 settled winner rows, 18 rules, maximum counted picks 0, eligible rules 0. First reproduction used an invalid side label and failed; corrected to combine.SIDES[0]. Historical selector cannot select a two-way rule with this change.
+- Agreement visibility: Today/Game/Performance gates now require Show research details. Pasted threshold table is probability confidence, not model-vote agreement. Primary live and market code replay available historical results through model.update; this is code-path evidence, not verification of deployed fits. Forward selector uses settled cohorts of the current definition, not historical training rows; relevant source changes create new identities.
+- Verification: python3 scripts/check_project.py passed structure only; synthetic selector reproduction above. No --ready, live API/browser verification, retraining, release move or database writes. No app-ready claim.
+- Next bounded writer task: fix historical selector reference handling explicitly without weakening live bookmaker-only comparisons; add regression coverage; make agreement visibility clear. Then verify deployed fit provenance and desktop/phone behavior and record in docs/SMOKE_TEST.md.
+
+## Historical selection requirement / additional review — Codex, 2026-10-04
+- User requires usable historical selection without historical odds or dependence on a successful combination; new-game odds may supplement it. Current design does not fulfill this: core/pool live decisions start from prospective cohorts, and research never replaces the primary forecast.
+- Required architecture for a later bounded implementation task: extend existing selector with explicit historical outcome-reference evaluation for single models and qualifying combinations; consume chronological out-of-sample forecasts, freeze choices before later evaluation, and expose a separately labelled historical starting policy. Keep prospective bookmaker comparisons separate, preserve prior forecasts/identities, and allow explicit no-qualified-rule outcomes. Do not use a universal 50% benchmark for asymmetric lines or claim profit without odds. Previously reused evaluation seasons cannot become fresh test evidence.
+- Additional source-confirmed findings: GoalsDraw fits weight against unscaled Poisson probabilities but predicts on rate-scaled/empty-net probabilities (score_candidates.py:227–263); nhl_eval.market_scores uses default plain grid while changed market_live enables empty_net; agreement identity hashes every models/*.py file, so even unrelated model-file edits change the core research identity. Selector coverage counts unquoted pushes while excluding unquoted wins/losses.
+- Deep code exists at f1e0181, not this checkout's HEAD e900cc7. Source review there: deep live artifacts are loaded for matching training fingerprints, otherwise fitting requires the research dependencies; agreement_tracking optional-dependency gate has no deep mapping. Do not equate installed/registered models with active agreement voters or verify deployment from this checkout. Live deployed fit/forecast coverage remains unverified.
+- Verification this turn: focused source/diff inspection only, no training, tests, browser/API, database or release changes. Existing writer's edits preserved. Next: historical-selector repair and regression tests, then separately versioned historical starting policy and deployed model coverage audit; correct NHL fitting/prediction parity before acceptance.
+
+## Independent review of historical-selection fixes — Codex, 2026-10-04: REQUEST CHANGES
+- Reviewed pending diff at e900cc7 plus historical_start.py/test_historical_selection.py. No implementation/model/data/release changes. Missing-odds mode, quoted-only coverage, default agreement visibility and numerical GoalsDraw parity are improved; focused checks pass.
+- P1 historical_start.py:74–96 admits stack based only on member names, then calls combination_research._stack_walk (all earlier OOS seasons). Live research_live._winner_stack/_line_state use last two completed seasons. Thus a frozen stack threshold is selected on a different learner policy than the live vectors it is applied to. Browser preview actually selects NHL winner "Learned stacker at 65%+". Match historical/live fit schedules and windows (or exclude stack until parity); rebuild under a new policy identity without overwriting the frozen artifact.
+- P1 selector.py:98,116 pools unrelated lines when any line has <50 rows, despite the report claiming a same-line baseline. Synthetic reproduction: 900 rows at -1.5 with 50% home outcomes, five other lines of 20 rows each with 80% home outcomes; source predicts home .8 only on those 100 rows, ties elsewhere. Historical selector returns active, lift +0.27, lower +0.17424, despite source matching each selected line's base rate. Use a justified line-aware reference or abstain on unsupported reference strata; do not pool asymmetric lines into apparent skill. Add regression coverage.
+- P2 candidates/live.py:522–527 and core_members use recent forecasts/fit rows without matching the current definition (candidate fit query also lacks as_of cutoff). The new Models in use panel can mark a changed/unfitted model as fitted/forecasting using its previous version. Preview displays old GoalsDraw/GLM fits from 3e2504c4d655c41b while current research definition is 5ec88cdcfca302da. Label earlier-version activity separately and verify current fit/artifact + current-version forecasts.
+- Browser gaps: details-on phone page width 428 at viewport 390; details-off 390 and desktop 1280 fit. Preview roster has no deep entries; deployed deep fit/forecast coverage remains unverified. See docs/SMOKE_TEST.md. No claim that a missing shell-local artifact implies no host policy: browser clearly serves a frozen policy.
+- Actual verification: python3 scripts/check_project.py passed; npm --prefix frontend run typecheck passed; backend/.venv/bin/python -m pytest backend/tests/test_historical_selection.py backend/tests/test_selection.py backend/tests/test_pool_selection.py backend/tests/test_goal_model_fixes.py -q -> 52 passed in 172.71s, one physical-core-discovery warning. Synthetic baseline reproduction above. No full --ready or new full-app smoke pass.
+- Next: Claude fixes these bounded findings, supplies current-version deep coverage evidence and records final readiness/smoke verification; Codex rechecks the changed paths. Keep one writer; preserve forecasts and frozen policy artifacts.

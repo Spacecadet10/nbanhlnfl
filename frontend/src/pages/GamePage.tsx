@@ -6,9 +6,9 @@ import { useApi } from '../api/useApi';
 import { ModeBadge, NearTipoffBadge, RunBadge } from '../components/Badges';
 import { ProbabilityBar } from '../components/ProbabilityBar';
 import { AsyncView } from '../components/States';
-import { calendarDate, dateTime, pct } from '../format';
+import { american, calendarDate, dateTime, pct } from '../format';
 import { MarketForecastsCard } from '../components/MarketView';
-import { useCarriedSearch, useSport } from '../components/Selection';
+import { DetailsToggle, useCarriedSearch, useDetails, useSport } from '../components/Selection';
 import { ResearchGameCard } from '../components/Research';
 import { TrackingGameCard } from '../components/Tracking';
 
@@ -38,6 +38,7 @@ const statRows = (unit: string): { label: string; help?: string; value: (s: Team
 function Detail({ game: g }: { game: GameDetail }) {
   const [sport] = useSport();
   const carried = useCarriedSearch();
+  const [details] = useDetails();
   const back = new URLSearchParams(carried.slice(1));
   back.set('date', g.game_date);
   return (
@@ -56,8 +57,11 @@ function Detail({ game: g }: { game: GameDetail }) {
         <h2>Within 2 hours · Win probability</h2><p className="forecast-note">No two-hour forecast recorded. New forecasts are made only during the two hours before the scheduled start, when fresh inputs are available.</p>
       </div>)}
       <div className="card"><ModelAgreement game={g} detail /></div>
-      <ResearchGameCard sport={sport} gameId={g.game_id} />
-      <TrackingGameCard sport={sport} gameId={g.game_id} />
+      <DetailsToggle />
+      {details && <>
+        <ResearchGameCard sport={sport} gameId={g.game_id} />
+        <TrackingGameCard sport={sport} gameId={g.game_id} />
+      </>}
       <div className="card">
         <h2>{g.mode === 'real' ? 'Pre-game archive probability' : 'Win probability'} {g.prediction && <RunBadge runType={g.prediction.run_type} />}</h2>
         {g.prediction
@@ -69,15 +73,21 @@ function Detail({ game: g }: { game: GameDetail }) {
             <tr>
               <th scope="row">Model</th>
               {g.prediction
-                ? <><td>{pct(1 - g.prediction.home_win_prob)}</td><td>{pct(g.prediction.home_win_prob)}</td></>
+                ? <><td>{pct(1 - g.prediction.home_win_prob, 1)}</td><td>{pct(g.prediction.home_win_prob, 1)}</td></>
                 : <td colSpan={2} className="muted">No forecast</td>}
             </tr>
             <tr>
               <th scope="row">Market <Help label="Market">Bookmaker odds converted to probabilities with the margin removed (de-vigged).</Help></th>
               {g.market
-                ? <><td>{pct(1 - g.market.home_win_prob)}</td><td>{pct(g.market.home_win_prob)}</td></>
+                ? <><td>{pct(1 - g.market.home_win_prob, 1)}</td><td>{pct(g.market.home_win_prob, 1)}</td></>
                 : <td colSpan={2} className="warn">No market odds for this game</td>}
             </tr>
+            {g.market?.home_price != null && g.market.away_price != null && (
+              <tr>
+                <th scope="row">Odds <Help label="Odds">The bookmaker's moneyline as quoted (American odds), before the margin is removed.</Help></th>
+                <td>{american(g.market.away_price)}</td><td>{american(g.market.home_price)}</td>
+              </tr>
+            )}
           </tbody>
         </table>
         <dl className="facts">
@@ -89,7 +99,7 @@ function Detail({ game: g }: { game: GameDetail }) {
             </>
           )}
           <dt>Projected score</dt>
-          <dd className="muted">{g.projected_score_available ? '—' : 'Not shown until a validated score model exists.'}</dd>
+          <dd className="muted">{g.projected_score_available ? 'Available in the market forecasts below.' : 'Not shown until a validated score model exists.'}</dd>
         </dl>
       </div>
 
@@ -161,7 +171,7 @@ function NearTipoffCard({ game: g }: { game: GameDetail }) {
         <dt>Market at that time</dt>
         <dd>
           {n.market_home_prob != null && n.market_retrieved_at
-            ? `${g.home.abbr} ${pct(n.market_home_prob)} (quote retrieved ${dateTime(n.market_retrieved_at)})`
+            ? `${g.home.abbr} ${pct(n.market_home_prob, 1)} (quote retrieved ${dateTime(n.market_retrieved_at)})`
             : <span className="warn">No market quote was available when this forecast was made</span>}
         </dd>
         <dt>Model version</dt><dd><code>{n.model_version}</code></dd>

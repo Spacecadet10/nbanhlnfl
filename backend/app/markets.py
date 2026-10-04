@@ -143,32 +143,57 @@ class ScoreGrid:
         return float("nan")
 
 
-def poisson_grid(lam_home: float, lam_away: float, ot_home_share: float, max_goals: int = 15) -> ScoreGrid:
-    """NHL: independent Poisson regulation goals; a regulation tie k-k becomes k+1-k (home wins OT/SO) with probability
-    `ot_home_share`, else k-k+1. The shootout winner's credited goal is part of the final score, as settled."""
+# NHL empty-net goals: a regulation lead of one (two) goals grows by one with probability lead1 (lead2), and goal rates are
+# scaled by rate_scale so the mean total is unchanged. Fit once by maximum likelihood of regulation scores on development
+# seasons 2018-2021 (sealed goals_poisson rates) and checked on validation seasons 2022-2024: regulation-score NLL
+# 3.852 -> 3.799, favourite -1.5 cover 32.9% predicted vs 36.4% observed without it. Test seasons were not used.
+EMPTY_NET = {"lead1": 0.29, "lead2": 0.42, "rate_scale": 0.97}
+
+
+def empty_net(pmf: dict) -> dict:
+    """Moves EMPTY_NET lead1/lead2 of each one- and two-goal regulation lead to a lead one goal larger. Winner and 3-way
+    regulation probabilities are unchanged; margins and totals are not."""
+    out: dict = {}
+    for (h, a), p in pmf.items():
+        e = {1: EMPTY_NET["lead1"], 2: EMPTY_NET["lead2"]}.get(abs(h - a), 0.0)
+        out[(h, a)] = out.get((h, a), 0.0) + p * (1 - e)
+        if e:
+            k = (h + 1, a) if h > a else (h, a + 1)
+            out[k] = out.get(k, 0.0) + p * e
+    return out
+
+
+def poisson_grid(lam_home: float, lam_away: float, ot_home_share: float, max_goals: int = 15,
+                 empty_net_goals: bool = False) -> ScoreGrid:
+    """NHL: independent Poisson regulation goals (with `empty_net_goals`, rescaled and adjusted by `empty_net`); a
+    regulation tie k-k becomes k+1-k (home wins OT/SO) with probability `ot_home_share`, else k-k+1. The shootout
+    winner's credited goal is part of the final score, as settled."""
     def pois(lam):
         out, p = [], math.exp(-lam)
         for k in range(max_goals + 1):
             out.append(p)
             p *= lam / (k + 1)
         return out
-    ph, pa = pois(lam_home), pois(lam_away)
+    scale = EMPTY_NET["rate_scale"] if empty_net_goals else 1.0
+    ph, pa = pois(lam_home * scale), pois(lam_away * scale)
+    regulation = {(h, a): ph[h] * pa[a] for h in range(max_goals + 1) for a in range(max_goals + 1)}
+    if empty_net_goals:
+        regulation = empty_net(regulation)
     pmf: dict[tuple[int, int], float] = {}
     reg = [0.0, 0.0, 0.0]
-    for h in range(max_goals + 1):
-        for a in range(max_goals + 1):
-            p = ph[h] * pa[a]
-            if h == a:
-                reg[1] += p
-                pmf[(h + 1, a)] = pmf.get((h + 1, a), 0.0) + p * ot_home_share
-                pmf[(h, a + 1)] = pmf.get((h, a + 1), 0.0) + p * (1 - ot_home_share)
-            else:
-                reg[0 if h > a else 2] += p
-                pmf[(h, a)] = pmf.get((h, a), 0.0) + p
+    for (h, a), p in sorted(regulation.items()):
+        if h == a:
+            reg[1] += p
+            pmf[(h + 1, a)] = pmf.get((h + 1, a), 0.0) + p * ot_home_share
+            pmf[(h, a + 1)] = pmf.get((h, a + 1), 0.0) + p * (1 - ot_home_share)
+        else:
+            reg[0 if h > a else 2] += p
+            pmf[(h, a)] = pmf.get((h, a), 0.0) + p
     s = sum(reg)
-    return ScoreGrid(pmf, reg3=(reg[0] / s, reg[1] / s, reg[2] / s),
-                     params={"lambda_home": round(lam_home, 6), "lambda_away": round(lam_away, 6),
-                             "ot_home_share": round(ot_home_share, 6)})
+    params = {"lambda_home": round(lam_home, 6), "lambda_away": round(lam_away, 6), "ot_home_share": round(ot_home_share, 6)}
+    if empty_net_goals:
+        params["empty_net"] = dict(EMPTY_NET)
+    return ScoreGrid(pmf, reg3=(reg[0] / s, reg[1] / s, reg[2] / s), params=params)
 
 
 class MarginTotalNormal:
@@ -264,7 +289,8 @@ LIMITATIONS = {
     "nhl": ["Goalie listings are collected, but this model does not yet use goalies, injuries or line-ups."],
     "nba": ["No injury or line-up information is used."],
     ("nhl", "reg3"): "Regulation draws were under-predicted in the one-time test (about 16% predicted, 23% observed).",
-    ("nhl", "spread"): "Two-goal wins were under-predicted in testing (empty-net goals are not modelled).",
+    ("nhl", "spread"): "Two-goal wins were under-predicted in testing. The current model adds an empty-net adjustment (fit on "
+                       "2017-18 to 2020-21, checked on 2021-22 to 2023-24); earlier versions did not, and it has no live record yet.",
     ("nhl", "total"): "Totals showed no skill over a league-average model in the one-time test.",
     ("nhl", "team_total_home"): "Team totals were not tested separately.",
     ("nhl", "team_total_away"): "Team totals were not tested separately.",

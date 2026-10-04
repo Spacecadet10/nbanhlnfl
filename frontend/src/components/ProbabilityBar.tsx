@@ -7,10 +7,10 @@ export function ProbabilityBar({ home, away, homeProb, label = 'Model win probab
 }) {
   const awayProb = 1 - homeProb;
   return (
-    <div className="probbar" role="img" aria-label={`${label}: ${away.abbr} ${pct(awayProb)}, ${home.abbr} ${pct(homeProb)}`}>
+    <div className="probbar" role="img" aria-label={`${label}: ${away.abbr} ${pct(awayProb, 1)}, ${home.abbr} ${pct(homeProb, 1)}`}>
       <div className="probbar-labels">
-        <span className={awayProb > homeProb ? 'fav' : ''}>{away.abbr} {pct(awayProb)}</span>
-        <span className={homeProb >= awayProb ? 'fav' : ''}>{pct(homeProb)} {home.abbr}</span>
+        <span className={awayProb > homeProb ? 'fav' : ''}>{away.abbr} {pct(awayProb, 1)}</span>
+        <span className={homeProb >= awayProb ? 'fav' : ''}>{pct(homeProb, 1)} {home.abbr}</span>
       </div>
       <div className="probbar-track">
         <div className="probbar-away" style={{ width: `${awayProb * 100}%` }} />

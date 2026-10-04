@@ -64,6 +64,7 @@ class HockeyElo(Elo):
 class GoalsConfig:
     eta: float = 0.01     # gradient step on the Poisson log-likelihood per result; 0 = league_poisson (no team strength)
     carry: float = 0.75   # share of attack/defence kept at a new season
+    empty_net: bool = False   # markets.EMPTY_NET adjustment of the score grid (line markets); off for sealed evaluations
 
 
 LEAGUE_RATE = 0.01        # exponential weight of each new result in the running league home/away goal means (fixed)
@@ -89,7 +90,10 @@ class GoalsPoisson:
         return "league_poisson" if self.cfg.eta == 0 else "goals_poisson"
 
     def config(self) -> dict:
-        return {**asdict(self.cfg), "league_rate": LEAGUE_RATE, "prior_goals": PRIOR_GOALS}
+        cfg = asdict(self.cfg)
+        if cfg.pop("empty_net"):   # the version string of a model without the adjustment stays exactly as sealed
+            cfg["empty_net"] = "l1={lead1}-l2={lead2}-s={rate_scale}".format(**markets.EMPTY_NET)
+        return {**cfg, "league_rate": LEAGUE_RATE, "prior_goals": PRIOR_GOALS}
 
     def _team(self, team_id: str) -> str:
         return self.key.get(team_id, team_id)
@@ -114,7 +118,8 @@ class GoalsPoisson:
 
     def distribution(self, game: PregameGame) -> markets.ScoreGrid:
         lh, la = self.rates(game)
-        return markets.poisson_grid(lh, la, 0.5 if game.neutral_site else self.ot_home_share())
+        return markets.poisson_grid(lh, la, 0.5 if game.neutral_site else self.ot_home_share(),
+                                    empty_net_goals=self.cfg.empty_net)
 
     def predict(self, game: PregameGame) -> float:
         return self.distribution(game).winner()[0]

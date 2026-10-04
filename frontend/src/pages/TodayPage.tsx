@@ -7,11 +7,11 @@ import { useApi } from '../api/useApi';
 import { ModeBadge, NearTipoffBadge, RunBadge, SourceList } from '../components/Badges';
 import { ConfidenceFilter, confidenceLevels, levelLabel, RangeRecords, useConfidence } from '../components/ConfidenceFilter';
 import { MarketCard } from '../components/MarketView';
-import { MarketSelect, useCarriedSearch, useMarket, useSport } from '../components/Selection';
+import { DetailsToggle, MarketSelect, useCarriedSearch, useDetails, useMarket, useSport } from '../components/Selection';
 import { PolicyToggle, usePolicy } from '../components/RunTypeToggle';
 import { ProbabilityBar } from '../components/ProbabilityBar';
 import { AsyncView, Empty } from '../components/States';
-import { calendarDate, FULL_DATE, pct, shiftDate, time, dateTime } from '../format';
+import { american, calendarDate, FULL_DATE, pct, shiftDate, tipoffTime, dateTime } from '../format';
 
 export function TodayPage() {
   const [sport] = useSport();
@@ -70,6 +70,7 @@ function Slate({ meta }: { meta: Meta }) {
       )}
       <MarketSelect value={market} markets={meta.markets} onChange={setMarket} />
       <ConfidenceFilter value={level} onChange={setLevel} levels={confidenceLevels(sport, market)} />
+      <DetailsToggle />
       <RangeRecords sport={sport} market={market} level={level} realMode={meta.mode === 'real'} policy={policy} />
       <AsyncView state={state} retry={retry}>
         {(data) => (
@@ -84,7 +85,7 @@ function Slate({ meta }: { meta: Meta }) {
             ) : (
               <>
                 {research.state.status === 'error' && <p className="warn small">Research selections unavailable: {research.state.error}</p>}
-                <FilteredSlate games={data.games} selection={data.selection} showAll={() => setLevel(null)} market={market}
+                <FilteredSlate games={data.games} selection={data.selection} showAll={() => setLevel(null)} market={market} date={date}
                   research={research.state.status === 'success' ? research.state.data.games : undefined} />
               </>
             )}
@@ -100,8 +101,8 @@ const POLICY_NAME: Record<Policy, string> = { pregame: 'pre-game archive', near_
 const policyName = (policy: Policy, demo: boolean) => (demo ? 'demo' : POLICY_NAME[policy]);
 
 /** The API decides which games are selected: only the chosen policy's forecast counts, never the other one. */
-function FilteredSlate({ games, selection: sel, showAll, market, research }: { games: GameSummary[]; selection: SlateSelection; showAll: () => void;
-  market: MarketId; research?: ResearchSlate['games'] }) {
+function FilteredSlate({ games, selection: sel, showAll, market, date, research }: { games: GameSummary[]; selection: SlateSelection; showAll: () => void;
+  market: MarketId; date: string; research?: ResearchSlate['games'] }) {
   const level = sel.min_confidence;
   const isWinner = market === 'winner';
   const selected = level == null ? games
@@ -124,8 +125,8 @@ function FilteredSlate({ games, selection: sel, showAll, market, research }: { g
       ) : (
         <ul className="game-grid">
           {selected.map((g) => (isWinner
-            ? <GameCard key={g.game_id} game={g} policy={sel.policy} research={research?.[g.game_id]} />
-            : <MarketCard key={g.game_id} game={g} statusLabel={statusLabel(g)} research={research?.[g.game_id]} market={market} />))}
+            ? <GameCard key={g.game_id} game={g} policy={sel.policy} date={date} research={research?.[g.game_id]} />
+            : <MarketCard key={g.game_id} game={g} statusLabel={statusLabel(g, date)} research={research?.[g.game_id]} market={market} />))}
         </ul>
       )}
     </>
@@ -136,22 +137,23 @@ const SEASON_LABEL: Record<GameSummary['season_type'], string> = {
   preseason: 'PRESEASON', regular: '', play_in: 'PLAY-IN', postseason: 'PLAYOFFS', other: 'EXHIBITION',
 };
 
-function statusLabel(g: GameSummary) {
+function statusLabel(g: GameSummary, date: string) {
   if (g.outcome) return 'FINAL';
   if (g.status === 'postponed' || g.status === 'canceled') return g.status.toUpperCase();
   if (g.status === 'in_progress') return 'IN PROGRESS';
-  return time(g.tipoff);
+  return tipoffTime(g.tipoff, date);
 }
 
-function GameCard({ game: g, policy, research }: { game: GameSummary; policy: Policy; research?: ResearchSlate['games'][string] }) {
+function GameCard({ game: g, policy, date, research }: { game: GameSummary; policy: Policy; date: string; research?: ResearchSlate['games'][string] }) {
   const carried = useCarriedSearch();
+  const [details] = useDetails();
   const p = g.prediction;
   const n = g.near_tipoff;
   const near = policy === 'near_tipoff';
   const pick = g.slate_pick;   // the selected policy's pick; the other forecast is only mentioned below
   const side = (home: boolean) => {
     if (g.outcome) return home ? g.outcome.home_score : g.outcome.away_score;
-    if (pick) return pct(home ? pick.home_win_prob : 1 - pick.home_win_prob);
+    if (pick) return pct(home ? pick.home_win_prob : 1 - pick.home_win_prob, 1);
     return '—';
   };
   const other = near ? p : n;
@@ -159,7 +161,7 @@ function GameCard({ game: g, policy, research }: { game: GameSummary; policy: Po
     <li className="card game-card">
       <Link to={`/games/${g.game_id}${carried}`} className="card-link">
         <div className="game-card-head">
-          <span className="game-time">{statusLabel(g)}{SEASON_LABEL[g.season_type] && ` · ${SEASON_LABEL[g.season_type]}`}</span>
+          <span className="game-time">{statusLabel(g, date)}{SEASON_LABEL[g.season_type] && ` · ${SEASON_LABEL[g.season_type]}`}</span>
           {g.mode === 'demo' ? <RunBadge runType="demo" /> : near ? n && <NearTipoffBadge /> : p && <RunBadge runType={p.run_type} />}
         </div>
         <div className="team-line"><span className={`team-monogram team-${g.away.abbr}`}>{g.away.abbr}</span><div><strong>{g.away.name}</strong><span>Away</span></div><b>{side(false)}</b></div>
@@ -183,16 +185,16 @@ function GameCard({ game: g, policy, research }: { game: GameSummary; policy: Po
             ? 'No forecast recorded yet. Forecasts are made within two hours of game time.'
             : 'No two-hour forecast was recorded for this game.') : g.forecast_note ?? 'No forecast available.'}</p>
         )}
-        {other && (
+        {details && other && (
           <p className="other-forecast small muted">
             {near ? 'Pre-game archive forecast' : 'Near-tipoff forecast'} (not used by this view):{' '}
             {other.home_win_prob >= 0.5 ? g.home.abbr : g.away.abbr} {pct(Math.max(other.home_win_prob, 1 - other.home_win_prob), 1)}
           </p>
         )}
         <ModelAgreement game={g} />
-        <ResearchSlateLine entry={research} market="winner" />
+        {details && <ResearchSlateLine entry={research} market="winner" />}
         <div className="card-bottom small muted">
-          {g.market ? <span title="The latest bookmaker quote retrieved before the start; it may be newer than the forecast above">Market: {g.home.abbr} {pct(g.market.home_win_prob)} <span className="muted small">(quote {dateTime(g.market.retrieved_at)})</span></span> : <span className="warn">No market odds</span>}<span className="matchup-link">Matchup ↗</span>
+          {g.market ? <span title="The latest bookmaker quote retrieved before the start; it may be newer than the forecast above">Bookmaker: {g.home.abbr} {pct(g.market.home_win_prob, 1)}{g.market.home_price != null && g.market.away_price != null && <> · odds {g.away.abbr} {american(g.market.away_price)} / {g.home.abbr} {american(g.market.home_price)}</>} <span className="muted small">(quote {dateTime(g.market.retrieved_at)})</span></span> : <span className="warn">No market odds</span>}<span className="matchup-link">Matchup ↗</span>
         </div>
       </Link>
     </li>

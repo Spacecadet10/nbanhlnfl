@@ -80,6 +80,8 @@ class Market(BaseModel):
     quote_time: Optional[datetime] = Field(description="Publication time, when the source provides one.")
     retrieved_at: datetime
     home_win_prob: float = Field(ge=0, le=1, description="De-vigged implied probability.")
+    home_price: Optional[float] = Field(None, description="Home moneyline as quoted (American odds).")
+    away_price: Optional[float] = Field(None, description="Away moneyline as quoted (American odds).")
 
 
 Policy = Literal["pregame", "near_tipoff"]

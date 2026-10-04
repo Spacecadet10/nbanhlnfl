@@ -5,9 +5,9 @@ import { Link } from 'react-router-dom';
 import type { GameSummary, MarketForecast, MarketModelVersion, MarketPerformanceResponse, MarketRecord, Settlement } from '../api/types';
 import { RunBadge, NearTipoffBadge } from './Badges';
 import { MarketRecordLine } from './ConfidenceFilter';
-import { useCarriedSearch } from './Selection';
+import { useCarriedSearch, useDetails } from './Selection';
 import { Empty } from './States';
-import { calendarDate, dateTime, FULL_DATE, num, pct } from '../format';
+import { american, calendarDate, dateTime, FULL_DATE, num, pct } from '../format';
 
 const RESULT: Record<Settlement, { label: string; cls: string }> = {
   win: { label: 'Won', cls: 'ok' }, loss: { label: 'Lost', cls: 'bad' }, push: { label: 'Push', cls: 'muted' },
@@ -52,9 +52,9 @@ function QuoteLine({ f }: { f: MarketForecast }) {
   const push = f.market === 'reg3' ? 0 : f.sides.find((s) => s.side === 'mid')?.probability ?? 0;
   return (
     <span>
-      {q.bookmaker} at this line, de-vigged: {a?.label} {pct(q.prob_a)} · {b?.label} {pct(q.prob_b)}
+      {q.bookmaker} at this line: {a?.label} {american(q.price_a)} · {b?.label} {american(q.price_b)}; without the margin {pct(q.prob_a, 1)} · {pct(q.prob_b, 1)}
       <span className="muted"> (retrieved {dateTime(q.retrieved_at)})</span>
-      {push > 0 && a && b && <span className="muted"> · The bookmaker pair leaves out the push; on the same basis the model is {a.label} {pct(a.probability / (a.probability + b.probability))} · {b.label} {pct(b.probability / (a.probability + b.probability))}.</span>}
+      {push > 0 && a && b && <span className="muted"> · The bookmaker pair leaves out the push; on the same basis the model is {a.label} {pct(a.probability / (a.probability + b.probability), 1)} · {b.label} {pct(b.probability / (a.probability + b.probability), 1)}.</span>}
     </span>
   );
 }
@@ -63,6 +63,7 @@ function QuoteLine({ f }: { f: MarketForecast }) {
 export function MarketCard({ game: g, statusLabel, research, market }: { game: GameSummary; statusLabel: string; research?: ResearchSlateEntry; market: MarketId }) {
   const f = g.market_forecast;
   const carried = useCarriedSearch();
+  const [details] = useDetails();
   return (
     <li className="card game-card">
       <Link to={`/games/${g.game_id}${carried}`} className="card-link">
@@ -89,7 +90,7 @@ export function MarketCard({ game: g, statusLabel, research, market }: { game: G
           <p className="forecast-note">No forecast of this market under this policy for this game.</p>
         )}
         <ModelAgreement game={g} />
-        <ResearchSlateLine entry={research} market={market} />
+        {details && <ResearchSlateLine entry={research} market={market} />}
       </Link>
     </li>
   );
@@ -202,6 +203,7 @@ export function MarketReport({ perf: p }: { perf: MarketPerformanceResponse }) {
         <div className="card">
           <h2>Historical test <RunBadge runType="backtest" /></h2>
           <p className="small muted">{p.reference.label}</p>
+          {p.reference.model_note && <p className="warn small">{p.reference.model_note}</p>}
           <table className="table compare">
             <thead><tr><th>Line</th><th>Games</th><th>Log loss</th><th>League-average model</th><th>Pick accuracy</th></tr></thead>
             <tbody>

@@ -186,17 +186,30 @@ def _agreement_side(market, members):
     return f
 
 
-def _simulate(market, rows, sources, members, best=None):
-    """Weekly selector over the evaluated seasons, evidence starting empty. Returns per-game selections and a summary."""
-    from datetime import datetime, timedelta
+HISTORICAL_REFERENCE = ("outcome base rate of the picked side among earlier settled games at the same line; a line with "
+                        "too few earlier games is not judged (lines are never pooled; no historical bookmaker odds exist; "
+                        "lift is over that base rate, not over a market)")
+
+
+def history_items(market, rows, members):
+    """Selector items from walk-forward rows. A member or combination missing on a row is simply absent from its vectors
+    (the selector treats it as 'source unavailable' there); agreement counts the members present against all of them."""
     items = []
     for r in rows:
-        a = combine.agreement({m: r["vectors"][m] for m in members}, members, market)
+        a = combine.agreement({m: r["vectors"][m] for m in members if m in r["vectors"]}, members, market)
         items.append({"game_id": r["game_id"], "week": selector.week_of(r["tipoff_at"]), "tipoff_at": r["tipoff_at"],
-                      "result_available_at": r["result_available_at"], "vectors": r["vectors"],
+                      "result_available_at": r["result_available_at"], "vectors": r["vectors"], "line": r.get("line"),
                       "agreement": {"majority_side": a["side"] if a["majority"] else None,
                                     "unanimous_side": a["side"] if a["unanimous"] else None},
                       "bookmaker": None, "realised": r["realised"]})
+    return items
+
+
+def _simulate(market, rows, sources, members, best=None, filters=selector.FILTERS):
+    """Weekly selector over the evaluated seasons, evidence starting empty, judged on the historical basis (outcome base
+    rate at the line: no historical odds exist). Returns per-game selections and a summary."""
+    from datetime import datetime, timedelta
+    items = history_items(market, rows, members)
     items.sort(key=lambda i: (i["tipoff_at"], i["game_id"]))
     t0 = datetime.strptime(items[0]["tipoff_at"][:10], "%Y-%m-%d")
     t = t0 - timedelta(days=t0.weekday()) + timedelta(hours=selector.DECISION_HOUR_UTC)
@@ -206,27 +219,29 @@ def _simulate(market, rows, sources, members, best=None):
     while t < end:
         cut, nxt = t.strftime(fmt), (t + timedelta(days=7)).strftime(fmt)
         evidence = [i for i in items if i["result_available_at"] <= cut and i["tipoff_at"] < cut]
-        d = selector.decide(evidence, market, sources, incumbent) if evidence else None
+        d = selector.decide(evidence, market, sources, incumbent, "historical", filters) if evidence else None
         week_items = [i for i in items if cut <= i["tipoff_at"] < nxt]
         status = d["status"] if d else "insufficient_evidence"
         if d and d["status"] == "active" and incumbent and d["rule"] != incumbent:
             changes += 1
         incumbent = d["rule"] if d else None          # as live: the previous decision's rule, none after an abstention
         if d and d["status"] == "active":
-            rates = selector.reference_rates(evidence, market)
+            rates = selector.reference_rates(evidence, market, "historical")
             for i in week_items:
                 s = selector.apply(d, i, market)
                 if s["status"] == "pick":
                     side = SIDE_IDX[s["side"]]
                     picks.append({"game_id": i["game_id"], "cutoff_at": i["tipoff_at"], "side": side, "lower": d["lower"],
                                   "result": selector.outcome(market, side, i["realised"]),
-                                  "reference": selector.reference(i, side, rates, market), "p": s["probability"]})
+                                  "reference": selector.reference(i, side, rates, market, "historical"), "p": s["probability"]})
         decisions.append({"at": cut, "status": status, "rule": d["rule"] if d else None,
                           "lower": d.get("lower") if d else None, "games": len(week_items)})
         t += timedelta(days=7)
+    unjudged = sum(p["reference"] is None for p in picks)
+    picks = [p for p in picks if p["reference"] is not None]      # a pick at an unsupported line is not judged
     decided = [p for p in picks if p["result"] != "push"]
     wins = sum(p["result"] == "win" for p in decided)
-    summary = {"weeks": len(decisions), "active_weeks": sum(d["status"] == "active" for d in decisions),
+    summary = {"unjudged_picks": unjudged, "reference": HISTORICAL_REFERENCE, "weeks": len(decisions), "active_weeks": sum(d["status"] == "active" for d in decisions),
                "rule_changes": changes, "games": len(items), "picks": len(picks), "pushes": len(picks) - len(decided),
                "coverage": len(picks) / len(items), "wins": wins, "losses": len(decided) - wins,
                "accuracy": wins / len(decided) if decided else None,

@@ -6,6 +6,17 @@ export const num = (n: number | null | undefined, digits = 3) => (n == null ? 'â
 export const time = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
 
+/** Start time in the viewer's zone; adds the weekday when the local date differs from the slate's (US Eastern) date. */
+export const tipoffTime = (iso: string, slateDate: string) => {
+  const d = new Date(iso);
+  const local = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return local === slateDate ? time(iso) : `${d.toLocaleDateString([], { weekday: 'short' })} ${time(iso)}`;
+};
+
+/** American odds as quoted: +150, -120, EVEN. */
+export const american = (price: number | null | undefined) =>
+  price == null ? 'â€”' : Math.abs(price) === 100 ? 'EVEN' : price > 0 ? `+${Math.round(price)}` : `${Math.round(price)}`;
+
 export const dateTime = (iso: string) =>
   new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
 

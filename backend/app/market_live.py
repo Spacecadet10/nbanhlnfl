@@ -29,7 +29,7 @@ def market_model(conn: sqlite3.Connection):
         from . import nhl_eval
         from .models.hockey import GoalsConfig, GoalsPoisson
         d = nhl_eval.load_decision(conn)
-        model = GoalsPoisson(GoalsConfig(**d["goals_config"]), sports.NHL.rating_key)
+        model = GoalsPoisson(GoalsConfig(**{**d["goals_config"], "empty_net": True}), sports.NHL.rating_key)
         return model, backtest.model_version(model)
     from . import nba_markets
     return nba_markets.sealed_model(conn)

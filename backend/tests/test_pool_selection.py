@@ -57,14 +57,23 @@ def add_game(c, gid, tipoff):
               (gid, tipoff, "2026-10-01T00:00:00Z", "2026-10-01T00:00:00Z"))
 
 
-def add_cohort(c, gid, tipoff, generated, line=-1.5, market="spread", defn=DEFN, members_p=(0.5, 0.0, 0.5)):
+def add_cohort(c, gid, tipoff, generated, line=-1.5, market="spread", defn=DEFN, members_p=(0.5, 0.0, 0.5), book=(0.5, 0.0, 0.5)):
+    # An even bookmaker quote at the cohort's line: quoted markets are judged against the bookmaker only (selector.reference).
     members = [{"name": n, "ref": None, "p": list(members_p)} for n in research_live.LINE_MEMBERS["nhl"]]
     agree = {"side": None, "majority": False, "unanimous": False}
+    quote = None
+    if book and line is not None:
+        fetch = c.execute("INSERT INTO raw_fetches (raw_id, retrieved_at) VALUES (1, ?)", (generated,)).lastrowid
+        quote = c.execute("INSERT INTO market_quotes (sport, game_id, provider, market, price_label, line, price_a, price_b, "
+                          "p_a_devig, p_b_devig, retrieved_at, fetch_id, raw_id) VALUES ('nhl',?,'test',?,'current',?,-110,-110,"
+                          "?,?,?,?,1)", (gid, market, line, book[0] / (book[0] + book[2]), book[2] / (book[0] + book[2]),
+                                         generated, fetch)).lastrowid
     cur = c.execute(
         "INSERT INTO research_cohorts (idempotency_key, sport, game_id, market, line, line_source, market_quote_id, bookmaker, "
         "definition, primary_name, information_at, generated_at, tipoff_at, members, missing, average, stack, agreement) "
-        "VALUES (?,?,?,?,?,?,NULL,'null',?,?,?,?,?,?,'{}',?,?,?)",
-        (f"{gid}:{market}:{generated}:{defn}", "nhl", gid, market, line, None if line is None else "model", defn,
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'{}',?,?,?)",
+        (f"{gid}:{market}:{generated}:{defn}", "nhl", gid, market, line,
+         None if line is None else "market" if quote else "model", quote, json.dumps({"p": list(book)} if book else None), defn,
          "goals_poisson", generated,
          generated, tipoff, json.dumps(members), json.dumps(list(members_p)), json.dumps({"p": None, "reason": "test"}),
          json.dumps(agree)))

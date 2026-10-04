@@ -29,6 +29,9 @@ def accuracy(probs: Sequence[float], outcomes: Sequence[bool]) -> Optional[float
     return sum((p >= 0.5) == bool(y) for p, y in zip(probs, outcomes)) / len(probs)
 
 
+API_CALIBRATION_BINS = 10   # 0.2-wide bins put most games in 0.4-0.6, hiding miscalibration where most picks are made
+
+
 def calibration(probs: Sequence[float], outcomes: Sequence[bool], bins: int = 5) -> list[CalibrationBin]:
     out = []
     for i in range(bins):
@@ -53,3 +56,38 @@ def log_loss_multi(vectors: Sequence[Sequence[float]], realised: Sequence[int]) 
     if not vectors:
         return None
     return -sum(math.log(min(1 - EPS, max(EPS, v[r]))) for v, r in zip(vectors, realised)) / len(vectors)
+
+
+def regression_errors(predicted: Sequence[float], actual: Sequence[float]) -> Optional[dict]:
+    """Point-prediction errors (totals, margins, goals): MAE, RMSE, median absolute error (less moved by blowouts),
+    mean error actual − predicted (bias) and R² against the actual mean."""
+    if not predicted:
+        return None
+    err = [a - p for p, a in zip(predicted, actual)]
+    n = len(err)
+    mean_a = sum(actual) / n
+    ss_tot = sum((a - mean_a) ** 2 for a in actual)
+    sse = sum(e * e for e in err)
+    absolute = sorted(abs(e) for e in err)
+    mid = n // 2
+    return {"n": n, "mae": sum(absolute) / n, "rmse": math.sqrt(sse / n),
+            "medae": absolute[mid] if n % 2 else (absolute[mid - 1] + absolute[mid]) / 2,
+            "bias": sum(err) / n, "r2": 1 - sse / ss_tot if ss_tot else None}
+
+
+def confusion(probs: Sequence[float], outcomes: Sequence[bool], threshold: float = 0.5) -> Optional[dict]:
+    """Picks at `threshold` (p ≥ threshold → home) against outcomes: counts, precision, recall and F1 for the home side."""
+    if not probs:
+        return None
+    tp = sum(p >= threshold and bool(y) for p, y in zip(probs, outcomes))
+    fp = sum(p >= threshold and not y for p, y in zip(probs, outcomes))
+    fn = sum(p < threshold and bool(y) for p, y in zip(probs, outcomes))
+    tn = len(probs) - tp - fp - fn
+    precision = tp / (tp + fp) if tp + fp else None
+    recall = tp / (tp + fn) if tp + fn else None
+    if precision is None or recall is None:
+        f1 = None
+    else:
+        f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+    return {"home_picked_home_won": tp, "home_picked_away_won": fp, "away_picked_home_won": fn,
+            "away_picked_away_won": tn, "precision": precision, "recall": recall, "f1": f1}

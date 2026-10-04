@@ -12,14 +12,14 @@ SPORT_COMMANDS = {"nhl-pbp-import", "nhl-xg-research", "migrate", "replay", "cov
                   "score", "daily", "scheduler", "predict-now", "score-near-tipoff", "markets", "score-markets", "agreement", "thresholds",
                   "combination-study", "selector-decide", "research-report", "retrain-cadence", "catboost-challenger", "combination-search", "expanded-search", "selective-study", "rules-registry",
                   "daily-cadence", "features-nhl", "tracking-report", "tracking-record", "pool-screen", "pool-assess", "pool-record", "pool-roster", "pool-report",
-                  "release-check"}
+                  "release-check", "diagnostics", "historical-start"}
 NHL_ONLY = {"nhl-pbp-import", "nhl-xg-research", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies"}
 
 
 # Commands that only read the store: they run on a query-only connection without the job lock or a migration, so a long
 # report can never make a scheduled two-hour cycle wait, skip or miss a game. (`score` is not here: it records a job run.)
 READ_ONLY_COMMANDS = {"score-markets", "score-near-tipoff", "thresholds", "research-report", "pool-report", "pool-roster",
-                      "tracking-report", "coverage", "release-check"}
+                      "tracking-report", "coverage", "release-check", "diagnostics", "historical-start"}
 LOCK_WAIT_SECONDS = 45 * 60     # longer than any two-hour cycle (NHL ~13 minutes); a job still waiting then fails visibly
 ODDS_LOCK_WAIT_SECONDS = 120    # the periodic cycle waits out a short job (daily, injuries), not another full cycle
 
@@ -138,6 +138,12 @@ def main(argv=None) -> int:
     rg.add_argument("--nhl", required=True, help="NHL selective-study report.json")
     rg.add_argument("--effective-from", required=True)
     sub.add_parser("features-nhl", help="features-v1 NHL: shot volume and special-teams finishing (MODEL_SELECTION §19; exploratory)")
+    sub.add_parser("diagnostics", help="Read-only exploratory diagnostics on non-test seasons: permutation importance, "
+                                       "learning curves, score errors, goalie imputation (NHL), data checks; writes "
+                                       "data/reports/diagnostics-<sport>/")
+    sub.add_parser("historical-start", help="Freeze the separately labelled historical starting policy for the current "
+                                            "research definition (walk-forward history, outcome base-rate reference; reads "
+                                            "the store only, writes data/research/historical-start/; refuses to overwrite)")
     sub.add_parser("features-nba", help="features-v1 NBA: player-quality-weighted absences (MODEL_SELECTION §19; exploratory)")
     # Persistent agreement tracking tracking-v2 (MODEL_SELECTION §18)
     tg = sub.add_parser("tracking-registry", help="Seal the tracking-v2 group registry (refuses to replace an existing one)")
@@ -537,6 +543,21 @@ def _run(args, p, conn, applied) -> int:
         r = availability_quality.evaluate(conn)
         print(json.dumps({k: r[k] for k in ("scored_games", "reading", "output_dir")} | {"comparisons": {k: {"mean": v["mean"],
               "bonferroni": v["bonferroni_interval"]} for k, v in r["comparisons"].items()}}, indent=1, default=str))
+    elif args.cmd == "historical-start":
+        from . import historical_start
+        doc = historical_start.build(conn, args.sport)
+        print(json.dumps({"path": doc["path"], "definition": doc["definition"], "frozen_at": doc["frozen_at"],
+                          "markets": {m: {k: v.get(k) for k in ("status", "rule", "lower", "games", "reason")}
+                                      for m, v in doc["markets"].items()}}, indent=1, default=str))
+    elif args.cmd == "diagnostics":
+        from . import diagnostics
+        r = diagnostics.run(conn, args.sport)
+        print(json.dumps({"output_dir": r["output_dir"], "permutation_importance": [{"model": pi["model"], "baseline": pi["baseline"],
+              "features": {k: {m: round(x["mean"], 5) for m, x in v.items()} for k, v in pi["features"].items()}}
+              for pi in r["permutation_importance"]], "learning_curve": [{"model": c["model"], "points": [
+              {"seasons": q["seasons"], "loss": q["loss"]} for q in c["points"]]} for c in r["learning_curve"]],
+              "goalie_imputation": r["goalie_imputation"] and r["goalie_imputation"]["comparison"],
+              "data_checks": {k: len(v) for k, v in r["data_checks"].items()}}, indent=1, default=str))
     elif args.cmd == "tracking-report":
         from . import agreement_tracking as at
         if args.check:

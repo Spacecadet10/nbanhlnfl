@@ -70,7 +70,7 @@ class DemoProvider:
             sample_size=len(scored), date_from=min((g.game_date for g in scored), default=None),
             date_to=max((g.game_date for g in scored), default=None),
             accuracy=metrics.accuracy(probs, ys), brier_score=metrics.brier(probs, ys),
-            log_loss=metrics.log_loss(probs, ys), calibration=metrics.calibration(probs, ys), baselines=[],
+            log_loss=metrics.log_loss(probs, ys), calibration=metrics.calibration(probs, ys, metrics.API_CALIBRATION_BINS), baselines=[],
             market=MarketComparison(
                 matched_games=len(matched), coverage=len(matched) / len(scored) if scored else 0.0,
                 model_brier=metrics.brier([g.prediction.home_win_prob for g in matched],

@@ -480,11 +480,13 @@ def assess_market(market, table, plan, first, seasons, screen_seasons) -> dict:
                 out["rules"].append(_rule(market, stacked, f"{k} ≥ {t}", _threshold_side(k, t, market), strongest))
     # Selector over the pool (weekly, evidence only from earlier settled games), counted on assessment seasons only.
     sources = [strongest] + short + [_avg_key([strongest, c]) for c in short] + (["stack:pool"] if stacked else [])
-    sim_rows = [r for r in hist if all(s in r["vectors"] or s.startswith("avg:") or s.startswith("stack") for s in sources)]
+    # Every game where the strongest member forecast is a selector item; a candidate, average or stack missing on a game is
+    # "source unavailable" there, so single members are never dropped because a combination could not be formed.
+    sim_rows = [r for r in hist if strongest in r["vectors"]]
     for r in sim_rows:
         for c in short:
-            _add_avg([r], [strongest, c])
-    sim_rows = [r for r in sim_rows if all(s in r["vectors"] for s in sources)]
+            if c in r["vectors"]:
+                _add_avg([r], [strongest, c])
     if sim_rows:
         sim, picks = cr._simulate(market, sim_rows, sources, [strongest] + short, strongest)
         ids = {r["game_id"] for r in rows}

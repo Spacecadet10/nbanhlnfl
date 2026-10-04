@@ -120,6 +120,8 @@ def test_metric_helpers():
     assert metrics.brier([], []) is None
     bins = metrics.calibration([0.1, 0.9, 1.0], [False, True, True])
     assert [b.count for b in bins] == [1, 0, 0, 0, 2]
+    fine = metrics.calibration([0.1, 0.45, 0.55, 0.9, 1.0], [False, True, False, True, True], metrics.API_CALIBRATION_BINS)
+    assert [b.count for b in fine] == [0, 1, 0, 0, 1, 1, 0, 0, 0, 2] and fine[-1].upper == 1.0
 
 
 def test_team_stats_are_internally_consistent():

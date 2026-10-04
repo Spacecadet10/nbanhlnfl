@@ -313,3 +313,10 @@ button,input,select { min-height:44px; }
 @media (max-width: 640px) {
   .joint-research .tracking-filters label { flex-basis: 100%; }
 }
+
+.details-toggle { display:inline-flex; align-items:center; gap:6px; margin:4px 0 12px; cursor:pointer; }
+
+/* Long model-version / research-definition names in a select must not widen the page on phones. */
+select { max-width: 100%; }
+/* Long model and candidate identifiers in card text wrap instead of widening the page. */
+.card { overflow-wrap: break-word; }

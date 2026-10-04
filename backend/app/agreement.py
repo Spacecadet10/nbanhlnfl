@@ -39,13 +39,67 @@ def models(conn):
             GradientBoostedTrees(primary.cfg)]
 
 
+def model_files(built) -> list:
+    """The app files the built members' code can depend on. Seeds: the module of every app class in the MRO of each
+    member and of the objects it holds (a wrapped member).
+    Followed: a file's module-level relative imports, plus the imports written inside the members' own class bodies
+    (methods included); other function-level imports are not followed (e.g. an NHL helper imported inside another
+    class of the same file). From a `models/` file every imported app module is hashed, but only `models/` files are
+    followed further; from a seed outside `models/` (a wrapper such as retrain_cadence.Cadenced) only `models/` imports
+    count. An edit to a model file no member uses (e.g. the other sport's) therefore no longer restarts this identity."""
+    import ast
+    import inspect
+    import sys
+    import textwrap
+    app_root = Path(__file__).parent
+    models_root = app_root / "models"
+    objs = list(built) + [v for m in built for v in vars(m).values()]      # wrapped members (e.g. Cadenced(inner))
+    classes = list(dict.fromkeys(c for o in objs for c in type(o).__mro__ if c.__module__.startswith(__package__ + ".")))
+    local: dict = {}                    # file -> import nodes inside member class bodies
+    for c in classes:
+        f = Path(sys.modules[c.__module__].__file__)
+        try:
+            tree = ast.parse(textwrap.dedent(inspect.getsource(c)))
+        except (OSError, TypeError, SyntaxError):
+            continue
+        local.setdefault(f, []).extend(n for n in ast.walk(tree) if isinstance(n, ast.ImportFrom))
+    todo = [Path(sys.modules[c.__module__].__file__) for c in classes]
+    seen: set = set()
+
+    def targets(f: Path, node) -> list:
+        if not node.level:
+            return []
+        base = f.parent
+        for _ in range(node.level - 1):
+            base = base.parent
+        names = [node.module.replace(".", "/")] if node.module else [a.name for a in node.names]
+        return [t for t in (base / f"{n}.py" for n in names) if t.is_file() and app_root in t.parents]
+
+    while todo:
+        f = todo.pop()
+        if f in seen:
+            continue
+        seen.add(f)
+        tree = ast.parse(f.read_text())
+        nodes = [n for n in tree.body if isinstance(n, ast.ImportFrom)] + local.get(f, [])
+        for node in nodes:
+            for t in targets(f, node):
+                if t.parent == models_root:
+                    todo.append(t)
+                elif f.parent == models_root and t not in seen:
+                    seen.add(t)         # an app module a model file imports: hashed, not followed
+    return sorted(seen, key=lambda p: str(p.relative_to(app_root)))
+
+
 def definition_hash(built):
-    """Changed model code/settings get a separate forward identity, not a relabelled history."""
+    """Changed model code/settings get a separate forward identity, not a relabelled history. Only files the members can
+    depend on (`model_files`) are hashed, plus the shared walk-forward, agreement and availability code."""
     h = hashlib.sha256()
     h.update(version("scikit-learn").encode())
     root = Path(__file__).parent
-    for path in sorted((root / "models").glob("*.py")) + [root / "backtest.py", root / "agreement.py", root / "availability.py", root / "availability_live.py"]:
-        h.update(path.name.encode())
+    fixed = [root / "backtest.py", root / "agreement.py", root / "availability.py", root / "availability_live.py"]
+    for path in [p for p in model_files(built) if p not in fixed] + fixed:
+        h.update(str(path.relative_to(root)).encode())
         h.update(path.read_bytes())
     h.update(json.dumps([(m.name, m.config()) for m in built], sort_keys=True).encode())
     return h.hexdigest()[:16]

@@ -534,3 +534,43 @@ Scope: extended `agreement_tracking`, its API and the existing Performance compo
 - `web` (vite preview from ~/Desktop) hung in state U with an empty log; after `git worktree move` to ~/nba-predictor-live:
   :4173 200, /history 200, /api via proxy 200 (57/13/44); :8100 health 200. kill -9 of api and web: restarted in ~2 s.
 - Jobs after the switch: NBA 422 and NHL 155 skipped by quota with release 948f1bec; no guard refusals in either log.
+
+## Review fixes (dev checkout, uncommitted) — 2026-10-03 22:40 UTC, Claude (Opus 5.5)
+- Preview: `uvicorn app.main:app --port 8010` (real data) + `API_PROXY_TARGET=http://127.0.0.1:8010 npm run dev -- --port 5190`.
+- `/?sport=nhl&date=2026-10-03`: 13 cards; picks with one-decimal bars (BUF 70.3%); bookmaker line with American odds
+  (CHI +190 / BUF -230); no agreement/research lines until "Show research details" (`details=1`), which shows them.
+- `market=spread&details=1`: quotes as prices (BUF -1.5 +110 · CHI +1.5 -130) plus de-vigged %; tonight's release forecasts
+  shown as "earlier model version" (preview runs the new NHL market version).
+- `/history?sport=nhl&run=backtest`: "Show 500 more (500 of 2792 shown)" -> request `limit=1000`.
+- `/performance?run=backtest`: 10 calibration bins (0-10% … 90-100%); research cards collapsed behind the toggle.
+- Game page at 390 px wide: near-tipoff card, "Show research details" checkbox; layout fits. `/api/games?date=bad` -> 422 list detail.
+
+
+## Independent historical-selection review — Codex, 2026-10-04
+- Browser (Codex in-app) opened http://localhost:5190/performance?sport=nhl: real API-backed winner record, agreement visible with details off, frozen historical policy "Learned stacker at 65%+", frozen Oct 4 01:57 EDT; 0 post-freeze cohorts. Policy statistics observed only, not independently regenerated.
+- Viewport checks: 1280x900 -> document width 1280; 390x844 with details off -> document width 390. Enabling Show research details updated URL to &details=1 and loaded Models in use. At 390px with details on, document width became 428 (horizontal overflow); agreement-vs-confidence tables extend beyond viewport. PyTorch/Keras/TensorFlow entries absent in this preview roster. Viewport override reset.
+- CLI curl --max-time 5 to http://localhost:8100/api/research/historical-start?sport=nhl&market=winner returned exit 7 in the shell environment; this does not establish the host service is down (browser preview worked). Current release deployment/deep fits not independently verified.
+- python3 scripts/check_project.py: structure passed. npm --prefix frontend run typecheck: passed. Focused pytest result recorded in HANDOFF.md. Full --ready not run in this review; known semantic findings prevent acceptance. No new full navigation/loading/error/demo smoke pass claimed.
+
+## Historical selection, starting policy, agreement visibility — Claude (Opus 5.5), 2026-10-04 ~06:00–07:00 UTC
+Preview only, on SQLite backup copies of both live stores taken ~05:45 UTC (scratch `NBA_DATA_DIR`); live :8000/:8100/:4173
+untouched. API: `NBA_DATA_DIR=<scratch> NBA_API_MODE=real backend/.venv/bin/uvicorn app.main:app --port 8010`; frontend:
+`API_PROXY_TARGET=http://127.0.0.1:8010 npm run dev -- --host 127.0.0.1 --port 5190 --strictPort`.
+- Policies frozen on the copies: `python -m app.cli --sport nhl historical-start` (84 s, 4,877 games 2018–21) and `--sport nba`
+  (2 min 18 s, 3,962 games 2022–24). `/api/research/historical-start` 200 for both; before building it returned `not_built`.
+- Desktop 1280 px: Game day (NHL, Oct 3) shows "Winner agreement … 4 of 4 pick BUF" on every card with research details
+  off; Oct 4 cards say "Not recorded for this game". Performance shows the Historical starting policy card by default
+  (rule, reason, excluded sources, chronological check with the picks' mean probability vs base rate, "since frozen":
+  0 cohorts — no cohort exists under the new definition yet). Details on: "Models in use" table (fit, latest forecast,
+  votes/never votes, selectable). NHL puck line: historical test shows "Earlier model version …" note (API
+  `matches_live_model: false`). No console errors.
+- Phone 390 px (iframe; Chrome window minimum is 500 px): Game day, NBA and NHL Performance: no horizontal overflow after
+  one fix (the model-version `<select>` widened the NHL line page to 859 px; now `.version-select { max-width: 100% }`).
+- Not verified in a browser: the policy's live record with real picks (needs cohorts under the new definition; covered by
+  `test_policy_applies_only_to_its_definition_after_freezing_and_keeps_the_bookmaker_apart`); demo mode in a browser (API in demo mode returns status `demo` with a note, checked with TestClient).
+- **After Codex's review (06:30–07:00 UTC):** policies rebuilt as `historical-start-v2` (v1 files kept); API restarted on
+  the final code: both sports `matches_current_definition` and `matches_current_policy` true. 390 px iframes with research
+  details ON: NHL winner (was 432 px: "Research version" select), NHL puck line (was 449 px: an unbreakable suspended-source
+  list in the Candidate-pool selector card), NHL 3-way, NBA, Game page, Game day: all 386 px after `select { max-width:
+  100% }` and `.card { overflow-wrap: break-word }`. Desktop: NBA total shows "No rule qualified"; "Models in use" shows
+  current-version fits/forecasts with earlier versions listed apart. Preview servers stopped.

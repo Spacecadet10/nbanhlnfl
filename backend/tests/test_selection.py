@@ -172,7 +172,7 @@ def test_candidate_markets_are_coherent():
 
 
 # --- selector ----------------------------------------------------------------------------------------------------------
-def _items(n, acc, seed=1, start="2026-10-05", conf=0.7, market="winner"):
+def _items(n, acc, seed=1, start="2026-10-05", conf=0.7, market="winner", book=(0.5, 0.0, 0.5)):
     rng = random.Random(seed)
     t0 = datetime.strptime(start, "%Y-%m-%d")
     out = []
@@ -182,7 +182,7 @@ def _items(n, acc, seed=1, start="2026-10-05", conf=0.7, market="winner"):
         vec = (conf, 0.0, 1 - conf) if side == 0 else (1 - conf, 0.0, conf)
         out.append({"game_id": f"g{i}", "week": selector.week_of((t0 + timedelta(days=i // 10)).strftime("%Y-%m-%d")),
                     "vectors": {"p": vec, "q": vec}, "agreement": {"majority_side": combine.SIDES[side], "unanimous_side": None},
-                    "bookmaker": None, "realised": realised})
+                    "bookmaker": book, "realised": realised})
     return out
 
 
@@ -201,12 +201,23 @@ def test_bonferroni_bound_tightens_with_more_rules():
 
 
 def test_reference_removes_class_balance():
-    items = _items(400, 0.5)
-    for i in items:                        # always pick home, home always wins 60%: a home-rate rule has no lift
+    items = _items(400, 0.5, market="reg3", book=None)
+    for i in items:                        # 3-way (never quoted): always pick home, home wins 60%: no lift over the base rate
         i["vectors"] = {"p": (0.7, 0.0, 0.3)}
         i["realised"] = 0 if random.Random(i["game_id"]).random() < 0.6 else 2
-    s = selector.evaluate(items, "winner", ["p"])[0]
+    s = selector.evaluate(items, "reg3", ["p"])[0]
     assert abs(s["lift"]) < 1e-12 and s["accuracy"] > 0.55
+
+
+def test_quoted_market_is_judged_against_the_bookmaker_only():
+    # Unquoted games of a market the bookmaker quotes have no reference: never scored against a base rate, so a strong
+    # record on them cannot read as beating the market.
+    items = _items(400, 0.85, book=None)
+    s = selector.evaluate(items, "winner", ["p"])[0]
+    assert s["picks"] == 0 and s["lift"] is None
+    assert selector.decide(items, "winner", ["p"])["status"] == "insufficient_evidence"
+    assert selector.reference({"bookmaker": None}, 0, {0: 0.6, 2: 0.4}, "spread") is None
+    assert selector.reference({"bookmaker": None}, 0, {0: 0.4, 1: 0.2, 2: 0.4}, "reg3") == 0.4
 
 
 def test_bookmaker_reference_used_at_the_exact_line():

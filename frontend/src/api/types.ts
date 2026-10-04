@@ -38,6 +38,7 @@ export interface Prediction {
 }
 export interface Market {
   bookmaker: string; price_label: 'open' | 'current'; quote_time: string | null; retrieved_at: string; home_win_prob: number;
+  home_price?: number | null; away_price?: number | null;
 }
 export interface Outcome { home_score: number; away_score: number; home_won: boolean }
 
@@ -125,7 +126,7 @@ export interface MarketPerformanceResponse {
   mode: Mode; sport: Sport; market: MarketId; policy: Policy; title: string; model_version: string | null; versions?: MarketModelVersion[]; forecasts: number;
   record: MarketRecordSummary; brier_score: number | null; log_loss: number | null; line_sources: Record<string, number>;
   market_matched: number; model_log_loss_on_matched: number | null; market_log_loss_on_matched: number | null;
-  reference: { label: string; by_line: Record<string, { n: number; log_loss: number; brier: number; pick_accuracy_excluding_mid: number | null; league_reference_log_loss: number }> } | null;
+  reference: { label: string; tested_model?: string; matches_live_model?: boolean; model_note?: string | null; by_line: Record<string, { n: number; log_loss: number; brier: number; pick_accuracy_excluding_mid: number | null; league_reference_log_loss: number }> } | null;
   limitations: string[]; note: string;
 }
 
@@ -322,7 +323,29 @@ export interface Candidate {
   definition: string; training_status: string; latest_fit: { first_used_at: string; training_games: number; results_available_through: string } | null;
   evaluation: Record<string, CandidateEval>; prospective: { games: number; settled: number }; combination_participation: string[];
   pool?: Record<string, CandidatePoolState>; selection: string;
+  coverage?: { fitted: boolean; earlier_fit?: boolean; earlier_forecast_at?: string | null; latest_forecast_at: string | null; forecasting: boolean; in_agreement_tracking: string[]; votes: boolean;
+    selectable: { alone: string[]; inside: string[] } };
 }
+export interface CoreMemberCoverage { name: string; markets: string; votes: boolean; role: string;
+  fit_register: { definition: string; first_used_at: string; training_games: number } | null;
+  earlier_fit?: { definition: string; first_used_at: string; training_games: number } | null; current_definition?: string | null;
+  latest_forecast_at: string | null; forecasting: boolean; earlier_forecast_at?: string | null; selectable: boolean }
+// Historical starting policy (backend app/historical_start.py). Research only; separate from the live selector's record.
+export interface HistoricalStartRule { source: string; filter: string; threshold: number }
+export interface HistoricalStartMarket { status: 'active' | 'abstain' | 'insufficient_evidence'; rule: HistoricalStartRule | null;
+  lower?: number | null; lift?: number | null; reason: string; sources: string[]; filters: string[]; excluded: Record<string, string>;
+  games: number; seasons?: number[]; from?: string; until?: string; rules_compared?: number; eligible_rules?: number;
+  chronological_check?: { weeks: number; active_weeks: number; rule_changes: number; games: number; picks: number; pushes: number;
+    coverage: number; wins: number; losses: number; accuracy: number | null; lift: number | null; accuracy_ci95: [number, number] | null;
+    mean_probability?: number | null; mean_reference?: number | null } }
+export interface HistoricalStartLive { cohorts_after_freeze: number; cohorts_before_freeze: number; picks: number; wins: number;
+  losses: number; pushes: number; pending: number; void: number; unscorable: number; accuracy: number | null;
+  bookmaker: { quoted_decided: number; quoted_wins: number; mean_implied: number | null; note: string };
+  recent: { game_id: string; tipoff_at: string; line: number | null; side: string; probability: number; result: string }[] }
+export interface HistoricalStart { mode: Mode; sport: Sport; market: string; status: 'frozen' | 'not_built' | 'demo'; label?: string;
+  note: string; policy?: string; definition?: string; current_definition?: string; matches_current_definition?: boolean;
+  matches_current_selector?: boolean; frozen_at?: string; selector_version?: string; dataset_version?: string;
+  evaluated_seasons?: number[]; reference?: string; frozen_policy?: string; matches_current_policy?: boolean; decision?: HistoricalStartMarket | null; live?: HistoricalStartLive | null }
 // Candidate-pool selection (backend app/candidates/selection.py, docs/CANDIDATE_POOL.md §7). Research only.
 export type PoolRoute = 'standalone' | 'combination';
 export interface PoolEvidence { file: string; key: string; comparison: string; seasons: number[] | null; mean: number | null;
@@ -335,6 +358,7 @@ export interface CandidatePoolState {
   sources: { source: string; route: PoolRoute; evidence: PoolEvidence; prospective: PoolSourceStats | null }[];
   decision: PoolDecisionState | null; selected_now: boolean }
 export interface CandidateRoster { mode: Mode; sport: Sport; pool?: string; as_of?: string; candidates: Candidate[];
+  members?: CoreMemberCoverage[]; coverage_note?: string;
   registry?: { id: string; effective_from: string; routes: Record<string, string>; rule: string } | null;
   registry_error?: string | null; family_audit: unknown[]; note: string }
 export interface PoolSourceReport { source: string; kind: 'single' | 'average'; members: string[]; candidates: string[];

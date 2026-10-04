@@ -464,6 +464,7 @@ def roster(conn, sport: str, as_of: Optional[str] = None) -> dict:
     """Every registry candidate with training status, markets, latest fit, evaluation, prospective sample size,
     combination participation and selection eligibility; plus the family audit. Eligibility is the sealed pool
     registry's route (docs/CANDIDATE_POOL.md §7) and the pool decision in force, never a count on its own."""
+    from .. import agreement_tracking
     from . import selection as pool_selection
     as_of = as_of or utc_now()
     ev = _evidence(sport)
@@ -476,8 +477,9 @@ def roster(conn, sport: str, as_of: Optional[str] = None) -> dict:
     defn = pool_selection.core_definition(conn) if reg else None
     items = []
     for spec in registry.for_sport(sport):
-        fit = conn.execute("SELECT * FROM model_fits WHERE sport=? AND member=? ORDER BY first_used_at DESC, fit_id DESC LIMIT 1",
-                           (sport, f"cand:{spec.name}")).fetchone() if _has(conn, "model_fits") else None
+        fit = conn.execute("SELECT * FROM model_fits WHERE sport=? AND member=? AND first_used_at<=? "
+                           "ORDER BY first_used_at DESC, fit_id DESC LIMIT 1",
+                           (sport, f"cand:{spec.name}", as_of)).fetchone() if _has(conn, "model_fits") else None
         n = settled = 0
         if _has(conn, "candidate_forecasts"):
             r = conn.execute("SELECT COUNT(DISTINCT cf.game_id) AS n, COUNT(DISTINCT CASE WHEN g.status='final' AND "
@@ -518,14 +520,32 @@ def roster(conn, sport: str, as_of: Optional[str] = None) -> dict:
                  f"selectable only inside {', '.join(inside)} (incremental value in a combination); never alone" if inside else
                  "shortlisted, but no supported standalone or combination value: research only" if shortlisted else
                  "research only (no supported standalone or combination value)")
-        items.append({"name": spec.name, "family": spec.family, "head": spec.head, "features": spec.features,
+        # Coverage of the CURRENT candidate identity only; earlier identities are reported apart.
+        cdef = registry.definition(spec)
+        cur_fit = conn.execute("SELECT 1 FROM model_fits WHERE sport=? AND member=? AND definition=? AND first_used_at<=? "
+                               "LIMIT 1", (sport, f"cand:{spec.name}", cdef, as_of)).fetchone() if _has(conn, "model_fits") else None
+        latest_at, earlier_at = (conn.execute(
+            "SELECT MAX(CASE WHEN model_version=? THEN generated_at END), MAX(CASE WHEN model_version<>? THEN generated_at END) "
+            "FROM candidate_forecasts WHERE candidate=? AND generated_at<=?",
+            (model_version(spec), model_version(spec), spec.name, as_of)).fetchone()
+            if _has(conn, "candidate_forecasts") else (None, None))
+        tracked = [m for m in spec.markets if spec.name in agreement_tracking.candidates_for(sport, m, live_ok=True)]
+        items.append({"coverage": {"fitted": cur_fit is not None, "earlier_fit": fit is not None and cur_fit is None,
+                                   "latest_forecast_at": latest_at, "earlier_forecast_at": earlier_at,
+                                   "forecasting": _recent(latest_at, as_of),
+                                   "in_agreement_tracking": tracked, "votes": False,
+                                   "selectable": {"alone": alone, "inside": inside}},
+                      "name": spec.name, "family": spec.family, "head": spec.head, "features": spec.features,
                       "role": spec.role, "why": spec.why, "markets": list(spec.markets), "refit": spec.refit,
                       "definition": registry.definition(spec), "training_status": status,
                       "latest_fit": dict(fit) if fit else None, "evaluation": evaluation,
                       "prospective": {"games": n, "settled": settled},
                       "combination_participation": sorted(m for m, st in state.items() if st["sources"]) if reg else combos,
                       "pool": state, "selection": label})
-    return {"sport": sport, "pool": registry.POOL, "as_of": as_of, "candidates": items,
+    return {"sport": sport, "pool": registry.POOL, "as_of": as_of, "candidates": items, "members": core_members(conn, sport, as_of),
+            "coverage_note": f"Fitted: a model_fits row for the current version. Forecasting: a current-version forecast in "
+                             f"the {RECENT_DAYS} days before as_of; earlier versions are listed apart. Candidates never vote; 'agreement tracking' means recorded in the sealed tracking groups. "
+                             "Selectable: a registered pool source (alone or inside an average), not suspended.",
             "registry": None if reg is None else {"id": pool_selection.registry_id(reg), "effective_from": reg["effective_from"],
                                                   "routes": reg["routes"], "rule": reg["rule"],
                                                   "suspended": pool_selection.suspended(reg)},
@@ -533,6 +553,56 @@ def roster(conn, sport: str, as_of: Optional[str] = None) -> dict:
             "family_audit": list(registry.FAMILY_AUDIT),
             "note": "Research only. Evaluations are exploratory (spent seasons); only prospective forecasts can show "
                     "improvement. Candidates never vote and never replace the primary."}
+
+
+RECENT_DAYS = 7
+
+
+def _recent(ts: Optional[str], as_of: str) -> bool:
+    return ts is not None and _parse(as_of) - _parse(ts) <= timedelta(days=RECENT_DAYS)
+
+
+def _current_definitions(conn) -> tuple:
+    """(agreement digest, research definition) of the code running now; (None, None) when the store cannot build them."""
+    from .. import agreement, research_live
+    try:
+        return agreement.definition_hash(agreement.models(conn)), research_live.definition(conn)
+    except Exception:
+        return None, None
+
+
+def core_members(conn, sport: str, as_of: str) -> list:
+    """The research members per market: whether each votes in agreement, its fit and its latest forecast in a research
+    cohort (two-hour window), for the CURRENT definition (winner fits: agreement digest; line fits and cohorts: research
+    definition). Activity of earlier definitions is reported separately (`earlier_*`), never as current. Read-only."""
+    from .. import agreement, research_live
+    digest, defn = _current_definitions(conn)
+    current_cohorts = {defn, research_live.expanded_definition(defn)} if defn else set()
+    since = (_parse(as_of) - timedelta(days=RECENT_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    last: dict = {}
+    if _has(conn, "research_cohorts"):
+        for r in conn.execute("SELECT market, members, generated_at, definition FROM research_cohorts WHERE generated_at<=? "
+                              "AND generated_at>=? ORDER BY generated_at", (as_of, since)):
+            now_ = r["definition"] in current_cohorts
+            for m in json.loads(r["members"]):
+                last[(r["market"] == "winner", m["name"], now_)] = r["generated_at"]
+    out = []
+    for winner, voters, shadow in ((True, agreement.NAMES[sport], agreement.SHADOW[sport]),
+                                   (False, research_live.LINE_MEMBERS[sport], research_live.SHADOW_LINE_MEMBERS[sport])):
+        fit_defn = digest if winner else defn
+        for name in list(voters) + list(shadow):
+            fits = conn.execute("SELECT member, definition, first_used_at, training_games FROM model_fits WHERE sport=? AND "
+                                "member=? AND first_used_at<=? ORDER BY first_used_at DESC, fit_id DESC",
+                                (sport, name, as_of)).fetchall() if _has(conn, "model_fits") else []
+            cur = next((dict(f) for f in fits if fit_defn and f["definition"] == fit_defn), None)
+            old = next((dict(f) for f in fits if not fit_defn or f["definition"] != fit_defn), None)
+            at, old_at = last.get((winner, name, True)), last.get((winner, name, False))
+            out.append({"name": name, "markets": "winner" if winner else "line and 3-way markets",
+                        "votes": name in voters, "role": "voting member" if name in voters else "shadow (recorded, never votes)",
+                        "current_definition": fit_defn, "fit_register": cur, "earlier_fit": old,
+                        "latest_forecast_at": at, "forecasting": at is not None, "earlier_forecast_at": old_at,
+                        "selectable": True})
+    return out
 
 
 def _has(conn, table: str) -> bool:

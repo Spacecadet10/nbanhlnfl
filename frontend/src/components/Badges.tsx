@@ -35,7 +35,8 @@ export function SourceList({ sources }: { sources: SourceStatus[] }) {
           <span className="dot" aria-hidden />
           <span>{s.name}</span>
           <span className="muted">
-            {s.freshness === 'missing' || !s.last_updated ? 'missing' : `${s.freshness} · ${dateTime(s.last_updated)}`}
+            {s.freshness === 'missing' ? 'missing'
+              : s.last_updated ? `${s.freshness} · ${dateTime(s.last_updated)}` : `${s.freshness} · none recorded recently`}
           </span>
         </li>
       ))}

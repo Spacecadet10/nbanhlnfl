@@ -421,7 +421,8 @@ def report(conn, sport: str, as_of: Optional[str] = None, reg: Optional[dict] = 
     return {"sport": sport, "registry": rid, "effective_from": reg["effective_from"], "as_of": as_of,
             "routes": reg["routes"], "rule": reg["rule"], "markets": markets_out,
             "sealed_registry": reg["sha256"][:16], "suspended": suspended(reg),
-            "note": "Research only. Registry routes come from exploratory held-out seasons; only prospective settled "
+            "note": "Research only. Registry routes were judged on seasons that include the reserved final-test seasons, "
+                    "reused after the one-time test (exploratory, not held-out evidence); only prospective settled "
                     "cohorts can show value, and the selector requires its own thresholds before any pick."}
 
 

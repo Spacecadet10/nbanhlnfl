@@ -136,8 +136,12 @@ def _realised(market: str, line, row: HockeyRow) -> Optional[int]:
     return {"a": 0, "mid": 1, "b": 2}.get(side)
 
 
+MARKET_GRID = "goals_poisson, plain Poisson score grid (no empty-net adjustment)"
+
+
 def market_scores(preds: list[dict], rows_by_id: dict) -> dict[str, list[dict]]:
-    """Per-game market vectors and realised outcomes from a goals model's predictions (with lambdas)."""
+    """Per-game market vectors and realised outcomes from a goals model's predictions (with lambdas), on the plain score
+    grid (MARKET_GRID) the sealed evaluations used; the live market model's empty-net grid is a later, different model."""
     out: dict[str, list[dict]] = {}
     for p in preds:
         row = rows_by_id[p["game_id"]]

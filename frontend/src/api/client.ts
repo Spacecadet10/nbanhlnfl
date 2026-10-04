@@ -1,5 +1,5 @@
 // The app's single API client. All screens fetch through here; there is no local fallback data.
-import type {
+import type { HistoricalStart,
   JointReport, ThresholdReport, AgreementPerformance, GameDetail, GamesResponse, HistoryResponse, MarketHistoryResponse, MarketId, MarketPerformanceResponse, Meta,
   PerformanceResponse, Policy, ResearchGame, ResearchHistory, ResearchReport, ResearchSlate, Retrospective, RuleReport, CandidateRoster, PoolReport, SelectionStatus, Sport,
   TrainingStatus, TrackingCheck, TrackingEvidence, TrackingGame, TrackingKind, TrackingReport,
@@ -27,6 +27,10 @@ async function get<T>(path: string, params?: Record<string, string | undefined>,
     try {
       const body = await res.json();
       if (typeof body.detail === 'string') detail = body.detail;
+      // FastAPI validation errors: a list of {loc, msg}; show which parameter is wrong and why.
+      else if (Array.isArray(body.detail)) detail = body.detail
+        .map((d: { loc?: unknown[]; msg?: string }) => `${(d.loc ?? []).filter((x) => x !== 'query').join('.') || 'request'}: ${d.msg ?? 'invalid'}`)
+        .join('; ') || detail;
     } catch {
       // Non-JSON error body: typically the dev proxy failing to reach the backend.
       if (res.status >= 500) detail = 'API unavailable. Is the backend running?';
@@ -83,6 +87,8 @@ export const api = {
   researchRules: (sport: Sport, market: MarketId, show: 'selected' | 'all', signal?: AbortSignal, definition?: string) =>
     get<RuleReport>('/research/rules', { sport, market, show, definition: definition || undefined }, signal),
   researchCandidates: (sport: Sport, signal?: AbortSignal) => get<CandidateRoster>('/research/candidates', { sport }, signal),
+  researchHistoricalStart: (sport: Sport, market: MarketId, signal?: AbortSignal) =>
+    get<HistoricalStart>('/research/historical-start', { sport, market }, signal),
   researchPool: (sport: Sport, signal?: AbortSignal) => get<PoolReport>('/research/pool', { sport }, signal),
   researchTracking: (sport: Sport, market: MarketId, f: { evidence: TrackingEvidence; kind?: TrackingKind | ''; member?: string;
     line?: string; date_from?: string; date_to?: string; version?: string }, signal?: AbortSignal) =>

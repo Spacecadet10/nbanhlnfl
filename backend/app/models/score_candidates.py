@@ -26,7 +26,7 @@ GBT_SETTINGS = {"loss": "squared_error", "learning_rate": 0.05, "max_iter": 200,
 NBA_FEATURES = ("elo_diff", "mov10_diff", "rest_diff", "b2b_home", "b2b_away", "neutral",
                 "ortg_home", "drtg_home", "ortg_away", "drtg_away", "pace", "margin_est")
 DRAW_GRID = tuple(round(0.005 * i, 3) for i in range(61))     # 0 … 0.30
-GLM_ALPHA = 1.0
+GLM_ALPHA = 0.01   # sklearn penalises the mean deviance: 1.0 shrank goal-rate effects by ~25% (validation log loss worse in every market)
 MIN_HOCKEY_EXAMPLES = 500
 NHL_FEATURES = ("elo_diff", "gf10_home", "ga10_home", "gf10_away", "ga10_away", "rest_diff", "b2b_home", "b2b_away")
 MAX_GOALS = 15
@@ -179,14 +179,35 @@ def _pois(lam: float) -> list[float]:
     return out
 
 
-def regulation_pmf(lam_home: float, lam_away: float, draw_weight: float = 0.0) -> dict:
-    """Independent Poisson regulation scores, diagonally inflated: (1 − w)·p + w·p·[h = a] / P(h = a)."""
+def regulation_pmf(lam_home: float, lam_away: float, draw_weight: float = 0.0, empty_net_goals: bool = False) -> dict:
+    """Independent Poisson regulation scores, diagonally inflated: (1 − w)·p + w·p·[h = a] / P(h = a). With
+    `empty_net_goals`, rates are scaled and leads adjusted as in markets.poisson_grid (markets.EMPTY_NET)."""
+    if empty_net_goals:
+        lam_home, lam_away = lam_home * markets.EMPTY_NET["rate_scale"], lam_away * markets.EMPTY_NET["rate_scale"]
     ph, pa = _pois(lam_home), _pois(lam_away)
     pmf = {(h, a): ph[h] * pa[a] for h in range(MAX_GOALS + 1) for a in range(MAX_GOALS + 1)}
     if draw_weight:
         diag = sum(p for (h, a), p in pmf.items() if h == a)
         pmf = {(h, a): (1 - draw_weight) * p + (draw_weight * p / diag if h == a else 0.0) for (h, a), p in pmf.items()}
-    return pmf
+    return markets.empty_net(pmf) if empty_net_goals else pmf
+
+
+def _draw_fit_terms(lam_home: float, lam_away: float, h: int, a: int) -> tuple[float, float, bool]:
+    """(c, diag, tie) with regulation_pmf(lam_home, lam_away, w, empty_net_goals=True)[(h, a)] == (1 − w)·c + w·c/diag·tie
+    for every w. The empty-net step moves mass only out of one- and two-goal leads (never out of a tie), so the probability
+    of a score is linear in the inflated pre-step grid: its own cell kept, plus the cell one goal closer that moved to it."""
+    scale = markets.EMPTY_NET["rate_scale"]
+    ph, pa = _pois(lam_home * scale), _pois(lam_away * scale)
+    diag = sum(ph[k] * pa[k] for k in range(MAX_GOALS + 1))
+    if h == a:
+        return ph[h] * pa[a], diag, True
+    move = {1: markets.EMPTY_NET["lead1"], 2: markets.EMPTY_NET["lead2"]}
+    lead = abs(h - a)
+    c = ph[h] * pa[a] * (1 - move.get(lead, 0.0))
+    if lead - 1 in move:
+        sh, sa = (h - 1, a) if h > a else (h, a - 1)
+        c += ph[sh] * pa[sa] * move[lead - 1]
+    return c, diag, False
 
 
 def grid_from_regulation(pmf: dict, ot_home_share: float, params: dict) -> markets.ScoreGrid:
@@ -225,15 +246,13 @@ class GoalsDraw:
         train = [e for e in self.examples if e[0] < season]
         if len(train) < MIN_HOCKEY_EXAMPLES:
             return
-        # Per example: independent probability of the observed score and the diagonal mass; the likelihood of each w follows.
+        # Per example: the observed score's probability before inflation and the diagonal mass, on the same grid that
+        # `distribution` predicts with (scaled rates, empty-net step); the likelihood of each w follows.
         stats = []
         for _, lh, la, (h, a) in train:
             if h > MAX_GOALS or a > MAX_GOALS:
                 continue
-            ph, pa = _pois(lh), _pois(la)
-            p = ph[h] * pa[a]
-            diag = sum(ph[k] * pa[k] for k in range(MAX_GOALS + 1))
-            stats.append((p, diag, h == a))
+            stats.append(_draw_fit_terms(lh, la, h, a))
         best = max(DRAW_GRID, key=lambda w: (sum(math.log(max(1e-300, (1 - w) * p + (w * p / d if tie else 0.0)))
                                                   for p, d, tie in stats), -w))
         self.weight = best
@@ -255,9 +274,9 @@ class GoalsDraw:
         _, lh, la, ot = self._prepare(g)
         if self.weight is None:
             return None
-        return grid_from_regulation(regulation_pmf(lh, la, self.weight), ot,
+        return grid_from_regulation(regulation_pmf(lh, la, self.weight, empty_net_goals=True), ot,
                                     {"lambda_home": round(lh, 6), "lambda_away": round(la, 6), "ot_home_share": round(ot, 6),
-                                     "draw_weight": self.weight})
+                                     "draw_weight": self.weight, "empty_net": dict(markets.EMPTY_NET)})
 
     def predict(self, g: PregameGame) -> float:
         d = self.distribution(g)
@@ -272,7 +291,7 @@ class GoalsDraw:
 
     def config(self) -> dict:
         return {"goals": "eta{eta}-c{carry}".format(**self.goals_cfg.__dict__), "draw_grid": [DRAW_GRID[0], DRAW_GRID[-1], 0.005],
-                "min_examples": MIN_HOCKEY_EXAMPLES, "max_goals": MAX_GOALS}
+                "min_examples": MIN_HOCKEY_EXAMPLES, "max_goals": MAX_GOALS, "empty_net": dict(markets.EMPTY_NET)}
 
     def oos_from_season(self) -> Optional[int]:
         return self.first_ready_season
@@ -354,7 +373,7 @@ class GoalsGlm:
         z = ((np.asarray(x) - mu) / sd).reshape(1, -1)
         lh, la = float(mh.predict(z)[0]), float(ma.predict(z)[0])
         ot = 0.5 if neutral else self.ot_share
-        return grid_from_regulation(regulation_pmf(lh, la), ot,
+        return grid_from_regulation(regulation_pmf(lh, la, empty_net_goals=True), ot,
                                     {"lambda_home": round(lh, 6), "lambda_away": round(la, 6), "ot_home_share": round(ot, 6)})
 
     def predict(self, g: PregameGame) -> float:
@@ -374,6 +393,7 @@ class GoalsGlm:
 
     def config(self) -> dict:
         return {"features": "+".join(NHL_FEATURES), "alpha": GLM_ALPHA, "min_examples": MIN_HOCKEY_EXAMPLES,
+                "empty_net": dict(markets.EMPTY_NET),
                 "elo": "k{k}-h{home_advantage}-c{carry}-mov{mov}".format(**self.elo_cfg.__dict__)}
 
     def oos_from_season(self) -> Optional[int]:
