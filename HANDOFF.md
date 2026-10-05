@@ -10,6 +10,13 @@
 - **What agreement accuracy does not show (live API :8100, read-only):** NHL samples are tiny — pregame strict majority 8–9 (17 picks),
   unanimous 7–5 (12); near-tipoff 0–4 / 8–3 by definition; NBA none yet. No conclusion is possible either way. Historically
   (MODEL_AUDIT §3) winner members correlate 0.90–0.95, so "4 of 4 agree" is far less evidence than four independent opinions.
+- **Codex findings reconciled against current code (Claude, read-only):** closed — audit tie/abstention counting, withdrawn
+  effective-member count, market history all-versions labelling (`providers/real.py`), tracking calc versioning (`CALC`), historical
+  2-way reference/sparse-line/stack-parity/W-L-parity (Codex PASS `9d6abbb`), identity hashing only used model files, pushes counted
+  on judged items only, stale "winner/3-way unchanged" limitation text. **Still open:** `EMPTY_NET` constants have no committed
+  fitting script (not reproducible); NHL market backtest (`nhl_eval.market_scores`) uses the plain grid, so it does not describe
+  the live empty-net market model (now disclosed in its docstring, not fixed); its 0.97 rate scale also shifts reg3 draw slightly,
+  not mentioned in the reg3 limitation. Pending Codex items: review of `33a8638`..`4ee66c9`; per-game decision view not built.
 - Open (not bugs): (1) MODEL_AUDIT recommendation to show overlap (correlation/pick disagreement) beside "X of Y agree" is **not
   implemented** in the UI. (2) Tie rule differs slightly: `combine.pick` treats |p−0.5| ≤ 1e-12 as abstention, `agreement.py` Game-card
   votes use exact `p == .5`; practically negligible, but two definitions. No code changed.
