@@ -3,7 +3,14 @@
 ## Calibrated shadows finished (Devin fixes + verification) — Claude (Opus 5.5), 2026-10-04 ~21:30 EDT
 - Devin took over from Codex, fixed real gaps, then its turn was cancelled before readiness. Fixes (uncommitted, `candidates/calibrated.py`
   + its test): NBA winner and NHL reg3 shadows failed to record (NULL `line_source` vs ledger schema → `"none"`); stricter artifact
-  structure checks; one `fit_unavailable` check shared by record/roster, so mismatched/incomplete fits no longer show "fit ready". Reviewed; sound.
+  structure checks; one `fit_unavailable` check shared by record/roster, so mismatched/incomplete fits no longer show "fit ready".
+- **Independent review by Claude of all of `33a8638`: no defects found, no code changed.** Checked: every `candidate_forecasts`/roster reader
+  (selection reads registry names only; agreement tracking does load the shadows into its input map via the shared `research_cohorts:<id>`
+  line_ref, but groups read only named members and the registry is sealed, so no observation changes; `latest()` is unused; model-audit only
+  lists them); live-cycle timing (cohorts stamped before the overlay reads them); push-mass and 3-way maths; one core cohort per
+  game/market/cycle; idempotent fit registration; training uses validation/development seasons only, min 300 games; job error merge.
+  Notes, not bugs: overlays also apply to bookmaker-line cohorts (labelled "transfer unverified"); a future tracking group naming a shadow
+  would make it a tracked input, so that must be a deliberate registry change.
 - These edits change the calibration identity (it hashes `calibrated.py`), so preview fits were refit on the `/private/tmp` copy only; same game counts.
 - Verified: structure check passed; focused 15 passed; **`--ready` exit 0, 624 passed**; API + browser NBA/NHL 1280/390 px: 6/3 shadow rows
   "frozen fit ready", none voting, no overflow/console errors. Details in SMOKE_TEST. Live data, release and `rc-20261004` untouched; no commit.
