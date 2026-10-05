@@ -157,6 +157,9 @@ def main(argv=None) -> int:
     sub.add_parser("model-audit", help="Read-only decision and model-contribution audit (historical walk-forward of the live "
                                        "members, candidates, deep study, prospective cohorts, inputs); writes "
                                        "data/reports/model-audit-<sport>/report.json")
+    cal = sub.add_parser("calibration-shadow-fit", help="Freeze research-only calibration artifacts; reads store, writes artifact files")
+    cal.add_argument("--season", type=int, required=True)
+    cal.add_argument("--cutoff", required=True, help="Latest eligible outcome timestamp, YYYY-MM-DDTHH:MM:SSZ")
     sub.add_parser("calibration-study", help="calibration-v1 (registered): raw vs recalibrated vs shrunk members vs the existing "
                                              "combination on identical later games; read-only, writes data/reports/calibration-v1-<sport>/")
     sub.add_parser("features-nba", help="features-v1 NBA: player-quality-weighted absences (MODEL_SELECTION §19; exploratory)")
@@ -248,6 +251,11 @@ def main(argv=None) -> int:
             return c
         report = tuning_study.run(conn_for, out_dir=Path(args.out) if args.out else None)
         print(json.dumps({"output_dir": report["output_dir"], "games": {s: v["games_per_market"] for s, v in report["sports"].items()}}))
+        return 0
+    if args.cmd == "calibration-shadow-fit":
+        from .candidates import calibrated
+        report = calibrated.prepare(db.connect_readonly(args.sport), args.sport, args.season, args.cutoff)
+        print(json.dumps(report, indent=1, default=str))
         return 0
     if args.cmd == "pool-fit-deep":      # query-only store, no job lock, no migration; writes artifact files only
         from .candidates import live as pool_live
@@ -652,7 +660,7 @@ def _run(args, p, conn, applied) -> int:
             r = pool_study.run_assess(conn, args.sport)
             print(json.dumps({m: {"games": v.get("games")} for m, v in r["markets"].items()}))
         elif args.cmd == "pool-record":
-            r = pool_live.record(conn, write=not args.dry_run)
+            r = jobs.candidate_pool(conn, write=not args.dry_run)
             print(json.dumps({k: v for k, v in r.items() if k != "forecasts"}, default=str))
         else:
             print(json.dumps(pool_live.roster(conn, args.sport), indent=1, default=str))

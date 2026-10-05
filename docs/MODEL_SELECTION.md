@@ -709,3 +709,32 @@ selector, an identity or a stored row; any live use needs its own registration a
   calibration explanation of a combination gain is "supported" if the earlier-chosen best member's `platt` or `shrink`
   variant is not worse than the average (interval of `variant − average` not entirely above 0) while the raw best member
   is worse; "not supported" otherwise. All markets and members are reported, including no-gain and losses.
+
+## Calibrated shadows `calibrated-shadow-v1` — Codex, 2026-10-04
+Authorized research-only follow-up to calibration-v1. Register only platt/temperature pairs with a negative upper
+95% bound: NBA ridge_points (total, team_total_home), gbt_points (total, both team totals), efficiency_margin
+(winner); NHL goals_poisson (reg3), goals_glm (reg3, total). Nine pairs. They never vote, enter combinations,
+or become selector sources. No primary probability changes.
+
+Freeze a calibration artifact per sport, current raw research definition and target season, using only earlier
+out-of-sample forecasts from the already-used development/validation history (minimum 300 decided games per pair).
+Require every training outcome to be available by the declared training cutoff. Reserved test seasons remain untouched.
+Artifacts are immutable: a retry reuses the same fit; a changed method or raw definition requires a different identity.
+At recording time require artifact creation/training cutoff before the forecast and the current raw definition.
+Apply to the raw member of the exact current core cohort, preserving its line and, for two-way markets, its push mass.
+Log raw vector/reference and artifact provenance in candidate_forecasts; missing fit/raw member means an explicit skip.
+Calibration was studied at model-generated lines; transfer to bookmaker lines remains unverified and is labelled in
+provenance. Paired future evaluation must retain that distinction. Existing candidate UI displays these as shadows
+with no selection eligibility. Prepare artifacts explicitly with calibration-shadow-fit; do not run training inside a
+live forecast cycle. No automatic promotion from exploratory historical gains.
+
+Preparation (on a scratch copy first, from `backend/`; season uses the store's ending-year convention):
+```sh
+NBA_DATA_DIR=/path/to/copied-data .venv/bin/python -m app.cli --sport nhl calibration-shadow-fit --season 2027 --cutoff 2026-10-04T17:45:00Z
+NBA_DATA_DIR=/path/to/copied-data .venv/bin/python -m app.cli --sport nba calibration-shadow-fit --season 2027 --cutoff 2026-10-04T17:45:00Z
+```
+The cutoff is the latest permitted training-outcome timestamp, not a backdated fit creation time. New forecasts must
+follow actual artifact creation. Artifacts live in `data/research/calibrated/`; the roster distinguishes a prepared
+artifact from a fit first used in a forecast. `predict-now` and `pool-record` record available overlays after core
+cohorts. A core-definition change requires a new artifact. Review/release and live artifact preparation are separate
+steps; copying historical results into the live forecast ledger is never part of preparation.

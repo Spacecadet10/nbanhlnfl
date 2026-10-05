@@ -435,17 +435,23 @@ def _record_game(conn, spec, mv, art, fit_id, game, row, o, rec, recent, lines, 
                 "p": [pa, pm, pb], "model_version": mv, "generated_at": generated}
         if write:
             with transaction(conn):
-                new = conn.execute("SELECT 1 FROM candidate_forecasts WHERE idempotency_key=?", (key,)).fetchone() is None
-                if new:      # a plain insert: a row refused by a constraint raises and is reported, never counted as a retry
-                    conn.execute(
-                        "INSERT INTO candidate_forecasts (game_id, candidate, model_version, market, line, "
-                        "line_source, line_ref, p_a, p_mid, p_b, params, inputs, fit_id, artifact_sha256, training_cutoff, "
-                        "dataset_version, tipoff_at, generated_at, idempotency_key) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                        (game.game_id, spec.name, mv, market, line, source, ref, pa, pm, pb, json.dumps(params, sort_keys=True),
-                         json.dumps(inputs, sort_keys=True, default=str), fit_id, art["artifact_sha256"],
-                         art["results_available_through"], dataset, game.tipoff_at, generated, key))
+                new = insert_forecast(conn, (
+                    game.game_id, spec.name, mv, market, line, source, ref, pa, pm, pb, json.dumps(params, sort_keys=True),
+                    json.dumps(inputs, sort_keys=True, default=str), fit_id, art["artifact_sha256"],
+                    art["results_available_through"], dataset, game.tipoff_at, generated, key))
             out["created" if new else "already_recorded"] += 1
         out["forecasts"].append(item)
+
+
+def insert_forecast(conn, values) -> bool:
+    """Shared ledger insertion; caller owns the transaction. Constraints reject invalid rows; retries are no-ops."""
+    if conn.execute("SELECT 1 FROM candidate_forecasts WHERE idempotency_key=?", (values[-1],)).fetchone():
+        return False
+    conn.execute(
+        "INSERT INTO candidate_forecasts (game_id, candidate, model_version, market, line, "
+        "line_source, line_ref, p_a, p_mid, p_b, params, inputs, fit_id, artifact_sha256, training_cutoff, "
+        "dataset_version, tipoff_at, generated_at, idempotency_key) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", values)
+    return True
 
 
 # --- Reads ----------------------------------------------------------------------------------------------------------
@@ -572,6 +578,8 @@ def roster(conn, sport: str, as_of: Optional[str] = None) -> dict:
                       "prospective": {"games": n, "settled": settled},
                       "combination_participation": sorted(m for m, st in state.items() if st["sources"]) if reg else combos,
                       "pool": state, "selection": label})
+    from . import calibrated
+    items.extend(calibrated.roster(conn, sport, as_of))
     return {"sport": sport, "pool": registry.POOL, "as_of": as_of, "candidates": items, "members": core_members(conn, sport, as_of),
             "coverage_note": f"Fitted: a model_fits row for the current version. Forecasting: a current-version forecast in "
                              f"the {RECENT_DAYS} days before as_of; earlier versions are listed apart. Candidates never vote; 'agreement tracking' means recorded in the sealed tracking groups. "

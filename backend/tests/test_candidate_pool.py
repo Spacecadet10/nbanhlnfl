@@ -224,7 +224,9 @@ def test_artifacts_are_reused_and_roster_reports_every_candidate(upcoming):
     assert sorted(p.name for p in pool_live.artifact_dir("nhl").rglob("*.pkl")) == files
     r = pool_live.roster(upcoming, "nhl", as_of="2026-10-12T22:30:00Z")
     names = {c["name"]: c for c in r["candidates"]}
-    assert set(names) == {s.name for s in registry.for_sport("nhl")}
+    shadows = {"calibrated:nhl:goals_poisson:reg3", "calibrated:nhl:goals_glm:reg3", "calibrated:nhl:goals_glm:total"}
+    assert set(names) == {s.name for s in registry.for_sport("nhl")} | shadows
+    assert all(names[n]["role"] == "shadow" and not names[n]["coverage"]["votes"] for n in shadows)
     assert names["poisson_draw:nhl_base"]["prospective"] == {"games": 1, "settled": 0}
     assert names["poisson_draw:nhl_base"]["latest_fit"]["trained_season"] == 2027
     assert names["logit_l2:nhl_base"]["selection"] == "reference only (never selected)"

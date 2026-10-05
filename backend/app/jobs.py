@@ -457,6 +457,17 @@ def candidate_pool(conn: sqlite3.Connection, **kw) -> dict:
     try:
         from .candidates import live as pool_live
         r = pool_live.record(conn, **kw)
+        from .candidates import calibrated
+        try:
+            r["calibrated_shadows"] = calibrated.record(conn, **kw)
+        except Exception as exc:
+            r["calibrated_shadows"] = {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+        for field in ("errors", "skipped"):
+            r.setdefault(field, {}).update(r["calibrated_shadows"].get(field, {}))
+        if r["calibrated_shadows"].get("error"):
+            r.setdefault("errors", {})["calibrated_shadows"] = r["calibrated_shadows"]["error"]
+        if r["calibrated_shadows"]["status"] != "success" and r["status"] == "success":
+            r["status"] = "partial"
         return {k: v for k, v in r.items() if k != "forecasts"}
     except Exception as exc:
         conn.rollback()

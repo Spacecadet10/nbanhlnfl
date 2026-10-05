@@ -586,3 +586,42 @@ uvicorn app.main:app --port 8010`, `NBA_DATA_DIR=<copy>`), Vite :5190. 390 px an
 lines), Game page nhl:2026020035, Performance NHL and NBA spread with details: scroll width = viewport, no error states;
 historical starting policy card and `torch_mlp:nhl_base` roster row present. API: historical-start NHL frozen, matches the
 current definition; NHL torch/keras/sklearn MLP "trained" and forecasting (current version). Servers stopped.
+
+## Calibrated shadow members — Codex, 2026-10-04
+- Local implementation on `model-audit`; nine registered pairs, never voters or selector sources. No release or live store changes.
+- Preview data: static RC store copies in `/private/tmp/codex-calibrated-shadow-preview` (both `PRAGMA quick_check`: `ok`).
+  Source: Claude's stopped rehearsal `scratchpad/rcdata`; original files preserved. The initial SQLite read-only backup attempt
+  could not open the source; copying the static files to the writable scratch directory resolved it.
+- API: from repo root, `NBA_DATA_DIR=/private/tmp/codex-calibrated-shadow-preview PYTHONPATH=backend /Users/andry/nba-predictor-live/backend/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8016`.
+  Frontend: from `frontend/`, `API_PROXY_TARGET=http://127.0.0.1:8016 npm run dev -- --host 127.0.0.1 --port 5196`.
+  Sandbox initially refused both localhost binds; approved local-preview execution succeeded.
+- Browser: `http://127.0.0.1:5196/performance?details=1` (NBA) and
+  `http://127.0.0.1:5196/performance?details=1&sport=nhl`. Six NBA / three NHL shadow rows visible,
+  with no selection eligibility. NHL prepared-artifact state reads “frozen fit ready; awaiting first forecast”.
+  At 1280×900 and 390×844, document scroll width equals viewport width for both sports with details open;
+  NHL details closed also fits at 390. Browser console error list empty. Desktop roster visually inspected.
+- First readiness run: typecheck/build passed; 613 tests passed, one existing roster exact-set assertion failed because
+  it omitted the three new NHL shadows. Updated expected set explicitly and asserted all three are nonvoting shadows.
+- Focused regression checks cover unavailable/current-season results, immutable fits, artifact completion timestamp,
+  preserved push mass, append-only/idempotent recording, exact raw-cohort linkage, corruption/future-fit refusal,
+  unchanged primary/cohort rows, roster ineligibility, and reporting calibration even if other pool candidates fail.
+- Calibration history is exploratory and at model-generated lines. Bookmaker-line transfer remains unverified and is
+  recorded in forecast provenance. No real prospective calibration accuracy is claimed; runtime recording verified
+  with synthetic fixtures, not a backdated live forecast.
+
+## Calibrated shadows — Devin fixes resumed by Claude (Opus 5.5), 2026-10-04 ~21:15 EDT
+- Devin (19:39–19:44 EDT) fixed: no-line markets (NBA winner, NHL reg3) failed ledger insert (`line_source` NULL → stored
+  `"none"`, raw value kept in inputs); stricter artifact structure checks; per-member `fit_unavailable` shared by
+  record and roster, so incomplete/mismatched artifacts no longer show "fit ready". Its turn was cancelled before readiness.
+- Calibration identity hashes `calibrated.py`, so these edits made the preview fits stale (roster showed all 9 "awaiting
+  calibration-shadow-fit"). Refit on the preview copy only, cutoff `2026-10-05T01:13:44Z`:
+  `NBA_DATA_DIR=/private/tmp/codex-calibrated-shadow-preview PYTHONPATH=backend <live venv python> -m app.cli --sport {nhl,nba} calibration-shadow-fit --season 2027 --cutoff <ts>`
+  → new `nhl-69b2ba7c05e8cd4c-2027.json` (7,515/6,194/6,194 games), `nba-896aa9930176f03e-2027.json` (3,962×5, 5,133);
+  same counts as Codex's fits. Older artifacts left in place. Core identities unchanged (NBA `ff7e0e91…`, NHL `cb194620…`).
+- API :8017 / Vite :5197 (same commands as above, ports changed). `/api/research/candidates`: NBA 6 / NHL 3 calibration
+  rows, all "frozen fit ready; awaiting first forecast", none voting.
+- Browser (Playwright headless) `/performance?details=1` NBA and NHL at 1280×900 and 390×844: 6 / 3 ready rows,
+  scroll width = viewport, no `role=alert`, no console errors.
+- Readiness: `NBA_DATA_DIR=<empty scratch> /Users/andry/nba-predictor-deep/backend/.venv/bin/python scripts/check_project.py --ready`
+  → exit 0, **624 passed, 1 warning (12 m 42 s)**. Focused `test_calibrated_shadows.py` + `test_training_monitor.py`: 15 passed.
+  Servers :8017/:5197 stopped afterwards; Codex's :8016/:5196 left running.

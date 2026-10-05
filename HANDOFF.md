@@ -1,5 +1,24 @@
 # Current handoff
 
+## Calibrated shadows finished (Devin fixes + verification) — Claude (Opus 5.5), 2026-10-04 ~21:30 EDT
+- Devin took over from Codex, fixed real gaps, then its turn was cancelled before readiness. Fixes (uncommitted, `candidates/calibrated.py`
+  + its test): NBA winner and NHL reg3 shadows failed to record (NULL `line_source` vs ledger schema → `"none"`); stricter artifact
+  structure checks; one `fit_unavailable` check shared by record/roster, so mismatched/incomplete fits no longer show "fit ready". Reviewed; sound.
+- These edits change the calibration identity (it hashes `calibrated.py`), so preview fits were refit on the `/private/tmp` copy only; same game counts.
+- Verified: structure check passed; focused 15 passed; **`--ready` exit 0, 624 passed**; API + browser NBA/NHL 1280/390 px: 6/3 shadow rows
+  "frozen fit ready", none voting, no overflow/console errors. Details in SMOKE_TEST. Live data, release and `rc-20261004` untouched; no commit.
+- Gap: no forecast recorded through the real `record` path on a scheduled game (preview data has none within 2 h); recording is covered by
+  synthetic-fixture tests only. **Real live artifacts must be fit after this code is final** (any further edit to `calibrated.py` re-stales them).
+- Next: Codex review of the calibrated-shadow implementation, then commit and deliberate live artifact preparation.
+
+## Calibrated shadow members — Codex, 2026-10-04
+- Implemented locally on `model-audit` (uncommitted): **nine pairs**, explicitly listed in `candidates/calibrated.py` and registered in MODEL_SELECTION. NBA ridge total/home total, GBT total/both team totals, efficiency winner; NHL Poisson reg3, GLM reg3/total. Ridge away total excluded (inconclusive).
+- Existing candidate ledger, insertion helper and roster reused. `predict-now`/`pool-record` apply frozen earlier-OOF Platt/temperature fits to exact current raw cohorts; retain raw vector/ref, line, push mass, raw definition and artifact provenance. Never a voter, average/stack input or selector source. Retries are idempotent; changed cohorts append. Missing/corrupt/future artifacts skip visibly, including job diagnostics. Training monitor distinguishes calibrated fits and explicit preparation from automatic refits.
+- `calibration-shadow-fit --season 2027 --cutoff <UTC timestamp>` reads the store and freezes artifacts once per definition/season. No live-cycle training. Reused history only (no reserved test read). Actual fit-completion timestamp prevents retrospective use. Future bookmaker-line transfer is unverified, explicitly recorded in provenance.
+- Rehearsal only: `/private/tmp/codex-calibrated-shadow-preview`, both copied DBs pass quick_check. Fits built with release Python (no deep libraries): NHL 7,515/6,194 OOF games; NBA 3,962 line / 5,133 efficiency games. Final completion-timestamp artifact rebuild pending confirmation below. Earlier 16:05 NHL replay refused all three future fits, 0 rows created. Core identities unchanged: NHL `cb194620c0e6a3c6`, NBA `ff7e0e9199ca0cf7`.
+- Verification: structure check passed; new regression + training-monitor tests **7 passed** after timestamp/monitor refinements. Full readiness initially 613 passed/1 old roster expectation failed; expectation extended explicitly for new nonvoting shadows, focused regression passed. Final readiness pending below. Browser Performance NBA/NHL 1280/390 px: all 9 shadow rows, no page overflow or console errors; preparation state verified. Details and commands in SMOKE_TEST.
+- `rc-20261004`, release and live data untouched; no commit/push/deploy. Next: Claude review of this implementation, then deliberate release/integration and live artifact preparation. No prospective accuracy claim; current recording tests use synthetic fixtures.
+
 ## Codex review of model-audit `6788ec2` and RC integration — 2026-10-04
 - Audit needs corrections before its recommendations are treated as established: `_coverage` counts a tied/no-pick forecast as a loss (reproduced: summary accuracy `None`, coverage accuracy `0.0` for `(0.5, 0, 0.5)`). Report actual pick coverage and abstentions consistently.
 - `effective_members` derives from correlation of forecast logits across games; this is descriptive overlap, not a validated count of independent evidence. Do not present 1.04/1.08 as independent-model counts. The asserted calibration-only cause of NBA total gains also needs a calibrated-single and simple-shrinkage comparison; current evidence suggests that explanation but does not isolate it. No detectable improvement is not proof of equivalence.

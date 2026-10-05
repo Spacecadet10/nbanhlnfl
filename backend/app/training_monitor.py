@@ -57,6 +57,9 @@ def status(conn, now: Optional[str] = None) -> dict:
             jobs[job] = {"last_success": last, "last_checked": checked, "stale": stale, "stale_after_hours": hours}
     for f in fits:
         f.update(_versions_and_next(conn, f, now))
+        if f["member"].startswith("cand:calibrated:"):
+            f["schedule_note"] = "frozen calibration; explicit preparation required for each new season"
+            f["action"] = "no automatic refit; prepare and review the next season calibration artifact"
     return {"as_of": now, "fits": fits, "inputs": jobs, "online": _online(conn, now), "updates": _update_events(conn),
             "monitoring": _monitoring(conn, now),
             "note": "Online members (Elo, points model, goals model) update after every result and have no stored fit. "
@@ -85,9 +88,13 @@ def _versions_and_next(conn, f: dict, now: str) -> dict:
     else:
         nxt = {"when": first, "rule": f"first two-hour forecast of season {nxt_season}"
                + ("" if first else " (schedule not yet published)")}
+    calibration = CALIBRATION
+    if f["member"].startswith("cand:calibrated:"):
+        calibration = "frozen earlier-season OOF Platt/temperature calibration; shadow only"
+        nxt = {"when": None, "rule": f"explicit calibration artifact preparation for season {nxt_season}"}
     return {"next_update": nxt, "versions": {"definition": row["definition"] if row else None,
                                              "libraries": row["libraries"] if row else None,
-                                             "params": f["params_digest"], "calibration": CALIBRATION}}
+                                             "params": f["params_digest"], "calibration": calibration}}
 
 
 def _online(conn, now: str) -> list:
