@@ -2,11 +2,12 @@
 import copy
 import json
 import sqlite3
+from math import log, sqrt
 
 import pytest
 
-from app import agreement, ingest, research_live, training_monitor
-from app.candidates import calibrated as cal, live as candidates, registry
+from app import agreement, agreement_tracking, ingest, jobs, research_live, training_monitor
+from app.candidates import calibrated as cal, live as candidates, registry, selection
 from test_live_markets import sealed, add_upcoming  # noqa: F401
 from test_nhl_eval import nhl_store  # noqa: F401
 from test_calibration_study import _table
@@ -41,6 +42,11 @@ def test_apply_preserves_push_and_three_way_normalisation():
     assert cal.apply((0, .5), (0, 1, 0), "total") == (0, 1, 0)
     r3 = cal.apply(1.5, (.7, .2, .1), "reg3")
     assert sum(r3) == pytest.approx(1) and r3[1] != .2
+    assert v == pytest.approx((.6, .1, .3))
+    assert cal.apply((log(3), 1), (.45, .1, .45), "total") == pytest.approx((.675, .1, .225))
+    assert cal.apply((0, -.5), (.72, .1, .18), "total") == pytest.approx((.3, .1, .6))
+    assert cal.apply(2, (4 / 9, 4 / 9, 1 / 9), "reg3") == pytest.approx((.4, .4, .2))
+    assert cal.apply(.5, (.5, .25, .25), "reg3") == pytest.approx((2 / 3, 1 / 6, 1 / 6))
     with pytest.raises(ValueError, match="invalid"):
         cal.apply((0, 1), (.8, .3, .1), "total")
 
@@ -165,7 +171,7 @@ def shadow_cohorts(request, conn, monkeypatch):
     for market in sorted({m for _, m in cal.PAIRS[sport]}):
         names = [n for n, m in cal.PAIRS[sport] if m == market]
         vector = [.7, .2, .1] if market == "reg3" else [.7, 0, .3] if market == "winner" else [.72, .1, .18]
-        members = [{"name": n, "p": vector, "ref": f"raw:{n}:{market}"} for n in names]
+        members = [{"name": n, "p": vector, "ref": {"table": "synthetic", "id": f"{n}:{market}"}} for n in names]
         line = None if market in ("winner", "reg3") else 220.0 if sport == "nba" else 6.0
         c = research_live._cohort(sport, g, market, line, None if line is None else "model", None, None,
                                  "raw", names[0], NOW, NOW, members, {}, names, None, "test")
@@ -200,9 +206,16 @@ def test_every_supported_pair_records_exact_raw_cohort_and_stays_isolated(shadow
         assert r["line"] == c["line"] and r["line_source"] == (c["line_source"] or "none")
         assert inputs["line_source"] == c["line_source"]
         assert r["line_ref"] == f"research_cohorts:{c['cohort_id']}"
-        assert inputs["raw_ref"] == f"raw:{inputs['raw_member']}:{r['market']}"
-        assert (r["p_a"], r["p_mid"], r["p_b"]) == pytest.approx(
-            cal.apply(art["fits"][r["candidate"]]["params"], inputs["raw_probability"], r["market"]))
+        assert inputs["raw_ref"] == {"table": "synthetic", "id": f"{inputs['raw_member']}:{r['market']}"}
+        if r["market"] == "reg3":
+            weights = (7 ** (2 / 3), 2 ** (2 / 3), 1)
+            expected = tuple(w / sum(weights) for w in weights)
+        elif r["market"] == "winner":
+            home = sqrt(7) / (sqrt(7) + sqrt(3))
+            expected = (home, 0, 1 - home)
+        else:
+            expected = (.6, .1, .3)
+        assert (r["p_a"], r["p_mid"], r["p_b"]) == pytest.approx(expected)
         assert r["artifact_sha256"] == cal.digest(art)
         assert r["candidate"] not in registry.BY_NAME and r["candidate"] not in agreement.NAMES[sport]
         assert r["candidate"] not in research_live.sources(sport, r["market"])
@@ -230,3 +243,88 @@ def test_roster_never_claims_unusable_artifacts_are_ready(shadow_cohorts, proble
         assert all("frozen fit ready" in r["training_status"] for n, r in rows.items() if n != nm)
         result = cal.record(conn, game_ids=[gid], now=NOW)
         assert f"{nm}:{gid}" in result["skipped"] and not result["errors"]
+
+
+def test_shadows_do_not_change_sealed_tracking_or_pool_vectors(shadow_cohorts):
+    conn, sport, gid, _, _ = shadow_cohorts
+    tracking = agreement_tracking.load_registry()
+    pool = selection.load_registry()
+    cohorts = conn.execute("SELECT * FROM research_cohorts").fetchall()
+    pool_before = {c["cohort_id"]: selection.pool_vectors(conn, pool, sport, c, NOW) for c in cohorts}
+    initial = agreement_tracking.record(conn, game_ids=[gid], now=NOW, reg=tracking)
+    assert initial["status"] == "success" and initial["created"] > 0, initial
+    before = [tuple(r) for r in conn.execute("SELECT * FROM agreement_observations ORDER BY observation_id")]
+    assert conn.execute("SELECT count(*) FROM agreement_observations WHERE status='pick'").fetchone()[0] > 0
+    later = "2026-10-12T22:10:00Z"
+    assert cal.record(conn, game_ids=[gid], now=later)["created"] == len(cal.PAIRS[sport])
+    for c in cohorts:
+        vectors, _, _ = agreement_tracking._inputs(conn, c, None, later)
+        names = {cal.name(sport, n, m) for n, m in cal.PAIRS[sport] if m == c["market"]}
+        assert names <= vectors.keys()
+        groups = tracking["markets"][f"{sport}:{c['market']}"]["groups"]
+        assert all(names.isdisjoint(g["members"]) for g in groups)
+        assert names.isdisjoint(selection.all_sources(pool, sport, c["market"]))
+        assert selection.pool_vectors(conn, pool, sport, c, later) == pool_before[c["cohort_id"]]
+    again = agreement_tracking.record(conn, game_ids=[gid], now=later, reg=tracking)
+    assert again["status"] == "success" and again["created"] == 0, again
+    assert again["already_recorded"] == initial["created"]
+    assert [tuple(r) for r in conn.execute("SELECT * FROM agreement_observations ORDER BY observation_id")] == before
+
+
+@pytest.mark.parametrize("finished", ["2026-10-12T22:10:01Z", "2026-10-12T23:00:00Z"])
+def test_real_clock_branch_reads_prior_cohorts_and_checks_completion_time(shadow_cohorts, monkeypatch, finished):
+    conn, sport, gid, _, _ = shadow_cohorts
+    calls = []
+    def clock():
+        calls.append(None)
+        return "2026-10-12T22:10:00Z" if len(calls) == 1 else finished
+    monkeypatch.setattr(cal, "utc_now", clock)
+    result = cal.record(conn, game_ids=[gid])
+    assert not result["errors"], result
+    rows = conn.execute("SELECT * FROM candidate_forecasts").fetchall()
+    if finished < "2026-10-12T23:00:00Z":
+        assert result["status"] == "success" and len(rows) == len(cal.PAIRS[sport]), result
+        assert all(r["generated_at"] == finished and r["generated_at"] > NOW for r in rows)
+    else:
+        assert not rows and result["created"] == 0
+        assert all("at or after tipoff" in s for s in result["skipped"].values())
+        assert len(result["skipped"]) == len(cal.PAIRS[sport])
+        assert conn.execute("SELECT count(*) FROM model_fits").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize("problem", ["future_cutoff", "late_training_result", "current_training_season"])
+def test_unavailable_training_is_rejected_by_both_roster_and_record(shadow_cohorts, problem):
+    conn, sport, gid, art, p = shadow_cohorts
+    nm = next(iter(art["fits"]))
+    if problem == "future_cutoff":
+        art["training_cutoff"] = "2026-10-13T00:00:00Z"
+    elif problem == "late_training_result":
+        art["fits"][nm]["results_available_through"] = "2026-10-02T00:00:00Z"
+    else:
+        art["fits"][nm]["training_seasons"] = [2027]
+    p.write_text(json.dumps({"artifact": art, "sha256": cal.digest(art)}))
+    rows = {r["name"]: r for r in cal.roster(conn, sport, NOW)}
+    assert "unavailable" in rows[nm]["training_status"]
+    result = cal.record(conn, game_ids=[gid], now=NOW)
+    assert f"{nm}:{gid}" in result["skipped"] and not result["errors"], result
+    assert conn.execute("SELECT count(*) FROM candidate_forecasts WHERE candidate=?", (nm,)).fetchone()[0] == 0
+
+
+@pytest.mark.parametrize("problem", ["skipped", "errors", "exception"])
+def test_shadow_problems_are_visible_without_erasing_pool_results(monkeypatch, problem):
+    monkeypatch.setattr(candidates, "record", lambda *a, **k: {
+        "status": "success", "created": 2, "already_recorded": 3, "skipped": {}, "errors": {}})
+    def shadow(*a, **k):
+        if problem == "exception":
+            raise ValueError("test artifact failure")
+        return {"status": "partial", "created": 1, problem: {"calibrated:test": "test unavailable"}}
+    monkeypatch.setattr(cal, "record", shadow)
+    result = jobs.candidate_pool(None, now=NOW)
+    assert result["status"] == "partial"
+    assert result["created"] == 2 and result["already_recorded"] == 3
+    if problem == "exception":
+        assert result["calibrated_shadows"]["status"] == "failed"
+        assert result["errors"]["calibrated_shadows"] == "ValueError: test artifact failure"
+    else:
+        assert result["calibrated_shadows"]["created"] == 1
+        assert result[problem]["calibrated:test"] == "test unavailable"

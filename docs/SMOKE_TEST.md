@@ -625,3 +625,27 @@ current definition; NHL torch/keras/sklearn MLP "trained" and forecasting (curre
 - Readiness: `NBA_DATA_DIR=<empty scratch> /Users/andry/nba-predictor-deep/backend/.venv/bin/python scripts/check_project.py --ready`
   → exit 0, **624 passed, 1 warning (12 m 42 s)**. Focused `test_calibrated_shadows.py` + `test_training_monitor.py`: 15 passed.
   Servers :8017/:5197 stopped afterwards; Codex's :8016/:5196 left running.
+
+## Claims-focused calibrated-shadow review — Devin, after `9d88432`
+- Changes: tests and training-history wording only; no application code, model identity, live data or release change.
+- Baseline command from the repository root:
+  `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=backend NBA_DATA_DIR="$(mktemp -d /private/tmp/devin-calibration-review.XXXXXX)" /Users/andry/nba-predictor-live/backend/.venv/bin/python -m pytest backend/tests/test_calibrated_shadows.py backend/tests/test_candidate_pool.py backend/tests/test_training_monitor.py -q`
+  → **34 passed (21.46 s)** before test strengthening.
+- Mutation reproduction (memory only, no source edits): `unittest.mock.patch.object(cal.study, '_apply', ...)` delegates to the original
+  function with `1 / params` for three-way markets, reversing temperature direction to `p**T`. In-process
+  `pytest.main(['backend/tests/test_calibrated_shadows.py', '-q'])` still returned 0: **all 14 original tests passed**.
+  After adding independent expected values, the same mutation with `-k 'apply_preserves or every_supported_pair' --tb=short`
+  returned 1: **2 intentionally failing tests, 1 passed**. For input `(4/9,4/9,1/9)`, T=2, the wrong result was
+  `(0.484848,0.484848,0.030303)` instead of `(0.4,0.4,0.2)`. The mutation was removed by exiting its patch context/process.
+- Expanded file, normal unmodified application: **29 passed (3.39 s)**. New tests cover actual sealed-registry tracking before/after
+  recording all nine synthetic shadows, pool-vector isolation, the `now=None` clock branch and tipoff refusal, unavailable training,
+  and preservation of existing pool results when a shadow skips, errors or raises. These are not real-game or network-cycle tests.
+- Final command:
+  `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=backend NBA_DATA_DIR="$(mktemp -d /private/tmp/devin-calibration-review.XXXXXX)" /Users/andry/nba-predictor-live/backend/.venv/bin/python -m pytest backend/tests/test_calibrated_shadows.py backend/tests/test_candidate_pool.py backend/tests/test_training_monitor.py backend/tests/test_calibration_study.py backend/tests/test_agreement_tracking.py -q`
+  → **73 passed, 1 warning (61.07 s)**; warning is the existing Starlette/httpx TestClient deprecation.
+- `python3 scripts/check_project.py` and `git diff --check` passed. No full readiness/build/typecheck/browser rerun: application unchanged.
+- Used `db.connect_readonly` and `calibrated.load_artifact` with `NBA_DATA_DIR=/private/tmp/codex-calibrated-shadow-preview` to verify
+  all nine artifact digests, identities, ≥300 games, season restrictions and result ≤ training-cutoff ≤ creation timestamps.
+  Core identities still NBA `ff7e0e9199ca0cf7`, NHL `cb194620c0e6a3c6`; calibration identities still NBA `896aa9930176f03e`, NHL
+  `69b2ba7c05e8cd4c`. Fits include eligible warm-up seasons (NBA efficiency 2021; NHL Poisson 2016–17, GLM 2017), now explicit in
+  MODEL_SELECTION. No artifacts rebuilt. No preview servers started, no release interpreter/environment files modified.

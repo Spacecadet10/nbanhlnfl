@@ -717,8 +717,11 @@ Authorized research-only follow-up to calibration-v1. Register only platt/temper
 or become selector sources. No primary probability changes.
 
 Freeze a calibration artifact per sport, current raw research definition and target season, using only earlier
-out-of-sample forecasts from the already-used development/validation history (minimum 300 decided games per pair).
-Require every training outcome to be available by the declared training cutoff. Reserved test seasons remain untouched.
+out-of-sample forecasts from the already-used warm-up plus development/validation history (minimum 300 decided games
+per pair). The loaders allow NBA 2020–24 and NHL 2016–21; each member's first out-of-sample season further limits its
+eligible rows. Warm-up forecasts may train the calibrator once that member is out of sample; they are not added to the
+study's later comparison seasons. Require every training season to precede the target season and every training outcome
+to be available by the declared training cutoff. Reserved test seasons remain untouched.
 Artifacts are immutable: a retry reuses the same fit; a changed method or raw definition requires a different identity.
 At recording time require artifact creation/training cutoff before the forecast and the current raw definition.
 Apply to the raw member of the exact current core cohort, preserving its line and, for two-way markets, its push mass.

@@ -1,5 +1,15 @@
 # Current handoff
 
+## Claims-focused review of `33a8638` (+ `c4102ba`, `9d88432`) — Devin
+- **Verdict: approve with changes; fixes applied locally to tests/docs, uncommitted.** No runtime defect found. This remains a Devin review (including its own earlier fixes), not the required Codex review or release authorization.
+- **P2 test gap, fixed:** `test_calibrated_shadows.py:38–49,195–218` previously accepted reversed three-way temperature (`p**T`, not `p**(1/T)`): all 14 original tests still passed under an in-memory mutation. Added independently calculated arithmetic/ledger expectations; the same mutation now fails two targeted tests. No application code was changed by the mutation.
+- **P3 claim mismatch, clarified:** MODEL_SELECTION calibrated-shadow-v1 and earlier handoff shorthand omitted eligible warm-up forecasts. Copy artifacts prove NBA efficiency includes 2021; NHL Poisson includes 2016–17 and GLM includes 2017. `_history` loads warm-up plus NBA validation/NHL development, then member OOS/target-season/outcome-cutoff filters apply. This is not reserved-test leakage or a new training method; the registration now states the actual ranges.
+- Added synthetic tests for real-clock recording/completion at tipoff, training-time gates, nested pool error/status preservation, and unchanged sealed tracking observations/pool vectors after shadow insertion (including confirmation that `_inputs` really loads the shadows). Primary job status is intentionally not downgraded by research errors; `partial` refers to the nested pool result, not necessarily the whole job.
+- Actual fresh checks: focused baseline **34 passed**; expanded calibration file **29 passed**; final five-file review suite **73 passed, 1 existing Starlette warning (61.07 s)**. Structure guard and `git diff --check` passed. Commands and mutation evidence in SMOKE_TEST.
+- Read-only inspection of `/private/tmp/codex-calibrated-shadow-preview`: all nine fits have valid digest, expected season ranges, ≥300 games and ordered result/cutoff/creation times. Core and calibration identities unchanged. No fit rebuild needed for these test/doc-only edits.
+- Not rerun: full readiness, frontend build/typecheck, browser checks (application unchanged; Claude's prior 624-test/browser evidence remains historical). No live store, release, `rc-20261004`, deployment, commit or push touched. The earlier approval note is already committed as `9d88432`, superseding its old "uncommitted" wording.
+- Next: review/commit these test/documentation changes; obtain required Codex review and user's release decision. Then prepare live fits from final released code and verify first eligible real-game recording/retry. Bookmaker-line transfer and prospective gain remain unverified.
+
 ## Devin review approval — implementation `33a8638`, review note `c4102ba`
 - **Approved as a local research-only implementation; no additional blocking defect found.** This is Devin's approval, not Codex's required review or permission to deploy. Devin authored part of the fixes; Claude's independent review is recorded below.
 - Verified clean starting worktree and no backend/frontend/scripts changes since `33a8638`; reviewed the final calibration code, integration diff, recording tests and clock ordering. No implementation changes in this review.
@@ -16,7 +26,7 @@
   (selection reads registry names only; agreement tracking does load the shadows into its input map via the shared `research_cohorts:<id>`
   line_ref, but groups read only named members and the registry is sealed, so no observation changes; `latest()` is unused; model-audit only
   lists them); live-cycle timing (cohorts stamped before the overlay reads them); push-mass and 3-way maths; one core cohort per
-  game/market/cycle; idempotent fit registration; training uses validation/development seasons only, min 300 games; job error merge.
+  game/market/cycle; idempotent fit registration; min 300 games; job error merge. **Correction (after Devin's review): training also uses eligible warm-up seasons, not validation/development only; all precede the target season and no reserved test season is read.** My mechanics review also missed that the tests accepted a reversed 3-way temperature formula (Devin found it; I reproduced it).
   Notes, not bugs: overlays also apply to bookmaker-line cohorts (labelled "transfer unverified"); a future tracking group naming a shadow
   would make it a tracked input, so that must be a deliberate registry change.
 - These edits change the calibration identity (it hashes `calibrated.py`), so preview fits were refit on the `/private/tmp` copy only; same game counts.
