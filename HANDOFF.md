@@ -1,5 +1,13 @@
 # Current handoff
 
+## Devin review approval — implementation `33a8638`, review note `c4102ba`
+- **Approved as a local research-only implementation; no additional blocking defect found.** This is Devin's approval, not Codex's required review or permission to deploy. Devin authored part of the fixes; Claude's independent review is recorded below.
+- Verified clean starting worktree and no backend/frontend/scripts changes since `33a8638`; reviewed the final calibration code, integration diff, recording tests and clock ordering. No implementation changes in this review.
+- Evidence: Devin's earlier focused run was 15 passed; Claude records readiness exit 0 / 624 passed plus NBA/NHL desktop/phone browser checks in SMOKE_TEST. Those unchanged checks were not rerun or claimed as independently executed here. Review-time `git diff --check` passed.
+- Supersedes older "uncommitted / then commit" notes: implementation is already committed as `33a8638`. This approval note is left uncommitted.
+- Still pending: required Codex review, user-approved release integration, live fits for the final calibration identity, and a real eligible game's recording/retry check. Bookmaker-line transfer and prospective accuracy remain unverified. No release or live data touched.
+- Next: obtain the remaining review and release decision; after authorized activation, confirm exact cohort linkage and retry idempotency on the first eligible real game without backdating forecasts.
+
 ## Calibrated shadows finished (Devin fixes + verification) — Claude (Opus 5.5), 2026-10-04 ~21:30 EDT
 - Devin took over from Codex, fixed real gaps, then its turn was cancelled before readiness. Fixes (uncommitted, `candidates/calibrated.py`
   + its test): NBA winner and NHL reg3 shadows failed to record (NULL `line_source` vs ledger schema → `"none"`); stricter artifact
