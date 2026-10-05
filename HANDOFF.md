@@ -1,5 +1,19 @@
 # Current handoff
 
+## Agreement review (read-only) — Devin started, Claude (Opus 5.5) finished after Devin stalled, 2026-10-04 ~23:30 EDT
+- **Counting is correct.** Devin's pending checks, run by Claude: agreement/joint/historical-selection tests **39 passed**; Devin's exhaustive
+  script (`combine.agreement` + `agreement_tracking.joint_classify` vs independently stated rules, all 2–8-model winner/3-way vote
+  combinations incl. abstentions and a missing member) **97,213 configurations passed**.
+- **UI wording is accurate:** Game card says "vote count, not a win probability", flags partial cohorts (`n/expected available`) and lists
+  missing models; performance stats use the expected count for majority/unanimous; research view compares agreement with the
+  most-confident picks at the same coverage and labels the best rule as hindsight.
+- **What agreement accuracy does not show (live API :8100, read-only):** NHL samples are tiny — pregame strict majority 8–9 (17 picks),
+  unanimous 7–5 (12); near-tipoff 0–4 / 8–3 by definition; NBA none yet. No conclusion is possible either way. Historically
+  (MODEL_AUDIT §3) winner members correlate 0.90–0.95, so "4 of 4 agree" is far less evidence than four independent opinions.
+- Open (not bugs): (1) MODEL_AUDIT recommendation to show overlap (correlation/pick disagreement) beside "X of Y agree" is **not
+  implemented** in the UI. (2) Tie rule differs slightly: `combine.pick` treats |p−0.5| ≤ 1e-12 as abstention, `agreement.py` Game-card
+  votes use exact `p == .5`; practically negligible, but two definitions. No code changed.
+
 ## Claims-focused review of `33a8638` (+ `c4102ba`, `9d88432`) — Devin
 - **Verdict: approve with changes; fixes applied locally to tests/docs, uncommitted.** No runtime defect found. This remains a Devin review (including its own earlier fixes), not the required Codex review or release authorization.
 - **P2 test gap, fixed:** `test_calibrated_shadows.py:38–49,195–218` previously accepted reversed three-way temperature (`p**T`, not `p**(1/T)`): all 14 original tests still passed under an in-memory mutation. Added independently calculated arithmetic/ledger expectations; the same mutation now fails two targeted tests. No application code was changed by the mutation.
