@@ -1,5 +1,29 @@
 # Current handoff
 
+## Release moved to `a4c466e` — adaptive-v1 active for both sports — Claude (Fable 5.1), 2026-10-08 02:46–04:20 UTC
+- **Deployed commit:** `~/nba-predictor-live` fast-forwarded `f1e0181` → `a4c466e` (adaptive-v1 + review fixes, missed-prediction
+  recovery, default threshold display); app rebuilt, api/web restarted, `release-check` clean for NHL and NBA. Done in the documented
+  window (after the last NHL game started, nightly jobs run, no game within 2 h, job locks free). Exact steps/results in docs/SMOKE_TEST.md.
+- **Backups:** `data/backups/{nba,nhl}-before-release-20261008.sqlite` (quick_check ok, schema 23). **Migration:** both live stores
+  23 → 25 (`0024_adaptive`, `0025_recovery`) from the release checkout; existing rows untouched (`predictions` 9,002 / `market_forecasts`
+  965 NHL as before).
+- **Training (research venv on the release code):** NHL success — 16 fit records, combiner success, period `2027:2026-W41`, 15 members
+  (deep nets keep their season-start fit until 100 current-season results); NBA success — 22 fit records, combiner success, period
+  `2027:2026-W43`, 21 members (deep nets fitted on 8,919 games). Job locks stayed free throughout; the 03:08 UTC NHL odds cycle ran
+  normally during the NHL training.
+- **Scheduler:** `com.nba-predictor.adaptive-train` installed and loaded (09:30 local daily, both sports, research venv, release code;
+  due-only, so it skips until Monday's new period or a partial run).
+- **Recovery:** the first odds cycle after the move reconstructed 3 missed NHL games (18 rows, bounded per cycle) into
+  `recovered_forecasts` only; `/api/recovered-forecasts` shows them as retrospective (winner 2–1), while `/api/thresholds` and the live
+  record are unchanged (winner 32 forecasts, 17–14). NBA: 0 missed eligible games.
+- **What to watch:** first `adaptive_forecasts` rows in the next NHL two-hour cycle (Game page "Adaptive combination" card, status
+  card on Performance → research); Monday's 09:30 run must report "new period … (fit in force: …W41/W43)" and a combiner with
+  `prospective > 0` for NHL; NBA's first live forecasts arrive with the regular season (Oct 20). The Mac must stay awake. No
+  accuracy claim: the adaptive layer is research-tracked, the primary forecasts are unchanged.
+- **Rollback:** `git -C ~/nba-predictor-live checkout -B release f1e0181`, rebuild, kickstart api/web, `launchctl bootout
+  gui/$(id -u)/com.nba-predictor.adaptive-train`; the stores stay at schema 25 (the old release's guard would refuse them — restore the
+  backups above if rolling the schema back as well).
+
 ## Review of Codex's missed-prediction recovery + default thresholds — Claude (Fable 5.1), 2026-10-08 ~01:30 UTC
 - Reviewed `recovery.py`, migration 0025, the jobs/API/UI changes: results limited to `result_available_at ≤ tipoff − 1 s` and the
   game's own result excluded; quotes only if retrieved before the cutoff; append-only table with timestamp CHECKs; separate endpoint
