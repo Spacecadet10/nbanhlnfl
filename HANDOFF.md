@@ -1,5 +1,36 @@
 # Current handoff
 
+## Review of Codex's missed-prediction recovery + default thresholds — Claude (Fable 5.1), 2026-10-08 ~01:30 UTC
+- Reviewed `recovery.py`, migration 0025, the jobs/API/UI changes: results limited to `result_available_at ≤ tipoff − 1 s` and the
+  game's own result excluded; quotes only if retrieved before the cutoff; append-only table with timestamp CHECKs; separate endpoint
+  and card ("Reconstructed, not live"); bounded (3 games) after the live work in the odds cycle; nothing reads it for live win
+  rates, selectors or adaptive training. No defect found; no code changed.
+- Checks: recovery + storage + live + near-tipoff tests **65 passed**; full readiness (research venv) **exit 0, 665 passed**;
+  structure guard, `git diff --check`, frontend typecheck/build passed. Browser on fresh store copies migrated to 0025 with the
+  recovery run (NHL 42 reconstructed rows / 7 games, NBA 0): Performance default view shows the threshold table and the
+  reconstructed card (winner 4–3 at 50%+), live record unchanged (29 scored games); NBA phone width (390-px iframe) empty state,
+  no overflow, no console errors.
+- Committing recovery + default thresholds; next: the authorised release move (both sports) with backups, then verification.
+
+## Missed primary-market recovery — Codex, 2026-10-07
+- Added migration 0025 and `recovery.py`: separate append-only, uniquely keyed retrospective reconstructions for missing primary game/market records from the recorded two-hour job era. Both sports, all supported primary markets; uses only prior-game results available before tipoff minus one second, saved pregame market quotes or explicitly model-generated lines. Current sealed model/current corrected history are labelled retrospective, never original live forecasts. Research/injury/adaptive members are explicitly not reconstructed.
+- Existing periodic odds cycle now finishes current live work first, then recovers up to three missed games, including when no upcoming games exist. Retries do not duplicate; original live ledgers/selectors/training remain separate. API `/api/recovered-forecasts`; Performance shows a distinct reconstructed threshold table and game records below live thresholds.
+- On SQLite backups in `/private/tmp/codex-missed-recovery`: NHL **42 reconstructed primary market forecasts across 7 games**, no errors (~1.94 s); NBA zero missed eligible games. JSON exports `nhl-recovery.json` / `nba-recovery.json`. Live stores NOT migrated or changed; deployed release untouched.
+- Checks: storage **24 passed**, near-tipoff/live **38 passed**, recovery regression covers both sports, own-outcome independence, timestamp filtering, duplicate prevention, live-ledger isolation and cycle ordering. Frontend build/typecheck, structure guard and whitespace passed. Browser servers :8026/:5206 could not bind (EPERM); desktop/phone QA unverified. Full readiness not run; review remains required before activation. Next: review recovery scope/implementation, run full readiness and browser QA, then integrate with deliberate release move (schema 25).
+
+## Feature-status clarification — Codex, 2026-10-07
+- Rechecked release HEAD f1e0181 and absence of adaptive_fits/adaptive_forecasts in both live stores. Explained active online state updates versus season-start weights, research selection, and undeployed adaptive retraining/weight updates and default threshold display. No runtime/data changes. Next remains release/activation decision, not further claims of live adaptation.
+
+## Default threshold display — Codex, 2026-10-07
+- Performance now displays the existing API-backed threshold table above the overall report for the selected market in the default live/two-hour view, NBA and NHL, without enabling research details. Removed duplicate hidden placement; retained model-version/line-source selection, W–L, win rate, intervals, coverage, pending and push/void counts. Added cumulative-threshold explanation. Archive/backtest views do not show live thresholds.
+- Verified: frontend `npm run build` (TypeScript + Vite), `python3 scripts/check_project.py`, `git diff --check` passed. Browser inventory has no tabs; prior preview :5196 connection refused. Desktop/phone visual QA and full readiness not run; no deployment. Next: preview QA and release integration. No backend/training edits.
+
+## Operational status read — Codex, October 7 ~20:15 Toronto
+- Read local stores and release checkout: release remains f1e0181; neither sport has adaptive tables. New adaptive system is committed/reviewed, not active. Mac awake/logged-in dependency remains; forecasts only within pregame two-hour window, no after-start backfill as live.
+- NHL primary threshold totals: winner 16–13, reg3 14–15, puck line 17–12, total 15–14, home team total 15–14, away team total 18–11; two pending per market, no pushes. NBA no live two-hour threshold groups. Team totals are model lines.
+- Latest near-tipoff run started Oct 7 22:59:55 UTC, wrote two primary forecasts but finished with failed agreement/partial research; research explicitly reports finished-after-start skips. Prior cycle has after-tipoff refusals. Sleep causation not established from these logs.
+- No edits to runtime/data. Next: deliberate adaptive activation and resolve always-on execution/late-cycle reliability; prospective accuracy remains unproven.
+
 ## Codex review closure — 2026-10-07, commit e5d6a39
 - Verified committed final publication fix: members publish before combiner; usable member write failures downgrade combiner to partial and leave ordinary retries due. Independent command `PYTHONPATH=backend backend/.venv/bin/python -m pytest backend/tests/test_adaptive.py -q -k "record_write_failure or failing_at_publication"`: **2 passed**, 20 deselected, existing joblib warning, 13.23 s.
 - Last reported blocking review finding closed. Accept the reviewed adaptive implementation for separately tracked research use; this is not evidence of improved prospective accuracy or permission to deploy. Full readiness/browser not repeated for this publication-only fix. Prior author readiness and both-sport synthetic evidence remain as recorded; live next-period operation and deep-enabled activation require follow-up.

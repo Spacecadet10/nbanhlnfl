@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ThresholdResearch } from '../components/ConfidenceFilter';
+import { RecoveredThresholds, ThresholdResearch } from '../components/ConfidenceFilter';
 import { api } from '../api/client';
 import type { MarketId, PerformanceResponse, Policy, Sport } from '../api/types';
 import { useApi } from '../api/useApi';
@@ -34,8 +34,9 @@ export function PerformancePage() {
           ? <MarketSelect value={market} markets={markets} onChange={setMarket} />
           : meta.state.status === 'error' ? <p className="warn small">Market list unavailable: {meta.state.error}</p> : null}
         <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} /></div>
+        {policy === 'near_tipoff' && <><ThresholdResearch sport={sport} market={market} /><RecoveredThresholds sport={sport} market={market} /></>}
         <MarketPerformance sport={sport} market={market} policy={policy} />
-        <ResearchSection sport={sport} market={market} show={details} thresholds={policy === 'near_tipoff'} />
+        <ResearchSection sport={sport} market={market} show={details} />
       </section>
     );
   }
@@ -46,29 +47,29 @@ export function PerformancePage() {
         {(p) => (
           <>
             {p.mode === 'real' && run === 'live' && <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} /></div>}
+            {run === 'live' && policy === 'near_tipoff' && <><ThresholdResearch sport={sport} market={market} /><RecoveredThresholds sport={sport} market={market} /></>}
             <Report perf={p} run={run} setRun={setRun} />
           </>
         )}
       </AsyncView>
       {run === 'live' && policy === 'near_tipoff' && <AgreementReport sport={sport} />}
-      <ResearchSection sport={sport} market={market} show={details} thresholds={run === 'live' && policy === 'near_tipoff'} />
+      <ResearchSection sport={sport} market={market} show={details} />
     </section>
   );
 }
 
 /** Research and model-selection cards: loaded only when research details are shown, so the default page is the record. */
-function ResearchSection({ sport, market, show, thresholds }: { sport: Sport; market: MarketId; show: boolean; thresholds: boolean }) {
+function ResearchSection({ sport, market, show }: { sport: Sport; market: MarketId; show: boolean }) {
   return (
     <>
       <div className="card">
         <h2>Research</h2>
-        <p className="small muted">Model agreement, confidence thresholds, candidate models and the research selector. Research only: none of it is the primary forecast or a betting recommendation.</p>
+        <p className="small muted">Model agreement, candidate models and the research selector. Research only: none of it is the primary forecast or a betting recommendation.</p>
         <DetailsToggle />
         {show && <p><a href="#joint-agreement">Explore model agreement + confidence ranges</a></p>}
       </div>
       <HistoricalStartCard sport={sport} market={market} />
       {show && <>
-        {thresholds && <ThresholdResearch sport={sport} market={market} />}
         <SelectionStatusCard sport={sport} market={market} />
         <ResearchPerformance sport={sport} market={market} />
         <AgreementTracking sport={sport} market={market} />

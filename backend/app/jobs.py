@@ -561,7 +561,22 @@ def daily(conn: sqlite3.Connection, *, force_refresh: bool = False, **refresh_kw
     return out
 
 
+def recover_missed(conn: sqlite3.Connection) -> dict:
+    from . import recovery
+    try:
+        return recovery.recover(conn, limit=3)
+    except Exception as exc:
+        return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+
+
 def forecast_due(conn: sqlite3.Connection) -> dict:
+    # Current pregame windows take priority; then recover a bounded batch of missed primary markets.
+    result = _forecast_due(conn)
+    result["recovery"] = recover_missed(conn)
+    return result
+
+
+def _forecast_due(conn: sqlite3.Connection) -> dict:
     """Called by the existing periodic odds command for both sports; no eligible games means no extra requests."""
     decisions = selector_decisions(conn)
     now = utc_now()

@@ -738,3 +738,16 @@ immutable-mode backup); the live `data/` folder was never opened for writing and
 - `PYTHONPATH=backend backend/.venv/bin/python -m pytest backend/tests/test_adaptive.py -q`: **22 passed** (new: member row write failure →
   combiner partial → due → unforced retry succeeds). `git diff --check`, `python3 scripts/check_project.py`: passed. Publication-path change
   only; no real-copy rerun.
+
+
+## 2026-10-07 default threshold display
+- Existing threshold card moved above overall performance in live/two-hour views for all selected NBA/NHL markets; research toggle no longer required. No new API or data calculation.
+- `cd frontend` then `npm run build`: passed TypeScript + Vite. `python3 scripts/check_project.py` and `git diff --check`: passed.
+- Browser inventory: no tabs; `curl --max-time 3 http://127.0.0.1:5196/performance`: connection refused. Desktop/phone navigation and appearance unverified; full readiness not repeated. Not deployed.
+
+
+## 2026-10-07 missed prediction recovery (local, not activated)
+- `pytest backend/tests/test_storage.py -q`: 24 passed; `pytest backend/tests/test_near_tipoff.py backend/tests/test_live.py -q`: 38 passed. Recovery tests exercise NBA winner and all NHL primary markets, own-outcome independence, timestamps, duplicate prevention, separation and periodic-cycle ordering.
+- `npm run build` in frontend: TypeScript/Vite passed; `python3 scripts/check_project.py` and `git diff --check`: passed.
+- SQLite backup copies only, `/private/tmp/codex-missed-recovery`: NHL 42 rows / 7 games; NBA zero; exports retained as `*-recovery.json`. No live migration or writes.
+- Attempted API `NBA_DATA_DIR=/private/tmp/codex-missed-recovery NBA_API_MODE=real PYTHONPATH=backend backend/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8026`, frontend `API_PROXY_TARGET=http://127.0.0.1:8026 npm run dev -- --host 127.0.0.1 --port 5206`: both failed to bind with EPERM. Browser desktop/phone verification unavailable. Full readiness pending; not release-ready certification.

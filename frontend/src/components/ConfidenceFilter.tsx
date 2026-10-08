@@ -180,7 +180,8 @@ export function RangeRecords({ sport = 'nba', market = 'winner', level, realMode
 export function ThresholdResearch({ sport, market }: { sport: Sport; market: MarketId }) {
   const { state, retry } = useApi(s => api.thresholds(sport, s), [sport]);
   const [selected, setSelected] = useState('');
-  return <div className="card"><h2>Confidence thresholds · Two-hour record</h2>
+  return <div className="card"><h2>Results by confidence threshold · Two-hour record</h2>
+    <p className="small muted">Each row includes picks at or above that confidence: 60%+ also includes 65%, 70% and higher. Win rates exclude pending games and pushes. Small samples do not establish a reliable threshold.</p>
     <AsyncView state={state} retry={retry}>{p => {
       const groups = p.groups.filter(g => g.market === market);
       const key = (g: typeof groups[number]) => `${g.model_version}|${g.line_source}`;
@@ -201,5 +202,26 @@ export function ThresholdResearch({ sport, market }: { sport: Sport; market: Mar
         <p className="small muted">{p.note}</p>
       </>;
     }}</AsyncView>
+  </div>;
+}
+
+
+export function RecoveredThresholds({ sport, market }: { sport: Sport; market: MarketId }) {
+  const { state, retry } = useApi(s => api.recovered(sport, s), [sport]);
+  return <div className="card"><h2>Missed games · Reconstructed, not live</h2>
+    <AsyncView state={state} retry={retry}>{p => <>
+      <p className="notice">{p.note}</p>
+      {p.groups.filter(g => g.market === market).length === 0
+        ? <Empty>{p.status === 'schema not migrated' ? 'Recovery is not activated in this store.' : 'No reconstructed picks for this market yet.'}</Empty>
+        : p.groups.filter(g => g.market === market).map(g => <div key={`${g.model_version}|${g.line_source}`}>
+          <p className="small wrap">{g.model_version} · {g.line_source} lines</p>
+          <div className="table-wrap"><table className="table"><thead><tr><th>Minimum</th><th>W–L</th><th>Win rate</th><th>Pending</th><th>Push / void</th></tr></thead>
+            <tbody>{g.thresholds.map(r => <tr key={r.threshold}><th>{pct(r.threshold)}+</th><td>{r.win}–{r.loss}</td><td>{pct(r.accuracy, 1)}</td><td>{r.pending}</td><td>{r.push} / {r.void}</td></tr>)}</tbody>
+          </table></div>
+        </div>)}
+      <details><summary>Recovered game records</summary><ul className="small">{p.records.filter(r => r.market === market).slice(0, 50).map(r => <li key={r.recovery_id}>
+        {r.game_id} · {r.tipoff_at} · {r.line == null ? 'no line' : `line ${r.line}`} · {r.outcome}
+      </li>)}</ul></details>
+    </>}</AsyncView>
   </div>;
 }
