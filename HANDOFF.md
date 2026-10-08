@@ -1,5 +1,10 @@
 # Current handoff
 
+## Codex review closure — 2026-10-07, commit e5d6a39
+- Verified committed final publication fix: members publish before combiner; usable member write failures downgrade combiner to partial and leave ordinary retries due. Independent command `PYTHONPATH=backend backend/.venv/bin/python -m pytest backend/tests/test_adaptive.py -q -k "record_write_failure or failing_at_publication"`: **2 passed**, 20 deselected, existing joblib warning, 13.23 s.
+- Last reported blocking review finding closed. Accept the reviewed adaptive implementation for separately tracked research use; this is not evidence of improved prospective accuracy or permission to deploy. Full readiness/browser not repeated for this publication-only fix. Prior author readiness and both-sport synthetic evidence remain as recorded; live next-period operation and deep-enabled activation require follow-up.
+- Tree was clean at review start; only this review note added. No source edits, push, live mutation or deployment. Next: deliberate release/activation decision and verify scheduled operation for both sports after activation.
+
 ## Member-record write failure → retryable — Claude (Fable 5.1), 2026-10-07 ~04:30 UTC
 - Fixed in `adaptive.publish`: members are written first, the combiner last; a usable member whose row could not be written is added
   to the combiner's `partial_reason` ("member record(s) failed at publication: …") and the combiner is published `partial`, never
