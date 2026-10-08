@@ -1,0 +1,1684 @@
+{
+ "kind": "adaptive-replay",
+ "version": "adaptive-v1",
+ "sport": "nhl",
+ "started_at": "2026-10-06T00:39:58Z",
+ "finished_at": "2026-10-06T01:13:36Z",
+ "dataset_version": "5da8e01fc710d6a2",
+ "evaluated_seasons": [
+  2018,
+  2019,
+  2020,
+  2021
+ ],
+ "loaded_seasons": [
+  2016,
+  2017,
+  2018,
+  2019,
+  2020,
+  2021
+ ],
+ "exploratory": true,
+ "schedule": {
+  "period": "ISO week of the game's Eastern date",
+  "member": "first forecast of a new period, only when eligible results were delivered since the member's last fit",
+  "deep": "as member, and within a season only once 100 current-season results exist",
+  "combiner": "first forecast of a new period, only when newly settled results exist; L2 chosen on the newest 25% of the training rows from [1.0, 10.0, 100.0, 1000.0]",
+  "live_trigger": "jobs.daily (nightly) when the next eligible game's period differs from the fit in force and new eligible results exist"
+ },
+ "members": [
+  "cand:extra_trees:nhl_base@adaptive",
+  "cand:keras_mlp:nhl_base@adaptive",
+  "cand:logit_l2:nhl_base@adaptive",
+  "cand:mlp:nhl_base@adaptive",
+  "cand:multinomial_l2:nhl_base@adaptive",
+  "cand:poisson_draw:nhl_base@adaptive",
+  "cand:torch_mlp:nhl_base@adaptive",
+  "goals_draw@adaptive",
+  "goals_glm@adaptive",
+  "goals_poisson",
+  "goals_poisson@market",
+  "hockey_elo",
+  "hockey_gbt@adaptive",
+  "hockey_logistic@adaptive",
+  "hockey_logistic_xg@adaptive"
+ ],
+ "excluded": {
+  "hockey_logistic": "season-start version: superseded by its adaptive (within-season refit) version",
+  "hockey_gbt": "season-start version: superseded by its adaptive (within-season refit) version",
+  "hockey_logistic_xg": "season-start version: superseded by its adaptive (within-season refit) version",
+  "goals_draw": "season-start version: superseded by its adaptive (within-season refit) version",
+  "goals_glm": "season-start version: superseded by its adaptive (within-season refit) version",
+  "cand:logit_l2:nhl_goalie": "historical rows use the actual starting goalie (known only after the start): no point-in-time out-of-sample history to learn a weight from",
+  "cand:extra_trees:nhl_goalie": "historical rows use the actual starting goalie (known only after the start): no point-in-time out-of-sample history to learn a weight from",
+  "cand:multinomial_l2:nhl_goalie": "historical rows use the actual starting goalie (known only after the start): no point-in-time out-of-sample history to learn a weight from",
+  "cand:poisson_draw:nhl_goalie": "historical rows use the actual starting goalie (known only after the start): no point-in-time out-of-sample history to learn a weight from"
+ },
+ "seconds": 2018,
+ "member_fits": {
+  "hockey_elo": {
+   "refits_within_season": 0,
+   "skipped_no_new_results": null,
+   "seconds": 0.0
+  },
+  "goals_poisson": {
+   "refits_within_season": 0,
+   "skipped_no_new_results": null,
+   "seconds": 1.0
+  },
+  "hockey_logistic@adaptive": {
+   "refits_within_season": 163,
+   "skipped_no_new_results": 0,
+   "seconds": 9.3
+  },
+  "hockey_gbt@adaptive": {
+   "refits_within_season": 163,
+   "skipped_no_new_results": 0,
+   "seconds": 31.2
+  },
+  "hockey_logistic_xg@adaptive": {
+   "refits_within_season": 163,
+   "skipped_no_new_results": 0,
+   "seconds": 18.5
+  },
+  "goals_poisson@market": {
+   "refits_within_season": 0,
+   "skipped_no_new_results": null,
+   "seconds": 3.2
+  },
+  "goals_draw@adaptive": {
+   "refits_within_season": 163,
+   "skipped_no_new_results": 0,
+   "seconds": 7.8
+  },
+  "goals_glm@adaptive": {
+   "refits_within_season": 163,
+   "skipped_no_new_results": 0,
+   "seconds": 4.4
+  },
+  "cand:logit_l2:nhl_base@adaptive": {
+   "fits": 192,
+   "periods": 204,
+   "kept": 12,
+   "seconds": 2.6,
+   "reasons": [
+    "too few labelled results (0 < 500)",
+    "too few labelled results (119 < 500)",
+    "too few labelled results (168 < 500)",
+    "too few labelled results (214 < 500)",
+    "too few labelled results (259 < 500)",
+    "too few labelled results (306 < 500)",
+    "too few labelled results (31 < 500)",
+    "too few labelled results (354 < 500)",
+    "too few labelled results (403 < 500)",
+    "too few labelled results (447 < 500)",
+    "too few labelled results (498 < 500)",
+    "too few labelled results (77 < 500)"
+   ]
+  },
+  "cand:extra_trees:nhl_base@adaptive": {
+   "fits": 192,
+   "periods": 204,
+   "kept": 12,
+   "seconds": 32.0,
+   "reasons": [
+    "too few labelled results (0 < 500)",
+    "too few labelled results (119 < 500)",
+    "too few labelled results (168 < 500)",
+    "too few labelled results (214 < 500)",
+    "too few labelled results (259 < 500)",
+    "too few labelled results (306 < 500)",
+    "too few labelled results (31 < 500)",
+    "too few labelled results (354 < 500)",
+    "too few labelled results (403 < 500)",
+    "too few labelled results (447 < 500)",
+    "too few labelled results (498 < 500)",
+    "too few labelled results (77 < 500)"
+   ]
+  },
+  "cand:mlp:nhl_base@adaptive": {
+   "fits": 192,
+   "periods": 204,
+   "kept": 12,
+   "seconds": 190.0,
+   "reasons": [
+    "too few labelled results (0 < 500)",
+    "too few labelled results (119 < 500)",
+    "too few labelled results (168 < 500)",
+    "too few labelled results (214 < 500)",
+    "too few labelled results (259 < 500)",
+    "too few labelled results (306 < 500)",
+    "too few labelled results (31 < 500)",
+    "too few labelled results (354 < 500)",
+    "too few labelled results (403 < 500)",
+    "too few labelled results (447 < 500)",
+    "too few labelled results (498 < 500)",
+    "too few labelled results (77 < 500)"
+   ]
+  },
+  "cand:multinomial_l2:nhl_base@adaptive": {
+   "fits": 192,
+   "periods": 204,
+   "kept": 12,
+   "seconds": 3.0,
+   "reasons": [
+    "too few labelled results (0 < 500)",
+    "too few labelled results (119 < 500)",
+    "too few labelled results (168 < 500)",
+    "too few labelled results (214 < 500)",
+    "too few labelled results (259 < 500)",
+    "too few labelled results (306 < 500)",
+    "too few labelled results (31 < 500)",
+    "too few labelled results (354 < 500)",
+    "too few labelled results (403 < 500)",
+    "too few labelled results (447 < 500)",
+    "too few labelled results (498 < 500)",
+    "too few labelled results (77 < 500)"
+   ]
+  },
+  "cand:poisson_draw:nhl_base@adaptive": {
+   "fits": 192,
+   "periods": 204,
+   "kept": 12,
+   "seconds": 16.8,
+   "reasons": [
+    "too few labelled results (0 < 500)",
+    "too few labelled results (119 < 500)",
+    "too few labelled results (168 < 500)",
+    "too few labelled results (214 < 500)",
+    "too few labelled results (259 < 500)",
+    "too few labelled results (306 < 500)",
+    "too few labelled results (31 < 500)",
+    "too few labelled results (354 < 500)",
+    "too few labelled results (403 < 500)",
+    "too few labelled results (447 < 500)",
+    "too few labelled results (498 < 500)",
+    "too few labelled results (77 < 500)"
+   ]
+  },
+  "cand:torch_mlp:nhl_base@adaptive": {
+   "fits": 158,
+   "periods": 204,
+   "kept": 46,
+   "seconds": 88.8,
+   "reasons": [
+    "deep network keeps its fit until 100 current-season results (30 so far)",
+    "deep network keeps its fit until 100 current-season results (31 so far)",
+    "deep network keeps its fit until 100 current-season results (32 so far)",
+    "deep network keeps its fit until 100 current-season results (33 so far)",
+    "deep network keeps its fit until 100 current-season results (73 so far)",
+    "deep network keeps its fit until 100 current-season results (75 so far)",
+    "deep network keeps its fit until 100 current-season results (77 so far)",
+    "deep network keeps its fit until 100 current-season results (80 so far)",
+    "deep network keeps its fit until 100 current-season results (83 so far)",
+    "no earlier season to choose the number of epochs",
+    "too few labelled results (0 < 500)",
+    "too few labelled results (119 < 500)",
+    "too few labelled results (168 < 500)",
+    "too few labelled results (214 < 500)",
+    "too few labelled results (259 < 500)",
+    "too few labelled results (306 < 500)",
+    "too few labelled results (31 < 500)",
+    "too few labelled results (354 < 500)",
+    "too few labelled results (403 < 500)",
+    "too few labelled results (447 < 500)",
+    "too few labelled results (498 < 500)",
+    "too few labelled results (77 < 500)"
+   ]
+  },
+  "cand:keras_mlp:nhl_base@adaptive": {
+   "fits": 158,
+   "periods": 204,
+   "kept": 46,
+   "seconds": 1199.3,
+   "reasons": [
+    "deep network keeps its fit until 100 current-season results (30 so far)",
+    "deep network keeps its fit until 100 current-season results (31 so far)",
+    "deep network keeps its fit until 100 current-season results (32 so far)",
+    "deep network keeps its fit until 100 current-season results (33 so far)",
+    "deep network keeps its fit until 100 current-season results (73 so far)",
+    "deep network keeps its fit until 100 current-season results (75 so far)",
+    "deep network keeps its fit until 100 current-season results (77 so far)",
+    "deep network keeps its fit until 100 current-season results (80 so far)",
+    "deep network keeps its fit until 100 current-season results (83 so far)",
+    "no earlier season to choose the number of epochs",
+    "too few labelled results (0 < 500)",
+    "too few labelled results (119 < 500)",
+    "too few labelled results (168 < 500)",
+    "too few labelled results (214 < 500)",
+    "too few labelled results (259 < 500)",
+    "too few labelled results (306 < 500)",
+    "too few labelled results (31 < 500)",
+    "too few labelled results (354 < 500)",
+    "too few labelled results (403 < 500)",
+    "too few labelled results (447 < 500)",
+    "too few labelled results (498 < 500)",
+    "too few labelled results (77 < 500)"
+   ]
+  }
+ },
+ "markets": {
+  "winner": {
+   "primary": "hockey_elo",
+   "core_members": [
+    "hockey_elo",
+    "goals_poisson",
+    "hockey_logistic",
+    "hockey_gbt"
+   ],
+   "adaptive_members": [
+    "hockey_elo",
+    "goals_poisson",
+    "hockey_logistic@adaptive",
+    "hockey_gbt@adaptive",
+    "hockey_logistic_xg@adaptive",
+    "cand:logit_l2:nhl_base@adaptive",
+    "cand:extra_trees:nhl_base@adaptive",
+    "cand:mlp:nhl_base@adaptive",
+    "cand:multinomial_l2:nhl_base@adaptive",
+    "cand:poisson_draw:nhl_base@adaptive",
+    "cand:torch_mlp:nhl_base@adaptive",
+    "cand:keras_mlp:nhl_base@adaptive"
+   ],
+   "evaluated_games": 4877,
+   "scored_games": 4877,
+   "pushes": 0,
+   "coverage": {
+    "primary": 1.0,
+    "average": 1.0,
+    "stack": 1.0,
+    "adaptive_core": 1.0,
+    "adaptive": 1.0
+   },
+   "sources": {
+    "primary": {
+     "n": 4877,
+     "accuracy": 0.5769940537215501,
+     "accuracy_ci95": [
+      0.5630734374907186,
+      0.590793473845535
+     ],
+     "log_loss": 0.6742654971372312,
+     "brier": 0.4814346232551687,
+     "calibration": [
+      {
+       "n": 3441,
+       "mean_p": 0.5475314294507388,
+       "win_rate": 0.5469340308049986
+      },
+      {
+       "n": 1317,
+       "mean_p": 0.6374980409035689,
+       "win_rate": 0.6400911161731208
+      },
+      {
+       "n": 118,
+       "mean_p": 0.7241494399152539,
+       "win_rate": 0.7542372881355932
+      },
+      {
+       "n": 1,
+       "mean_p": 0.80117629,
+       "win_rate": 0.0
+      }
+     ]
+    },
+    "average": {
+     "n": 4877,
+     "accuracy": 0.579454582735288,
+     "accuracy_ci95": [
+      0.5655429553457343,
+      0.5932411409067246
+     ],
+     "log_loss": 0.6748742939765331,
+     "brier": 0.48201365093390525,
+     "calibration": [
+      {
+       "n": 3324,
+       "mean_p": 0.5454930112902827,
+       "win_rate": 0.5505415162454874
+      },
+      {
+       "n": 1406,
+       "mean_p": 0.6412687750309336,
+       "win_rate": 0.6337126600284495
+      },
+      {
+       "n": 147,
+       "mean_p": 0.7186074921002152,
+       "win_rate": 0.7142857142857143
+      }
+     ]
+    },
+    "stack": {
+     "n": 4877,
+     "accuracy": 0.5761738773836375,
+     "accuracy_ci95": [
+      0.5622503431037522,
+      0.5899775065937665
+     ],
+     "log_loss": 0.6744156238150993,
+     "brier": 0.4815751473029191,
+     "calibration": [
+      {
+       "n": 3005,
+       "mean_p": 0.5495515264782318,
+       "win_rate": 0.5397670549084859
+      },
+      {
+       "n": 1625,
+       "mean_p": 0.6384160942474081,
+       "win_rate": 0.6221538461538462
+      },
+      {
+       "n": 240,
+       "mean_p": 0.7301725169939381,
+       "win_rate": 0.7125
+      },
+      {
+       "n": 7,
+       "mean_p": 0.8201453378098323,
+       "win_rate": 0.8571428571428571
+      }
+     ]
+    },
+    "adaptive_core": {
+     "n": 4877,
+     "accuracy": 0.5798646709042444,
+     "accuracy_ci95": [
+      0.565954575921581,
+      0.5936490511502456
+     ],
+     "log_loss": 0.674954898847529,
+     "brier": 0.48206501111642985,
+     "calibration": [
+      {
+       "n": 3312,
+       "mean_p": 0.5477989327490951,
+       "win_rate": 0.5501207729468599
+      },
+      {
+       "n": 1409,
+       "mean_p": 0.6375937253782826,
+       "win_rate": 0.6337828246983677
+      },
+      {
+       "n": 154,
+       "mean_p": 0.7244431989350655,
+       "win_rate": 0.7207792207792207
+      },
+      {
+       "n": 2,
+       "mean_p": 0.8034156800000001,
+       "win_rate": 1.0
+      }
+     ]
+    },
+    "adaptive": {
+     "n": 4877,
+     "accuracy": 0.5817100676645479,
+     "accuracy_ci95": [
+      0.5678069898564834,
+      0.5954845259024971
+     ],
+     "log_loss": 0.6731282413477504,
+     "brier": 0.4803432537543997,
+     "calibration": [
+      {
+       "n": 3210,
+       "mean_p": 0.5469435541323994,
+       "win_rate": 0.5473520249221184
+      },
+      {
+       "n": 1478,
+       "mean_p": 0.639216904218539,
+       "win_rate": 0.6359945872801083
+      },
+      {
+       "n": 185,
+       "mean_p": 0.7243619113297298,
+       "win_rate": 0.7405405405405405
+      },
+      {
+       "n": 4,
+       "mean_p": 0.8034929887500001,
+       "win_rate": 0.75
+      }
+     ]
+    }
+   },
+   "paired": {
+    "adaptive_minus_primary": {
+     "mean": -0.001137255789480739,
+     "ci95": [
+      -0.0030525486210690356,
+      0.0008244285096153059
+     ],
+     "per_season": {
+      "2018": 0.0003327806528792138,
+      "2019": -0.0017471178107660835,
+      "2020": -0.000786742006455322,
+      "2021": -0.0028058791713284742
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 4877
+    },
+    "adaptive_minus_average": {
+     "mean": -0.0017460526287827278,
+     "ci95": [
+      -0.003597518851202849,
+      0.00025100946950939844
+     ],
+     "per_season": {
+      "2018": -0.0006491376661327986,
+      "2019": -0.0020940744830436476,
+      "2020": -0.0022290901907539252,
+      "2021": -0.002195910371634864
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 4877
+    },
+    "adaptive_minus_stack": {
+     "mean": -0.0012873824673488895,
+     "ci95": [
+      -0.0033137744366733527,
+      0.0007087294950299387
+     ],
+     "per_season": {
+      "2018": 0.001224984755253653,
+      "2019": -0.0024159087708871692,
+      "2020": -0.0016632631275516425,
+      "2021": -0.0027749365705586845
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 4877
+    },
+    "adaptive_minus_adaptive_core": {
+     "mean": -0.0018266574997786878,
+     "ci95": [
+      -0.00364978726512052,
+      -1.4097552366054677e-05
+     ],
+     "per_season": {
+      "2018": -0.0004363813043102133,
+      "2019": -0.0034763451896840537,
+      "2020": -0.0013215230656052704,
+      "2021": -0.00209532482770566
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 4877
+    }
+   },
+   "single_members_log_loss": {
+    "hockey_elo": 0.6742654971372312,
+    "goals_poisson": 0.6780534932198231,
+    "hockey_logistic@adaptive": 0.674043686036382,
+    "hockey_gbt@adaptive": 0.6793315784381362,
+    "hockey_logistic_xg@adaptive": 0.6718720260248897,
+    "cand:logit_l2:nhl_base@adaptive": 0.6722477365979521,
+    "cand:extra_trees:nhl_base@adaptive": 0.6745178885639048,
+    "cand:mlp:nhl_base@adaptive": 0.672837436598646,
+    "cand:multinomial_l2:nhl_base@adaptive": 0.6723047296211677,
+    "cand:poisson_draw:nhl_base@adaptive": 0.6742869557467069,
+    "cand:torch_mlp:nhl_base@adaptive": 0.6730096127133804,
+    "cand:keras_mlp:nhl_base@adaptive": 0.6737225813249482
+   },
+   "adaptive_fit_count": 133,
+   "adaptive_weights_last": {
+    "hockey_elo": 0.13265711381844525,
+    "goals_poisson": -0.0172755939163728,
+    "hockey_logistic@adaptive": 0.06824493328866336,
+    "hockey_gbt@adaptive": -0.12096943012205719,
+    "hockey_logistic_xg@adaptive": 0.17344220731983132,
+    "cand:logit_l2:nhl_base@adaptive": 0.14417693003960325,
+    "cand:extra_trees:nhl_base@adaptive": 0.018746406294877845,
+    "cand:mlp:nhl_base@adaptive": 0.09665159357895257,
+    "cand:multinomial_l2:nhl_base@adaptive": 0.1834075899993672,
+    "cand:poisson_draw:nhl_base@adaptive": 0.11673251038935514,
+    "cand:torch_mlp:nhl_base@adaptive": 0.145906551450127,
+    "cand:keras_mlp:nhl_base@adaptive": 0.10969053733813272
+   },
+   "adaptive_excluded_last": {},
+   "adaptive_l2_last": 10.0
+  },
+  "reg3": {
+   "primary": "goals_poisson",
+   "core_members": [
+    "goals_poisson",
+    "goals_draw",
+    "goals_glm"
+   ],
+   "adaptive_members": [
+    "goals_poisson@market",
+    "goals_draw@adaptive",
+    "goals_glm@adaptive",
+    "cand:multinomial_l2:nhl_base@adaptive",
+    "cand:poisson_draw:nhl_base@adaptive"
+   ],
+   "evaluated_games": 4877,
+   "scored_games": 4846,
+   "pushes": 0,
+   "coverage": {
+    "primary": 1.0,
+    "average": 1.0,
+    "stack": 1.0,
+    "adaptive_core": 0.993643633381177,
+    "adaptive": 1.0
+   },
+   "sources": {
+    "primary": {
+     "n": 4846,
+     "accuracy": 0.4541890218737103,
+     "accuracy_ci95": [
+      0.44021249793361156,
+      0.46823811766601336
+     ],
+     "log_loss": 1.0633495709540277,
+     "brier": 0.6404653878384289,
+     "calibration": [
+      {
+       "n": 2129,
+       "mean_p": 0.4391585972170141,
+       "win_rate": 0.4124001878816346
+      },
+      {
+       "n": 2609,
+       "mean_p": 0.5122387206738455,
+       "win_rate": 0.48332694518972785
+      },
+      {
+       "n": 108,
+       "mean_p": 0.6207805350450973,
+       "win_rate": 0.5740740740740741
+      }
+     ]
+    },
+    "average": {
+     "n": 4846,
+     "accuracy": 0.45810978126289725,
+     "accuracy_ci95": [
+      0.444120444556622,
+      0.4721654787169089
+     ],
+     "log_loss": 1.0551959550209948,
+     "brier": 0.6362705772312309,
+     "calibration": [
+      {
+       "n": 2629,
+       "mean_p": 0.4344286189887549,
+       "win_rate": 0.4214530239634842
+      },
+      {
+       "n": 2179,
+       "mean_p": 0.5093580691232349,
+       "win_rate": 0.5006883891693438
+      },
+      {
+       "n": 38,
+       "mean_p": 0.6229772055241307,
+       "win_rate": 0.5526315789473685
+      }
+     ]
+    },
+    "stack": {
+     "n": 4846,
+     "accuracy": 0.4572843582335947,
+     "accuracy_ci95": [
+      0.4432976462799941,
+      0.4713387385358723
+     ],
+     "log_loss": 1.0508613914750429,
+     "brier": 0.634172516569569,
+     "calibration": [
+      {
+       "n": 2760,
+       "mean_p": 0.4235836501254797,
+       "win_rate": 0.41739130434782606
+      },
+      {
+       "n": 1959,
+       "mean_p": 0.5139095215863724,
+       "win_rate": 0.5068912710566615
+      },
+      {
+       "n": 127,
+       "mean_p": 0.6300241532476839,
+       "win_rate": 0.5590551181102362
+      }
+     ]
+    },
+    "adaptive_core": {
+     "n": 4846,
+     "accuracy": 0.4599669830788279,
+     "accuracy_ci95": [
+      0.4459718822486001,
+      0.4740255025546756
+     ],
+     "log_loss": 1.0516427318076427,
+     "brier": 0.6346017901048312,
+     "calibration": [
+      {
+       "n": 3028,
+       "mean_p": 0.4241440662886396,
+       "win_rate": 0.43130779392338175
+      },
+      {
+       "n": 1762,
+       "mean_p": 0.5099566365062431,
+       "win_rate": 0.5068104426787742
+      },
+      {
+       "n": 56,
+       "mean_p": 0.6241594604285714,
+       "win_rate": 0.5357142857142857
+      }
+     ]
+    },
+    "adaptive": {
+     "n": 4846,
+     "accuracy": 0.463268675196038,
+     "accuracy_ci95": [
+      0.449263810563038,
+      0.4773317280708955
+     ],
+     "log_loss": 1.0486813189780795,
+     "brier": 0.6324162994688859,
+     "calibration": [
+      {
+       "n": 2960,
+       "mean_p": 0.4243363466206086,
+       "win_rate": 0.4347972972972973
+      },
+      {
+       "n": 1794,
+       "mean_p": 0.5118479587062428,
+       "win_rate": 0.49944258639910816
+      },
+      {
+       "n": 92,
+       "mean_p": 0.6296771593913043,
+       "win_rate": 0.6739130434782609
+      }
+     ]
+    }
+   },
+   "paired": {
+    "adaptive_minus_primary": {
+     "mean": -0.014668251975948201,
+     "ci95": [
+      -0.019139753952468624,
+      -0.010392320253019142
+     ],
+     "per_season": {
+      "2018": -0.014122597397380173,
+      "2019": -0.009691463481534962,
+      "2020": -0.015443093914710299,
+      "2021": -0.021539908496596923
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 4846
+    },
+    "adaptive_minus_average": {
+     "mean": -0.006514636042915463,
+     "ci95": [
+      -0.009421202268861447,
+      -0.00371367734160985
+     ],
+     "per_season": {
+      "2018": -0.004855016829426313,
+      "2019": -0.0026811644463318363,
+      "2020": -0.007674355008604377,
+      "2021": -0.012814647471912554
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 4846
+    },
+    "adaptive_minus_stack": {
+     "mean": -0.002180072496963406,
+     "ci95": [
+      -0.004284166251797539,
+      -1.1642131580728176e-06
+     ],
+     "per_season": {
+      "2018": -0.0022389557681748097,
+      "2019": -0.0006049169227778135,
+      "2020": -0.002310942757151564,
+      "2021": -0.004178481176913079
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 4846
+    },
+    "adaptive_minus_adaptive_core": {
+     "mean": -0.002961412829563348,
+     "ci95": [
+      -0.004620390516640957,
+      -0.001342732149666886
+     ],
+     "per_season": {
+      "2018": -0.0017480738725772639,
+      "2019": -0.002490626242499556,
+      "2020": -0.0026299165844920185,
+      "2021": -0.005742465784719501
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 4846
+    }
+   },
+   "single_members_log_loss": {
+    "goals_poisson@market": 1.0618596468556496,
+    "goals_draw@adaptive": 1.0524927729455036,
+    "goals_glm@adaptive": 1.0588070655870865,
+    "cand:multinomial_l2:nhl_base@adaptive": 1.0483413343208234,
+    "cand:poisson_draw:nhl_base@adaptive": 1.0480932051126337
+   },
+   "adaptive_fit_count": 133,
+   "adaptive_weights_last": {
+    "goals_poisson@market": 0.10933340423488018,
+    "goals_draw@adaptive": -0.0837902531167401,
+    "goals_glm@adaptive": 0.08689513076118201,
+    "cand:multinomial_l2:nhl_base@adaptive": 0.4494352267598093,
+    "cand:poisson_draw:nhl_base@adaptive": 0.5825391635347027
+   },
+   "adaptive_excluded_last": {},
+   "adaptive_l2_last": 1.0
+  },
+  "spread": {
+   "primary": "goals_poisson",
+   "core_members": [
+    "goals_poisson",
+    "goals_draw",
+    "goals_glm"
+   ],
+   "adaptive_members": [
+    "goals_poisson@market",
+    "goals_draw@adaptive",
+    "goals_glm@adaptive",
+    "cand:poisson_draw:nhl_base@adaptive"
+   ],
+   "evaluated_games": 4877,
+   "scored_games": 4846,
+   "pushes": 0,
+   "coverage": {
+    "primary": 1.0,
+    "average": 1.0,
+    "stack": 1.0,
+    "adaptive_core": 0.993643633381177,
+    "adaptive": 1.0
+   },
+   "sources": {
+    "primary": {
+     "n": 4846,
+     "accuracy": 0.5598431696244325,
+     "accuracy_ci95": [
+      0.5458248898748679,
+      0.5737666483058024
+     ],
+     "log_loss": 0.6829882043151372,
+     "brier": 0.48989419514428084,
+     "calibration": [
+      {
+       "n": 4022,
+       "mean_p": 0.5482215712185857,
+       "win_rate": 0.552710094480358
+      },
+      {
+       "n": 824,
+       "mean_p": 0.6122268658215474,
+       "win_rate": 0.5946601941747572
+      }
+     ]
+    },
+    "average": {
+     "n": 4846,
+     "accuracy": 0.5666529096161783,
+     "accuracy_ci95": [
+      0.5526536567127884,
+      0.5805465737436133
+     ],
+     "log_loss": 0.6812806013069022,
+     "brier": 0.488215108771562,
+     "calibration": [
+      {
+       "n": 4284,
+       "mean_p": 0.5485085692705469,
+       "win_rate": 0.5597572362278245
+      },
+      {
+       "n": 562,
+       "mean_p": 0.6121868061210706,
+       "win_rate": 0.6192170818505338
+      }
+     ]
+    },
+    "stack": {
+     "n": 4846,
+     "accuracy": 0.5674783326454808,
+     "accuracy_ci95": [
+      0.5534815677958403,
+      0.5813682011182256
+     ],
+     "log_loss": 0.680316159593753,
+     "brier": 0.48725619989259805,
+     "calibration": [
+      {
+       "n": 3396,
+       "mean_p": 0.5492995467764232,
+       "win_rate": 0.5441696113074205
+      },
+      {
+       "n": 1408,
+       "mean_p": 0.6337641302903415,
+       "win_rate": 0.6221590909090909
+      },
+      {
+       "n": 42,
+       "mean_p": 0.7171296849616278,
+       "win_rate": 0.6190476190476191
+      }
+     ]
+    },
+    "adaptive_core": {
+     "n": 4846,
+     "accuracy": 0.5697482459760628,
+     "accuracy_ci95": [
+      0.5557585264613826,
+      0.5836274732112608
+     ],
+     "log_loss": 0.6811235978642405,
+     "brier": 0.48801607903642863,
+     "calibration": [
+      {
+       "n": 3715,
+       "mean_p": 0.5486749331919241,
+       "win_rate": 0.5553162853297443
+      },
+      {
+       "n": 1121,
+       "mean_p": 0.6261649871971459,
+       "win_rate": 0.6199821587867975
+      },
+      {
+       "n": 10,
+       "mean_p": 0.7145691097999999,
+       "win_rate": 0.3
+      }
+     ]
+    },
+    "adaptive": {
+     "n": 4846,
+     "accuracy": 0.5751134956665291,
+     "accuracy_ci95": [
+      0.5611416162583625,
+      0.5889663833890997
+     ],
+     "log_loss": 0.6801143866570089,
+     "brier": 0.4870328212372404,
+     "calibration": [
+      {
+       "n": 3687,
+       "mean_p": 0.5482837858266882,
+       "win_rate": 0.5603471657173854
+      },
+      {
+       "n": 1150,
+       "mean_p": 0.6266449854478273,
+       "win_rate": 0.6243478260869565
+      },
+      {
+       "n": 9,
+       "mean_p": 0.7101316555555556,
+       "win_rate": 0.3333333333333333
+      }
+     ]
+    }
+   },
+   "paired": {
+    "adaptive_minus_primary": {
+     "mean": -0.002873817658128416,
+     "ci95": [
+      -0.004546702851637525,
+      -0.0011423324463007908
+     ],
+     "per_season": {
+      "2018": -0.004000273144945251,
+      "2019": -0.0007950084917196281,
+      "2020": -0.0021429790387198274,
+      "2021": -0.0052029901267847765
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 4846
+    },
+    "adaptive_minus_average": {
+     "mean": -0.0011662146498932872,
+     "ci95": [
+      -0.002547389309976915,
+      0.0003135065950142064
+     ],
+     "per_season": {
+      "2018": -0.0015457796023569783,
+      "2019": 0.0005390538848530334,
+      "2020": -0.001247032060703387,
+      "2021": -0.00296795831714301
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 4846
+    },
+    "adaptive_minus_stack": {
+     "mean": -0.00020177293674419726,
+     "ci95": [
+      -0.0017276149302994704,
+      0.0013495414639284758
+     ],
+     "per_season": {
+      "2018": 0.0009666510320929984,
+      "2019": -3.776251203442931e-05,
+      "2020": -0.0018660085747590823,
+      "2021": 5.803179201392112e-05
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 4846
+    },
+    "adaptive_minus_adaptive_core": {
+     "mean": -0.0010092112072316794,
+     "ci95": [
+      -0.002177360171454166,
+      0.00018158902833233074
+     ],
+     "per_season": {
+      "2018": -0.0008747691652770703,
+      "2019": -0.0006902087398653344,
+      "2020": -0.0008354087259714393,
+      "2021": -0.0018725045071463957
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 4846
+    }
+   },
+   "single_members_log_loss": {
+    "goals_poisson@market": 0.6832990973288146,
+    "goals_draw@adaptive": 0.6832479280174665,
+    "goals_glm@adaptive": 0.6803626128056126,
+    "cand:poisson_draw:nhl_base@adaptive": 0.6806492729020418
+   },
+   "adaptive_fit_count": 133,
+   "adaptive_weights_last": {
+    "goals_poisson@market": 0.6071229219714958,
+    "goals_draw@adaptive": -0.5950680591392038,
+    "goals_glm@adaptive": 0.5716193069547626,
+    "cand:poisson_draw:nhl_base@adaptive": 0.589401143277692
+   },
+   "adaptive_excluded_last": {},
+   "adaptive_l2_last": 1.0
+  },
+  "total": {
+   "primary": "goals_poisson",
+   "core_members": [
+    "goals_poisson",
+    "goals_draw",
+    "goals_glm"
+   ],
+   "adaptive_members": [
+    "goals_poisson@market",
+    "goals_draw@adaptive",
+    "goals_glm@adaptive",
+    "cand:poisson_draw:nhl_base@adaptive"
+   ],
+   "evaluated_games": 4877,
+   "scored_games": 4846,
+   "pushes": 0,
+   "coverage": {
+    "primary": 1.0,
+    "average": 1.0,
+    "stack": 1.0,
+    "adaptive_core": 0.993643633381177,
+    "adaptive": 1.0
+   },
+   "sources": {
+    "primary": {
+     "n": 4846,
+     "accuracy": 0.5303342963268676,
+     "accuracy_ci95": [
+      0.5162642182007802,
+      0.5443563201183872
+     ],
+     "log_loss": 0.6907852630317711,
+     "brier": 0.49763826709537323,
+     "calibration": [
+      {
+       "n": 4705,
+       "mean_p": 0.5330508186261687,
+       "win_rate": 0.5292242295430393
+      },
+      {
+       "n": 141,
+       "mean_p": 0.6100258368183645,
+       "win_rate": 0.5673758865248227
+      }
+     ]
+    },
+    "average": {
+     "n": 4846,
+     "accuracy": 0.5266198926950062,
+     "accuracy_ci95": [
+      0.5125467978144219,
+      0.5406508174452554
+     ],
+     "log_loss": 0.6920458569702116,
+     "brier": 0.49890833180847444,
+     "calibration": [
+      {
+       "n": 4766,
+       "mean_p": 0.534782364227748,
+       "win_rate": 0.5237096097356274
+      },
+      {
+       "n": 80,
+       "mean_p": 0.6316777199627126,
+       "win_rate": 0.7
+      }
+     ]
+    },
+    "stack": {
+     "n": 4846,
+     "accuracy": 0.5290961617829137,
+     "accuracy_ci95": [
+      0.5150249914250695,
+      0.5431212392076012
+     ],
+     "log_loss": 0.6912767507994563,
+     "brier": 0.4981429975153443,
+     "calibration": [
+      {
+       "n": 4709,
+       "mean_p": 0.5357310093775642,
+       "win_rate": 0.5266510936504566
+      },
+      {
+       "n": 136,
+       "mean_p": 0.6348278225358193,
+       "win_rate": 0.6102941176470589
+      },
+      {
+       "n": 1,
+       "mean_p": 0.7123145696639137,
+       "win_rate": 1.0
+      }
+     ]
+    },
+    "adaptive_core": {
+     "n": 4846,
+     "accuracy": 0.5344614114733801,
+     "accuracy_ci95": [
+      0.5203956004965351,
+      0.5484726301109544
+     ],
+     "log_loss": 0.6913240266543871,
+     "brier": 0.4982046152975903,
+     "calibration": [
+      {
+       "n": 4765,
+       "mean_p": 0.5331290613926553,
+       "win_rate": 0.531794333683106
+      },
+      {
+       "n": 80,
+       "mean_p": 0.6485884396374997,
+       "win_rate": 0.6875
+      },
+      {
+       "n": 1,
+       "mean_p": 0.711068558,
+       "win_rate": 1.0
+      }
+     ]
+    },
+    "adaptive": {
+     "n": 4846,
+     "accuracy": 0.5305406520841931,
+     "accuracy_ci95": [
+      0.5164707644245999,
+      0.5445621585089834
+     ],
+     "log_loss": 0.6910662193039082,
+     "brier": 0.4979546695490147,
+     "calibration": [
+      {
+       "n": 4760,
+       "mean_p": 0.5323814653722678,
+       "win_rate": 0.5275210084033614
+      },
+      {
+       "n": 81,
+       "mean_p": 0.650823457493827,
+       "win_rate": 0.6790123456790124
+      },
+      {
+       "n": 5,
+       "mean_p": 0.7046505035999999,
+       "win_rate": 1.0
+      }
+     ]
+    }
+   },
+   "paired": {
+    "adaptive_minus_primary": {
+     "mean": 0.00028095627213696505,
+     "ci95": [
+      -0.0008228394080259561,
+      0.0013495164498943861
+     ],
+     "per_season": {
+      "2018": 0.0008015562064062313,
+      "2019": 0.0003298343500391787,
+      "2020": -5.090271766640081e-06,
+      "2021": -0.00014862600890562476
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 4846
+    },
+    "adaptive_minus_average": {
+     "mean": -0.0009796376663034128,
+     "ci95": [
+      -0.002213664581072508,
+      0.0002751154404464595
+     ],
+     "per_season": {
+      "2018": -0.0005344308935742531,
+      "2019": -0.0011245755208356613,
+      "2020": -0.001656894587875326,
+      "2021": -0.0005298401575780516
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 4846
+    },
+    "adaptive_minus_stack": {
+     "mean": -0.00021053149554816687,
+     "ci95": [
+      -0.0011306563610783782,
+      0.0006407901038182458
+     ],
+     "per_season": {
+      "2018": -0.001066465190883762,
+      "2019": 0.00048047118813726597,
+      "2020": -0.001072466471837422,
+      "2021": 0.0010915060668910009
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 4846
+    },
+    "adaptive_minus_adaptive_core": {
+     "mean": -0.0002578073504789153,
+     "ci95": [
+      -0.0006812064280580925,
+      0.00013527238075376828
+     ],
+     "per_season": {
+      "2018": -0.00045568314667179707,
+      "2019": 0.00024090409105478343,
+      "2020": -0.00034964095935901494,
+      "2021": -0.0005770933268241952
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 4846
+    }
+   },
+   "single_members_log_loss": {
+    "goals_poisson@market": 0.6906293297576198,
+    "goals_draw@adaptive": 0.6907363927940802,
+    "goals_glm@adaptive": 0.6989668572758376,
+    "cand:poisson_draw:nhl_base@adaptive": 0.6932880713048404
+   },
+   "adaptive_fit_count": 133,
+   "adaptive_weights_last": {
+    "goals_poisson@market": 0.26173364937790816,
+    "goals_draw@adaptive": 0.36684793582453823,
+    "goals_glm@adaptive": -0.2157257412046103,
+    "cand:poisson_draw:nhl_base@adaptive": 0.6751038373686113
+   },
+   "adaptive_excluded_last": {},
+   "adaptive_l2_last": 1.0
+  },
+  "team_total_home": {
+   "primary": "goals_poisson",
+   "core_members": [
+    "goals_poisson",
+    "goals_draw",
+    "goals_glm"
+   ],
+   "adaptive_members": [
+    "goals_poisson@market",
+    "goals_draw@adaptive",
+    "goals_glm@adaptive",
+    "cand:poisson_draw:nhl_base@adaptive"
+   ],
+   "evaluated_games": 4877,
+   "scored_games": 4846,
+   "pushes": 0,
+   "coverage": {
+    "primary": 1.0,
+    "average": 1.0,
+    "stack": 1.0,
+    "adaptive_core": 0.993643633381177,
+    "adaptive": 1.0
+   },
+   "sources": {
+    "primary": {
+     "n": 4846,
+     "accuracy": 0.5703673132480396,
+     "accuracy_ci95": [
+      0.5563795669623933,
+      0.5842435865534982
+     ],
+     "log_loss": 0.6804880621526705,
+     "brier": 0.4874139398399319,
+     "calibration": [
+      {
+       "n": 4127,
+       "mean_p": 0.5570183155391325,
+       "win_rate": 0.5633632178337775
+      },
+      {
+       "n": 719,
+       "mean_p": 0.6065705787660863,
+       "win_rate": 0.6105702364394993
+      }
+     ]
+    },
+    "average": {
+     "n": 4846,
+     "accuracy": 0.5701609574907139,
+     "accuracy_ci95": [
+      0.5561725509947536,
+      0.5840382179067217
+     ],
+     "log_loss": 0.6805687838853577,
+     "brier": 0.4874979973108772,
+     "calibration": [
+      {
+       "n": 4063,
+       "mean_p": 0.5584027181504623,
+       "win_rate": 0.5653458035934039
+      },
+      {
+       "n": 783,
+       "mean_p": 0.6117643380581345,
+       "win_rate": 0.5951468710089399
+      }
+     ]
+    },
+    "stack": {
+     "n": 4846,
+     "accuracy": 0.5639702847709451,
+     "accuracy_ci95": [
+      0.5499632174123182,
+      0.5778760130566741
+     ],
+     "log_loss": 0.6817779659950498,
+     "brier": 0.48869051842929684,
+     "calibration": [
+      {
+       "n": 4077,
+       "mean_p": 0.552361473862964,
+       "win_rate": 0.5521216580819229
+      },
+      {
+       "n": 769,
+       "mean_p": 0.6161762896573293,
+       "win_rate": 0.6267880364109233
+      }
+     ]
+    },
+    "adaptive_core": {
+     "n": 4846,
+     "accuracy": 0.5689228229467602,
+     "accuracy_ci95": [
+      0.5549305069901078,
+      0.5828059542248711
+     ],
+     "log_loss": 0.680570368004713,
+     "brier": 0.48750364132452023,
+     "calibration": [
+      {
+       "n": 4213,
+       "mean_p": 0.5566272790868735,
+       "win_rate": 0.560170899596487
+      },
+      {
+       "n": 633,
+       "mean_p": 0.6121124429763035,
+       "win_rate": 0.627172195892575
+      }
+     ]
+    },
+    "adaptive": {
+     "n": 4846,
+     "accuracy": 0.567891044160132,
+     "accuracy_ci95": [
+      0.5538955381070209,
+      0.5817790000358775
+     ],
+     "log_loss": 0.6805427209694779,
+     "brier": 0.4874808423818184,
+     "calibration": [
+      {
+       "n": 4163,
+       "mean_p": 0.5580764113814568,
+       "win_rate": 0.5582512611097766
+      },
+      {
+       "n": 683,
+       "mean_p": 0.6130170228213765,
+       "win_rate": 0.6266471449487555
+      }
+     ]
+    }
+   },
+   "paired": {
+    "adaptive_minus_primary": {
+     "mean": 5.465881680736783e-05,
+     "ci95": [
+      -0.0012942528054690594,
+      0.0014722636387957948
+     ],
+     "per_season": {
+      "2018": -0.0005090865197854985,
+      "2019": 0.002379781357398422,
+      "2020": -0.0001794476704101024,
+      "2021": -0.0021799845886192317
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 4846
+    },
+    "adaptive_minus_average": {
+     "mean": -2.606291587974839e-05,
+     "ci95": [
+      -0.0014384670541837956,
+      0.0014252671792205408
+     ],
+     "per_season": {
+      "2018": 0.0001689630867027669,
+      "2019": 0.00017359040585216852,
+      "2020": 0.00036388740293843074,
+      "2021": -0.0010785455048911209
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 4846
+    },
+    "adaptive_minus_stack": {
+     "mean": -0.0012352450255718945,
+     "ci95": [
+      -0.002617915403305278,
+      8.499531496519208e-05
+     ],
+     "per_season": {
+      "2018": 0.0014085310845812944,
+      "2019": -0.005117112008683548,
+      "2020": -0.0011205471538053744,
+      "2021": 0.00047925284485014487
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 4846
+    },
+    "adaptive_minus_adaptive_core": {
+     "mean": -2.764703523513607e-05,
+     "ci95": [
+      -0.0005964195800007451,
+      0.0005251491130808778
+     ],
+     "per_season": {
+      "2018": 0.0004243473178394511,
+      "2019": 2.5588466128874668e-05,
+      "2020": -0.00022374905257794534,
+      "2021": -0.00048254061643639157
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 4846
+    }
+   },
+   "single_members_log_loss": {
+    "goals_poisson@market": 0.6802085195598474,
+    "goals_draw@adaptive": 0.6803343576700864,
+    "goals_glm@adaptive": 0.6843764594841502,
+    "cand:poisson_draw:nhl_base@adaptive": 0.6825361585934778
+   },
+   "adaptive_fit_count": 133,
+   "adaptive_weights_last": {
+    "goals_poisson@market": 0.28997388728030976,
+    "goals_draw@adaptive": 0.28303883450146206,
+    "goals_glm@adaptive": 0.24391091819599112,
+    "cand:poisson_draw:nhl_base@adaptive": 0.2715564997954068
+   },
+   "adaptive_excluded_last": {},
+   "adaptive_l2_last": 100.0
+  },
+  "team_total_away": {
+   "primary": "goals_poisson",
+   "core_members": [
+    "goals_poisson",
+    "goals_draw",
+    "goals_glm"
+   ],
+   "adaptive_members": [
+    "goals_poisson@market",
+    "goals_draw@adaptive",
+    "goals_glm@adaptive",
+    "cand:poisson_draw:nhl_base@adaptive"
+   ],
+   "evaluated_games": 4877,
+   "scored_games": 4846,
+   "pushes": 0,
+   "coverage": {
+    "primary": 1.0,
+    "average": 1.0,
+    "stack": 1.0,
+    "adaptive_core": 0.993643633381177,
+    "adaptive": 1.0
+   },
+   "sources": {
+    "primary": {
+     "n": 4846,
+     "accuracy": 0.5557160544779199,
+     "accuracy_ci95": [
+      0.541687541293417,
+      0.5696563045989311
+     ],
+     "log_loss": 0.6852413429348924,
+     "brier": 0.49212945838010985,
+     "calibration": [
+      {
+       "n": 4447,
+       "mean_p": 0.5448884040983212,
+       "win_rate": 0.5543062738925119
+      },
+      {
+       "n": 399,
+       "mean_p": 0.6070305336955992,
+       "win_rate": 0.5714285714285714
+      }
+     ]
+    },
+    "average": {
+     "n": 4846,
+     "accuracy": 0.5600495253817581,
+     "accuracy_ci95": [
+      0.5460317829770632,
+      0.573972139818023
+     ],
+     "log_loss": 0.6844238192154598,
+     "brier": 0.4913264634823132,
+     "calibration": [
+      {
+       "n": 4466,
+       "mean_p": 0.5432774916847852,
+       "win_rate": 0.5532915360501567
+      },
+      {
+       "n": 380,
+       "mean_p": 0.6124324198585448,
+       "win_rate": 0.6394736842105263
+      }
+     ]
+    },
+    "stack": {
+     "n": 4846,
+     "accuracy": 0.5581923235658275,
+     "accuracy_ci95": [
+      0.5441698331310628,
+      0.5721226281342785
+     ],
+     "log_loss": 0.6844013464667892,
+     "brier": 0.49131198889990063,
+     "calibration": [
+      {
+       "n": 3925,
+       "mean_p": 0.5462949898549242,
+       "win_rate": 0.5439490445859873
+      },
+      {
+       "n": 913,
+       "mean_p": 0.627072848809914,
+       "win_rate": 0.619934282584885
+      },
+      {
+       "n": 8,
+       "mean_p": 0.7102678657171863,
+       "win_rate": 0.5
+      }
+     ]
+    },
+    "adaptive_core": {
+     "n": 4846,
+     "accuracy": 0.5528270738753611,
+     "accuracy_ci95": [
+      0.5387919782394386,
+      0.566778483051084
+     ],
+     "log_loss": 0.6845133286458368,
+     "brier": 0.49143059339036455,
+     "calibration": [
+      {
+       "n": 4201,
+       "mean_p": 0.5461439486950728,
+       "win_rate": 0.5417757676743632
+      },
+      {
+       "n": 644,
+       "mean_p": 0.6197557608354035,
+       "win_rate": 0.6257763975155279
+      },
+      {
+       "n": 1,
+       "mean_p": 0.707820696,
+       "win_rate": 0.0
+      }
+     ]
+    },
+    "adaptive": {
+     "n": 4846,
+     "accuracy": 0.5546842756912918,
+     "accuracy_ci95": [
+      0.540653356773186,
+      0.5686285660470815
+     ],
+     "log_loss": 0.6839748109129513,
+     "brier": 0.4908871160204267,
+     "calibration": [
+      {
+       "n": 4164,
+       "mean_p": 0.546235422700768,
+       "win_rate": 0.5415465898174832
+      },
+      {
+       "n": 681,
+       "mean_p": 0.6207126951688691,
+       "win_rate": 0.6343612334801763
+      },
+      {
+       "n": 1,
+       "mean_p": 0.723521438,
+       "win_rate": 1.0
+      }
+     ]
+    }
+   },
+   "paired": {
+    "adaptive_minus_primary": {
+     "mean": -0.0012665320219411222,
+     "ci95": [
+      -0.002793041910961614,
+      0.00015389520346268537
+     ],
+     "per_season": {
+      "2018": -0.0020814050696319262,
+      "2019": -0.0010032000608113374,
+      "2020": -0.0014092092780696413,
+      "2021": -0.0003272337589619818
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 4846
+    },
+    "adaptive_minus_average": {
+     "mean": -0.00044900830250854955,
+     "ci95": [
+      -0.0015424415272728355,
+      0.0006414425859795456
+     ],
+     "per_season": {
+      "2018": -0.0009447441904505508,
+      "2019": -0.00014322012268470227,
+      "2020": -0.000850770224686143,
+      "2021": 0.0003157284801738751
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 4846
+    },
+    "adaptive_minus_stack": {
+     "mean": -0.00042653555383787646,
+     "ci95": [
+      -0.0015278571500312481,
+      0.0006354648449650648
+     ],
+     "per_season": {
+      "2018": -0.001790599729886477,
+      "2019": 0.0004490904689540047,
+      "2020": 0.00010395161728353914,
+      "2021": -0.0004538775929788255
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 4846
+    },
+    "adaptive_minus_adaptive_core": {
+     "mean": -0.0005385177328854801,
+     "ci95": [
+      -0.001244033831366485,
+      0.0002100905580126703
+     ],
+     "per_season": {
+      "2018": -0.0010577925732492362,
+      "2019": -0.00013091515795076887,
+      "2020": -0.0005470316104793925,
+      "2021": -0.0003869269644778153
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 4846
+    }
+   },
+   "single_members_log_loss": {
+    "goals_poisson@market": 0.6854394004616609,
+    "goals_draw@adaptive": 0.6852497145217477,
+    "goals_glm@adaptive": 0.6864099607028656,
+    "cand:poisson_draw:nhl_base@adaptive": 0.6837917327298424
+   },
+   "adaptive_fit_count": 133,
+   "adaptive_weights_last": {
+    "goals_poisson@market": 0.2519253907090226,
+    "goals_draw@adaptive": 0.25224557392774904,
+    "goals_glm@adaptive": 0.2527660413965554,
+    "cand:poisson_draw:nhl_base@adaptive": 0.25491516046144624
+   },
+   "adaptive_excluded_last": {},
+   "adaptive_l2_last": 1000.0
+  }
+ }
+}

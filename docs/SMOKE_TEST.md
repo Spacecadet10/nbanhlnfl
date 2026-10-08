@@ -649,3 +649,92 @@ current definition; NHL torch/keras/sklearn MLP "trained" and forecasting (curre
   Core identities still NBA `ff7e0e9199ca0cf7`, NHL `cb194620c0e6a3c6`; calibration identities still NBA `896aa9930176f03e`, NHL
   `69b2ba7c05e8cd4c`. Fits include eligible warm-up seasons (NBA efficiency 2021; NHL Poisson 2016–17, GLM 2017), now explicit in
   MODEL_SELECTION. No artifacts rebuilt. No preview servers started, no release interpreter/environment files modified.
+
+
+## 2026-10-05 Codex learning-status correction
+- `python3 scripts/check_project.py`: passed.
+- `PYTHONPATH=backend backend/.venv/bin/python -m pytest backend/tests/test_training_monitor.py -q`: 2 passed, existing Starlette/joblib warnings.
+- `cd frontend` then `npm run build`: TypeScript and Vite passed. `git diff --check`: passed.
+- Read-only `_online` against local stores: NBA latest eligible result June 14, no verified consumption; NHL primary Elo reports saved forecast provenance with 14,547 results. Non-primary consumption explicitly unverified. No data writes.
+- Browser URL `http://127.0.0.1:5196/performance?details=1`: CUA tab selection timed out in `Emulation.setFocusEmulationEnabled`. Desktop and phone flows/rendering unverified; no fresh full readiness run or deployment.
+
+
+## 2026-10-06 adaptive-v1 (NBA + NHL) — Claude (Fable 5.1)
+All runs on store copies (`NBA_DATA_DIR=<scratchpad>/data`, snapshots of the live stores taken 2026-10-05 23:10 UTC via an
+immutable-mode backup); the live `data/` folder was never opened for writing and is not migrated to 0024.
+- `python3 scripts/check_project.py`: passed. `git diff --check`: passed. `cd frontend && npm run typecheck && npm run build`: passed.
+- `PYTHONPATH=backend backend/.venv/bin/python -m pytest backend/tests/test_adaptive.py backend/tests/test_storage.py -q`: **36 passed**
+  (12 adaptive: end-to-end train→record on the synthetic NHL store, prospective rows entering the next fit and changing weights,
+  future/own outcomes never entering a fit, scheduled-walk resume equality, leave-one-out/abstain, failed refit keeps the previous
+  artifact, corrupt artifact → missing member, no-combiner → unavailable row, jobs hooks and off switch, two-hour DB guards,
+  freeze/thaw of function-local member classes, walk-forward history blind to later and own outcomes).
+- Regression: `pytest backend/tests/test_api.py backend/tests/test_training_monitor.py backend/tests/test_research_live.py
+  backend/tests/test_candidate_pool.py -q`: **63 passed**.
+- Full readiness `NBA_DATA_DIR=<empty> OMP_NUM_THREADS=4 ~/nba-predictor-deep/backend/.venv/bin/python scripts/check_project.py --ready`: **exit 0, 652 passed** (6 min 31 s; typecheck + build ok). With the release venv (`backend/.venv`, no torch/tensorflow) the same command fails only the 8 `test_deep_study.py` tests that need those libraries, as in earlier handoffs; everything else passed (642). Two existing expectations were extended for the new migration and the new `daily` step (`test_live.py`, `test_shadow.py`).
+- Replays (research env `~/nba-predictor-deep/backend/.venv/bin/python`, `OMP_NUM_THREADS=4`): `--sport nhl adaptive-replay`
+  34 min, `--sport nba adaptive-replay` 63 min; reports in the scratchpad, summaries committed to `docs/evidence/adaptive/`.
+  Numbers in docs/ADAPTIVE_SYSTEM.md §8.
+- Real-copy training: `--sport nhl adaptive-train` (research env): success, 15 member fits + combiner for `2027:2026-W41`,
+  2,831 training rows per market, deep members kept their season-start fit (39 current-season results < 100), ~1 h first run.
+  `--sport nba adaptive-train`: first run **partial** — every member fit succeeded except `points_normal` (`KeyError: 'winner'`: the NBA line primary asked for a model line on the winner market); the failure was logged in `adaptive_fits`, the winner combiner still trained (2,643 rows, 17 members) and every line market reported "no combination" with its reason — the designed failure path. Fixed (`walk_member` sets lines for line markets only; regression test `test_line_primary_walk_sets_model_lines_for_line_markets_only`) and rerun: **success**, 20 member fits (deep networks on 8,919 games) + combiner for `2027:2026-W43`, 2,643 rows per market, 18 winner / 9 line members, no exclusions, ~75 min. The NHL real-copy artifacts were made before that one-line fix, so their definition (`9042dd64a7c2e1f9`) differs from the final code's; the NHL logic is unchanged by the fix.
+- Real-copy forecast path (release env, no torch): `adaptive.record(now="2026-10-06T22:00:00Z", write=False)` on the NHL copy:
+  7 eligible games, winner + reg3 forecasts for every game (12 and 5 contributing members, deep artifacts applied from NumPy
+  weights), line markets skipped "no primary two-hour market forecast" (the snapshot predates those cycles), odds available for
+  winner, selector "insufficient evidence" everywhere; 80 s under CPU contention. No row written (dry run; the real clock had no
+  game within two hours and timestamps are never backdated).
+- API (dev server :8018 on the copies): `/api/health` ok; `/api/research/adaptive?sport=nhl` → combiner fit, 15 members, due=false
+  ("fit in force already prepared for 2027:2026-W41"); `?sport=nba` before training → due=true "no combiner fit";
+  `/api/research/adaptive/game/nhl:2026020043` → `no_adaptive_forecast`.
+- Browser (Claude-in-Chrome, desktop 1280-px viewport; the extension pins the viewport so `resize_window` has no effect — phone
+  width checked by rendering the same pages in a 390-px iframe and reading `scrollWidth`): Performance → details → "Adaptive system"
+  card (NHL) shows definition, schedule, weights per market, training rows (0 prospective / 2,831 walk-forward), selector state,
+  member fits in force, empty prospective record, replay tables with green/grey paired intervals; NBA shows the "no combiner fit
+  yet" state. Game page `nhl:2026020043` shows the explicit empty state. Populated Game card verified on a synthetic NHL store served
+  with a fixed clock (`:8019`/`:5199`, scratch-only harness): reg3/spread/totals probabilities, pick/no-pick reason, bookmaker
+  comparison at the same line or "unavailable", training cutoff, weight-update time, per-member probabilities/weights/roles,
+  missing members. 390-px iframe: no page overflow; wide tables scroll inside `.table-wrap` as the other research tables. No console
+  errors. Servers :8018/:5198/:8019/:5199 stopped afterwards.
+- Not verified: a real two-hour cycle writing `adaptive_forecasts` on a live game (needs a release move + the next game day);
+  prospective accuracy; the first real nightly `adaptive-train` duration in the release environment.
+
+## 2026-10-06 adaptive-v1 review fixes — Claude (Fable 5.1)
+- `PYTHONPATH=backend backend/.venv/bin/python -m pytest backend/tests/test_adaptive.py backend/tests/test_storage.py -q`: **41 passed**
+  (17 adaptive, 4 new for the review findings; the failed-refit test extended with the partial → retry → success cycle).
+- `NBA_DATA_DIR=<empty> OMP_NUM_THREADS=4 ~/nba-predictor-deep/backend/.venv/bin/python scripts/check_project.py --ready`: **exit 0, 657 passed**
+  (7 min 34 s). `python3 scripts/check_project.py`, `git diff --check`, `npm run typecheck`: passed.
+- Real-copy cycles (NHL, research venv): `adaptive-train` success (definition `903207331c701548`, 15 member fits + combiner, content-addressed
+  artifact names); forced repeat success with the candidate history reused (same out-of-sample counts, no new periods).
+- Browser not re-run after the fixes: the only UI change is the partial-run note and "in force: earlier fit #n" on the Performance
+  card (typechecked); desktop/phone rendering of the card itself was verified earlier today.
+
+## 2026-10-06 adaptive-v1 training-lock fix — Claude (Fable 5.1)
+- `pytest backend/tests/test_adaptive.py backend/tests/test_shadow.py backend/tests/test_storage.py -q`: **72 passed** (19 adaptive; new:
+  store lock free + forecast cycle during a blocked training run, tampered record published as failed, NBA new-week run through
+  the scheduled command). Full readiness (research venv): **exit 0, 659 passed** (6 min 39 s; a previous run of the same suite had one failure in `test_train_then_record_end_to_end…` — the winner row came back `unavailable` — that did not reproduce in three reruns of the test, the file or the suite; cause not established, noted as a flake to watch).
+- Real NHL copy, release venv (`NBA_DATA_DIR=<copy> backend/.venv/bin/python -m app.cli --sport nhl adaptive-train`): **success**, 16 fit records published (15 members + combiner; the torch/keras members `skipped` — no fit exists for this definition and no library here, they are fitted by the research-venv run), snapshot removed afterwards; `db.store_lock('nhl', wait_seconds=0)` acquired instantly while the training was mid-walk (held by `train.lock` instead). The run before it was refused at publication with "definition changed during training" because the module was edited while it ran — the guard working as designed.
+
+## 2026-10-07 adaptive-v1 final-code real-copy runs — Claude (Fable 5.1)
+- Code frozen after the snapshot-ownership / retryable-publication fixes. `pytest backend/tests/test_adaptive.py -q`: **21 passed**.
+  Full readiness `NBA_DATA_DIR=<empty> OMP_NUM_THREADS=3 ~/nba-predictor-deep/backend/.venv/bin/python scripts/check_project.py --ready`:
+  **exit 0, 661 passed** (8 min 13 s). Structure guard, `git diff --check`, typecheck/build passed.
+- Real copies, release venv (`backend/.venv`, no torch/tensorflow), scheduled command path (`run_scheduled`: training lock → brief job lock
+  + snapshot → train from the snapshot → brief job lock + verified publication → cleanup):
+  - NBA `adaptive-train`: success, 22 fit records published, 0 failed, combiner success, period `2027:2026-W43`; deep members skipped
+    (no library, no fit for this definition) as designed.
+  - NHL run A (`now=2026-10-01`, forced): success, 16 published, 0 failed, combiner success, period `2027:2026-W41`.
+  - NHL run B (`now=2026-10-05`, unforced): success, 16 published, 0 failed; due reason "no combiner fit for this definition yet" because
+    run A's rows carry the real clock (Oct 7) and are invisible at Oct 5 — fits are never backdated, so a next-period run on a real copy
+    needs real time to pass. The unforced next-period path (new week + settled prospective forecast → new fit with `prospective = 1`) is
+    verified on the synthetic NHL and NBA stores (`test_adaptive.py`).
+  - After the runs: both copies `due: false` ("fit in force already prepared … weekly schedule"); snapshot folders empty.
+- Forecasting during training (real NHL copy, while a trainer held `train.lock`): `db.store_lock("nhl", wait_seconds=0)` acquired in
+  0.00 s; `adaptive.training_lock("nhl")` not acquirable (held by the trainer); `adaptive.record(write=False)` at the next game window
+  produced winner + reg3 forecasts for 2 eligible games (10 and 5 contributing members) in 38 s with no errors.
+- Earlier run refused at publication with "definition changed during training (…→…): nothing published" after the module was edited
+  mid-run — the guard working as designed; that run's artifacts are orphaned on disk and unused.
+- Not done: no live migration, no deployment, no browser rerun since the UI change for partial runs (typechecked only).
+
+## 2026-10-07 member-record write failure fix — Claude (Fable 5.1)
+- `PYTHONPATH=backend backend/.venv/bin/python -m pytest backend/tests/test_adaptive.py -q`: **22 passed** (new: member row write failure →
+  combiner partial → due → unforced retry succeeds). `git diff --check`, `python3 scripts/check_project.py`: passed. Publication-path change
+  only; no real-copy rerun.

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- NOT INSTALLED. adaptive-v1 scheduled training (docs/ADAPTIVE_SYSTEM.md §7) run with the research environment's Python,
+     which has the pinned torch / tensorflow, so the deep members are refitted rather than kept. The release checkout's code
+     is used (WorkingDirectory). The command takes the store's job lock only to snapshot and to publish; the training reads
+     the snapshot under its own lock, so the odds/forecast cycles keep running. Due-only and idempotent. Install only with a
+     release move. -->
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>NBA_DATA_DIR</key>
+		<string>/Users/andry/Desktop/nba-predictor-sprint1/data</string>
+		<key>OMP_NUM_THREADS</key>
+		<string>4</string>
+	</dict>
+	<key>Label</key>
+	<string>com.nba-predictor.adaptive-train</string>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/sh</string>
+		<string>-c</string>
+		<string>/Users/andry/nba-predictor-deep/backend/.venv/bin/python -m app.cli --sport nhl adaptive-train; /Users/andry/nba-predictor-deep/backend/.venv/bin/python -m app.cli --sport nba adaptive-train</string>
+	</array>
+	<key>StandardErrorPath</key>
+	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/adaptive-train-launchd.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/adaptive-train-launchd.log</string>
+	<key>StartCalendarInterval</key>
+	<dict>
+		<key>Hour</key>
+		<integer>9</integer>
+		<key>Minute</key>
+		<integer>30</integer>
+	</dict>
+	<key>ThrottleInterval</key>
+	<integer>60</integer>
+	<key>WorkingDirectory</key>
+	<string>/Users/andry/nba-predictor-live/backend</string>
+</dict>
+</plist>

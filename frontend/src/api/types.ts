@@ -440,7 +440,7 @@ export interface TrainingFit {
 }
 export interface TrainingStatus {
   mode: Mode; as_of?: string; fits: TrainingFit[];
-  online: { member: string; schedule: string; last_update_input: string | null; next_update: string }[];
+  online: { member: string; schedule: string; last_update_input: string | null; latest_available_result: string | null; consumption_verified: boolean; verified_at: string | null; results_used: number | null; next_update: string }[];
   updates: { run_id: number; at: string; step: string; member: string | null; outcome: 'failed' | 'skipped'; reason: string }[];
   inputs: Record<string, { last_success: string | null; stale: boolean; stale_after_hours: number }>;
   monitoring: { members: { market: string; member: string; settled: number; recent_log_loss: number; previous_log_loss: number | null;
@@ -456,4 +456,48 @@ export interface JointReport {
   walk?: { configurations: number; note: string; folds: { season: string; reason?: string; reserved_test_season?: boolean;
     chosen: { agreement_min: number; agreement_max: number | null; confidence_min: number; confidence_max: number | null; comparator: string } | null;
     later?: TrackingCell; matched?: { model: string; games: number; win_rate: number | null } }[] } | null;
+}
+
+// adaptive-v1 (docs/ADAPTIVE_SYSTEM.md): separately versioned adaptive combination. Research only; never the primary forecast.
+export interface AdaptiveMemberRow { name: string; p: Vector; weight: number | null; fit_id: number | null; role: string }
+export interface AdaptiveSelection { status: 'pick' | 'no_pick'; side: Side | null; probability: number | null; reason: string; label?: string | null }
+export interface AdaptiveMarket {
+  market: MarketId; line: number | null; line_source: string; line_label: string | null;
+  sides: { a: string; mid: string | null; b: string }; status: 'forecast' | 'unavailable'; reason: string | null;
+  p: Vector | null; members: AdaptiveMemberRow[]; missing: Record<string, string>; contributing: string[];
+  weights: { members: string[]; weights: number[]; bias: number[]; l2: number | null } | null;
+  bookmaker: { p: Vector; provider: string; retrieved_at: string } | null; odds_status: string; edge: number[] | null;
+  selection: AdaptiveSelection; training_cutoff: string | null; weights_updated_at: string | null; combiner_fit_id: number | null;
+  definition: string; model_version: string; generated_at: string; information_at: string; tipoff_at: string;
+  minutes_before_start: number; start_changed: boolean;
+}
+export interface AdaptiveGame { mode: Mode; game_id: string; version: string; markets: AdaptiveMarket[]; status: string; note?: string }
+export interface AdaptiveSummary { n: number; accuracy: number | null; accuracy_ci95: [number, number] | null; log_loss: number | null; brier: number | null;
+  calibration: { n: number; mean_p: number; win_rate: number }[] }
+export interface AdaptiveReplayMarket {
+  primary: string; core_members: string[]; adaptive_members: string[]; evaluated_games: number; scored_games: number; pushes: number;
+  coverage: Record<string, number | null>; sources: Record<string, AdaptiveSummary | null>;
+  paired: Record<string, { mean: number; ci95: [number, number]; per_season: Record<string, number | null>; metric: string; games: number }>;
+  single_members_log_loss: Record<string, number | null>; adaptive_fit_count: number; adaptive_weights_last: Record<string, number> | null;
+  adaptive_excluded_last: Record<string, string> | null; adaptive_l2_last: number | null;
+}
+export interface AdaptiveReplay { version: string; sport: string; started_at: string; evaluated_seasons: number[]; loaded_seasons: number[];
+  members: string[]; excluded: Record<string, string>; markets: Record<string, AdaptiveReplayMarket>; seconds: number }
+export interface AdaptiveStatus {
+  mode: Mode; version: string; sport: string; as_of: string; definition: string | null; definition_error: string | null;
+  schedule: Record<string, string>; enabled: boolean; due: { due: boolean; reason: string; period?: string };
+  combiner: { fit_id: number; period: string; status: 'success' | 'partial'; partial_reason: string | null; market_fit_ids: Record<string, number>;
+    training_cutoff: string | null; weights_updated_at: string; artifact_sha256: string | null;
+    markets: Record<string, { members: string[] | null; excluded: Record<string, string> | null; weights: Record<string, number> | null; l2: number | null;
+      l2_validation: Record<string, number | null> | null; training: { games: number; prospective: number; walk_forward: number; seasons: number[]; results_through: string } | null; reason: string | null }>;
+    selection: Record<string, { status: string; rule: { source: string; filter: string; threshold: number } | null; reason: string; settled_items: number; judged_items: number }>;
+    excluded: Record<string, string>; members_available: string[] } | null;
+  last_failure: { at: string; period: string; error: string | null } | null;
+  members: { name: string; fit_in_force: { fit_id: number; period: string; training_cutoff: string | null; training_games: number | null; since: string; detail: Record<string, unknown> } | null;
+    last_failure: { at: string; error: string | null } | null }[];
+  attempts: { fit_id: number; kind: string; name: string; period: string; status: string; training_cutoff: string | null; training_games: number | null; started_at: string; finished_at: string; detail: Record<string, unknown> }[];
+  prospective: { markets: Record<string, { settled: number; log_loss: number | null; brier: number | null; record: ResearchRecord;
+    primary: { name: string; games: number; adaptive_log_loss: number | null; primary_log_loss: number | null };
+    bookmaker: { games: number; coverage: number | null; adaptive_log_loss: number | null; bookmaker_log_loss: number | null } }>; pending: number; note?: string };
+  replay: AdaptiveReplay | null; note: string;
 }

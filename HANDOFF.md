@@ -1,5 +1,176 @@
 # Current handoff
 
+## Member-record write failure → retryable — Claude (Fable 5.1), 2026-10-07 ~04:30 UTC
+- Fixed in `adaptive.publish`: members are written first, the combiner last; a usable member whose row could not be written is added
+  to the combiner's `partial_reason` ("member record(s) failed at publication: …") and the combiner is published `partial`, never
+  `success`; a combiner write failure reports `combiner_status: failed`. docs/ADAPTIVE_SYSTEM.md §10 item 7.
+- Test (Codex's reproduction): `_insert_fit` raising for one member → that row absent, combiner `partial`, `due` true → unforced
+  `run_scheduled` retry → success, member row present, not due. `pytest backend/tests/test_adaptive.py -q`: **22 passed**.
+  `git diff --check` and the structure guard passed. No real-copy rerun (publication-path change only; the trained artifacts are
+  unaffected). Still not active.
+
+## Codex final-path re-review — 2026-10-07
+- Snapshot ownership issue closed by inspection and focused tests: training lock encloses snapshot through publication/cleanup. Scheduled concurrency, overlapping trainers and synthetic NBA next-period tests independently **3 passed** (18 deselected, 12.69 s; existing warnings). Corrupt-artifact publication regression also independently **1 passed** (20 deselected, 6.57 s). `git diff --check` passed.
+- Remaining P1, incomplete publication-failure fix: artifact verification errors enter `broken`, but exceptions from `_apply` only enter `res[failed]`. A subsequent combiner is still written `success`, leaving `due` false for the period despite a failed member publication. Reproduced with valid-artifact verification and an injected member `_apply` failure: published=1, failed=[member-a], combiner_status=success. Propagate ledger-write failures to combiner partial/failed too, or make the publication batch atomic; add failure → due → ordinary successful retry coverage. No model changes or costly replay needed for this narrow fix.
+- Historical note correction: NHL run B is explicitly a repeated first-fit run, not real next-period evidence; the later sentence in Claude's entry claiming next-period evidence from run B is stale. Synthetic both-sport coverage is useful; real scheduled operation remains an activation follow-up. Claimed full readiness 661 is author evidence, not rerun here. No deployment or implementation edits.
+
+## Layout editor diagnostics check — Codex
+- Reported TS1161/NavLink/Outlet errors are not reproducible in the saved `frontend/src/components/Layout.tsx`: first-line router import is intact and file has no Git diff. `npm run build` in frontend passed TypeScript and Vite. Likely unsaved editor content or stale diagnostics; no source fix warranted. Training code untouched. Next: compare the editor buffer with the saved file, then refresh its TypeScript diagnostics.
+
+## Snapshot ownership + retryable publication — Claude (Fable 5.1), 2026-10-07 ~02:30–03:00 UTC (code frozen after this)
+- Fixed both findings in `adaptive.py`: `run_scheduled` takes the training lock first and holds it through snapshot, training,
+  publication and cleanup (snapshot file names also carry the pid); a concurrent trainer is refused before it touches anything.
+  `publish` verifies the whole batch first; a usable member whose artifact fails is published as `failed` and the run's combiner as
+  `partial` with the reason (never `success`), so `due` retries the week; a clean republication completes it. docs/ADAPTIVE_SYSTEM.md
+  §7/§10 updated.
+- Tests: `test_adaptive.py` 21 (new: overlapping trainers — second run refused, first snapshot survives, job lock never held;
+  tampered member → combiner `partial` → due → clean republish → success). `pytest backend/tests/test_adaptive.py -q`: **21 passed**.
+  Full readiness (research venv, final code): **exit 0, 661 passed** (8 min 13 s); structure guard + `git diff --check` passed.
+- Real-copy evidence, final code (no edits after launch): NBA `adaptive-train` (real clock): **success, 22 published, 0 failed, combiner success** (period `2027:2026-W43`; torch/keras members `skipped` in the release venv, as designed); NHL run A (forced, `now=2026-10-01`): **success, 16 published, 0 failed,
+  combiner success** — but it prepared W41, not W40 (games played Oct 1–5 are already final in the copy, so the next *scheduled*
+  game is in W41), and its fit rows carry the real clock (Oct 7), which a run at `now=Oct 5` cannot see: the "time-travel"
+  next-period idea does not work on a real copy — fits are never backdated; NHL run B (unforced, `now=2026-10-05`): **success, 16 published, 0 failed, combiner success**, but its due reason was
+  "no combiner fit for this definition yet" (run A's rows are stamped Oct 7, invisible at `now=Oct 5`): a repeat first-fit run, not a
+  next-period run. A normal unforced next-period run on the real copies needs real time to pass (next NHL week; NBA season start
+  Oct 20); that path is demonstrated by the synthetic NHL and NBA tests. Afterwards both copies report `due: false` ("fit in force
+  already prepared … weekly schedule") and the snapshot folders are empty. Forecasting during training (real NHL copy, earlier today): NHL store lock acquired in 0.00 s
+  while the trainer held `train.lock`; `adaptive.record(write=False)` produced winner + reg3 forecasts for the next 2 games in 38 s.
+- NBA "partial" history, explained: (1) first real-copy run — `points_normal` asked for a winner line (bug, fixed + test), rerun
+  success; (2) synthetic NBA test — line markets had only one ready member, so "no combination" was wrongly counted as partial;
+  availability is now counted from actual vectors; both resolved, the NBA run above (22 published, combiner success) is the final-code result. A normal next-period
+  NBA run on the real copy is impossible before the regular season starts (no eligible result arrives between the June finals and
+  Oct 20): the next-period path is shown on the synthetic NBA store (test) but not on the real NHL copy (run B was a repeated first-fit run).
+- Still not active. Next: Codex review of this final code; release decision.
+
+## Codex snapshot/publication review — 2026-10-06 (changes required)
+- The long forecast-job lock is removed. Independently ran `PYTHONPATH=backend backend/.venv/bin/python -m pytest backend/tests/test_adaptive.py -q -k "scheduled_training or new_week"`: **2 passed**, 17 deselected, existing joblib/Starlette warnings, 17.09 s. `git diff --check` passed. No full readiness/browser rerun.
+- P1 concurrent trainers: `run_scheduled` snapshots before acquiring `training_lock`; `snapshot` deletes all existing snapshots. A second invocation can delete the first snapshot between creation and opening (or replace the same-second pathname), before it discovers the held training lock. The training lock also ends before publication, allowing overlapping publishers. Reproduced snapshot deletion while training lock held and second acquisition refused. Acquire the training lock before due-check/snapshot creation and retain it through publication/cleanup; use unique per-run snapshots and only delete the owning run's files. Test two overlapping scheduled commands, including the snapshot-to-open and pre-publication boundaries.
+- P1 publication failure recovery: `publish` marks a corrupt member record failed but independently publishes the combiner as success. `run_scheduled` returns failed, yet `due` sees that successful same-period combiner and skips retry. The existing tamper test checks failure reporting but not retry eligibility or usable member/combiner consistency. Prevalidate the whole publication batch and propagate member/publication failures to combiner partial/failed status (or publish atomically); preserve earlier usable combinations and test ordinary retry recovery.
+- No implementation edits, live writes or deployment. Prior reported single unavailable-winner readiness failure still has no established cause. Next: fix these two narrow publication/concurrency issues; finish the already-running real-copy evidence without changing code mid-run.
+
+## Training lock fix + both-sport new-week evidence — Claude (Fable 5.1), 2026-10-06 ~22:00–23:30 UTC
+- **Fixed the lock blocker:** `adaptive.run_scheduled` (CLI `adaptive-train`, handled before the generic job-lock path) takes the
+  store's job lock only to (a) check `due` and take a SQLite online-backup snapshot and (b) verify + publish the fit records;
+  the training itself reads the snapshot under a separate per-sport `training_lock`. `train(..., publish=False)` writes artifacts
+  only and returns `pending` ledger records; `publish` re-verifies each artifact against its record's digest (a failed check is
+  published as `failed`) and refuses if the live definition changed. `jobs.daily` now only reports the due state (training never
+  runs inside the daily job's lock). README, docs/ADAPTIVE_SYSTEM.md §7/§10, the plist comment updated.
+- **Tests (`test_adaptive.py`, 19):** a training run blocked mid-fit leaves the store lock free, a full two-hour cycle + `adaptive.record`
+  run meanwhile, the training lock is the one held, publication lands and the snapshot is removed, a tampered record is
+  published as `failed`; an ordinary next-period run (new week + settled prospective forecast) trains and publishes through the
+  scheduled command on the synthetic **NBA** store (prospective = 1, cutoff = the settlement time) and on the synthetic **NHL**
+  store (existing test). `pytest test_adaptive.py test_shadow.py test_storage.py -q`: **72 passed**. Full readiness (research venv): **exit 0, 659 passed** (6 min 39 s; a previous run of the same suite had one failure in `test_train_then_record_end_to_end…` — the winner row came back `unavailable` — that did not reproduce in three reruns of the test, the file or the suite; cause not established, noted as a flake to watch).
+- **Real copies:** train-nhl3 (final code before this change) success; train-nhl4 (forced repeat) success, candidate history reused
+  (no new periods). `adaptive-train` on the real NHL copy (release venv, final code): **success**, 16 fit records published (15 members + combiner; the torch/keras members `skipped` — no fit exists for this definition and no library here, they are fitted by the research-venv run), snapshot removed afterwards; `db.store_lock('nhl', wait_seconds=0)` acquired instantly while the training was mid-walk (lock held by `train.lock` instead). The run before it was refused at publication with "definition changed during training" because the module was edited while it ran — the guard working as designed. A normal next-week run on the real copies cannot be produced before the
+  next week passes; the next-period behaviour is shown on both synthetic stores.
+- Still not active (no live migration, release `f1e0181`). Next: Codex re-review of `run_scheduled`/`publish`; release decision;
+  install the adaptive-train plist (research venv) with the release move.
+
+## Codex follow-up review — 2026-10-06
+- Independent verification: `PYTHONPATH=backend backend/.venv/bin/python -m pytest backend/tests/test_adaptive.py -q`: **17 passed**, existing joblib warning, 84.66 s; `git diff --check` passed. Full readiness/browser not repeated.
+- Four prior fixes inspected: immutable row-bound artifacts, separate live/history model state, partial-market fallback/retry, and retained dependency-limited candidates now have targeted tests. No implementation edited.
+- New P1 activation blocker: `cli.main` holds `db.store_lock` across `_run(adaptive-train)`; `daily` also runs adaptive training while holding that same sport job lock. Odds/forecast cycles wait only 120 seconds then skip. An hour-long refit can prevent odds refresh and two-hour forecasts. The new launchd command uses this same path. Train from a consistent snapshot outside the forecast job lock, with a separate training lock and brief validated publication phase; remove long training from the locked daily call. Add a concurrency regression proving forecast jobs remain available while fitting.
+- Scratch evidence: train-nhl3.log has a completed result; train-nhl4.log currently ends at hockey_logistic_xg weekly walk with no completion result. HANDOFF/SMOKE placeholders remain. A forced same-period repeat does not verify ordinary next-period scheduling with new results; require that evidence for both sports before calling operational validation complete. No activation or live writes.
+
+## Codex review fixes for adaptive-v1 — Claude (Fable 5.1), 2026-10-06 ~05:00–07:30 UTC
+- All four findings fixed in `backend/app/adaptive.py` (docs/ADAPTIVE_SYSTEM.md §10): (1) content-addressed immutable artifacts
+  (`_save` → `…-<sha12>.pkl`, identical fit = same file, never an overwrite) and row-bound verification in every loader (`load_fit`
+  checks the bytes against the fit row's digest; mismatch = `ArtifactMismatch` → member missing); (2) `live_fit` prepares the next
+  period's fit on a copy, so the history checkpoint keeps each period's own fit and a resumed walk equals the uninterrupted one
+  (Codex's 101-row reproduction is now a test); (3) combiner rows are `success` only with a combination for every market with ≥2
+  available members and no failed member refit, else `partial` — usable markets apply, other markets keep the latest earlier
+  combination (`combiners_in_force`, per-market `combiner_fit_id` on each forecast row, shown in the UI), and `due` retries the
+  period while it is partial; (4) a member whose library is missing keeps its stored fit (applied from NumPy weights, flagged
+  `kept_for_dependency`) and stays in the combination; `due` turns true in an environment that can refit it. Added
+  `scripts/launchd/com.nba-predictor.adaptive-train.plist` (NOT installed): research-venv Python on the release checkout, so the
+  nightly deep refits happen there; the release `daily` run keeps what it cannot refit; both are idempotent.
+- Migration `0024_adaptive.sql` (still unapplied anywhere live) now allows status `partial`; `_insert_fit` treats a repeated
+  usable fit as the same row.
+- Tests: `test_adaptive.py` now 17 (new: content-addressed artifacts + row-bound load refusal, resume after live preparation ==
+  uninterrupted walk, partial combiner → earlier market kept + retry → success, missing library → kept fit stays in the
+  combination → refit where the library exists; the failed-refit test now also checks the partial→retry→success cycle).
+  `pytest backend/tests/test_adaptive.py backend/tests/test_storage.py -q`: **41 passed**. Full readiness (research venv, after the fixes): **exit 0, 657 passed**; structure guard and `git diff --check` passed; frontend typecheck/build passed.
+- Real-copy second cycle (NHL, research venv): train-nhl3 success (fresh definition, 15 members + combiner); train-nhl4 (forced repeat) success, history reused.
+- Replay numbers (§8) unchanged: the replay runs a fresh uninterrupted walk per member, which these paths do not touch; the
+  evidence JSONs were not regenerated (only the dependency-exclusion wording changed).
+- Still not active: no live migration, no artifacts outside the scratchpad, release at `f1e0181`. Next: Codex re-review of the four
+  fixes; then the release decision (install the adaptive-train plist with the release move).
+
+## Codex adaptive-v1 review — 2026-10-06 (changes required)
+- Reviewed training/checkpoint paths, combiner/replay, artifact persistence/loaders, scheduling, and migration. No implementation edits or live writes.
+- P1: immutable fit ledger points to mutable artifact paths. `_save` replaces existing files; paths omit full artifact identity, while loaders only validate the current sidecar, not the digest saved on the selected fit row. A same-period forced/retry fit can overwrite an earlier artifact and make an older fit load newer state. Fix with immutable content-addressed artifacts and row-bound hash verification; test retry/failure between file and ledger writes and historical loads.
+- P1: candidate history checkpoint and prepared live model share `store[model]`. `train` calls `scheduled_walk`, then `_period_fit` on all available labels and checkpoints that changed model. On resume, `scheduled_walk` uses it for unseen games in the last completed period, instead of that period's original fit. Reproduced with test `_feature_rows`, logit_l2:nhl_base, MIN_TRAIN=40: split at 101, perform the live `_period_fit` preparation, then resume; g101–g103 differ from uninterrupted replay. Separate historical period models/checkpoints from live-prepared artifacts; test the complete train/checkpoint/resume sequence and rerun affected replay validation. This establishes replay/live mismatch, not proof of future-label leakage in every run.
+- P1: `due` returns false whenever a successful combiner exists for the period, even if member fits failed or market combiners have no stack. `train` records combiner success even for empty/partial markets. Thus fixing the dependency/data problem does not automatically retry that week. Gate completion on usable market combinations and member outcomes; retain prior valid combinations and retry recoverable failures.
+- Additional activation issue: nightly release environment lacks deep libraries. Training skips deep members before loading their cached history, so the next combiner can omit previously trained neural networks. Configure scheduled training in the research environment (or an equivalent worker), and test the second scheduled cycle rather than only the initial manual fit.
+- Next: address these issues before activation; preserve existing uncommitted work. Independent check: `PYTHONPATH=backend backend/.venv/bin/python -m pytest backend/tests/test_adaptive.py -q`: **13 passed**, one existing joblib warning, 45.26 s. Targeted checkpoint and artifact-overwrite reproductions above expose gaps beyond those tests. `git diff --check` passed. Full readiness/browser not repeated; no release approval.
+
+## adaptive-v1 implemented for NBA and NHL — Claude (Fable 5.1), 2026-10-05 23:00 → 2026-10-06 ~03:30 UTC
+- **Built (uncommitted on `model-audit`; Codex's uncommitted monitor/UI edits preserved):** `backend/app/adaptive.py` (members: online
+  + every learned core member wrapped as `Adaptive` over `retrain_cadence.Cadenced` with a weekly, new-results-only refit rule +
+  every registry candidate incl. `mlp`/`torch_mlp`/`keras_mlp` via `scheduled_walk`; combiner over all compatible members with
+  `combine.fit_stack`, greedy coverage admission, time-ordered L2 choice, leave-one-out fallbacks; settled prospective forecasts
+  replace the walk-forward row of the same game in the next fit; artifacts via `candidates.live._write/_load_verified`; `train`,
+  `record`, `status`, `game_detail`), `adaptive_replay.py`, migration `0024_adaptive.sql` (`adaptive_fits`, `adaptive_forecasts`,
+  append-only + two-hour/current-start guards), CLI `adaptive-train|record|status|replay`, `jobs.daily`→`adaptive_train` (nightly,
+  due-only, never raises), `jobs.predict_now`→`adaptive_record` after the pool steps, API `/api/research/adaptive[/game/{id}]`,
+  UI `frontend/src/components/Adaptive.tsx` (Game page "Adaptive combination" card; Performance → research "Adaptive system"
+  card), docs `docs/ADAPTIVE_SYSTEM.md` (design written before code; §8 results), README, `docs/evidence/adaptive/*-replay.json`,
+  tests `backend/tests/test_adaptive.py` (12) + migration list in `test_storage.py`. No file hashed into an existing identity was
+  edited (research/agreement/registry/selector/calibration identities unchanged); `training_monitor` lists the adaptive member fits
+  automatically through `model_fits` (`adaptive:<member>`, schedule weekly).
+- **Checks (docs/SMOKE_TEST.md):** adaptive + storage tests 36 passed; regression (api, training monitor, research_live, candidate
+  pool) 63 passed; structure guard, `git diff --check`, typecheck/build passed; full readiness (research venv) **exit 0, 652 passed**; release venv fails only the 8 torch/tensorflow `deep_study` tests, as before. Browser desktop
+  verified on the store copies (NHL fits in force, NBA "no fit yet", Game empty state) and a populated Game card on a synthetic
+  store; phone width via a 390-px iframe (viewport pinned by the extension).
+- **Both-sport replay (development seasons only, identical games/lines, log loss, ISO-week block CI):** NHL (2018–21, 4,877 games,
+  15 members) adaptive vs primary: winner −0.0011 [−0.0031, +0.0008], **reg3 −0.0147 [−0.0191, −0.0104]**, **spread −0.0029
+  [−0.0045, −0.0011]**, totals ≈ 0; vs the existing season-start stacker: reg3 −0.0022 [−0.0043, −0.0000], others within noise;
+  the best single member beats the combination on winners. NBA (2022–24, 3,962 winner / 2,639 line games, 20 members) vs primary:
+  winner −0.0013 [−0.0042, +0.0017], **spread −0.0076 [−0.0119, −0.0030]**, totals/team totals within noise; vs the existing
+  stacker and core average: nothing distinguishable (winner L2 settled at 1000 ≈ equal weights). Brier/accuracy/calibration/coverage
+  per market in the evidence files and the UI. No bookmaker comparison possible historically (no quotes); none fabricated.
+- **Real-copy runs:** NHL `adaptive-train` success (15 member fits + combiner, period `2027:2026-W41`, 2,831 rows/market, deep
+  members kept their season-start fit until 100 current-season results); NBA first run partial (`points_normal` KeyError on the winner line — logged, winner combiner trained, line markets "no combination"; bug fixed + test), rerun success: 20 member fits + combiner `2027:2026-W43`, 2,643 rows/market, no exclusions. NHL copy artifacts predate that fix (definition differs from the final code's; NHL logic unaffected). NHL forecast-path dry run at the next
+  game window: winner + reg3 adaptive forecasts for 7 games in the release env (deep artifacts applied without torch), line markets
+  skipped for lack of the primary two-hour line in the snapshot; selector "insufficient evidence" (thresholds unchanged, no picks).
+- **What is and is not active:** nothing live. Live stores are **not** migrated (the release guard would refuse a store ahead of
+  the release's schema); no artifact exists outside the session scratchpad; the release stays `f1e0181`. Activation = release move
+  with this code → migrate → one `adaptive-train` per sport (deep fits only with `~/nba-predictor-deep`'s Python; elsewhere they
+  are skipped with the reason) → the existing nightly `daily` and two-hour cycles do the rest. Off switch `RESEARCH_SELECTION=0`.
+- **Limitations:** first training run per definition re-walks all history (NHL ~1 h, dominated by `hockey_gbt` weekly refits; later
+  runs add periods only); the forecast step adds ~80 s to an NHL cycle (measured under load); every edit to `adaptive.py` changes the
+  definition (by design) and restarts the prospective record; the NBA line comparison covers 2023–24 only (the existing stacker has
+  no 2022 forecasts); gains are confined to NHL reg3/puck line and NBA spread vs the primary — not a case for replacing anything.
+  Removed a stray `.claude/scheduled_tasks.lock` the harness had created at the repo root (it failed the structure guard).
+- **Next:** Codex review of `adaptive.py` (leakage: `training_rows`/`prospective_rows`, `_advance` season guard, `fit_combiner`
+  admission) and of the migration; then a deliberate release decision. After activation, verify the first real `adaptive_forecasts`
+  rows (lines from the primary forecast, quote at the same line) and that the first nightly fit reports `prospective > 0`.
+
+## Both-sport adaptive-system scope correction — Codex, 2026-10-05
+- User clarified that the requested fix is adaptive training and combination for NBA AND NHL, not only status wording. Rechecked `research_live` stack training, candidate `ensure_fit`, registry exclusions, and selector odds gates. Combination weights are learned but exclude current-season training data; candidate/deep fits also exclude current-season labels. Odds gate some live comparison evidence, not historical outcome learning. NBA historical work need not wait for season start.
+- Updated `docs/LEARNING_LOOP_AUDIT.md` with concrete restrictions and both-sport implementation scope. Read-only reevaluation; no runtime edits or new tests in this turn. Next assigned implementation: extend existing paths for versioned within-season base/combination updates for both sports, with chronological replay and optional odds comparison; preserve existing records.
+
+## Learning status correction — Codex, 2026-10-05
+- Fixed online status: eligible availability excludes preseason; consumed-result timestamps now require saved current-version primary forecast provenance at/before the displayed time. Other online members explicitly show consumption unverified. UI distinguishes state updates from weight refits and research selection from primary replacement. No forecast methodology, schedule, weights, or live data changed.
+- Verified: training-monitor tests **2 passed** (new regression covers no forecast, exact ledger evidence, other-member isolation, future forecast exclusion, preseason, and immutable historical provenance); structure guard passed; frontend `npm run build` passed including TypeScript; `git diff --check` passed. Read-only real-store output: NBA no verified consumption; NHL Elo 14,547 results verified.
+- Browser attempt at :5196 failed with CDP focus-emulation timeout; desktop/phone rendering unverified. Full readiness not rerun; this is not release approval. Next: browser QA and richer per-model consumption provenance; evaluate a separate NHL cadence before changing live refit policy.
+
+## Learning-loop audit — Codex, 2026-10-05 ~22:20 UTC
+- Read-only code/store audit in `docs/LEARNING_LOOP_AUDIT.md`. Corrected earlier conversational overstatement: online models update and weekly selectors run. Latest NHL cycle used 14,547 results, including 39 newer regular-season games; 16 registered learned/candidate fits retain season-start weights trained on 14,508. All current weekly market decisions lack evidence (NHL 18 cohorts at cutoff, NBA zero). Calibrated candidates have no live rows in either local store.
+- Found a display limitation: online monitor's newest-result timestamp is availability, not verified per-model consumption, and includes preseason. Primary cycle provenance gives stronger evidence. No automatic research-to-primary promotion; future improvement remains unproven.
+- Verification: `PYTHONPATH=backend backend/.venv/bin/python -m pytest backend/tests/test_retrain_cadence.py backend/tests/test_near_tipoff.py backend/tests/test_training_monitor.py -q`: **28 passed**, two existing dependency/environment warnings. No runtime edits, live writes, deployment, or new browser check. Next: expose actual per-model learning provenance, then evaluate a separately versioned NHL within-season refit policy using existing cadence machinery.
+
+## Threshold status read — Codex, 2026-10-05 22:18 UTC
+- Read local `data/nba.sqlite` and `data/nhl.sqlite` using `connect_readonly` and `tracking.report`; API :8100 was unreachable from the shell. Latest NHL market forecast 21:48:56 UTC, latest final result availability 04:24:32 UTC. NBA has no two-hour threshold groups; NHL primary markets have 23 decided games and 3 pending at their lowest threshold. Reported each market/source separately, with cumulative thresholds and W–L denominators; no research-version pooling.
+- No model/data changes or accuracy claim. Next: continue prospective recording; samples remain too small to choose a reliable threshold.
+
+## Codex calibrated-shadow review — 2026-10-05, HEAD `218b81c`
+- Approved for local research-only use: no new blocking defect found in implementation `33a8638` with strengthened tests/docs through `4ee66c9`. Reviewed calibration math/push handling, earlier-season and availability gates, append-only recording/retries, identities, and exclusion from voting/selection. No application code changed in this review.
+- Independent checks: `PYTHONPATH=backend backend/.venv/bin/python -m pytest backend/tests/test_calibrated_shadows.py backend/tests/test_calibration_study.py backend/tests/test_training_monitor.py -q` **32 passed**; candidate-pool/agreement-tracking test files with the same command **41 passed**. Existing joblib core-detection and Starlette deprecation warnings only. `python3 scripts/check_project.py` and `git diff --check` passed.
+- Read-only validation on `/private/tmp/codex-calibrated-shadow-preview`: all nine current-definition artifacts/fits load with valid digest, >=300 games, training seasons before 2027, and ordered result/cutoff/creation timestamps. NBA identity `896aa9930176f03e`, NHL `69b2ba7c05e8cd4c`.
+- Limits: no fresh full readiness or browser run (runtime unchanged since prior author's checks); no real eligible-game recording/retry verified, no prospective accuracy or bookmaker-line transfer established. Existing NHL plain-grid backtest/live empty-net mismatch remains outside this change. No deployment or live-data mutation.
+- Next: after a deliberate release decision, prepare fits using final code and verify first eligible real-game recording and retry. This review does not authorize deployment.
+
 ## Agreement review (read-only) — Devin started, Claude (Opus 5.5) finished after Devin stalled, 2026-10-04 ~23:30 EDT
 - **Counting is correct.** Devin's pending checks, run by Claude: agreement/joint/historical-selection tests **39 passed**; Devin's exhaustive
   script (`combine.agreement` + `agreement_tracking.joint_classify` vs independently stated rules, all 2–8-model winner/3-way vote

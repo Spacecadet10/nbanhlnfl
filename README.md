@@ -117,6 +117,25 @@ Run from `backend/`:
   (the one-time retrospective study; already run, do not rerun for evaluation). The UI shows it on Today (research line for the
   selected market: exact line, status, missing inputs, minutes before start),
   Game (Model selection card), History (Research recommendations) and Performance (forward research + retrospective study).
+- **Adaptive system `adaptive-v1` (research; docs/ADAPTIVE_SYSTEM.md).** Both sports. Every learned member (the core walk
+  members and every registry candidate, the `mlp` / `torch_mlp` / `keras_mlp` networks included) is refitted within the
+  season at the first forecast of each ISO week when new eligible results exist; a learned combination over every
+  compatible member is refitted on the same schedule from out-of-sample predictions (walk-forward history of the last two
+  completed seasons plus the current one, with settled prospective adaptive forecasts replacing the reconstruction of the
+  same game). Training runs only off the forecast path: the scheduled
+  `adaptive-train` command (research-environment Python, `scripts/launchd/com.nba-predictor.adaptive-train.plist`, not
+  installed) snapshots the store under the job lock, trains from the snapshot under its own training lock and publishes the
+  fit records under the job lock again, skipping unless the next game's week differs from the fit in force; `daily` only
+  reports whether a run is due; the two-hour cycle (`predict-now`) only loads the verified artifacts, delivers
+  results that arrived after their cutoff, and records `adaptive_forecasts` (probability or an explicit `unavailable` row
+  with the reason; contributing members, weights, missing members, training cutoff, weight-update time, bookmaker quote at
+  the same line or "unavailable", pick / no pick under the research selector's unchanged thresholds). A failed refit keeps
+  the previous valid artifact in force and is logged in `adaptive_fits`. Separate identity (`adaptive-v1:<member>:<definition>`),
+  separate tables; nothing replaces the primary forecast. CLI: `adaptive-train [--dry-run|--force]`, `adaptive-record`,
+  `adaptive-status`, `adaptive-replay` (chronological development-season comparison; reserved test seasons never read).
+  Deep networks are fitted only where torch / tensorflow are installed at their pinned versions (the research environment);
+  elsewhere they are skipped with the reason. UI: Game page "Adaptive combination" card, Performance → research details →
+  "Adaptive system" card. API: `/api/research/adaptive`, `/api/research/adaptive/game/{id}`.
 - Odds (free, no key): each snapshot appends DraftKings moneylines with their retrieval time. The last quote confirmed
   before tipoff is our own closing snapshot (`coverage` → `closing_lines`, with minutes before tipoff). It is not a
   bookmaker-published close, and it exists only for games snapshotted while the collector was running.

@@ -2,6 +2,7 @@
 import argparse
 import json
 import os
+import sys
 
 from . import backtest, config, coverage, db, ingest, jobs, release, sports
 from .models.elo import EloConfig
@@ -12,7 +13,8 @@ SPORT_COMMANDS = {"nhl-pbp-import", "nhl-xg-research", "migrate", "replay", "cov
                   "score", "daily", "scheduler", "predict-now", "score-near-tipoff", "markets", "score-markets", "agreement", "thresholds",
                   "combination-study", "selector-decide", "research-report", "retrain-cadence", "catboost-challenger", "combination-search", "expanded-search", "selective-study", "rules-registry",
                   "daily-cadence", "features-nhl", "tracking-report", "tracking-record", "pool-screen", "pool-assess", "pool-record", "pool-roster", "pool-report",
-                  "release-check", "diagnostics", "historical-start", "model-audit", "calibration-study"}
+                  "release-check", "diagnostics", "historical-start", "model-audit", "calibration-study",
+                  "adaptive-train", "adaptive-record", "adaptive-status", "adaptive-replay"}
 NHL_ONLY = {"nhl-pbp-import", "nhl-xg-research", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies"}
 
 
@@ -20,7 +22,7 @@ NHL_ONLY = {"nhl-pbp-import", "nhl-xg-research", "ingest-nhl", "nhl-validate", "
 # report can never make a scheduled two-hour cycle wait, skip or miss a game. (`score` is not here: it records a job run.)
 READ_ONLY_COMMANDS = {"score-markets", "score-near-tipoff", "thresholds", "research-report", "pool-report", "pool-roster",
                       "tracking-report", "coverage", "release-check", "diagnostics", "historical-start", "model-audit",
-                      "calibration-study"}
+                      "calibration-study", "adaptive-status", "adaptive-replay"}
 LOCK_WAIT_SECONDS = 45 * 60     # longer than any two-hour cycle (NHL ~13 minutes); a job still waiting then fails visibly
 ODDS_LOCK_WAIT_SECONDS = 120    # the periodic cycle waits out a short job (daily, injuries), not another full cycle
 
@@ -180,6 +182,17 @@ def main(argv=None) -> int:
     pr = sub.add_parser("pool-record", help="Two-hour candidate forecasts for winner/reg3 markets (lines come from the core cohort)")
     pr.add_argument("--dry-run", action="store_true")
     sub.add_parser("pool-roster", help="Read-only candidate roster")
+    at_ = sub.add_parser("adaptive-train", help="adaptive-v1 (docs/ADAPTIVE_SYSTEM.md): scheduled within-season refits of every "
+                         "learned member and the combiner, off the forecast path; artifacts only, forecasts unchanged")
+    at_.add_argument("--dry-run", action="store_true", help="Fit in memory only; no artifact, fit record or history checkpoint")
+    at_.add_argument("--force", action="store_true", help="Train even when no refit is due")
+    ar = sub.add_parser("adaptive-record", help="adaptive-v1 forecasts for games within two hours of the start (normally the two-hour cycle)")
+    ar.add_argument("--dry-run", action="store_true")
+    sub.add_parser("adaptive-status", help="Read-only adaptive-v1 status: fits in force, weights, exclusions, due state, record")
+    arp = sub.add_parser("adaptive-replay", help="Chronological replay of adaptive-v1 against the existing system on development "
+                         "seasons (exploratory; reserved test seasons are never read)")
+    arp.add_argument("--out", help="Report directory (default data/reports/adaptive-replay-<sport>-<time>)")
+    arp.add_argument("--skip-deep", action="store_true", help="Leave the deep networks out even where their libraries are installed")
     pr = sub.add_parser("pool-rules", help="Freeze the candidate-pool selection registry from the stage-2 evidence (CANDIDATE_POOL §7)")
     pr.add_argument("--effective-from", required=True)
     sub.add_parser("pool-report", help="Read-only prospective record of the pool registry's sources and pool decisions")
@@ -257,6 +270,16 @@ def main(argv=None) -> int:
         report = calibrated.prepare(db.connect_readonly(args.sport), args.sport, args.season, args.cutoff)
         print(json.dumps(report, indent=1, default=str))
         return 0
+    if args.cmd == "adaptive-train":     # its own locking (docs/ADAPTIVE_SYSTEM.md §7): the job lock only for the snapshot and
+        from . import adaptive           # the publication, the training itself under a separate training lock
+        log = lambda m: print(m, file=sys.stderr)   # noqa: E731
+        if args.dry_run:
+            r = adaptive.train(db.connect_readonly(args.sport), write=False, force=args.force, log=log)
+            r = adaptive._summary(r)
+        else:
+            r = adaptive.run_scheduled(args.sport, force=args.force, log=log)
+        print(json.dumps(r, indent=1, default=str))
+        return 1 if r["status"] == "failed" else 0
     if args.cmd == "pool-fit-deep":      # query-only store, no job lock, no migration; writes artifact files only
         from .candidates import live as pool_live
         report = pool_live.fit_deep_artifacts(db.connect_readonly(args.sport))
@@ -664,6 +687,21 @@ def _run(args, p, conn, applied) -> int:
             print(json.dumps({k: v for k, v in r.items() if k != "forecasts"}, default=str))
         else:
             print(json.dumps(pool_live.roster(conn, args.sport), indent=1, default=str))
+    elif args.cmd == "adaptive-record":
+        from . import adaptive
+        r = adaptive.record(conn, write=not args.dry_run)
+        print(json.dumps(r, indent=1, default=str))
+        return 1 if r["status"] == "failed" else 0
+    elif args.cmd == "adaptive-status":
+        from . import adaptive
+        print(json.dumps(adaptive.status(conn), indent=1, default=str))
+    elif args.cmd == "adaptive-replay":
+        from pathlib import Path
+        from . import adaptive_replay
+        report = adaptive_replay.run(conn, args.sport, out_dir=Path(args.out) if args.out else None, skip_deep=args.skip_deep,
+                                     log=lambda m: print(m, file=sys.stderr))
+        print(json.dumps({"output_dir": report["output_dir"], "markets": {m: {s: (v["log_loss"] if v else None) for s, v in
+                          x["comparison"]["sources"].items()} for m, x in report["markets"].items()}}, indent=1))
     elif args.cmd == "selector-decide":
         result = jobs.selector_decisions(conn)
         print(json.dumps(result, indent=2))

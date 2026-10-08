@@ -98,19 +98,39 @@ def _versions_and_next(conn, f: dict, now: str) -> dict:
 
 
 def _online(conn, now: str) -> list:
-    """Online members update after every result: their last update is the latest delivered final result."""
-    from . import agreement, research_live
+    """Separate available eligible results from consumption proven by forecast provenance."""
+    from . import agreement, research_live, live, near_tipoff
     sport = conn.execute("SELECT sport FROM store_identity").fetchone()
     if not sport:
         return []
     sport = sport[0]
-    last = conn.execute("SELECT max(result_available_at) FROM games WHERE status='final' AND result_available_at<=?",
-                        (now,)).fetchone()[0]
+    last = conn.execute("SELECT max(result_available_at) FROM games WHERE status='final' AND result_available_at<=? "
+                        "AND season_type IN (" + ",".join("?" for _ in live.engine(conn).eligible_types) + ")",
+                        (now, *live.engine(conn).eligible_types)).fetchone()[0]
     online = {"nba": ("elo", "points_normal", "efficiency_margin (ratings; spread refits at season start)"),
               "nhl": ("hockey_elo", "goals_poisson")}[sport]
     known = set(agreement.NAMES[sport]) | set(research_live.LINE_MEMBERS[sport])
-    return [{"member": m, "schedule": "after every result (replayed at each forecast)", "last_update_input": last,
-             "next_update": "the next delivered final result", "registered": m.split(" ")[0] in known} for m in online]
+    proof = None
+    if _has(conn, "near_tipoff_forecasts"):
+        try:
+            version = near_tipoff.current_version(conn)
+        except (ValueError, RuntimeError):
+            version = None
+        if version:
+            proof = conn.execute(
+                "SELECT n.* FROM near_tipoff_forecasts n JOIN predictions p USING(prediction_id) "
+                "WHERE p.model_version=? AND p.run_type='live' AND n.generated_at<=? "
+                "ORDER BY n.generated_at DESC, n.prediction_id DESC LIMIT 1", (version, now)).fetchone()
+    primary = "elo" if sport == "nba" else "hockey_elo"
+    return [{"member": m, "schedule": "result updates replayed at forecast time",
+             "latest_available_result": last,
+             "last_update_input": proof["latest_result_available_at"] if proof and m == primary else None,
+             "consumption_verified": bool(proof and m == primary),
+             "verified_at": proof["generated_at"] if proof and m == primary else None,
+             "results_used": proof["results_used"] if proof and m == primary else None,
+             "next_update": "next forecast using newly available eligible results",
+             "registered": m.split(" ")[0] in known} for m in online]
+
 
 
 def _update_events(conn, limit: int = 40) -> list:

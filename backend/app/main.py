@@ -331,6 +331,33 @@ def research_training(p=Depends(get_provider)):
     return {**training_monitor.status(p.conn, p.now), "mode": "real"}
 
 
+@app.get("/api/research/adaptive")
+def research_adaptive(p=Depends(get_provider)):
+    """adaptive-v1 (docs/ADAPTIVE_SYSTEM.md): fits in force, combination weights, exclusions, schedule, due state, recent
+    training attempts, prospective record and the replay summary. Read-only; separate from the primary system."""
+    if p.mode != "real":
+        return {"mode": "demo", "version": "adaptive-v1", "sport": "nba", "combiner": None, "members": [], "attempts": [],
+                "prospective": {"markets": {}, "pending": 0}, "replay": None, "due": {"due": False, "reason": "demo mode"},
+                "schedule": {}, "enabled": False, "note": "The adaptive system reads the real stores; none in demo mode."}
+    from . import adaptive
+    if not db.has_table(p.conn, "adaptive_fits"):
+        raise HTTPException(status_code=503, detail="Adaptive tables missing: run `python -m app.cli migrate` for this sport.")
+    return {**adaptive.status(p.conn, p.now), "mode": "real"}
+
+
+@app.get("/api/research/adaptive/game/{game_id}")
+def research_adaptive_game(game_id: str, p=Depends(get_provider)):
+    """Latest adaptive-v1 forecast per market for one game: probability, contributing members and weights, training
+    cutoff, weight-update time, odds availability, pick or abstention with its reason."""
+    if p.mode != "real":
+        return {"mode": "demo", "game_id": game_id, "version": "adaptive-v1", "markets": [], "status": "no_adaptive_forecast",
+                "note": "The adaptive system reads the real stores; none in demo mode."}
+    from . import adaptive
+    if not db.has_table(p.conn, "adaptive_forecasts"):
+        raise HTTPException(status_code=503, detail="Adaptive tables missing: run `python -m app.cli migrate` for this sport.")
+    return {**adaptive.game_detail(p.conn, game_id, p.now), "mode": "real"}
+
+
 @app.get("/api/research/historical-start")
 def research_historical_start(market: str = MARKET, p=Depends(get_provider)):
     """Separately labelled historical starting policy (app/historical_start.py): the frozen rule chosen on walk-forward

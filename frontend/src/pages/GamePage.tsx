@@ -10,6 +10,7 @@ import { american, calendarDate, dateTime, pct } from '../format';
 import { MarketForecastsCard } from '../components/MarketView';
 import { DetailsToggle, useCarriedSearch, useDetails, useSport } from '../components/Selection';
 import { ResearchGameCard } from '../components/Research';
+import { AdaptiveGameCard } from '../components/Adaptive';
 import { TrackingGameCard } from '../components/Tracking';
 
 export function GamePage() {
@@ -60,6 +61,7 @@ function Detail({ game: g }: { game: GameDetail }) {
       <DetailsToggle />
       {details && <>
         <ResearchGameCard sport={sport} gameId={g.game_id} />
+        <AdaptiveGameCard sport={sport} gameId={g.game_id} />
         <TrackingGameCard sport={sport} gameId={g.game_id} />
       </>}
       <div className="card">

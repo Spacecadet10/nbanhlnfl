@@ -1,5 +1,5 @@
 // The app's single API client. All screens fetch through here; there is no local fallback data.
-import type { HistoricalStart,
+import type { AdaptiveGame, AdaptiveStatus, HistoricalStart,
   JointReport, ThresholdReport, AgreementPerformance, GameDetail, GamesResponse, HistoryResponse, MarketHistoryResponse, MarketId, MarketPerformanceResponse, Meta,
   PerformanceResponse, Policy, ResearchGame, ResearchHistory, ResearchReport, ResearchSlate, Retrospective, RuleReport, CandidateRoster, PoolReport, SelectionStatus, Sport,
   TrainingStatus, TrackingCheck, TrackingEvidence, TrackingGame, TrackingKind, TrackingReport,
@@ -102,4 +102,8 @@ export const api = {
   researchStatus: (sport: Sport, signal?: AbortSignal) => get<SelectionStatus>('/research/status', { sport }, signal),
   researchHistory: (sport: Sport, signal?: AbortSignal) => get<ResearchHistory>('/research/history', { sport }, signal),
   researchRetrospective: (sport: Sport, signal?: AbortSignal) => get<Retrospective>('/research/retrospective', { sport }, signal),
+  // adaptive-v1: separately versioned adaptive combination (research), never the primary forecast.
+  adaptiveStatus: (sport: Sport, signal?: AbortSignal) => get<AdaptiveStatus>('/research/adaptive', { sport }, signal),
+  adaptiveGame: (sport: Sport, id: string, signal?: AbortSignal) =>
+    get<AdaptiveGame>(`/research/adaptive/game/${encodeURIComponent(id)}`, { sport }, signal),
 };

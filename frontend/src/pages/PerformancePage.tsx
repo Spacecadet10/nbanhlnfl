@@ -7,6 +7,7 @@ import { RunBadge } from '../components/Badges';
 import { MarketReport, MarketVersionSelect } from '../components/MarketView';
 import { AgreementTracking } from '../components/Tracking';
 import { TrainingStatusCard } from '../components/Training';
+import { AdaptiveStatusCard } from '../components/Adaptive';
 import { CandidateRosterCard, HistoricalStartCard, CombinationRules, PoolSelectionCard, SelectionStatusCard, ResearchPerformance, RetrospectiveStudy } from '../components/Research';
 import { DetailsToggle, MarketSelect, useDetails, useMarket, useSport } from '../components/Selection';
 import { PolicyToggle, RunTypeToggle, usePolicy, useRunType } from '../components/RunTypeToggle';
@@ -74,6 +75,7 @@ function ResearchSection({ sport, market, show, thresholds }: { sport: Sport; ma
         <CombinationRules sport={sport} market={market} />
         <CandidateRosterCard sport={sport} market={market} />
         <TrainingStatusCard sport={sport} />
+        <AdaptiveStatusCard sport={sport} />
         <PoolSelectionCard sport={sport} market={market} />
         <RetrospectiveStudy sport={sport} market={market} />
       </>}

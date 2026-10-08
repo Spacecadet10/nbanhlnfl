@@ -18,6 +18,7 @@ function TrainingBody({ t }: { t: TrainingStatus }) {
   if (t.mode === 'demo') return <Empty>{t.note}</Empty>;
   return <>
     <p className="small muted">{t.note}</p>
+    <p className="small muted">Team inputs can update between weight refits. Research selection does not automatically replace the primary model.</p>
     <h3>Learned members (fit in force)</h3>
     {t.fits.length === 0 ? <Empty>No learned member has a registered fit in this store yet (fits are registered at their first two-hour forecast).</Empty>
       : <div className="table-wrap"><table className="table small">
@@ -32,8 +33,12 @@ function TrainingBody({ t }: { t: TrainingStatus }) {
             <div className="muted">calibration: {f.versions.calibration}</div></td></tr>)}</tbody>
       </table></div>}
     <h3>Online members</h3>
-    <ul className="small">{t.online.map((o) => <li key={o.member}><strong>{modelName(o.member)}</strong>: {o.schedule}; latest result used
-      {' '}{o.last_update_input ? dateTime(o.last_update_input) : '—'}; next: {o.next_update}</li>)}</ul>
+    <ul className="small">{t.online.map((o) => <li key={o.member}><strong>{modelName(o.member)}</strong>: {o.schedule}.
+      <div>Latest eligible result available: {o.latest_available_result ? dateTime(o.latest_available_result) : 'none'}.</div>
+      <div>{o.consumption_verified ? <>Verified forecast: {dateTime(o.verified_at!)}; {o.results_used} results used,
+        latest {o.last_update_input ? dateTime(o.last_update_input) : 'none'}.</>
+        : 'Result consumption is not verified by per-model forecast provenance.'}</div>
+      <div>Next state update: {o.next_update}.</div></li>)}</ul>
     <h3>Inputs</h3>
     <ul className="small">{Object.entries(t.inputs).map(([job, i]) => <li key={job} className={i.stale ? 'warn' : undefined}>
       {job}: last success {i.last_success ? dateTime(i.last_success) : 'never'}{i.stale ? ` — stale (older than ${i.stale_after_hours} h)` : ''}</li>)}</ul>

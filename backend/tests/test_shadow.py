@@ -195,14 +195,15 @@ def test_daily_runs_shadow_steps_only_when_enabled(sealed, monkeypatch):
     empty = json.dumps({"events": []}).encode()
     monkeypatch.delenv("NBA_SHADOW_RECORDING", raising=False)
     out = jobs.daily(sealed, fetch=lambda _m: empty, sleep=lambda _s: None)
-    assert list(out) == ["refresh", "score", "two_hour_score", "market_score", "forecast_policy", "training_check"]
+    assert list(out) == ["refresh", "score", "two_hour_score", "market_score", "forecast_policy", "training_check", "adaptive_train"]
     assert out["training_check"].get("status") != "failed"
     assert sealed.execute("SELECT COUNT(*) FROM job_runs WHERE job IN ('boxscores', 'shadow')").fetchone()[0] == 0
     monkeypatch.setenv("NBA_SHADOW_RECORDING", "1")
     monkeypatch.setattr(jobs, "boxscores", lambda conn: {"status": "skipped"})
     monkeypatch.setattr(jobs, "shadow_forecasts", lambda conn: {"status": "success"})
     out = jobs.daily(sealed, force_refresh=True, fetch=lambda _m: empty, sleep=lambda _s: None)
-    assert list(out) == ["refresh", "boxscores", "score", "two_hour_score", "market_score", "forecast_policy", "training_check"]
+    assert list(out) == ["refresh", "boxscores", "score", "two_hour_score", "market_score", "forecast_policy", "training_check",
+                         "adaptive_train"]
 
 
 # ---- possession refresh ----------------------------------------------------------------------------------------

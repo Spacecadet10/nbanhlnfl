@@ -367,6 +367,8 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
                                                    defn=(out["research"] or {}).get("definition"))
             # Agreement tracking (tracking-v2): one observation per registered group and cohort; never raises.
             out["tracking"] = agreement_tracking(conn, game_ids=accepted, now=now, write=not dry_run)
+            # adaptive-v1 forecasts from the artifacts in force (docs/ADAPTIVE_SYSTEM.md); no fit here, never raises.
+            out["adaptive"] = adaptive_record(conn, game_ids=accepted, now=now, write=not dry_run)
         else:
             out["research"] = {"status": "disabled", "reason": "RESEARCH_SELECTION=0"}
     return {"status": status, **out} if dry_run else _finish(conn, run_id, status, 1, out)
@@ -484,6 +486,30 @@ def agreement_tracking(conn: sqlite3.Connection, **kw) -> dict:
         return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
 
 
+def adaptive_record(conn: sqlite3.Connection, **kw) -> dict:
+    """adaptive-v1 forecasts (app/adaptive.py): artifacts in force only, separate append-only table; never raises."""
+    try:
+        from . import adaptive
+        r = adaptive.record(conn, **kw)
+        return {k: v for k, v in r.items() if k != "forecasts"}
+    except Exception as exc:
+        conn.rollback()
+        return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+
+
+def adaptive_train(conn: sqlite3.Connection, **kw) -> dict:
+    """adaptive-v1 training status for the nightly report. Training itself never runs inside this job: it holds the
+    store's job lock, which would make the two-hour cycles skip. `adaptive-train` (its own scheduled command) snapshots
+    and publishes under brief locks and trains under a separate training lock. Never raises."""
+    try:
+        from . import adaptive
+        d = adaptive.due(conn, kw.get("now"))
+        return {"status": "due" if d.get("due") else "not_due", **d,
+                "note": "training runs under its own lock via `adaptive-train` (scripts/launchd/com.nba-predictor.adaptive-train.plist)"}
+    except Exception as exc:
+        return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+
+
 def pool_selection(conn: sqlite3.Connection, **kw) -> dict:
     """Candidate-pool selections (app/candidates/selection.py), separate tables; never touches core or primary rows."""
     try:
@@ -530,6 +556,8 @@ def daily(conn: sqlite3.Connection, *, force_refresh: bool = False, **refresh_kw
         out["training_check"] = training_monitor.status(conn)
     except Exception as exc:
         out["training_check"] = {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+    # adaptive-v1 (docs/ADAPTIVE_SYSTEM.md): due state only; the refits run as `adaptive-train` under their own lock.
+    out["adaptive_train"] = adaptive_train(conn) if research_live.enabled() else {"status": "disabled", "reason": "RESEARCH_SELECTION=0"}
     return out
 
 
