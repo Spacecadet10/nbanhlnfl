@@ -763,3 +763,22 @@ Started 22:46 EDT after the last NHL game (02:00 UTC) had begun and the 22:15 ni
 - Scheduler: `com.nba-predictor.adaptive-train.plist` copied to `~/Library/LaunchAgents` and bootstrapped (loaded, fires 09:30 local, both sports, research venv on the release checkout).
 - Recovery: the 03:08 UTC NHL odds cycle's recovery step reconstructed 3 missed games (18 rows, bounded per cycle); `/api/recovered-forecasts?sport=nhl` shows them as "retrospective" (winner 2–1 at 50%+), while `/api/thresholds` and the live record are unchanged (winner 32 forecasts, 17–14; `predictions` 9,002 and `market_forecasts` 965 exactly as before the move). NBA: 0 missed eligible games.
 - Live API after the move: `/api/research/adaptive?sport=nhl` → combiner success, due false ("fit in force already prepared for 2027:2026-W41"); first live `adaptive_forecasts` rows will be written by the first two-hour cycle (NHL games from 23:00 UTC Oct 8); the first ordinary next-week refit is the Monday 09:30 run.
+
+
+## Missing NGBoost dependency repair — Codex, 2026-10-08
+- Installed project-pinned `ngboost==0.5.11` into research AND release environments (training and pickled-model inference require it). uv resolver added dependencies without replacing existing packages; `uv pip check` passes in both. No source/release commit changes.
+- Library fingerprint changes affect both sports: due() now reports no current-definition combiner, NBA `3f090596b8efcb6e`, NHL `2c63d35ec5a24519`. Started installed launchd adaptive-train job immediately with kickstart; it runs NHL then NBA. Training completion remains pending; do not describe prior fits as matching these new definitions.
+- Stored next eligible games: NHL Oct 8 23:00 UTC (two-hour window opens 17:00 Toronto); NBA Oct 20 19:00 UTC. Zero adaptive rows before these windows is not evidence of a recording defect. Scheduler first execution initiated manually for this repair.
+- Checks: structure guard and whitespace pass; no frontend edits/browser rerun or full readiness. Next: inspect `data/adaptive-train-launchd.log`, verify successful current-definition combiners and NGBoost member fit, then first prospective forecast. Mac must remain awake during training.
+
+
+## 2026-10-09 post-activation refit under the NGBoost definitions — Claude (Fable 5.1)
+- `data/adaptive-train-launchd.log` (scheduler job kickstarted by Codex 11:06 UTC Oct 8, research venv, release code): NHL success,
+  16 published, 0 failed, combiner success (def `2c63d35ec5a24519`); NBA success, 22 published, 0 failed, combiner success
+  (def `3f090596b8efcb6e`, NGBoost member fit: 104 fits). Read-only store checks: `adaptive_fits` new-definition rows NHL 1 combiner +
+  15 members, NBA 1 + 21; snapshots removed; job_runs continued every cycle (odds 07:15–07:54 UTC) while training.
+- `adaptive_forecasts`: 11 rows, all `unavailable` ("no combiner fit for this definition yet"), game `nhl:2026020065`, generated
+  01:11/01:45 UTC Oct 9 before its 02:00 UTC start; `/api/research/adaptive/game/nhl:2026020065` shows them. `recovered_forecasts`:
+  96 rows / 16 NHL games; live counts unaffected.
+- `requirements-release.txt` + 21 pins (ngboost closure); `git diff --check`, structure guard passed; release fast-forwarded, `release-check`
+  clean NHL and NBA.
