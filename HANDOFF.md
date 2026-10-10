@@ -1,5 +1,20 @@
 # Current handoff
 
+## Adaptive recovery DEPLOYED (option a: backfill first) — Claude (Opus 5.5), 2026-10-10 02:25–02:37 UTC, user-approved
+- User chose to deploy before Codex's review of 8fda360; that review is still owed (now post-deploy).
+- Backups (under job locks, integrity ok, schema 25): `data/backups/{nhl,nba}-before-0026-20261010.sqlite`.
+- Release fast-forwarded 27eafef -> f7ee505 (includes Codex's status panel d463213); `app.cli --sport {nhl,nba} migrate` applied
+  0026. Backfill on the live NHL store under the job lock, new code with the definition pinned to the old `2c63d35ec5a24519`
+  (scratch script, same method as the dry run): 60 reconstructed rows / 10 games, 0 unreconstructable, 0 errors.
+- `release-check` (launchd env) nhl/nba: problems [], schema 26/26, commit f7ee505. API restarted (health ok); frontend rebuilt,
+  web restarted (:4173 /performance 200, proxy 200). `/api/recovered-forecasts?sport=nhl` adaptive: 60 records, 6 groups.
+- New definitions: NHL `8631cc578d16aa5c`, NBA `2a0111fd73fc5cfa`; no combiner yet, so live adaptive forecasts are `unavailable`
+  until training publishes. Retrain kickstarted 02:36 UTC (launchd job, caffeinate held; NHL then NBA).
+- Expected side effect: once the new NHL combiner publishes, recovery under the new definition will add `unreconstructable` rows
+  for the Oct 8–9 games (keyed per definition); the 60 rows under the old definition remain.
+- Next: confirm NHL combiner publishes before the first Oct 10 game (17:00 UTC) and the 2h cycle writes `status='forecast'`;
+  confirm NBA publishes; Codex review of the deployed recovery diff.
+
 ## First live NHL adaptive forecasts verified — Claude (Opus 5.5), 2026-10-10 02:20 UTC
 - Live API (`:8100/api/research/adaptive/game/...`): all 4 Oct 9 NHL games (`nhl:2026020066`-`069`) have adaptive status `recorded`,
   every market (`winner`, `reg3`, `spread`, `total`, both team totals) `status='forecast'`, probabilities summing to 1.0, combiner
