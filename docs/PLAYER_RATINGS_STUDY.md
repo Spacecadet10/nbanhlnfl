@@ -119,3 +119,68 @@ dressed-roster proxy succeeding: that proxy could fail simply because it measure
 The rating update spreads each game's prediction error over the players by minutes. Teammates who share minutes move together, so
 a rating is a **predictive team-strength input**, not an isolated estimate of a player's individual ability. Results are read only
 as forecast quality, never as player valuations.
+
+## 10. Results (run 2026-10-10 15:21 UTC, after §1–§9 were committed)
+
+Run: `player_ratings.evaluate` on the copy `~/nba-predictor-research-data/players-v1/` (report
+`reports/players-v1-2026-10-10T152102Z/report.json`, per-game `games.json`). K chosen on 2020-21 only: **0.02** (MSE 204.1 /
+202.5 / 208.3 for 0.01 / 0.02 / 0.04). The injury-report facts rebuilt by the new module match `avail_v1`'s exactly on all
+1,002 development dates (parity check), and B+I reproduces the earlier `avail_v1` result.
+
+**Verdict: player ratings add no demonstrable information**, with or without the injury report, in the development seasons
+or in the recent seasons. The injury report still helps. Negative result; nothing to promote.
+
+### Development (decision), 2021-22 … 2023-24, 3,667 evening games, all four variants on identical games
+| Variant | Accuracy | Log loss | Brier | ECE | ≥0.65: games / acc | ≥0.75: games / acc |
+|---|---|---|---|---|---|---|
+| B `logistic_v2` | 64.5% | 0.6300 | 0.2199 | 0.022 | 1,639 / 73.5% | 688 / 78.9% |
+| B+I `avail_v1` | 66.0% | 0.6251 | 0.2177 | 0.023 | 1,708 / 73.7% | 732 / 79.6% |
+| B+R | 64.7% | 0.6299 | 0.2199 | 0.024 | 1,631 / 73.1% | 685 / 79.1% |
+| B+R+I | 65.6% | 0.6248 | 0.2177 | 0.026 | 1,717 / 73.3% | 748 / 79.7% |
+
+| Comparison (paired, week-block bootstrap) | Log loss diff | Bonferroni interval | Accuracy diff [95%] |
+|---|---|---|---|
+| **Primary 1:** B+R − B | −0.0001 | [−0.0006, +0.0004] | +0.2 pts [−0.1, +0.5] |
+| **Primary 2:** B+R+I − B+I | −0.0002 | [−0.0013, +0.0009] | −0.3 pts [−0.7, +0.0] |
+| Secondary: B+I − B | −0.0049 | [−0.0095, −0.0003] | +1.5 pts [+0.4, +2.6] |
+| Secondary: B+R+I − B | −0.0051 | [−0.0097, −0.0006] | +1.1 pts [+0.1, +2.3] |
+
+Per season, log loss B / B+I / B+R / B+R+I: 2022 0.6372 / 0.6287 / 0.6372 / 0.6285; 2023 0.6429 / 0.6341 / 0.6429 / 0.6344;
+2024 0.6098 / 0.6125 / 0.6095 / 0.6116 (in 2024 the injury report did not help on log loss).
+
+### Recent seasons, 2024-25 and 2025-26: retrospective, previously reserved; not a final test (2,430 games)
+| Variant | Accuracy | Log loss | Brier | ECE | ≥0.65: games / acc | ≥0.75: games / acc |
+|---|---|---|---|---|---|---|
+| B | 67.3% | 0.6013 | 0.2074 | 0.023 | 1,245 / 76.5% | 603 / 82.3% |
+| B+I | 68.4% | 0.5904 | 0.2029 | 0.023 | 1,333 / 76.4% | 700 / 84.6% |
+| B+R | 67.6% | 0.6005 | 0.2071 | 0.021 | 1,262 / 76.2% | 611 / 82.5% |
+| B+R+I | 68.4% | 0.5895 | 0.2024 | 0.020 | 1,345 / 76.4% | 703 / 84.5% |
+
+| Comparison | Log loss diff | Bonferroni interval | Accuracy diff [95%] |
+|---|---|---|---|
+| B+R − B | −0.0007 | [−0.0017, +0.0002] | +0.3 pts [−0.3, +0.9] |
+| B+R+I − B+I | −0.0010 | [−0.0025, +0.0006] | −0.0 pts [−0.6, +0.6] |
+| B+I − B | −0.0108 | [−0.0157, −0.0059] | +1.2 pts [−0.1, +2.4] |
+| B+R+I − B | −0.0118 | [−0.0172, −0.0064] | +1.1 pts [−0.2, +2.4] |
+
+Per season, log loss B / B+I / B+R / B+R+I: 2025 0.6037 / 0.5945 / 0.6030 / 0.5933; 2026 0.5989 / 0.5864 / 0.5981 / 0.5856.
+The player-rating point estimates lean slightly favourable in the recent seasons, but every interval includes zero, and these
+seasons cannot overturn the development result (§3).
+
+### Coverage
+- Reports: 1,002 development and 422 recent dates, all with a publication header and usable (0 download failures, 0 not
+  available). Every scored game had a usable report for both teams (`report_used` 100%). Entries without a team: 18 (dev), 77 (all).
+- Unresolved report names per season: 2020 303, 2021 8, 2022 0, 2023 18, 2024 26, 2025 89, **2026 227** (higher; these players
+  are simply not removed from the expected roster).
+- Rating updates: 6,269 games through 2023-24, 8,912 through 2025-26; 6 results had no player box (no update).
+- Access to 2025/2026 logged in the copy's `eval/test_access.jsonl` and mirrored to `data/eval/test_access.jsonl`.
+
+### Limitations
+- Name matching level `team_any_season` uses every loaded season, so loading 2025–26 slightly changed 2024 match counts
+  (`team_any_season` 320 → 386, `league_unique` 459 → 393). It affects which ESPN id a report name maps to, never outcomes; same
+  behaviour as `avail_v1`.
+- Report publication times are assumed (header / Last-Modified), as in `avail_v1`.
+- One rating rule, one K grid, no tuning beyond K: a better-specified player model (e.g. regularized plus-minus with on/off
+  splits) is not ruled out by this result.
+- Ratings are a team-strength input (§9); `player_diff_full` is highly collinear with team Elo and net rating (its fitted weight
+  0.13 vs elo 0.25 and net 0.29 in the last B+R fit).

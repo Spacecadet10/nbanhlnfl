@@ -1,5 +1,34 @@
 # Current handoff
 
+## players-v1 study RUN, ready for Codex review — Claude (Opus 5.5), 2026-10-10 15:21 UTC
+- Implementation: `backend/app/player_ratings.py` (new; no hashed/live file edited), `backend/tests/test_player_ratings.py`
+  (7 tests: newcomer prior/season carry, roster from earlier games only + trades keep rating, report removal/halving/rescale,
+  missing/unsubmitted report fallback, own outcome/box independence, results used only once delivered, K from 2021 only).
+  Checks: 24 passed (player_ratings + availability + availability_live); `scripts/check_project.py` structure guard passed.
+- Data copy `~/nba-predictor-research-data/players-v1/`: player boxes 2025/2026 (sha256 8e34c5b1…, 7a4868da…), 422 recent
+  report dates (0 failed). Recent-season access logged in the copy and mirrored to `data/eval/test_access.jsonl` (only live-dir write).
+- Result (docs/PLAYER_RATINGS_STUDY.md §10): **negative**. B+R − B log loss −0.0001, Bonferroni [−0.0006, +0.0004];
+  B+R+I − B+I −0.0002 [−0.0013, +0.0009]. Recent seasons (retrospective) same: intervals include 0. Injury report (B+I) still
+  helps: dev −0.0049, recent −0.0108. K=0.02. avail_v1 report-facts parity identical on all 1,002 dev dates.
+- Gaps: 2026 unresolved report names 227; `team_any_season` identity matching uses later seasons (identity only).
+  NHL feasibility audit (§8) not started. No live model, definition, release or job changed.
+- Next: Codex reviews code, timestamp tests and evidence.
+
+## Player study progress review — Codex, Oct 10
+- Read Claude's progress transcript, committed players-v1 design, and current rating update implementation. NBA work is in progress, not an accepted result; no independent full implementation review or study verification in this turn. Preserved Claude's untracked implementation/tests and existing handoff edits.
+- NHL recommendations: distinguish missing cached data from proven source unavailability; audit per-game boxscore ice time before assuming full shift charts are required. Aggregate minutes support a simpler rating experiment; event-level on-ice attribution requires richer data. A negative dressed-roster proxy must not gate a better-measured on-ice study. Existing goalie candidates/collector should be reused and their incremental contribution evaluated, not duplicated.
+- NBA rating residual is shared among teammates in proportion to minutes; this is a roster-based predictive proxy, not an identified individual impact estimate. Trades, collinearity and uncertainty need explicit interpretation. Next: Claude finishes NBA evidence; Codex reviews code/timestamp tests and results. NHL feasibility/design remains a separate task; no live changes.
+
+## Player ratings / injuries scope — Codex, Oct 10
+- User wants chronological training across recent seasons to measure performance, plus evolving player Elo and injuries. Inspected existing availability.py, availability_live.py, candidate features and MODEL_SELECTION §features-v1: NBA already has minutes-weighted injury research and a player-quality-weighted absence study. Cached NBA player boxes currently listed for season IDs 2020–24 only; newer coverage must be audited/acquired before claiming recent-season player training. NHL goalie handling is not a full skater availability model.
+- Proposed architecture for next implementation task: extend existing point-in-time player history/availability pipeline with stable player IDs, dated team membership and shrinkage-regularized player ratings updated after each available result. Estimate pregame minutes/ice time from past data; do not use the target game lineup, actual minutes or final injury outcome. Separate team and player effects to avoid awarding every teammate the same team Elo. Preserve each rating/roster/report cutoff; trades transfer player state, rookies use an explicit prior. Weekly training may recalibrate impact coefficients while ratings update after games.
+- Compare existing team baseline, current injury candidate, player-rating candidate, and rating+injury candidate on identical chronological games; current/historical injury provenance constraints remain. Newer-season evaluation is explicitly retrospective and cannot silently bypass reserved-season access rules; record an amendment before running it. No features/models trained or deployed in this turn. Next: recovery/safe transitions, audit player coverage for both sports, then implement this extension in isolated research without changing live definitions.
+
+## Current-version verification — Codex, Oct 10 07:33 Toronto
+- Read-only live DB/API check: NHL fit 48 definition 8631cc578d16aa5c and NBA fit 66 definition 2a0111fd73fc5cfa successful; API definitions match, no definition error, due false, 15/15 and 21/21 member fits available. Latest odds jobs successful in both stores.
+- Both new definitions have zero forecasts so far; first eligible NHL game 17:00 UTC, window opens 15:00 UTC (11:00 Toronto), still future at check. NBA first eligible game Oct 20 19:00 UTC. No early/fabricated forecast generated.
+- Independently verified previous NHL definition: 24 successful rows across 4 games, all 6 markets per game; every vector in [0,1], sums within 1e-6 of one, generated strictly before start and within 7200 seconds. This proves prior-version live recording, not the replacement version. Next: verify current NHL after window opens; deployed recovery review remains owed. No runtime changes.
+
 ## Adaptive recovery DEPLOYED (option a: backfill first) — Claude (Opus 5.5), 2026-10-10 02:25–02:37 UTC, user-approved
 - User chose to deploy before Codex's review of 8fda360; that review is still owed (now post-deploy).
 - Backups (under job locks, integrity ok, schema 25): `data/backups/{nhl,nba}-before-0026-20261010.sqlite`.
