@@ -782,3 +782,9 @@ Started 22:46 EDT after the last NHL game (02:00 UTC) had begun and the 22:15 ni
   96 rows / 16 NHL games; live counts unaffected.
 - `requirements-release.txt` + 21 pins (ngboost closure); `git diff --check`, structure guard passed; release fast-forwarded, `release-check`
   clean NHL and NBA.
+
+
+## Oct 9 — automatic training sleep protection (Codex)
+- Installed and reloaded the existing idle adaptive-train LaunchAgent with `/usr/bin/caffeinate -i /bin/sh -c ...`; `launchctl print` confirms both sports remain in the command, same environment, same working directory and 09:30 calendar. No extra training started. Backup of former installed plist: `/private/tmp/adaptive-train-before-sleep-guard.plist`.
+- `plutil -lint`, structure guard, `git diff --check` passed. Four shell cases validate success and either/both sport failures; NHL failure cannot be masked by NBA success. No frontend changes/browser checks or full readiness run.
+- Both current combiners still successful; NHL 11 unavailable adaptive rows, NBA zero. Genuine live prediction still unverified. This guard covers idle sleep during training only, not lid closure or idle gaps between collection jobs.

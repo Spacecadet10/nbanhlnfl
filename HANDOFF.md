@@ -1,5 +1,11 @@
 # Current handoff
 
+## Gap closure plan and scheduled sleep protection — Codex, Oct 9
+- Scheduled training now wraps both sports in `caffeinate -i`; each run owns its assertion until the wrapper exits. Preserve NHL failure exit status even when the following NBA command succeeds. No model code/definition changes. Lid-close sleep and collection outside training remain separate reliability gaps.
+- Verification: installed/reloaded idle LaunchAgent; launchctl confirms caffeinate wrapper and unchanged 09:30 schedule. Plist lint, structure and whitespace checks pass; four shell exit-status cases pass. No retraining or model edits. Browser/full readiness not repeated for launcher-only change.
+- Architecture required before adaptive recovery implementation: separate retrospective ledger with actual reconstruction time, simulated pregame cutoff, artifact IDs/hashes and training cutoffs; never write replay into adaptive_forecasts or prospective training. Reuse the existing adaptive evaluator through a read-only replay path. Use only artifacts with training data preceding the target; if none exist, report unreconstructable rather than apply future-trained weights. Historical quotes must precede cutoff. Keep live cycles first and bound replay work. This storage/evaluator change is reserved for the next implementation task per the architecture guard.
+- Safe dependency updates must prepare and verify replacement artifacts in an isolated environment before switching the live interpreter; no automatic fallback across incompatible definitions. Next: implement the documented recovery path, then review release sequencing.
+
 ## Post-activation: NGBoost definitions refit, both sports live; requirements pinned — Claude (Fable 5.1), 2026-10-09 ~08:00 UTC
 - Codex installed `ngboost==0.5.11` in both venvs on Oct 8 (it was skipped as "optional dependency missing"); that changed both
   adaptive definitions (NHL `2c63d35ec5a24519`, NBA `3f090596b8efcb6e`) and the kickstarted scheduler job refit everything:

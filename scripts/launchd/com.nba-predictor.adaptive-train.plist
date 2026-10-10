@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- NOT INSTALLED. adaptive-v1 scheduled training (docs/ADAPTIVE_SYSTEM.md §7) run with the research environment's Python,
+<!-- adaptive-v1 scheduled training (docs/ADAPTIVE_SYSTEM.md §7) run with the research environment's Python,
      which has the pinned torch / tensorflow, so the deep members are refitted rather than kept. The release checkout's code
      is used (WorkingDirectory). The command takes the store's job lock only to snapshot and to publish; the training reads
      the snapshot under its own lock, so the odds/forecast cycles keep running. Due-only and idempotent. Install only with a
@@ -20,9 +20,11 @@
 	<string>Background</string>
 	<key>ProgramArguments</key>
 	<array>
+		<string>/usr/bin/caffeinate</string>
+		<string>-i</string>
 		<string>/bin/sh</string>
 		<string>-c</string>
-		<string>/Users/andry/nba-predictor-deep/backend/.venv/bin/python -m app.cli --sport nhl adaptive-train; /Users/andry/nba-predictor-deep/backend/.venv/bin/python -m app.cli --sport nba adaptive-train</string>
+		<string>/Users/andry/nba-predictor-deep/backend/.venv/bin/python -m app.cli --sport nhl adaptive-train; nhl_status=$?; /Users/andry/nba-predictor-deep/backend/.venv/bin/python -m app.cli --sport nba adaptive-train; nba_status=$?; if [ "$nhl_status" -ne 0 ]; then exit "$nhl_status"; fi; exit "$nba_status"</string>
 	</array>
 	<key>StandardErrorPath</key>
 	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/adaptive-train-launchd.log</string>
