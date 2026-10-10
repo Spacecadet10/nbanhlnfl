@@ -218,4 +218,167 @@ def test_an_evaluation_error_records_nothing_and_is_retried(store, monkeypatch):
     out = recovery.recover_adaptive(store, now=AFTER)
     assert out["status"] == "partial" and "raw cache missing" in json.dumps(out["errors"]) and not _rows(store)
     monkeypatch.setattr(pool_live, "_recorder", real)
-    assert recovery.recover_adaptive(store, now=AFTER)["created"] == 6
+    assert GID in recovery.recover_adaptive(store, now="2026-10-13T04:10:00Z")["backing_off"]     # waits out the backoff
+    assert recovery.recover_adaptive(store, now="2026-10-13T04:31:00Z")["created"] == 6
+    assert store.execute("SELECT count(*) FROM adaptive_recovery_attempts").fetchone()[0] == 0     # cleared once recorded
+
+
+# --- Review of 8fda360 (Oct 10): transient failures stay retryable; no starvation; component information times ------
+LATER = "2026-10-13T05:00:00Z"
+
+
+def _flaky(monkeypatch, broken):
+    real = adaptive.load_fit
+    monkeypatch.setattr(adaptive, "load_fit", lambda row: (_ for _ in ()).throw(FileNotFoundError("volume not mounted"))
+                        if broken(row) else real(row))
+    return lambda: monkeypatch.setattr(adaptive, "load_fit", real)
+
+
+@pytest.mark.parametrize("broken", [lambda row: row["kind"] == "combiner",
+                                    lambda row: row["kind"] == "member" and row["name"].startswith("hockey_elo")])
+def test_an_unreadable_artifact_records_nothing_and_is_retried(store, monkeypatch, broken):
+    _train(store, monkeypatch, TRAIN_AT)
+    run(store, CYCLE_AT)
+    _settle(store)
+    restore = _flaky(monkeypatch, broken)
+    out = recovery.recover_adaptive(store, now=AFTER)
+    assert out["status"] == "partial" and "ReplayUnavailable" in json.dumps(out["errors"]), out
+    assert out["unreconstructable"] == 0 and not _rows(store)                 # never a permanent row, never a fallback
+    restore()
+    assert recovery.recover_adaptive(store, now=LATER)["created"] == 6
+    assert {r["status"] for r in _rows(store).values()} == {"reconstructed"}
+
+
+def test_a_candidate_evaluation_error_in_a_replay_is_retried(store, monkeypatch):
+    from app.candidates import engine
+    _train(store, monkeypatch, TRAIN_AT)
+    run(store, CYCLE_AT)
+    _settle(store)
+    real = engine.outputs
+    monkeypatch.setattr(engine, "outputs", lambda *a, **k: (_ for _ in ()).throw(MemoryError("transient")))
+    assert any(m.kind == "candidate" for m in adaptive.members(store)[0])     # the fixture has candidate members
+    out = recovery.recover_adaptive(store, now=AFTER)
+    assert out["status"] == "partial" and "MemoryError" in json.dumps(out["errors"]), out
+    assert not _rows(store)
+    monkeypatch.setattr(engine, "outputs", real)
+    assert recovery.recover_adaptive(store, now=LATER)["created"] == 6
+
+
+def test_a_failing_game_rotates_backs_off_and_stops_without_blocking_later_games(store, monkeypatch):
+    _train(store, monkeypatch, TRAIN_AT)
+    run(store, CYCLE_AT)
+    _settle(store)
+    add_upcoming(store, gid=2026020002, start="2026-10-12T20:00:00", state=7, hs=1, vs=3, period=3, at="2026-10-13T04:00:00Z")
+    monkeypatch.setattr(adaptive, "_primary_line", lambda *a, **k: {"line": 5.5})
+    calls = []
+
+    def rec(conn, **kw):
+        gid = kw["replay"]["game_id"]
+        calls.append(gid)
+        if gid == GID:
+            return {"status": "failed", "error": "RuntimeError: persistent", "errors": {}, "forecasts": [], "skipped": {}}
+        return {"status": "success", "errors": {}, "forecasts": [], "skipped": {}}
+    monkeypatch.setattr(adaptive, "record", rec)
+    other = "nhl:2026020002"
+    first_two = [recovery.recover_adaptive(store, now=t, limit=1) for t in ("2026-10-13T05:00:00Z", "2026-10-13T05:10:00Z")]
+    assert len(calls) == 2 and set(calls) == {GID, other}                   # strict limit, and the later game got its turn
+    assert GID in first_two[1]["backing_off"] or calls[0] == other
+    # Bounded: backoff doubles and the game leaves automatic retries after MAX_ATTEMPTS.
+    t = "2026-10-13T05:00:00Z"
+    from datetime import timedelta
+    from app import live
+    for _ in range(recovery.MAX_ATTEMPTS + 3):
+        t = live._ts(live._parse(t) + recovery.RETRY_CAP + timedelta(minutes=1))
+        recovery.recover_adaptive(store, now=t, limit=2)
+    assert calls.count(GID) == recovery.MAX_ATTEMPTS
+    last = recovery.recover_adaptive(store, now=live._ts(live._parse(t) + recovery.RETRY_CAP * 2), limit=2)
+    assert last["retries_exhausted"][GID]["attempts"] == recovery.MAX_ATTEMPTS and last["status"] == "partial"
+    assert not _rows(store)                                                  # still nothing permanent in the ledger
+    retrying = {r["game_id"]: r for r in recovery.adaptive_report(store, t)["retrying"]}
+    assert retrying[GID]["exhausted"] and "persistent" in retrying[GID]["last_error"]
+
+
+def test_a_candidate_artifact_without_a_spread_time_is_not_informed():
+    art = {"kind": "candidate", "cutoff": "2025-11-10T05:00:00Z", "sd": (9.0, 1.0)}
+    assert adaptive.information_at(art) is None and not adaptive._informed_by(art, "2030-01-01T00:00:00Z")
+    art["components"] = {"model": "2025-11-10T05:00:00Z", "sd": "2026-10-22T03:00:00Z"}
+    assert adaptive.information_at(art) == "2026-10-22T03:00:00Z"
+    assert not adaptive._informed_by(art, "2026-10-21T23:29:59Z") and adaptive._informed_by(art, "2026-10-22T03:00:00Z")
+    assert adaptive.information_at({"kind": "combiner", "cutoff": "2026-10-21T20:00:00Z"}) == "2026-10-21T20:00:00Z"
+
+
+def _nba_kept_fit_store(tmp_path, monkeypatch, final):
+    """NBA synthetic store (review reproduction B): a first training run, the primary two-hour forecasts for g1, then
+    g1's result `final` and a second training run in which ridge cannot refit, so its model is kept while its residual
+    spread is recomputed from results that include g1."""
+    from app import backtest, db, market_live, near_tipoff, research_live
+    from app.candidates import engine, registry
+    from app.models import score_candidates
+    from test_adaptive import _test_clock
+    from test_backtest import synthetic_rows
+    from test_live import T_GAME, event, ingest_events
+    monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path))
+    conn = db.connect(tmp_path / "nba.sqlite")
+    db.migrate(conn)
+    history = [event(r.game.game_id, r.game.tipoff_at, r.game.home_team_id.split(":")[1], r.game.away_team_id.split(":")[1],
+                     "STATUS_FINAL", r.home_score, r.away_score, r.game.season) for r in synthetic_rows(per_season=12)]
+    ingest_events(conn, history, "2026-09-30T00:00:00Z", month="202601")
+    val = backtest.evaluate(conn, "validation", out_dir=tmp_path / "val", log=lambda _: None)
+    (tmp_path / "decision.json").write_text(json.dumps(backtest.decision_from_validation_report(val, "synthetic")))
+    monkeypatch.setattr(backtest, "FROZEN_DECISION_PATH", tmp_path / "decision.json")
+    db.claim_store(conn, "nba")
+    monkeypatch.setattr(score_candidates, "MIN_EXAMPLES", 30)
+    monkeypatch.setattr(engine, "MIN_RESIDUALS", 10)
+    monkeypatch.setattr(research_live, "STACK_MIN_TRAIN", 20)
+    monkeypatch.setattr(registry, "MIN_TRAIN", {"nba": 40, "nhl": 100})
+    monkeypatch.setattr(registry, "SPECS", tuple(registry.BY_NAME[s] for s in ("logit_l2:nba_base", "ridge:nba_base")))
+    monkeypatch.setattr(adaptive, "MIN_TRAIN", 20)
+    monkeypatch.setattr(adaptive, "LEARNED", {**adaptive.LEARNED, "nba": ("logistic", "ridge_points")})
+    ingest_events(conn, [event("g1", T_GAME, "1", "2", odds=("-150", "+130"))], "2026-10-19T12:00:00Z")
+    clock = _test_clock("2026-10-21T20:00:00Z", "2026-10-21T22:00:00Z")
+    monkeypatch.setattr(adaptive, "utc_now", clock)
+    assert adaptive.run_scheduled("nba", now="2026-10-21T20:00:00Z")["status"] == "success"
+    conn.execute("INSERT INTO job_runs (job, started_at, finished_at, status) VALUES ('refresh', '2026-10-21T22:00:00Z', "
+                 "'2026-10-21T22:00:00Z', 'success')")
+    ids = [f["game_id"] for f in near_tipoff.predict_now(conn, now="2026-10-21T22:00:00Z")["forecasts"]]
+    market_live.forecast(conn, now="2026-10-21T22:00:00Z", policy="near_tipoff", game_ids=ids)   # adaptive step missed
+    ingest_events(conn, [event("g1", T_GAME, "1", "2", "STATUS_FINAL", *final)], "2026-10-22T03:00:00Z")
+    ingest_events(conn, [event("g2", "2026-10-28T23:30:00Z", "3", "1")], "2026-10-22T03:30:00Z")
+    real = registry.available
+    monkeypatch.setattr(registry, "available", lambda spec: False if spec.name == "ridge:nba_base" else real(spec))
+    clock.at("2026-10-22T04:00:00Z", "2026-10-22T05:00:00Z")
+    assert adaptive.run_scheduled("nba", now="2026-10-22T04:00:00Z")["status"] in ("success", "partial")
+    monkeypatch.setattr(registry, "available", real)
+    return conn, ids[0]
+
+
+def test_a_games_outcome_cannot_reach_its_reconstruction_through_a_reused_model(tmp_path, monkeypatch):
+    """Every artifact a replay may apply at the cutoff must be identical whatever the game's own result was; the kept
+    ridge fit (model from before, spread recomputed after the result) is therefore not eligible."""
+    import pickle
+    cutoff = "2026-10-21T23:29:59Z"
+    eligible, vectors = [], []
+    for i, final in enumerate(((140, 80), (80, 140))):
+        conn, gid = _nba_kept_fit_store(tmp_path / f"v{i}", monkeypatch, final)
+        defn = adaptive.definition(conn)
+        found = {}
+        for row in conn.execute("SELECT * FROM adaptive_fits WHERE definition=? AND status IN ('success','partial') "
+                                "AND training_cutoff<=? ORDER BY fit_id", (defn, cutoff)):
+            art = adaptive.load_fit(row)
+            if adaptive._informed_by(art, cutoff):
+                content = {k: v for k, v in art.items() if k not in ("fitted_at",)}
+                found[(row["kind"], row["name"], row["fit_id"])] = pickle.dumps(content.get("sd")) + pickle.dumps(
+                    content.get("model", content.get("state", content.get("markets"))))
+        kept = [r for r in conn.execute("SELECT * FROM adaptive_fits WHERE name LIKE 'cand:ridge%' ORDER BY fit_id")][-1]
+        art = adaptive.load_fit(kept)
+        assert art["components"]["sd"] > cutoff and not adaptive._informed_by(art, cutoff)   # the reused model's spread
+        eligible.append(found)
+        out = recovery.recover_adaptive(conn, now="2026-10-22T05:00:00Z")
+        assert out["created"] >= 1 and not out["errors"], out
+        rows = conn.execute("SELECT * FROM adaptive_recovered_forecasts WHERE game_id=? ORDER BY market", (gid,)).fetchall()
+        assert all(x["information_at"] <= cutoff for r in rows for x in json.loads(r["members"]) if x["fit_id"])
+        vectors.append({r["market"]: (r["status"], r["p_a"], r["p_mid"], r["p_b"]) for r in rows})
+        conn.close()
+    assert eligible[0] and eligible[0].keys() == eligible[1].keys()
+    assert eligible[0] == eligible[1]                       # no eligible artifact depends on the game's own outcome
+    assert vectors[0] and vectors[0] == vectors[1]

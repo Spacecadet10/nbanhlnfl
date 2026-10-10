@@ -982,8 +982,13 @@ def train(conn, *, now: Optional[str] = None, write: bool = True, force: bool = 
                 raise RuntimeError(rec.get("reason") or "no fit")
             sd = _sd(prepared["residuals"], now) if spec.head == "normal" else None
             fp = prepared["fitted_fp"]
+            # Information time of every component: the model's own fit and, separately, the residual spread, which is
+            # recomputed at every training run (a kept model's spread can include results after the model's fit).
+            components = {"model": prepared["fit_cutoff"],
+                          "sd": max((r[0] for r in prepared["residuals"] if r[0] <= now), default=None) if sd else None}
             art = {"kind": "candidate", "name": m.name, "spec": spec.name, "model": prepared["model"], "sd": sd, "period": period,
-                   "cutoff": prepared["fit_cutoff"], "results_available_through": prepared["results_through"],
+                   "cutoff": prepared["fit_cutoff"], "components": components,
+                   "results_available_through": prepared["results_through"],
                    "results_fingerprint": fp, "training_games": prepared["fit_games"], "fitted_at": prepared["fitted_at"],
                    "info": prepared["info"], "definition": defn, "fit_period": prepared["fit_period"], "refit_now": rec["refit"]}
             hist[m.name] = candidate_vectors(spec, {g: o for g, o in store["outputs"].items() if g in lines or walk[g].season in window},
@@ -1183,12 +1188,33 @@ def _replay_fits(conn, sport, kind, name, defn, at, limit=REPLAY_LOOKBACK) -> li
                         (sport, kind, name, defn, *IN_FORCE, at, limit)).fetchall()
 
 
+class ReplayUnavailable(RuntimeError):
+    """Replay only: an input could not be read (artifact file, digest, evaluation). Not evidence about the game: the
+    caller records nothing and retries; it never becomes an 'unreconstructable' row."""
+
+
+def information_at(art: dict) -> Optional[str]:
+    """The latest information used by any component of an artifact: its training snapshot (`cutoff`) and every entry of
+    `components` (a candidate's model fit and its residual spread). None when it cannot be established: a candidate
+    artifact with a spread but no recorded spread time (written before component times were kept)."""
+    comps = art.get("components") or {}
+    if art.get("kind") == "candidate" and art.get("sd") is not None and comps.get("sd") is None:
+        return None
+    times = [t for t in (art.get("cutoff"), *comps.values()) if t]
+    return max(times) if art.get("cutoff") else None
+
+
 def _informed_by(art: dict, at: str) -> bool:
-    """Replay only: the artifact's information time (its training snapshot) is at or before `at`."""
-    return bool(art.get("cutoff")) and art["cutoff"] <= at
+    """Replay only: every component of the artifact was informed at or before `at`."""
+    t = information_at(art)
+    return t is not None and t <= at
 
 
-def _load_member_artifacts(conn, sport, defn, mems, now, replay: bool = False) -> tuple[dict, dict]:
+def _load_member_artifacts(conn, sport, defn, mems, now, replay: bool = False,
+                           skipped: Optional[dict] = None) -> tuple[dict, dict]:
+    """Live: each member's latest published fit. Replay: the newest fit trained on, and informed by, data at or before
+    `now`; a newer fit is passed over only for that established reason (recorded in `skipped`). An artifact that cannot
+    be read raises ReplayUnavailable rather than falling back to an older fit or counting the member as missing."""
     arts, missing = {}, {}
     for m in mems:
         if replay:
@@ -1201,15 +1227,16 @@ def _load_member_artifacts(conn, sport, defn, mems, now, replay: bool = False) -
                 try:
                     art = load_fit(row)
                 except Exception as exc:
-                    problems.append(f"fit {row['fit_id']}: artifact unavailable: {type(exc).__name__}: {exc}")
-                    continue
+                    raise ReplayUnavailable(f"{m.name} fit {row['fit_id']}: artifact unavailable: {type(exc).__name__}: {exc}") from exc
                 if not _informed_by(art, now):
-                    problems.append(f"fit {row['fit_id']}: information time {art.get('cutoff')} is after this game's cutoff")
+                    problems.append(f"fit {row['fit_id']}: information time {information_at(art)} is after this game's cutoff")
                     continue
                 arts[m.name] = (row, art)
                 break
             else:
                 missing[m.name] = "; ".join(problems)
+            if skipped is not None and problems:
+                skipped[m.name] = problems
             continue
         row = latest_fit(conn, sport, "member", m.name, defn, now)
         if row is None:
@@ -1290,7 +1317,8 @@ def _record(conn, game_ids, now, write, out, replay=None) -> None:
     ids = {g["game_id"] for g in eligible}
     per_market, comb_reason = combiners_in_force(conn, sport, defn, now, replay=rp)
     mems, excluded = members(conn)
-    arts, missing_all = _load_member_artifacts(conn, sport, defn, mems, now, replay=rp)
+    passed_over: dict = {}
+    arts, missing_all = _load_member_artifacts(conn, sport, defn, mems, now, replay=rp, skipped=passed_over)
     rows = live.available_rows(conn, now)
     if rp:
         out["results_used"] = len(rows)
@@ -1371,6 +1399,8 @@ def _record(conn, game_ids, now, write, out, replay=None) -> None:
                         have.setdefault((gid, market), {})[m.name] = _vec(v)
             except Exception as exc:
                 missing[gid][m.name] = f"error: {type(exc).__name__}: {exc}"
+                if rp:      # an evaluation failure is not evidence about the game: the replay is retried, never recorded
+                    out["errors"][m.name] = missing[gid][m.name]
     # Walk members: deliver what arrived after the artifact's cutoff, then predict the schedule in order.
     for m in [m for m in mems if m.kind == "walk" and m.name in arts]:
         row, art = arts[m.name]
@@ -1447,10 +1477,11 @@ def _record(conn, game_ids, now, write, out, replay=None) -> None:
                     if r["name"] in arts:
                         frow, fart = arts[r["name"]]
                         r.update({"artifact_sha256": frow["artifact_sha256"], "training_cutoff": frow["training_cutoff"],
-                                  "information_at": fart.get("cutoff"), "finished_at": frow["finished_at"]})
+                                  "information_at": information_at(fart), "components": fart.get("components"),
+                                  "finished_at": frow["finished_at"], "passed_over": passed_over.get(r["name"], [])})
                 item_out.update({"line_source": ln["source"], "line_ref": ln["ref"], "quote_id": ln["quote"], "book": book,
                                  "member_rows": mem_rows, "combiner": dict(cfit) if cfit else None,
-                                 "combiner_information_at": comb.get("cutoff") if comb else None,
+                                 "combiner_information_at": information_at(comb) if comb else None,
                                  "weights": {"members": names, "weights": stack["weights"], "bias": stack["bias"],
                                              "l2": stack.get("l2")} if stack else None})
             out["forecasts"].append(item_out)
@@ -1501,10 +1532,12 @@ def combiners_in_force(conn, sport, defn, now, replay: bool = False) -> tuple[di
         try:
             comb = load_fit(row)
         except Exception as exc:
+            if replay:      # unreadable is not evidence: retry rather than fall back or record 'unreconstructable'
+                raise ReplayUnavailable(f"combiner fit {row['fit_id']}: artifact unavailable: {type(exc).__name__}: {exc}") from exc
             problems.append(f"fit {row['fit_id']}: {type(exc).__name__}: {exc}")
             continue
         if replay and not _informed_by(comb, now):
-            problems.append(f"fit {row['fit_id']}: information time {comb.get('cutoff')} is after this game's cutoff")
+            problems.append(f"fit {row['fit_id']}: information time {information_at(comb)} is after this game's cutoff")
             continue
         loaded.append((row, comb))
         for market, cm in comb["markets"].items():

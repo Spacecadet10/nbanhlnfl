@@ -213,8 +213,72 @@ The migration (never applied to a live store) now allows status `partial`. The r
 - `recovery.recover_adaptive` runs in `jobs.forecast_due` after live work and primary recovery, one replayed game per
   cycle (about 40 s on the real NHL store). It defers when no current-definition combiner exists yet (training pending)
   or a primary line is missing; it records `unreconstructable` only when every current-definition combiner was trained
-  after the cutoff, or the replay itself abstains. A replay error records nothing and is retried.
+  after the cutoff, or the replay itself abstains. A replay error records nothing and is retried (bounded since §12).
 - Era: games from the first combiner in force (any definition) or the first adaptive attempt. Reported under
   `adaptive` in `/api/recovered-forecasts`; not shown in the UI.
 - Any edit to `adaptive.py` changes the adaptive definition (the file's bytes are hashed). Deploying this code therefore
   starts a new definition: both sports retrain, and games before the new fits' snapshot become unreconstructable.
+
+## 12. Recovery review fixes (review of deployed 8fda360, 2026-10-10; implemented, not deployed)
+Findings (read-only agent review, reproduced; Codex coordinating): H1 an unreadable combiner artifact was recorded as a
+permanent `unreconstructable` row; M1 an unreadable member artifact or a candidate evaluation error was recorded permanently
+(abstention, or a reconstruction without that member); H2 a kept candidate model could carry a residual spread recomputed
+after the cutoff (possibly from the replayed game itself) and still pass both replay checks; M2 one failing game took the
+only replay slot every cycle.
+
+Fixes:
+- **Transient vs permanent.** In a replay, an artifact that cannot be read (missing file, I/O error, digest mismatch) raises
+  `adaptive.ReplayUnavailable`; a candidate evaluation exception is a replay error. Either way the replay records nothing.
+  A newer fit is passed over for an older one only for an established reason (trained or informed after the cutoff), and the
+  passed-over fits are listed per member (`passed_over`) in the ledger's `members` JSON. `unreconstructable` remains only for:
+  every current-definition combiner trained after the cutoff, or the evaluator's own abstention with every artifact read.
+- **Information time of every component.** Candidate artifacts record `components = {model: <fit cutoff>, sd: <latest residual
+  time used>}`; `adaptive.information_at(art)` is the latest of `cutoff` and every component, and `_informed_by` requires it at
+  or before the replay cutoff. A candidate artifact with a spread but no recorded spread time is never informed (unknown is not
+  allowed). Ledger rows record `information_at` and `components` per member.
+- **Bounded retries without starvation.** Migration 0027 adds `adaptive_recovery_attempts` (operational state, not a record):
+  a failed replay, or one that records nothing, waits 30 min × 2^(attempts−1) (cap 24 h); never-attempted games go first, then
+  attempted ones least recently tried first; after 8 attempts the game leaves automatic retries (`retries_exhausted` in the
+  job output, `retrying` in `/api/recovered-forecasts` adaptive). The per-cycle limit (1 replay) is unchanged.
+- Regression tests (`tests/test_adaptive_recovery.py`): unreadable combiner / member → nothing recorded, reconstructed after
+  the artifact is readable; candidate evaluation error → retried; rotation, backoff and exhaustion with a strict limit; and
+  outcome independence: two NBA stores differing only in the game's final score, with ridge's model kept and its spread
+  recomputed after the result — every artifact eligible at the cutoff is byte-identical between them and the reconstructions
+  are equal. Each new test fails on the deployed code.
+
+**Inventory of stored rows (live stores, read-only, 2026-10-10 ~18:45 UTC).** NBA: 0 rows. NHL: 120 rows — 60 `reconstructed`
+under `2c63d35ec5a24519` (Oct 8–9 backfill) and 60 `unreconstructable` under `8631cc578d16aa5c` (reason: every combiner
+trained after the cutoff; a permanent, established reason). None has a load-failure or evaluation-error reason or missing
+member; no member fit was a fallback past a newer eligible fit; and no NHL candidate artifact used carries a residual spread
+(NHL has no normal-output candidates), every artifact's information time ≤ the cutoff. **No stored row is affected**; nothing
+needs correcting.
+
+**Correction mechanism (proposal; not implemented, nothing to correct now).** The ledger stays append-only. A correction is
+a new append-only table `adaptive_recovery_supersessions (recovery_id UNIQUE REFERENCES adaptive_recovered_forecasts,
+superseded_at, reason, review_ref)`; reports and the API exclude superseded rows from scoring and list them separately with
+the reason. Re-reconstructing a superseded game under the same definition would need a `revision` column added to the
+ledger's unique key (a separate migration); until then a superseded game is reported as withdrawn, not replayed.
+
+### Deployment plan (stop for Codex review before any step)
+Editing `adaptive.py` changes both sports' adaptive definitions, and migration 0027 must match the release (the release guard
+refuses every job when the store schema differs). To avoid a gap with no usable fits:
+1. Codex reviews the commit. The exact reviewed commit is the only one used below (the definition hash includes the bytes).
+2. **Pre-train the new definitions without switching.** From a separate worktree at the reviewed commit, with the deep venv
+   (torch/tensorflow, as the training job uses) and `NBA_DATA_DIR` = the live data folder, run
+   `caffeinate -i python -m app.cli --sport nhl adaptive-train`, then `--sport nba`. `adaptive-train` does not migrate the
+   store; it snapshots under the store lock, trains under the sport's training lock (serialised with the release's own
+   training), and publishes fit rows under the new definition, which the running release ignores (it filters by its own
+   definition). Verify: one successful combiner per sport under the new definition, all markets fitted, member counts as before
+   (NHL 15, NBA 21). Expected durations from Oct 10: NHL ~2 h, NBA ~7 h. Old definitions keep serving throughout.
+3. **Switch** (minutes): back up both stores under the job lock; fast-forward `release` to the reviewed commit; `migrate`
+   both stores (0027); `release-check` both (problems [], schema 27/27); restart the API and web; check
+   `/api/research/adaptive/...` reports the new definition with `due: false` and the pre-trained fits.
+4. **After the switch:** recovery under the new definitions will add `unreconstructable` rows for earlier games that have no
+   live adaptive forecast (e.g. Oct 8–9 NHL), because the new combiners' training snapshots follow those games (expected;
+   the old-definition reconstructions remain). Verify the next eligible game's forecasts are written under the new definition.
+5. **Rollback:** the old definitions' fits stay in the store. Rolling back = a release commit that restores the previous
+   `adaptive.py` and `recovery.py` bytes but keeps migration 0027 (the schema cannot go back without restoring a backup):
+   the old definition hashes, and so their fits, are in force again immediately; the old recovery code ignores the attempts table.
+Risks: if the weekly scheduled refit of the old definition (Mondays) runs during pre-training, the training lock serialises
+them (longer wall time, no conflict). If the reviewed commit changes after pre-training, its fits are under a different
+definition and step 2 repeats.

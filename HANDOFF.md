@@ -1,5 +1,47 @@
 # Current handoff
 
+## Recovery review fixes + NBA players-v1 final — Claude (Opus 5.5), 2026-10-10 ~19:30 UTC; NOT deployed, awaiting Codex review
+- Recovery (docs/ADAPTIVE_SYSTEM.md §12): unreadable artifacts and candidate evaluation errors in a replay are retryable errors
+  (`adaptive.ReplayUnavailable`), never `unreconstructable`, never a silent fallback; newer fits passed over only for an
+  established reason (listed as `passed_over`). Candidate artifacts record `components` {model, sd}; `information_at` is the
+  latest of all components and must be ≤ the replay cutoff (unknown spread time = not informed). Migration 0027
+  `adaptive_recovery_attempts`: backoff 30 min × 2^(n−1) (cap 24 h), rotation (never-tried first, then least recently tried),
+  max 8 attempts, limit per cycle unchanged; retry state in `adaptive_report()['retrying']`.
+- Regression tests (tests/test_adaptive_recovery.py, 17 pass; each new one fails on deployed 8fda360): unreadable combiner,
+  unreadable member, candidate evaluation error, rotation/backoff/exhaustion, outcome independence through a reused (kept)
+  model on two NBA stores differing only in the game's score. Migration-list tests updated for 0027.
+- Full suite (sprint1 venv): 685 passed after the 0027 list fix; tests/test_deep_study.py needs torch/keras (absent in this
+  venv) and passes in the deep venv (10 passed). `scripts/check_project.py` structure guard passed.
+- Inventory (live stores read-only): NBA 0 recovered rows; NHL 120 (60 reconstructed old definition, 60 unreconstructable
+  "combiner trained after cutoff"). None affected by these bugs; correction mechanism proposed only (§12, supersession table).
+- `adaptive.py` changed → new adaptive definitions for both sports. Deployment plan (§12): pre-train the new definitions from a
+  worktree at the exact reviewed commit (adaptive-train never migrates; the release ignores other definitions), then switch:
+  backup, fast-forward release, migrate 0027, release-check, restart. Rollback restores the old adaptive.py/recovery.py bytes
+  with 0027 kept. Nothing deployed, no training started.
+- NBA players-v1 (docs/PLAYER_RATINGS_STUDY.md §10, final): verdict unchanged — this rating method showed no demonstrated
+  added information (primary 1 −0.00012 [−0.00063, +0.00034]; primary 2 −0.00029 [−0.00148, +0.00077]; corrected primary 2
+  −0.00028 [−0.00146, +0.00076]). Historical results all assume tip-off + 4 h, so injury timing violations are 0 structurally;
+  every run-1→2 change came from All-Star games and the minute-less 2020-21 play-in boxes, not timing. Injury benefit
+  (−0.0049 dev, −0.0108 recent) holds under the stated timing assumptions. Code label: "corrected primary 2".
+- NHL feasibility (read-only agent, details in this session's consolidated report): stats REST `skater/timeonice` gives
+  per-game TOI with EV/PP/SH splits back to 2015-16 (~200 requests; 10,000-row cap needs ≤~270-game date windows — truncation
+  handling unverified); historical injuries only via Wayback copies of espn.com/nhl/injuries (coverage before cutoffs unchecked).
+- Next: Codex reviews both commits; then (if approved) pre-train per §12 with user go-ahead; NHL TOI completeness check.
+
+
+## Claude agent consolidation / next repair scope — Codex, Oct 10
+- Read three-agent consolidated report. Source inspection agrees with reported recovery failure paths: loader errors collapse into unavailable; recovery persists any unavailable market as unreconstructable; candidate sd is recomputed at now while artifact cutoff remains prepared fit_cutoff; failures consume the one-game limit. Agent reproductions not independently rerun in this turn; NBA study fixes/evidence not yet independently accepted.
+- Repair direction for Claude (sole writer): typed retryable artifact/evaluation failures, explicit deterministic terminal reasons; bound total attempts/time while rotating/backing off failures (do not merely exempt failures from all limits). Track maximum information cutoff of every probability-affecting artifact component, including residual spread; wall-clock fit/publication time is not a substitute. Preserve valid retrospective postgame publication when all inputs predate target. Tests must mutate target outcomes for kept/deep normal candidates and verify retry after artifact restoration.
+- Inventory existing terminal/degraded recovered rows before repair; append-only correction/supersession needs a documented design, no silent deletion. Plan safe definition transition before deployment to avoid another forecasting gap. No live or code changes here.
+- NBA: zero historical timing violations is conditional on assumed tipoff+4h availability, not observed latency proof; report All-Star/blank-minute population changes separately. Corrected primary 2 replaces rather than adds a primary; secondary intervals explicitly labelled. NHL collection proposal remains exploratory: bulk TOI completeness/cap detection and per-cutoff injury archive freshness need validation; unofficial goalie scores not accepted without verifying probability orientation/matched games.
+- Next: Claude prepares recovery fixes and final NBA write-up, Codex independently rechecks; NHL feasibility/design can continue read-only. No new agents launched here.
+
+## players-v1 independent review — Codex, Oct 10
+- Review not accepted yet. Re-ran player_ratings, availability and availability_live tests: 24 passed, one existing Starlette deprecation warning. No full readiness/browser run (research-only review), no runtime/model changes.
+- Confirmed timestamp gap: Rosters preloads all box appearances and gates only by calendar date, whereas ratings gate on delivered results. Reproduction using existing _season fixture: delay game 103 result to March 1, mutate its home minutes to h1=240; game 104 player_diff_full changes 1.3623809375 -> 1.3840921875 before the delayed result arrives. Existing delayed-result test mutates only scores, so misses this. Gate box/roster histories on explicit availability (or delivered results when no independent box availability exists), add delayed-box mutation test, and rerun affected study; actual dataset impact not measured.
+- compare() reconstructs a standard deviation from a percentile bootstrap 95% interval and uses a normal multiplier for the claimed Bonferroni interval. This is a normal approximation, not the specified adjusted percentile week-bootstrap interval. Use actual 1.25/98.75 percentile endpoints for two two-sided primary comparisons and regenerate summary evidence, or explicitly amend/justify the approximation without tuning to outcome.
+- Report wording: no demonstrated benefit from this specific rating method is supported provisionally; redundancy with team Elo is a hypothesis, not established causation. Next: Claude addresses both review items, then Codex rechecks. NHL feasibility remains outstanding.
+
 ## players-v1 study RUN, ready for Codex review — Claude (Opus 5.5), 2026-10-10 15:21 UTC
 - Implementation: `backend/app/player_ratings.py` (new; no hashed/live file edited), `backend/tests/test_player_ratings.py`
   (7 tests: newcomer prior/season carry, roster from earlier games only + trades keep rating, report removal/halving/rescale,

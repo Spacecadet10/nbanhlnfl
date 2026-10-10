@@ -170,12 +170,44 @@ def _insert_adaptive(conn, g, sport, defn, cutoff, now, market, status, reason, 
          (replay or {}).get('results_used'), (replay or {}).get('latest_result_at'))).rowcount
 
 
+RETRY_BASE = timedelta(minutes=30)     # first wait after a failed replay; doubles per attempt
+RETRY_CAP = timedelta(hours=24)
+MAX_ATTEMPTS = 8                       # then the game leaves automatic retries (listed as 'retries_exhausted')
+
+
+def _attempts(conn, defn):
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE name='adaptive_recovery_attempts'").fetchone():
+        return None
+    return {(r['game_id'], r['tipoff_at']): r for r in
+            conn.execute('SELECT * FROM adaptive_recovery_attempts WHERE definition=?', (defn,))}
+
+
+def _failed_attempt(conn, g, defn, now, error, prev):
+    from .db import transaction
+    n = (prev['attempts'] if prev else 0) + 1
+    wait = min(RETRY_CAP, RETRY_BASE * 2 ** (n - 1))
+    with transaction(conn):
+        conn.execute('INSERT OR REPLACE INTO adaptive_recovery_attempts (game_id, tipoff_at, definition, attempts, first_failed_at, '
+                     'last_attempt_at, next_attempt_at, last_error) VALUES (?,?,?,?,?,?,?,?)',
+                     (g['game_id'], g['tipoff_at'], defn, n, prev['first_failed_at'] if prev else now, now,
+                      live._ts(live._parse(now) + wait), str(error)[:2000]))
+
+
+def _clear_attempts(conn, g, defn):
+    conn.execute('DELETE FROM adaptive_recovery_attempts WHERE game_id=? AND tipoff_at=? AND definition=?',
+                 (g['game_id'], g['tipoff_at'], defn))
+
+
 def recover_adaptive(conn, now=None, limit=2):
-    """Bounded, retrospective adaptive reconstructions (separate ledger). Runs after the live work of the cycle."""
+    """Bounded, retrospective adaptive reconstructions (separate ledger). Runs after the live work of the cycle.
+    At most `limit` replays per call. A replay that fails for a reason that is not evidence about the game (unreadable
+    artifact, evaluation error) records nothing in the ledger; the game waits with exponential backoff, games never
+    attempted go first and failed ones rotate to the back, and after MAX_ATTEMPTS it leaves automatic retries."""
     from . import adaptive
     from .db import transaction
     now = now or utc_now()
-    out = {'status': 'success', 'created': 0, 'unreconstructable': 0, 'deferred': {}, 'errors': {}, 'note': ADAPTIVE_NOTE}
+    out = {'status': 'success', 'created': 0, 'unreconstructable': 0, 'deferred': {}, 'errors': {}, 'backing_off': {},
+           'retries_exhausted': {}, 'note': ADAPTIVE_NOTE}
     if not (exists(conn) and adaptive._has(conn, 'adaptive_recovered_forecasts') and adaptive._has(conn, 'adaptive_forecasts')):
         return {**out, 'status': 'unavailable', 'reason': 'adaptive recovery schema not migrated'}
     if not adaptive.enabled():
@@ -197,6 +229,13 @@ def recover_adaptive(conn, now=None, limit=2):
     games = conn.execute(f"SELECT * FROM games WHERE tipoff_at>=? AND tipoff_at<=? AND status IN ('scheduled','in_progress','final') "
                          f"AND season_type IN ({','.join('?' for _ in eng.eligible_types)}) ORDER BY tipoff_at, game_id",
                          (start, now, *eng.eligible_types)).fetchall()
+    attempts = _attempts(conn, defn)
+    tracked = attempts is not None
+    attempts = attempts or {}
+    # Never-attempted games first (by start), then failed ones least recently attempted first: a broken game rotates.
+    games = sorted(games, key=lambda g: (attempts.get((g['game_id'], g['tipoff_at'])) is not None,
+                                         (attempts.get((g['game_id'], g['tipoff_at'])) or {'last_attempt_at': ''})['last_attempt_at'],
+                                         g['tipoff_at'], g['game_id']))
     processed = 0
     for g in games:
         todo = [m for m in sports.get(sport).markets if _adaptive_missing(conn, g, m, defn)]
@@ -220,29 +259,43 @@ def recover_adaptive(conn, now=None, limit=2):
         if no_line:
             out['deferred'][gid] = f'awaiting a primary line known before the cutoff for {", ".join(no_line)}'
             continue
+        prev = attempts.get((gid, g['tipoff_at']))
+        if prev is not None and prev['attempts'] >= MAX_ATTEMPTS:
+            out['retries_exhausted'][gid] = {'attempts': prev['attempts'], 'last_error': prev['last_error']}
+            continue
+        if prev is not None and prev['next_attempt_at'] > now:
+            out['backing_off'][gid] = prev['next_attempt_at']
+            continue
         if processed >= limit:
             out['more_pending'] = True
             break
         processed += 1
         r = adaptive.record(conn, now=cutoff, write=False, replay=g)
         if r['status'] == 'failed' or r['errors']:
-            # An evaluation error (missing raw file, library failure) is not evidence about the game: record nothing, so a
-            # transient failure never becomes a permanent 'unreconstructable' row; the game is retried next cycle.
+            # An unreadable artifact or evaluation error is not evidence about the game: record nothing in the ledger, so a
+            # transient failure never becomes a permanent 'unreconstructable' row; retried after the backoff.
             out['errors'][gid] = r.get('error') or r['errors']
+            if tracked:
+                _failed_attempt(conn, g, defn, now, out['errors'][gid], prev)
             continue
         items = {i['market']: i for i in r['forecasts']}
+        waiting = {m: (r['skipped'].get(m) or {}).get(gid, 'not evaluated') for m in todo if m not in items}
         with transaction(conn):
+            if tracked and prev is not None:
+                _clear_attempts(conn, g, defn)
             for m in todo:
                 i = items.get(m)
-                if i is None:      # retried next cycle
-                    out['deferred'][f'{gid}:{m}'] = (r['skipped'].get(m) or {}).get(gid, 'not evaluated')
+                if i is None:      # retried after the backoff (a replay that records nothing rotates like a failure)
+                    out['deferred'][f'{gid}:{m}'] = waiting[m]
                     continue
                 if i['status'] == 'forecast':
                     out['created'] += _insert_adaptive(conn, g, sport, defn, cutoff, now, m, 'reconstructed', None, i, r)
                 else:
                     out['unreconstructable'] += _insert_adaptive(conn, g, sport, defn, cutoff, now, m, 'unreconstructable',
                                                                  i['reason'] or 'no combined probability', i, r)
-    if out['errors']:
+        if waiting and tracked:
+            _failed_attempt(conn, g, defn, now, 'replayed, not evaluated: ' + '; '.join(f'{m}: {v}' for m, v in waiting.items()), prev)
+    if out['errors'] or out['retries_exhausted']:
         out['status'] = 'partial'
     return out
 
@@ -270,7 +323,11 @@ def adaptive_report(conn, now=None):
             groups.setdefault((r['market'], r['definition'], r['line_source']), []).append(((r['p_a'], r['p_mid'], r['p_b'])[side], outcome))
         records.append({**base, 'outcome': outcome, 'pick': combine.SIDES[side] if side is not None else None,
                         'members': len(json.loads(r['members']))})
-    return {'note': ADAPTIVE_NOTE, 'status': 'retrospective', 'records': records,
+    retrying = [] if not conn.execute("SELECT 1 FROM sqlite_master WHERE name='adaptive_recovery_attempts'").fetchone() else [
+        {**dict(r), 'exhausted': r['attempts'] >= MAX_ATTEMPTS} for r in conn.execute(
+            'SELECT game_id, tipoff_at, definition, attempts, last_attempt_at, next_attempt_at, last_error '
+            'FROM adaptive_recovery_attempts ORDER BY tipoff_at')]
+    return {'note': ADAPTIVE_NOTE, 'status': 'retrospective', 'records': records, 'retrying': retrying,
             'unreconstructable': [{'reason': k, 'rows': len(v), 'games': len(set(v))} for k, v in missing.items()],
             'groups': [{'market': k[0], 'definition': k[1], 'line_source': k[2], 'thresholds': tracking.table(v, k[0])}
                        for k, v in groups.items()]}
