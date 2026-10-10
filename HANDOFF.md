@@ -1,5 +1,21 @@
 # Current handoff
 
+## Travel experiment season rules clarified — Codex, Oct 9
+- Explicit NBA no-spare-fold rule: any of the three seasons below coverage makes admission inconclusive, with no substitutions. NHL counts all four named seasons, including ID 2021, in primary decision; requires pandemic-period sensitivity tables (including excluding both IDs 2020/2021) without alternate promotion paths. Fixed before study results.
+- Documentation only; whitespace check passed. No models/data changed. Next remains recovery/safe transitions, then venue feasibility.
+
+## Travel experiment review incorporated — Codex, Oct 9
+- Added review/response to docs/TRAVEL_ALTITUDE_EXPERIMENT.md; amended NHL primary to travel-only, NBA combined unchanged. Conditional matched pregame-odds comparison, venue feasibility gate and exact development folds added (NBA 2022–24 IDs; NHL 2018–21 IDs); reserved seasons excluded. Market pricing and 0.002 effect-size assertions explicitly not treated as established facts.
+- Documentation only, whitespace check passed; no training or runtime changes. Next remains recovery/safe transitions, then data feasibility audit before experiment implementation.
+
+## Travel/altitude experiment plan — Codex, Oct 9
+- Added docs/TRAVEL_ALTITUDE_EXPERIMENT.md: NBA/NHL separately, winner-only initial study; base vs travel vs altitude vs combined, matched chronological evaluation, verified dated venue provenance, schedule-proxy limitations and venue-confounding control. Historical evidence remains exploratory; existing holdouts preserved, future prospective confirmation required. Explicit proposed shadow-admission thresholds fixed before results.
+- Plan only: no model, registry, dependencies, live artifacts or definitions changed. Reviewed current feature lists and selection-policy notes; no tests run for documentation. Next: finish recovery/safe transitions, then audit venue coverage and freeze exact study manifest before running.
+
+## Legacy project scan — Codex, Oct 9
+- Read-only source/CSV audit of Downloads/NHL_Project and untitled folder/nba, with sibling nhl cross-check. Report: docs/LEGACY_PROJECT_SCAN.md. Confirmed disconnected weight-adjustment method, evaluator/CSV schema mismatch, H2H margin double inversion, leakage in synthetic generator, duplicate 237-game evaluation across copies and no forecast-time provenance in those CSVs. Current named-team training CSV is not proven synthetic; corrected that earlier overclaim.
+- Recomputed 155/237 correct versus 141/237 home baseline; no legacy scripts/models executed or credentials opened. No runtime changes or tests needed for this report. Preserve existing uncommitted work. Next: review reusable travel and explanation ideas after recovery/safe transitions; predictive superiority remains unproven.
+
 ## System status panel — Codex, Oct 9
 - Added default Performance status panel for both sports in existing Training component, using existing single API client. Independent loading/error/retry states for training inputs, adaptive fit/due state and recovery; visible-page minute refresh plus manual refresh. Demo explicitly labelled; pending/settled market counts are distinct from fit success and unique games. Optional adaptive recovery payload works with old release API. No backend/model/definition edits.
 - Verification: frontend build/typecheck, structure guard and whitespace pass. Browser preview http://127.0.0.1:5197/performance (API proxy :8100): NBA desktop shows 21/21 fits and empty prospective record; NHL 390px shows 15/15 fits, 24 pending pairs and 16 recovered primary games. Document width equals 390px, screenshot inspected. Viewport reset. User navigated preview to History before manual refresh/expanded-error checks, so those remain unverified; error/demo UI implemented but not browser-injected. Full readiness not repeated (prior 676 backend pass predates this frontend-only change).
