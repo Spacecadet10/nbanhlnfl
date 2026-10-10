@@ -1,5 +1,13 @@
 # Current handoff
 
+## First live NHL adaptive forecasts verified — Claude (Opus 5.5), 2026-10-10 02:20 UTC
+- Live API (`:8100/api/research/adaptive/game/...`): all 4 Oct 9 NHL games (`nhl:2026020066`-`069`) have adaptive status `recorded`,
+  every market (`winner`, `reg3`, `spread`, `total`, both team totals) `status='forecast'`, probabilities summing to 1.0, combiner
+  fit 32 / definition `2c63d35ec5a24519`. Generated 21:16:32Z (23:00Z games) and 22:25:39Z (00:00Z game): before start, inside the
+  two-hour window. Some lines show "no bookmaker quote retrieved before this forecast at this line" (odds missing, not model failure).
+- Not yet checked: settlement/scoring of these rows after the games finish; NBA adaptive (first eligible game Oct 20).
+  Read-only API checks only; no code or runtime changes.
+
 ## Travel experiment season rules clarified — Codex, Oct 9
 - Explicit NBA no-spare-fold rule: any of the three seasons below coverage makes admission inconclusive, with no substitutions. NHL counts all four named seasons, including ID 2021, in primary decision; requires pandemic-period sensitivity tables (including excluding both IDs 2020/2021) without alternate promotion paths. Fixed before study results.
 - Documentation only; whitespace check passed. No models/data changed. Next remains recovery/safe transitions, then venue feasibility.
