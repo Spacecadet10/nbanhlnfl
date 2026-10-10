@@ -18,6 +18,22 @@ CYCLE_AT = "2026-10-12T21:30:00Z"     # inside it
 SPECS = ("logit_l2:nhl_base", "multinomial_l2:nhl_base", "poisson_draw:nhl_base", "torch_mlp:nhl_base")
 
 
+class _test_clock:
+    """Advances one second per reading from `start` (reset with `at`); never reaches `before`."""
+    def __init__(self, start="2026-10-12T20:00:00Z", before="2026-10-12T20:50:00Z"):
+        self.at(start, before)
+
+    def at(self, start, before):
+        from datetime import datetime
+        self.t, self.before = datetime.strptime(start, adaptive.FMT), datetime.strptime(before, adaptive.FMT)
+
+    def __call__(self):
+        from datetime import timedelta
+        self.t += timedelta(seconds=1)
+        assert self.t < self.before, "test clock ran past the forecast times"
+        return self.t.strftime(adaptive.FMT)
+
+
 @pytest.fixture
 def store(sealed, monkeypatch):
     monkeypatch.setattr(score_candidates, "MIN_HOCKEY_EXAMPLES", 100)
@@ -25,6 +41,9 @@ def store(sealed, monkeypatch):
     monkeypatch.setattr(registry, "MIN_TRAIN", {"nba": 200, "nhl": 100})
     monkeypatch.setattr(registry, "SPECS", tuple(registry.BY_NAME[s] for s in SPECS))
     monkeypatch.setattr(adaptive, "MIN_TRAIN", 30)
+    # Fit rows and artifacts are stamped with the clock. A clock that starts before TRAIN_AT and advances one second per
+    # reading keeps the tests independent of the real date (publication must still precede the forecast times).
+    monkeypatch.setattr(adaptive, "utc_now", _test_clock())
     # The boosted members refit slowly (hundreds of weekly fits in the walk): kept out of the test members only.
     monkeypatch.setattr(adaptive, "LEARNED", {**adaptive.LEARNED, "nhl": ("hockey_logistic", "hockey_logistic_xg", "goals_draw")})
     add_upcoming(sealed, start="2026-10-12T19:00:00", at="2026-10-12T20:30:00Z")
@@ -533,6 +552,8 @@ def test_a_new_week_with_new_results_is_trained_and_published_for_nba(monkeypatc
     monkeypatch.setattr(adaptive, "MIN_TRAIN", 20)
     monkeypatch.setattr(adaptive, "LEARNED", {**adaptive.LEARNED, "nba": ("logistic", "ridge_points")})
     ingest_events(conn, [event("g1", T_GAME, "1", "2", odds=("-150", "+130"))], "2026-10-19T12:00:00Z")
+    clock = _test_clock("2026-10-21T20:00:00Z", "2026-10-21T22:00:00Z")      # publication before the forecast below
+    monkeypatch.setattr(adaptive, "utc_now", clock)
     first = adaptive.run_scheduled("nba", now="2026-10-21T20:00:00Z")
     assert first["status"] == "success", (first["training"]["members"], first["training"]["combiner"])
     conn.execute("INSERT INTO job_runs (job, started_at, finished_at, status) VALUES ('refresh', '2026-10-21T22:00:00Z', "
@@ -547,6 +568,7 @@ def test_a_new_week_with_new_results_is_trained_and_published_for_nba(monkeypatc
     ingest_events(conn, [event("g2", "2026-10-28T23:30:00Z", "3", "1")], "2026-10-22T03:30:00Z")            # next week's game
     d = adaptive.due(conn, "2026-10-22T04:00:00Z")
     assert d["due"] and "new period" in d["reason"]
+    clock.at("2026-10-22T04:00:00Z", "2026-10-22T05:00:00Z")
     second = adaptive.run_scheduled("nba", now="2026-10-22T04:00:00Z")
     assert second["status"] == "success", second
     fit = adaptive.latest_fit(conn, "nba", "combiner", "combiner", adaptive.definition(conn))

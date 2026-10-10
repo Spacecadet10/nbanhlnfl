@@ -569,10 +569,23 @@ def recover_missed(conn: sqlite3.Connection) -> dict:
         return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
 
 
+def recover_adaptive_missed(conn: sqlite3.Connection) -> dict:
+    from . import recovery
+    try:
+        return recovery.recover_adaptive(conn, limit=ADAPTIVE_RECOVERY_LIMIT)
+    except Exception as exc:
+        return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+
+
+ADAPTIVE_RECOVERY_LIMIT = 1     # replayed games per cycle (about 40 s each on the real NHL store, under the job lock; live work comes first)
+
+
 def forecast_due(conn: sqlite3.Connection) -> dict:
-    # Current pregame windows take priority; then recover a bounded batch of missed primary markets.
+    # Current pregame windows take priority; then recover a bounded batch of missed primary markets, then (needing
+    # their lines) a bounded batch of missed adaptive research forecasts into their own retrospective ledger.
     result = _forecast_due(conn)
     result["recovery"] = recover_missed(conn)
+    result["adaptive_recovery"] = recover_adaptive_missed(conn)
     return result
 
 

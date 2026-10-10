@@ -569,13 +569,20 @@ def _has(conn, table: str) -> bool:
 IN_FORCE = ("success", "partial")     # fit rows whose artifact may be used (a partial combiner has usable markets)
 
 
-def latest_fit(conn, sport: str, kind: str, name: str, defn: str, at: str = "9999", status=None):
-    """The latest fit row of a member or the combiner at `at`: by default any usable one (success or partial)."""
+FIT_ORDER = {     # which fit is "latest at `at`": published by then (live), or trained only on results through then (replay)
+    "finished": "finished_at<=? ORDER BY finished_at DESC, fit_id DESC",
+    "training": "training_cutoff IS NOT NULL AND training_cutoff<=? ORDER BY training_cutoff DESC, finished_at DESC, fit_id DESC",
+}
+
+
+def latest_fit(conn, sport: str, kind: str, name: str, defn: str, at: str = "9999", status=None, basis: str = "finished"):
+    """The latest fit row of a member or the combiner at `at`: by default any usable one (success or partial).
+    basis='training' (retrospective replay only): the latest fit whose training results end at or before `at`."""
     if not _has(conn, "adaptive_fits"):
         return None
     statuses = IN_FORCE if status is None else (status,)
     return conn.execute(f"SELECT * FROM adaptive_fits WHERE sport=? AND kind=? AND name=? AND definition=? AND status IN "
-                        f"({','.join('?' * len(statuses))}) AND finished_at<=? ORDER BY finished_at DESC, fit_id DESC LIMIT 1",
+                        f"({','.join('?' * len(statuses))}) AND {FIT_ORDER[basis]} LIMIT 1",
                         (sport, kind, name, defn, *statuses, at)).fetchone()
 
 
@@ -1126,30 +1133,84 @@ def _decide(conn, sport, defn, market, now, incumbent) -> dict:
 
 
 # --- Forecast path ----------------------------------------------------------------------------------------------------
-def _primary_line(conn, g, market, sport, now):
-    """The exact line, source, quote and reference of the primary two-hour market forecast (as research cohorts)."""
+def _book(conn, quote_id, line, until=None) -> Optional[dict]:
+    """The de-vigged stored quote at exactly this line (and, in a replay, retrieved at or before `until`)."""
+    if quote_id is None:
+        return None
+    qr = conn.execute("SELECT * FROM market_quotes WHERE quote_id=?", (quote_id,)).fetchone()
+    if qr is None or qr["line"] != line or (until is not None and qr["retrieved_at"] > until):
+        return None
+    return {"p": [qr["p_a_devig"], qr["p_mid_devig"] or 0.0, qr["p_b_devig"]], "provider": qr["provider"],
+            "retrieved_at": qr["retrieved_at"], "quote_table": "market_quotes", "quote_id": quote_id}
+
+
+def _primary_line(conn, g, market, sport, now, replay: bool = False):
+    """The exact line, source, quote and reference of the primary two-hour market forecast (as research cohorts).
+    replay=True: only a primary forecast made at or before `now` (the simulated cutoff) counts; failing that, the line of
+    the primary reconstruction (recovered_forecasts) with its quote only if that was retrieved at or before `now`."""
     from . import market_live
     _, base = market_live.market_model(conn)
     mv = market_live.model_version(base, "near_tipoff")
     prim = conn.execute(
         "SELECT * FROM market_forecasts WHERE game_id=? AND market=? AND policy='near_tipoff' AND run_type='live' "
-        "AND model_version=? AND tipoff_at=? AND generated_at>=? ORDER BY generated_at DESC, forecast_id DESC LIMIT 1",
-        (g["game_id"], market, mv, g["tipoff_at"], _fmt(_parse(g["tipoff_at"]) - near_tipoff.WINDOW))).fetchone()
-    if prim is None:
+        "AND model_version=? AND tipoff_at=? AND generated_at>=? AND generated_at<=? ORDER BY generated_at DESC, forecast_id DESC LIMIT 1",
+        (g["game_id"], market, mv, g["tipoff_at"], _fmt(_parse(g["tipoff_at"]) - near_tipoff.WINDOW),
+         now if replay else "9999")).fetchone()
+    if prim is not None:
+        book = _book(conn, prim["market_quote_id"], prim["line"], now if replay else None)
+        return {"line": prim["line"], "source": prim["line_source"], "quote": prim["market_quote_id"] if book or not replay else None,
+                "ref": f"market_forecasts:{prim['forecast_id']}", "book": book}
+    if not replay or not _has(conn, "recovered_forecasts"):
         return None
-    book = None
-    if prim["market_quote_id"] is not None:
-        qr = conn.execute("SELECT * FROM market_quotes WHERE quote_id=?", (prim["market_quote_id"],)).fetchone()
-        if qr is not None and qr["line"] == prim["line"]:
-            book = {"p": [qr["p_a_devig"], qr["p_mid_devig"] or 0.0, qr["p_b_devig"]], "provider": qr["provider"],
-                    "retrieved_at": qr["retrieved_at"], "quote_table": "market_quotes", "quote_id": prim["market_quote_id"]}
-    return {"line": prim["line"], "source": prim["line_source"], "quote": prim["market_quote_id"],
-            "ref": f"market_forecasts:{prim['forecast_id']}", "book": book}
+    rec = conn.execute("SELECT * FROM recovered_forecasts WHERE game_id=? AND market=? AND tipoff_at=? AND cutoff_at<=?",
+                       (g["game_id"], market, g["tipoff_at"], now)).fetchone()
+    if rec is None:
+        return None
+    book = _book(conn, rec["quote_id"], rec["line"], now)
+    return {"line": rec["line"], "source": rec["line_source"], "quote": rec["quote_id"] if book else None,
+            "ref": f"recovered_forecasts:{rec['recovery_id']}", "book": book}
 
 
-def _load_member_artifacts(conn, sport, defn, mems, now) -> tuple[dict, dict]:
+REPLAY_LOOKBACK = 6     # fits per member/combiner examined in a replay (newest training first)
+
+
+def _replay_fits(conn, sport, kind, name, defn, at, limit=REPLAY_LOOKBACK) -> list:
+    """Replay only: usable fits trained on results through `at`, newest training first."""
+    if not _has(conn, "adaptive_fits"):
+        return []
+    return conn.execute(f"SELECT * FROM adaptive_fits WHERE sport=? AND kind=? AND name=? AND definition=? AND status IN "
+                        f"({','.join('?' * len(IN_FORCE))}) AND {FIT_ORDER['training']} LIMIT ?",
+                        (sport, kind, name, defn, *IN_FORCE, at, limit)).fetchall()
+
+
+def _informed_by(art: dict, at: str) -> bool:
+    """Replay only: the artifact's information time (its training snapshot) is at or before `at`."""
+    return bool(art.get("cutoff")) and art["cutoff"] <= at
+
+
+def _load_member_artifacts(conn, sport, defn, mems, now, replay: bool = False) -> tuple[dict, dict]:
     arts, missing = {}, {}
     for m in mems:
+        if replay:
+            rows = _replay_fits(conn, sport, "member", m.name, defn, now)
+            if not rows:
+                missing[m.name] = "no fit for this definition trained only on results before this game's cutoff"
+                continue
+            problems = []
+            for row in rows:
+                try:
+                    art = load_fit(row)
+                except Exception as exc:
+                    problems.append(f"fit {row['fit_id']}: artifact unavailable: {type(exc).__name__}: {exc}")
+                    continue
+                if not _informed_by(art, now):
+                    problems.append(f"fit {row['fit_id']}: information time {art.get('cutoff')} is after this game's cutoff")
+                    continue
+                arts[m.name] = (row, art)
+                break
+            else:
+                missing[m.name] = "; ".join(problems)
+            continue
         row = latest_fit(conn, sport, "member", m.name, defn, now)
         if row is None:
             missing[m.name] = "no adaptive fit for this definition yet (adaptive-train has not produced one)"
@@ -1184,12 +1245,18 @@ def _advance(w, art: dict, rows, events, known, now):
     return len(new_rows)
 
 
-def record(conn, *, game_ids: Optional[list] = None, now: Optional[str] = None, write: bool = True) -> dict:
+def record(conn, *, game_ids: Optional[list] = None, now: Optional[str] = None, write: bool = True, replay=None) -> dict:
     """Adaptive forecasts for eligible games within two hours of the start (the exact line of the primary two-hour
-    market forecast; the winner market needs none). No fit happens here. Never raises into the cycle."""
+    market forecast; the winner market needs none). No fit happens here. Never raises into the cycle.
+
+    replay=<games row> (retrospective recovery only; read-only): the same evaluation for that one past game as of
+    `now` (its simulated pregame cutoff), applying only fits trained on and informed by data at or before `now`, with
+    lines and quotes known by then. Nothing is written; the caller stores the result in its own ledger."""
+    if replay is not None and (write or now is None or now >= replay["tipoff_at"]):
+        raise ValueError("a replay is read-only and needs a cutoff before the game's start")
     out = {"status": "success", "created": 0, "already_recorded": 0, "unavailable": 0, "skipped": {}, "errors": {}, "forecasts": []}
     try:
-        _record(conn, game_ids, now, write, out)
+        _record(conn, game_ids, now, write, out, replay)
     except Exception as exc:
         out["status"] = "failed"
         out["error"] = f"{type(exc).__name__}: {exc}"
@@ -1200,8 +1267,9 @@ def record(conn, *, game_ids: Optional[list] = None, now: Optional[str] = None, 
     return out
 
 
-def _record(conn, game_ids, now, write, out) -> None:
+def _record(conn, game_ids, now, write, out, replay=None) -> None:
     fixed = now is not None
+    rp = replay is not None
     now = now or utc_now()
     eng = live.engine(conn)
     sport = eng.sport
@@ -1210,7 +1278,9 @@ def _record(conn, game_ids, now, write, out) -> None:
     out["definition"] = defn
     horizon = _fmt(_parse(now) + near_tipoff.WINDOW)
     types = eng.eligible_types
-    eligible = [g for g in conn.execute(
+    # A replay predicts past games: any game that was pending at `now` belongs to the schedule, whatever its status now.
+    pending = "status IN ('scheduled', 'in_progress', 'final')" if rp else "status='scheduled'"
+    eligible = [replay] if rp else [g for g in conn.execute(
         f"SELECT * FROM games WHERE status='scheduled' AND tipoff_at > ? AND tipoff_at <= ? AND season_type IN "
         f"({','.join('?' * len(types))}) ORDER BY tipoff_at, game_id", (now, horizon, *types))
         if game_ids is None or g["game_id"] in game_ids]
@@ -1218,14 +1288,17 @@ def _record(conn, game_ids, now, write, out) -> None:
     if not eligible:
         return
     ids = {g["game_id"] for g in eligible}
-    per_market, comb_reason = combiners_in_force(conn, sport, defn, now)
+    per_market, comb_reason = combiners_in_force(conn, sport, defn, now, replay=rp)
     mems, excluded = members(conn)
-    arts, missing_all = _load_member_artifacts(conn, sport, defn, mems, now)
+    arts, missing_all = _load_member_artifacts(conn, sport, defn, mems, now, replay=rp)
     rows = live.available_rows(conn, now)
+    if rp:
+        out["results_used"] = len(rows)
+        out["latest_result_at"] = max((r.result_available_at for r in rows), default=None)
     known = {r.game.game_id: r for r in rows}
     events = _events(conn, eng, rows, known, now)
     schedule = [g for g in conn.execute(
-        f"SELECT * FROM games WHERE status='scheduled' AND tipoff_at > ? AND tipoff_at <= ? AND season_type IN "
+        f"SELECT * FROM games WHERE {pending} AND tipoff_at > ? AND tipoff_at <= ? AND season_type IN "
         f"({','.join('?' * len(types))}) ORDER BY tipoff_at, game_id", (now, max(g["tipoff_at"] for g in eligible), *types))
         if g["game_id"] not in known]
     # Lines and quotes per game and market, from the primary two-hour forecasts of this cycle.
@@ -1237,11 +1310,11 @@ def _record(conn, game_ids, now, write, out) -> None:
                                                  "book": research_live._winner_quote(conn, sport, g["game_id"], now)}
             elif market == "reg3":
                 lines[(g["game_id"], market)] = {"line": None, "source": "none", "quote": None, "ref": None, "book": None}
-                pl = _primary_line(conn, g, market, sport, now)
+                pl = _primary_line(conn, g, market, sport, now, replay=rp)
                 if pl is not None:
                     lines[(g["game_id"], market)].update({"quote": pl["quote"], "ref": pl["ref"], "book": pl["book"]})
             else:
-                pl = _primary_line(conn, g, market, sport, now)
+                pl = _primary_line(conn, g, market, sport, now, replay=rp)
                 if pl is None:
                     out["skipped"].setdefault(market, {})[g["game_id"]] = "no primary two-hour market forecast: no line to combine at"
                     continue
@@ -1369,6 +1442,17 @@ def _record(conn, game_ids, now, write, out) -> None:
                        [(r["name"], r["p"], r["fit_id"]) for r in mem_rows], miss, reason)
             item_out = {"game_id": gid, "market": market, "line": ln["line"], "p": list(p) if p else None, "status": "forecast" if p else "unavailable",
                         "reason": reason, "members": names, "missing": miss, "selection": sel, "odds_status": odds, "generated_at": generated}
+            if rp:      # provenance for the retrospective ledger: every artifact applied, with its digest and data times
+                for r in mem_rows:
+                    if r["name"] in arts:
+                        frow, fart = arts[r["name"]]
+                        r.update({"artifact_sha256": frow["artifact_sha256"], "training_cutoff": frow["training_cutoff"],
+                                  "information_at": fart.get("cutoff"), "finished_at": frow["finished_at"]})
+                item_out.update({"line_source": ln["source"], "line_ref": ln["ref"], "quote_id": ln["quote"], "book": book,
+                                 "member_rows": mem_rows, "combiner": dict(cfit) if cfit else None,
+                                 "combiner_information_at": comb.get("cutoff") if comb else None,
+                                 "weights": {"members": names, "weights": stack["weights"], "bias": stack["bias"],
+                                             "l2": stack.get("l2")} if stack else None})
             out["forecasts"].append(item_out)
             if not write:
                 continue
@@ -1397,24 +1481,30 @@ def _record(conn, game_ids, now, write, out) -> None:
 COMBINER_LOOKBACK = 6
 
 
-def combiners_in_force(conn, sport, defn, now) -> tuple[dict, Optional[str]]:
+def combiners_in_force(conn, sport, defn, now, replay: bool = False) -> tuple[dict, Optional[str]]:
     """market -> (fit row, loaded combiner artifact) to apply now: the latest usable combiner (success or partial) for
     every market it has a combination for; a market it lacks keeps the combination of the most recent earlier usable
     fit that has one (within COMBINER_LOOKBACK fits). Returns ({}, reason) when nothing usable exists. Each artifact is
-    verified against its own row's digest before use."""
+    verified against its own row's digest before use. replay=True (retrospective only): fits are ordered by training
+    cutoff and only those trained on results, and informed, at or before `now` qualify, whenever they were published."""
     if not _has(conn, "adaptive_fits"):
         return {}, "schema not migrated"
-    rows = conn.execute(f"SELECT * FROM adaptive_fits WHERE sport=? AND kind='combiner' AND definition=? AND status IN "
-                        f"({','.join('?' * len(IN_FORCE))}) AND finished_at<=? ORDER BY finished_at DESC, fit_id DESC LIMIT ?",
-                        (sport, defn, *IN_FORCE, now, COMBINER_LOOKBACK)).fetchall()
+    rows = (_replay_fits(conn, sport, "combiner", "combiner", defn, now, COMBINER_LOOKBACK) if replay else
+            conn.execute(f"SELECT * FROM adaptive_fits WHERE sport=? AND kind='combiner' AND definition=? AND status IN "
+                         f"({','.join('?' * len(IN_FORCE))}) AND finished_at<=? ORDER BY finished_at DESC, fit_id DESC LIMIT ?",
+                         (sport, defn, *IN_FORCE, now, COMBINER_LOOKBACK)).fetchall())
     if not rows:
-        return {}, "no combiner fit for this definition yet (adaptive-train has not produced one)"
+        return {}, ("no combiner fit for this definition trained only on results before this game's cutoff" if replay
+                    else "no combiner fit for this definition yet (adaptive-train has not produced one)")
     out, loaded, problems = {}, [], []
     for row in rows:
         try:
             comb = load_fit(row)
         except Exception as exc:
             problems.append(f"fit {row['fit_id']}: {type(exc).__name__}: {exc}")
+            continue
+        if replay and not _informed_by(comb, now):
+            problems.append(f"fit {row['fit_id']}: information time {comb.get('cutoff')} is after this game's cutoff")
             continue
         loaded.append((row, comb))
         for market, cm in comb["markets"].items():

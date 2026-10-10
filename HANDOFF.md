@@ -5,6 +5,40 @@
 - Verification: frontend build/typecheck, structure guard and whitespace pass. Browser preview http://127.0.0.1:5197/performance (API proxy :8100): NBA desktop shows 21/21 fits and empty prospective record; NHL 390px shows 15/15 fits, 24 pending pairs and 16 recovered primary games. Document width equals 390px, screenshot inspected. Viewport reset. User navigated preview to History before manual refresh/expanded-error checks, so those remain unverified; error/demo UI implemented but not browser-injected. Full readiness not repeated (prior 676 backend pass predates this frontend-only change).
 - Existing endpoint does not expose recovery backlog/deferred jobs or active training process: panel explicitly marks those unavailable instead of claiming completion. Working tree contains Claude's recovery work; preserved unchanged. Panel not committed/deployed. Next: review panel, add backlog telemetry in the recovery owner, and complete recovery review/safe release.
 
+## Adaptive recovery implemented, NOT deployed — Claude (Opus 5.5), 2026-10-09
+- **Built to the Codex design:** separate append-only ledger `adaptive_recovered_forecasts` (migration 0026); read-only replay
+  through the existing evaluator (`adaptive.record(replay=game, now=tipoff-1s, write=False)`), fits chosen by training cutoff and
+  accepted only when training cutoff AND artifact information time precede the cutoff; lines from a pre-cutoff primary forecast
+  or the primary reconstruction; quotes only if retrieved before the cutoff. `recovery.recover_adaptive` runs after live work and
+  primary recovery, 1 game per cycle. Defers while training is pending or a primary line is missing; `unreconstructable` only when
+  all current-definition combiners were trained after the cutoff or the replay abstains; a replay error writes nothing. API:
+  `adaptive` section of `/api/recovered-forecasts`. Details: docs/ADAPTIVE_SYSTEM.md section 11.
+- **Checks:** 11 new tests pass, including the replay equalling the live evaluation, a later future-trained refit skipped for the
+  earlier fit, a fit published after the start but trained before it being used, and a late-informed fit refused. Full suite: 667
+  passed, 8 failed only in `test_deep_study.py` for missing torch/keras, identical on HEAD; all 93 related tests pass in the deep
+  venv. Real NHL copy dry run: 60/60 rows reconstructed for the 10 missed Oct 8-9 games. Evidence in docs/SMOKE_TEST.md.
+- **Deployment blocker (user decision):** `adaptive.definition()` hashes `adaptive.py`'s bytes, so deploying this redefines
+  adaptive-v1 for both sports: full retrain, live adaptive unavailable until it publishes, and under the new definition the
+  Oct 8-9 NHL games become permanently unreconstructable. Options: (a) one-off backfill of those games on the live store under the
+  current definition before deploying (what the dry run did on a copy); (b) in the same deploy, narrow the definition hash to code
+  that affects fitted artifacts so forecast-path and recovery edits stop redefining (the open "safe model transitions" item;
+  architecture change, needs its own design note). Not committed, not deployed.
+- **Corrections (user/Codex review):** the Oct 8-9 games are not *permanently* unreconstructable: the older artifacts remain, so a
+  replay path that loads the older definition could still recover them; only the current code under a new definition cannot.
+  Option (b) is itself a redefinition (one more retrain) and is not a safe transition on its own.
+- **Clock-dependent tests fixed:** `tests/test_adaptive.py` stamped fits with the real clock (NHL tests would fail after
+  2026-10-12T21:30Z, the NBA new-week test after 2026-10-21T22:00Z; reproduced by simulating a later date). Replaced with an
+  advancing, per-step test clock (`_test_clock`); a frozen clock is not usable because identical artifacts are deduplicated as a
+  retry of the partial fit. Test-only change; no app code.
+- **Checks (deep venv):** full suite 676 passed under the real clock and 676 passed with every app clock set to 2027-03-01;
+  `check_project.py --ready` passed (structure, typecheck, build, 676 passed). A first readiness run failed on a `.claude/`
+  scheduler lock created by this session's own wakeup; removed, guard unchanged.
+- **Next (agreed order):** independent Codex review of the recovery diff (pregame-only information for postgame-published fits;
+  justification of every `unreconstructable` decision); preserve current definitions and artifacts and recover eligible missed
+  games before any change that invalidates them; design and verify safe model transitions; then deploy. Separately verify the
+  first live NHL adaptive forecast (`status='forecast'`, valid p_a/p_mid/p_b summing to 1; p_mid 0 is normal for binary markets).
+  Still uncommitted and undeployed.
+
 ## Gap closure plan and scheduled sleep protection — Codex, Oct 9
 - Scheduled training now wraps both sports in `caffeinate -i`; each run owns its assertion until the wrapper exits. Preserve NHL failure exit status even when the following NBA command succeeds. No model code/definition changes. Lid-close sleep and collection outside training remain separate reliability gaps.
 - Verification: installed/reloaded idle LaunchAgent; launchctl confirms caffeinate wrapper and unchanged 09:30 schedule. Plist lint, structure and whitespace checks pass; four shell exit-status cases pass. No retraining or model edits. Browser/full readiness not repeated for launcher-only change.

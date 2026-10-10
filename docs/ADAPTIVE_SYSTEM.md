@@ -202,3 +202,19 @@ The migration (never applied to a live store) now allows status `partial`. The r
    usable member whose record could not be written (not only one whose artifact failed to verify) downgrades the
    combiner to `partial` with the reason, so the week stays due and the ordinary scheduled retry completes it. Test:
    forced write failure → member row absent, combiner `partial`, `due` true → unforced `run_scheduled` → success, not due.
+
+## 11. Retrospective recovery of missed adaptive forecasts (implemented 2026-10-09, not deployed)
+- Ledger `adaptive_recovered_forecasts` (migration 0026), append-only, never read by live forecasts, the selector,
+  `prospective_rows` or combiner training. Rows are `reconstructed` (probabilities) or `unreconstructable` (reason).
+- `adaptive.record(..., replay=<game>, now=<tipoff - 1 s>, write=False)` is the read-only replay: the same evaluator, with
+  fits chosen by training cutoff (not publication time) and accepted only if both the fit's `training_cutoff` and the
+  artifact's information time (`cutoff`) are at or before the simulated cutoff. Lines come from a primary two-hour
+  forecast made before the cutoff, else from the primary reconstruction; quotes only if retrieved before the cutoff.
+- `recovery.recover_adaptive` runs in `jobs.forecast_due` after live work and primary recovery, one replayed game per
+  cycle (about 40 s on the real NHL store). It defers when no current-definition combiner exists yet (training pending)
+  or a primary line is missing; it records `unreconstructable` only when every current-definition combiner was trained
+  after the cutoff, or the replay itself abstains. A replay error records nothing and is retried.
+- Era: games from the first combiner in force (any definition) or the first adaptive attempt. Reported under
+  `adaptive` in `/api/recovered-forecasts`; not shown in the UI.
+- Any edit to `adaptive.py` changes the adaptive definition (the file's bytes are hashed). Deploying this code therefore
+  starts a new definition: both sports retrain, and games before the new fits' snapshot become unreconstructable.

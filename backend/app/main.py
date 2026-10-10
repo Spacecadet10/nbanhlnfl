@@ -214,8 +214,9 @@ def agreement_performance(policy: str = Query("near_tipoff", pattern="^(pregame|
 def recovered_forecasts(p=Depends(get_provider)):
     from . import recovery
     if p.mode != "real":
-        return {"note": recovery.NOTE, "groups": [], "records": [], "status": "demo"}
-    return recovery.report(p.conn, p.now)
+        return {"note": recovery.NOTE, "groups": [], "records": [], "status": "demo",
+                "adaptive": {"note": recovery.ADAPTIVE_NOTE, "groups": [], "records": [], "unreconstructable": [], "status": "demo"}}
+    return {**recovery.report(p.conn, p.now), "adaptive": recovery.adaptive_report(p.conn, p.now)}
 
 
 @app.get("/api/thresholds")
