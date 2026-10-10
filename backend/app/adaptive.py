@@ -1515,7 +1515,8 @@ COMBINER_LOOKBACK = 6
 def combiners_in_force(conn, sport, defn, now, replay: bool = False) -> tuple[dict, Optional[str]]:
     """market -> (fit row, loaded combiner artifact) to apply now: the latest usable combiner (success or partial) for
     every market it has a combination for; a market it lacks keeps the combination of the most recent earlier usable
-    fit that has one (within COMBINER_LOOKBACK fits). Returns ({}, reason) when nothing usable exists. Each artifact is
+    fit that has one (within COMBINER_LOOKBACK fits); older fits are loaded only while some market still lacks one.
+    Returns ({}, reason) when nothing usable exists. Each artifact is
     verified against its own row's digest before use. replay=True (retrospective only): fits are ordered by training
     cutoff and only those trained on results, and informed, at or before `now` qualify, whenever they were published."""
     if not _has(conn, "adaptive_fits"):
@@ -1528,7 +1529,10 @@ def combiners_in_force(conn, sport, defn, now, replay: bool = False) -> tuple[di
         return {}, ("no combiner fit for this definition trained only on results before this game's cutoff" if replay
                     else "no combiner fit for this definition yet (adaptive-train has not produced one)")
     out, loaded, problems = {}, [], []
+    required = set(sports.get(sport).markets)
     for row in rows:
+        if required <= out.keys():      # every market already has a combination: older fits are not needed, not loaded
+            break
         try:
             comb = load_fit(row)
         except Exception as exc:

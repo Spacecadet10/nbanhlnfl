@@ -382,3 +382,74 @@ def test_a_games_outcome_cannot_reach_its_reconstruction_through_a_reused_model(
     assert eligible[0] and eligible[0].keys() == eligible[1].keys()
     assert eligible[0] == eligible[1]                       # no eligible artifact depends on the game's own outcome
     assert vectors[0] and vectors[0] == vectors[1]
+
+
+# --- Review of deac94a (Oct 10): an older combiner is loaded only when the newer one leaves a market uncombined ------
+def _older_combiner(conn):
+    """A copy of the trained combiner as an earlier fit (earlier training cutoff and publication, still after the adaptive
+    era began); returns (newest, older) ids."""
+    newest = conn.execute("SELECT fit_id FROM adaptive_fits WHERE kind='combiner' ORDER BY fit_id DESC").fetchone()[0]
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(adaptive_fits)") if r[1] != "fit_id"]
+    over = {"training_cutoff": "'2026-01-15T00:00:00Z'", "started_at": "'2026-10-12T19:00:00Z'",
+            "finished_at": "'2026-10-12T20:00:00Z'", "idempotency_key": "'older-combiner'"}
+    conn.execute(f"INSERT INTO adaptive_fits ({','.join(cols)}) SELECT {','.join(over.get(c, c) for c in cols)} "
+                 f"FROM adaptive_fits WHERE fit_id=?", (newest,))
+    older = conn.execute("SELECT max(fit_id) FROM adaptive_fits").fetchone()[0]
+    cut = dict(conn.execute("SELECT fit_id, training_cutoff FROM adaptive_fits WHERE fit_id IN (?, ?)", (newest, older)).fetchall())
+    assert cut[older] < cut[newest]                     # older by training cutoff, the replay's ordering
+    return newest, older
+
+
+def _combiners(monkeypatch, newest, older, *, drop=None, older_readable=True):
+    """load_fit with the newest combiner lacking `drop`'s combination and the older one optionally unreadable."""
+    import copy
+    real = getattr(adaptive.load_fit, "real", adaptive.load_fit)     # re-patching replaces, never wraps, the stub
+
+    def load(row):
+        if row["fit_id"] == older and not older_readable:
+            raise FileNotFoundError("older artifact pruned")
+        art = real(row)
+        if row["fit_id"] == newest and drop:
+            art = copy.deepcopy(art)
+            art["markets"][drop]["stack"] = None
+        return art
+    load.real = real
+    monkeypatch.setattr(adaptive, "load_fit", load)
+
+
+def test_a_complete_newest_combiner_is_used_despite_an_unreadable_older_artifact(store, monkeypatch):
+    _train(store, monkeypatch, TRAIN_AT)
+    run(store, CYCLE_AT)
+    _settle(store)
+    newest, older = _older_combiner(store)
+    _combiners(monkeypatch, newest, older, older_readable=False)
+    out = recovery.recover_adaptive(store, now=AFTER)
+    assert out["created"] == 6 and not out["errors"], out
+    assert {r["combiner_fit_id"] for r in _rows(store).values()} == {newest}
+
+
+def test_an_incomplete_newest_combiner_takes_the_missing_market_from_an_older_fit(store, monkeypatch):
+    _train(store, monkeypatch, TRAIN_AT)
+    run(store, CYCLE_AT)
+    _settle(store)
+    newest, older = _older_combiner(store)
+    _combiners(monkeypatch, newest, older, drop="total")
+    out = recovery.recover_adaptive(store, now=AFTER)
+    assert out["created"] == 6 and not out["errors"], out
+    used = {m: r["combiner_fit_id"] for m, r in _rows(store).items()}
+    assert used.pop("total") == older and set(used.values()) == {newest}
+
+
+def test_an_unreadable_older_fit_needed_for_a_missing_market_is_retried_and_records_nothing(store, monkeypatch):
+    _train(store, monkeypatch, TRAIN_AT)
+    run(store, CYCLE_AT)
+    _settle(store)
+    newest, older = _older_combiner(store)
+    _combiners(monkeypatch, newest, older, drop="total", older_readable=False)
+    out = recovery.recover_adaptive(store, now=AFTER)
+    assert out["status"] == "partial" and "ReplayUnavailable" in json.dumps(out["errors"]), out
+    assert out["unreconstructable"] == 0 and not _rows(store)
+    assert store.execute("SELECT attempts FROM adaptive_recovery_attempts WHERE game_id=?", (GID,)).fetchone()[0] == 1
+    _combiners(monkeypatch, newest, older, drop="total")                    # the artifact is readable again
+    again = recovery.recover_adaptive(store, now=LATER)
+    assert again["created"] == 6 and not again["errors"], again

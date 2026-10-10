@@ -1,5 +1,27 @@
 # Current handoff
 
+## Replay no longer loads unneeded older combiners — Claude (Opus 5.5), 2026-10-10; NOT deployed, awaiting Codex recheck
+- Fixes Codex P2 below. `adaptive.combiners_in_force` stops loading older fits once every market of the sport has a
+  combination (live and replay; the result for live is unchanged, since older fits only filled missing markets). An older fit
+  still fills a market the newest lacks, and an unreadable older fit that is actually needed still raises `ReplayUnavailable`.
+- Tests (tests/test_adaptive_recovery.py, older combiner = a copy of the trained one with an earlier training cutoff):
+  complete newest + unreadable older → 6 reconstructed rows, all from the newest fit (FAILS without the fix: ReplayUnavailable);
+  newest lacking `total` → `total` from the older fit, the rest from the newest; same but older unreadable → partial with
+  ReplayUnavailable, no ledger rows, 1 attempt recorded, then 6 rows once readable. The last two pass with and without the fix
+  (they guard the kept fallback/retry behaviour).
+- Checks: `PYTHONPATH=backend backend/.venv/bin/python -m pytest backend/tests/test_adaptive.py backend/tests/test_adaptive_recovery.py
+  backend/tests/test_live.py backend/tests/test_storage.py -q` → 89 passed, 1 warning; `python3 scripts/check_project.py` passed;
+  `git diff --check` passed. Not run: full suite, deep suite, readiness/browser (backend-only change).
+- `adaptive.py` changed again → the adaptive definition hash changes again; pre-training for the deployment plan must use this
+  commit, not deac94a. No training or deployment.
+
+## Independent review of deac94a / 45d7428 — Codex, 2026-10-10: recovery REQUEST CHANGES
+- P2 `backend/app/adaptive.py:1531–1545`: replay keeps loading older combiners after the newest informed fit supplies every market. An unreadable unused older artifact raises ReplayUnavailable, blocks an otherwise reconstructable game and can exhaust its 8 retries. Reproduced with two mocked fit rows: newest covers every market, older raises FileNotFoundError → ReplayUnavailable. Stop loading once required markets are resolved; retain retryable errors for artifacts actually needed. Add a regression covering both cases before pre-training (adaptive.py changes the definition again).
+- NBA correction: no blocking finding in this focused review. Delivery-gated roster/injury tests and percentile-bootstrap tests pass; independently recomputed primary 1 and corrected primary 2 from run-3 saved games for 3,667 development / 2,430 recent games, exactly matching saved comparisons. This does not independently regenerate source coverage/population attribution or validate observed historical latency.
+- Verification: `backend/.venv/bin/python -m pytest backend/tests/test_adaptive_recovery.py backend/tests/test_player_ratings.py backend/tests/test_live.py backend/tests/test_storage.py -q` → 77 passed, 2 warnings (Starlette deprecation, physical-core discovery), 92.16s. `python3 scripts/check_project.py`, `git diff --check`, and `git diff deac94a^ 45d7428 --check` passed.
+- Full 685 + 10 deep suite and old-code failure demonstrations remain author-reported; not rerun here. No readiness/browser check (focused backend/research review), live-store inventory re-audit, training, deployment, or implementation edits. Preserved uncommitted CLAUDE.md and untracked docs/TASK_TEMPLATE.md.
+- Deployment source check: adaptive-train bypasses migration and uses separate training/store locks as described; training-lock contention skips immediately rather than waiting, so verify actual successful publication before switching. Next: sole writer fixes the replay finding, Codex rechecks, then user decides on pre-training and release.
+
 ## Recovery review fixes + NBA players-v1 final — Claude (Opus 5.5), 2026-10-10 ~19:30 UTC; NOT deployed, awaiting Codex review
 - Recovery (docs/ADAPTIVE_SYSTEM.md §12): unreadable artifacts and candidate evaluation errors in a replay are retryable errors
   (`adaptive.ReplayUnavailable`), never `unreconstructable`, never a silent fallback; newer fits passed over only for an
