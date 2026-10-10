@@ -32,10 +32,10 @@ reserved test seasons).
 | Goalie snapshots (ESPN probable/confirmed starters, our retrieval times) | prospective only, since 2026-10-01 | 6,310 rows |
 | Goalie quality features (goals saved above our xG) | in the candidate pool | `docs/CANDIDATE_POOL.md` |
 
-Gaps, not solvable inside this study: **no historical NHL injury reports** from any free source; **no time on ice** (shift
-charts or boxscore endpoints are not cached; one request per game, about 17k requests); dressed lineups are known only after a
-game. An honest NHL player-and-injury backtest is therefore not possible with current data. NHL is out of scope for `players-v1`
-beyond this audit; options are listed in §8.
+Gaps in **our cached data** (not proof that no source exists): no historical NHL injury reports in the cache, and no free
+source checked yet; no time on ice cached (per-game boxscore TOI and bulk stats-API player-game reports have not been checked;
+shift charts are only needed for event-level on-ice analysis); dressed lineups are known only after a game. NHL is out of scope
+for `players-v1`; a separate NHL data-feasibility audit comes before any NHL decision (§8).
 
 ## 2. Question
 
@@ -106,8 +106,16 @@ research candidate after Codex review and the safe-transition work.
   mutation independence; ratings use only results delivered before the cutoff; trades keep the rating; newcomers get the
   prior; missing/unsubmitted report falls back to `player_diff_full` with the flag; minutes rescaling; season carry.
 
-## 8. NHL options (not part of this study)
+## 8. NHL: feasibility audit first (corrected after Codex review, 2026-10-10)
 
-(a) Prospective only: record goalie starters (already collected) and dressed-roster absences from the previous game, and judge
-on future games. (b) Backfill shift charts (about 17k requests) to get time on ice, then rate skaters from on-ice goal and xG
-differential. (c) Rate only goalies (already a candidate feature) with the probable/confirmed starter. Each needs its own design.
+Before excluding NHL or committing to thousands of requests: (1) search for free historical NHL injury/availability sources and
+record what each provides and when it was published; (2) check per-game player time on ice from the boxscore endpoint and the
+bulk stats API (request count, coverage, timing); (3) measure what the existing goalie features and the prospective goalie
+collection already add, rather than building an overlapping goalie candidate. Better NHL data is not made conditional on a crude
+dressed-roster proxy succeeding: that proxy could fail simply because it measures player contributions poorly.
+
+## 9. Interpretation limit (Codex review)
+
+The rating update spreads each game's prediction error over the players by minutes. Teammates who share minutes move together, so
+a rating is a **predictive team-strength input**, not an isolated estimate of a player's individual ability. Results are read only
+as forecast quality, never as player valuations.
