@@ -120,67 +120,121 @@ The rating update spreads each game's prediction error over the players by minut
 a rating is a **predictive team-strength input**, not an isolated estimate of a player's individual ability. Results are read only
 as forecast quality, never as player valuations.
 
-## 10. Results (run 2026-10-10 15:21 UTC, after §1–§9 were committed)
+## 10. Results (final after Codex review; three runs, 2026-10-10)
 
-Run: `player_ratings.evaluate` on the copy `~/nba-predictor-research-data/players-v1/` (report
-`reports/players-v1-2026-10-10T152102Z/report.json`, per-game `games.json`). K chosen on 2020-21 only: **0.02** (MSE 204.1 /
-202.5 / 208.3 for 0.01 / 0.02 / 0.04). The injury-report facts rebuilt by the new module match `avail_v1`'s exactly on all
-1,002 development dates (parity check), and B+I reproduces the earlier `avail_v1` result.
+> **Timing assumption.** Every historical result in the store (2019-20 … 2025-26) has
+> `result_availability_basis = assumed_tipoff_plus_4h`; only 2026-27 has observed retrieval times. Report publication times are
+> also assumed (header / Last-Modified). On this history, "delivered by the cutoff" is therefore the same as "dated before the
+> game day", and the injury-report benefit below is historical evidence **under these assumptions**, not under observed times.
 
-**Verdict: player ratings add no demonstrable information**, with or without the injury report, in the development seasons
-or in the recent seasons. The injury report still helps. Negative result; nothing to promote.
+**Verdict (measured).** This player-rating method showed **no demonstrated added information** over the team model, nor over
+the injury-report model, in any version of the analysis. The recent seasons agree (all intervals include 0). The injury report
+(B+I) still improves log loss over B, with and without the corrections. Nothing to promote.
 
-### Development (decision), 2021-22 … 2023-24, 3,667 evening games, all four variants on identical games
-| Variant | Accuracy | Log loss | Brier | ECE | ≥0.65: games / acc | ≥0.75: games / acc |
-|---|---|---|---|---|---|---|
-| B `logistic_v2` | 64.5% | 0.6300 | 0.2199 | 0.022 | 1,639 / 73.5% | 688 / 78.9% |
-| B+I `avail_v1` | 66.0% | 0.6251 | 0.2177 | 0.023 | 1,708 / 73.7% | 732 / 79.6% |
-| B+R | 64.7% | 0.6299 | 0.2199 | 0.024 | 1,631 / 73.1% | 685 / 79.1% |
-| B+R+I | 65.6% | 0.6248 | 0.2177 | 0.026 | 1,717 / 73.3% | 748 / 79.7% |
+### Runs and what each change was
+All on the copy `~/nba-predictor-research-data/players-v1/` (`reports/<run>/report.json`, per-game `games.json`). Game ids,
+order, outcomes and cutoffs are identical in all three runs (3,667 development, 2,430 recent games), and every variant scores
+every game.
 
-| Comparison (paired, week-block bootstrap) | Log loss diff | Bonferroni interval | Accuracy diff [95%] |
-|---|---|---|---|
-| **Primary 1:** B+R − B | −0.0001 | [−0.0006, +0.0004] | +0.2 pts [−0.1, +0.5] |
-| **Primary 2:** B+R+I − B+I | −0.0002 | [−0.0013, +0.0009] | −0.3 pts [−0.7, +0.0] |
-| Secondary: B+I − B | −0.0049 | [−0.0095, −0.0003] | +1.5 pts [+0.4, +2.6] |
-| Secondary: B+R+I − B | −0.0051 | [−0.0097, −0.0006] | +1.1 pts [+0.1, +2.3] |
+| Run | Report | Change |
+|---|---|---|
+| 1 | `players-v1-2026-10-10T152102Z` | Original. **Superseded.** |
+| 2 | `players-v1-2026-10-10T173450Z` | (a) rosters/expected minutes use only games whose result the walk delivered; (b) the adjusted interval is the actual 1.25 / 98.75 week-bootstrap percentile (run 1 used a normal approximation from the 95% interval). |
+| 3 | `players-v1-2026-10-10T175100Z` | Adds the injury timing audit and the corrected variants B+I\*, B+R+I\* (injury absent minutes from delivered games only). Run-2 variants bit-identical. |
 
-Per season, log loss B / B+I / B+R / B+R+I: 2022 0.6372 / 0.6287 / 0.6372 / 0.6285; 2023 0.6429 / 0.6341 / 0.6429 / 0.6344;
-2024 0.6098 / 0.6125 / 0.6095 / 0.6116 (in 2024 the injury report did not help on log loss).
+**Timing fixes — no measurable effect on this history.** Because of the tip-off + 4 h assumption, gating by delivery could not
+differ from gating by date: a rebuild of every expected roster both ways is identical on every scored game, and the injury
+timing audit finds **0 games in every season** (2022 … 2026) whose injury features used an undelivered game. The fixes matter
+for live or genuinely delayed data; they are not measurable here.
 
-### Recent seasons, 2024-25 and 2025-26: retrospective, previously reserved; not a final test (2,430 games)
-| Variant | Accuracy | Log loss | Brier | ECE | ≥0.65: games / acc | ≥0.75: games / acc |
+**Data-population changes — the actual source of every run-1 → run-2 difference.** Run 1's rosters and minutes came from every
+box-score appearance; runs 2–3 use only games in the walk's game list. The difference is entirely:
+- **All-Star games** (store `season_type='other'`, coded regular season in the ESPN files; 6 in the development box, 13 in all):
+  their minutes entered last-10 averages, and an All-Star was dropped from his team's expected roster until his next team game.
+- **The six 2020-21 play-in games, whose box rows have blank minutes** (the remaining 10 development games, October 2021).
+
+B and B+I are bit-identical between runs 1 and 2; `player_diff_full` changed on 473 development / 310 recent games and
+`player_diff_report` on 430 / 283. K is still 0.02 (warm-up MSE 204.0 / 202.4 / 208.1 for K = 0.01 / 0.02 / 0.04). The same
+population difference explains the corrected injury variants: B+I\* differs from B+I on 252 development / 237 recent games
+(All-Star minutes; one game, `espn:401359833`, from the minute-less play-in date), never because of timing.
+
+### Development (decision), 2021-22 … 2023-24, 3,667 evening games (run 3)
+| Variant | Accuracy | Log loss | Brier | ECE | ≥0.60 games / acc | ≥0.65 | ≥0.70 | ≥0.75 |
+|---|---|---|---|---|---|---|---|---|
+| B `logistic_v2` | 64.5% | 0.6300 | 0.2199 | 0.022 | 2,213 / 70.3% | 1,639 / 73.5% | 1,095 / 77.4% | 688 / 78.9% |
+| B+I `avail_v1` | 66.0% | 0.6251 | 0.2177 | 0.023 | 2,271 / 70.8% | 1,708 / 73.7% | 1,186 / 76.8% | 732 / 79.6% |
+| B+R | 64.7% | 0.6299 | 0.2199 | 0.024 | 2,216 / 70.6% | 1,628 / 73.2% | 1,087 / 77.5% | 684 / 79.1% |
+| B+R+I | 65.6% | 0.6248 | 0.2176 | 0.025 | 2,271 / 70.8% | 1,712 / 73.3% | 1,177 / 77.7% | 747 / 79.8% |
+| B+I\* | 65.9% | 0.6250 | 0.2177 | 0.024 | 2,271 / 70.8% | 1,710 / 73.7% | 1,187 / 76.8% | 734 / 79.6% |
+| B+R+I\* | 65.6% | 0.6248 | 0.2176 | 0.025 | 2,273 / 70.8% | 1,715 / 73.3% | 1,180 / 77.6% | 749 / 79.7% |
+
+| Comparison (paired; ISO-week block bootstrap, 2,000 samples, seed 20260930) | Log loss diff | 95% | Adjusted 1.25 / 98.75 | Accuracy [95%] |
+|---|---|---|---|---|
+| **Primary 1:** B+R − B | −0.00012 | [−0.00056, +0.00029] | **[−0.00063, +0.00034]** | +0.16 pts [−0.18, +0.52] |
+| **Primary 2:** B+R+I − B+I | −0.00029 | [−0.00133, +0.00066] | **[−0.00148, +0.00077]** | −0.35 pts [−0.78, +0.03] |
+| **Corrected primary 2:** B+R+I\* − B+I\* | −0.00028 | [−0.00131, +0.00067] | **[−0.00146, +0.00076]** | −0.33 pts [−0.76, +0.06] |
+| Secondary: B+I − B | −0.00489 | [−0.00884, −0.00088] | [−0.00956, −0.00036] | +1.47 pts [+0.43, +2.58] |
+| Secondary, corrected: B+I\* − B | −0.00493 | [−0.00889, −0.00089] | [−0.00960, −0.00037] | +1.45 pts [+0.40, +2.51] |
+| Secondary: B+R+I − B | −0.00518 | [−0.00906, −0.00111] | [−0.00979, −0.00054] | +1.12 pts [+0.03, +2.27] |
+| Correction effect: B+I\* − B+I | −0.00004 | [−0.00009, +0.00001] | [−0.00010, +0.00001] | −0.03 pts [−0.12, +0.06] |
+
+Corrected primary 2 restates primary 2 with injury minutes from listed, delivered games only; it is a correction of a
+pre-registered comparison, not an extra one, and uses the same two-comparison adjustment. The pre-registered adjustment covers
+the primaries only; secondary adjusted intervals are shown for comparability. Run 1 (superseded) primaries: −0.00010 [−0.00057,
++0.00037] and −0.00024 [−0.00135, +0.00087] (normal approximation); same reading.
+
+Per-season log loss (B / B+I / B+R / B+R+I / B+I\* / B+R+I\*): 2022 0.6372 / 0.6287 / 0.6372 / 0.6284 / 0.6286 / 0.6284;
+2023 0.6429 / 0.6341 / 0.6428 / 0.6343 / 0.6341 / 0.6343; 2024 0.6098 / 0.6125 / 0.6096 / 0.6117 / 0.6125 / 0.6116 (in 2024 the
+injury report did not help).
+
+### Recent seasons, 2024-25 and 2025-26 — retrospective, previously reserved; not a final test (2,430 games, run 3)
+| Variant | Accuracy | Log loss | Brier | ECE | ≥0.65 games / acc | ≥0.75 games / acc |
 |---|---|---|---|---|---|---|
 | B | 67.3% | 0.6013 | 0.2074 | 0.023 | 1,245 / 76.5% | 603 / 82.3% |
 | B+I | 68.4% | 0.5904 | 0.2029 | 0.023 | 1,333 / 76.4% | 700 / 84.6% |
-| B+R | 67.6% | 0.6005 | 0.2071 | 0.021 | 1,262 / 76.2% | 611 / 82.5% |
-| B+R+I | 68.4% | 0.5895 | 0.2024 | 0.020 | 1,345 / 76.4% | 703 / 84.5% |
+| B+R | 67.5% | 0.6005 | 0.2071 | 0.019 | 1,262 / 76.1% | 610 / 82.6% |
+| B+R+I | 68.3% | 0.5894 | 0.2024 | 0.022 | 1,347 / 76.4% | 703 / 84.5% |
+| B+I\* | 68.4% | 0.5904 | 0.2028 | 0.022 | 1,337 / 76.4% | 700 / 84.6% |
+| B+R+I\* | 68.4% | 0.5894 | 0.2024 | 0.019 | 1,347 / 76.4% | 704 / 84.5% |
 
-| Comparison | Log loss diff | Bonferroni interval | Accuracy diff [95%] |
+| Comparison | Log loss diff | Adjusted 1.25 / 98.75 | Accuracy [95%] |
 |---|---|---|---|
-| B+R − B | −0.0007 | [−0.0017, +0.0002] | +0.3 pts [−0.3, +0.9] |
-| B+R+I − B+I | −0.0010 | [−0.0025, +0.0006] | −0.0 pts [−0.6, +0.6] |
-| B+I − B | −0.0108 | [−0.0157, −0.0059] | +1.2 pts [−0.1, +2.4] |
-| B+R+I − B | −0.0118 | [−0.0172, −0.0064] | +1.1 pts [−0.2, +2.4] |
+| B+R − B | −0.00075 | [−0.00169, +0.00023] | +0.21 pts [−0.43, +0.81] |
+| B+R+I − B+I | −0.00102 | [−0.00259, +0.00054] | −0.12 pts [−0.74, +0.55] |
+| Corrected primary 2: B+R+I\* − B+I\* | −0.00101 | [−0.00257, +0.00054] | −0.08 pts [−0.70, +0.60] |
+| B+I − B | −0.01083 | [−0.01595, −0.00614] | +1.15 pts [−0.05, +2.36] |
+| B+I\* − B | −0.01086 | [−0.01597, −0.00616] | +1.15 pts [−0.05, +2.36] |
 
-Per season, log loss B / B+I / B+R / B+R+I: 2025 0.6037 / 0.5945 / 0.6030 / 0.5933; 2026 0.5989 / 0.5864 / 0.5981 / 0.5856.
-The player-rating point estimates lean slightly favourable in the recent seasons, but every interval includes zero, and these
-seasons cannot overturn the development result (§3).
+Per-season log loss: 2025 0.6037 / 0.5945 / 0.6030 / 0.5933 / 0.5945 / 0.5933; 2026 0.5989 / 0.5864 / 0.5980 / 0.5856 / 0.5863 /
+0.5855. Rating point estimates lean slightly favourable; every interval includes 0, and these seasons cannot overturn the
+development result (§3).
+
+### Measured vs hypothesis
+Measured (these seasons, these games, this method):
+- Adding `player_diff_full` to `logistic_v2`, or `player_diff_report` to `avail_v1` (original or corrected), showed no
+  demonstrated added information; the adjusted log-loss intervals include 0.
+- The injury report improves log loss over B by about −0.0049 in development (adjusted interval excludes 0; not in 2024 alone)
+  and −0.0108 in the recent seasons — under the timing assumptions stated at the top.
+- No injury-feature timing violation on this history (structurally guaranteed by the assumed result times).
+
+Hypotheses, not tested here:
+- That the ratings add nothing *because* they duplicate team Elo / net rating (suggestive only: the update spreads team
+  residuals by minutes, §9; last development fit weights `player_diff_full` 0.14 vs elo 0.25 and net 0.29; no ablation run).
+- That a better-specified player model (regularized plus-minus with on/off splits, more tuning) would add information.
+- That the recent-season lean means anything; that the injury benefit holds under observed publication and result times
+  (the prospective collector since 2026-10-01 is the test of that).
 
 ### Coverage
-- Reports: 1,002 development and 422 recent dates, all with a publication header and usable (0 download failures, 0 not
-  available). Every scored game had a usable report for both teams (`report_used` 100%). Entries without a team: 18 (dev), 77 (all).
-- Unresolved report names per season: 2020 303, 2021 8, 2022 0, 2023 18, 2024 26, 2025 89, **2026 227** (higher; these players
-  are simply not removed from the expected roster).
-- Rating updates: 6,269 games through 2023-24, 8,912 through 2025-26; 6 results had no player box (no update).
-- Access to 2025/2026 logged in the copy's `eval/test_access.jsonl` and mirrored to `data/eval/test_access.jsonl`.
+- Reports: 1,002 development and 422 recent dates, all with a publication header and usable (0 download failures); every
+  scored game had a usable report for both teams. Entries without a team: 18 (development), 77 (all).
+- Unresolved report names: 2020 303, 2021 8, 2022 0, 2023 18, 2024 26, 2025 89, **2026 227** (those players stay on the roster).
+- Rating updates: 6,269 games through 2023-24, 8,912 through 2025-26; the six 2020-21 play-in games gave no update (box rows
+  exist, minutes blank).
+- Access to 2025/2026 logged per run in the copy's `eval/test_access.jsonl` and mirrored to `data/eval/test_access.jsonl`
+  (runs at 15:23, 17:37, 17:43 — the third-run attempt stopped by the audit's self-check — and 17:54 UTC).
 
 ### Limitations
-- Name matching level `team_any_season` uses every loaded season, so loading 2025–26 slightly changed 2024 match counts
-  (`team_any_season` 320 → 386, `league_unique` 459 → 393). It affects which ESPN id a report name maps to, never outcomes; same
-  behaviour as `avail_v1`.
-- Report publication times are assumed (header / Last-Modified), as in `avail_v1`.
-- One rating rule, one K grid, no tuning beyond K: a better-specified player model (e.g. regularized plus-minus with on/off
-  splits) is not ruled out by this result.
-- Ratings are a team-strength input (§9); `player_diff_full` is highly collinear with team Elo and net rating (its fitted weight
-  0.13 vs elo 0.25 and net 0.29 in the last B+R fit).
+- Name matching level `team_any_season` uses every loaded season (loading 2025–26 changed 2024 counts: `team_any_season`
+  320 → 386, `league_unique` 459 → 393); identity only, as in `avail_v1`.
+- Assumed report publication and result times (top of this section).
+- One rating rule, one K grid, no other tuning. Ratings are a team-strength input (§9), not player valuations.

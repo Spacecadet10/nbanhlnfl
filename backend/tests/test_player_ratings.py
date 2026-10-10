@@ -86,11 +86,10 @@ def test_newcomer_prior_season_carry_and_update_direction():
 
 
 def test_roster_uses_only_earlier_games_and_a_traded_player_keeps_his_rating():
-    games = [("1", "2023-01-02", {H: [("star", 36), ("h2", 30)], A: [("a1", 30)]}),
-             ("2", "2023-01-04", {H: [("star", 36), ("h2", 30)], A: [("a1", 30)]}),
-             ("3", "2023-01-06", {H: [("star", 36), ("h2", 30)], A: [("a1", 30)]}),
-             ("4", "2023-01-10", {C: [("star", 34), ("c1", 30)], A: [("a1", 30)]})]      # traded to C
-    ros = pr.Rosters(_box(games))
+    ros = pr.Rosters()
+    for day in ("2023-01-02", "2023-01-04", "2023-01-06"):
+        ros.add(day, 2023, {"2": [("star", 36), ("h2", 30)], "3": [("a1", 30)]})
+    ros.add("2023-01-10", 2023, {"4": [("star", 34), ("c1", 30)], "3": [("a1", 30)]})       # traded to C
     before = dict(ros.expected("2", "2023-01-08", 2023))
     assert set(before) == {"star", "h2"} and sum(before.values()) == pytest.approx(240)
     assert ros.expected("2", "2023-01-02", 2023) == []                    # nothing before the first game
@@ -99,6 +98,15 @@ def test_roster_uses_only_earlier_games_and_a_traded_player_keeps_his_rating():
     ratings = pr.PlayerRatings(k=0.1)
     ratings.update(2023, [("star", 48)], [("a1", 48)], margin=20, neutral=False)
     assert ratings.get("star", 2023) > pr.NEWCOMER_PRIOR                  # rating is per player, not per team
+
+
+def test_rosters_follow_minutes_history_rule():
+    ros, apps = pr.Rosters(), []
+    for i, m in enumerate([30, 20, 10, 40]):
+        ros.add(f"2023-01-{i * 2 + 2:02d}", 2023, {"2": [("p", m)]})
+    assert ros.minutes("p", "2023-01-07", 2023) == pytest.approx(20)        # first three only
+    assert ros.minutes("p", "2023-01-07", 2024) == pytest.approx(20)        # previous season fallback
+    assert ros.minutes("p", "2023-01-02", 2023) == 0.0
 
 
 def test_report_removes_and_halves_minutes_then_rescales():
@@ -156,3 +164,78 @@ def test_select_k_uses_the_warm_up_season_only():
     box = _box([(g, d, t) for g, d, t in games], season=2021)
     out = pr.select_k(rows, box)
     assert out["k"] in pr.K_GRID and set(out["mse"]) == set(pr.K_GRID) and out["season"] == 2021
+
+
+def test_delayed_result_box_stays_unseen_until_delivered():
+    """Codex review: a delayed game's minutes/lineup must not reach later rosters before its result is delivered."""
+    games, rows = _season()
+    late = list(rows)
+    late[3] = backtest.Row(rows[3].game, rows[3].cutoff_at, rows[3].home_score, rows[3].away_score, "2023-03-01T00:00:00Z")
+    base = _walk(games, late)
+    games2 = list(games)
+    games2[3] = (games[3][0], games[3][1], {H: [("h1", 240)], A: FIVE_A})
+    assert _walk(games2, late) == base                                    # game 103's box never delivered in time
+    assert _walk(games2, rows)["espn:104"] != _walk(games, rows)["espn:104"]   # on time, it is used
+
+
+def test_week_bootstrap_matches_backtest_and_adjusted_interval_is_wider():
+    import random
+    rnd = random.Random(7)
+    vals = [rnd.gauss(-0.001, 0.05) for _ in range(600)]
+    cut = [f"2023-{1 + i // 120:02d}-{1 + (i % 120) // 5:02d}T23:00:00Z" for i in range(600)]
+    ref = backtest.block_bootstrap(vals, cut)
+    stats = pr.week_bootstrap(vals, cut)
+    assert pr.percentile_interval(stats, 0.05) == ref["ci95"]
+    lo, hi = pr.percentile_interval(stats, pr.PRIMARY_ALPHA)
+    n = len(stats)
+    assert (lo, hi) == (stats[int(0.0125 * n)], stats[int(0.9875 * n) - 1])
+    assert lo <= ref["ci95"][0] and hi >= ref["ci95"][1]
+
+
+def _report(day, team, entries):
+    f = pr.PlayerFacts(True, "ok", f"{day}T21:30:00Z")
+    f.absent[team] = {"new": 0.0, "all": 0.0, "unresolved": 0, "no_history": 0}
+    f.entries[team] = entries
+    f.players[team] = {p: w for p, w in entries}
+    return {day: f}
+
+
+def test_gated_injury_minutes_ignore_a_delayed_box_until_delivered():
+    games, rows = _season()
+    facts = _report("2023-01-10", "2", [("h1", 1.0), ("h2", 0.5)])               # game 104
+    late = list(rows)
+    late[3] = backtest.Row(rows[3].game, rows[3].cutoff_at, rows[3].home_score, rows[3].away_score, "2023-03-01T00:00:00Z")
+    base = _walk(games, late, facts)["espn:104"]
+    assert base["all_absent_diff"] != 0 and base["report_missing"] == 0.0
+    games2 = list(games)
+    games2[3] = (games[3][0], games[3][1], {H: [("h1", 12), ("h2", 12), ("zz", 216)], A: FIVE_A})
+    assert _walk(games2, late, facts)["espn:104"] == base                    # delayed box unseen
+    assert _walk(games2, rows, facts)["espn:104"]["all_absent_diff"] != base["all_absent_diff"]
+
+
+def test_date_gated_recomputation_equals_availability_minutes_history():
+    games, _ = _season()
+    box = _box(games)
+    hist, ros = av.MinutesHistory(box.apps), pr.Rosters.from_apps(box.apps)
+    entries = [("h1", 1.0), ("h3", 0.5), ("nobody", 1.0)]
+    for day in ("2023-01-03", "2023-01-09", "2023-01-20"):
+        ref = {"new": 0.0, "all": 0.0}
+        for pid, w in entries:
+            m, _ = hist.expected(pid, day, 2023)
+            ref["all"] += w * m
+            ref["new"] += w * m if hist.played_last_team_game(pid, "2", day) else 0.0
+        assert ros.absent(entries, "2", day, 2023) == pytest.approx(ref)
+
+
+def test_same_date_appearances_keep_minutes_history_order():
+    """All-Star weekend: several appearances on one date; the last-10 window must cut where MinutesHistory cuts."""
+    rows = []
+    apps = [("2023-01-01", "999", 9), ("2023-01-01", "999", 5), ("2023-01-01", "999", 7)]       # window cuts this date
+    apps += [(f"2023-01-{d:02d}", "2", 30 + d) for d in range(2, 20, 2)]
+    for i, (day, team, m) in enumerate(apps):
+        local = datetime.fromisoformat(f"{day}T19:30:00").replace(tzinfo=av.ET).isoformat()
+        rows.append({"game_id": str(i), "game_date_time": local, "athlete_id": "p", "athlete_display_name": "P",
+                     "team_id": team, "minutes": str(m), "did_not_play": "false"})
+    box = pr.load_box((2023,), loader=lambda s: rows)
+    hist, ros = av.MinutesHistory(box.apps), pr.Rosters.from_apps(box.apps)
+    assert ros.minutes("p", "2023-02-20", 2023) == pytest.approx(hist.expected("p", "2023-02-20", 2023)[0])

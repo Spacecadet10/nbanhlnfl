@@ -14,6 +14,7 @@ import dataclasses
 import hashlib
 import json
 import math
+import random
 import sqlite3
 import time
 from collections import defaultdict
@@ -39,6 +40,7 @@ SEASON_CARRY = 0.75
 HOME_EDGE = 2.5
 ROSTER_RECENT_GAMES = 5
 TEAM_MINUTES = 240.0
+PRIMARY_ALPHA = 0.05 / 2                                # Bonferroni over the two primary comparisons
 THRESHOLDS = (0.60, 0.65, 0.70, 0.75)
 
 
@@ -176,6 +178,7 @@ def load_box(seasons: tuple, loader: Callable[[int], list] = _box_rows) -> Box:
 class PlayerFacts(av.ReportFacts):
     """availability.ReportFacts plus the weighted absent players per team ({team: {athlete id: weight}})."""
     players: dict = dataclasses.field(default_factory=dict)
+    entries: dict = dataclasses.field(default_factory=dict)    # {team: [(athlete id, weight)]}, one per matched entry
 
 
 def build_facts(conn: sqlite3.Connection, box: Box, seasons: tuple) -> tuple[dict, dict]:
@@ -241,6 +244,7 @@ def build_facts(conn: sqlite3.Connection, box: Box, seasons: tuple) -> tuple[dic
             slot["all"] += w * minutes
             if hist.played_last_team_game(pid, team, day):
                 slot["new"] += w * minutes
+            f.entries.setdefault(team, []).append((pid, w))
             team_players = f.players.setdefault(team, {})
             team_players[pid] = max(team_players.get(pid, 0.0), w)
         facts[day] = f
@@ -286,31 +290,91 @@ class PlayerRatings:
 
 
 class Rosters:
-    """Pregame expected rosters from box scores dated strictly before the game date."""
+    """Pregame expected rosters built only from delivered games: `add` is called with a game's box when the walk-forward
+    runner delivers its result, so a delayed result's minutes and lineup stay unseen until then (not merely until its date)."""
 
-    def __init__(self, box: Box):
-        self.hist = av.MinutesHistory(box.apps)
-        self.dates: dict[str, list[str]] = {}
-        self.teams: dict[str, list[str]] = {}
-        for pid, rows in self.hist.apps.items():
-            played = [a for a in rows if a.played]
-            self.dates[pid] = [a.date for a in played]
-            self.teams[pid] = [a.team_id for a in played]
+    def __init__(self):
+        self.apps: dict[str, list[tuple]] = defaultdict(list)        # pid -> sorted [(date, order, season, team, minutes)]
+        self.team_dates: dict[str, list[str]] = defaultdict(list)    # team -> sorted delivered game dates
+        self.team_game: dict[tuple, set] = defaultdict(set)          # (team, date) -> ids with minutes > 0
+
+    def add(self, day: str, season: int, teams: dict) -> None:
+        for team, players in teams.items():
+            if (team, day) not in self.team_game:
+                bisect.insort(self.team_dates[team], day)
+            for pid, m in players:
+                self.team_game[(team, day)].add(pid)
+                bisect.insort(self.apps[pid], (day, 0, season, team, m))
+
+    @classmethod
+    def from_apps(cls, apps: dict) -> "Rosters":
+        """Every box appearance gated only by date (availability.MinutesHistory's view); used by the timing audit."""
+        ros = cls()
+        for season, (by_pid, _) in sorted(apps.items()):
+            for pid, rows in by_pid.items():
+                for a in rows:                         # order keeps MinutesHistory's same-date order (All-Star weekend)
+                    key = (a.team_id, a.date)
+                    if key not in ros.team_game:
+                        bisect.insort(ros.team_dates[a.team_id], a.date)
+                        ros.team_game[key] = set()
+                    if a.played:
+                        ros.team_game[key].add(pid)
+                        ros.apps[pid].append((a.date, len(ros.apps[pid]), season, a.team_id, a.minutes))
+        for rows in ros.apps.values():
+            rows.sort()
+        return ros
+
+    @classmethod
+    def from_games(cls, box: Box, games: list) -> "Rosters":
+        """Every scored-universe game's box gated only by date (no delivery gate); separates timing from game coverage."""
+        ros = cls()
+        for g in games:
+            teams = box.games.get(g.game_id, {})
+            h, a = g.home_team_id.split(":", 1)[1], g.away_team_id.split(":", 1)[1]
+            if h in teams and a in teams:
+                ros.add(et_day(g.tipoff_at), g.season, {h: teams[h], a: teams[a]})
+        return ros
+
+    def absent(self, entries: list, team: str, day: str, season: int) -> dict:
+        """availability's absent minutes for one team's report entries: {"new": .., "all": ..} (weight × expected minutes;
+        "new" only for players who played the team's last game before `day`)."""
+        dates = self.team_dates.get(team, [])
+        i = bisect.bisect_left(dates, day)
+        last = self.team_game.get((team, dates[i - 1]), set()) if i else set()
+        out = {"new": 0.0, "all": 0.0}
+        for pid, w in entries:
+            m = self.minutes(pid, day, season)
+            out["all"] += w * m
+            if pid in last:
+                out["new"] += w * m
+        return out
 
     def last_team(self, pid: str, day: str) -> Optional[str]:
-        i = bisect.bisect_left(self.dates.get(pid, []), day)
-        return self.teams[pid][i - 1] if i else None
+        rows = self.apps.get(pid, [])
+        i = bisect.bisect_left(rows, (day,))
+        return rows[i - 1][3] if i else None
+
+    def minutes(self, pid: str, day: str, season: int) -> float:
+        """Last-10 mean minutes before `day` (availability.MinutesHistory's rule): this season if ≥ 3, else previous, else 0."""
+        rows = self.apps.get(pid, [])
+        before = rows[:bisect.bisect_left(rows, (day,))]
+        this = [m for _, _, s, _, m in before if s == season][-10:]
+        if len(this) >= 3:
+            return sum(this) / len(this)
+        prev = [m for _, _, s, _, m in before if s == season - 1][-10:]
+        return sum(prev) / len(prev) if prev else 0.0
 
     def expected(self, team: str, day: str, season: int) -> list[tuple[str, float]]:
-        """[(athlete id, expected minutes)] scaled to 240: players whose latest appearance before `day` was for `team` and
-        who played in one of the team's last 5 games before `day`."""
-        recent = [d for d in self.hist.team_dates.get(team, []) if d < day][-ROSTER_RECENT_GAMES:]
-        pids = set().union(*(self.hist.team_game.get((team, d), set()) for d in recent)) if recent else set()
+        """[(athlete id, expected minutes)] scaled to 240: players whose latest delivered appearance before `day` was for
+        `team` and who played in one of the team's last 5 delivered games before `day`."""
+        dates = self.team_dates.get(team, [])
+        recent = dates[:bisect.bisect_left(dates, day)][-ROSTER_RECENT_GAMES:]
+        pids = set().union(*(self.team_game[(team, d)] for d in recent)) if recent else set()
         out = []
         for pid in sorted(pids):
             if self.last_team(pid, day) != team:
                 continue
-            m, _ = self.hist.expected(pid, day, season)
+            m = self.minutes(pid, day, season)
             if m > 0:
                 out.append((pid, m))
         return scale(out)
@@ -330,6 +394,17 @@ def et_day(tipoff_at: str) -> str:
     return datetime.strptime(tipoff_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).astimezone(av.ET).strftime("%Y-%m-%d")
 
 
+def gated_avail(rosters: "Rosters", f, g: PregameGame, usable: bool) -> dict:
+    """avail_v1's three features with absent minutes from `rosters` (delivered games only, in PlayerState)."""
+    if not usable:
+        return {"new_absent_diff": 0.0, "all_absent_diff": 0.0, "report_missing": 1.0}
+    day, h, a = et_day(g.tipoff_at), g.home_team_id.split(":", 1)[1], g.away_team_id.split(":", 1)[1]
+    hh = rosters.absent(f.entries.get(h, []), h, day, g.season) if h in f.absent else {"new": 0.0, "all": 0.0}
+    aa = rosters.absent(f.entries.get(a, []), a, day, g.season) if a in f.absent else {"new": 0.0, "all": 0.0}
+    return {"new_absent_diff": (aa["new"] - hh["new"]) / 48, "all_absent_diff": (aa["all"] - hh["all"]) / 48,
+            "report_missing": 0.0}
+
+
 class PlayerState:
     """Ratings + rosters for one model instance. `features(g)` uses only state as of the call; `update(result)` consumes the
     delivered result and that game's minutes."""
@@ -337,7 +412,7 @@ class PlayerState:
     def __init__(self, box: Box, k: float, facts: Optional[dict] = None):
         self.box, self.facts = box, facts or {}
         self.ratings = PlayerRatings(k)
-        self.rosters = Rosters(box)
+        self.rosters = Rosters()
         self.coverage: dict = defaultdict(int)
 
     def _team(self, team_id: str) -> str:
@@ -358,7 +433,7 @@ class PlayerState:
         else:
             rep = full
         return {"player_diff_full": full, "player_diff_report": rep, "report_used": usable,
-                "roster_home": len(rh), "roster_away": len(ra)}
+                "roster_home": len(rh), "roster_away": len(ra), **gated_avail(self.rosters, f, g, usable)}
 
     def update(self, r: Result) -> None:
         g = r.game
@@ -368,6 +443,7 @@ class PlayerState:
             self.coverage["result_without_box"] += 1
             return
         self.ratings.update(g.season, teams[h], teams[a], r.home_score - r.away_score, g.neutral_site)
+        self.rosters.add(et_day(g.tipoff_at), g.season, {h: teams[h], a: teams[a]})
         self.coverage["rating_updates"] += 1
 
 
@@ -383,8 +459,12 @@ def models(elo_cfg, box: Box, facts: dict, k: float) -> dict:
             super().__init__(elo_cfg)
             self.players = PlayerState(box, k, facts)
 
+        gated = False
+
         def _features(self, g):
-            x = {**super()._features(g), **av.game_features(facts, g), **self.players.diffs(g)}
+            d = self.players.diffs(g)
+            avail = {n: d[n] for n in av.AVAIL_FEATURES} if self.gated else av.game_features(facts, g)
+            x = {**super()._features(g), **d, **avail}
             return {n: x[n] for n in self.feature_names}
 
         def update(self, r: Result) -> None:
@@ -405,7 +485,19 @@ def models(elo_cfg, box: Box, facts: dict, k: float) -> dict:
         feature_names = V2_FEATURES + av.AVAIL_FEATURES + ("player_diff_report",)
         scaled_names = V2_SCALED + ("new_absent_diff", "all_absent_diff", "player_diff_report")
 
-    return {"B": LogisticV2(elo_cfg), "B+I": av.avail_v1(elo_cfg, facts), "B+R": BR(elo_cfg), "B+R+I": BRI(elo_cfg)}
+    class IGated(WithPlayers):
+        """Research-only correction (Codex review): avail_v1's features with absent minutes from delivered games only."""
+        name = "avail_gated"
+        gated = True
+        feature_names = V2_FEATURES + av.AVAIL_FEATURES
+        scaled_names = V2_SCALED + ("new_absent_diff", "all_absent_diff")
+
+    class BRIGated(BRI):
+        name = "players_report_gated"
+        gated = True
+
+    return {"B": LogisticV2(elo_cfg), "B+I": av.avail_v1(elo_cfg, facts), "B+R": BR(elo_cfg), "B+R+I": BRI(elo_cfg),
+            "B+I*": IGated(elo_cfg), "B+R+I*": BRIGated(elo_cfg)}
 
 
 # --- K selection (warm-up only) ----------------------------------------------------------------------------------------
@@ -471,15 +563,42 @@ def metrics(games: list[dict], key: str) -> dict:
     return out
 
 
-def compare(games: list[dict], a: str, b: str, z: float) -> dict:
+def week_bootstrap(values: list[float], cutoffs: list[str], seed: int = backtest.BOOTSTRAP_SEED,
+                   samples: int = backtest.BOOTSTRAP_SAMPLES) -> list[float]:
+    """Sorted resampled means: the exact procedure of backtest.block_bootstrap (same seed, ISO-week blocks, draw order),
+    returned whole so adjusted percentile intervals come from the samples themselves (tests check the 95% endpoints match)."""
+    blocks: dict[tuple, list[float]] = {}
+    for v, c in zip(values, cutoffs):
+        iso = datetime.strptime(c, "%Y-%m-%dT%H:%M:%SZ").isocalendar()
+        blocks.setdefault((iso[0], iso[1]), []).append(v)
+    weeks = list(blocks.values())
+    rng, stats = random.Random(seed), []
+    for _ in range(samples):
+        pick = [weeks[rng.randrange(len(weeks))] for _ in weeks]
+        stats.append(sum(sum(w) for w in pick) / sum(len(w) for w in pick))
+    return sorted(stats)
+
+
+def percentile_interval(stats: list[float], alpha: float) -> list[float]:
+    """Two-sided (1 - alpha) percentile interval, same index convention as backtest.block_bootstrap."""
+    n = len(stats)
+    return [stats[int(alpha / 2 * n)], stats[int((1 - alpha / 2) * n) - 1]]
+
+
+def compare(games: list[dict], a: str, b: str, alpha: float = PRIMARY_ALPHA) -> dict:
+    """Paired differences a − b with the week-block bootstrap: 95% interval and the Bonferroni-adjusted percentile interval
+    (alpha = 0.05 / number of primary comparisons, i.e. the 1.25th and 98.75th percentiles for two)."""
+    cutoffs = [g["cutoff_at"] for g in games]
     out = {}
     for metric, fn in (("log_loss", _ll), ("brier", _br)):
         diffs = [fn(g[a], g["home_won"]) - fn(g[b], g["home_won"]) for g in games]
-        bs = backtest.block_bootstrap(diffs, [g["cutoff_at"] for g in games])
-        sd = (bs["ci95"][1] - bs["ci95"][0]) / (2 * 1.959964)
-        out[metric] = {**bs, "bonferroni_interval": [bs["mean"] - z * sd, bs["mean"] + z * sd]}
+        stats = week_bootstrap(diffs, cutoffs)
+        out[metric] = {"mean": sum(diffs) / len(diffs), "ci95": percentile_interval(stats, 0.05),
+                       "bonferroni_interval": percentile_interval(stats, alpha), "bonferroni_alpha": alpha,
+                       "games": len(diffs), "seed": backtest.BOOTSTRAP_SEED, "samples": len(stats)}
     acc = [int((g[a] >= 0.5) == g["home_won"]) - int((g[b] >= 0.5) == g["home_won"]) for g in games]
-    out["accuracy"] = backtest.block_bootstrap(acc, [g["cutoff_at"] for g in games])
+    stats = week_bootstrap(acc, cutoffs)
+    out["accuracy"] = {"mean": sum(acc) / len(acc), "ci95": percentile_interval(stats, 0.05), "games": len(acc)}
     return out
 
 
@@ -513,24 +632,68 @@ def walk(conn: sqlite3.Connection, period: str, seasons: tuple, scored: tuple, e
               "player_diff_report": by["B+R+I"][g]["diffs"]["player_diff_report"],
               "report_used": by["B+R+I"][g]["diffs"]["report_used"]} for g in order]
     report_ok = sum(1 for g in games if g["report_used"])
+    audit = timing_audit(box, facts, [r.game for r in rows], [r.game for r in rows if r.game.game_id in ids], by["B+R+I*"])
     weights = {n: dict(zip(("intercept",) + built[n].feature_names, [round(w, 4) for w in built[n].weights]))
                for n in built if getattr(built[n], "weights", None)}
     player_cov = {n: dict(built[n].players.coverage) for n in built if hasattr(built[n], "players")}
     return {"games": games, "coverage": coverage, "k": k_choice, "box_digest": box.digest,
             "dataset_version": backtest.dataset_version(rows), "box_version": backtest.box_version(events),
-            "weights_last_fit": weights, "player_coverage": player_cov, "games_with_report_adjustment": report_ok,
+            "injury_timing_audit": audit, "weights_last_fit": weights, "player_coverage": player_cov, "games_with_report_adjustment": report_ok,
             "versions": {n: backtest.model_version(built[n]) for n in built}}
 
 
+def timing_audit(box: Box, facts: dict, all_games: list, scored: list, gated_preds: dict) -> dict:
+    """Codex review: do avail_v1's absent minutes use a game whose result was not yet delivered at the cutoff?
+    Three recomputations of the same features: (a) every box appearance dated before the game — must equal avail_v1
+    exactly (proves the recomputation); (c) only games in the walk's game list, dated before (no delivery gate); (b) only
+    games delivered by the cutoff (recorded during the walk). timing = (b) ≠ (c); game coverage = (c) ≠ (a), i.e. minutes
+    from box games outside the game list (e.g. All-Star weekend) that the delivery-gated variants never see."""
+    by_date, by_list = Rosters.from_apps(box.apps), Rosters.from_games(box, all_games)
+    keys = ("new_absent_diff", "all_absent_diff", "report_missing")
+
+    def feats(ros, g):
+        ref = av.game_features(facts, g)
+        return gated_avail(ros, facts.get(et_day(g.tipoff_at)), g, ref["report_missing"] == 0.0)
+
+    def gap(x, y):
+        return max(abs(x[k] - y[k]) for k in keys)
+
+    mismatch, timing, coverage, worst = [], [], [], {"timing": 0.0, "coverage": 0.0}
+    for g in scored:
+        ref = av.game_features(facts, g)
+        if gap(feats(by_date, g), ref) > 1e-9:
+            mismatch.append(g.game_id)
+        listed, delivered = feats(by_list, g), gated_preds[g.game_id]["diffs"]
+        if gap(delivered, listed) > 1e-9:
+            timing.append(g)
+            worst["timing"] = max(worst["timing"], gap(delivered, listed))
+        if gap(listed, ref) > 1e-9:
+            coverage.append(g)
+            worst["coverage"] = max(worst["coverage"], gap(listed, ref))
+    if mismatch:
+        raise PlayersError(f"absent-minutes recomputation differs from avail_v1 on {len(mismatch)} games: {mismatch[:5]}")
+    seasons = sorted({g.season for g in scored})
+    by_season = lambda gs: {s: sum(1 for g in gs if g.season == s) for s in seasons}
+    affected = {g.game_id for g in timing} | {g.game_id for g in coverage}
+    return {"scored_games": len(scored), "recomputation_identical": True, "affected_games": len(affected),
+            "timing_games": len(timing), "timing_by_season": by_season(timing),
+            "coverage_games": len(coverage), "coverage_by_season": by_season(coverage),
+            "max_feature_change_per48": worst, "timing_examples": [g.game_id for g in timing[:20]],
+            "coverage_examples": [g.game_id for g in coverage[:20]]}
+
+
 def summarize(games: list[dict], seasons: tuple) -> dict:
-    from statistics import NormalDist
-    z = NormalDist().inv_cdf(1 - 0.05 / 2 / 2)          # Bonferroni over the two primary comparisons
-    names = ("B", "B+I", "B+R", "B+R+I")
+    names = ("B", "B+I", "B+R", "B+R+I", "B+I*", "B+R+I*")
     out = {"games": len(games), "models": {n: metrics(games, f"p_{n}") for n in names},
-           "primary": {"B+R minus B": compare(games, "p_B+R", "p_B", z),
-                       "B+R+I minus B+I": compare(games, "p_B+R+I", "p_B+I", z)},
-           "secondary": {"B+R+I minus B": compare(games, "p_B+R+I", "p_B", z),
-                         "B+I minus B": compare(games, "p_B+I", "p_B", z)},
+           "primary": {"B+R minus B": compare(games, "p_B+R", "p_B"),
+                       "B+R+I minus B+I": compare(games, "p_B+R+I", "p_B+I")},
+           "secondary": {"B+R+I minus B": compare(games, "p_B+R+I", "p_B"),
+                         "B+I minus B": compare(games, "p_B+I", "p_B")},
+           # * = injury absent minutes from delivered games only (same availability rule as the rosters); Codex review
+           "corrected": {"B+R+I* minus B+I*": compare(games, "p_B+R+I*", "p_B+I*"),
+                         "B+I* minus B": compare(games, "p_B+I*", "p_B"),
+                         "B+R+I* minus B": compare(games, "p_B+R+I*", "p_B"),
+                         "B+I* minus B+I": compare(games, "p_B+I*", "p_B+I")},
            "by_season": {}}
     for s in seasons:
         sg = [g for g in games if g["season"] == s]
@@ -538,7 +701,7 @@ def summarize(games: list[dict], seasons: tuple) -> dict:
             out["by_season"][s] = {n: {k: v for k, v in metrics(sg, f"p_{n}").items() if k in ("n", "accuracy", "log_loss", "brier")}
                                    for n in names}
     out["reading"] = {c: ("adds information" if v["log_loss"]["bonferroni_interval"][1] < 0 else "no evidence of added information")
-                      for c, v in out["primary"].items()}
+                      for c, v in {**out["primary"], "corrected primary 2: B+R+I* minus B+I*": out["corrected"]["B+R+I* minus B+I*"]}.items()}
     return out
 
 
