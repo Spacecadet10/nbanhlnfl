@@ -12,7 +12,9 @@
   until training publishes. Retrain kickstarted 02:36 UTC (launchd job, caffeinate held; NHL then NBA).
 - Expected side effect: once the new NHL combiner publishes, recovery under the new definition will add `unreconstructable` rows
   for the Oct 8–9 games (keyed per definition); the 60 rows under the old definition remain.
-- Next: confirm NHL combiner publishes before the first Oct 10 game (17:00 UTC) and the 2h cycle writes `status='forecast'`;
+- **NHL retrain done:** combiner fit 48 (`8631cc578d16aa5c`) success 04:23 UTC, training cutoff 02:10 UTC, all 6 markets fitted
+  (2,860 games; winner 12 members), due false. NBA retrain still running at 05:08 UTC.
+- Next: confirm the NHL combiner (done, above) publishes before the first Oct 10 game (17:00 UTC) and the 2h cycle writes `status='forecast'`;
   confirm NBA publishes; Codex review of the deployed recovery diff.
 
 ## First live NHL adaptive forecasts verified — Claude (Opus 5.5), 2026-10-10 02:20 UTC
