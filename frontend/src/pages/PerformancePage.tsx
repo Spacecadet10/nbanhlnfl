@@ -6,7 +6,7 @@ import { useApi } from '../api/useApi';
 import { RunBadge } from '../components/Badges';
 import { MarketReport, MarketVersionSelect } from '../components/MarketView';
 import { AgreementTracking } from '../components/Tracking';
-import { TrainingStatusCard } from '../components/Training';
+import { SystemStatusPanel, TrainingStatusCard } from '../components/Training';
 import { AdaptiveStatusCard } from '../components/Adaptive';
 import { CandidateRosterCard, HistoricalStartCard, CombinationRules, PoolSelectionCard, SelectionStatusCard, ResearchPerformance, RetrospectiveStudy } from '../components/Research';
 import { DetailsToggle, MarketSelect, useDetails, useMarket, useSport } from '../components/Selection';
@@ -29,6 +29,7 @@ export function PerformancePage() {
   if (market !== 'winner') {
     return (
       <section>
+        <SystemStatusPanel sport={sport} />
         <div className="page-head"><h1>Model performance <RunBadge runType="live" /></h1></div>
         {meta.state.status === 'success'
           ? <MarketSelect value={market} markets={markets} onChange={setMarket} />
@@ -42,6 +43,7 @@ export function PerformancePage() {
   }
   return (
     <section>
+      <SystemStatusPanel sport={sport} />
       {markets.length > 0 && <MarketSelect value={market} markets={markets} onChange={setMarket} />}
       <AsyncView state={state} retry={retry}>
         {(p) => (

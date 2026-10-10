@@ -45,7 +45,7 @@ const policyParam = (policy?: Policy) => (policy === 'near_tipoff' ? 'near_tipof
 const confParam = (c?: number | null) => (c == null ? undefined : String(c));
 
 export const api = {
-  recovered: (sport: Sport, signal?: AbortSignal) => get<{ note: string; status: string; groups: ThresholdReport['groups']; records: { recovery_id: number; game_id: string; market: MarketId; tipoff_at: string; line: number | null; outcome: string }[] }>('/recovered-forecasts', { sport }, signal),
+  recovered: (sport: Sport, signal?: AbortSignal) => get<{ note: string; status: string; groups: ThresholdReport['groups']; adaptive?: { status: string; records: { game_id: string; status: string }[]; unreconstructable: { reason: string; rows: number; games: number }[] }; records: { recovery_id: number; game_id: string; market: MarketId; tipoff_at: string; line: number | null; outcome: string }[] }>('/recovered-forecasts', { sport }, signal),
   jointTracking: (sport: Sport, market: MarketId, params: Record<string, string | undefined>, signal?: AbortSignal) =>
     get<JointReport>('/research/tracking/joint', { sport, market, ...params }, signal),
 
