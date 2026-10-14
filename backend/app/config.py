@@ -32,7 +32,9 @@ def shadow_enabled() -> bool:
 
 
 def injury_collection_enabled() -> bool:
-    """Whether `app.cli injuries` may make requests. Off unless NBA_INJURY_COLLECTION=1 (set only in its own agent)."""
+    """Whether `app.cli injuries` may make requests. Off unless NBA_INJURY_COLLECTION=1 (set only in its own agent). Not the
+    only collector: the NBA two-hour cycle (jobs.predict_now) also fetches the official report whenever the sealed
+    availability facts (research/forward-facts.json) exist, because that variant needs a report from the last 60 minutes."""
     return os.environ.get("NBA_INJURY_COLLECTION") == "1"
 
 
@@ -45,3 +47,10 @@ def player_box_refresh_enabled() -> bool:
 def daily_agreement_enabled() -> bool:
     """Opt-in recording, activated only with an approved service configuration change."""
     return os.environ.get("NBA_DAILY_AGREEMENT", "0") == "1"
+
+
+def nhl_injury_capture_enabled() -> bool:
+    """Whether the NHL two-hour cycle captures the live ESPN NHL injuries page (sources.nhl_injuries.capture_live) into the
+    research cache the NHL injury member reads. Off unless NHL_INJURY_CAPTURE=1, activated only with an approved service
+    configuration change."""
+    return os.environ.get("NHL_INJURY_CAPTURE", "0") == "1"

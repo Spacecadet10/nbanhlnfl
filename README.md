@@ -88,7 +88,7 @@ The backend allows CORS from the Vite origin; override with `CORS_ORIGINS` (comm
 |---|---|
 | `GET /api/health` | Health check and mode |
 | `GET /api/meta` | Next game date, available dates, teams, primary model, last successful refresh |
-| `GET /api/sources` | Freshness of schedule/results, odds, and forecasts |
+| `GET /api/sources` | Freshness of schedule/results, odds, forecasts, NBA official injury reports, NHL injuries (newest ESPN snapshot), the NBA player box file and the canonical every-game ledger; an input without data is `missing` or `stale`, never left out |
 | `GET /api/games?date=YYYY-MM-DD` | Games on an Eastern date: prediction (or a `forecast_note` explaining why none), market, result |
 | `GET /api/games/{game_id}` | Detail plus point-in-time team stats as of the game's cutoff (404 if unknown) |
 | `GET /api/predictions?run_type=live\|backtest&date_from&date_to&team&min_confidence&limit` | History, latest version per game (422 if `date_from > date_to`). `min_confidence` (0.5–1) keeps picks whose model probability for the predicted winner, max(p_home, 1 − p_home), is at least that value. Each row has `pick` and `confidence`; `record` gives the selected count and the settled win/loss record (unscored games never count) |
@@ -209,7 +209,13 @@ cd ~/nba-predictor-live/backend && NBA_RELEASE_GUARD=1 NBA_RELEASE_ROOT=$HOME/nb
   NBA_DATA_DIR=/Users/andry/Desktop/nba-predictor-sprint1/data .venv/bin/python -m app.cli --sport nhl release-check   # 4. and nba
 ```
 - A release with a new migration is refused until the store is migrated deliberately from the release checkout (same
-  environment as step 4, command `migrate`, each sport), between cycles and after a backup.
+  environment as step 4, command `migrate`, each sport), between cycles and after a backup:
+  `NBA_DATA_DIR=<data dir> .venv/bin/python -m app.backup --dest <backup dir>` (online SQLite backup of both stores,
+  integrity-checked, with a manifest of sha256, schema version and row counts; reads the stores only).
+  To undo a migration, with the scheduled jobs and the API stopped (an open connection keeps writing to the replaced file): `… -m app.backup --restore <backup dir>/<stamp> --sport nba --sport nhl`
+  (refuses a manifest naming another store, a file that does not match the manifest or carries another store identity, and a store whose job lock is held; the new file is written and synced first, then the replaced files are kept as
+  `*.replaced-<UTC>`). Rehearsed on copies of the live stores 2026-10-14: schema 26 → 30 in under 1 s per sport, restore
+  logically identical to the original (docs/SMOKE_TEST.md).
 - Roll back: `git -C ~/nba-predictor-live checkout -B release <previous commit>`, then steps 3–4. Pre-release launchd files:
   `data/backups/launchd-before-release-20261003/` (dev checkout) and `…-before-release-venv-20261003/` (shared venv, Desktop path).
 - The release runs only while this Mac is awake: closing a laptop lid sleeps it. An always-on host is the planned next step.

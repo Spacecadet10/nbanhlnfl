@@ -1,5 +1,135 @@
 # Current handoff
 
+## Stabilization batch 3 — Claude (Opus 5.5, session -ae), 2026-10-14 ~13:40Z; IMPLEMENTED + TESTED + INDEPENDENTLY REVIEWED (fresh-context subagents, same model; not Codex); NOT ACTIVATED
+- Base: `snapshot-2026-10-13` (cb29841) + batches 1–2, all uncommitted. No training, collection, live write, job change, release switch or commit. No fingerprinted file changed (reviewer `cmp` against the pre-batch tree).
+- Integration: this session is the integrator for the combined candidate. Session -25 delivers the research agent and status panel, a per-game candidate view and research HTTP tests as patches, each with its own review. Phase order (user, relayed by -25): finish product → verify and freeze → retrain on isolated snapshots after approval.
+- 1. Settlement A (Coverage card pre-ledger night-before fallback, `coverage._existing`):
+  - Fix: now voids by its History's own rule. Winner: the Eastern date changed (`live.day_changed`). Markets: any start change (`markets.settle` with the row's start). A game moved to another date is void, not "missing". Takes the latest row, as History does.
+  - Tests: `test_coverage.py::test_a_night_before_*` (2, failed first), plus `test_a_game_reforecast_for_its_new_date_*` (review).
+  - Real copy: the whole Coverage report is byte-identical before and after (0 moved night-before rows).
+  - Review: ACCEPT.
+  - Intended consequence: an upcoming pre-ledger game moved to another date counts as void, not upcoming (matches History).
+- 2. Results chip (`RealProvider.sources()`, Today):
+  - Before: "fresh" for 24 h, falling back to any raw fetch.
+  - Now: the forecast guard's 60 min (`near_tipoff.MAX_DATA_AGE`) while the two-hour cycle works (`coverage.forecast_window`, now shared with `jobs._forecast_due`, behaviour-identical; the reviewer checked 2×4032 time points), else the daily job's 26 h (as System status). "missing" when no refresh succeeded. Header `last_refresh_at` cut at now.
+  - Changed assertion: `test_live.py::test_real_api_shows_live_forecast_market_and_notes` schedule fresh → missing (that fixture never ran a refresh job; reviewer: legitimate).
+  - Review: ACCEPT after fixes.
+  - Open LOW: the chip can read stale for up to one cycle when a window opens (9 of 616 points in a point-in-time replay; nothing refused).
+- 3. Agreement and per-model view audit (fresh agent, repros in scratchpad `agree-audit/`). Fixed with failing-first tests:
+  - F1 `/api/thresholds`: reg3 never picked the draw and graded a correct draw as a loss.
+  - F2: two-way confidence on push-able lines was not the canonical max(a,b)/(a+b).
+  - F3: game-card agreement still read as current after a start change or postponement → `void` + reason.
+  - F4: Game tracking panel → the report's canonical cohort, with `state` recorded/void/not_recorded.
+  - F5: the tracking-v2 record pooled research definitions → one definition per record via `resolve_definition`:
+    - default = the newest definition with games in the date/line filters
+    - a member signature resolves within one definition
+    - an ambiguous prefix gets 422
+    - the same definition is used for exact rules, the joint view and the panel (with a note when the game is outside the default)
+  - F6: unscorable counts shown.
+  - Same class as F1 in `recovery.py` (recovered and adaptive-recovered tables graded a reg3 draw pick as a loss; raw confidence).
+  - Real NHL effect:
+    - Tracking-v2 now reports the newest definition (cb194620): e.g. winner single|hockey_elo 20–15 over 41 games, previously 37–24 pooled over 67 games from 3 definitions (the other definitions: 25 and 1 games, selectable).
+    - 26 of 67 games carry the "outside the default record" note.
+    - `/api/thresholds` and recovered tables: byte-identical (no draw-favoured or whole-number-line rows yet).
+  - Review: ACCEPT WITH FIXES twice → all fixed (incl. the 500→422).
+  - Open: F7 (LOW) research views use other grids (`research_live.report` 50–75%/reg3 40–60%; combination ladders reg3 from 1/3), not the 50–90/35–70 report grid; a fix touches fingerprinted files or needs a route-level filter (decision). Recovery keeps combine.pick's exact-tie abstention (canonical picks a→mid→b; ties not seen in data).
+  - Changed test fixture (assertion unchanged): `test_game_card_counts_only_the_latest_cohort_of_each_market` hand-made schema gained the real columns (reviewer: legitimate).
+- 4. Injury collection switch: `config.injury_collection_enabled` doc now states that the NBA two-hour cycle also fetches the official report when `research/forward-facts.json` exists (deliberate since ef56512; behaviour unchanged). DECISION FOR USER: keep this second collector (recommended: needed for the 60-min report requirement), or gate it on the switch.
+- Checks (cwd backend, deep env, NBA_DATA_DIR = empty scratch dir):
+  - Full suite: `NBA_DATA_DIR=<scratch>/emptydata6 OMP_NUM_THREADS=4 PYTHONPATH=. ~/nba-predictor-deep/backend/.venv/bin/python -m pytest -q -p no:cacheprovider tests` → 1105 passed, 0 failed (15:55); source hash fe8fd1ca… identical before and after.
+  - Frontend: `npx tsc --noEmit -p . && npm run build` OK.
+  - Browser (real-copy API :8812 fixed clock 2026-10-14T23:10Z + Vite :5182): Today stale chip; Game nhl:2026020030 tracking note; Performance definition selector and note; phone width 390 px; no console errors.
+- 5. Source status (`/api/sources`, Today):
+  - New entries (`RealProvider._input_sources`, each isolated):
+    - NBA official injury reports: fresh only if a report for a slot of the last 60 min was stored by now; missing when none is due (preseason); the note says how collection runs.
+    - NBA player box file: file age; missing if the file is absent or written after the view's time; the note says the members check rows themselves.
+    - NHL injuries: always missing (no live collector).
+    - Canonical ledger: fresh only if every started regular/play-in/playoff game since recording began has a forecast in every market; preseason games with no row at all are gaps.
+  - UI: "why" note visible for non-fresh entries. README endpoint row updated.
+  - Changed assertion: `test_live.py` kinds dict extended with the 3 entries (injuries stale, players missing, canonical missing on that fixture).
+  - Review: 3 rounds (HIGH: a ledger of only 'missing' rows read fresh; MEDIUM ×3) → ACCEPT; remaining LOWs fixed.
+  - Real copy: NBA injuries/player box/canonical missing at 03Z; NHL canonical stale "0 of 2 … 12 market cells missing" on the browser copy (copy-only missing rows).
+- 6. Backup/restore (`backend/app/backup.py`, `python -m app.backup --dest | --restore … --sport`):
+  - Backup: SQLite online backup, integrity check, manifest (sha256, schema, identity, row counts); no sidecar files.
+  - Restore: checks file name, sha256, identity and job lock for every sport before touching any; writes, fsyncs and verifies, then moves the old store and -wal/-shm aside; syncs the directory.
+  - Tests: `tests/test_backup_restore.py` (4).
+  - Rehearsed on copies of the live stores (schema 26 → candidate 30 in < 1 s per sport → restore = original content); README release section updated; record in docs/SMOKE_TEST.md.
+  - NOT done: a real backup of data/ (release-time, approval).
+- Checks for 5–6:
+  - Full suite: `… pytest -q -p no:cacheprovider tests` (NBA_DATA_DIR=<scratch>/emptydata7) → 1119 passed, 0 failed (16:30); source hash 9665fba2… before = after.
+  - Frontend: tsc + build OK.
+  - Browser: Today NBA at 1280 px and phone width; why notes open; no console errors in the earlier pass.
+- 7. Player/injury fixes (all fingerprinted adaptive files → a new definition; refit expected, not yet run):
+  - NBA serving: `LiveState.stale_inputs` → the member abstains, with the reason, when no usable report exists (none before the cutoff, unsubmitted, unreconciled, team not listed, unresolved name). Basis: the user rule "no probability when requirements are unmet" (product decisions 2026-10-13, item 3). Same as NHL.
+  - NBA training: `add_live_reports(full=True)` via `prepare_training_inputs`, called by `adaptive.train` before each walk. Training reads every live report retrieved by its `now`, gated per row (pub = max(header, retrieval) ≤ row cutoff; reviewer's look-ahead probe holds).
+  - NHL live capture: `sources.nhl_injuries.capture_live` (free ESPN page, stamped at retrieval, raw kept, atomic metadata). Loader reads `live-*.json`, rejects a source/timestamp mismatch and skips torn files. Opt-in `NHL_INJURY_CAPTURE=1` step in the NHL two-hour cycle (never fatal, skipped on dry run).
+  - Status entry "NHL injuries (ESPN page)": fresh ≤ 24 h (the member's MAX_AGE_HOURS); capture times from file names.
+  - Tests:
+    - test_player_ratings: abstain, training reports, prepare hook.
+    - test_adaptive: spy that train calls the hook; usable report stand-ins for the served games g1/g2.
+    - test_nhl_player_ratings: 4 live-capture tests.
+    - test_sources: NHL entry.
+    - Fixture changes (assertions unchanged) judged legitimate by the reviewer.
+  - Review: ACCEPT WITH FIXES (no look-ahead, no regression). Findings 4, 5 and 7 fixed; the rest recorded as limitations below.
+  - User decisions 2026-10-14 (asked directly):
+    - Backfill NBA reports for 2024-25 and 2025-26 before retraining: already present and verified in the isolated `~/nba-predictor-research-data/players-v1/research/availability/reports` (211 + 211, sha256 all ok). The retraining snapshot must use that folder, not data/research (ends 2023-24).
+    - Keep the second collector.
+    - F7: filter research views to the standard grid at display (done: Research, ThresholdExplorer, DailyLearning, with a note naming hidden or uncomputed rows).
+    - `.claude/` removed; the structure guard passes.
+  - LIMITATIONS (recorded, not fixed; model-design choices for after the refit):
+    - NBA training rows use cutoff tipoff−2 h, while serving forecasts later (≤ 2 h before the start). Serving can see a report up to about 2 h fresher than its training row did. The live injuries agent collects half-hourly, so the gap is timing, not a missing source.
+    - NHL `snapshot_age_hours`: serving captures just before forecasting (age ≈ 0), training archive rows are 0–24 h old, and live-era training rows depend on capture cadence. Rows from 2026-10-01 until capture is switched on have no snapshot.
+    - The winner combiner is fitted on history rows where the injury members would now abstain (also true for NHL before).
+    - Expected abstention load: NBA preseason (no official reports); NHL teams not listed on the ESPN page (29 of 32 on the probe).
+- 8. Integration of session -25's work (research agent loop, autoresearch status endpoint and panel, per-game candidate-model view, research HTTP tests):
+  - Patches: C (sha256 43e257fd…) then D, the review fixes (6ace629d…). Applied with `git apply`; the DailyLearningPage hunk was hand-resolved (import + `<AutoresearchCard />`). CandidateForecasts is mounted on GamePage (research details).
+  - Reviews:
+    - C: ACCEPT WITH FIXES (HIGH .git/config sandbox escape, plus MEDIUM ×3).
+    - D re-review: all 8 fixed, verified by sandbox-exec and local-git probes.
+    - New open items N1–N4, sent to -25 for a patch E. N3 (MEDIUM): the agent's process can write ~/.claude and ~/.claude.json, which the user's unsandboxed Claude Code reads. THE AGENT LOOP MUST NOT RUN UNTIL N3 IS FIXED.
+  - Nothing schedules the loop. NBA_AUTORESEARCH_DIR is unset (the status card says "not configured").
+  - -25 reported real paid runs: $0.69 earlier (reported spend, not total; the stopped run's cost is unknown), then $0.14 probe + $0.19 run after the #1 fix.
+- FINAL CANDIDATE (2026-10-14 17:50Z): patches E (63b80c34…) and F (54e5009b…) from -25 integrated after review (E: ACCEPT WITH FIXES, residual MEDIUM = keychain login item reachable from the agent sandbox, a user decision; F: ACCEPT WITH FIXES, 4 new LOWs for a later patch G: core.worktree not refused at registration, backslash/non-ASCII workspace paths, combined `-qF`, hook-name test gap). Cosmetic hidden-row count fixed (reviewed).
+  - Source identity (`scratchpad/source_id.sh`: git-tracked + non-ignored untracked files under backend/app, backend/tests, backend/pyproject.toml, frontend/src, frontend/package*.json, scripts; docs and ignored editor state excluded) = 9efe26f3f5b545bb4ff3d6d4a31f6a11820ad23598732c9aba7153d04a1b1922. Cross-checked by -25 on the pre-F tree.
+  - `check_project.py --ready` on exactly that tree → 1263 passed, 0 failed; identity unchanged after the run.
+  - Research agent loop: NO runs or scheduling until the authentication isolation decision (user rule 2026-10-14).
+- FINAL COMBINED VERIFICATION (exact candidate = this working tree; backend app+tests hash 9091e03a…, frontend/src hash 39c77d5f…):
+  - `NBA_DATA_DIR=<scratch>/emptydata9 OMP_NUM_THREADS=4 PYTHONPATH=backend ~/nba-predictor-deep/backend/.venv/bin/python scripts/check_project.py --ready` → structure guard passed, typecheck, build, 1251 passed / 0 failed (19:08). Hashes identical before and after.
+  - Lifecycle on isolated migrated copies of the live stores (scratchpad `lifecycle/lifecycle.py`; synthetic rewind labelled):
+    - NHL 2026-10-13: 7 regular games, cycle at 21:40Z → 7 two-hour forecasts, 42 canonical rows, all pregame. After restoring finals, Today/Game/History/Performance/Coverage agree on every game and market.
+    - NBA: preseason only (00:00Z game) → unvalidated on every page, 5 experimental rows kept apart. A real NBA regular-season lifecycle is not possible before 2026-10-20 (synthetic tests cover it).
+  - Browser (real-copy API :8812, fixed clock 06:00Z): Game page candidate view; Daily learning autoresearch card "not configured"; no console errors.
+- Still open (Phase 1): user decisions listed in the batch-2 entry; F7 grid decision; the injury second-collector decision.
+
+## Stabilization batch 2 — Claude (Opus 5.5), 2026-10-14 ~05:00Z; reviewed (fresh-context subagent, same model; not Codex): ACCEPT after fixes
+- Review 2: ACCEPT WITH FIXES, 7 findings (tracked rule too broad for historical backfill → sealed-fingerprint risk on rebuild; periods-only change moved availability; first late NHL decision shown as a correction; failed gap season never retried; stray cache file crashed the never-fatal job; empty season name in a reason; grade history ignored as_of). All fixed with failing-first tests; re-review ACCEPT (its 9/10 reproductions pass; the 1 failure is its own gap-cache setup, behaviour by design). One existing test changed: `test_the_current_season_player_box_is_refreshed_daily_and_verified` starting cache 2024→2026 (no gap), assertions unchanged; reviewer judged it legitimate.
+- Open (LOW, recorded): a game first seen unfinished >24 h after its start is still stamped start+4 h (pre-existing); grade_history is cut at as_of while `grade` uses the current row (API always passes now); no test pins one listing request per run for an unpublished gap.
+- Full suite on the final code (deep env): 1088 passed, 0 failed; source hash identical before/after the run.
+- Review 1 of the all-markets slice (fresh-context subagent, same model; not Codex): ACCEPT WITH FIXES, no wrong grades / page disagreement / winner regression (old-vs-new winner responses identical except intended fields). Its 4 findings are fixed here: per-market Coverage record (`record_by_market`), threshold `graded` = W+L, reg3 "no three-way quotes are collected", ConfidenceFilter comment. Its notes (NHL pages now default to canonical; NBA winner canonical levels 50–90%; demo canonical non-winner 404) are intended.
+- Settlement C: migration 0030 `result_revisions` (append-only; backfill = one revision per stored final, basis 'backfill'; earlier versions not reconstructed); `ingest._record_result_revision` after each game/decision write; canonical `grade_history` + `regraded`, summary `regraded`, UI "Regraded after a score correction: … The forecast itself never changed." Copy of real stores: 9456/9456 NBA, 15838/15838 NHL finals backfilled; 0 corrected results exist today.
+- Training audit (fresh-context subagent, 7 reproductions). Fixed: (A) a game first seen in progress whose final arrives >24 h later is stamped at retrieval, not tipoff+4 h (real instance nhl:2026020007 stays backdated in stored data; forward-only); (B) an NHL decision-only correction moves result_available_at (look-ahead). Disclosure: adaptive replay seasons = tuning seasons (Adaptive.tsx). NOT fixed, user decision: NBA player member serves on full rosters with no injury report (NHL abstains); NBA player member trains with report_missing=1 but serves with live reports (train/serve skew) — both need player_ratings.py (fingerprinted) changes → new definition → refit (approval). Recorded, not fixed: score corrections make the served state between sightings unreproducible; first-time NHL decision arriving after the score is read regardless of time.
+- NBA player box: `jobs.player_box_refresh` asked only for the unpublished current season (404, failed) and never fetched 2024-25/2025-26; now fetches every published season up to the current one (digest-verified), reports unpublished as `not_published`. Verified against the real source on an isolated copy. Job still disabled (NBA_PLAYER_BOX_REFRESH=0, not in release): enabling = approval. availability.py restored byte-identical to the snapshot (it is in the agreement fingerprint).
+- NBA injuries (probed, free): no official reports exist for preseason (403, 2025 and 2026); since 2025-12-22 reports are quarter-hourly, the collector takes :00/:30 only (decision: keep); parser reads the current format (206/206 reconciled). NHL: no live injury collector exists (Wayback archive only); ESPN live page parses (128 rows, 29 teams); accepting live captures changes fingerprinted NHL files → refit (user decision).
+- Process: other sessions confirmed no overlapping edits (autoresearch moved to /Users/andry/autoresearch-sports/app). A `pkill -f "pytest -q -p no:cacheprovider"` by this session at 04:27:46Z may have stopped another session's pytest; that session was told.
+
+## All-markets canonical integration (NBA + NHL) — Claude (Opus 5.5), 2026-10-14 ~04:00Z; implemented, AWAITING INDEPENDENT REVIEW
+- Base: local branch `snapshot-2026-10-13` (cb29841 = all prior uncommitted work); this change is uncommitted on top. No training, collection, live write, job change, release switch or commit.
+- User decisions (2026-10-14): a regulation draw can be the reg3 pick (deterministic ties a → mid → b); reg3 reports on the 35–70% grid, two-way markets on 50–90% (`agreement_tracking.REPORT_THRESHOLDS`); markets never pooled; thresholds never stop recording/grading.
+- Changed: `coverage.py` (`pick_side` shared by grading and records; `canonical()` passes the regulation decision; record carries `side`, `market_quote_id`, `result_side`; per-market `canonical_summary` with explicit denominators, multi-outcome Brier for reg3, threshold rows; `matched_quote` accepts a quote only for the same game/market, exact line, retrieved ≤ forecast and < start, bookmaker line; Coverage card: canonical selection for every sport/market, `thresholds_by_market` replaces the pooled `thresholds`, `games_unvalidated`, preseason experimental sources still counted); `providers/real.py` + `main.py` (market on Today canonical slate, `/api/canonical/*`, Game `canonical_markets`; 404 for a market the sport lacks, 422 two-way min_confidence < 0.5); `schemas.py`; frontend Canonical/Today/Game/History/Performance/Coverage/ConfidenceFilter (canonical shown for every sport and market; canonical grids in the filter).
+- Changed interpretations (not silent): Coverage card non-winner cells used "latest row before the start", now the canonical selection (a later missing attempt no longer hides an earlier forecast; preseason cells now `unvalidated` + experimental); preseason games no longer count as "fully forecast" (new `games_unvalidated`); Coverage threshold table is per market. Stored rows unchanged. Legacy market ledger still never picks a draw (two views of reg3 remain; legacy is labelled legacy).
+- Tests: new `tests/test_canonical_markets.py` (7) + NBA all-markets test in `test_canonical.py`. Written after the code; run against `snapshot-2026-10-13` in a scratch worktree: 7 failed for the intended reasons (no endpoint/market, no `pick_side`, no `decision`, no `market_quote_id`, reg3 422), NHL winner regression passed there too (already worked). Assertions changed to the approved behaviour: `test_canonical.py` preseason-other-markets, `test_coverage.py` thresholds (per market), preseason labels, `games_fully_forecast` 2→1 + `games_unvalidated`.
+- Not resolved here: score corrections still regrade silently (an existing test enforces it); legacy source chips call results "fresh" up to 24 h while the forecast guard needs 60 min; the structure guard fails on an empty untracked `.claude/` dir (created 23:25 local by tooling, not removed). A second Claude session wrote this file and docs/SMOKE_TEST.md at 23:16 local on the same tree (one-writer rule). Evidence: docs/SMOKE_TEST.md last section.
+
+## Fail-closed adaptive selection (coverage-v2) — Claude (Opus 5.5), 2026-10-14 ~03:50Z; needs independent review
+- User-approved scope: smallest fail-closed slice only. Decision: no adaptive definition is approved for canonical use. An adaptive row, valid fit or successful retrain is not approval, and adaptive stays labelled research. This is an explicit "no approvals exist" policy, NOT an approval system (no format, registry, schema or config). No training, collection, deployment, live write, job change or commit.
+- Changed: `coverage.py`: `ORDER_VERSION` coverage-v2; `_adaptive_rejected` (always rejects, names definition + schedule); `_adaptive` skips rejected rows and names them in the reason, so the sealed primary is used, or a `missing` row lists every reason. `_existing` (report read path for games before every-game recording) gets the same rule because it calls `_adaptive`. On the real NHL copy this moves 240 earlier adaptive "main" cells to the recorded primary, with no new missing cells. Also: report note, `providers/real.py` canonical note, UI wording (Canonical.tsx labels/badge/"not used because", Coverage.tsx labels, TodayPage copy), docs/COVERAGE.md.
+- Unchanged: preseason exclusion (adaptive refuses preseason before approval; Experimental label), append-only `adaptive_forecasts`/`game_forecasts`, pregame timing (nothing recorded at/after the start), retry idempotency (a v2 decision appends one revision per market, then retries return it).
+- Tests (`tests/test_coverage.py`): 5 new: weekly+daily both unapproved, adaptive rows unchanged; adaptive without an eligible baseline → missing; v1 rows unchanged + one v2 revision + retries 0 + nothing after the start; preseason outside ensemble/accepted record; pre-ledger report never counts adaptive. EXPECTATIONS CHANGED by this product decision (other assertions kept): `test_the_adaptive_ensemble_is_the_main_source_when_it_forecast` → renamed `test_an_adaptive_forecast_is_research_only_never_the_canonical_source` (now primary_recorded + reason; still asserts the adaptive forecast exists); `test_a_daily_unavailable_row_never_hides_the_weekly_ensembles_forecast` (now asserts the weekly forecast is named as not approved instead of being the source).
+- Checks: fail-before 7 failed; after 23 passed; `--ready` gate 1058 passed, exit 0; frontend build re-run after a last label edit OK. Evidence: docs/SMOKE_TEST.md last section.
+- Policy dispositions (user, 2026-10-14): D1 deferred: keep existing safeguards; before using the selector rule for adaptive, establish applicability, the unit counted, correlated forecasts and the forward protocol; nothing can be promoted meanwhile. D2: approval must name the exact definition + operating policy (sport, market, season type, cadence, fallback policy) and tell a new fit under an unchanged policy apart from a changed definition; design deferred. D3: separate model/data task; show training/serving semantics of "report missing" and whether the fallback combination exists and is valid; behaviour unchanged here. D4: no blanket subset approval; fallback covered only if that exact policy was evaluated, with subset usage/results reported.
+- Limits: API `main`/`fallback` keys keep their names (labels changed); stored coverage-v1 adaptive rows (dev copies only; the live release has no game_forecasts) still show as adaptive, labelled research/not approved; phone-width check not repeated.
+- Next: independent review of this slice. Still required before release promotion: traceable settlement corrections, current player/injury collection; also settlement A/B, finding 5, real regular-season check 2026-10-20T19:00Z.
+
 ## Adaptive eligibility/promotion gate defined (read-only) — Claude (Opus 5.5), 2026-10-14 ~03:30Z; awaiting user decisions
 - Slice 1 accepted locally (independent review below); its LOW limitations stay recorded there. No edits, training, network, live writes, jobs, release changes or commits here. Isolated copy only for read queries.
 - Forecast-time validity is largely implemented: per-member abstention with reasons (adaptive.py:1650-1768), inputs-changed-since-fit guards (1717-1728), digest-verified content-addressed artifacts (651-665), definition-filtered combiners (1855-1902), one-missing / player-group fallback stacks else abstain (522-539, 1265-1271). Gaps: no declared per-member required-input list; result freshness only via the cycle passing primary-accepted games (jobs.py:347,374), not in adaptive.record or on the row; NBA player member uses `report_missing=1` when no injury report (player_ratings.py:443-455) while NHL abstains (nhl_player_ratings.py:453-460).

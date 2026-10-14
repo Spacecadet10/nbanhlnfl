@@ -280,12 +280,23 @@ class Inputs:
             digest.update(body)
         self.digest = digest.hexdigest()
         self.snapshots = []
-        for p in sorted((self.root / 'injuries').glob('[0-9]*.json')):
-            item = json.loads(p.read_text())
+        directory = self.root / 'injuries'
+        self.skipped_live = 0
+        for p in sorted([*directory.glob('[0-9]*.json'), *directory.glob('live-[0-9]*.json')]):
+            try:
+                item = json.loads(p.read_text())
+            except ValueError:
+                if p.name.startswith('live-'):      # a torn live write (pre-atomic or a crash): skipped and counted
+                    self.skipped_live += 1
+                    continue
+                raise
             raw = (p.parent / item['raw_file']).read_bytes()
             if hashlib.sha256(raw).hexdigest() != item['sha256']:
                 raise ValueError('NHL injury raw hash mismatch')
-            if nhl_injuries.actual_capture(item['response_url'], item['requested_capture']) != item['captured_at']:
+            if item.get('source') == 'live':        # live capture: stamped at retrieval, from the live page only
+                if not nhl_injuries.live_source(item['response_url']) or item['captured_at'] != item['retrieved_at']:
+                    raise ValueError('NHL live injury capture source or timestamp mismatch')
+            elif nhl_injuries.actual_capture(item['response_url'], item['requested_capture']) != item['captured_at']:
                 raise ValueError('NHL injury timestamp mismatch')
             layout, rows, teams = nhl_injuries.parse(raw)
             if (item.get('layout'), item.get('rows'), item.get('teams')) != (layout, rows, teams):
@@ -305,7 +316,8 @@ class Inputs:
 
 def missing_inputs():
     root = nhl_injuries.root()
-    if not any((root / 'boxes').glob('[0-9]*.json')) or not any((root / 'injuries').glob('[0-9]*.json')):
+    if not any((root / 'boxes').glob('[0-9]*.json')) or not any([*(root / 'injuries').glob('[0-9]*.json'),
+                                                                     *(root / 'injuries').glob('live-[0-9]*.json')]):
         return f'needs NHL player boxes and timestamp-verified injury archives under {root}; run nhl-player-inputs'
     return None
 

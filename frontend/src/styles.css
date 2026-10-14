@@ -40,6 +40,9 @@ input, select {
 .source-stale .dot { background: var(--warn); }
 .source-stale .muted { color: var(--warn); }
 .source-missing .dot { background: var(--bad); }
+.source-why { flex-basis: 100%; }
+.source-why summary { cursor: pointer; color: var(--muted, inherit); }
+.source-why span { display: block; max-width: 60ch; white-space: normal; }
 
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin-bottom: 1rem; }
 details.card summary { cursor: pointer; font-weight: 600; }

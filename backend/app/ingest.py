@@ -300,6 +300,7 @@ def import_raw(conn: sqlite3.Connection, raw_id: int, cache_dir: Optional[Path] 
         outcome = _upsert_game(conn, g, raw_id, retrieved_at)
         if outcome:
             stats[f"games_{outcome}"] += 1
+            _record_result_revision(conn, g.game_id, raw_id, retrieved_at)
         if g.status == "final":
             for team, is_home, s in ((g.home, 1, g.home_stats), (g.away, 0, g.away_stats)):
                 _upsert_stats(conn, g.game_id, team.team_id, is_home, s, raw_id, retrieved_at)
@@ -334,10 +335,12 @@ def _upsert_game(conn: sqlite3.Connection, g: espn.GameRow, raw_id: int, retriev
               "home_team_id": g.home.team_id, "away_team_id": g.away.team_id, "neutral_site": int(g.neutral_site),
               "status": g.status, "home_score": g.home_score, "away_score": g.away_score}
     if g.status == "final":
-        # Observed: seen within a day of the start, or a game this store already tracked before it started (a result that
-        # arrives late after an outage is stamped with the time it was actually learned, never backdated). Only a game
-        # first met already finished (historical backfill) gets the assumed start + 4 h.
-        tracked = row is not None and row["status"] != "final" and row["first_seen_at"] < g.tipoff_at
+        # Observed: seen within a day of the start, or a game this store tracked live (first seen unfinished no later than a
+        # day after its start: a result that arrives late after an outage is stamped with the time it was actually learned,
+        # never backdated). A game first met long after its start (historical backfill, even listed unfinished there) gets
+        # the assumed start + 4 h, so a rebuilt store keeps the sealed validation fingerprints.
+        tracked = (row is not None and row["status"] != "final"
+                   and _ts(row["first_seen_at"]) - _ts(g.tipoff_at) <= OBSERVED_WINDOW)
         observed = tracked or _ts(retrieved_at) - _ts(g.tipoff_at) <= OBSERVED_WINDOW
         availability = {
             "result_first_seen_at": retrieved_at,
@@ -450,7 +453,27 @@ def import_nhl_fetch(conn: sqlite3.Connection, fetch_id: int, cache_dir: Optiona
             stats["decisions" if dec else "decision_unknown"] += 1
             if dec:
                 _upsert_decision(conn, g.game_id, dec, periods, f["raw_id"], f["retrieved_at"])
+            _record_result_revision(conn, g.game_id, f["raw_id"], f["retrieved_at"])
     return stats
+
+
+def _record_result_revision(conn: sqlite3.Connection, game_id: str, raw_id: int, retrieved_at: str) -> None:
+    """Appends the game's current final result (score and, for NHL, how it was decided) to result_revisions when it
+    differs from the latest revision: the first final result is revision 1, each correction the next one. Runs after the
+    game (and decision) rows were written for this retrieval, so an older response that changed nothing adds nothing."""
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='result_revisions'").fetchone():
+        return
+    g = conn.execute("SELECT g.status, g.home_score, g.away_score, d.decision FROM games g "
+                     "LEFT JOIN game_decisions d ON d.game_id = g.game_id WHERE g.game_id=?", (game_id,)).fetchone()
+    if g is None or g["status"] != "final":
+        return
+    last = conn.execute("SELECT * FROM result_revisions WHERE game_id=? ORDER BY revision DESC LIMIT 1", (game_id,)).fetchone()
+    if last is not None and (last["home_score"], last["away_score"], last["decision"]) == (g["home_score"], g["away_score"], g["decision"]):
+        return
+    conn.execute("INSERT INTO result_revisions (game_id, revision, home_score, away_score, decision, observed_at, raw_id, basis) "
+                 "VALUES (?, ?, ?, ?, ?, ?, ?, 'observed')",
+                 (game_id, 1 if last is None else last["revision"] + 1, g["home_score"], g["away_score"], g["decision"],
+                  retrieved_at, raw_id))
 
 
 def _upsert_decision(conn: sqlite3.Connection, game_id: str, dec: str, periods: int, raw_id: int,
@@ -464,6 +487,11 @@ def _upsert_decision(conn: sqlite3.Connection, game_id: str, dec: str, periods: 
     elif retrieved_at >= row["last_retrieved_at"] and (row["decision"], row["periods"]) != (dec, periods):
         conn.execute("UPDATE game_decisions SET decision=?, periods=?, last_raw_id=? WHERE game_id=?",
                      (dec, periods, raw_id, game_id))
+        # Like a score correction, a corrected decision (REG/OT/SO; not a restated period count) is only knowable from this
+        # retrieval on: the result's availability moves (result_first_seen_at keeps the first sighting).
+        if row["decision"] != dec:
+            conn.execute("UPDATE games SET result_available_at=?, result_availability_basis='observed_retrieval' "
+                         "WHERE game_id=? AND status='final' AND result_available_at < ?", (retrieved_at, game_id, retrieved_at))
 
 
 # --- Line quotes (moneyline, spread/puck line, total) from ESPN day/month scoreboards, per retrieval event. ---

@@ -695,16 +695,26 @@ def test_nba_player_injury_member_trains_records_and_keeps_its_artifact_small(mo
         _write_box(rdir, season, games)
     day_before, (_, next_day, next_teams) = by_season[2026][5][1], by_season[2026][6]        # consecutive days
     team = next(iter(next_teams)).split(":")[1]
+    # The served games g1 (2026-10-21) and g2 (2026-10-28) have a usable same-day report listing both teams, published
+    # 17:30 ET (21:30Z) before their forecasts: without one the member abstains (missing information is never healthy).
+    served = {av.report_name(d): {"header": f"{d}T21:30:00Z", "entries": [_entry(d, f"Team {t}", f"{t}p0", "Probable")
+                                                                          for t in teams]}
+              for d, teams in (("2026-10-21", ("1", "2")), ("2026-10-28", ("3", "1")))}
     _fake_reports(monkeypatch, rdir / "reports", {av.report_name(day_before): {
         "header": f"{day_before}T22:30:00Z",                                                  # 17:30 ET, before midnight
-        "entries": [_entry(next_day, f"Team {team}", f"{team}p0", "Out")]}})
+        "entries": [_entry(next_day, f"Team {team}", f"{team}p0", "Out")]}, **served})
+    trained_with = []                     # training reads the stored live reports too (train/serve consistency)
+    real_prepare = pr.PlayersInjuriesV1.prepare_training_inputs
+    monkeypatch.setattr(pr.PlayersInjuriesV1, "prepare_training_inputs",
+                        lambda self, c, now: trained_with.append(now) or real_prepare(self, c, now))
     test_a_new_week_with_new_results_is_trained_and_published_for_nba(monkeypatch, tmp_path)
+    assert "2026-10-21T20:00:00Z" in trained_with
     conn = db.connect(tmp_path / "nba.sqlite")
     name = f"{pr.ADAPTIVE_MEMBER}@adaptive"
     fit = adaptive.latest_fit(conn, "nba", "member", name, adaptive.definition(conn))
     assert fit is not None and fit["status"] == "success"
     detail = json.loads(fit["detail"])
-    assert detail["inputs"]["box_seasons"] == sorted(by_season) and detail["inputs"]["reports"] == 1
+    assert detail["inputs"]["box_seasons"] == sorted(by_season) and detail["inputs"]["reports"] == 3
     assert detail["inputs"]["players"]["rating_updates"] > 0 and detail["inputs"]["facts"]["usable"] >= 1
     art = adaptive.load_fit(fit)
     state = pickle.loads(art["state"])

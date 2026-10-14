@@ -36,11 +36,10 @@ function Slate({ meta }: { meta: Meta }) {
   };
   const sport = meta.sport;
   const [market, setMarket] = useMarket();
-  const [level, setLevel] = useConfidence(sport, market);
   const [policyChoice, setPolicy] = usePolicy(canonicalFor(sport));
-  // The canonical forecast covers the NBA winner market so far; other markets keep their two-hour ledger.
   const policy: Policy = meta.mode !== 'real' ? 'pregame'
     : policyChoice === 'canonical' && !canonicalFor(sport, market) ? 'near_tipoff' : policyChoice;
+  const [level, setLevel] = useConfidence(sport, market, policy);
   const { state, retry } = useApi((s) => api.games(sport, date, policy, level, market, s), [sport, date, policy, level, market]);
   const research = useApi((s) => api.researchSlate(sport, date, s), [sport, date]);
 
@@ -72,9 +71,9 @@ function Slate({ meta }: { meta: Meta }) {
         </div>
       )}
       <MarketSelect value={market} markets={meta.markets} onChange={setMarket} />
-      <ConfidenceFilter value={level} onChange={setLevel} levels={confidenceLevels(sport, market)} />
+      <ConfidenceFilter value={level} onChange={setLevel} levels={confidenceLevels(sport, market, policy)} />
       <DetailsToggle />
-      {policy === 'canonical' ? <CanonicalRecordLine sport={sport} />
+      {policy === 'canonical' ? <CanonicalRecordLine sport={sport} market={market} />
         : <RangeRecords sport={sport} market={market} level={level} realMode={meta.mode === 'real'} policy={policy} />}
       <AsyncView state={state} retry={retry}>
         {(data) => (
@@ -109,7 +108,7 @@ function FilteredSlate({ games, selection: sel, showAll, market, date, research 
   market: MarketId; date: string; research?: ResearchSlate['games'] }) {
   const level = sel.min_confidence;
   const isWinner = market === 'winner';
-  if (isWinner && sel.policy === 'canonical') return <CanonicalSlate games={games} sel={sel} showAll={showAll} date={date} research={research} />;
+  if (sel.policy === 'canonical') return <CanonicalSlate games={games} sel={sel} showAll={showAll} market={market} date={date} research={research} />;
   const selected = level == null ? games
     : games.filter((g) => (isWinner ? g.slate_pick?.meets_confidence : g.market_forecast?.meets_confidence));
   const noun = games.length === 1 ? 'game' : 'games';
@@ -145,16 +144,20 @@ const WITHOUT_LABEL: Record<Exclude<CanonicalState, 'forecast'>, string> = {
 
 /** Canonical view: the confidence filter narrows the forecasts only. Games without a canonical forecast (missing,
  * unvalidated, not yet forecast) are always listed apart with their reason, and the counts name each group. */
-function CanonicalSlate({ games, sel, showAll, date, research }: { games: GameSummary[]; sel: SlateSelection; showAll: () => void;
-  date: string; research?: ResearchSlate['games'] }) {
+function CanonicalSlate({ games, sel, showAll, market, date, research }: { games: GameSummary[]; sel: SlateSelection; showAll: () => void;
+  market: MarketId; date: string; research?: ResearchSlate['games'] }) {
   const level = sel.min_confidence;
-  const forecasts = games.filter((g) => g.slate_pick != null);
-  const shown = level == null ? forecasts : forecasts.filter((g) => g.slate_pick?.meets_confidence);
-  const without = games.filter((g) => g.slate_pick == null);
+  // The slate market's canonical record (the API returns it in `canonical`); the winner's filter is decided by the API.
+  const has = (g: GameSummary) => g.canonical?.state === 'forecast' && g.canonical.record != null;
+  const meets = (g: GameSummary) => (market === 'winner' ? Boolean(g.slate_pick?.meets_confidence)
+    : level == null || (g.canonical?.record?.confidence ?? 0) >= level - 1e-9);
+  const forecasts = games.filter(has);
+  const shown = level == null ? forecasts : forecasts.filter(meets);
+  const without = games.filter((g) => !has(g));
   const below = sel.below_threshold ?? forecasts.length - shown.length;
   const groups = Object.entries(sel.without_forecast ?? {}).filter(([, n]) => n)
     .map(([state, n]) => `${n} ${WITHOUT_LABEL[state as Exclude<CanonicalState, 'forecast'>] ?? state}`).join(', ');
-  const card = (g: GameSummary) => <GameCard key={g.game_id} game={g} policy="canonical" date={date} research={research?.[g.game_id]} />;
+  const card = (g: GameSummary) => <GameCard key={g.game_id} game={g} policy="canonical" market={market} date={date} research={research?.[g.game_id]} />;
   return (
     <>
       <p className="small muted selection-count">
@@ -188,7 +191,8 @@ function statusLabel(g: GameSummary, date: string) {
   return tipoffTime(g.tipoff, date);
 }
 
-function GameCard({ game: g, policy, date, research }: { game: GameSummary; policy: Policy; date: string; research?: ResearchSlate['games'][string] }) {
+function GameCard({ game: g, policy, market = 'winner', date, research }: { game: GameSummary; policy: Policy; market?: MarketId; date: string;
+  research?: ResearchSlate['games'][string] }) {
   const carried = useCarriedSearch();
   const [details] = useDetails();
   const p = g.prediction;
@@ -201,7 +205,7 @@ function GameCard({ game: g, policy, date, research }: { game: GameSummary; poli
     if (pick) return pct(home ? pick.home_win_prob : 1 - pick.home_win_prob, 1);
     return '—';
   };
-  const other = near ? p : n;   // canonical view: the legacy two-hour forecast, mentioned only with details
+  const other = market !== 'winner' ? null : near ? p : n;   // canonical view: the legacy two-hour forecast, mentioned only with details
   return (
     <li className="card game-card">
       <Link to={`/games/${g.game_id}${carried}`} className="card-link">
@@ -236,10 +240,11 @@ function GameCard({ game: g, policy, date, research }: { game: GameSummary; poli
             {other.home_win_prob >= 0.5 ? g.home.abbr : g.away.abbr} {pct(Math.max(other.home_win_prob, 1 - other.home_win_prob), 1)}
           </p>
         )}
-        <ModelAgreement game={g} />
-        {details && <ResearchSlateLine entry={research} market="winner" />}
+        {market === 'winner' && <ModelAgreement game={g} />}
+        {details && market === 'winner' && <ResearchSlateLine entry={research} market="winner" />}
         <div className="card-bottom small muted">
-          {g.market ? <span title="The latest bookmaker quote retrieved before the start; it may be newer than the forecast above">Bookmaker: {g.home.abbr} {pct(g.market.home_win_prob, 1)}{g.market.home_price != null && g.market.away_price != null && <> · odds {g.away.abbr} {american(g.market.away_price)} / {g.home.abbr} {american(g.market.home_price)}</>} <span className="muted small">(quote {dateTime(g.market.retrieved_at)})</span></span> : <span className="warn">No market odds</span>}<span className="matchup-link">Matchup ↗</span>
+          {market !== 'winner' ? <span>{g.canonical?.record?.line_source === 'bookmaker' ? "At the bookmaker's line when forecast" : ' '}</span>
+            : g.market ? <span title="The latest bookmaker quote retrieved before the start; it may be newer than the forecast above">Bookmaker: {g.home.abbr} {pct(g.market.home_win_prob, 1)}{g.market.home_price != null && g.market.away_price != null && <> · odds {g.away.abbr} {american(g.market.away_price)} / {g.home.abbr} {american(g.market.home_price)}</>} <span className="muted small">(quote {dateTime(g.market.retrieved_at)})</span></span> : <span className="warn">No market odds</span>}<span className="matchup-link">Matchup ↗</span>
         </div>
       </Link>
     </li>

@@ -428,3 +428,64 @@ def test_a_five_overtime_game_is_a_valid_box_but_an_impossible_time_is_not():
     goalies[0]['timeOnIce'] = 201 * 60.                                                     # longer than any game played
     with pytest.raises(ValueError, match='invalid bulk time on ice'):
         pr.bulk_players(game, skaters, goalies)
+
+
+# --- Live capture (player/injury fix: live NHL games were always report_missing; only the archive existed) --------------
+def live_response(body=None, url=src.LIVE_PAGE):
+    return httpx.Response(200, content=body or page(), request=httpx.Request('GET', url))
+
+
+def test_a_live_capture_is_stamped_at_retrieval_and_read_like_an_archive_capture(tmp_path):
+    meta = src.capture_live(get=lambda url: live_response(), directory=tmp_path / 'injuries',
+                            clock=lambda: '2026-10-20T21:30:05Z')
+    assert meta['source'] == 'live' and meta['captured_at'] == '2026-10-20T21:30:05Z' and meta['rows']
+    inputs = pr.Inputs(tmp_path)
+    assert inputs.snapshot('2026-10-20T21:30:04Z')[0] is None                       # never before it was retrieved
+    assert inputs.snapshot('2026-10-20T23:00:00Z')[0]['captured_at'] == '2026-10-20T21:30:05Z'
+    assert inputs.snapshot('2026-10-21T21:30:06Z')[0] is None                       # older than MAX_AGE_HOURS
+    src.capture_live(get=lambda url: live_response(), directory=tmp_path / 'injuries', clock=lambda: '2026-10-20T22:00:00Z')
+    assert len(pr.Inputs(tmp_path).snapshots) == 2                                  # each retrieval is its own snapshot
+    (tmp_path / 'injuries' / meta['raw_file']).write_bytes(b'changed')
+    with pytest.raises(ValueError, match='hash mismatch'):
+        pr.Inputs(tmp_path)
+
+
+def test_a_live_capture_from_another_source_or_an_unparseable_page_is_never_usable(tmp_path):
+    with pytest.raises(ValueError, match='not the ESPN NHL injuries page'):
+        src.capture_live(get=lambda url: live_response(url='https://example.com/nhl/injuries'), directory=tmp_path / 'injuries',
+                         clock=lambda: '2026-10-20T21:30:05Z')
+    with pytest.raises(ValueError):
+        src.capture_live(get=lambda url: live_response(body=b'<html>bot check</html>'), directory=tmp_path / 'injuries',
+                         clock=lambda: '2026-10-20T21:31:00Z')
+    assert pr.Inputs(tmp_path).snapshots == []                                       # raw evidence kept, nothing usable
+
+
+def test_the_nhl_cycle_captures_injuries_only_when_switched_on(monkeypatch, tmp_path):
+    from app import config, jobs
+    calls = []
+    monkeypatch.setattr(src, 'capture_live', lambda **kw: calls.append(kw) or {'captured_at': 'x', 'rows': [1]})
+    monkeypatch.delenv('NHL_INJURY_CAPTURE', raising=False)
+    assert jobs.nhl_injury_capture()['status'] == 'disabled' and calls == []
+    monkeypatch.setenv('NHL_INJURY_CAPTURE', '1')
+    assert config.nhl_injury_capture_enabled()
+    out = jobs.nhl_injury_capture()
+    assert out['status'] == 'success' and len(calls) == 1
+    monkeypatch.setattr(src, 'capture_live', lambda **kw: (_ for _ in ()).throw(ValueError('bot check')))
+    assert jobs.nhl_injury_capture()['status'] == 'failed'                         # never fatal to the cycle
+
+
+def test_a_live_capture_must_carry_its_retrieval_time_and_a_torn_metadata_file_is_skipped(tmp_path):
+    meta = src.capture_live(get=lambda url: live_response(), directory=tmp_path / 'injuries', clock=lambda: '2026-10-20T21:30:05Z')
+    path = tmp_path / 'injuries' / 'live-20261020213005.json'
+    path.write_text(json.dumps({**meta, 'captured_at': '2026-10-20T20:00:00Z'}))          # back-dated: rejected
+    with pytest.raises(ValueError, match='live injury capture'):
+        pr.Inputs(tmp_path)
+    path.write_text(json.dumps(meta)[:40])                                                 # a write torn by a crash
+    inputs = pr.Inputs(tmp_path)
+    assert inputs.snapshots == [] and inputs.skipped_live == 1                             # skipped and counted, never fatal
+    assert not list((tmp_path / 'injuries').glob('*.tmp'))
+    src.save_capture(response(), '20240101120000', tmp_path / 'injuries')                  # archive files stay strict
+    assert not list((tmp_path / 'injuries').glob('.*.tmp'))
+    (tmp_path / 'injuries' / '20240101120000.json').write_text('{"torn')
+    with pytest.raises(ValueError):
+        pr.Inputs(tmp_path)

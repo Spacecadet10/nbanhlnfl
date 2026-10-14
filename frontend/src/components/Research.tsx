@@ -6,6 +6,7 @@ import type {
 } from '../api/types';
 import { useApi } from '../api/useApi';
 import { AsyncView, Empty } from './States';
+import { gridNote, onStandardGrid } from './ConfidenceFilter';
 import { count, dateTime, num, pct } from '../format';
 
 const NAMES: Record<string, string> = {
@@ -434,10 +435,11 @@ function ReportBody({ r }: { r: ResearchReport }) {
           {' '}({pct(g.selector.picks.accuracy, 1)}, {interval(g.selector.picks.ci95)}) · recommended for the game {record(g.selector.recommended_for_game)}
           {' · '}{g.selector.pending} pending · {g.selector.void} void</p></>}
         <details className="small"><summary>Confidence thresholds (descriptive, not tuned)</summary>
+          <p className="muted">{gridNote(g.sources[primary].thresholds.map((t) => t.threshold), r.market)}</p>
           <div className="table-wrap"><table className="table">
-            <thead><tr><th>Source</th>{g.sources[primary].thresholds.map((t) => <th key={t.threshold}>≥{pct(t.threshold)}</th>)}</tr></thead>
+            <thead><tr><th>Source</th>{g.sources[primary].thresholds.filter((t) => onStandardGrid(t.threshold, r.market)).map((t) => <th key={t.threshold}>≥{pct(t.threshold)}</th>)}</tr></thead>
             <tbody>{Object.entries(g.sources).map(([n, s]) => <tr key={n}><th scope="row">{modelName(n)}</th>
-              {s.thresholds.map((t) => <td key={t.threshold}>{record(t)}{t.decided > 0 && <span className="muted"> {pct(t.accuracy, 0)}</span>}</td>)}</tr>)}</tbody>
+              {s.thresholds.filter((t) => onStandardGrid(t.threshold, r.market)).map((t) => <td key={t.threshold}>{record(t)}{t.decided > 0 && <span className="muted"> {pct(t.accuracy, 0)}</span>}</td>)}</tr>)}</tbody>
           </table></div></details>
         <details className="small"><summary>By week</summary>
           <div className="table-wrap"><table className="table"><thead><tr><th>Week</th><th>Games</th><th>Primary</th><th>Average</th></tr></thead>

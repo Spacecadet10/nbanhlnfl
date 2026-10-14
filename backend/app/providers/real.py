@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 import json
 
 from .. import agreement, backtest, config, coverage, live, market_live, markets, metrics, near_tipoff, sports
+from .. import db
 from ..db import utc_now
 from ..live import LATEST_LIVE_SQL
 from ..schemas import (BaselineScore, CanonicalForecast, CanonicalHistoryResponse, CanonicalPerformanceResponse,
@@ -88,8 +89,7 @@ class RealProvider:
         return self._team_map[team_id]
 
     def _last_refresh(self) -> Optional[str]:
-        return self.conn.execute("SELECT MAX(finished_at) FROM job_runs WHERE job='refresh' AND status='success'"
-                                 ).fetchone()[0]
+        return near_tipoff.results_refreshed_at(self.conn, self.now)
 
     def _prediction(self, game_id: str) -> Optional[Prediction]:
         live = self.conn.execute(LATEST_LIVE_SQL + " AND p.game_id = ?", (self.model_version, game_id)).fetchone()
@@ -165,18 +165,39 @@ class RealProvider:
                     away=self._team(g["away_team_id"]), prediction=pred,
                     forecast_note=None if pred else self._forecast_note(g),
                     market=self._market(g["game_id"], g["tipoff_at"]), outcome=outcome,
-                    near_tipoff=self._near_tipoff(g), canonical=CanonicalForecast(**canon),
+                    near_tipoff=self._near_tipoff(g), canonical=self._canon_out(canon, g),
                     # research agreement has two-hour and archive cohorts only; the canonical view shows the two-hour one
-                    agreement=self._agreement(g["game_id"], "pregame" if policy == "pregame" else "near_tipoff"))
+                    agreement=self._agreement(g["game_id"], "pregame" if policy == "pregame" else "near_tipoff", g["tipoff_at"]))
 
-    def _agreement(self, game_id: str, policy: str) -> dict:
+    def _canon_out(self, c: dict, g) -> CanonicalForecast:
+        """A canonical forecast with its pick and realised side in words, at the forecast's own line."""
+        if c["state"] != "forecast":
+            return CanonicalForecast(**c)
+        rec = c["record"]
+        labels = markets.side_labels(c["market"], rec["line"], self._team(g["home_team_id"]).abbr,
+                                     self._team(g["away_team_id"]).abbr)
+        idx = {"a": 0, "mid": 1, "b": 2}
+        return CanonicalForecast(**{**c, "record": {**rec, "pick_label": labels[idx[rec["side"]]]},
+                                    "result_label": None if c["result_side"] is None else labels[idx[c["result_side"]]]})
+
+    def _agreement(self, game_id: str, policy: str, tipoff_at: Optional[str] = None) -> dict:
         """Winner agreement for a game card, from ONE research definition: if the latest cohort's members come from more
-        than one definition (a code change on unchanged data), only the newest definition's members are shown."""
+        than one definition (a code change on unchanged data), only the newest definition's members are shown. Void when
+        the game moved after the cohort, by the policy's own rule (two-hour: the exact start; archive: the Eastern date)."""
         out = agreement.summary(self.conn, game_id, self.sport, self.now, policy)
         definitions = {m["model_version"].rsplit(":", 1)[-1] for m in out["models"]}
         if len(definitions) > 1:
             newest = max(out["models"], key=lambda m: m["generated_at"])["model_version"].rsplit(":", 1)[-1]
             out = agreement.summary(self.conn, game_id, self.sport, self.now, policy, definition=newest)
+        if out["cutoff_at"] is not None:
+            g = self.conn.execute("SELECT tipoff_at, status FROM games WHERE game_id=?", (game_id,)).fetchone()
+            row = {"cutoff_at": out["cutoff_at"], "tipoff_at": tipoff_at or g["tipoff_at"]}
+            moved = near_tipoff.start_changed(row) if policy == "near_tipoff" else live.day_changed(row)
+            reason = (f"Game {g['status']}: void, never scored." if g["status"] in ("postponed", "canceled") else
+                      "The game's start changed after these forecasts were made (they were for "
+                      f"{out['cutoff_at'] if policy == 'near_tipoff' else 'another Eastern date'}): void, never scored."
+                      if moved else None)
+            out = {**out, "void": reason is not None, "void_reason": reason}
         return out
 
     def _stats(self, team_id: str, season: int, tipoff: str, cutoff: str) -> TeamStats:
@@ -245,8 +266,23 @@ class RealProvider:
             if ts is None:
                 return "missing"
             return "fresh" if _parse(self.now) - _parse(ts) <= FRESH_FOR else "stale"
-        last_fetch = self.conn.execute("SELECT MAX(retrieved_at) FROM raw_fetches").fetchone()[0]
-        refresh = self._last_refresh() or last_fetch
+        # Results: the last successful refresh up to now (a raw fetch of a failed or partial refresh never counts; none is
+        # 'missing'). While the two-hour cycle works (coverage.forecast_window) it is judged by the forecast guard
+        # (near_tipoff.MAX_DATA_AGE); otherwise by the daily job's limit (training_monitor.STALE_JOB_HOURS), as System status.
+        from .. import training_monitor
+        refresh = near_tipoff.results_refreshed_at(self.conn, self.now)
+        guard = int(near_tipoff.MAX_DATA_AGE.total_seconds() // 60)
+        daily = training_monitor.STALE_JOB_HOURS["refresh"]
+        window = coverage.forecast_window(self.conn, self.now)
+        limit = near_tipoff.MAX_DATA_AGE if window else timedelta(hours=daily)
+        results_state = "missing" if refresh is None else "fresh" if _parse(self.now) - _parse(refresh) <= limit else "stale"
+        results_note = (f" A game starts within two hours, so the forecast rule applies: no new forecast is made unless the "
+                        f"last successful results refresh is at most {guard} minutes old (each cycle refreshes first)."
+                        if window == "upcoming" else
+                        f" A game is under way: each cycle refreshes the results, so the last successful refresh should be "
+                        f"at most {guard} minutes old (no forecast is due)." if window == "recent" else
+                        f" No game is within two hours of its start, so the daily job's limit applies ({daily} h); each "
+                        f"forecast cycle refreshes the results again before it forecasts.")
         odds = self.conn.execute("SELECT MAX(retrieved_at) FROM odds_quotes").fetchone()[0]
         # Winner forecasts are made only within two hours of a start, so "stale" is never the age of a job run: it means an
         # eligible game started in the last 24 h without a two-hour forecast. No eligible game is a healthy state.
@@ -267,16 +303,16 @@ class RealProvider:
         lines = self.conn.execute("SELECT MAX(retrieved_at) FROM market_quotes").fetchone()[0]
         if self.sport == "nhl":
             schedule = SourceStatus(name="NHL schedule & results", kind="schedule", mode="real", last_updated=refresh,
-                                    freshness=fresh(refresh), note="NHL stats API season game list; refreshed by the daily job.")
+                                    freshness=results_state, note="NHL stats API season game list; refreshed by the daily job and each forecast cycle." + results_note)
             odds, odds_note = lines, "DraftKings lines via ESPN for games in the next 36 h; no quote time published."
         else:
             schedule = SourceStatus(name="ESPN schedule & results", kind="schedule", mode="real", last_updated=refresh,
-                                    freshness=fresh(refresh), note="Unofficial ESPN scoreboard API; refreshed by the daily job.")
+                                    freshness=results_state, note="Unofficial ESPN scoreboard API; refreshed by the daily job and each forecast cycle." + results_note)
             odds = max(filter(None, (odds, lines)), default=None)
             odds_note = "Moneylines, spreads and totals for some upcoming games only; no quote time published."
         markets_at = self.conn.execute("SELECT MAX(generated_at) FROM market_forecasts").fetchone()[0]
         return [
-            schedule,
+            schedule, *self._input_sources(),
             SourceStatus(name="Bookmaker odds (ESPN)", kind="odds", mode="real", last_updated=odds,
                          freshness=fresh(odds), note=odds_note),
             SourceStatus(name="Elo forecasts", kind="forecasts", mode="real", last_updated=predict,
@@ -285,6 +321,161 @@ class RealProvider:
                          freshness=fresh(markets_at), note="Spread/puck line, totals and team totals from the sealed "
                                                            "score model, each at its exact line."),
         ]
+
+    def _input_sources(self) -> list[SourceStatus]:
+        """Injury, player and canonical-ledger inputs: an input without data is 'missing' or 'stale', never left out. Each
+        entry is isolated: one that cannot be read is listed as missing with the error (the slate still loads)."""
+        builders = ([self._nba_injury_source, self._player_box_source] if self.sport == "nba" else [self._nhl_injury_source])
+        out = []
+        for build in [*builders, self._canonical_source]:
+            try:
+                out.append(build())
+            except Exception as exc:          # never fail the slate because one status cannot be read
+                label, kind = {self._nba_injury_source: ("NBA injury reports (official)", "injuries"),
+                               self._player_box_source: ("NBA player box file (current season)", "players"),
+                               self._nhl_injury_source: ("NHL injuries (ESPN page)", "injuries"),
+                               self._canonical_source: ("Canonical forecasts (every game)", "canonical")}[build]
+                out.append(SourceStatus(name=label, kind=kind,
+                                        mode="real", last_updated=None, freshness="missing",
+                                        note=f"Status unavailable: {type(exc).__name__}: {exc}"))
+        return out
+
+    def _nba_injury_source(self) -> SourceStatus:
+        """Fresh when a report for a slot of the last 60 minutes was stored by now (the injury-aware forecast needs one
+        published within 60 minutes). Stored is not the same as usable: the forecast also reconciles the report."""
+        from .. import availability, injuries
+        plan = injuries.plan(self.conn, _parse(self.now))
+        since = (_parse(self.now) - timedelta(minutes=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        stored = self.conn.execute("SELECT MAX(completed_at) FROM injury_report_attempts WHERE outcome='stored' "
+                                   "AND completed_at <= ?", (self.now,)).fetchone()[0]
+        recent = self.conn.execute("SELECT 1 FROM injury_report_attempts WHERE outcome='stored' AND completed_at <= ? AND "
+                                   "slot_at >= ? LIMIT 1", (self.now, since)).fetchone() is not None
+        collecting = ("collected by the injuries job (NBA_INJURY_COLLECTION=1)" if config.injury_collection_enabled() else
+                      "collected by the two-hour cycle (the sealed availability facts exist)"
+                      if (availability.research_dir() / "forward-facts.json").exists() else
+                      "not collected: NBA_INJURY_COLLECTION is not 1 and the two-hour cycle has no availability facts")
+        if not plan["due"]:
+            return SourceStatus(name="NBA injury reports (official)", kind="injuries", mode="real", last_updated=stored,
+                                freshness="missing", note=f"No official injury report is due: reports are collected around "
+                                f"regular-season and playoff games (none are published for preseason); {collecting}. "
+                                "Injury-aware forecasts have no report now.")
+        waiting = len(plan["pending"]) + len(plan["given_up"])
+        note = (("A report for the last 60 minutes is stored (stored, not yet reconciled by the forecast). " if recent else
+                 "No report for the last 60 minutes is stored. ")
+                + f"{plan['stored']} of {plan['due']} due reports stored in the last 24 h"
+                + (f"; {waiting} not stored ({len(plan['given_up'])} given up)" if waiting else "") + f"; {collecting}.")
+        return SourceStatus(name="NBA injury reports (official)", kind="injuries", mode="real", last_updated=stored,
+                            freshness="fresh" if recent else "stale", note=note)
+
+    def _player_box_source(self) -> SourceStatus:
+        """File age of the current season's player box. The player-rating members check rows themselves (the box rows of
+        each team's recent finals, and that consumed rows did not change) and abstain otherwise."""
+        from .. import availability, jobs
+        name = "NBA player box file (current season)"
+        row = self.conn.execute("SELECT MAX(season) FROM games WHERE tipoff_at <= ?", (self.now,)).fetchone()
+        path = availability.player_box_path(row[0]) if row and row[0] else None
+        switch = ("refreshed nightly (NBA_PLAYER_BOX_REFRESH=1)" if config.player_box_refresh_enabled() else
+                  "not refreshed: the refresh job is off (NBA_PLAYER_BOX_REFRESH is not 1)")
+        rows_note = "file age only: the player-rating members also require the recent finals' box rows and abstain without them"
+        if path is None or not path.exists():
+            return SourceStatus(name=name, kind="players", mode="real", last_updated=None, freshness="missing",
+                                note=f"No player box file for the current season; {switch}.")
+        at = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+        if at > _parse(self.now):          # a replay or fixed clock: the file did not exist yet at `now`
+            return SourceStatus(name=name, kind="players", mode="real", last_updated=None, freshness="missing",
+                                note=f"{path.name} was written after this view's time ({self.now}); {switch}.")
+        age = (_parse(self.now) - at).total_seconds() / 3600
+        return SourceStatus(name=name, kind="players", mode="real", last_updated=at,
+                            freshness="fresh" if age <= jobs.PLAYER_BOX_MAX_AGE_HOURS else "stale",
+                            note=f"{path.name}; stale after {jobs.PLAYER_BOX_MAX_AGE_HOURS} h; {switch}; {rows_note}.")
+
+    def _nhl_injury_source(self) -> SourceStatus:
+        """The newest ESPN NHL injuries snapshot (live capture or archive) captured by now: fresh while the NHL injury member
+        would use it (nhl_player_ratings.MAX_AGE_HOURS), else stale; none → missing (the member abstains)."""
+        from .. import nhl_player_ratings
+        from ..sources import nhl_injuries
+        name = "NHL injuries (ESPN page)"
+        switch = ("captured by the two-hour cycle (NHL_INJURY_CAPTURE=1)" if config.nhl_injury_capture_enabled() else
+                  "not captured live: NHL_INJURY_CAPTURE is not 1")
+        folder = nhl_injuries.root() / "injuries"
+        times = []                  # capture times from the file-name stamps (archive and live both name the capture UTC)
+        for path in [*folder.glob("[0-9]*.json"), *folder.glob("live-[0-9]*.json")]:
+            stamp = path.stem.removeprefix("live-")
+            if len(stamp) == 14 and stamp.isdigit():
+                at = f"{stamp[:4]}-{stamp[4:6]}-{stamp[6:8]}T{stamp[8:10]}:{stamp[10:12]}:{stamp[12:14]}Z"
+                if at <= self.now:
+                    times.append(at)
+        if not times:
+            return SourceStatus(name=name, kind="injuries", mode="real", last_updated=None, freshness="missing",
+                                note=f"No NHL injury snapshot captured by now; {switch}. NHL injury inputs are 'report "
+                                     "missing' and the injury member abstains.")
+        last = max(times)
+        age = (_parse(self.now) - _parse(last)).total_seconds() / 3600
+        limit = nhl_player_ratings.MAX_AGE_HOURS
+        return SourceStatus(name=name, kind="injuries", mode="real", last_updated=last,
+                            freshness="fresh" if age <= limit else "stale",
+                            note=f"Newest snapshot of the ESPN NHL injuries page; the injury member uses one at most {limit:g} h "
+                                 f"old (otherwise it abstains); {switch}.")
+
+    def _canonical_source(self) -> SourceStatus:
+        """Fresh only when every forecastable game that started in the last 24 h (after recording began) has a canonical
+        forecast in every market; a recorded reason for no forecast is a gap, never health."""
+        name = "Canonical forecasts (every game)"
+        if not db.has_table(self.conn, "game_forecasts"):
+            return SourceStatus(name=name, kind="canonical", mode="real", last_updated=None, freshness="missing",
+                                note="This store has no every-game ledger (migration 0029 not applied): no canonical "
+                                     "forecasts are recorded.")
+        last = self.conn.execute("SELECT MAX(generated_at) FROM game_forecasts WHERE generated_at <= ?", (self.now,)).fetchone()[0]
+        began = coverage.recording_began(self.conn, self.sport)
+        if last is None or began is None or began > self.now:
+            return SourceStatus(name=name, kind="canonical", mode="real", last_updated=None, freshness="missing",
+                                note="No canonical forecast or reason has been recorded yet.")
+        since = max((_parse(self.now) - FRESH_FOR).strftime("%Y-%m-%dT%H:%M:%SZ"), began)
+        types = coverage.COMPETITIVE          # preseason has no canonical forecast by rule ('unvalidated'), never a gap
+        games = [r[0] for r in self.conn.execute(
+            f"SELECT game_id FROM games WHERE tipoff_at > ? AND tipoff_at <= ? AND status NOT IN ('postponed', 'canceled') "
+            f"AND season_type IN ({', '.join('?' * len(types))})", (since, self.now, *types))]
+        market_list = sports.get(self.sport).markets
+        unrecorded_pre = self.conn.execute(          # preseason has rows by rule ('unvalidated'); none at all = no cycle ran
+            "SELECT COUNT(*) FROM games g WHERE g.tipoff_at > ? AND g.tipoff_at <= ? AND g.status NOT IN ('postponed', "
+            "'canceled') AND g.season_type = 'preseason' AND NOT EXISTS (SELECT 1 FROM game_forecasts f WHERE f.game_id = "
+            "g.game_id AND f.generated_at <= ? AND f.generated_at < g.tipoff_at)", (since, self.now, self.now)).fetchone()[0]
+        full, gaps, reasons = 0, 0, {}
+        for gid in games:
+            states = {}
+            for r in self.conn.execute("SELECT market, status, reason FROM game_forecasts WHERE game_id=? AND generated_at <= ? "
+                                       "AND generated_at < tipoff_at ORDER BY generated_at, forecast_id", (gid, self.now)):
+                if r["status"] == "forecast" or r["market"] not in states:
+                    states[r["market"]] = (r["status"], r["reason"])
+                elif states[r["market"]][0] != "forecast":
+                    states[r["market"]] = (r["status"], r["reason"])
+            if all(states.get(m, ("none",))[0] == "forecast" for m in market_list):
+                full += 1
+            for m in market_list:
+                st = states.get(m)
+                if st is None or st[0] != "forecast":
+                    gaps += 1
+                    why = "not recorded" if st is None else (st[1] or "missing")
+                    reasons[why] = reasons.get(why, 0) + 1
+        if not games:
+            note = ("No regular-season, play-in or playoff game started in the last 24 h (since recording began); records are "
+                    "made within two hours of each start. Preseason games have no canonical forecast.")
+        else:
+            top = "; ".join(f"{n}× {why[:90]}" for why, n in sorted(reasons.items(), key=lambda kv: -kv[1])[:2])
+            note = (f"{full} of {len(games)} regular-season, play-in or playoff games that started in the last 24 h have a "
+                    f"canonical forecast in every market" + (f"; {gaps} market cells missing ({top})." if gaps else ".")
+                    + " Preseason games have no canonical forecast.")
+        recorded_pre = self.conn.execute(
+            "SELECT COUNT(*) FROM games g WHERE g.tipoff_at > ? AND g.tipoff_at <= ? AND g.status NOT IN ('postponed', "
+            "'canceled') AND g.season_type = 'preseason' AND EXISTS (SELECT 1 FROM game_forecasts f WHERE f.game_id = "
+            "g.game_id AND f.generated_at <= ? AND f.generated_at < g.tipoff_at)", (since, self.now, self.now)).fetchone()[0]
+        if recorded_pre:
+            note += (f" {recorded_pre} preseason game{'s' if recorded_pre > 1 else ''} recorded without a canonical forecast "
+                     "(none by rule).")
+        if unrecorded_pre:
+            note += f" {unrecorded_pre} preseason game{'s' if unrecorded_pre > 1 else ''} not recorded (no cycle ran for it)."
+        return SourceStatus(name=name, kind="canonical", mode="real", last_updated=last,
+                            freshness="fresh" if full == len(games) and not unrecorded_pre else "stale", note=note)
 
     def games(self, day: date, policy: str = "pregame", min_confidence: Optional[float] = None,
               market: str = "winner") -> GamesResponse:
@@ -295,6 +486,19 @@ class RealProvider:
         games = [GameSummary(**self._summary(g, policy, canon[g["game_id"]])) for g in rows]
         if market == "winner":
             selection = apply_slate_policy(games, policy, min_confidence)
+        elif policy == "canonical":   # the market's canonical record only; never a legacy ledger's forecast
+            canon = coverage.canonical(self.conn, rows, market, self.now)
+            for g, row in zip(games, rows):
+                g.canonical = self._canon_out(canon[g.game_id], row)
+            picks = [g.canonical.record for g in games if g.canonical.state == "forecast"]
+            selected = sum(min_confidence is None or r.confidence >= min_confidence - 1e-9 for r in picks)
+            without: dict[str, int] = {}
+            for g in games:
+                if g.canonical.state != "forecast":
+                    without[g.canonical.state] = without.get(g.canonical.state, 0) + 1
+            selection = SlateSelection(market=market, policy=policy, min_confidence=min_confidence, games=len(games),
+                                       with_forecast=len(picks), selected=selected, below_threshold=len(picks) - selected,
+                                       without_forecast=without)
         else:   # the selected market and policy only; no fallback to another market or policy
             found = {}     # the current model's forecast; else the latest of an earlier version (labelled, never both)
             for r in self._market_all_versions(policy, market=market, game_ids=[g.game_id for g in games]):
@@ -352,10 +556,12 @@ class RealProvider:
                                         source_status_label=r["source_status_label"], retrieved_at=r["retrieved_at"])
                        for r in self.conn.execute(f"SELECT * FROM ({GOALIE_AS_OF_SQL}) WHERE game_id = ? ORDER BY side DESC",
                                                   (self.now, game_id))]
+        canonical_markets = [self._canon_out(coverage.canonical(self.conn, [g], m, self.now)[game_id], g)
+                             for m in sports.get(self.sport).markets]
         return GameDetail(**summary, stats_as_of=cutoff, projected_score_available=False, goalies=goalies,
                           home_stats=self._stats(g["home_team_id"], g["season"], g["tipoff_at"], cutoff),
                           away_stats=self._stats(g["away_team_id"], g["season"], g["tipoff_at"], cutoff),
-                          market_forecasts=forecasts)
+                          market_forecasts=forecasts, canonical_markets=canonical_markets)
 
     # ---- market history and performance ---------------------------------------------------------------------------
     def _current_market_version(self, policy: str) -> Optional[str]:
@@ -544,21 +750,22 @@ class RealProvider:
         return None if q is None else q[0]
 
     # ---- canonical forecast (game_forecasts; one record per game and market) -------------------------------------------
-    def _canonical_games(self, start: Optional[str] = None, end: Optional[str] = None) -> tuple[Optional[str], list, dict]:
-        """Games since canonical recording began (none before it), in [start, end), with their canonical winner forecast."""
+    def _canonical_games(self, start: Optional[str] = None, end: Optional[str] = None,
+                         market: str = "winner") -> tuple[Optional[str], list, dict]:
+        """Games since canonical recording began (none before it), in [start, end), with their canonical forecast of `market`."""
         began = coverage.recording_began(self.conn, self.sport)
         if began is None:
             return None, [], {}
         lo = max(began, start) if start else began
         rows = self.conn.execute("SELECT * FROM games WHERE tipoff_at >= ? AND tipoff_at < ? ORDER BY tipoff_at DESC, game_id",
                                  (lo, end or "9999")).fetchall()
-        return began, rows, coverage.canonical(self.conn, rows, "winner", self.now, began)
+        return began, rows, coverage.canonical(self.conn, rows, market, self.now, began)
 
     def canonical_history(self, date_from: Optional[date], date_to: Optional[date], team: Optional[str],
-                          limit: int) -> CanonicalHistoryResponse:
+                          limit: int, market: str = "winner") -> CanonicalHistoryResponse:
         start = _day_bounds(date_from)[0] if date_from else None
         end = _day_bounds(date_to)[1] if date_to else None
-        began, rows, canon = self._canonical_games(start, end)
+        began, rows, canon = self._canonical_games(start, end, market)
         shown, cohort, preseason = [], [], 0
         for g in rows:
             c = canon[g["game_id"]]
@@ -574,13 +781,13 @@ class RealProvider:
                        if g["status"] == "final" else None)
             shown.append(CanonicalRow(game_id=g["game_id"], game_date=eastern_date(g["tipoff_at"]), tipoff=g["tipoff_at"],
                                       status=g["status"], season_type=g["season_type"], home=home, away=away,
-                                      outcome=outcome, canonical=CanonicalForecast(**c)))
-        return CanonicalHistoryResponse(mode="real", market="winner", as_of=self.now, recording_began_at=began,
-                                        total=len(shown), record=CanonicalSummary(**coverage.canonical_summary(cohort)),
+                                      outcome=outcome, canonical=self._canon_out(c, g)))
+        return CanonicalHistoryResponse(mode="real", market=market, as_of=self.now, recording_began_at=began,
+                                        total=len(shown), record=CanonicalSummary(**coverage.canonical_summary(cohort, market)),
                                         preseason_games=preseason, rows=shown[:limit])
 
-    def canonical_performance(self) -> CanonicalPerformanceResponse:
-        began, rows, canon = self._canonical_games()
+    def canonical_performance(self, market: str = "winner") -> CanonicalPerformanceResponse:
+        began, rows, canon = self._canonical_games(market=market)
         cohort, pre = [], []
         for g in rows:
             if g["tipoff_at"] > self.now or (began and g["tipoff_at"] <= began):
@@ -589,36 +796,68 @@ class RealProvider:
                 cohort.append((g, canon[g["game_id"]]))
             elif g["season_type"] == "preseason":
                 pre.append(g)
-        summary = coverage.canonical_summary(cohort)
-        graded = [(g, c) for g, c in cohort if c["state"] == "forecast" and c["grade"] in ("win", "loss")]
-        probs = [c["record"]["home_win_prob"] for _, c in graded]
-        ys = [g["home_score"] > g["away_score"] for g, _ in graded]
-        matched = []
-        for (g, c), p, y in zip(graded, probs, ys):
-            q = self._winner_quote_prob(g["game_id"], c["record"]["generated_at"])
-            if q is not None:
-                matched.append((p, q, y))
+        summary = coverage.canonical_summary(cohort, market)
+        scored = [(g, c, coverage.scored(market, c)) for g, c in cohort]
+        scored = [(g, c, s) for g, c, s in scored if s is not None]
+        unmatched = None
+        if market == "winner":   # P(home) against the latest moneyline retrieved at or before the forecast
+            calibration = metrics.calibration([s[0] for _, _, s in scored], [s[1] for _, _, s in scored],
+                                              metrics.API_CALIBRATION_BINS)
+            matched = []
+            for g, c, (p, y) in scored:
+                q = self._winner_quote_prob(g["game_id"], c["record"]["generated_at"])
+                if q is not None:
+                    matched.append((p, q, y))
+            model_brier = metrics.brier([m[0] for m in matched], [m[2] for m in matched])
+            market_brier = metrics.brier([m[1] for m in matched], [m[2] for m in matched])
+        else:
+            if market == "reg3":   # the picked outcome's probability against whether it happened
+                calibration = metrics.calibration([c["record"]["confidence"] for _, c, _ in scored],
+                                                  [c["grade"] == "win" for _, c, _ in scored], metrics.API_CALIBRATION_BINS)
+            else:                  # P(a | no push) against side a
+                calibration = metrics.calibration([s[0] for _, _, s in scored], [s[1] for _, _, s in scored],
+                                                  metrics.API_CALIBRATION_BINS)
+            matched, unmatched = [], {}
+            for g, c, _ in scored:
+                m, why = coverage.matched_quote(self.conn, market, g, c)
+                if m is None:
+                    unmatched[why] = unmatched.get(why, 0) + 1
+                else:
+                    matched.append(m)
+            if market == "reg3":
+                ys = [m[2] for m in matched]
+                model_brier = metrics.brier_multi([m[0] for m in matched], ys)
+                market_brier = metrics.brier_multi([m[1] for m in matched], ys)
+            else:
+                model_brier = metrics.brier([m[0] for m in matched], [m[2] for m in matched])
+                market_brier = metrics.brier([m[1] for m in matched], [m[2] for m in matched])
         experimental = 0
         if pre:
             ids = [g["game_id"] for g in pre]
             experimental = self.conn.execute(
-                f"SELECT COUNT(*) FROM game_forecasts WHERE market='winner' AND status='forecast' "
-                f"AND game_id IN ({','.join('?' * len(ids))})", ids).fetchone()[0]
+                f"SELECT COUNT(*) FROM game_forecasts WHERE market=? AND status='forecast' "
+                f"AND game_id IN ({','.join('?' * len(ids))})", (market, *ids)).fetchone()[0]
         days = [eastern_date(g["tipoff_at"]) for g, _ in cohort]
+        title = markets.spec(self.sport, market).title
         return CanonicalPerformanceResponse(
-            mode="real", market="winner", title="Canonical winner forecasts",
-            note=("One canonical forecast per game: the sealed baseline model (no adaptive ensemble is approved for this "
-                  "record; adaptive forecasts stay research), recorded within two hours of the start. Every started regular-season, play-in and "
-                  "playoff game since canonical recording began is counted: a game without a forecast is a coverage gap, "
-                  "never a loss. Metrics cover settled forecasts only. Preseason has no validated model and is reported "
-                  "apart. Forecasts made before canonical recording began are in the legacy views."),
+            mode="real", market=market, title=f"Canonical forecasts: {title}",
+            note=("One canonical forecast per game and market: the sealed baseline model (no adaptive ensemble is approved "
+                  "for this record; adaptive forecasts stay research), recorded within two hours of the start. Every started "
+                  "regular-season, play-in and playoff game since canonical recording began is counted: a game without a "
+                  "forecast is a coverage gap, never a loss. Accuracy is wins / (wins + losses); pushes, voids and "
+                  "unscorable forecasts are counted apart. Metrics cover graded forecasts only"
+                  + ("" if market == "winner" else
+                     "; no regulation three-way bookmaker quotes are collected, so there is no bookmaker comparison"
+                     if market == "reg3" else
+                     "; the bookmaker comparison uses only the quote the forecast used, at its exact line, retrieved before "
+                     "the forecast") + ". Preseason has no validated model and is reported apart. Forecasts made before "
+                  "canonical recording began are in the legacy views."),
             as_of=self.now, recording_began_at=began, date_from=min(days, default=None), date_to=max(days, default=None),
             competitive=CanonicalSummary(**summary),
-            calibration=metrics.calibration(probs, ys, metrics.API_CALIBRATION_BINS),
+            calibration=calibration,
             market_comparison=MarketComparison(
-                matched_games=len(matched), coverage=len(matched) / len(graded) if graded else 0.0,
-                model_brier=metrics.brier([m[0] for m in matched], [m[2] for m in matched]),
-                market_brier=metrics.brier([m[1] for m in matched], [m[2] for m in matched])),
+                matched_games=len(matched), coverage=len(matched) / len(scored) if scored else 0.0,
+                model_brier=model_brier, market_brier=market_brier, unmatched=unmatched),
             preseason=CanonicalPreseason(games=len(pre), unvalidated=len(pre), experimental_rows=experimental,
                                          note=coverage.PRESEASON_UNVALIDATED))
 

@@ -54,7 +54,7 @@ function SportResults({ sport }: { sport: Sport }) {
         <h2>{LABEL[sport]}</h2>
         {demo ? <span className="badge badge-demo">Demo · synthetic</span> : <span className="badge badge-live">Live record</span>}
       </div>
-      {!demo && canonicalFor(sport) && <><h3>Canonical forecast record</h3><CanonicalRecordLine sport={sport} /><h3>Legacy two-hour Elo ledger</h3></>}
+      {!demo && canonicalFor(sport) && <><h3>Canonical forecast record</h3><CanonicalRecordLine sport={sport} market="winner" /><h3>Legacy two-hour Elo ledger</h3></>}
       <AsyncView state={live.state} retry={live.retry}>{([hist, perf]) => {
         const r = hist.record;
         const dates = range(perf.date_from, perf.date_to);

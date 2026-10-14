@@ -13,7 +13,7 @@ export interface MarketInfo { id: MarketId; title: string; available: boolean; n
 
 export interface SourceStatus {
   name: string;
-  kind: 'schedule' | 'results' | 'odds' | 'forecasts';
+  kind: 'schedule' | 'results' | 'odds' | 'forecasts' | 'injuries' | 'players' | 'canonical';
   mode: Mode;
   last_updated: string | null;
   freshness: 'fresh' | 'stale' | 'missing';
@@ -51,18 +51,33 @@ export interface CanonicalRecord {
   fallback_reason: string | null; model_version: string; generated_at: string; start_at: string; minutes_before_start: number;
   p: number[]; home_win_prob: number | null; pick: 'home' | 'away' | null; confidence: number; line: number | null;
   line_source: 'bookmaker' | 'model' | 'none';
+  /** The picked side (three-way: a draw can be the pick) and the pick in words at the forecast's own line. */
+  side: 'a' | 'mid' | 'b'; pick_label: string | null; market_quote_id: number | null;
 }
 export type CanonicalState = 'forecast' | 'missing' | 'upcoming' | 'unvalidated' | 'not_recorded' | 'not_forecastable';
 export type CanonicalGrade = 'win' | 'loss' | 'push' | 'pending' | 'void' | 'unscorable' | 'unresolved';
 export interface CanonicalForecast {
   market: MarketId; state: CanonicalState; reason: string | null; record: CanonicalRecord | null; grade: CanonicalGrade | null;
+  result_side?: 'a' | 'mid' | 'b' | null; result_label?: string | null;
+  /** The grade under each recorded final result, oldest first (a score correction adds an entry); the last is `grade`. */
+  grade_history?: { revision: number; observed_at: string; basis: 'observed' | 'backfill'; change: 'first' | 'decision_known' | 'correction'; home_score: number | null;
+    away_score: number | null; decision: string | null; grade: CanonicalGrade }[];
+  regraded?: boolean;
   later_failure: { forecast_id: number; generated_at: string; reason: string } | null; attempts: number;
   recording_began_at: string | null;
 }
 export interface CanonicalSummary {
   games: number; forecast: number; missing: number; coverage: number | null; grades: Record<CanonicalGrade, number>; graded: number;
   accuracy: number | null; brier_score: number | null; log_loss: number | null; by_source: Record<string, number>;
+  /** Forecasts whose grade a corrected result changed. */
+  regraded?: number;
   model_versions: { model_version: string; forecasts: number }[]; missing_reasons: { reason: string; games: number }[];
+  /** The market's reporting grid (two-way 50–90%, regulation three-way 35–70%): a filter of the record, never of recording. */
+  thresholds: CanonicalThreshold[];
+}
+export interface CanonicalThreshold {
+  threshold: number; forecasts: number; graded: number; win: number; loss: number; push: number; pending: number; void: number;
+  unscorable: number; unresolved: number; win_rate: number | null;
 }
 export interface CanonicalRow {
   game_id: string; game_date: string; tipoff: string; status: GameSummary['status']; season_type: GameSummary['season_type'];
@@ -75,7 +90,9 @@ export interface CanonicalHistory {
 export interface CanonicalPerformance {
   mode: Mode; market: MarketId; title: string; note: string; as_of: string; recording_began_at: string | null;
   date_from: string | null; date_to: string | null; competitive: CanonicalSummary; calibration: CalibrationBin[];
-  market_comparison: { matched_games: number; coverage: number; model_brier: number | null; market_brier: number | null };
+  market_comparison: { matched_games: number; coverage: number; model_brier: number | null; market_brier: number | null;
+    /** Non-winner markets: graded forecasts without a valid bookmaker comparison, by reason. */
+    unmatched?: Record<string, number> };
   preseason: { games: number; unvalidated: number; experimental_rows: number; note: string };
 }
 
@@ -100,6 +117,7 @@ export interface AgreementSummary {
   agreeing: number; pick: 'home' | 'away' | null; home_votes: number; away_votes: number;
   abstentions: number; missing: string[]; generated_at: string | null;
   models: { name: string; model_version: string; home_win_prob: number; generated_at: string }[];
+  void?: boolean; void_reason?: string | null;
 }
 
 export interface GameSummary {
@@ -121,7 +139,7 @@ export interface GameSummary {
   slate_pick: SlatePick | null;
   /** The selected non-winner market's forecast under the selected policy, if any. */
   market_forecast: MarketForecast | null;
-  /** The canonical winner forecast (real mode); null in demo mode. */
+  /** The canonical forecast (real mode; null in demo): the winner's, or the slate market's under the canonical policy. */
   canonical?: CanonicalForecast | null;
 }
 
@@ -138,6 +156,8 @@ export interface GameDetail extends GameSummary {
   away_stats: TeamStats;
   projected_score_available: boolean;
   market_forecasts: MarketForecast[];
+  /** The canonical forecast of every market of the sport, winner first (real mode). */
+  canonical_markets?: CanonicalForecast[];
   /** NHL only: ESPN's latest probable-goalie listing per team, as retrieved; not used by any model. */
   goalies: { side: 'home' | 'away'; player_name: string | null; source_status: string; source_status_label: string | null; retrieved_at: string }[];
 }
@@ -554,6 +574,9 @@ export interface TrackingReport {
   groups: TrackingGroup[]; leaderboard: TrackingLeader[]; note: string; leaderboard_note?: string;
   recommendation?: SelectionStatusMarket | null;
   exact_rules?: ExactRulesReport;
+  /** Prospective evidence only - the research definitions with observations, newest first; the record covers only `definition_applied`. */
+  definitions?: { definition: string; games: number; last_cohort_at: string }[]; definition_applied?: string | null;
+  signature_applied?: string | null;
 }
 /** exact-rules-v1: a registered subset with one threshold per member, tracked prospectively only (CLI-only registration).
  * The statistic is the minimum member confidence for the agreed side: descriptive, never an ensemble probability. */
@@ -579,7 +602,9 @@ export interface TrackingCheck {
     later?: { decided: number; coverage: number | null; win_rate: number | null; ci95: [number, number] | null; matched: TrackingMatched[] } }[];
 }
 export interface TrackingGameMarket {
-  market: MarketId; line: number | null; groups: number; counts: Record<string, number>; recorded_at: string; definition: string;
+  market: MarketId; line: number | null; groups: number; counts: Record<string, number>; recorded_at: string | null; definition: string | null;
+  /** 'recorded' = the report's canonical cohort, 'void' = the game moved or was not played, 'not_recorded' = none for that cohort. */
+  state?: 'recorded' | 'void' | 'not_recorded'; state_reason?: string | null; definition_note?: string | null;
   picks: { group: string; kind: TrackingKind; side: Side; statistic: number; votes: Record<string, number> | null }[];
   incomplete: { group: string; missing: Record<string, string> }[];
 }
@@ -608,6 +633,7 @@ export interface TrainingStatus {
 
 export interface JointReport {
   status: string; note: string; options: string[]; lines: number[]; definitions: string[]; games: number;
+  definition_applied?: string | null;
   by_definition: { definition: string; games: number; status_counts: Record<string, number>; cell: TrackingCell }[];
   recent: { game_id: string; tipoff_at: string; line: number | null; state: string; status: string;
     side: number | null; agreement: number | null; statistic: number | null; votes: Record<string, number>; missing: Record<string, string>; matches_filter: boolean }[];
@@ -731,14 +757,17 @@ export interface CoverageReport {
   status: 'available' | 'demo'; note?: string; sport?: Sport; date_from?: string; date_to?: string; as_of?: string;
   order_version?: string; order?: string[]; recording_began_at?: string | null;
   schedule?: { games: number; by_season_type: Record<string, number>; by_status: Record<string, number>;
-    games_with_any_forecast: number; games_fully_forecast: number; upcoming_games: number; not_forecastable_type: number; corrected_results: number };
+    games_with_any_forecast: number; games_fully_forecast: number; games_unvalidated?: number; upcoming_games: number; not_forecastable_type: number; corrected_results: number };
   sources?: { competitive: Record<string, number>; preseason: Record<string, number> };
   by_market?: Record<string, { cells: number; forecast: number; main: number; fallback: number; missing: number; upcoming: number; unvalidated?: number; graded: number;
     pending: number; void: number; unscorable: number; unresolved: number }>;
   missing_reasons?: { reason: string; cells: number }[];
+  /** All markets combined (counts only); the card shows `record_by_market`. */
   record?: { all: CoverageRecord; main: CoverageRecord; fallback: CoverageRecord };
+  record_by_market?: Record<string, { all: CoverageRecord; main: CoverageRecord; fallback: CoverageRecord }>;
   preseason_record?: CoverageRecord & { label?: string };
-  thresholds?: { threshold: number; all: CoverageRecord; main: CoverageRecord; fallback: CoverageRecord }[];
+  /** Each market on its own grid (two-way 50–90%, regulation three-way 35–70%); markets are never pooled. */
+  thresholds_by_market?: Record<string, { threshold: number; all: CoverageRecord; main: CoverageRecord; fallback: CoverageRecord }[]>;
   games?: { game_id: string; tipoff_at: string; season_type: string; status: string; home_team_id: string; away_team_id: string;
     markets: CoverageCell[] }[];
   source_schedule?: { available: boolean; reason?: string; requests?: number; source_games?: number; stored_games?: number;
@@ -746,4 +775,44 @@ export interface CoverageReport {
     stored_not_in_source?: string[]; field_differences?: unknown[] };
   ledgers?: (CoverageRecord & { ledger: string; model: string; market: MarketId; retrospective: boolean; games: number })[];
   notes?: string[];
+}
+
+/** /api/research/autoresearch: the sports autoresearch experiment directory (research only; never a forecast source). */
+export interface AutoresearchTrial {
+  trial_id: string; commit: string; status: string; cached_from?: string | null; description?: string | null;
+  reason?: string | null; finished_at?: string | null; agent_run?: string | null;
+  resources?: { wall_s?: number; max_rss_gb?: number; timed_out?: boolean } | null;
+  markets: Record<string, { decision: string; incumbent?: string; forecast?: number; cohort?: number; delta?: number | null; ci95?: number[] | null }>;
+}
+export interface AutoresearchSport {
+  protocol_id: string; registered_at?: string; scored_seasons?: number[]; holdout_seasons?: number[];
+  cohort?: Record<string, number>; dataset_version?: string;
+  bar: Record<string, { member: string; log_loss?: number | null }>;
+  incumbents: Record<string, { source: string; label: string; log_loss?: number | null; delta_vs_previous?: number | null }>;
+  trials: number; by_status: Record<string, number>; failures: number; running: string[]; unreadable_lines: number;
+  recent: AutoresearchTrial[]; holdout: { event: string; at?: string }[];
+}
+export interface AutoresearchRun {
+  run_id: string; branch?: string; budget?: { max_trials?: number; max_minutes?: number; max_usd?: number }; sports?: string[];
+  agent?: string; model?: string | null; started_at?: string; finished_at?: string; end?: string; stopped?: string;
+  outcome?: string; trials?: number; cost_usd?: number | null; reason?: string; report?: string;
+  corrections?: { at?: string; reason?: string }[];
+}
+export interface AutoresearchStatus {
+  mode: 'real' | 'demo'; configured: boolean; note: string; reason?: string; experiment_dir?: string; stopped?: string | null;
+  active_run?: { run_id: string; branch?: string; started_at?: string; deadline?: number; max_trials?: number; driver_alive: boolean } | null;
+  agent_runs?: AutoresearchRun[];
+  last_daily?: { started_at?: string; finished_at?: string; outcome?: string; stopped?: string; refused?: Record<string, string> } | null;
+  sports?: Record<string, AutoresearchSport>;
+}
+/** /api/research/candidates/game/{id}: each candidate model version's latest pregame forecast (research only, never canonical). */
+export interface CandidateGameForecast {
+  candidate: string; family: string | null; neural: boolean; market: MarketId; model_version: string;
+  line: number | null; line_source: string; line_ref: string | null; sides: { label: string; p: number }[];
+  fit_id: number | null; artifact_sha256: string; training_cutoff: string; dataset_version: string; generated_at: string;
+  start_at_forecast: string; start_moved: boolean; inputs: Record<string, unknown>; research: true; canonical: false;
+}
+export interface CandidateGameView {
+  mode: 'real' | 'demo'; game_id: string; sport?: Sport; start?: string; status?: string; as_of?: string; note: string;
+  forecasts: CandidateGameForecast[]; without_forecast: { candidate: string; family: string; neural: boolean; reason: string }[];
 }

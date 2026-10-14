@@ -317,6 +317,20 @@ def injury_reports(conn: sqlite3.Connection, *, enabled: Optional[bool] = None, 
     return _finish(conn, run_id, status, out["attempts"], out)
 
 
+def nhl_injury_capture() -> dict:
+    """NHL: one capture of the live ESPN injuries page for the NHL injury member (opt-in NHL_INJURY_CAPTURE=1, like the
+    other collectors; one request per cycle). Reported as a step of the two-hour cycle's job run. Never fatal: a failed
+    capture leaves the member 'report missing' (it abstains)."""
+    from .sources import nhl_injuries
+    if not config.nhl_injury_capture_enabled():
+        return {"status": "disabled", "reason": "NHL_INJURY_CAPTURE is not set to 1; no request was made"}
+    try:
+        meta = nhl_injuries.capture_live()
+        return {"status": "success", "captured_at": meta["captured_at"], "rows": len(meta["rows"])}
+    except Exception as exc:
+        return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+
+
 def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optional[str] = None,
                 refresh_kw: Optional[dict] = None, odds_kw: Optional[dict] = None, box_kw: Optional[dict] = None, injury_kw: Optional[dict] = None,
                 pbp_kw: Optional[dict] = None) -> dict:
@@ -331,8 +345,10 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
         from . import availability
         if (availability.research_dir() / 'forward-facts.json').exists():
             steps["injuries"] = injury_reports(conn, enabled=True, **(injury_kw or {}))
-    elif research_live.enabled():
-        steps["nhl_pbp"] = nhl_pbp(conn, **(pbp_kw or {}))
+    else:
+        steps["nhl_injuries"] = nhl_injury_capture() if not dry_run else {"status": "skipped", "reason": "dry run"}
+        if research_live.enabled():
+            steps["nhl_pbp"] = nhl_pbp(conn, **(pbp_kw or {}))
     run_id = None if dry_run else _start(conn, "near_tipoff")
     try:
         out = near_tipoff.predict_now(conn, now=now, write=not dry_run)
@@ -574,15 +590,64 @@ def player_box_refresh(conn: sqlite3.Connection, *, now: Optional[str] = None, g
     season = row[0] if row else None
     if season is None:
         return {"status": "skipped", "reason": "no current season in the store"}
+    try:
+        return _player_box_refresh(folder, season, get)
+    except Exception as exc:                        # never fatal: the nightly job continues
+        return {"status": "failed", "season": season, "error": f"{type(exc).__name__}: {exc}"}
+
+
+def _cached_seasons(folder) -> list[int]:
+    """Seasons with a player box file in the cache; any other file name (a backup, a partial download) is ignored."""
+    import re
+    return sorted(int(m[1]) for p in folder.glob("player_box_*.csv") if (m := re.fullmatch(r"player_box_(\d{4})", p.stem)))
+
+
+def _player_box_refresh(folder, season: int, get) -> dict:
+    from . import availability
+    cached = _cached_seasons(folder)
+    if not cached:
+        return {"status": "skipped", "reason": f"no player box cache under {folder}"}
+    # Due: every season missing from the cache between the oldest cached one and the current season (a season the source
+    # published while this cache was not refreshed, e.g. 2024-25 and 2025-26, or one whose download failed earlier), and
+    # the current season again once its file is stale.
+    due = [s for s in range(cached[0], season + 1) if s not in cached]
     path = availability.player_box_path(season)
     if path.exists():
         age = (time.time() - path.stat().st_mtime) / 3600          # file times are wall-clock times
-        if age < PLAYER_BOX_MAX_AGE_HOURS:
-            return {"status": "skipped", "reason": f"player_box_{season}.csv is {age:.1f} h old", "season": season}
+        if age >= PLAYER_BOX_MAX_AGE_HOURS:
+            due.append(season)
+        elif not due:
+            return {"status": "skipped", "reason": f"player_box_{season}.csv is {age:.1f} h old", "season": season,
+                    "newest_season": max(cached)}
+    import httpx
+    fetch = get or (lambda url: httpx.get(url, timeout=120, follow_redirects=True))
     try:
-        return {"status": "success", **availability.download_player_box(season, get=get, live=True)}
+        listing = fetch(availability.PLAYER_BOX_RELEASE)
+        release = listing.json()
     except Exception as exc:
-        return {"status": "failed", "season": season, "error": f"{type(exc).__name__}: {exc}"}
+        return {"status": "failed", "season": season, "error": f"release listing: {type(exc).__name__}: {exc}"}
+
+    def get(url):        # the release listing is read once per run; download_player_box asks for it again
+        return listing if url == availability.PLAYER_BOX_RELEASE else fetch(url)
+    published = {a.get("name") for a in release.get("assets", [])}
+    downloaded, not_published, errors = [], [], {}
+    for s in due:
+        if f"player_box_{s}.csv" not in published:
+            not_published.append(s)             # the source has not published this season (yet): reported, never a failure
+            continue
+        try:
+            downloaded.append(availability.download_player_box(s, get=get, live=True))
+        except Exception as exc:
+            errors[s] = f"{type(exc).__name__}: {exc}"
+    out = {"season": season, "newest_season": max(_cached_seasons(folder)), "downloaded": downloaded,
+           "not_published": not_published}
+    if errors:
+        return {**out, "status": "partial" if downloaded else "failed", "errors": errors,
+                "error": "; ".join(f"{s}: {e}" for s, e in errors.items())}
+    if downloaded:
+        return {**out, "status": "success"}
+    return {**out, "status": "skipped", "reason": ", ".join(f"player_box_{s}.csv" for s in not_published) +
+            f" not published by the source; newest season cached: {out['newest_season']}"}
 
 
 def daily(conn: sqlite3.Connection, *, force_refresh: bool = False, **refresh_kw) -> dict:
@@ -639,18 +704,11 @@ def forecast_due(conn: sqlite3.Connection) -> dict:
 def _forecast_due(conn: sqlite3.Connection) -> dict:
     """Called by the existing periodic odds command for both sports; no eligible games means no extra requests."""
     decisions = selector_decisions(conn)
-    now = utc_now()
-    end = near_tipoff._fmt(near_tipoff._parse(now) + near_tipoff.WINDOW)
     # Every forecastable game type (preseason included) opens the cycle: the primary steps forecast their eligible games
     # and the every-game coverage step (coverage.record) records every game.
-    types = coverage.FORECAST_TYPES
-    exists = conn.execute(f"SELECT 1 FROM games WHERE status='scheduled' AND tipoff_at>? AND tipoff_at<=? "
-        f"AND season_type IN ({','.join('?' for _ in types)}) LIMIT 1", (now, end, *types)).fetchone()
-    if not exists:
-        recent = conn.execute("SELECT 1 FROM games WHERE tipoff_at<=? AND tipoff_at>? "
-                              "AND status IN ('scheduled','in_progress') LIMIT 1",
-                              (now, near_tipoff._fmt(near_tipoff._parse(now) - near_tipoff.RECENT_TIPOFF))).fetchone()
-        if recent:
+    window = coverage.forecast_window(conn, utc_now())
+    if window != "upcoming":
+        if window == "recent":
             return {"refresh": refresh(conn), "status": "skipped", "reason": "results refresh; no upcoming game within two hours",
                     "selector": decisions}
         return {"status": "skipped", "reason": "no forecastable game within two hours", "selector": decisions}

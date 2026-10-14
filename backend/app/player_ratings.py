@@ -871,11 +871,15 @@ class AdaptiveInputs:
                 self._parsed[path] = {"parsed": parsed, "pub": None if pub is None else pub.strftime(FMT), "basis": basis}
         return self._parsed[path]
 
-    def add_live_reports(self, conn, now):
-        """Read the existing official collector's raw PDFs, gated by actual retrieval time."""
+    def add_live_reports(self, conn, now, full: bool = False):
+        """Read the existing official collector's raw PDFs, gated by actual retrieval time: those retrieved in the last two
+        days (serving), or with `full` every one retrieved by `now` (training, so rows of seasons covered only by the live
+        collector see the reports serving sees; each still counts only for rows whose cutoff follows its publication and
+        retrieval, `get`)."""
         if not conn.execute("SELECT 1 FROM sqlite_master WHERE name='injury_report_attempts'").fetchone():
             return
-        since = (datetime.fromisoformat(now.replace('Z', '+00:00')) - timedelta(days=2)).strftime(FMT)
+        since = ("0000-00-00T00:00:00Z" if full else
+                 (datetime.fromisoformat(now.replace('Z', '+00:00')) - timedelta(days=2)).strftime(FMT))
         rows = conn.execute("SELECT a.file_name,a.completed_at,a.last_modified,f.raw_id FROM injury_report_attempts a "
                             "JOIN raw_fetches f USING(fetch_id) WHERE a.outcome='stored' AND a.completed_at BETWEEN ? AND ? "
                             "ORDER BY a.completed_at", (since, now))
@@ -1084,6 +1088,11 @@ class LiveState:
             if missing:
                 return (f"stale inputs: {len(missing)} recent final(s) without player box rows ({team}); ratings and rosters "
                         "would be last season's")
+        # Missing information never means healthy (as nhl_player_ratings): without a usable report for the game the member
+        # abstains instead of forecasting on full rosters with report_missing=1.
+        if not self.diffs(g)["report_used"]:
+            return ("missing/unusable NBA injury report: none published before the cutoff, a team not listed or not "
+                    "submitted, unreconciled, or an unresolved player name; the injury-aware member abstains")
         return None
 
 
@@ -1115,6 +1124,12 @@ class PlayersInjuriesV1(LogisticV2):
     def prepare_inputs(self, conn, now):
         self.players._resolve()
         self.players._inputs.add_live_reports(conn, now)
+
+    def prepare_training_inputs(self, conn, now):
+        """Before the training walk: every live report stored by `now` (train/serve consistency)."""
+        if self.players._inputs is None:
+            self.players._resolve()
+        self.players._inputs.add_live_reports(conn, now, full=True)
 
     def input_status(self) -> dict:
         return self.players.status()
@@ -1163,6 +1178,7 @@ class PlayersInjuriesPoints(RidgePoints):
                 "player_k": ADAPTIVE_K}
 
     prepare_inputs = PlayersInjuriesV1.prepare_inputs
+    prepare_training_inputs = PlayersInjuriesV1.prepare_training_inputs
     input_status = PlayersInjuriesV1.input_status
     input_mismatch = PlayersInjuriesV1.input_mismatch
     stale_inputs = PlayersInjuriesV1.stale_inputs

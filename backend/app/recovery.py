@@ -109,8 +109,17 @@ def _settle(r, now, game_status=None):
         outcome = 'void'
     elif game_status == 'final' and r['result_available_at'] and r['result_available_at'] <= now:
         result = markets.settle(r['market'], r['line'], status='final', home=r['home_score'], away=r['away_score'], decision=r['decision'])
-        outcome = market_live.result_for_pick(r['market'], combine.SIDES[side], result) if side is not None and result in ('a', 'b', 'mid') else 'unscorable'
+        # Graded as coverage.grade: a two-way 'mid' is a push; a regulation draw is a win of a draw pick, else a loss.
+        outcome = ('unscorable' if side is None or result not in ('a', 'b', 'mid') else
+                   'push' if result == 'mid' and r['market'] != 'reg3' else
+                   'win' if combine.SIDES[side] == result else 'loss')
     return side, outcome
+
+
+def confidence(r) -> float:
+    """The canonical confidence (coverage._confidence): two-way markets conditional on no push."""
+    from . import coverage
+    return coverage._confidence(r['market'], (r['p_a'], r['p_mid'], r['p_b']))
 
 
 def report(conn, now=None):
@@ -122,10 +131,9 @@ def report(conn, now=None):
                         'd.decision FROM recovered_forecasts r JOIN games g USING(game_id) LEFT JOIN game_decisions d USING(game_id) '
                         'WHERE r.reconstructed_at<=? ORDER BY r.tipoff_at DESC', (now,)).fetchall()
     for r in rows:
-        vec = (r['p_a'], r['p_mid'], r['p_b'])
         side, outcome = _settle(r, now)
         key = (r['market'], r['model_version'], r['line_source'])
-        if side is not None: groups.setdefault(key, []).append((vec[side], outcome))
+        if side is not None: groups.setdefault(key, []).append((confidence(r), outcome))
         records.append({**dict(r), 'outcome': outcome, 'pick': combine.SIDES[side] if side is not None else None})
     return {'note': NOTE, 'status': 'retrospective', 'records': records,
             'groups': [{'market': k[0], 'model_version': k[1], 'line_source': k[2], 'thresholds': tracking.table(v, k[0])} for k,v in groups.items()]}
@@ -321,7 +329,7 @@ def adaptive_report(conn, now=None):
             continue
         side, outcome = _settle(r, now, r['game_status'])
         if side is not None:
-            groups.setdefault((r['market'], r['definition'], r['line_source']), []).append(((r['p_a'], r['p_mid'], r['p_b'])[side], outcome))
+            groups.setdefault((r['market'], r['definition'], r['line_source']), []).append((confidence(r), outcome))
         records.append({**base, 'outcome': outcome, 'pick': combine.SIDES[side] if side is not None else None,
                         'members': len(json.loads(r['members']))})
     retrying = [] if not conn.execute("SELECT 1 FROM sqlite_master WHERE name='adaptive_recovery_attempts'").fetchone() else [

@@ -9,9 +9,10 @@ import { AsyncView } from '../components/States';
 import { american, calendarDate, dateTime, pct } from '../format';
 import { MarketForecastsCard } from '../components/MarketView';
 import { DetailsToggle, useCarriedSearch, useDetails, useSport } from '../components/Selection';
-import { ResearchGameCard } from '../components/Research';
+import { MARKET, ResearchGameCard } from '../components/Research';
 import { AdaptiveGameCard } from '../components/Adaptive';
 import { TrackingGameCard } from '../components/Tracking';
+import { CandidateForecasts } from '../components/CandidateForecasts';
 import { CanonicalBlock, canonicalFor } from '../components/Canonical';
 
 export function GamePage() {
@@ -62,6 +63,19 @@ function Detail({ game: g }: { game: GameDetail }) {
           <CanonicalBlock c={g.canonical} home={g.home} away={g.away} detail />
         </div>
       )}
+      {g.mode === 'real' && (g.canonical_markets ?? []).filter((c) => c.market !== 'winner').length > 0 && (
+        <div className="card">
+          <h2>Canonical forecast · Other markets</h2>
+          <p className="small muted">One record per market for this game, the same records Today, History and Performance show and grade for that market.
+            Each is graded at its own line.</p>
+          {(g.canonical_markets ?? []).filter((c) => c.market !== 'winner').map((c) => (
+            <section key={c.market} className="canonical-market" aria-label={`Canonical ${MARKET[c.market] ?? c.market} forecast`}>
+              <h3>{MARKET[c.market] ?? c.market}</h3>
+              <CanonicalBlock c={c} home={g.home} away={g.away} detail={details} />
+            </section>
+          ))}
+        </div>
+      )}
       {g.mode === 'real' && (g.near_tipoff ? <NearTipoffCard game={g} legacy={canonicalFor(sport)} /> : <div className="card">
         <h2>{canonicalFor(sport) ? 'Legacy · within 2 hours (Elo ledger)' : 'Within 2 hours · Win probability'}</h2><p className="forecast-note">No two-hour forecast recorded. New forecasts are made only during the two hours before the scheduled start, when fresh inputs are available.</p>
       </div>)}
@@ -71,6 +85,7 @@ function Detail({ game: g }: { game: GameDetail }) {
         <ResearchGameCard sport={sport} gameId={g.game_id} />
         <AdaptiveGameCard sport={sport} gameId={g.game_id} />
         <TrackingGameCard sport={sport} gameId={g.game_id} />
+        <CandidateForecasts sport={sport} gameId={g.game_id} />
       </>}
       <div className="card">
         <h2>{g.mode !== 'real' ? 'Win probability' : canonicalFor(sport) ? 'Legacy · pre-game archive probability' : 'Pre-game archive probability'} {g.prediction && <RunBadge runType={g.prediction.run_type} />}</h2>
