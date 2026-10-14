@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 from zoneinfo import ZoneInfo
 
-from . import agreement, config, ingest, injuries, live, market_live, near_tipoff, research_live
+from . import agreement, config, coverage, ingest, injuries, live, market_live, near_tipoff, research_live
 from .db import store_sport, utc_now
 from .sources import espn, nhl_stats
 
@@ -338,6 +338,8 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
         out = near_tipoff.predict_now(conn, now=now, write=not dry_run)
     except Exception as exc:
         error = {"error": f"{type(exc).__name__}: {exc}", "steps": {k: v.get("status") for k, v in steps.items()}}
+        # The primary step failing does not stop every-game coverage: it records the other sources or the reasons.
+        error["coverage"] = {k: v for k, v in coverage.record(conn, now=now, write=not dry_run).items() if k != "rows"}
         return {"status": "failed", **error} if dry_run else _finish(conn, run_id, "failed", 1, error)
     blocked = [r for r in out["refused"] if r["reason"] in ("stale_results", "missing_result")]
     status = "failed" if blocked else "success" if out["forecasts"] else "skipped"
@@ -371,6 +373,10 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
             out["adaptive"] = adaptive_record(conn, game_ids=accepted, now=now, write=not dry_run)
         else:
             out["research"] = {"status": "disabled", "reason": "RESEARCH_SELECTION=0"}
+    # Every game (preseason included) and market: the adaptive forecast, else the sealed primary, else a recorded reason.
+    # Last, so it sees this cycle's rows; isolated per game and market; never changes the primary run's status.
+    cov = coverage.record(conn, now=now, write=not dry_run)
+    out["coverage"] = {k: v for k, v in cov.items() if k != "rows"}
     return {"status": status, **out} if dry_run else _finish(conn, run_id, status, 1, out)
 
 
@@ -491,6 +497,11 @@ def adaptive_record(conn: sqlite3.Connection, **kw) -> dict:
     try:
         from . import adaptive
         r = adaptive.record(conn, **kw)
+        from . import config
+        if config.daily_agreement_enabled():
+            with adaptive.cadence("daily"):
+                daily = adaptive.record(conn, **kw)
+            r["daily_agreement"] = {k: v for k, v in daily.items() if k != "forecasts"}
         return {k: v for k, v in r.items() if k != "forecasts"}
     except Exception as exc:
         conn.rollback()
@@ -540,11 +551,47 @@ def selector_decisions(conn: sqlite3.Connection, now: Optional[str] = None) -> d
     return out
 
 
+PLAYER_BOX_MAX_AGE_HOURS = 20
+
+
+def player_box_refresh(conn: sqlite3.Connection, *, now: Optional[str] = None, get=None, enabled: Optional[bool] = None) -> dict:
+    """NBA: re-downloads the current season's player box file (verified against the digest the source publishes) once it
+    is older than PLAYER_BOX_MAX_AGE_HOURS, so the player-rating members do not go stale between retrains. Only where the
+    player box cache exists (the members' inputs) and NBA_PLAYER_BOX_REFRESH=1 (opt-in, like the other collectors); never
+    fatal. The fitted members stay valid: their guard covers only
+    the rows of games they consumed (player_ratings.LiveState.input_mismatch)."""
+    from . import availability
+    if sport(conn) != "nba":
+        return {"status": "skipped", "reason": "NBA only"}
+    if not (config.player_box_refresh_enabled() if enabled is None else enabled):
+        return {"status": "disabled", "reason": "NBA_PLAYER_BOX_REFRESH is not set to 1; no request was made"}
+    folder = availability.research_dir() / "player_box"
+    if not folder.is_dir() or not any(folder.glob("player_box_*.csv")):
+        return {"status": "skipped", "reason": f"no player box cache under {folder}"}
+    now = now or utc_now()
+    row = conn.execute("SELECT MAX(season) FROM games WHERE tipoff_at <= ? AND season_type IN ('regular', 'play_in', "
+                       "'postseason', 'preseason')", (now,)).fetchone()
+    season = row[0] if row else None
+    if season is None:
+        return {"status": "skipped", "reason": "no current season in the store"}
+    path = availability.player_box_path(season)
+    if path.exists():
+        age = (time.time() - path.stat().st_mtime) / 3600          # file times are wall-clock times
+        if age < PLAYER_BOX_MAX_AGE_HOURS:
+            return {"status": "skipped", "reason": f"player_box_{season}.csv is {age:.1f} h old", "season": season}
+    try:
+        return {"status": "success", **availability.download_player_box(season, get=get, live=True)}
+    except Exception as exc:
+        return {"status": "failed", "season": season, "error": f"{type(exc).__name__}: {exc}"}
+
+
 def daily(conn: sqlite3.Connection, *, force_refresh: bool = False, **refresh_kw) -> dict:
     """Nightly maintenance only. User policy: new forecasts are made within two hours of tipoff by odds cycles."""
     out = {"refresh": refresh(conn, force=force_refresh, **refresh_kw)}
     if sport(conn) == "nba" and config.shadow_enabled():
         out["boxscores"] = boxscores(conn)
+    if sport(conn) == "nba":
+        out["player_box"] = player_box_refresh(conn)
     if sport(conn) == "nhl" and research_live.enabled():
         out["nhl_pbp"] = nhl_pbp(conn)
     out["score"] = score(conn)
@@ -593,11 +640,12 @@ def _forecast_due(conn: sqlite3.Connection) -> dict:
     """Called by the existing periodic odds command for both sports; no eligible games means no extra requests."""
     decisions = selector_decisions(conn)
     now = utc_now()
-    eng = live.engine(conn)
     end = near_tipoff._fmt(near_tipoff._parse(now) + near_tipoff.WINDOW)
+    # Every forecastable game type (preseason included) opens the cycle: the primary steps forecast their eligible games
+    # and the every-game coverage step (coverage.record) records every game.
+    types = coverage.FORECAST_TYPES
     exists = conn.execute(f"SELECT 1 FROM games WHERE status='scheduled' AND tipoff_at>? AND tipoff_at<=? "
-        f"AND season_type IN ({','.join('?' for _ in eng.eligible_types)}) LIMIT 1",
-        (now, end, *eng.eligible_types)).fetchone()
+        f"AND season_type IN ({','.join('?' for _ in types)}) LIMIT 1", (now, end, *types)).fetchone()
     if not exists:
         recent = conn.execute("SELECT 1 FROM games WHERE tipoff_at<=? AND tipoff_at>? "
                               "AND status IN ('scheduled','in_progress') LIMIT 1",
@@ -605,7 +653,7 @@ def _forecast_due(conn: sqlite3.Connection) -> dict:
         if recent:
             return {"refresh": refresh(conn), "status": "skipped", "reason": "results refresh; no upcoming game within two hours",
                     "selector": decisions}
-        return {"status": "skipped", "reason": "no eligible game within two hours", "selector": decisions}
+        return {"status": "skipped", "reason": "no forecastable game within two hours", "selector": decisions}
     return {**predict_now(conn), "selector": decisions}
 
 

@@ -10,7 +10,7 @@ import itertools
 import json
 import random
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Iterable, Optional
@@ -164,14 +164,15 @@ def run(model: Model, rows: list[Row], box_events: Optional[list[BoxEvent]] = No
             if deliver_box:
                 deliver_box(boxes[k][4])
             k += 1
-        p = model.predict(row.game)
+        game = replace(row.game, cutoff_at=row.cutoff_at)
+        p = model.predict(game)
         out.append({"game_id": row.game.game_id, "season": row.game.season, "season_type": row.game.season_type,
                     "tipoff_at": row.game.tipoff_at, "cutoff_at": row.cutoff_at,
                     "home_team_id": row.game.home_team_id, "away_team_id": row.game.away_team_id,
                     "neutral_site": row.game.neutral_site, "p_home": p,
                     "home_won": row.home_score > row.away_score})
         if extra is not None:
-            out[-1].update(extra(model, row.game))
+            out[-1].update(extra(model, game))
     if deliver_until is not None:
         while j < len(results) and results[j].result_available_at <= deliver_until:
             model.update(results[j].result)

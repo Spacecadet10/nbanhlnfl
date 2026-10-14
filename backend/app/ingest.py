@@ -360,6 +360,9 @@ def _upsert_game(conn: sqlite3.Connection, g: espn.GameRow, raw_id: int, retriev
         return None
     changes = {k: v for k, v in fields.items() if row[k] != v}
     if row["status"] == "final":
+        # The game was played at the stored start: a later edit of the start time (kept in the raw response) must not move
+        # it, or every forecast graded for that game would turn void ('start changed after the forecast').
+        changes.pop("tipoff_at", None)
         # First observation of a result is kept; availability is not rewritten, unless the score itself was corrected:
         # the corrected result was only knowable from this retrieval on (result_first_seen_at keeps the first sighting).
         corrected = "home_score" in changes or "away_score" in changes

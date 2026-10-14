@@ -33,3 +33,6 @@ export const shiftDate = (ymd: string, days: number) => {
 };
 
 export const FULL_DATE: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+
+/** "1 rule" / "2 rules": a count with the word in the right number. */
+export const count = (n: number, word: string, plural = `${word}s`) => `${n} ${n === 1 ? word : plural}`;

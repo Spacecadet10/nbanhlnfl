@@ -140,8 +140,9 @@ ADAPTIVE_NOTE = ('Adaptive research forecasts reconstructed after the start for 
 
 
 def _adaptive_missing(conn, g, market, defn):
+    # Only a live forecast of THIS definition covers the game: a daily-cadence row never hides the weekly gap (or vice versa).
     if conn.execute("SELECT 1 FROM adaptive_forecasts WHERE game_id=? AND market=? AND tipoff_at=? AND status='forecast' "
-                    "AND generated_at<? LIMIT 1", (g['game_id'], market, g['tipoff_at'], g['tipoff_at'])).fetchone():
+                    "AND generated_at<? AND definition=? LIMIT 1", (g['game_id'], market, g['tipoff_at'], g['tipoff_at'], defn)).fetchone():
         return False
     return not conn.execute('SELECT 1 FROM adaptive_recovered_forecasts WHERE game_id=? AND market=? AND tipoff_at=? '
                             'AND definition=?', (g['game_id'], market, g['tipoff_at'], defn)).fetchone()

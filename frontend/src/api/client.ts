@@ -1,8 +1,8 @@
 // The app's single API client. All screens fetch through here; there is no local fallback data.
-import type { AdaptiveGame, AdaptiveStatus, HistoricalStart,
+import type { CanonicalHistory, CanonicalPerformance, CoverageReport, DailyEvidence, DailyReport, AdaptiveGame, CombinationAnalysis, RuleLedger, SubsetSearch, ThresholdExplorer, AdaptiveStatus, HistoricalStart,
   JointReport, ThresholdReport, AgreementPerformance, GameDetail, GamesResponse, HistoryResponse, MarketHistoryResponse, MarketId, MarketPerformanceResponse, Meta,
   PerformanceResponse, Policy, ResearchGame, ResearchHistory, ResearchReport, ResearchSlate, Retrospective, RuleReport, CandidateRoster, PoolReport, SelectionStatus, Sport,
-  TrainingStatus, TrackingCheck, TrackingEvidence, TrackingGame, TrackingKind, TrackingReport,
+  Health, TrainingRun, TrainingStatus, TrackingCheck, TrackingEvidence, TrackingGame, TrackingKind, TrackingReport,
 } from './types';
 
 export class ApiError extends Error {
@@ -14,7 +14,8 @@ export class ApiError extends Error {
 async function get<T>(path: string, params?: Record<string, string | undefined>, signal?: AbortSignal): Promise<T> {
   const query = new URLSearchParams();
   for (const [k, v] of Object.entries(params ?? {})) if (v) query.set(k, v);
-  const url = `/api${path}${query.size ? `?${query}` : ''}`;
+  const qs = query.toString();      // URLSearchParams.size is missing in older browsers (would drop every parameter)
+  const url = `/api${path}${qs ? `?${qs}` : ''}`;
   let res: Response;
   try {
     res = await fetch(url, { signal, headers: { Accept: 'application/json' } });
@@ -41,15 +42,26 @@ async function get<T>(path: string, params?: Record<string, string | undefined>,
 }
 
 // Every call names its sport explicitly; the API never substitutes another sport, market or policy.
-const policyParam = (policy?: Policy) => (policy === 'near_tipoff' ? 'near_tipoff' : undefined);
+const policyParam = (policy?: Policy) => (policy === 'near_tipoff' || policy === 'canonical' ? policy : undefined);
 const confParam = (c?: number | null) => (c == null ? undefined : String(c));
 
 export const api = {
+  dailyEvidence: (sport: Sport, market: MarketId, rule: string, period: string, offset: number, signal?: AbortSignal) => get<DailyEvidence>('/research/daily-agreement/evidence', { sport, market, rule, period, offset: String(offset) }, signal),
+  dailyAgreement: (sport: Sport, signal?: AbortSignal) => get<DailyReport>('/research/daily-agreement', { sport }, signal),
+  health: (signal?: AbortSignal) => get<Health>('/health', undefined, signal),
+  trainingRun: (sport: Sport, signal?: AbortSignal) => get<TrainingRun>('/training-run', { sport }, signal),
   recovered: (sport: Sport, signal?: AbortSignal) => get<{ note: string; status: string; groups: ThresholdReport['groups']; adaptive?: { status: string; records: { game_id: string; status: string }[]; unreconstructable: { reason: string; rows: number; games: number }[] }; records: { recovery_id: number; game_id: string; market: MarketId; tipoff_at: string; line: number | null; outcome: string }[] }>('/recovered-forecasts', { sport }, signal),
   jointTracking: (sport: Sport, market: MarketId, params: Record<string, string | undefined>, signal?: AbortSignal) =>
     get<JointReport>('/research/tracking/joint', { sport, market, ...params }, signal),
 
+  // The canonical forecast (one record per game; winner market only so far).
+  canonicalHistory: (sport: Sport, f: { date_from?: string; date_to?: string; team?: string; limit?: number }, signal?: AbortSignal) =>
+    get<CanonicalHistory>('/canonical/forecasts', { sport, date_from: f.date_from, date_to: f.date_to, team: f.team,
+      limit: f.limit == null ? undefined : String(f.limit) }, signal),
+  canonicalPerformance: (sport: Sport, signal?: AbortSignal) => get<CanonicalPerformance>('/canonical/performance', { sport }, signal),
   thresholds: (sport: Sport, signal?: AbortSignal) => get<ThresholdReport>('/thresholds', { sport }, signal),
+  coverage: (sport: Sport, dateFrom: string | undefined, dateTo: string | undefined, signal?: AbortSignal) =>
+    get<CoverageReport>('/coverage', { sport, date_from: dateFrom, date_to: dateTo }, signal),
   agreementPerformance: (sport: Sport, signal?: AbortSignal) => get<AgreementPerformance>('/agreement-performance', { sport }, signal),
   meta: (sport: Sport, signal?: AbortSignal) => get<Meta>('/meta', { sport }, signal),
   games: (sport: Sport, date: string, policy: Policy, minConfidence: number | null, market: MarketId, signal?: AbortSignal) =>
@@ -103,6 +115,19 @@ export const api = {
   researchStatus: (sport: Sport, signal?: AbortSignal) => get<SelectionStatus>('/research/status', { sport }, signal),
   researchHistory: (sport: Sport, signal?: AbortSignal) => get<ResearchHistory>('/research/history', { sport }, signal),
   researchRetrospective: (sport: Sport, signal?: AbortSignal) => get<Retrospective>('/research/retrospective', { sport }, signal),
+  researchCombinations: (sport: Sport, market: MarketId, base: string[], signal?: AbortSignal) =>
+    get<CombinationAnalysis>('/research/combinations', { sport, market, base: base.join(',') || undefined }, signal),
+  researchThresholds: (sport: Sport, market: MarketId, f: { source: string; group?: string[]; base?: string[]; rule?: string },
+    signal?: AbortSignal) =>
+    get<ThresholdExplorer>('/research/thresholds', { sport, market, source: f.source, group: f.group?.join(',') || undefined,
+      base: f.base?.join(',') || undefined, rule: f.rule || undefined }, signal),
+  researchRuleLedger: (sport: Sport, market: MarketId, source: string, rule: string, period: string, signal?: AbortSignal) =>
+    get<RuleLedger>('/research/thresholds/ledger', { sport, market, source, rule, period }, signal),
+  /** Same ledger as a CSV download (a plain link: the browser saves the file). */
+  researchRuleLedgerCsvUrl: (sport: Sport, market: MarketId, source: string, rule: string, period: string) =>
+    `/api/research/thresholds/ledger?${new URLSearchParams({ sport, market, source, rule, period, format: 'csv' })}`,
+  researchSubsets: (sport: Sport, market: MarketId, source: string, signal?: AbortSignal) =>
+    get<SubsetSearch>('/research/subsets', { sport, market, source }, signal),
   // adaptive-v1: separately versioned adaptive combination (research), never the primary forecast.
   adaptiveStatus: (sport: Sport, signal?: AbortSignal) => get<AdaptiveStatus>('/research/adaptive', { sport }, signal),
   adaptiveGame: (sport: Sport, id: string, signal?: AbortSignal) =>

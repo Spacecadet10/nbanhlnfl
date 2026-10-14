@@ -14,7 +14,8 @@ SPORT_COMMANDS = {"nhl-pbp-import", "nhl-xg-research", "migrate", "replay", "cov
                   "combination-study", "selector-decide", "research-report", "retrain-cadence", "catboost-challenger", "combination-search", "expanded-search", "selective-study", "rules-registry",
                   "daily-cadence", "features-nhl", "tracking-report", "tracking-record", "pool-screen", "pool-assess", "pool-record", "pool-roster", "pool-report",
                   "release-check", "diagnostics", "historical-start", "model-audit", "calibration-study",
-                  "adaptive-train", "adaptive-record", "adaptive-status", "adaptive-replay"}
+                  "adaptive-train", "adaptive-record", "adaptive-status", "adaptive-replay",
+                  "combination-export-adaptive", "combination-thresholds-report"}
 NHL_ONLY = {"nhl-pbp-import", "nhl-xg-research", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies"}
 
 
@@ -22,7 +23,8 @@ NHL_ONLY = {"nhl-pbp-import", "nhl-xg-research", "ingest-nhl", "nhl-validate", "
 # report can never make a scheduled two-hour cycle wait, skip or miss a game. (`score` is not here: it records a job run.)
 READ_ONLY_COMMANDS = {"score-markets", "score-near-tipoff", "thresholds", "research-report", "pool-report", "pool-roster",
                       "tracking-report", "coverage", "release-check", "diagnostics", "historical-start", "model-audit",
-                      "calibration-study", "adaptive-status", "adaptive-replay"}
+                      "calibration-study", "adaptive-status", "adaptive-replay", "combination-export-adaptive",
+                      "combination-thresholds-report"}
 LOCK_WAIT_SECONDS = 45 * 60     # longer than any two-hour cycle (NHL ~13 minutes); a job still waiting then fails visibly
 ODDS_LOCK_WAIT_SECONDS = 120    # the periodic cycle waits out a short job (daily, injuries), not another full cycle
 
@@ -59,6 +61,12 @@ def main(argv=None) -> int:
                    help="Which sport's store to use (default nba). Each sport has its own SQLite file.")
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("migrate", help="Create/upgrade the SQLite schema")
+    ni = sub.add_parser("nhl-player-inputs", help="Cache NHL historical injuries and/or player boxes; no training or store writes")
+    ni.add_argument("--from-season", type=int, required=True)
+    ni.add_argument("--to-season", type=int, required=True)
+    ni.add_argument("--kind", choices=("injuries", "boxes", "both"), default="both")
+    ni.add_argument("--limit", type=int)
+    ni.add_argument("--sleep", type=float, default=2.)
     nh = sub.add_parser("ingest-nhl", help="NHL only: import NHL stats season game lists (one request per season) and the team list")
     nh.add_argument("--from-season", type=int, required=True, help="First season end year, e.g. 2016 = 2015-16")
     nh.add_argument("--to-season", type=int, required=True)
@@ -175,6 +183,16 @@ def main(argv=None) -> int:
     tr.add_argument("--check", action="store_true", help="Historical: chronological selection check (earlier → later seasons)")
     tc = sub.add_parser("tracking-record", help="Record tracking-v2 observations for games with pregame cohorts (normally the two-hour cycle)")
     tc.add_argument("--dry-run", action="store_true")
+    # exact-rules-v1 (app/exact_rules.py): explicit member/threshold rules tracked through tracking-v2; CLI-only registration
+    xr = sub.add_parser("exact-rules-register", help="Register one exact rule (members with their own thresholds, e.g. "
+                        "hockey_elo@0.65,goals_poisson@0.60) for prospective tracking; sealed, versioned, never backdated; no store")
+    xr.add_argument("--market", required=True)
+    xr.add_argument("--rule", required=True, help="model@threshold,model@threshold (explorer names, pool source only)")
+    xr.add_argument("--evidence", help="the explorer's subsets.json holding the rule in a frozen list (provenance)")
+    xr.add_argument("--note", default="", help="free-text provenance when no evidence file is given")
+    xr.add_argument("--effective-from", help="ISO UTC; defaults to now and may not be earlier than now")
+    xr.add_argument("--dry-run", action="store_true", help="validate and print the rule; write nothing")
+    sub.add_parser("exact-rules-list", help="Print the sealed exact-rule registry (no store)")
     # Candidate pool (docs/CANDIDATE_POOL.md)
     ps = sub.add_parser("pool-screen", help="Candidate pool stage 1: screen every registry candidate on development seasons")
     ps.add_argument("--dry-run", action="store_true", help="Score only a warm-up season; writes nothing")
@@ -185,14 +203,24 @@ def main(argv=None) -> int:
     at_ = sub.add_parser("adaptive-train", help="adaptive-v1 (docs/ADAPTIVE_SYSTEM.md): scheduled within-season refits of every "
                          "learned member and the combiner, off the forecast path; artifacts only, forecasts unchanged")
     at_.add_argument("--dry-run", action="store_true", help="Fit in memory only; no artifact, fit record or history checkpoint")
+    at_.add_argument("--cadence", choices=("weekly", "daily"), default="weekly")
     at_.add_argument("--force", action="store_true", help="Train even when no refit is due")
     ar = sub.add_parser("adaptive-record", help="adaptive-v1 forecasts for games within two hours of the start (normally the two-hour cycle)")
     ar.add_argument("--dry-run", action="store_true")
+    ar.add_argument("--cadence", choices=("weekly", "daily"), default="weekly")
     sub.add_parser("adaptive-status", help="Read-only adaptive-v1 status: fits in force, weights, exclusions, due state, record")
     arp = sub.add_parser("adaptive-replay", help="Chronological replay of adaptive-v1 against the existing system on development "
                          "seasons (exploratory; reserved test seasons are never read)")
     arp.add_argument("--out", help="Report directory (default data/reports/adaptive-replay-<sport>-<time>)")
     arp.add_argument("--skip-deep", action="store_true", help="Leave the deep networks out even where their libraries are installed")
+    sub.add_parser("combination-export-adaptive", help="Write each adaptive candidate history as a plain saved-forecast table "
+                   "(research/adaptive/<sport>/oof-<definition>.json.gz) for the threshold explorer; reads, refits nothing. "
+                   "Needs the research environment (the histories hold torch/keras objects)")
+    ctr = sub.add_parser("combination-thresholds-report", help="Thresholds, agreement and exact-subset report from saved "
+                         "out-of-sample forecasts (exploratory; nothing is fitted)")
+    ctr.add_argument("--market", default="winner")
+    ctr.add_argument("--source", default="pool", help="'pool' or 'adaptive:<definition>'")
+    ctr.add_argument("--out", help="Report directory (default data/reports/combination-thresholds-<sport>-<market>-<source>)")
     pr = sub.add_parser("pool-rules", help="Freeze the candidate-pool selection registry from the stage-2 evidence (CANDIDATE_POOL §7)")
     pr.add_argument("--effective-from", required=True)
     sub.add_parser("pool-report", help="Read-only prospective record of the pool registry's sources and pool decisions")
@@ -244,6 +272,22 @@ def main(argv=None) -> int:
                     help="Required for --period test; the access is logged to data/eval/test_access.jsonl")
     bt.add_argument("--record", action="store_true", help="Also append predictions to the ledger as run_type=backtest")
     args = p.parse_args(argv)
+    if args.cmd == "nhl-player-inputs":
+        if args.sport != "nhl" or args.to_season < args.from_season or (args.limit is not None and args.limit < 1):
+            p.error("requires --sport nhl, ascending seasons, and a positive limit")
+        from .sources import nhl_injuries
+        from . import nhl_player_ratings
+        report = {}
+        if args.kind in ("injuries", "both"):
+            report["injuries"] = nhl_injuries.collect(args.from_season - 1, args.to_season,
+                                                     limit=args.limit, delay=args.sleep)
+        if args.kind in ("boxes", "both"):
+            with db.connect_readonly("nhl") as conn:
+                report["boxes"] = nhl_player_ratings.collect_boxes(conn, args.from_season, args.to_season,
+                                                                   limit=args.limit, delay=args.sleep)
+        print(json.dumps(report, indent=2))
+        return 1 if any(r.get("failed") for r in report.values()) else 0
+
     if args.cmd == "tuning-evaluate":
         from pathlib import Path
         from . import tuning_study
@@ -273,11 +317,12 @@ def main(argv=None) -> int:
     if args.cmd == "adaptive-train":     # its own locking (docs/ADAPTIVE_SYSTEM.md §7): the job lock only for the snapshot and
         from . import adaptive           # the publication, the training itself under a separate training lock
         log = lambda m: print(m, file=sys.stderr)   # noqa: E731
-        if args.dry_run:
-            r = adaptive.train(db.connect_readonly(args.sport), write=False, force=args.force, log=log)
-            r = adaptive._summary(r)
-        else:
-            r = adaptive.run_scheduled(args.sport, force=args.force, log=log)
+        with adaptive.cadence(args.cadence):
+            if args.dry_run:
+                r = adaptive.train(db.connect_readonly(args.sport), write=False, force=args.force, log=log)
+                r = adaptive._summary(r)
+            else:
+                r = adaptive.run_scheduled(args.sport, force=args.force, log=log)
         print(json.dumps(r, indent=1, default=str))
         return 1 if r["status"] == "failed" else 0
     if args.cmd == "pool-fit-deep":      # query-only store, no job lock, no migration; writes artifact files only
@@ -332,6 +377,25 @@ def main(argv=None) -> int:
                               m["configurations"], "skipped": len(m["skipped"])} for k, m in reg["markets"].items()}}, indent=1))
         else:
             print(json.dumps({"path": str(at.build_historical(args.sport))}))
+        return 0
+
+    if args.cmd in ("exact-rules-register", "exact-rules-list"):      # registry file only: no store, no lock, no migration
+        from pathlib import Path
+        from . import exact_rules as er
+        if args.cmd == "exact-rules-list":
+            try:
+                print(json.dumps(er.summary(er.load_registry()), indent=1))
+            except er.RegistryError as exc:      # unreadable or tampered file: a visible failure, never "no rules"
+                print(json.dumps({"status": "failed", "reason": str(exc), "path": str(er.REGISTRY_PATH)}))
+                return 1
+            return 0
+        try:
+            out = er.register(args.sport, args.market, args.rule, evidence=Path(args.evidence) if args.evidence else None,
+                              note=args.note, effective_from=args.effective_from, write=not args.dry_run)
+        except er.RegistryError as exc:
+            print(json.dumps({"status": "refused", "reason": str(exc)}))
+            return 1
+        print(json.dumps({"status": "registered" if out["written"] else "dry_run", **out}, indent=1, default=str))
         return 0
 
     if args.sport != "nba" and args.cmd not in SPORT_COMMANDS:
@@ -689,7 +753,8 @@ def _run(args, p, conn, applied) -> int:
             print(json.dumps(pool_live.roster(conn, args.sport), indent=1, default=str))
     elif args.cmd == "adaptive-record":
         from . import adaptive
-        r = adaptive.record(conn, write=not args.dry_run)
+        with adaptive.cadence(args.cadence):
+            r = adaptive.record(conn, write=not args.dry_run)
         print(json.dumps(r, indent=1, default=str))
         return 1 if r["status"] == "failed" else 0
     elif args.cmd == "adaptive-status":
@@ -702,6 +767,14 @@ def _run(args, p, conn, applied) -> int:
                                      log=lambda m: print(m, file=sys.stderr))
         print(json.dumps({"output_dir": report["output_dir"], "markets": {m: {s: (v["log_loss"] if v else None) for s, v in
                           x["comparison"]["sources"].items()} for m, x in report["markets"].items()}}, indent=1))
+    elif args.cmd == "combination-export-adaptive":
+        from . import combination_thresholds
+        print(json.dumps(combination_thresholds.export_adaptive(conn, args.sport, log=lambda m: print(m, file=sys.stderr)), indent=1))
+    elif args.cmd == "combination-thresholds-report":
+        from pathlib import Path
+        from . import combination_thresholds
+        print(json.dumps(combination_thresholds.report(args.sport, args.market, args.source,
+                                                       Path(args.out) if args.out else None), indent=1))
     elif args.cmd == "selector-decide":
         result = jobs.selector_decisions(conn)
         print(json.dumps(result, indent=2))

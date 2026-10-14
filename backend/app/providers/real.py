@@ -10,10 +10,11 @@ from zoneinfo import ZoneInfo
 
 import json
 
-from .. import agreement, backtest, config, live, market_live, markets, metrics, near_tipoff, sports
+from .. import agreement, backtest, config, coverage, live, market_live, markets, metrics, near_tipoff, sports
 from ..db import utc_now
 from ..live import LATEST_LIVE_SQL
-from ..schemas import (BaselineScore, MarketModelVersion, GameDetail, GamesResponse, GoalieListingOut, GameSummary, HistoryResponse, Market,
+from ..schemas import (BaselineScore, CanonicalForecast, CanonicalHistoryResponse, CanonicalPerformanceResponse,
+                       CanonicalPreseason, CanonicalRow, CanonicalSummary, MarketModelVersion, GameDetail, GamesResponse, GoalieListingOut, GameSummary, HistoryResponse, Market,
                        MarketComparison, MarketForecastOut, MarketHistoryResponse, MarketInfo, MarketPerformanceResponse,
                        MarketQuoteOut, MarketRecord, MarketRecordSummary, MarketSide, Meta, NearTipoffForecast, Outcome,
                        PerformanceResponse, Prediction, PredictionRecord, SlateSelection, SourceStatus, SportInfo, Team,
@@ -151,8 +152,10 @@ class RealProvider:
                       retrieved_at=row["retrieved_at"], home_win_prob=row["home_prob_devig"],
                       home_price=row["home_american"], away_price=row["away_american"])
 
-    def _summary(self, g: sqlite3.Row, policy: str = "near_tipoff") -> dict:
+    def _summary(self, g: sqlite3.Row, policy: str = "near_tipoff", canon: Optional[dict] = None) -> dict:
         pred = self._prediction(g["game_id"])
+        if canon is None:
+            canon = coverage.canonical(self.conn, [g], "winner", self.now)[g["game_id"]]
         outcome = None
         if g["status"] == "final":
             outcome = Outcome(home_score=g["home_score"], away_score=g["away_score"],
@@ -162,8 +165,9 @@ class RealProvider:
                     away=self._team(g["away_team_id"]), prediction=pred,
                     forecast_note=None if pred else self._forecast_note(g),
                     market=self._market(g["game_id"], g["tipoff_at"]), outcome=outcome,
-                    near_tipoff=self._near_tipoff(g),
-                    agreement=self._agreement(g["game_id"], policy))
+                    near_tipoff=self._near_tipoff(g), canonical=CanonicalForecast(**canon),
+                    # research agreement has two-hour and archive cohorts only; the canonical view shows the two-hour one
+                    agreement=self._agreement(g["game_id"], "pregame" if policy == "pregame" else "near_tipoff"))
 
     def _agreement(self, game_id: str, policy: str) -> dict:
         """Winner agreement for a game card, from ONE research definition: if the latest cohort's members come from more
@@ -287,7 +291,8 @@ class RealProvider:
         start, end = _day_bounds(day)
         rows = self.conn.execute("SELECT * FROM games WHERE tipoff_at >= ? AND tipoff_at < ? ORDER BY tipoff_at, game_id",
                                  (start, end)).fetchall()
-        games = [GameSummary(**self._summary(g, policy)) for g in rows]
+        canon = coverage.canonical(self.conn, rows, "winner", self.now)    # one canonical read for the whole slate
+        games = [GameSummary(**self._summary(g, policy, canon[g["game_id"]])) for g in rows]
         if market == "winner":
             selection = apply_slate_policy(games, policy, min_confidence)
         else:   # the selected market and policy only; no fallback to another market or policy
@@ -526,6 +531,97 @@ class RealProvider:
     def _period(self, season: int) -> Optional[str]:
         return next((name for name, seasons in self.periods.items() if season in seasons), None)
 
+    def _winner_quote_prob(self, game_id: str, at: str) -> Optional[float]:
+        """De-vigged home probability of the latest moneyline retrieved no later than `at` (a quote the forecast could
+        have seen), or None."""
+        q = self.conn.execute(
+            "SELECT home_prob_devig FROM odds_quotes WHERE game_id=? AND retrieved_at <= ? "
+            "ORDER BY retrieved_at DESC, price_label = 'current' DESC, quote_id DESC LIMIT 1"
+            if self.sport == "nba" else     # NHL moneylines: market_quotes
+            "SELECT p_a_devig FROM market_quotes WHERE game_id=? AND market='winner' AND retrieved_at <= ? "
+            "ORDER BY retrieved_at DESC, price_label = 'current' DESC, quote_id DESC LIMIT 1",
+            (game_id, at)).fetchone()
+        return None if q is None else q[0]
+
+    # ---- canonical forecast (game_forecasts; one record per game and market) -------------------------------------------
+    def _canonical_games(self, start: Optional[str] = None, end: Optional[str] = None) -> tuple[Optional[str], list, dict]:
+        """Games since canonical recording began (none before it), in [start, end), with their canonical winner forecast."""
+        began = coverage.recording_began(self.conn, self.sport)
+        if began is None:
+            return None, [], {}
+        lo = max(began, start) if start else began
+        rows = self.conn.execute("SELECT * FROM games WHERE tipoff_at >= ? AND tipoff_at < ? ORDER BY tipoff_at DESC, game_id",
+                                 (lo, end or "9999")).fetchall()
+        return began, rows, coverage.canonical(self.conn, rows, "winner", self.now, began)
+
+    def canonical_history(self, date_from: Optional[date], date_to: Optional[date], team: Optional[str],
+                          limit: int) -> CanonicalHistoryResponse:
+        start = _day_bounds(date_from)[0] if date_from else None
+        end = _day_bounds(date_to)[1] if date_to else None
+        began, rows, canon = self._canonical_games(start, end)
+        shown, cohort, preseason = [], [], 0
+        for g in rows:
+            c = canon[g["game_id"]]
+            if c["state"] in ("upcoming", "not_recorded", "not_forecastable"):
+                continue
+            home, away = self._team(g["home_team_id"]), self._team(g["away_team_id"])
+            if team and team.upper() not in (home.abbr, away.abbr):
+                continue
+            preseason += c["state"] == "unvalidated"
+            if g["season_type"] in coverage.COMPETITIVE and g["tipoff_at"] <= self.now:
+                cohort.append((g, c))
+            outcome = (Outcome(home_score=g["home_score"], away_score=g["away_score"], home_won=g["home_score"] > g["away_score"])
+                       if g["status"] == "final" else None)
+            shown.append(CanonicalRow(game_id=g["game_id"], game_date=eastern_date(g["tipoff_at"]), tipoff=g["tipoff_at"],
+                                      status=g["status"], season_type=g["season_type"], home=home, away=away,
+                                      outcome=outcome, canonical=CanonicalForecast(**c)))
+        return CanonicalHistoryResponse(mode="real", market="winner", as_of=self.now, recording_began_at=began,
+                                        total=len(shown), record=CanonicalSummary(**coverage.canonical_summary(cohort)),
+                                        preseason_games=preseason, rows=shown[:limit])
+
+    def canonical_performance(self) -> CanonicalPerformanceResponse:
+        began, rows, canon = self._canonical_games()
+        cohort, pre = [], []
+        for g in rows:
+            if g["tipoff_at"] > self.now or (began and g["tipoff_at"] <= began):
+                continue                     # not started, or before canonical recording began (legacy views)
+            if g["season_type"] in coverage.COMPETITIVE:
+                cohort.append((g, canon[g["game_id"]]))
+            elif g["season_type"] == "preseason":
+                pre.append(g)
+        summary = coverage.canonical_summary(cohort)
+        graded = [(g, c) for g, c in cohort if c["state"] == "forecast" and c["grade"] in ("win", "loss")]
+        probs = [c["record"]["home_win_prob"] for _, c in graded]
+        ys = [g["home_score"] > g["away_score"] for g, _ in graded]
+        matched = []
+        for (g, c), p, y in zip(graded, probs, ys):
+            q = self._winner_quote_prob(g["game_id"], c["record"]["generated_at"])
+            if q is not None:
+                matched.append((p, q, y))
+        experimental = 0
+        if pre:
+            ids = [g["game_id"] for g in pre]
+            experimental = self.conn.execute(
+                f"SELECT COUNT(*) FROM game_forecasts WHERE market='winner' AND status='forecast' "
+                f"AND game_id IN ({','.join('?' * len(ids))})", ids).fetchone()[0]
+        days = [eastern_date(g["tipoff_at"]) for g, _ in cohort]
+        return CanonicalPerformanceResponse(
+            mode="real", market="winner", title="Canonical winner forecasts",
+            note=("One canonical forecast per game: the sealed baseline model (no adaptive ensemble is approved for this "
+                  "record; adaptive forecasts stay research), recorded within two hours of the start. Every started regular-season, play-in and "
+                  "playoff game since canonical recording began is counted: a game without a forecast is a coverage gap, "
+                  "never a loss. Metrics cover settled forecasts only. Preseason has no validated model and is reported "
+                  "apart. Forecasts made before canonical recording began are in the legacy views."),
+            as_of=self.now, recording_began_at=began, date_from=min(days, default=None), date_to=max(days, default=None),
+            competitive=CanonicalSummary(**summary),
+            calibration=metrics.calibration(probs, ys, metrics.API_CALIBRATION_BINS),
+            market_comparison=MarketComparison(
+                matched_games=len(matched), coverage=len(matched) / len(graded) if graded else 0.0,
+                model_brier=metrics.brier([m[0] for m in matched], [m[2] for m in matched]),
+                market_brier=metrics.brier([m[1] for m in matched], [m[2] for m in matched])),
+            preseason=CanonicalPreseason(games=len(pre), unvalidated=len(pre), experimental_rows=experimental,
+                                         note=coverage.PRESEASON_UNVALIDATED))
+
     def performance(self, run_type: str, policy: str = "pregame") -> PerformanceResponse:
         primary = self.near_version if policy == "near_tipoff" else self.model_version
         def scored(model_version: str) -> list[sqlite3.Row]:
@@ -551,16 +647,9 @@ class RealProvider:
                                                brier_score=metrics.brier(bp, by), log_loss=metrics.log_loss(bp, by)))
         matched = []
         for r in rows:
-            # Fair comparison: only a quote the forecast could have seen (retrieved no later than its generation).
-            q = self.conn.execute(
-                "SELECT home_prob_devig FROM odds_quotes WHERE game_id=? AND retrieved_at <= ? "
-                "ORDER BY retrieved_at DESC, price_label = 'current' DESC, quote_id DESC LIMIT 1"
-                if self.sport == "nba" else     # NHL moneylines: market_quotes
-                "SELECT p_a_devig FROM market_quotes WHERE game_id=? AND market='winner' AND retrieved_at <= ? "
-                "ORDER BY retrieved_at DESC, price_label = 'current' DESC, quote_id DESC LIMIT 1",
-                (r["game_id"], r["generated_at"])).fetchone()
-            if q:
-                matched.append((r["home_win_prob"], q[0], r["home_score"] > r["away_score"]))
+            q = self._winner_quote_prob(r["game_id"], r["generated_at"])
+            if q is not None:
+                matched.append((r["home_win_prob"], q, r["home_score"] > r["away_score"]))
         days = [eastern_date(r["tipoff_at"]) for r in rows]
         if run_type == "backtest":
             title = "Final test: retrospective backtest, 2024-25 to 2025-26"

@@ -19,6 +19,7 @@ from typing import Optional
 
 from .. import backtest, config, live
 from ..db import transaction, utc_now
+from ..models.score_candidates import usable_rates
 from . import deep, engine, features, registry
 
 PREFIX = "research-cand"
@@ -399,10 +400,22 @@ def _record_spec(conn, eng, spec, history, upcoming, recent, rec, lines, now, fi
                 out["errors"][f"{spec.name}:{game.game_id}"] = f"{type(exc).__name__}: {exc}"
 
 
+DEGENERATE_GOALS = "not ready: goal rates put too much mass beyond the score grid"
+
+
+def usable_goals(o: Optional[dict]) -> bool:
+    """A goals-head output whose rates leave more than 10% of the Poisson mass beyond the score grid is not a forecast
+    (its renormalised, draw-inflated grid would be misleading). Checked when applying outputs, not in `engine.ready`:
+    engine.py is part of every candidate's sealed identity."""
+    return o is None or o["head"] != "goals" or usable_rates(o["lh"], o["la"])
+
+
 def _record_game(conn, spec, mv, art, fit_id, game, row, o, rec, recent, lines, now, fixed, write, dataset, table, eng, out):
     reason = _stale(eng, rec, game, recent)
     if reason is None and not engine.ready(o):
         reason = "not ready: no out-of-sample residual spread yet"
+    if reason is None and not usable_goals(o):
+        reason = DEGENERATE_GOALS
     if reason:
         out["skipped"].setdefault(spec.name, {})[game.game_id] = reason
         return

@@ -250,7 +250,7 @@ def performance(conn, as_of=None, policy="near_tipoff"):
     as_of = as_of or utc_now()
     sport = live.engine(conn).sport
     games = conn.execute("SELECT DISTINCT g.*, substr(p.model_version, instr(p.model_version, ':')+1+instr(substr(p.model_version,instr(p.model_version, ':')+1), ':')) AS definition FROM games g JOIN predictions p ON p.game_id=g.game_id "
-                         "WHERE p.run_type='live' AND p.feature_version=?", (feature,)).fetchall()
+                         "WHERE p.run_type='live' AND p.feature_version=? AND p.generated_at<=?", (feature, as_of)).fetchall()
     groups = {}
     partial = 0
     for g in games:

@@ -800,3 +800,529 @@ Started 22:46 EDT after the last NHL game (02:00 UTC) had begun and the 22:15 ni
 - Added default Performance status panel for both sports in existing Training component, using existing single API client. Independent loading/error/retry states for training inputs, adaptive fit/due state and recovery; visible-page minute refresh plus manual refresh. Demo explicitly labelled; pending/settled market counts are distinct from fit success and unique games. Optional adaptive recovery payload works with old release API. No backend/model/definition edits.
 - Verification: frontend build/typecheck, structure guard and whitespace pass. Browser preview http://127.0.0.1:5197/performance (API proxy :8100): NBA desktop shows 21/21 fits and empty prospective record; NHL 390px shows 15/15 fits, 24 pending pairs and 16 recovered primary games. Document width equals 390px, screenshot inspected. Viewport reset. User navigated preview to History before manual refresh/expanded-error checks, so those remain unverified; error/demo UI implemented but not browser-injected. Full readiness not repeated (prior 676 backend pass predates this frontend-only change).
 - Existing endpoint does not expose recovery backlog/deferred jobs or active training process: panel explicitly marks those unavailable instead of claiming completion. Working tree contains Claude's recovery work; preserved unchanged. Panel not committed/deployed. Next: review panel, add backlog telemetry in the recovery owner, and complete recovery review/safe release.
+
+## Model combinations of saved forecasts — 2026-10-10 (Claude, Opus 5.5)
+Data: session-scratch copies (`NBA_DATA_DIR=<scratchpad>/data`: immutable snapshots of nba/nhl.sqlite + copies of
+`research/candidates/oof-*.json.gz`). Live `data/` only read (snapshot), never written.
+- API: `NBA_DATA_DIR=<copy> NBA_API_MODE=real <deep venv>/python -m uvicorn app.main:app --port 8765`; web:
+  `API_PROXY_TARGET=http://127.0.0.1:8765 npx vite --port 5199 --strictPort` → http://localhost:5199/performance?sport=nhl.
+- `GET /api/research/combinations?sport=nhl&market=winner` → 200, `available`, 11,870 games, earlier 2018–24 (9,078),
+  later 2025–26 (2,792, flagged spent reserved-test), 4 goalie models excluded; first call 9.3 s, cached after.
+  `sport=nba` winner/spread → `available` (6,605 games); nba `reg3` → `no_stored_forecasts`. Bad `base` → 422 (pytest).
+- Browser (Claude in Chrome, viewport 500 px; window resize had no effect, so 1440 and 390 px checked in same-origin
+  iframes): card "Model combinations · saved forecasts" opens and loads (spinner) → 6 tables; first rows of the
+  leaderboard, pairs, add-a-model and all four holdout rows equal the API values. 1440 px and 390 px: page scrollWidth =
+  viewport (no page overflow); at 390 px four tables scroll inside `.table-wrap`. "Compare additions" with Elo + Goals model
+  showed loading then "Group: Elo + Goals model — log loss 0.6686" and first addition matching the API (−0.0031
+  [−0.0038, −0.0024], 258 corrected / 201 introduced). API stopped → "Couldn't load data. 500: API unavailable…" + Try
+  again. NBA spread card shows the model-only-line note.
+- Not verified in browser: the `no_stored_forecasts` empty state (no NBA reg3 page exists; covered by API + pytest), demo
+  mode (pytest only).
+
+# Smoke test — usable app: one-command startup, results overview, training status (2026-10-10)
+
+Tester: Claude (Opus 5.5) via Claude-in-Chrome (macOS Chrome) and curl. Real data (dev copy of the live stores).
+
+## Startup
+- Found before the change: a 7-day-old dev API (pid 6850, :8000, started before many backend commits, no reload, reading
+  `data/` read-write) and a 7-day-old Vite (:5173) from this checkout; the dev code expects schema 0027 while the live
+  stores are at 0026. The release app (launchd, `~/nba-predictor-live` @ f7ee505) answers on :4173 / :8100. A hung uvicorn
+  from this checkout (pid 82323, :8093) was left alone.
+- `sh scripts/dev.sh` (from the repo root): stopped the two stale dev servers (cwd inside this checkout only), copied
+  `data/nba.sqlite`/`nhl.sqlite` by read-only SQLite backup plus `research/ raw/ eval/` (APFS clones) to
+  `~/nba-predictor-dev-data`, migrated the copy, started API + Vite, waited for `:8000/api/health`, `:5173/` and the
+  `:5173/api/health` proxy → printed `dev.sh: ready` (every launch this session; copy time not measured).
+- Killing the API process → the launcher stopped Vite too, printed the log tails, exited 1, both ports free (verified
+  with `lsof`). TaskStop of the launcher → both ports free.
+- Release app (:4173/:8100), launchd agents, the pre-training gate (pids 81169/81170) and `data/` were not touched.
+
+## API (curl via the Vite proxy, actual)
+- `/api/health` → `{"status":"ok","mode":"real","api_version":"0.3.0","data_snapshot_at":"2026-10-10T19:59:04Z"}`.
+- `/api/training-run?sport=nhl` (0.46 s) → running false ("No process holds this sport's training lock"), last run
+  2026-10-10T04:23:06Z success 15 models, no failure, serving adaptive `8631cc578d16aa5c` (18 forecasts, latest
+  18:36:55Z), primary `hockey_elo-…-policy=near_tipoff` (18:33:24Z); not serving: `abfc617c4309ed33`, 3 models written,
+  not published (the 19:17 interrupted pre-training attempt's leftovers).
+- `/api/training-run?sport=nba` (0.78 s) → not running; last run 09:23:07Z success 21 models; no live forecast yet;
+  `2a0111fd73fc5cfa` "published, no live forecast yet".
+
+## Browser
+| Flow | Result |
+|---|---|
+| Desktop 1440 wide: `/` shows Development copy banner, "Results so far" NBA + NHL cards, Training cards for both | Pass |
+| NHL live record: 56.8%, 21 of 37 correct, settled 37, pending 3, settled games Oct 2 – Oct 9; small-sample note; archive 33/57; reconstructed 10/16 (labelled retrospective); backtest 56.2% of 2,792 | Pass (matches release API `/api/predictions` record 21–16, 3 pending) |
+| NBA: no live forecasts, notice explaining preseason exclusion; backtest 67.2% of 2,643 labelled retrospective | Pass |
+| Training cards: Not running, last run, last failure none, what is forecasting, trained-not-forecasting; Technical details expands (versions, paths, lock note) | Pass |
+| Sport toggle NHL keeps the overview for both sports | Pass |
+| "Every prediction →" (NHL) → `/history?sport=nhl`, Prediction history, 40 rows, no error | Pass |
+| Phone width: app in a 390 px iframe (window resize did not apply to the maximized Chrome window): viewport 388, scrollWidth 388, no element past the right edge; stat tiles 2×2 | Pass |
+| API stopped: "API NOT REACHABLE" banner with the start command, error card with Try again | Pass |
+| Loading state | Not verified (requests finished before a capture; code path is the existing `AsyncView`/`Loading`) |
+
+## Gaps
+- Results and games come from the copy (timestamp shown); restart the launcher to refresh. Training status is live.
+- "Expected models" for a running trainer is shown only when its version equals this checkout's; otherwise the last run's
+  count is shown for reference (this worktree has uncommitted edits, so its version hash differs from the trainer's).
+- A running-trainer state was exercised only in unit tests (no trainer ran during this session).
+- Header "REAL DATA" pill is clipped at phone width (existing header layout, not changed here).
+- The headless-Chrome phone screenshot is unusable (minimum window ≈ 500 px); the iframe measurement is the evidence.
+
+## Automated checks (actual)
+- `python3 scripts/check_project.py` → "Structure guard passed". `git diff --check` → clean. `cd frontend && npm run build` → OK.
+- `backend/.venv/bin/python -m pytest -q tests/test_training_run.py tests/test_api.py tests/test_training_monitor.py` → 21 passed
+  (test_training_run: 6 passed after adding the not-serving test).
+- Full suite, main venv (excluding the concurrent writer's new `tests/test_combination_stored.py`): 696 passed, 8 failed
+  (all `tests/test_deep_study.py`: `ModuleNotFoundError: torch` / `keras`; those libraries exist only in
+  `~/nba-predictor-deep`). Not caused by this change; not rerun in the deep venv.
+- `backend/.venv/bin/python scripts/check_project.py --ready` → pytest 701 passed, 8 failed (same deep-study tests), so
+  **--ready FAILED** in the main venv.
+
+## Confidence thresholds & exact model subsets (saved forecasts) — 2026-10-10 (Claude, Opus 5.5)
+- Servers (own pair, the other session's :8000/:5173 untouched): `cd backend && NBA_API_MODE=real NBA_DATA_DIR=~/nba-predictor-dev-data
+  NBA_LIVE_DATA_DIR=<repo>/data .venv/bin/python -m uvicorn app.main:app --port 8011`; `cd frontend && API_PROXY_TARGET=http://127.0.0.1:8011
+  npx vite --port 5183`. Data = the dev copy made by scripts/dev.sh (snapshot 2026-10-10T20:07:37Z); `data/` not read or written.
+- Adaptive histories exported on the dev copy with the research venv: `NBA_DATA_DIR=~/nba-predictor-dev-data
+  ~/nba-predictor-deep/backend/.venv/bin/python -m app.cli --sport {nhl,nba} combination-export-adaptive` → 3 definitions per sport
+  (NHL 4,246–4,260 winner/reg3 games, NBA 3,962 winner games), 8 walk members per definition listed as not stored. Note: dev.sh
+  re-copies research/ on restart, so the export must be rerun after it.
+- curl via :5183 proxy, all 200: thresholds nba winner 796 KB 0.98 s; nhl reg3 373 KB; nba spread 518 KB; nhl winner
+  adaptive:8631cc578d16aa5c 363 KB; subsets 224–245 KB, 0.3–2.2 s uncached.
+- Browser (Claude in Chrome), Performance › Research › "Confidence thresholds & model subsets": all five views (Thresholds,
+  Agreement × confidence, Add a model, Exact subsets, Check a rule via "Details") rendered real rows; source switch to
+  adaptive:2a0111fd73fc5cfa and Add `torch_mlp` rendered; "No saved history" lists the 8 NBA walk members. Widths: 606 px window
+  and a 1280 px same-origin iframe: document scrollWidth = viewport, card scrollWidth = clientWidth. Phone: 390 px iframe
+  (NHL reg3, every view): document 386 = viewport, card 344 = 344; wide tables scroll inside `.table-wrap`. One overflow found
+  and fixed (long source names in the facts list; `min-width: 0` on `#thresholds .facts dd`). Console: no errors.
+- Not verified: a real phone device; the release servers (:4173/:8100) — nothing deployed.
+
+### Codex focused threshold review — 2026-10-10
+- URL: http://127.0.0.1:5183/performance?sport=nhl (existing in-app browser tab; API backing the preview).
+- Opened Confidence thresholds & model subsets: loading then NHL winner pool results, real model names, archive digests, earlier/later labels and cumulative threshold rows rendered.
+- Reproduced source recovery bug: Market = Game total goals, open explorer, choose adaptive:8631cc578d16aa5c. Empty message appears and Saved forecast source selector disappears (DOM count 0); cannot directly switch back to pool. Returned Market to Winner afterwards.
+- Independent commands: `backend/.venv/bin/python -m pytest backend/tests/test_combination_thresholds.py backend/tests/test_combination_stored.py -q` → 13 passed, one Starlette warning; `npm --prefix frontend run typecheck` passed; `git diff --check` passed. `python3 scripts/check_project.py` failed: unexpected top-level directory `.claude`.
+- Not verified this review: dedicated desktop/phone viewport checks, full navigation/error/demo flows, full readiness, training or release behavior. No servers restarted, no deployment or training changes. See HANDOFF for the independently reproduced later-outcome-dependent shortlist bug.
+
+### Codex threshold-fix recheck — 2026-10-10
+- Existing in-app browser at http://127.0.0.1:5183/performance?sport=nhl: selected Game total goals, expanded threshold explorer, selected adaptive:8631cc578d16aa5c. Source picker and Back to the candidate pool remained visible during loading and in the empty state; clicked the back control to return to pool.
+- Focused backend command `backend/.venv/bin/python -m pytest backend/tests/test_combination_thresholds.py backend/tests/test_combination_stored.py -q`: 16 passed, one Starlette warning, 2.07s. Frontend typecheck, structure guard and whitespace check passed. No full readiness or new phone viewport verification; full-suite completion remains to be recorded by its running session.
+
+## Threshold explorer review fixes — 2026-10-10 ~22:55 UTC (Claude, Opus 5.5)
+- Same servers (:8011 API restarted with the fix, :5183 web, dev copy). NHL › total, Performance › Research › thresholds card:
+  pool loads (50%+ row 2792 of 2792, 1505–1287); switching the picker to adaptive:8631cc578d16aa5c shows "No saved out-of-sample
+  forecasts for this market and source — choose another source above." with the picker still present and value kept;
+  "Back to the candidate pool" and the picker each return to the pool table (1 table, value pool).
+- Widths (same-origin iframes): 390 px — document 386 = viewport, card 344 = 344, picker 312 px, in pool and empty states;
+  1280 px — document 1276 = viewport, card 954 = 954. Before the CSS fix the picker was 492 px and the phone document 529 px.
+- Not verified: a real phone device.
+
+## Threshold explorer: rule ledger and comparisons — 2026-10-10 ~23:15 UTC (Claude, Opus 5.5)
+- Servers :8011 (restarted with the change) / :5183, dev copy. NHL › Exact subsets: limits panel (Archive, Models searched, Not
+  searched, Rules, Selection, Best single model); both rankings; columns earlier/later picks (coverage) · W–L · win rate [95%],
+  best single on the same games, best single's most confident picks. "Details & games" on hockey_logistic≥75 & extra_trees≥70 &
+  multinomial_l2≥75: rule 44 of 2792, 38–6, 86.4% [73.3–93.6]; (a) same games 38–6 (same side 44/44); (b) 44 most confident
+  (≥78.8%) 38–6; constituent, by-season and ledger tables; first ledger row 2024-10-12 CHI @ EDM, members home 81.2/77.3/79.7%,
+  5–2, actual away, loss, best single home 82.3% loss. Frozen label shown; after "Check rule" the exploratory label shown.
+- CSV via the :5183 proxy: `content-type: text/csv`, `attachment; filename="ledger-nhl-winner-all.csv"`, 172 lines (171 games
+  + header). JSON ledger later: 44 games, 38 wins.
+- Widths: 1440 px document 1440 = viewport, card 1118 = 1118; 390 px iframe (NBA subsets and rule detail) document 386 =
+  viewport, card 344 = 344, ledger 50 rows. Not verified: a real phone.
+
+### Codex rule-ledger focused review — 2026-10-10
+- URL http://127.0.0.1:5183/performance?sport=nhl&market=total, existing in-app browser. Exact subsets → Details & games for Goals regression ≥65% & poisson_draw:nhl_base ≥60%: constituent probabilities, two labelled comparisons, season totals, later ledger and both CSV links render.
+- Visible later ledger: 2026-04-08 EDM @ SJS, model line 7.5, under 78.1% / under 68.1%, score 5–2, win; best single under 59.5%, win. One-pick sample explicitly warned. Download not independently exercised; no fresh phone viewport/full-app/error-state run.
+- `backend/.venv/bin/python -m pytest backend/tests/test_combination_thresholds.py backend/tests/test_combination_stored.py backend/tests/test_api.py -q`: 32 passed, one Starlette warning (2.00s). Structure guard, whitespace and frontend typecheck passed. No training, deployment or live-data writes.
+
+## Research presentation: distinct later pick sets, reasons, coverage — 2026-10-11 (Claude, Opus 5.5; author)
+- Browser verification BLOCKED (desktop and 390 px not run). The only dev API, :8011 (pid 68117, started 19:12 with no reload), predates
+  this change and the previous coverage increment: `curl -s -m 60 "http://127.0.0.1:8011/api/research/thresholds?sport=nba&market=winner&source=pool"`
+  → status available, but no `coverage_definition`, no `split` and no per-period coverage keys. :8000/:5173 are older still (16:07).
+  No service was started or restarted (not approved). With a stale API the new sections are absent: every new field is optional
+  in the types, so nothing breaks, but this is not verification of the new flows.
+- Verified without a browser: `npm --prefix frontend run typecheck` passed; `npm --prefix frontend run build` built (398.55 kB JS).
+- To verify: restart the :8011 API on the current code (with approval), then at 1440 px and 390 px check:
+  - Combinations and threshold cards: the "Games and forecast coverage" table and its scope sentence;
+  - an insufficient-evidence market or source shows the backend reason, with the source picker still usable;
+  - NBA winner pool › Exact subsets: "18 of 20 rules (13 distinct later pick sets)"; overlap note "20 rules make 15 distinct later
+    pick sets — set 9: rules 9, 12, 14, 15, 16, 18 (278 picks)"; the "Later pick set" column; the two-comparison note;
+  - no horizontal overflow.
+
+## Research presentation cleanup: wording, shared-picks test, legacy coverage, plurals — 2026-10-11 (Claude, Fable 5.1; writer)
+- Browser verification BLOCKED, same cause as the entry above: `:8011` (pid 68117, started 19:12, no reload) still serves the
+  older code; `:5183` (Vite, HMR) already serves the current frontend source. No service was started, stopped or restarted
+  (not approved). Exact current processes and the proposed restart are in HANDOFF.md (top entry).
+- Verified without a browser: `npm --prefix frontend run typecheck` exit 0; `npm --prefix frontend run build` built (399.58 kB JS);
+  focused backend tests 98 passed with `NBA_DATA_DIR=<empty scratch>`.
+- To verify after the approved restart, at 1440 px and 390 px on http://127.0.0.1:5183/performance?sport=nba:
+  - Exact subsets (NBA winner, pool): headline "18 of 20 rules (13 distinct later pick sets)"; overlap note "these 20 rules make 15
+    distinct later pick sets — set 9: rules 9, 12, 14, 15, 16, 18 (278 picks)" followed by the definition that says "made the same
+    picks … mean probability and calibration gap can differ"; footer says outcomes are identical by construction, not records;
+  - NBA spread, pool: headline "1 of 20 rules (1 distinct later pick set)" (singular);
+  - a rule detail where the best single is a member: "(a member: the same picks and outcomes)";
+  - "Games and forecast coverage" tables on the combinations and thresholds cards (full shape). The older-API note cannot be seen
+    against the restarted server; it is reachable only by pointing the web app at an API without per-period coverage fields;
+  - no horizontal overflow, no console errors.
+
+## Browser verification: research presentation cleanup — 2026-10-11 ~03:40–04:20 UTC (Claude, Fable 5.1; the session that wrote the cleanup, so this is the author's verification, not an independent review)
+- Setup (user-approved): the stale `:8011` API (pid 68117; verified first: `.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8011`,
+  cwd `<repo>/backend`, ppid 1, no children) was stopped with `kill 68117` and restarted on the current code as pid 10146 from `<repo>/backend`:
+  `NBA_API_MODE=real NBA_DATA_DIR=/Users/andry/nba-predictor-dev-data NBA_LIVE_DATA_DIR=/Users/andry/nba-predictor-dev-data OMP_NUM_THREADS=1
+  nohup .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8011` (both data variables point at the dev copy; `data/` not read).
+  Log: a fresh regular file in the session scratchpad (`api-8011-20261011T034146Z.log`, created with `noclobber`); `~/nba-predictor-dev-data/api.log`
+  and `web.log` untouched (mtimes 23:07/23:04 local), no marker written, `scripts/dev.sh` not run. Vite `:5183` (pid 43514) left running.
+  Startup: `app/main.py` has no startup hook, scheduler or thread; a store needing migration gives a 503 per request. Startup log: "Application
+  startup complete" only; `/api/health` → `{"status":"ok","mode":"real","api_version":"0.3.0","data_snapshot_at":"2026-10-10T20:07:37Z"}`;
+  after the whole session the API had 0 child processes. Training-status text on the page is snapshot-derived here (both dirs = the copy).
+- API fields via the Vite proxy (`curl -s "http://127.0.0.1:5183/api/research/subsets?sport=nba&market=winner&source=pool"`, 200, 336 KB, 1.0 s):
+  `later_overlap_definition` starts "Descriptive later-period overlap: … share one pick set. Rules in one set made the same picks …";
+  `later_overlap.reliable` = 20 rules, 15 sets, shared set 9 = rules 9, 12, 14, 15, 16, 18 (278 picks), beats_matched {18 rules, 13 sets};
+  coverage keys games/settled/pending/used/excluded_missing_member/missing; split earlier 2022–2024, later 2025–2026. Thresholds (797 KB, 0.7 s):
+  coverage earlier 3962/3962/0/3962/0, later 2643/2643/0/2643/0. NBA spread subsets: beats 1 rule, 1 set, 17 sets.
+- Viewports: the Claude-in-Chrome window could not be resized (`resize_window` reported success but `innerWidth` stayed 511; the window sits
+  off-screen at y=982). As in earlier entries, same-origin iframes of exactly 1440 px (NBA, NHL) and 390 px (NBA) were used inside
+  `http://127.0.0.1:5183/@vite/client` (a non-React page on the same origin); layout was measured from each iframe document
+  (`innerWidth`, `documentElement.scrollWidth`, card `scrollWidth`) and text read from its DOM; screenshots at device resolution.
+  Every check below: page `scrollWidth` = viewport width (1440/1440/390); no element outside the viewport except inside `.table-wrap`
+  (overflow-x auto; at 390 px the subsets table wrapper is 316 px wide with 492 px of scrollable content). No "undefined"/"NaN" text in the card.
+- 1440 px, NBA winner, pool: Facts, "Games and forecast coverage" scope sentence + table (Earlier (2022, 2023, 2024) 3962 3962 0 3962 0 none;
+  Later (2025, 2026) 2643 2643 0 2643 0 none) + definition. Exact subsets: limits panel (15 models, 105 pairs, 455 triples, 161,210 rules,
+  174 collapsed, best single elastic_net:nba_base); headline "18 of 20 rules (13 distinct later pick sets) in the first list and 3 of 20
+  (3 distinct later pick sets) in the second"; overlap note "these 20 rules make 15 distinct later pick sets — set 9: rules 9, 12, 14, 15, 16, 18
+  (278 picks)." followed by the new definition; second list "15 distinct later pick sets — set 5: rules 5, 10 (324 picks); set 12: rules 13, 16,
+  17, 18, 20 (335 picks)"; "Later pick set" column 1…15 with "9 (shared by 6)" on rules 9, 12, 14, 15, 16, 18; footer "made the same later picks,
+  so their win–loss–push outcomes and win rate are identical by construction; their mean probability and calibration gap can still differ…".
+  Details & games on rule 9 (mlp:nba_base ≥ 80% & elastic_net:nba_base ≥ 80%): later record 278 of 2643, 237–41, 85.3% [80.6–88.9], mean p 84.8%;
+  row "(a) elastic_net:nba_base on the SAME games (a member: the same picks and outcomes)" 237–41, mean p 85.3% (same outcomes, different
+  probability, as the wording now says); (b) 278 most confident 236–42; constituent models, by season; ledger "278 games", rows with both
+  members' probabilities, shared pick, score, result and best single; CSV links present.
+- 1440 px, NBA spread, pool (market change collapses the card, pre-existing): headline "1 of 20 rules (1 distinct later pick set) … 2 of 20
+  (2 distinct later pick sets)" (singular correct); overlap "17 distinct later pick sets — set 11: rules 11, 14, 15, 20 (98 picks)";
+  second list "18 … set 8: rules 8, 14, 15 (98 picks)". Adaptive sources in spread: "No saved forecasts: no saved forecasts for this market."
+  with the source picker still shown; back to pool recovers. NBA winner adaptive sources (3): all available, "0 of 20 rules (0 distinct later
+  pick sets)".
+- 1440 px, NHL winner, pool: models list + "Excluded: logit_l2:nhl_goalie (used the actual starting goalie…)"; coverage Earlier (2018–2024)
+  9078/9078/0/9078/0 none, Later (2025, 2026) 2792/2792/0/2792/0 none; headline "0 of 20 rules (0 distinct later pick sets)" both lists;
+  overlap "17 … set 7: rules 7, 8, 12 (57 picks); set 11: rules 13, 16 (80 picks)". NHL winner adaptive:8631…: "18 of 20 rules (9 distinct
+  later pick sets) … 14 of 20 (8 distinct later pick sets)"; overlap "10 distinct later pick sets — set 1: rules 1, 3 (15 picks); set 2: rules
+  2, 4, 5, 6 (16 picks); set 4: rules 8, 9, 10 (14 picks); set 5: rules 11, 19 (15 picks); set 6: rules 12, 14 (22 picks); set 8: rules 15, 18
+  (16 picks); set 10: rules 17, 20 (27 picks)" — all equal to the evidence summaries.
+- 390 px, NBA: same coverage table, headline, overlap note and set 9 rows; rule 9 detail with the "(a member: the same picks and outcomes)"
+  row and the 278-game ledger; spread headline "1 of 20 rules (1 distinct later pick set)". Screenshots: headline box, overlap note (text
+  wraps, no clipping).
+- Loading / error / recovery (fetch patched inside the iframe only; no service touched): a 4 s delay shows "Loading…" with a `role=status`
+  spinner and the source picker still usable; a rejected `/research/subsets` fetch shows the `role=alert` "Couldn't load data. Cannot reach the
+  API. Is the backend running?" with "Try again" and the picker still present; after restoring fetch, "Try again" loads the real result
+  ("18 of 20 rules (13 distinct…"). Insufficient evidence (no real sport/market/source returns it — a full sweep of 2 sports × 6 markets × 4
+  sources via curl gave only `available` or `no_stored_forecasts`): a mocked `insufficient_evidence` response rendered "Insufficient evidence:
+  needs more than 2 seasons for an earlier/later split (2 saved seasons) [mock]. Earlier seasons 2021; later seasons 2022, 2023. Not compared:
+  Elo (mock exclusion reason)." with the picker present; switching back to pool recovered the real data.
+- Legacy / absent coverage (mocked thresholds responses, 1440 NHL and 390 NBA): coverage reduced to `{games, missing}` per period →
+  "This response comes from an older API that does not report settled, pending and every-model-saved counts per period, so the coverage table
+  is not shown. Reported only: Earlier (2018, …, 2024): 9078 saved games; missing forecasts Elo 244. Later (2025, 2026): 2792 saved games;
+  missing forecasts none. Restart the API on the current code for the full table." — no table, no denominator, no "of undefined"; at 390 px
+  "… Elo 244, Ridge points 3 …" with no overflow. Coverage removed entirely → no "Games and forecast coverage" section; the thresholds tables
+  still render.
+- Console: no errors or exceptions during the whole session, including a reload of the 390 px frame with tracking active. API log: 333 lines,
+  328 × 200; one `422` for `market=puckline` (nhl) from another client of `:5183` — "puckline" appears nowhere in this checkout's frontend or
+  backend source and was not requested by these frames; the API rejected it as designed. No 5xx, no traceback, no migration message.
+- Not verified: a real insufficient-evidence market (none exists in this snapshot); the pending-game wording (every real list has 0 pending);
+  browser window at a true 1440/390 OS window (iframes used instead).
+- After the check: the browser tab was closed; the restarted `:8011` API (pid 10146) was left running on the current code, as approved.
+
+## Presentation cleanup: focused review + browser verification — 2026-10-11 ~04:00 UTC (Claude, Fable 5.1; reviewer, authored none of the increment)
+- Services (verified, NOT restarted): API `:8011` = pid 10146, `.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8011`,
+  cwd `<repo>/backend`, started 23:41:46 local on 2026-10-10 (after the last code edit, 23:32), env `NBA_API_MODE=real
+  NBA_DATA_DIR=/Users/andry/nba-predictor-dev-data NBA_LIVE_DATA_DIR=/Users/andry/nba-predictor-dev-data OMP_NUM_THREADS=1`; its stdout/stderr
+  is another session's scratchpad file `api-8011-20261011T034146Z.log` (read only, left in place). This differs from the HANDOFF proposal
+  (pid 68117, live `NBA_LIVE_DATA_DIR`) and already matches the requested isolation, so no process was killed or started and no new log was
+  created. Web `:5183` = pid 43514 (Vite, `API_PROXY_TARGET=http://127.0.0.1:8011`), untouched. Nothing on :8000/:5173.
+  `curl -s http://127.0.0.1:5183/api/health` → `{"status":"ok","mode":"real","api_version":"0.3.0","data_snapshot_at":"2026-10-10T20:07:37Z"}`;
+  the page shows the "Development copy" banner. Startup: `app/main.py` has no lifespan/startup hook and migrations only raise a 503 on
+  demand; the process log shows "Application startup complete" with no job, training or migration line. Training-status panels read the
+  snapshot copy, so they are not evidence of live training. `scripts/dev.sh` not run; `data/` not read.
+- API (curl via `:5183`, actual): `GET /api/research/subsets?sport=nba&market=winner&source=pool` → `later_overlap_definition` contains
+  "made the same picks … mean probability and calibration gap can differ"; `later_overlap.reliable` = rules 20, 15 distinct sets,
+  `beats_matched` {rules 18, distinct_later_pick_sets 13}, shared set 9 = rules 9, 12, 14, 15, 16, 18 (278 picks); `lift` = 3 of 20, sets
+  5 and 12 shared. `coverage` carries games/settled/pending/used/excluded_missing_member/missing for both periods on thresholds,
+  combinations and subsets (nba winner/spread/total, nhl winner/reg3). A scan of every sport × market × source (42 subsets calls) returned
+  only `available` or `no_stored_forecasts`: no `insufficient_evidence` and no pending later pick exists in this data, so those renderings
+  were exercised with in-page mocks only.
+- Browser: Chrome extension on http://127.0.0.1:5183/performance?sport=nba and ?sport=nhl. The window would not resize past the real
+  viewport of 1280 CSS px (`resize_window` 1440×900 reported success; `innerWidth` stayed 1280 on a 1512-px screen), so the interactive
+  flow ran at 1280 px and the 1440 px and 390 px checks used same-origin iframes (1440×900 scaled 0.85 for the screenshot, 390×844) of the
+  same page driven through the same flow. That exercises CSS layout, not a phone browser.
+  | Flow | Result |
+  |---|---|
+  | NBA winner, pool: open card → Thresholds: facts, full "Games and forecast coverage" table (3962 / 2643 saved, 0 pending, 0 excluded, missing none) + definition | Pass |
+  | Per-model thresholds: "Model or combination" → Elo: table changes (50%+ 1776–867 vs 1787–856 for the 15-model average) | Pass |
+  | Exact subsets: "18 of 20 rules (13 distinct later pick sets) … 3 of 20 (3 distinct later pick sets)"; note "these 20 rules make 15 distinct later pick sets — set 9: rules 9, 12, 14, 15, 16, 18 (278 picks)" + the new definition; set column "9 (shared by 6)" on rules 9, 12, 14, 15, 16, 18; footer: outcomes and win rate identical by construction, mean probability and calibration gap can differ | Pass |
+  | Rule 9 detail (mlp ≥ 80% & elastic_net ≥ 80%): "(a) elastic_net:nba_base on the SAME games (a member: the same picks and outcomes)"; ledger "278 games", 50 rows, "Show more (228 left)" → 250 rows and "Show more (28 left)" | Pass |
+  | NBA spread, pool → Exact subsets: "1 of 20 rules (1 distinct later pick set) … 2 of 20 (2 distinct later pick sets)"; "20 rules make 17 distinct later pick sets — set 11: rules 11, 14, 15, 20 (98 picks)" | Pass (singular) |
+  | Source adaptive 00911fd3e4b0640b on spread: "No saved forecasts: no saved forecasts for this market."; source select still usable; "Back to the candidate pool" restores the pool list | Pass |
+  | NBA winner, adaptive 2a0111fd73fc5cfa, rule 5 detail: "244 games excluded: a member had no saved forecast."; non-member (a) row "same side on 313 of 313" | Pass (plural; see gap 3) |
+  | Mock legacy coverage (`window.fetch` patched in the page for /api/research/thresholds only; no service touched) `{games, missing}`: warn note "This response comes from an older API … Reported only: Earlier (2022, 2023, 2024): 3962 saved games; missing forecasts Elo 12, Logistic 3. Later (2025, 2026): 2643 saved games; missing forecasts none. Restart the API on the current code for the full table."; no table, no denominator | Pass |
+  | Mock coverage absent: heading and table absent, rest intact. Mock `{earlier:{games,settled}, later:{}}`: "… 3962 saved games; missing forecasts not reported. Later …: saved games not reported; missing forecasts not reported." | Pass |
+  | Mock status `insufficient_evidence` + reason/excluded/split: "Insufficient evidence: only 1 eligible model; a subset needs at least 2. Earlier seasons 2022, 2023, 2024; later seasons 2025, 2026. Not compared: Elo (mock: fewer than 100 settled games)."; source select and view buttons usable | Pass |
+  | Mock HTTP 500: role=alert "Couldn't load data. 500: mock failure" + "Try again"; mock removed → Try again → full view and coverage table | Pass |
+  | Mock 3 s delay: "Loading…" then the view | Pass |
+  | Mock subsets without `later_overlap`/`later_pick_set`: "for 18 of 20 rules in the first list and 3 of 20 in the second." (no set counts), no overlap note, "—" in the set column | Pass |
+  | Model combinations card (NBA winner): scope sentence + full coverage table | Pass |
+  | NHL winner, pool: Excluded / Not searched list the 4 goalie models with the postgame-input reason; coverage 9078 / 2792; Exact subsets "0 of 20 rules (0 distinct later pick sets)" in both lists; "20 rules make 17 … set 7: rules 7, 8, 12 (57 picks); set 11: rules 13, 16 (80 picks)" | Pass |
+  | NHL reg3: "5 of 20 rules (3 distinct later pick sets) … 6 of 20 (3 distinct later pick sets)"; rule 2 "(shared by 3)" detail "(a) multinomial_l2:nhl_base … (a member: the same picks and outcomes)", ledger 48 games / 48 rows | Pass |
+  | "undefined" / "NaN" in the card text after every step above | None |
+  | `scrollWidth` = viewport at 1280 (1280), in the 1440 iframe (1436 = width − borders) and the 390 iframe (386) through thresholds, subsets and rule detail; no element outside `.table-wrap` past the viewport; wide tables scroll inside `.table-wrap` (390: 492 px in a 312 px wrap) | Pass |
+  | Console errors (tracking on from the NHL reload; the NBA flows before that are not covered) | None |
+- Automated (actual): `cd backend && NBA_DATA_DIR=<empty scratch> OMP_NUM_THREADS=1 .venv/bin/python -m pytest -q -p no:cacheprovider
+  tests/test_combination_thresholds.py tests/test_combination_stored.py tests/test_api.py` → 63 passed, 1 warning; scratch dir stayed empty.
+  `npm --prefix frontend run typecheck` → exit 0. Not run: build, full suite, pyflakes, check_project.
+- Gaps / observations (nothing fixed; none blocks):
+  1. The extension's network list shows a 503 entry before each 200 for the same research URL. The API log has 0 lines with 503, the
+     Vite log 0, direct page fetches return 200 (4–388 ms) and no error state was ever displayed; cause not established (most likely a
+     capture artifact). Outside the four changes.
+  2. Changing the market select closes the open thresholds and combinations cards (the section remounts). Pre-existing.
+  3. The rule detail's "N games excluded: a member had no saved forecast." is the rule's count over both periods (`(~elig).sum()` in
+     `combination_thresholds.py`) under a "· later period" heading; for adaptive 2a0111 rule 5 all 244 are earlier-period games (later:
+     0 excluded, eligible 2643). Pre-existing wording; the cleanup only pluralised it.
+  4. `Research.tsx` line 183 keeps an inline `d.games === 1 ? 'game' : 'games'` instead of `count()`. Cosmetic.
+  5. Not verified: a real phone browser; 1440 px as a real window; a real older server (legacy shapes were mocked in the page).
+
+## exact-rules-v1: registered exact rules tracked prospectively — 2026-10-11 ~05:50 UTC (Claude, Fable 5.1; writer)
+- Services untouched: API `:8011` (pid 10146, started 23:41 local, before these edits) and Vite `:5183` were not restarted,
+  so the real API does not serve the new `exact_rules` field yet; no store was migrated or registered against (the registry
+  file `backend/app/models/exact_rules.json` does not exist; nothing registered on the user's behalf).
+- Automated (actual, `NBA_DATA_DIR=<empty scratch>`, dir stayed empty): `tests/test_exact_rules.py` + `tests/test_agreement_tracking.py`
+  → 45 passed; regression `tests/test_research_live.py test_api.py test_combination_thresholds.py test_combination_stored.py
+  test_selection.py test_research_contract.py test_rule_tracking.py test_pool_selection.py test_joint_agreement.py
+  test_audit_pool_tracking.py test_selection_status.py test_release_guard.py test_dev_script.py` → 256 passed;
+  `npm --prefix frontend run typecheck` exit 0; `npm --prefix frontend run build` built (402.47 kB JS);
+  `python3 scripts/check_project.py` passed; `git diff --check` clean (new files: 0 whitespace problems).
+  CLI without a store: `exact-rules-register … --dry-run` prints the validated rule and writes nothing; an adaptive member is
+  refused (`exit 1`, reason printed); `exact-rules-list` reports no registry. Migration 0028 was executed only on the
+  disposable synthetic test store (test_migration_0028_…).
+- Browser (Chrome, http://127.0.0.1:5183/performance?sport=nhl, "Show research details" on): the running API predates the
+  change, so the new section was checked with an IN-PAGE `fetch` mock of `/api/research/tracking` (the real payload plus a
+  synthetic `exact_rules`); no service was touched. Real viewport 1440×682 this time (`innerWidth` 1440) and a 390×844
+  same-origin iframe.
+  | Check | Result |
+  |---|---|
+  | "Registered exact rules · Prospective only" section under the tracking table: rule "Elo ≥ 65% & Goals model ≥ 60%", "core cohort · registry v1 · explorer reliable list, rank 3", reasons "Goals model 20×, Elo 8×", tracked since + first game, eligible 40 with "20 below a member threshold · 8 members disagree", 12 (30%), pending 2, 7–3, 70.0% 39%–89%, mean min. confidence 66.0%, anchor 60.0% (10), "insufficient evidence" | Pass |
+  | Historical evidence: only the not-applicable note; no rule rows | Pass |
+  | No registered rule: note + "No exact rule is registered for this market." | Pass |
+  | No "undefined"/"NaN"; no element outside `.table-wrap` past the viewport at 1440 (table 1070/1070) and 390 (table scrolls: 617 px in a 312 px wrap, page 386 = width − borders) | Pass |
+  | Console errors during the mocked renders (tracking on from the first read; the initial load before it is not covered) | None |
+- Not verified: the real API serving `exact_rules` (needs an API restart on this code, not authorised here); a registered real
+  rule end-to-end in a live two-hour cycle (none registered by design); a real phone browser.
+
+# exact-rules-v1 synthetic end-to-end (2026-10-11, Claude Opus 5.5, verification only; no code changed)
+## Isolation
+- `exact_rules.REGISTRY_PATH` is fixed to `backend/app/models/exact_rules.json` (no override), so the run used a **disposable checkout**: `rsync` of this working tree (tracked + untracked, excluding `.git`, `data/`, `node_modules`, `.venv`, `dist`) to `<scratchpad>/e2e/checkout`, `node_modules` APFS-cloned into it. Data: `NBA_DATA_DIR=NBA_LIVE_DATA_DIR=<scratchpad>/e2e/data` (also `data-void`, `data-pre28`). `PYTHONDONTWRITEBYTECODE=1`.
+- Verified from the copy's cwd: `app.__file__`, `exact_rules.REGISTRY_PATH`, `agreement_tracking.REGISTRY_PATH`, `db.MIGRATIONS_DIR`, `config.REPO_ROOT`, `data_dir()`, `live_data_dir()` all inside the scratchpad.
+- Pitfall found and fixed in the harness: a script run from outside the copy imports `app` through the venv's editable install (= the shared checkout's code). The first stage-3 call did so (read-only: registry absent there, no write; code identical to the copy apart from `.omc` folders); the harness then put the copy first on `sys.path` and asserts `app.__file__` is inside it.
+- In the copy only: `backend/app/models/nhl_frozen_decision.json` replaced by the synthetic store's sealed decision (from the test fixture), otherwise every NHL request is 503 "Sealed model decision unusable".
+- Shared checkout afterwards: no file outside `data/` changed; `backend/app/models` has no `exact_rules*`. In `data/`, `nba.sqlite`, `injuries-launchd.log`, `odds-launchd.log` changed during the run: the scheduled release jobs (`com.nba-predictor.injuries` runs from `~/nba-predictor-live` with `NBA_DATA_DIR=<this repo>/data`; log entry at the same second). The installed `com.nba-predictor.api/web` services were not touched.
+## Data and clock
+- Stores: `tests/test_e2e_build.py` (copy only) = the existing fixtures `nhl_store` → `sealed` → two upcoming games (`nhl:2026020001` BOS–CHI, `nhl:2026020002`) through the real NHL ingest, an integer total line (o6/u6), then the real two-hour research sequence (`near_tipoff.predict_now` → `market_live.forecast` → `agreement.predict` → `research_live.record`) at fixture time 2026-10-12T21:30Z; copied out by SQLite backup. `data-pre28` built the same way with `db.migrate(upto=27)`.
+- Registration: real CLI, real clock: `python -m app.cli --sport nhl exact-rules-register --market winner --rule hockey_elo@0.8,goals_poisson@0.75 --note …` and `--market total --rule goals_poisson@0.5,goals_glm@0.5` → versions 1, 2, `effective_from` 2026-10-11T05:33:01Z (synthetic test rules, copy registry only).
+- Harness clock (only in `<scratchpad>/e2e/stage.py`): recording via `jobs.agreement_tracking(conn, game_ids, now=2026-10-12T21:40:00Z)` (before the 23:00Z start; after registration); results via the real NHL schedule ingest (`add_upcoming`, final 4–2, `retrieved_at` 2026-10-13T02:00Z); voids by re-ingesting a moved start. Nothing backdated, nothing after the start.
+- Servers: `uvicorn app.main:app --host 127.0.0.1 --port 8765 --app-dir <copy>/backend` (`NBA_API_MODE=real`), `vite --host 127.0.0.1 --port 5875 --strictPort` with `API_PROXY_TARGET=http://127.0.0.1:8765`; ports checked free first; both stopped at the end (PIDs from their own pid files).
+## Results (real API via the vite proxy, real UI in Chrome; no fetch mocks)
+| # | Scenario | API | UI (desktop 1440 px) |
+|---|---|---|---|
+| 1 | No registry | `exact_rules.status no_registered_rules`, 83 sealed groups | "No exact rule is registered for this market." |
+| 2 | Registered, no observations | `no_observations_yet`, eligible 0 | row "Tracked since Oct 11, 1:33 AM EDT · no game yet" |
+| 3 | Recording | `out.exact`: rules 2, created 4 (winner g1 pick, g2 `below_threshold`; total g1 pick, g2 `disagree`), 0 errors | pending: winner 1 pick (50%), pending 1, 0–0 |
+| 4 | Identical retry | created 0, already_recorded 4; `agreement_observations` 498 rows before and after | unchanged |
+| 5 | Settled / push / void | winner 1–0, win rate 1.0, mean min. confidence 0.879, Brier null; total 1 push; void store (game 1 moved): both rules 1 void, 0 pending | "1–0 · 100.0% (21%–100%) · 87.9%"; total "0–0–1P"; void store "0–0 · 1 void" |
+| 6 | Broken (`{not json`) and tampered (threshold edited, seal not updated) registry | tracking 200, 83 sealed groups, `failed` + error (JSON / seal); game endpoints 200, 247 sealed groups (249 − 2 exact), `exact_rules_error`; CLI `exact-rules-list` → JSON `failed`, exit 1, file unchanged | Performance: warn "Exact-rule tracking unavailable…"; Game (populated, game 1): `role=alert` warn above the sealed markets (winner 83 / total 29 groups); Game (no observations, `nhl:2025020036`): warn + "No tracking observations…" |
+| 7 | Pre-0028 store | cycle: exact `skipped` "migration 0028 not applied", 494 sealed rows; API `schema_required` + registered ids; schema 27 before and after | warn "Not recorded on this store: … Registered for this market: …"; no "no game yet" |
+| 8 | Historical evidence | `exact_rules.status not_applicable`, rules [] (store has no historical table: `no_historical_table`) | note "Registered exact rules have no historical record here…", no rule rows |
+- Payload agreement: every UI number above was compared with the same request's JSON. Game card counts equal the endpoint (winner 84 = 83 + 1 exact).
+- Navigation: sidebar links clicked (history → game day → performance), routes and sections render. Console: no errors on the checked pages. API log: 5xx only from the startup poll before the synthetic decision was installed and from NBA requests (no NBA store in the scratch folder).
+- Phone: **390 × 844 same-origin iframes**, not a real viewport (the window resize left `innerWidth` at 1440). Performance and game page, normal and broken-registry states: document width 388 = viewport, no element outside a `.table-wrap` overflows; tables scroll inside their wrappers; warnings wrap.
+## Observations (not fixed; verification only)
+- Game card lists the top 12 picks by statistic (`game_observations`, `picks[:12]`): the winner exact pick (0.879) is counted ("29 home") but not named among 29 sealed picks. Presentation only.
+- Pre-0028: the game card shows sealed groups with no schema note (does not claim exact tracking).
+- `schema_required` text runs the reason and "Registered for this market" together without a full stop.
+- The "Historical (exploratory)" button did not toggle on two extension clicks (ref); DOM `click()` did; sidebar ref clicks worked. Not investigated: worth one manual click.
+## Not verified
+- A real 390 px browser viewport; the NBA sport (no NBA synthetic store); the live/release environment; candidate members (the rules used cohort members only).
+
+## Codex daily-learning preview — 2026-10-11; superseded by subsequent Fable edits
+- Startup: `NBA_DATA_DIR=/tmp/nba-daily-learning-preview-20261011 NBA_API_MODE=real backend/.venv/bin/python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8021`; `API_PROXY_TARGET=http://127.0.0.1:8021 npm --prefix frontend run dev -- --host 127.0.0.1 --port 5181 --strictPort`. Source: read-only SQLite backups of existing ~/nba-predictor-dev-data snapshots; original SNAPSHOT_AT 2026-10-10T20:07:37Z preserved. Live-backup attempts failed with `sqlite3.OperationalError: unable to open database file` twice; no live-store writes. Port 8011 occupied; untouched, preview used 8021.
+- URL http://127.0.0.1:5181/daily-learning: observed NBA 5/NHL 6 markets, supported threshold ranges, fit/history/recording counts separately. All real-data daily results awaiting training. Expanded NHL regulation market, inspected exclusions, submitted exact-rule evidence request: visible `422: No daily fit for this definition` with retry; no fabricated fallback. Navigation between Game day and Daily learning worked. Loading/empty states observed.
+- Browser at 1440x900 and 390x844; phone document.scrollWidth = innerWidth = 390. Screenshots visually inspected. Viewport reset. Populated production-training UI unverified because real-data training intentionally belongs to Claude. Synthetic API tests cover populated histories and evidence responses for the same implementation; this is not production acceptance.
+- Latest scoped run at that point: 9 daily tests passed in 13.98s (synthetic NBA daily train/record/settle/reassess; six-market NHL recording, duplicate retry, new frozen-rule version, settlement, API and drill-down). Build/typecheck, structure and diff whitespace passed. Earlier full --ready: 878 passed in 651.12s. These checks do not validate subsequent Fable code changes. User reports Fable later stopped preview API 8021.
+
+
+## Codex repair continuation — 2026-10-12; independent verification assigned to Claude
+- Focused command: `backend/.venv/bin/python -m pytest -q backend/tests/test_nhl_player_ratings.py backend/tests/test_adaptive.py -k 'nhl or score_member_without_distribution'` → 12 passed, 27 deselected. Bulk-collector regression first failed (`stored == 0` instead of 1); after repair the valid second game is saved and the incomplete first game is reported.
+- `python3 scripts/check_project.py` and `git diff --check` passed.
+- `NBA_DATA_DIR=/tmp/codex-injury-readiness OMP_NUM_THREADS=2 LOKY_MAX_CPU_COUNT=2 /Users/andry/nba-predictor-deep/backend/.venv/bin/python scripts/check_project.py --ready`: structure, frontend typecheck and build passed; backend suite interrupted (exit 130) after user assigned independent verification to Claude. Not a readiness pass.
+- No browser/API flows reverified in this continuation; desktop and phone checks remain Claude's gate. Earlier temporary logs/download cache are unavailable, so collection completion and source coverage remain unverified. No real-data training launched.
+
+
+## Additional source-integrity repairs — 2026-10-12
+- Same focused command above now returns 14 passed, 27 deselected (0.13s). Two new regressions demonstrated that changed derived injury weights were accepted despite an unchanged raw report, and rejected page bodies were discarded; both pass after fixing those paths.
+- Structure guard and diff whitespace passed. No new API/browser checks or training; this is targeted implementation verification only. Claude owns the independent full gate.
+
+- Final raw-box integrity repair: same focused command → 16 passed, 27 deselected (0.14s); original and bulk source-corruption regressions both failed before and passed after. Structure and whitespace checks passed. Browser/full readiness remain unverified for this final code.
+
+## Unresolved NBA injuries and incomplete team boxes — 2026-10-12
+- Three failing-first regressions: unmatched NBA absent player falsely counted as a complete report; NBA and NHL cached game IDs falsely passed freshness without the team's rows.
+- `backend/.venv/bin/python -m pytest -q backend/tests/test_player_ratings.py backend/tests/test_nhl_player_ratings.py` → 47 passed in 0.45s. Structure guard and diff whitespace passed. No new browser/full-suite verification or real-data training.
+- Adaptive integration command: `backend/.venv/bin/python -m pytest -q backend/tests/test_adaptive.py -k 'nba_player_injury_member or score_member_without_distribution'` → 4 passed, 24 deselected in 4.79s; one Starlette/httpx deprecation warning. Synthetic fixture fits only.
+
+
+## Further targeted checks — 2026-10-12
+- NHL delayed-result regressions failed before: old late box changed injury minutes from 20/60 to 28/60 and revived a player outside the five most recent games. Both pass with game-time-ordered delivered histories.
+- Six invalid probability vectors (nonfinite, negative, non-unit-sum) were accepted before; now rejected. Valid rounding regression passes.
+- NBA player minutes NaN, infinity and negative value each reproduced acceptance before; shared parser now raises an explicit error.
+- `backend/.venv/bin/python -m pytest -q backend/tests/test_adaptive.py -k 'probability_vector or nba_player_injury_member or score_member_without_distribution or train_then_record_end_to_end'` → 12 passed, 23 deselected in 11.28s (core-count fallback and Starlette deprecation warnings). Synthetic fixtures only, before final minutes guard.
+- After minutes guard: `backend/.venv/bin/python -m pytest -q backend/tests/test_availability.py backend/tests/test_player_ratings.py backend/tests/test_nhl_player_ratings.py` → 64 passed in 0.48s. Structure and whitespace checks passed. Full independent/browser verification remains Claude's task.
+
+
+## Failure handling and source validation — 2026-10-12
+- Reproduced a score model retaining earlier market votes after a later market raised; walk and candidate paths now remove partial outputs. Synthetic integration tests cover both.
+- NBA duplicate player/game rows previously entered ratings twice; importer now raises. NHL importers now share completeness/global uniqueness checks; malformed `19:99` minutes rejected. Regressions failed before fixes.
+- Shared feature check formerly skipped adaptive-suffixed walk members without candidates; when feature calculation failed, dependent walk members did not receive the failure reason. Checks now normalize member names and propagate unusable state; independent recent-result indexing survives feature failure. Integration tests cover with/without candidates.
+- `backend/.venv/bin/python -m pytest -q backend/tests/test_nhl_player_ratings.py backend/tests/test_player_ratings.py backend/tests/test_availability.py` → 68 passed in 0.47s.
+- Final `LOKY_MAX_CPU_COUNT=2 backend/.venv/bin/python -m pytest -q backend/tests/test_adaptive.py -k 'feature_walk_failure_blocks or failed_score_member or nba_player_injury_member or train_then_record_end_to_end'` → 8 passed, 31 deselected in 27.52s; Starlette/httpx deprecation warning. Synthetic fits only. Earlier broader vector/integration selection (before last feature-walk change) passed 13 tests.
+- Structure guard and diff whitespace passed. Full independent readiness, browser, real-data coverage/parity and predictive evaluation remain Claude's gate; no claim of complete correctness.
+
+## Source parity and threshold review — 2026-10-12
+- Focused NHL/threshold/daily suites: 100 passed (15.39s); added rule-application checks: 2 passed, 17 deselected (0.15s). Structure and whitespace passed. Commands, real NBA read-only sample, and limitations: `docs/evidence/nhl-injury-sources/cache-review-2026-10-12.md`. No fresh browser/full readiness pass or real-data training.
+
+## NHL team/side identity — 2026-10-12
+- Wrong-team box and reordered explicit-side cache tests failed before fixes. NHL suite passed 25 tests in 0.15s. Added swapped-side rejection: `backend/.venv/bin/python -m pytest -q backend/tests/test_nhl_player_ratings.py -k 'wrong_teams or explicit_sides'` → 3 passed, 23 deselected in 0.14s. Structure/whitespace passed. No browser/full-suite or real-data training. Model state rejects mismatched delivered team IDs/sides; new bulk caches use explicit side IDs, old bulk caches keep ordered-key compatibility.
+
+## Systematic bug-hunt verification — 2026-10-12 (Claude, Opus 5.5)
+Scope: the audit fixes listed in HANDOFF.md (top entry). No training, deployment, scheduler or live-store change.
+- Data: live `data/nba.sqlite`/`nhl.sqlite` copied with `cp` (live files unchanged) into the session scratchpad; the copy was
+  migrated (0027, 0028) with `NBA_DATA_DIR=<scratch>/app .venv/bin/python -m app.cli --sport {nba,nhl} migrate`.
+  `data/research`, `data/eval`, `data/reports` copied alongside. The release app (8100/4173) was not touched.
+- Servers: `cd backend && NBA_DATA_DIR=<scratch>/app NBA_LIVE_DATA_DIR=<scratch>/app .venv/bin/python -m uvicorn app.main:app
+  --host 127.0.0.1 --port 8000`; `cd frontend && npx vite --host 127.0.0.1 --port 5173 --strictPort`. Health: API 200, web 200.
+- Browser (Claude in Chrome): the window could not be resized (outerWidth stayed 511 px), so pages were also loaded in
+  same-origin iframes of 1440×900 and 390×844. `/`, `/daily-learning`, `/history?sport=nhl`, `/performance?sport=nba`,
+  `/performance?sport=nhl&market=total&details=1`: API-backed content at 511, 1440 and 390 px, 4 nav links, no `role=alert`,
+  no horizontal page overflow, no element outside a table wrapper wider than the viewport. Pass.
+- Reproduced before / verified after (Agreement tracking filters): NHL spread, tracking "Exact line" −1.5, switch market to
+  total. Before: API log `GET /api/research/tracking?sport=nhl&market=total&evidence=prospective&line=-1.5`, select showing
+  "every line" with no line options. After: `…market=total&evidence=prospective` (no line), options 5.5/6.5. Pass.
+- Daily learning: both sports show "No daily fit published for this code definition" — expected, the audit changed hashed
+  definition files. The new live-record line (95% interval, unscorable, outcome words) is therefore only typechecked/built,
+  not seen with real rows.
+- Not reproducible here: threshold-explorer adaptive source after a sport switch (no exported adaptive history in the copy:
+  sources = `pool` only for both sports); `URLSearchParams.size` (Chrome supports it). Both code-confirmed only.
+- Not run: loading/error states with the backend stopped (unchanged code paths this round), real-device phone.
+- Automated: see HANDOFF.md top entry for the exact `check_project.py --ready` result.
+
+## Pasted adaptive review follow-up — 2026-10-13
+- Inspected current fixes and original scratch repros. No code changes: existing correction/late-result serving guard and pending-feature fix already present.
+- `LOKY_MAX_CPU_COUNT=2 backend/.venv/bin/python -m pytest -q backend/tests/test_adaptive.py -k 'training_time_forecast or results_that_changed'` → 3 passed, 39 deselected in 13.98s, same process. Synthetic fixtures only. Original scratch-test KeyError remains undiagnosed; scratch correction tests bypass the serving guard. Full readiness/browser gate not repeated.
+
+## Six-item adaptive follow-up audit — 2026-10-13 (Claude, Opus 5.5)
+Synthetic fixtures only (plus a read-only `cp` copy of the players-v1 study cache for item 5); no live `data/` access,
+no training. `S` = the session scratchpad; `NBA_DATA_DIR=$S/emptydata` (or `$S/readydata*`), `OMP_NUM_THREADS=4`,
+`LOKY_MAX_CPU_COUNT=2`, cwd `backend/` unless noted.
+- Fail-before (each new test on the unfixed code, then pass after the fix):
+  - `pytest tests/test_adaptive.py -k one_markets` → 2 failed (`'failed' == 'partial'`: the combiner fit and the forecast
+    cycle both failed for every market on one market's injected exception) → 2 passed.
+  - `-k committed_after_the_training_snapshot` → failed: `hockey_elo` missing "results changed since the fit … cutoff
+    2026-10-12T20:00:04Z", winner members `[]`; re-confirmed failing with the fix line reverted → passed with it.
+  - `-k backfilled_shot` (real `nhl_shots.import_game`, policy historical_backfill, dated before the fit) → failed (no
+    reason recorded for `hockey_logistic_xg@adaptive`) → passed.
+  - `tests/test_player_ratings.py -k late_result_of_an_earlier_season` → `assert 2024 == 2025` → passed.
+  - `tests/test_player_ratings.py -k research_report_names` → `{'h1': 1.0, 'n1': 1.0} == {'h1': 1.0}` (name resolved
+    from a March box row for a January report) → passed.
+  - `tests/test_goal_model_fixes.py -k draw_inflated` → GoalsDraw returned a grid at λ=40 → passed.
+- Mutation: the two existing `results_that_changed` tests FAIL with `adaptive._results_changed` patched to `None`
+  (`$S/mut/test_mut_guard.py`) → the digest guard is load-bearing.
+- Scratch repros `/private/tmp/claude-501/adrev/test_repro_correction.py` → 2 failed (8.597 / 9.276): they call `_advance`
+  directly, below the serving guard; expected, not a regression. No KeyError seen.
+- Together: `pytest tests/test_adaptive.py tests/test_adaptive_recovery.py` → 66 passed (211.7 s). Broader targeted set
+  (13 files) → 253 passed / 1 failed — the failure was my mid-run edit of hashed `availability.py`; `test_adaptive_recovery.py`
+  alone → 20 passed; player/availability suites → 88 passed; `test_goal_model_fixes.py test_pool_selection.py` → 24 passed.
+- Full gate (repo root) `NBA_DATA_DIR=$S/readydata OMP_NUM_THREADS=4 ~/nba-predictor-deep/backend/.venv/bin/python
+  scripts/check_project.py --ready` → 1001 passed, 1 failed (`test_committed_registry_is_sealed…`: my first goals guard sat in
+  hashed `engine.py`; moved out, engine.py restored). Final rerun (`$S/readydata2`): structure guard passed, frontend typecheck + build OK, **1002 passed, 0 failed** (630 s), exit 0, scratch data dir empty afterwards (run 22:27:12–22:37:51 UTC; only docs edited during it).
+- Browser: not rerun — no API/UI code changed in this increment.
+
+## Every-game coverage + review fixes — 2026-10-13 (Claude, Opus 5.5)
+Synthetic fixtures for tests; a read-only copy of the live stores (19:00Z) for the Oct 6–12 audit and the browser check
+(`$S` = session scratchpad; the copy migrated to 0029 in `$S/uidata`, raw cache linked read-only). No training, no
+deployment, no live-store write.
+- Fail-before (each regression on the unfixed code): preseason/coverage ledger tests (new functionality, fail by
+  construction); start-time edit after the final → `tipoff_at` became 23:07Z; R1/R1b → `due False` (mutation: stubbing
+  `inputs_changed_since_fit` to [] fails both); exact rules → '2026-10-1T00:00:00Z' registered; 0028 detection broke once
+  0029 existed (2 existing tests failed → presence check); two models → 422 `min() iterable argument is empty`; recovery
+  definition (reviewer repro); player box republication → `inputs changed since the fit`; C1 (reviewer repro: all six
+  rows `primary_recorded`); C2 (reviewer repro passed = defect, now fails); C3 (reviewer repro: due False after the
+  player-box block → now True; regression folded into the B1/B2 test: block → due → retrain → forecasts → growth never
+  blocks); NHL 5OT box → `invalid bulk time on ice`;
+  daily rule / report / invalid vector by injection.
+- Reviewer repros on the fixed tree: review-repros 6 failed / 6 passed (defect-asserting ones fail; test_b_serving fails
+  by an accepted semantic difference); recheck: c1 passes, c2 fails (defect gone).
+- Targeted (cwd backend, empty NBA_DATA_DIR): `tests/test_coverage.py` 18 passed; `test_daily_agreement.py
+  test_player_ratings.py test_shadow.py` 94 passed; `test_adaptive.py test_adaptive_recovery.py` 66 passed (earlier in
+  the session); exact rules + agreement tracking 64; research suites 96; storage + live 47.
+- Full backend venv (before the C1/C2 round): 1027 passed / 10 failed — 8 `test_deep_study` (torch/keras not in
+  backend/.venv; the deep venv gate runs them) + 2 fixed since (`test_shadow` step list, B1 player-box test).
+- Oct 6–12 report (`coverage.games_report` on the copy): NHL 46 games, source 46, 0 missing from store, all covered,
+  record 155–121 (UTC window) / 154–122 (ET); NBA 34 (UTC) preseason games, 0 forecast, 170 game-markets missing
+  ("no pregame forecast in any ledger").
+- Browser (Chrome, real API via vite proxy, uvicorn `NBA_DATA_DIR=$S/uidata NBA_API_MODE=real … --port 8010`,
+  `API_PROXY_TARGET=http://127.0.0.1:8010 npm run dev -- --port 5180`): Performance → Every-game coverage card, NHL and
+  NBA, 1440×900 and 390-wide window (renders at the 500 px minimum): schedule vs source, market line, unfiltered record,
+  threshold view, sources, missing reasons, games/ledgers details. Found: not-started games listed as missing → fixed
+  (`upcoming`), re-verified ("4 not started yet", 0 missing). Not checked: date-filter interaction by typing (API
+  date range covered by the API test), real phone device.
+- Final readiness gate (deep venv, repo root, `NBA_DATA_DIR=$S/readydata4`): structure guard passed, frontend typecheck + build OK, **1042 passed, 0 failed** (801 s), exit 0; run 2026-10-14T00:04:41Z–00:18:11Z on the reviewed code (last code edit 00:04:15Z; no non-doc file changed during the run), scratch data dir empty afterwards.
+
+## Canonical NBA winner forecast connected to Today, Game, History, Performance — 2026-10-14 (Claude, Opus 5.5)
+`$S` = session scratchpad. No live-store write, no job/launchd/release change, no training.
+- Fail-before: `tests/test_canonical.py` (7 tests) on the unfixed code → 7 failed (no canonical policy → 422; no
+  `canonical` field; A → B → A recorded `['primary_recorded','primary_direct']`, the third decision returned the first
+  row). Re-run of the final file on a scratch copy with the fix reversed → 7 failed, existing coverage tests 18 passed.
+- After: `cd backend && NBA_DATA_DIR=$S/empty-data .venv/bin/python -m pytest -q tests/test_canonical.py tests/test_coverage.py
+  tests/test_live.py tests/test_near_tipoff.py tests/test_api.py tests/test_api_markets.py tests/test_multisport.py
+  tests/test_record_counts.py tests/test_research_contract.py tests/test_api_research.py tests/test_live_markets.py
+  tests/test_storage.py` → 151 passed. Gate: `NBA_DATA_DIR=$S/gate-data OMP_NUM_THREADS=4
+  ~/nba-predictor-deep/backend/.venv/bin/python scripts/check_project.py --ready` (01:16:29–01:29:17Z) → structure guard
+  passed, typecheck + build OK, **1049 passed**, exit 0; scratch dir empty afterwards.
+- API, SYNTHETIC FIXTURE (`$S/fixture/build_and_serve.py`, fixed clock 2026-10-23T03:00Z): g1 record #1 identical on
+  `/api/games?policy=canonical`, `/api/games/espn:g1`, `/api/canonical/forecasts` (grade loss); g2 missing "no forecast
+  cycle ran…" identical on all three; preseason `unvalidated` identical, no probability; performance 2 games / 1 forecast /
+  1 missing / coverage 0.5 / 0–1, market matched 1; preseason 1 game, 1 experimental row; legacy near-tipoff sample 1.
+- Browser (Chrome, API :8012 + Vite :5182 fixture; API :8011 + Vite :5181 isolated real copy): 1440 px Today card
+  (record #1, pick, Wrong, "Fallback: sealed baseline model"), Game page provenance, History rows, Performance canonical
+  report; 500 px (window minimum, not 390) Game page and History stacked rows; real copy Oct 13 NBA preseason cards
+  "No validated forecast" with the reason; NHL Today unchanged (two-button toggle, Within 2 hours default); no console
+  errors. Gap: the fixture server shows the REAL DATA banner (mode real); phone width below 500 px not tested.
+- Real isolated check: copy `~/nba-predictor-research-data/canonical-check-20261014/` (guarded `cp` at 01:12:23Z, no WAL,
+  sha match), dev cycle steps refresh/odds skipped by quota (0 network requests; data from the live 01:08Z refresh),
+  `coverage.record` wrote experimental rows for the 2 real preseason games. Real regular-season pregame→final check
+  PENDING (first NBA regular game 2026-10-20T19:00Z).
+
+## Independent review of the canonical NBA winner slice — 2026-10-14 (Claude, Opus 5.5, separate session)
+`$S` = this session's scratchpad `rv/`. Review only: no implementation edit, no live write, no job/release change.
+- Focused tests: `cd backend && NBA_DATA_DIR=$S/empty-data .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_canonical.py tests/test_coverage.py tests/test_live.py tests/test_near_tipoff.py tests/test_api.py tests/test_api_markets.py tests/test_multisport.py tests/test_record_counts.py tests/test_research_contract.py tests/test_api_research.py tests/test_live_markets.py tests/test_storage.py` → 151 passed (01:36:53–01:38:00Z).
+- Mutation (scratch copy of backend/, repo untouched): revision identity removed from `_insert` → only the A → B → A test fails; selection "latest row wins" → only the later-failure test fails; unmutated 7 passed.
+- Gate: `NBA_DATA_DIR=$S/gate-data OMP_NUM_THREADS=4 ~/nba-predictor-deep/backend/.venv/bin/python scripts/check_project.py --ready` (01:45:41–01:58:17Z) → structure guard passed, typecheck + build OK, 1049 passed, exit 0, scratch dir empty.
+- SYNTHETIC FIXTURE (`$S/fixture.py`, own script, repo test helpers, real `near_tipoff.predict_now` + `coverage.record`; API :8031 pinned to as_of 2026-10-22T03:50Z, this tree's app/main.py; Vite :5191 from this tree): g1 #30 (later missing #44), g3 A→B→A #35, g5 pending #49, g2 no-cycle gap, g6 missing (unfinished earlier game), preseason `pre`. `/api/games?policy=canonical`, `/api/games/{id}`, `/api/canonical/forecasts` identical for all 6; performance 5 games / 3 forecast / 2 missing / 1–1 / market matched 2; preseason 1 game, 1 experimental row; legacy near_tipoff 2, pre-game archive 3. `/api/coverage` on the same store: g1 winner `missing`, `pre` `win` 0.771 (contradiction, see HANDOFF). Fixture artifacts: REAL DATA banner, NHL card served from the NBA store.
+- Browser (Chrome): 1440 px Today (default 70% → "0 of 6 selected", no cards; conf=all → 6 cards matching the API, later failure shown), Game page provenance (#30, made 22:40Z, version, Wrong), History rows, canonical Performance, legacy Performance Coverage card (g1 "Missing", pre "Won · 77.1%"); 500 px (window minimum; 390 px not reachable) History stacked rows and preseason Game page. No console errors.
+- Isolated real copy (`$S/realcopy`, `cp -p` of data/{nba,nhl}.sqlite at 01:43Z, no WAL, sha match, migrated 26→29 on the copy; API :8032 with NBA_DATA_DIR verified in the process env; no cycle, no network): Oct 13/14 NBA, 12 preseason games all `unvalidated`; Today default shows "None of these games has a canonical forecast yet"; NHL Today two-button toggle, Within 2 hours default, legacy perf sample 61. Real regular-season pregame→final: PENDING (2026-10-20T19:00Z).
+
+## Slice 1 follow-up (review findings 1, 3, 4) — 2026-10-14 (Claude, Opus 5.5)
+`$S` = session scratchpad `rv/`. Isolated data only; no live write, no job/release change.
+- Fail-before: 4 new tests in `tests/test_canonical.py` on the unfixed code → 4 failed (Coverage g1 `missing` vs canonical `loss`; preseason Coverage `win` vs `unvalidated`; `KeyError: 'upcoming'` on a not-started preseason game; no `below_threshold`). After: `cd backend && NBA_DATA_DIR=$S/empty-data .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_canonical.py tests/test_coverage.py tests/test_live.py tests/test_near_tipoff.py tests/test_api.py tests/test_api_markets.py tests/test_multisport.py tests/test_record_counts.py tests/test_research_contract.py tests/test_api_research.py tests/test_live_markets.py tests/test_storage.py` → 155 passed (two exact-shape legacy selection tests failed on an intermediate version; fixed by omitting the new keys outside the canonical policy).
+- Gate: `NBA_DATA_DIR=$S/gate-data OMP_NUM_THREADS=4 ~/nba-predictor-deep/backend/.venv/bin/python scripts/check_project.py --ready` (02:12:11–02:25:10Z) → structure guard passed, typecheck + build OK, 1053 passed, exit 0, scratch dir empty.
+- API, SYNTHETIC FIXTURE (same `$S/fixture.py` store, :8031): `/api/coverage` winner cells g1 `loss` #30 + later_failure #44, g3 #35, g5 #49 pending, g2/g6 missing, `pre` `unvalidated` + experimental #11 (win) — all equal to the canonical record; winner counts 3 forecast / 2 missing / 1 unvalidated; spread keeps the old rule (g1 `missing`). Slate 70%: with_forecast 3, selected 0, below_threshold 3, without_forecast {unvalidated 1, missing 2}; legacy slate JSON unchanged.
+- Isolated real copy (`$S/realcopy`, :8032): `/api/coverage?sport=nba` default range (Oct 6–13) now 200 (was KeyError): 38 winner cells `unvalidated`; NHL coverage unchanged except labels. Oct 14 slate: without_forecast {unvalidated 7}.
+- Browser (Chrome; Vite :5191/:5192 from this tree): 1440 px fixture Today default 70% — count line by group, "No canonical forecast reaches 70%+ (3 below it)", the 3 games without a forecast listed with reasons; fixture Coverage card (#30 Lost + later failure; preseason "No validated forecast … Experimental / unvalidated row #11"); real-copy Coverage card loads ("38 preseason without a validated model"). 390 px: real CSS width via an iframe harness (`$S/narrow/index.html`; the Chrome window minimum is 500 px) — real-copy Today Oct 14 (7 preseason cards with the reason, no overflow seen) and fixture Coverage card record table with the experimental preseason row. Not checked at 390: the Coverage games table (inside its own horizontal scroller). No console errors.
+
+## Independent review of the Slice 1 follow-up (findings 1, 3, 4) — 2026-10-14 (Claude, Opus 5.5, separate session)
+`$S` = this session's scratchpad. Review only: no implementation edit, live write, job/release change or commit.
+- Diff: pre-fix baseline = the earlier review's scratch copy of backend/ (`diff -rq` vs this tree: only app/coverage.py, app/schemas.py, tests/test_canonical.py differ); frontend read directly (Coverage.tsx, TodayPage.tsx CanonicalSlate).
+- Focused tests: `cd backend && NBA_DATA_DIR=$S/empty-data .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_canonical.py tests/test_coverage.py tests/test_live.py tests/test_near_tipoff.py tests/test_api.py tests/test_api_markets.py tests/test_multisport.py tests/test_record_counts.py tests/test_research_contract.py tests/test_api_research.py tests/test_live_markets.py tests/test_storage.py` → 155 passed (02:35–02:36Z). `--ready` gate NOT re-run (unchanged code since the author's run; that 1053-pass result is reported, not observed here).
+- Own reproduction (`$S/repro/test_review.py`, repo fixtures, game_forecasts rows inserted directly; 7-game Oct 21 slate: forecast A→B then later missing, missing→forecast, missing-only, no rows, start moved after a forecast then a missing attempt, preseason with an experimental row, not-started preseason): current tree 4 passed; pre-fix baseline 3 failed (`KeyError: 'upcoming'`, no `below_threshold`, no `forecast_id`). After results, pre-fix Coverage showed g1 `missing` (canonical #7 win), moved game `missing` (canonical #8 void), preseason p2 `win` (canonical unvalidated); current: all 7 cells equal canonical state/grade/record id/later_failure. Slate counts at None/0.5/0.6/0.7/0.99: selected + below_threshold = with_forecast; without_forecast equals the per-state count of games without a pick (missing 2, unvalidated 2); legacy policy JSON has neither key.
+- Isolated real copy (`$S/realcopy`, sqlite read-only backup of data/{nba,nhl}.sqlite at 02:38Z, quick_check ok, migrated 26→29 on the copy; current API :8041, pre-fix API :8042, no network): `/api/coverage?sport=nba&date_from=2026-10-07&date_to=2026-10-14` pre-fix 500 `KeyError: 'upcoming'`, current 200 (41 winner cells `unvalidated`). NHL `/api/coverage` default and Oct 6–12: identical between pre-fix and current except the new `forecast_id` cell field, `unvalidated: 0`, labels and notes. Copy artifact: source schedule unreadable (raw cache not copied).
+- Browser (Chrome; Vite :5195 → own SYNTHETIC fixture API :8043, Vite :5196 → real copy :8041; 390 px CSS width via a same-origin iframe, real clicks/keyboard): Performance → Legacy (within 2 hours) → Coverage "Games" table, fixture (later-failure and experimental preseason rows), real NBA (To date typed to 2026-10-14: 41 preseason without a validated model, no error) and real NHL (62 rows): table 316 px wide in a 316 px scroller, page scrollWidth 390, text wraps and is readable (header 9 px, cells 11 px), date inputs 133×44 px and usable by keyboard, Games disclosure opens by click. Horizontal scrolling: not needed at 390; forced at 280 px the table scroller moved 26.5 px with no page scroll. Today 390 px fixture default 70%: "3 with a canonical forecast (1 … shown, 2 below it hidden); 4 without one (2 missing, 2 preseason…)" and all 4 listed with reasons. Not verified: real mobile touch behaviour; console errors only captured after tracking started (none seen). Aside (not this slice): at 320 px the sidebar "Prediction history" link widens the page to 367 px.

@@ -219,6 +219,31 @@ def test_combine_now_uses_leave_one_out_for_one_missing_member_and_abstains_for_
     assert adaptive.combine_now({"stack": None, "reason": "only 1 members"}, {})[3].startswith("no combination trained")
 
 
+def test_combine_now_uses_a_group_fallback_only_when_exactly_that_group_is_missing(monkeypatch):
+    """Members that share external inputs (the player box / injury cache guards) abstain together, so the combiner also
+    trains one stack without the whole group. Any other missing subset still abstains: weights are never substituted."""
+    monkeypatch.setattr(adaptive, "MIN_TRAIN", 20)
+    vec = {"a": (0.6, 0.0, 0.4), "b": (0.58, 0.0, 0.42), "c": (0.45, 0.0, 0.55), "d": (0.52, 0.0, 0.48)}
+    rows = [{"game_id": str(i), "season": 2026, "cutoff_at": f"2026-01-{i % 28 + 1:02d}T04:00:00Z",
+             "result_available_at": f"2026-01-{i % 28 + 1:02d}T05:00:00Z", "line": None, "realised": 0 if i % 2 else 2,
+             "vectors": dict(vec)} for i in range(60)]
+    cm = adaptive.fit_combiner(rows, ["a", "b", "c", "d"], "winner", "2026-02-01T00:00:00Z", groups=[["c", "d"]])
+    assert cm["members"] == ["a", "b", "c", "d"] and set(cm["fallbacks"]) == {"a", "b", "c", "d"}
+    assert [(f["missing"], f["members"]) for f in cm["group_fallbacks"]] == [(["c", "d"], ["a", "b"])]
+    p, stack, names, reason = adaptive.combine_now(cm, {"a": vec["a"], "b": vec["b"]})
+    assert p is not None and names == ["a", "b"] and reason is None and stack is cm["group_fallbacks"][0]["stack"]
+    one, _, names, _ = adaptive.combine_now(cm, {"a": vec["a"], "b": vec["b"], "d": vec["d"]})
+    assert one is not None and names == ["a", "b", "d"]                     # one of the group: leave-one-out as before
+    none, _, _, reason = adaptive.combine_now(cm, {"a": vec["a"]})            # the group plus another member: not trained
+    assert none is None and "missing members b, c, d" in reason
+    none, _, _, reason = adaptive.combine_now(cm, {"c": vec["c"], "d": vec["d"]})       # a different pair: not trained
+    assert none is None and "missing members a, b" in reason and "no combination trained for this subset" in reason
+    # A group with a single chosen member is already covered by its leave-one-out stack; fallbacks=False trains none.
+    assert adaptive.fit_combiner(rows, ["a", "b", "c"], "winner", "2026-02-01T00:00:00Z", groups=[["c", "d"]])["group_fallbacks"] == []
+    assert adaptive.fit_combiner(rows, ["a", "b", "c", "d"], "winner", "2026-02-01T00:00:00Z", fallbacks=False,
+                                 groups=[["c", "d"]])["group_fallbacks"] == []
+
+
 def test_a_failed_member_refit_keeps_the_previous_artifact_in_force_and_is_visible(store, monkeypatch):
     adaptive.train(store, now=TRAIN_AT)
     ok = adaptive.latest_fit(store, "nhl", "member", "cand:logit_l2:nhl_base@adaptive", adaptive.definition(store))
@@ -313,6 +338,23 @@ def test_freeze_and_thaw_round_trip_a_function_local_member_class(store):
     assert fresh.delivered == ["x"] and fresh.member.season == 2026 and fresh.name == m.obj.name
 
 
+def test_state_rejects_non_dict_getstate_so_external_cache_cannot_leak():
+    # A member defines __getstate__ to keep its external cache out of the artifact. If that returns a
+    # non-dict we must raise, never silently fall back to vars(obj) and re-include the cache.
+    class Leaky:
+        def __init__(self): self._inputs = "external cache"
+        def __getstate__(self): return ("not", "a", "dict")
+
+    with pytest.raises(TypeError, match="must return a dict"):
+        adaptive._state(Leaky())
+
+    class Clean:
+        def __init__(self): self._inputs = "external cache"
+        def __getstate__(self): return {k: v for k, v in vars(self).items() if k != "_inputs"}
+
+    assert adaptive._state(Clean()) == {}      # cache excluded by __getstate__, no vars(obj) fallback
+
+
 def test_walk_member_history_is_out_of_sample_and_blind_to_later_and_own_outcomes(store):
     from dataclasses import replace as rep
     from app import live
@@ -400,11 +442,11 @@ def test_a_market_without_a_new_combination_keeps_the_earlier_one_and_the_week_i
     add_upcoming(store, gid=2026020002, start="2026-10-20T19:00:00", at="2026-10-13T03:00:00Z")
     real = adaptive.fit_combiner
 
-    def no_total(rows, candidates, market, cutoff, fallbacks=True):
+    def no_total(rows, candidates, market, cutoff, fallbacks=True, groups=()):
         if market == "total":
             return {"market": market, "cutoff": cutoff, "excluded": {}, "members": [], "stack": None, "fallbacks": {},
                     "reason": "simulated: no usable rows"}
-        return real(rows, candidates, market, cutoff, fallbacks)
+        return real(rows, candidates, market, cutoff, fallbacks, groups)
     monkeypatch.setattr(adaptive, "fit_combiner", no_total)
     t = adaptive.train(store, now="2026-10-13T04:00:00Z")
     second = adaptive.latest_fit(store, "nhl", "combiner", "combiner", adaptive.definition(store))
@@ -602,3 +644,475 @@ def test_a_member_record_write_failure_leaves_the_week_retryable_and_an_ordinary
     assert retry["status"] == "success" and not retry["publication"]["failed"] and retry["publication"]["combiner_status"] == "success"
     assert adaptive.latest_fit(store, "nhl", "member", victim, adaptive.definition(store)) is not None
     assert adaptive.due(store, "2026-10-12T20:50:00Z")["due"] is False
+
+
+def test_nba_player_injury_member_is_excluded_without_the_research_cache_and_identity_ignores_the_environment(monkeypatch, tmp_path):
+    from test_player_ratings import _write_box
+    from app import backtest, db, player_ratings as pr
+    from test_backtest import synthetic_rows
+    from test_live import event, ingest_events
+    monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path))
+    conn = db.connect(tmp_path / "nba.sqlite")
+    db.migrate(conn)
+    ingest_events(conn, [event(r.game.game_id, r.game.tipoff_at, r.game.home_team_id.split(":")[1], r.game.away_team_id.split(":")[1],
+                               "STATUS_FINAL", r.home_score, r.away_score, r.game.season) for r in synthetic_rows(per_season=12)],
+                  "2026-09-30T00:00:00Z", month="202601")
+    val = backtest.evaluate(conn, "validation", out_dir=tmp_path / "val", log=lambda _: None)
+    (tmp_path / "decision.json").write_text(json.dumps(backtest.decision_from_validation_report(val, "synthetic")))
+    monkeypatch.setattr(backtest, "FROZEN_DECISION_PATH", tmp_path / "decision.json")
+    db.claim_store(conn, "nba")
+    mems, excluded = adaptive.members(conn)
+    assert pr.ADAPTIVE_MEMBER in excluded and "player_box" in excluded[pr.ADAPTIVE_MEMBER]
+    assert not any(m.name.startswith(pr.ADAPTIVE_MEMBER) for m in mems)
+    defn = adaptive.definition(conn)
+    _write_box(tmp_path / "research" / "availability", 2026, [("x1", "2026-01-02", {"espn:1": [("p1", 240)], "espn:2": [("p2", 240)]})])
+    mems, excluded = adaptive.members(conn)
+    member = next(m for m in mems if m.name == f"{pr.ADAPTIVE_MEMBER}@adaptive")
+    assert member.learned and member.markets == ("winner",) and isinstance(member.obj, adaptive.Adaptive)
+    assert pr.ADAPTIVE_MEMBER not in excluded and pr.ADAPTIVE_MEMBER in adaptive.BOX_DEPENDENT["nba"]
+    assert adaptive.definition(conn) == defn                              # the identity is code, never the environment
+    conn.close()
+
+
+def test_nba_player_injury_member_trains_records_and_keeps_its_artifact_small(monkeypatch, tmp_path):
+    """The member walks the synthetic NBA store with a synthetic research cache (box scores for every game, two reports),
+    is fitted and published, forecasts in the two-hour cycle after a thaw, and its artifact carries ratings and the
+    delivered-game index, never the box."""
+    import pickle
+    from pathlib import Path
+    from app import availability as av, db, player_ratings as pr
+    from test_backtest import synthetic_rows
+    from test_player_ratings import _write_box, _fake_reports, _entry
+    rdir = tmp_path / "research" / "availability"
+    by_season = {}
+    for r in synthetic_rows(per_season=12):
+        g = r.game
+        day = pr.et_day(g.tipoff_at)
+        teams = {t: [(f"{t.split(':')[1]}p{j}", m) for j, m in enumerate((36, 34, 32, 30, 28, 26, 24, 30))]
+                 for t in (g.home_team_id, g.away_team_id)}
+        by_season.setdefault(g.season, []).append((g.game_id, day, teams))          # the store id is espn:<this>
+    for season, games in by_season.items():
+        _write_box(rdir, season, games)
+    day_before, (_, next_day, next_teams) = by_season[2026][5][1], by_season[2026][6]        # consecutive days
+    team = next(iter(next_teams)).split(":")[1]
+    _fake_reports(monkeypatch, rdir / "reports", {av.report_name(day_before): {
+        "header": f"{day_before}T22:30:00Z",                                                  # 17:30 ET, before midnight
+        "entries": [_entry(next_day, f"Team {team}", f"{team}p0", "Out")]}})
+    test_a_new_week_with_new_results_is_trained_and_published_for_nba(monkeypatch, tmp_path)
+    conn = db.connect(tmp_path / "nba.sqlite")
+    name = f"{pr.ADAPTIVE_MEMBER}@adaptive"
+    fit = adaptive.latest_fit(conn, "nba", "member", name, adaptive.definition(conn))
+    assert fit is not None and fit["status"] == "success"
+    detail = json.loads(fit["detail"])
+    assert detail["inputs"]["box_seasons"] == sorted(by_season) and detail["inputs"]["reports"] == 1
+    assert detail["inputs"]["players"]["rating_updates"] > 0 and detail["inputs"]["facts"]["usable"] >= 1
+    art = adaptive.load_fit(fit)
+    state = pickle.loads(art["state"])
+    players = state["inner"]["players"]
+    assert isinstance(players, pr.LiveState) and players._state is None
+    # Delivered = applied (review finding B3): g1 (2026-27) is final but the cache has no box rows for it, so it is counted
+    # in result_without_box and absent from the delivered index, which otherwise equals the wrapper's delivered results.
+    coverage = detail["inputs"]["players"]
+    assert coverage["result_without_box"] == 1
+    assert len(players.delivered) == coverage["rating_updates"] == fit["training_games"] - 1
+    assert Path(fit["artifact_path"]).stat().st_size < 300_000
+    comb = adaptive.latest_fit(conn, "nba", "combiner", "combiner", adaptive.definition(conn))
+    assert name in json.loads(comb["detail"])["members_available"]
+    rows = conn.execute("SELECT members, missing FROM adaptive_forecasts WHERE market='winner' ORDER BY forecast_id").fetchall()
+    assert rows and all(name in {m["name"] for m in json.loads(r["members"])} for r in rows), [r["missing"] for r in rows]
+    conn.close()
+
+
+def test_nba_player_injury_member_abstains_on_stale_or_changed_player_box_inputs(monkeypatch, tmp_path):
+    """Review findings B2/B1 and recheck C2/C3 (2026-10-13). g1 (2026-27) was final at training with no player-box rows, so
+    the fit was offered it and skipped it. Recording g2: the member is missing as stale (B2). The cache then gets g1's rows:
+    a fresh walk would now apply g1, so the member is missing with 'inputs changed' (C2) — and the run is DUE (C3), naming
+    the player members; after the retrain the member forecasts. Rows for a game the fit was never offered (a later game)
+    are growth and never block (2026-10-13 fix of the whole-file digest)."""
+    import csv
+    from app import db, player_ratings as pr
+    from test_player_ratings import _write_box
+    from test_shadow import CSV_HEADER
+    test_nba_player_injury_member_trains_records_and_keeps_its_artifact_small(monkeypatch, tmp_path)
+    conn = db.connect(tmp_path / "nba.sqlite")
+    name = f"{pr.ADAPTIVE_MEMBER}@adaptive"
+    fit = adaptive.latest_fit(conn, "nba", "member", name, adaptive.definition(conn))
+    recorded = json.loads(fit["detail"])["inputs"]
+    assert recorded["box_digest"] and recorded["box_seasons"] and recorded["players"]["result_without_box"] == 1
+    # The live possession box for g1 arrives (as the ESPN summaries do): the other box-dependent members stay current.
+    g1_box = (CSV_HEADER + "g1,2027,2,1,home,104,88,22,10,33,13\ng1,2027,2,2,away,99,88,22,10,33,12\n").encode()
+    assert ingest.ingest_team_box(conn, 2027, fetch=lambda _s: g1_box, retrieved_at="2026-10-22T05:00:00Z")["recorded"] == 2
+    clock = _test_clock("2026-10-28T21:00:00Z", "2026-10-28T23:00:00Z")
+    monkeypatch.setattr(adaptive, "utc_now", clock)
+    r = adaptive.record(conn, game_ids=["espn:g2"], now="2026-10-28T21:40:00Z")      # g2 tips off 23:30Z; g1 is final
+    w = next(f for f in r["forecasts"] if f["market"] == "winner")
+    assert "efficiency_margin" in w["members"], w["missing"]        # a possession-box member forecasts: that box is current
+    assert name in w["missing"] and "player box" in w["missing"][name] and "stale" in w["missing"][name], w["missing"]
+    assert name not in w["members"]
+    rdir = tmp_path / "research" / "availability"
+    _write_box(rdir, 2027, [("g1", "2026-10-21", {"espn:1": [("1p0", 240)], "espn:2": [("2p0", 240)]})])   # rows for g1 appear
+    pr._INPUTS.clear()
+    r = adaptive.record(conn, game_ids=["espn:g2"], now="2026-10-28T21:50:00Z")
+    w = next(f for f in r["forecasts"] if f["market"] == "winner")
+    assert name in w["missing"] and "inputs changed since the fit" in w["missing"][name], w["missing"]   # C2: blocked
+    d = adaptive.due(conn, "2026-10-28T21:50:00Z")
+    assert d["due"] is True and name in d["reason"], d                                                # C3: retrain due
+    clock.at("2026-10-28T21:00:00Z", "2026-10-28T23:00:00Z")
+    t = adaptive.train(conn, now="2026-10-28T21:20:00Z")
+    assert t["members"][name]["status"] == "success", t["members"][name]
+    assert adaptive.due(conn, "2026-10-28T21:50:00Z")["due"] is False
+    pr._INPUTS.clear()
+    r = adaptive.record(conn, game_ids=["espn:g2"], now="2026-10-28T21:55:00Z")
+    w = next(f for f in r["forecasts"] if f["market"] == "winner")
+    assert name not in w["missing"], w["missing"].get(name)                                           # forecasts again
+    path = rdir / "player_box" / "player_box_2027.csv"
+    rows = list(csv.DictReader(path.open()))
+    rows += [{**rows[0], "game_id": "g9", "game_date_time": "2026-10-30T19:30:00-04:00"}]            # a game never offered
+    with path.open("w", newline="") as f:
+        out = csv.DictWriter(f, fieldnames=list(rows[0]))
+        out.writeheader()
+        out.writerows(rows)
+    pr._INPUTS.clear()
+    r = adaptive.record(conn, game_ids=["espn:g2"], now="2026-10-28T22:00:00Z")
+    w = next(f for f in r["forecasts"] if f["market"] == "winner")
+    assert name not in w["missing"], w["missing"].get(name)                                           # growth never blocks
+    conn.close()
+
+
+def test_score_member_without_distribution_never_contributes_a_fake_winner():
+    from app.models.base import PregameGame
+    from app import backtest
+    class Unready:
+        name = 'unready_score'
+        def predict(self, game): return .5
+        def distribution(self, game): return None
+        def update(self, result): pass
+    g = PregameGame('test:missing', 2024, 'regular', '2024-01-01T23:00:00Z', 'h', 'a', False)
+    row = backtest.Row(g, '2024-01-01T21:00:00Z', 3, 2, '2024-01-02T03:00:00Z')
+    member = adaptive.Member('unready_score', 'walk', Unready(), markets_=('winner', 'total'))
+    hist = adaptive.walk_member(member, [row], [], None, {2024}, {g.game_id: {'total': 5.5}})
+    assert hist[g.game_id] == {}
+
+
+@pytest.mark.parametrize('vector', [
+    (float('nan'), 0., .5), (float('inf'), 0., 0.), (-.1, 0., 1.1),
+    (.8, .4, -.2), (.2, .2, .2), (.5, 0., float('nan')),
+])
+def test_member_probability_vectors_reject_invalid_outputs(vector):
+    with pytest.raises(ValueError, match='probability vector'):
+        adaptive._vec(vector)
+
+
+def test_member_probability_vector_rounding_preserves_nonnegative_unit_sum():
+    vector = adaptive._vec((.5000000006, .4999999994, 0.))
+    assert all(0 <= p <= 1 for p in vector)
+    assert sum(vector) == pytest.approx(1.)
+    assert adaptive._vec((.2, .3, .50000000001)) == (.2, .3, .5)
+
+
+@pytest.mark.parametrize('kind', ['walk', 'candidate'])
+def test_failed_score_member_does_not_leave_partial_market_votes(store, monkeypatch, kind):
+    adaptive.train(store, now=TRAIN_AT)
+    run(store, CYCLE_AT)
+    if kind == 'walk':
+        original = adaptive.markets.ScoreGrid.market
+        def fail_total(self, market, line=None):
+            if market == 'total':
+                raise ValueError('synthetic broken total')
+            return original(self, market, line)
+        monkeypatch.setattr(adaptive.markets.ScoreGrid, 'market', fail_total)
+        name = 'goals_poisson@market'
+    else:
+        original = engine.vector
+        def fail_total(output, market, line=None):
+            if market == 'total':
+                raise ValueError('synthetic broken total')
+            return original(output, market, line)
+        monkeypatch.setattr(engine, 'vector', fail_total)
+        name = 'cand:poisson_draw:nhl_base@adaptive'
+    result = adaptive.record(store, game_ids=[GID], now=CYCLE_AT)
+    if kind == 'walk':
+        assert name in result['errors']
+    assert any(name in f['missing'] for f in result['forecasts'])
+    # Earlier successful markets must not conceal the subsequent member failure.
+    for forecast in result['forecasts']:
+        assert name not in forecast['members']
+
+
+@pytest.mark.parametrize('with_candidates', [True, False])
+def test_feature_walk_failure_blocks_box_dependent_walk_members(store, monkeypatch, with_candidates):
+    # Use the fixture's fitted walk member to exercise the box-dependency gate.
+    monkeypatch.setattr(adaptive, 'BOX_DEPENDENT', {**adaptive.BOX_DEPENDENT, 'nhl': ('hockey_logistic',)})
+    if not with_candidates:
+        monkeypatch.setattr(registry, 'SPECS', ())
+    adaptive.train(store, now=TRAIN_AT)
+    run(store, CYCLE_AT)
+    def broken(*args, **kwargs):
+        raise ValueError('synthetic feature walk failure')
+    monkeypatch.setattr(adaptive.pool_live, '_recorder', broken)
+    result = adaptive.record(store, game_ids=[GID], now=CYCLE_AT)
+    assert 'feature_walk' in result['errors']
+    winner = next(f for f in result['forecasts'] if f['market'] == 'winner')
+    assert 'hockey_logistic@adaptive' not in winner['members']
+    assert 'feature walk failed' in winner['missing']['hockey_logistic@adaptive']
+
+
+def test_the_training_time_forecast_of_the_next_game_is_not_frozen_into_the_artifact(store):
+    """train() predicts the next game at the training cutoff (to trigger the scheduled refit). Score members cache that
+    game's features; frozen into the artifact, the cache was served after newer results had been delivered (a train/serve
+    difference: the walk computes each game's features at its own cutoff). Reproduction from the 2026-10-12 audit."""
+    from app import live
+    add_upcoming(store, gid=2026020000, start="2026-10-12T14:00:00", state=3, home=8, away=16, at="2026-10-12T20:30:00Z")
+    adaptive.train(store, now=TRAIN_AT)
+    # the game in progress at training finishes before the cycle
+    add_upcoming(store, gid=2026020000, start="2026-10-12T14:00:00", state=7, hs=9, vs=0, period=3, home=8, away=16,
+                 at="2026-10-12T21:00:00Z")
+    defn = adaptive.definition(store)
+    m = next(x for x in adaptive.members(store)[0] if x.name == "goals_draw@adaptive")
+    arts, _ = adaptive._load_member_artifacts(store, "nhl", defn, [m], CYCLE_AT)
+    row, art = arts[m.name]
+    w = adaptive.thaw(m.obj, art["state"])
+    w.frozen = True
+    assert "nhl:2026020001" not in w.member.pending
+    rows = adaptive.available_rows(store, CYCLE_AT)
+    assert adaptive._advance(w, art, rows, [], {r.game.game_id: r for r in rows}, CYCLE_AT) == 1
+    nxt = store.execute("SELECT * FROM games WHERE game_id='nhl:2026020001'").fetchone()
+    game = replace(live.engine(store).pregame(nxt), cutoff_at=CYCLE_AT)
+    served = w.distribution(game).market("total", 6.5)
+    w.member.pending.pop(game.game_id, None)
+    assert served == w.distribution(game).market("total", 6.5)
+
+
+@pytest.mark.parametrize("change", ["corrected", "late"])
+def test_results_that_changed_before_the_fit_cutoff_make_a_walk_member_missing_until_a_retrain(store, change):
+    """A walk member's frozen state consumed exactly the results available at the training cutoff. A score corrected
+    after it (ingest moves result_available_at to the correction time) was re-delivered on top of the old score; a final
+    ingested late with an assumed availability before the cutoff was never delivered. Neither can be replayed into the
+    frozen state in order, so the member abstains with the reason until the next fit (2026-10-12 audit reproduction)."""
+    g = store.execute("SELECT * FROM games WHERE status='final' AND result_available_at < ? "
+                      "ORDER BY result_available_at DESC LIMIT 1", (TRAIN_AT,)).fetchone()
+    if change == "late":
+        store.execute("UPDATE games SET status='scheduled', home_score=NULL, away_score=NULL, result_available_at=NULL, "
+                      "result_availability_basis=NULL WHERE game_id=?", (g["game_id"],))
+        store.commit()
+    adaptive.train(store, now=TRAIN_AT)
+    run(store, CYCLE_AT)
+    clean = adaptive.record(store, game_ids=[GID], now=CYCLE_AT, write=False)
+    assert "hockey_elo" in next(f for f in clean["forecasts"] if f["market"] == "winner")["members"]
+    if change == "corrected":
+        store.execute("UPDATE games SET home_score=?, away_score=?, result_available_at=?, "
+                      "result_availability_basis='observed_retrieval' WHERE game_id=?",
+                      (g["away_score"], g["home_score"], "2026-10-12T21:00:00Z", g["game_id"]))
+    else:
+        store.execute("UPDATE games SET status='final', home_score=?, away_score=?, result_available_at=?, "
+                      "result_availability_basis='assumed_tipoff_plus_4h' WHERE game_id=?",
+                      (g["home_score"], g["away_score"], g["result_available_at"], g["game_id"]))
+    store.commit()
+    r = adaptive.record(store, game_ids=[GID], now=CYCLE_AT, write=False)
+    w = next(f for f in r["forecasts"] if f["market"] == "winner")
+    assert "hockey_elo" not in w["members"]
+    assert "results changed since the fit" in w["missing"]["hockey_elo"], w["missing"]
+
+
+def test_one_markets_combiner_exception_leaves_the_other_markets_fitted_and_the_market_on_its_earlier_fit(store, monkeypatch):
+    """Fault injection (no natural trigger was found): an exception while fitting one market's combination failed the
+    whole combiner fit, so every market stayed on the previous fit (and, when deterministic, on every retry)."""
+    adaptive.train(store, now=TRAIN_AT)
+    first = adaptive.latest_fit(store, "nhl", "combiner", "combiner", adaptive.definition(store))
+    _settle(store)
+    add_upcoming(store, gid=2026020002, start="2026-10-20T19:00:00", at="2026-10-13T03:00:00Z")
+    real = adaptive.fit_combiner
+
+    def broken_total(rows, candidates, market, cutoff, fallbacks=True, groups=()):
+        if market == "total":
+            raise FloatingPointError("synthetic failure in one market")
+        return real(rows, candidates, market, cutoff, fallbacks, groups)
+    monkeypatch.setattr(adaptive, "fit_combiner", broken_total)
+    t = adaptive.train(store, now="2026-10-13T04:00:00Z")
+    assert t["combiner"]["status"] == "partial", t["combiner"]
+    assert "total" in t["combiner"]["partial_reason"] and "FloatingPointError" in t["combiner"]["partial_reason"]
+    second = adaptive.latest_fit(store, "nhl", "combiner", "combiner", adaptive.definition(store))
+    assert second["fit_id"] != first["fit_id"] and second["status"] == "partial"
+    per, reason = adaptive.combiners_in_force(store, "nhl", adaptive.definition(store), "2026-10-13T05:00:00Z")
+    assert reason is None and per["winner"][0]["fit_id"] == second["fit_id"] and per["total"][0]["fit_id"] == first["fit_id"]
+    assert adaptive.due(store, "2026-10-13T05:00:00Z")["due"] is True                 # the market is retried
+
+
+def test_one_markets_combination_exception_does_not_stop_the_other_markets_forecasts(store, monkeypatch):
+    """Fault injection: an exception while combining one market's member vectors raised out of the whole forecast cycle,
+    so no market of any game was recorded."""
+    adaptive.train(store, now=TRAIN_AT)
+    run(store, CYCLE_AT)
+    real = adaptive.combine_now
+
+    def broken_total(cm, have):
+        if cm is not None and cm.get("market") == "total":
+            raise ValueError("synthetic failure in one market")
+        return real(cm, have)
+    monkeypatch.setattr(adaptive, "combine_now", broken_total)
+    r = adaptive.record(store, game_ids=[GID], now=CYCLE_AT)
+    assert r["status"] == "partial", r.get("error")
+    assert "total" in r["errors"] and "ValueError" in r["errors"]["total"]
+    recorded = {x["market"]: x["status"] for x in store.execute("SELECT market, status FROM adaptive_forecasts")}
+    assert recorded.get("winner") == "forecast" and "total" not in recorded
+
+
+def test_a_result_committed_after_the_training_snapshot_is_delivered_not_a_reason_to_abstain(store, monkeypatch):
+    """The scheduled run stamped its training cutoff after the snapshot was taken and the store lock released. A job that
+    took the lock in between committed a result observed before that cutoff: absent from the snapshot, so the digest
+    guard (correctly) marked every walk member missing until the next fit. The cutoff is now taken under the lock, before
+    the snapshot, so that result is after the cutoff and is delivered at serving."""
+    add_upcoming(store, gid=2026020000, start="2026-10-12T14:00:00", state=3, home=8, away=16, at="2026-10-12T19:30:00Z")
+    real = adaptive.snapshot
+
+    def then_a_result_arrives(conn, sport):
+        path = real(conn, sport)
+        # the next job on the store: retrieves the final (stamped with its own retrieval time) and commits it
+        add_upcoming(store, gid=2026020000, start="2026-10-12T14:00:00", state=7, hs=9, vs=0, period=3, home=8, away=16,
+                     at=adaptive.utc_now())
+        return path
+    monkeypatch.setattr(adaptive, "snapshot", then_a_result_arrives)
+    res = adaptive.run_scheduled("nhl")
+    assert res["status"] in ("success", "partial"), res
+    run(store, CYCLE_AT)
+    r = adaptive.record(store, game_ids=[GID], now=CYCLE_AT, write=False)
+    w = next(f for f in r["forecasts"] if f["market"] == "winner")
+    # its vector is produced (members without one are listed in `missing`; the combination itself may still abstain
+    # because the new final has no shot data yet, a separate staleness guard)
+    assert "hockey_elo" not in w["missing"], w["missing"]["hockey_elo"]
+
+
+def test_a_backfilled_shot_import_dated_before_the_fit_cutoff_makes_the_shot_member_missing_until_a_retrain(store):
+    """Historical backfills of box/shot data are stamped with the game's result time (nhl_shots.import_game: max(result,
+    start); ingest._record_observation for NBA boxes). One imported after training but dated before the training cutoff
+    was skipped at serving (`_advance` treats it as already delivered) while a fresh walk uses it; nothing detected it."""
+    from app import nhl_shots
+    from test_nhl_xg import fake_fetch
+    adaptive.train(store, now=TRAIN_AT)
+    run(store, CYCLE_AT)
+    xg = "hockey_logistic_xg@adaptive"
+    clean = adaptive.record(store, game_ids=[GID], now=CYCLE_AT, write=False)
+    assert "box/shot inputs changed" not in next(f for f in clean["forecasts"] if f["market"] == "winner")["missing"].get(xg, "")
+    g = store.execute("SELECT game_id, tipoff_at, result_available_at FROM games WHERE status='final' AND result_available_at < ? "
+                      "ORDER BY result_available_at DESC LIMIT 1", (TRAIN_AT,)).fetchone()
+    imp = nhl_shots.import_game(store, g, fake_fetch(store)(g["game_id"]), "2026-10-12T21:00:00Z")   # the backfill lands
+    assert imp["complete"] and imp["policy"] == "historical_backfill"
+    assert store.execute("SELECT available_at FROM nhl_pbp_imports").fetchone()[0] < TRAIN_AT          # dated before the fit
+    r = adaptive.record(store, game_ids=[GID], now=CYCLE_AT, write=False)
+    w = next(f for f in r["forecasts"] if f["market"] == "winner")
+    assert "box/shot inputs changed since the fit" in w["missing"].get(xg, ""), w["missing"].get(xg)
+    assert "hockey_elo" not in w["missing"]                                    # members without these inputs are unaffected
+
+
+@pytest.mark.parametrize("change", ["corrected_old_score", "changed_decision"])
+def test_a_changed_input_of_the_fit_in_force_schedules_a_retrain_that_restores_the_members(store, change):
+    """The serving guard correctly abstains when results the frozen state consumed changed, but `due` stayed False until the
+    next period (weekly: up to ~7 days of every market unavailable). Now the change makes the run due; the retrain's fit
+    consumes the corrected inputs and the members forecast again (reviewer reproductions R1 / R1b, 2026-10-13)."""
+    adaptive.train(store, now=TRAIN_AT)
+    run(store, CYCLE_AT)
+    assert adaptive.due(store, CYCLE_AT)["due"] is False
+    if change == "corrected_old_score":
+        g = store.execute("SELECT * FROM games WHERE status='final' AND result_available_at < ? ORDER BY result_available_at "
+                          "LIMIT 1", (TRAIN_AT,)).fetchone()                                        # a first-season game
+        store.execute("UPDATE games SET home_score=home_score+1, result_available_at=?, result_availability_basis='observed_retrieval' "
+                      "WHERE game_id=?", ("2026-10-12T20:45:00Z", g["game_id"]))
+    else:   # the source changes a decision in place (game_decisions has no availability time); the NHL digest includes it
+        g = store.execute("SELECT g.game_id, d.decision FROM games g JOIN game_decisions d USING(game_id) WHERE g.status='final' "
+                          "AND g.result_available_at < ? ORDER BY g.result_available_at DESC LIMIT 1", (TRAIN_AT,)).fetchone()
+        store.execute("UPDATE game_decisions SET decision=? WHERE game_id=?", ("OT" if g["decision"] != "OT" else "REG", g["game_id"]))
+    store.commit()
+    stale = adaptive.record(store, game_ids=[GID], now=CYCLE_AT, write=False)
+    assert "results changed since the fit" in next(f for f in stale["forecasts"] if f["market"] == "winner")["missing"]["hockey_elo"]
+    d = adaptive.due(store, CYCLE_AT)
+    assert d["due"] is True and "hockey_elo" in d["reason"] and "changed since it was trained" in d["reason"]
+    adaptive.train(store, now="2026-10-12T20:50:00Z")                      # the scheduled retrain the due state triggers
+    assert adaptive.due(store, CYCLE_AT)["due"] is False
+    again = adaptive.record(store, game_ids=[GID], now=CYCLE_AT, write=False)
+    w = next(f for f in again["forecasts"] if f["market"] == "winner")
+    assert "hockey_elo" not in w["missing"], w["missing"].get("hockey_elo")
+
+
+def test_nba_box_events_reach_only_members_that_consume_them():
+    """A backfilled NBA box changes the events digest only of members that read boxes; Elo-style members never see them."""
+    from types import SimpleNamespace
+    eng = SimpleNamespace(sport="nba")
+    events = ["box"]
+
+    class NoBox:
+        pass
+
+    class Box:
+        def update_box(self, e):
+            pass
+    assert adaptive._events_for(NoBox(), eng, events) == []
+    assert adaptive._events_for(Box(), eng, events) == events
+    wrapped = lambda m: SimpleNamespace(member=m, update_box=lambda e: None)      # noqa: E731  (as the Adaptive wrapper)
+    assert adaptive._events_for(wrapped(NoBox()), eng, events) == []           # the wrapper passes boxes through only
+    assert adaptive._events_for(wrapped(Box()), eng, events) == events
+
+
+def test_a_market_on_an_earlier_combination_applies_the_newest_daily_rule_assessment(tmp_path, monkeypatch):
+    """Reviewer reproduction (2026-10-13): the newest daily fit had no stack for the market (too few members, not an error),
+    so the market kept the earlier fit's combination — and, wrongly, the earlier fit's daily rule instead of the newest
+    assessment."""
+    import sqlite3
+    from pathlib import Path
+    schema = (Path(adaptive.__file__).parent / "migrations" / "0024_adaptive.sql").read_text()
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    create = schema[schema.index("CREATE TABLE adaptive_fits"):]
+    conn.execute(create[:create.index(");") + 2].replace("REFERENCES model_fits(fit_id)", ""))
+    clock = iter(["2026-10-11T10:00:00Z", "2026-10-12T10:00:00Z"])
+    monkeypatch.setattr(adaptive, "utc_now", lambda: next(clock))
+    old_rule = {"members": ["a", "b"], "thresholds": [0.5, 0.5], "rule": "OLD"}
+    new_rule = {"members": ["c", "d"], "thresholds": [0.6, 0.6], "rule": "NEW"}
+    arts = [{"markets": {"winner": {"stack": {"weights": [1]}}}, "daily_agreement": {"winner": {"status": "selected", "rule": old_rule}}},
+            {"markets": {"winner": {"stack": None, "reason": "only 1 members with 400 common out-of-sample rows"}},
+             "daily_agreement": {"winner": {"status": "selected", "rule": new_rule}}}]
+    for i, art in enumerate(arts):
+        p, sha = adaptive._save(tmp_path / f"c{i}.pkl", art)
+        adaptive._insert_fit(conn, "nba", "combiner", "combiner", "D", f"p{i}", "partial" if i else "success",
+                             "2026-10-1%dT09:00:00Z" % (1 + i), {}, cutoff="2026-10-1%dT09:00:00Z" % (1 + i), path=str(p), sha=sha, fp=str(i))
+    in_force, err = adaptive.combiners_in_force(conn, "nba", "D", "2026-10-13T00:00:00Z")
+    row, art = in_force["winner"]
+    assert err is None and art["markets"]["winner"]["stack"] == {"weights": [1]}          # the earlier combination ...
+    assert art["daily_agreement"]["winner"]["rule"]["rule"] == "NEW"                       # ... with the newest rule
+    assert art["daily_agreement_fit_id"] != row["fit_id"]
+
+
+def test_a_failed_daily_rule_assessment_keeps_the_markets_combination_and_carries_the_earlier_rule(store, monkeypatch):
+    """Reviewer suspicion (2026-10-13), reproduced: the daily rule assessment shared the market's guard with the combiner fit,
+    so an assessment error dropped the market's combination too."""
+    from app import daily_agreement
+    with adaptive.cadence("daily"):
+        adaptive.train(store, now=TRAIN_AT)
+        real = daily_agreement.assess
+
+        def broken(market, rows, cutoff, incumbent=None):
+            if market == "total":
+                raise ValueError("synthetic assessment failure")
+            return real(market, rows, cutoff, incumbent)
+        monkeypatch.setattr(daily_agreement, "assess", broken)
+        t = adaptive.train(store, now="2026-10-12T20:45:00Z", force=True)
+    assert t["combiner"]["status"] == "partial" and "daily rule total assessment failed" in t["combiner"]["partial_reason"]
+    assert t["combiner"]["markets"]["total"]["weights"]                       # the combination itself was still fitted
+
+
+def test_one_invalid_historical_vector_is_left_out_not_the_members_whole_history(store, monkeypatch):
+    """Reviewer suspicion (2026-10-13), reproduced by injection: `_vec` raising on one historical game failed the member's
+    entire training walk (the member then had no fit at all)."""
+    real = adaptive._vec
+    calls = {"n": 0}
+
+    def once_invalid(v):
+        calls["n"] += 1
+        if calls["n"] == 50:
+            raise ValueError("invalid probability vector: synthetic")
+        return real(v)
+    monkeypatch.setattr(adaptive, "_vec", once_invalid)
+    t = adaptive.train(store, now=TRAIN_AT)
+    bad = [n for n, m in t["members"].items() if m.get("invalid_vectors")]
+    assert len(bad) == 1 and t["members"][bad[0]]["status"] == "success"
+    assert t["members"][bad[0]]["invalid_vectors"]["count"] == 1
+    assert "synthetic" in t["members"][bad[0]]["invalid_vectors"]["first"][0][2]

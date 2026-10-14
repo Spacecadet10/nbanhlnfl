@@ -126,7 +126,8 @@ def build_quality_facts(conn: sqlite3.Connection, box: dict, quality: QualityHis
             w = av.STATUS_WEIGHT[e["status"]]
             if w == 0:
                 continue
-            pid, _level = idx.match(e["last"], e["first"], team, season)
+            pid, _level = idx.match(e["last"], e["first"], team, season,
+                                    pub.astimezone(av.ET).strftime("%Y-%m-%d"))     # never from later appearances
             slot = f.absent.setdefault(team, {"new": 0.0, "all": 0.0, "new_q": 0.0, "all_q": 0.0})
             if pid is None:
                 cov["unresolved"] += 1

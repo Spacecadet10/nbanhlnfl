@@ -179,6 +179,21 @@ def _pois(lam: float) -> list[float]:
     return out
 
 
+MIN_RETAINED = 0.9   # as GoalsGlm: a grid that keeps less of the Poisson mass is not renormalised into a forecast
+
+
+def retained_mass(lam_home: float, lam_away: float, empty_net_goals: bool = False) -> float:
+    """The share of the independent-Poisson mass inside the 0..MAX_GOALS grid, before any draw inflation (the inflated
+    grid always keeps the tie weight, so its sum cannot reveal a truncated tail). Non-finite for a non-finite rate."""
+    scale = markets.EMPTY_NET["rate_scale"] if empty_net_goals else 1.0
+    return sum(_pois(lam_home * scale)) * sum(_pois(lam_away * scale))
+
+
+def usable_rates(lam_home: float, lam_away: float, empty_net_goals: bool = False) -> bool:
+    m = retained_mass(lam_home, lam_away, empty_net_goals)
+    return math.isfinite(m) and m >= MIN_RETAINED
+
+
 def regulation_pmf(lam_home: float, lam_away: float, draw_weight: float = 0.0, empty_net_goals: bool = False) -> dict:
     """Independent Poisson regulation scores, diagonally inflated: (1 − w)·p + w·p·[h = a] / P(h = a). With
     `empty_net_goals`, rates are scaled and leads adjusted as in markets.poisson_grid (markets.EMPTY_NET)."""
@@ -272,7 +287,7 @@ class GoalsDraw:
 
     def distribution(self, g: PregameGame) -> Optional[markets.ScoreGrid]:
         _, lh, la, ot = self._prepare(g)
-        if self.weight is None:
+        if self.weight is None or not usable_rates(lh, la, empty_net_goals=True):     # degenerate rate: abstain
             return None
         return grid_from_regulation(regulation_pmf(lh, la, self.weight, empty_net_goals=True), ot,
                                     {"lambda_home": round(lh, 6), "lambda_away": round(la, 6), "ot_home_share": round(ot, 6),
@@ -372,8 +387,15 @@ class GoalsGlm:
         mu, sd, (mh, ma) = self.fitted
         z = ((np.asarray(x) - mu) / sd).reshape(1, -1)
         lh, la = float(mh.predict(z)[0]), float(ma.predict(z)[0])
+        pmf = regulation_pmf(lh, la, empty_net_goals=True)
+        s = sum(pmf.values())
+        # A degenerate rate (non-finite, or so large that more than 10% of its mass lies beyond MAX_GOALS, up to exp(-rate)
+        # underflowing the grid to zero) has no usable distribution: abstain, never renormalise a mostly truncated grid.
+        # (Rates up to ~11 goals keep >= 90%; the synthetic study's largest, 8.45, keeps 99%.)
+        if not math.isfinite(s) or s < 0.9:
+            return None
         ot = 0.5 if neutral else self.ot_share
-        return grid_from_regulation(regulation_pmf(lh, la, empty_net_goals=True), ot,
+        return grid_from_regulation(pmf, ot,
                                     {"lambda_home": round(lh, 6), "lambda_away": round(la, 6), "ot_home_share": round(ot, 6)})
 
     def predict(self, g: PregameGame) -> float:

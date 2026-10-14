@@ -1,7 +1,8 @@
 import { ModelAgreement } from '../components/ModelAgreement';
+import { Overview } from '../components/Overview';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
-import type { GameSummary, MarketId, Meta, Policy, ResearchSlate, SlateSelection } from '../api/types';
+import type { CanonicalState, GameSummary, MarketId, Meta, Policy, ResearchSlate, SlateSelection } from '../api/types';
 import { ResearchSlateLine } from '../components/Research';
 import { useApi } from '../api/useApi';
 import { ModeBadge, NearTipoffBadge, RunBadge, SourceList } from '../components/Badges';
@@ -11,6 +12,7 @@ import { DetailsToggle, MarketSelect, useCarriedSearch, useDetails, useMarket, u
 import { PolicyToggle, usePolicy } from '../components/RunTypeToggle';
 import { ProbabilityBar } from '../components/ProbabilityBar';
 import { AsyncView, Empty } from '../components/States';
+import { CanonicalBlock, canonicalFor, CanonicalRecordLine } from '../components/Canonical';
 import { american, calendarDate, FULL_DATE, pct, shiftDate, tipoffTime, dateTime } from '../format';
 
 export function TodayPage() {
@@ -35,17 +37,16 @@ function Slate({ meta }: { meta: Meta }) {
   const sport = meta.sport;
   const [market, setMarket] = useMarket();
   const [level, setLevel] = useConfidence(sport, market);
-  const [policyChoice, setPolicy] = usePolicy();
-  const policy: Policy = meta.mode === 'real' ? policyChoice : 'pregame';
+  const [policyChoice, setPolicy] = usePolicy(canonicalFor(sport));
+  // The canonical forecast covers the NBA winner market so far; other markets keep their two-hour ledger.
+  const policy: Policy = meta.mode !== 'real' ? 'pregame'
+    : policyChoice === 'canonical' && !canonicalFor(sport, market) ? 'near_tipoff' : policyChoice;
   const { state, retry } = useApi((s) => api.games(sport, date, policy, level, market, s), [sport, date, policy, level, market]);
   const research = useApi((s) => api.researchSlate(sport, date, s), [sport, date]);
 
   return (
     <section>
-      <div className="slate-hero">
-        <div><p className="eyebrow">THE DAILY SLATE</p><h1>A clearer view<br />of the game<span className="accent">.</span></h1><p className="hero-copy">Explore the matchups. Compare the probabilities.<br />Follow the numbers beyond the final score.</p></div>
-        <svg className="court-art" viewBox="0 0 420 280" fill="none" aria-hidden="true"><rect x="30" y="20" width="360" height="240" rx="4"/><path d="M210 20v240"/><circle cx="210" cy="140" r="45"/><path d="M30 55h68v170H30m360-170h-68v170h68M30 85h45v110H30m360-110h-45v110h45"/><path d="M30 32c180 0 180 216 0 216M390 32c-180 0-180 216 0 216"/><circle cx="55" cy="140" r="9"/><circle cx="365" cy="140" r="9"/><circle className="court-dot" cx="265" cy="91" r="7"/><circle className="court-dot muted-dot" cx="152" cy="182" r="5"/></svg>
-      </div>
+      <Overview />
       <div className="page-head">
         <h2 className="slate-title">Game day <ModeBadge mode={meta.mode} /></h2>
         <div className="date-picker">
@@ -60,9 +61,11 @@ function Slate({ meta }: { meta: Meta }) {
       <p className="muted">{calendarDate(date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>
       {meta.mode === 'real' && (
         <div className="policy-row">
-          <PolicyToggle value={policy} onChange={setPolicy} />
+          <PolicyToggle value={policy} onChange={setPolicy} canonical={canonicalFor(sport, market)} />
           <p className="small muted">
-            {policy === 'near_tipoff'
+            {policy === 'canonical'
+              ? 'One canonical forecast per game, recorded within two hours of the start: the sealed baseline model (no adaptive ensemble is approved for this record; it stays research), otherwise the reason there is none. Preseason games have no validated model.'
+              : policy === 'near_tipoff'
               ? 'Forecasts appear within two hours of game time. Picks, confidence filters and records use this timing policy.'
               : 'Showing the pre-game archive: forecasts the discontinued daily job recorded before midnight Eastern on the game date, some several days before the game. Picks, the confidence filter and the records use them.'}
           </p>
@@ -71,7 +74,8 @@ function Slate({ meta }: { meta: Meta }) {
       <MarketSelect value={market} markets={meta.markets} onChange={setMarket} />
       <ConfidenceFilter value={level} onChange={setLevel} levels={confidenceLevels(sport, market)} />
       <DetailsToggle />
-      <RangeRecords sport={sport} market={market} level={level} realMode={meta.mode === 'real'} policy={policy} />
+      {policy === 'canonical' ? <CanonicalRecordLine sport={sport} />
+        : <RangeRecords sport={sport} market={market} level={level} realMode={meta.mode === 'real'} policy={policy} />}
       <AsyncView state={state} retry={retry}>
         {(data) => (
           <>
@@ -96,7 +100,7 @@ function Slate({ meta }: { meta: Meta }) {
   );
 }
 
-const POLICY_NAME: Record<Policy, string> = { pregame: 'pre-game archive', near_tipoff: 'near-tipoff' };
+const POLICY_NAME: Record<Policy, string> = { pregame: 'pre-game archive', near_tipoff: 'near-tipoff', canonical: 'canonical' };
 /** Demo games carry one synthetic forecast each: never call it an archive or a timing policy. */
 const policyName = (policy: Policy, demo: boolean) => (demo ? 'demo' : POLICY_NAME[policy]);
 
@@ -105,6 +109,7 @@ function FilteredSlate({ games, selection: sel, showAll, market, date, research 
   market: MarketId; date: string; research?: ResearchSlate['games'] }) {
   const level = sel.min_confidence;
   const isWinner = market === 'winner';
+  if (isWinner && sel.policy === 'canonical') return <CanonicalSlate games={games} sel={sel} showAll={showAll} date={date} research={research} />;
   const selected = level == null ? games
     : games.filter((g) => (isWinner ? g.slate_pick?.meets_confidence : g.market_forecast?.meets_confidence));
   const noun = games.length === 1 ? 'game' : 'games';
@@ -133,6 +138,45 @@ function FilteredSlate({ games, selection: sel, showAll, market, date, research 
   );
 }
 
+const WITHOUT_LABEL: Record<Exclude<CanonicalState, 'forecast'>, string> = {
+  missing: 'missing (coverage gaps)', unvalidated: 'preseason, no validated model', upcoming: 'not forecast yet (recorded within two hours of the start)',
+  not_recorded: 'before canonical recording began', not_forecastable: 'not a forecastable game type',
+};
+
+/** Canonical view: the confidence filter narrows the forecasts only. Games without a canonical forecast (missing,
+ * unvalidated, not yet forecast) are always listed apart with their reason, and the counts name each group. */
+function CanonicalSlate({ games, sel, showAll, date, research }: { games: GameSummary[]; sel: SlateSelection; showAll: () => void;
+  date: string; research?: ResearchSlate['games'] }) {
+  const level = sel.min_confidence;
+  const forecasts = games.filter((g) => g.slate_pick != null);
+  const shown = level == null ? forecasts : forecasts.filter((g) => g.slate_pick?.meets_confidence);
+  const without = games.filter((g) => g.slate_pick == null);
+  const below = sel.below_threshold ?? forecasts.length - shown.length;
+  const groups = Object.entries(sel.without_forecast ?? {}).filter(([, n]) => n)
+    .map(([state, n]) => `${n} ${WITHOUT_LABEL[state as Exclude<CanonicalState, 'forecast'>] ?? state}`).join(', ');
+  const card = (g: GameSummary) => <GameCard key={g.game_id} game={g} policy="canonical" date={date} research={research?.[g.game_id]} />;
+  return (
+    <>
+      <p className="small muted selection-count">
+        {sel.games} {sel.games === 1 ? 'game' : 'games'}: <strong>{sel.with_forecast}</strong> with a canonical forecast
+        {level != null && sel.with_forecast > 0 && <> ({sel.selected} at {levelLabel(level)} model confidence shown, {below} below it hidden)</>}
+        {without.length > 0 && <>; <strong>{without.length}</strong> without one ({groups}), listed below whatever the confidence filter</>}.
+      </p>
+      {forecasts.length > 0 && (shown.length === 0 ? (
+        <Empty>
+          No canonical forecast reaches {levelLabel(level)} model confidence on this date ({below} below it).{' '}
+          <button type="button" className="link-btn" onClick={showAll}>Show all {forecasts.length} forecasts</button>
+        </Empty>
+      ) : <ul className="game-grid">{shown.map(card)}</ul>)}
+      {without.length > 0 && <>
+        <h3>Without a canonical forecast</h3>
+        <p className="small muted">Not predictions, so the confidence filter does not apply: each card gives the reason.</p>
+        <ul className="game-grid">{without.map(card)}</ul>
+      </>}
+    </>
+  );
+}
+
 const SEASON_LABEL: Record<GameSummary['season_type'], string> = {
   preseason: 'PRESEASON', regular: '', play_in: 'PLAY-IN', postseason: 'PLAYOFFS', other: 'EXHIBITION',
 };
@@ -150,23 +194,24 @@ function GameCard({ game: g, policy, date, research }: { game: GameSummary; poli
   const p = g.prediction;
   const n = g.near_tipoff;
   const near = policy === 'near_tipoff';
+  const canonical = policy === 'canonical';
   const pick = g.slate_pick;   // the selected policy's pick; the other forecast is only mentioned below
   const side = (home: boolean) => {
     if (g.outcome) return home ? g.outcome.home_score : g.outcome.away_score;
     if (pick) return pct(home ? pick.home_win_prob : 1 - pick.home_win_prob, 1);
     return '—';
   };
-  const other = near ? p : n;
+  const other = near ? p : n;   // canonical view: the legacy two-hour forecast, mentioned only with details
   return (
     <li className="card game-card">
       <Link to={`/games/${g.game_id}${carried}`} className="card-link">
         <div className="game-card-head">
           <span className="game-time">{statusLabel(g, date)}{SEASON_LABEL[g.season_type] && ` · ${SEASON_LABEL[g.season_type]}`}</span>
-          {g.mode === 'demo' ? <RunBadge runType="demo" /> : near ? n && <NearTipoffBadge /> : p && <RunBadge runType={p.run_type} />}
+          {g.mode === 'demo' ? <RunBadge runType="demo" /> : canonical ? null : near ? n && <NearTipoffBadge /> : p && <RunBadge runType={p.run_type} />}
         </div>
         <div className="team-line"><span className={`team-monogram team-${g.away.abbr}`}>{g.away.abbr}</span><div><strong>{g.away.name}</strong><span>Away</span></div><b>{side(false)}</b></div>
         <div className="team-line"><span className={`team-monogram team-${g.home.abbr}`}>{g.home.abbr}</span><div><strong>{g.home.name}</strong><span>Home</span></div><b>{side(true)}</b></div>
-        {pick ? (
+        {canonical ? <CanonicalBlock c={g.canonical} home={g.home} away={g.away} /> : pick ? (
           <>
             <div className="card-section-label">
               {near ? 'NEAR-TIPOFF WIN PROBABILITY' : p?.run_type === 'backtest' ? 'BACKTEST WIN PROBABILITY' : 'MODEL WIN PROBABILITY'}
@@ -187,7 +232,7 @@ function GameCard({ game: g, policy, date, research }: { game: GameSummary; poli
         )}
         {details && other && (
           <p className="other-forecast small muted">
-            {near ? 'Pre-game archive forecast' : 'Near-tipoff forecast'} (not used by this view):{' '}
+            {near ? 'Pre-game archive forecast' : canonical ? 'Legacy two-hour forecast' : 'Near-tipoff forecast'} (not used by this view):{' '}
             {other.home_win_prob >= 0.5 ? g.home.abbr : g.away.abbr} {pct(Math.max(other.home_win_prob, 1 - other.home_win_prob), 1)}
           </p>
         )}

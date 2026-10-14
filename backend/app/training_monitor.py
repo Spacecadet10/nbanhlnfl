@@ -1,7 +1,11 @@
 """Daily training check (docs/MODEL_SELECTION.md §13 schedule; §17): for every learned member with a registered fit, the fit
 in force, its declared schedule, and how many newly settled eligible results exist since the fit's training cutoff; plus
 input freshness. Reports only: it never refits a sealed member or changes a schedule (deliberate changes are new versions)."""
+import json
+import re
+import subprocess
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Optional
 
 from .db import utc_now
@@ -211,3 +215,170 @@ def _monitoring(conn, now: str, window: int = 100) -> dict:
         members.append(item)
     return {"members": members, "alerts": alerts, "window": window,
             "note": "Monitoring reports only; it never retunes or replaces a model after a short run of results."}
+
+
+# --- Training-run status (adaptive-train): what is running, what finished, what serves. Read-only: no lock is taken,
+# nothing is written. "Running" is reported only with evidence (a process holding the sport's training lock file).
+SNAPSHOT_NAME = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{6}Z)-(\d+)\.sqlite$")
+
+
+def lock_holders(path: Path) -> Optional[list]:
+    """PIDs with the training lock file open ([] if none), or None when that cannot be determined. The trainer keeps the
+    file open for its whole run; `lsof` only lists open files, so this never contends for the lock."""
+    if not path.exists():
+        return []
+    try:
+        r = subprocess.run(["lsof", "-t", "--", str(path)], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode not in (0, 1) or (r.returncode == 1 and r.stdout.strip()):
+        return None
+    try:
+        return sorted({int(x) for x in r.stdout.split()})
+    except ValueError:
+        return None
+
+
+def _command(pid: int) -> Optional[str]:
+    try:
+        r = subprocess.run(["ps", "-o", "command=", "-p", str(pid)], capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return r.stdout.strip()[:300] or None
+
+
+def _mtime(path: Path) -> str:
+    return datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).strftime(FMT)
+
+
+def artifacts_written(train_root: Path, since: Optional[str] = None) -> dict:
+    """Completed artifacts on disk per definition (a digest file is written last, after the artifact itself): distinct
+    members with at least one, whether a combination artifact exists, and the newest write. Optionally only files
+    written at or after `since`."""
+    out: dict = {}
+    for kind in ("members", "combiner"):
+        base = train_root / kind
+        if not base.is_dir():
+            continue
+        for digest in base.glob("*.pkl.sha256" if kind == "combiner" else "*/*.pkl.sha256"):
+            at = _mtime(digest)
+            if since and at < since:
+                continue
+            defn = digest.name.split("-", 1)[0]
+            d = out.setdefault(defn, {"members": set(), "combiner": False, "last_written_at": None})
+            if kind == "members":
+                d["members"].add(digest.parent.name)
+            else:
+                d["combiner"] = True
+            d["last_written_at"] = max(filter(None, (d["last_written_at"], at)))
+    return {k: {"members_written": len(v["members"]), "combiner_written": v["combiner"],
+                "last_written_at": v["last_written_at"]} for k, v in out.items()}
+
+
+def _run_row(conn, row) -> Optional[dict]:
+    """One training run, identified by its combination record: when, outcome, and the member records of that run."""
+    if row is None:
+        return None
+    counts = dict(conn.execute("SELECT status, count(*) FROM adaptive_fits WHERE sport=? AND kind='member' AND definition=? "
+                               "AND period=? AND finished_at<=? GROUP BY status",
+                               (row["sport"], row["definition"], row["period"], row["finished_at"])).fetchall())
+    detail = json.loads(row["detail"] or "{}")
+    return {"definition": row["definition"], "period": row["period"], "status": row["status"],
+            "started_at": row["started_at"], "finished_at": row["finished_at"], "training_cutoff": row["training_cutoff"],
+            "members_succeeded": counts.get("success", 0) + counts.get("partial", 0),
+            "members_failed": counts.get("failed", 0), "members_skipped": counts.get("skipped", 0),
+            "error": detail.get("error") or detail.get("partial_reason")}
+
+
+def run_status(live_conn, train_root: Path, sport: str, now: str, *, code_definition: Optional[str] = None,
+               expected_members: Optional[int] = None, holders=lock_holders) -> dict:
+    """Training state for one sport from the live store and training folder. Never estimates progress or time left:
+    reports counts and timestamps that exist, and says so when something cannot be determined."""
+    pids = holders(train_root / "train.lock")
+    running = None if pids is None else bool(pids)
+    current = None
+    if running:
+        snaps = []
+        for f in (train_root / "snapshots").glob("*.sqlite") if (train_root / "snapshots").is_dir() else []:
+            m = SNAPSHOT_NAME.match(f.name)
+            if m and int(m.group(2)) in pids:
+                snaps.append(datetime.strptime(m.group(1), "%Y-%m-%dT%H%M%SZ").strftime(FMT))
+        started = max(snaps, default=None)
+        written = artifacts_written(train_root, since=started) if started else {}
+        current = {"started_at": started, "processes": [{"pid": p, "command": _command(p)} for p in pids],
+                   "by_definition": written,
+                   "last_progress_at": max((w["last_written_at"] for w in written.values()), default=None) or started}
+    has = _has(live_conn, "adaptive_fits")
+    last_run = last_success = last_failure = None
+    published = None
+    if has:
+        last_run = _run_row(live_conn, live_conn.execute(
+            "SELECT * FROM adaptive_fits WHERE sport=? AND kind='combiner' AND finished_at<=? ORDER BY finished_at DESC, "
+            "fit_id DESC LIMIT 1", (sport, now)).fetchone())
+        last_success = _run_row(live_conn, live_conn.execute(
+            "SELECT * FROM adaptive_fits WHERE sport=? AND kind='combiner' AND status IN ('success', 'partial') AND "
+            "finished_at<=? ORDER BY finished_at DESC, fit_id DESC LIMIT 1", (sport, now)).fetchone())
+        f = live_conn.execute("SELECT * FROM adaptive_fits WHERE sport=? AND status='failed' AND finished_at<=? "
+                              "ORDER BY finished_at DESC, fit_id DESC LIMIT 1", (sport, now)).fetchone()
+        if f is not None:
+            last_failure = {"definition": f["definition"], "kind": f["kind"], "name": f["name"], "at": f["finished_at"],
+                            "error": json.loads(f["detail"] or "{}").get("error")}
+        if code_definition:
+            counts = dict(live_conn.execute(
+                "SELECT status, count(*) FROM adaptive_fits WHERE sport=? AND kind='member' AND definition=? AND finished_at<=? "
+                "GROUP BY status", (sport, code_definition, now)).fetchall())
+            comb = live_conn.execute("SELECT status, finished_at FROM adaptive_fits WHERE sport=? AND kind='combiner' AND "
+                                     "definition=? AND finished_at<=? ORDER BY finished_at DESC, fit_id DESC LIMIT 1",
+                                     (sport, code_definition, now)).fetchone()
+            published = {"members_succeeded": counts.get("success", 0) + counts.get("partial", 0),
+                         "members_failed": counts.get("failed", 0),
+                         "combiner": dict(comb) if comb else None}
+    serving_adaptive = serving_primary = None
+    recording: dict = {}        # definition -> rows recorded (forecast / unavailable) and the latest of each
+    if _has(live_conn, "adaptive_forecasts"):
+        for r in live_conn.execute("SELECT definition, status, count(*) n, MAX(generated_at) last FROM adaptive_forecasts "
+                                   "WHERE sport=? AND generated_at<=? GROUP BY definition, status", (sport, now)):
+            d = recording.setdefault(r["definition"], {"definition": r["definition"], "forecasts": 0, "unavailable": 0,
+                                                       "last_forecast_at": None, "last_row_at": None})
+            d["forecasts" if r["status"] == "forecast" else "unavailable"] += r["n"]
+            if r["status"] == "forecast":
+                d["last_forecast_at"] = r["last"]
+            d["last_row_at"] = max(d["last_row_at"] or "", r["last"])
+        # The definition of the latest COMBINED forecast (never an 'unavailable' row); every recording definition is listed.
+        latest = max((d for d in recording.values() if d["last_forecast_at"]), key=lambda d: d["last_forecast_at"], default=None)
+        if latest is not None:
+            serving_adaptive = {**latest, "definitions": sorted(recording.values(), key=lambda d: d["last_row_at"], reverse=True)}
+    if _has(live_conn, "near_tipoff_forecasts"):
+        r = live_conn.execute("SELECT p.model_version, n.generated_at FROM near_tipoff_forecasts n JOIN predictions p "
+                              "USING(prediction_id) WHERE p.run_type='live' AND n.generated_at<=? "
+                              "ORDER BY n.generated_at DESC, n.prediction_id DESC LIMIT 1", (now,)).fetchone()
+        if r is not None:
+            serving_primary = {"model_version": r["model_version"], "last_forecast_at": r["generated_at"]}
+    disk = artifacts_written(train_root)
+    on_disk = disk.get(code_definition) if code_definition else None
+    # Trained but not making forecasts: model files on disk whose version has no published record (an unfinished or
+    # unpublished run), and the newest published run when the latest live forecast used a different version.
+    known = {r[0] for r in live_conn.execute("SELECT DISTINCT definition FROM adaptive_fits WHERE sport=?", (sport,))} if has else set()
+    not_serving = [{"definition": d, "state": "written, not published", "members_written": a["members_written"],
+                    "at": a["last_written_at"]} for d, a in sorted(disk.items(), key=lambda x: x[1]["last_written_at"] or "")
+                   if d not in known and a["members_written"]]
+    if last_success:            # published: is it recording since? (judged per definition, not by the single newest row)
+        rec = recording.get(last_success["definition"])
+        since = rec is not None and (rec["last_row_at"] or "") >= (last_success["finished_at"] or "")
+        state = (None if since and rec["last_forecast_at"] and rec["last_forecast_at"] >= last_success["finished_at"]
+                 else "published, recording only 'unavailable' rows (no combined probability) since" if since
+                 else "published, no live forecast yet")
+        if state:
+            not_serving.append({"definition": last_success["definition"], "state": state,
+                                "members_written": last_success["members_succeeded"], "at": last_success["finished_at"]})
+    return {"sport": sport, "as_of": now, "running": running,
+            "running_note": {None: "Could not determine whether training is running (lsof unavailable or failed).",
+                             True: "A process holds this sport's training lock.",
+                             False: "No process holds this sport's training lock."}[running],
+            "current_run": current, "last_run": last_run, "last_success": last_success, "last_failure": last_failure,
+            "code_definition": code_definition, "expected_members": expected_members,
+            "code_definition_published": published, "code_definition_on_disk": on_disk, "not_serving": not_serving,
+            "serving": {"adaptive": serving_adaptive, "primary": serving_primary},
+            "note": "Training completion is not predictive performance: a finished run says nothing about accuracy, which is "
+                    "measured only on settled games. Progress is counted from artifacts written; no percentage or time left "
+                    "is estimated."}

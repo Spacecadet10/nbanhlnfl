@@ -6,6 +6,7 @@ import { dateTime } from '../format';
 import { SportToggle, useCarriedSearch, useSport } from './Selection';
 
 const NAV = [
+  { to: '/daily-learning', label: 'Daily learning', icon: '↻' },
   { to: '/', label: 'Game day', icon: '◫', end: true },
   { to: '/performance', label: 'Performance', icon: '↗' },
   { to: '/history', label: 'Prediction history', icon: '◷' },
@@ -22,6 +23,8 @@ export function Layout() {
   const meta = useApi((s) => api.meta(sport, s), [sport]);
   const mode = meta.state.status === 'success' ? meta.state.data.mode : null;
   const lastRefresh = meta.state.status === 'success' ? meta.state.data.last_refresh_at : null;
+  const health = useApi((s) => api.health(s), []);
+  const snapshot = health.state.status === 'success' ? health.state.data.data_snapshot_at : null;
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     try { localStorage.setItem('courtside-theme', theme); } catch { /* Theme still works for this session. */ }
@@ -52,6 +55,8 @@ export function Layout() {
             </button>
           </div>
         </header>
+        {health.state.status === 'error' && <div className="demo-banner error-banner" role="alert"><strong>API NOT REACHABLE</strong><span>{health.state.error} Start the app with <code>sh scripts/dev.sh</code> from the repository folder.</span></div>}
+        {snapshot && <div className="demo-banner" role="note"><strong>DEVELOPMENT COPY</strong><span>Results and games come from a copy of the live data taken {dateTime(snapshot)}; restart <code>scripts/dev.sh</code> to refresh it. Training status reads the live system directly.</span></div>}
         {mode === 'demo' && <div className="demo-banner" role="note"><strong>DEMO MODE</strong><span>Explore the app with synthetic games and predictions. These are not real NBA forecasts or results.</span></div>}
         {mode === 'real' && sport === 'nhl' && (
           <div className="demo-banner data-banner" role="note">

@@ -14,3 +14,7 @@ data/
 *.sqlite3
 *.egg-info/
 .omc/
+
+# exact-rules-v1 registry lock / temp files (app/exact_rules.py)
+backend/app/models/*.lock
+backend/app/models/*.tmp

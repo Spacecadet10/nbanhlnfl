@@ -28,7 +28,47 @@ cd ..
 cd frontend && npm ci && cd ..
 ```
 
-## Run (two terminals, from the repo root)
+## Run — one command (development app)
+```sh
+export NBA_DEV_DATA_DIR="$HOME/nba-predictor-dev-copy"   # one development directory; set it the same way every time
+sh scripts/dev.sh --check-paths                          # optional: only validates the paths; nothing is written
+sh scripts/dev.sh                                        # from the repo root; Ctrl-C stops it
+```
+Then open **http://127.0.0.1:5173/**. The script copies the live stores (`data/`, read-only backup) into
+`$NBA_DEV_DATA_DIR` (default `~/nba-predictor-dev-data` when unset), migrates the copy to this checkout's schema, starts
+the API (:8000) and web app (:5173), and waits until both answer (or prints the failing log). Results show the copy's
+timestamp. Training status reads the live `data/` folder directly, read-only. An earlier dev server of this checkout on
+those ports is replaced; anything else on them is left alone and reported. The installed release app is separate
+(http://127.0.0.1:4173/, launchd `com.nba-predictor.web`/`api`) and is never touched by this script.
+
+**Development data directory.** The script deletes and overwrites files in this directory, so it only reuses one that it
+created itself. That directory holds a `.nba-dev-data` marker file. An existing directory without the marker is refused
+and left exactly as it is, even an empty one. It could be your home folder, a backup or another checkout's `data/`, and
+the script cannot tell. The first start at a path that does not exist yet creates and marks the directory. Every later
+start, `--check-paths` and refresh must use the same `NBA_DEV_DATA_DIR`, and then reuses that marked directory. Without
+the variable, the script checks the default `~/nba-predictor-dev-data` instead. If that folder exists without a marker,
+as an older one does, the script refuses. Choose a new, nonexistent path only to start fresh on purpose. An older,
+unmarked development folder is neither adopted nor deleted: remove it yourself if you no longer need it.
+The development directory itself must not be a symlink, and naming it with a trailing `.` or `..` is also refused.
+Symlinks in its parent path (for example macOS `/tmp`) are allowed. The resolved path still has to pass the separation
+checks: it must not be inside `data/`, and `data/` must not be inside it. A directory is also refused if it contains a
+symlink anywhere, or if a log, store or `SNAPSHOT_AT` in it is hard-linked.
+
+**Snapshot, not live.** The development app shows a copy taken at startup (`SNAPSHOT_AT`), not live data. Every start
+replaces the stores and `research/`, `raw/` and `eval/` with fresh copies of `data/`. Refresh by restarting with the
+same `NBA_DEV_DATA_DIR`. The live `data/nba.sqlite` is required: without it the script stops before the path checks
+and before changing anything. If `data/nhl.sqlite`, `research/`, `raw/` or `eval/` is missing, its earlier development copy is
+removed instead of being kept under a new timestamp. Other files in the directory (such as the app's `reports/`) are
+not touched.
+
+**Limits.** The marker protects against misconfiguration; it is not a security boundary. Path and ownership validation
+runs at three checkpoints, not before every operation: before anything is stopped or written, again just before the
+copy (once the directory exists, newly created or reused), and again after the copy, before migrate and the servers.
+None of these checks is atomic with the step that follows it. If another process replaces the directory, or one of its
+parts, between a check and its use, that is not detected. Do not move or relink these directories while the script
+starts.
+
+## Run manually (two terminals, from the repo root)
 First run only: build the data store (see "Data store" below: `migrate`, then `ingest`).
 ```sh
 cd backend && .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
@@ -55,6 +95,7 @@ The backend allows CORS from the Vite origin; override with `CORS_ORIGINS` (comm
 | `GET /api/games?date=…&policy=pregame\|near_tipoff&min_confidence` | The slate. `selection` gives the counts, and each game's `slate_pick` is its pick under the chosen policy only (never the other forecast), with `meets_confidence` |
 | `…/predictions` and `…/performance` `&policy=pregame\|near_tipoff` | Live forecasts only: the pre-game archive of the discontinued daily job, some made several days before the game (API compatibility default) or the two-hour record (frontend default); never mixed (422 with `run_type=backtest`). Game payloads carry an optional `near_tipoff` object next to `prediction` |
 | `GET /api/performance?run_type=live\|backtest` | Live scoring, or the final-test backtest with baselines. Never mixed |
+| `GET /api/training-run?sport=` | Adaptive training state: process holding the training lock (via `lsof`, no lock taken), artifacts written by a running run, last run / success / failure, versions trained but not forecasting, and the versions behind the latest live forecasts. Reads `NBA_LIVE_DATA_DIR` (default: the data dir) read-only; no progress percentage or ETA |
 
 ## NBA + NHL and markets (contract v3)
 Every endpoint takes `sport=nba|nhl` (default `nba`). Each sport has its own store (`data/nba.sqlite`, `data/nhl.sqlite`); a

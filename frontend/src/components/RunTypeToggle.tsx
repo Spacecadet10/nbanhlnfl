@@ -24,11 +24,14 @@ export function RunTypeToggle({ value, onChange }: { value: ViewRunType; onChang
   );
 }
 
-/** Which live forecast: the two-hour one (default) or the pre-game archive (?policy=pregame). Never mixed. The archive
- * holds the discontinued daily job's forecasts, some made several days before the game. */
-export function usePolicy(): [Policy, (p: Policy) => void] {
+/** Which live forecast: the canonical record (default where it exists: ?policy=canonical) or a legacy ledger — the
+ * two-hour Elo ledger (?policy=near_tipoff) or the pre-game archive (?policy=pregame). Never mixed. Where the canonical
+ * forecast is not available (NHL, other markets, so far) the two-hour ledger stays the default, as before. */
+export function usePolicy(canonical = false): [Policy, (p: Policy) => void] {
   const [params, setParams] = useSearchParams();
-  const policy: Policy = params.get('policy') === 'pregame' ? 'pregame' : 'near_tipoff';
+  const raw = params.get('policy');
+  const policy: Policy = raw === 'pregame' ? 'pregame' : raw === 'near_tipoff' ? 'near_tipoff'
+    : canonical ? 'canonical' : 'near_tipoff';
   const set = (p: Policy) => {
     const next = new URLSearchParams(params);
     next.set('policy', p);
@@ -37,11 +40,12 @@ export function usePolicy(): [Policy, (p: Policy) => void] {
   return [policy, set];
 }
 
-export function PolicyToggle({ value, onChange }: { value: Policy; onChange: (p: Policy) => void }) {
+export function PolicyToggle({ value, onChange, canonical = false }: { value: Policy; onChange: (p: Policy) => void; canonical?: boolean }) {
   return (
     <div className="segmented" role="group" aria-label="Live forecast timing">
-      <button type="button" aria-pressed={value === 'pregame'} onClick={() => onChange('pregame')}>Pre-game archive</button>
-      <button type="button" aria-pressed={value === 'near_tipoff'} onClick={() => onChange('near_tipoff')}>Within 2 hours</button>
+      {canonical && <button type="button" aria-pressed={value === 'canonical'} onClick={() => onChange('canonical')}>Canonical forecast</button>}
+      <button type="button" aria-pressed={value === 'pregame'} onClick={() => onChange('pregame')}>{canonical ? 'Legacy: pre-game archive' : 'Pre-game archive'}</button>
+      <button type="button" aria-pressed={value === 'near_tipoff'} onClick={() => onChange('near_tipoff')}>{canonical ? 'Legacy: within 2 hours' : 'Within 2 hours'}</button>
     </div>
   );
 }

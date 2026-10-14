@@ -453,3 +453,21 @@ def test_an_unreadable_older_fit_needed_for_a_missing_market_is_retried_and_reco
     _combiners(monkeypatch, newest, older, drop="total")                    # the artifact is readable again
     again = recovery.recover_adaptive(store, now=LATER)
     assert again["created"] == 6 and not again["errors"], again
+
+
+def test_a_daily_definition_forecast_does_not_hide_the_weekly_definitions_gap(store):
+    """Reviewer reproduction R5 (2026-10-13): the adaptive recovery's 'already forecast' check ignored the definition, so a
+    daily-cadence row made the weekly definition's missing forecast look covered."""
+    adaptive.train(store, now=TRAIN_AT)
+    with adaptive.cadence("daily"):
+        adaptive.train(store, now=TRAIN_AT)
+    run(store, CYCLE_AT)
+    weekly = adaptive.definition(store)
+    with adaptive.cadence("daily"):
+        daily = adaptive.definition(store)
+        assert adaptive.record(store, game_ids=[GID], now=CYCLE_AT)["created"] > 0
+    assert weekly != daily
+    assert store.execute("SELECT count(*) FROM adaptive_forecasts WHERE definition=?", (weekly,)).fetchone()[0] == 0
+    g = store.execute("SELECT * FROM games WHERE game_id=?", (GID,)).fetchone()
+    assert recovery._adaptive_missing(store, g, "winner", weekly) is True
+    assert recovery._adaptive_missing(store, g, "winner", daily) is False

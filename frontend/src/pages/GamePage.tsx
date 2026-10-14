@@ -12,6 +12,7 @@ import { DetailsToggle, useCarriedSearch, useDetails, useSport } from '../compon
 import { ResearchGameCard } from '../components/Research';
 import { AdaptiveGameCard } from '../components/Adaptive';
 import { TrackingGameCard } from '../components/Tracking';
+import { CanonicalBlock, canonicalFor } from '../components/Canonical';
 
 export function GamePage() {
   const { gameId = '' } = useParams();
@@ -54,8 +55,15 @@ function Detail({ game: g }: { game: GameDetail }) {
           : <>Tipoff {dateTime(g.tipoff)}</>}
       </p>
 
-      {g.mode === 'real' && (g.near_tipoff ? <NearTipoffCard game={g} /> : <div className="card">
-        <h2>Within 2 hours · Win probability</h2><p className="forecast-note">No two-hour forecast recorded. New forecasts are made only during the two hours before the scheduled start, when fresh inputs are available.</p>
+      {g.mode === 'real' && canonicalFor(sport) && (
+        <div className="card">
+          <h2>Canonical forecast · Win probability</h2>
+          <p className="small muted">The one forecast record for this game that Today, History and Performance also show and grade.</p>
+          <CanonicalBlock c={g.canonical} home={g.home} away={g.away} detail />
+        </div>
+      )}
+      {g.mode === 'real' && (g.near_tipoff ? <NearTipoffCard game={g} legacy={canonicalFor(sport)} /> : <div className="card">
+        <h2>{canonicalFor(sport) ? 'Legacy · within 2 hours (Elo ledger)' : 'Within 2 hours · Win probability'}</h2><p className="forecast-note">No two-hour forecast recorded. New forecasts are made only during the two hours before the scheduled start, when fresh inputs are available.</p>
       </div>)}
       <div className="card"><ModelAgreement game={g} detail /></div>
       <DetailsToggle />
@@ -65,7 +73,7 @@ function Detail({ game: g }: { game: GameDetail }) {
         <TrackingGameCard sport={sport} gameId={g.game_id} />
       </>}
       <div className="card">
-        <h2>{g.mode === 'real' ? 'Pre-game archive probability' : 'Win probability'} {g.prediction && <RunBadge runType={g.prediction.run_type} />}</h2>
+        <h2>{g.mode !== 'real' ? 'Win probability' : canonicalFor(sport) ? 'Legacy · pre-game archive probability' : 'Pre-game archive probability'} {g.prediction && <RunBadge runType={g.prediction.run_type} />}</h2>
         {g.prediction
           ? <ProbabilityBar home={g.home} away={g.away} homeProb={g.prediction.home_win_prob} />
           : <p className="forecast-note">{g.forecast_note ?? 'No forecast available.'}</p>}
@@ -147,11 +155,11 @@ function Detail({ game: g }: { game: GameDetail }) {
   );
 }
 
-function NearTipoffCard({ game: g }: { game: GameDetail }) {
+function NearTipoffCard({ game: g, legacy = false }: { game: GameDetail; legacy?: boolean }) {
   const n = g.near_tipoff!;
   return (
     <div className="card">
-      <h2>Within 2 hours · Win probability <NearTipoffBadge /></h2>
+      <h2>{legacy ? 'Legacy · within 2 hours (Elo ledger)' : 'Within 2 hours · Win probability'} <NearTipoffBadge /></h2>
       <p className="small muted">
         The current forecast policy uses the freshest stored results within two hours of the scheduled start. {n.limitation}
       </p>

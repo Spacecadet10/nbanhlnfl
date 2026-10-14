@@ -136,3 +136,32 @@ def test_expected_minutes_use_the_stored_season_not_the_calendar():
     h = av.MinutesHistory(box)
     assert h.expected("1", "2020-08-01", 2020) == (32.0, "this_season")
     assert h.expected("1", "2020-08-01")[1] == "previous_season"            # the calendar rule would call it next season
+
+
+def test_merged_team_names_are_recognized_and_wrapped_names_are_joined():
+    """Review finding A2: layout extraction sometimes drops the space inside a team name ("Portland TrailBlazers",
+    "LosAngeles Lakers", "OklahomaCity Thunder") or wraps it over two lines ("Minnesota" / "Timberwolves"); such rows were
+    credited to the previously seen team. Both forms must resolve to the right team, in both producers' layouts."""
+    teams = TEAMS + ["Portland Trail Blazers", "Oklahoma City Thunder", "Minnesota Timberwolves"]
+    lines = [H2024,
+             row({"Game Date": "01/10/2024", "Team": "Boston Celtics", "Player Name": "Holiday, Jrue", "Current Status": "Out"}, H2024),
+             row({"Team": "Portland TrailBlazers", "Player Name": "Brown, Moses", "Current Status": "Out"}, H2024),
+             row({"Team": "LosAngeles Lakers", "Player Name": "James, LeBron", "Current Status": "Questionable"}, H2024),
+             row({"Team": "OklahomaCity Thunder", "Reason": "NOT YET SUBMITTED"}, H2024),
+             row({"Team": "Minnesota", "Player Name": "Edwards, Anthony", "Current Status": "Out"}, H2024),
+             row({"Team": "Timberwolves"}, H2024),
+             row({"Player Name": "Gobert, Rudy", "Current Status": "Doubtful"}, H2024)]
+    r = av.parse_layout([("Injury Report: 01/10/24 05:30 PM", lines)], "x", teams)
+    assert r.reconciled
+    assert [(e["team"], e["last"]) for e in r.entries] == [
+        ("Boston Celtics", "Holiday"), ("Portland Trail Blazers", "Brown"), ("Los Angeles Lakers", "James"),
+        ("Minnesota Timberwolves", "Edwards"), ("Minnesota Timberwolves", "Gobert")]
+    assert r.not_submitted == [{"game_date": "2024-01-10", "team": "Oklahoma City Thunder"}]
+    # GemBox (row-pattern) layout: the team is matched anywhere on the line.
+    rows_mode = ["01/10/2024   07:30 (ET)   POR@LAL   Portland TrailBlazers   Brown, Moses        Out   Injury/Illness - Knee",
+                 "                                                            Simons, Anfernee    Out   Injury/Illness - Ankle",
+                 "             10:00 (ET)   OKC@LAL   OklahomaCity Thunder                        NOT YET SUBMITTED"]
+    r = av.parse_layout([("Injury Report: 01/10/24 05:30 PM", rows_mode)], "x", teams, mode="rows")
+    assert r.reconciled and [(e["team"], e["last"]) for e in r.entries] == [("Portland Trail Blazers", "Brown"),
+                                                                            ("Portland Trail Blazers", "Simons")]
+    assert r.not_submitted == [{"game_date": "2024-01-10", "team": "Oklahoma City Thunder"}]

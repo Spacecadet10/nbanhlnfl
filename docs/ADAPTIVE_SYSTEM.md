@@ -10,7 +10,7 @@ cohort, a candidate forecast, a selector decision or any existing identity.
 |---|---|---|
 | Point-in-time walk of a learned member with within-season refits | `retrain_cadence.Cadenced` (weekly cadence; `member._refit(season+1)` trains on every delivered result), `backtest.run(..., deliver_until=now)` | `adaptive.Adaptive(Cadenced)`: weekly period by `retrain_cadence.period_key`, refit only when new eligible results were delivered since the member's last fit (the `cadence_daily.Daily` rule), `frozen` flag so the forecast path never refits |
 | Registry candidates incl. the neural networks (`mlp`, `torch_mlp`, `keras_mlp`) | `candidates.features.walk` (shared feature walk), `candidates.engine.fit/outputs/vector/ready`, `candidates.deep.fit`, `registry.SPECS`, `registry.MIN_TRAIN` | `adaptive.scheduled_walk`: weekly refit on every labelled row whose result was available at the fit cutoff (all seasons, current one included); residual spread from the candidate's own out-of-sample residuals so far |
-| Combination weights | `combine.fit_stack` / `combine.stack` (log-linear pool, unconstrained weights), `combination_research.STACK_MIN_TRAIN`, `research_live.STACK_SEASONS` | `adaptive.fit_combiner`: training rows = out-of-sample predictions of the last two completed seasons plus the current season to date; settled prospective `adaptive_forecasts` rows replace the reconstruction of the same game; greedy member admission by common out-of-sample coverage; L2 chosen on the newest quarter of the training rows (time ordered) from a registered grid; leave-one-out fallback stacks for one missing member |
+| Combination weights | `combine.fit_stack` / `combine.stack` (log-linear pool, unconstrained weights), `combination_research.STACK_MIN_TRAIN`, `research_live.STACK_SEASONS` | `adaptive.fit_combiner`: training rows = out-of-sample predictions of the last two completed seasons plus the current season to date; settled prospective `adaptive_forecasts` rows replace the reconstruction of the same game; greedy member admission by common out-of-sample coverage; L2 chosen on the newest quarter of the training rows (time ordered) from a registered grid; leave-one-out fallback stacks for one missing member, plus one stack without all the members that share the player-cache guards (`stale_inputs`), since they abstain together |
 | Lines, quotes, settlement | `market_live` primary two-hour forecast (exact line, line source, quote id), `research_live._winner_quote`, `markets.settle`, `markets.model_line` | — |
 | Pick / abstain | `selector.decide` / `selector.apply` with the unchanged thresholds, MIN_PICKS, coverage and week gates | decisions computed at combiner fit time from settled prospective adaptive forecasts only; the source is `adaptive` |
 | Artifacts | `candidates.live._write` (data then digest, atomic renames), `_load_verified`, `_locked`, `_results_fingerprint`; `fit_register.record` (`model_fits`) | `adaptive_fits` run log, `adaptive_forecasts` ledger (migration 0024) |
@@ -24,13 +24,29 @@ cohort, a candidate forecast, a selector decision or any existing identity.
   NHL `hockey_logistic`, `hockey_gbt`, `hockey_logistic_xg`, `goals_draw`, `goals_glm`.
 - Registry candidates as `cand:<spec>@adaptive`: every `registry.SPECS` entry of the sport, including the scikit-learn
   `mlp`, `torch_mlp` and `keras_mlp` networks.
+- NBA only: `players_injuries_v1@adaptive` (`player_ratings.PlayersInjuriesV1`, docs/PLAYER_RATINGS_STUDY.md §11), winner
+  market: `logistic_v2` + the injury-report features + the expected-roster player-rating difference after reported absences.
+  Its inputs are the availability research cache of the data directory (`research/availability/player_box/*.csv`,
+  `reports/`), read on the first forecast or delivered result and shared per process — never by `members()` or an API
+  read. Each game uses only the latest report published before its row cutoff (tipoff minus two hours, matching the live two-hour forecast cycle: in practice the
+  same-day 5:30 PM report when the game tips off later, otherwise the prior evening's) and only rosters and
+  ratings from results delivered before that cutoff; both teams must be positively listed on that report, else the
+  declared `report_missing` state. The member artifact holds the ratings and the delivered-game index (results whose
+  game has no box rows are counted, not indexed); rosters are rebuilt from the box after a thaw. What the member read
+  (box seasons and digest, report count, facts coverage, name matching) is recorded in its fit detail (`inputs`). Two
+  forecast-path guards make it `missing` with the reason: the serving process's resolved player box must match the
+  digest/seasons recorded in the fit (else "inputs changed since the fit … retrain"), and a team's recent finals of the
+  season must have player-box rows (else "stale inputs … without player box rows"), mirroring the possession-box
+  staleness check. NHL has no historical injury reports or player box in the cache: no such NHL member.
 - Recorded exclusions: `availability_two_hour` (forward-only injury inputs, no out-of-sample history), the season-start
   version and the existing `@weekly` shadow of a member that has an adaptive version (same model), `ngboost` where the
   dependency is missing, deep networks where neither library nor artifact is available, `nhl_goalie` feature sets
-  (historical rows use the actual starter, known only after the start).
+  (historical rows use the actual starter, known only after the start), `players_injuries_v1` where the data directory
+  has no player box cache.
 - Markets: a member contributes to every market its output supports at the exact line of the primary forecast.
   A member that cannot predict a game/market is `missing` with a reason; the combination then uses the registered
-  leave-one-out fallback or abstains. Probabilities are never substituted.
+  leave-one-out fallback (or, when exactly the members guarded by the shared player cache are missing together, the
+  stack trained without that group) or abstains. Probabilities are never substituted.
 
 ## 3. Schedules (registered constants, `adaptive.SCHEDULE`)
 
@@ -48,7 +64,8 @@ cohort, a candidate forecast, a selector decision or any existing identity.
 ## 4. Identities and artifacts
 
 - `adaptive.definition(conn)`: `adaptive-v1` + research definition + agreement digest + every candidate definition +
-  this module's code. Model versions: `adaptive-v1:<member>:<definition>`; combiner: `adaptive-v1:combiner:<definition>`.
+  this module's code (+ `player_ratings.py` for NBA, the player-rating/injury member's code). Model versions:
+  `adaptive-v1:<member>:<definition>`; combiner: `adaptive-v1:combiner:<definition>`.
 - `data/research/adaptive/<sport>/members/<name>/<definition>-<period>-<fingerprint>.pkl` (+ `.sha256`),
   `.../history-<definition>.pkl` (out-of-sample history store, checkpointed per member),
   `.../combiner/<definition>-<period>-<fingerprint>.pkl`. A file is loaded only after its digest matches.
@@ -88,7 +105,11 @@ outcome is available after the fit cutoff; no fit's results reach the cutoff of 
   taken first and held through the whole run — snapshot, training, publication, cleanup — so two trainers can never share
   or delete each other's snapshot or republish each other's records; the store's job lock is held only briefly inside it,
   twice — for the due check plus a consistent SQLite online-backup snapshot, and for verifying and publishing the fit
-  records — so the two-hour odds/forecast cycles are never blocked by a refit. Training writes no ledger row; `publish` re-verifies every artifact
+  records — so the two-hour odds/forecast cycles are never blocked by a refit. The training cutoff (`now`) is taken under
+  that first lock, before the snapshot, so a result committed by a later job is after the cutoff and delivered at serving.
+  Walk artifacts record `delivered_digest` (the results, and `events_digest` the box/shot observations, available at
+  the cutoff); when the store's view of either differs at serving (a corrected score, a late result or backfill dated
+  before the cutoff), the member is `missing` with the reason until the next fit. Training writes no ledger row; `publish` re-verifies every artifact
   digest and refuses if the live definition changed meanwhile. Scheduled by
   `scripts/launchd/com.nba-predictor.adaptive-train.plist` (research-environment Python; not installed).
 - Cost: a training run re-walks every learned member from the first stored season with its weekly refits (the walk is
@@ -177,6 +198,10 @@ primary system. Weekly refits plus the learned combination help where the member
    got a combination and no member refit failed; otherwise it is `partial`. The forecast path applies the usable markets
    of the latest usable fit and keeps the most recent earlier combination for the others (`combiners_in_force`,
    per-market `combiner_fit_id` on every forecast row); `due` is true again while the period's latest run is partial.
+   An exception while fitting one market's combination (or its daily rule or selection) is that market's failure only:
+   the fit is `partial` with `combiner fit failed for <market>: …`, the other markets are fitted, and the failed market
+   keeps its earlier combination and daily decision. Likewise an exception while combining one market at forecast time is
+   recorded in the cycle's `errors[<market>]` and the other markets are still recorded (2026-10-13 audit).
 4. **Missing deep libraries no longer drop the networks.** A member whose fitting library is missing keeps its stored
    fit (`kept_for_dependency`), is applied from the NumPy weights, and stays in the combination; only a member with no
    fit at all is skipped. `due` becomes true in an environment that can refit the kept members, so the research
@@ -263,22 +288,65 @@ ledger's unique key (a separate migration); until then a superseded game is repo
 Editing `adaptive.py` changes both sports' adaptive definitions, and migration 0027 must match the release (the release guard
 refuses every job when the store schema differs). To avoid a gap with no usable fits:
 1. Codex reviews the commit. The exact reviewed commit is the only one used below (the definition hash includes the bytes).
-2. **Pre-train the new definitions without switching.** From a separate worktree at the reviewed commit, with the deep venv
-   (torch/tensorflow, as the training job uses) and `NBA_DATA_DIR` = the live data folder, run
-   `caffeinate -i python -m app.cli --sport nhl adaptive-train`, then `--sport nba`. `adaptive-train` does not migrate the
-   store; it snapshots under the store lock, trains under the sport's training lock (serialised with the release's own
-   training), and publishes fit rows under the new definition, which the running release ignores (it filters by its own
-   definition). Verify: one successful combiner per sport under the new definition, all markets fitted, member counts as before
-   (NHL 15, NBA 21). Expected durations from Oct 10: NHL ~2 h, NBA ~7 h. Old definitions keep serving throughout.
-3. **Switch** (minutes): back up both stores under the job lock; fast-forward `release` to the reviewed commit; `migrate`
-   both stores (0027); `release-check` both (problems [], schema 27/27); restart the API and web; check
-   `/api/research/adaptive/...` reports the new definition with `due: false` and the pre-trained fits.
+2. **Pre-train the new definitions without switching.** Runner: `~/nba-predictor-pretrain-logs/pretrain.py`, run as
+   `caffeinate -i /Users/andry/nba-predictor-deep/backend/.venv/bin/python ~/nba-predictor-pretrain-logs/pretrain.py`. It runs
+   `app.cli --sport {nhl,nba} adaptive-train` from the clean detached worktree `~/nba-predictor-pretrain` at the reviewed
+   commit (checked before every attempt), deep venv, `NBA_DATA_DIR` = the live data folder, NHL first and NBA only after NHL
+   verifies. `adaptive-train` does not migrate; it publishes fit rows under the new definition, which the running release
+   ignores (every adaptive read filters by its own definition).
+   - **Lock contention does not wait.** A held training lock (`research/adaptive/{sport}/train.lock`, e.g. the 09:30 scheduled
+     refit) returns `status: skipped` immediately with exit code 0; a store job lock still busy after 120 s at the snapshot is
+     also `skipped` (exit 0), and at publication it is `failed` (exit 1, nothing published; a rerun walks the members again).
+     The exit code therefore never proves training. The runner parses the JSON, retries only the two lock-skip reasons every
+     10 min up to 12 h per sport, and stops on anything else (failed, partial, unparseable output, unexpected definition).
+   - **Success = published rows, verified read-only:** latest combiner under the expected definition (NHL `abfc617c4309ed33`,
+     NBA `71d234fa8993bf9a` for d52b248) with status `success`, every market weighted, and the same successful member set as the
+     definition in force (NHL 15, NBA 21). Expected durations from Oct 10: NHL ~2 h, NBA ~7 h. Old definitions keep serving.
+   - Start outside NHL games' two-hour windows (long near-tipoff cycles hold the job lock; publication waits only 120 s) and
+     with both `train.lock` files free. Artifacts are written during training before publication; an interrupted run leaves
+     unreferenced artifacts and a snapshot that the next run of that sport clears or rewrites.
+3. **Switch.** Locks only stop *new* lock-takers; they do not stop a process that already imported the old code. Because
+   `definition()` re-reads `adaptive.py` from disk at call time and jobs import `adaptive`/`recovery` lazily, any process
+   started from the release checkout before the fast-forward that runs after it can write rows labelled with the new
+   definition while executing old code (append-only: they cannot be removed). So every such process is stopped first:
+   1. **Window:** no eligible game in either sport starts within the next ~2.5 h and the nightly jobs (22:00 NBA daily,
+      22:15 NHL daily, 09:30 adaptive-train) are not due during the switch; the pre-training runner has finished.
+   2. **Pause launches:** for each scheduled agent `com.nba-predictor.{odds,nhl-odds,daily,nhl-daily,injuries,adaptive-train}`
+      wait until `launchctl print gui/$(id -u)/<label>` shows `state = not running`, then `launchctl bootout gui/$(id -u)
+      ~/Library/LaunchAgents/<label>.plist` (booting out a running job would kill it mid-cycle; wait instead).
+   3. **Stop long-lived processes:** `launchctl bootout` `com.nba-predictor.api` and `com.nba-predictor.web` (KeepAlive would
+      restart them from the changed files otherwise).
+   4. **Drain and confirm quiet:** `pgrep -fl 'nba-predictor-live|app.cli|adaptive-train|pretrain.py'` prints nothing (this
+      also covers manual commands and trainers from any checkout); both `.{sport}-jobs.lock` and both `train.lock` can be
+      taken without waiting (`python -c` with `db.store_lock(s, wait_seconds=0)` / `adaptive.training_lock(s)` returning True,
+      released immediately). If anything is running, wait or stop the switch; never kill a writer mid-transaction.
+      Then record per store the row-ID boundaries `max(forecast_id)` of `adaptive_forecasts` and `max(recovery_id)` of
+      `adaptive_recovered_forecasts` (read-only), the drain time, and the definitions in force before the move.
+   5. **Back up** both stores while holding that sport's job lock (one process: take `db.store_lock(s, wait_seconds=0)`,
+      SQLite online backup to `data/backups/{sport}-before-0027-<date>.sqlite`, `PRAGMA quick_check` = ok, release). The CLI
+      takes the job lock itself, so the holder must exit before the next step; with launches paused and step 4 clean,
+      nothing else can take it in between.
+   6. **Move the release:** fast-forward `~/nba-predictor-live` (`release`) to the reviewed commit; confirm `git rev-parse HEAD`.
+   7. **Migrate and check** from the release checkout with its venv and the plist environment (`NBA_DATA_DIR`,
+      `NBA_RELEASE_ROOT=~/nba-predictor-live`): `app.cli --sport {nhl,nba} migrate`, then `release-check` for both
+      (problems `[]`, schema 27/27, commit = reviewed commit). Rebuild the frontend if it changed.
+   8. **Restart:** bootstrap `api` and `web`; check `/api/research/adaptive` reports the new definition, `due: false`, and
+      the pre-trained fits. Then bootstrap the six scheduled agents (resume).
+   9. **Verify no mixed rows (only rows appended after the step-4 boundaries are checked):** no row with an ID above its
+      boundary has `generated_at` / `reconstructed_at` between the drain time and the restart time (nothing was written
+      while code was moving), and every row above the boundary carries the definition the moved release computes
+      (`/api/research/adaptive`). Rows at or below the boundary are earlier history and are not judged here.
 4. **After the switch:** recovery under the new definitions will add `unreconstructable` rows for earlier games that have no
    live adaptive forecast (e.g. Oct 8–9 NHL), because the new combiners' training snapshots follow those games (expected;
    the old-definition reconstructions remain). Verify the next eligible game's forecasts are written under the new definition.
 5. **Rollback:** the old definitions' fits stay in the store. Rolling back = a release commit that restores the previous
    `adaptive.py` and `recovery.py` bytes but keeps migration 0027 (the schema cannot go back without restoring a backup):
-   the old definition hashes, and so their fits, are in force again immediately; the old recovery code ignores the attempts table.
-Risks: if the weekly scheduled refit of the old definition (Mondays) runs during pre-training, the training lock serialises
-them (longer wall time, no conflict). If the reviewed commit changes after pre-training, its fits are under a different
-definition and step 2 repeats.
+   the old definition hashes, and so their fits, are in force again. The rollback moves code under the same running
+   processes, so it uses the same sequence as step 3 (window, pause, stop api/web, drain and record row-ID boundaries, backup,
+   move, `release-check` with no migration, restart, resume). The step-9 check applies only to rows above the boundaries
+   recorded before the rollback: the restored definitions already have legitimate history from before the switch, so a
+   time-based check over all rows of that definition would wrongly fail. The old recovery code ignores the attempts table.
+Risks: the weekly scheduled refit of the old definition (Mondays 09:30) and pre-training exclude each other through the
+training lock without waiting: whichever starts second skips (exit 0). The runner retries pre-training; a skipped scheduled
+refit retries only at the next 09:30 run, so the old definition keeps its previous fit one more day. If the reviewed commit
+changes after pre-training, its fits are under a different definition and step 2 repeats.

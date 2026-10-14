@@ -14,11 +14,16 @@ predicts. A failed refit keeps the previous valid artifact in force and is logge
 """
 import hashlib
 import json
+import math
 import pickle
+from dataclasses import replace
+from datetime import timedelta
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Callable, Optional
 
-from . import agreement, backtest, combination_research, combine, config, live, markets, near_tipoff, research_live, selector, sports
+from . import agreement, backtest, combination_research, combine, config, live, markets, near_tipoff, player_ratings, nhl_player_ratings, research_live, selector, sports
 from . import retrain_cadence as rc
 from .candidates import deep, engine, features, registry
 from .candidates import live as pool_live
@@ -42,7 +47,7 @@ SCHEDULE = {"period": "ISO week of the game's Eastern date",
 ONLINE = {"nba": ("elo", "points_normal", "efficiency_margin"), "nhl": ("hockey_elo", "goals_poisson")}
 LEARNED = {"nba": ("logistic", "logistic_v2", "gbt_v1", "ridge_points", "gbt_points"),
            "nhl": ("hockey_logistic", "hockey_gbt", "hockey_logistic_xg", "goals_draw", "goals_glm")}
-BOX_DEPENDENT = {"nba": ("logistic_v2", "efficiency_margin", "gbt_v1"), "nhl": ("hockey_logistic_xg",)}
+BOX_DEPENDENT = {"nba": ("logistic_v2", "efficiency_margin", "gbt_v1", player_ratings.ADAPTIVE_MEMBER, player_ratings.SCORE_MEMBER), "nhl": ("hockey_logistic_xg",)}
 EXCLUDED_FEATURES = {"nhl_goalie": "historical rows use the actual starting goalie (known only after the start): no "
                                    "point-in-time out-of-sample history to learn a weight from"}
 SIDE = research_live.SIDE
@@ -65,7 +70,23 @@ def _key(*parts) -> str:
     return hashlib.sha256("\x1f".join(json.dumps(p, sort_keys=True, default=str) for p in parts).encode()).hexdigest()
 
 
+_CADENCE = ContextVar("adaptive_cadence", default=PERIOD)
+
+
+@contextmanager
+def cadence(value: str):
+    if value not in ("weekly", "daily"):
+        raise ValueError("cadence must be weekly or daily")
+    token = _CADENCE.set(value)
+    try:
+        yield
+    finally:
+        _CADENCE.reset(token)
+
+
 def period_of(tipoff_at: str, season: int) -> str:
+    if _CADENCE.get() == "daily":
+        return f"{season}:{_parse(tipoff_at).astimezone(backtest.EASTERN).date().isoformat()}"
     y, w = rc.period_key(PERIOD, tipoff_at)
     return f"{season}:{y}-W{w:02d}"
 
@@ -73,13 +94,34 @@ def period_of(tipoff_at: str, season: int) -> str:
 def definition(conn) -> str:
     """adaptive-v1 identity: this code, the research definition (members, combination code), the agreement digest and
     every candidate definition. Any change gives a new identity; earlier adaptive rows keep theirs."""
+    sport = live.engine(conn).sport
     h = hashlib.sha256(VERSION.encode())
     h.update(research_live.definition(conn).encode())
     h.update(agreement.definition_hash(agreement.models(conn)).encode())
-    for spec in registry.for_sport(live.engine(conn).sport):
+    for spec in registry.for_sport(sport):
         h.update(registry.definition(spec).encode())
     h.update(Path(__file__).read_bytes())
+    if sport == "nba":      # the player-rating/injury member's code (availability.py is already in the agreement digest)
+        h.update(Path(__file__).with_name("player_ratings.py").read_bytes())
+    if sport == "nhl":
+        h.update(Path(__file__).with_name("nhl_player_ratings.py").read_bytes())
+        h.update(Path(__file__).with_name("sources").joinpath("nhl_injuries.py").read_bytes())
+    if _CADENCE.get() != PERIOD:
+        h.update(_CADENCE.get().encode())
+        h.update(Path(__file__).with_name("daily_agreement.py").read_bytes())
+        h.update(Path(__file__).with_name("combination_thresholds.py").read_bytes())
     return h.hexdigest()[:16]
+
+
+def forecast_cutoff(tipoff_at: str) -> str:
+    """Historical adaptive forecasts share one information time, two hours before the game."""
+    return _fmt(_parse(tipoff_at) - timedelta(hours=2))
+
+
+def available_rows(conn, now):
+    return [replace(r, cutoff_at=forecast_cutoff(r.game.tipoff_at),
+                    game=replace(r.game, cutoff_at=forecast_cutoff(r.game.tipoff_at)))
+            for r in live.available_rows(conn, now)]
 
 
 def model_version(defn: str, member: str = "combiner") -> str:
@@ -94,6 +136,7 @@ class Adaptive(rc.Cadenced):
 
     def __init__(self, member):
         super().__init__(member, PERIOD)
+        self.cadence = _CADENCE.get()
         self.name = f"{member.name}@adaptive"
         self.fitted_on: Optional[int] = None
         self.frozen = False
@@ -109,7 +152,8 @@ class Adaptive(rc.Cadenced):
             self.fitted_on = len(self.delivered)
         if g.season == self.first_season:
             return
-        key = (g.season, *rc.period_key(PERIOD, g.tipoff_at))
+        key = ((g.season, _parse(g.tipoff_at).astimezone(backtest.EASTERN).date().isoformat())
+               if self.cadence == "daily" else (g.season, *rc.period_key(PERIOD, g.tipoff_at)))
         if key == self.key:
             return
         self.key = key
@@ -124,12 +168,16 @@ class Adaptive(rc.Cadenced):
             if v is None and getattr(self.member, a, None) is not None:
                 setattr(self.member, a, g.season)
         self.fitted_on = len(self.delivered)
-        self.refits.append({"cutoff_at": backtest.cutoff_for(g.tipoff_at), "season": g.season,
+        self.refits.append({"cutoff_at": g.cutoff_at or forecast_cutoff(g.tipoff_at), "season": g.season,
                             "training_games": len(getattr(self.member, "examples", []))})
-        self._log(PERIOD, g)
+        self._log(self.cadence, g)
+
+    def _log(self, kind, g):
+        super()._log(kind, g)
+        self.last_fit["trigger_cutoff"] = g.cutoff_at or forecast_cutoff(g.tipoff_at)
 
     def config(self) -> dict:
-        return {**self.member.config(), "cadence": "adaptive-weekly"}
+        return {**self.member.config(), "cadence": f"adaptive-{self.cadence}"}
 
 
 class Member:
@@ -151,7 +199,8 @@ def members(conn) -> tuple[list, dict]:
     all_markets = sports.get(sport).markets
     lines = tuple(m for m in all_markets if m != "winner")
     out, excluded = [], {}
-    for m in agreement.models(conn):
+    built = agreement.models(conn)
+    for m in built:
         if m.name in LEARNED[sport]:
             out.append(Member(f"{m.name}@adaptive", "walk", Adaptive(m), markets_=("winner",), learned=True))
             excluded[m.name] = "season-start version: superseded by its adaptive (within-season refit) version"
@@ -161,6 +210,26 @@ def members(conn) -> tuple[list, dict]:
             excluded[m.name] = "forward-only inputs (injury listings): no out-of-sample history to learn a weight from"
         else:
             excluded[m.name] = "not registered as an adaptive member (adaptive.LEARNED / ONLINE)"
+    if sport == "nba":
+        # logistic_v2 + injury report + player ratings (player_ratings.PlayersInjuriesV1), every input gated by the row's
+        # cutoff. It needs the availability research cache of this data directory; without one it is excluded, visibly.
+        # NHL has a separate input pipeline; never apply NBA per-48 player ratings to hockey.
+        reason = player_ratings.adaptive_inputs_missing()
+        if reason:
+            excluded[player_ratings.ADAPTIVE_MEMBER] = reason
+            excluded[player_ratings.SCORE_MEMBER] = reason
+        else:
+            inner = player_ratings.adaptive_member(built[0].cfg, player_ratings.team_names(conn))
+            out.append(Member(f"{inner.name}@adaptive", "walk", Adaptive(inner), markets_=("winner",), learned=True))
+            scores = player_ratings.PlayersInjuriesPoints(built[0].cfg, player_ratings.team_names(conn))
+            out.append(Member(f"{scores.name}@adaptive", "walk", Adaptive(scores), markets_=all_markets, learned=True))
+    if sport == "nhl":
+        reason = nhl_player_ratings.missing_inputs()
+        if reason:
+            excluded[nhl_player_ratings.MEMBER] = reason
+        else:
+            inner = nhl_player_ratings.NhlPlayersInjuries(built[0].cfg, sports.get(sport).rating_key)
+            out.append(Member(f"{inner.name}@adaptive", "walk", Adaptive(inner), markets_=all_markets, learned=True))
     names = {m.name for m in out}
     for i, m in enumerate(research_live.line_models(conn)):
         if isinstance(m, rc.Cadenced):
@@ -186,23 +255,37 @@ def members(conn) -> tuple[list, dict]:
 
 
 def _vec(v) -> tuple:
-    pa, pm = round(float(v[0]), 9), round(float(v[1]), 9)
+    values = tuple(float(p) for p in v)
+    if (len(values) != 3 or any(not math.isfinite(p) or not 0 <= p <= 1 for p in values)
+            or not math.isclose(sum(values), 1., rel_tol=0., abs_tol=1e-6)):
+        raise ValueError("invalid probability vector: expected three finite probabilities summing to one")
+    total = sum(values)
+    pa = round(values[0] / total, 9)
+    pm = min(round(values[1] / total, 9), round(1 - pa, 9))
     return pa, pm, round(1 - pa - pm, 9)
 
 
-def _dist_vectors(d, p, market_list, lines: dict) -> dict:
-    """market -> vector of a walk member's forecast (winner from its probability, line markets from its distribution)."""
+def _dist_vectors(d, p, market_list, lines: dict, invalid: Optional[list] = None) -> dict:
+    """market -> vector of a walk member's forecast (winner from its probability, line markets from its distribution).
+    With `invalid` (the training walk), an invalid vector is left out for that market and listed instead of failing the
+    member's whole history; without it (serving), it raises as before."""
     out = {}
     for mk in market_list:
-        if mk == "winner":
-            if p is not None:
-                out[mk] = _vec((p, 0.0, 1 - p))
-        elif d is not None and (mk == "reg3" or mk in lines):
-            out[mk] = _vec(d.market(mk, None if mk == "reg3" else lines[mk]))
+        try:
+            if mk == "winner":
+                if p is not None:
+                    out[mk] = _vec((p, 0.0, 1 - p))
+            elif d is not None and (mk == "reg3" or mk in lines):
+                out[mk] = _vec(d.market(mk, None if mk == "reg3" else lines[mk]))
+        except ValueError as exc:
+            if invalid is None:
+                raise
+            invalid.append((mk, str(exc)))
     return out
 
 
-def walk_member(member: Member, rows, events, now: Optional[str], window: set, lines: dict, line_primary: bool = False) -> dict:
+def walk_member(member: Member, rows, events, now: Optional[str], window: set, lines: dict, line_primary: bool = False,
+                invalid: Optional[list] = None) -> dict:
     """Walk-forward of one walk member over `rows` (results delivered until `now`). Returns per game in `window` the
     member's vectors at the given lines (or, for the line primary, the model lines it sets)."""
     m = member.obj
@@ -219,7 +302,12 @@ def walk_member(member: Member, rows, events, now: Optional[str], window: set, l
     hist = {}
     for p in out:
         if p["season"] in window:
-            hist[p["game_id"]] = _dist_vectors(p.get("dist"), p["p_home"], member.markets, lines.get(p["game_id"], {}))
+            bad: list = []
+            hist[p["game_id"]] = ({} if has_dist and p.get("dist") is None else
+                                  _dist_vectors(p.get("dist"), p["p_home"], member.markets, lines.get(p["game_id"], {}),
+                                                bad if invalid is not None else None))
+            if invalid is not None:
+                invalid += [(p["game_id"], mk, err) for mk, err in bad]
     return hist
 
 
@@ -276,7 +364,7 @@ def _period_fit(spec, store: dict, train: list, key: str, season: int, cutoff: s
         rec["kept_for_dependency"] = True
         return rec
     in_season = sum(1 for r in train if r.season == season)
-    if deep.is_deep(spec) and store.get("model") is not None and 0 < in_season < MIN_DEEP_VALIDATION:
+    if _CADENCE.get() != "daily" and deep.is_deep(spec) and store.get("model") is not None and 0 < in_season < MIN_DEEP_VALIDATION:
         rec["reason"] = f"deep network keeps its fit until {MIN_DEEP_VALIDATION} current-season results ({in_season} so far)"
         return rec
     if deep.is_deep(spec) and len({r.season for r in train}) < 2:
@@ -354,6 +442,8 @@ def candidate_vectors(spec, outputs: dict, market_list, lines: dict) -> dict:
     """game -> market -> vector at the given lines, from a candidate's stored outputs."""
     hist = {}
     for gid, o in outputs.items():
+        if not pool_live.usable_goals(o):          # degenerate goal rates: no vector, as at serving
+            continue
         v = {}
         for mk in market_list:
             if mk in ("winner", "reg3"):
@@ -373,16 +463,18 @@ def _loss(stack, rows, names) -> float:
     return sum(combine.log_loss(combine.stack(stack, [r["vectors"][m] for m in names]), r["realised"]) for r in rows) / len(rows)
 
 
-def fit_combiner(rows: list, candidates: list, market: str, cutoff: str, fallbacks: bool = True) -> dict:
+def fit_combiner(rows: list, candidates: list, market: str, cutoff: str, fallbacks: bool = True, groups=()) -> dict:
     """The combination for one market from out-of-sample rows ({vectors, realised, cutoff_at, result_available_at}).
     Only rows whose outcome was available at `cutoff` are used. Members are admitted greedily by coverage while the
     common training set stays large; the L2 penalty is chosen on the newest VALIDATION_SHARE of the rows; weights are
-    unconstrained (a member may get a weight near or below zero). Leave-one-out fallbacks cover one missing member."""
+    unconstrained (a member may get a weight near or below zero). Leave-one-out fallbacks cover one missing member;
+    `groups` (member names that abstain together, e.g. the members guarded by one shared input cache) each get one more
+    fallback trained without the whole group, when at least two of its members are in the combination."""
     cls = combine._classes(market)
     usable = [r for r in rows if r["result_available_at"] <= cutoff and r["realised"] in cls]
     late = [r for r in rows if r["result_available_at"] > cutoff]
     out = {"market": market, "cutoff": cutoff, "rows_available": len(usable), "rows_after_cutoff": len(late),
-           "excluded": {}, "members": [], "stack": None, "fallbacks": {}}
+           "excluded": {}, "members": [], "stack": None, "fallbacks": {}, "group_fallbacks": []}
     coverage = {m: sum(1 for r in usable if m in r["vectors"]) for m in candidates}
     order = sorted(candidates, key=lambda m: (-coverage[m], candidates.index(m)))
     best = coverage[order[0]] if order else 0
@@ -418,12 +510,19 @@ def fit_combiner(rows: list, candidates: list, market: str, cutoff: str, fallbac
         if len(others) >= 2:
             out["fallbacks"][m] = {"members": others,
                                    "stack": combine.fit_stack([([r["vectors"][x] for x in others], r["realised"]) for r in common], market, l2)}
+    for group in groups if fallbacks else []:
+        gone = [x for x in chosen if x in group]          # one member of the group alone is covered by its leave-one-out stack
+        others = [x for x in chosen if x not in group]
+        if len(gone) >= 2 and len(others) >= 2:
+            out["group_fallbacks"].append({"missing": gone, "members": others,
+                                           "stack": combine.fit_stack([([r["vectors"][x] for x in others], r["realised"]) for r in common], market, l2)})
     return out
 
 
 def combine_now(cm: Optional[dict], have: dict) -> tuple:
     """(vector, stack used, members used, reason) for one game from the combiner of its market and the member vectors
-    available. One missing member uses the registered leave-one-out stack; more abstain. Never substitutes."""
+    available. One missing member uses the registered leave-one-out stack; exactly a registered group missing together
+    uses that group's stack; any other missing subset abstains. Never substitutes."""
     if cm is None or cm.get("stack") is None:
         return None, None, [], "no combination trained for this market" + (f": {cm['reason']}" if cm and cm.get("reason") else "")
     missing = [m for m in cm["members"] if m not in have]
@@ -432,7 +531,10 @@ def combine_now(cm: Optional[dict], have: dict) -> tuple:
     elif len(missing) == 1 and missing[0] in cm["fallbacks"]:
         names, stack = cm["fallbacks"][missing[0]]["members"], cm["fallbacks"][missing[0]]["stack"]
     else:
-        return None, None, [], f"missing members {', '.join(missing)}: no combination trained for this subset"
+        group = next((f for f in cm.get("group_fallbacks", ()) if set(f["missing"]) == set(missing)), None)
+        if group is None:
+            return None, None, [], f"missing members {', '.join(missing)}: no combination trained for this subset"
+        names, stack = group["members"], group["stack"]
     return _vec(combine.stack(stack, [have[m] for m in names])), stack, list(names), None
 
 
@@ -468,20 +570,43 @@ def _dumps(obj) -> bytes:
     return buf.getvalue()
 
 
+def _defines(obj, name: str) -> bool:
+    """Whether the object's own classes (not `object`, which has a default __getstate__ since Python 3.11) define `name`."""
+    return any(name in vars(c) for c in type(obj).__mro__ if c is not object)
+
+
+def _state(obj) -> dict:
+    """The instance state that enters an artifact: the member's own __getstate__ when it defines one (that is how a
+    member keeps its external inputs, e.g. the shared player cache, out of the artifact), else its instance dictionary.
+    A member that defines __getstate__ must return a dict; we never drop back to vars(obj) for it, or the external
+    cache that __getstate__ deliberately excluded would slip back into the artifact."""
+    if _defines(obj, "__getstate__"):
+        state = obj.__getstate__()
+        if not isinstance(state, dict):
+            raise TypeError(f"{type(obj).__name__}.__getstate__ must return a dict for artifact state, "
+                            f"got {type(state).__name__}")
+        return dict(state)
+    return dict(vars(obj))
+
+
 def freeze(w) -> bytes:
     """The state of a walk member (wrapper and inner model) as instance dictionaries: some NHL members are classes
     defined inside builder functions, so the objects themselves cannot be pickled, their state can."""
     inner = getattr(w, "member", None)
     if inner is None:
-        return _dumps({"wrapped": False, "inner": dict(vars(w))})
-    return _dumps({"wrapped": True, "inner": dict(vars(inner)), "wrapper": {k: v for k, v in vars(w).items() if k != "member"}})
+        return _dumps({"wrapped": False, "inner": _state(w)})
+    return _dumps({"wrapped": True, "inner": _state(inner), "wrapper": {k: v for k, v in vars(w).items() if k != "member"}})
 
 
 def thaw(fresh, blob: bytes):
-    """Loads frozen state into a freshly built member of the same kind (from `members(conn)`)."""
+    """Loads frozen state into a freshly built member of the same kind (from `members(conn)`), through the member's own
+    __setstate__ when it defines one (the counterpart of `_state`)."""
     state = pickle.loads(blob)
     inner = getattr(fresh, "member", fresh)
-    inner.__dict__.update(state["inner"])
+    if _defines(inner, "__setstate__"):
+        inner.__setstate__(state["inner"])
+    else:
+        inner.__dict__.update(state["inner"])
     if state["wrapped"]:
         fresh.__dict__.update(state["wrapper"])
     return fresh
@@ -598,7 +723,7 @@ def _insert_fit(conn, sport, kind, name, defn, period, status, started, detail: 
             "INSERT INTO adaptive_fits (sport, kind, name, definition, period, schedule, status, training_cutoff, training_games, "
             "results_fingerprint, artifact_path, artifact_sha256, model_fit_id, detail, started_at, finished_at, idempotency_key) "
             "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (sport, kind, name, defn, period, PERIOD, status, cutoff, games, fp, path, sha, model_fit_id,
+            (sport, kind, name, defn, period, _CADENCE.get(), status, cutoff, games, fp, path, sha, model_fit_id,
              json.dumps(detail, sort_keys=True, default=str), started, utc_now(), key)).lastrowid
 
 
@@ -621,7 +746,7 @@ def due(conn, now: Optional[str] = None) -> dict:
     nxt = next_game(conn, now)
     if nxt is None:
         return {"due": False, "reason": "no upcoming eligible game", "definition": defn}
-    period = period_of(nxt["tipoff_at"], nxt["season"])
+    period = period_of(now if _CADENCE.get() == "daily" else nxt["tipoff_at"], nxt["season"])
     fit = latest_fit(conn, sport, "combiner", "combiner", defn, now)
     if fit is None:
         return {"due": True, "reason": "no combiner fit for this definition yet", "period": period, "definition": defn}
@@ -633,13 +758,75 @@ def due(conn, now: Optional[str] = None) -> dict:
         if refittable:
             return {"due": True, "reason": f"this environment can refit members kept for a missing library: {', '.join(refittable)}",
                     "period": period, "definition": defn}
-        return {"due": False, "reason": f"fit in force already prepared for {period} (weekly schedule)", "period": period, "definition": defn}
-    rows = live.available_rows(conn, now)
+        changed = inputs_changed_since_fit(conn, sport, defn, now)
+        if changed:
+            return {"due": True, "reason": "results or box/shot data the fit in force consumed have changed since it was trained "
+                                           f"(a corrected score or decision, or a late result or backfill dated before its cutoff): "
+                                           f"{', '.join(changed)} cannot forecast until a retrain", "period": period, "definition": defn}
+        return {"due": False, "reason": f"fit in force already prepared for {period} ({_CADENCE.get()} schedule)", "period": period, "definition": defn}
+    rows = available_rows(conn, now)
     newest = max((r.result_available_at for r in rows), default=None)
     if newest and fit["training_cutoff"] and newest <= fit["training_cutoff"]:
         return {"due": False, "reason": f"new period {period}, but no eligible result since {fit['training_cutoff']}", "period": period,
                 "definition": defn}
     return {"due": True, "reason": f"new period {period} (fit in force: {fit['period']})", "period": period, "definition": defn}
+
+
+def inputs_changed_since_fit(conn, sport, defn, now) -> list:
+    """Walk members in force (latest usable fit of the definition) whose consumed results or box/shot observations, as the
+    store shows them now at the fit's cutoff, differ from what the frozen state consumed (`_results_changed` /
+    `_events_changed` make them missing at serving), or whose external inputs fail their own `input_mismatch` guard.
+    Fits recorded before the digests were kept are not checked for results/events."""
+    fits = conn.execute("SELECT f.* FROM adaptive_fits f WHERE f.sport=? AND f.kind='member' AND f.definition=? "
+                        "AND f.status='success' AND f.finished_at<=? AND f.fit_id=(SELECT MAX(x.fit_id) FROM adaptive_fits x "
+                        "WHERE x.sport=f.sport AND x.kind='member' AND x.name=f.name AND x.definition=f.definition "
+                        "AND x.status='success' AND x.finished_at<=?) ORDER BY f.name", (sport, defn, now, now)).fetchall()
+    details = {r["name"]: json.loads(r["detail"]) for r in fits}
+    consumed = {k: d.get("consumed") for k, d in details.items() if d.get("consumed")}
+    # Members with external inputs (player box / injury cache): their own serving guard, `input_mismatch`, against the
+    # artifact in force — a mismatch (e.g. box rows appearing for a result the fit was offered without them) blocks the
+    # member at serving exactly as a changed result does, so it must schedule the retrain too.
+    external = [r for r in fits if details[r["name"]].get("inputs")]
+    changed = []
+    if external:
+        mems = {m.name: m for m in members(conn)[0]}
+        for r in external:
+            m = mems.get(r["name"])
+            if m is None:                  # excluded here (e.g. no cache): nothing it could forecast with, nothing to retrain
+                continue
+            try:
+                art = load_fit(r)
+                w = thaw(m.obj, art["state"])
+                check = getattr(getattr(w, "member", w), "input_mismatch", None)
+                if check is not None and check(art.get("inputs") or {}):
+                    changed.append(r["name"])
+            except Exception as exc:
+                changed.append(f"{r['name']} (fit in force unreadable: {type(exc).__name__})")
+    if not consumed:
+        return sorted(changed)
+    eng = live.engine(conn)
+    rows = available_rows(conn, now)
+    known = {r.game.game_id: r for r in rows}
+    empty = _events_digest([], known, now)
+    events = None
+    results: dict = {}
+    boxes: dict = {}
+    for name, c in consumed.items():
+        if name in changed:
+            continue
+        cut = c["cutoff"]
+        if cut not in results:
+            results[cut] = eng.dataset_version([r for r in rows if r.result_available_at <= cut])
+        bad = results[cut] != c["delivered_digest"]
+        if not bad and c.get("events_digest") not in (None, empty):
+            if events is None:
+                events = _events(conn, eng, rows, known, now)
+            if cut not in boxes:
+                boxes[cut] = _events_digest(events, known, cut)
+            bad = boxes[cut] != c["events_digest"]
+        if bad:
+            changed.append(name)
+    return sorted(changed)
 
 
 def kept_for_dependency_here(conn, sport, defn, period, now) -> list:
@@ -823,6 +1010,10 @@ def run_scheduled(sport: str, *, now: Optional[str] = None, force: bool = False,
             try:
                 if not _has(conn, "adaptive_fits"):
                     return {**out, "status": "failed", "reason": "store not migrated to 0024 (adaptive_fits missing)"}
+                # The training cutoff is taken under the store lock, before the snapshot: a job that commits after the lock
+                # is released retrieves its results later than this, so every result at or before the cutoff is in the
+                # snapshot (a cutoff stamped later made the frozen state miss them and the digest guard abstain).
+                now = now or utc_now()
                 d = due(conn, now)
                 out["due"] = d
                 if not d["due"] and not force:
@@ -875,10 +1066,12 @@ def _events(conn, eng, rows, known, now):
 
 
 def _events_for(member_obj, eng, events):
-    """NHL shot events reach only the xG member (as agreement.predict); NBA box events reach every member."""
+    """NHL shot events reach only the xG member (as agreement.predict); NBA box events reach every member that consumes
+    them (`update_box`); the others never see them, so a box backfill cannot change what they were fitted on."""
+    inner = getattr(member_obj, "member", member_obj)
     if eng.sport == "nhl":
-        return events if hasattr(getattr(member_obj, "member", member_obj), "xg") else []
-    return events
+        return events if hasattr(inner, "xg") else []
+    return events if hasattr(inner, "update_box") else []
 
 
 def train(conn, *, now: Optional[str] = None, write: bool = True, force: bool = False, log=None, publish: bool = True) -> dict:
@@ -908,7 +1101,7 @@ def train(conn, *, now: Optional[str] = None, write: bool = True, force: bool = 
         out["reason"] = "no upcoming eligible game"
         return out
     season = nxt["season"]
-    rows = live.available_rows(conn, now)
+    rows = available_rows(conn, now)
     known = {r.game.game_id: r for r in rows}
     events = _events(conn, eng, rows, known, now)
     window = _window({r.game.season for r in rows}, season)
@@ -922,9 +1115,14 @@ def train(conn, *, now: Optional[str] = None, write: bool = True, force: bool = 
     for m in walkers:
         t0 = utc_now()
         try:
-            hist[m.name] = walk_member(m, rows, _events_for(m.obj, eng, events), now, window, lines, line_primary=m.line_primary)
+            invalid: list = []
+            hist[m.name] = walk_member(m, rows, _events_for(m.obj, eng, events), now, window, lines, line_primary=m.line_primary,
+                                       invalid=invalid)
             w = m.obj
-            w.predict(eng.pregame(nxt))               # first forecast of the period: the scheduled refit, if due
+            cached = nxt["game_id"] in (getattr(getattr(w, "member", w), "pending", None) or {})
+            w.predict(replace(eng.pregame(nxt), cutoff_at=now))               # first forecast of the period: the scheduled refit, if due
+            if not cached:   # features cached at the training cutoff must not be served after newer results are delivered
+                (getattr(getattr(w, "member", w), "pending", None) or {}).pop(nxt["game_id"], None)
             if isinstance(w, Adaptive):
                 w.frozen = True
             info = w.fit_info() if isinstance(w, Adaptive) else None
@@ -933,21 +1131,31 @@ def train(conn, *, now: Optional[str] = None, write: bool = True, force: bool = 
                 from . import fit_register
                 ident = fit_register.identity(w, rows, now)
             fp = (info or {}).get("results_fingerprint") or eng.dataset_version(rows)
+            # Members with external inputs (the player box / injury-report cache) report what they actually read, so a
+            # missing or partial cache is visible in the fit record rather than silently degrading the features.
+            inputs = getattr(getattr(w, "member", w), "input_status", None)
+            inputs = inputs() if inputs else None
             art = {"kind": "walk", "name": m.name, "state": freeze(w), "period": period, "cutoff": now,
                    "results_available_through": max((r.result_available_at for r in rows), default=now),
                    "results_fingerprint": fp, "fit_info": info, "markets": list(m.markets), "fitted_at": utc_now(),
-                   "definition": defn, "training_games": (info or {}).get("delivered_results", len(rows))}
+                   "delivered_digest": eng.dataset_version(rows),   # exactly the results the frozen state consumed
+                   "events_digest": _events_digest(_events_for(m.obj, eng, events), known, now),   # ... and box/shot data
+                   "definition": defn, "training_games": (info or {}).get("delivered_results", len(rows)), "inputs": inputs}
             path = base / "members" / m.name.replace(":", "__") / f"{defn}-{period.replace(':', '_')}-{fp}.pkl"
             sha = None
             mf = None
             if write:
                 path, sha = _save(path, art)
                 sink.fit(sport, "member", m.name, defn, period, "success", t0,
-                         {"fit_info": info, "refits_within_season": len(getattr(w, "refits", [])), "learned": m.learned},
+                         {"fit_info": info, "refits_within_season": len(getattr(w, "refits", [])), "learned": m.learned,
+                          "consumed": {"cutoff": art["cutoff"], "delivered_digest": art["delivered_digest"],
+                                       "events_digest": art["events_digest"]},
+                          **({"inputs": inputs} if inputs is not None else {})},
                          cutoff=art["results_available_through"], games=art["training_games"], fp=fp, path=str(path), sha=sha,
                          ident=ident, now=now)
             out["members"][m.name] = {"status": "success", "fit": info, "artifact": str(path) if write else None,
-                                      "history_games": len(hist[m.name])}
+                                      "history_games": len(hist[m.name]), **({"inputs": inputs} if inputs is not None else {}),
+                                      **({"invalid_vectors": {"count": len(invalid), "first": invalid[:5]}} if invalid else {})}
             log(f"{m.name}: walked {len(hist[m.name])} window games; fit {info and info.get('kind')}")
         except Exception as exc:
             out["errors"][m.name] = f"{type(exc).__name__}: {exc}"
@@ -997,7 +1205,7 @@ def train(conn, *, now: Optional[str] = None, write: bool = True, force: bool = 
             sha = mf = None
             if write:
                 path, sha = _save(path, art)
-                ident = {"schedule": PERIOD, "fit_kind": "adaptive-weekly" if rec["refit"] else "kept", "trained_season": season,
+                ident = {"schedule": _CADENCE.get(), "fit_kind": f"adaptive-{_CADENCE.get()}" if rec["refit"] else "kept", "trained_season": season,
                          "training_games": prepared["fit_games"], "results_fingerprint": fp,
                          "results_available_through": prepared["results_through"], "params_digest": sha[:24]}
                 sink.fit(sport, "member", m.name, defn, period, "success", t0,
@@ -1025,22 +1233,65 @@ def train(conn, *, now: Optional[str] = None, write: bool = True, force: bool = 
         comb = {"version": VERSION, "definition": defn, "period": period, "cutoff": now, "markets": {}, "selection": {},
                 "members_available": sorted(hist), "excluded": excluded, "fitted_at": utc_now(),
                 "results_available_through": max((r.result_available_at for r in rows), default=now)}
+        if _CADENCE.get() == "daily":
+            comb["agreement_history"] = {mk: [{**r, "tipoff_at": known[r["game_id"]].game.tipoff_at}
+                                                for r in rs] for mk, rs in table.items()}
+            comb["cadence"] = "daily"
+            from . import daily_agreement
+            old_daily = {}
+            if prev:        # the incumbent rule lives in the previous ARTIFACT; an unreadable one costs the incumbent, never the run
+                try:
+                    old_daily = load_fit(prev).get("daily_agreement", {})
+                except Exception as exc:
+                    comb["daily_incumbent_error"] = f"previous combiner fit {prev['fit_id']} unreadable, no incumbent rule carried: {type(exc).__name__}: {exc}"
+                    log(comb["daily_incumbent_error"])
+            comb["daily_agreement"] = {}
+        market_errors = {}
         for market in sports.get(sport).markets:
-            cands_m = [m.name for m in mems if market in m.markets and m.name in hist]
-            comb["markets"][market] = fit_combiner(table.get(market, []), cands_m, market, now)
-            incumbent = (prev_detail.get("selection") or {}).get(market, {}).get("rule")
-            comb["selection"][market] = _decide(conn, sport, defn, market, now, incumbent)
+            # One market's failure leaves that market without a combination in this fit (it keeps the combination of the
+            # earlier fit, and the 'partial' fit is retried); the other markets are still fitted.
+            if _CADENCE.get() == "daily":     # its own guard: a failed rule assessment never costs the market its combination
+                try:
+                    comb["daily_agreement"][market] = daily_agreement.assess(
+                        market, comb["agreement_history"].get(market, []), now, old_daily.get(market, {}).get("rule"))
+                except Exception as exc:
+                    err = f"{type(exc).__name__}: {exc}"
+                    market_errors[f"daily rule {market}"] = err
+                    log(f"daily rule {market}: {err}")
+                    if market in old_daily:      # the earlier frozen decision stays in force, as for a failed fit
+                        comb["daily_agreement"][market] = {**old_daily[market], "carried_after_failure": err}
+            try:
+                cands_m = [m.name for m in mems if market in m.markets and m.name in hist]
+                # Members guarded by `stale_inputs` read the data directory's shared player cache and are marked missing
+                # together when it is stale or changed (B1/B2 guards in `_record`): the market also needs a stack trained
+                # without all of them, else every forecast of the market would abstain with them.
+                shared = [m.name for m in mems if m.name in cands_m
+                          and getattr(getattr(m.obj, "member", m.obj), "stale_inputs", None) is not None]
+                comb["markets"][market] = fit_combiner(table.get(market, []), cands_m, market, now,
+                                                       groups=[shared] if len(shared) > 1 else [])
+                incumbent = (prev_detail.get("selection") or {}).get(market, {}).get("rule")
+                comb["selection"][market] = _decide(conn, sport, defn, market, now, incumbent)
+            except Exception as exc:
+                market_errors[market] = f"{type(exc).__name__}: {exc}"
+                log(f"combiner {market}: {market_errors[market]}")
+                comb["markets"][market] = {"market": market, "cutoff": now, "excluded": {}, "members": [], "stack": None,
+                                           "fallbacks": {}, "reason": f"combiner fit failed: {market_errors[market]}"}
+                comb["selection"][market] = {"status": "failed", "rule": None, "reason": comb["markets"][market]["reason"]}
         fp = _key(sorted((mk, v.get("training", {}).get("results_through"), v.get("members")) for mk, v in comb["markets"].items()))[:16]
         path = base / "combiner" / f"{defn}-{period.replace(':', '_')}-{fp}.pkl"
         sha = None
         # 'success' only when every market with at least two available members got a combination and no member refit
         # failed; otherwise 'partial' (its usable markets are applied, earlier fits cover the rest, and the next run retries).
         available = {mk: {n for r in table.get(mk, []) for n in r["vectors"]} for mk in comb["markets"]}
-        no_stack = [mk for mk, v in comb["markets"].items() if v.get("stack") is None and len(available[mk]) >= 2]
+        no_stack = [mk for mk, v in comb["markets"].items()
+                    if v.get("stack") is None and len(available[mk]) >= 2 and mk not in market_errors]
         failed = sorted(k for k, v in out["members"].items() if v.get("status") == "failed")
-        partial_reason = "; ".join(([f"no combination for {', '.join(no_stack)}"] if no_stack else [])
+        partial_reason = "; ".join([f"{mk} assessment failed: {e}" if mk.startswith("daily rule") else f"combiner fit failed for {mk}: {e}"
+                                    for mk, e in market_errors.items()]
+                                   + ([f"no combination for {', '.join(no_stack)}"] if no_stack else [])
                                    + ([f"member refit failed: {', '.join(failed)}"] if failed else [])) or None
         status = "partial" if partial_reason else "success"
+        out["errors"].update({f"combiner:{mk}": e for mk, e in market_errors.items()})
         detail = {"markets": {mk: {k: v.get(k) for k in ("members", "excluded", "weights", "l2", "l2_validation", "training", "reason")}
                               for mk, v in comb["markets"].items()},
                   "selection": {mk: {k: v.get(k) for k in ("status", "rule", "reason", "settled_items", "judged_items")}
@@ -1249,6 +1500,50 @@ def _load_member_artifacts(conn, sport, defn, mems, now, replay: bool = False,
     return arts, missing
 
 
+def _results_changed(eng, art: dict, rows, digests: dict) -> Optional[str]:
+    """None when the results available at the artifact's cutoff are still exactly the ones its frozen state consumed.
+    A score corrected later (its availability moves past the cutoff) or a final ingested late with an assumed
+    availability before the cutoff cannot be delivered to the frozen state in walk order: the member is missing, with
+    this reason, until the next fit. Artifacts without the digest predate this check."""
+    recorded = art.get("delivered_digest")
+    if recorded is None:
+        return None
+    cutoff = art["cutoff"]
+    if cutoff not in digests:
+        digests[cutoff] = eng.dataset_version([r for r in rows if r.result_available_at <= cutoff])
+    if digests[cutoff] != recorded:
+        return (f"results changed since the fit: the results available at its cutoff {cutoff} differ from the ones it "
+                "consumed (a corrected score or a late-ingested result); retrain before this member can forecast")
+    return None
+
+
+def _events_digest(events, known, cutoff) -> str:
+    """Fingerprint of the box/shot observations a walk delivered by `cutoff` (effective availability: the later of the
+    observation's and its game result's). Observations are append-only per fetch, so the fetch identifies the content."""
+    h = hashlib.sha256()
+    for e in sorted(events, key=lambda e: (e.game.game_id, e.fetch_id)):
+        if max(e.available_at, known[e.game.game_id].result_available_at) <= cutoff:
+            h.update(f"{e.game.game_id}|{e.fetch_id}|{e.available_at}\n".encode())
+    return h.hexdigest()[:16]
+
+
+def _events_changed(art: dict, events, known, digests: dict) -> Optional[str]:
+    """None when the box/shot observations dated at or before the artifact's cutoff are exactly the ones its frozen state
+    consumed. A backfill imported later but dated before the cutoff (historical backfills take the result's time) cannot
+    be delivered in walk order (`_advance` skips it as already delivered): the member is missing until the next fit.
+    Artifacts without the digest predate this check."""
+    recorded = art.get("events_digest")
+    if recorded is None:
+        return None
+    key = ("events", art["cutoff"], len(events))      # within one cycle a member gets either every event or none
+    if key not in digests:
+        digests[key] = _events_digest(events, known, art["cutoff"])
+    if digests[key] != recorded:
+        return (f"box/shot inputs changed since the fit: observations dated at or before its cutoff {art['cutoff']} differ "
+                "from the ones it consumed (a backfill imported after the fit); retrain before this member can forecast")
+    return None
+
+
 def _advance(w, art: dict, rows, events, known, now):
     """Delivers results and box/shot events that became available after the artifact's cutoff to the frozen state."""
     cutoff = art["cutoff"]
@@ -1319,7 +1614,7 @@ def _record(conn, game_ids, now, write, out, replay=None) -> None:
     mems, excluded = members(conn)
     passed_over: dict = {}
     arts, missing_all = _load_member_artifacts(conn, sport, defn, mems, now, replay=rp, skipped=passed_over)
-    rows = live.available_rows(conn, now)
+    rows = available_rows(conn, now)
     if rp:
         out["results_used"] = len(rows)
         out["latest_result_at"] = max((r.result_available_at for r in rows), default=None)
@@ -1356,25 +1651,27 @@ def _record(conn, game_ids, now, write, out, replay=None) -> None:
     cands = [m for m in mems if m.kind == "candidate" and m.name in arts]
     stale: dict = {}
     crow: dict = {}
-    if cands or any(m.name in BOX_DEPENDENT[sport] for m in mems):
+    recent: dict = {}          # (season, team) -> final game ids, newest first (staleness checks)
+    for r in sorted(rows, key=lambda r: r.game.tipoff_at, reverse=True):
+        for team in (r.game.home_team_id, r.game.away_team_id):
+            recent.setdefault((r.game.season, team), []).append(r.game.game_id)
+    if cands or any(m.name.split("@")[0] in BOX_DEPENDENT[sport] for m in mems):
         try:
             rec = pool_live._recorder(conn, eng, ids, now)
             features.walk(rec, rows, events, deliver_until=now)
             for g in schedule:
-                game = eng.pregame(g)
+                game = replace(eng.pregame(g), cutoff_at=now)
                 rec.predict(game)
                 if game.game_id in ids:
                     row = rec.rows[game.game_id]
                     row.cutoff_at = now
                     crow[game.game_id] = (game, row)
-            recent: dict = {}
-            for r in sorted(rows, key=lambda r: r.game.tipoff_at, reverse=True):
-                for team in (r.game.home_team_id, r.game.away_team_id):
-                    recent.setdefault((r.game.season, team), []).append(r.game.game_id)
             for gid, (game, _) in crow.items():
                 stale[gid] = pool_live._stale(eng, rec, game, recent)
         except Exception as exc:
             out["errors"]["feature_walk"] = f"{type(exc).__name__}: {exc}"
+            for gid in ids:
+                stale[gid] = f"feature walk failed: {type(exc).__name__}: {exc}"
             for m in cands:
                 for gid in ids:
                     missing[gid][m.name] = f"feature walk failed: {type(exc).__name__}: {exc}"
@@ -1390,6 +1687,9 @@ def _record(conn, game_ids, now, write, out, replay=None) -> None:
                 if not engine.ready(o):
                     missing[gid][m.name] = "not ready: no out-of-sample residual spread yet"
                     continue
+                if not pool_live.usable_goals(o):
+                    missing[gid][m.name] = pool_live.DEGENERATE_GOALS
+                    continue
                 for market in m.markets:
                     ln = lines.get((gid, market))
                     if ln is None:
@@ -1398,10 +1698,13 @@ def _record(conn, game_ids, now, write, out, replay=None) -> None:
                     if v is not None:
                         have.setdefault((gid, market), {})[m.name] = _vec(v)
             except Exception as exc:
+                for market in m.markets:
+                    have.get((gid, market), {}).pop(m.name, None)
                 missing[gid][m.name] = f"error: {type(exc).__name__}: {exc}"
                 if rp:      # an evaluation failure is not evidence about the game: the replay is retried, never recorded
                     out["errors"][m.name] = missing[gid][m.name]
     # Walk members: deliver what arrived after the artifact's cutoff, then predict the schedule in order.
+    digests: dict = {}
     for m in [m for m in mems if m.kind == "walk" and m.name in arts]:
         row, art = arts[m.name]
         try:
@@ -1409,9 +1712,27 @@ def _record(conn, game_ids, now, write, out, replay=None) -> None:
             if isinstance(w, Adaptive):
                 w.frozen = True
             inner = getattr(w, "member", w)
-            _advance(w, art, rows, _events_for(w, eng, events), known, now)
+            # Members with external inputs (the player box / injury-report cache): the inputs this process resolves must be
+            # the ones the artifact was fitted on, else the member is missing with the reason until a retrain.
+            check_inputs = getattr(inner, "input_mismatch", None)
+            mismatch = check_inputs(art.get("inputs") or {}) if check_inputs else None
+            if mismatch:
+                for gid in ids:
+                    missing[gid][m.name] = mismatch
+                continue
+            member_events = _events_for(w, eng, events)
+            changed = _results_changed(eng, art, rows, digests) or _events_changed(art, member_events, known, digests)
+            if changed:
+                for gid in ids:
+                    missing[gid][m.name] = changed
+                continue
+            prepare_inputs = getattr(inner, "prepare_inputs", None)
+            if prepare_inputs:
+                prepare_inputs(conn, now)
+            _advance(w, art, rows, member_events, known, now)
+            check_stale = getattr(inner, "stale_inputs", None)
             for g in schedule:
-                game = eng.pregame(g)
+                game = replace(eng.pregame(g), cutoff_at=now)
                 season_fit = getattr(inner, "season", None)
                 if season_fit is not None and game.season > season_fit:
                     if game.game_id in ids:
@@ -1420,11 +1741,17 @@ def _record(conn, game_ids, now, write, out, replay=None) -> None:
                 if game.game_id in ids and m.name.split("@")[0] in BOX_DEPENDENT[sport] and stale.get(game.game_id):
                     missing[game.game_id][m.name] = stale[game.game_id]
                     continue
+                if game.game_id in ids and check_stale is not None:        # the member's own inputs (player box) must be current
+                    reason = check_stale(game, recent, pool_live.STALE_BOX_GAMES)
+                    if reason:
+                        missing[game.game_id][m.name] = reason
+                        continue
                 p = w.predict(game)
                 d = w.distribution(game) if hasattr(inner, "distribution") else None
                 if game.game_id in ids:
                     if d is None and m.markets != ("winner",):
-                        missing[game.game_id][m.name] = "not ready: no out-of-sample fit yet"
+                        missing[game.game_id][m.name] = "not ready: no usable score distribution"
+                        continue
                     for market in m.markets:
                         ln = lines.get((game.game_id, market))
                         if ln is None:
@@ -1436,6 +1763,8 @@ def _record(conn, game_ids, now, write, out, replay=None) -> None:
         except Exception as exc:
             out["errors"][m.name] = f"{type(exc).__name__}: {exc}"
             for gid in ids:
+                for market in m.markets:
+                    have.get((gid, market), {}).pop(m.name, None)
                 missing[gid][m.name] = f"error: {type(exc).__name__}: {exc}"
     # Combine, select, record.
     for g in eligible:
@@ -1449,16 +1778,27 @@ def _record(conn, game_ids, now, write, out, replay=None) -> None:
             cm = comb["markets"].get(market) if comb else None
             supports = {m.name: m.markets for m in mems}
             miss = {k: v for k, v in missing[gid].items() if market in supports.get(k, ()) and k not in vecs}
-            if comb is None:
-                p, stack, names, reason = None, None, [], comb_reason
-            else:
-                p, stack, names, reason = combine_now(cm, vecs)
             book = ln.get("book")
             odds = "available" if book else ("unavailable: no bookmaker quote retrieved before this forecast at this line"
                                              if market != "winner" else "unavailable: no bookmaker moneyline retrieved before this forecast")
-            decision = comb["selection"].get(market) if comb else None
-            item = {"vectors": {"adaptive": p} if p else {}, "agreement": {}, "bookmaker": tuple(book["p"]) if book else None, "line": ln["line"]}
-            sel = selector.apply(decision, item, market) if p else {"status": "no_pick", "reason": reason, "side": None, "probability": None}
+            # One market's failure is that market's error (nothing recorded for it this cycle); the others still record.
+            try:
+                if comb is None:
+                    p, stack, names, reason = None, None, [], comb_reason
+                else:
+                    p, stack, names, reason = combine_now(cm, vecs)
+                decision = comb["selection"].get(market) if comb else None
+                item = {"vectors": {"adaptive": p} if p else {}, "agreement": {}, "bookmaker": tuple(book["p"]) if book else None, "line": ln["line"]}
+                sel = selector.apply(decision, item, market) if p else {"status": "no_pick", "reason": reason, "side": None, "probability": None}
+                if _CADENCE.get() == "daily":
+                    from . import daily_agreement
+                    sel["daily_agreement"] = {**daily_agreement.apply(
+                        comb.get("daily_agreement", {}).get(market) if comb else None, vecs, market),
+                        # the fit whose rule assessment applied (the newest one, also when the combination is older)
+                        "rule_fit_id": (comb.get("daily_agreement_fit_id") or (cfit["fit_id"] if cfit else None)) if comb else None}
+            except Exception as exc:
+                out["errors"][market] = f"{gid}: {type(exc).__name__}: {exc}"
+                continue
             weights = dict(zip(names, stack["weights"])) if stack else {}
             mem_rows = [{"name": n, "p": list(v), "weight": weights.get(n),
                          "fit_id": arts[n][0]["fit_id"] if n in arts else None,
@@ -1551,6 +1891,14 @@ def combiners_in_force(conn, sport, defn, now, replay: bool = False) -> tuple[di
         return {}, "combiner artifact unavailable: " + "; ".join(problems)
     for market, cm in loaded[0][1]["markets"].items():     # no usable combination anywhere: the latest fit's reason applies
         out.setdefault(market, loaded[0])
+    # The daily agreement rule does not depend on the stack: a market whose combination comes from an earlier fit still
+    # applies the NEWEST fit's assessment of its rule (a decision carried after a failed fit is that earlier rule anyway).
+    newest_row, newest = loaded[0]
+    for market, (row, comb) in list(out.items()):
+        decision = (newest.get("daily_agreement") or {}).get(market)
+        if comb is not newest and decision is not None:
+            out[market] = (row, {**comb, "daily_agreement": {**(comb.get("daily_agreement") or {}), market: decision},
+                                 "daily_agreement_fit_id": newest_row["fit_id"]})
     return out, None
 
 
@@ -1565,11 +1913,16 @@ def game_detail(conn, game_id: str, as_of: Optional[str] = None) -> dict:
         return {"game_id": game_id, "version": VERSION, "markets": [], "status": "unknown_game"}
     abbr = {t["team_id"]: t["abbr"] for t in conn.execute("SELECT team_id, abbr FROM teams WHERE team_id IN (?, ?)",
                                                             (g["home_team_id"], g["away_team_id"]))}
+    # One cadence per view: daily rows (recorded by the same two-hour job with NBA_DAILY_AGREEMENT=1, same generated_at,
+    # higher forecast_id) always carry `selection.daily_agreement`; weekly rows never do. Both the outer filter and the
+    # latest-per-market choice are scoped, so a daily row can never win the weekly view or the reverse.
+    scope = "json_type({}.selection, '$.daily_agreement') IS " + ("NOT NULL" if _CADENCE.get() == "daily" else "NULL")
     out = []
     for r in conn.execute(
-            "SELECT a.* FROM adaptive_forecasts a WHERE a.game_id=? AND a.generated_at<=? AND a.forecast_id=(SELECT x.forecast_id "
-            "FROM adaptive_forecasts x WHERE x.game_id=a.game_id AND x.market=a.market AND x.generated_at<=? "
-            "ORDER BY x.generated_at DESC, x.forecast_id DESC LIMIT 1) ORDER BY a.market", (game_id, as_of, as_of)):
+            f"SELECT a.* FROM adaptive_forecasts a WHERE a.game_id=? AND a.generated_at<=? AND {scope.format('a')} "
+            f"AND a.forecast_id=(SELECT x.forecast_id FROM adaptive_forecasts x WHERE x.game_id=a.game_id AND x.market=a.market "
+            f"AND x.generated_at<=? AND {scope.format('x')} ORDER BY x.generated_at DESC, x.forecast_id DESC LIMIT 1) "
+            "ORDER BY a.market", (game_id, as_of, as_of)):
         labels = markets.side_labels(r["market"], r["line"], abbr.get(g["home_team_id"], "home"), abbr.get(g["away_team_id"], "away"))
         sel = json.loads(r["selection"])
         mems_ = json.loads(r["members"])

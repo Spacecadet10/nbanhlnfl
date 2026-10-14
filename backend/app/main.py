@@ -14,10 +14,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import config, db, sports
 from .backtest import FrozenDecisionError
+from .errors import InvalidRequest
 from .nhl_eval import NhlEvaluationError
 from .providers.demo import DemoProvider
 from .providers.real import RealProvider
-from .schemas import (GameDetail, GamesResponse, Health, HistoryResponse, MarketHistoryResponse, MarketPerformanceResponse,
+from .schemas import (CanonicalHistoryResponse, CanonicalPerformanceResponse, GameDetail, GamesResponse, Health, HistoryResponse, MarketHistoryResponse, MarketPerformanceResponse,
                       Meta, PerformanceResponse, SourceStatus)
 
 API_VERSION = "0.3.0"
@@ -105,7 +106,12 @@ def _provider(mode: str, sport: str) -> Iterator:
 
 @app.get("/api/health", response_model=Health)
 def health(mode: str = Depends(api_mode)):
-    return Health(status="ok", mode=mode, api_version=API_VERSION)
+    stamp = config.data_dir() / "SNAPSHOT_AT"
+    try:
+        snapshot = stamp.read_text().strip() or None if stamp.is_file() else None
+    except OSError:
+        snapshot = None
+    return Health(status="ok", mode=mode, api_version=API_VERSION, data_snapshot_at=snapshot)
 
 
 @app.get("/api/meta", response_model=Meta)
@@ -120,11 +126,14 @@ def sources(p=Depends(get_provider)):
 
 @app.get("/api/games", response_model=GamesResponse)
 def games(date: date = Query(description="Game date (US Eastern), YYYY-MM-DD"),
-          policy: str = Query("pregame", pattern="^(pregame|near_tipoff)$",
-                              description="Which forecast the slate's picks and confidence filter use."),
+          policy: str = Query("pregame", pattern="^(pregame|near_tipoff|canonical)$",
+                              description="Which forecast the slate's picks and confidence filter use: canonical (one "
+                                          "record per game, winner market only) or a legacy ledger."),
           min_confidence: Optional[float] = Query(None, ge=0, le=1), market: str = MARKET, p=Depends(get_provider)):
     if market == "winner" and min_confidence is not None and min_confidence < 0.5:
         raise HTTPException(status_code=422, detail="min_confidence for the winner market is at least 0.5")
+    if market != "winner" and policy == "canonical":
+        raise HTTPException(status_code=422, detail="The canonical forecast covers the winner market only so far")
     if market != "winner":
         _market_supported(p, market)
         return p.games(date, policy, min_confidence, market)
@@ -148,6 +157,29 @@ def game(game_id: str, p=Depends(get_provider)):
     if g is None:
         raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
     return g
+
+
+WINNER_ONLY = Query("winner", pattern="^winner$", description="The canonical forecast covers the winner market only so far.")
+
+
+def _canonical_provider(p):
+    if getattr(p, "mode", None) != "real":
+        raise HTTPException(status_code=404, detail="Canonical forecasts are not part of the demo data.")
+    return p
+
+
+@app.get("/api/canonical/forecasts", response_model=CanonicalHistoryResponse)
+def canonical_forecasts(market: str = WINNER_ONLY, date_from: Optional[date] = None, date_to: Optional[date] = None,
+                        team: Optional[str] = None, limit: int = Query(500, ge=1, le=5000), p=Depends(get_provider)):
+    """One row per game since canonical recording began: its canonical forecast and grade, or why there is none."""
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(status_code=422, detail="date_from must be on or before date_to")
+    return _canonical_provider(p).canonical_history(date_from, date_to, team, limit)
+
+
+@app.get("/api/canonical/performance", response_model=CanonicalPerformanceResponse)
+def canonical_performance(market: str = WINNER_ONLY, p=Depends(get_provider)):
+    return _canonical_provider(p).canonical_performance()
 
 
 @app.get("/api/predictions", response_model=HistoryResponse)
@@ -227,6 +259,26 @@ def thresholds(p=Depends(get_provider)):
     return tracking.report(p.conn, p.now)
 
 
+@app.get("/api/coverage")
+def coverage_report(p=Depends(get_provider), date_from: Optional[date] = None, date_to: Optional[date] = None):
+    """Every-game coverage (docs/COVERAGE.md) for Eastern dates [date_from, date_to] (default: the last 7 days and today):
+    scheduled games against the source schedule, forecasts per market (main or fallback), graded, pending, void,
+    unresolved and missing with reasons, the unfiltered record and threshold views. Read-only."""
+    from datetime import timedelta
+    from . import coverage
+    today = date.fromisoformat(coverage.et_date(p.now))
+    date_to = date_to or today
+    date_from = date_from or (date_to - timedelta(days=7))
+    if date_from > date_to or (date_to - date_from).days > coverage.MAX_REPORT_DAYS:
+        raise HTTPException(status_code=422, detail=f"date_from must not be after date_to and the range at most "
+                                                    f"{coverage.MAX_REPORT_DAYS} days")
+    if p.mode != "real":
+        return {"status": "demo", "note": "Coverage requires the real store; demo mode records no forecasts."}
+    start, end = coverage.et_bounds(date_from.isoformat(), date_to.isoformat())
+    return {"status": "available", "date_from": date_from.isoformat(), "date_to": date_to.isoformat(),
+            **coverage.games_report(p.conn, start=start, end=end, as_of=p.now)}
+
+
 # --- Research: model agreement, combination and selection (docs/MODEL_SELECTION.md). Research/shadow only. ------------------
 def _research_store(p) -> None:
     if not db.has_table(p.conn, "research_cohorts"):
@@ -294,10 +346,13 @@ def research_tracking(market: str = MARKET, evidence: str = Query("prospective",
                       line: Optional[float] = None, date_from: Optional[date] = None, date_to: Optional[date] = None,
                       p=Depends(get_provider)):
     """Persistent agreement tracking tracking-v2 (docs/MODEL_SELECTION.md §18): every registered group by threshold and band,
-    prospective or historical (exploratory) evidence, exploratory leaderboard. Research only."""
+    prospective or historical (exploratory) evidence, exploratory leaderboard; `exact_rules` = the registered exact rules'
+    prospective record (exact-rules-v1; CLI-only registration). Research only."""
     if p.mode != "real":
         return {"mode": "demo", "sport": "nba", "market": market, "evidence": evidence, "status": "demo", "groups": [],
-                "leaderboard": [], "note": "Agreement tracking reads the real stores; none in demo mode."}
+                "leaderboard": [], "note": "Agreement tracking reads the real stores; none in demo mode.",
+                "exact_rules": {"study": "exact-rules-v1", "status": "demo", "games": 0, "rules": [],
+                                "note": "Exact-rule tracking reads the real stores; none in demo mode."}}
     _market_supported(p, market)
     from . import agreement_tracking as at, selection_status
     try:
@@ -338,6 +393,33 @@ def research_training(p=Depends(get_provider)):
                 "note": "Training status reads the real stores; none in demo mode."}
     from . import training_monitor
     return {**training_monitor.status(p.conn, p.now), "mode": "real"}
+
+
+@app.get("/api/training-run")
+def training_run(p=Depends(get_provider)):
+    """Adaptive training state for one sport: whether a process holds the training lock, artifacts written by a running
+    run, the last run, last success and last failure, and which model versions made the latest live forecasts. Reads the
+    live store and training folder (config.live_data_dir) without locks or writes; nothing is estimated."""
+    if p.mode != "real":
+        return {"mode": "demo", "sport": "nba", "note": "Training status reads the real stores; none in demo mode."}
+    from . import adaptive, training_monitor
+    try:
+        defn, expected = adaptive.definition(p.conn), len(adaptive.members(p.conn)[0])
+    except Exception:      # an unusable definition is reported as unknown, never guessed
+        defn, expected = None, None
+    live = config.live_data_dir()
+    path = live / sports.get(p.sport).db_file
+    try:
+        conn = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
+        conn.row_factory = sqlite3.Row
+        try:
+            out = training_monitor.run_status(conn, live / "research" / "adaptive" / p.sport, p.sport, p.now,
+                                              code_definition=defn, expected_members=expected)
+        finally:
+            conn.close()
+    except sqlite3.Error as exc:
+        raise HTTPException(status_code=503, detail=f"Live store unreadable for training status ({path}): {exc}") from exc
+    return {**out, "live_data_dir": str(live), "serving_data_dir": str(config.data_dir()), "mode": "real"}
 
 
 @app.get("/api/research/adaptive")
@@ -429,6 +511,79 @@ def research_retrospective(p=Depends(get_provider)):
     return {**combination_research.compact(p.sport), "mode": p.mode}
 
 
+@app.get("/api/research/combinations")
+def research_combinations(market: str = MARKET, base: str = Query("", max_length=1000), sport: str = SPORT,
+                          mode: str = Depends(api_mode)):
+    """Combinations of the saved out-of-sample forecasts (combination_research.stored). Reads saved tables, not the store,
+    so it takes no store turn; a first, uncached call computes for several seconds."""
+    if mode != "real":       # real historical results: never shown under the Demo label
+        return {"mode": "demo", "sport": sport, "market": market, "status": "unavailable", "models": [],
+                "note": "The combination analysis uses real historical results; it is not part of the demo data."}
+    from . import combination_research
+    try:
+        return {**combination_research.stored(sport, market, [m for m in base.split(",") if m] or None), "mode": "real"}
+    except InvalidRequest as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+SOURCE = Query("pool", pattern="^(pool|adaptive:[0-9a-f]{16})$",
+               description="'pool' (candidate-pool saved tables) or 'adaptive:<definition>' (exported adaptive candidates)")
+
+
+@app.get("/api/research/thresholds")
+def research_thresholds(market: str = MARKET, sport: str = SPORT, source: str = SOURCE,
+                        group: str = Query("", max_length=2000), base: str = Query("", max_length=2000),
+                        rule: str = Query("", max_length=2000), mode: str = Depends(api_mode)):
+    """Confidence thresholds, agreement x confidence, a model added at each threshold, and one exact rule
+    (combination_thresholds.explore) on the saved out-of-sample forecasts. Reads saved tables only; nothing is fitted."""
+    if mode != "real":
+        return {"mode": "demo", "sport": sport, "market": market, "status": "unavailable", "models": [],
+                "note": "The threshold explorer uses real historical results; it is not part of the demo data."}
+    from . import combination_thresholds as ct
+    split = lambda s: [m for m in s.split(",") if m] or None     # noqa: E731
+    try:
+        return {**ct.explore(sport, market, source, split(group), split(base), rule or None), "mode": "real"}
+    except InvalidRequest as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@app.get("/api/research/thresholds/ledger")
+def research_threshold_ledger(market: str = MARKET, sport: str = SPORT, source: str = SOURCE,
+                              rule: str = Query(..., min_length=3, max_length=2000),
+                              period: str = Query("all", pattern="^(earlier|later|all)$"),
+                              format: str = Query("json", pattern="^(json|csv)$"), mode: str = Depends(api_mode)):
+    """Every qualifying game of one exact rule (combination_thresholds.ledger): teams, each member's pick and probability, the
+    shared pick, actual outcome and result, and the best single model's pick on the same game. CSV for download."""
+    if mode != "real":
+        return {"mode": "demo", "sport": sport, "market": market, "status": "unavailable", "rows": [],
+                "note": "The ledger uses real historical results; it is not part of the demo data."}
+    from fastapi.responses import Response
+    from . import combination_thresholds as ct
+    try:
+        led = ct.ledger(sport, market, source, rule, period)
+    except InvalidRequest as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    if format == "csv":
+        name = f"ledger-{sport}-{market}-{period}.csv"
+        return Response(ct.ledger_csv(led), media_type="text/csv",
+                        headers={"Content-Disposition": f'attachment; filename="{name}"'})
+    return {**led, "mode": "real"}
+
+
+@app.get("/api/research/subsets")
+def research_subsets(market: str = MARKET, sport: str = SPORT, source: str = SOURCE, mode: str = Depends(api_mode)):
+    """Every pair and triple of saved models with per-member thresholds: searched on the earlier period, the top rules
+    frozen and scored on the later period (combination_thresholds.subsets). Exploratory; nothing is fitted or promoted."""
+    if mode != "real":
+        return {"mode": "demo", "sport": sport, "market": market, "status": "unavailable", "models": [],
+                "note": "The subset search uses real historical results; it is not part of the demo data."}
+    from . import combination_thresholds as ct
+    try:
+        return {**ct.subsets(sport, market, source), "mode": "real"}
+    except InvalidRequest as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
 @app.get("/api/research/history")
 def research_history(limit: int = Query(200, ge=1, le=2000), p=Depends(get_provider)):
     if p.mode != "real":
@@ -461,5 +616,26 @@ def research_tracking_joint(market: str = MARKET, evidence: str = Query("histori
                                confidence=confidence, agreement_min=agreement_min, agreement_max=agreement_max,
                                confidence_min=confidence_min, confidence_max=confidence_max, version=version, line=line,
                                date_from=date_from, date_to=date_to, evaluate=evaluate)
-    except ValueError as exc:
+    except InvalidRequest as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+
+
+@app.get("/api/research/daily-agreement")
+def research_daily_agreement(p=Depends(get_provider)):
+    if not hasattr(p, "conn"):
+        return {"mode": "demo", "markets": [], "note": "Daily learning requires real stored results; no synthetic performance is presented."}
+    from . import daily_agreement
+    return {**daily_agreement.report(p.conn, p.now), "mode": "real"}
+
+
+@app.get("/api/research/daily-agreement/evidence")
+def daily_agreement_evidence(market: str = MARKET, rule: str = Query(..., max_length=4096),
+                             period: str = Query("later", pattern="^(earlier|later)$"),
+                             offset: int = Query(0, ge=0), p=Depends(get_provider)):
+    if not hasattr(p, "conn"):
+        raise HTTPException(status_code=400, detail="Daily evidence requires real stored results")
+    from . import daily_agreement
+    try:
+        return daily_agreement.evidence(p.conn, p.now, market, rule, period, offset)
+    except InvalidRequest as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc

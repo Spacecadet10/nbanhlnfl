@@ -19,6 +19,12 @@ def raw_dir() -> Path:
     return data_dir() / "raw"
 
 
+def live_data_dir() -> Path:
+    """Where the scheduled jobs and the trainer write. Training-run status reads it (read-only). Defaults to the data
+    directory; the development launcher (scripts/dev.sh) serves a snapshot copy and points NBA_LIVE_DATA_DIR at the live one."""
+    return Path(os.environ.get("NBA_LIVE_DATA_DIR", data_dir()))
+
+
 
 def shadow_enabled() -> bool:
     """Whether `daily` also refreshes possession stats and records shadow forecasts. Off unless NBA_SHADOW_RECORDING=1."""
@@ -28,3 +34,14 @@ def shadow_enabled() -> bool:
 def injury_collection_enabled() -> bool:
     """Whether `app.cli injuries` may make requests. Off unless NBA_INJURY_COLLECTION=1 (set only in its own agent)."""
     return os.environ.get("NBA_INJURY_COLLECTION") == "1"
+
+
+def player_box_refresh_enabled() -> bool:
+    """Whether the nightly job may re-download the current season's NBA player box (jobs.player_box_refresh). Off unless
+    NBA_PLAYER_BOX_REFRESH=1, activated only with an approved service configuration change."""
+    return os.environ.get("NBA_PLAYER_BOX_REFRESH", "0") == "1"
+
+
+def daily_agreement_enabled() -> bool:
+    """Opt-in recording, activated only with an approved service configuration change."""
+    return os.environ.get("NBA_DAILY_AGREEMENT", "0") == "1"

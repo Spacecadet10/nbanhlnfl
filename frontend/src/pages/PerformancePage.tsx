@@ -8,11 +8,14 @@ import { MarketReport, MarketVersionSelect } from '../components/MarketView';
 import { AgreementTracking } from '../components/Tracking';
 import { SystemStatusPanel, TrainingStatusCard } from '../components/Training';
 import { AdaptiveStatusCard } from '../components/Adaptive';
-import { CandidateRosterCard, HistoricalStartCard, CombinationRules, PoolSelectionCard, SelectionStatusCard, ResearchPerformance, RetrospectiveStudy } from '../components/Research';
+import { CoverageCard } from '../components/Coverage';
+import { ThresholdExplorerCard } from '../components/ThresholdExplorer';
+import { CandidateRosterCard, CombinationAnalysisCard, HistoricalStartCard, CombinationRules, PoolSelectionCard, SelectionStatusCard, ResearchPerformance, RetrospectiveStudy } from '../components/Research';
 import { DetailsToggle, MarketSelect, useDetails, useMarket, useSport } from '../components/Selection';
 import { PolicyToggle, RunTypeToggle, usePolicy, useRunType } from '../components/RunTypeToggle';
 import { AsyncView, Empty } from '../components/States';
 import { calendarDate, FULL_DATE, num, pct } from '../format';
+import { canonicalFor, CanonicalReport } from '../components/Canonical';
 
 const SMALL_SAMPLE = 200;
 
@@ -20,11 +23,14 @@ export function PerformancePage() {
   const [sport] = useSport();
   const [market, setMarket] = useMarket();
   const [run, setRun] = useRunType();
-  const [policyChoice, setPolicy] = usePolicy();
+  const [policyChoice, setPolicy] = usePolicy(canonicalFor(sport));
   const [details] = useDetails();
-  const policy = run === 'live' || market !== 'winner' ? policyChoice : 'pregame';
+  const chosen: Policy = policyChoice === 'canonical' && !canonicalFor(sport, market) ? 'near_tipoff' : policyChoice;
+  const policy: Policy = run === 'live' || market !== 'winner' ? chosen : 'pregame';
+  const canonical = market === 'winner' && run === 'live' && policy === 'canonical';
   const meta = useApi((s) => api.meta(sport, s), [sport]);
-  const { state, retry } = useApi((s) => api.performance(sport, run, policy, s), [sport, run, policy]);
+  const { state, retry } = useApi((s): Promise<PerformanceResponse | null> => (canonical ? Promise.resolve(null) : api.performance(sport, run, policy, s)),
+    [sport, run, policy, canonical]);
   const markets = meta.state.status === 'success' ? meta.state.data.markets : [];
   if (market !== 'winner') {
     return (
@@ -35,8 +41,21 @@ export function PerformancePage() {
           ? <MarketSelect value={market} markets={markets} onChange={setMarket} />
           : meta.state.status === 'error' ? <p className="warn small">Market list unavailable: {meta.state.error}</p> : null}
         <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} /></div>
+        <CoverageCard sport={sport} market={market} />
         {policy === 'near_tipoff' && <><ThresholdResearch sport={sport} market={market} /><RecoveredThresholds sport={sport} market={market} /></>}
         <MarketPerformance sport={sport} market={market} policy={policy} />
+        <ResearchSection sport={sport} market={market} show={details} />
+      </section>
+    );
+  }
+  if (canonical) {
+    return (
+      <section>
+        <SystemStatusPanel sport={sport} />
+        {markets.length > 0 && <MarketSelect value={market} markets={markets} onChange={setMarket} />}
+        <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} canonical />
+          <RunTypeToggle value={run} onChange={setRun} /></div>
+        <CanonicalReport sport={sport} />
         <ResearchSection sport={sport} market={market} show={details} />
       </section>
     );
@@ -46,9 +65,10 @@ export function PerformancePage() {
       <SystemStatusPanel sport={sport} />
       {markets.length > 0 && <MarketSelect value={market} markets={markets} onChange={setMarket} />}
       <AsyncView state={state} retry={retry}>
-        {(p) => (
+        {(p) => p && (
           <>
-            {p.mode === 'real' && run === 'live' && <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} /></div>}
+            {p.mode === 'real' && run === 'live' && <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} canonical={canonicalFor(sport, market)} /></div>}
+            {p.mode === 'real' && run === 'live' && <CoverageCard sport={sport} market={market} />}
             {run === 'live' && policy === 'near_tipoff' && <><ThresholdResearch sport={sport} market={market} /><RecoveredThresholds sport={sport} market={market} /></>}
             <Report perf={p} run={run} setRun={setRun} />
           </>
@@ -71,6 +91,8 @@ function ResearchSection({ sport, market, show }: { sport: Sport; market: Market
         {show && <p><a href="#joint-agreement">Explore model agreement + confidence ranges</a></p>}
       </div>
       <HistoricalStartCard sport={sport} market={market} />
+      <CombinationAnalysisCard sport={sport} market={market} />
+      <ThresholdExplorerCard sport={sport} market={market} />
       {show && <>
         <SelectionStatusCard sport={sport} market={market} />
         <ResearchPerformance sport={sport} market={market} />

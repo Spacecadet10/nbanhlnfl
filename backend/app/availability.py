@@ -12,6 +12,8 @@ import csv
 import hashlib
 import io
 import json
+import math
+import os
 import re
 import sqlite3
 import time
@@ -67,9 +69,12 @@ def player_box_path(season: int) -> Path:
     return research_dir() / "player_box" / f"player_box_{season}.csv"
 
 
-def download_player_box(season: int, get: Optional[Callable] = None) -> dict:
-    """Downloads one season file and verifies it against the digest GitHub publishes; a mismatch stores nothing."""
-    _check_season(season)
+def download_player_box(season: int, get: Optional[Callable] = None, live: bool = False) -> dict:
+    """Downloads one season file and verifies it against the digest GitHub publishes; a mismatch stores nothing.
+    `live=True` (the adaptive member's current-season input, jobs.player_box_refresh) may fetch a season outside the
+    research window; the study itself never reads it (its loaders keep the window check)."""
+    if not live:
+        _check_season(season)
     import httpx
     get = get or (lambda url: httpx.get(url, timeout=120, follow_redirects=True))
     name = f"player_box_{season}.csv"
@@ -88,7 +93,9 @@ def download_player_box(season: int, get: Optional[Callable] = None) -> dict:
         raise AvailabilityError(f"{name}: status {resp.status_code}, digest {sha} vs published {digest}")
     path = player_box_path(season)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(body)
+    tmp = path.with_name(path.name + ".part")          # atomic: a reader (training, serving) never sees a half-written file
+    tmp.write_bytes(body)
+    os.replace(tmp, path)
     return {"season": season, "bytes": len(body), "sha256": sha}
 
 
@@ -112,16 +119,24 @@ def parse_player_rows(rows, season: int) -> tuple[dict, dict]:
     """Shared CSV parser. Research loader above retains its explicit season restriction."""
     apps: dict[str, list[Appearance]] = defaultdict(list)
     names: dict[str, str] = {}
+    seen = set()
     for r in rows:
         pid = r.get("athlete_id")
         if not pid or pid == "NA":
             continue
+        if r.get("game_id"):
+            key = (str(r["game_id"]), str(pid))
+            if key in seen:
+                raise ValueError(f"duplicate player game: {key}")
+            seen.add(key)
         dnp = str(r.get("did_not_play", "")).lower() == "true"
         raw_min = r.get("minutes") or ""
         try:
             minutes = 0.0 if dnp or raw_min in ("", "NA") else float(raw_min)
         except ValueError:
             minutes = 0.0
+        if not math.isfinite(minutes) or minutes < 0:
+            raise ValueError(f"invalid player minutes for {pid}: {raw_min}")
         tip = datetime.fromisoformat(r["game_date_time"].replace("Z", "+00:00")) if r.get("game_date_time") \
             else datetime.fromisoformat(r["game_date"])
         day = (tip.astimezone(ET) if tip.tzinfo else tip).strftime("%Y-%m-%d")
@@ -301,8 +316,11 @@ def parse_layout(pages: list[tuple[str, list[str]]], name: str, team_names: list
     column starts; game date and team carry down from the rows above. `loose_lines` counts, independently of the column
     logic, every line with a "Last, First" name followed by a status word; reconciliation requires the parsed entries to
     equal that count, so a page the column logic cannot read fails instead of passing with zero entries."""
-    teams_by_key = {" ".join(t.split()).lower(): t for t in team_names}
-    team_re = re.compile("|".join(r"\s+".join(map(re.escape, t.split())) for t in sorted(team_names, key=len, reverse=True)))
+    # Team names are matched without regard to internal spacing: layout extraction sometimes drops the space inside a
+    # name ("Portland TrailBlazers", "LosAngeles Lakers", "OklahomaCity Thunder"), which used to leave the row credited to
+    # the previously seen team (review finding).
+    teams_by_key = {_team_key(t): t for t in team_names}
+    team_re = re.compile("|".join(r"\s*".join(map(re.escape, t.split())) for t in sorted(team_names, key=len, reverse=True)))
     out = ParsedReport(name=name, header_published=None)
     game_date = team = None
     cols: dict[str, int] = {}
@@ -321,7 +339,8 @@ def parse_layout(pages: list[tuple[str, list[str]]], name: str, team_names: list
         if mode == "rows":
             game_date, team = _parse_rows(lines, out, team_re, teams_by_key, game_date, team)
             continue
-        for line in lines:
+        cells = [_team_key(_field(line, cols, "Team")) if cols else "" for line in lines]
+        for i, line in enumerate(lines):
             if is_header_row(line):
                 continue
             if not cols or not line.strip():
@@ -329,9 +348,9 @@ def parse_layout(pages: list[tuple[str, list[str]]], name: str, team_names: list
             d = GAME_DATE.search(_field(line, cols, "Game Date"))
             if d:
                 game_date = f"{d.group(3)}-{d.group(1)}-{d.group(2)}"
-            tm = " ".join(_field(line, cols, "Team").split())
-            if tm and tm.lower() in teams_by_key:
-                team = teams_by_key[tm.lower()]
+            found = _team_cell(cells, i, teams_by_key)
+            if found:
+                team = found
             if "NOT YET SUBMITTED" in " ".join(line.upper().split()):
                 out.not_submitted.append({"game_date": game_date, "team": team})
                 continue
@@ -346,6 +365,26 @@ def parse_layout(pages: list[tuple[str, list[str]]], name: str, team_names: list
     return out
 
 
+def _team_key(text: str) -> str:
+    """Spacing-insensitive lookup key of a team name ("Portland TrailBlazers" and "Portland Trail Blazers" agree)."""
+    return "".join(text.split()).lower()
+
+
+def _team_cell(cells: list, i: int, teams_by_key: dict) -> Optional[str]:
+    """The team named by the Team column at line `i`: the cell itself, or a name wrapped over two lines ("Minnesota" /
+    "Timberwolves"), joined with the neighbouring line's cell. Header/footer fragments and unknown text give None (the
+    team carried from the rows above stays in force, as before)."""
+    cell = cells[i]
+    if not cell:
+        return None
+    if cell in teams_by_key:
+        return teams_by_key[cell]
+    for joined in ((cell + cells[i + 1]) if i + 1 < len(cells) else "", (cells[i - 1] + cell) if i else ""):
+        if joined and joined in teams_by_key:
+            return teams_by_key[joined]
+    return None
+
+
 def _parse_rows(lines, out: ParsedReport, team_re, teams_by_key, game_date, team):
     """Row-pattern parsing (GemBox: continuation pages have no header and shifted columns). The team is a known team name
     anywhere on the line; the player and status are searched only after it."""
@@ -358,7 +397,7 @@ def _parse_rows(lines, out: ParsedReport, team_re, teams_by_key, game_date, team
         rest = line
         t = team_re.search(line)
         if t:
-            team = teams_by_key[" ".join(t.group(0).split()).lower()]
+            team = teams_by_key[_team_key(t.group(0))]
             rest = line[t.end():]
         if "NOT YET SUBMITTED" in " ".join(line.upper().split()):
             out.not_submitted.append({"game_date": game_date, "team": team})
@@ -406,6 +445,7 @@ class PlayerIndex:
         self.by_team_season: dict[tuple, dict[str, set]] = defaultdict(lambda: defaultdict(set))
         self.by_team: dict[str, dict[str, set]] = defaultdict(lambda: defaultdict(set))
         self.by_season: dict[int, dict[str, set]] = defaultdict(lambda: defaultdict(set))
+        self.first: dict[tuple, str] = {}       # (pid, team|None, season|None) -> earliest box date (match's `before`)
         for season, (apps, names) in box.items():
             for pid, rows in apps.items():
                 key = norm_name(names.get(pid, ""))
@@ -415,13 +455,24 @@ class PlayerIndex:
                 for a in rows:
                     self.by_team_season[(a.team_id, season)][key].add(pid)
                     self.by_team[a.team_id][key].add(pid)
+                    for k in ((pid, a.team_id, season), (pid, a.team_id, None), (pid, None, season)):
+                        self.first[k] = min(self.first.get(k, a.date), a.date)
         self.aliases = aliases
 
-    def match(self, last: str, first: str, team_id: str, season: int) -> tuple[Optional[str], str]:
+    def match(self, last: str, first: str, team_id: str, season: int,
+              before: Optional[str] = None) -> tuple[Optional[str], str]:
+        """`before` (an ET date): only box rows dated earlier may establish an identity, so a report is never resolved
+        with later appearances. None keeps the research behaviour (the whole box)."""
         key = norm_name(f"{first} {last}")
-        for level, ids in (("team_season", self.by_team_season[(team_id, season)].get(key, set())),
-                           ("team_any_season", self.by_team[team_id].get(key, set())),
-                           ("league_unique", self.by_season[season].get(key, set()) | self.by_season[season - 1].get(key, set()))):
+
+        def seen(ids, team, seasons):
+            if before is None:
+                return ids
+            return {p for p in ids if any(self.first.get((p, team, s), before) < before for s in seasons)}
+        for level, ids in (("team_season", seen(self.by_team_season[(team_id, season)].get(key, set()), team_id, (season,))),
+                           ("team_any_season", seen(self.by_team[team_id].get(key, set()), team_id, (None,))),
+                           ("league_unique", seen(self.by_season[season].get(key, set()) | self.by_season[season - 1].get(key, set()),
+                                                  None, (season, season - 1)))):
             if len(ids) == 1:
                 return next(iter(ids)), level
             if len(ids) > 1:
@@ -524,6 +575,7 @@ def build_report_facts(conn: sqlite3.Connection, box: dict, *, log: Callable[[st
             cov[f"excluded_{reason}"] += 1
             continue
         f = ReportFacts(True, "ok", pub.strftime("%Y-%m-%dT%H:%M:%SZ"))
+        before = pub.astimezone(ET).strftime("%Y-%m-%d")
         for ns in parsed.not_submitted:
             if ns["game_date"] == day and ns["team"] in team_names:
                 f.unsubmitted.add(team_names[ns["team"]])
@@ -537,7 +589,7 @@ def build_report_facts(conn: sqlite3.Connection, box: dict, *, log: Callable[[st
             team = team_names[e["team"]]
             f.teams_on_report.add(team)
             w = STATUS_WEIGHT[e["status"]]
-            pid, level = idx.match(e["last"], e["first"], team, season)
+            pid, level = idx.match(e["last"], e["first"], team, season, before)   # never from later appearances
             match_levels[season][level] += 1
             if w == 0:
                 continue

@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Optional
 
 from . import combine, config, nhl_eval, selector, sports
+from .errors import InvalidRequest
 from .db import transaction, utc_now
 
 STUDY = "tracking-v2"
@@ -59,6 +60,13 @@ KIND_SEMANTICS = {
     "stack": "probability from the cohort's learned stacker (refit on the two earlier seasons)",
     "stack_pool": "probability from the pool stacker fitted on earlier out-of-sample forecasts (frozen weights)",
 }
+# exact-rules-v1 (app/exact_rules.py): a registered subset with one threshold PER MEMBER, tracked here as kind 'exact'.
+# Confidence = each member's probability of the agreed side among the market's allowed sides (the explorer's definition);
+# the rule's statistic is the minimum of them: descriptive, never an ensemble probability (no vector, no Brier/log loss).
+EXACT_KIND = "exact"
+EXACT_EPS = 1e-12          # the explorer's tolerance (combination_thresholds.EPS): the same boundary games qualify in both
+EXACT_SEMANTICS = {"exact": "minimum member confidence for the agreed side (each member's probability of that side among the "
+                            "allowed sides) with every member at or above its OWN threshold; descriptive only"}
 
 
 EXTRA_MODULES = {"research": "ngboost"}      # optional dependency group -> importable module (candidates/registry.py)
@@ -294,6 +302,8 @@ def classify(group: dict, vectors: dict, market: str, pool_model: Optional[dict]
         return from_vector(vectors[f"stack:{group['stack_of']}"])
     if kind == "stack_pool":
         return from_vector(combine.stack(pool_model, [vectors[m] for m in pool_model["members"]]))
+    if kind == EXACT_KIND:
+        return _classify_exact(group, vectors, market, out)
     vecs = [vectors[m] for m in members]
     picks = [combine.pick(v, market) for v in vecs]
     if kind == "unanimous":
@@ -321,6 +331,42 @@ def classify(group: dict, vectors: dict, market: str, pool_model: Optional[dict]
             out["side"], out["statistic"] = s, sum(v[s] for v in vecs) / len(vecs)
         return out
     raise ValueError(kind)
+
+
+def exact_confidence(vec, side: int, market: str) -> float:
+    """A member's probability of `side` among the market's allowed sides: the explorer's confidence (the push mass of a
+    two-way line market is left out), so a registered threshold means what it meant where the rule was chosen."""
+    allowed = combine.sides(market)
+    tot = sum(float(vec[k]) for k in allowed)
+    return float(vec[side]) / tot if tot > 0 else 0.0
+
+
+def _classify_exact(group: dict, vectors: dict, market: str, out: dict) -> dict:
+    """Every member present (checked by the caller), all on the same side, each at or above its own threshold. The reasons
+    of a non-pick go to `missing` (member -> reason), as the missing members of an incomplete observation do."""
+    members, ths = group["members"], group["thresholds"]
+    if len(ths) != len(members):
+        raise ValueError("exact rule needs one threshold per member")
+    vecs = [tuple(float(x) for x in vectors[m]) for m in members]
+    picks = [combine.pick(v, market) for v in vecs]
+    if any(p is None for p in picks):
+        out["status"] = "tie"
+        out["missing"] = {m: "no pick: its allowed sides tie exactly" for m, p in zip(members, picks) if p is None}
+        return out
+    if len(set(picks)) > 1:
+        out["status"] = "disagree"
+        out["missing"] = {m: f"picks {SIDE_NAMES[p]}" for m, p in zip(members, picks)}
+        return out
+    side = picks[0]
+    confs = [exact_confidence(v, side, market) for v in vecs]
+    below = {m: f"confidence {c:.4f} below its threshold {float(t):.4g}" for m, c, t in zip(members, confs, ths)
+             if c < float(t) - EXACT_EPS}
+    if below:
+        out["status"] = "below_threshold"
+        out["missing"] = below
+        return out
+    out["side"], out["statistic"] = side, min(confs)
+    return out
 
 
 # --- Prospective recording ------------------------------------------------------------------------------------------
@@ -397,23 +443,91 @@ def _pairs(conn, game_ids: list, now: str) -> list:
     return out
 
 
-def record(conn, *, game_ids: list, now: Optional[str] = None, write: bool = True, reg: Optional[dict] = None) -> dict:
+def _has_0028(conn) -> bool:
+    """Whether migration 0028 itself is applied (not the highest version: later migrations do not imply it)."""
+    return _has(conn, "schema_migrations") and conn.execute(
+        "SELECT 1 FROM schema_migrations WHERE version = 28").fetchone() is not None
+
+
+def _observation_row(registry: str, group_id: str, sport: str, core, src, kind: str, mem: list, res: dict, sig: str,
+                     inputs: str, now: str) -> tuple:
+    """One `agreement_observations` row (positional, in INSERT order) from a classification and its stored inputs."""
+    info_at = max([src["information_at"], core["information_at"]] +
+                  [x["generated_at"] for x in mem if x["ref"] and x["ref"].get("table") == "candidate_forecasts"])
+    return (registry, group_id, sport, core["game_id"], core["market"], core["line"], core["line_source"],
+            core["cohort_id"], src["cohort_id"], src["definition"], kind, json.dumps(mem),
+            json.dumps(res["missing"], sort_keys=True), sig, inputs, res["status"],
+            None if res["side"] is None else SIDE_NAMES[res["side"]], res["statistic"],
+            json.dumps(res["vector"]), json.dumps(res["votes"]), info_at, core["tipoff_at"], now)
+
+
+_NO_EXPANDED = {"status": "incomplete", "side": None, "statistic": None, "vector": None, "votes": None,
+                "missing": {"expanded_cohort": "no expanded cohort recorded with this core cohort"}}
+NO_FIT_REFERENCE = "no fit reference: {table} rows carry a model version (code and configuration), not a parameter fit"
+
+
+def _fit_provenance(conn, ref: Optional[dict]) -> dict:
+    """The parameter fit behind a member forecast, when the forecast row records one (candidate_forecasts: fit_id, artifact
+    digest, training cutoff). A `model_version` names code and configuration; a refit with the same configuration keeps it,
+    so this is the only record that separates fits. Rows without a fit reference say so instead of implying one."""
+    table = ref.get("table") if ref else None
+    if table == "candidate_forecasts":
+        r = conn.execute("SELECT fit_id, artifact_sha256, training_cutoff, dataset_version FROM candidate_forecasts "
+                         "WHERE forecast_id=?", (ref["id"],)).fetchone()
+        if r is not None:
+            return {"fit": {"fit_id": r["fit_id"], "artifact_sha256": r["artifact_sha256"],
+                            "training_cutoff": r["training_cutoff"], "dataset_version": r["dataset_version"]}, "fit_note": None}
+    return {"fit": None, "fit_note": NO_FIT_REFERENCE.format(table=table or "member")}
+
+
+def _exact_registry(exact_registry: Optional[dict], load_exact: bool) -> tuple:
+    """(registry or None, error text or None): a broken registry file is an explicit failure, never 'no rules'."""
+    from . import exact_rules as er
+    if exact_registry is not None:
+        return exact_registry, None
+    if not load_exact:
+        return None, None
+    try:
+        return er.load_registry(), None
+    except Exception as exc:        # RegistryError (unreadable, tampered, malformed): reported, never raised to the caller
+        return None, f"{type(exc).__name__}: {exc}"
+
+
+def record(conn, *, game_ids: list, now: Optional[str] = None, write: bool = True, reg: Optional[dict] = None,
+           exact_registry: Optional[dict] = None, load_exact: Optional[bool] = None) -> dict:
     """Observations for every registered group and every pregame core cohort of the games. Idempotent (UNIQUE registry,
     group, source cohort, inputs digest): the same stored inputs never add a row; a cohort whose available inputs changed
-    (a candidate forecast made against its line later) gets a new row, earlier rows untouched (triggers). Never raises."""
+    (a candidate forecast made against its line later) gets a new row, earlier rows untouched (triggers). Never raises.
+
+    Registered exact rules (exact-rules-v1) are recorded in the same pass, one row per rule and cohort, only for games that
+    start after the rule's registration (`out["exact"]`); the registry is loaded from its file when `reg` is not given
+    (the production path), or passed as `exact_registry`."""
     now = now or utc_now()
-    out = {"status": "success", "registry": None, "created": 0, "already_recorded": 0, "cohorts": 0, "errors": {}}
+    out = {"status": "success", "registry": None, "created": 0, "already_recorded": 0, "cohorts": 0, "errors": {},
+           "exact": {"status": "none", "rules": 0, "rows": 0, "created": 0, "already_recorded": 0, "before_registration": 0}}
     try:
+        load_exact = (reg is None) if load_exact is None else load_exact
         reg = reg or load_registry()
         out["registry"] = reg["sha256"][:16]
         if not _has(conn, "agreement_observations") or "inputs_digest" not in \
                 {r[1] for r in conn.execute("PRAGMA table_info(agreement_observations)")}:
             return {**out, "status": "skipped", "reason": "migrations 0021/0022 not applied to this store"}
         sport = conn.execute("SELECT sport FROM store_identity").fetchone()[0]
+        exact, exact_error = _exact_registry(exact_registry, load_exact)
+        if exact_error:                 # a broken exact-rule registry is reported and never stops the sealed groups
+            out["exact"].update(status="failed", error=exact_error)
+            out["errors"]["exact_rules"] = exact_error
+        ex_all = [r for r in (exact["rules"] if exact else []) if r["sport"] == sport]
+        if ex_all:
+            out["exact"].update(status="recording", rules=len(ex_all), registry_version=exact["version"])
+            if not _has_0028(conn):       # visible, never a constraint error per row, never blocks the sealed groups
+                out["exact"].update(status="skipped", reason="migration 0028 not applied to this store: exact rules not recorded")
+                ex_all = []
         rows = []
         for core, exp in _pairs(conn, game_ids, now):
             m = reg["markets"].get(f"{sport}:{core['market']}")
-            if m is None:
+            ex_rules = [r for r in ex_all if r["market"] == core["market"]]
+            if m is None and not ex_rules:
                 continue
             out["cohorts"] += 1
             try:
@@ -421,13 +535,11 @@ def record(conn, *, game_ids: list, now: Optional[str] = None, write: bool = Tru
                 if latest >= core["tipoff_at"]:
                     out["errors"][f"{core['game_id']}:{core['market']}"] = "an input is not earlier than the start"
                     continue
-                for g in m["groups"]:
+                for g in (m["groups"] if m else []):
                     try:
                         src = exp if g["cohort"] == "expanded" else core
                         if src is None:
-                            res = {"status": "incomplete", "side": None, "statistic": None, "vector": None, "votes": None,
-                                   "missing": {"expanded_cohort": "no expanded cohort recorded with this core cohort"}}
-                            src = core
+                            res, src = dict(_NO_EXPANDED), core
                         else:
                             res = classify(g, vectors, core["market"], m.get("pool_stacker"))
                         names = [x for x in g["members"] if x in info] if g["kind"] != "stack" else []
@@ -436,15 +548,29 @@ def record(conn, *, game_ids: list, now: Optional[str] = None, write: bool = Tru
                                           src["definition"] if g["kind"] == "stack" else None)
                         inputs = _key_digest(sorted((x["name"], json.dumps(x["ref"], sort_keys=True)) for x in mem),
                                              sorted(res["missing"]))
-                        info_at = max([src["information_at"], core["information_at"]] +
-                                      [x["generated_at"] for x in mem if x["ref"] and x["ref"].get("table") == "candidate_forecasts"])
-                        rows.append((reg["sha256"], g["id"], sport, core["game_id"], core["market"], core["line"], core["line_source"],
-                                     core["cohort_id"], src["cohort_id"], src["definition"], g["kind"], json.dumps(mem),
-                                     json.dumps(res["missing"], sort_keys=True), sig, inputs, res["status"],
-                                     None if res["side"] is None else SIDE_NAMES[res["side"]], res["statistic"],
-                                     json.dumps(res["vector"]), json.dumps(res["votes"]), info_at, core["tipoff_at"], now))
+                        rows.append(_observation_row(reg["sha256"], g["id"], sport, core, src, g["kind"], mem, res, sig, inputs, now))
                     except Exception as exc:     # one group never blocks the other groups of its cohort
                         out["errors"][f"{core['game_id']}:{core['market']}:{g['id']}"] = f"{type(exc).__name__}: {exc}"
+                for r in ex_rules:
+                    try:
+                        if core["tipoff_at"] <= r["effective_from"] or now < r["effective_from"]:
+                            out["exact"]["before_registration"] += 1      # never backfilled: the game must start after registration
+                            continue
+                        src = exp if r["cohort"] == "expanded" else core
+                        if src is None:
+                            res, src = dict(_NO_EXPANDED), core
+                        else:
+                            res = classify({"kind": EXACT_KIND, "members": r["members"], "thresholds": r["thresholds"]},
+                                           vectors, core["market"])
+                        mem = [{**info[x], "threshold": float(t), **_fit_provenance(conn, info[x]["ref"])}
+                               for x, t in zip(r["members"], r["thresholds"]) if x in info]
+                        sig = _key_digest(sorted((x["name"], x["version"]) for x in mem), EXACT_KIND, None)
+                        inputs = _key_digest(sorted((x["name"], json.dumps(x["ref"], sort_keys=True)) for x in mem),
+                                             sorted(res["missing"]))
+                        rows.append(_observation_row(r["rule_sha256"], r["id"], sport, core, src, EXACT_KIND, mem, res, sig, inputs, now))
+                        out["exact"]["rows"] += 1
+                    except Exception as exc:     # one rule never blocks the sealed groups or the other rules
+                        out["errors"][f"{core['game_id']}:{core['market']}:{r['id']}"] = f"{type(exc).__name__}: {exc}"
             except Exception as exc:     # one cohort never blocks the others
                 out["errors"][f"{core['game_id']}:{core['market']}"] = f"{type(exc).__name__}: {exc}"
         if write and rows:
@@ -455,9 +581,10 @@ def record(conn, *, game_ids: list, now: Optional[str] = None, write: bool = Tru
                 try:
                     with transaction(conn):
                         for r in batch:
+                            counter = out["exact"] if r[10] == EXACT_KIND else out
                             if conn.execute("SELECT 1 FROM agreement_observations WHERE registry=? AND group_id=? AND "
                                             "source_cohort_id=? AND inputs_digest=?", (r[0], r[1], r[8], r[14])).fetchone():
-                                out["already_recorded"] += 1
+                                counter["already_recorded"] += 1
                                 continue
                             try:     # a plain insert: a row refused by a constraint is reported, never counted as a retry
                                 conn.execute(
@@ -465,7 +592,7 @@ def record(conn, *, game_ids: list, now: Optional[str] = None, write: bool = Tru
                                     "line, line_source, cohort_id, source_cohort_id, definition, kind, members, missing, "
                                     "version_sig, inputs_digest, status, side, statistic, vector, votes, information_at, "
                                     "tipoff_at, recorded_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", r)
-                                out["created"] += 1
+                                counter["created"] += 1
                             except sqlite3.IntegrityError as exc:
                                 out["errors"][f"{key[0]}:{key[1]}:{r[1]}"] = f"{type(exc).__name__}: {exc}"
                 except sqlite3.DatabaseError as exc:
@@ -691,16 +818,19 @@ def _state(row) -> str:
     return "settled"
 
 
-def prospective_items(conn, reg: dict, sport: str, market: str, date_from=None, date_to=None, version=None) -> dict:
-    """group_id -> {game_id: item} from the canonical observation per game (latest pregame source cohort)."""
+def prospective_items(conn, reg: dict, sport: str, market: str, date_from=None, date_to=None, version=None,
+                      registries: Optional[list] = None) -> dict:
+    """group_id -> {game_id: item} from the canonical observation per game (latest pregame source cohort). `registries`
+    (default: the sealed registry's sha256) are the `registry` values read, e.g. registered exact rules' own digests."""
     from . import markets as mk
     if not _has(conn, "agreement_observations"):
         return {}
+    regs = list(registries) if registries else [reg["sha256"]]
     sql = ("SELECT o.*, g.status AS g_status, g.home_score, g.away_score, g.result_available_at, g.tipoff_at AS game_tipoff_at, "
            "d.decision, c.generated_at AS cohort_generated_at FROM agreement_observations o JOIN games g ON g.game_id=o.game_id "
            "JOIN research_cohorts c ON c.cohort_id=o.source_cohort_id LEFT JOIN game_decisions d ON d.game_id=o.game_id "
-           "WHERE o.registry=? AND o.market=?")
-    params = [reg["sha256"], market]
+           f"WHERE o.registry IN ({','.join('?' * len(regs))}) AND o.market=?")
+    params = [*regs, market]
     lo, hi = day_bounds(date_from, date_to)
     if lo:
         sql += " AND o.tipoff_at >= ?"
@@ -779,12 +909,76 @@ def _historical_full(sport: str, market: str, date_from, date_to, line, sha: str
     return _full(per, reg["markets"][f"{sport}:{market}"], market, historical=True)
 
 
+EXACT_NOTE = ("Registered exact rules (exact-rules-v1): chosen in the threshold explorer, registered by the CLI, tracked here "
+              "prospectively only: one observation per registered rule and canonical pregame cohort, for games starting after "
+              "the rule's registration. The statistic is the minimum member confidence for the agreed side (descriptive, not "
+              "an ensemble probability; no Brier or log loss). The explorer's frozen later record is historical and exploratory "
+              "and is never merged with this record. Nothing here selects, recommends or promotes.")
+EXACT_HISTORICAL_NOTE = ("Registered exact rules have no historical record here: their historical evidence is the explorer's "
+                         "frozen later record (exploratory, reused seasons), kept separate from the prospective record.")
+EXACT_REGISTRATION = "CLI only (`python -m app.cli exact-rules-register`); the app has no Save or Track control in this milestone"
+EXACT_VERSIONS_NOTE = ("`versions` counts model-definition versions (each member's `model_version`: code and configuration). "
+                       "A parameter refit with the same configuration keeps its version; the parameter fit is recorded per "
+                       "member in the observation only where the forecast row carries one (candidate forecasts: fit id, "
+                       "artifact digest, training cutoff); cohort members' prediction rows carry no fit reference, which the "
+                       "observation states instead of inventing one.")
+
+
+def exact_report(conn, sport: str, market: str, *, date_from=None, date_to=None, version=None, line=None,
+                 reg: Optional[dict] = None, exact_registry: Optional[dict] = None, load_exact: Optional[bool] = None) -> dict:
+    """Prospective record of every registered exact rule of one market: one canonical observation per game (as the sealed
+    groups), summarised by the same cells; comparators at matched coverage come from the sealed registry's single groups."""
+    from . import exact_rules as er
+    load_exact = (reg is None) if load_exact is None else load_exact
+    ex, error = _exact_registry(exact_registry, load_exact)
+    rules = er.rules_for(ex, sport, market)
+    base = {"study": er.STUDY, "registry_version": ex["version"] if ex else 0, "registry_sha256": ex["sha256"] if ex else None,
+            "statistic": er.STATISTIC, "kinds": EXACT_SEMANTICS, "registration": EXACT_REGISTRATION, "note": EXACT_NOTE,
+            "versions_note": EXACT_VERSIONS_NOTE}
+    if error:
+        return {**base, "status": "failed", "error": error, "games": 0, "rules": [],
+                "reason": "the exact-rule registry file cannot be loaded; registered rules are unknown until it is repaired"}
+    if not rules:
+        return {**base, "status": "no_registered_rules", "games": 0, "rules": []}
+    if not _has_0028(conn):
+        return {**base, "status": "schema_required", "games": 0, "rules": [], "registered_rules": [r["id"] for r in rules],
+                "reason": "migration 0028 is not applied to this store: registered exact rules are not recorded or reported; "
+                          "the store is migrated by the scheduled store commands, never by the API"}
+    reg = reg or load_registry()
+    m = reg["markets"].get(f"{sport}:{market}") or {"groups": [], "anchor": None}
+    per = _by_line(prospective_items(conn, reg, sport, market, date_from, date_to, version,
+                                     registries=[r["rule_sha256"] for r in rules]), line)
+    singles = [g for g in m["groups"] if g["kind"] == "single"]
+    sealed = _by_line(prospective_items(conn, reg, sport, market, date_from, date_to, version), line) if singles else {}
+    ranked = _Ranked({g["members"][0]: sealed.get(g["id"], {}) for g in singles}, market)
+    out = []
+    for r in rules:
+        group = {"id": r["id"], "kind": EXACT_KIND, "members": r["members"], "thresholds": r["thresholds"],
+                 "cohort": r["cohort"], "priority": "registered exact rule"}
+        items = list(per.get(r["id"], {}).values())
+        s = summarise(group, items, ranked, market, m.get("anchor"))
+        tips = sorted(i["tipoff_at"] for i in items)
+        out.append({**s, "member_thresholds": [float(t) for t in r["thresholds"]], "effective_from": r["effective_from"],
+                    "registered_at": r["registered_at"], "registered_version": r["registered_version"],
+                    "rule_sha256": r["rule_sha256"], "provenance": r.get("provenance"),
+                    "first_observed": tips[0] if tips else None, "last_observed": tips[-1] if tips else None})
+    games = len({gid for items in per.values() for gid in items})
+    return {**base, "status": "recording" if games else "no_observations_yet", "games": games, "rules": out}
+
+
 def report(conn, sport: str, market: str, *, evidence: str = "prospective", kind=None, member=None, group_id=None,
-           date_from=None, date_to=None, version=None, line=None, reg: Optional[dict] = None) -> dict:
+           date_from=None, date_to=None, version=None, line=None, reg: Optional[dict] = None,
+           exact_registry: Optional[dict] = None, load_exact: Optional[bool] = None) -> dict:
+    load_exact = (reg is None) if load_exact is None else load_exact
     reg = reg or load_registry()
     m = reg["markets"].get(f"{sport}:{market}")
+    from . import exact_rules as er
+    exact = ({"study": er.STUDY, "status": "not_applicable", "games": 0, "rules": [], "note": EXACT_HISTORICAL_NOTE,
+              "registration": EXACT_REGISTRATION} if evidence == "historical"
+             else exact_report(conn, sport, market, date_from=date_from, date_to=date_to, version=version, line=line,
+                               reg=reg, exact_registry=exact_registry, load_exact=load_exact))
     if m is None:
-        return {"sport": sport, "market": market, "status": "no_registered_groups", "groups": []}
+        return {"sport": sport, "market": market, "status": "no_registered_groups", "groups": [], "exact_rules": exact}
     if evidence == "historical":
         p = historical_path(sport, market)
         pre = _precomputed(sport, reg["sha256"]) if not (date_from or date_to or line is not None) else None
@@ -803,7 +997,7 @@ def report(conn, sport: str, market: str, *, evidence: str = "prospective", kind
             "skipped_allocation": len(m["skipped"]), "games": full["games"], "lines": full["lines"], "kinds": reg["kinds"],
             "min_evidence": MIN_EVIDENCE, "groups": [g for g in full["summaries"] if g["id"] in keep],
             "leaderboard": full["leaderboard"], "note": HISTORICAL_NOTE if evidence == "historical" else PROSPECTIVE_NOTE,
-            "leaderboard_note": LEADERBOARD_NOTE}
+            "leaderboard_note": LEADERBOARD_NOTE, "exact_rules": exact}
 
 
 # --- Historical (exploratory) ---------------------------------------------------------------------------------------
@@ -1008,16 +1202,21 @@ def chronological_check(sport: str, market: str, reg: Optional[dict] = None) -> 
             "note": "Exploratory (reused seasons). Shows whether a configuration chosen on earlier seasons held up later."}
 
 
-def game_observations(conn, game_id: str, reg: Optional[dict] = None) -> dict:
+def game_observations(conn, game_id: str, reg: Optional[dict] = None, exact_registry: Optional[dict] = None,
+                      load_exact: Optional[bool] = None) -> dict:
     """The canonical (latest pregame cohort) tracking-v2 observations of one game, per market: how many groups pick each
-    side, abstain or are incomplete, and the groups' picks with their rule statistic. Research only."""
+    side, abstain or are incomplete, and the groups' picks with their rule statistic (registered exact rules included,
+    under their own digests). Research only."""
+    load_exact = (reg is None) if load_exact is None else load_exact
     reg = reg or load_registry()
     if not _has(conn, "agreement_observations"):
         return {"game_id": game_id, "status": "migration 0021 not applied", "markets": []}
+    ex, exact_error = _exact_registry(exact_registry, load_exact)       # a broken file: sealed groups only, error named
+    regs = [reg["sha256"], *[r["rule_sha256"] for r in (ex["rules"] if ex else [])]]
     rows = conn.execute(
         "SELECT o.* FROM agreement_observations o JOIN research_cohorts c ON c.cohort_id=o.source_cohort_id "
-        "WHERE o.registry=? AND o.game_id=? ORDER BY c.generated_at, o.source_cohort_id, o.observation_id",
-        (reg["sha256"], game_id)).fetchall()
+        f"WHERE o.registry IN ({','.join('?' * len(regs))}) AND o.game_id=? ORDER BY c.generated_at, o.source_cohort_id, o.observation_id",
+        (*regs, game_id)).fetchall()
     # One cohort per market: the market's latest core cohort with observations, so counts never mix cohorts or lines.
     newest = {}
     for r in rows:
@@ -1041,7 +1240,7 @@ def game_observations(conn, game_id: str, reg: Optional[dict] = None) -> dict:
                                    for r in rs if r["status"] == "incomplete"][:12]})
     order = {m: i for i, m in enumerate(sports.get(reg_sport(conn)).markets)}
     return {"game_id": game_id, "registry_sha256": reg["sha256"], "status": "recorded" if out else "no_observations",
-            "markets": sorted(out, key=lambda x: order.get(x["market"], 99)),
+            "markets": sorted(out, key=lambda x: order.get(x["market"], 99)), "exact_rules_error": exact_error,
             "note": "Research classifications from member forecasts stored before the start; not recommendations."}
 
 
@@ -1178,7 +1377,7 @@ def joint_report(conn, sport, market, *, evidence="historical", members=None, co
                  agreement_min=0.5, agreement_max=None, confidence_min=0.5, confidence_max=None,
                  version=None, line=None, date_from=None, date_to=None, evaluate=False):
     if confidence not in ("supporters_mean", "all_mean", "supporters_min"):
-        raise ValueError("Unknown confidence definition")
+        raise InvalidRequest("Unknown confidence definition")
     rows = joint_rows(conn, sport, market, evidence, version, line, date_from, date_to)
     options = sorted({m for r in rows for m in r["vectors"] if not m.startswith("stack")})
     reg = load_registry()["markets"].get(f"{sport}:{market}", {})
@@ -1195,7 +1394,7 @@ def joint_report(conn, sport, market, *, evidence="historical", members=None, co
     if len(members) < 2:
         return {**base, "status": "choose_models", "by_definition": [], "recent": []}
     if not 2 <= len(members) <= 8 or any(m not in options for m in members):
-        raise ValueError("Choose between 2 and 8 available models")
+        raise InvalidRequest("Choose between 2 and 8 available models")
     if evidence == "historical" and any("goalie" in m for m in members):
         return {**base, "status": "invalid_historical_inputs", "by_definition": [], "recent": [],
                 "note": "This subset uses actual-starter historical goalie inputs. Historical evaluation is refused; prospective tracking remains available."}

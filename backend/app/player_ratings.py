@@ -1,5 +1,6 @@
-"""NBA player ratings and injuries, research study `players-v1` (docs/PLAYER_RATINGS_STUDY.md). Exploratory research only:
-never imported by the API, the scheduled jobs or any live definition.
+"""NBA player ratings and injuries: research study `players-v1` (docs/PLAYER_RATINGS_STUDY.md) and, in the last section, the
+adaptive member built from the same construction (`adaptive.members`, NBA only; docs/PLAYER_RATINGS_STUDY.md §11). This file is
+hashed into the NBA adaptive definition: editing it starts a new adaptive identity.
 
 Game-by-game player ratings (points of team margin per 48 minutes) are updated only after a result is delivered by the
 walk-forward runner; team strength at the 17:45 ET cutoff is the rating of the expected roster (players who recently played for
@@ -14,18 +15,22 @@ import dataclasses
 import hashlib
 import json
 import math
+import os
 import random
+import re
 import sqlite3
 import time
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
 from . import availability as av
-from . import backtest, config
+from . import backtest, config, raw_cache
 from .db import utc_now
 from .models.base import PregameGame, Result
+from .models.score_candidates import RidgePoints
+from .models.logistic import V2_FEATURES, V2_SCALED, LogisticV2
 from .sources import nba_injury
 
 STUDY = "players-v1"
@@ -181,11 +186,54 @@ class PlayerFacts(av.ReportFacts):
     entries: dict = dataclasses.field(default_factory=dict)    # {team: [(athlete id, weight)]}, one per matched entry
 
 
+def team_names(conn: sqlite3.Connection) -> dict[str, str]:
+    """{report team name: ESPN team id} for the 30 franchises (availability.build_report_facts' query)."""
+    return {r["name"]: r["team_id"].split(":", 1)[1] for r in conn.execute(
+        "SELECT team_id, name FROM teams WHERE CAST(substr(team_id, 6) AS INTEGER) BETWEEN 1 AND 30")}
+
+
+def _fill_facts(f: "PlayerFacts", parsed: av.ParsedReport, day: str, season: int, names: dict, idx: av.PlayerIndex,
+                hist: Optional[av.MinutesHistory], cov: dict, match_levels: dict, before: Optional[str] = None) -> None:
+    """One report's entries for game date `day` into `f`: availability.build_report_facts' rules (unsubmitted teams, status
+    weights, name matching, counted unresolved names), plus each matched absent player and his weight. With `hist` the
+    date-gated absent minutes are filled as well (the research facts); without it they stay 0 (the adaptive member
+    recomputes absent minutes from delivered games only, PlayerState.diffs via gated_avail)."""
+    for ns in parsed.not_submitted:
+        if ns["game_date"] == day and ns["team"] in names:
+            f.unsubmitted.add(names[ns["team"]])
+    for e in parsed.entries:
+        if e["game_date"] != day:
+            continue
+        if e["team"] not in names:
+            cov["entries_without_team"] += 1
+            continue
+        team = names[e["team"]]
+        f.teams_on_report.add(team)
+        w = av.STATUS_WEIGHT[e["status"]]
+        pid, level = idx.match(e["last"], e["first"], team, season, before)
+        match_levels[season][level] += 1
+        if w == 0:
+            continue
+        slot = f.absent.setdefault(team, {"new": 0.0, "all": 0.0, "unresolved": 0, "no_history": 0})
+        if pid is None:
+            slot["unresolved"] += 1
+            continue
+        if hist is not None:
+            minutes, basis_m = hist.expected(pid, day, season)
+            if basis_m == "no_history":
+                slot["no_history"] += 1
+            slot["all"] += w * minutes
+            if hist.played_last_team_game(pid, team, day):
+                slot["new"] += w * minutes
+        f.entries.setdefault(team, []).append((pid, w))
+        team_players = f.players.setdefault(team, {})
+        team_players[pid] = max(team_players.get(pid, 0.0), w)
+
+
 def build_facts(conn: sqlite3.Connection, box: Box, seasons: tuple) -> tuple[dict, dict]:
     """availability.build_report_facts for `seasons`, also keeping each matched absent player and his status weight.
     The `absent` minutes are computed by the same rules, so `avail_v1` sees identical features (checked in tests)."""
-    team_names = {r["name"]: r["team_id"].split(":", 1)[1] for r in conn.execute(
-        "SELECT team_id, name FROM teams WHERE CAST(substr(team_id, 6) AS INTEGER) BETWEEN 1 AND 30")}
+    names = team_names(conn)
     idx = av.PlayerIndex(box.apps, av.load_aliases())
     hist = av.MinutesHistory(box.apps)
     cov: dict = defaultdict(int)
@@ -203,7 +251,7 @@ def build_facts(conn: sqlite3.Connection, box: Box, seasons: tuple) -> tuple[dic
             continue
         meta = json.loads((rdir / (name + ".json")).read_text())
         try:
-            parsed = av.parse_report(path.read_bytes(), name, list(team_names))
+            parsed = av.parse_report(path.read_bytes(), name, list(names))
         except Exception as exc:
             facts[day] = PlayerFacts(False, f"parse_error:{type(exc).__name__}", None)
             cov["parse_error"] += 1
@@ -217,36 +265,8 @@ def build_facts(conn: sqlite3.Connection, box: Box, seasons: tuple) -> tuple[dic
             cov[f"excluded_{reason}"] += 1
             continue
         f = PlayerFacts(True, "ok", pub.strftime("%Y-%m-%dT%H:%M:%SZ"))
-        for ns in parsed.not_submitted:
-            if ns["game_date"] == day and ns["team"] in team_names:
-                f.unsubmitted.add(team_names[ns["team"]])
-        season = days[day]
-        for e in parsed.entries:
-            if e["game_date"] != day:
-                continue
-            if e["team"] not in team_names:
-                cov["entries_without_team"] += 1
-                continue
-            team = team_names[e["team"]]
-            f.teams_on_report.add(team)
-            w = av.STATUS_WEIGHT[e["status"]]
-            pid, level = idx.match(e["last"], e["first"], team, season)
-            match_levels[season][level] += 1
-            if w == 0:
-                continue
-            slot = f.absent.setdefault(team, {"new": 0.0, "all": 0.0, "unresolved": 0, "no_history": 0})
-            if pid is None:
-                slot["unresolved"] += 1
-                continue
-            minutes, basis_m = hist.expected(pid, day, season)
-            if basis_m == "no_history":
-                slot["no_history"] += 1
-            slot["all"] += w * minutes
-            if hist.played_last_team_game(pid, team, day):
-                slot["new"] += w * minutes
-            f.entries.setdefault(team, []).append((pid, w))
-            team_players = f.players.setdefault(team, {})
-            team_players[pid] = max(team_players.get(pid, 0.0), w)
+        # identity only from box rows dated before the report's publication (ET date), as in the adaptive path
+        _fill_facts(f, parsed, day, days[day], names, idx, hist, cov, match_levels, before=pub.astimezone(av.ET).strftime("%Y-%m-%d"))
         facts[day] = f
         cov["usable"] += 1
     return facts, {"coverage": dict(cov), "match_levels": {s: dict(v) for s, v in match_levels.items()}}
@@ -285,7 +305,8 @@ class PlayerRatings:
         for side, sign in ((home, 1.0), (away, -1.0)):
             for pid, m in side:
                 self.r[pid] = self.get(pid, season) + sign * self.k * (m / 48) * e
-                self.season[pid] = season
+                # never backward: a late result of an earlier season must not re-arm the season carry
+                self.season[pid] = max(season, self.season.get(pid, season))
         return e
 
 
@@ -397,17 +418,19 @@ def et_day(tipoff_at: str) -> str:
 def gated_avail(rosters: "Rosters", f, g: PregameGame, usable: bool) -> dict:
     """avail_v1's three features with absent minutes from `rosters` (delivered games only, in PlayerState)."""
     if not usable:
-        return {"new_absent_diff": 0.0, "all_absent_diff": 0.0, "report_missing": 1.0}
+        return {"new_absent_diff": 0.0, "all_absent_diff": 0.0, "all_absent_sum": 0.0, "report_missing": 1.0}
     day, h, a = et_day(g.tipoff_at), g.home_team_id.split(":", 1)[1], g.away_team_id.split(":", 1)[1]
     hh = rosters.absent(f.entries.get(h, []), h, day, g.season) if h in f.absent else {"new": 0.0, "all": 0.0}
     aa = rosters.absent(f.entries.get(a, []), a, day, g.season) if a in f.absent else {"new": 0.0, "all": 0.0}
     return {"new_absent_diff": (aa["new"] - hh["new"]) / 48, "all_absent_diff": (aa["all"] - hh["all"]) / 48,
-            "report_missing": 0.0}
+            "all_absent_sum": (aa["all"] + hh["all"]) / 48, "report_missing": 0.0}
 
 
 class PlayerState:
     """Ratings + rosters for one model instance. `features(g)` uses only state as of the call; `update(result)` consumes the
     delivered result and that game's minutes."""
+
+    require_evening = True      # the 17:45 ET study design: a game tipping off before 18:00 ET never uses a report (docs §5)
 
     def __init__(self, box: Box, k: float, facts: Optional[dict] = None):
         self.box, self.facts = box, facts or {}
@@ -423,28 +446,45 @@ class PlayerState:
         h, a = self._team(g.home_team_id), self._team(g.away_team_id)
         rh, ra = self.rosters.expected(h, day, g.season), self.rosters.expected(a, day, g.season)
         full = self.ratings.strength(rh, g.season) - self.ratings.strength(ra, g.season)
-        f = self.facts.get(day)
-        usable = (f is not None and f.usable and h not in f.unsubmitted and a not in f.unsubmitted
-                  and av.evening_cutoff(g.tipoff_at) is not None)
+        f = (self.facts.for_game(g) if hasattr(self.facts, "for_game") else self.facts.get(day))
+        # Both teams must be positively present on the report (an entry of any status) and not marked NOT YET SUBMITTED.
+        # A team listed nowhere has usually not reported yet (on the prior-evening report, 83% of such team-games had
+        # absences on the same-day report): that is the declared report_missing state, never a healthy team.
+        usable = (f is not None and f.usable and h in f.teams_on_report and a in f.teams_on_report
+                  and h not in f.unsubmitted and a not in f.unsubmitted
+                  and not any(f.absent.get(t, {}).get("unresolved", 0) for t in (h, a))
+                  and (not self.require_evening or av.evening_cutoff(g.tipoff_at) is not None))
+        home_strength = self.ratings.strength(rh, g.season)
+        away_strength = self.ratings.strength(ra, g.season)
         if usable:
             players = getattr(f, "players", {})
-            rep = (self.ratings.strength(without_absent(rh, players.get(h, {})), g.season)
-                   - self.ratings.strength(without_absent(ra, players.get(a, {})), g.season))
+
+            def report_absent(team):
+                # A player the report lists on another team (traded while injured, before any delivered box shows the
+                # move) has left this team's expected roster as surely as one it lists out.
+                elsewhere = {p: 1.0 for t, ps in players.items() if t != team for p in ps}
+                return {**elsewhere, **players.get(team, {})}
+            home_strength = self.ratings.strength(without_absent(rh, report_absent(h)), g.season)
+            away_strength = self.ratings.strength(without_absent(ra, report_absent(a)), g.season)
+            rep = home_strength - away_strength
         else:
             rep = full
         return {"player_diff_full": full, "player_diff_report": rep, "report_used": usable,
+                "player_home_report": home_strength, "player_away_report": away_strength,
                 "roster_home": len(rh), "roster_away": len(ra), **gated_avail(self.rosters, f, g, usable)}
 
-    def update(self, r: Result) -> None:
+    def update(self, r: Result) -> bool:
+        """Applies a delivered result's margin and minutes; False (counted) when the box has no rows for the game."""
         g = r.game
         teams = self.box.games.get(g.game_id)
         h, a = self._team(g.home_team_id), self._team(g.away_team_id)
         if not teams or h not in teams or a not in teams:
             self.coverage["result_without_box"] += 1
-            return
+            return False
         self.ratings.update(g.season, teams[h], teams[a], r.home_score - r.away_score, g.neutral_site)
         self.rosters.add(et_day(g.tipoff_at), g.season, {h: teams[h], a: teams[a]})
         self.coverage["rating_updates"] += 1
+        return True
 
 
 # --- Models ---------------------------------------------------------------------------------------------------------------
@@ -731,3 +771,398 @@ def evaluate(conn: sqlite3.Connection, *, recent: bool = True, out_dir: Optional
     report["output_dir"] = str(out_dir)
     log(f"wrote {out_dir / 'report.json'}")
     return report
+
+
+# --- Adaptive member (docs/PLAYER_RATINGS_STUDY.md §11; registered in adaptive.members for NBA) ---------------------------
+ADAPTIVE_MEMBER = "players_injuries_v1"
+ADAPTIVE_K = 0.02            # the study's K (chosen once on the 2020-21 warm-up, docs §4 and §10); not re-tuned here
+REPORT_FILE = re.compile(r"Injury-Report_(\d{4}-\d{2}-\d{2})_.+\.pdf")
+INJURY_CUTOFF_NOTE = ("Latest reconciled report published at or before the explicit forecast cutoff: historical adaptive "
+                      "rows use tipoff minus two hours; live rows use their actual prediction time. Rosters and ratings "
+                      "use delivered results only. Missing reports remain missing, never healthy.")
+SCORE_MEMBER = "players_injuries_points"
+SCORE_FEATURES = ("player_home_report", "player_away_report", "new_absent_diff", "all_absent_diff",
+                  "all_absent_sum", "report_missing")
+
+FMT = "%Y-%m-%dT%H:%M:%SZ"
+
+
+def adaptive_inputs_missing() -> Optional[str]:
+    """Why the member cannot run in this data directory (no player box scores), else None. Cheap: a directory glob."""
+    d = av.research_dir() / "player_box"
+    if not d.is_dir() or not any(d.glob("player_box_*.csv")):
+        return (f"no player box scores under {d}: the player-rating/injury member needs the availability research cache "
+                "(player_box/player_box_<season>.csv; reports/ optional)")
+    return None
+
+
+def _midnight_utc(day: str) -> str:
+    """The walk rows' cutoff for a game on ET date `day`: backtest.cutoff_for (00:00 America/New_York as UTC), computed by
+    that function itself so the member's report gate cannot drift from the rows' cutoff_at."""
+    noon = datetime.fromisoformat(f"{day}T12:00:00").replace(tzinfo=av.ET).astimezone(timezone.utc).strftime(FMT)
+    return backtest.cutoff_for(noon)
+
+
+def _shift(day: str, days: int) -> str:
+    return (date.fromisoformat(day) + timedelta(days=days)).isoformat()
+
+
+def _csv_rows(path: Path) -> list[dict]:
+    with path.open(newline="") as f:
+        return list(csv.DictReader(f))
+
+
+class AdaptiveInputs:
+    """The availability research cache of one data directory, as the adaptive member reads it: every player box season
+    present (loaded once, on first use) and the injury reports, each parsed once when a game date first needs it. Shared
+    per process through `adaptive_inputs`; never written into an artifact (LiveState drops it when pickled)."""
+
+    LOOKBACK_DAYS = 2        # a report names games up to two days ahead
+
+    def __init__(self, research_dir: Path, names: dict):
+        self.dir, self.names = Path(research_dir), dict(names)
+        self.seasons = sorted(int(m.group(1)) for p in (self.dir / "player_box").glob("player_box_*.csv")
+                              if (m := re.fullmatch(r"player_box_(\d{4})\.csv", p.name)))
+        self.reports: dict[str, list[Path]] = defaultdict(list)             # date in the file name -> report files
+        for p in sorted((self.dir / "reports").glob("Injury-Report_*.pdf")):
+            m = REPORT_FILE.fullmatch(p.name)
+            if m:
+                self.reports[m.group(1)].append(p)
+        self.coverage: dict = defaultdict(int)
+        self.match_levels: dict = defaultdict(lambda: defaultdict(int))
+        self._box = self._index = self._season_by_day = None
+        self._parsed: dict = {}
+        self._facts: dict = {}
+
+    @property
+    def box(self) -> Box:
+        if self._box is None:
+            box = load_box(tuple(self.seasons), loader=lambda s: _csv_rows(self.dir / "player_box" / f"player_box_{s}.csv"))
+            h = hashlib.sha256()
+            for s in self.seasons:
+                h.update((self.dir / "player_box" / f"player_box_{s}.csv").read_bytes())
+            self._box = Box(box.seasons, box.apps, box.games, h.hexdigest()[:16])
+        return self._box
+
+    @property
+    def index(self) -> av.PlayerIndex:
+        if self._index is None:
+            self._index = av.PlayerIndex(self.box.apps, av.load_aliases())
+        return self._index
+
+    def _season_of(self, day: str) -> int:
+        """The stored season of the games on `day`, from the box (the 2020 bubble belongs to 2019-20, not the calendar's
+        2020-21); the calendar rule for dates without box games."""
+        if self._season_by_day is None:
+            self._season_by_day = {a.date: season for season, (apps, _) in self.box.apps.items()
+                                   for rows in apps.values() for a in rows}
+        return self._season_by_day.get(day, av.season_of(day))
+
+    def _parse(self, path: Path) -> dict:
+        if path not in self._parsed:
+            meta_path = path.with_name(path.name + ".json")
+            try:
+                meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
+                parsed = av.parse_report(path.read_bytes(), path.name, list(self.names))
+            except Exception as exc:                # an unreadable file is excluded and counted, never guessed
+                self._parsed[path] = {"error": f"parse_error:{type(exc).__name__}"}
+            else:
+                pub, basis = av.publication_time(parsed, meta.get("last_modified"))
+                self._parsed[path] = {"parsed": parsed, "pub": None if pub is None else pub.strftime(FMT), "basis": basis}
+        return self._parsed[path]
+
+    def add_live_reports(self, conn, now):
+        """Read the existing official collector's raw PDFs, gated by actual retrieval time."""
+        if not conn.execute("SELECT 1 FROM sqlite_master WHERE name='injury_report_attempts'").fetchone():
+            return
+        since = (datetime.fromisoformat(now.replace('Z', '+00:00')) - timedelta(days=2)).strftime(FMT)
+        rows = conn.execute("SELECT a.file_name,a.completed_at,a.last_modified,f.raw_id FROM injury_report_attempts a "
+                            "JOIN raw_fetches f USING(fetch_id) WHERE a.outcome='stored' AND a.completed_at BETWEEN ? AND ? "
+                            "ORDER BY a.completed_at", (since, now))
+        for row in rows:
+            key = Path(f"live-{row['raw_id']}-{row['file_name']}")
+            if key in self._parsed:
+                continue
+            try:
+                parsed = av.parse_report(raw_cache.load(conn, row['raw_id']), row['file_name'], list(self.names))
+            except Exception as exc:                # as _parse: an unreadable report is excluded and counted, never raised
+                self._parsed[key] = {"error": f"parse_error:{type(exc).__name__}"}
+                continue
+            pub, basis = av.publication_time(parsed, row['last_modified'])
+            self._parsed[key] = {'parsed': parsed, 'basis': basis,
+                                 'pub': max(pub.strftime(FMT), row['completed_at']) if pub else None}
+            match = REPORT_FILE.fullmatch(row['file_name'])
+            if match:
+                self.reports[match[1]].append(key)
+                self._facts.clear()
+
+    def for_game(self, g: PregameGame) -> Optional[PlayerFacts]:
+        cutoff = g.cutoff_at
+        if cutoff is None:
+            raise ValueError("adaptive injury inputs require an explicit forecast cutoff")
+        if cutoff >= g.tipoff_at:
+            raise ValueError("injury forecast cutoff must precede tipoff")
+        return self.get(et_day(g.tipoff_at), cutoff)
+
+    def get(self, day: str, cutoff: Optional[str] = None) -> Optional[PlayerFacts]:
+        """Facts for the games of ET date `day` from the latest reconciled report published at or before `cutoff` that
+        lists them (INJURY_CUTOFF_NOTE): adaptive callers pass the game's forecast cutoff of tipoff - 2 h, date-only
+        callers fall back to midnight ET of `day`. None when no such report is usable. Exclusion reasons are counted only
+        for dates that end up without facts, so the always-excluded same-day report does not drown the counts."""
+        # Date-only callers retain the old research gate; adaptive callers always supply the game cutoff.
+        cutoff = cutoff or _midnight_utc(day)
+        key = (day, cutoff)
+        if key in self._facts:
+            return self._facts[key]
+        best, reasons = None, []
+        for d in (_shift(day, -k) for k in range(self.LOOKBACK_DAYS, -1, -1)):
+            for path in self.reports.get(d, []):
+                rep = self._parse(path)
+                if "error" in rep:
+                    reasons.append(rep["error"])
+                    continue
+                parsed = rep["parsed"]
+                if not any(e["game_date"] == day for e in parsed.entries) and \
+                        not any(n["game_date"] == day for n in parsed.not_submitted):
+                    continue                                                     # does not list this date
+                if rep["pub"] is None:
+                    reasons.append(rep["basis"])
+                elif rep["pub"] > cutoff:
+                    reasons.append("published_after_cutoff")
+                elif not parsed.reconciled:
+                    reasons.append("unreconciled")
+                elif best is None or rep["pub"] > best["pub"]:
+                    best = rep
+        self.coverage["dates"] += 1
+        if best is None:
+            for reason in sorted(set(reasons)) or ["missing"]:
+                self.coverage[reason if reason == "missing" else f"excluded_{reason}"] += 1
+            self._facts[key] = None
+            return None
+        f = PlayerFacts(True, "ok", best["pub"])
+        # Identity only from box rows dated before the report's publication (ET date): never from later appearances.
+        _fill_facts(f, best["parsed"], day, self._season_of(day), self.names, self.index, None, self.coverage, self.match_levels,
+                    before=et_day(best["pub"]))
+        self.coverage["usable"] += 1
+        self._facts[key] = f
+        return f
+
+    def status(self) -> dict:
+        dates = sorted(self.reports)
+        return {"research_dir": str(self.dir), "box_seasons": list(self.seasons),
+                "box_digest": self._box.digest if self._box is not None else None,
+                "reports": sum(len(v) for v in self.reports.values()),
+                "report_dates": [dates[0], dates[-1]] if dates else None,
+                "facts": dict(self.coverage), "match_levels": {s: dict(v) for s, v in self.match_levels.items()},
+                "injury_cutoff": INJURY_CUTOFF_NOTE}
+
+
+_INPUTS: dict = {}
+
+
+def _cache_key(rdir: Path) -> tuple:
+    """Listing fingerprint (names, sizes, mtimes) of the box and report folders: a changed cache is reloaded, an unchanged
+    one is shared by every member instance in the process."""
+    parts = []
+    for sub in ("player_box", "reports"):
+        d = rdir / sub
+        if d.is_dir():
+            with os.scandir(d) as it:
+                for e in it:
+                    st = e.stat()
+                    parts.append((sub, e.name, st.st_size, st.st_mtime_ns))
+    return tuple(sorted(parts))
+
+
+def adaptive_inputs(names: dict) -> AdaptiveInputs:
+    rdir = av.research_dir()
+    key = (str(rdir), _cache_key(rdir), tuple(sorted(names.items())))
+    if key not in _INPUTS:
+        _INPUTS.clear()
+        _INPUTS[key] = AdaptiveInputs(rdir, names)
+    return _INPUTS[key]
+
+
+class LiveState:
+    """The adaptive member's player state. Pickled into every member artifact: the ratings, which results were delivered
+    (game id -> ET day, season, home, away) and coverage counters. Not pickled: the shared inputs (box, reports) and the
+    expected rosters, which are a pure function of the box and the delivered games and are rebuilt on first use after a
+    thaw. The research PlayerState does the feature work with `require_evening` off: here the row cutoff, not the 17:45 ET
+    report time, gates the report."""
+
+    def __init__(self, k: float, names: dict, inputs=None):
+        self.k, self.names = k, dict(names)
+        self.ratings = PlayerRatings(k)
+        self.delivered: dict[str, tuple] = {}
+        self.skipped_no_box: set = set()          # results offered without box rows (not applied)
+        self.coverage: dict = defaultdict(int)
+        self._inputs, self._state = inputs, None
+
+    def __getstate__(self):
+        return {k: v for k, v in vars(self).items() if k not in ("_inputs", "_state")}
+
+    def __setstate__(self, state):
+        vars(self).update(state)
+        self.skipped_no_box = state.get("skipped_no_box", set())        # artifacts written before it was kept
+        self._inputs = self._state = None
+
+    def _resolve(self) -> PlayerState:
+        if self._state is None:
+            if self._inputs is None:
+                self._inputs = adaptive_inputs(self.names)
+            st = PlayerState(self._inputs.box, self.k, self._inputs)
+            st.require_evening = False
+            st.ratings, st.coverage = self.ratings, self.coverage
+            for gid, (day, season, h, a) in self.delivered.items():          # delivered games only, as PlayerState.update
+                teams = st.box.games.get(gid)
+                if teams and h in teams and a in teams:
+                    st.rosters.add(day, season, {h: teams[h], a: teams[a]})
+            self._state = st
+        return self._state
+
+    def diffs(self, g: PregameGame) -> dict:
+        return self._resolve().diffs(g)
+
+    def update(self, r: Result) -> None:
+        st = self._resolve()
+        g = r.game
+        if st.update(r):            # delivered = applied: a result without box rows (counted) must not seed a later roster rebuild
+            self.delivered[g.game_id] = (et_day(g.tipoff_at), g.season, st._team(g.home_team_id), st._team(g.away_team_id))
+        else:                       # offered without box rows: skipped by this state; rows appearing later change what it saw
+            self.skipped_no_box.add(g.game_id)
+
+    def status(self) -> dict:
+        inputs = self._inputs.status() if self._inputs is not None else {"resolved": False}
+        consumed = {"consumed_box_digest": self._consumed_digest(self._inputs.box)} if self._inputs is not None else {}
+        return {**inputs, **consumed, "k": self.k, "delivered_results": len(self.delivered), "players": dict(self.coverage)}
+
+    def _consumed_digest(self, box: Box) -> str:
+        """Fingerprint of the box rows of every result this state was offered: the delivered (applied) games and those it
+        skipped for having no rows then (their rows must still be absent). Rows appended for games after the fit (the routine
+        republication of the current season) leave it unchanged; a changed row of a consumed game, or rows that appear for
+        a skipped one, change it (a fresh walk would then produce a different state)."""
+        h = hashlib.sha256()
+        for gid in sorted(set(self.delivered) | self.skipped_no_box):
+            teams = box.games.get(gid, {})
+            h.update(repr((gid, sorted((t, sorted(players)) for t, players in teams.items()))).encode())
+        return h.hexdigest()[:16]
+
+    def input_mismatch(self, recorded: dict) -> Optional[str]:
+        """Train/serve guard: the inputs this process resolves must be the ones the artifact was fitted on (`recorded` =
+        the fit's `inputs`). A different player box (another file set or content) means the pickled ratings and the
+        delivered index no longer describe the rosters that would be rebuilt from it: the member is missing, with this
+        reason, until a retrain. None when consistent."""
+        then_digest, then_seasons = recorded.get("box_digest"), recorded.get("box_seasons")
+        if not then_digest:
+            return "fit artifact records no player box digest/seasons: cannot verify the serving inputs; retrain"
+        box = self._resolve().box
+        if recorded.get("consumed_box_digest"):
+            # Only what the frozen state consumed must be unchanged; a season file may grow (new games) or appear.
+            now_digest, missing = self._consumed_digest(box), sorted(set(then_seasons or []) - set(box.seasons))
+            if now_digest != recorded["consumed_box_digest"] or missing:
+                return (f"inputs changed since the fit: the player box rows of the "
+                        f"{len(self.delivered) + len(self.skipped_no_box)} results the fit was offered now digest "
+                        f"{now_digest} vs {recorded['consumed_box_digest']} in the artifact"
+                        + (f"; seasons {missing} are gone" if missing else "") + "; retrain before this member can forecast")
+            return None
+        now_digest, now_seasons = box.digest, list(box.seasons)
+        if now_digest != then_digest or now_seasons != list(then_seasons or []):
+            return (f"inputs changed since the fit: player box digest {now_digest} (seasons {now_seasons}) in this data "
+                    f"directory vs {then_digest} (seasons {list(then_seasons or [])}) in the artifact; retrain before this "
+                    "member can forecast")
+        return None
+
+    def stale_inputs(self, g: PregameGame, recent: dict, n: int) -> Optional[str]:
+        """candidates.live._stale for the player box: a team's `n` most recent finals of this season ({(season, team id):
+        [game ids, newest first]}) must have player-box rows, else the ratings and rosters are last season's (an empty,
+        truncated or absent current-season box) and the member abstains with this reason. None at season start (nothing
+        final yet) or when every recent final has rows."""
+        box = self._resolve().box.games
+        for team in (g.home_team_id, g.away_team_id):
+            missing = [gid for gid in recent.get((g.season, team), [])[:n]
+                       if not box.get(gid, {}).get(team.split(":", 1)[1])]
+            if missing:
+                return (f"stale inputs: {len(missing)} recent final(s) without player box rows ({team}); ratings and rosters "
+                        "would be last season's")
+        return None
+
+
+class PlayersInjuriesV1(LogisticV2):
+    """`logistic_v2` + the injury-report features (new/all absent minutes, report missing) + the expected-roster rating
+    difference after reported absences (`player_diff_report`): the study's B+R+I construction with absent minutes from
+    delivered games only (its corrected variant), every input gated by the row's own cutoff. Winner market only."""
+    name = ADAPTIVE_MEMBER
+    feature_names = V2_FEATURES + av.AVAIL_FEATURES + ("player_diff_report",)
+    scaled_names = V2_SCALED + ("new_absent_diff", "all_absent_diff", "player_diff_report")
+
+    def __init__(self, elo_cfg, names: dict, inputs=None, l2: float = 1.0):
+        super().__init__(elo_cfg, l2)
+        self.players = LiveState(ADAPTIVE_K, names, inputs)
+
+    def _features(self, g: PregameGame) -> dict:
+        x = {**super()._features(g), **self.players.diffs(g)}
+        return {n: x[n] for n in self.feature_names}
+
+    def update(self, r: Result) -> None:
+        super().update(r)
+        self.players.update(r)
+
+    def config(self) -> dict:
+        return {**super().config(), "players": {"k": ADAPTIVE_K, "prior": NEWCOMER_PRIOR, "carry": SEASON_CARRY,
+                                                "home_edge": HOME_EDGE, "roster_games": ROSTER_RECENT_GAMES},
+                "injury_report": "latest published before the row cutoff"}
+
+    def prepare_inputs(self, conn, now):
+        self.players._resolve()
+        self.players._inputs.add_live_reports(conn, now)
+
+    def input_status(self) -> dict:
+        return self.players.status()
+
+    def input_mismatch(self, recorded: dict) -> Optional[str]:
+        return self.players.input_mismatch(recorded)
+
+    def stale_inputs(self, g: PregameGame, recent: dict, n: int) -> Optional[str]:
+        return self.players.stale_inputs(g, recent, n)
+
+
+def adaptive_member(elo_cfg, names: dict, inputs=None) -> PlayersInjuriesV1:
+    """Fresh member for adaptive.members: cheap to build (no file is read until the first forecast or delivered result)."""
+    return PlayersInjuriesV1(elo_cfg, names, inputs)
+
+
+class PlayersInjuriesPoints(RidgePoints):
+    """Injury-adjusted player strengths in both learned margin and total equations.
+
+    Uses RidgePoints' existing chronological fitting and out-of-sample residual calibration;
+    its joint distribution supplies winner, spread, total and both team totals.
+    """
+    name = SCORE_MEMBER
+
+    def __init__(self, elo_cfg, names: dict, inputs=None):
+        super().__init__(elo_cfg)
+        self.players = LiveState(ADAPTIVE_K, names, inputs)
+        self.feature_cutoffs = {}
+
+    def _prepare(self, g):
+        if self.feature_cutoffs.get(g.game_id) != g.cutoff_at:
+            self.pending.pop(g.game_id, None)
+            self.feature_cutoffs[g.game_id] = g.cutoff_at
+        return super()._prepare(g)
+
+    def _vector(self, g):
+        f = self.players.diffs(g)
+        return super()._vector(g) + [float(f[n]) for n in SCORE_FEATURES]
+
+    def update(self, r):
+        super().update(r)
+        self.players.update(r)
+
+    def config(self):
+        return {**super().config(), "player_features": SCORE_FEATURES, "injury_report": INJURY_CUTOFF_NOTE,
+                "player_k": ADAPTIVE_K}
+
+    prepare_inputs = PlayersInjuriesV1.prepare_inputs
+    input_status = PlayersInjuriesV1.input_status
+    input_mismatch = PlayersInjuriesV1.input_mismatch
+    stale_inputs = PlayersInjuriesV1.stale_inputs

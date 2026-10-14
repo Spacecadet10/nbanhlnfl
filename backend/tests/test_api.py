@@ -14,7 +14,7 @@ client = TestClient(app)
 def test_health():
     r = client.get("/api/health")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "mode": "demo", "api_version": "0.3.0"}
+    assert r.json() == {"status": "ok", "mode": "demo", "api_version": "0.3.0", "data_snapshot_at": None}
 
 
 def test_meta_lists_dates_and_teams():

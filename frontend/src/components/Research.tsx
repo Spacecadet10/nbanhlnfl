@@ -2,11 +2,11 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import type {
-  CalibrationBin, Candidate, CoreMemberCoverage, HistoricalStart, HistoricalStartRule, CandidatePoolState, CandidateRoster, PoolReport, SelectionRuleView, SelectionStatus, MarketId, RegisteredRule, ResearchExpanded, RuleReport, ResearchGame, ResearchMarket, ResearchRecord, ResearchReport, ResearchSlateEntry, Retrospective, RetroMarket, Side, Sport, Vector,
+  CalibrationBin, Candidate, CoreMemberCoverage, HistoricalStart, HistoricalStartRule, CandidatePoolState, CombinationAnalysis, CoverageFields, PeriodCoverage, CandidateRoster, PoolReport, SelectionRuleView, SelectionStatus, MarketId, RegisteredRule, ResearchExpanded, RuleReport, ResearchGame, ResearchMarket, ResearchRecord, ResearchReport, ResearchSlateEntry, Retrospective, RetroMarket, Side, Sport, Vector,
 } from '../api/types';
 import { useApi } from '../api/useApi';
 import { AsyncView, Empty } from './States';
-import { dateTime, num, pct } from '../format';
+import { count, dateTime, num, pct } from '../format';
 
 const NAMES: Record<string, string> = {
   elo: 'Elo', logistic: 'Logistic', logistic_v2: 'Efficiency logistic', efficiency_margin: 'Efficiency', gbt_v1: 'Boosted trees',
@@ -18,7 +18,7 @@ const NAMES: Record<string, string> = {
 };
 export const modelName = (n: string) => n.startsWith('avg:')
   ? `Average: ${n.slice(4).split('+').map((m) => NAMES[m] ?? m).join(' + ')}` : NAMES[n] ?? n;
-const MARKET: Record<string, string> = { winner: 'Winner', reg3: 'Regulation 3-way', spread: 'Spread / puck line', total: 'Total',
+export const MARKET: Record<string, string> = { winner: 'Winner', reg3: 'Regulation 3-way', spread: 'Spread / puck line', total: 'Total',
   team_total_home: 'Home team total', team_total_away: 'Away team total' };
 const FILTER: Record<string, string> = { none: 'no agreement filter', majority: 'strict majority agrees', unanimous: 'all models agree' };
 const STATUS: Record<string, string> = { active: 'Active rule', abstain: 'Abstaining', insufficient_evidence: 'Insufficient evidence' };
@@ -580,4 +580,174 @@ function StatusBody({ r, market }: { r: SelectionStatus; market: MarketId }) {
     </table></div>
     <p className="small muted">{r.note}</p>
   </>;
+}
+
+/** Combinations of the saved out-of-sample forecasts (GET /api/research/combinations). Loads only when opened. */
+export function CombinationAnalysisCard({ sport, market }: { sport: Sport; market: MarketId }) {
+  const [open, setOpen] = useState(false);
+  return <details className="card" id="combinations" onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+    <summary><strong>Model combinations · saved forecasts</strong> <span className="badge badge-backtest">Backtest</span> <span className="muted small">exploratory</span></summary>
+    {open && <CombinationLoader sport={sport} market={market} />}
+  </details>;
+}
+
+function CombinationLoader({ sport, market }: { sport: Sport; market: MarketId }) {
+  const [base, setBase] = useState<string[]>([]);       // [] = the backend's default (best earlier pair)
+  useEffect(() => setBase([]), [sport, market]);
+  const { state, retry } = useApi((s) => api.researchCombinations(sport, market, base, s), [sport, market, base.join(',')]);
+  return <AsyncView state={state} retry={retry}>{(r) => <CombinationBody r={r} onBase={setBase} />}</AsyncView>;
+}
+
+/** A saved-forecast research response that cannot support an earlier/later comparison: the backend's own reason, the models
+ * it set aside and why, and the season split when there is one. Nothing is recomputed here. */
+export function NotAvailable({ status, reason, excluded, split, fallback }: { status: string; reason?: string;
+  excluded?: { model: string; reason: string }[]; split?: CoverageFields['split']; fallback: string }) {
+  const head = status === 'no_stored_forecasts' ? 'No saved forecasts' : status === 'unavailable' ? 'Unavailable' : 'Insufficient evidence';
+  return <Empty>
+    <strong>{head}:</strong> {reason ?? fallback}.
+    {split && <span className="small"> Earlier seasons {split.earlier_seasons.join(', ')}; later seasons {split.later_seasons.join(', ')}.</span>}
+    {(excluded ?? []).length > 0 && <span className="small"> Not compared: {excluded!.map((e) => `${modelName(e.model)} (${e.reason})`).join('; ')}.</span>}
+  </Empty>;
+}
+
+/** Per-period saved games and forecast coverage of ALL compared models (backend `coverage`), with a statement of what it
+ * applies to. Pending games count as saved but never as settled; missing forecasts count settled games only. An older
+ * server's `coverage` (no settled/pending/used counts, a different `missing` denominator) is reported as such: only the
+ * counts it states are shown, with no denominator, and nothing is filled in. */
+const PERIODS = ['earlier', 'later'] as const;
+const periodLabel = (p: 'earlier' | 'later', split: CoverageFields['split']) =>
+  `${p === 'earlier' ? 'Earlier' : 'Later'}${split ? ` (${(p === 'earlier' ? split.earlier_seasons : split.later_seasons).join(', ')})` : ''}`;
+const completeCoverage = (c: PeriodCoverage | undefined): c is Required<PeriodCoverage> =>
+  !!c && c.games != null && c.settled != null && c.pending != null && c.used != null && c.excluded_missing_member != null && c.missing != null;
+export function CoverageTable({ r, scope }: { r: CoverageFields; scope: string }) {
+  const cov = r.coverage;
+  if (!cov) return null;
+  if (!PERIODS.every((p) => completeCoverage(cov[p]))) {
+    return <>
+      <h3>Games and forecast coverage</h3>
+      <p className="small warn" role="note">This response comes from an older API that does not report settled, pending and every-model-saved counts per period,
+        so the coverage table is not shown. Reported only:{' '}
+        {PERIODS.map((p) => { const c = cov[p]; const miss = Object.entries(c?.missing ?? {});
+          return `${periodLabel(p, r.split)}: ${c?.games != null ? count(c.games, 'saved game') : 'saved games not reported'}; missing forecasts ${
+            c?.missing == null ? 'not reported' : miss.length ? miss.map(([m, n]) => `${modelName(m)} ${n}`).join(', ') : 'none'}`; }).join('. ')}.
+        {' '}Restart the API on the current code for the full table.</p>
+    </>;
+  }
+  return <>
+    <h3>Games and forecast coverage</h3>
+    <p className="small">{scope}</p>
+    <div className="table-wrap"><table className="table small">
+      <thead><tr><th>Period</th><th>Saved games</th><th>Settled</th><th>Pending (no result)</th><th>Settled, every compared model saved</th>
+        <th>Settled, a compared model missing</th><th>Missing forecasts (of settled games)</th></tr></thead>
+      <tbody>{PERIODS.map((p) => { const c = cov[p] as Required<PeriodCoverage>; const miss = Object.entries(c.missing);
+        return <tr key={p}><th scope="row">{periodLabel(p, r.split)}</th>
+          <td>{c.games}</td><td>{c.settled}</td><td>{c.pending}</td><td>{c.used}</td><td>{c.excluded_missing_member}</td>
+          <td className="wrap">{miss.length ? miss.map(([m, n]) => `${modelName(m)} ${n} of ${c.settled}`).join('; ') : 'none'}</td></tr>; })}</tbody>
+    </table></div>
+    {r.coverage_definition && <p className="small muted">{r.coverage_definition}</p>}
+  </>;
+}
+
+const signed = (d: { mean: number; ci95: [number, number] } | null | undefined, digits = 4) =>
+  d ? `${d.mean >= 0 ? '+' : ''}${d.mean.toFixed(digits)} [${d.ci95[0].toFixed(digits)}, ${d.ci95[1].toFixed(digits)}]` : '—';
+const points = (d: { mean: number; ci95: [number, number] } | null | undefined) =>
+  d ? `${d.mean >= 0 ? '+' : ''}${(d.mean * 100).toFixed(1)} pts [${(d.ci95[0] * 100).toFixed(1)}, ${(d.ci95[1] * 100).toFixed(1)}]` : '—';
+const members = (ms: string[]) => ms.map(modelName).join(' + ');
+const wl = (m: { wins: number; losses: number; pushes: number }) => `${m.wins}–${m.losses}${m.pushes ? `–${m.pushes}P` : ''}`;
+const span = (p: { seasons: number[]; games: number; date_from: string | null; date_to: string | null }) =>
+  `${p.date_from ?? '—'} to ${p.date_to ?? '—'} (seasons ${p.seasons.join(', ')}; ${p.games} games)`;
+
+function CombinationBody({ r, onBase }: { r: CombinationAnalysis; onBase: (b: string[]) => void }) {
+  const [allPairs, setAllPairs] = useState(false);
+  if (r.status === 'unavailable') return <Empty>{r.note}</Empty>;
+  if (r.status === 'no_stored_forecasts')
+    return <NotAvailable status={r.status} reason={r.reason} excluded={r.excluded} split={r.split}
+      fallback={`no saved out-of-sample forecasts for ${MARKET[r.market] ?? r.market} in ${r.sport.toUpperCase()}`} />;
+  if (r.status === 'insufficient_evidence' || !r.periods || !r.singles || !r.pairs || !r.add_model || !r.agreement || !r.holdout || !r.search)
+    return <NotAvailable status="insufficient_evidence" reason={r.reason} excluded={r.excluded} split={r.split}
+      fallback="not enough saved forecasts for this market" />;
+  const { periods, search, add_model: add, agreement, holdout } = r;
+  const pairs = allPairs ? r.pairs : r.pairs.slice(0, search.pairs_with_interval);
+  return <>
+    <p className="notice small" role="note">{r.note}</p>
+    <dl className="facts small">
+      <dt>Evidence</dt><dd>{r.kind} · {r.sport.toUpperCase()} · {MARKET[r.market] ?? r.market}</dd>
+      <dt>All games</dt><dd>{span(periods.all)}; every model on the same games ({r.stored_games} saved, {r.excluded_games?.no_result ?? 0} without a result)</dd>
+      <dt>Earlier period</dt><dd>{span(periods.earlier)} — every table below except the last</dd>
+      <dt>Later period</dt><dd>{span(periods.later)}{r.later_reserved_test_seasons?.length
+        ? ` — includes the spent reserved-test seasons ${r.later_reserved_test_seasons.join(', ')}, already explored: not an untouched test` : ''}</dd>
+      <dt>Model versions</dt><dd>as saved by the candidate pool ({(r.sources ?? []).map((s) => `${s.stage} ${s.sha256}`).join(', ')})</dd>
+      <dt>Searched</dt><dd>{search.singles} models, {search.pairs} pairs ({search.pairs_with_interval} with intervals), {search.additions_per_base} one-model additions, {search.frozen_choices} frozen choices. {search.rule}.</dd>
+      {(r.excluded ?? []).length > 0 && <><dt>Excluded</dt><dd>{(r.excluded ?? []).map((e) => `${modelName(e.model)} (${e.reason})`).join('; ')}</dd></>}
+    </dl>
+    <CoverageTable r={r} scope={`Applies to all ${r.models.length} compared models together: every table below uses only the settled games where every compared model has a saved forecast (the "every compared model saved" column); a game missing any one is left out of all of them, and no forecast is filled in.`} />
+
+    <h3>Individual models · earlier period</h3>
+    <div className="table-wrap"><table className="table small">
+      <thead><tr><th>#</th><th>Model</th><th>Record</th><th>Accuracy [95%]</th><th>Log loss</th><th title="Summed over outcomes: 0–2 scale">Brier (0–2)</th><th>Log loss vs best [95%]</th></tr></thead>
+      <tbody>{r.singles.map((s) => <tr key={s.model}><td>{s.rank}</td><th scope="row">{modelName(s.model)}</th><td>{wl(s.metrics)}</td>
+        <td>{pct(s.metrics.accuracy, 1)} <span className="muted">{interval(s.metrics.accuracy_ci95)}</span></td>
+        <td>{num(s.metrics.log_loss, 4)}</td><td>{num(s.metrics.brier, 4)}</td><td>{s.log_loss_vs_best ? signed(s.log_loss_vs_best) : 'best'}</td></tr>)}</tbody>
+    </table></div>
+    <p className="small muted">Log loss: lower is better; a difference whose interval includes 0 is not distinguishable from the best model.</p>
+
+    <h3>Pairs · equal-weight average</h3>
+    <div className="table-wrap"><table className="table small">
+      <thead><tr><th>Pair</th><th>Log loss</th><th>vs stronger member [95%]</th><th>Accuracy</th><th>Pick the same side</th><th>Accuracy when they agree</th><th>Disagree: first right / second right</th><th>Both wrong</th></tr></thead>
+      <tbody>{pairs.map((p) => <tr key={p.members.join('+')}><th scope="row">{members(p.members)}</th><td>{num(p.metrics.log_loss, 4)}</td>
+        <td>{p.log_loss_vs_strongest ? signed(p.log_loss_vs_strongest) : <span className="muted">no interval</span>} <span className="muted">({modelName(p.strongest_member)})</span></td>
+        <td>{pct(p.metrics.accuracy, 1)}</td><td>{pct(p.agreement_rate, 1)}</td><td>{pct(p.agree.accuracy, 1)} <span className="muted">({p.agree.decided})</span></td>
+        <td>{p.disagree.first_right} / {p.disagree.second_right} <span className="muted">of {p.disagree.games}</span></td>
+        <td>{p.shared_mistakes.games} <span className="muted">({pct(p.shared_mistakes.rate, 1)})</span></td></tr>)}</tbody>
+    </table></div>
+    <p className="small muted">Ranked by the pair's log loss on the earlier period; the stronger member is the lower-log-loss member on the same games.
+      {r.pairs.length > search.pairs_with_interval && <> <button type="button" className="link-btn" onClick={() => setAllPairs(!allPairs)}>
+        {allPairs ? `Show top ${search.pairs_with_interval}` : `Show all ${r.pairs.length} pairs`}</button></>}</p>
+
+    <h3>Add a model</h3>
+    <BasePicker models={r.models} base={add.base} onApply={onBase} />
+    <p className="small">Group: <strong>{members(add.base)}</strong> — log loss {num(add.base_metrics.log_loss, 4)}, accuracy {pct(add.base_metrics.accuracy, 1)} on {add.games} earlier games.</p>
+    <div className="table-wrap"><table className="table small">
+      <thead><tr><th>Add</th><th>Log loss</th><th>Change [95%]</th><th>Accuracy change [95%]</th><th>Picks changed</th><th title="Group was wrong, group + model is right">Corrected</th><th title="Group was right, group + model is wrong">Introduced</th></tr></thead>
+      <tbody>{add.rows.map((x) => <tr key={x.added}><th scope="row">+ {modelName(x.added)}</th><td>{num(x.metrics.log_loss, 4)}</td>
+        <td>{signed(x.log_loss_change)}</td><td>{points(x.accuracy_change)}</td><td>{x.changed_picks}</td><td>{x.corrected}</td><td>{x.introduced}</td></tr>)}</tbody>
+    </table></div>
+
+    <h3>Agreement and confidence · all {agreement.members.length} models</h3>
+    <p className="small muted">How many models pick the same side, kept separate from how confident their average is. {agreement.tie_rule}.</p>
+    <div className="table-wrap"><table className="table small">
+      <thead><tr><th>Models agreeing</th><th>Games</th><th>Accuracy of that side [95%]</th><th>Average's confidence</th></tr></thead>
+      <tbody>{agreement.by_count.map((c) => <tr key={String(c.agreeing)}><th scope="row">{typeof c.agreeing === 'number' ? `${c.agreeing} of ${c.of}` : c.agreeing}</th>
+        <td>{c.games} <span className="muted">({pct(c.share, 0)})</span></td><td>{pct(c.accuracy, 1)} <span className="muted">{interval(c.accuracy_ci95)}</span></td><td>{pct(c.mean_average_confidence, 1)}</td></tr>)}</tbody>
+    </table></div>
+    <div className="table-wrap"><table className="table small">
+      <thead><tr><th>Average's confidence</th><th>Games</th><th>Accuracy [95%]</th><th>All models agree</th></tr></thead>
+      <tbody>{agreement.by_confidence.map((b) => <tr key={b.band}><th scope="row">{b.band}</th><td>{b.games}</td>
+        <td>{pct(b.accuracy, 1)} <span className="muted">{interval(b.accuracy_ci95)}</span></td><td>{pct(b.unanimous_share, 0)}</td></tr>)}</tbody>
+    </table></div>
+
+    <h3>Does it hold up on later games?</h3>
+    <p className="small muted">Chosen on the earlier period by log loss, then frozen and scored on the later period without retuning.</p>
+    {holdout.status === 'insufficient_evidence' && <p className="warn small">Insufficient evidence: fewer than {holdout.min_decided} decided later games.</p>}
+    <div className="table-wrap"><table className="table small">
+      <thead><tr><th>Frozen choice</th><th>Models</th><th>Earlier log loss</th><th>Later log loss</th><th>Later accuracy</th><th>Later log loss vs best single [95%]</th><th>Later accuracy vs best single [95%]</th></tr></thead>
+      <tbody>{holdout.checks.map((c) => <tr key={c.choice}><th scope="row">{c.choice}</th><td className="wrap">{members(c.members)}</td>
+        <td>{num(c.earlier.log_loss, 4)}</td><td>{num(c.later?.log_loss, 4)}</td><td>{pct(c.later?.accuracy, 1)} <span className="muted">({c.later ? wl(c.later) : '—'})</span></td>
+        <td>{c.later_log_loss_vs_best_single ? signed(c.later_log_loss_vs_best_single) : '—'}</td><td>{c.later_accuracy_vs_best_single ? points(c.later_accuracy_vs_best_single) : '—'}</td></tr>)}</tbody>
+    </table></div>
+    <p className="small muted">A promising combination here does not change the live forecasts or select a model.</p>
+  </>;
+}
+
+function BasePicker({ models, base, onApply }: { models: string[]; base: string[]; onApply: (b: string[]) => void }) {
+  const [chosen, setChosen] = useState<string[]>(base);
+  useEffect(() => setChosen(base), [base.join(',')]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const valid = chosen.length >= 1 && chosen.length < models.length;
+  return <fieldset className="base-picker small">
+    <legend>Starting group</legend>
+    {models.map((m) => <label key={m}><input type="checkbox" checked={chosen.includes(m)}
+      onChange={(e) => setChosen(e.target.checked ? [...chosen, m] : chosen.filter((x) => x !== m))} /> {modelName(m)}</label>)}
+    <button type="button" disabled={!valid} onClick={() => onApply(chosen)}>Compare additions</button>
+    {!valid && <span className="muted"> choose 1 to {models.length - 1} models</span>}
+  </fieldset>;
 }

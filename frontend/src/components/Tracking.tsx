@@ -2,7 +2,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client';
 import type {
-  MarketId, Sport, TrackingCell, TrackingCheck, TrackingEvidence, TrackingGame, TrackingGroup, TrackingKind, TrackingReport,
+  ExactRule, ExactRulesReport, MarketId, Sport, TrackingCell, TrackingCheck, TrackingEvidence, TrackingGame, TrackingGroup, TrackingKind,
+  TrackingReport,
 } from '../api/types';
 import { useApi } from '../api/useApi';
 import { AsyncView, Empty } from './States';
@@ -19,7 +20,10 @@ const sideName = (market: string, side: string) => {
   if (market === 'spread') return ({ a: 'home covers', mid: 'push', b: 'away covers' } as Record<string, string>)[side];
   return ({ a: 'over', mid: 'push', b: 'under' } as Record<string, string>)[side];
 };
-const STATUS: Record<string, string> = { pick: 'pick', disagree: 'members disagree', tie: 'tie', no_majority: 'no majority', incomplete: 'incomplete' };
+const STATUS: Record<string, string> = {
+  pick: 'pick', disagree: 'members disagree', tie: 'tie', no_majority: 'no majority', incomplete: 'incomplete',
+  below_threshold: 'below a member threshold',
+};
 const ci = (c: [number, number] | null) => (c ? `${pct(c[0], 0)}–${pct(c[1], 0)}` : '');
 const rec = (c: TrackingCell) => `${c.wins}–${c.losses}${c.pushes ? `–${c.pushes}P` : ''}${c.voids ? ` · ${c.voids} void` : ''}`;
 
@@ -44,6 +48,9 @@ export function AgreementTracking({ sport, market }: { sport: Sport; market: Mar
   const [view, setView] = useState<View>({ type: 'threshold', value: null });
   const [sort, setSort] = useState<Sort>('evidence');
   const [all, setAll] = useState(false);
+  // Model and line options belong to one sport and market: a value kept across a switch would filter silently while the
+  // select (which no longer lists it) shows "any model" / "every line".
+  useEffect(() => { setMember(''); setLine(''); }, [sport, market]);
   const { state, retry } = useApi((s) => api.researchTracking(sport, market, {
     evidence, kind, member: member || undefined, line: line || undefined, date_from: from || undefined, date_to: to || undefined,
     version: version.trim() || undefined,
@@ -163,6 +170,47 @@ function TrackingBody({ r, sport, market, f }: { r: TrackingReport; sport: Sport
         minimum of agreeing members and the majority confidence are thresholds, not forecasts.</p>
     </details>
     {r.evidence === 'historical' && <ChronologicalCheck sport={sport} market={market} />}
+    <ExactRules x={r.exact_rules} evidence={r.evidence} />
+  </>;
+}
+
+const ruleLabel = (x: ExactRule) => x.members.map((m, i) => `${modelName(m)} ≥ ${pct(x.member_thresholds[i], 0)}`).join(' & ');
+
+/** exact-rules-v1: registered member/threshold rules, prospective record only (never the explorer's historical record). */
+function ExactRules({ x, evidence }: { x: ExactRulesReport | undefined; evidence: TrackingEvidence }) {
+  if (!x) return null;
+  return <>
+    <h3>Registered exact rules <span className="badge badge-research">Prospective only</span></h3>
+    {evidence === 'historical' || x.status === 'not_applicable'
+      ? <p className="small muted">{x.note}</p>
+      : x.status === 'failed'
+        ? <Empty><span className="warn">Exact-rule tracking unavailable: the registry file could not be loaded ({x.error}). Registered rules are unknown until it is repaired; the sealed groups above are unaffected.</span></Empty>
+        : x.status === 'schema_required'
+          ? <Empty><span className="warn">Not recorded on this store: {x.reason} Registered for this market: {(x.registered_rules ?? []).join(', ') || 'none listed'}.</span></Empty>
+          : <>
+        <p className="small muted">{x.note}{x.registration && <> Registration: {x.registration}.</>}</p>
+        {x.status === 'demo'
+          ? <Empty>{x.note}</Empty>
+          : x.status === 'no_registered_rules' || x.rules.length === 0
+          ? <Empty>No exact rule is registered for this market.</Empty>
+          : <div className="table-wrap"><table className="table small tracking-table">
+            <thead><tr><th>Rule (each member at its own threshold)</th><th>Tracked since</th><th>Eligible</th><th>Picks (coverage)</th><th>Pending</th>
+              <th>Record</th><th>Win rate (95%)</th><th title="Mean of the rule's statistic: the minimum member confidence for the agreed side. Descriptive; not an ensemble probability.">Mean min. confidence</th>
+              <th>Anchor, same count</th><th>Evidence</th></tr></thead>
+            <tbody>{x.rules.map((g) => { const c = g.all_picks; return <tr key={g.id}>
+              <th scope="row" className="wrap">{ruleLabel(g)}<div className="muted">{g.cohort === 'expanded' ? 'expanded cohort' : 'core cohort'} · registry v{g.registered_version}
+                {g.provenance?.explorer && <> · explorer {g.provenance.explorer.list} list, rank {g.provenance.explorer.rank}</>}</div>
+                {Object.keys(g.missing_reasons).length > 0 && <div className="muted">reasons: {Object.entries(g.missing_reasons).map(([m, n]) => `${modelName(m)} ${n}×`).join(', ')}</div>}
+              </th>
+              <td>{dateTime(g.effective_from)}<div className="muted">{g.first_observed ? `first game ${dateTime(g.first_observed)}` : 'no game yet'}</div></td>
+              <td>{g.eligible}<div className="muted">{Object.entries(g.status_counts).filter(([k]) => k !== 'pick').map(([k, n]) => `${n} ${STATUS[k] ?? k}`).join(' · ')}</div></td>
+              <td>{c.selected} ({pct(c.coverage, 0)})</td><td>{c.pending}</td><td>{rec(c)}</td>
+              <td>{pct(c.win_rate, 1)} <span className="muted">{ci(c.ci95)}</span></td><td>{pct(c.mean_confidence, 1)}</td>
+              <td>{c.matched?.[0] ? `${pct(c.matched[0].win_rate, 1)} (${c.matched[0].games})` : '—'}</td>
+              <td className={c.evidence === 'sufficient' ? 'ok' : 'muted'}>{c.evidence}</td></tr>; })}</tbody>
+          </table></div>}
+        {x.versions_note && x.rules.length > 0 && <p className="small muted">{x.versions_note}</p>}
+      </>}
   </>;
 }
 
@@ -195,7 +243,9 @@ export function TrackingGameCard({ sport, gameId }: { sport: Sport; gameId: stri
   const { state, retry } = useApi((s) => api.researchTrackingGame(sport, gameId, s), [sport, gameId]);
   return <div className="card">
     <h2>Agreement tracking <span className="badge badge-research">Research</span></h2>
-    <AsyncView state={state} retry={retry}>{(t: TrackingGame) => t.mode === 'demo' || t.markets.length === 0
+    <AsyncView state={state} retry={retry}>{(t: TrackingGame) => <>
+      {t.exact_rules_error && <p role="alert" className="small warn">Exact-rule results unavailable for this game: the registry file could not be loaded ({t.exact_rules_error}). Registered rules are unknown until it is repaired; this does not mean no rules exist. The sealed groups below are unaffected.</p>}
+      {t.mode === 'demo' || t.markets.length === 0
       ? <Empty>{t.mode === 'demo' ? 'Agreement tracking reads the real stores; none in demo mode.'
         : 'No tracking observations for this game (they are recorded during the two hours before the start).'}</Empty>
       : <>{t.markets.map((m) => <details key={m.market} className="tracking-game">
@@ -209,7 +259,7 @@ export function TrackingGameCard({ sport, gameId }: { sport: Sport; gameId: stri
             <td>{pct(p.statistic, 1)}{p.votes && <span className="muted"> ({p.votes.a ?? 0}–{p.votes.b ?? 0}{p.votes.mid ? `–${p.votes.mid}` : ''} votes)</span>}</td></tr>)}</tbody>
         </table></div></details>}
         {m.incomplete.length > 0 && <p className="small warn">Incomplete: {m.incomplete.map((x) => `${x.group} (${Object.keys(x.missing).join(', ')})`).join('; ')}</p>}
-      </details>)}<p className="small muted">{t.note}</p></>}</AsyncView>
+      </details>)}<p className="small muted">{t.note}</p></>}</>}</AsyncView>
   </div>;
 }
 

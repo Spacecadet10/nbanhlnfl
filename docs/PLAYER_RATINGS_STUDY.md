@@ -111,7 +111,9 @@ research candidate after Codex review and the safe-transition work.
 Before excluding NHL or committing to thousands of requests: (1) search for free historical NHL injury/availability sources and
 record what each provides and when it was published; (2) check per-game player time on ice from the boxscore endpoint and the
 bulk stats API (request count, coverage, timing); (3) measure what the existing goalie features and the prospective goalie
-collection already add, rather than building an overlapping goalie candidate. Better NHL data is not made conditional on a crude
+collection already add, rather than building an overlapping goalie candidate.
+Step (1) sample done 2026-10-11: `docs/evidence/nhl-injury-sources/README.md` (ESPN injury page via Wayback = cutoff-safe history
+2016-17 … 2024-25; Pro Sports Transactions and NHL Injury Viz are retrospective only). Better NHL data is not made conditional on a crude
 dressed-roster proxy succeeding: that proxy could fail simply because it measures player contributions poorly.
 
 ## 9. Interpretation limit (Codex review)
@@ -236,5 +238,40 @@ Hypotheses, not tested here:
 ### Limitations
 - Name matching level `team_any_season` uses every loaded season (loading 2025–26 changed 2024 counts: `team_any_season`
   320 → 386, `league_unique` 459 → 393); identity only, as in `avail_v1`.
+- Run 3 matched report names against the WHOLE box, including rows dated after the report (and later seasons). Measured
+  2026-10-13 on a copy of this study's cache: 0 forecast features changed on any scored game (every name resolved only
+  by a later row has zero expected minutes before the report), so the numbers above stand. The research builders now
+  resolve names only from rows dated before the report's publication (as the adaptive member does); a re-run would
+  report more unresolved names (e.g. 2024 26 → 429), and under the current unresolved-name ⇒ report-void rule it would
+  void more games (dev 2022/23/24: 0/15/26 → 188/294/231), so it would not be comparable to run 3 for this reason alone.
 - Assumed report publication and result times (top of this section).
 - One rating rule, one K grid, no other tuning. Ratings are a team-strength input (§9), not player valuations.
+
+## 11. Adaptive member `players_injuries_v1` (2026-10-11; code only, retrain pending)
+
+The B+R+I construction with delivered-games-only absent minutes (the corrected variant of §10) is now an NBA adaptive walk
+member, `players_injuries_v1@adaptive` (`player_ratings.PlayersInjuriesV1`, registered in `adaptive.members`, winner market;
+docs/ADAPTIVE_SYSTEM.md §2, docs/DAILY_LEARNING.md). Differences from the study, all forced by the adaptive walk's rows:
+
+- **Cutoff.** Rows have `cutoff_at` = midnight ET of the game date (`backtest.cutoff_for`), not 17:45 ET. A game uses the
+  latest report published before that cutoff that lists it — the previous evening's 5:30 PM report's next-day section
+  (`AdaptiveInputs.get`); the same-day report is never used. Games before 18:00 ET may use it (`PlayerState.require_evening`
+  is off for this member only). The study's injury effect (§10) was measured on the same-day report and does not transfer.
+- **Inputs.** The data directory's `research/availability` cache (every `player_box_<season>.csv` present; `reports/`), read
+  lazily and shared per process; the artifact stores ratings and the delivered-game index, the rosters are rebuilt from the
+  box after a thaw. K = 0.02 (§10), not re-tuned. Name matching, as in the study, uses every loaded season (identity only).
+- **Report gating per team (review finding A1).** A team counts as reported only when positively listed on the report (an
+  entry of any status) and not marked NOT YET SUBMITTED. A team listed nowhere is `report_missing`, not healthy: on the
+  prior-evening report such teams have usually not reported yet. `availability.game_features` (the `avail_v1` research
+  features at 17:45 ET) keeps its original rule.
+- **Coverage, training copy (read-only, corrected parser):** 1,428 reports, box seasons 2020–2026. Over every final
+  regular-season game of 2021-22 … 2025-26 (6,605 games) 93.8% have a usable prior-evening report but only **31.8% have
+  both teams positively listed** on it (30.5–33.0% by season). The earlier "37% both teams submitted" figure came from a
+  60-date sample under the looser "not marked NOT YET SUBMITTED" rule (34.6% on the full set). No forecast-quality claim
+  is made here: the retrain and the prospective ledger decide.
+- **Live limits.** The LIVE `data/` cache ends with the 2023-24 box and reports to 2024-06-17 (the training copy: 2025-26
+  box, reports to 2026-06-13). Where the cache stops before the current season the member is active but stale (walk
+  forecasts = `logistic_v2` + near-constant player/injury features; it can score worse than `logistic_v2` there); in live
+  recording it is `missing` with the reason once a team's recent finals lack player-box rows, or when the serving cache
+  differs from the box digest/seasons recorded in the fit (docs/DAILY_LEARNING.md).
+- `player_ratings.py` is now hashed into the NBA adaptive definition; editing it starts a new adaptive identity.

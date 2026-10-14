@@ -741,3 +741,53 @@ follow actual artifact creation. Artifacts live in `data/research/calibrated/`; 
 artifact from a fit first used in a forecast. `predict-now` and `pool-record` record available overlays after core
 cohorts. A core-definition change requires a new artifact. Review/release and live artifact preparation are separate
 steps; copying historical results into the live forecast ledger is never part of preparation.
+
+## Registered exact rules `exact-rules-v1` — Claude (Fable 5.1), 2026-10-11 ~05:30 UTC (recorded before any rule was registered)
+- **Purpose:** let a rule chosen in the threshold explorer (an exact model subset with ONE threshold PER MEMBER, §15 study
+  shape, saved out-of-sample tables) be tracked prospectively, through tracking-v2, so that a forward record can accumulate for
+  it. Tracking only: it selects, recommends and promotes nothing; the weekly selectors stay the only source of recommendations;
+  the §6 promotion rule, training schedules and primary forecasts are unchanged.
+- **Registry (`backend/app/models/exact_rules.json`, `app/exact_rules.py`):** CLI-only in this milestone
+  (`python -m app.cli --sport <s> exact-rules-register --market <m> --rule a@0.65,b@0.60 [--evidence <subsets.json>] [--note …]`);
+  the app has no Save/Track control. Sealed file (sha256) with an integer version; registering appends one rule and a history
+  entry, never edits or removes an earlier rule (each rule carries its own `rule_sha256`, verified on load; a changed rule is a
+  registry error). `effective_from` = the registration time, or a later time; never earlier (no backdating). Provenance: the
+  rule's row in the explorer's frozen list (file sha256, list, rank, both period records, later pick set) and/or a note, plus
+  the optional dependency group each candidate member needs (recorded, not verified for the release checkout).
+  A rule is its member → threshold mapping: the same thresholds in another member order are the same rule (refused at
+  registration, a registry error if a file holds both; provenance is matched the same way); earlier ids are never rewritten.
+  Writes hold an advisory lock (`exact_rules.json.lock`, flock as the store job lock) across load, validation and publication,
+  publish by temp file + atomic replace, and refuse when the file changed under them: concurrent registrations never lose a rule.
+  An unreadable, malformed or tampered file is a `RegistryError` naming the file: the CLI refuses with exit 1, the API reports
+  `exact_rules.status = "failed"` (sealed groups still reported), the game card carries `exact_rules_error`; never "no rules".
+- **Mapping (checked at registration, no substitution):** explorer pool names = pregame names for core cohort members, shadow
+  members (paired expanded cohort) and live-recorded candidates (`candidate_forecasts.candidate`, same cohort and exact line).
+  Refused with the reason: adaptive-definition members (`…@adaptive`; adaptive-v1 records them, the tracking inputs do not),
+  candidates not recorded live on this machine (deep networks, optional groups not installed), goalie candidates (historical
+  evidence used the actual starter), single-member rules (a tracking-v2 `single` group), thresholds off the explorer grid,
+  duplicates, unknown names, sources other than the candidate pool.
+- **Classification (kind `exact`):** every member present, all on the same side, each member's confidence ≥ its own threshold
+  (1e-12 tolerance, the explorer's `EPS`, so the same boundary games qualify in both; tested at the boundary). Confidence = the member's probability of the agreed side among the market's allowed sides (the explorer's
+  definition: the push mass of a two-way line market is left out). Statistic = the minimum member confidence: descriptive only,
+  never an ensemble probability (no vector, no Brier/log loss). Non-picks keep the reason per member in `missing`:
+  `incomplete` (forecast missing), `disagree` (each member's side), `tie`, `below_threshold` (confidence vs own threshold).
+- **Recording (migration 0028 widens the `kind`/`status` CHECKs of `agreement_observations`, rows, identity, index and triggers
+  unchanged):** in the existing two-hour tracking step, one row per rule and canonical core/expanded cohort, `registry` = the
+  rule's `rule_sha256`, `group_id` = its id, members with their model versions and thresholds, `version_sig`, `inputs_digest`
+  (retry idempotency; changed inputs add a row). Only games that START after the rule's `effective_from` are observed, and only
+  while the start is ahead: nothing is backfilled. A store without 0028 skips exact rules with the reason and the report says
+  `schema_required` (never "no observations yet"; the API never migrates a store); a broken registry or rule is an error entry;
+  the sealed groups are recorded regardless and the primary cycle never fails because of it.
+- **Reporting:** `/api/research/tracking` carries `exact_rules` (prospective evidence only): per rule, the tracking-v2 cells
+  (eligible, picks, coverage, pending, W–L–P, voids, Wilson 95% win rate, mean minimum confidence, matched-coverage anchor),
+  status counts with reasons, member versions, first/last observed game. Under historical evidence the field says
+  `not_applicable`: the explorer's frozen later record is the historical, exploratory evidence and is never merged.
+- **Retraining:** unchanged. A rule names members only, so it stays fixed across refits. What an observation records about the
+  inputs: each member's `model_version` (code and configuration: primaries `name-config`, candidates `research-cand:<name>:<definition
+  digest>`), summarised by `version_sig`; a parameter refit with the SAME configuration keeps that version, so `versions` separates
+  definition versions, not fits. The parameter fit is kept per member only where the forecast row carries one (candidate
+  forecasts: `fit_id`, `artifact_sha256`, `training_cutoff`, `dataset_version`, under `fit`); cohort members' prediction rows have
+  no fit reference and the observation says so (`fit_note`) rather than implying one.
+- **Unresolved (recorded, not solved):** member availability is checked on the registering machine (installed optional groups);
+  the release checkout may not forecast a candidate member, in which case every observation of that rule is `incomplete` with
+  the member named, visibly, and the rule cannot be removed. No compatibility check against the release environment exists yet.

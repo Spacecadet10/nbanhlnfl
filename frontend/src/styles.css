@@ -76,6 +76,15 @@ details.card summary { cursor: pointer; font-weight: 600; }
 
 .facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.35rem 1rem; margin: 1rem 0 0; }
 .facts dt { color: var(--muted); }
+.base-picker { display: flex; flex-wrap: wrap; gap: 0.35rem 0.9rem; align-items: center; border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.75rem; margin: 0.5rem 0; }
+.base-picker label { display: inline-flex; align-items: center; gap: 0.3rem; white-space: nowrap; }
+.base-picker input { min-height: 0; margin: 0; }
+.explorer-controls { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; margin: 0.75rem 0; }
+.explorer-controls .segmented { flex-wrap: wrap; }
+#thresholds .facts dd { min-width: 0; overflow-wrap: anywhere; }
+#thresholds select { max-width: 100%; }
+#thresholds .explorer-controls label { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; max-width: 100%; min-width: 0; }
+#thresholds .explorer-controls select { min-width: 0; width: 100%; flex: 1 1 14rem; }
 .facts dd { margin: 0; }
 
 .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin: 1rem 0; }
@@ -320,3 +329,31 @@ button,input,select { min-height:44px; }
 select { max-width: 100%; }
 /* Long model and candidate identifiers in card text wrap instead of widening the page. */
 .card { overflow-wrap: break-word; }
+
+/* Home-screen overview: results and training per sport. */
+.overview { margin-bottom: 28px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.overview-head h1 { font-family: 'Barlow Condensed','Arial Narrow',sans-serif; text-transform: uppercase; font-size: clamp(30px,3.2vw,44px); line-height: 1.05; margin: 0 0 4px; }
+.overview-head h2 { margin: 18px 0 4px; }
+.overview-head p { margin: 0 0 14px; max-width: 70ch; }
+.overview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.overview-card { margin-bottom: 0; min-width: 0; }
+.overview-card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.overview-card-head h2 { margin: 0; }
+.overview-big { margin: 10px 0 6px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.overview-big strong { font-size: 2.2rem; line-height: 1; }
+.overview-big span { color: var(--muted); }
+.overview-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 8px 0; }
+.overview-stats div { background: var(--surface-raised); border-radius: 10px; padding: 8px 10px; }
+.overview-stats dt { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.overview-stats dd { margin: 0; font-size: 1.15rem; font-weight: 700; }
+.overview-other { padding-left: 1.1rem; margin: 8px 0; }
+.overview-other li { margin: 3px 0; }
+.overview-links { display: flex; gap: 16px; flex-wrap: wrap; margin: 8px 0 0; }
+.overview-state { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 10px 0 4px; }
+.overview .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); display: inline-block; }
+.overview .dot-on { background: var(--ok); }
+.overview .dot-unknown { background: var(--warn); }
+.overview details code, .overview .wrap { overflow-wrap: anywhere; }
+.error-banner { border-color: var(--bad); }
+@media (max-width: 800px) { .overview-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 420px) { .overview-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

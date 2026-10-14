@@ -10,6 +10,7 @@ import { ResearchHistoryTable } from '../components/Research';
 import { MarketSelect, useCarriedSearch, useMarket, useSport } from '../components/Selection';
 import { PolicyToggle, RunTypeToggle, usePolicy, useRunType } from '../components/RunTypeToggle';
 import { AsyncView, Empty } from '../components/States';
+import { canonicalFor, CanonicalHistory } from '../components/Canonical';
 import { calendarDate, dateTime, FULL_DATE, pct } from '../format';
 
 const PAGE = 500;
@@ -36,16 +37,18 @@ export function HistoryPage() {
   const [runChoice, setRun] = useRunType();
   const run = isWinner ? runChoice : 'live';   // market forecasts are live only
   const [level, setLevel] = useConfidence(sport, market);
-  const [policyChoice, setPolicy] = usePolicy();
-  const policy = run === 'live' ? policyChoice : 'pregame';
+  const [policyChoice, setPolicy] = usePolicy(canonicalFor(sport));
+  const policy: Policy = run !== 'live' ? 'pregame'
+    : policyChoice === 'canonical' && !canonicalFor(sport, market) ? 'near_tipoff' : policyChoice;
+  const canonical = policy === 'canonical';
   const meta = useApi((s) => api.meta(sport, s), [sport]);
   const realMode = meta.state.status === 'success' && meta.state.data.mode === 'real';
   const [limit, setLimit] = useState(PAGE);
   useEffect(() => setLimit(PAGE), [sport, filters.date_from, filters.date_to, filters.team, run, level, policy, market]);
   // Other markets have their own history (MarketHistory): the winner list is fetched only when it is shown.
-  const { state, retry } = useApi((s): Promise<HistoryResponse | null> => (isWinner
+  const { state, retry } = useApi((s): Promise<HistoryResponse | null> => (isWinner && !canonical
     ? api.predictions(sport, { ...filters, run_type: run, min_confidence: level, policy, limit }, s) : Promise.resolve(null)),
-    [sport, filters.date_from, filters.date_to, filters.team, run, level, policy, isWinner, limit]);
+    [sport, filters.date_from, filters.date_to, filters.team, run, level, policy, isWinner, limit, canonical]);
 
   const update = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -69,12 +72,14 @@ export function HistoryPage() {
       {meta.state.status === 'success' && <MarketSelect value={market} markets={meta.state.data.markets} onChange={setMarket} />}
       {meta.state.status === 'success' && <p className="muted small">
         {!realMode ? 'Demo predictions from synthetic fixtures.'
+          : canonical ? 'Canonical forecasts: one record per game, the same record Today, the game page and Performance show and grade. Missing forecasts are listed with their reason.'
           : run === 'live' && policy === 'near_tipoff' ? 'Near-tipoff forecasts, each made before tipoff from the freshest stored results (latest version per game). Kept separate from the pre-game archive. Elo does not know about injuries or line-ups.'
           : run === 'live' ? 'Pre-game archive: forecasts the discontinued daily job recorded before each game\'s cutoff (midnight Eastern on the game date), some several days before the game. Compare the recorded time with the game date. Latest version per game; outcomes are added after the game.'
             : 'Retrospective backtest predictions of the primary model, computed after the fact. These are not forecasts recorded before the games.'}
       </p>}
-      {realMode && run === 'live' && <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} /></div>}
-      <ConfidenceFilter value={level} onChange={setLevel} levels={confidenceLevels(sport, market)} />
+      {realMode && run === 'live' && <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} canonical={canonicalFor(sport, market)} /></div>}
+      {canonical ? <p className="small muted">The confidence filter applies to the legacy views and the game-day slate; the canonical history lists every game.</p>
+        : <ConfidenceFilter value={level} onChange={setLevel} levels={confidenceLevels(sport, market)} />}
       <form className="filters" onSubmit={(e) => e.preventDefault()}>
         <label>From <input type="date" value={filters.date_from ?? ''} onChange={(e) => update('date_from', e.target.value)} /></label>
         <label>To <input type="date" value={filters.date_to ?? ''} onChange={(e) => update('date_to', e.target.value)} /></label>
@@ -92,7 +97,8 @@ export function HistoryPage() {
           <button type="button" className="link-btn" onClick={meta.retry}>Retry</button>
         </p>
       )}
-      {!isWinner ? (
+      {canonical ? <CanonicalHistory sport={sport} filters={filters} limit={limit} />
+      : !isWinner ? (
         <MarketHistory sport={sport} market={market} policy={policy} level={level} filters={filters} hasFilters={hasFilters}
           showAll={() => setLevel(null)} />
       ) : <AsyncView state={state} retry={retry}>

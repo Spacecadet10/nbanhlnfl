@@ -7,7 +7,7 @@ A prediction's `run_type` says what kind of forecast it is: 'live' (recorded bef
 from datetime import date, datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_serializer
 
 RunType = Literal["demo", "backtest", "live"]
 Mode = Literal["real", "demo"]
@@ -23,6 +23,8 @@ class Health(BaseModel):
     status: Literal["ok"]
     mode: Mode
     api_version: str
+    data_snapshot_at: Optional[str] = Field(default=None, description="When the served stores were copied from the live "
+                                            "ones (development launcher, scripts/dev.sh); null when serving the stores in place.")
 
 
 class Team(BaseModel):
@@ -84,7 +86,45 @@ class Market(BaseModel):
     away_price: Optional[float] = Field(None, description="Away moneyline as quoted (American odds).")
 
 
-Policy = Literal["pregame", "near_tipoff"]
+Policy = Literal["pregame", "near_tipoff", "canonical"]   # canonical: game_forecasts (app/coverage.canonical); the others are legacy
+
+
+class CanonicalRecord(BaseModel):
+    """The selected game_forecasts row: the one record every page shows and grades for this game and market."""
+    forecast_id: int
+    source: Literal["adaptive", "primary_recorded", "primary_direct"] = Field(
+        description="adaptive = the intended primary (ensemble); primary_* = the labelled sealed baseline fallback.")
+    fallback_rank: int
+    fallback_reason: Optional[str] = Field(description="Why each earlier source in the order was not used.")
+    model_version: str
+    generated_at: datetime
+    start_at: datetime = Field(description="The scheduled start the forecast was made for.")
+    minutes_before_start: float
+    p: list[float]
+    home_win_prob: Optional[float] = None
+    pick: Optional[Literal["home", "away"]] = None
+    confidence: float
+    line: Optional[float]
+    line_source: Literal["bookmaker", "model", "none"]
+
+
+class CanonicalAttempt(BaseModel):
+    forecast_id: int
+    generated_at: datetime
+    reason: str
+
+
+class CanonicalForecast(BaseModel):
+    """One game's canonical forecast for one market, or why there is none. Graded on read from the stored result."""
+    market: MarketId
+    state: Literal["forecast", "missing", "upcoming", "unvalidated", "not_recorded", "not_forecastable"]
+    reason: Optional[str] = Field(description="Why there is no canonical forecast (every state except 'forecast').")
+    record: Optional[CanonicalRecord]
+    grade: Optional[Literal["win", "loss", "push", "pending", "void", "unscorable", "unresolved"]]
+    later_failure: Optional[CanonicalAttempt] = Field(description="A later attempt before the start that recorded no "
+                                                                  "forecast; the earlier forecast stays the canonical one.")
+    attempts: int = Field(description="Rows recorded for this game and market before the start.")
+    recording_began_at: Optional[datetime]
 
 
 class NearTipoffForecast(BaseModel):
@@ -157,6 +197,8 @@ class GameSummary(BaseModel):
                                   "requested confidence. Null when the game has no forecast under that policy.")
     market_forecast: Optional["MarketForecastOut"] = Field(
         default=None, description="The selected non-winner market's forecast under the selected policy, if any.")
+    canonical: Optional[CanonicalForecast] = Field(
+        default=None, description="The canonical winner forecast (real mode); null in demo mode.")
 
 
 class SlatePick(BaseModel):
@@ -175,6 +217,20 @@ class SlateSelection(BaseModel):
     games: int
     with_forecast: int = Field(description="Games that have a forecast under this policy.")
     selected: int = Field(description="Games whose pick under this policy meets the confidence level.")
+    below_threshold: Optional[int] = Field(default=None, description="Canonical policy: games with a forecast whose pick is "
+                                           "below the confidence level (the only games the filter hides).")
+    without_forecast: Optional[dict[str, int]] = Field(default=None, description="Canonical policy: games without a "
+                                                       "canonical forecast by state (missing, unvalidated, upcoming, ...); "
+                                                       "never hidden by the confidence filter.")
+
+    @model_serializer(mode="wrap")
+    def _canonical_counts_only_when_set(self, handler):
+        """The legacy policies' selection keeps its earlier shape: the canonical counts appear only when set."""
+        out = handler(self)
+        for k in ("below_threshold", "without_forecast"):
+            if out.get(k) is None:
+                out.pop(k, None)
+        return out
 
 
 class GamesResponse(BaseModel):
@@ -280,16 +336,28 @@ def meets_confidence(home_win_prob: float, min_confidence: Optional[float]) -> b
 
 def apply_slate_policy(games: list[GameSummary], policy: str, min_confidence: Optional[float]) -> SlateSelection:
     """Sets each game's `slate_pick` from the selected policy only (never falling back to the other forecast) and
-    returns the counts. `pregame` uses `prediction`; `near_tipoff` uses `near_tipoff`."""
+    returns the counts. `pregame` uses `prediction`; `near_tipoff` uses `near_tipoff`; `canonical` uses the canonical
+    record (only in state 'forecast')."""
     for g in games:
-        source = g.near_tipoff if policy == "near_tipoff" else g.prediction
+        if policy == "canonical":
+            source = g.canonical.record if g.canonical is not None and g.canonical.state == "forecast" else None
+        else:
+            source = g.near_tipoff if policy == "near_tipoff" else g.prediction
         g.slate_pick = None if source is None else SlatePick(
             policy=policy, home_win_prob=source.home_win_prob, pick="home" if source.home_win_prob >= 0.5 else "away",
             confidence=pick_confidence(source.home_win_prob),
             meets_confidence=meets_confidence(source.home_win_prob, min_confidence))
     picks = [g.slate_pick for g in games if g.slate_pick is not None]
+    selected = sum(p.meets_confidence for p in picks)
+    extra = {}
+    if policy == "canonical":
+        without: dict[str, int] = {}
+        for g in games:
+            if g.slate_pick is None and g.canonical is not None:
+                without[g.canonical.state] = without.get(g.canonical.state, 0) + 1
+        extra = {"below_threshold": len(picks) - selected, "without_forecast": without}
     return SlateSelection(policy=policy, min_confidence=min_confidence, games=len(games), with_forecast=len(picks),
-                          selected=sum(p.meets_confidence for p in picks))
+                          selected=selected, **extra)
 
 
 def confidence_record(rows: list[PredictionRecord], min_confidence: Optional[float]) -> ConfidenceRecord:
@@ -341,6 +409,69 @@ class PerformanceResponse(BaseModel):
     baselines: list[BaselineScore]
     market: MarketComparison
     note: str
+
+
+class CanonicalSummary(BaseModel):
+    """Started competitive games (regular season, play-in, playoffs): a game is either forecast or missing (a coverage
+    gap, never a loss). Grades and metrics cover settled forecasts only."""
+    games: int
+    forecast: int
+    missing: int
+    coverage: Optional[float]
+    grades: dict[str, int]
+    graded: int = Field(description="Wins + losses.")
+    accuracy: Optional[float]
+    brier_score: Optional[float]
+    log_loss: Optional[float]
+    by_source: dict[str, int]
+    model_versions: list[dict]
+    missing_reasons: list[dict]
+
+
+class CanonicalRow(BaseModel):
+    game_id: str
+    game_date: date
+    tipoff: datetime
+    status: GameStatus
+    season_type: SeasonType
+    home: Team
+    away: Team
+    outcome: Optional[Outcome]
+    canonical: CanonicalForecast
+
+
+class CanonicalHistoryResponse(BaseModel):
+    mode: Mode
+    market: MarketId
+    as_of: datetime
+    recording_began_at: Optional[datetime]
+    total: int
+    record: CanonicalSummary = Field(description="Every matching started competitive game, not only the rows shown.")
+    preseason_games: int
+    rows: list[CanonicalRow]
+
+
+class CanonicalPreseason(BaseModel):
+    games: int
+    unvalidated: int
+    experimental_rows: int = Field(description="Experimental fallback rows recorded for these games; never canonical, "
+                                               "never in the competitive record.")
+    note: str
+
+
+class CanonicalPerformanceResponse(BaseModel):
+    mode: Mode
+    market: MarketId
+    title: str
+    note: str
+    as_of: datetime
+    recording_began_at: Optional[datetime]
+    date_from: Optional[date]
+    date_to: Optional[date]
+    competitive: CanonicalSummary
+    calibration: list[CalibrationBin]
+    market_comparison: MarketComparison
+    preseason: CanonicalPreseason
 
 
 class GoalieListingOut(BaseModel):

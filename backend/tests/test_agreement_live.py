@@ -130,3 +130,26 @@ def test_agreement_reports_each_definition_separately(store):
     got=agreement.performance(store,'2026-10-21T22:00:00Z')
     assert {g['definition'] for g in got['groups']}=={'one','two'}
     assert all(g['pending']==1 for g in got['groups'])
+
+
+def test_performance_as_of_ignores_forecasts_made_after_it(monkeypatch):
+    """A game whose complete cohort was forecast after `as_of` was not yet forecast at `as_of`: it is not a partial
+    cohort in the record as of that time."""
+    import sqlite3
+    import types
+    from app import agreement, live
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE games (game_id TEXT, status TEXT, tipoff_at TEXT, home_score INT, away_score INT, "
+                 "result_available_at TEXT)")
+    conn.execute("CREATE TABLE predictions (prediction_id INTEGER PRIMARY KEY, game_id TEXT, run_type TEXT, feature_version "
+                 "TEXT, model_version TEXT, dataset_version TEXT, generated_at TEXT, cutoff_at TEXT, home_win_prob REAL)")
+    conn.execute("INSERT INTO games VALUES ('g1','scheduled','2026-10-20T00:00:00Z',NULL,NULL,NULL)")
+    for n in agreement.NAMES["nhl"]:
+        conn.execute("INSERT INTO predictions (game_id,run_type,feature_version,model_version,dataset_version,generated_at,"
+                     "cutoff_at,home_win_prob) VALUES ('g1','live',?,?,'d1','2026-10-19T23:00:00Z','2026-10-20T00:00:00Z',0.6)",
+                     (agreement.FEATURE_VERSION, f"research-v2:{n}:abc"))
+    monkeypatch.setattr(live, "engine", lambda c: types.SimpleNamespace(sport="nhl"))
+    assert agreement.performance(conn, as_of="2026-10-19T12:00:00Z")["partial_games"] == 0
+    after = agreement.performance(conn, as_of="2026-10-19T23:30:00Z")
+    assert after["partial_games"] == 0 and after["groups"][0]["games"] == 1
