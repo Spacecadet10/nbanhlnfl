@@ -11,7 +11,7 @@ from typing import Optional
 from .db import utc_now
 
 FMT = "%Y-%m-%dT%H:%M:%SZ"
-STALE_JOB_HOURS = {"refresh": 26, "odds": 2}
+STALE_JOB_HOURS = {"refresh": 26, "odds": 2, "training_inputs": 30}   # training_inputs: 09:30 run + 15:30 retry
 SCHEDULE_NOTE = {"season_start": "refits at the first forecast of a new season only",
                  "weekly": "refits at the first forecast of each ISO week (and at season start)"}
 
@@ -23,6 +23,19 @@ def _expanded() -> str:
 
 def _has(conn, table: str) -> bool:
     return conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone() is not None
+
+
+def _failure_reason(detail: Optional[str]) -> str:
+    try:
+        d = json.loads(detail or "{}")
+    except ValueError:
+        return "unreadable detail"
+    blocking = (d.get("check") or {}).get("blocking")
+    if blocking:                          # training_inputs: what training waits for
+        return "training inputs not ready: " + ", ".join(sorted(blocking))
+    if d.get("failed_steps"):             # training_inputs: a collector failed although training could proceed
+        return "collection step(s) failed: " + ", ".join(d["failed_steps"])
+    return str(d.get("error") or d.get("reason") or "failed")[:200]
 
 
 def status(conn, now: Optional[str] = None) -> dict:
@@ -59,6 +72,18 @@ def status(conn, now: Optional[str] = None) -> dict:
             stale = checked is None or datetime.strptime(checked, FMT).replace(tzinfo=timezone.utc) < \
                 datetime.strptime(now, FMT).replace(tzinfo=timezone.utc) - timedelta(hours=hours)
             jobs[job] = {"last_success": last, "last_checked": checked, "stale": stale, "stale_after_hours": hours}
+            # The latest finished run, so a failure shows at once rather than only once the job turns stale.
+            r = conn.execute("SELECT status, finished_at, detail FROM job_runs WHERE job=? AND finished_at IS NOT NULL "
+                             "ORDER BY finished_at DESC, run_id DESC LIMIT 1", (job,)).fetchone()
+            jobs[job]["last_status"] = r[0] if r else None
+            jobs[job]["last_failure"] = {"at": r[1], "reason": _failure_reason(r[2])} if r and r[0] == "failed" else None
+            # A run killed mid-way never finishes: its 'running' row shows as a failure once it is older than two hours.
+            u = conn.execute("SELECT started_at FROM job_runs WHERE job=? AND finished_at IS NULL AND status='running' "
+                             "ORDER BY started_at DESC LIMIT 1", (job,)).fetchone()
+            if u and (r is None or u[0] > r[1]) and datetime.strptime(u[0], FMT).replace(tzinfo=timezone.utc) < \
+                    datetime.strptime(now, FMT).replace(tzinfo=timezone.utc) - timedelta(hours=2):
+                jobs[job]["last_status"] = "running"
+                jobs[job]["last_failure"] = {"at": u[0], "reason": "did not finish (killed, or still running after 2 h)"}
     for f in fits:
         f.update(_versions_and_next(conn, f, now))
         if f["member"].startswith("cand:calibrated:"):

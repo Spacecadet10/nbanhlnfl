@@ -1,7 +1,7 @@
 """Read-only threshold research for recorded forecasts. No threshold is automatically selected or promoted."""
 import math
 from collections import defaultdict
-from . import agreement, live, market_live, near_tipoff
+from . import agreement, coverage, live, market_live, near_tipoff
 from .db import utc_now
 
 THRESHOLDS = (0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9)
@@ -60,14 +60,17 @@ def report(conn, now=None):
     for r in market_live.latest(conn, policy='near_tipoff'):
         if '-window=2h-' not in r['model_version'] or r['generated_at'] > now:
             continue
-        side = market_live.pick(r)
-        conf = r['p_a'] if side == 'a' else r['p_b']
+        # The canonical record's pick and confidence (coverage.pick_side / _confidence): reg3 may pick the draw; a two-way
+        # line market's confidence is conditional on no push. Graded as coverage.grade (a two-way 'mid' is a push).
+        p = (r['p_a'], r['p_mid'], r['p_b'])
+        side = coverage.pick_side(r['market'], p)
+        conf = coverage._confidence(r['market'], p)
         result = market_live.outcome(r)
         available = conn.execute('SELECT result_available_at FROM games WHERE game_id=?', (r['game_id'],)).fetchone()[0]
         if result not in ('pending', 'void') and (not available or available > now):
             result = 'pending'
         if result in ('a','b','mid'):
-            result = market_live.result_for_pick(r['market'], side, result)
+            result = 'push' if result == 'mid' and r['market'] != 'reg3' else 'win' if result == side else 'loss'
         buckets[(r['market'], r['model_version'], r['line_source'] or 'no_line')].append((conf, result))
     # Each research model gets its own record. No mixing model definitions or old night-before forecasts.
     rows = conn.execute("SELECT p.*, g.status, g.tipoff_at, g.home_score, g.away_score, g.result_available_at "

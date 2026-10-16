@@ -46,11 +46,13 @@ function CoverageBody({ c, market }: { c: CoverageReport; market: MarketId }) {
   const s = c.schedule;
   const src = c.source_schedule;
   const m = c.by_market[market];
+  const rec = c.record_by_market?.[market];
+  if (!rec) return <Empty>No coverage record for this market in this report.</Empty>;
   const types = Object.entries(s.by_season_type).map(([k, v]) => `${v} ${k.replace('_', '-')}`).join(', ');
   return <>
     <p className="small muted">{c.date_from} to {c.date_to} (Eastern dates) · fallback order {c.order_version}: {(c.order ?? []).map((o) => SOURCE[o] ?? o).join(' → ')}</p>
     <ul className="small">
-      <li>Scheduled: <strong>{s.games}</strong> games{types ? ` (${types})` : ''}; {s.games_with_any_forecast} with a forecast, {s.games_fully_forecast} for every market{s.upcoming_games ? `; ${s.upcoming_games} not started yet` : ''}{s.not_forecastable_type ? `; ${s.not_forecastable_type} exhibition games not forecast` : ''}.</li>
+      <li>Scheduled: <strong>{s.games}</strong> games{types ? ` (${types})` : ''}; {s.games_with_any_forecast} with a forecast, {s.games_fully_forecast} for every market{s.games_unvalidated ? `; ${s.games_unvalidated} preseason without a validated model (no canonical forecast)` : ''}{s.upcoming_games ? `; ${s.upcoming_games} not started yet` : ''}{s.not_forecastable_type ? `; ${s.not_forecastable_type} exhibition games not forecast` : ''}.</li>
       <li>Source schedule: {src?.available
         ? <>{src.source_games} games listed by the source; {src.missing_from_store?.length ?? 0} missing from this store; {src.field_differences?.length ?? 0} with a different start, type or status.</>
         : <span className="warn">{src?.reason ?? 'not checked'}</span>}</li>
@@ -61,19 +63,19 @@ function CoverageBody({ c, market }: { c: CoverageReport; market: MarketId }) {
     </ul>
     {m && <p className="small"><strong>{MARKET[market] ?? market}</strong>: {m.forecast} of {m.cells} forecast ({m.main} adaptive, {m.fallback} sealed primary), {m.missing} missing{m.upcoming ? `, ${m.upcoming} not started` : ''}{m.unvalidated ? `, ${m.unvalidated} preseason without a validated model` : ''} · {m.graded} graded, {m.pending} pending, {m.void} void{m.unresolved ? `, ${m.unresolved} unresolved` : ''}{m.unscorable ? `, ${m.unscorable} unscorable` : ''}.</p>}
 
-    <h3>All forecasts, unfiltered</h3>
+    <h3>{MARKET[market] ?? market} forecasts, unfiltered</h3>
     <div className="table-wrap"><table className="table"><thead><tr><th>Source</th><th>Forecasts</th><th>Record (W–L–P · win rate)</th></tr></thead>
       <tbody>
-        <tr><th scope="row">All (regular season and playoffs)</th><td>{c.record.all.forecasts}</td><td><Rec r={c.record.all} /></td></tr>
-        <tr><th scope="row">Adaptive ensemble (research, not approved)</th><td>{c.record.main.forecasts}</td><td><Rec r={c.record.main} /></td></tr>
-        <tr><th scope="row">Sealed primary</th><td>{c.record.fallback.forecasts}</td><td><Rec r={c.record.fallback} /></td></tr>
-        {c.preseason_record && <tr><th scope="row">Preseason · {c.preseason_record.label ?? 'Experimental / unvalidated'} (not in the record above)</th><td>{c.preseason_record.forecasts}</td><td><Rec r={c.preseason_record} /></td></tr>}
+        <tr><th scope="row">All (regular season and playoffs)</th><td>{rec.all.forecasts}</td><td><Rec r={rec.all} /></td></tr>
+        <tr><th scope="row">Adaptive ensemble (research, not approved)</th><td>{rec.main.forecasts}</td><td><Rec r={rec.main} /></td></tr>
+        <tr><th scope="row">Sealed primary</th><td>{rec.fallback.forecasts}</td><td><Rec r={rec.fallback} /></td></tr>
+        {c.preseason_record && <tr><th scope="row">Preseason · {c.preseason_record.label ?? 'Experimental / unvalidated'} · all markets combined (not in the record above)</th><td>{c.preseason_record.forecasts}</td><td><Rec r={c.preseason_record} /></td></tr>}
       </tbody></table></div>
 
     <h3>Same record by confidence threshold</h3>
-    <p className="small muted">Filters the record above; every market is included. Fallback forecasts are counted apart from the ensemble and never train it.</p>
+    <p className="small muted">{MARKET[market] ?? market} only, on its own grid ({market === 'reg3' ? '35–70%' : '50–90%'}): filters that market's forecasts in the record above; markets are never pooled. Fallback forecasts are counted apart from the ensemble and never train it.</p>
     <div className="table-wrap"><table className="table"><thead><tr><th>Minimum</th><th>All</th><th>Adaptive</th><th>Sealed primary</th></tr></thead>
-      <tbody>{(c.thresholds ?? []).map((t) => <tr key={t.threshold}><th scope="row">{pct(t.threshold)}+</th>
+      <tbody>{(c.thresholds_by_market?.[market] ?? []).map((t) => <tr key={t.threshold}><th scope="row">{pct(t.threshold)}+</th>
         <td>{t.all.win}–{t.all.loss} · {pct(t.all.win_rate, 1)} ({t.all.forecasts})</td>
         <td>{t.main.win}–{t.main.loss} · {pct(t.main.win_rate, 1)}</td><td>{t.fallback.win}–{t.fallback.loss} · {pct(t.fallback.win_rate, 1)}</td></tr>)}</tbody>
     </table></div>

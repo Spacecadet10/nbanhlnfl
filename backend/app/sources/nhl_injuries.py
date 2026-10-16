@@ -19,6 +19,7 @@ from ..db import utc_now
 VERSION = "nhl-availability-archive-1"
 CDX = "https://web.archive.org/cdx/search/cdx"
 PAGE = "http://www.espn.com/nhl/injuries"
+LIVE_PAGE = "https://www.espn.com/nhl/injuries"
 WEIGHTS = {"injured reserve": 1., "ir": 1., "out": 1., "day-to-day": .5,
            "day to day": .5, "dtd": .5, "questionable": .5, "probable": .25,
            "active": 0., "healthy": 0.}
@@ -102,9 +103,10 @@ def save_capture(response, stamp, directory):
         old = json.loads(path.read_text())
         if old["sha256"] != digest:
             raise ValueError("capture content changed; kept original metadata and both raw bodies")
-    else:
-        with path.open("x") as f:
-            json.dump(meta, f)
+    else:                                   # atomic, as capture_live: a torn archive file would block every load
+        tmp = directory / f".{stamp}.json.tmp"
+        tmp.write_text(json.dumps(meta))
+        tmp.replace(path)
     return meta
 
 
@@ -148,3 +150,43 @@ def collect(start: int, end: int, *, limit=None, delay=2., directory=None, log=p
                 log(json.dumps({k: v for k, v in counts.items() if k != "errors"}))
     (directory / "last-run.json").write_text(json.dumps(counts, indent=2))
     return counts
+
+
+def live_source(url) -> bool:
+    parsed = urlparse(str(url))
+    return parsed.hostname in ("www.espn.com", "espn.com") and parsed.path.rstrip("/") == "/nhl/injuries"
+
+
+def capture_live(*, get=None, directory=None, clock=None) -> dict:
+    """One capture of the live ESPN NHL injuries page (the page the archive captured), stamped at retrieval: `captured_at`
+    is the time the response was in hand, so a snapshot is never usable before it existed here. Raw body kept as evidence
+    (`live-<stamp>-<sha>.html`) even when the page cannot be parsed; metadata (`live-<stamp>.json`) only when it parses.
+    Called by jobs.nhl_injury_capture (opt-in NHL_INJURY_CAPTURE=1)."""
+    import httpx
+    get = get or (lambda url: httpx.get(url, timeout=45, follow_redirects=True))
+    response = get(LIVE_PAGE)
+    response.raise_for_status()
+    captured = (clock or utc_now)()
+    if not live_source(response.url):
+        raise ValueError(f"live capture is not the ESPN NHL injuries page: {response.url}")
+    directory = Path(directory or root() / "injuries")
+    directory.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.strptime(captured, "%Y-%m-%dT%H:%M:%SZ").strftime("%Y%m%d%H%M%S")
+    digest = hashlib.sha256(response.content).hexdigest()
+    raw = directory / f"live-{stamp}-{digest}.html"
+    if not raw.exists():
+        with raw.open("xb") as f:
+            f.write(response.content)
+    layout, rows, teams = parse(response.content)
+    meta = {"version": VERSION, "source": "live", "page": LIVE_PAGE, "captured_at": captured, "retrieved_at": captured,
+            "response_url": str(response.url), "sha256": digest, "raw_file": raw.name, "layout": layout, "rows": rows,
+            "teams": teams}
+    path = directory / f"live-{stamp}.json"
+    if path.exists():
+        if json.loads(path.read_text())["sha256"] != digest:
+            raise ValueError("live capture content changed within the same second; kept the original metadata")
+    else:                                   # atomic: a crash never leaves torn metadata where the loader reads it
+        tmp = directory / f".live-{stamp}.json.tmp"
+        tmp.write_text(json.dumps(meta))
+        tmp.replace(path)
+    return meta

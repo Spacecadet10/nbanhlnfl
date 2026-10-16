@@ -211,7 +211,10 @@ def test_preseason_is_unvalidated_on_the_coverage_card_and_its_rows_are_experime
     assert cell["experimental"]["label"] == "Experimental / unvalidated" and cell["experimental"]["grade"] in ("win", "loss")
     assert body["by_market"]["winner"]["unvalidated"] == 1 and body["by_market"]["winner"]["forecast"] == 0
     others = [c for g in body["games"] if g["season_type"] == "preseason" for c in g["markets"] if c["market"] != "winner"]
-    assert others and all(c.get("label") == "Experimental / unvalidated" for c in others if c["status"] != "missing")
+    # Every market uses the canonical selection (all-markets integration): preseason is unvalidated in each, its stored row
+    # experimental only (was: non-winner cells showed the latest row, labelled experimental).
+    assert others and all(c["status"] == "unvalidated" and c["experimental"]["label"] == "Experimental / unvalidated"
+                          for c in others)
     assert body["record"]["all"]["forecasts"] == 0                 # nothing preseason in the accepted (competitive) record
     assert body["preseason_record"]["label"] == "Experimental / unvalidated"
 
@@ -233,3 +236,34 @@ def test_slate_counts_keep_games_without_a_forecast_apart_from_picks_below_the_t
     assert sel["without_forecast"] == {"upcoming": 1}
     pre = client.get("/api/games", params={"date": "2026-10-22", "policy": "canonical", "min_confidence": 0.7}).json()["selection"]
     assert pre["without_forecast"] == {"unvalidated": 1} and pre["below_threshold"] == 0 and pre["with_forecast"] == 0
+
+
+def test_every_nba_market_is_one_canonical_record_on_every_page_graded_identically(ready, client):
+    record_now(ready)
+    client.now = NOW
+    markets = ("winner", "spread", "total", "team_total_home", "team_total_away")
+    detail = client.get(f"/api/games/{G1}").json()["canonical_markets"]
+    assert [c["market"] for c in detail] == list(markets)
+    ids = {}
+    for m in markets:
+        [row] = [r for r in ready.execute("SELECT * FROM game_forecasts WHERE game_id=? AND market=? AND status='forecast'",
+                                          (G1, m))]
+        ids[m] = row["forecast_id"]
+        c = card(client, "2026-10-21", G1, policy="canonical", market=m)[1]["canonical"]
+        h = next(r for r in client.get("/api/canonical/forecasts", params={"market": m}).json()["rows"] if r["game_id"] == G1)
+        d = next(x for x in client.get(f"/api/games/{G1}").json()["canonical_markets"] if x["market"] == m)
+        assert c["record"]["forecast_id"] == h["canonical"]["record"]["forecast_id"] == d["record"]["forecast_id"] == ids[m]
+        assert c["record"]["line"] == row["line"] and c["record"]["pick_label"]
+    assert client.get("/api/canonical/forecasts", params={"market": "reg3"}).status_code == 404     # not an NBA market
+    ingest_events(ready, [event("g1", T_GAME, "1", "2", "STATUS_FINAL", 110, 100)], "2026-10-22T03:00:00Z")
+    client.now = AFTER
+    for m in markets:
+        c = card(client, "2026-10-21", G1, policy="canonical", market=m)[1]["canonical"]
+        h = next(r for r in client.get("/api/canonical/forecasts", params={"market": m}).json()["rows"] if r["game_id"] == G1)
+        d = next(x for x in client.get(f"/api/games/{G1}").json()["canonical_markets"] if x["market"] == m)
+        assert c["grade"] == h["canonical"]["grade"] == d["grade"] and c["grade"] in ("win", "loss", "push"), m
+        perf = client.get("/api/canonical/performance", params={"market": m}).json()["competitive"]
+        assert perf["forecast"] == 1 and perf["grades"][c["grade"]] == 1
+    # The winner record is unchanged by the all-markets integration.
+    perf = client.get("/api/canonical/performance").json()
+    assert perf["market"] == "winner" and perf["market_comparison"]["matched_games"] == 1 and "unmatched" not in perf["market_comparison"]

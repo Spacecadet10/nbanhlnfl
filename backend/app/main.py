@@ -128,12 +128,13 @@ def sources(p=Depends(get_provider)):
 def games(date: date = Query(description="Game date (US Eastern), YYYY-MM-DD"),
           policy: str = Query("pregame", pattern="^(pregame|near_tipoff|canonical)$",
                               description="Which forecast the slate's picks and confidence filter use: canonical (one "
-                                          "record per game, winner market only) or a legacy ledger."),
+                                          "record per game and market) or a legacy ledger."),
           min_confidence: Optional[float] = Query(None, ge=0, le=1), market: str = MARKET, p=Depends(get_provider)):
     if market == "winner" and min_confidence is not None and min_confidence < 0.5:
         raise HTTPException(status_code=422, detail="min_confidence for the winner market is at least 0.5")
     if market != "winner" and policy == "canonical":
-        raise HTTPException(status_code=422, detail="The canonical forecast covers the winner market only so far")
+        _canonical_market(p, market, min_confidence)
+        return p.games(date, policy, min_confidence, market)
     if market != "winner":
         _market_supported(p, market)
         return p.games(date, policy, min_confidence, market)
@@ -159,27 +160,36 @@ def game(game_id: str, p=Depends(get_provider)):
     return g
 
 
-WINNER_ONLY = Query("winner", pattern="^winner$", description="The canonical forecast covers the winner market only so far.")
-
-
 def _canonical_provider(p):
     if getattr(p, "mode", None) != "real":
         raise HTTPException(status_code=404, detail="Canonical forecasts are not part of the demo data.")
     return p
 
 
+def _canonical_market(p, market: str, min_confidence: Optional[float] = None) -> None:
+    """The market must be one the sport defines; a two-way market's confidence is at least 0.5 (its pick is the likelier
+    side). The three-way market's confidence can be lower (its grid starts at 35%)."""
+    _canonical_provider(p)
+    if market not in sports.get(p.sport).markets:
+        raise HTTPException(status_code=404, detail=f"The {market} market is not defined for {p.sport.upper()}.")
+    if market != "reg3" and min_confidence is not None and min_confidence < 0.5:
+        raise HTTPException(status_code=422, detail=f"min_confidence for the {market} market is at least 0.5")
+
+
 @app.get("/api/canonical/forecasts", response_model=CanonicalHistoryResponse)
-def canonical_forecasts(market: str = WINNER_ONLY, date_from: Optional[date] = None, date_to: Optional[date] = None,
+def canonical_forecasts(market: str = MARKET, date_from: Optional[date] = None, date_to: Optional[date] = None,
                         team: Optional[str] = None, limit: int = Query(500, ge=1, le=5000), p=Depends(get_provider)):
     """One row per game since canonical recording began: its canonical forecast and grade, or why there is none."""
     if date_from and date_to and date_from > date_to:
         raise HTTPException(status_code=422, detail="date_from must be on or before date_to")
-    return _canonical_provider(p).canonical_history(date_from, date_to, team, limit)
+    _canonical_market(p, market)
+    return p.canonical_history(date_from, date_to, team, limit, market)
 
 
 @app.get("/api/canonical/performance", response_model=CanonicalPerformanceResponse)
-def canonical_performance(market: str = WINNER_ONLY, p=Depends(get_provider)):
-    return _canonical_provider(p).canonical_performance()
+def canonical_performance(market: str = MARKET, p=Depends(get_provider)):
+    _canonical_market(p, market)
+    return p.canonical_performance(market)
 
 
 @app.get("/api/predictions", response_model=HistoryResponse)
@@ -360,6 +370,8 @@ def research_tracking(market: str = MARKET, evidence: str = Query("prospective",
                         date_from=date_from, date_to=date_to, version=version, line=line)
     except at.RegistryError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
+    except InvalidRequest as exc:          # e.g. a version prefix matching several research definitions
+        raise HTTPException(status_code=422, detail=str(exc))
     rec = None
     if db.has_table(p.conn, "research_cohorts"):
         rec = next((m for m in selection_status.status(p.conn, p.now).get("markets", []) if m.get("market") == market), None)
@@ -639,3 +651,29 @@ def daily_agreement_evidence(market: str = MARKET, rule: str = Query(..., max_le
         return daily_agreement.evidence(p.conn, p.now, market, rule, period, offset)
     except InvalidRequest as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/api/research/autoresearch")
+def research_autoresearch(mode: str = Depends(api_mode)):
+    """Sports autoresearch (docs/AUTORESEARCH.md): current protocol and bar per sport, incumbents, recent trials with per-market
+    decisions and failures, holdout accesses, agent runs, and whether research is running or stopped. Reads the experiment
+    directory (NBA_AUTORESEARCH_DIR) only; research, never a forecast source."""
+    from . import research_status
+    if mode != "real":
+        return {"mode": "demo", "configured": False, "note": research_status.NOTE,
+                "reason": "Autoresearch status reads the real experiment directory; none in demo mode."}
+    return {**research_status.status(), "mode": "real"}
+
+
+@app.get("/api/research/candidates/game/{game_id}")
+def research_candidates_game(game_id: str, as_of: Optional[str] = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$"),
+                             p=Depends(get_provider)):
+    """Every candidate model's recorded pregame forecasts for one game (candidate_forecasts), neural ones included: each model
+    version separately, with line, line source, fit and input provenance. Research only: never canonical, never a vote."""
+    from . import candidates_view
+    if p.mode != "real":
+        return {"mode": "demo", "game_id": game_id, "forecasts": [], "without_forecast": [], "note": candidates_view.NOTE}
+    out = candidates_view.game(p.conn, p.sport, game_id, as_of or p.now)
+    if out is None:
+        raise HTTPException(status_code=404, detail=f"Unknown game {game_id}")
+    return {**out, "mode": "real"}

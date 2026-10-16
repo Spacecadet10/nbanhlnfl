@@ -14,7 +14,7 @@ SPORT_COMMANDS = {"nhl-pbp-import", "nhl-xg-research", "migrate", "replay", "cov
                   "combination-study", "selector-decide", "research-report", "retrain-cadence", "catboost-challenger", "combination-search", "expanded-search", "selective-study", "rules-registry",
                   "daily-cadence", "features-nhl", "tracking-report", "tracking-record", "pool-screen", "pool-assess", "pool-record", "pool-roster", "pool-report",
                   "release-check", "diagnostics", "historical-start", "model-audit", "calibration-study",
-                  "adaptive-train", "adaptive-record", "adaptive-status", "adaptive-replay",
+                  "adaptive-train", "adaptive-record", "adaptive-status", "adaptive-replay", "adaptive-import", "training-inputs",
                   "combination-export-adaptive", "combination-thresholds-report"}
 NHL_ONLY = {"nhl-pbp-import", "nhl-xg-research", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies"}
 
@@ -67,6 +67,15 @@ def main(argv=None) -> int:
     ni.add_argument("--kind", choices=("injuries", "boxes", "both"), default="both")
     ni.add_argument("--limit", type=int)
     ni.add_argument("--sleep", type=float, default=2.)
+    pt = sub.add_parser("paper-trades", help="Read-only: would the recorded forecasts have beaten the recorded bookmaker "
+                                             "quotes? (bets, ROI, closing-line value; no money, no writes)")
+    pt.add_argument("--since", help="Only forecasts generated at or after this UTC time")
+    oh = sub.add_parser("odds-history", help="Cache historical bookmaker lines of finished games (ESPN core odds, free); "
+                                             "research input only, no store writes")
+    oh.add_argument("--from-season", type=int, required=True)
+    oh.add_argument("--to-season", type=int, required=True)
+    oh.add_argument("--limit", type=int)
+    oh.add_argument("--sleep", type=float, default=0.6)
     nh = sub.add_parser("ingest-nhl", help="NHL only: import NHL stats season game lists (one request per season) and the team list")
     nh.add_argument("--from-season", type=int, required=True, help="First season end year, e.g. 2016 = 2015-16")
     nh.add_argument("--to-season", type=int, required=True)
@@ -209,9 +218,17 @@ def main(argv=None) -> int:
     ar.add_argument("--dry-run", action="store_true")
     ar.add_argument("--cadence", choices=("weekly", "daily"), default="weekly")
     sub.add_parser("adaptive-status", help="Read-only adaptive-v1 status: fits in force, weights, exclusions, due state, record")
+    sub.add_parser("training-inputs", help="Before a scheduled refit: collect the inputs the adaptive members read (results, "
+                   "NHL shots and player boxes, NBA boxes), then check them; exit 1 when training must wait")
+    aim = sub.add_parser("adaptive-import", help="Transfer published adaptive-v1 fits (rows, artifacts, history) from the data "
+                         "directory they were trained in into this store; every artifact verified, same definition only")
+    aim.add_argument("--from", dest="source", required=True, help="The source data directory (holding <sport>.sqlite and research/)")
+    aim.add_argument("--cadence", choices=("weekly", "daily", "both"), default="both")
     arp = sub.add_parser("adaptive-replay", help="Chronological replay of adaptive-v1 against the existing system on development "
                          "seasons (exploratory; reserved test seasons are never read)")
     arp.add_argument("--out", help="Report directory (default data/reports/adaptive-replay-<sport>-<time>)")
+    arp.add_argument("--period", help="development (NHL) or validation; never a reserved test period")
+    arp.add_argument("--book-lines", help="JSON {game_id: {market: line}}: price and settle line markets at these bookmaker lines")
     arp.add_argument("--skip-deep", action="store_true", help="Leave the deep networks out even where their libraries are installed")
     sub.add_parser("combination-export-adaptive", help="Write each adaptive candidate history as a plain saved-forecast table "
                    "(research/adaptive/<sport>/oof-<definition>.json.gz) for the threshold explorer; reads, refits nothing. "
@@ -272,6 +289,30 @@ def main(argv=None) -> int:
                     help="Required for --period test; the access is logged to data/eval/test_access.jsonl")
     bt.add_argument("--record", action="store_true", help="Also append predictions to the ledger as run_type=backtest")
     args = p.parse_args(argv)
+    if args.cmd == "paper-trades":
+        from . import paper_trading
+        with db.connect_readonly(args.sport) as conn:
+            print(json.dumps(paper_trading.report(conn, since=args.since), indent=2))
+        return 0
+
+    if args.cmd == "odds-history":
+        if args.to_season < args.from_season or (args.limit is not None and args.limit < 1):
+            p.error("requires ascending seasons and a positive limit")
+        from .sources import espn_odds_history as odds_history
+        with db.connect_readonly(args.sport) as conn:
+            ids = [g for (g,) in conn.execute("SELECT game_id FROM games WHERE status = 'final' AND season BETWEEN ? AND ? "
+                                              "ORDER BY tipoff_at DESC", (args.from_season, args.to_season))]
+            report = {}
+            if args.sport == "nhl":
+                report["event_map"] = odds_history.nhl_event_map(conn, game_ids=set(ids), delay=args.sleep)
+                mapping = __import__("json").loads((odds_history.root("nhl") / "event-map.json").read_text())
+                events = [mapping[g] for g in ids if g in mapping]
+            else:
+                events = [g.split(":", 1)[1] for g in ids if g.startswith("espn:")]
+        report["odds"] = odds_history.collect(args.sport, events, limit=args.limit, delay=args.sleep)
+        print(json.dumps(report, indent=2))
+        return 1 if report["odds"]["failed"] else 0
+
     if args.cmd == "nhl-player-inputs":
         if args.sport != "nhl" or args.to_season < args.from_season or (args.limit is not None and args.limit < 1):
             p.error("requires --sport nhl, ascending seasons, and a positive limit")
@@ -317,6 +358,47 @@ def main(argv=None) -> int:
     if args.cmd == "adaptive-train":     # its own locking (docs/ADAPTIVE_SYSTEM.md §7): the job lock only for the snapshot and
         from . import adaptive           # the publication, the training itself under a separate training lock
         log = lambda m: print(m, file=sys.stderr)   # noqa: E731
+        # The training walks read the cached source responses from this data directory; a directory copied without them
+        # failed hours into retrain attempt 1 (2026-10-14), so it is refused before any training starts. Fail-closed over
+        # every cached source, not only those the members read today; `--force` does not bypass it; nothing is written.
+        # Here rather than in adaptive.py: that file's bytes are part of the adaptive definition (trained fits' identity).
+        from . import raw_cache
+        rconn = db.connect_readonly(args.sport)
+        try:
+            missing = raw_cache.missing_files(rconn)
+        finally:
+            rconn.close()
+        if not missing and not args.dry_run:
+            # Inputs that retire a fit when they arrive after it (training_inputs.py) must be in before training starts:
+            # otherwise the run is deferred (exit 1) and the fits in force stay; `--force` does not bypass it.
+            from . import training_inputs
+            rconn = db.connect_readonly(args.sport)
+            try:
+                ready = training_inputs.check(rconn)
+            finally:
+                rconn.close()
+            if not ready["ready"]:
+                recorded = "not recorded: the store lock was busy"
+                with db.store_lock(args.sport, wait_seconds=60) as held:     # a visible job_runs row
+                    if held:
+                        wconn = db.connect(sport=args.sport)
+                        try:
+                            recorded = f"job_runs {training_inputs.record_deferral(wconn, f'adaptive-train --cadence {args.cadence}', ready)}"
+                        except Exception as exc:                            # e.g. a store not migrated to 0031
+                            recorded = f"not recorded: {type(exc).__name__}: {exc}"
+                        finally:
+                            wconn.close()
+                print(json.dumps({"sport": args.sport, "status": "deferred", "inputs": ready, "deferral_record": recorded,
+                                  "reason": "training inputs not ready (run `training-inputs` first): "
+                                            + "; ".join(f"{k}: {v}" for k, v in ready["blocking"].items())
+                                            + "; nothing trained, the fits in force are unchanged"}, indent=1, default=str))
+                return 1
+        if missing:
+            print(json.dumps({"sport": args.sport, "status": "failed", "missing_raw": {"count": len(missing), "first": missing[:5]},
+                              "reason": f"incomplete data directory: {len(missing)} cached source response file(s) referenced "
+                                        f"by the store are missing under {config.raw_dir()} (first: {', '.join(missing[:5])}); "
+                                        "training not started"}, indent=1))
+            return 1
         with adaptive.cadence(args.cadence):
             if args.dry_run:
                 r = adaptive.train(db.connect_readonly(args.sport), write=False, force=args.force, log=log)
@@ -760,11 +842,23 @@ def _run(args, p, conn, applied) -> int:
     elif args.cmd == "adaptive-status":
         from . import adaptive
         print(json.dumps(adaptive.status(conn), indent=1, default=str))
+    elif args.cmd == "training-inputs":     # under the store lock taken above: collectors write the store
+        from . import training_inputs
+        r = training_inputs.run(conn)
+        print(json.dumps(r, indent=1, default=str))
+        return 0 if r["check"]["ready"] else 1      # readiness alone decides training; a failed collector shows in job_runs
+    elif args.cmd == "adaptive-import":     # under the store lock taken above, like adaptive.publish
+        from . import fit_transfer
+        r = fit_transfer.transfer(conn, args.source, args.sport,
+                                  cadences=("weekly", "daily") if args.cadence == "both" else (args.cadence,))
+        print(json.dumps(r, indent=1, default=str))
+        return 0 if r["status"] == "success" else 1
     elif args.cmd == "adaptive-replay":
         from pathlib import Path
         from . import adaptive_replay
+        book = json.loads(Path(args.book_lines).read_text()) if args.book_lines else None
         report = adaptive_replay.run(conn, args.sport, out_dir=Path(args.out) if args.out else None, skip_deep=args.skip_deep,
-                                     log=lambda m: print(m, file=sys.stderr))
+                                     log=lambda m: print(m, file=sys.stderr), period=args.period, book_lines=book)
         print(json.dumps({"output_dir": report["output_dir"], "markets": {m: {s: (v["log_loss"] if v else None) for s, v in
                           x["comparison"]["sources"].items()} for m, x in report["markets"].items()}}, indent=1))
     elif args.cmd == "combination-export-adaptive":

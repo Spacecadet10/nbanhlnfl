@@ -38,6 +38,7 @@ export function SourceList({ sources }: { sources: SourceStatus[] }) {
             {s.freshness === 'missing' ? 'missing'
               : s.last_updated ? `${s.freshness} · ${dateTime(s.last_updated)}` : `${s.freshness} · none recorded recently`}
           </span>
+          {s.freshness !== 'fresh' && <details className="source-why"><summary>why</summary><span>{s.note}</span></details>}
         </li>
       ))}
     </ul>

@@ -10,6 +10,10 @@
 		<string>1</string>
 		<key>NBA_RELEASE_ROOT</key>
 		<string>/Users/andry/nba-predictor-live</string>
+		<key>NBA_DAILY_AGREEMENT</key>
+		<string>1</string>
+		<key>NHL_INJURY_CAPTURE</key>
+		<string>1</string>
 	</dict>
 	<key>Label</key>
 	<string>com.nba-predictor.nhl-daily</string>

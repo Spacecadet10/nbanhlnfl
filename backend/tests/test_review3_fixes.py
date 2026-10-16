@@ -477,3 +477,41 @@ def test_a_quote_posted_later_at_the_models_own_line_is_recorded_once_with_the_q
     assert [tuple(r) for r in rows] == [("model", None), ("market", q["quote_id"])]
     latest = [r for r in market_live.latest(sealed, policy="near_tipoff", market="total", game_ids=[gid])]
     assert len(latest) == 1 and latest[0]["line_source"] == "market" and latest[0]["p_a_devig"] is not None   # shown with its quote
+
+
+# --- The results chip: the forecast guard's rule while the two-hour cycle works, the daily job's limit otherwise ----------
+def test_the_results_chip_is_fresh_only_when_the_forecast_guard_would_accept_the_results(store):
+    """The chip said 'fresh' for 24 h after a refresh while forecasts are refused once the last successful results refresh
+    is older than 60 minutes, and with no successful refresh at all it fell back to any raw fetch (also 'fresh'). Outside
+    a forecast window it is judged like System status (the daily job's 26 h), never 'stale' for a healthy idle store."""
+    from app import coverage, near_tipoff, training_monitor
+
+    def chip(now):
+        return next(s for s in RealProvider(store, now=now).sources() if s.kind == "schedule")
+
+    def ran(finished, status="success"):
+        store.execute("INSERT INTO job_runs (job, started_at, finished_at, status) VALUES ('refresh', ?, ?, ?)",
+                      (finished, finished, status))
+    assert store.execute("SELECT COUNT(*) FROM job_runs WHERE job='refresh'").fetchone()[0] == 0
+    none = chip("2026-10-21T12:00:00Z")
+    assert none.freshness == "missing" and none.last_updated is None      # raw fetches exist, but no refresh ever succeeded
+    assert near_tipoff.MAX_DATA_AGE.total_seconds() == 3600 and training_monitor.STALE_JOB_HOURS["refresh"] == 26
+    # Inside the window (T_GAME 23:30Z starts within two hours): the forecast guard's 60 minutes.
+    ran("2026-10-21T21:00:00Z")
+    ran("2026-10-21T21:30:00Z", "failed")
+    assert coverage.forecast_window(store, "2026-10-21T22:00:00Z") == "upcoming"
+    ok = chip("2026-10-21T22:00:00Z")                                     # 60 min after the success: the guard accepts it
+    assert ok.freshness == "fresh" and str(ok.last_updated).startswith("2026-10-21 21:00")
+    old = chip("2026-10-21T22:01:00Z")                                    # 61 min: no new forecast would be made
+    assert old.freshness == "stale" and "60 minutes" in old.note
+    assert chip("2026-10-21T20:59:00Z").freshness == "missing"            # a refresh finished after `now` is not counted
+    assert RealProvider(store, now="2026-10-21T20:59:00Z").meta().last_refresh_at is None      # nor in the page header
+    # A game under way (started within six hours, not final): the same 60 minutes, worded as a results refresh.
+    assert coverage.forecast_window(store, "2026-10-22T01:00:00Z") == "recent"
+    assert chip("2026-10-22T01:00:00Z").freshness == "stale" and "under way" in chip("2026-10-22T01:00:00Z").note
+    # Outside any window: the daily job's limit, as on System status.
+    ran("2026-10-01T00:00:00Z")
+    assert coverage.forecast_window(store, "2026-10-02T02:00:00Z") is None
+    idle = chip("2026-10-02T02:00:00Z")
+    assert idle.freshness == "fresh" and "26 h" in idle.note
+    assert chip("2026-10-02T02:01:00Z").freshness == "stale"

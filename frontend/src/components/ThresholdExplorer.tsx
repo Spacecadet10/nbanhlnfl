@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
+import { bandNote, gridNote, onStandardGrid, standardRows } from './ConfidenceFilter';
 import type { MarketId, Sport, SubsetSearch, ThRecord, ThRule, ThSourceInfo, ThresholdExplorer as Explorer } from '../api/types';
 import { RuleLedgerTable } from './RuleLedger';
 import { useApi } from '../api/useApi';
@@ -133,7 +134,8 @@ function ThresholdsView({ r, period, onGroup }: { r: Explorer; period: Period; o
   const [key, setKey] = useState(sources.find((s) => s.kind === 'average')?.key ?? sources[0].key);
   const [bands, setBands] = useState(false);
   const src = sources.find((s) => s.key === key) ?? sources[0];
-  const rows = bands ? src[period].bands : src[period].cumulative;
+  const all = bands ? src[period].bands : src[period].cumulative;
+  const rows = standardRows(all, r.market, bands);
   return <>
     <GroupPicker models={r.models} value={r.group ?? []} label="Group (its average is a row below; also the agreement group)" min={1} onApply={onGroup} />
     <div className="explorer-controls small">
@@ -146,6 +148,7 @@ function ThresholdsView({ r, period, onGroup }: { r: Explorer; period: Period; o
       </div>
     </div>
     {src.kind === 'average' && <p className="small muted">Thresholds on the averaged probability of {names(src.members)} — not a per-model rule.</p>}
+    <p className="small muted">{gridNote(all.map((x) => x.lo), r.market, all.length - rows.length)}{bands && bandNote(all, r.market)}</p>
     <div className="table-wrap"><table className="table small">
       <thead><tr><th>Threshold</th>{RECORD_HEAD}<th>Picks dated</th></tr></thead>
       <tbody>{rows.map((x) => <tr key={x.rule}><th scope="row">{x.rule}</th><RecordCells r={x} /><td className="muted">{x.first ? `${x.first} – ${x.last}` : '—'}</td></tr>)}</tbody>
@@ -155,7 +158,8 @@ function ThresholdsView({ r, period, onGroup }: { r: Explorer; period: Period; o
 
 // --- 2. Agreement x confidence ------------------------------------------------------------------------------------------
 function AgreementView({ r, period, onGroup }: { r: Explorer; period: Period; onGroup: (g: string[]) => void }) {
-  const levels = r.thresholds!.levels;
+  const standard = r.thresholds!.levels.filter((l) => onStandardGrid(l, r.market));
+  const levels = standard.length ? standard : r.thresholds!.levels;      // no standard level computed: show what exists
   const [level, setLevel] = useState(levels[0]);
   const a = r.agreement;
   return <>
@@ -195,7 +199,7 @@ function AddView({ r, period, onBase }: { r: Explorer; period: Period; onBase: (
         starting group qualifies. A higher win rate from dropping hard games is fewer picks, not better predictions.</p>
       <div className="table-wrap"><table className="table small">
         <thead><tr><th>Threshold</th><th>Starting group</th><th>With {modelName(row.added)}</th><th>Win rate change</th><th>Retained</th><th>Switched side</th><th>New picks</th><th>Dropped picks</th></tr></thead>
-        <tbody>{row[period].map((x) => <tr key={x.rule}><th scope="row">{x.rule}</th><td>{short(x.base)}</td><td>{short(x.with)}</td>
+        <tbody>{row[period].filter((x) => onStandardGrid(x.level, r.market)).map((x) => <tr key={x.rule}><th scope="row">{x.rule}</th><td>{short(x.base)}</td><td>{short(x.with)}</td>
           <td>{x.base.win_rate != null && x.with.win_rate != null ? gap(x.with.win_rate - x.base.win_rate) : '—'}</td>
           <td>{x.retained.picks}</td><td>{x.switched_base.picks ? `${x.switched_base.picks}: was ${wlp(x.switched_base)}, now ${wlp(x.switched_with)}` : 0}</td>
           <td>{x.new.picks ? `${x.new.picks} (${wlp(x.new)})` : 0}</td><td>{x.dropped.picks ? `${x.dropped.picks} (${wlp(x.dropped)})` : 0}</td></tr>)}</tbody>

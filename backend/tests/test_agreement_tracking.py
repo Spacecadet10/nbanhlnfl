@@ -368,19 +368,149 @@ def test_game_card_counts_only_the_latest_cohort_of_each_market(monkeypatch):
     (which can be at another line)."""
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
-    conn.execute("CREATE TABLE research_cohorts (cohort_id INTEGER PRIMARY KEY, generated_at TEXT)")
+    conn.execute("CREATE TABLE research_cohorts (cohort_id INTEGER PRIMARY KEY, generated_at TEXT, game_id TEXT, market TEXT, "
+                 "definition TEXT, tipoff_at TEXT)")
+    conn.execute("CREATE TABLE games (game_id TEXT, status TEXT, tipoff_at TEXT)")
+    conn.execute("INSERT INTO games VALUES ('g', 'scheduled', '2026-10-12T23:00:00Z')")
     conn.execute("CREATE TABLE agreement_observations (observation_id INTEGER PRIMARY KEY, registry TEXT, game_id TEXT, "
                  "market TEXT, group_id TEXT, cohort_id INT, source_cohort_id INT, line REAL, status TEXT, side TEXT, "
-                 "statistic REAL, kind TEXT, votes TEXT, missing TEXT, recorded_at TEXT, definition TEXT)")
-    conn.executemany("INSERT INTO research_cohorts VALUES (?, ?)", [(1, "2026-10-12T21:30:00Z"), (2, "2026-10-12T22:00:00Z")])
+                 "statistic REAL, kind TEXT, votes TEXT, missing TEXT, recorded_at TEXT, definition TEXT, tipoff_at TEXT)")
+    conn.executemany("INSERT INTO research_cohorts VALUES (?, ?, 'g', 'total', 'd', '2026-10-12T23:00:00Z')",
+                     [(1, "2026-10-12T21:30:00Z"), (2, "2026-10-12T22:00:00Z")])
     rows = [(1, "single|a", 1, 5.5, "a"), (1, "single|b", 1, 5.5, "a"), (2, "single|a", 2, 6.5, "b")]
     for i, (coh, gid, src, line, side) in enumerate(rows):
         conn.execute("INSERT INTO agreement_observations (registry, game_id, market, group_id, cohort_id, source_cohort_id, "
-                     "line, status, side, statistic, kind, votes, missing, recorded_at, definition) VALUES "
-                     "('R', 'g', 'total', ?, ?, ?, ?, 'pick', ?, 0.6, 'single', '{}', '{}', ?, 'd')",
+                     "line, status, side, statistic, kind, votes, missing, recorded_at, definition, tipoff_at) VALUES "
+                     "('R', 'g', 'total', ?, ?, ?, ?, 'pick', ?, 0.6, 'single', '{}', '{}', ?, 'd', '2026-10-12T23:00:00Z')",
                      (gid, coh, src, line, side, f"2026-10-12T2{1 + coh}:00:0{i}Z"))
     monkeypatch.setattr(at, "_has", lambda c, t: True)
     monkeypatch.setattr(at, "reg_sport", lambda c: "nhl")
     out = at.game_observations(conn, "g", reg={"sha256": "R"})
     (m,) = out["markets"]
     assert m["groups"] == 1 and m["line"] == 6.5 and m["counts"] == {"b": 1}        # single|b from cohort 1 is not mixed in
+
+
+# --- The Game page panel shows the report's canonical cohort and its void state (audit F4) ---------------------------------
+def test_the_game_panel_is_void_after_the_start_moved_as_in_the_report(game):
+    from test_live_markets import add_upcoming
+    run(game, "2026-10-12T21:30:00Z")
+    reg = small_registry()
+    at.record(game, game_ids=[GID], now="2026-10-12T21:40:00Z", reg=reg)
+    assert at.game_observations(game, GID, reg=reg, load_exact=False)["markets"][0]["state"] == "recorded"
+    add_upcoming(game, start="2026-10-14T19:00:00", at="2026-10-12T22:00:00Z")       # the start moved after the cohort
+    w = at.game_observations(game, GID, reg=reg, load_exact=False)["markets"][0]
+    single = next(x for x in at.report(game, "nhl", "winner", reg=reg, load_exact=False)["groups"] if x["id"] == "single|hockey_elo")
+    assert single["all_picks"]["voids"] == 1
+    assert w["state"] == "void" and "start" in w["state_reason"]
+
+
+def test_the_game_panel_never_shows_an_older_cohort_than_the_report_counts(game):
+    run(game, "2026-10-12T21:30:00Z")
+    reg = small_registry()
+    at.record(game, game_ids=[GID], now="2026-10-12T21:40:00Z", reg=reg)
+    c = dict(core_winner(game))           # a newer core cohort of the game that tracking never recorded (a failed step)
+    cols = [k for k in c if k != "cohort_id"]
+    c.update(idempotency_key="newer-unrecorded", generated_at="2026-10-12T21:50:00Z", information_at="2026-10-12T21:50:00Z")
+    game.execute(f"INSERT INTO research_cohorts ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})", [c[k] for k in cols])
+    game.commit()
+    single = next(x for x in at.report(game, "nhl", "winner", reg=reg, load_exact=False)["groups"] if x["id"] == "single|hockey_elo")
+    assert single["eligible"] == 0
+    w = next(m for m in at.game_observations(game, GID, reg=reg, load_exact=False)["markets"] if m["market"] == "winner")
+    assert w["picks"] == [] and w["groups"] == 0 and w["state"] == "not_recorded"
+
+
+def _two_definitions(game, reg=None):
+    """Game 1 (12 Oct) observed under definition D_old; game 2 (13 Oct) observed under D_old and, after a code change, under
+    D_new (sharing D_old's first 8 characters). Returns (registry, D_old, D_new)."""
+    from test_live_markets import add_upcoming
+    g2 = "nhl:2026020002"
+    add_upcoming(game, gid=2026020002, start="2026-10-13T19:00:00", home=8, away=10, at="2026-10-12T20:30:00Z")
+    reg = reg or small_registry()
+    run(game, "2026-10-12T21:30:00Z")
+    at.record(game, game_ids=[GID], now="2026-10-12T21:40:00Z", reg=reg)
+    game.execute("INSERT INTO job_runs (job, started_at, finished_at, status) VALUES "
+                 "('refresh', '2026-10-13T21:00:00Z', '2026-10-13T21:00:00Z', 'success')")
+    run(game, "2026-10-13T21:30:00Z")
+    at.record(game, game_ids=[g2], now="2026-10-13T21:40:00Z", reg=reg)
+    c = dict(game.execute("SELECT * FROM research_cohorts WHERE market='winner' AND game_id=? AND definition NOT LIKE "
+                          "'%:expanded-v1'", (g2,)).fetchone())
+    old_def = c["definition"]
+    new_def = old_def[:8] + ("0" if old_def[8] != "0" else "1") + old_def[9:]
+    cols = [k for k in c if k != "cohort_id"]
+    c.update(idempotency_key="newdef", definition=new_def, generated_at="2026-10-13T21:45:00Z", information_at="2026-10-13T21:45:00Z")
+    game.execute(f"INSERT INTO research_cohorts ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})", [c[k] for k in cols])
+    game.commit()
+    at.record(game, game_ids=[g2], now="2026-10-13T21:50:00Z", reg=reg)
+    return reg, old_def, new_def
+
+
+def test_the_prospective_record_never_pools_research_definitions(game):
+    """After a code change the record merged games observed under different research definitions into one W-L (audit F5;
+    real NHL copy: every group pooled 3 definitions). The default is the newest definition; the others are listed and
+    reachable by `version`, never merged."""
+    reg, old_def, new_def = _two_definitions(game)
+    rep = at.report(game, "nhl", "winner", reg=reg, load_exact=False)
+    assert rep["games"] == 1 and rep["definition_applied"] == new_def
+    # The earlier definition's own view holds both games (each was observed under it), still never mixed with the newer.
+    assert [(d["definition"], d["games"]) for d in rep["definitions"]] == [(new_def, 1), (old_def, 2)]
+    old = at.report(game, "nhl", "winner", reg=reg, load_exact=False, version=old_def)
+    assert old["games"] == 2 and old["definition_applied"] == old_def
+
+
+def test_a_member_signature_or_a_short_prefix_never_pools_definitions(game):
+    """Review of F5: a member-version signature matched observations of every definition, and a prefix could match
+    several definitions while the page named one."""
+    from app.errors import InvalidRequest
+    reg, old_def, new_def = _two_definitions(game)
+    sig = game.execute("SELECT version_sig FROM agreement_observations WHERE group_id='single|hockey_elo' AND definition=? "
+                       "LIMIT 1", (old_def,)).fetchone()[0]
+    newest = game.execute("SELECT c.definition FROM agreement_observations o JOIN research_cohorts c ON c.cohort_id=o.cohort_id "
+                          "WHERE o.version_sig=? ORDER BY c.generated_at DESC LIMIT 1", (sig,)).fetchone()[0]
+    one = {r[0] for r in game.execute("SELECT DISTINCT game_id FROM agreement_observations WHERE version_sig=? AND definition=?",
+                                      (sig, newest))}
+    rep = at.report(game, "nhl", "winner", reg=reg, load_exact=False, version=sig)
+    assert rep["games"] == len(one) and rep["definition_applied"] == newest and rep["signature_applied"] == sig
+    with pytest.raises(InvalidRequest):
+        at.report(game, "nhl", "winner", reg=reg, load_exact=False, version=old_def[:8])
+
+
+def test_the_default_definition_is_the_newest_with_games_in_the_date_filter(game):
+    """Review of F5: with dates before the newest definition began, the default showed it with no games while the older
+    definition had games in that range; the listed counts were all-dates counts."""
+    reg, old_def, new_def = _two_definitions(game)
+    rep = at.report(game, "nhl", "winner", reg=reg, load_exact=False, date_to="2026-10-12")
+    assert rep["definition_applied"] == old_def and rep["games"] == 1
+    assert [(d["definition"], d["games"]) for d in rep["definitions"]] == [(old_def, 1)]
+
+
+def test_the_game_panel_notes_a_game_outside_the_default_record(game):
+    reg, old_def, new_def = _two_definitions(game)
+    w = next(m for m in at.game_observations(game, GID, reg=reg, load_exact=False)["markets"] if m["market"] == "winner")
+    assert w["definition"] == old_def and new_def[:16] in (w.get("definition_note") or "")
+    g2 = next(m for m in at.game_observations(game, "nhl:2026020002", reg=reg, load_exact=False)["markets"] if m["market"] == "winner")
+    assert g2["definition"] == new_def and g2["definition_note"] is None
+
+
+
+def test_an_ambiguous_definition_prefix_is_a_bad_request_not_a_server_error(game):
+    """Re-review: GET /api/research/tracking?version=<prefix of two definitions> returned HTTP 500."""
+    from fastapi.testclient import TestClient
+    from app import db, main
+    from app.providers.real import RealProvider
+    _, old_def, _ = _two_definitions(game, reg=at.load_registry())
+    path = game.execute("PRAGMA database_list").fetchone()["file"]
+
+    def provider():
+        conn = db.connect(path, check_same_thread=False)
+        try:
+            yield RealProvider(conn, now="2026-10-13T21:55:00Z")
+        finally:
+            conn.close()
+    main.app.dependency_overrides[main.get_provider] = provider
+    try:
+        c = TestClient(main.app, raise_server_exceptions=False)
+        r = c.get("/api/research/tracking", params={"sport": "nhl", "market": "winner", "version": old_def[:8]})
+        assert r.status_code == 422 and "research definitions" in r.json()["detail"]
+        assert c.get("/api/research/tracking", params={"sport": "nhl", "market": "winner", "version": old_def}).status_code == 200
+    finally:
+        main.app.dependency_overrides.pop(main.get_provider, None)

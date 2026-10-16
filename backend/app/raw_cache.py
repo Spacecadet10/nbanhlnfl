@@ -46,6 +46,13 @@ def store_fetch(conn: sqlite3.Connection, *, source: str, endpoint: str, request
     return raw_id, fetch_id
 
 
+def missing_files(conn: sqlite3.Connection, cache_dir: Optional[Path] = None) -> list[str]:
+    """Cache paths the store references whose file is absent (a data directory copied without its `raw/` folder). Checks
+    existence only; `load` still verifies each file's hash when it is read."""
+    cache_dir = cache_dir or config.raw_dir()
+    return [r[0] for r in conn.execute("SELECT path FROM raw_responses ORDER BY raw_id") if not (cache_dir / r[0]).is_file()]
+
+
 def load(conn: sqlite3.Connection, raw_id: int, cache_dir: Optional[Path] = None) -> bytes:
     """Reads cached bytes and verifies them against the recorded hash."""
     cache_dir = cache_dir or config.raw_dir()

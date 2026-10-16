@@ -22,7 +22,16 @@ ratings cannot be computed from this source. ESPN's per-game `summary` endpoint 
 - **Historical:** ESPN strips odds from finished games (0 of 9,412 finished games carry odds). The Odds API offers
   historical NBA odds **only on paid plans**: coverage starts 2020-06-06, snapshots every 10 minutes (every 5 minutes from
   Sept 2022), at 10 credits per region per market ([docs](https://the-odds-api.com/liveapi/guides/v4/), read 2026-09-30).
-  Nothing was purchased and no key is configured. **Historical market comparison is blocked on a paid source.**
+  Nothing was purchased and no key is configured.
+- **Historical (free, found 2026-10-16):** ESPN's core odds endpoint
+  `sports.core.api.espn.com/v2/sports/<basketball|hockey>/leagues/<nba|nhl>/events/<id>/competitions/<id>/odds` keeps
+  odds for finished games (no key). `app/sources/espn_odds_history.py` + `app.cli odds-history` store the raw bodies
+  (research files only, never the store's tables); NHL events are matched from ESPN scoreboards (start ±3 h).
+  Coverage seen: 10–12 books with open and close for NBA 2022–24 and NHL 2022–24; "current" only (used as the close) for
+  older seasons; one book (DraftKings) for NHL 2024–25 and 2025–26 and NBA 2025–26 (as checked). Cleaning: overround 1.00–1.12, sport line bounds, mirrored
+  handicaps, in-play feeds and projection sites excluded, books > 0.15 from the other books' median dropped. About 6.7%
+  of NBA best-price pairs imply an arbitrage (books at different moments): best-price returns are an upper bound.
+  Used for the 2026-10-16 market comparison (HANDOFF.md): no model or weighting beat the closing line.
 - **Current:** ESPN carries DraftKings moneylines (open and current) for some upcoming games: 26 of 155 scheduled
   2026-27 games at retrieval. They are stored append-only in `odds_quotes` as `open` / `current` with a proportional de-vig.
   `quote_time` is NULL because ESPN publishes none. The retrieval time is recorded, and lines on finished games are never

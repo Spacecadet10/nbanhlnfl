@@ -91,6 +91,21 @@ def closing_summary(conn: sqlite3.Connection) -> dict:
 # source that can give one (ORDER), or a 'missing' row with the reasons. Exhibitions ('other': All-Star events) are not a
 # forecastable game type and are reported as such. Training never reads this ledger; preseason rows are reported apart.
 FORECAST_TYPES = ("preseason", "regular", "play_in", "postseason")
+
+
+def forecast_window(conn, now: str) -> Optional[str]:
+    """Why the two-hour cycle works now (jobs._forecast_due): 'upcoming' when a forecastable game starts within
+    near_tipoff.WINDOW (refresh, then forecast), 'recent' when a game started within near_tipoff.RECENT_TIPOFF and is not
+    final (results refresh only), else None (the cycle makes no request)."""
+    from . import near_tipoff
+    end = near_tipoff._fmt(near_tipoff._parse(now) + near_tipoff.WINDOW)
+    if conn.execute(f"SELECT 1 FROM games WHERE status='scheduled' AND tipoff_at>? AND tipoff_at<=? "
+                    f"AND season_type IN ({','.join('?' for _ in FORECAST_TYPES)}) LIMIT 1", (now, end, *FORECAST_TYPES)).fetchone():
+        return "upcoming"
+    if conn.execute("SELECT 1 FROM games WHERE tipoff_at<=? AND tipoff_at>? AND status IN ('scheduled','in_progress') LIMIT 1",
+                    (now, near_tipoff._fmt(near_tipoff._parse(now) - near_tipoff.RECENT_TIPOFF))).fetchone():
+        return "recent"
+    return None
 ORDER_VERSION = "coverage-v2"        # v2 (2026-10-14): an adaptive source needs an approval, and none exists
 ORDER = ("adaptive", "primary_recorded", "primary_direct")   # approved adaptive ensemble, then the sealed primary model
 LINE_SOURCE = {"market": "bookmaker", "bookmaker": "bookmaker", "model": "model", "none": "none", None: "none"}
@@ -389,7 +404,6 @@ def et_bounds(date_from: str, date_to: str) -> tuple[str, str]:
     b = datetime.strptime(date_to, "%Y-%m-%d").replace(tzinfo=et) + timedelta(days=1)
     fmt = "%Y-%m-%dT%H:%M:%SZ"
     return a.astimezone(timezone.utc).strftime(fmt), b.astimezone(timezone.utc).strftime(fmt)          # a game not final this long after its start (or status 'other') is unresolved
-THRESHOLDS = (0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9)
 COMPETITIVE = ("regular", "play_in", "postseason")
 
 
@@ -398,30 +412,35 @@ def _hours_since(start: str, as_of: str) -> float:
     return (datetime.strptime(as_of, fmt) - datetime.strptime(start, fmt)).total_seconds() / 3600
 
 
-def grade(market: str, line, p, game, as_of: str, forecast_tipoff_at: Optional[str] = None) -> str:
+def pick_side(market: str, p) -> str:
+    """The side a forecast picks: 'a' / 'mid' / 'b'. Three-way markets: the most likely of the three outcomes (a draw can be
+    the pick; product decision 2026-10-14), ties to the first in the order a, mid, b. Two-way markets: 'a' when p_a >= p_b
+    (the push is never a pick)."""
+    if market == "reg3":
+        return ("a", "mid", "b")[max(range(3), key=lambda i: p[i])]
+    return "a" if p[0] >= p[2] else "b"
+
+
+def grade(market: str, line, p, game, as_of: str, forecast_tipoff_at: Optional[str] = None, decision: Optional[str] = None) -> str:
     """'win' / 'loss' / 'push' for a graded forecast, else 'pending', 'void' (postponed, canceled, or the start moved after
     the forecast), 'unscorable' (no score, no regulation decision, no line) or 'unresolved' (no final result
     UNRESOLVED_AFTER_HOURS after the start, or a status the source never resolves, e.g. suspended → 'other'). The pick is
     the favoured side; confidence plays no part (thresholds only filter views of these grades)."""
     from . import markets
     state = markets.settle(market, line, status=game["status"], home=game["home_score"], away=game["away_score"],
-                           decision=game["decision"] if "decision" in game.keys() else None,
+                           decision=game["decision"] if "decision" in game.keys() else decision,
                            tipoff_at=game["tipoff_at"], forecast_tipoff_at=forecast_tipoff_at)
     if state == "pending":
         return "unresolved" if game["status"] == "other" or _hours_since(game["tipoff_at"], as_of) > UNRESOLVED_AFTER_HOURS else "pending"
     if state in ("void", "unscorable"):
         return state
-    if market == "reg3":
-        pick = ("a", "mid", "b")[max(range(3), key=lambda i: p[i])]
-        return "win" if pick == state else "loss"
-    if state == "mid":
+    if state == "mid" and market != "reg3":
         return "push"
-    return "win" if ("a" if p[0] >= p[2] else "b") == state else "loss"
+    return "win" if pick_side(market, p) == state else "loss"
 
 
 # --- The canonical forecast: one record per game and market, read by Today, Game, History and Performance ---------------
 CANONICAL_STATES = ("forecast", "missing", "upcoming", "unvalidated", "not_recorded", "not_forecastable")
-CANONICAL_COVERAGE = {("nba", "winner")}      # sport/markets whose coverage cells use the canonical selection (so far)
 EXPERIMENTAL_LABEL = "Experimental / unvalidated"     # preseason rows: no model is validated on preseason games
 PRESEASON_UNVALIDATED = ("Preseason: no forecast model has been validated on preseason games (the sealed models were "
                          "validated on regular-season and playoff games only), so there is no canonical forecast.")
@@ -449,7 +468,60 @@ def canonical(conn, games, market: str, as_of: str, began: Optional[str] = None)
         began = recording_began(conn, sport)
     games = list(games)
     rows = _canonical_rows(conn, [g["game_id"] for g in games], market, as_of)
-    return {g["game_id"]: _canonical_one(g, rows.get(g["game_id"], []), market, as_of, began) for g in games}
+    decisions = _decisions(conn, [g["game_id"] for g in games]) if market == "reg3" else {}
+    revisions = _revisions(conn, [g["game_id"] for g in games])
+    return {g["game_id"]: _canonical_one(g, rows.get(g["game_id"], []), market, as_of, began, decisions.get(g["game_id"]),
+                                         revisions.get(g["game_id"], [])) for g in games}
+
+
+def _revisions(conn, ids: list) -> dict:
+    """game_id -> its result revisions (result_revisions, migration 0030), oldest first; {} before that migration."""
+    out: dict = {}
+    if not _has_table(conn, "result_revisions"):
+        return out
+    for i in range(0, len(ids), 500):
+        chunk = ids[i:i + 500]
+        for r in conn.execute(f"SELECT * FROM result_revisions WHERE game_id IN ({','.join('?' * len(chunk))}) "
+                              f"ORDER BY game_id, revision", chunk):
+            out.setdefault(r["game_id"], []).append(r)
+    return out
+
+
+def grade_history(market: str, line, p, g, as_of: str, forecast_tipoff_at: str, revisions: list) -> list:
+    """The forecast's grade under each final result of its game recorded by `as_of`, oldest first (graded on read, never
+    stored), so a regrade is traceable and the earlier grade is never erased. `change`: 'first'; 'decision_known' (same
+    score, the NHL regulation decision was unknown before: completed, not corrected); 'correction' (score or decision)."""
+    out, prev = [], None
+    for r in revisions:
+        if r["observed_at"] > as_of:
+            break
+        change = ("first" if prev is None else
+                  "decision_known" if prev["decision"] is None and r["decision"] is not None
+                  and (prev["home_score"], prev["away_score"]) == (r["home_score"], r["away_score"]) else "correction")
+        prev = r
+        result = {"status": "final", "home_score": r["home_score"], "away_score": r["away_score"], "tipoff_at": g["tipoff_at"],
+                  "decision": r["decision"]}
+        out.append({"revision": r["revision"], "observed_at": r["observed_at"], "basis": r["basis"], "change": change,
+                    "home_score": r["home_score"], "away_score": r["away_score"], "decision": r["decision"],
+                    "grade": grade(market, line, p, result, as_of, forecast_tipoff_at)})
+    return out
+
+
+def _regraded(history: list) -> bool:
+    """A correction changed the grade: a 'correction' entry whose grade differs from the entry before it."""
+    return any(h["change"] == "correction" and h["grade"] != before["grade"] for before, h in zip(history, history[1:]))
+
+
+def _decisions(conn, ids: list) -> dict:
+    """game_id -> how the game was decided ('REG' / 'OT' / 'SO'), for games rows read without it (NHL three-way grading)."""
+    out: dict = {}
+    if not _has_table(conn, "game_decisions"):
+        return out
+    for i in range(0, len(ids), 500):
+        chunk = ids[i:i + 500]
+        out.update(conn.execute(f"SELECT game_id, decision FROM game_decisions WHERE game_id IN ({','.join('?' * len(chunk))})",
+                                chunk).fetchall())
+    return out
 
 
 def _canonical_rows(conn, ids: list, market: str, as_of: str) -> dict:
@@ -478,9 +550,10 @@ def _select(g, rows: list):
     return sel, (later[-1] if later else None)
 
 
-def _canonical_one(g, rows: list, market: str, as_of: str, began: Optional[str]) -> dict:
-    out = {"market": market, "state": None, "reason": None, "record": None, "grade": None, "later_failure": None,
-           "attempts": len(rows), "recording_began_at": began}
+def _canonical_one(g, rows: list, market: str, as_of: str, began: Optional[str], decision: Optional[str] = None,
+                   revisions: Optional[list] = None) -> dict:
+    out = {"market": market, "state": None, "reason": None, "record": None, "grade": None, "result_side": None,
+           "grade_history": [], "regraded": False, "later_failure": None, "attempts": len(rows), "recording_began_at": began}
     st = g["season_type"]
     if st not in FORECAST_TYPES:
         return {**out, "state": "not_forecastable", "reason": f"Not a forecastable game type ({st})."}
@@ -493,10 +566,18 @@ def _canonical_one(g, rows: list, market: str, as_of: str, began: Optional[str])
         rec = {"forecast_id": sel["forecast_id"], "source": sel["source"], "fallback_rank": sel["fallback_rank"],
                "fallback_reason": sel["fallback_reason"], "model_version": sel["model_version"], "generated_at": sel["generated_at"],
                "start_at": sel["tipoff_at"], "minutes_before_start": _minutes(sel["tipoff_at"], sel["generated_at"]),
-               "p": list(p), "confidence": sel["confidence"], "line": sel["line"], "line_source": sel["line_source"]}
+               "p": list(p), "side": pick_side(market, p), "confidence": sel["confidence"], "line": sel["line"],
+               "line_source": sel["line_source"], "market_quote_id": sel["market_quote_id"]}
         if market == "winner":
             rec.update(home_win_prob=p[0], pick="home" if p[0] >= p[2] else "away")
-        return {**out, "state": "forecast", "record": rec, "grade": grade(market, sel["line"], p, g, as_of, sel["tipoff_at"]),
+        from . import markets
+        settled = markets.settle(market, sel["line"], status=g["status"], home=g["home_score"], away=g["away_score"],
+                                 decision=g["decision"] if "decision" in g.keys() else decision, tipoff_at=g["tipoff_at"],
+                                 forecast_tipoff_at=sel["tipoff_at"])
+        history = grade_history(market, sel["line"], p, g, as_of, sel["tipoff_at"], revisions or []) if g["status"] == "final" else []
+        return {**out, "state": "forecast", "record": rec, "result_side": settled if settled in ("a", "mid", "b") else None,
+                "grade_history": history, "regraded": _regraded(history),
+                "grade": grade(market, sel["line"], p, g, as_of, sel["tipoff_at"], decision),
                 "later_failure": None if not later else {"forecast_id": later[-1]["forecast_id"],
                                                          "generated_at": later[-1]["generated_at"], "reason": later[-1]["reason"]}}
     if rows:                             # attempts were recorded, none could forecast
@@ -512,16 +593,45 @@ def _canonical_one(g, rows: list, market: str, as_of: str, began: Optional[str])
     return {**out, "state": "missing", "reason": "not recorded: no forecast cycle ran within two hours of the start"}
 
 
-def canonical_summary(items: list) -> dict:
-    """Counts of canonical forecasts for started competitive games: missing forecasts are coverage gaps (never losses,
-    never dropped); grades and metrics cover settled forecasts only."""
+def threshold_grid(market: str) -> tuple:
+    """The reporting thresholds of a market (agreement_tracking.REPORT_THRESHOLDS): 50-90% for two-way markets, 35-70% for
+    the three-way regulation market. A forecast is in a threshold's row when its confidence is at least the threshold."""
+    from .agreement_tracking import REPORT_THRESHOLDS, kind_of
+    return REPORT_THRESHOLDS[kind_of(market)]
+
+
+def scored(market: str, c: dict):
+    """(probability vector or side-a probability, realised outcome) for a canonical forecast that is scored: graded
+    win/loss (a push, void, pending, unscorable or unresolved forecast is never scored). Winner: P(home), home won.
+    Two-way line markets: P(a | no push), side a realised. Three-way: (p_a, p_mid, p_b), index of the realised outcome."""
+    if c["state"] != "forecast" or c["grade"] not in ("win", "loss") or c["result_side"] is None:
+        return None
+    p = c["record"]["p"]
+    if market == "reg3":
+        return (p[0], p[1], p[2]), ("a", "mid", "b").index(c["result_side"])
+    if market == "winner":
+        return p[0], c["result_side"] == "a"
+    return p[0] / (p[0] + p[2]), c["result_side"] == "a"
+
+
+def canonical_summary(items: list, market: Optional[str] = None) -> dict:
+    """Counts of canonical forecasts of one market for started competitive games. Denominators: `games` = forecast + missing
+    (a missing forecast is a coverage gap, never a loss, never dropped); `graded` = wins + losses; accuracy = wins / graded;
+    pushes, voids, pending, unscorable and unresolved forecasts are counted apart and are in no rate. Brier score and log
+    loss cover the graded forecasts (three-way: the multi-outcome forms). `thresholds`: the same counts for forecasts whose
+    confidence is at least each threshold of the market's grid; thresholds never remove a forecast from `games`."""
     from . import metrics
+    if market is None:
+        market = items[0][1]["market"] if items else "winner"
     states = {k: 0 for k in ("forecast", "missing")}
     grades = {k: 0 for k in ("win", "loss", "push", "pending", "void", "unscorable", "unresolved")}
     by_source: dict = {}
     versions: dict = {}
     reasons: dict = {}
     probs, ys = [], []
+    regraded = 0
+    grid = threshold_grid(market)
+    by_threshold = {t: _blank() for t in grid}
     for g, c in items:
         if c["state"] not in states:
             continue
@@ -531,20 +641,60 @@ def canonical_summary(items: list) -> dict:
             continue
         rec = c["record"]
         grades[c["grade"]] += 1
+        regraded += bool(c.get("regraded"))
         by_source[rec["source"]] = by_source.get(rec["source"], 0) + 1
         versions[rec["model_version"]] = versions.get(rec["model_version"], 0) + 1
-        if c["grade"] in ("win", "loss") and c["market"] == "winner":
-            probs.append(rec["home_win_prob"])
-            ys.append(g["home_score"] > g["away_score"])
+        for t in grid:
+            if rec["confidence"] >= t - 1e-12:
+                _add(by_threshold[t], c["grade"])
+        s = scored(market, c)
+        if s is not None:
+            probs.append(s[0])
+            ys.append(s[1])
     games = states["forecast"] + states["missing"]
     graded = grades["win"] + grades["loss"]
+    if market == "reg3":
+        brier, log_loss = metrics.brier_multi(probs, ys), metrics.log_loss_multi(probs, ys)
+    else:
+        brier, log_loss = metrics.brier(probs, ys), metrics.log_loss(probs, ys)
     return {"games": games, "forecast": states["forecast"], "missing": states["missing"],
             "coverage": states["forecast"] / games if games else None, "grades": grades, "graded": graded,
             "accuracy": grades["win"] / graded if graded else None,
-            "brier_score": metrics.brier(probs, ys), "log_loss": metrics.log_loss(probs, ys),
+            "brier_score": brier, "log_loss": log_loss, "regraded": regraded,
             "by_source": by_source,
             "model_versions": [{"model_version": k, "forecasts": v} for k, v in sorted(versions.items(), key=lambda kv: -kv[1])],
-            "missing_reasons": [{"reason": k, "games": v} for k, v in sorted(reasons.items(), key=lambda kv: -kv[1])]}
+            "missing_reasons": [{"reason": k, "games": v} for k, v in sorted(reasons.items(), key=lambda kv: -kv[1])],
+            "thresholds": [{"threshold": t, **_finish_record(by_threshold[t]), "graded": by_threshold[t]["win"] + by_threshold[t]["loss"]}
+                           for t in grid]}
+
+
+def matched_quote(conn, market: str, g, c: dict):
+    """(model, market, outcome) for one scored canonical forecast of a non-winner market compared with the bookmaker, or
+    (None, why not). The quote is the one the forecast's source used (market_quote_id), accepted only when it is a quote of
+    the same game and market at the forecast's exact line, retrieved no later than the forecast and before the start, and
+    the forecast's line is the bookmaker's. Two-way: P(a | no push) against the de-vigged P(a); three-way: the
+    three-outcome vectors."""
+    s = scored(market, c)
+    if s is None:
+        return None, "not scored"
+    rec = c["record"]
+    if market != "reg3" and rec["line_source"] != "bookmaker":
+        return None, "model line (no bookmaker line at forecast time)"
+    if rec.get("market_quote_id") is None:
+        return None, ("no regulation three-way bookmaker quotes are collected" if market == "reg3"
+                      else "no bookmaker quote recorded with the forecast")
+    q = conn.execute("SELECT * FROM market_quotes WHERE quote_id=?", (rec["market_quote_id"],)).fetchone()
+    if q is None or q["game_id"] != g["game_id"] or q["market"] != market:
+        return None, "quote is not of this game and market"
+    if (q["line"] is None) != (rec["line"] is None) or (q["line"] is not None and abs(q["line"] - rec["line"]) > 1e-9):
+        return None, "quote line differs from the forecast line"
+    if q["retrieved_at"] > rec["generated_at"] or q["retrieved_at"] >= g["tipoff_at"]:
+        return None, "quote retrieved after the forecast or the start"
+    if market == "reg3":
+        if q["p_mid_devig"] is None:
+            return None, "quote has no regulation-draw price"
+        return (s[0], (q["p_a_devig"], q["p_mid_devig"], q["p_b_devig"]), s[1]), None
+    return (s[0], q["p_a_devig"], s[1]), None
 
 
 def _blank() -> dict:
@@ -625,23 +775,26 @@ def _existing(conn, g, market: str):
     if r is not None:
         return {"source": "primary_recorded", "model_version": r["model_version"], "p": r["p"], "line": r["line"],
                 "line_source": r["line_source"], "tipoff_at": g["tipoff_at"]}
+    # The night-before primary: its latest row (as its History selects it), void by that History's rule when the game moved
+    # since: the winner when the game left the Eastern date it was made for (live.day_changed), the other markets on any
+    # start change (markets.settle via market_live.outcome).
     from . import backtest
     cutoff = backtest.cutoff_for(g["tipoff_at"])
     if market == "winner":
-        n = conn.execute("SELECT * FROM predictions WHERE game_id=? AND run_type='live' AND cutoff_at=? AND generated_at<=cutoff_at "
+        n = conn.execute("SELECT * FROM predictions WHERE game_id=? AND run_type='live' AND generated_at<=cutoff_at "
                          "AND model_version NOT LIKE 'research-%' AND model_version NOT LIKE '%-policy=near_tipoff' "
-                         "ORDER BY generated_at DESC, prediction_id DESC LIMIT 1", (g["game_id"], cutoff)).fetchone()
+                         "ORDER BY generated_at DESC, prediction_id DESC LIMIT 1", (g["game_id"],)).fetchone()
         if n is not None:
             p = n["home_win_prob"]
             return {"source": "primary_night_before", "model_version": n["model_version"], "p": (p, 0.0, 1 - p), "line": None,
-                    "line_source": "none", "tipoff_at": None}
+                    "line_source": "none", "tipoff_at": None, "void": n["cutoff_at"] != cutoff}
         return None
     n = conn.execute("SELECT * FROM market_forecasts WHERE game_id=? AND market=? AND policy='pregame' AND run_type='live' "
-                     "AND generated_at<cutoff_at AND model_version NOT LIKE 'research-%' ORDER BY generated_at DESC, forecast_id DESC "
+                     "AND generated_at<=cutoff_at AND model_version NOT LIKE 'research-%' ORDER BY generated_at DESC, forecast_id DESC "
                      "LIMIT 1", (g["game_id"], market)).fetchone()
-    if n is not None and n["cutoff_at"] == cutoff:
+    if n is not None:
         return {"source": "primary_night_before", "model_version": n["model_version"], "p": (n["p_a"], n["p_mid"], n["p_b"]),
-                "line": n["line"], "line_source": LINE_SOURCE[n["line_source"]], "tipoff_at": None}
+                "line": n["line"], "line_source": LINE_SOURCE[n["line_source"]], "tipoff_at": n["tipoff_at"]}
     return None
 
 
@@ -674,17 +827,18 @@ def games_report(conn: sqlite3.Connection, *, start: str, end: str, as_of: str, 
             latest[(r["game_id"], r["market"])] = r
     # Canonical markets: the same selection as the canonical pages (a later missing attempt never hides an earlier forecast;
     # it is reported apart). Other markets keep the latest row (unchanged so far).
-    canon_markets = {m for m in market_list if (sport, m) in CANONICAL_COVERAGE} if has else set()
+    canon_markets = set(market_list) if has else set()
     canon_rows = {m: _canonical_rows(conn, [g["game_id"] for g in games], m, as_of) for m in canon_markets}
     buckets = {"competitive": {}, "preseason": {}}
     schedule = {"games": len(games), "by_season_type": {}, "by_status": {}, "games_with_any_forecast": 0,
-                "games_fully_forecast": 0, "upcoming_games": 0, "not_forecastable_type": 0, "corrected_results": 0}
+                "games_fully_forecast": 0, "games_unvalidated": 0, "upcoming_games": 0, "not_forecastable_type": 0, "corrected_results": 0}
     missing_reasons: dict = {}
     record = {"all": _blank(), "main": _blank(), "fallback": _blank()}
+    record_by_market = {m: {"all": _blank(), "main": _blank(), "fallback": _blank()} for m in market_list}
     by_market = {m: {"cells": 0, "forecast": 0, "main": 0, "fallback": 0, "missing": 0, "upcoming": 0, "unvalidated": 0,
                      **{k: 0 for k in ("graded", "pending", "void", "unscorable", "unresolved")}}
                  for m in market_list}
-    thresholds = {t: {"all": _blank(), "main": _blank(), "fallback": _blank()} for t in THRESHOLDS}
+    thresholds = {m: {t: {"all": _blank(), "main": _blank(), "fallback": _blank()} for t in threshold_grid(m)} for m in market_list}
     games_out = []
     for g in games:
         st = g["season_type"]
@@ -701,7 +855,7 @@ def games_report(conn: sqlite3.Connection, *, start: str, end: str, as_of: str, 
             r = latest.get((g["game_id"], market))
             mk = by_market[market]
             mk["cells"] += 1
-            extra = {}
+            extra, moved = {}, False             # moved: a pre-ledger night-before forecast void by its History's rule
             rows = canon_rows[market].get(g["game_id"], []) if market in canon_markets else None
             if rows is not None and (rows or st == "preseason" or not (began is None or g["tipoff_at"] <= began)):
                 c = _canonical_one(g, rows, market, as_of, began)
@@ -710,6 +864,7 @@ def games_report(conn: sqlite3.Connection, *, start: str, end: str, as_of: str, 
                     mk["unvalidated"] += 1
                     cell = {"market": market, "status": "unvalidated", "reason": c["reason"]}
                     if sel is not None:
+                        buckets[bucket][sel["source"]] = buckets[bucket].get(sel["source"], 0) + 1   # experimental row's source
                         sp = (sel["p_a"], sel["p_mid"], sel["p_b"])
                         cell["experimental"] = {"label": EXPERIMENTAL_LABEL, "forecast_id": sel["forecast_id"], "source": sel["source"],
                                                 "model_version": sel["model_version"], "confidence": sel["confidence"], "p": list(sp),
@@ -729,6 +884,7 @@ def games_report(conn: sqlite3.Connection, *, start: str, end: str, as_of: str, 
                     r = {"status": "forecast", "source": e["source"], "p_a": e["p"][0], "p_mid": e["p"][1], "p_b": e["p"][2],
                          "line": e["line"], "line_source": e["line_source"], "tipoff_at": e["tipoff_at"],
                          "confidence": _confidence(market, e["p"]), "fallback_reason": None, "model_version": e["model_version"]}
+                    moved = e.get("void", False)
             if r is None and g["tipoff_at"] > as_of and g["status"] == "scheduled":   # not started: nothing is missing yet
                 mk["upcoming"] += 1
                 cells.append({"market": market, "status": "upcoming"})
@@ -752,7 +908,7 @@ def games_report(conn: sqlite3.Connection, *, start: str, end: str, as_of: str, 
             mk["forecast"] += 1
             mk[kind] += 1
             p = (r["p_a"], r["p_mid"], r["p_b"])
-            state = grade(market, r["line"], p, g, as_of, r["tipoff_at"])
+            state = "void" if moved else grade(market, r["line"], p, g, as_of, r["tipoff_at"])
             if state in ("win", "loss", "push"):
                 mk["graded"] += 1
             else:
@@ -762,10 +918,12 @@ def games_report(conn: sqlite3.Connection, *, start: str, end: str, as_of: str, 
             if bucket == "competitive":
                 _add(record["all"], state)
                 _add(record[kind], state)
-                for t in THRESHOLDS:
+                _add(record_by_market[market]["all"], state)
+                _add(record_by_market[market][kind], state)
+                for t, rec_t in thresholds[market].items():      # the market's own grid; markets are never pooled
                     if r["confidence"] >= t - 1e-12:
-                        _add(thresholds[t]["all"], state)
-                        _add(thresholds[t][kind], state)
+                        _add(rec_t["all"], state)
+                        _add(rec_t[kind], state)
             cells.append({"market": market, "status": state, "source": r["source"], "fallback_reason": r["fallback_reason"],
                           "line": r["line"], "line_source": r["line_source"], "confidence": r["confidence"],
                           "p": list(p), "model_version": r["model_version"],
@@ -775,6 +933,7 @@ def games_report(conn: sqlite3.Connection, *, start: str, end: str, as_of: str, 
         schedule["upcoming_games"] += all(c["status"] == "upcoming" for c in cells)
         schedule["games_with_any_forecast"] += n_forecast > 0
         schedule["games_fully_forecast"] += n_forecast == len(market_list)
+        schedule["games_unvalidated"] += all(c["status"] == "unvalidated" for c in cells)   # preseason: no validated model
         games_out.append({"game_id": g["game_id"], "tipoff_at": g["tipoff_at"], "season_type": st, "status": g["status"],
                           "home_team_id": g["home_team_id"], "away_team_id": g["away_team_id"], "markets": cells})
     preseason = {"all": _blank()}      # experimental rows only (no validated preseason model); never in the record above
@@ -788,16 +947,19 @@ def games_report(conn: sqlite3.Connection, *, start: str, end: str, as_of: str, 
            "recording_began_at": began, "schedule": schedule,
            "sources": buckets, "by_market": by_market,
            "missing_reasons": [{"reason": k, "cells": v} for k, v in sorted(missing_reasons.items(), key=lambda kv: -kv[1])],
-           "record": {k: _finish_record(v) for k, v in record.items()},
+           "record": {k: _finish_record(v) for k, v in record.items()},        # all markets combined (counts across markets)
+           "record_by_market": {m: {k: _finish_record(v) for k, v in r.items()} for m, r in record_by_market.items()},
            "preseason_record": {**_finish_record(preseason["all"]), "label": EXPERIMENTAL_LABEL},
-           "thresholds": [{"threshold": t, **{k: _finish_record(v) for k, v in thresholds[t].items()}} for t in THRESHOLDS],
+           "thresholds_by_market": {m: [{"threshold": t, **{k: _finish_record(v) for k, v in rows.items()}} for t, rows in ts.items()]
+                                    for m, ts in thresholds.items()},
            "games": games_out,
            "notes": ["The record counts every graded every-game forecast (regular season, play-in, playoffs); preseason rows are "
                      "experimental / unvalidated (no model is validated on preseason games), reported separately and never "
-                     "mixed in. Thresholds only filter this record.",
-                     "NBA winner cells use the canonical selection (the same record as Today, the game page, History and "
+                     "mixed in. Thresholds only filter this record, per market on the market's own grid (50-90% for two-way "
+                     "markets, 35-70% for the regulation three-way market); markets are never pooled.",
+                     "Every market uses the canonical selection (the same record as Today, the game page, History and "
                      "Performance): a later attempt without a forecast never hides an earlier forecast and is shown apart; "
-                     "preseason has no canonical forecast. Other markets show the latest row made before the start.",
+                     "preseason has no canonical forecast.",
                      "Main = an approved adaptive ensemble (none is approved: since coverage-v2 adaptive forecasts stay research and "
                      "are never this record's source; adaptive cells come only from rows recorded earlier); fallback = the sealed "
                      "primary model (recorded by the two-hour primary writers, or computed for this ledger with the same guards). "

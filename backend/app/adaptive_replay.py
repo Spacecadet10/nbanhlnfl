@@ -1,10 +1,13 @@
-"""Chronological replay of adaptive-v1 against the existing system (docs/ADAPTIVE_SYSTEM.md §6). Development data only:
-NBA warm-up + validation seasons, NHL warm-up + development seasons; the reserved test seasons are never loaded.
+"""Chronological replay of adaptive-v1 against the existing system (docs/ADAPTIVE_SYSTEM.md §6). Already-used data only:
+NBA warm-up + validation seasons, NHL warm-up + development (or, with `period`, validation) seasons; the reserved test
+seasons are never loaded. NHL validation 2022-24 chose the primaries' settings, so replays on it are in-sample for them.
+With bookmaker lines, line markets are priced and settled at the book's line (see `run`).
 
 Every adaptive member is walked with its registered schedule; the combiner is refitted at the first game of each ISO
 week on rows whose outcome was available at that cutoff (last two completed seasons plus the current one). The existing
 system (primary, core average, core season-start stacker) is scored on identical games and lines. Exploratory: no
 ledger rows, no artifacts, no live change."""
+import gzip
 import json
 import time
 from pathlib import Path
@@ -17,7 +20,29 @@ from .db import utc_now
 PERIOD = {"nba": "validation", "nhl": "development"}
 EVALUATED = {"nba": backtest.PERIODS["validation"], "nhl": nhl_eval.PERIODS["development"]}
 LOADABLE = {"nba": backtest.LOADABLE["validation"], "nhl": nhl_eval.LOADABLE["development"]}
+# Periods a replay may use: never a reserved test period (NHL validation 2022-24 is already-used development data).
+ALLOWED = {"nba": ("validation",), "nhl": ("development", "validation")}
+
+
+def scored_rows(rows: list, book_mode: bool) -> list:
+    """The rows a line market is scored on: with bookmaker lines, only the games priced at a book line."""
+    return [r for r in rows if r.get("line_basis") == "book"] if book_mode else rows
+
+
+def writes_evidence(sport: str, period: str, book_lines) -> bool:
+    """Only the default replay (the sport's period, model lines) replaces the committed summary the API serves."""
+    return period == PERIOD[sport] and book_lines is None
+
+
+def periods(sport: str, period: Optional[str]) -> tuple:
+    """(evaluated seasons, loadable seasons, period) for `period` (default: the sport's replay period)."""
+    period = period or PERIOD[sport]
+    if period not in ALLOWED[sport]:
+        raise ValueError(f"adaptive replay: period {period!r} is not allowed for {sport} ({', '.join(ALLOWED[sport])})")
+    mod = backtest if sport == "nba" else nhl_eval
+    return tuple(mod.PERIODS[period]), tuple(mod.LOADABLE[period]), period
 EXISTING = {"primary": None, "average": None, "stack": None}
+SOURCES = ("primary", "average", "stack", "adaptive_core", "adaptive")
 
 
 def _fingerprint(rows) -> str:
@@ -84,14 +109,16 @@ def _compare(market: str, rows: list, sources: list, evaluated) -> dict:
 
 
 def run(conn, sport: str, out_dir: Optional[Path] = None, log: Callable[[str], None] = print,
-        skip_deep: bool = False) -> dict:
+        skip_deep: bool = False, period: Optional[str] = None, book_lines: Optional[dict] = None) -> dict:
+    """`period`: see `periods`. `book_lines` ({game_id: {market: line}}): line markets are priced and settled at the
+    bookmaker's line instead of the primary's model line (games without one are left out of that market)."""
     started = utc_now()
     t0 = time.time()
-    evaluated = EVALUATED[sport]
-    tables, first, existing, rows, events, recorder, dataset = study.existing_tables(conn, sport, PERIOD[sport])
+    evaluated, loadable, period = periods(sport, period)
+    tables, first, existing, rows, events, recorder, dataset = study.existing_tables(conn, sport, period, book_lines)
     seasons = {r.game.season for r in rows}
-    if seasons - set(LOADABLE[sport]):
-        raise ValueError("adaptive replay read seasons outside the development data")
+    if seasons - set(loadable):
+        raise ValueError(f"adaptive replay read seasons outside the {period} data")
     log(f"{sport}: existing members on {len(rows)} games in {time.time() - t0:.0f} s")
     line_markets = [m for m in tables if m != "winner"]
     lines = {r["game_id"]: {} for r in tables["winner"]}
@@ -140,8 +167,11 @@ def run(conn, sport: str, out_dir: Optional[Path] = None, log: Callable[[str], N
                                "kept": sum(1 for f in store["fits"] if not f["refit"]), "seconds": round(time.time() - t1, 1),
                                "reasons": sorted({f.get("reason") for f in store["fits"] if f.get("reason")})}
     report = {"kind": "adaptive-replay", "version": adaptive.VERSION, "sport": sport, "started_at": started, "dataset_version": dataset,
-              "evaluated_seasons": list(evaluated), "loaded_seasons": sorted(seasons), "exploratory": True,
+              "evaluated_seasons": list(evaluated), "loaded_seasons": sorted(seasons), "exploratory": True, "period": period,
+              "line_basis": ("bookmaker consensus close (or last current quote); games without one keep the model line "
+                             "for learning and are not scored") if book_lines is not None else "primary model line",
               "schedule": adaptive.SCHEDULE, "members": sorted(hist), "excluded": excluded, "member_fits": member_fits, "markets": {}}
+    per_game: dict = {}
     core = {"winner": list(research_live.CORE[sport]), **{mk: list(research_live.LINE_MEMBERS[sport]) for mk in line_markets}}
     for market, table in tables.items():
         rows_m = [dict(r, vectors=dict(r["vectors"]), tipoff_at=r["tipoff_at"]) for r in table]
@@ -161,17 +191,24 @@ def run(conn, sport: str, out_dir: Optional[Path] = None, log: Callable[[str], N
         names = [m.name for m in mems if market in m.markets and m.name in hist]
         fits_core = adaptive_combiner_walk(market, rows_m, members_core, evaluated, "adaptive_core", log)
         fits_full = adaptive_combiner_walk(market, rows_m, names, evaluated, "adaptive", log)
-        singles = {n: cr._summary(market, [r for r in rows_m if r["season"] in evaluated and n in r["vectors"]
+        # Learning above used every row; scoring below only the games priced at a book line (when given).
+        scored = rows_m if market in ("winner", "reg3") else scored_rows(rows_m, book_lines is not None)
+        singles = {n: cr._summary(market, [r for r in scored if r["season"] in evaluated and n in r["vectors"]
                                             and r["realised"] in combine._classes(market)], n)["log_loss"]
-                   for n in names if any(n in r["vectors"] for r in rows_m)}
+                   for n in names if any(n in r["vectors"] for r in scored)}
         report["markets"][market] = {
             "primary": primary, "core_members": members_core, "adaptive_members": names,
-            "comparison": _compare(market, rows_m, ["primary", "average", "stack", "adaptive_core", "adaptive"], evaluated),
-            "single_members_log_loss": singles, "existing_stack_fits": stack_fits,
+            "comparison": _compare(market, scored, ["primary", "average", "stack", "adaptive_core", "adaptive"], evaluated),
+            "single_members_log_loss": singles,
+            # every model with output here, incl. the existing season-start versions the combination leaves out
+            "single_members": single_members(market, scored, sorted({k for r in scored for k in r["vectors"]} - set(SOURCES)),
+                                             evaluated, first),
+            "existing_stack_fits": stack_fits,
             "adaptive_core_fits": fits_core[-3:], "adaptive_fits_last": fits_full[-3:],
             "adaptive_fit_count": sum(1 for f in fits_full if "weights" in f),
             "adaptive_weights_last": next((f["weights"] for f in reversed(fits_full) if "weights" in f), None),
             "adaptive_excluded_last": next((f["excluded"] for f in reversed(fits_full) if "weights" in f), None)}
+        per_game[market] = game_rows(scored, evaluated)
         c = report["markets"][market]["comparison"]
         log(f"{market}: n={c['scored_games']} " + " ".join(f"{s}={v['log_loss']:.4f}" for s, v in c["sources"].items() if v))
     report["finished_at"] = utc_now()
@@ -179,17 +216,55 @@ def run(conn, sport: str, out_dir: Optional[Path] = None, log: Callable[[str], N
     out_dir = out_dir or config.data_dir() / "reports" / f"adaptive-replay-{sport}-{started.replace(':', '')}"
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "report.json").write_text(json.dumps(report, indent=1, default=str))
+    for market, rows in per_game.items():      # every model's per-game vector, for comparisons the report does not make
+        with gzip.open(out_dir / f"games-{market}.jsonl.gz", "wt") as f:
+            f.writelines(json.dumps(r) + "\n" for r in rows)
     report["output_dir"] = str(out_dir)
-    adaptive.EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
-    (adaptive.EVIDENCE_DIR / f"{sport}-replay.json").write_text(json.dumps(compact(report), indent=1, default=str) + "\n")
-    log(f"wrote {out_dir / 'report.json'} and {adaptive.EVIDENCE_DIR / f'{sport}-replay.json'}")
+    if writes_evidence(sport, period, book_lines):
+        adaptive.EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
+        (adaptive.EVIDENCE_DIR / f"{sport}-replay.json").write_text(json.dumps(compact(report), indent=1, default=str) + "\n")
+        log(f"wrote {out_dir / 'report.json'} and {adaptive.EVIDENCE_DIR / f'{sport}-replay.json'}")
+    else:
+        log(f"wrote {out_dir / 'report.json'} (a {period}/{'book-line' if book_lines is not None else 'model-line'} variant: "
+            "the served evidence summary is not replaced)")
     return report
+
+
+def game_rows(rows_m: list, evaluated) -> list:
+    """Evaluated games of one market with the line, outcome class and every model's and source's probability vector."""
+    return [{"game_id": r["game_id"], "season": r["season"], "cutoff_at": r["cutoff_at"], "line": r.get("line"),
+             **({"line_basis": r["line_basis"]} if "line_basis" in r else {}),
+             "realised": r["realised"], "vectors": {k: [round(float(x), 6) for x in v] for k, v in r["vectors"].items()}}
+            for r in rows_m if r["season"] in evaluated]
+
+
+def single_members(market: str, rows_m: list, names: list, evaluated, first: Optional[dict] = None) -> dict:
+    """Each model alone on the evaluated, scorable games it has an output for (its own coverage; `coverage` is that share
+    of all scorable evaluated games): n, wins/losses, hit rate with interval, log loss, Brier and calibration of the picked
+    side. `vs_primary` pairs it with the primary on the games both have (log loss, negative favours the model). Seasons
+    before a model's first out-of-sample season (`first`, where known) are left out."""
+    cls = combine._classes(market)
+    scorable = [r for r in rows_m if r["season"] in evaluated and r["realised"] in cls]
+    out = {}
+    for n in names:
+        start = (first or {}).get(n)
+        own = [r for r in rows_m if start is None or r["season"] >= start]
+        rows = [r for r in own if r["season"] in evaluated and n in r["vectors"] and r["realised"] in cls]
+        if rows:
+            s = cr._summary(market, rows, n)
+            out[n] = {k: s[k] for k in ("n", "wins", "losses", "accuracy", "accuracy_ci95", "log_loss", "brier", "calibration")}
+            out[n]["coverage"] = len(rows) / len(scorable)
+            paired = _compare(market, own, ["primary", n], evaluated)["paired"].get(f"{n}_minus_primary") \
+                if n != "primary" else None
+            out[n]["vs_primary"] = {k: paired[k] for k in ("mean", "ci95", "games")} if paired else None
+    return out
 
 
 def compact(report: dict) -> dict:
     """The committed summary read by the API: per market the comparison and the last weights; no per-game rows."""
     out = {k: report[k] for k in ("kind", "version", "sport", "started_at", "finished_at", "dataset_version", "evaluated_seasons",
                                   "loaded_seasons", "exploratory", "schedule", "members", "excluded", "seconds")}
+    out.update({k: report.get(k) for k in ("period", "line_basis")})
     out["member_fits"] = {k: {kk: vv for kk, vv in v.items() if kk != "season_fits"} for k, v in report["member_fits"].items()}
     out["markets"] = {}
     for mk, v in report["markets"].items():
@@ -201,7 +276,8 @@ def compact(report: dict) -> dict:
                                               if x else None) for s, x in c["sources"].items()},
                               "paired": {k: {kk: x[kk] for kk in ("mean", "ci95", "per_season", "metric", "games")}
                                          for k, x in c["paired"].items()},
-                              "single_members_log_loss": v["single_members_log_loss"], "adaptive_fit_count": v["adaptive_fit_count"],
+                              "single_members_log_loss": v["single_members_log_loss"],
+                              "single_members": v.get("single_members"), "adaptive_fit_count": v["adaptive_fit_count"],
                               "adaptive_weights_last": v["adaptive_weights_last"], "adaptive_excluded_last": v["adaptive_excluded_last"],
                               "adaptive_l2_last": (v["adaptive_fits_last"][-1].get("l2") if v["adaptive_fits_last"] else None)}
     return out

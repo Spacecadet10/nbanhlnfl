@@ -41,8 +41,9 @@ function TrainingBody({ t }: { t: TrainingStatus }) {
         : 'Result consumption is not verified by per-model forecast provenance.'}</div>
       <div>Next state update: {o.next_update}.</div></li>)}</ul>
     <h3>Inputs</h3>
-    <ul className="small">{Object.entries(t.inputs).map(([job, i]) => <li key={job} className={i.stale ? 'warn' : undefined}>
-      {job}: last success {i.last_success ? dateTime(i.last_success) : 'never'}{i.stale ? ` — stale (older than ${i.stale_after_hours} h)` : ''}</li>)}</ul>
+    <ul className="small">{Object.entries(t.inputs).map(([job, i]) => <li key={job} className={i.stale || i.last_failure ? 'warn' : undefined}>
+      {job}: last success {i.last_success ? dateTime(i.last_success) : 'never'}{i.stale ? ` — stale (older than ${i.stale_after_hours} h)` : ''}
+      {i.last_failure ? ` — last run failed ${dateTime(i.last_failure.at)}: ${i.last_failure.reason}` : ''}</li>)}</ul>
     <h3>Skipped and failed updates</h3>
     {t.updates.length === 0 ? <p className="small muted">None in the latest two-hour runs.</p>
       : <div className="table-wrap"><table className="table small">

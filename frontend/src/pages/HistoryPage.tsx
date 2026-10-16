@@ -72,7 +72,7 @@ export function HistoryPage() {
       {meta.state.status === 'success' && <MarketSelect value={market} markets={meta.state.data.markets} onChange={setMarket} />}
       {meta.state.status === 'success' && <p className="muted small">
         {!realMode ? 'Demo predictions from synthetic fixtures.'
-          : canonical ? 'Canonical forecasts: one record per game, the same record Today, the game page and Performance show and grade. Missing forecasts are listed with their reason.'
+          : canonical ? 'Canonical forecasts: one record per game for the selected market, the same record Today, the game page and Performance show and grade. Missing forecasts are listed with their reason.'
           : run === 'live' && policy === 'near_tipoff' ? 'Near-tipoff forecasts, each made before tipoff from the freshest stored results (latest version per game). Kept separate from the pre-game archive. Elo does not know about injuries or line-ups.'
           : run === 'live' ? 'Pre-game archive: forecasts the discontinued daily job recorded before each game\'s cutoff (midnight Eastern on the game date), some several days before the game. Compare the recorded time with the game date. Latest version per game; outcomes are added after the game.'
             : 'Retrospective backtest predictions of the primary model, computed after the fact. These are not forecasts recorded before the games.'}
@@ -97,7 +97,7 @@ export function HistoryPage() {
           <button type="button" className="link-btn" onClick={meta.retry}>Retry</button>
         </p>
       )}
-      {canonical ? <CanonicalHistory sport={sport} filters={filters} limit={limit} />
+      {canonical ? <CanonicalHistory sport={sport} market={market} filters={filters} limit={limit} />
       : !isWinner ? (
         <MarketHistory sport={sport} market={market} policy={policy} level={level} filters={filters} hasFilters={hasFilters}
           showAll={() => setLevel(null)} />

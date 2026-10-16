@@ -1,4 +1,6 @@
 // The app's single API client. All screens fetch through here; there is no local fallback data.
+import type { AutoresearchStatus } from './types';
+import type { CandidateGameView } from './types';
 import type { CanonicalHistory, CanonicalPerformance, CoverageReport, DailyEvidence, DailyReport, AdaptiveGame, CombinationAnalysis, RuleLedger, SubsetSearch, ThresholdExplorer, AdaptiveStatus, HistoricalStart,
   JointReport, ThresholdReport, AgreementPerformance, GameDetail, GamesResponse, HistoryResponse, MarketHistoryResponse, MarketId, MarketPerformanceResponse, Meta,
   PerformanceResponse, Policy, ResearchGame, ResearchHistory, ResearchReport, ResearchSlate, Retrospective, RuleReport, CandidateRoster, PoolReport, SelectionStatus, Sport,
@@ -54,11 +56,12 @@ export const api = {
   jointTracking: (sport: Sport, market: MarketId, params: Record<string, string | undefined>, signal?: AbortSignal) =>
     get<JointReport>('/research/tracking/joint', { sport, market, ...params }, signal),
 
-  // The canonical forecast (one record per game; winner market only so far).
-  canonicalHistory: (sport: Sport, f: { date_from?: string; date_to?: string; team?: string; limit?: number }, signal?: AbortSignal) =>
-    get<CanonicalHistory>('/canonical/forecasts', { sport, date_from: f.date_from, date_to: f.date_to, team: f.team,
+  // The canonical forecast (one record per game and market).
+  canonicalHistory: (sport: Sport, market: MarketId, f: { date_from?: string; date_to?: string; team?: string; limit?: number }, signal?: AbortSignal) =>
+    get<CanonicalHistory>('/canonical/forecasts', { sport, market, date_from: f.date_from, date_to: f.date_to, team: f.team,
       limit: f.limit == null ? undefined : String(f.limit) }, signal),
-  canonicalPerformance: (sport: Sport, signal?: AbortSignal) => get<CanonicalPerformance>('/canonical/performance', { sport }, signal),
+  canonicalPerformance: (sport: Sport, market: MarketId, signal?: AbortSignal) =>
+    get<CanonicalPerformance>('/canonical/performance', { sport, market }, signal),
   thresholds: (sport: Sport, signal?: AbortSignal) => get<ThresholdReport>('/thresholds', { sport }, signal),
   coverage: (sport: Sport, dateFrom: string | undefined, dateTo: string | undefined, signal?: AbortSignal) =>
     get<CoverageReport>('/coverage', { sport, date_from: dateFrom, date_to: dateTo }, signal),
@@ -132,4 +135,9 @@ export const api = {
   adaptiveStatus: (sport: Sport, signal?: AbortSignal) => get<AdaptiveStatus>('/research/adaptive', { sport }, signal),
   adaptiveGame: (sport: Sport, id: string, signal?: AbortSignal) =>
     get<AdaptiveGame>(`/research/adaptive/game/${encodeURIComponent(id)}`, { sport }, signal),
+  // Sports autoresearch: experiment directory status (research only; never a forecast source).
+  autoresearch: (signal?: AbortSignal) => get<AutoresearchStatus>('/research/autoresearch', undefined, signal),
+  // Every candidate model's recorded pregame forecasts for one game (research only; never canonical, never a vote).
+  candidatesGame: (sport: Sport, id: string, signal?: AbortSignal) =>
+    get<CandidateGameView>(`/research/candidates/game/${encodeURIComponent(id)}`, { sport }, signal),
 };

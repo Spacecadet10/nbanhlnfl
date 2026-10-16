@@ -106,7 +106,7 @@ def _log(entry: dict) -> None:
 
 
 # --- Tables ---------------------------------------------------------------------------------------------------------
-def existing_tables(conn, sport: str, period: str):
+def existing_tables(conn, sport: str, period: str, book_lines=None):
     """§5 study tables of the existing members (identical lines, outcomes, cutoffs) and the rows/events used."""
     if sport == "nba":
         from .. import nba_markets
@@ -121,7 +121,7 @@ def existing_tables(conn, sport: str, period: str):
         points, _ = nba_markets.sealed_model(conn)
         dist = [points, RidgePoints(cfg), GbtPoints(cfg), Cadenced(RidgePoints(cfg), "weekly"), Cadenced(GbtPoints(cfg), "weekly")]
         winner = [Elo(cfg), LogisticElo(cfg), LogisticV2(cfg), EfficiencyMargin(), GradientBoostedTrees(cfg)]
-        tables, first = cr._tables(rows, winner, dist, LINE_MARKETS["nba"], events)
+        tables, first = cr._tables(rows, winner, dist, LINE_MARKETS["nba"], events, book_lines=book_lines)
         for m in dist[3:]:
             first[m.name] = m.member.oos_from_season()
         first["elo"] = first["points_normal"] = min(backtest.PERIODS["warmup"])
@@ -139,7 +139,8 @@ def existing_tables(conn, sport: str, period: str):
     ec, gc, key = HockeyEloConfig(**d["hockey_elo_config"]), GoalsConfig(**d["goals_config"]), sports.NHL.rating_key
     winner = [HockeyElo(ec, key), GoalsPoisson(gc, key), hockey_logistic(ec, gc, key), hockey_gbt(ec, gc, key)]
     dist = [GoalsPoisson(gc, key), GoalsDraw(gc, key), GoalsGlm(ec, key)]
-    tables, first = cr._tables(rows, winner, dist, LINE_MARKETS["nhl"], None, lambda r: r.decision)
+    tables, first = cr._tables(rows, winner, dist, LINE_MARKETS["nhl"], None, lambda r: r.decision,
+                               book_lines=book_lines)
     xg = hockey_logistic_xg(ec, gc, key)      # shots reach only the xG member (as expanded_search)
     pxg = {p["game_id"]: p["p_home"] for p in backtest.run(xg, rows, events)}
     for r in tables["winner"]:

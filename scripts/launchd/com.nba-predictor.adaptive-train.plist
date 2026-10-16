@@ -4,13 +4,21 @@
      which has the pinned torch / tensorflow, so the deep members are refitted rather than kept. The release checkout's code
      is used (WorkingDirectory). The command takes the store's job lock only to snapshot and to publish; the training reads
      the snapshot under its own lock, so the odds/forecast cycles keep running. Due-only and idempotent. Install only with a
-     release move. -->
+     release move.
+     Order per sport (docs/ADAPTIVE_SYSTEM.md §14): `training-inputs` collects (results, NHL shots and player boxes, NBA boxes)
+     and checks; only when it passes, `adaptive-train` (weekly) then `adaptive-train` with the daily cadence. A run that is not ready
+     exits 1 (job_runs 'training_inputs' failed; adaptive-train 'deferred'); the 15:30 run is the retry (anything already
+     trained is not due and is skipped). Overlap: the store lock for collection, the per-sport training lock for training. -->
 <plist version="1.0">
 <dict>
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>NBA_DATA_DIR</key>
 		<string>/Users/andry/Desktop/nba-predictor-sprint1/data</string>
+		<key>NBA_PLAYER_BOX_REFRESH</key>
+		<string>1</string>
+		<key>NHL_PLAYER_BOX_REFRESH</key>
+		<string>1</string>
 		<key>OMP_NUM_THREADS</key>
 		<string>4</string>
 	</dict>
@@ -24,19 +32,27 @@
 		<string>-i</string>
 		<string>/bin/sh</string>
 		<string>-c</string>
-		<string>/Users/andry/nba-predictor-deep/backend/.venv/bin/python -m app.cli --sport nhl adaptive-train; nhl_status=$?; /Users/andry/nba-predictor-deep/backend/.venv/bin/python -m app.cli --sport nba adaptive-train; nba_status=$?; if [ "$nhl_status" -ne 0 ]; then exit "$nhl_status"; fi; exit "$nba_status"</string>
+		<string>PY=/Users/andry/nba-predictor-deep/backend/.venv/bin/python; rc=0; for s in nhl nba; do if $PY -m app.cli --sport $s training-inputs; then $PY -m app.cli --sport $s adaptive-train || rc=1; $PY -m app.cli --sport $s adaptive-train --cadence daily || rc=1; else rc=1; fi; done; exit $rc</string>
 	</array>
 	<key>StandardErrorPath</key>
 	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/adaptive-train-launchd.log</string>
 	<key>StandardOutPath</key>
 	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/adaptive-train-launchd.log</string>
 	<key>StartCalendarInterval</key>
-	<dict>
-		<key>Hour</key>
-		<integer>9</integer>
-		<key>Minute</key>
-		<integer>30</integer>
-	</dict>
+	<array>
+		<dict>
+			<key>Hour</key>
+			<integer>9</integer>
+			<key>Minute</key>
+			<integer>30</integer>
+		</dict>
+		<dict>
+			<key>Hour</key>
+			<integer>15</integer>
+			<key>Minute</key>
+			<integer>30</integer>
+		</dict>
+	</array>
 	<key>ThrottleInterval</key>
 	<integer>60</integer>
 	<key>WorkingDirectory</key>

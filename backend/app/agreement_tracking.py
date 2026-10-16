@@ -818,8 +818,46 @@ def _state(row) -> str:
     return "settled"
 
 
+def _definitions(conn, registry: str, market: str, date_from=None, date_to=None, line=None, signature=None) -> list:
+    """The research definitions with observations of the market under `registry` (within the date/line filters and, if
+    given, a member-version signature), newest first by their latest pregame core cohort (ties: the later cohort id), each
+    with the games its own view scores: games with a pregame core cohort of it."""
+    if not _has(conn, "agreement_observations"):
+        return []
+    sql = ("SELECT c.definition, COUNT(DISTINCT o.game_id) AS games, MAX(c.generated_at) AS last, MAX(c.cohort_id) AS last_id "
+           "FROM agreement_observations o JOIN research_cohorts c ON c.cohort_id=o.cohort_id WHERE o.registry=? AND o.market=? "
+           "AND c.definition NOT LIKE '%:expanded-v1' AND c.generated_at < c.tipoff_at")
+    params: list = [registry, market]
+    lo, hi = day_bounds(date_from, date_to)
+    for cond, val in (("o.tipoff_at >= ?", lo), ("o.tipoff_at < ?", hi), ("o.line = ?", line), ("o.version_sig = ?", signature)):
+        if val is not None:
+            sql += f" AND {cond}"
+            params.append(val)
+    rows = conn.execute(sql + " GROUP BY c.definition ORDER BY last DESC, last_id DESC", params).fetchall()
+    return [{"definition": r["definition"], "games": r["games"], "last_cohort_at": r["last"]} for r in rows]
+
+
+def resolve_definition(conn, registry: str, market: str, version=None, date_from=None, date_to=None, line=None):
+    """(definitions in the filters, the one research definition to report, member signature filter or None). `version` is
+    a definition prefix (more than one match is refused) or a member-version signature (then the newest definition with
+    that signature); without it, the newest definition with games in the filters. Records never pool definitions."""
+    every = _definitions(conn, registry, market)
+    defs = _definitions(conn, registry, market, date_from, date_to, line)
+    signature = None
+    if version:
+        hits = [d["definition"] for d in every if d["definition"].startswith(version)]
+        if len(hits) > 1:
+            raise InvalidRequest(f"version {version!r} matches {len(hits)} research definitions; give more characters")
+        if hits:
+            return defs, hits[0], None
+        signature = version
+        with_sig = _definitions(conn, registry, market, date_from, date_to, line, signature=version)
+        return defs, (with_sig[0]["definition"] if with_sig else None), signature
+    return defs, (defs[0]["definition"] if defs else every[0]["definition"] if every else None), None
+
+
 def prospective_items(conn, reg: dict, sport: str, market: str, date_from=None, date_to=None, version=None,
-                      registries: Optional[list] = None) -> dict:
+                      registries: Optional[list] = None, definition: Optional[str] = None) -> dict:
     """group_id -> {game_id: item} from the canonical observation per game (latest pregame source cohort). `registries`
     (default: the sealed registry's sha256) are the `registry` values read, e.g. registered exact rules' own digests."""
     from . import markets as mk
@@ -841,11 +879,14 @@ def prospective_items(conn, reg: dict, sport: str, market: str, date_from=None, 
     if version:
         sql += " AND (o.definition LIKE ? OR o.version_sig = ?)"
         params += [f"{version}%", version]
+    if definition is not None:          # exactly one research definition (its core and expanded cohorts)
+        sql += " AND c.definition IN (?, ?)"
+        params += [definition, f"{definition}:expanded-v1"]
     out: dict = defaultdict(dict)
     rows = conn.execute(sql + " ORDER BY c.generated_at, o.source_cohort_id, o.observation_id", params).fetchall()
     # Canonical cohort per game: its latest pregame core cohort (independent of which observations exist). A group without
     # an observation at that cohort has none for the game; it is never scored from an older cohort (another line or inputs).
-    canonical = _canonical_cohorts(conn, market, version)
+    canonical = _canonical_cohorts(conn, market, definition if definition is not None else version)
     for r in rows:
         if r["cohort_id"] != canonical.get(r["game_id"]):
             continue
@@ -925,7 +966,8 @@ EXACT_VERSIONS_NOTE = ("`versions` counts model-definition versions (each member
 
 
 def exact_report(conn, sport: str, market: str, *, date_from=None, date_to=None, version=None, line=None,
-                 reg: Optional[dict] = None, exact_registry: Optional[dict] = None, load_exact: Optional[bool] = None) -> dict:
+                 reg: Optional[dict] = None, exact_registry: Optional[dict] = None, load_exact: Optional[bool] = None,
+                 definition: Optional[str] = None) -> dict:
     """Prospective record of every registered exact rule of one market: one canonical observation per game (as the sealed
     groups), summarised by the same cells; comparators at matched coverage come from the sealed registry's single groups."""
     from . import exact_rules as er
@@ -947,9 +989,10 @@ def exact_report(conn, sport: str, market: str, *, date_from=None, date_to=None,
     reg = reg or load_registry()
     m = reg["markets"].get(f"{sport}:{market}") or {"groups": [], "anchor": None}
     per = _by_line(prospective_items(conn, reg, sport, market, date_from, date_to, version,
-                                     registries=[r["rule_sha256"] for r in rules]), line)
+                                     registries=[r["rule_sha256"] for r in rules], definition=definition), line)
     singles = [g for g in m["groups"] if g["kind"] == "single"]
-    sealed = _by_line(prospective_items(conn, reg, sport, market, date_from, date_to, version), line) if singles else {}
+    sealed = _by_line(prospective_items(conn, reg, sport, market, date_from, date_to, version, definition=definition),
+                      line) if singles else {}
     ranked = _Ranked({g["members"][0]: sealed.get(g["id"], {}) for g in singles}, market)
     out = []
     for r in rules:
@@ -973,10 +1016,14 @@ def report(conn, sport: str, market: str, *, evidence: str = "prospective", kind
     reg = reg or load_registry()
     m = reg["markets"].get(f"{sport}:{market}")
     from . import exact_rules as er
+    # One research definition per prospective record (as agreement.performance and research_live.report): games observed
+    # under different definitions are never pooled, in the sealed groups or the exact rules.
+    definitions, definition, signature = (([], None, None) if evidence == "historical" else
+                                          resolve_definition(conn, reg["sha256"], market, version, date_from, date_to, line))
     exact = ({"study": er.STUDY, "status": "not_applicable", "games": 0, "rules": [], "note": EXACT_HISTORICAL_NOTE,
               "registration": EXACT_REGISTRATION} if evidence == "historical"
-             else exact_report(conn, sport, market, date_from=date_from, date_to=date_to, version=version, line=line,
-                               reg=reg, exact_registry=exact_registry, load_exact=load_exact))
+             else exact_report(conn, sport, market, date_from=date_from, date_to=date_to, version=signature, line=line,
+                               reg=reg, exact_registry=exact_registry, load_exact=load_exact, definition=definition or ""))
     if m is None:
         return {"sport": sport, "market": market, "status": "no_registered_groups", "groups": [], "exact_rules": exact}
     if evidence == "historical":
@@ -986,10 +1033,12 @@ def report(conn, sport: str, market: str, *, evidence: str = "prospective", kind
             if reg is load_registry() else _full(_by_line(historical_items(sport, market, reg, date_from, date_to), line), m, market, historical=True)
         status = "available" if full["games"] else "historical_table_outdated" if _outdated(p, reg) else "no_historical_table"
     else:
-        full = _full(_by_line(prospective_items(conn, reg, sport, market, date_from, date_to, version), line), m, market)
+        full = _full(_by_line(prospective_items(conn, reg, sport, market, date_from, date_to, signature,
+                                                definition=definition or ""), line), m, market)
         status = "recording" if full["games"] else "no_observations_yet"
     keep = {g["id"] for g in _filter_groups(m["groups"], kind, member, group_id)}
-    return {"sport": sport, "market": market, "evidence": evidence, "status": status, "study": reg["study"],
+    extra = {"definitions": definitions, "definition_applied": definition, "signature_applied": signature}
+    return {**extra, "sport": sport, "market": market, "evidence": evidence, "status": status, "study": reg["study"],
             "registry_sha256": reg["sha256"], "effective_from": reg["effective_from"], "anchor": m["anchor"],
             "thresholds": list(report_thresholds(market)), "sealed_thresholds": m["thresholds"], "grid": GRID,
             "bands": [{"band": [lo, min(hi, 1.0)], "label": band_label(market, lo, hi)} for lo, hi in report_bands(market)],
@@ -1217,22 +1266,46 @@ def game_observations(conn, game_id: str, reg: Optional[dict] = None, exact_regi
         "SELECT o.* FROM agreement_observations o JOIN research_cohorts c ON c.cohort_id=o.source_cohort_id "
         f"WHERE o.registry IN ({','.join('?' * len(regs))}) AND o.game_id=? ORDER BY c.generated_at, o.source_cohort_id, o.observation_id",
         (*regs, game_id)).fetchall()
-    # One cohort per market: the market's latest core cohort with observations, so counts never mix cohorts or lines.
-    newest = {}
-    for r in rows:
-        newest[r["market"]] = r["cohort_id"]
+    # One cohort per market: the report's canonical cohort (prospective_items: the game's latest pregame core cohort), so
+    # counts never mix cohorts or lines and the panel never shows an older cohort than the report scores.
+    # The report's default record is the newest research definition: the panel shows the game's latest pregame core cohort
+    # of that definition, else its latest cohort, noted as outside the default record.
+    canonical, outside = {}, {}
+    cohorts = conn.execute("SELECT market, cohort_id, definition FROM research_cohorts WHERE game_id=? AND definition NOT LIKE "
+                           "'%:expanded-v1' AND generated_at < tipoff_at ORDER BY generated_at, cohort_id", (game_id,)).fetchall()
+    for market in {c["market"] for c in cohorts}:
+        _, default, _ = resolve_definition(conn, reg["sha256"], market)
+        own = [c for c in cohorts if c["market"] == market and c["definition"] == default]
+        last = own[-1] if own else [c for c in cohorts if c["market"] == market][-1]
+        canonical[market] = last["cohort_id"]
+        if not own and default is not None:
+            outside[market] = (f"Observed only under research definition {last['definition'][:16]}; the default record "
+                               f"(newest definition {default[:16]}) does not include this game.")
     latest: dict = {}
     for r in rows:
-        if r["cohort_id"] == newest[r["market"]]:
+        if r["cohort_id"] == canonical.get(r["market"]):
             latest[(r["market"], r["group_id"])] = r
     markets = defaultdict(list)
     for (market, _), r in latest.items():
         markets[market].append(r)
+    g = conn.execute("SELECT status, tipoff_at FROM games WHERE game_id=?", (game_id,)).fetchone()
     out = []
+    for market in {r["market"] for r in rows} - set(markets):       # observations exist, but none for the canonical cohort
+        out.append({"market": market, "line": None, "groups": 0, "counts": {}, "recorded_at": None, "definition": None,
+                    "picks": [], "incomplete": [], "state": "not_recorded", "definition_note": outside.get(market),
+                    "state_reason": "No observations were recorded for the game's latest pregame cohort; earlier cohorts are "
+                                    "not shown or scored."})
     for market, rs in markets.items():
         counts = Counter(r["side"] if r["status"] == "pick" else r["status"] for r in rs)
         picks = sorted((r for r in rs if r["status"] == "pick"), key=lambda r: -r["statistic"])
+        void = g is not None and _state({"status": g["status"], "game_tipoff_at": g["tipoff_at"], "tipoff_at": rs[0]["tipoff_at"],
+                                         "result_available_at": None}) == "void"
+        reason = None
+        if void:
+            reason = (f"Game {g['status']}: void, never scored." if g["status"] in ("postponed", "canceled") else
+                      f"The game's start changed after these forecasts (made for {rs[0]['tipoff_at']}): void, never scored.")
         out.append({"market": market, "line": rs[0]["line"], "groups": len(rs), "counts": dict(counts),
+                    "state": "void" if void else "recorded", "state_reason": reason, "definition_note": outside.get(market),
                     "recorded_at": max(r["recorded_at"] for r in rs), "definition": rs[0]["definition"],
                     "picks": [{"group": r["group_id"], "kind": r["kind"], "side": r["side"], "statistic": r["statistic"],
                                "votes": json.loads(r["votes"])} for r in picks[:12]],
@@ -1379,13 +1452,23 @@ def joint_report(conn, sport, market, *, evidence="historical", members=None, co
     if confidence not in ("supporters_mean", "all_mean", "supporters_min"):
         raise InvalidRequest("Unknown confidence definition")
     rows = joint_rows(conn, sport, market, evidence, version, line, date_from, date_to)
+    every = sorted({r["definition"] for r in rows})
+    applied = None
+    if evidence != "historical" and rows:      # one research definition, never pooled: the newest unless `version` names one
+        applied = every[0]
+        if len(every) > 1 and not version:     # the tracking report's default when it has rows here, else the newest cohort's
+            _, default, _ = resolve_definition(conn, load_registry()["sha256"], market, None, date_from, date_to, line)
+            applied = default if default in every else max(rows, key=lambda r: r["cohort_id"])["definition"]
+        if version and len(every) > 1:
+            raise InvalidRequest(f"version {version!r} matches {len(every)} research definitions; give more characters")
+        rows = [r for r in rows if r["definition"] == applied]
     options = sorted({m for r in rows for m in r["vectors"] if not m.startswith("stack")})
     reg = load_registry()["markets"].get(f"{sport}:{market}", {})
     options = sorted(set(options) | set(reg.get("core", [])) | set(reg.get("shadow", [])) | set(reg.get("candidates", [])))
     members = list(dict.fromkeys(members or []))
     base = {"calculation": JOINT_CALC, "sport": sport, "market": market, "evidence": evidence, "members": members,
             "options": options, "lines": sorted({r["line"] for r in rows if r["line"] is not None}),
-            "definitions": sorted({r["definition"] for r in rows}), "confidence": confidence,
+            "definitions": every, "definition_applied": applied, "confidence": confidence,
             "agreement_min": agreement_min, "agreement_max": agreement_max, "confidence_min": confidence_min,
             "confidence_max": confidence_max, "games": len(rows), "recommendation": False,
             "note": "Agreement counts votes; confidence is a separate probability filter. Derived from original forecasts; no new predictions. " +

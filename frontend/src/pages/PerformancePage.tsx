@@ -27,11 +27,23 @@ export function PerformancePage() {
   const [details] = useDetails();
   const chosen: Policy = policyChoice === 'canonical' && !canonicalFor(sport, market) ? 'near_tipoff' : policyChoice;
   const policy: Policy = run === 'live' || market !== 'winner' ? chosen : 'pregame';
-  const canonical = market === 'winner' && run === 'live' && policy === 'canonical';
+  const canonical = (run === 'live' || market !== 'winner') && policy === 'canonical';   // non-winner markets are live only
   const meta = useApi((s) => api.meta(sport, s), [sport]);
   const { state, retry } = useApi((s): Promise<PerformanceResponse | null> => (canonical ? Promise.resolve(null) : api.performance(sport, run, policy, s)),
     [sport, run, policy, canonical]);
   const markets = meta.state.status === 'success' ? meta.state.data.markets : [];
+  if (canonical) {
+    return (
+      <section>
+        <SystemStatusPanel sport={sport} />
+        {markets.length > 0 && <MarketSelect value={market} markets={markets} onChange={setMarket} />}
+        <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} canonical />
+          {market === 'winner' && <RunTypeToggle value={run} onChange={setRun} />}</div>
+        <CanonicalReport sport={sport} market={market} />
+        <ResearchSection sport={sport} market={market} show={details} />
+      </section>
+    );
+  }
   if (market !== 'winner') {
     return (
       <section>
@@ -40,22 +52,10 @@ export function PerformancePage() {
         {meta.state.status === 'success'
           ? <MarketSelect value={market} markets={markets} onChange={setMarket} />
           : meta.state.status === 'error' ? <p className="warn small">Market list unavailable: {meta.state.error}</p> : null}
-        <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} /></div>
+        <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} canonical={canonicalFor(sport, market)} /></div>
         <CoverageCard sport={sport} market={market} />
         {policy === 'near_tipoff' && <><ThresholdResearch sport={sport} market={market} /><RecoveredThresholds sport={sport} market={market} /></>}
         <MarketPerformance sport={sport} market={market} policy={policy} />
-        <ResearchSection sport={sport} market={market} show={details} />
-      </section>
-    );
-  }
-  if (canonical) {
-    return (
-      <section>
-        <SystemStatusPanel sport={sport} />
-        {markets.length > 0 && <MarketSelect value={market} markets={markets} onChange={setMarket} />}
-        <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} canonical />
-          <RunTypeToggle value={run} onChange={setRun} /></div>
-        <CanonicalReport sport={sport} />
         <ResearchSection sport={sport} market={market} show={details} />
       </section>
     );

@@ -152,8 +152,13 @@ def test_every_recorded_forecast_is_graded_whatever_its_confidence_and_threshold
     all_rec = rep["record"]["all"]
     assert all_rec["forecasts"] == 6 and all_rec["graded"] + all_rec["unscorable"] == 6
     assert rep["record"]["fallback"]["forecasts"] == 6 and rep["record"]["main"]["forecasts"] == 0
-    top = next(t for t in rep["thresholds"] if t["threshold"] == 0.9)["all"]
-    assert top["forecasts"] < all_rec["forecasts"]                 # a threshold only filters; the unfiltered record keeps all
+    # Each market on its own grid (approved 2026-10-14): two-way 50-90%, regulation three-way 35-70%; never pooled.
+    grids = {m: [t["threshold"] for t in rows] for m, rows in rep["thresholds_by_market"].items()}
+    assert grids["winner"] == grids["total"] == [0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9]
+    assert grids["reg3"] == [0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7]
+    for m, rows in rep["thresholds_by_market"].items():            # a threshold only filters; the lowest keeps the market's forecasts
+        assert rows[0]["all"]["forecasts"] <= 1 and all(a["all"]["forecasts"] >= b["all"]["forecasts"] for a, b in zip(rows, rows[1:]))
+    assert sum(rows[0]["all"]["forecasts"] for rows in rep["thresholds_by_market"].values()) <= all_rec["forecasts"]
     low = [c for c in g["markets"] if c["confidence"] < 0.9]
     assert low and all(c["status"] != "missing" for c in low)        # below-threshold forecasts are recorded and graded
 
@@ -239,7 +244,9 @@ def test_the_coverage_api_reports_the_window_against_the_source_schedule(game, m
     r = c.get("/api/coverage", params={"sport": "nhl", "date_from": "2026-10-12", "date_to": "2026-10-12"})
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["schedule"]["games"] == 2 and body["schedule"]["games_fully_forecast"] == 2
+    # The preseason game has no canonical forecast in any market (no validated model): unvalidated, not "fully forecast".
+    assert body["schedule"]["games"] == 2 and body["schedule"]["games_fully_forecast"] == 1
+    assert body["schedule"]["games_unvalidated"] == 1
     assert body["sources"]["preseason"] == {"primary_direct": 6} and body["sources"]["competitive"] == {"primary_recorded": 6}
     assert body["source_schedule"]["available"] is True and body["source_schedule"]["missing_from_store"] == []
     assert any(x["ledger"] == "game_forecasts" for x in body["ledgers"])
@@ -375,7 +382,9 @@ def test_preseason_stays_outside_the_ensemble_and_the_accepted_record(store):
     rep = coverage.games_report(store, start="2026-10-12T00:00:00Z", end="2026-10-14T00:00:00Z", as_of=CYCLE_AT,
                                 with_source=False)
     pre = next(g for g in rep["games"] if g["game_id"] == PRE)
-    assert all(c.get("label") == "Experimental / unvalidated" for c in pre["markets"] if c["status"] not in ("missing", "upcoming"))
+    # Preseason is unvalidated in every market (canonical selection); a stored row is experimental only.
+    assert all(c["status"] == "unvalidated" and c.get("experimental", {}).get("label", "Experimental / unvalidated") ==
+               "Experimental / unvalidated" for c in pre["markets"])
     assert rep["record"]["main"]["forecasts"] == 0
 
 
@@ -392,3 +401,68 @@ def test_the_report_never_counts_an_unapproved_adaptive_row_from_before_every_ga
     g = next(x for x in rep["games"] if x["game_id"] == GID)
     assert {c["source"] for c in g["markets"]} == {"primary_recorded"}
     assert all(c["recorded_in"] == "existing ledgers" for c in g["markets"]) and rep["record"]["main"]["forecasts"] == 0
+
+
+# --- Settlement A: the Coverage card grades a pre-ledger night-before forecast by the same void rule as its History ----------
+def _night_before(c, moved_start):
+    """A game forecast the night before (winner by the night-before primary, the other markets by the pregame market
+    model), then moved to `moved_start` before it is played and settled. No every-game row exists (pre-ledger game)."""
+    from app import live, market_live
+    add_upcoming(c, start="2026-10-11T19:00:00", at="2026-10-10T12:00:00Z")
+    live.predict(c, now="2026-10-10T15:00:00Z")
+    market_live.forecast(c, now="2026-10-10T15:00:00Z")
+    add_upcoming(c, start=moved_start, at="2026-10-11T12:00:00Z")
+    add_upcoming(c, start=moved_start, state=7, hs=4, vs=2, period=3, at="2026-10-13T03:00:00Z")
+    rep = coverage.games_report(c, start="2026-10-10T00:00:00Z", end="2026-10-14T00:00:00Z", as_of="2026-10-13T05:00:00Z",
+                                with_source=False, with_ledgers=False)
+    cells = {x["market"]: x for x in rep["games"][0]["markets"]}
+    from app.providers.real import RealProvider
+    p = RealProvider(c, now="2026-10-13T05:00:00Z")
+    hist = {m: p.market_predictions(m, "pregame", None, None, None, 50, None).predictions for m in MARKETS - {"winner"}}
+    winner = p.predictions("live", None, None, None, 50, None, policy="pregame").predictions
+    return cells, hist, winner
+
+
+def test_a_night_before_market_forecast_whose_start_moved_the_same_day_is_void_as_in_its_history(sealed):
+    """Same row: start moved +60 min on the same Eastern date. Market History voids it (markets.settle: any start change);
+    the Coverage card passed no forecast start for night-before rows and graded it as a win or loss."""
+    cells, hist, winner = _night_before(sealed, "2026-10-11T20:00:00")
+    for m, rows in hist.items():
+        assert len(rows) == 1 and rows[0].forecast.result == "void", m
+        assert cells[m]["status"] == "void", (m, cells[m]["status"])
+    # The night-before winner rule is the Eastern date (live.day_changed): same date, so graded in both views.
+    assert len(winner) == 1 and winner[0].void is False and winner[0].correct is not None
+    assert cells["winner"]["status"] == ("win" if winner[0].correct else "loss")
+
+
+def test_a_night_before_forecast_whose_game_moved_to_another_date_is_void_not_missing(sealed):
+    """A game moved to another Eastern date: History shows the night-before forecast as void; the Coverage card looked only
+    for a row with the new date's cutoff and reported 'no pregame forecast in any ledger'."""
+    cells, hist, winner = _night_before(sealed, "2026-10-12T19:00:00")
+    assert len(winner) == 1 and winner[0].void is True
+    for m, rows in hist.items():
+        assert len(rows) == 1 and rows[0].forecast.result == "void", m
+    assert {m: c["status"] for m, c in cells.items()} == {m: "void" for m in MARKETS}
+
+
+def test_a_game_reforecast_for_its_new_date_is_graded_from_the_new_forecast_in_both_views(sealed):
+    """Latest-row selection after a move: the night-before forecast for the new date replaces the void one, in Coverage as
+    in History (independent review, settlement A)."""
+    from app import live, market_live
+    from app.providers.real import RealProvider
+    add_upcoming(sealed, start="2026-10-11T19:00:00", at="2026-10-10T12:00:00Z")
+    live.predict(sealed, now="2026-10-10T15:00:00Z")
+    market_live.forecast(sealed, now="2026-10-10T15:00:00Z")
+    add_upcoming(sealed, start="2026-10-12T19:00:00", at="2026-10-11T12:00:00Z")
+    live.predict(sealed, now="2026-10-11T15:00:00Z")
+    market_live.forecast(sealed, now="2026-10-11T15:00:00Z")
+    add_upcoming(sealed, start="2026-10-12T19:00:00", state=7, hs=4, vs=2, period=3, at="2026-10-13T03:00:00Z")
+    rep = coverage.games_report(sealed, start="2026-10-10T00:00:00Z", end="2026-10-14T00:00:00Z", as_of="2026-10-13T05:00:00Z",
+                                with_source=False, with_ledgers=False)
+    cells = {x["market"]: x["status"] for x in rep["games"][0]["markets"]}
+    p = RealProvider(sealed, now="2026-10-13T05:00:00Z")
+    hist = {m: p.market_predictions(m, "pregame", None, None, None, 50, None).predictions[0].forecast.result
+            for m in MARKETS - {"winner"}}
+    (w,) = p.predictions("live", None, None, None, 50, None, policy="pregame").predictions
+    hist["winner"] = "void" if w.void else "win" if w.correct else "loss"
+    assert cells == hist and "void" not in cells.values()

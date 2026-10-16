@@ -350,3 +350,61 @@ Risks: the weekly scheduled refit of the old definition (Mondays 09:30) and pre-
 training lock without waiting: whichever starts second skips (exit 0). The runner retries pre-training; a skipped scheduled
 refit retries only at the next 09:30 run, so the old definition keeps its previous fit one more day. If the reviewed commit
 changes after pre-training, its fits are under a different definition and step 2 repeats.
+
+## 13. Transferring trained fits between data directories (implemented 2026-10-15, not deployed)
+
+The 2026-10-14 retrain ran on an isolated copy (`~/nba-predictor-research-data/retrain-20261014/data`) and published its fit
+rows there, not in the live store. `app.cli --sport {nhl,nba} adaptive-import --from <dir> [--cadence weekly|daily|both]`
+(`app/fit_transfer.py`) moves them: for the definition the running code and store compute, it verifies every artifact
+(and the history checkpoint) against its fit row and sidecar before writing anything, copies them under this data
+directory's `research/adaptive/<sport>/` (never overwriting), writes the `model_fits` identities with the training
+environment's library versions, and publishes the rows through `adaptive.publish` (digests re-verified, definition
+re-checked). A target that already has fits of the definition is refused; a source without them is reported, never
+substituted. Rows are stamped when written (`finished_at` = transfer time), so the fits are in force from the transfer on;
+`idempotency_key`, training cutoffs and fingerprints are the originals. The serving guards (results and box/shot digests at
+each fit's cutoff) still decide in the target store whether a member forecasts.
+
+Identity requirements found while preparing the release (2026-10-15):
+- `adaptive.py` is part of every adaptive definition. The raw-cache completeness guard therefore lives in the
+  `adaptive-train` command (`cli.py`), not in `run_scheduled`; `adaptive.py` is byte-identical to the frozen export
+  `9efe26f3`, which gives the trained definitions NHL `eb0b7519…` (weekly) / `3728ae13…` (daily), NBA `4a4f1e0e…` /
+  `39b484bc…`.
+- Candidate identities include library versions (`registry.definition`): the release venv (`~/nba-predictor-live/backend/.venv`,
+  with ngboost 0.5.11) and the deep venv give the same definitions; an environment without ngboost (e.g. the checkout's
+  `backend/.venv`) gives different ones and finds no fits. Deep members are applied from stored NumPy weights; the release
+  venv needs no torch/tensorflow.
+- The scheduled `adaptive-train` plist refits the weekly cadence only; daily-cadence fits refresh only if `--cadence daily`
+  is scheduled too.
+
+## 14. Collection before training; daily operation (implemented 2026-10-15, not deployed)
+
+Dependency order, per sport, in `com.nba-predictor.adaptive-train` (09:30 local, retry 15:30): `training-inputs` (collect,
+then check) → `adaptive-train` (weekly, if due) → `adaptive-train --cadence daily` (if due); the two-hour cycle then records
+weekly and (with `NBA_DAILY_AGREEMENT=1`) daily rows; the nightly jobs settle; the System status panel reports.
+- Collect (`training_inputs.collect`, each step isolated): results refresh; NHL shots (`jobs.nhl_pbp`); NHL player boxes for
+  new finals of the current season (`nhl_player_ratings.collect_bulk_boxes`, opt-in `NHL_PLAYER_BOX_REFRESH=1`; two requests
+  per 128 games); NBA team boxes and the season player-box file.
+- Check (`training_inputs.check`, read-only), gating: results refresh within 3 h; NHL shots for finals whose results
+  arrived in the last 3 days, until a game has stayed missing after 3 collection runs (then reported as given up: a source
+  that never publishes cannot stop every later refit; manual runs count too). Recent shots are imported first, newest
+  first, so an old backlog cannot starve them. Older gaps are reported. NBA inputs are reported only (their guard covers
+  consumed rows).
+- NHL boxes are collected last, only after every other gate passed (a run that defers training adds none, since a box
+  added after a fit retires the NHL injury member), right before training, and they never gate it: once one has arrived the
+  member is retired until the next fit anyway, and training is how it comes back (a still-missing box only affects that
+  team's games). A failed collection step marks the `training_inputs` run failed on the panel without stopping training (the command's exit code follows readiness only). Box files and raw bulk responses written in the last 7 days that are truncated (JSON that does not parse; a `bulk-*.raw` whose bytes no longer match the sha256 in its name — a run killed mid-write; `collect_bulk_boxes` writes in place and is part of the NHL definition, so it is not edited) are renamed aside (`.corrupt-<time>`) before each collection, so they are fetched again; files modified in the last 10 minutes are left alone (another collector may be writing them); game files that name a quarantined raw are set aside with it, so they are refetched. Dry run on the real box folder: 14,846 files checked, 0 flagged.
+- Why boxes are collected only here: the NHL injury member's guard digests the whole box folder, so a box added after a
+  fit retires the member until the next fit. With weekly-only training it would serve on training day only; daily training
+  after collection keeps it current.
+- `adaptive-train` re-checks (read-only) and returns `deferred` (exit 1, nothing trained, fits in force unchanged) when not
+  ready; `--force` does not bypass it, and the deferral is written as a failed `training_inputs` row. Each `training-inputs`
+  run is a `job_runs` row (migration 0031); the panel shows its last failure at once, a run that never finished after 2 h,
+  and staleness after 30 h. A new period after new NHL boxes makes the weekly definition due as well (its fit consumed the
+  old box set), so NHL refits both cadences nightly once boxes are collected.
+- Known, not changed here: the panel text in `daily_agreement.py` still says no scheduler is installed (that file is part of
+  the daily definition, so it is not edited); a snapshot that finds the store lock busy returns `skipped` with exit 0
+  (pre-existing); a collection longer than the odds cycle's 120 s lock wait makes that cycle skip with `lock_busy`
+  (measured collection: 4.5 s NHL, 0.8 s NBA).
+- Overlap: collection takes the store's job lock; training the per-sport training lock (non-blocking: a second trainer
+  skips); the transfer refuses while a training lock is held.
+- Measured (isolated clone holding the imported fits, frozen tree 6b6c0917, 4 threads): incremental daily refit NHL 1,015 s, NBA 916 s (forced; no new NBA results); both succeeded and published 17 / 24 records.

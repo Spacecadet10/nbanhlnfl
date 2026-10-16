@@ -695,16 +695,26 @@ def test_nba_player_injury_member_trains_records_and_keeps_its_artifact_small(mo
         _write_box(rdir, season, games)
     day_before, (_, next_day, next_teams) = by_season[2026][5][1], by_season[2026][6]        # consecutive days
     team = next(iter(next_teams)).split(":")[1]
+    # The served games g1 (2026-10-21) and g2 (2026-10-28) have a usable same-day report listing both teams, published
+    # 17:30 ET (21:30Z) before their forecasts: without one the member abstains (missing information is never healthy).
+    served = {av.report_name(d): {"header": f"{d}T21:30:00Z", "entries": [_entry(d, f"Team {t}", f"{t}p0", "Probable")
+                                                                          for t in teams]}
+              for d, teams in (("2026-10-21", ("1", "2")), ("2026-10-28", ("3", "1")))}
     _fake_reports(monkeypatch, rdir / "reports", {av.report_name(day_before): {
         "header": f"{day_before}T22:30:00Z",                                                  # 17:30 ET, before midnight
-        "entries": [_entry(next_day, f"Team {team}", f"{team}p0", "Out")]}})
+        "entries": [_entry(next_day, f"Team {team}", f"{team}p0", "Out")]}, **served})
+    trained_with = []                     # training reads the stored live reports too (train/serve consistency)
+    real_prepare = pr.PlayersInjuriesV1.prepare_training_inputs
+    monkeypatch.setattr(pr.PlayersInjuriesV1, "prepare_training_inputs",
+                        lambda self, c, now: trained_with.append(now) or real_prepare(self, c, now))
     test_a_new_week_with_new_results_is_trained_and_published_for_nba(monkeypatch, tmp_path)
+    assert "2026-10-21T20:00:00Z" in trained_with
     conn = db.connect(tmp_path / "nba.sqlite")
     name = f"{pr.ADAPTIVE_MEMBER}@adaptive"
     fit = adaptive.latest_fit(conn, "nba", "member", name, adaptive.definition(conn))
     assert fit is not None and fit["status"] == "success"
     detail = json.loads(fit["detail"])
-    assert detail["inputs"]["box_seasons"] == sorted(by_season) and detail["inputs"]["reports"] == 1
+    assert detail["inputs"]["box_seasons"] == sorted(by_season) and detail["inputs"]["reports"] == 3
     assert detail["inputs"]["players"]["rating_updates"] > 0 and detail["inputs"]["facts"]["usable"] >= 1
     art = adaptive.load_fit(fit)
     state = pickle.loads(art["state"])
@@ -1116,3 +1126,50 @@ def test_one_invalid_historical_vector_is_left_out_not_the_members_whole_history
     assert len(bad) == 1 and t["members"][bad[0]]["status"] == "success"
     assert t["members"][bad[0]]["invalid_vectors"]["count"] == 1
     assert "synthetic" in t["members"][bad[0]]["invalid_vectors"]["first"][0][2]
+
+
+def test_scheduled_training_refuses_a_data_directory_missing_cached_source_files_before_any_snapshot_or_fit(store, monkeypatch, capsys):
+    """Guard for retrain attempt 1 (2026-10-14): the training data directory held the stores but not their raw response cache,
+    so the candidate feature walk failed with FileNotFoundError after the walk members had already run, and the combiner was
+    published as partial. A store that references a cached response whose file is absent is refused by `adaptive-train`
+    before any training starts (training is stubbed here: this pins the guard, it does not reproduce the walk failure).
+    The guard lives in the command, not in adaptive.py, whose bytes are part of the adaptive definition."""
+    from app import cli, config, raw_cache
+    raw_id = raw_cache.store(store, source="nhl_api_web", endpoint="test", request_key="completeness-probe", body=b'{"probe": 1}',
+                             retrieved_at="2026-10-01T00:00:00Z", importer_version="test")
+    store.commit()
+    rel = store.execute("SELECT path FROM raw_responses WHERE raw_id=?", (raw_id,)).fetchone()["path"]
+    (config.raw_dir() / rel).unlink()
+    defn = adaptive.definition(store)
+    called = []
+
+    def never(step):
+        def stub(*a, **k):
+            called.append(step)
+            raise AssertionError(f"{step} started although cached source files are missing")
+        return stub
+    for step in ("run_scheduled", "snapshot", "train"):
+        monkeypatch.setattr(adaptive, step, never(step))
+    for argv in (["--force"], ["--force", "--dry-run"], ["--cadence", "daily", "--force"]):
+        capsys.readouterr()
+        assert cli.main(["--sport", "nhl", "adaptive-train", *argv]) == 1, argv
+        res = json.loads(capsys.readouterr().out)
+        assert res["status"] == "failed" and not called, (argv, res, called)
+        assert "1 cached source response" in res["reason"] and rel in res["reason"], res["reason"]
+        assert res["missing_raw"] == {"count": 1, "first": [rel]}
+    assert adaptive.definition(store) == defn
+
+
+def test_adaptive_train_command_runs_training_when_every_cached_source_file_is_present(store, monkeypatch, capsys):
+    """The other side of the completeness guard: a complete cache is not refused (the guard must not over-refuse)."""
+    from app import cli, raw_cache
+    raw_cache.store(store, source="nhl_api_web", endpoint="test", request_key="completeness-probe", body=b'{"probe": 1}',
+                    retrieved_at="2026-10-01T00:00:00Z", importer_version="test")
+    store.commit()
+    calls = []
+    from app import training_inputs     # the input-readiness gate is covered in test_training_inputs.py
+    monkeypatch.setattr(training_inputs, "check", lambda conn, now=None: {"ready": True, "blocking": {}, "report": {}})
+    monkeypatch.setattr(adaptive, "run_scheduled", lambda sport, **kw: calls.append((sport, kw)) or {"sport": sport, "status": "success"})
+    assert cli.main(["--sport", "nhl", "adaptive-train", "--force"]) == 0
+    assert calls and calls[0][0] == "nhl" and calls[0][1]["force"] is True
+    assert json.loads(capsys.readouterr().out)["status"] == "success"

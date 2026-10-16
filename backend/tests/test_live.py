@@ -229,7 +229,7 @@ def test_odds_job_migration_keeps_existing_job_runs(tmp_path):
          "0019_candidate_forecasts.sql", "0020_pool_selection.sql", "0021_agreement_observations.sql", "0022_agreement_observation_inputs.sql",
          "0023_two_hour_guards.sql", "0024_adaptive.sql", "0025_recovery.sql",
          "0026_adaptive_recovery.sql", "0027_adaptive_recovery_attempts.sql", "0028_exact_rule_observations.sql",
-         "0029_game_forecasts.sql"]
+         "0029_game_forecasts.sql", "0030_result_revisions.sql", "0031_training_inputs_job.sql"]
     conn.execute("INSERT INTO job_runs (job, started_at, status) VALUES ('odds', '2026-09-30T00:01:00Z', 'success')")
     assert [r[0] for r in conn.execute("SELECT job FROM job_runs ORDER BY run_id")] == ["refresh", "odds"]
     conn.close()
@@ -272,7 +272,11 @@ def test_real_api_shows_live_forecast_market_and_notes(store, client):
     pre = client.get("/api/games", params={"date": "2026-10-22"}).json()["games"][0]
     assert pre["season_type"] == "preseason" and pre["prediction"] is None and "preseason" in pre["forecast_note"]
     kinds = {s["kind"]: s["freshness"] for s in body["sources"]}
-    assert kinds == {"schedule": "fresh", "odds": "fresh", "forecasts": "missing"}  # predict job not run via jobs
+    # Neither job ran here (data ingested directly): no successful results refresh is 'missing', never 'fresh' from a raw fetch.
+    # Inputs are listed even without data (tests/test_sources.py): game day with no injury report stored, no player box file,
+    # no canonical ledger rows in this fixture.
+    assert kinds == {"schedule": "missing", "odds": "fresh", "forecasts": "missing", "injuries": "stale", "players": "missing",
+                     "canonical": "missing"}
 
 
 def test_real_api_backtest_label_and_warmup_note(store, client):

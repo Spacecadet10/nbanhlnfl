@@ -412,7 +412,8 @@ def test_adaptive_member_reports_stale_inputs_when_recent_finals_have_no_player_
     """Review finding B2: a team's recent finals of the season without player-box rows mean the ratings and rosters are
     last season's; the member must say so (and abstain in live) instead of forecasting on them silently."""
     games, rows = _season(6)
-    m = _member(games[:4])                                               # the box ends with game 103
+    report = _report(games[5][1], "2", [("h1", 1.0)])                   # a usable report: only the box rule is tested here
+    m = _member(games[:4], report)                                       # the box ends with game 103
     backtest.run(m, rows)
     g = rows[5].game
     stale = m.players.stale_inputs(g, {(2023, H): ["espn:104", "espn:103"], (2023, A): ["espn:104", "espn:103"]}, 5)
@@ -648,7 +649,8 @@ def test_unresolved_absent_player_does_not_count_as_a_complete_report():
 def test_live_staleness_requires_rows_for_the_team_not_just_game_id():
     from types import SimpleNamespace
     state = pr.LiveState(.05, {})
-    state._state = SimpleNamespace(box=SimpleNamespace(games={'espn:prior': {'3': [('a', 40)]}}))
+    state._state = SimpleNamespace(box=SimpleNamespace(games={'espn:prior': {'3': [('a', 40)]}}),
+                                   diffs=lambda g: {'report_used': True})      # a usable report: only the box rule here
     game = _row('next', '2023-01-10', H, A, 100, 90).game
     recent = {(2023, H): ['espn:prior']}
     assert state.stale_inputs(game, recent, 5) is not None
@@ -801,7 +803,8 @@ def test_the_current_season_player_box_is_refreshed_daily_and_verified(tmp_path,
     assert jobs.player_box_refresh(conn, now="2026-10-22T10:00:00Z")["status"] == "disabled"    # opt-in: no request
     assert jobs.player_box_refresh(conn, now="2026-10-22T10:00:00Z", enabled=True)["status"] == "skipped"   # no cache here
     monkeypatch.setenv("NBA_PLAYER_BOX_REFRESH", "1")
-    _write_box(tmp_path / "research" / "availability", 2024, _season()[0])
+    # The cache holds the season before the current one (no gap: a gap is fetched again every run, tested separately).
+    _write_box(tmp_path / "research" / "availability", 2026, _season()[0])
     body = b"game_id,athlete_id\n1,2\n"
 
     class Resp:
@@ -824,6 +827,109 @@ def test_the_current_season_player_box_is_refreshed_daily_and_verified(tmp_path,
     assert again["status"] == "skipped" and "h old" in again["reason"] and len(calls) == 2     # fresh: no second request
 
 
+def test_the_refresh_fetches_every_published_season_up_to_the_current_one_and_names_the_unpublished_one(tmp_path, monkeypatch):
+    """Reproduced 2026-10-14 on an isolated copy of the live store with the real source: during the 2026-27 preseason the
+    job asked only for player_box_2027.csv (not published yet: 404, status failed) and never fetched 2025 or 2026, which
+    the source publishes, so the cache stayed at 2023-24. Now every published season after the newest cached one is
+    fetched (each verified), and a current season the source has not published is reported, not failed."""
+    import hashlib
+    from app import db, jobs
+    monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path))
+    conn = db.connect(tmp_path / "nba.sqlite")
+    db.migrate(conn)
+    from test_live import event, ingest_events
+    ingest_events(conn, [event("p1", "2026-10-05T23:30:00Z", "1", "2", "STATUS_FINAL", 104, 99, 2027, stype=1)],
+                  "2026-10-06T03:00:00Z")                                              # 2026-27 preseason has started
+    _write_box(tmp_path / "research" / "availability", 2024, _season()[0])
+    bodies = {2025: b"game_id,athlete_id\n1,25\n", 2026: b"game_id,athlete_id\n1,26\n"}
+
+    class Resp:
+        def __init__(self, content=b"", js=None, status=200):
+            self.content, self.status_code, self._js = content, status, js
+
+        def json(self):
+            return self._js
+    calls = []
+
+    def get(url):
+        calls.append(url)
+        if url == av.PLAYER_BOX_RELEASE:
+            return Resp(js={"assets": [{"name": f"player_box_{y}.csv", "digest": "sha256:" + hashlib.sha256(b).hexdigest()}
+                                       for y, b in bodies.items()]})
+        y = int(url.rsplit("_", 1)[1].split(".")[0])
+        return Resp(content=bodies[y]) if y in bodies else Resp(content=b"Not Found", status=404)
+    out = jobs.player_box_refresh(conn, now="2026-10-14T04:00:00Z", get=get, enabled=True)
+    assert out["status"] == "success", out
+    assert [d["season"] for d in out["downloaded"]] == [2025, 2026] and out["not_published"] == [2027]
+    assert out["newest_season"] == 2026
+    assert av.player_box_path(2025).read_bytes() == bodies[2025] and av.player_box_path(2026).read_bytes() == bodies[2026]
+    assert not av.player_box_path(2027).exists() and not any(u.endswith("player_box_2027.csv") for u in calls)
+    n = len(calls)
+    again = jobs.player_box_refresh(conn, now="2026-10-14T05:00:00Z", get=get, enabled=True)
+    # Nothing new is due (2026 is fresh); the current season is still unpublished and is named, never a failure.
+    assert again["status"] == "skipped" and "2027" in again["reason"] and again["newest_season"] == 2026
+    assert len(calls) == n + 1                               # one release lookup to see whether 2027 appeared; no download
+
+
+def _refresh_store(tmp_path, monkeypatch):
+    from app import db
+    from test_live import event, ingest_events
+    monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path))
+    conn = db.connect(tmp_path / "nba.sqlite")
+    db.migrate(conn)
+    ingest_events(conn, [event("p1", "2026-10-05T23:30:00Z", "1", "2", "STATUS_FINAL", 104, 99, 2027, stype=1)],
+                  "2026-10-06T03:00:00Z")
+    _write_box(tmp_path / "research" / "availability", 2024, _season()[0])
+    return conn
+
+
+class _Resp:
+    def __init__(self, content=b"", js=None, status=200):
+        self.content, self.status_code, self._js = content, status, js
+
+    def json(self):
+        return self._js
+
+
+def test_a_season_that_failed_is_fetched_again_once_a_later_one_is_cached(tmp_path, monkeypatch):
+    """Review 2 finding 4: a gap season whose download failed was never retried once a later season was cached."""
+    import hashlib
+    from app import jobs
+    conn = _refresh_store(tmp_path, monkeypatch)
+    bodies = {2025: b"a\n", 2026: b"b\n", 2027: b"c\n"}
+    corrupt = {2025}
+
+    def get(url):
+        if url == av.PLAYER_BOX_RELEASE:
+            return _Resp(js={"assets": [{"name": f"player_box_{y}.csv", "digest": "sha256:" + hashlib.sha256(b).hexdigest()}
+                                        for y, b in bodies.items()]})
+        y = int(url.rsplit("_", 1)[1].split(".")[0])
+        return _Resp(content=b"garbage" if y in corrupt else bodies[y])
+    first = jobs.player_box_refresh(conn, now="2026-10-14T04:00:00Z", get=get, enabled=True)
+    assert first["status"] == "partial" and 2025 in first["errors"]
+    corrupt.clear()
+    again = jobs.player_box_refresh(conn, now="2026-10-14T05:00:00Z", get=get, enabled=True)
+    assert again["status"] == "success" and [d["season"] for d in again["downloaded"]] == [2025]
+
+
+def test_an_unrelated_file_in_the_cache_never_breaks_the_job(tmp_path, monkeypatch):
+    """Review 2 finding 5: a stray file name raised ValueError out of a job documented as never fatal."""
+    from app import jobs
+    conn = _refresh_store(tmp_path, monkeypatch)
+    (tmp_path / "research" / "availability" / "player_box" / "player_box_2024_backup.csv").write_text("x")
+    out = jobs.player_box_refresh(conn, now="2026-10-14T04:00:00Z", get=lambda u: _Resp(js={"assets": []}), enabled=True)
+    assert out["status"] == "skipped" and "player_box_2025.csv" in out["reason"]
+
+
+def test_a_cache_newer_than_the_store_season_names_what_is_missing(tmp_path, monkeypatch):
+    """Review 2 finding 6: the reason read 'player_box_ not published …' with an empty season."""
+    from app import jobs
+    conn = _refresh_store(tmp_path, monkeypatch)
+    _write_box(tmp_path / "research" / "availability", 2028, _season()[0])
+    out = jobs.player_box_refresh(conn, now="2026-10-14T04:00:00Z", get=lambda u: _Resp(js={"assets": []}), enabled=True)
+    assert "player_box_ " not in out.get("reason", "") and "player_box_2027.csv" in out["reason"]
+
+
 def test_rows_appearing_for_a_result_the_fit_skipped_without_box_rows_block_the_member(tmp_path, monkeypatch):
     """Reviewer recheck C2 (2026-10-13): a result delivered before the fit while its game had no player-box rows yet is
     skipped by the frozen ratings. When the nightly refresh then adds those rows, the consumed-games digest (delivered games
@@ -842,3 +948,64 @@ def test_rows_appearing_for_a_result_the_fit_skipped_without_box_rows_block_the_
     served = pickle.loads(pickle.dumps(m.players))
     served._inputs = pr.adaptive_inputs(TEAM_NAMES)
     assert "inputs changed since the fit" in served.input_mismatch(recorded)
+
+
+def test_the_adaptive_member_abstains_at_serving_without_a_usable_injury_report():
+    """Player/injury fix (approved direction 2026-10-14: missing information never means healthy; the NHL member already
+    abstains): with no usable report for the game (none, unsubmitted, unreconciled, a team not listed) the NBA member used
+    to forecast on full rosters with report_missing=1. It now abstains, with the reason, like a stale player box."""
+    games, rows = _season(6)
+    day = games[4][1]
+    g = rows[4].game
+    used = _member(games, _report(day, "2", [("h1", 1.0)]))
+    backtest.run(used, rows)
+    assert used.stale_inputs(g, {}, 5) is None                          # a usable report: the member forecasts
+    unsubmitted = _report(day, "2", [("h1", 1.0)])
+    unsubmitted[day].unsubmitted.add("3")
+    unreconciled = {day: pr.PlayerFacts(False, "unreconciled", f"{day}T22:30:00Z")}
+    unlisted = _report(day, "2", [("h1", 1.0)], present=())
+    for facts in ({}, unsubmitted, unreconciled, unlisted):
+        m = _member(games, facts)
+        backtest.run(m, rows)
+        reason = m.stale_inputs(g, {}, 5)
+        assert reason and "injury report" in reason
+    points = pr.PlayersInjuriesPoints(EloConfig(), TEAM_NAMES, inputs=_Inputs(_box(games, 2023), {}))
+    assert "injury report" in (points.stale_inputs(g, {}, 5) or "")     # the score member shares the rule
+
+
+def test_training_reads_every_stored_live_report_while_serving_reads_the_last_two_days(tmp_path, monkeypatch):
+    """Train/serve skew (training audit): serving added the official reports the live collector stored (last two days),
+    training never did, so rows of seasons covered only by the live collector trained with report_missing=1 while serving
+    used reports. `full=True` (training) loads every stored report retrieved by `now`; each is still used only by rows
+    whose cutoff is after its publication and retrieval (AdaptiveInputs.get)."""
+    import sqlite3
+    from pathlib import Path
+    from app import raw_cache
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE injury_report_attempts(file_name, completed_at, last_modified, fetch_id, outcome)")
+    conn.execute("CREATE TABLE raw_fetches(fetch_id, raw_id)")
+    for i, (name, done) in enumerate((("Injury-Report_2026-01-05_05_30PM.pdf", "2026-01-05T22:31:00Z"),     # 10 days old
+                                      ("Injury-Report_2026-01-14_05_30PM.pdf", "2026-01-14T22:31:00Z"),     # recent
+                                      ("Injury-Report_2026-01-16_05_30PM.pdf", "2026-01-16T22:31:00Z")), 1):  # after now
+        conn.execute("INSERT INTO injury_report_attempts VALUES(?, ?, 'Mon, 05 Jan 2026 22:30:00 GMT', ?, 'stored')", (name, done, i))
+        conn.execute("INSERT INTO raw_fetches VALUES(?, ?)", (i, 10 + i))
+    monkeypatch.setattr(raw_cache, "load", lambda c, rid: b"%PDF")
+    monkeypatch.setattr(av, "parse_report", lambda pdf, name, teams: av.ParsedReport(name, None, entries=[]))
+    now = "2026-01-15T23:00:00Z"
+    serving = pr.AdaptiveInputs(tmp_path, {"Atlanta Hawks": "1"})
+    serving.add_live_reports(conn, now)
+    assert sorted(serving.reports) == ["2026-01-14"]
+    training = pr.AdaptiveInputs(tmp_path, {"Atlanta Hawks": "1"})
+    training.add_live_reports(conn, now, full=True)
+    assert sorted(training.reports) == ["2026-01-05", "2026-01-14"]                 # never one retrieved after `now`
+    assert Path("live-11-Injury-Report_2026-01-05_05_30PM.pdf") in training._parsed
+
+
+def test_adaptive_training_loads_the_live_reports_before_walking_the_member(monkeypatch):
+    calls = []
+    member = pr.adaptive_member(EloConfig(), TEAM_NAMES, inputs=_Inputs(_box(_season(2)[0], 2023), {}))
+    monkeypatch.setattr(pr.AdaptiveInputs, "add_live_reports", lambda self, conn, now, full=False: calls.append((now, full)))
+    member.players._inputs = pr.AdaptiveInputs.__new__(pr.AdaptiveInputs)
+    member.prepare_training_inputs("conn", "2026-10-21T20:00:00Z")
+    assert calls == [("2026-10-21T20:00:00Z", True)]

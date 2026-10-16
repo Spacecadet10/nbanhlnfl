@@ -1116,6 +1116,9 @@ def train(conn, *, now: Optional[str] = None, write: bool = True, force: bool = 
         t0 = utc_now()
         try:
             invalid: list = []
+            prepare = getattr(getattr(m.obj, "member", m.obj), "prepare_training_inputs", None)
+            if prepare:              # external inputs the serving path reads (live injury reports) are read for training too
+                prepare(conn, now)
             hist[m.name] = walk_member(m, rows, _events_for(m.obj, eng, events), now, window, lines, line_primary=m.line_primary,
                                        invalid=invalid)
             w = m.obj

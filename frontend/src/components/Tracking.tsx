@@ -25,7 +25,7 @@ const STATUS: Record<string, string> = {
   below_threshold: 'below a member threshold',
 };
 const ci = (c: [number, number] | null) => (c ? `${pct(c[0], 0)}–${pct(c[1], 0)}` : '');
-const rec = (c: TrackingCell) => `${c.wins}–${c.losses}${c.pushes ? `–${c.pushes}P` : ''}${c.voids ? ` · ${c.voids} void` : ''}`;
+const rec = (c: TrackingCell) => `${c.wins}–${c.losses}${c.pushes ? `–${c.pushes}P` : ''}${c.voids ? ` · ${c.voids} void` : ''}${c.unscorable ? ` · ${c.unscorable} unscorable` : ''}`;
 
 export const groupLabel = (g: { kind: TrackingKind; members: string[] }) => {
   if (g.kind === 'stack_pool') return `Pool stacker (${g.members.length} inputs)`;
@@ -118,6 +118,12 @@ function TrackingBody({ r, sport, market, f }: { r: TrackingReport; sport: Sport
       </select></label>}
       <label>From<input type="date" value={f.from} onChange={(e) => f.setFrom(e.target.value)} /></label>
       <label>To<input type="date" value={f.to} onChange={(e) => f.setTo(e.target.value)} /></label>
+      {r.evidence === 'prospective' && (r.definitions ?? []).length > 1 && <label>Research definition<select
+        value={f.version && (r.definitions ?? []).some((d) => d.definition === r.definition_applied) ? r.definition_applied! : ''}
+        onChange={(e) => f.setVersion(e.target.value)}>
+        <option value="">newest ({r.definitions![0].definition.slice(0, 12)})</option>
+        {r.definitions!.map((d) => <option key={d.definition} value={d.definition}>{d.definition.slice(0, 12)} · {d.games} {d.games === 1 ? 'game' : 'games'} in these filters</option>)}
+      </select></label>}
       {r.evidence === 'prospective' && <label>Version<input type="text" value={f.version} placeholder="definition or member signature"
         onChange={(e) => f.setVersion(e.target.value)} /></label>}
       <label>Sort<select value={f.sort} onChange={(e) => f.setSort(e.target.value as Sort)}>
@@ -128,6 +134,10 @@ function TrackingBody({ r, sport, market, f }: { r: TrackingReport; sport: Sport
       {' '}{r.registered_groups} registered groups, {r.configurations_searched} rule configurations ({r.skipped_allocation} more held back by the
       allocation cap) · anchor {r.anchor && modelName(r.anchor)} · registry <code>{r.registry_sha256?.slice(0, 10)}</code>
       {r.evidence === 'prospective' && r.effective_from && <> · recording since {dateTime(r.effective_from)}</>}</p>
+    {r.evidence === 'prospective' && r.definition_applied && <p className="small muted">One research definition per record:{' '}
+      <code>{r.definition_applied.slice(0, 16)}</code>
+      {r.signature_applied && <> · member versions <code>{r.signature_applied.slice(0, 16)}</code></>}
+      {(r.definitions ?? []).length > 1 && <> · {r.definitions!.length - 1} other definition(s) recorded, shown separately, never pooled</>}</p>}
     <p className={r.evidence === 'historical' ? 'small warn' : 'small muted'}>{r.note}</p>
     <div className="tracking-reco small">
       <strong>Active recommendation:</strong>{' '}
@@ -251,7 +261,9 @@ export function TrackingGameCard({ sport, gameId }: { sport: Sport; gameId: stri
       : <>{t.markets.map((m) => <details key={m.market} className="tracking-game">
         <summary><strong>{m.market}</strong>{m.line != null && ` ${m.line}`} — {m.groups} groups:{' '}
           {Object.entries(m.counts).map(([k, n]) => `${n} ${sideName(m.market, k) ?? STATUS[k] ?? k}`).join(' · ')}</summary>
-        <p className="small muted">Recorded {dateTime(m.recorded_at)} · definition {m.definition.slice(0, 16)}</p>
+        {m.definition_note && <p className="small muted">{m.definition_note}</p>}
+        {m.state_reason && <p className="small warn"><strong>{m.state === 'void' ? 'Void' : 'Not recorded'}</strong> · {m.state_reason}</p>}
+        {m.recorded_at && <p className="small muted">Recorded {dateTime(m.recorded_at)} · definition {(m.definition ?? '').slice(0, 16)}</p>}
         {m.picks.length > 0 && <details className="small"><summary>Classifications by group (research; not picks, regardless of evidence)</summary>
           <div className="table-wrap"><table className="table small">
           <thead><tr><th>Group (highest rule statistic first)</th><th>Side</th><th>Rule statistic</th></tr></thead>
@@ -336,6 +348,8 @@ function JointAgreement({ sport, market }: { sport: Sport; market: MarketId }) {
         </select></label>}
       </div>
       <p className="small muted">{r.note} Upper bounds are exclusive. Ties and missing members produce no pick.</p>
+      {r.definition_applied && <p className="small muted">One research definition: <code>{r.definition_applied.slice(0, 16)}</code>
+        {r.definitions.length > 1 && <> ({r.definitions.length - 1} other definition(s) recorded; enter one under Research definition, never pooled)</>}</p>}
       {r.status === 'invalid_historical_inputs' && <p role="alert" className="warn">Historical evaluation unavailable for this goalie subset.</p>}
       {members.length < 2 && <p>Select at least two models to compare their joint rule.</p>}
       <div className="table-wrap"><table><thead><tr><th>Method / member versions</th><th>Eligible</th><th>Selected</th><th>Record</th>

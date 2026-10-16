@@ -141,7 +141,8 @@ function AdaptiveStatusBody({ a }: { a: AdaptiveStatus }) {
 function ReplayView({ r }: { r: AdaptiveStatus['replay'] & object }) {
   return <>
     <p className="small muted">Chronological replay on development seasons {r.evaluated_seasons.join(', ')} (loaded {r.loaded_seasons[0]}–{r.loaded_seasons[r.loaded_seasons.length - 1]}; reserved test seasons never read),
-      {' '}{r.members.length} adaptive members, run {dateTime(r.started_at)} in {Math.round(r.seconds / 60)} min. Identical games and lines; log loss is lower-is-better. Exploratory, not a live result.</p>
+      {' '}{r.members.length} adaptive members, run {dateTime(r.started_at)} in {Math.round(r.seconds / 60)} min. Identical games and lines; log loss is lower-is-better. Exploratory, not a live result.
+      {' '}These are the same development seasons the sealed models' settings were tuned and selected on, so the primary and core members are in-sample here: a lead on them is not out-of-sample evidence.</p>
     {Object.entries(r.markets).map(([mk, m]) => <ReplayMarket key={mk} mk={mk} m={m} />)}
   </>;
 }

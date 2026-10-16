@@ -34,7 +34,7 @@ class Team(BaseModel):
 
 class SourceStatus(BaseModel):
     name: str
-    kind: Literal["schedule", "results", "odds", "forecasts"]
+    kind: Literal["schedule", "results", "odds", "forecasts", "injuries", "players", "canonical"]
     mode: Mode
     last_updated: Optional[datetime]
     freshness: Freshness
@@ -100,18 +100,36 @@ class CanonicalRecord(BaseModel):
     generated_at: datetime
     start_at: datetime = Field(description="The scheduled start the forecast was made for.")
     minutes_before_start: float
-    p: list[float]
+    p: list[float] = Field(description="Probabilities of sides a / mid / b (mid: push or regulation draw).")
     home_win_prob: Optional[float] = None
-    pick: Optional[Literal["home", "away"]] = None
-    confidence: float
+    pick: Optional[Literal["home", "away"]] = Field(default=None, description="Winner market only.")
+    side: Literal["a", "mid", "b"] = Field(description="The picked side: the most likely outcome (three-way: of all three, "
+                                                       "a draw can be the pick; ties go to a, then mid, then b).")
+    pick_label: Optional[str] = Field(default=None, description="The pick in words at the forecast's line, e.g. 'BOS -1.5'.")
+    confidence: float = Field(description="Probability of the pick: two-way markets excluding the push; three-way over all three.")
     line: Optional[float]
     line_source: Literal["bookmaker", "model", "none"]
+    market_quote_id: Optional[int] = Field(default=None, description="The bookmaker quote the forecast's source used, if any.")
 
 
 class CanonicalAttempt(BaseModel):
     forecast_id: int
     generated_at: datetime
     reason: str
+
+
+class CanonicalGradeRevision(BaseModel):
+    """The forecast's grade under one recorded final result (result_revisions); a correction adds an entry."""
+    revision: int
+    observed_at: datetime = Field(description="The retrieval that delivered this result.")
+    change: Literal["first", "decision_known", "correction"] = Field(description="decision_known: same score, the NHL "
+                                                                     "regulation decision became known (not a correction).")
+    basis: Literal["observed", "backfill"] = Field(description="backfill: the result stored when revisions began; any "
+                                                               "earlier versions of it were not recorded.")
+    home_score: Optional[int]
+    away_score: Optional[int]
+    decision: Optional[str]
+    grade: Literal["win", "loss", "push", "pending", "void", "unscorable", "unresolved"]
 
 
 class CanonicalForecast(BaseModel):
@@ -121,6 +139,12 @@ class CanonicalForecast(BaseModel):
     reason: Optional[str] = Field(description="Why there is no canonical forecast (every state except 'forecast').")
     record: Optional[CanonicalRecord]
     grade: Optional[Literal["win", "loss", "push", "pending", "void", "unscorable", "unresolved"]]
+    result_side: Optional[Literal["a", "mid", "b"]] = Field(default=None, description="The realised side once final (forecast "
+                                                                                     "state only).")
+    result_label: Optional[str] = None
+    grade_history: list[CanonicalGradeRevision] = Field(default=[], description="The grade under each recorded final result, "
+                                                        "oldest first; the last one is `grade`.")
+    regraded: bool = Field(default=False, description="A result correction (score or decision) changed this forecast's grade.")
     later_failure: Optional[CanonicalAttempt] = Field(description="A later attempt before the start that recorded no "
                                                                   "forecast; the earlier forecast stays the canonical one.")
     attempts: int = Field(description="Rows recorded for this game and market before the start.")
@@ -174,6 +198,9 @@ class AgreementSummary(BaseModel):
     models: list[AgreementModel]
     missing: list[str]
     generated_at: Optional[datetime]
+    void: bool = Field(default=False, description="The game's start (two-hour cohort) or Eastern date (archive cohort) "
+                                                  "changed after these forecasts: they are never scored and are not current.")
+    void_reason: Optional[str] = None
 
 
 class GameSummary(BaseModel):
@@ -198,7 +225,8 @@ class GameSummary(BaseModel):
     market_forecast: Optional["MarketForecastOut"] = Field(
         default=None, description="The selected non-winner market's forecast under the selected policy, if any.")
     canonical: Optional[CanonicalForecast] = Field(
-        default=None, description="The canonical winner forecast (real mode); null in demo mode.")
+        default=None, description="The canonical forecast (real mode; null in demo mode): of the winner market, or of the "
+                                  "slate's market when the slate is read with the canonical policy.")
 
 
 class SlatePick(BaseModel):
@@ -261,6 +289,8 @@ class GameDetail(GameSummary):
     )
     market_forecasts: list["MarketForecastOut"] = Field(
         default=[], description="Latest forecast of every market and policy for this game (non-winner markets).")
+    canonical_markets: list[CanonicalForecast] = Field(
+        default=[], description="The canonical forecast of every market of the sport (real mode), winner first.")
     goalies: list["GoalieListingOut"] = Field(default=[], description="NHL only: latest goalie listing per team, if any.")
 
 
@@ -384,6 +414,15 @@ class MarketComparison(BaseModel):
     coverage: float = Field(description="Share of scored games with a market quote.")
     model_brier: Optional[float]
     market_brier: Optional[float]
+    unmatched: Optional[dict[str, int]] = Field(default=None, description="Canonical non-winner markets: scored forecasts "
+                                                "without a valid comparison, by reason.")
+
+    @model_serializer(mode="wrap")
+    def _unmatched_only_when_set(self, handler):
+        out = handler(self)
+        if out.get("unmatched") is None:
+            out.pop("unmatched", None)
+        return out
 
 
 class BaselineScore(BaseModel):
@@ -411,6 +450,21 @@ class PerformanceResponse(BaseModel):
     note: str
 
 
+class CanonicalThreshold(BaseModel):
+    """The record of forecasts whose confidence is at least `threshold` (a filter of the record, never of recording)."""
+    threshold: float
+    forecasts: int
+    graded: int = Field(description="Wins + losses, as in the summary (pushes, voids and pending are counted apart).")
+    win: int
+    loss: int
+    push: int
+    pending: int
+    void: int
+    unscorable: int
+    unresolved: int
+    win_rate: Optional[float] = Field(description="win / (win + loss); null when nothing is graded.")
+
+
 class CanonicalSummary(BaseModel):
     """Started competitive games (regular season, play-in, playoffs): a game is either forecast or missing (a coverage
     gap, never a loss). Grades and metrics cover settled forecasts only."""
@@ -420,12 +474,15 @@ class CanonicalSummary(BaseModel):
     coverage: Optional[float]
     grades: dict[str, int]
     graded: int = Field(description="Wins + losses.")
+    regraded: int = Field(default=0, description="Forecasts whose grade a corrected result changed (each shows its history).")
     accuracy: Optional[float]
     brier_score: Optional[float]
     log_loss: Optional[float]
     by_source: dict[str, int]
     model_versions: list[dict]
     missing_reasons: list[dict]
+    thresholds: list[CanonicalThreshold] = Field(default=[], description="The market's reporting grid: 50-90% for two-way "
+                                                 "markets, 35-70% for the regulation three-way market.")
 
 
 class CanonicalRow(BaseModel):

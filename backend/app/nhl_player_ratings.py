@@ -40,6 +40,39 @@ TEAM_ALIASES = {
 }
 
 
+def split_name(value):
+    """(first name as written, normalized surname); the first whitespace-separated token is the first name."""
+    parts = (value or '').split(None, 1)
+    return (parts[0], norm(parts[1])) if len(parts) == 2 else (value or '', '')
+
+
+# Same player, written differently by ESPN and the NHL API, where neither first name is a prefix of the other. Each pair
+# was observed in the 2016-2026 archive; the last group are transliterations (Yevgeni/Evgeni follows Yegor/Egor).
+NICKNAMES = {frozenset(p) for p in (
+    ('joe', 'joseph'), ('mike', 'michael'), ('jake', 'jacob'), ('nick', 'nicholas'), ('matt', 'mathew'),
+    ('freddy', 'frederick'), ('sammy', 'samuel'), ('tommy', 'thomas'), ('vinnie', 'vincent'), ('quinn', 'quintin'),
+    ('tony', 'anthony'), ('jj', 'janis'),
+    ('alexei', 'alexey'), ('maxim', 'maksim'), ('artyom', 'artem'), ('yegor', 'egor'), ('yevgeni', 'evgeni'),
+    ('yevgeny', 'evgeny'))}
+
+
+def _initials(written):
+    parts = [p for p in re.split(r'[\s.\-]+', written) if p]
+    return ''.join(norm(p)[:1] for p in parts) if len(parts) > 1 else None
+
+
+def first_names_compatible(a, b):
+    """Two written first names of the same person: equal, one a prefix of the other with 3+ letters (Matt/Matthew,
+    Alex/Alexander, Josh/Joshua), the initials of a multi-part name (P.O/Pierre-Olivier, JJ/John-Jason), or a listed
+    nickname or transliteration. A shared initial alone is not enough (Josh/Jordan, Jeremie/Emile, Carter/Matt): the
+    reported player may not be in any delivered box yet, and a teammate must not take his absence."""
+    x, y = sorted((norm(a), norm(b)), key=len)
+    if not x:
+        return False
+    return (x == y or (len(x) >= 3 and y.startswith(x)) or frozenset((x, y)) in NICKNAMES
+            or (len(x) >= 2 and x in (_initials(a), _initials(b))))
+
+
 def team_key(name):
     """Normalized cross-source team identity for matching, or None when the team is unknown."""
     if not name:
@@ -280,12 +313,23 @@ class Inputs:
             digest.update(body)
         self.digest = digest.hexdigest()
         self.snapshots = []
-        for p in sorted((self.root / 'injuries').glob('[0-9]*.json')):
-            item = json.loads(p.read_text())
+        directory = self.root / 'injuries'
+        self.skipped_live = 0
+        for p in sorted([*directory.glob('[0-9]*.json'), *directory.glob('live-[0-9]*.json')]):
+            try:
+                item = json.loads(p.read_text())
+            except ValueError:
+                if p.name.startswith('live-'):      # a torn live write (pre-atomic or a crash): skipped and counted
+                    self.skipped_live += 1
+                    continue
+                raise
             raw = (p.parent / item['raw_file']).read_bytes()
             if hashlib.sha256(raw).hexdigest() != item['sha256']:
                 raise ValueError('NHL injury raw hash mismatch')
-            if nhl_injuries.actual_capture(item['response_url'], item['requested_capture']) != item['captured_at']:
+            if item.get('source') == 'live':        # live capture: stamped at retrieval, from the live page only
+                if not nhl_injuries.live_source(item['response_url']) or item['captured_at'] != item['retrieved_at']:
+                    raise ValueError('NHL live injury capture source or timestamp mismatch')
+            elif nhl_injuries.actual_capture(item['response_url'], item['requested_capture']) != item['captured_at']:
                 raise ValueError('NHL injury timestamp mismatch')
             layout, rows, teams = nhl_injuries.parse(raw)
             if (item.get('layout'), item.get('rows'), item.get('teams')) != (layout, rows, teams):
@@ -305,7 +349,8 @@ class Inputs:
 
 def missing_inputs():
     root = nhl_injuries.root()
-    if not any((root / 'boxes').glob('[0-9]*.json')) or not any((root / 'injuries').glob('[0-9]*.json')):
+    if not any((root / 'boxes').glob('[0-9]*.json')) or not any([*(root / 'injuries').glob('[0-9]*.json'),
+                                                                     *(root / 'injuries').glob('live-[0-9]*.json')]):
         return f'needs NHL player boxes and timestamp-verified injury archives under {root}; run nhl-player-inputs'
     return None
 
@@ -322,6 +367,8 @@ class NhlPlayersInjuries(GoalsGlm):
         # Identity lasts beyond the short expected-lineup window. Updated from delivered results only.
         self.player_history = {}
         self.name_index = defaultdict(set)
+        self.surname_index = defaultdict(set)      # normalized surname -> player ids (for first-name variants)
+        self.first_names = defaultdict(set)        # player id -> first names as written in delivered boxes
         self.delivered = set()
         self.feature_cutoffs = {}
 
@@ -373,7 +420,7 @@ class NhlPlayersInjuries(GoalsGlm):
                     # Prefer identities last observed on this team; a unique global identity can be
                     # assigned by the pre-cutoff report itself (e.g. traded while injured).
                     local = {pid for pid in ids if self.player_history[pid]['team'] == tid}
-                    ids = local or ids
+                    ids = local or ids or self.variant_ids(row['player'], tid)
                     if len(ids) != 1 or row['weight'] is None:
                         features['unresolved'] += 1.; features['report_missing'] = 1.; continue
                     pid = next(iter(ids))
@@ -428,6 +475,9 @@ class NhlPlayersInjuries(GoalsGlm):
             for p in players:
                 pid = p['id']
                 self.name_index[norm(p['name'])].add(pid)
+                first, last = split_name(p['name'])
+                if last:
+                    self.surname_index[last].add(pid); self.first_names[pid].add(first)
                 history = self.player_history.setdefault(pid, {'team': tid, 'goalie': p['goalie'],
                                                                'minutes': deque(maxlen=10), 'last_tipoff': ''})
                 if r.game.tipoff_at >= history['last_tipoff']:
@@ -440,6 +490,14 @@ class NhlPlayersInjuries(GoalsGlm):
                     stats = self.player_stats.setdefault(p['id'], [0., 0.])
                     stats[0] += p['plus_minus']; stats[1] += p['minutes']
         self.delivered.add(r.game.game_id)
+
+    def variant_ids(self, name, tid):
+        """Players last observed on `tid` whose surname equals the reported one and whose first name is compatible (see
+        first_names_compatible). Used only when the reported name matches no delivered player exactly; a caller treats any
+        result other than exactly one id as unresolved, so two candidates (e.g. brothers with one initial) stay unknown."""
+        first, last = split_name(name)
+        return {pid for pid in self.surname_index.get(last, ()) if self.player_history[pid]['team'] == tid
+                and any(first_names_compatible(first, f) for f in self.first_names[pid])} if last else set()
 
     def input_status(self):
         return {'box_digest': self.inputs.digest, 'box_games': len(self.inputs.boxes),
@@ -462,6 +520,8 @@ class NhlPlayersInjuries(GoalsGlm):
     def config(self):
         return {**super().config(), 'player_features': FEATURES, 'rating': 'regularized plus-minus per60',
                 'prior_minutes': PRIOR_MINUTES, 'max_snapshot_age_hours': MAX_AGE_HOURS,
-                'identity': 'all delivered player names; most-recent observed team; unique report-resolved transfer',
+                'identity': 'all delivered player names; most-recent observed team; unique report-resolved transfer; '
+                            'unmatched reported names: unique same-surname player last seen on the listed team '
+                            'with a nickname-compatible first name',
                 'absence_minutes': 'last 10 by game time among delivered appearances in current or prior season',
                 'roster': 'last 5 by game time among delivered team boxes excluding observed transfers'}

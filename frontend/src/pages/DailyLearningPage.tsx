@@ -5,6 +5,8 @@ import { useApi } from '../api/useApi';
 import type { DailyReport, MarketId, Sport, ThRecord, ThRow } from '../api/types';
 import { MemberOverlapNote } from '../components/RuleLedger';
 import { AsyncView } from '../components/States';
+import { bandNote, gridNote, standardGrid, standardRows } from '../components/ConfidenceFilter';
+import { AutoresearchCard } from '../components/Autoresearch';
 import { pct, dateTime } from '../format';
 
 // The ledger outcome is the API's counter key; show it as a word.
@@ -14,6 +16,7 @@ export function DailyLearningPage() {
   return <section><div className="page-head"><h1>Daily learning · All 11 markets</h1></div>
     <p>Discover unanimous model groups from 2 members through the eligible roster, with separate thresholds per member. Historical research and frozen prospective decisions are shown separately.</p>
     {(['nba', 'nhl'] as Sport[]).map(s => <SportLearning key={s} sport={s} />)}
+    <AutoresearchCard />
   </section>;
 }
 function SportLearning({ sport }: { sport: Sport }) {
@@ -43,7 +46,7 @@ function MarketLearning({ sport, m }: { sport: Sport; m: DailyReport['markets'][
   const [custom, setCustom] = useState('');
   const d = m.decision, p = m.prospective;
   return <details className="card" id={`daily-${sport}-${m.market}`}><summary><strong>{LABELS[m.market]}</strong> · {d?.status ?? 'Awaiting daily training'}</summary>
-    <p>Supported confidence levels: {m.levels.map(x => pct(x, 1)).join(', ')}. Cumulative thresholds include all higher confidence; bands are disjoint.</p>
+    <p>Confidence levels shown (standard grid): {standardGrid(m.market).filter(x => m.levels.some(l => Math.abs(l - x) < 1e-6)).map(x => pct(x, 0)).join(', ')}. Cumulative thresholds include all higher confidence; bands are disjoint.</p>
     {m.reason && <p className="notice">{m.reason}</p>}
     <h3>Frozen upcoming-game rule</h3><p>{d?.rule?.rule ?? 'No eligible selected rule'} · {d?.reason ?? 'Train and publish daily fits to reassess.'}</p>
     {d?.rule && <MemberOverlapNote overlap={d.member_overlap} members={d.rule.members} showNote />}
@@ -61,7 +64,8 @@ function MarketLearning({ sport, m }: { sport: Sport; m: DailyReport['markets'][
     <label>Evidence period <select value={period} onChange={e => setPeriod(e.target.value as 'earlier' | 'later')}><option value="earlier">Earlier search</option><option value="later">Later (selection — biased)</option></select></label>{' '}
     <label><input type="checkbox" checked={bands} onChange={e => setBands(e.target.checked)} /> Confidence bands</label>
     {!m.thresholds && <p>No daily historical predictions available. Zero coverage is not completed evaluation.</p>}
-    {m.thresholds?.sources.map(s => <details key={s.key}><summary>{s.key} · {s.kind === 'average' ? 'Equal average (not unanimous agreement)' : 'Individual model'}</summary><RecordTable rows={s[period][bands ? 'bands' : 'cumulative'] as ThRow[]} />{s.kind === 'model' && <button onClick={() => setInspect(`${s.key}@${m.levels[0]}`)}>Inspect games / custom threshold</button>}</details>)}
+    {m.thresholds && m.thresholds.sources[0] && <p className="small muted">{gridNote((m.thresholds.sources[0][period][bands ? 'bands' : 'cumulative'] as ThRow[]).map(x => x.lo), m.market, (m.thresholds.sources[0][period][bands ? 'bands' : 'cumulative'] as ThRow[]).length - standardRows(m.thresholds.sources[0][period][bands ? 'bands' : 'cumulative'] as ThRow[], m.market, bands).length)}{bands && bandNote(m.thresholds.sources[0][period].bands as ThRow[], m.market)}</p>}
+    {m.thresholds?.sources.map(s => <details key={s.key}><summary>{s.key} · {s.kind === 'average' ? 'Equal average (not unanimous agreement)' : 'Individual model'}</summary><RecordTable rows={standardRows(s[period][bands ? 'bands' : 'cumulative'] as ThRow[], m.market, bands)} />{s.kind === 'model' && <button onClick={() => setInspect(`${s.key}@${standardGrid(m.market)[0]}`)}>Inspect games / custom threshold</button>}</details>)}
     {d?.search && <><p>{d.search.method}. Sizes explored: {d.search.sizes.join(', ')}. {d.search.evaluated} rules evaluated; at most {d.search.budget_per_size} per size. Stops at budget or when beam mutations produce no new rules. {d.search.note}</p><p>Best earlier single-model baseline: {d.best_single}. Searched member thresholds: {d.search.thresholds.map(x => pct(x, 1)).join(', ')}.</p>
       <details><summary>Search coverage by subset size</summary><div className="table-wrap"><table className="table"><thead><tr><th>Size</th><th>Rules evaluated</th></tr></thead><tbody>{Object.entries(d.search.evaluated_by_size).map(([size, count]) => <tr key={size}><td>{size}</td><td>{count}</td></tr>)}</tbody></table></div></details>
       {d.rules.map((r, i) => <details key={i}><summary>{r.members.length} members · {r.rule}</summary><MemberOverlapNote overlap={d.member_overlap} members={r.members} /><button onClick={() => setInspect(r.members.map((n, j) => `${n}@${r.thresholds[j]}`).join(','))}>Inspect games and full unanimous threshold ladder</button><RecordTable rows={[{...r[period].record, rule: 'Unanimous subset'}, ...r[period].alone.map(a => ({...a.own, rule: `${a.model} alone @ ${pct(a.threshold, 1)}`})), ...(r[period].coverage_matched_best_single ? [{...r[period].coverage_matched_best_single!, rule: 'Strong single · matched pick count'}] : []), ...(r[period].same_games_best_single ? [{...r[period].same_games_best_single!, rule: 'Strong single · same games'}] : [])]} /><p>Season stability: {r[period].by_season.map(s => `${s.season}: ${s.wins}–${s.losses} (${s.picks} picks)`).join('; ')}</p></details>)}
@@ -75,8 +79,9 @@ function Evidence({ sport, market, rule, period }: { sport: Sport; market: Marke
   const { state, retry } = useApi(s => api.dailyEvidence(sport, market, rule, period, offset, s), [sport, market, rule, period, offset]);
   return <div className="card"><h3>Game evidence · {rule}</h3><AsyncView state={state} retry={retry}>{d => <>
     <p>{d.note} Fit #{d.fit_id} · {d.total} qualifying games.</p>
-    <details><summary>All cumulative thresholds</summary><RecordTable rows={d.ladder.cumulative} /></details>
-    <details><summary>All confidence bands</summary><RecordTable rows={d.ladder.bands} /></details>
+    <p className="small muted">{gridNote(d.ladder.cumulative.map(x => x.lo), market)}</p>
+    <details><summary>Cumulative thresholds</summary><RecordTable rows={standardRows(d.ladder.cumulative, market, false)} /></details>
+    <details><summary>Confidence bands</summary><p className="small muted">{bandNote(d.ladder.bands, market)}</p><RecordTable rows={standardRows(d.ladder.bands, market, true)} /></details>
     <div className="table-wrap"><table className="table"><thead><tr><th>Game / date</th><th>Line</th><th>Source</th><th>Member confidence</th><th>Result</th></tr></thead><tbody>{d.games.map(g => <tr key={g.game_id}><td><Link to={`/games/${encodeURIComponent(g.game_id)}?sport=${sport}`}>{g.game_id}</Link><br />{dateTime(g.tipoff_at)}</td><td>{g.line ?? '—'}</td><td>{g.source}</td><td>{Object.entries(g.probabilities).map(([n, p]) => `${n}: ${pct(p, 1)}`).join('; ')}</td><td>{g.result}</td></tr>)}</tbody></table></div>
     {d.total === 0 && <p>No qualifying games at these thresholds.</p>}
     <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 100))}>Previous 100</button>{' '}<button disabled={offset + 100 >= d.total} onClick={() => setOffset(offset + 100)}>Next 100</button>

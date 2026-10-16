@@ -15,7 +15,43 @@ const MARKET_LEVELS: (number | null)[] = [null, 0.55, 0.6, 0.65, 0.7];
 // Three outcomes split the probability: a 3-way pick is rarely above 55%, so its levels start lower (as the research grid).
 const THREE_WAY_LEVELS: (number | null)[] = [null, 0.4, 0.45, 0.5, 0.55, 0.6];
 
-export function confidenceLevels(sport: Sport, market: MarketId): (number | null)[] {
+/** The canonical record's reporting grid (approved 2026-10-14): two-way markets 50–90%, the regulation three-way market
+ * 35–70%, the same grids the canonical Performance report uses. */
+const CANONICAL_LEVELS: (number | null)[] = [null, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9];
+const CANONICAL_THREE_WAY_LEVELS: (number | null)[] = [null, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7];
+
+/** The standard reporting grid of a market (50–90%; regulation three-way 35–70%). Research views that compute their own
+ * grids show only these rows (decision 2026-10-14: filter at display; model code and stored numbers unchanged). */
+export function standardGrid(market: MarketId): number[] {
+  return (market === 'reg3' ? CANONICAL_THREE_WAY_LEVELS : CANONICAL_LEVELS).filter((x): x is number => x != null);
+}
+export const onStandardGrid = (value: number, market: MarketId) => standardGrid(market).some((t) => Math.abs(t - value) < 1e-6);
+/** Rows of a computed ladder on the standard grid. A band (lo–hi) is kept only when both ends are grid levels (hi may be
+ * the 100% top): a band such as 70–75% for the three-way market is not a standard band and is hidden, never shown as one. */
+export function standardRows<T extends { lo: number; hi: number | null }>(rows: T[], market: MarketId, bands: boolean): T[] {
+  return rows.filter((x) => onStandardGrid(x.lo, market)
+    && (!bands || x.hi == null || x.hi >= 0.999999 || onStandardGrid(x.hi, market)));
+}
+/** The note for a band ladder: which picks the shown bands no longer cover (above the grid's highest computed band). */
+export function bandNote<T extends { lo: number; hi: number | null }>(rows: T[], market: MarketId): string {
+  const shown = standardRows(rows, market, true);
+  const top = shown.length ? Math.max(...shown.map((x) => (x.hi == null || x.hi >= 0.999999 ? 1 : x.hi))) : null;
+  return top != null && top < 0.999999
+    ? ` Bands stop at ${Math.round(top * 100)}%: picks above it are in the cumulative ${Math.round(top * 100)}%+ row, not in a band.`
+    : '';
+}
+/** A short note on what the standard-grid filter hid and which standard rows the view did not compute. */
+export function gridNote(values: number[], market: MarketId, hiddenRows?: number): string {
+  const grid = standardGrid(market);
+  const hidden = hiddenRows ?? values.filter((v) => !onStandardGrid(v, market)).length;
+  const missing = grid.filter((t) => !values.some((v) => Math.abs(v - t) < 1e-6));
+  return `Standard grid ${Math.round(grid[0] * 100)}–${Math.round(grid[grid.length - 1] * 100)}% only`
+    + (hidden ? ` (${hidden} other row${hidden > 1 ? 's' : ''} hidden)` : '')
+    + (missing.length ? `; not computed by this view: ${missing.map((t) => `${Math.round(t * 100)}%`).join(', ')}` : '') + '.';
+}
+
+export function confidenceLevels(sport: Sport, market: MarketId, policy?: Policy): (number | null)[] {
+  if (policy === 'canonical') return market === 'reg3' ? CANONICAL_THREE_WAY_LEVELS : CANONICAL_LEVELS;
   if (market === 'reg3') return THREE_WAY_LEVELS;
   return sport === 'nba' && market === 'winner' ? CONFIDENCE_LEVELS : MARKET_LEVELS;
 }
@@ -26,10 +62,11 @@ export function defaultLevel(sport: Sport, market: MarketId): number | null {
 
 export const levelLabel = (min: number | null) => (min == null ? 'All picks' : `${Math.round(min * 100)}%+`);
 
-/** The filter lives in the URL (?conf=all|55|60|…); the sport's and market's default when absent or not offered. */
-export function useConfidence(sport: Sport = 'nba', market: MarketId = 'winner'): [number | null, (level: number | null) => void] {
+/** The filter lives in the URL (?conf=all|55|60|…); the sport's and market's default when absent or not offered by the
+ * market and policy shown (changing the market clears it; a level offered by both grids stays when the policy changes). */
+export function useConfidence(sport: Sport = 'nba', market: MarketId = 'winner', policy?: Policy): [number | null, (level: number | null) => void] {
   const [params, setParams] = useSearchParams();
-  const levels = confidenceLevels(sport, market);
+  const levels = confidenceLevels(sport, market, policy);
   const fallback = defaultLevel(sport, market);
   const raw = params.get('conf');
   const parsed = raw === 'all' ? null : levels.find((l) => l != null && String(Math.round(l * 100)) === raw);
@@ -192,11 +229,11 @@ export function ThresholdResearch({ sport, market }: { sport: Sport; market: Mar
           <label className="threshold-model">Model and line source <select value={key(group)} onChange={e => setSelected(e.target.value)}>
             {groups.map(g => <option key={key(g)} value={key(g)}>{g.model_version} · {g.line_source}</option>)}
           </select></label>
-          <div className="table-wrap"><table className="table"><thead><tr><th>Minimum</th><th>W–L</th><th>Win rate</th><th>95% range</th><th>Coverage</th><th>Pending</th><th>Push / void</th></tr></thead>
+          <div className="table-wrap"><table className="table"><thead><tr><th>Minimum</th><th>W–L</th><th>Win rate</th><th>95% range</th><th>Coverage</th><th>Pending</th><th>Push / void / unscorable</th></tr></thead>
             <tbody>{group.thresholds.map(r => <tr key={r.threshold}><th scope="row">{pct(r.threshold)}+</th>
               <td>{r.win}–{r.loss}</td><td>{pct(r.accuracy, 1)}</td>
               <td>{r.interval ? `${pct(r.interval[0], 1)}–${pct(r.interval[1], 1)}` : '—'}</td>
-              <td>{pct(r.coverage, 1)}</td><td>{r.pending}</td><td>{r.push} / {r.void}</td>
+              <td>{pct(r.coverage, 1)}</td><td>{r.pending}</td><td>{r.push} / {r.void} / {r.unscorable}</td>
             </tr>)}</tbody></table></div>
         </>}
         <p className="small muted">{p.note}</p>
@@ -215,8 +252,8 @@ export function RecoveredThresholds({ sport, market }: { sport: Sport; market: M
         ? <Empty>{p.status === 'schema not migrated' ? 'Recovery is not activated in this store.' : 'No reconstructed picks for this market yet.'}</Empty>
         : p.groups.filter(g => g.market === market).map(g => <div key={`${g.model_version}|${g.line_source}`}>
           <p className="small wrap">{g.model_version} · {g.line_source} lines</p>
-          <div className="table-wrap"><table className="table"><thead><tr><th>Minimum</th><th>W–L</th><th>Win rate</th><th>Pending</th><th>Push / void</th></tr></thead>
-            <tbody>{g.thresholds.map(r => <tr key={r.threshold}><th>{pct(r.threshold)}+</th><td>{r.win}–{r.loss}</td><td>{pct(r.accuracy, 1)}</td><td>{r.pending}</td><td>{r.push} / {r.void}</td></tr>)}</tbody>
+          <div className="table-wrap"><table className="table"><thead><tr><th>Minimum</th><th>W–L</th><th>Win rate</th><th>Pending</th><th>Push / void / unscorable</th></tr></thead>
+            <tbody>{g.thresholds.map(r => <tr key={r.threshold}><th>{pct(r.threshold)}+</th><td>{r.win}–{r.loss}</td><td>{pct(r.accuracy, 1)}</td><td>{r.pending}</td><td>{r.push} / {r.void} / {r.unscorable}</td></tr>)}</tbody>
           </table></div>
         </div>)}
       <details><summary>Recovered game records</summary><ul className="small">{p.records.filter(r => r.market === market).slice(0, 50).map(r => <li key={r.recovery_id}>

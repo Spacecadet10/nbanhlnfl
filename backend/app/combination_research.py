@@ -28,8 +28,12 @@ def _realised(market, line, home, away, decision=None):
     return SIDE_IDX.get(s)
 
 
-def _tables(rows, winner_models, dist_models, line_markets, events=None, decision_of=None) -> tuple[dict, dict]:
-    """market -> [row] with member vectors, and each model's first out-of-sample season."""
+def _tables(rows, winner_models, dist_models, line_markets, events=None, decision_of=None,
+            book_lines=None) -> tuple[dict, dict]:
+    """market -> [row] with member vectors, and each model's first out-of-sample season. With `book_lines`
+    ({game_id: {market: line}}), the line markets other than reg3 use the bookmaker's line instead of the primary's model
+    line, for every member's vector and the settlement; a game without one keeps the model line, marked
+    `line_basis` "model" (for learning only: the replay scores "book" rows), so earlier seasons still train combiners."""
     first = {}
     win = {}
     for m in winner_models:
@@ -54,9 +58,14 @@ def _tables(rows, winner_models, dist_models, line_markets, events=None, decisio
         prim = dists[primary_dist][g.game_id]
         for m in line_markets:
             line = None if m == "reg3" else markets.model_line(prim, m)
+            basis = {}
+            if m != "reg3" and book_lines is not None:
+                book = book_lines.get(g.game_id, {}).get(m)
+                basis = {"line_basis": "model" if book is None else "book"}    # model-line rows: learning only
+                line = line if book is None else book
             vecs = {n: tuple(d[g.game_id].market(m, line)) for n, d in dists.items() if d[g.game_id] is not None}
             tables[m].append({**base, "line": line, "realised": _realised(m, line, r.home_score, r.away_score, dec),
-                              "vectors": vecs})
+                              "vectors": vecs, **basis})
     return tables, first
 
 
