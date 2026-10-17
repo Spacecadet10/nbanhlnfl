@@ -24,7 +24,7 @@ NHL_ONLY = {"nhl-pbp-import", "nhl-xg-research", "ingest-nhl", "nhl-validate", "
 READ_ONLY_COMMANDS = {"score-markets", "score-near-tipoff", "thresholds", "research-report", "pool-report", "pool-roster",
                       "tracking-report", "coverage", "release-check", "diagnostics", "historical-start", "model-audit",
                       "calibration-study", "adaptive-status", "adaptive-replay", "combination-export-adaptive",
-                      "combination-thresholds-report"}
+                      "combination-thresholds-report", "early-forecasts-report"}
 LOCK_WAIT_SECONDS = 45 * 60     # longer than any two-hour cycle (NHL ~13 minutes); a job still waiting then fails visibly
 ODDS_LOCK_WAIT_SECONDS = 120    # the periodic cycle waits out a short job (daily, injuries), not another full cycle
 
@@ -70,6 +70,12 @@ def main(argv=None) -> int:
     pt = sub.add_parser("paper-trades", help="Read-only: would the recorded forecasts have beaten the recorded bookmaker "
                                              "quotes? (bets, ROI, closing-line value; no money, no writes)")
     pt.add_argument("--since", help="Only forecasts generated at or after this UTC time")
+    ef = sub.add_parser("early-forecasts", help="NHL early-forecast test (docs/evidence/early-forecast-test): an injury capture, "
+                                              "then early winner forecasts appended to early_forecasts (research only)")
+    ef.add_argument("--dry-run", action="store_true", help="No capture and no writes: print the rows a run would append")
+    ef.add_argument("--no-capture", action="store_true", help="Skip the injury capture (tests, manual runs)")
+    ef.add_argument("--now", help="Test only: a fixed UTC time instead of the clock")
+    sub.add_parser("early-forecasts-report", help="Read-only: the pre-registered early-forecast verdict per arm")
     oh = sub.add_parser("odds-history", help="Cache historical bookmaker lines of finished games (ESPN core odds, free); "
                                              "research input only, no store writes")
     oh.add_argument("--from-season", type=int, required=True)
@@ -289,6 +295,18 @@ def main(argv=None) -> int:
                     help="Required for --period test; the access is logged to data/eval/test_access.jsonl")
     bt.add_argument("--record", action="store_true", help="Also append predictions to the ledger as run_type=backtest")
     args = p.parse_args(argv)
+    if args.cmd == "early-forecasts":    # its own locking: plans on a query-only connection, appends under the job lock
+        return _early_forecasts(args, p)
+    if args.cmd == "early-forecasts-report":
+        from . import early_forecasts
+        with db.connect_readonly(args.sport) as conn:
+            rows: dict = {}
+            if db.has_table(conn, "early_forecasts"):
+                for r in conn.execute("SELECT arm, status, COUNT(*) AS n FROM early_forecasts GROUP BY arm, status"):
+                    rows.setdefault(r["arm"], {})[r["status"]] = r["n"]
+            print(json.dumps({"rows": rows, "coverage": early_forecasts.coverage(conn),
+                              "verdict": early_forecasts.evaluate(conn)}, indent=2))
+        return 0
     if args.cmd == "paper-trades":
         from . import paper_trading
         with db.connect_readonly(args.sport) as conn:
@@ -518,6 +536,58 @@ def main(argv=None) -> int:
         if args.cmd != "scheduler":
             return _run(args, p, conn, applied)
     return _run(args, p, conn, applied)
+
+
+def _early_forecasts(args, p) -> int:
+    """The scheduled early-forecast run: the forecasts are computed on a query-only connection (the adaptive evaluation can
+    take minutes and must never make a two-hour cycle wait), then appended under the job lock in one short transaction. The
+    store must already have migration 0032 (a release step); this command does not migrate."""
+    from . import early_forecasts, jobs
+    if args.sport != "nhl":
+        p.error("early-forecasts is NHL only")
+    commit = None
+    if release.enabled():      # as the guarded commands: refuse before any request, lock or write unless a clean release
+        info = release.check(args.sport)
+        if info["problems"]:
+            print(json.dumps({"status": "failed", "reason": "release guard", **info}))
+            return 1
+        commit = info["commit"]
+    capture = None if (args.dry_run or args.no_capture) else jobs.nhl_injury_capture()
+    now = args.now or db.utc_now()
+    rconn = db.connect_readonly(args.sport)
+    try:
+        out = early_forecasts.plan(rconn, now, fixed_clock=args.now is not None)
+    finally:
+        rconn.close()
+    if commit:                 # the code identity of every row (PREREGISTRATION.md §9)
+        for arm in ("open", "news"):
+            for r in out[arm]["rows"]:
+                r["provenance"] = json.dumps({**json.loads(r["provenance"]), "release": commit}, sort_keys=True)
+    out["capture"] = capture
+    for arm in ("open", "news"):
+        out[arm]["created"] = 0
+    if args.dry_run:
+        print(json.dumps(out, indent=1, default=str))
+        return 0
+    with db.store_lock(args.sport, wait_seconds=ODDS_LOCK_WAIT_SECONDS) as held:
+        if not held:
+            out.update(status="skipped", reason=f"another job is running on the {args.sport} store; nothing appended")
+            print(json.dumps(out, indent=1, default=str))
+            return 0
+        wconn = db.connect(sport=args.sport)
+        try:
+            if not db.has_table(wconn, "early_forecasts"):
+                out.update(status="failed", reason="the store has no early_forecasts table (migration 0032 not applied)")
+                print(json.dumps(out, indent=1, default=str))
+                return 1
+            counts = early_forecasts.write_rows(wconn, out)
+        finally:
+            wconn.close()
+    for arm in ("open", "news"):
+        out[arm].update(counts[arm])
+    out["status"] = "partial" if any(counts[a]["refused"] for a in counts) else "success"
+    print(json.dumps(out, indent=1, default=str))
+    return 0
 
 
 def _run(args, p, conn, applied) -> int:

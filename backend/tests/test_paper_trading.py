@@ -144,3 +144,40 @@ def test_a_single_spread_vector_with_push_mass_is_renormalised_at_its_exact_line
     b = singles(store)
     assert len(b) == 1 and b[0]["edge"] == pytest.approx(0.55 / 0.95 - 0.5) and b[0]["side"] == "a"
     assert b[0]["result"] == "a"                                     # home won by 2 at -1.0
+
+
+def early(c, at, pa, arm="open", member="hockey_logistic_xg"):
+    """Appends an early forecast of g1 (docs/evidence/early-forecast-test) while it is still scheduled."""
+    from app import early_forecasts as ef
+    final = c.execute("SELECT home_score, away_score, result_available_at, result_availability_basis FROM games").fetchone()
+    c.execute("UPDATE games SET status = 'scheduled', home_score = NULL, away_score = NULL, result_available_at = NULL, "
+              "result_availability_basis = NULL WHERE game_id = 'g1'")
+    ef.store_row(c, {"sport": "nhl", "arm": arm, "member": member, "model_version": "v", "game_id": "g1", "market": "winner",
+                     "status": "forecast", "reason": None, "p_a": pa, "p_b": 1 - pa, "information_at": at,
+                     "trigger_detail": "{}", "provenance": "{}", "tipoff_at": "2026-10-10T23:00:00Z", "generated_at": at,
+                     "idempotency_key": f"{arm}{at}"})
+    c.execute("UPDATE games SET status = 'final', home_score = ?, away_score = ?, result_available_at = ?, "
+              "result_availability_basis = ? WHERE game_id = 'g1'", final)
+
+
+def test_an_early_forecast_bets_at_the_first_quote_retrieved_after_it_and_reports_the_excess_clv(store):
+    # Pre-registered price rule: a bettor acts after the forecast, so the bet price is the first odds snapshot retrieved
+    # after it (polled every 30 min), never the last one before it. Excess CLV = de-vigged close of the bet side minus the
+    # bet price's implied probability (> 0 only when the close beats the price paid, margin included).
+    quote(store, "2026-10-10T08:00:00Z", 0.50, price_a=+100, price_b=-120)      # before the forecast: never the price
+    quote(store, "2026-10-10T08:40:00Z", 0.48, price_a=+105, price_b=-125)      # the first after it: the bet price
+    quote(store, "2026-10-10T22:50:00Z", 0.56)                                 # the close
+    early(store, "2026-10-10T08:30:00Z", 0.60)
+    b = [x for x in pt.bets(store, thresholds=(0.06,)) if x["source"] == "early:open:hockey_logistic_xg"]
+    assert len(b) == 1 and (b[0]["quote_at"], b[0]["side"], b[0]["price"]) == ("2026-10-10T08:40:00Z", "a", 2.05)
+    assert b[0]["edge"] == pytest.approx(0.12) and b[0]["clv"] == pytest.approx(0.08)
+    assert b[0]["excess_clv"] == pytest.approx(0.56 - 1 / 2.05) and b[0]["result"] == "a"
+    r = pt.report(store, thresholds=(0.06,))["early:open:hockey_logistic_xg"]["winner"]["6pt"]
+    assert r["excess_clv_mean"] == pytest.approx(0.56 - 1 / 2.05) and r["bets"] == 1
+
+
+def test_an_early_forecast_without_a_later_quote_before_the_start_is_no_bet(store):
+    quote(store, "2026-10-10T08:00:00Z", 0.40)
+    quote(store, "2026-10-10T23:10:00Z", 0.40)                                  # after the start: never a bet price
+    early(store, "2026-10-10T08:30:00Z", 0.60, arm="news", member="nhl_players_injuries@adaptive")
+    assert [x for x in pt.bets(store) if x["source"].startswith("early:")] == []

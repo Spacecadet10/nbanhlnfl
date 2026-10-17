@@ -12,11 +12,15 @@ or before the start; closing-line value (CLV) = the de-vigged close probability 
 Limits: one bookmaker (DraftKings via ESPN); a quote's own time is unknown (retrieval time is used); a line that moved
 leaves the bet without a same-line close (counted, CLV not computed).
 A single member is recorded every tracking cycle (and per cohort definition), so it gets more looks per game than the
-canonical forecast; its first qualifying row is the bet, as a bettor watching live would take it."""
+canonical forecast; its first qualifying row is the bet, as a bettor watching live would take it.
+Early forecasts (`early:<arm>:<member>`, table early_forecasts, docs/evidence/early-forecast-test) bet at the first quote
+retrieved after the forecast and before the start (their pre-registered rule: the bettor acts after the forecast).
+Excess CLV = the de-vigged close of the bet side minus the implied probability of the price taken (> 0: the close beats
+the price paid, margin included)."""
 from collections import defaultdict
 from typing import Optional
 
-from . import markets
+from . import db, markets
 
 THRESHOLDS = (0.02, 0.04, 0.06)
 TWO_WAY = ("winner", "spread", "total")
@@ -38,9 +42,22 @@ def _forecasts(conn, since: Optional[str]):
          "UNION ALL SELECT 'single:' || substr(group_id, 8), game_id, market, line, json_extract(vector, '$[0]'), "
          "json_extract(vector, '$[2]'), recorded_at, tipoff_at, observation_id FROM agreement_observations "
          "WHERE kind = 'single' AND group_id LIKE 'single|%' AND json_valid(vector) AND vector != 'null' "
-         "AND market IN ('winner','spread','total') AND recorded_at >= ? "
-         "ORDER BY generated_at, source, line, rid")
-    return [r[:8] for r in conn.execute(q, (since or "", since or "", since or ""))]
+         "AND market IN ('winner','spread','total') AND recorded_at >= ? ")
+    args = [since or ""] * 3
+    if db.has_table(conn, "early_forecasts"):      # migration 0032 (the early-forecast test)
+        q += ("UNION ALL SELECT 'early:' || arm || ':' || member, game_id, market, NULL, p_a, p_b, generated_at, tipoff_at, "
+              "early_id FROM early_forecasts WHERE status = 'forecast' AND generated_at >= ? ")
+        args.append(since or "")
+    q += "ORDER BY generated_at, source, line, rid"
+    return [r[:8] for r in conn.execute(q, args)]
+
+
+def _quote_after(conn, game_id, market, line, at, tipoff):
+    """Early forecasts (pre-registered): the first quote retrieved after the forecast and before the start."""
+    return conn.execute("SELECT price_a, price_b, p_a_devig, p_b_devig, retrieved_at FROM market_quotes WHERE game_id = ? "
+                        "AND market = ? AND line IS ? AND retrieved_at > ? AND retrieved_at < ? AND p_a_devig IS NOT NULL "
+                        "AND price_label = 'current' "
+                        "ORDER BY retrieved_at, quote_id LIMIT 1", (game_id, market, line, at, tipoff)).fetchone()
 
 
 def _quote(conn, game_id, market, line, at):
@@ -57,7 +74,8 @@ def bets(conn, *, thresholds=THRESHOLDS, since: Optional[str] = None) -> list[di
     for source, gid, market, line, pa, pb, generated, tipoff in _forecasts(conn, since):
         if pa is None or pb is None or pa + pb <= 0 or generated >= tipoff:
             continue
-        q = _quote(conn, gid, market, line, generated)
+        q = (_quote_after(conn, gid, market, line, generated, tipoff) if source.startswith("early:")
+             else _quote(conn, gid, market, line, generated))
         if q is None:
             continue
         price_a, price_b, qa, qb, retrieved = q
@@ -80,12 +98,13 @@ def bets(conn, *, thresholds=THRESHOLDS, since: Optional[str] = None) -> list[di
                 profit = 0.0 if realised == "mid" else (dec - 1 if realised == side else -1.0)
             else:
                 profit = None
-            clv = None
+            clv = excess = None
             if close is not None and close[4] > retrieved:
                 clv = (close[2] - qa) if side == "a" else (close[3] - qb)
+                excess = (close[2] if side == "a" else close[3]) - 1 / dec      # > 0: the close beats the price paid
             out.append({"source": source, "game_id": gid, "market": market, "line": line, "threshold": t, "side": side,
-                        "edge": edge[side], "price": dec, "quote_at": retrieved, "forecast_at": generated,
-                        "result": realised, "profit": profit, "clv": clv})
+                        "edge": edge[side], "price": dec, "quote_at": retrieved, "forecast_at": generated, "tipoff_at": tipoff,
+                        "result": realised, "profit": profit, "clv": clv, "excess_clv": excess})
     return out
 
 
@@ -99,6 +118,7 @@ def report(conn, **kw) -> dict:
     for (source, market, t), rows in sorted(groups.items()):
         settled = [r for r in rows if r["profit"] is not None]
         clv = [r["clv"] for r in rows if r["clv"] is not None]
+        excess = [r["excess_clv"] for r in rows if r["excess_clv"] is not None]
         out.setdefault(source, {}).setdefault(market, {})[f"{int(round(t * 100))}pt"] = {
             "bets": len(rows), "wins": sum(1 for r in settled if r["result"] == r["side"]),
             "losses": sum(1 for r in settled if r["result"] not in (r["side"], "mid")),
@@ -107,5 +127,5 @@ def report(conn, **kw) -> dict:
                                                                                    and r["result"] != "void"),
             "roi": (sum(r["profit"] for r in settled) / len(settled)) if settled else None,
             "clv_mean": (sum(clv) / len(clv)) if clv else None, "clv_positive": (sum(c > 0 for c in clv) / len(clv)) if clv else None,
-            "clv_n": len(clv)}
+            "clv_n": len(clv), "excess_clv_mean": (sum(excess) / len(excess)) if excess else None}
     return out
