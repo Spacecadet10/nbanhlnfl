@@ -22,7 +22,8 @@ from . import sports as sport_defs
 
 SPORTS = ("nba", "nhl")
 COUNTED = ("games", "predictions", "market_forecasts", "game_forecasts", "result_revisions", "research_cohorts",
-           "agreement_observations", "adaptive_forecasts", "early_forecasts", "job_runs", "teams")
+           "agreement_observations", "adaptive_forecasts", "early_forecasts", "early_runs",
+           "job_runs", "teams")
 
 
 class BackupError(RuntimeError):

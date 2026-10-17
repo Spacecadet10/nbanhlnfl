@@ -23,7 +23,7 @@ about +0.07 pt over 25 bets). This is a betting test, not a test of forecast acc
 | Arm | Member | When | Once per |
 |---|---|---|---|
 | `open` | `hockey_logistic_xg`, computed exactly as the research cycle computes it (`agreement.predict`: walk over all results and shots available at the forecast time, season-start refits) | the first scheduled run (every 30 min) that finds a bookmaker moneyline for the game; lines are fetched up to 36 h before the start | game |
-| `news` | `nhl_players_injuries@adaptive` (the only NHL member that reads injury reports), served from its weekly-cadence adaptive fit in force, as the adaptive cycle serves it (`adaptive.record`, read-only evaluation) | a run whose latest live injury capture (taken in that run, every 30 min) differs from the previous capture for a team (players, statuses or weights), within 45 min of the capture; for every quoted game of that team starting within 36 h | game and capture |
+| `news` | `nhl_players_injuries@adaptive` (the only NHL member that reads injury reports), served from its weekly-cadence adaptive fit in force, as the adaptive cycle serves it (`adaptive.record`, read-only evaluation, and only when the fit it applied is the fit in force at that time) | a run (every 30 min; each run first takes its own capture) finds a live injury capture taken in the last 45 min — by this job or by the two-hour cycle — that differs from the capture before it for a team (players, statuses or weights); for every quoted game of that team starting within 36 h | game and change (a change is never forecast twice) |
 
 Source labels in paper trading: `early:open:hockey_logistic_xg`, `early:news:nhl_players_injuries@adaptive`.
 A forecast the member cannot make is stored as `unavailable` with the reason (coverage is reported, section 6).
@@ -37,7 +37,11 @@ row records its first quote time (`trigger_detail.first_quote_at`), and the dela
   start or for a game not scheduled at that start (migration 0032).
 - **Bet price: the first `current` moneyline quote retrieved after `generated_at` and before the start** (the bettor acts
   after the forecast; odds are polled every 30 min). Never a quote retrieved before the forecast.
-- Close: the last quote retrieved at or before the start. Settlement: `markets.settle` (a moved start voids the bet).
+- Close: the last quote retrieved at or before the start. When no quote follows the bet quote, the bet quote is the
+  close (excess CLV = minus the margin); such bets count. Settlement: `markets.settle` (a moved start voids the bet).
+- A run computes its forecasts without the store lock and appends them under it, waiting up to 20 min for the two-hour
+  cycle; `generated_at` stays the time the forecast was made. A run writing with a `--now` more than 5 min from the clock
+  is refused (no backdated rows); `--dry-run` writes nothing.
 - One bookmaker: DraftKings via ESPN, as recorded in `market_quotes`.
 
 ## 5. Bet rule
@@ -47,16 +51,18 @@ The first forecast of an arm per game whose probability exceeds the bet quote's 
 
 ## 6. Decision (one analysis, at the end)
 
-- Games starting before **2027-05-01T00:00:00Z** (the 2026–27 regular season), from installation on.
+- Games starting before **2027-05-01T00:00:00Z** (the 2026–27 regular season and any playoff games before that time),
+  from installation on.
 - **Primary metric: mean excess CLV** = de-vigged close probability of the bet side minus the implied probability of the
   price taken (> 0 means the close beats the price paid, margin included; expected profit per unit ≈ price × excess).
-- **95% interval:** week-block bootstrap (ISO week of the start), 10,000 resamples, seed 20261016, percentile.
+- **95% interval:** week-block bootstrap (ISO week of the start, in UTC), 10,000 resamples, seed 20261016, percentile.
 - **Verdict per arm:** `pass` if at least **150** bets have an excess CLV and the interval's lower bound is above 0;
   `fail` if at least 150 and it is not; `inconclusive` with fewer than 150.
 - Expected precision: the 2025–26 open bets had a per-bet CLV spread of about 4.7 pt, so 150 bets give roughly ±0.75 pt
   and 275 bets ±0.56 pt (before the week blocking widens it).
 - Reported, never decisive: ROI and W-L (thousands of bets would be needed to decide on ROI), raw CLV, bets per arm,
-  unavailable rows by reason, time from first quote to forecast, and a descriptive open-vs-news comparison.
+  unavailable rows by reason, model versions in force, time from the trigger to the forecast, runs per day (`early_runs`;
+  days with fewer than 40 of the 48 runs are listed), and both arms side by side (a descriptive comparison only).
 - Command: `python -m app.cli --sport nhl early-forecasts-report` (read-only; `early_forecasts.verdict`, written before
   any row existed).
 
@@ -68,7 +74,8 @@ The first forecast of an arm per game whose probability exceeds the bet quote's 
   close, which limits this; best-price shopping is not modelled.
 - **Model identity changes:** a release can change the NHL adaptive definition mid-test. Each row records the definition
   (`model_version`) and fit (`provenance`); every row counts, and any change is listed in the report.
-- **Outages** (job not running, capture failures) reduce bets but are not tied to outcomes; they are reported.
+- **Outages** (job not running, capture failures, a store lock busy for 20 min) reduce bets but are not tied to
+  outcomes; every run that reaches the store is in `early_runs`, so missing runs are visible.
 - **The injury member abstains often** (fit retired after new boxes, unresolved players): the news arm may end
   `inconclusive`. That is an answer, not a reason to change the rule.
 
@@ -81,7 +88,7 @@ extending because of interim numbers; pooling the arms; scoring games before ins
 ## 9. Freeze record (filled at installation)
 
 - Commit:
-- sha256: this file; `backend/app/early_forecasts.py`; `backend/app/paper_trading.py`;
+- sha256: this file; `backend/app/early_forecasts.py`; `backend/app/paper_trading.py`; `backend/app/cli.py`;
   `backend/app/migrations/0032_early_forecasts.sql`; `scripts/launchd/com.nba-predictor.nhl-early.plist`
 - Frozen at (UTC), installed at (UTC):
 - Release environment and NHL adaptive definition in force at installation:

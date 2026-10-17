@@ -1,14 +1,15 @@
 """Early-forecast test, NHL winner (docs/evidence/early-forecast-test/PREREGISTRATION.md). Research only: rows go to
 `early_forecasts` (migration 0032), never to a primary, research, adaptive or selection table, and are paper-traded at the
-first quote retrieved after them (app/paper_trading.py). Nothing here changes a canonical forecast.
+first quote retrieved after them (app/paper_trading.py). No canonical forecast reads these rows; the job's injury captures
+(every 30 min) do join the capture folder that the live NHL injury member also reads.
 
 Arms (fixed in the pre-registration):
 - 'open': `hockey_logistic_xg` as the research cycle computes it (agreement.predict, season-start refits), made once per
   game at the first run that finds a bookmaker moneyline for it (lines are fetched up to 36 h before the start).
 - 'news': `nhl_players_injuries@adaptive` (the only NHL member that reads injury reports), served from its fit in force
-  exactly as the adaptive cycle serves it (adaptive.record, read-only replay evaluation at `now`), for every quoted game of
-  a team whose rows changed between the two latest live injury captures, once per capture, only while that capture is
-  fresh (NEWS_WINDOW).
+  exactly as the adaptive cycle serves it (adaptive.record, read-only replay evaluation at `now`, checked against the fit
+  in force), for every quoted game of a team whose rows changed in a live injury capture (this job's or the two-hour
+  cycle's) taken within NEWS_WINDOW, compared with the capture before it; once per game and change.
 
 No information retrieved after `now` is used: results, shots and quotes by retrieval time, captures by capture time, fits
 published by then. This file is not part of any model or adaptive definition, so editing it retires no fit."""
@@ -119,23 +120,44 @@ def adaptive_member(conn, now: str, game, member: str) -> dict:
     if not row.get("finished_at") or row["finished_at"] > now:     # chosen by its training data; must also exist by `now`
         res["reason"] = f"the fit applied (fit {row.get('fit_id')}) was published after this time ({row.get('finished_at')})"
         return res
+    in_force = adaptive.latest_fit(conn, "nhl", "member", member, res["definition"], now)     # as the live cycle orders fits
+    if in_force is None or in_force["fit_id"] != row.get("fit_id"):
+        res["reason"] = (f"the evaluation applied fit {row.get('fit_id')}, but the fit in force at this time is "
+                         f"{in_force['fit_id'] if in_force else 'none'}")
+        return res
     res["p"] = list(row["p"])
     return res
 
 
-def captures(now: str) -> list:
-    """Live NHL injury captures (nhl_injuries.capture_live metadata) taken at or before `now`, oldest first. Unreadable
-    files are skipped (the injury member verifies the raw pages itself)."""
+def _valid_capture(meta) -> bool:
+    if not isinstance(meta, dict) or not isinstance(meta.get("captured_at"), str):
+        return False
+    try:
+        _parse(meta["captured_at"])
+    except ValueError:
+        return False
+    rows, teams = meta.get("rows", []), meta.get("teams", [])
+    return (isinstance(rows, list) and all(isinstance(r, dict) for r in rows) and isinstance(teams, list)
+            and all(isinstance(t, str) for t in teams))
+
+
+def captures(now: str) -> tuple:
+    """(live NHL injury captures — nhl_injuries.capture_live metadata, by this job or the two-hour cycle — taken at or before
+    `now`, oldest first; the number of unreadable or malformed files skipped). The injury member verifies the raw pages
+    itself; here only the parsed rows are compared."""
     d = config.data_dir() / "research" / "nhl_players" / "injuries"
-    out = []
+    out, bad = [], 0
     for p in sorted(d.glob("live-*.json")) if d.is_dir() else ():
         try:
             meta = json.loads(p.read_text())
         except (OSError, ValueError):
+            bad += 1
             continue
-        if isinstance(meta, dict) and meta.get("captured_at") and meta["captured_at"] <= now:
+        if not _valid_capture(meta):
+            bad += 1
+        elif meta["captured_at"] <= now:
             out.append(meta)
-    return sorted(out, key=lambda m: m["captured_at"])
+    return sorted(out, key=lambda m: m["captured_at"]), bad
 
 
 def _per_team(capture: dict) -> dict:
@@ -155,10 +177,16 @@ def changed_teams(previous: dict, latest: dict) -> set:
 
 
 # --- One run --------------------------------------------------------------------------------------------------------
-def _existing(conn) -> set:
+def _existing(conn) -> tuple:
+    """(idempotency keys stored, {(game id, capture time)} of changes a news row was already made for)."""
     if not db.has_table(conn, "early_forecasts"):
-        return set()
-    return {r[0] for r in conn.execute("SELECT idempotency_key FROM early_forecasts")}
+        return set(), set()
+    keys, used = set(), set()
+    for r in conn.execute("SELECT idempotency_key, arm, game_id, trigger_detail FROM early_forecasts"):
+        keys.add(r["idempotency_key"])
+        if r["arm"] == "news":
+            used |= {(r["game_id"], c) for c in json.loads(r["trigger_detail"]).get("changed_captures", [])}
+    return keys, used
 
 
 def _row(arm, member, version, g, now, generated, p, reason, trigger, provenance, key) -> dict:
@@ -175,7 +203,7 @@ def plan(conn, now: str, *, fixed_clock: bool = True) -> dict:
     eng = live.engine(conn)
     if eng.sport != "nhl":
         raise ValueError("the early-forecast test is NHL only")
-    done = _existing(conn)
+    done, used = _existing(conn)
     horizon = _fmt(_parse(now) + HORIZON)
     games = conn.execute(
         f"SELECT * FROM games WHERE status='scheduled' AND tipoff_at > ? AND tipoff_at <= ? AND season_type IN "
@@ -206,34 +234,45 @@ def plan(conn, now: str, *, fixed_clock: bool = True) -> dict:
                                             {"first_quote_at": first[g["game_id"]][0], "quote_id": first[g["game_id"]][1]},
                                             {"results_through": now}, f"open|{g['game_id']}"))
 
-    # Arm 'news': games of teams whose report changed in the latest capture, while it is fresh.
-    caps = captures(now)
-    news = out["news"]
+    # Arm 'news': games of teams whose report changed in a fresh capture. A failure here never costs the open rows.
+    try:
+        _news(conn, now, quoted, used, finish, out["news"])
+    except Exception as exc:
+        out["news"]["reason"] = f"error: {type(exc).__name__}: {exc}"
+    return out
+
+
+def _news(conn, now, quoted, used, finish, news) -> None:
+    caps, news["bad_captures"] = captures(now)
     if len(caps) < 2:
         news["reason"] = "fewer than two live injury captures"
-        return out
-    latest, previous = caps[-1], caps[-2]
-    if _parse(latest["captured_at"]) < _parse(now) - NEWS_WINDOW:
-        news["reason"] = f"the latest capture ({latest['captured_at']}) is older than {int(NEWS_WINDOW.total_seconds() // 60)} min"
-        return out
-    changed = changed_teams(previous, latest)
-    news["changed_teams"] = sorted(changed)
+        return
+    oldest = _fmt(_parse(now) - NEWS_WINDOW)
+    # Every capture of the window against the capture before it, so a change first seen by the two-hour cycle's own
+    # capture is news too: {capture time: (previous capture time, changed team keys)}.
+    changes = {cur["captured_at"]: (prev["captured_at"], changed_teams(prev, cur))
+               for prev, cur in zip(caps, caps[1:]) if cur["captured_at"] >= oldest}
+    if not changes:
+        news["reason"] = (f"the latest capture ({caps[-1]['captured_at']}) is older than "
+                          f"{int(NEWS_WINDOW.total_seconds() // 60)} min")
+        return
+    news["changed_teams"] = sorted(set().union(*(teams for _, teams in changes.values())))
     keys = {r["team_id"]: npr.team_key(r["name"]) for r in conn.execute("SELECT team_id, name FROM teams")}
-    hit = [g for g in quoted if {keys.get(g["home_team_id"]), keys.get(g["away_team_id"])} & changed
-           and f"news|{g['game_id']}|{latest['captured_at']}" not in done]
-    for g in hit:
+    for g in quoted:
+        sides = {keys.get(g["home_team_id"]), keys.get(g["away_team_id"])}
+        new = sorted(at for at, (_, teams) in changes.items() if teams & sides and (g["game_id"], at) not in used)
+        if not new:
+            continue
         try:
             m = adaptive_member(conn, now, g, NEWS_MEMBER)
         except Exception as exc:
             m = {"p": None, "reason": f"error: {type(exc).__name__}: {exc}", "definition": None, "provenance": {}}
         v = m["p"]
         p = None if v is None else (v[0], v[2]) if len(v) == 3 else (v[0], 1 - v[0])
+        trigger = {"capture_at": new[-1], "previous_capture_at": changes[new[-1]][0], "changed_captures": new,
+                   "changed_teams": sorted(set().union(*(changes[at][1] for at in new)) & sides)}
         news["rows"].append(_row("news", NEWS_MEMBER, m["definition"] and f"adaptive:{m['definition']}", g, now, finish(), p,
-                                 m["reason"], {"capture_at": latest["captured_at"], "previous_capture_at": previous["captured_at"],
-                                               "changed_teams": sorted(changed & {keys.get(g["home_team_id"]),
-                                                                                  keys.get(g["away_team_id"])})},
-                                 m["provenance"], f"news|{g['game_id']}|{latest['captured_at']}"))
-    return out
+                                 m["reason"], trigger, m["provenance"], f"news|{g['game_id']}|{new[-1]}"))
 
 
 def store_row(conn, row: dict) -> bool:
@@ -244,16 +283,28 @@ def store_row(conn, row: dict) -> bool:
     return cur.rowcount == 1
 
 
-def write_rows(conn, planned: dict) -> dict:
-    """Stores a plan's rows in one transaction; a row the store refuses (the game started or moved meanwhile) is reported."""
+def write_rows(conn, planned: dict, now: Optional[str] = None) -> dict:
+    """Stores a plan's rows and the run's `early_runs` row in one transaction (finished at `now`, default the clock); a row
+    the store refuses (the game started or moved meanwhile) is reported and makes the run 'partial'."""
     counts = {"open": {"created": 0, "refused": {}}, "news": {"created": 0, "refused": {}}}
     with db.transaction(conn):
         for arm in ("open", "news"):
             for r in planned[arm]["rows"]:
+                conn.execute("SAVEPOINT row")
                 try:
                     counts[arm]["created"] += store_row(conn, r)
+                    conn.execute("RELEASE row")
                 except Exception as exc:
+                    conn.execute("ROLLBACK TO row")
+                    conn.execute("RELEASE row")
                     counts[arm]["refused"][r["idempotency_key"]] = f"{type(exc).__name__}: {exc}"
+        status = "partial" if any(counts[a]["refused"] for a in counts) else "success"
+        detail = {"counts": counts, "capture": planned.get("capture"), "open_candidates": planned["open"]["candidates"],
+                  "news_reason": planned["news"].get("reason"), "changed_teams": planned["news"].get("changed_teams"),
+                  "bad_captures": planned["news"].get("bad_captures", 0)}
+        conn.execute("INSERT INTO early_runs (information_at, finished_at, status, detail) VALUES (?, ?, ?, ?)",
+                     (planned["now"], now or utc_now(), status, json.dumps(detail, sort_keys=True, default=str)))
+    counts["status"] = status
     return counts
 
 
@@ -271,11 +322,27 @@ def run(conn, *, now: Optional[str] = None, write: bool = True, capture: bool = 
     for arm in ("open", "news"):
         out[arm]["created"] = 0
     if write:
-        counts = write_rows(conn, out)
+        counts = write_rows(conn, out, now=now if fixed else None)
         for arm in ("open", "news"):
             out[arm].update(counts[arm])
+        out["status"] = counts["status"]
     return out
 
+
+
+def runs(conn) -> dict:
+    """Runs that reached the store: count, by status, first and last `now`, and days with fewer than 40 runs (every 30 min
+    gives 48; fewer means the job was not running part of the day)."""
+    if not db.has_table(conn, "early_runs"):
+        return {"count": 0, "by_status": {}, "first": None, "last": None, "short_days": {}}
+    rows = conn.execute("SELECT information_at, status FROM early_runs ORDER BY information_at").fetchall()
+    by_status, per_day = defaultdict(int), defaultdict(int)
+    for r in rows:
+        by_status[r["status"]] += 1
+        per_day[r["information_at"][:10]] += 1
+    return {"count": len(rows), "by_status": dict(by_status), "first": rows[0]["information_at"] if rows else None,
+            "last": rows[-1]["information_at"] if rows else None,
+            "short_days": {d: n for d, n in sorted(per_day.items()) if n < 40}}
 
 
 def coverage(conn) -> dict:
@@ -318,9 +385,13 @@ def verdict(bets: list) -> dict:
     for k in keys:
         weeks[k].sort()
     n = len(usable)
-    settled = [b["profit"] for b in bets if b.get("profit") is not None]
+    settled = [b for b in usable if b.get("profit") is not None]
+    clv = sorted(b["clv"] for b in usable if b.get("clv") is not None)
     out = {"bets": n, "weeks": len(keys), "excess_clv_mean": math.fsum(x for k in keys for x in weeks[k]) / n if n else None,
-           "excess_clv_ci": None, "roi": math.fsum(settled) / len(settled) if settled else None, "settled": len(settled)}
+           "excess_clv_ci": None, "settled": len(settled),
+           "roi": math.fsum(b["profit"] for b in settled) / len(settled) if settled else None,     # reported, never decisive
+           "wins": sum(1 for b in settled if b["profit"] > 0), "losses": sum(1 for b in settled if b["profit"] < 0),
+           "clv_mean": math.fsum(clv) / len(clv) if clv else None}
     if len(keys) >= 2:
         rng = random.Random(SEED)
         means = []
@@ -340,7 +411,7 @@ def evaluate(conn, *, end: str = END) -> dict:
     """Per arm: the pre-registered verdict over paper-traded early bets at THRESHOLD on games starting before `end`."""
     from . import paper_trading
     by: dict = defaultdict(list)
-    for b in paper_trading.bets(conn, thresholds=(THRESHOLD,)):
+    for b in paper_trading.bets(conn, thresholds=(THRESHOLD,), prefix="early:"):
         if b["source"].startswith("early:") and b["tipoff_at"] < end:
             by[b["source"]].append(b)
     return {source: verdict(rows) for source, rows in sorted(by.items())}

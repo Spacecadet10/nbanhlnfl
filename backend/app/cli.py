@@ -15,8 +15,9 @@ SPORT_COMMANDS = {"nhl-pbp-import", "nhl-xg-research", "migrate", "replay", "cov
                   "daily-cadence", "features-nhl", "tracking-report", "tracking-record", "pool-screen", "pool-assess", "pool-record", "pool-roster", "pool-report",
                   "release-check", "diagnostics", "historical-start", "model-audit", "calibration-study",
                   "adaptive-train", "adaptive-record", "adaptive-status", "adaptive-replay", "adaptive-import", "training-inputs",
-                  "combination-export-adaptive", "combination-thresholds-report"}
-NHL_ONLY = {"nhl-pbp-import", "nhl-xg-research", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies"}
+                  "combination-export-adaptive", "combination-thresholds-report", "early-forecasts", "early-forecasts-report"}
+NHL_ONLY = {"nhl-pbp-import", "nhl-xg-research", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies",
+            "early-forecasts", "early-forecasts-report"}
 
 
 # Commands that only read the store: they run on a query-only connection without the job lock or a migration, so a long
@@ -27,6 +28,8 @@ READ_ONLY_COMMANDS = {"score-markets", "score-near-tipoff", "thresholds", "resea
                       "combination-thresholds-report", "early-forecasts-report"}
 LOCK_WAIT_SECONDS = 45 * 60     # longer than any two-hour cycle (NHL ~13 minutes); a job still waiting then fails visibly
 ODDS_LOCK_WAIT_SECONDS = 120    # the periodic cycle waits out a short job (daily, injuries), not another full cycle
+EARLY_LOCK_WAIT_SECONDS = 20 * 60   # early-forecasts: waits out a two-hour cycle (~13 min); the wait holds nothing
+EARLY_NOW_TOLERANCE_SECONDS = 300   # early-forecasts --now that writes must be the present (no backdated prospective rows)
 
 
 def _record_lock_busy(sport: str, reason: str):
@@ -297,16 +300,6 @@ def main(argv=None) -> int:
     args = p.parse_args(argv)
     if args.cmd == "early-forecasts":    # its own locking: plans on a query-only connection, appends under the job lock
         return _early_forecasts(args, p)
-    if args.cmd == "early-forecasts-report":
-        from . import early_forecasts
-        with db.connect_readonly(args.sport) as conn:
-            rows: dict = {}
-            if db.has_table(conn, "early_forecasts"):
-                for r in conn.execute("SELECT arm, status, COUNT(*) AS n FROM early_forecasts GROUP BY arm, status"):
-                    rows.setdefault(r["arm"], {})[r["status"]] = r["n"]
-            print(json.dumps({"rows": rows, "coverage": early_forecasts.coverage(conn),
-                              "verdict": early_forecasts.evaluate(conn)}, indent=2))
-        return 0
     if args.cmd == "paper-trades":
         from . import paper_trading
         with db.connect_readonly(args.sport) as conn:
@@ -552,6 +545,14 @@ def _early_forecasts(args, p) -> int:
             print(json.dumps({"status": "failed", "reason": "release guard", **info}))
             return 1
         commit = info["commit"]
+    if args.now and not args.dry_run:
+        from datetime import datetime
+        gap = abs((datetime.strptime(args.now, early_forecasts.FMT) - datetime.strptime(db.utc_now(), early_forecasts.FMT))
+                  .total_seconds())
+        if gap > EARLY_NOW_TOLERANCE_SECONDS:
+            print(json.dumps({"status": "failed", "reason": f"--now {args.now} is not the present: a backdated run would "
+                              "store rows nobody could have bet on; use --dry-run"}))
+            return 1
     capture = None if (args.dry_run or args.no_capture) else jobs.nhl_injury_capture()
     now = args.now or db.utc_now()
     rconn = db.connect_readonly(args.sport)
@@ -569,9 +570,10 @@ def _early_forecasts(args, p) -> int:
     if args.dry_run:
         print(json.dumps(out, indent=1, default=str))
         return 0
-    with db.store_lock(args.sport, wait_seconds=ODDS_LOCK_WAIT_SECONDS) as held:
+    with db.store_lock(args.sport, wait_seconds=EARLY_LOCK_WAIT_SECONDS) as held:
         if not held:
-            out.update(status="skipped", reason=f"another job is running on the {args.sport} store; nothing appended")
+            out.update(status="skipped", reason=f"another job held the {args.sport} store for {EARLY_LOCK_WAIT_SECONDS} s; "
+                                                 "nothing appended (not in early_runs)")
             print(json.dumps(out, indent=1, default=str))
             return 0
         wconn = db.connect(sport=args.sport)
@@ -580,12 +582,12 @@ def _early_forecasts(args, p) -> int:
                 out.update(status="failed", reason="the store has no early_forecasts table (migration 0032 not applied)")
                 print(json.dumps(out, indent=1, default=str))
                 return 1
-            counts = early_forecasts.write_rows(wconn, out)
+            counts = early_forecasts.write_rows(wconn, out, now=now if args.now else None)
         finally:
             wconn.close()
     for arm in ("open", "news"):
         out[arm].update(counts[arm])
-    out["status"] = "partial" if any(counts[a]["refused"] for a in counts) else "success"
+    out["status"] = counts["status"]
     print(json.dumps(out, indent=1, default=str))
     return 0
 
@@ -912,6 +914,14 @@ def _run(args, p, conn, applied) -> int:
     elif args.cmd == "adaptive-status":
         from . import adaptive
         print(json.dumps(adaptive.status(conn), indent=1, default=str))
+    elif args.cmd == "early-forecasts-report":
+        from . import early_forecasts
+        rows: dict = {}
+        if db.has_table(conn, "early_forecasts"):
+            for r in conn.execute("SELECT arm, status, COUNT(*) AS n FROM early_forecasts GROUP BY arm, status"):
+                rows.setdefault(r["arm"], {})[r["status"]] = r["n"]
+        print(json.dumps({"rows": rows, "runs": early_forecasts.runs(conn), "coverage": early_forecasts.coverage(conn),
+                          "verdict": early_forecasts.evaluate(conn)}, indent=2))
     elif args.cmd == "training-inputs":     # under the store lock taken above: collectors write the store
         from . import training_inputs
         r = training_inputs.run(conn)

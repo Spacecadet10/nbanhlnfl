@@ -12,6 +12,8 @@
 		<string>/Users/andry/nba-predictor-live</string>
 		<key>NHL_INJURY_CAPTURE</key>
 		<string>1</string>
+		<key>OMP_NUM_THREADS</key>
+		<string>4</string>
 	</dict>
 	<key>Label</key>
 	<string>com.nba-predictor.nhl-early</string>

@@ -67,15 +67,16 @@ def _quote(conn, game_id, market, line, at):
                         "ORDER BY retrieved_at DESC, quote_id DESC LIMIT 1", (game_id, market, line, at)).fetchone()
 
 
-def bets(conn, *, thresholds=THRESHOLDS, since: Optional[str] = None) -> list[dict]:
+def bets(conn, *, thresholds=THRESHOLDS, since: Optional[str] = None, prefix: Optional[str] = None) -> list[dict]:
+    """`prefix`: only sources whose label starts with it (e.g. 'early:')."""
     games = {r[0]: r for r in conn.execute("SELECT game_id, status, home_score, away_score, tipoff_at FROM games")}
     taken: set = set()
     out = []
     for source, gid, market, line, pa, pb, generated, tipoff in _forecasts(conn, since):
-        if pa is None or pb is None or pa + pb <= 0 or generated >= tipoff:
+        if (prefix and not source.startswith(prefix)) or pa is None or pb is None or pa + pb <= 0 or generated >= tipoff:
             continue
-        q = (_quote_after(conn, gid, market, line, generated, tipoff) if source.startswith("early:")
-             else _quote(conn, gid, market, line, generated))
+        early = source.startswith("early:")
+        q = _quote_after(conn, gid, market, line, generated, tipoff) if early else _quote(conn, gid, market, line, generated)
         if q is None:
             continue
         price_a, price_b, qa, qb, retrieved = q
@@ -99,7 +100,9 @@ def bets(conn, *, thresholds=THRESHOLDS, since: Optional[str] = None) -> list[di
             else:
                 profit = None
             clv = excess = None
-            if close is not None and close[4] > retrieved:
+            # Early bets: the bet quote can itself be the close (no later quote before the start); it then counts, at
+            # minus the margin, so the pre-registered metric never drops the bets the market did not move toward.
+            if close is not None and (close[4] > retrieved or (early and close[4] == retrieved)):
                 clv = (close[2] - qa) if side == "a" else (close[3] - qb)
                 excess = (close[2] if side == "a" else close[3]) - 1 / dec      # > 0: the close beats the price paid
             out.append({"source": source, "game_id": gid, "market": market, "line": line, "threshold": t, "side": side,

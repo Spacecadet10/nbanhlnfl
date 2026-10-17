@@ -181,3 +181,23 @@ def test_an_early_forecast_without_a_later_quote_before_the_start_is_no_bet(stor
     quote(store, "2026-10-10T23:10:00Z", 0.40)                                  # after the start: never a bet price
     early(store, "2026-10-10T08:30:00Z", 0.60, arm="news", member="nhl_players_injuries@adaptive")
     assert [x for x in pt.bets(store) if x["source"].startswith("early:")] == []
+
+
+def test_an_early_bet_priced_at_the_closing_quote_counts_at_minus_the_margin(store):
+    # Review: with one quote after the forecast, the bet price is also the close; excluding such bets from the excess CLV
+    # (always minus the margin) would bias the pre-registered metric upward. A quote retrieved in the same second as
+    # the forecast is not after it.
+    quote(store, "2026-10-10T22:20:00Z", 0.40)                                  # same second as the forecast: not after
+    quote(store, "2026-10-10T22:40:00Z", 0.45, price_a=+115, price_b=-135)      # the bet price and the close
+    early(store, "2026-10-10T22:20:00Z", 0.60, arm="news", member="m")
+    b = [x for x in pt.bets(store, thresholds=(0.06,)) if x["source"] == "early:news:m"]
+    assert len(b) == 1 and b[0]["quote_at"] == "2026-10-10T22:40:00Z"
+    assert b[0]["clv"] == 0 and b[0]["excess_clv"] == pytest.approx(0.45 - 1 / 2.15) and b[0]["excess_clv"] < 0
+    observe(store, [("single|m", "single", "[0.70, 0.0, 0.30]")], recorded="2026-10-10T22:30:00Z")
+    single = [x for x in pt.bets(store, thresholds=(0.06,)) if x["source"] == "single:m"]
+    assert len(single) == 1 and single[0]["quote_at"] == "2026-10-10T22:20:00Z"    # existing rule: the quote before
+    assert single[0]["clv"] is not None                                         # its close (22:40) is later
+    assert pt.bets(store, thresholds=(0.06,), prefix="early:") == b             # other sources left out
+    observe(store, [("single|n", "single", "[0.70, 0.0, 0.30]")], recorded="2026-10-10T22:45:00Z")
+    late = [x for x in pt.bets(store, thresholds=(0.06,)) if x["source"] == "single:n"]
+    assert late[0]["quote_at"] == "2026-10-10T22:40:00Z" and late[0]["clv"] is None and late[0]["excess_clv"] is None

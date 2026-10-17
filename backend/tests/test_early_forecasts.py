@@ -151,6 +151,7 @@ def test_a_fit_published_after_the_forecast_time_is_never_applied(store, monkeyp
     # The read-only evaluation chooses fits by the results they were trained on; a fit row published after `now` (possible
     # only for a backdated --now) must not inform an early forecast.
     game = store.execute("SELECT * FROM games WHERE game_id=?", (GID,)).fetchone()
+    monkeypatch.setattr(adaptive, "latest_fit", lambda *a, **k: {"fit_id": 7})
     row = {"name": "hockey_logistic@adaptive", "p": [0.6, 0.0, 0.4], "fit_id": 7, "artifact_sha256": "s",
            "training_cutoff": "2026-10-12T19:00:00Z", "information_at": "2026-10-12T20:40:00Z"}
     for finished, ok in (("2026-10-12T20:44:59Z", True), ("2026-10-12T20:45:01Z", False)):
@@ -193,8 +194,9 @@ def test_the_preregistered_verdict_needs_enough_bets_and_a_bootstrap_lower_bound
     assert ef.verdict(good) == ef.verdict(list(reversed(good)))          # fixed seed and order: one reproducible answer
 
 
-def test_the_command_plans_read_only_appends_under_the_lock_and_reports(xstore, capsys):
-    from app import cli
+def test_the_command_plans_read_only_appends_under_the_lock_and_reports(xstore, capsys, monkeypatch):
+    from app import cli, db
+    monkeypatch.setattr(db, "utc_now", lambda: EARLY)
     quote(xstore, "2026-10-12T20:41:00Z", date="2026-10-12T23:00Z")
     xstore.commit()
     assert cli.main(["--sport", "nhl", "early-forecasts", "--dry-run", "--now", EARLY]) == 0
@@ -209,12 +211,15 @@ def test_the_command_plans_read_only_appends_under_the_lock_and_reports(xstore, 
     cov = report["coverage"]["open"]
     assert cov["unavailable_reasons"] == {} and list(cov["model_versions"].values()) == [1]
     assert cov["hours_from_first_quote"] == {"median": 0.07, "max": 0.07}        # 20:41 quote, 20:45 forecast
-    v = report["verdict"]["early:open:hockey_logistic_xg"]          # bet at the 21:05 quote; no later close yet
-    assert (v["bets"], v["verdict"]) == (0, "inconclusive")
+    v = report["verdict"]["early:open:hockey_logistic_xg"]          # bet at the 21:05 quote, which is also the close
+    assert (v["bets"], v["verdict"]) == (1, "inconclusive") and v["excess_clv_mean"] < 0      # counts at minus the margin
+    runs = report["runs"]
+    assert runs["count"] == 1 and runs["by_status"] == {"success": 1} and runs["last"] == EARLY
 
 
 def test_the_scheduled_command_obeys_the_release_guard_before_any_request_or_write(xstore, capsys, monkeypatch):
-    from app import cli, jobs, release
+    from app import cli, db, jobs, release
+    monkeypatch.setattr(db, "utc_now", lambda: EARLY)
     quote(xstore, "2026-10-12T20:41:00Z", date="2026-10-12T23:00Z")
     xstore.commit()
     monkeypatch.setenv(release.GUARD_ENV, "1")
@@ -226,3 +231,139 @@ def test_the_scheduled_command_obeys_the_release_guard_before_any_request_or_wri
     assert cli.main(["--sport", "nhl", "early-forecasts", "--no-capture", "--now", EARLY]) == 0
     capsys.readouterr()
     assert json.loads(_rows(xstore, "open")[0]["provenance"])["release"] == "c0ffee"
+
+
+def test_a_fit_other_than_the_one_the_live_cycle_serves_is_never_applied(store, monkeypatch):
+    # Review: the read-only evaluation orders fits by training data, the live cycle by publication (an imported fit can
+    # make them differ): the early row must use the fit in force at that time, or be unavailable.
+    game = store.execute("SELECT * FROM games WHERE game_id=?", (GID,)).fetchone()
+    fake = {"definition": "d", "forecasts": [{"game_id": GID, "market": "winner", "missing": {}, "member_rows": [
+        {"name": "hockey_logistic@adaptive", "p": [0.6, 0.0, 0.4], "fit_id": 7, "finished_at": "2026-10-12T20:00:00Z"}]}]}
+    monkeypatch.setattr(adaptive, "record", lambda *a, **k: fake)
+    monkeypatch.setattr(adaptive, "latest_fit", lambda *a, **k: {"fit_id": 8})
+    got = ef.adaptive_member(store, EARLY, game, "hockey_logistic@adaptive")
+    assert got["p"] is None and "fit in force" in got["reason"]
+
+
+def test_a_news_row_stores_the_members_home_and_away_probabilities(store, monkeypatch):
+    # The synthetic store has no injury cache, so a learned member with a fit stands in for the injury member here.
+    adaptive.train(store, now=TRAIN_AT)
+    monkeypatch.setattr(ef, "NEWS_MEMBER", "hockey_logistic@adaptive")
+    names = _names(store)
+    quote(store, "2026-10-12T20:41:00Z", date="2026-10-12T23:00Z")
+    _capture("2026-10-12T20:30:00Z", {names["nhl:16"]: [("Pat Two", "Out", 1.0)]})
+    _capture("2026-10-12T20:44:00Z", {names["nhl:16"]: []})
+    ef.run(store, now=EARLY, capture=False)
+    r = _rows(store, "news")[0]
+    game = store.execute("SELECT * FROM games WHERE game_id=?", (GID,)).fetchone()
+    m = ef.adaptive_member(store, EARLY, game, "hockey_logistic@adaptive")
+    v = m["p"]
+    assert r["status"] == "forecast" and abs(v[0] - 0.5) > 1e-6
+    assert (r["p_a"], r["p_b"]) == (pytest.approx(v[0]), pytest.approx(v[2]))
+    assert json.loads(r["provenance"])["fit_id"] == m["provenance"]["fit_id"] is not None
+
+
+def test_a_change_first_seen_by_the_cycles_own_capture_is_still_news_once(store):
+    # Review: the two-hour cycle also captures. Job at :00, cycle at :15 (sees the change), job at :30 (no further
+    # change): comparing only the last two captures missed the news. Every fresh capture is compared with the one before
+    # it; a change triggers one forecast per game, never again for the same capture.
+    names = _names(store)
+    home = names["nhl:6"]
+    quote(store, "2026-10-12T20:10:00Z", date="2026-10-12T23:00Z")
+    _capture("2026-10-12T20:00:00Z", {home: [("Pat One", "Out", 1.0)]})
+    _capture("2026-10-12T20:15:00Z", {home: [("Pat One", "Out", 1.0), ("Pat Three", "Out", 1.0)]})      # the cycle's
+    _capture("2026-10-12T20:30:00Z", {home: [("Pat One", "Out", 1.0), ("Pat Three", "Out", 1.0)]})
+    out = ef.run(store, now="2026-10-12T20:31:00Z", capture=False)
+    rows = _rows(store, "news")
+    assert out["news"]["changed_teams"] == [ef.npr.team_key(home)] and [r["game_id"] for r in rows] == [GID]
+    t = json.loads(rows[0]["trigger_detail"])
+    assert t["capture_at"] == "2026-10-12T20:15:00Z" and t["changed_captures"] == ["2026-10-12T20:15:00Z"]
+    assert ef.run(store, now="2026-10-12T20:45:00Z", capture=False)["news"]["created"] == 0     # same change: once
+    assert ef.plan(store, "2026-10-12T20:50:00Z")["news"]["rows"] == []        # ... and not even evaluated again
+
+
+def test_a_malformed_capture_is_skipped_and_never_costs_the_open_arm(xstore):
+    store = xstore
+    quote(store, "2026-10-12T20:41:00Z", date="2026-10-12T23:00Z")
+    d = config.data_dir() / "research" / "nhl_players" / "injuries"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "live-20261012204000.json").write_text(json.dumps({"captured_at": "2026-10-12 20:40", "rows": ["x"]}))
+    (d / "live-20261012204100.json").write_text(json.dumps({"captured_at": "2026-10-12T20:41:00Z", "rows": ["x"]}))
+    (d / "live-20261012204200.json").write_text("{not json")
+    out = ef.run(store, now=EARLY, capture=False)
+    assert out["open"]["created"] == 1 and out["news"]["bad_captures"] == 3
+
+
+def test_an_early_xg_forecast_ignores_shots_imported_after_its_time(xstore):
+    from test_nhl_xg import fake_fetch
+    store = xstore
+    add_upcoming(store, gid=2026020051, start="2026-10-12T13:00:00", state=7, hs=1, vs=5, period=3, home=6, away=16,
+                 at="2026-10-12T20:00:00Z")                                    # a final before EARLY ...
+    before = ef.xg_forecasts(store, EARLY, [GID])[GID]
+    g = store.execute("SELECT * FROM games WHERE game_id='nhl:2026020051'").fetchone()
+    nhl_shots.import_game(store, g, fake_fetch(store)(g["game_id"]), "2026-10-12T20:50:00Z")    # ... shots after it
+    assert ef.xg_forecasts(store, EARLY, [GID])[GID] == before
+    assert ef.xg_forecasts(store, "2026-10-12T20:55:00Z", [GID])[GID] != before
+
+
+def test_the_xg_member_abstains_without_recent_shots(store):
+    p, reason = ef.xg_forecasts(store, EARLY, [GID])[GID]                      # no shots imported in this store
+    assert p is None and reason.startswith("stale shot data")
+
+
+def test_the_preregistered_constants_and_blocks_are_the_documented_ones():
+    from datetime import timedelta
+    assert (ef.THRESHOLD, ef.MIN_BETS, ef.END, ef.BOOTSTRAP, ef.SEED) == (0.06, 150, "2027-05-01T00:00:00Z", 10000, 20261016)
+    assert (ef.HORIZON, ef.NEWS_WINDOW) == (timedelta(hours=36), timedelta(minutes=45))
+    assert ef._week("2026-10-12T23:00:00Z") == ef._week("2026-10-18T23:59:59Z") != ef._week("2026-10-19T00:00:00Z")
+
+
+def test_the_evaluation_scores_only_early_bets_on_games_starting_before_the_end(store, monkeypatch):
+    from app import paper_trading as pt
+    seen = {}
+
+    def bets(conn, *, thresholds, prefix=None, since=None):
+        seen.update(thresholds=thresholds, prefix=prefix)
+        return [{"source": "early:open:m", "tipoff_at": "2027-04-30T23:00:00Z", "excess_clv": 0.01, "profit": 1.0},
+                {"source": "early:open:m", "tipoff_at": ef.END, "excess_clv": -0.5, "profit": -1.0}]
+    monkeypatch.setattr(pt, "bets", bets)
+    v = ef.evaluate(store)["early:open:m"]
+    assert seen == {"thresholds": (0.06,), "prefix": "early:"} and v["bets"] == 1 and v["excess_clv_mean"] == 0.01
+
+
+def test_a_row_for_a_game_that_started_or_moved_after_planning_is_refused_and_reported(xstore):
+    store = xstore
+    quote(store, "2026-10-12T20:41:00Z", date="2026-10-12T23:00Z")
+    planned = ef.plan(store, EARLY)
+    add_upcoming(store, start="2026-10-12T19:30:00", at="2026-10-12T20:46:00Z")       # the start moved meanwhile
+    counts = ef.write_rows(store, planned, now=EARLY)
+    assert counts["open"]["created"] == 0 and list(counts["open"]["refused"]) == [f"open|{GID}"]
+    assert _rows(store) == [] and store.execute("SELECT status FROM early_runs").fetchone()["status"] == "partial"
+
+
+def test_a_backdated_or_lock_blocked_run_writes_nothing(xstore, capsys, monkeypatch):
+    from app import cli, db
+    quote(xstore, "2026-10-12T20:41:00Z", date="2026-10-12T23:00Z")
+    xstore.commit()
+    monkeypatch.setattr(db, "utc_now", lambda: "2026-10-14T03:00:00Z")
+    assert cli.main(["--sport", "nhl", "early-forecasts", "--no-capture", "--now", EARLY]) == 1     # 30 h in the past
+    assert "--now" in json.loads(capsys.readouterr().out)["reason"] and _rows(xstore) == []
+    monkeypatch.setattr(db, "utc_now", lambda: EARLY)
+    monkeypatch.setattr(cli, "EARLY_LOCK_WAIT_SECONDS", 0)
+    with db.store_lock("nhl", wait_seconds=0) as held:
+        assert held
+        assert cli.main(["--sport", "nhl", "early-forecasts", "--no-capture", "--now", EARLY]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["status"] == "skipped" and _rows(xstore) == []
+    real = db.has_table
+    monkeypatch.setattr(db, "has_table", lambda conn, name: False if name == "early_forecasts" else real(conn, name))
+    assert cli.main(["--sport", "nhl", "early-forecasts", "--no-capture", "--now", EARLY]) == 1
+    assert "0032" in json.loads(capsys.readouterr().out)["reason"]
+
+
+def test_a_failure_in_the_news_arm_never_costs_the_open_rows(xstore, monkeypatch):
+    store = xstore
+    quote(store, "2026-10-12T20:41:00Z", date="2026-10-12T23:00Z")
+    monkeypatch.setattr(ef, "_news", lambda *a, **k: 1 / 0)
+    out = ef.run(store, now=EARLY, capture=False)
+    assert out["open"]["created"] == 1 and out["news"]["reason"].startswith("error: ZeroDivisionError")

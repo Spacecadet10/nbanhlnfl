@@ -32,3 +32,18 @@ CREATE TRIGGER early_forecasts_no_update BEFORE UPDATE ON early_forecasts
 BEGIN SELECT RAISE(ABORT, 'early_forecasts are append-only'); END;
 CREATE TRIGGER early_forecasts_no_delete BEFORE DELETE ON early_forecasts
 BEGIN SELECT RAISE(ABORT, 'early_forecasts are append-only'); END;
+
+-- One row per early-forecast run that reached the store (PREREGISTRATION.md §7: outages must be visible, and "no news"
+-- must be told apart from "the job was not running"). A run that could not take the store lock writes nothing here; it
+-- is in the job's log only.
+CREATE TABLE early_runs (
+  run_id          INTEGER PRIMARY KEY,
+  information_at  TEXT NOT NULL,            -- the run's `now`
+  finished_at     TEXT NOT NULL,
+  status          TEXT NOT NULL CHECK (status IN ('success', 'partial')),
+  detail          TEXT NOT NULL             -- JSON: rows created and refused per arm, capture, news reason, bad captures
+);
+CREATE TRIGGER early_runs_no_update BEFORE UPDATE ON early_runs
+BEGIN SELECT RAISE(ABORT, 'early_runs are append-only'); END;
+CREATE TRIGGER early_runs_no_delete BEFORE DELETE ON early_runs
+BEGIN SELECT RAISE(ABORT, 'early_runs are append-only'); END;
