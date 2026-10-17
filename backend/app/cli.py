@@ -29,7 +29,6 @@ READ_ONLY_COMMANDS = {"score-markets", "score-near-tipoff", "thresholds", "resea
 LOCK_WAIT_SECONDS = 45 * 60     # longer than any two-hour cycle (NHL ~13 minutes); a job still waiting then fails visibly
 ODDS_LOCK_WAIT_SECONDS = 120    # the periodic cycle waits out a short job (daily, injuries), not another full cycle
 EARLY_LOCK_WAIT_SECONDS = 20 * 60   # early-forecasts: waits out a two-hour cycle (~13 min); the wait holds nothing
-EARLY_NOW_TOLERANCE_SECONDS = 300   # early-forecasts --now that writes must be the present (no backdated prospective rows)
 
 
 def _record_lock_busy(sport: str, reason: str):
@@ -77,8 +76,11 @@ def main(argv=None) -> int:
                                               "then early winner forecasts appended to early_forecasts (research only)")
     ef.add_argument("--dry-run", action="store_true", help="No capture and no writes: print the rows a run would append")
     ef.add_argument("--no-capture", action="store_true", help="Skip the injury capture (tests, manual runs)")
-    ef.add_argument("--now", help="Test only: a fixed UTC time instead of the clock")
-    sub.add_parser("early-forecasts-report", help="Read-only: the pre-registered early-forecast verdict per arm")
+    ef.add_argument("--now", help="With --dry-run only: plan as of this UTC time (a run that writes always uses the clock)")
+    er = sub.add_parser("early-forecasts-report", help="Read-only: rows, runs and coverage of the early-forecast test; "
+                                                       "the verdict only after its end date or with --final")
+    er.add_argument("--final", action="store_true", help="Show the pre-registered verdict before the end date (§8: the "
+                                                         "one analysis; interim numbers are not for decisions)")
     oh = sub.add_parser("odds-history", help="Cache historical bookmaker lines of finished games (ESPN core odds, free); "
                                              "research input only, no store writes")
     oh.add_argument("--from-season", type=int, required=True)
@@ -303,7 +305,8 @@ def main(argv=None) -> int:
     if args.cmd == "paper-trades":
         from . import paper_trading
         with db.connect_readonly(args.sport) as conn:
-            print(json.dumps(paper_trading.report(conn, since=args.since), indent=2))
+            # early-forecast sources are left out: their numbers are sealed until the test's end (early-forecasts-report)
+            print(json.dumps(paper_trading.report(conn, since=args.since, exclude="early:"), indent=2))
         return 0
 
     if args.cmd == "odds-history":
@@ -545,14 +548,13 @@ def _early_forecasts(args, p) -> int:
             print(json.dumps({"status": "failed", "reason": "release guard", **info}))
             return 1
         commit = info["commit"]
-    if args.now and not args.dry_run:
-        from datetime import datetime
-        gap = abs((datetime.strptime(args.now, early_forecasts.FMT) - datetime.strptime(db.utc_now(), early_forecasts.FMT))
-                  .total_seconds())
-        if gap > EARLY_NOW_TOLERANCE_SECONDS:
-            print(json.dumps({"status": "failed", "reason": f"--now {args.now} is not the present: a backdated run would "
-                              "store rows nobody could have bet on; use --dry-run"}))
-            return 1
+    if args.now:               # a fixed time never writes: prospective rows carry the clock's times only
+        if not args.dry_run:
+            p.error("early-forecasts --now needs --dry-run (a run that writes uses the clock)")
+        try:
+            early_forecasts._parse(args.now)
+        except ValueError:
+            p.error(f"--now must look like 2026-10-17T20:00:00Z, not {args.now!r}")
     capture = None if (args.dry_run or args.no_capture) else jobs.nhl_injury_capture()
     now = args.now or db.utc_now()
     rconn = db.connect_readonly(args.sport)
@@ -582,7 +584,7 @@ def _early_forecasts(args, p) -> int:
                 out.update(status="failed", reason="the store has no early_forecasts table (migration 0032 not applied)")
                 print(json.dumps(out, indent=1, default=str))
                 return 1
-            counts = early_forecasts.write_rows(wconn, out, now=now if args.now else None)
+            counts = early_forecasts.write_rows(wconn, out)
         finally:
             wconn.close()
     for arm in ("open", "news"):
@@ -920,8 +922,10 @@ def _run(args, p, conn, applied) -> int:
         if db.has_table(conn, "early_forecasts"):
             for r in conn.execute("SELECT arm, status, COUNT(*) AS n FROM early_forecasts GROUP BY arm, status"):
                 rows.setdefault(r["arm"], {})[r["status"]] = r["n"]
+        sealed = not args.final and db.utc_now() < early_forecasts.END      # §8: one analysis, at the end
         print(json.dumps({"rows": rows, "runs": early_forecasts.runs(conn), "coverage": early_forecasts.coverage(conn),
-                          "verdict": early_forecasts.evaluate(conn)}, indent=2))
+                          "verdict": f"sealed until {early_forecasts.END} (PREREGISTRATION.md §8); --final shows it"
+                          if sealed else early_forecasts.evaluate(conn)}, indent=2))
     elif args.cmd == "training-inputs":     # under the store lock taken above: collectors write the store
         from . import training_inputs
         r = training_inputs.run(conn)

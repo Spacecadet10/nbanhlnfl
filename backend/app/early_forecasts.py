@@ -9,7 +9,8 @@ Arms (fixed in the pre-registration):
 - 'news': `nhl_players_injuries@adaptive` (the only NHL member that reads injury reports), served from its fit in force
   exactly as the adaptive cycle serves it (adaptive.record, read-only replay evaluation at `now`, checked against the fit
   in force), for every quoted game of a team whose rows changed in a live injury capture (this job's or the two-hour
-  cycle's) taken within NEWS_WINDOW, compared with the capture before it; once per game and change.
+  cycle's) taken since the previous run (at least NEWS_WINDOW, at most NEWS_MAX_AGE back), compared with the capture
+  before it; once per game and change.
 
 No information retrieved after `now` is used: results, shots and quotes by retrieval time, captures by capture time, fits
 published by then. This file is not part of any model or adaptive definition, so editing it retires no fit."""
@@ -27,13 +28,15 @@ from .db import utc_now
 OPEN_MEMBER = "hockey_logistic_xg"
 NEWS_MEMBER = "nhl_players_injuries@adaptive"
 HORIZON = timedelta(hours=36)            # jobs.ODDS_WINDOW: no line is fetched earlier
-NEWS_WINDOW = timedelta(minutes=45)      # a capture older than this is not news any more (captures every 30 min)
+NEWS_WINDOW = timedelta(minutes=45)      # captures since the previous run, and at least this far back (runs every 30 min)
+NEWS_MAX_AGE = timedelta(hours=2)        # ... but never older than this (after an outage, old changes are not news)
 # Pre-registered analysis (PREREGISTRATION.md): fixed before the first early forecast exists.
 THRESHOLD = 0.06
 MIN_BETS = 150
 END = "2027-05-01T00:00:00Z"             # games starting before this time (the 2026-27 regular season)
 BOOTSTRAP = 10000
 SEED = 20261016
+INSTALLED_AT: Optional[str] = None       # set at the freeze (PREREGISTRATION.md §9); until then the first run counts
 FMT = "%Y-%m-%dT%H:%M:%SZ"
 COLUMNS = ("sport", "arm", "member", "model_version", "game_id", "market", "status", "reason", "p_a", "p_b", "information_at",
            "trigger_detail", "provenance", "tipoff_at", "generated_at", "idempotency_key")
@@ -208,11 +211,13 @@ def plan(conn, now: str, *, fixed_clock: bool = True) -> dict:
     games = conn.execute(
         f"SELECT * FROM games WHERE status='scheduled' AND tipoff_at > ? AND tipoff_at <= ? AND season_type IN "
         f"({','.join('?' * len(eng.eligible_types))}) ORDER BY tipoff_at, game_id", (now, horizon, *eng.eligible_types)).fetchall()
-    first = {r["game_id"]: (r["retrieved_at"], r["quote_id"]) for r in conn.execute(
-        "SELECT game_id, retrieved_at, quote_id FROM market_quotes q WHERE market='winner' AND price_label='current' "
-        "AND p_a_devig IS NOT NULL AND retrieved_at <= ? AND quote_id = (SELECT x.quote_id FROM market_quotes x "
-        "WHERE x.game_id=q.game_id AND x.market='winner' AND x.price_label='current' AND x.p_a_devig IS NOT NULL "
-        "AND x.retrieved_at <= ? ORDER BY x.retrieved_at, x.quote_id LIMIT 1)", (now, now))}
+    first = {}
+    for g in games:
+        q = conn.execute("SELECT retrieved_at, quote_id FROM market_quotes WHERE game_id=? AND market='winner' "
+                         "AND price_label='current' AND p_a_devig IS NOT NULL AND retrieved_at <= ? "
+                         "ORDER BY retrieved_at, quote_id LIMIT 1", (g["game_id"], now)).fetchone()
+        if q is not None:
+            first[g["game_id"]] = (q["retrieved_at"], q["quote_id"])
     quoted = [g for g in games if g["game_id"] in first]
     finish = (lambda: now) if fixed_clock else utc_now
     out = {"now": now, "open": {"candidates": [], "rows": []}, "news": {"changed_teams": [], "rows": [], "reason": None}}
@@ -247,14 +252,16 @@ def _news(conn, now, quoted, used, finish, news) -> None:
     if len(caps) < 2:
         news["reason"] = "fewer than two live injury captures"
         return
-    oldest = _fmt(_parse(now) - NEWS_WINDOW)
+    last = (conn.execute("SELECT MAX(information_at) FROM early_runs WHERE information_at < ?", (now,)).fetchone()[0]
+            if db.has_table(conn, "early_runs") else None)
+    oldest = max(_fmt(_parse(now) - NEWS_MAX_AGE), min(_fmt(_parse(now) - NEWS_WINDOW), last or now))
+    news["window_from"] = oldest
     # Every capture of the window against the capture before it, so a change first seen by the two-hour cycle's own
     # capture is news too: {capture time: (previous capture time, changed team keys)}.
     changes = {cur["captured_at"]: (prev["captured_at"], changed_teams(prev, cur))
                for prev, cur in zip(caps, caps[1:]) if cur["captured_at"] >= oldest}
     if not changes:
-        news["reason"] = (f"the latest capture ({caps[-1]['captured_at']}) is older than "
-                          f"{int(NEWS_WINDOW.total_seconds() // 60)} min")
+        news["reason"] = f"no capture since {oldest} (the latest, {caps[-1]['captured_at']}, is older than the window)"
         return
     news["changed_teams"] = sorted(set().union(*(teams for _, teams in changes.values())))
     keys = {r["team_id"]: npr.team_key(r["name"]) for r in conn.execute("SELECT team_id, name FROM teams")}
@@ -330,9 +337,9 @@ def run(conn, *, now: Optional[str] = None, write: bool = True, capture: bool = 
 
 
 
-def runs(conn) -> dict:
-    """Runs that reached the store: count, by status, first and last `now`, and days with fewer than 40 runs (every 30 min
-    gives 48; fewer means the job was not running part of the day)."""
+def runs(conn, until: Optional[str] = None) -> dict:
+    """Runs that reached the store: count, by status, first and last `now`, and every UTC day from the first run to
+    `until` (default the clock) with fewer than 40 runs, days without any included (every 30 min gives 48)."""
     if not db.has_table(conn, "early_runs"):
         return {"count": 0, "by_status": {}, "first": None, "last": None, "short_days": {}}
     rows = conn.execute("SELECT information_at, status FROM early_runs ORDER BY information_at").fetchall()
@@ -340,9 +347,16 @@ def runs(conn) -> dict:
     for r in rows:
         by_status[r["status"]] += 1
         per_day[r["information_at"][:10]] += 1
+    short = {}
+    if rows:
+        day, last = _parse(rows[0]["information_at"]).date(), _parse(until or utc_now()).date()
+        while day <= last:
+            n = per_day.get(day.isoformat(), 0)
+            if n < 40:
+                short[day.isoformat()] = n
+            day += timedelta(days=1)
     return {"count": len(rows), "by_status": dict(by_status), "first": rows[0]["information_at"] if rows else None,
-            "last": rows[-1]["information_at"] if rows else None,
-            "short_days": {d: n for d, n in sorted(per_day.items()) if n < 40}}
+            "last": rows[-1]["information_at"] if rows else None, "short_days": short}
 
 
 def coverage(conn) -> dict:
@@ -376,8 +390,9 @@ def _week(tipoff: str) -> tuple:
 def verdict(bets: list) -> dict:
     """The pre-registered decision for one arm: mean excess CLV (de-vigged close of the bet side minus the implied
     probability of the price taken) with a week-block bootstrap 95% interval (BOOTSTRAP resamples, SEED). 'pass' when the
-    lower bound is above 0 with at least MIN_BETS bets, 'fail' otherwise, 'inconclusive' with fewer bets."""
-    usable = [b for b in bets if b.get("excess_clv") is not None]
+    lower bound is above 0 with at least MIN_BETS bets, 'fail' otherwise, 'inconclusive' with fewer bets. Void bets (a
+    postponed game or a moved start: refunded) are left out."""
+    usable = [b for b in bets if b.get("excess_clv") is not None and b.get("result") != "void"]    # void: refunded
     weeks: dict = defaultdict(list)
     for b in usable:
         weeks[_week(b["tipoff_at"])].append(b["excess_clv"])
@@ -407,11 +422,14 @@ def verdict(bets: list) -> dict:
     return out
 
 
-def evaluate(conn, *, end: str = END) -> dict:
-    """Per arm: the pre-registered verdict over paper-traded early bets at THRESHOLD on games starting before `end`."""
+def evaluate(conn, *, end: str = END, start: Optional[str] = None) -> dict:
+    """Per arm: the pre-registered verdict over paper-traded early bets at THRESHOLD made from installation on (`start`,
+    default INSTALLED_AT, else the first run) on games starting before `end`."""
     from . import paper_trading
+    start = start or INSTALLED_AT or (conn.execute("SELECT MIN(information_at) FROM early_runs").fetchone()[0]
+                                      if db.has_table(conn, "early_runs") else None)
     by: dict = defaultdict(list)
     for b in paper_trading.bets(conn, thresholds=(THRESHOLD,), prefix="early:"):
-        if b["source"].startswith("early:") and b["tipoff_at"] < end:
+        if b["source"].startswith("early:") and b["tipoff_at"] < end and (start is None or b["forecast_at"] >= start):
             by[b["source"]].append(b)
-    return {source: verdict(rows) for source, rows in sorted(by.items())}
+    return {source: {**verdict(rows), "from": start} for source, rows in sorted(by.items())}

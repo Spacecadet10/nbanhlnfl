@@ -36,6 +36,21 @@ def _capture(at, rows):
                                                       "rows": body}))
 
 
+def _clock(start, step=1):
+    """A clock reading `start`, then one second later at each call (the scheduled path takes its times from the clock)."""
+    from datetime import timedelta
+    t = [ef._parse(start) - timedelta(seconds=step)]
+
+    def now():
+        t[0] += timedelta(seconds=step)
+        return ef._fmt(t[0])
+    return now
+
+
+def _run_log(conn, at):
+    conn.execute("INSERT INTO early_runs (information_at, finished_at, status, detail) VALUES (?, ?, 'success', '{}')", (at, at))
+
+
 def _rows(conn, arm=None):
     q = "SELECT * FROM early_forecasts" + (" WHERE arm = ?" if arm else "") + " ORDER BY early_id"
     return conn.execute(q, (arm,) if arm else ()).fetchall()
@@ -95,6 +110,7 @@ def test_changed_teams_compares_each_teams_listed_players_statuses_and_weights()
 def test_the_news_arm_forecasts_only_games_of_teams_whose_report_changed_and_each_capture_once(store):
     names = _names(store)
     home, away = names["nhl:6"], names["nhl:16"]
+    add_upcoming(store, gid=2026020002, start="2026-10-13T19:00:00", at="2026-10-12T12:00:00Z")   # same teams, no line
     quote(store, "2026-10-12T20:41:00Z", date="2026-10-12T23:00Z")
     _capture("2026-10-12T20:00:00Z", {home: [("Pat One", "Out", 1.0)], away: [("Pat Two", "Out", 1.0)]})
     _capture("2026-10-12T20:30:00Z", {home: [("Pat One", "Out", 1.0)], away: [("Pat Two", "Out", 1.0)]})
@@ -196,16 +212,25 @@ def test_the_preregistered_verdict_needs_enough_bets_and_a_bootstrap_lower_bound
 
 def test_the_command_plans_read_only_appends_under_the_lock_and_reports(xstore, capsys, monkeypatch):
     from app import cli, db
-    monkeypatch.setattr(db, "utc_now", lambda: EARLY)
+    clock = _clock(EARLY)
+    monkeypatch.setattr(db, "utc_now", clock)
+    monkeypatch.setattr(ef, "utc_now", clock)
     quote(xstore, "2026-10-12T20:41:00Z", date="2026-10-12T23:00Z")
     xstore.commit()
     assert cli.main(["--sport", "nhl", "early-forecasts", "--dry-run", "--now", EARLY]) == 0
     dry = json.loads(capsys.readouterr().out)
     assert [r["game_id"] for r in dry["open"]["rows"]] == [GID] and dry["open"]["created"] == 0 and _rows(xstore) == []
-    assert cli.main(["--sport", "nhl", "early-forecasts", "--no-capture", "--now", EARLY]) == 0
+    assert cli.main(["--sport", "nhl", "early-forecasts", "--no-capture"]) == 0           # the scheduled path: the clock
     out = json.loads(capsys.readouterr().out)
     assert out["open"]["created"] == 1 and out["capture"] is None and len(_rows(xstore, "open")) == 1
+    r = _rows(xstore, "open")[0]
+    assert r["information_at"] < r["generated_at"]          # made when the calculation finished, not when it started
     assert cli.main(["--sport", "nhl", "early-forecasts-report"]) == 0
+    sealed = json.loads(capsys.readouterr().out)
+    assert sealed["verdict"] == f"sealed until {ef.END} (PREREGISTRATION.md §8); --final shows it"
+    assert cli.main(["--sport", "nhl", "paper-trades"]) == 0
+    assert not [s for s in json.loads(capsys.readouterr().out) if s.startswith("early:")]     # nor here
+    assert cli.main(["--sport", "nhl", "early-forecasts-report", "--final"]) == 0
     report = json.loads(capsys.readouterr().out)
     assert report["rows"] == {"open": {"forecast": 1}}
     cov = report["coverage"]["open"]
@@ -214,21 +239,22 @@ def test_the_command_plans_read_only_appends_under_the_lock_and_reports(xstore, 
     v = report["verdict"]["early:open:hockey_logistic_xg"]          # bet at the 21:05 quote, which is also the close
     assert (v["bets"], v["verdict"]) == (1, "inconclusive") and v["excess_clv_mean"] < 0      # counts at minus the margin
     runs = report["runs"]
-    assert runs["count"] == 1 and runs["by_status"] == {"success": 1} and runs["last"] == EARLY
+    assert runs["count"] == 1 and runs["by_status"] == {"success": 1} and runs["last"] == r["information_at"]
 
 
 def test_the_scheduled_command_obeys_the_release_guard_before_any_request_or_write(xstore, capsys, monkeypatch):
     from app import cli, db, jobs, release
-    monkeypatch.setattr(db, "utc_now", lambda: EARLY)
+    monkeypatch.setattr(db, "utc_now", _clock(EARLY))
+    monkeypatch.setattr(ef, "utc_now", _clock(EARLY))
     quote(xstore, "2026-10-12T20:41:00Z", date="2026-10-12T23:00Z")
     xstore.commit()
     monkeypatch.setenv(release.GUARD_ENV, "1")
     monkeypatch.setattr(jobs, "nhl_injury_capture", lambda: pytest.fail("captured before the release check"))
     monkeypatch.setattr(release, "check", lambda sport: {"commit": "c0ffee", "problems": ["not the release checkout"]})
-    assert cli.main(["--sport", "nhl", "early-forecasts", "--now", EARLY]) == 1
+    assert cli.main(["--sport", "nhl", "early-forecasts"]) == 1
     assert json.loads(capsys.readouterr().out)["reason"] == "release guard" and _rows(xstore) == []
     monkeypatch.setattr(release, "check", lambda sport: {"commit": "c0ffee", "problems": []})
-    assert cli.main(["--sport", "nhl", "early-forecasts", "--no-capture", "--now", EARLY]) == 0
+    assert cli.main(["--sport", "nhl", "early-forecasts", "--no-capture"]) == 0
     capsys.readouterr()
     assert json.loads(_rows(xstore, "open")[0]["provenance"])["release"] == "c0ffee"
 
@@ -345,19 +371,23 @@ def test_a_backdated_or_lock_blocked_run_writes_nothing(xstore, capsys, monkeypa
     from app import cli, db
     quote(xstore, "2026-10-12T20:41:00Z", date="2026-10-12T23:00Z")
     xstore.commit()
-    monkeypatch.setattr(db, "utc_now", lambda: "2026-10-14T03:00:00Z")
-    assert cli.main(["--sport", "nhl", "early-forecasts", "--no-capture", "--now", EARLY]) == 1     # 30 h in the past
-    assert "--now" in json.loads(capsys.readouterr().out)["reason"] and _rows(xstore) == []
-    monkeypatch.setattr(db, "utc_now", lambda: EARLY)
+    with pytest.raises(SystemExit):                                  # a fixed time writes nothing, ever: --dry-run only
+        cli.main(["--sport", "nhl", "early-forecasts", "--no-capture", "--now", EARLY])
+    with pytest.raises(SystemExit):                                  # a malformed time is a usage error
+        cli.main(["--sport", "nhl", "early-forecasts", "--dry-run", "--now", "yesterday"])
+    capsys.readouterr()
+    assert _rows(xstore) == [] and cli.EARLY_LOCK_WAIT_SECONDS == 20 * 60
+    monkeypatch.setattr(db, "utc_now", _clock(EARLY))
+    monkeypatch.setattr(ef, "utc_now", _clock(EARLY))
     monkeypatch.setattr(cli, "EARLY_LOCK_WAIT_SECONDS", 0)
     with db.store_lock("nhl", wait_seconds=0) as held:
         assert held
-        assert cli.main(["--sport", "nhl", "early-forecasts", "--no-capture", "--now", EARLY]) == 0
+        assert cli.main(["--sport", "nhl", "early-forecasts", "--no-capture"]) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["status"] == "skipped" and _rows(xstore) == []
     real = db.has_table
     monkeypatch.setattr(db, "has_table", lambda conn, name: False if name == "early_forecasts" else real(conn, name))
-    assert cli.main(["--sport", "nhl", "early-forecasts", "--no-capture", "--now", EARLY]) == 1
+    assert cli.main(["--sport", "nhl", "early-forecasts", "--no-capture"]) == 1
     assert "0032" in json.loads(capsys.readouterr().out)["reason"]
 
 
@@ -367,3 +397,75 @@ def test_a_failure_in_the_news_arm_never_costs_the_open_rows(xstore, monkeypatch
     monkeypatch.setattr(ef, "_news", lambda *a, **k: 1 / 0)
     out = ef.run(store, now=EARLY, capture=False)
     assert out["open"]["created"] == 1 and out["news"]["reason"].startswith("error: ZeroDivisionError")
+
+
+def test_a_change_since_the_previous_run_is_news_when_a_run_starts_late_but_never_older_than_two_hours(store):
+    # Second review: the window was a fixed 45 min, so with the 19:30 run missing a change captured by the two-hour cycle
+    # at 19:05 was outside the 20:00 run's window. The window now starts at the previous run (at most 2 h back).
+    names = _names(store)
+    home = names["nhl:6"]
+    quote(store, "2026-10-12T18:00:00Z", date="2026-10-12T23:00Z")
+    _capture("2026-10-12T19:00:00Z", {home: []})
+    _run_log(store, "2026-10-12T19:00:00Z")
+    _capture("2026-10-12T19:05:00Z", {home: [("Pat One", "Out", 1.0)]})        # the cycle's capture
+    _capture("2026-10-12T20:00:00Z", {home: [("Pat One", "Out", 1.0)]})        # the job's, after a missed run
+    out = ef.run(store, now="2026-10-12T20:00:00Z", capture=False)
+    assert out["news"]["window_from"] == "2026-10-12T19:00:00Z" and len(_rows(store, "news")) == 1
+    assert json.loads(_rows(store, "news")[0]["trigger_detail"])["changed_captures"] == ["2026-10-12T19:05:00Z"]
+
+
+def test_the_news_window_reaches_back_at_most_two_hours(store):
+    names = _names(store)
+    home = names["nhl:6"]
+    quote(store, "2026-10-12T15:00:00Z", date="2026-10-12T23:00Z")
+    _run_log(store, "2026-10-12T16:00:00Z")                                  # the job was down for four hours
+    _capture("2026-10-12T16:00:00Z", {home: []})
+    _capture("2026-10-12T17:00:00Z", {home: [("Pat One", "Out", 1.0)]})        # stale news by 20:00
+    _capture("2026-10-12T20:00:00Z", {home: [("Pat One", "Out", 1.0)]})
+    out = ef.run(store, now="2026-10-12T20:00:00Z", capture=False)
+    assert out["news"]["window_from"] == "2026-10-12T18:00:00Z" and _rows(store, "news") == []
+
+
+def test_the_first_capture_of_the_window_is_compared_with_the_one_before_it(store):
+    names = _names(store)
+    home = names["nhl:6"]
+    quote(store, "2026-10-12T18:00:00Z", date="2026-10-12T23:00Z")
+    _capture("2026-10-12T19:00:00Z", {home: []})                                # before the window
+    _capture("2026-10-12T20:10:00Z", {home: [("Pat One", "Out", 1.0)]})        # the window's first capture
+    assert ef.run(store, now="2026-10-12T20:15:00Z", capture=False)["news"]["changed_teams"] == [ef.npr.team_key(home)]
+    assert len(_rows(store, "news")) == 1
+
+
+def test_every_change_a_news_row_covers_is_never_forecast_again(store):
+    names = _names(store)
+    home = names["nhl:6"]
+    quote(store, "2026-10-12T18:00:00Z", date="2026-10-12T23:00Z")
+    _capture("2026-10-12T20:00:00Z", {home: []})
+    _capture("2026-10-12T20:10:00Z", {home: [("Pat One", "Out", 1.0)]})
+    _capture("2026-10-12T20:20:00Z", {home: [("Pat One", "Out", 1.0), ("Pat Two", "Out", 1.0)]})
+    ef.run(store, now="2026-10-12T20:21:00Z", capture=False)
+    t = json.loads(_rows(store, "news")[0]["trigger_detail"])
+    assert t["changed_captures"] == ["2026-10-12T20:10:00Z", "2026-10-12T20:20:00Z"] and t["capture_at"] == "2026-10-12T20:20:00Z"
+    assert ef.run(store, now="2026-10-12T20:30:00Z", capture=False)["news"]["created"] == 0
+    assert ef.plan(store, "2026-10-12T20:31:00Z")["news"]["rows"] == [] and len(_rows(store, "news")) == 1
+
+
+def test_the_run_log_lists_days_without_enough_runs_including_days_with_none(store):
+    for at in ("2026-10-10T12:00:00Z", "2026-10-12T12:00:00Z"):
+        _run_log(store, at)
+    assert ef.runs(store, until="2026-10-13T12:00:00Z")["short_days"] == {
+        "2026-10-10": 1, "2026-10-11": 0, "2026-10-12": 1, "2026-10-13": 0}
+
+
+def test_the_primary_metric_counts_settled_bets_from_installation_on_and_never_void_ones(store, monkeypatch):
+    from app import paper_trading as pt
+    bets = [{"source": "early:open:m", "forecast_at": "2026-10-20T10:00:00Z", "tipoff_at": "2026-10-20T23:00:00Z",
+             "excess_clv": 0.02, "clv": 0.01, "profit": 1.0, "result": "a"},
+            {"source": "early:open:m", "forecast_at": "2026-10-21T10:00:00Z", "tipoff_at": "2026-10-21T23:00:00Z",
+             "excess_clv": -0.5, "clv": -0.4, "profit": None, "result": "void"},          # refunded: not a bet
+            {"source": "early:open:m", "forecast_at": "2026-10-19T10:00:00Z", "tipoff_at": "2026-10-19T23:00:00Z",
+             "excess_clv": -0.9, "clv": -0.9, "profit": -1.0, "result": "b"}]            # before installation
+    monkeypatch.setattr(pt, "bets", lambda conn, **k: bets)
+    _run_log(store, "2026-10-20T09:00:00Z")                               # the first run: installation
+    v = ef.evaluate(store)["early:open:m"]
+    assert v["bets"] == 1 and v["excess_clv_mean"] == 0.02 and v["from"] == "2026-10-20T09:00:00Z"

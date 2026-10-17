@@ -201,3 +201,23 @@ def test_an_early_bet_priced_at_the_closing_quote_counts_at_minus_the_margin(sto
     observe(store, [("single|n", "single", "[0.70, 0.0, 0.30]")], recorded="2026-10-10T22:45:00Z")
     late = [x for x in pt.bets(store, thresholds=(0.06,)) if x["source"] == "single:n"]
     assert late[0]["quote_at"] == "2026-10-10T22:40:00Z" and late[0]["clv"] is None and late[0]["excess_clv"] is None
+
+
+def test_an_early_bets_close_comes_from_the_same_bookmaker_and_a_quote_at_the_start_is_never_a_price(store):
+    # Second review: ESPN can list several providers; the close of an early bet must be the bet's own book (names
+    # compared without spaces or case: 'Draft Kings' = 'DraftKings'), and a quote retrieved at the start is not on offer.
+    def q(at, provider, pa, price_a):
+        fetch = store.execute("INSERT INTO raw_fetches (raw_id, retrieved_at) VALUES (1, ?)", (at,)).lastrowid
+        store.execute("INSERT INTO market_quotes (sport, game_id, provider, market, price_label, line, price_a, price_b, "
+                      "p_a_devig, p_b_devig, retrieved_at, fetch_id, raw_id) VALUES ('nhl','g1',?,'winner','current',NULL,"
+                      "?,-110,?,?,?,?,1)", (provider, price_a, pa, 1 - pa, at, fetch))
+    q("2026-10-10T20:00:00Z", "DraftKings", 0.58, -150)            # the bet price
+    q("2026-10-10T22:00:00Z", "Other Book", 0.73, -300)            # another book: never the close
+    q("2026-10-10T22:30:00Z", "Draft Kings", 0.55, -130)           # the same book, spelled differently: the close
+    q("2026-10-10T23:00:00Z", "DraftKings", 0.90, -1000)           # at the start: neither price nor close
+    early(store, "2026-10-10T19:00:00Z", 0.70)
+    b = [x for x in pt.bets(store, thresholds=(0.06,)) if x["source"].startswith("early:")]
+    assert len(b) == 1 and b[0]["quote_at"] == "2026-10-10T20:00:00Z"
+    assert b[0]["clv"] == pytest.approx(0.55 - 0.58) and b[0]["excess_clv"] == pytest.approx(0.55 - 1 / (1 + 100 / 150))
+    early(store, "2026-10-10T22:59:00Z", 0.99, arm="news", member="n")
+    assert [x for x in pt.bets(store, thresholds=(0.06,)) if x["source"] == "early:news:n"] == []

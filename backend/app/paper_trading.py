@@ -14,7 +14,8 @@ leaves the bet without a same-line close (counted, CLV not computed).
 A single member is recorded every tracking cycle (and per cohort definition), so it gets more looks per game than the
 canonical forecast; its first qualifying row is the bet, as a bettor watching live would take it.
 Early forecasts (`early:<arm>:<member>`, table early_forecasts, docs/evidence/early-forecast-test) bet at the first quote
-retrieved after the forecast and before the start (their pre-registered rule: the bettor acts after the forecast).
+retrieved after the forecast and before the start (their pre-registered rule: the bettor acts after the forecast); their
+close is the last quote of the same book (names compared without spaces or case) retrieved before the start.
 Excess CLV = the de-vigged close of the bet side minus the implied probability of the price taken (> 0: the close beats
 the price paid, margin included)."""
 from collections import defaultdict
@@ -52,12 +53,23 @@ def _forecasts(conn, since: Optional[str]):
     return [r[:8] for r in conn.execute(q, args)]
 
 
+_BOOK = "lower(replace(provider, ' ', ''))"     # 'Draft Kings' and 'DraftKings' are one book
+
+
 def _quote_after(conn, game_id, market, line, at, tipoff):
-    """Early forecasts (pre-registered): the first quote retrieved after the forecast and before the start."""
-    return conn.execute("SELECT price_a, price_b, p_a_devig, p_b_devig, retrieved_at FROM market_quotes WHERE game_id = ? "
-                        "AND market = ? AND line IS ? AND retrieved_at > ? AND retrieved_at < ? AND p_a_devig IS NOT NULL "
-                        "AND price_label = 'current' "
+    """Early forecasts (pre-registered): the first quote retrieved after the forecast and before the start, with its book."""
+    return conn.execute(f"SELECT price_a, price_b, p_a_devig, p_b_devig, retrieved_at, {_BOOK} FROM market_quotes "
+                        "WHERE game_id = ? AND market = ? AND line IS ? AND retrieved_at > ? AND retrieved_at < ? "
+                        "AND p_a_devig IS NOT NULL AND price_label = 'current' "
                         "ORDER BY retrieved_at, quote_id LIMIT 1", (game_id, market, line, at, tipoff)).fetchone()
+
+
+def _close_same_book(conn, game_id, market, line, tipoff, book):
+    """Early forecasts: the last quote of the bet's own book retrieved before the start (at least the bet quote itself)."""
+    return conn.execute(f"SELECT price_a, price_b, p_a_devig, p_b_devig, retrieved_at FROM market_quotes WHERE game_id = ? "
+                        f"AND market = ? AND line IS ? AND retrieved_at < ? AND {_BOOK} = ? AND p_a_devig IS NOT NULL "
+                        "AND price_label = 'current' ORDER BY retrieved_at DESC, quote_id DESC LIMIT 1",
+                        (game_id, market, line, tipoff, book)).fetchone()
 
 
 def _quote(conn, game_id, market, line, at):
@@ -67,19 +79,22 @@ def _quote(conn, game_id, market, line, at):
                         "ORDER BY retrieved_at DESC, quote_id DESC LIMIT 1", (game_id, market, line, at)).fetchone()
 
 
-def bets(conn, *, thresholds=THRESHOLDS, since: Optional[str] = None, prefix: Optional[str] = None) -> list[dict]:
-    """`prefix`: only sources whose label starts with it (e.g. 'early:')."""
+def bets(conn, *, thresholds=THRESHOLDS, since: Optional[str] = None, prefix: Optional[str] = None,
+         exclude: Optional[str] = None) -> list[dict]:
+    """`prefix`: only sources whose label starts with it (e.g. 'early:'); `exclude`: none whose label does."""
     games = {r[0]: r for r in conn.execute("SELECT game_id, status, home_score, away_score, tipoff_at FROM games")}
     taken: set = set()
     out = []
     for source, gid, market, line, pa, pb, generated, tipoff in _forecasts(conn, since):
-        if (prefix and not source.startswith(prefix)) or pa is None or pb is None or pa + pb <= 0 or generated >= tipoff:
+        if (prefix and not source.startswith(prefix)) or (exclude and source.startswith(exclude)):
+            continue
+        if pa is None or pb is None or pa + pb <= 0 or generated >= tipoff:
             continue
         early = source.startswith("early:")
         q = _quote_after(conn, gid, market, line, generated, tipoff) if early else _quote(conn, gid, market, line, generated)
         if q is None:
             continue
-        price_a, price_b, qa, qb, retrieved = q
+        price_a, price_b, qa, qb, retrieved = q[:5]
         two = pa + pb
         edge = {"a": pa / two - qa, "b": pb / two - qb}
         for t in thresholds:
@@ -91,7 +106,7 @@ def bets(conn, *, thresholds=THRESHOLDS, since: Optional[str] = None, prefix: Op
             dec = _decimal(price_a if side == "a" else price_b)
             if dec is None:
                 continue
-            close = _quote(conn, gid, market, line, tipoff)
+            close = _close_same_book(conn, gid, market, line, tipoff, q[5]) if early else _quote(conn, gid, market, line, tipoff)
             g = games.get(gid)
             realised = markets.settle(market, line, status=g[1], home=g[2], away=g[3], tipoff_at=g[4],
                                       forecast_tipoff_at=tipoff) if g else "pending"
