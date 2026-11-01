@@ -7,7 +7,7 @@ Provides schedule, status, final scores, basic team box stats, and (for upcoming
 """
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Callable, Optional
 
 from ..odds import devig_two_way, parse_american
 
@@ -102,6 +102,34 @@ def normalize_time(value: str) -> str:
 
 
 def parse_scoreboard(payload: dict) -> list[GameRow]:
+    return _parse_scoreboard(payload, prefix="espn:", season_types=SEASON_TYPES, franchise_ids=NBA_FRANCHISE_IDS,
+                             box=True)
+
+
+def parse_nfl_scoreboard(payload: dict) -> list[GameRow]:
+    """ESPN NFL scoreboard: schedule, status and final scores only (no box stats, no odds yet). Ties are final results
+    with equal scores. Season is ESPN's season year (the year the season starts: 2024 = the 2024-25 season)."""
+    return _parse_scoreboard(payload, prefix="nfl:", season_types=NFL_SEASON_TYPES, franchise_ids=NFL_FRANCHISE_IDS,
+                             box=False, adjust=_nfl_adjust)
+
+
+def _nfl_adjust(ev: dict, comp: dict, g: "GameRow") -> None:
+    """NFL rules taken from the feed's own fields (checked 2026-11-01):
+    - neutral site: ESPN's flag, or a venue outside the USA (London, Germany, Mexico, Brazil, the Bills' Toronto series),
+      or a Super Bowl (event note). Before 2014 ESPN leaves the flag false for international games and Super Bowls.
+    - a game dated outside August of its season year … March of the next (ESPN lists a 1988 game in its 2004-11 feed)
+      is 'other': never a result of that season."""
+    country = ((comp.get("venue") or {}).get("address") or {}).get("country")
+    super_bowl = any(str(n.get("headline", "")).startswith("Super Bowl") for n in comp.get("notes") or [])
+    if (country and country != "USA") or (g.season_type == "postseason" and super_bowl):
+        g.neutral_site = True
+    year, month = int(g.tipoff_at[:4]), int(g.tipoff_at[5:7])
+    if not ((year == g.season and month >= 8) or (year == g.season + 1 and month <= 3)):
+        g.season_type = "other"
+
+
+def _parse_scoreboard(payload: dict, *, prefix: str, season_types: dict, franchise_ids: frozenset,
+                      box: bool, adjust: Optional[Callable] = None) -> list[GameRow]:
     games = []
     for ev in payload.get("events", []):
         comp = ev["competitions"][0]
@@ -109,26 +137,28 @@ def parse_scoreboard(payload: dict) -> list[GameRow]:
         if set(sides) != {"home", "away"}:
             continue
         status = STATUS.get(comp["status"]["type"]["name"], "other")
-        teams = {k: TeamRow(team_id=f"espn:{c['team']['id']}", abbr=c["team"].get("abbreviation", "?"),
+        teams = {k: TeamRow(team_id=f"{prefix}{c['team']['id']}", abbr=c["team"].get("abbreviation", "?"),
                             name=c["team"].get("displayName") or c["team"].get("name", "?"))
                  for k, c in sides.items()}
         final = status == "final"
-        season_type = SEASON_TYPES.get(ev["season"].get("type"), "other")
-        if season_type != "preseason" and not all(c["team"]["id"] in NBA_FRANCHISE_IDS for c in sides.values()):
+        season_type = season_types.get(ev["season"].get("type"), "other")
+        if season_type != "preseason" and not all(c["team"]["id"] in franchise_ids for c in sides.values()):
             season_type = "other"
         g = GameRow(
-            game_id=f"espn:{ev['id']}", season=int(ev["season"]["year"]),
+            game_id=f"{prefix}{ev['id']}", season=int(ev["season"]["year"]),
             season_type=season_type,
             tipoff_at=normalize_time(ev["date"]), home=teams["home"], away=teams["away"],
             neutral_site=bool(comp.get("neutralSite")), status=status,
             home_score=int(sides["home"]["score"]) if final else None,
             away_score=int(sides["away"]["score"]) if final else None,
         )
-        if final:
+        if final and box:
             g.home_stats = _stats(sides["home"])
             g.away_stats = _stats(sides["away"])
-        if status == "scheduled":
+        if status == "scheduled" and box:
             g.odds = _odds(comp)
+        if adjust:
+            adjust(ev, comp, g)
         games.append(g)
     return games
 
@@ -229,6 +259,20 @@ def parse_summary_box(payload: dict) -> SummaryBox:
 
 # --- Lines with prices (moneyline, point spread / puck line, total) for scheduled games, both sports. ---
 NHL_SOURCE = "espn_nhl"   # the NHL store caches ESPN NHL day scoreboards under its own source name
+NFL_SOURCE = "espn_nfl"
+NFL_ENDPOINT = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
+NFL_IMPORTER_VERSION = "espn-nfl-scoreboard-1"
+NFL_SEASON_TYPES = {1: "preseason", 2: "regular", 3: "postseason"}
+# ESPN ids of the 32 NFL franchises (checked against /teams on 2026-11-01: 1-30, 33 BAL, 34 HOU). 31/32 are the Pro Bowl
+# AFC/NFC sides; any game involving a non-franchise team outside the preseason is 'other' (never a team result).
+NFL_FRANCHISE_IDS = frozenset(str(i) for i in (*range(1, 31), 33, 34))
+
+
+def fetch_nfl_month(yyyymm: str, timeout: float = 60) -> bytes:
+    """One calendar month of the NFL scoreboard (dates=YYYYMM; a date range is refused by ESPN, checked 2026-11-01)."""
+    return _get(month_request(yyyymm)[1], timeout, NFL_ENDPOINT)
+
+
 NHL_ENDPOINT = "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard"
 LINES_IMPORTER_VERSION = "espn-lines-1"
 

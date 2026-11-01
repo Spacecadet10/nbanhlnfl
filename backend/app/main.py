@@ -22,7 +22,7 @@ from .schemas import (CanonicalHistoryResponse, CanonicalPerformanceResponse, Ga
                       Meta, PerformanceResponse, SourceStatus)
 
 API_VERSION = "0.3.0"
-SPORT = Query("nba", pattern="^(nba|nhl)$", description="Which sport's data store to read. Never falls back to another.")
+SPORT = Query("nba", pattern=f"^({'|'.join(sports.SPORT_IDS)})$", description="Which sport's data store to read. Never falls back to another.")
 MARKET = Query("winner", pattern="^(winner|reg3|spread|total|team_total_home|team_total_away)$")
 
 app = FastAPI(title="NBA Predictor API", version=API_VERSION)

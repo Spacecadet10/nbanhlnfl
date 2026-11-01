@@ -61,6 +61,12 @@ def main(argv=None) -> int:
                    help="Which sport's store to use (default nba). Each sport has its own SQLite file.")
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("migrate", help="Create/upgrade the SQLite schema")
+    nfl_p = sub.add_parser("nfl", help="NFL data-only store (not served, no model): migrate, ingest ESPN NFL months, "
+                                       "replay or coverage. Ignores --sport; always opens the NFL store.")
+    nfl_p.add_argument("action", choices=("migrate", "ingest", "replay", "coverage"))
+    nfl_p.add_argument("--from", dest="start", help="ingest: first month YYYYMM")
+    nfl_p.add_argument("--to", dest="end", help="ingest: last month YYYYMM")
+    nfl_p.add_argument("--sleep", type=float, default=1.0, help="ingest: seconds between requests")
     ni = sub.add_parser("nhl-player-inputs", help="Cache NHL historical injuries and/or player boxes; no training or store writes")
     ni.add_argument("--from-season", type=int, required=True)
     ni.add_argument("--to-season", type=int, required=True)
@@ -289,6 +295,8 @@ def main(argv=None) -> int:
                     help="Required for --period test; the access is logged to data/eval/test_access.jsonl")
     bt.add_argument("--record", action="store_true", help="Also append predictions to the ledger as run_type=backtest")
     args = p.parse_args(argv)
+    if args.cmd == "nfl":
+        return _nfl(args, p)
     if args.cmd == "paper-trades":
         from . import paper_trading
         with db.connect_readonly(args.sport) as conn:
@@ -518,6 +526,48 @@ def main(argv=None) -> int:
         if args.cmd != "scheduler":
             return _run(args, p, conn, applied)
     return _run(args, p, conn, applied)
+
+
+def _nfl(args, p) -> int:
+    """NFL data-only commands on the NFL store, under its own job lock. Nothing here touches the NBA or NHL stores."""
+    import time
+    from . import nfl
+    if args.action == "ingest" and not (args.start and args.end and len(args.start) == 6 and len(args.end) == 6
+                                         and args.start.isdigit() and args.end.isdigit() and args.start <= args.end):
+        p.error("nfl ingest needs --from YYYYMM --to YYYYMM (from <= to)")
+    if args.action == "coverage":
+        try:
+            conn = db.connect_readonly("nfl")
+        except FileNotFoundError as exc:
+            p.error(f"{exc}; run `nfl migrate` and `nfl ingest` first")
+        print(json.dumps(nfl.coverage(conn), indent=1))
+        return 0
+    with db.store_lock("nfl", wait_seconds=LOCK_WAIT_SECONDS) as held:
+        if not held:
+            print(json.dumps({"status": "failed", "reason": "another job is running on the nfl store"}))
+            return 1
+        conn = db.connect(sport="nfl")
+        applied = db.migrate(conn)
+        db.claim_store(conn, "nfl")
+        if args.action == "migrate":
+            print(json.dumps({"db": str(config.db_path("nfl")), "sport": "nfl", "applied": applied}))
+            return 0
+        if args.action == "replay":
+            print(json.dumps(ingest.replay(conn)))
+            return 0
+        failed = []
+        for i, month in enumerate(ingest.months(args.start, args.end)):
+            if i and args.sleep:
+                time.sleep(args.sleep)
+            try:
+                stats = ingest.ingest_nfl_month(conn, month)
+                stats.pop("raw_id", None)
+            except Exception as exc:  # report and continue; nothing partial is committed for that month
+                stats = {"month": month, "error": f"{type(exc).__name__}: {str(exc).splitlines()[0]}"}
+                failed.append(month)
+            print(json.dumps(stats))
+        print(json.dumps({"status": "failed" if failed else "ok", "failed_months": failed}))
+        return 1 if failed else 0
 
 
 def _run(args, p, conn, applied) -> int:

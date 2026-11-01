@@ -10,9 +10,10 @@ def data_dir() -> Path:
 
 
 def db_path(sport: str = "nba") -> Path:
-    """Each sport has its own store (docs/MULTISPORT_PLAN.md); the NBA store keeps its original file name."""
+    """Each sport has its own store (docs/MULTISPORT_PLAN.md); the NBA store keeps its original file name.
+    Data-only sports (NFL) have a store path too; serving them is refused elsewhere (sports.get, live.engine)."""
     from . import sports
-    return data_dir() / sports.get(sport).db_file
+    return data_dir() / sports.store(sport).db_file
 
 
 def raw_dir() -> Path:

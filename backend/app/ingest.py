@@ -16,7 +16,8 @@ from .odds import devig_two_way
 
 RESULT_ASSUMED_DELAY = timedelta(hours=4)
 SOURCE_SPORTS = {"nba": {espn.SOURCE, espn.SUMMARY_SOURCE, sdv_team_box.SOURCE, nba_injury.SOURCE, "nba_player_minutes_live"},
-                 "nhl": {nhl_stats.SOURCE, espn.NHL_SOURCE}}
+                 "nhl": {nhl_stats.SOURCE, espn.NHL_SOURCE},
+                 "nfl": {espn.NFL_SOURCE}}
 OBSERVED_WINDOW = timedelta(hours=24)  # results first seen within this window of tipoff count as observed
 
 
@@ -58,6 +59,20 @@ def _ingest(conn: sqlite3.Connection, request_key: str, body: bytes, retrieved_a
         stats = import_raw(conn, raw_id, cache_dir=cache_dir, retrieved_at=retrieved_at)
         stats["lines"] = import_lines_fetch(conn, fetch_id, "nba", cache_dir=cache_dir)
         return stats
+
+
+def ingest_nfl_month(conn: sqlite3.Connection, yyyymm: str, *, fetch: Callable[[str], bytes] = espn.fetch_nfl_month,
+                     retrieved_at: Optional[str] = None, cache_dir: Optional[Path] = None) -> dict:
+    """One month of the ESPN NFL scoreboard into an NFL store (schedule, status, scores; no box stats or odds)."""
+    body = fetch(yyyymm)
+    retrieved_at = retrieved_at or utc_now()
+    with transaction(conn):
+        claim_store(conn, "nfl")
+        raw_id, _ = raw_cache.store_fetch(conn, source=espn.NFL_SOURCE, endpoint=espn.NFL_ENDPOINT,
+                                          request_key=espn.month_request(yyyymm)[0], body=body, retrieved_at=retrieved_at,
+                                          importer_version=espn.NFL_IMPORTER_VERSION, cache_dir=cache_dir)
+        return {"month": yyyymm, **import_raw(conn, raw_id, cache_dir=cache_dir, retrieved_at=retrieved_at,
+                                              parse=espn.parse_nfl_scoreboard)}
 
 
 def ingest_range(conn: sqlite3.Connection, start: str, end: str, *, sleep: float = 1.0,
@@ -253,12 +268,12 @@ def replay(conn: sqlite3.Connection, cache_dir: Optional[Path] = None) -> dict:
     # One pass over every schedule/result and line retrieval in retrieval order, so each line quote is matched against
     # the games as they were stored at its own retrieval, exactly as live ingestion matched it. A cached response without
     # any logged retrieval (a cache copied without its log) replays once at its first retrieval.
-    sources = (espn.SOURCE, nhl_stats.SOURCE, espn.NHL_SOURCE)
+    sources = (espn.SOURCE, nhl_stats.SOURCE, espn.NHL_SOURCE, espn.NFL_SOURCE)
     fetches = conn.execute(
         "SELECT f.fetch_id, f.raw_id, f.retrieved_at, r.source FROM raw_fetches f JOIN raw_responses r ON r.raw_id = f.raw_id "
-        "WHERE r.source IN (?, ?, ?) "
+        "WHERE r.source IN (?, ?, ?, ?) "
         "UNION ALL SELECT NULL, r.raw_id, r.first_retrieved_at, r.source FROM raw_responses r "
-        "WHERE r.source IN (?, ?, ?) AND NOT EXISTS (SELECT 1 FROM raw_fetches f WHERE f.raw_id = r.raw_id) "
+        "WHERE r.source IN (?, ?, ?, ?) AND NOT EXISTS (SELECT 1 FROM raw_fetches f WHERE f.raw_id = r.raw_id) "
         "ORDER BY 3, 1, 2", sources * 2).fetchall()
     for f in fetches:
         with transaction(conn):
@@ -266,6 +281,9 @@ def replay(conn: sqlite3.Connection, cache_dir: Optional[Path] = None) -> dict:
                 s = import_raw(conn, f["raw_id"], cache_dir=cache_dir, retrieved_at=f["retrieved_at"])
                 if f["fetch_id"] is not None:
                     totals["line_quotes"] += import_lines_fetch(conn, f["fetch_id"], "nba", cache_dir=cache_dir)["inserted"]
+            elif f["source"] == espn.NFL_SOURCE:
+                s = import_raw(conn, f["raw_id"], cache_dir=cache_dir, retrieved_at=f["retrieved_at"],
+                               parse=espn.parse_nfl_scoreboard)
             elif f["fetch_id"] is None:
                 continue
             elif f["source"] == nhl_stats.SOURCE:
@@ -283,12 +301,13 @@ def replay(conn: sqlite3.Connection, cache_dir: Optional[Path] = None) -> dict:
 
 
 def import_raw(conn: sqlite3.Connection, raw_id: int, cache_dir: Optional[Path] = None,
-               retrieved_at: Optional[str] = None) -> dict:
+               retrieved_at: Optional[str] = None, parse: Callable[[dict], list] = espn.parse_scoreboard) -> dict:
     """Upserts one cached response as seen at `retrieved_at` (that retrieval's own time; default: the first retrieval
-    of these bytes). Must run inside a transaction."""
+    of these bytes). Must run inside a transaction. `parse` is the ESPN parser of the store's sport (NBA by default);
+    a parser that returns no box stats (NFL) writes no team_game_stats rows."""
     retrieved_at = retrieved_at or conn.execute("SELECT first_retrieved_at FROM raw_responses WHERE raw_id=?",
                                                 (raw_id,)).fetchone()["first_retrieved_at"]
-    games = espn.parse_scoreboard(json.loads(raw_cache.load(conn, raw_id, cache_dir)))
+    games = parse(json.loads(raw_cache.load(conn, raw_id, cache_dir)))
     stats = {"raw_id": raw_id, "games_seen": len(games), "games_inserted": 0, "games_updated": 0, "odds_inserted": 0}
     for g in games:
         for t in (g.home, g.away):
@@ -301,7 +320,7 @@ def import_raw(conn: sqlite3.Connection, raw_id: int, cache_dir: Optional[Path] 
         if outcome:
             stats[f"games_{outcome}"] += 1
             _record_result_revision(conn, g.game_id, raw_id, retrieved_at)
-        if g.status == "final":
+        if g.status == "final" and parse is espn.parse_scoreboard:
             for team, is_home, s in ((g.home, 1, g.home_stats), (g.away, 0, g.away_stats)):
                 _upsert_stats(conn, g.game_id, team.team_id, is_home, s, raw_id, retrieved_at)
         for o in g.odds:

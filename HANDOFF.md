@@ -1,5 +1,29 @@
 # Current handoff
 
+## NFL phase A0: data-only NFL store behind guards — Claude (Opus 5.5, session 2994a49e), 2026-11-01; IMPLEMENTED + TESTED; NOT REVIEWED; NOT RELEASED; branch `nfl-dev`
+User: "how hard would it be to add nfl, without breaking the code" → "lets get to the nfl". Plan and preregistered NFL evaluation: docs/NFL_PLAN.md.
+- **Guards (no NBA/NHL behaviour change):** `sports.NFL` is registered in `sports.DATA_ONLY`, not `SPORT_IDS`; `sports.get("nfl")` raises
+  `UnsupportedSport` (a ValueError), `sports.store()` resolves store files for data commands. `live.engine` now names sports explicitly
+  (NHL → hockey, NBA/unlabelled → NBA, else `UnsupportedSport`) instead of "not NHL = NBA". API `sport=` pattern is built from `SPORT_IDS`.
+  ~75 "nba … else NHL" branches stay as they are and are unreachable with an NFL store while NFL is outside `SPORT_IDS`.
+- **Migration 0032** rebuilds only `store_identity` to allow `nfl` (row + 3 triggers recreated). Verified on read-only snapshot copies of
+  live `data/nba.sqlite` and `data/nhl.sqlite` (scratchpad `migcheck`): row counts unchanged, 90 triggers unchanged, integrity_check ok,
+  identity insert/update/delete still blocked, the cross-store `market_quotes_store_sport` guard still fires. Live stores NOT migrated.
+- **ESPN NFL adapter:** `espn.parse_nfl_scoreboard` (shared parser with prefix `nfl:`, no box stats/odds), NFL franchise ids 1–30/33/34,
+  Pro Bowl → `other`; neutral = ESPN flag OR non-USA venue OR Super Bowl note (ESPN leaves the flag false before 2014); a game dated outside
+  Aug(season)…Mar(season+1) → `other` (ESPN lists a 1988 game in its 2004-11 feed). `ingest.ingest_nfl_month`, replay of `espn_nfl`,
+  `app/nfl.py` coverage, CLI `python -m app.cli nfl {migrate,ingest,replay,coverage}` (own job lock; ignores `--sport`).
+- **Real data (scratch copy only):** `NBA_DATA_DIR=<scratchpad>/nfldata`, months 200208–202611, 292 responses, 0 failed months; 8,168 games,
+  6,607 eligible finals 2002–2026, 32 teams every season, 256/272 regular games, 11/13 playoff games, 3 postponed/canceled, ties present;
+  fresh rebuild from the raw cache identical (8,168 games). No `data/nfl.sqlite` was created.
+- **Checks:** `.venv/bin/python -m pytest tests/test_nfl.py` 12 passed. Full suite, old (48cb93f, separate worktree) vs new, 4 shards each:
+  only the 8 `test_deep_study.py` failures (need torch/tensorflow, fail on the old code too) plus two explicit migration-list tests
+  (`test_storage::test_migrations_are_idempotent`, `test_live::test_odds_job_migration_keeps_existing_job_runs`), updated for 0032; those
+  files + multisport/sources/api/release_guard/coverage then 143 passed. `python3 scripts/check_project.py`: passed. Browser: not run (no UI change).
+- **Known gaps:** no NFL odds, injuries, model, ledger rows, API or UI yet. Toronto Bills games count as neutral by the venue rule.
+- **Next:** independent review of this increment; then phase A1 (walk-forward of constant/home rate/`nfl_elo` on the preregistered periods,
+  seal, one logged test). Serving NFL (adding it to `SPORT_IDS`, UI toggle, jobs) and migrating the live stores need the user's go.
+
 ## Light redesign (frontend only) — Claude (Opus 5.5, session cb8787d2), 2026-11-01 ~07:30–09:30Z; IMPLEMENTED + VERIFIED (typecheck/build/structure guard, headless screenshots); NOT REVIEWED; NOT RELEASED; uncommitted
 User: redesign to the attached light mockup (four screens: Prediction Dashboard, Today's Games, Model Performance, Research Details; palette #1E1B4B / #A3E635 / #C084FC / #F8FAFC), visual/UX only; then "you missing a lot of design elements" and "these are different pages".
 - **No backend, API, data, forecast, grading or route change.** Page mapping: Prediction Dashboard = game page `/games/:id` (sidebar item opens the last game viewed, else Game day); Today's Games = `/`; Model Performance = `/performance`; Research Details = `/games/:id?tab=research` (own title, breadcrumb, compact matchup header; legacy cards open there). The game page's tab is a `?tab=` query value (forecast | markets | teams | research), not a route.

@@ -229,7 +229,8 @@ def test_odds_job_migration_keeps_existing_job_runs(tmp_path):
          "0019_candidate_forecasts.sql", "0020_pool_selection.sql", "0021_agreement_observations.sql", "0022_agreement_observation_inputs.sql",
          "0023_two_hour_guards.sql", "0024_adaptive.sql", "0025_recovery.sql",
          "0026_adaptive_recovery.sql", "0027_adaptive_recovery_attempts.sql", "0028_exact_rule_observations.sql",
-         "0029_game_forecasts.sql", "0030_result_revisions.sql", "0031_training_inputs_job.sql"]
+         "0029_game_forecasts.sql", "0030_result_revisions.sql", "0031_training_inputs_job.sql",
+         "0032_nfl_store_identity.sql"]
     conn.execute("INSERT INTO job_runs (job, started_at, status) VALUES ('odds', '2026-09-30T00:01:00Z', 'success')")
     assert [r[0] for r in conn.execute("SELECT job FROM job_runs ORDER BY run_id")] == ["refresh", "odds"]
     conn.close()

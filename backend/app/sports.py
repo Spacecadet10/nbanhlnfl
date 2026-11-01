@@ -5,6 +5,8 @@ live here and in the sport's own source adapter and models; shared infrastructur
 """
 from dataclasses import dataclass, field
 
+# Served sports: the API, the UI, live jobs, research and every `--sport` command. Code that branches on the sport
+# (if "nba" ... else NHL) may assume one of these two, so a sport joins this tuple only once every such path handles it.
 SPORT_IDS = ("nba", "nhl")
 
 
@@ -40,14 +42,38 @@ NHL = Sport(
     rating_key={"nhl:59": "nhl:53", "nhl:68": "nhl:53"},
 )
 
+# NFL: a data-only store (schedule and results from ESPN's NFL scoreboard; docs/NFL_PLAN.md). It is not served and no
+# model forecasts it yet; `get` refuses it, so no served path can open or branch on an NFL store by accident.
+# International games (London, Germany, Brazil, ...) and the Super Bowl carry ESPN's neutral-site flag per game.
+NFL = Sport(
+    id="nfl", label="NFL", db_file="nfl.sqlite", id_prefix="nfl:",
+    eligible_season_types=("regular", "postseason"),
+    markets=("winner",),
+)
+
 SPORTS = {s.id: s for s in (NBA, NHL)}
+DATA_ONLY = {NFL.id: NFL}
+
+
+class UnsupportedSport(ValueError):
+    """A store or request for a sport that is registered but not served (or not registered at all)."""
 
 
 def get(sport: str) -> Sport:
+    """A served sport. Raises for NFL (data-only) and unknown ids."""
     try:
         return SPORTS[sport]
     except KeyError:
-        raise ValueError(f"Unknown sport {sport!r}; expected one of {', '.join(SPORT_IDS)}") from None
+        raise UnsupportedSport(f"Unknown sport {sport!r}; expected one of {', '.join(SPORT_IDS)}") from None
+
+
+def store(sport: str) -> Sport:
+    """A sport that has a store: served or data-only. Only for store paths, identity and data commands."""
+    if sport in SPORTS:
+        return SPORTS[sport]
+    if sport in DATA_ONLY:
+        return DATA_ONLY[sport]
+    raise UnsupportedSport(f"Unknown sport {sport!r}; expected one of {', '.join([*SPORT_IDS, *DATA_ONLY])}")
 
 
 def is_neutral(sport: Sport, flagged: bool, tipoff_at: str) -> bool:

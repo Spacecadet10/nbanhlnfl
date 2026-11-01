@@ -61,7 +61,14 @@ NBA_ENGINE = Engine("nba", ELIGIBLE_TYPES, backtest.FEATURE_VERSION, lambda c: b
 
 
 def engine(conn: sqlite3.Connection) -> Engine:
-    return _nhl_engine() if store_sport(conn) == "nhl" else NBA_ENGINE
+    """The serving engine of the store's sport. A store without an identity predates multi-sport support and is NBA.
+    Any other sport (NFL is data-only) is refused rather than served with another sport's model."""
+    sport = store_sport(conn)
+    if sport == "nhl":
+        return _nhl_engine()
+    if sport in ("nba", None):
+        return NBA_ENGINE
+    raise sports.UnsupportedSport(f"No serving engine for a {sport!r} store; only {', '.join(sports.SPORT_IDS)} are served")
 
 
 def _ts(dt: datetime) -> str:
