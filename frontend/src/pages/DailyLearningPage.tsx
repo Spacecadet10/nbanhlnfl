@@ -8,12 +8,13 @@ import { AsyncView } from '../components/States';
 import { bandNote, gridNote, standardGrid, standardRows } from '../components/ConfidenceFilter';
 import { AutoresearchCard } from '../components/Autoresearch';
 import { pct, dateTime } from '../format';
+import { Icon } from '../components/ui';
 
 // The ledger outcome is the API's counter key; show it as a word.
 const OUTCOME: Record<string, string> = { wins: 'Win', losses: 'Loss', pushes: 'Push', pending: 'Pending', void: 'Void', unscorable: 'Unscorable', no_pick: 'No pick' };
 const LABELS: Record<string, string> = { winner: 'Winner', reg3: 'Regulation three-way', spread: 'Spread / puck line', total: 'Total', team_total_home: 'Home team total', team_total_away: 'Away team total' };
 export function DailyLearningPage() {
-  return <section><div className="page-head"><h1>Daily learning · All 11 markets</h1></div>
+  return <section><div className="page-head"><h1><Icon name="learning" size={28} /> Daily learning · All 11 markets</h1></div>
     <p>Discover unanimous model groups from 2 members through the eligible roster, with separate thresholds per member. Historical research and frozen prospective decisions are shown separately.</p>
     {(['nba', 'nhl'] as Sport[]).map(s => <SportLearning key={s} sport={s} />)}
     <AutoresearchCard />

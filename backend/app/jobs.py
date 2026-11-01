@@ -331,6 +331,17 @@ def nhl_injury_capture() -> dict:
         return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
 
 
+def odds_cycle_injuries(sport_name: str, snap: dict) -> Optional[dict]:
+    """NHL: the 30-minute odds cycle also captures the injury page while a game tips off within its window (the odds
+    snapshot succeeded), so a forecast is never left with the previous evening's snapshot; nothing on idle days. NBA
+    reports have their own collector."""
+    if sport_name != "nhl":
+        return None
+    if snap.get("status") != "success":
+        return {"status": "skipped", "reason": f"odds snapshot {snap.get('status')}: {snap.get('reason', 'no game in the window')}"}
+    return nhl_injury_capture()
+
+
 def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optional[str] = None,
                 refresh_kw: Optional[dict] = None, odds_kw: Optional[dict] = None, box_kw: Optional[dict] = None, injury_kw: Optional[dict] = None,
                 pbp_kw: Optional[dict] = None) -> dict:

@@ -1,3 +1,5 @@
+import { NoSkillNote } from './Skill';
+import { TeamLogo } from './TeamLogo';
 import { ResearchSlateLine } from './Research';
 import type { MarketId, ResearchSlateEntry } from '../api/types';
 import { ModelAgreement } from './ModelAgreement';
@@ -71,7 +73,7 @@ export function MarketCard({ game: g, statusLabel, research, market }: { game: G
           <span className="game-time">{statusLabel}</span>
           {f && (f.policy === 'near_tipoff' ? <NearTipoffBadge /> : <RunBadge runType="live" />)}
         </div>
-        <p className="matchup-title"><strong>{g.away.abbr}</strong> @ <strong>{g.home.abbr}</strong>
+        <p className="matchup-title"><TeamLogo team={g.away} size={28} /><strong>{g.away.abbr}</strong> @ <TeamLogo team={g.home} size={28} /><strong>{g.home.abbr}</strong>
           {g.outcome && <span className="muted"> · final {g.outcome.away_score}–{g.outcome.home_score}</span>}</p>
         {f ? (
           <>
@@ -79,9 +81,10 @@ export function MarketCard({ game: g, statusLabel, research, market }: { game: G
             {f.current_version === false && <p className="warn small">Earlier model version (archive): shown for reference, not a pick of the current model and not in its counts or record.</p>}
             <SideBars f={f} />
             <p className="pick-line small">
-              Pick: <strong>{f.pick_label}</strong><span className="muted"> · model confidence {pct(f.confidence, 1)}</span>
+              Model estimate: <strong>{f.pick_label}</strong><span className="muted"> · {pct(f.confidence, 1)} model probability</span>
               {f.result !== 'pending' && <> · <ResultLabel result={f.result} /></>}
             </p>
+            <NoSkillNote market={f.market} compact />
             <p className="small"><QuoteLine f={f} /></p>
             <p className="small muted">Made {dateTime(f.generated_at)}</p>
             {f.limitations.length > 0 && <ul className="limitations small">{f.limitations.map((x) => <li key={x}>{x}</li>)}</ul>}
@@ -89,7 +92,7 @@ export function MarketCard({ game: g, statusLabel, research, market }: { game: G
         ) : (
           <p className="forecast-note">No forecast of this market under this policy for this game.</p>
         )}
-        <ModelAgreement game={g} />
+        {details && <ModelAgreement game={g} />}
         {details && <ResearchSlateLine entry={research} market={market} />}
       </Link>
     </li>
@@ -114,6 +117,7 @@ export function MarketForecastsCard({ forecasts }: { forecasts: MarketForecast[]
               <div className="market-row-head"><strong>{f.title}</strong> <LineLabel f={f} /> {f.result !== 'pending' && <ResultLabel result={f.result} />}
                 {f.current_version === false && <span className="warn small"> · earlier model version (archive)</span>}</div>
               <SideBars f={f} />
+              <NoSkillNote market={f.market} compact />
               <p className="small"><QuoteLine f={f} /></p>
               <p className="small muted">Made {dateTime(f.generated_at)} · cutoff {dateTime(f.cutoff_at)} · <code>{f.model_version}</code></p>
               {f.limitations.length > 0 && <ul className="limitations small">{f.limitations.map((x) => <li key={x}>{x}</li>)}</ul>}
@@ -150,7 +154,7 @@ export function MarketHistoryTable({ rows }: { rows: MarketRecord[] }) {
   return (
     <table className="table history">
       <thead>
-        <tr><th>Date</th><th>Game</th><th>Line</th><th>Pick</th><th>Model confidence</th><th>Result</th><th>Outcome of pick</th><th>Recorded</th></tr>
+        <tr><th>Date</th><th>Game</th><th>Line</th><th>Pick</th><th>Model probability</th><th>Result</th><th>Outcome of pick</th><th>Recorded</th></tr>
       </thead>
       <tbody>
         {rows.map((r) => (
@@ -159,7 +163,7 @@ export function MarketHistoryTable({ rows }: { rows: MarketRecord[] }) {
             <td data-label="Game"><Link to={`/games/${r.game_id}${carried}`}>{r.away.abbr} @ {r.home.abbr}</Link></td>
             <td data-label="Line"><LineLabel f={r.forecast} /></td>
             <td data-label="Pick"><strong>{r.forecast.pick_label}</strong></td>
-            <td data-label="Model confidence">{pct(r.forecast.confidence, 1)}</td>
+            <td data-label="Model probability">{pct(r.forecast.confidence, 1)}</td>
             <td data-label="Result">{r.outcome ? `${r.away.abbr} ${r.outcome.away_score} – ${r.outcome.home_score} ${r.home.abbr}` : <span className="muted">Pending</span>}</td>
             <td data-label="Outcome of pick"><ResultLabel result={r.forecast.result} /></td>
             <td data-label="Recorded">{dateTime(r.forecast.generated_at)}{r.lead_days != null && r.lead_days >= 2 && <span className="warn small"> · {r.lead_days} days before</span>}</td>

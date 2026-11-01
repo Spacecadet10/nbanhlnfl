@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Courtside</title>
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      // Apply the remembered theme before first paint (light unless dark was chosen); Layout keeps it in sync afterwards.
+      try { document.documentElement.dataset.theme = localStorage.getItem('courtside-theme-choice') === 'dark' ? 'dark' : 'light'; }
+      catch (e) { document.documentElement.dataset.theme = 'light'; }
+    </script>
   </head>
   <body>
     <div id="root"></div>

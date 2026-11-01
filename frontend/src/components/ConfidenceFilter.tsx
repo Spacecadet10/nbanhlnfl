@@ -8,8 +8,8 @@ import { pct } from '../format';
 import { RunBadge } from './Badges';
 
 /** Thresholds on the model's probability for its pick (winner: max(p_home, 1 - p_home); other markets: the picked
- * side). Levels and defaults are per sport and market: the NBA winner's 70% default was chosen for that market only and
- * is never applied to the NHL or to other markets, which default to all picks. null = all picks. */
+ * side). Levels are per sport and market; every market defaults to all picks (null): a preset 70% filter on an
+ * uncalibrated probability hid ordinary games without evidence that the band was better. */
 export const CONFIDENCE_LEVELS: (number | null)[] = [null, 0.6, 0.65, 0.7, 0.75, 0.8];
 const MARKET_LEVELS: (number | null)[] = [null, 0.55, 0.6, 0.65, 0.7];
 // Three outcomes split the probability: a 3-way pick is rarely above 55%, so its levels start lower (as the research grid).
@@ -56,8 +56,8 @@ export function confidenceLevels(sport: Sport, market: MarketId, policy?: Policy
   return sport === 'nba' && market === 'winner' ? CONFIDENCE_LEVELS : MARKET_LEVELS;
 }
 
-export function defaultLevel(sport: Sport, market: MarketId): number | null {
-  return sport === 'nba' && market === 'winner' ? 0.7 : null;
+export function defaultLevel(_sport: Sport, _market: MarketId): number | null {
+  return null;   // All picks. The selected band's settled record is shown instead of hiding games behind a preset threshold.
 }
 
 export const levelLabel = (min: number | null) => (min == null ? 'All picks' : `${Math.round(min * 100)}%+`);
@@ -84,7 +84,7 @@ export function ConfidenceFilter({ value, onChange, levels = CONFIDENCE_LEVELS }
 }) {
   return (
     <div className="confidence-filter">
-      <span className="confidence-filter-label" id="confidence-filter-label">Model confidence in the pick</span>
+      <span className="confidence-filter-label" id="confidence-filter-label">Model Probability Threshold</span>
       <div className="segmented" role="group" aria-labelledby="confidence-filter-label">
         {levels.map((l) => (
           <button key={String(l)} type="button" aria-pressed={value === l} onClick={() => onChange(l)}>
@@ -137,6 +137,9 @@ export function RecordLine({ record, runType, scope, parts }: { record: Confiden
           </>}
       <Unsettled pending={record.pending} voids={record.void} unscorable={record.unscorable} />
     </p>
+    {record.settled > 0 && record.settled < 30 && (
+      <p className="small warn">Only {record.settled} settled {record.settled === 1 ? 'pick' : 'picks'} at this level: too few to judge the threshold.</p>
+    )}
     {parts && parts.length > 0 && <ul className="record-parts small" aria-label="The same record, split; the parts add up to the line above">
       {parts.map((p) => <li key={p.key}><strong>{p.label}:</strong> {p.record.selected} {p.record.selected === 1 ? 'pick' : 'picks'}
         {p.record.settled > 0 ? <> · {p.record.wins}–{p.record.losses} ({pct(p.record.win_rate, 1)})</> : <> · none settled</>}
@@ -163,6 +166,9 @@ export function MarketRecordLine({ record, scope, parts }: { record: MarketRecor
           </>}
       <Unsettled pending={record.pending} voids={record.voids} unscorable={record.unscorable} />
     </p>
+    {(record.wins + record.losses + record.pushes) > 0 && (record.wins + record.losses + record.pushes) < 30 && (
+      <p className="small warn">Only {record.wins + record.losses + record.pushes} settled {record.wins + record.losses + record.pushes === 1 ? 'pick' : 'picks'} at this level: too few to judge the threshold.</p>
+    )}
     {(record.quoted_decided ?? 0) > 0 && <p className="small muted">On the {record.quoted_decided} decided picks made at a bookmaker line the picks won {record.quoted_wins} ({pct((record.quoted_wins ?? 0) / (record.quoted_decided ?? 1), 1)}); the bookmaker's own de-vigged probability for those sides averaged {pct(record.mean_implied ?? null, 1)}. A win rate near that figure is what the prices already implied.</p>}
     {parts && parts.length > 0 && <ul className="record-parts small" aria-label="The same record, split by lead time; the parts add up to the line above">
       {parts.map((p) => <li key={p.key}><strong>{p.label}:</strong> {p.record.selected} {p.record.selected === 1 ? 'pick' : 'picks'}
@@ -198,7 +204,7 @@ export function RangeRecords({ sport = 'nba', market = 'winner', level, realMode
     return (
       <div className="range-records" aria-label="Observed record of picks in this confidence range">
         <FetchedMarketRecord sport={sport} market={market} level={level} policy={policy} />
-        <p className="small muted">Model confidence is the forecast probability for the picked side. Pushes and voided games are not counted as wins or losses.</p>
+        <p className="small muted">Model probability is the model's estimate for its side; the market's de-vigged estimate is on the card. Pushes and voided games are not counted as wins or losses.</p>
       </div>
     );
   }
@@ -207,7 +213,7 @@ export function RangeRecords({ sport = 'nba', market = 'winner', level, realMode
       <FetchedRecord sport={sport} runType="live" level={level} policy={policy} />
       {realMode && policy === 'pregame' && <FetchedRecord sport={sport} runType="backtest" level={level} policy="pregame" />}
       <p className="small muted">
-        Model confidence is the forecast probability for the predicted winner. The observed win rate counts settled games only and is not a promise of future results.
+        Model probability is the model's estimate for its side (the market's de-vigged estimate is on each card). The observed win rate counts settled games only and is not a promise of future results.
       </p>
     </div>
   );

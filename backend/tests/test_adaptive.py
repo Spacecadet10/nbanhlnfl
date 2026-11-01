@@ -893,19 +893,58 @@ def test_the_training_time_forecast_of_the_next_game_is_not_frozen_into_the_arti
     assert served == w.distribution(game).market("total", 6.5)
 
 
-@pytest.mark.parametrize("change", ["corrected", "late"])
+def test_a_late_box_of_a_delivered_game_reaches_the_frozen_state_when_a_fresh_walk_would_deliver_it():
+    """Serving advances a frozen state through the results and box scores that became available after its cutoff. A box
+    of a game whose result the fit already consumed was delivered before every newer result and forecast, so a game whose
+    cutoff (19:30) precedes the box (19:31) was forecast with it; a fresh walk forecasts it without, and its residual (and
+    the next season's sigma) differed. Reduction of the review's seed-39 property example (2026-10-16)."""
+    from app import backtest
+    from app.models.efficiency import EfficiencyMargin
+    from test_efficiency import box, game, row, season_rows
+    history = season_rows(20)
+    a = row(game("A", "2021-11-21T23:30:00Z", "T1", "T2"), 130, 90)
+    b = backtest.Row(game("B", "2021-11-22T21:30:00Z", "T1", "T3"), "2021-11-22T19:30:00Z", 100, 100,
+                     "2021-11-23T01:30:00Z")
+    cut, now = a.result_available_at, "2021-11-23T12:00:00Z"
+    late_box = box(a, 99, available_at="2021-11-22T19:31:00Z")
+    events = [box(r, i) for i, r in enumerate(history)]
+    frozen = EfficiencyMargin()
+    backtest.run(frozen, history + [a], events, deliver_until=cut)
+    rows = history + [a, b]
+    asked, predict = [], frozen.predict
+    frozen.predict = lambda g: asked.append(g.game_id) or predict(g)
+    assert adaptive._advance(frozen, {"cutoff": cut}, rows, events + [late_box], {r.game.game_id: r for r in rows}, now) == 1
+    del frozen.predict
+    assert asked == [b.game.game_id]            # A rides along only for its box: its result and forecast were consumed
+    fresh = EfficiencyMargin()
+    backtest.run(fresh, rows, events + [late_box], deliver_until=now)
+    assert frozen.eff.lines == fresh.eff.lines
+    assert [x for r in frozen.residuals for x in r] == pytest.approx([x for r in fresh.residuals for x in r], abs=1e-12)
+    nxt = game("C", "2021-11-24T23:30:00Z", "T1", "T3", season=2023)
+    assert frozen.predict(nxt) == pytest.approx(fresh.predict(nxt), abs=1e-12)
+
+
+@pytest.mark.parametrize("change", ["corrected", "late, stuck", "late after postponed"])
 def test_results_that_changed_before_the_fit_cutoff_make_a_walk_member_missing_until_a_retrain(store, change):
-    """A walk member's frozen state consumed exactly the results available at the training cutoff. A score corrected
-    after it (ingest moves result_available_at to the correction time) was re-delivered on top of the old score; a final
-    ingested late with an assumed availability before the cutoff was never delivered. Neither can be replayed into the
-    frozen state in order, so the member abstains with the reason until the next fit (2026-10-12 audit reproduction)."""
+    """A walk member's frozen state consumed exactly the results available at its cutoff. A score corrected after it
+    (ingest moves result_available_at to the correction time) was re-delivered on top of the old score; a final ingested
+    late with an assumed availability before the cutoff was never delivered. Neither can be replayed into the frozen
+    state in order, so the member abstains with the reason until the next fit (2026-10-12 audit reproduction).
+    A game still marked scheduled or in progress more than `ingest.OBSERVED_WINDOW` after its start (here months) is
+    stuck, not in flight (`adaptive._in_flight`): online members are not frozen before it, and its late result makes
+    every walk member abstain, as one marked postponed at training (in flight: the next test)."""
     g = store.execute("SELECT * FROM games WHERE status='final' AND result_available_at < ? "
                       "ORDER BY result_available_at DESC LIMIT 1", (TRAIN_AT,)).fetchone()
-    if change == "late":
-        store.execute("UPDATE games SET status='scheduled', home_score=NULL, away_score=NULL, result_available_at=NULL, "
-                      "result_availability_basis=NULL WHERE game_id=?", (g["game_id"],))
+    assert adaptive._parse(TRAIN_AT) - adaptive._parse(g["tipoff_at"]) > ingest.OBSERVED_WINDOW
+    if change != "corrected":
+        status = "scheduled" if change == "late, stuck" else "postponed"
+        store.execute("UPDATE games SET status=?, home_score=NULL, away_score=NULL, result_available_at=NULL, "
+                      "result_availability_basis=NULL WHERE game_id=?", (status, g["game_id"]))
         store.commit()
-    adaptive.train(store, now=TRAIN_AT)
+    trained = adaptive.train(store, now=TRAIN_AT)
+    frozen = trained["members"]["hockey_elo"].get("frozen_at")
+    assert frozen is None or frozen >= adaptive.forecast_cutoff(g["tipoff_at"]), frozen
+    assert "frozen_at" not in trained["members"]["hockey_logistic@adaptive"]
     run(store, CYCLE_AT)
     clean = adaptive.record(store, game_ids=[GID], now=CYCLE_AT, write=False)
     assert "hockey_elo" in next(f for f in clean["forecasts"] if f["market"] == "winner")["members"]
@@ -920,8 +959,80 @@ def test_results_that_changed_before_the_fit_cutoff_make_a_walk_member_missing_u
     store.commit()
     r = adaptive.record(store, game_ids=[GID], now=CYCLE_AT, write=False)
     w = next(f for f in r["forecasts"] if f["market"] == "winner")
+    assert "results changed since the fit" in w["missing"]["hockey_logistic@adaptive"], w["missing"]
     assert "hockey_elo" not in w["members"]
     assert "results changed since the fit" in w["missing"]["hockey_elo"], w["missing"]
+
+
+def test_a_game_in_progress_at_training_freezes_online_members_before_it_and_its_result_is_replayed(store):
+    """A game whose forecast cutoff passed before the fit and whose result arrives after it is in flight: online members
+    are frozen before its cutoff (`adaptive.frozen_at`) and serving replays it in walk order, so they keep forecasting
+    after its result; learned members are frozen at the cutoff and take it as a new result (the other side of the
+    stuck-game bound in `adaptive._in_flight`)."""
+    gid = 2026020003
+    add_upcoming(store, gid=gid, start="2026-10-12T14:00:00", state=3, hs=1, vs=0, home=8, away=16,
+                 at="2026-10-12T19:30:00Z")
+    g = store.execute("SELECT * FROM games WHERE game_id=?", (f"nhl:{gid}",)).fetchone()
+    assert g["status"] == "in_progress" and adaptive.forecast_cutoff(g["tipoff_at"]) < TRAIN_AT
+    trained = adaptive.train(store, now=TRAIN_AT)
+    frozen = trained["members"]["hockey_elo"].get("frozen_at")
+    assert frozen is not None and frozen < adaptive.forecast_cutoff(g["tipoff_at"]), frozen
+    assert "frozen_at" not in trained["members"]["hockey_logistic@adaptive"]
+    add_upcoming(store, gid=gid, start="2026-10-12T14:00:00", state=7, hs=3, vs=1, period=3, home=8, away=16,
+                 at="2026-10-12T21:00:00Z")
+    assert store.execute("SELECT status FROM games WHERE game_id=?", (f"nhl:{gid}",)).fetchone()[0] == "final"
+    run(store, CYCLE_AT)
+    r = adaptive.record(store, game_ids=[GID], now=CYCLE_AT, write=False)
+    w = next(f for f in r["forecasts"] if f["market"] == "winner")
+    assert "hockey_elo" not in w["missing"] and "hockey_logistic@adaptive" not in w["missing"], w["missing"]
+
+
+def test_a_stuck_game_whose_result_arrives_after_the_fit_is_replayed_exactly_for_online_members_without_forecast_state(store):
+    """A game still scheduled more than `ingest.OBSERVED_WINDOW` after its start is not in flight (`adaptive._in_flight`),
+    so online members are frozen after its cutoff. Tracked live, its result is stamped when learned (after the fit) and
+    serving replays it at its cutoff with the fit's state: exact for members whose forecast is not part of their state
+    (hockey_elo keeps serving; the pinned serving cases compare with a fresh walk and cover efficiency_margin, which is
+    missing until the next fit, `adaptive._landed_in_flight`); learned members take it as a new result."""
+    gid = 2026020004
+    add_upcoming(store, gid=gid, start="2026-10-11T10:00:00", home=8, away=16, at="2026-10-11T04:00:00Z")
+    g = store.execute("SELECT * FROM games WHERE game_id=?", (f"nhl:{gid}",)).fetchone()
+    assert g["status"] == "scheduled" and adaptive._parse(TRAIN_AT) - adaptive._parse(g["tipoff_at"]) > ingest.OBSERVED_WINDOW
+    trained = adaptive.train(store, now=TRAIN_AT)
+    assert "frozen_at" not in trained["members"]["hockey_elo"]
+    add_upcoming(store, gid=gid, start="2026-10-11T10:00:00", state=7, hs=3, vs=1, period=3, home=8, away=16,
+                 at="2026-10-12T21:00:00Z")
+    g = store.execute("SELECT * FROM games WHERE game_id=?", (f"nhl:{gid}",)).fetchone()
+    assert (g["status"], g["result_available_at"]) == ("final", "2026-10-12T21:00:00Z")
+    run(store, CYCLE_AT)
+    r = adaptive.record(store, game_ids=[GID], now=CYCLE_AT, write=False)
+    w = next(f for f in r["forecasts"] if f["market"] == "winner")
+    assert "hockey_elo" not in w["missing"] and "hockey_logistic@adaptive" not in w["missing"], w["missing"]
+
+
+@pytest.mark.parametrize("new_season", [False, True])
+def test_a_landed_stuck_game_that_starts_a_season_ahead_of_an_old_season_result_changes_production_elo(new_season):
+    """Why `_landed_in_flight` also guards a season start: production Elo regresses ratings toward the mean at its first
+    forecast of a season (carry 0.75). A fresh walk forecasts the stuck game S at its cutoff, before the old season's
+    result O (available later), so O is applied after the regression; replaying S after the fit applied O before it.
+    Same season: the replay is exact and the member keeps serving (review of 2026-10-17: the property worlds' Elo has
+    carry 1.0, where a season roll changes nothing)."""
+    from app import backtest
+    from app.models.elo import Elo
+    from test_efficiency import game, season_rows
+    history = season_rows(20)
+    o = backtest.Row(game("O", "2021-11-22T00:00:00Z", "T1", "T2"), "2021-11-21T22:00:00Z", 120, 90, "2021-11-22T04:00:00Z")
+    s = backtest.Row(game("S", "2021-11-22T01:00:00Z", "T3", "T1", season=2023 if new_season else 2022),
+                     "2021-11-21T23:00:00Z", 100, 95, "2021-11-23T12:00:00Z")
+    cut, now = "2021-11-23T09:00:00Z", "2021-11-23T13:00:00Z"            # S still unfinished 32 h after its start at the fit
+    rows = history + [o, s]
+    frozen = Elo()
+    backtest.run(frozen, history + [o], [], deliver_until=cut)            # S is stuck, not in flight: not waited for
+    reason = adaptive._landed_in_flight(frozen, {"cutoff": cut}, rows)
+    assert adaptive._advance(frozen, {"cutoff": cut}, rows, [], {r.game.game_id: r for r in rows}, now) == 1
+    fresh = Elo()
+    backtest.run(fresh, rows, [], deliver_until=now)
+    exact = all(frozen.ratings[t] == pytest.approx(fresh.ratings[t], abs=1e-9) for t in fresh.ratings)
+    assert exact == (not new_season) and (reason is not None) == new_season, (reason, dict(frozen.ratings), dict(fresh.ratings))
 
 
 def test_one_markets_combiner_exception_leaves_the_other_markets_fitted_and_the_market_on_its_earlier_fit(store, monkeypatch):
@@ -1012,6 +1123,33 @@ def test_a_backfilled_shot_import_dated_before_the_fit_cutoff_makes_the_shot_mem
     w = next(f for f in r["forecasts"] if f["market"] == "winner")
     assert "box/shot inputs changed since the fit" in w["missing"].get(xg, ""), w["missing"].get(xg)
     assert "hockey_elo" not in w["missing"]                                    # members without these inputs are unaffected
+
+
+def test_a_previous_season_result_arriving_after_a_fit_that_started_the_new_season_keeps_online_members_exact_and_learned_ones_missing(store):
+    """The training-time forecast of the next game (season 2027) ran each member's season start (carry, season-start
+    refit) while the last 2026 game was still in progress. Its final arrives after the fit: a fresh walk delivers it before
+    the season starts, the frozen state only after, so the served forecast differed from the fresh walk (found by
+    test_serving_properties: NBA points_normal -0.028, efficiency_margin +0.001; Elo too with the production carry 0.75).
+    Online members are now frozen as walked and start the season in walk order at serving; a learned member, whose
+    season-start refit is the fit in force, is missing and the run is due; the retrain consumes the final first."""
+    add_upcoming(store, gid=2026021999, start="2026-10-12T14:00:00", state=3, at="2026-10-12T19:30:00Z", season=2026)
+    adaptive.train(store, now=TRAIN_AT)
+    run(store, CYCLE_AT)
+    assert adaptive.due(store, CYCLE_AT)["due"] is False
+    add_upcoming(store, gid=2026021999, start="2026-10-12T14:00:00", state=7, hs=3, vs=1, period=3, at="2026-10-12T20:45:00Z",
+                 season=2026)                                                               # the 2026 final, after the fit
+    learned = "hockey_logistic@adaptive"
+    r = adaptive.record(store, game_ids=[GID], now=CYCLE_AT, write=False)
+    w = next(f for f in r["forecasts"] if f["market"] == "winner")
+    assert "season 2026 arrived after the fit had started season 2027" in w["missing"].get(learned, ""), w["missing"]
+    assert "hockey_elo" not in w["missing"], w["missing"]["hockey_elo"]
+    d = adaptive.due(store, CYCLE_AT)
+    assert d["due"] is True and learned in d["reason"] and "hockey_elo" not in d["reason"]
+    adaptive.train(store, now="2026-10-12T20:50:00Z")                      # the scheduled retrain the due state triggers
+    assert adaptive.due(store, CYCLE_AT)["due"] is False
+    again = adaptive.record(store, game_ids=[GID], now=CYCLE_AT, write=False)
+    w = next(f for f in again["forecasts"] if f["market"] == "winner")
+    assert learned not in w["missing"], w["missing"].get(learned)
 
 
 @pytest.mark.parametrize("change", ["corrected_old_score", "changed_decision"])

@@ -1,0 +1,31 @@
+{
+  "frozen_at": "2026-11-01T06:30:00Z",
+  "season": "2026-27",
+  "note": "Frozen before any game it counts. No money. Only canonical forecasts generated at or after frozen_at count. Never edited mid-season; a changed rule is a new rule with its own frozen_at. Regular-season games only.",
+  "verdict_rule": "Judged once, after the last 2026-27 regular-season game of the rule's sport: PASS only if at least 100 settled bets and the ISO-week block-bootstrap 95% interval of the return per 1-unit bet lies above 0; FAIL if at least 100 settled bets and the interval does not lie above 0; INCONCLUSIVE with fewer than 100. Any look before then is interim and is never a verdict.",
+  "rules": [
+    {
+      "id": "nhl-winner-65",
+      "sport": "nhl",
+      "market": "winner",
+      "min_confidence": 0.65,
+      "side": "pick",
+      "description": "NHL winner: bet the canonical pick when its model probability is 65% or higher.",
+      "price": "the latest current bookmaker quote for the game's moneyline retrieved at or before the forecast"
+    },
+    {
+      "id": "nba-spread-against-65",
+      "sport": "nba",
+      "market": "spread",
+      "min_confidence": 0.65,
+      "side": "opposite",
+      "description": "NBA spread: bet the side opposite the canonical pick when its model probability is 65% or higher (the forecast must be at the bookmaker's line).",
+      "price": "the latest current bookmaker quote for the game's spread at the forecast's line retrieved at or before the forecast"
+    }
+  ],
+  "min_bets": 100,
+  "stake": 1.0,
+  "season_types": [
+    "regular"
+  ]
+}

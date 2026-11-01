@@ -12,6 +12,7 @@ import { PolicyToggle, RunTypeToggle, usePolicy, useRunType } from '../component
 import { AsyncView, Empty } from '../components/States';
 import { canonicalFor, CanonicalHistory } from '../components/Canonical';
 import { calendarDate, dateTime, FULL_DATE, pct } from '../format';
+import { Icon } from '../components/ui';
 
 const PAGE = 500;
 const MAX_ROWS = 5000;   // the API's largest limit
@@ -66,7 +67,7 @@ export function HistoryPage() {
   return (
     <section>
       <div className="page-head">
-        <h1>Prediction history</h1>
+        <h1><Icon name="history" size={28} /> Prediction history</h1>
         {realMode && isWinner && <RunTypeToggle value={run} onChange={setRun} />}
       </div>
       {meta.state.status === 'success' && <MarketSelect value={market} markets={meta.state.data.markets} onChange={setMarket} />}

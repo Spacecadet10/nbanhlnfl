@@ -817,3 +817,53 @@ export interface CandidateGameView {
   mode: 'real' | 'demo'; game_id: string; sport?: Sport; start?: string; status?: string; as_of?: string; note: string;
   forecasts: CandidateGameForecast[]; without_forecast: { candidate: string; family: string; neural: boolean; reason: string }[];
 }
+
+/** GET /api/canonical/thresholds: every market of a sport, per confidence threshold (app/threshold_overview.py). */
+export type CalibrationState = 'holds' | 'overconfident' | 'underconfident' | 'too_few';
+export interface ThresholdLiveRow {
+  threshold: number; forecasts: number; graded: number; win: number; loss: number; push: number; unsettled: number;
+  win_rate: number | null; ci95: [number, number] | null; stated: number | null; calibration: CalibrationState;
+  market_matched: number; market_win_rate: number | null; market_implied: number | null;
+  break_even: 'above' | 'below' | 'undecided' | 'too_few' | null;
+}
+export interface ThresholdHistoryRow {
+  threshold: number; graded: number; win: number; loss: number; coverage: number | null;
+  win_rate: number | null; ci95: [number, number] | null; stated: number | null; calibration: CalibrationState;
+}
+export interface ThresholdHistoryPeriod { seasons: number[]; date_from: string | null; date_to: string | null; rows: ThresholdHistoryRow[] }
+export interface ThresholdMarketBlock {
+  market: MarketId; title: string; grid: number[]; live: ThresholdLiveRow[];
+  history: { status: 'available' | 'not_comparable' | 'unavailable'; model: string | null; reason: string | null;
+    earlier: ThresholdHistoryPeriod | null; later: ThresholdHistoryPeriod | null };
+  verdict: { best: number | null; better_than_all: boolean; held_up: boolean | null; reason: string | null };
+  skill_proven: boolean; skill_note: string | null;
+}
+export interface ThresholdOverview {
+  mode: 'real'; sport: Sport; as_of: string; recording_began_at: string | null; rule: string;
+  break_even_standard: number; markets: ThresholdMarketBlock[];
+}
+
+/** GET /api/canonical/ranked: every canonical pick of a date, ranked by past evidence (app/threshold_overview.py RANK_RULE). */
+export interface RankedPickEvidence { lo: number; hi: number | null; win_rate: number; settled: number; lower: number; source: 'history' | 'season' }
+export interface RankedPick {
+  game_id: string; matchup: string; tipoff: string; status: string; market: MarketId; market_title: string; pick_label: string;
+  probability: number; threshold: number | null; evidence: RankedPickEvidence | null; market_prob: number | null;
+  grade: string | null; generated_at: string; day_rank: number | null; game_rank: number | null; game_ranked: number;
+  /** Picks like it have won more often than not (95% lower bound above 50%): the only picks shown as best picks. */
+  strong: boolean;
+  /** False for markets with no proven skill against the bookmaker's line (spread, total, team totals). */
+  skill_proven: boolean;
+}
+export interface RankedPicks {
+  mode: 'real'; sport: Sport; date: string; as_of: string; rule: string; min_settled: number; picks: RankedPick[];
+  without_forecast: Record<string, number>;
+}
+
+/** GET /api/paper-rules: the frozen paper rules of a sport (no money; app/paper_rules.py). */
+export interface PaperRule {
+  id: string; sport: Sport; market: MarketId; min_confidence: number; side: 'pick' | 'opposite'; description: string; price: string;
+  bets: number; settled: number; wins: number; losses: number; pushes: number; pending: number; units: number;
+  return_per_bet: number | null; ci95: [number, number] | null; state: 'interim' | 'pass' | 'fail' | 'inconclusive';
+  skipped: Record<string, number>;
+}
+export interface PaperRules { sport: Sport; as_of: string; frozen_at: string; sha256: string; verdict_rule: string; min_bets: number; note: string; rules: PaperRule[] }

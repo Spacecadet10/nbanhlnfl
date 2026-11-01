@@ -677,7 +677,15 @@ def matched_quote(conn, market: str, g, c: dict):
     s = scored(market, c)
     if s is None:
         return None, "not scored"
-    rec = c["record"]
+    q, why = forecast_quote(conn, market, g, c["record"])
+    if q is None:
+        return None, why
+    return (s[0], q, s[1]), None
+
+
+def forecast_quote(conn, market: str, g, rec: dict):
+    """(the bookmaker's de-vigged P(a) — three-way: the vector — from the quote a non-winner forecast used, or None, why
+    not), whether or not the game is settled. Same acceptance rules as matched_quote."""
     if market != "reg3" and rec["line_source"] != "bookmaker":
         return None, "model line (no bookmaker line at forecast time)"
     if rec.get("market_quote_id") is None:
@@ -693,8 +701,8 @@ def matched_quote(conn, market: str, g, c: dict):
     if market == "reg3":
         if q["p_mid_devig"] is None:
             return None, "quote has no regulation-draw price"
-        return (s[0], (q["p_a_devig"], q["p_mid_devig"], q["p_b_devig"]), s[1]), None
-    return (s[0], q["p_a_devig"], s[1]), None
+        return (q["p_a_devig"], q["p_mid_devig"], q["p_b_devig"]), None
+    return q["p_a_devig"], None
 
 
 def _blank() -> dict:

@@ -891,6 +891,9 @@ def _run(args, p, conn, applied) -> int:
             snap = jobs.odds_snapshot(conn, force=args.force, props=False)
             result = {"odds": snap, "forecasts": jobs.forecast_due(conn)}
             snap["props"] = jobs.collect_props(conn, snap)       # after the time-critical forecasts, never before them
+            injuries = jobs.odds_cycle_injuries(args.sport, snap)   # NHL game days: a fresh injury snapshot each cycle
+            if injuries is not None:
+                result["nhl_injuries"] = injuries
         elif args.cmd == "predict":
             result = jobs.predict_now(conn)
         elif args.cmd == "score":
@@ -901,7 +904,8 @@ def _run(args, p, conn, applied) -> int:
             result = jobs.scheduler(conn, interval_minutes=args.interval_minutes, max_runs=args.max_runs, job=args.job,
                                     lock=lambda: db.store_lock(args.sport, wait_seconds=ODDS_LOCK_WAIT_SECONDS))
         print(json.dumps(result, indent=2, default=str))
-        return 1 if _any_failed(result) else 0
+        # the odds cycle's injury capture is reported, never fatal (as in the forecast step): its forecasts are done
+        return 1 if _any_failed({k: v for k, v in result.items() if k != "nhl_injuries"} if isinstance(result, dict) else result) else 0
     elif args.cmd == "coverage":
         print(json.dumps(coverage.report(conn), indent=2))
     elif args.cmd == "release-check":

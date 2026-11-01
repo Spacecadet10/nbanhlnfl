@@ -19,8 +19,8 @@ const NAMES: Record<string, string> = {
 };
 export const modelName = (n: string) => n.startsWith('avg:')
   ? `Average: ${n.slice(4).split('+').map((m) => NAMES[m] ?? m).join(' + ')}` : NAMES[n] ?? n;
-export const MARKET: Record<string, string> = { winner: 'Winner', reg3: 'Regulation 3-way', spread: 'Spread / puck line', total: 'Total',
-  team_total_home: 'Home team total', team_total_away: 'Away team total' };
+export const MARKET: Record<string, string> = { winner: 'Winner', reg3: 'Regulation 3-Way', spread: 'Spread / Puck Line', total: 'Total',
+  team_total_home: 'Home Team Total', team_total_away: 'Away Team Total' };
 const FILTER: Record<string, string> = { none: 'no agreement filter', majority: 'strict majority agrees', unanimous: 'all models agree' };
 const STATUS: Record<string, string> = { active: 'Active rule', abstain: 'Abstaining', insufficient_evidence: 'Insufficient evidence' };
 const SIDES: Side[] = ['a', 'mid', 'b'];

@@ -16,6 +16,9 @@ import { PolicyToggle, RunTypeToggle, usePolicy, useRunType } from '../component
 import { AsyncView, Empty } from '../components/States';
 import { calendarDate, FULL_DATE, num, pct } from '../format';
 import { canonicalFor, CanonicalReport } from '../components/Canonical';
+import { ThresholdOverviewCard } from '../components/ThresholdOverview';
+import { PaperRulesCard } from '../components/PaperRules';
+import { Icon, PageTitle } from '../components/ui';
 
 const SMALL_SAMPLE = 200;
 
@@ -33,22 +36,27 @@ export function PerformancePage() {
     [sport, run, policy, canonical]);
   const markets = meta.state.status === 'success' ? meta.state.data.markets : [];
   if (canonical) {
+    const title = markets.find((m) => m.id === market)?.title;
     return (
-      <section>
-        <SystemStatusPanel sport={sport} />
-        {markets.length > 0 && <MarketSelect value={market} markets={markets} onChange={setMarket} />}
-        <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} canonical />
-          {market === 'winner' && <RunTypeToggle value={run} onChange={setRun} />}</div>
+      <section className="performance-page">
+        <PageTitle icon="performance" soft title="Model Performance" sub={`Canonical forecasts${title ? `: ${title}` : ''}`}
+          right={markets.length > 0 ? <MarketSelect value={market} markets={markets} onChange={setMarket} /> : undefined} />
+        <div className="tab-row">
+          <PolicyToggle value={policy} onChange={setPolicy} canonical />
+          {market === 'winner' && <RunTypeToggle value={run} onChange={setRun} />}
+        </div>
         <CanonicalReport sport={sport} market={market} />
+        <ThresholdOverviewCard sport={sport} />
+        <PaperRulesCard sport={sport} />
         <ResearchSection sport={sport} market={market} show={details} />
+        <PerformanceStatus sport={sport} />
       </section>
     );
   }
   if (market !== 'winner') {
     return (
       <section>
-        <SystemStatusPanel sport={sport} />
-        <div className="page-head"><h1>Model performance <RunBadge runType="live" /></h1></div>
+        <div className="page-head"><h1><Icon name="performance" size={28} /> Model performance <RunBadge runType="live" /></h1></div>
         {meta.state.status === 'success'
           ? <MarketSelect value={market} markets={markets} onChange={setMarket} />
           : meta.state.status === 'error' ? <p className="warn small">Market list unavailable: {meta.state.error}</p> : null}
@@ -57,12 +65,12 @@ export function PerformancePage() {
         {policy === 'near_tipoff' && <><ThresholdResearch sport={sport} market={market} /><RecoveredThresholds sport={sport} market={market} /></>}
         <MarketPerformance sport={sport} market={market} policy={policy} />
         <ResearchSection sport={sport} market={market} show={details} />
+        <PerformanceStatus sport={sport} />
       </section>
     );
   }
   return (
     <section>
-      <SystemStatusPanel sport={sport} />
       {markets.length > 0 && <MarketSelect value={market} markets={markets} onChange={setMarket} />}
       <AsyncView state={state} retry={retry}>
         {(p) => p && (
@@ -76,6 +84,7 @@ export function PerformancePage() {
       </AsyncView>
       {run === 'live' && policy === 'near_tipoff' && <AgreementReport sport={sport} />}
       <ResearchSection sport={sport} market={market} show={details} />
+      <PerformanceStatus sport={sport} />
     </section>
   );
 }
@@ -112,7 +121,7 @@ function Report({ perf: p, run, setRun }: { perf: PerformanceResponse; run: 'liv
   return (
     <>
       <div className="page-head">
-        <h1>Model performance <RunBadge runType={p.run_type} /></h1>
+        <h1><Icon name="performance" size={28} /> Model performance <RunBadge runType={p.run_type} /></h1>
         {p.mode === 'real' && <RunTypeToggle value={run} onChange={setRun} />}
       </div>
       <p className="muted">{p.title}</p>
@@ -185,7 +194,7 @@ function Report({ perf: p, run, setRun }: { perf: PerformanceResponse; run: 'liv
             <p className="small muted">
               Only games with a market quote are compared: {p.market.matched_games} of {p.sample_size} ({pct(p.market.coverage)} coverage).
             </p>
-            {p.market.matched_games === 0 ? <Empty>No games with market odds.</Empty> : (
+            {p.market.matched_games === 0 ? <Empty>No games with market odds.</Empty> : (<>
               <table className="table compare">
                 <thead><tr><th /><th>Brier score</th></tr></thead>
                 <tbody>
@@ -193,7 +202,12 @@ function Report({ perf: p, run, setRun }: { perf: PerformanceResponse; run: 'liv
                   <tr><th scope="row">Market</th><td>{num(p.market.market_brier)}</td></tr>
                 </tbody>
               </table>
-            )}
+              {p.market.model_brier != null && p.market.market_brier != null && (
+                <p className="small">{p.market.market_brier < p.market.model_brier
+                  ? <>The market's Brier is lower by {num(p.market.model_brier - p.market.market_brier)} — the market is the better forecaster on these games. The model is a record, not a market edge.</>
+                  : <>The model's Brier is lower by {num(p.market.market_brier - p.market.model_brier)} on these {p.market.matched_games} games; that is not yet evidence of a betting edge.</>}</p>
+              )}
+            </>)}
           </div>
 
           <details className="card">
@@ -248,4 +262,15 @@ function AgreementReport({ sport }: { sport: Sport }) {
       </div>)}
       <p className="small muted">{p.partial_games} games with incomplete model coverage. This descriptive record does not establish that agreement beats confidence filtering.</p>
     </>}</AsyncView></div>;
+}
+
+/** Freshness, training and recovery diagnostics: kept for review, folded away so the record and the market
+ * benchmark are what the page opens with. */
+function PerformanceStatus({ sport }: { sport: Sport }) {
+  return (
+    <details className="card today-more">
+      <summary><strong>System status and data collection</strong> <span className="muted small">freshness, training and recovery diagnostics</span></summary>
+      <SystemStatusPanel sport={sport} />
+    </details>
+  );
 }

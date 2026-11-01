@@ -20,11 +20,11 @@ def sealed(nhl_store, tmp_path, monkeypatch):
 
 
 def add_upcoming(c, gid=2026020001, start="2026-10-10T19:00:00", state=1, hs=0, vs=0, period=1, at="2026-10-10T12:00:00Z",
-                 sched=1, home=6, away=16):
+                 sched=1, home=6, away=16, season=2027):
     body = json.dumps({"data": [{"id": gid, "easternStartTime": start, "gameScheduleStateId": sched, "gameStateId": state,
-                                 "gameType": 2, "homeScore": hs, "homeTeamId": home, "period": period, "season": 20262027,
+                                 "gameType": 2, "homeScore": hs, "homeTeamId": home, "period": period, "season": int(f"{season - 1}{season}"),
                                  "visitingScore": vs, "visitingTeamId": away}]}).encode()
-    ingest.ingest_nhl_season(c, 2027, fetch=lambda _s: body, retrieved_at=at)
+    ingest.ingest_nhl_season(c, season, fetch=lambda _s: body, retrieved_at=at)
 
 
 def quote(c, at, spread=("-1.5", "+1.5"), total=("o6.5", "u6.5"), ml=("-150", "+130"), date="2026-10-11T23:00Z"):

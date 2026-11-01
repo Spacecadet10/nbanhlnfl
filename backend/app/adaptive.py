@@ -12,6 +12,7 @@ Training (`train`) runs off the forecast path (nightly job or CLI) and saves ver
 cycle (`record`) only loads them, delivers results that arrived after each artifact's cutoff to the frozen state, and
 predicts. A failed refit keeps the previous valid artifact in force and is logged in `adaptive_fits`.
 """
+import copy
 import hashlib
 import json
 import math
@@ -23,11 +24,12 @@ from contextvars import ContextVar
 from pathlib import Path
 from typing import Callable, Optional
 
-from . import agreement, backtest, combination_research, combine, config, live, markets, near_tipoff, player_ratings, nhl_player_ratings, research_live, selector, sports
+from . import agreement, backtest, combination_research, combine, config, ingest, live, markets, near_tipoff, player_ratings, nhl_player_ratings, research_live, selector, sports
 from . import retrain_cadence as rc
 from .candidates import deep, engine, features, registry
 from .candidates import live as pool_live
 from .db import transaction, utc_now
+from .models.efficiency import EfficiencyMargin
 
 VERSION = "adaptive-v1"
 PERIOD = "weekly"
@@ -47,6 +49,8 @@ SCHEDULE = {"period": "ISO week of the game's Eastern date",
 ONLINE = {"nba": ("elo", "points_normal", "efficiency_margin"), "nhl": ("hockey_elo", "goals_poisson")}
 LEARNED = {"nba": ("logistic", "logistic_v2", "gbt_v1", "ridge_points", "gbt_points"),
            "nhl": ("hockey_logistic", "hockey_gbt", "hockey_logistic_xg", "goals_draw", "goals_glm")}
+FORECAST_IN_STATE = (EfficiencyMargin,)   # online members whose forecast is part of their state (the margin estimate
+                                          # kept for its residual); pinned against every online member by a test
 BOX_DEPENDENT = {"nba": ("logistic_v2", "efficiency_margin", "gbt_v1", player_ratings.ADAPTIVE_MEMBER, player_ratings.SCORE_MEMBER), "nhl": ("hockey_logistic_xg",)}
 EXCLUDED_FEATURES = {"nhl_goalie": "historical rows use the actual starting goalie (known only after the start): no "
                                    "point-in-time out-of-sample history to learn a weight from"}
@@ -761,7 +765,8 @@ def due(conn, now: Optional[str] = None) -> dict:
         changed = inputs_changed_since_fit(conn, sport, defn, now)
         if changed:
             return {"due": True, "reason": "results or box/shot data the fit in force consumed have changed since it was trained "
-                                           f"(a corrected score or decision, or a late result or backfill dated before its cutoff): "
+                                           f"(a corrected score or decision, a late result or backfill dated before its cutoff, "
+                                           f"or a previous-season result after a fit that started the new season): "
                                            f"{', '.join(changed)} cannot forecast until a retrain", "period": period, "definition": defn}
         return {"due": False, "reason": f"fit in force already prepared for {period} ({_CADENCE.get()} schedule)", "period": period, "definition": defn}
     rows = available_rows(conn, now)
@@ -824,6 +829,8 @@ def inputs_changed_since_fit(conn, sport, defn, now) -> list:
             if cut not in boxes:
                 boxes[cut] = _events_digest(events, known, cut)
             bad = boxes[cut] != c["events_digest"]
+        if not bad and c.get("season") is not None:              # `_season_changed` (fits recorded since it exist)
+            bad = bool(_earlier_seasons_after(rows, cut, c["season"]))
         if bad:
             changed.append(name)
     return sorted(changed)
@@ -1105,6 +1112,7 @@ def train(conn, *, now: Optional[str] = None, write: bool = True, force: bool = 
     known = {r.game.game_id: r for r in rows}
     events = _events(conn, eng, rows, known, now)
     window = _window({r.game.season for r in rows}, season)
+    in_flight = _in_flight(conn, eng, rows, now)
     mems, excluded = members(conn)
     out["excluded"] = excluded
     lines: dict = {}
@@ -1119,15 +1127,13 @@ def train(conn, *, now: Optional[str] = None, write: bool = True, force: bool = 
             prepare = getattr(getattr(m.obj, "member", m.obj), "prepare_training_inputs", None)
             if prepare:              # external inputs the serving path reads (live injury reports) are read for training too
                 prepare(conn, now)
+            cut = frozen_at(m.obj, rows, in_flight, now)
+            unwalked = copy.deepcopy(m.obj) if cut != now else None
             hist[m.name] = walk_member(m, rows, _events_for(m.obj, eng, events), now, window, lines, line_primary=m.line_primary,
                                        invalid=invalid)
-            w = m.obj
-            cached = nxt["game_id"] in (getattr(getattr(w, "member", w), "pending", None) or {})
-            w.predict(replace(eng.pregame(nxt), cutoff_at=now))               # first forecast of the period: the scheduled refit, if due
-            if not cached:   # features cached at the training cutoff must not be served after newer results are delivered
-                (getattr(getattr(w, "member", w), "pending", None) or {}).pop(nxt["game_id"], None)
-            if isinstance(w, Adaptive):
-                w.frozen = True
+            # an online member is frozen before the games in flight (walked again to that time; history above is unchanged)
+            w = m.obj if unwalked is None else _walk_until(unwalked, rows, _events_for(m.obj, eng, events), known, cut)
+            _training_forecast(w, replace(eng.pregame(nxt), cutoff_at=now))
             info = w.fit_info() if isinstance(w, Adaptive) else None
             ident = None
             if isinstance(w, Adaptive):
@@ -1138,11 +1144,12 @@ def train(conn, *, now: Optional[str] = None, write: bool = True, force: bool = 
             # missing or partial cache is visible in the fit record rather than silently degrading the features.
             inputs = getattr(getattr(w, "member", w), "input_status", None)
             inputs = inputs() if inputs else None
-            art = {"kind": "walk", "name": m.name, "state": freeze(w), "period": period, "cutoff": now,
+            art = {"kind": "walk", "name": m.name, "state": freeze(w), "period": period, "cutoff": cut,
                    "results_available_through": max((r.result_available_at for r in rows), default=now),
                    "results_fingerprint": fp, "fit_info": info, "markets": list(m.markets), "fitted_at": utc_now(),
-                   "delivered_digest": eng.dataset_version(rows),   # exactly the results the frozen state consumed
-                   "events_digest": _events_digest(_events_for(m.obj, eng, events), known, now),   # ... and box/shot data
+                   # exactly the results the frozen state consumed, and box/shot data
+                   "delivered_digest": eng.dataset_version([r for r in rows if r.result_available_at <= cut]),
+                   "events_digest": _events_digest(_events_for(m.obj, eng, events), known, cut),
                    "definition": defn, "training_games": (info or {}).get("delivered_results", len(rows)), "inputs": inputs}
             path = base / "members" / m.name.replace(":", "__") / f"{defn}-{period.replace(':', '_')}-{fp}.pkl"
             sha = None
@@ -1152,12 +1159,13 @@ def train(conn, *, now: Optional[str] = None, write: bool = True, force: bool = 
                 sink.fit(sport, "member", m.name, defn, period, "success", t0,
                          {"fit_info": info, "refits_within_season": len(getattr(w, "refits", [])), "learned": m.learned,
                           "consumed": {"cutoff": art["cutoff"], "delivered_digest": art["delivered_digest"],
-                                       "events_digest": art["events_digest"]},
+                                       "events_digest": art["events_digest"],
+                                       "season": _season_fit(w)},
                           **({"inputs": inputs} if inputs is not None else {})},
                          cutoff=art["results_available_through"], games=art["training_games"], fp=fp, path=str(path), sha=sha,
                          ident=ident, now=now)
             out["members"][m.name] = {"status": "success", "fit": info, "artifact": str(path) if write else None,
-                                      "history_games": len(hist[m.name]), **({"inputs": inputs} if inputs is not None else {}),
+                                      "history_games": len(hist[m.name]), **({"frozen_at": cut} if cut != now else {}), **({"inputs": inputs} if inputs is not None else {}),
                                       **({"invalid_vectors": {"count": len(invalid), "first": invalid[:5]}} if invalid else {})}
             log(f"{m.name}: walked {len(hist[m.name])} window games; fit {info and info.get('kind')}")
         except Exception as exc:
@@ -1547,27 +1555,165 @@ def _events_changed(art: dict, events, known, digests: dict) -> Optional[str]:
     return None
 
 
+def _earlier_seasons_after(rows, cutoff: str, season: int) -> list:
+    return sorted({r.game.season for r in rows if r.result_available_at > cutoff and r.game.season < season})
+
+
+def _training_forecast(w, game) -> None:
+    """The training-time forecast of the next game, for learned members only: it makes the period's scheduled refit, the
+    fit the artifact freezes. Online members are frozen as walked: their season start (carry) runs in walk order when
+    serving delivers the results still to come (`_advance`), as in a fresh walk, never ahead of a pending result."""
+    if not isinstance(w, Adaptive):
+        return
+    pending = getattr(w.member, "pending", None)
+    cached = game.game_id in (pending or {})
+    w.predict(game)
+    if not cached:   # features cached at the training cutoff must not be served after newer results are delivered
+        (getattr(w.member, "pending", None) or {}).pop(game.game_id, None)
+    w.frozen = True
+
+
+def _in_flight(conn, eng, rows, now) -> list:
+    """Forecast cutoffs of the eligible games in flight at `now`: their cutoff has passed, their result is not available
+    yet (scheduled, in progress, or final with a later availability). Postponed and canceled games never become rows.
+    A game still scheduled or in progress more than `ingest.OBSERVED_WINDOW` after its start is stuck (a feed that never
+    updated it, a game suspended for days), not in flight: counting it would freeze the online members before it for as
+    long as it stays so (every serve replaying everything since). The trade-off: if it later turns final with an
+    assumed availability before the fit, every walk member is missing until the next fit (`_results_changed`, as for a
+    game marked postponed at training); with one after it, serving replays it exactly except for members whose forecast
+    is part of their state or a season start (`_landed_in_flight`: missing until the next fit). Finals with a later
+    availability stay in flight."""
+    known = {r.game.game_id for r in rows}
+    types = eng.eligible_types
+    stale = _fmt(_parse(now) - ingest.OBSERVED_WINDOW)
+    out = []
+    for g in conn.execute(f"SELECT game_id, tipoff_at, status, result_available_at FROM games WHERE tipoff_at IS NOT NULL "
+                          f"AND status IN ('scheduled', 'in_progress', 'final') AND season_type IN ({','.join('?' * len(types))})",
+                          types):
+        if g["game_id"] in known or (g["status"] == "final" and not (g["result_available_at"] or "") > now):
+            continue
+        if g["status"] != "final" and g["tipoff_at"] < stale:
+            continue
+        cutoff = forecast_cutoff(g["tipoff_at"])
+        if cutoff <= now:
+            out.append(cutoff)
+    return out
+
+
+def frozen_at(w, rows, in_flight, now) -> str:
+    """The cutoff of a walk member's frozen state. Learned members: `now` (their fit is the period's fit). Online members:
+    the latest time at or before `now` at which no game was in flight (its forecast cutoff passed, its result not yet
+    available; `in_flight`: those still without a result). Frozen later, a game in flight would be forecast at serving at
+    its own cutoff with a state that already holds results and box scores of after it (a fresh walk forecasts it before
+    them), and its forecast is part of the state (e.g. efficiency_margin's residuals, the next season's sigma); frozen
+    there, serving replays everything after it in walk order (`_advance`)."""
+    if isinstance(w, Adaptive):
+        return now
+    spans = [(c, None) for c in in_flight] + [(r.cutoff_at, r.result_available_at) for r in rows if r.result_available_at > r.cutoff_at]
+    at = now
+    while True:
+        open_ = [c for c, end in spans if c <= at and (end is None or end > at)]
+        if not open_:
+            return at
+        at = _fmt(_parse(min(open_)) - timedelta(seconds=1))
+
+
+def _walk_until(w, rows, events, known, at):
+    """`w` walked over the results available at `at` and the box/shot data available then (effective time)."""
+    head = [r for r in rows if r.result_available_at <= at]
+    ids = {r.game.game_id for r in head}
+    backtest.run(w, head, [e for e in events if e.game.game_id in ids
+                           and max(e.available_at, known[e.game.game_id].result_available_at) <= at], deliver_until=at)
+    return w
+
+
+def _season_fit(w) -> Optional[int]:
+    """The season a learned member's frozen fit is for; None for online members (they start seasons in walk order)."""
+    return getattr(w.member, "season", None) if isinstance(w, Adaptive) else None
+
+
+def _season_changed(w, art: dict, rows) -> Optional[str]:
+    """None unless a result of an earlier season became available after the artifact's cutoff while a learned member's
+    frozen fit is for a later season (the training-time forecast of the next game made its season-start refit). A fresh
+    walk delivers that result before the season starts, the frozen fit cannot: the member is missing until the next fit
+    (`inputs_changed_since_fit` makes that fit due)."""
+    season = _season_fit(w)
+    late = _earlier_seasons_after(rows, art["cutoff"], season) if season is not None else []
+    if late:
+        return (f"results of season {late[-1]} arrived after the fit had started season {season}; retrain before this member "
+                "can forecast")
+    return None
+
+
+def _landed_in_flight(w, art: dict, rows) -> Optional[str]:
+    """None unless an online member's state was frozen while a game it did not wait for was in flight (stuck past the
+    `_in_flight` bound, or not in the store at the fit), that game's result has arrived since, and replaying it differs
+    from a fresh walk. `_advance` forecasts it at its cutoff with the state of the fit cutoff; that differs only when the
+    forecast is part of the state (`FORECAST_IN_STATE`) or when it starts its season (every online member does so at its
+    first forecast of a season) ahead of an earlier season's result delivered between its cutoff and the fit. Otherwise
+    the replay is exact and the member keeps serving; else it is missing until the next fit (frozen before the game)."""
+    if isinstance(w, Adaptive):
+        return None
+    cut = art["cutoff"]
+    for g in (r for r in rows if r.cutoff_at <= cut < r.result_available_at):
+        if isinstance(w, FORECAST_IN_STATE) or any(r.game.season < g.game.season and g.cutoff_at < r.result_available_at <= cut
+                                                   for r in rows):
+            return (f"{g.game.game_id} was in flight at the fit cutoff and has a result now; retrain before this member "
+                    "can forecast")
+    return None
+
+
+def _frozen_state_unusable(eng, w, art: dict, rows, events, known, digests: dict) -> Optional[str]:
+    """Why a thawed walk member cannot be brought up to date by `_advance` (None when it can)."""
+    return (_results_changed(eng, art, rows, digests) or _events_changed(art, events, known, digests)
+            or _season_changed(w, art, rows) or _landed_in_flight(w, art, rows))
+
+
 def _advance(w, art: dict, rows, events, known, now):
     """Delivers results and box/shot events that became available after the artifact's cutoff to the frozen state."""
     cutoff = art["cutoff"]
-    inner = getattr(w, "member", w)
-    season_fit = getattr(inner, "season", None)
-    # Results of a season the member has no fit for are not delivered: predicting them would trigger the member's own
+    season_fit = _season_fit(w)
+    # Results of a season a learned member has no fit for are not delivered: predicting them would trigger its own
     # season-start refit in the forecast path (the scheduled training job makes that fit; until then the member is missing).
     new_rows = [r for r in rows if r.result_available_at > cutoff and (season_fit is None or r.game.season <= season_fit)]
     ids = {r.game.game_id for r in new_rows}
+    # A box of a game the state already has the result of is interleaved with the newer results and forecasts by its
+    # effective time, as a walk over every row delivers it (delivered ahead of them, a forecast whose cutoff precedes it
+    # would use it).
     late, fresh = [], []
     for e in events:
         eff = max(e.available_at, known[e.game.game_id].result_available_at)
         if eff <= cutoff:
             continue
-        (fresh if e.game.game_id in ids else late).append(e)
-    for e in sorted(late, key=lambda e: (max(e.available_at, known[e.game.game_id].result_available_at), e.game.game_id)):
-        if hasattr(w, "update_box"):
-            w.update_box(e)
-    if new_rows:
-        backtest.run(w, new_rows, fresh, deliver_until=now)
+        if e.game.game_id in ids:
+            fresh.append(e)
+        else:
+            late.append((eff, e))
+    if new_rows or late:
+        held = {e.game.game_id for _, e in late}
+        backtest.run(_Delivered(w, held), new_rows + [known[g] for g in sorted(held)], fresh + [e for _, e in late],
+                     deliver_until=now)
     return len(new_rows)
+
+
+class _Delivered:
+    """`w` as seen by a walk that also lists games whose results `w` already has (`held`): their results and forecasts
+    are not passed on, so their box/shot lists join the walk's delivery queue by effective time and reach `w` exactly
+    when a walk over every row would deliver them (backtest.run itself is unchanged: it is part of the research
+    definition)."""
+
+    def __init__(self, w, held):
+        self.w, self.held = w, held
+
+    def predict(self, game):
+        return None if game.game_id in self.held else self.w.predict(game)
+
+    def update(self, result):
+        if result.game.game_id not in self.held:
+            self.w.update(result)
+
+    def __getattr__(self, name):          # update_box (when `w` has it), anything else the walk asks for
+        return getattr(self.w, name)
 
 
 def record(conn, *, game_ids: Optional[list] = None, now: Optional[str] = None, write: bool = True, replay=None) -> dict:
@@ -1724,7 +1870,7 @@ def _record(conn, game_ids, now, write, out, replay=None) -> None:
                     missing[gid][m.name] = mismatch
                 continue
             member_events = _events_for(w, eng, events)
-            changed = _results_changed(eng, art, rows, digests) or _events_changed(art, member_events, known, digests)
+            changed = _frozen_state_unusable(eng, w, art, rows, member_events, known, digests)
             if changed:
                 for gid in ids:
                     missing[gid][m.name] = changed
@@ -1736,7 +1882,7 @@ def _record(conn, game_ids, now, write, out, replay=None) -> None:
             check_stale = getattr(inner, "stale_inputs", None)
             for g in schedule:
                 game = replace(eng.pregame(g), cutoff_at=now)
-                season_fit = getattr(inner, "season", None)
+                season_fit = _season_fit(w)
                 if season_fit is not None and game.season > season_fit:
                     if game.game_id in ids:
                         missing[game.game_id][m.name] = f"awaiting the scheduled season fit for {game.season} (fit in force: {season_fit})"

@@ -75,10 +75,17 @@ A bounded pilot needs all five; none is complete, so no prop forecast is made or
 | Player identity | partial | No player table. ESPN athlete ids exist in the research player box files (NBA 2019-24), the live NBA ESPN summary box (minutes path) and NHL goalie listings; no cross-source id map, no NHL skater ids stored. |
 | Minutes / role inputs before the cutoff | partial (NBA) | NBA expected minutes = last-10 mean of games played (availability research); no projected minutes or confirmed lineups (lineups are post-game facts). NHL: no TOI or line combinations stored. |
 | Reliable outcomes | partial | NBA player box stats arrive with ESPN summaries after the game (stored for minutes only, not as outcomes). NHL skater/goalie stat outcomes are not stored. |
-| Available lines | not collected | The only free source found is ESPN core `propBets` (upcoming NHL games only, 404 after the game; NBA coverage unverified until the season starts). No historical prop lines exist anywhere free, so every evaluation would be prospective. |
+| Available lines | forward snapshots only, unparsed | ESPN core `propBets` fetched for games inside two hours: NBA 221 and NHL 255 raw responses stored 2026-10-03 … 2026-10-29 (observed). No parser yet; no historical prop lines exist anywhere free, so every evaluation is prospective. |
 | Settlement rules | not written | Needs: DNP / did-not-dress = void, overtime counts, whole-number lines push, stat corrections cut-off time, scratched-after-quote handling. |
 Next authorised free step: raw forward snapshots of ESPN `propBets` for games inside the two-hour window (raw cache only, no
 forecast), so line availability and timing can be measured before any model is built.
+
+**2026-10-29: design only.** `docs/PROPS_PLAYBOOK.md` records the design (layer firewall, exposure-first
+distribution, ladder-implied market benchmark, EV/LCB/Kelly, settlement proposal, promotion gates and phases).
+No prop market, quote table, forecast, settlement rule, API field or job is implemented; the remaining
+prerequisites above are still the gate. Observed 2026-10-29: NBA `propBets` payloads do exist (221 raw responses since 2026-10-03),
+so the "available lines" prerequisite is partly met for NBA; the other four remain open and no historical prop
+lines were found.
 
 ## Changes
 - **2026-10-02, model-only line choice:** a model-only line is now the half-point line where the model's two sides are closest to 50/50

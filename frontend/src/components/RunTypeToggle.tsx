@@ -17,9 +17,9 @@ export function useRunType(): [ViewRunType, (r: ViewRunType) => void] {
 
 export function RunTypeToggle({ value, onChange }: { value: ViewRunType; onChange: (r: ViewRunType) => void }) {
   return (
-    <div className="segmented" role="group" aria-label="Forecast type">
-      <button type="button" aria-pressed={value === 'live'} onClick={() => onChange('live')}>Live forecasts</button>
-      <button type="button" aria-pressed={value === 'backtest'} onClick={() => onChange('backtest')}>Backtest (retrospective)</button>
+    <div className="segmented run-toggle" role="group" aria-label="Forecast type">
+      <button type="button" aria-pressed={value === 'live'} onClick={() => onChange('live')}>Live Forecasts</button>
+      <button type="button" aria-pressed={value === 'backtest'} onClick={() => onChange('backtest')}>Backtest (Retrospective)</button>
     </div>
   );
 }
@@ -43,9 +43,9 @@ export function usePolicy(canonical = false): [Policy, (p: Policy) => void] {
 export function PolicyToggle({ value, onChange, canonical = false }: { value: Policy; onChange: (p: Policy) => void; canonical?: boolean }) {
   return (
     <div className="segmented" role="group" aria-label="Live forecast timing">
-      {canonical && <button type="button" aria-pressed={value === 'canonical'} onClick={() => onChange('canonical')}>Canonical forecast</button>}
-      <button type="button" aria-pressed={value === 'pregame'} onClick={() => onChange('pregame')}>{canonical ? 'Legacy: pre-game archive' : 'Pre-game archive'}</button>
-      <button type="button" aria-pressed={value === 'near_tipoff'} onClick={() => onChange('near_tipoff')}>{canonical ? 'Legacy: within 2 hours' : 'Within 2 hours'}</button>
+      {canonical && <button type="button" aria-pressed={value === 'canonical'} onClick={() => onChange('canonical')}>Current Forecast</button>}
+      <button type="button" aria-pressed={value === 'pregame'} onClick={() => onChange('pregame')}>Pre-Game Archive</button>
+      <button type="button" aria-pressed={value === 'near_tipoff'} onClick={() => onChange('near_tipoff')}>Within 2 Hours</button>
     </div>
   );
 }

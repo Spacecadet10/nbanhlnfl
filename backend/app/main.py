@@ -192,6 +192,31 @@ def canonical_performance(market: str = MARKET, p=Depends(get_provider)):
     return p.canonical_performance(market)
 
 
+@app.get("/api/canonical/thresholds")
+def canonical_thresholds(p=Depends(get_provider)):
+    """Every market of the sport, per confidence threshold: the live canonical record (with the bookmaker's probability
+    for the same picks), the primary model's comparable history, and the declared best-threshold verdict. Read-only."""
+    _canonical_provider(p)
+    return p.threshold_overview()
+
+
+@app.get("/api/canonical/ranked")
+def canonical_ranked(date_: date = Query(..., alias="date", description="Eastern game date."), p=Depends(get_provider)):
+    """Every canonical pick of the date in every market of the sport, ranked by the past evidence for picks like it
+    (best first), with the threshold each pick reaches. Read-only; not betting advice."""
+    _canonical_provider(p)
+    return p.ranked_picks(date_)
+
+
+@app.get("/api/paper-rules")
+def paper_rules_report(p=Depends(get_provider)):
+    """The frozen paper rules of the sport (app/reference/paper_rules.json; no money): bets since the freeze, record,
+    return per bet and the verdict state (interim until the regular season is over). Read-only."""
+    _canonical_provider(p)
+    from . import paper_rules
+    return paper_rules.report(p.conn, p.sport, p.now)
+
+
 @app.get("/api/predictions", response_model=HistoryResponse)
 def predictions(run_type: str = Query("live", pattern="^(live|backtest)$"), date_from: Optional[date] = None,
                 date_to: Optional[date] = None, team: Optional[str] = None,

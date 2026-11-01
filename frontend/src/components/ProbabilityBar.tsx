@@ -13,8 +13,8 @@ export function ProbabilityBar({ home, away, homeProb, label = 'Model win probab
         <span className={homeProb >= awayProb ? 'fav' : ''}>{pct(homeProb, 1)} {home.abbr}</span>
       </div>
       <div className="probbar-track">
-        <div className="probbar-away" style={{ width: `${awayProb * 100}%` }} />
-        <div className="probbar-home" style={{ width: `${homeProb * 100}%` }} />
+        <div className={`probbar-away${awayProb > homeProb ? ' is-fav' : ''}`} style={{ width: `${awayProb * 100}%` }} />
+        <div className={`probbar-home${homeProb >= awayProb ? ' is-fav' : ''}`} style={{ width: `${homeProb * 100}%` }} />
       </div>
     </div>
   );

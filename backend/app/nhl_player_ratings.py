@@ -22,6 +22,7 @@ MEMBER = "nhl_players_injuries"
 FEATURES = ("player_home", "player_away", "absent_home", "absent_away", "goalie_absent_home",
             "goalie_absent_away", "report_missing", "snapshot_age_hours", "unresolved")
 MAX_AGE_HOURS = 24.
+MIN_FULL_PAGE_TEAMS = 25   # user, 2026-10-17: an absent team counts as healthy only on a json page listing at least this many
 PRIOR_MINUTES = 1200.
 
 
@@ -370,6 +371,7 @@ class NhlPlayersInjuries(GoalsGlm):
         self.surname_index = defaultdict(set)      # normalized surname -> player ids (for first-name variants)
         self.first_names = defaultdict(set)        # player id -> first names as written in delivered boxes
         self.delivered = set()
+        self.skipped_no_box = set()                # results offered without a box (rows appearing later change them)
         self.feature_cutoffs = {}
 
     def __getstate__(self):
@@ -377,6 +379,7 @@ class NhlPlayersInjuries(GoalsGlm):
 
     def __setstate__(self, state):
         vars(self).update(state); self._inputs = None
+        self.skipped_no_box = state.get('skipped_no_box', set())       # artifacts written before it was kept
 
     @property
     def inputs(self):
@@ -411,7 +414,12 @@ class NhlPlayersInjuries(GoalsGlm):
             roster = {pid: rows[-1] for pid, rows in appearances.items()}
             tkey = team_key(self.team_names.get(tid))
             listed = snap is not None and tkey is not None and tkey in snap_team_keys
-            if not listed or not roster: features['report_missing'] = 1.
+            # The live page (json layout) lists every team with an injury: on a page listing at least
+            # MIN_FULL_PAGE_TEAMS teams, a known team absent from it has none listed. Table pages are update histories
+            # and a shorter page may be partial: there absence stays a missing report.
+            full_page = (snap is not None and tkey is not None and snap.get('layout') == 'json'
+                         and len(snap_team_keys) >= MIN_FULL_PAGE_TEAMS)
+            if not (listed or full_page) or not roster: features['report_missing'] = 1.
             weights = {}
             if listed:
                 for row in snap['rows']:
@@ -465,7 +473,9 @@ class NhlPlayersInjuries(GoalsGlm):
                            for side in ('home_team_id', 'away_team_id'))):
                 raise ValueError('NHL player box teams disagree with delivered game')
         super().update(r)
-        if not box: return
+        if not box:
+            self.skipped_no_box.add(r.game.game_id)
+            return
         for tid, players in box['teams'].items():
             recent = list(self.recent_players[tid])
             entry = (r.game.tipoff_at, r.game.game_id, players)
@@ -501,10 +511,24 @@ class NhlPlayersInjuries(GoalsGlm):
 
     def input_status(self):
         return {'box_digest': self.inputs.digest, 'box_games': len(self.inputs.boxes),
-                'snapshots': len(self.inputs.snapshots), 'delivered_results': len(self.delivered)}
+                'snapshots': len(self.inputs.snapshots), 'delivered_results': len(self.delivered),
+                'consumed_box_digest': self._consumed_digest()}
+
+    def _consumed_digest(self):
+        """Fingerprint of the boxes of every result this state was offered (with a box, and those without one, whose box
+        must still be absent), as player_ratings.LiveState: boxes of later games (published every night) leave it
+        unchanged; a changed box of a consumed game, or one appearing for a skipped result, change it."""
+        h = hashlib.sha256()
+        for gid in sorted(self.delivered | self.skipped_no_box):
+            h.update(json.dumps([gid, self.inputs.boxes.get(gid)], sort_keys=True).encode())
+        return h.hexdigest()[:16]
 
     def input_mismatch(self, recorded):
-        if recorded.get('box_digest') != self.inputs.digest:
+        if recorded.get('consumed_box_digest'):
+            if recorded['consumed_box_digest'] != self._consumed_digest():
+                return 'NHL player box inputs of the results the fit consumed changed since fit; retrain'
+            return None
+        if recorded.get('box_digest') != self.inputs.digest:            # fits recorded before the consumed digest
             return 'NHL player box inputs changed since fit; retrain'
         return None
 
@@ -520,6 +544,7 @@ class NhlPlayersInjuries(GoalsGlm):
     def config(self):
         return {**super().config(), 'player_features': FEATURES, 'rating': 'regularized plus-minus per60',
                 'prior_minutes': PRIOR_MINUTES, 'max_snapshot_age_hours': MAX_AGE_HOURS,
+                'absent_team': f'no listed injuries on a json page of >= {MIN_FULL_PAGE_TEAMS} teams; else missing report',
                 'identity': 'all delivered player names; most-recent observed team; unique report-resolved transfer; '
                             'unmatched reported names: unique same-surname player last seen on the listed team '
                             'with a nickname-compatible first name',

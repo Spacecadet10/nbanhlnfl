@@ -1395,3 +1395,42 @@ deployment, no live-store write.
 Later edits (patch F, cosmetic note count) need their own run.
 - CORRECTION (found by session -25): the identity hashes above (9091e03a…, a68b6122…, f3273ef1…, and the frontend/src ones) also covered git-ignored editor-plugin state (`.omc/state/*` inside backend/app and frontend/src). They were identical before and after each run, so each result belongs to its tree, but they cannot be reproduced from source alone. From here on the identity is `scratchpad/source_id.sh`: sha256 over (sha256, path) of `git ls-files -co --exclude-standard` under backend/app, backend/tests, backend/pyproject.toml, frontend/src, frontend/package*.json and scripts (ignored files and docs excluded).
 | + cosmetic hidden-row count + patch F (54e5009b…) — FINAL CANDIDATE | source_id.sh `9efe26f3f5b545bb4ff3d6d4a31f6a11820ad23598732c9aba7153d04a1b1922` (excludes docs and ignored files) | | 1263 passed, 0 failed (19:46), guard + typecheck + build OK; identity identical after |
+
+## Today screen readability + threshold pass (2026-10-29, session docs-playbook)
+Change: Today page now puts the slate first (title, date, policy, market, probability filter, games) and folds the full
+results/training block and data sources into two collapsed sections ("How we're doing", "Data sources"). Every market now
+defaults to the All-picks filter (the NBA winner's preset 70% is gone), "model confidence" reads "model probability", the
+selected band's settled record is shown with a warning under 30 settled picks, and model-agreement research is behind
+"Show research details". No model, API or data change.
+- Environment: dev API `127.0.0.1:8100` (real data); `cd frontend && API_PROXY_TARGET=http://127.0.0.1:8100 npm run dev -- --port 5175 --strictPort`.
+- Automated: `npm run typecheck` exit 0; `npm run build` exit 0 (`dist/assets/index-B1WMoTyY.js`, `index-B-s9RwEK.css`);
+  `python3 scripts/check_project.py` → "Structure guard passed".
+- Desktop (1280×1900, headless Chrome): Today shows 3 games; the two canonical forecasts (52.9%, 64.4%) are visible at the
+  default All filter; band summary "63 of 68 started games have a forecast … Settled: 37–26 (58.7% correct)"; "Data sources"
+  and "How we're doing" are collapsed. Opening both renders 4 overview cards + the source list; no console errors.
+- Band check (`/?conf=70`): "At 70% or higher: 18–5 on 23 settled (78.3%). Too few settled picks to judge this threshold.";
+  empty state "No forecast at 70%+ model probability on this date (2 lower)."
+- Phone (390×844 CSS px, CDP `Emulation.setDeviceMetricsOverride`): `innerWidth` 390, `document.scrollWidth` 390 — no
+  horizontal overflow; header wraps, filter wraps three per row, cards stack.
+- Screenshots (not committed): `/tmp/v3-desktop.png`, `/tmp/v3-band70.png`, `/tmp/v3-expanded.png`, `/tmp/cdp-mobile.png`.
+- Not run: `check_project.py --ready` (full backend suite; no backend change in this pass), manual-browser walkthrough
+  (headless Chrome only), and no deployment — `127.0.0.1:4173` still serves `~/nba-predictor-live`, not this build.
+
+## Market reposition pass (2026-10-29, session docs-playbook)
+Change (frontend only): Today cards now show the market's de-vigged probability beside the model estimate
+("Model estimate: ATL · 52.9% model probability · market 51.7%") and the record line carries the benchmark
+("Market benchmark: model Brier 0.224 vs market 0.193 over 63 matched games — the market is the better
+forecaster"). Performance opens with the record and the "Versus the market" card above the detail tables, with an
+explicit sentence on which forecaster is better; system-status diagnostics are folded into a collapsed section.
+"Pick:" became "Model estimate:", the filter is "Model probability threshold", and the threshold table warns that
+small bands are noise. No model, API or data change.
+- Automated: `npm run typecheck` exit 0; `npm run build` exit 0 (`dist/assets/index-DZKHYpx7.js`);
+  `python3 scripts/check_project.py` passed.
+- Desktop (1280×1400, headless Chrome): Today shows "market 51.7%" / "market 66.4%" and the benchmark line;
+  Performance header → tiles → "Versus the market" (model 0.224, market 0.193, "the market's Brier is lower by
+  0.031 — the market is the better forecaster on these games. The model is a record, not a market edge.").
+- Phone (390×2500 CSS px, CDP): `innerWidth` 390, `document.scrollWidth` 390, no JS errors, market text present.
+- Screenshots (not committed): `/tmp/reposition-today.png`, `/tmp/reposition-perf3.png`,
+  `/tmp/reposition-mobile.png`.
+- Not run: `check_project.py --ready` (full backend suite; no backend change), manual walkthrough, deployment
+  (`127.0.0.1:4173` still serves `~/nba-predictor-live`).

@@ -109,6 +109,7 @@ missing store or a store labelled with the other sport returns 503, never the ot
 | `GET /api/market-performance?sport=&market=&policy=` | Multi-outcome Brier/log loss, line sources, bookmaker comparison at the same line, NHL one-time test |
 
 Markets and settlement: [docs/MARKETS.md](docs/MARKETS.md). Plan and status: [docs/MULTISPORT_PLAN.md](docs/MULTISPORT_PLAN.md).
+Player-prop design (design only, nothing implemented): [docs/PROPS_PLAYBOOK.md](docs/PROPS_PLAYBOOK.md).
 NHL results: [docs/NHL_BASELINE_REPORT.md](docs/NHL_BASELINE_REPORT.md). Run from `backend/`:
 ```sh
 .venv/bin/python -m app.cli --sport nhl ingest-nhl --from-season 2016 --to-season 2027   # NHL stats season lists (13 requests)

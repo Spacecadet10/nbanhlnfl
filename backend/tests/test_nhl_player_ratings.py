@@ -87,6 +87,58 @@ def test_nhl_only_delivered_boxes_and_unknown_players_are_missing():
     assert restored.member.player_stats == model.player_stats and restored.member._inputs is None
 
 
+def test_a_team_absent_from_a_full_league_page_has_no_listed_injuries_but_an_update_history_still_abstains():
+    """ESPN's live NHL page (one JSON block of every team with an injury) leaves healthy teams out: on Oct 16 Boston was
+    not on it (30 of 32 teams), and the member abstained for BOS @ ANA as if the report were missing. User (2026-10-17):
+    "go absent-team rule (only when the page lists at least 25 teams)". On a json page listing at least
+    MIN_FULL_PAGE_TEAMS teams, an absent known team has no listed injuries. Fewer teams (a partial page), old table pages
+    (update histories: a team is absent when nothing changed) or no snapshot within 24 h: still a missing report."""
+    model, inputs, snap, g = fixture_model()
+    backtest.run(model, [HockeyRow(g, g.cutoff_at, 4, 2, '2024-01-02T03:00:00Z', 'REG')], deliver_until='2024-01-02T03:00:00Z')
+    nxt = replace(g, game_id='nhl:2', tipoff_at='2024-01-03T23:00:00Z', cutoff_at='2024-01-03T21:00:00Z')
+    others = [f'Club {chr(97 + i)}' for i in range(pr.MIN_FULL_PAGE_TEAMS - 1)]     # distinct after team_key
+    snap.update(layout='json', teams=['Boston Bruins', *others],
+                rows=[{'team': 'Boston Bruins', 'player': 'Pat One', 'weight': 1.}])
+    f = model.player_features(nxt)                              # Toronto (away) absent from a full page: healthy
+    assert f['report_missing'] == 0 and f['absent_away'] == 0 and f['absent_home'] == pytest.approx(1 / 3)
+    snap['teams'] = ['Boston Bruins', *others[:-1]]             # one team short of a full page
+    assert model.player_features(nxt)['report_missing'] == 1
+    snap.update(layout='table', teams=['Boston Bruins', *others])
+    assert model.player_features(nxt)['report_missing'] == 1
+    snap['layout'] = 'json'
+    inputs.snapshot = lambda cutoff: (None, pr.MAX_AGE_HOURS)
+    assert model.player_features(nxt)['report_missing'] == 1    # no snapshot within 24 h: never inferred healthy
+
+
+def test_a_box_for_a_later_game_keeps_the_fit_usable_but_a_changed_or_new_box_of_a_consumed_game_does_not():
+    """The NHL guard hashed every box in the cache, so the box of any game played after the fit (published every night)
+    made the member 'inputs changed since fit' until the next retrain, though nothing it consumed changed (found by
+    test_serving_properties; the NBA member was fixed the same way on 2026-10-13). Now only the boxes of the results the
+    fit was offered count: a changed one, or one appearing for a result offered without a box, still blocks it."""
+    import copy
+    model, inputs, snap, g = fixture_model()
+    skipped = replace(g, game_id='nhl:2', tipoff_at='2024-01-02T23:00:00Z', cutoff_at='2024-01-02T21:00:00Z')
+    backtest.run(model, [HockeyRow(g, g.cutoff_at, 4, 2, '2024-01-02T03:00:00Z', 'REG'),
+                         HockeyRow(skipped, skipped.cutoff_at, 1, 3, '2024-01-03T03:00:00Z', 'REG')],
+                 deliver_until='2024-01-03T03:00:00Z')
+    recorded = model.input_status()
+
+    def box(gid):
+        return {**copy.deepcopy(inputs.boxes['nhl:1']), 'game_id': gid}
+    inputs.boxes['nhl:3'] = box('nhl:3'); inputs.digest = 'digest-with-a-later-game'       # the next night's box
+    assert model.input_mismatch(recorded) is None
+    inputs.boxes['nhl:1']['teams']['nhl:6'][0]['minutes'] = 25.                             # a consumed box changed
+    assert 'retrain' in model.input_mismatch(recorded)
+    inputs.boxes['nhl:1']['teams']['nhl:6'][0]['minutes'] = 20.
+    assert model.input_mismatch(recorded) is None
+    inputs.boxes['nhl:2'] = box('nhl:2')                                                    # rows appear for a skipped one
+    assert 'retrain' in model.input_mismatch(recorded)
+    restored = adaptive.thaw(adaptive.Adaptive(pr.NhlPlayersInjuries(HockeyEloConfig())),
+                             adaptive.freeze(adaptive.Adaptive(model)))
+    restored.member._inputs = inputs
+    assert 'retrain' in restored.member.input_mismatch(recorded)                            # the artifact keeps the index
+
+
 def test_nhl_score_distribution_supports_every_market_and_refreshes_features():
     import numpy as np
     model, inputs, snap, g = fixture_model()
@@ -472,6 +524,37 @@ def test_the_nhl_cycle_captures_injuries_only_when_switched_on(monkeypatch, tmp_
     assert out['status'] == 'success' and len(calls) == 1
     monkeypatch.setattr(src, 'capture_live', lambda **kw: (_ for _ in ()).throw(ValueError('bot check')))
     assert jobs.nhl_injury_capture()['status'] == 'failed'                         # never fatal to the cycle
+
+
+def test_the_30_minute_nhl_odds_cycle_also_captures_injuries_on_game_days(monkeypatch):
+    """Captures only inside the two-hour forecast step left a forecast 2 h before puck drop with the previous evening's
+    snapshot (read-only check 2026-10-17: 2025-26 snapshots at tipoff − 2 h median 145 h old). The odds cycle runs every
+    30 min while an NHL game tips off within its window: it captures too (after its forecasts), not on idle days."""
+    from app import jobs
+    calls = []
+    monkeypatch.setattr(src, 'capture_live', lambda **kw: calls.append(kw) or {'captured_at': 'x', 'rows': [1]})
+    monkeypatch.setenv('NHL_INJURY_CAPTURE', '1')
+    assert jobs.odds_cycle_injuries('nhl', {'status': 'success'})['status'] == 'success' and len(calls) == 1
+    assert jobs.odds_cycle_injuries('nhl', {'status': 'skipped', 'reason': 'no scheduled game'})['status'] == 'skipped'
+    assert jobs.odds_cycle_injuries('nba', {'status': 'success'}) is None and len(calls) == 1
+    monkeypatch.delenv('NHL_INJURY_CAPTURE')
+    assert jobs.odds_cycle_injuries('nhl', {'status': 'success'})['status'] == 'disabled' and len(calls) == 1
+
+
+def test_the_nhl_odds_command_reports_its_injury_capture_and_a_failed_capture_never_fails_the_cycle(monkeypatch, tmp_path, capsys):
+    """The wiring in `cli odds` (review note 2026-10-17: only jobs.odds_cycle_injuries was tested). A failed capture is
+    reported in the output but, like the forecast step's capture, is never fatal: the cycle's forecasts are done."""
+    from app import cli, jobs
+    monkeypatch.setenv('NBA_DATA_DIR', str(tmp_path))
+    monkeypatch.setattr(jobs, 'odds_snapshot', lambda conn, **kw: {'status': 'success'})
+    monkeypatch.setattr(jobs, 'forecast_due', lambda conn: {'status': 'skipped'})
+    monkeypatch.setattr(jobs, 'collect_props', lambda conn, snap: {'status': 'skipped'})
+    monkeypatch.setattr(jobs, 'nhl_injury_capture', lambda: {'status': 'success', 'captured_at': 'x', 'rows': 3})
+    assert cli.main(['--sport', 'nhl', 'odds']) == 0
+    assert json.loads(capsys.readouterr().out)['nhl_injuries'] == {'status': 'success', 'captured_at': 'x', 'rows': 3}
+    monkeypatch.setattr(jobs, 'nhl_injury_capture', lambda: {'status': 'failed', 'error': 'ConnectError'})
+    assert cli.main(['--sport', 'nhl', 'odds']) == 0
+    assert json.loads(capsys.readouterr().out)['nhl_injuries']['status'] == 'failed'
 
 
 def test_a_live_capture_must_carry_its_retrieval_time_and_a_torn_metadata_file_is_skipped(tmp_path):

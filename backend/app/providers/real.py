@@ -786,7 +786,8 @@ class RealProvider:
                                         total=len(shown), record=CanonicalSummary(**coverage.canonical_summary(cohort, market)),
                                         preseason_games=preseason, rows=shown[:limit])
 
-    def canonical_performance(self, market: str = "winner") -> CanonicalPerformanceResponse:
+    def _canonical_cohort(self, market: str) -> tuple[Optional[str], list, list]:
+        """(recording start, started competitive games [(game, canonical)], started preseason games) of one market."""
         began, rows, canon = self._canonical_games(market=market)
         cohort, pre = [], []
         for g in rows:
@@ -796,6 +797,77 @@ class RealProvider:
                 cohort.append((g, canon[g["game_id"]]))
             elif g["season_type"] == "preseason":
                 pre.append(g)
+        return began, cohort, pre
+
+    def threshold_overview(self) -> dict:
+        """Every market of the sport: live canonical record per confidence threshold (with the bookmaker's probability for
+        the same picks), the primary's history where it is comparable, and the declared best-threshold verdict
+        (app/threshold_overview.py)."""
+        from .. import threshold_overview as to
+
+        def quote_for(market):
+            def q(g, c):
+                if market == "winner":
+                    return self._winner_quote_prob(g["game_id"], c["record"]["generated_at"])
+                m, _ = coverage.matched_quote(self.conn, market, g, c)
+                return None if m is None else m[1]
+            return q
+
+        blocks = []
+        began = None
+        for market in sports.get(self.sport).markets:
+            began, cohort, _ = self._canonical_cohort(market)
+            blocks.append(to.market_block(self.sport, market, markets.spec(self.sport, market).title, cohort,
+                                          coverage.threshold_grid(market), quote_for(market)))
+        return {"mode": "real", "sport": self.sport, "as_of": self.now, "recording_began_at": began, "rule": to.RULE,
+                "break_even_standard": to.BREAK_EVEN_STANDARD, "markets": blocks}
+
+    def _pick_market_prob(self, market: str, g, c: dict) -> Optional[float]:
+        """The bookmaker's de-vigged probability for the canonical forecast's picked side, from a quote the forecast could
+        see (winner: latest moneyline at or before the forecast; other markets: the quote the forecast used)."""
+        from .. import threshold_overview as to
+        rec = c["record"]
+        if market == "winner":
+            q = self._winner_quote_prob(g["game_id"], rec["generated_at"])
+        else:
+            q, _ = coverage.forecast_quote(self.conn, market, g, rec)
+        return to._picked(market, q, rec["side"])
+
+    def ranked_picks(self, day: date) -> dict:
+        """Every canonical pick of the date's competitive games in every market, with the threshold it reaches, the past
+        evidence for picks like it, the market's probability for it, and its rank for the day and within its game
+        (app/threshold_overview.py RANK_RULE). Evidence never includes the date's own games."""
+        from .. import threshold_overview as to
+        start, end = _day_bounds(day)
+        picks, without = [], {}
+        for market in sports.get(self.sport).markets:
+            grid = coverage.threshold_grid(market)
+            title = markets.spec(self.sport, market).title
+            _, cohort, _ = self._canonical_cohort(market)
+            ladder = to.evidence_ladder(self.sport, market, grid, [(g, c) for g, c in cohort if g["tipoff_at"] < start])
+            _, rows, canon = self._canonical_games(start, end, market)
+            for g in rows:
+                if g["season_type"] not in coverage.COMPETITIVE:
+                    continue
+                c = canon[g["game_id"]]
+                if c["state"] != "forecast":
+                    without[c["state"]] = without.get(c["state"], 0) + 1
+                    continue
+                out = self._canon_out(c, g)
+                rec = c["record"]
+                home, away = self._team(g["home_team_id"]).abbr, self._team(g["away_team_id"]).abbr
+                picks.append({
+                    "game_id": g["game_id"], "matchup": f"{away} @ {home}", "tipoff": g["tipoff_at"], "status": g["status"],
+                    "market": market, "market_title": title, "pick_label": out.record.pick_label,
+                    "probability": rec["confidence"], "threshold": to.threshold_reached(rec["confidence"], grid),
+                    "evidence": to.pick_evidence(rec["confidence"], ladder, grid),
+                    "market_prob": self._pick_market_prob(market, g, c), "grade": c["grade"],
+                    "generated_at": rec["generated_at"]})
+        return {"mode": "real", "sport": self.sport, "date": day.isoformat(), "as_of": self.now, "rule": to.RANK_RULE,
+                "min_settled": to.MIN_LIVE_GRADED, "picks": to.rank(picks), "without_forecast": without}
+
+    def canonical_performance(self, market: str = "winner") -> CanonicalPerformanceResponse:
+        began, cohort, pre = self._canonical_cohort(market)
         summary = coverage.canonical_summary(cohort, market)
         scored = [(g, c, coverage.scored(market, c)) for g, c in cohort]
         scored = [(g, c, s) for g, c, s in scored if s is not None]

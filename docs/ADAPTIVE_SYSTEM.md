@@ -109,7 +109,27 @@ outcome is available after the fit cutoff; no fit's results reach the cutoff of 
   that first lock, before the snapshot, so a result committed by a later job is after the cutoff and delivered at serving.
   Walk artifacts record `delivered_digest` (the results, and `events_digest` the box/shot observations, available at
   the cutoff); when the store's view of either differs at serving (a corrected score, a late result or backfill dated
-  before the cutoff), the member is `missing` with the reason until the next fit. Training writes no ledger row; `publish` re-verifies every artifact
+  before the cutoff), the member is `missing` with the reason until the next fit. Only learned members make the
+  training-time forecast of the next game (their period's refit, `_training_forecast`); online members are frozen as
+  walked and start a new season in walk order at serving, exactly as a fresh walk. A learned member whose fit already
+  started a later season is `missing` when a result of an earlier season arrives after its cutoff (`_season_changed`;
+  the fit records the season as `consumed.season`, so the run is due). An online member's frozen state has its own
+  cutoff (`adaptive.frozen_at`): the latest time at or before the training cutoff at which no game was in flight (its
+  forecast cutoff passed, its result not yet available; scheduled and in-progress games from the store, postponed and
+  canceled ones excluded), recorded as `consumed.cutoff` and `frozen_at` in the run output. Frozen later, a game in
+  flight would be forecast at serving with a state already holding results and box scores of after its cutoff (a fresh
+  walk forecasts it before them), and the forecast is part of the state (efficiency_margin's residuals, the next season's
+  sigma). Results and box/shot data after that cutoff are replayed at serving, so a late result of a game in flight at
+  training no longer makes online members missing. A game still scheduled or in progress more than
+  `ingest.OBSERVED_WINDOW` (24 h) after its start is stuck, not in flight (`_in_flight`): it would hold the state back
+  for as long as it stays so. If it later turns final with an assumed availability before the fit, every walk member
+  is missing until the next fit (`_results_changed`); with a later one, serving replays it at its cutoff, which is exact
+  except for members whose forecast is part of their state (`adaptive.FORECAST_IN_STATE`: efficiency_margin, pinned by
+  a test against every online member) or when its forecast starts a season ahead of an earlier season's result
+  delivered in between: those are missing until the next fit (`_landed_in_flight`). At serving (`_advance`) a box/shot list of a game whose result the state
+  already holds joins the delivery queue by its effective time (`adaptive._Delivered`; `backtest.run` unchanged), after the
+  results and before the forecasts of its time, as a walk over every row delivers it (it was delivered ahead of every newer
+  forecast until 2026-10-16). Training writes no ledger row; `publish` re-verifies every artifact
   digest and refuses if the live definition changed meanwhile. Scheduled by
   `scripts/launchd/com.nba-predictor.adaptive-train.plist` (research-environment Python; not installed).
 - Cost: a training run re-walks every learned member from the first stored season with its weekly refits (the walk is
@@ -119,7 +139,7 @@ outcome is available after the fit cutoff; no fit's results reach the cutoff of 
 - Deep networks (`torch_mlp`, `keras_mlp`) are fitted only in the research environment (`~/nba-predictor-deep`); in the
   release environment their fit is recorded as `skipped` with the reason and the member is `missing` in every forecast.
 - Forecast path: artifacts are loaded only when their digest matches; results that arrived after an artifact's cutoff
-  are delivered to the frozen state (no refit; a season the member has no fit for makes it `missing`); one missing
+  are delivered to the frozen state (no refit; a season a learned member has no fit for makes it `missing`); one missing
   member uses the registered leave-one-out stack, more abstain with the reason; probabilities are never substituted.
 
 ## 8. Replay results (run 2026-10-06 UTC on store copies, research environment with torch/tensorflow)
@@ -390,12 +410,12 @@ weekly and (with `NBA_DAILY_AGREEMENT=1`) daily rows; the nightly jobs settle; t
   first, so an old backlog cannot starve them. Older gaps are reported. NBA inputs are reported only (their guard covers
   consumed rows).
 - NHL boxes are collected last, only after every other gate passed (a run that defers training adds none, since a box
-  added after a fit retires the NHL injury member), right before training, and they never gate it: once one has arrived the
-  member is retired until the next fit anyway, and training is how it comes back (a still-missing box only affects that
-  team's games). A failed collection step marks the `training_inputs` run failed on the panel without stopping training (the command's exit code follows readiness only). Box files and raw bulk responses written in the last 7 days that are truncated (JSON that does not parse; a `bulk-*.raw` whose bytes no longer match the sha256 in its name — a run killed mid-write; `collect_bulk_boxes` writes in place and is part of the NHL definition, so it is not edited) are renamed aside (`.corrupt-<time>`) before each collection, so they are fetched again; files modified in the last 10 minutes are left alone (another collector may be writing them); game files that name a quarantined raw are set aside with it, so they are refetched. Dry run on the real box folder: 14,846 files checked, 0 flagged.
-- Why boxes are collected only here: the NHL injury member's guard digests the whole box folder, so a box added after a
-  fit retires the member until the next fit. With weekly-only training it would serve on training day only; daily training
-  after collection keeps it current.
+  that appears for a result the fit was offered without one retires the NHL injury member), right before training, and
+  they never gate it: training is how a retired member comes back (a still-missing box only affects that team's games). A failed collection step marks the `training_inputs` run failed on the panel without stopping training (the command's exit code follows readiness only). Box files and raw bulk responses written in the last 7 days that are truncated (JSON that does not parse; a `bulk-*.raw` whose bytes no longer match the sha256 in its name — a run killed mid-write; `collect_bulk_boxes` writes in place and is part of the NHL definition, so it is not edited) are renamed aside (`.corrupt-<time>`) before each collection, so they are fetched again; files modified in the last 10 minutes are left alone (another collector may be writing them); game files that name a quarantined raw are set aside with it, so they are refetched. Dry run on the real box folder: 14,846 files checked, 0 flagged.
+- Why boxes are collected only here: the NHL injury member's guard covers the boxes of the results its fit was offered
+  (since 2026-10-16; before, it digested the whole box folder, so any box added after a fit retired the member). A box
+  that appears after the fit for a result it was offered without one still retires it until the next fit, so boxes are
+  collected right before training; boxes of later games no longer do.
 - `adaptive-train` re-checks (read-only) and returns `deferred` (exit 1, nothing trained, fits in force unchanged) when not
   ready; `--force` does not bypass it, and the deferral is written as a failed `training_inputs` row. Each `training-inputs`
   run is a `job_runs` row (migration 0031); the panel shows its last failure at once, a run that never finished after 2 h,
