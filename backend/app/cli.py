@@ -9,7 +9,7 @@ from .models.elo import EloConfig
 
 
 # Commands that work for every sport; everything else is NBA-only until generalised.
-SPORT_COMMANDS = {"nhl-pbp-import", "nhl-xg-research", "migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies", "refresh", "odds", "predict",
+SPORT_COMMANDS = {"nhl-pbp-import", "nhl-xg-research", "migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies", "refresh", "odds", "tick", "predict",
                   "score", "daily", "scheduler", "predict-now", "score-near-tipoff", "markets", "score-markets", "agreement", "thresholds",
                   "combination-study", "selector-decide", "research-report", "retrain-cadence", "catboost-challenger", "combination-search", "expanded-search", "selective-study", "rules-registry",
                   "daily-cadence", "features-nhl", "tracking-report", "tracking-record", "pool-screen", "pool-assess", "pool-record", "pool-roster", "pool-report",
@@ -27,6 +27,7 @@ READ_ONLY_COMMANDS = {"score-markets", "score-near-tipoff", "thresholds", "resea
                       "combination-thresholds-report"}
 LOCK_WAIT_SECONDS = 45 * 60     # longer than any two-hour cycle (NHL ~13 minutes); a job still waiting then fails visibly
 ODDS_LOCK_WAIT_SECONDS = 120    # the periodic cycle waits out a short job (daily, injuries), not another full cycle
+TICK_LOCK_WAIT_SECONDS = 20     # the once-a-minute coordinator never queues: the next tick follows within a minute
 
 
 def _record_lock_busy(sport: str, reason: str):
@@ -117,7 +118,9 @@ def main(argv=None) -> int:
     sub.add_parser("coverage", help="Print stored data coverage as JSON")
     sub.add_parser("release-check", help="Read-only: the release commit, schema, research definition and every reason the "
                                          "scheduled jobs would refuse to run from this checkout (docs: HANDOFF, operations)")
-    rf = sub.add_parser("refresh", help="Fetch current ESPN months (retries; at most once per 30 min unless --force)")
+    rf = sub.add_parser("refresh", help="Schedule/status/results refresh when the activity policy says it is due "
+                                        "(app/freshness.py: hourly when idle, every 2 min within two hours of a start, every "
+                                        "minute while a game is active); --force runs a broad refresh now")
     rf.add_argument("--force", action="store_true")
     sub.add_parser("predict", help="Refresh and record supported forecasts only within two hours of tipoff")
     sub.add_parser("thresholds", help="Read-only two-hour threshold records for every stored market and model")
@@ -252,6 +255,8 @@ def main(argv=None) -> int:
     od = sub.add_parser("odds", help="Snapshot pregame odds for games tipping off within 36 h "
                                      "(ESPN day scoreboards; at most once per 10 min unless --force)")
     od.add_argument("--force", action="store_true")
+    sub.add_parser("tick", help="Coordinator step for a once-a-minute launcher: data refresh when due, then the odds cycle at "
+                                "its usual cadence or the forecast step early when a two-hour window opens (docs/REFRESH_PLAN.md)")
     sc = sub.add_parser("scheduler", help="Run `daily` (or `odds`) every N minutes, a bounded number of times")
     sc.add_argument("--job", choices=("daily", "odds"), default="daily")
     sc.add_argument("--interval-minutes", type=float, default=360)
@@ -504,14 +509,15 @@ def main(argv=None) -> int:
     # One job per store at a time: every command below opens (and migrates) the sport's store. The periodic odds cycle
     # waits out a short job but does not queue behind another full cycle (that cycle is doing the same work; the next
     # interval follows); other commands wait, then fail visibly. `scheduler` holds the lock per iteration, not while asleep.
-    with db.store_lock(args.sport, wait_seconds=ODDS_LOCK_WAIT_SECONDS if args.cmd == "odds" else LOCK_WAIT_SECONDS) as held:
+    wait = {"odds": ODDS_LOCK_WAIT_SECONDS, "tick": TICK_LOCK_WAIT_SECONDS}.get(args.cmd, LOCK_WAIT_SECONDS)
+    with db.store_lock(args.sport, wait_seconds=wait) as held:
         if not held:
-            busy = {"status": "skipped" if args.cmd == "odds" else "failed",
+            busy = {"status": "skipped" if args.cmd in ("odds", "tick") else "failed",
                     "reason": f"another job is running on the {args.sport} store"}
             if args.cmd == "odds":       # leave a trace: a cycle that never ran is otherwise invisible
                 busy["run_id"] = _record_lock_busy(args.sport, busy["reason"])
-            print(json.dumps(busy))
-            return 0 if args.cmd == "odds" else 1
+            print(json.dumps(busy))      # tick: no row (it runs every minute; the next one follows)
+            return 0 if args.cmd in ("odds", "tick") else 1
         conn = db.connect(sport=args.sport)
         applied = db.migrate(conn)
         db.claim_store(conn, args.sport)
@@ -884,13 +890,13 @@ def _run(args, p, conn, applied) -> int:
         result = jobs.predict_now(conn, dry_run=args.dry_run)
         print(json.dumps(result, indent=2))
         return 1 if result["status"] == "failed" else 0
-    elif args.cmd in ("refresh", "odds", "predict", "score", "daily", "scheduler"):
+    elif args.cmd in ("refresh", "odds", "tick", "predict", "score", "daily", "scheduler"):
         if args.cmd == "refresh":
             result = jobs.refresh(conn, force=args.force)
         elif args.cmd == "odds":
-            snap = jobs.odds_snapshot(conn, force=args.force, props=False)
-            result = {"odds": snap, "forecasts": jobs.forecast_due(conn)}
-            snap["props"] = jobs.collect_props(conn, snap)       # after the time-critical forecasts, never before them
+            result = jobs.odds_cycle(conn, args.sport, force=args.force)
+        elif args.cmd == "tick":
+            result = jobs.tick(conn)
         elif args.cmd == "predict":
             result = jobs.predict_now(conn)
         elif args.cmd == "score":

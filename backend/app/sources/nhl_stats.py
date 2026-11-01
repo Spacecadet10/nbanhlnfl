@@ -37,6 +37,16 @@ def season_request(season: int) -> tuple[str, dict]:
     return f"season={sid}", {"cayenneExp": f"season={sid}"}
 
 
+def day_request(season: int, day: str) -> tuple[str, dict]:
+    """One Eastern game date (YYYY-MM-DD) of a season: the same game list rows as `season_request`, filtered to that date
+    (≈1 KB instead of ≈350 KB; checked against the season list on 2026-11-01). Used by the frequent status refresh."""
+    season_request(season)
+    if len(day) != 10 or day[4] != "-" or day[7] != "-" or not (day[:4] + day[5:7] + day[8:]).isdigit():
+        raise ValueError(f"Expected YYYY-MM-DD, got {day!r}")
+    sid = f"{season - 1}{season}"
+    return f"season={sid}&gameDate={day}", {"cayenneExp": f'season={sid} and gameDate="{day}"'}
+
+
 def team_request() -> tuple[str, dict]:
     return "teams", {}
 
@@ -51,6 +61,10 @@ def _get(endpoint: str, params: dict, timeout: float) -> bytes:
 
 def fetch_season(season: int, timeout: float = 60) -> bytes:
     return _get(GAME_ENDPOINT, season_request(season)[1], timeout)
+
+
+def fetch_day(season: int, day: str, timeout: float = 30) -> bytes:
+    return _get(GAME_ENDPOINT, day_request(season, day)[1], timeout)
 
 
 def fetch_teams(timeout: float = 30) -> bytes:

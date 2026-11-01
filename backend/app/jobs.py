@@ -12,7 +12,6 @@ from .db import store_sport, utc_now
 from .sources import espn, nhl_stats
 
 EASTERN = ZoneInfo("America/New_York")
-MIN_REFRESH_INTERVAL = timedelta(minutes=30)   # quota: at most one successful refresh per 30 minutes
 MAX_REQUESTS_PER_REFRESH = 3                   # quota: months fetched per refresh
 MIN_ODDS_INTERVAL = timedelta(minutes=10)      # quota: at most one successful odds snapshot per 10 minutes
 ODDS_WINDOW = timedelta(hours=36)              # snapshot days with a scheduled game tipping off this soon
@@ -75,29 +74,59 @@ def nhl_season_for(now: datetime) -> int:
 
 def refresh(conn: sqlite3.Connection, *, force: bool = False, fetch: Optional[Callable] = None,
             sleep: Callable[[float], None] = time.sleep, now: Optional[datetime] = None) -> dict:
-    """Schedule and results refresh for this store's sport. NBA: ESPN months around today (≤ 3 requests). NHL: the
-    current season's NHL stats game list (1 request). Retries and the 30-minute quota are shared."""
+    """Schedule, status and results refresh for this store's sport, when the activity policy says it is due
+    (app/freshness.py; replaces the fixed 30-minute quota). Broad scope: NBA ESPN months around today (<= 3 requests),
+    NHL the current season's game list (1 request). Dates scope (a game active or starting within two hours): only those
+    games' Eastern dates (<= 3 small requests). `force` runs a broad refresh now. Failures back off and never count as
+    fresh data. Dispatch is explicit per sport: an unknown store is refused, never treated as NBA."""
+    from . import freshness
     run_id = _start(conn, "refresh")
     now = now or datetime.now(timezone.utc)
-    last = last_success(conn, "refresh")
-    if last and not force and now - _parse(last) < MIN_REFRESH_INTERVAL:
-        return _finish(conn, run_id, "skipped", 0, {"reason": f"last successful refresh {last} is under "
-                                                              f"{MIN_REFRESH_INTERVAL} old (quota)"})
-    if sport(conn) == "nhl":
-        season = nhl_season_for(now)
-        fetch = fetch or nhl_stats.fetch_season
-        results, attempts, failure = _fetch_each([season], lambda y: ingest.ingest_nhl_season(conn, y, fetch=fetch), sleep)
-        if failure:
-            return _finish(conn, run_id, "failed", attempts, {"seasons": [season], "failed_season": failure[0],
-                                                              "error": failure[1], "completed": results})
-        return _finish(conn, run_id, "success", attempts, {"seasons": [season], "imports": results})
-    fetch = fetch or espn.fetch_month
-    months = refresh_months(now)[:MAX_REQUESTS_PER_REFRESH]
-    results, attempts, failure = _fetch_each(months, lambda m: ingest.ingest_month(conn, m, fetch=fetch), sleep)
+    plan = freshness.plan(conn, now)
+    if not force and not plan["due"]:
+        return _finish(conn, run_id, "skipped", 0, {"reason": f"not due until {plan['next_due_at']} ({plan['activity']}; "
+                                                              f"every {plan['interval_seconds']} s)", "policy": _policy(plan)})
+    scope = "broad" if force else plan["scope"]
+    name = store_sport(conn) or "nba"       # an unlabelled store is the original NBA store (db.claim_store binds it)
+    if name == "nhl":
+        if scope == "broad":
+            keys, label = [nhl_season_for(now)], "seasons"
+            fetch = fetch or nhl_stats.fetch_season
+            one = lambda y: ingest.ingest_nhl_season(conn, y, fetch=fetch)
+        else:
+            keys, label = plan["dates"], "dates"
+            fetch = fetch or nhl_stats.fetch_day
+            one = lambda d: ingest.ingest_nhl_games_day(conn, nhl_season_for(_eastern_noon(d)), d, fetch=fetch)
+    elif name == "nba":
+        if scope == "broad":
+            keys, label = refresh_months(now)[:MAX_REQUESTS_PER_REFRESH], "months"
+            fetch = fetch or espn.fetch_month
+            one = lambda m: ingest.ingest_month(conn, m, fetch=fetch)
+        else:
+            keys, label = [d.replace("-", "") for d in plan["dates"]], "dates"
+            fetch = fetch or espn.fetch_day
+            one = lambda d: ingest.ingest_day(conn, d, fetch=fetch)
+    else:
+        return _finish(conn, run_id, "failed", 0, {"error": f"no refresh is defined for a {name!r} store"})
+    results, attempts, failure = _fetch_each(keys, one, sleep)
+    detail = {"scope": scope, label: keys, "policy": _policy(plan), "forced": force}
     if failure:
-        return _finish(conn, run_id, "failed", attempts, {"months": months, "failed_month": failure[0],
-                                                          "error": failure[1], "completed": results})
-    return _finish(conn, run_id, "success", attempts, {"months": months, "imports": results})
+        return _finish(conn, run_id, "failed", attempts, {**detail, f"failed_{label[:-1]}": failure[0], "error": failure[1],
+                                                          "completed": results})
+    return _finish(conn, run_id, "success", attempts, {**detail, "imports": results})
+
+
+def _policy(plan: dict) -> dict:
+    return {k: plan[k] for k in ("activity", "interval_seconds", "next_due_at", "failures")}
+
+
+def _eastern_noon(day: str) -> datetime:
+    return datetime.strptime(day, "%Y-%m-%d").replace(hour=12, tzinfo=EASTERN)
+
+
+def refresh_changed(run: dict) -> bool:
+    """Whether a refresh result stored or changed any game (a new status, start time or result)."""
+    return any((r.get("games_inserted") or 0) + (r.get("games_updated") or 0) for r in run.get("imports") or [])
 
 
 def _fetch_each(keys: list[str], ingest_one: Callable[[str], dict], sleep: Callable[[float], None]
@@ -713,6 +742,79 @@ def _forecast_due(conn: sqlite3.Connection) -> dict:
                     "selector": decisions}
         return {"status": "skipped", "reason": "no forecastable game within two hours", "selector": decisions}
     return {**predict_now(conn), "selector": decisions}
+
+
+def odds_cycle(conn: sqlite3.Connection, sport_name: str, *, force: bool = False) -> dict:
+    """The periodic odds command: odds snapshot, due forecasts (with bounded recovery), then props -- after the
+    time-critical forecasts, never before them. The same steps as the `odds` command of release 18fa0bf."""
+    snap = odds_snapshot(conn, force=force, props=False)
+    result = {"odds": snap, "forecasts": forecast_due(conn)}
+    snap["props"] = collect_props(conn, snap)
+    return result
+
+
+# The odds cycle keeps its installed cadence inside `tick` (launchd StartInterval: NBA 900 s, NHL 1800 s).
+ODDS_CYCLE_EVERY = {"nba": timedelta(minutes=15), "nhl": timedelta(minutes=30)}
+
+
+def pending_forecasts(conn: sqlite3.Connection, now: datetime) -> list[sqlite3.Row]:
+    """Scheduled games of a forecastable type inside the two-hour window with no canonical winner forecast yet."""
+    from . import near_tipoff
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='game_forecasts'").fetchone():
+        return []
+    types = coverage.FORECAST_TYPES
+    return conn.execute(
+        f"SELECT g.game_id, g.tipoff_at FROM games g WHERE g.status='scheduled' AND g.tipoff_at > ? AND g.tipoff_at <= ? "
+        f"AND g.season_type IN ({','.join('?' * len(types))}) AND NOT EXISTS (SELECT 1 FROM game_forecasts f "
+        f"WHERE f.game_id = g.game_id AND f.market = 'winner' AND f.status = 'forecast') ORDER BY g.tipoff_at, g.game_id",
+        (_fmt(now), _fmt(now + near_tipoff.WINDOW), *types)).fetchall()
+
+
+def forecast_trigger(conn: sqlite3.Connection, sport_name: str, now: datetime, refresh_run: dict) -> Optional[str]:
+    """Why `tick` runs forecast work now, or None. 'cycle': the odds cycle's usual cadence is due. 'window_opened': a game
+    without a forecast entered its two-hour window after the last forecast attempt (no waiting for the next cycle).
+    'new_data': this tick's refresh changed stored games while a game in the window still has no forecast (a forecast
+    blocked by missing or stale prerequisites is retried as soon as they may have arrived). Forecast rules, selection
+    and timestamps are those of the existing forecast step; this only chooses when it runs."""
+    from . import freshness, near_tipoff
+    last_cycle = conn.execute("SELECT MAX(started_at) FROM job_runs WHERE job='odds'").fetchone()[0]
+    if last_cycle is None or now - _parse(last_cycle) >= ODDS_CYCLE_EVERY[sport_name] - freshness.TICK_SLACK:
+        return "cycle"
+    pending = pending_forecasts(conn, now)
+    if not pending:
+        return None
+    last_attempt = conn.execute("SELECT MAX(started_at) FROM job_runs WHERE job='near_tipoff'").fetchone()[0]
+    if last_attempt is None or any(_parse(g["tipoff_at"]) - near_tipoff.WINDOW > _parse(last_attempt) for g in pending):
+        return "window_opened"
+    if refresh_run.get("status") == "success" and refresh_changed(refresh_run):
+        return "new_data"
+    return None
+
+
+def tick(conn: sqlite3.Connection, *, now: Optional[datetime] = None, refresh_kw: Optional[dict] = None,
+         cycle: Optional[Callable[[], dict]] = None, forecast: Optional[Callable[[], dict]] = None) -> dict:
+    """One coordinator step, meant to run every minute under the store's job lock (docs/REFRESH_PLAN.md). Refreshes data
+    when the activity policy says it is due; then runs the odds cycle at its
+    usual cadence or the forecast step early when a window opens or blocked prerequisites change. A tick with nothing
+    due makes no request and writes no job row."""
+    from . import freshness
+    now = now or datetime.now(timezone.utc)
+    name = store_sport(conn) or "nba"
+    if name not in ("nba", "nhl"):
+        raise ValueError(f"no tick is defined for a {name!r} store")
+    plan = freshness.plan(conn, now)
+    out = {"sport": name, "as_of": _fmt(now), "policy": _policy(plan)}
+    out["refresh"] = refresh(conn, now=now, **(refresh_kw or {})) if plan["due"] else \
+        {"status": "not_due", "next_due_at": plan["next_due_at"], "activity": plan["activity"]}
+    why = forecast_trigger(conn, name, now, out["refresh"])
+    if why == "cycle":
+        out.update((cycle or (lambda: odds_cycle(conn, name)))())
+    elif why:
+        out["forecasts"] = (forecast or (lambda: _forecast_due(conn)))()
+    else:
+        out["forecasts"] = {"status": "not_due"}
+    out["trigger"] = why
+    return out
 
 
 def scheduler(conn: sqlite3.Connection, *, interval_minutes: float, max_runs: int, job: str = "daily",

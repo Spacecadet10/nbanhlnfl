@@ -26,7 +26,7 @@
 		<string>app.cli</string>
 		<string>--sport</string>
 		<string>nhl</string>
-		<string>odds</string>
+		<string>tick</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>
@@ -35,7 +35,7 @@
 	<key>StandardOutPath</key>
 	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/nhl-odds-launchd.log</string>
 	<key>StartInterval</key>
-	<integer>1800</integer>
+	<integer>60</integer>
 	<key>ThrottleInterval</key>
 	<integer>60</integer>
 	<key>WorkingDirectory</key>

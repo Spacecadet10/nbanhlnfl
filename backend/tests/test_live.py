@@ -121,9 +121,9 @@ def test_refresh_retries_then_succeeds_and_logs(store):
     out = jobs.refresh(store, fetch=flaky, sleep=lambda _s: None, now=now)
     assert out["status"] == "success" and out["attempts"] == 3 and out["months"] == ["202610"]
     assert jobs.last_success(store, "refresh") is not None
-    # Quota uses the real clock of the job log: an immediate second refresh is skipped.
+    # The activity policy (app/freshness.py) uses the job log's clock: an immediate second refresh is not due yet.
     skipped = jobs.refresh(store, fetch=flaky, sleep=lambda _s: None)
-    assert skipped["status"] == "skipped" and "quota" in skipped["reason"]
+    assert skipped["status"] == "skipped" and "not due" in skipped["reason"]
 
 
 def test_nightly_refresh_failure_is_visible_without_early_forecasts(store, monkeypatch):

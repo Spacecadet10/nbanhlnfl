@@ -415,6 +415,13 @@ def ingest_nhl_season(conn: sqlite3.Connection, season: int, *, fetch: Callable[
                                             fetch(season), retrieved_at, cache_dir)}
 
 
+def ingest_nhl_games_day(conn: sqlite3.Connection, season: int, day: str, *, fetch: Callable[[int, str], bytes] = nhl_stats.fetch_day,
+                         retrieved_at: Optional[str] = None, cache_dir: Optional[Path] = None) -> dict:
+    """One Eastern date of the NHL stats game list (the frequent status refresh); imported exactly like the season list."""
+    return {"date": day, **_ingest_nhl(conn, nhl_stats.day_request(season, day)[0], nhl_stats.GAME_ENDPOINT,
+                                       fetch(season, day), retrieved_at, cache_dir)}
+
+
 def _ingest_nhl(conn, request_key, endpoint, body, retrieved_at, cache_dir) -> dict:
     retrieved_at = retrieved_at or utc_now()
     with transaction(conn):
