@@ -529,18 +529,20 @@ def test_connection_failures_back_off_and_keep_the_permanent_allowance(sealed):
     assert jobs.box_attempts(sealed, "espn:9100") == 0 and jobs.transient_box_attempts(sealed, "espn:9100")[0] == 3
     assert first["network_wait"] == ["espn:9100"] and first["gave_up"] == []          # visible, waiting
     from datetime import timedelta
-    soon = jobs.boxscores(sealed, fetch=dns_down, sleep=lambda _s: None, now=at("20 06") + timedelta(minutes=30))
+    soon = jobs.boxscores(sealed, fetch=dns_down, sleep=lambda _s: None, now=at("20 06") + timedelta(minutes=10))
     assert len(calls) == 3 and soon["status"] == "skipped" and soon["network_wait"] == ["espn:9100"]
-    assert jobs.transient_box_backoff(3) == timedelta(minutes=60) and jobs.transient_box_backoff(20) == timedelta(hours=6)
+    assert "waiting to retry after connection failures" in soon["reason"]
+    # Backoff grows per consecutive failed run (3 attempts each) and is capped at 1 h (review P2): 15, 30, 60, 60 min.
+    assert [jobs.transient_box_backoff(n) for n in (1, 3, 4, 6, 9, 60)] == [timedelta(minutes=m) for m in (15, 15, 30, 30, 60, 60)]
     later = jobs.boxscores(sealed, fetch=lambda g: summary("9100", ("1", "110"), ("2", "100")), sleep=lambda _s: None,
-                           now=at("20 07"))                                             # backoff over: fetched
+                           now=at("20 06") + timedelta(minutes=15))                     # backoff over: fetched
     assert later["status"] == "success" and later["fetched"][0]["complete_lines"] == 2
 
 
 def test_connection_failures_are_bounded_separately(sealed):
     recent_finals(sealed, 1)
     for i in range(jobs.MAX_TRANSIENT_BOX_ATTEMPTS):
-        jobs._log_box_attempt(sealed, "espn:9100", f"2026-10-20T00:{i:02d}:00Z", error="ConnectTimeout: timed out")
+        jobs._log_box_attempt(sealed, "espn:9100", f"2026-10-20T{i // 60:02d}:{i % 60:02d}:00Z", error="ConnectTimeout: timed out")
     plan = jobs.box_refresh_plan(sealed, at("20 23"))
     assert plan["gave_up"] == ["espn:9100"] and plan["missing"] == []
 
@@ -550,3 +552,14 @@ def test_http_and_other_failures_still_use_the_permanent_allowance(sealed):
     for i in range(jobs.MAX_BOX_ATTEMPTS):
         jobs._log_box_attempt(sealed, "espn:9100", f"2026-10-20T0{i}:00:00Z", error="HTTPStatusError: 404 Not Found")
     assert jobs.box_refresh_plan(sealed, at("20 12"))["gave_up"] == ["espn:9100"]
+
+
+def test_backoff_counts_only_connection_failures_since_the_last_other_attempt(sealed):
+    recent_finals(sealed, 1)
+    for i in range(9):
+        jobs._log_box_attempt(sealed, "espn:9100", f"2026-10-20T00:{i:02d}:00Z", error="ConnectError: down")
+    jobs._log_box_attempt(sealed, "espn:9100", "2026-10-20T01:00:00Z", error="HTTPStatusError: 503")
+    jobs._log_box_attempt(sealed, "espn:9100", "2026-10-20T02:00:00Z", error="ConnectError: down")
+    assert jobs.consecutive_transient_box_attempts(sealed, "espn:9100") == 1
+    assert jobs.box_refresh_plan(sealed, at("20 02") + __import__("datetime").timedelta(minutes=10))["network_wait"] == ["espn:9100"]
+    assert jobs.box_refresh_plan(sealed, at("20 02") + __import__("datetime").timedelta(minutes=15))["missing"] == ["espn:9100"]
