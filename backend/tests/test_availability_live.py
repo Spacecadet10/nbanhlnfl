@@ -98,3 +98,35 @@ def test_live_definition_uses_two_hour_training_cutoff_and_unsubmitted_fails(sto
     current.unsubmitted.add('1')
     with pytest.raises(av.AvailabilityError,match='not submitted'):
         m._features(g)
+
+
+def test_inactive_coachs_decision_player_with_dash_minutes_played_zero_minutes(monkeypatch):
+    """ESPN summaries since 2026-10-24 (events 401909095, 401909855, 401909877) list unused players with MIN '-' or '--',
+    active=false and a reason, but didNotPlay=false. They played 0 minutes; every NBA forecast run failed on them."""
+    game=dict(game_id='espn:g',home_team_id='espn:1',away_team_id='espn:2')
+    monkeypatch.setattr(al.espn,'parse_summary_box',lambda _:SimpleNamespace(completed=True,game_id='espn:g'))
+    body=summary()
+    athletes=body['boxscore']['players'][0]['statistics'][0]['athletes']
+    for i, dash in ((7, '-'), (8, '--')):
+        athletes.append(dict(athlete=dict(id=str(i),displayName=f'Bench {i}'), active=False, starter=False,
+                             didNotPlay=False, reason="COACH'S DECISION", ejected=False, stats=[dash]))
+    out=al.summary_players(body,game)
+    assert out['1']['7']==('Bench 7',0.) and out['1']['8']==('Bench 8',0.)
+
+
+def test_dash_minutes_without_an_inactive_reason_are_still_invalid(monkeypatch):
+    """Missing/malformed minutes are not zero minutes: a dash counts as 0 only when ESPN also says the player was
+    inactive with a reason."""
+    game=dict(game_id='espn:g',home_team_id='espn:1',away_team_id='espn:2')
+    monkeypatch.setattr(al.espn,'parse_summary_box',lambda _:SimpleNamespace(completed=True,game_id='espn:g'))
+    for extra in (dict(active=True, reason="COACH'S DECISION"), dict(active=False), dict(), dict(active=False, reason='')):
+        body=summary()
+        body['boxscore']['players'][0]['statistics'][0]['athletes'].append(
+            dict(athlete=dict(id='9',displayName='Bench 9'), didNotPlay=False, stats=['--'], **extra))
+        with pytest.raises(av.AvailabilityError,match='Invalid player minutes'):
+            al.summary_players(body,game)
+    body=summary()
+    body['boxscore']['players'][0]['statistics'][0]['athletes'].append(
+        dict(athlete=dict(id='9',displayName='Bench 9'), active=False, reason="COACH'S DECISION", stats=['abc']))
+    with pytest.raises(av.AvailabilityError,match='Invalid player minutes'):
+        al.summary_players(body,game)

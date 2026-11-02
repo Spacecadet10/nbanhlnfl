@@ -83,10 +83,12 @@ def summary_players(data, game):
                 name = a.get('athlete', {}).get('displayName', '')
                 if not pid or not name:
                     raise av.AvailabilityError('Player summary is missing an athlete identity')
-                if a.get('didNotPlay'):
+                values = a.get('stats', [])
+                inactive_dash = (a.get('active') is False and bool(a.get('reason')) and len(values) > index
+                                 and str(values[index]).strip() in ('-', '--'))
+                if a.get('didNotPlay') or inactive_dash:   # ESPN: unused player listed inactive with a reason
                     minutes = 0.
                 else:
-                    values = a.get('stats', [])
                     if len(values) <= index:
                         raise av.AvailabilityError('Missing player minutes')
                     value = str(values[index])
