@@ -124,11 +124,6 @@ def _eastern_noon(day: str) -> datetime:
     return datetime.strptime(day, "%Y-%m-%d").replace(hour=12, tzinfo=EASTERN)
 
 
-def refresh_changed(run: dict) -> bool:
-    """Whether a refresh result stored or changed any game (a new status, start time or result)."""
-    return any((r.get("games_inserted") or 0) + (r.get("games_updated") or 0) for r in run.get("imports") or [])
-
-
 def _fetch_each(keys: list[str], ingest_one: Callable[[str], dict], sleep: Callable[[float], None]
                 ) -> tuple[list[dict], int, Optional[tuple[str, str]]]:
     """Ingests each key with retries and backoff. Returns (results, attempts, (failed key, error) or None)."""
@@ -746,8 +741,11 @@ def _forecast_due(conn: sqlite3.Connection) -> dict:
 
 def odds_cycle(conn: sqlite3.Connection, sport_name: str, *, force: bool = False) -> dict:
     """The periodic odds command: odds snapshot, due forecasts (with bounded recovery), then props -- after the
-    time-critical forecasts, never before them. The same steps as the `odds` command of release 18fa0bf."""
+    time-critical forecasts, never before them. The same steps as the `odds` command of release 18fa0bf. Its own odds
+    row is marked `cycle` so the cadence clock ignores the odds snapshots the forecast step and refusals also write."""
     snap = odds_snapshot(conn, force=force, props=False)
+    conn.execute("UPDATE job_runs SET detail = json_set(COALESCE(detail, '{}'), '$.cycle', json('true')) WHERE run_id = ?",
+                 (snap["run_id"],))
     result = {"odds": snap, "forecasts": forecast_due(conn)}
     snap["props"] = collect_props(conn, snap)
     return result
@@ -757,46 +755,25 @@ def odds_cycle(conn: sqlite3.Connection, sport_name: str, *, force: bool = False
 ODDS_CYCLE_EVERY = {"nba": timedelta(minutes=15), "nhl": timedelta(minutes=30)}
 
 
-def pending_forecasts(conn: sqlite3.Connection, now: datetime) -> list[sqlite3.Row]:
-    """Scheduled games of a forecastable type inside the two-hour window with no canonical winner forecast yet."""
-    from . import near_tipoff
-    if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='game_forecasts'").fetchone():
-        return []
-    types = coverage.FORECAST_TYPES
-    return conn.execute(
-        f"SELECT g.game_id, g.tipoff_at FROM games g WHERE g.status='scheduled' AND g.tipoff_at > ? AND g.tipoff_at <= ? "
-        f"AND g.season_type IN ({','.join('?' * len(types))}) AND NOT EXISTS (SELECT 1 FROM game_forecasts f "
-        f"WHERE f.game_id = g.game_id AND f.market = 'winner' AND f.status = 'forecast') ORDER BY g.tipoff_at, g.game_id",
-        (_fmt(now), _fmt(now + near_tipoff.WINDOW), *types)).fetchall()
+def last_cycle_at(conn: sqlite3.Connection) -> Optional[str]:
+    """Start of the last odds cycle (an odds row marked `cycle`); rows written before this release have no mark."""
+    return conn.execute("SELECT MAX(started_at) FROM job_runs WHERE job = 'odds' AND json_extract(detail, '$.cycle') = 1"
+                        ).fetchone()[0]
 
 
-def forecast_trigger(conn: sqlite3.Connection, sport_name: str, now: datetime, refresh_run: dict) -> Optional[str]:
-    """Why `tick` runs forecast work now, or None. 'cycle': the odds cycle's usual cadence is due. 'window_opened': a game
-    without a forecast entered its two-hour window after the last forecast attempt (no waiting for the next cycle).
-    'new_data': this tick's refresh changed stored games while a game in the window still has no forecast (a forecast
-    blocked by missing or stale prerequisites is retried as soon as they may have arrived). Forecast rules, selection
-    and timestamps are those of the existing forecast step; this only chooses when it runs."""
-    from . import freshness, near_tipoff
-    last_cycle = conn.execute("SELECT MAX(started_at) FROM job_runs WHERE job='odds'").fetchone()[0]
-    if last_cycle is None or now - _parse(last_cycle) >= ODDS_CYCLE_EVERY[sport_name] - freshness.TICK_SLACK:
-        return "cycle"
-    pending = pending_forecasts(conn, now)
-    if not pending:
-        return None
-    last_attempt = conn.execute("SELECT MAX(started_at) FROM job_runs WHERE job='near_tipoff'").fetchone()[0]
-    if last_attempt is None or any(_parse(g["tipoff_at"]) - near_tipoff.WINDOW > _parse(last_attempt) for g in pending):
-        return "window_opened"
-    if refresh_run.get("status") == "success" and refresh_changed(refresh_run):
-        return "new_data"
-    return None
+def cycle_due(conn: sqlite3.Connection, sport_name: str, now: datetime) -> bool:
+    """Whether the odds cycle (odds snapshot, forecasts, recovery, props) is due at its usual cadence. Forecast timing is
+    therefore that of release 18fa0bf: `tick` never runs the forecast step between cycles."""
+    from . import freshness
+    last = last_cycle_at(conn)
+    return last is None or now - _parse(last) >= ODDS_CYCLE_EVERY[sport_name] - freshness.TICK_SLACK
 
 
 def tick(conn: sqlite3.Connection, *, now: Optional[datetime] = None, refresh_kw: Optional[dict] = None,
-         cycle: Optional[Callable[[], dict]] = None, forecast: Optional[Callable[[], dict]] = None) -> dict:
-    """One coordinator step, meant to run every minute under the store's job lock (docs/REFRESH_PLAN.md). Refreshes data
-    when the activity policy says it is due; then runs the odds cycle at its
-    usual cadence or the forecast step early when a window opens or blocked prerequisites change. A tick with nothing
-    due makes no request and writes no job row."""
+         cycle: Optional[Callable[[], dict]] = None) -> dict:
+    """One coordinator step, meant to run every minute under the store's job lock (docs/REFRESH_PLAN.md). Refreshes
+    schedule/status/results when the activity policy says it is due, then runs the odds cycle when its usual cadence
+    (NBA 15 min, NHL 30 min) is due. A tick with nothing due makes no request and writes no job row."""
     from . import freshness
     now = now or datetime.now(timezone.utc)
     name = store_sport(conn) or "nba"
@@ -806,14 +783,9 @@ def tick(conn: sqlite3.Connection, *, now: Optional[datetime] = None, refresh_kw
     out = {"sport": name, "as_of": _fmt(now), "policy": _policy(plan)}
     out["refresh"] = refresh(conn, now=now, **(refresh_kw or {})) if plan["due"] else \
         {"status": "not_due", "next_due_at": plan["next_due_at"], "activity": plan["activity"]}
-    why = forecast_trigger(conn, name, now, out["refresh"])
-    if why == "cycle":
+    out["cycle"] = cycle_due(conn, name, now)
+    if out["cycle"]:
         out.update((cycle or (lambda: odds_cycle(conn, name)))())
-    elif why:
-        out["forecasts"] = (forecast or (lambda: _forecast_due(conn)))()
-    else:
-        out["forecasts"] = {"status": "not_due"}
-    out["trigger"] = why
     return out
 
 

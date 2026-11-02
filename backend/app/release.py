@@ -23,6 +23,7 @@ GUARD_ENV = "NBA_RELEASE_GUARD"
 ROOT_ENV = "NBA_RELEASE_ROOT"
 COMMIT_ENV = "NBA_RELEASE_COMMIT"
 # Scheduled commands and the job_runs name a refusal is recorded under (job_runs.job has a fixed set of names).
+REFUSAL_REPEAT = {"tick": 15 * 60}   # seconds: a once-a-minute command records a repeated refusal at most this often
 GUARDED = {"odds": "odds", "tick": "odds", "daily": "refresh", "refresh": "refresh", "injuries": "injuries", "score": "score",
            "predict-now": "near_tipoff", "predict": "near_tipoff", "markets": "markets", "boxscores": "boxscores"}
 
@@ -96,6 +97,12 @@ def record_refusal(sport: str, cmd: str, info: dict) -> Optional[int]:
         try:
             if not db.has_table(conn, "job_runs"):
                 return None
+            if cmd in REFUSAL_REPEAT:
+                from datetime import datetime, timedelta, timezone
+                since = (datetime.now(timezone.utc) - timedelta(seconds=REFUSAL_REPEAT[cmd])).strftime("%Y-%m-%dT%H:%M:%SZ")
+                if conn.execute("SELECT 1 FROM job_runs WHERE job = ? AND status = 'failed' AND started_at > ? "
+                                "AND json_extract(detail, '$.command') = ?", (GUARDED[cmd], since, cmd)).fetchone():
+                    return None
             run_id = jobs._start(conn, GUARDED.get(cmd, "odds"))
             return jobs._finish(conn, run_id, "failed", 0, {"reason": "release guard refused the scheduled command",
                                                             "command": cmd, "release_check": info})["run_id"]

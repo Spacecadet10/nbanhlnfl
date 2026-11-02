@@ -153,7 +153,6 @@ def test_nba_focused_refresh_fetches_only_the_game_day(nba, clock):
     clock.at = NOW
     out = jobs.refresh(nba, fetch=fetch, sleep=lambda _s: None, now=NOW)
     assert out["status"] == "success" and out["scope"] == "dates" and calls == ["20261101"] and out["dates"] == ["20261101"]
-    assert jobs.refresh_changed(out)
     assert nba.execute("SELECT tipoff_at FROM games").fetchone()[0] == _fmt(NOW + timedelta(minutes=75))
     again = jobs.refresh(nba, fetch=fetch, sleep=lambda _s: None, now=NOW + timedelta(seconds=30))
     assert again["status"] == "skipped" and "not due" in again["reason"] and calls == ["20261101"]
@@ -192,10 +191,16 @@ def test_refresh_refuses_an_unknown_store(nba, clock, monkeypatch):
         jobs.tick(nba, now=NOW)
 
 
-# --- tick: no work when nothing is due; forecast wake-ups ---------------------------------------------------------
+# --- tick: no work when nothing is due; the odds cycle keeps its cadence; forecast timing unchanged ----------------
 def _cycle_ran(conn, clock, at):
+    """An odds cycle's own row, as odds_cycle leaves it (marked `cycle`)."""
     clock.at = at
-    jobs._finish(conn, jobs._start(conn, "odds"), "skipped", 0, {"reason": "test"})
+    jobs._finish(conn, jobs._start(conn, "odds"), "skipped", 0, {"reason": "test", "cycle": True})
+
+
+def _other_odds_row(conn, clock, at, **detail):
+    clock.at = at
+    jobs._finish(conn, jobs._start(conn, "odds"), "skipped", 0, {"reason": "test", **detail})
 
 
 def test_tick_with_nothing_due_makes_no_request_and_writes_no_row(nba, clock):
@@ -205,8 +210,8 @@ def test_tick_with_nothing_due_makes_no_request_and_writes_no_row(nba, clock):
 
     def boom(*_a, **_k):
         raise AssertionError("no work expected")
-    out = jobs.tick(nba, now=NOW, cycle=boom, forecast=boom, refresh_kw={"fetch": boom})
-    assert out["refresh"]["status"] == "not_due" and out["forecasts"]["status"] == "not_due" and out["trigger"] is None
+    out = jobs.tick(nba, now=NOW, cycle=boom, refresh_kw={"fetch": boom})
+    assert out["refresh"]["status"] == "not_due" and out["cycle"] is False
     assert nba.execute("SELECT COUNT(*) FROM job_runs").fetchone()[0] == rows
 
 
@@ -214,48 +219,58 @@ def test_tick_runs_the_odds_cycle_at_its_usual_cadence(nba, clock):
     ok_refresh(nba, clock, NOW - timedelta(minutes=5))
     _cycle_ran(nba, clock, NOW - timedelta(minutes=15))
     out = jobs.tick(nba, now=NOW, cycle=lambda: {"odds": {"status": "skipped"}, "forecasts": {"status": "skipped"}})
-    assert out["trigger"] == "cycle"
+    assert out["cycle"] is True and out["forecasts"] == {"status": "skipped"}
+    assert not jobs.cycle_due(nba, "nhl", NOW)                  # NHL: 30 minutes
+    assert jobs.cycle_due(nba, "nhl", NOW + timedelta(minutes=15))
 
 
-def test_forecast_window_opening_wakes_the_forecast_step_without_waiting(nba, clock):
-    games(nba, event("e1", _fmt(NOW + timedelta(hours=2)), "1", "2"))           # window opens exactly now
+def test_odds_rows_outside_the_cycle_do_not_move_its_clock(nba, clock):
+    """The forecast step's own odds snapshot, release-guard refusals and lock-busy rows are odds rows too: none of them
+    may postpone the next cycle (review P2-2). Before this release no row was marked: the first tick runs a cycle."""
+    _other_odds_row(nba, clock, NOW - timedelta(minutes=20))
+    assert jobs.last_cycle_at(nba) is None and jobs.cycle_due(nba, "nba", NOW)
+    _cycle_ran(nba, clock, NOW - timedelta(minutes=16))
+    _other_odds_row(nba, clock, NOW - timedelta(minutes=10))                     # predict_now's snapshot
+    _other_odds_row(nba, clock, NOW - timedelta(minutes=5), lock_busy=True)
+    _other_odds_row(nba, clock, NOW - timedelta(minutes=1), command="tick")      # a refusal
+    assert jobs.last_cycle_at(nba) == _fmt(NOW - timedelta(minutes=16)) and jobs.cycle_due(nba, "nba", NOW)
+
+
+def test_odds_cycle_marks_its_own_row(nba, clock, monkeypatch):
+    monkeypatch.setattr(jobs, "forecast_due", lambda _c: {"status": "skipped"})
+    monkeypatch.setattr(jobs, "collect_props", lambda _c, _s: {"status": "skipped"})
+    out = jobs.odds_cycle(nba, "nba")
+    assert out["odds"]["status"] == "skipped"                                   # no game within 36 h: no request
+    assert jobs.last_cycle_at(nba) == nba.execute("SELECT started_at FROM job_runs WHERE run_id=?",
+                                                  (out["odds"]["run_id"],)).fetchone()[0]
+
+
+def test_a_forecast_window_opening_between_cycles_waits_for_the_cycle(nba, clock):
+    """Forecast timing stays that of release 18fa0bf (the 15/30-minute cycle): tick never forecasts between cycles."""
+    games(nba, event("e1", _fmt(NOW + timedelta(hours=2)), "1", "2"))
     ok_refresh(nba, clock, NOW - timedelta(minutes=1), scope="dates")
     ok_refresh(nba, clock, NOW - timedelta(minutes=10))
-    _cycle_ran(nba, clock, NOW - timedelta(minutes=5))                            # next cycle would be 10 min away
-    clock.at = NOW - timedelta(minutes=5)
-    jobs._finish(nba, jobs._start(nba, "near_tipoff"), "skipped", 1, {})          # last attempt before the window
-    calls = []
-    out = jobs.tick(nba, now=NOW + timedelta(seconds=5), forecast=lambda: calls.append(1) or {"status": "success"})
-    assert out["trigger"] == "window_opened" and calls == [1]
-    # Attempted after the window opened and nothing new arrived: no retry each minute.
-    clock.at = NOW + timedelta(seconds=10)
-    jobs._finish(nba, jobs._start(nba, "near_tipoff"), "failed", 1, {})
-    out = jobs.tick(nba, now=NOW + timedelta(seconds=30), forecast=lambda: calls.append(2) or {})
-    assert out["trigger"] is None and calls == [1]
-
-
-def test_blocked_forecast_is_retried_when_the_refresh_brings_new_data(nba, clock):
-    games(nba, event("e1", _fmt(NOW + timedelta(minutes=90)), "1", "2"))
-    ok_refresh(nba, clock, NOW - timedelta(minutes=20))
     _cycle_ran(nba, clock, NOW - timedelta(minutes=5))
-    clock.at = NOW - timedelta(minutes=4)
-    jobs._finish(nba, jobs._start(nba, "near_tipoff"), "failed", 1, {"refused": "missing_result"})
-    clock.at = NOW
-    unchanged = jobs.tick(nba, now=NOW, forecast=lambda: {"status": "success"},
-                          refresh_kw={"fetch": lambda d: day_body(event("e1", _fmt(NOW + timedelta(minutes=90)), "1", "2")),
-                                      "sleep": lambda _s: None})
-    assert unchanged["refresh"]["status"] == "success" and unchanged["trigger"] is None
-    clock.at = NOW + timedelta(minutes=2)
-    changed = jobs.tick(nba, now=clock.at, forecast=lambda: {"status": "success"},
-                        refresh_kw={"fetch": lambda d: day_body(event("e1", _fmt(NOW + timedelta(minutes=100)), "1", "2")),
+
+    def boom(*_a, **_k):
+        raise AssertionError("no forecast work between cycles")
+    monkeypatch_forecast = jobs._forecast_due
+    try:
+        jobs._forecast_due = boom
+        out = jobs.tick(nba, now=NOW + timedelta(seconds=5), cycle=boom,
+                        refresh_kw={"fetch": lambda d: day_body(event("e1", _fmt(NOW + timedelta(hours=2)), "1", "2")),
                                     "sleep": lambda _s: None})
-    assert changed["trigger"] == "new_data"
+    finally:
+        jobs._forecast_due = monkeypatch_forecast
+    assert out["cycle"] is False and "forecasts" not in out
 
 
 def test_cli_tick_never_queues_behind_a_running_job(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path))
     c = db.connect(tmp_path / "nba.sqlite")
     db.migrate(c)
+    jobs._finish(c, jobs._start(c, "odds"), "skipped", 0, {"reason": "test", "cycle": True})   # a cycle just ran
+    c.commit()
     c.close()
     monkeypatch.setattr(cli, "TICK_LOCK_WAIT_SECONDS", 0)
     with db.store_lock("nba", wait_seconds=0) as held:
@@ -263,4 +278,40 @@ def test_cli_tick_never_queues_behind_a_running_job(tmp_path, monkeypatch, capsy
         assert cli.main(["--sport", "nba", "tick"]) == 0
     assert json.loads(capsys.readouterr().out.strip().splitlines()[-1])["status"] == "skipped"
     c = db.connect(tmp_path / "nba.sqlite")
-    assert c.execute("SELECT COUNT(*) FROM job_runs").fetchone()[0] == 0
+    assert c.execute("SELECT COUNT(*) FROM job_runs").fetchone()[0] == 1      # only the cycle row: no busy trace
+
+
+def test_a_busy_tick_leaves_one_trace_per_missed_cycle(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path))
+    c = db.connect(tmp_path / "nba.sqlite")
+    db.migrate(c)
+    c.close()
+    monkeypatch.setattr(cli, "TICK_LOCK_WAIT_SECONDS", 0)
+    busy = lambda: json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    with db.store_lock("nba", wait_seconds=0) as held:
+        assert held
+        assert cli.main(["--sport", "nba", "tick"]) == 0           # no cycle yet: due -> one lock-busy row
+        first = busy()
+        assert first["status"] == "skipped" and first["run_id"]
+        assert cli.main(["--sport", "nba", "tick"]) == 0           # same missed cycle: no second row
+        assert busy()["run_id"] is None
+    c = db.connect(tmp_path / "nba.sqlite")
+    assert c.execute("SELECT COUNT(*) FROM job_runs").fetchone()[0] == 1
+    c.execute("UPDATE job_runs SET detail = json_set(detail, '$.cycle', json('true'))")      # now: a cycle just ran
+    c.commit()
+    c.close()
+    with db.store_lock("nba", wait_seconds=0):
+        assert cli.main(["--sport", "nba", "tick"]) == 0           # cycle not due: busy minute leaves nothing
+        assert busy()["run_id"] is None
+
+
+
+def test_the_forecast_steps_real_odds_snapshot_does_not_move_the_cycle_clock(nba, clock):
+    """predict_now (the forecast step inside each cycle, and `predict`/`daily`) calls the real jobs.odds_snapshot, which
+    writes an unmarked odds row: the cadence clock must keep the cycle's own start."""
+    _cycle_ran(nba, clock, NOW - timedelta(minutes=14))
+    clock.at = NOW - timedelta(minutes=13)
+    snap = jobs.odds_snapshot(nba, now=NOW - timedelta(minutes=13), props=False)      # no game within 36 h: no request
+    assert snap["status"] == "skipped" and snap["run_id"]
+    assert jobs.last_cycle_at(nba) == _fmt(NOW - timedelta(minutes=14))
+    assert jobs.cycle_due(nba, "nba", NOW + timedelta(minutes=1))

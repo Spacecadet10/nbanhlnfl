@@ -30,16 +30,28 @@ ODDS_LOCK_WAIT_SECONDS = 120    # the periodic cycle waits out a short job (dail
 TICK_LOCK_WAIT_SECONDS = 20     # the once-a-minute coordinator never queues: the next tick follows within a minute
 
 
-def _record_lock_busy(sport: str, reason: str):
+def _record_lock_busy(sport: str, reason: str, *, tick: bool = False):
     """job_runs row for an odds cycle skipped because the store lock was busy; None if it could not be written (no store
-    yet, or the running job holds the database). Never raises and never creates or migrates a store."""
+    yet, or the running job holds the database) or, for `tick`, not needed: a busy tick leaves a row only when the odds
+    cycle was due and no busy row was left since the last cycle (one trace per missed cycle, not one per minute).
+    Never raises and never creates or migrates a store."""
     import sqlite3
     if not config.db_path(sport).is_file():
         return None
     try:
         conn = db.connect(sport=sport)
         try:
-            return jobs.record_lock_busy(conn, "odds", reason) if db.has_table(conn, "job_runs") else None
+            if not db.has_table(conn, "job_runs"):
+                return None
+            if tick:
+                from datetime import datetime, timezone
+                if not jobs.cycle_due(conn, sport, datetime.now(timezone.utc)):
+                    return None
+                since = jobs.last_cycle_at(conn) or ""
+                if conn.execute("SELECT 1 FROM job_runs WHERE job = 'odds' AND started_at > ? "
+                                "AND json_extract(detail, '$.lock_busy') = 1", (since,)).fetchone():
+                    return None
+            return jobs.record_lock_busy(conn, "odds", reason)
         finally:
             conn.close()
     except sqlite3.Error:
@@ -514,9 +526,9 @@ def main(argv=None) -> int:
         if not held:
             busy = {"status": "skipped" if args.cmd in ("odds", "tick") else "failed",
                     "reason": f"another job is running on the {args.sport} store"}
-            if args.cmd == "odds":       # leave a trace: a cycle that never ran is otherwise invisible
-                busy["run_id"] = _record_lock_busy(args.sport, busy["reason"])
-            print(json.dumps(busy))      # tick: no row (it runs every minute; the next one follows)
+            if args.cmd in ("odds", "tick"):   # leave a trace: a cycle that never ran is otherwise invisible
+                busy["run_id"] = _record_lock_busy(args.sport, busy["reason"], tick=args.cmd == "tick")
+            print(json.dumps(busy))
             return 0 if args.cmd in ("odds", "tick") else 1
         conn = db.connect(sport=args.sport)
         applied = db.migrate(conn)
@@ -906,7 +918,8 @@ def _run(args, p, conn, applied) -> int:
         else:
             result = jobs.scheduler(conn, interval_minutes=args.interval_minutes, max_runs=args.max_runs, job=args.job,
                                     lock=lambda: db.store_lock(args.sport, wait_seconds=ODDS_LOCK_WAIT_SECONDS))
-        print(json.dumps(result, indent=2, default=str))
+        # tick runs every minute: one compact line per run keeps the launchd log readable
+        print(json.dumps(result, indent=None if args.cmd == "tick" else 2, default=str))
         return 1 if _any_failed(result) else 0
     elif args.cmd == "coverage":
         print(json.dumps(coverage.report(conn), indent=2))

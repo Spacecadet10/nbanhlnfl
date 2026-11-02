@@ -1,6 +1,6 @@
 # NBA / NHL / NFL freshness milestone
 
-**Status (2026-11-01):** core refresh implementation and P1–P4 fixes passed the focused independent re-review recorded in HANDOFF.md. Preview publisher is running. NBA/NHL launchd templates now call `tick` every 60 seconds (configuration prepared, NOT INSTALLED; freshness/release-guard tests 35 passed). The pinned live release lacks `tick`; a scoped reviewed release must precede installation. Live collection therefore still uses the old jobs. Carolina's delayed final was recovered with the guarded released importer; this one-off recovery does not complete automatic-ingestion rollout.
+**Status in this release (refresh-release on 18fa0bf, 2026-11-01):** only the data-refresh policy (`app/freshness.py`) and the once-a-minute `tick` coordinator ship here. Forecast timing is unchanged from 18fa0bf: `tick` runs the odds/forecast cycle only at its old cadence (NBA 15 min, NHL 30 min); early forecast wake-ups, the preview publisher, `/api/freshness`, UI polling and NFL are not in this release.
 
 Proposed 2026-11-01 from the current code and read-only operational checks. Opus remains the implementation owner; this is a design/acceptance plan, not a deployed change or a model-policy change. Read AGENTS.md and HANDOFF.md first.
 
