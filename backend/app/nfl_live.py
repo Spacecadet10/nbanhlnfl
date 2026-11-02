@@ -140,7 +140,8 @@ class Views:
 
     def cohort(self, market):
         if market not in self.cohorts:
-            cs = coverage.canonical(self.conn, self.games, market, self.now)
+            cs = coverage.canonical(self.conn, self.games, market, self.now,
+                                    began=self.active['activated_at'] if self.active else None)
             self.cohorts[market] = [(g, cs[g['game_id']]) for g in self.games]
             self.indexes[market] = to.percentage_index(self.cohorts[market], self.now)
         return self.cohorts[market]
@@ -182,7 +183,7 @@ class Views:
         return game
 
     def report(self):
-        began = coverage.recording_began(self.conn, 'nfl')
+        began = self.active['activated_at'] if self.active else coverage.recording_began(self.conn, 'nfl')
         blocks = []
         for m in MARKETS:
             cohort = [(g,c) for g,c in self.cohort(m) if began and g['tipoff_at'] >= began and g['tipoff_at'] <= self.now]

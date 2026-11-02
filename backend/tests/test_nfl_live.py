@@ -37,6 +37,7 @@ def live_store(tmp_path, monkeypatch):
 def test_two_hour_window_actual_timestamp_retry_and_five_markets(live_store):
     c = live_store
     assert nfl_live.record(c,now='2026-11-02T22:14:59Z')['recorded']==0
+    assert all(x['state']=='upcoming' for x in nfl_live.Views(c,'2026-11-02T22:14:59Z').forecasts('nfl:live'))
     assert nfl_live.record(c,now=NOW)['recorded']==5
     assert nfl_live.record(c,now='2026-11-02T23:01:00Z')['recorded']==0
     rows = list(c.execute('SELECT * FROM game_forecasts'))
