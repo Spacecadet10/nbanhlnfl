@@ -1,0 +1,515 @@
+{
+ "plan": "docs/NFL_PLAN.md (Reserved test run protocol, 2026-11-01)",
+ "generated_at": "2026-11-02T21:42:37Z",
+ "choice_sha256": "d0e51f91c3acd3b45dcb0b8d72c55fabf9db9d2c789c7e3e6926bf885efc8b9a",
+ "dataset_version_open": "f59df479f5769084",
+ "dataset_version_all": "17ff62e3639d3836",
+ "seasons": {
+  "test": [
+   2022,
+   2023,
+   2024,
+   2025
+  ]
+ },
+ "winner": {
+  "model": "elo",
+  "config": {
+   "k": 20,
+   "home_advantage": 50,
+   "carry": 0.5,
+   "mov": true
+  },
+  "probabilities": "raw",
+  "games": {
+   "scored": 1136,
+   "ties": 3
+  },
+  "summary": {
+   "constant": {
+    "n": 1136,
+    "brier": 0.25,
+    "log_loss": 0.6931471805599272,
+    "accuracy": 0.5536971830985915,
+    "reliability": [
+     {
+      "lower": 0.0,
+      "upper": 0.1,
+      "count": 0,
+      "mean_predicted": null,
+      "observed_rate": null
+     },
+     {
+      "lower": 0.1,
+      "upper": 0.2,
+      "count": 0,
+      "mean_predicted": null,
+      "observed_rate": null
+     },
+     {
+      "lower": 0.2,
+      "upper": 0.3,
+      "count": 0,
+      "mean_predicted": null,
+      "observed_rate": null
+     },
+     {
+      "lower": 0.3,
+      "upper": 0.4,
+      "count": 0,
+      "mean_predicted": null,
+      "observed_rate": null
+     },
+     {
+      "lower": 0.4,
+      "upper": 0.5,
+      "count": 0,
+      "mean_predicted": null,
+      "observed_rate": null
+     },
+     {
+      "lower": 0.5,
+      "upper": 0.6,
+      "count": 1136,
+      "mean_predicted": 0.5,
+      "observed_rate": 0.5536971830985915
+     },
+     {
+      "lower": 0.6,
+      "upper": 0.7,
+      "count": 0,
+      "mean_predicted": null,
+      "observed_rate": null
+     },
+     {
+      "lower": 0.7,
+      "upper": 0.8,
+      "count": 0,
+      "mean_predicted": null,
+      "observed_rate": null
+     },
+     {
+      "lower": 0.8,
+      "upper": 0.9,
+      "count": 0,
+      "mean_predicted": null,
+      "observed_rate": null
+     },
+     {
+      "lower": 0.9,
+      "upper": 1.0,
+      "count": 0,
+      "mean_predicted": null,
+      "observed_rate": null
+     }
+    ]
+   },
+   "home_rate": {
+    "n": 1136,
+    "brier": 0.2473696874722816,
+    "log_loss": 0.6878814750944462,
+    "accuracy": 0.5536971830985915,
+    "reliability": [
+     {
+      "lower": 0.0,
+      "upper": 0.1,
+      "count": 0,
+      "mean_predicted": null,
+      "observed_rate": null
+     },
+     {
+      "lower": 0.1,
+      "upper": 0.2,
+      "count": 0,
+      "mean_predicted": null,
+      "observed_rate": null
+     },
+     {
+      "lower": 0.2,
+      "upper": 0.3,
+      "count": 0,
+      "mean_predicted": null,
+      "observed_rate": null
+     },
+     {
+      "lower": 0.3,
+      "upper": 0.4,
+      "count": 0,
+      "mean_predicted": null,
+      "observed_rate": null
+     },
+     {
+      "lower": 0.4,
+      "upper": 0.5,
+      "count": 0,
+      "mean_predicted": null,
+      "observed_rate": null
+     },
+     {
+      "lower": 0.5,
+      "upper": 0.6,
+      "count": 1136,
+      "mean_predicted": 0.5647545821696963,
+      "observed_rate": 0.5536971830985915
+     },
+     {
+      "lower": 0.6,
+      "upper": 0.7,
+      "count": 0,
+      "mean_predicted": null,
+      "observed_rate": null
+     },
+     {
+      "lower": 0.7,
+      "upper": 0.8,
+      "count": 0,
+      "mean_predicted": null,
+      "observed_rate": null
+     },
+     {
+      "lower": 0.8,
+      "upper": 0.9,
+      "count": 0,
+      "mean_predicted": null,
+      "observed_rate": null
+     },
+     {
+      "lower": 0.9,
+      "upper": 1.0,
+      "count": 0,
+      "mean_predicted": null,
+      "observed_rate": null
+     }
+    ]
+   },
+   "elo": {
+    "n": 1136,
+    "brier": 0.2220716810277488,
+    "log_loss": 0.6340284681945579,
+    "accuracy": 0.6399647887323944,
+    "reliability": [
+     {
+      "lower": 0.0,
+      "upper": 0.1,
+      "count": 0,
+      "mean_predicted": null,
+      "observed_rate": null
+     },
+     {
+      "lower": 0.1,
+      "upper": 0.2,
+      "count": 12,
+      "mean_predicted": 0.16812206972293184,
+      "observed_rate": 0.08333333333333333
+     },
+     {
+      "lower": 0.2,
+      "upper": 0.3,
+      "count": 41,
+      "mean_predicted": 0.26177323652536344,
+      "observed_rate": 0.3902439024390244
+     },
+     {
+      "lower": 0.3,
+      "upper": 0.4,
+      "count": 104,
+      "mean_predicted": 0.356777011772345,
+      "observed_rate": 0.3557692307692308
+     },
+     {
+      "lower": 0.4,
+      "upper": 0.5,
+      "count": 227,
+      "mean_predicted": 0.45407800475140003,
+      "observed_rate": 0.3920704845814978
+     },
+     {
+      "lower": 0.5,
+      "upper": 0.6,
+      "count": 258,
+      "mean_predicted": 0.5530467342453774,
+      "observed_rate": 0.5193798449612403
+     },
+     {
+      "lower": 0.6,
+      "upper": 0.7,
+      "count": 253,
+      "mean_predicted": 0.6475170442628982,
+      "observed_rate": 0.6521739130434783
+     },
+     {
+      "lower": 0.7,
+      "upper": 0.8,
+      "count": 181,
+      "mean_predicted": 0.7437393838586408,
+      "observed_rate": 0.7513812154696132
+     },
+     {
+      "lower": 0.8,
+      "upper": 0.9,
+      "count": 55,
+      "mean_predicted": 0.8362906940020635,
+      "observed_rate": 0.8363636363636363
+     },
+     {
+      "lower": 0.9,
+      "upper": 1.0,
+      "count": 5,
+      "mean_predicted": 0.9080018395907737,
+      "observed_rate": 1.0
+     }
+    ]
+   },
+   "chosen": {
+    "n": 1136,
+    "brier": 0.2220716810277488,
+    "log_loss": 0.6340284681945579,
+    "accuracy": 0.6399647887323944,
+    "reliability": [
+     {
+      "lower": 0.0,
+      "upper": 0.1,
+      "count": 0,
+      "mean_predicted": null,
+      "observed_rate": null
+     },
+     {
+      "lower": 0.1,
+      "upper": 0.2,
+      "count": 12,
+      "mean_predicted": 0.16812206972293184,
+      "observed_rate": 0.08333333333333333
+     },
+     {
+      "lower": 0.2,
+      "upper": 0.3,
+      "count": 41,
+      "mean_predicted": 0.26177323652536344,
+      "observed_rate": 0.3902439024390244
+     },
+     {
+      "lower": 0.3,
+      "upper": 0.4,
+      "count": 104,
+      "mean_predicted": 0.356777011772345,
+      "observed_rate": 0.3557692307692308
+     },
+     {
+      "lower": 0.4,
+      "upper": 0.5,
+      "count": 227,
+      "mean_predicted": 0.45407800475140003,
+      "observed_rate": 0.3920704845814978
+     },
+     {
+      "lower": 0.5,
+      "upper": 0.6,
+      "count": 258,
+      "mean_predicted": 0.5530467342453774,
+      "observed_rate": 0.5193798449612403
+     },
+     {
+      "lower": 0.6,
+      "upper": 0.7,
+      "count": 253,
+      "mean_predicted": 0.6475170442628982,
+      "observed_rate": 0.6521739130434783
+     },
+     {
+      "lower": 0.7,
+      "upper": 0.8,
+      "count": 181,
+      "mean_predicted": 0.7437393838586408,
+      "observed_rate": 0.7513812154696132
+     },
+     {
+      "lower": 0.8,
+      "upper": 0.9,
+      "count": 55,
+      "mean_predicted": 0.8362906940020635,
+      "observed_rate": 0.8363636363636363
+     },
+     {
+      "lower": 0.9,
+      "upper": 1.0,
+      "count": 5,
+      "mean_predicted": 0.9080018395907737,
+      "observed_rate": 1.0
+     }
+    ]
+   }
+  },
+  "by_season": {
+   "constant": {
+    "2022": 0.25,
+    "2023": 0.25,
+    "2024": 0.25,
+    "2025": 0.25
+   },
+   "home_rate": {
+    "2022": 0.2446562056275505,
+    "2023": 0.2457288960720672,
+    "2024": 0.2494850661969832,
+    "2025": 0.24958780188332153
+   },
+   "elo": {
+    "2022": 0.22200951512727435,
+    "2023": 0.2327972900602364,
+    "2024": 0.21167822646712564,
+    "2025": 0.2218000851103277
+   }
+  },
+  "chosen_vs_home_rate": {
+   "mean_diff": -0.02529800644453284,
+   "ci95": [
+    -0.032104536987569314,
+    -0.018645074436602755
+   ],
+   "weeks": 88,
+   "games": 1136,
+   "beats": true
+  },
+  "chosen_vs_constant": {
+   "mean_diff": -0.027928318972251225,
+   "ci95": [
+    -0.03521735508469917,
+    -0.020603829095079823
+   ],
+   "weeks": 88,
+   "games": 1136,
+   "beats": true
+  },
+  "confirmed": true,
+  "frozen_threshold": {
+   "threshold": 0.75,
+   "graded": 157,
+   "won": 126,
+   "win_rate": 0.802547770700637,
+   "ci95": [
+    0.7333790655431572,
+    0.8572646693542724
+   ],
+   "stated": 0.804769845079132,
+   "calibration": "too_few",
+   "holds": true,
+   "rule": "holds = Wilson lower bound > 50 %; the 200-pick minimum is a selection rule"
+  },
+  "thresholds_reported_only": {
+   "rows": [
+    {
+     "threshold": 0.5,
+     "graded": 1136,
+     "won": 727,
+     "win_rate": 0.6399647887323944,
+     "ci95": [
+      0.611622978300784,
+      0.6673631890492815
+     ],
+     "stated": 0.6362059961647846,
+     "calibration": "holds"
+    },
+    {
+     "threshold": 0.55,
+     "graded": 888,
+     "won": 596,
+     "win_rate": 0.6711711711711712,
+     "ci95": [
+      0.6395927704396761,
+      0.7012749891521802
+     ],
+     "stated": 0.6669864585692807,
+     "calibration": "holds"
+    },
+    {
+     "threshold": 0.6,
+     "graded": 651,
+     "won": 455,
+     "win_rate": 0.6989247311827957,
+     "ci95": [
+      0.6626039992508235,
+      0.7329115816387324
+     ],
+     "stated": 0.7006446409930194,
+     "calibration": "holds"
+    },
+    {
+     "threshold": 0.65,
+     "graded": 461,
+     "won": 335,
+     "win_rate": 0.7266811279826464,
+     "ci95": [
+      0.6842507970326502,
+      0.765364864408106
+     ],
+     "stated": 0.733409387472098,
+     "calibration": "holds"
+    },
+    {
+     "threshold": 0.7,
+     "graded": 294,
+     "won": 223,
+     "win_rate": 0.7585034013605442,
+     "ci95": [
+      0.7064491058891176,
+      0.8038895171182967
+     ],
+     "stated": 0.7666757085451233,
+     "calibration": "holds"
+    },
+    {
+     "threshold": 0.75,
+     "graded": 157,
+     "won": 126,
+     "win_rate": 0.802547770700637,
+     "ci95": [
+      0.7333790655431572,
+      0.8572646693542724
+     ],
+     "stated": 0.804769845079132,
+     "calibration": "too_few"
+    },
+    {
+     "threshold": 0.8,
+     "graded": 72,
+     "won": 62,
+     "win_rate": 0.8611111111111112,
+     "ci95": [
+      0.7628681265904589,
+      0.9227726926531201
+     ],
+     "stated": 0.8405351740471136,
+     "calibration": "too_few"
+    },
+    {
+     "threshold": 0.85,
+     "graded": 25,
+     "won": 22,
+     "win_rate": 0.88,
+     "ci95": [
+      0.7004420590811532,
+      0.9583318288209496
+     ],
+     "stated": 0.8800727432800042,
+     "calibration": "too_few"
+    },
+    {
+     "threshold": 0.9,
+     "graded": 5,
+     "won": 5,
+     "win_rate": 1.0,
+     "ci95": [
+      0.5655175313406071,
+      1.0
+     ],
+     "stated": 0.9080018395907737,
+     "calibration": "too_few"
+    }
+   ],
+   "note": "reported only: no band is promoted, re-chosen or re-labelled from the test"
+  }
+ },
+ "line_markets": {
+  "status": "not_run",
+  "reason": "no reserved-season lines collected (`nfl collect-lines --test`)"
+ }
+}

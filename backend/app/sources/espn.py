@@ -273,6 +273,11 @@ def fetch_nfl_month(yyyymm: str, timeout: float = 60) -> bytes:
     return _get(month_request(yyyymm)[1], timeout, NFL_ENDPOINT)
 
 
+def fetch_nfl_day(yyyymmdd: str, timeout: float = 30) -> bytes:
+    """One Eastern day of the NFL scoreboard (dates=YYYYMMDD): the frequent game-day status refresh."""
+    return _get(day_request(yyyymmdd)[1], timeout, NFL_ENDPOINT)
+
+
 NHL_ENDPOINT = "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard"
 LINES_IMPORTER_VERSION = "espn-lines-1"
 

@@ -462,8 +462,8 @@ def canonical(conn, games, market: str, as_of: str, began: Optional[str] = None)
     it and is reported as `later_failure`. Without a forecast row: the latest 'missing' row's reason, else why nothing was
     recorded. Preseason is never a canonical forecast (no validated model); its experimental rows stay in the ledger.
     Legacy ledgers (pre-game archive, earlier two-hour rows) are never read here. Graded on read by `grade`."""
-    from . import live
-    sport = live.engine(conn).sport
+    from .db import store_sport
+    sport = store_sport(conn) or "nba"
     if began is None:
         began = recording_began(conn, sport)
     games = list(games)

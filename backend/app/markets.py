@@ -25,6 +25,11 @@ class MarketSpec:
 
 
 SPEC = {(s.sport, s.market): s for s in (
+    MarketSpec("nfl", "winner", "Winner", "overtime counts; winner ties void", None),
+    MarketSpec("nfl", "spread", "Point spread", "overtime counts; winner ties void", 0.5),
+    MarketSpec("nfl", "total", "Game total points", "overtime counts; winner ties void", 0.5),
+    MarketSpec("nfl", "team_total_home", "Home team points", "overtime counts; winner ties void", 0.5),
+    MarketSpec("nfl", "team_total_away", "Away team points", "overtime counts; winner ties void", 0.5),
     MarketSpec("nba", "winner", "Winner", "overtime counts", None),
     MarketSpec("nba", "spread", "Point spread", "overtime counts", 0.5),
     MarketSpec("nba", "total", "Game total points", "overtime counts", 0.5),
@@ -64,7 +69,7 @@ def settle(market: str, line: Optional[float], *, status: str, home: Optional[in
     if home is None or away is None:
         return "unscorable"
     if market == "winner":
-        return "a" if home > away else "b"
+        return "void" if home == away else "a" if home > away else "b"
     if market == "reg3":
         if decision is None:
             return "unscorable"

@@ -64,15 +64,25 @@ def _ingest(conn: sqlite3.Connection, request_key: str, body: bytes, retrieved_a
 def ingest_nfl_month(conn: sqlite3.Connection, yyyymm: str, *, fetch: Callable[[str], bytes] = espn.fetch_nfl_month,
                      retrieved_at: Optional[str] = None, cache_dir: Optional[Path] = None) -> dict:
     """One month of the ESPN NFL scoreboard into an NFL store (schedule, status, scores; no box stats or odds)."""
-    body = fetch(yyyymm)
+    return {"month": yyyymm, **_ingest_nfl(conn, espn.month_request(yyyymm)[0], fetch(yyyymm), retrieved_at, cache_dir)}
+
+
+def ingest_nfl_day(conn: sqlite3.Connection, yyyymmdd: str, *, fetch: Callable[[str], bytes] = espn.fetch_nfl_day,
+                   retrieved_at: Optional[str] = None, cache_dir: Optional[Path] = None) -> dict:
+    """One Eastern day of the ESPN NFL scoreboard (the game-day status refresh); same import as a month."""
+    return {"date": yyyymmdd, **_ingest_nfl(conn, espn.day_request(yyyymmdd)[0], fetch(yyyymmdd), retrieved_at, cache_dir)}
+
+
+def _ingest_nfl(conn, request_key: str, body: bytes, retrieved_at: Optional[str], cache_dir: Optional[Path]) -> dict:
     retrieved_at = retrieved_at or utc_now()
     with transaction(conn):
         claim_store(conn, "nfl")
-        raw_id, _ = raw_cache.store_fetch(conn, source=espn.NFL_SOURCE, endpoint=espn.NFL_ENDPOINT,
-                                          request_key=espn.month_request(yyyymm)[0], body=body, retrieved_at=retrieved_at,
+        raw_id, fetch_id = raw_cache.store_fetch(conn, source=espn.NFL_SOURCE, endpoint=espn.NFL_ENDPOINT,
+                                          request_key=request_key, body=body, retrieved_at=retrieved_at,
                                           importer_version=espn.NFL_IMPORTER_VERSION, cache_dir=cache_dir)
-        return {"month": yyyymm, **import_raw(conn, raw_id, cache_dir=cache_dir, retrieved_at=retrieved_at,
-                                              parse=espn.parse_nfl_scoreboard)}
+        out = import_raw(conn, raw_id, cache_dir=cache_dir, retrieved_at=retrieved_at, parse=espn.parse_nfl_scoreboard)
+        out["lines"] = import_lines_fetch(conn, fetch_id, "nfl", cache_dir)
+        return out
 
 
 def ingest_range(conn: sqlite3.Connection, start: str, end: str, *, sleep: float = 1.0,
@@ -434,6 +444,13 @@ def ingest_nhl_season(conn: sqlite3.Connection, season: int, *, fetch: Callable[
                                             fetch(season), retrieved_at, cache_dir)}
 
 
+def ingest_nhl_games_day(conn: sqlite3.Connection, season: int, day: str, *, fetch: Callable[[int, str], bytes] = nhl_stats.fetch_day,
+                         retrieved_at: Optional[str] = None, cache_dir: Optional[Path] = None) -> dict:
+    """One Eastern date of the NHL stats game list (the frequent status refresh); imported exactly like the season list."""
+    return {"date": day, **_ingest_nhl(conn, nhl_stats.day_request(season, day)[0], nhl_stats.GAME_ENDPOINT,
+                                       fetch(season, day), retrieved_at, cache_dir)}
+
+
 def _ingest_nhl(conn, request_key, endpoint, body, retrieved_at, cache_dir) -> dict:
     retrieved_at = retrieved_at or utc_now()
     with transaction(conn):
@@ -538,8 +555,8 @@ def _name_key(name: str) -> str:
 def _match_game(conn: sqlite3.Connection, sport: str, q: espn.LineQuote) -> Optional[str]:
     """NBA: ESPN event ids are the store's ids. NHL: the game with the same start time (±3 h) and the same home and away
     team names; ambiguous or missing matches return None (counted, never guessed)."""
-    if sport == "nba":
-        gid = f"espn:{q.event_id}"
+    if sport in ("nba", "nfl"):
+        gid = f"{'espn' if sport == 'nba' else 'nfl'}:{q.event_id}"
         return gid if conn.execute("SELECT 1 FROM games WHERE game_id=?", (gid,)).fetchone() else None
     tip = datetime.strptime(q.tipoff_at, "%Y-%m-%dT%H:%M:%SZ")
     lo, hi = (_fmt((tip - timedelta(hours=3)).replace(tzinfo=timezone.utc)),

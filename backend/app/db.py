@@ -103,10 +103,21 @@ def migrate(conn: sqlite3.Connection, upto: Optional[int] = None) -> list[str]:
         version = int(f.name[:4])
         if version in done or (upto is not None and version > upto):
             continue
-        with transaction(conn):
-            for stmt in _split(f.read_text()):
-                conn.execute(stmt)
-            conn.execute("INSERT INTO schema_migrations VALUES (?, ?, ?)", (version, f.name, utc_now()))
+        parent_rebuild = f.name == "0033_nfl_market_quotes.sql"
+        foreign_keys = conn.execute("PRAGMA foreign_keys").fetchone()[0]
+        if parent_rebuild:
+            conn.execute("PRAGMA foreign_keys = OFF")
+        try:
+            with transaction(conn):
+                for stmt in _split(f.read_text()):
+                    conn.execute(stmt)
+                if parent_rebuild and conn.execute("PRAGMA foreign_key_check").fetchone() is not None:
+                    raise sqlite3.IntegrityError("foreign key violation in market_quotes rebuild")
+                conn.execute("INSERT INTO schema_migrations VALUES (?, ?, ?)", (version, f.name, utc_now()))
+        finally:
+            if parent_rebuild:
+                conn.execute(f"PRAGMA foreign_keys = {foreign_keys}")
+                conn.execute("PRAGMA legacy_alter_table = OFF")
         applied.append(f.name)
     return applied
 

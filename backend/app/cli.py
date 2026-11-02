@@ -9,7 +9,7 @@ from .models.elo import EloConfig
 
 
 # Commands that work for every sport; everything else is NBA-only until generalised.
-SPORT_COMMANDS = {"nhl-pbp-import", "nhl-xg-research", "migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies", "refresh", "odds", "predict",
+SPORT_COMMANDS = {"nhl-pbp-import", "nhl-xg-research", "migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies", "refresh", "odds", "tick", "predict",
                   "score", "daily", "scheduler", "predict-now", "score-near-tipoff", "markets", "score-markets", "agreement", "thresholds",
                   "combination-study", "selector-decide", "research-report", "retrain-cadence", "catboost-challenger", "combination-search", "expanded-search", "selective-study", "rules-registry",
                   "daily-cadence", "features-nhl", "tracking-report", "tracking-record", "pool-screen", "pool-assess", "pool-record", "pool-roster", "pool-report",
@@ -27,6 +27,7 @@ READ_ONLY_COMMANDS = {"score-markets", "score-near-tipoff", "thresholds", "resea
                       "combination-thresholds-report"}
 LOCK_WAIT_SECONDS = 45 * 60     # longer than any two-hour cycle (NHL ~13 minutes); a job still waiting then fails visibly
 ODDS_LOCK_WAIT_SECONDS = 120    # the periodic cycle waits out a short job (daily, injuries), not another full cycle
+TICK_LOCK_WAIT_SECONDS = 20     # the once-a-minute coordinator never queues: the next tick follows within a minute
 
 
 def _record_lock_busy(sport: str, reason: str):
@@ -60,10 +61,32 @@ def main(argv=None) -> int:
     p.add_argument("--sport", choices=sports.SPORT_IDS, default="nba",
                    help="Which sport's store to use (default nba). Each sport has its own SQLite file.")
     sub = p.add_subparsers(dest="cmd", required=True)
+    tg = sub.add_parser('telegram', help='Personal pregame Telegram delivery; credentials stay in private server configuration')
+    tg.add_argument('telegram_action', choices=('status', 'connect', 'test', 'preview', 'run'))
+    tg.add_argument('--date', help='Preview only: actual past game date YYYY-MM-DD')
+    tg.add_argument('--game-id', help='Preview only: actual stored game ID')
+    tg.add_argument('--once', action='store_true')
+    tg.add_argument('--interval', type=int, default=60)
     sub.add_parser("migrate", help="Create/upgrade the SQLite schema")
-    nfl_p = sub.add_parser("nfl", help="NFL data-only store (not served, no model): migrate, ingest ESPN NFL months, "
+    nfl_p = sub.add_parser("nfl", help="NFL store and dedicated live pipeline: migrate, ingest ESPN NFL months, "
                                        "replay or coverage. Ignores --sport; always opens the NFL store.")
-    nfl_p.add_argument("action", choices=("migrate", "ingest", "replay", "coverage"))
+    pp = sub.add_parser("preview-publish", help="Development only: republish read-only copies of the live stores into a "
+                                                "scripts/dev.sh data directory when their data changed (docs/REFRESH_PLAN.md)")
+    pp.add_argument("--live", required=True, help="live data directory (read-only)")
+    pp.add_argument("--dev", required=True, help="development data directory created by scripts/dev.sh")
+    pp.add_argument("--interval", type=int, default=60, help="seconds between checks (>= 30)")
+    pp.add_argument("--max-lag-minutes", type=float, default=10, help="republish when the copy's source time lags live this much")
+    pp.add_argument("--once", action="store_true")
+    nfl_p.add_argument("action", choices=("migrate", "ingest", "replay", "coverage", "refresh", "tick", "evaluate", "collect-lines",
+                                                "test-run", "activate"))
+    nfl_p.add_argument("--out", help="evaluate: directory for the report and the sealed choice (development + validation "
+                                     "only; 2022-2025 are never read)")
+    nfl_p.add_argument("--sealed", help="test-run / collect-lines --test: the sealed choice JSON (digest checked)")
+    nfl_p.add_argument("--report", help="activate: completed one-shot test report JSON")
+    nfl_p.add_argument("--access-log", help="activate: original test access log JSONL")
+    nfl_p.add_argument("--test", action="store_true", help="collect-lines: the reserved seasons 2022-2025 (needs --sealed; "
+                                                           "logged; odds only)")
+    nfl_p.add_argument("--force", action="store_true", help="refresh: broad refresh now, whatever the activity policy says")
     nfl_p.add_argument("--from", dest="start", help="ingest: first month YYYYMM")
     nfl_p.add_argument("--to", dest="end", help="ingest: last month YYYYMM")
     nfl_p.add_argument("--sleep", type=float, default=1.0, help="ingest: seconds between requests")
@@ -123,7 +146,9 @@ def main(argv=None) -> int:
     sub.add_parser("coverage", help="Print stored data coverage as JSON")
     sub.add_parser("release-check", help="Read-only: the release commit, schema, research definition and every reason the "
                                          "scheduled jobs would refuse to run from this checkout (docs: HANDOFF, operations)")
-    rf = sub.add_parser("refresh", help="Fetch current ESPN months (retries; at most once per 30 min unless --force)")
+    rf = sub.add_parser("refresh", help="Schedule/status/results refresh when the activity policy says it is due "
+                                        "(app/freshness.py: hourly when idle, every 2 min within two hours of a start, every "
+                                        "minute while a game is active); --force runs a broad refresh now")
     rf.add_argument("--force", action="store_true")
     sub.add_parser("predict", help="Refresh and record supported forecasts only within two hours of tipoff")
     sub.add_parser("thresholds", help="Read-only two-hour threshold records for every stored market and model")
@@ -258,6 +283,8 @@ def main(argv=None) -> int:
     od = sub.add_parser("odds", help="Snapshot pregame odds for games tipping off within 36 h "
                                      "(ESPN day scoreboards; at most once per 10 min unless --force)")
     od.add_argument("--force", action="store_true")
+    sub.add_parser("tick", help="Coordinator step for a once-a-minute launcher: data refresh when due, then the odds cycle at "
+                                "its usual cadence or the forecast step early when a two-hour window opens (docs/REFRESH_PLAN.md)")
     sc = sub.add_parser("scheduler", help="Run `daily` (or `odds`) every N minutes, a bounded number of times")
     sc.add_argument("--job", choices=("daily", "odds"), default="daily")
     sc.add_argument("--interval-minutes", type=float, default=360)
@@ -295,8 +322,27 @@ def main(argv=None) -> int:
                     help="Required for --period test; the access is logged to data/eval/test_access.jsonl")
     bt.add_argument("--record", action="store_true", help="Also append predictions to the ledger as run_type=backtest")
     args = p.parse_args(argv)
+    if args.cmd == 'telegram':
+        from . import telegram
+        if args.interval < 30:
+            p.error('Telegram interval must be at least 30 seconds.')
+        try:
+            return telegram.command(args)
+        except (telegram.DeliveryError, ValueError) as exc:
+            print(json.dumps({'status': 'failed', 'error': str(exc)}))
+            return 1
     if args.cmd == "nfl":
         return _nfl(args, p)
+    if args.cmd == "preview-publish":
+        from pathlib import Path as _P
+        from . import preview_publish
+        if args.interval < 30:
+            p.error("--interval must be at least 30 seconds")
+        try:
+            return preview_publish.run(_P(args.live), _P(args.dev), interval=args.interval,
+                                       max_lag_minutes=args.max_lag_minutes, once=args.once)
+        except ValueError as exc:
+            p.error(str(exc))
     if args.cmd == "paper-trades":
         from . import paper_trading
         with db.connect_readonly(args.sport) as conn:
@@ -512,14 +558,15 @@ def main(argv=None) -> int:
     # One job per store at a time: every command below opens (and migrates) the sport's store. The periodic odds cycle
     # waits out a short job but does not queue behind another full cycle (that cycle is doing the same work; the next
     # interval follows); other commands wait, then fail visibly. `scheduler` holds the lock per iteration, not while asleep.
-    with db.store_lock(args.sport, wait_seconds=ODDS_LOCK_WAIT_SECONDS if args.cmd == "odds" else LOCK_WAIT_SECONDS) as held:
+    wait = {"odds": ODDS_LOCK_WAIT_SECONDS, "tick": TICK_LOCK_WAIT_SECONDS}.get(args.cmd, LOCK_WAIT_SECONDS)
+    with db.store_lock(args.sport, wait_seconds=wait) as held:
         if not held:
-            busy = {"status": "skipped" if args.cmd == "odds" else "failed",
+            busy = {"status": "skipped" if args.cmd in ("odds", "tick") else "failed",
                     "reason": f"another job is running on the {args.sport} store"}
             if args.cmd == "odds":       # leave a trace: a cycle that never ran is otherwise invisible
                 busy["run_id"] = _record_lock_busy(args.sport, busy["reason"])
-            print(json.dumps(busy))
-            return 0 if args.cmd == "odds" else 1
+            print(json.dumps(busy))      # tick: no row (it runs every minute; the next one follows)
+            return 0 if args.cmd in ("odds", "tick") else 1
         conn = db.connect(sport=args.sport)
         applied = db.migrate(conn)
         db.claim_store(conn, args.sport)
@@ -532,9 +579,81 @@ def _nfl(args, p) -> int:
     """NFL data-only commands on the NFL store, under its own job lock. Nothing here touches the NBA or NHL stores."""
     import time
     from . import nfl
+    if release.enabled() and args.action in ("tick", "refresh"):
+        info = release.check("nfl")
+        if info["problems"]:
+            print(json.dumps({"status": "failed", "reason": "release guard", **info,
+                              "run_id": release.record_refusal("nfl", "tick", info)}))
+            return 1
+        os.environ[release.COMMIT_ENV] = info["commit"]
+    if args.action == "activate":
+        from pathlib import Path
+        from . import nfl_live
+        if not (args.sealed and args.report and args.access_log):
+            p.error("nfl activate requires --sealed FILE --report FILE --access-log FILE")
+        with db.store_lock("nfl", wait_seconds=LOCK_WAIT_SECONDS) as held:
+            if not held:
+                p.error("another NFL job is running")
+            with db.connect_readonly("nfl") as conn:
+                a = nfl_live.activate(conn, json.loads(Path(args.sealed).read_text()),
+                    json.loads(Path(args.report).read_text()), Path(args.access_log))
+        print(json.dumps({"status": "active", "activated_at": a["activated_at"], "definition": a["definition"]}))
+        return 0
     if args.action == "ingest" and not (args.start and args.end and len(args.start) == 6 and len(args.end) == 6
                                          and args.start.isdigit() and args.end.isdigit() and args.start <= args.end):
         p.error("nfl ingest needs --from YYYYMM --to YYYYMM (from <= to)")
+    if args.action == "collect-lines":
+        from . import nfl_eval
+        from .sources import espn_odds_history as eoh
+        try:
+            conn = db.connect_readonly("nfl")
+        except FileNotFoundError as exc:
+            p.error(f"{exc}; run `nfl migrate` and `nfl ingest` first")
+        if args.test:                                  # reserved seasons: only with a valid seal, and logged
+            if not args.sealed:
+                p.error("nfl collect-lines --test needs --sealed FILE")
+            events = nfl_eval.line_events(conn, through=nfl_eval.TEST[-1], sealed=json.loads(open(args.sealed).read()),
+                                          access_log=nfl_eval.access_log_path())
+        else:
+            events = nfl_eval.line_events(conn)        # validation seasons 2017-2021 only; reserved seasons refused
+        print(json.dumps({"events": len(events), "dir": str(eoh.root("nfl")),
+                          **eoh.collect("nfl", events, delay=args.sleep)}))
+        return 0
+    if args.action == "evaluate":
+        from pathlib import Path as _P
+        from . import nfl_eval
+        if not args.out:
+            p.error("nfl evaluate needs --out DIR")
+        try:
+            conn = db.connect_readonly("nfl")
+        except FileNotFoundError as exc:
+            p.error(f"{exc}; run `nfl migrate` and `nfl ingest` first")
+        out = nfl_eval.evaluate_open(conn)
+        d = _P(args.out)
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "nfl_winner_validation_report.json").write_text(json.dumps(out["report"], indent=1, default=str))
+        (d / "nfl_winner_sealed_choice.json").write_text(json.dumps(out["sealed_choice"], indent=1))
+        print(json.dumps({"out": str(d), "choice": out["sealed_choice"]["model"],
+                          "calibration_accepted": out["sealed_choice"]["calibration"]["accepted"]}))
+        return 0
+    if args.action == "test-run":                      # the single logged 2022-2025 run (docs/NFL_PLAN.md protocol)
+        from pathlib import Path as _P
+        from . import nfl_eval
+        if not (args.sealed and args.out):
+            p.error("nfl test-run needs --sealed FILE and --out DIR (DIR must not exist)")
+        try:
+            conn = db.connect_readonly("nfl")
+        except FileNotFoundError as exc:
+            p.error(f"{exc}; run `nfl migrate` and `nfl ingest` first")
+        try:
+            rep = nfl_eval.run_test(conn, json.loads(open(args.sealed).read()), access_log=nfl_eval.access_log_path(),
+                                    out_dir=_P(args.out))
+        except (nfl_eval.TestSeasonsLocked, nfl_eval.TestRunAlreadyDone) as exc:
+            p.error(f"nfl test-run refused: {exc}")
+        w = rep["winner"]
+        print(json.dumps({"out": args.out, "confirmed": w["confirmed"], "frozen_threshold": w["frozen_threshold"],
+                          "line_markets": rep["line_markets"]["status"]}, default=str))
+        return 0
     if args.action == "coverage":
         try:
             conn = db.connect_readonly("nfl")
@@ -555,6 +674,10 @@ def _nfl(args, p) -> int:
         if args.action == "replay":
             print(json.dumps(ingest.replay(conn)))
             return 0
+        if args.action in ("refresh", "tick"):   # schedule/results only, through the shared activity policy
+            out = jobs.refresh(conn, force=args.force) if args.action == "refresh" else jobs.tick(conn)
+            print(json.dumps(out, indent=2, default=str))
+            return 1 if _any_failed(out) else 0
         failed = []
         for i, month in enumerate(ingest.months(args.start, args.end)):
             if i and args.sleep:
@@ -934,16 +1057,13 @@ def _run(args, p, conn, applied) -> int:
         result = jobs.predict_now(conn, dry_run=args.dry_run)
         print(json.dumps(result, indent=2))
         return 1 if result["status"] == "failed" else 0
-    elif args.cmd in ("refresh", "odds", "predict", "score", "daily", "scheduler"):
+    elif args.cmd in ("refresh", "odds", "tick", "predict", "score", "daily", "scheduler"):
         if args.cmd == "refresh":
             result = jobs.refresh(conn, force=args.force)
         elif args.cmd == "odds":
-            snap = jobs.odds_snapshot(conn, force=args.force, props=False)
-            result = {"odds": snap, "forecasts": jobs.forecast_due(conn)}
-            snap["props"] = jobs.collect_props(conn, snap)       # after the time-critical forecasts, never before them
-            injuries = jobs.odds_cycle_injuries(args.sport, snap)   # NHL game days: a fresh injury snapshot each cycle
-            if injuries is not None:
-                result["nhl_injuries"] = injuries
+            result = jobs.odds_cycle(conn, args.sport, force=args.force)
+        elif args.cmd == "tick":
+            result = jobs.tick(conn)
         elif args.cmd == "predict":
             result = jobs.predict_now(conn)
         elif args.cmd == "score":

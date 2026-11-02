@@ -27,6 +27,33 @@ class Health(BaseModel):
                                             "ones (development launcher, scripts/dev.sh); null when serving the stores in place.")
 
 
+class DataFreshness(BaseModel):
+    """How current the served data is, per sport (docs/REFRESH_PLAN.md). The browser polls this cheap read and refetches
+    game/forecast views only when `revision` changes. Three separate times: when the source was last fetched successfully,
+    when the served copy was published (copies only), and when the latest forecast was generated (NBA/NHL only)."""
+    sport: Literal["nba", "nhl", "nfl"]
+    as_of: str
+    mode: Literal["live", "auto_snapshot", "frozen_snapshot", "demo"] = Field(description="live: the API reads the stores the "
+        "jobs write. auto_snapshot: a copy republished periodically. frozen_snapshot: a one-time copy that will not update.")
+    revision: str = Field(description="Changes when a stored game, result revision or forecast row changes")
+    activity: Optional[Literal["active", "pregame", "idle"]] = None
+    interval_seconds: Optional[int] = None
+    source_fetched_at: Optional[str] = Field(default=None, description="Last successful schedule/results refresh")
+    source_state: Literal["fresh", "stale", "never", "unknown"]
+    stale_after_seconds: Optional[int] = None
+    last_failed_at: Optional[str] = None
+    last_error: Optional[str] = None
+    failing: bool = False
+    next_check_at: Optional[str] = Field(default=None, description="live: when the next refresh is due by the policy; "
+                                         "auto_snapshot: when the next publication is expected; otherwise null")
+    published_at: Optional[str] = None
+    publish_interval_seconds: Optional[int] = None
+    publish_error: Optional[str] = None
+    forecasts_supported: bool
+    forecast_generated_at: Optional[str] = None
+    forecasts_note: Optional[str] = None
+
+
 class Team(BaseModel):
     abbr: str
     name: str
@@ -106,6 +133,7 @@ class CanonicalRecord(BaseModel):
     side: Literal["a", "mid", "b"] = Field(description="The picked side: the most likely outcome (three-way: of all three, "
                                                        "a draw can be the pick; ties go to a, then mid, then b).")
     pick_label: Optional[str] = Field(default=None, description="The pick in words at the forecast's line, e.g. 'BOS -1.5'.")
+    opposite_pick_label: Optional[str] = Field(default=None, description="Other side at the same stored line; no single opposite for three-way markets. Not a recorded recommendation.")
     confidence: float = Field(description="Probability of the pick: two-way markets excluding the push; three-way over all three.")
     line: Optional[float]
     line_source: Literal["bookmaker", "model", "none"]
@@ -132,6 +160,29 @@ class CanonicalGradeRevision(BaseModel):
     grade: Literal["win", "loss", "push", "pending", "void", "unscorable", "unresolved"]
 
 
+class ForecastPercentageRecord(BaseModel):
+    """Current observed live record for the exact displayed percentage, excluding the target game."""
+    sport: Literal['nba', 'nhl', 'nfl']
+    market: MarketId
+    market_title: str
+    percentage: str
+    side: Literal['a', 'mid', 'b']
+    direction: str
+    source: Literal['adaptive', 'primary_recorded', 'primary_direct']
+    model_version: str
+    line_source: Literal['bookmaker', 'model', 'none']
+    state: Literal['more_right', 'more_wrong', 'neutral', 'no_history']
+    wins: int
+    losses: int
+    settled: int
+    win_rate: Optional[float]
+    loss_rate: Optional[float]
+    ci95: Optional[list[float]]
+    small_sample: bool
+    excluded: dict[str, int]
+    as_of: datetime
+
+
 class CanonicalForecast(BaseModel):
     """One game's canonical forecast for one market, or why there is none. Graded on read from the stored result."""
     market: MarketId
@@ -149,6 +200,7 @@ class CanonicalForecast(BaseModel):
                                                                   "forecast; the earlier forecast stays the canonical one.")
     attempts: int = Field(description="Rows recorded for this game and market before the start.")
     recording_began_at: Optional[datetime]
+    percentage_history: Optional[ForecastPercentageRecord] = None
 
 
 class NearTipoffForecast(BaseModel):
@@ -663,3 +715,67 @@ class MarketPerformanceResponse(BaseModel):
 
 GameSummary.model_rebuild()
 GameDetail.model_rebuild()
+
+
+# --- NFL (data-only store; docs/NFL_PLAN.md). Schedule, results and facts about when they were learned. There is no NFL
+# forecast, odds, injury or metric field: capabilities say what is not available and why.
+class NflTeam(BaseModel):
+    team_id: str
+    abbr: str
+    name: str
+
+
+class NflCapability(BaseModel):
+    id: str
+    label: str
+    available: bool
+    reason: str
+
+
+class NflGame(BaseModel):
+    game_id: str
+    season: int = Field(description="ESPN season year: the year the season starts (2024 = 2024-25).")
+    season_type: SeasonType
+    kickoff: datetime
+    status: GameStatus
+    home: NflTeam
+    away: NflTeam
+    home_score: Optional[int]
+    away_score: Optional[int]
+    winner: Optional[Literal["home", "away", "tie"]] = Field(description="Final games only; a tie is a result.")
+    neutral_site: bool
+    first_seen_at: datetime
+    updated_at: datetime
+    result_available_at: Optional[datetime]
+    result_availability_basis: Optional[Literal["observed_retrieval", "assumed_tipoff_plus_4h"]]
+    forecasts: Optional[list[CanonicalForecast]] = None
+    recommended_pick: Optional[str] = None
+
+
+class NflMeta(BaseModel):
+    mode: Literal["real"]
+    sport: Literal["nfl"]
+    label: str
+    available: bool
+    default_date: Optional[date]
+    game_dates: list[date]
+    seasons: list[int]
+    games_stored: int
+    last_refresh_at: Optional[datetime]
+    capabilities: list[NflCapability]
+
+
+class NflGamesResponse(BaseModel):
+    date: date
+    games: list[NflGame]
+    prev_date: Optional[date]
+    next_date: Optional[date]
+    last_refresh_at: Optional[datetime]
+
+
+class NflGameDetail(BaseModel):
+    game: NflGame
+    head_to_head: list[NflGame]
+    home_recent: list[NflGame]
+    away_recent: list[NflGame]
+    capabilities: list[NflCapability]

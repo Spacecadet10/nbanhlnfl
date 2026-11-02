@@ -48,7 +48,7 @@ NHL = Sport(
 NFL = Sport(
     id="nfl", label="NFL", db_file="nfl.sqlite", id_prefix="nfl:",
     eligible_season_types=("regular", "postseason"),
-    markets=("winner",),
+    markets=("winner", "spread", "total", "team_total_home", "team_total_away"),
 )
 
 SPORTS = {s.id: s for s in (NBA, NHL)}
