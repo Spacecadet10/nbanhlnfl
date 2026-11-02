@@ -21,6 +21,13 @@ BOX_LOOKBACK = timedelta(days=14)             # only recent finals are refreshed
 BOX_RECHECK_AFTER = timedelta(hours=24)        # one re-check for boxes first seen sooner than this after tipoff
 MAX_BOX_REQUESTS = 30                          # quota: HTTP attempts per run, counting every retry and failure
 MAX_BOX_ATTEMPTS = 5                           # quota: HTTP attempts ever made per game, counting failures
+# Connection failures (no connection was made: DNS, refused, unreachable; the source was never asked) do not use the
+# permanent allowance above: on 2026-10-22/26/27 a local DNS outage exhausted it for 13 games, which then stayed missing.
+# They are bounded separately and retried after a backoff, and stay visible in every run's report.
+TRANSIENT_BOX_ERRORS = ("ConnectError", "ConnectTimeout")
+MAX_TRANSIENT_BOX_ATTEMPTS = 30                # lifetime connection failures per game
+TRANSIENT_BOX_BACKOFF = timedelta(minutes=15)  # after the k-th connection failure: 15 min x 2^(k-1), capped below
+TRANSIENT_BOX_BACKOFF_CAP = timedelta(hours=6)
 RETRIES = 3
 BACKOFF_SECONDS = (2, 8)
 
@@ -214,7 +221,8 @@ def box_refresh_plan(conn: sqlite3.Connection, now: datetime) -> dict:
         f"SELECT game_id, tipoff_at FROM games WHERE status='final' AND tipoff_at >= ? AND tipoff_at <= ? "
         f"AND season_type IN ({', '.join('?' * len(types))}) ORDER BY tipoff_at, game_id",
         (since, _fmt(now), *types)).fetchall()
-    plan = {"missing": [], "recheck": [], "gave_up": [], "window_start": since, "recent_finals": len(games)}
+    plan = {"missing": [], "recheck": [], "gave_up": [], "network_wait": [], "window_start": since,
+            "recent_finals": len(games)}
     for g in games:
         complete = conn.execute(
             "SELECT MAX(h.observed_at) FROM team_possession_observations h JOIN team_possession_observations a "
@@ -229,13 +237,39 @@ def box_refresh_plan(conn: sqlite3.Connection, now: datetime) -> dict:
             kind = "recheck"
         else:
             continue
-        plan["gave_up" if box_attempts(conn, g["game_id"]) >= MAX_BOX_ATTEMPTS else kind].append(g["game_id"])
+        transient, last_transient = transient_box_attempts(conn, g["game_id"])
+        if box_attempts(conn, g["game_id"]) >= MAX_BOX_ATTEMPTS or transient >= MAX_TRANSIENT_BOX_ATTEMPTS:
+            plan["gave_up"].append(g["game_id"])
+        elif transient and now < _parse(last_transient) + transient_box_backoff(transient):
+            plan["network_wait"].append(g["game_id"])
+        else:
+            plan[kind].append(g["game_id"])
     return plan
 
 
+_TRANSIENT_SQL = " OR ".join(f"error LIKE '{name}:%'" for name in TRANSIENT_BOX_ERRORS)
+
+
+def is_transient_box_error(error: Optional[str]) -> bool:
+    return bool(error) and any(error.startswith(f"{name}:") for name in TRANSIENT_BOX_ERRORS)
+
+
 def box_attempts(conn: sqlite3.Connection, game_id: str) -> int:
-    """HTTP attempts ever made for this game's summary by the refresh job (successes and failures)."""
-    return conn.execute("SELECT COUNT(*) FROM box_fetch_attempts WHERE game_id = ?", (game_id,)).fetchone()[0]
+    """HTTP attempts ever made for this game's summary by the refresh job (successes and failures), except connection
+    failures (TRANSIENT_BOX_ERRORS), which are counted by transient_box_attempts."""
+    return conn.execute(f"SELECT COUNT(*) FROM box_fetch_attempts WHERE game_id = ? AND NOT (outcome = 'failed' "
+                        f"AND ({_TRANSIENT_SQL}))", (game_id,)).fetchone()[0]
+
+
+def transient_box_attempts(conn: sqlite3.Connection, game_id: str) -> tuple[int, Optional[str]]:
+    """(connection failures ever logged for this game's summary, the latest one's attempt time)."""
+    row = conn.execute(f"SELECT COUNT(*), MAX(attempted_at) FROM box_fetch_attempts WHERE game_id = ? "
+                       f"AND outcome = 'failed' AND ({_TRANSIENT_SQL})", (game_id,)).fetchone()
+    return row[0], row[1]
+
+
+def transient_box_backoff(failures: int) -> timedelta:
+    return min(TRANSIENT_BOX_BACKOFF * (2 ** max(failures - 1, 0)), TRANSIENT_BOX_BACKOFF_CAP)
 
 
 def _log_box_attempt(conn: sqlite3.Connection, game_id: str, at: str, fetch_id: Optional[int] = None,
@@ -273,7 +307,8 @@ def boxscores(conn: sqlite3.Connection, *, fetch: Callable[[str], bytes] = espn.
         if budget < MAX_BOX_REQUESTS and pause_seconds:
             sleep(pause_seconds)
         allowance, used, error, result = MAX_BOX_ATTEMPTS - box_attempts(conn, game_id), 0, None, None
-        while result is None and used < RETRIES and budget > 0 and allowance > 0:
+        transient_left = MAX_TRANSIENT_BOX_ATTEMPTS - transient_box_attempts(conn, game_id)[0]
+        while result is None and used < RETRIES and budget > 0 and allowance > 0 and transient_left > 0:
             if used:
                 sleep(BACKOFF_SECONDS[min(used - 1, len(BACKOFF_SECONDS) - 1)])
             budget, allowance, used = budget - 1, allowance - 1, used + 1
@@ -283,6 +318,8 @@ def boxscores(conn: sqlite3.Connection, *, fetch: Callable[[str], bytes] = espn.
             except Exception as exc:  # network/HTTP failure: counted, then retried within the budgets
                 error = f"{type(exc).__name__}: {str(exc).splitlines()[0] if str(exc) else ''}"
                 _log_box_attempt(conn, game_id, started, error=error)
+                if is_transient_box_error(error):   # never reached the source: the permanent allowance is kept
+                    allowance, transient_left = allowance + 1, transient_left - 1
                 continue
             received = clock()   # the retrieval time: taken only once the response is in hand
             try:
@@ -296,13 +333,14 @@ def boxscores(conn: sqlite3.Connection, *, fetch: Callable[[str], bytes] = espn.
             fetched.append({k: result[k] for k in ("game_id", "recorded", "complete_lines", "changed_vs_previous",
                                                    "skipped_not_completed")})
         else:
-            failed.append({"game_id": game_id, "error": error, "attempts": used})
+            failed.append({"game_id": game_id, "error": error, "attempts": used,
+                           "transient": is_transient_box_error(error)})
     after = box_refresh_plan(conn, now)
     attempts = MAX_BOX_REQUESTS - budget
     detail = {"recent_finals": plan["recent_finals"], "window_start": plan["window_start"],
               "requested": len(fetched) + len(failed), "http_attempts": attempts, "attempt_budget": MAX_BOX_REQUESTS,
               "deferred": len(deferred), "fetched": fetched, "failed": failed, "still_missing": after["missing"],
-              "gave_up": after["gave_up"]}
+              "gave_up": after["gave_up"], "network_wait": after["network_wait"]}
     if not queue:
         return _finish(conn, run_id, "skipped", 0, {**detail, "reason": "no recent final needs a box score"})
     return _finish(conn, run_id, "failed" if failed else "success", attempts, detail)

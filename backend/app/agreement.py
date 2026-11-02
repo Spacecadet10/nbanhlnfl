@@ -137,6 +137,8 @@ def predict(conn, *, now=None, write=True, game_ids=None, collect=None):
         try:
             from .availability_live import build
             built.append(build(conn, built[0].cfg, now, ids))
+            # Report entries counted as 0 minutes for want of a match or minute history: shown, never as coverage.
+            out['availability_unknown_players'] = built[-1].unknown
         except Exception as exc:
             out['errors']['availability_two_hour'] = f"{type(exc).__name__}: {exc}"
     # Identity does not change merely because an input is missing on one run.

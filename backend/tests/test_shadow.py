@@ -501,3 +501,52 @@ def test_promotion_rule_logic():
     worse_ll = rule(1200, -0.001, 0.63, 0.62, 800)
     assert worse_ll["outcome"] == "elo_stays" and "log loss" in worse_ll["reason"]
     assert shadow_report.season_of({"season": "2026-27"}) == 2027
+
+
+# ---- connection failures (2026-10-22/26/27 DNS outage exhausted the permanent allowance of 13 games) -----------------
+
+def test_games_given_up_after_connection_failures_only_are_retried(sealed):
+    """The real history of the 13 games: 5 logged `ConnectError` failures each, nothing else. They are queued again."""
+    recent_finals(sealed, 1)
+    for i in range(jobs.MAX_BOX_ATTEMPTS):
+        jobs._log_box_attempt(sealed, "espn:9100", f"2026-10-20T0{i}:00:00Z",
+                              error="ConnectError: [Errno 8] nodename nor servname provided, or not known")
+    assert jobs.box_attempts(sealed, "espn:9100") == 0
+    plan = jobs.box_refresh_plan(sealed, at("20 12"))
+    assert plan["missing"] == ["espn:9100"] and plan["gave_up"] == [] and plan["network_wait"] == []
+
+
+def test_connection_failures_back_off_and_keep_the_permanent_allowance(sealed):
+    import httpx
+    recent_finals(sealed, 1)
+    calls = []
+
+    def dns_down(game_id):
+        calls.append(game_id)
+        raise httpx.ConnectError("[Errno 8] nodename nor servname provided, or not known")
+    first = jobs.boxscores(sealed, fetch=dns_down, sleep=lambda _s: None, now=at("20 06"))
+    assert len(calls) == jobs.RETRIES and first["status"] == "failed" and first["failed"][0]["transient"] is True
+    assert jobs.box_attempts(sealed, "espn:9100") == 0 and jobs.transient_box_attempts(sealed, "espn:9100")[0] == 3
+    assert first["network_wait"] == ["espn:9100"] and first["gave_up"] == []          # visible, waiting
+    from datetime import timedelta
+    soon = jobs.boxscores(sealed, fetch=dns_down, sleep=lambda _s: None, now=at("20 06") + timedelta(minutes=30))
+    assert len(calls) == 3 and soon["status"] == "skipped" and soon["network_wait"] == ["espn:9100"]
+    assert jobs.transient_box_backoff(3) == timedelta(minutes=60) and jobs.transient_box_backoff(20) == timedelta(hours=6)
+    later = jobs.boxscores(sealed, fetch=lambda g: summary("9100", ("1", "110"), ("2", "100")), sleep=lambda _s: None,
+                           now=at("20 07"))                                             # backoff over: fetched
+    assert later["status"] == "success" and later["fetched"][0]["complete_lines"] == 2
+
+
+def test_connection_failures_are_bounded_separately(sealed):
+    recent_finals(sealed, 1)
+    for i in range(jobs.MAX_TRANSIENT_BOX_ATTEMPTS):
+        jobs._log_box_attempt(sealed, "espn:9100", f"2026-10-20T00:{i:02d}:00Z", error="ConnectTimeout: timed out")
+    plan = jobs.box_refresh_plan(sealed, at("20 23"))
+    assert plan["gave_up"] == ["espn:9100"] and plan["missing"] == []
+
+
+def test_http_and_other_failures_still_use_the_permanent_allowance(sealed):
+    recent_finals(sealed, 1)
+    for i in range(jobs.MAX_BOX_ATTEMPTS):
+        jobs._log_box_attempt(sealed, "espn:9100", f"2026-10-20T0{i}:00:00Z", error="HTTPStatusError: 404 Not Found")
+    assert jobs.box_refresh_plan(sealed, at("20 12"))["gave_up"] == ["espn:9100"]

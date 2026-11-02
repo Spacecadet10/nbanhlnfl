@@ -2,8 +2,12 @@
 
 The old 17:45 experiment stays unchanged. This variant trains at two-hour historical cutoffs, using a report only
 if its documented historical publication assumption precedes that cutoff. Missing historical reports use the
-registered missing flag. Current reports must have actually arrived and reconcile; unknown weighted players block
-this candidate. Baselines continue independently. This is forward research, not an asserted improvement.
+registered missing flag. Current reports must have actually arrived and reconcile; a team that has not submitted, or
+incomplete current-season minute coverage, blocks this candidate. Unmatched weighted players and players without minute
+history follow the sealed training rule (availability.build_report_facts): 0 minutes, counted separately as unknown
+(`unknown_players`), never as matched players or verified minutes (approved 2026-11-02; before, any of them blocked the
+candidate on every report this season). Baselines continue independently. This is forward research, not an asserted
+improvement.
 """
 import csv
 import dataclasses
@@ -183,17 +187,31 @@ def current_facts(conn, now):
         weight = av.STATUS_WEIGHT[entry['status']]
         if not weight:
             continue
+        slot = facts[day].absent.setdefault(team,{'new':0.,'all':0.,'unresolved':0,'no_history':0})
         pid,_ = index.match(entry['last'],entry['first'],team,av.season_of(day))
-        if pid is None:
-            raise av.AvailabilityError('Unresolved unavailable player; no silent zero-minute assumption')
+        if pid is None:                  # sealed training rule: unmatched -> 0 minutes, counted as unknown
+            slot['unresolved'] += 1
+            continue
         minutes,basis = hist.expected(pid,day)
-        if basis=='no_history':
-            raise av.AvailabilityError('Unavailable player has no trustworthy minute history')
-        slot = facts[day].absent.setdefault(team,{'new':0.,'all':0.})
+        if basis=='no_history':          # sealed training rule: no minute history -> 0 minutes, counted as unknown
+            slot['no_history'] += 1
         slot['all'] += weight*minutes
         if hist.played_last_team_game(pid,team,day):
             slot['new'] += weight*minutes
     return facts, [row['fetch_id'], *used]
+
+
+def unknown_players(facts) -> dict:
+    """{ET date: {team: {'unmatched': n, 'no_minutes_history': n}}} for weighted report entries that contributed 0 minutes
+    because no player or no minute history was found. Reported separately: they are not matched players and not
+    verified minutes coverage."""
+    out = {}
+    for day, f in facts.items():
+        for team, slot in f.absent.items():
+            u, h = slot.get('unresolved', 0), slot.get('no_history', 0)
+            if u or h:
+                out.setdefault(day, {})[team] = {'unmatched': u, 'no_minutes_history': h}
+    return out
 
 
 def build(conn, elo_cfg, now, current_ids):
@@ -210,6 +228,7 @@ def build(conn, elo_cfg, now, current_ids):
         feature_names = V2_FEATURES + av.AVAIL_FEATURES
         scaled_names = V2_SCALED + ('new_absent_diff','all_absent_diff')
         input_version = hashlib.sha256(json.dumps([seal,fetches],sort_keys=True).encode()).hexdigest()
+        unknown = unknown_players(current)
         training_two_hour = True
         def _features(self,g):
             day = av.datetime.fromisoformat(g.tipoff_at.replace('Z','+00:00')).astimezone(av.ET).strftime('%Y-%m-%d')

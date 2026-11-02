@@ -40,7 +40,7 @@ def test_recent_download_of_old_report_is_stale(store, monkeypatch):
         al.current_facts(store,NOW)
 
 
-def test_current_report_uses_prior_minutes_and_fails_on_unknown_player(store, monkeypatch):
+def test_current_report_uses_prior_minutes(store, monkeypatch):
     report(store)
     monkeypatch.setattr(al.av,'parse_report',lambda *a:parsed())
     monkeypatch.setattr(al,'live_box',lambda *a:(minute_box(),[99]))
@@ -48,9 +48,52 @@ def test_current_report_uses_prior_minutes_and_fails_on_unknown_player(store, mo
     facts, fetches=al.current_facts(store,NOW)
     assert facts['2026-10-21'].absent['1']['all']==30 and facts['2026-10-21'].published_at==NOW
     assert fetches[-1]==99
-    monkeypatch.setattr(al,'live_box',lambda *a:({2026:({}, {})},[]))
-    with pytest.raises(av.AvailabilityError, match='Unresolved'):
-        al.current_facts(store,NOW)
+    assert al.unknown_players(facts)=={}
+
+
+def test_unmatched_and_no_history_players_follow_the_sealed_training_rule(store, monkeypatch):
+    """Approved 2026-11-02: as in the sealed training facts (availability.build_report_facts), an unmatched weighted
+    player and one without minute history contribute 0 minutes and are counted -- separately, as unknown, never as
+    matched players or verified minutes. Before, any of them blocked the candidate on every report this season."""
+    report(store)
+    entries=[dict(game_date='2026-10-21',team='Team 1',last='Player',first='One',status='Out'),
+             dict(game_date='2026-10-21',team='Team 1',last='Rookie',first='New',status='Out'),
+             dict(game_date='2026-10-21',team='Team 1',last='Bench',first='Never',status='Doubtful'),
+             dict(game_date='2026-10-21',team='Team 2',last='Unknown',first='Two',status='Questionable')]
+    monkeypatch.setattr(al.av,'parse_report',lambda *a:av.ParsedReport('report',
+        datetime.fromisoformat('2026-10-21T22:00:00+00:00'),entries=entries,loose_lines=4))
+    box={2026:({'p1':[av.Appearance('2026-04-01',2026,'1',30,True)],
+                'p2':[av.Appearance('2026-04-01',2026,'1',0,False)]}, {'p1':'One Player','p2':'Never Bench'})}
+    monkeypatch.setattr(al,'live_box',lambda *a:(box,[99]))
+    monkeypatch.setattr(al.av,'load_aliases',lambda:{})
+    facts,_=al.current_facts(store,NOW)
+    one,two=facts['2026-10-21'].absent['1'],facts['2026-10-21'].absent['2']
+    assert (one['all'],one['unresolved'],one['no_history'])==(30,1,1)       # p1 counted; rookie unmatched; p2 no history
+    assert (two['all'],two['unresolved'],two['no_history'])==(0,1,0)
+    assert al.unknown_players(facts)=={'2026-10-21':{'1':{'unmatched':1,'no_minutes_history':1},
+                                                    '2':{'unmatched':1,'no_minutes_history':0}}}
+    feats=av.game_features(facts,SimpleNamespace(tipoff_at='2026-10-21T23:30:00Z',home_team_id='espn:1',
+                                                 away_team_id='espn:2'),allow_early=True)
+    assert feats['all_absent_diff']==(0-30)/48 and feats['report_missing']==0.0
+
+
+def test_a_box_score_fetched_after_the_cutoff_never_counts_as_coverage(store, monkeypatch):
+    """Late-fetched (backfilled) summaries are available only from their own retrieval time: at an earlier cutoff the
+    game is still uncovered and the candidate is skipped, never fed later evidence."""
+    from app import ingest
+    from test_live import event
+    ingest.ingest_month(store,'202610',fetch=lambda _m: json.dumps({'events':[event('77','2026-10-20T23:00:00Z','1','2',
+        status='STATUS_FINAL',hs=100,as_=90)]}).encode(),retrieved_at='2026-10-21T03:00:00Z')
+    raw_cache.store_fetch(store,source=al.SEED_SOURCE,endpoint='test',request_key='player_box_2026.csv',body=b'x',
+                          retrieved_at='2026-10-01T00:00:00Z',importer_version='test')
+    monkeypatch.setattr(al.av,'parse_player_rows',lambda rows,season:({},{}))
+    monkeypatch.setattr(al.espn,'parse_summary_box',lambda _:SimpleNamespace(completed=True,game_id='espn:77'))
+    raw_cache.store_fetch(store,source=al.espn.SUMMARY_SOURCE,endpoint='test',request_key='event=77',
+                          body=json.dumps(summary()).encode(),retrieved_at='2026-11-02T12:00:00Z',importer_version='test')
+    with pytest.raises(av.AvailabilityError,match='coverage incomplete for 1'):
+        al.live_box(store,'2026-10-21T22:30:00Z')
+    box,_=al.live_box(store,'2026-11-02T12:00:00Z')
+    assert 2027 in box
 
 
 def test_future_minutes_seed_is_not_read(store, monkeypatch):
