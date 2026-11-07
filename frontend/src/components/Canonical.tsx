@@ -1,6 +1,7 @@
 // The canonical forecast: one record per game and market (game_forecasts), shown and graded the same way on Today, Game,
 // History and Performance. Each view names the record (#id) and model version so the pages can be compared.
 import { NoSkillNote } from './Skill';
+import { ForecastPercentageRecord } from './ThresholdOverview';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import type { CanonicalForecast, CanonicalGrade, CanonicalRecord, CanonicalState, CanonicalSummary, MarketId, Sport, Team } from '../api/types';
@@ -34,7 +35,7 @@ export const STATE_LABEL: Record<Exclude<CanonicalState, 'forecast'>, string> = 
 };
 
 export const GRADE_LABEL: Record<CanonicalGrade, string> = {
-  win: 'Correct', loss: 'Wrong', push: 'Push', pending: 'Pending', void: 'Void (start changed, postponed or cancelled: not scored)',
+  win: 'Correct', loss: 'Wrong', push: 'Push', pending: 'Pending', void: 'Void (tie, start changed, postponed or cancelled: not scored)',
   unscorable: 'Not scorable (final without a usable result)', unresolved: 'Unresolved (no final result 48 h after the start)',
 };
 
@@ -65,7 +66,7 @@ export function CanonicalBlock({ c, home, away, detail = false, market }: {
   const marketSide = winner && market != null ? (r.pick === 'home' ? market : 1 - market) : null;
   return (
     <div className="canonical">
-      <div className="card-section-label">{winner ? 'CURRENT FORECAST · WIN PROBABILITY' : `CURRENT FORECAST · ${(MARKET[c.market] ?? c.market).toUpperCase()}`} · RECORD #{r.forecast_id}</div>
+      <div className="card-section-label">CURRENT FORECAST · {(c.percentage_history?.market_title ?? MARKET[c.market] ?? c.market).toUpperCase()} · RECORD #{r.forecast_id}</div>
       {winner && <ProbabilityBar home={home} away={away} homeProb={r.home_win_prob!} label="Canonical win probability" />}
       <p className="pick-line small">
         Model estimate: <strong>{winner ? (r.pick === 'home' ? home : away).abbr : r.pick_label}</strong>
@@ -74,7 +75,10 @@ export function CanonicalBlock({ c, home, away, detail = false, market }: {
         {' · '}<GradeText grade={c.grade} />
         {!winner && c.result_label && <span className="muted"> · result: {c.result_label}</span>}
       </p>
-      <NoSkillNote market={c.market} />
+      <p><ForecastPercentageRecord history={c.percentage_history} grade={c.grade} opposite={r.opposite_pick_label} startAt={r.start_at} /></p>
+      {c.percentage_history?.sport === "nfl" && c.market !== "winner"
+        ? <p className="no-skill small">Informational NFL score forecast. This market has no proven skill against the bookmaker’s line and is excluded from recommended picks.</p>
+        : <NoSkillNote market={c.market} />}
       <p className="small"><span className={r.source === 'adaptive' ? 'badge badge-research' : 'badge'}>{SOURCE_LABEL[r.source]}</span></p>
       {c.regraded && c.grade_history && (
         <p className="small warn">Regraded after a result correction: {c.grade_history.map((h) =>

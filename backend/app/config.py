@@ -2,6 +2,41 @@
 import os
 from pathlib import Path
 
+
+def telegram_settings() -> dict:
+    """Private local bot settings; environment overrides the ignored, owner-only credentials file."""
+    import stat
+    settings = {}
+    path = REPO_ROOT / '.env.telegram'
+    if path.exists():
+        if path.is_symlink() or stat.S_IMODE(path.stat().st_mode) & 0o077:
+            raise ValueError('Telegram credentials must be a private regular file (chmod 600 .env.telegram).')
+        for line in path.read_text().splitlines():
+            if line and not line.startswith('#') and '=' in line:
+                key, value = line.split('=', 1)
+                settings[key.strip()] = value.strip()
+    for key in ('TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID', 'TELEGRAM_PAIR_CODE'):
+        if key in os.environ:
+            settings[key] = os.environ[key]
+    return settings
+
+
+def save_telegram_setting(key: str, value: str) -> None:
+    """Atomic private-file update; never prints secrets or places them in a tracked file."""
+    import tempfile
+    if key not in ('TELEGRAM_CHAT_ID', 'TELEGRAM_PAIR_CODE') or '\n' in value:
+        raise ValueError('Invalid Telegram setting.')
+    settings = telegram_settings()
+    settings[key] = value
+    fd, name = tempfile.mkstemp(prefix='.env.telegram.', dir=REPO_ROOT)
+    try:
+        with os.fdopen(fd, 'w') as f:
+            f.write(''.join(f'{k}={v}\n' for k, v in settings.items()))
+        os.replace(name, REPO_ROOT / '.env.telegram')
+    finally:
+        if os.path.exists(name):
+            os.unlink(name)
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 

@@ -39,6 +39,8 @@ def repo(tmp_path):
     root = tmp_path / "repo"
     (root / "scripts").mkdir(parents=True)
     shutil.copy(SCRIPT, root / "scripts" / "dev.sh")
+    (root / "backend" / "app").mkdir(parents=True)          # the path check dev.sh runs (shared with the publisher)
+    shutil.copy(SCRIPT.parents[1] / "backend" / "app" / "devpaths.py", root / "backend" / "app" / "devpaths.py")
     (root / "frontend" / "node_modules").mkdir(parents=True)
     log = tmp_path / "calls.log"
     venv = root / "backend" / ".venv" / "bin"
@@ -235,12 +237,13 @@ def test_symlinked_development_directory_is_refused(repo):
 
 
 # --- Write targets: nothing the launcher or the development app writes may lead elsewhere ------------------------------
-WRITE_TARGETS = ["SNAPSHOT_AT", "api.log", "web.log", "nba.sqlite", "nba.sqlite-wal", "nba.sqlite-shm",
+WRITE_TARGETS = ["SNAPSHOT_AT", "api.log", "web.log", "publish.log", "PUBLISH_STATUS.json", ".publish-staging",
+                 "nfl.sqlite", "nfl.sqlite-wal", ".nfl.sqlite.tmp", "nba.sqlite", "nba.sqlite-wal", "nba.sqlite-shm",
                  "nba.sqlite-journal", ".nba.sqlite.tmp", "nhl.sqlite", "nhl.sqlite-wal", "nhl.sqlite-shm",
                  ".nhl.sqlite.tmp", ".nba-jobs.lock", ".nhl-jobs.lock", "research", "raw", "eval", "reports",
                  "reports/diagnostics-nba", "research/tables", "research/adaptive/nba", "eval/test_access_nhl.jsonl",
                  "some-future-file"]
-DIR_TARGETS = {"research", "raw", "eval", "reports", "reports/diagnostics-nba", "research/tables", "research/adaptive/nba"}
+DIR_TARGETS = {".publish-staging", "research", "raw", "eval", "reports", "reports/diagnostics-nba", "research/tables", "research/adaptive/nba"}
 
 
 @pytest.mark.parametrize("name", WRITE_TARGETS)
@@ -329,7 +332,7 @@ def test_refused_configuration_without_check_flag_still_never_reaches_port_or_co
 
 
 # --- Full accepted startup flow on fake directories: every later step must use exactly the validated directories ----
-def _full_run(repo, dev, live=None, cwd=None, before_create=""):
+def _full_run(repo, dev, live=None, cwd=None, before_create="", extra_env=None, api_seconds=0):
     """Runs the whole script. Validation, directory creation, the read-only backup and the research copy really run
     (on fake directories); migrate and uvicorn are recorded with their working directory and data-directory variables
     and exit; lsof/curl/npm/sleep are stubs. `before_create` is shell run just before the create step's Python starts.
@@ -339,12 +342,14 @@ def _full_run(repo, dev, live=None, cwd=None, before_create=""):
     repo["log"].unlink(missing_ok=True)
     py = repo["root"] / "backend" / ".venv" / "bin" / "python"
     py.write_text("#!/bin/sh\n"
-                  f'printf "%s\\t%s\\t%s\\t%s\\t%s\\t%s\\n" "$1 $2" "$(pwd -P)" "${{NBA_DATA_DIR:-}}" '
-                  f'"${{NBA_LIVE_DATA_DIR:-}}" "${{2:-}}" "${{3:-}}" >> "{trace}"\n'
+                  f'printf "%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\n" "$1 $2" "$(pwd -P)" "${{NBA_DATA_DIR:-}}" '
+                  f'"${{NBA_LIVE_DATA_DIR:-}}" "${{2:-}}" "${{3:-}}" "$*" >> "{trace}"\n'
                   f'[ "${{2:-}}" = create-dev ] && {{ :; {before_create}\n}}\n'
                   'case "${2:-}" in check-paths|create-dev|/*) exec ' f'"{sys.executable}" "$@" ;; esac\n'
+                  f'[ "${{2:-}}" = uvicorn ] && /bin/sleep {api_seconds}\n'
                   "exit 0\n")
-    env = {"PATH": f"{repo['svc']}:/usr/bin:/bin", "HOME": str(repo["tmp"]), "NBA_DEV_DATA_DIR": str(dev)}
+    env = {"PATH": f"{repo['svc']}:/usr/bin:/bin", "HOME": str(repo["tmp"]), "NBA_DEV_DATA_DIR": str(dev),
+           **(extra_env or {})}
     if live is not None:
         env["NBA_LIVE_DATA_DIR"] = str(live)
     proc = subprocess.run(["/bin/sh", str(repo["root"] / "scripts" / "dev.sh")], env=env, cwd=cwd or repo["root"],
@@ -361,7 +366,7 @@ def _assert_targets(repo, proc, rows, dev_dir, cwd=None):
     assert "dev.sh: ready" in proc.stdout, (proc.stdout, proc.stderr, rows)
     dev_real, live_real = os.path.realpath(dev_dir), os.path.realpath(repo["live"])
     kinds = {}
-    for call, run_cwd, data_dir, live_env, a2, a3 in rows:
+    for call, run_cwd, data_dir, live_env, a2, a3, *_ in rows:
         kinds.setdefault(call, []).append((run_cwd, data_dir, live_env, a2, a3))
     assert "-m app.cli" in kinds and "-m uvicorn" in kinds, rows
     backups = [r for c, rs in kinds.items() if c.startswith("- /") for r in rs]
@@ -537,4 +542,77 @@ def test_missing_live_sources_remove_stale_development_counterparts(repo):
     assert not [n for n in left if "nhl" in n] and "raw" not in left and "eval" not in left, left
     assert sorted(os.listdir(dev / "research")) == ["keep.txt"]
     assert (dev / "notes.txt").read_text() == "mine" and (dev / "reports" / "r.json").read_text() == "{}"
-    assert [r[0] for r in rows].count("-m app.cli") == 1, rows               # nba only; no stale nhl copy migrated
+    migrations = [r for r in rows if r[0] == "-m app.cli" and r[5] != "preview-publish"]
+    assert len(migrations) == 1, rows                                        # nba only; no stale nhl copy migrated
+
+
+def test_wal_mode_live_store_without_side_files_is_copied_and_left_unchanged(repo):
+    """The live stores are WAL-mode and their -wal/-shm files vanish when the last job closes. The read-only backup must
+    still copy them (checked 2026-11-01 with the backend's SQLite 3.50: a mode=ro reader creates the usual empty -wal and
+    -shm side files, which the next job reuses) and must never change the live database file itself."""
+    live_db = repo["live"] / "nba.sqlite"
+    live_db.unlink()
+    c = sqlite3.connect(live_db)
+    c.execute("PRAGMA journal_mode = WAL")
+    c.execute("create table t(x)")
+    c.execute("insert into t values ('LIVE')")
+    c.commit()
+    c.close()                                   # last connection: checkpoint, -wal and -shm removed
+    assert sorted(p.name for p in repo["live"].iterdir()) == ["nba.sqlite", "research"]
+    before = live_db.read_bytes()
+    dev = repo["tmp"] / "dev wal"
+    proc, rows = _full_run(repo, str(dev))
+    assert "dev.sh: ready" in proc.stdout, (proc.stdout, proc.stderr)
+    copy = sqlite3.connect(dev / "nba.sqlite")
+    assert [r[0] for r in copy.execute("select x from t")] == ["LIVE"]
+    copy.close()
+    assert live_db.read_bytes() == before
+    extra = sorted(p.name for p in repo["live"].iterdir() if p.name not in ("nba.sqlite", "research"))
+    assert set(extra) <= {"nba.sqlite-wal", "nba.sqlite-shm"}, extra
+    wal = repo["live"] / "nba.sqlite-wal"
+    assert not wal.exists() or wal.stat().st_size == 0
+
+
+# --- Republishing (docs/REFRESH_PLAN.md): the publisher runs on the validated directories only, and can be turned off ---
+def _publisher_rows(repo, dev, extra_env=None, wait=5.0):
+    import time
+    (repo["svc"] / "npm").write_text("#!/bin/sh\n/bin/sleep 1\n")          # the stub servers stay up for a moment
+    proc, rows = _full_run(repo, dev, extra_env=extra_env, api_seconds=1)
+    trace = repo["tmp"] / "trace.log"
+    deadline = time.time() + wait            # the publisher starts in the background; give it a moment to be recorded
+    found = []
+    while time.time() < deadline:
+        found = [line.split("\t") for line in trace.read_text().splitlines() if "preview-publish" in line]
+        if found or extra_env:
+            break
+        time.sleep(0.1)
+    return proc, rows, found
+
+
+def test_publisher_republishes_into_the_validated_development_directory_only(repo):
+    dev = marked(repo["tmp"] / "dev")
+    proc, rows, found = _publisher_rows(repo, dev)
+    _assert_targets(repo, proc, rows, dev)
+    assert len(found) == 1, (found, proc.stdout, proc.stderr, (repo["tmp"] / "trace.log").read_text())
+    call, run_cwd, data_dir, _, _, _, args = found[0]
+    dev_real, live_real = os.path.realpath(dev), os.path.realpath(repo["live"])
+    assert call == "-m app.cli" and _resolve(run_cwd, data_dir) == dev_real
+    argv = args.split()
+    assert _resolve(run_cwd, argv[argv.index("--dev") + 1]) == dev_real
+    assert _resolve(run_cwd, argv[argv.index("--live") + 1]) == live_real != dev_real
+    assert argv[argv.index("--interval") + 1] == "60"
+    assert not (dev / "PUBLISH_STATUS.json").exists()        # a previous run's status is removed at startup
+
+
+def test_publisher_can_be_turned_off_for_a_frozen_copy(repo):
+    dev = marked(repo["tmp"] / "dev")
+    (dev / "PUBLISH_STATUS.json").write_text('{"interval_seconds": 60}')
+    proc, rows, found = _publisher_rows(repo, dev, extra_env={"NBA_DEV_PUBLISH": "0"})
+    _assert_targets(repo, proc, rows, dev)
+    assert found == [] and not (dev / "PUBLISH_STATUS.json").exists()
+
+
+def test_the_publisher_checks_the_same_marker_text_dev_sh_writes():
+    from app import devpaths
+    assert f'DEV_MARK="{devpaths.MARK_TEXT}"' in SCRIPT.read_text()
+    assert MARKER_TEXT == devpaths.MARK_TEXT + "\n"

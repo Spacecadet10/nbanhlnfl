@@ -1,9 +1,14 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
+import type { League } from '../api/types';
+import { FreshnessContext, useFreshnessPoll } from '../api/freshness';
 import { useApi } from '../api/useApi';
 import { dateTime } from '../format';
-import { SportToggle, useCarriedSearch, useSport } from './Selection';
+import { NflScreens } from '../pages/NflPages';
+import { SoccerScreens } from '../pages/SoccerPages';
+import { FreshnessBar } from './Freshness';
+import { CompetitionSelect, SportToggle, useCarriedSearch, useCompetition, useLeague } from './Selection';
 import { Icon } from './ui';
 
 const NAV = [
@@ -31,25 +36,34 @@ export function Layout() {
     try { return localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light'; }
     catch { return 'light'; }
   });
-  const [sport, setSport] = useSport();
+  // `sport` is the selected league: NBA and NHL are served; NFL and soccer are data-only with their own screens.
+  const [sport, setSport] = useLeague();
+  const [competition, setCompetition] = useCompetition();
   const carried = useCarriedSearch();
   const location = useLocation();
-  const label = sport === 'nhl' ? 'NHL' : 'NBA';
-  const meta = useApi((s) => api.meta(sport, s), [sport]);
+  const label = sport.toUpperCase();
+  const fresh = useFreshnessPoll(sport);
+  const meta = useApi((s) => (sport === 'nfl' ? api.nflMeta(s) : sport === 'soccer' ? api.soccerMeta(competition, s) : api.meta(sport, s))
+    .then((m) => ({ mode: m.mode, last_refresh_at: m.last_refresh_at })), [sport, competition], fresh.changes);
   const mode = meta.state.status === 'success' ? meta.state.data.mode : null;
   const lastRefresh = meta.state.status === 'success' ? meta.state.data.last_refresh_at : null;
   const health = useApi((s) => api.health(s), []);
   const snapshot = health.state.status === 'success' ? health.state.data.data_snapshot_at : null;
   const section = SECTION.find(([re]) => re.test(location.pathname))?.[1] ?? 'Prediction Dashboard';
   const onGame = location.pathname.startsWith('/games/');
-  const [lastGame, setLastGame] = useState<string | null>(() => {
-    try { return sessionStorage.getItem(LAST_GAME); } catch { return null; }
+  const [lastGames, setLastGames] = useState<Record<League, string | null>>(() => {
+    try {
+      return { nba: sessionStorage.getItem(`${LAST_GAME}-nba`), nhl: sessionStorage.getItem(`${LAST_GAME}-nhl`),
+        nfl: sessionStorage.getItem(`${LAST_GAME}-nfl`), soccer: sessionStorage.getItem(`${LAST_GAME}-soccer`) };
+    } catch { return { nba: null, nhl: null, nfl: null, soccer: null }; }
   });
+  const lastGame = lastGames[sport];
   useEffect(() => {
     if (!onGame) return;
-    setLastGame(location.pathname);
-    try { sessionStorage.setItem(LAST_GAME, location.pathname); } catch { /* the link then falls back to Game day */ }
-  }, [onGame, location.pathname]);
+    setLastGames((previous) => ({ ...previous, [sport]: location.pathname }));
+    try { sessionStorage.setItem(`${LAST_GAME}-${sport}`, location.pathname); } catch { /* the link then falls back to Game day */ }
+  }, [onGame, location.pathname, sport]);
+  useEffect(() => { window.scrollTo(0, 0); }, [location.pathname, sport]);
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
   const choose = (t: Theme) => {
     setTheme(t);
@@ -57,15 +71,17 @@ export function Layout() {
   };
   const next: Theme = theme === 'dark' ? 'light' : 'dark';
   return (
-    <div className="app">
+    <div className={`app sport-${sport}`}>
       <aside className="topbar">
         <div className="brand-block">
           <NavLink to={`/${carried}`} className="brand">
             <svg className="brand-mark" viewBox="0 0 40 40" aria-hidden="true">
-              <path d="M4 33C14 31 27 21 36 6c-4 12-15 22-27 26 6-1 14-5 20-12C22 30 12 34 4 33z" fill="#A3E635" />
-              <circle cx="31" cy="9" r="3.2" fill="#F8FAFC" />
+              <ellipse cx="21" cy="18" rx="19" ry="8" transform="rotate(-46 21 18)" fill="none" stroke="#F8FAFC" strokeWidth="1.2" />
+              <path d="M3 35C15 34 28 19 35 8l-1 10C26 29 13 38 3 35Z" fill="#A3E635" />
+              <circle cx="29" cy="12" r="5" fill="#C084FC" stroke="#1E1B4B" />
+              <path d="M25 9l8 6m-8-1l7-5" fill="none" stroke="#1E1B4B" strokeWidth=".9" />
             </svg>
-            COURTSIDE<span className="brand-sub">{sport === 'nhl' ? 'HOCKEY' : 'BASKETBALL'} INTELLIGENCE</span>
+            COURTSIDE<span className="brand-sub">{sport === 'nhl' ? 'HOCKEY' : sport === 'nfl' ? 'FOOTBALL' : sport === 'soccer' ? 'SOCCER' : 'BASKETBALL'} INTELLIGENCE</span>
           </NavLink>
         </div>
         <nav className="nav" aria-label="Main">
@@ -86,25 +102,29 @@ export function Layout() {
           ))}
         </nav>
         <div className="sidebar-note">
-          <span className="league-mark">{label}</span><strong>The game, in perspective.</strong>
-          <span className="sidebar-status">Research preview</span>
+          <div className="sidebar-note-copy"><span className="league-mark">{label}</span><strong>The game, in perspective.</strong></div>
         </div>
       </aside>
       <div className="workspace">
         <header className="workspace-header">
           <span className="breadcrumb">{label} <span className="header-divider">/</span> <strong>{section}</strong></span>
-          <div className="header-tools">
+          <div className={`header-tools${sport === 'soccer' ? ' has-competition' : ''}`}>
             <SportToggle value={sport} onChange={setSport} />
+            {sport === 'soccer' && <CompetitionSelect value={competition} onChange={setCompetition} />}
             {mode === 'demo' && <span className="preview-pill is-demo"><span /> Demo workspace</span>}
             {mode === 'real' && (
               <details className="source-pop">
                 <summary className="preview-pill" title="Where the data comes from"><span /> Real data</summary>
                 <div className="source-pop-panel" role="note">
                   <strong>REAL {label} DATA</strong>
-                  {sport === 'nhl'
+                  {sport === 'soccer'
+                    ? <p>Fixtures and results from ESPN's public soccer scoreboards, one competition and one day per request{lastRefresh ? `; this competition last imported ${dateTime(lastRefresh)}` : ''}. Data only: there is no soccer model, so no soccer forecast, odds, injury or performance record is shown.</p>
+                    : sport === 'nfl'
+                    ? <p>Schedule and results from ESPN's public NFL scoreboard{lastRefresh ? `, last imported ${dateTime(lastRefresh)}` : ''}. Data only: there is no NFL model, so no NFL forecast, odds, injury or performance record is shown.</p>
+                    : sport === 'nhl'
                     ? <p>Schedule and results from the NHL's own stats API{lastRefresh ? `, last refreshed ${dateTime(lastRefresh)}` : ''}. Winner forecasts come from an NHL Elo model; puck line, totals and the regulation result from a goals model. No goalie, injury or line-up information.</p>
                     : <p>Schedule and results from ESPN's unofficial API{lastRefresh ? `, last refreshed ${dateTime(lastRefresh)}` : ''}. Forecasts come from an Elo model.</p>}
-                  <p>Backtests are labelled Backtest; forecasts recorded before the game are labelled Live. Team logos are loaded from {sport === 'nhl' ? 'the NHL' : 'ESPN'}. No betting advice.</p>
+                  <p>{sport === 'nfl' || sport === 'soccer' ? '' : 'Backtests are labelled Backtest; forecasts recorded before the game are labelled Live. '}Team logos are loaded from {sport === 'nhl' ? 'the NHL' : 'ESPN'}. No betting advice.</p>
                 </div>
               </details>
             )}
@@ -114,10 +134,17 @@ export function Layout() {
             </button>
           </div>
         </header>
-        {health.state.status === 'error' && <div className="demo-banner error-banner" role="alert"><strong>API NOT REACHABLE</strong><span>{health.state.error} Start the app with <code>sh scripts/dev.sh</code> from the repository folder.</span></div>}
-        {snapshot && <div className="demo-banner" role="note"><strong>DEVELOPMENT COPY</strong><span>Results and games come from a copy of the live data taken {dateTime(snapshot)}; restart <code>scripts/dev.sh</code> to refresh it. Training status reads the live system directly.</span></div>}
+        {health.state.status === 'error' && <div className="demo-banner error-banner" role="alert"><strong>API NOT REACHABLE</strong><span>{health.state.error} Start the app with <code>sh scripts/dev.sh</code> from the repository folder.</span><button type="button" onClick={() => window.location.reload()}>Reconnect</button></div>}
+        {snapshot && (fresh.data?.mode === 'auto_snapshot'
+          ? <div className="demo-banner" role="note"><strong>DEVELOPMENT COPY</strong><span>Games, results and forecasts come from a copy of the live data, republished automatically when it changes (checked every {Math.round((fresh.data.publish_interval_seconds ?? 60))} s; last copy {dateTime(fresh.data.published_at ?? snapshot)}). Training status reads the live system directly.</span></div>
+          : fresh.data?.mode === 'frozen_snapshot'
+          ? <div className="demo-banner" role="note"><strong>DEVELOPMENT COPY</strong><span>Results and games come from a copy of the live data taken {dateTime(snapshot)}. It will not update automatically; restart <code>scripts/dev.sh</code> to refresh it. Training status reads the live system directly.</span></div>
+          : <div className="demo-banner" role="note"><strong>DEVELOPMENT COPY</strong><span>Results and games come from a copy of the live data (last copied {dateTime(snapshot)}). Training status reads the live system directly.</span></div>)}
         {mode === 'demo' && <div className="demo-banner" role="note"><strong>DEMO MODE</strong><span>Explore the app with synthetic games and predictions. These are not real NBA forecasts or results.</span></div>}
-        <main className="content"><Outlet /></main>
+        <FreshnessBar check={fresh} />
+        <FreshnessContext.Provider value={fresh}>
+          <main className="content">{sport === 'nfl' ? <NflScreens /> : sport === 'soccer' ? <SoccerScreens /> : <Outlet />}</main>
+        </FreshnessContext.Provider>
         <footer className="app-footer"><span>COURTSIDE / {label}</span><span>Every probability deserves context.</span></footer>
       </div>
     </div>

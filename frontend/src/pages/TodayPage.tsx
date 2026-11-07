@@ -6,6 +6,7 @@ import { api } from '../api/client';
 import type { CanonicalState, GameSummary, MarketId, Meta, Policy, ResearchSlate, SlateSelection, Sport } from '../api/types';
 import { ResearchSlateLine } from '../components/Research';
 import { useApi } from '../api/useApi';
+import { useDataRevision } from '../api/freshness';
 import { ModeBadge, NearTipoffBadge, RunBadge, SourceList } from '../components/Badges';
 import { ConfidenceFilter, confidenceLevels, levelLabel, RangeRecords, useConfidence } from '../components/ConfidenceFilter';
 import { MarketCard } from '../components/MarketView';
@@ -22,7 +23,8 @@ import { american, calendarDate, FULL_DATE, pct, shiftDate, tipoffTime, dateTime
 
 export function TodayPage() {
   const [sport] = useSport();
-  const meta = useApi((s) => api.meta(sport, s), [sport]);
+  const rev = useDataRevision();
+  const meta = useApi((s) => api.meta(sport, s), [sport], rev);
   return (
     <AsyncView state={meta.state} retry={meta.retry}>
       {(m) => <Slate meta={m} />}
@@ -51,8 +53,9 @@ function Slate({ meta }: { meta: Meta }) {
   const policy: Policy = meta.mode !== 'real' ? 'pregame'
     : policyChoice === 'canonical' && !canonicalFor(sport, market) ? 'near_tipoff' : policyChoice;
   const [level, setLevel] = useConfidence(sport, market, policy);
-  const { state, retry } = useApi((s) => api.games(sport, date, policy, level, market, s), [sport, date, policy, level, market]);
-  const research = useApi((s) => api.researchSlate(sport, date, s), [sport, date]);
+  const rev = useDataRevision();
+  const { state, retry } = useApi((s) => api.games(sport, date, policy, level, market, s), [sport, date, policy, level, market], rev);
+  const research = useApi((s) => api.researchSlate(sport, date, s), [sport, date], rev);
   const [showOverview, setShowOverview] = useState(false);
 
   return (
@@ -287,8 +290,9 @@ function GameCard({ game: g, policy, market = 'winner', date, research }: { game
 /** The compact analytics row at the top of Game day: this date's best picks and the selected market's season record
  * (coverage and settled accuracy of the canonical forecasts). Values come from the API as they are; nothing is filled in. */
 function TodaySummary({ sport, market, date }: { sport: Sport; market: MarketId; date: string }) {
-  const perf = useApi((s) => api.canonicalPerformance(sport, market, s), [sport, market]);
-  const ranked = useApi((s) => api.canonicalRanked(sport, date, s), [sport, date]);
+  const rev = useDataRevision();
+  const perf = useApi((s) => api.canonicalPerformance(sport, market, s), [sport, market], rev);
+  const ranked = useApi((s) => api.canonicalRanked(sport, date, s), [sport, date], rev);
   const p = perf.state.status === 'success' ? perf.state.data : null;
   const strong = ranked.state.status === 'success' ? ranked.state.data.picks.filter((x) => x.strong).length : null;
   const s = p?.competitive;

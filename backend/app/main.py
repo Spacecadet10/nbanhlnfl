@@ -18,8 +18,9 @@ from .errors import InvalidRequest
 from .nhl_eval import NhlEvaluationError
 from .providers.demo import DemoProvider
 from .providers.real import RealProvider
-from .schemas import (CanonicalHistoryResponse, CanonicalPerformanceResponse, GameDetail, GamesResponse, Health, HistoryResponse, MarketHistoryResponse, MarketPerformanceResponse,
-                      Meta, PerformanceResponse, SourceStatus)
+from .schemas import (CanonicalHistoryResponse, CanonicalPerformanceResponse, DataFreshness, GameDetail, GamesResponse, Health, HistoryResponse, MarketHistoryResponse, MarketPerformanceResponse,
+                      Meta, NflGameDetail, NflGamesResponse, NflMeta, PerformanceResponse, SoccerMatchDetail, SoccerMatchesResponse,
+                      SoccerMeta, SourceStatus)
 
 API_VERSION = "0.3.0"
 SPORT = Query("nba", pattern=f"^({'|'.join(sports.SPORT_IDS)})$", description="Which sport's data store to read. Never falls back to another.")
@@ -112,6 +113,180 @@ def health(mode: str = Depends(api_mode)):
     except OSError:
         snapshot = None
     return Health(status="ok", mode=mode, api_version=API_VERSION, data_snapshot_at=snapshot)
+
+
+LEAGUE = Query("nba", pattern="^(nba|nhl|nfl)$", description="Which sport's store; NFL is data-only (no forecasts)")
+PUBLISH_STATUS = "PUBLISH_STATUS.json"     # written by `app.cli preview-publish` next to the copies it publishes
+
+
+def snapshot_state(sport: str) -> Optional[dict]:
+    """None when the API serves the stores in place. A served copy (SNAPSHOT_AT present) of `sport` is 'auto_snapshot'
+    only while a publisher keeps republishing it (its status file names an interval, its last attempt is recent) AND it
+    has published this sport; otherwise 'frozen_snapshot': a copy that will not update automatically. Publication time
+    and errors are this sport's own: another sport's publication says nothing about this copy. A sport the publisher never
+    republished keeps the startup copy time (`initial_snapshot_at`, else SNAPSHOT_AT when no publisher ever ran)."""
+    import json as _json
+    from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+    folder = config.data_dir()
+    stamp = folder / "SNAPSHOT_AT"
+    if not stamp.is_file():
+        return None
+    try:
+        copied = stamp.read_text().strip() or None
+    except OSError:
+        copied = None
+    try:
+        status = _json.loads((folder / PUBLISH_STATUS).read_text())
+    except (OSError, ValueError):
+        return {"mode": "frozen_snapshot", "published_at": copied}
+    own = (status.get("sports") or {}).get(sport) or {}
+    published = own.get("published_at") or status.get("initial_snapshot_at") or copied
+    state = {"mode": "frozen_snapshot", "published_at": published,
+             "last_error": own.get("error") if own.get("status") == "failed" else None}
+    interval, attempt = status.get("interval_seconds"), status.get("last_attempt_at")
+    try:
+        alive = bool(interval and attempt) and _dt.now(_tz.utc) - _dt.strptime(attempt, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=_tz.utc) <= _td(seconds=3 * int(interval) + 60)
+    except (TypeError, ValueError):
+        alive = False
+    if alive and own.get("published_at"):
+        state.update(mode="auto_snapshot", interval_seconds=int(interval), next_publish_at=status.get("next_attempt_at"))
+    return state
+
+
+@app.get("/api/freshness", response_model=DataFreshness)
+def freshness_status(sport: str = LEAGUE, mode: str = Depends(api_mode)):
+    """Cheap read for the browser's 30-second check: never contacts a source, never writes, works for all three sports
+    (NFL through its data-only store, never through the served-sport path)."""
+    from datetime import datetime as _dt, timezone as _tz
+    from . import freshness
+    now = _dt.now(_tz.utc)
+    if mode == "demo":
+        return {"sport": sport, "as_of": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "mode": "demo", "revision": "demo",
+                "source_state": "unknown", "forecasts_supported": sport != "nfl"}
+    try:
+        conn = db.connect_readonly(sport)
+    except FileNotFoundError:
+        raise HTTPException(status_code=503, detail=f"No {sport.upper()} data store found.") from None
+    try:
+        stored = db.store_sport(conn)
+        if stored not in (sport, None) or (stored is None and sport != "nba"):
+            raise HTTPException(status_code=503, detail=f"The {sport.upper()} store holds {stored or 'unlabelled'} data.")
+        return freshness.summary(conn, sport, now, snapshot=snapshot_state(sport))
+    except sqlite3.Error as exc:
+        raise HTTPException(status_code=503, detail=f"Data store error: {exc}") from exc
+    finally:
+        conn.close()
+
+
+# --- NFL: data-only (docs/NFL_PLAN.md). These reads open the NFL store query-only and never go through get_provider,
+# live.engine or any served path, so NFL stays outside SPORT_IDS and no forecast code can see an NFL store.
+@contextmanager
+def _nfl_store(mode: str) -> Iterator[sqlite3.Connection]:
+    from .nfl import StoreMismatch
+    if mode == "demo":
+        raise HTTPException(status_code=404, detail="Demo data exists only for the NBA; there is no NFL demo. Start the "
+                                                    "API in real mode to see the stored NFL schedule and results.")
+    try:
+        conn = db.connect_readonly("nfl")
+    except FileNotFoundError:
+        raise HTTPException(status_code=503, detail="No NFL data store found. Run `python -m app.cli nfl migrate` and "
+                                                    "`python -m app.cli nfl ingest --from YYYYMM --to YYYYMM` from backend/.") from None
+    try:
+        conn.execute("BEGIN")
+        yield conn
+    except StoreMismatch as exc:
+        raise HTTPException(status_code=503, detail=f"The NFL store is unusable: {exc}") from exc
+    except sqlite3.Error as exc:
+        raise HTTPException(status_code=503, detail=f"NFL data store error: {exc}") from exc
+    finally:
+        conn.close()
+
+
+@app.get("/api/nfl/meta", response_model=NflMeta)
+def nfl_meta(mode: str = Depends(api_mode)):
+    from . import nfl
+    from datetime import datetime as _dt
+    with _nfl_store(mode) as conn:
+        return {"mode": "real", **nfl.meta(conn, _dt.now(nfl.EASTERN).date())}
+
+
+@app.get("/api/nfl/games", response_model=NflGamesResponse, response_model_exclude_unset=True)
+def nfl_games(date: date = Query(description="Kickoff date (US Eastern), YYYY-MM-DD"), mode: str = Depends(api_mode)):
+    from . import nfl
+    with _nfl_store(mode) as conn:
+        return nfl.games_on(conn, date)
+
+
+@app.get("/api/nfl/record")
+def nfl_record(mode: str = Depends(api_mode)):
+    from .nfl_live import Views
+    with _nfl_store(mode) as conn:
+        return Views(conn).report()
+
+
+@app.get("/api/nfl/games/{game_id}", response_model=NflGameDetail, response_model_exclude_unset=True)
+def nfl_game(game_id: str, mode: str = Depends(api_mode)):
+    from . import nfl
+    with _nfl_store(mode) as conn:
+        detail = nfl.game_detail(conn, game_id) if game_id.startswith(sports.NFL.id_prefix) else None
+    if detail is None:
+        raise HTTPException(status_code=404, detail=f"No NFL game {game_id!r} in the store.")
+    return detail
+
+
+# --- European soccer: data-only (app/soccer.py). Like the NFL reads: query-only connection to the soccer store, never
+# get_provider or any forecast path; soccer is not in SPORT_IDS. Every read names one competition.
+COMPETITION = Query("eng.1", pattern="^(eng\\.1|esp\\.1|ger\\.1|ita\\.1|fra\\.1|uefa\\.champions|uefa\\.europa)$",
+                    description="ESPN competition slug; one competition per request, never mixed")
+
+
+@contextmanager
+def _soccer_store(mode: str) -> Iterator[sqlite3.Connection]:
+    from .db import StoreMismatch
+    if mode == "demo":
+        raise HTTPException(status_code=404, detail="There is no soccer demo. Start the API in real mode to see the stored "
+                                                    "soccer fixtures and results.")
+    try:
+        conn = db.connect_readonly("soccer")
+    except FileNotFoundError:
+        raise HTTPException(status_code=503, detail="No soccer data store found. Run `python -m app.cli soccer migrate` and "
+                                                    "`python -m app.cli soccer ingest --from YYYYMMDD --to YYYYMMDD` from backend/.") from None
+    try:
+        conn.execute("BEGIN")
+        yield conn
+    except StoreMismatch as exc:
+        raise HTTPException(status_code=503, detail=f"The soccer store is unusable: {exc}") from exc
+    except sqlite3.Error as exc:
+        raise HTTPException(status_code=503, detail=f"Soccer data store error: {exc}") from exc
+    finally:
+        conn.close()
+
+
+@app.get("/api/soccer/meta", response_model=SoccerMeta)
+def soccer_meta(competition: str = COMPETITION, mode: str = Depends(api_mode)):
+    from . import soccer
+    from datetime import datetime as _dt
+    with _soccer_store(mode) as conn:
+        return {"mode": "real", **soccer.meta(conn, competition, _dt.now(soccer.EASTERN).date())}
+
+
+@app.get("/api/soccer/matches", response_model=SoccerMatchesResponse)
+def soccer_matches(date: date = Query(description="Kickoff date (US Eastern), YYYY-MM-DD"), competition: str = COMPETITION,
+                   mode: str = Depends(api_mode)):
+    from . import soccer
+    with _soccer_store(mode) as conn:
+        return soccer.matches_on(conn, competition, date)
+
+
+@app.get("/api/soccer/matches/{match_id}", response_model=SoccerMatchDetail)
+def soccer_match(match_id: str, mode: str = Depends(api_mode)):
+    from . import soccer
+    with _soccer_store(mode) as conn:
+        detail = soccer.match_detail(conn, match_id) if match_id.startswith(sports.SOCCER.id_prefix) else None
+    if detail is None:
+        raise HTTPException(status_code=404, detail=f"No soccer match {match_id!r} in the store.")
+    return detail
 
 
 @app.get("/api/meta", response_model=Meta)

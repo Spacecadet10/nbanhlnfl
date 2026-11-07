@@ -38,6 +38,18 @@ def _rows(conn, market):
                                           (GID, market))]
 
 
+def test_three_way_has_no_single_opposite_and_nhl_two_way_opposites_are_named(nhl):
+    conn, client = nhl
+    run(conn, CYCLE_AT)
+    coverage.record(conn, now=CYCLE_AT)
+    conn.commit()
+    detail = client.get(f'/api/games/{GID}', params={'sport':'nhl'}).json()
+    recs = {c['market']:c['record'] for c in detail['canonical_markets']}
+    assert recs['reg3']['opposite_pick_label'] is None
+    assert all(recs[m]['opposite_pick_label'] and recs[m]['opposite_pick_label'] != recs[m]['pick_label']
+               for m in recs if m != 'reg3')
+
+
 def test_the_nhl_winner_is_one_canonical_record_from_forecast_to_grade_and_performance(nhl):
     conn, client = nhl
     run(conn, CYCLE_AT)

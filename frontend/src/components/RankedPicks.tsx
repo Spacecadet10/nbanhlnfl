@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { api } from '../api/client';
 import type { RankedPick, RankedPickEvidence, Sport } from '../api/types';
 import { useApi } from '../api/useApi';
+import { useDataRevision } from '../api/freshness';
 import { pct, tipoffTime } from '../format';
 import { AsyncView } from './States';
 import { NoSkillNote } from './Skill';
+import { ForecastPercentageRecord } from './ThresholdOverview';
 
 const TOP = 10;
 const GRADE: Record<string, { text: string; cls: string }> = {
@@ -38,14 +40,14 @@ function Market({ p }: { p: RankedPick }) {
 function RankTable({ picks, date }: { picks: RankedPick[]; date: string }) {
   return (
     <div className="table-wrap"><table className="table ranked-table">
-      <thead><tr><th>#</th><th>Game</th><th>Pick</th><th>Model</th><th>Threshold</th><th>Picks like this</th><th>Market</th><th>Result</th></tr></thead>
+      <thead><tr><th>#</th><th>Game</th><th>Pick</th><th>Model / exact-percentage record</th><th>Ranking threshold</th><th>Broader ranking history</th><th>Market</th><th>Result</th></tr></thead>
       <tbody>{picks.map((p) => (
         <tr key={`${p.game_id}:${p.market}`}>
           <th scope="row">{p.day_rank ?? '—'}</th>
           <td>{p.matchup}<br /><span className="small muted">{tipoffTime(p.tipoff, date)}{p.game_rank != null && ` · #${p.game_rank} of ${p.game_ranked} in this game`}</span></td>
           <td><strong>{p.pick_label}</strong><br /><span className="small muted">{p.market_title}</span>
             {!p.skill_proven && <><br /><NoSkillNote market={p.market} compact /></>}</td>
-          <td>{pct(p.probability, 1)}</td>
+          <td>{pct(p.probability, 1)}<br /><ForecastPercentageRecord history={p.percentage_history} grade={p.grade} opposite={p.opposite_pick_label} startAt={p.tipoff} /></td>
           <td>{p.threshold == null ? <span className="muted">below grid</span> : <span className="badge badge-threshold">{pct(p.threshold)}+</span>}</td>
           <td><Evidence e={p.evidence} /></td>
           <td><Market p={p} /></td>
@@ -64,10 +66,11 @@ function GamePickList({ picks }: { picks: RankedPick[] }) {
           <strong>{p.game_rank != null ? `#${p.game_rank}` : 'Not ranked'}</strong>{' '}
           {p.pick_label} <span className="small muted">({p.market_title})</span>{' · '}
           model {pct(p.probability, 1)}{p.threshold != null && <> · <span className="badge badge-threshold">{pct(p.threshold)}+</span></>}
-          {' · '}{p.evidence ? <>{band(p.evidence)} picks ({source(p.evidence)}) won {pct(p.evidence.win_rate, 1)} of {p.evidence.settled}</> : 'not enough past picks'}
+          {' · '}{p.evidence ? <>broader ranking history: {band(p.evidence)} picks ({source(p.evidence)}) won {pct(p.evidence.win_rate, 1)} of {p.evidence.settled}</> : 'not enough ranking history'}
           {p.market_prob != null && <> · market {pct(p.market_prob, 1)}</>}
           {' '}<Result grade={p.grade} />
           {p.day_rank != null && <span className="small muted"> · #{p.day_rank} of the day</span>}
+          <br /><ForecastPercentageRecord history={p.percentage_history} grade={p.grade} opposite={p.opposite_pick_label} startAt={p.tipoff} />
         </li>
     ))}</ol>
   );
@@ -94,16 +97,17 @@ function Simple({ p, date, game }: { p: RankedPick; date?: string; game?: boolea
     <strong className="simple-pick">{p.pick_label}</strong>
     <span className="small muted">
       {' '}{game && date && <>{p.matchup}, {tipoffTime(p.tipoff, date)} · </>}{p.market_title}
-      {p.threshold != null && <> · <span className="badge badge-threshold">{pct(p.threshold)}+</span></>}
-      {p.evidence && <> · picks like this won {pct(p.evidence.win_rate, 0)}</>}
+      {' · '}model {pct(p.probability, 1)}
     </span>
     {' '}<Result grade={p.grade === 'pending' ? null : p.grade} />
+    <br /><ForecastPercentageRecord history={p.percentage_history} grade={p.grade} opposite={p.opposite_pick_label} startAt={p.tipoff} />
   </>;
 }
 
 /** The Today card: the date's best picks in order, in plain words; every pick and the numbers sit behind "See every pick". */
 export function RankedPicksCard({ sport, date }: { sport: Sport; date: string }) {
-  const { state, retry } = useApi((s) => api.canonicalRanked(sport, date, s), [sport, date]);
+  const rev = useDataRevision();
+  const { state, retry } = useApi((s) => api.canonicalRanked(sport, date, s), [sport, date], rev);
   const [view, setView] = useState<'day' | 'game'>('day');
   const [all, setAll] = useState(false);
   return (
@@ -148,7 +152,8 @@ export function RankedPicksCard({ sport, date }: { sport: Sport; date: string })
 
 /** The game's ranked picks (same ranking as the Today card); null while loading or outside real mode. */
 export function useGamePicks(sport: Sport, date: string, gameId: string, enabled = true): { picks: RankedPick[] | null; error: boolean } {
-  const { state } = useApi((s) => (enabled ? api.canonicalRanked(sport, date, s) : Promise.resolve(null)), [sport, date, enabled]);
+  const rev = useDataRevision();
+  const { state } = useApi((s) => (enabled ? api.canonicalRanked(sport, date, s) : Promise.resolve(null)), [sport, date, enabled], rev);
   if (state.status !== 'success' || !state.data) return { picks: null, error: state.status === 'error' };
   return { picks: state.data.picks.filter((p) => p.game_id === gameId), error: false };
 }
@@ -156,7 +161,8 @@ export function useGamePicks(sport: Sport, date: string, gameId: string, enabled
 /** The game page: one clear best pick, then the others in order; the numbers sit behind "Why this order?". `compact`: the
  * ranked list only (the best pick is already shown in the card grid above it). */
 export function GameRankedPicks({ sport, date, gameId, compact = false }: { sport: Sport; date: string; gameId: string; compact?: boolean }) {
-  const { state, retry } = useApi((s) => api.canonicalRanked(sport, date, s), [sport, date]);
+  const rev = useDataRevision();
+  const { state, retry } = useApi((s) => api.canonicalRanked(sport, date, s), [sport, date], rev);
   if (compact) {
     return (
       <AsyncView state={state} retry={retry}>{(d) => {
@@ -196,9 +202,9 @@ export function GameRankedPicks({ sport, date, gameId, compact = false }: { spor
                 <p className="best-label">Best pick in this game</p>
                 <p className="best-pick">{best.pick_label} <Result grade={best.grade === 'pending' ? null : best.grade} /></p>
                 <p className="small muted">{best.market_title}
-                  {best.threshold != null && <> · <span className="badge badge-threshold">{pct(best.threshold)}+</span></>}
-                  {best.evidence && <> · picks like this won {pct(best.evidence.win_rate, 0)} of the time</>}
-                  {best.day_rank != null && <> · #{best.day_rank} of the day</>}</p>
+                  {' · '}model {pct(best.probability, 1)}
+                  {best.day_rank != null && <> · #{best.day_rank} of the day</>}<br />
+                  <ForecastPercentageRecord history={best.percentage_history} grade={best.grade} opposite={best.opposite_pick_label} startAt={best.tipoff} /></p>
                 {rest.length > 0 && <>
                   <p className="best-label">Next best</p>
                   <ol className="best-list" start={2}>{rest.map((p) => <li key={p.market}><Simple p={p} /></li>)}</ol>

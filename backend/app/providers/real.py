@@ -174,10 +174,20 @@ class RealProvider:
         if c["state"] != "forecast":
             return CanonicalForecast(**c)
         rec = c["record"]
+        from .. import threshold_overview as to
+        if not hasattr(self, '_percentage_indexes'):
+            self._percentage_indexes = {}
+        if c['market'] not in self._percentage_indexes:
+            _, cohort, _ = self._canonical_cohort(c['market'])
+            self._percentage_indexes[c['market']] = to.percentage_index(cohort, self.now)
+        percentage_history = to.percentage_record(self.sport, c['market'], rec, g['game_id'],
+                                                 self._percentage_indexes[c['market']], self.now)
         labels = markets.side_labels(c["market"], rec["line"], self._team(g["home_team_id"]).abbr,
                                      self._team(g["away_team_id"]).abbr)
         idx = {"a": 0, "mid": 1, "b": 2}
-        return CanonicalForecast(**{**c, "record": {**rec, "pick_label": labels[idx[rec["side"]]]},
+        opposite = None if c['market'] == 'reg3' else labels[2 if rec['side'] == 'a' else 0]
+        return CanonicalForecast(**{**c, "record": {**rec, "pick_label": labels[idx[rec["side"]]], "opposite_pick_label": opposite},
+                                    "percentage_history": percentage_history,
                                     "result_label": None if c["result_side"] is None else labels[idx[c["result_side"]]]})
 
     def _agreement(self, game_id: str, policy: str, tipoff_at: Optional[str] = None) -> dict:
@@ -859,8 +869,11 @@ class RealProvider:
                 picks.append({
                     "game_id": g["game_id"], "matchup": f"{away} @ {home}", "tipoff": g["tipoff_at"], "status": g["status"],
                     "market": market, "market_title": title, "pick_label": out.record.pick_label,
+                    "forecast_id": rec['forecast_id'],
+                    "opposite_pick_label": out.record.opposite_pick_label,
                     "probability": rec["confidence"], "threshold": to.threshold_reached(rec["confidence"], grid),
                     "evidence": to.pick_evidence(rec["confidence"], ladder, grid),
+                    "percentage_history": out.percentage_history,
                     "market_prob": self._pick_market_prob(market, g, c), "grade": c["grade"],
                     "generated_at": rec["generated_at"]})
         return {"mode": "real", "sport": self.sport, "date": day.isoformat(), "as_of": self.now, "rule": to.RANK_RULE,

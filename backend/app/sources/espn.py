@@ -273,6 +273,11 @@ def fetch_nfl_month(yyyymm: str, timeout: float = 60) -> bytes:
     return _get(month_request(yyyymm)[1], timeout, NFL_ENDPOINT)
 
 
+def fetch_nfl_day(yyyymmdd: str, timeout: float = 30) -> bytes:
+    """One Eastern day of the NFL scoreboard (dates=YYYYMMDD): the frequent game-day status refresh."""
+    return _get(day_request(yyyymmdd)[1], timeout, NFL_ENDPOINT)
+
+
 NHL_ENDPOINT = "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard"
 LINES_IMPORTER_VERSION = "espn-lines-1"
 
@@ -392,4 +397,137 @@ def parse_goalies(payload: dict) -> list[GoalieListing]:
             out.append(GoalieListing(**base, status=str(st.get("type") or st.get("name") or "unknown").lower(),
                                      status_label=st.get("name"), espn_player_id=None if pid is None else str(pid),
                                      player_name=athlete.get("fullName") or athlete.get("displayName")))
+    return out
+
+
+# --- European soccer (data only; app/soccer.py). One ESPN scoreboard per competition, one Eastern day per request
+# (dates=YYYYMMDD; a date range returned HTTP 400, checked 2026-11-07). Fields read here were checked on real payloads of
+# all seven competitions (2026-11-04/05/07) and on 2024-25 UEFA knockout days with extra time and shoot-outs:
+# - `score` is the goal count when play ended: after extra time when extra time was played, never shoot-out kicks;
+# - `shootoutScore` is the shoot-out, `series` / `leg` / `aggregateScore` describe a two-legged tie;
+# - a competitor's `winner` flag marks who went through on a decided tie (Atlético 1-0 Real Madrid, 2025-03-12: the flag
+#   is on Real Madrid, who advanced on penalties), so it is never read as the match result;
+# - no per-half or per-period scores are published, so the 90-minute result of a match that went to extra time is unknown.
+SOCCER_SOURCE = "espn_soccer"
+SOCCER_IMPORTER_VERSION = "espn-soccer-scoreboard-1"
+SOCCER_ENDPOINT = "https://site.api.espn.com/apis/site/v2/sports/soccer/{competition}/scoreboard"
+SOCCER_COMPETITIONS = {
+    "eng.1": "Premier League", "esp.1": "La Liga", "ger.1": "Bundesliga", "ita.1": "Serie A", "fra.1": "Ligue 1",
+    "uefa.champions": "UEFA Champions League", "uefa.europa": "UEFA Europa League",
+}
+# Only these three ESPN statuses are final results (all three observed). How the match was decided comes from the status.
+SOCCER_FINAL = {"STATUS_FULL_TIME": "regulation", "STATUS_FINAL_AET": "extra_time", "STATUS_FINAL_PEN": "penalties"}
+SOCCER_STATUS = {"STATUS_SCHEDULED": "scheduled", "STATUS_POSTPONED": "postponed", "STATUS_CANCELED": "canceled",
+                 "STATUS_ABANDONED": "abandoned", "STATUS_SUSPENDED": "suspended"}
+
+
+class SoccerPayloadMismatch(ValueError):
+    """A scoreboard that is not the requested competition's: never imported under that competition."""
+
+
+def soccer_request(competition: str, yyyymmdd: str) -> tuple[str, str, dict]:
+    """(request_key, endpoint, params) for one competition's scoreboard on one day."""
+    if competition not in SOCCER_COMPETITIONS:
+        raise ValueError(f"Unknown soccer competition {competition!r}; expected one of {', '.join(SOCCER_COMPETITIONS)}")
+    key, params = day_request(yyyymmdd)
+    return f"competition={competition}&{key}", SOCCER_ENDPOINT.format(competition=competition), params
+
+
+def fetch_soccer_day(competition: str, yyyymmdd: str, timeout: float = 30) -> bytes:
+    _, endpoint, params = soccer_request(competition, yyyymmdd)
+    return _get(params, timeout, endpoint)
+
+
+@dataclass
+class SoccerMatchRow:
+    match_id: str
+    competition_id: str
+    event_id: str
+    season: int
+    season_type_id: int
+    stage: Optional[str]
+    stage_label: Optional[str]
+    kickoff_at: str
+    home: TeamRow
+    away: TeamRow
+    neutral_site: Optional[bool]
+    venue: Optional[str]
+    status: str
+    source_status: str
+    decided_in: Optional[str] = None
+    home_score: Optional[int] = None
+    away_score: Optional[int] = None
+    home_shootout: Optional[int] = None
+    away_shootout: Optional[int] = None
+    leg: Optional[int] = None
+    aggregate_home: Optional[int] = None
+    aggregate_away: Optional[int] = None
+    qualified_team_id: Optional[str] = None
+    note: Optional[str] = None
+
+
+def _whole(value) -> Optional[int]:
+    """A non-negative whole number from the feed ('2', 2, 2.0), else None (missing or not a count)."""
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return None
+    return int(f) if f >= 0 and f == int(f) else None
+
+
+def parse_soccer_scoreboard(payload: dict, competition: str) -> list[SoccerMatchRow]:
+    """Matches of one competition's ESPN scoreboard. Raises SoccerPayloadMismatch when the payload names another league.
+    Scores and tie facts are kept only for final matches; live scores are not collected."""
+    slugs = {lg.get("slug") for lg in payload.get("leagues") or []}
+    if slugs != {competition}:
+        raise SoccerPayloadMismatch(f"Scoreboard is for {sorted(s for s in slugs if s) or 'no league'}, not {competition!r}")
+    league_type = ((payload["leagues"][0].get("season") or {}).get("type") or {})
+    out = []
+    for ev in payload.get("events", []):
+        comp = ev["competitions"][0]
+        sides = {c.get("homeAway"): c for c in comp.get("competitors", [])}
+        if set(sides) != {"home", "away"}:
+            continue
+        name = comp["status"]["type"]["name"]
+        state = comp["status"]["type"].get("state")
+        status = "final" if name in SOCCER_FINAL else SOCCER_STATUS.get(name) or ("in_progress" if state == "in" else "other")
+        teams = {k: TeamRow(team_id=f"soccer:{c['team']['id']}", abbr=c["team"].get("abbreviation") or "?",
+                            name=c["team"].get("displayName") or c["team"].get("name") or "?") for k, c in sides.items()}
+        season = ev.get("season") or {}
+        series = comp.get("series") or {}
+        type_id = int(season.get("type"))
+        venue = comp.get("venue") or {}
+        city = (venue.get("address") or {}).get("city")
+        neutral = comp.get("neutralSite")
+        row = SoccerMatchRow(
+            match_id=f"soccer:{competition}:{ev['id']}", competition_id=competition, event_id=str(ev["id"]),
+            season=int(season["year"]), season_type_id=type_id, stage=season.get("slug"),
+            stage_label=series.get("title") or (league_type.get("name") if league_type.get("type") == type_id else None),
+            kickoff_at=normalize_time(ev["date"]), home=teams["home"], away=teams["away"],
+            neutral_site=None if neutral is None else bool(neutral),
+            venue=", ".join(x for x in (venue.get("fullName"), city) if x) or None,
+            status=status, source_status=name)
+        if status == "final":
+            row.home_score, row.away_score = _whole(sides["home"].get("score")), _whole(sides["away"].get("score"))
+            if row.home_score is None or row.away_score is None:
+                row.status = "other"          # a final without both scores is not a usable result
+            else:
+                row.decided_in = SOCCER_FINAL[name]
+                if row.decided_in == "penalties":
+                    h, a = _whole(sides["home"].get("shootoutScore")), _whole(sides["away"].get("shootoutScore"))
+                    if h is not None and a is not None and h != a:
+                        row.home_shootout, row.away_shootout = h, a
+                row.leg = _whole((comp.get("leg") or {}).get("value")) or None
+                agg = {str(c.get("id")): c for c in series.get("competitors") or []}
+                hid, aid = sides["home"]["team"]["id"], sides["away"]["team"]["id"]
+                if hid in agg and aid in agg:
+                    h, a = _whole(agg[hid].get("aggregateScore")), _whole(agg[aid].get("aggregateScore"))
+                    if h is not None and a is not None:
+                        row.aggregate_home, row.aggregate_away = h, a
+                    winners = [t for t in (hid, aid) if agg[t].get("winner") is True]
+                    if series.get("completed") is True and len(winners) == 1:
+                        row.qualified_team_id = f"soccer:{winners[0]}"
+                notes = [n.get("headline") for n in comp.get("notes") or [] if n.get("headline")]
+                row.note = notes[0] if notes else None
+        out.append(row)
     return out

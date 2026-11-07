@@ -1,7 +1,7 @@
 import { api } from '../api/client';
-import type { CalibrationState, Sport, ThresholdHistoryPeriod, ThresholdHistoryRow, ThresholdLiveRow, ThresholdMarketBlock } from '../api/types';
+import type { CalibrationState, ForecastPercentageHistory, Sport, ThresholdHistoryPeriod, ThresholdHistoryRow, ThresholdLiveRow, ThresholdMarketBlock } from '../api/types';
 import { useApi } from '../api/useApi';
-import { pct } from '../format';
+import { dateTime, pct } from '../format';
 import { AsyncView } from './States';
 
 const near = (a: number | null | undefined, b: number | null | undefined) => a != null && b != null && Math.abs(a - b) < 1e-9;
@@ -137,4 +137,37 @@ export function ThresholdOverviewCard({ sport }: { sport: Sport }) {
       </>}</AsyncView>
     </div>
   );
+}
+
+/** Exact-percentage observations and an explicitly experimental opposite scenario; original forecasts stay unchanged. */
+export function ForecastPercentageRecord({ history: h, grade, opposite, startAt }: {
+  history: ForecastPercentageHistory | null | undefined; grade: string | null; opposite?: string | null; startAt?: string;
+}) {
+  if (!h) return <span className="small warn">Percentage history unavailable</span>;
+  // The API supplies OTHER matches. A settled card also shows its own separately supplied canonical result in the total.
+  const ownWin = grade === 'win' ? 1 : 0, ownLoss = grade === 'loss' ? 1 : 0;
+  const includesThisGame = ownWin + ownLoss > 0;
+  const wins = h.wins + ownWin, losses = h.losses + ownLoss, settled = wins + losses;
+  const label = settled === 0 ? 'No settled matches' : settled === 1 ? `First example ${wins ? 'won' : 'lost'}`
+    : wins === losses ? 'Evenly split' : wins > losses ? 'More often right' : 'More often wrong';
+  const excluded = Object.values(h.excluded).reduce((a, b) => a + b, 0);
+  const against = h.losses > h.wins; // Only OTHER games can trigger it, never this game's own loss.
+  const pregame = grade === 'pending' && startAt != null && Date.parse(h.as_of) < Date.parse(startAt);
+  return <span className="small percentage-record" title={`Same source: ${h.source}; model: ${h.model_version}. Current record, including results learned after older forecasts. The total includes this game's result only once it has won or lost; the other-example count always excludes it. Lines vary within the same market and line source. Observed counts do not establish a future win rate.`}>
+    <strong>Observed: {label}</strong><br />
+    {h.sport.toUpperCase()} · {h.market_title} · {h.direction} · {h.percentage}% only
+    {h.line_source !== 'none' && <> · {h.line_source === 'bookmaker' ? 'bookmaker lines' : 'model lines'}</>}
+    <br />{wins} {wins === 1 ? 'win' : 'wins'} · {losses} {losses === 1 ? 'loss' : 'losses'} · {settled} settled {settled === 1 ? 'pick' : 'picks'}
+    <br />{includesThisGame ? "Includes this game's result" : "This game isn't counted"} · {h.settled} other settled {h.settled === 1 ? 'example' : 'examples'}
+    {settled > 0 && <><br />{pct(wins / settled, 1)} won / {pct(losses / settled, 1)} lost
+      {h.small_sample && <span className="muted"> · small sample</span>}</>}
+    {excluded > 0 && <><br /><span className="muted">{excluded} non-decisive or unavailable results excluded</span></>}
+    {against && <><br />{opposite ? <>
+      <strong>{pregame ? 'Against model — experimental' : 'Opposite scenario — retrospective'}: {opposite}</strong>
+      <br />Other matching model picks: {h.wins}–{h.losses} · {h.settled} settled
+      <br /><span className="muted">{pregame ? 'Current comparison; not a validated betting rule.' : 'Comparison now; no pregame opposite call was recorded.'}</span>
+      <br /><span className="muted">{h.line_source === 'model' ? 'Model line only; no bookmaker offer verified.' : 'Current opposite-side price unverified.'}</span>
+    </> : <span className="muted">{h.market === 'reg3' ? 'Three-way market: no single opposite pick.' : 'Opposite side unavailable.'}</span>}</>}
+    <br /><span className="muted">Live record · same model · as of {dateTime(h.as_of)}</span>
+  </span>;
 }

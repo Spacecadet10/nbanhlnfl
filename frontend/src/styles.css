@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Sans:wght@400;500;600;700;800&display=swap');
+@font-face { font-family:'Inter'; src:url('/fonts/Inter.ttf') format('truetype'); font-weight:100 900; font-style:normal; font-display:swap; }
+@font-face { font-family:'Barlow Condensed'; src:url('/fonts/BarlowCondensed-Bold.ttf') format('truetype'); font-weight:700; font-style:normal; font-display:swap; }
 
 /* ---------------------------------------------------------------------------------------------------------------------
    Design tokens. Light is the primary theme (data-theme="light", the default); dark is kept as data-theme="dark".
@@ -22,7 +23,7 @@
   --ok:#3F6212; --bad:#BE123C; --warn:#9A5B05;
   --demo-bg:var(--bg-muted); --demo-border:var(--border-lavender); --shell:#FFFFFF; --nav-hover:var(--bg-muted);
   --nav-active:var(--accent-lime); --card-start:var(--bg-card); --card-end:var(--bg-card); --radius:16px;
-  font-family:'DM Sans',system-ui,sans-serif; color:var(--text); background:var(--bg); line-height:1.5; font-synthesis:none;
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color:var(--text); background:var(--bg); line-height:1.5; font-synthesis:none;
 }
 :root[data-theme='dark'] {
   color-scheme: dark;
@@ -201,7 +202,7 @@ details.card summary { cursor: pointer; font-weight: 600; }
    --------------------------------------------------------------------------------------------------------------------- */
 .app { min-height: 100vh; }
 .topbar { position: fixed; inset: 0 auto 0 0; width: 236px; padding: 26px 16px 20px; background: var(--shell); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; overflow-y: auto; }
-.brand { position: relative; display: block; padding-left: 42px; color: var(--text); text-decoration: none; font-size: 21.5px; font-weight: 800; letter-spacing: 0.06em; }
+.brand { position: relative; display: block; padding-left: 42px; color: var(--text); text-decoration: none; font-size: 21.5px; font-weight: 700; letter-spacing: 0.06em; }
 .brand-mark { position: absolute; left: 0; top: 0; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--accent-purple); }
 .brand-sub { display: block; font-size: 9.5px; font-weight: 600; letter-spacing: 0.18em; color: var(--muted); margin-top: 2px; }
 .nav-caption { font-size: 11px; font-weight: 600; letter-spacing: 0.18em; color: var(--muted); margin: 34px 12px 10px; }
@@ -473,7 +474,7 @@ p.no-skill { border-left: 3px solid var(--warn); background: color-mix(in srgb, 
 .canonical-market { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; }
 /* =====================================================================================================================
    Reference layout (consolidated). Matches the design in layout, hierarchy, spacing, colour balance, cards and logo use;
-   decoration is limited to soft gradients and blurred light that render crisply at any size. No illustrations.
+   decoration is limited to soft gradients; no illustrations or photographs (user decision 2026-11-01).
    ===================================================================================================================== */
 
 /* Shell: dark brand block, light sidebar, flat header */
@@ -481,7 +482,7 @@ p.no-skill { border-left: 3px solid var(--warn); background: color-mix(in srgb, 
 :root[data-theme='dark'] .topbar { background: var(--shell); }
 .brand-block { margin: 0 -16px 14px; height: 72px; display: flex; align-items: center; padding: 0 18px; position: relative; overflow: hidden;
   background: radial-gradient(120px 80px at 100% 0%, rgba(192,132,252,0.35), transparent 70%), radial-gradient(90px 60px at 85% 110%, rgba(163,230,53,0.22), transparent 70%), var(--accent-purple); }
-.brand { position: relative; display: block; padding-left: 44px; color: var(--on-dark); text-decoration: none; font-size: 20px; font-weight: 800; letter-spacing: 0.06em; }
+.brand { position: relative; display: block; padding-left: 44px; color: var(--on-dark); text-decoration: none; font-size: 20px; font-weight: 700; letter-spacing: 0.06em; }
 .brand-mark { position: absolute; left: 0; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px;
   background: var(--accent-lime); color: var(--accent-purple); font-size: 21.5px; font-weight: 900; letter-spacing: 0; }
 .brand-sub { display: block; font-size: 9px; font-weight: 600; letter-spacing: 0.18em; color: rgba(248,250,252,0.7); margin-top: 1px; }
@@ -502,7 +503,7 @@ p.no-skill { border-left: 3px solid var(--warn); background: color-mix(in srgb, 
 .page-title-icon.plain { background: none; box-shadow: none; color: #7C3AED; width: 44px; }
 :root[data-theme='dark'] .page-title-icon.plain { color: var(--accent-lavender); }
 .page-title-text { flex: 1 1 260px; min-width: 0; }
-.page-title-text h1 { font-size: clamp(28px, 1.406rem + 0.9vw, 35.5px); font-weight: 800; letter-spacing: -0.02em; }
+.page-title-text h1 { font-size: clamp(28px, 1.406rem + 0.9vw, 35.5px); font-weight: 700; letter-spacing: -0.02em; }
 .page-title-text .page-sub { margin-top: 2px; font-size: 17px; }
 .page-title-right { display: flex; align-items: center; gap: 12px; margin-left: auto; }
 .page-head h1 .icon { color: var(--accent-lavender-ink); }
@@ -523,8 +524,8 @@ p.no-skill { border-left: 3px solid var(--warn); background: color-mix(in srgb, 
   box-shadow: 0 14px 36px rgba(30,27,75,0.22); }
 .hero .team-logo { border: 5px solid rgba(255,255,255,0.95); box-shadow: 0 10px 26px rgba(0,0,0,0.28), 0 0 0 8px rgba(255,255,255,0.06); }
 .hero-center { text-align: center; min-width: 0; }
-.league-chip { display: inline-block; padding: 3px 12px; border-radius: 999px; background: var(--accent-lime); color: var(--on-accent); font-size: 12.5px; font-weight: 800; letter-spacing: 0.08em; }
-.hero-matchup { margin: 10px 0 6px; font-size: clamp(22.5px, 1rem + 1vw, 32.5px); font-weight: 800; line-height: 1.2; color: var(--on-dark); letter-spacing: -0.01em; }
+.league-chip { display: inline-block; padding: 3px 12px; border-radius: 999px; background: var(--accent-lime); color: var(--on-accent); font-size: 12.5px; font-weight: 700; letter-spacing: 0.08em; }
+.hero-matchup { margin: 10px 0 6px; font-size: clamp(22.5px, 1rem + 1vw, 32.5px); font-weight: 700; line-height: 1.2; color: var(--on-dark); letter-spacing: -0.01em; }
 .hero-matchup span { color: var(--accent-lime); padding: 0 2px; }
 .hero-time { margin: 0; color: rgba(248,250,252,0.82); font-size: 17px; }
 @media (max-width: 760px) { .hero { grid-template-columns: auto auto; justify-content: space-around; padding: 22px 18px; } .hero-center { grid-column: 1 / -1; order: -1; } }
@@ -706,7 +707,7 @@ body, .app { background: var(--app-bg); }
 .app-footer { background: var(--panel-bg); border-top: 1px solid var(--border); }
 
 /* Titles */
-.page-title-text h1, .sub-title h1 { font-size: clamp(32.5px, 1.5rem + 1vw, 42px); font-weight: 800; }
+.page-title-text h1, .sub-title h1 { font-size: clamp(32.5px, 1.5rem + 1vw, 42px); font-weight: 700; }
 .page-title-text .page-sub { font-size: 21.5px; color: color-mix(in srgb, var(--text) 85%, transparent); }
 .page-title-icon.plain { width: 48px; color: var(--violet); }
 .page-title-icon.soft { width: 56px; height: 56px; border-radius: 50%; background: #E9D5FF; color: var(--violet); box-shadow: none; }
@@ -782,7 +783,7 @@ body, .app { background: var(--app-bg); }
 .metrics.kpi { gap: 20px; }
 .kpi .metric-card { min-height: 170px; padding: 28px 32px; box-shadow: 0 10px 24px rgba(30,27,75,0.10); border: 0; }
 .kpi .metric-label { font-size: 21.5px; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--text); }
-.kpi .metric-value { font-size: clamp(40px, 1.719rem + 1.6vw, 54.5px); font-weight: 800; line-height: 1; margin: 10px 0 10px; }
+.kpi .metric-value { font-size: clamp(40px, 1.719rem + 1.6vw, 54.5px); font-weight: 700; line-height: 1; margin: 10px 0 10px; }
 .kpi .metric-hint { font-size: 19px; color: color-mix(in srgb, var(--text) 80%, transparent); }
 .kpi .metric-icon .icon { width: 44px; height: 44px; stroke-width: 2; }
 .kpi .metric-dark { background: linear-gradient(135deg, #3B3283, #2E2768); }
@@ -793,7 +794,7 @@ body, .app { background: var(--app-bg); }
 :root[data-theme='dark'] .kpi .metric-lime :is(.metric-label, .metric-value, .metric-hint, .metric-icon) { color: var(--on-accent); }
 :root[data-theme='dark'] .kpi .metric-lavender { background: linear-gradient(135deg, #EBE4FD, #D6C2FC); }
 :root[data-theme='dark'] .kpi .metric-lavender :is(.metric-label, .metric-value, .metric-hint) { color: var(--on-accent); }
-.two-col .card h2 { font-size: 26px; font-weight: 800; }
+.two-col .card h2 { font-size: 26px; font-weight: 700; }
 .two-col .table thead th { font-size: 17px; text-transform: none; letter-spacing: 0; color: var(--text); }
 .two-col .table th[scope='row'], .two-col .table td { font-size: 18px; }
 .two-col .table th, .two-col .table td { padding: 10px 10px; }
@@ -802,10 +803,10 @@ body, .app { background: var(--app-bg); }
 .matchup-strip { min-height: 130px; padding: 20px 24px; border-radius: 18px; border: 2px solid #DACEFD; background: #F2F0FE; }
 :root[data-theme='dark'] .matchup-strip { background: var(--accent-lavender-soft); border-color: var(--border-lavender); }
 .matchup-strip .page-title-icon { width: 56px; height: 56px; }
-.matchup-strip-text strong { font-size: 26px; font-weight: 800; }
+.matchup-strip-text strong { font-size: 26px; font-weight: 700; }
 .matchup-strip-logos { gap: 24px; font-size: 30px; color: var(--text); }
 .matchup-strip-logos .team-logo { width: 96px !important; height: 96px !important; border: 0; box-shadow: 0 4px 14px rgba(30,27,75,0.10); }
-.sub-page .card h2 { font-size: 26px; font-weight: 800; }
+.sub-page .card h2 { font-size: 26px; font-weight: 700; }
 .sub-page .card > p.small, .sub-page .card > .forecast-note { font-size: 18px; }
 .sub-page .table.compare th, .sub-page .table.compare td { padding: 0 12px; height: 46px; font-size: 19px; }
 .sub-page .table.compare tbody th { font-weight: 700; }
@@ -833,7 +834,7 @@ body, .app { background: var(--app-bg); }
 .slate-group { margin: 22px 0 12px; font-size: 19px; }
 .game-grid { gap: 20px; }
 .card-link { padding: 22px 24px; }
-.game-time { font-size: 20px; font-weight: 800; letter-spacing: 0; }
+.game-time { font-size: 20px; font-weight: 700; letter-spacing: 0; }
 .team-line { gap: 14px; margin-bottom: 14px; }
 .team-line .team-logo { width: 52px !important; height: 52px !important; }
 .team-line strong { font-size: 20px; font-weight: 700; }
@@ -853,7 +854,7 @@ body, .app { background: var(--app-bg); }
 .sidebar-note strong { font-size: 17px; margin: 6px 0 0; }
 .sidebar-note .sidebar-status { margin-top: 8px; padding-top: 8px; border-top-color: rgba(30,27,75,0.12); color: color-mix(in srgb, var(--text) 70%, transparent); }
 :root[data-theme='dark'] .sidebar-note { background: var(--accent-lavender-soft); }
-.page-title-text h1, .sub-title h1 { font-weight: 800; }
+.page-title-text h1, .sub-title h1 { font-weight: 700; }
 .skill-chip { color: #7E22CE; background: #F3E8FF; }
 :root[data-theme='dark'] .skill-chip { color: var(--accent-lavender-ink); background: var(--accent-lavender-soft); }
 
@@ -1081,36 +1082,287 @@ body, .app { background: var(--app-bg); }
   .page-title:has(.page-title-right) { flex-wrap: wrap; }
   .card-link { padding: 18px; }
 }
-/* Larger type (user request): a wider sidebar so the nav labels stay on one line, and the game-card odds get the full
-   card width (the Matchup link moves to its own row, right-aligned). */
-.topbar { width: 276px; }
-.workspace { margin-left: 276px; }
-@media (max-width: 1100px) { .topbar { width: 244px; } .workspace { margin-left: 244px; } }
-@media (max-width: 800px) { .topbar { width: auto; } .workspace { margin-left: 0; } }
-.card-bottom { flex-wrap: wrap; }
-.card-bottom .book-lines { flex: 1 1 100%; }
-.card-bottom .matchup-link { margin-left: auto; }
-.book-lines strong { white-space: nowrap; }
-.topbar { width: 288px; }
-.workspace { margin-left: 288px; }
-@media (max-width: 1100px) { .topbar { width: 252px; } .workspace { margin-left: 252px; } }
-@media (max-width: 800px) { .topbar { width: auto; } .workspace { margin-left: 0; } }
-@media (min-width: 801px) { .nav a { white-space: nowrap; padding-inline: 12px; gap: 12px; } }
-/* tabs and threshold chips keep one row at desktop width with the larger type; they wrap rather than overflow when narrower */
-.segmented:not(.sport-toggle) button, .tab-row .segmented button { padding: 0 18px; }
-.tab-row { flex-wrap: wrap; overflow-x: visible; row-gap: 10px; }
-.tab-row .segmented, .confidence-filter .segmented { flex-wrap: wrap; row-gap: 8px; }
-.confidence-filter .segmented button, .today-controls .confidence-filter .segmented button { min-width: 0; padding: 0 11px; }
-/* the smallest text (stamps, captions, table heads, chips) gets a readable floor */
-.book-lines .muted, .quote-time, .selection-count, .sidebar-status, .app-footer, .source .muted, .table thead th,
-.sample-chip, .best-label, details.demo-banner > summary::after { font-size: 15px; }
-.badge, .legacy-tag, .card-section-label, .demo-banner strong, .skill-chip, .source-pop-panel strong { font-size: 13.5px; }
+
+/* Reference finish: shared proportions and responsive behavior.
+   Keep text readable; compact spacing rather than scaling the entire interface. */
+:root { --sidebar-width: 248px; --header-height: 84px; --app-bg: #EDEDFB; --panel-bg: #F8F9FE; }
+:root[data-theme='dark'] { --app-bg: #141534; --panel-bg: #181A39; }
+.topbar { width: var(--sidebar-width); padding: 0 16px 20px; }
+.workspace { margin-left: var(--sidebar-width); min-width: 0; }
+.brand-block { height: var(--header-height); min-height: var(--header-height); margin: 0 -16px 16px; padding: 0 20px; background: #1E1B4B; }
+.brand { font-size: 24px; padding-left: 45px; letter-spacing: .025em; }
+.brand-mark { width: 39px; height: 43px; }
+.brand-sub { font-size: 8px; letter-spacing: .16em; white-space: nowrap; }
+.workspace-header { height: var(--header-height); min-height: var(--header-height); padding: 0 30px 0 112px; gap: 16px; }
+.workspace-header::before { width: 150px; height: var(--header-height); border-radius: 0; background: linear-gradient(128deg, #1E1B4B 0 27%, #9860D8 28% 39%, #A3E635 40% 51%, #B47CEB 52% 64%, transparent 65%); }
+.workspace-header::after { display: none; }
+.breadcrumb { font-size: 13px; white-space: nowrap; opacity: .8; }
+.header-tools { margin-left: auto; gap: 24px; }
+.sport-toggle button { padding: 0 21px; min-height: 36px; font-size: 15px; }
+.preview-pill { font-size: 15px; }
+.nav { gap: 5px; }
+.nav a, .nav-caption { font-size: 16px; line-height: 1.35; min-height: 48px; padding: 10px 12px; gap: 12px; white-space: normal; }
+.nav a.active { box-shadow: none; background: linear-gradient(100deg, #A3E635, #C2FA68); }
+.nav .icon, .nav-caption .icon { width: 20px; height: 20px; stroke-width: 1.8; }
+.sidebar-note { display: flex; align-items: center; gap: 8px; position: relative; overflow: hidden; min-height: 108px; padding: 16px 12px; background: linear-gradient(110deg, #DAC7FC, #EAE3FC); }
+.sidebar-note-copy { flex: 1; min-width: 0; }
+.sidebar-note .league-mark { border: 0; padding: 0; font-size: 14px; letter-spacing: .03em; }
+.sidebar-note strong { font-size: 14px; line-height: 1.4; margin: 5px 0 0; }
+.content { padding: 24px 30px 48px; border-top-left-radius: 32px; min-height: calc(100vh - var(--header-height) - 70px); }
+.page-title { gap: 14px; margin: 0 0 24px; }
+.page-title-icon { width: 52px; height: 52px; border-radius: 15px; }
+.page-title-text { flex: 1 1 250px; }
+.page-title-text h1, .sub-title h1 { font-size: clamp(27px, 2.2vw, 36px); line-height: 1.15; letter-spacing: -.035em; }
+.page-title-text .page-sub { font-size: 17px; margin-top: 5px; }
+.date-button, .date-chip { min-width: 204px; height: 46px; font-size: 16px; border-radius: 10px; }
+.demo-banner { margin: 0 30px 12px; font-size: 14px; padding: 9px 13px; }
+.hero { min-height: 202px; padding: 28px 38px; gap: 24px; border-radius: 20px; margin-bottom: 22px; isolation: isolate; background: #2B1B67; background-size: cover; background-position: center 55%; }
+.hero .team-logo { width: 116px !important; height: 116px !important; background: #FFFFFF; border: 3px solid #FFFFFF; box-shadow: 0 4px 12px #11132C33; overflow: hidden; }
+.hero .team-logo img { width: 90%; height: 90%; filter: drop-shadow(0 4px 6px #11132C55); }
+.hero .team-monogram { background: #F8FAFC; color: #1E1B4B; }
+.hero-matchup { font-size: clamp(23px, 1.9vw, 32px); line-height: 1.25; margin: 10px 0; }
+.hero-time { font-size: 17px; }
+.league-chip { font-size: 13px; padding: 2px 12px; letter-spacing: .03em; }
+.forecast-metrics { grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 16px; margin-bottom: 24px; }
+.forecast-metrics .metric-card { min-height: 124px; padding: 22px; border-radius: 18px; background: linear-gradient(120deg, var(--surface), var(--bg-subtle)); }
+.forecast-metrics .metric-label { font-size: 17px; line-height: 1.4; }
+.forecast-metrics .metric-value { font-size: 24px; margin-top: 12px; }
+.forecast-metrics .metric-icon .icon { width: 33px; height: 33px; stroke-width: 1.8; }
+.segmented:not(.sport-toggle) button, .tab-row .segmented button { min-height: 44px; font-size: 15px; padding: 0 18px; border-radius: 10px; }
+.policy-row { margin: 4px 0 26px; }
+.tab-row { flex-wrap: wrap; overflow: visible; gap: 10px; }
+.tab-row .segmented { flex-wrap: wrap; gap: 8px; }
+.tab-row .run-toggle { margin-left: 0; }
+.today-controls { position: relative; isolation: isolate; gap: 16px 36px; margin: 0 0 24px; align-items: flex-end; }
+.today-controls .market-select { flex: 0 0 auto; }
+.today-controls .market-select label { gap: 14px; }
+.market-select label, .market-select .confidence-filter-label { font-size: 16px; }
+.market-select select { min-width: 170px; width: auto; height: 44px; font-size: 16px; }
+.today-controls .confidence-filter { flex: 1 1 550px; }
+.confidence-filter-label { font-size: 14px; }
+.confidence-filter .segmented { display: flex; flex-wrap: wrap; padding: 4px; gap: 3px; background: var(--bg-muted); }
+.confidence-filter .segmented button, .today-controls .confidence-filter .segmented button { min-width: 0; min-height: 36px; padding: 0 10px; font-size: 14px; border-radius: 8px; }
+.game-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.card-link { padding: 20px; height: 100%; }
+.game-time { font-size: 17px; font-weight: 700; }
+.team-line { gap: 12px; margin-bottom: 14px; }
+.team-line strong { font-size: 17px; line-height: 1.35; }
+.team-line > div > span { font-size: 15px; }
+.team-line > b { font-size: 21px; }
+.team-line .team-logo { width: 48px !important; height: 48px !important; background: transparent; }
+.team-line .team-logo img { width: 94%; height: 94%; }
+.game-card .forecast-note { font-size: 15px; line-height: 1.5; padding: 12px; border-radius: 10px; }
+.card-bottom { flex-wrap: wrap; gap: 8px; font-size: 14px; margin-top: 12px; }
+.card-bottom .book-lines { flex: 1 1 100%; font-size: 14px; }
+.card-bottom .matchup-link { margin-left: auto; font-size: 14px; }
+.book-lines strong { white-space: normal; }
+.book-lines .muted, .quote-time, .selection-count { font-size: 13px; }
+.performance-page { margin-top: 0; }
+.performance-page .metrics.kpi { margin: 24px 0; }
+.kpi .metric-card { padding: 23px; border-radius: 18px; }
+.kpi .metric-label { font-size: 17px; }
+.kpi .metric-value { font-size: 44px; margin: 7px 0; }
+.kpi .metric-hint { font-size: 15px; line-height: 1.45; }
+.kpi .metric-icon .icon { width: 34px; height: 34px; stroke-width: 1.8; }
+.two-col { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.two-col .card { padding: 22px; }
+.two-col .card h2, .sub-page .card h2 { font-size: 22px; }
+.two-col .card > p.small, .two-col .table th[scope='row'], .two-col .table td { font-size: 16px; }
+.two-col .table thead th { font-size: 14px; }
+.two-col .table tbody tr.row-model > th, .two-col .table tbody tr.row-model > td { font-size: 16px; }
+.matchup-strip { padding: 18px 22px; gap: 16px; border-width: 1px; }
+.matchup-strip-text strong { font-size: 23px; }
+.matchup-strip-logos { gap: 20px; }
+.matchup-strip-logos .team-logo { width: 78px !important; height: 78px !important; border: 0; }
+.sub-page .card > .forecast-note, .sub-page .card > p.small, .sub-page .facts { font-size: 16px; }
+.sub-page .table.compare thead th, .sub-page .table.compare tbody th { font-size: 16px; }
+.sub-page .table.compare tbody td { font-size: 18px; }
+.sub-page .table.compare td.muted { font-size: 16px; }
+.badge, .legacy-tag, .card-section-label, .skill-chip { font-size: 12px; }
 .filters label { font-size: 15px; }
 .filters input, .filters select { font-size: 17px; }
-/* phone: the later desktop hero sizes must not apply; toggles take their own row and wrap inside it */
+:root[data-theme='dark'] .sidebar-note { background: var(--accent-lavender-soft); }
+:root[data-theme='dark'] .forecast-metrics .metric-card { background: var(--surface); }
+@media (max-width: 1200px) {
+  :root { --sidebar-width: 220px; }
+  .brand { font-size: 20px; }
+  .nav a, .nav-caption { font-size: 15px; }
+  .breadcrumb { display: none; }
+  .workspace-header { padding-left: 100px; }
+  .game-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .forecast-metrics .metric-card { padding: 18px; gap: 10px; }
+  .forecast-metrics .metric-label { font-size: 16px; }
+}
 @media (max-width: 800px) {
-  .hero { padding: 22px 18px; gap: 16px; }
-  .hero .team-logo { width: 84px !important; height: 84px !important; }
+  .topbar { position: static; width: auto; padding: 0 16px 12px; }
+  .brand-block { height: 66px; min-height: 66px; margin-bottom: 0; width: calc(100% + 32px); }
+  .brand-block::after { content: ''; position: absolute; inset: 0 0 0 auto; width: 120px; background: linear-gradient(130deg, transparent 40%, #C084FC 41% 52%, #A3E635 53% 65%, var(--app-bg) 66%); pointer-events: none; }
+  .brand { font-size: 22px; }
+  .nav { flex-direction: row; flex-wrap: wrap; gap: 4px; margin-top: 12px; overflow: visible; }
+  .nav a { min-height: 40px; padding: 8px 10px; font-size: 14px; gap: 6px; }
+  .nav-caption, .sidebar-note { display: none; }
+  .workspace { margin-left: 0; }
+  .workspace-header { height: auto; min-height: 58px; padding: 8px 16px; justify-content: flex-end; }
+  .workspace-header::before { display: none; }
+  .header-tools { gap: 14px; margin-left: 0; }
+  .content { padding: 22px 18px 36px; border-radius: 24px 24px 0 0; }
+  .demo-banner { margin: 0 16px 12px; }
+  .page-title { gap: 12px; flex-wrap: wrap; }
+  .page-title-text { flex: 1 1 200px; }
+  .page-title-text h1, .sub-title h1 { font-size: 28px; }
+  .page-title-text .page-sub { font-size: 16px; }
+  .page-title-right { width: 100%; margin-left: 0; }
+  .date-control { justify-content: flex-start; flex-wrap: wrap; }
+  .date-button { min-width: 190px; }
+  .hero { padding: 24px 20px; gap: 20px; grid-template-columns: auto auto; justify-content: space-around; }
+  .hero-center { grid-column: 1 / -1; order: -1; }
+  .hero .team-logo { width: 86px !important; height: 86px !important; }
+  .hero-matchup { font-size: 25px; }
+  .hero-time { font-size: 16px; }
+  .two-col { grid-template-columns: 1fr; }
+  .today-controls .confidence-filter { flex-basis: 100%; }
+  .today-controls .market-select, .today-controls .market-select label { width: auto; }
   .tab-row .segmented { flex: 1 1 100%; }
-  .segmented:not(.sport-toggle) button, .tab-row .segmented button { padding: 0 14px; font-size: 16px; min-height: 44px; }
+  .matchup-strip-text { flex-basis: 200px; }
+  .matchup-strip-text strong { font-size: 20px; }
+  .matchup-strip-logos .team-logo { width: 60px !important; height: 60px !important; }
+  .app-footer { flex-wrap: wrap; padding: 18px; font-size: 12px; }
+}
+@media (max-width: 580px) {
+  .game-grid, .metrics.kpi { grid-template-columns: 1fr; }
+  .forecast-metrics { gap: 12px; }
+  .forecast-metrics .metric-card { display: flex; flex-direction: column; padding: 16px; }
+  .forecast-metrics .metric-label { font-size: 15px; }
+  .forecast-metrics .metric-icon .icon { width: 28px; height: 28px; }
+  .forecast-metrics .metric-value { font-size: 22px; }
+  .today-controls { gap: 20px; }
+  .header-tools { width: 100%; justify-content: space-between; gap: 8px; }
+  .sport-toggle button { padding: 0 14px; font-size: 14px; }
+  .preview-pill { font-size: 13px; }
+  .matchup-strip { padding: 16px; gap: 12px; }
+  .matchup-strip .page-title-icon { width: 42px; height: 42px; }
+  .matchup-strip-logos { width: 100%; justify-content: center; }
+}
+
+.date-button:focus-within { outline: 2px solid var(--accent-lavender); outline-offset: 3px; }
+
+@media (max-width: 580px) { .tab-row .run-toggle button { font-size: 14px; padding-inline: 12px; } }
+@media (max-width: 800px) {
+  .market-select, .market-select label { min-width: 0; max-width: 100%; }
+  .today-controls .market-select, .today-controls .market-select label { width: 100%; }
+  .market-select select { min-width: 0; max-width: 100%; flex: 1; }
+}
+
+/* NFL (data-only screens, pages/NflPages.tsx): reuse the shared cards; only the two-column detail grid, the notice and the
+   capability list are new. Winner emphasis is weight only, so no colour implies a forecast. */
+.nfl-notice { margin: 0 0 1rem; line-height: 1.5; }
+.nfl-notice > summary { cursor: pointer; list-style: none; }
+.nfl-notice > summary::-webkit-details-marker { display: none; }
+.nfl-notice[open] > summary .link-btn { display: none; }
+.nfl-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+.nfl-detail-grid > .card { margin: 0; }
+.nfl-capabilities { margin: 0.75rem 0 0; padding-left: 1.1rem; display: grid; gap: 0.35rem; }
+.team-line.is-winner strong, .team-line.is-winner b { font-weight: 700; }
+.date-step:disabled { opacity: 0.4; cursor: not-allowed; }
+@media (max-width: 760px) {
+  .nfl-detail-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Data freshness bar (docs/REFRESH_PLAN.md): source, copy and forecast times, next check, stale/failed state. */
+.freshness-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: 0 30px 12px; padding: 8px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--muted); font-size: 12.5px; }
+.freshness-bar.is-warn { border-color: var(--warn); }
+.freshness-mode { color: var(--text); font-weight: 650; }
+.freshness-label { color: var(--muted); }
+.freshness-item { color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.freshness-item.is-warn { color: var(--warn); }
+.freshness-flag { color: var(--warn); font-weight: 600; }
+.freshness-note { display: inline-flex; align-items: center; gap: 6px; }
+.freshness-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-lavender); animation: freshness-pulse 1.2s ease-in-out infinite; }
+@keyframes freshness-pulse { 50% { opacity: .35; } }
+@media (max-width: 800px) { .freshness-bar { margin-inline: 16px; gap: 4px 12px; } }
+
+/* Larger type (user request 2026-11-01, restored after the reference finish shrank it). Sizes are the ones the user
+   approved; the sidebar is widened so the nav labels stay on one line. Keep this block last. */
+:root { --sidebar-width: 288px; }
+.brand-sub { font-size: 10px; }
+.breadcrumb { font-size: 15px; }
+.nav a, .nav-caption { font-size: 19px; }
+@media (min-width: 801px) { .nav a { white-space: nowrap; } }
+.sidebar-note .league-mark { font-size: 15px; }
+.sidebar-note strong { font-size: 17px; }
+.sport-toggle button, .preview-pill { font-size: 17px; }
+.demo-banner { font-size: 15px; }
+.freshness-bar { font-size: 15px; }
+.app-footer { font-size: 15px; }
+.page-title-text h1, .sub-title h1 { font-size: clamp(30px, 2.4vw, 38px); }
+.page-title-text .page-sub { font-size: 19px; }
+.date-button, .date-chip { font-size: 18px; }
+.hero-matchup { font-size: clamp(26px, 2.2vw, 36px); }
+.hero-time { font-size: 19px; }
+.league-chip { font-size: 16px; }
+.segmented:not(.sport-toggle) button, .tab-row .segmented button { font-size: 18px; }
+.market-select label, .market-select .confidence-filter-label, .market-select select { font-size: 18px; }
+.confidence-filter-label { font-size: 16px; }
+.confidence-filter .segmented button, .today-controls .confidence-filter .segmented button { font-size: 17px; padding: 0 11px; }
+.game-time { font-size: 19px; }
+.team-line strong { font-size: 19px; }
+.team-line > div > span { font-size: 18px; }
+.game-card .forecast-note { font-size: 17px; }
+.card-bottom, .card-bottom .book-lines, .card-bottom .matchup-link { font-size: 18px; }
+.book-lines .muted, .quote-time, .selection-count, .sample-chip, .table thead th { font-size: 15px; }
+.badge, .legacy-tag, .card-section-label, .skill-chip { font-size: 13.5px; }
+.forecast-metrics .metric-label { font-size: 19px; }
+.forecast-metrics .metric-value { font-size: 27px; }
+.forecast-metrics .metric-hint { font-size: 17px; }
+.kpi .metric-label { font-size: 19px; }
+.kpi .metric-value { font-size: 48px; }
+.kpi .metric-hint { font-size: 17px; }
+.two-col .card h2, .sub-page .card h2 { font-size: 24px; }
+.two-col .card > p.small, .two-col .table th[scope='row'], .two-col .table td,
+.two-col .table tbody tr.row-model > th, .two-col .table tbody tr.row-model > td { font-size: 18px; }
+.two-col .table thead th { font-size: 15px; }
+.matchup-strip-text strong { font-size: 26px; }
+.sub-page .card > .forecast-note, .sub-page .card > p.small, .sub-page .facts, .sub-page .table.compare thead th,
+.sub-page .table.compare tbody th, .sub-page .table.compare td.muted { font-size: 18px; }
+.sub-page .table.compare tbody td { font-size: 20px; }
+code.wrap { font-size: 13px; }
+@media (max-width: 1200px) {
+  :root { --sidebar-width: 256px; }
+  .nav a, .nav-caption { font-size: 17px; }
+}
+@media (max-width: 800px) {
+  .nav a { font-size: 16px; }
+  .page-title-text h1, .sub-title h1 { font-size: 30px; }
+  .page-title-text .page-sub { font-size: 17px; }
+  .hero-matchup { font-size: 27px; }
+  .app-footer { font-size: 14px; }
+}
+@media (max-width: 580px) {
+  .forecast-metrics .metric-label { font-size: 17px; }
+  .forecast-metrics .metric-value { font-size: 24px; }
+  .sport-toggle button { font-size: 15px; }
+  .preview-pill { font-size: 15px; }
+  .tab-row .run-toggle button, .segmented:not(.sport-toggle) button { font-size: 16px; }
+}
+
+/* Dark-mode and phone fixes (2026-11-01 check): the selected threshold chip keeps its lime fill in dark mode (the dark
+   chip rule was more specific), the research "?" help toggles get readable contrast, and the "Real data" popover stays
+   inside a phone screen. */
+:root[data-theme='dark'] .confidence-filter .segmented button[aria-pressed='true'] { background: var(--accent-lime); border-color: var(--accent-lime); color: var(--on-accent); }
+:root[data-theme='dark'] .help summary, :root[data-theme='dark'] .sub-page .help summary { background: #2E2A66; border: 1px solid var(--border-lavender); color: #E9D5FF; }
+@media (max-width: 580px) {
+  .header-tools { position: relative; }
+  .source-pop { position: static; }
+  .source-pop-panel { left: 0; right: 0; width: auto; }
+}
+
+/* Sport display typography; data and small text retain Inter. */
+h1,h2,h3,.hero-matchup,.metric-value,.tile-value,.brand { font-family:'Barlow Condensed','Inter',sans-serif; font-weight:700; }
+
+/* Soccer competition picker (header, next to the league toggle). */
+.competition-select select { min-height: 42px; padding: 0 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); font-weight: 600; }
+@media (max-width: 800px) {
+  .header-tools.has-competition { flex-wrap: wrap; }
+  .header-tools.has-competition .competition-select { order: 10; flex: 1 1 100%; }
+  .header-tools.has-competition .competition-select select { width: 100%; }
 }

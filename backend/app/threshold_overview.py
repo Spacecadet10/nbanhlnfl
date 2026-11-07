@@ -25,6 +25,8 @@ A higher win rate is not a better bet: a 75%+ pick is usually priced near 75% by
 is the comparison that bears on value; history has no bookmaker prices.
 """
 import math
+from collections import Counter
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Callable, Optional
 
 MIN_HISTORY_PICKS = 200
@@ -59,6 +61,56 @@ def wilson(w: int, n: int, z: float = 1.959964) -> Optional[list]:
     c = (p + z * z / (2 * n)) / d
     h = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
     return [max(0.0, c - h), min(1.0, c + h)]
+
+
+def displayed_percentage(probability: float) -> str:
+    """Match the card's JavaScript (p * 100).toFixed(1), including binary-float ties."""
+    return str(Decimal.from_float(probability * 100).quantize(Decimal('0.1'), rounding=ROUND_HALF_UP))
+
+
+def _percentage_key(rec: dict) -> tuple:
+    return (displayed_percentage(rec['confidence']), rec['side'], rec['source'], rec['model_version'], rec['line_source'])
+
+
+def percentage_index(items: list, as_of: str) -> dict:
+    """Index one sport/market's canonical competitive cohort, never historical/recovered/demo records.
+
+    The caller supplies the existing canonical cohort. Retain non-decisive grades outside the W/L denominator.
+    This is a current descriptive record, not evidence available when an older forecast was issued.
+    """
+    out: dict = {}
+    for g, c in items:
+        if c['state'] != 'forecast':
+            continue
+        rec = c['record']
+        if not rec['generated_at'] < rec['start_at'] or not rec['generated_at'] < g['tipoff_at']:
+            continue
+        grade = c['grade']
+        if grade in ('win', 'loss', 'push') and (not g['result_available_at'] or g['result_available_at'] > as_of):
+            grade = 'not_yet_available'
+        out.setdefault(_percentage_key(rec), {})[g['game_id']] = grade
+    return out
+
+
+def percentage_record(sport: str, market: str, rec: dict, game_id: str, index: dict, as_of: str) -> dict:
+    """Exact displayed percentage and direction, same model/source and line provenance; exclude this game.
+
+    Deliberately no fallback to a range, cumulative threshold, other direction, version, or historical study.
+    """
+    from . import markets
+    grades = Counter(grade for gid, grade in index.get(_percentage_key(rec), {}).items() if gid != game_id)
+    wins, losses = grades['win'], grades['loss']
+    settled = wins + losses
+    state = ('no_history' if not settled else 'neutral' if wins == losses else
+             'more_right' if wins > losses else 'more_wrong')
+    return {'sport': sport, 'market': market, 'market_title': markets.spec(sport, market).title,
+            'percentage': displayed_percentage(rec['confidence']), 'side': rec['side'],
+            'direction': markets.SIDE_LABELS[market][('a', 'mid', 'b').index(rec['side'])],
+            'source': rec['source'], 'model_version': rec['model_version'], 'line_source': rec['line_source'],
+            'state': state, 'wins': wins, 'losses': losses, 'settled': settled,
+            'win_rate': wins / settled if settled else None, 'loss_rate': losses / settled if settled else None,
+            'ci95': wilson(wins, settled), 'small_sample': settled < MIN_LIVE_GRADED,
+            'excluded': {k: v for k, v in grades.items() if k not in ('win', 'loss')}, 'as_of': as_of}
 
 
 def calibration_state(rate: Optional[float], ci: Optional[list], stated: Optional[float], n: int, min_n: int) -> str:

@@ -20,8 +20,8 @@ from .. import config
 from ..db import utc_now
 
 VERSION = "espn-odds-history-1"
-LEAGUE = {"nba": "basketball/nba", "nhl": "hockey/nhl"}               # site API path (scoreboard)
-CORE = {"nba": "basketball/leagues/nba", "nhl": "hockey/leagues/nhl"}  # core API path (odds)
+LEAGUE = {"nba": "basketball/nba", "nhl": "hockey/nhl", "nfl": "football/nfl"}               # site API path (scoreboard)
+CORE = {"nba": "basketball/leagues/nba", "nhl": "hockey/leagues/nhl", "nfl": "football/leagues/nfl"}  # core API path (odds)
 ODDS_URL = "https://sports.core.api.espn.com/v2/sports/{league}/events/{id}/competitions/{id}/odds"
 SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/{league}/scoreboard"
 OVERROUND = (1.0, 1.12)       # a two-way line whose implied probabilities sum outside this is stale, live or mislabelled
@@ -29,6 +29,7 @@ NOT_BOOKS = ("live", "accuscore", "numberfire", "consensus", "teamrankings", "be
 # aggregate (it would double-count the books) and projection/rating sites are not bookmaker lines; matched by name
 # because provider ids differ between sports
 BOUNDS = {"nba": {"spread": 30, "total": (150, 300)}, "nhl": {"spread": 4, "total": (3, 10)},
+          "nfl": {"spread": 30, "total": (20, 80)},
           None: {"spread": 30, "total": (1, 400)}}   # a value outside is a price written into the line field
 OUTLIER = 0.15     # a book whose de-vigged probability is this far from the median of the other books (3+) is left out
 

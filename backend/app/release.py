@@ -23,7 +23,7 @@ GUARD_ENV = "NBA_RELEASE_GUARD"
 ROOT_ENV = "NBA_RELEASE_ROOT"
 COMMIT_ENV = "NBA_RELEASE_COMMIT"
 # Scheduled commands and the job_runs name a refusal is recorded under (job_runs.job has a fixed set of names).
-GUARDED = {"odds": "odds", "daily": "refresh", "refresh": "refresh", "injuries": "injuries", "score": "score",
+GUARDED = {"odds": "odds", "tick": "odds", "daily": "refresh", "refresh": "refresh", "injuries": "injuries", "score": "score",
            "predict-now": "near_tipoff", "predict": "near_tipoff", "markets": "markets", "boxscores": "boxscores"}
 
 

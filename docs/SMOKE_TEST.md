@@ -1434,3 +1434,308 @@ small bands are noise. No model, API or data change.
   `/tmp/reposition-mobile.png`.
 - Not run: `check_project.py --ready` (full backend suite; no backend change), manual walkthrough, deployment
   (`127.0.0.1:4173` still serves `~/nba-predictor-live`).
+
+## Reference redesign review — Codex, 2026-11-01 (local only)
+- Compared the two user attachments (palette and four-screen Courtside reference) with the running implementation. Revised the existing shell, cards, hero, controls and responsive rules; added generated decorative assets, NBA logo aliases, per-sport dashboard history, safe sport switching from game routes, scroll reset and an outage Reconnect button. No backend/model/data contract changes.
+- API/demo: `NBA_API_MODE=demo NBA_DATA_DIR=/tmp/courtside-design-review backend/.venv/bin/python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8831`; web from frontend/: `API_PROXY_TARGET=http://127.0.0.1:8831 npm run dev -- --host 127.0.0.1 --port 5193 --strictPort`.
+- Real-data layout preview: copied the existing **Oct 10 development snapshots**, migrated only `/tmp/courtside-redesign-data/{nba,nhl}.sqlite`, preserved SNAPSHOT_AT `2026-10-10T20:07:37Z`. NBA used SQLite read-only backup; NHL used a file copy after asserting no source WAL, with copied-store integrity_check `ok`. Live store backups failed twice with `sqlite3.OperationalError: unable to open database file`; live stores were not migrated or written.
+- API: `NBA_API_MODE=real NBA_DATA_DIR=/tmp/courtside-redesign-data NBA_LIVE_DATA_DIR=/tmp/courtside-redesign-data backend/.venv/bin/python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8832`; web from frontend/: `API_PROXY_TARGET=http://127.0.0.1:8832 npm run dev -- --host 127.0.0.1 --port 5194 --strictPort`. Initial sandbox port binds returned EPERM; local servers started with approved escalation.
+- Browser: in-app browser at **1440×900** and **390×844**. Inspected NBA Today `/`, dashboard `/games/espn:401909896`, Research Details `?tab=research`, Performance `/performance`; also NHL Today and `/games/nhl:2026020227?sport=nhl`. NBA arena/athlete/ball are absent on NHL. Real snapshot labels remain visible; missing forecasts/odds remain missing. Phone document scrollWidth equals 390 on dashboard, research, performance, Today, History, Daily Learning and Demo Today after fixing the demo selector's intrinsic-width overflow.
+- Flows: game-card navigation → dashboard → Research Details → dashboard; Performance, History and Daily Learning links; threshold 70% produces `conf=70` and pressed 70% button; selecting spread resets threshold; previous day updates `date=2026-10-30`; sport switch resets league-specific filters; changing sport from an NHL matchup returns to NBA `/` rather than requesting the NHL identifier from NBA. Empty `/?date=2000-01-01` shows no games and a return button. Loading state observed while real responses arrive.
+- Outage: stopped only the test demo API, reloaded :5193, verified visible API error and Try again (no fixture fallback); restored API and confirmed page-level retry loads demo games. Added Reconnect because the shell health warning otherwise stayed stale, then repeated the outage, restored API and verified Reconnect clears alerts and restores Demo workspace/banner. Native calendar popup selection is unverified (automation fill did not commit); previous-day button and date URLs were verified.
+- Appearance: inspected light four-screen layout at desktop and phone; dark desktop Performance; high-contrast logo discs on NBA/NHL hero. Screenshots: `/tmp/courtside-redesign-smoke/{dashboard,research,performance}-desktop.jpg`, corresponding `-phone.jpg`, `today-phone.jpg`, `demo-phone.jpg`, `performance-dark.jpg`, `nhl-dashboard-{desktop,phone}.jpg`, `history-phone.jpg`, `daily-phone.jpg`. Some early desktop screenshots precede the snapshot banner and final white logo discs; final captures supersede them where present.
+- Automated: frontend typecheck/build passed during implementation; build emits its existing >500 kB JS chunk warning. `python3 scripts/check_project.py` and `git diff --check` passed. Final build and full readiness results will be recorded below when complete.
+- Full readiness started: `OMP_NUM_THREADS=2 LOKY_MAX_CPU_COUNT=2 NBA_DATA_DIR=/tmp/courtside-redesign-readiness NBA_LIVE_DATA_DIR=/tmp/courtside-redesign-readiness /Users/andry/nba-predictor-deep/backend/.venv/bin/python scripts/check_project.py --ready > /tmp/courtside-redesign-readiness.log 2>&1`. Frontend gates passed; backend suite still running at this entry. No release/deployment, push or real-data model training requested or performed. Tests may fit synthetic fixtures. Training status in this preview reads the isolated copy, despite the existing development banner's generic live-system wording.
+
+- Final frontend verification: `npm --prefix frontend run build` → exit 0 (typecheck + build, 555 ms on the first final run; later final rebuild also passed); structure guard and whitespace check passed. Follow-up inspected dark dashboard at desktop/phone (390px document width), fixed hero image sizing to cover and mobile ribbon theme color, and captured the final desktop dashboard. Full readiness remains running with backend failures observed; it is not a pass.
+
+### Readiness diagnosis / native date follow-up
+- Original full readiness exited 1: **1420 passed, 18 failed, 33 errors, 1 warning in 1608.93s**. Failures/errors are in test_autoresearch, test_research_agent, test_research_status; tracebacks show `sandbox-exec: sandbox_apply: Operation not permitted`, dependent setup assertions (`crash` rather than `keep`), missing sandbox-created output, and a denied `ps` subprocess. Backend source/tests remain unchanged. Raw log: `/tmp/courtside-redesign-readiness.log`. This run is a failure, not a readiness pass.
+- Re-running those three modules with approved execution outside Codex's sandbox, retaining their own app sandbox profiles; log `/tmp/courtside-redesign-process-tests.log`. No test assertions, skips or application safety guards changed.
+- Browser binding recovered after a tool-session refresh. Native calendar now verified at the default desktop viewport: opened the date-picker popup, Right then Return changed NHL Nov 1 to Nov 2, URL became `/?sport=nhl&date=2026-11-02`, and the date label and API-backed four-game slate updated. Screenshot `/tmp/courtside-redesign-smoke/calendar-selected.jpg`. This supersedes the earlier native-calendar gap.
+
+### Final result
+- Approved process-test rerun command (from backend/): `OMP_NUM_THREADS=2 LOKY_MAX_CPU_COUNT=2 NBA_DATA_DIR=/tmp/courtside-redesign-readiness NBA_LIVE_DATA_DIR=/tmp/courtside-redesign-readiness /Users/andry/nba-predictor-deep/backend/.venv/bin/python -m pytest tests/test_autoresearch.py tests/test_research_agent.py tests/test_research_status.py -q` → **107 passed, 1 warning in 182.05s**. Log `/tmp/courtside-redesign-process-tests.log`. All 51 original failed/error cases belong to these modules and are covered by this passing rerun; the first full execution also passed 1420 tests. No tests or safety profiles were changed, deleted or skipped to clear failures. This is combined full-run plus affected-module verification, not a claimed single unrestricted full-suite pass.
+- Completed reference audit: palette tokens, compact sidebar/header, three-column desktop slate and forecast metrics, NBA arena/athlete/ball decoration, real team logos, Performance KPI/report hierarchy and Research Details layout inspected in rendered screens. API-backed values, missing forecasts/odds, Demo labels and NBA/NHL separation preserved. Backend diff is empty. No further source changes after the final passing frontend build. Final dashboard screenshot refreshed and browser left on the NBA dashboard; viewport override reset.
+- Implementation and local verification complete. Independent review remains the next acceptance step; nothing was pushed or released. Preview data is an older development snapshot, not a current forecast service.
+
+## NFL data-only UI + live-health check + preview refresh — Claude (Opus 5.5, session 2994a49e), 2026-11-01 ~18:15–18:45Z
+- **Live health (read-only, `PRAGMA query_only` on `data/{nba,nhl}.sqlite`; launchd jobs from `~/nba-predictor-live`, release 18fa0bf):**
+  NBA odds/two-hour cycle every ~15 min, all `success` (runs 5044–5055, 16:14–18:09Z); NHL cycle ~35 min, all `success` (2244–2257).
+  The 1 p.m. ET NHL game WPG @ CAR (`nhl:2026020227`, 18:00Z) has two-hour forecasts recorded 16:14–16:29Z (predictions 6,
+  near_tipoff 1, market 15, adaptive 12, game_forecasts 6); live API `:8100/api/games?sport=nhl&date=2026-11-01&policy=canonical`
+  → `with_forecast: 1`, other 4 `upcoming`. NBA games start 20:30Z; forecasts are two-hour only, none due yet. Not backdated, nothing written.
+  The NHL game still showed `scheduled` after the 18:19:53Z refresh because the NHL stats feed itself returned `gameStateId 2` (pre-game),
+  period 1, 0–0 for it (raw fetch 17165); status turns `in_progress` only on states 3–5. Source timing, not a job failure.
+- **Why :5194 looked stale:** its API (:8832, started inside the Codex sandbox) read `/tmp/courtside-redesign-data`, an Oct 10 copy.
+  Codex's two live-backup failures were the sandbox: with the backend venv (SQLite 3.50) a `mode=ro` backup of the live WAL stores works
+  (it leaves empty `-wal`/`-shm` side files, main files unchanged: sizes/mtimes 199491584 @13:09, 247685120 @12:45). The system
+  `python3` (3.9) fails with `unable to open database file`. New regression test `test_dev_script.py::test_wal_mode_live_store_without_side_files_is_copied_and_left_unchanged`.
+- **Preview refreshed:** new dir `/tmp/courtside-preview-20261101` (SNAPSHOT_AT `2026-11-01T18:18:33Z`): read-only backup of both live stores,
+  APFS clones of research/raw/eval, `--sport nba|nhl migrate` on the copies only (0032 applied to copies), NFL store copied from the scratch
+  import + `nfl ingest --from 202610 --to 202612` into the copy. Stopped only PID 80658 (old :8832) and later my own 94141; API now
+  `NBA_API_MODE=real NBA_DATA_DIR=/tmp/courtside-preview-20261101 NBA_LIVE_DATA_DIR=<repo>/data backend/.venv/bin/python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8832`.
+  Vite :5194 (PID 80672) unchanged. `:5194/api/health` → `data_snapshot_at 2026-11-01T18:18:33Z`; NHL slate shows the 1 p.m. forecast.
+- **Browser (preview tab, 1440×900 and 390×844):** NFL Game day (12 games Nov 1: 8 in progress without invented scores, 4 scheduled),
+  matchup `nfl:401873024` and `nfl:401873009` (facts, forecast unavailable, earlier meetings, last results; checked against real results,
+  e.g. DAL 7–41 at PHI 2024-12-29, PHI 34–6 at DAL 2024-11-10), empty date 2026-11-04, error `/games/nfl:999` (404 + Try again),
+  NFL Performance/History/Daily Learning unavailable screens, NBA and NHL Game day, NHL Performance, History. Document overflow 0 px
+  on every one at 390 px. Dark theme NFL matchup at desktop. Light theme restored; tab closed. Screenshots under
+  `~/.t3/userdata/browser-artifacts/` (game day desktop, matchup dark). Demo mode NFL: covered by API test (404, honest message).
+- **Checks:** `pytest tests/test_api.py tests/test_nfl.py tests/test_nfl_api.py tests/test_dev_script.py tests/test_multisport.py tests/test_storage.py tests/test_live.py`
+  → 195 passed. First combined run failed 5 NFL API tests: `test_api.py` sets `app.dependency_overrides[api_mode] = demo` for the session;
+  fixed in the NFL test fixture as `test_api_research.py` does (no assertion changed). `npx tsc --noEmit` OK; `python3 scripts/check_project.py`
+  passed; `git diff --check` clean. `check_project.py --ready`: typecheck + build passed (existing >500 kB chunk warning); backend suite result below.
+- **Full readiness result:** `OMP_NUM_THREADS=4 backend/.venv/bin/python scripts/check_project.py --ready` → **exit 1**: structure guard,
+  typecheck and build passed; backend **1473 passed, 8 failed, 1 warning in 1168.14s**. All 8 failures are `tests/test_deep_study.py`
+  (torch/tensorflow are only in the deep venv; they also fail on the pre-NFL code, see the NFL A0 entry). Rerun of that file with
+  `/Users/andry/nba-predictor-deep/backend/.venv/bin/python -m pytest tests/test_deep_study.py -q` → **10 passed**. Log
+  `/tmp/courtside-preview-20261101/ready.log`. This is a full run plus an environment-specific rerun, not a single green run.
+
+## Freshness milestone (docs/REFRESH_PLAN.md) — Claude (Opus 5.5), 2026-11-01 ~19:05–19:40Z
+- Startup: `NBA_DEV_DATA_DIR=/tmp/courtside-fresh-20261101 API_PORT=8845 WEB_PORT=5195 sh scripts/dev.sh` → ready; publisher started
+  (`app.cli preview-publish --live <repo>/data --dev /tmp/courtside-fresh-20261101 --interval 60`). Live data read-only; :5194/:8832 untouched.
+- `/api/freshness?sport=nba|nhl` → `auto_snapshot`, NBA `pregame` (120 s), NHL `active` (60 s), both `stale` at 19:07Z (live data 28/18 min
+  old: launchd jobs still run at 15/30 min). `sport=nfl` → 503 "No NFL data store found" (no live NFL store).
+- No-reload update (headless Chrome over DevTools, `/tmp/claude-cdp/observe.py`, one page open on `?sport=nba`): live NBA refresh at
+  19:14 → publisher republished 19:14:31Z (reason: source time lag; 1.0 s) → bar changed within 5 s from "Data updated 1:39 PM … Source data
+  stale" to "Data updated 2:14 PM · Copy published 2:14 PM · Next check 2:15 PM", banner "last copy 2:14 PM"; page loads 1. Requests in
+  65 s: freshness 4, games 2, meta 4, ranked 4 (dev StrictMode doubles the initial effects); game views were not refetched because the
+  data revision did not change (lag-only republish). A revision-change refetch in the browser was not observed this session (covered by
+  code path + backend revision tests only).
+- Screenshots (headless Chrome): `/tmp/claude-fresh-smoke/{nba-desktop,nhl-desktop,nfl-desktop,nba-phone,nhl-phone500}.png`. Desktop bar
+  and banner render; at 500 px the bar wraps without overflow; the 390-px capture is a crop of Chrome's ≥500-px headless layout (not a
+  real phone check). NFL shows the 503 error card and a failed-check bar (true: no store).
+- Real `tick` on scratch `/tmp/claude-tick-20261101`: NHL dates refresh 1 request / 0.43 s; NBA dates refresh + due odds cycle 230 s.
+- Not verified: hidden-tab pause/resume and offline in a real browser (code path only), touch devices, dark theme of the bar.
+
+## Larger text restored, decorative images removed, dark/phone fixes, freshness 404 — Claude (Opus 5.5, session cb8787d2), 2026-11-01 ~19:35–20:00Z
+- Started only after the freshness thread had finished (T3 thread eafbd452 idle, its last run 19:35Z). Preview :5194 (vite, current tree) with
+  API :8832 on `/tmp/courtside-preview-20261101` (frozen copy, no publisher).
+- **Freshness 404:** `/api/freshness` returned 404 on :8832 because that API process (PID 1474, started 13:24 EST) predated the endpoint
+  (main.py edited 13:50 EST). Restarted it on the current code with the same environment (`NBA_API_MODE=real NBA_DATA_DIR=/tmp/courtside-preview-20261101
+  NBA_LIVE_DATA_DIR=<repo>/data backend/.venv/bin/python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8832`, new PID 62324,
+  log `/tmp/courtside-opus-check/api-8832.log`); about one minute of downtime. Now `GET /api/freshness?sport=nba|nhl|nfl` → 200 each, mode
+  `frozen_snapshot`, NBA/NHL `source_state: stale`, NFL `never` (true for this copy). The page shows "Frozen copy: will not update
+  automatically … Source data stale" instead of the 404; the failure is reported, not hidden. The live API :8100 also answers 404 (old
+  process, live — not touched; it needs a restart as part of a release).
+- **Browser (T3 preview, same-origin iframes, theme set via localStorage and restored afterwards):** 12 screens — NBA Game day, dashboard,
+  Research details, Performance, History, Daily learning; NHL Game day, dashboard, Performance; NFL games, NFL matchup, NFL Performance
+  (unavailable) — × light/dark × 1440/390 px = 48 loads. Automated per load: document overflow, elements past the viewport, clipped text,
+  WCAG contrast of every text node on solid backgrounds, decorative `<img>` count, nav label height, error alerts. Result: **0 problems in
+  all 48** (overflow 0, nothing clipped, no contrast below 4.5/3, no decorative images, nav labels one line at 1440, no alerts).
+  Text on gradients was checked by eye (dark dashboard, dark phone NBA/NHL/NFL).
+- **Before the fixes (same harness, 19:00Z):** dark Game day selected threshold chip contrast 1.07 (invisible), dark Research "?" 2.23,
+  phone "Real data" popover from −3 px; rendered sizes nav 16, team names 17, odds 14, tabs 15, chips 14, badges 12, brand line 8 px.
+  **After:** chip lime in dark (contrast passes), "?" passes, popover 16–374 px of 390 when opened; nav 19, team names 19, odds 18,
+  tabs 18, chips 17, page subtitles 19, KPI labels 19, brand line 10 px.
+- Screenshot after: `~/.t3/userdata/browser-artifacts/browser-screenshot-127-0-0-1-mvy8jg48-03ac818b.png` (dark: NHL phone with popover
+  open, Research details with "?"). Before: `…-mvy77b9l-9e517ddd.png` (dark Game day, invisible chip).
+- Not verified: a real phone/touch device; NFL with a live store (none exists).
+- Readiness: `backend/.venv/bin/python scripts/check_project.py --ready` → **exit 1**: structure guard, typecheck, build passed (existing >500 kB chunk warning); backend **1505 passed, 8 failed, 1 warning in 1776 s**; all 8 are `tests/test_deep_study.py` (torch/keras only in the deep venv); rerun `~/nba-predictor-deep/backend/.venv/bin/python -m pytest tests/test_deep_study.py -q` → **10 passed**. Log `/tmp/courtside-opus-check/ready.log`. A full run plus an environment rerun, not one green run.
+
+## Codex review fixes P1–P4 — Claude (Opus 5.5, session cb8787d2), 2026-11-01 ~20:15–20:45Z
+- Regressions first: `backend/.venv/bin/python -m pytest tests/test_freshness.py -q -k "leads_to_the_live or inside_the_live or odds_only or per_sport"`
+  → 5 failed before the fixes (DID NOT RAISE ×3; revision unchanged after an odds-only ingestion; NFL `auto_snapshot`); after → passed.
+- Related suites after the fixes: `pytest tests/test_freshness.py tests/test_dev_script.py tests/test_nfl_api.py tests/test_nfl.py tests/test_live.py tests/test_api.py -q`
+  → 181 passed, 1 warning. `npx tsc --noEmit` → OK. `sh -n scripts/dev.sh` OK; `dev.sh` test suite 94 passed using `backend/app/devpaths.py`.
+- Manual: `python - check-paths LIVE DEV MARK < backend/app/devpaths.py` on scratch dirs → "data directories are separate" exit 0; with
+  `dev/nba.sqlite` symlinked → "write target is a symlink" exit 1.
+- API :8832 restarted on this code (same env as before) → `/api/freshness?sport=nba|nfl` 200, both `frozen_snapshot`, own publish time.
+- Browser P2 (T3 preview on :5194, `window.fetch` patched in the page): forced revision change + `/api/games` 503 → 4 game cards stayed,
+  bar showed "Update failed (503: simulated outage); showing the last loaded data, retrying"; outage ended with the revision held fixed →
+  `/api/games` re-requested 30 s after the failure (20:16:45 → 20:17:15Z) and the warning cleared. Tab closed; theme untouched.
+- Full: `OMP_NUM_THREADS=4 backend/.venv/bin/python scripts/check_project.py --ready` → **exit 1**: structure guard, typecheck, build passed; backend **1511 passed, 8 failed, 1 warning in 1184 s**, all 8 `tests/test_deep_study.py` (torch/keras only in the deep venv); rerun `~/nba-predictor-deep/backend/.venv/bin/python -m pytest tests/test_deep_study.py -q` → **10 passed**. Log `/tmp/courtside-opus-check/ready2.log`. A full run plus an environment rerun, not one green run.
+
+## Focused Codex re-review — P1–P4, 2026-11-01
+- Reviewed shared publisher path guards, background error reporting/retry wiring, odds revision invalidation and per-sport publication metadata. No remaining blocking finding in these four fixes.
+- Independent: `backend/.venv/bin/python -m pytest backend/tests/test_freshness.py backend/tests/test_dev_script.py backend/tests/test_nfl_api.py backend/tests/test_nfl.py -q` → 144 passed, 1 warning, 29.42s; frontend typecheck, structure guard and whitespace check passed. Regressions preserve the source schema and reject unsafe destinations, change revision on an odds-only update, and distinguish NBA/NFL publication states/errors.
+- Browser outage/recovery and visual matrix remain author evidence above; not replayed in this focused code/test review. Full/deep suites not repeated. Read ready2.log: 1511 passed / 8 deep failures, exit 1; separate deep rerun remains author-reported. No claim of a single green full run, release readiness or installed scheduling. Only review documentation edited.
+
+
+## 2026-11-01 ~21:05Z — missing NBA forecast / preview recovery (Codex)
+- Compared `GET http://127.0.0.1:8100/api/games/espn%3A401909903?sport=nba` with :5194: live canonical #779 existed, frozen 13:18 EST preview lacked it. Record timestamp 18:59:17Z = 13:59:17 EST, before 15:30 EST tipoff. No predictions regenerated.
+- Started existing launcher with `NBA_DEV_DATA_DIR=/tmp/courtside-active-preview-20261101 API_PORT=8832 WEB_PORT=5194 sh scripts/dev.sh` (detached PID 7934; log `/tmp/courtside-active-preview-20261101.launcher.log`). Preview now serves fresh copies, checked for publication every 60 s. Publisher log confirms initial NBA/NHL publication then successful checks at 21:03:58Z and 21:04:58Z; status last_error null.
+- Preserved scratch-only NFL SQLite/raw data from old preview into new guarded development directory; NFL identity and quick_check passed, `/api/nfl/meta` HTTP 200. Live data/ lacks NFL: launcher restart rebuilds scratch stores, so save/restore this NFL scratch data on restart; do not write it into live data/.
+- Browser URL `http://127.0.0.1:5194/games/espn%3A401909903?conf=70`: desktop 1440×900 and phone 390×844 display Boston–Orlando in progress, BOS 55.5%, spread and three totals; canonical table populated. Phone document/viewport width both 390. Screenshot `/tmp/courtside-bos-orl-fixed.png`, phone `/tmp/courtside-bos-orl-phone.png`. Temporary viewport reset. NHL Game Day also showed existing forecasts. No navigation/source changes.
+- `python3 scripts/check_project.py` passed. Full readiness not rerun; this is an operational preview fix, not overall readiness certification. Live source timestamps still old enough to display Source data stale: old live refresh cadence remains, no tick job installed. No commit/deploy/live migrations or training.
+
+
+## 2026-11-01 — market/threshold matchup records (Codex)
+- Classification by threshold AND market, then all sports. Reused existing canonicalThresholds API/useApi and ThresholdOverview types; added ForecastThresholdRecord in existing component. NBA/NHL each recorded matchup market now shows highest reporting threshold reached, cumulative live win/loss/rate/count, small-sample note, explicit live-season provenance. One request per sport/revision, loading/error/retry/unavailable states. Historical and live evidence remain separate; no new model judgment or ranking/forecast selection changes.
+- Renamed matchup-only broad “No proven skill” chip to “Market edge unproven” with explicit bookmaker-edge tooltip; observed threshold records appear independently. Existing Performance market ladders unchanged. NFL matchup and unavailable performance/history/research screens have an explicit “No recorded NFL forecasts to classify by market and threshold” section, using existing API capability reason; no generic NFL model/API activation or invented numbers.
+- Files: frontend/src/components/ThresholdOverview.tsx, frontend/src/pages/GamePage.tsx, frontend/src/pages/NflPages.tsx. Preserved pre-existing edits. Actual checks: npm --prefix frontend run typecheck PASS; npm --prefix frontend run build PASS (existing >500kB chunk warning); python3 scripts/check_project.py PASS. No backend changes, migrations, model runs, full readiness rerun, commit or release.
+- Browser :5194 Boston–Orlando: winner55%+ 42–27/60.9%/69; spread60%+10–11/47.6%/21 small sample, markets separate. NBA desktop1440×1000 + phone390×844 (scroll width390). NHL Jets–Hurricanes phone shows winner65%+6–2 and puckline55%+50–33, plus reg3/totals separated. NFL401873024 empty state verified desktop/phone; phone scroll width390. Temporary viewport reset. Screenshot /tmp/courtside-market-threshold-desktop.png. Error/empty code paths inspected; network-error UI not forced. Dark-mode-specific check not repeated.
+- Next: separate focused review of these UI changes; full readiness still not certified. Source refresh rollout remains outstanding and unrelated. NFL forecast serving remains unavailable.
+
+
+## 2026-11-01 16:21–16:25 EST — Carolina final recovery / scheduled refresh preparation
+- Requested fixing the delayed final. Ran released CLI from /Users/andry/nba-predictor-live/backend with NBA_DATA_DIR pointing to repository data/, NBA_RELEASE_GUARD=1 and NBA_RELEASE_ROOT set: `.../.venv/bin/python -m app.cli --sport nhl refresh --force`. Success run2280, one request, season2027, fetch17182, 1409 games seen, 2 updated; release18fa0bf unchanged. Normal importer wrote actual observation times; no score/forecast manually edited or schema migrated.
+- Verified both live :8100 and preview :5194: game nhl:2026020227 final, CAR7/WPG0, original canonical winner#738 win; reg3 win; spread/total/both team totals loss. Automatic publisher carried result into preview; browser existing NHL tab showed final and all grades. Winner65%+ threshold updated7–2 (77.8%,9 settled). Screenshot /tmp/courtside-carolina-final.png. No frontend changes this task. Separate `score` command was queued behind scheduled NHL odds; canceled ONLY our redundant PID21255, before it ran; canonical grades already available from imported outcome, not a successful score-command claim.
+- Recurrence fix PREPARED, NOT INSTALLED: scripts/launchd/com.nba-predictor.odds.plist and nhl-odds.plist now call `tick`, StartInterval60, retaining same labels/logs, clean pinned release path, release guard and existing environment. Coordinator applies active/pregame/idle cadence and bounded retries; not forced full-season refresh every minute. No duplicate launchd jobs created or installed.
+- Actual checks: plistlib parse/inspection passed, structure guard passed, test_freshness.py + test_release_guard.py 35 passed, 1 existing warning (1.59s). First pytest invocation referenced nonexistent test_release.py and ran zero tests; corrected filename then passed. No full readiness rerun or claim.
+- Remaining blocker for lasting fix: pinned release18fa0bf does NOT contain tick, development branch includes schema0032 and unrelated unreviewed snapshot/NFL evaluation/UI work. Installing these plists now would fail; disabling release guard or running dirty development code on live is not a rollout. Next task: prepare scoped reviewed refresh release from pinned base (coordinator + date adapters + necessary tests, preserving model policy/schema compatibility), independent review per project rule, then promote and replace the existing odds jobs with these templates; verify two unattended cycles and rollback. User's fix request supplies rollout intent; no need to ask again merely for authorization. Current game fixed; recurring ingestion rollout remains incomplete. No NFL activation, training, live migration, release promotion, commit or push.
+
+
+## Independent remaining-check audit — Codex, 2026-11-01 ~20:02–20:04 EST; observation incomplete
+- Read-only current state at01:02Z: NBA marked full cycles00:42:55/00:57:56 (901s apart); second near_tipoff5188 still running, so odds row finished does NOT establish complete second tick. NHL only first full cycle00:42:55, second due~01:13Z. Completed compact tick log confirms first full ticks returned; successful focused ticks then run~61s apart. No lock_busy/refusal rows since activation. Both refresh streams have zero failed refreshes in observation.
+- Latest broad successes NBA00:31:41 and NHL00:23:17 (prior to activation): an hourly broad verification needs observation through~01:32Z, beyond proposed01:22Z check. No broad refresh by new release yet observed; do not force one and label it unattended.
+- New NBA final espn:401909904 observed at00:52:53Z, result98–90 away, observed_retrieval availability timestamp. This proves real final ingestion after activation, NOT actual end-of-game-to-display lag without source finish time. No new NHL final in this interval.
+- Pause confirmed: first full cycles start00:42:55; next successful fast refresh NBA00:52:53/NHL00:55:01, gaps~10/~12min. Long same-job forecast work prevents minute refresh ticks until completion. This is not continuous minute-level refresh.
+- Preview API01:02:32: NBA source00:57:56/copy00:58:58 fresh; NHL source00:55:02/copy00:55:50 stale despite live NHL refreshing through01:02:06. Publisher healthy/no errors, configured max_lag600s; unchanged NHL revision can leave copied freshness heartbeat10min behind. A stale preview banner here is not live ingestion failure. Changed data revisions publish promptly; no publisher edits during verification.
+- Independent preactivation confirmation: NBA near_tipoff5166(00:31:42),5158(00:01:02) already had availability_two_hour Invalid player minutes; current error predates activation. Rollback dry-run passed per activating session's report, not rerun by this audit. No live/source/job changes or tests triggered. Remaining: complete second full ticks, unattended hourly broad refreshes, idle-no-work evidence when actually idle, final preview check. NFL untouched.
+
+## Refresh release 7a83e27 activation (2026-11-02 00:42–01:36Z, live, read-only verification)
+- Live checkout `~/nba-predictor-live` fast-forwarded 18fa0bf → 7a83e27 (clean); `release-check` nba/nhl → schema 31/31, problems []; odds/nhl-odds launchd jobs run `tick` every 60 s.
+- Observed unattended: NBA cycles every 15 min (4), NHL every 30 min (2); minute date refreshes succeeded throughout (NBA 18, NHL 42); hourly broad refresh (NBA 01:32:30, NHL 01:23:20); no lock_busy, refusal or refresh-failure rows.
+- Rollback dry run: 18fa0bf detached worktree `release-check` against live stores → problems []. Backups: `/Users/andry/nba-predictor-launchd-backup-20261101-refresh/` (checksums OK).
+- Known: NBA forecast runs `failed` from the research agreement step (`Invalid player minutes`, failing since 2026-10-24T20:11Z: ESPN "-"/"--" minutes for inactive coach's-decision players); minute refreshes pause during a cycle's forecast step (worst ≈14 min); preview copies of unchanged data may lag ~10 min.
+- Not run: frontend/browser checks (no frontend change in this release).
+
+
+## Refresh activation independently verified — Codex, 2026-11-01 21:26 EST
+- Live checkout clean at7a83e27. Read-only audit of00:42:00–01:36:59Z confirms FOUR completed NBA tick cycles (00:42:55,00:57:56,01:12:43,01:27:35) and TWO NHL cycles (00:42:55,01:13:12 log / marked odds01:13:13). Verified compact completion logs, not merely odds snapshot marks. Forecast cycle timing~15/30min preserved; NHL second forecast step skipped as not due.
+- Successful unattended broad refresh NBA01:32:30Z, NHL01:23:20Z. Window ending01:36:59Z contains19 NBA/43 NHL successful refresh rows plus4/2 skips, zero refresh failures; author's18/42 tally used an earlier endpoint. No busy-lock/refusal rows. At02:26:32Z preview both fresh, no publish errors (NBA source02:24:59/copy02:25:34; NHLsource02:24:17/copy02:24:32).
+- ACCEPTED OPERATIONAL LIMITATIONS, not error-free: all four NBA near_tipoff steps failed in the research agreement member with availability_two_hour Invalid player minutes (confirmed predates activation); primary forecasts unaffected per retained records. Completed forecast steps occupy the tick/store job~4–14min, pausing fast refreshes. Unchanged preview heartbeat may lag10min. Actual final-to-display latency and an idle-no-work interval were not independently measured in this active-game window; do not claim continuous1min updates or observed idle behaviour.
+- Earlier independent checks confirmed guards/schema31 and backup hashes. Old-release rollback dry-run passed per activating session; not rerun here after their temporary checkout was removed. No live writes, manual jobs, model runs, NFL access/activation or new tests in this verification. Next scoped fix: Invalid player minutes, then remove refresh pauses via separately reviewed design/release. Activation no longer pending; older candidate-status sections below are historical.
+
+## Release A a55c874 (box-score connection-failure retry) activation (2026-11-02 ~17:59Z, live)
+- `~/nba-predictor-live` 7a83e27 → a55c874; `release-check` nba/nhl → schema 31/31, problems [], definitions unchanged.
+- Guarded `app.cli --sport nba boxscores` → 13/13 previously given-up games fetched, complete lines, basis observed_retrieval, available from 17:59:28–17:59:42Z (no backdating).
+- Tick jobs reloaded; idle ticks exit 0. Full suite on a55c874: 1373 passed, 8 failed (test_deep_study only; same 8 fail on 7a83e27). Not run: browser checks (no frontend change).
+
+
+## Exact displayed-percentage card record — Codex, 2026-11-02
+- Scope: descriptive live canonical history only, sport → market → pick direction → displayed 0.1-point percentage, also matching source/model version and bookmaker/model/none line source. No cumulative fallback. Same market may contain different actual lines; labelled line provenance. Current record as of API read, NOT a reconstruction of what was known when an older forecast was made. API comparison excludes this game; card totals add its own canonical win/loss once it settles and explicitly say whether this game's result is included, plus a separate count of other settled examples. Small sample is separate from observed right/wrong/evenly-split tendency.
+- API/UI: `percentage_history` added to existing canonical responses and ranked picks. Backend recomputes from the current store per request; no persisted counters, new scheduler, ledger/schema migration, training or forecast changes. Existing 30s visible-page freshness checks refetch views on a data revision; existing publisher checks live copies every60s. Source ingestion and publisher delays still apply. No actual new live final arrived during this browser check; automatic refresh is verified by integration ingestion/revision assertions plus existing UI refresh wiring, not a measured live end-to-end latency.
+- Preview startup (repository root): `NBA_API_MODE=real NBA_DATA_DIR=/tmp/courtside-active-preview-20261101 NBA_LIVE_DATA_DIR=/Users/andry/nba-predictor-live/data PYTHONDONTWRITEBYTECODE=1 backend/.venv/bin/python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8841`; in frontend/: `API_PROXY_TARGET=http://127.0.0.1:8841 npm run dev -- --host 127.0.0.1 --port 5198 --strictPort`. Uses existing auto-published development copy, no live writes. Normal reproducible startup remains `sh scripts/dev.sh`; restart it to load the new API. Existing :8832/:5194 stack was not restarted or overwritten. Sandbox binds initially refused; approved local startup succeeded.
+- Focused checks: `cd backend && OMP_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_threshold_overview.py tests/test_canonical.py tests/test_canonical_markets.py` →47 passed/1 Starlette deprecation warning,28.19s. Covers exact rounding boundaries (also checked against Node toFixed), direction/version/source/line separation, own-game exclusion, future result timestamp/late forecast rejection, empty/equal/right/wrong states, result ingestion changing data revision and card counts across Today/Game/History/Ranked, repeated reads stable.
+- Independent current-API audit: `python3 /tmp/audit_percentage_cards.py` reads all11 markets with limit5000, checks returned totals and independently groups/excludes each target →981 histories reconcile (87×5 NBA,91×6 NHL). No duplicate counting or broader threshold substitution. Structure guard passed; whitespace check clean. Full readiness results recorded below when completed.
+- Browser: http://127.0.0.1:5198/games/espn%3A401909903?sport=nba and /games/nhl%3A2026020227?sport=nhl at1440×1000 and390×844; document widths equal viewport (1440/390). Correct five NBA and six NHL market names, Over/Under, home/away, model/bookmaker lines, sample counts and timestamp visible; no console warnings/errors before deliberate outage test. Default headlines use exact model percentage; broad ranking evidence remains separately named behind ranking details. Boston55.5% is only the game's own one win; zero OTHER settled matches, never59%.
+- Game Day: navigation + previous-day control; selected NHL Game total goals for2026-11-01. Observed more-right(55.4% under1–0), more-wrong(52.3% under0–1), evenly-split(54.4% under1–1), and empty examples visible. Nov2 upcoming games show not forecast yet; no fabricated history. Loading states observed during navigation. API8841 intentionally stopped only for error test →API NOT REACHABLE + Couldn't load data, no fallback numbers; restarted and Reconnect restored API-backed records. Temporary viewport reset. Demo-specific browser check not repeated (demo contract unchanged; canonical reporting not provided in demo).
+- Screenshots: /tmp/courtside-percentage-desktop.png, /tmp/courtside-percentage-phone.png, /tmp/courtside-percentage-nhl-phone.png, /tmp/courtside-percentage-nhl-desktop.png, /tmp/courtside-percentage-cards-final.png. Some initial images precede final wording clarification; updated Boston evidence captured separately. No deployment or independent Codex review claimed.
+- User follow-up correction: Boston55.5% has one matching win total (the card itself); zero other settled matches. Always display W/L counts including0/0; broader rank-history text removed from default headlines and explicitly named in expanded ranking details. Final card grid fits at390,847,1440px without overflow (narrow layouts use a full-width card). Final evidence: /tmp/courtside-boston-exact-percentage.jpg and /tmp/courtside-boston-exact-percentage-phone.jpg. The earlier cropped PNG was blank and is not evidence. Final `npm run build` passed (582ms Vite phase; existing >500kB bundle warning). Final structure guard and `git diff --check` passed.
+- Final follow-up supersedes the intermediate zero-count wording: BOS55.5% now reads **First example won; 1 win, 0 losses, 1 settled pick; includes this game's result; 0 other settled examples**. Before a game settles it adds no win/loss. Rates on the card use the displayed total; API comparison intervals still describe other games and are not shown as total intervals. Confirmed final wording in browser at390/847/1440px; the two final JPGs above were replaced with current evidence. Final frontend build passed (571ms Vite phase; existing bundle warning).
+- Final team-total verification after user spotted the inclusion issue: Orlando Over109.5 at50.7% shows1 win/1 loss (evenly split); Boston Over111.5 at51.5% shows0 wins/2 losses (more often wrong). Each includes this game and lists1 other settled example, with markets kept home/away separate. Screenshot /tmp/courtside-team-total-records.jpg.
+
+- Full readiness command completed FAILED (before final opposite-side follow-up):1499 passed,26 failed,33 errors,1 warning in1362.84s. Detailed log /tmp/courtside-percentage-ready.log. Autoresearch/research-agent trial subprocesses report sandbox-exec sandbox_apply Operation not permitted; research-status ps denied; deep-study Torch/Keras dependencies absent; research-agent file/path case also failed. First autoresearch failure reproduced alone →KeyError markets from absent trial output, /tmp/courtside-percentage-readiness-first-failure.log. No checks skipped or assertions weakened, no unrelated fixes. These are NOT passing readiness checks.
+- User then requested against-model output. Response-only opposite_pick_label uses existing market labels and unchanged stored line. Two-way opposite swaps a/b; reg3 returns null. The shared renderer names an experimental opposite only when other matching games have more losses than wins. A pending card before recorded start says Against model — experimental; a started/final card says Opposite scenario — retrospective and explicitly no pregame opposite call was recorded. Never triggered by the card's own loss; never promoted to the existing Best Pick ranking. Model lines/current price limitations visible.
+- Final focused tests, same command above plus2 new opposite-label tests:49 passed/1 warning in28.78s. One initial new-test failure was a fixture clock before prediction time; setting it to the actual forecast time fixed the test; all original assertions retained. `node /tmp/check-courtside-card-ui.cjs` →6 actual React rendered-card cases pass: pregame vs retrospective, own-loss-only no trigger, model/bookmaker price wording, reg3 no single opposite, tied total no trigger. `npm run build` final passed(561ms Vite phase, existing >500kB warning); structure guard/diff --check passed. Full suite not repeated after small follow-up due known readiness failures; no full readiness claim.
+- Final running API restarted on8841 (same command/data), frontend5198. Real NBA browser verified BOS under111.5 retrospective on0–1 other matching evidence, total0–2 including current loss; ORL50.7% total1–1 has no against signal because other record1–0. Screenshot /tmp/courtside-opposite-scenario.jpg (and -phone.jpg); latest text checked390/847/1440px no overflow, viewport reset. Actual pregame signal not observed on real qualifying upcoming picks; pregame branch is verified by rendered component cases only.
+
+
+## Personal Telegram delivery — Codex, 2026-11-02
+- Setup/commands and limitations: docs/TELEGRAM.md. Token/chat/nonce saved in .env.telegram mode600 and git-ignored; receipt DB mode600 and logs ignored; no secrets in committed files or launch agent. Verified official getMe usernameProp51picksbot and no webhook; only private Start with generated nonce paired a destination. No public auto-subscription.
+- User requested actual test: `PYTHONPATH=backend backend/.venv/bin/python -m app.cli telegram test` →sent, Telegram message57; `... telegram preview --date 2026-11-01 --game-id espn:401909903` →sent, message58. Preview1158chars uses real stored BOS–ORL records and actual historical time, explicitly TEST PREVIEW—PAST GAME, NOT A LIVE PICK. Own-game results included in displayed totals; only other matches trigger retrospective opposite scenario. No final-game record was changed to pass live eligibility. Telegram accepted messages; recipient-read not verified.
+- Read-only actual-source dry run: repo/data is the configured live-job source; ~/nba-predictor-live/data does not contain the stores. NBA/NHL both fresh, failingFalse, zero eligible summaries. Source read transactions/query_only only; no model, fit, forecast, import, score or migration commands. NFL absent from sender by construction.
+- Installed personal agent from scripts/launchd/com.nba-predictor.telegram.plist to ~/Library/LaunchAgents using exclusive creation (no overwrite), launchctl bootstrap gui/<uid> succeeded. Three unattended statusok runs at20:17:09/20:18:29/20:19:49Z, launchctl runs3/last exit0, stderr empty. StartInterval60s; actual observed cadence~80s. This is a logged-in Mac service, not cloud delivery: awake/online and source jobs required. /stop pauses, /start resumes; only the paired chat controls it. No naturally eligible pregame message observed yet.
+- Verification: initial `OMP_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_telegram.py tests/test_threshold_overview.py tests/test_canonical.py tests/test_canonical_markets.py` →61 passed/1 existing warning,28.25s. Final expanded sender-only command →18 passed,0.30s. SQLite repeated sends across separate connections deduplicate; new forecast IDs can send; ambiguous acknowledgements are not automatically retried; confirmed connection/429 retries are bounded by time and pregame eligibility. Mismatched sport/market/percentage, stale/failed sources, finished games and unpaired/group controls rejected.
+- `npm run typecheck`, `plutil -lint scripts/launchd/com.nba-predictor.telegram.plist`, `python3 scripts/check_project.py`, `git diff --check` passed. Existing full-readiness sandbox/ML failures above remain; full suite not repeated for this scoped sender. No repeated browser pass: no changed screen/flow, actual external delivery verified by Telegram API acknowledgements instead. No release checkout changes, purchases or deployment of the main app.
+
+
+## Telegram message presentation — Codex, 2026-11-02
+- User confirmed Recommended pick wording. Added bold HTML headings, separators, sport/status icons, prominent recommendation, consistent market order, and visually separate experimental/retrospective opposite blocks; forecasts/ranking/counts unchanged. Input text escaped before markup. parse_modeHTML verified by tests and real Telegram acceptance. Live deduplication keys remain unchanged across presentation-only updates; explicit redesigned preview key versioned separately.
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_telegram.py` →19 passed,0.21s; HTML parser safety test and actual send payload HTML-mode assertion added. `python3 scripts/check_project.py` and `git diff --check` passed. No browser pass (Telegram-only text change), no full readiness claim.
+- `PYTHONPATH=backend backend/.venv/bin/python -m app.cli telegram preview --date 2026-11-01 --game-id espn:401909903` →preview sent; stored receipt message59,statussent,1290chars, Recommended pick heading present. Actual Telegram client appearance/read status is for user review; API accepted formatted message. No secrets printed, no extra messages beyond requested new preview.
+
+
+## Native Telegram image card, no icons — Codex, 2026-11-02
+- User requested a proper card design without emojis. Existing format_batch records feed telegram_card.py’s Pillow renderer: navy header, lime Recommended pick panel, stacked white market cards, correct original percentages, W–L/settled counts, source labels, historical results, and separately labelled retrospective/experimental opposite. No analytics duplicated or forecast/ranking/count changes. Dynamic source text remains escaped in the underlying message; image is rendered locally, never from a public image URL.
+- Task dependency: optional notifications Pillow>=10.4,<14 in backend/pyproject.toml. `backend/.venv/bin/python -m pip install ...` failed because this uv-created venv has no pip; existing `uv pip install --python backend/.venv/bin/python 'Pillow>=10.4,<14'` installed only Pillow13.0.0. No other packages changed.
+- Local real-data preview /tmp/prop51-designed-card.png1080×1957 inspected visually: all five NBA markets, correct line sources and record counts, no overlap, no icons, prominent Recommended pick. `... app.cli telegram preview --date 2026-11-01 --game-id espn:401909903` →previewsent using sendPhoto, Telegram message60; stored receiptstatussent and sourceiconcheckfalse. Caption prominently identifies past-game/test. Actual Telegram display/read status not verified independently beyond accepted upload.
+- Sender22 tests passed,0.40s; new PNG/image-size/multipart/no-icon/source-immutability and render-before-claim failure checks. Existing at-most-one-claim receipt behavior retained for photo sends; live keys unchanged for style-only updates. `python3 scripts/check_project.py` and `git diff --check` passed. No website UI changed, so no new browser pass; no full app readiness claim.
+
+
+## NFL live setup — Codex, 2026-11-02 22:14Z
+
+- Commands: `python3 scripts/check_project.py` passed; `git diff --check` clean. `cd frontend && npm run build` passed
+  (existing large-chunk warning). NFL/eval/API/Telegram/freshness/release/market focused suite116 passed12.39s;
+  NFL live+storage34 passed1.34s (includes populated quote-table migration with referencing forecasts, preserved IDs,
+  full foreign-key check, restored enforcement and append-only triggers). Final NFL live10 passed0.60s, including the
+  corrected first-window state. Baseline NFL suite66 passed2.65s. Earlier combined suite134 passed27.61s.
+- Full required command launched: `OMP_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 backend/.venv/bin/python scripts/check_project.py --ready`
+  → frontend typecheck/build passed; backend suite still running at this recording (`/tmp/nfl-ready.log`, session49660).
+  It is NOT a passing whole-app readiness result. Prior unrelated research/sandbox/ML failures are documented above.
+- Live source (scratch, then first NFL live-store initialization): guarded NFL refresh imported71 November games,
+  updated12, collected96 retrieval-stamped complete market quotes. Actual one-shot frozen test completed, report saved
+  separately; no historical predictions inserted in live ledger. NFL schema33; live NBA/NHL remain31.
+- Runtime release guard8539513: schema33/33, problems[]; NFL launchd runs22:10:39,22:11:40,22:12:40,22:13:40Z, exit0,
+  stderr empty, idle/not_due, zero forecasts. The first run preceded the small first-window display fix; later runs use
+  8539513. No natural live forecast/settlement or Telegram delivery yet observed (first window23:15Z).
+- Read-only HTTP probe `/tmp/nfl-api-smoke.py`: all200 for NFL meta,Nov2 slate,CHI@SEA detail,record,freshness plus NBA/NHL
+  meta; NFL active,fresh,5 upcoming markets,zero live grades. Source and delivered record identities match in tests.
+- Browser `http://127.0.0.1:5198/?sport=nfl`:1280px desktop and390×844 phone; actual API-backed game day, matchup,
+  performance and history navigation; five markets, honest empty live records, separate frozen-test details, actual
+  forecast-window time18:15EST. Scroll width390/viewport390 on phone record and matchup pages;1280/1280 desktop.
+  Screenshots `/tmp/prop51-nfl-desktop.png`, `/tmp/prop51-nfl-phone.png`; viewport reset; NFL Game Day left open.
+- Active publisher restarted after its old loaded migrator rejected the newly added parent-table rebuild for an NHL
+  preview copy. New publisher22:13:43Z: error null,NHL published. NBA/NHL live stores and jobs were not migrated/released.
+- Limits: pregame forecasts, not in-play probability updates; injuries/weather and NFL daily research unavailable;
+  score markets informational; laptop must be awake/online. Activation/operations/rollback: docs/NFL_LIVE.md.
+
+- Full-readiness follow-up22:17Z: autoresearch failures observed; first reproduced in isolation (not an NFL test):
+  `test_the_bar_is_the_best_existing_member_and_a_real_fit_is_kept_only_where_it_beats_it` → KeyError`markets`; trial
+  JSONL records candidate exit71,`sandbox-exec: sandbox_apply: Operation not permitted`, matching prior environmental
+  failure. `/tmp/nfl-ready-failure-probe.log`; full run continues, no full-suite pass claimed. Telegram unattended
+ 22:13:07/22:14:18/22:15:27Z reports NFL eligible0/statusok; existing NHL sends remain deduplicated.
+
+
+## Screenshot warning diagnosis — 2026-11-02 22:22Z
+Safari screenshot URL5194/games/espn:401909286 used old API8832, whose same-game/ranked responses omit percentage_history.
+Current API8841 returns allfive exact records. Switched existing Safari tab through UI to
+http://127.0.0.1:5198/games/espn%3A401909286?sport=nba; AX confirms warning absent and total records including this game:
+52.0 winner1–0;53.8 spread0–1;60.2 total1–1;50.1 home3–2;51.4 away1–2. No code/data changes; phone checks not rerun for
+navigation-only correction. Screenshot capture unavailable(noWindowsAvailable), desktop AX verification succeeded.
+
+## Typography refresh — 2026-11-03
+App5198/game espn:401909286, computed root Avenir Next stack; desktop1280/1280 and phone390/390 scroll width. Font screenshot saved /tmp/prop51-app-font-desktop.png, /tmp/prop51-app-font-phone.png; viewport reset. Frontend npm run build passed, Telegram pytest22 passed0.42s, structure guard and diffcheck passed. Telegram preview /tmp/prop51-card-new-font.png rendered real saved past-game data, no test message sent.
+
+## Barlow + Inter trial — 2026-11-03
+Bundled TTF+OFLassets; npm run build passed(607ms), Telegram23passed0.56s, structure/diffcheck passed. On5198/game espn:401909286 browser confirms both fonts loaded; rootInter/h1BarlowCondensed; desktop1280/1280 and phone390/390 scrollwidth,viewportreset. /tmp/prop51-barlow-app.png and /tmp/prop51-barlow-inter.png(card real past-game example) inspected. No data/model changes or test notifications.
+
+## European soccer data milestone — 2026-11-07 (Claude Opus 5.5)
+Scope: fixtures, results and matchup pages for eng.1, esp.1, ger.1, ita.1, fra.1, uefa.champions, uefa.europa. Data only:
+no soccer forecast, odds, injury or accuracy exists or is shown. Nothing written to `data/`.
+
+Commands (repository root; `S` = a scratch data directory, here the session scratchpad `appdata/`):
+- Store + real sample: `cd backend && NBA_DATA_DIR=$S OMP_NUM_THREADS=1 .venv/bin/python -m app.cli soccer migrate`, then
+  `... soccer ingest --from 20261025 --to 20261109 --sleep 0.5` (all seven; 112 day requests, 0 failed) and
+  `... soccer ingest --competition uefa.champions --from 20250311 --to 20250312`, `--competition uefa.europa` for 20250417
+  and 20250521 (knockout days with extra time / penalties). `... soccer coverage` → 179 matches, 116 raw responses.
+- Repeat ingestion on real data (`--competition eng.1 --competition uefa.champions --from 20261104 --to 20261105`):
+  matches 179→179, result revisions 147→147, raw responses 116→116, raw fetch log 116→120.
+- API: `NBA_DATA_DIR=$S NBA_API_MODE=real .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8850`
+- Web: `cd frontend && API_PROXY_TARGET=http://127.0.0.1:8850 npx vite --host 127.0.0.1 --port 5210 --strictPort`
+- URLs: http://127.0.0.1:5210/?sport=soccer[&competition=uefa.champions][&date=YYYY-MM-DD], match pages
+  /games/soccer:<competition>:<ESPN event id>; API /api/soccer/meta|matches|matches/{id}.
+
+Real statuses observed in the sample: STATUS_FULL_TIME, STATUS_FINAL_AET, STATUS_FINAL_PEN, STATUS_SCHEDULED,
+STATUS_FIRST_HALF, STATUS_HALFTIME (in progress via ESPN `state`). Postponed/cancelled/abandoned/suspended mappings are
+by name and were not observed. ESPN gives no per-half scores and leaves `neutralSite` unset (stored as unknown).
+
+Browser (Claude-in-Chrome, macOS Chrome), desktop 1440 px wide:
+| Flow | Result |
+|---|---|
+| `?sport=soccer&date=2026-11-07`: Premier League cards, Fulham 1–1 Newcastle tagged "FULL TIME · DRAW", Draws metric, "predictions not available" notice, ESPN logos | Pass |
+| Match page (Fulham v Newcastle): score, 90-minute result Draw, extra time not played, no shoot-out, venue, neutral site "not reported", same-competition last results with W/D/L | Pass |
+| Header competition picker → Champions League from a match page: returns to UCL Game day, default date Nov 4, League Phase tags | Pass |
+| Previous-day step (Nov 4 → Nov 3) | Pass |
+| UCL 2025-03-12: Atlético 1–0 Real Madrid "AFTER EXTRA TIME · PENS 2–4", Atlético not bolded, "Real Madrid went through the tie (aggregate 2–2)" | Pass |
+| That match page: 90-minute result "Not available", shoot-out 2–4 Real Madrid, qualifier "(the tie, not this match)", source note | Pass |
+| Performance (Europa League) and History (Serie A): explicit not-available text, stored-match counts, "not full-season coverage" | Pass |
+| La Liga 2026-12-25 (never requested): "has not been requested … matches may exist"; previous match-day link | Pass |
+| Unknown match id: 404 error state with Try again | Pass |
+| League toggle Soccer → NBA → Soccer: competition cleared, NBA shows its 503 "No NBA data store found" error (no NBA store in the scratch dir), back to Premier League | Pass |
+| API stopped (own PID): "API NOT REACHABLE" banner + error state; restarted, Try again reloads Ligue 1 | Pass |
+| Console errors on soccer pages | None |
+
+Phone: Chrome's minimum window gave a **500 px** CSS viewport, not 390. At 500 px the first check found horizontal overflow
+(scrollWidth 634: the 800 px rule `header-tools { nowrap }` plus the new picker). Fixed: soccer header wraps with the
+picker on its own row. Rechecked Game day (Europa League) and the extra-time match page (Man Utd 5–4 Lyon, 90-minute result
+not available, aggregate 7–6): scrollWidth 500 = clientWidth. 390 px itself: **unverified**.
+
+Not verified / gaps: loading spinner not captured (shared AsyncView); NFL/NBA/NHL screens not exercised with data (copying
+the preview NFL store failed twice with "unable to open database file"; not retried); no refresh job, so soccer data is only
+as fresh as the last manual `soccer ingest` (in-progress matches stay "IN PROGRESS" until re-imported); `scripts/dev.sh`
+does not copy `soccer.sqlite` into its snapshot (scripts/ out of scope), so the dev launcher shows the soccer 503 state;
+ESPN date-parameter time zone and historical coverage beyond the requested days not established.

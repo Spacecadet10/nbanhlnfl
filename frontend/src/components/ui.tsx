@@ -23,6 +23,7 @@ const PATHS: Record<string, ReactNode> = {
   chevron: <><path d="M9 6l6 6-6 6" /></>,
   info: <><circle cx="12" cy="12" r="8.5" /><path d="M12 11v5M12 8h.01" /></>,
   ball: <><circle cx="12" cy="12" r="8.5" /><path d="M3.5 12h17M12 3.5v17M6 6c3 3 3 9 0 12M18 6c-3 3-3 9 0 12" /></>,
+  football: <><ellipse cx="12" cy="12" rx="9.5" ry="5.5" transform="rotate(-35 12 12)" /><path d="M8.5 15.5l7-7M10 11.5l2.5 2.5M11.5 10l2.5 2.5" /></>,
   puck: <><ellipse cx="12" cy="10" rx="8" ry="3.5" /><path d="M4 10v4c0 1.9 3.6 3.5 8 3.5s8-1.6 8-3.5v-4" /></>,
   workspace: <><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><rect x="13" y="13" width="7" height="7" rx="1.5" /></>,
   calendar: <><rect x="3.5" y="4.5" width="17" height="16" rx="2.5" /><path d="M3.5 9.5h17M8 3v3M16 3v3" /></>,

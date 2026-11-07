@@ -48,11 +48,19 @@ NHL = Sport(
 NFL = Sport(
     id="nfl", label="NFL", db_file="nfl.sqlite", id_prefix="nfl:",
     eligible_season_types=("regular", "postseason"),
-    markets=("winner",),
+    markets=("winner", "spread", "total", "team_total_home", "team_total_away"),
+)
+
+# European soccer: one data-only store for seven competitions (fixtures and results from ESPN; app/soccer.py). Its matches
+# live in soccer_* tables, never in `games`, and no model, ledger or served path reads it. Markets are empty: a soccer
+# winner market has three outcomes (home, draw, away) and needs its own validated model first.
+SOCCER = Sport(
+    id="soccer", label="Soccer", db_file="soccer.sqlite", id_prefix="soccer:",
+    eligible_season_types=(), markets=(),
 )
 
 SPORTS = {s.id: s for s in (NBA, NHL)}
-DATA_ONLY = {NFL.id: NFL}
+DATA_ONLY = {NFL.id: NFL, SOCCER.id: SOCCER}
 
 
 class UnsupportedSport(ValueError):
@@ -60,7 +68,7 @@ class UnsupportedSport(ValueError):
 
 
 def get(sport: str) -> Sport:
-    """A served sport. Raises for NFL (data-only) and unknown ids."""
+    """A served sport. Raises for data-only sports (NFL, soccer) and unknown ids."""
     try:
         return SPORTS[sport]
     except KeyError:

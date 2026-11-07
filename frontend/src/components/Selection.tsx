@@ -1,25 +1,64 @@
-import { useSearchParams } from 'react-router-dom';
-import type { MarketId, MarketInfo, Sport } from '../api/types';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import type { League, MarketId, MarketInfo, SoccerCompetitionId, Sport } from '../api/types';
 
 /** Sport and market live in the URL (?sport=nhl, ?market=total) so Today, History and Performance always show the
  * same selection. Absent means NBA and the winner market. An unknown value is never silently replaced by data of
  * another sport or market: it falls back only to these documented defaults. */
-const SPORTS: { id: Sport; label: string }[] = [{ id: 'nba', label: 'NBA' }, { id: 'nhl', label: 'NHL' }];
+const LEAGUES: { id: League; label: string }[] = [{ id: 'nba', label: 'NBA' }, { id: 'nhl', label: 'NHL' }, { id: 'nfl', label: 'NFL' },
+  { id: 'soccer', label: 'Soccer' }];
+/** Soccer competitions (?competition=…, ESPN slugs). Absent means the Premier League; an unknown value never shows another
+ * competition's data under its name: it falls back only to this documented default. */
+export const COMPETITIONS: { id: SoccerCompetitionId; label: string }[] = [
+  { id: 'eng.1', label: 'Premier League' }, { id: 'esp.1', label: 'La Liga' }, { id: 'ger.1', label: 'Bundesliga' },
+  { id: 'ita.1', label: 'Serie A' }, { id: 'fra.1', label: 'Ligue 1' }, { id: 'uefa.champions', label: 'Champions League' },
+  { id: 'uefa.europa', label: 'Europa League' },
+];
 const MARKETS: MarketId[] = ['winner', 'reg3', 'spread', 'total', 'team_total_home', 'team_total_away'];
 
-export function useSport(): [Sport, (s: Sport) => void] {
+/** The league shown (?sport=nba|nhl|nfl|soccer). NFL and soccer are data-only: the layout shows their own screens and
+ * every forecast screen keeps using `useSport`, which never returns 'nfl' or 'soccer'. */
+export function useLeague(): [League, (l: League) => void] {
   const [params, setParams] = useSearchParams();
-  const sport: Sport = params.get('sport') === 'nhl' ? 'nhl' : 'nba';
-  const set = (s: Sport) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const raw = params.get('sport');
+  const league: League = raw === 'nhl' || raw === 'nfl' || raw === 'soccer' ? raw : 'nba';
+  const set = (s: League) => {
     const next = new URLSearchParams(params);
     if (s === 'nba') next.delete('sport'); else next.set('sport', s);
     next.delete('market');   // markets differ by sport; the winner market exists for both
     next.delete('team');
     next.delete('date');
     next.delete('conf');     // confidence levels are sport- and market-specific
-    setParams(next);
+    next.delete('competition');
+    // Game identifiers belong to one league. Choose a game in the new league before opening its dashboard.
+    if (s !== league && location.pathname.startsWith('/games/')) navigate({ pathname: '/', search: next.toString() });
+    else setParams(next);
   };
-  return [sport, set];
+  return [league, set];
+}
+
+/** The served sport of the forecast screens: NBA or NHL only (NFL and soccer selections are handled by the layout). */
+export function useSport(): [Sport, (s: Sport) => void] {
+  const [league, set] = useLeague();
+  return [league === 'nhl' ? 'nhl' : 'nba', set];
+}
+
+/** The soccer competition shown. Changing it clears the date and leaves an open match (match ids belong to one competition). */
+export function useCompetition(): [SoccerCompetitionId, (c: SoccerCompetitionId) => void] {
+  const [params, setParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const raw = params.get('competition');
+  const competition = COMPETITIONS.find((c) => c.id === raw)?.id ?? 'eng.1';
+  const set = (c: SoccerCompetitionId) => {
+    const next = new URLSearchParams(params);
+    if (c === 'eng.1') next.delete('competition'); else next.set('competition', c);
+    next.delete('date');
+    if (c !== competition && location.pathname.startsWith('/games/')) navigate({ pathname: '/', search: next.toString() });
+    else setParams(next);
+  };
+  return [competition, set];
 }
 
 export function useMarket(): [MarketId, (m: MarketId) => void] {
@@ -61,7 +100,7 @@ export function DetailsToggle() {
 export function useCarriedSearch(): string {
   const [params] = useSearchParams();
   const keep = new URLSearchParams();
-  for (const k of ['sport', 'market', 'policy', 'conf', 'details']) {
+  for (const k of ['sport', 'competition', 'market', 'policy', 'conf', 'details']) {
     const v = params.get(k);
     if (v) keep.set(k, v);
   }
@@ -69,10 +108,10 @@ export function useCarriedSearch(): string {
   return q ? `?${q}` : '';
 }
 
-export function SportToggle({ value, onChange }: { value: Sport; onChange: (s: Sport) => void }) {
+export function SportToggle({ value, onChange }: { value: League; onChange: (s: League) => void }) {
   return (
-    <div className="segmented sport-toggle" role="group" aria-label="Sport">
-      {SPORTS.map((s) => (
+    <div className="segmented sport-toggle" role="group" aria-label="League">
+      {LEAGUES.map((s) => (
         <button key={s.id} type="button" aria-pressed={value === s.id} onClick={() => onChange(s.id)}>{s.label}</button>
       ))}
     </div>
@@ -95,5 +134,15 @@ export function MarketSelect({ value, markets, onChange }: { value: MarketId; ma
       {current && <p className="small muted market-note">{current.note}</p>}
       {!current && <p className="small warn">This market is not defined for this sport.</p>}
     </div>
+  );
+}
+
+export function CompetitionSelect({ value, onChange }: { value: SoccerCompetitionId; onChange: (c: SoccerCompetitionId) => void }) {
+  return (
+    <label className="competition-select">
+      <select value={value} onChange={(e) => onChange(e.target.value as SoccerCompetitionId)} aria-label="Competition">
+        {COMPETITIONS.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+      </select>
+    </label>
   );
 }

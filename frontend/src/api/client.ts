@@ -4,7 +4,7 @@ import type { CandidateGameView } from './types';
 import type { CanonicalHistory, CanonicalPerformance, PaperRules, RankedPicks, ThresholdOverview, CoverageReport, DailyEvidence, DailyReport, AdaptiveGame, CombinationAnalysis, RuleLedger, SubsetSearch, ThresholdExplorer, AdaptiveStatus, HistoricalStart,
   JointReport, ThresholdReport, AgreementPerformance, GameDetail, GamesResponse, HistoryResponse, MarketHistoryResponse, MarketId, MarketPerformanceResponse, Meta,
   PerformanceResponse, Policy, ResearchGame, ResearchHistory, ResearchReport, ResearchSlate, Retrospective, RuleReport, CandidateRoster, PoolReport, SelectionStatus, Sport,
-  Health, TrainingRun, TrainingStatus, TrackingCheck, TrackingEvidence, TrackingGame, TrackingKind, TrackingReport,
+  DataFreshness, Health, NflRecord, PolledLeague, SoccerCompetitionId, SoccerMatchDetail, SoccerMatchesResponse, SoccerMeta, NflGameDetail, NflGamesResponse, NflMeta, TrainingRun, TrainingStatus, TrackingCheck, TrackingEvidence, TrackingGame, TrackingKind, TrackingReport,
 } from './types';
 
 export class ApiError extends Error {
@@ -51,6 +51,18 @@ export const api = {
   dailyEvidence: (sport: Sport, market: MarketId, rule: string, period: string, offset: number, signal?: AbortSignal) => get<DailyEvidence>('/research/daily-agreement/evidence', { sport, market, rule, period, offset: String(offset) }, signal),
   dailyAgreement: (sport: Sport, signal?: AbortSignal) => get<DailyReport>('/research/daily-agreement', { sport }, signal),
   health: (signal?: AbortSignal) => get<Health>('/health', undefined, signal),
+  // Cheap freshness check polled while the page is visible (all three leagues; NFL through its data-only store).
+  freshness: (league: PolledLeague, signal?: AbortSignal) => get<DataFreshness>('/freshness', { sport: league }, signal),
+  // European soccer: data-only reads (fixtures, results, matchup facts) for one competition at a time; never a `sport`.
+  soccerMeta: (competition: SoccerCompetitionId, signal?: AbortSignal) => get<SoccerMeta>('/soccer/meta', { competition }, signal),
+  soccerMatches: (competition: SoccerCompetitionId, date: string, signal?: AbortSignal) =>
+    get<SoccerMatchesResponse>('/soccer/matches', { competition, date }, signal),
+  soccerMatch: (id: string, signal?: AbortSignal) => get<SoccerMatchDetail>(`/soccer/matches/${encodeURIComponent(id)}`, undefined, signal),
+  // NFL: data-only reads (schedule, results, matchup facts). Separate endpoints; NFL is never passed as `sport`.
+  nflRecord: (signal?: AbortSignal) => get<NflRecord>('/nfl/record', undefined, signal),
+  nflMeta: (signal?: AbortSignal) => get<NflMeta>('/nfl/meta', undefined, signal),
+  nflGames: (date: string, signal?: AbortSignal) => get<NflGamesResponse>('/nfl/games', { date }, signal),
+  nflGame: (id: string, signal?: AbortSignal) => get<NflGameDetail>(`/nfl/games/${encodeURIComponent(id)}`, undefined, signal),
   trainingRun: (sport: Sport, signal?: AbortSignal) => get<TrainingRun>('/training-run', { sport }, signal),
   recovered: (sport: Sport, signal?: AbortSignal) => get<{ note: string; status: string; groups: ThresholdReport['groups']; adaptive?: { status: string; records: { game_id: string; status: string }[]; unreconstructable: { reason: string; rows: number; games: number }[] }; records: { recovery_id: number; game_id: string; market: MarketId; tipoff_at: string; line: number | null; outcome: string }[] }>('/recovered-forecasts', { sport }, signal),
   jointTracking: (sport: Sport, market: MarketId, params: Record<string, string | undefined>, signal?: AbortSignal) =>

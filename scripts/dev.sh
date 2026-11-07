@@ -5,12 +5,17 @@
 #    the copy to this checkout's schema. The live data/ folder is never migrated or written. Each start replaces the
 #    copies; a store or folder missing from live has its earlier copy removed, so nothing stale is shown as current.
 # 2. Starts the API (http://127.0.0.1:8000) and the web app (http://127.0.0.1:5173) and waits until both answer.
-# 3. Stays in the foreground; Ctrl-C stops both. Restart to refresh the data copy.
+# 3. Republishes the copies while it runs (`app.cli preview-publish`, docs/REFRESH_PLAN.md): every PUBLISH_INTERVAL seconds
+#    (default 60) it compares each live store with what it last published and, only when the data changed or the copy's
+#    source time lags live by more than 10 minutes, publishes a new consistent backup in one transaction (the previous copy
+#    stays served if that fails). NBA_DEV_PUBLISH=0 keeps the startup copy frozen (the app then says it will not update).
+#    Research files (research/, raw/, eval/) are copied at startup only.
+# 4. Stays in the foreground; Ctrl-C stops everything.
 #
 # A previous development API/web server of THIS checkout on the same port is stopped first; anything else on the port
 # (for example the release app) is never touched: the script refuses and names the process instead.
 # Overrides: NBA_LIVE_DATA_DIR (default <repo>/data), NBA_DEV_DATA_DIR (default ~/nba-predictor-dev-data),
-# API_PORT (8000), WEB_PORT (5173).
+# API_PORT (8000), WEB_PORT (5173), PUBLISH_INTERVAL (60 s), NBA_DEV_PUBLISH (1; 0 = frozen copy).
 # `sh scripts/dev.sh --check-paths` only validates the two data directories and exits (nothing is stopped or written).
 #
 # Ownership: the development directory is only ever overwritten if this launcher created it. A path that does not exist
@@ -50,116 +55,11 @@ case "$DEV" in /*) ;; ?*) DEV=$START/$DEV ;; esac
 # symlink anywhere (logs, SNAPSHOT_AT, stores and their -wal/-shm/-journal/.tmp/lock files, research/raw/eval/reports and
 # anything the app may add); the files written in place must not be hard links either. The live trees that are copied
 # must contain no symlink (cp -R copies links as links). Runs before any server is stopped or any file is touched, again
-# after the directory is created, and again after the copy (before migrate and the servers).
+# after the directory is created, and again after the copy (before migrate and the servers). The check lives in
+# backend/app/devpaths.py (standard library only, fed to the backend Python on stdin) so the preview publisher runs the
+# very same proof before every publication.
 check_paths() {
-  "$PY" - check-paths "$LIVE" "$DEV" "$DEV_MARK" <<'EOF' || fail "refusing to continue: the development data directory is not provably separate from the live one or not safe to overwrite."
-import os, stat, sys
-live, dev, mark = sys.argv[2], sys.argv[3], sys.argv[4] + "\n"
-MARKER = ".nba-dev-data"
-FILES = ["SNAPSHOT_AT", "api.log", "web.log"] + [n for sport in ("nba", "nhl") for n in (
-    f"{sport}.sqlite", f"{sport}.sqlite-wal", f"{sport}.sqlite-shm", f"{sport}.sqlite-journal", f".{sport}.sqlite.tmp",
-    f".{sport}-jobs.lock")]
-DIRS = ["research", "raw", "eval", "reports"]
-COPIED = ["research", "raw", "eval"]
-def refuse(msg):
-    print(f"dev.sh: {msg} (live: {live!r}, development: {dev!r})", file=sys.stderr)
-    sys.exit(1)
-def ancestors(p):
-    while True:
-        yield p
-        parent = os.path.dirname(p)
-        if parent == p:
-            return
-        p = parent
-def ident(p):
-    s = os.stat(p)
-    return s.st_dev, s.st_ino
-def raise_error(exc):
-    raise exc
-def no_links(top, what):
-    for base, dirs, files in os.walk(top, onerror=raise_error):   # never follows links; unreadable dirs are errors
-        for n in dirs + files:
-            if os.path.islink(os.path.join(base, n)):
-                refuse(f"{what} contains a symlink: {os.path.join(base, n)}")
-try:
-    if not live or not dev:
-        refuse("empty data directory path")
-    if os.path.basename(dev.rstrip("/")) in (".", ".."):     # islink("<link>/.") is false: would hide a symlink
-        refuse("development path ends in '.' or '..'; give the directory's own path")
-    L = os.path.realpath(live, strict=True)
-    if not os.path.isdir(L):
-        refuse("live data path is not a directory")
-    # Longest existing prefix of the development path, resolved by the OS; the rest must be plain new names.
-    raw = dev if os.path.isabs(dev) else os.path.join(os.getcwd(), dev)
-    head, tail = raw, []
-    while not os.path.lexists(head):
-        head, name = os.path.split(head)
-        if name:
-            tail.insert(0, name)
-        elif not head or head == os.path.dirname(head):
-            refuse("development path has no existing ancestor")
-    if any(n in (".", "..") for n in tail):
-        refuse("development path uses '.' or '..' below a directory that does not exist yet")
-    E = os.path.realpath(head, strict=True)          # raises for a dangling or looping symlink
-    if not os.path.isdir(E):
-        refuse("development path (or its existing part) is not a directory")
-    D = os.path.join(E, *tail)
-    Lc, Dc = os.path.normcase(L).casefold(), os.path.normcase(D).casefold()
-    if os.path.commonpath([Lc, Dc]) in (Lc, Dc):
-        refuse("development and live data directories are the same or nested")
-    live_id = ident(L)
-    if any(ident(a) == live_id for a in ancestors(E)):
-        refuse("development data directory is the live directory or inside it")
-    if not tail:
-        dev_id = ident(E)
-        if any(ident(a) == dev_id for a in ancestors(L)):
-            refuse("live data directory is inside the development directory")
-    for sub in COPIED:                                 # copied into the development directory as they are
-        p = os.path.join(L, sub)
-        if os.path.islink(p):
-            refuse(f"live {sub} is a symlink")
-        if os.path.isdir(p):
-            no_links(p, f"live {sub}")
-    if not tail:                                       # existing: reused only if this launcher created it
-        if os.path.islink(raw.rstrip("/") or "/"):
-            refuse("development data directory is itself a symlink; give its real path")
-        m = os.path.join(E, MARKER)
-        try:
-            st = os.lstat(m)
-        except FileNotFoundError:
-            refuse(f"existing development data directory {E} was not created by this launcher (no launcher marker "
-                   f"{MARKER}); it is never adopted. Set NBA_DEV_DATA_DIR to a path that does not exist yet")
-        if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):
-            refuse(f"launcher marker {m} is a symlink or not a regular file")
-        fd = os.open(m, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)   # never waits on a FIFO swapped in meanwhile
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
-            os.close(fd)
-            refuse(f"launcher marker {m} is a symlink or not a regular file")
-        with os.fdopen(fd, "rb") as f:
-            if f.read(len(mark.encode()) + 1) != mark.encode():
-                refuse(f"launcher marker {m} has unexpected contents")
-        for n in FILES + DIRS:
-            p = os.path.join(E, n)
-            if not os.path.lexists(p):
-                continue
-            st = os.lstat(p)
-            mode = st.st_mode
-            if stat.S_ISLNK(mode):
-                refuse(f"write target is a symlink: {p}")
-            if n in FILES and not stat.S_ISREG(mode):
-                refuse(f"write target is not a regular file: {p}")
-            if n in FILES and st.st_nlink != 1:          # written in place: another link would receive the write
-                refuse(f"write target is a hard link shared with another file: {p}")
-            if n in DIRS and not stat.S_ISDIR(mode):
-                refuse(f"write target is not a directory: {p}")
-        no_links(E, "development data directory")
-except SystemExit:
-    raise
-except Exception as exc:
-    refuse(f"could not validate the data directories ({type(exc).__name__}: {exc})")
-print(f"dev.sh: data directories are separate: live {L}, development {D}"
-      + (" (launcher-owned)" if not tail else " (will be created)"))
-EOF
+  "$PY" - check-paths "$LIVE" "$DEV" "$DEV_MARK" < "$ROOT/backend/app/devpaths.py" || fail "refusing to continue: the development data directory is not provably separate from the live one or not safe to overwrite."
 }
 # Only a directory made here, at a path where nothing existed, is marked. os.mkdir fails if anything has appeared there
 # since the check, so an unrelated directory is never adopted; the marker is created exclusively and never follows links.
@@ -202,7 +102,7 @@ check_paths >/dev/null   # again now that the directory exists (inode checks in 
 import os, sqlite3, sys
 from pathlib import Path
 live, dev = Path(sys.argv[1]), Path(sys.argv[2])
-for name in ("nba.sqlite", "nhl.sqlite"):
+for name in ("nba.sqlite", "nhl.sqlite", "nfl.sqlite"):
     src = live / name
     tmp = dev / f".{name}.tmp"
     old = [dev / n for n in (name, f"{name}-wal", f"{name}-shm", f"{name}-journal", tmp.name)]
@@ -236,11 +136,13 @@ for sub in research raw eval; do
     || fail "copying $LIVE/$sub failed."
 done
 check_paths >/dev/null   # again after the copy: nothing written below may lead outside the development directory
-for sport in nba nhl; do
+for sport in nba nhl nfl; do
   [ -f "$DEV/$sport.sqlite" ] || continue
-  (cd "$ROOT/backend" && NBA_DATA_DIR="$DEV" "$PY" -m app.cli --sport "$sport" migrate >/dev/null) \
+  if [ "$sport" = nfl ]; then set -- nfl migrate; else set -- --sport "$sport" migrate; fi   # NFL: data-only command
+  (cd "$ROOT/backend" && NBA_DATA_DIR="$DEV" "$PY" -m app.cli "$@" >/dev/null) \
     || fail "migrating the $sport copy failed (the live store is untouched)."
 done
+rm -f "$DEV/PUBLISH_STATUS.json"   # a previous run's publisher status must not describe this copy
 date -u +%Y-%m-%dT%H:%M:%SZ > "$DEV/SNAPSHOT_AT"
 say "data copy ready ($(cat "$DEV/SNAPSHOT_AT"))"
 
@@ -249,9 +151,15 @@ cleanup() { [ -n "$PIDS" ] && kill $PIDS 2>/dev/null; wait 2>/dev/null; say "sto
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 
+if [ "${NBA_DEV_PUBLISH:-1}" != 0 ]; then
+  (cd "$ROOT/backend" && NBA_DATA_DIR="$DEV" exec "$PY" -m app.cli preview-publish --live "$LIVE" --dev "$DEV" \
+    --interval "${PUBLISH_INTERVAL:-60}") >"$DEV/publish.log" 2>&1 &
+  PIDS="$PIDS $!"   # if it stops, the app keeps serving the last copy and reports it as frozen
+fi
+
 (cd "$ROOT/backend" && NBA_API_MODE=real NBA_DATA_DIR="$DEV" NBA_LIVE_DATA_DIR="$LIVE" \
   exec "$PY" -m uvicorn app.main:app --host 127.0.0.1 --port "$API_PORT") >"$DEV/api.log" 2>&1 &
-API_PID=$!; PIDS="$API_PID"
+API_PID=$!; PIDS="$PIDS $API_PID"
 (cd "$ROOT/frontend" && API_PROXY_TARGET="http://127.0.0.1:$API_PORT" \
   exec npm run dev -- --host 127.0.0.1 --port "$WEB_PORT" --strictPort) >"$DEV/web.log" 2>&1 &
 WEB_PID=$!; PIDS="$PIDS $WEB_PID"
@@ -276,7 +184,8 @@ say "ready"
 echo "  App:  http://127.0.0.1:$WEB_PORT/"
 echo "  API:  http://127.0.0.1:$API_PORT/api/health"
 echo "  Data: copy of $LIVE taken $(cat "$DEV/SNAPSHOT_AT"); training status reads $LIVE directly (read-only)."
-echo "  Logs: $DEV/api.log, $DEV/web.log. Ctrl-C stops both."
+[ "${NBA_DEV_PUBLISH:-1}" != 0 ] && echo "  Copies are republished when the live data changes (checked every ${PUBLISH_INTERVAL:-60} s; $DEV/publish.log)."
+echo "  Logs: $DEV/api.log, $DEV/web.log. Ctrl-C stops everything."
 # If either server stops, stop the other too: a half-running app would only show errors.
 while kill -0 "$API_PID" 2>/dev/null && kill -0 "$WEB_PID" 2>/dev/null; do sleep 2; done
 kill -0 "$API_PID" 2>/dev/null || echo "dev.sh: the API stopped; last lines of $DEV/api.log:" >&2

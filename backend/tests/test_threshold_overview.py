@@ -10,6 +10,108 @@ from test_live import client, store  # noqa: F401  (fixtures)
 from test_near_tipoff import ready  # noqa: F401  (fixture)
 
 
+def percentage_item(gid, grade, conf=.5181, **changes):
+    rec = dict(confidence=conf, side='a', source='primary_recorded', model_version='test-model',
+               line_source='bookmaker', generated_at='2026-10-20T22:00:00Z', start_at='2026-10-20T23:00:00Z')
+    rec.update(changes)
+    g = dict(game_id=gid, tipoff_at='2026-10-20T23:00:00Z', result_available_at='2026-10-21T03:00:00Z')
+    return g, dict(state='forecast', record=rec, grade=grade)
+
+
+def test_exact_displayed_record_separates_direction_model_source_and_line_source_and_excludes_self():
+    target = percentage_item('self', 'win')
+    items = [target, percentage_item('w', 'win', .5179), percentage_item('l1', 'loss'),
+             percentage_item('l2', 'loss'), percentage_item('push', 'push'), percentage_item('pending', 'pending'),
+             percentage_item('higher', 'win', .519), percentage_item('opposite', 'win', side='b'),
+             percentage_item('version', 'win', model_version='other'), percentage_item('source', 'win', source='primary_direct'),
+             percentage_item('line', 'win', line_source='model')]
+    idx = to.percentage_index(items, AFTER)
+    r = to.percentage_record('nba', 'total', target[1]['record'], 'self', idx, AFTER)
+    assert (r['percentage'], r['direction'], r['wins'], r['losses'], r['settled']) == ('51.8', 'over', 1, 2, 3)
+    assert r['state'] == 'more_wrong' and r['small_sample'] is True
+    assert r['win_rate'] == pytest.approx(1/3) and r['loss_rate'] == pytest.approx(2/3)
+    assert r['ci95'] == to.wilson(1, 3) and r['excluded'] == {'push': 1, 'pending': 1}
+    # A different market's index is independent; side a is home for spread, not over.
+    spread = to.percentage_record('nhl', 'spread', target[1]['record'], 'self', {}, AFTER)
+    assert (spread['sport'], spread['market'], spread['direction'], spread['state']) == ('nhl', 'spread', 'home', 'no_history')
+    assert spread['win_rate'] is None and spread['loss_rate'] is None
+
+
+@pytest.mark.parametrize('grades,state', [(['win'],'more_right'), (['loss'],'more_wrong'), (['win','loss'],'neutral'), ([], 'no_history')])
+def test_percentage_tendency_is_independent_of_sample_size(grades, state):
+    rec = percentage_item('target', 'pending')[1]['record']
+    idx = to.percentage_index([percentage_item(str(i), g) for i, g in enumerate(grades)], AFTER)
+    r = to.percentage_record('nhl', 'reg3', {**rec, 'side':'a'}, 'target', idx, AFTER)
+    assert r['state'] == state and r['small_sample'] is True
+
+
+def test_percentage_history_rejects_late_forecasts_and_future_results_and_separates_three_way_draw():
+    rec = percentage_item('target', 'pending', side='mid')[1]['record']
+    late = percentage_item('late', 'win', side='mid', generated_at='2026-10-20T23:00:00Z')
+    future = percentage_item('future', 'win', side='mid')
+    future[0]['result_available_at'] = '2026-10-23T03:00:00Z'
+    items = [late, future, percentage_item('draw', 'loss', side='mid'), percentage_item('home', 'win')]
+    r = to.percentage_record('nhl', 'reg3', rec, 'target', to.percentage_index(items, AFTER), AFTER)
+    assert (r['direction'],r['wins'],r['losses']) == ('draw',0,1)
+    assert r['excluded'] == {'not_yet_available':1}
+
+
+def test_percentage_rounding_uses_card_precision_without_cumulative_matching():
+    assert to.displayed_percentage(.51849) == '51.8'
+    assert to.displayed_percentage(.51851) == '51.9'
+    # Binary float products on either side of a decimal tie, as in JavaScript toFixed(1).
+    assert to.displayed_percentage(.5005) == '50.0'
+    assert to.displayed_percentage(.5015) == '50.1'
+
+
+def test_card_record_refreshes_after_result_ingestion_and_agrees_across_routes(ready, client):
+    from app import freshness
+    record_now(ready)
+    ingest_events(ready, [event('matching', T_GAME, '1', '2')], '2026-10-21T22:30:00Z')
+    row = dict(ready.execute("SELECT * FROM game_forecasts WHERE game_id='espn:g1' AND market='winner'").fetchone())
+    row.update(game_id='espn:matching', idempotency_key='percentage-history-target')
+    cols = [k for k in row if k != 'forecast_id']
+    ready.execute(f"INSERT INTO game_forecasts ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})", [row[c] for c in cols])
+    client.now = '2026-10-21T23:00:00Z'
+    before = client.get('/api/games/espn:matching').json()['canonical']['percentage_history']
+    assert before['state'] == 'no_history' and before['settled'] == 0
+    revision = freshness.revision(ready)
+    ingest_events(ready, [event('g1', T_GAME, '1', '2', 'STATUS_FINAL', 110, 100)], '2026-10-22T03:00:00Z')
+    assert freshness.revision(ready) != revision  # visible pages refetch when results change
+    client.now = AFTER
+    detail = client.get('/api/games/espn:matching').json()['canonical']['percentage_history']
+    assert detail['settled'] == 1 and detail['wins'] + detail['losses'] == 1
+    assert detail['state'] in ('more_right', 'more_wrong')
+    games = client.get('/api/games', params={'date':'2026-10-21','policy':'canonical'}).json()['games']
+    history = client.get('/api/canonical/forecasts').json()['rows']
+    ranked = client.get('/api/canonical/ranked', params={'date':'2026-10-21'}).json()['picks']
+    assert next(g for g in games if g['game_id']=='espn:matching')['canonical']['percentage_history'] == detail
+    assert next(g for g in history if g['game_id']=='espn:matching')['canonical']['percentage_history'] == detail
+    assert next(g for g in ranked if g['game_id']=='espn:matching' and g['market']=='winner')['percentage_history'] == detail
+    # Reading it again does not accumulate counts, and a settled card never counts its own result.
+    assert client.get('/api/games/espn:matching').json()['canonical']['percentage_history'] == detail
+    assert client.get('/api/games/espn:g1').json()['canonical']['percentage_history']['settled'] == 0
+
+
+def test_opposite_labels_keep_the_stored_line_and_original_pick(ready, client):
+    record_now(ready)
+    client.now = '2026-10-21T22:30:00Z'
+    detail = client.get('/api/games/espn:g1').json()
+    for c in detail['canonical_markets']:
+        rec = c['record']
+        assert rec['pick_label'] != rec['opposite_pick_label']
+        if c['market'] == 'winner':
+            other = detail['away'] if rec['side'] == 'a' else detail['home']
+            assert rec['opposite_pick_label'] == other['abbr'] + ' win'
+        elif c['market'] in ('total','team_total_home','team_total_away'):
+            opposite_direction = 'under' if rec['side'] == 'a' else 'over'
+            assert opposite_direction in rec['opposite_pick_label'].lower()
+            assert f"{abs(rec['line']):g}" in rec['opposite_pick_label']
+        else:
+            other = detail['away'] if rec['side'] == 'a' else detail['home']
+            assert rec['opposite_pick_label'].startswith(other['abbr'] + ' ')
+
+
 def hist(t, n, w):
     return {"threshold": t, "graded": n, "win_rate": w / n if n else None, "ci95": to.wilson(w, n)}
 

@@ -7,6 +7,11 @@ export type Mode = 'real' | 'demo';
 export interface Team { abbr: string; name: string }
 
 export type Sport = 'nba' | 'nhl';
+/** Every league the app can show. NFL is data-only (schedule and results; docs/NFL_PLAN.md): it is never a `Sport`, so no
+ * forecast, market, performance or research call can be made for it. */
+export type League = Sport | 'nfl' | 'soccer';
+/** Leagues whose stores the freshness check covers (soccer has no refresh job yet, so nothing to poll). */
+export type PolledLeague = Sport | 'nfl';
 export type MarketId = 'winner' | 'reg3' | 'spread' | 'total' | 'team_total_home' | 'team_total_away';
 export interface SportInfo { id: Sport; label: string; available: boolean; note: string | null }
 export interface MarketInfo { id: MarketId; title: string; available: boolean; note: string }
@@ -47,6 +52,7 @@ export type Policy = 'pregame' | 'near_tipoff' | 'canonical';
 
 /** The selected game_forecasts row: the one record every page shows and grades for this game and market. */
 export interface CanonicalRecord {
+  opposite_pick_label?: string | null;
   forecast_id: number; source: 'adaptive' | 'primary_recorded' | 'primary_direct'; fallback_rank: number;
   fallback_reason: string | null; model_version: string; generated_at: string; start_at: string; minutes_before_start: number;
   p: number[]; home_win_prob: number | null; pick: 'home' | 'away' | null; confidence: number; line: number | null;
@@ -57,6 +63,7 @@ export interface CanonicalRecord {
 export type CanonicalState = 'forecast' | 'missing' | 'upcoming' | 'unvalidated' | 'not_recorded' | 'not_forecastable';
 export type CanonicalGrade = 'win' | 'loss' | 'push' | 'pending' | 'void' | 'unscorable' | 'unresolved';
 export interface CanonicalForecast {
+  percentage_history?: ForecastPercentageHistory | null;
   market: MarketId; state: CanonicalState; reason: string | null; record: CanonicalRecord | null; grade: CanonicalGrade | null;
   result_side?: 'a' | 'mid' | 'b' | null; result_label?: string | null;
   /** The grade under each recorded final result, oldest first (a score correction adds an entry); the last is `grade`. */
@@ -689,6 +696,17 @@ export interface AdaptiveStatus {
 
 export interface Health { status: 'ok'; mode: Mode; api_version: string; data_snapshot_at?: string | null }
 
+/** /api/freshness: how current the served data is (backend app/freshness.py). Three separate times: source fetch,
+ *  copy publication (copies only) and latest forecast (NBA/NHL only). `revision` changes only when games/forecasts change. */
+export interface DataFreshness {
+  sport: PolledLeague; as_of: string; mode: 'live' | 'auto_snapshot' | 'frozen_snapshot' | 'demo'; revision: string;
+  activity: 'active' | 'pregame' | 'idle' | null; interval_seconds: number | null;
+  source_fetched_at: string | null; source_state: 'fresh' | 'stale' | 'never' | 'unknown'; stale_after_seconds: number | null;
+  last_failed_at: string | null; last_error: string | null; failing: boolean; next_check_at: string | null;
+  published_at: string | null; publish_interval_seconds: number | null; publish_error: string | null;
+  forecasts_supported: boolean; forecast_generated_at: string | null; forecasts_note: string | null;
+}
+
 /** One adaptive training run, identified by its combination record (backend training_monitor._run_row). */
 export interface TrainingRunRecord {
   definition: string; period: string; status: 'success' | 'partial' | 'failed' | 'skipped'; started_at: string; finished_at: string;
@@ -846,6 +864,9 @@ export interface ThresholdOverview {
 /** GET /api/canonical/ranked: every canonical pick of a date, ranked by past evidence (app/threshold_overview.py RANK_RULE). */
 export interface RankedPickEvidence { lo: number; hi: number | null; win_rate: number; settled: number; lower: number; source: 'history' | 'season' }
 export interface RankedPick {
+  forecast_id?: number;
+  opposite_pick_label?: string | null;
+  percentage_history?: ForecastPercentageHistory | null;
   game_id: string; matchup: string; tipoff: string; status: string; market: MarketId; market_title: string; pick_label: string;
   probability: number; threshold: number | null; evidence: RankedPickEvidence | null; market_prob: number | null;
   grade: string | null; generated_at: string; day_rank: number | null; game_rank: number | null; game_ranked: number;
@@ -859,6 +880,16 @@ export interface RankedPicks {
   without_forecast: Record<string, number>;
 }
 
+/** Current live observations for the exact displayed percentage and direction; excludes the card's own game. */
+export interface ForecastPercentageHistory {
+  sport: League; market: MarketId; market_title: string; percentage: string;
+  side: 'a' | 'mid' | 'b'; direction: string;
+  source: CanonicalRecord['source']; model_version: string; line_source: CanonicalRecord['line_source'];
+  state: 'more_right' | 'more_wrong' | 'neutral' | 'no_history';
+  wins: number; losses: number; settled: number; win_rate: number | null; loss_rate: number | null;
+  ci95: [number, number] | null; small_sample: boolean; excluded: Record<string, number>; as_of: string;
+}
+
 /** GET /api/paper-rules: the frozen paper rules of a sport (no money; app/paper_rules.py). */
 export interface PaperRule {
   id: string; sport: Sport; market: MarketId; min_confidence: number; side: 'pick' | 'opposite'; description: string; price: string;
@@ -867,3 +898,88 @@ export interface PaperRule {
   skipped: Record<string, number>;
 }
 export interface PaperRules { sport: Sport; as_of: string; frozen_at: string; sha256: string; verdict_rule: string; min_bets: number; note: string; rules: PaperRule[] }
+
+// --- NFL (data-only; backend/app/schemas.py Nfl*). No forecast, odds, injury or metric field exists for the NFL.
+export interface NflTeam { team_id: string; abbr: string; name: string }
+export interface NflCapability { id: string; label: string; available: boolean; reason: string }
+export interface NflGame {
+  game_id: string;
+  season: number;
+  season_type: 'preseason' | 'regular' | 'play_in' | 'postseason' | 'other';
+  kickoff: string;
+  forecasts?: CanonicalForecast[];
+  recommended_pick?: string | null;
+  status: 'scheduled' | 'in_progress' | 'final' | 'postponed' | 'canceled' | 'other';
+  home: NflTeam;
+  away: NflTeam;
+  home_score: number | null;
+  away_score: number | null;
+  winner: 'home' | 'away' | 'tie' | null;
+  neutral_site: boolean;
+  first_seen_at: string;
+  updated_at: string;
+  result_available_at: string | null;
+  result_availability_basis: 'observed_retrieval' | 'assumed_tipoff_plus_4h' | null;
+}
+export interface NflMeta {
+  mode: 'real';
+  sport: 'nfl';
+  label: string;
+  available: boolean;
+  default_date: string | null;
+  game_dates: string[];
+  seasons: number[];
+  games_stored: number;
+  last_refresh_at: string | null;
+  capabilities: NflCapability[];
+}
+export interface NflGamesResponse { date: string; games: NflGame[]; prev_date: string | null; next_date: string | null; last_refresh_at: string | null }
+export interface NflGameDetail { game: NflGame; head_to_head: NflGame[]; home_recent: NflGame[]; away_recent: NflGame[]; capabilities: NflCapability[] }
+
+export interface NflRecord {
+  sport: 'nfl'; as_of: string; active: boolean; recording_began_at: string | null;
+  historical_test: { threshold: number; graded: number; won: number; win_rate: number; ci95: [number, number]; holds: boolean } | null;
+  markets: { market: MarketId; title: string; summary: CanonicalSummary; rows: { game_id: string; tipoff: string; forecast: CanonicalForecast }[] }[];
+}
+
+// --- European soccer (data-only; backend/app/schemas.py Soccer*). No forecast, odds, injury or metric field exists.
+// Draws, extra time, penalties and two-legged qualification are separate fields; null means the source cannot establish it.
+export type SoccerCompetitionId = 'eng.1' | 'esp.1' | 'ger.1' | 'ita.1' | 'fra.1' | 'uefa.champions' | 'uefa.europa';
+export type SoccerSide = 'home' | 'away' | 'draw';
+export interface SoccerCompetition { id: SoccerCompetitionId; label: string; matches_stored: number }
+export interface SoccerMatch {
+  match_id: string; competition_id: SoccerCompetitionId; competition: string; event_id: string;
+  season: number; season_type_id: number; stage: string | null; stage_label: string | null; kickoff: string;
+  status: 'scheduled' | 'in_progress' | 'final' | 'postponed' | 'canceled' | 'abandoned' | 'suspended' | 'other';
+  source_status: string; home: NflTeam; away: NflTeam; neutral_site: boolean | null; venue: string | null;
+  decided_in: 'regulation' | 'extra_time' | 'penalties' | null;
+  /** Goals when play ended: after extra time if played; never shoot-out kicks. */
+  home_score: number | null; away_score: number | null;
+  /** 90-minute result: only for matches that ended in regulation (no 90-minute score is published after extra time). */
+  regulation_result: SoccerSide | null;
+  end_of_play_result: SoccerSide | null;
+  shootout_winner: 'home' | 'away' | null; home_shootout: number | null; away_shootout: number | null;
+  leg: number | null; aggregate_home: number | null; aggregate_away: number | null;
+  /** Who went through a decided two-legged tie: a tie fact, not this match's result. */
+  qualified_team_id: string | null; note: string | null;
+  first_seen_at: string; updated_at: string; result_available_at: string | null;
+  result_availability_basis: 'observed_retrieval' | 'assumed_tipoff_plus_4h' | null;
+}
+export interface SoccerMeta {
+  mode: 'real'; sport: 'soccer'; competition_id: SoccerCompetitionId; competition: string; competitions: SoccerCompetition[];
+  default_date: string | null; match_dates: string[]; fetched_dates: string[]; seasons: number[]; matches_stored: number;
+  last_refresh_at: string | null; capabilities: NflCapability[];
+}
+export interface SoccerMatchesResponse {
+  competition_id: SoccerCompetitionId; date: string; fetched: boolean; matches: SoccerMatch[];
+  prev_date: string | null; next_date: string | null; last_refresh_at: string | null;
+}
+export interface SoccerResultRevision {
+  revision: number; decided_in: 'regulation' | 'extra_time' | 'penalties'; home_score: number; away_score: number;
+  home_shootout: number | null; away_shootout: number | null; aggregate_home: number | null; aggregate_away: number | null;
+  qualified_team_id: string | null; observed_at: string;
+}
+export interface SoccerMatchDetail {
+  match: SoccerMatch; head_to_head: SoccerMatch[]; home_recent: SoccerMatch[]; away_recent: SoccerMatch[];
+  result_revisions: SoccerResultRevision[]; capabilities: NflCapability[];
+}
