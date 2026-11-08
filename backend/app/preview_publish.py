@@ -25,7 +25,7 @@ from typing import Callable, Optional
 from . import db, devpaths, freshness, sports
 
 STATUS_FILE = "PUBLISH_STATUS.json"
-SPORTS = ("nba", "nhl", "nfl")
+SPORTS = ("nba", "nhl", "nfl", "soccer")   # soccer: data-only store, republished like the others
 
 
 def _now() -> datetime:

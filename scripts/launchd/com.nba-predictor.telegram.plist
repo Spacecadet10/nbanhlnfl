@@ -5,14 +5,18 @@
   <key>Label</key><string>com.nba-predictor.telegram</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/bin/python</string>
+    <string>/Users/andry/nba-predictor-delivery/backend/.venv/bin/python</string>
     <string>-m</string><string>app.cli</string>
     <string>telegram</string><string>run</string><string>--once</string>
   </array>
-  <key>WorkingDirectory</key><string>/Users/andry/Desktop/nba-predictor-sprint1/backend</string>
+  <key>WorkingDirectory</key><string>/Users/andry/nba-predictor-delivery/backend</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>NBA_DATA_DIR</key><string>/Users/andry/Desktop/nba-predictor-sprint1/data</string>
+    <key>NBA_RELEASE_GUARD</key><string>1</string>
+    <key>NBA_RELEASE_ROOT</key><string>/Users/andry/nba-predictor-delivery</string>
+    <key>NBA_TELEGRAM_LEDGER</key><string>/Users/andry/Desktop/nba-predictor-sprint1/.telegram-delivery.sqlite</string>
+    <key>NBA_TELEGRAM_CREDENTIALS</key><string>/Users/andry/Desktop/nba-predictor-sprint1/.env.telegram</string>
     <key>PYTHONDONTWRITEBYTECODE</key><string>1</string>
     <key>PYTHONUNBUFFERED</key><string>1</string>
     <key>OMP_NUM_THREADS</key><string>1</string>

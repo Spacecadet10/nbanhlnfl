@@ -1,0 +1,88 @@
+FFF                                                                      [100%]
+=================================== FAILURES ===================================
+____________ test_replay_on_an_empty_store_file_is_refused[replay] _____________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-163/test_replay_on_an_empty_store_0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10c2526c0>
+capsys = <_pytest.capture.CaptureFixture object at 0x10c2a8650>
+argv = ['replay']
+
+    @pytest.mark.parametrize("argv", [["replay"], ["nfl", "replay"], ["soccer", "replay"]], ids=lambda a: a[0])
+    def test_replay_on_an_empty_store_file_is_refused(tmp_path, monkeypatch, capsys, argv):
+        """A 0-byte store file has no cached-response log to replay from: refused before any lock, migration or side file (a
+        store file that does not exist at all is still created and migrated as before)."""
+        data = tmp_path / "data"
+        data.mkdir()
+        monkeypatch.setenv("NBA_DATA_DIR", str(data))
+        store = config.db_path({"replay": "nba"}.get(argv[0], argv[0]))
+        store.write_bytes(b"")
+        rc, out = run(argv, capsys)
+>       assert (rc, out.get("status")) == (1, "refused") and "empty" in out["reason"], (rc, out)
+E       AssertionError: (0, {'responses': 0, 'games_inserted': 0, 'games_updated': 0, 'line_quotes': 0})
+E       assert ((0, None) == (1, 'refused')
+E         
+E         At index 0 diff: 0 != 1
+E         Use -v to get more diff)
+
+tests/test_live_store_guard.py:663: AssertionError
+______________ test_replay_on_an_empty_store_file_is_refused[nfl] ______________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-163/test_replay_on_an_empty_store_1')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10c2e1010>
+capsys = <_pytest.capture.CaptureFixture object at 0x10c2e2d20>
+argv = ['nfl', 'replay']
+
+    @pytest.mark.parametrize("argv", [["replay"], ["nfl", "replay"], ["soccer", "replay"]], ids=lambda a: a[0])
+    def test_replay_on_an_empty_store_file_is_refused(tmp_path, monkeypatch, capsys, argv):
+        """A 0-byte store file has no cached-response log to replay from: refused before any lock, migration or side file (a
+        store file that does not exist at all is still created and migrated as before)."""
+        data = tmp_path / "data"
+        data.mkdir()
+        monkeypatch.setenv("NBA_DATA_DIR", str(data))
+        store = config.db_path({"replay": "nba"}.get(argv[0], argv[0]))
+        store.write_bytes(b"")
+        rc, out = run(argv, capsys)
+>       assert (rc, out.get("status")) == (1, "refused") and "empty" in out["reason"], (rc, out)
+E       AssertionError: (0, {'responses': 0, 'games_inserted': 0, 'games_updated': 0, 'line_quotes': 0})
+E       assert ((0, None) == (1, 'refused')
+E         
+E         At index 0 diff: 0 != 1
+E         Use -v to get more diff)
+
+tests/test_live_store_guard.py:663: AssertionError
+____________ test_replay_on_an_empty_store_file_is_refused[soccer] _____________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-163/test_replay_on_an_empty_store_2')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10c2e1550>
+capsys = <_pytest.capture.CaptureFixture object at 0x10c2e1520>
+argv = ['soccer', 'replay']
+
+    @pytest.mark.parametrize("argv", [["replay"], ["nfl", "replay"], ["soccer", "replay"]], ids=lambda a: a[0])
+    def test_replay_on_an_empty_store_file_is_refused(tmp_path, monkeypatch, capsys, argv):
+        """A 0-byte store file has no cached-response log to replay from: refused before any lock, migration or side file (a
+        store file that does not exist at all is still created and migrated as before)."""
+        data = tmp_path / "data"
+        data.mkdir()
+        monkeypatch.setenv("NBA_DATA_DIR", str(data))
+        store = config.db_path({"replay": "nba"}.get(argv[0], argv[0]))
+        store.write_bytes(b"")
+        rc, out = run(argv, capsys)
+>       assert (rc, out.get("status")) == (1, "refused") and "empty" in out["reason"], (rc, out)
+E       AssertionError: (0, {'responses': 0, 'matches_inserted': 0, 'matches_updated': 0, 'revisions': 0, ...})
+E       assert ((0, None) == (1, 'refused')
+E         
+E         At index 0 diff: 0 != 1
+E         Use -v to get more diff)
+
+tests/test_live_store_guard.py:663: AssertionError
+=============================== warnings summary ===============================
+../../nba-predictor-sprint1/backend/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_live_store_guard.py::test_replay_on_an_empty_store_file_is_refused[replay]
+FAILED tests/test_live_store_guard.py::test_replay_on_an_empty_store_file_is_refused[nfl]
+FAILED tests/test_live_store_guard.py::test_replay_on_an_empty_store_file_is_refused[soccer]
+3 failed, 46 deselected, 1 warning in 0.41s

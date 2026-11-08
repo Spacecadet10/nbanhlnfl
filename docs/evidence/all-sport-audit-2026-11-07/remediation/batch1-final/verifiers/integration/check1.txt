@@ -1,0 +1,14 @@
+== CHECK1 index vs main working
+     350
+MISSING-IN-MAIN backend/tests/test_live_store_guard.py
+MISSING-IN-MAIN frontend/src/components/nflWording.test.mjs
+MISSING-IN-MAIN frontend/src/components/tables.test.mjs
+-- main untracked nondoc missing from base
+-- main modified tracked files not in idx
+== index entries intent-to-add
+5
+100644 e69de29bb2d1d6434b8b29ae775ad8c2e48c5391 0	backend/app/__init__.py
+100644 e69de29bb2d1d6434b8b29ae775ad8c2e48c5391 0	backend/app/sources/__init__.py
+100644 e69de29bb2d1d6434b8b29ae775ad8c2e48c5391 0	backend/tests/test_live_store_guard.py
+100644 e69de29bb2d1d6434b8b29ae775ad8c2e48c5391 0	frontend/src/components/nflWording.test.mjs
+100644 e69de29bb2d1d6434b8b29ae775ad8c2e48c5391 0	frontend/src/components/tables.test.mjs

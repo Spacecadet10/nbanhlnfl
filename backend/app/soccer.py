@@ -5,9 +5,10 @@ competition and its id embeds it (soccer:<competition>:<ESPN event id>), unique 
 live in soccer_* tables (migration 0034), never in `games`, so no NBA/NHL model, ledger or served path can read them.
 
 Results keep soccer's distinctions: a draw is a result; how a match was decided (regulation, extra time, penalties) comes
-from ESPN's status; the shoot-out, the leg and the aggregate/qualifier of a two-legged tie are separate facts. ESPN
-publishes no 90-minute score for a match that went to extra time, so its regulation result is reported as unavailable,
-and a qualifier is never presented as the winner of the match.
+from ESPN's status; the shoot-out, the leg and the aggregate/qualifier of a two-legged tie are separate facts. ESPN's
+score fields include extra time; a 90-minute score could be derived from goal minutes (S1 report) but that rule is not
+validated yet, so the regulation result after extra time is reported as unavailable. A qualifier is never presented as
+the winner of the match.
 
 There is no soccer model: no forecast, odds, injury or metric exists here and none is derived. The API reads this store
 through /api/soccer/* only.
@@ -23,7 +24,7 @@ from zoneinfo import ZoneInfo
 
 from . import raw_cache, sports
 from .db import StoreMismatch, claim_store, store_sport, transaction, utc_now
-from .ingest import OBSERVED_WINDOW, RESULT_ASSUMED_DELAY, _fmt, _ts, _upsert_team
+from .ingest import OBSERVED_WINDOW, RESULT_ASSUMED_DELAY, _fmt, _ts, _upsert_team, is_newer_retrieval
 from .sources import espn
 
 COMPETITIONS = espn.SOCCER_COMPETITIONS
@@ -31,7 +32,14 @@ EASTERN = ZoneInfo("America/New_York")
 MAX_INGEST_DAYS = 62            # one CLI run requests at most this many days per competition
 RESULT_FIELDS = ("decided_in", "home_score", "away_score", "home_shootout", "away_shootout", "aggregate_home",
                  "aggregate_away", "qualified_team_id")
-
+# The result itself: a change of any of these on a final (or of either team) is a correction, knowable only from the
+# retrieval that delivered it (result_available_at moves there).
+CORE_FIELDS = ("decided_in", "home_score", "away_score")
+# Tie facts: learned with or after the result; their own availability is tie_facts_available_at.
+TIE_FIELDS = ("home_shootout", "away_shootout", "aggregate_home", "aggregate_away", "qualified_team_id")
+# A later response may simply omit `series`, `leg`, `shootoutScore` or `notes`: absence keeps the stored value, but only
+# while both teams and the core result are unchanged (otherwise the old facts may belong to another result or side).
+KEPT_WHEN_ABSENT = ("leg", "note", *TIE_FIELDS)
 
 def _require_soccer(conn: sqlite3.Connection) -> None:
     current = store_sport(conn)
@@ -67,11 +75,11 @@ def ingest_day(conn: sqlite3.Connection, competition: str, yyyymmdd: str, *,
     retrieved_at = retrieved_at or utc_now()
     with transaction(conn):
         claim_store(conn, sports.SOCCER.id)
-        raw_id, _fetch_id = raw_cache.store_fetch(conn, source=espn.SOCCER_SOURCE, endpoint=endpoint,
-                                                  request_key=request_key, body=body, retrieved_at=retrieved_at,
-                                                  importer_version=espn.SOCCER_IMPORTER_VERSION, cache_dir=cache_dir)
+        raw_id, fetch_id = raw_cache.store_fetch(conn, source=espn.SOCCER_SOURCE, endpoint=endpoint,
+                                                 request_key=request_key, body=body, retrieved_at=retrieved_at,
+                                                 importer_version=espn.SOCCER_IMPORTER_VERSION, cache_dir=cache_dir)
         return {"competition": competition, "date": yyyymmdd,
-                **import_raw(conn, raw_id, competition, retrieved_at=retrieved_at, cache_dir=cache_dir)}
+                **import_raw(conn, raw_id, competition, retrieved_at=retrieved_at, fetch_id=fetch_id, cache_dir=cache_dir)}
 
 
 def _request_competition(request_key: str) -> str:
@@ -79,79 +87,135 @@ def _request_competition(request_key: str) -> str:
 
 
 def import_raw(conn: sqlite3.Connection, raw_id: int, competition: str, *, retrieved_at: str,
-               cache_dir: Optional[Path] = None) -> dict:
-    """Upserts one cached scoreboard as seen at `retrieved_at`. Must run inside a transaction on a soccer store."""
+               fetch_id: Optional[int] = None, cache_dir: Optional[Path] = None) -> dict:
+    """Upserts one cached scoreboard as seen at its retrieval (`retrieved_at`, `fetch_id` from raw_fetches). Must run inside
+    a transaction on a soccer store. An event the store cannot hold (home and away the same team) is recorded in
+    soccer_rejections and skipped; the other matches of the day are still imported."""
     _require_soccer(conn)
     rows = espn.parse_soccer_scoreboard(json.loads(raw_cache.load(conn, raw_id, cache_dir)), competition)
-    stats = {"raw_id": raw_id, "matches_seen": len(rows), "matches_inserted": 0, "matches_updated": 0, "revisions": 0}
+    stats = {"raw_id": raw_id, "matches_seen": len(rows), "matches_inserted": 0, "matches_updated": 0, "revisions": 0,
+             "rejected": 0, "reclassified": 0}
     for m in rows:
+        if m.home.team_id == m.away.team_id:
+            conn.execute("INSERT INTO soccer_rejections (competition_id, event_id, reason, raw_id, retrieved_at) "
+                         "VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
+                         (competition, m.event_id, f"home and away are the same team ({m.home.team_id})", raw_id, retrieved_at))
+            stats["rejected"] += 1
+            continue
         for t in (m.home, m.away):
             _upsert_team(conn, t, retrieved_at)
-        outcome = _upsert_match(conn, m, raw_id, retrieved_at)
-        if outcome:
-            stats[f"matches_{outcome}"] += 1
-            stats["revisions"] += _record_revision(conn, m.match_id, raw_id, retrieved_at)
+        before = conn.execute("SELECT home_team_id, away_team_id FROM soccer_matches WHERE match_id = ?", (m.match_id,)).fetchone()
+        outcome = _upsert_match(conn, m, raw_id, retrieved_at, fetch_id)
+        if outcome in ("inserted", "updated", "reclassified"):
+            stats["reclassified" if outcome == "reclassified" else f"matches_{outcome}"] += 1
+            teams_changed = before is not None and tuple(before) != (m.home.team_id, m.away.team_id)
+            stats["revisions"] += _record_revision(conn, m.match_id, raw_id, retrieved_at, fetch_id, teams_changed=teams_changed,
+                                                   basis="reclassified" if outcome == "reclassified" else "observed")
     return stats
 
 
-def _upsert_match(conn: sqlite3.Connection, m: espn.SoccerMatchRow, raw_id: int, retrieved_at: str) -> Optional[str]:
-    """Same ordering rules as ingest._upsert_game: an older response never overwrites a newer one, a final result never
-    regresses to unfinished, a final match keeps its kickoff, and a corrected result is only knowable from the retrieval
-    that delivered it (its availability moves; result_first_seen_at keeps the first sighting)."""
-    row = conn.execute("SELECT m.*, r.first_retrieved_at AS last_retrieved_at FROM soccer_matches m "
-                       "JOIN raw_responses r ON r.raw_id = m.last_raw_id WHERE m.match_id = ?", (m.match_id,)).fetchone()
+def _upsert_match(conn: sqlite3.Connection, m: espn.SoccerMatchRow, raw_id: int, retrieved_at: str,
+                  fetch_id: Optional[int] = None) -> Optional[str]:
+    """'inserted', 'updated', 'seen' (a newer retrieval that changed nothing) or 'stale' (not newer than the last retrieval
+    that contained the match: skipped as a whole). Rules: a final never regresses to unfinished; a final keeps its kickoff;
+    a result correction (core result or either team) is knowable only from the retrieval that delivered it; tie facts get
+    their own availability, never earlier than the retrieval that delivered them."""
+    row = conn.execute("SELECT * FROM soccer_matches WHERE match_id = ?", (m.match_id,)).fetchone()
+    seen = {"last_seen_at": retrieved_at, "last_seen_fetch_id": fetch_id}
     fields = {"season": m.season, "season_type_id": m.season_type_id, "stage": m.stage, "stage_label": m.stage_label,
               "kickoff_at": m.kickoff_at, "home_team_id": m.home.team_id, "away_team_id": m.away.team_id,
               "neutral_site": None if m.neutral_site is None else int(m.neutral_site), "venue": m.venue,
               "status": m.status, "source_status": m.source_status, "leg": m.leg, "note": m.note,
-              **{k: getattr(m, k) for k in RESULT_FIELDS}}
-    if m.status == "final":
+              "decision_note": m.decision_note, **{k: getattr(m, k) for k in RESULT_FIELDS}}
+    final = m.status == "final"
+    has_ties = final and any(fields[k] is not None for k in TIE_FIELDS)
+    if final:
         tracked = (row is not None and row["status"] != "final"
                    and _ts(row["first_seen_at"]) - _ts(m.kickoff_at) <= OBSERVED_WINDOW)
         observed = tracked or _ts(retrieved_at) - _ts(m.kickoff_at) <= OBSERVED_WINDOW
-        availability = {"result_first_seen_at": retrieved_at,
-                        "result_available_at": retrieved_at if observed else _fmt(_ts(m.kickoff_at) + RESULT_ASSUMED_DELAY),
+        available = retrieved_at if observed else _fmt(_ts(m.kickoff_at) + RESULT_ASSUMED_DELAY)
+        availability = {"result_first_seen_at": retrieved_at, "result_available_at": available,
                         "result_availability_basis": "observed_retrieval" if observed else "assumed_tipoff_plus_4h"}
     else:
         availability = {"result_first_seen_at": None, "result_available_at": None, "result_availability_basis": None}
     if row is None:
-        cols = {**fields, **availability, "match_id": m.match_id, "competition_id": m.competition_id,
-                "event_id": m.event_id, "first_seen_at": retrieved_at, "last_raw_id": raw_id, "updated_at": retrieved_at}
+        cols = {**fields, **availability, **seen, "match_id": m.match_id, "competition_id": m.competition_id,
+                "event_id": m.event_id, "tie_facts_available_at": availability["result_available_at"] if has_ties else None,
+                "first_seen_at": retrieved_at, "last_raw_id": raw_id, "updated_at": retrieved_at}
         conn.execute(f"INSERT INTO soccer_matches ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})",
                      list(cols.values()))
         return "inserted"
-    if row["status"] == "final" and m.status != "final":
-        return None
-    if retrieved_at < row["last_retrieved_at"]:
-        return None
+    if not is_newer_retrieval(retrieved_at, fetch_id, row):
+        # Replaying the very retrieval the row was last seen in may re-derive how the match ended from those same cached
+        # bytes (rows imported before the ending classifier kept ESPN's status label). Only the ending fields change; no
+        # new source information, so availability does not move. Any older retrieval stays skipped.
+        same = retrieved_at == row["last_seen_at"] and (fetch_id or 0) == (row["last_seen_fetch_id"] or 0)
+        ending = {"decided_in": m.decided_in, "decision_note": m.decision_note}
+        if same and final and row["status"] == "final" and any(row[k] != v for k, v in ending.items()):
+            if m.decided_in != "penalties":
+                ending.update(home_shootout=None, away_shootout=None)
+            conn.execute(f"UPDATE soccer_matches SET {', '.join(f'{k}=?' for k in ending)} WHERE match_id=?",
+                         [*ending.values(), m.match_id])
+            return "reclassified"
+        return "stale"
+    conn.execute("UPDATE soccer_matches SET last_seen_at = ?, last_seen_fetch_id = ? WHERE match_id = ?",
+                 (retrieved_at, fetch_id, m.match_id))
+    if row["status"] == "final" and not final:
+        return "seen"
+    same_sides = (row["home_team_id"], row["away_team_id"]) == (m.home.team_id, m.away.team_id)
+    core_changed = row["status"] == "final" and any(row[k] != fields[k] for k in CORE_FIELDS)
+    for k in KEPT_WHEN_ABSENT:
+        keep = same_sides and (k == "leg" or not core_changed)
+        if keep and fields[k] is None and row[k] is not None:
+            fields[k] = row[k]
+    if not final:
+        for k in TIE_FIELDS:
+            fields[k] = None
     changes = {k: v for k, v in fields.items() if row[k] != v}
+    extra: dict = {}
     if row["status"] == "final":
         changes.pop("kickoff_at", None)
-        corrected = any(k in changes for k in RESULT_FIELDS)
-        availability = ({"result_available_at": retrieved_at, "result_availability_basis": "observed_retrieval"}
-                        if corrected and row["result_available_at"] < retrieved_at else {})
+        kicks_corrected = any(row[k] is not None and k in changes for k in ("home_shootout", "away_shootout"))
+        corrected = core_changed or not same_sides or kicks_corrected
+        if corrected and row["result_available_at"] < retrieved_at:
+            extra.update(result_available_at=retrieved_at, result_availability_basis="observed_retrieval")
+        if any(k in changes for k in TIE_FIELDS):
+            extra["tie_facts_available_at"] = retrieved_at if has_ties else None
     else:
-        availability = {k: v for k, v in availability.items() if row[k] != v}
-    if not changes and not availability:
-        return None
-    upd = {**changes, **availability, "last_raw_id": raw_id, "updated_at": retrieved_at}
+        extra = {k: v for k, v in availability.items() if row[k] != v}
+        if final:
+            extra["tie_facts_available_at"] = availability["result_available_at"] if has_ties else None
+    if not changes and not extra:
+        return "seen"
+    upd = {**changes, **extra, "last_raw_id": raw_id, "updated_at": retrieved_at}
     conn.execute(f"UPDATE soccer_matches SET {', '.join(f'{k}=?' for k in upd)} WHERE match_id=?",
                  [*upd.values(), m.match_id])
     return "updated"
 
 
-def _record_revision(conn: sqlite3.Connection, match_id: str, raw_id: int, retrieved_at: str) -> int:
-    """Appends the match's current final result when it differs from its latest revision (1 = first result)."""
-    g = conn.execute(f"SELECT status, {', '.join(RESULT_FIELDS)} FROM soccer_matches WHERE match_id=?", (match_id,)).fetchone()
+def _record_revision(conn: sqlite3.Connection, match_id: str, raw_id: int, retrieved_at: str,
+                     fetch_id: Optional[int] = None, teams_changed: bool = False, basis: str = "observed") -> int:
+    """Appends the match's current final result (with both teams) when it differs from its latest revision. Only called
+    for a newer retrieval; a retrieval older than the latest revision never appends (revisions stay in time order). A
+    revision written before migration 0035 has no teams recorded: teams are compared only when both rows have them."""
+    g = conn.execute(f"SELECT status, home_team_id, away_team_id, {', '.join(RESULT_FIELDS)} FROM soccer_matches "
+                     "WHERE match_id=?", (match_id,)).fetchone()
     if g is None or g["status"] != "final":
         return 0
     last = conn.execute("SELECT * FROM soccer_result_revisions WHERE match_id=? ORDER BY revision DESC LIMIT 1",
                         (match_id,)).fetchone()
-    if last is not None and all(last[k] == g[k] for k in RESULT_FIELDS):
-        return 0
-    conn.execute(f"INSERT INTO soccer_result_revisions (match_id, revision, {', '.join(RESULT_FIELDS)}, observed_at, raw_id) "
-                 f"VALUES (?, ?, {', '.join('?' * len(RESULT_FIELDS))}, ?, ?)",
-                 (match_id, 1 if last is None else last["revision"] + 1, *(g[k] for k in RESULT_FIELDS), retrieved_at, raw_id))
+    if last is not None:
+        if retrieved_at < last["observed_at"]:
+            return 0
+        teams_same = not teams_changed and (last["home_team_id"] is None or
+                                            (last["home_team_id"], last["away_team_id"]) == (g["home_team_id"], g["away_team_id"]))
+        if teams_same and all(last[k] == g[k] for k in RESULT_FIELDS):
+            return 0
+    conn.execute(f"INSERT INTO soccer_result_revisions (match_id, revision, {', '.join(RESULT_FIELDS)}, home_team_id, "
+                 f"away_team_id, observed_at, raw_id, fetch_id, basis) "
+                 f"VALUES (?, ?, {', '.join('?' * len(RESULT_FIELDS))}, ?, ?, ?, ?, ?, ?)",
+                 (match_id, 1 if last is None else last["revision"] + 1, *(g[k] for k in RESULT_FIELDS), g["home_team_id"],
+                  g["away_team_id"], retrieved_at, raw_id, fetch_id, basis))
     return 1
 
 
@@ -175,18 +239,27 @@ def ingest_range(conn: sqlite3.Connection, competitions: list[str], start: str, 
     return out
 
 
+def _replay_fetches(conn: sqlite3.Connection) -> list:
+    return conn.execute("SELECT f.fetch_id, f.raw_id, f.retrieved_at, r.request_key FROM raw_fetches f "
+                        "JOIN raw_responses r ON r.raw_id = f.raw_id WHERE r.source = ? ORDER BY f.retrieved_at, f.fetch_id",
+                        (espn.SOCCER_SOURCE,)).fetchall()
+
+
+def replay_missing(conn: sqlite3.Connection, cache_dir: Optional[Path] = None) -> list[int]:
+    """raw_ids of the cached files `replay` would read that are absent; read-only, checked by the CLI before it migrates
+    or replays anything (replay commits one transaction per retrieval and would otherwise stop half-way)."""
+    return raw_cache.missing_raw_ids(conn, {f["raw_id"] for f in _replay_fetches(conn)}, cache_dir)
+
+
 def replay(conn: sqlite3.Connection, cache_dir: Optional[Path] = None) -> dict:
     """Re-imports every logged soccer retrieval in retrieval order, each at its own fetch time, from the cached bytes."""
-    totals = {"responses": 0, "matches_inserted": 0, "matches_updated": 0, "revisions": 0}
-    fetches = conn.execute("SELECT f.raw_id, f.retrieved_at, r.request_key FROM raw_fetches f "
-                           "JOIN raw_responses r ON r.raw_id = f.raw_id WHERE r.source = ? ORDER BY f.retrieved_at, f.fetch_id",
-                           (espn.SOCCER_SOURCE,)).fetchall()
-    for f in fetches:
+    totals = {"responses": 0, "matches_inserted": 0, "matches_updated": 0, "revisions": 0, "reclassified": 0}
+    for f in _replay_fetches(conn):
         with transaction(conn):
             s = import_raw(conn, f["raw_id"], _request_competition(f["request_key"]), retrieved_at=f["retrieved_at"],
-                           cache_dir=cache_dir)
+                           fetch_id=f["fetch_id"], cache_dir=cache_dir)
         totals["responses"] += 1
-        for k in ("matches_inserted", "matches_updated", "revisions"):
+        for k in ("matches_inserted", "matches_updated", "revisions", "reclassified"):
             totals[k] += s[k]
     return totals
 
@@ -198,11 +271,11 @@ def coverage(conn: sqlite3.Connection) -> dict:
     for r in conn.execute(
             "SELECT competition_id, season, COUNT(*) AS matches, SUM(status = 'final') AS final, "
             "SUM(status = 'scheduled') AS scheduled, SUM(status NOT IN ('final', 'scheduled')) AS not_final, "
-            "SUM(status = 'final' AND decided_in = 'regulation' AND home_score = away_score) AS draws, "
+            "SUM(status = 'final' AND decided_in = 'regulation' AND home_score = away_score) AS regulation_draws, "
             "SUM(decided_in = 'extra_time') AS extra_time, SUM(decided_in = 'penalties') AS penalties "
             "FROM soccer_matches GROUP BY 1, 2 ORDER BY 1, 2"):
         out[r["competition_id"]][str(r["season"])] = {k: r[k] or 0 for k in
-                                                      ("matches", "final", "scheduled", "not_final", "draws", "extra_time", "penalties")}
+                                                      ("matches", "final", "scheduled", "not_final", "regulation_draws", "extra_time", "penalties")}
     return {"sport": "soccer", "competitions": dict(out),
             "requested_days": {c: len(fetched_dates(conn, c)) for c in COMPETITIONS},
             "raw_responses": conn.execute("SELECT COUNT(*) FROM raw_responses WHERE source = ?",
@@ -228,8 +301,16 @@ MATCH_SQL = """
     FROM soccer_matches m JOIN teams h ON h.team_id = m.home_team_id JOIN teams a ON a.team_id = m.away_team_id"""
 
 
-def capabilities() -> list[dict]:
-    return [{"id": i, "label": label, "available": False, "reason": reason} for i, label, reason in CAPABILITIES]
+LIVE_FORECASTS = ("Match forecasts", "Live: the 90-minute home/draw/away result only, from the sealed draw-aware Elo "
+                                     "(held-out test passed for this competition). No totals, both-teams-to-score, double "
+                                     "chance, qualification or other soccer market is forecast.")
+
+
+def capabilities(live: bool = False) -> list[dict]:
+    out = [{"id": i, "label": label, "available": False, "reason": reason} for i, label, reason in CAPABILITIES]
+    if live:
+        out[0] = {"id": "forecasts", "label": LIVE_FORECASTS[0], "available": True, "reason": LIVE_FORECASTS[1]}
+    return out
 
 
 def _side(score_h: Optional[int], score_a: Optional[int]) -> Optional[str]:
@@ -255,13 +336,15 @@ def _match(r: sqlite3.Row) -> dict:
         "home": {"team_id": r["home_team_id"], "abbr": r["home_abbr"], "name": r["home_name"]},
         "away": {"team_id": r["away_team_id"], "abbr": r["away_abbr"], "name": r["away_name"]},
         "neutral_site": None if r["neutral_site"] is None else bool(r["neutral_site"]), "venue": r["venue"],
-        "decided_in": decided, "home_score": r["home_score"] if final else None, "away_score": r["away_score"] if final else None,
+        "decided_in": decided, "decision_note": r["decision_note"] if final else None,
+        "home_score": r["home_score"] if final else None, "away_score": r["away_score"] if final else None,
         "regulation_result": regulation, "end_of_play_result": end_of_play, "shootout_winner": shootout,
         "home_shootout": r["home_shootout"], "away_shootout": r["away_shootout"],
         "leg": r["leg"], "aggregate_home": r["aggregate_home"] if two_legged else None,
         "aggregate_away": r["aggregate_away"] if two_legged else None, "qualified_team_id": r["qualified_team_id"],
         "note": r["note"], "first_seen_at": r["first_seen_at"], "updated_at": r["updated_at"],
         "result_available_at": r["result_available_at"], "result_availability_basis": r["result_availability_basis"],
+        "tie_facts_available_at": r["tie_facts_available_at"],
     }
 
 
@@ -313,7 +396,14 @@ def meta(conn: sqlite3.Connection, competition: str, today: date) -> dict:
             "seasons": [r[0] for r in conn.execute("SELECT DISTINCT season FROM soccer_matches WHERE competition_id = ? "
                                                    "ORDER BY 1", (competition,))],
             "matches_stored": counts.get(competition, 0), "last_refresh_at": last_refresh_at(conn, competition),
-            "capabilities": capabilities()}
+            "capabilities": capabilities(_live(conn, competition))}
+
+
+def _live(conn: sqlite3.Connection, competition: str) -> bool:
+    """True when this store records live forecasts and the competition is in their launch scope (app/soccer_live.py)."""
+    from . import intl_live, soccer_live
+    return (competition in soccer_live.LAUNCH or competition in intl_live.LAUNCH) and soccer_live.has_tables(conn) and conn.execute(
+        "SELECT 1 FROM soccer_live_forecasts WHERE competition_id = ? LIMIT 1", (competition,)).fetchone() is not None
 
 
 def matches_on(conn: sqlite3.Connection, competition: str, day: date) -> dict:
@@ -348,7 +438,8 @@ def match_detail(conn: sqlite3.Connection, match_id: str) -> Optional[dict]:
             f"{MATCH_SQL} WHERE {before} AND (m.home_team_id = ? OR m.away_team_id = ?) ORDER BY m.kickoff_at DESC LIMIT ?",
             (r["competition_id"], r["kickoff_at"], team, team, RECENT))]
     revisions = [dict(x) for x in conn.execute(
-        f"SELECT revision, {', '.join(RESULT_FIELDS)}, observed_at FROM soccer_result_revisions WHERE match_id = ? "
+        f"SELECT revision, {', '.join(RESULT_FIELDS)}, home_team_id, away_team_id, observed_at, basis FROM soccer_result_revisions "
+        "WHERE match_id = ? "
         "ORDER BY revision", (match_id,))]
     return {"match": _match(r), "head_to_head": [_match(x) for x in h2h], "home_recent": recent(r["home_team_id"]),
             "away_recent": recent(r["away_team_id"]), "result_revisions": revisions, "capabilities": capabilities()}

@@ -1,0 +1,39 @@
+{
+ "model": "elo",
+ "config": {
+  "k": 20,
+  "h": 75,
+  "mov": true
+ },
+ "draw_model": {
+  "slope": 2.2689838548750094,
+  "c1": -0.7737521559630023,
+  "c2": 0.49884022681644535
+ },
+ "frequency": {
+  "home": [
+   0.5048452347351585,
+   0.24602502587261266,
+   0.24912973939222882
+  ],
+  "neutral": [
+   0.41113189897100094,
+   0.25116931711880264,
+   0.3376987839101964
+  ]
+ },
+ "protocol_sha256": "1c5aee54648795fa3137ac4547ae23394478eb80a3803377d2f50904484608ee",
+ "data": {
+  "repo": "martj42/international_results",
+  "commit": "b0948cb558c927c357db4067eac5b37b96d0e4bb",
+  "files": {
+   "results.csv": "09aac809e317f3004c69720a38addb656c49ebb19f1937deab96f96e3362257a",
+   "goalscorers.csv": "e02b25cfcad3fca9af79a5cf075c33a6875416d6d80e5ab42514535cb0d639fe",
+   "shootouts.csv": "072b445adf5183fbe981087857e5b64c8f17abfdbf257b1822ceacb4a37919fa"
+  },
+  "retrieved_at": "2026-11-08T21:46:51Z"
+ },
+ "code_sha256": "d76f0978ddfc439eb6eb7e21a9eda88eb4e84402b89e3ffd91ccad1f964fb1c7",
+ "sealed_at": "2026-11-08T21:47:28Z",
+ "sha256": "10547b47146e579bb6f53e6adf4ac57b1896c0f7723cca564f9be93a49206d79"
+}

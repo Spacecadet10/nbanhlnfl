@@ -4,7 +4,8 @@ import type { CandidateGameView } from './types';
 import type { CanonicalHistory, CanonicalPerformance, PaperRules, RankedPicks, ThresholdOverview, CoverageReport, DailyEvidence, DailyReport, AdaptiveGame, CombinationAnalysis, RuleLedger, SubsetSearch, ThresholdExplorer, AdaptiveStatus, HistoricalStart,
   JointReport, ThresholdReport, AgreementPerformance, GameDetail, GamesResponse, HistoryResponse, MarketHistoryResponse, MarketId, MarketPerformanceResponse, Meta,
   PerformanceResponse, Policy, ResearchGame, ResearchHistory, ResearchReport, ResearchSlate, Retrospective, RuleReport, CandidateRoster, PoolReport, SelectionStatus, Sport,
-  DataFreshness, Health, NflRecord, PolledLeague, SoccerCompetitionId, SoccerMatchDetail, SoccerMatchesResponse, SoccerMeta, NflGameDetail, NflGamesResponse, NflMeta, TrainingRun, TrainingStatus, TrackingCheck, TrackingEvidence, TrackingGame, TrackingKind, TrackingReport,
+  DataFreshness, Health, NflRecord, PolledLeague, SoccerCompetitionId, SoccerMatchDetail, SoccerMatchesResponse, SoccerMeta, SoccerLiveResponse,
+  SoccerPerformance, SoccerResearchHistory, SoccerResearchMatchDetail, SoccerResearchMatches, SoccerResearchMeta, NflGameDetail, NflGamesResponse, NflMeta, TrainingRun, TrainingStatus, TrackingCheck, TrackingEvidence, TrackingGame, TrackingKind, TrackingReport,
 } from './types';
 
 export class ApiError extends Error {
@@ -55,9 +56,22 @@ export const api = {
   freshness: (league: PolledLeague, signal?: AbortSignal) => get<DataFreshness>('/freshness', { sport: league }, signal),
   // European soccer: data-only reads (fixtures, results, matchup facts) for one competition at a time; never a `sport`.
   soccerMeta: (competition: SoccerCompetitionId, signal?: AbortSignal) => get<SoccerMeta>('/soccer/meta', { competition }, signal),
+  soccerLive: (competition: SoccerCompetitionId, signal?: AbortSignal) => get<SoccerLiveResponse>('/soccer/live', { competition }, signal),
   soccerMatches: (competition: SoccerCompetitionId, date: string, signal?: AbortSignal) =>
     get<SoccerMatchesResponse>('/soccer/matches', { competition, date }, signal),
   soccerMatch: (id: string, signal?: AbortSignal) => get<SoccerMatchDetail>(`/soccer/matches/${encodeURIComponent(id)}`, undefined, signal),
+  // Soccer research: stored backtest forecasts of the openfootball history (retrospective, never Live).
+  soccerResearchMeta: (competition: SoccerCompetitionId, signal?: AbortSignal) =>
+    get<SoccerResearchMeta>('/soccer/research/meta', { competition }, signal),
+  soccerResearchMatches: (competition: SoccerCompetitionId, date: string, signal?: AbortSignal) =>
+    get<SoccerResearchMatches>('/soccer/research/matches', { competition, date }, signal),
+  soccerResearchMatch: (id: string, signal?: AbortSignal) =>
+    get<SoccerResearchMatchDetail>(`/soccer/research/matches/${encodeURIComponent(id)}`, undefined, signal),
+  soccerResearchPerformance: (competition: SoccerCompetitionId, signal?: AbortSignal) =>
+    get<SoccerPerformance>('/soccer/research/performance', { competition }, signal),
+  soccerResearchHistory: (competition: SoccerCompetitionId, season: number | null, model: string | null, offset: number,
+    signal?: AbortSignal) => get<SoccerResearchHistory>('/soccer/research/history',
+    { competition, ...(season != null ? { season: String(season) } : {}), ...(model ? { model } : {}), offset: String(offset), limit: '100' }, signal),
   // NFL: data-only reads (schedule, results, matchup facts). Separate endpoints; NFL is never passed as `sport`.
   nflRecord: (signal?: AbortSignal) => get<NflRecord>('/nfl/record', undefined, signal),
   nflMeta: (signal?: AbortSignal) => get<NflMeta>('/nfl/meta', undefined, signal),

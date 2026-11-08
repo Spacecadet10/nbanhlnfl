@@ -56,7 +56,7 @@ def _ingest(conn: sqlite3.Connection, request_key: str, body: bytes, retrieved_a
         raw_id, fetch_id = raw_cache.store_fetch(conn, source=espn.SOURCE, endpoint=espn.ENDPOINT,
                                                  request_key=request_key, body=body, retrieved_at=retrieved_at,
                                                  importer_version=espn.IMPORTER_VERSION, cache_dir=cache_dir)
-        stats = import_raw(conn, raw_id, cache_dir=cache_dir, retrieved_at=retrieved_at)
+        stats = import_raw(conn, raw_id, cache_dir=cache_dir, retrieved_at=retrieved_at, fetch_id=fetch_id)
         stats["lines"] = import_lines_fetch(conn, fetch_id, "nba", cache_dir=cache_dir)
         return stats
 
@@ -80,7 +80,8 @@ def _ingest_nfl(conn, request_key: str, body: bytes, retrieved_at: Optional[str]
         raw_id, fetch_id = raw_cache.store_fetch(conn, source=espn.NFL_SOURCE, endpoint=espn.NFL_ENDPOINT,
                                           request_key=request_key, body=body, retrieved_at=retrieved_at,
                                           importer_version=espn.NFL_IMPORTER_VERSION, cache_dir=cache_dir)
-        out = import_raw(conn, raw_id, cache_dir=cache_dir, retrieved_at=retrieved_at, parse=espn.parse_nfl_scoreboard)
+        out = import_raw(conn, raw_id, cache_dir=cache_dir, retrieved_at=retrieved_at, parse=espn.parse_nfl_scoreboard,
+                         fetch_id=fetch_id)
         out["lines"] = import_lines_fetch(conn, fetch_id, "nfl", cache_dir)
         return out
 
@@ -256,13 +257,44 @@ def rebuild_team_box(conn: sqlite3.Connection, cache_dir: Optional[Path] = None)
     by replay and after migrations 0006/0007."""
     importers = {sdv_team_box.SOURCE: import_team_box_fetch, espn.SUMMARY_SOURCE: import_box_summary_fetch}
     totals = {"fetches": 0, "recorded": 0}
-    for r in conn.execute(f"SELECT f.fetch_id, r.source FROM raw_fetches f JOIN raw_responses r ON r.raw_id = f.raw_id "
-                          f"WHERE r.source IN ({', '.join('?' * len(importers))}) ORDER BY f.retrieved_at, f.fetch_id",
-                          tuple(importers)).fetchall():
+    for r in _team_box_fetches(conn, tuple(importers)):
         with transaction(conn):
             totals["recorded"] += importers[r["source"]](conn, r["fetch_id"], cache_dir=cache_dir)["recorded"]
         totals["fetches"] += 1
     return totals
+
+
+def _team_box_fetches(conn: sqlite3.Connection, sources: tuple = (sdv_team_box.SOURCE, espn.SUMMARY_SOURCE)) -> list:
+    """The possession retrievals rebuild_team_box imports, in its order (each reads its own fetch's cached file)."""
+    return conn.execute(f"SELECT f.fetch_id, f.raw_id, r.source FROM raw_fetches f JOIN raw_responses r ON r.raw_id = f.raw_id "
+                        f"WHERE r.source IN ({', '.join('?' * len(sources))}) ORDER BY f.retrieved_at, f.fetch_id",
+                        sources).fetchall()
+
+
+def _replay_fetches(conn: sqlite3.Connection) -> list:
+    """replay's schedule/result/line pass: every logged retrieval in retrieval order, plus each cached response without a
+    logged retrieval at its first retrieval (fetch_id NULL)."""
+    sources = (espn.SOURCE, nhl_stats.SOURCE, espn.NHL_SOURCE, espn.NFL_SOURCE)
+    return conn.execute(
+        "SELECT f.fetch_id, f.raw_id, f.retrieved_at, r.source FROM raw_fetches f JOIN raw_responses r ON r.raw_id = f.raw_id "
+        "WHERE r.source IN (?, ?, ?, ?) "
+        "UNION ALL SELECT NULL, r.raw_id, r.first_retrieved_at, r.source FROM raw_responses r "
+        "WHERE r.source IN (?, ?, ?, ?) AND NOT EXISTS (SELECT 1 FROM raw_fetches f WHERE f.raw_id = r.raw_id) "
+        "ORDER BY 3, 1, 2", sources * 2).fetchall()
+
+
+def _replay_reads(f) -> bool:
+    """Whether replay reads this row's cached file: every logged retrieval; an unlogged response only for the ESPN
+    NBA/NFL scoreboards (unlogged NHL responses are skipped in replay)."""
+    return f["fetch_id"] is not None or f["source"] in (espn.SOURCE, espn.NFL_SOURCE)
+
+
+def replay_missing(conn: sqlite3.Connection, cache_dir: Optional[Path] = None) -> list[int]:
+    """raw_ids of the cached files `replay` would read that are absent. Read-only (a query-only connection is enough), so
+    the CLI refuses a replay before it migrates the store or writes anything (audit C4/I9): replay commits one
+    transaction per response and would otherwise stop half-way at the first missing file."""
+    wanted = {f["raw_id"] for f in _replay_fetches(conn) if _replay_reads(f)} | {r["raw_id"] for r in _team_box_fetches(conn)}
+    return raw_cache.missing_raw_ids(conn, wanted, cache_dir)
 
 
 def replay(conn: sqlite3.Connection, cache_dir: Optional[Path] = None) -> dict:
@@ -278,22 +310,15 @@ def replay(conn: sqlite3.Connection, cache_dir: Optional[Path] = None) -> dict:
     # One pass over every schedule/result and line retrieval in retrieval order, so each line quote is matched against
     # the games as they were stored at its own retrieval, exactly as live ingestion matched it. A cached response without
     # any logged retrieval (a cache copied without its log) replays once at its first retrieval.
-    sources = (espn.SOURCE, nhl_stats.SOURCE, espn.NHL_SOURCE, espn.NFL_SOURCE)
-    fetches = conn.execute(
-        "SELECT f.fetch_id, f.raw_id, f.retrieved_at, r.source FROM raw_fetches f JOIN raw_responses r ON r.raw_id = f.raw_id "
-        "WHERE r.source IN (?, ?, ?, ?) "
-        "UNION ALL SELECT NULL, r.raw_id, r.first_retrieved_at, r.source FROM raw_responses r "
-        "WHERE r.source IN (?, ?, ?, ?) AND NOT EXISTS (SELECT 1 FROM raw_fetches f WHERE f.raw_id = r.raw_id) "
-        "ORDER BY 3, 1, 2", sources * 2).fetchall()
-    for f in fetches:
+    for f in _replay_fetches(conn):
         with transaction(conn):
             if f["source"] == espn.SOURCE:
-                s = import_raw(conn, f["raw_id"], cache_dir=cache_dir, retrieved_at=f["retrieved_at"])
+                s = import_raw(conn, f["raw_id"], cache_dir=cache_dir, retrieved_at=f["retrieved_at"], fetch_id=f["fetch_id"])
                 if f["fetch_id"] is not None:
                     totals["line_quotes"] += import_lines_fetch(conn, f["fetch_id"], "nba", cache_dir=cache_dir)["inserted"]
             elif f["source"] == espn.NFL_SOURCE:
                 s = import_raw(conn, f["raw_id"], cache_dir=cache_dir, retrieved_at=f["retrieved_at"],
-                               parse=espn.parse_nfl_scoreboard)
+                               parse=espn.parse_nfl_scoreboard, fetch_id=f["fetch_id"])
             elif f["fetch_id"] is None:
                 continue
             elif f["source"] == nhl_stats.SOURCE:
@@ -311,10 +336,12 @@ def replay(conn: sqlite3.Connection, cache_dir: Optional[Path] = None) -> dict:
 
 
 def import_raw(conn: sqlite3.Connection, raw_id: int, cache_dir: Optional[Path] = None,
-               retrieved_at: Optional[str] = None, parse: Callable[[dict], list] = espn.parse_scoreboard) -> dict:
-    """Upserts one cached response as seen at `retrieved_at` (that retrieval's own time; default: the first retrieval
-    of these bytes). Must run inside a transaction. `parse` is the ESPN parser of the store's sport (NBA by default);
-    a parser that returns no box stats (NFL) writes no team_game_stats rows."""
+               retrieved_at: Optional[str] = None, parse: Callable[[dict], list] = espn.parse_scoreboard,
+               fetch_id: Optional[int] = None) -> dict:
+    """Upserts one cached response as seen at its retrieval (`retrieved_at`, default: the first retrieval of these bytes;
+    `fetch_id`: that retrieval's raw_fetches id when known). Must run inside a transaction. `parse` is the ESPN parser of
+    the store's sport (NBA by default); a parser that returns no box stats (NFL) writes no team_game_stats rows. A game
+    whose last retrieval is at or after this one is skipped as a whole (row, stats and revision)."""
     retrieved_at = retrieved_at or conn.execute("SELECT first_retrieved_at FROM raw_responses WHERE raw_id=?",
                                                 (raw_id,)).fetchone()["first_retrieved_at"]
     games = parse(json.loads(raw_cache.load(conn, raw_id, cache_dir)))
@@ -326,11 +353,13 @@ def import_raw(conn: sqlite3.Connection, raw_id: int, cache_dir: Optional[Path] 
                 "ON CONFLICT(team_id) DO UPDATE SET abbr=excluded.abbr, name=excluded.name "
                 "WHERE teams.abbr IS NOT excluded.abbr OR teams.name IS NOT excluded.name",
                 (t.team_id, t.abbr, t.name, retrieved_at))
-        outcome = _upsert_game(conn, g, raw_id, retrieved_at)
-        if outcome:
+        before = conn.execute("SELECT home_team_id, away_team_id FROM games WHERE game_id=?", (g.game_id,)).fetchone()
+        outcome = _upsert_game(conn, g, raw_id, retrieved_at, fetch_id)
+        if outcome in ("inserted", "updated"):
             stats[f"games_{outcome}"] += 1
-            _record_result_revision(conn, g.game_id, raw_id, retrieved_at)
-        if g.status == "final" and parse is espn.parse_scoreboard:
+            _record_result_revision(conn, g.game_id, raw_id, retrieved_at, fetch_id,
+                                    teams_changed=_teams_changed(before, g))
+        if outcome != "stale" and g.status == "final" and parse is espn.parse_scoreboard:
             for team, is_home, s in ((g.home, 1, g.home_stats), (g.away, 0, g.away_stats)):
                 _upsert_stats(conn, g.game_id, team.team_id, is_home, s, raw_id, retrieved_at)
         for o in g.odds:
@@ -357,9 +386,26 @@ def _upsert_team(conn: sqlite3.Connection, t: espn.TeamRow, retrieved_at: str, p
         (t.team_id, t.abbr, t.name, retrieved_at, int(placeholder)))
 
 
-def _upsert_game(conn: sqlite3.Connection, g: espn.GameRow, raw_id: int, retrieved_at: str) -> Optional[str]:
-    row = conn.execute("SELECT g.*, r.first_retrieved_at AS last_retrieved_at FROM games g "
-                       "JOIN raw_responses r ON r.raw_id = g.last_raw_id WHERE game_id=?", (g.game_id,)).fetchone()
+def is_newer_retrieval(retrieved_at: str, fetch_id: Optional[int], row: sqlite3.Row) -> bool:
+    """Whether this retrieval comes after the last one that contained the row, ordered by (retrieval time, raw_fetches id).
+    Not by the first retrieval of the row's raw bytes: after A -> B -> A the reused raw row of A is older than B, so a replay
+    into the same store re-applied B and A and appended duplicate revisions (tests/test_replay_same_store.py). The same
+    retrieval again (a replay) is not newer; two responses in the same second are ordered by fetch id; without a fetch id a
+    unlogged retrieval (no fetch id) orders before any logged one in the same second. Rows without a last-seen retrieval
+    (none after migration 0035's backfill except stores never migrated) are compared with updated_at."""
+    seen_at, seen_fetch = row["last_seen_at"], row["last_seen_fetch_id"]
+    if seen_at is None:
+        return retrieved_at >= row["updated_at"]
+    # Unlogged retrievals (fetch id NULL) order first within a second, as in replay(); the same retrieval is never newer.
+    return (retrieved_at, fetch_id or 0) > (seen_at, seen_fetch or 0)
+
+
+def _upsert_game(conn: sqlite3.Connection, g: espn.GameRow, raw_id: int, retrieved_at: str,
+                 fetch_id: Optional[int] = None) -> str:
+    """'inserted', 'updated', 'seen' (a newer retrieval that changed nothing) or 'stale' (not newer than the last retrieval
+    that contained the game: the caller skips its stats, decision and revision too). Every newer retrieval is remembered
+    in last_seen_at / last_seen_fetch_id; updated_at moves only when something changed (it drives the data revision)."""
+    row = conn.execute("SELECT * FROM games WHERE game_id=?", (g.game_id,)).fetchone()
     fields = {"season": g.season, "season_type": g.season_type, "tipoff_at": g.tipoff_at,
               "home_team_id": g.home.team_id, "away_team_id": g.away.team_id, "neutral_site": int(g.neutral_site),
               "status": g.status, "home_score": g.home_score, "away_score": g.away_score}
@@ -379,33 +425,44 @@ def _upsert_game(conn: sqlite3.Connection, g: espn.GameRow, raw_id: int, retriev
     else:
         availability = {"result_first_seen_at": None, "result_available_at": None, "result_availability_basis": None}
 
+    seen = {"last_seen_at": retrieved_at, "last_seen_fetch_id": fetch_id} if "last_seen_at" in (row.keys() if row else
+            [c[1] for c in conn.execute("PRAGMA table_info(games)")]) else {}
     if row is None:
-        cols = {**fields, **availability, "game_id": g.game_id, "first_seen_at": retrieved_at,
+        cols = {**fields, **availability, **seen, "game_id": g.game_id, "first_seen_at": retrieved_at,
                 "last_raw_id": raw_id, "updated_at": retrieved_at}
         conn.execute(f"INSERT INTO games ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})", list(cols.values()))
         return "inserted"
 
-    # Never regress a final result, and never let an older response overwrite newer information.
+    # Never let an older (or the same) retrieval overwrite newer information, and never regress a final result.
+    if seen:
+        if not is_newer_retrieval(retrieved_at, fetch_id, row):
+            return "stale"
+        conn.execute("UPDATE games SET last_seen_at=?, last_seen_fetch_id=? WHERE game_id=?", (retrieved_at, fetch_id, g.game_id))
+    elif retrieved_at < row["updated_at"]:          # a store not yet migrated to 0035 (migration rehearsals only)
+        return "stale"
     if row["status"] == "final" and g.status != "final":
-        return None
-    if retrieved_at < row["last_retrieved_at"]:
-        return None
+        return "seen"
     changes = {k: v for k, v in fields.items() if row[k] != v}
     if row["status"] == "final":
         # The game was played at the stored start: a later edit of the start time (kept in the raw response) must not move
         # it, or every forecast graded for that game would turn void ('start changed after the forecast').
         changes.pop("tipoff_at", None)
-        # First observation of a result is kept; availability is not rewritten, unless the score itself was corrected:
-        # the corrected result was only knowable from this retrieval on (result_first_seen_at keeps the first sighting).
-        corrected = "home_score" in changes or "away_score" in changes
+        # First observation of a result is kept; availability is not rewritten, unless the result itself was corrected (a
+        # score, or either team even with the same score): the corrected result was only knowable from this retrieval on
+        # (result_first_seen_at keeps the first sighting).
+        corrected = any(k in changes for k in ("home_score", "away_score", "home_team_id", "away_team_id"))
         availability = ({"result_available_at": retrieved_at, "result_availability_basis": "observed_retrieval"}
                         if corrected and row["result_available_at"] < retrieved_at else {})
     else:
         availability = {k: v for k, v in availability.items() if row[k] != v}
     if not changes and not availability:
-        return None
+        return "seen"
     upd = {**changes, **availability, "last_raw_id": raw_id, "updated_at": retrieved_at}
     conn.execute(f"UPDATE games SET {', '.join(f'{k}=?' for k in upd)} WHERE game_id=?", [*upd.values(), g.game_id])
+    if "home_team_id" in changes or "away_team_id" in changes:
+        # The replaced team no longer played this game: its box-score row would leave a phantom game in its record.
+        conn.execute("DELETE FROM team_game_stats WHERE game_id=? AND team_id NOT IN (?, ?)",
+                     (g.game_id, g.home.team_id, g.away.team_id))
     return "updated"
 
 
@@ -482,34 +539,58 @@ def import_nhl_fetch(conn: sqlite3.Connection, fetch_id: int, cache_dir: Optiona
             unknown = int(t.team_id.split(":", 1)[1]) not in known
             _upsert_team(conn, t, f["retrieved_at"], placeholder=unknown)
             stats["placeholder_teams"] += unknown
-        outcome = _upsert_game(conn, g, f["raw_id"], f["retrieved_at"])
-        if outcome:
+        before = conn.execute("SELECT home_team_id, away_team_id FROM games WHERE game_id=?", (g.game_id,)).fetchone()
+        outcome = _upsert_game(conn, g, f["raw_id"], f["retrieved_at"], fetch_id)
+        if outcome in ("inserted", "updated"):
             stats[f"games_{outcome}"] += 1
-        if g.status == "final":
+        if g.status == "final" and outcome != "stale":
             stats["decisions" if dec else "decision_unknown"] += 1
             if dec:
                 _upsert_decision(conn, g.game_id, dec, periods, f["raw_id"], f["retrieved_at"])
-            _record_result_revision(conn, g.game_id, f["raw_id"], f["retrieved_at"])
+            _record_result_revision(conn, g.game_id, f["raw_id"], f["retrieved_at"], fetch_id,
+                                    teams_changed=outcome == "updated" and _teams_changed(before, g))
     return stats
 
 
-def _record_result_revision(conn: sqlite3.Connection, game_id: str, raw_id: int, retrieved_at: str) -> None:
+def _teams_changed(before: Optional[sqlite3.Row], g) -> bool:
+    """Whether this retrieval changed the game's teams (known from the row before the upsert, also when the latest
+    revision predates migration 0035 and recorded no teams)."""
+    return before is not None and (before["home_team_id"], before["away_team_id"]) != (g.home.team_id, g.away.team_id)
+
+
+def _record_result_revision(conn: sqlite3.Connection, game_id: str, raw_id: int, retrieved_at: str,
+                            fetch_id: Optional[int] = None, teams_changed: bool = False) -> None:
     """Appends the game's current final result (score and, for NHL, how it was decided) to result_revisions when it
     differs from the latest revision: the first final result is revision 1, each correction the next one. Runs after the
     game (and decision) rows were written for this retrieval, so an older response that changed nothing adds nothing."""
     if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='result_revisions'").fetchone():
         return
-    g = conn.execute("SELECT g.status, g.home_score, g.away_score, d.decision FROM games g "
+    g = conn.execute("SELECT g.status, g.home_score, g.away_score, g.home_team_id, g.away_team_id, d.decision FROM games g "
                      "LEFT JOIN game_decisions d ON d.game_id = g.game_id WHERE g.game_id=?", (game_id,)).fetchone()
     if g is None or g["status"] != "final":
         return
     last = conn.execute("SELECT * FROM result_revisions WHERE game_id=? ORDER BY revision DESC LIMIT 1", (game_id,)).fetchone()
-    if last is not None and (last["home_score"], last["away_score"], last["decision"]) == (g["home_score"], g["away_score"], g["decision"]):
+    # A retrieval older than the latest recorded result never appends (revisions stay in time order; a same-store replay of
+    # an NHL decision REG -> OT -> REG, which never touches games.updated_at, appends nothing).
+    if last is not None and retrieved_at < last["observed_at"]:
         return
-    conn.execute("INSERT INTO result_revisions (game_id, revision, home_score, away_score, decision, observed_at, raw_id, basis) "
-                 "VALUES (?, ?, ?, ?, ?, ?, ?, 'observed')",
-                 (game_id, 1 if last is None else last["revision"] + 1, g["home_score"], g["away_score"], g["decision"],
-                  retrieved_at, raw_id))
+    with_teams = "home_team_id" in last.keys() if last is not None else \
+        "home_team_id" in [c[1] for c in conn.execute("PRAGMA table_info(result_revisions)")]
+    if last is not None and (last["home_score"], last["away_score"], last["decision"]) == (g["home_score"], g["away_score"], g["decision"]):
+        # Teams are compared only when the latest revision recorded them (revisions before migration 0035 did not).
+        if not teams_changed and (not with_teams or last["home_team_id"] is None or
+                                  (last["home_team_id"], last["away_team_id"]) == (g["home_team_id"], g["away_team_id"])):
+            return
+    if with_teams:
+        conn.execute("INSERT INTO result_revisions (game_id, revision, home_score, away_score, decision, observed_at, raw_id, "
+                     "basis, home_team_id, away_team_id, fetch_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'observed', ?, ?, ?)",
+                     (game_id, 1 if last is None else last["revision"] + 1, g["home_score"], g["away_score"], g["decision"],
+                      retrieved_at, raw_id, g["home_team_id"], g["away_team_id"], fetch_id))
+    else:
+        conn.execute("INSERT INTO result_revisions (game_id, revision, home_score, away_score, decision, observed_at, raw_id, basis) "
+                     "VALUES (?, ?, ?, ?, ?, ?, ?, 'observed')",
+                     (game_id, 1 if last is None else last["revision"] + 1, g["home_score"], g["away_score"], g["decision"],
+                      retrieved_at, raw_id))
 
 
 def _upsert_decision(conn: sqlite3.Connection, game_id: str, dec: str, periods: int, raw_id: int,

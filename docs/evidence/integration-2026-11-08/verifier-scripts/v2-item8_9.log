@@ -1,0 +1,31 @@
+...8c deliveries ['sendMessage', 'sendPhoto']
+.alerts for crashed reservation: []
+F9 main exit 1 {'status': 'failed', 'error_type': 'ValueError', 'reason': 'Daily suggested stake limit already allocated'}
+{"status": "no_ticket"}
+.
+=================================== FAILURES ===================================
+________________________ test_8c_crash_alert_visibility ________________________
+
+env = (<module 'app.tickets' from '/Users/andry/Desktop/nba-predictor-sprint1/backend/app/tickets.py'>, <module 'app.telegra...'/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-315/test_8c_crash_alert_visibility0'))
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10bd0c740>
+
+    def test_8c_crash_alert_visibility(env, monkeypatch):
+        """Does notify_alerts surface a reservation that crashed before its delivery claim?"""
+        t, tg, state, plan, sent, path = env
+        monkeypatch.setattr(tg, 'deliver', lambda *a, **k: (_ for _ in ()).throw(RuntimeError('crash')))
+        with pytest.raises(RuntimeError):
+            t.send(t.check(plan([T([('nba', 1), ('nhl', 2)], 3)])))
+        monkeypatch.undo  # keep crash deliver: count attempted alerts via a recording deliver instead
+        alerts = []
+        monkeypatch.setattr(tg, 'deliver', lambda bot, conn, chat, key, text, now, **k: alerts.append(key) or 'sent')
+        snap = dict(state['snap']); snap['alerts'] = []
+        t.notify_alerts(snap, [])
+        print('alerts for crashed reservation:', alerts)
+>       assert alerts, 'reservation retained with no delivery row is never alerted'
+E       AssertionError: reservation retained with no delivery row is never alerted
+E       assert []
+
+/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/77ca1c52-38b7-48e4-a3dd-f779b67607f6/scratchpad/p1v2/test_p8_9.py:119: AssertionError
+=========================== short test summary info ============================
+FAILED ../../../../../private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/77ca1c52-38b7-48e4-a3dd-f779b67607f6/scratchpad/p1v2/test_p8_9.py::test_8c_crash_alert_visibility
+1 failed, 5 passed in 1.36s

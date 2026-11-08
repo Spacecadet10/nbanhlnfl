@@ -1,0 +1,30 @@
+== restore over a target store belonging to another sport (nba file sitting at nfl.sqlite)
+exit=0
+.nfl-jobs.lock
+nfl.sqlite
+nfl.sqlite.replaced-20261108T060508Z
+== WAL-mode source fixtures
+nba fk_check [] ver 35
+nfl fk_check [] ver 35
+nba.sqlite
+nfl.sqlite
+exit=0
+WARNING: no nhl store at /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/backup-verify/srcw/nhl.sqlite; not backed up
+WARNING: no soccer store at /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/backup-verify/srcw/soccer.sqlite; not backed up
+total 2240
+-rw-r--r--@ 1 andry  wheel  540672 Nov  8 01:05 nba.sqlite
+-rw-r--r--@ 1 andry  wheel   32768 Nov  8 01:05 nba.sqlite-shm
+-rw-r--r--@ 1 andry  wheel       0 Nov  8 01:05 nba.sqlite-wal
+-rw-r--r--@ 1 andry  wheel  540672 Nov  8 01:05 nfl.sqlite
+-rw-r--r--@ 1 andry  wheel   32768 Nov  8 01:05 nfl.sqlite-shm
+-rw-r--r--@ 1 andry  wheel       0 Nov  8 01:05 nfl.sqlite-wal
+main db bytes unchanged
+{'sport': 'nba', 'sha_ok': True, 'bytes_ok': True, 'integrity': 'ok', 'fk_backup': [], 'fk_src': [], 'uv': (0, 0), 'schema_eq': True, 'ident': ([('nba',)], [('nba',)]), 'dump_eq': True, 'counts_ok': True}
+{'sport': 'nfl', 'sha_ok': True, 'bytes_ok': True, 'integrity': 'ok', 'fk_backup': [], 'fk_src': [], 'uv': (0, 0), 'schema_eq': True, 'ident': ([('nfl',)], [('nfl',)]), 'dump_eq': True, 'counts_ok': True}
+ALL OK
+backup journal_mode ('wal',)
+manifest.json
+nba.sqlite
+nfl.sqlite
+== backup dir default: --dest required
+backup.py: error: give exactly one of --dest or --restore

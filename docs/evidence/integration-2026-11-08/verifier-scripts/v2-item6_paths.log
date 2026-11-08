@@ -1,0 +1,40 @@
+A unset
+  NBA_DATA_DIR=None REPO_ROOT=/Users/andry/Desktop/nba-predictor-sprint1
+  data_dir=/Users/andry/Desktop/nba-predictor-sprint1/data
+  ledger=/Users/andry/Desktop/nba-predictor-sprint1/.telegram-delivery.sqlite  (== production ledger: True; resolves into repo data/: False)
+  credentials file read by telegram_settings=/Users/andry/Desktop/nba-predictor-sprint1/.env.telegram
+B = repo data
+  NBA_DATA_DIR='/Users/andry/Desktop/nba-predictor-sprint1/data' REPO_ROOT=/Users/andry/Desktop/nba-predictor-sprint1
+  data_dir=/Users/andry/Desktop/nba-predictor-sprint1/data
+  ledger=/Users/andry/Desktop/nba-predictor-sprint1/.telegram-delivery.sqlite  (== production ledger: True; resolves into repo data/: False)
+  credentials file read by telegram_settings=/Users/andry/Desktop/nba-predictor-sprint1/.env.telegram
+C = repo data + trailing slash
+  NBA_DATA_DIR='/Users/andry/Desktop/nba-predictor-sprint1/data/' REPO_ROOT=/Users/andry/Desktop/nba-predictor-sprint1
+  data_dir=/Users/andry/Desktop/nba-predictor-sprint1/data
+  ledger=/Users/andry/Desktop/nba-predictor-sprint1/.telegram-delivery.sqlite  (== production ledger: True; resolves into repo data/: False)
+  credentials file read by telegram_settings=/Users/andry/Desktop/nba-predictor-sprint1/.env.telegram
+D = symlink -> repo data
+  NBA_DATA_DIR='/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/77ca1c52-38b7-48e4-a3dd-f779b67607f6/scratchpad/p1v2/d6/link_to_repo_data' REPO_ROOT=/Users/andry/Desktop/nba-predictor-sprint1
+  data_dir=/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/77ca1c52-38b7-48e4-a3dd-f779b67607f6/scratchpad/p1v2/d6/link_to_repo_data
+  ledger=/Users/andry/Desktop/nba-predictor-sprint1/.telegram-delivery.sqlite  (== production ledger: True; resolves into repo data/: False)
+  credentials file read by telegram_settings=/Users/andry/Desktop/nba-predictor-sprint1/.env.telegram
+E = temp copy
+  NBA_DATA_DIR='/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/77ca1c52-38b7-48e4-a3dd-f779b67607f6/scratchpad/p1v2/d6/copy' REPO_ROOT=/Users/andry/Desktop/nba-predictor-sprint1
+  data_dir=/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/77ca1c52-38b7-48e4-a3dd-f779b67607f6/scratchpad/p1v2/d6/copy
+  ledger=/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/77ca1c52-38b7-48e4-a3dd-f779b67607f6/scratchpad/p1v2/d6/copy/.telegram-delivery.sqlite  (== production ledger: False; resolves into repo data/: False)
+  credentials file read by telegram_settings=/Users/andry/Desktop/nba-predictor-sprint1/.env.telegram
+F release checkout REPO_ROOT=/Users/andry/nba-predictor-live, NBA_DATA_DIR=sprint1 data (launchd value)
+  NBA_DATA_DIR='/Users/andry/Desktop/nba-predictor-sprint1/data' REPO_ROOT=/Users/andry/nba-predictor-live
+  data_dir=/Users/andry/Desktop/nba-predictor-sprint1/data
+  ledger=/Users/andry/Desktop/nba-predictor-sprint1/data/.telegram-delivery.sqlite  (== production ledger: False; resolves into repo data/: True)
+  credentials file read by telegram_settings=/Users/andry/nba-predictor-live/.env.telegram
+G release checkout, NBA_DATA_DIR unset
+  NBA_DATA_DIR=None REPO_ROOT=/Users/andry/nba-predictor-live
+  data_dir=/Users/andry/nba-predictor-live/data
+  ledger=/Users/andry/nba-predictor-live/.telegram-delivery.sqlite  (== production ledger: False; resolves into repo data/: False)
+  credentials file read by telegram_settings=/Users/andry/nba-predictor-live/.env.telegram
+H dev copy (temp NBA_DATA_DIR) in this checkout
+  NBA_DATA_DIR='/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/77ca1c52-38b7-48e4-a3dd-f779b67607f6/scratchpad/p1v2/d6/copy' REPO_ROOT=/Users/andry/Desktop/nba-predictor-sprint1
+  data_dir=/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/77ca1c52-38b7-48e4-a3dd-f779b67607f6/scratchpad/p1v2/d6/copy
+  ledger=/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/77ca1c52-38b7-48e4-a3dd-f779b67607f6/scratchpad/p1v2/d6/copy/.telegram-delivery.sqlite  (== production ledger: False; resolves into repo data/: False)
+  credentials file read by telegram_settings=/Users/andry/Desktop/nba-predictor-sprint1/.env.telegram

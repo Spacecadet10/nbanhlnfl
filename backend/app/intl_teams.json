@@ -1,0 +1,893 @@
+{
+ "version": "2026-11-08.1",
+ "source": "ESPN national-team ids (soccer_matches) -> martj42/international_results team names @ b0948cb5",
+ "espn": {
+  "soccer:1038": "Jamaica",
+  "soccer:10528": "Central African Republic",
+  "soccer:10532": "French Guiana",
+  "soccer:10596": "Saint Martin",
+  "soccer:11678": "Curaçao",
+  "soccer:11766": "Puerto Rico",
+  "soccer:13582": "Dominica",
+  "soccer:13584": "Saint Vincent and the Grenadines",
+  "soccer:14075": "South Sudan",
+  "soccer:14561": "Taiwan",
+  "soccer:162": "Italy",
+  "soccer:164": "Spain",
+  "soccer:16721": "Gibraltar",
+  "soccer:18243": "Sint Maarten",
+  "soccer:18272": "Kosovo",
+  "soccer:19314": "Bonaire",
+  "soccer:202": "Argentina",
+  "soccer:203": "Mexico",
+  "soccer:204": "Bolivia",
+  "soccer:205": "Brazil",
+  "soccer:206": "Canada",
+  "soccer:207": "Chile",
+  "soccer:208": "Colombia",
+  "soccer:209": "Ecuador",
+  "soccer:210": "Paraguay",
+  "soccer:211": "Peru",
+  "soccer:212": "Uruguay",
+  "soccer:213": "Venezuela",
+  "soccer:214": "Costa Rica",
+  "soccer:215": "Honduras",
+  "soccer:2405": "Malaysia",
+  "soccer:2570": "Uzbekistan",
+  "soccer:2597": "Cape Verde",
+  "soccer:2619": "Kazakhstan",
+  "soccer:2620": "Egypt",
+  "soccer:2621": "Libya",
+  "soccer:2627": "Trinidad and Tobago",
+  "soccer:2637": "Barbados",
+  "soccer:2638": "Antigua and Barbuda",
+  "soccer:2641": "Belize",
+  "soccer:2642": "Aruba",
+  "soccer:2643": "Bermuda",
+  "soccer:2646": "Cayman Islands",
+  "soccer:2647": "Cuba",
+  "soccer:2649": "Dominican Republic",
+  "soccer:2650": "El Salvador",
+  "soccer:2651": "Grenada",
+  "soccer:2652": "Guatemala",
+  "soccer:2653": "Guyana",
+  "soccer:2654": "Haiti",
+  "soccer:2655": "Montserrat",
+  "soccer:2658": "Nicaragua",
+  "soccer:2659": "Panama",
+  "soccer:2661": "Saint Lucia",
+  "soccer:2662": "Saint Kitts and Nevis",
+  "soccer:2664": "Suriname",
+  "soccer:2666": "New Zealand",
+  "soccer:2728": "Martinique",
+  "soccer:2844": "Benin",
+  "soccer:2845": "Burkina Faso",
+  "soccer:2847": "Guinea",
+  "soccer:2848": "Kenya",
+  "soccer:2849": "Mali",
+  "soccer:2850": "DR Congo",
+  "soccer:2851": "Rwanda",
+  "soccer:2869": "Morocco",
+  "soccer:2917": "Jordan",
+  "soccer:4205": "Liberia",
+  "soccer:4211": "Uganda",
+  "soccer:4214": "Zimbabwe",
+  "soccer:4231": "Gabon",
+  "soccer:4245": "Botswana",
+  "soccer:4276": "Congo",
+  "soccer:4277": "Zambia",
+  "soccer:4319": "Sudan",
+  "soccer:4325": "Malawi",
+  "soccer:4356": "Togo",
+  "soccer:4375": "Iraq",
+  "soccer:4380": "Syria",
+  "soccer:4381": "Bahrain",
+  "soccer:4384": "Singapore",
+  "soccer:4385": "India",
+  "soccer:4388": "Lebanon",
+  "soccer:4397": "United Arab Emirates",
+  "soccer:4398": "Qatar",
+  "soccer:444": "Estonia",
+  "soccer:445": "Cyprus",
+  "soccer:4469": "Ghana",
+  "soccer:447": "Faroe Islands",
+  "soccer:448": "England",
+  "soccer:449": "Netherlands",
+  "soccer:450": "Czech Republic",
+  "soccer:451": "South Korea",
+  "soccer:452": "Bosnia and Herzegovina",
+  "soccer:453": "Malta",
+  "soccer:454": "Russia",
+  "soccer:455": "Greece",
+  "soccer:456": "Latvia",
+  "soccer:457": "Ukraine",
+  "soccer:458": "Finland",
+  "soccer:459": "Belgium",
+  "soccer:460": "Lithuania",
+  "soccer:461": "Israel",
+  "soccer:462": "Bulgaria",
+  "soccer:463": "North Macedonia",
+  "soccer:464": "Norway",
+  "soccer:465": "Turkey",
+  "soccer:466": "Sweden",
+  "soccer:467": "South Africa",
+  "soccer:468": "Slovakia",
+  "soccer:469": "Iran",
+  "soccer:470": "Iceland",
+  "soccer:471": "Poland",
+  "soccer:472": "Slovenia",
+  "soccer:473": "Romania",
+  "soccer:474": "Austria",
+  "soccer:475": "Switzerland",
+  "soccer:476": "Republic of Ireland",
+  "soccer:477": "Croatia",
+  "soccer:478": "France",
+  "soccer:4789": "Ivory Coast",
+  "soccer:479": "Denmark",
+  "soccer:480": "Hungary",
+  "soccer:481": "Germany",
+  "soccer:482": "Portugal",
+  "soccer:483": "Moldova",
+  "soccer:4895": "Indonesia",
+  "soccer:5533": "Madagascar",
+  "soccer:5774": "Eritrea",
+  "soccer:5776": "Somalia",
+  "soccer:5777": "Ethiopia",
+  "soccer:5778": "Tanzania",
+  "soccer:5779": "Burundi",
+  "soccer:578": "Wales",
+  "soccer:579": "Armenia",
+  "soccer:580": "Scotland",
+  "soccer:581": "Azerbaijan",
+  "soccer:582": "Luxembourg",
+  "soccer:583": "Belarus",
+  "soccer:584": "Georgia",
+  "soccer:585": "Albania",
+  "soccer:586": "Northern Ireland",
+  "soccer:587": "Andorra",
+  "soccer:588": "San Marino",
+  "soccer:589": "Liechtenstein",
+  "soccer:6014": "Yemen",
+  "soccer:6167": "Palestine",
+  "soccer:624": "Algeria",
+  "soccer:627": "Japan",
+  "soccer:628": "Australia",
+  "soccer:653": "Angola",
+  "soccer:654": "Senegal",
+  "soccer:655": "Saudi Arabia",
+  "soccer:656": "Cameroon",
+  "soccer:657": "Nigeria",
+  "soccer:658": "China",
+  "soccer:659": "Tunisia",
+  "soccer:660": "United States",
+  "soccer:6640": "Lesotho",
+  "soccer:6686": "Eswatini",
+  "soccer:6724": "Kyrgyzstan",
+  "soccer:6725": "Namibia",
+  "soccer:6757": "Serbia",
+  "soccer:6775": "Montenegro",
+  "soccer:7349": "Vietnam",
+  "soccer:7368": "Gambia",
+  "soccer:7657": "Guadeloupe",
+  "soccer:841": "Kuwait",
+  "soccer:8600": "Sierra Leone",
+  "soccer:8601": "Comoros",
+  "soccer:8602": "Guinea-Bissau",
+  "soccer:8937": "Niger",
+  "soccer:8938": "Equatorial Guinea",
+  "soccer:8939": "Mozambique",
+  "soccer:8940": "Mauritania"
+ },
+ "evidence": {
+  "soccer:1038": {
+   "team": "Jamaica",
+   "basis": "exact name"
+  },
+  "soccer:10528": {
+   "team": "Central African Republic",
+   "basis": "exact name"
+  },
+  "soccer:10532": {
+   "team": "French Guiana",
+   "basis": "exact name"
+  },
+  "soccer:10596": {
+   "espn_name": "St. Martin",
+   "team": "Saint Martin",
+   "basis": "hand alias (history spelling; team has matches in 2025-26)"
+  },
+  "soccer:11678": {
+   "team": "Curaçao",
+   "basis": "exact name"
+  },
+  "soccer:11766": {
+   "team": "Puerto Rico",
+   "basis": "exact name"
+  },
+  "soccer:13582": {
+   "team": "Dominica",
+   "basis": "exact name"
+  },
+  "soccer:13584": {
+   "espn_name": "St. Vincent and the Grenadines",
+   "team": "Saint Vincent and the Grenadines",
+   "basis": "hand alias (history spelling; team has matches in 2025-26)"
+  },
+  "soccer:14075": {
+   "team": "South Sudan",
+   "basis": "exact name"
+  },
+  "soccer:14561": {
+   "espn_name": "Chinese Taipei",
+   "team": "Taiwan",
+   "basis": "hand alias (history spelling; team has matches in 2025-26)"
+  },
+  "soccer:162": {
+   "team": "Italy",
+   "basis": "exact name"
+  },
+  "soccer:164": {
+   "team": "Spain",
+   "basis": "exact name"
+  },
+  "soccer:16721": {
+   "team": "Gibraltar",
+   "basis": "exact name"
+  },
+  "soccer:18243": {
+   "team": "Sint Maarten",
+   "basis": "exact name"
+  },
+  "soccer:18272": {
+   "team": "Kosovo",
+   "basis": "exact name"
+  },
+  "soccer:19314": {
+   "team": "Bonaire",
+   "basis": "exact name"
+  },
+  "soccer:202": {
+   "team": "Argentina",
+   "basis": "exact name"
+  },
+  "soccer:203": {
+   "team": "Mexico",
+   "basis": "exact name"
+  },
+  "soccer:204": {
+   "team": "Bolivia",
+   "basis": "exact name"
+  },
+  "soccer:205": {
+   "team": "Brazil",
+   "basis": "exact name"
+  },
+  "soccer:206": {
+   "team": "Canada",
+   "basis": "exact name"
+  },
+  "soccer:207": {
+   "team": "Chile",
+   "basis": "exact name"
+  },
+  "soccer:208": {
+   "team": "Colombia",
+   "basis": "exact name"
+  },
+  "soccer:209": {
+   "team": "Ecuador",
+   "basis": "exact name"
+  },
+  "soccer:210": {
+   "team": "Paraguay",
+   "basis": "exact name"
+  },
+  "soccer:211": {
+   "team": "Peru",
+   "basis": "exact name"
+  },
+  "soccer:212": {
+   "team": "Uruguay",
+   "basis": "exact name"
+  },
+  "soccer:213": {
+   "team": "Venezuela",
+   "basis": "exact name"
+  },
+  "soccer:214": {
+   "team": "Costa Rica",
+   "basis": "exact name"
+  },
+  "soccer:215": {
+   "team": "Honduras",
+   "basis": "exact name"
+  },
+  "soccer:2405": {
+   "team": "Malaysia",
+   "basis": "exact name"
+  },
+  "soccer:2570": {
+   "team": "Uzbekistan",
+   "basis": "exact name"
+  },
+  "soccer:2597": {
+   "team": "Cape Verde",
+   "basis": "exact name"
+  },
+  "soccer:2619": {
+   "team": "Kazakhstan",
+   "basis": "exact name"
+  },
+  "soccer:2620": {
+   "team": "Egypt",
+   "basis": "exact name"
+  },
+  "soccer:2621": {
+   "team": "Libya",
+   "basis": "exact name"
+  },
+  "soccer:2627": {
+   "team": "Trinidad and Tobago",
+   "basis": "exact name"
+  },
+  "soccer:2637": {
+   "team": "Barbados",
+   "basis": "exact name"
+  },
+  "soccer:2638": {
+   "team": "Antigua and Barbuda",
+   "basis": "exact name"
+  },
+  "soccer:2641": {
+   "team": "Belize",
+   "basis": "exact name"
+  },
+  "soccer:2642": {
+   "team": "Aruba",
+   "basis": "exact name"
+  },
+  "soccer:2643": {
+   "team": "Bermuda",
+   "basis": "exact name"
+  },
+  "soccer:2646": {
+   "team": "Cayman Islands",
+   "basis": "exact name"
+  },
+  "soccer:2647": {
+   "team": "Cuba",
+   "basis": "exact name"
+  },
+  "soccer:2649": {
+   "team": "Dominican Republic",
+   "basis": "exact name"
+  },
+  "soccer:2650": {
+   "team": "El Salvador",
+   "basis": "exact name"
+  },
+  "soccer:2651": {
+   "team": "Grenada",
+   "basis": "exact name"
+  },
+  "soccer:2652": {
+   "team": "Guatemala",
+   "basis": "exact name"
+  },
+  "soccer:2653": {
+   "team": "Guyana",
+   "basis": "exact name"
+  },
+  "soccer:2654": {
+   "team": "Haiti",
+   "basis": "exact name"
+  },
+  "soccer:2655": {
+   "team": "Montserrat",
+   "basis": "exact name"
+  },
+  "soccer:2658": {
+   "team": "Nicaragua",
+   "basis": "exact name"
+  },
+  "soccer:2659": {
+   "team": "Panama",
+   "basis": "exact name"
+  },
+  "soccer:2661": {
+   "espn_name": "St. Lucia",
+   "team": "Saint Lucia",
+   "basis": "hand alias (history spelling; team has matches in 2025-26)"
+  },
+  "soccer:2662": {
+   "espn_name": "St. Kitts and Nevis",
+   "team": "Saint Kitts and Nevis",
+   "basis": "hand alias (history spelling; team has matches in 2025-26)"
+  },
+  "soccer:2664": {
+   "team": "Suriname",
+   "basis": "exact name"
+  },
+  "soccer:2666": {
+   "team": "New Zealand",
+   "basis": "exact name"
+  },
+  "soccer:2728": {
+   "team": "Martinique",
+   "basis": "exact name"
+  },
+  "soccer:2844": {
+   "team": "Benin",
+   "basis": "exact name"
+  },
+  "soccer:2845": {
+   "team": "Burkina Faso",
+   "basis": "exact name"
+  },
+  "soccer:2847": {
+   "team": "Guinea",
+   "basis": "exact name"
+  },
+  "soccer:2848": {
+   "team": "Kenya",
+   "basis": "exact name"
+  },
+  "soccer:2849": {
+   "team": "Mali",
+   "basis": "exact name"
+  },
+  "soccer:2850": {
+   "espn_name": "Congo DR",
+   "team": "DR Congo",
+   "basis": "hand alias (history spelling; team has matches in 2025-26)"
+  },
+  "soccer:2851": {
+   "team": "Rwanda",
+   "basis": "exact name"
+  },
+  "soccer:2869": {
+   "team": "Morocco",
+   "basis": "exact name"
+  },
+  "soccer:2917": {
+   "team": "Jordan",
+   "basis": "exact name"
+  },
+  "soccer:4205": {
+   "team": "Liberia",
+   "basis": "exact name"
+  },
+  "soccer:4211": {
+   "team": "Uganda",
+   "basis": "exact name"
+  },
+  "soccer:4214": {
+   "team": "Zimbabwe",
+   "basis": "exact name"
+  },
+  "soccer:4231": {
+   "team": "Gabon",
+   "basis": "exact name"
+  },
+  "soccer:4245": {
+   "team": "Botswana",
+   "basis": "exact name"
+  },
+  "soccer:4276": {
+   "team": "Congo",
+   "basis": "exact name"
+  },
+  "soccer:4277": {
+   "team": "Zambia",
+   "basis": "exact name"
+  },
+  "soccer:4319": {
+   "team": "Sudan",
+   "basis": "exact name"
+  },
+  "soccer:4325": {
+   "team": "Malawi",
+   "basis": "exact name"
+  },
+  "soccer:4356": {
+   "team": "Togo",
+   "basis": "exact name"
+  },
+  "soccer:4375": {
+   "team": "Iraq",
+   "basis": "exact name"
+  },
+  "soccer:4380": {
+   "team": "Syria",
+   "basis": "exact name"
+  },
+  "soccer:4381": {
+   "team": "Bahrain",
+   "basis": "exact name"
+  },
+  "soccer:4384": {
+   "team": "Singapore",
+   "basis": "exact name"
+  },
+  "soccer:4385": {
+   "team": "India",
+   "basis": "exact name"
+  },
+  "soccer:4388": {
+   "team": "Lebanon",
+   "basis": "exact name"
+  },
+  "soccer:4397": {
+   "team": "United Arab Emirates",
+   "basis": "exact name"
+  },
+  "soccer:4398": {
+   "team": "Qatar",
+   "basis": "exact name"
+  },
+  "soccer:444": {
+   "team": "Estonia",
+   "basis": "exact name"
+  },
+  "soccer:445": {
+   "team": "Cyprus",
+   "basis": "exact name"
+  },
+  "soccer:4469": {
+   "team": "Ghana",
+   "basis": "exact name"
+  },
+  "soccer:447": {
+   "team": "Faroe Islands",
+   "basis": "exact name"
+  },
+  "soccer:448": {
+   "team": "England",
+   "basis": "exact name"
+  },
+  "soccer:449": {
+   "team": "Netherlands",
+   "basis": "exact name"
+  },
+  "soccer:450": {
+   "espn_name": "Czechia",
+   "team": "Czech Republic",
+   "basis": "hand alias (history spelling; team has matches in 2025-26)"
+  },
+  "soccer:451": {
+   "team": "South Korea",
+   "basis": "exact name"
+  },
+  "soccer:452": {
+   "espn_name": "Bosnia-Herzegovina",
+   "team": "Bosnia and Herzegovina",
+   "basis": "hand alias (history spelling; team has matches in 2025-26)"
+  },
+  "soccer:453": {
+   "team": "Malta",
+   "basis": "exact name"
+  },
+  "soccer:454": {
+   "team": "Russia",
+   "basis": "exact name"
+  },
+  "soccer:455": {
+   "team": "Greece",
+   "basis": "exact name"
+  },
+  "soccer:456": {
+   "team": "Latvia",
+   "basis": "exact name"
+  },
+  "soccer:457": {
+   "team": "Ukraine",
+   "basis": "exact name"
+  },
+  "soccer:458": {
+   "team": "Finland",
+   "basis": "exact name"
+  },
+  "soccer:459": {
+   "team": "Belgium",
+   "basis": "exact name"
+  },
+  "soccer:460": {
+   "team": "Lithuania",
+   "basis": "exact name"
+  },
+  "soccer:461": {
+   "team": "Israel",
+   "basis": "exact name"
+  },
+  "soccer:462": {
+   "team": "Bulgaria",
+   "basis": "exact name"
+  },
+  "soccer:463": {
+   "team": "North Macedonia",
+   "basis": "exact name"
+  },
+  "soccer:464": {
+   "team": "Norway",
+   "basis": "exact name"
+  },
+  "soccer:465": {
+   "espn_name": "Türkiye",
+   "team": "Turkey",
+   "basis": "hand alias (history spelling; team has matches in 2025-26)"
+  },
+  "soccer:466": {
+   "team": "Sweden",
+   "basis": "exact name"
+  },
+  "soccer:467": {
+   "team": "South Africa",
+   "basis": "exact name"
+  },
+  "soccer:468": {
+   "team": "Slovakia",
+   "basis": "exact name"
+  },
+  "soccer:469": {
+   "team": "Iran",
+   "basis": "exact name"
+  },
+  "soccer:470": {
+   "team": "Iceland",
+   "basis": "exact name"
+  },
+  "soccer:471": {
+   "team": "Poland",
+   "basis": "exact name"
+  },
+  "soccer:472": {
+   "team": "Slovenia",
+   "basis": "exact name"
+  },
+  "soccer:473": {
+   "team": "Romania",
+   "basis": "exact name"
+  },
+  "soccer:474": {
+   "team": "Austria",
+   "basis": "exact name"
+  },
+  "soccer:475": {
+   "team": "Switzerland",
+   "basis": "exact name"
+  },
+  "soccer:476": {
+   "team": "Republic of Ireland",
+   "basis": "exact name"
+  },
+  "soccer:477": {
+   "team": "Croatia",
+   "basis": "exact name"
+  },
+  "soccer:478": {
+   "team": "France",
+   "basis": "exact name"
+  },
+  "soccer:4789": {
+   "team": "Ivory Coast",
+   "basis": "exact name"
+  },
+  "soccer:479": {
+   "team": "Denmark",
+   "basis": "exact name"
+  },
+  "soccer:480": {
+   "team": "Hungary",
+   "basis": "exact name"
+  },
+  "soccer:481": {
+   "team": "Germany",
+   "basis": "exact name"
+  },
+  "soccer:482": {
+   "team": "Portugal",
+   "basis": "exact name"
+  },
+  "soccer:483": {
+   "team": "Moldova",
+   "basis": "exact name"
+  },
+  "soccer:4895": {
+   "team": "Indonesia",
+   "basis": "exact name"
+  },
+  "soccer:5533": {
+   "team": "Madagascar",
+   "basis": "exact name"
+  },
+  "soccer:5774": {
+   "team": "Eritrea",
+   "basis": "exact name"
+  },
+  "soccer:5776": {
+   "team": "Somalia",
+   "basis": "exact name"
+  },
+  "soccer:5777": {
+   "team": "Ethiopia",
+   "basis": "exact name"
+  },
+  "soccer:5778": {
+   "team": "Tanzania",
+   "basis": "exact name"
+  },
+  "soccer:5779": {
+   "team": "Burundi",
+   "basis": "exact name"
+  },
+  "soccer:578": {
+   "team": "Wales",
+   "basis": "exact name"
+  },
+  "soccer:579": {
+   "team": "Armenia",
+   "basis": "exact name"
+  },
+  "soccer:580": {
+   "team": "Scotland",
+   "basis": "exact name"
+  },
+  "soccer:581": {
+   "team": "Azerbaijan",
+   "basis": "exact name"
+  },
+  "soccer:582": {
+   "team": "Luxembourg",
+   "basis": "exact name"
+  },
+  "soccer:583": {
+   "team": "Belarus",
+   "basis": "exact name"
+  },
+  "soccer:584": {
+   "team": "Georgia",
+   "basis": "exact name"
+  },
+  "soccer:585": {
+   "team": "Albania",
+   "basis": "exact name"
+  },
+  "soccer:586": {
+   "team": "Northern Ireland",
+   "basis": "exact name"
+  },
+  "soccer:587": {
+   "team": "Andorra",
+   "basis": "exact name"
+  },
+  "soccer:588": {
+   "team": "San Marino",
+   "basis": "exact name"
+  },
+  "soccer:589": {
+   "team": "Liechtenstein",
+   "basis": "exact name"
+  },
+  "soccer:6014": {
+   "team": "Yemen",
+   "basis": "exact name"
+  },
+  "soccer:6167": {
+   "team": "Palestine",
+   "basis": "exact name"
+  },
+  "soccer:624": {
+   "team": "Algeria",
+   "basis": "exact name"
+  },
+  "soccer:627": {
+   "team": "Japan",
+   "basis": "exact name"
+  },
+  "soccer:628": {
+   "team": "Australia",
+   "basis": "exact name"
+  },
+  "soccer:653": {
+   "team": "Angola",
+   "basis": "exact name"
+  },
+  "soccer:654": {
+   "team": "Senegal",
+   "basis": "exact name"
+  },
+  "soccer:655": {
+   "team": "Saudi Arabia",
+   "basis": "exact name"
+  },
+  "soccer:656": {
+   "team": "Cameroon",
+   "basis": "exact name"
+  },
+  "soccer:657": {
+   "team": "Nigeria",
+   "basis": "exact name"
+  },
+  "soccer:658": {
+   "team": "China",
+   "basis": "exact name"
+  },
+  "soccer:659": {
+   "team": "Tunisia",
+   "basis": "exact name"
+  },
+  "soccer:660": {
+   "team": "United States",
+   "basis": "exact name"
+  },
+  "soccer:6640": {
+   "team": "Lesotho",
+   "basis": "exact name"
+  },
+  "soccer:6686": {
+   "team": "Eswatini",
+   "basis": "exact name"
+  },
+  "soccer:6724": {
+   "espn_name": "Kyrgyz Republic",
+   "team": "Kyrgyzstan",
+   "basis": "hand alias (history spelling; team has matches in 2025-26)"
+  },
+  "soccer:6725": {
+   "team": "Namibia",
+   "basis": "exact name"
+  },
+  "soccer:6757": {
+   "team": "Serbia",
+   "basis": "exact name"
+  },
+  "soccer:6775": {
+   "team": "Montenegro",
+   "basis": "exact name"
+  },
+  "soccer:7349": {
+   "team": "Vietnam",
+   "basis": "exact name"
+  },
+  "soccer:7368": {
+   "team": "Gambia",
+   "basis": "exact name"
+  },
+  "soccer:7657": {
+   "team": "Guadeloupe",
+   "basis": "exact name"
+  },
+  "soccer:841": {
+   "team": "Kuwait",
+   "basis": "exact name"
+  },
+  "soccer:8600": {
+   "team": "Sierra Leone",
+   "basis": "exact name"
+  },
+  "soccer:8601": {
+   "team": "Comoros",
+   "basis": "exact name"
+  },
+  "soccer:8602": {
+   "team": "Guinea-Bissau",
+   "basis": "exact name"
+  },
+  "soccer:8937": {
+   "team": "Niger",
+   "basis": "exact name"
+  },
+  "soccer:8938": {
+   "team": "Equatorial Guinea",
+   "basis": "exact name"
+  },
+  "soccer:8939": {
+   "team": "Mozambique",
+   "basis": "exact name"
+  },
+  "soccer:8940": {
+   "team": "Mauritania",
+   "basis": "exact name"
+  }
+ }
+}

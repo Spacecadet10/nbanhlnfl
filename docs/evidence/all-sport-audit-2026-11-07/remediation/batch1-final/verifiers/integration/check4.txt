@@ -1,0 +1,4 @@
+gated lines absent from final: 0
+== CHECK4
+376ee756af15cdf0fcc11560df8e0b17d85b7220  -
+eacd7c8288ddf90ba54f73bf0d5bd4751cc180a2  -

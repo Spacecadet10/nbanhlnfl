@@ -1361,8 +1361,48 @@ h1,h2,h3,.hero-matchup,.metric-value,.tile-value,.brand { font-family:'Barlow Co
 
 /* Soccer competition picker (header, next to the league toggle). */
 .competition-select select { min-height: 42px; padding: 0 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); font-weight: 600; }
+/* 25 competitions (clubs and national teams): the native select would size itself to the longest name. Cap it, and let
+   the soccer header tools wrap to a second row instead of pushing the page wider than the window (any desktop width). */
+.competition-select select { max-width: 230px; text-overflow: ellipsis; }
+.header-tools.has-competition { flex-wrap: wrap; justify-content: flex-end; row-gap: 8px; min-width: 0; }
 @media (max-width: 800px) {
   .header-tools.has-competition { flex-wrap: wrap; }
   .header-tools.has-competition .competition-select { order: 10; flex: 1 1 100%; }
   .header-tools.has-competition .competition-select select { width: 100%; }
 }
+/* Four leagues in the toggle (NBA, NHL, NFL, Soccer) no longer fit one row with the data pill and theme button on a
+   390 px phone: let the header tools wrap there instead of overflowing the page. */
+@media (max-width: 480px) {
+  .header-tools { flex-wrap: wrap; }
+}
+
+/* Soccer research forecasts (pages/SoccerResearch.tsx): three-way bar, legend, filters, pager. Phone-safe: wraps. */
+.research-notice { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.threeway { margin: .5rem 0 .25rem; min-width: 0; }
+.threeway-bar { display: flex; height: 10px; border-radius: 6px; overflow: hidden; background: var(--line, #e5e5e5); }
+.threeway-bar > span { display: block; height: 100%; min-width: 2px; }
+.threeway-home { background: #2f6fde; }
+.threeway-draw { background: #9aa0a6; }
+.threeway-away { background: #e07a2f; }
+.threeway-legend { display: flex; flex-wrap: wrap; gap: .25rem .9rem; margin-top: .3rem; }
+.threeway-legend .dot { display: inline-block; width: .6rem; height: .6rem; border-radius: 50%; margin-right: .3rem; vertical-align: middle; }
+.forecast-row { padding: .5rem 0; border-bottom: 1px solid var(--line, #e5e5e5); overflow-wrap: anywhere; }
+.plain-list { list-style: none; margin: 0; padding: 0; }
+.reliability-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .75rem; }
+.filters { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; margin: .5rem 0; }
+.pager { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; justify-content: center; margin: .75rem 0; }
+/* Error/empty messages can quote long ids (e.g. of:uefa.champions:2022:…): wrap them instead of widening a phone page. */
+.state span, .state { overflow-wrap: anywhere; }
+
+/* Live soccer forecasts (SoccerLivePanel) */
+.soccer-live { margin: 0 0 24px; }
+.soccer-live-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.soccer-live-head h2 { margin: 0; }
+.soccer-live-badge { background: var(--lime, #A3E635); color: #1E1B4B; font-weight: 700; }
+.soccer-live-list { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); }
+.soccer-live-card { border: 1px solid rgba(30, 27, 75, .12); border-radius: 16px; padding: 14px 16px; background: var(--panel, #fff); min-width: 0; }
+.soccer-live-card header { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.soccer-live-probs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.soccer-live-prob { display: flex; flex-direction: column; gap: 2px; padding: 8px; border-radius: 12px; background: rgba(30, 27, 75, .04); min-width: 0; overflow-wrap: anywhere; }
+.soccer-live-prob.is-top { outline: 2px solid #1E1B4B; }
+.soccer-live-prob strong { font-size: 1.25em; }

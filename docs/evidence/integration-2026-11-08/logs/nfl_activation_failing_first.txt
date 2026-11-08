@@ -1,0 +1,5 @@
+E       AssertionError: a sealed NFL dependency changed; NFL would be inactive
+E       assert 'a926a90ed63fd631' == 'b6074877a7e7ccfe'
+E         
+E         - b6074877a7e7ccfe
+E         + a926a90ed63fd631

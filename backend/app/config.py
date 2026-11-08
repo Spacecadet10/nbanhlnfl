@@ -7,7 +7,7 @@ def telegram_settings() -> dict:
     """Private local bot settings; environment overrides the ignored, owner-only credentials file."""
     import stat
     settings = {}
-    path = REPO_ROOT / '.env.telegram'
+    path = telegram_credentials_path()
     if path.exists():
         if path.is_symlink() or stat.S_IMODE(path.stat().st_mode) & 0o077:
             raise ValueError('Telegram credentials must be a private regular file (chmod 600 .env.telegram).')
@@ -28,11 +28,12 @@ def save_telegram_setting(key: str, value: str) -> None:
         raise ValueError('Invalid Telegram setting.')
     settings = telegram_settings()
     settings[key] = value
-    fd, name = tempfile.mkstemp(prefix='.env.telegram.', dir=REPO_ROOT)
+    path = telegram_credentials_path()
+    fd, name = tempfile.mkstemp(prefix='.env.telegram.', dir=path.parent)
     try:
         with os.fdopen(fd, 'w') as f:
             f.write(''.join(f'{k}={v}\n' for k, v in settings.items()))
-        os.replace(name, REPO_ROOT / '.env.telegram')
+        os.replace(name, path)
     finally:
         if os.path.exists(name):
             os.unlink(name)
@@ -42,6 +43,63 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def data_dir() -> Path:
     return Path(os.environ.get("NBA_DATA_DIR", REPO_ROOT / "data"))
+
+
+def protected_data_dir(path: Path) -> bool:
+    """A data folder holding live stores: this checkout's own `data/` folder (the default data directory) or the folder
+    directly inside the root of a main git checkout (its parent has a `.git` DIRECTORY; linked worktrees have a `.git`
+    file; copies, scratch and test folders have none). Development commands never write, migrate or create a store there
+    (cli._write_refusal, db.migrate); only the verified release environment may (release.migration_context).
+    Path checks only: no subprocess, nothing at import time."""
+    p, own = Path(path).expanduser().resolve(), (REPO_ROOT / "data").resolve()
+    if p == own:
+        return True
+    try:            # by file identity when both exist: another spelling (case variant, firmlink) of the same folder
+        if os.path.samefile(p, own):
+            return True
+    except (FileNotFoundError, NotADirectoryError):
+        pass
+    except OSError:
+        return True     # cannot tell: fail closed
+    return (p.parent / ".git").is_dir()
+
+
+def protected_path(path: Path) -> bool:
+    """True when `path`, with links followed, is a protected data folder or lies inside one (a store file, its raw/ or
+    research/ folder, a lock file), so a link from an unprotected folder into the live one is caught too."""
+    p = Path(path).expanduser().resolve()
+    return any(protected_data_dir(a) for a in (p, *p.parents))
+
+
+def lock_path(sport: str) -> Path:
+    """The store's job-lock file (db.store_lock)."""
+    return data_dir() / f".{sport}-jobs.lock"
+
+
+# A release checkout imports code from its own folder, so REPO_ROOT is not where the production receipts and credentials
+# live: the release environment names them explicitly (scripts/launchd, app/release.delivery_check).
+TELEGRAM_LEDGER_ENV = 'NBA_TELEGRAM_LEDGER'
+TELEGRAM_CREDENTIALS_ENV = 'NBA_TELEGRAM_CREDENTIALS'
+
+
+def telegram_credentials_path() -> Path:
+    """The private bot settings file: named explicitly in the release environment, else this checkout's own.
+    A development copy (NBA_DATA_DIR elsewhere) still reads these same credentials: tests must mock Telegram."""
+    explicit = os.environ.get(TELEGRAM_CREDENTIALS_ENV)
+    return Path(explicit) if explicit else REPO_ROOT / '.env.telegram'
+
+
+def telegram_ledger_path() -> Path:
+    """Preserve the production ledger; isolate development copies with their data directory."""
+    explicit = os.environ.get(TELEGRAM_LEDGER_ENV)
+    if explicit:
+        return Path(explicit)
+    directory = data_dir()
+    if directory.resolve() == (REPO_ROOT / 'data').resolve():
+        return REPO_ROOT / '.telegram-delivery.sqlite'
+    if (directory.resolve().parent / '.git').is_dir():   # another main checkout's live data folder: its ledger, never a new one
+        return directory.resolve().parent / '.telegram-delivery.sqlite'
+    return directory / '.telegram-delivery.sqlite'
 
 
 def db_path(sport: str = "nba") -> Path:

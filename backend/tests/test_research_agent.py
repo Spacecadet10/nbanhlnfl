@@ -590,7 +590,9 @@ def test_f_low2_registration_refuses_a_workspace_that_configures_programs(tmp_pa
     try:
         for i, plant in enumerate([lambda ws: git(ws, "config", "filter.x.clean", "cat"),
                                    lambda ws: git(ws, "config", "core.fsmonitor", "true"),
-                                   lambda ws: git(ws, "config", "include.path", "/tmp/x"),
+                                   # an absent path inside this test's own directory: a machine-wide path such as
+                                   # /tmp/x may exist (another process created one on 2026-11-07) and git would read it
+                                   lambda ws: git(ws, "config", "include.path", str(tmp_path / "absent-include")),
                                    lambda ws: (ws / ".git" / "hooks" / "post-checkout").write_text("#!/bin/sh\n"),
                                    lambda ws: (ws / ".gitattributes").write_text("* text\n"),
                                    lambda ws: (ws / ".git" / "objects" / "info" / "alternates").write_text("/tmp\n")]):

@@ -1,0 +1,8 @@
+2a936de8873c9f94e5f2495ecf51c59d943b91098596ffff00c58a7712d39d4c  ./plan-B-tests/test_planb_eval.py
+3fbc9f8f04f65b6efea666ba5751251b663e6bc7d7fafdf0b8786262c819ea6c  ./plan-B-tests/test_planb_timestamps.py
+fec99e3df4f23c43e99147df834a3fba850356e72e0b15a285a021e0eb0b7b1c  ./plan-C-scripts/hashsearch.py
+f92f63e223d74f3b0ae44b863e6b24f42c566dadb3a4e643b0e41cfb11f67e33  ./plan-C-scripts/manual_backup_nfl.py
+02022d73d82be4f4c2eb699be3071edaa667a68eaad2a55950b3b08a2c7837bc  ./plan-C-scripts/missing_csv.py
+424d982448ad081415d74f0951e0b89d130e41ffbff735b0fb7fc1ce868befa5  ./plan-C-scripts/sizesearch.py
+461ac04db3db0731b730f818f92b401d23db3d49f0c46699acbb85c8622a0cf5  ./plan-C-tests/test_backup_nfl_plan.py
+d6e069269c86a6544e1b9b2bd2cdd785e72c48fe1b921462aa5870d6503c3e78  ./plan-C-tests/test_telegram_guard_plan.py

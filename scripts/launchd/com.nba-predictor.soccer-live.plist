@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.nba-predictor.soccer-live</string>
+  <key>ProgramArguments</key>
+  <array><string>/bin/sh</string><string>/Users/andry/nba-predictor-delivery/scripts/soccer_live_cycle.sh</string></array>
+  <key>WorkingDirectory</key><string>/Users/andry/nba-predictor-delivery/backend</string>
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Minute</key><integer>25</integer></dict>
+  </array>
+  <key>RunAtLoad</key><false/>
+  <key>ProcessType</key><string>Standard</string>
+  <key>StandardOutPath</key><string>/Users/andry/Desktop/nba-predictor-sprint1/data/soccer-live-launchd.log</string>
+  <key>StandardErrorPath</key><string>/Users/andry/Desktop/nba-predictor-sprint1/data/soccer-live-launchd.log</string>
+</dict>
+</plist>

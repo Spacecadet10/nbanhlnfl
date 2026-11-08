@@ -1,13 +1,15 @@
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
-import type { NflCapability, SoccerMatch, SoccerMeta } from '../api/types';
+import type { NflCapability, SoccerLiveForecast, SoccerMatch, SoccerMeta } from '../api/types';
 import { useApi } from '../api/useApi';
 import { useCarriedSearch, useCompetition } from '../components/Selection';
 import { AsyncView, Empty } from '../components/States';
+import { gameRoute } from '../components/gameRoute';
 import { TeamLogo } from '../components/TeamLogo';
 import { EmptyForecastState, Icon, MetricCard, PageTitle } from '../components/ui';
 import { calendarDate, dateTime, FULL_DATE, tipoffTime } from '../format';
 import { GameDateControl } from './NflPages';
+import { ResearchGameDay, ResearchHistory, ResearchMatchPage, ResearchPerformance } from './SoccerResearch';
 
 // European soccer is data-only (backend app/soccer.py): fixtures, results and when each was learned, one competition at a
 // time through /api/soccer/*. Nothing here shows or derives a forecast, odds, injury or metric. Results keep soccer's
@@ -28,6 +30,7 @@ function sideText(m: SoccerMatch, side: SoccerMatch['regulation_result']) {
 /** Short status for a card: kickoff time, or how a final match was decided. */
 function statusLabel(m: SoccerMatch, date: string) {
   if (m.status === 'final') {
+    if (m.decided_in === 'unknown') return 'FINAL · ENDING NOT ESTABLISHED';
     if (m.decided_in === 'penalties') return m.home_shootout != null ? `AFTER EXTRA TIME · PENS ${m.home_shootout}–${m.away_shootout}` : 'AFTER EXTRA TIME · PENS';
     if (m.decided_in === 'extra_time') return 'AFTER EXTRA TIME';
     return m.regulation_result === 'draw' ? 'FULL TIME · DRAW' : 'FULL TIME';
@@ -45,15 +48,40 @@ function learned(m: SoccerMatch) {
     : `Result first seen ${dateTime(m.result_available_at)}`;
 }
 
-/** Routes the soccer selection: Game day, a match, or the honest "not available" screens for everything else. */
+/** Routes the soccer selection. When the store holds research forecasts (openfootball history + backtest ledger), Game
+ * day, Performance and History show those, labelled Research backtest; otherwise the ESPN fixture screens and the honest
+ * "not available" screens. A history match id (of:…) always opens its research page. */
 export function SoccerScreens() {
+  const { pathname } = useLocation();
+  const [competition] = useCompetition();
+  const research = useApi((s) => api.soccerResearchMeta(competition, s), [competition]);
+  let matchId: string | null = null;
+  if (pathname.startsWith('/games/')) {
+    try { matchId = decodeURIComponent(pathname.slice('/games/'.length)); } catch { matchId = ''; }   // malformed: not found
+  }
+  if (matchId?.startsWith('of:')) return <ResearchMatchPage id={matchId} />;
+  if (research.state.status === 'loading') return <AsyncView state={research.state} retry={research.retry}>{() => null}</AsyncView>;
+  const r = research.state.status === 'success' && research.state.data.runs.length ? research.state.data : null;
+  if (r && !matchId) {
+    if (pathname === '/') return <ResearchGameDay meta={r} />;
+    if (pathname.startsWith('/performance')) return <ResearchPerformance meta={r} />;
+    if (pathname.startsWith('/history')) return <ResearchHistory meta={r} />;
+  }
+  return <SoccerEspnScreens researchError={research.state.status === 'error' ? research.state.error : null} />;
+}
+
+function SoccerEspnScreens({ researchError }: { researchError: string | null }) {
   const { pathname } = useLocation();
   const [competition] = useCompetition();
   const meta = useApi((s) => api.soccerMeta(competition, s), [competition]);
   return (
+    <>
+    {researchError && <p className="notice small">Soccer research forecasts are not available here: {researchError}</p>}
     <AsyncView state={meta.state} retry={meta.retry}>
       {(m) => {
-        if (pathname.startsWith('/games/')) return <SoccerMatchPage id={decodeURIComponent(pathname.slice('/games/'.length))} />;
+        const game = gameRoute(pathname);
+        if (game.kind === 'game') return <SoccerMatchPage id={game.id} />;
+        if (game.kind === 'malformed') return <Empty>This match link is damaged or incomplete. <Link to="/?sport=soccer">Go to soccer matches</Link></Empty>;
         if (pathname === '/') return <SoccerGameDay meta={m} />;
         const page = pathname.startsWith('/performance') ? 'performance' : pathname.startsWith('/history') ? 'history'
           : pathname.startsWith('/daily-learning') ? 'research' : null;
@@ -61,10 +89,22 @@ export function SoccerScreens() {
           : <Empty>Page not found. <Link to="/?sport=soccer">Go to soccer matches</Link></Empty>;
       }}
     </AsyncView>
+    </>
   );
 }
 
 function PredictionsUnavailable({ capabilities }: { capabilities: NflCapability[] }) {
+  const live = capabilities.find((c) => c.id === 'forecasts' && c.available);
+  if (live) {
+    return (
+      <details className="notice nfl-notice">
+        <summary><strong>Live soccer forecasts:</strong> the 90-minute home/draw/away result only. <span className="link-btn">What else is not available</span></summary>
+        <ul className="nfl-capabilities small">
+          {capabilities.map((c) => <li key={c.id}><strong>{c.label}:</strong> {c.available ? 'available. ' : 'not available. '}<span className="muted">{c.reason}</span></li>)}
+        </ul>
+      </details>
+    );
+  }
   return (
     <details className="notice nfl-notice">
       <summary><strong>Soccer predictions are not available:</strong> fixtures and results only, with no forecasts, odds or injuries. <span className="link-btn">Why</span></summary>
@@ -89,9 +129,65 @@ function SoccerGameDay({ meta }: { meta: SoccerMeta }) {
       <PageTitle icon="ball" plain title={`${meta.competition} matches`} sub="Fixtures and results from ESPN. Kickoff dates are US Eastern."
         right={date && <GameDateControl date={date} dates={meta.match_dates} defaultDate={meta.default_date} onChange={setDate} />} />
       <PredictionsUnavailable capabilities={meta.capabilities} />
+      <SoccerLivePanel competition={meta.competition_id} name={meta.competition} />
       {date ? <SoccerSlate meta={meta} date={date} onChange={setDate} />
-        : <Empty>No {meta.competition} matches are stored yet. Import days with <code>python -m app.cli soccer ingest --competition {meta.competition_id} --from YYYYMMDD --to YYYYMMDD</code> from <code>backend/</code>.</Empty>}
+        : <Empty>No {meta.competition} matches are stored yet. A development store is filled from <code>backend/</code> with <code>NBA_DATA_DIR=&lt;scratch or development data directory&gt; .venv/bin/python -m app.cli soccer ingest --competition {meta.competition_id} --from YYYYMMDD --to YYYYMMDD</code> (never the live <code>data/</code> folder). That collects from ESPN, which the source review found not clearly permitted for this project: a user decision.</Empty>}
     </section>
+  );
+}
+
+const OUTCOME_LABEL = { home: 'Home win', draw: 'Draw', away: 'Away win' } as const;
+const pct = (p: number) => `${(p * 100).toFixed(1)}%`;
+
+/** Live 90-minute forecasts of the sealed Elo (backend app/soccer_live.py): upcoming matches and those of the last 2 days.
+ * Separate from the research backtest screens; shows the input check when a run was refused. */
+function SoccerLivePanel({ competition, name }: { competition: SoccerMeta['competition_id']; name: string }) {
+  const { state } = useApi((s) => api.soccerLive(competition, s), [competition]);
+  if (state.status !== 'success') return null;            // no live store yet: the fixtures below still show
+  const d = state.data;
+  return (
+    <section className="soccer-live" aria-label="Live soccer forecasts">
+      <div className="soccer-live-head">
+        <h2>Upcoming forecasts</h2>
+        <span className="pill soccer-live-badge">{d.label}</span>
+      </div>
+      <p className="small muted">{d.settlement_rule} Model: {d.model.name}, frozen and tested once on held-out seasons; not a betting edge.</p>
+      {!d.in_scope ? <Empty>{d.scope_note}</Empty> : (
+        <>
+          {d.check && !d.check.ok && (
+            <div className="notice error-notice" role="alert">
+              <strong>No new forecast: inputs refused at {dateTime(d.check.checked_at)}.</strong>
+              <ul className="small">{d.check.problems.slice(0, 4).map((p) => <li key={p}>{p}</li>)}</ul>
+            </div>
+          )}
+          {d.forecasts.length === 0
+            ? <Empty>No live {name} forecast for the coming matches yet. Each match is forecast before 06:00 UTC on its date, once every earlier match is settled.</Empty>
+            : <div className="soccer-live-list">{d.forecasts.map((f) => <SoccerLiveCard key={f.forecast_id} f={f} />)}</div>}
+        </>
+      )}
+    </section>
+  );
+}
+
+function SoccerLiveCard({ f }: { f: SoccerLiveForecast }) {
+  const names = { home: `${f.home} win`, draw: 'Draw', away: `${f.away} win` } as const;
+  return (
+    <article className="soccer-live-card">
+      <header><strong>{f.home} vs {f.away}</strong><span className="muted small">{dateTime(f.kickoff_at)}</span></header>
+      <div className="soccer-live-probs">
+        {(['home', 'draw', 'away'] as const).map((o) => (
+          <div key={o} className={`soccer-live-prob${f.most_likely === o ? ' is-top' : ''}`}>
+            <span className="small muted">{OUTCOME_LABEL[o]}</span>
+            <strong>{pct(f.probabilities[o])}</strong>
+            <span className="small">{names[o]}</span>
+          </div>
+        ))}
+      </div>
+      <p className="small muted">
+        {f.result ? <>90-minute result: <strong>{names[f.result]}</strong> ({f.result === f.most_likely ? 'model\u2019s most likely outcome' : 'not the model\u2019s most likely outcome'}). </> : null}
+        Forecast {dateTime(f.generated_at)} (cutoff {dateTime(f.cutoff_at)}); results through {f.inputs_through ? dateTime(f.inputs_through) : '—'}; ESPN data retrieved {dateTime(f.source_retrieved_at)}.
+      </p>
+    </article>
   );
 }
 
@@ -171,13 +267,17 @@ function ResultFacts({ m }: { m: SoccerMatch }) {
   return (
     <dl className="facts">
       <dt>Score when play ended</dt>
-      <dd>{m.home.name} {m.home_score}–{m.away_score} {m.away.name}{m.decided_in !== 'regulation' ? ' (after extra time)' : ''}</dd>
+      <dd>{m.home.name} {m.home_score}–{m.away_score} {m.away.name}{m.decided_in === 'extra_time' || m.decided_in === 'penalties' ? ' (after extra time)' : ''}</dd>
+      {m.decided_in === 'unknown' && <><dt>How it ended</dt>
+        <dd><span className="muted">Not established: ESPN's fields disagree ({m.decision_note}). Nothing is guessed.</span></dd></>}
       <dt>90-minute result</dt>
       <dd>{m.regulation_result ? sideText(m, m.regulation_result)
-        : <span className="muted">Not available: the match went to extra time and ESPN publishes no 90-minute score.</span>}</dd>
-      <dt>Extra time</dt><dd>{m.decided_in === 'regulation' ? 'Not played' : 'Played'}</dd>
+        : m.decided_in === 'unknown'
+        ? <span className="muted">Not available: it is not established whether the match went to extra time.</span>
+        : <span className="muted">Not shown: the match went to extra time and ESPN's score fields include it. The 90-minute score can be derived from goal minutes; that derivation is not validated yet, so nothing is shown.</span>}</dd>
+      <dt>Extra time</dt><dd>{m.decided_in === 'regulation' ? 'Not played' : m.decided_in === 'unknown' ? <span className="muted">Not established</span> : 'Played'}</dd>
       <dt>Penalty shoot-out</dt>
-      <dd>{m.decided_in !== 'penalties' ? 'None'
+      <dd>{m.decided_in === 'unknown' ? <span className="muted">None reported by the source</span> : m.decided_in !== 'penalties' ? 'None'
         : m.home_shootout != null ? `${m.home_shootout}–${m.away_shootout}, ${name(m, m.shootout_winner)} won the shoot-out`
         : <span className="muted">A shoot-out was held; the source did not report its score.</span>}</dd>
       {(m.leg != null || m.aggregate_home != null) && <>
@@ -186,6 +286,8 @@ function ResultFacts({ m }: { m: SoccerMatch }) {
           {m.aggregate_home != null ? ` · aggregate ${m.home.name} ${m.aggregate_home}–${m.aggregate_away} ${m.away.name} (as reported)` : ''}</dd>
         <dt>Went through</dt>
         <dd>{qualified ? <>{qualified} <span className="muted">(the tie, not this match)</span></> : <span className="muted">Not decided by this match, or not reported.</span>}</dd>
+        {m.tie_facts_available_at && m.tie_facts_available_at !== m.result_available_at && <>
+          <dt>Tie facts known</dt><dd>{dateTime(m.tie_facts_available_at)} <span className="muted">(later than the result)</span></dd></>}
       </>}
       {m.note && <><dt>Source note</dt><dd>{m.note}</dd></>}
       <dt>Result known</dt><dd>{learned(m)}</dd>
@@ -210,7 +312,7 @@ function SoccerMatchPage({ id }: { id: string }) {
                   <span className="league-chip">{m.competition}</span>
                   <h2 className="hero-matchup">{m.home.name} <span>v</span> {m.away.name}</h2>
                   <p className="hero-time">{m.status === 'final'
-                    ? <>{m.home_score}–{m.away_score}{m.decided_in === 'extra_time' ? ' after extra time' : m.decided_in === 'penalties'
+                    ? <>{m.home_score}–{m.away_score}{m.decided_in === 'unknown' ? ' · ending not established' : m.decided_in === 'extra_time' ? ' after extra time' : m.decided_in === 'penalties'
                       ? ` after extra time${m.home_shootout != null ? `, ${m.home_shootout}–${m.away_shootout} on penalties` : ', decided on penalties'}` : m.regulation_result === 'draw' ? ' · draw' : ''}</>
                     : <>Kickoff: {dateTime(m.kickoff)}{m.status !== 'scheduled' && ` · ${m.status.replace('_', ' ')}`}</>}</p>
                 </div>
@@ -221,8 +323,14 @@ function SoccerMatchPage({ id }: { id: string }) {
                   <h2>Result</h2>
                   <ResultFacts m={m} />
                   {d.result_revisions.length > 1 && (
-                    <p className="small muted">The source corrected this result {d.result_revisions.length - 1} time(s); every version is kept:{' '}
-                      {d.result_revisions.map((r) => `${r.home_score}–${r.away_score}${r.home_shootout != null ? ` (pens ${r.home_shootout}–${r.away_shootout})` : ''} seen ${dateTime(r.observed_at)}`).join('; ')}.</p>
+                    <p className="small muted">{d.result_revisions.filter((r) => r.basis === 'observed').length > 1
+                      ? `The source delivered ${d.result_revisions.filter((r) => r.basis === 'observed').length} versions of this result (a later version may only add tie facts such as the qualifier)`
+                      : 'One version from the source'}{d.result_revisions.some((r) => r.basis === 'reclassified') ? ', re-read by a newer importer from the same retrieval' : ''}; every version is kept:{' '}
+                      {d.result_revisions.map((r) => `${r.home_score}–${r.away_score}${r.decided_in === 'regulation' ? '' : r.decided_in === 'unknown' ? ' (ending unclear)' : ' aet'}`
+                        + `${r.home_shootout != null ? `, pens ${r.home_shootout}–${r.away_shootout}` : ''}`
+                        + `${r.aggregate_home != null ? `, agg ${r.aggregate_home}–${r.aggregate_away}` : ''}`
+                        + `${r.qualified_team_id ? `, through: ${r.qualified_team_id === m.home.team_id ? m.home.name : m.away.name}` : ''}`
+                        + (r.basis === 'reclassified' ? ' (re-read, same retrieval)' : ` (seen ${dateTime(r.observed_at)})`)).join('; ')}.</p>
                   )}
                 </div>
                 <div className="card">
@@ -287,7 +395,7 @@ function ResultTable({ matches, team, empty }: { matches: SoccerMatch[]; team?: 
             <td>{new Date(m.kickoff).toLocaleDateString([], FULL_DATE)}</td>
             <td><Link to={`/games/${encodeURIComponent(m.match_id)}${carried}`}>{m.home.abbr} v {m.away.abbr}</Link>
               {stageOf(m) && <span className="muted small"> · {stageOf(m)}</span>}</td>
-            <td>{m.home_score}–{m.away_score}{m.decided_in === 'extra_time' ? ' aet' : m.decided_in === 'penalties'
+            <td>{m.home_score}–{m.away_score}{m.decided_in === 'unknown' ? ' (ending unclear)' : m.decided_in === 'extra_time' ? ' aet' : m.decided_in === 'penalties'
               ? ` aet${m.home_shootout != null ? `, pens ${m.home_shootout}–${m.away_shootout}` : ', pens'}` : ''}</td>
             {team && <td>{outcome(m)}</td>}
           </tr>

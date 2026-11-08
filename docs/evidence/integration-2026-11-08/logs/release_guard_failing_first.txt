@@ -1,0 +1,15 @@
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'app.config' has no attribute 'TELEGRAM_LEDGER_ENV'
+
+tests/test_delivery_release.py:154: AttributeError
+=========================== short test summary info ============================
+FAILED tests/test_delivery_release.py::test_explicit_production_paths_are_honoured
+FAILED tests/test_delivery_release.py::test_without_explicit_paths_a_release_elsewhere_would_lose_the_production_ledger
+FAILED tests/test_delivery_release.py::test_clean_release_with_existing_state_passes
+FAILED tests/test_delivery_release.py::test_every_unsafe_delivery_state_is_refused
+FAILED tests/test_delivery_release.py::test_guarded_sender_refuses_from_the_development_checkout_before_any_request
+FAILED tests/test_delivery_release.py::test_guarded_ticket_helper_refuses_from_the_development_checkout
+FAILED tests/test_delivery_release.py::test_guarded_commands_proceed_from_a_clean_release
+FAILED tests/test_delivery_release.py::test_the_guarded_ledger_is_never_created
+FAILED tests/test_delivery_release.py::test_development_runs_are_unchanged - ...
+9 failed in 0.54s

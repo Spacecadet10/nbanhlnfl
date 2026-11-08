@@ -46,6 +46,105 @@ def _record_lock_busy(sport: str, reason: str):
         return None
 
 
+def _write_refusal(sport: str, *, migrate: bool = False, info=None, paths=()):
+    """None when this command may open `sport`'s store for writing. A store in a protected live data folder
+    (config.protected_data_dir: REPO/data, the live stores) is written only in the verified release environment
+    (release.migration_context empty) and migrated only by the explicit `migrate` command there, whatever its schema
+    (audit H1). Decided from paths and the release facts alone: before any lock, connection, directory or file.
+    `info`: a release.check result the caller already has; `paths`: other files the command writes. Links are followed
+    (a store file, raw/ or research/ folder or lock linked into the live folder is protected too)."""
+    targets = (config.data_dir(), config.db_path(sport), config.raw_dir(), config.data_dir() / "research",
+               config.lock_path(sport), *paths)
+    hit = next((t for t in targets if config.protected_path(t)), None)
+    store = config.db_path(sport)
+    links = store.stat().st_nlink if hit is None and store.is_file() else 1
+    if hit is None and links <= 1:
+        return None
+    # A hard-linked store file may be the live store under another name (no path leads into the live folder): fail closed.
+    where = (f"{hit} is in a protected live data folder" if hit is not None else
+             f"{store} has {links} hard links (it may be a live store under another name)")
+    hint = "use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)"
+    problems = release.migration_context(sport, info)
+    if problems:
+        return {"status": "refused", "reason": f"{where} and this is not the verified release environment "
+                                              f"({'; '.join(problems)}): development commands never write there "
+                                              f"(store, migration, new store, activation, access log); {hint}",
+                "problems": problems}
+    stored, shipped = release.store_schema(sport), release.shipped_schema()
+    if stored != shipped and not migrate:
+        return {"status": "refused", "reason": f"{where} at schema {stored}; this release ships {shipped}: only the explicit "
+                                              "`migrate` command migrates it"}
+    return None
+
+
+def _refused(sport: str, *, migrate: bool = False, info=None, paths=()) -> bool:
+    """Prints the structured refusal (status 'refused') when `_write_refusal` gives one; the caller then exits 1."""
+    refusal = _write_refusal(sport, migrate=migrate, info=info, paths=paths)
+    if refusal:
+        print(json.dumps(refusal))
+    return refusal is not None
+
+
+def _open_ro(path):
+    """A connection the SQLite library itself opens read-only (mode=ro): unlike connect_readonly it cannot checkpoint a
+    WAL into the store file on close."""
+    import sqlite3
+    conn = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _has_raw_log(conn) -> bool:
+    return conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='raw_responses'").fetchone() is not None
+
+
+def _replay_refused(sport: str, missing_fn) -> bool:
+    """Read-only preflight of `replay` (audit C4/I9): every cached file it will read must exist, checked before the store
+    is migrated or replayed; otherwise a structured refusal with the missing raw ids and nothing written. No store file
+    or no raw_responses table: nothing is logged, nothing to read. An empty (0-byte) store file or any other read error
+    refuses (fails closed)."""
+    import sqlite3
+    path = config.db_path(sport)
+    if not path.is_file():
+        return False
+    if path.stat().st_size == 0:
+        print(json.dumps({"status": "refused", "reason": f"the store file {path} is empty; nothing to replay from; nothing "
+                                                         "was migrated or replayed"}))
+        return True
+    try:
+        conn = _open_ro(path)
+        try:
+            if not _has_raw_log(conn):
+                return False
+            missing = missing_fn(conn)
+        finally:
+            conn.close()
+    except sqlite3.Error as exc:
+        print(json.dumps({"status": "refused", "reason": f"replay preflight could not read the store {path}: "
+                                                         f"{type(exc).__name__}: {exc}; nothing was migrated or replayed"}))
+        return True
+    if not missing:
+        return False
+    full = {"nfl": "`nfl release-check` lists them all", "soccer": "soccer has no release-check"}.get(
+        sport, f"`--sport {sport} release-check` lists them all")
+    print(json.dumps({"status": "refused", "reason": f"replay would read {len(missing)} cached source response file(s) "
+                      f"missing under {config.raw_dir()}; nothing was migrated or replayed (a re-fetch is a new retrieval, "
+                      f"never a recovery). The first {RAW_LIST_LIMIT} ids are listed; {full}",
+                      "missing_raw": {"count": len(missing), "raw_ids": missing[:RAW_LIST_LIMIT],
+                                      "truncated": len(missing) > RAW_LIST_LIMIT}}))
+    return True
+
+
+RAW_LIST_LIMIT = 20     # raw ids listed in a refusal or release-check (the count is always complete)
+
+
+def _raw_missing(conn) -> dict:
+    """The full missing-bytes scan, for `release-check` output only (never in release.check, which runs every tick)."""
+    from . import raw_cache
+    missing = raw_cache.missing_raw_ids(conn)
+    return {"count": len(missing), "raw_ids": missing[:RAW_LIST_LIMIT], "truncated": len(missing) > RAW_LIST_LIMIT}
+
+
 def _any_failed(result) -> bool:
     """True if any job result (nested dicts/lists) has status 'failed'."""
     if isinstance(result, list):
@@ -71,13 +170,25 @@ def main(argv=None) -> int:
     nfl_p = sub.add_parser("nfl", help="NFL store and dedicated live pipeline: migrate, ingest ESPN NFL months, "
                                        "replay or coverage. Ignores --sport; always opens the NFL store.")
     sc = sub.add_parser("soccer", help="European soccer data-only store (seven ESPN competitions): migrate, ingest days, "
-                                       "replay or coverage. Ignores --sport; always opens the soccer store. No forecasts.")
-    sc.add_argument("action", choices=("migrate", "ingest", "replay", "coverage"))
+                                       "replay or coverage; live-refresh / live-forecast / live-status for the sealed Elo's live "
+                                       "90-minute forecasts (app/soccer_live.py). Ignores --sport; always opens the soccer store.")
+    sc.add_argument("action", choices=("migrate", "ingest", "replay", "coverage", "history-download", "history-replay",
+                                       "history-coverage", "eval-develop", "eval-record", "eval-test", "live-refresh",
+                                       "live-forecast", "live-status"))
     sc.add_argument("--competition", action="append", choices=(*soccer_competitions(), "all"),
                     help="ingest: competition slug (repeatable) or 'all' (default all)")
     sc.add_argument("--from", dest="start", help="ingest: first day YYYYMMDD")
     sc.add_argument("--to", dest="end", help="ingest: last day YYYYMMDD (at most 62 days per run)")
     sc.add_argument("--sleep", type=float, default=1.0, help="ingest: seconds between requests")
+    sc.add_argument("--pin", action="append", default=[], metavar="REPO=SHA",
+                    help="history-download: openfootball repo commit to download (repeatable; default: current HEAD)")
+    sc.add_argument("--out", help="eval-develop / eval-test: output folder (must not exist for eval-test); eval-record: "
+                                  "a finished eval-develop folder")
+    sc.add_argument("--sealed", help="eval-test: the sealed candidate JSON (the one-shot reserved test; needs review + go)")
+    sc.add_argument("--if-ready", action="store_true", help="live-forecast: an early attempt; when inputs are not settled yet, "
+                                                         "record nothing and exit 0 (the scheduled cycle's look-ahead)")
+    sc.add_argument("--day", help="live-forecast: match date YYYY-MM-DD (default today, UTC); refused after its 06:00 UTC "
+                                  "cutoff or while any earlier match is unsettled")
     pp = sub.add_parser("preview-publish", help="Development only: republish read-only copies of the live stores into a "
                                                 "scripts/dev.sh data directory when their data changed (docs/REFRESH_PLAN.md)")
     pp.add_argument("--live", required=True, help="live data directory (read-only)")
@@ -86,7 +197,7 @@ def main(argv=None) -> int:
     pp.add_argument("--max-lag-minutes", type=float, default=10, help="republish when the copy's source time lags live this much")
     pp.add_argument("--once", action="store_true")
     nfl_p.add_argument("action", choices=("migrate", "ingest", "replay", "coverage", "refresh", "tick", "evaluate", "collect-lines",
-                                                "test-run", "activate"))
+                                                "test-run", "activate", "release-check"))
     nfl_p.add_argument("--out", help="evaluate: directory for the report and the sealed choice (development + validation "
                                      "only; 2022-2025 are never read)")
     nfl_p.add_argument("--sealed", help="test-run / collect-lines --test: the sealed choice JSON (digest checked)")
@@ -332,6 +443,11 @@ def main(argv=None) -> int:
     args = p.parse_args(argv)
     if args.cmd == 'telegram':
         from . import telegram
+        if release.enabled():          # guarded release: refuse before any request or ledger access (release.delivery_check)
+            info = release.delivery_check()
+            if info["problems"]:
+                print(json.dumps({"status": "failed", "reason": "release guard", **info}))
+                return 1
         if args.interval < 30:
             p.error('Telegram interval must be at least 30 seconds.')
         try:
@@ -402,6 +518,8 @@ def main(argv=None) -> int:
     if args.cmd == "tuning-study":       # opens (and migrates) both stores: run on copies
         from pathlib import Path
         import importlib.util
+        if any(_refused(s) for s in sports.SPORT_IDS):      # the stores conn_for opens; never the live ones
+            return 1
         if importlib.util.find_spec("optuna") is None:      # refuse before any store is opened or migrated
             p.error("tuning-study needs the research extra (optuna==5.0.0); install it in a research venv, not the live one")
         from . import tuning_study
@@ -422,6 +540,8 @@ def main(argv=None) -> int:
     if args.cmd == "adaptive-train":     # its own locking (docs/ADAPTIVE_SYSTEM.md §7): the job lock only for the snapshot and
         from . import adaptive           # the publication, the training itself under a separate training lock
         log = lambda m: print(m, file=sys.stderr)   # noqa: E731
+        if not args.dry_run and _refused(args.sport):   # writes fit records / a deferral row: never from a dev checkout
+            return 1
         # The training walks read the cached source responses from this data directory; a directory copied without them
         # failed hours into retrain attempt 1 (2026-10-14), so it is refused before any training starts. Fail-closed over
         # every cached source, not only those the members read today; `--force` does not bypass it; nothing is written.
@@ -485,6 +605,8 @@ def main(argv=None) -> int:
     if args.cmd == "deep-study":         # opens (and migrates) both stores: run on copies
         from pathlib import Path
         import importlib.util
+        if any(_refused(s) for s in sports.SPORT_IDS):      # the stores conn_for opens; never the live ones
+            return 1
         if any(importlib.util.find_spec(m) is None for m in ("torch", "tensorflow")):   # refuse before any store is opened
             p.error("deep-study needs the deep extra (torch, tensorflow); install it in a research venv, not the live one")
         from . import deep_study
@@ -557,6 +679,9 @@ def main(argv=None) -> int:
                               "run_id": release.record_refusal(args.sport, args.cmd, info)}))
             return 1
         os.environ[release.COMMIT_ENV] = info["commit"]          # recorded in every job run of this command
+        guard_info = info
+    else:
+        guard_info = None
     if args.cmd in READ_ONLY_COMMANDS:
         try:
             conn = db.connect_readonly(args.sport)
@@ -565,6 +690,10 @@ def main(argv=None) -> int:
         if not db.has_table(conn, "job_runs") or db.store_sport(conn) not in (args.sport, None):
             p.error(f"the {args.sport} store is not migrated or holds another sport's data")
         return _run(args, p, conn, [])
+    if _refused(args.sport, migrate=args.cmd == "migrate", info=guard_info):
+        return 1
+    if args.cmd == "replay" and _replay_refused(args.sport, ingest.replay_missing):
+        return 1
     # One job per store at a time: every command below opens (and migrates) the sport's store. The periodic odds cycle
     # waits out a short job but does not queue behind another full cycle (that cycle is doing the same work; the next
     # interval follows); other commands wait, then fail visibly. `scheduler` holds the lock per iteration, not while asleep.
@@ -578,7 +707,7 @@ def main(argv=None) -> int:
             print(json.dumps(busy))      # tick: no row (it runs every minute; the next one follows)
             return 0 if args.cmd in ("odds", "tick") else 1
         conn = db.connect(sport=args.sport)
-        applied = db.migrate(conn)
+        applied = db.migrate(conn, explicit=args.cmd == "migrate")
         db.claim_store(conn, args.sport)
         if args.cmd != "scheduler":
             return _run(args, p, conn, applied)
@@ -589,6 +718,7 @@ def _nfl(args, p) -> int:
     """NFL data-only commands on the NFL store, under its own job lock. Nothing here touches the NBA or NHL stores."""
     import time
     from . import nfl
+    guard_info = None
     if release.enabled() and args.action in ("tick", "refresh"):
         info = release.check("nfl")
         if info["problems"]:
@@ -596,11 +726,14 @@ def _nfl(args, p) -> int:
                               "run_id": release.record_refusal("nfl", "tick", info)}))
             return 1
         os.environ[release.COMMIT_ENV] = info["commit"]
+        guard_info = info
     if args.action == "activate":
         from pathlib import Path
         from . import nfl_live
         if not (args.sealed and args.report and args.access_log):
             p.error("nfl activate requires --sealed FILE --report FILE --access-log FILE")
+        if _refused("nfl", paths=(nfl_live.activation_path(),)):    # would replace the live activation file
+            return 1
         with db.store_lock("nfl", wait_seconds=LOCK_WAIT_SECONDS) as held:
             if not held:
                 p.error("another NFL job is running")
@@ -615,6 +748,8 @@ def _nfl(args, p) -> int:
     if args.action == "collect-lines":
         from . import nfl_eval
         from .sources import espn_odds_history as eoh
+        if args.test and _refused("nfl", paths=(nfl_eval.access_log_path(),)):     # appends to the one-shot access log
+            return 1
         try:
             conn = db.connect_readonly("nfl")
         except FileNotFoundError as exc:
@@ -651,6 +786,8 @@ def _nfl(args, p) -> int:
         from . import nfl_eval
         if not (args.sealed and args.out):
             p.error("nfl test-run needs --sealed FILE and --out DIR (DIR must not exist)")
+        if _refused("nfl", paths=(nfl_eval.access_log_path(),)):    # appends to the one-shot access log
+            return 1
         try:
             conn = db.connect_readonly("nfl")
         except FileNotFoundError as exc:
@@ -671,12 +808,39 @@ def _nfl(args, p) -> int:
             p.error(f"{exc}; run `nfl migrate` and `nfl ingest` first")
         print(json.dumps(nfl.coverage(conn), indent=1))
         return 0
+    if args.action == "release-check":     # read-only: the release facts plus the full missing-bytes scan (audit C4)
+        import sqlite3
+        info = release.check("nfl")
+        out = {**info, "guard_enabled": release.enabled(), "raw_missing": None}
+        path = config.db_path("nfl")
+        if not path.is_file():
+            out["raw_missing_reason"] = f"no nfl store at {path}"
+        else:
+            try:
+                conn = _open_ro(path)
+                try:
+                    if _has_raw_log(conn):
+                        out["raw_missing"] = _raw_missing(conn)
+                    else:
+                        out["raw_missing_reason"] = "the store has no raw_responses table (not a migrated store)"
+                finally:
+                    conn.close()
+            except sqlite3.Error as exc:
+                out["raw_missing_reason"] = f"could not read the store: {type(exc).__name__}: {exc}"
+        print(json.dumps(out, indent=1))
+        return 1 if info["problems"] else 0
+    from . import nfl_eval, nfl_live      # a tick/refresh reads the activation and may append to the access log
+    if _refused("nfl", migrate=args.action == "migrate", info=guard_info,
+                paths=(nfl_live.activation_path(), nfl_eval.access_log_path())):
+        return 1
+    if args.action == "replay" and _replay_refused("nfl", ingest.replay_missing):
+        return 1
     with db.store_lock("nfl", wait_seconds=LOCK_WAIT_SECONDS) as held:
         if not held:
             print(json.dumps({"status": "failed", "reason": "another job is running on the nfl store"}))
             return 1
         conn = db.connect(sport="nfl")
-        applied = db.migrate(conn)
+        applied = db.migrate(conn, explicit=args.action == "migrate")
         db.claim_store(conn, "nfl")
         if args.action == "migrate":
             print(json.dumps({"db": str(config.db_path("nfl")), "sport": "nfl", "applied": applied}))
@@ -710,7 +874,49 @@ def soccer_competitions() -> tuple[str, ...]:
 
 def _soccer(args, p) -> int:
     """Soccer store commands (app/soccer.py). Writes take the soccer store's own job lock; coverage only reads."""
-    from . import soccer
+    from pathlib import Path
+    from . import soccer, soccer_history
+    if args.action == "history-coverage":
+        try:
+            conn = db.connect_readonly("soccer")
+        except FileNotFoundError as exc:
+            p.error(f"{exc}; run `soccer migrate` and `soccer history-download` first")
+        print(json.dumps(soccer_history.coverage(conn), indent=1, ensure_ascii=False))
+        return 0
+    if args.action == "eval-develop":
+        from . import soccer_eval
+        if not args.out:
+            p.error("soccer eval-develop needs --out <folder>")
+        try:
+            conn = db.connect_readonly("soccer")
+        except FileNotFoundError as exc:
+            p.error(f"{exc}; run `soccer history-download` first")
+        if _refused("soccer", paths=(soccer_eval.experiments_log_path(),)):
+            return 1
+        res = soccer_eval.develop(conn, out_dir=Path(args.out), experiments_log=soccer_eval.experiments_log_path(),
+                                  progress=lambda m: print(m, file=sys.stderr, flush=True))
+        print(json.dumps({"status": "ok", "selected": res["sealed"]["model"], "candidate_sha256": res["sealed"]["sha256"],
+                          "out": args.out}))
+        return 0
+    if args.action == "eval-record" and not args.out:
+        p.error("soccer eval-record needs --out <finished eval-develop folder>")      # before any store is opened
+    if args.action == "eval-test":
+        from . import soccer_eval
+        if not (args.sealed and args.out):
+            p.error("soccer eval-test needs --sealed <file> --out <new folder>")
+        if _refused("soccer", paths=(soccer_eval.access_log_path(),)):
+            return 1
+        conn = db.connect_readonly("soccer")
+        rep = soccer_eval.run_test(conn, json.loads(Path(args.sealed).read_text()), access_log=soccer_eval.access_log_path(),
+                                   experiments_log=soccer_eval.experiments_log_path(), out_dir=Path(args.out))
+        print(json.dumps({"status": "ok", "out": args.out, "test": rep["test"]["overall"]}))
+        return 0
+    pins = {}
+    for item in args.pin:
+        repo, _, sha = item.partition("=")
+        if repo not in soccer_history.REPOS or not sha:
+            p.error(f"--pin expects REPO=SHA with REPO in {', '.join(soccer_history.REPOS)}")
+        pins[repo] = sha
     if args.action == "coverage":
         try:
             conn = db.connect_readonly("soccer")
@@ -718,7 +924,20 @@ def _soccer(args, p) -> int:
             p.error(f"{exc}; run `soccer migrate` and `soccer ingest` first")
         print(json.dumps(soccer.coverage(conn), indent=1))
         return 0
-    if args.action == "ingest":
+    if args.action == "live-status":           # read-only: latest completeness check and today's live forecasts
+        from . import soccer_live
+        conn = db.connect_readonly("soccer")
+        print(json.dumps({"checks": soccer_live.latest_checks(conn), "forecasts": soccer_live.forecasts(conn)}, indent=1))
+        return 0
+    if args.action == "live-refresh":          # recent and upcoming days of the live and input competitions (app/soccer_live.py)
+        from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+        from . import soccer_live
+        today = _dt.now(_tz.utc).date()
+        args.start = args.start or (today - _td(days=3)).strftime("%Y%m%d")
+        args.end = args.end or (today + _td(days=7)).strftime("%Y%m%d")
+        from . import intl_live
+        args.competition = args.competition or [*soccer_live.LAUNCH, *soccer_live.INPUT_ONLY, *intl_live.COMPETITIONS]
+    if args.action in ("ingest", "live-refresh"):
         if not (args.start and args.end):
             p.error("soccer ingest needs --from YYYYMMDD --to YYYYMMDD")
         try:
@@ -727,12 +946,18 @@ def _soccer(args, p) -> int:
             p.error(f"soccer ingest: {exc}")
     chosen = args.competition or ["all"]
     competitions = list(soccer.COMPETITIONS) if "all" in chosen else list(dict.fromkeys(chosen))
+    if _refused("soccer", migrate=args.action == "migrate"):
+        return 1
+    if args.action == "replay" and _replay_refused("soccer", soccer.replay_missing):
+        return 1
+    if args.action == "history-replay" and _replay_refused("soccer", soccer_history.replay_missing):
+        return 1
     with db.store_lock("soccer", wait_seconds=LOCK_WAIT_SECONDS) as held:
         if not held:
             print(json.dumps({"status": "failed", "reason": "another job is running on the soccer store"}))
             return 1
         conn = db.connect(sport="soccer")
-        applied = db.migrate(conn)
+        applied = db.migrate(conn, explicit=args.action == "migrate")
         db.claim_store(conn, "soccer")
         if args.action == "migrate":
             print(json.dumps({"db": str(config.db_path("soccer")), "sport": "soccer", "applied": applied}))
@@ -740,6 +965,32 @@ def _soccer(args, p) -> int:
         if args.action == "replay":
             print(json.dumps(soccer.replay(conn)))
             return 0
+        if args.action == "history-replay":
+            print(json.dumps(soccer_history.replay(conn)))
+            return 0
+        if args.action == "eval-record":
+            from . import soccer_forecasts
+            if not args.out:
+                p.error("soccer eval-record needs --out <finished eval-develop folder>")
+            print(json.dumps({"status": "ok", "runs": soccer_forecasts.record_development(conn, Path(args.out))}))
+            return 0
+        if args.action == "history-download":
+            report = soccer_history.download(conn, pins=pins, sleep=args.sleep)
+            replayed = soccer_history.replay(conn)
+            print(json.dumps({"status": "ok", "commits": report["commits"], "files": len(report["files"]),
+                              "bytes": sum(f["bytes"] for f in report["files"]), "import": replayed}))
+            return 0
+        if args.action == "live-forecast":
+            from . import soccer_live
+            from . import intl_live
+            report = {"clubs": soccer_live.run(conn, day=args.day, record_refusal=not args.if_ready)}
+            try:          # an international failure never stops the club forecasts; it is reported (and alerted)
+                report["international"] = intl_live.run(conn, day=args.day, record_refusal=not args.if_ready)
+            except Exception as exc:
+                report["international"] = {"status": "failed", "error": type(exc).__name__}
+            print(json.dumps(report, indent=1))
+            ok = all(r.get("status") == "ok" for r in report.values())
+            return 0 if ok or args.if_ready else 1
         results = soccer.ingest_range(conn, competitions, args.start, args.end, sleep=args.sleep)
         failed = [f"{r['competition']}:{r['date']}" for r in results if "error" in r]
         print(json.dumps({"status": "failed" if failed else "ok", "failed": failed}))
@@ -1136,7 +1387,7 @@ def _run(args, p, conn, applied) -> int:
         info = release.check(args.sport)
         print(json.dumps({**info, "app": str(release.code_root() / "backend" / "app"),
                           "research_definition": research_live.definition(conn), "selector": selector.version(),
-                          "guard_enabled": release.enabled()}, indent=1))
+                          "guard_enabled": release.enabled(), "raw_missing": _raw_missing(conn)}, indent=1))
         return 1 if info["problems"] else 0
     return 0
 

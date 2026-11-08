@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import type { League } from '../api/types';
@@ -8,7 +8,9 @@ import { dateTime } from '../format';
 import { NflScreens } from '../pages/NflPages';
 import { SoccerScreens } from '../pages/SoccerPages';
 import { FreshnessBar } from './Freshness';
-import { CompetitionSelect, SportToggle, useCarriedSearch, useCompetition, useLeague } from './Selection';
+import { gameRoute } from './gameRoute';
+import { Empty, PageErrorBoundary } from './States';
+import { CompetitionSelect, SportToggle, useCarriedSearch, useCompetition, useLeague, useSoccerMatchUrlSync } from './Selection';
 import { Icon } from './ui';
 
 const NAV = [
@@ -39,18 +41,22 @@ export function Layout() {
   // `sport` is the selected league: NBA and NHL are served; NFL and soccer are data-only with their own screens.
   const [sport, setSport] = useLeague();
   const [competition, setCompetition] = useCompetition();
+  useSoccerMatchUrlSync();
   const carried = useCarriedSearch();
   const location = useLocation();
   const label = sport.toUpperCase();
   const fresh = useFreshnessPoll(sport);
   const meta = useApi((s) => (sport === 'nfl' ? api.nflMeta(s) : sport === 'soccer' ? api.soccerMeta(competition, s) : api.meta(sport, s))
-    .then((m) => ({ mode: m.mode, last_refresh_at: m.last_refresh_at })), [sport, competition], fresh.changes);
+    .then((m) => ({ mode: m.mode, last_refresh_at: m.last_refresh_at,
+      forecasts: 'capabilities' in m && m.capabilities.some((c) => c.id === 'forecasts' && c.available) })), [sport, competition], fresh.changes);
   const mode = meta.state.status === 'success' ? meta.state.data.mode : null;
   const lastRefresh = meta.state.status === 'success' ? meta.state.data.last_refresh_at : null;
+  const nflForecasts = sport === 'nfl' && meta.state.status === 'success' && meta.state.data.forecasts;
   const health = useApi((s) => api.health(s), []);
   const snapshot = health.state.status === 'success' ? health.state.data.data_snapshot_at : null;
   const section = SECTION.find(([re]) => re.test(location.pathname))?.[1] ?? 'Prediction Dashboard';
-  const onGame = location.pathname.startsWith('/games/');
+  const route = gameRoute(location.pathname);
+  const onGame = route.kind !== 'none';
   const [lastGames, setLastGames] = useState<Record<League, string | null>>(() => {
     try {
       return { nba: sessionStorage.getItem(`${LAST_GAME}-nba`), nhl: sessionStorage.getItem(`${LAST_GAME}-nhl`),
@@ -59,10 +65,10 @@ export function Layout() {
   });
   const lastGame = lastGames[sport];
   useEffect(() => {
-    if (!onGame) return;
+    if (route.kind !== 'game') return;   // a malformed link is never remembered as the last game
     setLastGames((previous) => ({ ...previous, [sport]: location.pathname }));
     try { sessionStorage.setItem(`${LAST_GAME}-${sport}`, location.pathname); } catch { /* the link then falls back to Game day */ }
-  }, [onGame, location.pathname, sport]);
+  }, [route.kind, location.pathname, sport]);
   useEffect(() => { window.scrollTo(0, 0); }, [location.pathname, sport]);
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
   const choose = (t: Theme) => {
@@ -118,9 +124,11 @@ export function Layout() {
                 <div className="source-pop-panel" role="note">
                   <strong>REAL {label} DATA</strong>
                   {sport === 'soccer'
-                    ? <p>Fixtures and results from ESPN's public soccer scoreboards, one competition and one day per request{lastRefresh ? `; this competition last imported ${dateTime(lastRefresh)}` : ''}. Data only: there is no soccer model, so no soccer forecast, odds, injury or performance record is shown.</p>
+                    ? <p>Results history from openfootball (CC0) where this data folder has it, with stored research backtest forecasts (retrospective, never live); otherwise fixtures and results from ESPN's public soccer scoreboards{lastRefresh ? ` (this competition last imported ${dateTime(lastRefresh)})` : ''}. No live soccer forecast, odds or injury information exists.</p>
                     : sport === 'nfl'
-                    ? <p>Schedule and results from ESPN's public NFL scoreboard{lastRefresh ? `, last imported ${dateTime(lastRefresh)}` : ''}. Data only: there is no NFL model, so no NFL forecast, odds, injury or performance record is shown.</p>
+                    ? <p>Schedule and results from ESPN's public NFL scoreboard{lastRefresh ? `, last imported ${dateTime(lastRefresh)}` : ''}. {nflForecasts
+                      ? 'Live forecasts are recorded within two hours of kickoff for regular-season and playoff games: the winner from an NFL Elo model; spread, total and team totals from a points model, against a bookmaker line collected 2–4 hours before kickoff when there is one, otherwise a model line. No injury or weather information.'
+                      : 'NFL live forecasts are not active for this data store, so no NFL forecast, odds or record is shown. No injury information.'}</p>
                     : sport === 'nhl'
                     ? <p>Schedule and results from the NHL's own stats API{lastRefresh ? `, last refreshed ${dateTime(lastRefresh)}` : ''}. Winner forecasts come from an NHL Elo model; puck line, totals and the regulation result from a goals model. No goalie, injury or line-up information.</p>
                     : <p>Schedule and results from ESPN's unofficial API{lastRefresh ? `, last refreshed ${dateTime(lastRefresh)}` : ''}. Forecasts come from an Elo model.</p>}
@@ -143,7 +151,14 @@ export function Layout() {
         {mode === 'demo' && <div className="demo-banner" role="note"><strong>DEMO MODE</strong><span>Explore the app with synthetic games and predictions. These are not real NBA forecasts or results.</span></div>}
         <FreshnessBar check={fresh} />
         <FreshnessContext.Provider value={fresh}>
-          <main className="content">{sport === 'nfl' ? <NflScreens /> : sport === 'soccer' ? <SoccerScreens /> : <Outlet />}</main>
+          <main className="content">
+            <PageErrorBoundary key={location.pathname + location.search}
+              fallback={<Empty>This page could not be displayed. <Link to={`/${carried}`}>Go to today's games</Link></Empty>}>
+              {route.kind === 'malformed'
+                ? <Empty>This game link is damaged or incomplete, so no game can be opened. <Link to={`/${carried}`}>Go to today's games</Link></Empty>
+                : sport === 'nfl' ? <NflScreens /> : sport === 'soccer' ? <SoccerScreens /> : <Outlet />}
+            </PageErrorBoundary>
+          </main>
         </FreshnessContext.Provider>
         <footer className="app-footer"><span>COURTSIDE / {label}</span><span>Every probability deserves context.</span></footer>
       </div>

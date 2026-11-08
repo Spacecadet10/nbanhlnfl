@@ -1,0 +1,819 @@
+{
+ "version": "2026-11-08.1",
+ "source": "ESPN team ids (soccer_matches 2026-27) -> openfootball club ids (app/soccer_clubs.py MAP_VERSION 2026-11-08.1)",
+ "built_by": "docs/evidence/soccer-live-2026-11-08/build_club_map.py + hand review",
+ "espn": {
+  "soccer:101": "ESP:Rayo Vallecano de Madrid",
+  "soccer:1010": "GRE:OFI Crete",
+  "soccer:102": "ESP:Villarreal CF",
+  "soccer:103": "ITA:AC Milan",
+  "soccer:10388": "GER:SV 07 Elversberg",
+  "soccer:104": "ITA:AS Roma",
+  "soccer:105": "ITA:Atalanta BC",
+  "soccer:1068": "ESP:Club Atlético de Madrid",
+  "soccer:107": "ITA:Bologna FC 1909",
+  "soccer:109": "ITA:ACF Fiorentina",
+  "soccer:110": "ITA:FC Internazionale Milano",
+  "soccer:111": "ITA:Juventus FC",
+  "soccer:112": "ITA:SS Lazio",
+  "soccer:113": "ITA:US Lecce",
+  "soccer:114": "ITA:SSC Napoli",
+  "soccer:11420": "GER:RB Leipzig",
+  "soccer:115": "ITA:Parma Calcio 1913",
+  "soccer:11505": "POL:Jagiellonia Białystok",
+  "soccer:11706": "CZE:Viktoria Plzeň",
+  "soccer:118": "ITA:Udinese Calcio",
+  "soccer:122": "GER:1. FC Köln",
+  "soccer:124": "GER:Borussia Dortmund",
+  "soccer:125": "GER:Eintracht Frankfurt",
+  "soccer:126": "GER:SC Freiburg",
+  "soccer:127": "GER:Hamburger SV",
+  "soccer:13083": "ISR:Hapoel Be'er Sheva",
+  "soccer:131": "GER:Bayer 04 Leverkusen",
+  "soccer:132": "GER:FC Bayern München",
+  "soccer:133": "GER:FC Schalke 04",
+  "soccer:134": "GER:VfB Stuttgart",
+  "soccer:137": "GER:SV Werder Bremen",
+  "soccer:140": "NED:AZ Alkmaar",
+  "soccer:142": "NED:Feyenoord Rotterdam",
+  "soccer:147": "NED:NEC Nijmegen",
+  "soccer:148": "NED:PSV",
+  "soccer:1538": "ESP:Levante UD",
+  "soccer:160": "FRA:Paris Saint-Germain FC",
+  "soccer:166": "FRA:Lille OSC",
+  "soccer:167": "FRA:Olympique Lyonnais",
+  "soccer:169": "FRA:Stade Rennais FC 1901",
+  "soccer:170": "FRA:ES Troyes AC",
+  "soccer:172": "FRA:AJ Auxerre",
+  "soccer:174": "FRA:AS Monaco FC",
+  "soccer:175": "FRA:Racing Club de Lens",
+  "soccer:17530": "ITA:Venezia FC",
+  "soccer:176": "FRA:Olympique de Marseille",
+  "soccer:179": "FRA:Toulouse FC",
+  "soccer:180": "FRA:RC Strasbourg Alsace",
+  "soccer:1895": "TUR:Beşiktaş",
+  "soccer:1929": "POR:Sport Lisboa e Benfica",
+  "soccer:20024": "ARM:Ararat-Armenia",
+  "soccer:21615": "POR:SCU Torreense",
+  "soccer:21922": "AZE:Sabah FK",
+  "soccer:2250": "POR:Sporting Clube de Portugal",
+  "soccer:239": "ITA:Torino FC",
+  "soccer:243": "ESP:Sevilla FC",
+  "soccer:244": "ESP:Real Betis Balompié",
+  "soccer:2502": "FRA:OGC Nice",
+  "soccer:256": "SCO:Celtic FC",
+  "soccer:2572": "ITA:Como 1907",
+  "soccer:268": "GER:Borussia Mönchengladbach",
+  "soccer:2697": "FRA:Le Mans FC",
+  "soccer:273": "FRA:FC Lorient",
+  "soccer:2790": "AUT:FC Red Bull Salzburg",
+  "soccer:2922": "ESP:Getafe CF",
+  "soccer:2925": "ITA:Cagliari Calcio",
+  "soccer:2950": "GER:1. FSV Mainz 05",
+  "soccer:2980": "NOR:FK Bodø/Glimt",
+  "soccer:2990": "POL:Lech Poznań",
+  "soccer:306": "ENG:Hull City AFC",
+  "soccer:3236": "FRA:Le Havre AC",
+  "soccer:3263": "ITA:Genoa CFC",
+  "soccer:3307": "GER:SC Paderborn 07",
+  "soccer:331": "ENG:Brighton & Hove Albion FC",
+  "soccer:3362": "SVN:NK Celje",
+  "soccer:337": "ENG:Brentford FC",
+  "soccer:349": "ENG:AFC Bournemouth",
+  "soccer:357": "ENG:Leeds United FC",
+  "soccer:359": "ENG:Arsenal FC",
+  "soccer:360": "ENG:Manchester United FC",
+  "soccer:361": "ENG:Newcastle United FC",
+  "soccer:362": "ENG:Aston Villa FC",
+  "soccer:363": "ENG:Chelsea FC",
+  "soccer:364": "ENG:Liverpool FC",
+  "soccer:366": "ENG:Sunderland AFC",
+  "soccer:367": "ENG:Tottenham Hotspur FC",
+  "soccer:368": "ENG:Everton FC",
+  "soccer:370": "ENG:Fulham FC",
+  "soccer:373": "ENG:Ipswich Town FC",
+  "soccer:3746": "AUT:SK Sturm Graz",
+  "soccer:3751": "ESP:Elche CF",
+  "soccer:382": "ENG:Manchester City FC",
+  "soccer:384": "ENG:Crystal Palace FC",
+  "soccer:3841": "GER:FC Augsburg",
+  "soccer:388": "ENG:Coventry City FC",
+  "soccer:393": "ENG:Nottingham Forest FC",
+  "soccer:3997": "ITA:US Sassuolo Calcio",
+  "soccer:4007": "ITA:AC Monza",
+  "soccer:4057": "ITA:Frosinone Calcio",
+  "soccer:432": "TUR:Galatasaray SK",
+  "soccer:433": "CZE:AC Sparta Praha",
+  "soccer:435": "GRE:PAE Olympiakos SFP",
+  "soccer:436": "TUR:Fenerbahçe",
+  "soccer:437": "POR:FC Porto",
+  "soccer:441": "BEL:RSC Anderlecht",
+  "soccer:4411": "AUT:LASK",
+  "soccer:490": "BUL:Levski Sofia",
+  "soccer:493": "UKR:FK Shakhtar Donetsk",
+  "soccer:494": "CZE:SK Slavia Praha",
+  "soccer:510": "NOR:Viking FK",
+  "soccer:521": "SVK:ŠK Slovan Bratislava",
+  "soccer:570": "BEL:Club Brugge KV",
+  "soccer:5807": "BEL:Royale Union Saint-Gilloise",
+  "soccer:597": "CRO:GNK Dinamo Zagreb",
+  "soccer:598": "GER:1. FC Union Berlin",
+  "soccer:617": "CYP:Omonia Nikosia",
+  "soccer:622": "HUN:Ferencvárosi TC",
+  "soccer:6851": "FRA:Paris FC",
+  "soccer:6997": "FRA:Stade Brestois 29",
+  "soccer:7868": "FRA:Angers SCO",
+  "soccer:7911": "GER:TSG 1899 Hoffenheim",
+  "soccer:83": "ESP:FC Barcelona",
+  "soccer:85": "ESP:RC Celta de Vigo",
+  "soccer:86": "ESP:Real Madrid CF",
+  "soccer:87": "ESP:Real Racing Club de Santander",
+  "soccer:88": "ESP:RCD Espanyol de Barcelona",
+  "soccer:887": "GRE:AEK Athen",
+  "soccer:89": "ESP:Real Sociedad de Fútbol",
+  "soccer:90": "ESP:RC Deportivo La Coruña",
+  "soccer:93": "ESP:Athletic Club",
+  "soccer:94": "ESP:Valencia CF",
+  "soccer:96": "ESP:Deportivo Alavés",
+  "soccer:97": "ESP:CA Osasuna",
+  "soccer:987": "NOR:Lillestrøm SK",
+  "soccer:99": "ESP:Málaga CF"
+ },
+ "evidence": {
+  "soccer:101": {
+   "club": "ESP:Rayo Vallecano de Madrid",
+   "espn_name": "Rayo Vallecano",
+   "basis": "word subset, reviewed by hand"
+  },
+  "soccer:1010": {
+   "club": "GRE:OFI Crete",
+   "espn_name": "OFI Crete",
+   "basis": "new club: no openfootball history under any spelling (protocol: starts at 1500 - F)"
+  },
+  "soccer:102": {
+   "club": "ESP:Villarreal CF",
+   "espn_name": "Villarreal",
+   "basis": "same comparison form"
+  },
+  "soccer:103": {
+   "club": "ITA:AC Milan",
+   "espn_name": "AC Milan",
+   "basis": "same comparison form"
+  },
+  "soccer:10388": {
+   "club": "GER:SV 07 Elversberg",
+   "espn_name": "SV Elversberg",
+   "basis": "same comparison form"
+  },
+  "soccer:104": {
+   "club": "ITA:AS Roma",
+   "espn_name": "AS Roma",
+   "basis": "same comparison form"
+  },
+  "soccer:105": {
+   "club": "ITA:Atalanta BC",
+   "espn_name": "Atalanta",
+   "basis": "same comparison form"
+  },
+  "soccer:1068": {
+   "club": "ESP:Club Atlético de Madrid",
+   "espn_name": "Atlético Madrid",
+   "basis": "same comparison form"
+  },
+  "soccer:107": {
+   "club": "ITA:Bologna FC 1909",
+   "espn_name": "Bologna",
+   "basis": "same comparison form"
+  },
+  "soccer:109": {
+   "club": "ITA:ACF Fiorentina",
+   "espn_name": "Fiorentina",
+   "basis": "word subset, reviewed by hand"
+  },
+  "soccer:110": {
+   "club": "ITA:FC Internazionale Milano",
+   "espn_name": "Internazionale",
+   "basis": "word subset, reviewed by hand"
+  },
+  "soccer:111": {
+   "club": "ITA:Juventus FC",
+   "espn_name": "Juventus",
+   "basis": "same comparison form"
+  },
+  "soccer:112": {
+   "club": "ITA:SS Lazio",
+   "espn_name": "Lazio",
+   "basis": "same comparison form"
+  },
+  "soccer:113": {
+   "club": "ITA:US Lecce",
+   "espn_name": "Lecce",
+   "basis": "same comparison form"
+  },
+  "soccer:114": {
+   "club": "ITA:SSC Napoli",
+   "espn_name": "Napoli",
+   "basis": "same comparison form"
+  },
+  "soccer:11420": {
+   "club": "GER:RB Leipzig",
+   "espn_name": "RB Leipzig",
+   "basis": "same comparison form"
+  },
+  "soccer:115": {
+   "club": "ITA:Parma Calcio 1913",
+   "espn_name": "Parma",
+   "basis": "same comparison form"
+  },
+  "soccer:11505": {
+   "club": "POL:Jagiellonia Białystok",
+   "espn_name": "Jagiellonia Bialystok",
+   "basis": "new club: no openfootball history under any spelling (protocol: starts at 1500 - F)"
+  },
+  "soccer:11706": {
+   "club": "CZE:Viktoria Plzeň",
+   "espn_name": "Viktoria Plzen",
+   "basis": "same comparison form"
+  },
+  "soccer:118": {
+   "club": "ITA:Udinese Calcio",
+   "espn_name": "Udinese",
+   "basis": "same comparison form"
+  },
+  "soccer:122": {
+   "club": "GER:1. FC Köln",
+   "espn_name": "FC Cologne",
+   "basis": "hand alias (history spelling)"
+  },
+  "soccer:124": {
+   "club": "GER:Borussia Dortmund",
+   "espn_name": "Borussia Dortmund",
+   "basis": "same comparison form"
+  },
+  "soccer:125": {
+   "club": "GER:Eintracht Frankfurt",
+   "espn_name": "Eintracht Frankfurt",
+   "basis": "same comparison form"
+  },
+  "soccer:126": {
+   "club": "GER:SC Freiburg",
+   "espn_name": "SC Freiburg",
+   "basis": "same comparison form"
+  },
+  "soccer:127": {
+   "club": "GER:Hamburger SV",
+   "espn_name": "Hamburg SV",
+   "basis": "hand alias (history spelling)"
+  },
+  "soccer:13083": {
+   "club": "ISR:Hapoel Be'er Sheva",
+   "espn_name": "Hapoel Be'er",
+   "basis": "word subset, reviewed by hand"
+  },
+  "soccer:131": {
+   "club": "GER:Bayer 04 Leverkusen",
+   "espn_name": "Bayer Leverkusen",
+   "basis": "same comparison form"
+  },
+  "soccer:132": {
+   "club": "GER:FC Bayern München",
+   "espn_name": "Bayern Munich",
+   "basis": "hand alias (history spelling)"
+  },
+  "soccer:133": {
+   "club": "GER:FC Schalke 04",
+   "espn_name": "Schalke 04",
+   "basis": "same comparison form"
+  },
+  "soccer:134": {
+   "club": "GER:VfB Stuttgart",
+   "espn_name": "VfB Stuttgart",
+   "basis": "same comparison form"
+  },
+  "soccer:137": {
+   "club": "GER:SV Werder Bremen",
+   "espn_name": "Werder Bremen",
+   "basis": "same comparison form"
+  },
+  "soccer:140": {
+   "club": "NED:AZ Alkmaar",
+   "espn_name": "AZ Alkmaar",
+   "basis": "same comparison form"
+  },
+  "soccer:142": {
+   "club": "NED:Feyenoord Rotterdam",
+   "espn_name": "Feyenoord Rotterdam",
+   "basis": "same comparison form"
+  },
+  "soccer:147": {
+   "club": "NED:NEC Nijmegen",
+   "espn_name": "NEC Nijmegen",
+   "basis": "new club: no openfootball history under any spelling (protocol: starts at 1500 - F)"
+  },
+  "soccer:148": {
+   "club": "NED:PSV",
+   "espn_name": "PSV Eindhoven",
+   "basis": "word subset, reviewed by hand"
+  },
+  "soccer:1538": {
+   "club": "ESP:Levante UD",
+   "espn_name": "Levante",
+   "basis": "same comparison form"
+  },
+  "soccer:160": {
+   "club": "FRA:Paris Saint-Germain FC",
+   "espn_name": "Paris Saint-Germain",
+   "basis": "same comparison form"
+  },
+  "soccer:166": {
+   "club": "FRA:Lille OSC",
+   "espn_name": "Lille",
+   "basis": "same comparison form"
+  },
+  "soccer:167": {
+   "club": "FRA:Olympique Lyonnais",
+   "espn_name": "Lyon",
+   "basis": "hand alias (history spelling)"
+  },
+  "soccer:169": {
+   "club": "FRA:Stade Rennais FC 1901",
+   "espn_name": "Stade Rennais",
+   "basis": "same comparison form"
+  },
+  "soccer:170": {
+   "club": "FRA:ES Troyes AC",
+   "espn_name": "Troyes",
+   "basis": "same comparison form"
+  },
+  "soccer:172": {
+   "club": "FRA:AJ Auxerre",
+   "espn_name": "AJ Auxerre",
+   "basis": "same comparison form"
+  },
+  "soccer:174": {
+   "club": "FRA:AS Monaco FC",
+   "espn_name": "AS Monaco",
+   "basis": "same comparison form"
+  },
+  "soccer:175": {
+   "club": "FRA:Racing Club de Lens",
+   "espn_name": "Lens",
+   "basis": "word subset, reviewed by hand"
+  },
+  "soccer:17530": {
+   "club": "ITA:Venezia FC",
+   "espn_name": "Venezia",
+   "basis": "same comparison form"
+  },
+  "soccer:176": {
+   "club": "FRA:Olympique de Marseille",
+   "espn_name": "Marseille",
+   "basis": "word subset, reviewed by hand"
+  },
+  "soccer:179": {
+   "club": "FRA:Toulouse FC",
+   "espn_name": "Toulouse",
+   "basis": "same comparison form"
+  },
+  "soccer:180": {
+   "club": "FRA:RC Strasbourg Alsace",
+   "espn_name": "Strasbourg",
+   "basis": "word subset, reviewed by hand"
+  },
+  "soccer:1895": {
+   "club": "TUR:Beşiktaş",
+   "espn_name": "Besiktas",
+   "basis": "same comparison form"
+  },
+  "soccer:1929": {
+   "club": "POR:Sport Lisboa e Benfica",
+   "espn_name": "Benfica",
+   "basis": "word subset, reviewed by hand"
+  },
+  "soccer:20024": {
+   "club": "ARM:Ararat-Armenia",
+   "espn_name": "Ararat-Armenia",
+   "basis": "new club: no openfootball history under any spelling (protocol: starts at 1500 - F)"
+  },
+  "soccer:21615": {
+   "club": "POR:SCU Torreense",
+   "espn_name": "Torreense",
+   "basis": "new club: no openfootball history under any spelling (protocol: starts at 1500 - F)"
+  },
+  "soccer:21922": {
+   "club": "AZE:Sabah FK",
+   "espn_name": "Sabah FK",
+   "basis": "new club: no openfootball history under any spelling (protocol: starts at 1500 - F)"
+  },
+  "soccer:2250": {
+   "club": "POR:Sporting Clube de Portugal",
+   "espn_name": "Sporting CP",
+   "basis": "hand alias (history spelling)"
+  },
+  "soccer:239": {
+   "club": "ITA:Torino FC",
+   "espn_name": "Torino",
+   "basis": "same comparison form"
+  },
+  "soccer:243": {
+   "club": "ESP:Sevilla FC",
+   "espn_name": "Sevilla",
+   "basis": "same comparison form"
+  },
+  "soccer:244": {
+   "club": "ESP:Real Betis Balompié",
+   "espn_name": "Real Betis",
+   "basis": "word subset, reviewed by hand"
+  },
+  "soccer:2502": {
+   "club": "FRA:OGC Nice",
+   "espn_name": "Nice",
+   "basis": "same comparison form"
+  },
+  "soccer:256": {
+   "club": "SCO:Celtic FC",
+   "espn_name": "Celtic",
+   "basis": "same comparison form"
+  },
+  "soccer:2572": {
+   "club": "ITA:Como 1907",
+   "espn_name": "Como",
+   "basis": "same comparison form"
+  },
+  "soccer:268": {
+   "club": "GER:Borussia Mönchengladbach",
+   "espn_name": "Borussia Mönchengladbach",
+   "basis": "same comparison form"
+  },
+  "soccer:2697": {
+   "club": "FRA:Le Mans FC",
+   "espn_name": "Le Mans",
+   "basis": "same comparison form"
+  },
+  "soccer:273": {
+   "club": "FRA:FC Lorient",
+   "espn_name": "Lorient",
+   "basis": "same comparison form"
+  },
+  "soccer:2790": {
+   "club": "AUT:FC Red Bull Salzburg",
+   "espn_name": "RB Salzburg",
+   "basis": "word subset, reviewed by hand"
+  },
+  "soccer:2922": {
+   "club": "ESP:Getafe CF",
+   "espn_name": "Getafe",
+   "basis": "same comparison form"
+  },
+  "soccer:2925": {
+   "club": "ITA:Cagliari Calcio",
+   "espn_name": "Cagliari",
+   "basis": "same comparison form"
+  },
+  "soccer:2950": {
+   "club": "GER:1. FSV Mainz 05",
+   "espn_name": "Mainz",
+   "basis": "word subset, reviewed by hand"
+  },
+  "soccer:2980": {
+   "club": "NOR:FK Bodø/Glimt",
+   "espn_name": "Bodo/Glimt",
+   "basis": "hand alias (history spelling)"
+  },
+  "soccer:2990": {
+   "club": "POL:Lech Poznań",
+   "espn_name": "Lech Poznan",
+   "basis": "same comparison form"
+  },
+  "soccer:306": {
+   "club": "ENG:Hull City AFC",
+   "espn_name": "Hull City",
+   "basis": "same comparison form"
+  },
+  "soccer:3236": {
+   "club": "FRA:Le Havre AC",
+   "espn_name": "Le Havre AC",
+   "basis": "same comparison form"
+  },
+  "soccer:3263": {
+   "club": "ITA:Genoa CFC",
+   "espn_name": "Genoa",
+   "basis": "same comparison form"
+  },
+  "soccer:3307": {
+   "club": "GER:SC Paderborn 07",
+   "espn_name": "SC Paderborn 07",
+   "basis": "same comparison form"
+  },
+  "soccer:331": {
+   "club": "ENG:Brighton & Hove Albion FC",
+   "espn_name": "Brighton & Hove Albion",
+   "basis": "same comparison form"
+  },
+  "soccer:3362": {
+   "club": "SVN:NK Celje",
+   "espn_name": "NK Celje",
+   "basis": "new club: no openfootball history under any spelling (protocol: starts at 1500 - F)"
+  },
+  "soccer:337": {
+   "club": "ENG:Brentford FC",
+   "espn_name": "Brentford",
+   "basis": "same comparison form"
+  },
+  "soccer:349": {
+   "club": "ENG:AFC Bournemouth",
+   "espn_name": "AFC Bournemouth",
+   "basis": "same comparison form"
+  },
+  "soccer:357": {
+   "club": "ENG:Leeds United FC",
+   "espn_name": "Leeds United",
+   "basis": "same comparison form"
+  },
+  "soccer:359": {
+   "club": "ENG:Arsenal FC",
+   "espn_name": "Arsenal",
+   "basis": "same comparison form"
+  },
+  "soccer:360": {
+   "club": "ENG:Manchester United FC",
+   "espn_name": "Manchester United",
+   "basis": "same comparison form"
+  },
+  "soccer:361": {
+   "club": "ENG:Newcastle United FC",
+   "espn_name": "Newcastle United",
+   "basis": "same comparison form"
+  },
+  "soccer:362": {
+   "club": "ENG:Aston Villa FC",
+   "espn_name": "Aston Villa",
+   "basis": "same comparison form"
+  },
+  "soccer:363": {
+   "club": "ENG:Chelsea FC",
+   "espn_name": "Chelsea",
+   "basis": "same comparison form"
+  },
+  "soccer:364": {
+   "club": "ENG:Liverpool FC",
+   "espn_name": "Liverpool",
+   "basis": "same comparison form"
+  },
+  "soccer:366": {
+   "club": "ENG:Sunderland AFC",
+   "espn_name": "Sunderland",
+   "basis": "same comparison form"
+  },
+  "soccer:367": {
+   "club": "ENG:Tottenham Hotspur FC",
+   "espn_name": "Tottenham Hotspur",
+   "basis": "same comparison form"
+  },
+  "soccer:368": {
+   "club": "ENG:Everton FC",
+   "espn_name": "Everton",
+   "basis": "same comparison form"
+  },
+  "soccer:370": {
+   "club": "ENG:Fulham FC",
+   "espn_name": "Fulham",
+   "basis": "same comparison form"
+  },
+  "soccer:373": {
+   "club": "ENG:Ipswich Town FC",
+   "espn_name": "Ipswich Town",
+   "basis": "same comparison form"
+  },
+  "soccer:3746": {
+   "club": "AUT:SK Sturm Graz",
+   "espn_name": "SK Sturm Graz",
+   "basis": "same comparison form"
+  },
+  "soccer:3751": {
+   "club": "ESP:Elche CF",
+   "espn_name": "Elche",
+   "basis": "same comparison form"
+  },
+  "soccer:382": {
+   "club": "ENG:Manchester City FC",
+   "espn_name": "Manchester City",
+   "basis": "same comparison form"
+  },
+  "soccer:384": {
+   "club": "ENG:Crystal Palace FC",
+   "espn_name": "Crystal Palace",
+   "basis": "same comparison form"
+  },
+  "soccer:3841": {
+   "club": "GER:FC Augsburg",
+   "espn_name": "FC Augsburg",
+   "basis": "same comparison form"
+  },
+  "soccer:388": {
+   "club": "ENG:Coventry City FC",
+   "espn_name": "Coventry City",
+   "basis": "same comparison form"
+  },
+  "soccer:393": {
+   "club": "ENG:Nottingham Forest FC",
+   "espn_name": "Nottingham Forest",
+   "basis": "same comparison form"
+  },
+  "soccer:3997": {
+   "club": "ITA:US Sassuolo Calcio",
+   "espn_name": "Sassuolo",
+   "basis": "same comparison form"
+  },
+  "soccer:4007": {
+   "club": "ITA:AC Monza",
+   "espn_name": "Monza",
+   "basis": "same comparison form"
+  },
+  "soccer:4057": {
+   "club": "ITA:Frosinone Calcio",
+   "espn_name": "Frosinone",
+   "basis": "same comparison form"
+  },
+  "soccer:432": {
+   "club": "TUR:Galatasaray SK",
+   "espn_name": "Galatasaray",
+   "basis": "same comparison form"
+  },
+  "soccer:433": {
+   "club": "CZE:AC Sparta Praha",
+   "espn_name": "Sparta Prague",
+   "basis": "hand alias (history spelling)"
+  },
+  "soccer:435": {
+   "club": "GRE:PAE Olympiakos SFP",
+   "espn_name": "Olympiacos",
+   "basis": "hand alias (history spelling)"
+  },
+  "soccer:436": {
+   "club": "TUR:Fenerbahçe",
+   "espn_name": "Fenerbahce",
+   "basis": "same comparison form"
+  },
+  "soccer:437": {
+   "club": "POR:FC Porto",
+   "espn_name": "FC Porto",
+   "basis": "same comparison form"
+  },
+  "soccer:441": {
+   "club": "BEL:RSC Anderlecht",
+   "espn_name": "Anderlecht",
+   "basis": "same comparison form"
+  },
+  "soccer:4411": {
+   "club": "AUT:LASK",
+   "espn_name": "LASK Linz",
+   "basis": "word subset, reviewed by hand"
+  },
+  "soccer:490": {
+   "club": "BUL:Levski Sofia",
+   "espn_name": "Levski Sofia",
+   "basis": "new club: no openfootball history under any spelling (protocol: starts at 1500 - F)"
+  },
+  "soccer:493": {
+   "club": "UKR:FK Shakhtar Donetsk",
+   "espn_name": "Shakhtar Donetsk",
+   "basis": "same comparison form"
+  },
+  "soccer:494": {
+   "club": "CZE:SK Slavia Praha",
+   "espn_name": "Slavia Prague",
+   "basis": "hand alias (history spelling)"
+  },
+  "soccer:510": {
+   "club": "NOR:Viking FK",
+   "espn_name": "Viking FK",
+   "basis": "new club: no openfootball history under any spelling (protocol: starts at 1500 - F)"
+  },
+  "soccer:521": {
+   "club": "SVK:ŠK Slovan Bratislava",
+   "espn_name": "Slovan Bratislava",
+   "basis": "same comparison form"
+  },
+  "soccer:570": {
+   "club": "BEL:Club Brugge KV",
+   "espn_name": "Club Brugge",
+   "basis": "same comparison form"
+  },
+  "soccer:5807": {
+   "club": "BEL:Royale Union Saint-Gilloise",
+   "espn_name": "Union St.-Gilloise",
+   "basis": "word subset, reviewed by hand"
+  },
+  "soccer:597": {
+   "club": "CRO:GNK Dinamo Zagreb",
+   "espn_name": "Dinamo Zagreb",
+   "basis": "same comparison form"
+  },
+  "soccer:598": {
+   "club": "GER:1. FC Union Berlin",
+   "espn_name": "1. FC Union Berlin",
+   "basis": "same comparison form"
+  },
+  "soccer:617": {
+   "club": "CYP:Omonia Nikosia",
+   "espn_name": "Omonia Nicosia",
+   "basis": "hand alias (history spelling)"
+  },
+  "soccer:622": {
+   "club": "HUN:Ferencvárosi TC",
+   "espn_name": "Ferencvaros",
+   "basis": "hand alias (history spelling)"
+  },
+  "soccer:6851": {
+   "club": "FRA:Paris FC",
+   "espn_name": "Paris FC",
+   "basis": "same comparison form"
+  },
+  "soccer:6997": {
+   "club": "FRA:Stade Brestois 29",
+   "espn_name": "Brest",
+   "basis": "hand alias (history spelling)"
+  },
+  "soccer:7868": {
+   "club": "FRA:Angers SCO",
+   "espn_name": "Angers",
+   "basis": "same comparison form"
+  },
+  "soccer:7911": {
+   "club": "GER:TSG 1899 Hoffenheim",
+   "espn_name": "TSG Hoffenheim",
+   "basis": "same comparison form"
+  },
+  "soccer:83": {
+   "club": "ESP:FC Barcelona",
+   "espn_name": "Barcelona",
+   "basis": "same comparison form"
+  },
+  "soccer:85": {
+   "club": "ESP:RC Celta de Vigo",
+   "espn_name": "Celta Vigo",
+   "basis": "same comparison form"
+  },
+  "soccer:86": {
+   "club": "ESP:Real Madrid CF",
+   "espn_name": "Real Madrid",
+   "basis": "same comparison form"
+  },
+  "soccer:87": {
+   "club": "ESP:Real Racing Club de Santander",
+   "espn_name": "Racing Santander",
+   "basis": "word subset, reviewed by hand"
+  },
+  "soccer:88": {
+   "club": "ESP:RCD Espanyol de Barcelona",
+   "espn_name": "Espanyol",
+   "basis": "word subset, reviewed by hand"
+  },
+  "soccer:887": {
+   "club": "GRE:AEK Athen",
+   "espn_name": "AEK Athens",
+   "basis": "hand alias (history spelling)"
+  },
+  "soccer:89": {
+   "club": "ESP:Real Sociedad de Fútbol",
+   "espn_name": "Real Sociedad",
+   "basis": "word subset, reviewed by hand"
+  },
+  "soccer:90": {
+   "club": "ESP:RC Deportivo La Coruña",
+   "espn_name": "Deportivo",
+   "basis": "hand alias (history spelling)"
+  },
+  "soccer:93": {
+   "club": "ESP:Athletic Club",
+   "espn_name": "Athletic Club",
+   "basis": "same comparison form"
+  },
+  "soccer:94": {
+   "club": "ESP:Valencia CF",
+   "espn_name": "Valencia",
+   "basis": "same comparison form"
+  },
+  "soccer:96": {
+   "club": "ESP:Deportivo Alavés",
+   "espn_name": "Alavés",
+   "basis": "word subset, reviewed by hand"
+  },
+  "soccer:97": {
+   "club": "ESP:CA Osasuna",
+   "espn_name": "Osasuna",
+   "basis": "same comparison form"
+  },
+  "soccer:987": {
+   "club": "NOR:Lillestrøm SK",
+   "espn_name": "Lillestrom",
+   "basis": "new club: no openfootball history under any spelling (protocol: starts at 1500 - F)"
+  },
+  "soccer:99": {
+   "club": "ESP:Málaga CF",
+   "espn_name": "Málaga",
+   "basis": "same comparison form"
+  }
+ }
+}

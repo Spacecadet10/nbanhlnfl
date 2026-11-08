@@ -152,7 +152,7 @@ export function MarketVersionSelect({ versions, value, onChange }: {
 export function MarketHistoryTable({ rows }: { rows: MarketRecord[] }) {
   const carried = useCarriedSearch();
   return (
-    <table className="table history">
+    <div className="table-wrap"><table className="table history">
       <thead>
         <tr><th>Date</th><th>Game</th><th>Line</th><th>Pick</th><th>Model probability</th><th>Result</th><th>Outcome of pick</th><th>Recorded</th></tr>
       </thead>
@@ -170,7 +170,7 @@ export function MarketHistoryTable({ rows }: { rows: MarketRecord[] }) {
           </tr>
         ))}
       </tbody>
-    </table>
+    </table></div>
   );
 }
 

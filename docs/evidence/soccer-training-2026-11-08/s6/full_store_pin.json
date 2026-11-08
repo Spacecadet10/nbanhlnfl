@@ -1,0 +1,12 @@
+{
+ "store": "/Users/andry/nba-predictor-research-data/soccer-train-20261108/data/soccer.sqlite",
+ "file_sha256": "f26e60a2f0d17d884401bf6255f7211fcae4ced1fcbf8adb70e31cc2fa40f7f5",
+ "table_digests": {
+  "soccer_clubs": "9f70b829f2b438afd31bff344ac4bc9e02de1014cd809064eb8add797984a12f",
+  "soccer_club_names": "e56b159905ad4192f494bc0c6d1a6aa71df0c8c478b8676ac377043bf26930d6",
+  "soccer_hist_matches": "f23a6adc6d047485416c316b1e01586962aca5fd912bd69a5942aeb9cdac3b8a",
+  "soccer_hist_revisions": "9b24a894aa3a14cf7fecf904424747fc65e0ef9719e733532ae7acfeb635a2ad",
+  "soccer_hist_rejections": "930c0c65f3d07c170934cd50297be0cf42e8eefb8a9fa0f8f4583bc928255282"
+ },
+ "note": "hashes only (no outcome read); re-verify immediately before the one-shot test run"
+}

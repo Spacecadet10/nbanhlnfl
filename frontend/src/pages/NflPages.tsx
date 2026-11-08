@@ -8,6 +8,7 @@ import { useApi } from '../api/useApi';
 import { useDataRevision } from '../api/freshness';
 import { useCarriedSearch } from '../components/Selection';
 import { AsyncView, Empty } from '../components/States';
+import { gameRoute } from '../components/gameRoute';
 import { TeamLogo } from '../components/TeamLogo';
 import { EmptyForecastState, Icon, MetricCard, PageTitle } from '../components/ui';
 import { calendarDate, dateTime, FULL_DATE, tipoffTime } from '../format';
@@ -44,7 +45,9 @@ export function NflScreens() {
   return (
     <AsyncView state={meta.state} retry={meta.retry}>
       {(m) => {
-        if (pathname.startsWith('/games/')) return <NflMatchup id={decodeURIComponent(pathname.slice('/games/'.length))} />;
+        const game = gameRoute(pathname);
+        if (game.kind === 'game') return <NflMatchup id={game.id} />;
+        if (game.kind === 'malformed') return <Empty>This game link is damaged or incomplete. <Link to="/?sport=nfl">Go to NFL games</Link></Empty>;
         if (pathname === '/') return <NflGameDay meta={m} />;
         const page = pathname.startsWith('/performance') ? 'performance' : pathname.startsWith('/history') ? 'history'
           : pathname.startsWith('/daily-learning') ? 'research' : null;
@@ -103,7 +106,7 @@ function ForecastUnavailable({ capabilities }: { capabilities: NflCapability[] }
   if (capabilities.some(c => c.id === "forecasts" && c.available)) return <p className="notice">NFL live predictions active. Winner recommendations use the frozen 75% threshold. Spread and total markets are informational; injuries and weather are not included.</p>;
   return (
     <details className="notice nfl-notice">
-      <summary><strong>NFL is data only:</strong> schedule and results, with no forecasts, odds or injuries yet. <span className="link-btn">Why</span></summary>
+      <summary><strong>NFL live forecasts are not active:</strong> schedule and results only, with no forecasts, odds or injuries. <span className="link-btn">Why</span></summary>
       <ul className="nfl-capabilities small">
         {capabilities.map((c) => <li key={c.id}><strong>{c.label}:</strong> {c.available ? "active" : "not available"}. <span className="muted">{c.reason}</span></li>)}
       </ul>
@@ -278,21 +281,25 @@ const PAGES = {
   research: { icon: 'learning', title: 'NFL Daily Learning', capability: 'research' },
 } as const;
 
-/** Performance, history and daily learning have nothing to show for a data-only league: say so, and show what is stored. */
+/** A page with nothing to show for the NFL (Daily Learning always; Performance and History while live forecasts are not
+ *  active): say so, and show what is stored. */
 function NflUnavailable({ meta, page }: { meta: NflMeta; page: keyof typeof PAGES }) {
   const carried = useCarriedSearch();
   const p = PAGES[page];
   const cap = meta.capabilities.find((c) => c.id === p.capability);
   const first = meta.seasons[0];
   const last = meta.seasons[meta.seasons.length - 1];
+  const forecastsActive = meta.capabilities.some((c) => c.id === 'forecasts' && c.available);
   return (
     <section>
-      <PageTitle icon={p.icon} title={p.title} sub="Not available: the NFL is data only for now." />
+      <PageTitle icon={p.icon} title={p.title} sub={forecastsActive
+        ? 'Not available for the NFL. NFL live forecasts and their record are on Game Day, Prediction History and Performance.'
+        : 'Not available: NFL live forecasts are not active for this data store.'} />
       <Empty>
         <strong>{cap?.label ?? p.title}: not available.</strong> {cap?.reason}{' '}
         <Link to={`/${carried}`}>See the NFL schedule and results</Link>.
       </Empty>
-      <NflThresholdRecord capabilities={meta.capabilities} />
+      {!forecastsActive && <NflThresholdRecord capabilities={meta.capabilities} />}
       <div className="metrics today-metrics">
         <MetricCard icon="calendar" label="Seasons stored" tone="lime" value={meta.seasons.length || '—'}
           hint={first != null ? `${seasonLabel(first)} to ${seasonLabel(last)} (regular season and playoffs).` : 'No season stored yet.'} />

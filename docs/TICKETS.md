@@ -1,0 +1,157 @@
+# Reviewed parlays
+
+The application owns one workflow in `backend/app/tickets.py`. The installed `courtside-ticket-review/scripts/tickets.py` is a compatibility entry point. The AI agent performs judgment and comparison using the skill; the helper checks invariants and transmits the selected combination. There is no second predictive model or claim of an optimal/profitable parlay.
+
+From the repository root (existing backend environment):
+
+```sh
+PYTHONPATH=backend backend/.venv/bin/python -m app.tickets preflight --notify
+PYTHONPATH=backend backend/.venv/bin/python -m app.tickets snapshot --output /tmp/new-ticket-snapshot.json
+PYTHONPATH=backend backend/.venv/bin/python -m app.tickets check --plan /tmp/reviewed-plan.json
+PYTHONPATH=backend backend/.venv/bin/python -m app.tickets send --plan /tmp/reviewed-plan.json
+PYTHONPATH=backend backend/.venv/bin/python -m app.tickets settle
+```
+
+Use a new snapshot filename per review; never overwrite prior evidence. Preflight settles prior tickets BEFORE any selection early exit, then checks source freshness and games overdue for an available forecast (ten minutes into the two-hour window). `--notify` enables deduplicated operational alerts and result notifications to the existing paired chat. Respect `/stop`. A failed/unconfirmed send keeps its reservation and never gets a bypass key. The existing hourly :10 automation invokes this workflow; it still needs the desktop host running and online. No new server has been purchased or deployed.
+
+The review plan retains `snapshot_path`, `review`, `tickets`. Review includes `skill_sha256`, `helper_sha256` (hash of app/tickets.py), `snapshot_sha256`, `markets_reviewed`, `notes` and **`combination_comparison`** explaining the joint NBA/NHL/NFL candidate comparison, exclusions, timing and missing coverage. Each ticket has a label and two or three legs; no staking amount or daily allocation is required. Optional explicitly requested dollar amounts remain supported for compatibility. Legs have with sport, forecast_id and rationale. Shared identical core forecasts may recur across batches; the message shows joint dollar exposure and ticket IDs. Conflicting forecasts for a shared game and identical complete combinations are rejected. Original reservations and uncertain receipts remain immutable; there is no daily dollar cap or fixed staking template. No sport quotas; mixed-sport tickets are supported, not mandatory.
+
+Soccer is explicitly reported as unavailable: its current adapter stores schedules/results but has no prediction model. Adding soccer predictions requires its separate model/data validation milestone. Source freshness does not establish forecast coverage or bookmaker availability.
+
+## What Telegram receives
+
+One readable message per selected batch, with numbered tickets, permanent IDs, exact combined legs, matchups, sports, Toronto dates/start times, dollar stakes and model product estimates labelled as an independence approximation. It says to combine all legs of a ticket in ONE parlay. Detailed analysis stays in the saved JSON. The visual PNG follows the readable ticket text; its caption is at most1,024 characters. Both deliveries have stable separate keys and receipts. Existing individual game-card notifications are a separate sender.
+
+`ticket_batches` stores the exact outgoing text and original resolved forecasts in the existing private Telegram ledger (`.telegram-delivery.sqlite`). `ticket_items` enforces combination uniqueness in SQLite. The same exact text is also written to ignored `data/reports/tickets/`. Delivery receipts retain the Telegram message ID/status. API acceptance does not prove user read/visibility. No bot credentials are committed. Legacy v2 reservations/receipts and original archives are read to preserve earlier budget allocation; missing legacy evidence refuses new allocation.
+
+## Settlement
+
+The existing `coverage.grade` grades the **original immutable forecast ID** and line against recorded results, with result-availability checks. It does not replace an earlier forecast with a later canonical selection. Each ticket's complete leg list is retained, including pending/unavailable/loss/push/void. Any loss loses the ticket; all pushes/voids means void; otherwise unresolved legs keep it pending and a fully resolved remaining win wins. This is model settlement: exact sportsbook payout rules and promotions can differ.
+
+`ticket_grades` appends only changed evidence snapshots; original batches and old grades cannot be updated/deleted. Result corrections append a new entry. Confirmed v3 deliveries can get one deduplicated result notification per evidence revision. Legacy tickets are graded without repeating their earlier result alerts. Suggested stakes do not establish an actual placed bet or profit.
+
+## User-placed slips
+
+Import explicitly supplied slips separately:
+
+```sh
+PYTHONPATH=backend backend/.venv/bin/python -m app.tickets personal --plan /tmp/actual-slip.json
+```
+
+```json
+{"slip_id":"user-slip-unique-id","source":"user-provided screenshot","stake_usd":5,"return_usd":18.07,"legs":[{"sport":"nba","pick_label":"ATL win"},{"sport":"nba","pick_label":"OKC win"}]}
+```
+
+These are user-provided facts, not independently verified sportsbook records. `return_usd` is optional; profit remains unknown without it. Exact repeated imports are idempotent; changed content requires an explicit correction ID. Stored in `personal_tickets`, separate from AI suggestions/budget. No automatic sportsbook login, screenshot OCR pipeline or app UI for personal slips is implemented.
+
+## Publication and remaining hosting limits
+
+`jobs.predict_now` records primary coverage after winner/market generation and before slow research, then records final coverage again afterward. Existing append-only/timestamp rules remain in force; later adaptive versions have their actual availability time. Test in the development checkout before promoting to the immutable live release. This change does not independently refresh sources while a long process holds the existing scheduler lock; health alerts expose stale sources, but eliminating that lock coupling requires a separately reviewed worker split.
+
+The app's live release checkout and desktop automation are separate deployment concerns. This task does not deploy the changed prediction job to the immutable release, configure an always-on host, invent soccer forecasts, or claim a successful scheduled delivery of the new message format. Those require real operational verification after review. Current readiness/verification results are in SMOKE_TEST.md and HANDOFF.md.
+
+## Coverage guard (Nov8 follow-up)
+
+Hourly analysis continues through later forecast windows. Every plan, including `tickets=[]`, must include `review.forecasts_reviewed`, keyed `sport:forecast_id`, with `decision` (`candidate`/`excluded`) and a substantive `reason` for every eligible pending forecast in both saved and current snapshots. Newly published forecasts cause validation to refuse until reviewed. Selected legs must be candidates. `combination_comparison` is required for no-stake plans too. A successful check archives the full review under `data/reports/tickets/reviews/` and reports required/accounted counts, without sending messages. Check cannot verify the quality of reasoning, so the agent still owns evidence-based judgment. Future unopened windows remain pending coverage; absent forecasts cannot be invented.
+
+## Audit remediation batch (Nov8)
+
+Retry attempts preserve the original payload and reservations but use the current validated attempt time, not the archive creation time. Retry/paused/uncertain/partial-image statuses exit nonzero. A successful text message is never resent merely because its image failed; the image has a separate stable delivery key, original PNG hash and caption stored in ticket_images. An uncertain image is never automatically resent.
+
+Settlement persists all outcome evidence before calling Telegram; notification failures are returned in notification_errors and cannot suppress grading. Ticket failure alerts include retry/sending/uncertain/failed text or image receipts in the Toronto calendar day for the paired destination. Each affected delivery/status has its own dedup key, so an unrelated earlier failure cannot mask a later ticket failure. Individual game-card failures are excluded from these ticket alerts.
+
+The default production ledger remains .telegram-delivery.sqlite at repository root for compatibility. With a different NBA_DATA_DIR the ledger resides inside that directory; explicit ledger(path) still works. Data isolation does not isolate credentials; tests require mocked Telegram/config.
+
+Early and final publication do not create a new forecast for an explanation-only change in fallback_reason; original rows remain untouched. Actual probability, model, source, line and missing-decision changes retain versioning. The cycle reports created rows across both publication passes.
+
+Historical visual tests use `PYTHONPATH=backend backend/.venv/bin/python -m app.tickets preview --plan /path/to/past-archive.json`. The JSON contains date and resolved original tickets. The command checks past original forecasts, labels the PNG TEST/PAST GAMES, uses a test ID, example stakes, a separate receipt and no betting-budget reservation.
+
+Still open: guarded-release operation of the sender/helper, cross-window stake policy, same-game/new-market policy, personal-slip UI/correction workflow and token rotation. A reported soccer model in another checkout is not automatically an approved forecast provider here.
+
+## Integration fixes (Nov8, integration writer)
+
+- An image file left by a crash before its `ticket_images` record no longer blocks the image forever: new ticket PNGs are named by content (`<day>-<key16>-<png sha256>.png`). Archives written by a concurrent identical run are accepted when byte-identical.
+- If the ticket image cannot be rendered after the text was sent, a `failed` image receipt is recorded, so the Toronto-day ticket alert reports it. It is terminal and needs a person to look at it.
+- A reservation committed without any delivery claim (a crash in between) raises an `unclaimed` ticket alert.
+- Settlement notifications:
+  - No notification problem aborts settlement, including a malformed Telegram reply. Grades are already committed.
+  - A notice that ends `failed` or `retry` is listed in `notification_errors`.
+  - A Telegram reply that is not a JSON object counts as unconfirmed (`uncertain`).
+- `preflight --notify` still prints the committed settlement report when alerts cannot be sent (status `failed`, `alerts_error`).
+
+**Withdrawn from the integrated build: early publication in `jobs.predict_now`, and the explanation-only rule in
+`coverage._content_key`.**
+- **Why.** `coverage.py` is one of the seven files whose bytes the approved NFL activation binds
+  (`nfl_live.definition`, artifact `b6074877a7e7ccfe`, activated 2026-11-02). Editing it turned NFL off: no NFL
+  forecasts, cards or ticket legs. This happened in the live sender/helper from 19:04Z on Nov 8 until sprint1's
+  `coverage.py` was restored.
+- **The conflict.** With the sealed `coverage.py`, early publication writes a second canonical row whenever only the
+  fallback explanation changes between the early and final passes (`test_coverage.py:278`). Append-only rows cannot be
+  removed afterwards.
+- **What changed.** `coverage.py` and `jobs.py` are byte-identical to HEAD `79ff6ec`, which is the live behaviour.
+  `tests/test_nfl_activation_compat.py` checks a byte copy of the production artifact and fails if any sealed file
+  changes.
+- **To bring it back** needs one of:
+  - a new reviewed NFL activation for the new definition, which is a release decision;
+  - a design that does not change `coverage.py` and creates no explanation-only versions.
+- Still open (LOW): two identical plans sent concurrently cannot double-send or over-allocate, but the loser reports "Duplicate ticket combination" and exits 1.
+
+## Guarded release for the sender and helper
+
+**The problem.** The Telegram sender (`app.cli telegram run --once`, launchd every 60 s) and the ticket helper (`python -m app.tickets`, hourly Codex review) used to import the development working tree. Any uncommitted edit went live within a minute.
+
+**What the guard does.** Under `NBA_RELEASE_GUARD=1` both refuse (exit 1, `"reason": "release guard"`) before any snapshot, ledger access or Telegram call, unless all of these hold (`app/release.py delivery_check`):
+- the code is imported from `NBA_RELEASE_ROOT`;
+- that checkout has no uncommitted changes;
+- `NBA_DATA_DIR` is set;
+- `NBA_TELEGRAM_LEDGER` and `NBA_TELEGRAM_CREDENTIALS` name existing regular files (not symlinks).
+
+**Ledger safety.**
+- Under the guard, `telegram.ledger()` never creates a missing ledger. An empty ledger would forget every receipt, duplicate guard, `/stop` state and $5 reservation.
+- Without the guard, a data folder that sits inside another main checkout uses that checkout's ledger.
+
+**Where it runs.** The sender and helper run from a dedicated delivery checkout, `~/nba-predictor-delivery`, and the forecast jobs keep their own `~/nba-predictor-live`. Moving `~/nba-predictor-live` to this tree would also promote the forecast jobs and require migrating the live stores from 31/33 to 37, which is a separate release decision. Read paths were checked: on raw, unmigrated copies of today's stores (NBA/NHL 31, NFL 33), this tree's `tickets snapshot` is identical to the current live code's.
+
+**Configuration.**
+- `scripts/launchd/com.nba-predictor.telegram.plist`: the sender template.
+- `scripts/release_tickets.sh`: the helper wrapper.
+- Both keep production state where it is now: `NBA_DATA_DIR`, `.telegram-delivery.sqlite` and `.env.telegram` in the main checkout.
+
+**Activation.** Not done: this needs review and the user's go. Run steps 2–4 between hourly reviews, not at :05–:20, and with no ticket send in flight.
+1. Commit the reviewed integrated tree. Note its commit as `<C>`.
+2. Create the delivery checkout and its environment:
+   - `git worktree add ~/nba-predictor-delivery <C>`
+   - `git -C ~/nba-predictor-delivery checkout -B delivery-release`
+   - `uv venv ~/nba-predictor-delivery/backend/.venv --python 3.12`
+   - `uv pip sync --python ~/nba-predictor-delivery/backend/.venv/bin/python backend/requirements-release.txt`
+3. Read-only checks from `~/nba-predictor-delivery/backend`:
+   - `sh ../scripts/release_tickets.sh snapshot --output /tmp/delivery-check.json` must print a snapshot path. This makes no network call.
+   - With the plist's environment, `.venv/bin/python -m app.cli telegram status` must print the bot and receipt counts. This calls getMe/getWebhookInfo only.
+4. Back up `~/Library/LaunchAgents/com.nba-predictor.telegram.plist` (for example to `data/backups/launchd-before-delivery-<date>/`). Then switch the sender:
+   - `launchctl bootout gui/$(id -u)/com.nba-predictor.telegram`
+   - `cp scripts/launchd/com.nba-predictor.telegram.plist ~/Library/LaunchAgents/`
+   - `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.nba-predictor.telegram.plist`
+5. Switch the helper:
+   - Point the installed skill wrapper (`~/.codex/skills/courtside-ticket-review/scripts/tickets.py`) at `/Users/andry/nba-predictor-delivery`.
+   - Change the ACTIVE hourly automation prompt's helper command to `sh /Users/andry/nba-predictor-delivery/scripts/release_tickets.sh …`.
+6. Confirm both are running from the release:
+   - The next sender log line in `.telegram-delivery.log` is a normal result.
+   - The next hourly preflight prints settlement JSON, not `release guard`.
+   - The ledger's `deliveries` count is unchanged except for genuine new sends.
+
+**Moving to a newer reviewed commit.** `git -C ~/nba-predictor-delivery merge --ff-only <new commit>`. Re-sync the venv only if `requirements-release.txt` changed. Then repeat step 3.
+
+**Rollback.**
+- To a previous delivery commit: `git -C ~/nba-predictor-delivery checkout -B delivery-release <previous commit>`, then step 3.
+- Back to the pre-guard setup:
+  1. `launchctl bootout gui/$(id -u)/com.nba-predictor.telegram`
+  2. Restore the backed-up plist.
+  3. `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.nba-predictor.telegram.plist`
+  4. Restore the skill wrapper and automation command to the sprint1 paths.
+
+  The ledger and credentials never move, so rollback loses no receipts.
+
+**Limits.**
+- A refused run is visible only in the sender log and the helper's JSON output; there is no Telegram alert, because the guard runs before Telegram. The hourly review must report a `release guard` refusal.
+- The Mac must be awake.
+- Development copies still read the production credentials file unless `NBA_TELEGRAM_CREDENTIALS` or the environment overrides it, so tests must mock Telegram.

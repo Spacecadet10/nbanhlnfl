@@ -309,3 +309,15 @@ def test_published_branding_is_complete_and_sport_specific():
     for values in teams.values():
         for team in values.values():
             assert all(len(team[k])==7 and int(team[k][1:],16)>=0 for k in ('primary','secondary'))
+
+
+def test_game_card_caption_says_single_game_not_a_parlay_ticket(tmp_path):
+    key, text = tg.message_batches(report(), '123')[0]
+    class PhotoBot:
+        def call(self, method, body, **kwargs):
+            self.caption = body['caption']
+            return {'message_id': 1}
+    bot = PhotoBot()
+    with tg.ledger(tmp_path / 'receipts.sqlite') as conn:
+        assert tg.deliver(bot, conn, '123', key, text, NOW) == 'sent'
+    assert 'GAME CARD' in bot.caption and 'not a parlay ticket' in bot.caption.lower() and 'Recommended pick' in bot.caption

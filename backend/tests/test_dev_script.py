@@ -88,7 +88,8 @@ def calls(repo):
 def assert_live_unchanged(repo):
     assert (repo["live"] / "nba.sqlite").read_bytes() == repo["live_bytes"]
     assert (repo["live"] / "research" / "keep.txt").read_text() == "live research"
-    assert sorted(p.name for p in repo["live"].iterdir()) == ["nba.sqlite", "research"]
+    # Exactly the live entries the test created (repo["live_extra"]: stores a test deliberately added), nothing written there.
+    assert sorted(p.name for p in repo["live"].iterdir()) == sorted(["nba.sqlite", "research", *repo.get("live_extra", [])])
 
 
 def assert_refused_before_anything(repo, proc, reason="refusing to continue"):
@@ -238,6 +239,7 @@ def test_symlinked_development_directory_is_refused(repo):
 
 # --- Write targets: nothing the launcher or the development app writes may lead elsewhere ------------------------------
 WRITE_TARGETS = ["SNAPSHOT_AT", "api.log", "web.log", "publish.log", "PUBLISH_STATUS.json", ".publish-staging",
+                 "soccer.sqlite", "soccer.sqlite-wal", ".soccer.sqlite.tmp", ".soccer-jobs.lock",
                  "nfl.sqlite", "nfl.sqlite-wal", ".nfl.sqlite.tmp", "nba.sqlite", "nba.sqlite-wal", "nba.sqlite-shm",
                  "nba.sqlite-journal", ".nba.sqlite.tmp", "nhl.sqlite", "nhl.sqlite-wal", "nhl.sqlite-shm",
                  ".nhl.sqlite.tmp", ".nba-jobs.lock", ".nhl-jobs.lock", "research", "raw", "eval", "reports",
@@ -528,7 +530,9 @@ def test_missing_live_sources_remove_stale_development_counterparts(repo):
     # be served under a fresh SNAPSHOT_AT; files the launcher does not manage are left alone.
     dev = marked(repo["tmp"] / "dev")
     _store(dev / "nhl.sqlite", "STALE NHL")
-    for name in ("nhl.sqlite-wal", "nhl.sqlite-shm", "nhl.sqlite-journal", ".nhl.sqlite.tmp"):
+    _store(dev / "soccer.sqlite", "STALE SOCCER")
+    for name in ("nhl.sqlite-wal", "nhl.sqlite-shm", "nhl.sqlite-journal", ".nhl.sqlite.tmp",
+                 "soccer.sqlite-wal", "soccer.sqlite-shm", "soccer.sqlite-journal", ".soccer.sqlite.tmp"):
         (dev / name).write_text("stale")
     for sub in ("raw", "eval", "research"):
         (dev / sub).mkdir()
@@ -539,11 +543,31 @@ def test_missing_live_sources_remove_stale_development_counterparts(repo):
     proc, rows = _full_run(repo, dev)
     _assert_targets(repo, proc, rows, dev)
     left = sorted(os.listdir(dev))
-    assert not [n for n in left if "nhl" in n] and "raw" not in left and "eval" not in left, left
+    assert not [n for n in left if "nhl" in n or "soccer" in n] and "raw" not in left and "eval" not in left, left
     assert sorted(os.listdir(dev / "research")) == ["keep.txt"]
     assert (dev / "notes.txt").read_text() == "mine" and (dev / "reports" / "r.json").read_text() == "{}"
     migrations = [r for r in rows if r[0] == "-m app.cli" and r[5] != "preview-publish"]
     assert len(migrations) == 1, rows                                        # nba only; no stale nhl copy migrated
+
+
+def test_live_soccer_store_is_copied_and_migrated_with_the_soccer_command(repo):
+    # The data-only soccer store (app/soccer.py) is copied like the others and migrated through `app.cli soccer migrate`
+    # (never `--sport soccer`, which the served-sport CLI refuses), against the copy only.
+    _store(repo["live"] / "soccer.sqlite", "LIVE SOCCER")
+    live_soccer = (repo["live"] / "soccer.sqlite").read_bytes()
+    repo["live_extra"] = ["soccer.sqlite"]
+    dev = repo["tmp"] / "dev"
+    proc, rows = _full_run(repo, dev)
+    _assert_targets(repo, proc, rows, dev)
+    assert _rows(dev / "soccer.sqlite") == ["LIVE SOCCER"]
+    soccer = [r for r in rows if r[0] == "-m app.cli" and r[5] == "soccer"]
+    assert len(soccer) == 1 and r_args(soccer[0]) == "-m app.cli soccer migrate", rows
+    assert os.path.realpath(soccer[0][2]) == os.path.realpath(dev)
+    assert (repo["live"] / "soccer.sqlite").read_bytes() == live_soccer
+
+
+def r_args(row):
+    return row[6]
 
 
 def test_wal_mode_live_store_without_side_files_is_copied_and_left_unchanged(repo):
@@ -616,3 +640,19 @@ def test_the_publisher_checks_the_same_marker_text_dev_sh_writes():
     from app import devpaths
     assert f'DEV_MARK="{devpaths.MARK_TEXT}"' in SCRIPT.read_text()
     assert MARKER_TEXT == devpaths.MARK_TEXT + "\n"
+
+
+@pytest.mark.parametrize("interval", ["10", "29", "abc", "60s", "-60", "3.5"])
+def test_invalid_publish_interval_is_refused_before_anything(repo, interval):
+    # The publisher refuses intervals under 30 s and exits; the launcher used to start anyway and still announce that copies
+    # are republished. An invalid value must stop the launch with a clear message before any server or file is touched.
+    dev = marked(repo["tmp"] / "dev")
+    proc = run(repo, dev, extra_env={"PUBLISH_INTERVAL": interval})
+    assert_refused_before_anything(repo, proc, "PUBLISH_INTERVAL")
+
+
+def test_publish_interval_is_not_checked_when_publishing_is_off(repo):
+    dev = repo["tmp"] / "dev"
+    proc, rows = _full_run(repo, dev, extra_env={"PUBLISH_INTERVAL": "10", "NBA_DEV_PUBLISH": "0"})
+    _assert_targets(repo, proc, rows, dev)
+    assert "republished" not in proc.stdout and not [r for r in rows if r[5] == "preview-publish"]

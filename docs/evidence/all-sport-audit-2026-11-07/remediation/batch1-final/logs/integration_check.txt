@@ -1,0 +1,180 @@
+## A. integration index (= untouched base) vs main checkout working files (code only, excluding HANDOFF.md and docs/)
+MISSING in REPO: backend/tests/test_live_store_guard.py
+MISSING in REPO: frontend/src/components/nflWording.test.mjs
+MISSING in REPO: frontend/src/components/tables.test.mjs
+index files compared: 350, differing: 3
+## REPO untracked non-doc files absent from base index
+## B. each writer's changed files vs integration
+w1: deleted? HANDOFF.md
+backend/app/cli.py
+backend/app/config.py
+backend/app/db.py
+backend/app/devpaths.py
+backend/app/freshness.py
+backend/app/ingest.py
+backend/app/main.py
+backend/app/migrations/0035_result_integrity.sql
+backend/app/preview_publish.py
+backend/app/raw_cache.py
+backend/app/release.py
+backend/app/schemas.py
+backend/app/soccer.py
+backend/app/sources/espn.py
+backend/tests/conftest.py
+backend/tests/test_dev_script.py
+backend/tests/test_live.py
+backend/tests/test_live_store_guard.py
+backend/tests/test_nfl_live.py
+backend/tests/test_replay_same_store.py
+backend/tests/test_research_agent.py
+backend/tests/test_soccer.py
+backend/tests/test_storage.py
+frontend/package.json
+frontend/src/api/types.ts
+frontend/src/components/Canonical.tsx
+frontend/src/components/Layout.tsx
+frontend/src/components/Selection.tsx
+frontend/src/components/competition.test.mjs
+frontend/src/components/competition.ts
+frontend/src/pages/SoccerPages.tsx
+frontend/src/styles.css
+scripts/dev.sh
+w1 index state:
+ M backend/app/cli.py
+ M backend/app/config.py
+MM backend/app/db.py
+MM backend/app/ingest.py
+ M backend/app/raw_cache.py
+ M backend/app/release.py
+MM backend/app/soccer.py
+ M backend/tests/conftest.py
+?? backend/tests/test_live_store_guard.py
+w2: deleted? HANDOFF.md
+backend/app/backup.py
+backend/app/db.py
+backend/app/devpaths.py
+backend/app/freshness.py
+backend/app/ingest.py
+backend/app/main.py
+backend/app/migrations/0035_result_integrity.sql
+backend/app/preview_publish.py
+backend/app/schemas.py
+backend/app/soccer.py
+backend/app/sources/espn.py
+backend/tests/test_backup_restore.py
+backend/tests/test_dev_script.py
+backend/tests/test_live.py
+backend/tests/test_nfl_live.py
+backend/tests/test_replay_same_store.py
+backend/tests/test_research_agent.py
+backend/tests/test_soccer.py
+backend/tests/test_storage.py
+frontend/package.json
+frontend/src/api/types.ts
+frontend/src/components/Canonical.tsx
+frontend/src/components/Layout.tsx
+frontend/src/components/Selection.tsx
+frontend/src/components/competition.test.mjs
+frontend/src/components/competition.ts
+frontend/src/pages/SoccerPages.tsx
+frontend/src/styles.css
+scripts/dev.sh
+w2 index state:
+ M backend/app/backup.py
+ M backend/tests/test_backup_restore.py
+w3: deleted? HANDOFF.md
+backend/app/db.py
+backend/app/devpaths.py
+backend/app/freshness.py
+backend/app/ingest.py
+backend/app/main.py
+backend/app/migrations/0035_result_integrity.sql
+backend/app/preview_publish.py
+backend/app/schemas.py
+backend/app/soccer.py
+backend/app/sources/espn.py
+backend/tests/test_dev_script.py
+backend/tests/test_live.py
+backend/tests/test_nfl_live.py
+backend/tests/test_replay_same_store.py
+backend/tests/test_research_agent.py
+backend/tests/test_soccer.py
+backend/tests/test_storage.py
+frontend/package.json
+frontend/src/api/types.ts
+frontend/src/components/Canonical.tsx
+frontend/src/components/Layout.tsx
+frontend/src/components/MarketView.tsx
+frontend/src/components/Selection.tsx
+frontend/src/components/competition.test.mjs
+frontend/src/components/competition.ts
+frontend/src/components/nflWording.test.mjs
+frontend/src/components/tables.test.mjs
+frontend/src/pages/HistoryPage.tsx
+frontend/src/pages/NflPages.tsx
+frontend/src/pages/SoccerPages.tsx
+frontend/src/styles.css
+scripts/dev.sh
+w3 index state:
+MM frontend/package.json
+MM frontend/src/components/Canonical.tsx
+MM frontend/src/components/Layout.tsx
+ M frontend/src/components/MarketView.tsx
+ M frontend/src/pages/HistoryPage.tsx
+ M frontend/src/pages/NflPages.tsx
+?? frontend/src/components/nflWording.test.mjs
+?? frontend/src/components/tables.test.mjs
+## C. integration changed files vs writers (who owns each)
+backend/app/backup.py <- w2
+backend/app/cli.py <- w1
+backend/app/config.py <- w1
+backend/app/db.py <- w1
+backend/app/ingest.py <- w1
+backend/app/raw_cache.py <- w1
+backend/app/release.py <- w1
+backend/app/soccer.py <- w1
+backend/tests/conftest.py <- w1
+backend/tests/test_backup_restore.py <- w2
+backend/tests/test_live_store_guard.py <- w1
+frontend/package.json <- w3
+frontend/src/components/Canonical.tsx <- w3
+frontend/src/components/Layout.tsx <- w3
+frontend/src/components/MarketView.tsx <- w3
+frontend/src/components/nflWording.test.mjs <- w3
+frontend/src/components/tables.test.mjs <- w3
+frontend/src/pages/HistoryPage.tsx <- w3
+frontend/src/pages/NflPages.tsx <- w3
+## B (bash rerun). each writer's files that differ from the base index, vs integration
+w1 PRESENT  backend/app/cli.py
+w1 PRESENT  backend/app/config.py
+w1 PRESENT  backend/app/db.py
+w1 PRESENT  backend/app/ingest.py
+w1 PRESENT  backend/app/raw_cache.py
+w1 PRESENT  backend/app/release.py
+w1 PRESENT  backend/app/soccer.py
+w1 PRESENT  backend/tests/conftest.py
+w1 PRESENT  backend/tests/test_live_store_guard.py
+w2 PRESENT  backend/app/backup.py
+w2 PRESENT  backend/tests/test_backup_restore.py
+w3 PRESENT  frontend/package.json
+w3 PRESENT  frontend/src/components/Canonical.tsx
+w3 PRESENT  frontend/src/components/Layout.tsx
+w3 PRESENT  frontend/src/components/MarketView.tsx
+w3 PRESENT  frontend/src/components/nflWording.test.mjs
+w3 PRESENT  frontend/src/components/tables.test.mjs
+w3 PRESENT  frontend/src/pages/HistoryPage.tsx
+w3 PRESENT  frontend/src/pages/NflPages.tsx
+## index trees (write-tree; equal => writer staging holds only the base, no writer edits hidden in the index)
+/Users/andry/Desktop/nba-predictor-batch1 index-listing-hash(excl. intent-to-add new tests)=06188734790aa3b3bbf1c46c0b5f4a7714f291c3
+/Users/andry/Desktop/nba-predictor-batch1-w1 index-listing-hash(excl. intent-to-add new tests)=efc5023e13a8c4fd6845e278c914937f68a0a312
+/Users/andry/Desktop/nba-predictor-batch1-w2 index-listing-hash(excl. intent-to-add new tests)=efc5023e13a8c4fd6845e278c914937f68a0a312
+/Users/andry/Desktop/nba-predictor-batch1-w3 index-listing-hash(excl. intent-to-add new tests)=efc5023e13a8c4fd6845e278c914937f68a0a312
+## intent-to-add entries
+nba-predictor-batch1: 100644 e69de29bb2d1d6434b8b29ae775ad8c2e48c5391 0	backend/tests/test_live_store_guard.py
+nba-predictor-batch1: 100644 e69de29bb2d1d6434b8b29ae775ad8c2e48c5391 0	frontend/src/components/nflWording.test.mjs
+nba-predictor-batch1: 100644 e69de29bb2d1d6434b8b29ae775ad8c2e48c5391 0	frontend/src/components/tables.test.mjs
+## HANDOFF.md in writers vs base index
+w1 HANDOFF = base
+w2 HANDOFF = base
+w3 HANDOFF = base
+integration HANDOFF = base

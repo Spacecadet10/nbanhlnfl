@@ -1,0 +1,4 @@
+## mutation: L8 rule removed + max_season ignored (expect the two new tests to fail)
+FAILED tests/test_soccer_history.py::test_a_second_leg_appearing_makes_the_first_leg_usable_only_from_that_retrieval
+FAILED tests/test_soccer_history.py::test_a_development_copy_leaves_out_later_seasons_entirely
+2 failed, 31 passed in 1.20s

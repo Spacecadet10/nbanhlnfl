@@ -1,0 +1,35 @@
+app imported from: /Users/andry/Desktop/nba-predictor-batch1/backend/app/__init__.py
+--- 1a activate, protected, no activation file
+rc: 1
+stdout: {"status": "refused", "reason": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_1_4/fakerepo/data is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+--- 1b activate, protected, existing activation file
+rc: 1
+stdout: {"status": "refused", "reason": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_1_4/fakerepo/data is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+--- 1c activate, protected, guard=1 but wrong root
+rc: 1
+stdout: {"status": "refused", "reason": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_1_4/fakerepo/data is in a protected live data folder and this is not the verified release environment (code imported from /Users/andry/Desktop/nba-predictor-batch1, not the release checkout /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_1_4; the release checkout has uncommitted changes: HANDOFF.md, backend/app/backup.py, backend/app/cli.py, backend/app/config.py, backend/app/db.py): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["code imported from /Users/andry/
+tree unchanged: True
+--- 1d activate, copy with research/ symlinked into protected
+rc: 1
+stdout: {"status": "refused", "reason": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_1_4/copy/research/nfl_live/activation.json is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+--- 4a test-run, protected
+rc: 1
+stdout: {"status": "refused", "reason": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_1_4/fakerepo/data is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+out dir created: False
+--- 4b collect-lines --test, protected
+rc: 1
+stdout: {"status": "refused", "reason": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_1_4/fakerepo/data is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+--- 4c test-run, protected, no access log yet
+rc: 1
+stdout: {"status": "refused", "reason": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_1_4/fakerepo/data is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+--- 4d test-run, copy with research/ symlinked
+rc: 1
+stdout: {"status": "refused", "reason": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_1_4/copy/research/nfl_eval/nfl_test_access.jsonl is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+lock files anywhere in protected: []

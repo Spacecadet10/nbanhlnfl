@@ -7,6 +7,8 @@ from typing import Optional
 from . import config
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
+# Migrations that rebuild a table other tables reference: run with foreign keys off, every reference checked before commit.
+PARENT_REBUILDS = frozenset({"0033_nfl_market_quotes.sql", "0035_result_integrity.sql", "0039_soccer_international.sql"})
 
 
 def utc_now() -> str:
@@ -15,6 +17,10 @@ def utc_now() -> str:
 
 class StoreMismatch(RuntimeError):
     pass
+
+
+class ProtectedStoreError(RuntimeError):
+    """A migration of a store in a protected live data folder outside the release migration (config.protected_data_dir)."""
 
 
 def connect(path: Optional[Path] = None, *, check_same_thread: bool = True, sport: Optional[str] = None) -> sqlite3.Connection:
@@ -65,7 +71,7 @@ class store_lock:
     on the same store together; the two sports' stores are independent."""
 
     def __init__(self, sport: str, wait_seconds: Optional[float] = None, poll_seconds: float = 2.0):
-        self.path = config.data_dir() / f".{sport}-jobs.lock"
+        self.path = config.lock_path(sport)
         self.wait, self.poll, self.fd = wait_seconds, poll_seconds, None
 
     def __enter__(self) -> bool:
@@ -94,8 +100,12 @@ class store_lock:
         return False
 
 
-def migrate(conn: sqlite3.Connection, upto: Optional[int] = None) -> list[str]:
-    """Applies pending migrations in order (optionally only through version `upto`); returns the names applied."""
+def migrate(conn: sqlite3.Connection, upto: Optional[int] = None, *, explicit: bool = False) -> list[str]:
+    """Applies pending migrations in order (optionally only through version `upto`); returns the names applied.
+    A store in a protected live data folder is migrated only by the explicit `migrate` command (`explicit`) in the
+    verified release environment; otherwise ProtectedStoreError before anything is written (defence in depth behind the
+    CLI's own refusal, for any other caller)."""
+    _refuse_protected(conn, upto, explicit)
     conn.execute("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)")
     done = {r["version"] for r in conn.execute("SELECT version FROM schema_migrations")}
     applied = []
@@ -103,7 +113,7 @@ def migrate(conn: sqlite3.Connection, upto: Optional[int] = None) -> list[str]:
         version = int(f.name[:4])
         if version in done or (upto is not None and version > upto):
             continue
-        parent_rebuild = f.name == "0033_nfl_market_quotes.sql"
+        parent_rebuild = f.name in PARENT_REBUILDS
         foreign_keys = conn.execute("PRAGMA foreign_keys").fetchone()[0]
         if parent_rebuild:
             conn.execute("PRAGMA foreign_keys = OFF")
@@ -112,7 +122,7 @@ def migrate(conn: sqlite3.Connection, upto: Optional[int] = None) -> list[str]:
                 for stmt in _split(f.read_text()):
                     conn.execute(stmt)
                 if parent_rebuild and conn.execute("PRAGMA foreign_key_check").fetchone() is not None:
-                    raise sqlite3.IntegrityError("foreign key violation in market_quotes rebuild")
+                    raise sqlite3.IntegrityError(f"foreign key violation in the {f.name} table rebuild")
                 conn.execute("INSERT INTO schema_migrations VALUES (?, ?, ?)", (version, f.name, utc_now()))
         finally:
             if parent_rebuild:
@@ -120,6 +130,32 @@ def migrate(conn: sqlite3.Connection, upto: Optional[int] = None) -> list[str]:
                 conn.execute("PRAGMA legacy_alter_table = OFF")
         applied.append(f.name)
     return applied
+
+
+def _refuse_protected(conn: sqlite3.Connection, upto: Optional[int], explicit: bool) -> None:
+    """Raises ProtectedStoreError when `migrate` would apply a migration to a store file in a protected live data folder
+    outside the explicit release migration. In-memory and temporary databases (no file) are never protected."""
+    main = next((r[2] for r in conn.execute("PRAGMA database_list") if r[1] == "main"), "")
+    if not main:                       # '' would resolve to the working directory (a checkout's backend/): not a store
+        return
+    path = Path(main)
+    if not config.protected_path(path):        # links followed: a link into the live folder is protected too
+        return
+    done = {r[0] for r in conn.execute("SELECT version FROM schema_migrations")} if has_table(conn, "schema_migrations") else set()
+    pending = [f.name for f in sorted(MIGRATIONS_DIR.glob("[0-9][0-9][0-9][0-9]_*.sql"))
+               if int(f.name[:4]) not in done and (upto is None or int(f.name[:4]) <= upto)]
+    if not pending:
+        return
+    if not explicit:
+        problems = ["only the explicit `migrate` command migrates it"]
+    else:
+        from . import release, sports
+        sport = next((s for s in (*sports.SPORTS, *sports.DATA_ONLY) if config.db_path(s).resolve() == path.resolve()), None)
+        problems = release.migration_context(sport) if sport else [f"{path.name} is not this data folder's store of any sport"]
+    if problems:
+        raise ProtectedStoreError(f"refusing to migrate {path} ({len(pending)} pending, first {pending[0]}): it is in a "
+                                  f"protected live data folder; {'; '.join(problems)}. Use scripts/dev.sh or "
+                                  "NBA_DATA_DIR=<a copy>; a live migration is the release procedure.")
 
 
 def _split(sql: str) -> list[str]:

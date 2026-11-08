@@ -20,6 +20,7 @@ from .providers.demo import DemoProvider
 from .providers.real import RealProvider
 from .schemas import (CanonicalHistoryResponse, CanonicalPerformanceResponse, DataFreshness, GameDetail, GamesResponse, Health, HistoryResponse, MarketHistoryResponse, MarketPerformanceResponse,
                       Meta, NflGameDetail, NflGamesResponse, NflMeta, PerformanceResponse, SoccerMatchDetail, SoccerMatchesResponse,
+                      SoccerPerformance, SoccerResearchHistory, SoccerResearchMatchDetail, SoccerResearchMatches, SoccerResearchMeta,
                       SoccerMeta, SourceStatus)
 
 API_VERSION = "0.3.0"
@@ -237,7 +238,8 @@ def nfl_game(game_id: str, mode: str = Depends(api_mode)):
 
 # --- European soccer: data-only (app/soccer.py). Like the NFL reads: query-only connection to the soccer store, never
 # get_provider or any forecast path; soccer is not in SPORT_IDS. Every read names one competition.
-COMPETITION = Query("eng.1", pattern="^(eng\\.1|esp\\.1|ger\\.1|ita\\.1|fra\\.1|uefa\\.champions|uefa\\.europa)$",
+from .sources.espn import SOCCER_COMPETITIONS as _SOCCER_COMPETITIONS   # noqa: E402
+COMPETITION = Query("eng.1", pattern="^(" + "|".join(c.replace(".", "\\.") for c in _SOCCER_COMPETITIONS) + ")$",
                     description="ESPN competition slug; one competition per request, never mixed")
 
 
@@ -250,8 +252,11 @@ def _soccer_store(mode: str) -> Iterator[sqlite3.Connection]:
     try:
         conn = db.connect_readonly("soccer")
     except FileNotFoundError:
-        raise HTTPException(status_code=503, detail="No soccer data store found. Run `python -m app.cli soccer migrate` and "
-                                                    "`python -m app.cli soccer ingest --from YYYYMMDD --to YYYYMMDD` from backend/.") from None
+        raise HTTPException(status_code=503, detail="No soccer data store found. A development store is created from backend/ "
+                            "with `NBA_DATA_DIR=<scratch or development data directory> .venv/bin/python -m app.cli soccer "
+                            "migrate` and `... soccer ingest --from YYYYMMDD --to YYYYMMDD` (never the live data/ folder). That "
+                            "ingest collects from ESPN, which the S1 source review found not clearly permitted for this "
+                            "project (docs/SOCCER_PLAN.md): a user decision.") from None
     try:
         conn.execute("BEGIN")
         yield conn
@@ -287,6 +292,95 @@ def soccer_match(match_id: str, mode: str = Depends(api_mode)):
     if detail is None:
         raise HTTPException(status_code=404, detail=f"No soccer match {match_id!r} in the store.")
     return detail
+
+
+@app.get("/api/soccer/live")
+def soccer_live_forecasts(competition: str = COMPETITION, mode: str = Depends(api_mode)):
+    """Live 90-minute forecasts of the sealed Elo (app/soccer_live.py) for one competition: upcoming matches and those
+    kicked off in the last 2 days, each with its exact probabilities, generation/cutoff times, input freshness and, once
+    known, its 90-minute result. Separate from the research reads below; never computed on request."""
+    from . import soccer_live
+    from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+    now = _dt.now(_tz.utc)
+    since = (now - _td(days=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with _soccer_store(mode) as conn:
+        rows = [f for f in soccer_live.forecasts(conn, competition=competition, as_of=now.strftime("%Y-%m-%dT%H:%M:%SZ"))
+                if f["kickoff_at"] >= since]
+        check = soccer_live.latest_checks(conn).get(competition)
+    from . import intl_live
+    in_scope = competition in soccer_live.LAUNCH or competition in intl_live.LAUNCH
+    return {"competition": competition, "in_scope": in_scope, "label": soccer_live.LABEL,
+            "settlement_rule": soccer_live.SETTLEMENT_RULE, "market": soccer_live.MARKET,
+            "scope_note": None if in_scope else ("No live forecast: this competition did not pass its held-out test "
+                                                 "(too few test matches)."),
+            "model": ({"name": "international Elo (national teams)", "candidate_sha256": intl_live.CANDIDATE_SHA256}
+                      if competition in intl_live.COMPETITIONS else
+                      {"name": "draw-aware Elo (uncalibrated)", "candidate_sha256": soccer_live.CANDIDATE_SHA256}),
+            "check": check, "forecasts": rows}
+
+
+from datetime import date as _dt_date   # noqa: E402  (calendar check of the research date parameter)
+
+
+# Soccer research reads (app/soccer_forecasts.py): openfootball history and the stored research forecasts. Only stored
+# rows are returned; a store without them gives an empty list or a 503 that says so, never a computed fallback.
+def _research(conn: sqlite3.Connection) -> None:
+    from . import soccer_forecasts
+    if not soccer_forecasts.available(conn):
+        raise HTTPException(status_code=503, detail="This soccer store has no research history or forecast ledger (migrations "
+                            "0036/0037). Build one on a copy: `NBA_DATA_DIR=<scratch> .venv/bin/python -m app.cli soccer "
+                            "history-download` then `soccer eval-develop` and `soccer eval-record` (never the live data/ folder).")
+
+
+@app.get("/api/soccer/research/meta", response_model=SoccerResearchMeta)
+def soccer_research_meta(competition: str = COMPETITION, mode: str = Depends(api_mode)):
+    from . import soccer_forecasts
+    with _soccer_store(mode) as conn:
+        _research(conn)
+        return soccer_forecasts.research_meta(conn, competition)
+
+
+@app.get("/api/soccer/research/matches", response_model=SoccerResearchMatches)
+def soccer_research_matches(date: str = Query(pattern="^[0-9]{4}-[0-9]{2}-[0-9]{2}$", description="Listed local match date"),
+                            competition: str = COMPETITION, mode: str = Depends(api_mode)):
+    from . import soccer_forecasts
+    try:
+        _dt_date.fromisoformat(date)
+    except ValueError:
+        raise HTTPException(status_code=422, detail=f"{date!r} is not a calendar date (YYYY-MM-DD)") from None
+    with _soccer_store(mode) as conn:
+        _research(conn)
+        return soccer_forecasts.research_matches(conn, competition, date)
+
+
+@app.get("/api/soccer/research/matches/{match_id}", response_model=SoccerResearchMatchDetail)
+def soccer_research_match(match_id: str, mode: str = Depends(api_mode)):
+    from . import soccer_forecasts
+    with _soccer_store(mode) as conn:
+        _research(conn)
+        detail = soccer_forecasts.research_match(conn, match_id) if match_id.startswith("of:") else None
+    if detail is None:
+        raise HTTPException(status_code=404, detail=f"No soccer history match {match_id!r} in the store.")
+    return detail
+
+
+@app.get("/api/soccer/research/performance", response_model=SoccerPerformance)
+def soccer_research_performance(competition: str = COMPETITION, mode: str = Depends(api_mode)):
+    from . import soccer_forecasts
+    with _soccer_store(mode) as conn:
+        _research(conn)
+        return soccer_forecasts.performance(conn, competition)
+
+
+@app.get("/api/soccer/research/history", response_model=SoccerResearchHistory)
+def soccer_research_history(competition: str = COMPETITION, season: Optional[int] = Query(None, ge=1990, le=2100),
+                            model: Optional[str] = Query(None, pattern="^(frequency|elo|poisson)$"),
+                            limit: int = Query(100, ge=1, le=500), offset: int = Query(0, ge=0),
+                            mode: str = Depends(api_mode)):
+    from . import soccer_forecasts
+    with _soccer_store(mode) as conn:
+        _research(conn)
+        return soccer_forecasts.research_history(conn, competition, season, model, limit, offset)
 
 
 @app.get("/api/meta", response_model=Meta)

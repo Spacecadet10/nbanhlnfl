@@ -1,0 +1,6 @@
+cwd: /Users/andry/Desktop/nba-predictor-soccer-train
+cmd: OMP_NUM_THREADS=4 backend/.venv/bin/python scripts/check_project.py --ready (backend/.venv -> /Users/andry/Desktop/nba-predictor-sprint1/backend/.venv)
+START=2026-11-08T18:24:32Z
+FAIL: Possible duplicate/backup file: docs/evidence/soccer-training-2026-11-08/s6/build_open_season_store.py; modify the original instead.
+EXIT=1
+END=2026-11-08T18:24:32Z

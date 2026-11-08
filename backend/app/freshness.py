@@ -121,6 +121,15 @@ def revision(conn: sqlite3.Connection) -> str:
              _one(conn, "SELECT IFNULL(MAX(revision_id), 0) FROM result_revisions"),
              _one(conn, "SELECT IFNULL(MAX(quote_id), 0) FROM odds_quotes"),
              _one(conn, "SELECT IFNULL(MAX(quote_id), 0) FROM market_quotes"))
+    # Soccer (data-only store, app/soccer.py) keeps its matches outside `games`, and its "Last imported" time is a scoreboard
+    # retrieval: a fetch that changed no match (same bytes, empty day) must still republish a development copy. Added only
+    # when soccer matches or soccer retrievals exist, so the revision of every NBA/NHL/NFL store is unchanged.
+    soccer = _one(conn, "SELECT COUNT(*) || '|' || IFNULL(MAX(updated_at), '') || '|' || "
+                        "(SELECT IFNULL(MAX(revision_id), 0) FROM soccer_result_revisions) || '|' || "
+                        "(SELECT IFNULL(MAX(f.fetch_id), 0) FROM raw_fetches f JOIN raw_responses r ON r.raw_id = f.raw_id "
+                        " WHERE r.source = 'espn_soccer') FROM soccer_matches")
+    if soccer and soccer != "0||0|0":
+        parts += (soccer,)
     return hashlib.sha256(json.dumps(parts, default=str).encode()).hexdigest()[:16]
 
 

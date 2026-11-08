@@ -68,7 +68,9 @@ def test_migrations_are_idempotent(conn):
          "0023_two_hour_guards.sql", "0024_adaptive.sql", "0025_recovery.sql",
          "0026_adaptive_recovery.sql", "0027_adaptive_recovery_attempts.sql", "0028_exact_rule_observations.sql",
          "0029_game_forecasts.sql", "0030_result_revisions.sql", "0031_training_inputs_job.sql",
-         "0032_nfl_store_identity.sql", "0033_nfl_market_quotes.sql", "0034_soccer_store.sql"]
+         "0032_nfl_store_identity.sql", "0033_nfl_market_quotes.sql", "0034_soccer_store.sql",
+         "0035_result_integrity.sql", "0036_soccer_history.sql",
+         "0037_soccer_forecasts.sql", "0038_soccer_live.sql", "0039_soccer_international.sql"]
 
 
 def test_repeated_ingestion_creates_no_duplicates(conn):
@@ -125,7 +127,11 @@ def test_replay_from_cache_rebuilds_identical_rows(conn, tmp_path):
     for r in conn.execute("SELECT * FROM raw_responses ORDER BY raw_id"):
         fresh.execute("INSERT INTO raw_responses VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", tuple(r))
     ingest.replay(fresh)
-    assert [dict(r) for r in fresh.execute("SELECT * FROM games")] == snapshot
+    # The fresh store has the cached responses but not the retrieval log (raw_fetches), so it cannot name the retrieval that
+    # last contained each game: that bookkeeping column is NULL there; every data column is identical.
+    rebuilt = [dict(r) for r in fresh.execute("SELECT * FROM games")]
+    assert [r.pop("last_seen_fetch_id") for r in rebuilt] == [None] * len(rebuilt)
+    assert rebuilt == [{k: v for k, v in r.items() if k != "last_seen_fetch_id"} for r in snapshot]
 
 
 def test_tampered_cache_is_detected(conn, tmp_path):

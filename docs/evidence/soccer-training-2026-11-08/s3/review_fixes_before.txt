@@ -1,0 +1,177 @@
+...................F...FF.FFFFF...FF                                     [100%]
+=================================== FAILURES ===================================
+_______ test_a_model_never_receives_the_label_of_the_match_it_forecasts ________
+
+    def test_a_model_never_receives_the_label_of_the_match_it_forecasts():
+        class Peek(Spy):
+            def predict(self, matches, cutoff_at):
+                self.labels = [m.label for m in matches]
+                return super().predict(matches, cutoff_at)
+        spy = Peek()
+        ev.walk(spy, dataset([mt("a", "eng.1", 2020, "2020-09-12", "A", "B", label=2)], []), seasons=[2020])
+>       assert spy.labels == [None]
+E       assert [2] == [None]
+E         
+E         At index 0 diff: 2 != None
+E         Use -v to get more diff
+
+tests/test_soccer_eval.py:284: AssertionError
+__ test_poisson_promoted_prior_uses_the_previous_fit_and_the_forecast_season ___
+
+    def test_poisson_promoted_prior_uses_the_previous_fit_and_the_forecast_season():
+        members = {("eng.1", 2019): frozenset({"A", "B"}), ("eng.1", 2020): frozenset({"A", "P"})}
+        m = ev.PoissonModel(ev.PoissonConfig(365, 3, 0.25), members)
+        m.params = {"att": {"A": 0.4, "B": -0.2}, "def": {"A": 0.3, "B": -0.1}, "mu": {}, "h": {}}
+>       centre = m.prior_centres({"P": 2020, "A": 2020}, m.params)
+                 ^^^^^^^^^^^^^^^
+E       AttributeError: 'PoissonModel' object has no attribute 'prior_centres'
+
+tests/test_soccer_eval.py:362: AttributeError
+________ test_configuration_ties_are_broken_in_the_preregistered_order _________
+
+    def test_configuration_ties_are_broken_in_the_preregistered_order():
+        a, b = ev.EloConfig(20, 50, 1.0, 0, 0, False), ev.EloConfig(15, 75, 0.6, 200, 200, True)
+>       assert ev.select_config([(0.5, ev.elo_tiebreak(a), a), (0.5 + 5e-10, ev.elo_tiebreak(b), b)])[2] == b
+               ^^^^^^^^^^^^^^^^
+E       AttributeError: module 'app.soccer_eval' has no attribute 'select_config'
+
+tests/test_soccer_eval.py:369: AttributeError
+__ test_choice_needs_the_candidate_better_in_two_of_three_validation_seasons ___
+
+    def test_choice_needs_the_candidate_better_in_two_of_three_validation_seasons():
+        base = _seasons_preds({2020: [1.0] * 100, 2021: [1.0] * 100, 2022: [1.0] * 100})
+        one_season = _seasons_preds({2020: [0.5] * 100, 2021: [1.01] * 100, 2022: [1.01] * 100})
+        two = _seasons_preds({2020: [0.9] * 100, 2021: [0.9] * 100, 2022: [1.01] * 100})
+>       assert ev.choose_model({"frequency": base, "elo": one_season, "poisson": base})["selected"] == "frequency"
+E       AssertionError: assert 'elo' == 'frequency'
+E         
+E         - frequency
+E         + elo
+
+tests/test_soccer_eval.py:395: AssertionError
+___ test_loader_marks_awarded_extra_time_deciding_and_dropped_rows_unusable ____
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-247/test_loader_marks_awarded_extr0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10d335670>
+
+    def test_loader_marks_awarded_extra_time_deciding_and_dropped_rows_unusable(tmp_path, monkeypatch):
+        monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path))
+        c = db.connect(sport="soccer")
+        db.migrate(c)
+        db.claim_store(c, "soccer")
+        c.commit()
+        from tests.test_soccer_history import FakeHub, CL
+        hub = FakeHub({SHA: {"2021-22/cl.txt": CL.replace("2023", "2021").replace("2024", "2022").encode()}})
+        h.download(c, pins={"champions-league": SHA}, fetch=hub, sleep=0, only={"champions-league"},
+                   now=iter(["2026-11-08T10:00:00Z"] * 3).__next__)
+        h.replay(c)
+        ds = ev.load(c, through=2022)
+        usable = {ds.meta[r.mid][2:4]: r.usable for r in ds.revisions}
+>       assert usable[("ENG:Arsenal FC", "POR:FC Porto")] is False          # a.e.t./pens
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: ('ENG:Arsenal FC', 'POR:FC Porto')
+
+tests/test_soccer_eval.py:412: KeyError
+______ test_seasons_after_the_reserved_test_are_refused_even_with_a_seal _______
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-247/test_seasons_after_the_reserve0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10d329040>
+
+    def test_seasons_after_the_reserved_test_are_refused_even_with_a_seal(tmp_path, monkeypatch):
+        c = _store(tmp_path, monkeypatch)
+>       with pytest.raises(ev.TestSeasonsLocked, match="prospective"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE TestSeasonsLocked
+
+tests/test_soccer_eval.py:420: Failed
+______________ test_one_test_run_per_access_log_whatever_the_seal ______________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-247/test_one_test_run_per_access_l0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10d54e300>
+
+    def test_one_test_run_per_access_log_whatever_the_seal(tmp_path, monkeypatch):
+        c = _store(tmp_path, monkeypatch)
+        log, xlog = tmp_path / "access.jsonl", tmp_path / "exp.jsonl"
+        log.write_text(json.dumps({"candidate_sha256": "something-else", "purpose": ev.RUN_START}) + "\n")
+        sealed = ev.seal_candidate({"model": "frequency"})
+        with pytest.raises(ev.TestRunAlreadyDone):
+>           ev.run_test(c, sealed, access_log=log, experiments_log=xlog, out_dir=tmp_path / "o")
+E           TypeError: run_test() got an unexpected keyword argument 'experiments_log'
+
+tests/test_soccer_eval.py:430: TypeError
+____ test_the_candidate_must_be_the_only_seal_the_development_log_recorded _____
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-247/test_the_candidate_must_be_the0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10d336630>
+
+    def test_the_candidate_must_be_the_only_seal_the_development_log_recorded(tmp_path, monkeypatch):
+        c = _store(tmp_path, monkeypatch)
+        log, xlog = tmp_path / "access.jsonl", tmp_path / "exp.jsonl"
+        sealed = ev.seal_candidate({"model": "frequency", "development_run": "r1"})
+        with pytest.raises(ev.FrozenMismatch, match="not recorded"):
+>           ev.run_test(c, sealed, access_log=log, experiments_log=xlog, out_dir=tmp_path / "o")
+E           TypeError: run_test() got an unexpected keyword argument 'experiments_log'
+
+tests/test_soccer_eval.py:438: TypeError
+______ test_code_digest_covers_the_shared_metric_bootstrap_and_seal_code _______
+
+    def test_code_digest_covers_the_shared_metric_bootstrap_and_seal_code():
+>       assert {"backtest.py", "metrics.py", "soccer_eval.py", "soccer_protocol.json"} <= set(ev.code_digest())
+E       AssertionError: assert {'backtest.py...rotocol.json'} <= {'soccer_club...rotocol.json'}
+E         
+E         Extra items in the left set:
+E         'metrics.py'
+E         'backtest.py'
+
+tests/test_soccer_eval.py:456: AssertionError
+_ test_development_end_to_end_never_reads_a_reserved_season_and_logs_its_start _
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-247/test_development_end_to_end_ne0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10d57efc0>
+
+    def test_development_end_to_end_never_reads_a_reserved_season_and_logs_its_start(tmp_path, monkeypatch):
+        monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path))
+        c = db.connect(sport="soccer")
+        db.migrate(c)
+        db.claim_store(c, "soccer")
+        c.commit()
+        import random
+        rnd, files = random.Random(7), {}
+        clubs = ["Arsenal FC", "Burnley FC", "Chelsea FC", "Everton FC"]
+        for s in range(2010, 2025):
+            ms = []
+            for k, (hc, ac) in enumerate((x, y) for x in clubs for y in clubs if x != y):
+                d = (date(s, 8, 14) + timedelta(days=7 * k)).isoformat()
+                ms.append({"round": f"Matchday {k + 1}" if k else "Matchday 1", "date": d, "time": "15:00", "team1": hc,
+                           "team2": ac, "score": {"ft": [rnd.randint(0, 3), rnd.randint(0, 3)]}})
+            files[f"{s}-{(s + 1) % 100:02d}/en.1.json"] = json.dumps({"name": "x", "matches": ms}).encode()
+        from tests.test_soccer_history import FakeHub
+        h.download(c, pins={"football.json": SHA}, fetch=FakeHub({SHA: files}), sleep=0, only={"football.json"},
+                   now=iter(["2026-11-08T10:00:00Z"] * 40).__next__)
+        h.replay(c)
+        c.commit()
+        calls, real_load = [], ev.load
+        monkeypatch.setattr(ev, "load", lambda conn, **kw: calls.append(kw) or real_load(conn, **kw))
+        monkeypatch.setattr(ev, "ELO_GRID", {"K": [20], "H": [50], "C": [1.0], "P": [0], "F": [0], "mov": [False]})
+        monkeypatch.setattr(ev, "POISSON_GRID", {"half_life_days": [365], "tau": [3], "D": [0.1]})
+        xlog = tmp_path / "exp.jsonl"
+>       with pytest.raises(TypeError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE TypeError
+
+tests/test_soccer_eval.py:485: Failed
+----------------------------- Captured stdout call -----------------------------
+elo 1/1 0s
+poisson {'half_life_days': 365, 'tau': 3, 'D': 0.1} ll=1.08938 0s
+=========================== short test summary info ============================
+FAILED tests/test_soccer_eval.py::test_a_model_never_receives_the_label_of_the_match_it_forecasts
+FAILED tests/test_soccer_eval.py::test_poisson_promoted_prior_uses_the_previous_fit_and_the_forecast_season
+FAILED tests/test_soccer_eval.py::test_configuration_ties_are_broken_in_the_preregistered_order
+FAILED tests/test_soccer_eval.py::test_choice_needs_the_candidate_better_in_two_of_three_validation_seasons
+FAILED tests/test_soccer_eval.py::test_loader_marks_awarded_extra_time_deciding_and_dropped_rows_unusable
+FAILED tests/test_soccer_eval.py::test_seasons_after_the_reserved_test_are_refused_even_with_a_seal
+FAILED tests/test_soccer_eval.py::test_one_test_run_per_access_log_whatever_the_seal
+FAILED tests/test_soccer_eval.py::test_the_candidate_must_be_the_only_seal_the_development_log_recorded
+FAILED tests/test_soccer_eval.py::test_code_digest_covers_the_shared_metric_bootstrap_and_seal_code
+FAILED tests/test_soccer_eval.py::test_development_end_to_end_never_reads_a_reserved_season_and_logs_its_start
+10 failed, 26 passed in 1.77s

@@ -1,0 +1,2 @@
+[{"version": 1, "file": "s3/sealed-protocol-1.json", "sealed_at": "2026-11-08T16:27:11Z", "sha256": "043b5ede4ee58cb4e97de7e9159e172f08bc8f79637d25494be6eba3758fb051", "model_fits_before_seal": 0, "metrics_before_seal": 0},
+ {"version": 2, "file": "s3/sealed-protocol-2.json", "sealed_at": "2026-11-08T16:47:57Z", "sha256": "f37946397ce971a28dd2d1603fad570273e9b7eb50a67583fbe9830ac32f70e9", "amendment": 1, "reason": "S3 review REQUEST CHANGES + S2 review notes", "model_fits_before_seal": 0, "metrics_before_seal": 0}]

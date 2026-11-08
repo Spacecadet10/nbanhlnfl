@@ -58,9 +58,8 @@ def _git(root: Path, *args: str) -> str:
     return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, check=True, timeout=30).stdout
 
 
-def check(sport: str, root: Optional[Path] = None) -> dict:
-    """The release facts and every reason the scheduled jobs must not run from here (empty `problems`: they may)."""
-    root = (root or code_root()).resolve()
+def _checkout(root: Path) -> tuple[Optional[str], list[str]]:
+    """The commit and every reason this is not the clean release checkout using the shared data folder."""
     problems = []
     expected = os.environ.get(ROOT_ENV)
     if not expected:
@@ -77,6 +76,13 @@ def check(sport: str, root: Optional[Path] = None) -> dict:
         problems.append(f"cannot verify the release checkout with git: {type(exc).__name__}")
     if not os.environ.get("NBA_DATA_DIR"):
         problems.append("NBA_DATA_DIR is not set: the release would use its own empty data folder")
+    return commit, problems
+
+
+def check(sport: str, root: Optional[Path] = None) -> dict:
+    """The release facts and every reason the scheduled jobs must not run from here (empty `problems`: they may)."""
+    root = (root or code_root()).resolve()
+    commit, problems = _checkout(root)
     shipped, stored = shipped_schema(), store_schema(sport)
     if stored is None:
         problems.append(f"no migrated {sport} store at {config.db_path(sport)}")
@@ -84,6 +90,36 @@ def check(sport: str, root: Optional[Path] = None) -> dict:
         problems.append(f"store schema {stored} differs from this release's schema {shipped}: update the release deliberately")
     return {"commit": commit, "root": str(root), "data_dir": str(config.data_dir()), "store_schema": stored,
             "release_schema": shipped, "problems": problems}
+
+
+def migration_context(sport: str, info: Optional[dict] = None) -> list[str]:
+    """Why this process is not the verified release environment, the only one that may write to a protected live data
+    folder (config.protected_data_dir) and, with the explicit `migrate` command, migrate it: NBA_RELEASE_GUARD unset, or
+    any `check` problem other than the store-schema line (README release procedure, step 4). Empty: it may. `info` is a
+    `check(sport)` result already computed by the caller; `check` itself is unchanged."""
+    if not enabled():
+        return [f"{GUARD_ENV} is not 1 (not the release environment)"]
+    info = info if info is not None else check(sport)
+    problems = [p for p in info["problems"] if not (p.startswith("store schema ") and "differs from this release's schema" in p)]
+    root = code_root().resolve()
+    held = []
+    try:            # by file identity: another spelling of the same folder (case variant, firmlink) is the same folder
+        st = root.stat()
+        for t in (config.data_dir().expanduser().resolve(), config.db_path(sport).resolve()):
+            for a in (t, *t.parents):
+                try:
+                    s = a.stat()
+                except FileNotFoundError:   # not created yet: cannot be the existing code root
+                    continue
+                if (s.st_dev, s.st_ino) == (st.st_dev, st.st_ino):
+                    held.append(t)
+                    break
+    except OSError as exc:
+        problems.append(f"cannot tell whether the checkout {root} holds this data folder: {type(exc).__name__}: {exc}")
+    if held:       # the development main checkout with the release variables set is still not a release
+        problems.append(f"the code runs from {root}, the checkout that holds this data folder ({held[0]}); a release runs "
+                        "from its own checkout")
+    return problems
 
 
 def record_refusal(sport: str, cmd: str, info: dict) -> Optional[int]:
@@ -103,3 +139,31 @@ def record_refusal(sport: str, cmd: str, info: dict) -> Optional[int]:
             conn.close()
     except sqlite3.Error:
         return None
+
+
+# Telegram sender (`app.cli telegram`) and ticket helper (`python -m app.tickets`): they read the stores and write only the
+# receipt ledger, so the store-schema rule of the scheduled jobs does not apply. They must run from the clean release
+# checkout and use the production ledger and credentials, named explicitly and already present: a release folder's own
+# empty ledger would forget every receipt, duplicate guard and $5 reservation (telegram.ledger never creates it here).
+TELEGRAM_LEDGER_ENV_NAME = config.TELEGRAM_LEDGER_ENV
+TELEGRAM_CREDENTIALS_ENV_NAME = config.TELEGRAM_CREDENTIALS_ENV
+
+
+def delivery_check(root: Optional[Path] = None) -> dict:
+    """Every reason the guarded sender/helper must not run from here (empty `problems`: they may). No network, no writes."""
+    root = (root or code_root()).resolve()
+    commit, problems = _checkout(root)
+    named = {}
+    for env, what in ((TELEGRAM_LEDGER_ENV_NAME, "receipt ledger"), (TELEGRAM_CREDENTIALS_ENV_NAME, "Telegram credentials")):
+        value = os.environ.get(env)
+        named[env] = value
+        if not value:
+            problems.append(f"{env} is not set: the {what} must be named explicitly in the release environment")
+            continue
+        path = Path(value)
+        if path.is_symlink():
+            problems.append(f"the {what} {path} is a symlink")
+        elif not path.is_file():
+            problems.append(f"the {what} {path} does not exist; it is never created by a release")
+    return {"commit": commit, "root": str(root), "data_dir": str(config.data_dir()),
+            "ledger": named[TELEGRAM_LEDGER_ENV_NAME], "credentials": named[TELEGRAM_CREDENTIALS_ENV_NAME], "problems": problems}

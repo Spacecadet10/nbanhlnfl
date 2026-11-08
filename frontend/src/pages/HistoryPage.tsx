@@ -173,7 +173,7 @@ function scopeLabel(f: { date_from?: string; date_to?: string; team?: string }):
 function HistoryTable({ rows }: { rows: PredictionRecord[] }) {
   const carried = useCarriedSearch();   // keeps sport=nhl on the game link (the game is read from that sport's store)
   return (
-    <table className="table history">
+    <div className="table-wrap"><table className="table history">
       <thead>
         <tr><th>Date</th><th>Game</th><th>Pick</th><th>Model confidence</th><th>Result</th><th>Outcome of pick</th><th>Recorded / computed</th><th>Model</th></tr>
       </thead>
@@ -196,6 +196,6 @@ function HistoryTable({ rows }: { rows: PredictionRecord[] }) {
           </tr>
         ))}
       </tbody>
-    </table>
+    </table></div>
   );
 }

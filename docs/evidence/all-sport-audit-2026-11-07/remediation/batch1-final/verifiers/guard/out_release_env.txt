@@ -1,0 +1,142 @@
+usage: python -m app.cli [-h] [--sport {nba,nhl}]
+                         {telegram,migrate,nfl,soccer,preview-publish,nhl-player-inputs,paper-trades,odds-history,ingest-nhl,nba-market-research,markets,score-markets,nhl-validate,nhl-test,nhl-learned,nba-availability,availability-prepare,rebuild-goalies,nhl-agreement-explore,nhl-agreement,nhl-record-test,ingest,import-team-box,replay,coverage,release-check,refresh,predict,thresholds,combination-study,retrain-cadence,catboost-challenger,combination-search,nhl-pbp-import,nhl-xg-research,expanded-search,tuning-study,tuning-evaluate,pool-fit-deep,deep-study,deep-evaluate,discovery-study,gapfill-study,daily-cadence,selective-study,rules-registry,features-nhl,diagnostics,historical-start,model-audit,calibration-shadow-fit,calibration-study,features-nba,tracking-registry,tracking-historical,tracking-report,tracking-record,exact-rules-register,exact-rules-list,pool-screen,pool-assess,pool-record,pool-roster,adaptive-train,adaptive-record,adaptive-status,training-inputs,adaptive-import,adaptive-replay,combination-export-adaptive,combination-thresholds-report,pool-rules,pool-report,selector-decide,research-report,agreement,score,daily,odds,tick,scheduler,freeze-decision,screen-candidates,boxscores,seal-shadow,shadow-predict,shadow-report,research-gbt,injuries,research-stacking,predict-now,score-near-tipoff,backtest}
+                         ...
+python -m app.cli: error: nfl test-run refused: the sealed choice is missing or its digest does not match
+app imported from: /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/release/relclone/backend/app/__init__.py
+data protected: True | clone clean: True
+--- R1 implicit non-guarded `--sport nhl replay` on schema 31
+rc: 1
+stdout: {"status": "refused", "reason": "$G/release/fakemain/data is in a protected live data folder at schema 31; this release ships 35: only the explicit `migrate` command migrates it"}
+tree unchanged: True
+--- R2 implicit guarded `--sport nhl score` on schema 31
+rc: 1
+stdout: {"status": "failed", "reason": "release guard", "commit": "c795d41a9a40ac0e43a64f842ae7ea9e33e73b17", "root": "$G/release/relclone", "data_dir": "$G/release/fakemain/data", "store_schema": 31, "release_schema": 35, "problems": ["store schema 31 differs from this release's schema 35: update the release deliberately"], "run_id": 1}
+tree unchanged: False
+  before: {'nba.sqlite': '07cde4afd1ec4d08', 'nfl.sqlite': '90a417cf43e42e9f', 'nhl.sqlite': '79ac4346c6b2de03'}
+  after:  {'nba.sqlite': '07cde4afd1ec4d08', 'nfl.sqlite': '90a417cf43e42e9f', 'nhl.sqlite': '0e80b35639de8a58'}
+--- R3 implicit `nfl ingest` on schema 33
+rc: 1
+stdout: {"status": "refused", "reason": "$G/release/fakemain/data is in a protected live data folder at schema 33; this release ships 35: only the explicit `migrate` command migrates it"}
+tree unchanged: True
+--- R4 implicit `soccer ingest`-like `soccer replay` (no soccer store)
+rc: 1
+stdout: {"status": "refused", "reason": "$G/release/fakemain/data is in a protected live data folder and this is not the verified release environment (no migrated soccer store at $G/release/fakemain/data/soccer.sqlite): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["no migrated soccer store at $G/release/fakemain/data/soccer.sqlite"]}
+tree unchanged: True
+schemas after implicit: 31 33 31
+--- R5 explicit `--sport nhl migrate` 31->shipped
+rc: 0
+stdout: {"status": "REACHED_RUN"}
+tree unchanged: False
+  before: {'nba.sqlite': '07cde4afd1ec4d08', 'nfl.sqlite': '90a417cf43e42e9f', 'nhl.sqlite': '0e80b35639de8a58', 'nhl.sqlite-shm': 'fd4c9fda9cd3f9ae', 'nhl.sqlite-wal': 'e3b0c44298fc1c14'}
+  after:  {'.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nba.sqlite': '07cde4afd1ec4d08', 'nfl.sqlite': '90a417cf43e42e9f', 'nhl.sqlite': '0e80b35639de8a58', 'nhl.sqlite-shm': 'b9f85965c9d86c5f', 'nhl.sqlite-wal': 'c7ed6386eee0eb36'}
+--- R6 explicit `nfl migrate` 33->shipped
+rc: 0
+stdout: {"db": "$G/release/fakemain/data/nfl.sqlite", "sport": "nfl", "applied": ["0034_soccer_store.sql", "0035_result_integrity.sql"]}
+tree unchanged: False
+  before: {'.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nba.sqlite': '07cde4afd1ec4d08', 'nfl.sqlite': '90a417cf43e42e9f', 'nhl.sqlite': '0e80b35639de8a58', 'nhl.sqlite-shm': 'b9f85965c9d86c5f', 'nhl.sqlite-wal': 'c7ed6386eee0eb36'}
+  after:  {'.nfl-jobs.lock': 'e3b0c44298fc1c14', '.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nba.sqlite': '07cde4afd1ec4d08', 'nfl.sqlite': 'c9cbb80562ec5dcb', 'nfl.sqlite-shm': '79ea5442cad2ae9f', 'nfl.sqlite-wal': 'bb97be205bbb312f', 'nhl.sqlite': '99da55a469f72a4a'}
+--- R7 explicit `--sport nba migrate` 31->shipped
+rc: 0
+stdout: {"status": "REACHED_RUN"}
+tree unchanged: False
+  before: {'.nfl-jobs.lock': 'e3b0c44298fc1c14', '.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nba.sqlite': '07cde4afd1ec4d08', 'nfl.sqlite': 'c9cbb80562ec5dcb', 'nfl.sqlite-shm': '79ea5442cad2ae9f', 'nfl.sqlite-wal': 'bb97be205bbb312f', 'nhl.sqlite': '99da55a469f72a4a'}
+  after:  {'.nba-jobs.lock': 'e3b0c44298fc1c14', '.nfl-jobs.lock': 'e3b0c44298fc1c14', '.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nba.sqlite': '35753fcc46459a90', 'nba.sqlite-shm': 'a4516ce0212cccc5', 'nba.sqlite-wal': '8480675d9d7be0e5', 'nfl.sqlite': '4fdc324a0a080492', 'nhl.sqlite': '99da55a469f72a4a'}
+schemas after explicit: 35 35 35 shipped 35
+--- R8 guarded `--sport nhl score` at shipped (runner stubbed)
+rc: 0
+stdout: {"status": "REACHED_RUN"}
+tree unchanged: False
+  before: {'.nba-jobs.lock': 'e3b0c44298fc1c14', '.nfl-jobs.lock': 'e3b0c44298fc1c14', '.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nba.sqlite': '35753fcc46459a90', 'nba.sqlite-shm': 'a4516ce0212cccc5', 'nba.sqlite-wal': '8480675d9d7be0e5', 'nfl.sqlite': '4fdc324a0a080492', 'nfl.sqlite-shm': 'fd4c9fda9cd3f9ae', 'nfl.sqlite-wal': 'e3b0c44298fc1c14', 'nhl.sqlite': '99da55a469f72a4a', 'nhl.sqlite-shm': 'fd4c9fda9cd3f9ae', 'nhl.sqlite-wal': 'e3b0c44298fc1c14'}
+  after:  {'.nba-jobs.lock': 'e3b0c44298fc1c14', '.nfl-jobs.lock': 'e3b0c44298fc1c14', '.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nba.sqlite': 'd8b817d00f1f9f94', 'nfl.sqlite': '4fdc324a0a080492', 'nfl.sqlite-shm': 'fd4c9fda9cd3f9ae', 'nfl.sqlite-wal': 'e3b0c44298fc1c14', 'nhl.sqlite': '99da55a469f72a4a', 'nhl.sqlite-shm': 'fd4c9fda9cd3f9ae', 'nhl.sqlite-wal': 'e3b0c44298fc1c14'}
+--- R9 `nfl refresh` at shipped (jobs.refresh stubbed)
+rc: 0
+stdout: {
+  "status": "ok",
+  "stub": "jobs.refresh stubbed (no network)"
+}
+tree unchanged: False
+  before: {'.nba-jobs.lock': 'e3b0c44298fc1c14', '.nfl-jobs.lock': 'e3b0c44298fc1c14', '.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nba.sqlite': 'd8b817d00f1f9f94', 'nfl.sqlite': '4fdc324a0a080492', 'nfl.sqlite-shm': 'fd4c9fda9cd3f9ae', 'nfl.sqlite-wal': 'e3b0c44298fc1c14', 'nhl.sqlite': '99da55a469f72a4a', 'nhl.sqlite-shm': 'fd4c9fda9cd3f9ae', 'nhl.sqlite-wal': 'e3b0c44298fc1c14'}
+  after:  {'.nba-jobs.lock': 'e3b0c44298fc1c14', '.nfl-jobs.lock': 'e3b0c44298fc1c14', '.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nba.sqlite': 'd8b817d00f1f9f94', 'nfl.sqlite': '4fdc324a0a080492', 'nfl.sqlite-shm': 'fd4c9fda9cd3f9ae', 'nfl.sqlite-wal': 'e3b0c44298fc1c14', 'nhl.sqlite': '99da55a469f72a4a'}
+--- R10 `nfl activate` in release env
+rc: EXCEPTION TestSeasonsLocked: the sealed choice is missing or its digest does not match
+stdout: 
+tree unchanged: True
+--- R11 `nfl test-run` in release env
+rc: SystemExit(2)
+stdout: 
+tree unchanged: True
+--- R12 `nfl collect-lines --test` in release env
+rc: EXCEPTION TestSeasonsLocked: lines of the reserved seasons are collected only for the sealed test run (seal + log)
+stdout: 
+tree unchanged: True
+--- RO1 `--sport nhl release-check`
+rc: EXCEPTION NhlEvaluationError: NHL validation data changed since sealing (dfa8a0b70fd2b799 -> 8e2d0c61b0acc423)
+stdout: 
+tree unchanged: False
+  before: {'.nba-jobs.lock': 'e3b0c44298fc1c14', '.nfl-jobs.lock': 'e3b0c44298fc1c14', '.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nba.sqlite': 'd8b817d00f1f9f94', 'nfl.sqlite': '4fdc324a0a080492', 'nfl.sqlite-shm': 'fd4c9fda9cd3f9ae', 'nfl.sqlite-wal': 'e3b0c44298fc1c14', 'nhl.sqlite': '99da55a469f72a4a'}
+  after:  {'.nba-jobs.lock': 'e3b0c44298fc1c14', '.nfl-jobs.lock': 'e3b0c44298fc1c14', '.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nba.sqlite': 'd8b817d00f1f9f94', 'nfl.sqlite': '4fdc324a0a080492', 'nfl.sqlite-shm': 'fd4c9fda9cd3f9ae', 'nfl.sqlite-wal': 'e3b0c44298fc1c14', 'nhl.sqlite': '99da55a469f72a4a', 'nhl.sqlite-shm': 'fd4c9fda9cd3f9ae', 'nhl.sqlite-wal': 'e3b0c44298fc1c14'}
+--- RO2 `nfl release-check`
+rc: 1
+stdout: {
+ "commit": "c795d41a9a40ac0e43a64f842ae7ea9e33e73b17",
+ "root": "$G/release/relclone",
+ "data_dir": "$G/release/fakemain/data",
+ "store_schema": 35,
+ "release_schema": 35,
+ "problems": [
+  "NBA_RELEASE_ROOT is not set"
+ ],
+ "guard_enabled": false,
+ "raw_missing": {
+  "count": 0,
+  "raw_ids": [],
+tree unchanged: True
+--- RO3 `--sport nhl thresholds` (READ_ONLY_COMMANDS)
+rc: 0
+stdout: {
+  "sport": "nhl",
+  "policy": "two-hour-v1",
+  "all_stored_rows": {
+    "winner_rows": 0,
+    "market_rows": 0
+  },
+  "groups": [],
+  "note": "All forecast versions remain stored. Tables count the latest forecast per game/model/market, not retries. Markets, model definitions and model-only/bookmak
+tree unchanged: True
+--- RO4 `nfl coverage`
+rc: 0
+stdout: {
+ "sport": "nfl",
+ "seasons": {},
+ "eligible_final_results": 0,
+ "result_availability_basis": {},
+ "other_statuses": {},
+ "raw_responses": 0
+}
+tree unchanged: False
+  before: {'.nba-jobs.lock': 'e3b0c44298fc1c14', '.nfl-jobs.lock': 'e3b0c44298fc1c14', '.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nba.sqlite': 'd8b817d00f1f9f94', 'nfl.sqlite': '4fdc324a0a080492', 'nfl.sqlite-shm': 'fd4c9fda9cd3f9ae', 'nfl.sqlite-wal': 'e3b0c44298fc1c14', 'nhl.sqlite': '99da55a469f72a4a', 'nhl.sqlite-shm': 'fd4c9fda9cd3f9ae', 'nhl.sqlite-wal': 'e3b0c44298fc1c14'}/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/p_release_env.py:54: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient
+
+  after:  {'.nba-jobs.lock': 'e3b0c44298fc1c14', '.nfl-jobs.lock': 'e3b0c44298fc1c14', '.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nba.sqlite': 'd8b817d00f1f9f94', 'nfl.sqlite': '4fdc324a0a080492', 'nhl.sqlite': '99da55a469f72a4a', 'nhl.sqlite-shm': 'fd4c9fda9cd3f9ae', 'nhl.sqlite-wal': 'e3b0c44298fc1c14'}
+--- RO5 `--sport nhl coverage`
+rc: 0
+stdout: {
+  "seasons": [],
+  "totals": {
+    "games": 0,
+    "teams": 0,
+    "team_game_stats": 0,
+    "odds_quotes": 0,
+    "team_possession_observations": 0,
+    "raw_responses": 0,
+    "raw_fetches": 0,
+    "predictions": 0
+  },
+  "closing_lines": {
+    "started_competitive_games": 0,
+    "games_with_pre
+tree unchanged: True
+API /api/health 200 {"status":"ok","mode":"real","api_version":"0.3.0","data_snapshot_at":null}
+API /api/games?sport=nhl 503 {"detail":"Sealed model decision unusable: NHL validation data changed since sealing (dfa8a0b70fd2b799 -> 8e2d0c61b0acc4
+API /api/status?sport=nhl 404 {"detail":"Not Found"}
+API tree unchanged: True

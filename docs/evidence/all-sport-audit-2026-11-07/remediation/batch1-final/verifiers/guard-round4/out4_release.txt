@@ -1,0 +1,63 @@
+app imported from: /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/round4/release/relclone/backend/app/__init__.py
+research/ present in live folder: False
+migration_context nhl (store at 31): (["store schema 31 differs from this release's schema 35: update the release deliberately"], [])
+--- implicit nhl replay on 31 (must refuse)
+rc: 1
+stdout: {"status": "refused", "reason": "$G4/release/fakemain/data is in a protected live data folder at schema 31; this release ships 35: only the explicit `migrate` command migrates it"}
+tree unchanged: True
+--- implicit nfl tick on 33 (must refuse)
+rc: 1
+stdout: {"status": "failed", "reason": "release guard", "commit": "199e7ff425aa94bf46fad760c51141d73f820e07", "root": "$G4/release/relclone", "data_dir": "$G4/release/fakemain/data", "store_schema": 33, "rele
+tree unchanged: False
+  before: {'nba.sqlite': 'ecf287c819bb466e', 'nfl.sqlite': '5dc8ec9fa0ec9f45', 'nhl.sqlite': '4a5b856e97e8e7a5'}
+  after:  {'nba.sqlite': 'ecf287c819bb466e', 'nfl.sqlite': 'f528c13509751f06', 'nhl.sqlite': '4a5b856e97e8e7a5'}
+--- explicit --sport nhl migrate
+rc: 0
+stdout: {"status": "REACHED_RUN"}
+tree unchanged: False
+  before: {'nba.sqlite': 'ecf287c819bb466e', 'nfl.sqlite': 'f528c13509751f06', 'nhl.sqlite': '4a5b856e97e8e7a5'}
+  after:  {'.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nba.sqlite': 'ecf287c819bb466e', 'nfl.sqlite': 'f528c13509751f06', 'nhl.sqlite': '274cb478ee9f507e', 'nhl.sqlite-shm': '1621ae5814e78c85', 'nhl.sqlite-wal': 'd2ed64323b15ec7f'}
+--- explicit nfl migrate
+rc: 0
+stdout: {"db": "$G4/release/fakemain/data/nfl.sqlite", "sport": "nfl", "applied": ["0034_soccer_store.sql", "0035_result_integrity.sql"]}
+tree unchanged: False
+  before: {'.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nba.sqlite': 'ecf287c819bb466e', 'nfl.sqlite': 'f528c13509751f06', 'nhl.sqlite': '274cb478ee9f507e', 'nhl.sqlite-shm': '1621ae5814e78c85', 'nhl.sqlite-wal': 'd2ed64323b15ec7f'}
+  after:  {'.nfl-jobs.lock': 'e3b0c44298fc1c14', '.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nba.sqlite': 'ecf287c819bb466e', 'nfl.sqlite': 'f528c13509751f06', 'nfl.sqlite-shm': '16c3da5e6fd39d07', 'nfl.sqlite-wal': '54f47e734e34469d', 'nhl.sqlite': '7b0add1b14dee9e1'}
+--- explicit --sport nba migrate
+rc: 0
+stdout: {"status": "REACHED_RUN"}
+tree unchanged: False
+  before: {'.nfl-jobs.lock': 'e3b0c44298fc1c14', '.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nba.sqlite': 'ecf287c819bb466e', 'nfl.sqlite': 'f528c13509751f06', 'nfl.sqlite-shm': '16c3da5e6fd39d07', 'nfl.sqlite-wal': '54f47e734e34469d', 'nhl.sqlite': '7b0add1b14dee9e1'}
+  after:  {'.nba-jobs.lock': 'e3b0c44298fc1c14', '.nfl-jobs.lock': 'e3b0c44298fc1c14', '.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nba.sqlite': '0ed94ee6698155cd', 'nba.sqlite-shm': '629445db137f2dba', 'nba.sqlite-wal': 'd05486de68167ce3', 'nfl.sqlite': '5405093741872c01', 'nhl.sqlite': '7b0add1b14dee9e1'}
+schemas: 35 35 35 shipped 35
+--- guarded nhl score at shipped
+rc: 0
+stdout: {"status": "REACHED_RUN"}
+tree unchanged: False
+  before: {'.nba-jobs.lock': 'e3b0c44298fc1c14', '.nfl-jobs.lock': 'e3b0c44298fc1c14', '.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nba.sqlite': '0ed94ee6698155cd', 'nba.sqlite-shm': '629445db137f2dba', 'nba.sqlite-wal': 'd05486de68167ce3', 'nfl.sqlite': '5405093741872c01', 'nfl.sqlite-shm': 'fd4c9fda9cd3f9ae', 'nfl.sqlite-wal': 'e3b0c44298fc1c14', 'nhl.sqlite': '7b0add1b14dee9e1', 'nhl.sqlite-shm': 'fd4c9fda9cd3f9ae', 'nhl.sqlite-wal': 'e3b0c44298fc1c14'}
+  after:  {'.nba-jobs.lock': 'e3b0c44298fc1c14', '.nfl-jobs.lock': 'e3b0c44298fc1c14', '.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nba.sqlite': 'c344139ec7a1d743', 'nfl.sqlite': '5405093741872c01', 'nfl.sqlite-shm': 'fd4c9fda9cd3f9ae', 'nfl.sqlite-wal': 'e3b0c44298fc1c14', 'nhl.sqlite': '7b0add1b14dee9e1', 'nhl.sqlite-shm': 'fd4c9fda9cd3f9ae', 'nhl.sqlite-wal': 'e3b0c44298fc1c14'}
+--- nfl tick at shipped
+rc: 0
+stdout: {
+  "status": "ok",
+  "stub": "jobs.tick (no network)"
+}
+tree unchanged: False
+  before: {'.nba-jobs.lock': 'e3b0c44298fc1c14', '.nfl-jobs.lock': 'e3b0c44298fc1c14', '.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nba.sqlite': 'c344139ec7a1d743', 'nfl.sqlite': '5405093741872c01', 'nfl.sqlite-shm': 'fd4c9fda9cd3f9ae', 'nfl.sqlite-wal': 'e3b0c44298fc1c14', 'nhl.sqlite': '7b0add1b14dee9e1', 'nhl.sqlite-shm': 'fd4c9fda9cd3f9ae', 'nhl.sqlite-wal': 'e3b0c44298fc1c14'}
+  after:  {'.nba-jobs.lock': 'e3b0c44298fc1c14', '.nfl-jobs.lock': 'e3b0c44298fc1c14', '.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nba.sqlite': 'c344139ec7a1d743', 'nfl.sqlite': '5405093741872c01', 'nfl.sqlite-shm': 'fd4c9fda9cd3f9ae', 'nfl.sqlite-wal': 'e3b0c44298fc1c14', 'nhl.sqlite': '7b0add1b14dee9e1'}
+--- nfl refresh at shipped
+rc: 0
+stdout: {
+  "status": "ok",
+  "stub": "jobs.refresh (no network)"
+}
+tree unchanged: True
+--- nfl tick at shipped, research/ present
+rc: 0
+stdout: {
+  "status": "ok",
+  "stub": "jobs.tick (no network)"
+}
+tree unchanged: True
+nonexistent data dir: check problems ['no migrated nfl store at /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/round4/release/fakemain/data-not-yet/nfl.sqlite'] | migration_context ['no migrated nfl store at /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/round4/release/fakemain/data-not-yet/nfl.sqlite'] | identity added nothing: True
+nonexistent nested data dir: True ['no migrated nfl store at /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/round4/release/elsewhere/deep/data/nfl.sqlite']

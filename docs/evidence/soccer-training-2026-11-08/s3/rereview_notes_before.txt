@@ -1,0 +1,5 @@
+FAILED tests/test_soccer_eval.py::test_eval_logs_live_in_one_folder_shared_by_every_data_folder
+FAILED tests/test_soccer_eval.py::test_the_test_run_needs_exactly_one_development_start
+FAILED tests/test_soccer_eval.py::test_the_test_run_refuses_a_store_without_reserved_matches
+FAILED tests/test_soccer_history.py::test_a_dropped_match_is_unusable_only_from_the_retrieval_that_dropped_it
+4 failed, 70 passed in 3.37s

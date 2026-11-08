@@ -1,0 +1,4 @@
+1dd1717fbbbf2ad1d5abec1c33b3eb049caa59e0419776e7fbe6960f61d3317c  /Users/andry/nba-predictor-research-data/soccer-train-20261108/development-run/development_validation_report.json
+21c4d04373abe03efe914edb8ed0fdd2cca8b7d3a69fa0da2124d33335d34018  /Users/andry/nba-predictor-research-data/soccer-train-20261108/development-run/forecasts.jsonl
+1fee79b3783a93d88ad74e6d6dbdc92c0326d9ae5dae1e656ef62d35b0d7b88b  /Users/andry/nba-predictor-research-data/soccer-train-20261108/development-run/sealed_candidate.json
+cbb5ae32bd3e941b9f9d50dfddc933f52503749204de01e4e54b687d1f9f56d7  /Users/andry/nba-predictor-research-data/soccer-eval-logs/soccer_experiments.jsonl

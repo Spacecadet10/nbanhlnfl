@@ -783,7 +783,12 @@ class NflGameDetail(BaseModel):
 
 # --- European soccer (data only; app/soccer.py). No forecast, odds, injury or metric field exists for soccer. Results keep
 # draws, extra time, penalties and two-legged qualification apart; a field the source cannot establish is null.
-SoccerCompetitionId = Literal["eng.1", "esp.1", "ger.1", "ita.1", "fra.1", "uefa.champions", "uefa.europa"]
+SoccerCompetitionId = Literal["eng.1", "esp.1", "ger.1", "ita.1", "fra.1", "uefa.champions", "uefa.europa",
+                              # national teams (migration 0039, app/intl_live.py)
+                              "uefa.nations", "concacaf.nations.league", "fifa.friendly", "caf.nations_qual", "uefa.euroq",
+                              "afc.cupq", "fifa.worldq.uefa", "fifa.worldq.conmebol", "fifa.worldq.concacaf",
+                              "fifa.worldq.afc", "fifa.worldq.caf", "fifa.worldq.ofc", "uefa.euro", "conmebol.america",
+                              "caf.nations", "afc.asian.cup", "concacaf.gold", "fifa.world"]
 SoccerSide = Literal["home", "away", "draw"]
 
 
@@ -809,11 +814,13 @@ class SoccerMatch(BaseModel):
     away: NflTeam
     neutral_site: Optional[bool] = Field(description="Null: the source does not say.")
     venue: Optional[str]
-    decided_in: Optional[Literal["regulation", "extra_time", "penalties"]]
+    decided_in: Optional[Literal["regulation", "extra_time", "penalties", "unknown"]] = Field(description="'unknown': ESPN's "
+        "status, period, clock and goal minutes disagree about how the match ended; never guessed.")
+    decision_note: Optional[str] = Field(description="What disagreed, when decided_in is 'unknown'.")
     home_score: Optional[int] = Field(description="Goals when play ended (after extra time if played; never shoot-out kicks).")
     away_score: Optional[int]
     regulation_result: Optional[SoccerSide] = Field(description="90-minute result; only when the match ended in regulation. "
-                                                    "Null after extra time: the source publishes no 90-minute score.")
+                                                    "Null after extra time: ESPN score fields include extra time; a 90-minute score derived from goal events is not validated yet.")
     end_of_play_result: Optional[SoccerSide] = Field(description="From home_score/away_score (after extra time if played).")
     shootout_winner: Optional[Literal["home", "away"]]
     home_shootout: Optional[int]
@@ -828,6 +835,8 @@ class SoccerMatch(BaseModel):
     updated_at: datetime
     result_available_at: Optional[datetime]
     result_availability_basis: Optional[Literal["observed_retrieval", "assumed_tipoff_plus_4h"]]
+    tie_facts_available_at: Optional[datetime] = Field(description="When the current aggregate / qualifier / shoot-out "
+        "became known (own time; never earlier than the retrieval that delivered them).")
 
 
 class SoccerMeta(BaseModel):
@@ -857,7 +866,7 @@ class SoccerMatchesResponse(BaseModel):
 
 class SoccerResultRevision(BaseModel):
     revision: int
-    decided_in: Literal["regulation", "extra_time", "penalties"]
+    decided_in: Literal["regulation", "extra_time", "penalties", "unknown"]
     home_score: int
     away_score: int
     home_shootout: Optional[int]
@@ -865,7 +874,11 @@ class SoccerResultRevision(BaseModel):
     aggregate_home: Optional[int]
     aggregate_away: Optional[int]
     qualified_team_id: Optional[str]
+    home_team_id: Optional[str] = Field(description="Null for revisions recorded before teams were stored.")
+    away_team_id: Optional[str]
     observed_at: datetime
+    basis: Literal["observed", "reclassified"] = Field(description="'reclassified': the same cached retrieval re-read by a "
+        "newer importer, not a result the source delivered again.")
 
 
 class SoccerMatchDetail(BaseModel):
@@ -875,3 +888,186 @@ class SoccerMatchDetail(BaseModel):
     away_recent: list[SoccerMatch]
     result_revisions: list[SoccerResultRevision]
     capabilities: list[NflCapability]
+
+
+# --- Soccer research (openfootball history + the append-only 1X2 forecast ledger; app/soccer_forecasts.py). Every forecast
+# carries its run_type and label: 'backtest' rows are retrospective research forecasts, never Live.
+SoccerGrading = Literal["gradable", "not_final", "cancelled", "awarded", "extra_time_noted", "deciding_match_unverified"]
+
+
+class SoccerClub(BaseModel):
+    club_id: str
+    name: str
+    country: str
+
+
+class SoccerHistMatch(BaseModel):
+    match_id: str
+    competition_id: SoccerCompetitionId
+    season: int
+    round: str
+    stage: Literal["league", "group", "league_phase", "knockout"]
+    local_date: str = Field(description="Listed local date; the source states no time zone.")
+    local_time: Optional[str] = Field(description="Listed local time (zone not stated); null when the source lists none.")
+    local_time_listed: Optional[bool] = Field(description="False: the time was carried from the line above in the source.")
+    home: SoccerClub
+    away: SoccerClub
+    status: Literal["final", "scheduled", "result_missing", "cancelled", "awarded"]
+    ft_home: Optional[int] = Field(description="90-minute score as the source gives it.")
+    ft_away: Optional[int]
+    ht_home: Optional[int]
+    ht_away: Optional[int]
+    aet_home: Optional[int]
+    aet_away: Optional[int]
+    pen_home: Optional[int]
+    pen_away: Optional[int]
+    regulation_result: Optional[SoccerSide] = Field(description="Only for matches graded on the 90-minute result.")
+    grading: SoccerGrading
+    grading_note: Optional[str]
+    result_available_at: Optional[datetime]
+    result_availability_basis: Optional[Literal["assumed_next_day_0600Z", "observed_retrieval", "observed_correction"]]
+
+
+class SoccerForecast(BaseModel):
+    forecast_id: int
+    run_id: str
+    run_type: Literal["backtest", "reserved_test", "prospective"]
+    period: Literal["development_tune", "development_calibration", "validation", "reserved_test", "prospective"]
+    model: Literal["frequency", "elo", "poisson"]
+    label: str
+    calibrated: bool
+    market: Literal["1x2_regulation"]
+    version: int
+    p_home: float
+    p_draw: float
+    p_away: float
+    cutoff_at: datetime = Field(description="Information cutoff the forecast used.")
+    computed_at: datetime = Field(description="When the numbers were computed (a backtest: long after the match).")
+    generated_at: datetime
+    published_at: Optional[datetime] = Field(description="Null: never published as a live forecast.")
+    is_selected_candidate: bool
+
+
+class SoccerResearchRun(BaseModel):
+    run_id: str
+    run_type: Literal["backtest", "reserved_test", "prospective"]
+    period: str
+    model: str
+    label: str
+    calibrated: bool
+    protocol_sha256: str
+    created_at: datetime
+    is_selected_candidate: bool
+    forecasts: int
+    first_date: Optional[str]
+    last_date: Optional[str]
+
+
+class SoccerResearchCoverage(BaseModel):
+    first_season: Optional[int]
+    last_season: Optional[int]
+    matches: int
+
+
+class SoccerResearchMeta(BaseModel):
+    competition_id: SoccerCompetitionId
+    runs: list[SoccerResearchRun]
+    forecast_dates: list[str]
+    history: SoccerResearchCoverage
+    label: str
+    market: Literal["1x2_regulation"]
+    notice: str
+
+
+class SoccerResearchMatch(SoccerHistMatch):
+    forecasts: list[SoccerForecast]
+
+
+class SoccerResearchMatches(BaseModel):
+    competition_id: SoccerCompetitionId
+    date: str
+    matches: list[SoccerResearchMatch]
+
+
+class SoccerHistRevision(BaseModel):
+    revision: int
+    local_date: str
+    local_time: Optional[str]
+    status: str
+    ft_home: Optional[int]
+    ft_away: Optional[int]
+    aet_home: Optional[int]
+    aet_away: Optional[int]
+    pen_home: Optional[int]
+    pen_away: Optional[int]
+    deciding: int
+    in_file: int
+    result_available_at: Optional[str]
+    result_availability_basis: Optional[str]
+    observed_at: str
+
+
+class SoccerSourceFile(BaseModel):
+    repo: str
+    commit_sha: str
+    path: str
+    retrieved_at: str
+
+
+class SoccerResearchMatchDetail(BaseModel):
+    match: SoccerHistMatch
+    forecasts: list[SoccerForecast]
+    revisions: list[SoccerHistRevision]
+    source: Optional[SoccerSourceFile]
+
+
+class SoccerReliabilityBin(BaseModel):
+    lower: float
+    upper: float
+    n: int
+    mean_predicted: float
+    observed: float
+
+
+class SoccerReliability(BaseModel):
+    outcome: Literal["home", "draw", "away"]
+    bins: list[SoccerReliabilityBin]
+
+
+class SoccerPerformanceRow(BaseModel):
+    period: str
+    model: str
+    run_type: str
+    label: str
+    is_selected_candidate: bool
+    calibrated: bool
+    n: int
+    log_loss: float
+    brier: float
+    mean_predicted: list[float]
+    observed: list[float]
+    reliability: list[SoccerReliability]
+
+
+class SoccerPerformance(BaseModel):
+    competition_id: Optional[SoccerCompetitionId]
+    label: str
+    rows: list[SoccerPerformanceRow]
+    notice: str
+
+
+class SoccerHistoryItem(BaseModel):
+    match: SoccerHistMatch
+    forecast: SoccerForecast
+
+
+class SoccerResearchHistory(BaseModel):
+    competition_id: SoccerCompetitionId
+    season: Optional[int]
+    model: Optional[str]
+    total: int
+    limit: int
+    offset: int
+    seasons: list[int]
+    label: str
+    items: list[SoccerHistoryItem]

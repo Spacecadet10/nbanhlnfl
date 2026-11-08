@@ -49,6 +49,8 @@ class Telegram:
             raise DeliveryError('Telegram connection unavailable.', retry_after=60) from None
         except (httpx.HTTPError, ValueError):
             raise DeliveryError('Telegram response not confirmed; review delivery before retrying.', uncertain=True) from None
+        if not isinstance(body, dict):
+            raise DeliveryError('Telegram response not confirmed; review delivery before retrying.', uncertain=True)
         if response.status_code >= 500:
             raise DeliveryError('Telegram server response not confirmed.', uncertain=True)
         if not body.get('ok'):
@@ -67,9 +69,12 @@ class Telegram:
 
 @contextmanager
 def ledger(path=None):
-    path = Path(path or config.REPO_ROOT / '.telegram-delivery.sqlite')
+    path = Path(path or config.telegram_ledger_path())
     if path.is_symlink():
         raise ValueError('Telegram delivery ledger must not be a symlink.')
+    from . import release
+    if release.enabled() and not path.is_file():
+        raise ValueError(f'Telegram delivery ledger {path} does not exist; a release never creates an empty one.')
     fd = os.open(path, os.O_CREAT | os.O_WRONLY, 0o600)
     os.close(fd)
     conn = sqlite3.connect(path, timeout=5, isolation_level=None)
@@ -240,7 +245,7 @@ def deliver(bot, conn, chat_id, key, text, now, *, photo=None, caption=None):
         else:
             if caption is None:
                 league = text.split('PROP51 PICKS · ', 1)[1].split('<', 1)[0]
-                caption = ('TEST PREVIEW — design example, not a new live pick.\n' if 'TEST PREVIEW' in text else '') + f'Prop51 · {league} · Recommended pick and market breakdown\nOpen the card to view the full record.'
+                caption = ('TEST PREVIEW — design example, not a new live pick.\n' if 'TEST PREVIEW' in text else '') + f'PROP51 GAME CARD · {league} · single game, not a parlay ticket\nRecommended pick and market breakdown for this one game. Combined parlay tickets arrive separately.'
             message = bot.call('sendPhoto', {'chat_id': str(chat_id), 'caption': caption}, photo=photo)
     except DeliveryError as exc:
         status = 'uncertain' if exc.uncertain else 'retry' if exc.retry_after is not None else 'failed'

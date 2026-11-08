@@ -20,7 +20,7 @@ class UnsafePaths(ValueError):
 
 MARKER = ".nba-dev-data"
 FILES = ["SNAPSHOT_AT", "api.log", "web.log", "publish.log", "PUBLISH_STATUS.json", ".PUBLISH_STATUS.json.tmp",
-         ".SNAPSHOT_AT.tmp"] + [n for sport in ("nba", "nhl", "nfl") for n in (
+         ".SNAPSHOT_AT.tmp"] + [n for sport in ("nba", "nhl", "nfl", "soccer") for n in (
     f"{sport}.sqlite", f"{sport}.sqlite-wal", f"{sport}.sqlite-shm", f"{sport}.sqlite-journal", f".{sport}.sqlite.tmp",
     f".{sport}-jobs.lock")]
 DIRS = ["research", "raw", "eval", "reports", ".publish-staging"]

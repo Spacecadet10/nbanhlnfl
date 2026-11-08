@@ -1,0 +1,8 @@
+734499 | Manchester United v Lyon | 2025-4-17 | wiki score 5–4 | aet y | pens - | goals1 ['10', '45+1', '114', '120', '120+1'] | goals2 ['71', '78', '105', '110'] | wiki goals total 5-4 | wiki 90-min 2-2 | ESPN 90-min (S1) 2-2 | AGREE
+733606 | Atlético v Real Madrid | 2025-3-12 | wiki score 1–0 | aet y | pens 2–4 | goals1 ['1'] | goals2 [] | wiki goals total 1-0 | wiki 90-min 1-0 | ESPN 90-min (S1) 1-0 | AGREE
+733605 | Liverpool v Paris | 2025-3-11 | wiki score 0–1 | aet y | pens 1–4 | goals1 [] | goals2 ['12'] | wiki goals total 0-1 | wiki 90-min 0-1 | ESPN 90-min (S1) 0-1 | AGREE
+733619 | Inter v Barcelona | 2025-5-6 | wiki score 4–3 | aet y | pens - | goals1 ['21', '45+1', '90+3', '99'] | goals2 ['54', '60', '87'] | wiki goals total 4-3 | wiki 90-min 3-3 | ESPN 90-min (S1) 3-3 | AGREE
+733642 | Lazio v Bodø | 2025-4-17 | wiki score 3–1 | aet y | pens 2–3 | goals1 ['21', '90+3', '100'] | goals2 ['109'] | wiki goals total 3-1 | wiki 90-min 2-0 | ESPN 90-min (S1) 2-0 | AGREE
+410544 | Chelsea v Paris | 2015-3-11 | wiki score 2–2 | aet yes | pens - | goals1 ['81', '96'] | goals2 ['86', '114'] | wiki goals total 2-2 | wiki 90-min 1-1 | ESPN 90-min (S1) 1-1 | AGREE
+410540 | Atlético v Leverkusen | 2015-3-17 | wiki score 1–0 | aet yes | pens 3–2 | goals1 ['27'] | goals2 [] | wiki goals total 1-0 | wiki 90-min 1-0 | ESPN 90-min (S1) 1-0 | AGREE
+183634 | Milan v Liverpool | 2005-5-25 | wiki score 3–3 | aet yes | pens 2–3 | goals1 ['1', '39', '44'] | goals2 ['54', '56', '60'] | wiki goals total 3-3 | wiki 90-min 3-3 | ESPN 90-min (S1) 3-3 | AGREE

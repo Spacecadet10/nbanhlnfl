@@ -1,0 +1,44 @@
+apply rc 0
+identical=19 of 19
+--- files in final not in gated
+b/backend/tests/test_live_store_guard.py
+b/frontend/src/components/nflWording.test.mjs
+b/frontend/src/components/tables.test.mjs
+--- per-file +/- counts gated vs final
+/Users/andry/Desktop/nba-predictor-sprint1/docs/evidence/all-sport-audit-2026-11-07/batch1/batch1.patch
+28	13	backend/app/backup.py
+148	5	backend/app/cli.py
+22	0	backend/app/config.py
+37	3	backend/app/db.py
+35	11	backend/app/ingest.py
+10	1	backend/app/raw_cache.py
+17	0	backend/app/release.py
+13	4	backend/app/soccer.py
+15	1	backend/tests/conftest.py
+165	2	backend/tests/test_backup_restore.py
+584	0	backend/tests/test_live_store_guard.py
+1	1	frontend/package.json
+2	2	frontend/src/components/Canonical.tsx
+6	2	frontend/src/components/Layout.tsx
+2	2	frontend/src/components/MarketView.tsx
+41	0	frontend/src/components/nflWording.test.mjs
+55	0	frontend/src/components/tables.test.mjs
+2	2	frontend/src/pages/HistoryPage.tsx
+8	4	frontend/src/pages/NflPages.tsx
+/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/batch1/batch1-gated.patch
+28	13	backend/app/backup.py
+148	5	backend/app/cli.py
+22	0	backend/app/config.py
+37	3	backend/app/db.py
+35	11	backend/app/ingest.py
+10	1	backend/app/raw_cache.py
+17	0	backend/app/release.py
+13	4	backend/app/soccer.py
+15	1	backend/tests/conftest.py
+165	2	backend/tests/test_backup_restore.py
+1	1	frontend/package.json
+2	2	frontend/src/components/Canonical.tsx
+6	2	frontend/src/components/Layout.tsx
+2	2	frontend/src/components/MarketView.tsx
+2	2	frontend/src/pages/HistoryPage.tsx
+8	4	frontend/src/pages/NflPages.tsx

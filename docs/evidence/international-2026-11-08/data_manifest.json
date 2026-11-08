@@ -1,0 +1,10 @@
+{
+ "repo": "martj42/international_results",
+ "commit": "b0948cb558c927c357db4067eac5b37b96d0e4bb",
+ "files": {
+  "results.csv": "09aac809e317f3004c69720a38addb656c49ebb19f1937deab96f96e3362257a",
+  "goalscorers.csv": "e02b25cfcad3fca9af79a5cf075c33a6875416d6d80e5ab42514535cb0d639fe",
+  "shootouts.csv": "072b445adf5183fbe981087857e5b64c8f17abfdbf257b1822ceacb4a37919fa"
+ },
+ "retrieved_at": "2026-11-08T21:46:51Z"
+}

@@ -944,7 +944,25 @@ export interface NflRecord {
 
 // --- European soccer (data-only; backend/app/schemas.py Soccer*). No forecast, odds, injury or metric field exists.
 // Draws, extra time, penalties and two-legged qualification are separate fields; null means the source cannot establish it.
-export type SoccerCompetitionId = 'eng.1' | 'esp.1' | 'ger.1' | 'ita.1' | 'fra.1' | 'uefa.champions' | 'uefa.europa';
+export type SoccerCompetitionId = 'eng.1' | 'esp.1' | 'ger.1' | 'ita.1' | 'fra.1' | 'uefa.champions' | 'uefa.europa'
+  | 'uefa.nations'
+  | 'concacaf.nations.league'
+  | 'fifa.friendly'
+  | 'caf.nations_qual'
+  | 'uefa.euroq'
+  | 'afc.cupq'
+  | 'fifa.worldq.uefa'
+  | 'fifa.worldq.conmebol'
+  | 'fifa.worldq.concacaf'
+  | 'fifa.worldq.afc'
+  | 'fifa.worldq.caf'
+  | 'fifa.worldq.ofc'
+  | 'uefa.euro'
+  | 'conmebol.america'
+  | 'caf.nations'
+  | 'afc.asian.cup'
+  | 'concacaf.gold'
+  | 'fifa.world';
 export type SoccerSide = 'home' | 'away' | 'draw';
 export interface SoccerCompetition { id: SoccerCompetitionId; label: string; matches_stored: number }
 export interface SoccerMatch {
@@ -952,10 +970,12 @@ export interface SoccerMatch {
   season: number; season_type_id: number; stage: string | null; stage_label: string | null; kickoff: string;
   status: 'scheduled' | 'in_progress' | 'final' | 'postponed' | 'canceled' | 'abandoned' | 'suspended' | 'other';
   source_status: string; home: NflTeam; away: NflTeam; neutral_site: boolean | null; venue: string | null;
-  decided_in: 'regulation' | 'extra_time' | 'penalties' | null;
+  /** 'unknown': ESPN's status, period, clock and goal minutes disagree about how the match ended (decision_note says how). */
+  decided_in: 'regulation' | 'extra_time' | 'penalties' | 'unknown' | null;
+  decision_note: string | null;
   /** Goals when play ended: after extra time if played; never shoot-out kicks. */
   home_score: number | null; away_score: number | null;
-  /** 90-minute result: only for matches that ended in regulation (no 90-minute score is published after extra time). */
+  /** 90-minute result: only for matches that ended in regulation (after extra time ESPN's score fields include it; goal-minute derivation not validated yet). */
   regulation_result: SoccerSide | null;
   end_of_play_result: SoccerSide | null;
   shootout_winner: 'home' | 'away' | null; home_shootout: number | null; away_shootout: number | null;
@@ -964,22 +984,94 @@ export interface SoccerMatch {
   qualified_team_id: string | null; note: string | null;
   first_seen_at: string; updated_at: string; result_available_at: string | null;
   result_availability_basis: 'observed_retrieval' | 'assumed_tipoff_plus_4h' | null;
+  /** When the current aggregate / qualifier / shoot-out became known (never earlier than the retrieval that delivered it). */
+  tie_facts_available_at: string | null;
 }
 export interface SoccerMeta {
   mode: 'real'; sport: 'soccer'; competition_id: SoccerCompetitionId; competition: string; competitions: SoccerCompetition[];
   default_date: string | null; match_dates: string[]; fetched_dates: string[]; seasons: number[]; matches_stored: number;
   last_refresh_at: string | null; capabilities: NflCapability[];
 }
+export interface SoccerLiveForecast {
+  forecast_id: number; match_id: string; competition: SoccerCompetitionId; kickoff_at: string; home: string; away: string;
+  probabilities: { home: number; draw: number; away: number }; most_likely: 'home' | 'draw' | 'away';
+  generated_at: string; cutoff_at: string; source_retrieved_at: string; inputs_through: string | null; candidate_sha256: string;
+  status: string; result: 'home' | 'draw' | 'away' | null; label: string; settlement_rule: string;
+}
+export interface SoccerLiveResponse {
+  competition: SoccerCompetitionId; in_scope: boolean; label: string; settlement_rule: string; market: '1x2_regulation';
+  scope_note: string | null; model: { name: string; candidate_sha256: string };
+  check: { checked_at: string; ok: boolean; problems: string[]; match_date: string; forecasts: number } | null;
+  forecasts: SoccerLiveForecast[];
+}
 export interface SoccerMatchesResponse {
   competition_id: SoccerCompetitionId; date: string; fetched: boolean; matches: SoccerMatch[];
   prev_date: string | null; next_date: string | null; last_refresh_at: string | null;
 }
 export interface SoccerResultRevision {
-  revision: number; decided_in: 'regulation' | 'extra_time' | 'penalties'; home_score: number; away_score: number;
+  revision: number; decided_in: 'regulation' | 'extra_time' | 'penalties' | 'unknown'; home_score: number; away_score: number;
   home_shootout: number | null; away_shootout: number | null; aggregate_home: number | null; aggregate_away: number | null;
-  qualified_team_id: string | null; observed_at: string;
+  qualified_team_id: string | null; home_team_id: string | null; away_team_id: string | null; observed_at: string;
+  /** 'reclassified': the same cached retrieval re-read by a newer importer (not new source information). */
+  basis: 'observed' | 'reclassified';
 }
 export interface SoccerMatchDetail {
   match: SoccerMatch; head_to_head: SoccerMatch[]; home_recent: SoccerMatch[]; away_recent: SoccerMatch[];
   result_revisions: SoccerResultRevision[]; capabilities: NflCapability[];
+}
+
+// --- Soccer research (backend app/soccer_forecasts.py; /api/soccer/research/*). openfootball history and the stored,
+// append-only regulation-1X2 forecast ledger. Every forecast carries run_type + label; 'backtest' = retrospective research.
+export type SoccerGrading = 'gradable' | 'not_final' | 'cancelled' | 'awarded' | 'extra_time_noted' | 'deciding_match_unverified';
+export type SoccerModel = 'frequency' | 'elo' | 'poisson';
+export interface SoccerClub { club_id: string; name: string; country: string }
+export interface SoccerHistMatch {
+  match_id: string; competition_id: SoccerCompetitionId; season: number; round: string;
+  stage: 'league' | 'group' | 'league_phase' | 'knockout'; local_date: string; local_time: string | null;
+  local_time_listed: boolean | null; home: SoccerClub; away: SoccerClub;
+  status: 'final' | 'scheduled' | 'result_missing' | 'cancelled' | 'awarded';
+  ft_home: number | null; ft_away: number | null; ht_home: number | null; ht_away: number | null;
+  aet_home: number | null; aet_away: number | null; pen_home: number | null; pen_away: number | null;
+  regulation_result: SoccerSide | null; grading: SoccerGrading; grading_note: string | null;
+  result_available_at: string | null;
+  result_availability_basis: 'assumed_next_day_0600Z' | 'observed_retrieval' | 'observed_correction' | null;
+}
+export interface SoccerForecast {
+  forecast_id: number; run_id: string; run_type: 'backtest' | 'reserved_test' | 'prospective';
+  period: 'development_tune' | 'development_calibration' | 'validation' | 'reserved_test' | 'prospective';
+  model: SoccerModel; label: string; calibrated: boolean; market: '1x2_regulation'; version: number;
+  p_home: number; p_draw: number; p_away: number; cutoff_at: string; computed_at: string; generated_at: string;
+  published_at: string | null; is_selected_candidate: boolean;
+}
+export interface SoccerResearchRun {
+  run_id: string; run_type: SoccerForecast['run_type']; period: string; model: string; label: string; calibrated: boolean;
+  protocol_sha256: string; created_at: string; is_selected_candidate: boolean; forecasts: number;
+  first_date: string | null; last_date: string | null;
+}
+export interface SoccerResearchMeta {
+  competition_id: SoccerCompetitionId; runs: SoccerResearchRun[]; forecast_dates: string[];
+  history: { first_season: number | null; last_season: number | null; matches: number };
+  label: string; market: '1x2_regulation'; notice: string;
+}
+export interface SoccerResearchMatch extends SoccerHistMatch { forecasts: SoccerForecast[] }
+export interface SoccerResearchMatches { competition_id: SoccerCompetitionId; date: string; matches: SoccerResearchMatch[] }
+export interface SoccerHistRevision {
+  revision: number; local_date: string; local_time: string | null; status: string; ft_home: number | null;
+  ft_away: number | null; aet_home: number | null; aet_away: number | null; pen_home: number | null; pen_away: number | null;
+  deciding: number; in_file: number; result_available_at: string | null; result_availability_basis: string | null; observed_at: string;
+}
+export interface SoccerResearchMatchDetail {
+  match: SoccerHistMatch; forecasts: SoccerForecast[]; revisions: SoccerHistRevision[];
+  source: { repo: string; commit_sha: string; path: string; retrieved_at: string } | null;
+}
+export interface SoccerReliabilityBin { lower: number; upper: number; n: number; mean_predicted: number; observed: number }
+export interface SoccerPerformanceRow {
+  period: string; model: SoccerModel; run_type: string; label: string; is_selected_candidate: boolean; calibrated: boolean;
+  n: number; log_loss: number; brier: number; mean_predicted: number[]; observed: number[];
+  reliability: { outcome: 'home' | 'draw' | 'away'; bins: SoccerReliabilityBin[] }[];
+}
+export interface SoccerPerformance { competition_id: SoccerCompetitionId | null; label: string; rows: SoccerPerformanceRow[]; notice: string }
+export interface SoccerResearchHistory {
+  competition_id: SoccerCompetitionId; season: number | null; model: string | null; total: number; limit: number;
+  offset: number; seasons: number[]; label: string; items: { match: SoccerHistMatch; forecast: SoccerForecast }[];
 }

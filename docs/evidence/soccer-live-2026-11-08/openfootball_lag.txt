@@ -1,0 +1,7 @@
+checked 2026-11-08 source openfootball/football.json master (last commit 2026-09-22T09:33:49Z)
+en.1: 380 matches; 100 before today; 50 with result (latest 2026-09-20); 50 past without result (oldest 2026-10-10); 280 upcoming (next 2026-11-21)
+es.1: 380 matches; 110 before today; 69 with result (latest 2026-09-20); 41 past without result (oldest 2026-10-09); 270 upcoming (next 2026-11-08)
+de.1: 306 matches; 78 before today; 36 with result (latest 2026-09-20); 42 past without result (oldest 2026-10-09); 228 upcoming (next 2026-11-08)
+it.1: 380 matches; 105 before today; 50 with result (latest 2026-09-20); 55 past without result (oldest 2026-10-10); 275 upcoming (next 2026-11-08)
+fr.1: 306 matches; 84 before today; 45 with result (latest 2026-09-20); 39 past without result (oldest 2026-10-09); 222 upcoming (next 2026-11-08)
+champions-league latest commits: 2026-07-02T15:56:11Z, 2026-05-28T15:06:55Z (GitHub API, 2026-11-08 ~20:50Z)
