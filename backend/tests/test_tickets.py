@@ -1,6 +1,7 @@
 """Ticket lifecycle uses synthetic forecasts, temporary ledgers and a mocked Telegram transport."""
 import copy
 import json
+import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -1436,9 +1437,9 @@ def test_blocker_seen_before_the_start_but_gone_at_the_next_check_does_not_expla
     entry = t.review_state(snap)['missed_before_start'][0]
     assert entry['blocker_observed'] is True and entry['explained'] is False
     assert entry['last_observation'] == dict(issue='inactive', at=NOW, minutes_before_start=60)
-    assert entry['explanation'] == ("Blocker 'inactive' was last seen 60 minutes before the start and was not seen at the first "
-                                    "check at or after it (2026-11-08T18:01:30Z), so whether a review was possible in those "
-                                    "60 minutes is not established.")   # wording names the check since every run is recorded
+    assert entry['explanation'] == ("Blocker 'inactive' was last seen 60 minutes before the start and the first check at or after it "
+                                    "(2026-11-08T18:01:30Z) recorded nothing for nfl (no game of it was pending), so whether a review "
+                                    "was possible in those 60 minutes is not established.")   # every run is recorded: the check is named
 
 
 def test_single_game_window_explains_the_whole_window_only_while_no_other_game_became_eligible(setup, monkeypatch, capsys):
@@ -1551,9 +1552,9 @@ def test_blocker_that_returns_later_does_not_explain_a_miss_when_the_first_check
     preflight_at(snap, monkeypatch, capsys, '2026-11-08T19:30:00Z', dict(REFUSED))                           # the blocker is back
     entry = nfl_missed(snap, healthy)
     assert entry['blocker_observed'] is True and entry['explained'] is False
-    assert entry['explanation'] == ("Blocker 'inactive' was last seen 15 minutes before the start and was not seen at the first "
-                                    "check at or after it (2026-11-08T18:45:00Z), so whether a review was possible in those "
-                                    "15 minutes is not established.")
+    assert entry['explanation'] == ("Blocker 'inactive' was last seen 15 minutes before the start and the first check at or after it "
+                                    "(2026-11-08T18:45:00Z) recorded nothing for nfl (no game of it was pending), so whether a review "
+                                    "was possible in those 15 minutes is not established.")
     assert entry['trigger_runs'] == dict(in_window=1, last_before_start_at='2026-11-08T17:45:00Z', first_after_start_at='2026-11-08T18:45:00Z')
 
 
@@ -1648,7 +1649,9 @@ def test_rejected_notice_is_no_longer_listed_once_the_user_has_the_current_resul
     monkeypatch.setattr(tg.Telegram, 'call', delivered)
     grades[1] = 'win'; report = t.settle(now='2026-11-08T21:30:00Z', notify=True)   # back to the WIN the user has: nothing owed
     assert report['undelivered_results'] == [] and len(notice_texts(sent, before)) == 1
-    grades[1] = 'loss'; report = t.settle(now='2026-11-08T21:45:00Z', notify=True)  # corrected again: a new reading, so a new notice
+    grades[1] = 'loss'; report = t.settle(now='2026-11-08T21:45:00Z', notify=True)  # the same rejected text is owed again: not attempted again
+    assert len(notice_texts(sent, before)) == 1 and [u['rejected_at'] for u in report['undelivered_results']] == ['2026-11-08T21:15:00Z']
+    grades[2] = 'push'; report = t.settle(now='2026-11-08T22:00:00Z', notify=True)  # a different text: a new notice, delivered
     texts = notice_texts(sent, before)
     assert len(texts) == 2 and texts[1].split('\n')[0].endswith('/ LOSS') and texts[1].endswith(t.CORRECTED_LINE)
     assert report['undelivered_results'] == []                                 # the user now has the current result
@@ -1699,3 +1702,114 @@ def test_preflight_alerts_once_for_a_rejected_result_notice_and_lists_it_in_the_
     grades[1] = 'win'                                                          # nothing owed any more: gone from the brief
     out = json.loads(run_cli(monkeypatch, capsys, 'preflight', '--brief', '--notify')[1])
     assert 'undelivered_results' not in out
+
+
+# --- Delta review of acd984a (sessions 43 and cb, 2026-11-09): one MEDIUM and the LOW findings ---------------------------
+def test_rejected_notice_is_not_sent_again_when_only_the_payload_changes(setup, monkeypatch):
+    # cb MEDIUM / 43 LOW 3: a score-only re-grade changes the evidence hash, so the identical rejected text got a new key.
+    plan, snap, sent, path = setup; plan['tickets'] = [ticket([('nba', 1), ('nhl', 2)])]; assert t.send(t.check(plan)) == 'sent'
+    grades, score = {1: 'win', 2: 'win'}, {2: (3, 4)}
+    monkeypatch.setattr(t, 'grade_leg', lambda p, now: dict(forecast_id=p['forecast_id'], pick_label=p['pick_label'],
+                        grade=grades[p['forecast_id']], home_score=score.get(p['forecast_id'], (1, 0))[0], away_score=score.get(p['forecast_id'], (1, 0))[1]))
+    before = len(sent); snap['alerts'] = []
+    results = lambda: [x for x in notice_texts(sent, before) if x.startswith('PARLAY RESULT')]
+    t.settle(now='2026-11-08T21:00:00Z', notify=True)                          # WIN reaches the user
+    delivered = reject_all(monkeypatch)
+    grades[1] = 'loss'; t.settle(now='2026-11-08T21:15:00Z', notify=True)      # LOSS correction rejected
+    monkeypatch.setattr(tg.Telegram, 'call', delivered)
+    score[2] = (5, 4); report = t.settle(now='2026-11-08T21:30:00Z', notify=True)   # a score corrected, no grade changes
+    assert len(results()) == 1                                # the rejected text is not sent under a new key
+    [owed] = report['undelivered_results']
+    assert owed['rejected_at'] == '2026-11-08T21:15:00Z' and len([r for r in result_receipts() if r[2] == 'failed']) == 1
+    t.notify_alerts(snap, [], (), report['undelivered_results']); t.notify_alerts(snap, [], (), report['undelivered_results'])
+    assert len([1 for m, p in sent[before:] if 'RESULT NOTICE NOT DELIVERED' in p.get('text', '')]) == 1   # one alert, one key
+    grades[1] = 'win'; assert t.settle(now='2026-11-08T21:45:00Z', notify=True)['undelivered_results'] == []   # back to what the user has
+    grades[1] = 'loss'; report = t.settle(now='2026-11-08T22:00:00Z', notify=True)   # the same rejected correction again: still not sent
+    assert len(results()) == 1 and [u['rejected_at'] for u in report['undelivered_results']] == ['2026-11-08T21:15:00Z']
+    grades[2] = 'push'; t.settle(now='2026-11-08T22:15:00Z', notify=True)      # a different text: a new notice, delivered
+    assert len(results()) == 2 and results()[1].endswith('B2 win: push\n' + t.CORRECTED_LINE)
+
+
+def test_a_rejected_text_sent_before_the_last_delivered_notice_does_not_block_a_later_identical_one(setup, monkeypatch):
+    grades = {1: 'win', 2: 'win'}; sent = settled_ticket(setup, monkeypatch, grades); before = len(sent)
+    reject_all(monkeypatch)
+    t.settle(now='2026-11-08T21:00:00Z', notify=True)                          # first WIN rejected
+    monkeypatch.setattr(tg.Telegram, 'call', lambda self, m, p, **kw: (sent.append((m, p)), dict(message_id=len(sent)))[1])
+    grades[1] = 'loss'; t.settle(now='2026-11-08T21:15:00Z', notify=True)      # LOSS delivered (a new text)
+    grades[1] = 'win'; t.settle(now='2026-11-08T21:30:00Z', notify=True)       # WIN again: a correction of the delivered LOSS
+    texts = notice_texts(sent, before)
+    assert [x.split('\n')[0].rsplit(' / ', 1)[1] for x in texts] == ['LOSS', 'WIN'] and texts[1].endswith(t.CORRECTED_LINE)
+
+
+def test_a_check_exactly_at_the_start_belongs_to_the_checks_after_it(setup, monkeypatch, capsys):
+    # 43 LOW 1 / cb LOW 2: a run timed at kickoff counted as the last check before AND the first check after.
+    plan, snap, sent, path = setup
+    healthy = nfl_only(snap, monkeypatch)
+    preflight_at(snap, monkeypatch, capsys, NOW, copy.deepcopy(healthy))                  # 17:00 and 17:45: review due, none ran
+    preflight_at(snap, monkeypatch, capsys, '2026-11-08T17:45:00Z', copy.deepcopy(healthy))
+    started(snap, '2026-11-08T18:00:00Z'); preflight_at(snap, monkeypatch, capsys, '2026-11-08T18:00:00Z', dict(REFUSED))   # refused exactly at the start
+    entry = nfl_missed(snap, healthy, '2026-11-08T18:10:00Z')
+    assert entry['explained'] is False and entry['last_observation']['issue'] == 'review_due'
+    assert entry['trigger_runs'] == dict(in_window=2, last_before_start_at='2026-11-08T17:45:00Z', first_after_start_at='2026-11-08T18:00:00Z')
+
+
+def test_listing_undelivered_results_can_fail_without_costing_the_run(setup, monkeypatch, capsys):
+    # 43 LOW 2 / cb LOW 4: the listing step ran outside the guard that protects settlement from notification problems.
+    grades = {1: 'win', 2: 'win'}; settled_ticket(setup, monkeypatch, grades)
+    plan, snap, sent, path = setup; snap['alerts'] = []
+    def broken(*a, **kw): raise sqlite3.OperationalError('database is locked')
+    monkeypatch.setattr(t, 'undelivered_result', broken)
+    report = t.settle(now='2026-11-08T21:00:00Z', notify=True)
+    assert report['tickets'][0]['grade'] == 'win' and report['undelivered_results'] == [] and report['undelivered_error'] == 'OperationalError'
+    code, out = run_cli(monkeypatch, capsys, 'preflight', '--brief', '--notify')
+    assert code == 0 and json.loads(out)['review']['due'] is not None and len(trigger_runs()) == 1   # the run is still recorded
+
+
+def test_an_observations_table_from_an_unreleased_build_is_refused_loudly(setup, monkeypatch, capsys):
+    # cb LOW 3: CREATE TABLE IF NOT EXISTS leaves a run_id-less table in place; recording would fail on every run.
+    plan, snap, sent, path = setup
+    monkeypatch.setattr(t, 'settle', lambda **kw: {'errors': [], 'tickets': []})
+    with tg.ledger() as c:
+        c.execute('CREATE TABLE ticket_trigger_observations (observation_id INTEGER PRIMARY KEY AUTOINCREMENT, recorded_at TEXT NOT NULL, '
+                  'day TEXT NOT NULL, sport TEXT NOT NULL, game_id TEXT, issue TEXT NOT NULL, detail TEXT NOT NULL)')
+    code, out = run_cli(monkeypatch, capsys, 'preflight', '--brief')
+    review = json.loads(out)['review']
+    assert code == 0 and review['due'] is True and 'run_id' in review['observations_error'] and 'unreleased' in review['observations_error']
+    assert trigger_runs() == []
+
+
+def test_forecast_that_arrived_after_the_last_check_is_said_so(setup, monkeypatch, capsys):
+    # 43 LOW 4: the last check could not have seen a forecast made after it.
+    plan, snap, sent, path = setup
+    healthy = nfl_only(snap, monkeypatch)
+    for p in healthy['report']['picks']: p['generated_at'] = '2026-11-08T17:58:00Z'
+    preflight_at(snap, monkeypatch, capsys, '2026-11-08T17:51:00Z', {'error': 'forecasts_unavailable'})   # no forecast yet
+    entry = nfl_missed(snap, healthy, '2026-11-08T18:05:00Z')
+    assert entry['explained'] is False and entry['last_observation'] is None
+    assert entry['explanation'] == ('No trigger run saw this game before its start: its first forecast was made 2 minutes before the start, '
+                                    'after the last check (9 minutes before it).')
+
+
+def test_last_pending_game_of_its_sport_says_the_check_after_the_start_recorded_nothing_for_the_sport(setup, monkeypatch, capsys):
+    # cb LOW 1: once no game of the sport is pending, a check records nothing for it; "was not seen" read as "had cleared".
+    plan, snap, sent, path = setup
+    healthy = nfl_only(snap, monkeypatch)
+    preflight_at(snap, monkeypatch, capsys, '2026-11-08T17:45:00Z', dict(REFUSED))
+    started(snap); preflight_at(snap, monkeypatch, capsys, '2026-11-08T18:05:00Z', dict(REFUSED, unserved_forecasts=0, unserved_games=0))
+    entry = nfl_missed(snap, healthy)
+    assert entry['explained'] is False
+    assert entry['explanation'] == ("Blocker 'inactive' was last seen 15 minutes before the start and the first check at or after it "
+                                    "(2026-11-08T18:05:00Z) recorded nothing for nfl (no game of it was pending), so whether a review was "
+                                    "possible in those 15 minutes is not established.")
+
+
+def test_preflight_whose_snapshot_fails_still_leaves_a_run_record(setup, monkeypatch, capsys):
+    # a9 LOW 2: an unrecorded preflight let the next run stand in as "the first check after the start".
+    plan, snap, sent, path = setup
+    monkeypatch.setattr(t, 'settle', lambda **kw: {'errors': [], 'tickets': []})
+    def broken(): raise OSError('store unreadable')
+    monkeypatch.setattr(t, 'snapshot', broken)
+    code, out = run_cli(monkeypatch, capsys, 'preflight', '--brief')
+    assert code == 1 and json.loads(out)['status'] == 'failed'
+    [run] = trigger_runs()
+    assert run['due'] is None and run['reason'] == 'snapshot_unavailable' and run['observations'] == 0 and run['recorded_at'].endswith('Z')

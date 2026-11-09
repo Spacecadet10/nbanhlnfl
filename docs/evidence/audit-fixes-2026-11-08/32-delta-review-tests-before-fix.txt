@@ -1,0 +1,32 @@
+# Delta-review regression tests run against acd984a (tests added, helper unchanged) — 2026-11-09T19:57:19Z
+E       AssertionError: assert 2 == 1
+E        +  where 2 = len(['PARLAY RESULT / 2026-11-08-6515a0981162 / WIN\nB1 win: win\nB2 win: win', 'PARLAY RESULT / 2026-11-08-6515a0981162 / LOSS\nB1 win: loss\nB2 win: win\nCorrected result: it replaces the result sent before.'])
+E        +    where ['PARLAY RESULT / 2026-11-08-6515a0981162 / WIN\nB1 win: win\nB2 win: win', 'PARLAY RESULT / 2026-11-08-6515a0981162 / LOSS\nB1 win: loss\nB2 win: win\nCorrected result: it replaces the result sent before.'] = notice_texts([('sendMessage', {'chat_id': 'fixture', 'text': '<b>PROP51 · COMBINED PARLAY TICKETS · 2026-11-08</b>\nMulti-game comb...1162 / LOSS\nB1 win: loss\nB2 win: win\nCorrected result: it replaces the result sent before.', 'parse_mode': 'HTML'})], 2)
+tests/test_tickets.py:1718: AssertionError
+E       assert (True is False)
+tests/test_tickets.py:1749: AssertionError
+tests/test_tickets.py:1759: 
+E   sqlite3.OperationalError: database is locked
+tests/test_tickets.py:1757: OperationalError
+E       AssertionError: assert (0 == 0 and True is True and 'run_id' in 'OperationalError')
+tests/test_tickets.py:1774: AssertionError
+E       AssertionError: assert 'The last che...or this game.' == 'No trigger r...s before it).'
+E         
+E         - No trigger run saw this game before its start: its first forecast was made 2 minutes before the start, after the last check (9 minutes before it).
+E         + The last check before the start, 9 minutes before it, recorded neither a blocker nor a due review for this game.
+tests/test_tickets.py:1786: AssertionError
+E       assert "Blocker 'ina... established." == "Blocker 'ina... established."
+E         
+E         Skipping 55 identical leading characters in diff, use -v to show
+E         - start and the first check at or after it (2026-11-08T18:05:00Z) recorded nothing for nfl (no game of it was pending), so whether a review was possible in those 15 minutes is not established.
+E         ?                                                                -----------------------------------------------------
+E         + start and was not seen at the first check at or after it (2026-11-08T18:05:00Z), so whether a review was possible in those 15 minutes is not established.
+E         ?           ++++++++++++++++
+tests/test_tickets.py:1798: AssertionError
+FAILED tests/test_tickets.py::test_rejected_notice_is_not_sent_again_when_only_the_payload_changes
+FAILED tests/test_tickets.py::test_a_check_exactly_at_the_start_belongs_to_the_checks_after_it
+FAILED tests/test_tickets.py::test_listing_undelivered_results_can_fail_without_costing_the_run
+FAILED tests/test_tickets.py::test_an_observations_table_from_an_unreleased_build_is_refused_loudly
+FAILED tests/test_tickets.py::test_forecast_that_arrived_after_the_last_check_is_said_so
+FAILED tests/test_tickets.py::test_last_pending_game_of_its_sport_says_the_check_after_the_start_recorded_nothing_for_the_sport
+6 failed, 1 passed, 148 deselected in 3.98s

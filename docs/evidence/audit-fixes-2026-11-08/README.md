@@ -150,6 +150,31 @@ Still open after the follow-up (not part of this patch, by the owner's instructi
 - A check after Toronto midnight is not looked at for a game that started just before it (runs are read by day), so
   such a game stays `explained: false`.
 
+## Delta review of acd984a (three reviewers) and the second follow-up commit
+
+Verdicts on `acd984a`: session 43 APPROVE (4 low), session a9 APPROVE (2 low), session cb REQUEST CHANGES (1 medium,
+4 low). Every finding is addressed in the second follow-up commit; tests first (`32-…`: 6 of 7 fail on acd984a, the
+seventh guards against over-blocking and passes on both).
+
+| # | Finding | Raised by | Status | Evidence |
+|---|---|---|---|---|
+| D1 | The rejected text is sent again under a new key when only the payload changes (a score, a result time), with a new alert each time | cb medium, 43 low 3, a9 low 1 | Fixed: an owed notice with the identical text keeps the rejected receipt's key while that receipt is newer than the last notice that reached the user; a result that returns to the rejected one is not attempted again either (stricter than cb's variant, which allowed a resend after a return to the delivered result) | `test_rejected_notice_is_not_sent_again_when_only_the_payload_changes`, `test_a_rejected_text_sent_before_the_last_delivered_notice…` |
+| D2 | A check timed exactly at the start counts on both sides of it | 43 low 1, cb low 2 | Fixed: `before` and the game's observations use `< start` | `test_a_check_exactly_at_the_start_belongs_to_the_checks_after_it` |
+| D3 | The `undelivered_results` step is unguarded; a read problem ends the run after grades are committed | 43 low 2, cb low 4 | Fixed: guarded, reported as `undelivered_error` | `test_listing_undelivered_results_can_fail_without_costing_the_run` |
+| D4 | "Recorded neither a blocker nor a due review" for a check that predates the game's first forecast | 43 low 4 | Fixed: says the forecast was made after the last check | `test_forecast_that_arrived_after_the_last_check_is_said_so` |
+| D5 | "Was not seen at the first check after" reads as cleared when no game of the sport was pending | cb low 1 | Fixed: wording says the check recorded nothing for the sport | `test_last_pending_game_of_its_sport…` |
+| D6 | A ledger with the run_id-less observations table of an unreleased build would silently stop recording | cb low 3 | Fixed: refused with a message in `observations_error` every run (live ledger has no such table) | `test_an_observations_table_from_an_unreleased_build_is_refused_loudly` |
+| D7 | A preflight whose snapshot fails leaves no run row, so the next run stands in for it | a9 low 2 | Fixed for snapshot failures: a best-effort `due` NULL run with the clock's time. A run whose own recording fails still leaves no row (`observations_error` only) | `test_preflight_whose_snapshot_fails_still_leaves_a_run_record` |
+
+Evidence files: `32-delta-review-tests-before-fix.txt`, `33-delta-review-tests-after-fix.txt` (8 new tests, ticket file
+156, nine focused files 326, structure guard), `34-second-followup-real-copy-check.txt` (live-ledger copies: nothing
+appended or sent, two clean runs recorded, `status` records none), `35-full-backend-suite-second-followup.txt`,
+`36-second-followup.patch` (the delta against acd984a).
+
+Notes from the reviewers, recorded, no change: `explained` looks only at the end of the window (a review due early in
+the window that never ran, then a blocker through the start, reads explained; same on 3f85fc5); result-notice pick
+labels are not HTML-escaped (pre-existing, outside this patch; the live notices contain no `& < >`).
+
 ## Not claimed
 
 - The fixes have not run against live data, the live ledger or real Telegram.

@@ -169,7 +169,9 @@ Evidence and causes: `docs/evidence/audit-fixes-2026-11-08/README.md`.
   compared or deduplicated: one explanation may be attached to several forecasts.
 - **Why a game started unreviewed.** Every `preflight` appends one row to `ticket_trigger_runs` (time, day, whether a
   review was due, the trigger's reason, how many observations), also when it saw nothing to record; a run whose review
-  state could not be evaluated is recorded with `due` NULL. Under that run it appends to `ticket_trigger_observations`
+  state could not be evaluated, or whose snapshot failed (best effort, with the clock's time), is recorded with `due`
+  NULL. A run whose own recording fails (ledger busy) leaves no row and reports `observations_error`; a ledger holding
+  the older-shaped observations table of an unreleased build (no `run_id`) is refused with a message, every run. Under that run it appends to `ticket_trigger_observations`
   what it saw for each pending game: what kept it out of review (a refused sport when it excludes forecasts, an
   unusable source, a moved line, a single-game window; also shown as `review.not_reviewed_now`), or that a review of it
   was due (`review_due`). Both are new append-only tables in the Telegram ledger, created on first use; a run and its
@@ -182,7 +184,8 @@ Evidence and causes: `docs/evidence/audit-fixes-2026-11-08/README.md`.
     **`explained`**: the entire window is accounted for. That needs either a review that failed after the trigger last
     said one was due, or a blocker recorded at the last check before the start that is shown to have lasted to the
     start: the FIRST check at or after the start recorded the same blocker for that sport, or, for a single-game
-    window, no other game became eligible between that check and the start.
+    window, no other game became eligible between that check and the start. A check timed exactly at the start belongs
+    to the checks after it.
   - Because clean runs are recorded, "the last check before" and "the first check after" are the actual runs. A
     blocker seen at the last check and gone at the first check after the start leaves the minutes in between
     unaccounted for: `explained` is false and `explanation` says how many and names that check (HOU @ LAC on Nov 8: 57
@@ -190,7 +193,8 @@ Evidence and causes: `docs/evidence/audit-fixes-2026-11-08/README.md`.
     that. A blocker that had cleared at the last check before the start (that check recorded nothing for the game, or a
     due review that never ran) also leaves `explained` false, as does a check that could not evaluate the review state.
     While no check at or after the start is recorded yet, `explained` is false and says so; it can become true at the
-    next run. No time threshold is used.
+    next run. When no game of the sport is pending any more, a check records nothing for that sport, so the explanation
+    says "recorded nothing for {sport}" rather than that the blocker was gone. No time threshold is used.
 - **What is stored and what is announced are decided separately.**
   - *Stored (the archive):* `ticket_grades` gets a row whenever the result differs from the ticket's latest stored
     result, including every leg update and a return to an earlier result (that row carries `supersedes`, the hash it
@@ -208,13 +212,19 @@ Evidence and causes: `docs/evidence/audit-fixes-2026-11-08/README.md`.
 - **A refused review is filed under the day of the snapshot it reviewed**, not the wall-clock day (they differ around
   Toronto midnight). The trigger looks refusals up by the snapshot's day, so a "review again" refusal just after midnight
   is found again. The release files it under the wall-clock day; one of its own tests fails on any date but Nov 8.
-- **A rejected result notice stays visible.** A result notice Telegram rejected stays `failed`: it is never sent again
-  and its receipt is never changed (as before). New: while that notice is still the one the user is owed, every
+- **A rejected result notice stays visible.** A result notice Telegram rejected stays `failed` and its receipt is never
+  changed. Its text is not attempted again either: while that receipt is newer than the last notice that reached the
+  user, an owed notice with the identical text keeps the rejected receipt's key (as a deferred one keeps its `retry`
+  key), so a reading whose payload changed without changing the text (a score, a result time) does not send it under a
+  new key, and a result that returns to the rejected one is not attempted again. A different text is a new notice.
+  New: while that notice is still the one the user is owed, every
   settlement lists it under `undelivered_results` (ticket, grade, when it was rejected, its delivery key, whether it
   was a correction, and the last result notice on record), with notices on or off; brief preflight shows the list when
   it is not empty. `preflight --notify` sends one alert per rejected notice ("RESULT NOTICE NOT DELIVERED", naming the
   ticket, the rejected result and the last result on record; its key has no date, so it is sent once). The entry
   disappears when a notice that reaches the user says the current result, or the result returns to what they have.
+  Listing the undelivered notices is guarded like the notification step: a read problem there is reported as
+  `undelivered_error` and never ends the run.
   `notification_errors` reports the rejection only in the run in which it happens, as before, so the 15-minute trigger
   is not kept busy by a notice that stays rejected. An unconfirmed (`uncertain`) notice still counts as announced and
   is never sent again. In a run where a leg cannot be read, nothing is compared, so the list is empty for that run.

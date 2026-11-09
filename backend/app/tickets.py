@@ -553,6 +553,8 @@ def record_observations(state, snap=None):
                                             if not u['blocked_by_prior_ticket']})]
     with telegram.ledger() as conn:
         schema(conn)
+        if 'run_id' not in {r[1] for r in conn.execute('PRAGMA table_info(ticket_trigger_observations)')}:
+            raise ValueError('ticket_trigger_observations has no run_id column: it was created by an unreleased build; inspect the ledger')
         conn.execute('BEGIN IMMEDIATE')   # the run and its observations are stored together or not at all
         try:
             run = conn.execute('INSERT INTO ticket_trigger_runs (recorded_at,day,due,reason,observations) VALUES (?,?,?,?,?)',
@@ -591,7 +593,7 @@ def explain_missed(day, entries):
     for entry in entries:
         lo, hi = _parse(entry['review_window_from']), _parse(entry['tipoff'])
         mine = [o for o in seen if o['sport'] == entry['sport'] and o['game_id'] in (None, entry['game_id'])
-                and lo <= _parse(o['recorded_at']) <= hi]
+                and lo <= _parse(o['recorded_at']) < hi]
         blockers, due = {}, [o['recorded_at'] for o in mine if o['issue'] == REVIEW_DUE]
         for o in mine:
             if o['issue'] != REVIEW_DUE:
@@ -600,7 +602,7 @@ def explain_missed(day, entries):
                 item['last_seen_at'] = o['recorded_at']
                 item['observations'] += 1
         failed = [dict(f, detail=f['detail'][:200]) for f in failures if lo <= _parse(f['recorded_at']) <= hi]
-        before = [r for r in runs if lo <= _parse(r['recorded_at']) <= hi]            # the checks in the window
+        before = [r for r in runs if lo <= _parse(r['recorded_at']) < hi]             # the checks in the window
         check = before[-1] if before else None                                         # the last check before the start
         after = next((r for r in runs if _parse(r['recorded_at']) >= hi), None)        # the first check at or after it
         last = mine[-1] if mine else None                                              # the last thing recorded for this game
@@ -612,6 +614,10 @@ def explain_missed(day, entries):
             explained, why = True, 'A review failed after the trigger last reported one due.'
         elif check is None:
             explained, why = False, 'Nothing was recorded for this game in its review window: no trigger run saw it before its start.'
+        elif _parse(check['recorded_at']) < _parse(entry['first_forecast_at']):   # the last check predates the first forecast
+            explained = False
+            why = (f"No trigger run saw this game before its start: its first forecast was made {ago(entry['first_forecast_at'])} "
+                   f"minutes before the start, after the last check ({ago(check['recorded_at'])} minutes before it).")
         elif last is None or last['run_id'] != check['run_id']:   # the last check before the start recorded nothing for it
             explained = False
             why = (f"The last check before the start, {ago(check['recorded_at'])} minutes before it, "
@@ -640,6 +646,9 @@ def explain_missed(day, entries):
             elif unknown(after):
                 why = (f"Blocker '{last['issue']}' was last seen {minutes} minutes before the start and the first check at or "
                        f"after it ({after['recorded_at']}) could not evaluate the review state, {open_end}")
+            elif not any(o['run_id'] == after['run_id'] and o['sport'] == entry['sport'] for o in seen):
+                why = (f"Blocker '{last['issue']}' was last seen {minutes} minutes before the start and the first check at or "
+                       f"after it ({after['recorded_at']}) recorded nothing for {entry['sport']} (no game of it was pending), {open_end}")
             else:
                 why = (f"Blocker '{last['issue']}' was last seen {minutes} minutes before the start and was not seen at the "
                        f"first check at or after it ({after['recorded_at']}), {open_end}")
@@ -1211,7 +1220,10 @@ def result_notice(conn, chat, ticket_id, grade, legs, digest):
     - otherwise nothing: an unchanged losing ticket is not announced again when another leg settles, and a leg that
       reads as open for a while (or a corrected score with the same grades) changes nothing the user was told.
     When nothing new is owed the announced notice's own key is returned, so delivery reports it as already recorded.
-    A deferred notice with exactly the owed text is retried under its own key."""
+    A deferred notice with exactly the owed text is retried under its own key. A REJECTED notice with exactly the owed
+    text, newer than the last notice that reached the user, keeps its own key too: the text is not attempted again
+    under a new key when only the reading's payload changed (a score, a result time), it stays listed as undelivered
+    (`undelivered_result`) and its single alert key stays the same."""
     lines = [(str(p.get('pick_label', p['forecast_id'])), p['grade']) for p in legs]
     text = f"PARLAY RESULT / {ticket_id} / {grade.upper()}\n" + '\n'.join(f"{label}: {g}" for label, g in lines)
     said = lambda row: row['text'].split('\n' + CORRECTED_LINE)[0]
@@ -1234,8 +1246,9 @@ def result_notice(conn, chat, ticket_id, grade, legs, digest):
             owed = None
     if owed is None:
         return (announced['delivery_key'], announced['text']) if announced else None
-    deferred = next((r for r in rows if r['status'] == 'retry' and r['text'] == owed), None)
-    return (deferred['delivery_key'], deferred['text']) if deferred else ('ticket-result:' + ticket_id + ':' + digest, owed)
+    same = next((r for r in rows if r['text'] == owed and (r['status'] == 'retry' or (
+        r['status'] == 'failed' and (announced is None or r['attempted_at'] >= announced['attempted_at'])))), None)
+    return (same['delivery_key'], same['text']) if same else ('ticket-result:' + ticket_id + ':' + digest, owed)
 
 
 def settle(*, now=None, notify=False):
@@ -1317,7 +1330,11 @@ def settle(*, now=None, notify=False):
                 report['notification_errors'].append({'error':type(exc).__name__})
         # Owed result notices Telegram rejected: listed by every run (notices on or off) until the user has the current
         # result. Only the run in which the rejection happens reports it under notification_errors, as before.
-        report['undelivered_results'] = [u for result,key,text in notices for u in [undelivered_result(conn,chat,result,key)] if u]
+        report['undelivered_results'] = []
+        try:
+            report['undelivered_results'] = [u for result,key,text in notices for u in [undelivered_result(conn,chat,result,key)] if u]
+        except Exception as exc:  # the list is informational; a read problem here must not end the run after grades are committed
+            report['undelivered_error'] = type(exc).__name__
     return report
 
 
@@ -1573,7 +1590,16 @@ def main():
         if args.action in ('settle', 'preflight'):
             report = settle(notify=args.notify)
             if args.action == 'preflight':
-                snap = snapshot()
+                try:
+                    snap = snapshot()
+                except Exception:   # best effort: leave a run record with the clock's time, so the next run does not stand in for this one
+                    moment = datetime.now(timezone.utc)
+                    try:
+                        record_observations({'due': None, 'reason': 'snapshot_unavailable'},
+                                            {'as_of': _stamp(moment), 'date': moment.astimezone(TORONTO).date().isoformat()})
+                    except Exception:
+                        pass
+                    raise
                 try:
                     report['review'] = review_state(snap)
                 except Exception as exc:
@@ -1581,7 +1607,7 @@ def main():
                 try:
                     record_observations(report['review'], snap)
                 except Exception as exc:   # recording never blocks settlement, alerts or the trigger
-                    report['review']['observations_error'] = type(exc).__name__
+                    report['review']['observations_error'] = str(exc) if isinstance(exc, ValueError) else type(exc).__name__
                 try:
                     gone = record_interrupted(snap)
                 except Exception as exc:
