@@ -1,0 +1,7 @@
+# Third follow-up tree (98f8f96 + recheck fixes), 2026-11-09T21:01:31Z. Isolated temp data per test, Telegram mocked.
+# 1. python -m pytest tests/test_tickets.py -q -p no:cacheprovider
+159 passed in 15.06s
+# 2. nine focused files
+329 passed, 1 warning in 31.24s
+# 3. python3 scripts/check_project.py
+Structure guard passed. This does not prove semantic uniqueness or app correctness.

@@ -1,0 +1,17 @@
+# Recheck-round tests run against 98f8f96 (tests added/adjusted, helper unchanged) — 2026-11-09T21:00:23Z
+E       assert "Blocker 'ina... established." == "Blocker 'ina... established."
+E       assert "Blocker 'ina... established." == "Blocker 'ina... established."
+E       AssertionError: assert 'No trigger r...s before it).' == 'No trigger r...s before it).'
+E       assert "Blocker 'ina... established." == "Blocker 'ina... established."
+E       AssertionError: assert 'No trigger r...s before it).' == 'A review was...one finished.'
+E       assert (False is True)
+E       AssertionError: assert 'this alert is not repeated' in 'PROP51 / RESULT NOTICE NOT DELIVERED / 2026-11-08-6515a0981162\nTelegram rejected the LOSS result notice (a correctio...08T21:15:00Z. The last result notice on record is WIN (sent). It is not sent again automatically; inspect the receipt.'
+FAILED tests/test_tickets.py::test_blocker_seen_before_the_start_but_gone_at_the_next_check_does_not_explain_the_whole_window
+FAILED tests/test_tickets.py::test_blocker_that_returns_later_does_not_explain_a_miss_when_the_first_check_after_the_start_was_clean
+FAILED tests/test_tickets.py::test_listing_undelivered_results_can_fail_without_costing_the_run
+FAILED tests/test_tickets.py::test_forecast_that_arrived_after_the_last_check_is_said_so
+FAILED tests/test_tickets.py::test_last_pending_game_of_its_sport_says_the_check_after_the_start_recorded_nothing_for_the_sport
+FAILED tests/test_tickets.py::test_a_forecast_reissued_before_the_start_does_not_hide_that_a_review_was_due_and_never_ran
+FAILED tests/test_tickets.py::test_a_forecast_reissued_before_the_start_keeps_a_blocker_seen_on_both_sides_explained
+FAILED tests/test_tickets.py::test_rejected_notice_alert_says_it_is_not_repeated
+8 failed, 151 deselected in 4.10s

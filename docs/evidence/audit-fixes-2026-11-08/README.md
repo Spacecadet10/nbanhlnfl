@@ -175,6 +175,23 @@ Notes from the reviewers, recorded, no change: `explained` looks only at the end
 the window that never ran, then a blocker through the start, reads explained; same on 3f85fc5); result-notice pick
 labels are not HTML-escaped (pre-existing, outside this patch; the live notices contain no `& < >`).
 
+## Recheck of 98f8f96 (three reviewers) and the third follow-up commit
+
+Verdicts on `98f8f96`: session 43 APPROVE (2 low nits), session cb APPROVE (2 low), session a9 REQUEST CHANGES (1 medium,
+new in 98f8f96). Addressed in the third follow-up commit; tests first (`37-…` before, `38-…` after).
+
+| # | Finding | Raised by | Status | Evidence |
+|---|---|---|---|---|
+| E1 | The D4 sentence ("no trigger run saw this game: its first forecast was made after the last check") fired for games whose forecast was re-issued shortly before the start, because `first_forecast_at` is the CURRENT forecast's time; `explained` went true → false and "a review was due and none ran" was hidden. Common in the live stores (28 of 134 NBA games re-issued within 15 min of tipoff) | a9 medium | Fixed: the branch is taken only when nothing was recorded for the game in its window; it says "current forecast" | `test_a_forecast_reissued_before_the_start_does_not_hide…`, `…keeps_a_blocker_seen_on_both_sides_explained` |
+| E2 | `undelivered_error` dropped from the brief preflight output | 43 low | Fixed | `test_listing_undelivered_results_can_fail_without_costing_the_run` |
+| E3 | "(no game of it was pending)" can be false (reviewed or locked games are pending too) | 43 low | Fixed: parenthesis removed | the three wording tests |
+| E4 | A rejected notice that drops off the list and is owed again is not alerted again | cb low | Wording: the alert says it is not repeated; the alert key is unchanged (one alert per rejected receipt) | `test_rejected_notice_alert_says_it_is_not_repeated` |
+| E5 | A run recorded on a snapshot failure is filed under the clock's Toronto day, not the slate's | cb low | Recorded, not changed: without a snapshot there is no slate day; matters only at the midnight edge already listed | — |
+| E6 | `_review_window` (the single-game rule's other windows) also uses the current forecast version's time | a9 low, pre-existing | Recorded, not changed; documented in TICKETS.md | — |
+
+Evidence files: `37-recheck-tests-before-fix.txt`, `38-recheck-tests-after-fix.txt`, `39-third-followup-real-copy-check.txt`,
+`40-full-backend-suite-third-followup.txt`, `41-third-followup.patch` (the delta against 98f8f96).
+
 ## Not claimed
 
 - The fixes have not run against live data, the live ledger or real Telegram.

@@ -614,9 +614,11 @@ def explain_missed(day, entries):
             explained, why = True, 'A review failed after the trigger last reported one due.'
         elif check is None:
             explained, why = False, 'Nothing was recorded for this game in its review window: no trigger run saw it before its start.'
-        elif _parse(check['recorded_at']) < _parse(entry['first_forecast_at']):   # the last check predates the first forecast
+        elif last is None and _parse(check['recorded_at']) < _parse(entry['first_forecast_at']):
+            # Nothing was recorded for the game and its current forecast (after the start: the latest version made before
+            # it, often a re-issue minutes before) is younger than the last check, which could not have seen it.
             explained = False
-            why = (f"No trigger run saw this game before its start: its first forecast was made {ago(entry['first_forecast_at'])} "
+            why = (f"No trigger run saw this game before its start: its current forecast was made {ago(entry['first_forecast_at'])} "
                    f"minutes before the start, after the last check ({ago(check['recorded_at'])} minutes before it).")
         elif last is None or last['run_id'] != check['run_id']:   # the last check before the start recorded nothing for it
             explained = False
@@ -648,7 +650,7 @@ def explain_missed(day, entries):
                        f"after it ({after['recorded_at']}) could not evaluate the review state, {open_end}")
             elif not any(o['run_id'] == after['run_id'] and o['sport'] == entry['sport'] for o in seen):
                 why = (f"Blocker '{last['issue']}' was last seen {minutes} minutes before the start and the first check at or "
-                       f"after it ({after['recorded_at']}) recorded nothing for {entry['sport']} (no game of it was pending), {open_end}")
+                       f"after it ({after['recorded_at']}) recorded nothing for {entry['sport']}, {open_end}")
             else:
                 why = (f"Blocker '{last['issue']}' was last seen {minutes} minutes before the start and was not seen at the "
                        f"first check at or after it ({after['recorded_at']}), {open_end}")
@@ -1384,7 +1386,7 @@ def notify_alerts(snap, settlement_errors, extra=(), undelivered=()):
                 f"PROP51 / RESULT NOTICE NOT DELIVERED / {u['ticket_id']}\nTelegram rejected the {u['grade'].upper()} result notice"
                 f"{' (a correction)' if u['correction'] else ''} at {u['rejected_at']}. "
                 + (f"The last result notice on record is {last['grade']} ({last['status']})." if last else 'No result notice was delivered before.')
-                + ' It is not sent again automatically; inspect the receipt.',snap['as_of']))
+                + ' It is not sent again automatically and this alert is not repeated, also if it is owed again later; inspect the receipt.',snap['as_of']))
         start = datetime.fromisoformat(snap['date']).replace(tzinfo=TORONTO)
         end = start + timedelta(days=1)
         rows = conn.execute("SELECT delivery_key,status FROM deliveries WHERE chat_id=? "
@@ -1628,7 +1630,8 @@ def main():
                               'notification_errors': report.get('notification_errors', []), 'alerts': report.get('alerts', []),
                               'snapshot_alerts': snap.get('alerts', []), 'review': report['review'],
                               'settlement': [{k: t.get(k) for k in ('ticket_id', 'grade', 'notification')} for t in report.get('tickets', [])],
-                              **({'undelivered_results': report['undelivered_results']} if report.get('undelivered_results') else {})}
+                              **({'undelivered_results': report['undelivered_results']} if report.get('undelivered_results') else {}),
+                              **({'undelivered_error': report['undelivered_error']} if report.get('undelivered_error') else {})}
             print(json.dumps(report))
         elif args.action == 'status':
             snap = snapshot()

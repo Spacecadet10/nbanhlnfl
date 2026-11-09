@@ -194,7 +194,10 @@ Evidence and causes: `docs/evidence/audit-fixes-2026-11-08/README.md`.
     due review that never ran) also leaves `explained` false, as does a check that could not evaluate the review state.
     While no check at or after the start is recorded yet, `explained` is false and says so; it can become true at the
     next run. When no game of the sport is pending any more, a check records nothing for that sport, so the explanation
-    says "recorded nothing for {sport}" rather than that the blocker was gone. No time threshold is used.
+    says "recorded nothing for {sport}" rather than that the blocker was gone. When nothing at all was recorded for the
+    game in its window and its current forecast (after the start, the latest version made before it, often a re-issue
+    minutes before) is younger than the last check, the explanation says that check could not have seen it. No time
+    threshold is used. Known limit: the single-game rule's "other windows" also use each game's current forecast time.
 - **What is stored and what is announced are decided separately.**
   - *Stored (the archive):* `ticket_grades` gets a row whenever the result differs from the ticket's latest stored
     result, including every leg update and a return to an earlier result (that row carries `supersedes`, the hash it
@@ -221,7 +224,8 @@ Evidence and causes: `docs/evidence/audit-fixes-2026-11-08/README.md`.
   settlement lists it under `undelivered_results` (ticket, grade, when it was rejected, its delivery key, whether it
   was a correction, and the last result notice on record), with notices on or off; brief preflight shows the list when
   it is not empty. `preflight --notify` sends one alert per rejected notice ("RESULT NOTICE NOT DELIVERED", naming the
-  ticket, the rejected result and the last result on record; its key has no date, so it is sent once). The entry
+  ticket, the rejected result and the last result on record; its key has no date, so it is sent once, and not again if
+  the notice drops off the list and is owed again later; the alert says so). The entry
   disappears when a notice that reaches the user says the current result, or the result returns to what they have.
   Listing the undelivered notices is guarded like the notification step: a read problem there is reported as
   `undelivered_error` and never ends the run.
