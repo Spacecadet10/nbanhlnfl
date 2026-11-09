@@ -26,27 +26,41 @@ async function check(c) {
   await s.send('Page.enable'); await s.send('Network.enable'); await s.send('Runtime.enable');
   await s.send('Emulation.setDeviceMetricsOverride', { width: c.width, height: c.height, deviceScaleFactor: c.width < 600 ? 2 : 1, mobile: c.width < 600 });
   if (c.block) await s.send('Network.setBlockedURLs', { urls: c.block });
+  if (c.theme === 'dark') await s.send('Page.addScriptToEvaluateOnNewDocument', { source: "try { localStorage.setItem('courtside-theme-choice', 'dark'); } catch (e) {}" });
   await s.send('Page.navigate', { url: c.url });
   await sleep(c.wait ?? 3500);
   const evaluate = async (expression) => (await s.send('Runtime.evaluate', { expression, returnByValue: true })).result.value;
   const facts = await evaluate(`(() => ({ innerWidth: window.innerWidth, scrollWidth: document.documentElement.scrollWidth,
     visible: document.body.innerText, all: document.body.textContent,
     wide: [...document.querySelectorAll('body *')].filter((e) => e.getBoundingClientRect().right > window.innerWidth + 1 && getComputedStyle(e).position !== 'fixed' && e.getBoundingClientRect().width > 0).slice(0, 5).map((e) => e.tagName + '.' + e.className) }))()`);
+  // Readability of the live forecast card: WCAG contrast of each text against the first opaque background behind it.
+  const contrast = c.contrast ? await evaluate(`(() => {
+    const rgb = (v) => (v.match(/[\\d.]+/g) || []).map(Number);
+    const lum = ([r, g, b]) => { const f = (x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+    const behind = (e) => { for (let n = e; n; n = n.parentElement) { const c = rgb(getComputedStyle(n).backgroundColor); if (c.length === 3 || (c.length === 4 && c[3] >= 0.99)) return c.slice(0, 3); } return [255, 255, 255]; };
+    const out = { theme: document.documentElement.dataset.theme, cards: document.querySelectorAll('.soccer-live-card').length, min: null, worst: null };
+    for (const e of document.querySelectorAll('.soccer-live-card header strong, .soccer-live-prob strong, .soccer-live-prob span')) {
+      const a = lum(rgb(getComputedStyle(e).color).slice(0, 3)), b = lum(behind(e));
+      const ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+      if (out.min === null || ratio < out.min) { out.min = Math.round(ratio * 100) / 100; out.worst = e.tagName + ':' + e.textContent.slice(0, 20); }
+    }
+    return out; })()`) : null;
   const api = s.events.filter((e) => e.method === 'Network.responseReceived' && e.params.response.url.includes('/api/'))
     .map((e) => [e.params.response.status, e.params.response.url.replace(/^https?:\/\/[^/]+/, '')]);
   const failedApi = api.filter(([status]) => status >= 400);
   const shot = await s.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
-  writeFileSync(`${out}/${c.name}-${c.width}.png`, Buffer.from(shot.data, 'base64'));
+  writeFileSync(`${out}/${c.name}${c.theme === 'dark' ? '-dark' : ''}-${c.width}.png`, Buffer.from(shot.data, 'base64'));
   await fetch(`http://127.0.0.1:${port}/json/close/${s.targetId}`); s.close();
   const forbidden = facts.all.match(FORBIDDEN);
   const missing = (c.expect ?? []).filter((re) => !re.test(c.hidden ? facts.all : facts.visible)).map(String);
   const overflow = facts.scrollWidth > facts.innerWidth;
-  const ok = !forbidden && !missing.length && !overflow && facts.innerWidth === c.width && (c.allowApiFailures || !failedApi.length);
-  return { name: c.name, width: c.width, viewport: facts.innerWidth, scrollWidth: facts.scrollWidth, overflow, wide: overflow ? facts.wide : [],
+  const readable = !contrast || (contrast.cards > 0 && contrast.min >= 4.5 && contrast.theme === (c.theme ?? 'light'));
+  const ok = !forbidden && !missing.length && !overflow && facts.innerWidth === c.width && (c.allowApiFailures || !failedApi.length) && readable;
+  return { name: c.name, theme: c.theme ?? 'light', contrast, width: c.width, viewport: facts.innerWidth, scrollWidth: facts.scrollWidth, overflow, wide: overflow ? facts.wide : [],
     forbidden: forbidden ? forbidden[0] : null, missing, apiCalls: api.length, failedApi, ok };
 }
 
-const web = 'http://127.0.0.1:4191', stale = 'http://127.0.0.1:4192';
+const web = process.env.WEB ?? 'http://127.0.0.1:4191', stale = process.env.STALE ?? 'http://127.0.0.1:4192';
 const cases = [
   { name: 'recorded-uefa-nations', url: `${web}/?sport=soccer&competition=uefa.nations`,
     expect: [/Live soccer forecasts:/, /Upcoming forecasts/, /90-minute forecast: .* win \d+\.\d% · Draw \d+\.\d% · .* win \d+\.\d%\./, /The live soccer job last checked this competition/] },
@@ -73,8 +87,16 @@ const cases = [
   { name: 'data-note-recorded', url: `${web}/?sport=soccer&competition=uefa.nations`, hidden: true,
     expect: [/Live forecasts cover the 90-minute result only\. No soccer odds or injury information is collected\./] },
 ];
+// The live forecast card must be readable in both themes (review finding: white card with invisible text in dark).
+for (const name of ['recorded-uefa-nations', 'match-with-forecast']) {
+  const base = cases.find((c) => c.name === name);
+  base.contrast = true;
+  cases.push({ ...base, theme: 'dark' });
+}
+cases.push({ ...cases.find((c) => c.name === 'awaiting-premier-league-played-day'), theme: 'dark' });
 const results = [];
+if (process.env.ONLY_CONTRAST) cases.splice(0, cases.length, ...cases.filter((c) => c.contrast));   // before/after of the card fix
 for (const c of cases) for (const [width, height] of [[1280, 900], [390, 844]]) results.push(await check({ ...c, width, height }));
 for (const r of results) console.log(JSON.stringify(r));
-console.log(`SUMMARY ${results.filter((r) => r.ok).length}/${results.length} ok; failed: ${results.filter((r) => !r.ok).map((r) => r.name + '@' + r.width).join(', ') || 'none'}`);
+console.log(`SUMMARY ${results.filter((r) => r.ok).length}/${results.length} ok; failed: ${results.filter((r) => !r.ok).map((r) => r.name + '/' + r.theme + '@' + r.width).join(', ') || 'none'}`);
 process.exit(results.every((r) => r.ok) ? 0 : 1);

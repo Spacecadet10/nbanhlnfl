@@ -166,16 +166,24 @@ Evidence and causes: `docs/evidence/audit-fixes-2026-11-08/README.md`.
   under `locks` (ticket IDs, the ticket's forecast and pick). An entry the reviewer wrote is kept as written. Forecasts
   that are not locked still need the reviewer's own decision and reason. Reason text is never compared or deduplicated:
   one explanation may be attached to several forecasts.
-- **Why a game started unreviewed.** `preflight` appends to `ticket_review_blockers` (new append-only table in the
-  Telegram ledger, created on first use) what kept a pending game out of review at that run: a refused sport (when it
-  excludes forecasts), an unusable source, a moved line, a single-game window. `review.not_reviewed_now` shows the same
-  list. Each `missed_before_start` entry now carries `recorded_blockers` (issue, first/last seen, observations) and
-  `failed_reviews` from its own pregame window, and `explained`: false means a review was possible and none finished.
-  `status` records nothing.
-- **Corrections back to an earlier result.** `ticket_grades` gets a row whenever the result differs from the ticket's
-  latest stored result, including a return to an earlier one; that row carries `supersedes` (the hash it replaces), so it
-  is stored and announced once ("Corrected result: it replaces the result sent before."). Hashes of first and unchanged
-  results are as before, so nothing already stored or sent is repeated. A result with a leg that could not be graded is
-  stored as before and ignored when comparing, so a passing read error cannot repeat a notice.
+- **Why a game started unreviewed.** `preflight` appends to `ticket_trigger_observations` (new append-only table in the
+  Telegram ledger, created on first use) what it saw for each pending game at that run: what kept it out of review (a
+  refused sport when it excludes forecasts, an unusable source, a moved line, a single-game window; also shown as
+  `review.not_reviewed_now`), or that a review of it was due (`review_due`). Each `missed_before_start` entry carries, from
+  its own pregame window, `recorded_blockers`, `review_due_seen`, `failed_reviews` and `last_observation` (what, when, and
+  how many minutes before the start). `explained` is true only when the last thing the trigger saw before the start was
+  a blocker, or a review failed after the trigger last said one was due. A blocker that cleared while reviews were then
+  due and none ran leaves `explained` false. `status` records nothing.
+- **Stored results and announced results are decided separately.**
+  - *Stored:* `ticket_grades` gets a row whenever the result differs from the ticket's latest stored result, including a
+    return to an earlier one (that row carries `supersedes`, the hash it replaces). Hashes of first and unchanged
+    results are as before. A result with a leg that could not be graded is stored as before and skipped when comparing.
+  - *Announced:* a result notice says the ticket's grade and each leg's grade. It is compared with the last notice that
+    reached the user for that ticket (sent or unconfirmed; a rejected or deferred notice does not count): identical
+    content reuses that notice's key, so nothing is sent again (a pending spell in between, or a corrected score with
+    the same grades, changes nothing the notice says). A deferred notice with the same content is retried under its own
+    key. Different content is sent once under a new key. It ends with "Corrected result: it replaces the result sent before." only when a leg that was
+    announced as settled now has another grade; a leg that was open and settles is an update without that line.
+  - A result with a leg that could not be graded is never announced (the `settlement_unavailable` error and alert remain).
 - **Unchanged:** selection method, forecast-version lock, 2–6 legs and at most 6 tickets, legacy reservation read,
   existing rows.

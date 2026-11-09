@@ -1919,4 +1919,8 @@ back three days). Headless Chrome 156 with DevTools device metrics: real 1280×9
   League); empty competition (Euro qualifying); stale source (scratch copy); failed live read (request blocked in the
   browser); match with and without a forecast; soccer Performance page; header "Real data" note.
 - `npm run test:unit`: 21 passed. `npm run build`: passed.
-- Not verified: the live app (nothing deployed); NBA/NHL/NFL screens (not changed, not re-run); dark theme.
+- After the independent review (dark-theme finding): the live forecast card now uses the theme tokens. Same script with
+  dark-theme cases and a contrast measurement of the card text: **30/30 ok**; lowest contrast 7.26 in dark and 5.87 in
+  light (it was 1.08 in dark on commit 635a4ec: `17-dark-card-before-fix.txt`).
+- Not verified by this session: the live app (nothing deployed); NBA/NHL/NFL screens (unchanged; the reviewer's 160
+  captures found no regression).

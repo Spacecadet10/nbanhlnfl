@@ -1398,11 +1398,11 @@ h1,h2,h3,.hero-matchup,.metric-value,.tile-value,.brand { font-family:'Barlow Co
 .soccer-live { margin: 0 0 24px; }
 .soccer-live-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .soccer-live-head h2 { margin: 0; }
-.soccer-live-badge { background: var(--lime, #A3E635); color: #1E1B4B; font-weight: 700; }
+.soccer-live-badge { background: var(--accent-lime); color: #1E1B4B; font-weight: 700; }
 .soccer-live-list { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); }
-.soccer-live-card { border: 1px solid rgba(30, 27, 75, .12); border-radius: 16px; padding: 14px 16px; background: var(--panel, #fff); min-width: 0; }
+.soccer-live-card { border: 1px solid var(--border); border-radius: 16px; padding: 14px 16px; background: var(--surface); color: var(--text); min-width: 0; }
 .soccer-live-card header { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .soccer-live-probs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.soccer-live-prob { display: flex; flex-direction: column; gap: 2px; padding: 8px; border-radius: 12px; background: rgba(30, 27, 75, .04); min-width: 0; overflow-wrap: anywhere; }
-.soccer-live-prob.is-top { outline: 2px solid #1E1B4B; }
+.soccer-live-prob { display: flex; flex-direction: column; gap: 2px; padding: 8px; border-radius: 12px; background: var(--surface-raised); min-width: 0; overflow-wrap: anywhere; }
+.soccer-live-prob.is-top { outline: 2px solid var(--text); }
 .soccer-live-prob strong { font-size: 1.25em; }

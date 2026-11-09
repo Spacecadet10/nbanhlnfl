@@ -21,8 +21,9 @@ The audit as received is `00-audit-as-received.txt`.
 - `01-…` to `03-…`: the new tests run before the fixes (6 + 3 failing, then the frontend module missing).
 - `04-replay-missed-games.txt`: the real Nov 8 reviewer snapshots replayed through the fixed helper on copies. The
   `due` column there is not historical (the copy holds all of the day's later review archives).
-- `05-browser-check.txt` + `screens/`: 12 soccer screens × 1280 px and 390 px real viewports in headless Chrome
-  (DevTools device metrics, not a resized window): 24/24 ok. `scripts/browser_check.mjs` is the check.
+- `05-browser-check.txt` + `screens/`: soccer screens × 1280 px and 390 px real viewports in headless Chrome
+  (DevTools device metrics, not a resized window), light and dark for the forecast card: 30/30 ok.
+  `scripts/browser_check.mjs` is the check.
 - `06-full-backend-suite.txt`: full backend suite on the final tree: 1,982 passed, 8 failed. All 8 are
   `tests/test_deep_study.py` (torch/keras not installed in the venv used); `13-…` shows the same 8 failing on an
   unmodified export of `7f629ea`.
@@ -32,6 +33,30 @@ The audit as received is `00-audit-as-received.txt`.
   nothing (`scripts/settle_compare.py`).
 - `08-uncertain-receipts-inventory.txt`, `09-proposed-skill-text.md`.
 - `scripts/`: `dup_reasons.py` (which review entries share text), `replay_missed.py`, `snap_db.py` (read-only store copy).
+
+## After the independent review of 635a4ec (session 43: request changes, 2 must-fix, 2 should-fix)
+
+| Finding | Fix | Evidence |
+|---|---|---|
+| A result that went pending (or changed only a score) and came back was announced again as "Corrected" | Notices are decided by what was last announced (ticket grade + leg grades), not by what was last stored | `14-…` (failing first), `15-…` (the reviewer's probes pass) |
+| `explained: true` from a blocker that had already cleared | The trigger also records that a review was due; `explained` follows the last observation before the start | `14-…`, `15-…` (B1 now false), `04-…` |
+| A passing read error on a lost ticket still sent "… unavailable" | A result with an ungradable leg is stored but never announced | `12b-…`: on real copies with the NBA store unreadable, the release sends that notice and the branch does not; stored rows identical |
+| Dark theme: forecast card unreadable | Card uses the theme tokens | `17-dark-card-before-fix.txt` (contrast 1.08) → `05-browser-check.txt` (7.26 dark, 5.87 light; 30/30 screens) |
+
+- Settlement on copies of the real ledger and stores, Telegram mocked, release code against this branch:
+  - `12a-…-two-new-results.txt` (first version of these fixes): two tickets had newly settled; both codes appended the
+    same 2 rows and sent the same 2 notices; a second run added and sent nothing.
+  - `12-settle-release-vs-branch.txt` (final code, later copies): nothing new had settled; both codes appended and sent
+    nothing, with 12 result notices already recorded.
+  - `12b-…-nba-store-unreadable.txt` (first version of these fixes): the NBA store copy could not be opened, so six
+    tickets had an ungradable leg. Stored rows were identical; the release sent "…/ 1154: unavailable / …", the branch
+    did not.
+- One more case was added after the reviewer's four: a notice Telegram rejected is not treated as announced, and a
+  deferred one is retried once (`test_rejected_notice_is_not_what_was_announced_and_a_deferred_one_is_retried_once`).
+- `16-full-backend-suite-after-review.txt`: the full suite on the tree with these fixes.
+- The HOU @ LAC replay still reads `explained: true` because the last thing the trigger saw (20:07Z) was the refused
+  sport; `last_observation` now shows that this was 57 minutes before the start. The run that would have seen the
+  recovery did not exist under the hourly schedule of that afternoon.
 
 ## Not claimed
 

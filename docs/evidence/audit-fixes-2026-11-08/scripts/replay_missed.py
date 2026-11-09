@@ -9,6 +9,6 @@ for path in sorted(glob.glob("/tmp/ticket-snapshot-20261108-*.json")):
     if not ("2026-11-08T12:00:00Z" <= snap["as_of"] <= "2026-11-08T22:00:00Z"):
         continue
     state = t.review_state(snap)
-    n = t.record_blockers(state)
-    missed = [(m["matchup"], m["explained"], [(b["issue"], b["detail"][:40], b["first_seen_at"][11:16], b["last_seen_at"][11:16], b["observations"]) for b in m["recorded_blockers"]], len(m["failed_reviews"])) for m in state["missed_before_start"]]
+    n = t.record_observations(state)
+    missed = [(m["matchup"], m["explained"], [(b["issue"], b["first_seen_at"][11:16], b["last_seen_at"][11:16], b["observations"]) for b in m["recorded_blockers"]], "last seen", m["last_observation"] and (m["last_observation"]["issue"], m["last_observation"]["minutes_before_start"], "min before start")) for m in state["missed_before_start"]]
     print(snap["as_of"][11:19], "due", state["due"], state["reason"], "| recorded", n, [(w["sport"], (w["game_id"] or "-")[-9:], w["issue"]) for w in state.get("not_reviewed_now", [])], "| missed", missed)

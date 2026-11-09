@@ -470,12 +470,12 @@ def review_state(snap):
                                       'first_forecast_at': pick['generated_at']})
             entry['forecasts'] += 1
             entry['first_forecast_at'] = min(entry['first_forecast_at'], pick['generated_at'])
-    if missed:   # why: blockers the trigger recorded and reviews that failed while the game was still pending
+    if missed:   # why: what the trigger recorded and which reviews failed while the game was still pending
         try:
             explain_missed(snap['date'], missed.values())
         except Exception as exc:
             state['missed_explanation_error'] = type(exc).__name__
-    # Pending games this run does not send to review, each with its reason (recorded by preflight: record_blockers).
+    # Pending games this run does not send to review, each with its reason (recorded by preflight: record_observations).
     # A refused sport hides its games, so it is recorded for the sport unless it reports that it excludes no forecast now.
     waiting = [{'sport': sport, 'game_id': None, 'issue': section['error'], 'detail': str(section.get('reason') or '')}
                for sport, section in unavailable.items()
@@ -501,41 +501,60 @@ def review_state(snap):
     return state
 
 
-def record_blockers(state):
-    """Append what this trigger run saw standing between a pending game and its review (review_state's not_reviewed_now):
-    a refused sport or source, a moved line, a single-game window. One row per observation, so a game that later starts
-    unreviewed carries the blockers seen during its own pregame window. Never selects or sends."""
+REVIEW_DUE = 'review_due'
+
+
+def record_observations(state):
+    """Append what this trigger run saw for each pending game: what stood between it and a review (review_state's
+    not_reviewed_now: a refused sport or source, a moved line, a single-game window), or that a review of it was due
+    (REVIEW_DUE). One row per observation, so a game that later starts unreviewed carries what the trigger last saw
+    before its start. Never selects or sends."""
     from app import telegram
     rows = [(state['as_of'], state['date'], w['sport'], w['game_id'], w['issue'], w['detail'][:300])
             for w in state.get('not_reviewed_now', [])]
+    if state.get('due') is True:
+        rows += [(state['as_of'], state['date'], sport, game, REVIEW_DUE, '')
+                 for sport, game in sorted({(u['sport'], u['game_id']) for u in state['unreviewed']
+                                            if not u['blocked_by_prior_ticket']})]
     if rows:
         with telegram.ledger() as conn:
             schema(conn)
-            conn.executemany('INSERT INTO ticket_review_blockers (recorded_at,day,sport,game_id,issue,detail) VALUES (?,?,?,?,?,?)', rows)
+            conn.executemany('INSERT INTO ticket_trigger_observations (recorded_at,day,sport,game_id,issue,detail) VALUES (?,?,?,?,?,?)', rows)
     return len(rows)
 
 
 def explain_missed(day, entries):
-    """Attach to each game that started unreviewed the blockers recorded, and the reviews that failed, between its first
-    pregame forecast and its start. `explained` is False when neither exists: a review was possible and none finished."""
+    """Attach to each game that started unreviewed what the trigger recorded, and the reviews that failed, between its
+    first pregame forecast and its start. `explained` is True only when the LAST thing the trigger saw before the start
+    was a blocker, or a review failed after the trigger last said one was due. A blocker that cleared while reviews were
+    then due and none ran does not explain the miss; `last_observation` shows how long before the start it was made."""
     from app import telegram
     with telegram.ledger() as conn:
         schema(conn)
-        blockers = [dict(r) for r in conn.execute('SELECT * FROM ticket_review_blockers WHERE day=? ORDER BY blocker_id', (day,))]
+        seen = [dict(r) for r in conn.execute('SELECT * FROM ticket_trigger_observations WHERE day=? ORDER BY recorded_at, observation_id', (day,))]
         failures = [dict(r) for r in conn.execute("SELECT review_id,recorded_at,stage,outcome,detail FROM ticket_reviews "
                                                   "WHERE day=? AND outcome='operational_failure' ORDER BY review_id", (day,))]
     for entry in entries:
         lo, hi = _parse(entry['first_forecast_at']), _parse(entry['tipoff'])
-        seen = {}
-        for b in blockers:
-            if b['sport'] == entry['sport'] and b['game_id'] in (None, entry['game_id']) and lo <= _parse(b['recorded_at']) <= hi:
-                item = seen.setdefault((b['issue'], b['detail']), {'issue': b['issue'], 'detail': b['detail'],
-                                       'first_seen_at': b['recorded_at'], 'last_seen_at': b['recorded_at'], 'observations': 0})
-                item['last_seen_at'] = b['recorded_at']
+        mine = [o for o in seen if o['sport'] == entry['sport'] and o['game_id'] in (None, entry['game_id'])
+                and lo <= _parse(o['recorded_at']) <= hi]
+        blockers, due = {}, [o['recorded_at'] for o in mine if o['issue'] == REVIEW_DUE]
+        for o in mine:
+            if o['issue'] != REVIEW_DUE:
+                item = blockers.setdefault((o['issue'], o['detail']), {'issue': o['issue'], 'detail': o['detail'],
+                                           'first_seen_at': o['recorded_at'], 'last_seen_at': o['recorded_at'], 'observations': 0})
+                item['last_seen_at'] = o['recorded_at']
                 item['observations'] += 1
-        entry['recorded_blockers'] = list(seen.values())
-        entry['failed_reviews'] = [dict(f, detail=f['detail'][:200]) for f in failures if lo <= _parse(f['recorded_at']) <= hi]
-        entry['explained'] = bool(entry['recorded_blockers'] or entry['failed_reviews'])
+        failed = [dict(f, detail=f['detail'][:200]) for f in failures if lo <= _parse(f['recorded_at']) <= hi]
+        last = mine[-1] if mine else None
+        entry['recorded_blockers'] = list(blockers.values())
+        entry['review_due_seen'] = {'first_seen_at': due[0], 'last_seen_at': due[-1], 'observations': len(due)} if due else None
+        entry['last_observation'] = ({'issue': last['issue'], 'at': last['recorded_at'],
+                                      'minutes_before_start': int((hi - _parse(last['recorded_at'])).total_seconds() // 60)}
+                                     if last else None)
+        entry['failed_reviews'] = failed
+        entry['explained'] = bool((last and last['issue'] != REVIEW_DUE)
+                                  or (failed and (not due or max(f['recorded_at'] for f in failed) >= due[-1])))
 
 
 def _text(value, what):
@@ -915,13 +934,13 @@ def schema(conn):
         detail TEXT NOT NULL, snapshot_sha256 TEXT, snapshot_as_of TEXT, payload TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS ticket_review_starts (
         snapshot_sha256 TEXT PRIMARY KEY, day TEXT NOT NULL, started_at TEXT NOT NULL, earliest_tipoff TEXT);
-      CREATE TABLE IF NOT EXISTS ticket_review_blockers (
-        blocker_id INTEGER PRIMARY KEY AUTOINCREMENT, recorded_at TEXT NOT NULL, day TEXT NOT NULL, sport TEXT NOT NULL,
+      CREATE TABLE IF NOT EXISTS ticket_trigger_observations (
+        observation_id INTEGER PRIMARY KEY AUTOINCREMENT, recorded_at TEXT NOT NULL, day TEXT NOT NULL, sport TEXT NOT NULL,
         game_id TEXT, issue TEXT NOT NULL, detail TEXT NOT NULL);
-      CREATE TRIGGER IF NOT EXISTS ticket_review_blockers_no_update BEFORE UPDATE ON ticket_review_blockers
-        BEGIN SELECT RAISE(ABORT,'ticket review blockers are append-only'); END;
-      CREATE TRIGGER IF NOT EXISTS ticket_review_blockers_no_delete BEFORE DELETE ON ticket_review_blockers
-        BEGIN SELECT RAISE(ABORT,'ticket review blockers are append-only'); END;
+      CREATE TRIGGER IF NOT EXISTS ticket_trigger_observations_no_update BEFORE UPDATE ON ticket_trigger_observations
+        BEGIN SELECT RAISE(ABORT,'ticket trigger observations are append-only'); END;
+      CREATE TRIGGER IF NOT EXISTS ticket_trigger_observations_no_delete BEFORE DELETE ON ticket_trigger_observations
+        BEGIN SELECT RAISE(ABORT,'ticket trigger observations are append-only'); END;
       CREATE TRIGGER IF NOT EXISTS ticket_review_starts_no_update BEFORE UPDATE ON ticket_review_starts
         BEGIN SELECT RAISE(ABORT,'ticket review starts are append-only'); END;
       CREATE TRIGGER IF NOT EXISTS ticket_review_starts_no_delete BEFORE DELETE ON ticket_review_starts
@@ -1043,6 +1062,37 @@ def ticket_grade(legs):
     return 'win'
 
 
+CORRECTED_LINE = 'Corrected result: it replaces the result sent before.'
+SETTLED_GRADES = ('win', 'loss', 'push', 'void')
+
+
+def result_notice(conn, chat, ticket_id, grade, legs, digest):
+    """(delivery key, text) of the result notice a settled ticket is owed, decided by what was last ANNOUNCED for it, not
+    by what was last stored: the notice says the ticket's grade and each leg's grade, so a reading that changes neither
+    (a pending spell in between, a corrected score with the same grades) reuses the key of the notice already recorded
+    and nothing is sent again. "Announced" means sent or unconfirmed; a notice Telegram rejected or deferred never
+    reached the user, so it is not what later results are compared with (a deferred one with this same content is
+    retried under its own key). Different content gets a new key; it carries the correction line only when a leg that
+    was announced as settled now has another grade (a leg that was open and settles is an update, not a correction)."""
+    lines = [(str(p.get('pick_label', p['forecast_id'])), p['grade']) for p in legs]
+    text = f"PARLAY RESULT / {ticket_id} / {grade.upper()}\n" + '\n'.join(f"{label}: {g}" for label, g in lines)
+    said = lambda row: row['text'].split('\n' + CORRECTED_LINE)[0]
+    rows = conn.execute("SELECT delivery_key,text,status FROM deliveries WHERE chat_id=? AND delivery_key LIKE ? "
+                        "ORDER BY attempted_at DESC, rowid DESC", (chat, 'ticket-result:' + ticket_id + ':%')).fetchall()
+    announced = next((r for r in rows if r['status'] in ('sent', 'uncertain', 'sending')), None)
+    if announced and said(announced) == text:
+        return announced['delivery_key'], announced['text']
+    deferred = next((r for r in rows if r['status'] == 'retry' and said(r) == text), None)
+    if deferred:
+        return deferred['delivery_key'], deferred['text']
+    reversed_leg = False
+    if announced:
+        earlier = [line.rsplit(': ', 1) for line in said(announced).split('\n')[1:] if ': ' in line]
+        reversed_leg = len(earlier) == len(lines) and any(old[1] in SETTLED_GRADES and old[1] != new[1]
+                                                         for old, new in zip(earlier, lines))
+    return 'ticket-result:' + ticket_id + ':' + digest, text + ('\n' + CORRECTED_LINE if reversed_leg else '')
+
+
 def settle(*, now=None, notify=False):
     """Append grade changes, even when there are no new picks or the budget is exhausted."""
     from app import telegram, config
@@ -1072,14 +1122,13 @@ def settle(*, now=None, notify=False):
                     report['errors'].append({'ticket_id':t['ticket_id'],'error':'settlement_unavailable'})
                 result = {'ticket_id':t['ticket_id'], 'label':t['label'], 'grade':ticket_grade(legs), 'legs':legs,
                           'kind':'suggested_ticket', 'profit':None}
-                # Append-only: a row is added whenever the result differs from the ticket's latest stored result, also when
-                # a correction returns to an earlier one (that row names the result it supersedes, so its evidence hash
-                # and its notice are new). First and unchanged results keep the original hashing. A result with a leg
-                # that could not be graded ('unavailable') is a failed reading, never a correction: it is stored as
-                # before and skipped when looking for the latest result, so a passing error cannot repeat a notice.
+                # Append-only evidence: a row is added whenever the result differs from the ticket's latest stored result,
+                # also when it returns to an earlier one (that row names the result it supersedes, so its evidence hash
+                # is new). First and unchanged results keep the original hashing. A result with a leg that could not
+                # be graded ('unavailable') is a failed reading: stored as before, skipped when looking for the latest
+                # result. What is ANNOUNCED is decided separately (result_notice).
                 raw = json.dumps(result,sort_keys=True)
                 digest = sha(raw.encode())
-                corrected = False
                 if any(p['grade']=='unavailable' for p in legs):
                     conn.execute('INSERT OR IGNORE INTO ticket_grades VALUES (?,?,?,?)', (t['ticket_id'],digest,now,raw))
                 else:
@@ -1095,17 +1144,14 @@ def settle(*, now=None, notify=False):
                         if conn.execute('SELECT 1 FROM ticket_grades WHERE ticket_id=? AND evidence_hash=?', (t['ticket_id'],digest)).fetchone():
                             raw = json.dumps({**result, 'supersedes': latest[0]},sort_keys=True)
                             digest = sha(raw.encode())
-                            corrected = True
                         conn.execute('INSERT OR IGNORE INTO ticket_grades VALUES (?,?,?,?)', (t['ticket_id'],digest,now,raw))
                 report['tickets'].append(result)
                 # Only confirmed sent batches receive a settlement notification.
                 batch = conn.execute('SELECT batch_key FROM ticket_items WHERE ticket_id=? AND chat_id=?', (t['ticket_id'],chat)).fetchone()
                 confirmed = batch and conn.execute("SELECT 1 FROM deliveries WHERE delivery_key=? AND status='sent'",(batch['batch_key'],)).fetchone()
-                if confirmed and result['grade'] != 'pending':
-                    text = f"PARLAY RESULT / {t['ticket_id']} / {result['grade'].upper()}\n" + '\n'.join(f"{p.get('pick_label',p['forecast_id'])}: {p['grade']}" for p in legs)
-                    if corrected:
-                        text += '\nCorrected result: it replaces the result sent before.'
-                    notices.append((result,'ticket-result:'+t['ticket_id']+':'+digest,text))
+                # A result with a leg that could not be read is stored above but never announced.
+                if confirmed and result['grade'] != 'pending' and not any(p['grade']=='unavailable' for p in legs):
+                    notices.append((result, *result_notice(conn, chat, t['ticket_id'], result['grade'], legs, digest)))
         # All grading is committed before ANY external call. Notification failure cannot suppress outcomes.
         if notify and notices:
             try:
@@ -1364,9 +1410,9 @@ def main():
                 except Exception as exc:
                     report['review'] = {'due': None, 'reason': 'review_state_unavailable', 'error': type(exc).__name__}
                 try:
-                    record_blockers(report['review'])
+                    record_observations(report['review'])
                 except Exception as exc:   # recording never blocks settlement, alerts or the trigger
-                    report['review']['blockers_error'] = type(exc).__name__
+                    report['review']['observations_error'] = type(exc).__name__
                 try:
                     gone = record_interrupted(snap)
                 except Exception as exc:

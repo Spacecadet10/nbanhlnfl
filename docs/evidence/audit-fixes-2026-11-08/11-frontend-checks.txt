@@ -6,3 +6,9 @@ exit 0
 # fail 0
 == npm run build
 ✓ built in 600ms
+== after the review fixes
+npm run typecheck: exit 0
+# tests 21
+# pass 21
+# fail 0
+✓ built in 593ms

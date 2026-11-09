@@ -1069,8 +1069,8 @@ def test_game_blocked_until_kickoff_is_reported_with_its_recorded_blocker(setup,
     # NBA was reviewable (a review was due) and no review ran: nothing explains that miss
     assert missed[('nba','g1')]['explained'] is False and missed[('nba','g1')]['recorded_blockers']==[]
     with tg.ledger() as c:
-        with pytest.raises(Exception,match='append-only'):c.execute("update ticket_review_blockers set issue='x'")
-        with pytest.raises(Exception,match='append-only'):c.execute('delete from ticket_review_blockers')
+        with pytest.raises(Exception,match='append-only'):c.execute("update ticket_trigger_observations set issue='x'")
+        with pytest.raises(Exception,match='append-only'):c.execute('delete from ticket_trigger_observations')
 
 
 def test_blocked_sport_that_recovers_before_kickoff_triggers_a_review_and_is_not_missed(setup,monkeypatch,capsys):
@@ -1099,7 +1099,7 @@ def test_single_game_window_that_starts_unreviewed_is_explained_by_the_trigger_r
     code,out=run_cli(monkeypatch,capsys,'preflight','--brief')
     assert json.loads(out)['review']['reason']=='single_game_window'
     code,out=run_cli(monkeypatch,capsys,'status')                   # status stays read-only: records nothing
-    with tg.ledger() as c:assert c.execute('select count(*) from ticket_review_blockers').fetchone()[0]==1
+    with tg.ledger() as c:assert c.execute('select count(*) from ticket_trigger_observations').fetchone()[0]==1
     idle=copy.deepcopy(snap);idle['sports']['nfl']={'error':'inactive','reason':'definition_mismatch','unserved_forecasts':0,'unserved_games':0}
     assert [w['issue'] for w in t.review_state(idle)['not_reviewed_now']]==['single_game_window']   # an idle refused sport blocks nothing
     started(snap)
@@ -1142,10 +1142,10 @@ def test_correction_back_to_an_earlier_result_is_appended_and_notified(setup,mon
         with pytest.raises(Exception,match='append-only'):c.execute('delete from ticket_grades')
     notices=[p['text'].split('\n')[0].rsplit(' / ',1)[1] for m,p in sent[before:]]
     assert notices==['LOSS','WIN','LOSS']
-    assert ['Corrected result' in p['text'] for m,p in sent[before:]]==[False,False,True]
+    assert ['Corrected result' in p['text'] for m,p in sent[before:]]==[False,True,True]   # every reversal of an announced leg
 
 
-def test_leg_that_cannot_be_graded_for_a_while_never_repeats_a_result_notice(setup,monkeypatch):
+def test_leg_that_cannot_be_graded_for_a_while_is_never_announced_and_never_repeats_a_notice(setup,monkeypatch):
     grades={1:'loss',2:'win'};sent=settled_ticket(setup,monkeypatch,grades);before=len(sent)
     t.settle(now='2026-11-08T21:00:00Z',notify=True)
     grades[2]='unavailable';report=t.settle(now='2026-11-08T21:01:00Z',notify=True)   # e.g. the store could not be read
@@ -1155,7 +1155,7 @@ def test_leg_that_cannot_be_graded_for_a_while_never_repeats_a_result_notice(set
         rows=[json.loads(r[0]) for r in c.execute('select payload from ticket_grades order by rowid')]
     assert len(rows)==2 and not any('supersedes' in r for r in rows)                 # the failed reading is kept, no correction
     texts=[p['text'] for m,p in sent[before:]]
-    assert len(texts)==2 and sum('B2 win: win' in x for x in texts)==1               # the good result was announced once
+    assert len(texts)==1 and 'B2 win: win' in texts[0] and 'unavailable' not in texts[0]   # announced once; the failed reading never
 
 
 @pytest.mark.parametrize('grades,ticket_result,lines',[
@@ -1192,3 +1192,113 @@ def test_push_and_void_are_graded_from_the_original_forecast_line(monkeypatch,ma
     monkeypatch.setattr(db,'connect_readonly',lambda sport:c)
     result=t.grade_leg(dict(sport='nba',forecast_id=1,game_id='g',market=market,pick_label='fixture'),'2026-11-08T21:00:00Z')
     assert result['grade']==expected and result['line']==line
+
+
+# --- Independent review of 635a4ec (session 43, 2026-11-08): notices follow what was last ANNOUNCED; `explained` follows
+# --- the last thing the trigger saw before the start.
+def notice_texts(sent, before):
+    return [p['text'] for m, p in sent[before:] if m == 'sendMessage']
+
+
+def test_result_that_goes_pending_and_returns_is_not_announced_again(setup, monkeypatch):
+    grades = {1: 'win', 2: 'win'}; sent = settled_ticket(setup, monkeypatch, grades); before = len(sent)
+    t.settle(now='2026-11-08T21:00:00Z', notify=True)
+    grades[2] = 'unresolved'; t.settle(now='2026-11-08T21:15:00Z', notify=True)   # ticket pending: stored, never announced
+    grades[2] = 'win'; t.settle(now='2026-11-08T21:30:00Z', notify=True)          # the result already sent
+    assert len(notice_texts(sent, before)) == 1
+    with tg.ledger() as c: assert c.execute('select count(*) from ticket_grades').fetchone()[0] == 3   # every reading is kept
+
+
+def test_score_only_change_with_the_same_grades_is_stored_but_not_announced(setup, monkeypatch):
+    plan, snap, sent, path = setup; plan['tickets'] = [ticket([('nba', 1), ('nhl', 2)])]; assert t.send(t.check(plan)) == 'sent'
+    score = {2: (4, 3)}
+    monkeypatch.setattr(t, 'grade_leg', lambda p, now: dict(forecast_id=p['forecast_id'], pick_label=p['pick_label'],
+                        grade='loss' if p['forecast_id'] == 1 else 'win', home_score=score.get(p['forecast_id'], (3, 4))[0],
+                        away_score=score.get(p['forecast_id'], (3, 4))[1]))
+    before = len(sent)
+    t.settle(now='2026-11-08T21:00:00Z', notify=True)
+    score[2] = (5, 3); t.settle(now='2026-11-08T21:15:00Z', notify=True)   # score corrected, every grade the same
+    score[2] = (4, 3); t.settle(now='2026-11-08T21:30:00Z', notify=True)   # and corrected back
+    assert len(notice_texts(sent, before)) == 1
+    with tg.ledger() as c: assert c.execute('select count(*) from ticket_grades').fetchone()[0] == 3
+
+
+def test_leg_settling_later_is_an_update_and_a_reversed_leg_is_a_correction(setup, monkeypatch):
+    grades = {1: 'loss', 2: 'pending'}; sent = settled_ticket(setup, monkeypatch, grades); before = len(sent)
+    t.settle(now='2026-11-08T21:00:00Z', notify=True)
+    grades[2] = 'win'; t.settle(now='2026-11-08T21:15:00Z', notify=True)    # the open leg settles: an update
+    grades[1] = 'win'; t.settle(now='2026-11-08T21:30:00Z', notify=True)    # an announced loss becomes a win: a correction
+    texts = notice_texts(sent, before)
+    assert [x.split('\n')[0].rsplit(' / ', 1)[1] for x in texts] == ['LOSS', 'LOSS', 'WIN']
+    assert ['Corrected result' in x for x in texts] == [False, False, True]
+
+
+def test_unreadable_leg_is_stored_but_never_announced(setup, monkeypatch):
+    plan, snap, sent, path = setup; plan['tickets'] = [ticket([('nba', 1), ('nhl', 2)])]; assert t.send(t.check(plan)) == 'sent'
+    state = {2: 'pending'}
+    def grade(p, now):
+        if state.get(p['forecast_id']) == 'RAISE':
+            raise OSError('store briefly unreadable')
+        return dict(forecast_id=p['forecast_id'], pick_label=p['pick_label'], grade=state.get(p['forecast_id'], 'loss'))
+    monkeypatch.setattr(t, 'grade_leg', grade); before = len(sent)
+    t.settle(now='2026-11-08T21:00:00Z', notify=True)                         # LOSS announced, one leg still open
+    state[2] = 'RAISE'; report = t.settle(now='2026-11-08T21:15:00Z', notify=True)
+    assert report['errors'] == [{'ticket_id': report['tickets'][0]['ticket_id'], 'error': 'settlement_unavailable'}]
+    state[2] = 'pending'; t.settle(now='2026-11-08T21:30:00Z', notify=True)
+    texts = notice_texts(sent, before)
+    assert len(texts) == 1 and 'unavailable' not in texts[0]
+    with tg.ledger() as c: assert c.execute('select count(*) from ticket_grades').fetchone()[0] == 2   # the failed reading is kept
+
+
+def test_blocker_that_cleared_does_not_explain_a_review_that_was_due_and_never_ran(setup, monkeypatch, capsys):
+    plan, snap, sent, path = setup
+    monkeypatch.setattr(t, 'settle', lambda **kw: {'errors': [], 'tickets': []})
+    healthy = copy.deepcopy(snap['sports']['nfl'])
+    snap['sports']['nfl'] = {'error': 'inactive', 'reason': 'definition_mismatch', 'unserved_forecasts': 5, 'unserved_games': 5}
+    run_cli(monkeypatch, capsys, 'preflight', '--brief')                     # 17:00 NFL refused
+    snap['sports']['nfl'] = healthy
+    for at in ('2026-11-08T17:15:00Z', '2026-11-08T17:30:00Z', '2026-11-08T17:45:00Z'):   # recovered: due each run, nobody reviews
+        snap['as_of'] = at
+        code, out = run_cli(monkeypatch, capsys, 'preflight', '--brief')
+        assert json.loads(out)['review']['due'] is True
+    started(snap)
+    entry = {(e['sport'], e['game_id']): e for e in t.review_state(snap)['missed_before_start']}[('nfl', 'g1')]
+    assert entry['explained'] is False                                       # the blocker was gone 45 minutes before the start
+    assert entry['recorded_blockers'][0]['last_seen_at'] == NOW              # still shown, as history
+    assert entry['review_due_seen'] == dict(first_seen_at='2026-11-08T17:15:00Z', last_seen_at='2026-11-08T17:45:00Z', observations=3)
+    assert entry['last_observation'] == dict(issue='review_due', at='2026-11-08T17:45:00Z', minutes_before_start=15)
+
+
+def test_review_that_failed_after_the_trigger_was_due_explains_the_miss(setup, monkeypatch, capsys):
+    plan, snap, sent, path = setup
+    monkeypatch.setattr(t, 'settle', lambda **kw: {'errors': [], 'tickets': []})
+    run_cli(monkeypatch, capsys, 'preflight', '--brief')                     # 17:00 due
+    monkeypatch.setattr(t, '_stamp', lambda moment=None: '2026-11-08T17:05:00Z')
+    bad = copy.deepcopy(plan); bad['review']['combination_comparison'] = ''
+    assert run_cli(monkeypatch, capsys, 'check', '--plan', str(plan_file(bad, path, 'bad.json')))[0] == 1
+    started(snap)
+    entry = t.review_state(snap)['missed_before_start'][0]
+    assert entry['explained'] is True and entry['failed_reviews'][0]['recorded_at'] == '2026-11-08T17:05:00Z'
+    assert entry['last_observation']['issue'] == 'review_due'
+
+
+def test_rejected_notice_is_not_what_was_announced_and_a_deferred_one_is_retried_once(setup, monkeypatch):
+    grades = {1: 'loss', 2: 'win'}; sent = settled_ticket(setup, monkeypatch, grades); before = len(sent)
+    t.settle(now='2026-11-08T21:00:00Z', notify=True)                          # LOSS reaches the user
+    delivered = tg.Telegram.call
+    def rejected(self, method, payload, **kw): raise tg.DeliveryError('Telegram rejected sendMessage (HTTP 400).')
+    monkeypatch.setattr(tg.Telegram, 'call', rejected)
+    grades[1] = 'win'; report = t.settle(now='2026-11-08T21:15:00Z', notify=True)   # WIN is rejected: never delivered
+    assert report['notification_errors']
+    monkeypatch.setattr(tg.Telegram, 'call', delivered)
+    grades[1] = 'loss'; t.settle(now='2026-11-08T21:30:00Z', notify=True)      # back to what the user last received
+    assert len(notice_texts(sent, before)) == 1
+    def busy(self, method, payload, **kw): raise tg.DeliveryError('429', retry_after=60)
+    monkeypatch.setattr(tg.Telegram, 'call', busy)
+    grades[2] = 'push'; t.settle(now='2026-11-08T21:45:00Z', notify=True)      # a real change, deferred by Telegram
+    monkeypatch.setattr(tg.Telegram, 'call', delivered)
+    t.settle(now='2026-11-08T21:45:30Z', notify=True)                          # before the retry time: nothing
+    assert len(notice_texts(sent, before)) == 1
+    t.settle(now='2026-11-08T21:47:00Z', notify=True); t.settle(now='2026-11-08T21:48:00Z', notify=True)
+    texts = notice_texts(sent, before)
+    assert len(texts) == 2 and texts[1].endswith('B2 win: push\n' + t.CORRECTED_LINE)   # sent once, after the retry time
