@@ -167,22 +167,30 @@ Evidence and causes: `docs/evidence/audit-fixes-2026-11-08/README.md`.
   forecast selected as a leg is refused by `check` with a "review again" reason (before, only `send` refused it, without
   a retry). Forecasts that are not locked still need the reviewer's own decision and reason. Reason text is never
   compared or deduplicated: one explanation may be attached to several forecasts.
-- **Why a game started unreviewed.** `preflight` appends to `ticket_trigger_observations` (new append-only table in the
-  Telegram ledger, created on first use) what it saw for each pending game at that run: what kept it out of review (a
-  refused sport when it excludes forecasts, an unusable source, a moved line, a single-game window; also shown as
-  `review.not_reviewed_now`), or that a review of it was due (`review_due`). Each `missed_before_start` entry carries, from
-  its review window (the two hours before its start, `review_window_from`), `recorded_blockers`, `review_due_seen`,
-  `failed_reviews` and `last_observation` (what, when, and how many minutes before the start). Soccer matches are
-  covered too (their forecasts are made at the cutoff, days before, so they have their own "was reviewable" rule).
-  `status` records nothing.
+- **Why a game started unreviewed.** Every `preflight` appends one row to `ticket_trigger_runs` (time, day, whether a
+  review was due, the trigger's reason, how many observations), also when it saw nothing to record; a run whose review
+  state could not be evaluated is recorded with `due` NULL. Under that run it appends to `ticket_trigger_observations`
+  what it saw for each pending game: what kept it out of review (a refused sport when it excludes forecasts, an
+  unusable source, a moved line, a single-game window; also shown as `review.not_reviewed_now`), or that a review of it
+  was due (`review_due`). Both are new append-only tables in the Telegram ledger, created on first use; a run and its
+  observations are written in one transaction. Each `missed_before_start` entry carries, from its review window (the
+  two hours before its start, `review_window_from`), `recorded_blockers`, `review_due_seen`, `failed_reviews`,
+  `last_observation` (what, when, and how many minutes before the start) and `trigger_runs` (checks in the window, the
+  last check before the start, the first check at or after it). Soccer matches are covered too (their forecasts are
+  made at the cutoff, days before, so they have their own "was reviewable" rule). `status` records nothing.
   - Two different facts are reported. **`blocker_observed`**: a blocker was recorded at some check in the window.
     **`explained`**: the entire window is accounted for. That needs either a review that failed after the trigger last
-    said one was due, or a blocker at the last check before the start that is shown to have lasted to the start: the
-    same blocker of that sport recorded again at or after the start, or, for a single-game window, no other game
-    becoming eligible between that check and the start.
-  - A blocker seen at the last check and gone at the next one leaves the minutes in between unaccounted for:
-    `explained` is false and `explanation` says how many (HOU @ LAC on Nov 8: 57). A blocker that cleared while reviews
-    were then due and none ran also leaves `explained` false. No time threshold is used.
+    said one was due, or a blocker recorded at the last check before the start that is shown to have lasted to the
+    start: the FIRST check at or after the start recorded the same blocker for that sport, or, for a single-game
+    window, no other game became eligible between that check and the start.
+  - Because clean runs are recorded, "the last check before" and "the first check after" are the actual runs. A
+    blocker seen at the last check and gone at the first check after the start leaves the minutes in between
+    unaccounted for: `explained` is false and `explanation` says how many and names that check (HOU @ LAC on Nov 8: 57
+    minutes, first check after the start 21:06:30Z). A blocker that comes back later the same day does not change
+    that. A blocker that had cleared at the last check before the start (that check recorded nothing for the game, or a
+    due review that never ran) also leaves `explained` false, as does a check that could not evaluate the review state.
+    While no check at or after the start is recorded yet, `explained` is false and says so; it can become true at the
+    next run. No time threshold is used.
 - **What is stored and what is announced are decided separately.**
   - *Stored (the archive):* `ticket_grades` gets a row whenever the result differs from the ticket's latest stored
     result, including every leg update and a return to an earlier result (that row carries `supersedes`, the hash it
@@ -200,8 +208,17 @@ Evidence and causes: `docs/evidence/audit-fixes-2026-11-08/README.md`.
 - **A refused review is filed under the day of the snapshot it reviewed**, not the wall-clock day (they differ around
   Toronto midnight). The trigger looks refusals up by the snapshot's day, so a "review again" refusal just after midnight
   is found again. The release files it under the wall-clock day; one of its own tests fails on any date but Nov 8.
-- **Known delivery limits, unchanged from the release:** a result notice Telegram rejected stays `failed` and is not
-  sent again or reported on later runs; a deferred notice whose content was overtaken by a newer result stays `retry`
-  and is never sent. Both are visible in `deliveries`; neither is retried automatically.
+- **A rejected result notice stays visible.** A result notice Telegram rejected stays `failed`: it is never sent again
+  and its receipt is never changed (as before). New: while that notice is still the one the user is owed, every
+  settlement lists it under `undelivered_results` (ticket, grade, when it was rejected, its delivery key, whether it
+  was a correction, and the last result notice on record), with notices on or off; brief preflight shows the list when
+  it is not empty. `preflight --notify` sends one alert per rejected notice ("RESULT NOTICE NOT DELIVERED", naming the
+  ticket, the rejected result and the last result on record; its key has no date, so it is sent once). The entry
+  disappears when a notice that reaches the user says the current result, or the result returns to what they have.
+  `notification_errors` reports the rejection only in the run in which it happens, as before, so the 15-minute trigger
+  is not kept busy by a notice that stays rejected. An unconfirmed (`uncertain`) notice still counts as announced and
+  is never sent again. In a run where a leg cannot be read, nothing is compared, so the list is empty for that run.
+- **Known delivery limit, unchanged from the release:** a deferred notice whose content was overtaken by a newer result
+  stays `retry` and is never sent; it is visible in `deliveries` only.
 - **Unchanged:** selection method, forecast-version lock, 2–6 legs and at most 6 tickets, legacy reservation read,
   existing rows.

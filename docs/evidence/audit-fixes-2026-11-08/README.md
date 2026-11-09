@@ -95,6 +95,61 @@ refuse it with "identical forecast". R3's own finding 11 asked for that refusal 
 again", which is what the final tree does, so the probe's `checked = t.check(plan)` line now raises. Every notification
 probe of all three reviewers passes unchanged.
 
+## Follow-up to the re-review of 3f85fc5 (owner's instruction, Nov 9)
+
+The re-review of 3f85fc5 ended with three approvals, one medium finding (R3) and the deferred items above. The owner
+asked for two of them to be fixed before activation, in a small follow-up commit on top of 3f85fc5, and for the rest to
+stay outside it. "PENDING … Corrected result" (a corrected loss while other legs are open) is kept as it is, by the
+owner's decision.
+
+| # | Item | Before (3f85fc5) | Follow-up | Evidence |
+|---|---|---|---|---|
+| F1 | R3 medium: `explained` true because the blocker came back later the same day | "Lasted to the start" was any later sighting of the same blocker; a clean check left no record, so it could not be told apart from no check at all | Every trigger run is recorded (`ticket_trigger_runs`), clean ones and ones that could not evaluate the state included; observations belong to their run. `explained` uses the last run before the start and the FIRST run at or after it | `26-…` (fails before), `27-…`, `29-…` (real Nov 8 inputs) |
+| F2 | Deferred #18: a rejected result notice is final and silent on later runs | After the run in which Telegram rejected it, nothing reported it; the user kept the earlier result (a WIN whose LOSS correction was rejected) | Still never sent again, receipt never changed. While it is the notice the user is owed, every settlement lists it (`undelivered_results`), and `preflight --notify` sends one alert naming the ticket, the rejected result and the last result on record | `26-…`, `27-…`, `28-…` (real ledger copy: none owed, nothing sent) |
+
+Choices made in F2, for the reviewers and the owner:
+- **Listed, alerted once, not resent.** The rejected notice keeps its `failed` receipt and is not retried: Telegram
+  rejected that exact text, and resending is a delivery-policy change nobody asked for. The alert is a different
+  message with its own key; it says the result, so the owner is not left with a wrong WIN.
+- **`notification_errors` is unchanged**: it reports the rejection only in the run in which it happens. The review
+  skill tells the 15-minute trigger not to stop while `notification_errors` is non-empty, so a notice that stays
+  rejected would otherwise keep every run busy. The standing list is the separate `undelivered_results` field, which the
+  skill does not read; the skill and the automation are not changed.
+- **Unconfirmed notices are untouched**: an `uncertain` result notice still counts as announced, is never sent again
+  and is not listed as rejected (`test_unconfirmed_result_notice_is_still_treated_as_announced…`).
+
+New tests (13, all in `backend/tests/test_tickets.py`, section "Follow-up to the re-review of 3f85fc5"). Before the
+change all 13 fail (`26-…`); 11 fail on behaviour or on the missing record, and two only on what is new in the output:
+`test_blocker_seen_at_the_checks_on_both_sides…` (explanation wording) and `test_unconfirmed_result_notice…` (the new
+`undelivered_results` key; its safeguard assertions already held). One existing assertion changed: the explanation
+sentence in `test_blocker_seen_before_the_start_but_gone_at_the_next_check…` now names the first check after the start.
+
+Evidence files of the follow-up:
+- `26-followup-tests-before-fix.txt`: the 13 new tests against the helper of 3f85fc5.
+- `27-followup-tests-after-fix.txt`: the 13 new tests, the ticket file (148), nine focused files (318) and the
+  structure guard on the follow-up tree.
+- `28-followup-real-copy-check.txt`: `scripts/followup_check.py` on copies of the live ledger and stores with Telegram
+  mocked: settlement twice (nothing appended, nothing sent, no undelivered result), the trigger twice (two clean runs
+  recorded) and `status` (records nothing).
+- `29-followup-replay-nov8.txt`: the real Nov 8 reviewer snapshots replayed through the follow-up code: HOU @ LAC stays
+  `explained: false` and now names the clean first check after the start (21:06:30Z).
+- `30-full-backend-suite-followup.txt`: the full backend suite on the follow-up tree.
+- `31-followup.patch`: the code and documentation change against 3f85fc5.
+
+Still open after the follow-up (not part of this patch, by the owner's instruction):
+- R3 low: for the time between serving the new page and restarting the API on 8101, matches that have a forecast show
+  "Awaiting forecast".
+- R3 low, owner's decision: an announced WIN whose leg later becomes permanently `unscorable` is not retracted.
+- R2 note, still true: `explained` is decided from recorded runs, and a run records itself after it has computed the
+  state. At the first check after a start `explained` is therefore false ("no check at or after the start is recorded
+  yet") and can become true at the next run.
+- Deferred #19 (an overtaken `retry` notice is never sent), #20 (the trigger tables cannot be pruned; now one more row
+  per run, about 96 a day) and #21 (basketball icon on the soccer title).
+- In a run where a leg cannot be read nothing is compared, so `undelivered_results` is empty for that run
+  (`settlement_unavailable` is reported instead).
+- A check after Toronto midnight is not looked at for a game that started just before it (runs are read by day), so
+  such a game stays `explained: false`.
+
 ## Not claimed
 
 - The fixes have not run against live data, the live ledger or real Telegram.

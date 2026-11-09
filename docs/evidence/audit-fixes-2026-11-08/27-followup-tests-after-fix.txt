@@ -1,0 +1,9 @@
+# Follow-up tree (3f85fc5 + follow-up changes), 2026-11-09T18:58:16Z. Isolated temp data per test, Telegram mocked.
+# 1. the 13 new tests: python -m pytest tests/test_tickets.py -q -p no:cacheprovider -k '<13 new tests>' -v
+====================== 13 passed, 135 deselected in 0.89s ======================
+# 2. python -m pytest tests/test_tickets.py -q -p no:cacheprovider
+148 passed in 7.99s
+# 3. python -m pytest tests/test_tickets.py tests/test_telegram.py tests/test_delivery_release.py tests/test_soccer_live.py tests/test_soccer.py tests/test_soccer_forecasts.py tests/test_freshness.py tests/test_near_tipoff.py tests/test_nfl_live.py -q -p no:cacheprovider
+318 passed, 1 warning in 17.83s
+# 4. python3 scripts/check_project.py
+Structure guard passed. This does not prove semantic uniqueness or app correctness.
