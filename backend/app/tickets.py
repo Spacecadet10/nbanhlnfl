@@ -614,7 +614,7 @@ def explain_missed(day, entries):
             explained, why = True, 'A review failed after the trigger last reported one due.'
         elif check is None:
             explained, why = False, 'Nothing was recorded for this game in its review window: no trigger run saw it before its start.'
-        elif last is None and _parse(check['recorded_at']) < _parse(entry['first_forecast_at']):
+        elif last is None and not unknown(check) and _parse(check['recorded_at']) < _parse(entry['first_forecast_at']):
             # Nothing was recorded for the game and its current forecast (after the start: the latest version made before
             # it, often a re-issue minutes before) is younger than the last check, which could not have seen it.
             explained = False
@@ -1386,7 +1386,7 @@ def notify_alerts(snap, settlement_errors, extra=(), undelivered=()):
                 f"PROP51 / RESULT NOTICE NOT DELIVERED / {u['ticket_id']}\nTelegram rejected the {u['grade'].upper()} result notice"
                 f"{' (a correction)' if u['correction'] else ''} at {u['rejected_at']}. "
                 + (f"The last result notice on record is {last['grade']} ({last['status']})." if last else 'No result notice was delivered before.')
-                + ' It is not sent again automatically and this alert is not repeated, also if it is owed again later; inspect the receipt.',snap['as_of']))
+                + ' It is not sent again automatically and this alert is not repeated unless another result reaches you first; inspect the receipt.',snap['as_of']))
         start = datetime.fromisoformat(snap['date']).replace(tzinfo=TORONTO)
         end = start + timedelta(days=1)
         rows = conn.execute("SELECT delivery_key,status FROM deliveries WHERE chat_id=? "

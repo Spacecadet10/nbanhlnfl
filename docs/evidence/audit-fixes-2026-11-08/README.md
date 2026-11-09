@@ -192,6 +192,15 @@ new in 98f8f96). Addressed in the third follow-up commit; tests first (`37-…` 
 Evidence files: `37-recheck-tests-before-fix.txt`, `38-recheck-tests-after-fix.txt`, `39-third-followup-real-copy-check.txt`,
 `40-full-backend-suite-third-followup.txt`, `41-third-followup.patch` (the delta against 98f8f96).
 
+## Wording follow-up on 1121d60 (owner: "Apply only the two wording nits")
+
+Verdicts on `1121d60`: three APPROVE (43, a9, cb); it was activated on Nov 9 at 17:24 ET. Two wording nits remained and
+are applied here, behaviour unchanged: (1) 43: when the last check before the start could not evaluate the review state,
+the explanation says so instead of the timing sentence, also when the forecast was re-issued after that check;
+(2) a9: the rejected-notice alert says "this alert is not repeated unless another result reaches you first". Tests:
+`42-wording-tests-before-fix.txt` (2 fail on 1121d60), `43-wording-tests-after-fix.txt` (ticket file 160, nine focused
+files 330, structure guard). Full suite not rerun for this delta (two strings and one condition); `44-wording.patch`.
+
 ## Not claimed
 
 - The fixes have not run against live data, the live ledger or real Telegram.

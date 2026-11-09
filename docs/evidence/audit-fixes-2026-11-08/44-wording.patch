@@ -1,0 +1,60 @@
+diff --git a/backend/app/tickets.py b/backend/app/tickets.py
+index bcce5ff..480ee14 100644
+--- a/backend/app/tickets.py
++++ b/backend/app/tickets.py
+@@ -614,7 +614,7 @@ def explain_missed(day, entries):
+             explained, why = True, 'A review failed after the trigger last reported one due.'
+         elif check is None:
+             explained, why = False, 'Nothing was recorded for this game in its review window: no trigger run saw it before its start.'
+-        elif last is None and _parse(check['recorded_at']) < _parse(entry['first_forecast_at']):
++        elif last is None and not unknown(check) and _parse(check['recorded_at']) < _parse(entry['first_forecast_at']):
+             # Nothing was recorded for the game and its current forecast (after the start: the latest version made before
+             # it, often a re-issue minutes before) is younger than the last check, which could not have seen it.
+             explained = False
+@@ -1386,7 +1386,7 @@ def notify_alerts(snap, settlement_errors, extra=(), undelivered=()):
+                 f"PROP51 / RESULT NOTICE NOT DELIVERED / {u['ticket_id']}\nTelegram rejected the {u['grade'].upper()} result notice"
+                 f"{' (a correction)' if u['correction'] else ''} at {u['rejected_at']}. "
+                 + (f"The last result notice on record is {last['grade']} ({last['status']})." if last else 'No result notice was delivered before.')
+-                + ' It is not sent again automatically and this alert is not repeated, also if it is owed again later; inspect the receipt.',snap['as_of']))
++                + ' It is not sent again automatically and this alert is not repeated unless another result reaches you first; inspect the receipt.',snap['as_of']))
+         start = datetime.fromisoformat(snap['date']).replace(tzinfo=TORONTO)
+         end = start + timedelta(days=1)
+         rows = conn.execute("SELECT delivery_key,status FROM deliveries WHERE chat_id=? "
+diff --git a/backend/tests/test_tickets.py b/backend/tests/test_tickets.py
+index dfbd4da..17b4ed9 100644
+--- a/backend/tests/test_tickets.py
++++ b/backend/tests/test_tickets.py
+@@ -1851,4 +1851,18 @@ def test_rejected_notice_alert_says_it_is_not_repeated(setup, monkeypatch):
+     monkeypatch.setattr(tg.Telegram, 'call', delivered)
+     t.notify_alerts(snap, [], (), report['undelivered_results'])
+     [alert] = [p['text'] for m, p in sent if 'RESULT NOTICE NOT DELIVERED' in p.get('text', '')]
+-    assert 'this alert is not repeated' in alert
++    assert 'this alert is not repeated unless another result reaches you first' in alert
++
++
++# --- Recheck of 1121d60: two wording nits (43: unevaluable checks over the timing sentence; a9: alert wording) ---------------
++def test_unevaluable_checks_are_said_so_even_when_the_forecast_was_reissued_after_the_last_check(setup, monkeypatch, capsys):
++    plan, snap, sent, path = setup
++    healthy = nfl_only(snap, monkeypatch)
++    evaluate = t.review_state
++    def broken(snap): raise RuntimeError('fixture')
++    monkeypatch.setattr(t, 'review_state', broken)
++    for at in (NOW, '2026-11-08T17:45:00Z'): preflight_at(snap, monkeypatch, capsys, at, copy.deepcopy(healthy))   # both checks unevaluable
++    monkeypatch.setattr(t, 'review_state', evaluate)
++    entry = nfl_missed(snap, reissued(healthy), '2026-11-08T18:05:00Z')                 # re-issued at 17:55, after the last check
++    assert entry['explained'] is False and entry['last_observation'] is None
++    assert entry['explanation'] == 'The last check before the start, 15 minutes before it, could not evaluate the review state.'
+diff --git a/docs/TICKETS.md b/docs/TICKETS.md
+index 7baeb73..8c85d1f 100644
+--- a/docs/TICKETS.md
++++ b/docs/TICKETS.md
+@@ -225,7 +225,8 @@ Evidence and causes: `docs/evidence/audit-fixes-2026-11-08/README.md`.
+   was a correction, and the last result notice on record), with notices on or off; brief preflight shows the list when
+   it is not empty. `preflight --notify` sends one alert per rejected notice ("RESULT NOTICE NOT DELIVERED", naming the
+   ticket, the rejected result and the last result on record; its key has no date, so it is sent once, and not again if
+-  the notice drops off the list and is owed again later; the alert says so). The entry
++  the notice drops off the list and is owed again later, unless another result reached the user in between, after
++  which the text is a new notice; the alert says so). The entry
+   disappears when a notice that reaches the user says the current result, or the result returns to what they have.
+   Listing the undelivered notices is guarded like the notification step: a read problem there is reported as
+   `undelivered_error` and never ends the run.

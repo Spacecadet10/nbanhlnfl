@@ -1851,4 +1851,18 @@ def test_rejected_notice_alert_says_it_is_not_repeated(setup, monkeypatch):
     monkeypatch.setattr(tg.Telegram, 'call', delivered)
     t.notify_alerts(snap, [], (), report['undelivered_results'])
     [alert] = [p['text'] for m, p in sent if 'RESULT NOTICE NOT DELIVERED' in p.get('text', '')]
-    assert 'this alert is not repeated' in alert
+    assert 'this alert is not repeated unless another result reaches you first' in alert
+
+
+# --- Recheck of 1121d60: two wording nits (43: unevaluable checks over the timing sentence; a9: alert wording) ---------------
+def test_unevaluable_checks_are_said_so_even_when_the_forecast_was_reissued_after_the_last_check(setup, monkeypatch, capsys):
+    plan, snap, sent, path = setup
+    healthy = nfl_only(snap, monkeypatch)
+    evaluate = t.review_state
+    def broken(snap): raise RuntimeError('fixture')
+    monkeypatch.setattr(t, 'review_state', broken)
+    for at in (NOW, '2026-11-08T17:45:00Z'): preflight_at(snap, monkeypatch, capsys, at, copy.deepcopy(healthy))   # both checks unevaluable
+    monkeypatch.setattr(t, 'review_state', evaluate)
+    entry = nfl_missed(snap, reissued(healthy), '2026-11-08T18:05:00Z')                 # re-issued at 17:55, after the last check
+    assert entry['explained'] is False and entry['last_observation'] is None
+    assert entry['explanation'] == 'The last check before the start, 15 minutes before it, could not evaluate the review state.'

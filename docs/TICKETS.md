@@ -225,7 +225,8 @@ Evidence and causes: `docs/evidence/audit-fixes-2026-11-08/README.md`.
   was a correction, and the last result notice on record), with notices on or off; brief preflight shows the list when
   it is not empty. `preflight --notify` sends one alert per rejected notice ("RESULT NOTICE NOT DELIVERED", naming the
   ticket, the rejected result and the last result on record; its key has no date, so it is sent once, and not again if
-  the notice drops off the list and is owed again later; the alert says so). The entry
+  the notice drops off the list and is owed again later, unless another result reached the user in between, after
+  which the text is a new notice; the alert says so). The entry
   disappears when a notice that reaches the user says the current result, or the result returns to what they have.
   Listing the undelivered notices is guarded like the notification step: a read problem there is reported as
   `undelivered_error` and never ends the run.

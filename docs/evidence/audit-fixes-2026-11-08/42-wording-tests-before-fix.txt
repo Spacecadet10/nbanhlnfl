@@ -1,0 +1,4 @@
+# Wording-nit tests against 1121d60 (helper unchanged) — 2026-11-09T22:47:17Z
+FAILED tests/test_tickets.py::test_rejected_notice_alert_says_it_is_not_repeated
+FAILED tests/test_tickets.py::test_unevaluable_checks_are_said_so_even_when_the_forecast_was_reissued_after_the_last_check
+2 failed, 158 deselected in 3.72s
