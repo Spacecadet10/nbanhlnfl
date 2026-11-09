@@ -307,6 +307,8 @@ def soccer_live_forecasts(competition: str = COMPETITION, mode: str = Depends(ap
         rows = [f for f in soccer_live.forecasts(conn, competition=competition, as_of=now.strftime("%Y-%m-%dT%H:%M:%SZ"))
                 if f["kickoff_at"] >= since]
         check = soccer_live.latest_checks(conn).get(competition)
+        from . import soccer
+        refresh = soccer.refresh_state(conn, competition, now)
     from . import intl_live
     in_scope = competition in soccer_live.LAUNCH or competition in intl_live.LAUNCH
     return {"competition": competition, "in_scope": in_scope, "label": soccer_live.LABEL,
@@ -316,7 +318,7 @@ def soccer_live_forecasts(competition: str = COMPETITION, mode: str = Depends(ap
             "model": ({"name": "international Elo (national teams)", "candidate_sha256": intl_live.CANDIDATE_SHA256}
                       if competition in intl_live.COMPETITIONS else
                       {"name": "draw-aware Elo (uncalibrated)", "candidate_sha256": soccer_live.CANDIDATE_SHA256}),
-            "check": check, "forecasts": rows}
+            "check": check, "refresh": refresh, "forecasts": rows}
 
 
 from datetime import date as _dt_date   # noqa: E402  (calendar check of the research date parameter)

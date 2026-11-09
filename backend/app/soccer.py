@@ -10,7 +10,9 @@ score fields include extra time; a 90-minute score could be derived from goal mi
 validated yet, so the regulation result after extra time is reported as unavailable. A qualifier is never presented as
 the winner of the match.
 
-There is no soccer model: no forecast, odds, injury or metric exists here and none is derived. The API reads this store
+This module holds match facts only: no forecast, odds, injury or metric is stored or derived here. Live 90-minute
+forecasts are recorded separately (app/soccer_live.py, app/intl_live.py); the read views below report where a
+competition's forecasts stand (forecast_state) and return them beside, never inside, a match. The API reads this store
 through /api/soccer/* only.
 """
 import json
@@ -287,29 +289,49 @@ RECENT = 5
 HEAD_TO_HEAD = 10
 
 CAPABILITIES = [
-    ("forecasts", "Match forecasts", "No soccer model exists yet. A soccer forecast needs three outcomes (home win, draw, "
-                                     "away win) and a separately validated model; none is shown or estimated."),
+    ("forecasts", "Match forecasts", "This data store holds fixtures and results only; it records no live soccer forecasts."),
     ("odds", "Bookmaker odds", "Soccer odds are not collected."),
     ("injuries", "Injuries and line-ups", "Soccer injuries, suspensions and line-ups are not collected."),
-    ("performance", "Model performance", "There are no soccer forecasts to grade, so there is no accuracy or calibration record."),
-    ("history", "Prediction history", "No soccer forecast has been recorded."),
+    ("performance", "Model performance", "No forecast of this competition has been graded, so there is no accuracy or "
+                                         "calibration record."),
+    ("history", "Prediction history", "No forecast has been recorded for this competition."),
     ("research", "Research", "No soccer research models, combinations or thresholds exist."),
 ]
+# What the forecasts line says for each state of a competition (forecast_state). The page text follows these, so it can
+# never say "no forecasts" beside recorded ones (live-state audit, 2026-11-08).
+FORECAST_STATES = ("recorded", "awaiting", "out_of_scope", "no_live_store")
+FORECASTS_AWAITING = ("A sealed 90-minute model covers this competition, but no forecast has been recorded for it yet. Each "
+                      "match is forecast before it starts, once the earlier results it depends on are stored.")
+FORECASTS_OUT_OF_SCOPE = "No live forecast: this competition did not pass its held-out test (too few test matches)."
+# With live forecasts recorded, "none recorded / none to grade" would be false; the pages themselves are not built yet.
+RECORDED_PAGES = {
+    "performance": "Not built for live soccer forecasts yet: no accuracy or calibration figure is computed from them.",
+    "history": "Not built for live soccer forecasts yet: recorded forecasts and their 90-minute results are shown on the "
+               "match-day page and on each match.",
+}
 
 MATCH_SQL = """
     SELECT m.*, h.abbr AS home_abbr, h.name AS home_name, a.abbr AS away_abbr, a.name AS away_name
     FROM soccer_matches m JOIN teams h ON h.team_id = m.home_team_id JOIN teams a ON a.team_id = m.away_team_id"""
 
 
-LIVE_FORECASTS = ("Match forecasts", "Live: the 90-minute home/draw/away result only, from the sealed draw-aware Elo "
-                                     "(held-out test passed for this competition). No totals, both-teams-to-score, double "
+LIVE_FORECASTS = ("Match forecasts", "Live: the 90-minute home/draw/away result only, from the sealed Elo model for this "
+                                     "competition (held-out test passed). No totals, both-teams-to-score, double "
                                      "chance, qualification or other soccer market is forecast.")
 
 
-def capabilities(live: bool = False) -> list[dict]:
+def capabilities(state: str = "no_live_store") -> list[dict]:
+    """The capability lines for a competition whose forecasts are in `state` (forecast_state)."""
+    if state not in FORECAST_STATES:
+        raise ValueError(f"unknown soccer forecast state {state!r}")
     out = [{"id": i, "label": label, "available": False, "reason": reason} for i, label, reason in CAPABILITIES]
-    if live:
+    if state == "recorded":
         out[0] = {"id": "forecasts", "label": LIVE_FORECASTS[0], "available": True, "reason": LIVE_FORECASTS[1]}
+        out = [dict(c, reason=RECORDED_PAGES.get(c["id"], c["reason"])) for c in out]
+    elif state == "awaiting":
+        out[0]["reason"] = FORECASTS_AWAITING
+    elif state == "out_of_scope":
+        out[0]["reason"] = FORECASTS_OUT_OF_SCOPE
     return out
 
 
@@ -389,6 +411,7 @@ def meta(conn: sqlite3.Connection, competition: str, today: date) -> dict:
     t = today.isoformat()
     upcoming = [d for d in dates if d >= t]
     counts = {r[0]: r[1] for r in conn.execute("SELECT competition_id, COUNT(*) FROM soccer_matches GROUP BY 1")}
+    state = forecast_state(conn, competition)
     return {"sport": "soccer", "competition_id": competition, "competition": COMPETITIONS[competition],
             "competitions": [{"id": c, "label": label, "matches_stored": counts.get(c, 0)} for c, label in COMPETITIONS.items()],
             "default_date": upcoming[0] if upcoming else (dates[-1] if dates else None), "match_dates": dates,
@@ -396,14 +419,41 @@ def meta(conn: sqlite3.Connection, competition: str, today: date) -> dict:
             "seasons": [r[0] for r in conn.execute("SELECT DISTINCT season FROM soccer_matches WHERE competition_id = ? "
                                                    "ORDER BY 1", (competition,))],
             "matches_stored": counts.get(competition, 0), "last_refresh_at": last_refresh_at(conn, competition),
-            "capabilities": capabilities(_live(conn, competition))}
+            "forecast_state": state, "capabilities": capabilities(state)}
 
 
-def _live(conn: sqlite3.Connection, competition: str) -> bool:
-    """True when this store records live forecasts and the competition is in their launch scope (app/soccer_live.py)."""
+def forecast_state(conn: sqlite3.Connection, competition: str) -> str:
+    """Where this competition's live forecasts stand in this store (app/soccer_live.py, app/intl_live.py):
+    'recorded' (forecasts exist), 'awaiting' (in the sealed scope, none recorded yet), 'out_of_scope' (not forecast: it did
+    not pass its held-out test) or 'no_live_store' (the store has no live forecast tables)."""
     from . import intl_live, soccer_live
-    return (competition in soccer_live.LAUNCH or competition in intl_live.LAUNCH) and soccer_live.has_tables(conn) and conn.execute(
-        "SELECT 1 FROM soccer_live_forecasts WHERE competition_id = ? LIMIT 1", (competition,)).fetchone() is not None
+    if not soccer_live.has_tables(conn):
+        return "no_live_store"
+    if competition not in soccer_live.LAUNCH and competition not in intl_live.LAUNCH:
+        return "out_of_scope"
+    recorded = conn.execute("SELECT 1 FROM soccer_live_forecasts WHERE competition_id = ? LIMIT 1", (competition,)).fetchone()
+    return "recorded" if recorded else "awaiting"
+
+
+def live_forecasts_of(conn: sqlite3.Connection, match_ids: list) -> dict:
+    """match_id -> its latest recorded live forecast (soccer_live.forecast_dict), for the matches that have one."""
+    from . import soccer_live
+    if not match_ids or not soccer_live.has_tables(conn):
+        return {}
+    as_of, out = soccer_live.utc_now(), {}
+    for i in range(0, len(match_ids), 500):
+        chunk = match_ids[i:i + 500]
+        for r in conn.execute(soccer_live.LATEST_SQL + f"AND f.match_id IN ({','.join('?' * len(chunk))})", chunk):
+            out[r["match_id"]] = soccer_live.forecast_dict(r, as_of)
+    return out
+
+
+def refresh_state(conn: sqlite3.Connection, competition: str, now: datetime) -> dict:
+    """How old this competition's ESPN data is against the age beyond which a live forecast is refused (soccer_live.MAX_AGE)."""
+    from . import soccer_live
+    last = last_refresh_at(conn, competition)
+    return {"last_refresh_at": last, "max_age_hours": int(soccer_live.MAX_AGE.total_seconds() // 3600),
+            "stale": last is None or now - _ts(last) > soccer_live.MAX_AGE}
 
 
 def matches_on(conn: sqlite3.Connection, competition: str, day: date) -> dict:
@@ -416,7 +466,8 @@ def matches_on(conn: sqlite3.Connection, competition: str, day: date) -> dict:
     dates, d = match_dates(conn, competition), day.isoformat()
     earlier, later = [x for x in dates if x < d], [x for x in dates if x > d]
     return {"competition_id": competition, "date": d, "fetched": d in fetched_dates(conn, competition),
-            "matches": [_match(r) for r in rows], "prev_date": earlier[-1] if earlier else None,
+            "matches": [_match(r) for r in rows], "live_forecasts": live_forecasts_of(conn, [r["match_id"] for r in rows]),
+            "prev_date": earlier[-1] if earlier else None,
             "next_date": later[0] if later else None, "last_refresh_at": last_refresh_at(conn, competition)}
 
 
@@ -437,9 +488,12 @@ def match_detail(conn: sqlite3.Connection, match_id: str) -> Optional[dict]:
         return [_match(x) for x in conn.execute(
             f"{MATCH_SQL} WHERE {before} AND (m.home_team_id = ? OR m.away_team_id = ?) ORDER BY m.kickoff_at DESC LIMIT ?",
             (r["competition_id"], r["kickoff_at"], team, team, RECENT))]
+    state = forecast_state(conn, r["competition_id"])
     revisions = [dict(x) for x in conn.execute(
         f"SELECT revision, {', '.join(RESULT_FIELDS)}, home_team_id, away_team_id, observed_at, basis FROM soccer_result_revisions "
         "WHERE match_id = ? "
         "ORDER BY revision", (match_id,))]
     return {"match": _match(r), "head_to_head": [_match(x) for x in h2h], "home_recent": recent(r["home_team_id"]),
-            "away_recent": recent(r["away_team_id"]), "result_revisions": revisions, "capabilities": capabilities()}
+            "away_recent": recent(r["away_team_id"]), "result_revisions": revisions,
+            "live_forecast": live_forecasts_of(conn, [match_id]).get(match_id),
+            "forecast_state": state, "capabilities": capabilities(state)}

@@ -1,0 +1,25 @@
+{"name":"recorded-uefa-nations","width":1280,"viewport":1280,"scrollWidth":1280,"overflow":false,"wide":[],"forbidden":null,"missing":[],"apiCalls":6,"failedApi":[],"ok":true}
+{"name":"recorded-uefa-nations","width":390,"viewport":390,"scrollWidth":390,"overflow":false,"wide":[],"forbidden":null,"missing":[],"apiCalls":6,"failedApi":[],"ok":true}
+{"name":"awaiting-premier-league-played-day","width":1280,"viewport":1280,"scrollWidth":1280,"overflow":false,"wide":[],"forbidden":null,"missing":[],"apiCalls":6,"failedApi":[],"ok":true}
+{"name":"awaiting-premier-league-played-day","width":390,"viewport":390,"scrollWidth":390,"overflow":false,"wide":[],"forbidden":null,"missing":[],"apiCalls":6,"failedApi":[],"ok":true}
+{"name":"recorded-day-all-awaiting-nations-nov15","width":1280,"viewport":1280,"scrollWidth":1280,"overflow":false,"wide":[],"forbidden":null,"missing":[],"apiCalls":6,"failedApi":[],"ok":true}
+{"name":"recorded-day-all-awaiting-nations-nov15","width":390,"viewport":390,"scrollWidth":390,"overflow":false,"wide":[],"forbidden":null,"missing":[],"apiCalls":6,"failedApi":[],"ok":true}
+{"name":"mixed-day-friendlies-nov14","width":1280,"viewport":1280,"scrollWidth":1280,"overflow":false,"wide":[],"forbidden":null,"missing":[],"apiCalls":6,"failedApi":[],"ok":true}
+{"name":"mixed-day-friendlies-nov14","width":390,"viewport":390,"scrollWidth":390,"overflow":false,"wide":[],"forbidden":null,"missing":[],"apiCalls":6,"failedApi":[],"ok":true}
+{"name":"out-of-scope-europa","width":1280,"viewport":1280,"scrollWidth":1280,"overflow":false,"wide":[],"forbidden":null,"missing":[],"apiCalls":6,"failedApi":[],"ok":true}
+{"name":"out-of-scope-europa","width":390,"viewport":390,"scrollWidth":390,"overflow":false,"wide":[],"forbidden":null,"missing":[],"apiCalls":6,"failedApi":[],"ok":true}
+{"name":"empty-competition-euro-qualifying","width":1280,"viewport":1280,"scrollWidth":1280,"overflow":false,"wide":[],"forbidden":null,"missing":[],"apiCalls":5,"failedApi":[],"ok":true}
+{"name":"empty-competition-euro-qualifying","width":390,"viewport":390,"scrollWidth":390,"overflow":false,"wide":[],"forbidden":null,"missing":[],"apiCalls":5,"failedApi":[],"ok":true}
+{"name":"source-stale-ligue1","width":1280,"viewport":1280,"scrollWidth":1280,"overflow":false,"wide":[],"forbidden":null,"missing":[],"apiCalls":6,"failedApi":[],"ok":true}
+{"name":"source-stale-ligue1","width":390,"viewport":390,"scrollWidth":390,"overflow":false,"wide":[],"forbidden":null,"missing":[],"apiCalls":6,"failedApi":[],"ok":true}
+{"name":"source-failure-live-read-blocked","width":1280,"viewport":1280,"scrollWidth":1280,"overflow":false,"wide":[],"forbidden":null,"missing":[],"apiCalls":5,"failedApi":[],"ok":true}
+{"name":"source-failure-live-read-blocked","width":390,"viewport":390,"scrollWidth":390,"overflow":false,"wide":[],"forbidden":null,"missing":[],"apiCalls":5,"failedApi":[],"ok":true}
+{"name":"match-with-forecast","width":1280,"viewport":1280,"scrollWidth":1280,"overflow":false,"wide":[],"forbidden":null,"missing":[],"apiCalls":5,"failedApi":[],"ok":true}
+{"name":"match-with-forecast","width":390,"viewport":390,"scrollWidth":390,"overflow":false,"wide":[],"forbidden":null,"missing":[],"apiCalls":5,"failedApi":[],"ok":true}
+{"name":"match-without-forecast","width":1280,"viewport":1280,"scrollWidth":1280,"overflow":false,"wide":[],"forbidden":null,"missing":[],"apiCalls":5,"failedApi":[],"ok":true}
+{"name":"match-without-forecast","width":390,"viewport":390,"scrollWidth":390,"overflow":false,"wide":[],"forbidden":null,"missing":[],"apiCalls":5,"failedApi":[],"ok":true}
+{"name":"performance-page","width":1280,"viewport":1280,"scrollWidth":1280,"overflow":false,"wide":[],"forbidden":null,"missing":[],"apiCalls":4,"failedApi":[],"ok":true}
+{"name":"performance-page","width":390,"viewport":390,"scrollWidth":390,"overflow":false,"wide":[],"forbidden":null,"missing":[],"apiCalls":4,"failedApi":[],"ok":true}
+{"name":"data-note-recorded","width":1280,"viewport":1280,"scrollWidth":1280,"overflow":false,"wide":[],"forbidden":null,"missing":[],"apiCalls":6,"failedApi":[],"ok":true}
+{"name":"data-note-recorded","width":390,"viewport":390,"scrollWidth":390,"overflow":false,"wide":[],"forbidden":null,"missing":[],"apiCalls":6,"failedApi":[],"ok":true}
+SUMMARY 24/24 ok; failed: none

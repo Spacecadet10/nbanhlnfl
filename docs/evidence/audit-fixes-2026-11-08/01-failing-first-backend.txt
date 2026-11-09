@@ -1,0 +1,40 @@
+        bad=copy.deepcopy(plan);bad['review']['combination_comparison']=''
+        assert run_cli(monkeypatch,capsys,'check','--plan',str(plan_file(bad,path,'bad.json')))[0]==1
+        started(snap)
+        entry=t.review_state(snap)['missed_before_start'][0]
+>       assert entry['explained'] is True and entry['failed_reviews'][0]['outcome']=='operational_failure'
+               ^^^^^^^^^^^^^^^^^^
+E       KeyError: 'explained'
+
+tests/test_tickets.py:1114: KeyError
+______ test_correction_back_to_an_earlier_result_is_appended_and_notified ______
+
+setup = ({'snapshot_path': '/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-429/test_correctio...'/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-429/test_correction_back_to_an_ear0'))
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1099ed490>
+
+    def test_correction_back_to_an_earlier_result_is_appended_and_notified(setup,monkeypatch):
+        grades={1:'loss',2:'win'};sent=settled_ticket(setup,monkeypatch,grades);before=len(sent)
+        t.settle(now='2026-11-08T21:00:00Z',notify=True)
+        grades[1]='win';t.settle(now='2026-11-08T21:30:00Z',notify=True)           # correction: the loss becomes a win
+        with tg.ledger() as c:first_two=[tuple(r) for r in c.execute('select * from ticket_grades order by rowid')]
+        grades[1]='loss';report=t.settle(now='2026-11-08T22:00:00Z',notify=True)   # corrected back to the first result
+        assert report['tickets'][0]['grade']=='loss'
+        t.settle(now='2026-11-08T22:30:00Z',notify=True)                           # unchanged: nothing appended or re-sent
+        with tg.ledger() as c:
+            rows=[tuple(r) for r in c.execute('select * from ticket_grades order by rowid')]
+>           assert rows[:2]==first_two and len(rows)==3                           # earlier rows untouched, the reversal appended
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           assert ([('2026-11-08...5a0981162"}')] == [('2026-11-08...5a0981162"}')]
+E             
+E             Use -v to get more diff and 2 == 3)
+E            +  where 2 = len([('2026-11-08-6515a0981162', '4dde82b479a176942b09829f33910b1ba4d6209238810d4fc779132fe685d2d8', '2026-11-08T21:00:00Z...{"forecast_id": 2, "grade": "win", "pick_label": "B2 win"}], "profit": null, "ticket_id": "2026-11-08-6515a0981162"}')])
+
+tests/test_tickets.py:1135: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_tickets.py::test_lock_blocked_forecast_is_recorded_by_the_helper_without_reviewer_text
+FAILED tests/test_tickets.py::test_reviewer_text_for_a_locked_forecast_is_kept_beside_the_helper_fact
+FAILED tests/test_tickets.py::test_game_blocked_until_kickoff_is_reported_with_its_recorded_blocker
+FAILED tests/test_tickets.py::test_single_game_window_that_starts_unreviewed_is_explained_by_the_trigger_record
+FAILED tests/test_tickets.py::test_failed_review_before_kickoff_is_attached_to_the_missed_game
+FAILED tests/test_tickets.py::test_correction_back_to_an_earlier_result_is_appended_and_notified
+6 failed, 13 passed, 98 deselected in 4.76s

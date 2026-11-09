@@ -991,6 +991,8 @@ export interface SoccerMeta {
   mode: 'real'; sport: 'soccer'; competition_id: SoccerCompetitionId; competition: string; competitions: SoccerCompetition[];
   default_date: string | null; match_dates: string[]; fetched_dates: string[]; seasons: number[]; matches_stored: number;
   last_refresh_at: string | null; capabilities: NflCapability[];
+  /** Live forecasts of this competition in this store (backend app/soccer.py forecast_state). */
+  forecast_state: 'recorded' | 'awaiting' | 'out_of_scope' | 'no_live_store';
 }
 export interface SoccerLiveForecast {
   forecast_id: number; match_id: string; competition: SoccerCompetitionId; kickoff_at: string; home: string; away: string;
@@ -1002,11 +1004,15 @@ export interface SoccerLiveResponse {
   competition: SoccerCompetitionId; in_scope: boolean; label: string; settlement_rule: string; market: '1x2_regulation';
   scope_note: string | null; model: { name: string; candidate_sha256: string };
   check: { checked_at: string; ok: boolean; problems: string[]; match_date: string; forecasts: number } | null;
+  /** Age of this competition's ESPN data against the age beyond which a new forecast is refused. */
+  refresh: { last_refresh_at: string | null; max_age_hours: number; stale: boolean };
   forecasts: SoccerLiveForecast[];
 }
 export interface SoccerMatchesResponse {
   competition_id: SoccerCompetitionId; date: string; fetched: boolean; matches: SoccerMatch[];
   prev_date: string | null; next_date: string | null; last_refresh_at: string | null;
+  /** match_id -> the latest recorded live forecast of the listed matches that have one (never inside a match record). */
+  live_forecasts: Record<string, SoccerLiveForecast>;
 }
 export interface SoccerResultRevision {
   revision: number; decided_in: 'regulation' | 'extra_time' | 'penalties' | 'unknown'; home_score: number; away_score: number;
@@ -1018,6 +1024,9 @@ export interface SoccerResultRevision {
 export interface SoccerMatchDetail {
   match: SoccerMatch; head_to_head: SoccerMatch[]; home_recent: SoccerMatch[]; away_recent: SoccerMatch[];
   result_revisions: SoccerResultRevision[]; capabilities: NflCapability[];
+  /** This match's latest recorded live forecast, or null when none was recorded. */
+  live_forecast: SoccerLiveForecast | null;
+  forecast_state: SoccerMeta['forecast_state'];
 }
 
 // --- Soccer research (backend app/soccer_forecasts.py; /api/soccer/research/*). openfootball history and the stored,

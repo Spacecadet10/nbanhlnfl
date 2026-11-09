@@ -204,3 +204,62 @@ def test_a_failing_international_run_never_stops_the_club_run(live, monkeypatch,
     out = json.loads(capsys.readouterr().out)
     assert out["clubs"]["status"] == "ok" and out["international"] == {"status": "failed", "error": "FileNotFoundError"}
     assert live.execute("SELECT COUNT(*) FROM soccer_live_forecasts").fetchone()[0] == 2
+
+
+# --- Audit 2026-11-08: the page text follows what is stored (recorded / awaiting / outside the tested scope / stale) ---
+def _client(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app import main
+    monkeypatch.setenv("NBA_API_MODE", "real")
+    monkeypatch.setattr(main.app, "dependency_overrides", {})
+    return TestClient(main.app)
+
+
+def test_the_api_says_whether_forecasts_are_recorded_awaited_or_out_of_scope(live, monkeypatch):
+    client = _client(monkeypatch)
+    get = lambda path, **params: client.get(path, params=params).json()
+    before = get("/api/soccer/meta", competition="eng.1")
+    cap = before["capabilities"][0]
+    assert before["forecast_state"] == "awaiting" and cap["available"] is False
+    assert "no forecast has been recorded" in cap["reason"] and "No soccer model" not in cap["reason"]
+    day = get("/api/soccer/matches", competition="eng.1", date=TOMORROW.isoformat())
+    assert len(day["matches"]) == 2 and day["live_forecasts"] == {}
+
+    soccer_live.run(live, day=TOMORROW.isoformat())
+    after = get("/api/soccer/meta", competition="eng.1")
+    assert after["forecast_state"] == "recorded" and after["capabilities"][0]["available"] is True
+    reasons = " ".join(c["reason"] for c in after["capabilities"])
+    assert "No soccer forecast has been recorded" not in reasons and "no soccer forecasts to grade" not in reasons
+    day = get("/api/soccer/matches", competition="eng.1", date=TOMORROW.isoformat())
+    assert set(day["live_forecasts"]) == {m["match_id"] for m in day["matches"]}
+    for match_id, f in day["live_forecasts"].items():
+        assert f["match_id"] == match_id and abs(sum(f["probabilities"].values()) - 1) < 1e-9 and f["result"] is None
+    assert "forecast" not in json.dumps(day["matches"])                # match records stay facts only
+    first = day["matches"][0]["match_id"]
+    detail = get("/api/soccer/matches/" + first)
+    assert detail["live_forecast"]["forecast_id"] == day["live_forecasts"][first]["forecast_id"]
+    assert detail["capabilities"][0]["available"] is True and "forecast" not in json.dumps(detail["match"])
+    assert detail["forecast_state"] == "recorded"
+
+    world = get("/api/soccer/meta", competition="fifa.world")           # sealed scope excludes it: say that, not "no model"
+    assert world["forecast_state"] == "out_of_scope" and "held-out test" in world["capabilities"][0]["reason"]
+
+
+def test_the_live_response_reports_the_age_of_the_source_data(live, monkeypatch):
+    client = _client(monkeypatch)
+    fresh = client.get("/api/soccer/live", params={"competition": "eng.1"}).json()["refresh"]
+    assert fresh == {"last_refresh_at": STAMP, "max_age_hours": 26, "stale": False}
+    old = (NOW - timedelta(hours=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    monkeypatch.setattr(soccer, "last_refresh_at", lambda conn, competition: old)
+    assert client.get("/api/soccer/live", params={"competition": "eng.1"}).json()["refresh"] == {
+        "last_refresh_at": old, "max_age_hours": 26, "stale": True}
+
+
+def test_a_store_without_live_tables_says_so(tmp_path, monkeypatch):
+    monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path))
+    c = db.connect(sport="soccer")
+    db.migrate(c)
+    monkeypatch.setattr(soccer_live, "has_tables", lambda conn: False)
+    assert soccer.forecast_state(c, "eng.1") == "no_live_store"
+    assert "records no live soccer forecasts" in soccer.capabilities("no_live_store")[0]["reason"]
+    c.close()

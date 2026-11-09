@@ -1,0 +1,8 @@
+== npm run typecheck
+exit 0
+== npm run test:unit
+# tests 21
+# pass 21
+# fail 0
+== npm run build
+✓ built in 600ms

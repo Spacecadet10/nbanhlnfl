@@ -7,6 +7,7 @@ import { useApi } from '../api/useApi';
 import { dateTime } from '../format';
 import { NflScreens } from '../pages/NflPages';
 import { SoccerScreens } from '../pages/SoccerPages';
+import { dataSourceForecastText } from './soccerStatus';
 import { FreshnessBar } from './Freshness';
 import { gameRoute } from './gameRoute';
 import { Empty, PageErrorBoundary } from './States';
@@ -48,10 +49,12 @@ export function Layout() {
   const fresh = useFreshnessPoll(sport);
   const meta = useApi((s) => (sport === 'nfl' ? api.nflMeta(s) : sport === 'soccer' ? api.soccerMeta(competition, s) : api.meta(sport, s))
     .then((m) => ({ mode: m.mode, last_refresh_at: m.last_refresh_at,
-      forecasts: 'capabilities' in m && m.capabilities.some((c) => c.id === 'forecasts' && c.available) })), [sport, competition], fresh.changes);
+      forecasts: 'capabilities' in m && m.capabilities.some((c) => c.id === 'forecasts' && c.available),
+      soccerForecasts: 'forecast_state' in m ? m.forecast_state : null })), [sport, competition], fresh.changes);
   const mode = meta.state.status === 'success' ? meta.state.data.mode : null;
   const lastRefresh = meta.state.status === 'success' ? meta.state.data.last_refresh_at : null;
   const nflForecasts = sport === 'nfl' && meta.state.status === 'success' && meta.state.data.forecasts;
+  const soccerForecasts = sport === 'soccer' && meta.state.status === 'success' ? meta.state.data.soccerForecasts : null;
   const health = useApi((s) => api.health(s), []);
   const snapshot = health.state.status === 'success' ? health.state.data.data_snapshot_at : null;
   const section = SECTION.find(([re]) => re.test(location.pathname))?.[1] ?? 'Prediction Dashboard';
@@ -124,7 +127,7 @@ export function Layout() {
                 <div className="source-pop-panel" role="note">
                   <strong>REAL {label} DATA</strong>
                   {sport === 'soccer'
-                    ? <p>Results history from openfootball (CC0) where this data folder has it, with stored research backtest forecasts (retrospective, never live); otherwise fixtures and results from ESPN's public soccer scoreboards{lastRefresh ? ` (this competition last imported ${dateTime(lastRefresh)})` : ''}. No live soccer forecast, odds or injury information exists.</p>
+                    ? <p>Results history from openfootball (CC0) where this data folder has it, with stored research backtest forecasts (retrospective, never live); otherwise fixtures and results from ESPN's public soccer scoreboards{lastRefresh ? ` (this competition last imported ${dateTime(lastRefresh)})` : ''}. {soccerForecasts ? dataSourceForecastText(soccerForecasts) : 'No soccer odds or injury information is collected.'}</p>
                     : sport === 'nfl'
                     ? <p>Schedule and results from ESPN's public NFL scoreboard{lastRefresh ? `, last imported ${dateTime(lastRefresh)}` : ''}. {nflForecasts
                       ? 'Live forecasts are recorded within two hours of kickoff for regular-season and playoff games: the winner from an NFL Elo model; spread, total and team totals from a points model, against a bookmaker line collected 2–4 hours before kickoff when there is one, otherwise a model line. No injury or weather information.'

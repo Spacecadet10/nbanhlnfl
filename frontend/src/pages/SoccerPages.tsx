@@ -1,20 +1,24 @@
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
-import type { NflCapability, SoccerLiveForecast, SoccerMatch, SoccerMeta } from '../api/types';
+import type { SoccerLiveForecast, SoccerLiveResponse, SoccerMatch, SoccerMeta } from '../api/types';
 import { useApi } from '../api/useApi';
+import type { ApiState } from '../api/useApi';
 import { useCarriedSearch, useCompetition } from '../components/Selection';
 import { AsyncView, Empty } from '../components/States';
 import { gameRoute } from '../components/gameRoute';
+import { emptyCompetition, forecastBanner, importHint, liveLoadProblem, matchForecastNote } from '../components/soccerStatus';
 import { TeamLogo } from '../components/TeamLogo';
 import { EmptyForecastState, Icon, MetricCard, PageTitle } from '../components/ui';
 import { calendarDate, dateTime, FULL_DATE, tipoffTime } from '../format';
 import { GameDateControl } from './NflPages';
 import { ResearchGameDay, ResearchHistory, ResearchMatchPage, ResearchPerformance } from './SoccerResearch';
 
-// European soccer is data-only (backend app/soccer.py): fixtures, results and when each was learned, one competition at a
-// time through /api/soccer/*. Nothing here shows or derives a forecast, odds, injury or metric. Results keep soccer's
-// distinctions: a draw is a result; a match that went to extra time has no published 90-minute result; a shoot-out and the
-// qualifier of a two-legged tie are reported as what they are, never as the winner of the match.
+// Soccer fixtures and results (backend app/soccer.py), one competition at a time through /api/soccer/*, with the live
+// 90-minute forecasts recorded by the sealed models (app/soccer_live.py, app/intl_live.py) where a competition has them.
+// Nothing here derives a forecast, odds, injury or metric; what the page says about forecasts and refreshes follows the
+// API's forecast_state and /api/soccer/live (components/soccerStatus.ts). Results keep soccer's distinctions: a draw is a
+// result; a match that went to extra time has no published 90-minute result; a shoot-out and the qualifier of a
+// two-legged tie are reported as what they are, never as the winner of the match.
 
 const seasonLabel = (season: number) => `${season}–${String(season + 1).slice(2)}`;
 /** A real stage (League Phase, Round of 16 …); ESPN's domestic season names ('2026-27 LALIGA') are not stages. */
@@ -93,23 +97,14 @@ function SoccerEspnScreens({ researchError }: { researchError: string | null }) 
   );
 }
 
-function PredictionsUnavailable({ capabilities }: { capabilities: NflCapability[] }) {
-  const live = capabilities.find((c) => c.id === 'forecasts' && c.available);
-  if (live) {
-    return (
-      <details className="notice nfl-notice">
-        <summary><strong>Live soccer forecasts:</strong> the 90-minute home/draw/away result only. <span className="link-btn">What else is not available</span></summary>
-        <ul className="nfl-capabilities small">
-          {capabilities.map((c) => <li key={c.id}><strong>{c.label}:</strong> {c.available ? 'available. ' : 'not available. '}<span className="muted">{c.reason}</span></li>)}
-        </ul>
-      </details>
-    );
-  }
+/** What this competition has: recorded forecasts, forecasts still to come, or none (and why), with the capability list. */
+function ForecastStatus({ meta }: { meta: SoccerMeta }) {
+  const banner = forecastBanner(meta.forecast_state, meta.competition);
   return (
     <details className="notice nfl-notice">
-      <summary><strong>Soccer predictions are not available:</strong> fixtures and results only, with no forecasts, odds or injuries. <span className="link-btn">Why</span></summary>
+      <summary><strong>{banner.title}</strong> {banner.text} <span className="link-btn">{banner.more}</span></summary>
       <ul className="nfl-capabilities small">
-        {capabilities.map((c) => <li key={c.id}><strong>{c.label}:</strong> not available. <span className="muted">{c.reason}</span></li>)}
+        {meta.capabilities.map((c) => <li key={c.id}><strong>{c.label}:</strong> {c.available ? 'available. ' : 'not available. '}<span className="muted">{c.reason}</span></li>)}
       </ul>
     </details>
   );
@@ -124,14 +119,16 @@ function SoccerGameDay({ meta }: { meta: SoccerMeta }) {
     next.set('date', d);
     setParams(next);
   };
+  // One read of the live forecasts for the panel and for the "Last imported" hint; a store without them still shows fixtures.
+  const live = useApi((s) => api.soccerLive(meta.competition_id, s), [meta.competition_id]);
   return (
     <section>
       <PageTitle icon="ball" plain title={`${meta.competition} matches`} sub="Fixtures and results from ESPN. Kickoff dates are US Eastern."
         right={date && <GameDateControl date={date} dates={meta.match_dates} defaultDate={meta.default_date} onChange={setDate} />} />
-      <PredictionsUnavailable capabilities={meta.capabilities} />
-      <SoccerLivePanel competition={meta.competition_id} name={meta.competition} />
-      {date ? <SoccerSlate meta={meta} date={date} onChange={setDate} />
-        : <Empty>No {meta.competition} matches are stored yet. A development store is filled from <code>backend/</code> with <code>NBA_DATA_DIR=&lt;scratch or development data directory&gt; .venv/bin/python -m app.cli soccer ingest --competition {meta.competition_id} --from YYYYMMDD --to YYYYMMDD</code> (never the live <code>data/</code> folder). That collects from ESPN, which the source review found not clearly permitted for this project: a user decision.</Empty>}
+      <ForecastStatus meta={meta} />
+      {meta.forecast_state !== 'no_live_store' && <SoccerLivePanel state={live.state} name={meta.competition} />}
+      {date ? <SoccerSlate meta={meta} date={date} onChange={setDate} live={live.state.status === 'success' ? live.state.data : null} />
+        : <Empty>{emptyCompetition(meta.competition, meta.fetched_dates.length, meta.last_refresh_at, dateTime)}</Empty>}
     </section>
   );
 }
@@ -141,9 +138,11 @@ const pct = (p: number) => `${(p * 100).toFixed(1)}%`;
 
 /** Live 90-minute forecasts of the sealed Elo (backend app/soccer_live.py): upcoming matches and those of the last 2 days.
  * Separate from the research backtest screens; shows the input check when a run was refused. */
-function SoccerLivePanel({ competition, name }: { competition: SoccerMeta['competition_id']; name: string }) {
-  const { state } = useApi((s) => api.soccerLive(competition, s), [competition]);
-  if (state.status !== 'success') return null;            // no live store yet: the fixtures below still show
+function SoccerLivePanel({ state, name }: { state: ApiState<SoccerLiveResponse>; name: string }) {
+  if (state.status === 'error') {                         // a failed read is said, not hidden behind the fixtures
+    return <div className="notice error-notice" role="alert">{liveLoadProblem(state.error)}</div>;
+  }
+  if (state.status !== 'success') return null;
   const d = state.data;
   return (
     <section className="soccer-live" aria-label="Live soccer forecasts">
@@ -154,6 +153,13 @@ function SoccerLivePanel({ competition, name }: { competition: SoccerMeta['compe
       <p className="small muted">{d.settlement_rule} Model: {d.model.name}, frozen and tested once on held-out seasons; not a betting edge.</p>
       {!d.in_scope ? <Empty>{d.scope_note}</Empty> : (
         <>
+          {d.refresh.stale && (
+            <div className="notice error-notice" role="alert">
+              <strong>ESPN data for {name} is out of date.</strong> {d.refresh.last_refresh_at
+                ? <>Last retrieved {dateTime(d.refresh.last_refresh_at)}, more than {d.refresh.max_age_hours} h ago.</>
+                : <>No scoreboard request is stored.</>} New forecasts are refused until it refreshes.
+            </div>
+          )}
           {d.check && !d.check.ok && (
             <div className="notice error-notice" role="alert">
               <strong>No new forecast: inputs refused at {dateTime(d.check.checked_at)}.</strong>
@@ -191,7 +197,9 @@ function SoccerLiveCard({ f }: { f: SoccerLiveForecast }) {
   );
 }
 
-function SoccerSlate({ meta, date, onChange }: { meta: SoccerMeta; date: string; onChange: (d: string | null) => void }) {
+function SoccerSlate({ meta, date, onChange, live }: {
+  meta: SoccerMeta; date: string; onChange: (d: string | null) => void; live: SoccerLiveResponse | null;
+}) {
   const { state, retry } = useApi((s) => api.soccerMatches(meta.competition_id, date, s), [meta.competition_id, date]);
   return (
     <AsyncView state={state} retry={retry}>
@@ -206,7 +214,7 @@ function SoccerSlate({ meta, date, onChange }: { meta: SoccerMeta; date: string;
               <MetricCard icon="scale" label="Draws" tone="dark" value={finals.length ? draws : '—'}
                 hint={finals.length ? 'Level when play ended (a shoot-out does not change the score).' : 'No final result on this date.'} />
               <MetricCard icon="history" label="Last imported" tone="lavender" value={d.last_refresh_at ? dateTime(d.last_refresh_at) : '—'}
-                hint={`Latest ${meta.competition} scoreboard request. Not refreshed automatically.`} />
+                hint={importHint(meta.competition, live, dateTime)} />
             </div>
             {d.matches.length === 0 ? (
               <Empty>
@@ -217,7 +225,8 @@ function SoccerSlate({ meta, date, onChange }: { meta: SoccerMeta; date: string;
                 {d.prev_date && d.next_date && ' · '}
                 {d.next_date && <button type="button" className="link-btn" onClick={() => onChange(d.next_date)}>Next match day ({calendarDate(d.next_date)})</button>}
               </Empty>
-            ) : <ul className="game-grid">{d.matches.map((m) => <SoccerCard key={m.match_id} match={m} date={date} />)}</ul>}
+            ) : <ul className="game-grid">{d.matches.map((m) => <SoccerCard key={m.match_id} match={m} date={date}
+                note={matchForecastNote(meta.forecast_state, m.status, d.live_forecasts[m.match_id], m.home.name, m.away.name)} />)}</ul>}
           </>
         );
       }}
@@ -225,7 +234,7 @@ function SoccerSlate({ meta, date, onChange }: { meta: SoccerMeta; date: string;
   );
 }
 
-function SoccerCard({ match: m, date }: { match: SoccerMatch; date: string }) {
+function SoccerCard({ match: m, date, note }: { match: SoccerMatch; date: string; note: string }) {
   const carried = useCarriedSearch();
   // Bold only a side that led when play ended; after a shoot-out the card names the shoot-out and the tie separately.
   const led = (side: 'home' | 'away') => m.decided_in !== 'penalties' && m.end_of_play_result === side;
@@ -247,7 +256,7 @@ function SoccerCard({ match: m, date }: { match: SoccerMatch; date: string }) {
           <p className="small muted">{m.qualified_team_id === m.home.team_id ? m.home.name : m.away.name} went through the tie
             {m.aggregate_home != null ? ` (aggregate ${m.aggregate_home}–${m.aggregate_away})` : ''}.</p>
         )}
-        <p className="forecast-note">No soccer forecast: no validated model exists.</p>
+        <p className="forecast-note">{note}</p>
         <div className="card-bottom small muted">
           <span>{learned(m) ?? (m.status === 'scheduled' ? `Kickoff ${dateTime(m.kickoff)}`
             : m.status === 'in_progress' ? 'Live scores are not collected; the result follows the next import.'
@@ -349,10 +358,11 @@ function SoccerMatchPage({ id }: { id: string }) {
               </div>
               <div className="card">
                 <h2>Forecast</h2>
-                <EmptyForecastState>Not available. A soccer forecast needs three outcomes (home win, draw, away win) and a separately validated model. None exists, so no probability, pick, odds or accuracy is shown.</EmptyForecastState>
+                {d.live_forecast ? <SoccerLiveCard f={d.live_forecast} />
+                  : <EmptyForecastState>{matchForecastNote(d.forecast_state, m.status, null, m.home.name, m.away.name)} No probability, pick, odds or accuracy is shown.</EmptyForecastState>}
                 <ul className="nfl-capabilities small">
                   {d.capabilities.filter((c) => ['forecasts', 'odds', 'injuries'].includes(c.id)).map((c) =>
-                    <li key={c.id}><strong>{c.label}:</strong> not available. <span className="muted">{c.reason}</span></li>)}
+                    <li key={c.id}><strong>{c.label}:</strong> {c.available ? 'available. ' : 'not available. '}<span className="muted">{c.reason}</span></li>)}
                 </ul>
               </div>
               <div className="card">
@@ -411,7 +421,7 @@ const PAGES = {
   research: { icon: 'learning', title: 'Soccer Daily Learning', capability: 'research' },
 } as const;
 
-/** Performance, history and daily learning: soccer predictions do not exist, so say so plainly and show what is stored. */
+/** Performance, history and daily learning are not built for soccer: say so plainly and show what is stored. */
 function SoccerUnavailable({ meta, page }: { meta: SoccerMeta; page: keyof typeof PAGES }) {
   const carried = useCarriedSearch();
   const p = PAGES[page];
@@ -419,7 +429,7 @@ function SoccerUnavailable({ meta, page }: { meta: SoccerMeta; page: keyof typeo
   const forecasts = meta.capabilities.find((c) => c.id === 'forecasts');
   return (
     <section>
-      <PageTitle icon={p.icon} title={p.title} sub="Not available: soccer predictions are not ready." />
+      <PageTitle icon={p.icon} title={p.title} sub="Not available for soccer yet." />
       <Empty>
         <strong>{cap?.label ?? p.title}: not available.</strong> {cap?.reason} {forecasts?.reason}{' '}
         <Link to={`/${carried}`}>See {meta.competition} fixtures and results</Link>

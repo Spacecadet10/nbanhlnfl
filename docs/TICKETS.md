@@ -155,3 +155,27 @@ Still open: guarded-release operation of the sender/helper, cross-window stake p
 - A refused run is visible only in the sender log and the helper's JSON output; there is no Telegram alert, because the guard runs before Telegram. The hourly review must report a `release guard` refusal.
 - The Mac must be awake.
 - Development copies still read the production credentials file unless `NBA_TELEGRAM_CREDENTIALS` or the environment overrides it, so tests must mock Telegram.
+
+## Live-state audit fixes (Nov 8; prepared on `audit-fixes-20261108`, not deployed)
+
+Evidence and causes: `docs/evidence/audit-fixes-2026-11-08/README.md`.
+
+- **Locks are recorded by the helper.** A forecast whose game is already in a sent ticket with a different forecast cannot
+  be a leg. `check` now records that itself for every such forecast the reviewer left out
+  (`forecasts_reviewed[key] = {decision: excluded, reason: "Locked: …", recorded_by: helper}`) and archives every lock
+  under `locks` (ticket IDs, the ticket's forecast and pick). An entry the reviewer wrote is kept as written. Forecasts
+  that are not locked still need the reviewer's own decision and reason. Reason text is never compared or deduplicated:
+  one explanation may be attached to several forecasts.
+- **Why a game started unreviewed.** `preflight` appends to `ticket_review_blockers` (new append-only table in the
+  Telegram ledger, created on first use) what kept a pending game out of review at that run: a refused sport (when it
+  excludes forecasts), an unusable source, a moved line, a single-game window. `review.not_reviewed_now` shows the same
+  list. Each `missed_before_start` entry now carries `recorded_blockers` (issue, first/last seen, observations) and
+  `failed_reviews` from its own pregame window, and `explained`: false means a review was possible and none finished.
+  `status` records nothing.
+- **Corrections back to an earlier result.** `ticket_grades` gets a row whenever the result differs from the ticket's
+  latest stored result, including a return to an earlier one; that row carries `supersedes` (the hash it replaces), so it
+  is stored and announced once ("Corrected result: it replaces the result sent before."). Hashes of first and unchanged
+  results are as before, so nothing already stored or sent is repeated. A result with a leg that could not be graded is
+  stored as before and ignored when comparing, so a passing read error cannot repeat a notice.
+- **Unchanged:** selection method, forecast-version lock, 2–6 legs and at most 6 tickets, legacy reservation read,
+  existing rows.

@@ -377,6 +377,31 @@ def prior_ticket_games(day):
     return used
 
 
+def lock_facts(day, snaps):
+    """Forecasts that cannot be dispatched because their game is already in a sent ticket with a different forecast: a
+    fact the helper knows from the ledger, recorded per forecast so the reviewer writes reasons only for judgments."""
+    used = prior_ticket_games(day)
+    locks = {}
+    for snap in snaps:
+        now = _parse(snap['as_of'])
+        for sport, section in snap['sports'].items():
+            for pick in (section.get('report') or {}).get('picks', []):
+                entry = used.get((sport, pick['game_id']))
+                if entry and entry['forecast_id'] != pick['forecast_id'] and eligible(pick, now):
+                    locks[f"{sport}:{pick['forecast_id']}"] = {
+                        'matchup': pick.get('matchup'), 'market': pick.get('market'), 'pick_label': pick.get('pick_label'),
+                        'ticket_forecast_id': entry['forecast_id'], 'ticket_pick': entry['pick_label'],
+                        'tickets': sorted(set(entry['tickets']))}
+    return locks
+
+
+def _lock_reason(key, lock):
+    sport = key.split(':')[0]
+    return (f"Locked: {lock['matchup']} is already in sent ticket(s) {', '.join(lock['tickets'])} with forecast "
+            f"{sport}:{lock['ticket_forecast_id']} ({lock['ticket_pick']}); only that forecast may be used again, so "
+            f"{lock['pick_label']} ({lock['market']}) cannot be a leg.")
+
+
 def review_state(snap):
     """Deterministic review trigger: due when a fresh, combinable forecast has not been accounted for by any review today.
 
@@ -398,7 +423,8 @@ def review_state(snap):
         refused = [p for p in current if not source_usable(section, p)]
         if refused:
             blocked[sport] = {'issue': 'source_unavailable_or_stale', 'forecasts': len(refused),
-                              'games': len({p['game_id'] for p in refused})}
+                              'games': len({p['game_id'] for p in refused}),
+                              'game_ids': sorted({p['game_id'] for p in refused})}
         if usable and section['freshness']['source_state'] != 'fresh':
             delayed[sport] = dict(section['refresh_delay'], forecasts=len(usable))
         for p in usable:
@@ -440,18 +466,76 @@ def review_state(snap):
     for sport, pick in started:
         if (sport, pick['game_id']) not in reviewed_games:
             entry = missed.setdefault((sport, pick['game_id']), {'sport': sport, 'game_id': pick['game_id'],
-                                      'matchup': pick.get('matchup'), 'tipoff': pick['tipoff'], 'forecasts': 0})
+                                      'matchup': pick.get('matchup'), 'tipoff': pick['tipoff'], 'forecasts': 0,
+                                      'first_forecast_at': pick['generated_at']})
             entry['forecasts'] += 1
+            entry['first_forecast_at'] = min(entry['first_forecast_at'], pick['generated_at'])
+    if missed:   # why: blockers the trigger recorded and reviews that failed while the game was still pending
+        try:
+            explain_missed(snap['date'], missed.values())
+        except Exception as exc:
+            state['missed_explanation_error'] = type(exc).__name__
+    # Pending games this run does not send to review, each with its reason (recorded by preflight: record_blockers).
+    # A refused sport hides its games, so it is recorded for the sport unless it reports that it excludes no forecast now.
+    waiting = [{'sport': sport, 'game_id': None, 'issue': section['error'], 'detail': str(section.get('reason') or '')}
+               for sport, section in unavailable.items()
+               if section['error'] != 'forecasts_unavailable' and section.get('unserved_forecasts') != 0]
+    waiting += [{'sport': sport, 'game_id': game, 'issue': entry['issue'], 'detail': ''}
+                for sport, entry in blocked.items() for game in entry['game_ids']]
+    waiting += [{'sport': sport, 'game_id': game, 'issue': 'line_changed', 'detail': ''}
+                for sport, game in sorted({(m['sport'], m['game_id']) for m in moved} - games)]
+    if not due:   # a game with new forecasts that the trigger does not open a review for (a ticket needs two games)
+        waiting += [{'sport': sport, 'game_id': game, 'issue': reason, 'detail': ''}
+                    for sport, game in sorted({(u['sport'], u['game_id']) for u in new})]
     state.update(due=due, reason=reason, ticketable_forecasts=len(ticketable), ticketable_games=len(games),
                  reviewed_today=len(reviewed), unreviewed=unreviewed,
                  oldest_unreviewed_at=min((u['generated_at'] for u in new), default=None),
                  blocked=blocked, unavailable=unavailable, locked_games=locked,
                  missed_before_start=sorted(missed.values(), key=lambda m: (m['tipoff'], m['sport'], m['game_id'])))
+    if waiting:   # pending games this run does not send to review, each with its reason (preflight records them)
+        state['not_reviewed_now'] = waiting
     if delayed:   # stale only because the store's forecast job still holds the lock; legs disclose the refresh time
         state['delayed'] = delayed
     if moved:     # bookmaker line moved since the forecast: excluded until the app forecasts the new line
         state['line_changed'] = moved
     return state
+
+
+def record_blockers(state):
+    """Append what this trigger run saw standing between a pending game and its review (review_state's not_reviewed_now):
+    a refused sport or source, a moved line, a single-game window. One row per observation, so a game that later starts
+    unreviewed carries the blockers seen during its own pregame window. Never selects or sends."""
+    from app import telegram
+    rows = [(state['as_of'], state['date'], w['sport'], w['game_id'], w['issue'], w['detail'][:300])
+            for w in state.get('not_reviewed_now', [])]
+    if rows:
+        with telegram.ledger() as conn:
+            schema(conn)
+            conn.executemany('INSERT INTO ticket_review_blockers (recorded_at,day,sport,game_id,issue,detail) VALUES (?,?,?,?,?,?)', rows)
+    return len(rows)
+
+
+def explain_missed(day, entries):
+    """Attach to each game that started unreviewed the blockers recorded, and the reviews that failed, between its first
+    pregame forecast and its start. `explained` is False when neither exists: a review was possible and none finished."""
+    from app import telegram
+    with telegram.ledger() as conn:
+        schema(conn)
+        blockers = [dict(r) for r in conn.execute('SELECT * FROM ticket_review_blockers WHERE day=? ORDER BY blocker_id', (day,))]
+        failures = [dict(r) for r in conn.execute("SELECT review_id,recorded_at,stage,outcome,detail FROM ticket_reviews "
+                                                  "WHERE day=? AND outcome='operational_failure' ORDER BY review_id", (day,))]
+    for entry in entries:
+        lo, hi = _parse(entry['first_forecast_at']), _parse(entry['tipoff'])
+        seen = {}
+        for b in blockers:
+            if b['sport'] == entry['sport'] and b['game_id'] in (None, entry['game_id']) and lo <= _parse(b['recorded_at']) <= hi:
+                item = seen.setdefault((b['issue'], b['detail']), {'issue': b['issue'], 'detail': b['detail'],
+                                       'first_seen_at': b['recorded_at'], 'last_seen_at': b['recorded_at'], 'observations': 0})
+                item['last_seen_at'] = b['recorded_at']
+                item['observations'] += 1
+        entry['recorded_blockers'] = list(seen.values())
+        entry['failed_reviews'] = [dict(f, detail=f['detail'][:200]) for f in failures if lo <= _parse(f['recorded_at']) <= hi]
+        entry['explained'] = bool(entry['recorded_blockers'] or entry['failed_reviews'])
 
 
 def _text(value, what):
@@ -492,6 +576,18 @@ def check(plan):
             for pick in section.get('report', {}).get('picks', []):
                 if eligible(pick, at):
                     required.add(f"{sport}:{pick['forecast_id']}")
+    # A lock is a ledger fact, not a judgment: the helper records it for each locked forecast the reviewer left out, and
+    # archives every lock beside the review. Reviewer-written entries are kept as written; text is never compared.
+    locks, lock_error = {}, None
+    try:
+        locks = {key: lock for key, lock in lock_facts(old['date'], (old, fresh)).items() if key in required}
+    except Exception as exc:   # without the ledger nothing is filled in: every forecast then needs the reviewer's entry
+        lock_error = type(exc).__name__
+    if isinstance(accounted, dict):
+        for key, lock in locks.items():
+            if key not in accounted:
+                accounted[key] = {'decision': 'excluded', 'reason': _lock_reason(key, lock), 'recorded_by': 'helper'}
+        review['forecasts_reviewed'] = accounted
     if not isinstance(accounted, dict) or any(
         key not in accounted or not isinstance(accounted[key], dict) or
         accounted[key].get('decision') not in ('candidate', 'excluded') or
@@ -559,6 +655,7 @@ def check(plan):
                          'payout_assessment': ticket['payout_assessment'].strip(), 'assessment': ticket_assessment(legs)})
     text = ticket_text(fresh['date'], resolved)
     result = dict(snapshot=old, plan=plan, resolved=resolved, text=text, as_of=fresh['as_of'], date=fresh['date'],
+                  locks=locks, **({'locks_error': lock_error} if lock_error else {}),
                   coverage={'required':len(required), 'accounted':len(required & set(accounted)),
                             'unavailable_sports':{sport:section['error'] for sport,section in fresh['sports'].items()
                                                   if sport in ('nba','nhl','nfl') and section.get('error')},
@@ -818,6 +915,13 @@ def schema(conn):
         detail TEXT NOT NULL, snapshot_sha256 TEXT, snapshot_as_of TEXT, payload TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS ticket_review_starts (
         snapshot_sha256 TEXT PRIMARY KEY, day TEXT NOT NULL, started_at TEXT NOT NULL, earliest_tipoff TEXT);
+      CREATE TABLE IF NOT EXISTS ticket_review_blockers (
+        blocker_id INTEGER PRIMARY KEY AUTOINCREMENT, recorded_at TEXT NOT NULL, day TEXT NOT NULL, sport TEXT NOT NULL,
+        game_id TEXT, issue TEXT NOT NULL, detail TEXT NOT NULL);
+      CREATE TRIGGER IF NOT EXISTS ticket_review_blockers_no_update BEFORE UPDATE ON ticket_review_blockers
+        BEGIN SELECT RAISE(ABORT,'ticket review blockers are append-only'); END;
+      CREATE TRIGGER IF NOT EXISTS ticket_review_blockers_no_delete BEFORE DELETE ON ticket_review_blockers
+        BEGIN SELECT RAISE(ABORT,'ticket review blockers are append-only'); END;
       CREATE TRIGGER IF NOT EXISTS ticket_review_starts_no_update BEFORE UPDATE ON ticket_review_starts
         BEGIN SELECT RAISE(ABORT,'ticket review starts are append-only'); END;
       CREATE TRIGGER IF NOT EXISTS ticket_review_starts_no_delete BEFORE DELETE ON ticket_review_starts
@@ -968,15 +1072,39 @@ def settle(*, now=None, notify=False):
                     report['errors'].append({'ticket_id':t['ticket_id'],'error':'settlement_unavailable'})
                 result = {'ticket_id':t['ticket_id'], 'label':t['label'], 'grade':ticket_grade(legs), 'legs':legs,
                           'kind':'suggested_ticket', 'profit':None}
+                # Append-only: a row is added whenever the result differs from the ticket's latest stored result, also when
+                # a correction returns to an earlier one (that row names the result it supersedes, so its evidence hash
+                # and its notice are new). First and unchanged results keep the original hashing. A result with a leg
+                # that could not be graded ('unavailable') is a failed reading, never a correction: it is stored as
+                # before and skipped when looking for the latest result, so a passing error cannot repeat a notice.
                 raw = json.dumps(result,sort_keys=True)
                 digest = sha(raw.encode())
-                conn.execute('INSERT OR IGNORE INTO ticket_grades VALUES (?,?,?,?)', (t['ticket_id'],digest,now,raw))
+                corrected = False
+                if any(p['grade']=='unavailable' for p in legs):
+                    conn.execute('INSERT OR IGNORE INTO ticket_grades VALUES (?,?,?,?)', (t['ticket_id'],digest,now,raw))
+                else:
+                    latest = None
+                    for row in conn.execute('SELECT evidence_hash,payload FROM ticket_grades WHERE ticket_id=? ORDER BY rowid DESC', (t['ticket_id'],)):
+                        stored = json.loads(row['payload'])
+                        if not any(p.get('grade')=='unavailable' for p in stored.get('legs', [])):
+                            latest = (row['evidence_hash'], json.dumps({k:v for k,v in stored.items() if k!='supersedes'},sort_keys=True))
+                            break
+                    if latest and latest[1] == raw:
+                        digest = latest[0]
+                    else:
+                        if conn.execute('SELECT 1 FROM ticket_grades WHERE ticket_id=? AND evidence_hash=?', (t['ticket_id'],digest)).fetchone():
+                            raw = json.dumps({**result, 'supersedes': latest[0]},sort_keys=True)
+                            digest = sha(raw.encode())
+                            corrected = True
+                        conn.execute('INSERT OR IGNORE INTO ticket_grades VALUES (?,?,?,?)', (t['ticket_id'],digest,now,raw))
                 report['tickets'].append(result)
                 # Only confirmed sent batches receive a settlement notification.
                 batch = conn.execute('SELECT batch_key FROM ticket_items WHERE ticket_id=? AND chat_id=?', (t['ticket_id'],chat)).fetchone()
                 confirmed = batch and conn.execute("SELECT 1 FROM deliveries WHERE delivery_key=? AND status='sent'",(batch['batch_key'],)).fetchone()
                 if confirmed and result['grade'] != 'pending':
                     text = f"PARLAY RESULT / {t['ticket_id']} / {result['grade'].upper()}\n" + '\n'.join(f"{p.get('pick_label',p['forecast_id'])}: {p['grade']}" for p in legs)
+                    if corrected:
+                        text += '\nCorrected result: it replaces the result sent before.'
                     notices.append((result,'ticket-result:'+t['ticket_id']+':'+digest,text))
         # All grading is committed before ANY external call. Notification failure cannot suppress outcomes.
         if notify and notices:
@@ -1235,6 +1363,10 @@ def main():
                     report['review'] = review_state(snap)
                 except Exception as exc:
                     report['review'] = {'due': None, 'reason': 'review_state_unavailable', 'error': type(exc).__name__}
+                try:
+                    record_blockers(report['review'])
+                except Exception as exc:   # recording never blocks settlement, alerts or the trigger
+                    report['review']['blockers_error'] = type(exc).__name__
                 try:
                     gone = record_interrupted(snap)
                 except Exception as exc:

@@ -851,6 +851,9 @@ class SoccerMeta(BaseModel):
     seasons: list[int]
     matches_stored: int
     last_refresh_at: Optional[datetime]
+    forecast_state: Literal["recorded", "awaiting", "out_of_scope", "no_live_store"] = Field(
+        description="Live forecasts of this competition in this store: recorded; in the sealed scope but none recorded yet; "
+                    "outside the sealed scope; or a store without live forecast tables.")
     capabilities: list[NflCapability]
 
 
@@ -862,6 +865,9 @@ class SoccerMatchesResponse(BaseModel):
     prev_date: Optional[date]
     next_date: Optional[date]
     last_refresh_at: Optional[datetime]
+    live_forecasts: dict[str, dict] = Field(default_factory=dict, description="match_id -> the latest recorded live 90-minute "
+                                            "forecast (as in /api/soccer/live) of the listed matches that have one. Kept "
+                                            "beside the matches: a match record itself never carries a forecast.")
 
 
 class SoccerResultRevision(BaseModel):
@@ -887,6 +893,9 @@ class SoccerMatchDetail(BaseModel):
     home_recent: list[SoccerMatch]
     away_recent: list[SoccerMatch]
     result_revisions: list[SoccerResultRevision]
+    live_forecast: Optional[dict] = Field(None, description="This match's latest recorded live 90-minute forecast "
+                                                            "(as in /api/soccer/live), or null when none was recorded.")
+    forecast_state: Literal["recorded", "awaiting", "out_of_scope", "no_live_store"]
     capabilities: list[NflCapability]
 
 

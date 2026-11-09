@@ -1903,3 +1903,20 @@ Six audit items addressed in the existing implementation (tickets/telegram/confi
 - Actual user-requested test: `PYTHONPATH=backend backend/.venv/bin/python -m app.tickets preview --plan /tmp/visual-ticket-test-input-20261108.json` (network-enabled) returned sent. Read-only receipt: image message238, attempted19:08:08Z. Canonical renderer produced mixed past ATL1088 winner + OTT1012 +1.5, numbered ticket/legs, TEST ID, Toronto start dates/times, $3 EXAMPLE and TEST/PAST GAMES/RESULTS KNOWN. PNG `/tmp/visual-ticket-test-20261108.png` visually inspected before sending; exact PNG/caption archived under data/reports/tickets/previews. No betting budget reserved. API acceptance, not user visibility/read confirmation.
 - `OMP_NUM_THREADS=4 backend/.venv/bin/python scripts/check_project.py --ready`:FAILED on the same existing audit batch1-final.patch and batch1-final.diffstat.txt names; entire suite not reached. Checker unchanged and audit evidence preserved. Scoped diff whitespace check passed.
 - Installed skill and existing ACTIVE hourly automation updated to require visual PNG after readable text, inspect both receipts and treat retry/partial failures as failures. Schedule remains hourly :10. No forecast-release promotion, launchd change, full deployment or soccer reserved-test access. Sender/helper still run the active working tree; guarded release remains open. NBA_DATA_DIR isolates the ledger, not bot credentials; mock configuration/network remains mandatory for test copies.
+
+## Soccer page wording follows stored forecasts — Nov 8 audit fixes (branch `audit-fixes-20261108`, not deployed)
+
+Worktree `~/Desktop/nba-predictor-audit-fixes` on release commit `7f629ea`; API and built frontend from the worktree on
+scratch copies of `data/soccer.sqlite` (ports 8111/4191, and 8112/4192 for a copy whose Ligue 1 fetch times were moved
+back three days). Headless Chrome 156 with DevTools device metrics: real 1280×900 and 390×844 viewports.
+
+- `node docs/evidence/audit-fixes-2026-11-08/scripts/browser_check.mjs 9333 <out>`: **24/24 ok** (12 screens × 2 widths):
+  viewport equals the requested width, no horizontal overflow, no failed `/api/` call, none of the old sentences
+  ("Soccer predictions are not available", "no validated model exists", "Not refreshed automatically", "No live soccer
+  forecast, odds", "No soccer model exists") anywhere in the page, and the expected text present.
+- Screens: forecasts recorded (UEFA Nations League); recorded competition with a day still awaiting forecasts (Nov 15);
+  mixed day (friendlies Nov 14); awaiting competition (Premier League, played day); outside the tested scope (Europa
+  League); empty competition (Euro qualifying); stale source (scratch copy); failed live read (request blocked in the
+  browser); match with and without a forecast; soccer Performance page; header "Real data" note.
+- `npm run test:unit`: 21 passed. `npm run build`: passed.
+- Not verified: the live app (nothing deployed); NBA/NHL/NFL screens (not changed, not re-run); dark theme.
