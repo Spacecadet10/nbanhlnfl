@@ -454,6 +454,14 @@ def review_state(snap):
     return state
 
 
+def _text(value, what):
+    """A free-text plan field: non-text (e.g. a list of notes) is a plain validation refusal the reviewer can retry, never an
+    AttributeError recorded as a backend failure (review 9, 2026-11-09T01:58Z)."""
+    if not isinstance(value, str):
+        raise ValueError(f'{what} must be text, not {type(value).__name__}; review again')
+    return value.strip()
+
+
 def check(plan):
     raw = Path(plan['snapshot_path']).read_bytes()
     old = json.loads(raw)
@@ -466,7 +474,7 @@ def check(plan):
     for field in ('skill_sha256', 'helper_sha256'):
         if review[field] != fresh[field] or old[field] != fresh[field]:
             raise ValueError('Skill or helper changed; review again')
-    if review['snapshot_sha256'] != sha(raw) or not review['notes'].strip():
+    if review['snapshot_sha256'] != sha(raw) or not _text(review['notes'], 'review.notes'):
         raise ValueError('Missing or mismatched review')
     if not isinstance(review['markets_reviewed'], dict):
         raise ValueError('Record the review of each supported market')
@@ -474,7 +482,7 @@ def check(plan):
         if 'report' in section:
             markets = {p['market'] for p in section['report']['picks']}
             covered = review['markets_reviewed'].get(sport, {})
-            if not markets <= covered.keys() or any(not covered[m].strip() for m in markets):
+            if not markets <= covered.keys() or any(not _text(covered[m], f'markets_reviewed.{sport}.{m}') for m in markets):
                 raise ValueError('Every available market needs a review note')
     accounted = review.get('forecasts_reviewed', {})
     required = set()
@@ -489,13 +497,13 @@ def check(plan):
         accounted[key].get('decision') not in ('candidate', 'excluded') or
         not str(accounted[key].get('reason', '')).strip() for key in required):
         raise ValueError('Every available pregame forecast needs a candidate/excluded decision and reason; re-review newly published picks')
-    if not review.get('combination_comparison', '').strip():
+    if not _text(review.get('combination_comparison', ''), 'review.combination_comparison'):
         raise ValueError('Compare combinations even when no new stakes can be allocated')
     if not isinstance(plan['tickets'], list) or len(plan['tickets']) > MAX_TICKETS:
         raise ValueError('At most six ticket options per review')
     seen, combinations, resolved = {}, set(), []
     for ticket in plan['tickets']:
-        if not ticket['label'].strip() or not MIN_LEGS <= len(ticket['legs']) <= MAX_LEGS:
+        if not _text(ticket['label'], 'ticket label') or not MIN_LEGS <= len(ticket['legs']) <= MAX_LEGS:
             raise ValueError('A ticket needs a label and two to six legs')
         if not isinstance(ticket.get('payout_assessment'), str) or not ticket['payout_assessment'].strip():
             raise ValueError('Each ticket needs a payout_assessment: judge its payout at the stored prices against its uncertainty; review again')
@@ -532,7 +540,7 @@ def check(plan):
                 raise ValueError(f"Line changed since forecast ({pick['matchup']} {pick['market']}: {quote['line_at_forecast']:g} "
                                  f"-> {quote['line_now']:g}); review again")
             key = (sport, pick['game_id'])
-            if key in ticket_games or not leg['rationale'].strip():
+            if key in ticket_games or not _text(leg['rationale'], 'leg rationale'):
                 raise ValueError('Repeated game within ticket or missing rationale')
             identity = (sport, pick['forecast_id'])
             if key in seen and seen[key] != identity:

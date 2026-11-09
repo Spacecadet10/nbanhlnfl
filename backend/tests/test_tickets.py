@@ -984,3 +984,19 @@ def test_a_non_text_payout_assessment_is_a_clear_retryable_refusal(setup, bad):
     plan['tickets'][0]['payout_assessment']=bad
     with pytest.raises(ValueError, match='review again'):
         t.check(plan)
+
+
+@pytest.mark.parametrize('where', ['notes', 'combination_comparison', 'market_note', 'label', 'rationale'])
+def test_non_text_review_fields_are_clear_retryable_refusals(setup, where):
+    """Revision 4's first live run (review 9, 2026-11-09T01:58Z): review.notes arrived as a LIST and check() crashed on
+    .strip() with an AttributeError, recorded as a non-retryable 'backend compatibility' failure. Every free-text plan
+    field must refuse a non-text value with a plain '…; review again' validation error."""
+    plan,snap,sent,path=setup;plan['tickets']=[ticket([('nba',1),('nhl',2)],None)]
+    bad=['Read the skill.', 'Compared markets.']
+    if where=='notes': plan['review']['notes']=bad
+    if where=='combination_comparison': plan['review']['combination_comparison']=bad
+    if where=='market_note': plan['review']['markets_reviewed']['nba']['winner']=bad
+    if where=='label': plan['tickets'][0]['label']=bad
+    if where=='rationale': plan['tickets'][0]['legs'][0]['rationale']=bad
+    with pytest.raises(ValueError, match='review again'):
+        t.check(plan)
