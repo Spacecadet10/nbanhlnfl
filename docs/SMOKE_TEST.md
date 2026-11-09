@@ -1922,5 +1922,10 @@ back three days). Headless Chrome 156 with DevTools device metrics: real 1280×9
 - After the independent review (dark-theme finding): the live forecast card now uses the theme tokens. Same script with
   dark-theme cases and a contrast measurement of the card text: **30/30 ok**; lowest contrast 7.26 in dark and 5.87 in
   light (it was 1.08 in dark on commit 635a4ec: `17-dark-card-before-fix.txt`).
-- Not verified by this session: the live app (nothing deployed); NBA/NHL/NFL screens (unchanged; the reviewer's 160
+- After the consolidated review (three reviewers): the page no longer crashes when served by an API older than itself
+  (base-commit API behind the new build: 3 screens × 2 widths ok; the pre-fix build crashed on the match-day page,
+  `21-old-api-pairing-before-fix.txt`); a scheduled match past its forecast cutoff reads "No forecast: none was recorded
+  before this match's cutoff …" (clock moved 10 days ahead in the browser); `.error-notice` has a style. Final run of
+  the script: **38/38 ok**.
+- Not verified by this session: the live app (nothing deployed); NBA/NHL/NFL screens (unchanged; the reviewers' own
   captures found no regression).

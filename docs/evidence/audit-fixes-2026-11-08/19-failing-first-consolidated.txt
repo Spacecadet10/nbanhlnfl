@@ -1,0 +1,15 @@
+E       AssertionError: assert 2 == 1
+E        +  where 2 = len(['PARLAY RESULT / 2026-11-08-f677d84216f1 / LOSS\nB1 win: loss\nB2 win: pending\nB3 win: pending', 'PARLAY RESULT / 2026-11-08-f677d84216f1 / LOSS\nB1 win: loss\nB2 win: win\
+E        +    where ['PARLAY RESULT / 2026-11-08-f677d84216f1 / LOSS\nB1 win: loss\nB2 win: pending\nB3 win: pending', 'PARLAY RESULT / 2026-11-08-f677d84216f1 / LOSS\nB1 win: loss\nB2 win: win\nB3 wi
+E       AssertionError: assert ['LOSS', 'WIN'] == ['LOSS', 'PENDING', 'WIN']
+E         
+E         At index 1 diff: 'WIN' != 'PENDING'
+E         Right contains one more item: 'WIN'
+E         Use -v to get more diff
+E       TypeError: dict() got multiple values for keyword argument 'status'
+E       Failed: DID NOT RAISE ValueError
+FAILED tests/test_tickets.py::test_lost_ticket_is_announced_once_then_only_recapped_when_every_leg_is_settled
+FAILED tests/test_tickets.py::test_announced_loss_that_is_corrected_while_other_legs_are_open_is_announced_as_a_correction
+FAILED tests/test_tickets.py::test_soccer_match_that_starts_unreviewed_is_reported_and_explained_like_any_game
+FAILED tests/test_tickets.py::test_locked_forecast_selected_as_a_leg_is_refused_at_check_with_a_retryable_reason
+4 failed, 3 passed, 125 deselected in 0.94s

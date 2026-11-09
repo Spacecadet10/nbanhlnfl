@@ -1060,10 +1060,12 @@ def test_game_blocked_until_kickoff_is_reported_with_its_recorded_blocker(setup,
     assert code==0 and 'nfl' in json.loads(out)['review']['unavailable']
     snap['as_of']='2026-11-08T17:15:00Z'
     assert run_cli(monkeypatch,capsys,'preflight','--brief')[0]==0  # still refused at the next 15-minute run
-    snap['sports']['nfl']=healthy;started(snap)                     # readable again only after kickoff
+    refused=snap['sports']['nfl'];started(snap,'2026-11-08T18:02:00Z');snap['sports']['nfl']=refused
+    assert run_cli(monkeypatch,capsys,'preflight','--brief')[0]==0  # still refused at the first run after kickoff
+    snap['sports']['nfl']=healthy;started(snap)                     # readable again only later
     missed={(m['sport'],m['game_id']):m for m in t.review_state(snap)['missed_before_start']}
     entry=missed[('nfl','g1')]
-    assert entry['explained'] is True
+    assert entry['blocker_observed'] is True and entry['explained'] is True   # blocked at the checks on both sides of the start
     assert entry['recorded_blockers']==[dict(issue='inactive',detail='definition_mismatch',first_seen_at=NOW,
                                              last_seen_at='2026-11-08T17:15:00Z',observations=2)]
     # NBA was reviewable (a review was due) and no review ran: nothing explains that miss
@@ -1302,3 +1304,166 @@ def test_rejected_notice_is_not_what_was_announced_and_a_deferred_one_is_retried
     t.settle(now='2026-11-08T21:47:00Z', notify=True); t.settle(now='2026-11-08T21:48:00Z', notify=True)
     texts = notice_texts(sent, before)
     assert len(texts) == 2 and texts[1].endswith('B2 win: push\n' + t.CORRECTED_LINE)   # sent once, after the retry time
+
+
+# --- Consolidated review of 635a4ec (three reviewers) and the owner's notification rule, 2026-11-08 -----------------------
+# Rule: every reading is archived; the user is told the first result, genuine grade corrections, and one final recap
+# when every leg is settled. An unchanged losing ticket is not announced again each time another leg settles, and an
+# unreadable leg never produces a result notice.
+def three_leg_ticket(setup, monkeypatch, grades, raises=None):
+    plan, snap, sent, path = setup; plan['tickets'] = [ticket([('nba', 1), ('nhl', 2), ('nfl', 3)])]
+    assert t.send(t.check(plan)) == 'sent'
+    def grade(p, now):
+        if raises and raises.get(p['forecast_id']):
+            raise raises[p['forecast_id']]
+        return dict(forecast_id=p['forecast_id'], pick_label=p['pick_label'], grade=grades[p['forecast_id']])
+    monkeypatch.setattr(t, 'grade_leg', grade)
+    return sent
+
+
+def grade_rows():
+    with tg.ledger() as c:
+        return [json.loads(r[0]) for r in c.execute('select payload from ticket_grades order by as_of, rowid')]
+
+
+def test_lost_ticket_is_announced_once_then_only_recapped_when_every_leg_is_settled(setup, monkeypatch):
+    grades = {1: 'loss', 2: 'pending', 3: 'pending'}; sent = three_leg_ticket(setup, monkeypatch, grades); before = len(sent)
+    t.settle(now='2026-11-08T21:00:00Z', notify=True)                       # the initial loss
+    grades[2] = 'win'; t.settle(now='2026-11-08T22:00:00Z', notify=True)    # another leg settles: archived, not announced
+    assert len(notice_texts(sent, before)) == 1
+    grades[3] = 'push'; t.settle(now='2026-11-08T23:00:00Z', notify=True)   # the last leg settles: one recap
+    t.settle(now='2026-11-08T23:15:00Z', notify=True)                       # unchanged: nothing
+    texts = notice_texts(sent, before)
+    assert [x.split('\n')[1:] for x in texts] == [['B1 win: loss', 'B2 win: pending', 'B3 win: pending'],
+                                                  ['B1 win: loss', 'B2 win: win', 'B3 win: push']]
+    assert not any(t.CORRECTED_LINE in x for x in texts)                    # an update is not a correction
+    assert [[p['grade'] for p in r['legs']] for r in grade_rows()] == [['loss', 'pending', 'pending'],
+                                                                      ['loss', 'win', 'pending'], ['loss', 'win', 'push']]
+
+
+def test_announced_loss_that_is_corrected_while_other_legs_are_open_is_announced_as_a_correction(setup, monkeypatch):
+    grades = {1: 'loss', 2: 'pending', 3: 'pending'}; sent = three_leg_ticket(setup, monkeypatch, grades); before = len(sent)
+    t.settle(now='2026-11-08T21:00:00Z', notify=True)
+    grades[1] = 'win'; t.settle(now='2026-11-08T21:30:00Z', notify=True)    # the announced loss was wrong: ticket is open again
+    grades[2] = 'win'; t.settle(now='2026-11-08T22:00:00Z', notify=True)    # a leg settles: archived only
+    grades[3] = 'win'; t.settle(now='2026-11-08T23:00:00Z', notify=True)    # all settled: the final result
+    texts = notice_texts(sent, before)
+    assert [x.split('\n')[0].rsplit(' / ', 1)[1] for x in texts] == ['LOSS', 'PENDING', 'WIN']
+    assert [t.CORRECTED_LINE in x for x in texts] == [False, True, False]
+
+
+def test_unreadable_legs_of_any_kind_never_produce_a_result_notice(setup, monkeypatch):
+    grades = {1: 'loss', 2: 'pending', 3: 'pending'}; raises = {}
+    sent = three_leg_ticket(setup, monkeypatch, grades, raises); before = len(sent)
+    t.settle(now='2026-11-08T21:00:00Z', notify=True)
+    for minute, error in enumerate((OSError('disk'), ValueError('identity'), KeyError('row'), None), start=1):
+        raises[2] = error; raises[3] = error if minute % 2 else None
+        t.settle(now=f'2026-11-08T21:{minute:02d}:00Z', notify=True)
+    assert len(notice_texts(sent, before)) == 1
+    assert len(grade_rows()) >= 4                                           # each distinct failed reading is still archived
+
+
+def test_correction_computed_while_notices_were_off_is_still_labelled_when_it_is_sent(setup, monkeypatch):
+    grades = {1: 'loss', 2: 'win'}; sent = settled_ticket(setup, monkeypatch, grades); before = len(sent)
+    t.settle(now='2026-11-08T21:00:00Z', notify=True)
+    grades[1] = 'win'; t.settle(now='2026-11-08T21:30:00Z')                 # stored by a run without --notify
+    t.settle(now='2026-11-08T21:45:00Z', notify=True)
+    texts = notice_texts(sent, before)
+    assert len(texts) == 2 and texts[1].split('\n')[0].endswith('/ WIN') and texts[1].endswith(t.CORRECTED_LINE)
+
+
+def soccer_pick(i, tipoff, **over):
+    return dict(dict(forecast_id=i, game_id=f'soccer:eng.1:{i}', market='1x2_regulation', matchup=f'Home{i} vs Away{i}',
+                     pick_label=f'Home{i} win (90 min)', outcome='home', probability=.5, status='scheduled', grade='pending',
+                     generated_at='2026-11-06T03:00:00Z', cutoff_at='2026-11-08T06:00:00Z', tipoff=tipoff, competition='eng.1'), **over)
+
+
+def test_soccer_match_that_starts_unreviewed_is_reported_and_explained_like_any_game(setup, monkeypatch, capsys):
+    plan, snap, sent, path = setup
+    monkeypatch.setattr(t, 'settle', lambda **kw: {'errors': [], 'tickets': []})
+    for sport in ('nba', 'nhl', 'nfl'): snap['sports'][sport]['report']['picks'] = []
+    snap['sports']['soccer'] = dict(freshness=dict(source_state='fresh', failing=[], competitions_live=['eng.1']), refused={},
+                                    missing_due_games=[], report=dict(mode='real', picks=[
+                                        soccer_pick(1, '2026-11-08T18:00:00Z'),
+                                        soccer_pick(9, '2026-11-07T15:00:00Z', status='final', grade='win'),         # yesterday's match
+                                        soccer_pick(8, '2026-11-08T18:00:00Z', status='postponed')]))                # never started
+    code, out = run_cli(monkeypatch, capsys, 'preflight', '--brief')         # 17:00: one eligible match, a single-game window
+    assert json.loads(out)['review']['reason'] == 'single_game_window'
+    snap['as_of'] = '2026-11-08T18:05:00Z'
+    snap['sports']['soccer']['report']['picks'][0]['status'] = 'in_progress'
+    missed = t.review_state(snap)['missed_before_start']
+    assert [(m['sport'], m['game_id']) for m in missed] == [('soccer', 'soccer:eng.1:1')]
+    assert missed[0]['explained'] is True and missed[0]['recorded_blockers'][0]['issue'] == 'single_game_window'
+    assert missed[0]['review_window_from'] == '2026-11-08T16:00:00Z'
+
+
+def test_observation_made_before_the_review_window_opened_does_not_explain_a_miss(setup, monkeypatch, capsys):
+    plan, snap, sent, path = setup
+    monkeypatch.setattr(t, 'settle', lambda **kw: {'errors': [], 'tickets': []})
+    healthy = copy.deepcopy(snap['sports']['nfl'])
+    snap['as_of'] = '2026-11-08T15:30:00Z'                                   # 2.5 h before kickoff: outside the window
+    for sport in ('nba', 'nhl'): snap['sports'][sport]['report']['picks'] = []
+    snap['sports']['nfl'] = {'error': 'inactive', 'reason': 'definition_mismatch', 'unserved_forecasts': 5, 'unserved_games': 5}
+    run_cli(monkeypatch, capsys, 'preflight', '--brief')
+    snap['sports']['nfl'] = healthy; started(snap)
+    entry = t.review_state(snap)['missed_before_start'][0]
+    assert entry['recorded_blockers'] == [] and entry['last_observation'] is None and entry['explained'] is False
+
+
+def test_locked_forecast_selected_as_a_leg_is_refused_at_check_with_a_retryable_reason(setup):
+    plan, snap, sent, path = setup; plan['tickets'] = [ticket([('nba', 1), ('nhl', 2)])]
+    assert t.send(t.check(plan)) == 'sent'
+    snap['sports']['nba']['report']['picks'][3]['game_id'] = 'g1'            # nba:4 is another forecast of ticketed game g1
+    relock(plan, snap); plan['tickets'] = [ticket([('nba', 4), ('nfl', 5)])]
+    with pytest.raises(ValueError, match=r'nba:4 is locked.*review again'):
+        t.check(plan)
+    plan['tickets'] = []
+    del plan['review']['forecasts_reviewed']['nba:4']
+    reason = t.check(plan)['plan']['review']['forecasts_reviewed']['nba:4']['reason']
+    assert 'reserved or sent ticket(s)' in reason                           # a reservation locks too, delivered or not
+
+
+# --- Owner, 2026-11-08: "a blocker was observed" is not "the entire missed window is explained" (HOU @ LAC) ---------------
+def test_blocker_seen_before_the_start_but_gone_at_the_next_check_does_not_explain_the_whole_window(setup, monkeypatch, capsys):
+    plan, snap, sent, path = setup
+    monkeypatch.setattr(t, 'settle', lambda **kw: {'errors': [], 'tickets': []})
+    healthy = copy.deepcopy(snap['sports']['nfl'])
+    for sport in ('nba', 'nhl'): snap['sports'][sport]['report']['picks'] = []
+    snap['sports']['nfl'] = {'error': 'inactive', 'reason': 'definition_mismatch', 'unserved_forecasts': 5, 'unserved_games': 5}
+    run_cli(monkeypatch, capsys, 'preflight', '--brief')                     # 17:00: the last check before the 18:00 start
+    snap['sports']['nfl'] = healthy; started(snap, '2026-11-08T18:01:30Z')   # first check after the start: readable again
+    run_cli(monkeypatch, capsys, 'preflight', '--brief')
+    entry = t.review_state(snap)['missed_before_start'][0]
+    assert entry['blocker_observed'] is True and entry['explained'] is False
+    assert entry['last_observation'] == dict(issue='inactive', at=NOW, minutes_before_start=60)
+    assert entry['explanation'] == ("Blocker 'inactive' was last seen 60 minutes before the start and was not seen at or after "
+                                    "it, so whether a review was possible in those 60 minutes is not established.")
+
+
+def test_single_game_window_explains_the_whole_window_only_while_no_other_game_became_eligible(setup, monkeypatch, capsys):
+    plan, snap, sent, path = setup
+    monkeypatch.setattr(t, 'settle', lambda **kw: {'errors': [], 'tickets': []})
+    for sport in ('nhl', 'nfl'): snap['sports'][sport]['report']['picks'] = []
+    lone = [p for p in snap['sports']['nba']['report']['picks'] if p['game_id'] == 'g1']
+    snap['sports']['nba']['report']['picks'] = lone
+    run_cli(monkeypatch, capsys, 'preflight', '--brief')                     # 17:00: one game, a single-game window
+    later = dict(lone[0], forecast_id=77, game_id='h77', generated_at='2026-11-08T17:30:00Z', tipoff='2026-11-08T19:30:00Z')
+    snap['sports']['nhl']['report']['picks'] = [later]                       # a second game became eligible at 17:30
+    snap['as_of'] = '2026-11-08T18:05:00Z'; lone[0]['status'] = 'in_progress'
+    entry = t.review_state(snap)['missed_before_start'][0]
+    assert entry['blocker_observed'] is True and entry['explained'] is False
+    assert 'another game became eligible' in entry['explanation']
+    snap['sports']['nhl']['report']['picks'] = []                            # without it the lone window lasted to the start
+    entry = t.review_state(snap)['missed_before_start'][0]
+    assert entry['explained'] is True and entry['explanation'].startswith('Single-game window')
+
+
+def test_refused_review_is_filed_under_the_day_of_its_snapshot_whatever_the_calendar_says(setup, monkeypatch, capsys):
+    # Found when the suite ran past midnight: the refusal was filed under the wall-clock day, so on any other day than
+    # the fixture's the trigger could not find it (the release has this too).
+    plan, snap, sent, path = setup
+    bad = copy.deepcopy(plan); bad['review']['combination_comparison'] = ''
+    assert run_cli(monkeypatch, capsys, 'check', '--plan', str(plan_file(bad, path, 'bad.json')))[0] == 1
+    with tg.ledger() as c:
+        assert [r[0] for r in c.execute('select day from ticket_reviews')] == [snap['date']]
+    assert t._snapshot_day({'snapshot_path': str(path / 'missing.json')}) is None and t._snapshot_day(None) is None

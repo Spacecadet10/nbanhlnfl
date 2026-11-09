@@ -160,30 +160,48 @@ Still open: guarded-release operation of the sender/helper, cross-window stake p
 
 Evidence and causes: `docs/evidence/audit-fixes-2026-11-08/README.md`.
 
-- **Locks are recorded by the helper.** A forecast whose game is already in a sent ticket with a different forecast cannot
-  be a leg. `check` now records that itself for every such forecast the reviewer left out
+- **Locks are recorded by the helper.** A forecast whose game is already in a reserved or sent ticket with a different
+  forecast cannot be a leg. `check` records that itself for every such forecast the reviewer left out
   (`forecasts_reviewed[key] = {decision: excluded, reason: "Locked: …", recorded_by: helper}`) and archives every lock
-  under `locks` (ticket IDs, the ticket's forecast and pick). An entry the reviewer wrote is kept as written. Forecasts
-  that are not locked still need the reviewer's own decision and reason. Reason text is never compared or deduplicated:
-  one explanation may be attached to several forecasts.
+  under `locks` (ticket IDs, the ticket's forecast and pick). An entry the reviewer wrote is kept as written. A locked
+  forecast selected as a leg is refused by `check` with a "review again" reason (before, only `send` refused it, without
+  a retry). Forecasts that are not locked still need the reviewer's own decision and reason. Reason text is never
+  compared or deduplicated: one explanation may be attached to several forecasts.
 - **Why a game started unreviewed.** `preflight` appends to `ticket_trigger_observations` (new append-only table in the
   Telegram ledger, created on first use) what it saw for each pending game at that run: what kept it out of review (a
   refused sport when it excludes forecasts, an unusable source, a moved line, a single-game window; also shown as
   `review.not_reviewed_now`), or that a review of it was due (`review_due`). Each `missed_before_start` entry carries, from
-  its own pregame window, `recorded_blockers`, `review_due_seen`, `failed_reviews` and `last_observation` (what, when, and
-  how many minutes before the start). `explained` is true only when the last thing the trigger saw before the start was
-  a blocker, or a review failed after the trigger last said one was due. A blocker that cleared while reviews were then
-  due and none ran leaves `explained` false. `status` records nothing.
-- **Stored results and announced results are decided separately.**
-  - *Stored:* `ticket_grades` gets a row whenever the result differs from the ticket's latest stored result, including a
-    return to an earlier one (that row carries `supersedes`, the hash it replaces). Hashes of first and unchanged
-    results are as before. A result with a leg that could not be graded is stored as before and skipped when comparing.
-  - *Announced:* a result notice says the ticket's grade and each leg's grade. It is compared with the last notice that
-    reached the user for that ticket (sent or unconfirmed; a rejected or deferred notice does not count): identical
-    content reuses that notice's key, so nothing is sent again (a pending spell in between, or a corrected score with
-    the same grades, changes nothing the notice says). A deferred notice with the same content is retried under its own
-    key. Different content is sent once under a new key. It ends with "Corrected result: it replaces the result sent before." only when a leg that was
-    announced as settled now has another grade; a leg that was open and settles is an update without that line.
+  its review window (the two hours before its start, `review_window_from`), `recorded_blockers`, `review_due_seen`,
+  `failed_reviews` and `last_observation` (what, when, and how many minutes before the start). Soccer matches are
+  covered too (their forecasts are made at the cutoff, days before, so they have their own "was reviewable" rule).
+  `status` records nothing.
+  - Two different facts are reported. **`blocker_observed`**: a blocker was recorded at some check in the window.
+    **`explained`**: the entire window is accounted for. That needs either a review that failed after the trigger last
+    said one was due, or a blocker at the last check before the start that is shown to have lasted to the start: the
+    same blocker of that sport recorded again at or after the start, or, for a single-game window, no other game
+    becoming eligible between that check and the start.
+  - A blocker seen at the last check and gone at the next one leaves the minutes in between unaccounted for:
+    `explained` is false and `explanation` says how many (HOU @ LAC on Nov 8: 57). A blocker that cleared while reviews
+    were then due and none ran also leaves `explained` false. No time threshold is used.
+- **What is stored and what is announced are decided separately.**
+  - *Stored (the archive):* `ticket_grades` gets a row whenever the result differs from the ticket's latest stored
+    result, including every leg update and a return to an earlier result (that row carries `supersedes`, the hash it
+    replaces). Hashes of first and unchanged results are as before. A result with a leg that could not be graded is
+    stored as before and skipped when comparing.
+  - *Announced (owner's rule, Nov 8):* the user is told (1) the first settled result of a ticket: a loss as soon as one
+    leg loses, a win or void once every leg is in; (2) a genuine correction: a leg that was announced as settled now has
+    another settled grade, sent with "Corrected result: it replaces the result sent before.", also when it reopens the
+    ticket (`PENDING`); (3) one final recap when every leg is settled and the last notice still showed an open leg.
+    Nothing else is sent: an unchanged losing ticket is not announced again when another leg settles; a leg that reads
+    as open for a while, or a corrected score with the same grades, changes nothing the user was told.
+  - The comparison is with the last notice that reached the user for that ticket (sent or unconfirmed). A notice
+    Telegram rejected or deferred does not count; a deferred notice with the owed text is retried under its own key.
   - A result with a leg that could not be graded is never announced (the `settlement_unavailable` error and alert remain).
+- **A refused review is filed under the day of the snapshot it reviewed**, not the wall-clock day (they differ around
+  Toronto midnight). The trigger looks refusals up by the snapshot's day, so a "review again" refusal just after midnight
+  is found again. The release files it under the wall-clock day; one of its own tests fails on any date but Nov 8.
+- **Known delivery limits, unchanged from the release:** a result notice Telegram rejected stays `failed` and is not
+  sent again or reported on later runs; a deferred notice whose content was overtaken by a newer result stays `retry`
+  and is never sent. Both are visible in `deliveries`; neither is retried automatically.
 - **Unchanged:** selection method, forecast-version lock, 2–6 legs and at most 6 tickets, legacy reservation read,
   existing rows.

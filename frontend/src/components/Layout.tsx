@@ -50,7 +50,7 @@ export function Layout() {
   const meta = useApi((s) => (sport === 'nfl' ? api.nflMeta(s) : sport === 'soccer' ? api.soccerMeta(competition, s) : api.meta(sport, s))
     .then((m) => ({ mode: m.mode, last_refresh_at: m.last_refresh_at,
       forecasts: 'capabilities' in m && m.capabilities.some((c) => c.id === 'forecasts' && c.available),
-      soccerForecasts: 'forecast_state' in m ? m.forecast_state : null })), [sport, competition], fresh.changes);
+      soccerForecasts: 'forecast_state' in m ? m.forecast_state ?? null : null })), [sport, competition], fresh.changes);
   const mode = meta.state.status === 'success' ? meta.state.data.mode : null;
   const lastRefresh = meta.state.status === 'success' ? meta.state.data.last_refresh_at : null;
   const nflForecasts = sport === 'nfl' && meta.state.status === 'success' && meta.state.data.forecasts;

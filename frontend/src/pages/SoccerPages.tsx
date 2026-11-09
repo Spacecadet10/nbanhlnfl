@@ -6,7 +6,8 @@ import type { ApiState } from '../api/useApi';
 import { useCarriedSearch, useCompetition } from '../components/Selection';
 import { AsyncView, Empty } from '../components/States';
 import { gameRoute } from '../components/gameRoute';
-import { emptyCompetition, forecastBanner, importHint, liveLoadProblem, matchForecastNote } from '../components/soccerStatus';
+import { emptyCompetition, forecastBanner, forecastStateOf, importHint, liveLoadProblem, matchForecastNote } from '../components/soccerStatus';
+import type { NflCapability } from '../api/types';
 import { TeamLogo } from '../components/TeamLogo';
 import { EmptyForecastState, Icon, MetricCard, PageTitle } from '../components/ui';
 import { calendarDate, dateTime, FULL_DATE, tipoffTime } from '../format';
@@ -98,8 +99,14 @@ function SoccerEspnScreens({ researchError }: { researchError: string | null }) 
 }
 
 /** What this competition has: recorded forecasts, forecasts still to come, or none (and why), with the capability list. */
+/** The forecast state to describe, also when the API is older than this page (see forecastStateOf). */
+const stateOf = (state: SoccerMeta['forecast_state'], capabilities: NflCapability[]) =>
+  forecastStateOf(state, capabilities.some((c) => c.id === 'forecasts' && c.available));
+/** A match's forecast cutoff for its note, or null when the API reports none. */
+const cutoffOf = (at: string | null | undefined) => (at ? { passed: new Date(at).getTime() <= Date.now(), when: dateTime(at) } : null);
+
 function ForecastStatus({ meta }: { meta: SoccerMeta }) {
-  const banner = forecastBanner(meta.forecast_state, meta.competition);
+  const banner = forecastBanner(stateOf(meta.forecast_state, meta.capabilities), meta.competition);
   return (
     <details className="notice nfl-notice">
       <summary><strong>{banner.title}</strong> {banner.text} <span className="link-btn">{banner.more}</span></summary>
@@ -126,7 +133,7 @@ function SoccerGameDay({ meta }: { meta: SoccerMeta }) {
       <PageTitle icon="ball" plain title={`${meta.competition} matches`} sub="Fixtures and results from ESPN. Kickoff dates are US Eastern."
         right={date && <GameDateControl date={date} dates={meta.match_dates} defaultDate={meta.default_date} onChange={setDate} />} />
       <ForecastStatus meta={meta} />
-      {meta.forecast_state !== 'no_live_store' && <SoccerLivePanel state={live.state} name={meta.competition} />}
+      {stateOf(meta.forecast_state, meta.capabilities) !== 'no_live_store' && <SoccerLivePanel state={live.state} name={meta.competition} />}
       {date ? <SoccerSlate meta={meta} date={date} onChange={setDate} live={live.state.status === 'success' ? live.state.data : null} />
         : <Empty>{emptyCompetition(meta.competition, meta.fetched_dates.length, meta.last_refresh_at, dateTime)}</Empty>}
     </section>
@@ -153,7 +160,7 @@ function SoccerLivePanel({ state, name }: { state: ApiState<SoccerLiveResponse>;
       <p className="small muted">{d.settlement_rule} Model: {d.model.name}, frozen and tested once on held-out seasons; not a betting edge.</p>
       {!d.in_scope ? <Empty>{d.scope_note}</Empty> : (
         <>
-          {d.refresh.stale && (
+          {d.refresh?.stale && (
             <div className="notice error-notice" role="alert">
               <strong>ESPN data for {name} is out of date.</strong> {d.refresh.last_refresh_at
                 ? <>Last retrieved {dateTime(d.refresh.last_refresh_at)}, more than {d.refresh.max_age_hours} h ago.</>
@@ -214,7 +221,7 @@ function SoccerSlate({ meta, date, onChange, live }: {
               <MetricCard icon="scale" label="Draws" tone="dark" value={finals.length ? draws : '—'}
                 hint={finals.length ? 'Level when play ended (a shoot-out does not change the score).' : 'No final result on this date.'} />
               <MetricCard icon="history" label="Last imported" tone="lavender" value={d.last_refresh_at ? dateTime(d.last_refresh_at) : '—'}
-                hint={importHint(meta.competition, live, dateTime)} />
+                hint={importHint(meta.competition, live, dateTime, stateOf(meta.forecast_state, meta.capabilities))} />
             </div>
             {d.matches.length === 0 ? (
               <Empty>
@@ -226,7 +233,8 @@ function SoccerSlate({ meta, date, onChange, live }: {
                 {d.next_date && <button type="button" className="link-btn" onClick={() => onChange(d.next_date)}>Next match day ({calendarDate(d.next_date)})</button>}
               </Empty>
             ) : <ul className="game-grid">{d.matches.map((m) => <SoccerCard key={m.match_id} match={m} date={date}
-                note={matchForecastNote(meta.forecast_state, m.status, d.live_forecasts[m.match_id], m.home.name, m.away.name)} />)}</ul>}
+                note={matchForecastNote(stateOf(meta.forecast_state, meta.capabilities), m.status, d.live_forecasts?.[m.match_id],
+                  m.home.name, m.away.name, cutoffOf(d.forecast_cutoffs?.[m.match_id]))} />)}</ul>}
           </>
         );
       }}
@@ -359,7 +367,8 @@ function SoccerMatchPage({ id }: { id: string }) {
               <div className="card">
                 <h2>Forecast</h2>
                 {d.live_forecast ? <SoccerLiveCard f={d.live_forecast} />
-                  : <EmptyForecastState>{matchForecastNote(d.forecast_state, m.status, null, m.home.name, m.away.name)} No probability, pick, odds or accuracy is shown.</EmptyForecastState>}
+                  : <EmptyForecastState>{matchForecastNote(stateOf(d.forecast_state, d.capabilities), m.status, null, m.home.name, m.away.name,
+                      cutoffOf(d.forecast_cutoff_at))} No probability, pick, odds or accuracy is shown.</EmptyForecastState>}
                 <ul className="nfl-capabilities small">
                   {d.capabilities.filter((c) => ['forecasts', 'odds', 'injuries'].includes(c.id)).map((c) =>
                     <li key={c.id}><strong>{c.label}:</strong> {c.available ? 'available. ' : 'not available. '}<span className="muted">{c.reason}</span></li>)}

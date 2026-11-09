@@ -46,17 +46,54 @@ The audit as received is `00-audit-as-received.txt`.
 - Settlement on copies of the real ledger and stores, Telegram mocked, release code against this branch:
   - `12a-…-two-new-results.txt` (first version of these fixes): two tickets had newly settled; both codes appended the
     same 2 rows and sent the same 2 notices; a second run added and sent nothing.
-  - `12-settle-release-vs-branch.txt` (final code, later copies): nothing new had settled; both codes appended and sent
-    nothing, with 12 result notices already recorded.
+  - `12-settle-release-vs-branch.txt` (final commit, copies taken after the last game ended): nothing new had settled;
+    both codes appended and sent nothing in two runs, with 36 grade rows and 15 result notices already recorded. So
+    switching to this branch sends nothing by itself.
   - `12b-…-nba-store-unreadable.txt` (first version of these fixes): the NBA store copy could not be opened, so six
     tickets had an ungradable leg. Stored rows were identical; the release sent "…/ 1154: unavailable / …", the branch
     did not.
 - One more case was added after the reviewer's four: a notice Telegram rejected is not treated as announced, and a
   deferred one is retried once (`test_rejected_notice_is_not_what_was_announced_and_a_deferred_one_is_retried_once`).
 - `16-full-backend-suite-after-review.txt`: the full suite on the tree with these fixes.
-- The HOU @ LAC replay still reads `explained: true` because the last thing the trigger saw (20:07Z) was the refused
-  sport; `last_observation` now shows that this was 57 minutes before the start. The run that would have seen the
-  recovery did not exist under the hourly schedule of that afternoon.
+- (Superseded by the consolidated table below: HOU @ LAC now reads `blocker_observed: true`, `explained: false`.)
+
+## Consolidated findings of the three reviews of 635a4ec, against the final commit
+
+Reviewers: R1 = session 43 (Opus), R2 = session 5b7a (Opus, `REVIEW-635a4ec.md`), R3 = session 8a1e (Sonnet, relaying its
+reviewer). All three: request changes. Status is for the final commit of this branch; "probe" means the reviewer's own
+test, run unchanged on the final tree (`22-all-reviewer-probes.txt`: 27 of 28 pass; the 28th is explained under the table).
+
+| # | Finding | Raised by | Status | Evidence |
+|---|---|---|---|---|
+| 1 | Result → pending → same result announced again as "Corrected" | R1 must, R2 #5, R3 high | Fixed | probes P1, `test_A_pending_A…`, `test_scn_win_pending_win…` |
+| 2 | Score-only change re-announced | R1 | Fixed | probe P4 |
+| 3 | An unreadable leg triggers a result notice (several for different error types) | R1, R2 #3, R3 high | Fixed: never announced | probes P2, `…different_errors`, `12b-…` |
+| 4 | `explained: true` from a blocker that had cleared | R1 must, R2 #2, R3 medium | Fixed | probes B1, `test_blocker_that_cleared…`, `test_scn_explained_masks…` |
+| 5 | Dark theme: forecast card unreadable | R1, R2 #1 | Fixed | `17-…` (1.08) → `05-…` (7.26) |
+| 6 | New frontend crashes against the old API | R1 note, R2 #4, R3 medium | Fixed: optional fields with fallbacks | `21-…` (crash before) → `05-…` old-api cases |
+| 7 | Soccer matches that start unreviewed are never reported | R3 medium | Fixed | `test_soccer_match_that_starts_unreviewed…` |
+| 8 | "Awaiting forecast" after the cutoff has passed | R3 medium | Fixed: the API reports each match's cutoff | `test_the_api_reports_each_match_forecast_cutoff`, `05-…` cutoff case |
+| 9 | A LOSS is announced again each time another leg settles | R3 open question | Changed by the owner's rule: initial loss, corrections, one final recap | `test_lost_ticket_is_announced_once…` |
+| 10 | First correction unlabelled; label lost when the first attempt did not happen | R3 low, R2 #6 | Fixed | probes `…first_correction_is_labelled`, `test_corrected_label_survives…` |
+| 11 | A locked forecast selected as a leg passes `check`, refused only at send | R3 low | Fixed: refused at `check` with "review again" | `test_locked_forecast_selected_as_a_leg…` |
+| 12 | Lock reason says "sent" for a batch that was only reserved | R3 low | Fixed: "reserved or sent" | same test |
+| 13 | Stale-data hint talks about refused forecasts for competitions never forecast | R3 low | Fixed | frontend unit test |
+| 14 | "Latest stored result" ordered by rowid only | R3 low | Fixed: `as_of DESC, rowid DESC` | code |
+| 15 | `.error-notice` has no style | R2 #7 | Fixed | code |
+| 16 | Review window may start late if a forecast is re-versioned | R2 "not established" | Fixed: the window is the two hours before the start | `test_observation_made_before_the_review_window…` |
+| 17 | `explained` stays true when the last observation was a blocker long before the start (HOU @ LAC, 57 min) | R1 note, R2 #2, owner | Fixed without a threshold: `blocker_observed` and `explained` (entire window) are separate; a blocker must be shown to last to the start | `04-…`, `test_blocker_seen_before_the_start_but_gone_at_the_next_check…` |
+| 18 | A rejected ("failed") result notice is final and silent on later runs | R1 note | Deferred: same as the release; changing retry rules for rejected messages is a delivery-policy decision | — |
+| 19 | A deferred ("retry") notice whose content was overtaken stays in `retry` for ever | R1 note | Deferred: harmless, nothing loops over deliveries; cleaning it would mean editing delivery rows | — |
+| 20 | The observations table cannot be pruned; about one row per pending game per run | R2 note | Deferred: append-only by design; pruning is a storage decision | — |
+| 21 | Basketball icon on the soccer page title | R3 low | Deferred: already in the release, cosmetic, no soccer icon exists in the icon set | — |
+
+| 22 | A refused review is filed under the wall-clock day, not the day of the snapshot it reviewed | Found by the author when the full suite ran past midnight | Fixed: filed under the snapshot's day | `24-…` (3 ticket tests failed on Nov 9), `23-…` (the unmodified release fails one of them too), `test_refused_review_is_filed_under_the_day_of_its_snapshot…` |
+
+The one reviewer probe that fails on the final tree is R3's `test_scn_lock_filled_and_enforced`. It is about the forecast
+lock, not about notifications: it expects `check()` to accept a ticket whose leg is a locked forecast and `send()` to
+refuse it with "identical forecast". R3's own finding 11 asked for that refusal to move into `check()` with "review
+again", which is what the final tree does, so the probe's `checked = t.check(plan)` line now raises. Every notification
+probe of all three reviewers passes unchanged.
 
 ## Not claimed
 

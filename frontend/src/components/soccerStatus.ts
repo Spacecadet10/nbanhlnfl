@@ -3,12 +3,20 @@
 // never say "no forecasts" beside recorded ones, and must tell apart forecasts recorded, matches still awaiting theirs,
 // a competition with nothing stored, and a source that failed or went stale.
 
-export type SoccerForecastState = 'recorded' | 'awaiting' | 'out_of_scope' | 'no_live_store';
+/** 'unknown': the API serving this page is older than the page and does not report the state (during an update). */
+export type SoccerForecastState = 'recorded' | 'awaiting' | 'out_of_scope' | 'no_live_store' | 'unknown';
 type Side = 'home' | 'draw' | 'away';
 interface MatchForecast { probabilities: Record<Side, number>; most_likely: Side; result: Side | null }
 interface LiveFacts {
   check: { checked_at: string } | null;
-  refresh: { last_refresh_at: string | null; max_age_hours: number; stale: boolean };
+  refresh?: { last_refresh_at: string | null; max_age_hours: number; stale: boolean };   // absent from an older API
+}
+/** A match's forecast cutoff: `when` is the formatted time, `passed` whether it is already behind us. */
+export interface ForecastCutoff { passed: boolean; when: string }
+
+/** The state to describe: the API's own, or for an API that does not send it yet, what its capability line allows. */
+export function forecastStateOf(state: SoccerForecastState | undefined, forecastsAvailable: boolean): SoccerForecastState {
+  return state ?? (forecastsAvailable ? 'recorded' : 'unknown');
 }
 
 const pct = (p: number) => `${(p * 100).toFixed(1)}%`;
@@ -20,37 +28,45 @@ export function forecastBanner(state: SoccerForecastState, competition: string):
   }
   if (state === 'awaiting') {
     return { kind: 'awaiting', title: `No ${competition} forecast is recorded yet:`,
-      text: 'the live 90-minute model covers this competition, and each match is forecast before it starts.', more: 'Details' };
+      text: 'the live 90-minute model covers this competition, and each match is forecast by 06:00 UTC on its match day.', more: 'Details' };
   }
   if (state === 'out_of_scope') {
     return { kind: 'none', title: `No live forecast for ${competition}:`,
       text: 'it did not pass its held-out test, so only fixtures and results are shown.', more: 'Details' };
   }
+  if (state === 'unknown') {
+    return { kind: 'none', title: 'Forecast status not reported:',
+      text: 'this server version does not say whether this competition is forecast; fixtures and results are shown.', more: 'Details' };
+  }
   return { kind: 'none', title: 'No live soccer forecasts in this data store:', text: 'fixtures and results only.', more: 'Details' };
 }
 
 /** One match's forecast line: its recorded probabilities, or why there is none (yet). */
-export function matchForecastNote(state: SoccerForecastState, status: string, forecast: MatchForecast | null | undefined, home: string, away: string): string {
+export function matchForecastNote(state: SoccerForecastState, status: string, forecast: MatchForecast | null | undefined, home: string, away: string,
+  cutoff?: ForecastCutoff | null): string {
   if (forecast) {
     const names: Record<Side, string> = { home: `${home} win`, draw: 'Draw', away: `${away} win` };
     const p = forecast.probabilities;
     return `90-minute forecast: ${names.home} ${pct(p.home)} · Draw ${pct(p.draw)} · ${names.away} ${pct(p.away)}.`
       + (forecast.result ? ` 90-minute result: ${names[forecast.result]}.` : '');
   }
+  if (state === 'unknown') return 'Forecast status is not reported by this server version.';
   if (state === 'no_live_store') return 'No forecast: this data store records none.';
   if (state === 'out_of_scope') return 'No forecast: this competition is outside the live model’s tested scope.';
-  if (status === 'scheduled') return 'Awaiting forecast: recorded before kickoff, once the earlier results it depends on are stored.';
-  return 'No forecast was recorded for this match.';
+  if (status !== 'scheduled') return 'No forecast was recorded for this match.';
+  // A forecast is never made after its cutoff, so a scheduled match past it is no longer waiting for one.
+  if (cutoff?.passed) return `No forecast: none was recorded before this match’s cutoff (${cutoff.when}), and none is made after it.`;
+  return `Awaiting forecast: recorded ${cutoff ? `by ${cutoff.when} at the latest` : 'before its cutoff'}, once the earlier results it depends on are stored.`;
 }
 
 /** Hint under "Last imported": what refreshes this competition, and whether its data is too old for new forecasts. */
-export function importHint(competition: string, live: LiveFacts | null, when: (iso: string) => string): string {
+export function importHint(competition: string, live: LiveFacts | null, when: (iso: string) => string, state: SoccerForecastState = 'recorded'): string {
   const base = `Latest ${competition} scoreboard request`;
-  if (!live) return `${base}.`;
+  if (!live || !live.refresh) return `${base}.`;
   if (live.refresh.stale) {
-    return live.refresh.last_refresh_at
-      ? `${base}: more than ${live.refresh.max_age_hours} h old, so new forecasts are refused until it refreshes.`
-      : `No ${competition} scoreboard request is stored, so no forecast can be made.`;
+    const forecast = state === 'recorded' || state === 'awaiting';   // only these competitions have forecasts to refuse
+    if (!live.refresh.last_refresh_at) return `No ${competition} scoreboard request is stored${forecast ? ', so no forecast can be made' : ''}.`;
+    return `${base}: more than ${live.refresh.max_age_hours} h old${forecast ? ', so new forecasts are refused until it refreshes' : ''}.`;
   }
   return live.check
     ? `${base}. The live soccer job last checked this competition ${when(live.check.checked_at)}.`
@@ -77,5 +93,6 @@ export function dataSourceForecastText(state: SoccerForecastState): string {
   if (state === 'recorded') return `Live forecasts cover the 90-minute result only.${rest}`;
   if (state === 'awaiting') return `A live 90-minute forecast model covers this competition; none is recorded for it yet.${rest}`;
   if (state === 'out_of_scope') return `No live forecast is made for this competition.${rest}`;
+  if (state === 'unknown') return rest.trim();
   return `This data store records no live soccer forecast.${rest}`;
 }

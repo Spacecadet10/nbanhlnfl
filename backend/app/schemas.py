@@ -868,6 +868,9 @@ class SoccerMatchesResponse(BaseModel):
     live_forecasts: dict[str, dict] = Field(default_factory=dict, description="match_id -> the latest recorded live 90-minute "
                                             "forecast (as in /api/soccer/live) of the listed matches that have one. Kept "
                                             "beside the matches: a match record itself never carries a forecast.")
+    forecast_cutoffs: dict[str, str] = Field(default_factory=dict, description="match_id -> the UTC time by which that "
+                                             "match's live forecast must be recorded (none is made after it); only for "
+                                             "competitions that are forecast.")
 
 
 class SoccerResultRevision(BaseModel):
@@ -895,6 +898,8 @@ class SoccerMatchDetail(BaseModel):
     result_revisions: list[SoccerResultRevision]
     live_forecast: Optional[dict] = Field(None, description="This match's latest recorded live 90-minute forecast "
                                                             "(as in /api/soccer/live), or null when none was recorded.")
+    forecast_cutoff_at: Optional[str] = Field(None, description="UTC time by which this match's live forecast must be "
+                                                                "recorded; null for a competition that is never forecast.")
     forecast_state: Literal["recorded", "awaiting", "out_of_scope", "no_live_store"]
     capabilities: list[NflCapability]
 

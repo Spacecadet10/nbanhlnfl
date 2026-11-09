@@ -397,9 +397,32 @@ def lock_facts(day, snaps):
 
 def _lock_reason(key, lock):
     sport = key.split(':')[0]
-    return (f"Locked: {lock['matchup']} is already in sent ticket(s) {', '.join(lock['tickets'])} with forecast "
+    return (f"Locked: {lock['matchup']} is already in reserved or sent ticket(s) {', '.join(lock['tickets'])} with forecast "
             f"{sport}:{lock['ticket_forecast_id']} ({lock['ticket_pick']}); only that forecast may be used again, so "
             f"{lock['pick_label']} ({lock['market']}) cannot be a leg.")
+
+
+def _was_reviewable(pick, day):
+    """A started game's forecast that a review could have used before the start. NBA/NHL/NFL forecasts are made in the two
+    hours before the start. A soccer forecast is made at its cutoff, days earlier, so its own rule applies (as in
+    `eligible`); the soccer list holds every recorded match, so only this Toronto day's matches that were actually
+    played count."""
+    tip, made = _parse(pick['tipoff']), _parse(pick['generated_at'])
+    if pick.get('market') == '1x2_regulation':
+        return (made <= _parse(pick['cutoff_at']) <= tip and tip.astimezone(TORONTO).date().isoformat() == day
+                and pick.get('status') not in ('postponed', 'canceled', 'abandoned'))
+    return tip - timedelta(hours=2) <= made <= tip
+
+
+def _review_window(pick):
+    """(from, to) during which this forecast was eligible for a ticket (see `eligible`), or None if it never was."""
+    if pick.get('status') in ('postponed', 'canceled', 'abandoned'):   # never played: never a leg
+        return None
+    tip, made = _parse(pick['tipoff']), _parse(pick['generated_at'])
+    opens = tip - timedelta(hours=2)
+    if pick.get('market') == '1x2_regulation':
+        return (opens, tip) if made <= _parse(pick['cutoff_at']) <= tip else None
+    return (max(opens, made), tip) if opens <= made <= tip else None
 
 
 def review_state(snap):
@@ -411,14 +434,19 @@ def review_state(snap):
         raise ValueError('Snapshot lacks as_of/date')
     now = _parse(snap['as_of'])
     ticketable, blocked, unavailable, started, delayed, moved = [], {}, {}, [], {}, []
+    windows = {}   # (sport, game) -> when its forecasts were eligible: tells whether a lone game stayed alone
     for sport, section in snap['sports'].items():
         if section.get('error'):
             unavailable[sport] = dict(section)
             continue
         picks = section['report']['picks']
         current = [p for p in picks if eligible(p, now)]
-        started += [(sport, p) for p in picks if _parse(p['tipoff']) <= now
-                    and _parse(p['tipoff']) - timedelta(hours=2) <= _parse(p['generated_at']) <= _parse(p['tipoff'])]
+        for p in picks:
+            w = _review_window(p)
+            if w:
+                a, b = windows.get((sport, p['game_id']), w)
+                windows[(sport, p['game_id'])] = (min(a, w[0]), max(b, w[1]))
+        started += [(sport, p) for p in picks if _parse(p['tipoff']) <= now and _was_reviewable(p, snap['date'])]
         usable = [p for p in current if source_usable(section, p)]
         refused = [p for p in current if not source_usable(section, p)]
         if refused:
@@ -467,14 +495,19 @@ def review_state(snap):
         if (sport, pick['game_id']) not in reviewed_games:
             entry = missed.setdefault((sport, pick['game_id']), {'sport': sport, 'game_id': pick['game_id'],
                                       'matchup': pick.get('matchup'), 'tipoff': pick['tipoff'], 'forecasts': 0,
-                                      'first_forecast_at': pick['generated_at']})
+                                      'first_forecast_at': pick['generated_at'],
+                                      'review_window_from': (_parse(pick['tipoff']) - timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M:%SZ')})
             entry['forecasts'] += 1
             entry['first_forecast_at'] = min(entry['first_forecast_at'], pick['generated_at'])
     if missed:   # why: what the trigger recorded and which reviews failed while the game was still pending
+        for key, entry in missed.items():
+            entry['_other_windows'] = [w for other, w in windows.items() if other != key]
         try:
             explain_missed(snap['date'], missed.values())
         except Exception as exc:
             state['missed_explanation_error'] = type(exc).__name__
+        for entry in missed.values():
+            entry.pop('_other_windows', None)
     # Pending games this run does not send to review, each with its reason (recorded by preflight: record_observations).
     # A refused sport hides its games, so it is recorded for the sport unless it reports that it excludes no forecast now.
     waiting = [{'sport': sport, 'game_id': None, 'issue': section['error'], 'detail': str(section.get('reason') or '')}
@@ -524,10 +557,17 @@ def record_observations(state):
 
 
 def explain_missed(day, entries):
-    """Attach to each game that started unreviewed what the trigger recorded, and the reviews that failed, between its
-    first pregame forecast and its start. `explained` is True only when the LAST thing the trigger saw before the start
-    was a blocker, or a review failed after the trigger last said one was due. A blocker that cleared while reviews were
-    then due and none ran does not explain the miss; `last_observation` shows how long before the start it was made."""
+    """Attach to each game that started unreviewed what the trigger recorded, and the reviews that failed, in its review
+    window: the two hours before its start, in which its forecasts were eligible (`review_window_from`).
+
+    Two different facts are reported. `blocker_observed`: a blocker was recorded at some check in the window.
+    `explained`: the ENTIRE window is accounted for, which needs more than one sighting:
+    - a review failed after the trigger last said one was due; or
+    - the last check before the start saw a blocker AND it is shown to have lasted to the start: the same blocker of
+      that sport was recorded again at or after the start, or, for a single-game window, no other game became eligible
+      between that check and the start.
+    A blocker seen at the last check and gone at the next one leaves the minutes in between unaccounted for: `explained`
+    is false and `explanation` says how many minutes. No time threshold is used anywhere."""
     from app import telegram
     with telegram.ledger() as conn:
         schema(conn)
@@ -535,7 +575,7 @@ def explain_missed(day, entries):
         failures = [dict(r) for r in conn.execute("SELECT review_id,recorded_at,stage,outcome,detail FROM ticket_reviews "
                                                   "WHERE day=? AND outcome='operational_failure' ORDER BY review_id", (day,))]
     for entry in entries:
-        lo, hi = _parse(entry['first_forecast_at']), _parse(entry['tipoff'])
+        lo, hi = _parse(entry['review_window_from']), _parse(entry['tipoff'])
         mine = [o for o in seen if o['sport'] == entry['sport'] and o['game_id'] in (None, entry['game_id'])
                 and lo <= _parse(o['recorded_at']) <= hi]
         blockers, due = {}, [o['recorded_at'] for o in mine if o['issue'] == REVIEW_DUE]
@@ -547,14 +587,34 @@ def explain_missed(day, entries):
                 item['observations'] += 1
         failed = [dict(f, detail=f['detail'][:200]) for f in failures if lo <= _parse(f['recorded_at']) <= hi]
         last = mine[-1] if mine else None
+        minutes = int((hi - _parse(last['recorded_at'])).total_seconds() // 60) if last else None
+        failed_after_due = bool(failed and (not due or max(f['recorded_at'] for f in failed) >= due[-1]))
+        if failed_after_due:
+            explained, why = True, 'A review failed after the trigger last reported one due.'
+        elif last is None:
+            explained, why = False, 'Nothing was recorded for this game in its review window: no trigger run saw it before its start.'
+        elif last['issue'] == REVIEW_DUE:
+            explained, why = False, f"A review was due at the last check, {minutes} minutes before the start, and none finished."
+        elif last['issue'] == 'single_game_window':
+            at = _parse(last['recorded_at'])
+            joined = any(a < hi and b > at for a, b in entry.get('_other_windows', []))
+            explained = not joined
+            why = ('Single-game window: no other game became eligible between the last check and the start.' if explained else
+                   f"Single-game window at the last check, {minutes} minutes before the start, but another game became "
+                   f"eligible before the start and no review ran.")
+        else:
+            explained = last['issue'] != 'line_changed' and any(
+                o['sport'] == entry['sport'] and o['issue'] == last['issue'] and _parse(o['recorded_at']) >= hi for o in seen)
+            why = (f"Blocker '{last['issue']}' was seen at the last check before the start and again at or after it." if explained else
+                   f"Blocker '{last['issue']}' was last seen {minutes} minutes before the start and was not seen at or after "
+                   f"it, so whether a review was possible in those {minutes} minutes is not established.")
         entry['recorded_blockers'] = list(blockers.values())
         entry['review_due_seen'] = {'first_seen_at': due[0], 'last_seen_at': due[-1], 'observations': len(due)} if due else None
-        entry['last_observation'] = ({'issue': last['issue'], 'at': last['recorded_at'],
-                                      'minutes_before_start': int((hi - _parse(last['recorded_at'])).total_seconds() // 60)}
-                                     if last else None)
+        entry['last_observation'] = {'issue': last['issue'], 'at': last['recorded_at'], 'minutes_before_start': minutes} if last else None
         entry['failed_reviews'] = failed
-        entry['explained'] = bool((last and last['issue'] != REVIEW_DUE)
-                                  or (failed and (not due or max(f['recorded_at'] for f in failed) >= due[-1])))
+        entry['blocker_observed'] = bool(blockers)
+        entry['explained'] = explained
+        entry['explanation'] = why
 
 
 def _text(value, what):
@@ -630,6 +690,11 @@ def check(plan):
         for leg in ticket['legs']:
             sport = leg['sport']
             decision = accounted.get(f"{sport}:{leg['forecast_id']}", {})
+            if f"{sport}:{leg['forecast_id']}" in locks:   # send would refuse it without a retry; say so here instead
+                lock = locks[f"{sport}:{leg['forecast_id']}"]
+                raise ValueError(f"Selected forecast {sport}:{leg['forecast_id']} is locked: {lock['matchup']} is already in "
+                                 f"ticket(s) {', '.join(lock['tickets'])} with forecast {sport}:{lock['ticket_forecast_id']}, and "
+                                 f"shared games must preserve the identical forecast; review again")
             if decision.get('decision') != 'candidate':
                 raise ValueError('Selected leg must have been reviewed as a candidate')
             sections = [old['sports'][sport], fresh['sports'][sport]]
@@ -1067,30 +1132,42 @@ SETTLED_GRADES = ('win', 'loss', 'push', 'void')
 
 
 def result_notice(conn, chat, ticket_id, grade, legs, digest):
-    """(delivery key, text) of the result notice a settled ticket is owed, decided by what was last ANNOUNCED for it, not
-    by what was last stored: the notice says the ticket's grade and each leg's grade, so a reading that changes neither
-    (a pending spell in between, a corrected score with the same grades) reuses the key of the notice already recorded
-    and nothing is sent again. "Announced" means sent or unconfirmed; a notice Telegram rejected or deferred never
-    reached the user, so it is not what later results are compared with (a deferred one with this same content is
-    retried under its own key). Different content gets a new key; it carries the correction line only when a leg that
-    was announced as settled now has another grade (a leg that was open and settles is an update, not a correction)."""
+    """(delivery key, text) of the result notice a ticket is owed now, or None. Every reading is archived in ticket_grades;
+    what the user is TOLD is decided here, against the last notice that reached them for this ticket (sent or
+    unconfirmed; one Telegram rejected or deferred did not reach them):
+    - nothing announced yet: the first settled result (a loss as soon as one leg loses, a win or void once all are in);
+    - a genuine correction: a leg announced as settled (win/loss/push/void) now has another settled grade. Announced
+      with the correction line, also when it reopens the ticket (PENDING);
+    - one final recap: every leg is settled now and the announced notice still had an open leg;
+    - otherwise nothing: an unchanged losing ticket is not announced again when another leg settles, and a leg that
+      reads as open for a while (or a corrected score with the same grades) changes nothing the user was told.
+    When nothing new is owed the announced notice's own key is returned, so delivery reports it as already recorded.
+    A deferred notice with exactly the owed text is retried under its own key."""
     lines = [(str(p.get('pick_label', p['forecast_id'])), p['grade']) for p in legs]
     text = f"PARLAY RESULT / {ticket_id} / {grade.upper()}\n" + '\n'.join(f"{label}: {g}" for label, g in lines)
     said = lambda row: row['text'].split('\n' + CORRECTED_LINE)[0]
     rows = conn.execute("SELECT delivery_key,text,status FROM deliveries WHERE chat_id=? AND delivery_key LIKE ? "
                         "ORDER BY attempted_at DESC, rowid DESC", (chat, 'ticket-result:' + ticket_id + ':%')).fetchall()
     announced = next((r for r in rows if r['status'] in ('sent', 'uncertain', 'sending')), None)
-    if announced and said(announced) == text:
-        return announced['delivery_key'], announced['text']
-    deferred = next((r for r in rows if r['status'] == 'retry' and said(r) == text), None)
-    if deferred:
-        return deferred['delivery_key'], deferred['text']
-    reversed_leg = False
-    if announced:
-        earlier = [line.rsplit(': ', 1) for line in said(announced).split('\n')[1:] if ': ' in line]
-        reversed_leg = len(earlier) == len(lines) and any(old[1] in SETTLED_GRADES and old[1] != new[1]
-                                                         for old, new in zip(earlier, lines))
-    return 'ticket-result:' + ticket_id + ':' + digest, text + ('\n' + CORRECTED_LINE if reversed_leg else '')
+    settled_now = all(g in SETTLED_GRADES for _, g in lines)
+    if not announced:
+        owed = text if grade != 'pending' else None
+    else:
+        earlier = [line.rsplit(': ', 1)[1] for line in said(announced).split('\n')[1:] if ': ' in line]
+        comparable = len(earlier) == len(lines)
+        corrected = comparable and any(old in SETTLED_GRADES and new in SETTLED_GRADES and old != new
+                                       for old, (_, new) in zip(earlier, lines))
+        was_final = comparable and all(old in SETTLED_GRADES for old in earlier)
+        if corrected:
+            owed = text + '\n' + CORRECTED_LINE
+        elif said(announced) != text and settled_now and grade != 'pending' and not was_final:
+            owed = text
+        else:
+            owed = None
+    if owed is None:
+        return (announced['delivery_key'], announced['text']) if announced else None
+    deferred = next((r for r in rows if r['status'] == 'retry' and r['text'] == owed), None)
+    return (deferred['delivery_key'], deferred['text']) if deferred else ('ticket-result:' + ticket_id + ':' + digest, owed)
 
 
 def settle(*, now=None, notify=False):
@@ -1133,7 +1210,7 @@ def settle(*, now=None, notify=False):
                     conn.execute('INSERT OR IGNORE INTO ticket_grades VALUES (?,?,?,?)', (t['ticket_id'],digest,now,raw))
                 else:
                     latest = None
-                    for row in conn.execute('SELECT evidence_hash,payload FROM ticket_grades WHERE ticket_id=? ORDER BY rowid DESC', (t['ticket_id'],)):
+                    for row in conn.execute('SELECT evidence_hash,payload FROM ticket_grades WHERE ticket_id=? ORDER BY as_of DESC, rowid DESC', (t['ticket_id'],)):
                         stored = json.loads(row['payload'])
                         if not any(p.get('grade')=='unavailable' for p in stored.get('legs', [])):
                             latest = (row['evidence_hash'], json.dumps({k:v for k,v in stored.items() if k!='supersedes'},sort_keys=True))
@@ -1150,8 +1227,10 @@ def settle(*, now=None, notify=False):
                 batch = conn.execute('SELECT batch_key FROM ticket_items WHERE ticket_id=? AND chat_id=?', (t['ticket_id'],chat)).fetchone()
                 confirmed = batch and conn.execute("SELECT 1 FROM deliveries WHERE delivery_key=? AND status='sent'",(batch['batch_key'],)).fetchone()
                 # A result with a leg that could not be read is stored above but never announced.
-                if confirmed and result['grade'] != 'pending' and not any(p['grade']=='unavailable' for p in legs):
-                    notices.append((result, *result_notice(conn, chat, t['ticket_id'], result['grade'], legs, digest)))
+                if confirmed and not any(p['grade']=='unavailable' for p in legs):
+                    owed = result_notice(conn, chat, t['ticket_id'], result['grade'], legs, digest)
+                    if owed:
+                        notices.append((result, *owed))
         # All grading is committed before ANY external call. Notification failure cannot suppress outcomes.
         if notify and notices:
             try:
@@ -1287,6 +1366,15 @@ SEND_OUTCOMES = {'sent': 'ticket_sent', 'existing_sent': 'ticket_sent', 'no_tick
 RETRYABLE = {'retry', 'retry_pending'}   # uncertain/failed/partial need receipt inspection and are never re-triggered
 
 
+def _snapshot_day(plan):
+    """The slate date of the snapshot a plan reviewed, or None when the plan or its snapshot cannot be read."""
+    try:
+        day = json.loads(Path(plan['snapshot_path']).read_text())['date']
+        return day if isinstance(day, str) and len(day) == 10 else None
+    except Exception:
+        return None
+
+
 def record_review(stage, outcome, detail, *, plan=None, result=None, retryable=False, snapshot_sha256=None, day=None):
     """Append what one review attempt produced: a ticket, no ticket (insufficient evidence), a pause or an operational failure."""
     from app import telegram
@@ -1299,7 +1387,9 @@ def record_review(stage, outcome, detail, *, plan=None, result=None, retryable=F
     if result:
         payload.update(coverage=result['coverage'], ticket_ids=[t['ticket_id'] for t in result['resolved']],
                        alerts=result['snapshot'].get('alerts', []))
-    day = result['date'] if result else day or datetime.now(timezone.utc).astimezone(TORONTO).date().isoformat()
+    # A refused review belongs to the day of the snapshot it reviewed (the trigger looks failures up by that day), not to
+    # the wall-clock day: around Toronto midnight, and in tests with a fixed slate date, the two differ.
+    day = result['date'] if result else day or _snapshot_day(plan) or datetime.now(timezone.utc).astimezone(TORONTO).date().isoformat()
     with telegram.ledger() as conn:
         schema(conn)
         cursor = conn.execute('INSERT INTO ticket_reviews (recorded_at,day,stage,outcome,detail,snapshot_sha256,snapshot_as_of,payload) '

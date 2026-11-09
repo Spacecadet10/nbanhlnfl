@@ -43,7 +43,7 @@ test('matches awaiting forecasts, out-of-scope competitions and stores without f
   });
   assert.equal(new Set(texts).size, 4);
   assert.match(texts[1], /No Premier League forecast is recorded yet/);
-  assert.match(texts[1], /each match is forecast before it starts/);
+  assert.match(texts[1], /each match is forecast by 06:00 UTC on its match day/);   // the cutoff, not "before it starts"
   assert.match(texts[2], /did not pass its held-out test/);
   assert.match(texts[3], /data store/);
 });
@@ -65,4 +65,36 @@ test('an empty competition and a failed source are not described as "no predicti
     'No UEFA Euro qualifying matches are stored: ESPN listed none on the 41 days requested so far (latest request <2026-11-09T02:26:53Z>).');
   assert.match(emptyCompetition('UEFA Euro qualifying', 0, null, when), /no day has been requested/);
   assert.match(liveLoadProblem('503 Service Unavailable'), /could not be loaded \(503 Service Unavailable\).*not affected/);
+});
+
+// --- Consolidated review of 635a4ec -------------------------------------------------------------------------------
+import { forecastStateOf } from './soccerStatus.ts';
+
+test('a match past its forecast cutoff is not described as awaiting a forecast', () => {
+  const cutoff = { passed: false, when: '<2026-11-15T06:00:00Z>' };
+  assert.equal(matchForecastNote('recorded', 'scheduled', null, 'A', 'B', cutoff),
+    'Awaiting forecast: recorded by <2026-11-15T06:00:00Z> at the latest, once the earlier results it depends on are stored.');
+  assert.equal(matchForecastNote('recorded', 'scheduled', null, 'A', 'B', { ...cutoff, passed: true }),
+    'No forecast: none was recorded before this match’s cutoff (<2026-11-15T06:00:00Z>), and none is made after it.');
+  assert.doesNotMatch(matchForecastNote('awaiting', 'scheduled', null, 'A', 'B', { ...cutoff, passed: true }), /Awaiting/);
+  assert.match(forecastBanner('awaiting', 'Premier League').text, /forecast by 06:00 UTC on its match day/);
+});
+
+test('an API older than this page (no forecast_state, no refresh, no forecast map) gets honest fallbacks, not a crash', () => {
+  assert.equal(forecastStateOf(undefined, true), 'recorded');      // the old capability line already said forecasts exist
+  assert.equal(forecastStateOf(undefined, false), 'unknown');
+  assert.equal(forecastStateOf('awaiting', false), 'awaiting');
+  const b = forecastBanner('unknown', 'Premier League');
+  assert.match(b.title + ' ' + b.text, /not reported/);
+  assert.doesNotMatch(b.title + ' ' + b.text, /No live soccer forecasts|not available/);
+  assert.match(matchForecastNote('unknown', 'scheduled', undefined, 'A', 'B'), /not reported by this server/);
+  assert.equal(importHint('Premier League', { check: null }, when, 'unknown'), 'Latest Premier League scoreboard request.');
+  assert.equal(dataSourceForecastText('unknown'), 'No soccer odds or injury information is collected.');
+});
+
+test('stale data is only said to block forecasts for competitions that are forecast', () => {
+  const stale = { check: null, refresh: { last_refresh_at: '2026-11-07T20:00:00Z', max_age_hours: 26, stale: true } };
+  assert.match(importHint('Ligue 1', stale, when, 'awaiting'), /more than 26 h old, so new forecasts are refused/);
+  assert.equal(importHint('UEFA Europa League', stale, when, 'out_of_scope'), 'Latest UEFA Europa League scoreboard request: more than 26 h old.');
+  assert.doesNotMatch(importHint('UEFA Europa League', { ...stale, refresh: { ...stale.refresh, last_refresh_at: null } }, when, 'out_of_scope'), /forecast/);
 });

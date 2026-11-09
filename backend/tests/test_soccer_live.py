@@ -263,3 +263,18 @@ def test_a_store_without_live_tables_says_so(tmp_path, monkeypatch):
     assert soccer.forecast_state(c, "eng.1") == "no_live_store"
     assert "records no live soccer forecasts" in soccer.capabilities("no_live_store")[0]["reason"]
     c.close()
+
+
+# --- Consolidated review: a match past its forecast cutoff must not be described as still awaiting a forecast ----------
+def test_the_api_reports_each_match_forecast_cutoff(live, monkeypatch):
+    client = _client(monkeypatch)
+    day = client.get("/api/soccer/matches", params={"competition": "eng.1", "date": TOMORROW.isoformat()}).json()
+    assert day["forecast_cutoffs"] == {m["match_id"]: f"{TOMORROW.isoformat()}T06:00:00Z" for m in day["matches"]}
+    detail = client.get("/api/soccer/matches/" + day["matches"][0]["match_id"]).json()
+    assert detail["forecast_cutoff_at"] == f"{TOMORROW.isoformat()}T06:00:00Z" and "cutoff" not in json.dumps(detail["match"])
+    # national teams: the match day runs 06:00–06:00 UTC, so a 02:00 UTC kickoff belongs to the day before
+    assert soccer.forecast_cutoff("uefa.nations", "2026-11-12T17:00:00Z") == "2026-11-12T06:00:00Z"
+    assert soccer.forecast_cutoff("uefa.nations", "2026-11-13T02:00:00Z") == "2026-11-12T06:00:00Z"
+    assert soccer.forecast_cutoff("fifa.world", "2026-11-12T17:00:00Z") is None       # never forecast: no cutoff to report
+    world = client.get("/api/soccer/matches", params={"competition": "fifa.world", "date": TOMORROW.isoformat()}).json()
+    assert world["forecast_cutoffs"] == {}

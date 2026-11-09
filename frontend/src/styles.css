@@ -1395,6 +1395,7 @@ h1,h2,h3,.hero-matchup,.metric-value,.tile-value,.brand { font-family:'Barlow Co
 .state span, .state { overflow-wrap: anywhere; }
 
 /* Live soccer forecasts (SoccerLivePanel) */
+.error-notice { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 8%, transparent); }
 .soccer-live { margin: 0 0 24px; }
 .soccer-live-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .soccer-live-head h2 { margin: 0; }

@@ -301,7 +301,8 @@ CAPABILITIES = [
 # never say "no forecasts" beside recorded ones (live-state audit, 2026-11-08).
 FORECAST_STATES = ("recorded", "awaiting", "out_of_scope", "no_live_store")
 FORECASTS_AWAITING = ("A sealed 90-minute model covers this competition, but no forecast has been recorded for it yet. Each "
-                      "match is forecast before it starts, once the earlier results it depends on are stored.")
+                      "match is forecast by 06:00 UTC on its match day, once the earlier results it depends on are stored; "
+                      "none is made after that cutoff.")
 FORECASTS_OUT_OF_SCOPE = "No live forecast: this competition did not pass its held-out test (too few test matches)."
 # With live forecasts recorded, "none recorded / none to grade" would be false; the pages themselves are not built yet.
 RECORDED_PAGES = {
@@ -435,6 +436,17 @@ def forecast_state(conn: sqlite3.Connection, competition: str) -> str:
     return "recorded" if recorded else "awaiting"
 
 
+def forecast_cutoff(competition: str, kickoff_at: str) -> Optional[str]:
+    """The time by which this match's live forecast must be recorded (none is ever made after it), by the rule of the
+    model that covers the competition; None for a competition that is never forecast."""
+    from . import intl_eval, intl_live, soccer_eval, soccer_live
+    if competition in intl_live.LAUNCH:
+        return intl_eval.cutoff_for(intl_live.match_day(kickoff_at))
+    if competition in soccer_live.LAUNCH:
+        return soccer_eval.cutoff_for(soccer_live.local_date(kickoff_at, competition))
+    return None
+
+
 def live_forecasts_of(conn: sqlite3.Connection, match_ids: list) -> dict:
     """match_id -> its latest recorded live forecast (soccer_live.forecast_dict), for the matches that have one."""
     from . import soccer_live
@@ -467,6 +479,7 @@ def matches_on(conn: sqlite3.Connection, competition: str, day: date) -> dict:
     earlier, later = [x for x in dates if x < d], [x for x in dates if x > d]
     return {"competition_id": competition, "date": d, "fetched": d in fetched_dates(conn, competition),
             "matches": [_match(r) for r in rows], "live_forecasts": live_forecasts_of(conn, [r["match_id"] for r in rows]),
+            "forecast_cutoffs": {r["match_id"]: c for r in rows if (c := forecast_cutoff(competition, r["kickoff_at"]))},
             "prev_date": earlier[-1] if earlier else None,
             "next_date": later[0] if later else None, "last_refresh_at": last_refresh_at(conn, competition)}
 
@@ -496,4 +509,5 @@ def match_detail(conn: sqlite3.Connection, match_id: str) -> Optional[dict]:
     return {"match": _match(r), "head_to_head": [_match(x) for x in h2h], "home_recent": recent(r["home_team_id"]),
             "away_recent": recent(r["away_team_id"]), "result_revisions": revisions,
             "live_forecast": live_forecasts_of(conn, [match_id]).get(match_id),
+            "forecast_cutoff_at": forecast_cutoff(r["competition_id"], r["kickoff_at"]),
             "forecast_state": state, "capabilities": capabilities(state)}
