@@ -974,3 +974,13 @@ def test_soccer_picks_carry_an_assessment_in_the_snapshot(monkeypatch, tmp_path)
     snap = t.snapshot()
     a, b = [p['assessment'] for p in snap['sports']['soccer']['report']['picks']]
     assert a['probability'] == .55 and a['price'] is None and a['record'] is None and b == {'error': 'KeyError'}
+
+
+@pytest.mark.parametrize('bad', [{'why': 'pays well'}, ['pays', 'well'], 5])
+def test_a_non_text_payout_assessment_is_a_clear_retryable_refusal(setup, bad):
+    """First live run of revision 4 (Nov 9 01:58Z, review 9): a structured payout_assessment crashed check() with an
+    AttributeError, recorded as a non-retryable 'backend compatibility' failure. It must be a plain validation refusal."""
+    plan,snap,sent,path=setup;plan['tickets']=[ticket([('nba',1),('nhl',2)],None)]
+    plan['tickets'][0]['payout_assessment']=bad
+    with pytest.raises(ValueError, match='review again'):
+        t.check(plan)

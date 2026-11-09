@@ -497,7 +497,7 @@ def check(plan):
     for ticket in plan['tickets']:
         if not ticket['label'].strip() or not MIN_LEGS <= len(ticket['legs']) <= MAX_LEGS:
             raise ValueError('A ticket needs a label and two to six legs')
-        if not str(ticket.get('payout_assessment') or '').strip():
+        if not isinstance(ticket.get('payout_assessment'), str) or not ticket['payout_assessment'].strip():
             raise ValueError('Each ticket needs a payout_assessment: judge its payout at the stored prices against its uncertainty; review again')
         stake = ticket.get('stake_usd')
         if stake is not None and (isinstance(stake, bool) or not isinstance(stake, (int, float))
