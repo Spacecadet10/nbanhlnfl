@@ -152,6 +152,8 @@ def _refuse_protected(conn: sqlite3.Connection, upto: Optional[int], explicit: b
         from . import release, sports
         sport = next((s for s in (*sports.SPORTS, *sports.DATA_ONLY) if config.db_path(s).resolve() == path.resolve()), None)
         problems = release.migration_context(sport) if sport else [f"{path.name} is not this data folder's store of any sport"]
+        # Creating a new sport store is the verified release's explicit `migrate` (cli._write_refusal makes the same exception).
+        problems = [p for p in problems if not (sport and p.startswith(f"no migrated {sport} store at "))]
     if problems:
         raise ProtectedStoreError(f"refusing to migrate {path} ({len(pending)} pending, first {pending[0]}): it is in a "
                                   f"protected live data folder; {'; '.join(problems)}. Use scripts/dev.sh or "

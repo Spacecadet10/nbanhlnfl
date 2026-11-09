@@ -65,6 +65,8 @@ def _write_refusal(sport: str, *, migrate: bool = False, info=None, paths=()):
              f"{store} has {links} hard links (it may be a live store under another name)")
     hint = "use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)"
     problems = release.migration_context(sport, info)
+    if migrate:     # a new sport store is created only here: the verified release's explicit `migrate` (release step)
+        problems = [p for p in problems if not p.startswith(f"no migrated {sport} store at ")]
     if problems:
         return {"status": "refused", "reason": f"{where} and this is not the verified release environment "
                                               f"({'; '.join(problems)}): development commands never write there "

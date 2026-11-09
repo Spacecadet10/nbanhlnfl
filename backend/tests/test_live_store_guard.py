@@ -662,3 +662,26 @@ def test_replay_on_an_empty_store_file_is_refused(tmp_path, monkeypatch, capsys,
     rc, out = run(argv, capsys)
     assert (rc, out.get("status")) == (1, "refused") and "empty" in out["reason"], (rc, out)
     assert store.read_bytes() == b"" and sorted(p.name for p in data.iterdir()) == [store.name]
+
+
+def test_only_the_verified_release_creates_a_new_store_and_only_with_explicit_migrate(tmp_path, checkout, monkeypatch, capsys):
+    """A new sport store in the live folder (soccer, Nov 8) is a release step: the verified release environment's explicit
+    `migrate` creates it; any other command there, and any command outside the release, still refuses to create it."""
+    root = git_repo(tmp_path / "release")
+    monkeypatch.setattr(release, "code_root", lambda: root)
+    monkeypatch.setenv(release.GUARD_ENV, "1")
+    monkeypatch.setenv(release.ROOT_ENV, str(root))
+    monkeypatch.setenv("NBA_DATA_DIR", str(checkout))
+    def no_network(*a, **k):
+        raise AssertionError("a refused command must not make a request")
+    monkeypatch.setattr(soccer, "ingest_range", no_network)
+    rc, out = run(["soccer", "ingest", "--from", "20261101", "--to", "20261102"], capsys)
+    assert (rc, out.get("status")) == (1, "refused") and not (checkout / "soccer.sqlite").exists()
+    assert cli.main(["soccer", "migrate"]) == 0
+    assert schema(checkout / "soccer.sqlite") == release.shipped_schema()
+    monkeypatch.delenv(release.GUARD_ENV)                         # the same command outside the release: refused
+    (checkout / "soccer.sqlite").rename(tmp_path / "moved.sqlite")
+    for f in checkout.glob("soccer.sqlite*"):
+        f.rename(tmp_path / f.name)
+    rc, out = run(["soccer", "migrate"], capsys)
+    assert (rc, out.get("status")) == (1, "refused") and not (checkout / "soccer.sqlite").exists()
