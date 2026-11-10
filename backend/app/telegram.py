@@ -179,7 +179,14 @@ def format_batch(report, chat_id, gid, picks, *, preview=False):
         '<b>Recommended pick</b>',
         '<b>' + escape(strong[0]['pick_label'] if strong else 'No strong pick') + '</b>']
     if strong:
-        lines.append(escape(strong[0]['market_title']) + ' · Model ' + displayed_percentage(strong[0]['probability']) + '%')
+        # Owner request Nov 9: say what the sportsbook's own price implies next to the model, and say so plainly when the
+        # price asks for more than the model gives (a likely winner is not a value pick at any price).
+        book = strong[0].get('market_prob')
+        detail = escape(strong[0]['market_title']) + ' · Model ' + displayed_percentage(strong[0]['probability']) + '%'
+        if book is not None:
+            detail = 'Model ' + displayed_percentage(strong[0]['probability']) + '% · Sportsbook ' + displayed_percentage(book) + '%' + (
+                ' · no value at this price' if book > strong[0]['probability'] else '')
+        lines.append(detail)
     lines += ['<i>' + ('App ranking for this past game.' if preview else 'Based on the app’s existing ranking.') + '</i>',
               divider, '', '<b>Market breakdown</b>', '']
     versions = []
@@ -198,8 +205,10 @@ def format_batch(report, chat_id, gid, picks, *, preview=False):
         losses = h['losses'] + int(preview and pick['grade'] == 'loss')
         settled = wins + losses
         source = {'model': ' · <i>model line</i>', 'bookmaker': ' · <i>bookmaker line at forecast</i>', 'none': ''}[h['line_source']]
+        book = pick.get('market_prob')
+        versus = '' if book is None else f"Sportsbook {displayed_percentage(book)}% (model {100 * (pick['probability'] - book):+.1f}) · "
         lines += [f"<b>{escape(pick['market_title'])}</b>", f"{escape(pick['pick_label'])}{source}",
-                  f"<b>Model {escape(h['percentage'])}%</b> · {wins}W–{losses}L ({settled} settled)"]
+                  f"<b>Model {escape(h['percentage'])}%</b> · {versus}{wins}W–{losses}L ({settled} settled)"]
         if preview:
             result = {'win': 'Won', 'loss': 'Lost', 'push': 'Push'}.get(pick['grade'], pick['grade'])
             lines.append('Result: ' + escape(result))

@@ -367,3 +367,31 @@ def test_card_identity_ignores_the_line_only_and_is_none_for_other_messages():
     assert tg.card_identity(text)[3] == 'DET' and tg.card_identity('PROP51 / REVIEW BLOCKER / NBA') is None
     assert tg.card_identity(tg.message_batches(strong_report('Over 233.5'), '123')[0][1])[3] == 'Over'
     assert tg.card_identity(tg.message_batches(report(), '123')[0][1])[3] == 'No strong pick'
+
+
+def test_card_shows_the_sportsbook_probability_beside_the_model_and_flags_a_price_above_the_model():
+    """Owner request Nov 9 (CLE @ CHA: 'CLE win' was recommended at 55% while the price implied 74%; the card never said so)."""
+    d = strong_report('CLE win')
+    d['picks'][0].update(market='winner', market_title='Winner', probability=0.552, market_prob=0.7404)
+    d['picks'][0]['percentage_history'].update(market='winner', percentage='55.2', line_source='none')
+    spread = copy.deepcopy(strong_report('CHA +8.5')['picks'][0])
+    spread.update(strong=False, game_rank=2, probability=0.5708, market_prob=0.5094, forecast_id=2)
+    spread['percentage_history'].update(percentage='57.1')
+    d['picks'].append(spread)
+    key, text = tg.message_batches(d, '123')[0]
+    assert 'Model 55.2% · Sportsbook 74.0% · no value at this price' in text
+    assert len('Model 55.2% · Sportsbook 74.0% · no value at this price') <= 56     # one row of the card's headline box
+    assert '<b>Model 57.1%</b> · Sportsbook 50.9% (model +6.1) · 3W–1L (4 settled)' in text
+    assert '<b>Model 55.2%</b> · Sportsbook 74.0% (model -18.8) · ' in text
+    assert tg.card_identity(text)[3] == 'CLE win'
+    from app import telegram_card
+    assert telegram_card.render_card(text).startswith(b'\x89PNG')     # the picture still renders with the longer lines
+
+
+def test_card_without_a_stored_price_is_unchanged_and_a_fairly_priced_pick_is_not_flagged():
+    text = tg.message_batches(report(), '123')[0][1]            # team total: no sportsbook price is stored
+    assert 'Sportsbook' not in text and '<b>Model 51.8%</b> · 0W–2L (2 settled)' in text
+    d = strong_report(); d['picks'][0]['market_prob'] = 0.48
+    text = tg.message_batches(d, '123')[0][1]
+    assert 'Model 51.8% · Sportsbook 48.0%\n' in text and 'no value' not in text
+    assert tg.message_batches(d, '123')[0][0] == tg.message_batches(strong_report(), '123')[0][0]   # same delivery key: no resend
