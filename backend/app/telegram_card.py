@@ -230,11 +230,11 @@ def render_card(message):
     return output.getvalue()
 
 
-def render_ticket_card(day, tickets, *, preview=False):
+def render_ticket_card(day, tickets, *, preview=False, number_from=1, total=None):
     """Ticket layout using the shared fonts, team logos and published palettes."""
     from .tickets import CARD_TICKETS, MAX_TICKETS, MIN_LEGS, MAX_LEGS, bet_type
     if not tickets or len(tickets) > MAX_TICKETS or any(not MIN_LEGS <= len(t['legs']) <= MAX_LEGS for t in tickets):
-        raise ValueError('Ticket cards require one to six tickets of two to six legs.')
+        raise ValueError('Ticket cards require one to six tickets of two to seven legs.')
     extra = len(tickets) - CARD_TICKETS
     tickets = tickets[:CARD_TICKETS]   # the readable text lists every option
     first = tickets[0]['legs'][0]
@@ -261,10 +261,12 @@ def render_ticket_card(day, tickets, *, preview=False):
 
     line('PROP51 / COMBINED PARLAY TICKETS', size=49, bold=True, color=primary)
     line(day, size=28, color=MUTED)
+    if total and total > len(tickets):   # one of several pictures: say which tickets this one holds
+        line(f"Tickets {number_from}-{number_from + len(tickets) - 1} of {total}", size=28, bold=True, color=primary)
     if preview:
         line('TEST / PAST GAMES / RESULTS KNOWN', size=29, bold=True, color='#A83824')
     y += 20
-    for ticket_number, ticket in enumerate(tickets, 1):
+    for ticket_number, ticket in enumerate(tickets, number_from):
         draw.rounded_rectangle((52,y,1028,y+78),radius=20,fill=primary)
         y += 11
         line(f"Ticket {ticket_number}: {ticket['label']}",size=32,bold=True,color=PAPER,x=76,width=928)

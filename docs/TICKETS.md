@@ -236,3 +236,16 @@ Evidence and causes: `docs/evidence/audit-fixes-2026-11-08/README.md`.
   stays `retry` and is never sent; it is visible in `deliveries` only.
 - **Unchanged:** selection method, forecast-version lock, 2–6 legs and at most 6 tickets, legacy reservation read,
   existing rows.
+
+## Owner changes (Nov 9 evening)
+
+Requested by the owner in his own words ("I just want to see the picture", "it just clutters the Telegram", seven-leg parlays). Second version, after the Codex review of the first (docs/evidence/telegram-picture-only-2026-11-09/).
+
+- **Pictures only.** `send` delivers a batch as pictures with short captions; no long text message. Every ticket is drawn in full on exactly one picture (`ticket_pages`: at most three tickets and about nine legs per picture, so a seven-leg ticket stays readable). Each caption (`ticket_captions`) lists its picture's tickets: legs, stored prices, payout. A caption never cuts a selection: it drops labels, then prices, and otherwise `send` refuses before any reservation. A menu whose stored text exceeds one Telegram message is still refused whole by `check`, as before.
+- **Receipts.** The first picture is sent under the batch key, and the `ticket-image:` receipt is recorded as that same Telegram message, so settlement, result notices, delivery alerts and `ticket_deliveries` read what they read before. Further pictures have receipts `ticket-image:<hash>:p<n>` (kind `ticket_image_page`), are sent in order and are never resent when uncertain. Pictures are archived once in `ticket_images` under `<batch key>#p<n>` and reused unchanged; an archived picture that fails its hash raises and nothing is sent. The exact full text stays in `deliveries.text`, `ticket_batches` and the archive.
+- **Renderer unavailable.** The ticket still arrives, as the short caption lines in one message (never the long text); the image receipt is recorded `failed`, the result is `partial_failed` and the delivery alert fires as for any failed image. A batch whose text the earlier release already sent keeps that release's text-then-image path.
+- **Quiet health states.** `source_unavailable_or_stale` and `missing_due_forecasts` (`QUIET_HEALTH`) are no longer sent to the chat; they remain in the preflight report, the snapshot and the trigger observations. Every other alert is unchanged.
+- **Up to seven legs** (`MAX_LEGS = 7`).
+- **One game card per game** (`telegram.deliver_card`). The delivery key is unchanged, so receipts of the earlier release are matched at cutover. Before a card with a new key is sent, the ledger is searched (two days) for a card with the same sport, matchup, start and recommended pick, ignoring the line number, that reached or may have reached the chat (sent, uncertain, sending); if one exists the new card is not sent (`already_sent_for_game`). A different recommended side or start sends again; a rejected (`failed`) card does not block.
+
+Not changed: the review instructions (`SKILL.md`), the automation schedule, selection rules, settlement, stores. Tested in a Linux copy of this checkout (Python 3.10, own venv): `tests/test_tickets.py tests/test_telegram.py tests/test_delivery_release.py tests/test_nfl_live.py tests/test_soccer_live.py`, 237 passed. Not run by the author: the full backend suite, the release venv, a real Telegram send.

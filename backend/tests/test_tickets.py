@@ -45,6 +45,13 @@ def setup(tmp_path, monkeypatch):
     return plan,snap,sent,tmp_path
 
 
+def stored_texts():
+    """The exact ticket texts kept in the ledger, oldest first. Since Nov 9 a batch is delivered as one picture with a
+    short caption; the full text is stored and archived, no longer sent as its own message."""
+    with tg.ledger() as c:
+        return [r[0] for r in c.execute("select text from deliveries where delivery_key like 'ai-ticket-review-v3:%' order by rowid")]
+
+
 def ticket(legs,stake=1):
     return dict(label='Main' if stake==3 else 'Variation',stake_usd=stake,payout_assessment='Fixture payout judgment',
                 legs=[dict(sport=s,forecast_id=i,rationale='Fixture selection') for s,i in legs])
@@ -53,8 +60,13 @@ def ticket(legs,stake=1):
 def test_mixed_ticket_sent_as_numbered_text_exact_archive_and_dedup(setup):
     plan,snap,sent,path=setup;plan['tickets']=[ticket([('nba',1),('nhl',2)],3)]
     checked=t.check(plan);assert t.send(checked)=='sent';assert t.send(checked)=='existing_sent'
-    assert len(sent)==2 and [m for m,p in sent]==['sendMessage','sendPhoto']
-    text=sent[0][1]['text']
+    assert [m for m,p in sent]==['sendPhoto']   # one picture; no separate text message, nothing sent twice
+    caption=sent[0][1]['caption']
+    assert len(caption)<=1024 and 'B1 win' in caption and 'B2 win' in caption and '$3.00' in caption and 'ONE parlay' in caption
+    text=stored_texts()[0]
+    with tg.ledger() as c:
+        receipts=c.execute("select status,message_id from deliveries where delivery_key like 'ai-ticket-review-v3:%' or delivery_key like 'ticket-image:%' order by rowid").fetchall()
+    assert [tuple(r) for r in receipts]==[('sent',1),('sent',1)]   # text and image receipts name the same Telegram message
     assert 'Ticket 1:' in text and 'Combine ALL' in text and 'NBA' in text and 'NHL' in text and '$3.00' in text
     archive=json.loads(next((path/'reports/tickets').glob('*.json')).read_text())
     assert archive['text']==text
@@ -67,7 +79,7 @@ def test_cross_batch_shared_core_disclosed_without_daily_staking_cap(setup):
     plan,snap,sent,path=setup
     plan['tickets']=[ticket([('nba',1),('nhl',2)],3)];assert t.send(t.check(plan))=='sent'
     plan['tickets']=[ticket([('nba',1),('nfl',3)])];assert t.send(t.check(plan))=='sent'
-    assert 'Shared core exposure' in sent[-2][1]['text'] and 'shared across 2 tickets' in sent[-2][1]['text']
+    assert 'Shared core exposure' in stored_texts()[-1] and 'shared across 2 tickets' in stored_texts()[-1]
     plan['tickets']=[ticket([('nba',1),('nhl',2)])]
     with pytest.raises(ValueError,match='preserve'):t.send(t.check(plan))
     plan['tickets']=[ticket([('nba',4),('nfl',5)],3)]
@@ -184,7 +196,7 @@ def test_settlement_notifications_deduplicated_and_leg_failure_visible(setup,mon
     plan,snap,sent,path=setup;plan['tickets']=[ticket([('nba',1),('nhl',2)],3)];t.send(t.check(plan))
     monkeypatch.setattr(t,'grade_leg',lambda p,now:dict(forecast_id=p['forecast_id'],pick_label=p['pick_label'],grade='win'))
     t.settle(now=NOW,notify=True);t.settle(now=NOW,notify=True)
-    assert len(sent)==3 and '\n' in sent[2][1]['text'] and '\\n' not in sent[2][1]['text']
+    assert len(sent)==2 and '\n' in sent[1][1]['text'] and '\\n' not in sent[1][1]['text']
     def unavailable(*a):raise FileNotFoundError('store missing')
     monkeypatch.setattr(t,'grade_leg',unavailable)
     report=t.settle(now=NOW);assert report['errors'] and report['tickets'][0]['grade']=='pending'
@@ -202,7 +214,10 @@ def test_preflight_settlement_always_precedes_empty_slate(monkeypatch,capsys):
 def test_health_alerts_are_deduplicated_and_delivery_only_failures_alert(setup):
     plan,snap,sent,path=setup
     snap['alerts']=[dict(sport='nhl',issue='source_unavailable_or_stale')]
-    t.notify_alerts(snap,[]);t.notify_alerts(snap,[]);assert len(sent)==1
+    # Owner request Nov 9: stale-source and missing-forecast states are no longer sent to the chat.
+    assert t.notify_alerts(snap,[])==['not_sent_quiet'] and t.notify_alerts(snap,[])==['not_sent_quiet'] and sent==[]
+    snap['alerts']=[dict(sport='nhl',issue='Store identity mismatch')]
+    t.notify_alerts(snap,[]);t.notify_alerts(snap,[]);assert len(sent)==1   # any other issue: one alert, deduplicated
     with tg.ledger() as c:
         c.execute('insert into deliveries(delivery_key,chat_id,text,status,attempted_at) values(?,?,?,?,?)',('ai-ticket-review-v3:uncertain-fixture','fixture','fixture','uncertain',NOW))
     snap['alerts']=[];t.notify_alerts(snap,[]);assert len(sent)==2
@@ -231,7 +246,7 @@ def test_prior_tickets_still_require_full_review_and_archive_no_ticket_plan(setu
     plan['review']['forecasts_reviewed']['nhl:4']=dict(decision='excluded',reason='Reviewed later alternative; no new ticket justified')
     result=t.check(plan);assert t.send(result)=='no_ticket'
     assert any(not json.loads(p.read_text())['resolved'] for p in (path/'reports/tickets/reviews').glob('*.json'))
-    assert len(sent)==2
+    assert len(sent)==1
 
 
 def test_newly_published_forecast_requires_re_review(setup):
@@ -284,12 +299,12 @@ def test_ledger_follows_isolated_data_directory(tmp_path,monkeypatch):
         assert Path(c.execute('pragma database_list').fetchone()[2]).parent==tmp_path
 
 
-def test_production_sends_visual_ticket_after_text_with_archived_png(setup,monkeypatch):
+def test_production_sends_one_picture_with_archived_png(setup,monkeypatch):
     from app import telegram_card
     monkeypatch.setattr(telegram_card,'_logo',lambda *a:None)
     plan,snap,sent,path=setup;plan['tickets']=[ticket([('nba',1),('nhl',2)],3)]
     assert t.send(t.check(plan))=='sent'
-    assert [m for m,p in sent]==['sendMessage','sendPhoto']
+    assert [m for m,p in sent]==['sendPhoto']
     assert len(sent[-1][1]['caption'])<=1024
     assert list((path/'reports/tickets').glob('*.png'))
 
@@ -302,9 +317,9 @@ def test_visual_uncertain_does_not_resend_text_or_image(setup,monkeypatch):
             photos.append(kw['photo']);raise tg.DeliveryError('uncertain image',uncertain=True)
         return original(self,method,payload,**kw)
     monkeypatch.setattr(tg.Telegram,'call',flaky)
-    assert t.send(t.check(plan))=='partial_uncertain'
-    assert t.send(t.check(plan))=='partial_uncertain'
-    assert len(photos)==1 and len(sent)==1
+    assert t.send(t.check(plan))=='uncertain'
+    assert t.send(t.check(plan))=='existing_uncertain'
+    assert len(photos)==1 and sent==[]   # the one picture is never sent a second time, and no text is sent in its place
 
 
 def test_historical_visual_preview_is_labelled_and_never_reserves(setup,monkeypatch):
@@ -347,7 +362,7 @@ def test_tickets_without_stakes_send_text_and_visual_after_prior_allocations(set
     del new['stake_usd']
     plan['tickets']=[new]
     assert t.send(t.check(plan))=='sent'
-    text=sent[-2][1]['text']
+    text=stored_texts()[-1]
     assert 'Combine ALL' in text and 'Suggested stake' not in text and 'Daily maximum' not in text
     assert 'stake' not in sent[-1][1]['caption'].lower()
     with tg.ledger() as c:
@@ -460,16 +475,16 @@ def test_shared_exposure_lists_only_this_batch_with_readable_labels(setup):
     plan,snap,sent,path=setup
     plan['tickets']=[ticket([('nba',1),('nhl',2)]),ticket([('nba',1),('nfl',3)])];assert t.send(t.check(plan))=='sent'
     plan['tickets']=[ticket([('nba',4),('nhl',5)])];assert t.send(t.check(plan))=='sent'
-    assert 'Shared core exposure' not in sent[-2][1]['text'] and 'nba:1' not in sent[-2][1]['text']
+    assert 'Shared core exposure' not in stored_texts()[-1] and 'nba:1' not in stored_texts()[-1]
     plan['tickets']=[ticket([('nba',1),('nhl',3)])];assert t.send(t.check(plan))=='sent'
-    text=sent[-2][1]['text'];assert 'B1 win' in text and 'shared across 3 tickets' in text and 'nba:1' not in text
+    text=stored_texts()[-1];assert 'B1 win' in text and 'shared across 3 tickets' in text and 'nba:1' not in text
 
 
 def test_ticket_messages_are_labelled_as_combined_parlays_not_game_cards(setup):
     plan,snap,sent,path=setup;plan['tickets']=[ticket([('nba',1),('nhl',2)])]
     assert t.send(t.check(plan))=='sent'
-    assert 'COMBINED PARLAY TICKET' in sent[0][1]['text'] and 'not a single-game card' in sent[0][1]['text'].lower()
-    assert 'COMBINED PARLAY TICKET' in sent[1][1]['caption']
+    assert 'COMBINED PARLAY TICKET' in stored_texts()[0] and 'not a single-game card' in stored_texts()[0].lower()
+    assert 'COMBINED PARLAY TICKET' in sent[0][1]['caption'] and len(sent)==1
 
 
 def test_nfl_inactive_detail_names_cause_and_counts_unserved_forecasts(tmp_path,monkeypatch):
@@ -532,18 +547,21 @@ def test_varied_menu_sends_options_of_different_sizes_with_bet_types(setup):
     for i,(x,label) in enumerate(zip(plan['tickets'],['Safer pair','Mixed markets','Four-leg mix','Bigger five-leg'])):
         x['label']=label;del x['stake_usd']
     assert t.send(t.check(plan))=='sent'
-    text=sent[0][1]['text']
+    text=stored_texts()[0]
     assert '4 options:' in text and '#1 2 legs' in text and '#4 5 legs' in text
     assert 'Moneyline' in text and 'Puck line' in text and 'Over/Under' in text and 'Team total' in text and 'Spread' in text
     assert 'Ticket 4: Bigger five-leg' in text and len(text)<=3900
-    assert 'Ticket 4' in sent[1][1]['caption'] and '+1 more' in sent[1][1]['caption']
+    assert [m for m,p in sent]==['sendPhoto','sendPhoto']   # 2+3+4 legs on the first picture, the five-leg ticket on its own
+    first,second=sent[0][1]['caption'],sent[1][1]['caption']
+    assert 'picture 1 of 2' in first and '#3 Four-leg mix' in first and '#4' not in first
+    assert 'picture 2 of 2' in second and '#4 Bigger five-leg' in second and second.count(' + ')==4 and max(len(first),len(second))<=1024
 
 
 @pytest.mark.parametrize('tickets,message',[
     ([[('nba',i),('nhl',i)] for i in range(1,6)]+[[('nba',1),('nfl',1)],[('nba',2),('nfl',2)]],'six'),
-    ([[('nba',1),('nhl',1),('nfl',1),('nba',2),('nhl',2),('nfl',2),('nba',3)]],'two to six'),
-    ([[('nba',1)]],'two to six')])
-def test_menu_caps_are_six_options_of_two_to_six_legs(setup,tickets,message):
+    ([[('nba',1),('nhl',1),('nfl',1),('nba',2),('nhl',2),('nfl',2),('nba',3),('nhl',3)]],'two to seven'),
+    ([[('nba',1)]],'two to seven')])
+def test_menu_caps_are_six_options_of_two_to_seven_legs(setup,tickets,message):
     plan,snap,sent,path=setup
     plan['tickets']=[ticket(legs) for legs in tickets]
     with pytest.raises(ValueError,match=message):t.check(plan)
@@ -585,7 +603,7 @@ def test_source_stale_only_because_its_forecast_job_is_running_still_serves_tick
     plan['tickets']=[dict(label='Mixed',payout_assessment='Fixture payout judgment',legs=[dict(sport='nba',forecast_id=1,rationale='r'),dict(sport='nhl',forecast_id=2,rationale='r')])]
     checked=t.check(plan)
     assert 'NBA game status last refreshed' in checked['text'] and 'forecast job still running' in checked['text']
-    assert t.send(checked)=='sent' and 'NBA game status last refreshed' in sent[0][1]['text']
+    assert t.send(checked)=='sent' and 'NBA game status last refreshed' in stored_texts()[0]
 
 
 @pytest.mark.parametrize('problem',['failing','no_running_job','outside_window'])
@@ -655,7 +673,7 @@ def test_orphan_png_from_a_crash_before_its_record_never_blocks_the_image(setup,
     with pytest.raises(KeyboardInterrupt):t.send(t.check(plan))
     monkeypatch.setattr(tg,'ledger',real)
     monkeypatch.setattr(telegram_card,'_logo',lambda *a:Image.new('RGBA',(60,60),'red'))   # the re-render differs
-    assert t.send(t.check(plan))=='sent' and [m for m,p in sent]==['sendMessage','sendPhoto']
+    assert t.send(t.check(plan))=='sent' and [m for m,p in sent]==['sendPhoto']
     with tg.ledger() as c:
         row=c.execute('select * from ticket_images').fetchone()
     assert t.sha(Path(row['path']).read_bytes())==row['sha256']
@@ -1852,3 +1870,132 @@ def test_rejected_notice_alert_says_it_is_not_repeated(setup, monkeypatch):
     t.notify_alerts(snap, [], (), report['undelivered_results'])
     [alert] = [p['text'] for m, p in sent if 'RESULT NOTICE NOT DELIVERED' in p.get('text', '')]
     assert 'this alert is not repeated' in alert
+
+
+def test_seven_leg_long_shot_is_accepted_rendered_and_sent_as_one_picture(setup,monkeypatch):
+    """Owner request Nov 9: a long-shot ticket of up to seven legs."""
+    from app import telegram_card
+    monkeypatch.setattr(telegram_card,'_logo',lambda *a:None)
+    plan,snap,sent,path=setup
+    seven=ticket([('nba',1),('nhl',1),('nfl',1),('nba',2),('nhl',2),('nfl',2),('nba',3)]);seven['label']='Long shot'
+    plan['tickets']=[ticket([('nba',4),('nhl',4)]),seven]
+    assert t.send(t.check(plan))=='sent' and [m for m,p in sent]==['sendPhoto']
+    assert '#2 Long shot' in sent[0][1]['caption'] and sent[0][1]['caption'].count(' + ')==7 and '7 legs' in stored_texts()[0]
+
+
+def test_picture_that_cannot_be_rendered_sends_the_short_lines_never_the_long_text(setup,monkeypatch):
+    from app import telegram_card
+    def broken(*a,**k):raise RuntimeError('no renderer')
+    monkeypatch.setattr(telegram_card,'render_ticket_card',broken)
+    plan,snap,sent,path=setup;plan['tickets']=[ticket([('nba',1),('nhl',2)])]
+    assert t.send(t.check(plan))=='partial_failed'
+    assert [m for m,p in sent]==['sendMessage']   # the ticket still arrives
+    assert 'B1 win + B2 win' in sent[0][1]['text'] and 'Combine ALL' not in sent[0][1]['text'] and len(sent[0][1]['text'])<400
+    assert 'Combine ALL' in stored_texts()[0]     # the ledger keeps the exact full text
+    with tg.ledger() as c:
+        assert c.execute("select status from deliveries where delivery_key like 'ticket-image:%'").fetchone()[0]=='failed'
+    assert t.send(t.check(plan))=='partial_failed' and len(sent)==1   # never a second message for the same batch
+
+
+def test_batch_whose_text_the_earlier_release_sent_keeps_that_release_path_for_its_image(setup,monkeypatch):
+    from app import telegram_card
+    monkeypatch.setattr(telegram_card,'_logo',lambda *a:None)
+    plan,snap,sent,path=setup;plan['tickets']=[ticket([('nba',1),('nhl',2)])]
+    assert t.send(t.check(plan))=='sent'
+    with tg.ledger() as c:   # the earlier release's state after its text and before its image: no picture archived, no image receipt
+        c.execute("delete from deliveries where delivery_key like 'ticket-image:%'");c.execute('delete from ticket_images')
+    assert t.send(t.check(plan))=='sent' and [m for m,p in sent]==['sendPhoto','sendPhoto']
+    assert 'See preceding text' in sent[1][1]['caption']
+    assert t.send(t.check(plan))=='existing_sent' and len(sent)==2
+
+
+def seven(i):
+    games=[(s,n) for n in range(1,6) for s in ('nba','nhl','nfl')]
+    return [games[(i+k)%15] for k in range(7)]
+
+
+def long_shots(plan,count):
+    plan['tickets']=[ticket(seven(i)) for i in range(count)]
+    for n,x in enumerate(plan['tickets'],1):x['label']=f'Long shot {n}';del x['stake_usd']
+
+
+def test_largest_seven_leg_menu_delivers_every_selection_on_pictures_and_a_larger_one_is_refused_whole(setup,monkeypatch):
+    """Boundary (review, Nov 9): the stored ticket text must fit one Telegram message, so `check` refuses a menu that is
+    too large before anything is reserved or sent; the largest menu it accepts must reach the chat complete."""
+    from PIL import ImageDraw
+    from app import telegram_card
+    monkeypatch.setattr(telegram_card,'_logo',lambda *a:None)
+    drawn=[];original=ImageDraw.ImageDraw.text
+    def capture(self,xy,text,*a,**kw):drawn.append(text);return original(self,xy,text,*a,**kw)
+    monkeypatch.setattr(ImageDraw.ImageDraw,'text',capture)
+    plan,snap,sent,path=setup
+    accepted=[]
+    for count in range(1,t.MAX_TICKETS+1):
+        long_shots(plan,count)
+        try:t.check(plan);accepted.append(count)
+        except ValueError as exc:
+            assert 'too long for one Telegram message' in str(exc)
+    count=max(accepted);assert count>=3 and accepted==list(range(1,count+1))
+    if count<t.MAX_TICKETS:
+        long_shots(plan,count+1)
+        with pytest.raises(ValueError,match='too long'):t.send({'plan':plan,'resolved':[{'signature':'x'}]})
+        assert sent==[]
+    long_shots(plan,count);checked=t.check(plan)
+    assert t.send(checked)=='sent' and [m for m,p in sent]==['sendPhoto']*count
+    for n,(resolved,(m,p)) in enumerate(zip(checked['resolved'],sent),1):
+        caption=p['caption']
+        assert len(caption)<=1024 and f'picture {n} of {count}' in caption and not caption.endswith('...')
+        line=next(l for l in caption.split('\n') if l.startswith(f'#{n}'))
+        assert line.count(' + ')==6 and all(leg['pick_label'] in line for leg in resolved['legs'])
+        assert any(resolved['ticket_id'] in v for v in drawn) and any(v.startswith(f'Ticket {n}:') for v in drawn)
+    assert sum(v.startswith('7. ') for v in drawn)==count      # the seventh leg of every ticket is drawn
+    with tg.ledger() as c:
+        pages=c.execute("select status from deliveries where delivery_key like 'ticket-image:%' order by delivery_key").fetchall()
+        assert [r[0] for r in pages]==['sent']*count and c.execute('select count(*) from ticket_images').fetchone()[0]==count
+    assert t.send(t.check(plan))=='existing_sent' and len(sent)==count
+    assert [d['kind'] for d in t.ticket_deliveries(snap['date'])]==['ticket_text','ticket_image']+['ticket_image_page']*(count-1)
+
+
+def test_selections_that_cannot_be_shown_in_full_are_refused_before_any_reservation(setup):
+    plan,snap,sent,path=setup
+    for sport in ('nba','nhl','nfl'):
+        for p in snap['sports'][sport]['report']['picks']:p['pick_label']=p['pick_label']+' '+'x'*170
+    monkeypatch_snapshot=Path(plan['snapshot_path']);monkeypatch_snapshot.write_text(json.dumps(snap))
+    plan['review']['snapshot_sha256']=t.sha(monkeypatch_snapshot.read_bytes())
+    plan['tickets']=[ticket(seven(0))]
+    checked=t.check(plan)
+    with pytest.raises(ValueError,match='do not fit'):t.send(checked)
+    with tg.ledger() as c:
+        t.schema(c);assert c.execute('select count(*) from ticket_batches').fetchone()[0]==0
+    assert sent==[]
+
+
+def test_a_later_picture_that_may_not_have_arrived_is_never_resent_and_earlier_ones_are_not_repeated(setup,monkeypatch):
+    from app import telegram_card
+    monkeypatch.setattr(telegram_card,'_logo',lambda *a:None)
+    plan,snap,sent,path=setup;plan['tickets']=[ticket(seven(0)),ticket(seven(3))]
+    original=tg.Telegram.call;calls=[]
+    def flaky(self,method,payload,**kw):
+        calls.append(method)
+        if len(calls)==2:raise tg.DeliveryError('uncertain image',uncertain=True)
+        return original(self,method,payload,**kw)
+    monkeypatch.setattr(tg.Telegram,'call',flaky)
+    assert t.send(t.check(plan))=='partial_uncertain'
+    assert t.send(t.check(plan))=='partial_uncertain' and calls==['sendPhoto','sendPhoto']
+
+
+def test_archived_picture_that_fails_its_hash_sends_nothing(setup,monkeypatch):
+    from app import telegram_card
+    monkeypatch.setattr(telegram_card,'_logo',lambda *a:None)
+    plan,snap,sent,path=setup;plan['tickets']=[ticket([('nba',1),('nhl',2)])]
+    original=tg.Telegram.call
+    def busy(self,method,payload,**kw):raise tg.DeliveryError('Telegram rejected sendPhoto (HTTP 429).',retry_after=1)
+    monkeypatch.setattr(tg.Telegram,'call',busy)
+    assert t.send(t.check(plan))=='retry'
+    with tg.ledger() as c:
+        png=Path(c.execute('select path from ticket_images').fetchone()[0])
+        c.execute("update deliveries set next_attempt_at='2000-01-01T00:00:00Z'")
+    png.chmod(0o600);png.write_bytes(png.read_bytes()+b'tampered')
+    monkeypatch.setattr(tg.Telegram,'call',original)
+    with pytest.raises(ValueError,match='hash mismatch'):t.send(t.check(plan))
+    assert sent==[]

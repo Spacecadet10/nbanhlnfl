@@ -5,6 +5,7 @@ No training, ingestion, forecast changes, historical recommendations, or subscri
 import hashlib
 import json
 import os
+import re
 import secrets
 import sqlite3
 import time
@@ -225,7 +226,32 @@ def format_batch(report, chat_id, gid, picks, *, preview=False):
     return key, text
 
 
-def deliver(bot, conn, chat_id, key, text, now, *, photo=None, caption=None):
+def card_identity(text):
+    """What makes a game card the same card for its reader: sport, matchup and start (its first three lines) and the
+    recommended pick without its line number ('DET -10.5' and 'DET -9.5' are one pick; 'DET' and 'WSH' are not).
+    None for a text that is not a live game card."""
+    lines = text.split('\n')
+    if len(lines) < 3 or not lines[0].startswith('<b>PROP51 PICKS · ') or '<b>Recommended pick</b>' not in lines:
+        return None
+    pick = re.sub(r'<[^>]+>', '', lines[lines.index('<b>Recommended pick</b>') + 1])
+    return lines[0], lines[1], lines[2], re.sub(r'\s*[+-]?\d+(\.\d+)?$', '', pick.strip())
+
+
+def deliver_card(bot, conn, chat_id, key, text, now):
+    """Owner request Nov 9: one card per game. A card whose game, start and recommended pick already reached the chat (or
+    may have: sent, uncertain, sending) is not sent again when only a forecast version or a line changed; the delivery
+    key is unchanged, so receipts written by the earlier release count too."""
+    identity = card_identity(text)
+    if identity and not conn.execute('SELECT 1 FROM deliveries WHERE delivery_key=?', (key,)).fetchone():
+        since = (datetime.fromisoformat(now.replace('Z', '+00:00')) - timedelta(days=2)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        for row in conn.execute("SELECT text FROM deliveries WHERE chat_id=? AND attempted_at>=? AND status IN ('sent','uncertain','sending')",
+                                (str(chat_id), since)):
+            if card_identity(row['text']) == identity:
+                return 'already_sent_for_game'
+    return deliver(bot, conn, chat_id, key, text, now)
+
+
+def deliver(bot, conn, chat_id, key, text, now, *, photo=None, caption=None, send_text=None):
     """Unique claim before send; ambiguous responses/crashes are never automatically sent a second time."""
     if photo is None and '<b>Recommended pick</b>' in text:
         from .telegram_card import render_card
@@ -241,7 +267,7 @@ def deliver(bot, conn, chat_id, key, text, now, *, photo=None, caption=None):
     conn.execute('COMMIT')
     try:
         if photo is None:
-            message = bot.call('sendMessage', {'chat_id': str(chat_id), 'text': text, 'parse_mode': 'HTML'})
+            message = bot.call('sendMessage', {'chat_id': str(chat_id), 'text': text if send_text is None else send_text, 'parse_mode': 'HTML'})
         else:
             if caption is None:
                 league = text.split('PROP51 PICKS · ', 1)[1].split('<', 1)[0]
@@ -288,7 +314,7 @@ def run_once(bot, settings, conn, *, now=None):
                 source.close()
             batches = message_batches(report, settings['TELEGRAM_CHAT_ID'])
             result['sports'][sport] = {'eligible_summaries': len(batches), **dict(Counter(
-                deliver(bot, conn, settings['TELEGRAM_CHAT_ID'], key, text, report['as_of']) for key, text in batches))}
+                deliver_card(bot, conn, settings['TELEGRAM_CHAT_ID'], key, text, report['as_of']) for key, text in batches))}
         except Exception as exc:
             # Do not echo arbitrary exception text (URLs/credentials). Other sport can continue.
             result['sports'][sport] = {'status': 'failed', 'error_type': type(exc).__name__}

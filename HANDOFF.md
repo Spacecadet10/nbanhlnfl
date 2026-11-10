@@ -1,3 +1,9 @@
+## Telegram picture delivery v2 — Codex review approved, Nov9
+- Applied author v2 patch only (six scoped files) against1121d60 in isolated checkout; production receipts/credentials/stores untouched by tests. Read author response and corrected first review: six×seven batch was already refused by text-size guard; smaller accepted batch truncation was valid.
+- Release Python3.12.12, five focused files:237passed,1warning in20.75s. Structure checker passed; git diff --check passed. All six patch files byte-identical to tested export. Seven-leg preview visually inspected; IDs, starts and all seven legs visible. No real Telegram test or full frontend/API readiness claim.
+- Review: page splitting prevents omitted tickets; archived hash failure sends nothing; render failure deliberately sends short-caption text once with partial_failed; moved recommended line suppressed using prior receipt text, legacy delivery keys preserved. Multiple pages have distinct receipts and uncertainty remains non-retriable. Approve this scoped change for owner-requested activation.
+- Next: fast-forward guarded delivery to this commit, verify clean guard/status; first genuine justified ticket verifies production photo transport without synthetic betting advice. Main checkout's unrelated work remains untouched. GitHub authentication was invalid at last check; no push claimed.
+
 # Current handoff
 
 ## Hourly mixed ticket delivered — Codex, Nov8 15:10 ET

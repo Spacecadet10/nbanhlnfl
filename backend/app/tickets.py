@@ -10,7 +10,10 @@ from zoneinfo import ZoneInfo
 
 SKILL = Path.home() / '.codex/skills/courtside-ticket-review/SKILL.md'
 TORONTO = ZoneInfo('America/Toronto')
-MAX_TICKETS, MIN_LEGS, MAX_LEGS = 6, 2, 6   # owner request Nov 8: a varied menu, not one fixed shape
+MAX_TICKETS, MIN_LEGS, MAX_LEGS = 6, 2, 7   # owner request Nov 8: a varied menu; Nov 9: long-shot tickets up to seven legs
+# Owner request Nov 9: these two states clear by themselves within minutes and their alert text meant nothing to the
+# reader. They stay in the preflight report, the snapshot and the trigger observations; they are no longer sent to the chat.
+QUIET_HEALTH = ('source_unavailable_or_stale', 'missing_due_forecasts')
 CARD_TICKETS = 3
 PROVIDER_SHORT = {'DraftKings': 'DK'}
 SNAPSHOT_TTL = timedelta(minutes=10)   # check() refuses older snapshots; a start older than this can never complete                             # the PNG shows the first three; the text lists every option
@@ -727,7 +730,7 @@ def check(plan):
     seen, combinations, resolved = {}, set(), []
     for ticket in plan['tickets']:
         if not _text(ticket['label'], 'ticket label') or not MIN_LEGS <= len(ticket['legs']) <= MAX_LEGS:
-            raise ValueError('A ticket needs a label and two to six legs')
+            raise ValueError('A ticket needs a label and two to seven legs')
         if not isinstance(ticket.get('payout_assessment'), str) or not ticket['payout_assessment'].strip():
             raise ValueError('Each ticket needs a payout_assessment: judge its payout at the stored prices against its uncertainty; review again')
         stake = ticket.get('stake_usd')
@@ -900,6 +903,7 @@ def send(result):
         raise ValueError('Forecasts changed before dispatch')
     result = checked
     attempt_at = checked['as_of']
+    captions = ticket_captions(result)   # refuses before any reservation if a selection could not be shown in full
     settings = config.telegram_settings()
     if not settings.get('TELEGRAM_CHAT_ID'):
         raise ValueError('Pair the existing Telegram bot first')
@@ -924,6 +928,7 @@ def send(result):
             if delivery and delivery['status']=='retry' and delivery['next_attempt_at'] > attempt_at:
                 return 'retry_pending'
             result = archived
+            captions = ticket_captions(result)
         else:
             conn.execute('BEGIN IMMEDIATE')
             try:
@@ -962,6 +967,39 @@ def send(result):
         write_once(archive, raw)
         # Keep original content/time as evidence; retries use the CURRENT attempt time.
         previous = conn.execute('SELECT status FROM deliveries WHERE delivery_key=?',(key,)).fetchone()
+        image_key = 'ticket-image:' + sha(key.encode())
+        pictured = conn.execute('SELECT 1 FROM ticket_images WHERE batch_key=?',(key + '#p1',)).fetchone() is not None
+        if pictured or not (previous and previous['status'] == 'sent'):
+            # Owner request Nov 9: a ticket batch arrives as pictures only, no long text message. Every ticket is on a
+            # picture in full (ticket_pages); the first picture is sent under the batch key (the delivery every later step
+            # reads) and the image receipt is recorded as that same Telegram message, so nothing is sent twice. Further
+            # pictures have their own receipts. The exact text stays in the ledger and the archive.
+            pictures = ticket_pictures(conn, key, result, directory)   # an archived picture that fails its hash raises: nothing is sent
+            if pictures is None:
+                # The renderer is unavailable. The ticket still arrives, as the short caption lines (never the long text),
+                # and the failed image receipt raises the delivery alert, as a failed image always did.
+                short = '\n\n'.join(escape(c) for c in captions)
+                status = telegram.deliver(bot, conn, chat, key, result['text'], attempt_at, send_text=short)
+                confirmed = conn.execute('SELECT status FROM deliveries WHERE delivery_key=?',(key,)).fetchone()
+                if not confirmed or confirmed['status'] != 'sent':
+                    return status
+                conn.execute('INSERT OR IGNORE INTO deliveries (delivery_key,chat_id,text,status,attempted_at,error) VALUES (?,?,?,?,?,?)',
+                             (image_key, str(chat), result['text'], 'failed', attempt_at, 'ticket image not rendered'))
+                return 'partial_failed'
+            statuses = [telegram.deliver(bot, conn, chat, key, result['text'], attempt_at, photo=pictures[0][0], caption=pictures[0][1])]
+            confirmed = conn.execute('SELECT status,message_id FROM deliveries WHERE delivery_key=?',(key,)).fetchone()
+            if not confirmed or confirmed['status'] != 'sent':
+                return statuses[0]
+            conn.execute('INSERT OR IGNORE INTO deliveries (delivery_key,chat_id,text,status,attempted_at,message_id) VALUES (?,?,?,?,?,?)',
+                         (image_key, str(chat), result['text'], 'sent', attempt_at, confirmed['message_id']))
+            for number, (photo, caption) in enumerate(pictures[1:], 2):
+                page_key = f'{image_key}:p{number}'
+                statuses.append(telegram.deliver(bot, conn, chat, page_key, result['text'], attempt_at, photo=photo, caption=caption))
+                row = conn.execute('SELECT status FROM deliveries WHERE delivery_key=?',(page_key,)).fetchone()
+                if not row or row['status'] != 'sent':
+                    return 'partial_' + (row['status'] if row else statuses[-1])   # later pictures wait: order is kept
+            return 'sent' if 'sent' in statuses else 'existing_sent'
+        # A batch whose text the earlier release already sent keeps that release's text-then-image path.
         status = telegram.deliver(bot, conn, chat, key, result['text'], attempt_at)
         confirmed = conn.execute('SELECT status FROM deliveries WHERE delivery_key=?',(key,)).fetchone()
         if not confirmed or confirmed['status'] != 'sent':
@@ -970,6 +1008,86 @@ def send(result):
         if image_status not in ('sent','already_recorded'):
             return 'partial_' + image_status
         return 'existing_sent' if previous and previous['status']=='sent' and image_status=='already_recorded' else 'sent'
+
+
+PAGE_LEGS = 9   # a picture holds at most CARD_TICKETS tickets and about this many legs, so it stays readable on a phone
+
+
+def ticket_pages(tickets):
+    """Tickets split over pictures, in order; every ticket is on exactly one picture, whole."""
+    pages = []
+    for t in tickets:
+        if pages and len(pages[-1]) < CARD_TICKETS and sum(len(x['legs']) for x in pages[-1]) + len(t['legs']) <= PAGE_LEGS:
+            pages[-1].append(t)
+        else:
+            pages.append([t])
+    return pages
+
+
+def ticket_captions(result):
+    """One caption per picture: its tickets' legs with the stored price and what each pays at those prices. Telegram
+    captions hold 1,024 characters. A caption that is too long first drops the ticket labels, then the prices; if the legs
+    themselves still do not fit it raises: a selection is never cut off."""
+    tickets = result['resolved']
+    pages = ticket_pages(tickets)
+    quoted = [p['quote_check']['retrieved_at'] for t in tickets for p in t['legs'] if (p.get('quote_check') or {}).get('price_now') is not None]
+    footer = 'Each numbered ticket is ONE parlay with all its legs.' + (
+        ' Prices: stored DraftKings quotes, ' + _parse(max(quoted)).astimezone(TORONTO).strftime('%I:%M %p %Z') + '; confirm before betting.' if quoted else '')
+    out, number = [], 0
+    for index, page in enumerate(pages, 1):
+        first = number + 1
+
+        def build(labels, prices):
+            lines = ['PROP51 · COMBINED PARLAY TICKETS · ' + result['date'] + (f' · picture {index} of {len(pages)}' if len(pages) > 1 else '')]
+            for n, t in enumerate(page, first):
+                legs = ' + '.join(p['pick_label'] + (f" ({p['quote_check']['price_now']:+d})" if prices and (p.get('quote_check') or {}).get('price_now') is not None else '')
+                                  for p in t['legs'])
+                try:
+                    payout = (t.get('assessment') or ticket_assessment(t['legs']))['payout']
+                except Exception:
+                    payout = None
+                lines.append(f"#{n}" + (f" {t['label']}" if labels else '') + f": {legs}" + (f" — pays about ×{payout:.2f}" if payout else '')
+                             + (f" — ${t['stake_usd']:.2f}" if t.get('stake_usd') is not None else ''))
+            return '\n'.join(lines + [footer])
+        caption = next((c for c in (build(True, True), build(False, True), build(False, False)) if len(c) <= 1024), None)
+        if caption is None:
+            raise ValueError('Ticket selections do not fit a picture caption; shorten the pick labels or split the batch')
+        out.append(caption)
+        number += len(page)
+    return out
+
+
+def ticket_pictures(conn, key, result, directory):
+    """[(PNG bytes, caption)] for a batch, one per ticket_pages page, archived once in ticket_images (keys '<batch>#p<n>')
+    and reused unchanged on every retry. None when the renderer cannot draw (nothing is archived). An archived picture
+    whose bytes no longer match their recorded hash raises."""
+    from app.telegram_card import render_ticket_card
+    tickets = result['resolved']
+    pages, captions = ticket_pages(tickets), ticket_captions(result)
+    keys = [f'{key}#p{n}' for n in range(1, len(pages) + 1)]
+
+    def rows():
+        return [conn.execute('SELECT * FROM ticket_images WHERE batch_key=?',(k,)).fetchone() for k in keys]
+    if not all(rows()):
+        try:
+            photos, number = [], 1
+            for page in pages:
+                photos.append(render_ticket_card(result['date'], page, number_from=number, total=len(tickets)))
+                number += len(page)
+        except Exception:
+            return None
+        for k, photo, caption in zip(keys, photos, captions):
+            # Named by content: a file left by a crash before its record can never be mistaken for a later render.
+            image_path = directory / (result['date'] + '-' + sha(k.encode())[:16] + '-' + sha(photo) + '.png')
+            write_once(image_path, photo)
+            conn.execute('INSERT OR IGNORE INTO ticket_images VALUES (?,?,?,?)',(k,str(image_path),sha(photo),caption))
+    out = []
+    for row in rows():
+        photo = Path(row['path']).read_bytes()
+        if sha(photo) != row['sha256']:
+            raise ValueError('Archived ticket image hash mismatch')
+        out.append((photo, row['caption']))
+    return out
 
 
 def deliver_visual(bot, conn, chat, key, result, directory, attempt_at):
@@ -1374,6 +1492,9 @@ def notify_alerts(snap, settlement_errors, extra=(), undelivered=()):
         if not telegram.controls(bot,settings,conn):
             return ['paused']
         for issue in issues:
+            if issue['issue'] in QUIET_HEALTH:
+                out.append('not_sent_quiet')
+                continue
             # One alert per issue/sport/day, no repeated hourly noise.
             key = 'ticket-health:' + snap['date'] + ':' + issue['sport'] + ':' + issue['issue'] + (':' + issue['dedup'] if issue.get('dedup') else '')
             text = 'PROP51 / REVIEW BLOCKER / ' + issue['sport'].upper() + '\n' + issue['issue'] + ''.join(
@@ -1569,6 +1690,9 @@ def ticket_deliveries(day):
             for kind, key in (('ticket_text', batch['batch_key']), ('ticket_image', 'ticket-image:' + sha(batch['batch_key'].encode()))):
                 row = conn.execute('SELECT status,attempted_at,message_id,next_attempt_at FROM deliveries WHERE delivery_key=?', (key,)).fetchone()
                 out.append({'kind': kind, 'batch_key': batch['batch_key'], **(dict(row) if row else {'status': 'not_attempted'})})
+            for row in conn.execute("SELECT status,attempted_at,message_id,next_attempt_at FROM deliveries WHERE delivery_key LIKE ? ORDER BY delivery_key",
+                                    ('ticket-image:' + sha(batch['batch_key'].encode()) + ':p%',)).fetchall():
+                out.append({'kind': 'ticket_image_page', 'batch_key': batch['batch_key'], **dict(row)})
     return out
 
 

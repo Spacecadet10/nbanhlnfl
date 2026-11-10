@@ -321,3 +321,49 @@ def test_game_card_caption_says_single_game_not_a_parlay_ticket(tmp_path):
     with tg.ledger(tmp_path / 'receipts.sqlite') as conn:
         assert tg.deliver(bot, conn, '123', key, text, NOW) == 'sent'
     assert 'GAME CARD' in bot.caption and 'not a parlay ticket' in bot.caption.lower() and 'Recommended pick' in bot.caption
+
+
+def strong_report(label='DET -10.5', forecast_id=1, tipoff='2026-11-02T21:00:00Z'):
+    d = report()
+    d['picks'][0].update(market='spread', market_title='Point spread', pick_label=label, opposite_pick_label='WSH +10.5', strong=True,
+                         game_rank=1, forecast_id=forecast_id, tipoff=tipoff)
+    d['picks'][0]['percentage_history'].update(market='spread', line_source='bookmaker', wins=3, losses=1, settled=4)
+    return d
+
+
+def card_sends(tmp_path, reports, *, error=None, first_status=None):
+    """Statuses of delivering each report's single card in turn through the one-card-per-game guard."""
+    bot, out = Bot(), []
+    with tg.ledger(tmp_path / 'cards.sqlite') as conn:
+        for i, d in enumerate(reports):
+            key, text = tg.message_batches(d, '123')[0]
+            out.append(tg.deliver_card(bot, conn, '123', key, text, NOW))
+            if i == 0 and first_status:
+                conn.execute('UPDATE deliveries SET status=?', (first_status,))
+    return out, bot
+
+
+def test_one_card_per_game_a_new_forecast_version_or_a_moved_line_is_not_sent_again(tmp_path):
+    """Owner request Nov 9. The delivery key is the earlier release's, so its receipts are matched at cutover too."""
+    out, bot = card_sends(tmp_path, [strong_report(), strong_report(forecast_id=2), strong_report('DET -9.5', forecast_id=3)])
+    assert out == ['sent', 'already_sent_for_game', 'already_sent_for_game'] and len(bot.sends) == 1
+    assert tg.message_batches(strong_report(), '123')[0][0] != tg.message_batches(strong_report(forecast_id=2), '123')[0][0]
+
+
+def test_a_new_recommended_side_or_a_new_start_sends_the_game_again(tmp_path):
+    out, bot = card_sends(tmp_path, [strong_report(), strong_report('WSH +10.5', forecast_id=2),
+                                     strong_report(forecast_id=3, tipoff='2026-11-02T21:30:00Z'), strong_report()])
+    assert out == ['sent', 'sent', 'sent', 'already_recorded'] and len(bot.sends) == 3
+
+
+@pytest.mark.parametrize('status,expected', [('uncertain', 'already_sent_for_game'), ('sending', 'already_sent_for_game'), ('failed', 'sent')])
+def test_a_card_that_may_have_arrived_blocks_the_game_and_a_rejected_one_does_not(tmp_path, status, expected):
+    out, bot = card_sends(tmp_path, [strong_report(), strong_report(forecast_id=2)], first_status=status)
+    assert out == ['sent', expected]
+
+
+def test_card_identity_ignores_the_line_only_and_is_none_for_other_messages():
+    text = tg.message_batches(strong_report(), '123')[0][1]
+    assert tg.card_identity(text)[3] == 'DET' and tg.card_identity('PROP51 / REVIEW BLOCKER / NBA') is None
+    assert tg.card_identity(tg.message_batches(strong_report('Over 233.5'), '123')[0][1])[3] == 'Over'
+    assert tg.card_identity(tg.message_batches(report(), '123')[0][1])[3] == 'No strong pick'
