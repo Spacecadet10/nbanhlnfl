@@ -1999,3 +1999,28 @@ def test_archived_picture_that_fails_its_hash_sends_nothing(setup,monkeypatch):
     monkeypatch.setattr(tg.Telegram,'call',original)
     with pytest.raises(ValueError,match='hash mismatch'):t.send(t.check(plan))
     assert sent==[]
+
+
+def test_reviewer_sees_each_picks_exact_percentage_rank_and_the_ranked_list(setup,monkeypatch):
+    """Owner request Nov 9: the AI reads the ranked exact percentages when it builds tickets."""
+    plan,snap,sent,path=setup
+    pick=dict(snap['sports']['nba']['report']['picks'][0],percentage_history=dict(wins=4,losses=1,settled=5,rank=2,ranked=9,line_source='none'))
+    assert t.leg_assessment('nba',pick)['exact_rank']=='2 of 9' and t.leg_assessment('nba',pick)['exact']=='4-1 (5 settled)'
+    assert t.leg_assessment('nba',snap['sports']['nba']['report']['picks'][1])['exact_rank'] is None
+    class Provider:
+        indexes={m:{('87.8','a','primary_direct','m','none'):{'g1':'win','g2':'win','g3':'loss'}} for m in ('winner','spread','total','team_total_home','team_total_away')}
+    ranking=t.percentage_rankings('nfl',Provider(),NOW)
+    assert ranking['winner']==[dict(percentage='87.8',side='a',source='primary_direct',model_version='m',line_source='none',wins=2,losses=1,settled=3,win_rate=2/3,rank=1)]
+    class Broken:
+        indexes=None
+    assert t.percentage_rankings('nfl',Broken(),NOW)=={'error':'TypeError'}     # a ranking problem never fails the snapshot
+
+
+def test_nfl_percentage_rankings_populates_lazy_market_indexes():
+    class LazyProvider:
+        indexes = {}
+        def cohort(self, market):
+            self.indexes[market] = {('60.0', 'a', 'primary_direct', 'm', 'none'): {'g1': 'win', 'g2': 'win', 'g3': 'loss'}}
+    ranking = t.percentage_rankings('nfl', LazyProvider(), NOW)
+    assert set(ranking) == {'winner', 'spread', 'total', 'team_total_home', 'team_total_away'}
+    assert ranking['total'][0]['settled'] == 3

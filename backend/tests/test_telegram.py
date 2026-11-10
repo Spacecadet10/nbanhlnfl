@@ -369,29 +369,101 @@ def test_card_identity_ignores_the_line_only_and_is_none_for_other_messages():
     assert tg.card_identity(tg.message_batches(report(), '123')[0][1])[3] == 'No strong pick'
 
 
-def test_card_shows_the_sportsbook_probability_beside_the_model_and_flags_a_price_above_the_model():
-    """Owner request Nov 9 (CLE @ CHA: 'CLE win' was recommended at 55% while the price implied 74%; the card never said so)."""
+def priced_card(history=None):
     d = strong_report('CLE win')
-    d['picks'][0].update(market='winner', market_title='Winner', probability=0.552, market_prob=0.7404)
-    d['picks'][0]['percentage_history'].update(market='winner', percentage='55.2', line_source='none')
+    d['picks'][0].update(matchup='CLE @ CHA', market='winner', market_title='Winner', probability=0.552, market_prob=0.7404, opposite_pick_label='CHA win')
+    d['picks'][0]['percentage_history'].update(market='winner', percentage='55.2', line_source='none', **(history or {}))
     spread = copy.deepcopy(strong_report('CHA +8.5')['picks'][0])
-    spread.update(strong=False, game_rank=2, probability=0.5708, market_prob=0.5094, forecast_id=2)
-    spread['percentage_history'].update(percentage='57.1')
-    d['picks'].append(spread)
-    key, text = tg.message_batches(d, '123')[0]
-    assert 'Model 55.2% · Sportsbook 74.0% · no value at this price' in text
-    assert len('Model 55.2% · Sportsbook 74.0% · no value at this price') <= 56     # one row of the card's headline box
-    assert '<b>Model 57.1%</b> · Sportsbook 50.9% (model +6.1) · 3W–1L (4 settled)' in text
-    assert '<b>Model 55.2%</b> · Sportsbook 74.0% (model -18.8) · ' in text
+    spread.update(matchup='CLE @ CHA', strong=False, game_rank=2, probability=0.5708, market_prob=0.5043, forecast_id=2)
+    spread['percentage_history'].update(percentage='57.1', **(history or {}))
+    total = copy.deepcopy(spread)
+    total.update(market='total', market_title='Game total points', pick_label='Over 215.5', probability=0.52, market_prob=0.51, forecast_id=3)
+    total['percentage_history'].update(market='total', percentage='52.0')
+    d['picks'] += [spread, total]
+    return d
+
+
+def test_card_says_in_plain_words_how_the_app_and_the_sportsbook_compare():
+    """Owner request Nov 9 (CLE @ CHA: 'CLE win' was recommended at 55% while the sportsbook had it at 74%; the card never
+    said so). Simple words: overpriced / underpriced / fair price."""
+    key, text = tg.message_batches(priced_card(), '123')[0]
+    assert 'App 55.2% · Sportsbook 74.0% · OVERPRICED' in text
+    assert 'CLE win · <i>sportsbook 74.0% · overpriced</i>' in text
+    assert 'CHA +8.5 · <i>bookmaker line at forecast · sportsbook 50.4% · underpriced</i>' in text
+    assert 'Over 215.5 · <i>bookmaker line at forecast · sportsbook 51.0% · fair price</i>' in text
+    assert '<b>Model 57.1%</b> · 3W–1L (4 settled)' in text          # the record line is exactly as before
     assert tg.card_identity(text)[3] == 'CLE win'
+    assert (tg.price_tag(.60, .57), tg.price_tag(.60, .571), tg.price_tag(.60, .63), tg.price_tag(.60, .629)) == ('underpriced', 'fair price', 'overpriced', 'fair price')
+
+
+def test_priced_card_renders_and_no_line_is_longer_than_the_card():
+    """Found on a real card (CLE @ CHA, Nov 9): added sportsbook text pushed the record line off the right edge."""
+    from PIL import Image, ImageDraw
     from app import telegram_card
-    assert telegram_card.render_card(text).startswith(b'\x89PNG')     # the picture still renders with the longer lines
+    text = tg.message_batches(priced_card(dict(wins=0, losses=0, settled=0, small_sample=True)), '123')[0][1]
+    assert telegram_card.render_card(text).startswith(b'\x89PNG')
+    probe = ImageDraw.Draw(Image.new('RGB', (10, 10)))
+    assert 200 + probe.textlength('0W–0L (0 settled) · No settled matching examples.', font=telegram_card._font(22)) <= 1000
+    assert 200 + probe.textlength('Bookmaker line at forecast · sportsbook 50.4% · underpriced', font=telegram_card._font(20)) <= 1000
+    assert 95 + probe.textlength('App 55.2% · Sportsbook 74.0% · OVERPRICED', font=telegram_card._font(27)) <= 930
 
 
-def test_card_without_a_stored_price_is_unchanged_and_a_fairly_priced_pick_is_not_flagged():
+def test_card_without_a_stored_price_is_unchanged():
     text = tg.message_batches(report(), '123')[0][1]            # team total: no sportsbook price is stored
-    assert 'Sportsbook' not in text and '<b>Model 51.8%</b> · 0W–2L (2 settled)' in text
+    assert 'ortsbook' not in text and '<b>Model 51.8%</b> · 0W–2L (2 settled)' in text and 'ORL over 109.5 · <i>model line</i>' in text
     d = strong_report(); d['picks'][0]['market_prob'] = 0.48
-    text = tg.message_batches(d, '123')[0][1]
-    assert 'Model 51.8% · Sportsbook 48.0%\n' in text and 'no value' not in text
     assert tg.message_batches(d, '123')[0][0] == tg.message_batches(strong_report(), '123')[0][0]   # same delivery key: no resend
+
+
+def test_exact_percentages_are_ranked_by_record_once_they_have_three_results():
+    """Owner request Nov 9: 'we track every percentage to see the strongest ones'. Exact percentages only, never a range."""
+    from app import threshold_overview as to
+    key = lambda pct, side='a': (pct, side, 'primary_recorded', 'm', 'none')
+    index = {key('87.8'): {'g1': 'win', 'g2': 'win', 'g3': 'win'},                    # 3-0
+             key('87.9'): {'g4': 'win', 'g5': 'loss', 'g6': 'win', 'g7': 'win'},      # 3-1: a different percentage, its own record
+             key('51.4'): {'g8': 'loss', 'g9': 'loss', 'g10': 'loss'},                # 0-3
+             key('60.0'): {'g11': 'win', 'g12': 'win'},                               # two results: tracked, not ranked yet
+             key('87.8', 'b'): {'g13': 'win', 'g14': 'push', 'g15': 'not_yet_available'}}   # other direction, one settled
+    ranking = to.percentage_ranking(index)
+    assert [(r['percentage'], r['side'], r['wins'], r['losses'], r['rank']) for r in ranking] == [
+        ('87.8', 'a', 3, 0, 1), ('87.9', 'a', 3, 1, 2), ('51.4', 'a', 0, 3, 3)]
+    rec = {'confidence': 0.879, 'side': 'a', 'source': 'primary_recorded', 'model_version': 'm', 'line_source': 'none'}
+    mine = to.percentage_record('nba', 'winner', rec, 'new-game', index, NOW)
+    assert (mine['wins'], mine['losses'], mine['rank'], mine['ranked']) == (3, 1, 2, 3)
+    assert to.percentage_record('nba', 'winner', rec, 'g5', index, NOW)['rank'] == 1      # its own game never counts toward its record
+    assert to.percentage_record('nba', 'winner', dict(rec, confidence=0.60), 'new-game', index, NOW)['rank'] is None
+    from app.schemas import ForecastPercentageRecord
+    assert ForecastPercentageRecord(**mine).rank == 2
+
+
+def test_card_shows_the_rank_of_a_ranked_percentage_and_avoid_for_a_losing_one():
+    d = strong_report()
+    d['picks'][0]['percentage_history'].update(wins=5, losses=1, settled=6, rank=2, ranked=41)
+    assert '<b>Model 51.8%</b> · 5W–1L (6 settled) · rank 2 of 41\n' in tg.message_batches(d, '123')[0][1]
+    d['picks'][0]['percentage_history'].update(wins=0, losses=3, settled=3, rank=41, ranked=41)
+    text = tg.message_batches(d, '123')[0][1]
+    assert '0W–3L (3 settled) · rank 41 of 41 · AVOID' in text
+    from PIL import Image, ImageDraw
+    from app import telegram_card
+    assert telegram_card.render_card(text).startswith(b'\x89PNG')
+    probe = ImageDraw.Draw(Image.new('RGB', (10, 10)))
+    assert 200 + probe.textlength('10W–13L (23 settled) · rank 141 of 141 · AVOID · Small sample.', font=telegram_card._font(22)) <= 1000
+    plain = tg.message_batches(strong_report(), '123')[0][1]            # not ranked: the line is exactly as before
+    assert '<b>Model 51.8%</b> · 3W–1L (4 settled)\n' in plain and ' · rank ' not in plain
+
+
+def test_price_tag_includes_three_point_boundaries_despite_binary_rounding():
+    assert tg.price_tag(.58, .55) == 'underpriced'
+    assert tg.price_tag(.55, .58) == 'overpriced'
+    assert tg.price_tag(.57999, .55) == 'fair price'
+
+
+def test_ranking_failure_does_not_hide_the_existing_percentage_record(monkeypatch):
+    from app import threshold_overview as to
+    rec = dict(confidence=.60, side='a', source='primary_recorded', model_version='m', line_source='none')
+    index = {to._percentage_key(rec): {'g1':'win', 'g2':'win', 'g3':'loss'}}
+    def broken(*args):
+        raise ValueError('ranking unavailable')
+    monkeypatch.setattr(to, 'percentage_ranking', broken)
+    history = to.percentage_record('nba', 'winner', rec, 'new-game', index, NOW)
+    assert (history['wins'], history['losses'], history['rank'], history['ranked']) == (2, 1, None, 0)

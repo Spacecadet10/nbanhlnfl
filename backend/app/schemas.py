@@ -181,6 +181,9 @@ class ForecastPercentageRecord(BaseModel):
     small_sample: bool
     excluded: dict[str, int]
     as_of: datetime
+    rank: Optional[int] = Field(default=None, description="Place of this exact percentage among the market's exact percentages "
+                                                          "with at least three settled results, best record first; None below that.")
+    ranked: int = Field(default=0, description="How many exact percentages of this sport and market are ranked.")
 
 
 class CanonicalForecast(BaseModel):

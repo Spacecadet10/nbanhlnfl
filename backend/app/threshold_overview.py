@@ -92,6 +92,27 @@ def percentage_index(items: list, as_of: str) -> dict:
     return out
 
 
+RANK_MIN_SETTLED = 3   # an exact percentage is ranked once it has this many settled results (owner request Nov 9)
+
+
+def percentage_ranking(index: dict, exclude_game: Optional[str] = None) -> list:
+    """Every exact percentage of one sport and market that has at least RANK_MIN_SETTLED settled results, best record
+    first: higher win rate, then more results, then the higher percentage. The owner's question "which percentages should
+    we go for" answered from the same exact-percentage records the cards show; no ranges, no other model or direction.
+    A short record near 50% can lead by chance, so each row carries its counts."""
+    rows = []
+    for key, games in index.items():
+        grades = Counter(grade for gid, grade in games.items() if gid != exclude_game)
+        wins, losses = grades['win'], grades['loss']
+        if wins + losses >= RANK_MIN_SETTLED:
+            rows.append({'key': key, 'percentage': key[0], 'side': key[1], 'source': key[2], 'model_version': key[3], 'line_source': key[4],
+                         'wins': wins, 'losses': losses, 'settled': wins + losses, 'win_rate': wins / (wins + losses)})
+    rows.sort(key=lambda r: (-r['win_rate'], -r['settled'], -float(r['percentage']), r['side'], r['model_version']))
+    for number, row in enumerate(rows, 1):
+        row['rank'] = number
+    return rows
+
+
 def percentage_record(sport: str, market: str, rec: dict, game_id: str, index: dict, as_of: str) -> dict:
     """Exact displayed percentage and direction, same model/source and line provenance; exclude this game.
 
@@ -101,6 +122,11 @@ def percentage_record(sport: str, market: str, rec: dict, game_id: str, index: d
     grades = Counter(grade for gid, grade in index.get(_percentage_key(rec), {}).items() if gid != game_id)
     wins, losses = grades['win'], grades['loss']
     settled = wins + losses
+    try:
+        ranking = percentage_ranking(index, game_id)
+        rank = next((r['rank'] for r in ranking if r['key'] == _percentage_key(rec)), None)
+    except Exception:  # Optional ranking must never suppress the existing forecast or its record.
+        ranking, rank = [], None
     state = ('no_history' if not settled else 'neutral' if wins == losses else
              'more_right' if wins > losses else 'more_wrong')
     return {'sport': sport, 'market': market, 'market_title': markets.spec(sport, market).title,
@@ -110,6 +136,7 @@ def percentage_record(sport: str, market: str, rec: dict, game_id: str, index: d
             'state': state, 'wins': wins, 'losses': losses, 'settled': settled,
             'win_rate': wins / settled if settled else None, 'loss_rate': losses / settled if settled else None,
             'ci95': wilson(wins, settled), 'small_sample': settled < MIN_LIVE_GRADED,
+            'rank': rank, 'ranked': len(ranking),
             'excluded': {k: v for k, v in grades.items() if k not in ('win', 'loss')}, 'as_of': as_of}
 
 

@@ -66,7 +66,8 @@ def snapshot():
                 due = conn.execute("SELECT game_id FROM games WHERE status='scheduled' AND season_type IN ('regular','play_in','postseason') AND tipoff_at>? AND tipoff_at<=?",
                                    (stamp, (now+timedelta(minutes=110)).strftime('%Y-%m-%dT%H:%M:%SZ'))).fetchall()
                 covered = {p['game_id'] for p in report['picks'] if p['grade']=='pending'}
-                result['sports'][sport] = {'freshness': state, 'report': report,
+                ranking = percentage_rankings(sport, provider, stamp)
+                result['sports'][sport] = {'freshness': state, 'report': report, 'percentage_ranking': ranking,
                     'missing_due_games': [g['game_id'] for g in due if g['game_id'] not in covered]}
                 if delay:
                     result['sports'][sport]['refresh_delay'] = delay
@@ -82,6 +83,24 @@ def snapshot():
     result['alerts'] = health_alerts(result)
     from fastapi.encoders import jsonable_encoder
     return jsonable_encoder(result)
+
+
+def percentage_rankings(sport, provider, stamp):
+    """The ranked exact percentages of every market of a sport (threshold_overview.percentage_ranking), for the reviewer to
+    read beside the picks: which exact percentages have the best and the worst records so far. Never fails a snapshot."""
+    from app import sports, threshold_overview as to
+    out = {}
+    try:
+        if sport == 'nfl' and callable(getattr(provider, 'cohort', None)):
+            from app.nfl_live import MARKETS
+            for market in MARKETS:
+                provider.cohort(market)  # NFL indexes are lazy, including when today's board is empty.
+        for market in (list(provider.indexes) if hasattr(provider, 'indexes') else sports.get(sport).markets):
+            index = provider.indexes[market] if hasattr(provider, 'indexes') else to.percentage_index(provider._canonical_cohort(market)[1], stamp)
+            out[market] = [{k: v for k, v in row.items() if k != 'key'} for row in to.percentage_ranking(index)]
+    except Exception as exc:
+        return {'error': type(exc).__name__}
+    return out
 
 
 def _parse(stamp):
@@ -205,6 +224,7 @@ def leg_assessment(sport, pick):
                 record_minus_break_even=None if record is None or break_even is None else
                 [record['interval'][0] - break_even, record['interval'][1] - break_even],
                 exact=f"{_field(history, 'wins', 0) or 0}-{_field(history, 'losses', 0) or 0} ({_field(history, 'settled', 0) or 0} settled)",
+                exact_rank=(f"{_field(history, 'rank')} of {_field(history, 'ranked')}" if _field(history, 'rank') else None),
                 app_rank=pick.get('game_rank'), skill_proven=pick.get('skill_proven'),
                 line_source=quote.get('line_source') or _field(history, 'line_source'), app_note=markets.LIMITATIONS.get((sport, pick['market'])))
 

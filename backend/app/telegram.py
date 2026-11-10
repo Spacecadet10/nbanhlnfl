@@ -184,8 +184,8 @@ def format_batch(report, chat_id, gid, picks, *, preview=False):
         book = strong[0].get('market_prob')
         detail = escape(strong[0]['market_title']) + ' · Model ' + displayed_percentage(strong[0]['probability']) + '%'
         if book is not None:
-            detail = 'Model ' + displayed_percentage(strong[0]['probability']) + '% · Sportsbook ' + displayed_percentage(book) + '%' + (
-                ' · no value at this price' if book > strong[0]['probability'] else '')
+            detail = ('App ' + displayed_percentage(strong[0]['probability']) + '% · Sportsbook ' + displayed_percentage(book) + '% · '
+                      + price_tag(strong[0]['probability'], book).upper())
         lines.append(detail)
     lines += ['<i>' + ('App ranking for this past game.' if preview else 'Based on the app’s existing ranking.') + '</i>',
               divider, '', '<b>Market breakdown</b>', '']
@@ -206,9 +206,13 @@ def format_batch(report, chat_id, gid, picks, *, preview=False):
         settled = wins + losses
         source = {'model': ' · <i>model line</i>', 'bookmaker': ' · <i>bookmaker line at forecast</i>', 'none': ''}[h['line_source']]
         book = pick.get('market_prob')
-        versus = '' if book is None else f"Sportsbook {displayed_percentage(book)}% (model {100 * (pick['probability'] - book):+.1f}) · "
+        if book is not None:   # on the small grey line under the pick, so the record line keeps its length and never runs off the card
+            source = (source[:-4] + ' · ' if source else ' · <i>') + f"sportsbook {displayed_percentage(book)}% · {price_tag(pick['probability'], book)}</i>"
+        # Owner request Nov 9: where this exact percentage stands among the market's ranked exact percentages, and a plain
+        # AVOID when its own record is a losing one. Only percentages with three or more results are ranked.
+        standing = '' if not h.get('rank') else f" · rank {h['rank']} of {h['ranked']}" + (' · AVOID' if losses > wins else '')
         lines += [f"<b>{escape(pick['market_title'])}</b>", f"{escape(pick['pick_label'])}{source}",
-                  f"<b>Model {escape(h['percentage'])}%</b> · {versus}{wins}W–{losses}L ({settled} settled)"]
+                  f"<b>Model {escape(h['percentage'])}%</b> · {wins}W–{losses}L ({settled} settled){standing}"]
         if preview:
             result = {'win': 'Won', 'loss': 'Lost', 'push': 'Push'}.get(pick['grade'], pick['grade'])
             lines.append('Result: ' + escape(result))
@@ -244,6 +248,16 @@ def card_identity(text):
         return None
     pick = re.sub(r'<[^>]+>', '', lines[lines.index('<b>Recommended pick</b>') + 1])
     return lines[0], lines[1], lines[2], re.sub(r'\s*[+-]?\d+(\.\d+)?$', '', pick.strip())
+
+
+def price_tag(app_probability, book_probability):
+    """Plain words for the gap between the app and the sportsbook's own (margin-free) probability, owner request Nov 9:
+    'overpriced' when the sportsbook rates the pick at least three points higher than the app (the bet costs more than the
+    app thinks it is worth), 'underpriced' when at least three points lower, else 'fair price'. A description of the two
+    numbers, not a promise: the app has been wrong against the sportsbook often."""
+    from decimal import Decimal
+    gap = Decimal(str(app_probability)) - Decimal(str(book_probability))
+    return 'underpriced' if gap >= Decimal('0.03') else 'overpriced' if gap <= Decimal('-0.03') else 'fair price'
 
 
 def deliver_card(bot, conn, chat_id, key, text, now):
