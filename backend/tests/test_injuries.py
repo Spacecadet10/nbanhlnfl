@@ -103,11 +103,11 @@ def down(calls):
 
 
 def test_outage_never_exceeds_the_run_slot_or_day_budgets(conn, monkeypatch):
-    now = datetime(2026, 10, 20, 21, 31, tzinfo=UTC)     # 48 slots due
+    now = datetime(2026, 10, 20, 21, 31, tzinfo=UTC)     # 48 :00/:30 slots + 9 :15/:45 slots (17:15Z-21:15Z) due
     calls = []
     first = collect(conn, down(calls), now=now)
-    assert first["due"] == 48 and len(calls) == 8 == first["attempts"] and first["status"] == "failed"
-    assert len(first["failed"]) == 4 and first["deferred"] == 44      # 2 attempts on each of the 4 newest slots
+    assert first["due"] == 57 and len(calls) == 8 == first["attempts"] and first["status"] == "failed"
+    assert len(first["failed"]) == 4 and first["deferred"] == 53      # 2 attempts on each of the 4 newest slots
     second = collect(conn, down(calls), now=now)
     assert len(calls) == 16 and len(second["given_up"]) == 4          # those 4 slots have used their 4 attempts
     third = collect(conn, down(calls), now=now)
@@ -403,3 +403,31 @@ def test_missing_older_reports_never_delay_the_newest_one(conn, monkeypatch):
         return ok(pdf(name)) if name == NAMES[2] else Response(404, None, None, None)
     out = collect(conn, fetch)
     assert calls == [NAMES[2]] and out["stored"] == [NAMES[2]] and out["deferred"] == 2
+
+
+# ---- Nov 11: the quarter-hour reports in the hours before games ------------------------------------------------------
+
+def test_quarter_hour_reports_are_due_only_in_the_six_hours_before_a_tipoff(conn):
+    """Owner, Nov 11: the official report is published every 15 minutes; fetch every published one in the hours before
+    games. :00/:30 keep their 36 h / 6 h window; :15/:45 only when a game tips off within six hours after the slot."""
+    due = injuries.due_slots(conn, datetime(2026, 10, 19, 0, 0, tzinfo=UTC), datetime(2026, 10, 22, 0, 0, tzinfo=UTC))
+    quarter = [s.at for s in due if s.at[14:16] in ("15", "45")]
+    assert (quarter[0], quarter[-1], len(quarter)) == ("2026-10-20T17:15:00Z", "2026-10-20T22:45:00Z", 12)
+    assert "Injury-Report_2026-10-20_06_45PM.pdf" in [s.name for s in due]
+    half = [s.at for s in due if s.at[14:16] in ("00", "30")]
+    assert (half[0], half[-1]) == ("2026-10-19T11:00:00Z", "2026-10-21T04:30:00Z")   # unchanged
+    assert [s.at for s in due] == sorted(s.at for s in due) and len({s.name for s in due}) == len(due)
+
+
+def test_a_full_game_day_stays_inside_the_daily_budget(conn):
+    ingest_events(conn, [event("9002", "2026-10-21T02:30:00Z", "3", "4")], "2026-10-18T12:00:00Z")   # a late game too
+    now = datetime(2026, 10, 21, 3, 0, tzinfo=UTC)
+    due = injuries.due_slots(conn, now - timedelta(hours=24), now)
+    assert len(due) <= injuries.MAX_ATTEMPTS_PER_DAY // 2   # one request per report, with room for retries
+
+
+def test_the_job_runs_two_minutes_after_every_quarter_hour():
+    import plistlib
+    from pathlib import Path
+    plist = plistlib.loads((Path(__file__).resolve().parents[2] / "scripts/launchd/com.nba-predictor.injuries.plist").read_bytes())
+    assert sorted(i["Minute"] for i in plist["StartCalendarInterval"]) == [2, 17, 32, 47]
