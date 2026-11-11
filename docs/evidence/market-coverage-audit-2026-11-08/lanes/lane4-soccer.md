@@ -1,0 +1,9 @@
+LANE 4 SOCCER (20:15-20:20Z): No live soccer forecasting. Sealed draw-aware Elo 1x2_regulation only, seal 7dbc668c214f... sealed 17:03:48Z, uncommitted in soccer-train (ST) only; calibration null (rejected, draw ECE +0.0068 > 0.005). Market CHECK 0037_soccer_forecasts.sql:46, soccer_forecasts.py:24; not_claimed soccer_protocol.json:200-204. Seal file hashes match code at 20:16Z.
+Reserved test 2023-24..2025-26 NOT run: soccer_test_access.jsonl absent, R/reserved-test-run absent; enforcement ST soccer_eval.py:163-174, 941-961 (procedural, editable logs).
+Preview 8851/5251: 9 backtest runs "Research backtest", 55,356 forecasts, 0 published_at, seasons <=2022; publish blocked for backtest rows (0037:30-34,66-85); UI badge SoccerResearch.tsx:36,80.
+Live: no soccer.sqlite in S1/data, no plist mentions soccer, LIVE a55c874 zero soccer refs. S1 soccer = data-only ESPN (cli.py:73-74,711-743; soccer.py:13 "There is no soccer model"), not scheduled.
+Tickets: S1 tickets.py:28 loops ('nba','nhl','nfl'); :53 soccer hard-coded forecasts_unavailable; excluded from alerts :385-387; soccer leg rejected :120-122. Skill :22, :41. TICKETS.md:19,69.
+App: LIVE none; S1 data-only screens Layout.tsx:9,114,122,147; SoccerPages.tsx:71,155,257 "Not available"; API 503 without store main.py:253. Telegram: no soccer code.
+Settlement: ST research grades 90-min only; excludes ET/pen notes and UEFA deciding (soccer_history.py:14-17,435-445; 0036:99). S1 ESPN decided_in espn.py:423,471,577; 90-min shown only if regulation soccer.py:307-313. Odds: none (0 odds_quotes); soccer.py:283 "not collected".
+Sources: openfootball CC0 pinned football.json e6744429, champions-league abfaeddc; ESPN soccer "not clearly permitted" SOCCER_PLAN.md:29,52,63; SOCCER_PLAN.md:57 stale ("S2 not started").
+Totals/BTTS/DC/DNB: not built. Note lane4 says adaptive-train plist program runs from nba-predictor-deep (verify).

@@ -1,0 +1,14 @@
+Sun Nov  8 21:31:34 UTC 2026
+== preflight (mocked notify) ==
+exit=0
+{'due': True, 'reason': 'new_forecasts', 'ticketable_forecasts': 11, 'ticketable_games': 2} ['nba:1164', 'nba:1166', 'nba:1167', 'nba:1168', 'nba:1165', 'nhl:1085', 'nhl:1083', 'nhl:1087', 'nhl:1086', 'nhl:1084', 'nhl:1088'] {} alerts [] errors []
+== snapshot + synthetic ticket plan + check ==
+{"snapshot_path": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/43a0d8c8-5d19-4e11-a7c0-2df81439b128/scratchpad/e2e/snap1.json", "snapshot_sha256": "658f0d6638bd410975fccb4838b7a95e796a32870f599ccad1dd65efb772e0ca"}
+{"accounted": 11, "tickets": [[["nba", 1164], ["nhl", 1083]]]}
+exit=0
+== send (mocked) ==
+{"status": "sent", "review_outcome": "ticket_sent", "recorded": 1}
+exit=0
+== send again (dedup) ==
+{"status": "existing_sent", "review_outcome": "ticket_sent", "recorded": 2}
+exit=0

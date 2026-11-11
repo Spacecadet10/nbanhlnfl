@@ -1,0 +1,8 @@
+Sun Nov  8 16:37:26 EST 2026
+NFL definition before: b6074877a7e7ccfe True
+NFL definition after: b6074877a7e7ccfe True
+Sun Nov  8 16:37:27 EST 2026
+ff85e981e79e428f  app/tickets.py
+2e94bccdfab16ec9  app/telegram.py
+f82778e04f48f627  app/telegram_card.py
+97aa04d40755adab  /Users/andry/.codex/skills/courtside-ticket-review/SKILL.md

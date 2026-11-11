@@ -1,0 +1,49 @@
+--- backend/tests/test_tickets.py	2026-11-08 16:45:25
++++ /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/43a0d8c8-5d19-4e11-a7c0-2df81439b128/scratchpad/wt/backend/tests/test_tickets.py	2026-11-08 18:26:35
+@@ -598,3 +598,46 @@
+     png=telegram_card.render_ticket_card(snap['date'],t.check(plan)['resolved'])
+     assert png.startswith(b'\x89PNG') and any('+1 more option' in v for v in texts)
+     assert any('Moneyline' in v for v in texts)
++
++
++# Nov 8 evening: the release tick refreshes, then runs a 5-48 min forecast job under the store lock; meanwhile the source
++# turns "stale" although nothing failed, and every NBA/NHL leg was refused (7 PM NBA games never reached a review).
++def delayed(snap, sport, fetched='2026-11-08T16:40:00Z'):
++    snap['sports'][sport]['freshness'].update(source_state='stale', failing=False, source_fetched_at=fetched)
++    snap['sports'][sport]['refresh_delay'] = dict(job='near_tipoff', started_at=fetched, source_fetched_at=fetched)
++
++
++def test_source_stale_only_because_its_forecast_job_is_running_still_serves_tickets_with_disclosure(setup):
++    plan,snap,sent,path=setup;delayed(snap,'nba');sp=Path(plan['snapshot_path']);sp.write_text(json.dumps(snap))
++    plan['review']['snapshot_sha256']=t.sha(sp.read_bytes())
++    state=t.review_state(snap)
++    assert 'nba' not in state['blocked'] and state['delayed']['nba']['job']=='near_tipoff' and state['delayed']['nba']['forecasts']==5
++    plan['tickets']=[dict(label='Mixed',legs=[dict(sport='nba',forecast_id=1,rationale='r'),dict(sport='nhl',forecast_id=2,rationale='r')])]
++    checked=t.check(plan)
++    assert 'NBA game status last refreshed' in checked['text'] and 'forecast job still running' in checked['text']
++    assert t.send(checked)=='sent' and 'NBA game status last refreshed' in sent[0][1]['text']
++
++
++@pytest.mark.parametrize('problem',['failing','no_running_job','outside_window'])
++def test_delayed_source_is_refused_when_failing_unexplained_or_older_than_the_games_window(setup,problem):
++    plan,snap,sent,path=setup;delayed(snap,'nba')
++    if problem=='failing':snap['sports']['nba']['freshness']['failing']=True
++    if problem=='no_running_job':del snap['sports']['nba']['refresh_delay']
++    if problem=='outside_window':delayed(snap,'nba',fetched='2026-11-08T15:30:00Z')   # games start 18:00: refreshed before their 2-h window
++    sp=Path(plan['snapshot_path']);sp.write_text(json.dumps(snap));plan['review']['snapshot_sha256']=t.sha(sp.read_bytes())
++    assert t.review_state(snap)['blocked']['nba']['issue']=='source_unavailable_or_stale'
++    plan['tickets']=[dict(label='Mixed',legs=[dict(sport='nba',forecast_id=1,rationale='r'),dict(sport='nhl',forecast_id=2,rationale='r')])]
++    with pytest.raises(ValueError,match='stale'):t.check(plan)
++    assert sent==[]
++
++
++def test_refresh_delay_detects_only_a_job_running_since_the_last_successful_refresh():
++    import sqlite3
++    conn=sqlite3.connect(':memory:');conn.row_factory=sqlite3.Row
++    conn.execute('CREATE TABLE job_runs (run_id INTEGER PRIMARY KEY, job TEXT, started_at TEXT, finished_at TEXT, status TEXT, detail TEXT)')
++    conn.execute("INSERT INTO job_runs (job,started_at,status) VALUES ('near_tipoff','2026-11-04T22:27:50Z','running')")   # crashed long ago
++    stale=dict(source_state='stale',failing=False,source_fetched_at='2026-11-08T22:50:10Z')
++    assert t.refresh_delay(conn,stale) is None
++    conn.execute("INSERT INTO job_runs (job,started_at,status) VALUES ('near_tipoff','2026-11-08T22:50:11Z','running')")
++    assert t.refresh_delay(conn,stale)==dict(job='near_tipoff',started_at='2026-11-08T22:50:11Z',source_fetched_at='2026-11-08T22:50:10Z')
++    assert t.refresh_delay(conn,dict(stale,failing=True)) is None and t.refresh_delay(conn,dict(stale,source_state='fresh')) is None

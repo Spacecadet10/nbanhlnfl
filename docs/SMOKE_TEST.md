@@ -1739,3 +1739,167 @@ the preview NFL store failed twice with "unable to open database file"; not retr
 as fresh as the last manual `soccer ingest` (in-progress matches stay "IN PROGRESS" until re-imported); `scripts/dev.sh`
 does not copy `soccer.sqlite` into its snapshot (scripts/ out of scope), so the dev launcher shows the soccer 503 state;
 ESPN date-parameter time zone and historical coverage beyond the requested days not established.
+
+Automated checks for the soccer milestone (actual):
+- `OMP_NUM_THREADS=1 backend/.venv/bin/python -m pytest -q tests/test_soccer.py` (from backend/) → 12 passed.
+- Related suites (test_storage, test_nfl_live, test_nfl_api, test_nfl, test_multisport, test_backup_restore, test_freshness,
+  test_dev_script) → 210 passed. `npm run typecheck` → pass. `python3 scripts/check_project.py` → structure guard passed.
+- `backend/.venv/bin/python scripts/check_project.py --ready` → **exit 1**: typecheck pass, `vite build` pass, pytest
+  9 failed / 1596 passed. 1 fixed afterwards (test_live.py migration list lacked 0033 and 0034; rerun with test_soccer:
+  35 passed). 8 remain: tests/test_deep_study.py `ModuleNotFoundError: No module named 'torch'` (research-only `deep` extra
+  not installed in backend/.venv; unrelated). Full `--ready` not rerun after the fix.
+
+## Soccer S0 close-out — 2026-11-07 (Claude Opus 5.5, lead; independent reviewer/readiness/source agents)
+Changes verified here: launcher/publisher soccer support, header wrap at ≤480 px, reviewer fixes (replay ordering, tie
+facts), `deep` extra installed in backend/.venv. Scratch root `S=/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/11c8ef97-c1df-493c-b7b0-edeb8138cb0b/scratchpad`.
+
+Launcher runs (nothing written to data/; ports chosen free; no unrelated service stopped):
+- A, real live data: `NBA_DEV_DATA_DIR=$S/devcopy-A API_PORT=8860 WEB_PORT=5220 OMP_NUM_THREADS=1 sh scripts/dev.sh` →
+  "dev.sh: ready", copies nba/nhl/nfl (read-only backup), publisher running. `data/` has no soccer.sqlite, so no soccer copy:
+  `/api/soccer/meta` → 503 "No soccer data store found. Run `python -m app.cli soccer migrate` …" (missing-store behaviour kept).
+- B, scratch live with soccer: `$S/live-B` = empty migrated NBA store + backup copy of the real-sample soccer store.
+  `NBA_LIVE_DATA_DIR=$S/live-B NBA_DEV_DATA_DIR=$S/devcopy-B API_PORT=8861 WEB_PORT=5221 PUBLISH_INTERVAL=30 sh scripts/dev.sh`
+  → soccer copied + migrated; PUBLISH_STATUS soccer "no served copy" at 18:25:03Z. Manual
+  `NBA_DATA_DIR=$S/live-B .venv/bin/python -m app.cli soccer ingest --competition eng.1 --from 20261107 --to 20261107`
+  (matches_updated 1) → publisher republished soccer at 18:25:33Z reason "data changed"; API served the update.
+- All seven `/api/soccer/meta?competition=…` via :5221 → 200 (stored eng 25, esp 25, ger 20, ita 35, fra 25, UCL 26, UEL 23).
+- Replay idempotency on a real-data copy (`$S/replaycheck`, 120 logged retrievals): `soccer.replay` twice → 0 updated,
+  0 revisions; matches and all 147 revisions byte-identical.
+
+Browser (Claude-in-Chrome). Desktop 1440 px:
+| Flow | Result |
+|---|---|
+| Launcher A: NBA, NHL, NFL Game Day render real copies with "Copy, republished when the data changes" bar | Pass |
+| Launcher A: Soccer → 503 missing-store error with the CLI hint | Pass |
+| Launcher B: header picker through all seven competitions; titles/cards La Liga 4, Bundesliga 5, Serie A 4, Ligue 1 2, Europa League 17 (Nov 5), Premier League 4, Champions League | Pass |
+| Loading state (page `fetch` delayed 5 s by injected script): "Loading…" for meta, then for the match list | Pass |
+| Earlier flows (draw, AET, pens, qualifier wording, unrequested date, 404, API down + recovery) | Pass (section above; unchanged code paths except the revision list) |
+
+Phone, actual 390 px: same-origin `<iframe style="width:390px;height:844px;border:0">` injected into the app tab, each page
+loaded inside it and measured (`innerWidth`, `documentElement.clientWidth`, `scrollWidth`):
+- First pass: soccer pages 390/390/390, but NBA/NHL/NFL pages scrollWidth **436** (league toggle now has four buttons; the
+  ≤800 px rule keeps the header on one row). Fixed with `.header-tools { flex-wrap: wrap }` at ≤480 px.
+- After the fix, all 390/390/390: soccer Game day (eng.1; UCL 2025-03-12), ATM–RMA pens and MUN–LYON AET match pages,
+  Performance/History/Daily Learning (soccer), unrequested La Liga date, 404 match, NBA/NHL/NFL Game day, NBA Performance,
+  NHL History, NBA Daily Learning (wide tables scroll inside their own wrappers), soccer missing-store error. Visual check of
+  NBA and soccer at 390 inside the iframe: header wraps, nothing clipped.
+- Headless Chrome `--window-size=390,844` is NOT valid evidence: its layout viewport stays 500 px (`innerWidth=500`
+  measured with `--dump-dom`), screenshots are 390 px crops. Not used as a pass.
+- Chrome's visible window cannot go below 500 px (earlier finding); the iframe is the 390 px method used.
+
+Readiness and review (final code, 2026-11-07):
+- Dependency: the 8 test_deep_study.py failures were `ModuleNotFoundError: torch`; the declared `deep` extra had never
+  been installed in this dev venv (green gates on record all used ~/nba-predictor-deep/backend/.venv). PyPI check:
+  torch 2.14.1 cp312 macosx_14_0_arm64 and tensorflow 2.21.0 cp312 macosx_12_0_arm64 wheels exist. Installed exactly the
+  extra: `uv pip install --python backend/.venv/bin/python -c <freeze of backend/.venv + absl-py 2.5.0, filelock 4.0.9,
+  grpcio 1.84.0, setuptools 84.0.0, wrapt 2.5.0 from the research venv> torch==2.14.1 tensorflow==2.21.0` (dry run first)
+  → 33 packages added, 0 existing changed (freeze diff). `pytest tests/test_deep_study.py` in backend/.venv → 10 passed.
+- `python3 scripts/check_project.py` → "Structure guard passed", exit 0.
+- `OMP_NUM_THREADS=4 backend/.venv/bin/python scripts/check_project.py --ready` (18:38:35Z–19:02:54Z) → typecheck OK,
+  `vite build` OK, pytest **1618 passed, 1 warning in 1447.10s**, "Automated readiness checks passed", **exit 0**.
+  (Two earlier --ready starts were stopped deliberately after later code fixes; only this run counts.)
+- Independent reviewer: first pass 2 MEDIUM (replay on a populated store after A→B→A appended duplicate revisions; tie
+  facts treated as corrections / NULLed when omitted) + test gaps → fixed with failing-first tests. Final pass APPROVE with
+  2 LOW (kept tie facts after a team-id change could break the qualifier CHECK and block a day; home/away swap keeps old
+  orientation) → fixed with a failing-first test (keep only while both sides unchanged). Verified freshness revisions of
+  NBA/NHL/NFL copies are byte-identical before/after.
+- Text correction after S1: the UI/schema no longer say ESPN "publishes no 90-minute score"; they say the score fields
+  include extra time and goal-minute derivation is not validated yet (MUN–LYON page checked in the browser).
+Remaining gaps: soccer data updates only on manual `soccer ingest` (no job; "Not refreshed automatically" shown); live
+`data/` has no soccer store, so the normal launcher shows the soccer 503 until the user ingests one; a match deep link
+without `?competition` shows the right match while the header picker shows Premier League; the replay "older response"
+issue fixed for soccer is inherited from ingest._upsert_game (NBA/NHL/NFL) and was not changed or reproduced there.
+
+## Soccer S0 corrections after the independent audit — 2026-11-07 (Claude Opus 5.5; one writer, 3 read-only reviewers)
+Earlier readiness passes (1618 passed, 18:38–19:02Z; the audit's run started 14:33 ET) tested trees that predate
+competition.ts, the ingest.py replay change and everything below: they are prior evidence only.
+
+Reproduced from cached ESPN bytes (`…/scratchpad/s1-downloads`): 169930 Juventus 2-0 Real Madrid 2005-03-09 STATUS_FULL_TIME,
+period 4, clock 122', goals listed twice (76', 117'); 416637 Ajax 2-1 Dnipro 2015-03-19 STATUS_FULL_TIME, period 4, clock
+120'+4', goals 60'/97'/117'. Old parser: both "regulation". New classifier over all 2,306 cached real finals (s1-downloads,
+s1-recheck-downloads, espn-knockout): FULL_TIME→regulation 2286, AET→extra_time 3, PEN→penalties 5, unknown 12 (the two
+above, 9 false-AET 2001 league matches, UCL 21220); reviewer's run over 2,443 finals in all caches: no wrong label.
+
+Focused checks on the final code (each run after its change; failing-first tests written before each fix, mutations of the
+new guards verified to fail):
+- `cd backend && OMP_NUM_THREADS=2 .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_replay_same_store.py
+  tests/test_storage.py tests/test_multisport.py tests/test_result_revisions.py tests/test_nfl.py tests/test_nfl_api.py
+  tests/test_review_fixes.py tests/test_team_box.py tests/test_shadow.py tests/test_live.py tests/test_soccer.py
+  tests/test_injuries.py tests/test_nfl_live.py tests/test_freshness.py tests/test_dev_script.py tests/test_backup_restore.py
+  tests/test_recovery.py tests/test_store_properties.py tests/test_coverage.py` → 420 passed (before the last parser/
+  backfill edits); after them: test_soccer + test_replay_same_store + test_dev_script + test_freshness → 193 passed.
+- Mutation check (scratch copy): removing the 0035 last-seen backfill or the phantom-stats cleanup → 5 tests fail.
+- `cd frontend && npm run typecheck` → ok; `npm run test:unit` (node --test, competition.test.mjs) → 3 pass, 0 fail.
+- `python3 scripts/check_project.py` → structure guard passed; `git diff --check` → clean.
+
+Launchers on the final code (scratch dirs, free ports, own processes stopped afterwards):
+- A `NBA_DEV_DATA_DIR=$S/devcopy-A API_PORT=8860 WEB_PORT=5220 sh scripts/dev.sh` (copies of live data/): migrated the NBA/NHL/
+  NFL copies to 0035; backfill on the copies: NBA 9,850 / NHL 17,203 / NFL 8,230 games, 0 NULL last_seen, 0 duplicate
+  result revisions (same game, observed_at, raw) in any copy of the live stores.
+- B `NBA_LIVE_DATA_DIR=$S/live-B … API_PORT=8861 WEB_PORT=5221 PUBLISH_INTERVAL=30 sh scripts/dev.sh` with the scratch soccer
+  store (migrated to 0035; the two cached audit payloads imported with their original S1 request keys and retrieval times —
+  no new ESPN request): 203 matches, 2 unknown endings.
+
+Browser (Claude-in-Chrome). Desktop 1440 px: soccer deep link `/games/soccer%3Auefa.champions%3A169930` (no query) → league
+Soccer, picker Champions League, URL rewritten to sport=soccer&competition=uefa.champions, hero "2–0 · ending not
+established", result card "How it ended: Not established: ESPN's fields disagree (…period 4, clock 122'…)", 90-minute result
+not available, extra time not established; UEL 2015-03-19 card "FINAL · ENDING NOT ESTABLISHED · Third Round · Leg 2"; NBA
+Performance with Calibration table; NBA/NHL/NFL Game Day from real copies; soccer error (fetch blocked in-page) → "Couldn't
+load data" while switching to Ligue 1 → "Try again" after restoring → Ligue 1 with 2 matches, no error.
+Actual 390 px (same-origin iframe, border 0; innerWidth/clientWidth/scrollWidth): NBA, NHL, NFL Game Day, NBA and NHL
+Performance (Calibration table now inside .table-wrap: calibrationWrapped=true), NBA History, soccer 503 on A; soccer deep
+link without query and with contradicting `sport=nba&competition=eng.1` (both corrected to the match's competition), UEL
+2015-03-19, Performance (ita.1), History on B — all 390/390/390. Headless Chrome is not used (its viewport stays 500 px).
+
+Scheduled jobs (read-only inspection of ~/Library/LaunchAgents): com.nba-predictor.telegram runs this checkout's code with
+backend/.venv and NBA_DATA_DIR=<this checkout>/data, opening stores read-only (no migration); com.nba-predictor.nfl-live uses
+backend/.venv with code from ~/.codex/worktrees/nfl-live-release against <this checkout>/data/nfl.sqlite; adaptive-train uses
+~/nba-predictor-deep/backend/.venv; the other jobs use ~/nba-predictor-live/backend/.venv. Deep-dependency isolation issue:
+torch/tensorflow installed earlier today into backend/.venv now sit in the environment of two scheduled jobs although
+pyproject says the deep extra is "research venv only, never the release venv". Not uninstalled; no job changed.
+
+Peer-audit fixes after the reviews (session 2b, read-only; all with failing-first tests, before the final gate): team change
+recorded when the last revision predates 0035 (NBA/NHL/NFL + soccer); reclassification stored as basis 'reclassified' and
+shown as "re-read by a newer importer", not as a source version (browser: Juventus–Real page reads "One version from the
+source, re-read by a newer importer from the same retrieval"); 503 / empty-state hints name NBA_DATA_DIR=<scratch or
+development dir>, never data/, with the ESPN caveat; migrated tie_facts_available_at derived from revision history so it
+equals a rebuild (test: 2025-03-13T00:00:00Z both ways). Pre-gate focused run: 21 suites → 446 passed; unit 3/3.
+0035 timing on read-only backups of the real stores (live data/ is at migration 31): NHL 17,203 games / 18,823 fetches →
+1.67 s; NBA 9,850 / 6,107 → 0.62 s; with 200k synthetic fetches 0.23 s (reviewer; 134 s before the raw_fetches index).
+
+Readiness gate history (exact command `OMP_NUM_THREADS=4 backend/.venv/bin/python scripts/check_project.py --ready` from the
+repo root; logs in the session scratchpad):
+| Log | Start–end UTC | Code tested | Result |
+|---|---|---|---|
+| ready-final-audit.log | 20:37:00 – stopped | GITDIFF afd18db… | void: stopped by me after peer findings, no exit code |
+| ready-final-2.log | 20:54:59–21:20:04 | GITDIFF 330feed… | **exit 1**: 1 failed / 1668 passed. test_research_agent::test_f_low2… planted `include.path /tmp/x`; /tmp/x had been created by the peer audit's curl (15:32/15:39 ET). Test made hermetic (absent path under tmp_path; assertion unchanged); research-agent file then 46 passed with /tmp/x present |
+| ready-final-3.log | 21:23:59–21:49:52 | CODE_TREE 2275eab… before = after | **exit 0**: structure guard passed, typecheck + `vite build` ok, **1669 passed**, 1 warning (Starlette/httpx deprecation) in 1539 s |
+Run 3 is the result for the current code. HANDOFF.md changed during runs 2 and 3 (Codex hourly entries), which is why
+GITDIFF differs before/after; the code-tree hash excludes it and is identical.
+
+## Ticket workflow upgrade — Nov 8, 2026, Codex
+
+Scope: existing skill helper moved to the canonical `backend/app/tickets.py`; installed helper is a thin wrapper. No frontend implementation changed. Existing unrelated dirty files retained.
+
+- `OMP_NUM_THREADS=4 backend/.venv/bin/python -m pytest -q backend/tests/test_tickets.py backend/tests/test_telegram.py backend/tests/test_near_tipoff.py backend/tests/test_freshness.py`: **91 passed**, 11.08 s, one Starlette/httpx deprecation warning. Synthetic mixed NBA/NHL/NFL fixtures exercise check→reserve→exact text archive→mock send→receipt→dedup→settlement; shared core across batches, changed forecast/stake rejection, uncertain reservations, $5 cap, legacy budget, corrections, pushes/voids, failure alerts, preflight ordering and personal slip separation. No real test message sent.
+- `backend/.venv/bin/python /Users/andry/.codex/skills/courtside-ticket-review/scripts/tickets.py snapshot --output /tmp/ticket-upgrade-smoke-20261108.json`: success, snapshot 14:30:20Z; NBA/NHL/NFL fresh, soccer explicitly forecasts_unavailable, no health alerts. Read-only live stores, no source refresh/migration.
+- Read-only `app.tickets.grade_leg` over original Nov7 archive IDs: OKC1099/ATL1088, CAR1022/OTT1012, DAL1028/NYI1018 all win; three winning tickets, no profit inferred. No grades/picks overwritten or newly sent in this check.
+- Browser `http://127.0.0.1:5198/?sport=nba`: loading state resolved to Nov8 seven-game API-backed board; development-copy label and source timing visible. At1280x900: viewport1280/page1280; at390x844: viewport390/page390; Today's Games present at both. Viewport reset. This is a regression smoke of the existing app, not a personal-slip/ticket UI (none added). Full navigation/error/empty UI suite not rerun; ticket error/empty/uncertain states covered in helper tests.
+- `git diff --check -- backend/app/jobs.py backend/app/telegram_card.py docs/TICKETS.md`: passed.
+- `python3 scripts/check_project.py` and `OMP_NUM_THREADS=4 backend/.venv/bin/python scripts/check_project.py --ready`: **FAILED at structure guard** on pre-existing `docs/evidence/all-sport-audit-2026-11-07/remediation/batch1-final/batch1-final.patch` and `batch1-final.diffstat.txt` (duplicate/backup filename rule). Files preserved; checker not weakened. Full readiness, frontend build and entire backend suite were not reached through --ready; no app-ready claim.
+- Existing ACTIVE hourly :10 automation updated via automation_update; TOML read-back confirms preflight --notify before any selection early exit. Installed skill read-back/snapshot works. New real scheduled text delivery and settlement notification remain unverified.
+
+Operational boundaries: early primary coverage publication in jobs.py is tested in this checkout, not promoted to immutable live release. Long-running worker lock/source-refresh coupling remains; alerts detect stale/missing inputs but cannot keep a sleeping Mac online. No server/deployment/purchase or launchd changes. Soccer has no forecast model. Personal slips have an explicit JSON import/ledger, no sportsbook integration or frontend screen. See docs/TICKETS.md.
+
+## Ticket audit remediation — Nov8 follow-up
+
+Six audit items addressed in the existing implementation (tickets/telegram/config/coverage/jobs/renderer). No app UI routes changed; prior desktop/phone baseline retained, no fresh full UI regression claim. Existing individual game-card sender remains separate from tickets.
+
+- Failing-first audit regressions:7 failures reproduced (connection/429 retry timestamps, notify-before-grade, alert scope/retry, isolated ledger path, explanation-only forecast identity, production PNG delivery).
+- `OMP_NUM_THREADS=4 backend/.venv/bin/python -m pytest -q backend/tests/test_coverage.py::test_the_two_hour_cycle_records_every_game_even_when_the_primary_step_fails backend/tests/test_tickets.py backend/tests/test_telegram.py backend/tests/test_near_tipoff.py backend/tests/test_freshness.py`:103 passed9.66s, one existing deprecation warning.
+- `OMP_NUM_THREADS=4 backend/.venv/bin/python -m pytest -q backend/tests/test_tickets.py backend/tests/test_telegram.py backend/tests/test_near_tipoff.py backend/tests/test_freshness.py`:103 passed9.29s. Final ticket-only rerun after removing an unnecessary visual-delivery wrapper:36 passed1.71s.
+- Full `backend/tests/test_coverage.py`:26 passed137.24s. Intermediate broader run failed because the final publication pass reported created=0 after early writes; fixed cycle reporting to include early writes without double-counting already_recorded. Original assertions retained. Meaningful forecast source/model/probability/line changes still versioned; fallback-explanation-only changes reuse the immutable row.
+- Tests include text→PNG order, PNG archive/caption≤1024, image uncertainty without resending text/image, CLI nonzero retry exit, notify failure with grades already committed, Toronto-local-day ticket-only alerts, later failure dedup keys, config-relative receipt ledger and historical preview with zero budget allocation. Mock Telegram and temporary ledgers throughout automated tests.
+- Actual user-requested test: `PYTHONPATH=backend backend/.venv/bin/python -m app.tickets preview --plan /tmp/visual-ticket-test-input-20261108.json` (network-enabled) returned sent. Read-only receipt: image message238, attempted19:08:08Z. Canonical renderer produced mixed past ATL1088 winner + OTT1012 +1.5, numbered ticket/legs, TEST ID, Toronto start dates/times, $3 EXAMPLE and TEST/PAST GAMES/RESULTS KNOWN. PNG `/tmp/visual-ticket-test-20261108.png` visually inspected before sending; exact PNG/caption archived under data/reports/tickets/previews. No betting budget reserved. API acceptance, not user visibility/read confirmation.
+- `OMP_NUM_THREADS=4 backend/.venv/bin/python scripts/check_project.py --ready`:FAILED on the same existing audit batch1-final.patch and batch1-final.diffstat.txt names; entire suite not reached. Checker unchanged and audit evidence preserved. Scoped diff whitespace check passed.
+- Installed skill and existing ACTIVE hourly automation updated to require visual PNG after readable text, inspect both receipts and treat retry/partial failures as failures. Schedule remains hourly :10. No forecast-release promotion, launchd change, full deployment or soccer reserved-test access. Sender/helper still run the active working tree; guarded release remains open. NBA_DATA_DIR isolates the ledger, not bot credentials; mock configuration/network remains mandatory for test copies.

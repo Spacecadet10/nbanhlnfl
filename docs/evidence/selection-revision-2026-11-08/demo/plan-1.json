@@ -1,0 +1,31 @@
+{
+ "snapshot_path": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/43a0d8c8-5d19-4e11-a7c0-2df81439b128/scratchpad/demo/snapshot-1.json",
+ "tickets": [
+  {
+   "label": "ORIGINAL MAIN / KC + DET",
+   "legs": [
+    {
+     "sport": "nfl",
+     "forecast_id": 46
+    },
+    {
+     "sport": "nfl",
+     "forecast_id": 31
+    }
+   ]
+  },
+  {
+   "label": "ORIGINAL VARIATION / KC + DEN",
+   "legs": [
+    {
+     "sport": "nfl",
+     "forecast_id": 46
+    },
+    {
+     "sport": "nfl",
+     "forecast_id": 26
+    }
+   ]
+  }
+ ]
+}

@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import type { League, MarketId, MarketInfo, SoccerCompetitionId, Sport } from '../api/types';
+import { COMPETITION_IDS, competitionFrom, leagueFrom, soccerMatchCompetition } from './competition';
 
 /** Sport and market live in the URL (?sport=nhl, ?market=total) so Today, History and Performance always show the
  * same selection. Absent means NBA and the winner market. An unknown value is never silently replaced by data of
@@ -7,12 +9,13 @@ import type { League, MarketId, MarketInfo, SoccerCompetitionId, Sport } from '.
 const LEAGUES: { id: League; label: string }[] = [{ id: 'nba', label: 'NBA' }, { id: 'nhl', label: 'NHL' }, { id: 'nfl', label: 'NFL' },
   { id: 'soccer', label: 'Soccer' }];
 /** Soccer competitions (?competition=…, ESPN slugs). Absent means the Premier League; an unknown value never shows another
- * competition's data under its name: it falls back only to this documented default. */
-export const COMPETITIONS: { id: SoccerCompetitionId; label: string }[] = [
-  { id: 'eng.1', label: 'Premier League' }, { id: 'esp.1', label: 'La Liga' }, { id: 'ger.1', label: 'Bundesliga' },
-  { id: 'ita.1', label: 'Serie A' }, { id: 'fra.1', label: 'Ligue 1' }, { id: 'uefa.champions', label: 'Champions League' },
-  { id: 'uefa.europa', label: 'Europa League' },
-];
+ * competition's data under its name: it falls back only to this documented default. On a soccer match page the match's
+ * own competition wins (competition.ts). */
+const COMPETITION_LABELS: Record<SoccerCompetitionId, string> = {
+  'eng.1': 'Premier League', 'esp.1': 'La Liga', 'ger.1': 'Bundesliga', 'ita.1': 'Serie A', 'fra.1': 'Ligue 1',
+  'uefa.champions': 'Champions League', 'uefa.europa': 'Europa League',
+};
+export const COMPETITIONS = COMPETITION_IDS.map((id) => ({ id, label: COMPETITION_LABELS[id] }));
 const MARKETS: MarketId[] = ['winner', 'reg3', 'spread', 'total', 'team_total_home', 'team_total_away'];
 
 /** The league shown (?sport=nba|nhl|nfl|soccer). NFL and soccer are data-only: the layout shows their own screens and
@@ -21,8 +24,7 @@ export function useLeague(): [League, (l: League) => void] {
   const [params, setParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const raw = params.get('sport');
-  const league: League = raw === 'nhl' || raw === 'nfl' || raw === 'soccer' ? raw : 'nba';
+  const league = leagueFrom(location.pathname, params.get('sport'));
   const set = (s: League) => {
     const next = new URLSearchParams(params);
     if (s === 'nba') next.delete('sport'); else next.set('sport', s);
@@ -49,8 +51,7 @@ export function useCompetition(): [SoccerCompetitionId, (c: SoccerCompetitionId)
   const [params, setParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const raw = params.get('competition');
-  const competition = COMPETITIONS.find((c) => c.id === raw)?.id ?? 'eng.1';
+  const competition = competitionFrom(location.pathname, params.get('competition'));
   const set = (c: SoccerCompetitionId) => {
     const next = new URLSearchParams(params);
     if (c === 'eng.1') next.delete('competition'); else next.set('competition', c);
@@ -59,6 +60,24 @@ export function useCompetition(): [SoccerCompetitionId, (c: SoccerCompetitionId)
     else setParams(next);
   };
   return [competition, set];
+}
+
+/** On a soccer match page, writes the match's league and competition into the URL (replacing the history entry) when the
+ * query is missing or contradicts them, so links carried from the page (back to matches, other matches) stay consistent. */
+export function useSoccerMatchUrlSync(): void {
+  const [params, setParams] = useSearchParams();
+  const { pathname } = useLocation();
+  const match = soccerMatchCompetition(pathname);
+  const want = match === 'eng.1' ? null : match;
+  const stale = match !== null && (params.get('sport') !== 'soccer' || params.get('competition') !== want);
+  useEffect(() => {
+    if (!stale || match === null) return;
+    const next = new URLSearchParams(params);
+    next.set('sport', 'soccer');
+    if (want) next.set('competition', want); else next.delete('competition');
+    for (const k of ['market', 'conf', 'team', 'date']) next.delete(k);   // NBA/NHL selections do not apply to soccer
+    setParams(next, { replace: true });
+  }, [stale, match, want, params, setParams]);
 }
 
 export function useMarket(): [MarketId, (m: MarketId) => void] {

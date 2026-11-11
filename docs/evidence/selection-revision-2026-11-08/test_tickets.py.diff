@@ -1,0 +1,192 @@
+--- /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/43a0d8c8-5d19-4e11-a7c0-2df81439b128/scratchpad/selection-package/test_tickets.base.py	2026-11-08 19:31:14
++++ backend/tests/test_tickets.py	2026-11-08 20:11:58
+@@ -45,7 +45,7 @@
+ 
+ 
+ def ticket(legs,stake=1):
+-    return dict(label='Main' if stake==3 else 'Variation',stake_usd=stake,
++    return dict(label='Main' if stake==3 else 'Variation',stake_usd=stake,payout_assessment='Fixture payout judgment',
+                 legs=[dict(sport=s,forecast_id=i,rationale='Fixture selection') for s,i in legs])
+ 
+ 
+@@ -581,7 +581,7 @@
+     plan['review']['snapshot_sha256']=t.sha(sp.read_bytes())
+     state=t.review_state(snap)
+     assert 'nba' not in state['blocked'] and state['delayed']['nba']['job']=='near_tipoff' and state['delayed']['nba']['forecasts']==5
+-    plan['tickets']=[dict(label='Mixed',legs=[dict(sport='nba',forecast_id=1,rationale='r'),dict(sport='nhl',forecast_id=2,rationale='r')])]
++    plan['tickets']=[dict(label='Mixed',payout_assessment='Fixture payout judgment',legs=[dict(sport='nba',forecast_id=1,rationale='r'),dict(sport='nhl',forecast_id=2,rationale='r')])]
+     checked=t.check(plan)
+     assert 'NBA game status last refreshed' in checked['text'] and 'forecast job still running' in checked['text']
+     assert t.send(checked)=='sent' and 'NBA game status last refreshed' in sent[0][1]['text']
+@@ -595,7 +595,7 @@
+     if problem=='outside_window':delayed(snap,'nba',fetched='2026-11-08T15:30:00Z')   # games start 18:00: refreshed before their 2-h window
+     sp=Path(plan['snapshot_path']);sp.write_text(json.dumps(snap));plan['review']['snapshot_sha256']=t.sha(sp.read_bytes())
+     assert t.review_state(snap)['blocked']['nba']['issue']=='source_unavailable_or_stale'
+-    plan['tickets']=[dict(label='Mixed',legs=[dict(sport='nba',forecast_id=1,rationale='r'),dict(sport='nhl',forecast_id=2,rationale='r')])]
++    plan['tickets']=[dict(label='Mixed',payout_assessment='Fixture payout judgment',legs=[dict(sport='nba',forecast_id=1,rationale='r'),dict(sport='nhl',forecast_id=2,rationale='r')])]
+     with pytest.raises(ValueError,match='stale'):t.check(plan)
+     assert sent==[]
+ 
+@@ -815,3 +815,162 @@
+     from types import SimpleNamespace
+     pick=dict(forecast_id=3,game_id='g1',market='winner',percentage_history=SimpleNamespace(side='b'))
+     assert t.quote_check(quote_store(),pick,NOW)['price_now']==504
++
++
++# Selection revision (owner + reviewer, Nov 8 evening; see selection audit): weigh probability, recommendation, record,
++# evidence quality and exact price together, and judge every complete ticket's payout and uncertainty, not only its
++# multiplied hit probability. Facts only: no new thresholds, no value claims, no forced variety/length; zero tickets allowed.
++def priced(snap, sport, i, price, win_rate=None, settled=0, line_source='none'):
++    pick = snap['sports'][sport]['report']['picks'][i]
++    pick['quote_check'] = dict(provider='DraftKings', retrieved_at='2026-11-08T16:55:00Z', line_source=line_source,
++                               line_at_forecast=None, line_now=None, price_now=price, price_at_forecast=None, line_moved=False)
++    pick['evidence'] = dict(lo=.75, hi=.8, win_rate=win_rate, settled=settled, lower=None, source='history') if settled else None
++    return pick
++
++
++def test_decimal_odds_and_break_even():
++    assert t.decimal_odds(-110) == pytest.approx(1.909091, abs=1e-6) and t.decimal_odds(103) == pytest.approx(2.03)
++    assert t.decimal_odds(-700) == pytest.approx(8 / 7) and t.decimal_odds(None) is None
++
++
++def test_leg_assessment_puts_probability_price_record_and_evidence_quality_side_by_side(setup):
++    from app import threshold_overview
++    plan, snap, sent, path = setup
++    pick = priced(snap, 'nba', 0, -790, win_rate=.796, settled=607)
++    pick.update(game_rank=1, skill_proven=True, percentage_history=dict(side='a', wins=0, losses=0, settled=0))
++    a = t.leg_assessment('nba', pick)
++    lo, hi = threshold_overview.wilson(round(.796 * 607), 607)
++    assert a['break_even'] == pytest.approx(790 / 890) and a['model_gap'] == pytest.approx(.75 - 790 / 890)
++    assert a['record'] == dict(win_rate=.796, settled=607, interval=[lo, hi], source='history')
++    assert a['record_minus_break_even'] == [pytest.approx(lo - 790 / 890), pytest.approx(hi - 790 / 890)]
++    assert a['app_rank'] == 1 and a['skill_proven'] is True and a['line_source'] == 'none' and a['exact'] == '0-0 (0 settled)'
++    bare = t.leg_assessment('nhl', dict(snap['sports']['nhl']['report']['picks'][1], market='team_total_home'))
++    assert bare['price'] is None and bare['break_even'] is None and bare['record'] is None
++    assert bare['app_note'] == 'Team totals were not tested separately.'
++
++
++def test_ticket_assessment_reports_payout_break_even_estimate_and_uncertainty(setup):
++    plan, snap, sent, path = setup
++    legs = [dict(priced(snap, 'nba', 0, -790, .796, 607), sport='nba'), dict(priced(snap, 'nhl', 1, 103, .6, 100), sport='nhl')]
++    for leg in legs:
++        leg['assessment'] = t.leg_assessment(leg['sport'], leg)
++    a = t.ticket_assessment(legs)
++    payout = (1 + 100 / 790) * 2.03
++    assert a['payout'] == pytest.approx(payout) and a['break_even'] == pytest.approx(1 / payout)
++    assert a['model_estimate'] == pytest.approx(.75 * .75) and a['model_minus_break_even'] == pytest.approx(.75 * .75 - 1 / payout)
++    assert 'record_range' not in a and 'record_vs_break_even' not in a    # no ticket-level historical range (review, Nov 8)
++    assert [r['record']['settled'] for r in a['leg_records']] == [607, 100]
++    assert a['priced_above_model'] == ['NBA B1 win'] and a['unpriced'] == [] and a['no_record'] == []
++    legs[1]['quote_check'] = None; legs[1]['evidence'] = None; legs[1]['assessment'] = t.leg_assessment('nhl', legs[1])
++    a = t.ticket_assessment(legs)
++    assert a['payout'] is None and a['break_even'] is None and a['leg_records'][1]['record'] is None
++    assert a['unpriced'] == ['NHL B2 win'] and a['no_record'] == ['NHL B2 win']
++
++
++def test_check_requires_a_payout_judgment_per_ticket_and_the_text_shows_payout_and_break_even(setup):
++    plan, snap, sent, path = setup
++    priced(snap, 'nba', 0, -790, .796, 607); priced(snap, 'nhl', 1, 103, .6, 100)
++    sp = Path(plan['snapshot_path']); sp.write_text(json.dumps(snap)); plan['review']['snapshot_sha256'] = t.sha(sp.read_bytes())
++    plan['tickets'] = [dict(label='Pair', legs=[dict(sport='nba', forecast_id=1, rationale='r'), dict(sport='nhl', forecast_id=2, rationale='r')])]
++    with pytest.raises(ValueError, match='payout_assessment.*review again'):
++        t.check(plan)
++    plan['tickets'][0]['payout_assessment'] = 'Favorite adds little payout for its risk; kept because both legs have long records.'
++    result = t.check(plan)
++    text = result['text']
++    assert result['resolved'][0]['assessment']['payout'] == pytest.approx((1 + 100 / 790) * 2.03)
++    assert result['resolved'][0]['payout_assessment'].startswith('Favorite adds little payout')
++    assert f'Pays about ×2.29 at stored prices; break-even 43.7%; model estimate {.5625:.1%} (independence assumption).' in text
++    assert 'intervals multiplied' not in text and 'Similar past picks' not in text and 'entirely' not in text and 'straddles' not in text
++    assert 'Sportsbook implies a higher chance than the model: leg 1.' in text
++    assert 'value' not in text.lower() and 'edge' not in text.lower()
++
++
++def test_unpriced_tickets_say_the_payout_is_unknown(setup):
++    plan, snap, sent, path = setup
++    plan['tickets'] = [dict(ticket([('nba', 1), ('nhl', 2)]), payout_assessment='No stored prices; judged on records only.')]
++    text = t.check(plan)['text']
++    assert f'Payout unknown (no stored price: all legs); model estimate {.5625:.1%} (independence assumption).' in text
++
++
++def test_assess_action_compares_candidate_tickets_without_archiving_or_sending(setup, monkeypatch, capsys):
++    plan, snap, sent, path = setup
++    priced(snap, 'nba', 0, -790, .796, 607); priced(snap, 'nhl', 1, 103, .6, 100)
++    sp = Path(plan['snapshot_path']); sp.write_text(json.dumps(snap)); plan['review']['snapshot_sha256'] = t.sha(sp.read_bytes())
++    plan['tickets'] = [ticket([('nba', 1), ('nhl', 2)]), ticket([('nhl', 2), ('nfl', 3)])]
++    code, out = run_cli(monkeypatch, capsys, 'assess', '--plan', str(plan_file(plan, path)))
++    report = json.loads(out)
++    assert code == 0 and [r['ticket']['payout'] is not None for r in report['tickets']] == [True, False]
++    assert report['tickets'][0]['legs'][0]['label'] == 'NBA B1 win' and report['tickets'][0]['legs'][0]['model_gap'] < 0
++    assert not (path / 'reports/tickets/reviews').exists() and sent == []
++
++
++
++def test_no_ticket_level_historical_range_or_verdict_but_leg_records_stay_visible(setup):
++    plan, snap, sent, path = setup
++    legs = [dict(priced(snap, 'nba', 0, -790, .796, 607), sport='nba'), dict(priced(snap, 'nba', 1, -700, .882, 186), sport='nba')]
++    a = t.ticket_assessment([dict(l, assessment=t.leg_assessment('nba', l)) for l in legs])
++    assert set(a) == {'legs', 'payout', 'break_even', 'model_estimate', 'model_minus_break_even', 'leg_records',
++                      'priced_above_model', 'unpriced', 'no_record'}
++    assert a['leg_records'] == [dict(label='NBA B1 win', record=t.leg_assessment('nba', legs[0])['record']),
++                                dict(label='NBA B2 win', record=t.leg_assessment('nba', legs[1])['record'])]
++    text = t.ticket_text('2026-11-08', [dict(ticket_id='T1', label='Pair', legs=legs, assessment=a)])
++    assert 'Pays about ×1.29' in text and 'intervals' not in text and 'entirely' not in text
++
++
++def test_no_record_untested_markets_and_large_sportsbook_gaps_are_never_automatic_exclusions(setup):
++    # Owner, Nov 8: the demo's cautions are case-by-case judgment, not bans. The helper only reports them.
++    plan, snap, sent, path = setup
++    nfl = priced(snap, 'nfl', 0, 190)                        # no NFL record, model 75% vs break-even 34%: a 41-point gap
++    nhl = priced(snap, 'nhl', 1, -110); nhl.update(market='total', pick_label='Over 6.5')   # app note: totals showed no skill
++    sp = Path(plan['snapshot_path']); sp.write_text(json.dumps(snap)); plan['review']['snapshot_sha256'] = t.sha(sp.read_bytes())
++    plan['review']['markets_reviewed']['nhl']['total'] = 'Reviewed'
++    state = t.review_state(snap)
++    assert state['ticketable_forecasts'] == 15 and not state['blocked']
++    plan['tickets'] = [dict(label='Model-led pair', payout_assessment='Both legs rest on the model alone; weighed case by case.',
++                            legs=[dict(sport='nfl', forecast_id=1, rationale='r'), dict(sport='nhl', forecast_id=2, rationale='r')])]
++    result = t.check(plan)
++    assert len(result['resolved']) == 1 and 'No record of similar picks: all legs.' in result['text']
++    assert t.leg_assessment('nhl', nhl)['app_note'] == 'Totals showed no skill over a league-average model in the one-time test.'
++
++
++
++# f7 review fixes (F1-F3): long menus still fit, soccer picks carry an assessment, impossible prices are no price.
++LONG = ['Wolverhampton Wanderers', 'Brighton and Hove Albion', 'Borussia Monchengladbach', 'Paris Saint-Germain',
++        'Nottingham Forest', 'Atletico Madrid', 'Bayer Leverkusen', 'Manchester United', 'Real Sociedad', 'Newcastle United']
++
++
++@pytest.mark.parametrize('shape', [(6, 2), (5, 3), (4, 4)])
++def test_unpriced_no_record_menus_with_long_names_still_fit_one_message(setup, shape):
++    plan, snap, sent, path = setup
++    for sport in ('nba', 'nhl', 'nfl'):
++        for i, p in enumerate(snap['sports'][sport]['report']['picks']):
++            home, away = LONG[i % len(LONG)], LONG[(i + 3) % len(LONG)]
++            p.update(matchup=f'{away} @ {home}', pick_label=f'{home} win')
++    sp = Path(plan['snapshot_path']); sp.write_text(json.dumps(snap)); plan['review']['snapshot_sha256'] = t.sha(sp.read_bytes())
++    count, size = shape
++    games = [(s, i) for i in range(1, 6) for s in ('nba', 'nhl', 'nfl')]
++    plan['tickets'] = [dict(label=f'Option {n}', payout_assessment='Judged', legs=[dict(sport=s, forecast_id=i, rationale='r')
++                       for s, i in games[n * size:(n + 1) * size]]) for n in range(count)]
++    text = t.check(plan)['text']                                  # raises "too long" if the menu no longer fits
++    assert len(text) <= 3900 and text.count('No record of similar picks: all legs.') == count
++    assert 'Wolverhampton Wanderers win,' not in text            # per-ticket lines cite leg numbers, never repeat labels
++
++
++def test_decimal_odds_treats_impossible_american_prices_as_no_price():
++    assert [t.decimal_odds(x) for x in (0, 50, -99, 99)] == [None] * 4
++    assert t.decimal_odds(100) == 2.0 and t.decimal_odds(-100) == 2.0
++    pick = dict(forecast_id=1, game_id='g', market='winner', probability=.6, quote_check=dict(price_now=0))
++    assert t.leg_assessment('nba', pick)['price'] is None or t.leg_assessment('nba', pick)['break_even'] is None
++
++
++def test_soccer_picks_carry_an_assessment_in_the_snapshot(monkeypatch, tmp_path):
++    monkeypatch.setenv('NBA_DATA_DIR', str(tmp_path))
++    monkeypatch.setattr(t, 'SKILL', tmp_path / 'SKILL.md'); t.SKILL.write_text('fixture')
++    soccer = dict(forecast_id=7, game_id='m1', market='1x2_regulation', outcome='home', pick_label='ARS win', probability=.55,
++                  tipoff='2026-11-08T18:00:00Z', generated_at='2026-11-08T06:00:00Z', status='scheduled', grade='pending')
++    broken = dict(forecast_id=8, game_id='m2', market='1x2_regulation', pick_label='broken')        # no probability
++    monkeypatch.setattr(t, 'soccer_section', lambda now: {'freshness': {'source_state': 'fresh', 'failing': []},
++                                                          'report': {'mode': 'real', 'picks': [soccer, broken]}})
++    snap = t.snapshot()
++    a, b = [p['assessment'] for p in snap['sports']['soccer']['report']['picks']]
++    assert a['probability'] == .55 and a['price'] is None and a['record'] is None and b == {'error': 'KeyError'}

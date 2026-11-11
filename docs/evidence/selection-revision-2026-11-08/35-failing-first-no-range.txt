@@ -1,0 +1,4 @@
+FAILED tests/test_tickets.py::test_ticket_assessment_reports_payout_break_even_estimate_and_uncertainty
+FAILED tests/test_tickets.py::test_check_requires_a_payout_judgment_per_ticket_and_the_text_shows_payout_and_break_even
+FAILED tests/test_tickets.py::test_no_ticket_level_historical_range_or_verdict_but_leg_records_stay_visible
+3 failed, 81 deselected in 0.45s

@@ -1,0 +1,5 @@
+FAILED backend/tests/test_tickets.py::test_quote_check_reports_current_price_and_a_moved_bookmaker_line
+FAILED backend/tests/test_tickets.py::test_moved_line_is_excluded_from_the_trigger_and_refused_at_check
+FAILED backend/tests/test_tickets.py::test_ticket_text_shows_latest_stored_price_and_model_line_note
+FAILED backend/tests/test_tickets.py::test_interrupted_review_is_recorded_as_a_retryable_failure_and_alerted_once
+4 failed, 66 deselected in 3.55s

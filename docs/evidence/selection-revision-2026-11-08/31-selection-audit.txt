@@ -1,0 +1,112 @@
+{'legs': 15, 'top_probability': 15, 'app_rank_1': 12, 'chosen_nfl_winner': 4, 'alt_better_app_value': 12, 'alt_better_value_and_record': 5, 'chosen_positive_app_value': 3, 'chosen_price_missing': 0, 'chosen_nba_winner': 6, 'chosen_nhl_spread': 5}
+lock-cited exclusions {'nba': 14, 'nhl': 39, 'nfl': 9}
+
+#234 16:14Z NFL NYJ @ KC  SENT KC win (winner)
+  SENT winner           KC win             app 78.4% price  -520 implied 83.9% value -5.5% | record — n=0 low —  rec-value — | exact 0-0 rank 1 none
+  VAL  total            Under 47.5         app 64.5% price  -110 implied 52.4% value +12.1% | record — n=0 low —  rec-value — | exact 0-0 rank — bookmaker
+       team_total_home  KC over 25.5       app 51.4% price     — implied — value — | record — n=0 low —  rec-value — | exact 0-0 rank — model
+  VAL  spread           NYJ +9.5           app 51.0% price  -110 implied 52.4% value -1.4% | record — n=0 low —  rec-value — | exact 0-0 rank — bookmaker
+       team_total_away  NYJ over 16.5      app 50.6% price     — implied — value — | record — n=0 low —  rec-value — | exact 0-0 rank — model
+
+#234 16:14Z NFL DET @ MIA  SENT DET win (winner)
+  SENT winner           DET win            app 68.0% price  -305 implied 75.3% value -7.3% | record — n=0 low —  rec-value — | exact 0-0 rank — none
+       team_total_home  MIA under 22.5     app 52.0% price     — implied — value — | record — n=0 low —  rec-value — | exact 0-0 rank — model
+  VAL  spread           MIA +6.5           app 50.4% price  -108 implied 51.9% value -1.6% | record — n=0 low —  rec-value — | exact 0-0 rank — bookmaker
+       team_total_away  DET under 28.5     app 50.3% price     — implied — value — | record — n=0 low —  rec-value — | exact 0-0 rank — model
+  VAL  total            Under 50.5         app 50.1% price  -110 implied 52.4% value -2.3% | record — n=0 low —  rec-value — | exact 0-0 rank — bookmaker
+
+#234 16:14Z NFL DEN @ CAR  SENT DEN win (winner)
+  SENT winner           DEN win            app 66.3% price  -142 implied 58.7% value +7.6% | record — n=0 low —  rec-value — | exact 0-0 rank — none
+       spread           DEN -2.5           app 57.5% price  -120 implied 54.5% value +3.0% | record — n=0 low —  rec-value — | exact 0-0 rank — bookmaker
+       team_total_home  CAR over 19.5      app 51.3% price     — implied — value — | record — n=0 low —  rec-value — | exact 0-0 rank — model
+       team_total_away  DEN over 24.5      app 50.9% price     — implied — value — | record — n=0 low —  rec-value — | exact 0-0 rank — model
+       total            Under 44.5         app 50.0% price  -112 implied 52.8% value -2.8% | record — n=0 low —  rec-value — | exact 0-0 rank — bookmaker
+
+#245 20:07Z NBA PHI @ CHI  SENT PHI win (winner)
+  SENT winner           PHI win            app 67.8% price  -449 implied 81.8% value -14.0% | record 68.4% n=999 low 65.4% history rec-value -13.4% | exact 0-0 rank 1 none
+  DOM  total            Under 237.5        app 64.0% price  -110 implied 52.4% value +11.6% | record 54.5% n=33 low 38.0% season rec-value +2.2% | exact 0-0 rank 4 bookmaker
+  DOM  spread           CHI +9.5           app 53.3% price  -113 implied 53.1% value +0.2% | record 40.7% n=59 low 29.1% season rec-value -12.4% | exact 0-2 rank 5 bookmaker
+       team_total_away  PHI under 119.5    app 50.6% price     — implied — value — | record 50.4% n=127 low 41.8% season rec-value — | exact 3-6 rank 3 model
+       team_total_home  CHI under 111.5    app 50.1% price     — implied — value — | record 51.2% n=127 low 42.6% season rec-value — | exact 0-0 rank 2 model
+
+#245 20:07Z NHL VGK @ BUF  SENT BUF +1.5 (spread)
+  SENT spread           BUF +1.5           app 71.6% price  -270 implied 73.0% value -1.4% | record 77.3% n=66 low 65.8% season rec-value +4.3% | exact 0-0 rank 1 bookmaker
+       team_total_away  VGK under 3.5      app 59.5% price     — implied — value — | record 43.2% n=74 low 32.6% season rec-value — | exact 0-1 rank 6 model
+       team_total_home  BUF under 3.5      app 54.5% price     — implied — value — | record 47.8% n=46 low 34.1% season rec-value — | exact 0-0 rank 5 model
+  VAL  winner           BUF win            app 52.9% price  -108 implied 51.9% value +1.0% | record 51.5% n=4142 low 50.0% history rec-value -0.4% | exact 0-0 rank 2 none
+  DOM  total            Over 6.5           app 51.2% price  -105 implied 51.2% value -0.0% | record 55.8% n=95 low 45.8% season rec-value +4.6% | exact 2-0 rank 3 bookmaker
+       reg3             BUF in regulation  app 45.1% price     — implied — value — | record 44.7% n=4037 low 43.2% history rec-value — | exact 1-0 rank 4 none
+
+#258 21:55Z NBA LAL @ DET  SENT DET win (winner)
+  SENT winner           DET win            app 63.9% price  -264 implied 72.5% value -8.6% | record 61.5% n=1100 low 58.6% history rec-value -11.0% | exact 0-0 rank 1 none
+  DOM  total            Over 216.5         app 59.0% price  -115 implied 53.5% value +5.5% | record 56.3% n=87 low 45.9% season rec-value +2.8% | exact 0-0 rank 2 bookmaker
+  DOM  spread           LAL +7.5           app 58.8% price  -105 implied 51.2% value +7.6% | record 42.1% n=38 low 27.9% season rec-value -9.1% | exact 0-0 rank 5 bookmaker
+       team_total_home  DET under 112.5    app 50.7% price     — implied — value — | record 51.2% n=127 low 42.6% season rec-value — | exact 2-1 rank 3 model
+       team_total_away  LAL under 108.5    app 50.0% price     — implied — value — | record 50.4% n=127 low 41.8% season rec-value — | exact 0-0 rank 4 model
+
+#258 21:55Z NHL TBL @ WPG  SENT WPG +1.5 (spread)
+  SENT spread           WPG +1.5           app 66.1% price  -198 implied 66.4% value -0.4% | record 72.5% n=51 low 59.1% season rec-value +6.1% | exact 0-0 rank 1 bookmaker
+       team_total_home  WPG over 2.5       app 59.0% price     — implied — value — | record 59.5% n=79 low 48.5% season rec-value — | exact 0-1 rank 3 model
+       team_total_away  TBL under 3.5      app 57.0% price     — implied — value — | record 43.2% n=74 low 32.6% season rec-value — | exact 0-0 rank 6 model
+       winner           TBL win            app 56.8% price  -148 implied 59.7% value -2.8% | record 57.2% n=3525 low 55.5% history rec-value -2.5% | exact 0-0 rank 2 none
+       total            Under 6.5          app 52.7% price  -120 implied 54.5% value -1.8% | record 55.8% n=95 low 45.8% season rec-value +1.2% | exact 0-0 rank 4 bookmaker
+       reg3             TBL in regulation  app 45.1% price     — implied — value — | record 44.7% n=4037 low 43.2% history rec-value — | exact 0-0 rank 5 none
+
+#264 22:28Z NHL NJD @ TOR  SENT TOR +1.5 (spread)
+  SENT spread           TOR +1.5           app 73.1% price  -192 implied 65.8% value +7.4% | record 77.3% n=66 low 65.8% season rec-value +11.5% | exact 0-0 rank 1 bookmaker
+       team_total_away  NJD under 3.5      app 60.3% price     — implied — value — | record 46.4% n=84 low 36.2% season rec-value — | exact 1-0 rank 5 model
+       team_total_home  TOR under 3.5      app 52.4% price     — implied — value — | record 47.8% n=46 low 34.1% season rec-value — | exact 0-0 rank 6 model
+       total            Over 6.5           app 52.2% price   102 implied 49.5% value +2.7% | record 55.8% n=95 low 45.8% season rec-value +6.3% | exact 1-0 rank 3 bookmaker
+  VAL  winner           TOR win            app 50.3% price   136 implied 42.4% value +7.9% | record 51.5% n=4142 low 50.0% history rec-value +9.1% | exact 1-0 rank 2 none
+       reg3             TOR in regulation  app 47.1% price     — implied — value — | record 44.7% n=4037 low 43.2% history rec-value — | exact 2-0 rank 4 none
+
+#264 22:28Z NHL PHI @ CGY  SENT CGY +1.5 (spread)
+  SENT spread           CGY +1.5           app 72.1% price  -270 implied 73.0% value -0.8% | record 77.3% n=66 low 65.8% season rec-value +4.3% | exact 0-0 rank 1 bookmaker
+       team_total_home  CGY over 2.5       app 59.5% price     — implied — value — | record 59.5% n=79 low 48.5% season rec-value — | exact 1-0 rank 3 model
+       team_total_away  PHI over 2.5       app 55.3% price     — implied — value — | record 43.2% n=74 low 32.6% season rec-value — | exact 1-2 rank 6 model
+  VAL  winner           CGY win            app 52.6% price  -102 implied 50.5% value +2.1% | record 51.5% n=4142 low 50.0% history rec-value +1.0% | exact 0-1 rank 2 none
+       total            Over 5.5           app 51.5% price  -122 implied 55.0% value -3.4% | record 55.8% n=95 low 45.8% season rec-value +0.8% | exact 1-0 rank 4 bookmaker
+       reg3             CGY in regulation  app 44.1% price     — implied — value — | record 41.1% n=3405 low 39.4% history rec-value — | exact 0-1 rank 5 none
+
+#270 23:28Z NFL TB @ CHI  SENT CHI win (winner)
+  SENT winner           CHI win            app 71.7% price  -278 implied 73.5% value -1.9% | record — n=0 low —  rec-value — | exact 0-0 rank — none
+  VAL  spread           TB +6              app 58.9% price  -102 implied 50.5% value +8.4% | record — n=0 low —  rec-value — | exact 0-0 rank — bookmaker
+  VAL  total            Under 47.5         app 58.2% price  -118 implied 54.1% value +4.1% | record — n=0 low —  rec-value — | exact 0-0 rank — bookmaker
+       team_total_home  CHI under 24.5     app 52.2% price     — implied — value — | record — n=0 low —  rec-value — | exact 0-0 rank — model
+       team_total_away  TB over 20.5       app 51.0% price     — implied — value — | record — n=0 low —  rec-value — | exact 0-0 rank — model
+
+#270 23:28Z NHL PIT @ ANA  SENT PIT +1.5 (spread)
+  SENT spread           PIT +1.5           app 67.1% price  -238 implied 70.4% value -3.3% | record 72.5% n=51 low 59.1% season rec-value +2.1% | exact 0-1 rank 1 bookmaker
+  VAL  total            Over 6.5           app 60.0% price  -155 implied 60.8% value -0.8% | record 51.4% n=37 low 35.9% season rec-value -9.4% | exact 0-1 rank 4 bookmaker
+  VAL  winner           ANA win            app 52.0% price  -120 implied 54.5% value -2.5% | record 51.5% n=4142 low 50.0% history rec-value -3.0% | exact 0-0 rank 2 none
+       team_total_away  PIT under 3.5      app 51.9% price     — implied — value — | record 46.9% n=49 low 33.7% season rec-value — | exact 0-0 rank 6 model
+       team_total_home  ANA under 3.5      app 50.2% price     — implied — value — | record 47.8% n=46 low 34.1% season rec-value — | exact 0-0 rank 5 model
+       reg3             ANA in regulation  app 43.2% price     — implied — value — | record 41.1% n=3405 low 39.4% history rec-value — | exact 0-0 rank 3 none
+
+#282 23:57Z NBA UTAH @ MIN  SENT MIN win (winner)
+  SENT winner           MIN win            app 86.9% price  -700 implied 87.5% value -0.6% | record 88.2% n=186 low 82.7% history rec-value +0.7% | exact 0-0 rank 1 none
+  DOM  total            Over 222.5         app 61.0% price  -110 implied 52.4% value +8.6% | record 54.5% n=33 low 38.0% season rec-value +2.2% | exact 0-0 rank 4 bookmaker
+  VAL  spread           MIN -12.5          app 54.7% price  -108 implied 51.9% value +2.8% | record 40.7% n=59 low 29.1% season rec-value -11.2% | exact 0-0 rank 5 bookmaker
+       team_total_away  UTAH over 106.5    app 51.4% price     — implied — value — | record 50.4% n=127 low 41.8% season rec-value — | exact 3-1 rank 3 model
+       team_total_home  MIN over 120.5     app 51.1% price     — implied — value — | record 51.2% n=127 low 42.6% season rec-value — | exact 3-1 rank 2 model
+
+#282 23:57Z NBA BOS @ MIL  SENT BOS win (winner)
+  SENT winner           BOS win            app 77.8% price  -790 implied 88.8% value -11.0% | record 79.6% n=607 low 76.2% history rec-value -9.2% | exact 0-0 rank 1 none
+  VAL  spread           MIL +13.5          app 54.1% price  -112 implied 52.8% value +1.3% | record 40.7% n=59 low 29.1% season rec-value -12.2% | exact 1-0 rank 5 bookmaker
+       team_total_home  MIL over 104.5     app 51.0% price     — implied — value — | record 51.2% n=127 low 42.6% season rec-value — | exact 3-1 rank 2 model
+  DOM  total            Under 221.5        app 50.6% price  -113 implied 53.1% value -2.4% | record 45.0% n=40 low 30.7% season rec-value -8.1% | exact 0-0 rank 4 bookmaker
+       team_total_away  BOS under 116.5    app 50.3% price     — implied — value — | record 50.4% n=127 low 41.8% season rec-value — | exact 0-2 rank 3 model
+
+#282 23:57Z NBA BKN @ DAL  SENT DAL win (winner)
+  SENT winner           DAL win            app 70.7% price  -305 implied 75.3% value -4.6% | record 70.7% n=767 low 67.3% history rec-value -4.6% | exact 0-0 rank 1 none
+  VAL  spread           BKN +7.5           app 52.6% price  -113 implied 53.1% value -0.4% | record 40.7% n=59 low 29.1% season rec-value -12.4% | exact 0-0 rank 5 bookmaker
+  VAL  total            Under 223.5        app 51.5% price  -112 implied 52.8% value -1.3% | record 45.0% n=40 low 30.7% season rec-value -7.8% | exact 0-0 rank 4 bookmaker
+       team_total_away  BKN under 108.5    app 50.5% price     — implied — value — | record 50.4% n=127 low 41.8% season rec-value — | exact 2-3 rank 3 model
+       team_total_home  DAL under 114.5    app 50.2% price     — implied — value — | record 51.2% n=127 low 42.6% season rec-value — | exact 0-2 rank 2 model
+
+#286 00:12Z NBA NO @ LAC  SENT LAC win (winner)
+  SENT winner           LAC win            app 64.3% price   103 implied 49.3% value +15.0% | record 61.5% n=1100 low 58.6% history rec-value +12.3% | exact 0-0 rank 1 none
+       total            Over 226.5         app 58.2% price  -108 implied 51.9% value +6.3% | record 56.3% n=87 low 45.9% season rec-value +4.4% | exact 0-0 rank 2 bookmaker
+       spread           LAC +1.5           app 55.7% price  -110 implied 52.4% value +3.3% | record 42.1% n=38 low 27.9% season rec-value -10.3% | exact 1-0 rank 5 bookmaker
+       team_total_home  LAC over 115.5     app 50.7% price     — implied — value — | record 51.2% n=127 low 42.6% season rec-value — | exact 1-1 rank 3 model
+       team_total_away  NO over 114.5      app 50.6% price     — implied — value — | record 50.4% n=127 low 41.8% season rec-value — | exact 3-1 rank 4 model

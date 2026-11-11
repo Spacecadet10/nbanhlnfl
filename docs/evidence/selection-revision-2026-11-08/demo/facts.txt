@@ -1,0 +1,184 @@
+
+=== Snapshot 1 (2026-11-08T16:14:14Z, before message 234) ===
+  NFL DAL @ IND (18:00Z)
+    total           Over 51.5         p 62.7%  DK -112   BE 53%  gap +9.9  | no record                          | exact 0-0 (0 settled) rank — bookmaker 
+    spread          IND +4.5          p 62.5%  DK -105   BE 51%  gap +11.2 | no record                          | exact 0-0 (0 settled) rank — bookmaker 
+    team_total_away DAL under 28.5    p 51.4%  no price  BE —    gap —     | no record                          | exact 0-0 (0 settled) rank — model 
+    team_total_home IND over 27.5     p 50.9%  no price  BE —    gap —     | no record                          | exact 0-0 (0 settled) rank — model 
+    winner          IND win           p 50.7%  DK +190   BE 34%  gap +16.2 | no record                          | exact 0-0 (0 settled) rank — none 
+  NFL NYJ @ KC (18:00Z)
+    winner          KC win            p 78.4%  DK -520   BE 84%  gap -5.5  | no record                          | exact 0-0 (0 settled) rank 1 none 
+    total           Under 47.5        p 64.5%  DK -110   BE 52%  gap +12.1 | no record                          | exact 0-0 (0 settled) rank — bookmaker 
+    team_total_home KC over 25.5      p 51.4%  no price  BE —    gap —     | no record                          | exact 0-0 (0 settled) rank — model 
+    spread          NYJ +9.5          p 51.0%  DK -110   BE 52%  gap -1.4  | no record                          | exact 0-0 (0 settled) rank — bookmaker 
+    team_total_away NYJ over 16.5     p 50.6%  no price  BE —    gap —     | no record                          | exact 0-0 (0 settled) rank — model 
+  NFL DET @ MIA (18:00Z)
+    winner          DET win           p 68.0%  DK -305   BE 75%  gap -7.3  | no record                          | exact 0-0 (0 settled) rank — none 
+    team_total_home MIA under 22.5    p 52.0%  no price  BE —    gap —     | no record                          | exact 0-0 (0 settled) rank — model 
+    spread          MIA +6.5          p 50.4%  DK -108   BE 52%  gap -1.6  | no record                          | exact 0-0 (0 settled) rank — bookmaker 
+    team_total_away DET under 28.5    p 50.3%  no price  BE —    gap —     | no record                          | exact 0-0 (0 settled) rank — model 
+    total           Under 50.5        p 50.1%  DK -110   BE 52%  gap -2.3  | no record                          | exact 0-0 (0 settled) rank — bookmaker 
+  NFL CLE @ NO (18:00Z)
+    total           Under 42.5        p 56.5%  DK -105   BE 51%  gap +5.3  | no record                          | exact 0-0 (0 settled) rank — bookmaker 
+    spread          CLE +3.5          p 54.7%  DK -110   BE 52%  gap +2.3  | no record                          | exact 0-0 (0 settled) rank — bookmaker 
+    team_total_away CLE under 19.5    p 51.6%  no price  BE —    gap —     | no record                          | exact 0-0 (0 settled) rank — model 
+    team_total_home NO under 21.5     p 51.5%  no price  BE —    gap —     | no record                          | exact 0-0 (0 settled) rank — model 
+    winner          NO win            p 51.5%  DK -185   BE 65%  gap -13.5 | no record                          | exact 0-0 (0 settled) rank — none 
+  NFL NYG @ PHI (18:00Z)
+    spread          PHI +3            p 66.0%  DK -110   BE 52%  gap +13.6 | no record                          | exact 0-0 (0 settled) rank — bookmaker 
+    total           Over 38.5         p 60.9%  DK -102   BE 50%  gap +10.5 | no record                          | exact 0-0 (0 settled) rank — bookmaker 
+    winner          NYG win           p 53.1%  DK -155   BE 61%  gap -7.6  | no record                          | exact 0-0 (0 settled) rank — none 
+    team_total_away NYG under 20.5    p 51.8%  no price  BE —    gap —     | no record                          | exact 0-0 (0 settled) rank — model 
+    team_total_home PHI under 22.5    p 51.4%  no price  BE —    gap —     | no record                          | exact 0-0 (0 settled) rank — model 
+  NFL LAR @ WSH (18:00Z)
+    winner          LAR win           p 60.9%  DK -238   BE 70%  gap -9.5  | no record                          | exact 0-0 (0 settled) rank — none 
+    total           Over 47.5         p 56.2%  DK -112   BE 53%  gap +3.3  | no record                          | exact 0-0 (0 settled) rank — bookmaker 
+    team_total_away LAR under 27.5    p 51.3%  no price  BE —    gap —     | no record                          | exact 0-0 (0 settled) rank — model 
+    spread          LAR -4.5          p 50.9%  DK -115   BE 53%  gap -2.6  | no record                          | exact 0-0 (0 settled) rank — bookmaker 
+    team_total_home WSH under 22.5    p 50.4%  no price  BE —    gap —     | no record                          | exact 0-0 (0 settled) rank — model 
+  NFL DEN @ CAR (18:00Z)
+    winner          DEN win           p 66.3%  DK -142   BE 59%  gap +7.6  | no record                          | exact 0-0 (0 settled) rank — none 
+    spread          DEN -2.5          p 57.5%  DK -120   BE 55%  gap +3.0  | no record                          | exact 0-0 (0 settled) rank — bookmaker 
+    team_total_home CAR over 19.5     p 51.3%  no price  BE —    gap —     | no record                          | exact 0-0 (0 settled) rank — model 
+    team_total_away DEN over 24.5     p 50.9%  no price  BE —    gap —     | no record                          | exact 0-0 (0 settled) rank — model 
+    total           Under 44.5        p 50.0%  DK -112   BE 53%  gap -2.8  | no record                          | exact 0-0 (0 settled) rank — bookmaker 
+  NHL FLA @ BOS (18:00Z)
+    spread          FLA +1.5          p 62.3%  DK -218   BE 69%  gap -6.3  | rec 48% of 42 [33%-62%] season     | exact 0-0 (0 settled) rank 5 bookmaker Two-goal wins were under-predicted in 
+    team_total_away FLA over 2.5      p 56.9%  no price  BE —    gap —     | rec 43% of 74 [33%-55%] season     | exact 1-0 (1 settled) rank 6 model Team totals were not tested separately
+    winner          BOS win           p 56.6%  DK -142   BE 59%  gap -2.0  | rec 57% of 3525 [56%-59%] history  | exact 0-0 (0 settled) rank 1 none 
+    team_total_home BOS under 3.5     p 53.0%  no price  BE —    gap —     | rec 48% of 46 [34%-62%] season     | exact 0-1 (1 settled) rank 4 model Team totals were not tested separately
+    total           Under 6.5         p 51.2%  DK -125   BE 56%  gap -4.4  | rec 56% of 95 [46%-65%] season     | exact 1-0 (1 settled) rank 2 bookmaker Totals showed no skill over a league-a
+    reg3            BOS in regulation p 49.1%  no price  BE —    gap —     | rec 45% of 4037 [43%-46%] history  | exact 0-1 (1 settled) rank 3 none Regulation draws were under-predicted 
+  SOCCER: unavailable (forecasts_unavailable)
+
+=== Snapshot 2 (2026-11-08T20:07:27Z, before message 245) ===
+  NBA PHI @ CHI (20:30Z)
+    winner          PHI win           p 67.8%  DK -449   BE 82%  gap -14.0 | rec 68% of 999 [65%-71%] history   | exact 0-0 (0 settled) rank 1 none 
+    total           Under 237.5       p 64.0%  DK -110   BE 52%  gap +11.6 | rec 55% of 33 [38%-70%] season     | exact 0-0 (0 settled) rank 4 bookmaker moved Development research only (2023-24 hol
+    spread          CHI +9.5          p 53.3%  DK -113   BE 53%  gap +0.2  | rec 41% of 59 [29%-53%] season     | exact 0-2 (2 settled) rank 5 bookmaker Development research only (2023-24 hol
+    team_total_away PHI under 119.5   p 50.6%  no price  BE —    gap —     | rec 50% of 127 [42%-59%] season    | exact 3-6 (9 settled) rank 3 model Development research only; team totals
+    team_total_home CHI under 111.5   p 50.1%  no price  BE —    gap —     | rec 51% of 127 [43%-60%] season    | exact 0-0 (0 settled) rank 2 model Development research only; team totals
+  NFL: unavailable (inactive)
+  NHL VGK @ BUF (20:30Z)
+    spread          BUF +1.5          p 71.6%  DK -270   BE 73%  gap -1.4  | rec 77% of 66 [66%-86%] season     | exact 0-0 (0 settled) rank 1 bookmaker Two-goal wins were under-predicted in 
+    team_total_away VGK under 3.5     p 59.5%  no price  BE —    gap —     | rec 43% of 74 [33%-55%] season     | exact 0-1 (1 settled) rank 6 model Team totals were not tested separately
+    team_total_home BUF under 3.5     p 54.5%  no price  BE —    gap —     | rec 48% of 46 [34%-62%] season     | exact 0-0 (0 settled) rank 5 model Team totals were not tested separately
+    winner          BUF win           p 52.9%  DK -108   BE 52%  gap +1.0  | rec 51% of 4142 [50%-53%] history  | exact 0-0 (0 settled) rank 2 none 
+    total           Over 6.5          p 51.2%  DK -105   BE 51%  gap -0.0  | rec 56% of 95 [46%-65%] season     | exact 2-0 (2 settled) rank 3 bookmaker Totals showed no skill over a league-a
+    reg3            BUF in regulation p 45.1%  no price  BE —    gap —     | rec 45% of 4037 [43%-46%] history  | exact 1-0 (1 settled) rank 4 none Regulation draws were under-predicted 
+  SOCCER: unavailable (forecasts_unavailable)
+
+=== Snapshot 3 (2026-11-08T21:55:38Z, before message 258) ===
+  NBA LAL @ DET (23:00Z)
+    winner          DET win           p 63.9%  DK -264   BE 73%  gap -8.6  | rec 62% of 1100 [59%-64%] history  | exact 0-0 (0 settled) rank 1 none 
+    total           Over 216.5        p 59.0%  DK -115   BE 53%  gap +5.5  | rec 56% of 87 [46%-66%] season     | exact 0-0 (0 settled) rank 2 bookmaker Development research only (2023-24 hol
+    spread          LAL +7.5          p 58.8%  DK -105   BE 51%  gap +7.6  | rec 42% of 38 [28%-58%] season     | exact 0-0 (0 settled) rank 5 bookmaker Development research only (2023-24 hol
+    team_total_home DET under 112.5   p 50.7%  no price  BE —    gap —     | rec 51% of 127 [43%-60%] season    | exact 2-1 (3 settled) rank 3 model Development research only; team totals
+    team_total_away LAL under 108.5   p 50.0%  no price  BE —    gap —     | rec 50% of 127 [42%-59%] season    | exact 0-0 (0 settled) rank 4 model Development research only; team totals
+  NHL TBL @ WPG (23:00Z)
+    spread          WPG +1.5          p 66.1%  DK -198   BE 66%  gap -0.4  | rec 73% of 51 [59%-83%] season     | exact 0-0 (0 settled) rank 1 bookmaker Two-goal wins were under-predicted in 
+    team_total_home WPG over 2.5      p 59.0%  no price  BE —    gap —     | rec 59% of 79 [48%-70%] season     | exact 0-1 (1 settled) rank 3 model Team totals were not tested separately
+    team_total_away TBL under 3.5     p 57.0%  no price  BE —    gap —     | rec 43% of 74 [33%-55%] season     | exact 0-0 (0 settled) rank 6 model Team totals were not tested separately
+    winner          TBL win           p 56.8%  DK -148   BE 60%  gap -2.8  | rec 57% of 3525 [56%-59%] history  | exact 0-0 (0 settled) rank 2 none 
+    total           Under 6.5         p 52.7%  DK -120   BE 55%  gap -1.8  | rec 56% of 95 [46%-65%] season     | exact 0-0 (0 settled) rank 4 bookmaker Totals showed no skill over a league-a
+    reg3            TBL in regulation p 45.1%  no price  BE —    gap —     | rec 45% of 4037 [43%-46%] history  | exact 0-0 (0 settled) rank 5 none Regulation draws were under-predicted 
+  SOCCER: unavailable (forecasts_unavailable)
+
+=== Snapshot 4 (2026-11-08T22:28:08Z, before message 264) ===
+  NBA: source stale -> 5 forecasts blocked
+  NHL NJD @ TOR (00:00Z)
+    spread          TOR +1.5          p 73.1%  DK -192   BE 66%  gap +7.4  | rec 77% of 66 [66%-86%] season     | exact 0-0 (0 settled) rank 1 bookmaker Two-goal wins were under-predicted in 
+    team_total_away NJD under 3.5     p 60.3%  no price  BE —    gap —     | rec 46% of 84 [36%-57%] season     | exact 1-0 (1 settled) rank 5 model Team totals were not tested separately
+    team_total_home TOR under 3.5     p 52.4%  no price  BE —    gap —     | rec 48% of 46 [34%-62%] season     | exact 0-0 (0 settled) rank 6 model Team totals were not tested separately
+    total           Over 6.5          p 52.2%  DK +102   BE 50%  gap +2.7  | rec 56% of 95 [46%-65%] season     | exact 1-0 (1 settled) rank 3 bookmaker Totals showed no skill over a league-a
+    winner          TOR win           p 50.3%  DK +136   BE 42%  gap +7.9  | rec 51% of 4142 [50%-53%] history  | exact 1-0 (1 settled) rank 2 none 
+    reg3            TOR in regulation p 47.1%  no price  BE —    gap —     | rec 45% of 4037 [43%-46%] history  | exact 2-0 (2 settled) rank 4 none Regulation draws were under-predicted 
+  NHL PHI @ CGY (00:00Z)
+    spread          CGY +1.5          p 72.1%  DK -270   BE 73%  gap -0.8  | rec 77% of 66 [66%-86%] season     | exact 0-0 (0 settled) rank 1 bookmaker Two-goal wins were under-predicted in 
+    team_total_home CGY over 2.5      p 59.5%  no price  BE —    gap —     | rec 59% of 79 [48%-70%] season     | exact 1-0 (1 settled) rank 3 model Team totals were not tested separately
+    team_total_away PHI over 2.5      p 55.3%  no price  BE —    gap —     | rec 43% of 74 [33%-55%] season     | exact 1-2 (3 settled) rank 6 model Team totals were not tested separately
+    winner          CGY win           p 52.6%  DK -102   BE 50%  gap +2.1  | rec 51% of 4142 [50%-53%] history  | exact 0-1 (1 settled) rank 2 none 
+    total           Over 5.5          p 51.5%  DK -122   BE 55%  gap -3.4  | rec 56% of 95 [46%-65%] season     | exact 1-0 (1 settled) rank 4 bookmaker Totals showed no skill over a league-a
+    reg3            CGY in regulation p 44.1%  no price  BE —    gap —     | rec 41% of 3405 [39%-43%] history  | exact 0-1 (1 settled) rank 5 none Regulation draws were under-predicted 
+  NHL TBL @ WPG (23:00Z)  LOCKED to {1091}
+    spread          WPG +1.5          p 66.1%  DK -198   BE 66%  gap -0.4  | rec 73% of 51 [59%-83%] season     | exact 0-0 (0 settled) rank 1 bookmaker Two-goal wins were under-predicted in 
+  SOCCER: unavailable (forecasts_unavailable)
+
+=== Snapshot 5 (2026-11-08T23:28:49Z, before message 270) ===
+  NBA UTAH @ MIN (00:00Z)
+    winner          MIN win           p 86.9%  DK -620   BE 86%  gap +0.8  | rec 88% of 186 [83%-92%] history   | exact 0-0 (0 settled) rank 1 none 
+    total           Over 221.5        p 62.6%  DK -110   BE 52%  gap +10.2 | rec 55% of 33 [38%-70%] season     | exact 0-0 (0 settled) rank 4 bookmaker moved Development research only (2023-24 hol
+    spread          MIN -12.5         p 54.9%  DK -115   BE 53%  gap +1.4  | rec 41% of 59 [29%-53%] season     | exact 0-0 (0 settled) rank 5 bookmaker moved Development research only (2023-24 hol
+    team_total_away UTAH over 106.5   p 50.9%  no price  BE —    gap —     | rec 50% of 127 [42%-59%] season    | exact 1-4 (5 settled) rank 3 model Development research only; team totals
+    team_total_home MIN over 120.5    p 50.8%  no price  BE —    gap —     | rec 51% of 127 [43%-60%] season    | exact 2-1 (3 settled) rank 2 model Development research only; team totals
+  NBA BKN @ DAL (00:30Z)
+    winner          DAL win           p 70.7%  DK -305   BE 75%  gap -4.6  | rec 71% of 767 [67%-74%] history   | exact 0-0 (0 settled) rank 1 none 
+    spread          BKN +7.5          p 52.4%  DK -113   BE 53%  gap -0.6  | rec 41% of 59 [29%-53%] season     | exact 0-0 (0 settled) rank 5 bookmaker Development research only (2023-24 hol
+    total           Under 223.5       p 52.0%  DK -112   BE 53%  gap -0.8  | rec 45% of 40 [31%-60%] season     | exact 0-0 (0 settled) rank 4 bookmaker Development research only (2023-24 hol
+    team_total_away BKN under 108.5   p 51.0%  no price  BE —    gap —     | rec 50% of 127 [42%-59%] season    | exact 0-0 (0 settled) rank 3 model Development research only; team totals
+    team_total_home DAL under 114.5   p 50.5%  no price  BE —    gap —     | rec 51% of 127 [43%-60%] season    | exact 0-0 (0 settled) rank 2 model Development research only; team totals
+  NFL TB @ CHI (01:20Z)
+    winner          CHI win           p 71.7%  DK -278   BE 74%  gap -1.9  | no record                          | exact 0-0 (0 settled) rank — none 
+    spread          TB +6             p 58.9%  DK -102   BE 50%  gap +8.4  | no record                          | exact 0-0 (0 settled) rank — bookmaker 
+    total           Under 47.5        p 58.2%  DK -118   BE 54%  gap +4.1  | no record                          | exact 0-0 (0 settled) rank — bookmaker 
+    team_total_home CHI under 24.5    p 52.2%  no price  BE —    gap —     | no record                          | exact 0-0 (0 settled) rank — model 
+    team_total_away TB over 20.5      p 51.0%  no price  BE —    gap —     | no record                          | exact 0-0 (0 settled) rank — model 
+  NHL NJD @ TOR (00:00Z)  LOCKED to {1097}
+    spread          TOR +1.5          p 73.1%  DK -192   BE 66%  gap +7.4  | rec 77% of 66 [66%-86%] season     | exact 0-0 (0 settled) rank 1 bookmaker Two-goal wins were under-predicted in 
+  NHL PHI @ CGY (00:00Z)  LOCKED to {1103}
+    spread          CGY +1.5          p 72.1%  DK -270   BE 73%  gap -0.8  | rec 77% of 66 [66%-86%] season     | exact 0-0 (0 settled) rank 1 bookmaker Two-goal wins were under-predicted in 
+  NHL PIT @ ANA (01:00Z)
+    spread          PIT +1.5          p 67.1%  DK -238   BE 70%  gap -3.3  | rec 73% of 51 [59%-83%] season     | exact 0-1 (1 settled) rank 1 bookmaker Two-goal wins were under-predicted in 
+    total           Over 6.5          p 60.0%  DK -155   BE 61%  gap -0.8  | rec 51% of 37 [36%-67%] season     | exact 0-1 (1 settled) rank 4 bookmaker Totals showed no skill over a league-a
+    winner          ANA win           p 52.0%  DK -120   BE 55%  gap -2.5  | rec 51% of 4142 [50%-53%] history  | exact 0-0 (0 settled) rank 2 none 
+    team_total_away PIT under 3.5     p 51.9%  no price  BE —    gap —     | rec 47% of 49 [34%-61%] season     | exact 0-0 (0 settled) rank 6 model Team totals were not tested separately
+    team_total_home ANA under 3.5     p 50.2%  no price  BE —    gap —     | rec 48% of 46 [34%-62%] season     | exact 0-0 (0 settled) rank 5 model Team totals were not tested separately
+    reg3            ANA in regulation p 43.2%  no price  BE —    gap —     | rec 41% of 3405 [39%-43%] history  | exact 0-0 (0 settled) rank 3 none Regulation draws were under-predicted 
+  SOCCER: unavailable (forecasts_unavailable)
+
+=== Snapshot 6 (2026-11-08T23:57:23Z, before message 282) ===
+  NBA UTAH @ MIN (00:00Z)
+    winner          MIN win           p 86.9%  DK -700   BE 88%  gap -0.6  | rec 88% of 186 [83%-92%] history   | exact 0-0 (0 settled) rank 1 none 
+    total           Over 222.5        p 61.0%  DK -110   BE 52%  gap +8.6  | rec 55% of 33 [38%-70%] season     | exact 0-0 (0 settled) rank 4 bookmaker Development research only (2023-24 hol
+    spread          MIN -12.5         p 54.7%  DK -108   BE 52%  gap +2.8  | rec 41% of 59 [29%-53%] season     | exact 0-0 (0 settled) rank 5 bookmaker Development research only (2023-24 hol
+    team_total_away UTAH over 106.5   p 51.4%  no price  BE —    gap —     | rec 50% of 127 [42%-59%] season    | exact 3-1 (4 settled) rank 3 model Development research only; team totals
+    team_total_home MIN over 120.5    p 51.1%  no price  BE —    gap —     | rec 51% of 127 [43%-60%] season    | exact 3-1 (4 settled) rank 2 model Development research only; team totals
+  NBA BOS @ MIL (01:00Z)
+    winner          BOS win           p 77.8%  DK -790   BE 89%  gap -11.0 | rec 80% of 607 [76%-83%] history   | exact 0-0 (0 settled) rank 1 none 
+    spread          MIL +13.5         p 54.1%  DK -112   BE 53%  gap +1.3  | rec 41% of 59 [29%-53%] season     | exact 1-0 (1 settled) rank 5 bookmaker Development research only (2023-24 hol
+    team_total_home MIL over 104.5    p 51.0%  no price  BE —    gap —     | rec 51% of 127 [43%-60%] season    | exact 3-1 (4 settled) rank 2 model Development research only; team totals
+    total           Under 221.5       p 50.6%  DK -113   BE 53%  gap -2.4  | rec 45% of 40 [31%-60%] season     | exact 0-0 (0 settled) rank 4 bookmaker Development research only (2023-24 hol
+    team_total_away BOS under 116.5   p 50.3%  no price  BE —    gap —     | rec 50% of 127 [42%-59%] season    | exact 0-2 (2 settled) rank 3 model Development research only; team totals
+  NBA BKN @ DAL (00:30Z)
+    winner          DAL win           p 70.7%  DK -305   BE 75%  gap -4.6  | rec 71% of 767 [67%-74%] history   | exact 0-0 (0 settled) rank 1 none 
+    spread          BKN +7.5          p 52.6%  DK -113   BE 53%  gap -0.4  | rec 41% of 59 [29%-53%] season     | exact 0-0 (0 settled) rank 5 bookmaker Development research only (2023-24 hol
+    total           Under 223.5       p 51.5%  DK -112   BE 53%  gap -1.3  | rec 45% of 40 [31%-60%] season     | exact 0-0 (0 settled) rank 4 bookmaker Development research only (2023-24 hol
+    team_total_away BKN under 108.5   p 50.5%  no price  BE —    gap —     | rec 50% of 127 [42%-59%] season    | exact 2-3 (5 settled) rank 3 model Development research only; team totals
+    team_total_home DAL under 114.5   p 50.2%  no price  BE —    gap —     | rec 51% of 127 [43%-60%] season    | exact 0-2 (2 settled) rank 2 model Development research only; team totals
+  NFL TB @ CHI (01:20Z)  LOCKED to {71}
+    winner          CHI win           p 71.7%  DK -270   BE 73%  gap -1.3  | no record                          | exact 0-0 (0 settled) rank — none 
+  NHL NJD @ TOR (00:00Z)  LOCKED to {1097}
+  NHL PHI @ CGY (00:00Z)  LOCKED to {1103}
+  NHL PIT @ ANA (01:00Z)  LOCKED to {1109}
+  SOCCER: unavailable (forecasts_unavailable)
+
+=== Snapshot 7 (2026-11-09T00:12:14Z, before message 286) ===
+  NBA BOS @ MIL (01:00Z)  LOCKED to {1198}
+    winner          BOS win           p 77.8%  DK -790   BE 89%  gap -11.0 | rec 80% of 607 [76%-83%] history   | exact 0-0 (0 settled) rank 1 none 
+  NBA BKN @ DAL (00:30Z)  LOCKED to {1186}
+    winner          DAL win           p 70.7%  DK -305   BE 75%  gap -4.6  | rec 71% of 767 [67%-74%] history   | exact 0-0 (0 settled) rank 1 none 
+  NBA NO @ LAC (02:00Z)
+    winner          LAC win           p 64.3%  DK +103   BE 49%  gap +15.0 | rec 62% of 1100 [59%-64%] history  | exact 0-0 (0 settled) rank 1 none 
+    total           Over 226.5        p 58.2%  DK -108   BE 52%  gap +6.3  | rec 56% of 87 [46%-66%] season     | exact 0-0 (0 settled) rank 2 bookmaker Development research only (2023-24 hol
+    spread          LAC +1.5          p 55.7%  DK -110   BE 52%  gap +3.3  | rec 42% of 38 [28%-58%] season     | exact 1-0 (1 settled) rank 5 bookmaker Development research only (2023-24 hol
+    team_total_home LAC over 115.5    p 50.7%  no price  BE —    gap —     | rec 51% of 127 [43%-60%] season    | exact 1-1 (2 settled) rank 3 model Development research only; team totals
+    team_total_away NO over 114.5     p 50.6%  no price  BE —    gap —     | rec 50% of 127 [42%-59%] season    | exact 3-1 (4 settled) rank 4 model Development research only; team totals
+  NBA MIA @ SAC (02:00Z)
+    spread          SAC +11.5         p 67.6%  DK -115   BE 53%  gap +14.1 | rec 47% of 30 [30%-64%] season     | exact 0-0 (0 settled) rank 5 bookmaker Development research only (2023-24 hol
+    winner          MIA win           p 62.2%  DK -518   BE 84%  gap -21.6 | rec 62% of 1100 [59%-64%] history  | exact 0-0 (0 settled) rank 1 none 
+    total           Over 236.5        p 52.8%  DK -106   BE 51%  gap +1.3  | rec 45% of 40 [31%-60%] season     | exact 1-1 (2 settled) rank 4 bookmaker Development research only (2023-24 hol
+    team_total_away MIA under 121.5   p 51.2%  no price  BE —    gap —     | rec 50% of 127 [42%-59%] season    | exact 2-1 (3 settled) rank 3 model Development research only; team totals
+    team_total_home SAC over 116.5    p 50.6%  no price  BE —    gap —     | rec 51% of 127 [43%-60%] season    | exact 4-0 (4 settled) rank 2 model Development research only; team totals
+  NFL TB @ CHI (01:20Z)  LOCKED to {71}
+    winner          CHI win           p 71.7%  DK -270   BE 73%  gap -1.3  | no record                          | exact 0-0 (0 settled) rank — none 
+  NHL PIT @ ANA (01:00Z)  LOCKED to {1109}

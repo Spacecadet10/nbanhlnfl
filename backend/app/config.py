@@ -44,6 +44,14 @@ def data_dir() -> Path:
     return Path(os.environ.get("NBA_DATA_DIR", REPO_ROOT / "data"))
 
 
+def telegram_ledger_path() -> Path:
+    """Preserve the production ledger; isolate development copies with their data directory."""
+    directory = data_dir()
+    if directory.resolve() == (REPO_ROOT / 'data').resolve():
+        return REPO_ROOT / '.telegram-delivery.sqlite'
+    return directory / '.telegram-delivery.sqlite'
+
+
 def db_path(sport: str = "nba") -> Path:
     """Each sport has its own store (docs/MULTISPORT_PLAN.md); the NBA store keeps its original file name.
     Data-only sports (NFL) have a store path too; serving them is refused elsewhere (sports.get, live.engine)."""

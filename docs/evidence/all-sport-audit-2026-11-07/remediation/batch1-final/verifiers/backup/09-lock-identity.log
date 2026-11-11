@@ -1,0 +1,16 @@
+== lock held (separate process holds flock) -> restore must refuse, targets untouched
+exit 1 BackupError: A job holds the soccer store lock; stop the scheduled jobs first
+c108feb9e728f102f0fa8a65e6f0ac12e393fb28  /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/backup-verify/rl/nfl.sqlite
+c108feb9e728f102f0fa8a65e6f0ac12e393fb28  /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/backup-verify/rl/nfl.sqlite
+.nfl-jobs.lock
+.soccer-jobs.lock
+nfl.sqlite
+== wrong-identity: nba backup relabelled as nfl; nfl backup lacking identity; nba lacking identity
+x1 nfl <- nba.sqlite  REFUSED: l.sqlite is not the nfl store (store identity); not restored
+x2 nfl <- nfl.sqlite mut REFUSED: l.sqlite is not the nfl store (store identity); not restored
+x3 soccer <- soccer.sqlite mut REFUSED: qlite is not the soccer store (store identity); not restored
+x4 nba <- nba.sqlite mut RESTORED
+x5 nba <- nfl.sqlite  REFUSED: a.sqlite is not the nba store (store identity); not restored
+x6 soccer <- nfl.sqlite  REFUSED: qlite is not the soccer store (store identity); not restored
+.nba-jobs.lock
+nba.sqlite

@@ -1,0 +1,130 @@
+--- backend/app/tickets.py	2026-11-08 16:45:25
++++ /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/43a0d8c8-5d19-4e11-a7c0-2df81439b128/scratchpad/wt/backend/app/tickets.py	2026-11-08 18:26:35
+@@ -47,6 +47,7 @@
+                 if db.store_sport(conn) not in allowed:
+                     raise ValueError('Store identity mismatch')
+                 state = freshness.summary(conn, sport, now)
++                delay = refresh_delay(conn, state)
+                 provider = Views(conn, stamp) if sport == 'nfl' else RealProvider(conn, stamp)
+                 report = provider.ranked_picks(day)
+                 if report['mode'] != 'real':
+@@ -56,6 +57,8 @@
+                 covered = {p['game_id'] for p in report['picks'] if p['grade']=='pending'}
+                 result['sports'][sport] = {'freshness': state, 'report': report,
+                     'missing_due_games': [g['game_id'] for g in due if g['game_id'] not in covered]}
++                if delay:
++                    result['sports'][sport]['refresh_delay'] = delay
+             finally:
+                 conn.close()
+         except Exception as exc:
+@@ -70,6 +73,31 @@
+     return datetime.fromisoformat(stamp.replace('Z', '+00:00'))
+ 
+ 
++def refresh_delay(conn, state):
++    """A stale, non-failing source whose own store job started at/after the last successful refresh and is still running:
++    the tick refreshes, then runs the (sometimes 30+ min) forecast job under the store lock, so no refresh can run meanwhile
++    (docs/TICKETS.md, lock coupling). Nothing failed; the data is only as old as that refresh. Old crashed 'running' rows
++    predate the last success and never count."""
++    if state.get('source_state') != 'stale' or state.get('failing') or not state.get('source_fetched_at'):
++        return None
++    row = conn.execute("SELECT job, started_at FROM job_runs WHERE status='running' AND started_at>=? "
++                       "ORDER BY started_at DESC LIMIT 1", (state['source_fetched_at'],)).fetchone()
++    return dict(job=row['job'], started_at=row['started_at'], source_fetched_at=state['source_fetched_at']) if row else None
++
++
++def source_usable(section, pick=None):
++    """Fresh, or delayed only by its running forecast job (refresh_delay). A delayed source serves only games whose
++    last status refresh happened inside their own two-hour pregame window; legs disclose that refresh time."""
++    if 'error' in section or section['freshness']['failing']:
++        return False
++    if section['freshness']['source_state'] == 'fresh':
++        return True
++    delay = section.get('refresh_delay')
++    if section['freshness']['source_state'] != 'stale' or not delay:
++        return False
++    return pick is None or _parse(pick['tipoff']) - timedelta(hours=2) <= _parse(delay['source_fetched_at'])
++
++
+ def _stamp(moment=None):
+     return (moment or datetime.now(timezone.utc)).strftime('%Y-%m-%dT%H:%M:%SZ')
+ 
+@@ -179,7 +207,7 @@
+     if 'as_of' not in snap or 'date' not in snap:
+         raise ValueError('Snapshot lacks as_of/date')
+     now = _parse(snap['as_of'])
+-    ticketable, blocked, unavailable, started = [], {}, {}, []
++    ticketable, blocked, unavailable, started, delayed = [], {}, {}, [], {}
+     for sport, section in snap['sports'].items():
+         if section.get('error'):
+             unavailable[sport] = dict(section)
+@@ -188,12 +216,14 @@
+         current = [p for p in picks if eligible(p, now)]
+         started += [(sport, p) for p in picks if _parse(p['tipoff']) <= now
+                     and _parse(p['tipoff']) - timedelta(hours=2) <= _parse(p['generated_at']) <= _parse(p['tipoff'])]
+-        if section['freshness']['source_state'] != 'fresh' or section['freshness']['failing']:
+-            if current:
+-                blocked[sport] = {'issue': 'source_unavailable_or_stale', 'forecasts': len(current),
+-                                  'games': len({p['game_id'] for p in current})}
+-            continue
+-        ticketable += [(sport, p) for p in current]
++        usable = [p for p in current if source_usable(section, p)]
++        refused = [p for p in current if not source_usable(section, p)]
++        if refused:
++            blocked[sport] = {'issue': 'source_unavailable_or_stale', 'forecasts': len(refused),
++                              'games': len({p['game_id'] for p in refused})}
++        if usable and section['freshness']['source_state'] != 'fresh':
++            delayed[sport] = dict(section['refresh_delay'], forecasts=len(usable))
++        ticketable += [(sport, p) for p in usable]
+     reviewed, reviewed_games, used = set(), set(), {}
+     state = {'as_of': snap['as_of'], 'date': snap['date']}
+     if ticketable or started:
+@@ -234,6 +264,8 @@
+                  oldest_unreviewed_at=min((u['generated_at'] for u in new), default=None),
+                  blocked=blocked, unavailable=unavailable, locked_games=locked,
+                  missed_before_start=sorted(missed.values(), key=lambda m: (m['tipoff'], m['sport'], m['game_id'])))
++    if delayed:   # stale only because the store's forecast job still holds the lock; legs disclose the refresh time
++        state['delayed'] = delayed
+     return state
+ 
+ 
+@@ -293,12 +325,15 @@
+             sections = [old['sports'][sport], fresh['sports'][sport]]
+             picks = []
+             for section in sections:
+-                if 'error' in section or section['freshness']['source_state'] != 'fresh' or section['freshness']['failing']:
++                if not source_usable(section):
+                     raise ValueError('Selected source unavailable or stale')
+                 pick = next((p for p in section['report']['picks'] if p.get('forecast_id') == leg['forecast_id']), None)
+                 if pick is None:
+                     raise ValueError('Selected forecast missing')
++                if not source_usable(section, pick):
++                    raise ValueError('Selected source unavailable or stale for this game')
+                 picks.append(pick)
++            refreshed = None if sections[1]['freshness']['source_state'] == 'fresh' else sections[1]['refresh_delay']['source_fetched_at']
+             before, pick = picks
+             if not eligible(pick, now):
+                 raise ValueError('Forecast is settled or outside its pregame window')
+@@ -313,7 +348,8 @@
+                 raise ValueError('Variations must preserve the same forecast for a shared game')
+             ticket_games.add(key)
+             seen[key] = identity
+-            legs.append({**pick, 'sport': sport, 'rationale': leg['rationale']})
++            legs.append({**pick, 'sport': sport, 'rationale': leg['rationale'],
++                         **({'status_refreshed_at': refreshed} if refreshed else {})})
+         combination = tuple(sorted((p['sport'], p['forecast_id']) for p in legs))
+         if combination in combinations:
+             raise ValueError('Duplicate ticket combination')
+@@ -369,6 +405,12 @@
+               for key, p in current.items() if len(exposure[key]['tickets']) > 1]
+     if shared:
+         lines += ['', '<b>Shared core exposure</b>', *shared, 'One losing core pick can lose multiple tickets.']
++    delays = {}
++    for p in (p for t in tickets for p in t['legs'] if p.get('status_refreshed_at')):
++        delays[p['sport']] = min(delays.get(p['sport'], p['status_refreshed_at']), p['status_refreshed_at'])
++    for sport, stamp in sorted(delays.items()):
++        lines += ['', f"{sport.upper()} game status last refreshed {_parse(stamp).astimezone(TORONTO):%I:%M %p %Z} "
++                      f"(app forecast job still running). Confirm each game is still on before betting."]
+     lines += ['', 'Prices unverified. Confirm exact sportsbook lines. Model estimates are not guaranteed win rates.']
+     if not tickets:
+         lines.append('No tickets selected.')

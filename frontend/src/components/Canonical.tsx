@@ -239,12 +239,12 @@ export function CanonicalReport({ sport, market }: { sport: Sport; market: Marke
           <p className="small muted">Won or lost canonical forecasts only. {winner ? 'When the forecast says X% for the home team, does it win about X% of the time?'
             : p.market === 'reg3' ? 'When the picked outcome is given X%, does it happen about X% of the time?'
             : 'When the forecast gives side A (home side / over) X% excluding a push, does it land about X% of the time?'}</p>
-          <table className="table">
+          <div className="table-wrap"><table className="table">
             <thead><tr><th>{winner ? 'Predicted home win' : p.market === 'reg3' ? 'Predicted pick' : 'Predicted side A'}</th><th>Games</th><th>Avg predicted</th><th>{winner ? 'Actual home wins' : 'Actual'}</th></tr></thead>
             <tbody>{p.calibration.map((b) => (
               <tr key={b.lower}><td>{pct(b.lower)}–{pct(b.upper)}</td><td>{b.count}</td><td>{pct(b.mean_predicted)}</td><td>{pct(b.observed_rate)}</td></tr>
             ))}</tbody>
-          </table>
+          </table></div>
         </div>
         <div className="card">
           <h2>Preseason · reported apart</h2>

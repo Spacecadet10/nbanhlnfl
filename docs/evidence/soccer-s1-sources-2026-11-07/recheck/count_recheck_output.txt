@@ -1,0 +1,58 @@
+## 0. recheck probe log
+requests 76 bytes 9277481 status {200: 68, 404: 2, 403: 5, 502: 1} hash_mismatch 0
+per host {'api.github.com': 19, 'raw.githubusercontent.com': 27, 'www.football-data.org': 3, 'docs.football-data.org': 1, 'the-odds-api.com': 1, 'www.sportmonks.com': 2, 'disneytermsofuse.com': 1, 'www.espn.com': 1, 'developer.espn.com': 1, 'site.api.espn.com': 2, 'www.football-data.co.uk': 1, 'www.sports-reference.com': 2, 'fbref.com': 1, 'www.oddsportal.com': 1, 'www.transfermarkt.com': 1, 'understat.com': 1, 'clubelo.com': 1, 'api.clubelo.com': 1, 'api-sports.io': 1, 'www.api-football.com': 1, 'rapidapi.com': 1, 'projects.fivethirtyeight.com': 1, 'en.wikipedia.org': 4, 'query.wikidata.org': 1}
+first 2026-11-07T19:29:16Z last 2026-11-07T19:38:21Z
+
+## 1. repo licences (GitHub API)
+dcaribou/transfermarkt-datasets | spdx CC0-1.0 | pushed_at 2026-09-05T09:07:49Z
+fivethirtyeight/data | spdx CC-BY-4.0 | pushed_at 2025-02-25T19:40:33Z
+jalapic/engsoccerdata | spdx None | pushed_at 2026-02-08T04:52:56Z
+openfootball/champions-league | spdx CC0-1.0 | pushed_at 2026-07-02T15:56:14Z
+openfootball/deutschland | spdx CC0-1.0 | pushed_at 2026-09-21T10:35:58Z
+openfootball/england | spdx CC0-1.0 | pushed_at 2026-10-15T14:42:32Z
+openfootball/espana | spdx CC0-1.0 | pushed_at 2026-10-15T14:37:58Z
+openfootball/europe | spdx CC0-1.0 | pushed_at 2026-10-15T14:36:29Z
+openfootball/football.json | spdx CC0-1.0 | pushed_at 2026-09-22T09:33:50Z
+openfootball/europe | spdx CC0-1.0 | pushed_at 2026-10-15T14:36:29Z
+openfootball/italy | spdx CC0-1.0 | pushed_at 2026-09-21T10:36:02Z
+hudl/open-data | spdx NOASSERTION | pushed_at 2026-10-27T17:17:10Z
+
+## 2. openfootball league .txt season files (repo trees)
+england truncated False | season files 35 1992-93 .. 2026-27
+espana truncated False | season files 15 2012-13 .. 2026-27
+deutschland truncated False | season files 17 2010-11 .. 2026-27
+italy truncated False | season files 14 2013-14 .. 2026-27
+europe truncated False | season files 13 2014-15 .. 2026-27
+
+## 3. openfootball champions-league cl.txt / el.txt: header "# Matches", score lines, a.e.t., pen.
+of_cl_2014-15_cl.txt | header matches 125 | " v " lines 125 | with score 125 | a.e.t. 2 | pen. 1 | from S1
+of_cl_2024-25_cl.txt | header matches 189 | " v " lines 189 | with score 189 | a.e.t. 2 | pen. 2 | from S1
+of_cl_2011-12_cl.txt | header matches 125 | " v " lines 125 | with score 125 | a.e.t. 4 | pen. 3 | from recheck
+of_cl_2012-13_cl.txt | header matches 125 | " v " lines 125 | with score 125 | a.e.t. 0 | pen. 0 | from recheck
+of_cl_2013-14_cl.txt | header matches 125 | " v " lines 125 | with score 125 | a.e.t. 1 | pen. 0 | from recheck
+of_cl_2015-16_cl.txt | header matches 125 | " v " lines 125 | with score 125 | a.e.t. 3 | pen. 2 | from recheck
+of_cl_2016-17_cl.txt | header matches 125 | " v " lines 125 | with score 125 | a.e.t. 1 | pen. 0 | from recheck
+of_cl_2017-18_cl.txt | header matches 125 | " v " lines 125 | with score 125 | a.e.t. 0 | pen. 0 | from recheck
+of_cl_2018-19_cl.txt | header matches 125 | " v " lines 125 | with score 125 | a.e.t. 1 | pen. 0 | from recheck
+of_cl_2019-20_cl.txt | header matches 119 | " v " lines 119 | with score 119 | a.e.t. 1 | pen. 0 | from recheck
+of_cl_2020-21_cl.txt | header matches 125 | " v " lines 125 | with score 125 | a.e.t. 1 | pen. 0 | from recheck
+of_cl_2021-22_cl.txt | header matches 125 | " v " lines 125 | with score 125 | a.e.t. 2 | pen. 0 | from recheck
+of_cl_2022-23_cl.txt | header matches 125 | " v " lines 125 | with score 125 | a.e.t. 0 | pen. 0 | from recheck
+of_cl_2023-24_cl.txt | header matches 125 | " v " lines 125 | with score 125 | a.e.t. 3 | pen. 3 | from recheck
+of_cl_2025-26_cl.txt | header matches 189 | " v " lines 189 | with score 189 | a.e.t. 3 | pen. 1 | from recheck
+of_cl_2024-25_el.txt | header matches 189 | " v " lines 189 | with score 189 | a.e.t. 5 | pen. 2 | from S1
+of_cl_2020-21_el.txt | header matches 205 | " v " lines 205 | with score 205 | a.e.t. 2 | pen. 1 | from recheck
+of_cl_2021-22_el.txt | header matches 141 | " v " lines 141 | with score 139 | a.e.t. 5 | pen. 2 | from recheck
+of_cl_2022-23_el.txt | header matches 141 | " v " lines 141 | with score 141 | a.e.t. 6 | pen. 4 | from recheck
+of_cl_2023-24_el.txt | header matches 141 | " v " lines 141 | with score 141 | a.e.t. 4 | pen. 2 | from recheck
+
+## 4. engsoccerdata champs.csv
+rows 6556 | seasons 1955 .. 2017 | rows 2010..2017 {'2010': 213, '2011': 213, '2012': 213, '2013': 213, '2014': 215, '2015': 217, '2016': 1, '2017': 1}
+rows with aet 128 | with pens 205
+DESCRIPTION License line: ['License: GPL (>= 2)\n']
+
+## 5. FiveThirtyEight spi_matches.csv response
+bytes 1867088 | starts with html True | title []
+
+## 6. Wikidata
+[{'n': {'datatype': 'http://www.w3.org/2001/XMLSchema#integer', 'type': 'literal', 'value': '0'}}]

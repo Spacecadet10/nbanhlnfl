@@ -952,10 +952,12 @@ export interface SoccerMatch {
   season: number; season_type_id: number; stage: string | null; stage_label: string | null; kickoff: string;
   status: 'scheduled' | 'in_progress' | 'final' | 'postponed' | 'canceled' | 'abandoned' | 'suspended' | 'other';
   source_status: string; home: NflTeam; away: NflTeam; neutral_site: boolean | null; venue: string | null;
-  decided_in: 'regulation' | 'extra_time' | 'penalties' | null;
+  /** 'unknown': ESPN's status, period, clock and goal minutes disagree about how the match ended (decision_note says how). */
+  decided_in: 'regulation' | 'extra_time' | 'penalties' | 'unknown' | null;
+  decision_note: string | null;
   /** Goals when play ended: after extra time if played; never shoot-out kicks. */
   home_score: number | null; away_score: number | null;
-  /** 90-minute result: only for matches that ended in regulation (no 90-minute score is published after extra time). */
+  /** 90-minute result: only for matches that ended in regulation (after extra time ESPN's score fields include it; goal-minute derivation not validated yet). */
   regulation_result: SoccerSide | null;
   end_of_play_result: SoccerSide | null;
   shootout_winner: 'home' | 'away' | null; home_shootout: number | null; away_shootout: number | null;
@@ -964,6 +966,8 @@ export interface SoccerMatch {
   qualified_team_id: string | null; note: string | null;
   first_seen_at: string; updated_at: string; result_available_at: string | null;
   result_availability_basis: 'observed_retrieval' | 'assumed_tipoff_plus_4h' | null;
+  /** When the current aggregate / qualifier / shoot-out became known (never earlier than the retrieval that delivered it). */
+  tie_facts_available_at: string | null;
 }
 export interface SoccerMeta {
   mode: 'real'; sport: 'soccer'; competition_id: SoccerCompetitionId; competition: string; competitions: SoccerCompetition[];
@@ -975,9 +979,11 @@ export interface SoccerMatchesResponse {
   prev_date: string | null; next_date: string | null; last_refresh_at: string | null;
 }
 export interface SoccerResultRevision {
-  revision: number; decided_in: 'regulation' | 'extra_time' | 'penalties'; home_score: number; away_score: number;
+  revision: number; decided_in: 'regulation' | 'extra_time' | 'penalties' | 'unknown'; home_score: number; away_score: number;
   home_shootout: number | null; away_shootout: number | null; aggregate_home: number | null; aggregate_away: number | null;
-  qualified_team_id: string | null; observed_at: string;
+  qualified_team_id: string | null; home_team_id: string | null; away_team_id: string | null; observed_at: string;
+  /** 'reclassified': the same cached retrieval re-read by a newer importer (not new source information). */
+  basis: 'observed' | 'reclassified';
 }
 export interface SoccerMatchDetail {
   match: SoccerMatch; head_to_head: SoccerMatch[]; home_recent: SoccerMatch[]; away_recent: SoccerMatch[];

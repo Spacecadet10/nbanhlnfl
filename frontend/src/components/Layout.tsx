@@ -8,7 +8,7 @@ import { dateTime } from '../format';
 import { NflScreens } from '../pages/NflPages';
 import { SoccerScreens } from '../pages/SoccerPages';
 import { FreshnessBar } from './Freshness';
-import { CompetitionSelect, SportToggle, useCarriedSearch, useCompetition, useLeague } from './Selection';
+import { CompetitionSelect, SportToggle, useCarriedSearch, useCompetition, useLeague, useSoccerMatchUrlSync } from './Selection';
 import { Icon } from './ui';
 
 const NAV = [
@@ -39,6 +39,7 @@ export function Layout() {
   // `sport` is the selected league: NBA and NHL are served; NFL and soccer are data-only with their own screens.
   const [sport, setSport] = useLeague();
   const [competition, setCompetition] = useCompetition();
+  useSoccerMatchUrlSync();
   const carried = useCarriedSearch();
   const location = useLocation();
   const label = sport.toUpperCase();

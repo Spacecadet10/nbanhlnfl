@@ -1,0 +1,93 @@
+--- backend/tests/test_tickets.py	2026-11-08 18:32:17
++++ /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/43a0d8c8-5d19-4e11-a7c0-2df81439b128/scratchpad/wt/backend/tests/test_tickets.py	2026-11-08 18:57:07
+@@ -662,3 +662,90 @@
+     code,out=run_cli(monkeypatch,capsys,'send','--plan',str(file))
+     assert code==1 and 'review again' in out and sent==[]
+     assert t.review_state(snap)['due'] is True
++
++
++# Nov 8 owner request (forwarded review): check changed lines/prices; interrupted reviews must resume or record a failure.
++def quote_store(line_now=-12.5, price_b=-112, quotes=True):
++    import sqlite3
++    conn=sqlite3.connect(':memory:');conn.row_factory=sqlite3.Row
++    conn.execute('CREATE TABLE game_forecasts (forecast_id INTEGER PRIMARY KEY, line REAL, line_source TEXT, market_quote_id INTEGER)')
++    conn.execute('CREATE TABLE market_quotes (quote_id INTEGER PRIMARY KEY, game_id TEXT, provider TEXT, market TEXT, price_label TEXT, '
++                 'line REAL, price_a INTEGER, price_mid INTEGER, price_b INTEGER, retrieved_at TEXT)')
++    conn.executemany('INSERT INTO game_forecasts VALUES (?,?,?,?)',[(1,-12.5,'bookmaker',10),(2,120.5,'model',None),(3,None,'none',11)])
++    if quotes:
++        conn.executemany('INSERT INTO market_quotes VALUES (?,?,?,?,?,?,?,?,?,?)',[
++            (10,'g1','DraftKings','spread','current',-12.5,-108,None,-110,'2026-11-08T16:00:00Z'),
++            (11,'g1','DraftKings','winner','current',None,-650,None,480,'2026-11-08T16:00:00Z'),
++            (12,'g1','DraftKings','spread','current',line_now,-105,None,price_b,'2026-11-08T16:55:00Z'),
++            (13,'g1','DraftKings','winner','current',None,-700,None,504,'2026-11-08T16:55:00Z'),
++            (14,'g1','DraftKings','spread','current',-14.5,-110,None,-110,'2026-11-08T17:30:00Z')])   # after as_of: never used
++    return conn
++
++
++def qpick(fid,market,side):
++    return dict(forecast_id=fid,game_id='g1',market=market,percentage_history=dict(side=side))
++
++
++def test_quote_check_reports_current_price_and_a_moved_bookmaker_line():
++    same=t.quote_check(quote_store(),qpick(1,'spread','b'),NOW)
++    assert same==dict(provider='DraftKings',retrieved_at='2026-11-08T16:55:00Z',line_source='bookmaker',line_at_forecast=-12.5,
++                      line_now=-12.5,price_now=-112,price_at_forecast=-110,line_moved=False)
++    assert t.quote_check(quote_store(line_now=-11.5),qpick(1,'spread','b'),NOW)['line_moved'] is True
++    winner=t.quote_check(quote_store(),qpick(3,'winner','a'),NOW)
++    assert winner['price_now']==-700 and winner['price_at_forecast']==-650 and winner['line_moved'] is False
++    model=t.quote_check(quote_store(),qpick(2,'team_total_home','a'),NOW)
++    assert model==dict(provider=None,retrieved_at=None,line_source='model',line_at_forecast=120.5,line_now=None,price_now=None,
++                       price_at_forecast=None,line_moved=False)
++
++
++def test_moved_line_is_excluded_from_the_trigger_and_refused_at_check(setup):
++    plan,snap,sent,path=setup
++    snap['sports']['nhl']['report']['picks'][1]['quote_check']=dict(provider='DraftKings',retrieved_at=NOW,line_source='bookmaker',
++        line_at_forecast=-1.5,line_now=-2.5,price_now=150,price_at_forecast=120,line_moved=True)
++    sp=Path(plan['snapshot_path']);sp.write_text(json.dumps(snap));plan['review']['snapshot_sha256']=t.sha(sp.read_bytes())
++    state=t.review_state(snap)
++    assert [x['key'] for x in state['line_changed']]==['nhl:2'] and state['ticketable_forecasts']==14
++    plan['tickets']=[ticket([('nba',1),('nhl',2)])]
++    with pytest.raises(ValueError,match='Line changed since forecast.*review again'):t.check(plan)
++    assert sent==[]
++
++
++def test_ticket_text_shows_latest_stored_price_and_model_line_note(setup):
++    plan,snap,sent,path=setup
++    snap['sports']['nba']['report']['picks'][0]['quote_check']=dict(provider='DraftKings',retrieved_at='2026-11-08T16:55:00Z',
++        line_source='none',line_at_forecast=None,line_now=None,price_now=-700,price_at_forecast=-650,line_moved=False)
++    snap['sports']['nhl']['report']['picks'][1].update(market='team_total_home',pick_label='B2 over 2.5',quote_check=dict(
++        provider=None,retrieved_at=None,line_source='model',line_at_forecast=2.5,line_now=None,price_now=None,price_at_forecast=None,line_moved=False))
++    sp=Path(plan['snapshot_path']);sp.write_text(json.dumps(snap));plan['review']['snapshot_sha256']=t.sha(sp.read_bytes())
++    plan['review']['markets_reviewed']['nhl']['team_total_home']='Reviewed'
++    plan['tickets']=[ticket([('nba',1),('nhl',2)])]
++    text=t.check(plan)['text']
++    assert 'B1 win</b> / Nov 08 01:00 PM EST / 75.0% / DK -700 (was -650)' in text
++    assert 'Prices: latest stored DraftKings quotes, 11:55 AM EST' in text and 'confirm before betting' in text
++    assert "NHL B2 over 2.5: the app's own line; no sportsbook line stored" in text
++
++
++def test_interrupted_review_is_recorded_as_a_retryable_failure_and_alerted_once(setup,monkeypatch,capsys):
++    plan,snap,sent,path=setup
++    code,out=run_cli(monkeypatch,capsys,'snapshot','--output',str(path/'review-snapshot.json'))
++    digest=json.loads(out)['snapshot_sha256']
++    monkeypatch.setattr(t,'settle',lambda **kw:{'as_of':NOW,'errors':[],'notification_errors':[],'tickets':[]})
++    code,out=run_cli(monkeypatch,capsys,'preflight','--brief')       # 0 min later: the review may still be running
++    assert 'interrupted' not in json.loads(out)['review']
++    snap['as_of']='2026-11-08T17:11:00Z'                              # past the 10-min snapshot expiry, no check/send
++    code,out=run_cli(monkeypatch,capsys,'preflight','--brief')
++    gone=json.loads(out)['review']['interrupted']
++    assert [g['snapshot_sha256'] for g in gone]==[digest] and gone[0]['earliest_tipoff']=='2026-11-08T18:00:00Z'
++    rows=t.review_outcomes('2026-11-08')
++    assert [(r['outcome'],r['payload']['retryable']) for r in rows]==[('operational_failure',True)] and 'interrupted' in rows[0]['detail']
++    assert digest in t.retryable_snapshots('2026-11-08')
++    code,out=run_cli(monkeypatch,capsys,'preflight','--brief')
++    assert 'interrupted' not in json.loads(out)['review'] and len(t.review_outcomes('2026-11-08'))==1   # recorded once
++    assert [a for a in t.interruption_alerts(gone)]==[dict(sport='tickets',issue='review_interrupted',dedup=digest[:12],
++                                                          detail='review snapshot 12:00 PM EST never checked or sent; earliest game 01:00 PM EST')]
++
++
++def test_quote_check_reads_the_side_from_the_providers_record_object():
++    from types import SimpleNamespace
++    pick=dict(forecast_id=3,game_id='g1',market='winner',percentage_history=SimpleNamespace(side='b'))
++    assert t.quote_check(quote_store(),pick,NOW)['price_now']==504

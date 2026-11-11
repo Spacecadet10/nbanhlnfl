@@ -1,0 +1,6 @@
+cmd: cd <copy>/backend && NBA_DATA_DIR=<scratch>/emptydata OMP_NUM_THREADS=1 PYTHONPATH=<copy>/backend backend/.venv/bin/python -m pytest -q -p no:cacheprovider tests/test_tickets.py tests/test_telegram.py tests/test_nfl_live.py tests/test_freshness.py tests/test_near_tipoff.py
+Sun Nov  8 21:36:24 UTC 2026
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_tickets.py::test_fallback_explanation_only_does_not_create_new_forecast_identity
+1 failed, 130 passed, 1 warning in 8.20s

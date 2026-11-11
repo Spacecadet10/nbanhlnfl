@@ -1,0 +1,38 @@
+== tamper 1 byte of nfl.sqlite in backup
+BackupError: /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/backup-verify/t1/nfl.sqlite does not match the manifest (sha256); not restored
+BackupError: /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/backup-verify/t1/nfl.sqlite does not match the manifest (sha256); not restored
+nba restored? (should not be):
+.nba-jobs.lock
+}
+1
+== tamper manifest sha / content
+BackupError: /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/backup-verify/t1/nfl.sqlite does not match the manifest (sha256); not restored
+== manifest edited: swap file name; dropped sport; point sha at tampered...
+}
+(rows count tampering is NOT checked by restore; exit above)
+.nba-jobs.lock
+.nfl-jobs.lock
+.nhl-jobs.lock
+nfl.sqlite
+nhl.sqlite
+== there is no separate verify command:
+usage: backup.py [-h] [--dest DEST] [--restore RESTORE]
+                 [--sport {nba,nhl,nfl,soccer}]
+
+Store backup and restore around a release migration (README "Release"). A backup is SQLite's online backup of each sport's
+store (consistent while other readers run), checked with `PRAGMA integrity_check`, with a manifest: sha256, schema
+version, store identity and row counts. A restore copies a backup back only if its file matches the manifest, while holding
+the store's job lock (no scheduled job can run against it), and moves the replaced files aside, never deleting them.
+The raw response cache (`raw/`) is append-only and untouched by migrations; it is not copied.
+
+    NBA_DATA_DIR=<store dir> python -m app.backup --dest <dir>            # backup of every store present (reads them only)
+    NBA_DATA_DIR=<store dir> python -m app.backup --restore <backup dir> --sport nhl
+
+options:
+  -h, --help            show this help message and exit
+  --dest DEST           Directory for a new backup (a timestamped folder is
+                        created inside)
+  --restore RESTORE     A backup folder (with manifest.json) to restore from
+  --sport {nba,nhl,nfl,soccer}
+                        Default for a backup: every store present; required
+                        for a restore

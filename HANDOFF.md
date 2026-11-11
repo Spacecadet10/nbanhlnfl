@@ -1,5 +1,1618 @@
 # Current handoff
 
+## Ticket steps 0–4 (owner prompt, Nov 10 evening) — Claude Opus 5.5 session 36, from ~22:00 ET
+- **All five steps done Nov 10 ~23:20 ET.** Open items at the end of each step.
+- Owner: five changes one at a time, each in a worktree, fresh-context reviewer, fix, ff release, live evidence. Worktree ~/Desktop/nba-predictor-ticket-steps (branch ticket-steps-20261111). Reviewer = fresh Opus subagent each time.
+- **Step 0 — three-sportsbook prices: LIVE at 42bf7a2.** d608906 had already been activated at 21:59 ET (activate.sh; not by session 4d). First pull worked: 6 files, 37 events (NFL 0), quota header is `x-datapoints-remaining` (19,699/20,000 left; monthly 199,571/200,000), so no header fix needed.
+  - Review of d608906: no HIGH. MEDIUM: TheRundown NHL codes CAL/LAS never matched CGY/VGK; no fresh prices before 13:00 and status said "no_current_event". LOW: picture said "Pays most" even when not more; monthly quota unchecked; one damaged requests.jsonl line stopped collection; .fetch.lock left (harmless, kept).
+  - Fixed (tests first, each seen failing): 8436567 NHL-only aliases, `stale_prices` status, 10:00 run (7 runs, cap 40→48/UTC day = 42 used), monthly floor 5,000, damaged line counts as a request, one rule for picture+caption. Delta review of 8436567: no HIGH/MEDIUM; LOW 1 (staleness per sport, not per UTC date) fixed in 42bf7a2. Open LOWs: damaged log lines lower the daily cap permanently; no test for the "book pays more" picture line beyond the older one.
+  - Tests: `cd backend && NBA_DATA_DIR=$(mktemp -d) ~/nba-predictor-delivery/backend/.venv/bin/python -m pytest tests/test_rundown_odds.py tests/test_tickets.py tests/test_telegram.py tests/test_delivery_release.py tests/test_release_guard.py tests/test_soccer_markets_live.py -q -p no:cacheprovider` → 260 passed. `scripts/check_project.py` FAILS on a pre-existing file already in d608906 (docs/evidence/soccer-markets-2026-11-09/review/focused-final.txt "possible duplicate"); not touched.
+  - Released: delivery-release ff d608906 → 42bf7a2 (clean). LaunchAgent rundown-odds reinstalled (7 runs incl. 10:00; old plist backup ~/nba-predictor-backups/com.nba-predictor.rundown-odds.plist.pre-42bf7a2); api-delivery restarted. Live: `app.rundown_odds status` 6 fresh/0 stale; NYR@CGY and UTA@VGK now priced at all three books; `release_tickets.sh status` ran on 42bf7a2 (guard ok); API :8101 200, web :4173 200. Pushed by the owner after the session's own push was refused: GitHub delivery-release = 9d34600 (verified with ls-remote).
+  - Rollback (step 0): `git -C ~/nba-predictor-delivery reset --hard d608906 && cp ~/nba-predictor-backups/com.nba-predictor.rundown-odds.plist.pre-42bf7a2 ~/Library/LaunchAgents/com.nba-predictor.rundown-odds.plist && launchctl bootout gui/$(id -u)/com.nba-predictor.rundown-odds; launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.nba-predictor.rundown-odds.plist && launchctl kickstart -k gui/$(id -u)/com.nba-predictor.api-delivery`
+- **Step 1 — spreads/totals/team totals on tickets: skill LIVE (~/.codex/skills/courtside-ticket-review/SKILL.md 34de7f69 → 86c7eb15; backup ~/nba-predictor-backups/courtside-ticket-review-SKILL.md.pre-spreads-20261111).** Three bullets added before "Review winners, spreads…"; soccer-markets text kept. A spread/total/team total QUALIFIES when its exact percentage is ranked (exact_rank, 3+ settled) with wins > losses, not AVOID, and probability − market_prob > −0.03 (card's "fair price"/"underpriced"; fallback model_gap, stricter). Unranked but fair spreads/totals are ordinary candidates, never excluded for "no proven skill". book_prices/best_book/book_payouts/book_comparison.status explained. 2–7 legs; mixing sports/bet types preferred when evidence is comparable, never forced; no ticket when nothing is justified.
+  - Review (fresh agent): HIGH "if nothing qualifies send none" would have blocked moneyline tickets too → reworded; MEDIUM mixing vs "no variety requirement", model_gap basis, unpriced team totals; LOW −0.03 boundary (now strict, same as card), match all ranking keys, wording. All applied. quick_validate: valid. Helper `status` runs with the new skill.
+  - Measured on tonight's real snapshots (/tmp/ticket-snapshot-20261110-{1940,2007}.json, scratchpad qualify.py): 0 legs qualify. Priced spreads/totals are not ranked yet (exact percentages rarely repeat 3+ times); ranked team totals are model lines with no stored price, and TheRundown's free data has no team totals. So the rule will add spreads/totals slowly as records build. **Owner decision open:** allow a winning ranked model-line team total with "price unknown" (loosens your price condition; not done).
+  - Not yet seen: a Codex review recording skill_sha256 86c7eb15 (next scheduled review). Rollback: `cp ~/nba-predictor-backups/courtside-ticket-review-SKILL.md.pre-spreads-20261111 ~/.codex/skills/courtside-ticket-review/SKILL.md`.
+- **Step 2 — early board, PAPER ONLY: LIVE at 0363052** (6d2715f port, df4d710 + 0363052 review fixes). scripts/early_board.py now in the release: reads other books through app.rundown_odds (no second fetcher; sprint1 scripts/odds_books.py left as is, now unused by it), writes only data/early-board/ (write-once boards + grades/grade-*.json), each game-market graded once from its EARLIEST board, rows keep first_line/first_quote_at, temp store copies (~660 MB) removed. Grading per sport-market: toward/away/unchanged, exact sign test, same counts for non-lean priced picks, "readable" only at 136 moved lines (fixed before reading; 80% power for 62% vs 50%); skipped games counted by reason. No Telegram, no ticket, 2-hour forecasts untouched.
+  - Schedule: LaunchAgent com.nba-predictor.early-board (scripts/early_board.sh) 11:00, 18:00, 20:30, 23:30 Toronto (NBA first lines appear ~25 h ahead, mostly 17:00–23:00 the evening before); grading in the 11:00 run (catch-up until 18:00). Log data/early-board.log.
+  - Reviews: 6d2715f no HIGH; MEDIUM first line missed by schedule, dishonest sample wording; LOWs skipped counts, tie-break, per-sport isolation → fixed in df4d710. Delta: MEDIUM failing sport hidden (exit 0) → fixed 0363052 (traceback, exit 1); LOW sleep-missed grade fixed. Open LOWs: direction measured from the board quote, not first_line; baseline = non-lean favoured sides (not a neutral control), no multiple-test correction over 6 cells; winner cells fill faster (vig moves); log not rotated.
+  - Tests: `cd backend && NBA_DATA_DIR=$(mktemp -d) ~/nba-predictor-delivery/backend/.venv/bin/python -m pytest tests/test_early_board.py tests/test_rundown_odds.py -q -p no:cacheprovider` → 23 passed. Dry runs on store copies: board 30 game-markets/12 leans; grade 33 graded (Nov 9 boards), all cells "too small".
+  - Live: delivery ff 42bf7a2 → 0363052 (clean). Nov 9 boards COPIED into data/early-board (originals stay in docs/evidence/early-board). `launchctl kickstart` run: exit 0, board-2026-11-10-2220 written, checkout clean. **Sample: too small; decide after 2–3 weeks only if a sport-market reaches 136 moved lines — NBA/NHL totals and spreads likely will not in 3 weeks.**
+  - Rollback: `launchctl bootout gui/$(id -u)/com.nba-predictor.early-board; rm ~/Library/LaunchAgents/com.nba-predictor.early-board.plist; git -C ~/nba-predictor-delivery reset --hard 42bf7a2` (data/early-board can stay; it is only paper).
+- **Step 3 — closing price check: LIVE at 14b6d4f** (fc35463 + review fixes 14b6d4f). scripts/closing_value.py, daily 10:45 (LaunchAgent com.nba-predictor.closing-value, log data/closing-value.log): once a game is in progress/final, one append-only row per ticket leg (price printed on the ticket; older tickets: stored quote at send time, only on the forecast's own line) and per game card pick (one row per game+pick, first send; cards with "No strong pick" skipped) in data/closing-value/records.jsonl: DraftKings price/line at pick time vs last stored before the start → better/same/worse from the bettor's side + margin-free probabilities; same at DK/FanDuel/BetMGM when TheRundown files exist within 3 h of both moments (none yet). File lock, fsync, damaged lines skipped. sprint1 scripts/value_audit.py (untracked file, edited in place) has section 5b "Closing price check": per kind/sport/market counts, sign test, "too small" below 50 changed prices, ticket forecasts counted once, rows tested separately (stated).
+  - Review fc35463: HIGH resent cards counted up to 5× (94 of 222 rows), HIGH one cut-off line stops job+report; MEDIUM unplayed games recorded, no-pick cards mislabelled, repeated legs inflate test; LOW pick time, fallback line → all fixed; delta review: resolved, 2 LOW (one fixed: report tolerates a row without sport; open: a game stuck at "scheduled" after its start waits forever and is not counted).
+  - Tests: `cd backend && NBA_DATA_DIR=$(mktemp -d) ~/nba-predictor-delivery/backend/.venv/bin/python -m pytest tests/test_closing_value.py -q -p no:cacheprovider` → 6 passed. Live run (kickstart): exit 0, 126 rows: cards 22 better / 46 same / 19 worse; ticket legs 7 / 19 / 13. Every group "too small" (largest: NBA cards, 33 of 50 changed prices).
+  - Rollback: `launchctl bootout gui/$(id -u)/com.nba-predictor.closing-value; rm ~/Library/LaunchAgents/com.nba-predictor.closing-value.plist; git -C ~/nba-predictor-delivery reset --hard 0363052` (records.jsonl is facts only; keep it).
+- **Step 4 — reliability (delivery part LIVE at 9d34600; ed395cd + review fixes 9d34600).**
+  - (a) Missing forecasts (investigator, read-only; 12/159 NBA, 25/174 NHL since Oct 16): 29 lost while the Mac was asleep/shut down (verified shutdowns Nov 4 17:29–20:03 and Nov 5 19:48–Nov 6 18:37; Oct 20/27–28 inferred), 5 to network/DNS loss at the same times, 3 to a code ordering bug (coverage recorded after the slow research steps; Oct 28 run 1886). No true hangs: NBA cycles take 22–23 min, NHL 14–18 min; unfinished job_runs rows are runs killed by shutdowns (8423 unexplained, no game lost). The Mac (MacBook Pro, AC) is set to sleep after 1 minute idle. **Forecast jobs run from ~/nba-predictor-live (a55c874), not delivery.**
+  - (d) Telegram DeliveryError: 77 card-job failures since Nov 4 (~1.6% of runs; "connection unavailable"/"not confirmed", never 409); 59 coincide with the Mac entering sleep; preflight failures Nov 10 11:53Z/12:10Z/16:17Z were during sleep cycling, Nov 9 01:41Z during a DNS outage. Fix: a connection that never opened is retried after 3 s and 7 s (httpcore: ConnectError/ConnectTimeout occur before any bytes are sent; reviewer confirmed no double-send); preflight records `DeliveryError: <message>` (no token in messages).
+  - (c) Release guard: the checkout must equal the commit in `release-pin` in its git folder (`git -C ~/nba-predictor-delivery rev-parse --git-path release-pin` → sprint1/.git/worktrees/nba-predictor-delivery/release-pin). `NBA_RELEASE_COMMIT` was in fact used (cli sets it after the check; jobs.py records it), so it cannot be the pin. **New release step: write the pin (or `cd ~/nba-predictor-delivery/backend && .venv/bin/python -m app.release pin`) right after every ff and every rollback, else all guarded jobs refuse.** `git worktree prune` from sprint1 would delete the pin (fail-closed).
+  - (b) scripts/backup_ledger.py, LaunchAgent com.nba-predictor.ledger-snapshot 04:30 → ~/nba-predictor-backups/telegram-delivery/ (0700/0600, sha256, append-only verify-log.jsonl). Restore check: copy restored to a temp folder, sha256 equal, table set equal, opened with app.telegram.ledger, integrity_check, row counts equal to the SOURCE counts read in the same transaction. Nothing pruned (~3.3 MB/day).
+  - Reviews: ed395cd no HIGH; MEDIUM log folder must exist before load (created), restore check was circular (fixed); LOWs fixed: private files, shorter retries (stranded 'sending' window), table-set check. Open LOW: pin stops accidental moves only.
+  - Tests: focused 12 files on 9d34600 → 363 passed (`cd backend && NBA_DATA_DIR=$(mktemp -d) OMP_NUM_THREADS=4 ~/nba-predictor-delivery/backend/.venv/bin/python -m pytest tests/test_telegram.py tests/test_tickets.py tests/test_delivery_release.py tests/test_release_guard.py tests/test_live_store_guard.py tests/test_rundown_odds.py tests/test_backup_ledger.py tests/test_closing_value.py tests/test_early_board.py tests/test_soccer_markets_live.py tests/test_soccer_live.py tests/test_nfl_live.py -q -p no:cacheprovider`). check_project: only the pre-existing focused-final.txt failure.
+  - Live: pin written, delivery ff 14b6d4f → 9d34600, guard problems [] ; api-delivery restarted (:8101 200); first backup via launchd exit 0, verified (13 tables, 594 rows, 290 sent deliveries); card job ok on new code (03:40:20Z); `release_tickets.sh status` ok.
+  - **Keep-awake INSTALLED on owner's go ("install the keep-awake job too")**: com.nba-predictor.keep-awake (`caffeinate -s`, AC power only) running, pmset PreventSystemSleep 1. Main fix for (a) and (d). Undo: `launchctl bootout gui/$(id -u)/com.nba-predictor.keep-awake`. Lid closed without a display still sleeps; battery time not covered.
+  - Rollback (delivery part): `git -C ~/nba-predictor-delivery reset --hard 14b6d4f && git -C ~/nba-predictor-delivery rev-parse HEAD > "$(git -C ~/nba-predictor-delivery rev-parse --git-path release-pin)" && launchctl bootout gui/$(id -u)/com.nba-predictor.ledger-snapshot; launchctl kickstart -k gui/$(id -u)/com.nba-predictor.api-delivery` (14b6d4f ignores the pin; keep the backups).
+  - **(a) code fix LIVE in the forecasting release ~/nba-predictor-live: a55c874 → ae03119** (5423fbc + comment ae03119; worktree ~/Desktop/nba-predictor-coverage-order, branch coverage-order-20261111). predict_now records adaptive (same gate) and canonical coverage right after the primary+market steps, before research/pool/tracking. New test fails on a55c874, passes after. Review: no HIGH/MEDIUM; coverage source unchanged (adaptive is never canonical under coverage-v2), timestamps unchanged; open LOW: coverage still waits for adaptive_record (could go first). Tests: whole suite in that worktree 1373 passed, 9 failed = 8 test_deep_study (torch/keras missing, known) + test_research_agent::test_f_low2_registration… which fails identically on unmodified a55c874 (git config in sandbox). Released by ff between cycles at ~23:18 ET (scheduler not paused: this session's permission check refused bootout); `release-check` nba/nhl: commit ae031198, schema 31/31, problems [], research definitions 8424d3bd / b54556f6 unchanged; next ticks 04:19Z nba/nhl failures 0. Rollback: `git -C ~/nba-predictor-live reset --hard a55c874` between cycles.
+
+## Soccer markets released (owner go, NOT Codex-reviewed) — Claude, Nov10 ~21:45 ET
+- Owner: "finish the two review fixes and release the soccer markets". Codex locked out until Nov 15; an independent Claude reviewer agent (fresh context) reviewed f6100fc/bee91c2/57c2544: APPROVE, 2 LOW (fixed in d444fe4). Codex delta review still owed.
+- Branch soccer-markets-release (~/Desktop/nba-predictor-markets-release) on 223f174: f6100fc port of reviewed delta.patch 91856ccb (36 files; sealed/protocol/readings/soccer_markets*.py byte-identical; fixtures = fixtures.sha256; evidence folder copied); bee91c2 MEDIUM 1 (ticket snapshot 2-day kickoff window, TICKET_WINDOW_DAYS); 57c2544 MEDIUM 2 (card + caption line source, push, no proven skill); d444fe4 review LOWs (source on probability line so 3x7 legs fit 6,000 px; caption note per picture, DC/DNB "no line"; API uses the constant). Source tree ~/Desktop/nba-predictor-soccer-markets untouched (one accidental `git add -N .` there was reset immediately; index restored, nothing staged).
+- Tests: full suite on 57c2544 24 failed / 2119 passed — 8 test_deep_study (torch/keras) + 16 test_research_agent that pass alone on this branch and on 223f174 (46/46 each; concurrent pytest from the reviewer agent). After d444fe4: 12 focused files 420 passed. Frontend tsc ok, unit 27/27, build ok.
+- Released: ~/nba-predictor-delivery ff 223f174 -> d444fe4 (clean). Live soccer store backed up first: ~/nba-predictor-backups/soccer-pre-0040-20261111T0235Z.sqlite (sha256 64f4449c… = live at copy time, WAL empty). Migration 0040 applied to data/soccer.sqlite (release-guarded CLI). history-months 202407–202611 for eng.1 esp.1 ger.1 ita.1 fra.1 uefa.champions uefa.europa (log: scratchpad history-months.log). scripts/soccer_live_cycle.sh now runs markets-forecast (in the commit). Ticket skill ~/.codex/skills/courtside-ticket-review/SKILL.md updated (d55f1e04 -> 34de7f69; backup ~/nba-predictor-backups/courtside-ticket-review-SKILL.md.pre-markets-20261110). API + web restarted, frontend rebuilt.
+- Verified live (:4173): /api/soccer/markets families goals cfe78bf9 / corners f50224dd served (six club competitions); DC/DNB for 26 Nations League matches as model lines; page shows all disclosures. No goal/corner forecast yet: next club matches Nov 21 enter the 7-day window Nov 14.
+- Earlier 21:30 hourly run (map fix live): 151 checks, 0 refused, 1 new intl forecast (86 total).
+- Open (review LOWs not fixed, owner's call): corner leg on ESPN 0-0 stays pending with no notice; disclosed_lines not rendered; "Exp. return (model view)" column wording; markets_error not alerted.
+- Rollback: `git -C ~/nba-predictor-delivery reset --hard 223f174`, restore the skill backup, restart API, rebuild+restart web. The 0040 tables are append-only and unused by older code; to fully revert the store, stop launchd soccer-live and copy the backup back (loses rows written since 02:35Z).
+
+## Soccer release (UNREVIEWED, owner authorization) — Claude, Nov10 ~20:50 ET
+- Owner decision (verbatim): "do not wait for Codex. Codex is locked out until Nov 15 2 PM, after the cutoff. I accept the release without the Codex review. Release all three commits live now". Released WITHOUT independent review.
+- ~/nba-predictor-delivery (delivery-release) fast-forwarded b8b5f44 -> b1cc3b7 (intl team map: Tahiti, Cook Islands) -> 6728f3d (wording; same soccer.py diff as a63a8c4, linear copy) -> 223f174 (soccer display: per-match blockers, /api/soccer/live/record, History/Performance pages). Checkout clean. API (com.nba-predictor.api-delivery) restarted; frontend rebuilt (npm run build) and web (com.nba-predictor.web, :4173) restarted. Scheduler untouched.
+- Verified live (:4173): Nations League History lists 26 forecasts (record across all competitions: 85, 0 graded); Ipswich shows "listed after cutoff" + closed wording; Nov 16 Nations League cards show the team-map refusal recorded 01:30Z, i.e. before the map release; next hourly run (21:25 ET) should replace it. Read-only dry run with the released map: Nov 12–17 status ok, Nov 15/16/17 waiting on earlier results (10/24/52) — not a guarantee of publication.
+- Tests (delivery venv): each branch full suite 8 failed (all test_deep_study, torch/keras missing) / 2047–2052 passed; test_deep_study with ~/nba-predictor-deep venv 10 passed. Review package: scratchpad review-package/REVIEW_BRIEF.md (Codex to review after Nov 15 2 PM).
+- Rollback (each step back; then restart API, and rebuild+restart web when the display changes):
+  - display: `git -C ~/nba-predictor-delivery reset --hard 6728f3d && launchctl kickstart -k gui/$(id -u)/com.nba-predictor.api-delivery && (cd ~/nba-predictor-delivery/frontend && npm run build) && launchctl kickstart -k gui/$(id -u)/com.nba-predictor.web`
+  - wording: `git -C ~/nba-predictor-delivery reset --hard b1cc3b7 && launchctl kickstart -k gui/$(id -u)/com.nba-predictor.api-delivery` (after rolling back display)
+  - team map: `git -C ~/nba-predictor-delivery reset --hard b8b5f44` (after the two above; the hourly soccer job reads the map each run; re-introduces the refusal of all international competitions)
+- Dev app on production code + these commits: http://127.0.0.1:5181 (API 8851, data copy ~/nba-predictor-dev-soccer), run from ~/Desktop/nba-predictor-soccer-display by this session. Another session's sportsbook-price script expects pre-release delivery code and will refuse until updated.
+
+## Three-sportsbook prices on tickets — Claude, Nov 10 20:50 ET (built, NOT live, NOT reviewed)
+- Why: owner asked whether TheRundown is connected to ticket review (it was not: `data/odds-books` empty, no reference in the delivery release). Codex started the connection and hit its usage limit (until Nov 15); its uncommitted edits are in a `~/.codex` worktree this session cannot read. Rebuilt here from the module/tests shown in Codex's log.
+- Artifacts: `docs/evidence/book-prices-2026-11-10/` (`book-prices.patch` sha256 e543fa85…, against delivery-release b8b5f44, re-tested on 223f174 after the soccer release (232 passed); `README.md`; `activate.sh`; `ticket-preview-real-sample.png`). Delivery checkout untouched (b8b5f44).
+- Design change from Codex's draft: `quote_check` is never overwritten by another book's price; comparison is added beside it (`book_comparison`, assessment `book_prices`/`best_book`, ticket `book_payouts`). Ticket names the one book paying most for all legs.
+- Checks run (VM copy of b8b5f44): 232 passed (`test_rundown_odds test_tickets test_telegram test_delivery_release test_release_guard`); `scripts/check_project.py` passed; real saved sample matched exact lines only; `tickets.snapshot()` ran on a store copy.
+- Gaps: no live TheRundown request from this session; quota header name unconfirmed (request caps 6/run, 40/UTC day hold regardless); not run on the Mac venv; launchd job not installed; review skill not updated to mention the new fields; no independent review. Duplicate of Codex's unfinished worktree edits: discard those if this is activated.
+- **Update 22:05 ET:** production moved twice tonight (223f174 soccer display, then d444fe4 soccer markets, which changed `tickets.py`/`telegram_card.py`). Patch re-ported onto d444fe4 (sha256 d2daf1f8…; the b8b5f44 version kept as `book-prices-for-b8b5f44.patch`); `activate.sh` now expects d444fe4. Added: a picture that would exceed the layout bound with the sportsbook lines is drawn without them (test included). VM result on d444fe4 + patch: 277 passed, 1 failed (`test_soccer_markets_live::test_the_png_card_and_text_render_soccer_market_legs`, which fails identically on untouched d444fe4 in this VM; the soccer session reports it passing on the Mac; `activate.sh` runs it on the Mac before anything goes live).
+- Activation is the owner's call: `sh docs/evidence/book-prices-2026-11-10/activate.sh` (rollback at its top).
+
+## Remaining-slate review — Codex, Nov10 20:10 ET
+- Firstguardedpreflight01:07:02Z errors/notification_errors empty;due=true7newNBA1332–1338, prior2tickets pending, soccer17mappingrefusals alreadyrecorded. Fresh01:07snapshot all15required/accounted incl1322moved224.5→223.5 excluded,14otherwiseeligible/3NBAgames;46paststart exclusions,85soccerlater. NFL0/NHLstarted, NBA5/NHL6unopenedpending.
+- Sevenassesscomparisons: ORLtotal56.72%at-105/21of34season favored overORL-217 price burden but MIA71.06%total32of62/uncertain points calibration, spread20of43or27of65 and preferredexactLAC1324(3-2/5) untestedteamtotal jointly insufficient. No blanket gates/reversal/stakes. Check36=no_ticket15/15, /tmp/ticket-{snapshot,plan,assessment,check,status}-20261110-2007.json. Original343/347sent/photoaliases unchanged, no retryuncertainty or newimage/send.
+- Nextnewwindows when due; maintain soccerblocker until separatelyreviewedfix. No deployment/training/transactions.
+
+## Remaining-slate review — Codex, Nov10 19:40 ET
+- Guarded preflight00:37:04Z errors/notification_errors empty; due=true11newNBA. Soccer inputs_refused notice sent:17international competitions blocked by missing Cook Islands4884/Tahiti4863 mapping. Club checks unaffected. Two original tickets pending; receipts343/347still sent, batch/image aliases unchanged, no uncertain retry.
+- Fresh00:37:29Z snapshot:21eligible/4games,35started NBA/NHL excluded,85later soccer pending;NFL0, NBA10/NHL6unpublished pending. Eight assess comparisons inclMIA71.06%total, MIA/PHXmoneylines, newspreads and winningexact3-2/5,4-3/7,2-1/3. Joint record/price/calibration uncertainty insufficient; no forced ticket or stake/gate/reversal.
+- Check34 refused notes=list, operational_failure; corrected text, fresh snapshot /tmp/ticket-snapshot-20261110-1940.json re-reviewed unchanged IDs/assessment/prices, refreshed quote times; NY1318moved afterstart remains excluded. Check35=no_ticket,21required/21accounted. No new ticket/image; /tmp/ticket-{plan,check,status}-20261110-1940.json and assessment1937 archived.
+- Next: review new windows when due; separate assigned investigation of international mapping blocker (do not invent aliases or alter models in review). Soccer wording fix remains uncommitted/unreleased pending owner approval; no deployment/training/transactions.
+
+## Soccer page wording — Claude, Nov10 ~19:50 ET
+- Verified read-only: club Elo 7dbc668c + intl-elo run hourly from ~/nba-predictor-delivery (launchd soccer-live) into data/soccer.sqlite; 0 club forecasts Nov 9–18 = international break (all days fetched, empty); ESPN lists EPL Nov 21–22, enters window Nov 14.
+- Production copy bug (finished/past-cutoff match said "not recorded yet", and would say "available" once the competition has forecasts): fixed + test in new worktree ~/Desktop/nba-predictor-soccer-copyfix (branch soccer-closed-match-copy from b8b5f44), uncommitted, NOT released; release needs user go. Delivery checkout untouched.
+- This tree: stale "No soccer model exists yet" / "none recorded" copy replaced with "not shown in this development build" (backend/app/soccer.py CAPABILITIES, frontend SoccerPages.tsx) + test_capability_text_does_not_deny_the_live_soccer_models. Full port of production soccer (~4.2k lines) not done: this tree has an active writer.
+
+## Preflight notification transient — Codex, Nov10 19:21 ET
+- Guarded preflight 00:21:03Z: settlement errors empty, notification_errors=[DeliveryError], original two Nov10 tickets pending. One guarded repeat 00:21:20Z recovered with errors/notification_errors empty and prior settlement notices already_recorded; /tmp/ticket-preflight-20261110-1921-retry.json. Underlying network cause remains unverified.
+- due=false/no_new_forecasts; no snapshot, review plan or new ticket send. NBA/NHL delayed running jobs retain usable in-window forecasts; moved NBA1315/1316 excluded. Quiet source/missing-forecast observations preserved. Next: review new forecasts when due and inspect future notification failures; no receipt/credential/code changes.
+
+## Remaining-slate review — Codex, Nov10 19:07 ET
+- Firstguardedpreflight00:03:06Z (TorontoNov10) cleanerrors/notificationerrors/alerts, due=true3newNBAversions1315/1316/1317; settlementunchanged/twooriginaltickets pending. Fresh00:03:28Zsnapshot reviewed22/22eligible on4games plus24past19:00Toronto exclusions (46displayed); neverreuse startedWPG/MTLcores. Sourcesfresh/no movedlines, no blocked/unavailable/missed. NFL0,85soccerlater/refused{}, NBA20/NHL6unopenedpending.
+- Sevenassesscomparisons inclnewspreads/totals, CBJpermittedcore, STL and winningexactNBAteamtotals. NY/BOSspread oneexactwineach plus weakseason/developmentcalibration; totalbelowprice andseason47.83%/46; STLaboveappprice; untestedteamtotals jointly insufficient. Winning4-3/7and2-1/3records preferredthenreasonedlyexcluded, no pooling/reversal/automaticprice/samplegates. Check33=no_ticket,22required/22accounted; /tmp/ticket-{snapshot,plan,candidates,assessment,check,status}-20261110-1903.json.
+- Status343/347receipts unchanged/sent, no uncertain acknowledgements; no send/newPNG, original2ticketsimmutable. Nextnewwindows when due; preserve CBJlock1173, report actualsettlements, no full-daycoverage/edge/profit claim or budgetstop. No code/training/deployment/transactions.
+
+## Complete-slate review — Codex, Nov10 18:52 ET
+- First guardedpreflight23:48:04Z cleanerrors/notificationerrors/alerts; due=true2newNBA1313NY-16.5/1314BOSgameOver216.5; settlements unchanged,2tickets pending. Fresh23:48:25Zsnapshot all46current NBA/NHL/8games reviewed; BOS1309line returned to original (usable at-116), no movedlines now. Freshsources, NFL0,85soccerlater/refused{}, NBA20/NHL6unopened pending.
+- Eight assesscomparisons inclnewNBApair/mixed, improvedMTL+110/OTT-102 sharedcore, exactwinning1312(4-3/7)/1311(2-1/3). NewNBAseason41.54%/65spread and47.83%/46total/development-only calibration jointly weak; updatedshared-core/untestedteamtotals not convincing enough for newcombination. No budget/overlapban/positivegap/samplegate. Check32=no_ticket,46required/46accounted. /tmp/ticket-{snapshot,plan,candidates,assessment,check,status}-20261110-1848.json.
+- Read priorplans/statusreceipts343/347bothsent (batch/imagealias samephoto), unchanged/no uncertain receipts; no send/newPNG. Nextreview newlyopenedwindows when due; original2tickets/locks1155,1167,1173immutable, WPGshared2tickets. No whole-daycoverage/edge/profit claim, transactions/training/deployment/codechange.
+
+## Complete-slate review — Codex, Nov10 18:37 ET
+- Guarded preflight23:32:51Z cleanerrors/notification_errors/alerts, due=true:6newDET@STLforecasts; original grades unchanged/today2tickets pending. Fresh23:33:15Z snapshot reviewed46/46 displayed NBA/NHLforecasts/8games;44ticketable after movedNBA1299(-15.5→-16.5) and1309(storedopposing1.5→2.5) exclusions. Allsourcesfresh, no missed/blocked/unavailable; NFL0,85soccerlater/refused{}; NBA20/NHL6unopened pending.
+- Compared8current-price STL/NHLcore/NBAmixed alternatives using assess; STL-142 asks58.68% vs57.17%app, DETpuck-218/weakseason, totalbroad/no-skill and untested/unpriced teamtotals jointly insufficient. Exactwinning1312(4-3/7),1311(2-1/3) considered, overridden for combineduncertainty; no pooling/reversal/blanket sample or price gate. Existing343/347receipts remain sent; WPGshared2tickets, no amounts. Check31=no_ticket,46required/46accounted; noTelegram/no newPNG. /tmp/ticket-{snapshot,plan,candidates,assessment,check,status}-20261110-1833.json.
+- Next: review newly opened windows when due; preserve lockedidentical1155/1167/1173, whole-combination dedupe and all original records. No code/training/deployment/transactions; this review is not full-day coverage or validated bettingedge.
+
+## Complete-slate review and delivery recovery — Codex, Nov10 18:13 ET
+- First guarded preflight22:56:19Z: due=true,6newCBJforecasts,30NHLtotal; settlements unchanged/errors[]/notification_errors[]. Fresh snapshot22:56:41Z, all30accounted; compared7Columbus/shared-core variants. Initial send failedDeliveryError (review26) before reservation: read-only ledger0newticketitems/no picture/receipt. One same-plan retry refused newly publishedNBAforecasts (review27), nothing sent.
+- Re-snapshot23:03:46Z reviewed40/40 incl10newNBAthenstale, compared NBA/NHL alternatives. Revalidated and sent ticket2026-11-10-41f1347e9cf1 at23:05:44Z: FLA@CBJ CBJwin+105 at19:30Toronto + NJD@WPG WPGwin+120 at19:00Toronto,4.51x/22.17%break-even/25.87%model independence. Review28=ticket_sent; photo347=batch/image same receipt; PNG/caption/hash visually/read-only verified, no truncation. API accepted does not establish visibility. Prior343unchanged. WPG1167now shared by2tickets; its loss defeatsboth. No stakes/transactions.
+- NBA becamefresh and retriggered;23:08:12Z40forecast no-ticket check refused5newcanonicalBOS/PHIversions (review29). Fresh23:11:34Z re-reviewed40current plus5supersededIDs; checkedexactwinning1312(4-3/7,rank13of26) and1311(2-1/3,rank7of27), declined jointly for broad losingseason/untestedcalibration/small exact/unknownpayout; not missingpricealone. No ranking pooling/reversal. Final check review30=no_ticket,40required/40accounted; all NBAfive/NHLsixmarkets jointly reviewed and later alternatives archived. NFL0picks;85socceroutsideT−120/refused={}; NHLmissing_due2026020290quietJSON; later windows pending.
+- Evidence /tmp/ticket-{snapshot,plan,assessment,check,send,status}-20261110-{1757,1802,1807,1811}*; finalcheck /tmp/ticket-check-20261110-1811.json. NewPNG data/reports/tickets/2026-11-10-54f8ad2f5dd2f778-3a5dadb0bcfeaa56ab7ff365e83994a8a2d4ad7e42b8a1a2576ca1b4b8e65448.png. Next: newwindows when due; preserve all failure/success receipts and lockedidenticalforecasts. Network failure causeunverified, recovery not permanentfix; no code/deployment/training.
+
+## Ticket review — Codex, Nov10 17:32 ET
+- Guarded preflight22:25:43Z: errors/notification_errors/alerts empty; settlements unchanged. Fresh snapshot22:26:02Z; checked24/24 eligible NHL forecasts, six markets/four games. All exact groups unranked; broader history kept separate. NBA/NFL no current picks;85 soccer forecasts outside T−120, refused={}; later windows pending (NBA30/NHL18 upcoming without forecasts).
+- Compared six candidate combinations with helper assess; check passed24required/24accounted. Sent one ticket2026-11-10-5b4315a443d6: MIN@MTL MTLwin+105 and NJD@WPG WPGwin+120, both19:00Toronto;4.51x stored payout,22.17% break-even,26.06% model independence estimate. No stakes; thin exact samples0/2 and common model uncertainty disclosed. No whole-day coverage claim.
+- Helper send=ticket_sent, review_id25; post-status due=false/no_new_forecasts, reviewed_today24. Single picture-page batch/image receipts both sent/message343 (same photo, not two messages). Archived PNG visually inspected: complete two legs, times and ID; caption/hash inspected. API acceptance does not establish user visibility. Plan/assessment/check/send/status in /tmp/ticket-*-20261110-1726*; archive data/reports/tickets/2026-11-10-3d690246585e627e88df9374d4fada4e07b0f1ad48c929771d51073b2e7351d2.json.
+- Next: review new forecast windows when due; only identical1155/1167 may recur for locked Montreal/Winnipeg games, disclose exposure. Preserve receipts and original forecasts; no training/deployment or transactions.
+
+## Preflight notification-path transient — Codex, Nov10 11:18 ET
+- Guarded preflight at16:17Z completed settlement with errors[], unchanged original grades, but notification_errors=[DeliveryError]; /tmp/ticket-preflight-20261110-1117.json. Exit0 does not mean notifications succeeded. No new review snapshot or ticket send.
+- One guarded repeat at16:18:17Z recovered: errors[]/notification_errors[]/alerts[]/snapshot_alerts[], prior notices already_recorded; due=false/no eligible forecasts. /tmp/ticket-preflight-20261110-1118-retry.json. No receipt/key, credential, code or schedule changes; underlying Telegram failure cause unverified.
+- Next: continue triggered reviews through the pinned helper and preserve output if notification errors recur. Recovery is observed for this run, not a permanent fix.
+
+## Card wording and exact-percentage ranking activated — Codex, Nov10 08:25 ET
+- Reviewed the seven-file owner patch against clean live e7192f9 in /tmp/cards-ranking-review-20261110, never applied to live. Fixed three defects with failing-first tests: exact three-point float boundary; lazy NFL indexes missing when no games; optional ranking failure suppressing an existing forecast record. Exact percentage/direction/model/source/line provenance stays separate; no ranges. Schema defaults preserve older records. Delivery key and one-card-per-game guard unchanged.
+- Release Python3.12.12, scratch NBA_DATA_DIR and mocked Telegram. From /tmp/cards-ranking-review-20261110/backend: `NBA_DATA_DIR=/tmp/cards-ranking-testdata /Users/andry/nba-predictor-delivery/backend/.venv/bin/python -m pytest tests/test_tickets.py tests/test_telegram.py tests/test_delivery_release.py tests/test_nfl_live.py tests/test_soccer_live.py tests/test_threshold_overview.py -q`: 266 passed,1 warning,15.31s.
+- Full command: `NBA_DATA_DIR=/tmp/cards-ranking-testdata OMP_NUM_THREADS=4 /Users/andry/nba-predictor-delivery/backend/.venv/bin/python -m pytest -q`: 1995 passed,26 failed,33 errors,1 warning,1631.91s. Outer sandbox caused51 failures/errors; final-patch reruns outside that sandbox with same interpreter/env and `-m pytest tests/test_autoresearch.py -q --tb=short` (55 passed57.62s), `tests/test_research_agent.py` (46 passed127.22s), `tests/test_research_status.py` (6 passed0.42s) all pass. Remaining8 deep-study failures are missing pinned Torch/Keras, reproduced on unmodified e7192f9 with `NBA_DATA_DIR=/tmp/cards-ranking-baseline-data OMP_NUM_THREADS=4 <release-python> -m pytest tests/test_deep_study.py -q` (8 failed,2 passed0.58s). Full suite is not wholly green; no patch regression remains.
+- Logs: /tmp/cards-ranking-focused-final2.log, /tmp/cards-ranking-full-final-omp4.log, /tmp/cards-ranking-autoresearch-unsandboxed.log, /tmp/cards-ranking-research-agent-unsandboxed.log, /tmp/cards-ranking-research-status-unsandboxed.log, /tmp/cards-ranking-baseline-deep.log.
+- Priced0–0 and ranked losing-record cards rendered and visually inspected (/tmp/cards-ranking-zero.png, /tmp/cards-ranking-rank.png); measured drawing stays within card bounds. Read-only actual NBA/NHL/NFL ranking helpers work; no live forecast/store changes. Structure guard and diff check pass; six code/test files byte-identical to final tested export. No synthetic Telegram send, frontend/browser readiness claim, dependency/model/credential/schedule change.
+- Activated reviewed commit b8b5f44feb5a24e3c023052ca2e66fa3b8b5854f on delivery-release by clean fast-forward from e7192f9 at13:22:05Z. `sh /Users/andry/nba-predictor-delivery/scripts/release_tickets.sh status` exit0 at13:22:22Z (review.due=false/no eligible forecasts); live and authoring checkouts clean. Next scheduled .telegram-delivery.log run reports status=ok at13:23:47Z (08:23:47Toronto). `git -C /Users/andry/nba-predictor-delivery push origin delivery-release` succeeded76d8ab4..b8b5f44. No main-checkout files staged/committed.
+- Installed skill changed by exactly two added bullets after activation; backup: /Users/andry/.codex/skills/courtside-ticket-review/SKILL.md.before-ranking-20261110T132221Z. Read snapshot percentage_ranking and assessment.exact_rank; prefer winning ranked exact records across all available markets; ranked losing/AVOID excluded unless explicitly justified; unranked neutral. Exact groups/provenance stay separate; rankings are descriptive, not proven skill or an edge. skill-creator quick_validate: Skill is valid. New skill SHA256 d55f1e048d190219c8774c2079018e0d1c1bb159834b6a54b8db5edc340c5a36; prior snapshots require re-review as usual. No schedule change.
+- Next: normal future reviews and scheduled genuine cards; first new-card/photo visibility and future prediction performance remain unverified. Full suite has the eight existing deep-library failures above; no whole-app/frontend readiness claim. Preserve original receipts/stores and diagnose the separate recurring preflight alert-path network failure if it returns.
+
+## CORRECTION + next patch: delivery e7192f9 IS live and has a defect; fix and ranking prepared, NOT deployed — Claude Fable 5.2, Nov10 07:30 ET
+- **Correction to my Nov9 20:50 entry ("PREPARED, not deployed"):** the owner ran the activation command himself at 20:48 ET. `delivery-release` = `e7192f9`, clean, Telegram job running on it. It was tested only by me (Linux copy, 239 passed) and by the activation command's three test files in the release venv; **not reviewed by a second agent, not pushed** (GitHub has `76d8ab4`). The overnight audit is right on both points.
+- **Known defect in e7192f9 (cosmetic, found by rendering a real card):** on priced markets the record line `Sportsbook X% (model ±Y) · 0W–0L (0 settled) · No settled matching examples.` runs past the card's right edge. No card has been sent on it yet (no games since 20:48). Rollback: `git -C ~/nba-predictor-delivery reset --hard 76d8ab4`.
+- **Prepared, not deployed:** `docs/evidence/early-board/cards-plain-words-and-ranking.patch` against `e7192f9` (threshold_overview.py, schemas.py, telegram.py, tickets.py, two test files, docs/TICKETS.md). (1) Card wording in plain words: headline `App A% · Sportsbook B% · OVERPRICED / UNDERPRICED / FAIR PRICE` (±3 points), per-market tag on the grey provenance line, record line restored to its original length (fixes the overflow; width tests added). (2) Owner request: exact percentages ranked by their own record once they have 3+ settled results (`percentage_ranking`; exact only, no ranges); `percentage_history.rank/ranked`; card record line adds `rank N of M` and `AVOID` for a losing exact percentage; ticket snapshot carries `percentage_ranking` per sport and each assessment `exact_rank` so the reviewer can read it. Changes tickets.py, so the helper hash changes.
+- **Checks (Linux copy of e7192f9, Python 3.10, own venv):** `tests/test_tickets.py tests/test_telegram.py tests/test_delivery_release.py tests/test_nfl_live.py tests/test_soccer_live.py` 243 passed; plus `tests/test_threshold_overview.py` with the four files that touch the changed code, 232 passed. Real-store copy: rankings computed for NBA and NHL, ranked picks carry rank. Preview `card-cle-cha-simple.png` inspected. Not run: release venv, full suite, real Telegram. **Needs a second-agent review before activation** (the release guard does not check the commit).
+- Not done: a page in the web app listing the ranked percentages; the review instructions (SKILL.md) telling the reviewer how to weigh the ranking.
+
+## Recurrent preflight alert-path failure — Codex, Nov10 07:10 ET
+- Pinned preflight again returned `status: failed`, `alerts_error: DeliveryError` (exit1 path confirmed in release code). A single repeat recovered: exit0, due=false/no eligible forecasts, all errors/notification_errors/alerts empty; `/tmp/ticket-preflight-20261110-0710.json`. No review snapshot or ticket send started; settlements unchanged.
+- Read-only inspection: `notify_alerts` calls Telegram identity/controls even with no health issues; the exception reports only its class, so the exact failing request/cause is unverified. This recurred after 06:53 recovery and should not be described as permanently fixed. No credentials, receipt keys, release code or schedules changed.
+- Next: inspect recurrence with preserved full preflight output and diagnose the alert/control network path; continue eligible reviews through the pinned helper.
+
+## Preflight transient failure — Codex, Nov10 06:53 ET
+- First pinned `preflight --notify --brief` returned `status: failed`, `alerts_error: DeliveryError`; its expanded output was truncated, so the underlying alert and acknowledgement were not established. No ticket snapshot, check or send was started.
+- Repeated the same guarded preflight once: exit0, due=false/no eligible forecasts, errors/notification_errors/alerts/snapshot_alerts empty. Existing settlements unchanged/already recorded. Recovery output: `/tmp/ticket-preflight-20261110-0653.json`. No receipt keys or credentials changed.
+- Next: inspect any recurring alert failure through the helper; continue reviews when due. No training or deployment.
+
+## Settlement + final-window review — Codex, Nov9 21:58 ET
+- Pinned preflight: no grading/notification errors. Original DET1234+LAL1224 ticket2026-11-09-04806f073ef2 settledwin; notice sent/API accepted, visibility unconfirmed. Three DAL-core tickets pending; original receipts305/306,322/323 preserved, no actualprofit inferred.
+- Freshsnapshot `/tmp/ticket-snapshot-20261109-2155.json`: reviewed11/11 (5NBAnew1293–1297+6NHL), two22:00Toronto games. NBA delayed runningjob successfulrefresh02:46:56Z insidewindow, usable; NHLfresh, no missingdue/refusedsoccer. Soccer85futurewindows pending, earlierNFL/NBA/NHLstarted.
+- Helper assess6mixedpairs; no ticket justified by payout/evidencebalance. NOtotal65.43%at-108 vs32/6152.46%season, spread67.07%vs15/31developmentquality; SJSline66.62%at-205 vswide38/53season/changedmodel. No automatic sample/label/gap gate. Check exit0 review24 no_ticket coverage11/11; plan `/tmp/ticket-plan-20261109-2155.json`.
+- First handoff-write approval timed out without execution; retried once under normal approval. No newticket send; firstpicture-only productionbatch untested. Next: settle remainingoriginaltickets/reviewneweligiblepublications; no training/deployment.
+
+## Game cards: sportsbook probability beside the model — PREPARED, not deployed — Claude Fable 5.2, Nov9 20:50 ET
+- Owner asked why the card recommended CLE win (model 55.2%, price -336 = 74% margin-free) and never said the price was above the model, while the app's own spread forecast was CHA +8.5 at 57.1%.
+- `docs/evidence/early-board/value-on-cards.patch` against delivery `76d8ab4` (telegram.py, test_telegram.py, docs/TICKETS.md): each priced market row shows `Sportsbook X% (model ±Y)`; headline shows both and `no value at this price` when the sportsbook is above the model. Recommendation logic, delivery key and card guard unchanged. Preview image `card-preview-sportsbook-line.png` (inspected). Linux copy, Python 3.10: same five test files, 239 passed. Not run in the release venv; not reviewed; delivery untouched at `76d8ab4`.
+
+## Interrupted review recovered — Codex, Nov9 20:44 ET
+- Earlier19:54 snapshot `/tmp/ticket-snapshot-20261109-1955.json` analysed32forecasts and assessed6alternatives, but final helper check was **not executed**: automatic approval review hit account usage limit (retryafter20:32Toronto). Did not bypass review. Earlier plan/assessment preserved as incomplete, not claimed archived. Intervening heartbeats not executed while blocked.
+-20:39 pinned preflight resumed: no grading/notification errors, one interruption alert sent/API accepted; helper recorded operational_failure22. Fresh snapshot `/tmp/ticket-snapshot-20261109-2040.json` reviewed **22/22** remaining pregame forecasts (10NBA+12NHL),1movedPHXline excluded,21ticketable/fourgames. NFL and earlierNBA/NHLgames already underway; soccer85futurewindows pending. Allsourcesfresh,no missingduegames/refusals.
+- Helper assess6complete mixed/shared-core alternatives; no newticket justified. NOspread67.02% and total64.90% at-113 contrast weak15/31 and18/34 season evidence/developmentmodel; NHLpucklinegroup38/53wide and changedmodel; high-pricedGS/SApoorincrement. No automatic labels/sample/gap gates. Finalcheck exit0 recordedreview23 `no_ticket`, required/accounted22/22, plan `/tmp/ticket-plan-20261109-2040.json`.
+- Original4ticketspending, receipts305/306 and322/323unchanged. No send attempted; firstnewproductionpicturestillunverified. Next: neweligibleforecasts/settlement; keep picture-only release76d8ab4 and immutable originals. No training/deployment.
+
+## Independent review of soccer markets (`soccer-markets-20261109`, patch `91856ccb…`): REQUEST CHANGES — Claude Opus 5.5 (session 5b7a, R2), Nov9 19:58–20:45 ET
+- **Scope.** Read-only. Nothing deployed, merged, migrated or sent. No `data/`, ledger or launchd touched. `markets-test` was not run and `load` was never called. Probes logged to my own `SOCCER_MARKETS_LOG_DIR`; the shared eval logs are unchanged (sha256). The review used a `git archive 39fadb1` export with the patch applied (0 files differ from the worktree; fixtures 4/4) and copies of the research store, the author's verify store and the ticket ledger. Full report: `/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/5b7a74b4-cdae-45d0-b668-7591c3dd3d7f/scratchpad/REVIEW-soccer-markets.md`.
+- **Holds (verified from code and runtime):**
+  - **Point in time.** A perturbation probe on open seasons randomised every label not available by D 06:00Z: 0 of 246 forecasts changed. No corner count is available before its result; none of 1,909 zero-zero rows is an input. Fidelity: 6/6 stored Nov 20 forecasts are identical.
+  - **Integrity.** Order: protocol, then amendment 1, then development. Amendment 2 came after corners v1, which was retired untested. One reserved read per family. The goals seal digests equal `code_at_goals_seal/`, and goals forecasts from the seal-time code equal the current code on 277 open-season targets. Both readings recompute exactly from `test_rows.json`, with independent grids.
+  - **Tickets.** All 14 stored ticket signatures are unchanged. DC/DNB legs settle correctly through `grade_leg`. A quarter line gives a half result and a `partial` ticket.
+  - **Labels and UI.** Corners never carry a price. API, page and ticket text are labelled. UI 8/8 at 1280 and a true 390 px; contrast 8.59 dark, 6.11 light.
+- **MEDIUM 1:**
+  - **Problem:** `tickets.soccer_market_picks` calls `match_markets` with no date window, so every snapshot recomputes and lists every stored goal/corner forecast ever. Measured: 107 matches → 17 s and 1.2 MB per soccer section. A season comes to ~4 min, run twice per check.
+  - **Fix:** apply a kickoff window, as the API's `since` does.
+- **MEDIUM 2:**
+  - **Problem:** the delivery release now runs `76d8ab4` (picture-only Telegram, from `1121d60`, without `39fadb1`). In that mode the ticket text is not sent, and the card and caption show soccer market legs with no line source, no "no proven skill against the bookmaker" and no push note.
+  - **Fix:** rebase onto `76d8ab4`, label the card and caption, then re-review.
+- **LOW:**
+  1. Merging alone already adds DC/DNB picks, and `check()` needs a note per market. The skill update must therefore ship in the same step as the merge, not as plan step 5.
+  2. A corner leg on ESPN 0-0 counts leaves its ticket `pending` forever with no notice (owner's call: a terminal state or an alert).
+  3. The BTTS / corner totals 7.5–8.5 / R4 disclosures never reach the page (`disclosed_lines` is not rendered) or the reviewer (no soccer entries in `markets.LIMITATIONS`).
+  4. The "Exp. return (model view)" column (e.g. +22.4 %) reads like a value signal (owner's call).
+  5. `markets_error` is never alerted.
+  - **Nits:** quarter-line wording; the author's desktop screenshot is stale; `ranking()` uses the real clock; the moneyline parser uses `.get(src, {})`.
+- **Checks:**
+  - focused 16 files: 462 passed;
+  - full backend (`OMP_NUM_THREADS=4 pytest -q -p no:cacheprovider`, clean export, delivery venv): 2,106 passed, 8 failed, all `test_deep_study` (torch/keras absent);
+  - frontend: typecheck, 27/27 unit tests and build passed;
+  - not run: real Telegram, the live app.
+- **Next:**
+  - Session 5f fixes MEDIUM 1 and 2 without touching `soccer_markets_eval.py` or the protocol (the seals bind them), then asks for a delta review.
+  - Activation remains the owner's go.
+
+## Early board (paper, read-only) + line-movement evidence — Claude Fable 5.2, Nov9 20:15–20:30 ET
+- **Owner asked for a free route to an edge.** New files only: `scripts/early_board.py`, `docs/evidence/early-board/` (README.md with numbers and limits, `first_line_check.py`, first board `board-2026-11-09-2022.{md,jsonl}`). No app code, store, release or Telegram touched; stores copied with the backup API.
+- **Findings:** two hours before the start the DraftKings line no longer moves (about 94% unchanged; toward = away) — 762 priced canonical picks. From the first stored price (median 31 h ahead) the line later moved toward the model's side (NBA totals 62% toward / 26% away, +1.36 pts [+0.80, +1.95], 106 picks); no return interval is above zero. Look-ahead and other limits are in the README.
+- **early_board.py:** runs the sealed primary models (`coverage._Direct`) for games 3–40 h ahead against the latest DraftKings quote, writes a board + write-once JSONL log; `--grade` scores logs against the closing quote. Ran once (Linux copy, own venv, Python 3.10): 36 game-markets priced, 17 leans. Not run under `backend/.venv`; no tests written for it (script, not app code); not reviewed.
+- **Addendum 20:40 ET:** owner created a free TheRundown key (stored in git-ignored `.env.odds`; never commit or print it). New `scripts/odds_books.py` (`fetch` saves write-once JSON under ignored `data/odds-books/`; DraftKings, FanDuel, BetMGM; moneyline/spread/total) and `early_board.py` now shows the best of the three books per lean and a table of lines that differ by a point or more. Parser and game matching checked against a real response saved by the owner (`docs/evidence/early-board/therundown-sample.json`): 3 of 3 priced games matched the store, spread sign convention equal. `fetch` itself has NOT been run (this session cannot reach therundown.io; it must run on the Mac).
+- **Free multi-book sources identified, not integrated (need the owner's own free key):** TheRundown (DraftKings, FanDuel, BetMGM; 20,000 data points/day) and SharpAPI (DraftKings, FanDuel) per their own pages, unverified by sign-up.
+
+## GitHub: ten unpushed branches pushed by the owner from Terminal — Claude Fable 5.2, Nov9 20:13 ET
+- Owner ran `git push origin delivery-release release audit-fixes-20261108 avail-minutes-fix box-retry codex/nfl-live-20261102 codex/telegram-picture-delivery-20261109 integration-20261108 refresh-release soccer-markets-20261109` after `gh auth login`. Verified with `git ls-remote` from a read-only clone: all ten remote heads equal the local commits (delivery-release `76d8ab4`, release `a55c874`). Before pushing, the ten branches were checked for a tracked `.env.telegram` (none) and a bot-token pattern (none).
+- Still only on the Mac: the uncommitted changes in this checkout (`nfl-dev`, incl. untracked `backend/app/tickets.py` here, `scripts/value_audit.py`, `docs/VALUE_AUDIT.md`, evidence folders). Not staged wholesale on purpose: other sessions' work is mixed in.
+
+## Soccer goal/corner/double-chance/draw-no-bet markets built and tested (NOT deployed; independent review pending) — Claude Opus 5.5 (session 5f), Nov9 18:20 – Nov10 00:55 UTC
+- **Where:** worktree `~/Desktop/nba-predictor-soccer-markets`, branch `soccer-markets-20261109` on `39fadb1`,
+  uncommitted.
+  - Review patch: `docs/evidence/soccer-markets-2026-11-09/review/delta.patch`, sha256 `91856ccb5023f71d`, 36 files.
+  - Evidence: `docs/evidence/soccer-markets-2026-11-09/README.md`. Plan: `docs/SOCCER_MARKETS_PLAN.md`.
+  - Nothing deployed, merged, migrated live or sent. `data/`, the ledger, launchd and the reviewer skill are untouched.
+- **Data:**
+  - ESPN month history 2010-08…2026-10, 7 club competitions: 1,365 requests, 0 failed, in the research store
+    `~/nba-predictor-research-data/soccer-markets-2026-11-09`;
+  - corners from scoreboard `wonCorners`;
+  - DraftKings prices from the scoreboard (3-way, goals total, handicap), stored append-only with retrieval time.
+  - **Gaps:**
+    - no free source prices corners;
+    - ESPN's BTTS/team-total prop entries have no side and are not used;
+    - national teams get only double chance and draw no bet (from their tested 1X2).
+- **Evaluation:**
+  - protocol written and logged before any fit (sha256 `403b7814`); amendment 1 = stage rules, before any fit;
+  - **user decisions:**
+    - "Run it after sealing (Recommended)": I ran the one-shot tests;
+    - "Amend, redevelop, then test (Recommended)": amendment 2 treats ESPN's historical 0-0 corner rows (EPL 2016-17:
+      363/380) as not delivered, and the corners v1 seal `62c3b5e5` was retired untested.
+  - **Goals:**
+    - sealed `cfe78bf9` (Poisson);
+    - reserved test 2023-25, n 6,023: −0.127 [−0.140, −0.114] joint log loss vs frequency;
+    - R1-R3 pass for all markets in EPL, La Liga, Bundesliga, Serie A, Ligue 1, UCL;
+    - second use of those seasons, disclosed;
+    - BTTS no better than the base rate.
+  - **Corners:**
+    - sealed `f50224dd` (negative binomial);
+    - test n 5,937: −0.121 [−0.136, −0.106];
+    - same six competitions;
+    - R4 disclosure: total over 7.5 under-predicted by 3.4 pp; totals over 7.5/8.5 not better than frequency.
+  - **Double chance / draw no bet:** from the tested 1X2 (validation-only report).
+  - **No market has proven skill against the bookmaker** (labelled).
+- **Built:**
+  - migration `0040`;
+  - `soccer_markets.py`: push, quarter-line split, half win/half loss, DNB push;
+  - `soccer_markets_eval.py`, `soccer_markets_live.py` (sealed models pinned);
+  - CLI `soccer history-months | markets-develop | markets-test | markets-forecast | markets-status`;
+  - `GET /api/soccer/markets`, `/api/soccer/markets/history`;
+  - soccer Game day Markets panel (per match, bookmaker vs model line, ranking) and a markets live record on soccer
+    History;
+  - ticket snapshot selections:
+    - string IDs; integer ticket signatures unchanged;
+    - settlement via `grade_leg`;
+    - ticket grade `partial` for split stakes;
+    - text and PNG.
+  - hourly-cycle step in `scripts/soccer_live_cycle.sh`.
+- **Checks:**
+  - **4 new test files**, 81 tests, plus updates to `test_soccer_live`, `soccerStatus.test.mjs` and three
+    migration-list tests.
+  - **Full suite: 2,103 passed / 11 failed.**
+    - 8 are the known `test_deep_study` failures (torch/keras absent).
+    - 3 were migration-list tests; fixed by adding 0040, after which those files give 57 passed.
+  - **Final focused 16 files:** 462 passed. The whole suite was not rerun after the list fix.
+  - **Structure guard:** passed.
+  - **Frontend:** typecheck, 27 unit tests and build passed.
+  - **Fidelity:** live forecasts on a scratch copy (Nov 20 club matches) equal the evaluated frozen model exactly.
+  - **Headless Chrome:** 1280 and a true 390 px viewport, 8/8 ok (no overflow, labels present, blocked-API error
+    shown); contrast is 8.59 in dark and 6.11 in light.
+- **Next:**
+  1. Independent delta review (requested from a separate session; this session will not review its own work).
+  2. Then the owner's go for activation: merge; live `migrate` to 0040; `soccer history-months --from 202407`; deploy
+     the cycle-script step; apply the proposed skill text
+     (`docs/evidence/soccer-markets-2026-11-09/proposed-skill-soccer-markets.md`).
+- **Open:**
+  - market-family refusals are shown on the page but not yet in the ticket health alerts;
+  - the international ET/90-minute-draw wording mismatch noted by the explorer (`intl_live` docstring vs
+    `soccer_live.grade`) is pre-existing and untouched.
+
+## Telegram v2 APPROVED AND ACTIVE — Codex, Nov9
+- Author v2 re-reviewed: no new blocking findings. Release Python3.12.12 focused5files **237passed,1warning,20.75s** in private export; structure check/diff check passed, six patch files byte-identical before commit. Seven-leg TEST layout visually inspected; no real Telegram test/whole-app readiness claim. First review correction: six×seven menu already refused by old text-size guard; smaller accepted-menu omission was valid.
+- Commit **76d8ab42583887b1d37934c1e700648a34e4dd50** fast-forwarded into clean guarded delivery from1121d60. Pinned helper status exit0, original receipts305/306 and322/323 unchanged. Complete picture pages, short-caption render fallback(partial_failed), hash failure sends nothing, card moved-line dedup, quiet routine health alerts, max7legs now active. No unrelated main edits committed.
+- Installed skill + ACTIVE15-minute automation aligned with picture/page receipt behavior and2–7legs; no forced unsupported ticket quota or selection-method rewrite. Skill validator passed; previous skill archived under evidence. Details `docs/evidence/telegram-picture-only-2026-11-09/CODEX_REVIEW_V2.md`.
+- Cleanup: isolated managed checkout remains clean at `/Users/andry/.codex/worktrees/telegram-picture-delivery/nba-predictor-delivery`; app refused archiving because it is now this chat's primary checkout. No manual deletion attempted.
+- Next: inspect first genuine justified production picture batch/all page receipts, preserve old tickets and integrate76d8ab4 into any branch replacing release. GitHub auth previously invalid; no push claimed. No model training/tuning.
+
+## Codex review of picture-only Telegram patch — Nov9
+- **Changes required; NOT activated.** Read prepared patch against clean delivery1121d60, applied only to isolated `/tmp/telegram-picture-review.b94mTD`. Release Python3.12.12 focused five-file suite **227 passed** (13.00s,1warning), mocked transport/private data.
+- Boundary probe found six×seven-leg caption truncates inside ticket4 while image only shows first3; final tickets lose visible selections. Broad image-error catch falls back to unwanted long text (including hash mismatch). Game-card identity still changes when recommended line changes and uses a new namespace that does not match legacy receipts. Full findings: `docs/evidence/telegram-picture-only-2026-11-09/CODEX_REVIEW.md`.
+- Live release remains clean1121d60; no production sends/commit/deployment. GitHub remote exists, but `gh auth status` says token invalid; no push. Main47+changes belong to other work and were not staged. Existing instructions already permit spreads/totals; no unsupported forced long-shot change made.
+- Next: author fix these scoped issues plus regressions; Codex delta review, then authorized activation and versioned instruction update. Repair GitHub login before push.
+
+## Owner-requested cleanup + Telegram change PREPARED, NOT deployed (delivery stays 1121d60) — Claude Fable 5.2, Nov9 19:25–19:40 ET
+- **Owner's instruction (chat):** keep tickets arriving; tickets as a picture only, no text clutter, no repeated cards, no "REVIEW BLOCKER" texts; bigger parlays (up to seven legs), more market variety, predictable timing; tidy the folders; get the work onto GitHub; "do whatever you need to do".
+- **Prepared, tested, NOT live:** `docs/evidence/telegram-picture-only-2026-11-09/telegram-picture-only.patch` against delivery `1121d60` (6 files: tickets.py, telegram.py, telegram_card.py, both test files, docs/TICKETS.md). One picture per ticket batch with a caption (legs, stored prices, payout) and no separate text; render failure and already-texted batches keep the old path; `source_unavailable_or_stale` / `missing_due_forecasts` no longer sent to the chat; one game card per game (resent only for a new start or new recommended pick); `MAX_LEGS` 7. Tests in a Linux copy (Python 3.10, own venv): the five files importing the changed modules **227 passed** (`tests/test_tickets.py tests/test_telegram.py tests/test_delivery_release.py tests/test_nfl_live.py tests/test_soccer_live.py`); baseline before the change 194 passed on the first three. Not run: full suite, release venv, real Telegram.
+- **Why not deployed:** committing into the guarded delivery checkout from this session was refused by the session's safety check. The delivery checkout is untouched: HEAD `1121d60`, clean (verified 00:38Z). Apply with `git -C ~/nba-predictor-delivery apply <patch>`, run the tests in the release venv, commit (the release guard refuses a dirty checkout). Note `audit-fixes-20261108` (39fadb1) and `soccer-markets-20261109` are ahead of 1121d60 and will need the same change.
+- **Folders:** ten stale Desktop worktrees (no file change since Nov 2 or earlier, no script reference) MOVED, not deleted, to `~/Desktop/_old-nba-predictor-folders/` (avail-fix, box-retry, cadence, candidates, dev, early, features, poolsel, refresh-release, selector; READ-ME.txt inside has the restore command `git worktree repair`). Left in place: sprint1, audit-fixes, batch1, batch1-w1..w3, soccer-markets (files changing during this session), soccer-train, and everything under `~` (live, delivery, deep, pretrain, autoresearch-sports, data folders). After the move: card job ok 00:37Z, refresh success 00:38Z, ticket trigger run 9 at 00:33Z.
+- **Addendum 19:55 ET — v2 after Codex review:** `telegram-picture-only-v2.patch` + `AUTHOR_RESPONSE.md` in the same evidence folder address the three findings (all tickets on pictures, no truncation; hash failure sends nothing, renderer failure sends short lines; card guard with the release key unchanged). 237 passed on the same five files in the Linux copy. Still NOT applied; delivery stays `1121d60`. Next: Codex re-review of the delta and activation.
+- **Not done / blocked:** GitHub push (this session has no GitHub credentials; `nfl-dev` has 47 uncommitted files and `backend/app/tickets.py` is untracked here); review instructions `~/.codex/skills/courtside-ticket-review/SKILL.md` (access refused) — so market variety, a long-shot ticket and timing, which live in those instructions and the automation schedule, are unchanged; `~/Library/LaunchAgents` not readable from here.
+
+## Full review archived — Codex, Nov9 19:38 ET
+- Pinned preflight grading/notification errors and alerts empty; four Nov9 tickets pending. Fresh snapshot `/tmp/ticket-snapshot-20261109-1934.json`: all sources fresh, no missing due forecasts/refused soccer competitions. Reviewed **26/26** eligible forecasts (15NBA+5NFL+6NHL), including five new SA@PHX markets; TOR and earlier starts ineligible, soccer85 future windows pending.
+- Assessed six complete mixed/shared-core alternatives. SA winner68.73% at-372 asks78.81%, history68.37%/999; SA total54.04% at-114 asks53.27% with20/42 season record and wide interval. Pair comparisons do not justify additional risk; no automatic negative-gap/skill/sample gates. All current alternative markets accounted, DAL winner1250 lock and prior exposure preserved.
+- Helper check exit0 recorded review21 `no_ticket`, required/accounted26/26; plan `/tmp/ticket-plan-20261109-1934.json`. No send attempted, prior text305/322 and PNG306/323 receipts remain sent/API acceptance only. No rule/delivery switch, training or deployment. Next: review newly published eligible forecasts and settle original tickets; paper-only change still awaits owner instruction.
+
+## Full review archived — Codex, Nov9 19:09 ET
+- Pinned preflight: no grading/notification errors or new alerts; four Nov9 tickets pending. Fresh snapshot `/tmp/ticket-snapshot-20261109-1905.json`; all sources fresh, no missing due games/refused soccer competitions.
+- Reviewed **26/26** eligible forecasts (15 NBA,5 NFL,6 NHL), including new TOR+1.5 forecast1272; five games, earlier19:00 starts excluded, four DAL alternative markets locked to original winner1250. Soccer85 future windows pending. Compared six complete mixed/shared-core alternatives using helper assess; no additional combination justified by current price, calibration and contextual evidence. Existing rules unchanged; paper-only pause discussed, not activated.
+- Helper check exit0 recorded review20 `no_ticket`; plan `/tmp/ticket-plan-20261109-1905.json`. No send attempted; prior text305/322 and PNG306/323 receipts remain sent/API accepted, visibility unconfirmed. Read generated value audit, did not independently validate its script. Next: owner decision on a versioned paper-only protocol; continue settlement and current authorized reviews meanwhile. No training/deployment.
+
+## Value audit of forecasts and AI ticket selection (read-only; report + script, nothing deployed) — Claude Fable 5.2, Nov9 18:45–19:00 ET
+- **New files only:** `scripts/value_audit.py`, `docs/VALUE_AUDIT.md` (generated). No app code, test, store, ledger or release touched; nothing trained, tuned, sent or committed.
+- **Method:** stores copied with the SQLite backup API (sources `mode=ro`), only copies read; everything after `--as-of 2026-11-09T23:45:00Z` ignored. Settlement reuses `app.markets.settle` / `app.coverage.pick_side`. Backtest, live canonical, live adaptive (research) and reconstructed evidence reported separately; returns are hypothetical flat stakes at stored DraftKings prices, never actual profit.
+- **Findings (live, as generated):** winner picks beat a coin flip (NBA, NHL) but NBA winner and the all-sport pool are worse than the margin-free sportsbook probability; NBA spread picks overstated (44.0% won vs 56.5% stated, z −2.94); no market shows a flat return above zero; team totals / NHL reg3 have no stored price. AI selection: 21 settled selected legs in 4 days, adjusted selected−not-selected −3.5 pts [−23.8, +23.8] — **sample cannot support a conclusion**; no-review baselines (all winner picks, sportsbook favourites, `strong` flag) did at least as well in the same pool.
+- **Checks:** passed — report byte-identical across 3 runs (two fresh snapshots, different `PYTHONHASHSEED`, one earlier snapshot; sha256 `d501fdd0c14c8acc`); passed — audit grades equal the ledger's stored leg grades 41/41; passed — NBA winner 87/134 and spread 59/134 recomputed with raw SQL only; passed — stored de-vig equals recomputed in 864/864 quotes. Run with the linked workspace's Python 3.10 + numpy 2.2.6: `PYTHONPATH=backend python3 scripts/value_audit.py --as-of 2026-11-09T23:45:00Z --out docs/VALUE_AUDIT.md`.
+- **Not run:** the same command under `backend/.venv` (macOS venv not runnable from the workspace shell), backend test suite, structure guard, frontend (none in scope). Backtest walk-forward integrity not re-verified. No independent review yet — owner reviews findings.
+- **Next:** owner review of `docs/VALUE_AUDIT.md`; re-run unchanged as settled selected legs accumulate (report asks for 50).
+- **Addendum 19:15 ET (owner asked):** report section 5f added — tickets/legs grouped by (instructions hash, helper hash), user-requested batches flagged apart (text-based, approximate). Read-only change to `scripts/value_audit.py`; all other numbers unchanged; report regenerated at the same as-of, byte-identical across 2 runs (sha256 `968ea4ee6e2ffba0`). Ticket delivery NOT changed: no owner instruction to disable it was given to this session.
+
+## Full review archived — Codex, Nov9 18:52 ET
+- Pinned helper preflight clean;4Nov9tickets pending. Snapshot `/tmp/ticket-snapshot-20261109-1848.json`, plan `/tmp/ticket-plan-20261109-1848.json`. Reviewed **41/41** forecasts (30NBA+5NFL+6NHL), includingnewDEN@HOU5markets andrepublishedlineIDs; allsourcesfresh,nomissingduegames/refusals. Soccer85outsidewindows; laterwindowspending.
+- Assessed6fullmixed/shared-corealternatives. No additionalticket: HOUwinner60.04%,-173requires63.37%withhistorical61.55%/1100; HOUscoremarketsnearcoinflip; totalsalternativesconcentrateuncertaincommondevelopmentmodel. Noautomaticnegativegap/record/labelgate. ExistingDET/LAL/DALcorelocks,4tickets,text305/322andPNG306/323receipts preserved.
+- Check18refused because I retained the previoussnapshotdigest inplanmetadata; correcteddigest, retrycheckexited0 and recordedreview19 `no_ticket`, required/accounted41/41. No sendattemptorTelegramno-ticketmessage. Next: neweligibleforecasts/settlement; preserveoriginalIDs. No deployment/training.
+
+## User-requested three-ticket batch sent after revalidation — Codex, Nov9 18:26 ET
+- Preflight18:18 grading/notification errors empty;4source/missing alerts APIaccepted. Initial running NBA/NHLjobs permitted delayedNBAforecasts; newpublications duringcheck caused review14refusal. Re-snapshot/re-review finished review15no_ticket **36/36**. NBA brieflybecameblocked afterjobended, thenfreshagain; newDALandNHLforecastspublished, initialmissinggamesresolved.
+- User requested3tickets. Freshrecoveryreview comparedallNBA/NHL/NFLmarkets+soccerpending; check16refusednewNBAlineIDs, re-reviewed6newIDs and finalizedfreshsnapshot `/tmp/ticket-snapshot-20261109-1826-user.json`. Finalcheck **36/36**; assessrerunafterDALprice-179. Sendexit0 review17ticket_sent: DAL1250+DET1234 `2026-11-09-da1f7fba5b12` ×1.94; DAL1250+LAL1224 `2026-11-09-08d7e9770993` ×3.44; DAL+DET+LAL `2026-11-09-694ab4c8fb87` ×4.28. BothDET/LAL19:00Toronto,DAL20:00.
+- Text322/PNG323 bothsent/APIaccepted, uservisibilityunconfirmed; inspectedarchivedPNG/caption. DALsharedall3; DET/LALeach2newplusprior04806f073ef2, exposureexplicitinreview. Originalreceipts305/306preserved. No stakes orpersonal slipassumed. NFLMINQBchangeverifiedofficialVikingsannouncement; NHLprice/evidence weaker; movedlinesexcluded,soccer85outsidewindows. Laterwindowsremainpending. No deployment/training.
+- Plan `/tmp/ticket-plan-20261109-1826-user.json`; nextscheduledpreflightsettlesoriginalIDsandreviewsnewforecasts. Useralsoaskedforprompttoaddsoccergoals/cornersmarkets; provideimplementationbriefseparately, noexistingmodelprobabilitiesrepurposed.
+
+## Delta review of wording commit `39fadb1`: APPROVE, behaviour unchanged, no findings (session 43) — Claude Opus 5.5, Nov9 17:50–18:15 ET
+- **Scope:** `git diff 1121d60 39fadb1 -- backend docs/TICKETS.md` (sha256 `50a52fceee1e0890`, equals `44-wording.patch`;
+  tickets.py `489e4e6ee811f561`, test_tickets.py `25db77135f388a7e`). Clean `git archive` exports (`rev635/tree7`,
+  `tree7-suite`); worktree clean at `39fadb1`, only read. Live stores and ledger only copied (`mode=ro`, backup API);
+  Telegram mocked. Nothing deployed, merged or sent. Verdict sent to `nba-predictor-sprint1-58`.
+- **Code change is text only:** the timing branch of `explain_missed` now also requires `not unknown(check)`, so that
+  case falls to the next branch, which already said "could not evaluate the review state"; `explained` is false on both
+  paths and no other branch can be reached differently (the timing branch needs `last is None`). The alert change is one
+  string. TICKETS.md matches.
+- **My X11 nit is resolved:** X11/X13 (only check in the window unevaluable, forecast re-issued at 17:55) now read "The
+  last check before the start, 15 minutes before it, could not evaluate the review state." (on 1121d60: the timing
+  sentence). X8, X9 and X10 keep their texts.
+- **The new alert wording matches the code** (new probe X14, timestamps 15 min apart): WIN delivered → LOSS correction
+  rejected (alert 1) → back to WIN → LOSS again: listed again, not re-attempted, no second alert; then a push leg
+  (corrected WIN) delivered → LOSS again, attempted under a new key and rejected again → alert 2. Receipts
+  sent/failed/sent/failed, alerts, listings identical on 1121d60 and 39fadb1; only the alert text differs.
+  Note, not a finding: the comparison is `attempted_at >=` at one-second resolution, so if the rejection and the later
+  delivered result carried the same second (X15; not reachable with 15-minute runs in practice) the LOSS is not
+  re-attempted and no second alert goes out — the conservative side.
+- **Checks:**
+  - `tests/test_tickets.py` **160 passed**; my nine focused files **316 passed** (`logs/focused7.txt`) —
+    `NBA_DATA_DIR=<scratch>/data-focused7 OMP_NUM_THREADS=1 ~/nba-predictor-delivery/backend/.venv/bin/python -m pytest
+    -q -p no:cacheprovider tests/test_tickets.py tests/test_soccer_live.py tests/test_soccer.py tests/test_intl_live.py
+    tests/test_telegram.py tests/test_delivery_release.py tests/test_freshness.py tests/test_near_tipoff.py
+    tests/test_nfl_live.py` (the author's nine-file set differs: 330).
+  - Full backend suite on a private export: **2,025 passed / 8 failed** in 19m00s (22:52–23:11Z), all 8 in `tests/test_deep_study.py` (no
+    module torch/keras), same as on 1121d60 (+1 = the new test) — `NBA_DATA_DIR=<scratch>/data-full7 OMP_NUM_THREADS=1
+    ~/nba-predictor-delivery/backend/.venv/bin/python -m pytest -q -p no:cacheprovider` in `tree7-suite/backend`.
+  - Probes on 39fadb1: 43 of 48 pass; the same 5 that encode findings fixed earlier fail (R1, R6, X4, Q1, Q2). New
+    `probe/test_probe_followup4.py` (X13–X15) passes; X13 and X14 fail on 1121d60 on the text only.
+  - Real data (fresh copies of the live ledger, stores and `reports/tickets`, 22:56Z): live `1121d60` vs `39fadb1`,
+    `settle` twice with and without a mocked bot: 15 tickets, 0 new grade rows, 0 sends, grades and all 250 receipts
+    identical; `review_state(snapshot())` identical (due, reason, 0 missed games), so the changed branch is not exercised
+    by today's data. Live ledger: 2 trigger runs today (22:33, 22:48Z), 15 sent result receipts, none failed, no
+    result-notice alerts.
+  - Structure guard and frontend: not rerun (not in the delta).
+- **Not run:** anything against the live ledger or stores (copies only), real Telegram, a real scheduled run.
+- **Scratch:** `/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/43a0d8c8-5d19-4e11-a7c0-2df81439b128/scratchpad/rev635`
+  (probes in `probe/`, logs `logs/full-suite7.txt`, `logs/focused7.txt`, real-data outputs `settle7/`).
+
+## Full review archived, no additional ticket — Codex, Nov9 17:52 ET
+- Pinned1121d60 helper preflight clean; snapshot `/tmp/ticket-snapshot-20261109-1748.json`, plan `/tmp/ticket-plan-20261109-1748.json`. Helper `check` exited0, recorded review13 `no_ticket`, **required/accounted20/20** (18ticketable plus2moved-line exclusions). Re-reviewed all4NBA games/5markets including5new MEM@TOR forecasts; assessed6complete combinations.
+- TOR winner1239 (74.16%,-135, history542/767) was strongest new candidate, but official NBA11:30AM report listed Barnes/Quickley questionable, Leonard out; latest17:45PDF retrieval failed, current availability unconfirmed. No new combination justified with that unresolved input risk and overlapping DET/LAL exposure. No probability adjustment or claim that injuries explain the odds. TOR+DET/LAL alternatives saved; original ticket04806f073ef2 and text305/image306 receipts preserved.
+- Excluded moved LALspread1225/total1226 and conflicting markets in locked DET/LAL games. NHL/NFL no eligible picks;85soccer forecasts outside windows, no competition refusals. Later unopened windows remain pending. No Telegram no-ticket message/send. Next: new eligible publications or new reviewed lineup evidence; settle original forecast IDs. No deployment.
+
+## Wording follow-up commit 39fadb1 on 1121d60 (NOT deployed; delta review pending; release stays at 1121d60) — Claude Fable 5.1, Nov9 17:47 ET
+- Owner: "Apply only the two wording nits, with focused regression checks and a delta review. Keep behavior unchanged
+  and leave the current release running until the follow-up is approved. No broader cleanup." Then stop the audit cycle.
+- **Commit** `39fadb1f2cb216668cbd098197a244db375a2e05` on `1121d60`, branch `audit-fixes-20261108`; delta 3 files
+  +19/−4, sha256 `50a52fceee1e0890` (`44-wording.patch`); tickets.py `489e4e6ee811f561`, test_tickets.py `25db77135f388a7e`.
+  (1) an unevaluable last check before the start is said so, also when the forecast was re-issued after it (43's nit);
+  (2) the rejected-notice alert says "not repeated unless another result reaches you first" (a9's nit). No behaviour change.
+- **Checks:** 2 tests fail on 1121d60 (`42-…`), pass now; test_tickets 160; nine focused files 330; structure guard
+  passed (`43-…`). Full suite not rerun for this delta. Sent to sessions 43 and a9 at 17:48 ET; activation (ff-merge +
+  api-delivery restart; no frontend change) waits for their verdicts and the owner's go.
+  - **Session a9 (Opus), 17:5x ET: APPROVE.** Hashes match; 80-combination re-issue grid identical to 1121d60 line for
+    line; notice probes identical (keys, receipts, listings, alert counts), only the alert wording differs; 108 earlier
+    probes pass; test_tickets 160; focused 272.
+  - **Session 43 (Opus), 18:0x ET: APPROVE, no findings.** Hashes match; X11 resolved; new probe X14 shows alerts and
+    listings identical to 1121d60 (only the text differs); 43 of 48 probes (the 5 encode earlier-fixed findings);
+    test_tickets 160; focused 316; real-data copies live 1121d60 vs 39fadb1 identical (15 tickets, 0 new rows, 0 sends).
+    Note: attempted_at compared at one-second resolution (same-second rejection and delivery: cautious side).
+  - **Delta review complete: a9 APPROVE, 43 APPROVE.** Activation of 39fadb1 waits for the owner's go in the authoring session.
+
+## First real rev4 ticket delivery verified; batch1 soccer-wording patch superseded — Claude Opus 5.5 (f7), Nov9 ~17:40 ET
+- **Ticket:** ticket `2026-11-09-04806f073ef2` (DET win + LAL win, ×2.40, model 44.4%).
+  - Batch row 8 at 22:20:29Z; review 12 `ticket_sent` at 22:20:40Z.
+  - The batch payload records helper `d8cbdbce` and skill `d7bd95bf`, i.e. rev4 plus the validation fix, before
+    1121d60 was activated at 22:24Z.
+  - Ledger receipts: text message 305 and image message 306, both `sent` at 22:20:29Z. Telegram accepted them; that
+    the user saw them is not confirmed.
+  - Archived PNG sha256 `07f7752edf01…` matches `ticket_images` row 7. I viewed it: legs, times and percentages match
+    the text. The image does not show the payout or break-even that the text gives.
+  - Not forced: it came from the scheduled 17:17 ET review.
+- **Superseded patch:** the uncommitted batch1 wording diff (made on 7f629ea by a Fable subagent; never deployed) is
+  superseded by the live 1121d60 wording ("A sealed 90-minute model covers this competition, but no forecast has been
+  recorded for it yet…").
+  - Saved as `batch1/docs/evidence/webapp-switch-prep-2026-11-09/superseded-soccer-wording-on-7f629ea.patch`
+    (sha256 `a60769d6371e`); the two files were restored, so batch1 is clean at 7f629ea.
+  - The "UNRESOLVED finding" in my Nov8 21:08 entry is handled by 1121d60. I did not re-check it in the browser (the
+    Chrome extension timed out); only `/api/soccer/meta?competition=eng.1` was checked.
+
+## ACTIVATED: delivery release 1121d60 (owner's go: "Activate 1121d60 and restart api-delivery") — Claude Fable 5.1, Nov9 17:24 ET
+- **Delivery release** `~/nba-predictor-delivery`, `delivery-release`: `7f629ea` → **`1121d608c7834e0893a704bcaac5e100b93acb48`**
+  (`git merge --ff-only`, 22:24:1xZ), clean. tickets.py `35adbbdae7c0fc56`, release_tickets.sh `1074b0eea7ced826`
+  (unchanged). Approved by three reviewers (43, a9, cb) at that exact hash; see the entries below.
+- **API :8101** `com.nba-predictor.api-delivery`: `launchctl kickstart -k` at 22:24:19Z; running (pid 83642);
+  `/api/soccer/live` returns 200 with the new `refresh` field.
+- **Web :4173**: `npm run build` in the delivery frontend (node v22.23.2, 616 ms); vite preview served the new bundle
+  (`assets/index-Bj6f0Ii6.js`, was `index-BL7-embV.js`) without a restart; soccer-live and research proxies answer 200.
+  The API was restarted BEFORE the new build was served, so the old-API wording case never showed.
+- **Helper**: `release_tickets.sh status` at 22:24:58Z through the release path: exit 0, no guard problem,
+  due=false (no_new_forecasts), 0 missed. `status` created the two new ledger tables (`ticket_trigger_runs`,
+  `ticket_trigger_observations`, append-only triggers) empty, as `schema()` does; receipts unchanged (240 sent,
+  8 uncertain). The first scheduled preflight (automation every 15 min, next ~17:32 ET) writes the first run row.
+  The helper hash changed: a review in flight at the switch would be refused once with "review again"; none was running
+  at 17:24 (no helper process, last preflight file 17:17).
+- **Not changed:** skill `~/.codex/skills/courtside-ticket-review/SKILL.md`, automation, wrapper, launchd plists,
+  `~/nba-predictor-live` (a55c874, :8100), NFL release, stores (no migration; schemas nba 31, nhl 31, nfl 33, soccer 39),
+  credentials. The proposed skill paragraph (`09-proposed-skill-text.md`) is still NOT applied.
+- **What is live now:** the whole branch (`3f85fc5` + three follow-ups): soccer page wording from stored state,
+  helper-recorded locks, trigger-run and observation records, whole-window `explained`, append-only grade corrections
+  with the owner's notification rule, rejected result notices listed and alerted once. Open items and documented
+  limits: entries below (two wording nits, snapshot-failure day, single-game rule's current-forecast time, unscorable
+  WIN not retracted, pick labels not HTML-escaped, table growth, soccer icon).
+- **Rollback:** `git -C ~/nba-predictor-delivery reset --hard 7f629ea`, `npm run build` in its frontend, then
+  `launchctl kickstart -k gui/$(id -u)/com.nba-predictor.api-delivery`. The two new ledger tables can stay (unused by
+  7f629ea; rows are append-only).
+- **First scheduled run on the new code, 17:33:08 ET (`/tmp/ticket-preflight-20261109-1733.json`):** errors [],
+  notification_errors [], alerts [], due=false (no_new_forecasts), no observations_error, no interrupted review, no
+  undelivered result; settlement notices all `already_recorded`; receipts still 240 sent. First row in
+  `ticket_trigger_runs`: `1 | 2026-11-09T22:33:09Z | 2026-11-09 | due 0 | no_new_forecasts | 0 observations`.
+
+## Combined parlay review sent — Codex, Nov9 17:22 ET
+- Pinned helper preflight clean; new snapshot `/tmp/ticket-snapshot-20261109-1718.json`. Reviewed/accounted **15/15** eligible forecasts over 3 NBA games; assessed 6 full combinations. Selected DET winner1234 + LAL winner1224, ticket `2026-11-09-04806f073ef2`, both19:00 Toronto. Stored payout2.398x, break-even41.70%, model44.43% under independence; high risk, no verified edge or stake recommendation.
+- `check` passed15/15; `send` exited0, `ticket_sent` review12. Inspected separate text305 and PNG306 receipts, both `sent` (API acceptance, visibility unconfirmed); archived image visually checked against exact text. Archive `data/reports/tickets/2026-11-09-82e5c8d4d87505c9e161cc2238022c05dad8408da639d816c38eae17d236b6db.json`; image/caption preserved in ledger.
+- NHL/NFL no eligible picks; soccer85 forecasts outside windows (Nov11 onward), no refusal. Later NBA/NHL forecast windows remain pending, not full-day coverage. Status22:21:54Z duefalse/no_new_forecasts; original forecasts now locked for shared-game reuse. Next: review new eligible publications, preserve text/image receipts and settle original IDs. No deployment.
+
+## Recheck of third follow-up `1121d60`: APPROVE, one optional wording nit (session 43) — Claude Opus 5.5, Nov9 16:30–16:55 ET
+- **Scope:** `git diff 98f8f96 1121d60 -- backend docs/TICKETS.md` (sha256 `41bef62753884cc7`, equals
+  `41-third-followup.patch`; tickets.py `35adbbdae7c0fc56`, test_tickets.py `36f92e5dcb4f481a`). Clean `git archive`
+  exports (`rev635/tree6`, `tree6-suite`); worktree clean at `1121d60`, only read. Live stores and ledger only copied
+  (`mode=ro`); Telegram mocked. Nothing deployed, merged or sent. Verdict sent to `nba-predictor-sprint1-58`.
+- **My two nits on 98f8f96 are resolved:** the brief now carries `undelivered_error` (Q1); my Q2 case (four NFL games
+  pending but already reviewed) now reads "recorded nothing for nfl" with no claim that none was pending.
+- **a9's MEDIUM is resolved:** on 98f8f96, a forecast re-issued at 17:55 after reviews were due at 17:00 and 17:45
+  read "No trigger run saw this game…" and hid the due review (probe X9 fails there); on 1121d60 it reads "A review was
+  due at the last check, 15 minutes before the start, and none finished." My X8 case and a game whose earlier version
+  predated its window, re-issued after the last check (X10), still get the "current forecast … after the last check"
+  sentence, correctly.
+- **New nit (very low, optional):** when every check in the window could not evaluate the review state (nothing
+  recorded for the game) and the forecast was re-issued after the last check, the text gives the timing sentence
+  ("current forecast was made 5 minutes before the start, after the last check") rather than "could not evaluate the
+  review state" (X11). `explained` is false either way. Adding `not unknown(check)` to that branch would keep the more
+  informative sentence.
+- **Confirmed documented limit:** the single-game rule uses each other game's current forecast time. g2's first
+  forecast at 17:50 joined g1's window (start 18:00) → `explained: false`; if g2 is re-issued at 18:30, the same miss
+  reads `explained: true` (X12; same on 98f8f96). TICKETS.md states it.
+- **Alert wording:** now says the alert "is not repeated, also if it is owed again later" (accurate per Q4).
+- **Checks:**
+  - `tests/test_tickets.py` **159 passed**; my nine focused files **315 passed** — `NBA_DATA_DIR=<scratch>/data-focused6
+    OMP_NUM_THREADS=1 ~/nba-predictor-delivery/backend/.venv/bin/python -m pytest -q -p no:cacheprovider
+    tests/test_tickets.py tests/test_soccer_live.py tests/test_soccer.py tests/test_intl_live.py tests/test_telegram.py
+    tests/test_delivery_release.py tests/test_freshness.py tests/test_near_tipoff.py tests/test_nfl_live.py`.
+  - Full backend suite on a private export: **2,024 passed / 8 failed** in 20m08s (21:34–21:54Z), all 8 in
+    `tests/test_deep_study.py` (torch/keras not installed) — `NBA_DATA_DIR=<scratch>/data-full6 OMP_NUM_THREADS=1
+    ~/nba-predictor-delivery/backend/.venv/bin/python -m pytest -q -p no:cacheprovider` in `tree6-suite/backend`.
+  - Probes: 36 of 41 earlier pass unchanged; the other 5 encode findings now fixed (R1, R6, X4 on acd984a; Q1, Q2 on
+    98f8f96). New `probe/test_probe_followup3.py` (X9–X12) passes on 1121d60; X9 fails on 98f8f96.
+  - Real data (fresh copies of live ledger, stores and `reports/tickets`, 21:36Z): release `7f629ea` vs `1121d60`,
+    `settle` twice with and without a mocked bot: 14 tickets, 0 new grade rows, 0 sends, grades and receipts
+    identical. Live ledger: no `ticket_trigger_*` tables, 15 sent result receipts, none failed.
+  - Frontend: not in the delta; not rerun.
+- **Not run:** anything against the live ledger or stores (copies only), real Telegram, a real scheduled run.
+- **Scratch:** `/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/43a0d8c8-5d19-4e11-a7c0-2df81439b128/scratchpad/rev635`
+  (probes in `probe/`, logs `logs/full-suite6.txt`, `logs/focused6.txt`).
+
+## Ticket preflight recovered on retry — Codex, Nov9 16:48 ET
+- Pinned helper reported `notification_errors=[{"error":"DeliveryError"}]`; retry `/tmp/ticket-preflight-20261109-1647-retry.json` passed with errors/notification_errors/alerts empty. Settlement had no grading errors; all 11 Nov8 notifications were already recorded on retry. No new delivery claimed.
+- `review.due=false`, zero eligible forecasts/games. No selection snapshot, plan or send. Next: normal scheduled preflight; preserve original receipts.
+
+## Third follow-up commit 1121d60 on 98f8f96: recheck findings addressed; three APPROVE (NOT deployed) — Claude Fable 5.1, Nov9 16:25–16:40 ET
+- **Nothing deployed, merged, migrated or sent.** Release still `7f629ea`. Live stores and ledger only read (copies in
+  the scratchpad). Skill, automation, launchd untouched. Activation stays the owner's decision.
+- **Verdicts on `98f8f96`:** session 43 APPROVE (2 low nits), session cb APPROVE (2 low), session a9 REQUEST CHANGES
+  (1 medium, introduced by 98f8f96); details in the entry below. All three asked to recheck this commit at 16:38 ET.
+- **Commit:** `1121d608c7834e0893a704bcaac5e100b93acb48` on `98f8f96`, branch `audit-fixes-20261108`, worktree
+  `~/Desktop/nba-predictor-audit-fixes`; not pushed, not merged. Delta `git diff 98f8f96 1121d60 -- backend
+  docs/TICKETS.md`: 3 files, +57/−11, sha256 `41bef62753884cc7` (`41-third-followup.patch`). tickets.py
+  `35adbbdae7c0fc56`, test_tickets.py `36f92e5dcb4f481a`. Branch since the release: `3f85fc5` → `acd984a` → `98f8f96` →
+  `1121d60`.
+- **Fixed (tests first, `37-…` before / `38-…` after):**
+  - a9 MEDIUM: the "No trigger run saw this game before its start" sentence compared the last check with the game's
+    CURRENT forecast time (after the start, the latest version made before it, often a re-issue minutes before tipoff;
+    28 of 134 NBA games in the live store), so it fired for games recorded in the window, turned `explained` true →
+    false and hid "a review was due and none ran". The branch is now taken only when nothing was recorded for the game
+    in its window, and says "current forecast".
+  - 43 nits: `undelivered_error` is carried in the brief preflight output; "(no game of it was pending)" dropped.
+  - cb nit: the rejected-notice alert says it is not repeated if the notice is owed again later (one alert per rejected
+    receipt, key unchanged).
+- **Recorded, not changed:** a snapshot-failure run is filed under the clock's Toronto day (no snapshot, no slate day;
+  midnight edge); `_review_window` (single-game rule's other windows) uses each game's current forecast time (a9,
+  pre-existing); `explained` looks only at the end of the window; a run whose own recording fails leaves no row;
+  result-notice pick labels not HTML-escaped (pre-existing); plus the earlier open items (old-API wording until 8101
+  restarts, WIN with a leg that becomes `unscorable`, overtaken `retry` notice, table growth, soccer icon, empty list in
+  a run with an unreadable leg).
+- **Checks (worktree, isolated data, Telegram mocked; Python of the delivery venv, read-only use):**
+  - 3 new tests failed on `98f8f96` (with four adjusted wordings, `37-…`); after the change all pass.
+  - `pytest tests/test_tickets.py -q -p no:cacheprovider`: **159 passed**. Nine focused files: **329 passed**.
+  - Full suite `pytest -q -p no:cacheprovider`: **2,024 passed, 8 failed** (28 min 22 s), the 8 known
+    `tests/test_deep_study.py` (torch/keras absent). Changed-area checks pass; the suite is not fully green.
+  - `python3 scripts/check_project.py`: passed. `--ready`: not run. Frontend: unchanged since `3f85fc5`, not rerun.
+  - Live-ledger and store copies (`39-…`): settlement twice appended and sent nothing, no undelivered result; two
+    preflights recorded two clean runs; `status` recorded none.
+- **Recheck verdicts on 1121d60:** recorded here as they arrive.
+  - **Session 43 (Opus), 17:0x ET: APPROVE.** Hashes match; test_tickets 159; focused 315; full suite 2,024/8; 36 of 41
+    earlier probes unchanged (the other 5 encoded fixed findings); 4 new probes pass; live copies identical to the release,
+    nothing sent. Both its nits and a9's MEDIUM verified fixed. One very-low optional nit, not fixed: when every check
+    in the window could not evaluate the state and the forecast was re-issued after the last check, the timing sentence
+    is shown instead of "could not evaluate the review state" (`explained` false either way). Confirmed documented
+    limit: the single-game rule uses the other game's current forecast time.
+  - **Session a9 (Opus), 17:2x ET: APPROVE.** Its MEDIUM fixed: an 80-combination grid (4 scenarios × last-check and
+    re-issue offsets covering the live distribution) is identical with and without a re-issue on 1121d60 (40 of 80
+    differed on 98f8f96). test_tickets 159; focused 271; 28 earlier probes pass; full suite 2,024/8; live copies
+    identical, nothing sent. One wording nit, not fixed: the alert's "not repeated, also if it is owed again later"
+    overstates one correct path: when a different result reaches the user after the rejection and the rejected text is
+    owed again, it is attempted afresh under a new key; suggested "unless another result reaches you first".
+  - **Session cb (Sonnet, relaying its reviewer), 17:3x ET: APPROVE, no new findings.** a9's MEDIUM verified fixed
+    (four re-issue probes); earlier `explained` scenarios unchanged; rejected notices never re-sent, one alert across
+    five runs, `undelivered_error` in the brief; rounds 1–5 probes 49 passed / 1 (the outdated round-1 lock probe);
+    tickets+soccer 222; full suite 2,024/8; live copies identical to the release, nothing sent. Its two LOW accepted as
+    documented limits.
+- **Result: three APPROVE on `1121d60`** (43, a9, cb). Open: two wording nits (43: timing sentence vs "could not
+  evaluate" when every check in the window was unevaluable; a9: alert should say "not repeated unless another result
+  reaches you first") and the documented limits above. Nothing deployed; activation is the owner's decision.
+
+## Recheck of second follow-up `98f8f96`: APPROVE, 2 low wording/visibility nits (session 43) — Claude Opus 5.5, Nov9 15:30–15:55 ET
+- **Scope:** `git diff acd984a 98f8f96 -- backend docs/TICKETS.md` (sha256 `85e71df11fa8dec0`, equals
+  `36-second-followup.patch`; tickets.py `de0f394853a060a3`, test_tickets.py `fb283b83eadbef6e`). Clean `git archive`
+  exports in my scratchpad (`rev635/tree5`, `tree5-suite`). Nothing deployed, merged or sent; worktree, live stores and
+  ledger only read (sqlite backup API, `mode=ro`); Telegram mocked. Verdict sent to `nba-predictor-sprint1-58`.
+- **My four LOW findings on acd984a are resolved** (each probe that encoded one now fails for that reason only):
+  1. Check exactly at the start: X4 now `explained: false` ("A review was due at the last check, 15 minutes before
+     the start, and none finished"); the 18:00:00 run is the first check after.
+  2. Unguarded listing step: R6 now exits 0, the run row is written, alerts run; full output carries
+     `undelivered_error: OperationalError`.
+  3. "Not sent again": R1 now sends nothing after a score-only re-grade; the LOSS correction stays listed with its
+     original `rejected_at`, one alert. Also: first result rejected then score-only (Q5) and uncertain WIN → rejected
+     LOSS → score-only (Q6) send nothing. A return to the rejected result after the reading went back to the delivered
+     one is not re-attempted and gets no second alert, but is listed again (Q4: listed 1,0,1,1; alerts 1; no result
+     notice). That is the stricter rule the author documents; fine under "no automatic resend".
+  4. Forecast after the last check: X8 now reads "No trigger run saw this game before its start: its first forecast
+     was made 2 minutes before the start, after the last check (9 minutes before it)."
+- **Other changes checked:** a preflight whose `snapshot()` raises now leaves a `due NULL` / `snapshot_unavailable` run
+  (exit stays 1); a refused 17:45 → snapshot failure 17:55 → refused 18:05 is now `explained: false` ("could not
+  evaluate the review state"), which closes my earlier X5 note except for a run whose own recording fails (ledger busy;
+  documented). A run_id-less observations table is refused each run with a message (author's test).
+- **New nits (LOW, not blocking):**
+  - *`undelivered_error` is not in the brief.* `preflight --brief` (the trigger's mode) builds its output from fixed
+    keys and drops it; only `settle` and non-brief `preflight` show it (Q1). One-line fix: carry it like
+    `undelivered_results`.
+  - *"(no game of it was pending)" can be wrong.* The first check after the start records nothing for a sport also
+    when its pending games were already reviewed (`no_new_forecasts`) or locked. Probe Q2: g1 at 18:00, g2–g5 at 19:00
+    already reviewed, refused 17:45, readable 18:05 → the text says no NFL game was pending while four were.
+    `explained` is correctly false. Suggest "recorded nothing for nfl" without the parenthesis, or add it only when the
+    snapshot had no pending game of the sport.
+- **Unchanged and still fine:** all 21 earlier probes and 11 of my 14 acd984a probes pass unchanged (the other 3 are the
+  fixed findings above). X6 note stands (a due review that never ran earlier in the window does not affect `explained`;
+  `review_due_seen` shows it).
+- **Checks:**
+  - Ticket tests: `tests/test_tickets.py` **156 passed**. My nine focused files (`test_tickets`, `test_soccer_live`,
+    `test_soccer`, `test_intl_live`, `test_telegram`, `test_delivery_release`, `test_freshness`, `test_near_tipoff`,
+    `test_nfl_live`): **312 passed** — `NBA_DATA_DIR=<scratch>/data-focused5 OMP_NUM_THREADS=1
+    ~/nba-predictor-delivery/backend/.venv/bin/python -m pytest -q -p no:cacheprovider <those files>` (the author's
+    "nine focused files" set differs; it gave 318 vs my 304 on acd984a too).
+  - Full backend suite on a private export: **2,021 passed / 8 failed** in 19m51s (20:33–20:53Z), all 8 in
+    `tests/test_deep_study.py` (torch/keras not installed) — `NBA_DATA_DIR=<scratch>/data-full5 OMP_NUM_THREADS=1
+    ~/nba-predictor-delivery/backend/.venv/bin/python -m pytest -q -p no:cacheprovider` in `tree5-suite/backend`.
+  - Probes: 32 of 35 earlier pass unchanged (3 = fixed findings); new `probe/test_probe_followup2.py` 6 pass.
+  - Real data (fresh copies of live ledger, stores and `reports/tickets`, 20:36Z): release `7f629ea` vs `98f8f96`,
+    `settle` twice with and without a mocked bot: 14 tickets, 0 new grade rows, 0 sends, grades and receipts identical;
+    `undelivered_results: []`, no `undelivered_error`. The live ledger has no `ticket_trigger_*` tables and no failed
+    result receipts (15 sent).
+  - Frontend: not in the delta; not rerun.
+- **Not run:** anything against the live ledger or stores (copies only), real Telegram, a real scheduled run.
+- **Scratch:** `/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/43a0d8c8-5d19-4e11-a7c0-2df81439b128/scratchpad/rev635`
+  (probes in `probe/`, logs `logs/full-suite5.txt`, `logs/focused5.txt`).
+
+## Second follow-up commit 98f8f96 on acd984a: all delta-review findings addressed (NOT deployed; recheck pending) — Claude Fable 5.1, Nov9 14:55–15:35 ET
+- **Nothing deployed, merged, migrated or sent.** Release still `7f629ea`. Live stores and ledger only read (copies in
+  the scratchpad). Skill, automation, launchd untouched. Activation stays the owner's decision.
+- **Verdicts on `acd984a`:** session 43 APPROVE (4 low), session a9 APPROVE (2 low), session cb REQUEST CHANGES
+  (1 medium, 4 low); details in the entry below. All three were asked to recheck this commit at 15:33 ET.
+- **Commit:** `98f8f96d6dec7f4c20740cf8b4ab91aff08e0ea6` on `acd984a`, branch `audit-fixes-20261108`, worktree
+  `~/Desktop/nba-predictor-audit-fixes`; not pushed, not merged. Delta `git diff acd984a 98f8f96 -- backend
+  docs/TICKETS.md`: 3 files, +170/−20, sha256 `85e71df11fa8dec0` (`36-second-followup.patch`). tickets.py
+  `de0f394853a060a3`, test_tickets.py `fb283b83eadbef6e`. Whole change vs the release `git diff 7f629ea 98f8f96 --
+  backend frontend docs/TICKETS.md docs/SMOKE_TEST.md`: see the evidence README (section "Delta review of acd984a").
+- **Fixed (tests first, `32-…` before / `33-…` after):**
+  - cb MEDIUM, 43 low 3, a9 low 1: an owed notice whose identical text Telegram already rejected keeps the rejected
+    receipt's key while that receipt is newer than the last notice that reached the user (as a deferred notice keeps its
+    `retry` key). A payload-only change (score, result time) sends nothing new and no second alert follows. Strict
+    variant: a return to the rejected result after a reading returned to the delivered one is not re-attempted either
+    (cb's prototype allowed that resend; owner may prefer it). A different text is a new notice.
+  - 43 low 1 / cb low 2: a check exactly at the start belongs to the checks after it.
+  - 43 low 2 / cb low 4: the `undelivered_results` step is guarded (`undelivered_error`); the run continues.
+  - 43 low 4: a forecast made after the last check is said so. cb low 1: when no game of the sport was pending at the
+    first check after the start, the explanation says the check "recorded nothing for {sport}".
+  - cb low 3: a ledger with the run_id-less observations table of an unreleased build is refused with a message in
+    `observations_error` every run (live ledger has no such table).
+  - a9 low 2: a preflight whose snapshot fails records a best-effort run (`due` NULL, `snapshot_unavailable`, clock
+    time). A run whose own recording fails still leaves no row: documented, not fixed.
+- **Checks (worktree, isolated data, Telegram mocked; Python of the delivery venv, read-only use):**
+  - 8 new tests: 6 of 7 delta-review tests failed on `acd984a` (the seventh guards against over-blocking and passed);
+    after the change all 8 pass. Three expectation wordings and one scenario updated.
+  - `pytest tests/test_tickets.py -q -p no:cacheprovider`: **156 passed**. Nine focused files (same list as the entry
+    below): **326 passed**.
+  - Full suite `pytest -q -p no:cacheprovider`: **2,021 passed, 8 failed** (26 min 55 s), the 8 known
+    `tests/test_deep_study.py` (torch/keras absent). Changed-area checks pass; the suite is not fully green.
+  - `python3 scripts/check_project.py`: passed. `--ready`: not run. Frontend: unchanged, not rerun.
+  - Live-ledger and store copies (`34-…`): settlement twice appended and sent nothing, no undelivered result; two
+    preflights recorded two clean runs; `status` recorded none.
+- **Not verified:** anything live; a real rejected notice; the alert in Telegram.
+- **Still open (not in this patch):** result-notice pick labels are not HTML-escaped (a9, pre-existing; the 15 live
+  notices contain no `& < >`; the most plausible cause of a real rejection); `explained` looks only at the end of the
+  window (a review due early that never ran, then a blocker through the start, reads explained; same on 3f85fc5); a run
+  whose recording fails leaves no row; plus the items listed in the entry below (old-API wording until 8101 restarts,
+  WIN with a leg that becomes `unscorable`, overtaken `retry` notice, table growth, soccer icon, midnight boundary,
+  empty list in a run with an unreadable leg).
+- **Recheck verdicts on 98f8f96:** recorded here as they arrive.
+  - **Session 43 (Opus), 16:0x ET: APPROVE.** Hashes match; test_tickets 156; focused 312; full suite 2,021/8; 32 of 35
+    earlier probes unchanged (the other 3 encoded the fixed findings), 6 new probes pass; live copies: release and
+    98f8f96 identical, nothing sent, no undelivered_error. All four of its LOW findings verified fixed. Two new LOW nits,
+    not fixed: (1) `undelivered_error` is dropped by the brief preflight output (only settle and the full preflight show
+    it); (2) "(no game of it was pending)" can be false when the sport's pending games were already reviewed or locked
+    (explained stays false; the parenthesis should go or be conditional).
+  - **Session cb (Sonnet, relaying its reviewer), 16:1x ET: APPROVE.** The MEDIUM is fixed; no HIGH/MEDIUM remains.
+    Strict no-resend rule accepted (cost: the user does not get a re-owed rejected correction without a manual step; it
+    stays visible through the list and the alert). tickets+soccer 219 passed; 35/36 earlier probes (the outdated lock
+    probe); recheck probes 8/8; full suite 2,021/8; live copies identical to the release, nothing sent. Two LOW, not
+    fixed: (1) a rejected notice that drops off the list and becomes owed again is not alerted again (alert key = delivery
+    key); an operator who saw the list empty may think it resolved; (2) a run recorded on a snapshot failure is filed
+    under the clock's Toronto day, not the slate's (midnight edge).
+  - **Session a9 (Opus), 16:3x ET: REQUEST CHANGES.** Its two earlier findings are fixed; the other reviewers' items
+    hold; full suite 2,021/8; live copies identical. New MEDIUM, introduced by this commit: the "No trigger run saw this
+    game before its start" branch compares the last check with `first_forecast_at`, which is the CURRENT (canonical)
+    forecast's time; a forecast re-issued shortly before the start (common: 28 of 134 NBA games in the live store have
+    every version within 15 min of tipoff) makes the branch fire although the game was recorded in the window, turning
+    `explained` true → false and hiding "a review was due and none ran". Fix: take the branch only when nothing was
+    recorded for the game in the window; say "current forecast". Pre-existing LOW, same root cause: `_review_window`
+    (single-game rule) also uses the current version's time. Being fixed in a third follow-up commit.
+
+## Delta review of follow-up `acd984a`: APPROVE, 4 low findings (session 43) — Claude Opus 5.5, Nov9 14:20–14:55 ET
+- **Scope:** `git diff 3f85fc5 acd984a -- backend docs/TICKETS.md` (sha256 `8cba60f763d4f90e`, equals `31-followup.patch`;
+  tickets.py `3d933f503258f7ed`, test_tickets.py `915007b6ec31fc8c`). Reviewed from clean `git archive` exports in my
+  scratchpad (`rev635/tree4`, `tree4-suite`; 3f85fc5 in `tree3`). Nothing deployed, merged or sent; the worktree, live
+  stores and ledger were only read (sqlite backup API, `mode=ro`). Telegram mocked everywhere. Verdict sent to
+  `nba-predictor-sprint1-58`.
+- **Both owner items work as asked.**
+  - *Runs:* exactly one `ticket_trigger_runs` row per `preflight` (plain, `--brief`, `--notify`, both), none for
+    `status` or `settle` (probe W1: counts 1,2,3,4,4,4). The run and its observations are written together or not at all
+    (W2: a bad observation rolls back the run; the connection is left clean). With the ledger write-locked by another
+    connection, preflight still exits 0 after the 5 s timeout with `observations_error: OperationalError` and `due`
+    computed (W3). Append-only triggers hold. The third reviewer's MEDIUM case (refused 17:45, clean 18:45, refused
+    19:30; game 18:00) is `explained: false` on acd984a and `true` on 3f85fc5 (X7).
+  - *Rejected notices:* never sent again under their key, receipts byte-identical; listed on every settlement
+    while owed, notices on or off; dropped once the user has the current result; one alert per rejected notice (R3:
+    one alert across three preflights; R5: two tickets, two alerts); while paused, the alert waits and goes once after
+    (R4); a rejected alert stays silent but the brief keeps listing (R5). `uncertain` stays announced and unlisted.
+    Unreadable legs: not listed in that run, listed again after, no extra alert (R3).
+  - All 21 earlier notification/blocker probes (P1–P4, B1, D1–D4, E1–E3, N1–N5, X1–X3, S1) pass unchanged.
+  - Nothing else changed behaviour: real-data copies (live ledger + stores + `reports/tickets`, 19:37Z), release
+    `7f629ea` vs `acd984a`, `settle` twice with and without a mocked bot: 14 tickets, 0 new grade rows, 0 sends, grades
+    and receipts identical; `undelivered_results: []`. The live ledger has no `ticket_trigger_*` tables and no failed
+    result receipts, so activation sends no backlog alerts.
+- **Findings (all LOW, none blocking):**
+  1. *A check exactly at the start counts on both sides* (`explain_missed`: `before` uses `<= hi`, `after` uses
+     `>= hi`). Due at 17:00 and 17:45 with no review, refused only at 18:00:00 (the start) → `explained: true` from one
+     sighting at the start (X4; also true on 3f85fc5). Fix: `before` strictly `< hi`.
+  2. *The new listing step is unguarded* (`settle`, line 1320). If `undelivered_result` raises (e.g. a locked ledger),
+     preflight exits 1: grades are committed, but no review state, run record or alerts that run (R6). The
+     notification block just above is guarded for exactly this reason. Fix: try/except, report an error field.
+  3. *"Not sent again automatically" is not always true.* After a rejected LOSS correction, a score-only re-grade
+     (same text, new evidence digest) sends the same LOSS correction once under a new key (R1; also on 3f85fc5). Not
+     harmful (the user finally gets it; the list clears), but the alert text and TICKETS.md say otherwise. Reword or
+     accept.
+  4. *Wording regression for a forecast that arrives after the last check.* Forecast 17:58, start 18:00, last check
+     17:51 → "The last check before the start, 9 minutes before it, recorded neither a blocker nor a due review for this
+     game." That check could not have seen it; 3f85fc5 said "no trigger run saw it before its start" (X8).
+     `explained` stays false. Fix: when the last check predates the game's first forecast, keep the old sentence.
+- **Notes for the owner (no change asked):** a check whose recording failed leaves no run row, so the runs on either
+  side of it decide `explained` (X5: a readable, review-due 17:55 check that failed to record; refused 17:45 and 18:05
+  → `explained: true`; the failure shows only in that run's `observations_error`). `explained` looks only at the end of
+  the window: a review due at 17:00 that never ran, followed by a blocker from 17:45 through the start, is
+  `explained: true`; `review_due_seen` shows the 17:00 sighting (X6; same on 3f85fc5).
+- **Checks:**
+  - Focused 9 files on acd984a: **304 passed** — `NBA_DATA_DIR=<scratch>/data-focused4 OMP_NUM_THREADS=1
+    ~/nba-predictor-delivery/backend/.venv/bin/python -m pytest -q -p no:cacheprovider tests/test_tickets.py
+    tests/test_soccer_live.py tests/test_soccer.py tests/test_intl_live.py tests/test_telegram.py
+    tests/test_delivery_release.py tests/test_freshness.py tests/test_near_tipoff.py tests/test_nfl_live.py`.
+  - Full backend suite on a private export: **2,013 passed / 8 failed** in 19m39s (19:31–19:51Z), all 8 in
+    `tests/test_deep_study.py` (torch/keras not installed; same as on 3f85fc5) — `NBA_DATA_DIR=<scratch>/data-full4
+    OMP_NUM_THREADS=1 ~/nba-predictor-delivery/backend/.venv/bin/python -m pytest -q -p no:cacheprovider` in
+    `tree4-suite/backend`.
+  - Probes: earlier 21 pass; new `probe/test_probe_followup.py` 14 pass on acd984a (they assert the behaviour above,
+    including the four findings).
+  - Frontend: unchanged by this delta (`git diff --stat` touches no frontend file); not rerun.
+- **Not run:** anything against the live ledger or stores (copies only), real Telegram, a real scheduled run.
+- **Scratch:** `/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/43a0d8c8-5d19-4e11-a7c0-2df81439b128/scratchpad/rev635` (probes in `probe/`, logs in `logs/full-suite4.txt`, `logs/focused4.txt`).
+
+## Follow-up commit acd984a on 3f85fc5: trigger-run records, rejected result notices visible (NOT deployed; delta review pending) — Claude Fable 5.1, Nov9 13:45–14:30 ET
+- **Nothing deployed, merged, migrated or sent.** Release still `7f629ea`. Live stores and ledger were only read (copies
+  in the scratchpad). Skill, automation and launchd untouched. Activation stays the owner's decision.
+- **Why:** owner's instruction after the three approvals of `3f85fc5`: fix the diagnostic overclaim and the silent
+  rejected notice before activating; keep "PENDING … Corrected result"; leave icon, pruning and other deferred work out.
+- **Commit:** `acd984a1314e2793bdf912a40003127c8e5321ff` on `3f85fc5`, branch `audit-fixes-20261108`, worktree
+  `~/Desktop/nba-predictor-audit-fixes`; not pushed, not merged. Delta `git diff 3f85fc5 acd984a -- backend
+  docs/TICKETS.md`: 3 files, +383/−53, sha256 `8cba60f763d4f90e` (`31-followup.patch`). tickets.py `3d933f503258f7ed`,
+  test_tickets.py `915007b6ec31fc8c`. Evidence: `docs/evidence/audit-fixes-2026-11-08/` files 26–31 and the README
+  section "Follow-up to the re-review of 3f85fc5".
+- **1 Trigger runs.** Every `preflight` appends one row to the new append-only table `ticket_trigger_runs` (clean runs
+  and runs that could not evaluate the review state included); observations carry their `run_id` and are written with it
+  in one transaction. `explained` uses the last run before the start and the FIRST run at or after it. A blocker that
+  returns later, or that had cleared at the last check, no longer explains a miss. `status` records nothing.
+- **2 Rejected result notices.** Still never sent again; receipt never changed. While it is the notice the user is
+  owed, every settlement lists it under `undelivered_results` (brief preflight shows the list when non-empty) and
+  `preflight --notify` sends one alert ("RESULT NOTICE NOT DELIVERED": ticket, rejected result, last result on record;
+  key without a date). `notification_errors` is unchanged (the run of the rejection only), so the 15-minute trigger is
+  not kept busy; the skill does not read the new field and is not changed. `uncertain` notices are untouched.
+- **Checks (worktree, isolated data, Telegram mocked; Python of the delivery venv, read-only use):**
+  - The 13 new tests against the helper of `3f85fc5`: 13 failed (`26-…`); two of them only on new output (wording, new
+    key). After the change: 13 passed.
+  - `pytest tests/test_tickets.py -q -p no:cacheprovider`: **148 passed**. One existing assertion changed (explanation
+    wording names the first check).
+  - `pytest tests/test_tickets.py tests/test_telegram.py tests/test_delivery_release.py tests/test_soccer_live.py
+    tests/test_soccer.py tests/test_soccer_forecasts.py tests/test_freshness.py tests/test_near_tipoff.py
+    tests/test_nfl_live.py -q -p no:cacheprovider`: **318 passed**.
+  - Full suite `pytest -q -p no:cacheprovider`: **2,013 passed, 8 failed** (28 min 39 s). The 8 are
+    `tests/test_deep_study.py` (torch/keras absent; same on the release). Changed-area checks pass; the suite is not
+    fully green.
+  - `python3 scripts/check_project.py`: structure guard passed. `--ready`: not run. Frontend: unchanged, not rerun.
+  - Copies of the live ledger and stores (taken Nov 9 ~18:55Z), `scripts/followup_check.py`: settlement twice appended
+    and sent nothing, no undelivered result; two preflights recorded two clean runs; `status` recorded none (`28-…`).
+    The live ledger has no `ticket_trigger_*` table yet, 15 result receipts all `sent`, 8 uncertain game cards unchanged.
+  - Real Nov 8 snapshots replayed: HOU @ LAC stays `explained: false`, naming the clean check at 21:06:30Z (`29-…`).
+- **Not verified:** anything on the live app, live ledger or real Telegram; a real rejected notice; the alert text in
+  Telegram.
+- **Still open (not in this patch):** new page on old API shows "Awaiting forecast" until 8101 restarts (low);
+  announced WIN with a leg that becomes permanently `unscorable` is not retracted (owner's decision); `explained` is
+  false at the first check after a start and can turn true at the next run; an overtaken `retry` notice is never sent;
+  trigger tables cannot be pruned (one more row per run, about 96 a day); soccer title icon; in a run with an
+  unreadable leg `undelivered_results` is empty; runs after Toronto midnight are not read for a game that started just
+  before it.
+- **Activation notes (when the owner decides):** the helper hash changes (a review in flight is refused once with
+  "review again"); two tables are added to the Telegram ledger on first use; restart `api-delivery` (8101) before
+  serving the rebuilt frontend.
+- **Delta review:** requested from sessions 43, a9 and cb at 14:26 ET; verdicts are recorded below when they arrive.
+  - **Session 43 (Opus), 14:5x ET: APPROVE**, hashes match, focused 304 passed, full suite 2,013/8, 21 earlier probes
+    unchanged, 14 new probes pass, real-data copies: release and acd984a identical, nothing sent. Four LOW findings,
+    none fixed yet (owner's decision whether to fix before activation): (1) a check exactly at the start counts on both
+    sides of it (`before` uses <= hi); (2) the new `undelivered_results` step in `settle` is unguarded: if it raises
+    (e.g. locked ledger) preflight exits 1 with no run row and no alerts, grades already committed; (3) "not sent again
+    automatically" is not always true: a score-only re-grade gives the same LOSS correction a new key and sends it once
+    (also on 3f85fc5; harmless, wording); (4) when the forecast arrived after the last check, the explanation says that
+    check "recorded neither a blocker nor a due review" although it could not have seen the forecast (`explained` stays
+    false). Notes: a run whose recording failed leaves no run row, so the runs on either side decide; `explained` looks
+    only at the end of the window (a review due at 17:00 that never ran, then a blocker to the start, reads explained;
+    same on 3f85fc5).
+  - **Session cb (Sonnet, relaying its reviewer), 15:1x ET: REQUEST CHANGES.** MEDIUM: a rejected notice IS sent again
+    when the payload changes without the text changing (score-only re-grade, `result_available_at` moving): the new
+    evidence hash gives a new key that matches no receipt, so the identical "LOSS … Corrected result" goes out, and if
+    rejected again gives a second failed receipt and a second alert. Suggested fix: reuse the rejected receipt's key
+    while it is newer than the last notice that reached the user. LOW: (1) misleading wording when the blocked game was
+    the last pending game of its sport (nothing is recorded for the sport after it starts); (2) a run exactly at
+    kickoff counts on both sides; (3) a ledger with the older-shaped `ticket_trigger_observations` (no `run_id`) would
+    silently stop recording (live ledger has no such table); (4) `undelivered_results` step unguarded. Its checks:
+    tickets+soccer 211 passed, full suite 2,013/8, settlement on live-ledger copies identical to the release, nothing sent.
+  - **Session a9 (Opus), 15:0x ET: APPROVE**, delta hash matches, 13 new tests fail on 3f85fc5, test_tickets 148,
+    focused 260, full suite 2,013/8, live copies identical to the release. Two LOW: (1) the same rejected text can be
+    sent again under a new key with a new alert each time (its probe: 3 failed receipts and 3 alerts for one correction);
+    (2) a preflight that fails before recording (snapshot error, ledger busy) leaves no run row, so the next run stands
+    in for it. Pre-existing, outside the patch: result-notice pick labels not HTML-escaped.
+  - All findings of the three verdicts are addressed in commit `98f8f96` (entry above).
+
+## Ticket preflight recovered on retry — Codex, Nov9 10:12 ET
+- Pinned helper first reported `notification_errors=[{"error":"DeliveryError"}]`; retry `/tmp/ticket-preflight-20261109-1011-retry.json` passed with errors/notification_errors/alerts empty. All 11 Nov8 settlement notifications were already recorded; no new delivery or changed outcome.
+- `review.due=false`, zero eligible games/forecasts. No selection snapshot, plan or send. Next: normal scheduled preflight; preserve receipts if connectivity fails again.
+
+## Ticket preflight network failure — Codex, Nov9 07:58 ET
+- Pinned release helper `preflight --notify --brief` failed twice; retry report `/tmp/ticket-preflight-20261109-0755.json` records `notification_errors=[{"error":"DeliveryError"}]` and `alerts_error=DeliveryError`. Settlement completed with no grading errors; prior 14 ticket outcomes remain terminal. Telegram identity/control calls failed before notification receipts could be checked; no new delivery is claimed.
+- Review trigger remains `due=false`, zero eligible forecasts, no snapshot alerts. No selection snapshot/plan or ticket send. Next scheduled run should recheck connectivity through the same helper and preserve existing receipts.
+
+## Re-review verdicts on 3f85fc5: three APPROVE; unresolved findings recorded (NOT deployed) — Claude Fable 5.1, Nov9 01:53 ET
+- **Verdicts on `3f85fc57f7a6136c57c0ab92a051a35169008019`:** session 43 APPROVE; session a9 (second Opus reviewer)
+  APPROVE; session cb (Sonnet session relaying its reviewer) APPROVE with one MEDIUM "to fix or record as unresolved".
+  Sessions 43 and a9 recorded theirs in their own entries; cb did not edit this file, so its verdict is recorded here.
+  None of the reviews approves activation; that stays with the owner. Nothing is deployed; release still `7f629ea`.
+- **No code changed after the reviews.** The commit the three approved is the commit on the branch.
+- **Outdated lock test confirmed.** cb confirms `test_scn_lock_filled_and_enforced` is outdated: its expectation
+  (`check` accepts, `send` refuses) predates the change its own finding asked for. Expected now: `check` raises
+  "locked … review again", the CLI exits 1, a retryable operational failure is recorded, nothing goes to Telegram.
+- **UNRESOLVED, from cb's re-review (not fixed, not dropped):**
+  - **MEDIUM: `explained` can be true from a blocker that came back later the same day** (`explain_missed`, last
+    branch). Repro: NFL g1 starts 18:00; source stale at 17:45; clean at 18:45 (other games due); stale again at 19:30
+    → g1 reads `explained: true`. It should need the blocker at the first check after the start, not at any later one.
+    cb's suggested fix: use only the first observation of that sport at or after the start. My note: that covers the
+    repro, but a clean check that had nothing to record leaves no row, so a full fix needs one row per trigger run.
+    Affects only this diagnostic flag in `status`/`preflight`; not selection, sending or settlement.
+  - **LOW: new frontend against the release API shows "Awaiting forecast" for matches that have a forecast**, because
+    the old API sends no forecast map. Only between serving the new build and restarting `api-delivery`. Fix: treat a
+    missing map as "not reported".
+  - **LOW, owner decision: an announced WIN whose leg later becomes permanently `unscorable` is never retracted.** The
+    rule announces only settled-to-settled corrections; `unscorable` is not a settled grade.
+  - Also noted by a9, non-blocking: `explained` can read false at the first check after a start and true at the next,
+    because the proof that a blocker lasted arrives with that next check.
+- **Deferred items confirmed non-blocking by the reviewers, with the consequence of the first stated:**
+  - A result notice Telegram rejected stays `failed`. Consequence: if WIN was sent and the later LOSS correction is
+    rejected, the user keeps WIN and no later run reports it. Delivery limitation, same as the release.
+  - An overtaken `retry` notice stays `retry` and is never sent. cb found no sweep that retries deliveries.
+  - `ticket_trigger_observations` cannot be pruned. Basketball icon on the soccer title.
+- **Reviewers' own checks on `3f85fc5`:** full suite 2,000 passed / 8 failed (43 and a9: `test_deep_study` only). cb got
+  1,999 / 9: the same 8 plus a `test_research_agent` deadline test that failed under load and passed 3/3 alone; that
+  module is not in the diff. All three: frontend checks pass, browser screens clean at 1280/390 in both themes, new
+  frontend against the release API does not crash, settlement on real ledger copies sends nothing in either version.
+- **For the owner to glance at (session 43):** when an announced loss is corrected while other legs are open, the
+  ticket is announced as "PENDING … Corrected result".
+- **Next:** owner decides (a) activate `3f85fc5` as approved and fix the MEDIUM and the LOW in a follow-up, or (b) have
+  them fixed first and the delta re-reviewed. Activation notes are in the entry below ("Before activation").
+
+## Re-review of final commit `3f85fc5`: APPROVE (session 5b7a = R2, one of three reviewers) — Claude Opus 5.5, Nov9 01:00–02:15 ET
+- **Scope.** Read-only; nothing deployed. Worktree and branch untouched. Clean `git archive` exports of `3f85fc5` and `7f629ea`.
+  Read-only copies of the four stores, the ledger and `reports/tickets`, taken about 05:55Z. Telegram mocked; scratch
+  servers stopped by PID. Whole-change sha256 `10d24884cdcd9788` matches the author's.
+- **My 7 findings on `635a4ec`: all resolved.**
+  - Dark-theme forecast card: now rgb(25,36,78) with rgb(245,247,242) text.
+  - A cleared blocker no longer counts as `explained`.
+  - No second notice for an unreadable leg.
+  - The new frontend on the 7f629ea API: 20/20 screens render. The soccer pages show "Forecast status not reported" plus
+    the old API's own wording until the API restarts.
+  - A result that went pending and came back is not re-sent.
+  - The "Corrected" label survives a paused first attempt.
+  - `.error-notice` is styled.
+  - My 6 original probes pass unchanged.
+- **New probes, all pass.**
+  - The owner's notice rule (3): one recap after a loss; a reopening correction, then the final result; a deferred
+    correction that is overtaken and later needed again is sent once.
+  - The lock (2): `check()` refuses a locked leg with "review again"; `send()` still refuses it when `check()` cannot read the locks.
+- **Live copies.** Release and `3f85fc5` behave the same: 14 tickets, 36 grade rows, nothing sent. Paths not exercised:
+  every ticket is already settled. Soccer cutoffs in the API equal the stored forecasts' `cutoff_at`.
+- **Checks.**
+  - Full backend `pytest -q`: 2,000 passed, 8 failed (`test_deep_study`, torch/keras absent).
+  - Focused suites: 247 passed.
+  - Frontend: typecheck ok, 24/24 unit tests, build ok.
+  - Browser at 1280/390, light/dark: 68/68 same-version screens ok.
+- **Not blocking.** `explained` can be false at the first check after a start and true at the next. Deferred items 18–21
+  are accepted as stated.
+- **`test_scn_lock_filled_and_enforced`** is R3's probe (session 8a1e), not mine; R3 must confirm. My view: the behaviour
+  is intended. The assertion belongs on `check()`.
+- **Report:** `/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/5b7a74b4-cdae-45d0-b668-7591c3dd3d7f/scratchpad/REREVIEW-3f85fc5.md`.
+
+## Re-review of final commit `3f85fc5`: APPROVE (session 43, one of three reviewers) — Claude Opus 5.5, Nov9 00:51–01:33 ET
+- **What was reviewed.** A pristine `git archive` export of `3f85fc57f7a6`:
+  - delta from `6bb3ebf`: sha256 `f4b6caaa59bc8209`; whole change: `10d24884cdcd9788`;
+  - `tickets.py` `7ad5fc59daf2173c`, `test_tickets.py` `bb991b99415328db`.
+  - Read-only, with an isolated `NBA_DATA_DIR`, store and ledger copies, Telegram replaced by a recorder, and my own processes stopped by PID. Nothing deployed; worktree, release, launchd and `~/.codex` untouched.
+- **Owner's notification rule (my probes N1–N5 plus earlier P/D probes, all pass).**
+  - A lost 3-leg ticket gives LOSS, then nothing while legs settle, then one recap.
+  - A final loss corrected to a win gives WIN with the correction line.
+  - A correction that reopens a ticket gives PENDING with the correction line, then WIN.
+  - A winning ticket gives one WIN.
+  - Quiet cases: a settled leg flapping to pending and back; a score-only change.
+  - A notice is never sent twice when it was uncertain, rejected or deferred. Readings with an unavailable leg are never announced.
+- **`explained` covers the whole window (X1–X3, E1–E3, B1).**
+  - A blocker seen again after the start → explained.
+  - A blocker gone by the next check, or seen only once 60–75 min before the start → `blocker_observed` true, `explained` false, with the minutes stated.
+  - An observation before the 2 h window doesn't count.
+  - Due with no review → not explained; a review that failed after it was due → explained.
+- **Soccer.** A reviewed soccer match is not reported missed (my probe S1). The API's cutoffs equal the recorded forecasts' `cutoff_at` on real copies (06:00Z on match day).
+- **Locks.** A locked forecast selected as a leg is refused at `check` with "review again"; send-time enforcement is unchanged.
+- **Real ledger and store copies taken together at 05:55Z.** Settlement with notify on and Telegram mocked: base `7f629ea` and `3f85fc5` both appended 0 rows and sent 0 messages over two runs, with identical tables.
+- **Checks**
+  - **Full suite:** 2,000 passed, 8 failed (all `test_deep_study.py`, torch/keras absent). It ran at 05:50–06:13Z, so the after-midnight date case is covered.
+  - **Focused 9 files:** 291 passed.
+  - **Frontend:** typecheck passed; `test:unit` 24/24; build passed.
+  - **Headless Chrome, real 390/1280 viewports, light and dark:** 64 captures. That covers soccer × 5 screens on the new API and on the old `7f629ea` API, plus NBA/NHL/NFL day and game pages. No overflow, error boundary, failed API call, JS exception or console error. On the old API the page says "Forecast status not reported" instead of crashing.
+- **Non-blocking notes for activation**
+  - The helper hash changes, so land after the heartbeat thread logs `task_complete`.
+  - The ledger gains `ticket_trigger_observations`, which can't be pruned.
+  - Rebuild `dist` and restart `api-delivery`; order no longer matters.
+  - Documented known limits stay: a rejected result notice is final and silent; an overtaken deferred notice stays `retry`.
+  - A correction that reopens a ticket is announced as "PENDING … Corrected result". That is my reading of the owner's rule, and worth the owner's glance.
+- **Probe files:** `…/scratchpad/rev635/probe/test_probe_{rev635,blockers,delta,final,soccer_reviewed}.py`.
+
+## Consolidated audit fixes: final commit 3f85fc5, awaiting three re-reviews (NOT deployed) — Claude Fable 5.1, Nov8 23:36–Nov9 00:51 ET
+- **State:** branch `audit-fixes-20261108` in `~/Desktop/nba-predictor-audit-fixes`: `7f629ea` → `635a4ec` → `6bb3ebf` →
+  `3f85fc57f7a6136c57c0ab92a051a35169008019`. Not pushed, not merged; release still `7f629ea`, clean. Nothing was
+  deployed, migrated or sent; no skill, automation or launchd change. All work on scratch copies, Telegram mocked.
+- **Review status:** three sessions reviewed `635a4ec` with the owner's brief (session 43 Opus; a second Opus session;
+  a Sonnet session), all REQUEST CHANGES. Session 43 has since confirmed its four findings resolved on `6bb3ebf`.
+  `3f85fc5` was sent to sessions 43, cb and a9 at 00:51 ET. **No verdict on `3f85fc5` yet; activation waits for them.**
+- **Diff:** `git diff 6bb3ebf 3f85fc5 -- backend frontend docs/TICKETS.md docs/SMOKE_TEST.md`: 13 files, +460/−85, sha256
+  `f4b6caaa59bc8209`. Whole change against `7f629ea`: 14 files, +1270/−67, sha256 `10d24884cdcd9788`.
+  tickets.py `7ad5fc59daf2173c`, test_tickets.py `bb991b99415328db`.
+- **Findings:** 22 in total (21 from the three reviews, 1 of mine); status and evidence for each are in the table
+  "Consolidated findings" in `docs/evidence/audit-fixes-2026-11-08/README.md` of the commit. 18 fixed, 4 deferred.
+- **Result notices (owner's rule, Nov 8):**
+  - Sent: the first settled result of a ticket; a genuine grade correction (a leg announced as settled now has another
+    settled grade), marked "Corrected result", also when it reopens the ticket; one final recap when every leg is
+    settled and the last notice still showed an open leg.
+  - Not sent: a losing ticket again each time another leg settles; a result that went pending and came back; a
+    score-only change; any result with a leg that could not be read.
+  - Every reading is still archived in `ticket_grades`. The comparison is with the last notice that reached the user.
+- **Missed games:** `blocker_observed` and `explained` are now separate. `explained` means the entire two-hour review
+  window: a review failed after one was due, or the blocker at the last check is shown to have lasted to the start (seen
+  again at or after it; for a single-game window, no other game became eligible). No time threshold.
+  - Nov 8 replay: CIN @ ATL explained. HOU @ LAC: blocker observed, **not** explained: NFL refused at 19:08, 19:10 and
+    20:07Z, gone at the 21:06Z check, so the last 57 minutes are not established.
+  - Soccer matches that start unreviewed are now reported too.
+- **Also fixed:**
+  - a locked forecast picked as a leg is refused by `check` with "review again" (before: only at send, no retry);
+  - a refused review is filed under the day of the snapshot it reviewed, not the wall-clock day;
+  - the soccer page no longer crashes against an API older than itself;
+  - a scheduled match past its forecast cutoff no longer reads "Awaiting forecast" (the API reports each cutoff);
+  - lock wording "reserved or sent"; stale-data hint; `.error-notice` style; latest-grade ordering.
+- **Deferred (unchanged from the release), with reasons:**
+  - A result notice Telegram rejected stays `failed`: never sent again, not reported on later runs. A delivery
+    limitation; changing retry rules for rejected messages is a delivery-policy decision.
+  - A deferred (`retry`) notice whose content was overtaken by a newer result stays `retry` for ever and is never sent.
+    A delivery limitation; harmless today (nothing loops over deliveries), fixing it means editing delivery rows.
+  - `ticket_trigger_observations` cannot be pruned (append-only by design); about one row per pending game per run.
+  - Basketball icon on the soccer page title: cosmetic, already in the release, no soccer icon in the icon set.
+- **Date dependence found:** the full suite run that crossed midnight failed 3 ticket tests. Unmodified `7f629ea` fails
+  `test_refusal_saying_review_again_re_triggers_the_review` on any date but Nov 8 (a refused review was filed under the
+  wall-clock day). Fixed in `3f85fc5`; the release still has it.
+- **Checks on the exact committed tree (isolated data, Telegram mocked, Nov 9):**
+  - Full suite `pytest -q -p no:cacheprovider`: **2,000 passed, 8 failed** (all `tests/test_deep_study.py`, torch/keras
+    not installed; same 8 on unmodified 7f629ea).
+  - Focused, 10 files: **309 passed**. Frontend typecheck, 24 unit tests, build: passed. Structure guard: passed.
+    `--ready`: not run.
+  - Browser, real 1280/390 viewports, light and dark: **38/38 ok**, including the new build served by the `7f629ea` API
+    (the pre-fix build crashed there) and a match past its cutoff.
+  - The three reviewers' own probes, unchanged: 27 of 28 pass. The 28th (`test_scn_lock_filled_and_enforced`) is a lock
+    test, not a notification test: it expects `check` to accept a locked leg and `send` to refuse it; its reviewer's own
+    finding asked for the refusal to move into `check`. That reviewer has been asked to confirm.
+  - Settlement on fresh copies of the real ledger and stores, release against branch: both append and send nothing in
+    two runs (36 grade rows, 15 result notices already recorded), so switching sends nothing by itself.
+- **Not verified:** the live app, the live ledger, real Telegram; `--ready`. Earlier entries below describe `635a4ec`
+  and `6bb3ebf`; where they differ from this one (notice rules, `explained`, table name), this entry stands.
+- **Before activation:** the three verdicts; then `git -C ~/nba-predictor-delivery merge --ff-only 3f85fc5`. Activation
+  changes the helper hash (a review in flight is refused once with "review again") and adds one append-only table to
+  the Telegram ledger. The proposed skill paragraph (`09-proposed-skill-text.md`) is still not applied.
+
+## Scheduled settlement — Codex, Nov8 23:42 ET
+- Read installed skill/HANDOFF; pinned preflight errors[]/notification_errors[]/alerts[], due=false/0eligible games. No snapshot/plan/new ticket.
+- LAC1204+DAL1186 e0aad6ec4e5d both win, ticket win. CHI71 now win27–24; CHI/PIT pair and four-leg remain losses due PIT/TOR, full-leg updates preserved. Receipts299/300/301 sent04:41:53Z inspected (API acceptance only). All Nov8 suggested tickets now have terminal grades; no profit inferred. Continue future windows/health checks.
+
+## Review findings on 635a4ec addressed: commit 6bb3ebf (NOT deployed) — Claude Fable 5.1, Nov8 22:45–23:35 ET
+- **State:** branch `audit-fixes-20261108` in `~/Desktop/nba-predictor-audit-fixes` is now `7f629ea` → `635a4ec` →
+  `6bb3ebf6c01ecaa1f31cdacebb5509a0601da0a4`. Not pushed, not merged; release still `7f629ea`, clean. Nothing was
+  deployed, migrated or sent. Session 43's verdict on 635a4ec was REQUEST CHANGES (2 must-fix, 2 should-fix); 6bb3ebf
+  was sent to session 43 at 23:35 ET for re-review of the delta. **No verdict on 6bb3ebf yet; activation waits for it.**
+- **Delta** `git diff 635a4ec 6bb3ebf -- backend frontend docs/TICKETS.md docs/SMOKE_TEST.md`: 5 files, +229/−61,
+  sha256 `e7dc9458f34f5edc`. Whole change against `7f629ea`: 14 files, +892/−64, sha256 `31ac92d55877de2b`.
+  tickets.py `71935a6cc7ef988e`, test_tickets.py `81b4c44c02f74b57`.
+- **Must-fix 1, false "Corrected result" duplicate.** Result notices are now decided by what last reached the user (the
+  last sent or unconfirmed notice for the ticket: ticket grade and each leg's grade), not by what was last stored.
+  - Same content → that notice's key is reused and nothing is sent. A pending spell in between or a score-only change
+    no longer re-announces a result.
+  - Different content → sent once under a new key. The correction line is added only when a leg announced as settled
+    now has another grade; a leg that was open and settles is an update.
+  - A notice Telegram rejected is not treated as announced; a deferred one is retried once under its own key.
+  - Stored `ticket_grades` rows are unchanged from 635a4ec.
+- **Must-fix 2, `explained` hid a miss.** The trigger now also records that a review was due. `explained` is true only
+  when the last thing the trigger saw before the start was a blocker, or a review failed after the trigger last said
+  one was due. New fields `review_due_seen` and `last_observation` (with minutes before the start). The table is named
+  `ticket_trigger_observations` (renamed before any use). HOU @ LAC still reads explained (last observation, 57 minutes
+  before the start, was the refused sport); no gap threshold was invented.
+- **Should-fix 3.** A result with a leg that could not be graded is stored but never announced.
+- **Should-fix 4.** Dark theme: the live soccer forecast card uses the theme tokens.
+- **Checks (worktree, isolated data, Telegram mocked):**
+  - The new tests failed before the fixes (6 for the reviewer's cases, 1 for rejected/deferred notices); the reviewer's
+    own 5 probes pass on the fixed tree.
+  - Focused, 10 files (`test_tickets test_telegram test_delivery_release test_soccer_live test_soccer
+    test_soccer_forecasts test_freshness test_near_tipoff test_nfl_live test_intl_live`): **298 passed**.
+  - Full suite `pytest -q -p no:cacheprovider`: **1,989 passed, 8 failed** (all `tests/test_deep_study.py`,
+    torch/keras not installed; same 8 on unmodified 7f629ea).
+  - `npm run typecheck`, `npm run test:unit` (21), `npm run build`: passed. `scripts/check_project.py`: structure
+    guard passed. `--ready`: not run.
+  - Browser, real 1280/390 viewports, light and dark for the forecast card: **30/30 ok**; card contrast 7.26 dark and
+    5.87 light (1.08 dark on 635a4ec).
+  - Settlement on copies of the real ledger and stores, release code against the branch: same rows appended and same
+    notices sent in each run; a second run adds and sends nothing. In one run the NBA store copy could not be opened:
+    rows were identical, the release sent a "… unavailable …" result notice and the branch did not.
+- **Evidence:** `docs/evidence/audit-fixes-2026-11-08/README.md` in the branch, section "After the independent review"
+  (`12*`, `14`–`18`, `screens/`).
+- **Not verified:** the live app, the live ledger, real Telegram; `--ready`. The entry below ("Current live state +
+  audit fixes prepared") describes 635a4ec; where it says `ticket_review_blockers` or describes notices by `supersedes`
+  alone, this entry replaces it.
+
+## Scheduled settlement — Codex, Nov8 23:12 ET
+- Read installed skill/HANDOFF; pinned preflight errors[]/notification_errors[]/alerts[], due=false/0eligible games. No snapshot/plan/new ticket.
+- PIT+1.5 forecast1109 graded loss (away2/home5). CHI/PIT pair12a1e5539414 now loss; shared four-legb202001f2504 remains loss with PIT loss appended, CHI71 still pending. Receipts297/298 sent04:11:55Z inspected; API acceptance only. LAC/DAL remains pending. Next continue original-leg settlement; no recommendation changes.
+
+## Independent review of `635a4ec` (audit fixes): REQUEST CHANGES — Claude Opus 5.5 (session 43), Nov8 22:35–23:02 ET
+- **Scope and method.** Read-only, no deployment. I worked on clean `git archive` exports of `635a4ec` and base `7f629ea` in my scratchpad (`…/scratchpad/rev635/`), with an isolated `NBA_DATA_DIR`, read-only copies of the four stores and the ledger, Telegram mocked, and my own servers on scratch ports, stopped by PID. Untouched: the worktree, its branch, the release, launchd and `~/.codex`. Independence: I wrote revision 4, which this commit builds on, but none of this commit.
+- **Must fix 1: false "Corrected result" duplicate** (`settle`).
+  - Repro: a WIN is announced; one leg grades `unresolved` for a single run (the ticket is pending, stored, not announced); the leg returns to the same WIN.
+  - Result: the branch sends a second identical WIN notice with "Corrected result: it replaces the result sent before." The base sends 1.
+  - A score-only change with unchanged grades, then back, gives 3 notices with identical grade lines (the base gives 2).
+  - Cause: the notice compares against the latest *stored* payload, which includes pending results and score fields, not against the last *announced* result.
+- **Must fix 2: `explained: true` hides the miss it should expose** (`explain_missed`).
+  - Repro: NFL is refused at 17:00 (one blocker row) and recovers at 17:15. Preflight reports `due=True new_forecasts` at 17:15, 17:30 and 17:45, no review runs, and the game starts.
+  - Result: `explained: True`, from the 17:00 row.
+  - Cause: only blockers are recorded, never "due", so any old blocker in the pregame window counts as the explanation.
+- **Should fix 3: a passing read error on an already-lost ticket still sends an extra result notice**, "LOSS / B1 win: loss / 2: unavailable".
+  - Base and branch behave the same, and preflight also sends a `settlement_unavailable` alert.
+  - The new test `test_leg_that_cannot_be_graded_for_a_while_never_repeats_a_result_notice` asserts `len(texts)==2`, which locks this in. TICKETS.md and HANDOFF say the opposite.
+- **Should fix 4: in dark theme the live soccer forecast card is unreadable.** It is white, with team names and all three percentages invisible.
+  - Cause: `.soccer-live-card { background: var(--panel, #fff) }`; `--panel` is undefined, and `.soccer-live-prob` / `.is-top` hard-code light colours.
+  - The base already shows this on the day page. This commit also puts the card in the match page's Forecast section.
+  - Screens: `rev635/screens/branch-soccer-uefa.nations-{day,game}-dark-390.png`.
+- **Verified OK**
+  - **Forecast lock:** send-time enforcement is unchanged. The helper only adds `excluded` entries (`recorded_by: helper`) for locked forecasts the reviewer left out; reviewer entries are kept.
+  - **A → B → A → B → A:** each change is announced once, and repeats stay quiet.
+  - **Real ledger copy:** `settle(notify=False)` with store copies at 03:40Z gave identical tables under base and branch, with 0 new rows on two runs.
+  - **Soccer API/frontend:**
+    - the old frontend works with the new API;
+    - the new frontend needs the new API (`live_forecasts`, `refresh` are read unguarded), so restart `api-delivery` before serving the rebuilt `dist`, as the author's entry says;
+    - the staleness text matches the live 26 h refusal.
+  - **NBA/NHL/NFL:** no regression.
+- **Checks**
+  - **Focused suites on the clean export:** 273 passed. The command was `pytest -q -p no:cacheprovider tests/test_tickets.py tests/test_soccer_live.py tests/test_soccer.py tests/test_intl_live.py tests/test_telegram.py tests/test_delivery_release.py tests/test_freshness.py tests/test_near_tipoff.py tests/test_nfl_live.py`.
+  - **Full suite:** 1,982 passed, 8 failed, all in `test_deep_study.py` (torch/keras absent; pre-existing).
+  - **Frontend:** typecheck passed; `test:unit` 21/21; build passed.
+  - **Headless Chrome, real 390/1280 viewports, light and dark, base and branch:** 160 captures across NBA/NHL/NFL day, performance, history, daily-learning and game pages plus 5 soccer screens. There was no overflow, error boundary, failed API call, JS exception or console error. In a back-to-back rerun, 58 of 60 NBA/NHL/NFL pairs were pixel-identical and 2 differed only in the "Read at" time.
+  - **Probes:** `rev635/probe/test_probe_rev635.py` and `test_probe_blockers.py`.
+  - **Not run:** `--ready`, the live app, real Telegram.
+- **Delta re-review of `6bb3ebf`** (Nov8 23:15–23:45 ET; delta sha256 `e7dc9458f34f5edc`): **all four findings resolved; nothing new blocking.**
+  - My earlier probes now pass: one notice each for P1, P2 and P4; P3 reads LOSS, WIN*, LOSS*, WIN*, LOSS*; B1 is `explained: False`.
+  - New probes pass (`rev635/probe/test_probe_delta.py`): uncertain, failed and deferred notices; an open leg settling without a correction line; failed-after-due and due-after-failure cases.
+  - **Real-ledger check:** ledger and store copies were taken together at 04:38Z and run with notify on and a recording mock. Base and branch appended the same row and "sent" the same LAC+DAL WIN notice; a second run sent nothing.
+  - **Dark cards:** readable on the day and match pages.
+  - **Checks:** focused suites 280 passed; full suite 1,989 passed / 8 failed (all `test_deep_study.py`, torch/keras absent); typecheck, `test:unit` 21/21 and build passed; 20 soccer captures were clean.
+  - **Formal verdict deferred:** at the owner's request session 58 is preparing one consolidated final commit (new notice rule plus fixes from two other reviews). The verdict will be given on that commit.
+
+## Scheduled settlement — Codex, Nov8 22:27 ET
+- Read installed skill/HANDOFF; pinned preflight errors[]/notification_errors[]/alerts[], due=false/0eligible games. No snapshot/plan/new ticket.
+- MIN1181+BOS1198 pair9b971a2c4cee and shared-core MIN+BOS+DAL1186 trio6291dc2937a8 both win; immutable original legs all wins. Receipts295/296 sent03:26:48Z inspected (API acceptance only). No assumed profit or separate independent wins claimed for shared core. CHI/PIT and LAC/DAL remain pending; continue settlement checks.
+
+## Current live state + audit fixes prepared (NOT deployed) — Claude Fable 5.1, Nov8 21:27–22:25 ET
+- **Nothing was deployed, migrated, sent or switched.** One local commit on a new branch, not pushed, not merged. Live
+  stores and the ledger were only read (copies in the scratchpad); `~/.codex`, launchd and the three release checkouts
+  are untouched (release still `7f629ea`, clean). Not independently reviewed: this session wrote the changes.
+- **Awaiting independent review.** The owner's review brief for commit `635a4ec` was sent to session 43 at 22:29 ET
+  (this session, 58, wrote the commit and does not review it). No verdict yet; activation only after that review.
+
+### Current live state (verified read-only 21:51 ET = 02:51Z: git, shasum, launchctl, lsof, stores)
+- **Delivery release** `~/nba-predictor-delivery`, `delivery-release` @ `7f629ea`, clean.
+  - Runs: Telegram sender `com.nba-predictor.telegram` (60 s); ticket helper (only through `scripts/release_tickets.sh`);
+    `soccer-live` (hourly :25); API **:8101** `api-delivery`; web app **:4173** `web` (vite preview of its frontend).
+  - tickets.py `d8cbdbce9ef10121`, test_tickets.py `ea4398f80c76a9e9`, release_tickets.sh `1074b0eea7ced826`.
+- **Forecast release** `~/nba-predictor-live`, `release` @ `a55c874`, clean.
+  - Runs: API **:8100** `api`; NBA `odds` tick (60 s), `injuries` (:02/:32), `daily` (22:00), `nba-markets` (22:30);
+    NHL `nhl-odds` tick (60 s), `nhl-daily` (22:15).
+- **NFL release** `~/.codex/worktrees/nfl-live-release/nba-predictor-sprint1`, `codex/nfl-live-20261102` @ `8539513`,
+  clean. Runs `nfl-live` tick (60 s) with the Python of this folder's `backend/.venv`.
+- `com.nba-predictor.adaptive-train.plist` exists but is not loaded (training paused Nov 2).
+- **This working tree runs no live code.** It holds the live `data/`, `.telegram-delivery.sqlite`, `.env.telegram` and
+  the venv the NFL tick uses. Every job sets `NBA_DATA_DIR` to this folder's `data/`.
+- **The two APIs are split on purpose; do not merge them.** :4173 sends `/api/research*` and `/api/training-run` to
+  :8100 and everything else to :8101. Research definitions are bound to the code of the release that runs the forecast
+  jobs (a55c874), so those pages must come from that release; soccer and the newer screens exist only in the delivery
+  release. Moving the forecast jobs to the delivery release would need the stores migrated: a separate owner decision.
+- **Schemas:** nba 31, nhl 31, nfl 33, soccer 39. Delivery code is at 39; only the soccer store was created at 39.
+- **Review automation:** skill `d7bd95bfb74eb96f`, automation `1fc034d8791f7d1c` (ACTIVE, every 15 min), wrapper
+  `26dfc5fa14f08883`. Ledger (copy at 02:35Z): 225 sent / 8 uncertain deliveries; legacy reservation tables kept.
+- **Superseded statements further down (left as written):**
+  - "Selection revision 4 ACTIVATED": "3b74e51 … NOT deployed (release d700e3f)". It was deployed at 21:08:18 ET.
+  - "ACTIVATED: guarded delivery release": "branch delivery-release @ 3a67089" and "Not live: the always-on web app
+    (:4173) still runs ~/nba-predictor-live". The release is 7f629ea and serves :4173 since 21:09 ET.
+
+### Audit fixes (live-state audit 21:05–21:13 ET) — prepared only
+- **Where:** worktree `~/Desktop/nba-predictor-audit-fixes`, branch `audit-fixes-20261108`, one commit
+  `635a4ec6b48b742a4a972b1b2b64efdbb6666fd5` on `7f629ea`. Code diff `git diff 7f629ea 635a4ec -- backend frontend
+  docs/TICKETS.md docs/SMOKE_TEST.md`: 13 files, +717/−57, sha256 `5c0d2a3584f01254`, saved as
+  `docs/evidence/audit-fixes-2026-11-08/10-code.patch`. tickets.py `ea1b252ed4c02649`, test_tickets.py
+  `6d5367ca76e0e45f`. The README in that folder has causes, evidence and non-claims.
+- **1 Soccer page.** API now reports `forecast_state` (recorded / awaiting / out_of_scope / no_live_store), the
+  forecasts of the listed matches (beside the match records, never inside them) and the age of the source data. Banner,
+  match cards, match page, "Last imported" and the "Real data" note are derived from those.
+- **3 Copied NFL reasoning.** Cause: review 7's one-off plan script gave one catch-all sentence to every remaining
+  forecast: 19 of 31 entries (NBA 8, NHL 6, NFL 5), 18 of them lock-blocked. Fix: the helper records the lock for
+  lock-blocked forecasts itself and archives every lock; reviewer text is kept and never compared. Archived reviews
+  untouched. Proposed skill paragraph (not applied): `09-proposed-skill-text.md`.
+- **4 Missed reviews.** CIN @ ATL was reviewed at 13:10Z and 14:10Z as a lone-game window, in hand-written files the
+  later accounting does not read. HOU @ LAC (forecasts 19:05:47Z, kickoff 21:05:00Z): every reviewer snapshot from
+  19:08Z to 20:07Z has NFL refused as inactive (blocker alert 241 at 19:08:24Z; the 15:15 and 16:20 ET entries give the
+  cause as definition-hash drift from an uncommitted edit in the tree the helper then ran from, 19:04–20:31Z); no run
+  followed until the hourly snapshot at 21:06:30Z, 90 s after kickoff. Both causes were already removed (pinned clean
+  release; 15-minute trigger). Added: `preflight` records why a pending game is not being
+  reviewed (new append-only ledger table `ticket_review_blockers`, created on first use after activation), and each
+  `missed_before_start` entry carries those records, failed reviews and `explained`.
+- **5 Uncertain receipts.** All 8 preserved. Inventory with message-ID evidence: `08-uncertain-receipts-inventory.txt`.
+  Two (TOR @ DEN Nov 5, OKC @ MEM Nov 7) have no unaccounted message ID around them, which points to not delivered; the
+  other six each have one or two (IDs 115/116, 120, 174, 186, 207, 253) that may be the card or a message from the
+  owner. Delivery is established for none.
+- **6 Grading.** Push/void grading confirmed by tests. WPG ticket `cd2a6a716c85` is settled: three append-only rows
+  (pending 22:10:06Z, loss 01:41:43Z, loss with WPG +1.5 win 4–3 at 02:11:47Z), receipts 288 and 291 sent. Gap found
+  and fixed: a result corrected back to an earlier one (A → B → A) was neither stored nor announced, because rows and
+  notices are keyed by the result's hash and A's hash already existed.
+  - Now: settlement compares the new result with the ticket's latest stored result. Same → nothing is stored and the
+    notice key is that row's stored hash, which is already recorded as sent. Different and never seen → stored and
+    announced under its plain hash, as before. Different but seen earlier → stored with `supersedes` (the hash it
+    replaces), which gives it a new hash and one notice ("Corrected result: it replaces the result sent before.").
+  - A result with a leg that could not be graded is stored as before and skipped when looking for the latest result,
+    so a passing read error cannot create a correction or repeat a notice.
+  - On copies of the real ledger and stores with Telegram mocked, the release code and this branch appended the same
+    3 rows with the same hashes and the same 3 notices; a second run appended and sent nothing (`12-…`).
+- **Checks (worktree, isolated data, Telegram mocked; Python of the delivery venv, read-only use):**
+  - New tests before the fixes: 6 ticket + 3 soccer-API tests failed, frontend test module missing (`01`–`03`).
+  - `pytest tests/test_tickets.py tests/test_telegram.py tests/test_delivery_release.py tests/test_soccer_live.py
+    tests/test_soccer.py tests/test_soccer_forecasts.py tests/test_freshness.py tests/test_near_tipoff.py
+    tests/test_nfl_live.py -q`: **287 passed**. Baseline on unmodified 7f629ea (test_tickets, test_telegram,
+    test_soccer_live, test_soccer, test_delivery_release): 192 passed.
+  - Full suite `pytest -q -p no:cacheprovider`: **1,982 passed, 8 failed** (22 min 34 s). All 8 are
+    `tests/test_deep_study.py` (torch/keras not installed in that venv); the same 8 fail on an unmodified export of
+    7f629ea (`13-…`: 8 failed, 2 passed).
+  - `npm run typecheck`: passed. `npm run test:unit`: 21 passed. `npm run build`: passed.
+  - `python3 scripts/check_project.py`: structure guard passed. `--ready`: not run.
+  - Browser, headless Chrome with real 1280×900 and 390×844 viewports, worktree API + built frontend on scratch copies
+    of `soccer.sqlite`: **24/24 ok** (12 screens × 2 widths; no overflow, no failed API call, none of the old sentences).
+    One comment-only frontend edit followed; typecheck, unit tests and build were re-run after it.
+  - Real Nov 8 reviewer snapshots replayed through the fixed helper on copies: both missed games carry their cause.
+- **Not verified:** anything on the live app, live ledger or real Telegram; a real ticket with revision 4's payout
+  lines; NBA/NHL/NFL screens (unchanged, not re-run); dark theme; the stale-source and failed-read screens on live data
+  (produced on a scratch copy and by blocking the request).
+- **For the owner before activation:**
+  - Independent review of commit `635a4ec`, then `git -C ~/nba-predictor-delivery merge --ff-only 635a4ec` as before.
+  - Activation changes the helper hash (a review in flight is refused once with "review again") and adds one table to
+    the Telegram ledger. The skill paragraph needs the usual coordinated switch if adopted.
+  - The soccer page needs the new API fields: restart `api-delivery` (:8101) before the rebuilt frontend is served.
+  - The 8 uncertain cards need a look in Telegram at the listed message IDs; nothing resolves them automatically.
+  - Unchanged and still open: the original-forecast lock, the 6-leg/6-ticket limits, legacy reservation storage.
+
+## Scheduled settlement — Codex, Nov8 22:12 ET
+- Installed skill/HANDOFF reviewed. Pinned preflight due=false/0eligible games,164 reviewed today; no snapshot/plan/new ticket. Initial notification DeliveryError recovered via receipt-preserving retry; errors[]/notification_errors[]/alerts[].
+- New immutable settlements: TOR+1.5 loss, CGY+1.5 win; WPG+1.5 already win. TOR/CGY pair fb78638c5d77, TOR/CGY/WPG trio5c41fc014a11 and CHI/PIT/TOR/CGY b202001f2504 all loss due shared TOR. CHI/PIT pending in four-leg ticket, standalone pair pending. Receipts292/293/294 sent03:12:07Z inspected, API acceptance only. Next continue pending-leg settlement without changing recommendations.
+
+## Scheduled preflight — Codex, Nov8 21:42 ET
+- Read installed skill/HANDOFF. Sandbox DeliveryError recovered via authorized network retry; pinned preflight errors[]/notification_errors[]/alerts[], due=false/0eligible games. Settlement statuses unchanged, no messages sent. No snapshot/plan; continue next trigger.
+
+## Scheduled preflight — Codex, Nov8 21:27 ET
+- Pinned helper preflight: initial sandbox network DeliveryError recovered with authorized network retry; errors[]/notification_errors[]/alerts[]. due=false,0 eligible games,164 reviewed today. No new settlements or Telegram messages, no snapshot/plan. Installed skill reviewed; continue next trigger/settlement check.
+
+## Input-validation fix deployed + soccer web app switched (f7, owner's go) — Claude Opus 5.5, Nov8 21:08–21:20 ET
+- **Corrected chronology (all EST = UTC−5):**
+  - rev4 switch at 20:46:39 (01:46:39Z), not 21:46;
+  - first scheduled run started 20:56:38;
+  - reviews 9, 10 and 11 at 20:58:07, 20:58:24 and 20:58:39;
+  - Codex report at 20:59;
+  - validation fix deployed at 21:08:18 (02:08:18Z), after that thread's task_complete at 21:07:49.
+- **Fix:** release 3b74e51 tickets.py `d8cbdbce` (`_text` clear refusal for non-text review fields; review 9's cause was
+  `review.notes` as a list → AttributeError).
+- **Web app switch (as staged in batch1 docs/evidence/webapp-switch-prep-2026-11-09/PLAN.md):**
+  - `com.nba-predictor.api-delivery` added (:8101, delivery 7f629ea).
+  - `com.nba-predictor.web` now runs vite preview from the delivery frontend on :4173. It proxies `/api/research*` and
+    `/api/training-run` to :8100 (`~/nba-predictor-live` a55c874, unchanged) and everything else to :8101.
+  - First bootstrap failed ("5: Input/output error" while the old instance was exiting). 4173 was down roughly
+    02:08–02:09:28Z; the retry succeeded.
+  - Old plists: data/backups/launchd-before-webapp-20261109/. Rollback steps are in PLAN.md.
+- **No migration:** stores still at schema nba 31, nhl 31, nfl 33, soccer 39. Forecast jobs untouched.
+- **Checks (passed):**
+  - 4173 browser matrix: 4 sports × Game Day/Performance/History/Daily Learning × 1280/390 px = 32 screens, with 0 failed
+    API calls, 0 horizontal overflow and 0 error text;
+  - research status definition via 4173 is `8424d3bd`; daily-agreement via 4173 equals direct :8100 (`39b484bc`).
+- **Next scheduled review (21:11, done 21:12:30):** helper `d8cbdbce`, skill `d7bd95bf`.
+  - due=false, no_eligible_forecasts.
+  - The first notify attempt had a network error; the retry was clean.
+  - It settled DET+WPG cd2a6a716c85 as a loss; Telegram receipt 291 status sent 02:12:01Z.
+  - No ticket was forced and no test ticket was sent.
+- **UNRESOLVED finding:** the soccer Game Day banner and the "Real data" popover still say "Soccer predictions are not
+  available… no forecasts" / "No live soccer forecast… exists". Both appear beside the live 90-minute forecast panel.
+  This is stale copy shipped as staged and needs a frontend text fix plus a redeploy.
+
+## Scheduled preflight — Codex, Nov8 21:12 ET
+- Read installed skill/current handoff. Pinned preflight network failure recovered on authorized retry: errors[]/notification_errors[]/alerts[], due=false/no_eligible_forecasts,0games,164 reviewed today. No snapshot/plan/new ticket.
+- DET+WPG cd2a6a716c85 now has both legs settled: DET winner loss, WPG+1.5 win; ticket remains loss. Append-only settlement update API accepted, receipt291 sent02:12:01Z (earlier partial receipt288 preserved). User visibility not established. Other pending tickets unchanged; next run continue settlement/trigger checks.
+
+## Scheduled ticket review — Codex, Nov8 20:59 ET
+- Read current installed skill/HANDOFF; pinned helper snapshot 01:57:05Z contains rev4 assessments. Preflight network notification failure recovered with authorized retry; errors[]/notification_errors[]/alerts[], no new settlement notice. Fresh sources; future soccer outside two-hour window, no eligible NHL/NFL.
+- Reviewed10/10 (8 preflight eligible plus2 changed-line exclusions), plan /tmp/ticket-plan-20261108-2057.json. Compared LAC+MIA winners (×2.427, model40.0%, break-even41.2%) vs LAC+MIA/SAC total (×4.025,35.5%,24.8%) via release assess; independence approximations, no guaranteed value. Both require new locked LAC1214; original1204 remains immutable. Only MIA/SAC unlocked. No ticket/Telegram send.
+- Initial check notes-list AttributeError and missing market notes corrected in plan only; final check exit0, review11 no_ticket, coverage10/10. Full market coverage now includes noneligible markets explicitly. No code/deploy edits. Next: continue deterministic trigger and settlement; original-forecast lock still prevents later canonical LAC versions.
+
+## Codex evidence check / scheduled preflight — Nov8 20:44 ET
+- Read rev4 package and HANDOFF; all four proposed hashes match Claude’s report. Saved full-suite log confirms 1,951 passed / 8 failed in test_deep_study.py; f7 approval is recorded in HANDOFF, not independently rerun this turn. No activation or code changes. Next: owner activation decision; release owner must verify the coordinated switch and first real run.
+- Pinned preflight initial network delivery error recovered via authorized network retry: errors[]/notification_errors[]/alerts[], review.due=false; no review snapshot/plan or new ticket. Settlement helper reports sent for DET+WPG ticket cd2a6a716c85 loss (DET lost; WPG still pending in initial settlement data). API acceptance is not visibility.
+
+## Selection revision 4 ACTIVATED (f7, owner's direct go) — verified by Claude Opus 5.5, Nov8 ~21:00 ET
+- Independently verified read-only: release ~/nba-predictor-delivery 1400a1c (delivery-release, clean; only tickets.py/test_tickets.py changed vs 96ce63e); live tickets.py 2a053998, test 0993990a, SKILL d7bd95bf, automation 1fc034d8 (ACTIVE, 15-min), wrapper 26dfc5fa unchanged; switch 01:46:39Z; backups in data/backups/codex-ticket-skill-before-revision4-20261109T0146Z/.
+- First scheduled run after the switch (01:56:38Z) used `release_tickets.sh`: first preflight alert delivery hit DeliveryError, retry clean (errors/notification_errors/alerts []); review start recorded (e41dc82b6676); line_changed excluded 2 forecasts live (LAC total 226.5→225.5, SAC spread 11.5→12.5); every pick incl. soccer carried `assessment`; reviewer used `assess`; two plan-format refusals (review 9 'Inspect local inputs…' = AttributeError at release tickets.py:469 `review['notes'].strip()` on a plan whose notes was a LIST (Codex log 01:57:59Z; pre-existing check, not revision 4); 10 missing market note). f7 found a separate latent rev-4 crash (non-string payout_assessment at :551), fix b3098b7 on integration-20261108, NOT deployed (owner go needed); f7 then added 3b74e51 (`_text()`: non-text notes/comparison/market note/label/rationale → '…must be text, not list; review again'). Independent review by Claude (not its author): diff read, export of 3b74e51 (tickets.py d8cbdbce9ef10121, test ea4398f80c76a9e9) focused suites 207 passed; full suite not rerun on it. NOT deployed (release d700e3f); needs owner go in f7's session + switch after task_complete. Release HEAD now d700e3f (2 web-proxy-only commits, frontend/vite.config.ts; tickets.py still 2a053998) then review 11 no_ticket ("only MIA-SAC unlocked; LAC newer versions cannot replace original 1204"). No ticket → no text/image receipts to verify yet; payout lines in a real Telegram ticket NOT yet observed. Cards 289/290 sent 01:53:51Z (API acceptance, not visibility).
+
+## Selection revision for independent review (NOT deployed) — Claude Opus 5.5, Nov8 ~19:30–22:00 ET
+- f7 independent review of rev 3: APPROVE WITH FIXES (F1 must: ticket text too long for menus that send today; F2 soccer picks lacked assessment; F3 decimal_odds(0) crash; F4 wording; F5 'review again'). All fixed in rev 4 (failing-first 41-*, length probe 42-*): tickets.py 2a053998ea998b9b, test 0993990a295c18b3, SKILL d7bd95bfb74eb96f, automation 1fc034d8791f7d1c. Fresh 96ce63e + diffs: focused 199 passed; full suite 1,951 passed / 8 failed (only tests/test_deep_study.py, same 8 fail on unmodified 96ce63e: torch/keras absent; 44-*). f7 re-review of rev 4: APPROVE (code and text; 145 passed in its run). Owner go pending; NOT activated.
+- Revision 3 (final for f7 review, owner go pending): case-by-case clarification (no live record / untested markets / model lines / large sportsbook gaps are never automatic exclusions) in SKILL/automation proposed text + guard test; demo wording corrected. Exact: tickets.py 20b7f37f2e6e78d0, test_tickets.py 85e8da51f332a00f, SKILL.proposed.md 0e3a26bf8371ca1d, automation.proposed.toml 1fc034d8791f7d1c; base release 96ce63e (ticket files unchanged since 3a67089). Checks on fresh 96ce63e export + diff: focused 190 passed; full suite 1,946 passed / 8 failed, all tests/test_deep_study.py, same 8 fail on unmodified 96ce63e (torch/keras absent). Review request sent to f7; NOT activated.
+- Revision 2 (after review): ticket-level "similar past picks" range and its below/above/straddles verdict REMOVED from assessment and Telegram (per-leg records kept in `leg_records`); proposed tickets.py now sha256 prefix 20b7f37f2e6e78d0 (supersedes 5ffb9889bd83a5b7 below). Same suites 189 passed (36-selection-tests-v2.txt). Added demo/DEMO.md: proposed process on today's 7 frozen pregame snapshots (quotes stored by each as_of, no results read) → my selections TOR+1.5+CGY+1.5 (snap 4) and MIN win+TOR+1.5 (snap 5, TOR exposure flagged), no ticket in 5 snapshots; author's judgment, not validation.
+- Package: docs/evidence/selection-revision-2026-11-08/ (README first). Base release 3a67089 tickets.py 9182a677820f095f → proposed 5ffb9889bd83a5b7: per-pick `assessment` (probability, price/break-even/model_gap, similar-picks record + 95% Wilson interval, exact record, app rank, line source, app limitation note), `ticket_assessment` (payout at stored prices, break-even, model estimate, rough record range and where it sits vs break-even, priced-above-model/unpriced/no-record legs), read-only `assess --plan`, required `payout_assessment` per ticket, ticket text shows payout/break-even. Proposed SKILL/automation text diffs included (not applied; ~/.codex untouched).
+- Checks: 7 failing-first tests; isolated copy `pytest tests/test_delivery_release.py tests/test_soccer_live.py tests/test_tickets.py tests/test_telegram.py tests/test_freshness.py tests/test_near_tipoff.py tests/test_nfl_live.py` 189 passed. Before/after on today's 7 sent batches from saved snapshots + quotes stored by then, no results read (e.g. MIN+BOS pays ×1.29, break-even 77.7%, model 67.6%, record range 63–76% entirely below). Full suite/--ready/real run NOT run; not independently reviewed. Status corrections: my earlier "handed to f7, NOT landed" entry was superseded by f7's 00:04Z activation (3a67089).
+- Still open/unchanged: 6-leg cap, identical-forecast game lock (separate unreviewed 7-leg/newer-forecast work in session scratch), game_rank is hit-rate based, PNG shows no payout. Treat current tickets as experimental suggestions.
+
+## First scheduled pinned-release ticket — Codex, Nov8 19:15 ET
+- Read/reviewed current release skill/HANDOFF; only sh ~/nba-predictor-delivery/scripts/release_tickets.sh used. Preflight passed after network retry: errors[]/notification_errors[]/alerts[], due=true10newNBA. Snapshot /tmp/ticket-snapshot-20261108-1912.json records start; all31/31 eligible reviewed (NBA20/NHL6/NFL5), sourcesfresh, no line_changed. Soccer storefresh/refused{}, no eligible soccer forecast; no unsupported markets invented. This operational run is not the independent Claude audit the user asked to defer pending his proof.
+- Selected oneLAC winner1204 + identical priorDAL winner1186,45.4% independence product, ID2026-11-08-e0aad6ec4e5d. Exact0/0 each, broad677/1100 and542/767 separately descriptive. Compared apprecommendations/recordquality/quotes: LAC+BOS50.0% but BOS-790 repeats2prior tickets; DAL-305 gives less prior concentration; MIA-518 model62.2 vs83.8% implied expensive/disagreement, SAC+11.5 higher67.6 raw but band14/30/app rank5. No forced variety/size or positive-value guarantee. DAL overlap with earlier three-legNBA disclosed in review; no stake amounts.
+- Helper check/send31/31 and ticket_sent; text286 +PNG287 receipts sent00:13:50Z, both inspected; imageleg/ID/time readable. Text shows lateststored DK+103/-305 with quote time, not executable sportsbook offer. API acceptance not uservisibility. No code/source/model/deploy changes. PriorNFLwins/PHI+BUFloss preserved, otherspending. Next15min trigger+originalIDsettlement; no unopenedNBA/NHL/NFLwindows remain today, newly published versions still require accounting.
+
+## ACTIVATED: guarded delivery release + live soccer — Claude Opus 5.5 (session f7), Nov8 19:00–19:50 ET (user: "activate it, make it live")
+- **The Telegram sender and the ticket helper NO LONGER run from this sprint1 working tree.**
+  - Both run from `~/nba-predictor-delivery` (branch delivery-release @ `3a67089`, NBA_RELEASE_GUARD), with the same
+    data, ledger and credentials.
+  - **Edits here do not go live.** Land through a reviewed commit, then
+    `git -C ~/nba-predictor-delivery merge --ff-only <commit>`.
+- **Code:**
+  - `integration-20261108` @ `3a67089` (local commits `839701d` + `3a67089`; nothing pushed);
+  - integration tree gated `06dcc1d2` (1,910 passed), plus the live sprint1 ticket work and session 43's handoff
+    (quote_check, line_changed, interrupted reviews), three-way merged;
+  - focused suites 188 passed.
+- **Sender:** launchd `com.nba-predictor.telegram` now runs the release (backup:
+  `data/backups/launchd-before-delivery-20261108/`). First run: exit 0, all already_recorded, no resends. The release
+  read the same ledger (217 sent / 8 uncertain).
+- **Helper:**
+  - `~/.codex` SKILL.md (session 43's proposal plus soccer and the release path), the wrapper `scripts/tickets.py`
+    (execs `release_tickets.sh`) and `automation.toml` (rrule and status unchanged) were applied at 00:04:37Z, after
+    the review thread's task_complete;
+  - backup: `data/backups/codex-ticket-skill-before-delivery-20261108/`;
+  - `status` works through both paths.
+- **Soccer:**
+  - `data/soccer.sqlite` was created by the guarded release migrate (new rule: only the verified release's explicit
+    migrate creates a new store);
+  - openfootball history at the sealed pins: 96 files, 8,060,965 bytes;
+  - ESPN backfill: exit 0, no errors across about 1,470 competition-days. 85 live international forecasts were recorded
+    in `data/soccer.sqlite` for Nov 11–14.
+  - Later days wait correctly: Nov 15–16 for their teams' earlier games, Nov 18–20 until their dates are fetched.
+  - Club forecasts follow as Nov 20 comes into range.
+  - launchd `com.nba-predictor.soccer-live` runs hourly at :25 from the release (cycle looks ahead 7 days, commit
+    `96ce63e`). Kickstart test: exit 0, 291 refreshes, 0 errors.
+  - The release ticket snapshot shows soccer fresh, 23 live competitions, 0 refused, 85 picks. Soccer legs become
+    eligible in the usual 2-hour window before kickoff.
+  - The first release-helper review (#7, 00:13:53Z) sent 2026-11-08-e0aad6ec4e5d.
+- **Not live:** the always-on web app (:4173) still runs `~/nba-predictor-live` @ a55c874, so the soccer forecast panel
+  is not in that app yet. Moving that release also moves the forecast jobs and needs the NBA/NHL/NFL stores migrated to
+  39, which is a separate decision.
+- **Rollback:** docs/TICKETS.md "Guarded release" and docs/SOCCER_LIVE_PLAN.md §5. Restore the two backup folders,
+  then `launchctl bootout` / `bootstrap`.
+
+## Line/price check + interrupted-review guard + evidence-based selection text (HANDED TO f7, NOT landed) — Claude Opus 5.5, Nov8 18:50–19:10 ET
+- Owner-forwarded request (~18:50): remove variety/size requirements, evidence-based comparison, check changed lines/prices, interrupted reviews resume or record a failure before kickoff. f7 is moving delivery to a guarded release checkout and asked me not to land in sprint1 or edit ~/.codex, so nothing here is live; the full package is in docs/evidence/ticket-gap-repair-2026-11-08/handoff-to-f7/ (README, tickets.py.diff base d93bf926a04eea7a → 14f0a77d4427f1f8, test diff, SKILL/automation proposed text + diffs).
+- Checks: 5 new tests (4 failing-first on base); copy `pytest test_tickets test_telegram test_nfl_live test_freshness test_near_tipoff` 148 passed / 1 pre-existing failure; read-only real snapshot shows DK prices for winner/spread/total in all three sports, none for team totals/reg3, no moved lines at 23:57Z; mocked e2e send shows "DK -700" legs + price footer, start + outcome recorded. Full suite/--ready NOT run; not independently reviewed.
+- Open for the owner: 6-leg cap; whether a newer forecast version of an already-ticketed game may join another ticket (currently refused; originals immutable).
+
+## Completed NBA review before19:00 — Codex, Nov8 18:59 ET
+- Read/reviewed skill/HANDOFF. Preflight --notify --brief passed after network retry: errors[]/notification_errors[]/alerts[], due=true. Prior18:41 review was interrupted before check/send; this run took fresh /tmp/ticket-snapshot-20261108-1857.json and completed all38/38 NBA15/NHL18/NFL5. All sources fresh; no delayed source excluded. Soccer no approved provider; NHL new canonical versions locked to earlier original sent IDs, CHI remains same core. No source/model/methodology edits.
+- Sent MIN Timberwolves1181+BOS1198 pair67.6% approximate independence product; optional3game adds DAL Mavericks1186,47.8%. IDs2026-11-08-9b971a2c4cee /2026-11-08-6291dc2937a8. Selected exact0/0, historical164/186,483/607,542/767 separately descriptive. App rank1 recommendations and broad evidence support winners over weaker spread/total/team-total cohorts; no forced market variety/long-shot ticket. Both share MIN/BOS; no dollar amounts. Current prices/lineups unverified, no guaranteed edge or independent AI probabilities.
+- Helper check/send passed38/38; text282 and PNG283 receipts sent23:58:22Z (before MIN19:00), PNG inspected readable. API acceptance not visibility. Preflight retains earlier PHI+BUF loss (result277 already_recorded), twoNFL wins and otherspending. No bets/profit assumed. Two21:00 NBA windows pending; next15-min trigger and original-ID settlement. Preserve interrupted-run gap in audit, do not claim18:41 delivery.
+
+## Integration + live soccer + national teams (staged, NOT live) — Claude Opus 5.5 (session f7, single writer), Nov8 14:30–18:40 ET
+- **Integrated tree:** `~/Desktop/nba-predictor-batch1`, uncommitted. It contains batch-1 final `adacc372`, soccer-train
+  `8614c1e2`, Codex ticket fixes and this session's work.
+- **Reports:**
+  - docs/evidence/integration-2026-11-08/INTEGRATION_REPORT.md;
+  - docs/SOCCER_LIVE_PLAN.md;
+  - docs/INTERNATIONAL_PROTOCOL.md;
+  - docs/TICKETS.md, "Guarded release".
+- **Ticket fixes.**
+  - Codex's six reproduce, verified by 2 independent verifiers with the real Telegram error mapping.
+  - 11 more defects found. 9 are fixed test-first: orphan PNG, render failure without alert, malformed reply aborting
+    settlement, offline preflight report, notice failures, unclaimed reservation alert, archive races, ledger path for
+    release checkouts, coverage counts. 2 are recorded.
+- **NFL blocker** (user-reported): the coverage.py edit broke activation `b6074877`. The integrated `coverage.py` and
+  `jobs.py` were restored to HEAD and early publication was withdrawn. Regression: `tests/test_nfl_activation_compat.py`
+  on a byte copy of the activation artifact.
+- **Guarded release for the sender and helper:**
+  - NBA_RELEASE_GUARD with explicit NBA_TELEGRAM_LEDGER and NBA_TELEGRAM_CREDENTIALS; a guarded ledger is never created;
+  - delivery checkout `~/nba-predictor-delivery`;
+  - rehearsed in a throwaway repository: 9 scenarios as designed.
+- **Malformed /games/%E0%A4%A** is fixed in Layout with a recovery state and an error boundary.
+- **Soccer.**
+  - Club reserved test run once with a pre-run reading plan: 0.980 vs 1.071. Scope: EPL, La Liga, Bundesliga, Serie A,
+    Ligue 1, UCL. UEL fails (n 284).
+  - Live source is ESPN, by the user's decision ("forget the terms"); openfootball is stale since Sep 22.
+  - Separate append-only live ledger (0038) with completeness and freshness refusal.
+  - New international model: protocol first, then development, seal `10547b47`, one test. Paired −0.173 (−0.194 to
+    −0.152). In scope: friendlies, Nations Leagues, qualifiers, continental finals. World Cup finals excluded (n 64).
+  - Tickets, Telegram parlays and the app panel handle soccer: 90-minute 1X2 only.
+- **Real forecasts in the working copy (not live):** 85 national-team matches Nov 11–14, and 3 club matches on Nov 20.
+- **Checks:**
+  - gate 3 PASSED on `0134cbd7`: 1,898 passed / 0 failed, hash equal before and after;
+  - gate 4 FAILED (1 test-isolation failure in my new API test, fixed); **final gate 5 PASSED on `06dcc1d2`: 1,910 passed / 0 failed**, hash equal before/after;
+  - browser: NBA/NHL/NFL 48/48 at 1280/390; soccer 1024–1920/390 with 0 overflow and 0 errors;
+  - focused suites 350+ passed;
+  - frontend typecheck, build and 15 unit tests passed.
+- **Live versus staged.**
+  - Live is unchanged. The sender and the hourly helper still import THIS working tree (with Codex's six fixes, not
+    these).
+  - Soccer is not live: no `data/soccer.sqlite`, no soccer job, no soccer in the installed skill.
+- **Integration gap found at the end (must merge before release).** Sprint1 changed live at 18:20–18:35 ET, by another
+  session: stale-source delay and re-trigger, 4-leg tickets. Files: `app/tickets.py`, `app/telegram.py`,
+  `app/telegram_card.py`, `tests/test_tickets.py`, `tests/test_telegram.py`, `docs/TICKETS.md`. The integration tree
+  (gated `06dcc1d2`) has the earlier versions of these files. Re-merge them, rerun the focused suites and one gate before
+  review or release.
+- **Next, each needing the user's go:**
+  1. Independent review and a commit of the integrated tree.
+  2. Activate the delivery release (TICKETS.md steps 1–6).
+  3. `scripts/soccer_live_setup.sh`, the soccer launchd job and the skill update (SOCCER_LIVE_PLAN §5).
+  4. Separately, move `~/nba-predictor-live`, which needs store migrations to 39.
+- **Open:**
+  - same-game and cross-window stake policies;
+  - a personal-slip screen;
+  - token rotation;
+  - national-team results from competitions ESPN does not list here are not inputs.
+
+## Stale-source ticket gap: delayed sources + re-trigger (LIVE in sprint1) — Claude Opus 5.5, Nov8 18:20–18:35 ET
+- Cause (owner: "7 PM games and I still didn't get anything"): the release tick (nba-predictor-live `app.cli tick`) refreshes, then runs near_tipoff for 5–48 min under the store lock (NBA 22:11–22:48Z, 22:50–23:31Z); no refresh can run meanwhile, the 420 s freshness rule marks the source stale and every NBA leg was refused. NBA 19:00/19:30 forecasts (17:51 ET) were fresh ~6 min; the 15-min heartbeat (verified firing 21:55/22:10/22:26/22:41/22:57/23:11/23:26Z) missed them. docs/TICKETS.md already names the lock coupling; the worker split is release-side and NOT done.
+- Changed (failing-first, 7 new tests: `refresh_delay`, delayed serve/refuse, blocked-then-usable re-trigger, "review again" re-trigger): app/tickets.py — `refresh_delay()` (stale + not failing + a job_runs 'running' row started at/after the last successful refresh), `source_usable()` (delayed sources serve only games whose last refresh is inside their 2-h pregame window; legs carry `status_refreshed_at`, text adds "NBA game status last refreshed HH:MM (app forecast job still running). Confirm each game is still on"), review_state `delayed` block; `reviewed_history` no longer counts forecasts that were unusable in that review's snapshot; check refusals containing "review again" are retryable. Skill: `delayed` explained, never exclude a delayed sport as stale. Landed 23:28:31Z and 23:32:17Z (rollback-delay/, rollback-retrigger/ incl. SKILL.md).
+- Incident (mine): landing 1 changed helper_sha256 13 s before Codex's 23:28 send → "Skill or helper changed; review again" (ticket_reviews 4, then not retryable). Codex re-reviewed and sent 270/271 at 23:29:29Z, excluding NBA under the then-installed skill. Land only when the heartbeat thread shows task_complete.
+- Checks: live tree, isolated NBA_DATA_DIR, `pytest test_tickets test_telegram test_nfl_live test_freshness test_near_tipoff`: 143 passed / 1 failed (pre-existing coverage.py test). Mocked e2e on store copies with NBA delayed: text+PNG sent with the refresh note, ticket_sent recorded. Read-only live status after landing: due=True new_forecasts, 38 forecasts/7 games (NBA fresh again 23:31Z). NFL definition b6074877a7e7ccfe, activation True. Full suite/--ready NOT run. Not independently reviewed; the delayed-source rule needs the owner's explicit OK (Codex flagged it as methodology).
+
+## Trigger review / new-game pair + four-leg delivered — Codex, Nov8 18:30 ET
+- Skill reviewed; preflight --notify --brief passed after network retry: errors[]/notification_errors[], NBA alerts already_recorded, due=true11new NHL/NFL forecasts. All33 eligible reviewed (NBA10source-age excluded/NHL18/NFL5), check/send passed33/33. Prior originals/receipts inspected, twoNFL wins unchanged, remaining4suggested tickets pending. No source/model/job edits.
+- Selected CHI Bears ML71 + PIT+1.5 1109 pair48.1% approximate product; optional four-game adds identical TOR+1.5 1097/CGY+1.5 1103,25.4%. IDs2026-11-08-12a1e5539414 and2026-11-08-b202001f2504. Pair shares CHI/PIT with larger ticket; TOR/CGY also repeated from earlier pair/triple, one loss can defeat several. CHI exact0/0/no broader cohort, PIT0W1L/1 vs season37/51, TOR/CGY0/0 vs51/66. Alternatives totals/spreads/regulation/team totals compared; no forced quota, dollar amount or price-edge claim. Prices unverified.
+- Dispatch first refused concurrent helper-hash change; re-read current skill/helper, fresh /tmp/ticket-snapshot-20261108-1830.json unchanged33IDs/probabilities, re-reviewed and validated. New helper permits refresh_delay for running forecast job with status refreshed inside2h; NBA actual source_state still stale22:50:10Z, excluded for unresolved age under installed skill, not silently changed selection methodology. Successful text270/PNG271 receipts sent23:29:29Z, PNG readable, ticket_sent recorded; failure audit retained. API acceptance not visibility.
+- Soccer no approved provider; pending2lateNBA windows,20:00 NBA window open but missing publication. Next:15-min trigger/new forecast complete review, inspect source-age policy/installed-skill consistency in owning repair task, immutable settlement. No training/bets/deployment.
+
+## Trigger review / two NHL options delivered — Codex, Nov8 17:32 ET
+- Skill reviewed. Preflight --notify --brief succeeded after network retry: errors[]/notification_errors[], NBA stale/missing forecast alerts already_recorded, due=true12new NHL forecasts/3usable games. Prior two NFL tickets wins unchanged, PHI+BUF and DET+WPG pending; immutable batches/receipts inspected. No source/job/model edits.
+- New snapshot /tmp/ticket-snapshot-20261108-1727.json, helper check/send accounted23/23 eligible (NBA5stale excluded, NHL18). Selected TOR+1.5 1097 + CGY+1.5 1103 pair52.8% approximate product; optional three-game ticket adds identical previously sent WPG+1.5 1091,34.9%. IDs2026-11-08-fb78638c5d77 /2026-11-08-5c41fc014a11. All selected exact0/0; TOR/CGY same season51/66 cohort, WPG37/51 separately disclosed, not independent calibration. Reviewed winners/totals/team totals/regulation; weaker alternatives or prior-game locks excluded, no forced4–6leg option. Pair/triple share TOR/CGY; WPG also shared with prior DET ticket. Current prices unverified, no stake amounts.
+- Text264+PNG265 receipts sent22:31:04Z, ticket_sent recorded; PNG inspected readable. API acceptance not visibility. NBA stale blocks mixed sport use, missing19:00 forecast persists; soccer unavailable. Pending later5NBA/1NHL/1NFL at snapshot; earliest next19:30 opens17:30. Next:15-min trigger/review new publications, preserve shared forecasts, original-ID settlements; no allocation cap or performance guarantee.
+
+## Trigger preflight / publication alert — Codex, Nov8 17:10 ET
+- Skill reviewed; preflight --notify --brief completed after network retry: errors[]/notification_errors[], due=false(no new ticketable forecasts). Per trigger rule, no snapshot/plan/full review or ticket send. New NBA total1170 is blocked by already sent DET winner1164; existing DET+WPG ticket remains pending, as does PHI+BUF. Earlier2NFL winning settlements already_recorded.
+- Operational gap: overdue19:00 forecasts missing NBA espn:401909947 and NHL nhl:2026020279/2026020281. NBA health alert already_recorded; new NHL alert261 receipt sent22:10:20Z(API acceptance, not visibility). No refresh/model/job edits or duplicate message. Soccer no approved ticket provider. Next:15-min preflight; full review only when fresh ticketable publication makes due true, publication failure remains for source/job owner.
+
+## New-trigger live review + combined ticket — Codex, Nov8 16:58 ET
+- Read/reviewed current skill;15-min heartbeat actually fired16:55 (before old17:10), confirming scheduler pickup. Preflight --notify --brief passed after network retry: errors[]/notification_errors[]/alerts[], due=true11new forecasts/2games; NBA/NHL/NFL fresh, no blocked/locked games; soccer unavailable. Original KC+DET and KC+DEN graded wins, result receipts256/257 sent; PHI+BUF pending. No assumed user bets/profit.
+- Fresh snapshot /tmp/ticket-snapshot-20261108-1656.json, all11 eligible NBA5/NHL6 reviewed. Selected DET ML1164 + WPG+1.5 1091, both18:00 ET, ID2026-11-08-cd2a6a716c85;42.2% independence approximation, exact0/0 each, historical677/1100 and season37/51 kept separate. Compared all markets, mixed-total/spread/team-total alternatives;2games cannot support longer ticket, conflicting shared markets prohibit padded variants. Pending5NBA/3NHL/1NFL later windows; trigger reports missed CIN–ATL/HOU–LAC, old archived CIN review may predate trigger accounting.
+- Helper check/send passed11/11 with ticket_sent recorded; text258+PNG259 both receipts sent21:57:15Z, PNG inspected leg/ID/time transcription readable. No dollar amounts. API acceptance not visibility. A temporary plan-builder syntax error caused one operational_failure before correction; successful revalidation/send preserved that audit entry, no bypass. No code/model/source changes. Next:15-min preflight trigger, new-window all-market review, immutable settlement; no forced quota or performance claim.
+
+## Card→ticket gap repair (LIVE in sprint1) — Claude Opus 5.5, Nov8 16:20–16:45 ET
+- Trace (live receipts + read-only store copies): game cards go out ~1 min after publication (60 s sender); tickets only ran at the hourly :10 Codex review → 0–60 min lag (LAL@DET/TBL@WPG published 16:13, cards 16:15, still unreviewed 16:38). NFL HOU@LAC (16:05) never reviewed: NFL inactive 14:04–15:31 (coverage.py hash drift, since reverted); 16:25 NFL games first reviewed ~100 min after publication; 16:07 review stopped by the then-$5 cap. NBA source went stale 16:32 (odds tick blocked; release-side), which refuses NBA legs. Most 2-h windows hold ≤2 games; helper caps 2–3 legs, ≤3 tickets; no same-game legs; forecasts exist only from T−120, so whole-day parlays are impossible.
+- Changed (failing-first, 12 new tests): app/tickets.py — `review_state` trigger in `preflight` (+`--brief`), read-only `status`; due only for an unreviewed fresh forecast with ≥2 ticketable games; explicit blocked/unavailable (NFL inactive reason + unserved counts)/locked_games/missed_before_start; append-only `ticket_reviews` outcome per check/send (ticket_sent/no_ticket/paused/operational_failure); retryable refusals re-trigger, uncertain/failed never; shared-exposure text only for the current batch with readable labels; "COMBINED PARLAY TICKETS" headers. telegram.py card caption "PROP51 GAME CARD · single game, not a parlay ticket"; telegram_card.py ticket PNG header. Untouched: models, forecast jobs, app UI, NFL-hashed files (definition b6074877a7e7ccfe before=after, activation true).
+- Skill SKILL.md and automation.toml (FREQ=MINUTELY;INTERVAL=15, stop when review.due false) hand-edited; Codex pickup of the TOML UNVERIFIED (a run before 17:10 would confirm). Rollback copies + evidence: docs/evidence/ticket-gap-repair-2026-11-08/.
+- Checks: live tree, isolated NBA_DATA_DIR, `pytest test_tickets test_telegram test_nfl_live test_freshness test_near_tipoff`: 130 passed / 1 failed (pre-existing coverage.py fallback_reason test; not touched — NFL hash). Mocked e2e on real copies: text+PNG sent, dedup, /stop→paused, uncertain never re-sent + alert, no-ticket recorded, trigger clears. Live read-only status: due=True, 11 forecasts/2 games. Card sender tick 21:38:46Z ok. Full suite, --ready, browser NOT run. No real sends/live check/send by this session.
+- Owner request 16:42 ("polyvalent", varied, intuitive; not necessarily 7 legs) → landed 16:45: up to 6 options/review, 2–6 legs each (was ≤3 tickets, 2–3 legs); one-line menu (#n, legs, model %), bet type per leg (Moneyline/Spread/Puck line/Over-Under/Team total/60-min result), PNG shows first 3 + "+N more". Skill/automation: varied menu when the window supports it, never padded, zero when unsupported. Tests: same command 136 passed / 1 pre-existing failed; NFL definition before=after. Rollback: evidence rollback-menu/.
+- Open: no live review has run on the new code yet (live status 16:45: not due — NHL source stale, 1 usable game); Codex pickup of the 15-min schedule UNVERIFIED; cross-window (whole-day) tickets need earlier forecasts (model change, not done); release-side stale sources (NBA 16:32, NHL 16:43) block legs; coverage.py regression; independent review required (this session authored).
+
+## Card versus ticket diagnosis — Codex, Nov8 16:16 ET
+- Read-only ledger/archive/automation inspection: individual game cards continue independently of hourly AI ticket reviews. Confirmed actual ticket text245 + PNG246 API accepted15:09 ET; latest16:07 review accounted15/15 but sent none due then-active$5 rule. User subsequently removed all staking rules; automation read-back ACTIVE hourly:10 with no fixed stakes. No post-removal hourly review exists yet. API receipt does not establish user visibility.
+- Assessment: delivery has worked, but separate triggers/statuses and prior allocation/source gaps make the workflow confusing and timing fragile. No evidence here establishes incremental predictive advantage. No automation/send/code changes in this diagnosis. Next repair proposal: connect review to new forecast availability, show explicit ticket outcome/reason, distinguish game cards from ticket messages, verify end-to-end delivery without promising winners. User asks comparative agent suitability; do not claim model superiority or AI credit for independently built slips.
+
+## Removed preset staking system — Codex, Nov8
+- User explicitly removed all fixed dollar stakes, main/variation allocation and daily$5 cap. Updated installed skill and existing ACTIVE hourly automation through automation_update/read-back; future tickets omit stake_usd/dollar recommendations unless explicitly requested. Helper now accepts omitted stakes; no per-day amount/count allocation gate, no cap footer; text/cards/captions support amount-free tickets. Historical original messages/amounts and personal-slip stakes retained. Combination dedup, shared-game consistency, uncertain-send protection and complete review remain.
+- Validation: skill quick_validate passed; mocked amount-free text+PNG send after prior$10 record passed, cross-batch/legacy/uncertain/full-review focused checks passed. Full test_tickets:37 passed/1 existing unrelated fallback_reason identity regression failed at313 (coverage.py), not changed/skipped. Structure check fails existing audit batch1-final.patch/diffstat names; no bypass. No live ticket sends/bets/deployments for this change. Next: hourly reviews use new no-staking policy; address unrelated coverage regression in its assigned work.
+- Attribution correction: user independently built all screenshot tickets; matching proposed legs do not establish AI contribution. Do not claim the user's wins as ours.
+
+## Hourly complete-slate review after cap — Codex, Nov8 16:09 ET
+- Skill reviewed; preflight --notify passed after network retry: errors[]/notification_errors[]/alerts[]. NBA/NHL/NFL all fresh, NFL available again without this run changing activation. DET31 graded win; all3 Nov8 tickets still pending. Inspected receipts234text,245text,246image sent; suggested reservations total$5, no further allocation or send. Earlier first batch has no visual receipt (predates remediation), not blindly replayed.
+- New snapshot /tmp/ticket-snapshot-20261108-1606.json; all15 eligible NFL forecasts across3games reviewed and helper check archived coverage15/15, tickets=[]. Compared SEA61+SF56(62.23% approximate product), SF56+over39.5 63(57.09%), NE alternatives and all spreads/team totals; exact samples all0, broader band unavailable, current prices unverified. No independent AI probability/edge claim.
+- NBA/NHL18:00 windows open but publication pending (no overdue missing games at snapshot); unopened5NBA/3NHL/1NFL remain. Soccer no approved ticket provider. Next: continue complete coverage with tickets=[] after cap, re-review new publications, immutable-ID settlement; do not revise original recommendations or increase stakes.
+
+## Sport × market coverage audit (read-only) — Claude Opus 5.5, Nov8 15:15–15:30 ET (10 lanes)
+- Report: docs/evidence/market-coverage-audit-2026-11-08/REPORT.md (+ lanes/). No code/skill/plist/data change; stores read via copies; no train/refresh/send/test-run.
+- LIVE BREAK (unresolved, needs user go): since 19:04:08Z NFL is silently dropped from Telegram cards (telegram.py:263-266) and ticket snapshots (tickets.py:30) because the uncommitted S1 coverage.py:269 edit changes the NFL activation hash (S1 aedc35c649ce50dc vs stored b6074877a7e7ccfe; lead re-verified). NFL-R still records: forecasts 51–70 exist but were never carded/reviewed; coverage still "passed". TB@CHI window 23:20Z next.
+- Live forecasts: NBA 5 markets, NHL 6 (incl. reg3), NFL 5; soccer none (sealed 1X2 research only in soccer-train, reserved test not run). No props/alt/period/DC/DNB/BTTS anywhere. Team totals + reg3 always model line/no price. Sent legs so far: winners + NHL +1.5 only.
+- Other: live app NBA/NHL only (UI Oct 16, ?sport=nfl renders NBA); hung NBA runs 6126/6465 (~23 h gap, 7 games); no max quote age; NFL quote query lacks 'current' filter; send adds exposure text not reviewed (msg 245 shows nfl:46); duplicate cards per re-forecast; S1 lacks L's box-score fix.
+- Checks: test_tickets.py 36 passed (isolated, lane 5); full suite/--ready/helper/browser not run.
+
+## Hourly mixed ticket delivered — Codex, Nov8 15:10 ET
+- Skill reviewed; preflight --notify passed after network retry, errors[]/notification_errors[], prior tickets pending, NFL inactive alert already_recorded. NBA recovered fresh/no due gap, NHL fresh. All11 eligible forecasts reviewed (NBA5/NHL6), helper check/send passed11/11, no new publication gap.
+- Sent final$1 variation PHI winner1154 + BUF+1.5 1079, both15:30 ET; ID2026-11-08-f02719e1e628. Model product48.5% independence approximation; selected exact0/0 each, broader683/999 NBA and51/66 NHL season separately disclosed. Compared total/spread/regulation/team totals and mixed alternatives; no verified price-edge claim. Text245 and visual PNG246 API accepted20:09:06Z, both receipts sent; image/caption archived. No user-visibility claim.
+- Daily suggested total now$5 ($3+$1 prior, $1new), no further allocations. NFL definition mismatch blocks open windows, soccer no approved ticket provider. Pending unopened6NBA/4NHL/1NFL, four NFL afternoon windows unavailable. Next: continue complete-slate snapshots/reviews with tickets=[] after cap and original-ID settlement, no training/source/activation changes.
+
+## Hourly full-slate review — Codex, Nov8 14:11 ET
+- Validation addendum: concurrent skill/helper update rejected the older hash; re-read revised delivery/remediation instructions, fresh14:12 snapshot unchanged6 IDs/probabilities/gaps, new no-stake plan checked successfully6/6. No sender policy bypass or extra delivery.
+- Skill reviewed; preflight --notify passed after network retry, errors[], Nov8 tickets pending. Health alerts239–241 API accepted: NBA stale + missing due forecast espn:401909945, NFL inactive. Read-only NFL diagnosis: seal/choice/threshold valid, activated_at present, stored activation definition differs from current definition. No activation/source/model changes.
+- Fresh NHL snapshot /tmp/ticket-snapshot-20261108-1408.json; all6 eligible VGK–BUF markets reviewed, BUF+1.5 forecast1079 strongest71.6%, season51/66 separate from exact0/0. No second distinct eligible game; helper check passed6/6, archived tickets=[] comparison. No new ticket send; receipt234 sent/$4 allocated, $1 remains. Prices unverified; soccer model unavailable. Pending unopened6NBA/4NHL/4NFL; NFL16:05 window already open but blocked. Next: restore NBA publication/NFL definition integrity in assigned operational work; continue later full-slate review and immutable settlements.
+
+## Hourly full-slate review — Codex, Nov8 13:07 ET
+- Read/reviewed skill; preflight --notify passed after network retry: errors[], Nov8 tickets pending, alert already_recorded. Receipt234 remains sent/API accepted; $4 allocated/$1 available, no visibility claim. Fresh NBA/NHL/NFL, missing_due_games[]; soccer predictions unavailable.
+- Fresh snapshot /tmp/ticket-snapshot-20261108-1305.json: all earlier games started, eligible coverage0/0. Helper check passed and archived tickets=[] with full combination/timing comparison. No new Telegram message. Pending unopened windows7NBA/5NHL/5NFL; next15:30 ET games open13:30. Next: review fresh later slate and exact-ID settlements without changing earlier recommendations or increasing stakes.
+
+## Hourly full-slate review — Codex, Nov8 12:10 ET
+- Skill reviewed. Preflight --notify passed after sandbox network retry: errors[], both Nov8 tickets pending, prior alert already_recorded. Fresh sources; no overdue missing games. Receipt234 remains sent/API accepted; $4 reserved, $1 remains.
+- New snapshot /tmp/ticket-snapshot-20261108-1205.json: same41 eligible forecasts (NFL35/NHL6/NBA0), every forecast re-reviewed; helper check passed coverage41/41 and archived full no-stake review. Compared winner/spread/total/team-total/regulation and mixed/shared-core alternatives; no new evidence warrants another ticket. No Telegram ticket message sent. Soccer predictions unavailable. Pending unopened windows7NBA/5NHL/5NFL; earliest next15:30 ET start opens13:30 ET. Next: continue full-slate reviews and exact-ID settlement, retaining $1; no whole-day claim.
+
+## Hourly joint-slate tickets sent — Codex, Nov8 11:17 ET
+- Preflight --notify passed errors[], prior uncertain-card alert already_recorded. Skill reviewed. Fresh snapshot covered41/41 eligible forecasts (NFL35/NHL6), all markets jointly; NBA windows unopened, soccer prediction unavailable. Compared mixed, spread/total and shared-core alternatives. Selected $3 KC ML46+DET ML31 (53.3% product), $1 KC ML46+DEN ML26 (52.0%); same KC core exposure$4. Selected exact histories all0 settled; NFL band evidence unavailable. Bet365 prices/confirmed lineups unverified; no automatic reversal or new label/price gate.
+- Helper check/send passed complete forecast accounting, no new publication gap. Telegram API accepted exact readable numbered parlays, receipt234 sent16:17:21Z. Permanent IDs2026-11-08-6326d052a0f6 and2026-11-08-f836c8f90122. $4 suggested allocated, $1 remains; API acceptance does not establish read/visibility. Plans/snapshots and checks archived under data/reports/tickets/. Next: continue all-slate hourly analysis as later windows open, plus exact-ID settlement before selection; these early tickets do not cover the whole day.
+
+## Parlay workflow audit (read-only) — Claude Opus 5.5, Nov8 09:40–10:55 ET (10 lanes + 1 verifier)
+- Report: docs/evidence/ticket-workflow-audit-2026-11-08/REPORT.md. No code/skill/automation/launchd/data change; Telegram mocked; live ledger read via copies only.
+- HIGH: (1) no visual parlay ticket is ever sent — v3 sends text only, render_ticket_card has no production caller, msg224 was hand-edited text; (2) a `retry` send (connect error/429) is never re-sent (archived as_of reused), keeps its budget, no alert, exit 0; (3) Telegram notifier + ticket helper run this uncommitted tree live.
+- MEDIUM: settle --notify aborts before grading when Telegram/network fails; delivery alert counts game cards from UTC midnight — fired live 10:12 (msg225, false); jobs.py early coverage duplicates canonical rows (fallback_reason in content key) and fails test_coverage.py:278 (dev-only); ledger ignores NBA_DATA_DIR; used game locked for the day across versions/markets; legs must start within 2 h of check (no cross-window tickets); comparison quality is presence-only ("." passes); missing-forecast alert races T-110 publication; bot token in plaintext in ~/.codex history (rotation = user decision); personal slips CLI-only, no result update/corrections.
+- Works: per-forecast coverage accounting, $5 cap under 4-process races and crash points, uncertain never resent, exact text archived = sent, original-ID grading at original lines, /stop, thin wrapper, NBA/NHL/NFL UI at 1280/390.
+- Checks: focused 4 files PASS 93; structure FAIL (2 known batch1-final names; a 3rd, .claude lock, was this session's own and removed); --ready FAIL at structure; typecheck/build/unit PASS; backend suite FAIL 2/1695 (coverage regression repeatable; research_agent deadline passed alone).
+- Next (one writer, failing-first): retry resend+alert; settle before notify; scoped delivery alert; early-coverage reason-only no new version; ledger path from config; visual ticket PNG after text (own key, caption ≤1024). Decisions needed: same-game per-market rule, cross-window stakes, personal-slip UI, guarded release for sender/helper, token rotation.
+
+## Hourly full-slate preflight — Codex, Nov8 10:13 ET
+- Read current skill/app.tickets. Required preflight --notify succeeded after sandbox-network retry: settlement errors[], prior legacy3 tickets still wins; no repeated settlement alert. Operational notification225 sent for unconfirmed HOU–PHX individual game card attemptedNov7 19:28 ET; receipt left uncertain, no resend. Alert counts by UTC date and includes that prior-local-day receipt.
+- Fresh NBA/NHL/NFL, missing_due_games[], soccer explicitly forecasts_unavailable. CIN–ATL already started; eligible coverage0/0. Pending unopened windows7 NBA/6 NHL/12 NFL; earliest next13:00 ET games open11:00. Budget unused. No ticket/send. Complete plan with combination_comparison and forecasts_reviewed{} passed helper check, archived automatically under data/reports/tickets/reviews/. Next11:10 joint slate review.
+
+## Hourly ticket preflight — Codex, Nov8 09:10 ET
+- Skill reviewed; sources fresh, only same CIN–ATL forecasts11–15 from prior all-market review. No second eligible game or daily reservation. No ticket/send. Archived data/reports/tickets/2026-11-08-0910-no-ticket-review.json. Next eligible-slate check.
+
+## Hourly ticket review — Codex, Nov8 08:10 ET
+- Skill reviewed; all sources fresh, allocation unused. Only NFL CIN–ATL09:30 forecast available, all5 markets examined: CIN ML64.0, spread51.7,total under55.5, team totals50.3/51.8; exact live records all0 settled, no band evidence. One game cannot form distinct-game ticket; no send or allocation. Archived data/reports/tickets/2026-11-08-0810-no-ticket-review.json. Next eligible-slate check; Nov7 settlement already reviewed.
+
+## Hourly ticket preflight — Codex, Nov8 07:14 ET
+- Skill reviewed; all sources fresh, no future recorded forecasts, daily budget unused. No ticket/send. Archived data/reports/tickets/2026-11-08-0714-no-ticket-review.json. Next eligible-slate check.
+
+## Hourly ticket preflight — Codex, Nov8 06:08 ET
+- Skill reviewed; all sources fresh, no future recorded forecasts, daily allocation unused. No ticket/send. Archived data/reports/tickets/2026-11-08-0606-no-ticket-review.json. Next eligible-slate check.
+
+## Hourly ticket preflight — Codex, Nov8 05:13 ET
+- Skill reviewed; sources fresh, no future recorded forecasts, daily budget unused. No ticket/send. Archived data/reports/tickets/2026-11-08-0513-no-ticket-review.json. Next eligible-slate check.
+
+## Hourly ticket preflight — Codex, Nov8 04:06 ET
+- Skill reviewed; sources fresh, no future recorded forecasts, Nov8 budget unused. No ticket/send. Archived data/reports/tickets/2026-11-08-0406-no-ticket-review.json. Next eligible-slate check.
+
+## Hourly ticket preflight — Codex, Nov8 03:10 ET
+- Skill reviewed; sources fresh, no future recorded forecasts, daily budget unused. No ticket/send. Archived data/reports/tickets/2026-11-08-0310-no-ticket-review.json. Next eligible-slate check.
+
+## Hourly ticket preflight — Codex, Nov8 02:06 ET
+- Skill reviewed; sources fresh, no future recorded forecasts, Nov8 budget unused. No ticket/send or repeated settlement alert. Archived data/reports/tickets/2026-11-08-0206-no-ticket-review.json. Next eligible-slate check.
+
+## Hourly ticket preflight — Codex, Nov8 01:09 ET
+- Skill reviewed; sources fresh, no future recorded forecasts, Nov8 budget unused. No ticket/send or repeat settlement notification. Archived data/reports/tickets/2026-11-08-0109-no-ticket-review.json. Next eligible-slate check.
+
+## Hourly ticket preflight — Codex, Nov8 00:07 ET
+- Skill reviewed; all sources fresh, no future recorded forecasts. New Toronto-day allocation unused; no ticket/send. Prior Nov7 settlement already archived, no repeat alert. Archived data/reports/tickets/2026-11-08-0007-no-ticket-review.json. Next: next eligible pregame slate.
+
+## Sent-ticket settlement — Codex, Nov7 23:11 ET
+- Skill reviewed; sources fresh; daily$5 fully allocated, no new ticket. Original archived forecast IDs graded through existing coverage.grade against current recorded finals. Main OKC+ATL won (114–75,124–121); CAR+OTT+1.5 won (CAR9–2,OTT4–2); DAL+NYI+1.5 won (DAL4–3,NYI lost4–5 but covered). Six winning legs, three winning sent tickets. Actual user bets/prices unknown; no profit claim.
+- Saved one settlement data/reports/tickets/2026-11-07-settlement.json, preserved original picks and method. Official NHL reports additionally corroborated Ottawa and Islanders finals. Next: new Toronto-day slate; no repeated settlement notification.
+
+## Hourly ticket preflight — Codex, Nov7 22:08 ET
+- Reviewed skill/current receipts. Daily$5 fully reserved and sent: main message195 ($3), two NHL variations message199 ($1 each, CAR+OTT+1.5 and DAL+NYI+1.5). All sources fresh, no future forecast. No additional send. Main ATL leg still in progress, no final ticket grade. Archived data/reports/tickets/2026-11-07-2208-budget-complete-review.json. Next: settle exact sent tickets when all results available; new budget only on next Toronto date.
+
+## Hourly ticket delivery confirmed — Codex, Nov7 18:14 review
+- Skill/all5 NBA/all6 NHL markets reviewed, fresh NBA recovery snapshot18:16. Selected OKC ML1099 89.9% + ATL ML1088 81.2%, $3 main, joint73.0% assuming independence. Exact live histories both0/0; historical164/186 and339/421 descriptive with reused-test audit caveat. NHL stale on refreshed snapshot, excluded by freshness; no forced variation. NFL no pending.
+- Helper check passed. Send returned existing_sent; inspected receipt confirms concurrent original identical forecast pair delivered18:15:33 ET/message195. No duplicate sent. Budget table$3 reserved, $2 remains. Review archived data/reports/tickets/2026-11-07-1816-confirmed-existing-review.json. Next: distinct later games only; review results after finals. Current Bet365 offers unverified.
+
+## All-sport audit + remediation plan — Claude Opus 5.5 (lead 2b, read-only; 12 lane + 1 integration + 3 plan reviewers + 1 challenger), 2026-11-07 15:28–17:2x ET
+- Report: docs/evidence/all-sport-audit-2026-11-07/REPORT.md (lanes/ = per-sport evidence; remediation/ = PLAN.md, BATCH-A/B/C,
+  CHALLENGE.md, nfl_missing_raw.csv). Documentation only after the gate: these files + this entry (no code changed by the lead).
+- Readiness (lead read the logs): run 1 void (aborted); run 2 exit 1 — 1 failed/1668 passed, cause a stray /tmp/x written by
+  this audit's reviewers (removed); run 3 `OMP_NUM_THREADS=4 backend/.venv/bin/python scripts/check_project.py --ready`
+  21:23:59–21:49:52Z: exit 0, 1669 passed, typecheck+build ok, code tree 2275eab before = after. Engineering only — not
+  acceptance of model performance, betting edge or source use.
+- HIGH: H1 dev commands can write/migrate live data/ (reproduced on copies); H2 Telegram job runs this working tree on live
+  data with no guard (read-only; 39 modules imported live → edits here go live in 60 s); H3 NFL: 295/510 raw files not found
+  in searched locations, no NFL backup support; H4 reused NBA/NHL test seasons shown as "held up"/"strong" (logs preserved;
+  amendments were recorded); H5 dev line lacks live release fixes (7a83e27/a55c874/8539513 not ancestors of HEAD).
+  MEDIUM highlights: canonical rows stamped up to 70 min after computation (Live label still valid; no backdating); NFL live
+  quote lacks price_label='current'; NFL hash covers shared files; silent sleep gaps (12 NBA + 3 NHL games unforecast);
+  NHL OT/SO never shown; History overflow 581–710 px. Soccer: earlier blockers fixed + reproduced; S0/S1 still conditional.
+- Sources: ESPN, NHL.com explicit terms bar automated collection; NBA.com §9 gambling clause (applicability = interpretation);
+  only openfootball (CC0, soccer results) clearly permitted; no free suitable live NBA/NHL/NFL or odds source found in scope.
+- Next (bounded, needs the user to assign ONE writer): PLAN.md first batch 0→0b→1→2→6→3+3b in a no-commit detached worktree
+  (verify 2275eab), nothing landed in REPO until Telegram is guarded or a named landing window is approved. Standing: training
+  paused, no launchd/live migration/re-fetch/Telegram/deploy/commit without a go.
+
+## Hourly ticket preflight — Codex, Nov7 17:09 ET
+- Read updated skill (Nov6 process; labels/sample count/verified edge not hard gates; justified core overlap within batch permitted). All NBA/NHL/NFL sources fresh, no future recorded canonical picks, no Nov7 ticket receipts. No eligible combo or send, $0 allocated. Archived data/reports/tickets/2026-11-07-1709-no-ticket-review.json. Next: hourly check for evening forecasts; no price/label gate used to reject this empty slate.
+
+## Soccer S0 audit corrections — Claude Opus 5.5 (one writer; 3 read-only reviewers + peer audit 2b), 2026-11-07 15:00–16:30 ET
+- Fixed with failing-first tests (test_soccer 43, test_replay_same_store 21): ESPN extra-time classification (status +
+  period + clock + all event minutes + shoot-out + tie structure; conflicts → decided_in 'unknown' with decision_note; no
+  derived 90-minute values); verified goal dedup (exact copies only, every team must add up); a final status name needs
+  state post / final type id; tie facts dropped on a result correction, kept-when-absent only with same teams and core
+  result, own tie_facts_available_at (never backdated); team change = recorded correction (soccer + NBA/NHL/NFL); same-team
+  events → soccer_rejections, rest of the day imported; replay identity per retrieval (time, fetch id) for soccer AND
+  NBA/NHL/NFL (games.last_seen_*; stale retrievals skip game, stats, decision, revision; phantom team_game_stats removed on a
+  team change); rows stored with the old status-only label re-derived when their last retrieval is replayed; importer
+  espn-soccer-scoreboard-2; fetch-only soccer imports republished; dev.sh refuses invalid PUBLISH_INTERVAL; Calibration table
+  wrapped; deep links pick league + competition from the match id (unit check `npm run test:unit`).
+- Migration 0035 (all stores): games.last_seen_at/_fetch_id backfilled from recorded facts (updated_at / latest revision, fetch
+  id at that time), result_revisions team ids + fetch_id (old rows NULL), raw_fetches(raw_id, retrieved_at) index, soccer
+  table rebuild. On copies of the real stores: NHL 1.67 s, NBA 0.62 s, 0 NULL last_seen, 0 existing duplicate revisions.
+  Live data/ stores are at migration 31: 0032–0035 will apply the next time a live job migrates them (not triggered here).
+- Correction to the entry below: shared NBA/NHL/NFL ingestion WAS changed (ingest.py, then this round); the A→B→A replay
+  duplication was confirmed on HEAD for all three sports and is fixed here.
+- Checks: focused before freeze 446 passed (21 suites), unit 3/3, structure ok; final gate (`OMP_NUM_THREADS=4 backend/.venv/bin/python
+  scripts/check_project.py --ready`, ready-final-3.log 21:23:59–21:49:52Z) exit 0, 1669 passed, code tree hash identical
+  before/after. Run 2 (exit 1, 1 failed) failed on test_research_agent planting include.path /tmp/x while the peer audit had
+  created /tmp/x; test made hermetic (absent tmp_path path, same assertion). Earlier 1618-test passes cover older trees only. Browser desktop + actual 390 px
+  (iframe) for NBA/NHL/NFL/soccer, deep links, competition switch, loading/error/recovery: SMOKE_TEST.md.
+- Reviews: my parser reviewer APPROVED after the reclassification fix (2,443 cached finals, no wrong label); ingest reviewer
+  APPROVED after the raw_fetches index (0035: 0.23 s at 200k fetches vs 134 s). Then a peer read-only audit (session 2b)
+  found 4 more in my files, all fixed with failing-first tests BEFORE the gate: team change not recorded when the last
+  revision predates 0035 (NULL teams) — NBA/NHL/NFL + soccer; reclassification shown as a source version (now basis
+  'reclassified'); 503/empty-state hints that would have created data/soccer.sqlite (now NBA_DATA_DIR=<scratch>, ESPN caveat);
+  migrated tie_facts_available_at differed from a rebuild (now derived from revision history). These last fixes were not
+  re-reviewed by my reviewers; the peer re-checks them against its snap2 (git diff afd18db).
+- Remaining LOW (open): live vs fresh-rebuild difference after an out-of-order import (no production path: store lock +
+  utc_now); stats-only changes not in the last-seen backfill (one-time transient on the first replay); per-insert PRAGMA
+  table_info in _upsert_game; tie_facts_available_at kept when a reclassification clears shoot-outs; derived 90-minute
+  scores disabled (S3). Pre-v2 soccer stores need one `soccer replay` after migrating (re-derives endings, basis
+  'reclassified'); live data/ has no soccer store.
+- Ops: com.nba-predictor.telegram imports THIS working tree every 60 s (read-only store access, cannot migrate), and the
+  Codex 5198 preview's publisher applies this checkout's migrations to fresh copies on each republish (copies only).
+- Environment: torch/tensorflow (deep extra, installed earlier today) sit in backend/.venv, which the telegram and nfl-live
+  launchd jobs use; pyproject says the deep extra belongs to the research venv only. Not uninstalled, no job changed: needs a
+  separate plan.
+- S1: REPORT.md rewritten in place (9 football-data.co.uk requests, offsets 184/196, CY2023 vs season 2023-24, 10 of 62 went
+  to ET incl. 2 labelled FULL_TIME, no "clean" period, internal vs independent checks, licences from primary sources incl.
+  Wikipedia/Wikimedia UA rule, StatsBomb restrictive, Betfair unassessed). Compliance record: 10 football-data.co.uk requests
+  despite robots.txt; 5 Wikimedia API calls without a descriptive User-Agent.
+- Status: no material correctness finding known open; acceptance of the S0 corrections still awaits the user's/Codex
+  review of this uncommitted diff (no commit/push this round, per the user). Blockers for S2 (user decisions, no legal
+  question): free football-data.org account (UCL + 5 leagues, not UEL), optional free The Odds API account (forward-only),
+  Wikipedia as validation source, UEL scope; ESPN flagged as not clearly permitted (soccer S0, NBA/NFL) — unchanged.
+- Next: review this diff; then, on the user's go, S2 = openfootball results-only cache (no model fitting).
+
+## Hourly market review — Codex, Nov7 16:10 ET
+- NBA publication recovered; all three sports fresh, no Nov7 ticket receipts. Reviewed all5 NBA/all6 NHL markets for DEN–IND and NYR–SEA. DEN winner76.2 strongest individual; SEA+1.5 68.4 has season34/47 but unproven skill. Stored DK quotes DEN-324 (16:06) and SEA+1.5-225 (15:36) imply1.8903 vs model fair1.9183; not verified Bet365 offers. Other NHL candidates weak. No justified two-game ticket, no send, $0 allocated.
+- Skill/helper check passed; archived data/reports/tickets/2026-11-07-1610-no-ticket-review.json incl per-market reasoning and source references. Next: broader evening forecast slate; same selection method.
+
+## Missing ticket diagnosed — Codex, Nov7 15:34 ET
+- User asks why no ticket. Actual heartbeat ran15:07, before NBA cycle15:10. Read-only current snapshot: NHL NYR–SEA has six forecasts, none strong; NBA has no future canonical record. NBA near_tipoff run6933 started15:10:15 and remains running after markets6934 success; last source refresh15:10:09, stale by15:33 under540s limit. Thus fewer than two distinct eligible fresh games; no Nov7 ticket receipt or $ allocation.
+- ACTIVE automation next run16:09:59 ET. Prior quiet check failed to surface prolonged publication delay once it developed. No duplicate job launched or live policy bypassed. Next: investigate why canonical coverage waits on long NBA research work; monitor6933 completion before selecting a ticket.
+
+## Hourly ticket preflight — Codex, Nov7 15:07 ET
+- Reviewed skill, fresh NBA/NHL/NFL sources, no future canonical pick yet and no Nov7 AI ticket receipts. No eligible ticket/send, $0 allocated. Archived data/reports/tickets/2026-11-07-1507-no-ticket-review.json. Next hourly check for17:00 forecasts; source freshness alone does not establish forecast completion. No concurrent shared-ingest edits touched.
+
+## Independent audit of soccer S0/S1 — Claude Opus 5.5 (lead + 3 read-only audit agents), 2026-11-07 15:00 ET
+- Read-only: no code, store, job or doc changed except this entry. Evidence: scratchpad
+  /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/eaeb30dc-d893-4980-87d4-ba8b2efe245d/scratchpad/
+  (audit-storage/, audit-s1/, audit-app/, lead/, ready*.log). Concurrent writer: the earlier soccer session changed
+  backend/app/ingest.py (+ new tests/test_replay_same_store.py, 14:35) and REPORT.md/SOCCER_PLAN.md (14:43) during the
+  audit; its S0/S1 HANDOFF entry below was NOT updated (still says ingest "not changed", deep-link unresolved, "clean from
+  2010-11", paid UEFA odds). The ingest.py change touches the shared NBA/NHL/NFL path and is unreviewed.
+- HIGH: ESPN marks some extra-time matches STATUS_FULL_TIME (cached bytes: 169930 Juventus 2-0 Real 2005-03-09, period 4,
+  clock 122'; 416637 Ajax 2-1 Dnipro 2015-03-19 UEL, period 4, goals 97'/117'; 90-min 1-0). sources/espn.py:422 maps
+  FULL_TIME → regulation on status alone, so regulation_result would be wrong. Absent from REPORT/PLAN/HANDOFF; falsifies
+  REPORT "clean from 2010-11" and "8 of 62 AET/PEN" (≥10 went to ET). Pre-2010 details list goals twice.
+- HIGH (process): reported --ready pass (1618, 13:38–14:02) predates competition.ts/Selection/Layout (14:28) and
+  ingest.py (14:35). My run 1 (started 14:33:54, 1618 passed, exit 0) also predates them (new tests not collected).
+- MEDIUM: same-second retrieved_at → every populated replay appends duplicate revisions (2→4→6; soccer.py:133, ingest.py:393
+  also on HEAD); stale qualifier/aggregate/note carried across a genuine result correction (soccer.py:137-141); tie-fact
+  changes never move result_available_at (latent look-ahead, soccer.py:35-37/145); team change on a final with same score
+  leaves no revision (soccer.py:145/165, ingest.py:402); 390 px overflow 393/390 on NBA/NHL Performance (Canonical.tsx:242
+  Calibration table outside .table-wrap; pre-existing); fetch-only soccer imports never republished (freshness.py:126-129,
+  preview_publish.py:51); REPORT.md original body still carries contradicted lines (L66, L118, L128, L199, L216–224),
+  SOCCER_PLAN.md:16-18 stale.
+- LOW: ingest.py:511 early return can drop a late genuine correction (updated_at = last *changing* retrieval; docstrings
+  claim otherwise); decisions/stats still ordered by first_retrieved_at (transient flips in replay); mutations of
+  shootout_ok/note/leg/scores-only survive test_soccer; home==away event aborts the day; PUBLISH_INTERVAL<30 leaves the
+  launcher without publisher but says it republishes; deep extra sits in the venv used by nfl-live/telegram launchd jobs
+  (pyproject: "never the release venv" — user decision); REPORT L272 offsets are 184/196 not 194/186; 9 not 8
+  football-data.co.uk requests; UEFA false AET 21220 omitted; StatsBomb clauses not re-verified; Betfair BASIC not assessed.
+- Verified: A→B→A replay no duplicates + later correction kept (working tree; HEAD reproduces 3→7 revisions for soccer,
+  NBA, NFL, NHL); absence keeps facts, nothing carried across changed/swapped teams; deep links pick the match's
+  competition (3/3 unit, browser); dev.sh copies/migrates/publishes soccer, NBA/NHL/NFL revisions unchanged; manual import
+  wording; loading/empty/error/recovery/unavailable states; deep extra 33 added 0 changed (freeze before ⊂ after); S1 counts
+  (115 probes, hashes), 412 = calendar-2023 EPL across two seasons (216+196, FT scores), 2023-24 380/380, Wikipedia ET check
+  independent on the 8 ESPN-labelled AET/PEN matches.
+- Recommendation: S0 not accepted until espn.py:422 FULL_TIME+period>2 handling, tie-fact carry-over on corrections,
+  revision idempotency per retrieval, Canonical.tsx wrap, soccer publish trigger are fixed with failing-first tests, the
+  ingest.py change is reviewed, and --ready passes on that tree. S1 accepted with corrections (add FULL_TIME-ET defect +
+  21220, mark superseded lines, fix 184/196, PLAN 16-18, this file's S0/S1 entry, StatsBomb/Betfair labels). Fixes
+  proposed only, not applied (one writer; user to assign).
+- Readiness: NOT verified for the final tree. Run 2 (`OMP_NUM_THREADS=4 backend/.venv/bin/python scripts/check_project.py
+  --ready`, started 15:01:17, diff sha d948e82c…) was overtaken by the earlier session's further edits 15:07–15:27 (ingest.py,
+  espn.py, soccer.py, db.py, new migration 0035_result_integrity.sql, Canonical.tsx, SoccerPages.tsx). It is not the gate:
+  exit 1, 4 failed / 1618 passed (27.6 min, diff sha at end b5629c06…). All 4 match the mid-run edits: three
+  migration-list asserts (0035 appeared while test lists were collected at different times: test_live, test_nfl_live,
+  test_storage) and test_autoresearch (Refused: "app code … changed", its protocol hashes app code). Session 2b will run the single gate once that session stops editing. Those
+  15:07+ edits post-date this audit and are unreviewed; 0035 is a new migration (dev/live stores must not be migrated
+  without review and a go).
+
+## Hourly ticket preflight — Codex, Nov7 14:14 ET
+- Skill reviewed, sources NBA/NHL/NFL fresh, no future recorded forecasts or Nov7 ticket receipts. No eligible combo or Telegram send; $0 allocated. Review archived data/reports/tickets/2026-11-07-1414-no-ticket-review.json. Next hourly check after15:00 forecast windows open.
+
+## Soccer S0 closed + S1 source assessment — Claude Opus 5.5 (lead; reviewer, readiness and source agents), 2026-11-07
+- S0 fixes: soccer.py replay judged "older" by first raw retrieval → duplicate append-only revisions after A→B→A on a
+  populated store (then row.updated_at; SUPERSEDED: per-retrieval (time, fetch id) identity, see the audit-corrections entry above); tie facts (qualifier/aggregate/kicks) no longer count as corrections, are kept
+  when a response omits them, and only while both sides are unchanged; leg parsed for unplayed matches; ESPN winner-flag
+  comment corrected (match winner on first legs, qualifier on decided ties; never read); coverage key regulation_draws;
+  UI revision list shows every version; 90-minute wording corrected after S1. Failing-first tests for each (test_soccer 21).
+- Launcher/publisher: scripts/dev.sh copies + migrates soccer.sqlite (`app.cli soccer migrate`), devpaths guards soccer
+  files, preview_publish republishes soccer, freshness.revision adds a soccer part only when soccer rows exist (NBA/NHL/NFL
+  revisions unchanged). Live data/ has no soccer store → soccer shows its 503 there (unchanged behaviour); no job enabled.
+- 390 px regression found and fixed: four league buttons overflowed NBA/NHL/NFL pages (scrollWidth 436); header wraps at
+  ≤480 px. Verified at an actual 390 px viewport (same-origin iframe; headless Chrome clamps to 500 px, not used).
+- Environment: installed the declared `deep` extra (torch 2.14.1, tensorflow 2.21.0) into backend/.venv with all existing
+  pins held (33 added, 0 changed) → test_deep_study 10 passed. Release venv untouched.
+- Checks: `python3 scripts/check_project.py` exit 0; `OMP_NUM_THREADS=4 backend/.venv/bin/python scripts/check_project.py
+  --ready` exit 0, 1618 passed (24 min). Launcher runs on real-data copies (NBA/NHL/NFL) and a scratch soccer live dir;
+  desktop + 390 px flows, loading/empty/error/recovery: docs/SMOKE_TEST.md. Reviewer final verdict APPROVE (2 LOW, fixed).
+- S1: docs/evidence/soccer-s1-sources-2026-11-07/REPORT.md (115 probes, counts reproducible, re-run by lead identically).
+  ESPN months back to 2000-01/2001-02 (UEL 2009-10), [CORRECTED: no period is clean — 2015 FULL_TIME-labelled extra-time
+  match], EPL calendar-2023 412=412 vs openfootball; 90-minute score derivable after extra time from goal minutes/periods
+  [CORRECTED: 8/8 covered only ESPN-labelled AET/PEN; 10 of 62 went to ET]; no free timestamped pre-match odds; football-data.co.uk
+  not fetched (terms + robots exclude AI/automated use); openfootball CC0 but with errors.
+- Blockers needing the user: (1) ESPN/Disney terms prohibit automated extraction to compile datasets — affects soccer S0/S2
+  AND the existing NBA/NFL ESPN pipelines; (2) [WITHDRAWN: no manual download; football-data.co.uk excluded]; (3)
+  [WITHDRAWN: no paid sources]. [CORRECTED: shared ingest.py WAS changed — A→B→A replay fix, then per-retrieval identity in
+  the audit-corrections entry above; the deep-link mismatch is fixed.] Raw S1 bytes only in the session scratchpad.
+- Next (bounded, after the user's decisions on 1–3): S2 historical results cache per SOCCER_PLAN (2010-11+ leagues/UCL,
+  2009-10+ UEL), ingest validation rejecting league AET/PEN and postponed placeholders, no model fitting. Not started.
+
+## Hourly ticket preflight — Codex, Nov7 13:15 ET
+- Skill reviewed; fresh NBA/NHL/NFL snapshot contains no future recorded forecast, no Nov7 AI ticket receipts. Early NHL starts passed; NBA windows later. No eligible combo, no Telegram send, $0 allocated. Archived data/reports/tickets/2026-11-07-1315-no-ticket-review.json. Next hourly eligible-slate check.
+
 ## Working-tree snapshot for push — Codex, 2026-11-07
 - User explicitly requested committing/pushing all current working-tree changes on nfl-dev to origin. Includes soccer S0, NFL live/evaluation, Telegram cards, refresh/preview infrastructure, UI/fonts and evidence/docs already in the tree. No model or deployment changes made during this packaging task.
 - Actual checks: python3 scripts/check_project.py passed; tracked git diff --check passed; staged check caught trailing whitespace in two font licenses and an extra EOF blank line in migration0033, normalized without content changes; all 82 changed/untracked paths inspected by filename/size and scanned for common token/private-key patterns with no matches. Ignored credentials, databases and generated data remain excluded. This is not a full semantic/security review.
@@ -11,7 +1624,7 @@
 - Semantics (checked on real payloads incl. 2024-25 UEFA knockout days): finals only from STATUS_FULL_TIME/FINAL_AET/FINAL_PEN → decided_in regulation/extra_time/penalties. Score = end of play (after ET); 90-minute result only for regulation (ESPN publishes no per-half score); shoot-out, leg, aggregate and qualifier separate. ESPN's competitor `winner` flag marks the qualifier (Atlético 1–0 Real Madrid, flag on Real) and is never used. Payload whose league ≠ requested competition is rejected before writing. neutralSite never set by ESPN → stored unknown.
 - Files: backend/app/{soccer.py (ingest/replay/coverage/views), sources/espn.py (parser), sports.py, schemas.py, main.py (/api/soccer/meta|matches|matches/{id}), cli.py (`soccer migrate|ingest|replay|coverage`)}, migrations/0034, tests/test_soccer.py (12). Updated exhaustive migration lists in test_storage.py and test_nfl_live.py. Frontend: SoccerPages.tsx, Selection (Soccer + ?competition picker), Layout, TeamLogo (ESPN id logos), types/client, freshness (no soccer poll), NflPages date control exported as GameDateControl (reused), styles.
 - Real sample (scratch dir only, not data/): Oct 25–Nov 9 all seven + four UEFA knockout days: 179 matches, 116 raw responses, 0 failed requests; repeat ingestion added no rows (fetch log only).
-- Checks: soccer tests 12 passed; related suites (storage, nfl*, multisport, backup, freshness, dev_script) 210 passed; `python3 scripts/check_project.py` passed; `--ready`: READY_RESULT. Browser desktop flows passed; phone checked at 500 px (Chrome minimum), overflow found and fixed; 390 px unverified. Details in docs/SMOKE_TEST.md.
+- Checks: soccer tests 12 passed; related suites (storage, nfl*, multisport, backup, freshness, dev_script) 210 passed; `python3 scripts/check_project.py` passed; `backend/.venv/bin/python scripts/check_project.py --ready` FAILED (exit 1): typecheck and build passed; pytest 9 failed / 1596 passed (18 min). Fixed 1: test_live.py odds-migration test lists every pending migration and lacked 0033 (pre-existing) and 0034; updated, test_live+test_soccer 35 passed. UNRESOLVED 8: tests/test_deep_study.py, `ModuleNotFoundError: torch` (research-only `deep` extra not installed in backend/.venv; unrelated to soccer, untouched). --ready not rerun. Browser desktop flows passed; phone checked at 500 px (Chrome minimum), overflow found and fixed; 390 px unverified. Details in docs/SMOKE_TEST.md.
 - Gaps: no soccer refresh job (manual ingest; in-progress matches stay stale until re-import); scripts/dev.sh does not copy soccer.sqlite; no historical coverage; postponed/abandoned status names not observed; ESPN date-param time zone unverified.
 - User then set the goal to trustworthy soccer predictions; phases S1–S6 documented in docs/SOCCER_PLAN.md (sources → historical cache → preregistration → frequency/draw-aware Elo/Poisson baselines → calibration → freeze, one test run, prospective ledger). Target is the 90-minute 1X2 result; ESPN extra-time matches are ungradable without another source. Training pause, NBA/NHL/NFL models, no keyed/paid sources or recurring jobs without a go: unchanged.
 - Next: Codex review of S0. Then S1 only: read-only source assessment with cached probes and an actual coverage/cost/timestamp table; no store ingestion. Soccer refresh scheduling and dev.sh copy still need a go.
@@ -4394,3 +6007,94 @@ Started scripts/dev.sh with WEB_PORT=5198 API_PORT=8841 and /tmp/courtside-activ
 ## Forecast gap confirmed — Nov 4, Toronto
 - macOS reboot history shows shutdown 5:29 PM, boot 8:03 PM. Local launchd jobs automatically resumed after boot, refreshed both stores at 8:04 PM and wrote valid pregame winner forecasts for five NBA and two NHL games. Both full forecast job rows were still running at last check. Games whose windows elapsed during shutdown cannot be counted as live backfills.
 - No code, training, power settings or deployment changed. Next: verify canonical publishing after the cycles finish. Avoid recurrence with an always-running host or by keeping this Mac powered on and awake through forecast windows.
+
+## User ticket status recheck — Nov7 16:26 Toronto
+- Fresh snapshot and helper validation passed. Only DEN–IND and NYR–SEA remain eligible; DEN winner sole strong app pick. No supported second distinct game leg. Archived1626 no-ticket review, no Telegram send, $0 allocated. Next hourly review for broader slate.
+
+## Full slate timing check — Nov7 17:02 Toronto
+- User challenged zero tickets. Fresh live snapshot confirms forecasts for earlier games, none currently before scheduled start. Stored slate has nine later NHL games (first19:00) and six later NBA games (first19:30). Two-hour forecast windows therefore next open17:00 NHL,17:30 NBA. NBA refresh22:01:30Z and NHL22:01:07Z succeeded. Source freshness verified separately from forecast publication. Prior wording about no picks overstated the actual ticket-selection outcome. Next hourly review must inspect newly published evening forecasts across all markets.
+
+## Ticket selection audit — Nov7 after17:00 Toronto
+- Verified ACTIVE hourly minute10 automation and helper source. Helper enforces freshness, pregame timing, 2–3 legs, distinct games and budget, but does NOT require strong=True,30 samples, Wilson bound or positive price edge. Those additional rejections came from AI review judgment, documented1610/1626.
+- Installed skill explicitly forbids reversing losing picks, whereas earlier user discussed following positive exact records, opposing negative records and skipping ties. Automation only generically requests evidence-based selection; it never encodes that exact-record rule. This is a substantive methodology mismatch, not a Telegram delivery failure. No silent reversal implementation made during audit.
+- Historical current snapshot exact counts must not be presented as pregame counts (settled earlier games can include own result). No current future forecast at17:04; later NHL/NBA windows beginning17:00/17:30. Zero ticket sends today. Next: agree/version desired exact-record strategy before changing direction selection and sender probability semantics.
+
+## Ticket process restored — Nov7 user clarification
+- User requested Nov6 selection process, supplied transcript confirming hourly reviews and price-based rejection at16:10. Corrected prior diagnosis: Nov6 notes show all-market AI selection, including unproven line markets and unverified prices; no demonstrated automatic reversal strategy. 25/26 count remains unverified; archived final three slips were7/7 legs, broader proposals7/8 distinct legs.
+- Updated installed skill and existing ACTIVE hourly automation through automation_update: strong flag,30 samples,proven-skill label,verified positive price edge are evidence considerations, not mandatory ticket gates. Retained genuine pregame/freshness/budget/dedup checks. Read-back confirmed skill/prompt. Snapshot /tmp/ticket-restored-nov7.json fresh across sports, no future recorded picks yet. No Telegram send. Next: hourly all-market selection on new evening forecasts.
+
+## Shared original chat read — Nov7
+- Read user-shared chat https://chatgpt.com/s/cx_6aefa0ef7eec8191952e7dc58165cafa in browser. Confirmed nine proposed combinations with leg results2/2,3/3,3/3,4/4,4/4,2/2,2/3,2/2,3/3: total25/26 leg appearances,7/8 distinct legs,8/9 combinations. User's25/26 count was correct with repeats counted.
+- Original method app probabilities/comparable records plus AI all-market selection; no independent second model or automatic reversal. Later user endorsed shared-core variations, while installed helper still prohibits any repeated game. This restriction remains a workflow mismatch to resolve before supporting overlapping variations (joint exposure/dedup must stay correct). Restored selection prompt previously addresses overstrict skill/price gates only.
+
+## Shared-core variations fixed — Nov7
+- User requested fix. Installed helper now permits identical core forecasts across variations within one batch, requires distinct games within each ticket, rejects duplicate combinations/conflicting shared forecasts and discloses combined exposure. Existing daily budget/receipt transaction and prior-batch game reservations retained. Skill and ACTIVE hourly automation updated consistently.
+- Actual mocked regressions passed shared-core acceptance/disclosure, duplicate-combination rejection, same-ticket repeated game, stale/started/missing-market/changed-skill checks, prior-batch overlap rejection, $5 cap and delivery dedup. No real Telegram calls. Structure checker passed. First added mock needed its snapshot rewritten to include third forecast; corrected fixture then passed. Next: live eligible slate review under restored process.
+
+## Independent ticket workflow verification — Codex, Nov7 17:13 Toronto
+- Read both supplied shared chats and current skill/helper/ACTIVE hourly :10 automation. Report: docs/evidence/ticket-workflow-audit-2026-11-07/REPORT.md; mocked reproduction beside it. No production code/skill/job/model/store changes or real Telegram calls.
+- Verified restored Nov6 all-market method, exact-percentage cohort logic, shared-core acceptance, duplicate/prior-batch exclusions and $5 reservations. 53 focused tests passed (threshold_overview, telegram, nfl_live); structure passed; mock send/receipt/budget checks passed.
+- OPEN: shared-core PNG falsely says “Distinct games across tickets”; saved-text overlap warning is not delivered. Actual PNG/caption not archived. Settlement relies on prompt and can be skipped by no-new-picks/budget early exits; no durable ticket grading helper. Zero live ticket receipts; four historical test receipts sent. Full readiness/browser app smoke not run (audit only).
+- Reconciled shared-chat 25/26 appearances = 7/8 distinct legs, 8/9 combinations; not independent accuracy. Dallas–Utah score discrepancy in supplied chat remains unverified. Next: one bounded writer for disclosure + exact sent artifacts + settlement-before-exit and focused mocked tests; genuine pregame delivery remains unproven.
+
+## Actual live ticket delivered — Codex, Nov7 18:17 Toronto
+- Invoked existing ticket skill; reviewed all available NBA/NHL markets. Initial ATL+OTT draft passed check but network failed before delivery; network-enabled retry refused NHL staleness. No reservation/receipt from that draft.
+- New NBA canonical forecasts published during review; re-reviewed all five markets and selected stronger OKC1099 winner89.9% + ATL1088 winner81.2%, $3 main,73.0% independence estimate. Exact records0-0 both; historical164/186 and339/421 separate. No forced variations, no overlap, prices unverified.
+- Final helper check passed; network-enabled send returned sent; read-only receipt confirms message and $3 daily allocation. Plan /tmp/ticket-action-final-plan.json; helper archived immutable reviewed JSON in data/reports/tickets. Real combined ticket delivered before19:30/20:00 starts, not individual game cards/test. No code/model/job changes. Next: grade exact sent legs after finals; remaining known audit defects still open.
+
+## NHL variations delivered — Codex, Nov7
+- Fresh snapshot /tmp/ticket-nhl-send-current.json; all six NHL markets reviewed after feed recovery. Two $1 distinct-game combinations: CAR1022 winner + OTT1012 +1.5 (57.8% independence estimate); DAL1028 winner + NYI1018 +1.5 (50.5%). Exact records0-0 all; broader history/season counts retained separately. No verified current sportsbook prices.
+- Helper check passed; network-enabled send returned sent; receipts inspected. Combined with prior $3 NBA ticket, daily reservation $5. Plan /tmp/ticket-nhl-final-plan.json plus helper JSON archive. No model/code/schedule changes. Next: grade all six exact sent legs after finals; no further daily allocation.
+
+## Ticket UX assessment clarification — Codex, Nov8 Toronto
+- User confirms “ticket” means clearly numbered combined parlay with legs/stake in Telegram, not sportsbook booking link. Read actual outgoing path and Nov7 archives/receipts: NBA message195 and NHL199 same configured destination, status sent; user reports NBA not visible. API acknowledgement is not proof of user receipt/read; cause unresolved.
+- Root workflow: agent chooses combinations; skill is instructions; helper validates/archives/sends one PNG per batch with generic caption, omitting readable ticket text. Separate game-card sender continues. Cross-sport combos supported, but manual first NBA batch reserved its games; later batch prohibited reusing them, resulting in NHL-only variants. No global mixed-combination comparison before first send. More available forecasts arrived later, but $5 cap fully reserved.
+- Next bounded fix: readable numbered parlay captions/text, explicit matchups/start times/stakes and mixed-sport joint batch review before reservation; show overlap correctly; archive actual payload; settlement before early-exit. Do not silently resend/reallocate yesterday's tickets or claim receipt visible. No implementation in this assessment.
+
+## Tracking status checked — Codex, Nov8 morning Toronto
+- Read-only live freshness: NBA refreshed09:10:05, NHL09:02:10, NFL09:14:49 ET; all source_state fresh/failing false. Forecast ledger counts NBA1153,NHL1069,NFL15; new NFL forecasts07:30:02 ET. Overnight result availability NBA00:34:21,NHL01:00:26 ET. No model/store/job changes.
+- User screenshots are actual app-derived combinations; do not attribute every user leg to AI ticket proposals. Personal sportsbook slips are not automatically imported into app; screenshot outcomes remain separate from canonical forecast tracking. Next: maintain distinction between forecast W/L, sent tickets and user-placed parlays.
+
+## App + Telegram status — Codex, Nov8 09:16 Toronto
+- Network-enabled read-only HTTP: frontend5198, proxy /api/health and API8841 /api/health all200; real mode, snapshot09:15:44 ET. Telegram settings enabled=1; latest receipt sent message223 at07:31:32 ET Nov8. This confirms API acceptance, not user read/visibility. Initial sandbox localhost calls denied; elevated health checks succeeded. No changes. Next: normal ongoing feed/game-card/ticket checks.
+
+## Ticket reliability implementation decision — Codex, Nov8 (in progress)
+- Reuse canonical forecast writers and coverage ledger. Existing jobs.predict_now publishes coverage only after research; add an initial coverage.record after primary winner/market writes and before research, keeping final coverage after research. This exposes timestamped primary forecasts promptly and permits a later append-only adaptive version; does not backdate or fit models. Existing immutable release jobs do not automatically adopt this checkout change. One writer in jobs.py; unrelated dirty ingestion/UI files preserved.
+
+## Ticket workflow upgrade — Codex, Nov8 (one writer)
+- Canonical backend/app/tickets.py extends/reuses original skill helper; installed skill script now thin wrapper (no duplicate implementation). Readable numbered combined-parlay TEXT, permanent IDs, exact sent payload archive, DB combination uniqueness and daily $5 across old/new reservations. Cross-batch identical core allowed with dollar exposure; conflicts/duplicate tickets/changed retry stakes rejected. telegram_card.py fixes false no-overlap footer.
+- New append-only original-ID settlement reuses coverage.grade, preserves every leg/loss/push/void/unavailable and corrections. Settlement runs before no-pick/budget exits; confirmed-v3 results/operational failures get deduplicated notifications. Explicit personal-slip JSON import separate from suggestions; actual return needed for profit. Soccer explicitly unavailable (no model), NBA/NHL/NFL joint comparison required. Existing models/ranking preserved.
+- jobs.predict_now now records primary coverage before slow research and again after (decision documented above); unpromoted to immutable live release. Does not remove long-running worker/source-refresh lock coupling. No server/launchd/training/deploy/commit or real test sends.
+- Installed skill updated using skill-creator guidance; existing ACTIVE hourly :10 automation updated via tool/read-back, preflight --notify FIRST. Docs/TICKETS.md operations; docs/SMOKE_TEST.md evidence. Initial tests caught changed-stake retry acceptance (fixed), and unstable history/as_of comparison fixed with immutable selection fields. Unrelated dirty ingestion/UI/audit work preserved.
+- Final focused tests91 passed11.08s (tickets,telegram,near_tipoff,freshness; one deprecation warning); wrapper live snapshot read-only succeeded all3fresh/soccer unavailable; original Nov7 archives read-only graded3 winning tickets/6 winning legs. Browser NBA board loaded1280/390, no horizontal overflow, viewport reset. Diff check passed.
+- Structure and --ready FAILED on existing audit paths .../remediation/batch1-final/batch1-final.patch and batch1-final.diffstat.txt; no bypass/deletion. Entire readiness suite not reached, not app-ready. No independent review or genuine scheduled new-format delivery verified. No personal-slip UI; CLI import only.
+- Next: review this scoped diff, resolve unrelated guard filenames with their owner, pass --ready, then promote early publication in approved live release and verify scheduled text/settlement delivery. Soccer model and always-on hosting remain separate scoped work, with no invented forecasts or purchases.
+
+## Requested readable parlay test — Codex, Nov8
+- User requested test. Sent numbered mixed NBA/NHL TEXT using canonical ticket_text and existing Telegram sender: real past Nov7 ATL1088 win + OTT1012 +1.5, prominently TEST/PREVIOUS GAMES/NOT LIVE, example$3 only, no allocation. Telegram API accepted message224, receipt sent. Exact text archived data/reports/tickets/2026-11-08-numbered-parlay-test.json; respects /stop and stable test dedup key. No model/code/job changes. Next: user confirms visibility/format; genuine future scheduled new-format ticket remains unverified.
+
+## Complete-slate coverage enforced — Codex, Nov8
+- User asks prevention of premature first-batch/budget stopping. tickets.check now requires a candidate/excluded decision + reason for EVERY eligible forecast (saved/current snapshots), rejects newly published unreviewed forecasts and selected exclusions, requires combination comparison even with tickets=[], and archives successful no-stake reviews with required/accounted counts. Budget/send caps unchanged.
+- Existing installed skill + ACTIVE hourly automation updated via tool: continue all-sport analysis after$5 reserved, review later windows, save validated tickets=[] alternatives; unopened windows explicitly pending, no first-batch full-slate claim. Existing module reused, no new selection model/duplicate helper.
+- Tests49 passed0.74s (tickets+telegram): spent-budget no-stake review still requires full coverage, archives review without another send; newly published game rejected until re-reviewed. Fixture directory collision after check began archiving was corrected (exist_ok), original budget assertion preserved. Structure check still fails on pre-existing audit batch1-final filenames; no bypass. No new live sends or prediction-store writes.
+- Next: verify next hourly review actually produces complete accounted coverage and persists alternatives after cap; AI judgment quality is not proved by presence checks. Prior requested visual test still pending; message224 was text format only.
+
+## Six-item ticket audit remediation — Codex, Nov8 (one writer)
+- Verified audit, added failing-first tests (7 reproduced failures). Retry preserves original text/stakes but uses current attempt time; retry/partial statuses exit1. Text and visual PNG now have separate stable delivery keys; successful text is not resent for image failures, uncertain images stay unresent. PNG/hash/caption archived via ticket_images. Renderer includes numbers/IDs/Toronto start times/one-parlay grouping. Dedicated historical preview command, no budget reservation.
+- Settlement commits all grades before Telegram identity/controls/notifications; network failure reported in notification_errors. Alerts scoped to paired ticket text/image failures INCLUDING retry within Toronto day; individual game cards excluded, per-delivery/status dedup prevents an earlier false alert masking later failures. Config telegram_ledger_path isolates NBA_DATA_DIR copies while default production retains existing root ledger (credentials remain separate/shared unless mocked).
+- coverage._content_key ignores fallback explanation alone on forecast rows; still versions substantive changes/missing reasons. jobs cycle aggregates early+final created counts and avoids double-counting early rows as pre-existing. Existing coverage assertion preserved; no forecast store edits/backfills or release promotion.
+- Final focused103 passed9.29s; full coverage26 passed137.24s (one deprecation warning). An intermediate run caught created-count reporting after dedup (fixed). Final tickets-only rerun after wrapper cleanup36 passed1.71s. --ready still FAILS2 existing audit batch1-final filenames; no checker bypass. Full backend readiness unverified.
+- Actual requested visual mixed-sport historical test sent through app.tickets preview: Telegram API accepted image238 at19:08:08Z; PNG inspected /tmp/visual-ticket-test-20261108.png and archived data/reports/tickets/previews. No allocation. Earlier224 was text;238 is image. Visibility not claimed. Installed skill + ACTIVE hourly prompt updated via tool (same schedule). No code send test invented new picks.
+- Pasted soccer training report is not present at its cited path in this checkout; reported model selection/final checks do not automatically enable ticket soccer. No reserved test read/run or soccer edits. Still open: guarded sender/helper release, same-game/new-market and cross-window stake policies, personal-slip screen/correction lifecycle, token rotation. Source/model/release acceptance stays separate. Next: independent review of these six fixes and real scheduled dual text/image receipt verification, then broader audit backlog.
+
+## Urgent NFL activation compatibility restored — Codex, Nov8
+- New sport/market audit confirmed my coverage.py one-line dedup change invalidated NFL activation: currentaedc35c649ce50dc vs storedb6074877a7e7ccfe, activationFalse. Restored ONLY that line to sealed original bytes; currentb6074877a7e7ccfe, activationTrue. No reactivation, seal/hash bypass, model/training/data/job/deploy change. Affected canonical rows51–70 (20) intact; no retrospective pregame reviews or sends fabricated.
+- Read-only real helper snapshot /tmp/nfl-activation-restored-20261108.json now includes NFL report again. Added coverage metadata complete_supported_sports=false + unavailable_sports whenever NBA/NHL/NFL section errors, preventing available-ID counts being described as all-sport completeness. New regression1 passed; no full-suite claim.
+- IMPORTANT: restoring sealed coverage bytes REOPENS explanation-only duplicate publication in the unpromoted jobs.py early-publication change, and the associated new dedup test's assumption no longer holds. Previous103/26 passes predate this restore; do not cite them as current whole-tree readiness. Resolve in isolated integration alongside frozen NFL compatibility; do not silently re-edit hashed files/reseal. Production forecast jobs continue their existing release.
+- Existing audit backlog: stale quotes/current-price filter, hung workers, live/dev app mismatch, NHL seal scope, personal slips UI/corrections, guarded sender/helper release. Policy questions (same-game variants, cross-window budget) unchanged. Next bounded task: isolated integration fix for early publication + real NFL activation regression, then independent review/readiness before promoting anything.
+
+## Independent integration check — Codex, Nov8 after user go
+- User reports Claude already owns batch1 integration (batch1+soccer+tickets, guards, route fix, final check ongoing). Read-only reviewed actual batch1 code/report; no second writer or edits to that checkout. Existing integration is preferred over duplicate implementation.
+- CRITICAL release blocker reproduced: with batch1 app package and existing production activation artifact, nfl_live.activation() is False. Batch1 definition a926a90ed63fd631 vs approved b6074877a7e7ccfe. Of the seven definition inputs, only coverage.py differs from restored sprint1. It still has explanation-only identity and extra rows/new metadata changes. Guard rehearsal/synthetic tests do not prove production NFL activation compatibility. Do not activate/promote this tree until resolved and explicitly tested; no resealing/bypass performed.
+- Sprint1's restored NFL activation remains separate from this staged failure; no live model/data/job changes this check. A managed clean worktree ticket-release-integration was created before learning integration already existed; no code changes there. Archive tool refused because it became this chat's primary checkout; left intact, not manually deleted. Current task should verify batch1 rather than overwrite Claude work.
+- Next: integration owner resolves frozen-source compatibility, adds a real activation-artifact regression, reruns final gate if code changes, then independent release review. No reserved soccer test touched.

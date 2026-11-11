@@ -1,0 +1,225 @@
+
+## 0. Probe log
+requests 115 total_bytes 27382716 status {200: 106, 400: 1, 403: 3, 502: 5} hash_or_size_mismatch 0
+requests_per_host {'site.api.espn.com': 65, 'www.football-data.co.uk': 9, 'api.github.com': 7, 'raw.githubusercontent.com': 11, 'api.clubelo.com': 6, 'www.football-data.org': 2, 'www.api-football.com': 2, 'the-odds-api.com': 3, 'www.sportmonks.com': 1, 'www.sports-reference.com': 2, 'www.oddsportal.com': 2, 'www.transfermarkt.com': 1, 'understat.com': 1, 'docs.football-data.org': 2, 'disneytermsofuse.com': 1}
+
+## 1. ESPN scoreboard probes (month = dates=YYYYMM unless noted)
+file | events | status counts | finals | finals with details | details goal-sum == final score | postponed stubs with score "0" | finals with non-null scoreboard odds | finals with totalShots for both teams | season label
+espn_eng.1_dates_200010.json | 0 | {} | 0 | 0 | 0 | 0 | 0 | 0 | 2001-02 Barclays Premier League
+espn_eng.1_dates_200110.json | 33 | {'STATUS_FULL_TIME': 33} | 33 | 33 | 33 | 0 | 0 | 33 | 2001-02 Barclays Premier League
+espn_eng.1_dates_200210.json | 32 | {'STATUS_POSTPONED': 1, 'STATUS_FULL_TIME': 31} | 31 | 31 | 31 | 1 | 0 | 31 | 2002-03 Barclays Premier League
+espn_eng.1_dates_200510.json | 54 | {'STATUS_POSTPONED': 14, 'STATUS_FULL_TIME': 40} | 40 | 40 | 40 | 14 | 0 | 40 | 2005-06 Barclays Premier League
+espn_eng.1_dates_201010.json | 39 | {'STATUS_FULL_TIME': 39} | 39 | 39 | 39 | 0 | 0 | 39 | 2010-11 Barclays Premier League
+espn_eng.1_dates_201510.json | 37 | {'STATUS_FULL_TIME': 37} | 37 | 37 | 37 | 0 | 0 | 37 | 2015-16 Barclays Premier League
+espn_eng.1_dates_202010.json | 34 | {'STATUS_FULL_TIME': 34} | 34 | 34 | 34 | 0 | 0 | 34 | 2020-21 English Premier League
+espn_eng1_dates_2023_limit1000.json | 412 | {'STATUS_FULL_TIME': 412} | 412 | 412 | 412 | 0 | 0 | 412 | 2026-27 English Premier League
+espn_eng1_dates_2024.json | 100 | {'STATUS_FULL_TIME': 100} | 100 | 100 | 100 | 0 | 0 | 100 | 2026-27 English Premier League
+espn_eng1_dates_202410.json | 30 | {'STATUS_FULL_TIME': 30} | 30 | 30 | 30 | 0 | 0 | 30 | 2024-25 English Premier League
+espn_eng1_dates_202412.json | 62 | {'STATUS_FULL_TIME': 62} | 62 | 62 | 62 | 0 | 0 | 62 | 2024-25 English Premier League
+espn_esp.1_dates_200010.json | 40 | {'STATUS_FULL_TIME': 40} | 40 | 0 | 0 | 0 | 0 | 0 | 2000/01 Spanish Primera División
+espn_esp.1_dates_200110.json | 50 | {'STATUS_FULL_TIME': 45, 'STATUS_FINAL_AET': 5} | 50 | 48 | 48 | 0 | 0 | 49 | 2001/02 Spanish Primera División
+espn_esp.1_dates_200210.json | 31 | {'STATUS_FULL_TIME': 31} | 31 | 31 | 31 | 0 | 0 | 31 | 2002/03 Spanish Primera División
+espn_esp.1_dates_200510.json | 50 | {'STATUS_FULL_TIME': 50} | 50 | 50 | 50 | 0 | 0 | 45 | 2005-06 Spanish Primera División
+espn_esp.1_dates_201010.json | 39 | {'STATUS_FULL_TIME': 39} | 39 | 39 | 39 | 0 | 0 | 39 | 2010-11 Spanish Primera División
+espn_esp.1_dates_201510.json | 36 | {'STATUS_FULL_TIME': 36} | 36 | 36 | 36 | 0 | 0 | 36 | 2015-16 Spanish LaLiga
+espn_esp.1_dates_202010.json | 38 | {'STATUS_FULL_TIME': 38} | 38 | 38 | 38 | 0 | 0 | 38 | 2020-21 Spanish LaLiga
+espn_fra.1_dates_200110.json | 27 | {'STATUS_FULL_TIME': 26, 'STATUS_FINAL_AET': 1} | 27 | 27 | 27 | 0 | 0 | 27 | 2001/02 French Ligue 1
+espn_fra.1_dates_200210.json | 30 | {'STATUS_FULL_TIME': 30} | 30 | 30 | 30 | 0 | 0 | 30 | 2002/03 French Ligue 1
+espn_fra.1_dates_200510.json | 55 | {'STATUS_FULL_TIME': 39, 'STATUS_POSTPONED': 16} | 39 | 39 | 39 | 16 | 0 | 39 | 2005/06 French Ligue 1
+espn_fra.1_dates_201010.json | 38 | {'STATUS_FULL_TIME': 38} | 38 | 37 | 37 | 0 | 0 | 38 | 2010-11 French Ligue 1
+espn_fra.1_dates_201510.json | 36 | {'STATUS_FULL_TIME': 36} | 36 | 36 | 36 | 0 | 0 | 36 | 2015-16 French Ligue 1
+espn_fra.1_dates_202010.json | 31 | {'STATUS_FULL_TIME': 31} | 31 | 31 | 31 | 0 | 0 | 31 | 2020-21 French Ligue 1
+espn_ger.1_dates_200110.json | 27 | {'STATUS_FULL_TIME': 26, 'STATUS_FINAL_AET': 1} | 27 | 27 | 26 | 0 | 0 | 27 | 2001/02 German Bundesliga
+espn_ger.1_dates_200210.json | 33 | {'STATUS_FULL_TIME': 26, 'STATUS_POSTPONED': 7} | 26 | 26 | 26 | 7 | 0 | 26 | 2002/03 German Bundesliga
+espn_ger.1_dates_200510.json | 44 | {'STATUS_FULL_TIME': 36, 'STATUS_POSTPONED': 8} | 36 | 36 | 34 | 8 | 0 | 36 | 2005/06 German Bundesliga
+espn_ger.1_dates_201010.json | 36 | {'STATUS_FULL_TIME': 36} | 36 | 36 | 36 | 0 | 0 | 36 | 2010-11 German Bundesliga
+espn_ger.1_dates_201510.json | 34 | {'STATUS_FULL_TIME': 34} | 34 | 34 | 34 | 0 | 0 | 34 | 2015-16 German Bundesliga
+espn_ger.1_dates_202010.json | 33 | {'STATUS_FULL_TIME': 33} | 33 | 33 | 33 | 0 | 0 | 33 | 2020-21 German Bundesliga
+espn_ita.1_dates_200110.json | 36 | {'STATUS_POSTPONED': 9, 'STATUS_FULL_TIME': 25, 'STATUS_FINAL_AET': 2} | 27 | 27 | 27 | 9 | 0 | 27 | 2001/02 Italian Serie A
+espn_ita.1_dates_200210.json | 27 | {'STATUS_FULL_TIME': 27} | 27 | 27 | 27 | 0 | 0 | 27 | 2002/03 Italian Serie A
+espn_ita.1_dates_200510.json | 51 | {'STATUS_FULL_TIME': 50, 'STATUS_POSTPONED': 1} | 50 | 50 | 50 | 1 | 0 | 50 | 2005-06 Italian Serie A
+espn_ita.1_dates_201010.json | 40 | {'STATUS_FULL_TIME': 40} | 40 | 40 | 40 | 0 | 0 | 40 | 2010-11 Italian Serie A
+espn_ita.1_dates_201510.json | 42 | {'STATUS_FULL_TIME': 42} | 42 | 42 | 42 | 0 | 0 | 42 | 2015-16 Italian Serie A
+espn_ita.1_dates_202010.json | 31 | {'STATUS_FULL_TIME': 31} | 31 | 31 | 31 | 0 | 0 | 31 | 2020-21 Italian Serie A
+espn_uefa.champions_dates_200010.json | 0 | {} | 0 | 0 | 0 | 0 | 0 | 0 | 2001/02 UEFA Champions League
+espn_uefa.champions_dates_200110.json | 56 | {'STATUS_FULL_TIME': 55, 'STATUS_FINAL_AET': 1} | 56 | 53 | 52 | 0 | 0 | 11 | 2001/02 UEFA Champions League
+espn_uefa.champions_dates_200210.json | 48 | {'STATUS_FULL_TIME': 47, 'STATUS_POSTPONED': 1} | 47 | 47 | 47 | 1 | 0 | 12 | 2002/03 UEFA Champions League
+espn_uefa.champions_dates_200503.json | 8 | {'STATUS_FULL_TIME': 8} | 8 | 8 | 6 | 0 | 0 | 8 | 2004/05 UEFA Champions League
+espn_uefa.champions_dates_200505.json | 3 | {'STATUS_FULL_TIME': 2, 'STATUS_FINAL_PEN': 1} | 3 | 3 | 2 | 0 | 0 | 3 | 2004/05 UEFA Champions League
+espn_uefa.champions_dates_200510.json | 16 | {'STATUS_FULL_TIME': 16} | 16 | 16 | 16 | 0 | 0 | 16 | 2005/06 UEFA Champions League
+espn_uefa.champions_dates_201010.json | 16 | {'STATUS_FULL_TIME': 16} | 16 | 16 | 16 | 0 | 0 | 16 | 2010-11 UEFA Champions League
+espn_uefa.champions_dates_201503.json | 8 | {'STATUS_FULL_TIME': 6, 'STATUS_FINAL_AET': 1, 'STATUS_FINAL_PEN': 1} | 8 | 8 | 8 | 0 | 0 | 8 | 2014-15 UEFA Champions League
+espn_uefa.champions_dates_201510.json | 16 | {'STATUS_FULL_TIME': 16} | 16 | 16 | 16 | 0 | 0 | 16 | 2015-16 UEFA Champions League
+espn_uefa.champions_dates_202010.json | 32 | {'STATUS_FULL_TIME': 32} | 32 | 32 | 32 | 0 | 0 | 32 | 2020-21 UEFA Champions League
+espn_uefa.champions_dates_202503.json | 16 | {'STATUS_FULL_TIME': 14, 'STATUS_FINAL_PEN': 2} | 16 | 16 | 16 | 0 | 0 | 16 | 2024-25 UEFA Champions League
+espn_uefa.champions_dates_202505.json | 3 | {'STATUS_FINAL_AET': 1, 'STATUS_FULL_TIME': 2} | 3 | 3 | 3 | 0 | 0 | 3 | 2024-25 UEFA Champions League
+espn_uefa.europa_dates_200510.json | 0 | {} | 0 | 0 | 0 | 0 | 0 | 0 | 2009/10 UEFA Europa League
+espn_uefa.europa_dates_200910.json | 48 | {'STATUS_FULL_TIME': 48} | 48 | 48 | 48 | 0 | 0 | 48 | 2009/10 UEFA Europa League
+espn_uefa.europa_dates_201010.json | 24 | {'STATUS_FULL_TIME': 24} | 24 | 24 | 24 | 0 | 0 | 24 | 2010/11 UEFA Europa League
+espn_uefa.europa_dates_201503.json | 16 | {'STATUS_FULL_TIME': 16} | 16 | 16 | 16 | 0 | 0 | 16 | 2014/15 UEFA Europa League
+espn_uefa.europa_dates_201510.json | 48 | {'STATUS_FULL_TIME': 48} | 48 | 48 | 48 | 0 | 0 | 48 | 2015-16 UEFA Europa League
+espn_uefa.europa_dates_202010.json | 48 | {'STATUS_FULL_TIME': 48} | 48 | 48 | 48 | 0 | 0 | 48 | 2020-21 UEFA Europa League
+espn_uefa.europa_dates_202504.json | 8 | {'STATUS_FULL_TIME': 6, 'STATUS_FINAL_PEN': 1, 'STATUS_FINAL_AET': 1} | 8 | 8 | 8 | 0 | 0 | 8 | 2024-25 UEFA Europa League
+
+## 1b. ESPN parameter tests
+espn_eng1_range.json http_status 400 url https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard?dates=20241001-20241031
+espn_eng1_dates_2024.json events 100 first 2024-01-01T20:00Z last 2024-04-02T18:45Z
+espn_eng1_dates_2023_limit1000.json events 412 first 2023-01-01T14:00Z last 2023-12-31T14:00Z
+espn_eng1_20241019_limit.json events 7 first 2024-10-19T11:30Z last 2024-10-19T16:30Z
+
+## 2. ESPN AET/PEN events in sampled scoreboards: 90-minute score from scoreboard `details` (minute <= 90, non-shootout)
+espn_esp.1_dates_200110.json 20644 2001-10-14T16:00Z Real Sociedad at Rayo Vallecano STATUS_FINAL_AET final 2-1 shootout None-None | 90min(details) 2-1 | goal minutes ["20'", "37'", "53'"] | unparsed 0
+espn_esp.1_dates_200110.json 20647 2001-10-14T16:00Z Málaga at Villarreal STATUS_FINAL_AET final 1-2 shootout None-None | 90min(details) 1-2 | goal minutes ["1'", "30'", "79'"] | unparsed 0
+espn_esp.1_dates_200110.json 20639 2001-10-14T17:00Z Valencia at Barcelona STATUS_FINAL_AET final 2-2 shootout None-None | 90min(details) 2-2 | goal minutes ["26'", "42'", "71'", "73'"] | unparsed 0
+espn_esp.1_dates_200110.json 20642 2001-10-14T18:00Z Espanyol at Las Palmas STATUS_FINAL_AET final 2-0 shootout None-None | 90min(details) 2-0 | goal minutes ["74'", "80'"] | unparsed 0
+espn_esp.1_dates_200110.json 21181 2001-10-21T16:00Z Rayo Vallecano at Mallorca STATUS_FINAL_AET final 3-0 shootout None-None | 90min(details) 3-0 | goal minutes ["7'", "72'", "81'"] | unparsed 0
+espn_fra.1_dates_200110.json 21318 2001-10-27T19:00Z Troyes at Montpellier STATUS_FINAL_AET final 2-0 shootout None-None | 90min(details) 2-0 | goal minutes ["44'", "84'"] | unparsed 0
+espn_ger.1_dates_200110.json 21064 2001-10-20T13:30Z Kaiserslautern at Bayern Munich STATUS_FINAL_AET final 4-1 shootout None-None | 90min(details) 4-1 | goal minutes ["16'", "23'", "30'", "82'", "90'"] | unparsed 0
+espn_ita.1_dates_200110.json 20628 2001-10-14T13:00Z Chievo Verona at Brescia STATUS_FINAL_AET final 2-2 shootout None-None | 90min(details) 2-2 | goal minutes ["9'", "59'", "75'", "80'"] | unparsed 0
+espn_ita.1_dates_200110.json 20635 2001-10-14T13:00Z Bologna at Hellas Verona STATUS_FINAL_AET final 0-1 shootout None-None | 90min(details) 0-1 | goal minutes ["32'"] | unparsed 0
+espn_uefa.champions_dates_200110.json 21220 2001-10-23T18:45Z Lille at Deportivo STATUS_FINAL_AET final 1-1 shootout None-None | 90min(details) 1-1 | goal minutes ["13'", "19'"] | unparsed 0
+espn_uefa.champions_dates_200505.json 183634 2005-05-25T18:45Z Liverpool at AC Milan STATUS_FINAL_PEN final 3-3 shootout 2-3 | 90min(details) 3-3 | goal minutes ["1'", "39'", "44'", "54'", "56'", "61'"] | unparsed 0
+espn_uefa.champions_dates_201503.json 410544 2015-03-11T19:45Z Paris Saint-Germain at Chelsea STATUS_FINAL_AET final 2-2 shootout None-None | 90min(details) 1-1 | goal minutes ["81'", "86'", "96'", "114'"] | unparsed 0
+espn_uefa.champions_dates_201503.json 410540 2015-03-17T19:45Z Bayer Leverkusen at Atlético Madrid STATUS_FINAL_PEN final 1-0 shootout 3-2 | 90min(details) 1-0 | goal minutes ["27'"] | unparsed 0
+espn_uefa.champions_dates_202503.json 733605 2025-03-11T20:00Z Paris Saint-Germain at Liverpool STATUS_FINAL_PEN final 0-1 shootout 1-4 | 90min(details) 0-1 | goal minutes ["12'"] | unparsed 0
+espn_uefa.champions_dates_202503.json 733606 2025-03-12T20:00Z Real Madrid at Atlético Madrid STATUS_FINAL_PEN final 1-0 shootout 2-4 | 90min(details) 1-0 | goal minutes ["1'"] | unparsed 0
+espn_uefa.champions_dates_202505.json 733619 2025-05-06T19:00Z Barcelona at Internazionale STATUS_FINAL_AET final 4-3 shootout None-None | 90min(details) 3-3 | goal minutes ["21'", "45'+1'", "54'", "60'", "87'", "90'+3'", "99'"] | unparsed 0
+espn_uefa.europa_dates_202504.json 733642 2025-04-17T19:00Z Bodo/Glimt at Lazio STATUS_FINAL_PEN final 3-1 shootout 2-3 | 90min(details) 2-0 | goal minutes ["21'", "90'+3'", "99'", "109'"] | unparsed 0
+espn_uefa.europa_dates_202504.json 734499 2025-04-17T19:00Z Lyon at Manchester United STATUS_FINAL_AET final 5-4 shootout None-None | 90min(details) 2-2 | goal minutes ["10'", "45'+1'", "71'", "77'", "104'", "109'", "114'", "120'", "120'+1'"] | unparsed 0
+league-file AET/PEN statuses (league matches cannot go to extra time): 9
+
+## 3. ESPN summary endpoint
+espn_summary_eng.1_184593.json | status STATUS_FULL_TIME | final 2-3 | linescores [[], []] | 90min(linescores 1+2) None | linescore sum==final None | 90min(keyEvents period<=2) 2-3 | 90min(scoreboard details) 2-3 | keyEvent goal (minute,period) [("2'", 1), ("17'", 1), ("18'", 1), ("28'", 1), ("45'", 1)] | boxscore stat counts [24, 24] | odds providers [] | Bet365 preMatch 1X2 {} | quote-time fields none | pickcenter 0
+espn_summary_eng.1_704345.json | status STATUS_FULL_TIME | final 0-1 | linescores [['0', '0'], ['1', '0']] | 90min(linescores 1+2) 0-1 | linescore sum==final True | 90min(keyEvents period<=2) 0-1 | 90min(scoreboard details) 0-1 | keyEvent goal (minute,period) [("9'", 1)] | boxscore stat counts [28, 28] | odds providers ['Bet 365', 'ESPN BET', 'ESPN BET - Live Odds'] | Bet365 preMatch 1X2 {'Draw': '3/1', 'Away': '4/6', 'Home': '4/1'} | quote-time fields none | pickcenter 0
+espn_summary_uefa.champions_183634.json | status STATUS_FINAL_PEN | final 3-3 | linescores [[], []] | 90min(linescores 1+2) None | linescore sum==final None | 90min(keyEvents period<=2) 3-3 | 90min(scoreboard details) 3-3 | keyEvent goal (minute,period) [("1'", 1), ("39'", 1), ("44'", 1), ("54'", 2), ("56'", 2), ("61'", 2)] | boxscore stat counts [24, 24] | odds providers [] | Bet365 preMatch 1X2 {} | quote-time fields none | pickcenter 0
+espn_summary_uefa.champions_410544.json | status STATUS_FINAL_AET | final 2-2 | linescores [['0', '1', '0', '-1'], ['0', '1', '-1', '1']] | 90min(linescores 1+2) 1-1 | linescore sum==final False | 90min(keyEvents period<=2) 1-1 | 90min(scoreboard details) 1-1 | keyEvent goal (minute,period) [("81'", 2), ("86'", 2), ("96'", 3), ("114'", 4)] | boxscore stat counts [27, 27] | odds providers ['bloomberg'] | Bet365 preMatch 1X2 {} | quote-time fields none | pickcenter 0
+espn_summary_uefa.champions_733605.json | status STATUS_FINAL_PEN | final 0-1 | linescores [['0', '0', '0', '0', '1'], ['1', '0', '0', '0', '4']] | 90min(linescores 1+2) 0-1 | linescore sum==final True | 90min(keyEvents period<=2) 0-1 | 90min(scoreboard details) 0-1 | keyEvent goal (minute,period) [("12'", 1)] | boxscore stat counts [28, 28] | odds providers ['Bet 365', 'ESPN BET', 'ESPN BET - Live Odds'] | Bet365 preMatch 1X2 {'Draw': '29/10', 'Away': '17/10', 'Home': '13/10'} | quote-time fields none | pickcenter 0
+espn_summary_uefa.champions_733606.json | status STATUS_FINAL_PEN | final 1-0 | linescores [['1', '0', '0', '0', '2'], ['0', '0', '0', '0', '4']] | 90min(linescores 1+2) 1-0 | linescore sum==final True | 90min(keyEvents period<=2) 1-0 | 90min(scoreboard details) 1-0 | keyEvent goal (minute,period) [("1'", 1)] | boxscore stat counts [28, 28] | odds providers ['Bet 365', 'ESPN BET', 'ESPN BET - Live Odds'] | Bet365 preMatch 1X2 {'Draw': '12/5', 'Away': '6/4', 'Home': '17/10'} | quote-time fields none | pickcenter 0
+espn_summary_uefa.europa_734499.json | status STATUS_FINAL_AET | final 5-4 | linescores [['2', '0', '0', '3'], ['0', '2', '1', '1']] | 90min(linescores 1+2) 2-2 | linescore sum==final True | 90min(keyEvents period<=2) 2-2 | 90min(scoreboard details) 2-2 | keyEvent goal (minute,period) [("10'", 1), ("45'+1'", 1), ("71'", 2), ("77'", 2), ("104'", 3), ("109'", 4), ("114'", 4), ("120'", 4), ("120'+1'", 4)] | boxscore stat counts [28, 28] | odds providers ['Bet 365', 'ESPN BET', 'ESPN BET - Live Odds'] | Bet365 preMatch 1X2 {'Draw': '31/10', 'Away': '15/4', 'Home': '4/6'} | quote-time fields none | pickcenter 0
+
+## 4. ESPN team id stability (all sampled scoreboards)
+distinct team ids 285 ids with >1 displayName 0 {}
+displayNames with >1 id 1 {'CSKA Sofia': ['10834', '527']}
+id 360 ['Manchester United'] seen in 17 competition-seasons [('eng.1', '2001'), ('eng.1', '2002'), ('eng.1', '2005'), ('eng.1', '2010'), ('eng.1', '2015'), ('eng.1', '2020'), ('eng.1', '2022'), ('eng.1', '2023'), ('eng.1', '2024'), ('uefa.champions', '2001'), ('uefa.champions', '2002'), ('uefa.champions', '2004'), ('uefa.champions', '2005'), ('uefa.champions', '2010'), ('uefa.champions', '2015'), ('uefa.champions', '2020'), ('uefa.europa', '2024')]
+id 364 ['Liverpool'] seen in 17 competition-seasons [('eng.1', '2001'), ('eng.1', '2002'), ('eng.1', '2005'), ('eng.1', '2010'), ('eng.1', '2015'), ('eng.1', '2020'), ('eng.1', '2022'), ('eng.1', '2023'), ('eng.1', '2024'), ('uefa.champions', '2001'), ('uefa.champions', '2002'), ('uefa.champions', '2004'), ('uefa.champions', '2005'), ('uefa.champions', '2020'), ('uefa.champions', '2024'), ('uefa.europa', '2010'), ('uefa.europa', '2015')]
+id 86 ['Real Madrid'] seen in 16 competition-seasons [('esp.1', '2000'), ('esp.1', '2001'), ('esp.1', '2002'), ('esp.1', '2005'), ('esp.1', '2010'), ('esp.1', '2015'), ('esp.1', '2020'), ('uefa.champions', '2001'), ('uefa.champions', '2002'), ('uefa.champions', '2004'), ('uefa.champions', '2005'), ('uefa.champions', '2010'), ('uefa.champions', '2014'), ('uefa.champions', '2015'), ('uefa.champions', '2020'), ('uefa.champions', '2024')]
+id 83 ['Barcelona'] seen in 16 competition-seasons [('esp.1', '2000'), ('esp.1', '2001'), ('esp.1', '2002'), ('esp.1', '2005'), ('esp.1', '2010'), ('esp.1', '2015'), ('esp.1', '2020'), ('uefa.champions', '2001'), ('uefa.champions', '2002'), ('uefa.champions', '2004'), ('uefa.champions', '2005'), ('uefa.champions', '2010'), ('uefa.champions', '2014'), ('uefa.champions', '2015'), ('uefa.champions', '2020'), ('uefa.champions', '2024')]
+id 160 ['Paris Saint-Germain'] seen in 11 competition-seasons [('fra.1', '2001'), ('fra.1', '2002'), ('fra.1', '2005'), ('fra.1', '2010'), ('fra.1', '2015'), ('fra.1', '2020'), ('uefa.champions', '2014'), ('uefa.champions', '2015'), ('uefa.champions', '2020'), ('uefa.champions', '2024'), ('uefa.europa', '2010')]
+id 110 ['Internazionale'] seen in 13 competition-seasons [('ita.1', '2001'), ('ita.1', '2002'), ('ita.1', '2005'), ('ita.1', '2010'), ('ita.1', '2015'), ('ita.1', '2020'), ('uefa.champions', '2002'), ('uefa.champions', '2004'), ('uefa.champions', '2005'), ('uefa.champions', '2010'), ('uefa.champions', '2020'), ('uefa.champions', '2024'), ('uefa.europa', '2014')]
+
+## 5. openfootball
+football.json license CC0-1.0 pushed_at 2026-09-22T09:33:50Z tree truncated False
+champions-league license CC0-1.0 pushed_at 2026-07-02T15:56:14Z tree truncated False
+football.json eng.1 season files 17 2010-11..2026-27
+football.json esp.1 season files 15 2012-13..2026-27
+football.json ger.1 season files 17 2010-11..2026-27
+football.json ita.1 season files 14 2013-14..2026-27
+football.json fra.1 season files 13 2014-15..2026-27
+football.json uefa.champions season files 10 2011-12..2024-25
+football.json uefa.europa season files 0 -
+champions-league cl.txt season files 15 ['2011-12', '2012-13', '2013-14', '2014-15', '2015-16', '2016-17', '2017-18', '2018-19', '2019-20', '2020-21', '2021-22', '2022-23', '2023-24', '2024-25', '2025-26']
+champions-league el.txt season files 5 ['2020-21', '2021-22', '2022-23', '2023-24', '2024-25']
+of_fj_2024-25_uefa.cl.json matches 189 score-key patterns {'ft+ht': 177, 'ft': 9, 'et+ft+ht+p': 2, 'none': 1}
+   ET/P row 2025-03-11 Liverpool FC (ENG) v Paris Saint-Germain FC (FRA) {'ht': [0, 1], 'ft': [0, 1], 'et': [0, 1], 'p': [4, 4]}
+   ET/P row 2025-03-12 Club Atlético de Madrid (ESP) v Real Madrid CF (ESP) {'ht': [1, 0], 'ft': [1, 0], 'et': [1, 0], 'p': [4, 4]}
+of_fj_2014-15_uefa.cl.json matches 125 score-key patterns {'ft+ht': 115, 'ft': 8, 'et+ft+ht': 1, 'et+ft+ht+p': 1}
+   ET/P row 2015-03-11 Chelsea FC (ENG) v Paris Saint-Germain (FRA) {'ht': [0, 0], 'ft': [1, 1], 'et': [2, 2]}
+   ET/P row 2015-03-17 Atlético Madrid (ESP) v Bayer Leverkusen (GER) {'ht': [1, 0], 'ft': [1, 0], 'et': [1, 0], 'p': [3, 2]}
+of_fj_2024-25_en.1.json matches 380 score-key patterns {'ft+ht': 364, 'ft': 16}
+of_fj_2023-24_en.1.json matches 380 score-key patterns {'ft+ht': 369, 'ft': 11}
+of_fj_2022-23_en.1.json matches 380 score-key patterns {'ft+ht': 357, 'ft': 23}
+of_cl_2024-25_cl.txt match lines 189 a.e.t. lines 2
+    21:00 Liverpool FC (ENG) v Paris Saint-Germain FC (FRA) 1-4 pen. 0-1 a.e.t. (0-1, 0-1)
+    Club Atlético de Madrid (ESP) v Real Madrid CF (ESP) 2-4 pen. 1-0 a.e.t. (1-0, 1-0)
+of_cl_2024-25_el.txt match lines 189 a.e.t. lines 5
+    18:45 FK Bodø/Glimt (NOR) v FC Twente (NED) 5-2 a.e.t. (3-2, 0-1)
+    AFC Ajax (NED) v Union Saint-Gilloise (BEL) 1-2 a.e.t. (0-2, 0-2)
+    Rangers FC (SCO) v Fenerbahçe (TUR) 3-2 pen. 0-2 a.e.t. (0-2, 0-1)
+    Lazio Roma (ITA) v FK Bodø/Glimt (NOR) 2-3 pen. 3-1 a.e.t. (2-0, 1-0)
+    Manchester United (ENG) v Olympique Lyonnais (FRA) 5-4 a.e.t. (2-2, 2-0)
+of_cl_2014-15_cl.txt match lines 125 a.e.t. lines 2
+    20:45 Chelsea FC (ENG) v Paris Saint-Germain (FRA) 2-2 a.e.t. (1-1, 0-0)
+    20:45 Atlético Madrid (ESP) v Bayer Leverkusen (GER) 3-2 pen. 1-0 a.e.t. (1-0, 1-0)
+openfootball json Inter v Barcelona 2025-05-06: {'ht': [2, 0], 'ft': [4, 3]}
+openfootball json final row: 2025-05-31 {}
+ESPN 733619 status STATUS_FINAL_AET final 4-3 90min(details) 3-3
+
+## 6. ESPN vs openfootball: EPL calendar year 2023 and team names
+ESPN calendar-2023 EPL events 412 | openfootball rows dated 2023 412
+distinct names ESPN 23 openfootball 23 | exact matches 1 | matches after stripping trailing " FC" 23
+residual openfootball names needing a manual map [] | ESPN names unmatched []
+openfootball 2023 rows matched to exactly one ESPN event by (home, away, date) 412 | same full-time score 412 | score differences [] | unmatched 0 []
+EPL 2024-25 names: ESPN 20 openfootball 20 exact 1 after " FC" strip 20
+UCL 2024-25: ESPN names in Mar+May 2025 sample 16 | found in openfootball after stripping " (CCC)" and " FC" 6 | not found ['Atlético Madrid', 'Barcelona', 'Bayer Leverkusen', 'Bayern Munich', 'Benfica', 'Club Brugge', 'Internazionale', 'Lille', 'PSV Eindhoven', 'Real Madrid']
+
+## 7. football-data.co.uk (index/notes pages only; no CSV downloaded)
+englandm E0 season CSV links 34 first 9394 last 2627
+spainm SP1 season CSV links 34 first 9394 last 2627
+germanym D1 season CSV links 34 first 9394 last 2627
+italym I1 season CSV links 34 first 9394 last 2627
+francem F1 season CSV links 34 first 9394 last 2627
+data.php mentions of 'Champions League' 0
+data.php mentions of 'Europa League' 0
+data.php mentions of 'UEFA' 0
+data.php phrase present 'private individuals only' True
+data.php phrase present 'collected after market opening' True
+data.php phrase present 'closing odds' True
+data.php phrase present "Pinnacle's public API" True
+data.php phrase present 'Friday afternoons' True
+notes.txt phrase present 'Time = Time of match kick off' True
+notes.txt phrase present 'These are for pre-closing odds' True
+notes.txt phrase present 'B365CH' True
+notes.txt phrase present 'collected Friday afternoons' True
+notes.txt phrase present 'time zone' False
+notes.txt phrase present 'UK time' False
+notes.txt phrase present 'GMT' False
+robots.txt user-agents disallowed "/": ['GPTBot', 'ChatGPT-User', 'Google-Extended', 'Anthropic-AI', 'Claude-Web', 'ClaudeBot', 'PerplexityBot', 'Applebot-Extended', 'CCBot', 'Meta-ExternalAgent', 'Diffbot', 'Omgilibot']
+
+## 8. StatsBomb open data / ClubElo / docs
+StatsBomb eng.1 2 ['2003/2004', '2015/2016']
+StatsBomb esp.1 18 ['1973/1974', '2004/2005', '2005/2006', '2006/2007', '2007/2008', '2008/2009', '2009/2010', '2010/2011', '2011/2012', '2012/2013', '2013/2014', '2014/2015', '2015/2016', '2016/2017', '2017/2018', '2018/2019', '2019/2020', '2020/2021']
+StatsBomb ger.1 2 ['2015/2016', '2023/2024']
+StatsBomb ita.1 2 ['1986/1987', '2015/2016']
+StatsBomb fra.1 3 ['2015/2016', '2021/2022', '2022/2023']
+StatsBomb uefa.champions 18 ['1970/1971', '1971/1972', '1972/1973', '1999/2000', '2003/2004', '2004/2005', '2006/2007', '2008/2009', '2009/2010', '2010/2011', '2011/2012', '2012/2013', '2013/2014', '2014/2015', '2015/2016', '2016/2017', '2017/2018', '2018/2019']
+StatsBomb uefa.europa 1 ['1988/1989']
+StatsBomb repo license NOASSERTION
+ClubElo http://api.clubelo.com/robots.txt 502 0 b''
+ClubElo http://api.clubelo.com/2024-10-01 502 0 b''
+ClubElo http://api.clubelo.com/ManUnited 502 0 b''
+ClubElo http://api.clubelo.com/Fixtures 200 26 b'Fixtures API deactivated\n\n'
+ClubElo http://api.clubelo.com/2024-10-01 502 0 b''
+ClubElo http://api.clubelo.com/ManUnited 502 0 b''
+non-200 400 https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard?dates=20241001-20241031
+non-200 403 https://site.api.espn.com/robots.txt
+non-200 502 http://api.clubelo.com/robots.txt
+non-200 502 http://api.clubelo.com/2024-10-01
+non-200 502 http://api.clubelo.com/ManUnited
+non-200 502 http://api.clubelo.com/2024-10-01
+non-200 502 http://api.clubelo.com/ManUnited
+non-200 403 https://www.api-football.com/pricing
+non-200 403 https://www.api-football.com/
+
+## 9. ESPN ids: 2024-25 EPL teams seen in earlier sampled eng.1 seasons; UEFA appearances
+AFC Bournemouth 349 | earlier sampled eng.1 seasons ['2015', '2022', '2023'] | sampled UEFA []
+Arsenal 359 | earlier sampled eng.1 seasons ['2001', '2002', '2005', '2010', '2015', '2020', '2022', '2023'] | sampled UEFA ['uefa.champions:2001', 'uefa.champions:2002', 'uefa.champions:2004', 'uefa.champions:2005', 'uefa.champions:2010', 'uefa.champions:2014', 'uefa.champions:2015', 'uefa.champions:2024', 'uefa.europa:2020']
+Aston Villa 362 | earlier sampled eng.1 seasons ['2001', '2002', '2005', '2010', '2015', '2020', '2022', '2023'] | sampled UEFA ['uefa.champions:2024']
+Brentford 337 | earlier sampled eng.1 seasons ['2022', '2023'] | sampled UEFA []
+Brighton & Hove Albion 331 | earlier sampled eng.1 seasons ['2020', '2022', '2023'] | sampled UEFA []
+Chelsea 363 | earlier sampled eng.1 seasons ['2001', '2002', '2005', '2010', '2015', '2020', '2022', '2023'] | sampled UEFA ['uefa.champions:2004', 'uefa.champions:2005', 'uefa.champions:2010', 'uefa.champions:2014', 'uefa.champions:2015', 'uefa.champions:2020']
+Crystal Palace 384 | earlier sampled eng.1 seasons ['2015', '2020', '2022', '2023'] | sampled UEFA []
+Everton 368 | earlier sampled eng.1 seasons ['2001', '2002', '2005', '2010', '2015', '2020', '2022', '2023'] | sampled UEFA ['uefa.europa:2009', 'uefa.europa:2014']
+Fulham 370 | earlier sampled eng.1 seasons ['2001', '2002', '2005', '2010', '2020', '2022', '2023'] | sampled UEFA ['uefa.europa:2009']
+Ipswich Town 373 | earlier sampled eng.1 seasons ['2001'] | sampled UEFA []
+Leicester City 375 | earlier sampled eng.1 seasons ['2001', '2015', '2020', '2022'] | sampled UEFA ['uefa.europa:2020']
+Liverpool 364 | earlier sampled eng.1 seasons ['2001', '2002', '2005', '2010', '2015', '2020', '2022', '2023'] | sampled UEFA ['uefa.champions:2001', 'uefa.champions:2002', 'uefa.champions:2004', 'uefa.champions:2005', 'uefa.champions:2020', 'uefa.champions:2024', 'uefa.europa:2010', 'uefa.europa:2015']
+Manchester City 382 | earlier sampled eng.1 seasons ['2002', '2005', '2010', '2015', '2020', '2022', '2023'] | sampled UEFA ['uefa.champions:2014', 'uefa.champions:2015', 'uefa.champions:2020', 'uefa.europa:2010']
+Manchester United 360 | earlier sampled eng.1 seasons ['2001', '2002', '2005', '2010', '2015', '2020', '2022', '2023'] | sampled UEFA ['uefa.champions:2001', 'uefa.champions:2002', 'uefa.champions:2004', 'uefa.champions:2005', 'uefa.champions:2010', 'uefa.champions:2015', 'uefa.champions:2020', 'uefa.europa:2024']
+Newcastle United 361 | earlier sampled eng.1 seasons ['2001', '2002', '2005', '2010', '2015', '2020', '2022', '2023'] | sampled UEFA ['uefa.champions:2002']
+Nottingham Forest 393 | earlier sampled eng.1 seasons ['2022', '2023'] | sampled UEFA []
+Southampton 376 | earlier sampled eng.1 seasons ['2001', '2002', '2015', '2020', '2022'] | sampled UEFA []
+Tottenham Hotspur 367 | earlier sampled eng.1 seasons ['2001', '2002', '2005', '2010', '2015', '2020', '2022', '2023'] | sampled UEFA ['uefa.champions:2010', 'uefa.europa:2015', 'uefa.europa:2020', 'uefa.europa:2024']
+West Ham United 371 | earlier sampled eng.1 seasons ['2001', '2002', '2005', '2010', '2015', '2020', '2022', '2023'] | sampled UEFA []
+Wolverhampton Wanderers 380 | earlier sampled eng.1 seasons ['2010', '2020', '2022', '2023'] | sampled UEFA []
+total final events across sampled ESPN scoreboards 2125
+knockout-month samples: events 62 AET/PEN 8

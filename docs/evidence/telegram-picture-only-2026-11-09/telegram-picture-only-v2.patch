@@ -1,0 +1,662 @@
+diff -ruN a/backend/app/telegram.py b/backend/app/telegram.py
+--- a/backend/app/telegram.py	2026-11-10 00:38:16.043001536 +0000
++++ b/backend/app/telegram.py	2026-11-10 00:47:46.415001808 +0000
+@@ -5,6 +5,7 @@
+ import hashlib
+ import json
+ import os
++import re
+ import secrets
+ import sqlite3
+ import time
+@@ -225,7 +226,32 @@
+     return key, text
+ 
+ 
+-def deliver(bot, conn, chat_id, key, text, now, *, photo=None, caption=None):
++def card_identity(text):
++    """What makes a game card the same card for its reader: sport, matchup and start (its first three lines) and the
++    recommended pick without its line number ('DET -10.5' and 'DET -9.5' are one pick; 'DET' and 'WSH' are not).
++    None for a text that is not a live game card."""
++    lines = text.split('\n')
++    if len(lines) < 3 or not lines[0].startswith('<b>PROP51 PICKS · ') or '<b>Recommended pick</b>' not in lines:
++        return None
++    pick = re.sub(r'<[^>]+>', '', lines[lines.index('<b>Recommended pick</b>') + 1])
++    return lines[0], lines[1], lines[2], re.sub(r'\s*[+-]?\d+(\.\d+)?$', '', pick.strip())
++
++
++def deliver_card(bot, conn, chat_id, key, text, now):
++    """Owner request Nov 9: one card per game. A card whose game, start and recommended pick already reached the chat (or
++    may have: sent, uncertain, sending) is not sent again when only a forecast version or a line changed; the delivery
++    key is unchanged, so receipts written by the earlier release count too."""
++    identity = card_identity(text)
++    if identity and not conn.execute('SELECT 1 FROM deliveries WHERE delivery_key=?', (key,)).fetchone():
++        since = (datetime.fromisoformat(now.replace('Z', '+00:00')) - timedelta(days=2)).strftime('%Y-%m-%dT%H:%M:%SZ')
++        for row in conn.execute("SELECT text FROM deliveries WHERE chat_id=? AND attempted_at>=? AND status IN ('sent','uncertain','sending')",
++                                (str(chat_id), since)):
++            if card_identity(row['text']) == identity:
++                return 'already_sent_for_game'
++    return deliver(bot, conn, chat_id, key, text, now)
++
++
++def deliver(bot, conn, chat_id, key, text, now, *, photo=None, caption=None, send_text=None):
+     """Unique claim before send; ambiguous responses/crashes are never automatically sent a second time."""
+     if photo is None and '<b>Recommended pick</b>' in text:
+         from .telegram_card import render_card
+@@ -241,7 +267,7 @@
+     conn.execute('COMMIT')
+     try:
+         if photo is None:
+-            message = bot.call('sendMessage', {'chat_id': str(chat_id), 'text': text, 'parse_mode': 'HTML'})
++            message = bot.call('sendMessage', {'chat_id': str(chat_id), 'text': text if send_text is None else send_text, 'parse_mode': 'HTML'})
+         else:
+             if caption is None:
+                 league = text.split('PROP51 PICKS · ', 1)[1].split('<', 1)[0]
+@@ -288,7 +314,7 @@
+                 source.close()
+             batches = message_batches(report, settings['TELEGRAM_CHAT_ID'])
+             result['sports'][sport] = {'eligible_summaries': len(batches), **dict(Counter(
+-                deliver(bot, conn, settings['TELEGRAM_CHAT_ID'], key, text, report['as_of']) for key, text in batches))}
++                deliver_card(bot, conn, settings['TELEGRAM_CHAT_ID'], key, text, report['as_of']) for key, text in batches))}
+         except Exception as exc:
+             # Do not echo arbitrary exception text (URLs/credentials). Other sport can continue.
+             result['sports'][sport] = {'status': 'failed', 'error_type': type(exc).__name__}
+diff -ruN a/backend/app/telegram_card.py b/backend/app/telegram_card.py
+--- a/backend/app/telegram_card.py	2026-11-10 00:38:16.053001536 +0000
++++ b/backend/app/telegram_card.py	2026-11-10 00:47:46.416001808 +0000
+@@ -230,11 +230,11 @@
+     return output.getvalue()
+ 
+ 
+-def render_ticket_card(day, tickets, *, preview=False):
++def render_ticket_card(day, tickets, *, preview=False, number_from=1, total=None):
+     """Ticket layout using the shared fonts, team logos and published palettes."""
+     from .tickets import CARD_TICKETS, MAX_TICKETS, MIN_LEGS, MAX_LEGS, bet_type
+     if not tickets or len(tickets) > MAX_TICKETS or any(not MIN_LEGS <= len(t['legs']) <= MAX_LEGS for t in tickets):
+-        raise ValueError('Ticket cards require one to six tickets of two to six legs.')
++        raise ValueError('Ticket cards require one to six tickets of two to seven legs.')
+     extra = len(tickets) - CARD_TICKETS
+     tickets = tickets[:CARD_TICKETS]   # the readable text lists every option
+     first = tickets[0]['legs'][0]
+@@ -261,10 +261,12 @@
+ 
+     line('PROP51 / COMBINED PARLAY TICKETS', size=49, bold=True, color=primary)
+     line(day, size=28, color=MUTED)
++    if total and total > len(tickets):   # one of several pictures: say which tickets this one holds
++        line(f"Tickets {number_from}-{number_from + len(tickets) - 1} of {total}", size=28, bold=True, color=primary)
+     if preview:
+         line('TEST / PAST GAMES / RESULTS KNOWN', size=29, bold=True, color='#A83824')
+     y += 20
+-    for ticket_number, ticket in enumerate(tickets, 1):
++    for ticket_number, ticket in enumerate(tickets, number_from):
+         draw.rounded_rectangle((52,y,1028,y+78),radius=20,fill=primary)
+         y += 11
+         line(f"Ticket {ticket_number}: {ticket['label']}",size=32,bold=True,color=PAPER,x=76,width=928)
+diff -ruN a/backend/app/tickets.py b/backend/app/tickets.py
+--- a/backend/app/tickets.py	2026-11-10 00:38:16.033001536 +0000
++++ b/backend/app/tickets.py	2026-11-10 00:47:46.415001808 +0000
+@@ -10,7 +10,10 @@
+ 
+ SKILL = Path.home() / '.codex/skills/courtside-ticket-review/SKILL.md'
+ TORONTO = ZoneInfo('America/Toronto')
+-MAX_TICKETS, MIN_LEGS, MAX_LEGS = 6, 2, 6   # owner request Nov 8: a varied menu, not one fixed shape
++MAX_TICKETS, MIN_LEGS, MAX_LEGS = 6, 2, 7   # owner request Nov 8: a varied menu; Nov 9: long-shot tickets up to seven legs
++# Owner request Nov 9: these two states clear by themselves within minutes and their alert text meant nothing to the
++# reader. They stay in the preflight report, the snapshot and the trigger observations; they are no longer sent to the chat.
++QUIET_HEALTH = ('source_unavailable_or_stale', 'missing_due_forecasts')
+ CARD_TICKETS = 3
+ PROVIDER_SHORT = {'DraftKings': 'DK'}
+ SNAPSHOT_TTL = timedelta(minutes=10)   # check() refuses older snapshots; a start older than this can never complete                             # the PNG shows the first three; the text lists every option
+@@ -727,7 +730,7 @@
+     seen, combinations, resolved = {}, set(), []
+     for ticket in plan['tickets']:
+         if not _text(ticket['label'], 'ticket label') or not MIN_LEGS <= len(ticket['legs']) <= MAX_LEGS:
+-            raise ValueError('A ticket needs a label and two to six legs')
++            raise ValueError('A ticket needs a label and two to seven legs')
+         if not isinstance(ticket.get('payout_assessment'), str) or not ticket['payout_assessment'].strip():
+             raise ValueError('Each ticket needs a payout_assessment: judge its payout at the stored prices against its uncertainty; review again')
+         stake = ticket.get('stake_usd')
+@@ -900,6 +903,7 @@
+         raise ValueError('Forecasts changed before dispatch')
+     result = checked
+     attempt_at = checked['as_of']
++    captions = ticket_captions(result)   # refuses before any reservation if a selection could not be shown in full
+     settings = config.telegram_settings()
+     if not settings.get('TELEGRAM_CHAT_ID'):
+         raise ValueError('Pair the existing Telegram bot first')
+@@ -924,6 +928,7 @@
+             if delivery and delivery['status']=='retry' and delivery['next_attempt_at'] > attempt_at:
+                 return 'retry_pending'
+             result = archived
++            captions = ticket_captions(result)
+         else:
+             conn.execute('BEGIN IMMEDIATE')
+             try:
+@@ -962,6 +967,39 @@
+         write_once(archive, raw)
+         # Keep original content/time as evidence; retries use the CURRENT attempt time.
+         previous = conn.execute('SELECT status FROM deliveries WHERE delivery_key=?',(key,)).fetchone()
++        image_key = 'ticket-image:' + sha(key.encode())
++        pictured = conn.execute('SELECT 1 FROM ticket_images WHERE batch_key=?',(key + '#p1',)).fetchone() is not None
++        if pictured or not (previous and previous['status'] == 'sent'):
++            # Owner request Nov 9: a ticket batch arrives as pictures only, no long text message. Every ticket is on a
++            # picture in full (ticket_pages); the first picture is sent under the batch key (the delivery every later step
++            # reads) and the image receipt is recorded as that same Telegram message, so nothing is sent twice. Further
++            # pictures have their own receipts. The exact text stays in the ledger and the archive.
++            pictures = ticket_pictures(conn, key, result, directory)   # an archived picture that fails its hash raises: nothing is sent
++            if pictures is None:
++                # The renderer is unavailable. The ticket still arrives, as the short caption lines (never the long text),
++                # and the failed image receipt raises the delivery alert, as a failed image always did.
++                short = '\n\n'.join(escape(c) for c in captions)
++                status = telegram.deliver(bot, conn, chat, key, result['text'], attempt_at, send_text=short)
++                confirmed = conn.execute('SELECT status FROM deliveries WHERE delivery_key=?',(key,)).fetchone()
++                if not confirmed or confirmed['status'] != 'sent':
++                    return status
++                conn.execute('INSERT OR IGNORE INTO deliveries (delivery_key,chat_id,text,status,attempted_at,error) VALUES (?,?,?,?,?,?)',
++                             (image_key, str(chat), result['text'], 'failed', attempt_at, 'ticket image not rendered'))
++                return 'partial_failed'
++            statuses = [telegram.deliver(bot, conn, chat, key, result['text'], attempt_at, photo=pictures[0][0], caption=pictures[0][1])]
++            confirmed = conn.execute('SELECT status,message_id FROM deliveries WHERE delivery_key=?',(key,)).fetchone()
++            if not confirmed or confirmed['status'] != 'sent':
++                return statuses[0]
++            conn.execute('INSERT OR IGNORE INTO deliveries (delivery_key,chat_id,text,status,attempted_at,message_id) VALUES (?,?,?,?,?,?)',
++                         (image_key, str(chat), result['text'], 'sent', attempt_at, confirmed['message_id']))
++            for number, (photo, caption) in enumerate(pictures[1:], 2):
++                page_key = f'{image_key}:p{number}'
++                statuses.append(telegram.deliver(bot, conn, chat, page_key, result['text'], attempt_at, photo=photo, caption=caption))
++                row = conn.execute('SELECT status FROM deliveries WHERE delivery_key=?',(page_key,)).fetchone()
++                if not row or row['status'] != 'sent':
++                    return 'partial_' + (row['status'] if row else statuses[-1])   # later pictures wait: order is kept
++            return 'sent' if 'sent' in statuses else 'existing_sent'
++        # A batch whose text the earlier release already sent keeps that release's text-then-image path.
+         status = telegram.deliver(bot, conn, chat, key, result['text'], attempt_at)
+         confirmed = conn.execute('SELECT status FROM deliveries WHERE delivery_key=?',(key,)).fetchone()
+         if not confirmed or confirmed['status'] != 'sent':
+@@ -972,6 +1010,86 @@
+         return 'existing_sent' if previous and previous['status']=='sent' and image_status=='already_recorded' else 'sent'
+ 
+ 
++PAGE_LEGS = 9   # a picture holds at most CARD_TICKETS tickets and about this many legs, so it stays readable on a phone
++
++
++def ticket_pages(tickets):
++    """Tickets split over pictures, in order; every ticket is on exactly one picture, whole."""
++    pages = []
++    for t in tickets:
++        if pages and len(pages[-1]) < CARD_TICKETS and sum(len(x['legs']) for x in pages[-1]) + len(t['legs']) <= PAGE_LEGS:
++            pages[-1].append(t)
++        else:
++            pages.append([t])
++    return pages
++
++
++def ticket_captions(result):
++    """One caption per picture: its tickets' legs with the stored price and what each pays at those prices. Telegram
++    captions hold 1,024 characters. A caption that is too long first drops the ticket labels, then the prices; if the legs
++    themselves still do not fit it raises: a selection is never cut off."""
++    tickets = result['resolved']
++    pages = ticket_pages(tickets)
++    quoted = [p['quote_check']['retrieved_at'] for t in tickets for p in t['legs'] if (p.get('quote_check') or {}).get('price_now') is not None]
++    footer = 'Each numbered ticket is ONE parlay with all its legs.' + (
++        ' Prices: stored DraftKings quotes, ' + _parse(max(quoted)).astimezone(TORONTO).strftime('%I:%M %p %Z') + '; confirm before betting.' if quoted else '')
++    out, number = [], 0
++    for index, page in enumerate(pages, 1):
++        first = number + 1
++
++        def build(labels, prices):
++            lines = ['PROP51 · COMBINED PARLAY TICKETS · ' + result['date'] + (f' · picture {index} of {len(pages)}' if len(pages) > 1 else '')]
++            for n, t in enumerate(page, first):
++                legs = ' + '.join(p['pick_label'] + (f" ({p['quote_check']['price_now']:+d})" if prices and (p.get('quote_check') or {}).get('price_now') is not None else '')
++                                  for p in t['legs'])
++                try:
++                    payout = (t.get('assessment') or ticket_assessment(t['legs']))['payout']
++                except Exception:
++                    payout = None
++                lines.append(f"#{n}" + (f" {t['label']}" if labels else '') + f": {legs}" + (f" — pays about ×{payout:.2f}" if payout else '')
++                             + (f" — ${t['stake_usd']:.2f}" if t.get('stake_usd') is not None else ''))
++            return '\n'.join(lines + [footer])
++        caption = next((c for c in (build(True, True), build(False, True), build(False, False)) if len(c) <= 1024), None)
++        if caption is None:
++            raise ValueError('Ticket selections do not fit a picture caption; shorten the pick labels or split the batch')
++        out.append(caption)
++        number += len(page)
++    return out
++
++
++def ticket_pictures(conn, key, result, directory):
++    """[(PNG bytes, caption)] for a batch, one per ticket_pages page, archived once in ticket_images (keys '<batch>#p<n>')
++    and reused unchanged on every retry. None when the renderer cannot draw (nothing is archived). An archived picture
++    whose bytes no longer match their recorded hash raises."""
++    from app.telegram_card import render_ticket_card
++    tickets = result['resolved']
++    pages, captions = ticket_pages(tickets), ticket_captions(result)
++    keys = [f'{key}#p{n}' for n in range(1, len(pages) + 1)]
++
++    def rows():
++        return [conn.execute('SELECT * FROM ticket_images WHERE batch_key=?',(k,)).fetchone() for k in keys]
++    if not all(rows()):
++        try:
++            photos, number = [], 1
++            for page in pages:
++                photos.append(render_ticket_card(result['date'], page, number_from=number, total=len(tickets)))
++                number += len(page)
++        except Exception:
++            return None
++        for k, photo, caption in zip(keys, photos, captions):
++            # Named by content: a file left by a crash before its record can never be mistaken for a later render.
++            image_path = directory / (result['date'] + '-' + sha(k.encode())[:16] + '-' + sha(photo) + '.png')
++            write_once(image_path, photo)
++            conn.execute('INSERT OR IGNORE INTO ticket_images VALUES (?,?,?,?)',(k,str(image_path),sha(photo),caption))
++    out = []
++    for row in rows():
++        photo = Path(row['path']).read_bytes()
++        if sha(photo) != row['sha256']:
++            raise ValueError('Archived ticket image hash mismatch')
++        out.append((photo, row['caption']))
++    return out
++
++
+ def deliver_visual(bot, conn, chat, key, result, directory, attempt_at):
+     from app import telegram
+     from app.telegram_card import render_ticket_card
+@@ -1374,6 +1492,9 @@
+         if not telegram.controls(bot,settings,conn):
+             return ['paused']
+         for issue in issues:
++            if issue['issue'] in QUIET_HEALTH:
++                out.append('not_sent_quiet')
++                continue
+             # One alert per issue/sport/day, no repeated hourly noise.
+             key = 'ticket-health:' + snap['date'] + ':' + issue['sport'] + ':' + issue['issue'] + (':' + issue['dedup'] if issue.get('dedup') else '')
+             text = 'PROP51 / REVIEW BLOCKER / ' + issue['sport'].upper() + '\n' + issue['issue'] + ''.join(
+@@ -1569,6 +1690,9 @@
+             for kind, key in (('ticket_text', batch['batch_key']), ('ticket_image', 'ticket-image:' + sha(batch['batch_key'].encode()))):
+                 row = conn.execute('SELECT status,attempted_at,message_id,next_attempt_at FROM deliveries WHERE delivery_key=?', (key,)).fetchone()
+                 out.append({'kind': kind, 'batch_key': batch['batch_key'], **(dict(row) if row else {'status': 'not_attempted'})})
++            for row in conn.execute("SELECT status,attempted_at,message_id,next_attempt_at FROM deliveries WHERE delivery_key LIKE ? ORDER BY delivery_key",
++                                    ('ticket-image:' + sha(batch['batch_key'].encode()) + ':p%',)).fetchall():
++                out.append({'kind': 'ticket_image_page', 'batch_key': batch['batch_key'], **dict(row)})
+     return out
+ 
+ 
+diff -ruN a/backend/tests/test_telegram.py b/backend/tests/test_telegram.py
+--- a/backend/tests/test_telegram.py	2026-11-10 00:38:16.071001536 +0000
++++ b/backend/tests/test_telegram.py	2026-11-10 00:47:46.417001808 +0000
+@@ -321,3 +321,49 @@
+     with tg.ledger(tmp_path / 'receipts.sqlite') as conn:
+         assert tg.deliver(bot, conn, '123', key, text, NOW) == 'sent'
+     assert 'GAME CARD' in bot.caption and 'not a parlay ticket' in bot.caption.lower() and 'Recommended pick' in bot.caption
++
++
++def strong_report(label='DET -10.5', forecast_id=1, tipoff='2026-11-02T21:00:00Z'):
++    d = report()
++    d['picks'][0].update(market='spread', market_title='Point spread', pick_label=label, opposite_pick_label='WSH +10.5', strong=True,
++                         game_rank=1, forecast_id=forecast_id, tipoff=tipoff)
++    d['picks'][0]['percentage_history'].update(market='spread', line_source='bookmaker', wins=3, losses=1, settled=4)
++    return d
++
++
++def card_sends(tmp_path, reports, *, error=None, first_status=None):
++    """Statuses of delivering each report's single card in turn through the one-card-per-game guard."""
++    bot, out = Bot(), []
++    with tg.ledger(tmp_path / 'cards.sqlite') as conn:
++        for i, d in enumerate(reports):
++            key, text = tg.message_batches(d, '123')[0]
++            out.append(tg.deliver_card(bot, conn, '123', key, text, NOW))
++            if i == 0 and first_status:
++                conn.execute('UPDATE deliveries SET status=?', (first_status,))
++    return out, bot
++
++
++def test_one_card_per_game_a_new_forecast_version_or_a_moved_line_is_not_sent_again(tmp_path):
++    """Owner request Nov 9. The delivery key is the earlier release's, so its receipts are matched at cutover too."""
++    out, bot = card_sends(tmp_path, [strong_report(), strong_report(forecast_id=2), strong_report('DET -9.5', forecast_id=3)])
++    assert out == ['sent', 'already_sent_for_game', 'already_sent_for_game'] and len(bot.sends) == 1
++    assert tg.message_batches(strong_report(), '123')[0][0] != tg.message_batches(strong_report(forecast_id=2), '123')[0][0]
++
++
++def test_a_new_recommended_side_or_a_new_start_sends_the_game_again(tmp_path):
++    out, bot = card_sends(tmp_path, [strong_report(), strong_report('WSH +10.5', forecast_id=2),
++                                     strong_report(forecast_id=3, tipoff='2026-11-02T21:30:00Z'), strong_report()])
++    assert out == ['sent', 'sent', 'sent', 'already_recorded'] and len(bot.sends) == 3
++
++
++@pytest.mark.parametrize('status,expected', [('uncertain', 'already_sent_for_game'), ('sending', 'already_sent_for_game'), ('failed', 'sent')])
++def test_a_card_that_may_have_arrived_blocks_the_game_and_a_rejected_one_does_not(tmp_path, status, expected):
++    out, bot = card_sends(tmp_path, [strong_report(), strong_report(forecast_id=2)], first_status=status)
++    assert out == ['sent', expected]
++
++
++def test_card_identity_ignores_the_line_only_and_is_none_for_other_messages():
++    text = tg.message_batches(strong_report(), '123')[0][1]
++    assert tg.card_identity(text)[3] == 'DET' and tg.card_identity('PROP51 / REVIEW BLOCKER / NBA') is None
++    assert tg.card_identity(tg.message_batches(strong_report('Over 233.5'), '123')[0][1])[3] == 'Over'
++    assert tg.card_identity(tg.message_batches(report(), '123')[0][1])[3] == 'No strong pick'
+diff -ruN a/backend/tests/test_tickets.py b/backend/tests/test_tickets.py
+--- a/backend/tests/test_tickets.py	2026-11-10 00:38:16.062001536 +0000
++++ b/backend/tests/test_tickets.py	2026-11-10 00:47:46.417001808 +0000
+@@ -45,6 +45,13 @@
+     return plan,snap,sent,tmp_path
+ 
+ 
++def stored_texts():
++    """The exact ticket texts kept in the ledger, oldest first. Since Nov 9 a batch is delivered as one picture with a
++    short caption; the full text is stored and archived, no longer sent as its own message."""
++    with tg.ledger() as c:
++        return [r[0] for r in c.execute("select text from deliveries where delivery_key like 'ai-ticket-review-v3:%' order by rowid")]
++
++
+ def ticket(legs,stake=1):
+     return dict(label='Main' if stake==3 else 'Variation',stake_usd=stake,payout_assessment='Fixture payout judgment',
+                 legs=[dict(sport=s,forecast_id=i,rationale='Fixture selection') for s,i in legs])
+@@ -53,8 +60,13 @@
+ def test_mixed_ticket_sent_as_numbered_text_exact_archive_and_dedup(setup):
+     plan,snap,sent,path=setup;plan['tickets']=[ticket([('nba',1),('nhl',2)],3)]
+     checked=t.check(plan);assert t.send(checked)=='sent';assert t.send(checked)=='existing_sent'
+-    assert len(sent)==2 and [m for m,p in sent]==['sendMessage','sendPhoto']
+-    text=sent[0][1]['text']
++    assert [m for m,p in sent]==['sendPhoto']   # one picture; no separate text message, nothing sent twice
++    caption=sent[0][1]['caption']
++    assert len(caption)<=1024 and 'B1 win' in caption and 'B2 win' in caption and '$3.00' in caption and 'ONE parlay' in caption
++    text=stored_texts()[0]
++    with tg.ledger() as c:
++        receipts=c.execute("select status,message_id from deliveries where delivery_key like 'ai-ticket-review-v3:%' or delivery_key like 'ticket-image:%' order by rowid").fetchall()
++    assert [tuple(r) for r in receipts]==[('sent',1),('sent',1)]   # text and image receipts name the same Telegram message
+     assert 'Ticket 1:' in text and 'Combine ALL' in text and 'NBA' in text and 'NHL' in text and '$3.00' in text
+     archive=json.loads(next((path/'reports/tickets').glob('*.json')).read_text())
+     assert archive['text']==text
+@@ -67,7 +79,7 @@
+     plan,snap,sent,path=setup
+     plan['tickets']=[ticket([('nba',1),('nhl',2)],3)];assert t.send(t.check(plan))=='sent'
+     plan['tickets']=[ticket([('nba',1),('nfl',3)])];assert t.send(t.check(plan))=='sent'
+-    assert 'Shared core exposure' in sent[-2][1]['text'] and 'shared across 2 tickets' in sent[-2][1]['text']
++    assert 'Shared core exposure' in stored_texts()[-1] and 'shared across 2 tickets' in stored_texts()[-1]
+     plan['tickets']=[ticket([('nba',1),('nhl',2)])]
+     with pytest.raises(ValueError,match='preserve'):t.send(t.check(plan))
+     plan['tickets']=[ticket([('nba',4),('nfl',5)],3)]
+@@ -184,7 +196,7 @@
+     plan,snap,sent,path=setup;plan['tickets']=[ticket([('nba',1),('nhl',2)],3)];t.send(t.check(plan))
+     monkeypatch.setattr(t,'grade_leg',lambda p,now:dict(forecast_id=p['forecast_id'],pick_label=p['pick_label'],grade='win'))
+     t.settle(now=NOW,notify=True);t.settle(now=NOW,notify=True)
+-    assert len(sent)==3 and '\n' in sent[2][1]['text'] and '\\n' not in sent[2][1]['text']
++    assert len(sent)==2 and '\n' in sent[1][1]['text'] and '\\n' not in sent[1][1]['text']
+     def unavailable(*a):raise FileNotFoundError('store missing')
+     monkeypatch.setattr(t,'grade_leg',unavailable)
+     report=t.settle(now=NOW);assert report['errors'] and report['tickets'][0]['grade']=='pending'
+@@ -202,7 +214,10 @@
+ def test_health_alerts_are_deduplicated_and_delivery_only_failures_alert(setup):
+     plan,snap,sent,path=setup
+     snap['alerts']=[dict(sport='nhl',issue='source_unavailable_or_stale')]
+-    t.notify_alerts(snap,[]);t.notify_alerts(snap,[]);assert len(sent)==1
++    # Owner request Nov 9: stale-source and missing-forecast states are no longer sent to the chat.
++    assert t.notify_alerts(snap,[])==['not_sent_quiet'] and t.notify_alerts(snap,[])==['not_sent_quiet'] and sent==[]
++    snap['alerts']=[dict(sport='nhl',issue='Store identity mismatch')]
++    t.notify_alerts(snap,[]);t.notify_alerts(snap,[]);assert len(sent)==1   # any other issue: one alert, deduplicated
+     with tg.ledger() as c:
+         c.execute('insert into deliveries(delivery_key,chat_id,text,status,attempted_at) values(?,?,?,?,?)',('ai-ticket-review-v3:uncertain-fixture','fixture','fixture','uncertain',NOW))
+     snap['alerts']=[];t.notify_alerts(snap,[]);assert len(sent)==2
+@@ -231,7 +246,7 @@
+     plan['review']['forecasts_reviewed']['nhl:4']=dict(decision='excluded',reason='Reviewed later alternative; no new ticket justified')
+     result=t.check(plan);assert t.send(result)=='no_ticket'
+     assert any(not json.loads(p.read_text())['resolved'] for p in (path/'reports/tickets/reviews').glob('*.json'))
+-    assert len(sent)==2
++    assert len(sent)==1
+ 
+ 
+ def test_newly_published_forecast_requires_re_review(setup):
+@@ -284,12 +299,12 @@
+         assert Path(c.execute('pragma database_list').fetchone()[2]).parent==tmp_path
+ 
+ 
+-def test_production_sends_visual_ticket_after_text_with_archived_png(setup,monkeypatch):
++def test_production_sends_one_picture_with_archived_png(setup,monkeypatch):
+     from app import telegram_card
+     monkeypatch.setattr(telegram_card,'_logo',lambda *a:None)
+     plan,snap,sent,path=setup;plan['tickets']=[ticket([('nba',1),('nhl',2)],3)]
+     assert t.send(t.check(plan))=='sent'
+-    assert [m for m,p in sent]==['sendMessage','sendPhoto']
++    assert [m for m,p in sent]==['sendPhoto']
+     assert len(sent[-1][1]['caption'])<=1024
+     assert list((path/'reports/tickets').glob('*.png'))
+ 
+@@ -302,9 +317,9 @@
+             photos.append(kw['photo']);raise tg.DeliveryError('uncertain image',uncertain=True)
+         return original(self,method,payload,**kw)
+     monkeypatch.setattr(tg.Telegram,'call',flaky)
+-    assert t.send(t.check(plan))=='partial_uncertain'
+-    assert t.send(t.check(plan))=='partial_uncertain'
+-    assert len(photos)==1 and len(sent)==1
++    assert t.send(t.check(plan))=='uncertain'
++    assert t.send(t.check(plan))=='existing_uncertain'
++    assert len(photos)==1 and sent==[]   # the one picture is never sent a second time, and no text is sent in its place
+ 
+ 
+ def test_historical_visual_preview_is_labelled_and_never_reserves(setup,monkeypatch):
+@@ -347,7 +362,7 @@
+     del new['stake_usd']
+     plan['tickets']=[new]
+     assert t.send(t.check(plan))=='sent'
+-    text=sent[-2][1]['text']
++    text=stored_texts()[-1]
+     assert 'Combine ALL' in text and 'Suggested stake' not in text and 'Daily maximum' not in text
+     assert 'stake' not in sent[-1][1]['caption'].lower()
+     with tg.ledger() as c:
+@@ -460,16 +475,16 @@
+     plan,snap,sent,path=setup
+     plan['tickets']=[ticket([('nba',1),('nhl',2)]),ticket([('nba',1),('nfl',3)])];assert t.send(t.check(plan))=='sent'
+     plan['tickets']=[ticket([('nba',4),('nhl',5)])];assert t.send(t.check(plan))=='sent'
+-    assert 'Shared core exposure' not in sent[-2][1]['text'] and 'nba:1' not in sent[-2][1]['text']
++    assert 'Shared core exposure' not in stored_texts()[-1] and 'nba:1' not in stored_texts()[-1]
+     plan['tickets']=[ticket([('nba',1),('nhl',3)])];assert t.send(t.check(plan))=='sent'
+-    text=sent[-2][1]['text'];assert 'B1 win' in text and 'shared across 3 tickets' in text and 'nba:1' not in text
++    text=stored_texts()[-1];assert 'B1 win' in text and 'shared across 3 tickets' in text and 'nba:1' not in text
+ 
+ 
+ def test_ticket_messages_are_labelled_as_combined_parlays_not_game_cards(setup):
+     plan,snap,sent,path=setup;plan['tickets']=[ticket([('nba',1),('nhl',2)])]
+     assert t.send(t.check(plan))=='sent'
+-    assert 'COMBINED PARLAY TICKET' in sent[0][1]['text'] and 'not a single-game card' in sent[0][1]['text'].lower()
+-    assert 'COMBINED PARLAY TICKET' in sent[1][1]['caption']
++    assert 'COMBINED PARLAY TICKET' in stored_texts()[0] and 'not a single-game card' in stored_texts()[0].lower()
++    assert 'COMBINED PARLAY TICKET' in sent[0][1]['caption'] and len(sent)==1
+ 
+ 
+ def test_nfl_inactive_detail_names_cause_and_counts_unserved_forecasts(tmp_path,monkeypatch):
+@@ -532,18 +547,21 @@
+     for i,(x,label) in enumerate(zip(plan['tickets'],['Safer pair','Mixed markets','Four-leg mix','Bigger five-leg'])):
+         x['label']=label;del x['stake_usd']
+     assert t.send(t.check(plan))=='sent'
+-    text=sent[0][1]['text']
++    text=stored_texts()[0]
+     assert '4 options:' in text and '#1 2 legs' in text and '#4 5 legs' in text
+     assert 'Moneyline' in text and 'Puck line' in text and 'Over/Under' in text and 'Team total' in text and 'Spread' in text
+     assert 'Ticket 4: Bigger five-leg' in text and len(text)<=3900
+-    assert 'Ticket 4' in sent[1][1]['caption'] and '+1 more' in sent[1][1]['caption']
++    assert [m for m,p in sent]==['sendPhoto','sendPhoto']   # 2+3+4 legs on the first picture, the five-leg ticket on its own
++    first,second=sent[0][1]['caption'],sent[1][1]['caption']
++    assert 'picture 1 of 2' in first and '#3 Four-leg mix' in first and '#4' not in first
++    assert 'picture 2 of 2' in second and '#4 Bigger five-leg' in second and second.count(' + ')==4 and max(len(first),len(second))<=1024
+ 
+ 
+ @pytest.mark.parametrize('tickets,message',[
+     ([[('nba',i),('nhl',i)] for i in range(1,6)]+[[('nba',1),('nfl',1)],[('nba',2),('nfl',2)]],'six'),
+-    ([[('nba',1),('nhl',1),('nfl',1),('nba',2),('nhl',2),('nfl',2),('nba',3)]],'two to six'),
+-    ([[('nba',1)]],'two to six')])
+-def test_menu_caps_are_six_options_of_two_to_six_legs(setup,tickets,message):
++    ([[('nba',1),('nhl',1),('nfl',1),('nba',2),('nhl',2),('nfl',2),('nba',3),('nhl',3)]],'two to seven'),
++    ([[('nba',1)]],'two to seven')])
++def test_menu_caps_are_six_options_of_two_to_seven_legs(setup,tickets,message):
+     plan,snap,sent,path=setup
+     plan['tickets']=[ticket(legs) for legs in tickets]
+     with pytest.raises(ValueError,match=message):t.check(plan)
+@@ -585,7 +603,7 @@
+     plan['tickets']=[dict(label='Mixed',payout_assessment='Fixture payout judgment',legs=[dict(sport='nba',forecast_id=1,rationale='r'),dict(sport='nhl',forecast_id=2,rationale='r')])]
+     checked=t.check(plan)
+     assert 'NBA game status last refreshed' in checked['text'] and 'forecast job still running' in checked['text']
+-    assert t.send(checked)=='sent' and 'NBA game status last refreshed' in sent[0][1]['text']
++    assert t.send(checked)=='sent' and 'NBA game status last refreshed' in stored_texts()[0]
+ 
+ 
+ @pytest.mark.parametrize('problem',['failing','no_running_job','outside_window'])
+@@ -655,7 +673,7 @@
+     with pytest.raises(KeyboardInterrupt):t.send(t.check(plan))
+     monkeypatch.setattr(tg,'ledger',real)
+     monkeypatch.setattr(telegram_card,'_logo',lambda *a:Image.new('RGBA',(60,60),'red'))   # the re-render differs
+-    assert t.send(t.check(plan))=='sent' and [m for m,p in sent]==['sendMessage','sendPhoto']
++    assert t.send(t.check(plan))=='sent' and [m for m,p in sent]==['sendPhoto']
+     with tg.ledger() as c:
+         row=c.execute('select * from ticket_images').fetchone()
+     assert t.sha(Path(row['path']).read_bytes())==row['sha256']
+@@ -1852,3 +1870,132 @@
+     t.notify_alerts(snap, [], (), report['undelivered_results'])
+     [alert] = [p['text'] for m, p in sent if 'RESULT NOTICE NOT DELIVERED' in p.get('text', '')]
+     assert 'this alert is not repeated' in alert
++
++
++def test_seven_leg_long_shot_is_accepted_rendered_and_sent_as_one_picture(setup,monkeypatch):
++    """Owner request Nov 9: a long-shot ticket of up to seven legs."""
++    from app import telegram_card
++    monkeypatch.setattr(telegram_card,'_logo',lambda *a:None)
++    plan,snap,sent,path=setup
++    seven=ticket([('nba',1),('nhl',1),('nfl',1),('nba',2),('nhl',2),('nfl',2),('nba',3)]);seven['label']='Long shot'
++    plan['tickets']=[ticket([('nba',4),('nhl',4)]),seven]
++    assert t.send(t.check(plan))=='sent' and [m for m,p in sent]==['sendPhoto']
++    assert '#2 Long shot' in sent[0][1]['caption'] and sent[0][1]['caption'].count(' + ')==7 and '7 legs' in stored_texts()[0]
++
++
++def test_picture_that_cannot_be_rendered_sends_the_short_lines_never_the_long_text(setup,monkeypatch):
++    from app import telegram_card
++    def broken(*a,**k):raise RuntimeError('no renderer')
++    monkeypatch.setattr(telegram_card,'render_ticket_card',broken)
++    plan,snap,sent,path=setup;plan['tickets']=[ticket([('nba',1),('nhl',2)])]
++    assert t.send(t.check(plan))=='partial_failed'
++    assert [m for m,p in sent]==['sendMessage']   # the ticket still arrives
++    assert 'B1 win + B2 win' in sent[0][1]['text'] and 'Combine ALL' not in sent[0][1]['text'] and len(sent[0][1]['text'])<400
++    assert 'Combine ALL' in stored_texts()[0]     # the ledger keeps the exact full text
++    with tg.ledger() as c:
++        assert c.execute("select status from deliveries where delivery_key like 'ticket-image:%'").fetchone()[0]=='failed'
++    assert t.send(t.check(plan))=='partial_failed' and len(sent)==1   # never a second message for the same batch
++
++
++def test_batch_whose_text_the_earlier_release_sent_keeps_that_release_path_for_its_image(setup,monkeypatch):
++    from app import telegram_card
++    monkeypatch.setattr(telegram_card,'_logo',lambda *a:None)
++    plan,snap,sent,path=setup;plan['tickets']=[ticket([('nba',1),('nhl',2)])]
++    assert t.send(t.check(plan))=='sent'
++    with tg.ledger() as c:   # the earlier release's state after its text and before its image: no picture archived, no image receipt
++        c.execute("delete from deliveries where delivery_key like 'ticket-image:%'");c.execute('delete from ticket_images')
++    assert t.send(t.check(plan))=='sent' and [m for m,p in sent]==['sendPhoto','sendPhoto']
++    assert 'See preceding text' in sent[1][1]['caption']
++    assert t.send(t.check(plan))=='existing_sent' and len(sent)==2
++
++
++def seven(i):
++    games=[(s,n) for n in range(1,6) for s in ('nba','nhl','nfl')]
++    return [games[(i+k)%15] for k in range(7)]
++
++
++def long_shots(plan,count):
++    plan['tickets']=[ticket(seven(i)) for i in range(count)]
++    for n,x in enumerate(plan['tickets'],1):x['label']=f'Long shot {n}';del x['stake_usd']
++
++
++def test_largest_seven_leg_menu_delivers_every_selection_on_pictures_and_a_larger_one_is_refused_whole(setup,monkeypatch):
++    """Boundary (review, Nov 9): the stored ticket text must fit one Telegram message, so `check` refuses a menu that is
++    too large before anything is reserved or sent; the largest menu it accepts must reach the chat complete."""
++    from PIL import ImageDraw
++    from app import telegram_card
++    monkeypatch.setattr(telegram_card,'_logo',lambda *a:None)
++    drawn=[];original=ImageDraw.ImageDraw.text
++    def capture(self,xy,text,*a,**kw):drawn.append(text);return original(self,xy,text,*a,**kw)
++    monkeypatch.setattr(ImageDraw.ImageDraw,'text',capture)
++    plan,snap,sent,path=setup
++    accepted=[]
++    for count in range(1,t.MAX_TICKETS+1):
++        long_shots(plan,count)
++        try:t.check(plan);accepted.append(count)
++        except ValueError as exc:
++            assert 'too long for one Telegram message' in str(exc)
++    count=max(accepted);assert count>=3 and accepted==list(range(1,count+1))
++    if count<t.MAX_TICKETS:
++        long_shots(plan,count+1)
++        with pytest.raises(ValueError,match='too long'):t.send({'plan':plan,'resolved':[{'signature':'x'}]})
++        assert sent==[]
++    long_shots(plan,count);checked=t.check(plan)
++    assert t.send(checked)=='sent' and [m for m,p in sent]==['sendPhoto']*count
++    for n,(resolved,(m,p)) in enumerate(zip(checked['resolved'],sent),1):
++        caption=p['caption']
++        assert len(caption)<=1024 and f'picture {n} of {count}' in caption and not caption.endswith('...')
++        line=next(l for l in caption.split('\n') if l.startswith(f'#{n}'))
++        assert line.count(' + ')==6 and all(leg['pick_label'] in line for leg in resolved['legs'])
++        assert any(resolved['ticket_id'] in v for v in drawn) and any(v.startswith(f'Ticket {n}:') for v in drawn)
++    assert sum(v.startswith('7. ') for v in drawn)==count      # the seventh leg of every ticket is drawn
++    with tg.ledger() as c:
++        pages=c.execute("select status from deliveries where delivery_key like 'ticket-image:%' order by delivery_key").fetchall()
++        assert [r[0] for r in pages]==['sent']*count and c.execute('select count(*) from ticket_images').fetchone()[0]==count
++    assert t.send(t.check(plan))=='existing_sent' and len(sent)==count
++    assert [d['kind'] for d in t.ticket_deliveries(snap['date'])]==['ticket_text','ticket_image']+['ticket_image_page']*(count-1)
++
++
++def test_selections_that_cannot_be_shown_in_full_are_refused_before_any_reservation(setup):
++    plan,snap,sent,path=setup
++    for sport in ('nba','nhl','nfl'):
++        for p in snap['sports'][sport]['report']['picks']:p['pick_label']=p['pick_label']+' '+'x'*170
++    monkeypatch_snapshot=Path(plan['snapshot_path']);monkeypatch_snapshot.write_text(json.dumps(snap))
++    plan['review']['snapshot_sha256']=t.sha(monkeypatch_snapshot.read_bytes())
++    plan['tickets']=[ticket(seven(0))]
++    checked=t.check(plan)
++    with pytest.raises(ValueError,match='do not fit'):t.send(checked)
++    with tg.ledger() as c:
++        t.schema(c);assert c.execute('select count(*) from ticket_batches').fetchone()[0]==0
++    assert sent==[]
++
++
++def test_a_later_picture_that_may_not_have_arrived_is_never_resent_and_earlier_ones_are_not_repeated(setup,monkeypatch):
++    from app import telegram_card
++    monkeypatch.setattr(telegram_card,'_logo',lambda *a:None)
++    plan,snap,sent,path=setup;plan['tickets']=[ticket(seven(0)),ticket(seven(3))]
++    original=tg.Telegram.call;calls=[]
++    def flaky(self,method,payload,**kw):
++        calls.append(method)
++        if len(calls)==2:raise tg.DeliveryError('uncertain image',uncertain=True)
++        return original(self,method,payload,**kw)
++    monkeypatch.setattr(tg.Telegram,'call',flaky)
++    assert t.send(t.check(plan))=='partial_uncertain'
++    assert t.send(t.check(plan))=='partial_uncertain' and calls==['sendPhoto','sendPhoto']
++
++
++def test_archived_picture_that_fails_its_hash_sends_nothing(setup,monkeypatch):
++    from app import telegram_card
++    monkeypatch.setattr(telegram_card,'_logo',lambda *a:None)
++    plan,snap,sent,path=setup;plan['tickets']=[ticket([('nba',1),('nhl',2)])]
++    original=tg.Telegram.call
++    def busy(self,method,payload,**kw):raise tg.DeliveryError('Telegram rejected sendPhoto (HTTP 429).',retry_after=1)
++    monkeypatch.setattr(tg.Telegram,'call',busy)
++    assert t.send(t.check(plan))=='retry'
++    with tg.ledger() as c:
++        png=Path(c.execute('select path from ticket_images').fetchone()[0])
++        c.execute("update deliveries set next_attempt_at='2000-01-01T00:00:00Z'")
++    png.chmod(0o600);png.write_bytes(png.read_bytes()+b'tampered')
++    monkeypatch.setattr(tg.Telegram,'call',original)
++    with pytest.raises(ValueError,match='hash mismatch'):t.send(t.check(plan))
++    assert sent==[]
+diff -ruN a/docs/TICKETS.md b/docs/TICKETS.md
+--- a/docs/TICKETS.md	2026-11-10 00:38:16.078001536 +0000
++++ b/docs/TICKETS.md	2026-11-10 00:47:46.418001808 +0000
+@@ -236,3 +236,16 @@
+   stays `retry` and is never sent; it is visible in `deliveries` only.
+ - **Unchanged:** selection method, forecast-version lock, 2–6 legs and at most 6 tickets, legacy reservation read,
+   existing rows.
++
++## Owner changes (Nov 9 evening)
++
++Requested by the owner in his own words ("I just want to see the picture", "it just clutters the Telegram", seven-leg parlays). Second version, after the Codex review of the first (docs/evidence/telegram-picture-only-2026-11-09/).
++
++- **Pictures only.** `send` delivers a batch as pictures with short captions; no long text message. Every ticket is drawn in full on exactly one picture (`ticket_pages`: at most three tickets and about nine legs per picture, so a seven-leg ticket stays readable). Each caption (`ticket_captions`) lists its picture's tickets: legs, stored prices, payout. A caption never cuts a selection: it drops labels, then prices, and otherwise `send` refuses before any reservation. A menu whose stored text exceeds one Telegram message is still refused whole by `check`, as before.
++- **Receipts.** The first picture is sent under the batch key, and the `ticket-image:` receipt is recorded as that same Telegram message, so settlement, result notices, delivery alerts and `ticket_deliveries` read what they read before. Further pictures have receipts `ticket-image:<hash>:p<n>` (kind `ticket_image_page`), are sent in order and are never resent when uncertain. Pictures are archived once in `ticket_images` under `<batch key>#p<n>` and reused unchanged; an archived picture that fails its hash raises and nothing is sent. The exact full text stays in `deliveries.text`, `ticket_batches` and the archive.
++- **Renderer unavailable.** The ticket still arrives, as the short caption lines in one message (never the long text); the image receipt is recorded `failed`, the result is `partial_failed` and the delivery alert fires as for any failed image. A batch whose text the earlier release already sent keeps that release's text-then-image path.
++- **Quiet health states.** `source_unavailable_or_stale` and `missing_due_forecasts` (`QUIET_HEALTH`) are no longer sent to the chat; they remain in the preflight report, the snapshot and the trigger observations. Every other alert is unchanged.
++- **Up to seven legs** (`MAX_LEGS = 7`).
++- **One game card per game** (`telegram.deliver_card`). The delivery key is unchanged, so receipts of the earlier release are matched at cutover. Before a card with a new key is sent, the ledger is searched (two days) for a card with the same sport, matchup, start and recommended pick, ignoring the line number, that reached or may have reached the chat (sent, uncertain, sending); if one exists the new card is not sent (`already_sent_for_game`). A different recommended side or start sends again; a rejected (`failed`) card does not block.
++
++Not changed: the review instructions (`SKILL.md`), the automation schedule, selection rules, settlement, stores. Tested in a Linux copy of this checkout (Python 3.10, own venv): `tests/test_tickets.py tests/test_telegram.py tests/test_delivery_release.py tests/test_nfl_live.py tests/test_soccer_live.py`, 237 passed. Not run by the author: the full backend suite, the release venv, a real Telegram send.

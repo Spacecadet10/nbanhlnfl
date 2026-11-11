@@ -1,0 +1,434 @@
+--- backend/app/tickets.py	2026-11-08 16:10:54
++++ /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/43a0d8c8-5d19-4e11-a7c0-2df81439b128/scratchpad/wt/backend/app/tickets.py	2026-11-08 16:35:04
+@@ -28,7 +28,7 @@
+     for sport in ('nba', 'nhl', 'nfl'):
+         try:
+             if sport == 'nfl' and not activation():
+-                result['sports'][sport] = {'error': 'inactive'}
++                result['sports'][sport] = nfl_inactive_detail(stamp)
+                 continue
+             conn = db.connect_readonly(sport)
+             try:
+@@ -56,12 +56,175 @@
+     return jsonable_encoder(result)
+ 
+ 
++def _parse(stamp):
++    return datetime.fromisoformat(stamp.replace('Z', '+00:00'))
++
++
++def _stamp(moment=None):
++    return (moment or datetime.now(timezone.utc)).strftime('%Y-%m-%dT%H:%M:%SZ')
++
++
++def _nfl_store():
++    from app import db
++    return db.connect_readonly('nfl')
++
++
++def nfl_inactive_detail(stamp):
++    """Why NFL is not served, and how many recorded NFL forecasts that excludes. Never a silent drop."""
++    from app import nfl_live
++    detail = {'error': 'inactive'}
++    try:
++        stored = json.loads(nfl_live.activation_path().read_text())
++        detail['reason'] = ('definition_mismatch' if stored.get('definition') != nfl_live.definition()
++                            else 'activation_invalid')
++    except FileNotFoundError:
++        detail['reason'] = 'missing_activation'
++    except (OSError, ValueError, TypeError, AttributeError):
++        detail['reason'] = 'activation_unreadable'
++    try:
++        conn = _nfl_store()
++        try:
++            rows = conn.execute("SELECT game_id FROM game_forecasts WHERE status='forecast' AND tipoff_at>? AND tipoff_at<=? "
++                                "AND generated_at<=?", (stamp, _stamp(_parse(stamp) + timedelta(hours=2)), stamp)).fetchall()
++        finally:
++            conn.close()
++        detail.update(unserved_forecasts=len(rows), unserved_games=len({r[0] for r in rows}))
++    except Exception as exc:
++        detail['count_error'] = type(exc).__name__
++    return detail
++
++
+ def eligible(pick, now):
+     start = datetime.fromisoformat(pick['tipoff'].replace('Z', '+00:00'))
+     made = datetime.fromisoformat(pick['generated_at'].replace('Z', '+00:00'))
+     return (pick['status'] == 'scheduled' and pick['grade'] == 'pending'
+             and now < start <= now + timedelta(hours=2)
+             and start - timedelta(hours=2) <= made <= now)
++
++
++def _describe(sport, pick):
++    return {'key': f"{sport}:{pick['forecast_id']}", 'sport': sport, 'game_id': pick['game_id'],
++            'matchup': pick.get('matchup'), 'market': pick.get('market'), 'pick_label': pick.get('pick_label'),
++            'probability': pick.get('probability'), 'tipoff': pick['tipoff'], 'generated_at': pick['generated_at']}
++
++
++def retryable_snapshots(day):
++    """Snapshots whose latest recorded attempt failed in a retryable way (refused/connection/429): not yet reviewed."""
++    from app import telegram
++    latest = {}
++    with telegram.ledger() as conn:
++        schema(conn)
++        for row in conn.execute('SELECT snapshot_sha256,outcome,payload FROM ticket_reviews WHERE day=? ORDER BY review_id', (day,)):
++            if row['snapshot_sha256']:
++                latest[row['snapshot_sha256']] = row['outcome'] == 'operational_failure' and json.loads(row['payload']).get('retryable')
++    return {digest for digest, retry in latest.items() if retry}
++
++
++def reviewed_history(day):
++    """Forecast keys and games accounted for by the day's validated review archives (written only by a passing check).
++
++    A review whose dispatch then failed retryably does not count, so the trigger fires again; uncertain/paused do count.
++    """
++    from app import config
++    keys, games = set(), set()
++    retry = retryable_snapshots(day)
++    for path in sorted((config.data_dir() / 'reports/tickets/reviews').glob(day + '-*.json')):
++        try:
++            data = json.loads(path.read_text())
++            accounted = data['plan']['review'].get('forecasts_reviewed') or {}
++            sections = data['snapshot']['sports']
++            if data['plan']['review'].get('snapshot_sha256') in retry:
++                continue
++        except (OSError, ValueError, KeyError, TypeError, AttributeError):
++            continue
++        keys.update(accounted)
++        for sport, section in sections.items():
++            for pick in (section.get('report') or {}).get('picks', []):
++                if f"{sport}:{pick.get('forecast_id')}" in accounted:
++                    games.add((sport, pick['game_id']))
++    return keys, games
++
++
++def prior_ticket_games(day):
++    """Games already used by the day's tickets; the shared-game rule only allows that exact forecast again."""
++    from app import config, telegram
++    chat = str(config.telegram_settings().get('TELEGRAM_CHAT_ID', ''))
++    with telegram.ledger() as conn:
++        schema(conn)
++        tickets = existing_tickets(conn, chat, day)
++    used = {}
++    for ticket in tickets:
++        for leg in ticket['legs']:
++            entry = used.setdefault((leg['sport'], leg['game_id']), {'forecast_id': leg['forecast_id'],
++                                    'pick_label': leg.get('pick_label'), 'matchup': leg.get('matchup'), 'tickets': []})
++            entry['tickets'].append(ticket['ticket_id'])
++    return used
++
++
++def review_state(snap):
++    """Deterministic review trigger: due when a fresh, combinable forecast has not been accounted for by any review today.
++
++    Selection stays with the reviewer; this only says WHEN a review is needed and what is excluded and why.
++    """
++    if 'as_of' not in snap or 'date' not in snap:
++        raise ValueError('Snapshot lacks as_of/date')
++    now = _parse(snap['as_of'])
++    ticketable, blocked, unavailable, started = [], {}, {}, []
++    for sport, section in snap['sports'].items():
++        if section.get('error'):
++            unavailable[sport] = dict(section)
++            continue
++        picks = section['report']['picks']
++        current = [p for p in picks if eligible(p, now)]
++        started += [(sport, p) for p in picks if _parse(p['tipoff']) <= now
++                    and _parse(p['tipoff']) - timedelta(hours=2) <= _parse(p['generated_at']) <= _parse(p['tipoff'])]
++        if section['freshness']['source_state'] != 'fresh' or section['freshness']['failing']:
++            if current:
++                blocked[sport] = {'issue': 'source_unavailable_or_stale', 'forecasts': len(current),
++                                  'games': len({p['game_id'] for p in current})}
++            continue
++        ticketable += [(sport, p) for p in current]
++    reviewed, reviewed_games, used = set(), set(), {}
++    state = {'as_of': snap['as_of'], 'date': snap['date']}
++    if ticketable or started:
++        reviewed, reviewed_games = reviewed_history(snap['date'])
++    if ticketable:
++        try:
++            used = prior_ticket_games(snap['date'])
++        except Exception as exc:
++            state['locked_games_error'] = type(exc).__name__
++    locked = []
++    for (sport, game), entry in used.items():
++        here = [p for s, p in ticketable if (s, p['game_id']) == (sport, game)]
++        if here:
++            locked.append({'sport': sport, 'game_id': game, 'matchup': entry['matchup'], 'ticket_forecast_id': entry['forecast_id'],
++                           'ticket_pick': entry['pick_label'], 'tickets': entry['tickets'],
++                           'blocked_forecasts': [f"{sport}:{p['forecast_id']}" for p in here if p['forecast_id'] != entry['forecast_id']]})
++    blocked_keys = {k for x in locked for k in x['blocked_forecasts']}
++    unreviewed = [dict(_describe(s, p), blocked_by_prior_ticket=f"{s}:{p['forecast_id']}" in blocked_keys)
++                  for s, p in ticketable if f"{s}:{p['forecast_id']}" not in reviewed]
++    games = {(s, p['game_id']) for s, p in ticketable}
++    new = [u for u in unreviewed if not u['blocked_by_prior_ticket']]
++    if not ticketable:
++        due, reason = False, 'no_eligible_forecasts'
++    elif not new:
++        due, reason = False, 'no_new_forecasts'
++    elif len(games) < 2:
++        due, reason = False, 'single_game_window'   # a ticket needs two distinct games
++    else:
++        due, reason = True, 'new_forecasts'
++    missed = {}
++    for sport, pick in started:
++        if (sport, pick['game_id']) not in reviewed_games:
++            entry = missed.setdefault((sport, pick['game_id']), {'sport': sport, 'game_id': pick['game_id'],
++                                      'matchup': pick.get('matchup'), 'tipoff': pick['tipoff'], 'forecasts': 0})
++            entry['forecasts'] += 1
++    state.update(due=due, reason=reason, ticketable_forecasts=len(ticketable), ticketable_games=len(games),
++                 reviewed_today=len(reviewed), unreviewed=unreviewed,
++                 oldest_unreviewed_at=min((u['generated_at'] for u in new), default=None),
++                 blocked=blocked, unavailable=unavailable, locked_games=locked,
++                 missed_before_start=sorted(missed.values(), key=lambda m: (m['tipoff'], m['sport'], m['game_id'])))
++    return state
+ 
+ 
+ def check(plan):
+@@ -167,7 +330,8 @@
+ 
+ 
+ def ticket_text(day, tickets, prior_exposure=None):
+-    lines = [f'<b>PROP51 / PARLAY TICKETS / {day}</b>', 'App forecasts + AI selection.']
++    lines = [f'<b>PROP51 · COMBINED PARLAY TICKETS · {day}</b>',
++             'Multi-game combinations from app forecasts + AI selection. Not a single-game card.']
+     for number, ticket in enumerate(tickets, 1):
+         lines.extend(['', f"<b>Ticket {number}: {escape(ticket['label'])}</b>",
+                       f"ID {ticket['ticket_id']}" + (f" / Suggested stake ${ticket['stake_usd']:.2f}" if ticket.get('stake_usd') is not None else ''),
+@@ -182,7 +346,11 @@
+             key = f"{p['sport']}:{p['forecast_id']}"
+             old = exposure.get(key, {'dollars': 0, 'tickets': []})
+             exposure[key] = {'dollars': old['dollars'] + (t.get('stake_usd') or 0), 'tickets': old['tickets'] + [t['ticket_id']]}
+-    shared = [f"{key}: shared across {len(v['tickets'])} tickets" for key,v in exposure.items() if len(v['tickets']) > 1]
++    # Only this batch's legs; earlier batches keep their own original disclosure.
++    current = {f"{p['sport']}:{p['forecast_id']}": p for t in tickets for p in t['legs']}
++    shared = [f"{p['sport'].upper()} {escape(p['pick_label'])} ({escape(p['matchup'])}): shared across "
++              f"{len(exposure[key]['tickets'])} tickets ({', '.join(exposure[key]['tickets'])})"
++              for key, p in current.items() if len(exposure[key]['tickets']) > 1]
+     if shared:
+         lines += ['', '<b>Shared core exposure</b>', *shared, 'One losing core pick can lose multiple tickets.']
+     lines += ['', 'Prices unverified. Confirm exact sportsbook lines. Model estimates are not guaranteed win rates.']
+@@ -332,6 +500,15 @@
+         PRIMARY KEY(ticket_id,evidence_hash));
+       CREATE TABLE IF NOT EXISTS personal_tickets (
+         slip_id TEXT PRIMARY KEY, recorded_at TEXT NOT NULL, payload TEXT NOT NULL);
++      CREATE TABLE IF NOT EXISTS ticket_reviews (
++        review_id INTEGER PRIMARY KEY AUTOINCREMENT, recorded_at TEXT NOT NULL, day TEXT NOT NULL,
++        stage TEXT NOT NULL CHECK(stage IN ('check','send')),
++        outcome TEXT NOT NULL CHECK(outcome IN ('ticket_sent','no_ticket','operational_failure','paused')),
++        detail TEXT NOT NULL, snapshot_sha256 TEXT, snapshot_as_of TEXT, payload TEXT NOT NULL);
++      CREATE TRIGGER IF NOT EXISTS ticket_reviews_no_update BEFORE UPDATE ON ticket_reviews
++        BEGIN SELECT RAISE(ABORT,'ticket review outcomes are append-only'); END;
++      CREATE TRIGGER IF NOT EXISTS ticket_reviews_no_delete BEFORE DELETE ON ticket_reviews
++        BEGIN SELECT RAISE(ABORT,'ticket review outcomes are append-only'); END;
+       CREATE TRIGGER IF NOT EXISTS ticket_batches_no_update BEFORE UPDATE ON ticket_batches
+         BEGIN SELECT RAISE(ABORT,'ticket batches are immutable'); END;
+       CREATE TRIGGER IF NOT EXISTS ticket_batches_no_delete BEFORE DELETE ON ticket_batches
+@@ -383,7 +560,8 @@
+     for sport, section in snap['sports'].items():
+         if section.get('error'):
+             if section['error'] != 'forecasts_unavailable':
+-                alerts.append({'sport': sport, 'issue': section['error']})
++                alerts.append({'sport': sport, 'issue': section['error'],
++                               **{k: section[k] for k in ('reason', 'unserved_forecasts', 'unserved_games') if k in section}})
+             continue
+         state = section['freshness']
+         if state['source_state'] != 'fresh' or state['failing']:
+@@ -521,7 +699,8 @@
+         for issue in issues:
+             # One alert per issue/sport/day, no repeated hourly noise.
+             key = 'ticket-health:' + snap['date'] + ':' + issue['sport'] + ':' + issue['issue']
+-            text = 'PROP51 / REVIEW BLOCKER / ' + issue['sport'].upper() + '\n' + issue['issue']
++            text = 'PROP51 / REVIEW BLOCKER / ' + issue['sport'].upper() + '\n' + issue['issue'] + ''.join(
++                f"\n{field}: {issue[field]}" for field in ('reason', 'unserved_forecasts', 'unserved_games') if field in issue)
+             out.append(telegram.deliver(bot,conn,settings['TELEGRAM_CHAT_ID'],key,text,snap['as_of']))
+         start = datetime.fromisoformat(snap['date']).replace(tzinfo=TORONTO)
+         end = start + timedelta(days=1)
+@@ -588,23 +767,100 @@
+         if not telegram.controls(bot,settings,conn):
+             return 'paused'
+         return telegram.deliver(bot,conn,settings['TELEGRAM_CHAT_ID'],key,caption,now,photo=photo,caption=caption)
++
++
++SEND_OUTCOMES = {'sent': 'ticket_sent', 'existing_sent': 'ticket_sent', 'no_ticket': 'no_ticket', 'paused': 'paused'}
++RETRYABLE = {'retry', 'retry_pending'}   # uncertain/failed/partial need receipt inspection and are never re-triggered
++
++
++def record_review(stage, outcome, detail, *, plan=None, result=None, retryable=False):
++    """Append what one review attempt produced: a ticket, no ticket (insufficient evidence), a pause or an operational failure."""
++    from app import telegram
++    review = plan.get('review') if isinstance(plan, dict) and isinstance(plan.get('review'), dict) else {}
++    accounted = review.get('forecasts_reviewed') if isinstance(review.get('forecasts_reviewed'), dict) else {}
++    payload = {'snapshot_path': str(plan.get('snapshot_path')) if isinstance(plan, dict) else None,
++               'forecasts_accounted': len(accounted),
++               'candidates': sum(1 for v in accounted.values() if isinstance(v, dict) and v.get('decision') == 'candidate'),
++               'retryable': bool(retryable)}
++    if result:
++        payload.update(coverage=result['coverage'], ticket_ids=[t['ticket_id'] for t in result['resolved']],
++                       alerts=result['snapshot'].get('alerts', []))
++    day = result['date'] if result else datetime.now(timezone.utc).astimezone(TORONTO).date().isoformat()
++    with telegram.ledger() as conn:
++        schema(conn)
++        cursor = conn.execute('INSERT INTO ticket_reviews (recorded_at,day,stage,outcome,detail,snapshot_sha256,snapshot_as_of,payload) '
++                              'VALUES (?,?,?,?,?,?,?,?)',
++                              (_stamp(), day, stage, outcome, str(detail)[:1000], review.get('snapshot_sha256'),
++                               result['snapshot']['as_of'] if result else None, json.dumps(payload, sort_keys=True)))
++        return cursor.lastrowid
++
++
++def _no_ticket_detail(plan):
++    review = plan['review']
++    return 'insufficient evidence for a justified combination: ' + str(
++        review.get('outcome_summary') or review.get('combination_comparison', '')).strip()[:600]
++
++
++def _safe_record(*args, **kwargs):
++    try:
++        return record_review(*args, **kwargs)
++    except Exception as exc:      # recording must never change delivery; report the gap instead
++        return 'not_recorded:' + type(exc).__name__
++
++
++def review_outcomes(day):
++    from app import telegram
++    with telegram.ledger() as conn:
++        schema(conn)
++        return [dict(r) | {'payload': json.loads(r['payload'])} for r in
++                conn.execute('SELECT * FROM ticket_reviews WHERE day=? ORDER BY review_id', (day,))]
++
++
++def ticket_deliveries(day):
++    """Combined-ticket text and image receipts for the day (game cards are a separate sender and are excluded)."""
++    from app import telegram
++    out = []
++    with telegram.ledger() as conn:
++        schema(conn)
++        for batch in conn.execute('SELECT batch_key FROM ticket_batches WHERE day=? ORDER BY created_at', (day,)).fetchall():
++            for kind, key in (('ticket_text', batch['batch_key']), ('ticket_image', 'ticket-image:' + sha(batch['batch_key'].encode()))):
++                row = conn.execute('SELECT status,attempted_at,message_id,next_attempt_at FROM deliveries WHERE delivery_key=?', (key,)).fetchone()
++                out.append({'kind': kind, 'batch_key': batch['batch_key'], **(dict(row) if row else {'status': 'not_attempted'})})
++    return out
+ 
+ 
+ def main():
+     parser = argparse.ArgumentParser()
+-    parser.add_argument('action', choices=('snapshot', 'check', 'send', 'settle', 'preflight', 'personal', 'preview'))
++    parser.add_argument('action', choices=('snapshot', 'check', 'send', 'settle', 'preflight', 'status', 'personal', 'preview'))
+     parser.add_argument('--notify', action='store_true', help='Send result/failure notifications to the existing paired chat')
+     parser.add_argument('--output', type=Path)
+     parser.add_argument('--plan', type=Path)
++    parser.add_argument('--brief', action='store_true', help='preflight: print only the review trigger, alerts and settlement summary')
+     args = parser.parse_args()
++    if args.action in ('check', 'send'):
++        return review_command(args)
+     try:
+         if args.action in ('settle', 'preflight'):
+             report = settle(notify=args.notify)
+             if args.action == 'preflight':
+-                report['snapshot'] = snapshot()
++                snap = snapshot()
++                try:
++                    report['review'] = review_state(snap)
++                except Exception as exc:
++                    report['review'] = {'due': None, 'reason': 'review_state_unavailable', 'error': type(exc).__name__}
++                report['snapshot'] = snap
+                 if args.notify:
+                     report['alerts'] = notify_alerts(report['snapshot'], report['errors'])
++                if args.brief:   # the trigger check runs often; the full snapshot is taken separately when a review is due
++                    report = {'as_of': report.get('as_of'), 'errors': report['errors'],
++                              'notification_errors': report.get('notification_errors', []), 'alerts': report.get('alerts', []),
++                              'snapshot_alerts': snap.get('alerts', []), 'review': report['review'],
++                              'settlement': [{k: t.get(k) for k in ('ticket_id', 'grade', 'notification')} for t in report.get('tickets', [])]}
+             print(json.dumps(report))
++        elif args.action == 'status':
++            snap = snapshot()
++            print(json.dumps({'as_of': snap['as_of'], 'date': snap['date'], 'review': review_state(snap),
++                              'outcomes': review_outcomes(snap['date']), 'ticket_deliveries': ticket_deliveries(snap['date'])}))
+         elif args.action == 'preview':
+             status = send_preview(args.plan)
+             print(json.dumps({'status':status}))
+@@ -616,21 +872,51 @@
+             with args.output.open('xb') as handle:
+                 handle.write(raw)
+             print(json.dumps({'snapshot_path': str(args.output), 'snapshot_sha256': sha(raw)}))
+-        else:
+-            result = check(json.loads(args.plan.read_text()))
+-            if args.action == 'check':
+-                print(result['text'])
+-            else:
+-                status = send(result)
+-                print(json.dumps({'status':status}))
+-                if status not in ('sent','existing_sent','no_ticket'):
+-                    return 1
+     except Exception as exc:
+-        print(json.dumps({'status': 'failed', 'error_type': type(exc).__name__,
+-                          'reason': str(exc) if isinstance(exc, ValueError) else 'Inspect local inputs or backend compatibility'}))
++        print(json.dumps(_failure(exc)))
+         return 1
+     return 0
+ 
+ 
++def _failure(exc):
++    return {'status': 'failed', 'error_type': type(exc).__name__,
++            'reason': str(exc) if isinstance(exc, ValueError) else 'Inspect local inputs or backend compatibility'}
++
++
++def review_command(args):
++    """check/send; every attempt appends its outcome to ticket_reviews without changing what is validated or sent."""
++    plan = None
++    try:
++        plan = json.loads(args.plan.read_text())
++        result = check(plan)
++    except Exception as exc:
++        failure = dict(_failure(exc), review_outcome='operational_failure')
++        failure['recorded'] = _safe_record('check', 'operational_failure', 'validation refused: ' + failure['reason'], plan=plan)
++        print(json.dumps(failure))
++        return 1
++    if args.action == 'check':
++        print(result['text'])
++        if result['resolved']:
++            print(json.dumps({'review_outcome': 'validated_not_sent', 'coverage': result['coverage']}))
++        else:
++            recorded = _safe_record('check', 'no_ticket', _no_ticket_detail(plan), plan=plan, result=result)
++            print(json.dumps({'review_outcome': 'no_ticket', 'recorded': recorded, 'coverage': result['coverage']}))
++        return 0
++    try:
++        status = send(result)
++    except Exception as exc:
++        failure = dict(_failure(exc), review_outcome='operational_failure')
++        failure['recorded'] = _safe_record('send', 'operational_failure', 'send refused: ' + failure['reason'], plan=plan,
++                                           result=result, retryable=True)   # refused before any claim; a fresh review may retry
++        print(json.dumps(failure))
++        return 1
++    outcome = SEND_OUTCOMES.get(status, 'operational_failure')
++    detail = (_no_ticket_detail(plan) if outcome == 'no_ticket' else
++              status + ''.join(': ' + ', '.join(t['ticket_id'] for t in result['resolved']) for _ in [0] if result['resolved']))
++    recorded = _safe_record('send', outcome, detail, plan=plan, result=result, retryable=status in RETRYABLE)
++    print(json.dumps({'status': status, 'review_outcome': outcome, 'recorded': recorded}))
++    return 0 if status in ('sent', 'existing_sent', 'no_ticket') else 1
++
++
+ if __name__ == '__main__':
+     raise SystemExit(main())
+--- backend/app/telegram.py	2026-11-08 14:04:08
++++ /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/43a0d8c8-5d19-4e11-a7c0-2df81439b128/scratchpad/wt/backend/app/telegram.py	2026-11-08 16:29:59
+@@ -240,7 +240,7 @@
+         else:
+             if caption is None:
+                 league = text.split('PROP51 PICKS · ', 1)[1].split('<', 1)[0]
+-                caption = ('TEST PREVIEW — design example, not a new live pick.\n' if 'TEST PREVIEW' in text else '') + f'Prop51 · {league} · Recommended pick and market breakdown\nOpen the card to view the full record.'
++                caption = ('TEST PREVIEW — design example, not a new live pick.\n' if 'TEST PREVIEW' in text else '') + f'PROP51 GAME CARD · {league} · single game, not a parlay ticket\nRecommended pick and market breakdown for this one game. Combined parlay tickets arrive separately.'
+             message = bot.call('sendPhoto', {'chat_id': str(chat_id), 'caption': caption}, photo=photo)
+     except DeliveryError as exc:
+         status = 'uncertain' if exc.uncertain else 'retry' if exc.retry_after is not None else 'failed'
+--- backend/app/telegram_card.py	2026-11-08 16:10:54
++++ /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/43a0d8c8-5d19-4e11-a7c0-2df81439b128/scratchpad/wt/backend/app/telegram_card.py	2026-11-08 16:29:59
+@@ -256,7 +256,7 @@
+         draw.text((x,y),row,font=font,fill=color)
+         y += int(size*1.3)
+ 
+-    line('PROP51 / TICKETS', size=49, bold=True, color=primary)
++    line('PROP51 / COMBINED PARLAY TICKETS', size=49, bold=True, color=primary)
+     line(day, size=28, color=MUTED)
+     if preview:
+         line('TEST / PAST GAMES / RESULTS KNOWN', size=29, bold=True, color='#A83824')

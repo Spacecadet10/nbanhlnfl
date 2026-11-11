@@ -410,6 +410,10 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
             status = "failed"
         out["markets"] = {k: m.get(k) for k in ("created", "already_recorded", "reason", "error") if k in m}
     if accepted:
+        # Publish available primary forecasts before slow research. A later adaptive source is a new
+        # append-only version at its actual recording time; final coverage below still sees all sources.
+        early = coverage.record(conn, now=now, write=not dry_run)
+        out['early_coverage'] = {k: v for k, v in early.items() if k != 'rows'}
         collect = {} if research_live.enabled() else None
         run = research_forecasts(conn, write=not dry_run, now=now, game_ids=accepted, collect=collect, keep=True)
         winner = run.pop("forecasts", [])
@@ -435,6 +439,10 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
     # Last, so it sees this cycle's rows; isolated per game and market; never changes the primary run's status.
     cov = coverage.record(conn, now=now, write=not dry_run)
     out["coverage"] = {k: v for k, v in cov.items() if k != "rows"}
+    early_created = out.get('early_coverage', {}).get('created', 0)
+    out['coverage']['created'] += early_created
+    # The final pass observes early writes as existing; do not report them as both new and pre-existing.
+    out['coverage']['already_recorded'] = max(0, out['coverage'].get('already_recorded',0) - early_created)
     return {"status": status, **out} if dry_run else _finish(conn, run_id, status, 1, out)
 
 

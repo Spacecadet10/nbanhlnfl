@@ -1,0 +1,48 @@
+as_of 2026-11-08T23:57:18Z
+nba UTAH @ MIN  winner           MIN win          0.869 line None->None none price None->-700 moved=False 
+nba BOS @ MIL   winner           BOS win          0.778 line None->None none price None->-790 moved=False 
+nba BKN @ DAL   winner           DAL win          0.707 line None->None none price None->-305 moved=False 
+nba UTAH @ MIN  team_total_home  MIN over 120.5   0.511 line 120.5->None model price None->None moved=False 
+nba BOS @ MIL   team_total_home  MIL over 104.5   0.510 line 104.5->None model price None->None moved=False 
+nba BKN @ DAL   team_total_home  DAL under 114.5  0.502 line 114.5->None model price None->None moved=False 
+nba UTAH @ MIN  team_total_away  UTAH over 106.5  0.514 line 106.5->None model price None->None moved=False 
+nba BKN @ DAL   team_total_away  BKN under 108.5  0.505 line 108.5->None model price None->None moved=False 
+nba BOS @ MIL   team_total_away  BOS under 116.5  0.503 line 116.5->None model price None->None moved=False 
+nba UTAH @ MIN  total            Over 222.5       0.610 line 222.5->222.5 bookmaker price -110->-110 moved=False 
+nba BKN @ DAL   total            Under 223.5      0.515 line 223.5->223.5 bookmaker price -112->-112 moved=False 
+nba BOS @ MIL   total            Under 221.5      0.506 line 221.5->221.5 bookmaker price -113->-113 moved=False 
+nba UTAH @ MIN  spread           MIN -12.5        0.547 line -12.5->-12.5 bookmaker price -108->-108 moved=False 
+nba BOS @ MIL   spread           MIL +13.5        0.541 line 13.5->13.5 bookmaker price -112->-112 moved=False 
+nba BKN @ DAL   spread           BKN +7.5         0.526 line -7.5->-7.5 bookmaker price -113->-113 moved=False 
+nhl NJD @ TOR   spread           TOR +1.5         0.727 line 1.5->1.5 bookmaker price -180->-180 moved=False 
+nhl PHI @ CGY   spread           CGY +1.5         0.717 line 1.5->1.5 bookmaker price -270->-270 moved=False 
+nhl PIT @ ANA   spread           PIT +1.5         0.676 line -1.5->-1.5 bookmaker price -230->-230 moved=False 
+nhl PHI @ CGY   winner           CGY win          0.526 line None->None none price None->-102 moved=False 
+nhl PIT @ ANA   winner           ANA win          0.520 line None->None none price None->-120 moved=False 
+nhl NJD @ TOR   winner           TOR win          0.503 line None->None none price None->136 moved=False 
+nhl PHI @ CGY   team_total_home  CGY over 2.5     0.591 line 2.5->None model price None->None moved=False 
+nhl NJD @ TOR   total            Over 6.5         0.520 line 6.5->6.5 bookmaker price 102->102 moved=False 
+nhl PHI @ CGY   total            Over 5.5         0.513 line 5.5->5.5 bookmaker price -122->-122 moved=False 
+nhl NJD @ TOR   reg3             TOR in regulation 0.465 line None->None none price None->None moved=False 
+nhl PHI @ CGY   reg3             CGY in regulation 0.436 line None->None none price None->None moved=False 
+nhl PIT @ ANA   reg3             ANA in regulation 0.426 line None->None none price None->None moved=False 
+nhl NJD @ TOR   team_total_away  NJD under 3.5    0.600 line 3.5->None model price None->None moved=False 
+nhl PIT @ ANA   total            Over 6.5         0.598 line 6.5->6.5 bookmaker price -155->-155 moved=False 
+nhl NJD @ TOR   team_total_home  TOR under 3.5    0.529 line 3.5->None model price None->None moved=False 
+nhl PIT @ ANA   team_total_home  ANA under 3.5    0.508 line 3.5->None model price None->None moved=False 
+nhl PIT @ ANA   team_total_away  PIT under 3.5    0.516 line 3.5->None model price None->None moved=False 
+nhl PHI @ CGY   team_total_away  PHI over 2.5     0.556 line 2.5->None model price None->None moved=False 
+nfl TB @ CHI    winner           CHI win          0.717 line None->None none price -270->-270 moved=False 
+nfl TB @ CHI    spread           TB +6            0.589 line -6.0->-6.0 bookmaker price -108->-102 moved=False 
+nfl TB @ CHI    total            Under 47.5       0.582 line 47.5->47.5 bookmaker price -112->-118 moved=False 
+nfl TB @ CHI    team_total_home  CHI under 24.5   0.522 line 24.5->None model price None->None moved=False 
+nfl TB @ CHI    team_total_away  TB over 20.5     0.510 line 20.5->None model price None->None moved=False 
+{
+ "due": true,
+ "reason": "new_forecasts",
+ "ticketable_forecasts": 38,
+ "ticketable_games": 7,
+ "blocked": {},
+ "delayed": null,
+ "line_changed": null
+}

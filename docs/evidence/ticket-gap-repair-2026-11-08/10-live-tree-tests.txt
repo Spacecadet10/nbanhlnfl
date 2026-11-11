@@ -1,0 +1,5 @@
+cmd: cd /Users/andry/Desktop/nba-predictor-sprint1 && NBA_DATA_DIR=<scratch>/emptydata2 OMP_NUM_THREADS=1 PYTHONPATH=backend backend/.venv/bin/python -m pytest -q -p no:cacheprovider backend/tests/test_tickets.py backend/tests/test_telegram.py backend/tests/test_nfl_live.py backend/tests/test_freshness.py backend/tests/test_near_tipoff.py
+Sun Nov  8 16:37:35 EST 2026
+=========================== short test summary info ============================
+FAILED backend/tests/test_tickets.py::test_fallback_explanation_only_does_not_create_new_forecast_identity
+1 failed, 130 passed, 1 warning in 10.02s

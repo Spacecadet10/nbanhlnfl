@@ -1,0 +1,9 @@
+cwd: /Users/andry/Desktop/nba-predictor-batch1/backend
+cmd: OMP_NUM_THREADS=4 /Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/bin/python -m pytest -q -p no:cacheprovider tests/test_live_store_guard.py tests/test_release_guard.py tests/test_backup_restore.py tests/test_replay_same_store.py tests/test_storage.py tests/test_nfl.py tests/test_nfl_live.py tests/test_soccer.py tests/test_telegram.py tests/test_dev_script.py tests/test_live.py
+START=2026-11-08T14:30:20Z
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+340 passed, 1 warning in 46.24s
+exit=0
+END=2026-11-08T14:31:07Z

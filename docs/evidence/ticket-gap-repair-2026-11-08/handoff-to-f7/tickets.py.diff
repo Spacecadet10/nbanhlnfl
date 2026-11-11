@@ -1,0 +1,283 @@
+--- backend/app/tickets.py	2026-11-08 18:32:17
++++ /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/43a0d8c8-5d19-4e11-a7c0-2df81439b128/scratchpad/wt/backend/app/tickets.py	2026-11-08 18:57:07
+@@ -11,7 +11,9 @@
+ SKILL = Path.home() / '.codex/skills/courtside-ticket-review/SKILL.md'
+ TORONTO = ZoneInfo('America/Toronto')
+ MAX_TICKETS, MIN_LEGS, MAX_LEGS = 6, 2, 6   # owner request Nov 8: a varied menu, not one fixed shape
+-CARD_TICKETS = 3                             # the PNG shows the first three; the text lists every option
++CARD_TICKETS = 3
++PROVIDER_SHORT = {'DraftKings': 'DK'}
++SNAPSHOT_TTL = timedelta(minutes=10)   # check() refuses older snapshots; a start older than this can never complete                             # the PNG shows the first three; the text lists every option
+ BET_TYPES = {'winner': 'Moneyline', 'spread': 'Spread', 'total': 'Over/Under', 'team_total_home': 'Team total',
+              'team_total_away': 'Team total', 'reg3': '60-min result'}
+ 
+@@ -52,6 +54,11 @@
+                 report = provider.ranked_picks(day)
+                 if report['mode'] != 'real':
+                     raise ValueError('Real forecasts required')
++                for pick in report['picks']:
++                    try:
++                        pick['quote_check'] = quote_check(conn, pick, stamp)
++                    except Exception as exc:   # a quote lookup problem is reported on the pick, never hides the forecast
++                        pick['quote_check'] = {'error': type(exc).__name__}
+                 due = conn.execute("SELECT game_id FROM games WHERE status='scheduled' AND season_type IN ('regular','play_in','postseason') AND tipoff_at>? AND tipoff_at<=?",
+                                    (stamp, (now+timedelta(minutes=110)).strftime('%Y-%m-%dT%H:%M:%SZ'))).fetchall()
+                 covered = {p['game_id'] for p in report['picks'] if p['grade']=='pending'}
+@@ -98,6 +105,29 @@
+     return pick is None or _parse(pick['tipoff']) - timedelta(hours=2) <= _parse(delay['source_fetched_at'])
+ 
+ 
++def quote_check(conn, pick, stamp):
++    """The forecast's line against the latest stored sportsbook quote (market_quotes 'current', retrieved by `stamp`).
++    A bookmaker line that moved since the forecast means its probability belongs to a line no longer offered. Prices are
++    reported, never judged: value depends on the exact price the user gets. Model-line markets have no stored quote."""
++    row = conn.execute('SELECT line, line_source, market_quote_id FROM game_forecasts WHERE forecast_id=?',
++                       (pick['forecast_id'],)).fetchone()
++    history = pick.get('percentage_history')   # a dict, or the provider's ForecastPercentageRecord before JSON encoding
++    side = history.get('side') if isinstance(history, dict) else getattr(history, 'side', None)
++    price = lambda q: None if q is None else {'a': q['price_a'], 'b': q['price_b'], 'mid': q['price_mid']}.get(side)
++    first = conn.execute('SELECT provider, price_a, price_mid, price_b FROM market_quotes WHERE quote_id=?',
++                         (row['market_quote_id'],)).fetchone() if row and row['market_quote_id'] else None
++    sql = ("SELECT provider, line, price_a, price_mid, price_b, retrieved_at FROM market_quotes WHERE game_id=? AND market=? "
++           "AND price_label='current' AND retrieved_at<=?" + (' AND provider=?' if first else '') +
++           ' ORDER BY retrieved_at DESC, quote_id DESC LIMIT 1')
++    now = conn.execute(sql, (pick['game_id'], pick['market'], stamp) + ((first['provider'],) if first else ())).fetchone()
++    line_at = row['line'] if row else None
++    moved = bool(row and row['line_source'] == 'bookmaker' and now is not None and now['line'] is not None
++                 and line_at is not None and abs(now['line'] - line_at) > 1e-9)
++    return dict(provider=now['provider'] if now else None, retrieved_at=now['retrieved_at'] if now else None,
++                line_source=row['line_source'] if row else None, line_at_forecast=line_at,
++                line_now=now['line'] if now else None, price_now=price(now), price_at_forecast=price(first), line_moved=moved)
++
++
+ def _stamp(moment=None):
+     return (moment or datetime.now(timezone.utc)).strftime('%Y-%m-%dT%H:%M:%SZ')
+ 
+@@ -220,7 +250,7 @@
+     if 'as_of' not in snap or 'date' not in snap:
+         raise ValueError('Snapshot lacks as_of/date')
+     now = _parse(snap['as_of'])
+-    ticketable, blocked, unavailable, started, delayed = [], {}, {}, [], {}
++    ticketable, blocked, unavailable, started, delayed, moved = [], {}, {}, [], {}, []
+     for sport, section in snap['sports'].items():
+         if section.get('error'):
+             unavailable[sport] = dict(section)
+@@ -236,7 +266,12 @@
+                               'games': len({p['game_id'] for p in refused})}
+         if usable and section['freshness']['source_state'] != 'fresh':
+             delayed[sport] = dict(section['refresh_delay'], forecasts=len(usable))
+-        ticketable += [(sport, p) for p in usable]
++        for p in usable:
++            q = p.get('quote_check') or {}
++            if q.get('line_moved'):   # its probability is for a line the sportsbook no longer shows
++                moved.append(dict(_describe(sport, p), line_at_forecast=q['line_at_forecast'], line_now=q['line_now']))
++            else:
++                ticketable.append((sport, p))
+     reviewed, reviewed_games, used = set(), set(), {}
+     state = {'as_of': snap['as_of'], 'date': snap['date']}
+     if ticketable or started:
+@@ -279,6 +314,8 @@
+                  missed_before_start=sorted(missed.values(), key=lambda m: (m['tipoff'], m['sport'], m['game_id'])))
+     if delayed:   # stale only because the store's forecast job still holds the lock; legs disclose the refresh time
+         state['delayed'] = delayed
++    if moved:     # bookmaker line moved since the forecast: excluded until the app forecasts the new line
++        state['line_changed'] = moved
+     return state
+ 
+ 
+@@ -288,7 +325,7 @@
+     fresh = snapshot()
+     now = datetime.fromisoformat(fresh['as_of'].replace('Z', '+00:00'))
+     age = now - datetime.fromisoformat(old['as_of'].replace('Z', '+00:00'))
+-    if old['date'] != fresh['date'] or not timedelta(0) <= age <= timedelta(minutes=10):
++    if old['date'] != fresh['date'] or not timedelta(0) <= age <= SNAPSHOT_TTL:
+         raise ValueError('Snapshot expired; take a new snapshot and review again')
+     review = plan['review']
+     for field in ('skill_sha256', 'helper_sha256'):
+@@ -353,6 +390,10 @@
+             for field in ('game_id', 'market', 'pick_label', 'probability', 'tipoff', 'generated_at'):
+                 if before[field] != pick[field]:
+                     raise ValueError('Forecast changed; review again')
++            quote = pick.get('quote_check') or {}
++            if quote.get('line_moved'):
++                raise ValueError(f"Line changed since forecast ({pick['matchup']} {pick['market']}: {quote['line_at_forecast']:g} "
++                                 f"-> {quote['line_now']:g}); review again")
+             key = (sport, pick['game_id'])
+             if key in ticket_games or not leg['rationale'].strip():
+                 raise ValueError('Repeated game within ticket or missing rationale')
+@@ -402,8 +443,13 @@
+                       'Combine ALL these legs in ONE parlay:'])
+         for leg_number, p in enumerate(ticket['legs'], 1):
+             start = datetime.fromisoformat(p['tipoff'].replace('Z', '+00:00')).astimezone(TORONTO)
++            q = p.get('quote_check') or {}
++            price = ''
++            if q.get('price_now') is not None:
++                price = f" / {PROVIDER_SHORT.get(q['provider'], q['provider'])} {q['price_now']:+d}" + (
++                    f" (was {q['price_at_forecast']:+d})" if q.get('price_at_forecast') not in (None, q['price_now']) else '')
+             lines.append(f"{leg_number}. {p['sport'].upper()} / {escape(p['matchup'])} / {escape(bet_type(p))}: "
+-                         f"<b>{escape(p['pick_label'])}</b> / {start:%b %d %I:%M %p %Z} / {p['probability']:.1%}")
++                         f"<b>{escape(p['pick_label'])}</b> / {start:%b %d %I:%M %p %Z} / {p['probability']:.1%}{escape(price)}")
+         lines.append(f"Model estimate {math.prod(p['probability'] for p in ticket['legs']):.1%} (independence assumption).")
+     exposure = dict(prior_exposure or {})
+     for t in tickets:
+@@ -424,7 +470,18 @@
+     for sport, stamp in sorted(delays.items()):
+         lines += ['', f"{sport.upper()} game status last refreshed {_parse(stamp).astimezone(TORONTO):%I:%M %p %Z} "
+                       f"(app forecast job still running). Confirm each game is still on before betting."]
+-    lines += ['', 'Prices unverified. Confirm exact sportsbook lines. Model estimates are not guaranteed win rates.']
++    legs = list({f"{p['sport']}:{p['forecast_id']}": p for t in tickets for p in t['legs']}.values())
++    model = [p for p in legs if (p.get('quote_check') or {}).get('line_source') == 'model']
++    if model:
++        lines += [''] + [f"{p['sport'].upper()} {escape(p['pick_label'])}: the app's own line; no sportsbook line stored." for p in model]
++    quoted = [p['quote_check'] for p in legs if (p.get('quote_check') or {}).get('price_now') is not None]
++    if quoted:
++        oldest = min(quoted, key=lambda q: q['retrieved_at'])
++        lines += ['', f"Prices: latest stored {escape(oldest['provider'])} quotes, "
++                      f"{_parse(oldest['retrieved_at']).astimezone(TORONTO):%I:%M %p %Z}; confirm before betting. "
++                      'Model estimates are not guaranteed win rates.']
++    else:
++        lines += ['', 'Prices unverified. Confirm exact sportsbook lines. Model estimates are not guaranteed win rates.']
+     if not tickets:
+         lines.append('No tickets selected.')
+     text = '\n'.join(lines)
+@@ -579,6 +636,12 @@
+         stage TEXT NOT NULL CHECK(stage IN ('check','send')),
+         outcome TEXT NOT NULL CHECK(outcome IN ('ticket_sent','no_ticket','operational_failure','paused')),
+         detail TEXT NOT NULL, snapshot_sha256 TEXT, snapshot_as_of TEXT, payload TEXT NOT NULL);
++      CREATE TABLE IF NOT EXISTS ticket_review_starts (
++        snapshot_sha256 TEXT PRIMARY KEY, day TEXT NOT NULL, started_at TEXT NOT NULL, earliest_tipoff TEXT);
++      CREATE TRIGGER IF NOT EXISTS ticket_review_starts_no_update BEFORE UPDATE ON ticket_review_starts
++        BEGIN SELECT RAISE(ABORT,'ticket review starts are append-only'); END;
++      CREATE TRIGGER IF NOT EXISTS ticket_review_starts_no_delete BEFORE DELETE ON ticket_review_starts
++        BEGIN SELECT RAISE(ABORT,'ticket review starts are append-only'); END;
+       CREATE TRIGGER IF NOT EXISTS ticket_reviews_no_update BEFORE UPDATE ON ticket_reviews
+         BEGIN SELECT RAISE(ABORT,'ticket review outcomes are append-only'); END;
+       CREATE TRIGGER IF NOT EXISTS ticket_reviews_no_delete BEFORE DELETE ON ticket_reviews
+@@ -761,9 +824,9 @@
+     return value
+ 
+ 
+-def notify_alerts(snap, settlement_errors):
++def notify_alerts(snap, settlement_errors, extra=()):
+     from app import config, telegram
+-    issues = snap.get('alerts', []) + [{'sport':'tickets','issue':'settlement_unavailable'} for _ in settlement_errors]
++    issues = snap.get('alerts', []) + [{'sport':'tickets','issue':'settlement_unavailable'} for _ in settlement_errors] + list(extra)
+     out = []
+     settings = config.telegram_settings()
+     bot = telegram.Telegram(settings.get('TELEGRAM_BOT_TOKEN')); bot.identity()
+@@ -772,9 +835,9 @@
+             return ['paused']
+         for issue in issues:
+             # One alert per issue/sport/day, no repeated hourly noise.
+-            key = 'ticket-health:' + snap['date'] + ':' + issue['sport'] + ':' + issue['issue']
++            key = 'ticket-health:' + snap['date'] + ':' + issue['sport'] + ':' + issue['issue'] + (':' + issue['dedup'] if issue.get('dedup') else '')
+             text = 'PROP51 / REVIEW BLOCKER / ' + issue['sport'].upper() + '\n' + issue['issue'] + ''.join(
+-                f"\n{field}: {issue[field]}" for field in ('reason', 'unserved_forecasts', 'unserved_games') if field in issue)
++                f"\n{field}: {issue[field]}" for field in ('reason', 'unserved_forecasts', 'unserved_games', 'detail') if field in issue)
+             out.append(telegram.deliver(bot,conn,settings['TELEGRAM_CHAT_ID'],key,text,snap['as_of']))
+         start = datetime.fromisoformat(snap['date']).replace(tzinfo=TORONTO)
+         end = start + timedelta(days=1)
+@@ -847,7 +910,7 @@
+ RETRYABLE = {'retry', 'retry_pending'}   # uncertain/failed/partial need receipt inspection and are never re-triggered
+ 
+ 
+-def record_review(stage, outcome, detail, *, plan=None, result=None, retryable=False):
++def record_review(stage, outcome, detail, *, plan=None, result=None, retryable=False, snapshot_sha256=None, day=None):
+     """Append what one review attempt produced: a ticket, no ticket (insufficient evidence), a pause or an operational failure."""
+     from app import telegram
+     review = plan.get('review') if isinstance(plan, dict) and isinstance(plan.get('review'), dict) else {}
+@@ -859,16 +922,57 @@
+     if result:
+         payload.update(coverage=result['coverage'], ticket_ids=[t['ticket_id'] for t in result['resolved']],
+                        alerts=result['snapshot'].get('alerts', []))
+-    day = result['date'] if result else datetime.now(timezone.utc).astimezone(TORONTO).date().isoformat()
++    day = result['date'] if result else day or datetime.now(timezone.utc).astimezone(TORONTO).date().isoformat()
+     with telegram.ledger() as conn:
+         schema(conn)
+         cursor = conn.execute('INSERT INTO ticket_reviews (recorded_at,day,stage,outcome,detail,snapshot_sha256,snapshot_as_of,payload) '
+                               'VALUES (?,?,?,?,?,?,?,?)',
+-                              (_stamp(), day, stage, outcome, str(detail)[:1000], review.get('snapshot_sha256'),
++                              (_stamp(), day, stage, outcome, str(detail)[:1000], review.get('snapshot_sha256') or snapshot_sha256,
+                                result['snapshot']['as_of'] if result else None, json.dumps(payload, sort_keys=True)))
+         return cursor.lastrowid
+ 
+ 
++def record_start(digest, snap):
++    """A reviewer's snapshot (the `snapshot` action) starts a review; preflight later checks that it finished."""
++    from app import telegram
++    now = _parse(snap['as_of'])
++    tips = [p['tipoff'] for s in snap['sports'].values() for p in (s.get('report') or {}).get('picks', []) if eligible(p, now)]
++    with telegram.ledger() as conn:
++        schema(conn)
++        conn.execute('INSERT OR IGNORE INTO ticket_review_starts VALUES (?,?,?,?)', (digest, snap['date'], snap['as_of'], min(tips, default=None)))
++    return True
++
++
++def record_interrupted(snap):
++    """Reviews started today that can no longer finish (snapshot past SNAPSHOT_TTL) without any check/send outcome or
++    archive: each is recorded once as a retryable operational failure, so the trigger stays due and the gap is visible."""
++    from app import config, telegram
++    now, day = _parse(snap['as_of']), snap['date']
++    archived = set()
++    for path in (config.data_dir() / 'reports/tickets/reviews').glob(day + '-*.json'):
++        try:
++            archived.add(json.loads(path.read_text())['plan']['review'].get('snapshot_sha256'))
++        except (OSError, ValueError, KeyError, TypeError, AttributeError):
++            continue
++    with telegram.ledger() as conn:
++        schema(conn)
++        done = {r[0] for r in conn.execute('SELECT snapshot_sha256 FROM ticket_reviews WHERE day=? AND snapshot_sha256 IS NOT NULL', (day,))}
++        starts = [dict(r) for r in conn.execute('SELECT * FROM ticket_review_starts WHERE day=? ORDER BY started_at', (day,))]
++    gone = [s for s in starts if s['snapshot_sha256'] not in done | archived and now - _parse(s['started_at']) > SNAPSHOT_TTL]
++    for s in gone:
++        record_review('check', 'operational_failure', f"review interrupted: snapshot {s['started_at']} was never checked or sent "
++                      f"before it expired; earliest game {s['earliest_tipoff']}", retryable=True,
++                      snapshot_sha256=s['snapshot_sha256'], day=day)
++    return [{k: s[k] for k in ('snapshot_sha256', 'started_at', 'earliest_tipoff')} for s in gone]
++
++
++def interruption_alerts(gone):
++    fmt = lambda stamp: f"{_parse(stamp).astimezone(TORONTO):%I:%M %p %Z}" if stamp else 'none pending'
++    return [dict(sport='tickets', issue='review_interrupted', dedup=g['snapshot_sha256'][:12],
++                 detail=f"review snapshot {fmt(g['started_at'])} never checked or sent; earliest game {fmt(g['earliest_tipoff'])}")
++            for g in gone]
++
++
+ def _no_ticket_detail(plan):
+     review = plan['review']
+     return 'insufficient evidence for a justified combination: ' + str(
+@@ -922,9 +1026,15 @@
+                     report['review'] = review_state(snap)
+                 except Exception as exc:
+                     report['review'] = {'due': None, 'reason': 'review_state_unavailable', 'error': type(exc).__name__}
++                try:
++                    gone = record_interrupted(snap)
++                except Exception as exc:
++                    gone, report['review']['interrupted_error'] = [], type(exc).__name__
++                if gone:   # a started review that never reached check/send: resumed by this run (still due) and alerted once
++                    report['review']['interrupted'] = gone
+                 report['snapshot'] = snap
+                 if args.notify:
+-                    report['alerts'] = notify_alerts(report['snapshot'], report['errors'])
++                    report['alerts'] = notify_alerts(report['snapshot'], report['errors'], interruption_alerts(gone))
+                 if args.brief:   # the trigger check runs often; the full snapshot is taken separately when a review is due
+                     report = {'as_of': report.get('as_of'), 'errors': report['errors'],
+                               'notification_errors': report.get('notification_errors', []), 'alerts': report.get('alerts', []),
+@@ -942,10 +1052,15 @@
+         elif args.action == 'personal':
+             print(json.dumps(record_personal(args.plan)))
+         elif args.action == 'snapshot':
+-            raw = json.dumps(snapshot(), sort_keys=True, indent=2).encode()
++            snap = snapshot()
++            raw = json.dumps(snap, sort_keys=True, indent=2).encode()
+             with args.output.open('xb') as handle:
+                 handle.write(raw)
+-            print(json.dumps({'snapshot_path': str(args.output), 'snapshot_sha256': sha(raw)}))
++            try:
++                started = record_start(sha(raw), snap)
++            except Exception as exc:   # never blocks the review; preflight just cannot see this start
++                started = 'not_recorded:' + type(exc).__name__
++            print(json.dumps({'snapshot_path': str(args.output), 'snapshot_sha256': sha(raw), 'review_start_recorded': started}))
+     except Exception as exc:
+         print(json.dumps(_failure(exc)))
+         return 1

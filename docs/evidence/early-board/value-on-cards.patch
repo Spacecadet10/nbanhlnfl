@@ -1,0 +1,76 @@
+diff -ruN a/backend/app/telegram.py b/backend/app/telegram.py
+--- a/backend/app/telegram.py	2026-11-10 01:47:31.217003517 +0000
++++ b/backend/app/telegram.py	2026-11-10 01:47:31.217003517 +0000
+@@ -179,7 +179,14 @@
+         '<b>Recommended pick</b>',
+         '<b>' + escape(strong[0]['pick_label'] if strong else 'No strong pick') + '</b>']
+     if strong:
+-        lines.append(escape(strong[0]['market_title']) + ' · Model ' + displayed_percentage(strong[0]['probability']) + '%')
++        # Owner request Nov 9: say what the sportsbook's own price implies next to the model, and say so plainly when the
++        # price asks for more than the model gives (a likely winner is not a value pick at any price).
++        book = strong[0].get('market_prob')
++        detail = escape(strong[0]['market_title']) + ' · Model ' + displayed_percentage(strong[0]['probability']) + '%'
++        if book is not None:
++            detail = 'Model ' + displayed_percentage(strong[0]['probability']) + '% · Sportsbook ' + displayed_percentage(book) + '%' + (
++                ' · no value at this price' if book > strong[0]['probability'] else '')
++        lines.append(detail)
+     lines += ['<i>' + ('App ranking for this past game.' if preview else 'Based on the app’s existing ranking.') + '</i>',
+               divider, '', '<b>Market breakdown</b>', '']
+     versions = []
+@@ -198,8 +205,10 @@
+         losses = h['losses'] + int(preview and pick['grade'] == 'loss')
+         settled = wins + losses
+         source = {'model': ' · <i>model line</i>', 'bookmaker': ' · <i>bookmaker line at forecast</i>', 'none': ''}[h['line_source']]
++        book = pick.get('market_prob')
++        versus = '' if book is None else f"Sportsbook {displayed_percentage(book)}% (model {100 * (pick['probability'] - book):+.1f}) · "
+         lines += [f"<b>{escape(pick['market_title'])}</b>", f"{escape(pick['pick_label'])}{source}",
+-                  f"<b>Model {escape(h['percentage'])}%</b> · {wins}W–{losses}L ({settled} settled)"]
++                  f"<b>Model {escape(h['percentage'])}%</b> · {versus}{wins}W–{losses}L ({settled} settled)"]
+         if preview:
+             result = {'win': 'Won', 'loss': 'Lost', 'push': 'Push'}.get(pick['grade'], pick['grade'])
+             lines.append('Result: ' + escape(result))
+diff -ruN a/backend/tests/test_telegram.py b/backend/tests/test_telegram.py
+--- a/backend/tests/test_telegram.py	2026-11-10 01:47:31.219003517 +0000
++++ b/backend/tests/test_telegram.py	2026-11-10 01:47:31.219003517 +0000
+@@ -367,3 +367,31 @@
+     assert tg.card_identity(text)[3] == 'DET' and tg.card_identity('PROP51 / REVIEW BLOCKER / NBA') is None
+     assert tg.card_identity(tg.message_batches(strong_report('Over 233.5'), '123')[0][1])[3] == 'Over'
+     assert tg.card_identity(tg.message_batches(report(), '123')[0][1])[3] == 'No strong pick'
++
++
++def test_card_shows_the_sportsbook_probability_beside_the_model_and_flags_a_price_above_the_model():
++    """Owner request Nov 9 (CLE @ CHA: 'CLE win' was recommended at 55% while the price implied 74%; the card never said so)."""
++    d = strong_report('CLE win')
++    d['picks'][0].update(market='winner', market_title='Winner', probability=0.552, market_prob=0.7404)
++    d['picks'][0]['percentage_history'].update(market='winner', percentage='55.2', line_source='none')
++    spread = copy.deepcopy(strong_report('CHA +8.5')['picks'][0])
++    spread.update(strong=False, game_rank=2, probability=0.5708, market_prob=0.5094, forecast_id=2)
++    spread['percentage_history'].update(percentage='57.1')
++    d['picks'].append(spread)
++    key, text = tg.message_batches(d, '123')[0]
++    assert 'Model 55.2% · Sportsbook 74.0% · no value at this price' in text
++    assert len('Model 55.2% · Sportsbook 74.0% · no value at this price') <= 56     # one row of the card's headline box
++    assert '<b>Model 57.1%</b> · Sportsbook 50.9% (model +6.1) · 3W–1L (4 settled)' in text
++    assert '<b>Model 55.2%</b> · Sportsbook 74.0% (model -18.8) · ' in text
++    assert tg.card_identity(text)[3] == 'CLE win'
++    from app import telegram_card
++    assert telegram_card.render_card(text).startswith(b'\x89PNG')     # the picture still renders with the longer lines
++
++
++def test_card_without_a_stored_price_is_unchanged_and_a_fairly_priced_pick_is_not_flagged():
++    text = tg.message_batches(report(), '123')[0][1]            # team total: no sportsbook price is stored
++    assert 'Sportsbook' not in text and '<b>Model 51.8%</b> · 0W–2L (2 settled)' in text
++    d = strong_report(); d['picks'][0]['market_prob'] = 0.48
++    text = tg.message_batches(d, '123')[0][1]
++    assert 'Model 51.8% · Sportsbook 48.0%\n' in text and 'no value' not in text
++    assert tg.message_batches(d, '123')[0][0] == tg.message_batches(strong_report(), '123')[0][0]   # same delivery key: no resend
+diff -ruN a/docs/TICKETS.md b/docs/TICKETS.md
+--- a/docs/TICKETS.md	2026-11-10 01:47:31.221003517 +0000
++++ b/docs/TICKETS.md	2026-11-10 01:47:31.221003517 +0000
+@@ -247,5 +247,6 @@
+ - **Quiet health states.** `source_unavailable_or_stale` and `missing_due_forecasts` (`QUIET_HEALTH`) are no longer sent to the chat; they remain in the preflight report, the snapshot and the trigger observations. Every other alert is unchanged.
+ - **Up to seven legs** (`MAX_LEGS = 7`).
+ - **One game card per game** (`telegram.deliver_card`). The delivery key is unchanged, so receipts of the earlier release are matched at cutover. Before a card with a new key is sent, the ledger is searched (two days) for a card with the same sport, matchup, start and recommended pick, ignoring the line number, that reached or may have reached the chat (sent, uncertain, sending); if one exists the new card is not sent (`already_sent_for_game`). A different recommended side or start sends again; a rejected (`failed`) card does not block.
++- **Game cards show the sportsbook next to the model** (`telegram.format_batch`, owner request Nov 9 after CLE @ CHA: 'CLE win' was the recommended pick at 55% while the price implied 74%). Each priced market row reads `Sportsbook X% (model ±Y)`; the headline reads `Model A% · Sportsbook B%` and adds `no value at this price` when the sportsbook's margin-free probability is above the model's. The recommendation itself, the delivery key and the one-card-per-game guard are unchanged; markets without a stored price are unchanged. This is information, not a value claim: over the first month the model's disagreements with DraftKings two hours before the start lost on paper (docs/VALUE_AUDIT.md).
+ 
+ Not changed: the review instructions (`SKILL.md`), the automation schedule, selection rules, settlement, stores. Tested in a Linux copy of this checkout (Python 3.10, own venv): `tests/test_tickets.py tests/test_telegram.py tests/test_delivery_release.py tests/test_nfl_live.py tests/test_soccer_live.py`, 237 passed. Not run by the author: the full backend suite, the release venv, a real Telegram send.

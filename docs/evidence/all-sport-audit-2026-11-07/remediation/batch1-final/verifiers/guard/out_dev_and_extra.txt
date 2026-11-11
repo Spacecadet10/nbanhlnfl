@@ -1,0 +1,23 @@
+app imported from: /Users/andry/Desktop/nba-predictor-batch1/backend/app/__init__.py
+no .git ancestor of scratch: True
+D1 nhl migrate on empty dir rc 0 schema 35 ['.nhl-jobs.lock', 'nhl.sqlite', 'nhl.sqlite-shm', 'nhl.sqlite-wal']
+D1b soccer migrate rc 0 schema 35
+D2 implicit score on schema-31 copy rc 0 {"status": "REACHED_RUN"} schema now 35
+D3 nfl migrate copy rc 0 schema 35
+D4 journal mode: wal files: ['nfl.sqlite', 'nfl.sqlite-shm', 'nfl.sqlite-wal', 'raw']
+D4 real nfl replay rc 0 {"responses": 1, "games_inserted": 0, "games_updated": 0, "line_quotes": 0}
+D4b nfl release-check raw_missing {'count': 0, 'raw_ids': [], 'truncated': False} None
+D5 replay on 0-byte copy rc 0 {"responses": 0, "games_inserted": 0, "games_updated": 0, "line_quotes": 0} -> schema now 35
+X1 _write_refusal('nfl') for the copy: None
+X1 access_log_path resolves to: fakerepo/data/research/nfl_eval/nfl_test_access.jsonl protected: True
+--- X1 `nfl tick` on copy with research/ -> protected research
+rc: 0
+stdout: {
+  "status": "ok",
+  "stub": "jobs.tick -> nfl_eval.load_rows(access_log=access_log_path())"
+}
+tree unchanged: False
+  before: {'nfl.sqlite': 'a9b76d0614842809', 'research/': 'dir', 'research/nfl_eval/': 'dir', 'research/nfl_eval/nfl_test_access.jsonl': '0b6eff3ab526b84e'}
+  after:  {'nfl.sqlite': 'a9b76d0614842809', 'research/': 'dir', 'research/nfl_eval/': 'dir', 'research/nfl_eval/nfl_test_access.jsonl': '85531ac4a36a9a60'}
+X1 protected access log now: ['{"live": "entry"}', '{"at": "2026-11-08T06:10:54Z", "through": 2022, "choice_sha256": "004f4aa87331d0c6ef590b262f7c44f52b92e167ca88233202e584f0f55daec7", "purpose": "prospective NFL state initialization"}']
+X1 contrast: `nfl test-run` same copy rc 1 {"status": "refused", "reason": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9

@@ -1,0 +1,12 @@
+<b>PROP51 · COMBINED PARLAY TICKETS · 2026-11-08</b>
+Multi-game combinations from app forecasts + AI selection. Not a single-game card.
+
+<b>Ticket 1: E2E TEST synthetic mixed ticket</b>
+ID 2026-11-08-9c010c96ba54
+Combine ALL these legs in ONE parlay:
+1. NBA / LAL @ DET / <b>DET win</b> / Nov 08 06:00 PM EST / 63.9%
+2. NHL / TBL @ WPG / <b>TBL win</b> / Nov 08 06:00 PM EST / 56.8%
+Model estimate 36.3% (independence assumption).
+
+Prices unverified. Confirm exact sportsbook lines. Model estimates are not guaranteed win rates.
+{"review_outcome": "validated_not_sent", "coverage": {"required": 11, "accounted": 11, "unavailable_sports": {}, "complete_supported_sports": true}}

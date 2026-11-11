@@ -1,0 +1,27 @@
+--- backend/tests/test_tickets.py	2026-11-08 18:28:31
++++ /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/43a0d8c8-5d19-4e11-a7c0-2df81439b128/scratchpad/wt/backend/tests/test_tickets.py	2026-11-08 18:31:28
+@@ -641,3 +641,24 @@
+     conn.execute("INSERT INTO job_runs (job,started_at,status) VALUES ('near_tipoff','2026-11-08T22:50:11Z','running')")
+     assert t.refresh_delay(conn,stale)==dict(job='near_tipoff',started_at='2026-11-08T22:50:11Z',source_fetched_at='2026-11-08T22:50:10Z')
+     assert t.refresh_delay(conn,dict(stale,failing=True)) is None and t.refresh_delay(conn,dict(stale,source_state='fresh')) is None
++
++
++def test_forecast_excluded_while_its_source_was_stale_is_re_reviewed_once_usable(setup):
++    plan,snap,sent,path=setup;snap['sports']['nba']['freshness']['source_state']='stale'
++    sp=Path(plan['snapshot_path']);sp.write_text(json.dumps(snap));plan['review']['snapshot_sha256']=t.sha(sp.read_bytes())
++    assert t.check(plan)['resolved']==[]                  # complete review; NBA accounted but could not be a leg
++    state=t.review_state(snap)
++    assert state['due'] is False and state['reason']=='no_new_forecasts' and state['blocked']['nba']['forecasts']==5
++    snap['sports']['nba']['freshness']['source_state']='fresh'
++    state=t.review_state(snap)
++    assert state['due'] is True and sorted(u['key'] for u in state['unreviewed'])==[f'nba:{i}' for i in range(1,6)]
++
++
++def test_refusal_saying_review_again_re_triggers_the_review(setup,monkeypatch,capsys):
++    plan,snap,sent,path=setup;plan['tickets']=[ticket([('nba',1),('nhl',2)])]
++    file=plan_file(plan,path);assert t.check(plan)['resolved']          # validated and archived
++    assert t.review_state(snap)['due'] is False
++    snap['skill_sha256']='skill-updated-between-check-and-send'   # what the next fresh snapshot reports
++    code,out=run_cli(monkeypatch,capsys,'send','--plan',str(file))
++    assert code==1 and 'review again' in out and sent==[]
++    assert t.review_state(snap)['due'] is True

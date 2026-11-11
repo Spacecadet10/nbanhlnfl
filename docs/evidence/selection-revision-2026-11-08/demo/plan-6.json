@@ -1,0 +1,35 @@
+{
+ "snapshot_path": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/43a0d8c8-5d19-4e11-a7c0-2df81439b128/scratchpad/demo/snapshot-6.json",
+ "tickets": [
+  {
+   "label": "ORIGINAL Stronger pair / Timberwolves + Celtics",
+   "legs": [
+    {
+     "sport": "nba",
+     "forecast_id": 1181
+    },
+    {
+     "sport": "nba",
+     "forecast_id": 1198
+    }
+   ]
+  },
+  {
+   "label": "ORIGINAL Three-game NBA option / adds Mavericks",
+   "legs": [
+    {
+     "sport": "nba",
+     "forecast_id": 1181
+    },
+    {
+     "sport": "nba",
+     "forecast_id": 1198
+    },
+    {
+     "sport": "nba",
+     "forecast_id": 1186
+    }
+   ]
+  }
+ ]
+}

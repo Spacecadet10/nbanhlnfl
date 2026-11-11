@@ -1,0 +1,24 @@
+-- A_real_clock
+nfl.sqlite []
+nfl.sqlite.replaced-20261108T062009632331Z ['nfl:mark1']
+nfl.sqlite.replaced-20261108T062009636921Z ['nfl:mark2']
+nfl.sqlite.replaced-20261108T062009641073Z ['nfl:mark3']
+safety-copy marks ['nfl:mark1', 'nfl:mark2', 'nfl:mark3']
+-- B_frozen_clock
+nfl.sqlite []
+nfl.sqlite.replaced-20261108T010203456789Z ['nfl:mark1']
+nfl.sqlite.replaced-20261108T010203456789Z-1 ['nfl:mark2']
+nfl.sqlite.replaced-20261108T010203456789Z-2 ['nfl:mark3']
+safety-copy marks ['nfl:mark1', 'nfl:mark2', 'nfl:mark3']
+-- C_frozen_with_wal_shm
+nfl.sqlite []
+nfl.sqlite-shm.replaced-20261108T010203456789Z b'shm1'
+nfl.sqlite-shm.replaced-20261108T010203456789Z-1 b'shm2'
+nfl.sqlite-shm.replaced-20261108T010203456789Z-2 b'shm3'
+nfl.sqlite-wal.replaced-20261108T010203456789Z b'wal1'
+nfl.sqlite-wal.replaced-20261108T010203456789Z-1 b'wal2'
+nfl.sqlite-wal.replaced-20261108T010203456789Z-2 b'wal3'
+nfl.sqlite.replaced-20261108T010203456789Z ['nfl:mark1']
+nfl.sqlite.replaced-20261108T010203456789Z-1 ['nfl:mark2']
+nfl.sqlite.replaced-20261108T010203456789Z-2 ['nfl:mark3']
+safety-copy marks ['nfl:mark1', 'nfl:mark2', 'nfl:mark3']

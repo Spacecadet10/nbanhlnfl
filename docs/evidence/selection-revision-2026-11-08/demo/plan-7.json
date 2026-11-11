@@ -1,0 +1,18 @@
+{
+ "snapshot_path": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/43a0d8c8-5d19-4e11-a7c0-2df81439b128/scratchpad/demo/snapshot-7.json",
+ "tickets": [
+  {
+   "label": "ORIGINAL NBA pair / Clippers + Mavericks",
+   "legs": [
+    {
+     "sport": "nba",
+     "forecast_id": 1204
+    },
+    {
+     "sport": "nba",
+     "forecast_id": 1186
+    }
+   ]
+  }
+ ]
+}

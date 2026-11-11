@@ -15,7 +15,7 @@
 # A previous development API/web server of THIS checkout on the same port is stopped first; anything else on the port
 # (for example the release app) is never touched: the script refuses and names the process instead.
 # Overrides: NBA_LIVE_DATA_DIR (default <repo>/data), NBA_DEV_DATA_DIR (default ~/nba-predictor-dev-data),
-# API_PORT (8000), WEB_PORT (5173), PUBLISH_INTERVAL (60 s), NBA_DEV_PUBLISH (1; 0 = frozen copy).
+# API_PORT (8000), WEB_PORT (5173), PUBLISH_INTERVAL (60 s; whole seconds >= 30), NBA_DEV_PUBLISH (1; 0 = frozen copy).
 # `sh scripts/dev.sh --check-paths` only validates the two data directories and exits (nothing is stopped or written).
 #
 # Ownership: the development directory is only ever overwritten if this launcher created it. A path that does not exist
@@ -76,6 +76,14 @@ EOF
 }
 check_paths
 [ "${1:-}" = "--check-paths" ] && exit 0
+# The publisher refuses intervals under 30 s and exits; never start with a publisher that cannot run while announcing that
+# copies are republished.
+if [ "${NBA_DEV_PUBLISH:-1}" != 0 ]; then
+  case "${PUBLISH_INTERVAL:-60}" in
+    *[!0-9]*) fail "PUBLISH_INTERVAL must be a whole number of seconds (>= 30), not '${PUBLISH_INTERVAL}'. Nothing was started." ;;
+  esac
+  [ "${PUBLISH_INTERVAL:-60}" -ge 30 ] || fail "PUBLISH_INTERVAL must be at least 30 seconds, not '${PUBLISH_INTERVAL}'. Nothing was started."
+fi
 
 # Free a port held by an earlier development server of this checkout; refuse for anything else.
 free_port() {
@@ -102,7 +110,7 @@ check_paths >/dev/null   # again now that the directory exists (inode checks in 
 import os, sqlite3, sys
 from pathlib import Path
 live, dev = Path(sys.argv[1]), Path(sys.argv[2])
-for name in ("nba.sqlite", "nhl.sqlite", "nfl.sqlite"):
+for name in ("nba.sqlite", "nhl.sqlite", "nfl.sqlite", "soccer.sqlite"):
     src = live / name
     tmp = dev / f".{name}.tmp"
     old = [dev / n for n in (name, f"{name}-wal", f"{name}-shm", f"{name}-journal", tmp.name)]
@@ -136,9 +144,9 @@ for sub in research raw eval; do
     || fail "copying $LIVE/$sub failed."
 done
 check_paths >/dev/null   # again after the copy: nothing written below may lead outside the development directory
-for sport in nba nhl nfl; do
+for sport in nba nhl nfl soccer; do
   [ -f "$DEV/$sport.sqlite" ] || continue
-  if [ "$sport" = nfl ]; then set -- nfl migrate; else set -- --sport "$sport" migrate; fi   # NFL: data-only command
+  case "$sport" in nfl|soccer) set -- "$sport" migrate ;; *) set -- --sport "$sport" migrate ;; esac   # data-only commands
   (cd "$ROOT/backend" && NBA_DATA_DIR="$DEV" "$PY" -m app.cli "$@" >/dev/null) \
     || fail "migrating the $sport copy failed (the live store is untouched)."
 done

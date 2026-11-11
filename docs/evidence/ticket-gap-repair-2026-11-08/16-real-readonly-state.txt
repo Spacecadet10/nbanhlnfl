@@ -1,0 +1,168 @@
+nba None stale False 2026-11-08T22:50:10Z {'job': 'near_tipoff', 'started_at': '2026-11-08T22:50:11Z', 'source_fetched_at': '2026-11-08T22:50:10Z'}
+nhl None fresh False 2026-11-08T23:26:55Z None
+nfl None fresh False 2026-11-08T23:26:46Z None
+soccer forecasts_unavailable None None None None
+{
+ "due": true,
+ "reason": "new_forecasts",
+ "ticketable_forecasts": 33,
+ "ticketable_games": 6,
+ "blocked": {},
+ "delayed": {
+  "nba": {
+   "job": "near_tipoff",
+   "started_at": "2026-11-08T22:50:11Z",
+   "source_fetched_at": "2026-11-08T22:50:10Z",
+   "forecasts": 10
+  }
+ },
+ "unreviewed": [
+  [
+   "nba:1171",
+   "UTAH @ MIN",
+   "winner",
+   "MIN win",
+   "2026-11-09T00:00:00Z"
+  ],
+  [
+   "nba:1176",
+   "BKN @ DAL",
+   "winner",
+   "DAL win",
+   "2026-11-09T00:30:00Z"
+  ],
+  [
+   "nba:1174",
+   "UTAH @ MIN",
+   "team_total_home",
+   "MIN over 120.5",
+   "2026-11-09T00:00:00Z"
+  ],
+  [
+   "nba:1179",
+   "BKN @ DAL",
+   "team_total_home",
+   "DAL under 114.5",
+   "2026-11-09T00:30:00Z"
+  ],
+  [
+   "nba:1180",
+   "BKN @ DAL",
+   "team_total_away",
+   "BKN under 108.5",
+   "2026-11-09T00:30:00Z"
+  ],
+  [
+   "nba:1175",
+   "UTAH @ MIN",
+   "team_total_away",
+   "UTAH over 106.5",
+   "2026-11-09T00:00:00Z"
+  ],
+  [
+   "nba:1173",
+   "UTAH @ MIN",
+   "total",
+   "Over 221.5",
+   "2026-11-09T00:00:00Z"
+  ],
+  [
+   "nba:1178",
+   "BKN @ DAL",
+   "total",
+   "Under 223.5",
+   "2026-11-09T00:30:00Z"
+  ],
+  [
+   "nba:1172",
+   "UTAH @ MIN",
+   "spread",
+   "MIN -12.5",
+   "2026-11-09T00:00:00Z"
+  ],
+  [
+   "nba:1177",
+   "BKN @ DAL",
+   "spread",
+   "BKN +7.5",
+   "2026-11-09T00:30:00Z"
+  ],
+  [
+   "nhl:1109",
+   "PIT @ ANA",
+   "spread",
+   "PIT +1.5",
+   "2026-11-09T01:00:00Z"
+  ],
+  [
+   "nhl:1107",
+   "PIT @ ANA",
+   "winner",
+   "ANA win",
+   "2026-11-09T01:00:00Z"
+  ],
+  [
+   "nhl:1108",
+   "PIT @ ANA",
+   "reg3",
+   "ANA in regulation",
+   "2026-11-09T01:00:00Z"
+  ],
+  [
+   "nhl:1110",
+   "PIT @ ANA",
+   "total",
+   "Over 6.5",
+   "2026-11-09T01:00:00Z"
+  ],
+  [
+   "nhl:1111",
+   "PIT @ ANA",
+   "team_total_home",
+   "ANA under 3.5",
+   "2026-11-09T01:00:00Z"
+  ],
+  [
+   "nhl:1112",
+   "PIT @ ANA",
+   "team_total_away",
+   "PIT under 3.5",
+   "2026-11-09T01:00:00Z"
+  ],
+  [
+   "nfl:71",
+   "TB @ CHI",
+   "winner",
+   "CHI win",
+   "2026-11-09T01:20:00Z"
+  ],
+  [
+   "nfl:72",
+   "TB @ CHI",
+   "spread",
+   "TB +6",
+   "2026-11-09T01:20:00Z"
+  ],
+  [
+   "nfl:73",
+   "TB @ CHI",
+   "total",
+   "Under 47.5",
+   "2026-11-09T01:20:00Z"
+  ],
+  [
+   "nfl:74",
+   "TB @ CHI",
+   "team_total_home",
+   "CHI under 24.5",
+   "2026-11-09T01:20:00Z"
+  ],
+  [
+   "nfl:75",
+   "TB @ CHI",
+   "team_total_away",
+   "TB over 20.5",
+   "2026-11-09T01:20:00Z"
+  ]
+ ]
+}

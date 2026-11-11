@@ -12,34 +12,64 @@ tests → development/validation on copies → seal → review → one logged te
 ## What is being forecast
 The target is the **90-minute result** (home win / draw / away win), the outcome 1X2 markets settle on. Three probabilities
 per match, summing to 1. Extra time, penalties and two-legged qualification are not the target; qualification markets are
-out of scope. Consequence found in S0: ESPN publishes no 90-minute score for a match that went to extra time, so those
-knockout matches cannot be graded from ESPN alone. Each phase reports how many matches are ungradable for this reason,
-and S1 looks for a source of 90-minute scores; without one they are excluded from grading. They are never assumed to be
-draws: a second leg can go to extra time after a non-level 90 minutes. Only single-match ties (e.g. finals) imply a level
-90 minutes, and using that would need an explicit S3 rule backed by a verified competition format.
+out of scope. ESPN's status name does not establish how a match ended (S1: 2 extra-time matches labelled FULL_TIME,
+10 false AET labels), so S0 classifies the ending from status, period, clock, event minutes, shoot-out evidence and the tie
+structure together; any disagreement is stored as `unknown` with the reason, and only a consistent `regulation` ending
+shows a 90-minute result. A 90-minute score after extra time is derivable from goal minutes, but derived values stay
+disabled until S3 preregisters the grading rule: grade only when the 90-minute score from the results source agrees with an
+independent second source; otherwise the match is ungradable. A draw is never assumed: a second leg can go to extra time
+after a non-level 90 minutes.
 
-## S0 — Fixtures and results (done 2026-11-07; awaiting review)
-Data-only `soccer.sqlite`, migration 0034, `/api/soccer/*`, soccer screens. See HANDOFF.md and docs/SMOKE_TEST.md.
+## S0 — Fixtures and results (corrected after the 2026-11-07 audit; acceptance pending review of the corrections)
+Data-only `soccer.sqlite` (migrations 0034, 0035), `/api/soccer/*`, soccer screens, dev launcher/publisher support. The
+audit found that ESPN's FULL_TIME label hid extra time and that replay, tie facts and team changes needed stricter rules;
+the corrections (extra-time classification, per-retrieval replay identity for soccer and NBA/NHL/NFL, tie-fact
+availability, team-change revisions, rejection log, fetch-only republication) are recorded in HANDOFF.md and
+docs/SMOKE_TEST.md. Data is updated only by manual `app.cli soccer ingest`; no recurring job. Soccer data now comes from
+ESPN, which S1 found not clearly permitted for this use: it stays a development fixture until the user decides.
 
 ## S1 — Source assessment (read-only; no ingestion into stores)
 Find and assess sources for historical results, match statistics and odds. For each, record **actual** findings only:
 competitions and seasons covered (counted, not quoted from a web page), fields (90-minute score, extra time, shoot-out,
 kickoff time, team ids/names), cost and licence/terms, rate limits, and timestamp semantics (when a row became available;
 for odds: opening, a pre-kickoff snapshot with a time, or closing; whether quote times are published).
-Candidates to check (none verified yet): ESPN day scoreboards backwards in time (depth of history; 90-minute scores
-absent after extra time), football-data.co.uk season files (domestic results and 1X2 odds snapshots; UEFA competitions
+Candidates checked: ESPN scoreboards backwards in time (the pre-S1 hypothesis "90-minute scores absent after extra time"
+was disproved: derivable once extra time is detected), football-data.co.uk season files (domestic results and 1X2 odds snapshots; UEFA competitions
 likely missing), openfootball / other open results datasets, open event-data releases, and any odds source. Keyed or paid
 sources are assessed from public documentation only and proposed with costs; none is used without a go.
 Output: a coverage table per competition-season and source, team-identity mapping difficulty, gaps, and a recommendation.
 Acceptance: every coverage number reproducible from a cached probe response; nothing claimed from documentation alone is
 reported as verified.
 
+### S1 result (2026-11-07; report rewritten after the audit): docs/evidence/soccer-s1-sources-2026-11-07/REPORT.md
+Rule: every source must be **free** (no paid plans/trials/purchases) **and clearly permitted** for this use; free API keys
+only after the user agrees to create the account; odds optional; no manual-download workarounds. Findings: among the sources
+checked, only openfootball (CC0, licence read in all 7 repos) is both free and clearly licensed. Season files exist for EPL
+(1992-93+), Bundesliga (2010-11+), La Liga (2012-13+), Serie A (2013-14+), Ligue 1 (2014-15+), UCL main stage 2011-12..2025-26
+and UEL 2020-21..2024-25 only; match contents were counted only for EPL 2022-23..2024-25, UCL and UEL. 90-minute/HT scores and
+incomplete "a.e.t."/pens notes; no statistics, no odds. EPL 2023-24 matches ESPN 380/380. Wikipedia goal minutes agree with
+the ESPN-derived 90-minute score on the 8 sampled ESPN-labelled AET/PEN matches (the 2 FULL_TIME-labelled extra-time matches
+were not compared). ESPN, football-data.co.uk, FBref, Transfermarkt, OddsPortal and StatsBomb carry explicit restrictions
+(quoted in the report). No free, permitted historical odds were verified among the 11 sources checked; Betfair and
+API-Football are unassessed. Compliance: the S1 probes made 9 football-data.co.uk requests (robots.txt, then 8 pages despite its disallow; the recheck
+re-read robots.txt once, 10 in total; the source is excluded),
+and 5 Wikimedia API calls lacked the required descriptive User-Agent.
+**S2 proposal (not started):** results-only cache from openfootball for the supported competition-seasons; 90-minute
+grading after extra time only with independent second-source agreement; UEL limited to 5 seasons (or left out); statistics
+and odds labelled unavailable. **For the user (account decisions only):** a free football-data.org account (current UCL + 5
+leagues, not UEL; conditions: one application per key (2.3), credentials not in open-source repositories (6.1),
+attribution (7.1), no referencing of the data on one's own site or service after cancellation (9.1)); optionally a free The Odds
+API account (forward-only odds); Wikipedia as a validation source (descriptive User-Agent required); UEL scope. The existing
+ESPN collection (soccer S0, NBA/NFL) is flagged against the "clearly permitted" criterion; no schedule was changed.
+
 ## S2 — Historical download and cache
 Download the chosen sources through the raw cache (exact bytes, source, request key, retrieval time, content hash,
 importer version) with idempotent import and replay, as in S0. Requirements:
 - Database uniqueness per source event; repeated ingestion and replay tests; result corrections appended, never overwritten.
-- An explicit, versioned team-identity map between sources (ESPN id ↔ other names/ids), with an unmatched-teams report;
-  no fuzzy matching applied silently.
+- An explicit, versioned team-identity map (openfootball names ↔ the store's team ids; the anchor is chosen once the user
+  decides on ESPN), with an unmatched-teams report; no fuzzy matching applied silently.
+- How a match ended is detected from period/clock/event minutes or the source's explicit a.e.t./pens notes plus an
+  independent check, never from a single status label (S1: ESPN is wrong both ways).
 - Historical result availability is an assumption (kickoff + fixed delay), labelled as such, like the NBA/NHL/NFL stores.
 - Odds kept with bookmaker, market, label (opening / snapshot / closing) and quote time when published. A closing price
   is a benchmark only, never a model input for a forecast made before it existed.

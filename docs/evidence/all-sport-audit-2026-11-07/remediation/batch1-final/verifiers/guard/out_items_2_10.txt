@@ -1,0 +1,122 @@
+app imported from: /Users/andry/Desktop/nba-predictor-batch1/backend/app/__init__.py
+--- 2a store-file-symlink
+rc: 1
+stdout: {"status": "refused", "reason": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_2_10/c_2a/nhl.sqlite is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+  protected job_runs before/after: 0 0 | side files in protected: []
+--- 2b data-dir-symlink
+rc: 1
+stdout: {"status": "refused", "reason": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_2_10/c_2b is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+  protected job_runs before/after: 0 0 | side files in protected: []
+--- 2c raw-dir-symlink
+rc: 1
+stdout: {"status": "refused", "reason": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_2_10/c_2c/raw is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+  protected job_runs before/after: 0 0 | side files in protected: []
+--- 2d lock-symlink
+rc: 1
+stdout: {"status": "refused", "reason": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_2_10/c_2d/.nhl-jobs.lock is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+  protected job_runs before/after: 0 0 | side files in protected: []
+--- 2d2 dangling-lock-symlink(would-create-lock-in-protected)
+rc: 1
+stdout: {"status": "refused", "reason": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_2_10/c_2d2/.nhl-jobs.lock is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+  protected job_runs before/after: 0 0 | side files in protected: []
+--- 2e relative-path-with-..
+rc: 1
+stdout: {"status": "refused", "reason": "../../../../../private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_2_10/fakerepo/data is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+  protected job_runs before/after: 0 0 | side files in protected: []
+--- 2e2 dotdot-in-absolute
+rc: 1
+stdout: {"status": "refused", "reason": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_2_10/fakerepo/data/../data is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+  protected job_runs before/after: 0 0 | side files in protected: []
+--- 2f trailing-slash
+rc: 1
+stdout: {"status": "refused", "reason": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_2_10/fakerepo/data is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+  protected job_runs before/after: 0 0 | side files in protected: []
+--- 2f2 double-slash
+rc: 1
+stdout: {"status": "refused", "reason": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_2_10/fakerepo/data is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+  protected job_runs before/after: 0 0 | side files in protected: []
+--- 2g case-variant
+rc: 1
+stdout: {"status": "refused", "reason": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_2_10/FAKEREPO/DATA is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+  protected job_runs before/after: 0 0 | side files in protected: []
+--- 2g2 firmlink-alias
+rc: 1
+stdout: {"status": "refused", "reason": "/System/Volumes/Data/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_2_10/fakerepo/data is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+  protected job_runs before/after: 0 0 | side files in protected: []
+--- 2h empty-NBA_DATA_DIR-cwd-protected
+rc: 1
+stdout: {"status": "refused", "reason": ". is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+  protected job_runs before/after: 0 0 | side files in protected: []
+--- 2h2 empty-NBA_DATA_DIR-cwd-checkout-root
+rc: 1
+stdout: {"status": "refused", "reason": "nhl.sqlite is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+  protected job_runs before/after: 0 0 | side files in protected: []
+  created at checkout root: ['.git', 'data']
+--- 2i tilde-path
+rc: 1
+stdout: {"status": "refused", "reason": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_2_10/fakerepo/data is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+  protected job_runs before/after: 0 0 | side files in protected: []
+--- 2j parent-symlinked
+rc: 1
+stdout: {"status": "refused", "reason": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_2_10/c_2j/data is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+  protected job_runs before/after: 0 0 | side files in protected: []
+--- 10a hard-linked-store
+rc: 1
+stdout: {"status": "refused", "reason": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_2_10/c_10a/nhl.sqlite has 2 hard links (it may be a live store under another name) and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+  protected job_runs before/after: 0 0 | side files in protected: []
+--- 10b hard-linked-store-migrate
+rc: 1
+stdout: {"status": "refused", "reason": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_2_10/c_10b/nhl.sqlite has 3 hard links (it may be a live store under another name) and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+  protected job_runs before/after: 0 0 | side files in protected: []
+--- 10b' migrate on hard-linked store
+rc: 1
+stdout: {"status": "refused", "reason": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_2_10/c_10b/nhl.sqlite has 3 hard links (it may be a live store under another name) and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+--- 10c cp-al-style-copy
+rc: 1
+stdout: {"status": "refused", "reason": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_2_10/c_10c/nhl.sqlite has 4 hard links (it may be a live store under another name) and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["NBA_RELEASE_GUARD is not 1 (not the release environment)"]}
+tree unchanged: True
+  protected job_runs before/after: 0 0 | side files in protected: []
+--- 10d hard-linked-lock(copy store regular)
+rc: 0
+stdout: {"status": "REACHED_RUN"}
+tree unchanged: True
+  protected job_runs before/after: 0 0 | side files in protected: []
+--- 10e hard-linked-raw-file
+rc: 0
+stdout: {"status": "REACHED_RUN"}
+tree unchanged: True
+  protected job_runs before/after: 0 0 | side files in protected: []
+--- 10f plain-copy(should-pass)
+rc: 0
+stdout: {"status": "REACHED_RUN"}
+tree unchanged: True
+  protected job_runs before/after: 0 0 | side files in protected: []
+--- 10g sqlite-backup-copy(should-pass)
+rc: 0
+stdout: {"status": "REACHED_RUN"}
+tree unchanged: True
+  protected job_runs before/after: 0 0 | side files in protected: []
+--- 10h apfs-clone-cp-c(should-pass)
+rc: 0
+stdout: {"status": "REACHED_RUN"}
+tree unchanged: True
+  protected job_runs before/after: 0 0 | side files in protected: []
+final protected listing: ['nhl.sqlite', 'raw'] schema: 35 shipped: 35

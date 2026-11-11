@@ -1,0 +1,724 @@
+diff --git a/backend/app/rundown_odds.py b/backend/app/rundown_odds.py
+new file mode 100644
+index 0000000..cec361c
+--- /dev/null
++++ b/backend/app/rundown_odds.py
+@@ -0,0 +1,260 @@
++"""Prices of the same pick at three sportsbooks (TheRundown), stored on disk and compared with the app's own quote.
++
++Only fetch() uses the network. Reading never fetches, never changes a forecast, the app's stored quote, a ledger or
++Telegram. The newest whole response for a sport and day replaces older ones (a price a book withdrew never comes back).
++A price is only compared when the game, the side, the full-game period and the exact line all match the forecast.
++Prices are facts as of the time shown; they are not predictions and not a value claim.
++"""
++import argparse
++import fcntl
++import json
++import math
++import os
++import stat
++import time
++import urllib.request
++from datetime import datetime, timedelta, timezone
++from pathlib import Path
++from uuid import uuid4
++
++from . import config
++
++BASE = 'https://therundown.io/api/v2'
++SPORT_IDS = {'nba': 4, 'nhl': 6, 'nfl': 2}
++BOOKS = {'19': 'DraftKings', '22': 'BetMGM', '23': 'FanDuel'}
++MARKETS = {1: 'winner', 2: 'spread', 3: 'total'}
++ALIASES = {'NYK': 'NY', 'GSW': 'GS', 'SAS': 'SA', 'NOP': 'NO', 'WAS': 'WSH', 'PHO': 'PHX',
++           'TBL': 'TB', 'NJD': 'NJ', 'SJS': 'SJ', 'LAK': 'LA', 'MON': 'MTL', 'CLB': 'CBJ', 'NAS': 'NSH',
++           'KCC': 'KC', 'GBP': 'GB', 'NEP': 'NE', 'NOS': 'NO', 'SFO': 'SF', 'TBB': 'TB', 'LVR': 'LV',
++           'JAC': 'JAX', 'VEG': 'VGK'}
++MAX_AGE = timedelta(hours=3)
++DAY_REQUESTS, LOW_QUOTA = 40, 1000   # six requests a run (three sports, today and tomorrow), six scheduled runs a day
++
++
++def stamp(now):
++    return now.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
++
++
++def moment(value):
++    d = datetime.fromisoformat(value.replace('Z', '+00:00'))
++    if d.tzinfo is None:
++        raise ValueError('Timezone required')
++    return d.astimezone(timezone.utc)
++
++
++def canon(sport, value):
++    value = str(value).upper()
++    if sport == 'nba' and value == 'UTA':
++        return 'UTAH'
++    if sport == 'nhl' and value in ('UTAH_NHL', 'UTAH'):
++        return 'UTA'
++    return ALIASES.get(value, value)
++
++
++def decimal(price):
++    if isinstance(price, bool) or not isinstance(price, (float, int)) or not math.isfinite(price) or abs(price) < 100:
++        return None
++    return 1 + price / 100 if price > 0 else 1 + 100 / -price
++
++
++def read_cache(now, directory=None):
++    """The newest whole response per sport and day, if it is at most MAX_AGE old. Older responses are never merged in."""
++    directory = Path(directory or config.data_dir() / 'odds-books')
++    latest, errors = {}, []
++    for path in sorted(directory.glob('*.json')):
++        try:
++            d = json.loads(path.read_text())
++            at = moment(d['_fetched_at'])
++            sport, day = d['_sport'], d['_date']
++            if sport not in SPORT_IDS or not isinstance(d['events'], list) or at > now:
++                raise ValueError('Invalid response metadata')
++            if (sport, day) not in latest or at >= latest[sport, day][0]:
++                latest[sport, day] = (at, d)
++        except (ValueError, KeyError, OSError, TypeError):
++            errors.append(path.name)
++    return {'responses': [d for at, d in latest.values() if now - at <= MAX_AGE],
++            'stale_responses': sum(now - at > MAX_AGE for at, d in latest.values()), 'invalid_files': errors}
++
++
++def _side(pick):
++    record = pick.get('percentage_history') or {}
++    return record.get('side') if isinstance(record, dict) else getattr(record, 'side', None)
++
++
++def comparison(sport, pick, cache, now):
++    """{'status', 'checked_at', 'prices': {book: American price on the forecast's exact line}, 'best': {book, price},
++    'other_lines': [{book, line, price}]}. 'prices' is empty unless status is 'available'."""
++    q = pick.get('quote_check') or {}
++    out = {'status': 'unavailable', 'source': 'TheRundown', 'checked_at': None, 'prices': {}, 'best': None, 'other_lines': []}
++    if sport not in SPORT_IDS or pick.get('market') not in MARKETS.values() or q.get('line_source') == 'model':
++        return dict(out, status='unsupported_market')
++    if q.get('line_moved'):
++        return dict(out, status='forecast_line_changed')
++    side = _side(pick)
++    if side not in ('a', 'b') or ' @ ' not in str(pick.get('matchup')):
++        return dict(out, status='identity_unavailable')
++    expected = q.get('line_at_forecast')
++    if pick['market'] != 'winner' and expected is None:
++        return dict(out, status='no_forecast_line')
++    away, home = [canon(sport, x.strip()) for x in pick['matchup'].split(' @ ')]
++    matches = []
++    for response in cache['responses']:
++        if response['_sport'] != sport:
++            continue
++        for event in response['events']:
++            try:
++                h = [t for t in event['teams'] if t.get('is_home')]
++                a = [t for t in event['teams'] if t.get('is_away')]
++                start = moment(event['event_date'])
++                if (len(h) != 1 or len(a) != 1 or canon(sport, h[0]['abbreviation']) != home
++                        or canon(sport, a[0]['abbreviation']) != away
++                        or abs((start - moment(pick['tipoff'])).total_seconds()) > 300 or start <= now):
++                    continue
++                if (event.get('score') or {}).get('event_status') not in (None, 'STATUS_SCHEDULED'):
++                    continue
++                matches.append((response, event, h[0]['team_id'], a[0]['team_id']))
++            except (KeyError, TypeError, ValueError, AttributeError):
++                continue
++    if len({m[1].get('event_id') for m in matches}) != 1:
++        return dict(out, status='ambiguous_event' if matches else 'no_current_event')
++    response, event, home_id, away_id = max(matches, key=lambda m: m[0]['_fetched_at'])
++    fetched = moment(response['_fetched_at'])
++    out['checked_at'] = response['_fetched_at']
++    exact, other = {}, []
++    for market in event.get('markets') or []:
++        try:
++            if MARKETS.get(market.get('market_id')) != pick['market'] or market.get('period_id') != 0:
++                continue
++            for participant in market.get('participants') or []:
++                name = str(participant.get('name') or '').lower()
++                actual = ({'over': 'a', 'under': 'b'}.get(name) if pick['market'] == 'total' else
++                          'a' if participant.get('id') == home_id else 'b' if participant.get('id') == away_id else None)
++                if actual != side:
++                    continue
++                for line in participant.get('lines') or []:
++                    if pick['market'] == 'winner':
++                        value, same = None, True
++                    else:
++                        value = float(line['value'])
++                        if not math.isfinite(value):
++                            continue
++                        if pick['market'] == 'spread' and side == 'b':
++                            value = -value   # the app's spread line is always the HOME handicap
++                        same = abs(value - expected) < 1e-9
++                    for book, price in (line.get('prices') or {}).items():
++                        if (book not in BOOKS or not isinstance(price, dict) or price.get('is_main_line') is not True
++                                or price.get('closed_at') or decimal(price.get('price')) is None):
++                            continue
++                        updated = price.get('updated_at')
++                        if updated and moment(updated) > fetched:
++                            continue
++                        if same:
++                            exact.setdefault(BOOKS[book], []).append(int(price['price']))
++                        else:
++                            other.append(dict(book=BOOKS[book], line=value, price=int(price['price'])))
++        except (KeyError, TypeError, ValueError, AttributeError):
++            continue
++    # Two different prices from one book for the same side and line are ambiguous: that book is left out.
++    out['prices'] = {book: found[0] for book, found in sorted(exact.items()) if len(set(found)) == 1}
++    out['other_lines'] = sorted(other, key=lambda o: (o['book'], o['line']))
++    if out['prices']:
++        book = max(out['prices'], key=lambda b: decimal(out['prices'][b]))
++        out['best'] = dict(book=book, price=out['prices'][book])
++    out['status'] = 'available' if out['prices'] else 'no_exact_line'
++    return out
++
++
++def attach(sport, pick, cache, now):
++    """pick['book_comparison']; the app's own stored quote (pick['quote_check']) is never changed. Never raises."""
++    try:
++        pick['book_comparison'] = comparison(sport, pick, cache, now)
++    except Exception as exc:
++        pick['book_comparison'] = {'status': 'error', 'error': type(exc).__name__, 'prices': {}, 'best': None, 'other_lines': []}
++
++
++def credentials():
++    key = os.environ.get('THERUNDOWN_API_KEY')
++    if key:
++        return key
++    path = Path(os.environ.get('NBA_ODDS_CREDENTIALS', config.data_dir().parent / '.env.odds'))
++    if path.is_symlink() or not path.is_file() or stat.S_IMODE(path.stat().st_mode) & 0o077:
++        raise ValueError('Odds credentials require a private regular file (chmod 600 .env.odds)')
++    for line in path.read_text().splitlines():
++        if line.startswith('THERUNDOWN_API_KEY='):
++            key = line.split('=', 1)[1].strip()
++            if key:
++                return key
++    raise ValueError('Odds API key unavailable')
++
++
++def fetch(now=None, *, opener=urllib.request.urlopen, pause=time.sleep):
++    """Today and tomorrow for three sports: six requests a run and at most DAY_REQUESTS a UTC day, one a second,
++    no retries. Stops when the provider reports a low remaining allowance; the request caps hold when it reports none. Nothing printed or stored contains the
++    key, a URL or an error message. Every response is saved whole, once, and never overwritten."""
++    clock = (lambda: now) if now else (lambda: datetime.now(timezone.utc))
++    started = clock()
++    directory = config.data_dir() / 'odds-books'
++    directory.mkdir(parents=True, exist_ok=True)
++    key = credentials()
++    with (directory / '.fetch.lock').open('a') as lock:
++        try:
++            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
++        except OSError:
++            return {'status': 'already_running', 'results': []}
++        usage = directory / 'requests.jsonl'
++        today = started.date().isoformat()
++        count = sum(json.loads(x)['day'] == today for x in usage.read_text().splitlines() if x.strip()) if usage.exists() else 0
++        results = []
++        for sport, sid in SPORT_IDS.items():
++            for offset in range(2):
++                if count >= DAY_REQUESTS:
++                    return {'status': 'request_cap', 'requests_today': count, 'results': results}
++                day = (started + timedelta(days=offset)).date().isoformat()
++                with usage.open('a') as f:
++                    f.write(json.dumps({'day': today, 'at': stamp(clock()), 'sport': sport, 'date': day}) + '\n')
++                count += 1
++                url = f'{BASE}/sports/{sid}/events/{day}?market_ids=1,2,3&affiliate_ids=19,22,23&main_line=true&hide_closed=true'
++                request = urllib.request.Request(url, headers={'X-TheRundown-Key': key, 'User-Agent': 'Courtside-odds'})
++                try:
++                    with opener(request, timeout=30) as response:
++                        data = json.loads(response.read())
++                        headers = {k: v for k, v in dict(response.headers).items() if k.lower().startswith('x-data')}
++                    if not isinstance(data, dict) or not isinstance(data.get('events'), list):
++                        raise ValueError('Response schema')
++                    retrieved = clock()
++                    data.update(_fetched_at=stamp(retrieved), _sport=sport, _date=day, _quota=headers)
++                    dest = directory / f'{retrieved:%Y%m%dT%H%M%SZ}-{sport}-{day}-{uuid4().hex}.json'
++                    tmp = dest.with_suffix('.tmp')   # a reader never sees half a file
++                    tmp.write_text(json.dumps(data))
++                    tmp.rename(dest)
++                    results.append({'sport': sport, 'date': day, 'events': len(data['events']), 'quota': headers})
++                    remaining = next((v for k, v in headers.items() if k.lower() == 'x-datapoints-remaining'), None)
++                    if remaining is not None and int(remaining) < LOW_QUOTA:
++                        return {'status': 'quota_low', 'results': results}
++                except Exception as exc:
++                    return {'status': 'failed', 'error': type(exc).__name__, 'results': results}
++                pause(1.1)
++        return {'status': 'ok', 'results': results}
++
++
++def main():
++    parser = argparse.ArgumentParser()
++    parser.add_argument('command', choices=['fetch', 'status'])
++    args = parser.parse_args()
++    if args.command == 'fetch':
++        from . import release
++        if config.protected_data_dir(config.data_dir()):
++            # Only JSON files are written, no store: the checkout checks apply, the store-schema check does not.
++            if not release.enabled() or release._checkout(release.code_root().resolve())[1]:
++                raise SystemExit('release guard: price collection requires the clean release checkout')
++        result = fetch()
++        print(json.dumps(result))
++        raise SystemExit(0 if result['status'] == 'ok' else 1)
++    cache = read_cache(datetime.now(timezone.utc))
++    print(json.dumps({'fresh_responses': len(cache['responses']), 'stale_responses': cache['stale_responses'],
++                      'invalid_files': cache['invalid_files'],
++                      'events': {f"{d['_sport']} {d['_date']}": len(d['events']) for d in cache['responses']}}))
++
++
++if __name__ == '__main__':
++    main()
+diff --git a/backend/app/telegram_card.py b/backend/app/telegram_card.py
+index df97d1b..95f5f5f 100644
+--- a/backend/app/telegram_card.py
++++ b/backend/app/telegram_card.py
+@@ -243,6 +243,7 @@ def render_ticket_card(day, tickets, *, preview=False, number_from=1, total=None
+     canvas = Image.new('RGB', (1080, 6000), _mix(accent, PAPER, .96))
+     draw = ImageDraw.Draw(canvas)
+     y = 48
++    priced = False
+ 
+     def line(text, *, size=29, bold=False, color=INK, x=72, width=936):
+         nonlocal y
+@@ -297,6 +298,9 @@ def render_ticket_card(day, tickets, *, preview=False, number_from=1, total=None
+                 line(leg['result'],size=27,color='#11664D',x=240,width=760)
+             else:
+                 line(f"Model probability {leg['probability']:.1%}",size=27,color=MUTED,x=240,width=760)
++                books = (leg.get('book_comparison') or {}).get('prices') or {}
++                if books:   # the same pick on the same line at each sportsbook
++                    line(' · '.join(f"{book} {price:+d}" for book, price in sorted(books.items())),size=23,color=MUTED,x=240,width=760)
+             y += 18
+             draw.line((72,y,1008,y),fill=_mix(accent,PAPER,.65),width=2)
+             y += 24
+@@ -306,6 +310,15 @@ def render_ticket_card(day, tickets, *, preview=False, number_from=1, total=None
+         line(f"{'Pregame model estimate' if preview else 'Model estimate'} / {probability:.1%}",size=30,bold=True,color=primary)
+         if preview:
+             line(ticket['result'],size=34,bold=True,color='#11664D')
++        else:
++            from .tickets import best_book_line, ticket_assessment
++            try:
++                best = best_book_line(ticket.get('assessment') or ticket_assessment(ticket['legs']))
++            except Exception:
++                best = None
++            if best:
++                line(best,size=30,bold=True,color=primary)
++                priced = True
+         y += 36
+     if extra > 0:
+         line(f"+{extra} more option{'s' if extra > 1 else ''} in the message above.",size=27,bold=True,color=primary)
+@@ -314,7 +327,8 @@ def render_ticket_card(day, tickets, *, preview=False, number_from=1, total=None
+     line('App forecasts + AI selection. Distinct games within each ticket.',size=24,color=MUTED)
+     if shared:
+         line('Shared core picks: one loss can affect multiple tickets.',size=24,color=MUTED)
+-    line('Joint estimates assume independence. Sportsbook prices unverified.',size=24,color=MUTED)
++    line('Joint estimates assume independence. ' + ('Sportsbook prices are stored quotes: confirm before betting.' if priced
++                                                   else 'Sportsbook prices unverified.'),size=24,color=MUTED)
+     y += 35
+     if y > 6000:
+         raise ValueError('Ticket card exceeds layout bounds.')
+diff --git a/backend/app/tickets.py b/backend/app/tickets.py
+index 1fee649..ff6da12 100644
+--- a/backend/app/tickets.py
++++ b/backend/app/tickets.py
+@@ -40,6 +40,13 @@ def snapshot():
+     day = now.astimezone(TORONTO).date()
+     result = dict(as_of=stamp, date=str(day), skill_sha256=sha(SKILL.read_bytes()),
+                   helper_sha256=sha(Path(__file__).read_bytes()), sports={})
++    try:   # stored prices of the same picks at three sportsbooks; a problem here never hides a forecast
++        from app import rundown_odds
++        books = rundown_odds.read_cache(now)
++    except Exception as exc:
++        rundown_odds, books = None, {'error': type(exc).__name__}
++    result['book_prices'] = ({'fresh_responses': len(books['responses']), 'stale_responses': books['stale_responses'],
++                              'invalid_files': len(books['invalid_files'])} if 'responses' in books else books)
+     for sport in ('nba', 'nhl', 'nfl'):
+         try:
+             if sport == 'nfl' and not activation():
+@@ -62,6 +69,8 @@ def snapshot():
+                         pick['quote_check'] = quote_check(conn, pick, stamp)
+                     except Exception as exc:   # a quote lookup problem is reported on the pick, never hides the forecast
+                         pick['quote_check'] = {'error': type(exc).__name__}
++                    if 'responses' in books:
++                        rundown_odds.attach(sport, pick, books, now)
+                 attach_assessments(sport, report['picks'])
+                 due = conn.execute("SELECT game_id FROM games WHERE status='scheduled' AND season_type IN ('regular','play_in','postseason') AND tipoff_at>? AND tipoff_at<=?",
+                                    (stamp, (now+timedelta(minutes=110)).strftime('%Y-%m-%dT%H:%M:%SZ'))).fetchall()
+@@ -206,7 +215,9 @@ def leg_assessment(sport, pick):
+     """What the reviewer weighs together for one market, side by side; facts only, no verdict and no threshold:
+     the app probability and recommendation, the exact stored price and its break-even probability, the record of similar
+     past picks with its 95% interval (the app's own Wilson interval, threshold_overview.wilson) and the evidence quality
+-    the app states. A negative model_gap is a warning that the price asks for more than the app estimates, not proof of a
++    the app states. book_prices are the same pick on the same line at other sportsbooks (rundown_odds), best_book the one
++    paying most and best_book_gap the model_gap at that price; the app's own stored quote stays the basis of `price`.
++    A negative model_gap is a warning that the price asks for more than the app estimates, not proof of a
+     loss; a positive one is not a value claim (the estimate may be wrong; a past group does not fix today's probability)."""
+     from app import markets, threshold_overview
+     quote = pick.get('quote_check') or {}
+@@ -214,6 +225,9 @@ def leg_assessment(sport, pick):
+     history = pick.get('percentage_history') or {}
+     decimal = decimal_odds(quote.get('price_now'))
+     break_even = None if decimal is None else 1 / decimal
++    books = pick.get('book_comparison') or {}
++    book_prices = {b: p for b, p in (books.get('prices') or {}).items() if decimal_odds(p)}
++    best_book = max(book_prices, key=lambda b: decimal_odds(book_prices[b]), default=None)
+     record = None
+     if evidence.get('settled'):
+         n = evidence['settled']
+@@ -225,6 +239,9 @@ def leg_assessment(sport, pick):
+                 [record['interval'][0] - break_even, record['interval'][1] - break_even],
+                 exact=f"{_field(history, 'wins', 0) or 0}-{_field(history, 'losses', 0) or 0} ({_field(history, 'settled', 0) or 0} settled)",
+                 exact_rank=(f"{_field(history, 'rank')} of {_field(history, 'ranked')}" if _field(history, 'rank') else None),
++                book_prices=book_prices, best_book=best_book, best_book_price=book_prices.get(best_book),
++                best_book_gap=None if best_book is None else pick['probability'] - 1 / decimal_odds(book_prices[best_book]),
++                book_prices_checked_at=books.get('checked_at') if book_prices else None,
+                 app_rank=pick.get('game_rank'), skill_proven=pick.get('skill_proven'),
+                 line_source=quote.get('line_source') or _field(history, 'line_source'), app_note=markets.LIMITATIONS.get((sport, pick['market'])))
+ 
+@@ -242,12 +259,18 @@ def ticket_assessment(legs):
+     """The whole ticket: payout at the stored prices (decimal prices multiplied, as a parlay pays for distinct games), its
+     break-even probability and the model estimate (independence assumption), plus each leg's own record of similar picks.
+     No ticket-level range is computed from those records (review, Nov 8): multiplying historical intervals does not give
+-    today's ticket a win-probability interval. Lists legs priced above the model, unpriced legs and legs without a record."""
++    today's ticket a win-probability interval. book_payouts is what the whole ticket pays at each sportsbook that prices
++    every leg on the same line (stored prices), best_book the one paying most. Lists legs priced above the model, unpriced legs and legs without a record."""
+     rows = [(f"{leg['sport'].upper()} {leg['pick_label']}", leg.get('assessment') or leg_assessment(leg['sport'], leg)) for leg in legs]
+     payout = math.prod(a['decimal'] for _, a in rows) if all(a['decimal'] for _, a in rows) else None
+     estimate = math.prod(a['probability'] for _, a in rows)
+     break_even = None if payout is None else 1 / payout
++    # A parlay is placed at ONE sportsbook: a book counts only when it prices every leg on the forecast's exact line.
++    shared = set.intersection(*(set(a.get('book_prices') or {}) for _, a in rows)) if rows else set()
++    book_payouts = {b: math.prod(decimal_odds(a['book_prices'][b]) for _, a in rows) for b in sorted(shared)}
++    best_book = max(book_payouts, key=book_payouts.get, default=None)
+     return dict(legs=len(rows), payout=payout, break_even=break_even, model_estimate=estimate,
++                book_payouts=book_payouts, best_book=best_book,
+                 model_minus_break_even=None if payout is None else estimate - break_even,
+                 leg_records=[dict(label=label, record=a['record']) for label, a in rows],
+                 priced_above_model=[label for label, a in rows if a['model_gap'] is not None and a['model_gap'] < 0],
+@@ -1044,6 +1067,12 @@ def ticket_pages(tickets):
+     return pages
+ 
+ 
++def best_book_line(assessment):
++    """'Pays most at FanDuel: about ×4.72', or None when no sportsbook prices every leg of the ticket."""
++    book = (assessment or {}).get('best_book')
++    return f"Pays most at {book}: about ×{assessment['book_payouts'][book]:.2f}" if book else None
++
++
+ def ticket_captions(result):
+     """One caption per picture: its tickets' legs with the stored price and what each pays at those prices. Telegram
+     captions hold 1,024 characters. A caption that is too long first drops the ticket labels, then the prices; if the legs
+@@ -1053,6 +1082,9 @@ def ticket_captions(result):
+     quoted = [p['quote_check']['retrieved_at'] for t in tickets for p in t['legs'] if (p.get('quote_check') or {}).get('price_now') is not None]
+     footer = 'Each numbered ticket is ONE parlay with all its legs.' + (
+         ' Prices: stored DraftKings quotes, ' + _parse(max(quoted)).astimezone(TORONTO).strftime('%I:%M %p %Z') + '; confirm before betting.' if quoted else '')
++    checked = [p['book_comparison']['checked_at'] for t in tickets for p in t['legs'] if (p.get('book_comparison') or {}).get('prices')]
++    if checked:
++        footer += ' Other sportsbooks: prices stored ' + _parse(min(checked)).astimezone(TORONTO).strftime('%I:%M %p %Z') + '.'
+     out, number = [], 0
+     for index, page in enumerate(pages, 1):
+         first = number + 1
+@@ -1063,10 +1095,12 @@ def ticket_captions(result):
+                 legs = ' + '.join(p['pick_label'] + (f" ({p['quote_check']['price_now']:+d})" if prices and (p.get('quote_check') or {}).get('price_now') is not None else '')
+                                   for p in t['legs'])
+                 try:
+-                    payout = (t.get('assessment') or ticket_assessment(t['legs']))['payout']
++                    a = t.get('assessment') or ticket_assessment(t['legs'])
++                    payout, best = a['payout'], best_book_line(a)
+                 except Exception:
+-                    payout = None
++                    payout, best = None, None
+                 lines.append(f"#{n}" + (f" {t['label']}" if labels else '') + f": {legs}" + (f" — pays about ×{payout:.2f}" if payout else '')
++                             + (f" — {best}" if best and prices and (not payout or a['book_payouts'][a['best_book']] > payout + .005) else '')
+                              + (f" — ${t['stake_usd']:.2f}" if t.get('stake_usd') is not None else ''))
+             return '\n'.join(lines + [footer])
+         caption = next((c for c in (build(True, True), build(False, True), build(False, False)) if len(c) <= 1024), None)
+diff --git a/backend/tests/test_rundown_odds.py b/backend/tests/test_rundown_odds.py
+new file mode 100644
+index 0000000..5d4829b
+--- /dev/null
++++ b/backend/tests/test_rundown_odds.py
+@@ -0,0 +1,224 @@
++"""Prices at three sportsbooks: only the exact pick on the exact line, never a withdrawn or stale price, and the app's
++own stored quote is never replaced."""
++import copy
++import json
++from datetime import datetime, timedelta, timezone
++
++from app import rundown_odds as odds, tickets
++
++NOW = datetime(2026, 11, 11, 0, 10, tzinfo=timezone.utc)
++START = '2026-11-11T01:00:00Z'
++
++
++def response(at=NOW, events=True):
++    event = dict(event_id='rd-game', sport_id=6, event_date=START, score=dict(event_status='STATUS_SCHEDULED'),
++                 teams=[dict(team_id=7, abbreviation='WPG', is_home=True, is_away=False),
++                        dict(team_id=8, abbreviation='NJD', is_away=True, is_home=False)])
++    event['markets'] = [
++        dict(market_id=2, period_id=0, participants=[dict(id=8, name='New Jersey Devils', lines=[
++            dict(value='+1.5', prices={'19': dict(price=-125, is_main_line=True, updated_at='2026-11-11T00:05:00Z'),
++                                       '23': dict(price=-110, is_main_line=True),
++                                       '22': dict(price=155, is_main_line=True, closed_at='2026-11-11T00:01:00Z'),
++                                       '3': dict(price=200, is_main_line=True)}),
++            dict(value='+2.5', prices={'22': dict(price=-300, is_main_line=True)})]),
++            dict(id=7, name='Winnipeg Jets', lines=[dict(value='-1.5', prices={'19': dict(price=105, is_main_line=True)})])]),
++        dict(market_id=2, period_id=1, participants=[dict(id=8, name='x', lines=[
++            dict(value='+1.5', prices={'22': dict(price=900, is_main_line=True)})])]),
++        dict(market_id=1, period_id=0, participants=[
++            dict(id=7, name='Winnipeg Jets', lines=[dict(prices={'19': dict(price=-150, is_main_line=True),
++                                                                 '22': dict(price=-140, is_main_line=True)})]),
++            dict(id=8, name='New Jersey Devils', lines=[dict(prices={'19': dict(price=130, is_main_line=True)})])]),
++        dict(market_id=3, period_id=0, participants=[
++            dict(id=9, name='Over', lines=[dict(value='6.5', prices={'19': dict(price=-105, is_main_line=True)})]),
++            dict(id=10, name='Under', lines=[dict(value='6.5', prices={'19': dict(price=-115, is_main_line=True),
++                                                                         '23': dict(price=-112, is_main_line=True)}),
++                                             dict(value='6', prices={'22': dict(price=100, is_main_line=True)})])])]
++    return dict(_fetched_at=odds.stamp(at), _sport='nhl', _date='2026-11-11', events=[event] if events else [])
++
++
++def pick(market='spread', side='b', line=-1.5, price=-125, label='NJ +1.5', matchup='NJ @ WPG', game='g1'):
++    return dict(sport='nhl', matchup=matchup, market=market, pick_label=label, tipoff=START, game_id=game,
++                probability=.60, percentage_history={'side': side},
++                quote_check=dict(provider='DraftKings', price_now=price, price_at_forecast=price,
++                                 line_at_forecast=line, line_now=line, line_source='bookmaker',
++                                 line_moved=False, retrieved_at=odds.stamp(NOW)))
++
++
++def cache(*responses):
++    return {'responses': list(responses or [response()]), 'stale_responses': 0, 'invalid_files': []}
++
++
++def test_away_spread_exact_line_only_and_stored_quote_untouched():
++    p = pick()
++    before = copy.deepcopy(p['quote_check'])
++    odds.attach('nhl', p, cache(), NOW)
++    c = p['book_comparison']
++    assert c['status'] == 'available' and c['prices'] == {'DraftKings': -125, 'FanDuel': -110}   # closed, other period, unknown book: out
++    assert c['best'] == dict(book='FanDuel', price=-110) and c['checked_at'] == odds.stamp(NOW)
++    assert c['other_lines'] == [dict(book='BetMGM', line=-2.5, price=-300)]
++    assert p['quote_check'] == before
++    a = tickets.leg_assessment('nhl', p)
++    assert a['price'] == -125 and a['best_book'] == 'FanDuel' and a['best_book_price'] == -110
++    assert abs(a['best_book_gap'] - (.60 - 110 / 210)) < 1e-9 and a['model_gap'] < a['best_book_gap']
++
++
++def test_winner_total_and_home_sides():
++    for p, expected in [(pick('winner', 'a', None, -150, 'WPG win'), {'DraftKings': -150, 'BetMGM': -140}),
++                        (pick('winner', 'b', None, 130, 'NJ win'), {'DraftKings': 130}),
++                        (pick('total', 'b', 6.5, -115, 'Under 6.5'), {'DraftKings': -115, 'FanDuel': -112}),
++                        (pick('total', 'a', 6.5, -105, 'Over 6.5'), {'DraftKings': -105}),
++                        (pick('spread', 'a', -1.5, 105, 'WPG -1.5'), {'DraftKings': 105})]:
++        assert odds.comparison('nhl', p, cache(), NOW)['prices'] == expected, p['pick_label']
++    assert odds.comparison('nhl', pick('total', 'b', 5.5, -115), cache(), NOW)['status'] == 'no_exact_line'
++
++
++def test_nothing_compared_when_the_game_line_or_time_does_not_match():
++    p = pick()
++    for attr, value, status in [('line_moved', True, 'forecast_line_changed'), ('line_source', 'model', 'unsupported_market')]:
++        q = copy.deepcopy(p)
++        q['quote_check'][attr] = value
++        odds.attach('nhl', q, cache(), NOW)
++        assert q['book_comparison']['status'] == status and not q['book_comparison']['prices']
++    assert odds.comparison('nhl', pick(matchup='WPG @ NJ'), cache(), NOW)['status'] == 'no_current_event'   # home and away swapped
++    assert odds.comparison('nba', pick(), cache(), NOW)['status'] == 'no_current_event'
++    assert odds.comparison('soccer', pick(), cache(), NOW)['status'] == 'unsupported_market'
++    assert odds.comparison('nhl', dict(pick(), market='team_total_home'), cache(), NOW)['status'] == 'unsupported_market'
++    late = response()
++    late['events'][0]['event_date'] = '2026-11-11T02:00:00Z'
++    assert odds.comparison('nhl', p, cache(late), NOW)['status'] == 'no_current_event'
++    live = response()
++    live['events'][0]['score']['event_status'] = 'STATUS_IN_PROGRESS'
++    assert odds.comparison('nhl', p, cache(live), NOW)['status'] == 'no_current_event'
++    assert odds.comparison('nhl', p, cache(), NOW + timedelta(hours=1))['status'] == 'no_current_event'   # already started
++    twice = response()
++    twice['events'].append(dict(twice['events'][0], event_id='other'))
++    assert odds.comparison('nhl', p, cache(twice), NOW)['status'] == 'ambiguous_event'
++
++
++def test_conflicting_or_later_dated_prices_are_left_out_and_bad_data_never_raises():
++    d = response()
++    lines = d['events'][0]['markets'][0]['participants'][0]['lines']
++    lines.append(dict(value='+1.5', prices={'23': dict(price=-140, is_main_line=True)}))            # FanDuel twice, two prices
++    lines[0]['prices']['19']['updated_at'] = '2026-11-11T00:30:00Z'                                 # dated after the fetch
++    assert odds.comparison('nhl', pick(), cache(d), NOW)['status'] == 'no_exact_line'
++    broken = response()
++    broken['events'][0]['markets'] = [None, dict(market_id=2, period_id=0, participants=[dict(id=8, lines=[dict(value='x', prices=3)])])]
++    p = pick()
++    odds.attach('nhl', p, cache(broken, dict(_sport='nhl', _fetched_at=odds.stamp(NOW), events=[3])), NOW)
++    assert p['book_comparison']['status'] == 'no_exact_line'
++    odds.attach('nhl', p, {}, NOW)
++    assert p['book_comparison']['status'] == 'error' and p['book_comparison']['prices'] == {}
++    assert tickets.leg_assessment('nhl', p)['best_book'] is None
++
++
++def test_newest_response_replaces_older_and_future_or_old_files_are_not_used(tmp_path):
++    for name, data in [('old', response(NOW - timedelta(minutes=10))), ('new', response(events=False)),
++                       ('future', response(NOW + timedelta(minutes=1))), ('junk', 'x')]:
++        (tmp_path / f'{name}.json').write_text(json.dumps(data))
++    c = odds.read_cache(NOW, tmp_path)
++    assert sorted(c['invalid_files']) == ['future.json', 'junk.json'] and len(c['responses']) == 1
++    p = pick()
++    odds.attach('nhl', p, c, NOW)
++    assert p['book_comparison']['status'] == 'no_current_event'
++    later = odds.read_cache(NOW + timedelta(hours=4), tmp_path)
++    assert not later['responses'] and later['stale_responses'] == 1
++    assert odds.read_cache(NOW, tmp_path / 'missing') == {'responses': [], 'stale_responses': 0, 'invalid_files': []}
++
++
++def test_ticket_names_the_one_sportsbook_that_pays_most_for_the_whole_parlay():
++    p = pick()
++    q = pick('winner', 'a', None, -150, 'WPG win', game='g2')
++    for leg in (p, q):
++        odds.attach('nhl', leg, cache(), NOW)
++    a = tickets.ticket_assessment([p, q])
++    assert sorted(a['book_payouts']) == ['DraftKings']        # only DraftKings prices both legs
++    assert abs(a['book_payouts']['DraftKings'] - a['payout']) < 1e-9 and a['best_book'] == 'DraftKings'
++    r = pick('total', 'b', 6.5, -115, 'Under 6.5', game='g3')
++    odds.attach('nhl', r, cache(), NOW)
++    b = tickets.ticket_assessment([p, r])
++    assert b['best_book'] == 'FanDuel' and b['book_payouts']['FanDuel'] > b['payout']
++    assert tickets.best_book_line(b) == f"Pays most at FanDuel: about ×{b['book_payouts']['FanDuel']:.2f}"
++    result = dict(date='2026-11-10', resolved=[dict(label='Example', legs=[p, r], assessment=b)])
++    caption = tickets.ticket_captions(result)[0]
++    assert 'NJ +1.5 (-125)' in caption and 'Pays most at FanDuel' in caption and 'Other sportsbooks: prices stored' in caption
++    none = tickets.ticket_assessment([pick(), pick(game='g4')])
++    assert none['best_book'] is None and none['book_payouts'] == {} and tickets.best_book_line(none) is None
++    plain = tickets.ticket_captions(dict(date='2026-11-10', resolved=[dict(label='Example', legs=[pick(), pick(game='g4')])]))[0]
++    assert 'Pays most' not in plain and 'Other sportsbooks' not in plain
++
++
++def test_ticket_picture_draws_with_and_without_book_prices():
++    from app.telegram_card import render_ticket_card
++    p, r = pick(), pick('total', 'b', 6.5, -115, 'Under 6.5', game='g3')
++    plain = render_ticket_card('2026-11-10', [dict(label='Example', legs=[copy.deepcopy(p), copy.deepcopy(r)])])
++    for leg in (p, r):
++        odds.attach('nhl', leg, cache(), NOW)
++    priced = render_ticket_card('2026-11-10', [dict(label='Example', legs=[p, r])])
++    assert priced[:8] == plain[:8] == b'\x89PNG\r\n\x1a\n' and priced != plain
++
++
++class Response:
++    def __init__(self, headers):
++        self.headers = headers
++    def __enter__(self): return self
++    def __exit__(self, *args): pass
++    def read(self): return b'{"events": []}'
++
++
++def test_fetch_saves_whole_responses_without_the_key_and_respects_caps(tmp_path, monkeypatch):
++    monkeypatch.setenv('NBA_DATA_DIR', str(tmp_path))
++    monkeypatch.setenv('THERUNDOWN_API_KEY', 'test-key-do-not-save')
++    calls = []
++
++    def opener(headers):
++        def run(request, timeout):
++            calls.append(request)
++            return Response(headers)
++        return run
++
++    result = odds.fetch(NOW, opener=opener({}), pause=lambda _: None)      # provider reports no allowance: caps still hold
++    assert result['status'] == 'ok' and len(calls) == 6 and 'hide_closed=true' in calls[0].full_url
++    files = list((tmp_path / 'odds-books').glob('*.json'))
++    assert len(files) == 6 and all('test-key-do-not-save' not in f.read_text() for f in files)
++    assert 'test-key-do-not-save' not in (tmp_path / 'odds-books' / 'requests.jsonl').read_text()
++    assert len(odds.read_cache(NOW)['responses']) == 6
++    low = odds.fetch(NOW, opener=opener({'X-Datapoints-Remaining': '990'}), pause=lambda _: None)
++    assert low['status'] == 'quota_low' and len(calls) == 7
++    for _ in range(4):
++        odds.fetch(NOW, opener=opener({}), pause=lambda _: None)
++    for _ in range(3):
++        odds.fetch(NOW, opener=opener({}), pause=lambda _: None)
++    assert len(calls) == odds.DAY_REQUESTS and odds.fetch(NOW, opener=opener({}), pause=lambda _: None)['status'] == 'request_cap'
++
++    def fail(request, timeout):
++        raise OSError('https://example.invalid/?key=test-key-do-not-save')
++    monkeypatch.setenv('NBA_DATA_DIR', str(tmp_path / 'second'))
++    failed = odds.fetch(NOW, opener=fail, pause=lambda _: None)
++    assert failed == {'status': 'failed', 'error': 'OSError', 'results': []}
++
++
++def test_credentials_file_must_be_private(tmp_path, monkeypatch):
++    import pytest
++    monkeypatch.delenv('THERUNDOWN_API_KEY', raising=False)
++    path = tmp_path / '.env.odds'
++    path.write_text('THERUNDOWN_API_KEY=abc\n')
++    monkeypatch.setenv('NBA_ODDS_CREDENTIALS', str(path))
++    path.chmod(0o644)
++    with pytest.raises(ValueError):
++        odds.credentials()
++    path.chmod(0o600)
++    assert odds.credentials() == 'abc'
++
++
++def test_scheduled_job_runs_the_guarded_release_within_the_daily_request_cap():
++    import plistlib
++    from pathlib import Path
++    from app import release
++    root = Path(__file__).resolve().parents[2]
++    plist = plistlib.loads((root / 'scripts/launchd/com.nba-predictor.rundown-odds.plist').read_bytes())
++    live = '/Users/andry/nba-predictor-delivery'
++    env = plist['EnvironmentVariables']
++    assert env[release.GUARD_ENV] == '1' and env[release.ROOT_ENV] == live and env['NBA_DATA_DIR'].endswith('/data')
++    assert plist['ProgramArguments'] == [f'{live}/backend/.venv/bin/python', '-m', 'app.rundown_odds', 'fetch']
++    assert plist['WorkingDirectory'] == f'{live}/backend' and plist['RunAtLoad'] is False
++    assert len(plist['StartCalendarInterval']) * len(odds.SPORT_IDS) * 2 <= odds.DAY_REQUESTS
+diff --git a/backend/tests/test_tickets.py b/backend/tests/test_tickets.py
+index 3822e9e..dfd4006 100644
+--- a/backend/tests/test_tickets.py
++++ b/backend/tests/test_tickets.py
+@@ -929,7 +929,7 @@ def test_no_ticket_level_historical_range_or_verdict_but_leg_records_stay_visibl
+     legs = [dict(priced(snap, 'nba', 0, -790, .796, 607), sport='nba'), dict(priced(snap, 'nba', 1, -700, .882, 186), sport='nba')]
+     a = t.ticket_assessment([dict(l, assessment=t.leg_assessment('nba', l)) for l in legs])
+     assert set(a) == {'legs', 'payout', 'break_even', 'model_estimate', 'model_minus_break_even', 'leg_records',
+-                      'priced_above_model', 'unpriced', 'no_record'}
++                      'priced_above_model', 'unpriced', 'no_record', 'book_payouts', 'best_book'}
+     assert a['leg_records'] == [dict(label='NBA B1 win', record=t.leg_assessment('nba', legs[0])['record']),
+                                 dict(label='NBA B2 win', record=t.leg_assessment('nba', legs[1])['record'])]
+     text = t.ticket_text('2026-11-08', [dict(ticket_id='T1', label='Pair', legs=legs, assessment=a)])
+diff --git a/scripts/launchd/com.nba-predictor.rundown-odds.plist b/scripts/launchd/com.nba-predictor.rundown-odds.plist
+new file mode 100644
+index 0000000..0e1efe3
+--- /dev/null
++++ b/scripts/launchd/com.nba-predictor.rundown-odds.plist
+@@ -0,0 +1,45 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
++<plist version="1.0">
++<dict>
++	<key>EnvironmentVariables</key>
++	<dict>
++		<key>NBA_DATA_DIR</key>
++		<string>/Users/andry/Desktop/nba-predictor-sprint1/data</string>
++		<key>NBA_RELEASE_GUARD</key>
++		<string>1</string>
++		<key>NBA_RELEASE_ROOT</key>
++		<string>/Users/andry/nba-predictor-delivery</string>
++		<key>PYTHONDONTWRITEBYTECODE</key>
++		<string>1</string>
++	</dict>
++	<key>Label</key>
++	<string>com.nba-predictor.rundown-odds</string>
++	<key>ProcessType</key>
++	<string>Background</string>
++	<key>ProgramArguments</key>
++	<array>
++		<string>/Users/andry/nba-predictor-delivery/backend/.venv/bin/python</string>
++		<string>-m</string>
++		<string>app.rundown_odds</string>
++		<string>fetch</string>
++	</array>
++	<key>RunAtLoad</key>
++	<false/>
++	<key>StandardErrorPath</key>
++	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/rundown-odds.log</string>
++	<key>StandardOutPath</key>
++	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/rundown-odds.log</string>
++	<key>StartCalendarInterval</key>
++	<array>
++		<dict><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
++		<dict><key>Hour</key><integer>16</integer><key>Minute</key><integer>0</integer></dict>
++		<dict><key>Hour</key><integer>18</integer><key>Minute</key><integer>0</integer></dict>
++		<dict><key>Hour</key><integer>19</integer><key>Minute</key><integer>30</integer></dict>
++		<dict><key>Hour</key><integer>21</integer><key>Minute</key><integer>0</integer></dict>
++		<dict><key>Hour</key><integer>22</integer><key>Minute</key><integer>30</integer></dict>
++	</array>
++	<key>WorkingDirectory</key>
++	<string>/Users/andry/nba-predictor-delivery/backend</string>
++</dict>
++</plist>

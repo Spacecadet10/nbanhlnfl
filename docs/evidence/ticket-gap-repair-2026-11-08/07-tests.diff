@@ -1,0 +1,181 @@
+--- backend/tests/test_tickets.py	2026-11-08 16:11:17
++++ /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/43a0d8c8-5d19-4e11-a7c0-2df81439b128/scratchpad/wt/backend/tests/test_tickets.py	2026-11-08 16:34:56
+@@ -384,3 +384,160 @@
+         rows=c.execute('select payload from ticket_batches').fetchall()
+         assert len(rows)==2
+         assert json.loads(rows[-1][0])['resolved'][0]['stake_usd'] is None
++
++
++# --- Card/ticket gap repair (Nov 8): prompt review trigger, explicit outcomes, explicit exclusions ---
++
++def plan_file(plan,path,name='plan.json'):
++    file=path/name;file.write_text(json.dumps(plan));return file
++
++
++def run_cli(monkeypatch,capsys,*args):
++    import sys
++    monkeypatch.setattr(sys,'argv',['tickets',*args])
++    code=t.main();return code,capsys.readouterr().out
++
++
++def test_review_due_when_new_forecasts_span_two_games_and_clears_after_review(setup):
++    plan,snap,sent,path=setup
++    state=t.review_state(snap)
++    assert state['due'] is True and state['reason']=='new_forecasts'
++    assert len(state['unreviewed'])==15 and state['ticketable_games']==15
++    assert t.check(plan)['resolved']==[]          # complete tickets=[] review archived
++    state=t.review_state(snap)
++    assert state['due'] is False and state['reason']=='no_new_forecasts' and state['unreviewed']==[]
++    new=copy.deepcopy(snap['sports']['nba']['report']['picks'][0]);new.update(forecast_id=99,game_id='new-game')
++    snap['sports']['nba']['report']['picks'].append(new)
++    state=t.review_state(snap)
++    assert state['due'] is True and [u['key'] for u in state['unreviewed']]==['nba:99']
++
++
++def test_single_game_or_stale_only_forecasts_do_not_trigger_a_review_but_are_explained(setup):
++    plan,snap,sent,path=setup
++    for sport in ('nhl','nfl'):snap['sports'][sport]['report']['picks']=[]
++    snap['sports']['nba']['report']['picks']=[p for p in snap['sports']['nba']['report']['picks'] if p['game_id']=='g1']
++    state=t.review_state(snap)
++    assert state['due'] is False and state['reason']=='single_game_window' and [u['key'] for u in state['unreviewed']]==['nba:1']
++    snap['sports']['nhl']['report']['picks']=[dict(snap['sports']['nba']['report']['picks'][0],forecast_id=7,game_id='h7')]
++    snap['sports']['nhl']['freshness']['source_state']='stale'
++    state=t.review_state(snap)
++    assert state['due'] is False and state['blocked']['nhl']['issue']=='source_unavailable_or_stale' and state['blocked']['nhl']['forecasts']==1
++
++
++def test_inactive_sport_and_games_started_without_review_are_reported(setup):
++    plan,snap,sent,path=setup
++    snap['sports']['nfl']={'error':'inactive','reason':'definition_mismatch','unserved_forecasts':5,'unserved_games':1}
++    snap['sports']['nhl']['report']['picks'][0].update(status='in_progress',tipoff='2026-11-08T16:50:00Z',generated_at='2026-11-08T15:00:00Z')
++    state=t.review_state(snap)
++    assert state['unavailable']['nfl']['reason']=='definition_mismatch' and state['unavailable']['nfl']['unserved_forecasts']==5
++    assert [m['game_id'] for m in state['missed_before_start'] if m['sport']=='nhl']==['g1']
++
++
++def test_prior_ticket_game_lock_is_visible_before_selection(setup):
++    plan,snap,sent,path=setup;plan['tickets']=[ticket([('nba',1),('nhl',2)])]
++    assert t.send(t.check(plan))=='sent'
++    snap['sports']['nba']['report']['picks'][3]['game_id']='g1'      # newer nba version of a game already used
++    locked={(x['sport'],x['game_id']):x for x in t.review_state(snap)['locked_games']}
++    assert locked[('nba','g1')]['ticket_forecast_id']==1 and locked[('nba','g1')]['blocked_forecasts']==['nba:4']
++
++
++def test_preflight_prints_review_trigger_state(setup,monkeypatch,capsys):
++    plan,snap,sent,path=setup
++    monkeypatch.setattr(t,'settle',lambda **kw:{'errors':[],'tickets':[]})
++    code,out=run_cli(monkeypatch,capsys,'preflight')
++    report=json.loads(out);assert code==0 and report['review']['due'] is True and report['review']['reason']=='new_forecasts'
++
++
++def test_each_review_records_ticket_no_ticket_or_operational_failure(setup,monkeypatch,capsys):
++    plan,snap,sent,path=setup
++    code,out=run_cli(monkeypatch,capsys,'check','--plan',str(plan_file(plan,path)))
++    assert code==0 and 'no_ticket' in out
++    bad=copy.deepcopy(plan);bad['review']['combination_comparison']=''
++    code,out=run_cli(monkeypatch,capsys,'check','--plan',str(plan_file(bad,path,'bad.json')))
++    assert code==1
++    plan['tickets']=[ticket([('nba',1),('nhl',2)])]
++    code,out=run_cli(monkeypatch,capsys,'send','--plan',str(plan_file(plan,path,'send.json')))
++    assert code==0 and json.loads(out)['status']=='sent'
++    monkeypatch.setattr(tg,'controls',lambda *a:False)
++    plan['tickets']=[ticket([('nba',3),('nhl',4)])]
++    code,out=run_cli(monkeypatch,capsys,'send','--plan',str(plan_file(plan,path,'paused.json')))
++    assert code==1
++    with tg.ledger() as c:
++        rows=c.execute('select stage,outcome,detail,payload from ticket_reviews order by review_id').fetchall()
++        assert [(r['stage'],r['outcome']) for r in rows]==[('check','no_ticket'),('check','operational_failure'),
++                                                          ('send','ticket_sent'),('send','paused')]
++        assert 'Compare' in rows[1]['detail'] or 'Compare' in rows[1]['detail'].title()
++        assert json.loads(rows[0]['payload'])['coverage']['required']==15
++        assert json.loads(rows[2]['payload'])['ticket_ids']
++        with pytest.raises(Exception,match='append-only'):c.execute("update ticket_reviews set outcome='no_ticket'")
++        with pytest.raises(Exception,match='append-only'):c.execute('delete from ticket_reviews')
++
++
++def test_status_is_read_only_and_shows_outcomes_and_receipts(setup,monkeypatch,capsys):
++    plan,snap,sent,path=setup;plan['tickets']=[ticket([('nba',1),('nhl',2)])]
++    run_cli(monkeypatch,capsys,'send','--plan',str(plan_file(plan,path)))
++    def no_network(*a,**kw):raise AssertionError('status must not call Telegram')
++    monkeypatch.setattr(tg,'Telegram',no_network)
++    code,out=run_cli(monkeypatch,capsys,'status')
++    report=json.loads(out)
++    assert code==0 and report['outcomes'][-1]['outcome']=='ticket_sent'
++    assert {r['kind'] for r in report['ticket_deliveries']}=={'ticket_text','ticket_image'}
++    assert report['review']['due'] is False and report['review']['reason']=='no_new_forecasts'
++    assert [x['game_id'] for x in report['review']['locked_games']]==['g1','g2']
++
++
++def test_shared_exposure_lists_only_this_batch_with_readable_labels(setup):
++    plan,snap,sent,path=setup
++    plan['tickets']=[ticket([('nba',1),('nhl',2)]),ticket([('nba',1),('nfl',3)])];assert t.send(t.check(plan))=='sent'
++    plan['tickets']=[ticket([('nba',4),('nhl',5)])];assert t.send(t.check(plan))=='sent'
++    assert 'Shared core exposure' not in sent[-2][1]['text'] and 'nba:1' not in sent[-2][1]['text']
++    plan['tickets']=[ticket([('nba',1),('nhl',3)])];assert t.send(t.check(plan))=='sent'
++    text=sent[-2][1]['text'];assert 'B1 win' in text and 'shared across 3 tickets' in text and 'nba:1' not in text
++
++
++def test_ticket_messages_are_labelled_as_combined_parlays_not_game_cards(setup):
++    plan,snap,sent,path=setup;plan['tickets']=[ticket([('nba',1),('nhl',2)])]
++    assert t.send(t.check(plan))=='sent'
++    assert 'COMBINED PARLAY TICKET' in sent[0][1]['text'] and 'not a single-game card' in sent[0][1]['text'].lower()
++    assert 'COMBINED PARLAY TICKET' in sent[1][1]['caption']
++
++
++def test_nfl_inactive_detail_names_cause_and_counts_unserved_forecasts(tmp_path,monkeypatch):
++    import sqlite3
++    from app import nfl_live
++    monkeypatch.setenv('NBA_DATA_DIR',str(tmp_path))
++    c=sqlite3.connect(tmp_path/'nfl.sqlite')
++    c.executescript("""CREATE TABLE game_forecasts(forecast_id INTEGER PRIMARY KEY,game_id,status,tipoff_at,generated_at);
++      INSERT INTO game_forecasts VALUES(1,'n1','forecast','2026-11-08T18:00:00Z','2026-11-08T16:00:00Z');
++      INSERT INTO game_forecasts VALUES(2,'n1','forecast','2026-11-08T18:00:00Z','2026-11-08T16:00:00Z');
++      INSERT INTO game_forecasts VALUES(3,'n2','forecast','2026-11-08T23:00:00Z','2026-11-08T16:00:00Z');""");c.commit();c.close()
++    monkeypatch.setattr(t,'_nfl_store',lambda:sqlite3.connect(f"file:{tmp_path/'nfl.sqlite'}?mode=ro",uri=True))
++    detail=t.nfl_inactive_detail(NOW)
++    assert detail=={'error':'inactive','reason':'missing_activation','unserved_forecasts':2,'unserved_games':1}
++    nfl_live.activation_path().parent.mkdir(parents=True);nfl_live.activation_path().write_text(json.dumps({'definition':'old','activated_at':NOW}))
++    assert t.nfl_inactive_detail(NOW)['reason']=='definition_mismatch'
++
++
++@pytest.mark.parametrize('failure,retrigger',[('refused',True),('retry',True),('uncertain',False),('paused',False)])
++def test_retryable_dispatch_failure_re_triggers_review_but_uncertain_and_paused_do_not(setup,monkeypatch,capsys,failure,retrigger):
++    plan,snap,sent,path=setup;plan['tickets']=[ticket([('nba',1),('nhl',2)])]
++    def dispatch(result):
++        if failure=='refused':raise ValueError('Selected source unavailable or stale')
++        return failure
++    monkeypatch.setattr(t,'send',dispatch)
++    code,out=run_cli(monkeypatch,capsys,'send','--plan',str(plan_file(plan,path)))
++    assert code==1 and list((path/'reports/tickets/reviews').glob('*.json'))   # validation passed and archived
++    state=t.review_state(snap)
++    assert state['due'] is retrigger and state['reason']==('new_forecasts' if retrigger else 'no_new_forecasts')
++
++
++def test_brief_preflight_is_compact_but_keeps_trigger_settlement_and_alerts(setup,monkeypatch,capsys):
++    plan,snap,sent,path=setup
++    snap['alerts']=[dict(sport='nhl',issue='source_unavailable_or_stale')]
++    monkeypatch.setattr(t,'settle',lambda **kw:{'as_of':NOW,'errors':[],'notification_errors':[],
++                                                 'tickets':[dict(ticket_id='T1',grade='win',legs=[{'x':1}]*3,notification='sent')]})
++    code,out=run_cli(monkeypatch,capsys,'preflight','--brief')
++    report=json.loads(out)
++    assert code==0 and 'snapshot' not in report and report['review']['due'] is True
++    assert report['settlement']==[dict(ticket_id='T1',grade='win',notification='sent')]
++    assert report['snapshot_alerts']==snap['alerts'] and len(out)<len(json.dumps(snap))
+--- backend/tests/test_telegram.py	2026-11-03 20:58:37
++++ /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/43a0d8c8-5d19-4e11-a7c0-2df81439b128/scratchpad/wt/backend/tests/test_telegram.py	2026-11-08 16:27:09
+@@ -309,3 +309,15 @@
+     for values in teams.values():
+         for team in values.values():
+             assert all(len(team[k])==7 and int(team[k][1:],16)>=0 for k in ('primary','secondary'))
++
++
++def test_game_card_caption_says_single_game_not_a_parlay_ticket(tmp_path):
++    key, text = tg.message_batches(report(), '123')[0]
++    class PhotoBot:
++        def call(self, method, body, **kwargs):
++            self.caption = body['caption']
++            return {'message_id': 1}
++    bot = PhotoBot()
++    with tg.ledger(tmp_path / 'receipts.sqlite') as conn:
++        assert tg.deliver(bot, conn, '123', key, text, NOW) == 'sent'
++    assert 'GAME CARD' in bot.caption and 'not a parlay ticket' in bot.caption.lower() and 'Recommended pick' in bot.caption

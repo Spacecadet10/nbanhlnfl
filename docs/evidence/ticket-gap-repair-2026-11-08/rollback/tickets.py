@@ -1,0 +1,636 @@
+"""Reviewed ticket delivery through Courtside's existing private sender."""
+import argparse
+import hashlib
+import json
+import math
+from datetime import datetime, timedelta, timezone
+from html import escape
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+SKILL = Path.home() / '.codex/skills/courtside-ticket-review/SKILL.md'
+TORONTO = ZoneInfo('America/Toronto')
+
+
+def sha(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def snapshot():
+    from app import db, freshness
+    from app.providers.real import RealProvider
+    from app.nfl_live import Views, activation
+    now = datetime.now(timezone.utc)
+    stamp = now.strftime('%Y-%m-%dT%H:%M:%SZ')
+    day = now.astimezone(TORONTO).date()
+    result = dict(as_of=stamp, date=str(day), skill_sha256=sha(SKILL.read_bytes()),
+                  helper_sha256=sha(Path(__file__).read_bytes()), sports={})
+    for sport in ('nba', 'nhl', 'nfl'):
+        try:
+            if sport == 'nfl' and not activation():
+                result['sports'][sport] = {'error': 'inactive'}
+                continue
+            conn = db.connect_readonly(sport)
+            try:
+                conn.execute('BEGIN')
+                allowed = (sport, None) if sport == 'nba' else (sport,)
+                if db.store_sport(conn) not in allowed:
+                    raise ValueError('Store identity mismatch')
+                state = freshness.summary(conn, sport, now)
+                provider = Views(conn, stamp) if sport == 'nfl' else RealProvider(conn, stamp)
+                report = provider.ranked_picks(day)
+                if report['mode'] != 'real':
+                    raise ValueError('Real forecasts required')
+                due = conn.execute("SELECT game_id FROM games WHERE status='scheduled' AND season_type IN ('regular','play_in','postseason') AND tipoff_at>? AND tipoff_at<=?",
+                                   (stamp, (now+timedelta(minutes=110)).strftime('%Y-%m-%dT%H:%M:%SZ'))).fetchall()
+                covered = {p['game_id'] for p in report['picks'] if p['grade']=='pending'}
+                result['sports'][sport] = {'freshness': state, 'report': report,
+                    'missing_due_games': [g['game_id'] for g in due if g['game_id'] not in covered]}
+            finally:
+                conn.close()
+        except Exception as exc:
+            result['sports'][sport] = {'error': type(exc).__name__}
+    result['sports']['soccer'] = {'error': 'forecasts_unavailable', 'reason': 'No approved soccer forecast provider is connected to this ticket workflow; this checkout exposes schedules/results.'}
+    result['alerts'] = health_alerts(result)
+    from fastapi.encoders import jsonable_encoder
+    return jsonable_encoder(result)
+
+
+def eligible(pick, now):
+    start = datetime.fromisoformat(pick['tipoff'].replace('Z', '+00:00'))
+    made = datetime.fromisoformat(pick['generated_at'].replace('Z', '+00:00'))
+    return (pick['status'] == 'scheduled' and pick['grade'] == 'pending'
+            and now < start <= now + timedelta(hours=2)
+            and start - timedelta(hours=2) <= made <= now)
+
+
+def check(plan):
+    raw = Path(plan['snapshot_path']).read_bytes()
+    old = json.loads(raw)
+    fresh = snapshot()
+    now = datetime.fromisoformat(fresh['as_of'].replace('Z', '+00:00'))
+    age = now - datetime.fromisoformat(old['as_of'].replace('Z', '+00:00'))
+    if old['date'] != fresh['date'] or not timedelta(0) <= age <= timedelta(minutes=10):
+        raise ValueError('Snapshot expired; take a new snapshot and review again')
+    review = plan['review']
+    for field in ('skill_sha256', 'helper_sha256'):
+        if review[field] != fresh[field] or old[field] != fresh[field]:
+            raise ValueError('Skill or helper changed; review again')
+    if review['snapshot_sha256'] != sha(raw) or not review['notes'].strip():
+        raise ValueError('Missing or mismatched review')
+    if not isinstance(review['markets_reviewed'], dict):
+        raise ValueError('Record the review of each supported market')
+    for sport, section in old['sports'].items():
+        if 'report' in section:
+            markets = {p['market'] for p in section['report']['picks']}
+            covered = review['markets_reviewed'].get(sport, {})
+            if not markets <= covered.keys() or any(not covered[m].strip() for m in markets):
+                raise ValueError('Every available market needs a review note')
+    accounted = review.get('forecasts_reviewed', {})
+    required = set()
+    for snap in (old, fresh):
+        at = datetime.fromisoformat(snap['as_of'].replace('Z', '+00:00'))
+        for sport, section in snap['sports'].items():
+            for pick in section.get('report', {}).get('picks', []):
+                if eligible(pick, at):
+                    required.add(f"{sport}:{pick['forecast_id']}")
+    if not isinstance(accounted, dict) or any(
+        key not in accounted or not isinstance(accounted[key], dict) or
+        accounted[key].get('decision') not in ('candidate', 'excluded') or
+        not str(accounted[key].get('reason', '')).strip() for key in required):
+        raise ValueError('Every available pregame forecast needs a candidate/excluded decision and reason; re-review newly published picks')
+    if not review.get('combination_comparison', '').strip():
+        raise ValueError('Compare combinations even when no new stakes can be allocated')
+    if not isinstance(plan['tickets'], list) or len(plan['tickets']) > 3:
+        raise ValueError('At most three tickets per daily batch')
+    seen, combinations, resolved = {}, set(), []
+    for ticket in plan['tickets']:
+        if not ticket['label'].strip() or not 2 <= len(ticket['legs']) <= 3:
+            raise ValueError('A ticket needs a label and two or three legs')
+        stake = ticket.get('stake_usd')
+        if stake is not None and (isinstance(stake, bool) or not isinstance(stake, (int, float))
+                                  or not math.isfinite(stake) or stake <= 0):
+            raise ValueError('An optional dollar stake must be a positive finite amount')
+        legs, ticket_games = [], set()
+        for leg in ticket['legs']:
+            sport = leg['sport']
+            decision = accounted.get(f"{sport}:{leg['forecast_id']}", {})
+            if decision.get('decision') != 'candidate':
+                raise ValueError('Selected leg must have been reviewed as a candidate')
+            sections = [old['sports'][sport], fresh['sports'][sport]]
+            picks = []
+            for section in sections:
+                if 'error' in section or section['freshness']['source_state'] != 'fresh' or section['freshness']['failing']:
+                    raise ValueError('Selected source unavailable or stale')
+                pick = next((p for p in section['report']['picks'] if p.get('forecast_id') == leg['forecast_id']), None)
+                if pick is None:
+                    raise ValueError('Selected forecast missing')
+                picks.append(pick)
+            before, pick = picks
+            if not eligible(pick, now):
+                raise ValueError('Forecast is settled or outside its pregame window')
+            for field in ('game_id', 'market', 'pick_label', 'probability', 'tipoff', 'generated_at'):
+                if before[field] != pick[field]:
+                    raise ValueError('Forecast changed; review again')
+            key = (sport, pick['game_id'])
+            if key in ticket_games or not leg['rationale'].strip():
+                raise ValueError('Repeated game within ticket or missing rationale')
+            identity = (sport, pick['forecast_id'])
+            if key in seen and seen[key] != identity:
+                raise ValueError('Variations must preserve the same forecast for a shared game')
+            ticket_games.add(key)
+            seen[key] = identity
+            legs.append({**pick, 'sport': sport, 'rationale': leg['rationale']})
+        combination = tuple(sorted((p['sport'], p['forecast_id']) for p in legs))
+        if combination in combinations:
+            raise ValueError('Duplicate ticket combination')
+        combinations.add(combination)
+        signature = sha(json.dumps(combination).encode())
+        resolved.append({'ticket_id': old['date'] + '-' + signature[:12], 'signature': signature,
+                         'label': ticket['label'], 'legs': legs, 'stake_usd': ticket.get('stake_usd')})
+    text = ticket_text(fresh['date'], resolved)
+    result = dict(snapshot=old, plan=plan, resolved=resolved, text=text, as_of=fresh['as_of'], date=fresh['date'],
+                  coverage={'required':len(required), 'accounted':len(required & set(accounted)),
+                            'unavailable_sports':{sport:section['error'] for sport,section in fresh['sports'].items()
+                                                  if sport in ('nba','nhl','nfl') and section.get('error')},
+                            'complete_supported_sports':not any(section.get('error') for sport,section in fresh['sports'].items()
+                                                                 if sport in ('nba','nhl','nfl'))})
+    from app import config
+    directory = config.data_dir() / 'reports/tickets/reviews'
+    directory.mkdir(parents=True, exist_ok=True)
+    content = json.dumps(result, sort_keys=True, indent=2).encode()
+    archive = directory / (fresh['date'] + '-' + sha(content) + '.json')
+    if not archive.exists():
+        with archive.open('xb') as handle:
+            handle.write(content)
+    return result
+
+
+def ticket_text(day, tickets, prior_exposure=None):
+    lines = [f'<b>PROP51 / PARLAY TICKETS / {day}</b>', 'App forecasts + AI selection.']
+    for number, ticket in enumerate(tickets, 1):
+        lines.extend(['', f"<b>Ticket {number}: {escape(ticket['label'])}</b>",
+                      f"ID {ticket['ticket_id']}" + (f" / Suggested stake ${ticket['stake_usd']:.2f}" if ticket.get('stake_usd') is not None else ''),
+                      'Combine ALL these legs in ONE parlay:'])
+        for leg_number, p in enumerate(ticket['legs'], 1):
+            start = datetime.fromisoformat(p['tipoff'].replace('Z', '+00:00')).astimezone(TORONTO)
+            lines.append(f"{leg_number}. {p['sport'].upper()} / {escape(p['matchup'])} / <b>{escape(p['pick_label'])}</b> / {start:%b %d %I:%M %p %Z} / {p['probability']:.1%}")
+        lines.append(f"Model estimate {math.prod(p['probability'] for p in ticket['legs']):.1%} (independence assumption).")
+    exposure = dict(prior_exposure or {})
+    for t in tickets:
+        for p in t['legs']:
+            key = f"{p['sport']}:{p['forecast_id']}"
+            old = exposure.get(key, {'dollars': 0, 'tickets': []})
+            exposure[key] = {'dollars': old['dollars'] + (t.get('stake_usd') or 0), 'tickets': old['tickets'] + [t['ticket_id']]}
+    shared = [f"{key}: shared across {len(v['tickets'])} tickets" for key,v in exposure.items() if len(v['tickets']) > 1]
+    if shared:
+        lines += ['', '<b>Shared core exposure</b>', *shared, 'One losing core pick can lose multiple tickets.']
+    lines += ['', 'Prices unverified. Confirm exact sportsbook lines. Model estimates are not guaranteed win rates.']
+    if not tickets:
+        lines.append('No tickets selected.')
+    text = '\n'.join(lines)
+    if len(text) > 3900:
+        raise ValueError('Ticket message too long')
+    return text
+
+
+def selection_identity(tickets):
+    # Descriptive history/as_of can change between check and send; original selections cannot.
+    fields = ('sport','forecast_id','game_id','market','pick_label','probability','tipoff','generated_at')
+    return [(t['label'], t.get('stake_usd'), [tuple(p.get(k) for k in fields) for p in t['legs']]) for t in tickets]
+
+
+def send(result):
+    """Reserve atomically, persist exact text, then use existing single-message deduplicated delivery."""
+    from app import config, telegram
+    if not result['resolved']:
+        return 'no_ticket'
+    # Revalidate at dispatch; never accept a cached check result as authorization to send later.
+    checked = check(result['plan'])
+    if selection_identity(checked['resolved']) != selection_identity(result['resolved']):
+        raise ValueError('Forecasts changed before dispatch')
+    result = checked
+    attempt_at = checked['as_of']
+    settings = config.telegram_settings()
+    if not settings.get('TELEGRAM_CHAT_ID'):
+        raise ValueError('Pair the existing Telegram bot first')
+    bot = telegram.Telegram(settings.get('TELEGRAM_BOT_TOKEN'))
+    bot.identity()
+    with telegram.ledger() as conn:
+        if not telegram.controls(bot, settings, conn):
+            return 'paused'
+        schema(conn)
+        chat = str(settings['TELEGRAM_CHAT_ID'])
+        # Full combination structure, not a flattened multiset; stable across retries and ordering.
+        identity = sorted(t['signature'] for t in result['resolved'])
+        key = 'ai-ticket-review-v3:' + result['date'] + ':' + chat + ':' + sha(json.dumps(identity).encode())
+        prior = conn.execute('SELECT * FROM ticket_batches WHERE batch_key=?', (key,)).fetchone()
+        if prior:
+            delivery = conn.execute('SELECT * FROM deliveries WHERE delivery_key=?', (key,)).fetchone()
+            archived = json.loads(prior['payload'])
+            if selection_identity(archived['resolved']) != selection_identity(result['resolved']):
+                raise ValueError('Retry must preserve the original tickets and stakes')
+            if delivery and delivery['status'] not in ('retry','sent'):
+                return 'existing_' + delivery['status']
+            if delivery and delivery['status']=='retry' and delivery['next_attempt_at'] > attempt_at:
+                return 'retry_pending'
+            result = archived
+        else:
+            conn.execute('BEGIN IMMEDIATE')
+            try:
+                prior_tickets = existing_tickets(conn, chat, result['date'])
+                tickets = result['resolved']
+                all_tickets = prior_tickets + tickets
+                signatures = [t['signature'] for t in all_tickets]
+                if len(signatures) != len(set(signatures)):
+                    raise ValueError('Duplicate ticket combination across batches')
+                identities, exposure = {}, {}
+                for t in prior_tickets:
+                    for p in t['legs']:
+                        k = f"{p['sport']}:{p['forecast_id']}"
+                        e = exposure.setdefault(k, {'dollars': 0, 'tickets': []})
+                        e['dollars'] += t.get('stake_usd') or 0; e['tickets'].append(t['ticket_id'])
+                for t in all_tickets:
+                    for p in t['legs']:
+                        game = (p['sport'], p['game_id'])
+                        fid = p['forecast_id']
+                        if game in identities and identities[game] != fid:
+                            raise ValueError('Shared games must preserve the identical forecast')
+                        identities[game] = fid
+                result['text'] = ticket_text(result['date'], tickets, exposure)
+                raw = json.dumps(result, sort_keys=True, indent=2)
+                conn.execute('INSERT INTO ticket_batches VALUES (?,?,?,?,?)', (key, chat, result['date'], result['as_of'], raw))
+                for t in tickets:
+                    conn.execute('INSERT INTO ticket_items VALUES (?,?,?,?,?)',
+                                 (chat, result['date'], t['signature'], t['ticket_id'], key))
+                conn.execute('COMMIT')
+            except Exception:
+                conn.execute('ROLLBACK'); raise
+        directory = config.data_dir() / 'reports' / 'tickets'
+        directory.mkdir(parents=True, exist_ok=True)
+        raw = json.dumps(result, sort_keys=True, indent=2).encode()
+        archive = directory / (result['date'] + '-' + sha(raw) + '.json')
+        if not archive.exists():
+            with archive.open('xb') as handle:
+                handle.write(raw)
+        # Keep original content/time as evidence; retries use the CURRENT attempt time.
+        previous = conn.execute('SELECT status FROM deliveries WHERE delivery_key=?',(key,)).fetchone()
+        status = telegram.deliver(bot, conn, chat, key, result['text'], attempt_at)
+        confirmed = conn.execute('SELECT status FROM deliveries WHERE delivery_key=?',(key,)).fetchone()
+        if not confirmed or confirmed['status'] != 'sent':
+            return status
+        image_status = deliver_visual(bot, conn, chat, key, result, directory, attempt_at)
+        if image_status not in ('sent','already_recorded'):
+            return 'partial_' + image_status
+        return 'existing_sent' if previous and previous['status']=='sent' and image_status=='already_recorded' else 'sent'
+
+
+def deliver_visual(bot, conn, chat, key, result, directory, attempt_at):
+    from app import telegram
+    from app.telegram_card import render_ticket_card
+    artifact = conn.execute('SELECT * FROM ticket_images WHERE batch_key=?',(key,)).fetchone()
+    if artifact:
+        image_path = Path(artifact['path'])
+        photo = image_path.read_bytes()
+        if sha(photo) != artifact['sha256']:
+            raise ValueError('Archived ticket image hash mismatch')
+        caption = artifact['caption']
+    else:
+        photo = render_ticket_card(result['date'], result['resolved'])
+        image_path = directory / (result['date'] + '-' + sha(key.encode()) + '.png')
+        if not image_path.exists():
+            with image_path.open('xb') as handle:
+                handle.write(photo)
+        caption = 'PROP51 / COMBINED PARLAY TICKETS / ' + result['date'] + '\n' + '\n'.join(
+            f"Ticket {i}: {t['ticket_id']}" + (f" / ${t['stake_usd']:.2f}" if t.get('stake_usd') is not None else '') for i,t in enumerate(result['resolved'],1))
+        caption += '\nEach numbered ticket combines all its listed legs. See preceding text for full details.'
+        if len(caption)>1024:
+            raise ValueError('Ticket image caption too long')
+        conn.execute('INSERT OR IGNORE INTO ticket_images VALUES (?,?,?,?)',(key,str(image_path),sha(photo),caption))
+        artifact = conn.execute('SELECT * FROM ticket_images WHERE batch_key=?',(key,)).fetchone()
+        photo = Path(artifact['path']).read_bytes(); caption = artifact['caption']
+        if sha(photo) != artifact['sha256']:
+            raise ValueError('Archived ticket image hash mismatch')
+    image_key = 'ticket-image:' + sha(key.encode())
+    status = telegram.deliver(bot,conn,chat,image_key,result['text'],attempt_at,photo=photo,caption=caption)
+    row = conn.execute('SELECT status FROM deliveries WHERE delivery_key=?',(image_key,)).fetchone()
+    if row and row['status'] not in ('sent',):
+        return row['status']
+    return status
+
+
+def schema(conn):
+    conn.executescript('''
+      CREATE TABLE IF NOT EXISTS ticket_batches (
+        batch_key TEXT PRIMARY KEY, chat_id TEXT NOT NULL, day TEXT NOT NULL, created_at TEXT NOT NULL, payload TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS ticket_images (batch_key TEXT PRIMARY KEY, path TEXT NOT NULL, sha256 TEXT NOT NULL, caption TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS ticket_items (
+        chat_id TEXT NOT NULL, day TEXT NOT NULL, signature TEXT NOT NULL, ticket_id TEXT NOT NULL,
+        batch_key TEXT NOT NULL REFERENCES ticket_batches(batch_key), PRIMARY KEY(chat_id,day,signature));
+      CREATE TABLE IF NOT EXISTS ticket_grades (
+        ticket_id TEXT NOT NULL, evidence_hash TEXT NOT NULL, as_of TEXT NOT NULL, payload TEXT NOT NULL,
+        PRIMARY KEY(ticket_id,evidence_hash));
+      CREATE TABLE IF NOT EXISTS personal_tickets (
+        slip_id TEXT PRIMARY KEY, recorded_at TEXT NOT NULL, payload TEXT NOT NULL);
+      CREATE TRIGGER IF NOT EXISTS ticket_batches_no_update BEFORE UPDATE ON ticket_batches
+        BEGIN SELECT RAISE(ABORT,'ticket batches are immutable'); END;
+      CREATE TRIGGER IF NOT EXISTS ticket_batches_no_delete BEFORE DELETE ON ticket_batches
+        BEGIN SELECT RAISE(ABORT,'ticket batches are immutable'); END;
+      CREATE TRIGGER IF NOT EXISTS ticket_grades_no_update BEFORE UPDATE ON ticket_grades
+        BEGIN SELECT RAISE(ABORT,'ticket grades are append-only'); END;
+      CREATE TRIGGER IF NOT EXISTS ticket_grades_no_delete BEFORE DELETE ON ticket_grades
+        BEGIN SELECT RAISE(ABORT,'ticket grades are append-only'); END;
+    ''')
+
+
+def normalized_ticket(t, day):
+    out = dict(t)
+    combination = tuple(sorted((p['sport'], p['forecast_id']) for p in t['legs']))
+    out['signature'] = sha(json.dumps(combination).encode())
+    out['ticket_id'] = day + '-' + out['signature'][:12]
+    return out
+
+
+def existing_tickets(conn, chat, day):
+    """Legacy reservations count too; recover exact combinations from original archives/receipts."""
+    from app import config
+    out = []
+    for row in conn.execute('SELECT payload FROM ticket_batches WHERE chat_id=? AND day=?', (chat, day)):
+        out.extend(json.loads(row['payload'])['resolved'])
+    rows = conn.execute("SELECT delivery_key,text FROM deliveries WHERE chat_id=? AND delivery_key LIKE ?",
+                        (chat, 'ai-ticket-review-v%:' + day + ':%')).fetchall()
+    legacy = {r['delivery_key'] for r in rows if not r['delivery_key'].startswith('ai-ticket-review-v3:')}
+    # Include reservations even if a process crashed before its delivery claim.
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='ticket_budget_reservations'").fetchone():
+        legacy.update(r[0] for r in conn.execute('SELECT batch_key FROM ticket_budget_reservations WHERE chat_id=? AND day=?', (chat,day)))
+    if legacy:
+        for path in sorted((config.data_dir() / 'reports/tickets').glob(day + '-*.json')):
+            data = json.loads(path.read_text())
+            tickets = data.get('resolved', [])
+            if not tickets:
+                continue
+            identity = sorted((p['sport'],p['forecast_id']) for t in tickets for p in t['legs'])
+            key = 'ai-ticket-review-v2:' + day + ':' + chat + ':' + sha(json.dumps(identity).encode())
+            if key in legacy:
+                out.extend(normalized_ticket(t,day) for t in tickets); legacy.remove(key)
+        if legacy:
+            raise ValueError('Unresolved legacy ticket reservation; inspect archive before allocating more')
+    return out
+
+
+def health_alerts(snap):
+    alerts = []
+    for sport, section in snap['sports'].items():
+        if section.get('error'):
+            if section['error'] != 'forecasts_unavailable':
+                alerts.append({'sport': sport, 'issue': section['error']})
+            continue
+        state = section['freshness']
+        if state['source_state'] != 'fresh' or state['failing']:
+            alerts.append({'sport': sport, 'issue': 'source_unavailable_or_stale'})
+        if section.get('missing_due_games'):
+            alerts.append({'sport': sport, 'issue': 'missing_due_forecasts', 'games': section['missing_due_games']})
+    return alerts
+
+
+def grade_leg(leg, as_of):
+    """Resolve the immutable forecast ID, not today's replacement canonical pick."""
+    from app import db, coverage
+    conn = db.connect_readonly(leg['sport'])
+    try:
+        row = conn.execute('SELECT * FROM game_forecasts WHERE forecast_id=?', (leg['forecast_id'],)).fetchone()
+        if not row or row['game_id'] != leg['game_id'] or row['market'] != leg['market']:
+            raise ValueError('Archived forecast identity mismatch')
+        game = conn.execute('SELECT * FROM games WHERE game_id=?', (row['game_id'],)).fetchone()
+        if not game:
+            raise ValueError('Archived game missing')
+        g = dict(game)
+        if g['status'] == 'final' and (not g['result_available_at'] or g['result_available_at'] > as_of):
+            g.update(status='in_progress',home_score=None,away_score=None)
+        decision = None
+        if row['market'] == 'reg3':
+            d = conn.execute('SELECT decision FROM game_decisions WHERE game_id=?', (row['game_id'],)).fetchone()
+            decision = d['decision'] if d else None
+        grade = coverage.grade(row['market'], row['line'], (row['p_a'],row['p_mid'],row['p_b']),g,as_of,row['tipoff_at'],decision)
+        return {'sport':leg['sport'], 'forecast_id':row['forecast_id'], 'game_id':row['game_id'],
+                'pick_label':leg['pick_label'], 'market':row['market'], 'line':row['line'], 'grade':grade,
+                'home_score':g['home_score'], 'away_score':g['away_score'], 'result_available_at':g['result_available_at']}
+    finally:
+        conn.close()
+
+
+def ticket_grade(legs):
+    grades = [p['grade'] for p in legs]
+    if 'loss' in grades:
+        return 'loss'
+    if any(g in ('pending','unscorable','unresolved','unavailable') for g in grades):
+        return 'pending'
+    if all(g in ('push','void') for g in grades):
+        return 'void'
+    return 'win'
+
+
+def settle(*, now=None, notify=False):
+    """Append grade changes, even when there are no new picks or the budget is exhausted."""
+    from app import telegram, config
+    now = now or datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    report = {'as_of':now, 'tickets':[], 'errors':[]}
+    settings = config.telegram_settings()
+    chat = str(settings.get('TELEGRAM_CHAT_ID', ''))
+    with telegram.ledger() as conn:
+        schema(conn)
+        days = {r[0] for r in conn.execute('SELECT day FROM ticket_batches WHERE chat_id=?', (chat,))}
+        days.update(r[0].split(':')[1] for r in conn.execute("SELECT delivery_key FROM deliveries WHERE chat_id=? AND delivery_key LIKE 'ai-ticket-review-v%:%'", (chat,)))
+        notices = []
+        report['notification_errors'] = []
+        for day in sorted(days):
+            try:
+                tickets = existing_tickets(conn,chat,day)
+            except Exception as exc:
+                report['errors'].append({'day':day,'error':type(exc).__name__}); continue
+            for t in tickets:
+                legs = []
+                for p in t['legs']:
+                    try:
+                        legs.append(grade_leg(p,now))
+                    except Exception as exc:
+                        legs.append({'sport':p['sport'],'forecast_id':p['forecast_id'],'grade':'unavailable', 'error':type(exc).__name__})
+                if any(p['grade']=='unavailable' for p in legs):
+                    report['errors'].append({'ticket_id':t['ticket_id'],'error':'settlement_unavailable'})
+                result = {'ticket_id':t['ticket_id'], 'label':t['label'], 'grade':ticket_grade(legs), 'legs':legs,
+                          'kind':'suggested_ticket', 'profit':None}
+                raw = json.dumps(result,sort_keys=True)
+                digest = sha(raw.encode())
+                conn.execute('INSERT OR IGNORE INTO ticket_grades VALUES (?,?,?,?)', (t['ticket_id'],digest,now,raw))
+                report['tickets'].append(result)
+                # Only confirmed sent batches receive a settlement notification.
+                batch = conn.execute('SELECT batch_key FROM ticket_items WHERE ticket_id=? AND chat_id=?', (t['ticket_id'],chat)).fetchone()
+                confirmed = batch and conn.execute("SELECT 1 FROM deliveries WHERE delivery_key=? AND status='sent'",(batch['batch_key'],)).fetchone()
+                if confirmed and result['grade'] != 'pending':
+                    text = f"PARLAY RESULT / {t['ticket_id']} / {result['grade'].upper()}\n" + '\n'.join(f"{p.get('pick_label',p['forecast_id'])}: {p['grade']}" for p in legs)
+                    notices.append((result,'ticket-result:'+t['ticket_id']+':'+digest,text))
+        # All grading is committed before ANY external call. Notification failure cannot suppress outcomes.
+        if notify and notices:
+            try:
+                bot = telegram.Telegram(settings.get('TELEGRAM_BOT_TOKEN')); bot.identity()
+                allowed = telegram.controls(bot,settings,conn)
+                for result,key,text in notices:
+                    if allowed:
+                        try:
+                            result['notification'] = telegram.deliver(bot,conn,chat,key,text,now)
+                        except telegram.DeliveryError as exc:
+                            report['notification_errors'].append({'ticket_id':result['ticket_id'],'error':type(exc).__name__})
+            except (telegram.DeliveryError, ValueError) as exc:
+                report['notification_errors'].append({'error':type(exc).__name__})
+    return report
+
+
+def record_personal(path):
+    """Explicit user-provided slip, distinct from suggested stakes and strategy performance."""
+    from app import telegram
+    value = json.loads(Path(path).read_text())
+    if (not value.get('slip_id') or not value.get('source') or not isinstance(value.get('legs'),list) or
+        not value['legs'] or any(not isinstance(p,dict) or not p.get('sport') or not p.get('pick_label') for p in value['legs'])):
+        raise ValueError('Personal slip requires slip_id, source and exact legs')
+    stake, returned = value.get('stake_usd'), value.get('return_usd')
+    if not isinstance(stake,(int,float)) or not math.isfinite(stake) or stake < 0:
+        raise ValueError('Actual nonnegative dollar stake required')
+    if returned is not None and (not isinstance(returned,(int,float)) or not math.isfinite(returned) or returned < 0):
+        raise ValueError('Actual nonnegative return required')
+    value['kind'] = 'user_placed'
+    value['profit_usd'] = None if returned is None else round(returned-stake,2)
+    raw = json.dumps(value,sort_keys=True)
+    with telegram.ledger() as conn:
+        schema(conn)
+        prior = conn.execute('SELECT payload FROM personal_tickets WHERE slip_id=?',(value['slip_id'],)).fetchone()
+        if prior and prior['payload'] != raw:
+            raise ValueError('Personal slip already recorded with different content; use a correction ID')
+        conn.execute('INSERT OR IGNORE INTO personal_tickets VALUES (?,?,?)',(value['slip_id'],datetime.now(timezone.utc).isoformat(),raw))
+    return value
+
+
+def notify_alerts(snap, settlement_errors):
+    from app import config, telegram
+    issues = snap.get('alerts', []) + [{'sport':'tickets','issue':'settlement_unavailable'} for _ in settlement_errors]
+    out = []
+    settings = config.telegram_settings()
+    bot = telegram.Telegram(settings.get('TELEGRAM_BOT_TOKEN')); bot.identity()
+    with telegram.ledger() as conn:
+        if not telegram.controls(bot,settings,conn):
+            return ['paused']
+        for issue in issues:
+            # One alert per issue/sport/day, no repeated hourly noise.
+            key = 'ticket-health:' + snap['date'] + ':' + issue['sport'] + ':' + issue['issue']
+            text = 'PROP51 / REVIEW BLOCKER / ' + issue['sport'].upper() + '\n' + issue['issue']
+            out.append(telegram.deliver(bot,conn,settings['TELEGRAM_CHAT_ID'],key,text,snap['as_of']))
+        start = datetime.fromisoformat(snap['date']).replace(tzinfo=TORONTO)
+        end = start + timedelta(days=1)
+        rows = conn.execute("SELECT delivery_key,status FROM deliveries WHERE chat_id=? "
+                            "AND status IN ('uncertain','sending','failed','retry') AND attempted_at>=? AND attempted_at<? "
+                            "AND (delivery_key LIKE 'ai-ticket-review-v%:%' OR delivery_key LIKE 'ticket-image:%')",
+                            (str(settings['TELEGRAM_CHAT_ID']),start.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+                             end.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))).fetchall()
+        for row in rows:
+            # Each affected ticket/status has its own key: an earlier false alert cannot mask later failures.
+            digest = sha((row['delivery_key'] + ':' + row['status']).encode())
+            out.append(telegram.deliver(bot,conn,settings['TELEGRAM_CHAT_ID'],'ticket-health:'+snap['date']+':delivery:'+digest,
+                f"PROP51 / TICKET DELIVERY REVIEW REQUIRED / {row['status']}. Reservation retained; inspect original receipt.",snap['as_of']))
+    return out
+
+
+def preview_payload(path, *, now=None):
+    """Render an explicit historical format test from original forecast identities; never reserve stakes."""
+    from app import config
+    from app.telegram_card import render_ticket_card
+    now = now or datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    data = json.loads(Path(path).read_text())
+    past = data['resolved']
+    if not past or len(past)>3:
+        raise ValueError('Preview requires one to three archived tickets')
+    tickets = []
+    for source in past:
+        ticket = normalized_ticket(source,data['date'])
+        ticket['ticket_id'] = 'TEST-' + ticket['ticket_id']
+        legs = []
+        for original in ticket['legs']:
+            if original['tipoff'] >= now:
+                raise ValueError('Format tests require past games, not future recommendations')
+            result = grade_leg(original,now)
+            if result['grade'] in ('pending','unavailable','unresolved','unscorable'):
+                raise ValueError('Historical preview requires settled original forecasts')
+            legs.append({**original, 'result': result['grade'].upper() + f" / Final {result['home_score']}-{result['away_score']} (home-away)"})
+        ticket['legs'] = legs
+        ticket['result'] = 'TEST / RESULTS ALREADY KNOWN / ' + ticket_grade([{'grade':p['result'].split(' / ')[0].lower()} for p in legs]).upper()
+        tickets.append(ticket)
+    caption = 'TEST PREVIEW / PAST GAMES / NOT A LIVE TICKET. Example stakes only; no allocation or bet placed.'
+    photo = render_ticket_card(data['date'],tickets,preview=True)
+    return photo,caption
+
+
+def send_preview(path):
+    from app import config, telegram
+    photo,caption = preview_payload(path)
+    key = 'ticket-preview:' + sha(photo)
+    directory = config.data_dir() / 'reports/tickets/previews'
+    directory.mkdir(parents=True,exist_ok=True)
+    artifact = directory / (sha(photo) + '.png')
+    if not artifact.exists():
+        with artifact.open('xb') as handle:
+            handle.write(photo)
+    meta = directory / (sha(photo) + '.json')
+    if not meta.exists():
+        with meta.open('x') as handle:
+            json.dump({'kind':'historical_format_test','caption':caption,'image_sha256':sha(photo),'source':str(path)},handle,indent=2)
+    settings = config.telegram_settings()
+    bot = telegram.Telegram(settings.get('TELEGRAM_BOT_TOKEN')); bot.identity()
+    now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    with telegram.ledger() as conn:
+        if not telegram.controls(bot,settings,conn):
+            return 'paused'
+        return telegram.deliver(bot,conn,settings['TELEGRAM_CHAT_ID'],key,caption,now,photo=photo,caption=caption)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('action', choices=('snapshot', 'check', 'send', 'settle', 'preflight', 'personal', 'preview'))
+    parser.add_argument('--notify', action='store_true', help='Send result/failure notifications to the existing paired chat')
+    parser.add_argument('--output', type=Path)
+    parser.add_argument('--plan', type=Path)
+    args = parser.parse_args()
+    try:
+        if args.action in ('settle', 'preflight'):
+            report = settle(notify=args.notify)
+            if args.action == 'preflight':
+                report['snapshot'] = snapshot()
+                if args.notify:
+                    report['alerts'] = notify_alerts(report['snapshot'], report['errors'])
+            print(json.dumps(report))
+        elif args.action == 'preview':
+            status = send_preview(args.plan)
+            print(json.dumps({'status':status}))
+            return 0 if status in ('sent','already_recorded') else 1
+        elif args.action == 'personal':
+            print(json.dumps(record_personal(args.plan)))
+        elif args.action == 'snapshot':
+            raw = json.dumps(snapshot(), sort_keys=True, indent=2).encode()
+            with args.output.open('xb') as handle:
+                handle.write(raw)
+            print(json.dumps({'snapshot_path': str(args.output), 'snapshot_sha256': sha(raw)}))
+        else:
+            result = check(json.loads(args.plan.read_text()))
+            if args.action == 'check':
+                print(result['text'])
+            else:
+                status = send(result)
+                print(json.dumps({'status':status}))
+                if status not in ('sent','existing_sent','no_ticket'):
+                    return 1
+    except Exception as exc:
+        print(json.dumps({'status': 'failed', 'error_type': type(exc).__name__,
+                          'reason': str(exc) if isinstance(exc, ValueError) else 'Inspect local inputs or backend compatibility'}))
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

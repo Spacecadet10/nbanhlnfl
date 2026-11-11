@@ -1,0 +1,28 @@
+Sun Nov  8 21:32:00 UTC 2026
+== preflight after send: trigger should clear ==
+exit=0
+{'due': False, 'reason': 'no_new_forecasts', 'ticketable_games': 2} locked [('nba', 'LAL @ DET', 1164, ['nba:1166', 'nba:1167', 'nba:1168', 'nba:1165']), ('nhl', 'TBL @ WPG', 1083, ['nhl:1085', 'nhl:1087', 'nhl:1086', 'nhl:1084', 'nhl:1088'])]
+== no-ticket review (synthetic) ==
+{"accounted": 11, "tickets": []}
+{"review_outcome": "no_ticket", "recorded": 3, "coverage": {"required": 11, "accounted": 11, "unavailable_sports": {}, "complete_supported_sports": true}}
+exit=0
+== /stop honoured (mock getUpdates returns /stop) ==
+{"accounted": 11, "tickets": [[["nba", 1164], ["nhl", 1083]]]}
+{"status": "failed", "error_type": "ValueError", "reason": "Selected source unavailable or stale", "review_outcome": "operational_failure", "recorded": 4}
+exit=1
+enabled=1
+== uncertain ack (HTTP 500) never re-sent; distinct combination ==
+uncertain plan legs [('nba', 1164), ('nhl', 1083)]
+{"status": "failed", "error_type": "ValueError", "reason": "Selected source unavailable or stale", "review_outcome": "operational_failure", "recorded": 5}
+exit=1
+{"status": "failed", "error_type": "ValueError", "reason": "Selected source unavailable or stale", "review_outcome": "operational_failure", "recorded": 6}
+exit=1
+== status ==
+exit=0
+1 send ticket_sent sent: 2026-11-08-9c010c96ba54
+2 send ticket_sent existing_sent: 2026-11-08-9c010c96ba54
+3 check no_ticket insufficient evidence for a justified combination: E2E harness: no combination selected (synthetic).
+4 send operational_failure send refused: Selected source unavailable or stale
+5 check operational_failure validation refused: Selected source unavailable or stale
+6 check operational_failure validation refused: Selected source unavailable or stale
+[('ticket_text', 'sent', 234), ('ticket_image', 'not_attempted', None), ('ticket_text', 'sent', 245), ('ticket_image', 'sent', 246), ('ticket_text', 'sent', 900012), ('ticket_image', 'sent', 900013)]

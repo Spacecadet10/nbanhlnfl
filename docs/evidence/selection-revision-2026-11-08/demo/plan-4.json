@@ -1,0 +1,61 @@
+{
+ "snapshot_path": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/43a0d8c8-5d19-4e11-a7c0-2df81439b128/scratchpad/demo/snapshot-4.json",
+ "tickets": [
+  {
+   "label": "ORIGINAL Higher-hit pair / TOR + CGY puck lines",
+   "legs": [
+    {
+     "sport": "nhl",
+     "forecast_id": 1097
+    },
+    {
+     "sport": "nhl",
+     "forecast_id": 1103
+    }
+   ]
+  },
+  {
+   "label": "ORIGINAL Three-game puck-line option / shared core",
+   "legs": [
+    {
+     "sport": "nhl",
+     "forecast_id": 1097
+    },
+    {
+     "sport": "nhl",
+     "forecast_id": 1103
+    },
+    {
+     "sport": "nhl",
+     "forecast_id": 1091
+    }
+   ]
+  },
+  {
+   "label": "SELECTED TOR +1.5 + CGY +1.5",
+   "legs": [
+    {
+     "sport": "nhl",
+     "forecast_id": 1097
+    },
+    {
+     "sport": "nhl",
+     "forecast_id": 1103
+    }
+   ]
+  },
+  {
+   "label": "CANDIDATE (not sent) TOR win + CGY +1.5",
+   "legs": [
+    {
+     "sport": "nhl",
+     "forecast_id": 1095
+    },
+    {
+     "sport": "nhl",
+     "forecast_id": 1103
+    }
+   ]
+  }
+ ]
+}

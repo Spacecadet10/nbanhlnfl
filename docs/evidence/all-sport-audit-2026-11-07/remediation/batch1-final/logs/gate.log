@@ -1,0 +1,83 @@
+cwd: /Users/andry/Desktop/nba-predictor-batch1
+cmd: OMP_NUM_THREADS=4 /Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/bin/python scripts/check_project.py --ready
+START=2026-11-08T06:23:05Z
+Structure guard passed. This does not prove semantic uniqueness or app correctness.
+
+> nba-predictor-frontend@0.1.0 typecheck
+> tsc --noEmit
+
+
+> nba-predictor-frontend@0.1.0 build
+> tsc --noEmit && vite build
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 78 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.80 kB │ gzip:   0.45 kB
+dist/assets/index-4Y_4-cJU.css   81.47 kB │ gzip:  15.85 kB
+dist/assets/index-DOaHc7q4.js   550.34 kB │ gzip: 152.28 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 582ms
+........................................................................ [  4%]
+........................................................................ [  8%]
+........................................................................ [ 12%]
+........................................................................ [ 16%]
+........................................................................ [ 20%]
+........................................................................ [ 25%]
+........................................................................ [ 29%]
+........................................................................ [ 33%]
+........................................................................ [ 37%]
+........................................................................ [ 41%]
+........................................................................ [ 45%]
+........................................................................ [ 50%]
+........................................................................ [ 54%]
+........................................................................ [ 58%]
+........................................................................ [ 62%]
+........................................................................ [ 66%]
+........................................................................ [ 70%]
+......................................................F................. [ 75%]
+........................................................................ [ 79%]
+........................................................................ [ 83%]
+........................................................................ [ 87%]
+........................................................................ [ 91%]
+........................................................................ [ 95%]
+........................................................................ [100%]
+=================================== FAILURES ===================================
+________ test_the_deadline_kills_the_agent_tree_and_the_trial_in_flight ________
+
+agent = {'ws': PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-168/test_the_deadlin.../pytest-of-andry/pytest-168/test_the_deadline_kills_the_ag0/experiments/sports-autoresearch-v2-49e5067a7554/nba'), ...}
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-168/test_the_deadline_kills_the_ag0')
+
+    def test_the_deadline_kills_the_agent_tree_and_the_trial_in_flight(agent, tmp_path):
+        pidfile = tmp_path / "sleeper.pid"
+        rep = agent["go"]([("sleeper", str(pidfile)), ("commit", SLOW, "slow fit"), ("broker", ["trial", "--sport", "nba"]),
+                           ("sleep", 600)], max_minutes=0.25)
+        assert rep["stopped"].startswith("time budget reached") and "still alive" not in rep["stopped"]
+        sleeper = int(pidfile.read_text())
+        assert not ra._alive(sleeper)                               # a grandchild in its own session is gone too
+        [t] = rep["trials"]
+>       assert t["status"] == "timeout" and t["description"] == "slow fit"     # the trial's limit is capped at the run deadline
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert ('interrupted' == 'timeout'
+E         
+E         - timeout
+E         + interrupted)
+
+tests/test_research_agent.py:181: AssertionError
+=============================== warnings summary ===============================
+../../nba-predictor-sprint1/backend/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_research_agent.py::test_the_deadline_kills_the_agent_tree_and_the_trial_in_flight
+1 failed, 1727 passed, 1 warning in 1474.28s (0:24:34)
+EXIT=1
+END=2026-11-08T07:04:46Z

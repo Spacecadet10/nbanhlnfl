@@ -1,0 +1,20 @@
+ backend/app/backup.py                       |  41 +-
+ backend/app/cli.py                          | 153 +++++++-
+ backend/app/config.py                       |  22 ++
+ backend/app/db.py                           |  40 +-
+ backend/app/ingest.py                       |  46 ++-
+ backend/app/raw_cache.py                    |  11 +-
+ backend/app/release.py                      |  17 +
+ backend/app/soccer.py                       |  17 +-
+ backend/tests/conftest.py                   |  16 +-
+ backend/tests/test_backup_restore.py        | 167 +++++++-
+ backend/tests/test_live_store_guard.py      | 584 ++++++++++++++++++++++++++++
+ frontend/package.json                       |   2 +-
+ frontend/src/components/Canonical.tsx       |   4 +-
+ frontend/src/components/Layout.tsx          |   8 +-
+ frontend/src/components/MarketView.tsx      |   4 +-
+ frontend/src/components/nflWording.test.mjs |  41 ++
+ frontend/src/components/tables.test.mjs     |  55 +++
+ frontend/src/pages/HistoryPage.tsx          |   4 +-
+ frontend/src/pages/NflPages.tsx             |  12 +-
+ 19 files changed, 1191 insertions(+), 53 deletions(-)

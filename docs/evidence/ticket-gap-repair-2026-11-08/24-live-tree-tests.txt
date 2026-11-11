@@ -1,0 +1,2 @@
+FAILED backend/tests/test_tickets.py::test_fallback_explanation_only_does_not_create_new_forecast_identity
+1 failed, 143 passed, 1 warning in 8.08s

@@ -1,0 +1,31 @@
+{
+ "snapshot_path": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/43a0d8c8-5d19-4e11-a7c0-2df81439b128/scratchpad/demo/snapshot-3.json",
+ "tickets": [
+  {
+   "label": "ORIGINAL Mixed NBA/NHL pair",
+   "legs": [
+    {
+     "sport": "nba",
+     "forecast_id": 1164
+    },
+    {
+     "sport": "nhl",
+     "forecast_id": 1091
+    }
+   ]
+  },
+  {
+   "label": "CANDIDATE (not sent) WPG +1.5 + LAL@DET Over 216.5",
+   "legs": [
+    {
+     "sport": "nhl",
+     "forecast_id": 1091
+    },
+    {
+     "sport": "nba",
+     "forecast_id": 1169
+    }
+   ]
+  }
+ ]
+}

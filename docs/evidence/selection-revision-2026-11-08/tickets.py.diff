@@ -1,0 +1,189 @@
+--- /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/43a0d8c8-5d19-4e11-a7c0-2df81439b128/scratchpad/selection-package/tickets.base.py	2026-11-08 19:31:14
++++ backend/app/tickets.py	2026-11-08 20:12:35
+@@ -59,6 +59,7 @@
+                         pick['quote_check'] = quote_check(conn, pick, stamp)
+                     except Exception as exc:   # a quote lookup problem is reported on the pick, never hides the forecast
+                         pick['quote_check'] = {'error': type(exc).__name__}
++                attach_assessments(sport, report['picks'])
+                 due = conn.execute("SELECT game_id FROM games WHERE status='scheduled' AND season_type IN ('regular','play_in','postseason') AND tipoff_at>? AND tipoff_at<=?",
+                                    (stamp, (now+timedelta(minutes=110)).strftime('%Y-%m-%dT%H:%M:%SZ'))).fetchall()
+                 covered = {p['game_id'] for p in report['picks'] if p['grade']=='pending'}
+@@ -74,6 +75,7 @@
+         result['sports']['soccer'] = soccer_section(now)
+     except Exception as exc:
+         result['sports']['soccer'] = {'error': type(exc).__name__}
++    attach_assessments('soccer', (result['sports']['soccer'].get('report') or {}).get('picks', []))
+     result['alerts'] = health_alerts(result)
+     from fastapi.encoders import jsonable_encoder
+     return jsonable_encoder(result)
+@@ -165,6 +167,88 @@
+     return detail
+ 
+ 
++def decimal_odds(american):
++    """Decimal payout per 1 staked (stake included) for an American price. None when no price is stored or the stored
++    value is not a possible American price (0 or between -100 and +100): no payout is computed from it (review F3)."""
++    if american is None or -100 < american < 100:
++        return None
++    return 1 + american / 100 if american > 0 else 1 + 100 / -american
++
++
++def _field(obj, key, default=None):
++    """Picks carry percentage_history as a dict, or as the provider's record object before JSON encoding."""
++    return obj.get(key, default) if isinstance(obj, dict) else getattr(obj, key, default)
++
++
++def leg_assessment(sport, pick):
++    """What the reviewer weighs together for one market, side by side; facts only, no verdict and no threshold:
++    the app probability and recommendation, the exact stored price and its break-even probability, the record of similar
++    past picks with its 95% interval (the app's own Wilson interval, threshold_overview.wilson) and the evidence quality
++    the app states. A negative model_gap is a warning that the price asks for more than the app estimates, not proof of a
++    loss; a positive one is not a value claim (the estimate may be wrong; a past group does not fix today's probability)."""
++    from app import markets, threshold_overview
++    quote = pick.get('quote_check') or {}
++    evidence = pick.get('evidence') or {}
++    history = pick.get('percentage_history') or {}
++    decimal = decimal_odds(quote.get('price_now'))
++    break_even = None if decimal is None else 1 / decimal
++    record = None
++    if evidence.get('settled'):
++        n = evidence['settled']
++        record = dict(win_rate=evidence['win_rate'], settled=n,
++                      interval=threshold_overview.wilson(round(evidence['win_rate'] * n), n), source=evidence.get('source'))
++    return dict(probability=pick['probability'], price=quote.get('price_now'), decimal=decimal, break_even=break_even,
++                model_gap=None if break_even is None else pick['probability'] - break_even, record=record,
++                record_minus_break_even=None if record is None or break_even is None else
++                [record['interval'][0] - break_even, record['interval'][1] - break_even],
++                exact=f"{_field(history, 'wins', 0) or 0}-{_field(history, 'losses', 0) or 0} ({_field(history, 'settled', 0) or 0} settled)",
++                app_rank=pick.get('game_rank'), skill_proven=pick.get('skill_proven'),
++                line_source=quote.get('line_source') or _field(history, 'line_source'), app_note=markets.LIMITATIONS.get((sport, pick['market'])))
++
++
++def attach_assessments(sport, picks):
++    """Every snapshot pick carries its assessment (review F2: soccer too); a problem is reported on the pick, never hides it."""
++    for pick in picks:
++        try:
++            pick['assessment'] = leg_assessment(sport, pick)
++        except Exception as exc:
++            pick['assessment'] = {'error': type(exc).__name__}
++
++
++def ticket_assessment(legs):
++    """The whole ticket: payout at the stored prices (decimal prices multiplied, as a parlay pays for distinct games), its
++    break-even probability and the model estimate (independence assumption), plus each leg's own record of similar picks.
++    No ticket-level range is computed from those records (review, Nov 8): multiplying historical intervals does not give
++    today's ticket a win-probability interval. Lists legs priced above the model, unpriced legs and legs without a record."""
++    rows = [(f"{leg['sport'].upper()} {leg['pick_label']}", leg.get('assessment') or leg_assessment(leg['sport'], leg)) for leg in legs]
++    payout = math.prod(a['decimal'] for _, a in rows) if all(a['decimal'] for _, a in rows) else None
++    estimate = math.prod(a['probability'] for _, a in rows)
++    break_even = None if payout is None else 1 / payout
++    return dict(legs=len(rows), payout=payout, break_even=break_even, model_estimate=estimate,
++                model_minus_break_even=None if payout is None else estimate - break_even,
++                leg_records=[dict(label=label, record=a['record']) for label, a in rows],
++                priced_above_model=[label for label, a in rows if a['model_gap'] is not None and a['model_gap'] < 0],
++                unpriced=[label for label, a in rows if a['decimal'] is None],
++                no_record=[label for label, a in rows if a['record'] is None])
++
++
++def assess(plan):
++    """Read-only comparison of candidate tickets against the plan's snapshot (no fresh snapshot, archive, ledger or send)."""
++    snap = json.loads(Path(plan['snapshot_path']).read_text())
++    out = []
++    for ticket in plan.get('tickets') or []:
++        legs = []
++        for leg in ticket['legs']:
++            pick = next((p for p in (snap['sports'].get(leg['sport'], {}).get('report') or {}).get('picks', [])
++                         if p.get('forecast_id') == leg['forecast_id']), None)
++            if pick is None:
++                raise ValueError('Selected forecast missing')
++            legs.append(dict(pick, sport=leg['sport'], assessment=leg_assessment(leg['sport'], pick)))
++        out.append({'label': ticket.get('label'), 'ticket': ticket_assessment(legs),
++                    'legs': [dict(label=f"{l['sport'].upper()} {l['pick_label']}", market=l['market'], **l['assessment']) for l in legs]})
++    return {'snapshot_as_of': snap['as_of'], 'tickets': out}
++
++
+ def soccer_section(now):
+     """Live soccer picks (app/soccer_live.py): the sealed Elo's 90-minute home/draw/away forecast per match, made at or
+     before 06:00 UTC on match day. Each pick is the model's most likely outcome with its exact probability; all three
+@@ -413,6 +497,8 @@
+     for ticket in plan['tickets']:
+         if not ticket['label'].strip() or not MIN_LEGS <= len(ticket['legs']) <= MAX_LEGS:
+             raise ValueError('A ticket needs a label and two to six legs')
++        if not str(ticket.get('payout_assessment') or '').strip():
++            raise ValueError('Each ticket needs a payout_assessment: judge its payout at the stored prices against its uncertainty; review again')
+         stake = ticket.get('stake_usd')
+         if stake is not None and (isinstance(stake, bool) or not isinstance(stake, (int, float))
+                                   or not math.isfinite(stake) or stake <= 0):
+@@ -453,7 +539,7 @@
+                 raise ValueError('Variations must preserve the same forecast for a shared game')
+             ticket_games.add(key)
+             seen[key] = identity
+-            legs.append({**pick, 'sport': sport, 'rationale': leg['rationale'],
++            legs.append({**pick, 'sport': sport, 'rationale': leg['rationale'], 'assessment': leg_assessment(sport, pick),
+                          **({'status_refreshed_at': refreshed} if refreshed else {})})
+         combination = tuple(sorted((p['sport'], p['forecast_id']) for p in legs))
+         if combination in combinations:
+@@ -461,7 +547,8 @@
+         combinations.add(combination)
+         signature = sha(json.dumps(combination).encode())
+         resolved.append({'ticket_id': old['date'] + '-' + signature[:12], 'signature': signature,
+-                         'label': ticket['label'], 'legs': legs, 'stake_usd': ticket.get('stake_usd')})
++                         'label': ticket['label'], 'legs': legs, 'stake_usd': ticket.get('stake_usd'),
++                         'payout_assessment': ticket['payout_assessment'].strip(), 'assessment': ticket_assessment(legs)})
+     text = ticket_text(fresh['date'], resolved)
+     result = dict(snapshot=old, plan=plan, resolved=resolved, text=text, as_of=fresh['as_of'], date=fresh['date'],
+                   coverage={'required':len(required), 'accounted':len(required & set(accounted)),
+@@ -483,7 +570,9 @@
+              'Multi-game combinations from app forecasts + AI selection. Not a single-game card.']
+     if tickets:   # one-glance menu: size and model estimate of every option
+         lines.append(f"{len(tickets)} option{'s' if len(tickets) > 1 else ''}: " + ' · '.join(
+-            f"#{n} {len(x['legs'])} legs {math.prod(p['probability'] for p in x['legs']):.0%}" for n, x in enumerate(tickets, 1)))
++            f"#{n} {len(x['legs'])} legs {math.prod(p['probability'] for p in x['legs']):.0%}" +
++            (lambda a: f" pays ×{a['payout']:.2f}" if a['payout'] else '')(x.get('assessment') or ticket_assessment(x['legs']))
++            for n, x in enumerate(tickets, 1)))
+     for number, ticket in enumerate(tickets, 1):
+         kinds = ' + '.join(dict.fromkeys(bet_type(p) for p in ticket['legs']))
+         lines.extend(['', f"<b>Ticket {number}: {escape(ticket['label'])}</b>",
+@@ -499,7 +588,23 @@
+                     f" (was {q['price_at_forecast']:+d})" if q.get('price_at_forecast') not in (None, q['price_now']) else '')
+             lines.append(f"{leg_number}. {p['sport'].upper()} / {escape(p['matchup'])} / {escape(bet_type(p))}: "
+                          f"<b>{escape(p['pick_label'])}</b> / {start:%b %d %I:%M %p %Z} / {p['probability']:.1%}{escape(price)}")
+-        lines.append(f"Model estimate {math.prod(p['probability'] for p in ticket['legs']):.1%} (independence assumption).")
++        a = ticket.get('assessment') or ticket_assessment(ticket['legs'])   # the whole ticket: payout against uncertainty
++        per_leg = [p.get('assessment') or leg_assessment(p['sport'], p) for p in ticket['legs']]
++        def which(test):   # leg numbers, never labels again (review F1: keeps long menus inside one message)
++            numbers = [n for n, x in enumerate(per_leg, 1) if test(x)]
++            return '' if not numbers else 'all legs' if len(numbers) == len(per_leg) else (
++                f"leg {numbers[0]}" if len(numbers) == 1 else 'legs ' + ', '.join(map(str, numbers)))
++        if a['payout']:
++            lines.append(f"Pays about ×{a['payout']:.2f} at stored prices; break-even {a['break_even']:.1%}; "
++                         f"model estimate {a['model_estimate']:.1%} (independence assumption).")
++        else:
++            lines.append(f"Payout unknown (no stored price: {which(lambda x: x['decimal'] is None)}); "
++                         f"model estimate {a['model_estimate']:.1%} (independence assumption).")
++        if a['no_record']:
++            lines.append(f"No record of similar picks: {which(lambda x: x['record'] is None)}.")
++        if a['priced_above_model']:
++            lines.append(f"Sportsbook implies a higher chance than the model: "
++                         f"{which(lambda x: x['model_gap'] is not None and x['model_gap'] < 0)}.")
+     exposure = dict(prior_exposure or {})
+     for t in tickets:
+         for p in t['legs']:
+@@ -1099,7 +1204,7 @@
+ 
+ def main():
+     parser = argparse.ArgumentParser()
+-    parser.add_argument('action', choices=('snapshot', 'check', 'send', 'settle', 'preflight', 'status', 'personal', 'preview'))
++    parser.add_argument('action', choices=('snapshot', 'check', 'send', 'settle', 'preflight', 'status', 'personal', 'preview', 'assess'))
+     parser.add_argument('--notify', action='store_true', help='Send result/failure notifications to the existing paired chat')
+     parser.add_argument('--output', type=Path)
+     parser.add_argument('--plan', type=Path)
+@@ -1150,6 +1255,8 @@
+             status = send_preview(args.plan)
+             print(json.dumps({'status':status}))
+             return 0 if status in ('sent','already_recorded') else 1
++        elif args.action == 'assess':   # compare candidate tickets before check: payout, break-even, estimate, records
++            print(json.dumps(assess(json.loads(args.plan.read_text())), default=str))
+         elif args.action == 'personal':
+             print(json.dumps(record_personal(args.plan)))
+         elif args.action == 'snapshot':

@@ -1,0 +1,18 @@
+{
+ "snapshot_path": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/43a0d8c8-5d19-4e11-a7c0-2df81439b128/scratchpad/demo/snapshot-2.json",
+ "tickets": [
+  {
+   "label": "ORIGINAL OPTIONAL VARIATION / PHI + BUF +1.5",
+   "legs": [
+    {
+     "sport": "nba",
+     "forecast_id": 1154
+    },
+    {
+     "sport": "nhl",
+     "forecast_id": 1079
+    }
+   ]
+  }
+ ]
+}

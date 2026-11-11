@@ -1,0 +1,38 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_______________ test_a_hard_link_to_a_protected_store_is_refused _______________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-148/test_a_hard_link_to_a_protecte0')
+checkout = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-148/test_a_hard_link_to_a_protecte0/repo/data')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10c566c30>
+capsys = <_pytest.capture.CaptureFixture object at 0x10c57d1f0>
+
+    def test_a_hard_link_to_a_protected_store_is_refused(tmp_path, checkout, monkeypatch, capsys):
+        """A store file hard-linked to the live one (same inode, no path into the live folder) is refused, fail-closed: a
+        store file with more than one link may be the live store under another name."""
+        build_store(tmp_path, checkout / "nhl.sqlite", "nhl")
+        copy = tmp_path / "copy"
+        copy.mkdir()
+        os.link(checkout / "nhl.sqlite", copy / "nhl.sqlite")
+        monkeypatch.setenv("NBA_DATA_DIR", str(copy))
+        before = tree(checkout)
+        no_run(monkeypatch)
+        rc, out = run(["--sport", "nhl", "score"], capsys)
+>       assert (rc, out.get("status")) == (1, "refused") and "hard link" in out["reason"], (rc, out)
+E       AssertionError: (0, {})
+E       assert ((0, None) == (1, 'refused')
+E         
+E         At index 0 diff: 0 != 1
+E         Use -v to get more diff)
+
+tests/test_live_store_guard.py:583: AssertionError
+=============================== warnings summary ===============================
+../../nba-predictor-sprint1/backend/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_live_store_guard.py::test_a_hard_link_to_a_protected_store_is_refused
+1 failed, 39 deselected, 1 warning in 0.47s
+exit 1

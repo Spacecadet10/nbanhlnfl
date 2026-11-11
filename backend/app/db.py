@@ -7,6 +7,8 @@ from typing import Optional
 from . import config
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
+# Migrations that rebuild a table other tables reference: run with foreign keys off, every reference checked before commit.
+PARENT_REBUILDS = frozenset({"0033_nfl_market_quotes.sql", "0035_result_integrity.sql"})
 
 
 def utc_now() -> str:
@@ -103,7 +105,7 @@ def migrate(conn: sqlite3.Connection, upto: Optional[int] = None) -> list[str]:
         version = int(f.name[:4])
         if version in done or (upto is not None and version > upto):
             continue
-        parent_rebuild = f.name == "0033_nfl_market_quotes.sql"
+        parent_rebuild = f.name in PARENT_REBUILDS
         foreign_keys = conn.execute("PRAGMA foreign_keys").fetchone()[0]
         if parent_rebuild:
             conn.execute("PRAGMA foreign_keys = OFF")
@@ -112,7 +114,7 @@ def migrate(conn: sqlite3.Connection, upto: Optional[int] = None) -> list[str]:
                 for stmt in _split(f.read_text()):
                     conn.execute(stmt)
                 if parent_rebuild and conn.execute("PRAGMA foreign_key_check").fetchone() is not None:
-                    raise sqlite3.IntegrityError("foreign key violation in market_quotes rebuild")
+                    raise sqlite3.IntegrityError(f"foreign key violation in the {f.name} table rebuild")
                 conn.execute("INSERT INTO schema_migrations VALUES (?, ?, ?)", (version, f.name, utc_now()))
         finally:
             if parent_rebuild:

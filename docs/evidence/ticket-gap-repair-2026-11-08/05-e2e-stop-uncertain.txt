@@ -1,0 +1,25 @@
+E2E_FORCE_FRESH=1 (harness override of freshness only); ledger reset to live copy
+Sun Nov  8 21:33:07 UTC 2026
+{"accounted": 11, "tickets": [[["nba", 1164], ["nhl", 1083]]]}
+== /stop from the paired chat ==
+{"status": "paused", "review_outcome": "paused", "recorded": 1}
+exit=1
+enabled=0
+ticket batches today=2
+-- user sends /start (simulated by resetting the isolated copy's flag) --
+== uncertain acknowledgement (HTTP 500) ==
+{"status": "uncertain", "review_outcome": "operational_failure", "recorded": 2}
+exit=1
+== same plan again with a healthy transport: must NOT re-send ==
+{"status": "existing_uncertain", "review_outcome": "operational_failure", "recorded": 3}
+exit=1
+== preflight --notify: delivery alert for the uncertain ticket ==
+exit=0
+alerts ['sent'] review {'due': False, 'reason': 'no_new_forecasts'}
+delivery uncertain ai-ticket-review-v3:2026-11-08:924039348
+delivery sent ticket-result:2026-11-08-6326d052a0f6:d0
+delivery sent ticket-result:2026-11-08-f836c8f90122:61
+delivery sent ticket-health:2026-11-08:delivery:28d046
+1 send paused paused: 2026-11-08-9c010c96ba54
+2 send operational_failure uncertain: 2026-11-08-9c010c96ba54
+3 send operational_failure existing_uncertain: 2026-11-08-9c010c96ba54

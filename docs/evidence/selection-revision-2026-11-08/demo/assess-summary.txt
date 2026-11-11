@@ -1,0 +1,24 @@
+snapshot 1 (2026-11-08T16:14:14Z)
+   ORIGINAL MAIN / KC + DET                                   model 53.3% | ×1.58 BE 63.2% | above model: NFL KC win, NFL DET win | no record: NFL KC win, NFL DET win
+   ORIGINAL VARIATION / KC + DEN                              model 52.0% | ×2.03 BE 49.2% | above model: NFL KC win | no record: NFL KC win, NFL DEN win
+snapshot 2 (2026-11-08T20:07:27Z)
+   ORIGINAL OPTIONAL VARIATION / PHI + BUF +1.5               model 48.5% | ×1.68 BE 59.7% | above model: NBA PHI win, NHL BUF +1.5 | no record: —
+snapshot 3 (2026-11-08T21:55:38Z)
+   ORIGINAL Mixed NBA/NHL pair                                model 42.2% | ×2.08 BE 48.2% | above model: NBA DET win, NHL WPG +1.5 | no record: —
+   CANDIDATE (not sent) WPG +1.5 + LAL@DET Over 216.5         model 39.0% | ×2.81 BE 35.5% | above model: NHL WPG +1.5 | no record: —
+snapshot 4 (2026-11-08T22:28:08Z)
+   ORIGINAL Higher-hit pair / TOR + CGY puck lines            model 52.8% | ×2.08 BE 48.0% | above model: NHL CGY +1.5 | no record: —
+   ORIGINAL Three-game puck-line option / shared core         model 34.9% | ×3.14 BE 31.9% | above model: NHL CGY +1.5, NHL WPG +1.5 | no record: —
+   SELECTED TOR +1.5 + CGY +1.5                               model 52.8% | ×2.08 BE 48.0% | above model: NHL CGY +1.5 | no record: —
+   CANDIDATE (not sent) TOR win + CGY +1.5                    model 36.3% | ×3.23 BE 30.9% | above model: NHL CGY +1.5 | no record: —
+snapshot 5 (2026-11-08T23:28:49Z)
+   ORIGINAL New-game pair / Bears + Penguins puck line        model 48.1% | ×1.93 BE 51.8% | above model: NFL CHI win, NHL PIT +1.5 | no record: NFL CHI win
+   ORIGINAL Bigger four-game option / shared core             model 25.4% | ×4.02 BE 24.8% | above model: NFL CHI win, NHL PIT +1.5, NHL CGY +1.5 | no record: NFL CHI win
+   SELECTED MIN win + TOR +1.5                                model 63.6% | ×1.77 BE 56.6% | above model: — | no record: —
+   CANDIDATE (not sent) MIN win + CGY +1.5                    model 62.7% | ×1.59 BE 62.8% | above model: NHL CGY +1.5 | no record: —
+   CANDIDATE (not sent) MIN win + PIT +1.5                    model 58.3% | ×1.65 BE 60.6% | above model: NHL PIT +1.5 | no record: —
+snapshot 6 (2026-11-08T23:57:23Z)
+   ORIGINAL Stronger pair / Timberwolves + Celtics            model 67.6% | ×1.29 BE 77.7% | above model: NBA MIN win, NBA BOS win | no record: —
+   ORIGINAL Three-game NBA option / adds Mavericks            model 47.8% | ×1.71 BE 58.5% | above model: NBA MIN win, NBA BOS win, NBA DAL win | no record: —
+snapshot 7 (2026-11-09T00:12:14Z)
+   ORIGINAL NBA pair / Clippers + Mavericks                   model 45.4% | ×2.70 BE 37.1% | above model: NBA DAL win | no record: —

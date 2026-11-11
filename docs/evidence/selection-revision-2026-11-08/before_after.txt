@@ -1,0 +1,86 @@
+
+#234 snapshot 2026-11-08T16:14:14Z  BEFORE (delivered text): Model estimate 53.3%; Model estimate 52.0%
+  2026-11-08-6326d052a0f6 MAIN / KC + DET
+    AFTER     KC win 78%@-520 + DET win 68%@-305
+              model 53.3% | pays ×1.58, break-even 63.2% | leg records: NFL KC win none; NFL DET win none | priced above model: NFL KC win, NFL DET win
+    (a) swap  KC win 78%@-520 + MIA +6.5 50%@-108
+              model 39.5% | pays ×2.30, break-even 43.5% | leg records: NFL KC win none; NFL MIA +6.5 none | priced above model: NFL KC win, NFL MIA +6.5
+              swapped in MIA +6.5: record none; app note: none
+  2026-11-08-f836c8f90122 VARIATION / KC + DEN
+    AFTER     KC win 78%@-520 + DEN win 66%@-142
+              model 52.0% | pays ×2.03, break-even 49.2% | leg records: NFL KC win none; NFL DEN win none | priced above model: NFL KC win
+    (a) swap  Under 47.5 65%@-110 + DEN win 66%@-142
+              model 42.8% | pays ×3.25, break-even 30.7% | leg records: NFL Under 47.5 none; NFL DEN win none
+              swapped in Under 47.5: record none; app note: none
+
+#245 snapshot 2026-11-08T20:07:27Z  BEFORE (delivered text): Model estimate 48.5%
+  2026-11-08-f02719e1e628 OPTIONAL VARIATION / PHI + BUF +1.5
+    AFTER     PHI win 68%@-449 + BUF +1.5 72%@-270
+              model 48.5% | pays ×1.68, break-even 59.7% | leg records: NBA PHI win 68% of 999; NHL BUF +1.5 77% of 66 | priced above model: NBA PHI win, NHL BUF +1.5
+    (a) swap  Under 237.5 64%@-110 + BUF +1.5 72%@-270
+              model 45.8% | pays ×2.62, break-even 38.2% | leg records: NBA Under 237.5 55% of 33; NHL BUF +1.5 77% of 66 | priced above model: NHL BUF +1.5
+              swapped in Under 237.5: record 55% of 33 (season); app note: Development research only (2023-24 holdout); no independent test yet.
+
+#258 snapshot 2026-11-08T21:55:38Z  BEFORE (delivered text): Model estimate 42.2%
+  2026-11-08-cd2a6a716c85 Mixed NBA/NHL pair
+    AFTER     DET win 64%@-264 + WPG +1.5 66%@-198
+              model 42.2% | pays ×2.08, break-even 48.2% | leg records: NBA DET win 62% of 1100; NHL WPG +1.5 73% of 51 | priced above model: NBA DET win, NHL WPG +1.5
+    (a) swap  LAL +7.5 59%@-105 + WPG +1.5 66%@-198
+              model 38.8% | pays ×2.94, break-even 34.0% | leg records: NBA LAL +7.5 42% of 38; NHL WPG +1.5 73% of 51 | priced above model: NHL WPG +1.5
+              swapped in LAL +7.5: record 42% of 38 (season); app note: Development research only (2023-24 holdout); no independent test yet.
+
+#264 snapshot 2026-11-08T22:28:08Z  BEFORE (delivered text): Model estimate 52.8%; Model estimate 34.9%
+  2026-11-08-fb78638c5d77 Higher-hit pair / TOR + CGY puck lines
+    AFTER     TOR +1.5 73%@-192 + CGY +1.5 72%@-270
+              model 52.8% | pays ×2.08, break-even 48.0% | leg records: NHL TOR +1.5 77% of 66; NHL CGY +1.5 77% of 66 | priced above model: NHL CGY +1.5
+    (a) swap  TOR +1.5 73%@-192 + CGY win 53%@-102
+              model 38.5% | pays ×3.01, break-even 33.2% | leg records: NHL TOR +1.5 77% of 66; NHL CGY win 51% of 4142
+              swapped in CGY win: record 51% of 4142 (history); app note: none
+  2026-11-08-5c41fc014a11 Three-game puck-line option / shared core
+    AFTER     TOR +1.5 73%@-192 + CGY +1.5 72%@-270 + WPG +1.5 66%@-198
+              model 34.9% | pays ×3.14, break-even 31.9% | leg records: NHL TOR +1.5 77% of 66; NHL CGY +1.5 77% of 66; NHL WPG +1.5 73% of 51 | priced above model: NHL CGY +1.5, NHL WPG +1.5
+    (a) swap  TOR +1.5 73%@-192 + CGY win 53%@-102 + WPG +1.5 66%@-198
+              model 25.4% | pays ×4.53, break-even 22.1% | leg records: NHL TOR +1.5 77% of 66; NHL CGY win 51% of 4142; NHL WPG +1.5 73% of 51 | priced above model: NHL WPG +1.5
+              swapped in CGY win: record 51% of 4142 (history); app note: none
+    (b) drop  TOR +1.5 73%@-192 + WPG +1.5 66%@-198
+              model 48.3% | pays ×2.29, break-even 43.7% | leg records: NHL TOR +1.5 77% of 66; NHL WPG +1.5 73% of 51 | priced above model: NHL WPG +1.5
+
+#270 snapshot 2026-11-08T23:28:49Z  BEFORE (delivered text): Model estimate 48.1%; Model estimate 25.4%
+  2026-11-08-12a1e5539414 New-game pair / Bears + Penguins puck line
+    AFTER     CHI win 72%@-278 + PIT +1.5 67%@-238
+              model 48.1% | pays ×1.93, break-even 51.8% | leg records: NFL CHI win none; NHL PIT +1.5 73% of 51 | priced above model: NFL CHI win, NHL PIT +1.5
+    (a) swap  CHI win 72%@-278 + Over 6.5 60%@-155
+              model 43.0% | pays ×2.24, break-even 44.7% | leg records: NFL CHI win none; NHL Over 6.5 51% of 37 | priced above model: NFL CHI win, NHL Over 6.5
+              swapped in Over 6.5: record 51% of 37 (season); app note: Totals showed no skill over a league-average model in the one-time test.
+  2026-11-08-b202001f2504 Bigger four-game option / shared core
+    AFTER     CHI win 72%@-278 + PIT +1.5 67%@-238 + TOR +1.5 73%@-192 + CGY +1.5 72%@-270
+              model 25.4% | pays ×4.02, break-even 24.8% | leg records: NFL CHI win none; NHL PIT +1.5 73% of 51; NHL TOR +1.5 77% of 66; NHL CGY +1.5 77% of 66 | priced above model: NFL CHI win, NHL PIT +1.5, NHL CGY +1.5
+    (a) swap  CHI win 72%@-278 + Over 6.5 60%@-155 + TOR +1.5 73%@-192 + CGY +1.5 72%@-270
+              model 22.7% | pays ×4.66, break-even 21.4% | leg records: NFL CHI win none; NHL Over 6.5 51% of 37; NHL TOR +1.5 77% of 66; NHL CGY +1.5 77% of 66 | priced above model: NFL CHI win, NHL Over 6.5, NHL CGY +1.5
+              swapped in Over 6.5: record 51% of 37 (season); app note: Totals showed no skill over a league-average model in the one-time test.
+    (b) drop  CHI win 72%@-278 + TOR +1.5 73%@-192 + CGY +1.5 72%@-270
+              model 37.8% | pays ×2.83, break-even 35.3% | leg records: NFL CHI win none; NHL TOR +1.5 77% of 66; NHL CGY +1.5 77% of 66 | priced above model: NFL CHI win, NHL CGY +1.5
+
+#282 snapshot 2026-11-08T23:57:23Z  BEFORE (delivered text): Model estimate 67.6%; Model estimate 47.8%
+  2026-11-08-9b971a2c4cee Stronger pair / Timberwolves + Celtics
+    AFTER     MIN win 87%@-700 + BOS win 78%@-790
+              model 67.6% | pays ×1.29, break-even 77.7% | leg records: NBA MIN win 88% of 186; NBA BOS win 80% of 607 | priced above model: NBA MIN win, NBA BOS win
+    (a) swap  MIN win 87%@-700 + MIL +13.5 54%@-112
+              model 47.0% | pays ×2.16, break-even 46.2% | leg records: NBA MIN win 88% of 186; NBA MIL +13.5 41% of 59 | priced above model: NBA MIN win
+              swapped in MIL +13.5: record 41% of 59 (season); app note: Development research only (2023-24 holdout); no independent test yet.
+  2026-11-08-6291dc2937a8 Three-game NBA option / adds Mavericks
+    AFTER     MIN win 87%@-700 + BOS win 78%@-790 + DAL win 71%@-305
+              model 47.8% | pays ×1.71, break-even 58.5% | leg records: NBA MIN win 88% of 186; NBA BOS win 80% of 607; NBA DAL win 71% of 767 | priced above model: NBA MIN win, NBA BOS win, NBA DAL win
+    (a) swap  MIN win 87%@-700 + MIL +13.5 54%@-112 + DAL win 71%@-305
+              model 33.2% | pays ×2.87, break-even 34.8% | leg records: NBA MIN win 88% of 186; NBA MIL +13.5 41% of 59; NBA DAL win 71% of 767 | priced above model: NBA MIN win, NBA DAL win
+              swapped in MIL +13.5: record 41% of 59 (season); app note: Development research only (2023-24 holdout); no independent test yet.
+    (b) drop  MIN win 87%@-700 + DAL win 71%@-305
+              model 61.4% | pays ×1.52, break-even 65.9% | leg records: NBA MIN win 88% of 186; NBA DAL win 71% of 767 | priced above model: NBA MIN win, NBA DAL win
+
+#286 snapshot 2026-11-09T00:12:14Z  BEFORE (delivered text): Model estimate 45.4%
+  2026-11-08-e0aad6ec4e5d NBA pair / Clippers + Mavericks
+    AFTER     LAC win 64%@103 + DAL win 71%@-305
+              model 45.4% | pays ×2.70, break-even 37.1% | leg records: NBA LAC win 62% of 1100; NBA DAL win 71% of 767 | priced above model: NBA DAL win
+    (a) swap  LAC win 64%@103 + BKN +7.5 53%@-113
+              model 33.8% | pays ×3.83, break-even 26.1% | leg records: NBA LAC win 62% of 1100; NBA BKN +7.5 41% of 59 | priced above model: NBA BKN +7.5
+              swapped in BKN +7.5: record 41% of 59 (season); app note: Development research only (2023-24 holdout); no independent test yet.

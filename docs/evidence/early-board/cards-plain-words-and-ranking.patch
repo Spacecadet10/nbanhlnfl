@@ -1,0 +1,280 @@
+diff -ruN a/backend/app/schemas.py b/backend/app/schemas.py
+--- a/backend/app/schemas.py	2026-11-10 12:25:08.684000177 +0000
++++ b/backend/app/schemas.py	2026-11-10 12:25:08.684000177 +0000
+@@ -181,6 +181,9 @@
+     small_sample: bool
+     excluded: dict[str, int]
+     as_of: datetime
++    rank: Optional[int] = Field(default=None, description="Place of this exact percentage among the market's exact percentages "
++                                                          "with at least three settled results, best record first; None below that.")
++    ranked: int = Field(default=0, description="How many exact percentages of this sport and market are ranked.")
+ 
+ 
+ class CanonicalForecast(BaseModel):
+diff -ruN a/backend/app/telegram.py b/backend/app/telegram.py
+--- a/backend/app/telegram.py	2026-11-10 12:25:08.687000177 +0000
++++ b/backend/app/telegram.py	2026-11-10 12:25:08.687000177 +0000
+@@ -184,8 +184,8 @@
+         book = strong[0].get('market_prob')
+         detail = escape(strong[0]['market_title']) + ' · Model ' + displayed_percentage(strong[0]['probability']) + '%'
+         if book is not None:
+-            detail = 'Model ' + displayed_percentage(strong[0]['probability']) + '% · Sportsbook ' + displayed_percentage(book) + '%' + (
+-                ' · no value at this price' if book > strong[0]['probability'] else '')
++            detail = ('App ' + displayed_percentage(strong[0]['probability']) + '% · Sportsbook ' + displayed_percentage(book) + '% · '
++                      + price_tag(strong[0]['probability'], book).upper())
+         lines.append(detail)
+     lines += ['<i>' + ('App ranking for this past game.' if preview else 'Based on the app’s existing ranking.') + '</i>',
+               divider, '', '<b>Market breakdown</b>', '']
+@@ -206,9 +206,13 @@
+         settled = wins + losses
+         source = {'model': ' · <i>model line</i>', 'bookmaker': ' · <i>bookmaker line at forecast</i>', 'none': ''}[h['line_source']]
+         book = pick.get('market_prob')
+-        versus = '' if book is None else f"Sportsbook {displayed_percentage(book)}% (model {100 * (pick['probability'] - book):+.1f}) · "
++        if book is not None:   # on the small grey line under the pick, so the record line keeps its length and never runs off the card
++            source = (source[:-4] + ' · ' if source else ' · <i>') + f"sportsbook {displayed_percentage(book)}% · {price_tag(pick['probability'], book)}</i>"
++        # Owner request Nov 9: where this exact percentage stands among the market's ranked exact percentages, and a plain
++        # AVOID when its own record is a losing one. Only percentages with three or more results are ranked.
++        standing = '' if not h.get('rank') else f" · rank {h['rank']} of {h['ranked']}" + (' · AVOID' if losses > wins else '')
+         lines += [f"<b>{escape(pick['market_title'])}</b>", f"{escape(pick['pick_label'])}{source}",
+-                  f"<b>Model {escape(h['percentage'])}%</b> · {versus}{wins}W–{losses}L ({settled} settled)"]
++                  f"<b>Model {escape(h['percentage'])}%</b> · {wins}W–{losses}L ({settled} settled){standing}"]
+         if preview:
+             result = {'win': 'Won', 'loss': 'Lost', 'push': 'Push'}.get(pick['grade'], pick['grade'])
+             lines.append('Result: ' + escape(result))
+@@ -246,6 +250,15 @@
+     return lines[0], lines[1], lines[2], re.sub(r'\s*[+-]?\d+(\.\d+)?$', '', pick.strip())
+ 
+ 
++def price_tag(app_probability, book_probability):
++    """Plain words for the gap between the app and the sportsbook's own (margin-free) probability, owner request Nov 9:
++    'overpriced' when the sportsbook rates the pick at least three points higher than the app (the bet costs more than the
++    app thinks it is worth), 'underpriced' when at least three points lower, else 'fair price'. A description of the two
++    numbers, not a promise: the app has been wrong against the sportsbook often."""
++    gap = app_probability - book_probability
++    return 'underpriced' if gap >= 0.03 else 'overpriced' if gap <= -0.03 else 'fair price'
++
++
+ def deliver_card(bot, conn, chat_id, key, text, now):
+     """Owner request Nov 9: one card per game. A card whose game, start and recommended pick already reached the chat (or
+     may have: sent, uncertain, sending) is not sent again when only a forecast version or a line changed; the delivery
+diff -ruN a/backend/app/threshold_overview.py b/backend/app/threshold_overview.py
+--- a/backend/app/threshold_overview.py	2026-11-10 12:25:08.682000177 +0000
++++ b/backend/app/threshold_overview.py	2026-11-10 12:25:08.682000177 +0000
+@@ -92,6 +92,27 @@
+     return out
+ 
+ 
++RANK_MIN_SETTLED = 3   # an exact percentage is ranked once it has this many settled results (owner request Nov 9)
++
++
++def percentage_ranking(index: dict, exclude_game: Optional[str] = None) -> list:
++    """Every exact percentage of one sport and market that has at least RANK_MIN_SETTLED settled results, best record
++    first: higher win rate, then more results, then the higher percentage. The owner's question "which percentages should
++    we go for" answered from the same exact-percentage records the cards show; no ranges, no other model or direction.
++    A short record near 50% can lead by chance, so each row carries its counts."""
++    rows = []
++    for key, games in index.items():
++        grades = Counter(grade for gid, grade in games.items() if gid != exclude_game)
++        wins, losses = grades['win'], grades['loss']
++        if wins + losses >= RANK_MIN_SETTLED:
++            rows.append({'key': key, 'percentage': key[0], 'side': key[1], 'source': key[2], 'model_version': key[3], 'line_source': key[4],
++                         'wins': wins, 'losses': losses, 'settled': wins + losses, 'win_rate': wins / (wins + losses)})
++    rows.sort(key=lambda r: (-r['win_rate'], -r['settled'], -float(r['percentage']), r['side'], r['model_version']))
++    for number, row in enumerate(rows, 1):
++        row['rank'] = number
++    return rows
++
++
+ def percentage_record(sport: str, market: str, rec: dict, game_id: str, index: dict, as_of: str) -> dict:
+     """Exact displayed percentage and direction, same model/source and line provenance; exclude this game.
+ 
+@@ -110,6 +131,8 @@
+             'state': state, 'wins': wins, 'losses': losses, 'settled': settled,
+             'win_rate': wins / settled if settled else None, 'loss_rate': losses / settled if settled else None,
+             'ci95': wilson(wins, settled), 'small_sample': settled < MIN_LIVE_GRADED,
++            **(lambda ranking: {'rank': next((r['rank'] for r in ranking if r['key'] == _percentage_key(rec)), None), 'ranked': len(ranking)})(
++                percentage_ranking(index, game_id)),
+             'excluded': {k: v for k, v in grades.items() if k not in ('win', 'loss')}, 'as_of': as_of}
+ 
+ 
+diff -ruN a/backend/app/tickets.py b/backend/app/tickets.py
+--- a/backend/app/tickets.py	2026-11-10 12:25:08.691000177 +0000
++++ b/backend/app/tickets.py	2026-11-10 12:25:08.691000177 +0000
+@@ -66,7 +66,8 @@
+                 due = conn.execute("SELECT game_id FROM games WHERE status='scheduled' AND season_type IN ('regular','play_in','postseason') AND tipoff_at>? AND tipoff_at<=?",
+                                    (stamp, (now+timedelta(minutes=110)).strftime('%Y-%m-%dT%H:%M:%SZ'))).fetchall()
+                 covered = {p['game_id'] for p in report['picks'] if p['grade']=='pending'}
+-                result['sports'][sport] = {'freshness': state, 'report': report,
++                ranking = percentage_rankings(sport, provider, stamp)
++                result['sports'][sport] = {'freshness': state, 'report': report, 'percentage_ranking': ranking,
+                     'missing_due_games': [g['game_id'] for g in due if g['game_id'] not in covered]}
+                 if delay:
+                     result['sports'][sport]['refresh_delay'] = delay
+@@ -84,6 +85,20 @@
+     return jsonable_encoder(result)
+ 
+ 
++def percentage_rankings(sport, provider, stamp):
++    """The ranked exact percentages of every market of a sport (threshold_overview.percentage_ranking), for the reviewer to
++    read beside the picks: which exact percentages have the best and the worst records so far. Never fails a snapshot."""
++    from app import sports, threshold_overview as to
++    out = {}
++    try:
++        for market in (list(provider.indexes) if hasattr(provider, 'indexes') else sports.get(sport).markets):
++            index = provider.indexes[market] if hasattr(provider, 'indexes') else to.percentage_index(provider._canonical_cohort(market)[1], stamp)
++            out[market] = [{k: v for k, v in row.items() if k != 'key'} for row in to.percentage_ranking(index)]
++    except Exception as exc:
++        return {'error': type(exc).__name__}
++    return out
++
++
+ def _parse(stamp):
+     return datetime.fromisoformat(stamp.replace('Z', '+00:00'))
+ 
+@@ -205,6 +220,7 @@
+                 record_minus_break_even=None if record is None or break_even is None else
+                 [record['interval'][0] - break_even, record['interval'][1] - break_even],
+                 exact=f"{_field(history, 'wins', 0) or 0}-{_field(history, 'losses', 0) or 0} ({_field(history, 'settled', 0) or 0} settled)",
++                exact_rank=(f"{_field(history, 'rank')} of {_field(history, 'ranked')}" if _field(history, 'rank') else None),
+                 app_rank=pick.get('game_rank'), skill_proven=pick.get('skill_proven'),
+                 line_source=quote.get('line_source') or _field(history, 'line_source'), app_note=markets.LIMITATIONS.get((sport, pick['market'])))
+ 
+diff -ruN a/backend/tests/test_telegram.py b/backend/tests/test_telegram.py
+--- a/backend/tests/test_telegram.py	2026-11-10 12:25:08.692000177 +0000
++++ b/backend/tests/test_telegram.py	2026-11-10 12:25:08.693000177 +0000
+@@ -369,29 +369,84 @@
+     assert tg.card_identity(tg.message_batches(report(), '123')[0][1])[3] == 'No strong pick'
+ 
+ 
+-def test_card_shows_the_sportsbook_probability_beside_the_model_and_flags_a_price_above_the_model():
+-    """Owner request Nov 9 (CLE @ CHA: 'CLE win' was recommended at 55% while the price implied 74%; the card never said so)."""
++def priced_card(history=None):
+     d = strong_report('CLE win')
+-    d['picks'][0].update(market='winner', market_title='Winner', probability=0.552, market_prob=0.7404)
+-    d['picks'][0]['percentage_history'].update(market='winner', percentage='55.2', line_source='none')
++    d['picks'][0].update(matchup='CLE @ CHA', market='winner', market_title='Winner', probability=0.552, market_prob=0.7404, opposite_pick_label='CHA win')
++    d['picks'][0]['percentage_history'].update(market='winner', percentage='55.2', line_source='none', **(history or {}))
+     spread = copy.deepcopy(strong_report('CHA +8.5')['picks'][0])
+-    spread.update(strong=False, game_rank=2, probability=0.5708, market_prob=0.5094, forecast_id=2)
+-    spread['percentage_history'].update(percentage='57.1')
+-    d['picks'].append(spread)
+-    key, text = tg.message_batches(d, '123')[0]
+-    assert 'Model 55.2% · Sportsbook 74.0% · no value at this price' in text
+-    assert len('Model 55.2% · Sportsbook 74.0% · no value at this price') <= 56     # one row of the card's headline box
+-    assert '<b>Model 57.1%</b> · Sportsbook 50.9% (model +6.1) · 3W–1L (4 settled)' in text
+-    assert '<b>Model 55.2%</b> · Sportsbook 74.0% (model -18.8) · ' in text
++    spread.update(matchup='CLE @ CHA', strong=False, game_rank=2, probability=0.5708, market_prob=0.5043, forecast_id=2)
++    spread['percentage_history'].update(percentage='57.1', **(history or {}))
++    total = copy.deepcopy(spread)
++    total.update(market='total', market_title='Game total points', pick_label='Over 215.5', probability=0.52, market_prob=0.51, forecast_id=3)
++    total['percentage_history'].update(market='total', percentage='52.0')
++    d['picks'] += [spread, total]
++    return d
++
++
++def test_card_says_in_plain_words_how_the_app_and_the_sportsbook_compare():
++    """Owner request Nov 9 (CLE @ CHA: 'CLE win' was recommended at 55% while the sportsbook had it at 74%; the card never
++    said so). Simple words: overpriced / underpriced / fair price."""
++    key, text = tg.message_batches(priced_card(), '123')[0]
++    assert 'App 55.2% · Sportsbook 74.0% · OVERPRICED' in text
++    assert 'CLE win · <i>sportsbook 74.0% · overpriced</i>' in text
++    assert 'CHA +8.5 · <i>bookmaker line at forecast · sportsbook 50.4% · underpriced</i>' in text
++    assert 'Over 215.5 · <i>bookmaker line at forecast · sportsbook 51.0% · fair price</i>' in text
++    assert '<b>Model 57.1%</b> · 3W–1L (4 settled)' in text          # the record line is exactly as before
+     assert tg.card_identity(text)[3] == 'CLE win'
++    assert (tg.price_tag(.60, .57), tg.price_tag(.60, .571), tg.price_tag(.60, .63), tg.price_tag(.60, .629)) == ('underpriced', 'fair price', 'overpriced', 'fair price')
++
++
++def test_priced_card_renders_and_no_line_is_longer_than_the_card():
++    """Found on a real card (CLE @ CHA, Nov 9): added sportsbook text pushed the record line off the right edge."""
++    from PIL import Image, ImageDraw
+     from app import telegram_card
+-    assert telegram_card.render_card(text).startswith(b'\x89PNG')     # the picture still renders with the longer lines
++    text = tg.message_batches(priced_card(dict(wins=0, losses=0, settled=0, small_sample=True)), '123')[0][1]
++    assert telegram_card.render_card(text).startswith(b'\x89PNG')
++    probe = ImageDraw.Draw(Image.new('RGB', (10, 10)))
++    assert 200 + probe.textlength('0W–0L (0 settled) · No settled matching examples.', font=telegram_card._font(22)) <= 1000
++    assert 200 + probe.textlength('Bookmaker line at forecast · sportsbook 50.4% · underpriced', font=telegram_card._font(20)) <= 1000
++    assert 95 + probe.textlength('App 55.2% · Sportsbook 74.0% · OVERPRICED', font=telegram_card._font(27)) <= 930
+ 
+ 
+-def test_card_without_a_stored_price_is_unchanged_and_a_fairly_priced_pick_is_not_flagged():
++def test_card_without_a_stored_price_is_unchanged():
+     text = tg.message_batches(report(), '123')[0][1]            # team total: no sportsbook price is stored
+-    assert 'Sportsbook' not in text and '<b>Model 51.8%</b> · 0W–2L (2 settled)' in text
++    assert 'ortsbook' not in text and '<b>Model 51.8%</b> · 0W–2L (2 settled)' in text and 'ORL over 109.5 · <i>model line</i>' in text
+     d = strong_report(); d['picks'][0]['market_prob'] = 0.48
+-    text = tg.message_batches(d, '123')[0][1]
+-    assert 'Model 51.8% · Sportsbook 48.0%\n' in text and 'no value' not in text
+     assert tg.message_batches(d, '123')[0][0] == tg.message_batches(strong_report(), '123')[0][0]   # same delivery key: no resend
++
++
++def test_exact_percentages_are_ranked_by_record_once_they_have_three_results():
++    """Owner request Nov 9: 'we track every percentage to see the strongest ones'. Exact percentages only, never a range."""
++    from app import threshold_overview as to
++    key = lambda pct, side='a': (pct, side, 'primary_recorded', 'm', 'none')
++    index = {key('87.8'): {'g1': 'win', 'g2': 'win', 'g3': 'win'},                    # 3-0
++             key('87.9'): {'g4': 'win', 'g5': 'loss', 'g6': 'win', 'g7': 'win'},      # 3-1: a different percentage, its own record
++             key('51.4'): {'g8': 'loss', 'g9': 'loss', 'g10': 'loss'},                # 0-3
++             key('60.0'): {'g11': 'win', 'g12': 'win'},                               # two results: tracked, not ranked yet
++             key('87.8', 'b'): {'g13': 'win', 'g14': 'push', 'g15': 'not_yet_available'}}   # other direction, one settled
++    ranking = to.percentage_ranking(index)
++    assert [(r['percentage'], r['side'], r['wins'], r['losses'], r['rank']) for r in ranking] == [
++        ('87.8', 'a', 3, 0, 1), ('87.9', 'a', 3, 1, 2), ('51.4', 'a', 0, 3, 3)]
++    rec = {'confidence': 0.879, 'side': 'a', 'source': 'primary_recorded', 'model_version': 'm', 'line_source': 'none'}
++    mine = to.percentage_record('nba', 'winner', rec, 'new-game', index, NOW)
++    assert (mine['wins'], mine['losses'], mine['rank'], mine['ranked']) == (3, 1, 2, 3)
++    assert to.percentage_record('nba', 'winner', rec, 'g5', index, NOW)['rank'] == 1      # its own game never counts toward its record
++    assert to.percentage_record('nba', 'winner', dict(rec, confidence=0.60), 'new-game', index, NOW)['rank'] is None
++    from app.schemas import ForecastPercentageRecord
++    assert ForecastPercentageRecord(**mine).rank == 2
++
++
++def test_card_shows_the_rank_of_a_ranked_percentage_and_avoid_for_a_losing_one():
++    d = strong_report()
++    d['picks'][0]['percentage_history'].update(wins=5, losses=1, settled=6, rank=2, ranked=41)
++    assert '<b>Model 51.8%</b> · 5W–1L (6 settled) · rank 2 of 41\n' in tg.message_batches(d, '123')[0][1]
++    d['picks'][0]['percentage_history'].update(wins=0, losses=3, settled=3, rank=41, ranked=41)
++    text = tg.message_batches(d, '123')[0][1]
++    assert '0W–3L (3 settled) · rank 41 of 41 · AVOID' in text
++    from PIL import Image, ImageDraw
++    from app import telegram_card
++    assert telegram_card.render_card(text).startswith(b'\x89PNG')
++    probe = ImageDraw.Draw(Image.new('RGB', (10, 10)))
++    assert 200 + probe.textlength('10W–13L (23 settled) · rank 141 of 141 · AVOID · Small sample.', font=telegram_card._font(22)) <= 1000
++    plain = tg.message_batches(strong_report(), '123')[0][1]            # not ranked: the line is exactly as before
++    assert '<b>Model 51.8%</b> · 3W–1L (4 settled)\n' in plain and ' · rank ' not in plain
+diff -ruN a/backend/tests/test_tickets.py b/backend/tests/test_tickets.py
+--- a/backend/tests/test_tickets.py	2026-11-10 12:25:08.694000177 +0000
++++ b/backend/tests/test_tickets.py	2026-11-10 12:25:08.695000177 +0000
+@@ -1999,3 +1999,18 @@
+     monkeypatch.setattr(tg.Telegram,'call',original)
+     with pytest.raises(ValueError,match='hash mismatch'):t.send(t.check(plan))
+     assert sent==[]
++
++
++def test_reviewer_sees_each_picks_exact_percentage_rank_and_the_ranked_list(setup,monkeypatch):
++    """Owner request Nov 9: the AI reads the ranked exact percentages when it builds tickets."""
++    plan,snap,sent,path=setup
++    pick=dict(snap['sports']['nba']['report']['picks'][0],percentage_history=dict(wins=4,losses=1,settled=5,rank=2,ranked=9,line_source='none'))
++    assert t.leg_assessment('nba',pick)['exact_rank']=='2 of 9' and t.leg_assessment('nba',pick)['exact']=='4-1 (5 settled)'
++    assert t.leg_assessment('nba',snap['sports']['nba']['report']['picks'][1])['exact_rank'] is None
++    class Provider:
++        indexes={m:{('87.8','a','primary_direct','m','none'):{'g1':'win','g2':'win','g3':'loss'}} for m in ('winner','spread','total','team_total_home','team_total_away')}
++    ranking=t.percentage_rankings('nfl',Provider(),NOW)
++    assert ranking['winner']==[dict(percentage='87.8',side='a',source='primary_direct',model_version='m',line_source='none',wins=2,losses=1,settled=3,win_rate=2/3,rank=1)]
++    class Broken:
++        indexes=None
++    assert t.percentage_rankings('nfl',Broken(),NOW)=={'error':'TypeError'}     # a ranking problem never fails the snapshot
+diff -ruN a/docs/TICKETS.md b/docs/TICKETS.md
+--- a/docs/TICKETS.md	2026-11-10 12:25:08.696000177 +0000
++++ b/docs/TICKETS.md	2026-11-10 12:25:08.697000177 +0000
+@@ -247,6 +247,7 @@
+ - **Quiet health states.** `source_unavailable_or_stale` and `missing_due_forecasts` (`QUIET_HEALTH`) are no longer sent to the chat; they remain in the preflight report, the snapshot and the trigger observations. Every other alert is unchanged.
+ - **Up to seven legs** (`MAX_LEGS = 7`).
+ - **One game card per game** (`telegram.deliver_card`). The delivery key is unchanged, so receipts of the earlier release are matched at cutover. Before a card with a new key is sent, the ledger is searched (two days) for a card with the same sport, matchup, start and recommended pick, ignoring the line number, that reached or may have reached the chat (sent, uncertain, sending); if one exists the new card is not sent (`already_sent_for_game`). A different recommended side or start sends again; a rejected (`failed`) card does not block.
+-- **Game cards show the sportsbook next to the model** (`telegram.format_batch`, owner request Nov 9 after CLE @ CHA: 'CLE win' was the recommended pick at 55% while the price implied 74%). Each priced market row reads `Sportsbook X% (model ±Y)`; the headline reads `Model A% · Sportsbook B%` and adds `no value at this price` when the sportsbook's margin-free probability is above the model's. The recommendation itself, the delivery key and the one-card-per-game guard are unchanged; markets without a stored price are unchanged. This is information, not a value claim: over the first month the model's disagreements with DraftKings two hours before the start lost on paper (docs/VALUE_AUDIT.md).
++- **Game cards compare the app with the sportsbook in plain words** (`telegram.format_batch`, `price_tag`; owner request Nov 9 after CLE @ CHA, where 'CLE win' was the recommended pick at 55% while the sportsbook had it at 74%). Headline: `App A% · Sportsbook B% · OVERPRICED` (or UNDERPRICED / FAIR PRICE). Each priced market shows `sportsbook B% · overpriced` on the small grey line under the pick; the record line is untouched so nothing runs off the card (a first version did, on a real card). Three points either way decide the word. The recommendation, the delivery key and the one-card-per-game guard are unchanged; markets without a stored price are unchanged. A description of two numbers, not a value claim (docs/VALUE_AUDIT.md).
++- **Ranked exact percentages** (`threshold_overview.percentage_ranking`, owner request Nov 9: 'we track every percentage to see the strongest ones'). Every exact percentage of a sport and market with three or more settled results is ranked by its own record (win rate, then results, then the higher percentage); exact percentages only, no ranges. Each pick's `percentage_history` carries `rank` / `ranked`; the game card's record line adds `rank N of M`, and `AVOID` when that exact percentage has a losing record; the ticket snapshot carries `percentage_ranking` per sport and each pick's assessment carries `exact_rank`, so the reviewer reads the list beside the picks. Short records near 50% can lead by chance: the counts are always shown. The review instructions still decide how the reviewer weighs the list.
+ 
+ Not changed: the review instructions (`SKILL.md`), the automation schedule, selection rules, settlement, stores. Tested in a Linux copy of this checkout (Python 3.10, own venv): `tests/test_tickets.py tests/test_telegram.py tests/test_delivery_release.py tests/test_nfl_live.py tests/test_soccer_live.py`, 237 passed. Not run by the author: the full backend suite, the release venv, a real Telegram send.

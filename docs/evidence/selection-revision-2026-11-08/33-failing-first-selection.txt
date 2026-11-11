@@ -1,0 +1,10 @@
+FAILED tests/test_tickets.py::test_decimal_odds_and_break_even - AttributeErr...
+FAILED tests/test_tickets.py::test_leg_assessment_puts_probability_price_record_and_evidence_quality_side_by_side
+FAILED tests/test_tickets.py::test_ticket_assessment_reports_payout_break_even_estimate_and_uncertainty
+FAILED tests/test_tickets.py::test_check_requires_a_payout_judgment_per_ticket_and_the_text_shows_payout_and_break_even
+FAILED tests/test_tickets.py::test_unpriced_tickets_say_the_payout_is_unknown
+FAILED tests/test_tickets.py::test_assess_action_compares_candidate_tickets_without_archiving_or_sending
+6 failed, 77 passed in 3.68s
+FAILED tests/test_tickets.py::test_check_requires_a_payout_judgment_per_ticket_and_the_text_shows_payout_and_break_even
+FAILED tests/test_tickets.py::test_ticket_assessment_says_where_the_record_range_sits_against_break_even
+2 failed, 82 deselected in 0.35s

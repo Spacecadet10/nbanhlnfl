@@ -1,0 +1,29 @@
+<b>PROP51 · COMBINED PARLAY TICKETS · 2026-11-08</b>
+Multi-game combinations from app forecasts + AI selection. Not a single-game card.
+2 options: #1 2 legs 68% pays ×1.29 · #2 3 legs 48% pays ×1.71
+
+<b>Ticket 1: Stronger pair / Timberwolves + Celtics</b>
+2 legs · Moneyline
+ID 2026-11-08-9b971a2c4cee
+Combine ALL these legs in ONE parlay:
+1. NBA / UTAH @ MIN / Moneyline: <b>MIN win</b> / Nov 08 07:00 PM EST / 86.9% / DK -700
+2. NBA / BOS @ MIL / Moneyline: <b>BOS win</b> / Nov 08 08:00 PM EST / 77.8% / DK -790
+Pays about ×1.29 at stored prices; break-even 77.7%; model estimate 67.6% (independence assumption).
+Priced above the model: NBA MIN win, NBA BOS win.
+
+<b>Ticket 2: Three-game NBA option / adds Mavericks</b>
+3 legs · Moneyline
+ID 2026-11-08-6291dc2937a8
+Combine ALL these legs in ONE parlay:
+1. NBA / UTAH @ MIN / Moneyline: <b>MIN win</b> / Nov 08 07:00 PM EST / 86.9% / DK -700
+2. NBA / BOS @ MIL / Moneyline: <b>BOS win</b> / Nov 08 08:00 PM EST / 77.8% / DK -790
+3. NBA / BKN @ DAL / Moneyline: <b>DAL win</b> / Nov 08 07:30 PM EST / 70.7% / DK -305
+Pays about ×1.71 at stored prices; break-even 58.5%; model estimate 47.8% (independence assumption).
+Priced above the model: NBA MIN win, NBA BOS win, NBA DAL win.
+
+<b>Shared core exposure</b>
+NBA MIN win (UTAH @ MIN): shared across 2 tickets (2026-11-08-9b971a2c4cee, 2026-11-08-6291dc2937a8)
+NBA BOS win (BOS @ MIL): shared across 2 tickets (2026-11-08-9b971a2c4cee, 2026-11-08-6291dc2937a8)
+One losing core pick can lose multiple tickets.
+
+Prices: latest stored DraftKings quotes, 06:56 PM EST; confirm before betting. Model estimates are not guaranteed win rates.

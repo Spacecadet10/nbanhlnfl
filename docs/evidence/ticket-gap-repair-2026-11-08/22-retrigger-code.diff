@@ -1,0 +1,59 @@
+--- backend/app/tickets.py	2026-11-08 18:28:31
++++ /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/43a0d8c8-5d19-4e11-a7c0-2df81439b128/scratchpad/wt/backend/app/tickets.py	2026-11-08 18:31:06
+@@ -152,9 +152,10 @@
+     latest = {}
+     with telegram.ledger() as conn:
+         schema(conn)
+-        for row in conn.execute('SELECT snapshot_sha256,outcome,payload FROM ticket_reviews WHERE day=? ORDER BY review_id', (day,)):
+-            if row['snapshot_sha256']:
+-                latest[row['snapshot_sha256']] = row['outcome'] == 'operational_failure' and json.loads(row['payload']).get('retryable')
++        for row in conn.execute('SELECT snapshot_sha256,outcome,detail,payload FROM ticket_reviews WHERE day=? ORDER BY review_id', (day,)):
++            if row['snapshot_sha256']:   # a refusal that says "review again" (code/skill changed, snapshot expired) is retryable
++                latest[row['snapshot_sha256']] = row['outcome'] == 'operational_failure' and bool(
++                    json.loads(row['payload']).get('retryable') or 'review again' in row['detail'])
+     return {digest for digest, retry in latest.items() if retry}
+ 
+ 
+@@ -162,6 +163,8 @@
+     """Forecast keys and games accounted for by the day's validated review archives (written only by a passing check).
+ 
+     A review whose dispatch then failed retryably does not count, so the trigger fires again; uncertain/paused do count.
++    A forecast whose source was unusable (stale/failing) in that review's snapshot could not be a leg there, so it is not
++    counted either: once its source is usable again it triggers a review of its own.
+     """
+     from app import config
+     keys, games = set(), set()
+@@ -175,11 +178,21 @@
+                 continue
+         except (OSError, ValueError, KeyError, TypeError, AttributeError):
+             continue
+-        keys.update(accounted)
++        unusable = set()
+         for sport, section in sections.items():
+             for pick in (section.get('report') or {}).get('picks', []):
+-                if f"{sport}:{pick.get('forecast_id')}" in accounted:
++                key = f"{sport}:{pick.get('forecast_id')}"
++                if key not in accounted:
++                    continue
++                try:
++                    usable = source_usable(section, pick)
++                except (KeyError, TypeError, ValueError, AttributeError):
++                    usable = False
++                if usable:
+                     games.add((sport, pick['game_id']))
++                else:
++                    unusable.add(key)
++        keys.update(set(accounted) - unusable)
+     return keys, games
+ 
+ 
+@@ -952,7 +965,8 @@
+         result = check(plan)
+     except Exception as exc:
+         failure = dict(_failure(exc), review_outcome='operational_failure')
+-        failure['recorded'] = _safe_record('check', 'operational_failure', 'validation refused: ' + failure['reason'], plan=plan)
++        failure['recorded'] = _safe_record('check', 'operational_failure', 'validation refused: ' + failure['reason'], plan=plan,
++                                           retryable='review again' in failure['reason'])
+         print(json.dumps(failure))
+         return 1
+     if args.action == 'check':

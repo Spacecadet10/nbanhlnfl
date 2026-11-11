@@ -1,0 +1,4 @@
+Unmodified release 96ce63e (tickets.py 9182a677820f095f), isolated NBA_DATA_DIR, release venv:
+pytest -q -p no:cacheprovider tests/test_deep_study.py  ->  8 failed, 2 passed
+Cause: ModuleNotFoundError torch / keras; DependencyMissing "torch==2.14.1 not installed here" (research-only dependencies).
+The same 8 tests are the only failures in the full suite with the selection diff applied (39-full-suite-on-96ce63e.txt).

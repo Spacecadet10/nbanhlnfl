@@ -1,0 +1,10 @@
+Browser check, batch1 base worktree (W2+W3 merged), 2026-11-07 ~19:xx ET
+API: uvicorn from /Users/andry/Desktop/nba-predictor-batch1/backend :8871, NBA_API_MODE=real, NBA_DATA_DIR=$SP/work/devapi (copies of 15:29 live backups, migrated to 35), NBA_LIVE_DATA_DIR=$SP/stores (read-only copies). Web: vite from batch1/frontend :5271. NFL meta: forecasts True, odds True, injuries False.
+Method: same-origin iframe of exact width; wait until no "Loading"; documentElement.scrollWidth vs innerWidth; each table.history parent class.
+Grid: 9 pages x 7 widths (390,600,640,700,760,800,1440) = 63 loads:
+ /history, /history?sport=nhl, /history?sport=nfl, /performance (nba,nhl,nfl), /history?run=live (nba,nhl), /?sport=nfl
+Result: 63/63 scrollWidth == innerWidth; 0 still loading; 0 API errors; 0 history tables outside .table-wrap.
+ NBA/NHL history table width inside wrapper: 354@390 (cards), 692@600-700, 724@760, 764@800, 1092@1440.
+Control (same load, wrapper removed in DOM): /history nba & nhl: 710 @600 and 710 @700 (overflow reproduced); with wrapper 600/700. NFL history: 600/700 either way.
+Wording: /?sport=nfl and /daily-learning?sport=nfl contain no "data only"; active-forecast text present; Daily Learning subtitle "Not available for the NFL. NFL live forecasts and their record are on Game Day, Prediction History and Performance."
+Processes: API PID 42834, web PID 42835 started and stopped by PID.

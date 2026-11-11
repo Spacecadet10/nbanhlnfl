@@ -1,0 +1,45 @@
+app imported from: /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/release/selfrepo/backend/app/__init__.py
+git status clean: True
+[3a score (shipped schema)] release.check problems: []
+  migration_context: ['the code runs from /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/release/selfrepo, the checkout that holds this data folder (/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/release/selfrepo/data); a release runs from its own checkout']
+--- 3a score (shipped schema)
+rc: 1
+stdout: {"status": "refused", "reason": "$G/release/selfrepo/data is in a protected live data folder and this is not the verified release environment (the code runs from $G/release/selfrepo, the checkout that holds this data folder ($G/release/selfrepo/data); a release runs from its own checkout): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["the
+tree unchanged: True
+[3b explicit migrate nfl@33] release.check problems: ["store schema 33 differs from this release's schema 35: update the release deliberately"]
+  migration_context: ['the code runs from /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/release/selfrepo, the checkout that holds this data folder (/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/release/selfrepo/data); a release runs from its own checkout']
+--- 3b explicit migrate nfl@33
+rc: 1
+stdout: {"status": "refused", "reason": "$G/release/selfrepo/data is in a protected live data folder and this is not the verified release environment (the code runs from $G/release/selfrepo, the checkout that holds this data folder ($G/release/selfrepo/data); a release runs from its own checkout): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["the
+tree unchanged: True
+[3c migrate nhl] release.check problems: []
+  migration_context: ['the code runs from /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/release/selfrepo, the checkout that holds this data folder (/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/release/selfrepo/data); a release runs from its own checkout']
+--- 3c migrate nhl
+rc: 1
+stdout: {"status": "refused", "reason": "$G/release/selfrepo/data is in a protected live data folder and this is not the verified release environment (the code runs from $G/release/selfrepo, the checkout that holds this data folder ($G/release/selfrepo/data); a release runs from its own checkout): development commands never write there (store, migration, new store, activation, access log); use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)", "problems": ["the
+tree unchanged: True
+[3d case-variant NBA_DATA_DIR (ROOT exact)] release.check problems: []
+  migration_context: []
+--- 3d case-variant NBA_DATA_DIR (ROOT exact)
+rc: 0
+stdout: {"status": "REACHED_RUN"}
+tree unchanged: False
+  before: {'nfl.sqlite': 'bf5158f62343eab0', 'nhl.sqlite': 'b384d90887e99dcd'}
+  after:  {'.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nfl.sqlite': 'bf5158f62343eab0', 'nhl.sqlite': '78aca54b3965d2b6', 'nhl.sqlite-shm': 'fd4c9fda9cd3f9ae', 'nhl.sqlite-wal': 'e3b0c44298fc1c14'}
+[3e case-variant NBA_DATA_DIR, explicit nfl migrate] release.check problems: ["store schema 33 differs from this release's schema 35: update the release deliberately"]
+  migration_context: []
+--- 3e case-variant NBA_DATA_DIR, explicit nfl migrate
+rc: 0
+stdout: {"db": "$G/release/SELFREPO/data/nfl.sqlite", "sport": "nfl", "applied": ["0034_soccer_store.sql", "0035_result_integrity.sql"]}
+tree unchanged: False
+  before: {'.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nfl.sqlite': 'bf5158f62343eab0', 'nhl.sqlite': '78aca54b3965d2b6', 'nhl.sqlite-shm': 'fd4c9fda9cd3f9ae', 'nhl.sqlite-wal': 'e3b0c44298fc1c14'}
+  after:  {'.nfl-jobs.lock': 'e3b0c44298fc1c14', '.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nfl.sqlite': '7e040d05793d0dd2', 'nfl.sqlite-shm': '7a342073e1886023', 'nfl.sqlite-wal': '8dbdfc16abc2ca27', 'nhl.sqlite': '78aca54b3965d2b6'}
+[3f firmlink-alias NBA_DATA_DIR] release.check problems: []
+  migration_context: []
+--- 3f firmlink-alias NBA_DATA_DIR
+rc: 0
+stdout: {"status": "REACHED_RUN"}
+tree unchanged: False
+  before: {'.nfl-jobs.lock': 'e3b0c44298fc1c14', '.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nfl.sqlite': '7e040d05793d0dd2', 'nfl.sqlite-shm': '7a342073e1886023', 'nfl.sqlite-wal': '8dbdfc16abc2ca27', 'nhl.sqlite': '78aca54b3965d2b6', 'nhl.sqlite-shm': 'fd4c9fda9cd3f9ae', 'nhl.sqlite-wal': 'e3b0c44298fc1c14'}
+  after:  {'.nfl-jobs.lock': 'e3b0c44298fc1c14', '.nhl-jobs.lock': 'e3b0c44298fc1c14', 'nfl.sqlite': '633cc0350f268991', 'nhl.sqlite': '78aca54b3965d2b6', 'nhl.sqlite-shm': 'fd4c9fda9cd3f9ae', 'nhl.sqlite-wal': 'e3b0c44298fc1c14'}
+final schemas: nhl 35 nfl 35 shipped 35

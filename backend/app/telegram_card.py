@@ -232,8 +232,11 @@ def render_card(message):
 
 def render_ticket_card(day, tickets, *, preview=False):
     """Ticket layout using the shared fonts, team logos and published palettes."""
-    if not tickets or len(tickets) > 3 or any(not 2 <= len(t['legs']) <= 3 for t in tickets):
-        raise ValueError('Ticket cards require one to three tickets of two or three legs.')
+    from .tickets import CARD_TICKETS, MAX_TICKETS, MIN_LEGS, MAX_LEGS, bet_type
+    if not tickets or len(tickets) > MAX_TICKETS or any(not MIN_LEGS <= len(t['legs']) <= MAX_LEGS for t in tickets):
+        raise ValueError('Ticket cards require one to six tickets of two to six legs.')
+    extra = len(tickets) - CARD_TICKETS
+    tickets = tickets[:CARD_TICKETS]   # the readable text lists every option
     first = tickets[0]['legs'][0]
     abbr = first['matchup'].split(' @ ')[0]
     primary, accent = _team_palette(first['sport'].upper(), abbr)
@@ -256,18 +259,21 @@ def render_ticket_card(day, tickets, *, preview=False):
         draw.text((x,y),row,font=font,fill=color)
         y += int(size*1.3)
 
-    line('PROP51 / TICKETS', size=49, bold=True, color=primary)
+    line('PROP51 / COMBINED PARLAY TICKETS', size=49, bold=True, color=primary)
     line(day, size=28, color=MUTED)
     if preview:
         line('TEST / PAST GAMES / RESULTS KNOWN', size=29, bold=True, color='#A83824')
     y += 20
-    for ticket in tickets:
+    for ticket_number, ticket in enumerate(tickets, 1):
         draw.rounded_rectangle((52,y,1028,y+78),radius=20,fill=primary)
         y += 11
-        line(ticket['label'],size=39,bold=True,color=PAPER,x=76,width=928)
+        line(f"Ticket {ticket_number}: {ticket['label']}",size=32,bold=True,color=PAPER,x=76,width=928)
         y += 26
-        if 'stake_usd' in ticket:
-            line(f"Suggested stake / ${ticket['stake_usd']:.2f}",size=31,bold=True,color=primary)
+        line('Combine ALL listed legs in ONE parlay.',size=25,bold=True,color=primary)
+        if ticket.get('ticket_id'):
+            line(f"ID / {ticket['ticket_id']}",size=23,color=MUTED)
+        if ticket.get('stake_usd') is not None:
+            line(f"{'Example stake' if preview else 'Suggested stake'} / ${ticket['stake_usd']:.2f}",size=31,bold=True,color=primary)
             y += 16
         for index, leg in enumerate(ticket['legs'], 1):
             league = leg['sport'].upper()
@@ -278,8 +284,13 @@ def render_ticket_card(day, tickets, *, preview=False):
                     logo = logo.copy()
                     logo.thumbnail((62,62))
                     canvas.paste(logo,(x,y),logo)
-            line(f"{league} / {leg['matchup']}",size=27,bold=True,x=240,width=760)
+            line(f"{league} / {leg['matchup']} / {bet_type(leg)}",size=27,bold=True,x=240,width=760)
             line(f"{index}. {leg['pick_label']}",size=38,bold=True,x=240,width=760)
+            if leg.get('tipoff'):
+                from datetime import datetime
+                from zoneinfo import ZoneInfo
+                start = datetime.fromisoformat(leg['tipoff'].replace('Z','+00:00')).astimezone(ZoneInfo('America/Toronto'))
+                line(start.strftime('%b %d / %I:%M %p %Z'),size=23,color=MUTED,x=240,width=760)
             if preview:
                 line(leg['result'],size=27,color='#11664D',x=240,width=760)
             else:
@@ -294,7 +305,13 @@ def render_ticket_card(day, tickets, *, preview=False):
         if preview:
             line(ticket['result'],size=34,bold=True,color='#11664D')
         y += 36
-    line('App forecasts + AI selection. Distinct games across tickets.',size=24,color=MUTED)
+    if extra > 0:
+        line(f"+{extra} more option{'s' if extra > 1 else ''} in the message above.",size=27,bold=True,color=primary)
+    identities = [(p['sport'], p.get('game_id', p['matchup'])) for t in tickets for p in t['legs']]
+    shared = len(identities) != len(set(identities))
+    line('App forecasts + AI selection. Distinct games within each ticket.',size=24,color=MUTED)
+    if shared:
+        line('Shared core picks: one loss can affect multiple tickets.',size=24,color=MUTED)
     line('Joint estimates assume independence. Sportsbook prices unverified.',size=24,color=MUTED)
     y += 35
     if y > 6000:

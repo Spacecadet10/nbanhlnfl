@@ -1366,3 +1366,8 @@ h1,h2,h3,.hero-matchup,.metric-value,.tile-value,.brand { font-family:'Barlow Co
   .header-tools.has-competition .competition-select { order: 10; flex: 1 1 100%; }
   .header-tools.has-competition .competition-select select { width: 100%; }
 }
+/* Four leagues in the toggle (NBA, NHL, NFL, Soccer) no longer fit one row with the data pill and theme button on a
+   390 px phone: let the header tools wrap there instead of overflowing the page. */
+@media (max-width: 480px) {
+  .header-tools { flex-wrap: wrap; }
+}

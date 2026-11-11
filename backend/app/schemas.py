@@ -809,11 +809,13 @@ class SoccerMatch(BaseModel):
     away: NflTeam
     neutral_site: Optional[bool] = Field(description="Null: the source does not say.")
     venue: Optional[str]
-    decided_in: Optional[Literal["regulation", "extra_time", "penalties"]]
+    decided_in: Optional[Literal["regulation", "extra_time", "penalties", "unknown"]] = Field(description="'unknown': ESPN's "
+        "status, period, clock and goal minutes disagree about how the match ended; never guessed.")
+    decision_note: Optional[str] = Field(description="What disagreed, when decided_in is 'unknown'.")
     home_score: Optional[int] = Field(description="Goals when play ended (after extra time if played; never shoot-out kicks).")
     away_score: Optional[int]
     regulation_result: Optional[SoccerSide] = Field(description="90-minute result; only when the match ended in regulation. "
-                                                    "Null after extra time: the source publishes no 90-minute score.")
+                                                    "Null after extra time: ESPN score fields include extra time; a 90-minute score derived from goal events is not validated yet.")
     end_of_play_result: Optional[SoccerSide] = Field(description="From home_score/away_score (after extra time if played).")
     shootout_winner: Optional[Literal["home", "away"]]
     home_shootout: Optional[int]
@@ -828,6 +830,8 @@ class SoccerMatch(BaseModel):
     updated_at: datetime
     result_available_at: Optional[datetime]
     result_availability_basis: Optional[Literal["observed_retrieval", "assumed_tipoff_plus_4h"]]
+    tie_facts_available_at: Optional[datetime] = Field(description="When the current aggregate / qualifier / shoot-out "
+        "became known (own time; never earlier than the retrieval that delivered them).")
 
 
 class SoccerMeta(BaseModel):
@@ -857,7 +861,7 @@ class SoccerMatchesResponse(BaseModel):
 
 class SoccerResultRevision(BaseModel):
     revision: int
-    decided_in: Literal["regulation", "extra_time", "penalties"]
+    decided_in: Literal["regulation", "extra_time", "penalties", "unknown"]
     home_score: int
     away_score: int
     home_shootout: Optional[int]
@@ -865,7 +869,11 @@ class SoccerResultRevision(BaseModel):
     aggregate_home: Optional[int]
     aggregate_away: Optional[int]
     qualified_team_id: Optional[str]
+    home_team_id: Optional[str] = Field(description="Null for revisions recorded before teams were stored.")
+    away_team_id: Optional[str]
     observed_at: datetime
+    basis: Literal["observed", "reclassified"] = Field(description="'reclassified': the same cached retrieval re-read by a "
+        "newer importer, not a result the source delivered again.")
 
 
 class SoccerMatchDetail(BaseModel):

@@ -250,8 +250,11 @@ def _soccer_store(mode: str) -> Iterator[sqlite3.Connection]:
     try:
         conn = db.connect_readonly("soccer")
     except FileNotFoundError:
-        raise HTTPException(status_code=503, detail="No soccer data store found. Run `python -m app.cli soccer migrate` and "
-                                                    "`python -m app.cli soccer ingest --from YYYYMMDD --to YYYYMMDD` from backend/.") from None
+        raise HTTPException(status_code=503, detail="No soccer data store found. A development store is created from backend/ "
+                            "with `NBA_DATA_DIR=<scratch or development data directory> .venv/bin/python -m app.cli soccer "
+                            "migrate` and `... soccer ingest --from YYYYMMDD --to YYYYMMDD` (never the live data/ folder). That "
+                            "ingest collects from ESPN, which the S1 source review found not clearly permitted for this "
+                            "project (docs/SOCCER_PLAN.md): a user decision.") from None
     try:
         conn.execute("BEGIN")
         yield conn

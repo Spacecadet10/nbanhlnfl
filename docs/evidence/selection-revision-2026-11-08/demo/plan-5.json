@@ -1,0 +1,78 @@
+{
+ "snapshot_path": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/43a0d8c8-5d19-4e11-a7c0-2df81439b128/scratchpad/demo/snapshot-5.json",
+ "tickets": [
+  {
+   "label": "ORIGINAL New-game pair / Bears + Penguins puck line",
+   "legs": [
+    {
+     "sport": "nfl",
+     "forecast_id": 71
+    },
+    {
+     "sport": "nhl",
+     "forecast_id": 1109
+    }
+   ]
+  },
+  {
+   "label": "ORIGINAL Bigger four-game option / shared core",
+   "legs": [
+    {
+     "sport": "nfl",
+     "forecast_id": 71
+    },
+    {
+     "sport": "nhl",
+     "forecast_id": 1109
+    },
+    {
+     "sport": "nhl",
+     "forecast_id": 1097
+    },
+    {
+     "sport": "nhl",
+     "forecast_id": 1103
+    }
+   ]
+  },
+  {
+   "label": "SELECTED MIN win + TOR +1.5",
+   "legs": [
+    {
+     "sport": "nba",
+     "forecast_id": 1171
+    },
+    {
+     "sport": "nhl",
+     "forecast_id": 1097
+    }
+   ]
+  },
+  {
+   "label": "CANDIDATE (not sent) MIN win + CGY +1.5",
+   "legs": [
+    {
+     "sport": "nba",
+     "forecast_id": 1171
+    },
+    {
+     "sport": "nhl",
+     "forecast_id": 1103
+    }
+   ]
+  },
+  {
+   "label": "CANDIDATE (not sent) MIN win + PIT +1.5",
+   "legs": [
+    {
+     "sport": "nba",
+     "forecast_id": 1171
+    },
+    {
+     "sport": "nhl",
+     "forecast_id": 1109
+    }
+   ]
+  }
+ ]
+}

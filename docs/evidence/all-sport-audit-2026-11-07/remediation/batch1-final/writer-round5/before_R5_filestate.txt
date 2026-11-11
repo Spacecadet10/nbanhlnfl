@@ -1,0 +1,290 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.12, pytest-9.1.1, pluggy-1.6.0 -- /Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/bin/python
+hypothesis profile 'default'
+rootdir: /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/writer/r5_base/backend
+plugins: hypothesis-6.168.3, anyio-4.15.1
+collecting ... collected 23 items / 14 deselected / 9 selected
+
+tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nba-main] FAILED [ 11%]
+tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nba-wal] FAILED [ 22%]
+tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nba-shm] FAILED [ 33%]
+tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nba-install] FAILED [ 44%]
+tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nfl-main] FAILED [ 55%]
+tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nfl-wal] FAILED [ 66%]
+tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nfl-shm] FAILED [ 77%]
+tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nfl-install] FAILED [ 88%]
+tests/test_backup_restore.py::test_a_failed_rollback_deletes_nothing_and_names_the_manual_recovery FAILED [100%]
+
+=================================== FAILURES ===================================
+_________ test_a_failed_swap_is_rolled_back_for_every_sport[nba-main] __________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-188/test_a_failed_swap_is_rolled_b0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10b3240b0>
+sport = 'nba', stage = 'main'
+
+    @pytest.mark.parametrize("stage", ["main", "wal", "shm", "install"])
+    @pytest.mark.parametrize("sport", ["nba", "nfl"])     # nfl: a later sport, after nba was fully swapped
+    def test_a_failed_swap_is_rolled_back_for_every_sport(tmp_path, monkeypatch, sport, stage):
+        data, folder, originals = _swap_setup(tmp_path)
+        calls = _inject(monkeypatch, _forward(sport, stage))
+        with pytest.raises(OSError, match="injected"):
+            backup.restore(folder, data, sports=["nba", "nfl"])
+        if sport == "nfl":
+            assert ("nba.sqlite.restoring", "nba.sqlite") in calls    # the earlier sport was fully swapped first
+>       assert _files(data) == originals                              # originals back, -wal/-shm too; staged copies removed
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert {'nfl.sqlite'...'); END', ...} == {'nba.sqlite'...nal nfl', ...}
+E         
+E         Omitting 6 identical items, use -vv to show
+E         Left contains 2 more items:
+E         {'nba.sqlite.restoring': b'SQLite format 3\x00\x10\x00\x02\x02\x00@  '
+E                                  b'\x00\x00\x00\x01\x00\x00\x00l\x00\x00\x00W'
+E                                  b'\x00\x00\x00\x02\x00\x00\x00\x01\x00\x00\x00\x04'
+E                                  b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01'...
+E         
+E         ...Full output truncated (121504 lines hidden), use '-vv' to show
+
+tests/test_backup_restore.py:338: AssertionError
+__________ test_a_failed_swap_is_rolled_back_for_every_sport[nba-wal] __________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-188/test_a_failed_swap_is_rolled_b1')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10b34ac30>
+sport = 'nba', stage = 'wal'
+
+    @pytest.mark.parametrize("stage", ["main", "wal", "shm", "install"])
+    @pytest.mark.parametrize("sport", ["nba", "nfl"])     # nfl: a later sport, after nba was fully swapped
+    def test_a_failed_swap_is_rolled_back_for_every_sport(tmp_path, monkeypatch, sport, stage):
+        data, folder, originals = _swap_setup(tmp_path)
+        calls = _inject(monkeypatch, _forward(sport, stage))
+        with pytest.raises(OSError, match="injected"):
+            backup.restore(folder, data, sports=["nba", "nfl"])
+        if sport == "nfl":
+            assert ("nba.sqlite.restoring", "nba.sqlite") in calls    # the earlier sport was fully swapped first
+>       assert _files(data) == originals                              # originals back, -wal/-shm too; staged copies removed
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert {'nfl.sqlite'...nal nba', ...} == {'nba.sqlite'...nal nfl', ...}
+E         
+E         Omitting 5 identical items, use -vv to show
+E         Left contains 3 more items:
+E         {'nba.sqlite.replaced-20261108T142557857745Z': b'original nba',
+E          'nba.sqlite.restoring': b'SQLite format 3\x00\x10\x00\x02\x02\x00@  '
+E                                  b'\x00\x00\x00\x01\x00\x00\x00l\x00\x00\x00W'
+E                                  b'\x00\x00\x00\x02\x00\x00\x00\x01\x00\x00\x00\x04'...
+E         
+E         ...Full output truncated (121510 lines hidden), use '-vv' to show
+
+tests/test_backup_restore.py:338: AssertionError
+__________ test_a_failed_swap_is_rolled_back_for_every_sport[nba-shm] __________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-188/test_a_failed_swap_is_rolled_b2')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10b34b140>
+sport = 'nba', stage = 'shm'
+
+    @pytest.mark.parametrize("stage", ["main", "wal", "shm", "install"])
+    @pytest.mark.parametrize("sport", ["nba", "nfl"])     # nfl: a later sport, after nba was fully swapped
+    def test_a_failed_swap_is_rolled_back_for_every_sport(tmp_path, monkeypatch, sport, stage):
+        data, folder, originals = _swap_setup(tmp_path)
+        calls = _inject(monkeypatch, _forward(sport, stage))
+        with pytest.raises(OSError, match="injected"):
+            backup.restore(folder, data, sports=["nba", "nfl"])
+        if sport == "nfl":
+            assert ("nba.sqlite.restoring", "nba.sqlite") in calls    # the earlier sport was fully swapped first
+>       assert _files(data) == originals                              # originals back, -wal/-shm too; staged copies removed
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert {'nfl.sqlite'...nal nba', ...} == {'nba.sqlite'...nal nfl', ...}
+E         
+E         Omitting 4 identical items, use -vv to show
+E         Left contains 4 more items:
+E         {'nba.sqlite-wal.replaced-20261108T142558292485Z': b'original nba-wal',
+E          'nba.sqlite.replaced-20261108T142558292485Z': b'original nba',
+E          'nba.sqlite.restoring': b'SQLite format 3\x00\x10\x00\x02\x02\x00@  '
+E                                  b'\x00\x00\x00\x01\x00\x00\x00l\x00\x00\x00W'...
+E         
+E         ...Full output truncated (121514 lines hidden), use '-vv' to show
+
+tests/test_backup_restore.py:338: AssertionError
+________ test_a_failed_swap_is_rolled_back_for_every_sport[nba-install] ________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-188/test_a_failed_swap_is_rolled_b3')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10b34b410>
+sport = 'nba', stage = 'install'
+
+    @pytest.mark.parametrize("stage", ["main", "wal", "shm", "install"])
+    @pytest.mark.parametrize("sport", ["nba", "nfl"])     # nfl: a later sport, after nba was fully swapped
+    def test_a_failed_swap_is_rolled_back_for_every_sport(tmp_path, monkeypatch, sport, stage):
+        data, folder, originals = _swap_setup(tmp_path)
+        calls = _inject(monkeypatch, _forward(sport, stage))
+        with pytest.raises(OSError, match="injected"):
+            backup.restore(folder, data, sports=["nba", "nfl"])
+        if sport == "nfl":
+            assert ("nba.sqlite.restoring", "nba.sqlite") in calls    # the earlier sport was fully swapped first
+>       assert _files(data) == originals                              # originals back, -wal/-shm too; staged copies removed
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert {'nfl.sqlite'...nba-wal', ...} == {'nba.sqlite'...nal nfl', ...}
+E         
+E         Omitting 3 identical items, use -vv to show
+E         Left contains 5 more items:
+E         {'nba.sqlite-shm.replaced-20261108T142558719250Z': b'original nba-shm',
+E          'nba.sqlite-wal.replaced-20261108T142558719250Z': b'original nba-wal',
+E          'nba.sqlite.replaced-20261108T142558719250Z': b'original nba',
+E          'nba.sqlite.restoring': b'SQLite format 3\x00\x10\x00\x02\x02\x00@  '...
+E         
+E         ...Full output truncated (121512 lines hidden), use '-vv' to show
+
+tests/test_backup_restore.py:338: AssertionError
+_________ test_a_failed_swap_is_rolled_back_for_every_sport[nfl-main] __________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-188/test_a_failed_swap_is_rolled_b4')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10b348620>
+sport = 'nfl', stage = 'main'
+
+    @pytest.mark.parametrize("stage", ["main", "wal", "shm", "install"])
+    @pytest.mark.parametrize("sport", ["nba", "nfl"])     # nfl: a later sport, after nba was fully swapped
+    def test_a_failed_swap_is_rolled_back_for_every_sport(tmp_path, monkeypatch, sport, stage):
+        data, folder, originals = _swap_setup(tmp_path)
+        calls = _inject(monkeypatch, _forward(sport, stage))
+        with pytest.raises(OSError, match="injected"):
+            backup.restore(folder, data, sports=["nba", "nfl"])
+        if sport == "nfl":
+            assert ("nba.sqlite.restoring", "nba.sqlite") in calls    # the earlier sport was fully swapped first
+>       assert _files(data) == originals                              # originals back, -wal/-shm too; staged copies removed
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert {'nfl.sqlite'...nal nba', ...} == {'nba.sqlite'...nal nfl', ...}
+E         
+E         Omitting 3 identical items, use -vv to show
+E         Differing items:
+E         {'nba.sqlite': b'SQLite format 3\x00\x10\x00\x02\x02\x00@  \x00\x00\x00\x01\x00\x00\x00l\x00\x00\x00W\x00\x00\x00\x02\...0\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'} != {'nba.sqlite': b'original nba'}
+E         Left contains 4 more items:
+E         {'nba.sqlite-shm.replaced-20261108T142559199324Z': b'original nba-shm',
+E          'nba.sqlite-wal.replaced-20261108T142559199324Z': b'original nba-wal',...
+E         
+E         ...Full output truncated (89890 lines hidden), use '-vv' to show
+
+tests/test_backup_restore.py:338: AssertionError
+__________ test_a_failed_swap_is_rolled_back_for_every_sport[nfl-wal] __________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-188/test_a_failed_swap_is_rolled_b5')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10b3486b0>
+sport = 'nfl', stage = 'wal'
+
+    @pytest.mark.parametrize("stage", ["main", "wal", "shm", "install"])
+    @pytest.mark.parametrize("sport", ["nba", "nfl"])     # nfl: a later sport, after nba was fully swapped
+    def test_a_failed_swap_is_rolled_back_for_every_sport(tmp_path, monkeypatch, sport, stage):
+        data, folder, originals = _swap_setup(tmp_path)
+        calls = _inject(monkeypatch, _forward(sport, stage))
+        with pytest.raises(OSError, match="injected"):
+            backup.restore(folder, data, sports=["nba", "nfl"])
+        if sport == "nfl":
+            assert ("nba.sqlite.restoring", "nba.sqlite") in calls    # the earlier sport was fully swapped first
+>       assert _files(data) == originals                              # originals back, -wal/-shm too; staged copies removed
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert {'nfl.sqlite-...nba-shm', ...} == {'nba.sqlite'...nal nfl', ...}
+E         
+E         Omitting 2 identical items, use -vv to show
+E         Differing items:
+E         {'nba.sqlite': b'SQLite format 3\x00\x10\x00\x02\x02\x00@  \x00\x00\x00\x01\x00\x00\x00l\x00\x00\x00W\x00\x00\x00\x02\...0\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'} != {'nba.sqlite': b'original nba'}
+E         Left contains 5 more items:
+E         {'nba.sqlite-shm.replaced-20261108T142559663475Z': b'original nba-shm',
+E          'nba.sqlite-wal.replaced-20261108T142559663475Z': b'original nba-wal',...
+E         
+E         ...Full output truncated (89896 lines hidden), use '-vv' to show
+
+tests/test_backup_restore.py:338: AssertionError
+__________ test_a_failed_swap_is_rolled_back_for_every_sport[nfl-shm] __________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-188/test_a_failed_swap_is_rolled_b6')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10b36ee40>
+sport = 'nfl', stage = 'shm'
+
+    @pytest.mark.parametrize("stage", ["main", "wal", "shm", "install"])
+    @pytest.mark.parametrize("sport", ["nba", "nfl"])     # nfl: a later sport, after nba was fully swapped
+    def test_a_failed_swap_is_rolled_back_for_every_sport(tmp_path, monkeypatch, sport, stage):
+        data, folder, originals = _swap_setup(tmp_path)
+        calls = _inject(monkeypatch, _forward(sport, stage))
+        with pytest.raises(OSError, match="injected"):
+            backup.restore(folder, data, sports=["nba", "nfl"])
+        if sport == "nfl":
+            assert ("nba.sqlite.restoring", "nba.sqlite") in calls    # the earlier sport was fully swapped first
+>       assert _files(data) == originals                              # originals back, -wal/-shm too; staged copies removed
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert {'nfl.sqlite-...x00\x00', ...} == {'nba.sqlite'...nal nfl', ...}
+E         
+E         Omitting 1 identical items, use -vv to show
+E         Differing items:
+E         {'nba.sqlite': b'SQLite format 3\x00\x10\x00\x02\x02\x00@  \x00\x00\x00\x01\x00\x00\x00l\x00\x00\x00W\x00\x00\x00\x02\...0\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'} != {'nba.sqlite': b'original nba'}
+E         Left contains 6 more items:
+E         {'nba.sqlite-shm.replaced-20261108T142600123886Z': b'original nba-shm',
+E          'nba.sqlite-wal.replaced-20261108T142600123886Z': b'original nba-wal',...
+E         
+E         ...Full output truncated (89896 lines hidden), use '-vv' to show
+
+tests/test_backup_restore.py:338: AssertionError
+________ test_a_failed_swap_is_rolled_back_for_every_sport[nfl-install] ________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-188/test_a_failed_swap_is_rolled_b7')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10b36e540>
+sport = 'nfl', stage = 'install'
+
+    @pytest.mark.parametrize("stage", ["main", "wal", "shm", "install"])
+    @pytest.mark.parametrize("sport", ["nba", "nfl"])     # nfl: a later sport, after nba was fully swapped
+    def test_a_failed_swap_is_rolled_back_for_every_sport(tmp_path, monkeypatch, sport, stage):
+        data, folder, originals = _swap_setup(tmp_path)
+        calls = _inject(monkeypatch, _forward(sport, stage))
+        with pytest.raises(OSError, match="injected"):
+            backup.restore(folder, data, sports=["nba", "nfl"])
+        if sport == "nfl":
+            assert ("nba.sqlite.restoring", "nba.sqlite") in calls    # the earlier sport was fully swapped first
+>       assert _files(data) == originals                              # originals back, -wal/-shm too; staged copies removed
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert {'nfl.sqlite-...'); END', ...} == {'nba.sqlite'...nal nfl', ...}
+E         
+E         Differing items:
+E         {'nba.sqlite': b'SQLite format 3\x00\x10\x00\x02\x02\x00@  \x00\x00\x00\x01\x00\x00\x00l\x00\x00\x00W\x00\x00\x00\x02\...0\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'} != {'nba.sqlite': b'original nba'}
+E         Left contains 7 more items:
+E         {'nba.sqlite-shm.replaced-20261108T142600272097Z': b'original nba-shm',
+E          'nba.sqlite-wal.replaced-20261108T142600272097Z': b'original nba-wal',
+E          'nba.sqlite.replaced-20261108T142600272097Z': b'original nba',...
+E         
+E         ...Full output truncated (89898 lines hidden), use '-vv' to show
+
+tests/test_backup_restore.py:338: AssertionError
+_____ test_a_failed_rollback_deletes_nothing_and_names_the_manual_recovery _____
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-188/test_a_failed_rollback_deletes0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10b36cb30>
+
+    def test_a_failed_rollback_deletes_nothing_and_names_the_manual_recovery(tmp_path, monkeypatch):
+        import re
+        data, folder, originals = _swap_setup(tmp_path)
+        install_nfl = _forward("nfl", "install")
+        _inject(monkeypatch, lambda a, b: install_nfl(a, b) or (a.startswith("nba.sqlite.replaced-") and b == "nba.sqlite"))
+        with pytest.raises(backup.BackupError) as err:
+>           backup.restore(folder, data, sports=["nba", "nfl"])
+
+tests/test_backup_restore.py:347: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/backup.py:171: in restore
+    Path(f"{target}.restoring").rename(target)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-188/test_a_failed_rollback_deletes0/data/nfl.sqlite.restoring')
+target = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-188/test_a_failed_rollback_deletes0/data/nfl.sqlite')
+
+    def rename(self, target):
+        calls.append((Path(self).name, Path(target).name))
+        if fail(Path(self).name, Path(target).name):
+>           raise OSError(5, "injected")
+E           OSError: [Errno 5] injected
+
+tests/test_backup_restore.py:311: OSError
+=========================== short test summary info ============================
+FAILED tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nba-main]
+FAILED tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nba-wal]
+FAILED tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nba-shm]
+FAILED tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nba-install]
+FAILED tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nfl-main]
+FAILED tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nfl-wal]
+FAILED tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nfl-shm]
+FAILED tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nfl-install]
+FAILED tests/test_backup_restore.py::test_a_failed_rollback_deletes_nothing_and_names_the_manual_recovery
+======================= 9 failed, 14 deselected in 3.77s =======================

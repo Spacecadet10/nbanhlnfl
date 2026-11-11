@@ -1,0 +1,10 @@
+Sun Nov  8 16:45:24 EST 2026
+NFL before: b6074877a7e7ccfe True
+NFL after: b6074877a7e7ccfe True
+Sun Nov  8 16:45:25 EST 2026
+cmd: NBA_DATA_DIR=<scratch>/emptydata2 OMP_NUM_THREADS=1 PYTHONPATH=backend backend/.venv/bin/python -m pytest -q -p no:cacheprovider backend/tests/test_tickets.py backend/tests/test_telegram.py backend/tests/test_nfl_live.py backend/tests/test_freshness.py backend/tests/test_near_tipoff.py
+=========================== short test summary info ============================
+FAILED backend/tests/test_tickets.py::test_fallback_explanation_only_does_not_create_new_forecast_identity
+1 failed, 136 passed, 1 warning in 10.92s
+live status exit=0
+live review: False single_game_window 1 5 {'nhl': {'issue': 'source_unavailable_or_stale', 'forecasts': 6, 'games': 1}}

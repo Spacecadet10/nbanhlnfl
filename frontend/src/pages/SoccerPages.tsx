@@ -28,6 +28,7 @@ function sideText(m: SoccerMatch, side: SoccerMatch['regulation_result']) {
 /** Short status for a card: kickoff time, or how a final match was decided. */
 function statusLabel(m: SoccerMatch, date: string) {
   if (m.status === 'final') {
+    if (m.decided_in === 'unknown') return 'FINAL · ENDING NOT ESTABLISHED';
     if (m.decided_in === 'penalties') return m.home_shootout != null ? `AFTER EXTRA TIME · PENS ${m.home_shootout}–${m.away_shootout}` : 'AFTER EXTRA TIME · PENS';
     if (m.decided_in === 'extra_time') return 'AFTER EXTRA TIME';
     return m.regulation_result === 'draw' ? 'FULL TIME · DRAW' : 'FULL TIME';
@@ -90,7 +91,7 @@ function SoccerGameDay({ meta }: { meta: SoccerMeta }) {
         right={date && <GameDateControl date={date} dates={meta.match_dates} defaultDate={meta.default_date} onChange={setDate} />} />
       <PredictionsUnavailable capabilities={meta.capabilities} />
       {date ? <SoccerSlate meta={meta} date={date} onChange={setDate} />
-        : <Empty>No {meta.competition} matches are stored yet. Import days with <code>python -m app.cli soccer ingest --competition {meta.competition_id} --from YYYYMMDD --to YYYYMMDD</code> from <code>backend/</code>.</Empty>}
+        : <Empty>No {meta.competition} matches are stored yet. A development store is filled from <code>backend/</code> with <code>NBA_DATA_DIR=&lt;scratch or development data directory&gt; .venv/bin/python -m app.cli soccer ingest --competition {meta.competition_id} --from YYYYMMDD --to YYYYMMDD</code> (never the live <code>data/</code> folder). That collects from ESPN, which the source review found not clearly permitted for this project: a user decision.</Empty>}
     </section>
   );
 }
@@ -171,13 +172,17 @@ function ResultFacts({ m }: { m: SoccerMatch }) {
   return (
     <dl className="facts">
       <dt>Score when play ended</dt>
-      <dd>{m.home.name} {m.home_score}–{m.away_score} {m.away.name}{m.decided_in !== 'regulation' ? ' (after extra time)' : ''}</dd>
+      <dd>{m.home.name} {m.home_score}–{m.away_score} {m.away.name}{m.decided_in === 'extra_time' || m.decided_in === 'penalties' ? ' (after extra time)' : ''}</dd>
+      {m.decided_in === 'unknown' && <><dt>How it ended</dt>
+        <dd><span className="muted">Not established: ESPN's fields disagree ({m.decision_note}). Nothing is guessed.</span></dd></>}
       <dt>90-minute result</dt>
       <dd>{m.regulation_result ? sideText(m, m.regulation_result)
-        : <span className="muted">Not available: the match went to extra time and ESPN publishes no 90-minute score.</span>}</dd>
-      <dt>Extra time</dt><dd>{m.decided_in === 'regulation' ? 'Not played' : 'Played'}</dd>
+        : m.decided_in === 'unknown'
+        ? <span className="muted">Not available: it is not established whether the match went to extra time.</span>
+        : <span className="muted">Not shown: the match went to extra time and ESPN's score fields include it. The 90-minute score can be derived from goal minutes; that derivation is not validated yet, so nothing is shown.</span>}</dd>
+      <dt>Extra time</dt><dd>{m.decided_in === 'regulation' ? 'Not played' : m.decided_in === 'unknown' ? <span className="muted">Not established</span> : 'Played'}</dd>
       <dt>Penalty shoot-out</dt>
-      <dd>{m.decided_in !== 'penalties' ? 'None'
+      <dd>{m.decided_in === 'unknown' ? <span className="muted">None reported by the source</span> : m.decided_in !== 'penalties' ? 'None'
         : m.home_shootout != null ? `${m.home_shootout}–${m.away_shootout}, ${name(m, m.shootout_winner)} won the shoot-out`
         : <span className="muted">A shoot-out was held; the source did not report its score.</span>}</dd>
       {(m.leg != null || m.aggregate_home != null) && <>
@@ -186,6 +191,8 @@ function ResultFacts({ m }: { m: SoccerMatch }) {
           {m.aggregate_home != null ? ` · aggregate ${m.home.name} ${m.aggregate_home}–${m.aggregate_away} ${m.away.name} (as reported)` : ''}</dd>
         <dt>Went through</dt>
         <dd>{qualified ? <>{qualified} <span className="muted">(the tie, not this match)</span></> : <span className="muted">Not decided by this match, or not reported.</span>}</dd>
+        {m.tie_facts_available_at && m.tie_facts_available_at !== m.result_available_at && <>
+          <dt>Tie facts known</dt><dd>{dateTime(m.tie_facts_available_at)} <span className="muted">(later than the result)</span></dd></>}
       </>}
       {m.note && <><dt>Source note</dt><dd>{m.note}</dd></>}
       <dt>Result known</dt><dd>{learned(m)}</dd>
@@ -210,7 +217,7 @@ function SoccerMatchPage({ id }: { id: string }) {
                   <span className="league-chip">{m.competition}</span>
                   <h2 className="hero-matchup">{m.home.name} <span>v</span> {m.away.name}</h2>
                   <p className="hero-time">{m.status === 'final'
-                    ? <>{m.home_score}–{m.away_score}{m.decided_in === 'extra_time' ? ' after extra time' : m.decided_in === 'penalties'
+                    ? <>{m.home_score}–{m.away_score}{m.decided_in === 'unknown' ? ' · ending not established' : m.decided_in === 'extra_time' ? ' after extra time' : m.decided_in === 'penalties'
                       ? ` after extra time${m.home_shootout != null ? `, ${m.home_shootout}–${m.away_shootout} on penalties` : ', decided on penalties'}` : m.regulation_result === 'draw' ? ' · draw' : ''}</>
                     : <>Kickoff: {dateTime(m.kickoff)}{m.status !== 'scheduled' && ` · ${m.status.replace('_', ' ')}`}</>}</p>
                 </div>
@@ -221,8 +228,14 @@ function SoccerMatchPage({ id }: { id: string }) {
                   <h2>Result</h2>
                   <ResultFacts m={m} />
                   {d.result_revisions.length > 1 && (
-                    <p className="small muted">The source corrected this result {d.result_revisions.length - 1} time(s); every version is kept:{' '}
-                      {d.result_revisions.map((r) => `${r.home_score}–${r.away_score}${r.home_shootout != null ? ` (pens ${r.home_shootout}–${r.away_shootout})` : ''} seen ${dateTime(r.observed_at)}`).join('; ')}.</p>
+                    <p className="small muted">{d.result_revisions.filter((r) => r.basis === 'observed').length > 1
+                      ? `The source delivered ${d.result_revisions.filter((r) => r.basis === 'observed').length} versions of this result (a later version may only add tie facts such as the qualifier)`
+                      : 'One version from the source'}{d.result_revisions.some((r) => r.basis === 'reclassified') ? ', re-read by a newer importer from the same retrieval' : ''}; every version is kept:{' '}
+                      {d.result_revisions.map((r) => `${r.home_score}–${r.away_score}${r.decided_in === 'regulation' ? '' : r.decided_in === 'unknown' ? ' (ending unclear)' : ' aet'}`
+                        + `${r.home_shootout != null ? `, pens ${r.home_shootout}–${r.away_shootout}` : ''}`
+                        + `${r.aggregate_home != null ? `, agg ${r.aggregate_home}–${r.aggregate_away}` : ''}`
+                        + `${r.qualified_team_id ? `, through: ${r.qualified_team_id === m.home.team_id ? m.home.name : m.away.name}` : ''}`
+                        + (r.basis === 'reclassified' ? ' (re-read, same retrieval)' : ` (seen ${dateTime(r.observed_at)})`)).join('; ')}.</p>
                   )}
                 </div>
                 <div className="card">
@@ -241,7 +254,7 @@ function SoccerMatchPage({ id }: { id: string }) {
               </div>
               <div className="card">
                 <h2>Forecast</h2>
-                <EmptyForecastState>Not available. A soccer forecast needs three outcomes (home win, draw, away win) and a separately validated model. None exists, so no probability, pick, odds or accuracy is shown.</EmptyForecastState>
+                <EmptyForecastState>Not shown in this development build. Live soccer forecasts appear in the production app only; no probability, pick, odds or accuracy is shown here.</EmptyForecastState>
                 <ul className="nfl-capabilities small">
                   {d.capabilities.filter((c) => ['forecasts', 'odds', 'injuries'].includes(c.id)).map((c) =>
                     <li key={c.id}><strong>{c.label}:</strong> not available. <span className="muted">{c.reason}</span></li>)}
@@ -287,7 +300,7 @@ function ResultTable({ matches, team, empty }: { matches: SoccerMatch[]; team?: 
             <td>{new Date(m.kickoff).toLocaleDateString([], FULL_DATE)}</td>
             <td><Link to={`/games/${encodeURIComponent(m.match_id)}${carried}`}>{m.home.abbr} v {m.away.abbr}</Link>
               {stageOf(m) && <span className="muted small"> · {stageOf(m)}</span>}</td>
-            <td>{m.home_score}–{m.away_score}{m.decided_in === 'extra_time' ? ' aet' : m.decided_in === 'penalties'
+            <td>{m.home_score}–{m.away_score}{m.decided_in === 'unknown' ? ' (ending unclear)' : m.decided_in === 'extra_time' ? ' aet' : m.decided_in === 'penalties'
               ? ` aet${m.home_shootout != null ? `, pens ${m.home_shootout}–${m.away_shootout}` : ', pens'}` : ''}</td>
             {team && <td>{outcome(m)}</td>}
           </tr>

@@ -1,0 +1,14 @@
+=========================== short test summary info ============================
+FAILED tests/test_tickets.py::test_fallback_explanation_only_does_not_create_new_forecast_identity
+FAILED tests/test_tickets.py::test_review_due_when_new_forecasts_span_two_games_and_clears_after_review
+FAILED tests/test_tickets.py::test_single_game_or_stale_only_forecasts_do_not_trigger_a_review_but_are_explained
+FAILED tests/test_tickets.py::test_inactive_sport_and_games_started_without_review_are_reported
+FAILED tests/test_tickets.py::test_prior_ticket_game_lock_is_visible_before_selection
+FAILED tests/test_tickets.py::test_preflight_prints_review_trigger_state - Ke...
+FAILED tests/test_tickets.py::test_each_review_records_ticket_no_ticket_or_operational_failure
+FAILED tests/test_tickets.py::test_status_is_read_only_and_shows_outcomes_and_receipts
+FAILED tests/test_tickets.py::test_shared_exposure_lists_only_this_batch_with_readable_labels
+FAILED tests/test_tickets.py::test_ticket_messages_are_labelled_as_combined_parlays_not_game_cards
+FAILED tests/test_tickets.py::test_nfl_inactive_detail_names_cause_and_counts_unserved_forecasts
+FAILED tests/test_telegram.py::test_game_card_caption_says_single_game_not_a_parlay_ticket
+12 failed, 60 passed in 3.03s

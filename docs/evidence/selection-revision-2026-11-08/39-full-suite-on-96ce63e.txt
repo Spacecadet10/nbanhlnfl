@@ -1,0 +1,9 @@
+FAILED tests/test_deep_study.py::test_a_network_never_sees_the_season_it_predicts_and_is_reproducible[torch]
+FAILED tests/test_deep_study.py::test_a_network_never_sees_the_season_it_predicts_and_is_reproducible[keras]
+FAILED tests/test_deep_study.py::test_the_torch_network_learns_a_real_signal
+FAILED tests/test_deep_study.py::test_score_heads_produce_engine_compatible_outputs
+FAILED tests/test_deep_study.py::test_goals_head_fits_poisson_rates_on_regulation_scores
+FAILED tests/test_deep_study.py::test_numpy_export_reproduces_both_libraries_and_needs_neither_to_predict
+FAILED tests/test_deep_study.py::test_a_deep_candidate_is_fitted_once_then_applied_without_its_library
+FAILED tests/test_deep_study.py::test_normal_head_deep_candidate_gets_its_spread_from_its_own_earlier_residuals
+8 failed, 1946 passed, 1 warning in 1178.52s (0:19:38)
