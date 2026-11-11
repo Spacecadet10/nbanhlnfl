@@ -446,7 +446,8 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
         out["markets"] = {k: m.get(k) for k in ("created", "already_recorded", "reason", "error") if k in m}
     if accepted and research_live.enabled():
         # adaptive-v1 forecasts from the artifacts in force (docs/ADAPTIVE_SYSTEM.md); no fit here, never raises. Before
-        # the research steps: it reads only games, results and features, never this cycle's research rows.
+        # the research steps: it reads games, results, features, the primary/market rows and quotes written above, never
+        # this cycle's research, pool or tracking rows (review of 5423fbc).
         out["adaptive"] = adaptive_record(conn, game_ids=accepted, now=now, write=not dry_run)
     # Every game (preseason included) and market: the adaptive forecast, else the sealed primary, else a recorded reason.
     # Right after the primary, market and adaptive steps and BEFORE the slow research work (Nov 10 investigation: run
