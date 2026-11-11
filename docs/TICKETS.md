@@ -289,15 +289,24 @@ Display and review only (no model uses it): `app/lineup.py`.
 
 Ticket snapshot only, plain facts (`app/tickets.py` `attach_facts`): every NBA/NHL/NFL pick has `game_facts` = {`as_of` (the
 snapshot time), `rest`, `line_move`}. Rest: both teams' days since their previous scheduled start this season and
-`back_to_back` (under 1.5 days, the models' own rest feature), `picked_team` home/away/none. Line move: the latest stored
-quote of the pick's market retrieved by the snapshot; the opening = the first quote of the same sportsbook retrieved by
-then (the book's own 'open' price first) and its line; the pick side's de-vigged % move in points (+ = toward the pick)
-measured only against that sportsbook's first quote at the current quote's line (the scorecard's definition, never across
-lines, 0 = no move); `move_line` = the picked side's line change since the opening line; every timestamp. NFL: rest days
-kept, back-to-back not applicable. Unknown by the snapshot = null with a reason, never a later value. Soccer: not applicable. No rule reads
-these facts, the ticket picture and text never show them, and the skill gets no instruction about them until the paper
-record shows H4 and H6 hold on new games (owner, Nov 11). Adding them changed the helper hash: a review made before this
-release is refused with "review again".
+`back_to_back` (under 1.5 days, the models' own rest feature), `picked_team` home/away/none. NFL: rest days kept,
+back-to-back not applicable.
+
+Line move: `current` = the latest stored quote of the pick's market retrieved by the snapshot (when several sportsbooks
+share that moment, the pick's own sportsbook first); `opening` = the first quote of the same sportsbook STORED by then
+and its line. That is the first quote the app kept, not a verified opening line: its `label` says whether it was the
+book's own 'open' price. `move_pct_points` = the pick side's de-vigged % at `current` minus that sportsbook's first stored
+quote at `current`'s line (`move_base`; the scorecard's definition, never across lines, 0 = no move;
+`move_pct_points_sign`: + = toward the pick). `move_line` = the line change since the opening line (`move_line_sign`
+per market: spread, the picked team's handicap, + = more points for the pick; totals, + = the total went up). Every
+timestamp is given. Unknown by the snapshot = null with a reason, never a later value. Soccer: not applicable.
+
+What the helper does and does not do: it adds these facts; it does not tell the reviewer how to use them, no helper rule
+reads them, and the ticket picture and text never show them. The skill is a separate file: the version installed when
+this was built (courtside-ticket-review "full-context-v2", SKILL.md sha256 4e9e2c2ed64cdf4c63c6111126242de16631e45f97a00fb3b050f72f51e8f51e,
+installed Nov 11 ~22:43Z) does use line movement and back-to-back as provisional preferences. That is the skill's choice,
+recorded in docs/evidence/ticket-skill-context-2026-11-11/. Adding the facts changed the helper hash: a review made before
+this release is refused with "review again".
 
 ## DRatings on paper (Nov 11, 2026)
 

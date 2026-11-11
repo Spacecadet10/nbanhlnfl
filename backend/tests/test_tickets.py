@@ -2298,3 +2298,33 @@ def test_the_ticket_picture_and_text_are_unchanged_by_the_facts(setup, monkeypat
     assert (telegram_card.render_ticket_card(snap['date'], after['resolved']) ==
             telegram_card.render_ticket_card(snap['date'], before['resolved']))
     assert sent == []
+
+
+def test_line_move_signs_are_scoped_and_say_what_plus_means_per_market():
+    c = fact_store()
+    _mq(c, [('DraftKings', 'spread', 'current', 5.5, -110, -110, 0.5, 0.5, '2026-11-11T10:00:00Z', 1),
+            ('DraftKings', 'total', 'current', 221.5, -110, -110, 0.5, 0.5, '2026-11-11T10:00:00Z', 2)])
+    _odds(c, [('DraftKings', 'current', -120, 100, 0.53, '2026-11-11T10:00:00Z')])
+    fact_forecast(c, 1, 'spread', 0.55, line=5.5, line_source='bookmaker', quote=1)
+    fact_forecast(c, 2, 'total', 0.55, line=221.5, line_source='bookmaker', quote=2)
+    fact_forecast(c, 3, 'winner', 0.55)
+    picks = [dict(forecast_id=i, game_id='g') for i in (1, 2, 3)]
+    t.attach_facts(c, 'nba', picks, FACT_T)
+    spread, total, winner = (p['game_facts']['line_move'] for p in picks)
+    for m in (spread, total, winner):
+        assert 'sign' not in m and m['move_pct_points_sign'] == '+ = toward the pick'
+    assert 'more points for the pick' in spread['move_line_sign']
+    assert 'total went up' in total['move_line_sign']
+    assert winner['move_line_sign'] is None
+
+
+def test_line_move_prefers_the_picks_own_sportsbook_when_providers_share_the_latest_time():
+    c = fact_store()
+    _mq(c, [('DraftKings', 'total', 'current', 221.5, -110, -110, 0.50, 0.50, '2026-11-11T10:00:00Z', 1),
+            ('DraftKings', 'total', 'current', 221.5, -120, 100, 0.53, 0.47, '2026-11-11T22:00:00Z', 2),
+            ('ESPN BET', 'total', 'current', 222.5, -110, -110, 0.50, 0.50, '2026-11-11T22:00:00Z', 3)])   # same time, later id
+    fact_forecast(c, 1, 'total', 0.55, line=221.5, line_source='bookmaker', quote=1)       # the pick's quote: DraftKings
+    picks = [dict(forecast_id=1, game_id='g')]
+    t.attach_facts(c, 'nba', picks, FACT_T)
+    move = picks[0]['game_facts']['line_move']
+    assert move['provider'] == 'DraftKings' and move['current']['line'] == 221.5 and move['move_pct_points'] == pytest.approx(3.0)

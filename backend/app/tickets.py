@@ -207,12 +207,17 @@ def game_facts(conn, sport, pick, stamp):
     return {'as_of': stamp, 'rest': rest, 'line_move': _line_move(conn, sport, g, row, market, side, stamp)}
 
 
+MOVE_LINE_SIGN = {'spread': "+ = the picked team's handicap went up (more points for the pick)",
+                  'total': '+ = the total went up (an over needs more points, an under gets more room)',
+                  'team_total_home': "+ = the team's total went up", 'team_total_away': "+ = the team's total went up"}
+
+
 def _line_move(conn, sport, g, row, market, side, stamp):
     from app import coverage, scorecard
     pct = lambda p: None if p is None else round(100 * p, 2)
     out = {'state': 'missing', 'note': None, 'provider': None, 'pick_line': row['line'], 'line_source': row['line_source'],
-           'opening': None, 'current': None, 'move_pct_points': None, 'move_line': None, 'sign': '+ = toward the pick',
-           'move_base': None,
+           'opening': None, 'current': None, 'move_pct_points': None, 'move_line': None,
+           'move_pct_points_sign': '+ = toward the pick', 'move_line_sign': MOVE_LINE_SIGN.get(market), 'move_base': None,
            'line_is': {'spread': "opening/current: the home team's handicap; move_line: the picked team's", 'winner': None}
            .get(market, 'points')}
     if market == 'reg3':
@@ -225,9 +230,13 @@ def _line_move(conn, sport, g, row, market, side, stamp):
                    'price': q['price_home'] if side == 'a' else q['price_away'],
                    'devig': q['p_home'] if side == 'a' else (None if q['p_home'] is None else 1 - q['p_home'])}
     else:
+        # several sportsbooks retrieved at the same latest moment: the pick's own sportsbook (its forecast quote) first
+        own = conn.execute('SELECT provider FROM market_quotes WHERE quote_id=?', (row['market_quote_id'],)).fetchone() \
+            if row['market_quote_id'] and scorecard._has(conn, 'market_quotes') else None
         q = conn.execute("SELECT * FROM market_quotes WHERE game_id=? AND market=? AND retrieved_at<=? "
-                         "ORDER BY retrieved_at DESC, price_label='current' DESC, quote_id DESC LIMIT 1",
-                         (g['game_id'], market, stamp)).fetchone() if scorecard._has(conn, 'market_quotes') else None
+                         "ORDER BY retrieved_at DESC, provider IS ? DESC, price_label='current' DESC, quote_id DESC LIMIT 1",
+                         (g['game_id'], market, stamp, own[0] if own else None)).fetchone() \
+            if scorecard._has(conn, 'market_quotes') else None
         if q is None:
             return dict(out, note='no sportsbook quote of this market stored by the snapshot time')
         current = {'retrieved_at': q['retrieved_at'], 'label': q['price_label'], 'line': q['line'],
