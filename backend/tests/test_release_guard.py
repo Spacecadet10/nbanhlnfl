@@ -14,6 +14,7 @@ def git_repo(path):
     (path / "README").write_text("release\n")
     subprocess.run(["git", "-C", str(path), "add", "README"], check=True)
     subprocess.run(["git", "-C", str(path), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "r"], check=True)
+    release.write_pin(path)      # a release pins its commit (app.release pin), as the release procedure does
     return path
 
 
@@ -90,3 +91,27 @@ def test_job_runs_record_the_release_commit(store, monkeypatch):
     stamped = jobs._finish(conn, jobs._start(conn, "odds"), "skipped", 0, {"reason": "x"})
     assert stamped["release"] == "abc123"
     assert json.loads(conn.execute("SELECT detail FROM job_runs WHERE run_id=?", (stamped["run_id"],)).fetchone()[0])["release"] == "abc123"
+
+
+def test_a_checkout_not_at_its_pinned_commit_is_refused(tmp_path, store, monkeypatch):
+    # Owner, Nov 10: the guard never compared the checkout with a pinned commit, so a moved checkout still ran.
+    root = git_repo(tmp_path / "release")
+    monkeypatch.setenv(release.ROOT_ENV, str(root))
+    pinned = release.pinned_commit(root)
+    (root / "NEXT").write_text("later\n")
+    subprocess.run(["git", "-C", str(root), "add", "NEXT"], check=True)
+    subprocess.run(["git", "-C", str(root), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "moved"], check=True)
+    problems = release.check("nhl", root=root)["problems"]
+    assert problems == [f"the release checkout is at {release._git(root, 'rev-parse', 'HEAD')[:12]}, not the pinned commit {pinned[:12]}"]
+    monkeypatch.setenv(release.COMMIT_ENV, release._git(root, "rev-parse", "HEAD").strip())   # only records; never pins
+    assert release.check("nhl", root=root)["problems"] != []
+    monkeypatch.delenv(release.COMMIT_ENV)
+    release.write_pin(root)
+    assert release.check("nhl", root=root)["problems"] == [] and not release._git(root, "status", "--porcelain").strip()
+
+
+def test_a_checkout_without_any_pin_is_refused(tmp_path, store, monkeypatch):
+    root = git_repo(tmp_path / "release")
+    release.pin_path(root).unlink()
+    monkeypatch.setenv(release.ROOT_ENV, str(root))
+    assert any(p.startswith("no pinned release commit") for p in release.check("nhl", root=root)["problems"])

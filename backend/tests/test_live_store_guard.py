@@ -31,6 +31,7 @@ def git_repo(path):
     (path / "README").write_text("release\n")
     subprocess.run(["git", "-C", str(path), "add", "README"], check=True)
     subprocess.run(["git", "-C", str(path), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "r"], check=True)
+    release.write_pin(path)      # a release pins its commit (app.release pin), as the release procedure does
     return path
 
 
@@ -482,6 +483,7 @@ def test_the_checkout_holding_the_data_folder_is_never_a_release_environment(tmp
     (repo / ".gitignore").write_text("data/\n")
     subprocess.run(["git", "-C", str(repo), "add", ".gitignore"], check=True)
     subprocess.run(["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "ignore"], check=True)
+    release.write_pin(repo)   # re-pinned after the new commit, as a release is
     (repo / "data").mkdir()
     store = build_store(tmp_path, repo / "data" / "nhl.sqlite", "nhl")
     root, data = repo, repo / "data"

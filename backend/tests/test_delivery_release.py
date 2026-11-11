@@ -20,6 +20,7 @@ def git_repo(path):
     (path / "README").write_text("release\n")
     subprocess.run(["git", "-C", str(path), "add", "README"], check=True)
     subprocess.run(["git", "-C", str(path), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "r"], check=True)
+    release.write_pin(path)      # a release pins its commit (app.release pin), as the release procedure does
     return path
 
 

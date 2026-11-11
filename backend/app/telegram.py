@@ -36,7 +36,20 @@ class Telegram:
         self._token = token
         self._transport = transport
 
-    def call(self, method, payload=None, *, photo=None):
+    CONNECT_RETRIES = (5, 15)   # seconds; Nov 10: 59 of 77 failed runs happened while the Mac was going to sleep
+
+    def call(self, method, payload=None, *, photo=None, pause=time.sleep):
+        """One Telegram request. A connection that could not be opened (ConnectError/ConnectTimeout: the request never
+        reached Telegram, so nothing can have been sent) is retried after 5 and 15 seconds; anything else is not."""
+        for wait in (*self.CONNECT_RETRIES, None):
+            try:
+                return self._call(method, payload, photo=photo)
+            except DeliveryError as exc:
+                if not getattr(exc, 'not_connected', False) or wait is None:
+                    raise
+                pause(wait)
+
+    def _call(self, method, payload=None, *, photo=None):
         # Never propagate HTTP exceptions: their URL contains the token.
         try:
             with httpx.Client(timeout=15, follow_redirects=False, trust_env=False, transport=self._transport) as client:
@@ -47,7 +60,9 @@ class Telegram:
                     response = client.post(url, data=payload or {}, files={'photo': ('prop51-card.png', photo, 'image/png')})
                 body = response.json()
         except (httpx.ConnectError, httpx.ConnectTimeout):
-            raise DeliveryError('Telegram connection unavailable.', retry_after=60) from None
+            error = DeliveryError('Telegram connection unavailable.', retry_after=60)
+            error.not_connected = True
+            raise error from None
         except (httpx.HTTPError, ValueError):
             raise DeliveryError('Telegram response not confirmed; review delivery before retrying.', uncertain=True) from None
         if not isinstance(body, dict):

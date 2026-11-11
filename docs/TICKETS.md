@@ -123,6 +123,7 @@ Still open: guarded-release operation of the sender/helper, cross-window stake p
 **What the guard does.** Under `NBA_RELEASE_GUARD=1` both refuse (exit 1, `"reason": "release guard"`) before any snapshot, ledger access or Telegram call, unless all of these hold (`app/release.py delivery_check`):
 - the code is imported from `NBA_RELEASE_ROOT`;
 - that checkout has no uncommitted changes;
+- that checkout is at its pinned commit: the `release-pin` file in its git folder (Nov 10; a moved checkout is refused). After each reviewed fast-forward run `cd ~/nba-predictor-delivery/backend && .venv/bin/python -m app.release pin`; a rollback (`git reset --hard <old>`) must be followed by the same command. `NBA_RELEASE_COMMIT` only records which commit ran a job;
 - `NBA_DATA_DIR` is set;
 - `NBA_TELEGRAM_LEDGER` and `NBA_TELEGRAM_CREDENTIALS` name existing regular files (not symlinks).
 

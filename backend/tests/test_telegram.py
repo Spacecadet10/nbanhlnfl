@@ -467,3 +467,32 @@ def test_ranking_failure_does_not_hide_the_existing_percentage_record(monkeypatc
     monkeypatch.setattr(to, 'percentage_ranking', broken)
     history = to.percentage_record('nba', 'winner', rec, 'new-game', index, NOW)
     assert (history['wins'], history['losses'], history['rank'], history['ranked']) == (2, 1, None, 0)
+
+
+def test_a_connection_that_never_opened_is_retried_and_nothing_else_is():
+    """Nov 10: intermittent DeliveryError in the alert path; 59 of 77 failed runs coincided with the Mac going to sleep.
+    A ConnectError means the request never reached Telegram, so a short retry cannot send twice."""
+    import httpx
+    from app.telegram import DeliveryError, Telegram
+    calls, waits = [], []
+
+    def transport(fail_with, failures):
+        def handler(request):
+            calls.append(request)
+            if len(calls) <= failures:
+                raise fail_with('down', request=request)
+            return httpx.Response(200, json={'ok': True, 'result': {'id': 1}})
+        return httpx.MockTransport(handler)
+
+    bot = Telegram('t', transport=transport(httpx.ConnectError, 2))
+    assert bot.call('getMe', pause=waits.append) == {'id': 1} and len(calls) == 3 and waits == [5, 15]
+    calls.clear(); waits.clear()
+    bot = Telegram('t', transport=transport(httpx.ConnectError, 3))
+    with pytest.raises(DeliveryError, match='connection unavailable'):
+        bot.call('getMe', pause=waits.append)
+    assert len(calls) == 3
+    calls.clear(); waits.clear()
+    bot = Telegram('t', transport=transport(httpx.ReadTimeout, 1))     # may have reached Telegram: never retried
+    with pytest.raises(DeliveryError, match='not confirmed'):
+        bot.call('sendMessage', {'text': 'x'}, pause=waits.append)
+    assert len(calls) == 1 and waits == []

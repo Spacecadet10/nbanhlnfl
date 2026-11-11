@@ -728,7 +728,7 @@ def test_offline_preflight_still_prints_the_settlement_report(setup,monkeypatch,
     monkeypatch.setattr(sys,'argv',['tickets','preflight','--notify'])
     assert t.main()==1
     out=json.loads(capsys.readouterr().out)
-    assert out['tickets'][0]['grade']=='win' and out['status']=='failed' and out['alerts_error']=='DeliveryError'
+    assert out['tickets'][0]['grade']=='win' and out['status']=='failed' and out['alerts_error']=='DeliveryError: offline'   # the cause, not only the class (Nov 10)
 
 
 def test_unclaimed_reservation_from_a_crash_is_alerted(setup,monkeypatch):

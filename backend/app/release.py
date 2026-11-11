@@ -5,6 +5,8 @@ work in the development checkout can no longer reach the live jobs or change a r
 NBA_RELEASE_GUARD=1 (set only in the release plists) every scheduled command first checks that:
 - the code being imported is the release checkout named by NBA_RELEASE_ROOT;
 - that checkout has no uncommitted changes;
+- that checkout is at the pinned commit (the release-pin file in its git folder, written by `python -m app.release pin`
+  after each reviewed fast-forward): a checkout moved without a release decision is refused;
 - NBA_DATA_DIR is set (otherwise the release would use its own, empty data folder);
 - the store's schema version equals the highest migration this release ships (a newer store was migrated by newer code; an
   older one would be migrated by this release: both are release decisions, never a side effect of a scheduled job).
@@ -22,6 +24,7 @@ from . import config, db
 GUARD_ENV = "NBA_RELEASE_GUARD"
 ROOT_ENV = "NBA_RELEASE_ROOT"
 COMMIT_ENV = "NBA_RELEASE_COMMIT"
+PIN_FILE = "release-pin"   # in the release checkout's git folder: the commit the scheduled jobs may run
 # Scheduled commands and the job_runs name a refusal is recorded under (job_runs.job has a fixed set of names).
 GUARDED = {"odds": "odds", "tick": "odds", "daily": "refresh", "refresh": "refresh", "injuries": "injuries", "score": "score",
            "predict-now": "near_tipoff", "predict": "near_tipoff", "markets": "markets", "boxscores": "boxscores"}
@@ -58,6 +61,28 @@ def _git(root: Path, *args: str) -> str:
     return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, check=True, timeout=30).stdout
 
 
+def pin_path(root: Path) -> Path:
+    """Where a release's pinned commit is written: inside the checkout's own git folder, so it is never part of a commit
+    (a commit cannot name itself) and never makes the checkout look changed. Releasing = fast-forward + write the pin."""
+    path = Path(_git(root, "rev-parse", "--git-path", PIN_FILE).strip())
+    return path if path.is_absolute() else root / path
+
+
+def pinned_commit(root: Path) -> Optional[str]:
+    """The pin file's commit; at least 7 hex characters, else None. NBA_RELEASE_COMMIT is NOT an input: the CLI sets it
+    to the commit that passed the check, so it only records which commit ran (jobs.py) and can never pin anything."""
+    path = pin_path(root)
+    value = path.read_text().strip() if path.is_file() else ""
+    return value if len(value) >= 7 and all(c in "0123456789abcdefABCDEF" for c in value) else None
+
+
+def write_pin(root: Path) -> str:
+    """Pins the checkout's current commit (the release procedure's last step); returns it."""
+    commit = _git(root, "rev-parse", "HEAD").strip()
+    pin_path(root).write_text(commit + "\n")
+    return commit
+
+
 def _checkout(root: Path) -> tuple[Optional[str], list[str]]:
     """The commit and every reason this is not the clean release checkout using the shared data folder."""
     problems = []
@@ -72,6 +97,11 @@ def _checkout(root: Path) -> tuple[Optional[str], list[str]]:
         changed = [line for line in _git(root, "status", "--porcelain").splitlines() if line.strip()]
         if changed:
             problems.append(f"the release checkout has uncommitted changes: {', '.join(c[3:] for c in changed[:5])}")
+        pinned = pinned_commit(root)
+        if not pinned:
+            problems.append(f"no pinned release commit ({PIN_FILE} in the checkout's git folder; `python -m app.release pin`)")
+        elif not commit.startswith(pinned.lower()):
+            problems.append(f"the release checkout is at {commit[:12]}, not the pinned commit {pinned[:12]}")
     except (OSError, subprocess.SubprocessError) as exc:
         problems.append(f"cannot verify the release checkout with git: {type(exc).__name__}")
     if not os.environ.get("NBA_DATA_DIR"):
@@ -167,3 +197,10 @@ def delivery_check(root: Optional[Path] = None) -> dict:
             problems.append(f"the {what} {path} does not exist; it is never created by a release")
     return {"commit": commit, "root": str(root), "data_dir": str(config.data_dir()),
             "ledger": named[TELEGRAM_LEDGER_ENV_NAME], "credentials": named[TELEGRAM_CREDENTIALS_ENV_NAME], "problems": problems}
+
+
+if __name__ == "__main__":
+    import sys
+    if sys.argv[1:] != ["pin"]:
+        raise SystemExit("usage: python -m app.release pin   (pins this checkout's current commit for the scheduled jobs)")
+    print(write_pin(code_root().resolve()))

@@ -1654,12 +1654,12 @@ def settle(*, now=None, notify=False):
                         try:
                             result['notification'] = telegram.deliver(bot,conn,chat,key,text,now)
                         except telegram.DeliveryError as exc:
-                            report['notification_errors'].append({'ticket_id':result['ticket_id'],'error':type(exc).__name__})
+                            report['notification_errors'].append({'ticket_id':result['ticket_id'],'error':_delivery_error(exc)})
                             continue
                         if result['notification'] not in ('sent','already_recorded'):
                             report['notification_errors'].append({'ticket_id':result['ticket_id'],'status':result['notification']})
             except Exception as exc:  # grades are committed; no notification problem (even a malformed reply) may abort settlement
-                report['notification_errors'].append({'error':type(exc).__name__})
+                report['notification_errors'].append({'error':_delivery_error(exc)})
         # Owed result notices Telegram rejected: listed by every run (notices on or off) until the user has the current
         # result. Only the run in which the rejection happens reports it under notification_errors, as before.
         report['undelivered_results'] = []
@@ -1692,6 +1692,13 @@ def record_personal(path):
             raise ValueError('Personal slip already recorded with different content; use a correction ID')
         conn.execute('INSERT OR IGNORE INTO personal_tickets VALUES (?,?,?)',(value['slip_id'],datetime.now(timezone.utc).isoformat(),raw))
     return value
+
+
+def _delivery_error(exc):
+    """'DeliveryError: Telegram connection unavailable.' for the app's own Telegram errors (their messages never contain the
+    token or a URL); only the class name for anything else. Nov 10: the class name alone left the cause unknown."""
+    from app import telegram
+    return f"{type(exc).__name__}: {exc}" if isinstance(exc, telegram.DeliveryError) else type(exc).__name__
 
 
 def notify_alerts(snap, settlement_errors, extra=(), undelivered=()):
@@ -1958,7 +1965,7 @@ def main():
                         report['alerts'] = notify_alerts(report['snapshot'], report['errors'], interruption_alerts(gone),
                                                          report.get('undelivered_results', ()))
                     except Exception as exc:  # keep the committed settlement report visible when alerts cannot go out
-                        report.update(status='failed', alerts_error=type(exc).__name__)
+                        report.update(status='failed', alerts_error=_delivery_error(exc))
                         print(json.dumps(report))
                         return 1
                 if args.brief:   # the trigger check runs often; the full snapshot is taken separately when a review is due
