@@ -14,7 +14,7 @@ already saved (app.rundown_odds, data/odds-books); this script never fetches.
     PYTHONPATH=backend backend/.venv/bin/python scripts/early_board.py --root <live root>            # board, games 3-40 h ahead
     PYTHONPATH=backend backend/.venv/bin/python scripts/early_board.py --root <live root> --grade    # grade earlier boards
 """
-import argparse, copy, glob, json, math, os, sqlite3, sys, tempfile
+import argparse, copy, glob, json, math, os, sqlite3, sys, tempfile, traceback
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -76,8 +76,9 @@ def board(root, now, lo_h, hi_h, dest):
     for sport in SPORTS:
         try:
             sport_board(root, sport, now, lo_h, hi_h, dest, cache, picks, waiting)
-        except Exception as exc:     # one sport failing never stops the other's board (review of 6d2715f)
-            waiting.append(dict(sport=sport, reason=f"board failed: {type(exc).__name__}"))
+        except Exception as exc:     # one sport failing never stops the other's board (review of 6d2715f), but it is a failure:
+            traceback.print_exc()    # full traceback in the log, and main() exits non-zero after writing the board
+            waiting.append(dict(sport=sport, reason=f"board failed: {type(exc).__name__}", failed=True))
     return picks, waiting
 
 
@@ -318,6 +319,8 @@ def main():
         log, md, leans = write_board(picks, waiting, out_dir, now)
         print(open(md).read())
         print(f"saved {md} and {log}")
+        if any(w.get("failed") for w in waiting):
+            sys.exit(1)
 
 
 if __name__ == "__main__":

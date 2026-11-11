@@ -96,4 +96,4 @@ def test_sign_test_and_a_failing_sport_does_not_stop_the_other(monkeypatch):
     monkeypatch.setattr(eb, 'sport_board', fake)
     monkeypatch.setattr(eb.rundown_odds, 'read_cache', lambda now, d: {'responses': []})
     picks, waiting = eb.board('r', NOW, 3, 40, 'd')
-    assert calls == ['nba', 'nhl'] and picks == [dict(sport='nhl')] and waiting == [dict(sport='nba', reason='board failed: RuntimeError')]
+    assert calls == ['nba', 'nhl'] and picks == [dict(sport='nhl')] and waiting == [dict(sport='nba', reason='board failed: RuntimeError', failed=True)]
