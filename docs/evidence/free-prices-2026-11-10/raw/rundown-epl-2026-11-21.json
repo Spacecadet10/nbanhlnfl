@@ -1,0 +1,4676 @@
+{
+ "_fetched_at": "2026-11-11T04:40:50+00:00",
+ "_url": "https://therundown.io/api/v2/sports/11/events/2026-11-21?market_ids=1,3,330,331,899",
+ "_status": 200,
+ "_headers": {
+  "date": "Wed, 11 Nov 2026 04:40:50 GMT",
+  "content-type": "application/json",
+  "x-data-delay-seconds": "300",
+  "x-datapoints": "340",
+  "x-datapoints-breakdown": "events=7,odds=326,scores=7",
+  "x-datapoints-limit": "20000",
+  "x-datapoints-monthly-limit": "200000",
+  "x-datapoints-monthly-remaining": "198188",
+  "x-datapoints-monthly-reset": "2026-12-01T00:00:00Z",
+  "x-datapoints-monthly-used": "1812",
+  "x-datapoints-period": "daily",
+  "x-datapoints-remaining": "18316",
+  "x-datapoints-reset": "2026-11-12T00:00:00Z",
+  "x-datapoints-used": "1684",
+  "x-rate-limit": "1"
+ },
+ "body": {
+  "meta": {
+   "delta_last_id": "5539512898",
+   "affiliate_visibility_token": "enabled-2faa301d57efbaae"
+  },
+  "events": [
+   {
+    "event_id": "a416d9fe6465346bf366f08ef5693628",
+    "event_uuid": "11f1-e5bc-391cd800-8db9-f9d854d896ad",
+    "sport_id": 11,
+    "event_date": "2026-11-21T12:30:00Z",
+    "score": {
+     "event_id": "a416d9fe6465346bf366f08ef5693628",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 3443,
+     "team_id_home": 3447,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [
+      0,
+      0
+     ],
+     "score_home_by_period": [
+      0,
+      0
+     ],
+     "venue_name": "Etihad Stadium",
+     "venue_location": "Manchester",
+     "game_clock": 0,
+     "display_clock": "0'",
+     "game_period": 0,
+     "broadcast": "",
+     "event_status_detail": "Scheduled",
+     "updated_at": "2026-10-01T00:24:42Z"
+    },
+    "teams": [
+     {
+      "team_id": 3443,
+      "name": "Fulham",
+      "mascot": "",
+      "abbreviation": "FUL",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "2-4-4",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     },
+     {
+      "team_id": 3447,
+      "name": "Manchester City",
+      "mascot": "",
+      "abbreviation": "MNC",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "7-0-3",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 3443,
+      "name": "Fulham",
+      "mascot": "",
+      "abbreviation": "FUL",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "2-4-4",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     },
+     {
+      "team_id": 3447,
+      "name": "Manchester City",
+      "mascot": "",
+      "abbreviation": "MNC",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "7-0-3",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     }
+    ],
+    "schedule": {
+     "conference_competition": false,
+     "season_type": "2026-27 English Premier League",
+     "season_year": 2026,
+     "event_name": "Fulham at Manchester City - 2026-11-21T12:30:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 7902718,
+      "market_id": 1,
+      "period_id": 0,
+      "name": "moneyline",
+      "market_description": "Win the game outright.",
+      "participants": [
+       {
+        "id": 3443,
+        "type": "TYPE_TEAM",
+        "name": "Fulham",
+        "lines": [
+         {
+          "id": "d8bf509dc030e23925b7698146564cf1",
+          "prices": {
+           "19": {
+            "id": "709178278",
+            "price": 500,
+            "price_delta": 25,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T06:05:34Z",
+            "source_id": "0ML87095905_3"
+           },
+           "23": {
+            "id": "711546794",
+            "price": 550,
+            "price_delta": 50,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T01:27:19Z",
+            "source_id": "36293092-734.196494174-AWAY"
+           },
+           "22": {
+            "id": "712312225",
+            "price": 450,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910930-207682706-806046203"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 3447,
+        "type": "TYPE_TEAM",
+        "name": "Manchester City",
+        "lines": [
+         {
+          "id": "d5efa063f0f5ea9295ecbe4c37893270",
+          "prices": {
+           "19": {
+            "id": "709178277",
+            "price": -240,
+            "price_delta": -10,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T04:15:02Z",
+            "source_id": "0ML87095905_1"
+           },
+           "23": {
+            "id": "711546795",
+            "price": -240,
+            "is_main_line": true,
+            "updated_at": "2026-11-07T17:55:07Z",
+            "source_id": "36293092-734.196494174-HOME"
+           },
+           "22": {
+            "id": "712312226",
+            "price": -235,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910930-207682706-806046201"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 3,
+        "type": "TYPE_RESULT",
+        "name": "Draw",
+        "lines": [
+         {
+          "id": "3d70ca26843d6cf41890bb8877c7927f",
+          "prices": {
+           "19": {
+            "id": "709178279",
+            "price": 390,
+            "price_delta": 10,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T04:15:02Z",
+            "source_id": "0ML87095905_2"
+           },
+           "23": {
+            "id": "711546796",
+            "price": 390,
+            "price_delta": 10,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T01:27:19Z",
+            "source_id": "36293092-734.196494174-DRAW"
+           },
+           "22": {
+            "id": "712312227",
+            "price": 340,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910930-207682706-806046202"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 7902708,
+      "market_id": 3,
+      "period_id": 0,
+      "name": "totals",
+      "market_description": "Over/under on the combined score.",
+      "participants": [
+       {
+        "id": 9,
+        "type": "TYPE_RESULT",
+        "name": "Over",
+        "lines": [
+         {
+          "id": "707074b9bee8b671b60af2484bcc0c14",
+          "value": "1.5",
+          "prices": {
+           "22": {
+            "id": "712312239",
+            "price": -700,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910930-207687928-806065625"
+           },
+           "19": {
+            "id": "709178211",
+            "price": -700,
+            "price_delta": 50,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T18:18:11Z",
+            "source_id": "0OU87095929O150_1"
+           },
+           "23": {
+            "id": "711546812",
+            "price": -750,
+            "price_delta": -50,
+            "is_main_line": false,
+            "updated_at": "2026-11-11T01:27:19Z",
+            "source_id": "36293092-734.196494089-Over 1.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "8eeee1931d1e11571a0405eba3f1687d",
+          "value": "2.5",
+          "prices": {
+           "22": {
+            "id": "712312235",
+            "price": -210,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910930-207687926-806065621"
+           },
+           "19": {
+            "id": "709178212",
+            "price": -210,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T04:15:03Z",
+            "source_id": "0OU87095929O250_1"
+           },
+           "23": {
+            "id": "711546816",
+            "price": -205,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-11T01:27:19Z",
+            "source_id": "36293092-734.196494140-Over 2.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "2b10c11d8fb9e28daf00ad71b53a38cf",
+          "value": "3.5",
+          "prices": {
+           "22": {
+            "id": "712312233",
+            "price": 115,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910930-207687925-806065619"
+           },
+           "19": {
+            "id": "709178213",
+            "price": 120,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-07T18:18:11Z",
+            "source_id": "0OU87095929O350_1"
+           },
+           "23": {
+            "id": "711546808",
+            "price": 128,
+            "price_delta": -2,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T01:27:19Z",
+            "source_id": "36293092-734.196494070-Over 3.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "e508fbd5960b7b77832cb95fea069140",
+          "value": "4.5",
+          "prices": {
+           "19": {
+            "id": "709178215",
+            "price": 265,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T04:15:03Z",
+            "source_id": "0OU87095929O450_1"
+           },
+           "23": {
+            "id": "711546810",
+            "price": 290,
+            "price_delta": -20,
+            "is_main_line": false,
+            "updated_at": "2026-11-11T01:27:19Z",
+            "source_id": "36293092-734.196494075-Over 4.5 Goals"
+           },
+           "22": {
+            "id": "712312237",
+            "price": 270,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910930-207687927-806065623"
+           }
+          }
+         },
+         {
+          "id": "06644446f1c530d8c7e2a08f9e796ce9",
+          "value": "5.5",
+          "prices": {
+           "19": {
+            "id": "709178216",
+            "price": 550,
+            "price_delta": 50,
+            "is_main_line": false,
+            "updated_at": "2026-11-06T15:53:03Z",
+            "source_id": "0OU87095929O550_1"
+           },
+           "23": {
+            "id": "711546818",
+            "price": 650,
+            "price_delta": -60,
+            "is_main_line": false,
+            "updated_at": "2026-11-11T01:27:19Z",
+            "source_id": "36293092-734.196494145-Over 5.5 Goals"
+           },
+           "22": {
+            "id": "712312241",
+            "price": 575,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910930-207687929-806065627"
+           }
+          }
+         },
+         {
+          "id": "3c073471326a8c3d8a5ead80f78332b7",
+          "value": "6.5",
+          "prices": {
+           "19": {
+            "id": "709178217",
+            "price": 1000,
+            "is_main_line": false,
+            "updated_at": "2026-11-04T17:22:34Z",
+            "source_id": "0OU87095929O650_1"
+           },
+           "23": {
+            "id": "711546814",
+            "price": 1300,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T17:55:07Z",
+            "source_id": "36293092-734.196494092-Over 6.5 Goals"
+           },
+           "22": {
+            "id": "712312245",
+            "price": 1200,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910930-207687931-806065631"
+           }
+          }
+         },
+         {
+          "id": "5be34cf13d0caf47709c204455c58676",
+          "value": "0.5",
+          "prices": {
+           "23": {
+            "id": "711546820",
+            "price": -8000,
+            "price_delta": -2000,
+            "is_main_line": false,
+            "updated_at": "2026-11-11T01:27:19Z",
+            "source_id": "36293092-734.196494162-Over 0.5 Goals"
+           },
+           "22": {
+            "id": "712312243",
+            "price": -10000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910930-207687930-806065629"
+           }
+          }
+         },
+         {
+          "id": "b0aa4e70c2d10da424fd59b6243f4f7d",
+          "value": "7.5",
+          "prices": {
+           "23": {
+            "id": "711546806",
+            "price": 2500,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T17:55:07Z",
+            "source_id": "36293092-734.196494069-Over 7.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "3c35b0e22bf1c48846350dfc77d6f007",
+          "value": "8.5",
+          "prices": {
+           "23": {
+            "id": "711546822",
+            "price": 6500,
+            "price_delta": 1000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T16:47:45Z",
+            "source_id": "36293092-734.196494176-Over 8.5 Goals"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 10,
+        "type": "TYPE_RESULT",
+        "name": "Under",
+        "lines": [
+         {
+          "id": "21035c647d45ac57902a290a0743d04a",
+          "value": "1.5",
+          "prices": {
+           "19": {
+            "id": "709178218",
+            "price": 400,
+            "price_delta": -25,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T14:57:27Z",
+            "source_id": "0OU87095929U150_3"
+           },
+           "23": {
+            "id": "711546813",
+            "price": 490,
+            "price_delta": 20,
+            "is_main_line": false,
+            "updated_at": "2026-11-11T01:27:19Z",
+            "source_id": "36293092-734.196494089-Under 1.5 Goals"
+           },
+           "22": {
+            "id": "712312240",
+            "price": 425,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910930-207687928-806065626"
+           }
+          }
+         },
+         {
+          "id": "5eaafcdb49ba9f0c41a26aa74cdf3e3a",
+          "value": "2.5",
+          "prices": {
+           "19": {
+            "id": "709178219",
+            "price": 150,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T18:18:11Z",
+            "source_id": "0OU87095929U250_3"
+           },
+           "23": {
+            "id": "711546817",
+            "price": 164,
+            "price_delta": 4,
+            "is_main_line": false,
+            "updated_at": "2026-11-11T01:27:19Z",
+            "source_id": "36293092-734.196494140-Under 2.5 Goals"
+           },
+           "22": {
+            "id": "712312236",
+            "price": 150,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910930-207687926-806065622"
+           }
+          }
+         },
+         {
+          "id": "2630191d052e4778f4b682cff40b969e",
+          "value": "3.5",
+          "prices": {
+           "19": {
+            "id": "709178214",
+            "price": -165,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-07T18:18:11Z",
+            "source_id": "0OU87095929U350_3"
+           },
+           "23": {
+            "id": "711546809",
+            "price": -158,
+            "price_delta": 2,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T01:27:19Z",
+            "source_id": "36293092-734.196494070-Under 3.5 Goals"
+           },
+           "22": {
+            "id": "712312234",
+            "price": -165,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910930-207687925-806065620"
+           }
+          }
+         },
+         {
+          "id": "8c43fb05d820dd352e3e59922d02784e",
+          "value": "4.5",
+          "prices": {
+           "19": {
+            "id": "709178220",
+            "price": -400,
+            "price_delta": 25,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T18:14:59Z",
+            "source_id": "0OU87095929U450_3"
+           },
+           "23": {
+            "id": "711546811",
+            "price": -385,
+            "price_delta": 35,
+            "is_main_line": false,
+            "updated_at": "2026-11-11T01:27:19Z",
+            "source_id": "36293092-734.196494075-Under 4.5 Goals"
+           },
+           "22": {
+            "id": "712312238",
+            "price": -425,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910930-207687927-806065624"
+           }
+          }
+         },
+         {
+          "id": "5bf77779d0caa2ae360b584d25f57d87",
+          "value": "5.5",
+          "prices": {
+           "19": {
+            "id": "709178221",
+            "price": -1200,
+            "price_delta": -100,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T18:18:11Z",
+            "source_id": "0OU87095929U550_3"
+           },
+           "23": {
+            "id": "711546819",
+            "price": -1100,
+            "price_delta": 150,
+            "is_main_line": false,
+            "updated_at": "2026-11-11T01:27:19Z",
+            "source_id": "36293092-734.196494145-Under 5.5 Goals"
+           },
+           "22": {
+            "id": "712312242",
+            "price": -1100,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910930-207687929-806065628"
+           }
+          }
+         },
+         {
+          "id": "d9f2a78a7817f81a8275c9f7aa930809",
+          "value": "6.5",
+          "prices": {
+           "19": {
+            "id": "709178222",
+            "price": -6000,
+            "price_delta": -1000,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T14:57:27Z",
+            "source_id": "0OU87095929U650_3"
+           },
+           "23": {
+            "id": "711546815",
+            "price": -4500,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T17:55:07Z",
+            "source_id": "36293092-734.196494092-Under 6.5 Goals"
+           },
+           "22": {
+            "id": "712312246",
+            "price": -5000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910930-207687931-806065632"
+           }
+          }
+         },
+         {
+          "id": "fcfe43746c3a3e83f7029e98de8c3419",
+          "value": "0.5",
+          "prices": {
+           "23": {
+            "id": "711546821",
+            "price": 1800,
+            "price_delta": 200,
+            "is_main_line": false,
+            "updated_at": "2026-11-11T01:27:19Z",
+            "source_id": "36293092-734.196494162-Under 0.5 Goals"
+           },
+           "22": {
+            "id": "712312244",
+            "price": 1700,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910930-207687930-806065630"
+           }
+          }
+         },
+         {
+          "id": "1ee4b188a778e8141a75f98269008a92",
+          "value": "7.5",
+          "prices": {
+           "23": {
+            "id": "711546807",
+            "price": -10000,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T17:55:07Z",
+            "source_id": "36293092-734.196494069-Under 7.5 Goals"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "11": "491178180",
+     "14": "6231577",
+     "34": "207324241",
+     "6": "491178180",
+     "28": "2616878877133373829",
+     "30": "01a1c584-b9a7-7d82-b58f-d21fc618d9ff",
+     "33": "207324241",
+     "2": "33043582",
+     "3": "1639746855",
+     "4": "491178180",
+     "7": "39CC6663-9486-4B07-BDD3-E7A3555F723E",
+     "9": "39CC6663-9486-4B07-BDD3-E7A3555F723E",
+     "21": "1028072761",
+     "22": "7910930",
+     "19": "34962893",
+     "23": "36293092",
+     "24": "0d87145b-022b-49a2-bb96-410e4130b0ae",
+     "25": "26NOV21MCIFUL"
+    },
+    "affiliate_deep_links": {
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/207324241",
+     "14": "https://sports.everygame.eu/",
+     "9": "https://sportsbook.betcris.com/",
+     "11": "https://sports.lowvig.ag/sportsbook/soccer/epl/game/491178180",
+     "2": "https://www.bovada.lv/sports/soccer/europe/england/premier-league/manchester-city-fulham-202611210730",
+     "23": "https://sportsbook.fanduel.com/soccer/english-premier-league/man-city-v-fulham-36293092",
+     "25": "https://kalshi.com/markets/kxeplgame/kxeplgame-26nov21mciful",
+     "22": "https://sports.nj.betmgm.com/en/sports/events/2:7910930",
+     "30": "https://novig.com/event-markets/01a1c584-b9a7-7d82-b58f-d21fc618d9ff",
+     "19": "https://sportsbook.draftkings.com/event/man-city-vs-fulham/34962893",
+     "28": "https://app.hardrock.bet/competition/englandPremierLeague/2616878877133373829",
+     "24": "https://sportsbook.thescore.bet/sport/soccer/organization/england/competition/premier-league/event/0d87145b-022b-49a2-bb96-410e4130b0ae",
+     "33": "https://bet105.ag/",
+     "7": "https://www.bookmaker.eu/",
+     "4": "https://www.sportsbetting.ag/sportsbook/soccer/epl/game/491178180",
+     "21": "https://www.unibet.co.uk/betting/odds/contest/b97cb7083d5d35ec60b46bcd97f7b9c6",
+     "3": "https://www.pinnacle.com/en/soccer/england-premier-league/manchester-city-vs-fulham/1639746855/",
+     "6": "https://www.betonline.ag/sportsbook/soccer/epl/game/491178180"
+    },
+    "affiliate_deep_link_types": {
+     "9": "catalog",
+     "14": "catalog",
+     "7": "catalog",
+     "33": "catalog"
+    }
+   },
+   {
+    "event_id": "3f36d81c5ac5239cef8ef126cf199d61",
+    "event_uuid": "11f1-e5bc-391cd800-8043-0a76a59dd336",
+    "sport_id": 11,
+    "event_date": "2026-11-21T15:00:00Z",
+    "score": {
+     "event_id": "3f36d81c5ac5239cef8ef126cf199d61",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 4272,
+     "team_id_home": 4271,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [
+      0,
+      0
+     ],
+     "score_home_by_period": [
+      0,
+      0
+     ],
+     "venue_name": "Vitality Stadium",
+     "venue_location": "Bournemouth",
+     "game_clock": 0,
+     "display_clock": "0'",
+     "game_period": 0,
+     "broadcast": "",
+     "event_status_detail": "Scheduled",
+     "updated_at": "2026-10-01T00:24:42Z"
+    },
+    "teams": [
+     {
+      "team_id": 4272,
+      "name": "Nottingham Forest",
+      "mascot": "",
+      "abbreviation": "FOR",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "2-3-5",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     },
+     {
+      "team_id": 4271,
+      "name": "Bournemouth",
+      "mascot": "",
+      "abbreviation": "BOU",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "4-3-3",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 4272,
+      "name": "Nottingham Forest",
+      "mascot": "",
+      "abbreviation": "FOR",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "2-3-5",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     },
+     {
+      "team_id": 4271,
+      "name": "Bournemouth",
+      "mascot": "",
+      "abbreviation": "BOU",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "4-3-3",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     }
+    ],
+    "schedule": {
+     "conference_competition": false,
+     "season_type": "2026-27 English Premier League",
+     "season_year": 2026,
+     "event_name": "Nottingham Forest at AFC Bournemouth - 2026-11-21T15:00:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 7902734,
+      "market_id": 1,
+      "period_id": 0,
+      "name": "moneyline",
+      "market_description": "Win the game outright.",
+      "participants": [
+       {
+        "id": 4271,
+        "type": "TYPE_TEAM",
+        "name": "Bournemouth",
+        "lines": [
+         {
+          "id": "bce53d85764ca803687f80e5f57a1e9f",
+          "prices": {
+           "22": {
+            "id": "712312545",
+            "price": -105,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910914-207678380-806024945"
+           },
+           "19": {
+            "id": "709178383",
+            "price": 100,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T15:37:05Z",
+            "source_id": "0ML87095914_1"
+           },
+           "23": {
+            "id": "711509566",
+            "price": 100,
+            "is_main_line": true,
+            "updated_at": "2026-11-07T17:25:07Z",
+            "source_id": "36292923-734.196489723-HOME"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 4272,
+        "type": "TYPE_TEAM",
+        "name": "Nottingham Forest",
+        "lines": [
+         {
+          "id": "e2e0637f8eda8b7c9658a24393e38c64",
+          "prices": {
+           "19": {
+            "id": "709178385",
+            "price": 255,
+            "price_delta": 15,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T15:37:05Z",
+            "source_id": "0ML87095914_3"
+           },
+           "23": {
+            "id": "711509565",
+            "price": 240,
+            "price_delta": -10,
+            "is_main_line": true,
+            "updated_at": "2026-11-07T21:05:35Z",
+            "source_id": "36292923-734.196489723-AWAY"
+           },
+           "22": {
+            "id": "712312544",
+            "price": 225,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910914-207678380-806024947"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 3,
+        "type": "TYPE_RESULT",
+        "name": "Draw",
+        "lines": [
+         {
+          "id": "78464f185b948fc6a13aee1998df3b30",
+          "prices": {
+           "23": {
+            "id": "711509567",
+            "price": 250,
+            "price_delta": -10,
+            "is_main_line": true,
+            "updated_at": "2026-11-07T21:05:35Z",
+            "source_id": "36292923-734.196489723-DRAW"
+           },
+           "22": {
+            "id": "712312546",
+            "price": 230,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910914-207678380-806024946"
+           },
+           "19": {
+            "id": "709178384",
+            "price": 250,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T15:37:05Z",
+            "source_id": "0ML87095914_2"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 7902863,
+      "market_id": 3,
+      "period_id": 0,
+      "name": "totals",
+      "market_description": "Over/under on the combined score.",
+      "participants": [
+       {
+        "id": 9,
+        "type": "TYPE_RESULT",
+        "name": "Over",
+        "lines": [
+         {
+          "id": "dcdaa513f65d42ea8509c113ca331b19",
+          "value": "0.5",
+          "prices": {
+           "19": {
+            "id": "709179558",
+            "price": -3500,
+            "price_delta": 500,
+            "is_main_line": false,
+            "updated_at": "2026-11-04T17:23:00Z",
+            "source_id": "0OU87096235O50_1"
+           },
+           "23": {
+            "id": "711509579",
+            "price": -3500,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T17:25:07Z",
+            "source_id": "36292923-734.196489662-Over 0.5 Goals"
+           },
+           "22": {
+            "id": "712312560",
+            "price": -3000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910914-207687855-806065419"
+           }
+          }
+         },
+         {
+          "id": "146990cdfedcf57a5d0485f920f730f4",
+          "value": "1.5",
+          "prices": {
+           "19": {
+            "id": "709179553",
+            "price": -390,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T11:52:53Z",
+            "source_id": "0OU87096235O150_1"
+           },
+           "23": {
+            "id": "711509581",
+            "price": -420,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T17:25:07Z",
+            "source_id": "36292923-734.196489674-Over 1.5 Goals"
+           },
+           "22": {
+            "id": "712312556",
+            "price": -450,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910914-207687853-806065415"
+           }
+          }
+         },
+         {
+          "id": "1a900c15544a5033612444fb716b47e0",
+          "value": "2.5",
+          "prices": {
+           "19": {
+            "id": "709179554",
+            "price": -130,
+            "is_main_line": true,
+            "updated_at": "2026-11-04T17:22:58Z",
+            "source_id": "0OU87096235O250_1"
+           },
+           "23": {
+            "id": "711509588",
+            "price": -128,
+            "is_main_line": true,
+            "updated_at": "2026-11-07T18:46:52Z",
+            "source_id": "36292923-734.196489707-Over 2.5 Goals"
+           },
+           "22": {
+            "id": "712312552",
+            "price": -135,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910914-207687851-806065411"
+           }
+          }
+         },
+         {
+          "id": "3af89c97c6b507bf3e780f52d261356d",
+          "value": "3.5",
+          "prices": {
+           "19": {
+            "id": "709179556",
+            "price": 195,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T11:52:53Z",
+            "source_id": "0OU87096235O350_1"
+           },
+           "23": {
+            "id": "711509583",
+            "price": 205,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T17:25:07Z",
+            "source_id": "36292923-734.196489680-Over 3.5 Goals"
+           },
+           "22": {
+            "id": "712312554",
+            "price": 180,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910914-207687852-806065413"
+           }
+          }
+         },
+         {
+          "id": "c435f846c8708d9f8352b7a00f71a184",
+          "value": "4.5",
+          "prices": {
+           "22": {
+            "id": "712312558",
+            "price": 425,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910914-207687854-806065417"
+           },
+           "19": {
+            "id": "709179563",
+            "price": 425,
+            "is_main_line": false,
+            "updated_at": "2026-11-04T17:22:58Z",
+            "source_id": "0OU87096235O450_1"
+           },
+           "23": {
+            "id": "711509577",
+            "price": 490,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T17:25:07Z",
+            "source_id": "36292923-734.196489655-Over 4.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "e59b5617a5c278a8f55280ddfca651ce",
+          "value": "5.5",
+          "prices": {
+           "19": {
+            "id": "709179557",
+            "price": 900,
+            "price_delta": 50,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T19:57:45Z",
+            "source_id": "0OU87096235O550_1"
+           },
+           "23": {
+            "id": "711509585",
+            "price": 1120,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T17:25:07Z",
+            "source_id": "36292923-734.196489685-Over 5.5 Goals"
+           },
+           "22": {
+            "id": "712312562",
+            "price": 1000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910914-207687856-806065421"
+           }
+          }
+         },
+         {
+          "id": "02edd17f1796ea03ea68ccb48aa44de5",
+          "value": "6.5",
+          "prices": {
+           "23": {
+            "id": "711509575",
+            "price": 2500,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T17:25:07Z",
+            "source_id": "36292923-734.196489653-Over 6.5 Goals"
+           },
+           "22": {
+            "id": "712312564",
+            "price": 2000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910914-207687857-806065423"
+           }
+          }
+         },
+         {
+          "id": "5847ee40f3c36c96e5821f4627df8b7c",
+          "value": "7.5",
+          "prices": {
+           "23": {
+            "id": "711509590",
+            "price": 5500,
+            "price_delta": 500,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T19:45:55Z",
+            "source_id": "36292923-734.196489718-Over 7.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "9427402360ad7db577dc7a209b92897b",
+          "value": "8.5",
+          "prices": {
+           "23": {
+            "id": "711509587",
+            "price": 8000,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T17:25:07Z",
+            "source_id": "36292923-734.196489686-Over 8.5 Goals"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 10,
+        "type": "TYPE_RESULT",
+        "name": "Under",
+        "lines": [
+         {
+          "id": "692134fdc37a5c0fc628ae7c0b6b136a",
+          "value": "0.5",
+          "prices": {
+           "19": {
+            "id": "709179562",
+            "price": 900,
+            "is_main_line": false,
+            "updated_at": "2026-11-04T17:22:58Z",
+            "source_id": "0OU87096235U50_3"
+           },
+           "23": {
+            "id": "711509580",
+            "price": 1200,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T17:25:07Z",
+            "source_id": "36292923-734.196489662-Under 0.5 Goals"
+           },
+           "22": {
+            "id": "712312561",
+            "price": 1050,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910914-207687855-806065420"
+           }
+          }
+         },
+         {
+          "id": "1c5fbaf8212e0ebd8da95982229eebe0",
+          "value": "1.5",
+          "prices": {
+           "19": {
+            "id": "709179559",
+            "price": 265,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T11:52:53Z",
+            "source_id": "0OU87096235U150_3"
+           },
+           "23": {
+            "id": "711509582",
+            "price": 310,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T17:25:07Z",
+            "source_id": "36292923-734.196489674-Under 1.5 Goals"
+           },
+           "22": {
+            "id": "712312557",
+            "price": 290,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910914-207687853-806065416"
+           }
+          }
+         },
+         {
+          "id": "231de20a37fb3d50f9262c092ecb087f",
+          "value": "2.5",
+          "prices": {
+           "19": {
+            "id": "709179555",
+            "price": -105,
+            "is_main_line": true,
+            "updated_at": "2026-11-04T17:22:58Z",
+            "source_id": "0OU87096235U250_3"
+           },
+           "23": {
+            "id": "711509589",
+            "price": 104,
+            "is_main_line": true,
+            "updated_at": "2026-11-07T18:46:52Z",
+            "source_id": "36292923-734.196489707-Under 2.5 Goals"
+           },
+           "22": {
+            "id": "712312553",
+            "price": -102,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910914-207687851-806065412"
+           }
+          }
+         },
+         {
+          "id": "6c9a247cc7ca40cd18bcb4603bdc6aee",
+          "value": "3.5",
+          "prices": {
+           "19": {
+            "id": "709179560",
+            "price": -275,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T11:52:53Z",
+            "source_id": "0OU87096235U350_3"
+           },
+           "23": {
+            "id": "711509584",
+            "price": -260,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T17:25:07Z",
+            "source_id": "36292923-734.196489680-Under 3.5 Goals"
+           },
+           "22": {
+            "id": "712312555",
+            "price": -275,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910914-207687852-806065414"
+           }
+          }
+         },
+         {
+          "id": "c9e293edb6b1c12fd4f558124d35c29f",
+          "value": "4.5",
+          "prices": {
+           "23": {
+            "id": "711509578",
+            "price": -750,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T17:25:07Z",
+            "source_id": "36292923-734.196489655-Under 4.5 Goals"
+           },
+           "22": {
+            "id": "712312559",
+            "price": -700,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910914-207687854-806065418"
+           },
+           "19": {
+            "id": "709179582",
+            "price": -800,
+            "price_delta": -50,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T11:52:53Z",
+            "source_id": "0OU87096235U450_3"
+           }
+          }
+         },
+         {
+          "id": "b8472221c937b7fc2f9ed167a832cc18",
+          "value": "5.5",
+          "prices": {
+           "19": {
+            "id": "709179561",
+            "price": -3500,
+            "price_delta": -500,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T19:57:45Z",
+            "source_id": "0OU87096235U550_3"
+           },
+           "23": {
+            "id": "711509586",
+            "price": -3000,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T17:25:07Z",
+            "source_id": "36292923-734.196489685-Under 5.5 Goals"
+           },
+           "22": {
+            "id": "712312563",
+            "price": -2500,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910914-207687856-806065422"
+           }
+          }
+         },
+         {
+          "id": "da4e1b8e4eabc8b4b8dbd5e492dd70c3",
+          "value": "6.5",
+          "prices": {
+           "22": {
+            "id": "712312565",
+            "price": -20000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T07:09:06Z",
+            "source_id": "7910914-207687857-806065424"
+           },
+           "23": {
+            "id": "711509576",
+            "price": -10000,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T17:25:07Z",
+            "source_id": "36292923-734.196489653-Under 6.5 Goals"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "3": "1639737332",
+     "4": "491178181",
+     "6": "491178181",
+     "25": "26NOV21BOUNFO",
+     "28": "4203669970015617422",
+     "30": "01a1c584-ba3b-74e0-9381-7f6da4013a1a",
+     "34": "207324311",
+     "9": "6CE0FF9C-FDC8-40CF-89F5-CEDCA4EE2E12",
+     "24": "30ef01c8-15b0-488b-9817-950005489b04",
+     "33": "207324311",
+     "22": "7910914",
+     "7": "6CE0FF9C-FDC8-40CF-89F5-CEDCA4EE2E12",
+     "14": "6231694",
+     "2": "33044163",
+     "11": "491178181",
+     "19": "87095914",
+     "21": "1028072786",
+     "23": "36292923"
+    },
+    "affiliate_deep_links": {
+     "22": "https://sports.nj.betmgm.com/en/sports/events/2:7910914",
+     "28": "https://app.hardrock.bet/competition/englandPremierLeague/4203669970015617422",
+     "23": "https://sportsbook.fanduel.com/soccer/english-premier-league/bournemouth-v-nottm-forest-36292923",
+     "3": "https://www.pinnacle.com/en/soccer/england-premier-league/bournemouth-vs-nottingham-forest/1639737332/",
+     "7": "https://www.bookmaker.eu/",
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/207324311",
+     "25": "https://kalshi.com/markets/kxeplgame/kxeplgame-26nov21bounfo",
+     "6": "https://www.betonline.ag/sportsbook/soccer/epl/game/491178181",
+     "2": "https://www.bovada.lv/sports/soccer/europe/england/premier-league/bournemouth-nottingham-forest-202611211000",
+     "30": "https://novig.com/event-markets/01a1c584-ba3b-74e0-9381-7f6da4013a1a",
+     "33": "https://bet105.ag/",
+     "4": "https://www.sportsbetting.ag/sportsbook/soccer/epl/game/491178181",
+     "9": "https://sportsbook.betcris.com/",
+     "11": "https://sports.lowvig.ag/sportsbook/soccer/epl/game/491178181",
+     "24": "https://sportsbook.thescore.bet/sport/soccer/organization/england/competition/premier-league/event/30ef01c8-15b0-488b-9817-950005489b04",
+     "19": "https://sportsbook.draftkings.com/event/bournemouth-vs-nottingham-forest/34962902",
+     "21": "https://www.unibet.co.uk/betting/odds/contest/22980609208abecd67f62e8776b3bf9b",
+     "14": "https://sports.everygame.eu/"
+    },
+    "affiliate_deep_link_types": {
+     "14": "catalog",
+     "9": "catalog",
+     "33": "catalog",
+     "7": "catalog"
+    }
+   },
+   {
+    "event_id": "4c4b0f9c8afeda8baacbd48b69626c8a",
+    "event_uuid": "11f1-e5bc-391cd800-837e-24b9c5fdf7fe",
+    "sport_id": 11,
+    "event_date": "2026-11-21T15:00:00Z",
+    "score": {
+     "event_id": "4c4b0f9c8afeda8baacbd48b69626c8a",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 11054,
+     "team_id_home": 3437,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [
+      0,
+      0
+     ],
+     "score_home_by_period": [
+      0,
+      0
+     ],
+     "venue_name": "Villa Park",
+     "venue_location": "Birmingham",
+     "game_clock": 0,
+     "display_clock": "0'",
+     "game_period": 0,
+     "broadcast": "",
+     "event_status_detail": "Scheduled",
+     "updated_at": "2026-10-01T00:24:42Z"
+    },
+    "teams": [
+     {
+      "team_id": 11054,
+      "name": "Sunderland",
+      "mascot": "",
+      "abbreviation": "SUN",
+      "conference_id": 0,
+      "record": "2-2-6",
+      "is_away": true,
+      "is_home": false
+     },
+     {
+      "team_id": 3437,
+      "name": "Aston Villa",
+      "mascot": "",
+      "abbreviation": "AVL",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "3-4-3",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 11054,
+      "name": "Sunderland",
+      "mascot": "",
+      "abbreviation": "SUN",
+      "conference_id": 0,
+      "record": "2-2-6",
+      "is_away": true,
+      "is_home": false
+     },
+     {
+      "team_id": 3437,
+      "name": "Aston Villa",
+      "mascot": "",
+      "abbreviation": "AVL",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "3-4-3",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     }
+    ],
+    "schedule": {
+     "conference_competition": false,
+     "season_type": "2026-27 English Premier League",
+     "season_year": 2026,
+     "event_name": "Sunderland at Aston Villa - 2026-11-21T15:00:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 7902705,
+      "market_id": 1,
+      "period_id": 0,
+      "name": "moneyline",
+      "market_description": "Win the game outright.",
+      "participants": [
+       {
+        "id": 3437,
+        "type": "TYPE_TEAM",
+        "name": "Aston Villa",
+        "lines": [
+         {
+          "id": "a32e5e9f7d288dc3bd82f1148ef611f9",
+          "prices": {
+           "19": {
+            "id": "709178196",
+            "price": -140,
+            "price_delta": 10,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T18:22:58Z",
+            "source_id": "0ML87095906_1"
+           },
+           "23": {
+            "id": "712302174",
+            "price": -150,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T06:31:53Z",
+            "source_id": "36294872-734.196570917-HOME"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 11054,
+        "type": "TYPE_TEAM",
+        "name": "Sunderland",
+        "lines": [
+         {
+          "id": "2194fe205d0d3fd21efbb0978c7796ba",
+          "prices": {
+           "19": {
+            "id": "709178194",
+            "price": 350,
+            "price_delta": -10,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T18:22:58Z",
+            "source_id": "0ML87095906_3"
+           },
+           "23": {
+            "id": "712302173",
+            "price": 350,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T06:31:53Z",
+            "source_id": "36294872-734.196570917-AWAY"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 3,
+        "type": "TYPE_RESULT",
+        "name": "Draw",
+        "lines": [
+         {
+          "id": "55b40561598cc5aba7afa038e22ed647",
+          "prices": {
+           "19": {
+            "id": "709178195",
+            "price": 280,
+            "price_delta": -10,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T18:22:58Z",
+            "source_id": "0ML87095906_2"
+           },
+           "23": {
+            "id": "712302175",
+            "price": 290,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T06:31:53Z",
+            "source_id": "36294872-734.196570917-DRAW"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 7902722,
+      "market_id": 3,
+      "period_id": 0,
+      "name": "totals",
+      "market_description": "Over/under on the combined score.",
+      "participants": [
+       {
+        "id": 9,
+        "type": "TYPE_RESULT",
+        "name": "Over",
+        "lines": [
+         {
+          "id": "9f4d9571321eaea194d7719eb5883503",
+          "value": "0.5",
+          "prices": {
+           "19": {
+            "id": "709178299",
+            "price": -4000,
+            "price_delta": 1000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T18:22:58Z",
+            "source_id": "0OU87095963O50_1"
+           },
+           "23": {
+            "id": "712302197",
+            "price": -4000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:31:53Z",
+            "source_id": "36294872-734.196570997-Over 0.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "67d709b8eafe189527ccca5e60bd54b0",
+          "value": "1.5",
+          "prices": {
+           "19": {
+            "id": "709178295",
+            "price": -425,
+            "price_delta": 25,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T18:22:58Z",
+            "source_id": "0OU87095963O150_1"
+           },
+           "23": {
+            "id": "712302187",
+            "price": -430,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:31:53Z",
+            "source_id": "36294872-734.196570913-Over 1.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "f06538ee48176086478d5bd1e4265984",
+          "value": "2.5",
+          "prices": {
+           "19": {
+            "id": "709178296",
+            "price": -135,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T16:51:18Z",
+            "source_id": "0OU87095963O250_1"
+           },
+           "23": {
+            "id": "712302195",
+            "price": -134,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T06:44:33Z",
+            "source_id": "36294872-734.196570996-Over 2.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "849458a11cb1f682a6e91c26a0f4ca69",
+          "value": "3.5",
+          "prices": {
+           "23": {
+            "id": "712302199",
+            "price": 194,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:31:53Z",
+            "source_id": "36294872-734.196571001-Over 3.5 Goals"
+           },
+           "19": {
+            "id": "709178297",
+            "price": 185,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T16:51:18Z",
+            "source_id": "0OU87095963O350_1"
+           }
+          }
+         },
+         {
+          "id": "8c60c39d58177d773080223bc5a0d07f",
+          "value": "4.5",
+          "prices": {
+           "19": {
+            "id": "709178298",
+            "price": 400,
+            "is_main_line": false,
+            "updated_at": "2026-11-04T17:22:34Z",
+            "source_id": "0OU87095963O450_1"
+           },
+           "23": {
+            "id": "712302190",
+            "price": 470,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:31:53Z",
+            "source_id": "36294872-734.196570991-Over 4.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "ebbaf9efe5f742d9ac98a87f2baf1b2a",
+          "value": "5.5",
+          "prices": {
+           "23": {
+            "id": "712302192",
+            "price": 1120,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:31:53Z",
+            "source_id": "36294872-734.196570994-Over 5.5 Goals"
+           },
+           "19": {
+            "id": "709178300",
+            "price": 850,
+            "price_delta": 50,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T17:00:01Z",
+            "source_id": "0OU87095963O550_1"
+           }
+          }
+         },
+         {
+          "id": "458a18ebd5acfb343e0801615c197aae",
+          "value": "6.5",
+          "prices": {
+           "23": {
+            "id": "712302185",
+            "price": 2200,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:31:53Z",
+            "source_id": "36294872-734.196570909-Over 6.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "3e142550c954b0e6c2ab6a3a5097ae3c",
+          "value": "7.5",
+          "prices": {
+           "23": {
+            "id": "712302194",
+            "price": 5000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:31:53Z",
+            "source_id": "36294872-734.196570995-Over 7.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "a5af85c60dbb9c4dec4db5bc85047f69",
+          "value": "8.5",
+          "prices": {
+           "23": {
+            "id": "712302189",
+            "price": 8000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:31:53Z",
+            "source_id": "36294872-734.196570986-Over 8.5 Goals"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 10,
+        "type": "TYPE_RESULT",
+        "name": "Under",
+        "lines": [
+         {
+          "id": "a7461487331fc954e591f030de7e463d",
+          "value": "0.5",
+          "prices": {
+           "19": {
+            "id": "709178305",
+            "price": 950,
+            "is_main_line": false,
+            "updated_at": "2026-11-04T17:22:34Z",
+            "source_id": "0OU87095963U50_3"
+           },
+           "23": {
+            "id": "712302198",
+            "price": 1260,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:31:53Z",
+            "source_id": "36294872-734.196570997-Under 0.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "3f446104131ab175dba69e1b7944e6dd",
+          "value": "1.5",
+          "prices": {
+           "19": {
+            "id": "709178301",
+            "price": 280,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T16:51:18Z",
+            "source_id": "0OU87095963U150_3"
+           },
+           "23": {
+            "id": "712302188",
+            "price": 320,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:31:53Z",
+            "source_id": "36294872-734.196570913-Under 1.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "056a9369a4a3db84e07441289ccee562",
+          "value": "2.5",
+          "prices": {
+           "19": {
+            "id": "709178302",
+            "price": 100,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T16:51:18Z",
+            "source_id": "0OU87095963U250_3"
+           },
+           "23": {
+            "id": "712302196",
+            "price": 110,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T06:44:33Z",
+            "source_id": "36294872-734.196570996-Under 2.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "327a70bab8100858fd27297da6352a31",
+          "value": "3.5",
+          "prices": {
+           "19": {
+            "id": "709178303",
+            "price": -260,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T16:51:18Z",
+            "source_id": "0OU87095963U350_3"
+           },
+           "23": {
+            "id": "712302200",
+            "price": -245,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:31:53Z",
+            "source_id": "36294872-734.196571001-Under 3.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "45ebea33a61e0709770d598ae30fd45d",
+          "value": "4.5",
+          "prices": {
+           "19": {
+            "id": "709178304",
+            "price": -700,
+            "is_main_line": false,
+            "updated_at": "2026-11-04T17:22:34Z",
+            "source_id": "0OU87095963U450_3"
+           },
+           "23": {
+            "id": "712302191",
+            "price": -700,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:31:53Z",
+            "source_id": "36294872-734.196570991-Under 4.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "8269dba19965928fcb16ec35f8601823",
+          "value": "5.5",
+          "prices": {
+           "19": {
+            "id": "709178306",
+            "price": -3000,
+            "price_delta": -500,
+            "is_main_line": false,
+            "updated_at": "2026-11-05T14:31:54Z",
+            "source_id": "0OU87095963U550_3"
+           },
+           "23": {
+            "id": "712302193",
+            "price": -3000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:31:53Z",
+            "source_id": "36294872-734.196570994-Under 5.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "1080bb2ab2c1e98f0c3bc3814ff49f87",
+          "value": "6.5",
+          "prices": {
+           "23": {
+            "id": "712302186",
+            "price": -10000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:31:53Z",
+            "source_id": "36294872-734.196570909-Under 6.5 Goals"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "3": "1639746854",
+     "21": "1028072780",
+     "24": "09a1999d-74e7-4e90-8c88-d06a8329f305",
+     "34": "207324221",
+     "2": "33043581",
+     "6": "491178182",
+     "7": "EB62BEB0-C6EC-445C-8831-DA244D7B3232",
+     "14": "6231733",
+     "19": "87095968",
+     "4": "491178182",
+     "9": "EB62BEB0-C6EC-445C-8831-DA244D7B3232",
+     "23": "36294872",
+     "30": "01a1c584-bb39-75d2-b838-f078088a3a00",
+     "33": "207324221",
+     "11": "491178182",
+     "25": "26NOV21AVLSUN",
+     "28": "5966310254642856347"
+    },
+    "affiliate_deep_links": {
+     "25": "https://kalshi.com/markets/kxeplgame/kxeplgame-26nov21avlsun",
+     "28": "https://app.hardrock.bet/competition/englandPremierLeague/5966310254642856347",
+     "30": "https://novig.com/event-markets/01a1c584-bb39-75d2-b838-f078088a3a00",
+     "24": "https://sportsbook.thescore.bet/sport/soccer/organization/england/competition/premier-league/event/09a1999d-74e7-4e90-8c88-d06a8329f305",
+     "3": "https://www.pinnacle.com/en/soccer/england-premier-league/aston-villa-vs-sunderland/1639746854/",
+     "14": "https://sports.everygame.eu/",
+     "4": "https://www.sportsbetting.ag/sportsbook/soccer/epl/game/491178182",
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/207324221",
+     "9": "https://sportsbook.betcris.com/",
+     "33": "https://bet105.ag/",
+     "2": "https://www.bovada.lv/sports/soccer/europe/england/premier-league/aston-villa-sunderland-202611211000",
+     "23": "https://sportsbook.fanduel.com/soccer/english-premier-league/aston-villa-v-sunderland-36294872",
+     "19": "https://sportsbook.draftkings.com/event/aston-villa-vs-sunderland/34962894",
+     "21": "https://www.unibet.co.uk/betting/odds/contest/b899ebeef209f8d6f4568cdfba17a5c0",
+     "6": "https://www.betonline.ag/sportsbook/soccer/epl/game/491178182",
+     "7": "https://www.bookmaker.eu/",
+     "11": "https://sports.lowvig.ag/sportsbook/soccer/epl/game/491178182"
+    },
+    "affiliate_deep_link_types": {
+     "7": "catalog",
+     "14": "catalog",
+     "9": "catalog",
+     "33": "catalog"
+    }
+   },
+   {
+    "event_id": "4d894fd1754de830870a832426fe1067",
+    "event_uuid": "11f1-e5bc-391cd800-8fec-f747f509f955",
+    "sport_id": 11,
+    "event_date": "2026-11-21T15:00:00Z",
+    "score": {
+     "event_id": "4d894fd1754de830870a832426fe1067",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 3444,
+     "team_id_home": 3440,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [
+      0,
+      0
+     ],
+     "score_home_by_period": [
+      0,
+      0
+     ],
+     "venue_name": "Stamford Bridge",
+     "venue_location": "London",
+     "game_clock": 0,
+     "display_clock": "0'",
+     "game_period": 0,
+     "broadcast": "",
+     "event_status_detail": "Scheduled",
+     "updated_at": "2026-10-01T00:24:42Z"
+    },
+    "teams": [
+     {
+      "team_id": 3444,
+      "name": "Leeds United",
+      "mascot": "",
+      "abbreviation": "LEE",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "3-5-2",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     },
+     {
+      "team_id": 3440,
+      "name": "Chelsea",
+      "mascot": "",
+      "abbreviation": "CHE",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "5-1-4",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 3444,
+      "name": "Leeds United",
+      "mascot": "",
+      "abbreviation": "LEE",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "3-5-2",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     },
+     {
+      "team_id": 3440,
+      "name": "Chelsea",
+      "mascot": "",
+      "abbreviation": "CHE",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "5-1-4",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     }
+    ],
+    "schedule": {
+     "conference_competition": false,
+     "season_type": "2026-27 English Premier League",
+     "season_year": 2026,
+     "event_name": "Leeds United at Chelsea - 2026-11-21T15:00:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 7902733,
+      "market_id": 1,
+      "period_id": 0,
+      "name": "moneyline",
+      "market_description": "Win the game outright.",
+      "participants": [
+       {
+        "id": 3440,
+        "type": "TYPE_TEAM",
+        "name": "Chelsea",
+        "lines": [
+         {
+          "id": "19db109669103fc8d7c2d48aeceab407",
+          "prices": {
+           "22": {
+            "id": "713328235",
+            "price": -125,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910949-207691806-806088021"
+           },
+           "19": {
+            "id": "709178380",
+            "price": -115,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T04:15:02Z",
+            "source_id": "0ML87095909_1"
+           },
+           "23": {
+            "id": "712302447",
+            "price": -125,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T11:33:32Z",
+            "source_id": "36294873-734.196571103-HOME"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 3444,
+        "type": "TYPE_TEAM",
+        "name": "Leeds United",
+        "lines": [
+         {
+          "id": "2a25dcebc6ab9ae3f7547c48620ef4fd",
+          "prices": {
+           "19": {
+            "id": "709178382",
+            "price": 285,
+            "price_delta": -10,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T04:15:02Z",
+            "source_id": "0ML87095909_3"
+           },
+           "23": {
+            "id": "712302446",
+            "price": 300,
+            "price_delta": -10,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T11:33:32Z",
+            "source_id": "36294873-734.196571103-AWAY"
+           },
+           "22": {
+            "id": "713328234",
+            "price": 260,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910949-207691806-806088023"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 3,
+        "type": "TYPE_RESULT",
+        "name": "Draw",
+        "lines": [
+         {
+          "id": "6413ccdd37d42d19567417868a67b072",
+          "prices": {
+           "19": {
+            "id": "709178381",
+            "price": 265,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T04:15:02Z",
+            "source_id": "0ML87095909_2"
+           },
+           "23": {
+            "id": "712302448",
+            "price": 280,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T06:31:54Z",
+            "source_id": "36294873-734.196571103-DRAW"
+           },
+           "22": {
+            "id": "713328236",
+            "price": 250,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910949-207691806-806088022"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 7902735,
+      "market_id": 3,
+      "period_id": 0,
+      "name": "totals",
+      "market_description": "Over/under on the combined score.",
+      "participants": [
+       {
+        "id": 9,
+        "type": "TYPE_RESULT",
+        "name": "Over",
+        "lines": [
+         {
+          "id": "7b76a07209a5af94d6234d01d6159ab9",
+          "value": "0.5",
+          "prices": {
+           "19": {
+            "id": "709178393",
+            "price": -4000,
+            "is_main_line": false,
+            "updated_at": "2026-11-04T17:22:36Z",
+            "source_id": "0OU87096031O50_1"
+           },
+           "23": {
+            "id": "712302472",
+            "price": -4000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:31:54Z",
+            "source_id": "36294873-734.196571137-Over 0.5 Goals"
+           },
+           "22": {
+            "id": "713328250",
+            "price": -3000,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910949-207721965-806357005"
+           }
+          }
+         },
+         {
+          "id": "29354964f90422d1a9751d43073184c1",
+          "value": "1.5",
+          "prices": {
+           "19": {
+            "id": "709178389",
+            "price": -425,
+            "is_main_line": false,
+            "updated_at": "2026-11-04T17:22:36Z",
+            "source_id": "0OU87096031O150_1"
+           },
+           "23": {
+            "id": "712302470",
+            "price": -430,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T11:33:32Z",
+            "source_id": "36294873-734.196571121-Over 1.5 Goals"
+           },
+           "22": {
+            "id": "713328246",
+            "price": -450,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910949-207721963-806357001"
+           }
+          }
+         },
+         {
+          "id": "4a3316160fa90a9ec3906c6c13c9abda",
+          "value": "2.5",
+          "prices": {
+           "19": {
+            "id": "709178390",
+            "price": -135,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T04:15:03Z",
+            "source_id": "0OU87096031O250_1"
+           },
+           "23": {
+            "id": "712302458",
+            "price": -138,
+            "price_delta": -4,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T11:33:31Z",
+            "source_id": "36294873-734.196571030-Over 2.5 Goals"
+           },
+           "22": {
+            "id": "713328242",
+            "price": -140,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910949-207721961-806356997"
+           }
+          }
+         },
+         {
+          "id": "583eedaba114b3733cf11ea9d2916b65",
+          "value": "3.5",
+          "prices": {
+           "19": {
+            "id": "709178391",
+            "price": 185,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T04:15:03Z",
+            "source_id": "0OU87096031O350_1"
+           },
+           "23": {
+            "id": "712302460",
+            "price": 194,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:31:54Z",
+            "source_id": "36294873-734.196571050-Over 3.5 Goals"
+           },
+           "22": {
+            "id": "713328244",
+            "price": 175,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910949-207721962-806356999"
+           }
+          }
+         },
+         {
+          "id": "03df002d4fc876b44fa16fec1a84993f",
+          "value": "4.5",
+          "prices": {
+           "19": {
+            "id": "709178392",
+            "price": 400,
+            "is_main_line": false,
+            "updated_at": "2026-11-04T17:22:36Z",
+            "source_id": "0OU87096031O450_1"
+           },
+           "23": {
+            "id": "712302463",
+            "price": 470,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:31:54Z",
+            "source_id": "36294873-734.196571066-Over 4.5 Goals"
+           },
+           "22": {
+            "id": "713328248",
+            "price": 425,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910949-207721964-806357003"
+           }
+          }
+         },
+         {
+          "id": "6c0230eef724c5822f9f3a3b60ed3640",
+          "value": "5.5",
+          "prices": {
+           "19": {
+            "id": "709178394",
+            "price": 850,
+            "is_main_line": false,
+            "updated_at": "2026-11-04T17:22:36Z",
+            "source_id": "0OU87096031O550_1"
+           },
+           "23": {
+            "id": "712302466",
+            "price": 1040,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:31:54Z",
+            "source_id": "36294873-734.196571114-Over 5.5 Goals"
+           },
+           "22": {
+            "id": "713328252",
+            "price": 950,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910949-207721966-806357007"
+           }
+          }
+         },
+         {
+          "id": "11da4ff1b54f529c331bb6a356894c46",
+          "value": "6.5",
+          "prices": {
+           "23": {
+            "id": "712302468",
+            "price": 2200,
+            "price_delta": 400,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T11:33:31Z",
+            "source_id": "36294873-734.196571116-Over 6.5 Goals"
+           },
+           "22": {
+            "id": "713328254",
+            "price": 2000,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910949-207721967-806357009"
+           }
+          }
+         },
+         {
+          "id": "11b589077b00a2597206d042428afe24",
+          "value": "7.5",
+          "prices": {
+           "23": {
+            "id": "712302465",
+            "price": 5000,
+            "price_delta": 1000,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T11:33:31Z",
+            "source_id": "36294873-734.196571075-Over 7.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "0f8ab0de1216875a9bdb9e6359798550",
+          "value": "8.5",
+          "prices": {
+           "23": {
+            "id": "712302462",
+            "price": 8000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:31:54Z",
+            "source_id": "36294873-734.196571060-Over 8.5 Goals"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 10,
+        "type": "TYPE_RESULT",
+        "name": "Under",
+        "lines": [
+         {
+          "id": "7838fa29f6f84d778fa460394f4a65e8",
+          "value": "0.5",
+          "prices": {
+           "23": {
+            "id": "712302473",
+            "price": 1260,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:31:54Z",
+            "source_id": "36294873-734.196571137-Under 0.5 Goals"
+           },
+           "22": {
+            "id": "713328251",
+            "price": 1150,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910949-207721965-806357006"
+           },
+           "19": {
+            "id": "709178399",
+            "price": 950,
+            "is_main_line": false,
+            "updated_at": "2026-11-04T17:22:36Z",
+            "source_id": "0OU87096031U50_3"
+           }
+          }
+         },
+         {
+          "id": "fb99d40aacc3bf8d0373bfe2974dfc29",
+          "value": "1.5",
+          "prices": {
+           "23": {
+            "id": "712302471",
+            "price": 320,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T11:33:32Z",
+            "source_id": "36294873-734.196571121-Under 1.5 Goals"
+           },
+           "22": {
+            "id": "713328247",
+            "price": 300,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910949-207721963-806357002"
+           },
+           "19": {
+            "id": "709178395",
+            "price": 280,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T11:52:53Z",
+            "source_id": "0OU87096031U150_3"
+           }
+          }
+         },
+         {
+          "id": "65132c18a61344bb2f3a72ddd9ef1ef1",
+          "value": "2.5",
+          "prices": {
+           "19": {
+            "id": "709178396",
+            "price": 100,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T11:52:53Z",
+            "source_id": "0OU87096031U250_3"
+           },
+           "23": {
+            "id": "712302459",
+            "price": 112,
+            "price_delta": 2,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T11:33:31Z",
+            "source_id": "36294873-734.196571030-Under 2.5 Goals"
+           },
+           "22": {
+            "id": "713328243",
+            "price": 100,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910949-207721961-806356998"
+           }
+          }
+         },
+         {
+          "id": "2db0910693ebdbe1b94fb7f12e47376f",
+          "value": "3.5",
+          "prices": {
+           "19": {
+            "id": "709178397",
+            "price": -255,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T11:52:53Z",
+            "source_id": "0OU87096031U350_3"
+           },
+           "23": {
+            "id": "712302461",
+            "price": -245,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:31:54Z",
+            "source_id": "36294873-734.196571050-Under 3.5 Goals"
+           },
+           "22": {
+            "id": "713328245",
+            "price": -250,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910949-207721962-806357000"
+           }
+          }
+         },
+         {
+          "id": "ee361cffacade8858b57d521ef3941be",
+          "value": "4.5",
+          "prices": {
+           "19": {
+            "id": "709178398",
+            "price": -700,
+            "is_main_line": false,
+            "updated_at": "2026-11-04T17:22:36Z",
+            "source_id": "0OU87096031U450_3"
+           },
+           "23": {
+            "id": "712302464",
+            "price": -700,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:31:54Z",
+            "source_id": "36294873-734.196571066-Under 4.5 Goals"
+           },
+           "22": {
+            "id": "713328249",
+            "price": -700,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910949-207721964-806357004"
+           }
+          }
+         },
+         {
+          "id": "42e0e0efad13792c46e809767adebdea",
+          "value": "5.5",
+          "prices": {
+           "23": {
+            "id": "712302467",
+            "price": -2500,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:31:54Z",
+            "source_id": "36294873-734.196571114-Under 5.5 Goals"
+           },
+           "22": {
+            "id": "713328253",
+            "price": -2500,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910949-207721966-806357008"
+           },
+           "19": {
+            "id": "709178400",
+            "price": -3000,
+            "is_main_line": false,
+            "updated_at": "2026-11-04T17:22:36Z",
+            "source_id": "0OU87096031U550_3"
+           }
+          }
+         },
+         {
+          "id": "d1a79fa49be345bb9a1fcee89bae379f",
+          "value": "6.5",
+          "prices": {
+           "23": {
+            "id": "712302469",
+            "price": -10000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:31:54Z",
+            "source_id": "36294873-734.196571116-Under 6.5 Goals"
+           },
+           "22": {
+            "id": "713328255",
+            "price": -15000,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910949-207721967-806357010"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "3": "1639746857",
+     "4": "491178183",
+     "6": "491178183",
+     "23": "36294873",
+     "24": "577b5f7d-5934-4373-98bb-f7bfd5bc7f87",
+     "2": "33043171",
+     "9": "1ABB52AB-A0B4-42F1-B396-FCD8EAD75993",
+     "11": "491178183",
+     "28": "3367170319696658839",
+     "14": "6231720",
+     "19": "87095909",
+     "21": "1028072788",
+     "30": "01a1c584-bbd2-7793-aa20-8071fbe247b8",
+     "33": "207324301",
+     "7": "1ABB52AB-A0B4-42F1-B396-FCD8EAD75993",
+     "25": "26NOV21CFCLEE",
+     "34": "207324301",
+     "22": "7910949"
+    },
+    "affiliate_deep_links": {
+     "22": "https://sports.nj.betmgm.com/en/sports/events/2:7910949",
+     "3": "https://www.pinnacle.com/en/soccer/england-premier-league/chelsea-vs-leeds-united/1639746857/",
+     "4": "https://www.sportsbetting.ag/sportsbook/soccer/epl/game/491178183",
+     "6": "https://www.betonline.ag/sportsbook/soccer/epl/game/491178183",
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/207324301",
+     "11": "https://sports.lowvig.ag/sportsbook/soccer/epl/game/491178183",
+     "33": "https://bet105.ag/",
+     "21": "https://www.unibet.co.uk/betting/odds/contest/a37830ba0c8a829f9e70a4bd7861f151",
+     "2": "https://www.bovada.lv/sports/soccer/europe/england/premier-league/chelsea-leeds-united-202611211000",
+     "7": "https://www.bookmaker.eu/",
+     "25": "https://kalshi.com/markets/kxeplgame/kxeplgame-26nov21cfclee",
+     "14": "https://sports.everygame.eu/",
+     "30": "https://novig.com/event-markets/01a1c584-bbd2-7793-aa20-8071fbe247b8",
+     "24": "https://sportsbook.thescore.bet/sport/soccer/organization/england/competition/premier-league/event/577b5f7d-5934-4373-98bb-f7bfd5bc7f87",
+     "19": "https://sportsbook.draftkings.com/event/chelsea-vs-leeds/34962896",
+     "28": "https://app.hardrock.bet/competition/englandPremierLeague/3367170319696658839",
+     "23": "https://sportsbook.fanduel.com/soccer/english-premier-league/chelsea-v-leeds-36294873",
+     "9": "https://sportsbook.betcris.com/"
+    },
+    "affiliate_deep_link_types": {
+     "7": "catalog",
+     "9": "catalog",
+     "14": "catalog",
+     "33": "catalog"
+    }
+   },
+   {
+    "event_id": "932413d7254e4ee27b8e43b2d6d28edc",
+    "event_uuid": "11f1-e5bc-391cd800-8b84-55365654e544",
+    "sport_id": 11,
+    "event_date": "2026-11-21T15:00:00Z",
+    "score": {
+     "event_id": "932413d7254e4ee27b8e43b2d6d28edc",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 3441,
+     "team_id_home": 131654,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [
+      0,
+      0
+     ],
+     "score_home_by_period": [
+      0,
+      0
+     ],
+     "venue_name": "Coventry Building Society Arena",
+     "venue_location": "Coventry",
+     "game_clock": 0,
+     "display_clock": "0'",
+     "game_period": 0,
+     "broadcast": "",
+     "event_status_detail": "Scheduled",
+     "updated_at": "2026-10-01T00:24:42Z"
+    },
+    "teams": [
+     {
+      "team_id": 3441,
+      "name": "Crystal Palace",
+      "mascot": "",
+      "abbreviation": "CRY",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "2-1-7",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     },
+     {
+      "team_id": 131654,
+      "name": "Coventry City",
+      "mascot": "",
+      "abbreviation": "COV",
+      "record": "3-0-7",
+      "is_away": false,
+      "is_home": true
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 3441,
+      "name": "Crystal Palace",
+      "mascot": "",
+      "abbreviation": "CRY",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "2-1-7",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     },
+     {
+      "team_id": 131654,
+      "name": "Coventry City",
+      "mascot": "",
+      "abbreviation": "COV",
+      "record": "3-0-7",
+      "is_away": false,
+      "is_home": true
+     }
+    ],
+    "schedule": {
+     "conference_competition": false,
+     "season_type": "2026-27 English Premier League",
+     "season_year": 2026,
+     "event_name": "Crystal Palace at Coventry City - 2026-11-21T15:00:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 7902732,
+      "market_id": 1,
+      "period_id": 0,
+      "name": "moneyline",
+      "market_description": "Win the game outright.",
+      "participants": [
+       {
+        "id": 3441,
+        "type": "TYPE_TEAM",
+        "name": "Crystal Palace",
+        "lines": [
+         {
+          "id": "a557b0c63472f80a45553a859493ab5d",
+          "prices": {
+           "19": {
+            "id": "709178388",
+            "price": 175,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T09:42:36Z",
+            "source_id": "0ML87095908_3"
+           },
+           "23": {
+            "id": "712301224",
+            "price": 180,
+            "price_delta": 10,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T04:26:12Z",
+            "source_id": "36294871-734.196570766-AWAY"
+           },
+           "22": {
+            "id": "713327940",
+            "price": 160,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910942-207688929-806071492"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 131654,
+        "type": "TYPE_TEAM",
+        "name": "Coventry City",
+        "lines": [
+         {
+          "id": "e90bc8119f3610dda5968592fe1f24f2",
+          "prices": {
+           "19": {
+            "id": "709178386",
+            "price": 135,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T16:59:59Z",
+            "source_id": "0ML87095908_1"
+           },
+           "23": {
+            "id": "712301225",
+            "price": 135,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T04:26:12Z",
+            "source_id": "36294871-734.196570766-HOME"
+           },
+           "22": {
+            "id": "713327941",
+            "price": 125,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910942-207688929-806071490"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 3,
+        "type": "TYPE_RESULT",
+        "name": "Draw",
+        "lines": [
+         {
+          "id": "dce869a58894ca2162c8045f7f602bb1",
+          "prices": {
+           "19": {
+            "id": "709178387",
+            "price": 255,
+            "price_delta": 10,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T09:42:36Z",
+            "source_id": "0ML87095908_2"
+           },
+           "23": {
+            "id": "712301226",
+            "price": 260,
+            "price_delta": 10,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T04:26:12Z",
+            "source_id": "36294871-734.196570766-DRAW"
+           },
+           "22": {
+            "id": "713327942",
+            "price": 240,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910942-207688929-806071491"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 7902794,
+      "market_id": 3,
+      "period_id": 0,
+      "name": "totals",
+      "market_description": "Over/under on the combined score.",
+      "participants": [
+       {
+        "id": 9,
+        "type": "TYPE_RESULT",
+        "name": "Over",
+        "lines": [
+         {
+          "id": "c91e40cc9576f7507bb2984cae119756",
+          "value": "0.5",
+          "prices": {
+           "19": {
+            "id": "709178807",
+            "price": -6000,
+            "price_delta": -1000,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:42:37Z",
+            "source_id": "0OU87096065O50_1"
+           },
+           "23": {
+            "id": "712301236",
+            "price": -4500,
+            "price_delta": -500,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:09:51Z",
+            "source_id": "36294871-734.196570731-Over 0.5 Goals"
+           },
+           "22": {
+            "id": "713327956",
+            "price": -5000,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910942-207738848-806430171"
+           }
+          }
+         },
+         {
+          "id": "7f7b841373ec48a54ac4ee801b5247bf",
+          "value": "1.5",
+          "prices": {
+           "22": {
+            "id": "713327952",
+            "price": -525,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910942-207738846-806430167"
+           },
+           "19": {
+            "id": "709178801",
+            "price": -500,
+            "price_delta": -25,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:42:37Z",
+            "source_id": "0OU87096065O150_1"
+           },
+           "23": {
+            "id": "712301234",
+            "price": -500,
+            "price_delta": -50,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:09:51Z",
+            "source_id": "36294871-734.196570708-Over 1.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "de8717fdbc2465c40f26857cd4e59ece",
+          "value": "2.5",
+          "prices": {
+           "22": {
+            "id": "713327948",
+            "price": -160,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910942-207738844-806430163"
+           },
+           "19": {
+            "id": "709178799",
+            "price": -160,
+            "price_delta": -10,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T09:42:37Z",
+            "source_id": "0OU87096065O250_1"
+           },
+           "23": {
+            "id": "712301247",
+            "price": -148,
+            "price_delta": -6,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T09:09:51Z",
+            "source_id": "36294871-734.196570798-Over 2.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "76c313e042448e61f4d561993618eb25",
+          "value": "3.5",
+          "prices": {
+           "22": {
+            "id": "713327950",
+            "price": 155,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910942-207738845-806430165"
+           },
+           "19": {
+            "id": "709178802",
+            "price": 160,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:42:37Z",
+            "source_id": "0OU87096065O350_1"
+           },
+           "23": {
+            "id": "712301245",
+            "price": 172,
+            "price_delta": -12,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:09:51Z",
+            "source_id": "36294871-734.196570791-Over 3.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "fc933081c80a62052a61126c9c4247dd",
+          "value": "4.5",
+          "prices": {
+           "19": {
+            "id": "709178797",
+            "price": 350,
+            "price_delta": -20,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:42:37Z",
+            "source_id": "0OU87096065O450_1"
+           },
+           "23": {
+            "id": "712301243",
+            "price": 420,
+            "price_delta": -20,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:09:51Z",
+            "source_id": "36294871-734.196570774-Over 4.5 Goals"
+           },
+           "22": {
+            "id": "713327954",
+            "price": 360,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910942-207738847-806430169"
+           }
+          }
+         },
+         {
+          "id": "3d414921ea292a6b15329a3e605c493d",
+          "value": "5.5",
+          "prices": {
+           "19": {
+            "id": "709178806",
+            "price": 700,
+            "price_delta": -50,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T04:15:03Z",
+            "source_id": "0OU87096065O550_1"
+           },
+           "23": {
+            "id": "712301238",
+            "price": 980,
+            "price_delta": -60,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:09:51Z",
+            "source_id": "36294871-734.196570747-Over 5.5 Goals"
+           },
+           "22": {
+            "id": "713327958",
+            "price": 800,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910942-207738849-806430173"
+           }
+          }
+         },
+         {
+          "id": "537b39777aed1da6a7f7e8b157e32495",
+          "value": "6.5",
+          "prices": {
+           "23": {
+            "id": "712301241",
+            "price": 1800,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:27:53Z",
+            "source_id": "36294871-734.196570749-Over 6.5 Goals"
+           },
+           "22": {
+            "id": "713327960",
+            "price": 1750,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910942-207738850-806430175"
+           }
+          }
+         },
+         {
+          "id": "8451742d1d60a4bd648eedc6897cbde9",
+          "value": "7.5",
+          "prices": {
+           "23": {
+            "id": "712301249",
+            "price": 4000,
+            "price_delta": -1000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T16:50:03Z",
+            "source_id": "36294871-734.196570799-Over 7.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "9dc9d6184271718f45ee47b7049d1c13",
+          "value": "8.5",
+          "prices": {
+           "23": {
+            "id": "712301240",
+            "price": 8000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:27:53Z",
+            "source_id": "36294871-734.196570748-Over 8.5 Goals"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 10,
+        "type": "TYPE_RESULT",
+        "name": "Under",
+        "lines": [
+         {
+          "id": "9a5df8c68d7fa870223dabde75a22b3d",
+          "value": "0.5",
+          "prices": {
+           "23": {
+            "id": "712301237",
+            "price": 1300,
+            "price_delta": 40,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:09:51Z",
+            "source_id": "36294871-734.196570731-Under 0.5 Goals"
+           },
+           "22": {
+            "id": "713327957",
+            "price": 1300,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910942-207738848-806430172"
+           },
+           "19": {
+            "id": "709178838",
+            "price": 1000,
+            "price_delta": 50,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:15:49Z",
+            "source_id": "0OU87096065U50_3"
+           }
+          }
+         },
+         {
+          "id": "770e2717fc4e0237f8c1a831a27ef7fc",
+          "value": "1.5",
+          "prices": {
+           "22": {
+            "id": "713327953",
+            "price": 333,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910942-207738846-806430168"
+           },
+           "19": {
+            "id": "709178808",
+            "price": 320,
+            "price_delta": 20,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:42:37Z",
+            "source_id": "0OU87096065U150_3"
+           },
+           "23": {
+            "id": "712301235",
+            "price": 360,
+            "price_delta": 30,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:09:51Z",
+            "source_id": "36294871-734.196570708-Under 1.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "f105975ad82c636605ebf896e3c569ca",
+          "value": "2.5",
+          "prices": {
+           "22": {
+            "id": "713327949",
+            "price": 115,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910942-207738844-806430164"
+           },
+           "19": {
+            "id": "709178800",
+            "price": 115,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T09:42:37Z",
+            "source_id": "0OU87096065U250_3"
+           },
+           "23": {
+            "id": "712301248",
+            "price": 120,
+            "price_delta": 4,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T09:09:51Z",
+            "source_id": "36294871-734.196570798-Under 2.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "ef49ea90636a795e5e769e14392ec753",
+          "value": "3.5",
+          "prices": {
+           "19": {
+            "id": "709178809",
+            "price": -220,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:42:37Z",
+            "source_id": "0OU87096065U350_3"
+           },
+           "23": {
+            "id": "712301246",
+            "price": -215,
+            "price_delta": 15,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:09:51Z",
+            "source_id": "36294871-734.196570791-Under 3.5 Goals"
+           },
+           "22": {
+            "id": "713327951",
+            "price": -220,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910942-207738845-806430166"
+           }
+          }
+         },
+         {
+          "id": "393691e19580ee8ca183851881946a9d",
+          "value": "4.5",
+          "prices": {
+           "19": {
+            "id": "709178798",
+            "price": -575,
+            "price_delta": 75,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:42:37Z",
+            "source_id": "0OU87096065U450_3"
+           },
+           "23": {
+            "id": "712301244",
+            "price": -600,
+            "price_delta": 50,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:09:51Z",
+            "source_id": "36294871-734.196570774-Under 4.5 Goals"
+           },
+           "22": {
+            "id": "713327955",
+            "price": -600,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910942-207738847-806430170"
+           }
+          }
+         },
+         {
+          "id": "2760776e0e0f58e9f37e54bb5248f7b0",
+          "value": "5.5",
+          "prices": {
+           "19": {
+            "id": "709178810",
+            "price": -2000,
+            "price_delta": 500,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:42:37Z",
+            "source_id": "0OU87096065U550_3"
+           },
+           "23": {
+            "id": "712301239",
+            "price": -2200,
+            "price_delta": 300,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:09:51Z",
+            "source_id": "36294871-734.196570747-Under 5.5 Goals"
+           },
+           "22": {
+            "id": "713327959",
+            "price": -2000,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910942-207738849-806430174"
+           }
+          }
+         },
+         {
+          "id": "c5f527517e0eafbb7cf20d43c50e938d",
+          "value": "6.5",
+          "prices": {
+           "22": {
+            "id": "713327961",
+            "price": -10000,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:24Z",
+            "source_id": "7910942-207738850-806430176"
+           },
+           "23": {
+            "id": "712301242",
+            "price": -8000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T06:27:53Z",
+            "source_id": "36294871-734.196570749-Under 6.5 Goals"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "22": "7910942",
+     "9": "D41A6255-69D5-4A0E-AAB2-46F61A9BE35C",
+     "19": "87095908",
+     "21": "1028072753",
+     "6": "491178185",
+     "7": "D41A6255-69D5-4A0E-AAB2-46F61A9BE35C",
+     "11": "491178185",
+     "33": "207324191",
+     "14": "6231707",
+     "28": "3444954170292044202",
+     "30": "01a1c584-bc28-7542-9736-4f36a6944360",
+     "34": "207324191",
+     "25": "26NOV21COVCRY",
+     "2": "33042981",
+     "3": "1639740186",
+     "4": "491178185",
+     "23": "36294871",
+     "24": "07b94417-b876-4d0c-bbe4-96fe894ab5b4"
+    },
+    "affiliate_deep_links": {
+     "7": "https://www.bookmaker.eu/",
+     "33": "https://bet105.ag/",
+     "14": "https://sports.everygame.eu/",
+     "11": "https://sports.lowvig.ag/sportsbook/soccer/epl/game/491178185",
+     "21": "https://www.unibet.co.uk/betting/odds/contest/0eb06cf275303d6969b0cdf36594901b",
+     "4": "https://www.sportsbetting.ag/sportsbook/soccer/epl/game/491178185",
+     "22": "https://sports.nj.betmgm.com/en/sports/events/2:7910942",
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/207324191",
+     "24": "https://sportsbook.thescore.bet/sport/soccer/organization/england/competition/premier-league/event/07b94417-b876-4d0c-bbe4-96fe894ab5b4",
+     "6": "https://www.betonline.ag/sportsbook/soccer/epl/game/491178185",
+     "23": "https://sportsbook.fanduel.com/soccer/english-premier-league/coventry-v-crystal-palace-36294871",
+     "2": "https://www.bovada.lv/sports/soccer/europe/england/premier-league/coventry-city-crystal-palace-202611211000",
+     "9": "https://sportsbook.betcris.com/",
+     "3": "https://www.pinnacle.com/en/soccer/england-premier-league/coventry-city-vs-crystal-palace/1639740186/",
+     "19": "https://sportsbook.draftkings.com/event/coventry-vs-crystal-palace/34962897",
+     "25": "https://kalshi.com/markets/kxeplgame/kxeplgame-26nov21covcry",
+     "28": "https://app.hardrock.bet/competition/englandPremierLeague/3444954170292044202",
+     "30": "https://novig.com/event-markets/01a1c584-bc28-7542-9736-4f36a6944360"
+    },
+    "affiliate_deep_link_types": {
+     "7": "catalog",
+     "9": "catalog",
+     "33": "catalog",
+     "14": "catalog"
+    }
+   },
+   {
+    "event_id": "a5dac934dba9bf6b6105c64780b50b81",
+    "event_uuid": "11f1-e5bc-391cd800-8ac7-629075588a39",
+    "sport_id": 11,
+    "event_date": "2026-11-21T15:00:00Z",
+    "score": {
+     "event_id": "a5dac934dba9bf6b6105c64780b50b81",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 10708,
+     "team_id_home": 3452,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [
+      0,
+      0
+     ],
+     "score_home_by_period": [
+      0,
+      0
+     ],
+     "venue_name": "Tottenham Hotspur Stadium",
+     "venue_location": "London",
+     "game_clock": 0,
+     "display_clock": "0'",
+     "game_period": 0,
+     "broadcast": "",
+     "event_status_detail": "Scheduled",
+     "updated_at": "2026-10-01T00:24:42Z"
+    },
+    "teams": [
+     {
+      "team_id": 10708,
+      "name": "Ipswich Town",
+      "mascot": "",
+      "abbreviation": "IPS",
+      "conference_id": 0,
+      "record": "3-2-5",
+      "is_away": true,
+      "is_home": false
+     },
+     {
+      "team_id": 3452,
+      "name": "Tottenham Hotspur",
+      "mascot": "",
+      "abbreviation": "TOT",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "3-3-4",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 10708,
+      "name": "Ipswich Town",
+      "mascot": "",
+      "abbreviation": "IPS",
+      "conference_id": 0,
+      "record": "3-2-5",
+      "is_away": true,
+      "is_home": false
+     },
+     {
+      "team_id": 3452,
+      "name": "Tottenham Hotspur",
+      "mascot": "",
+      "abbreviation": "TOT",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "3-3-4",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     }
+    ],
+    "schedule": {
+     "conference_competition": false,
+     "season_type": "2026-27 English Premier League",
+     "season_year": 2026,
+     "event_name": "Ipswich Town at Tottenham Hotspur - 2026-11-21T15:00:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 7902786,
+      "market_id": 1,
+      "period_id": 0,
+      "name": "moneyline",
+      "market_description": "Win the game outright.",
+      "participants": [
+       {
+        "id": 3452,
+        "type": "TYPE_TEAM",
+        "name": "Tottenham Hotspur",
+        "lines": [
+         {
+          "id": "48bf7dc237ef55f570a1cf91bd5e652a",
+          "prices": {
+           "19": {
+            "id": "709178558",
+            "price": -190,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T19:02:00Z",
+            "source_id": "0ML87095912_1"
+           },
+           "23": {
+            "id": "711845823",
+            "price": -210,
+            "is_main_line": true,
+            "updated_at": "2026-11-07T22:21:35Z",
+            "source_id": "36293779-734.196524683-HOME"
+           },
+           "22": {
+            "id": "713948066",
+            "price": -210,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T04:59:29Z",
+            "source_id": "7910908-207674728-806009614"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 10708,
+        "type": "TYPE_TEAM",
+        "name": "Ipswich Town",
+        "lines": [
+         {
+          "id": "de43d8d7967b3ca0fbc4d9307163b272",
+          "prices": {
+           "19": {
+            "id": "709178560",
+            "price": 450,
+            "price_delta": 25,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T19:02:00Z",
+            "source_id": "0ML87095912_3"
+           },
+           "23": {
+            "id": "711845822",
+            "price": 460,
+            "is_main_line": true,
+            "updated_at": "2026-11-07T22:21:35Z",
+            "source_id": "36293779-734.196524683-AWAY"
+           },
+           "22": {
+            "id": "713948065",
+            "price": 380,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T04:59:29Z",
+            "source_id": "7910908-207674728-806009616"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 3,
+        "type": "TYPE_RESULT",
+        "name": "Draw",
+        "lines": [
+         {
+          "id": "2c272e80594c20b0d8ff9099df579006",
+          "prices": {
+           "19": {
+            "id": "709178559",
+            "price": 330,
+            "price_delta": -10,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T14:12:30Z",
+            "source_id": "0ML87095912_2"
+           },
+           "23": {
+            "id": "711845824",
+            "price": 350,
+            "is_main_line": true,
+            "updated_at": "2026-11-07T22:21:35Z",
+            "source_id": "36293779-734.196524683-DRAW"
+           },
+           "22": {
+            "id": "713948067",
+            "price": 320,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T04:59:29Z",
+            "source_id": "7910908-207674728-806009615"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 7902809,
+      "market_id": 3,
+      "period_id": 0,
+      "name": "totals",
+      "market_description": "Over/under on the combined score.",
+      "participants": [
+       {
+        "id": 9,
+        "type": "TYPE_RESULT",
+        "name": "Over",
+        "lines": [
+         {
+          "id": "5530c850580722b3c95263359fd5bea5",
+          "value": "0.5",
+          "prices": {
+           "19": {
+            "id": "709178927",
+            "price": -10000,
+            "price_delta": -2000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T19:02:03Z",
+            "source_id": "0OU87096099O50_1"
+           },
+           "23": {
+            "id": "711845844",
+            "price": -4500,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T22:21:35Z",
+            "source_id": "36293779-734.196524746-Over 0.5 Goals"
+           },
+           "22": {
+            "id": "713948081",
+            "price": -10000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T04:59:29Z",
+            "source_id": "7910908-207693645-806095399"
+           }
+          }
+         },
+         {
+          "id": "191eaa6d72c6e09729fa96483c981e32",
+          "value": "1.5",
+          "prices": {
+           "19": {
+            "id": "709178926",
+            "price": -600,
+            "price_delta": -25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T00:10:54Z",
+            "source_id": "0OU87096099O150_1"
+           },
+           "23": {
+            "id": "711845842",
+            "price": -550,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T22:21:35Z",
+            "source_id": "36293779-734.196524736-Over 1.5 Goals"
+           },
+           "22": {
+            "id": "713948077",
+            "price": -600,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T04:59:29Z",
+            "source_id": "7910908-207693643-806095395"
+           }
+          }
+         },
+         {
+          "id": "ff214a85e1317509dc7d5f20988d6f9c",
+          "value": "2.5",
+          "prices": {
+           "23": {
+            "id": "711845846",
+            "price": -168,
+            "is_main_line": true,
+            "updated_at": "2026-11-07T22:34:43Z",
+            "source_id": "36293779-734.196524771-Over 2.5 Goals"
+           },
+           "22": {
+            "id": "713948073",
+            "price": -185,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T04:59:29Z",
+            "source_id": "7910908-207693641-806095391"
+           },
+           "19": {
+            "id": "709178932",
+            "price": -180,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T00:10:54Z",
+            "source_id": "0OU87096099O250_1"
+           }
+          }
+         },
+         {
+          "id": "768e0c654be5eccbbeed531711a412a7",
+          "value": "3.5",
+          "prices": {
+           "22": {
+            "id": "713948075",
+            "price": 140,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T04:59:29Z",
+            "source_id": "7910908-207693642-806095393"
+           },
+           "19": {
+            "id": "709178929",
+            "price": 135,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T00:10:54Z",
+            "source_id": "0OU87096099O350_1"
+           },
+           "23": {
+            "id": "711845840",
+            "price": 154,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T22:21:35Z",
+            "source_id": "36293779-734.196524733-Over 3.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "2eeb3449cce4432820ca88d370a66ee5",
+          "value": "4.5",
+          "prices": {
+           "22": {
+            "id": "713948079",
+            "price": 320,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T04:59:29Z",
+            "source_id": "7910908-207693644-806095397"
+           },
+           "19": {
+            "id": "709178949",
+            "price": 310,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T00:10:54Z",
+            "source_id": "0OU87096099O450_1"
+           },
+           "23": {
+            "id": "711845838",
+            "price": 370,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T22:21:35Z",
+            "source_id": "36293779-734.196524712-Over 4.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "153b3a726b16b0860a0b8aa0596fb368",
+          "value": "5.5",
+          "prices": {
+           "22": {
+            "id": "713948083",
+            "price": 700,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T04:59:29Z",
+            "source_id": "7910908-207693646-806095401"
+           },
+           "19": {
+            "id": "709178928",
+            "price": 650,
+            "price_delta": 50,
+            "is_main_line": false,
+            "updated_at": "2026-11-04T22:32:48Z",
+            "source_id": "0OU87096099O550_1"
+           },
+           "23": {
+            "id": "711845836",
+            "price": 880,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T22:21:35Z",
+            "source_id": "36293779-734.196524700-Over 5.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "729fafde9a9055ea9ee5465a63e03974",
+          "value": "6.5",
+          "prices": {
+           "23": {
+            "id": "711845848",
+            "price": 1800,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T22:21:35Z",
+            "source_id": "36293779-734.196524773-Over 6.5 Goals"
+           },
+           "22": {
+            "id": "713948085",
+            "price": 1550,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T04:59:29Z",
+            "source_id": "7910908-207693647-806095403"
+           },
+           "19": {
+            "id": "709178934",
+            "price": 1200,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T19:02:03Z",
+            "source_id": "0OU87096099O650_1"
+           }
+          }
+         },
+         {
+          "id": "14980ee7468ccdade5e47fe65446e63c",
+          "value": "7.5",
+          "prices": {
+           "23": {
+            "id": "711845835",
+            "price": 3500,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T22:21:35Z",
+            "source_id": "36293779-734.196524696-Over 7.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "d2d8b578f35b9607c861647b26648d61",
+          "value": "8.5",
+          "prices": {
+           "23": {
+            "id": "711845834",
+            "price": 8000,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T22:21:35Z",
+            "source_id": "36293779-734.196524671-Over 8.5 Goals"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 10,
+        "type": "TYPE_RESULT",
+        "name": "Under",
+        "lines": [
+         {
+          "id": "ff9a023fe25b8fc303a90e4e21d729cb",
+          "value": "0.5",
+          "prices": {
+           "19": {
+            "id": "709178933",
+            "price": 1100,
+            "price_delta": -100,
+            "is_main_line": false,
+            "updated_at": "2026-11-04T22:32:48Z",
+            "source_id": "0OU87096099U50_3"
+           },
+           "23": {
+            "id": "711845845",
+            "price": 1300,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T22:21:35Z",
+            "source_id": "36293779-734.196524746-Under 0.5 Goals"
+           },
+           "22": {
+            "id": "713948082",
+            "price": 1500,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T04:59:29Z",
+            "source_id": "7910908-207693645-806095400"
+           }
+          }
+         },
+         {
+          "id": "08a32376877a82868e5b76a4e461a572",
+          "value": "1.5",
+          "prices": {
+           "19": {
+            "id": "709178931",
+            "price": 360,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T00:10:54Z",
+            "source_id": "0OU87096099U150_3"
+           },
+           "23": {
+            "id": "711845843",
+            "price": 390,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T22:21:35Z",
+            "source_id": "36293779-734.196524736-Under 1.5 Goals"
+           },
+           "22": {
+            "id": "713948078",
+            "price": 375,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T04:59:29Z",
+            "source_id": "7910908-207693643-806095396"
+           }
+          }
+         },
+         {
+          "id": "e2d7e4a6f65297ba14d8cf6e50e8e005",
+          "value": "2.5",
+          "prices": {
+           "19": {
+            "id": "709178936",
+            "price": 130,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T00:10:54Z",
+            "source_id": "0OU87096099U250_3"
+           },
+           "23": {
+            "id": "711845847",
+            "price": 136,
+            "is_main_line": true,
+            "updated_at": "2026-11-07T22:34:43Z",
+            "source_id": "36293779-734.196524771-Under 2.5 Goals"
+           },
+           "22": {
+            "id": "713948074",
+            "price": 130,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T04:59:29Z",
+            "source_id": "7910908-207693641-806095392"
+           }
+          }
+         },
+         {
+          "id": "f481066b31ac7d96d8c8a4df27695381",
+          "value": "3.5",
+          "prices": {
+           "19": {
+            "id": "709178930",
+            "price": -185,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T00:10:54Z",
+            "source_id": "0OU87096099U350_3"
+           },
+           "23": {
+            "id": "711845841",
+            "price": -192,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T22:21:35Z",
+            "source_id": "36293779-734.196524733-Under 3.5 Goals"
+           },
+           "22": {
+            "id": "713948076",
+            "price": -200,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T04:59:29Z",
+            "source_id": "7910908-207693642-806095394"
+           }
+          }
+         },
+         {
+          "id": "3ef7d745b4f7b192ef3bf67b83d5cc93",
+          "value": "4.5",
+          "prices": {
+           "19": {
+            "id": "709178950",
+            "price": -475,
+            "price_delta": 25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T00:10:54Z",
+            "source_id": "0OU87096099U450_3"
+           },
+           "23": {
+            "id": "711845839",
+            "price": -520,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T22:21:35Z",
+            "source_id": "36293779-734.196524712-Under 4.5 Goals"
+           },
+           "22": {
+            "id": "713948080",
+            "price": -500,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T04:59:29Z",
+            "source_id": "7910908-207693644-806095398"
+           }
+          }
+         },
+         {
+          "id": "88327918b75139239c5f3cf5926ce58c",
+          "value": "5.5",
+          "prices": {
+           "19": {
+            "id": "709178935",
+            "price": -1600,
+            "price_delta": -200,
+            "is_main_line": false,
+            "updated_at": "2026-11-04T22:32:48Z",
+            "source_id": "0OU87096099U550_3"
+           },
+           "23": {
+            "id": "711845837",
+            "price": -1800,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T22:21:35Z",
+            "source_id": "36293779-734.196524700-Under 5.5 Goals"
+           },
+           "22": {
+            "id": "713948084",
+            "price": -1400,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T04:59:29Z",
+            "source_id": "7910908-207693646-806095402"
+           }
+          }
+         },
+         {
+          "id": "5b2199f5478108a4c2b3e8fe5db3065f",
+          "value": "6.5",
+          "prices": {
+           "22": {
+            "id": "713948086",
+            "price": -10000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T04:59:29Z",
+            "source_id": "7910908-207693647-806095404"
+           },
+           "19": {
+            "id": "709178948",
+            "price": -20000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T19:02:03Z",
+            "source_id": "0OU87096099U650_3"
+           },
+           "23": {
+            "id": "711845849",
+            "price": -6000,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T22:21:35Z",
+            "source_id": "36293779-734.196524773-Under 6.5 Goals"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "21": "1028072766",
+     "28": "2699801946008715690",
+     "4": "491178184",
+     "6": "491178184",
+     "7": "28A5EA78-6827-4893-9509-78C1BE667FBE",
+     "14": "6231746",
+     "25": "26NOV21TOTIPS",
+     "30": "01a1c584-bb83-7510-a019-11ac835e1bd1",
+     "33": "207324231",
+     "2": "33043374",
+     "19": "87095912",
+     "23": "36293779",
+     "24": "63c0415d-c3bd-4932-93f9-1f5f7b7f011e",
+     "34": "207324231",
+     "22": "7910908",
+     "3": "1639746853",
+     "9": "28A5EA78-6827-4893-9509-78C1BE667FBE",
+     "11": "491178184"
+    },
+    "affiliate_deep_links": {
+     "28": "https://app.hardrock.bet/competition/englandPremierLeague/2699801946008715690",
+     "7": "https://www.bookmaker.eu/",
+     "25": "https://kalshi.com/markets/kxeplgame/kxeplgame-26nov21totips",
+     "21": "https://www.unibet.co.uk/betting/odds/contest/025ff1da33e668ddc004047094a60838",
+     "14": "https://sports.everygame.eu/",
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/207324231",
+     "9": "https://sportsbook.betcris.com/",
+     "24": "https://sportsbook.thescore.bet/sport/soccer/organization/england/competition/premier-league/event/63c0415d-c3bd-4932-93f9-1f5f7b7f011e",
+     "30": "https://novig.com/event-markets/01a1c584-bb83-7510-a019-11ac835e1bd1",
+     "2": "https://www.bovada.lv/sports/soccer/europe/england/premier-league/tottenham-hotspur-ipswich-town-202611211000",
+     "19": "https://sportsbook.draftkings.com/event/tottenham-vs-ipswich/34962898",
+     "23": "https://sportsbook.fanduel.com/soccer/english-premier-league/tottenham-v-ipswich-36293779",
+     "3": "https://www.pinnacle.com/en/soccer/england-premier-league/tottenham-hotspur-vs-ipswich-town/1639746853/",
+     "33": "https://bet105.ag/",
+     "22": "https://sports.nj.betmgm.com/en/sports/events/2:7910908",
+     "6": "https://www.betonline.ag/sportsbook/soccer/epl/game/491178184",
+     "4": "https://www.sportsbetting.ag/sportsbook/soccer/epl/game/491178184",
+     "11": "https://sports.lowvig.ag/sportsbook/soccer/epl/game/491178184"
+    },
+    "affiliate_deep_link_types": {
+     "9": "catalog",
+     "7": "catalog",
+     "14": "catalog",
+     "33": "catalog"
+    }
+   },
+   {
+    "event_id": "259fecfb1cd77f4a10342f78ad4ea86a",
+    "event_uuid": "11f1-e5bc-391cd800-8eb4-b38ef5997ef6",
+    "sport_id": 11,
+    "event_date": "2026-11-21T17:30:00Z",
+    "score": {
+     "event_id": "259fecfb1cd77f4a10342f78ad4ea86a",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 3436,
+     "team_id_home": 3449,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [
+      0,
+      0
+     ],
+     "score_home_by_period": [
+      0,
+      0
+     ],
+     "venue_name": "St. James' Park",
+     "venue_location": "Newcastle-upon-Tyne",
+     "game_clock": 0,
+     "display_clock": "0'",
+     "game_period": 0,
+     "broadcast": "",
+     "event_status_detail": "Scheduled",
+     "updated_at": "2026-10-01T00:24:42Z"
+    },
+    "teams": [
+     {
+      "team_id": 3436,
+      "name": "Arsenal FC",
+      "mascot": "",
+      "abbreviation": "ARS",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "9-0-1",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     },
+     {
+      "team_id": 3449,
+      "name": "Newcastle United",
+      "mascot": "",
+      "abbreviation": "NEW",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "3-3-4",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 3436,
+      "name": "Arsenal FC",
+      "mascot": "",
+      "abbreviation": "ARS",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "9-0-1",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     },
+     {
+      "team_id": 3449,
+      "name": "Newcastle United",
+      "mascot": "",
+      "abbreviation": "NEW",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "3-3-4",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     }
+    ],
+    "schedule": {
+     "conference_competition": false,
+     "season_type": "2026-27 English Premier League",
+     "season_year": 2026,
+     "event_name": "Arsenal at Newcastle United - 2026-11-21T17:30:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 7902741,
+      "market_id": 1,
+      "period_id": 0,
+      "name": "moneyline",
+      "market_description": "Win the game outright.",
+      "participants": [
+       {
+        "id": 3436,
+        "type": "TYPE_TEAM",
+        "name": "Arsenal FC",
+        "lines": [
+         {
+          "id": "a3b3d938116680a20d91bd03cbd2edf9",
+          "prices": {
+           "19": {
+            "id": "709178444",
+            "price": -175,
+            "price_delta": -10,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T16:03:11Z",
+            "source_id": "0ML87095907_3"
+           },
+           "23": {
+            "id": "711714203",
+            "price": -175,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T15:54:38Z",
+            "source_id": "36293556-734.196515817-AWAY"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 3449,
+        "type": "TYPE_TEAM",
+        "name": "Newcastle United",
+        "lines": [
+         {
+          "id": "cd8ea165cce4c5c91110eb676a3d2ae8",
+          "prices": {
+           "19": {
+            "id": "709178442",
+            "price": 425,
+            "price_delta": 25,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T16:03:11Z",
+            "source_id": "0ML87095907_1"
+           },
+           "23": {
+            "id": "711714204",
+            "price": 420,
+            "price_delta": -10,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T15:22:11Z",
+            "source_id": "36293556-734.196515817-HOME"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 3,
+        "type": "TYPE_RESULT",
+        "name": "Draw",
+        "lines": [
+         {
+          "id": "1ce1d8e8776ec36ccef0f52be204d1a4",
+          "prices": {
+           "19": {
+            "id": "709178443",
+            "price": 310,
+            "price_delta": 10,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T16:03:11Z",
+            "source_id": "0ML87095907_2"
+           },
+           "23": {
+            "id": "711714205",
+            "price": 310,
+            "is_main_line": true,
+            "updated_at": "2026-11-07T20:53:07Z",
+            "source_id": "36293556-734.196515817-DRAW"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 7902743,
+      "market_id": 3,
+      "period_id": 0,
+      "name": "totals",
+      "market_description": "Over/under on the combined score.",
+      "participants": [
+       {
+        "id": 9,
+        "type": "TYPE_RESULT",
+        "name": "Over",
+        "lines": [
+         {
+          "id": "dbea8b6b59b438586ccee848089ef313",
+          "value": "0.5",
+          "prices": {
+           "19": {
+            "id": "709178449",
+            "price": -5000,
+            "price_delta": 1000,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T16:54:04Z",
+            "source_id": "0OU87095997O50_1"
+           },
+           "23": {
+            "id": "711714217",
+            "price": -4000,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T20:53:07Z",
+            "source_id": "36293556-734.196515798-Over 0.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "8bef447e37cfb450e171d52f02a724d4",
+          "value": "1.5",
+          "prices": {
+           "19": {
+            "id": "709178445",
+            "price": -450,
+            "price_delta": 25,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T16:54:04Z",
+            "source_id": "0OU87095997O150_1"
+           },
+           "23": {
+            "id": "711714215",
+            "price": -450,
+            "price_delta": -20,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T15:54:38Z",
+            "source_id": "36293556-734.196515792-Over 1.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "0609f53176bbec20baed593aec784adc",
+          "value": "2.5",
+          "prices": {
+           "19": {
+            "id": "709178446",
+            "price": -150,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T16:03:12Z",
+            "source_id": "0OU87095997O250_1"
+           },
+           "23": {
+            "id": "711714229",
+            "price": -142,
+            "price_delta": -8,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T15:54:38Z",
+            "source_id": "36293556-734.196515895-Over 2.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "cc121ecd4b372ba3316fa61f343cb66f",
+          "value": "3.5",
+          "prices": {
+           "19": {
+            "id": "709178447",
+            "price": 170,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T16:03:12Z",
+            "source_id": "0OU87095997O350_1"
+           },
+           "23": {
+            "id": "711714221",
+            "price": 186,
+            "price_delta": -12,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T15:54:38Z",
+            "source_id": "36293556-734.196515811-Over 3.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "cde3d7543b89cc31fd91c66a3e654576",
+          "value": "4.5",
+          "prices": {
+           "19": {
+            "id": "709178448",
+            "price": 380,
+            "price_delta": -20,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T16:03:12Z",
+            "source_id": "0OU87095997O450_1"
+           },
+           "23": {
+            "id": "711714224",
+            "price": 470,
+            "price_delta": -20,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T15:54:38Z",
+            "source_id": "36293556-734.196515850-Over 4.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "b4f55b2b96a4299f1049fc18bebfe270",
+          "value": "5.5",
+          "prices": {
+           "19": {
+            "id": "709178450",
+            "price": 800,
+            "price_delta": 50,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T16:54:04Z",
+            "source_id": "0OU87095997O550_1"
+           },
+           "23": {
+            "id": "711714227",
+            "price": 1040,
+            "price_delta": -80,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T15:54:38Z",
+            "source_id": "36293556-734.196515877-Over 5.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "c37394328b6434b51200f0462877b4d8",
+          "value": "6.5",
+          "prices": {
+           "23": {
+            "id": "711714219",
+            "price": 1800,
+            "price_delta": -400,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T15:54:38Z",
+            "source_id": "36293556-734.196515803-Over 6.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "4f09a96aa110f876eecf80fd221f0f57",
+          "value": "7.5",
+          "prices": {
+           "23": {
+            "id": "711714223",
+            "price": 5000,
+            "price_delta": -500,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T15:54:38Z",
+            "source_id": "36293556-734.196515846-Over 7.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "5478e0fb49e946695769733f8bf1eb51",
+          "value": "8.5",
+          "prices": {
+           "23": {
+            "id": "711714226",
+            "price": 8000,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T20:53:07Z",
+            "source_id": "36293556-734.196515851-Over 8.5 Goals"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 10,
+        "type": "TYPE_RESULT",
+        "name": "Under",
+        "lines": [
+         {
+          "id": "25dd1533614b5ff0868da4bde567b1b0",
+          "value": "0.5",
+          "prices": {
+           "19": {
+            "id": "709178455",
+            "price": 1000,
+            "is_main_line": false,
+            "updated_at": "2026-11-04T17:22:38Z",
+            "source_id": "0OU87095997U50_3"
+           },
+           "23": {
+            "id": "711714218",
+            "price": 1260,
+            "is_main_line": false,
+            "updated_at": "2026-11-07T20:53:07Z",
+            "source_id": "36293556-734.196515798-Under 0.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "d913dfe9b1d7abf024debd28c5184774",
+          "value": "1.5",
+          "prices": {
+           "19": {
+            "id": "709178451",
+            "price": 300,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T16:03:12Z",
+            "source_id": "0OU87095997U150_3"
+           },
+           "23": {
+            "id": "711714216",
+            "price": 330,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T15:54:38Z",
+            "source_id": "36293556-734.196515792-Under 1.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "5d58207bc112712c3aab5e796d44fa0f",
+          "value": "2.5",
+          "prices": {
+           "23": {
+            "id": "711714230",
+            "price": 116,
+            "price_delta": 6,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T15:54:38Z",
+            "source_id": "36293556-734.196515895-Under 2.5 Goals"
+           },
+           "19": {
+            "id": "709178452",
+            "price": 110,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T16:03:12Z",
+            "source_id": "0OU87095997U250_3"
+           }
+          }
+         },
+         {
+          "id": "5709ad5efd90a963dcdad14f85cbac80",
+          "value": "3.5",
+          "prices": {
+           "19": {
+            "id": "709178453",
+            "price": -240,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T16:03:12Z",
+            "source_id": "0OU87095997U350_3"
+           },
+           "23": {
+            "id": "711714222",
+            "price": -235,
+            "price_delta": 15,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T15:54:38Z",
+            "source_id": "36293556-734.196515811-Under 3.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "1f0e557f8a19bb666b3b6d6a5a68edaf",
+          "value": "4.5",
+          "prices": {
+           "23": {
+            "id": "711714225",
+            "price": -650,
+            "price_delta": 100,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T15:54:38Z",
+            "source_id": "36293556-734.196515850-Under 4.5 Goals"
+           },
+           "19": {
+            "id": "709178454",
+            "price": -650,
+            "price_delta": 50,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T16:03:12Z",
+            "source_id": "0OU87095997U450_3"
+           }
+          }
+         },
+         {
+          "id": "c42aa9510ab00d995bc08028124adc60",
+          "value": "5.5",
+          "prices": {
+           "19": {
+            "id": "709178456",
+            "price": -2500,
+            "is_main_line": false,
+            "updated_at": "2026-11-04T17:22:38Z",
+            "source_id": "0OU87095997U550_3"
+           },
+           "23": {
+            "id": "711714228",
+            "price": -2500,
+            "price_delta": 500,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T15:54:38Z",
+            "source_id": "36293556-734.196515877-Under 5.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "651b8de37614372c82bc9cd6685e10e4",
+          "value": "6.5",
+          "prices": {
+           "23": {
+            "id": "711714220",
+            "price": -8000,
+            "price_delta": 2000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T15:54:38Z",
+            "source_id": "36293556-734.196515803-Under 6.5 Goals"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "11": "491178187",
+     "14": "6231798",
+     "19": "34962895",
+     "21": "1028072760",
+     "23": "36293556",
+     "28": "5317674389406351791",
+     "6": "491178187",
+     "25": "26NOV21NEWARS",
+     "30": "01a1c584-bc72-7e82-a7d1-3a8674b25ba6",
+     "3": "1639746856",
+     "4": "491178187",
+     "2": "33043375",
+     "24": "7f950ac5-37b2-4926-93a5-1b7facf0a279",
+     "33": "207324251",
+     "34": "207324251",
+     "7": "A6B211E9-9F11-48AB-93EE-5728AF9F70D2",
+     "9": "A6B211E9-9F11-48AB-93EE-5728AF9F70D2"
+    },
+    "affiliate_deep_links": {
+     "23": "https://sportsbook.fanduel.com/soccer/english-premier-league/newcastle-v-arsenal-36293556",
+     "33": "https://bet105.ag/",
+     "7": "https://www.bookmaker.eu/",
+     "28": "https://app.hardrock.bet/competition/englandPremierLeague/5317674389406351791",
+     "19": "https://sportsbook.draftkings.com/event/newcastle-vs-arsenal/34962895",
+     "3": "https://www.pinnacle.com/en/soccer/england-premier-league/newcastle-united-vs-arsenal-fc/1639746856/",
+     "2": "https://www.bovada.lv/sports/soccer/europe/england/premier-league/newcastle-united-arsenal-202611211230",
+     "9": "https://sportsbook.betcris.com/",
+     "14": "https://sports.everygame.eu/",
+     "21": "https://www.unibet.co.uk/betting/odds/contest/e0bada13c2145d3ea0d8f796fe76e575",
+     "4": "https://www.sportsbetting.ag/sportsbook/soccer/epl/game/491178187",
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/207324251",
+     "6": "https://www.betonline.ag/sportsbook/soccer/epl/game/491178187",
+     "11": "https://sports.lowvig.ag/sportsbook/soccer/epl/game/491178187",
+     "30": "https://novig.com/event-markets/01a1c584-bc72-7e82-a7d1-3a8674b25ba6",
+     "25": "https://kalshi.com/markets/kxeplgame/kxeplgame-26nov21newars",
+     "24": "https://sportsbook.thescore.bet/sport/soccer/organization/england/competition/premier-league/event/7f950ac5-37b2-4926-93a5-1b7facf0a279"
+    },
+    "affiliate_deep_link_types": {
+     "9": "catalog",
+     "33": "catalog",
+     "14": "catalog",
+     "7": "catalog"
+    }
+   }
+  ]
+ }
+}

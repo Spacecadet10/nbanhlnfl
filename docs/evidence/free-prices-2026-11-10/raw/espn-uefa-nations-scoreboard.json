@@ -1,0 +1,14 @@
+{
+ "_fetched_at": "2026-11-11T04:41:20+00:00",
+ "_url": "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.nations/scoreboard?dates=20261112-20261118",
+ "_status": 400,
+ "_headers": {
+  "content-type": "application/json;charset=UTF-8",
+  "cache-control": "max-age=1",
+  "date": "Wed, 11 Nov 2026 04:41:20 GMT"
+ },
+ "body": {
+  "code": 400,
+  "message": "Failed to get events endpoint."
+ }
+}

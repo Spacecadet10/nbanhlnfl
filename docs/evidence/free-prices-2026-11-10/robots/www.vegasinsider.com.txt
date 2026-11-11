@@ -1,0 +1,13 @@
+User-agent: *
+Disallow: /goto/
+Disallow: *shop.vegasinsider.com/*
+Disallow: *content.vegasinsider.com/*
+Disallow: */?
+Disallow: *?*
+Disallow: *@*
+
+Sitemap: https://www.vegasinsider.com/sitemap-index.xml
+Sitemap: https://www.vegasinsider.com/sitemap-authors.xml
+Sitemap: https://www.vegasinsider.com/sitemap-commercial.xml
+Sitemap: https://www.vegasinsider.com/sitemap-news.xml
+Sitemap: https://www.vegasinsider.com/sitemap-sports.xml

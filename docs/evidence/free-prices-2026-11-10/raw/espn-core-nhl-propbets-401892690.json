@@ -1,0 +1,843 @@
+{
+ "_fetched_at": "2026-11-11T04:39:10+00:00",
+ "_url": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690/odds/100/propBets?lang=en&region=us",
+ "_status": 200,
+ "_headers": {
+  "date": "Wed, 11 Nov 2026 04:39:10 GMT",
+  "content-type": "application/json;charset=utf-8",
+  "cache-control": "max-age=900, stale-while-revalidate=7200"
+ },
+ "body": {
+  "count": 252,
+  "pageIndex": 1,
+  "pageSize": 25,
+  "pageCount": 11,
+  "items": [
+   {
+    "competition": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690?lang=en&region=us"
+    },
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/2027/athletes/5118?lang=en&region=us"
+    },
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/casinos/100?lang=en&region=us"
+    },
+    "type": {
+     "id": "39",
+     "name": "To Score 2+ Goals"
+    },
+    "odds": {
+     "american": {
+      "value": "+5500",
+      "open": "+5000"
+     },
+     "decimal": {
+      "value": "56.00",
+      "open": "51.00"
+     },
+     "fraction": {
+      "value": "55/1",
+      "open": "50/1"
+     },
+     "total": {}
+    },
+    "lastUpdated": "2026-11-11T06:32Z",
+    "current": {},
+    "open": {}
+   },
+   {
+    "competition": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690?lang=en&region=us"
+    },
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/2027/athletes/5157?lang=en&region=us"
+    },
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/casinos/100?lang=en&region=us"
+    },
+    "type": {
+     "id": "39",
+     "name": "To Score 2+ Goals"
+    },
+    "odds": {
+     "american": {
+      "value": "+10000",
+      "open": "+10000"
+     },
+     "decimal": {
+      "value": "101.00",
+      "open": "101.00"
+     },
+     "fraction": {
+      "value": "100/1",
+      "open": "100/1"
+     },
+     "total": {}
+    },
+    "lastUpdated": "2026-11-11T06:32Z",
+    "current": {},
+    "open": {}
+   },
+   {
+    "competition": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690?lang=en&region=us"
+    },
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/2027/athletes/2563060?lang=en&region=us"
+    },
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/casinos/100?lang=en&region=us"
+    },
+    "type": {
+     "id": "39",
+     "name": "To Score 2+ Goals"
+    },
+    "odds": {
+     "american": {
+      "value": "+1100",
+      "open": "+1100"
+     },
+     "decimal": {
+      "value": "12.00",
+      "open": "12.00"
+     },
+     "fraction": {
+      "value": "11/1",
+      "open": "11/1"
+     },
+     "total": {}
+    },
+    "lastUpdated": "2026-11-11T06:32Z",
+    "current": {},
+    "open": {}
+   },
+   {
+    "competition": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690?lang=en&region=us"
+    },
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/2027/athletes/2593315?lang=en&region=us"
+    },
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/casinos/100?lang=en&region=us"
+    },
+    "type": {
+     "id": "39",
+     "name": "To Score 2+ Goals"
+    },
+    "odds": {
+     "american": {
+      "value": "+3500",
+      "open": "+3500"
+     },
+     "decimal": {
+      "value": "36.00",
+      "open": "36.00"
+     },
+     "fraction": {
+      "value": "35/1",
+      "open": "35/1"
+     },
+     "total": {}
+    },
+    "lastUpdated": "2026-11-11T06:32Z",
+    "current": {},
+    "open": {}
+   },
+   {
+    "competition": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690?lang=en&region=us"
+    },
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/2027/athletes/3042083?lang=en&region=us"
+    },
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/casinos/100?lang=en&region=us"
+    },
+    "type": {
+     "id": "39",
+     "name": "To Score 2+ Goals"
+    },
+    "odds": {
+     "american": {
+      "value": "+950",
+      "open": "+950"
+     },
+     "decimal": {
+      "value": "10.50",
+      "open": "10.50"
+     },
+     "fraction": {
+      "value": "19/2",
+      "open": "19/2"
+     },
+     "total": {}
+    },
+    "lastUpdated": "2026-11-11T06:32Z",
+    "current": {},
+    "open": {}
+   },
+   {
+    "competition": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690?lang=en&region=us"
+    },
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/2027/athletes/3094261?lang=en&region=us"
+    },
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/casinos/100?lang=en&region=us"
+    },
+    "type": {
+     "id": "39",
+     "name": "To Score 2+ Goals"
+    },
+    "odds": {
+     "american": {
+      "value": "+4500",
+      "open": "+4500"
+     },
+     "decimal": {
+      "value": "46.00",
+      "open": "46.00"
+     },
+     "fraction": {
+      "value": "45/1",
+      "open": "45/1"
+     },
+     "total": {}
+    },
+    "lastUpdated": "2026-11-11T06:32Z",
+    "current": {},
+    "open": {}
+   },
+   {
+    "competition": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690?lang=en&region=us"
+    },
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/2027/athletes/3941973?lang=en&region=us"
+    },
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/casinos/100?lang=en&region=us"
+    },
+    "type": {
+     "id": "39",
+     "name": "To Score 2+ Goals"
+    },
+    "odds": {
+     "american": {
+      "value": "+2500",
+      "open": "+2500"
+     },
+     "decimal": {
+      "value": "26.00",
+      "open": "26.00"
+     },
+     "fraction": {
+      "value": "25/1",
+      "open": "25/1"
+     },
+     "total": {}
+    },
+    "lastUpdated": "2026-11-11T06:35Z",
+    "current": {},
+    "open": {}
+   },
+   {
+    "competition": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690?lang=en&region=us"
+    },
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/2027/athletes/4024988?lang=en&region=us"
+    },
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/casinos/100?lang=en&region=us"
+    },
+    "type": {
+     "id": "39",
+     "name": "To Score 2+ Goals"
+    },
+    "odds": {
+     "american": {
+      "value": "+800",
+      "open": "+800"
+     },
+     "decimal": {
+      "value": "9.00",
+      "open": "9.00"
+     },
+     "fraction": {
+      "value": "8/1",
+      "open": "8/1"
+     },
+     "total": {}
+    },
+    "lastUpdated": "2026-11-11T06:32Z",
+    "current": {},
+    "open": {}
+   },
+   {
+    "competition": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690?lang=en&region=us"
+    },
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/2027/athletes/4065019?lang=en&region=us"
+    },
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/casinos/100?lang=en&region=us"
+    },
+    "type": {
+     "id": "39",
+     "name": "To Score 2+ Goals"
+    },
+    "odds": {
+     "american": {
+      "value": "+1000",
+      "open": "+1000"
+     },
+     "decimal": {
+      "value": "11.00",
+      "open": "11.00"
+     },
+     "fraction": {
+      "value": "10/1",
+      "open": "10/1"
+     },
+     "total": {}
+    },
+    "lastUpdated": "2026-11-11T06:32Z",
+    "current": {},
+    "open": {}
+   },
+   {
+    "competition": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690?lang=en&region=us"
+    },
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/2027/athletes/4233627?lang=en&region=us"
+    },
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/casinos/100?lang=en&region=us"
+    },
+    "type": {
+     "id": "39",
+     "name": "To Score 2+ Goals"
+    },
+    "odds": {
+     "american": {
+      "value": "+3500",
+      "open": "+3500"
+     },
+     "decimal": {
+      "value": "36.00",
+      "open": "36.00"
+     },
+     "fraction": {
+      "value": "35/1",
+      "open": "35/1"
+     },
+     "total": {}
+    },
+    "lastUpdated": "2026-11-11T06:32Z",
+    "current": {},
+    "open": {}
+   },
+   {
+    "competition": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690?lang=en&region=us"
+    },
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/2027/athletes/4294163?lang=en&region=us"
+    },
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/casinos/100?lang=en&region=us"
+    },
+    "type": {
+     "id": "39",
+     "name": "To Score 2+ Goals"
+    },
+    "odds": {
+     "american": {
+      "value": "+3500",
+      "open": "+3500"
+     },
+     "decimal": {
+      "value": "36.00",
+      "open": "36.00"
+     },
+     "fraction": {
+      "value": "35/1",
+      "open": "35/1"
+     },
+     "total": {}
+    },
+    "lastUpdated": "2026-11-11T06:32Z",
+    "current": {},
+    "open": {}
+   },
+   {
+    "competition": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690?lang=en&region=us"
+    },
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/2027/athletes/4378669?lang=en&region=us"
+    },
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/casinos/100?lang=en&region=us"
+    },
+    "type": {
+     "id": "39",
+     "name": "To Score 2+ Goals"
+    },
+    "odds": {
+     "american": {
+      "value": "+5500",
+      "open": "+5500"
+     },
+     "decimal": {
+      "value": "56.00",
+      "open": "56.00"
+     },
+     "fraction": {
+      "value": "55/1",
+      "open": "55/1"
+     },
+     "total": {}
+    },
+    "lastUpdated": "2026-11-11T06:32Z",
+    "current": {},
+    "open": {}
+   },
+   {
+    "competition": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690?lang=en&region=us"
+    },
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/2027/athletes/4422415?lang=en&region=us"
+    },
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/casinos/100?lang=en&region=us"
+    },
+    "type": {
+     "id": "39",
+     "name": "To Score 2+ Goals"
+    },
+    "odds": {
+     "american": {
+      "value": "+7500",
+      "open": "+7000"
+     },
+     "decimal": {
+      "value": "76.00",
+      "open": "71.00"
+     },
+     "fraction": {
+      "value": "75/1",
+      "open": "70/1"
+     },
+     "total": {}
+    },
+    "lastUpdated": "2026-11-11T06:32Z",
+    "current": {},
+    "open": {}
+   },
+   {
+    "competition": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690?lang=en&region=us"
+    },
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/2027/athletes/4565238?lang=en&region=us"
+    },
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/casinos/100?lang=en&region=us"
+    },
+    "type": {
+     "id": "39",
+     "name": "To Score 2+ Goals"
+    },
+    "odds": {
+     "american": {
+      "value": "+6000",
+      "open": "+6000"
+     },
+     "decimal": {
+      "value": "61.00",
+      "open": "61.00"
+     },
+     "fraction": {
+      "value": "60/1",
+      "open": "60/1"
+     },
+     "total": {}
+    },
+    "lastUpdated": "2026-11-11T06:32Z",
+    "current": {},
+    "open": {}
+   },
+   {
+    "competition": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690?lang=en&region=us"
+    },
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/2027/athletes/4588175?lang=en&region=us"
+    },
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/casinos/100?lang=en&region=us"
+    },
+    "type": {
+     "id": "39",
+     "name": "To Score 2+ Goals"
+    },
+    "odds": {
+     "american": {
+      "value": "+8000",
+      "open": "+10000"
+     },
+     "decimal": {
+      "value": "81.00",
+      "open": "101.00"
+     },
+     "fraction": {
+      "value": "80/1",
+      "open": "100/1"
+     },
+     "total": {}
+    },
+    "lastUpdated": "2026-11-11T06:32Z",
+    "current": {},
+    "open": {}
+   },
+   {
+    "competition": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690?lang=en&region=us"
+    },
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/2027/athletes/4588205?lang=en&region=us"
+    },
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/casinos/100?lang=en&region=us"
+    },
+    "type": {
+     "id": "39",
+     "name": "To Score 2+ Goals"
+    },
+    "odds": {
+     "american": {
+      "value": "+5000",
+      "open": "+5000"
+     },
+     "decimal": {
+      "value": "51.00",
+      "open": "51.00"
+     },
+     "fraction": {
+      "value": "50/1",
+      "open": "50/1"
+     },
+     "total": {}
+    },
+    "lastUpdated": "2026-11-11T06:32Z",
+    "current": {},
+    "open": {}
+   },
+   {
+    "competition": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690?lang=en&region=us"
+    },
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/2027/athletes/4697389?lang=en&region=us"
+    },
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/casinos/100?lang=en&region=us"
+    },
+    "type": {
+     "id": "39",
+     "name": "To Score 2+ Goals"
+    },
+    "odds": {
+     "american": {
+      "value": "+1700",
+      "open": "+1700"
+     },
+     "decimal": {
+      "value": "18.00",
+      "open": "18.00"
+     },
+     "fraction": {
+      "value": "17/1",
+      "open": "17/1"
+     },
+     "total": {}
+    },
+    "lastUpdated": "2026-11-11T06:32Z",
+    "current": {},
+    "open": {}
+   },
+   {
+    "competition": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690?lang=en&region=us"
+    },
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/2027/athletes/4874870?lang=en&region=us"
+    },
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/casinos/100?lang=en&region=us"
+    },
+    "type": {
+     "id": "39",
+     "name": "To Score 2+ Goals"
+    },
+    "odds": {
+     "american": {
+      "value": "+3500",
+      "open": "+3500"
+     },
+     "decimal": {
+      "value": "36.00",
+      "open": "36.00"
+     },
+     "fraction": {
+      "value": "35/1",
+      "open": "35/1"
+     },
+     "total": {}
+    },
+    "lastUpdated": "2026-11-11T06:32Z",
+    "current": {},
+    "open": {}
+   },
+   {
+    "competition": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690?lang=en&region=us"
+    },
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/2027/athletes/5080155?lang=en&region=us"
+    },
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/casinos/100?lang=en&region=us"
+    },
+    "type": {
+     "id": "39",
+     "name": "To Score 2+ Goals"
+    },
+    "odds": {
+     "american": {
+      "value": "+7500",
+      "open": "+7000"
+     },
+     "decimal": {
+      "value": "76.00",
+      "open": "71.00"
+     },
+     "fraction": {
+      "value": "75/1",
+      "open": "70/1"
+     },
+     "total": {}
+    },
+    "lastUpdated": "2026-11-11T06:32Z",
+    "current": {},
+    "open": {}
+   },
+   {
+    "competition": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690?lang=en&region=us"
+    },
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/2027/athletes/5080160?lang=en&region=us"
+    },
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/casinos/100?lang=en&region=us"
+    },
+    "type": {
+     "id": "39",
+     "name": "To Score 2+ Goals"
+    },
+    "odds": {
+     "american": {
+      "value": "+3000",
+      "open": "+3000"
+     },
+     "decimal": {
+      "value": "31.00",
+      "open": "31.00"
+     },
+     "fraction": {
+      "value": "30/1",
+      "open": "30/1"
+     },
+     "total": {}
+    },
+    "lastUpdated": "2026-11-11T06:32Z",
+    "current": {},
+    "open": {}
+   },
+   {
+    "competition": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690?lang=en&region=us"
+    },
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/2027/athletes/5149186?lang=en&region=us"
+    },
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/casinos/100?lang=en&region=us"
+    },
+    "type": {
+     "id": "39",
+     "name": "To Score 2+ Goals"
+    },
+    "odds": {
+     "american": {
+      "value": "+2500",
+      "open": "+2500"
+     },
+     "decimal": {
+      "value": "26.00",
+      "open": "26.00"
+     },
+     "fraction": {
+      "value": "25/1",
+      "open": "25/1"
+     },
+     "total": {}
+    },
+    "lastUpdated": "2026-11-11T06:32Z",
+    "current": {},
+    "open": {}
+   },
+   {
+    "competition": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690?lang=en&region=us"
+    },
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/2027/athletes/5216901?lang=en&region=us"
+    },
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/casinos/100?lang=en&region=us"
+    },
+    "type": {
+     "id": "39",
+     "name": "To Score 2+ Goals"
+    },
+    "odds": {
+     "american": {
+      "value": "+4000",
+      "open": "+4500"
+     },
+     "decimal": {
+      "value": "41.00",
+      "open": "46.00"
+     },
+     "fraction": {
+      "value": "40/1",
+      "open": "45/1"
+     },
+     "total": {}
+    },
+    "lastUpdated": "2026-11-11T06:35Z",
+    "current": {},
+    "open": {}
+   },
+   {
+    "competition": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690?lang=en&region=us"
+    },
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/2027/athletes/2563060?lang=en&region=us"
+    },
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/casinos/100?lang=en&region=us"
+    },
+    "type": {
+     "id": "40",
+     "name": "To Score 3+ Goals"
+    },
+    "odds": {
+     "american": {
+      "value": "+5500",
+      "open": "+5500"
+     },
+     "decimal": {
+      "value": "56.00",
+      "open": "56.00"
+     },
+     "fraction": {
+      "value": "55/1",
+      "open": "55/1"
+     },
+     "total": {}
+    },
+    "lastUpdated": "2026-11-11T06:32Z",
+    "current": {},
+    "open": {}
+   },
+   {
+    "competition": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690?lang=en&region=us"
+    },
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/2027/athletes/3042083?lang=en&region=us"
+    },
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/casinos/100?lang=en&region=us"
+    },
+    "type": {
+     "id": "40",
+     "name": "To Score 3+ Goals"
+    },
+    "odds": {
+     "american": {
+      "value": "+5000",
+      "open": "+5000"
+     },
+     "decimal": {
+      "value": "51.00",
+      "open": "51.00"
+     },
+     "fraction": {
+      "value": "50/1",
+      "open": "50/1"
+     },
+     "total": {}
+    },
+    "lastUpdated": "2026-11-11T06:32Z",
+    "current": {},
+    "open": {}
+   },
+   {
+    "competition": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/events/401892690/competitions/401892690?lang=en&region=us"
+    },
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/2027/athletes/4024988?lang=en&region=us"
+    },
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/casinos/100?lang=en&region=us"
+    },
+    "type": {
+     "id": "40",
+     "name": "To Score 3+ Goals"
+    },
+    "odds": {
+     "american": {
+      "value": "+4000",
+      "open": "+3500"
+     },
+     "decimal": {
+      "value": "41.00",
+      "open": "36.00"
+     },
+     "fraction": {
+      "value": "40/1",
+      "open": "35/1"
+     },
+     "total": {}
+    },
+    "lastUpdated": "2026-11-11T06:32Z",
+    "current": {},
+    "open": {}
+   }
+  ]
+ }
+}

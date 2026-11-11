@@ -316,3 +316,51 @@ def test_a_game_whose_own_day_has_only_old_prices_is_stale_even_when_the_sport_h
     c = odds.read_cache(NOW, tmp_path)
     assert c['stale_sports'] == [] and c['stale_days'] == ['nhl 2026-11-11']
     assert odds.comparison('nhl', pick(), c, NOW)['status'] == 'stale_prices'
+
+
+def reg3_response():
+    """Shape of TheRundown's NHL 60-minute 3-way market (563) as saved on Nov 11 (docs/evidence/free-prices-2026-11-10)."""
+    r = response()
+    r['events'][0]['markets'].append(dict(market_id=563, period_id=0, name='moneyline_3_way_no_push', participants=[
+        dict(id=7, name='Winnipeg Jets', type='TYPE_TEAM', lines=[dict(value=None, prices={'23': dict(price=160, is_main_line=True)})]),
+        dict(id=8, name='New Jersey Devils', type='TYPE_TEAM', lines=[dict(value=None, prices={'23': dict(price=125, is_main_line=True)})]),
+        dict(id=3, name='Draw', type='TYPE_RESULT', lines=[dict(value=None, prices={'23': dict(price=330, is_main_line=True)})])]))
+    return r
+
+
+def test_nhl_regulation_result_is_priced_from_the_60_minute_three_way_market_only():
+    no_quote = dict(provider=None, price_now=None, price_at_forecast=None, line_at_forecast=None, line_now=None,
+                    line_source='none', line_moved=False, retrieved_at=None)
+    home, away = pick('reg3', 'a', None, None, 'WPG in regulation'), pick('reg3', 'b', None, None, 'NJ in regulation')
+    for p in (home, away):
+        p['quote_check'] = dict(no_quote)
+    before = copy.deepcopy(home['quote_check'])
+    odds.attach('nhl', home, cache(reg3_response()), NOW)
+    assert home['book_comparison']['status'] == 'available' and home['book_comparison']['prices'] == {'FanDuel': 160}
+    assert home['quote_check'] == before                                   # the app's own (empty) quote is not filled in
+    assert odds.comparison('nhl', away, cache(reg3_response()), NOW)['prices'] == {'FanDuel': 125}
+    # never the 2-way moneyline (-150/130 in the same response) and nothing when the 3-way market is absent
+    assert odds.comparison('nhl', home, cache(), NOW)['status'] == 'no_exact_line'
+    # a 60-minute price is never offered for another sport or for the full-game winner
+    assert odds.comparison('nba', dict(home, sport='nba'), cache(reg3_response()), NOW)['status'] == 'unsupported_market'
+    assert odds.comparison('nhl', pick('winner', 'a', None, -150, 'WPG win'), cache(reg3_response()), NOW)['prices'] == {
+        'DraftKings': -150, 'BetMGM': -140}
+    clash = reg3_response()                         # the Draw entry is never read as a team, even with a team's id
+    clash['events'][0]['markets'][-1]['participants'][2]['id'] = 7
+    assert odds.comparison('nhl', home, cache(clash), NOW)['prices'] == {'FanDuel': 160}
+    a = tickets.leg_assessment('nhl', home)
+    assert a['price'] is None and a['best_book'] == 'FanDuel' and abs(a['best_book_gap'] - (.60 - 1 / 2.6)) < 1e-9
+
+
+def test_fetch_asks_for_the_three_way_market_on_nhl_requests_only(tmp_path, monkeypatch):
+    monkeypatch.setenv('NBA_DATA_DIR', str(tmp_path))
+    monkeypatch.setenv('THERUNDOWN_API_KEY', 'test-key-do-not-save')
+    calls = []
+
+    def run(request, timeout):
+        calls.append(request.full_url)
+        return Response({})
+    assert odds.fetch(NOW, opener=run, pause=lambda _: None)['status'] == 'ok' and len(calls) == 6
+    nhl = [u for u in calls if '/sports/6/' in u]
+    assert len(nhl) == 2 and all('market_ids=1,2,3,563&' in u for u in nhl)
+    assert all('market_ids=1,2,3&' in u for u in calls if '/sports/6/' not in u)
