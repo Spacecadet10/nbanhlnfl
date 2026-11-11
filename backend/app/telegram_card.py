@@ -95,8 +95,8 @@ RECORD_WIDTH = 800          # x 200 to the card's inner edge (1022) less padding
 
 
 def fit_record(draw, text, width=RECORD_WIDTH):
-    """(text, font) for a market's record line: 22 px, smaller down to 17 px when the live record plus the past-seasons
-    record is longer; only beyond that is it shortened by fit_line. Never overflows the card."""
+    """(text, font) for a market's record line (or its past-seasons line): 22 px, smaller down to 17 px when longer; only
+    beyond that is it shortened by fit_line. Never overflows the card."""
     for size in range(22, 16, -1):
         if draw.textlength(text, font=_font(size)) <= width:
             return text, _font(size)
@@ -232,7 +232,8 @@ def render_card(message):
         note = next((line for line in group if line in ('Small sample.', 'No settled matching examples.')), '')
         label_lines = max(1,int(draw.textlength(pick,font=_font(34,True))/470)+1)
         opposite_lines = max(1,int(draw.textlength(opposite,font=_font(24,True))/820)+1) if opposite else 0
-        height=130+(label_lines-1)*44+(30 if provenance else 0)+(opposite_lines*32+12 if opposite else 0)
+        past = next((line for line in group if line.startswith('Past seasons, ')), None)
+        height=130+(label_lines-1)*44+(30 if provenance else 0)+(30 if past else 0)+(opposite_lines*32+12 if opposite else 0)
         draw.rounded_rectangle((58,y,1022,y+height),radius=25,fill=cream,outline=border,width=2)
         draw.rounded_rectangle((78,y+25,149,y+86),radius=17,fill=pale)
         draw.text((91,y+31),f'{number:02d}',font=_font(31,True,True),fill=primary)
@@ -251,8 +252,11 @@ def render_card(message):
         draw.text((925-w/2,y+41),prob,font=_font(34,True),fill=primary)
         record_text, record_font = fit_record(draw, record+(' · '+note if note else ''))
         draw.text((200,end+4),record_text,font=record_font,fill=INK)
+        if past:      # the recomputed past seasons, on their own line under the live record and its note
+            past_text, past_font = fit_record(draw, past)
+            draw.text((200,end+33),past_text,font=past_font,fill=INK)
         if provenance:
-            draw.text((200,end+33),provenance.capitalize(),font=_font(20),fill=MUTED)
+            draw.text((200,end+33+(30 if past else 0)),provenance.capitalize(),font=_font(20),fill=MUTED)
         if opposite:
             wrapped(opposite,200,y+height-opposite_lines*32-8,800,size=24,bold=True,fill=primary)
         y+=height+8

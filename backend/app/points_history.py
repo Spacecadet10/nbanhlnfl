@@ -5,12 +5,16 @@ No training, no tuning: the sealed market model (market_live.market_model) is ad
 near-tipoff writer does (results ordered by availability, each used only once its result_available_at is at or before the
 forecast time), and each market is priced with the live code (latest bookmaker line retrieved by then, else the model's own
 line). On every canonical live forecast this reproduces the displayed %, side and line exactly (NBA 147/147, NHL 148/148 per
-market, Nov 11 copies).
+market, Nov 11 copies); reproducing live is not the same as being out of sample (see NHL below).
 
 Limits, on purpose:
-- Seasons: only HISTORY_SEASONS. The sealed parameters were chosen on earlier seasons (NBA eta/carry tuned on 2022-23, holdout
-  2024; NHL goals model chosen on 2022-24, empty-net constants fitted on 2018-21). Forecasts for those seasons would use
-  parameters estimated from the games being forecast; an honest version needs a walk-forward refit, which is training: not done.
+- NBA only, seasons HISTORY_SEASONS (2024-25, 2025-26). eta/carry were tuned on 2022-23 and the model was chosen on the 2024
+  holdout, so those parameters predate both seasons. Earlier seasons would use parameters estimated from the games being
+  forecast; an honest version needs a walk-forward refit, which is training: not done. Disclosed: after sealing, an NBA
+  challenger was run on 2024-25/2025-26 folds (kept points_normal; nothing re-tuned).
+- NHL: withheld (review HIGH-1, Nov 11). The empty-net adjustment the live NHL model uses was added after the one-time test on
+  2024-25/2025-26 showed two-goal home wins under-predicted (docs/NHL_BASELINE_REPORT.md), so NHL forecasts for those seasons
+  would be in-sample. No NHL history is built or shown.
 - Lines: the store holds no bookmaker lines before October 2026, so past-season rows carry the model's own line
   (line_source 'model'). They are never matched with a bookmaker-line live forecast.
 - Forecast time: start minus LEAD (one fixed time inside the live two-hour window). Past-season result availability is the
@@ -33,7 +37,9 @@ POLICY = "near_tipoff"                          # the live policy whose computat
 LEAD = timedelta(minutes=60)
 HISTORY_POLICY = "start-60m"
 MARKETS = ("spread", "total", "team_total_home", "team_total_away")
-HISTORY_SEASONS = {"nba": (2025, 2026), "nhl": (2025, 2026)}
+HISTORY_SEASONS = {"nba": (2025, 2026)}
+WITHHELD = {"nhl": ("NHL history is withheld: the live NHL model's empty-net adjustment was added after the one-time test on "
+                    "2024-25 and 2025-26 showed a miss on those games, so its forecasts for them would be in-sample.")}
 COMPETITIVE = ("regular", "play_in", "postseason")
 FMT = "%Y-%m-%dT%H:%M:%SZ"
 
@@ -144,6 +150,8 @@ def build(conn: sqlite3.Connection, hist: sqlite3.Connection, *, seasons: tuple,
     """Appends the recomputed forecasts of every final competitive game of `seasons` (each in HISTORY_SEASONS). A rerun
     with unchanged inputs adds nothing; changed inputs (a corrected result, a new line) add a new row, earlier rows kept."""
     sport = live.engine(conn).sport
+    if sport in WITHHELD:
+        raise HistoryRefused(WITHHELD[sport])
     allowed = HISTORY_SEASONS.get(sport, ())
     bad = [s for s in seasons if s not in allowed]
     if bad or not seasons:
@@ -185,6 +193,8 @@ def history_index(conn: sqlite3.Connection, hist: Optional[sqlite3.Connection], 
     if hist is None or market not in MARKETS:
         return None
     sport = live.engine(conn).sport
+    if sport not in HISTORY_SEASONS:
+        return None
     rows = hist.execute("SELECT * FROM points_history WHERE sport=? AND market=? ORDER BY history_id", (sport, market)).fetchall()
     latest = {}
     for r in rows:
@@ -214,12 +224,14 @@ def main(argv: Optional[list] = None) -> int:
     import argparse
     from .db import utc_now
     ap = argparse.ArgumentParser(description="Append recomputed past-season points-model forecasts (no training).")
-    ap.add_argument("--sport", choices=sorted(HISTORY_SEASONS), required=True)
+    ap.add_argument("--sport", choices=sorted({*HISTORY_SEASONS, *WITHHELD}), required=True)
     ap.add_argument("--season", type=int, action="append", help="default: every history season of the sport")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--explicit-release", action="store_true",
                     help="required to write next to a protected live store (release decision, not a development run)")
     a = ap.parse_args(argv)
+    if a.sport in WITHHELD:
+        raise SystemExit(WITHHELD[a.sport])
     store = config.data_dir() / f"{a.sport}.sqlite"
     target = path(a.sport)
     if not a.dry_run and config.protected_path(target) and not a.explicit_release:
