@@ -341,8 +341,8 @@ def test_picture_and_caption_carry_line_source_no_proven_skill_and_push_for_mark
     ticket = {"label": "Soccer markets", "ticket_id": "2026-11-09-abc", "legs": legs, "assessment": tickets.ticket_assessment(legs)}
     telegram_card.render_ticket_card("2026-11-09", [ticket])
     card = " ".join(texts)
-    assert "Model line (no sportsbook line stored)" in card
-    assert "DraftKings line" in card
+    assert "· model line" in card and "model line = no sportsbook line stored" in card
+    assert "· DraftKings -110 at" in card and "· no line" in card
     assert "No proven skill against the bookmaker" in card
     assert "push" in card.lower()
     caption = tickets.ticket_captions({"resolved": [ticket], "date": "2026-11-09"})[0]
@@ -353,3 +353,33 @@ def test_picture_and_caption_carry_line_source_no_proven_skill_and_push_for_mark
     plain = tickets.ticket_captions({"resolved": [{"label": "x", "legs": [one_x_two, {**one_x_two, "game_id": "y"}]}],
                                      "date": "2026-11-09"})[0]
     assert "no proven skill" not in plain.lower()          # 1X2-only tickets are unchanged
+
+
+def _market_leg(i, source="model"):
+    q = ({"line_source": "bookmaker", "provider": "DraftKings", "price_now": -120, "retrieved_at": "2026-11-21T09:40:00Z"}
+         if source == "bookmaker" else {"line_source": "model", "price_now": None})
+    return {"sport": "soccer", "matchup": "Nottingham Forest vs Wolverhampton Wanderers", "game_id": f"g{i}",
+            "tipoff": "2026-11-21T15:00:00Z", "probability": 0.55, "forecast_id": f"goals:{i}:goals_total:under:2.5",
+            "market": "goals_total", "market_title": "Match goals (90 min)", "pick_label": "Under 2.5 goals (90 min)",
+            "line": 2.5, "side": "under", "outcome_probabilities": {"win": 0.55, "loss": 0.45}, "quote_check": q}
+
+
+def test_three_tickets_of_seven_market_legs_fit_one_card():
+    # Independent review LOW 1 (Nov 10): the line-source line made 3 x 7 market legs exceed the 6,000 px card.
+    from app import telegram_card
+    tickets_ = [{"label": f"T{t}", "ticket_id": f"x{t}", "legs": [_market_leg(t * 10 + i, "bookmaker" if i % 2 else "model")
+                                                              for i in range(7)]} for t in range(3)]
+    assert telegram_card.render_ticket_card("2026-11-21", tickets_).startswith(b"\x89PNG")
+
+
+def test_caption_counts_market_legs_per_picture_and_names_dc_dnb_without_a_line(monkeypatch):
+    # Independent review LOW 2 (Nov 10): counts were batch-wide; DC/DNB were called "on a model line".
+    one_x_two = {"sport": "soccer", "market": "1x2_regulation", "pick_label": "A win (90 min)", "probability": 0.5,
+                 "matchup": "A vs B", "forecast_id": 1, "quote_check": {}}
+    plain = {"label": "p", "legs": [{**one_x_two, "game_id": "a"}, {**one_x_two, "game_id": "b"}]}
+    dnb = {**_market_leg(1), "market": "draw_no_bet", "line": None, "pick_label": "A (draw no bet, 90 min)"}
+    mixed = {"label": "m", "legs": [_market_leg(2), {**dnb, "game_id": "c"}]}
+    monkeypatch.setattr(tickets, "ticket_pages", lambda ts: [[t] for t in ts])
+    first, second = tickets.ticket_captions({"resolved": [plain, mixed], "date": "2026-11-21"})
+    assert "Soccer market legs" not in first
+    assert "1 on a model line" in second and "1 double chance / draw no bet (no line)" in second

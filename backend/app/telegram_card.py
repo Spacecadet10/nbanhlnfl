@@ -232,8 +232,8 @@ def render_card(message):
 
 # Soccer goal/corner/double-chance/draw-no-bet legs (review MEDIUM 2, Nov 9): picture-only delivery sends no text, so the
 # card itself names each leg's line source and the limits that the text version states.
-SOCCER_MARKET_NOTE = ('Soccer goal/corner/DC/DNB legs: 90 min + stoppage time; draw no bet and whole lines push (stake back). '
-                      'No proven skill against the bookmaker.')
+SOCCER_MARKET_NOTE = ('Soccer goal/corner/DC/DNB legs: 90 min + stoppage time; model line = no sportsbook line stored; '
+                      'draw no bet and whole lines push (stake back). No proven skill against the bookmaker.')
 
 
 def _soccer_market(leg):
@@ -241,7 +241,9 @@ def _soccer_market(leg):
 
 
 def _market_line_source(leg):
-    """'DraftKings line ... retrieved ...' or 'Model line (no sportsbook line stored)' for a soccer market leg, else None."""
+    """A short source for a soccer market leg, appended to its probability line: 'model line' (no sportsbook line stored),
+    'DraftKings <price> at <time>' or 'no line' (double chance / draw no bet); None for any other leg. The footer
+    (SOCCER_MARKET_NOTE) explains 'model line' and carries no-proven-skill and the push rule."""
     if not _soccer_market(leg):
         return None
     q = leg.get('quote_check') or {}
@@ -249,11 +251,11 @@ def _market_line_source(leg):
         from datetime import datetime
         from zoneinfo import ZoneInfo
         at = q.get('retrieved_at')
-        when = (datetime.fromisoformat(at.replace('Z', '+00:00')).astimezone(ZoneInfo('America/Toronto')).strftime('%b %d %I:%M %p %Z')
-                if at else 'time not stored')
+        when = (' at ' + datetime.fromisoformat(at.replace('Z', '+00:00')).astimezone(ZoneInfo('America/Toronto')).strftime('%I:%M %p')
+                if at else '')
         price = f" {q['price_now']:+d}" if q.get('price_now') is not None else ''
-        return f"{q.get('provider') or 'DraftKings'} line{price}, retrieved {when}. No proven skill against the bookmaker."
-    return 'Model line (no sportsbook line stored). No proven skill against the bookmaker.'
+        return f"{q.get('provider') or 'DraftKings'}{price}{when}"
+    return 'no line' if leg.get('line') is None else 'model line'
 
 
 def render_ticket_card(day, tickets, *, preview=False, number_from=1, total=None):
@@ -322,10 +324,8 @@ def render_ticket_card(day, tickets, *, preview=False, number_from=1, total=None
             if preview:
                 line(leg['result'],size=27,color='#11664D',x=240,width=760)
             else:
-                line(f"Model probability {leg['probability']:.1%}",size=27,color=MUTED,x=240,width=760)
-            source = _market_line_source(leg)
-            if source:
-                line(source,size=23,color=MUTED,x=240,width=760)
+                source = _market_line_source(leg)      # same line: a separate one overflows 3 x 7 market legs
+                line(f"Model probability {leg['probability']:.1%}" + (f" · {source}" if source else ''),size=27,color=MUTED,x=240,width=760)
             y += 18
             draw.line((72,y,1008,y),fill=_mix(accent,PAPER,.65),width=2)
             y += 24

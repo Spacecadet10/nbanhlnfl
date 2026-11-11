@@ -340,7 +340,7 @@ def soccer_markets(competition: str = COMPETITION, mode: str = Depends(api_mode)
     from . import soccer_live, soccer_markets_live as sml
     from datetime import datetime as _dt, timedelta as _td, timezone as _tz
     now = _dt.now(_tz.utc)
-    stamp, since = now.strftime("%Y-%m-%dT%H:%M:%SZ"), (now - _td(days=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    stamp, since = now.strftime("%Y-%m-%dT%H:%M:%SZ"), (now - _td(days=sml.TICKET_WINDOW_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
     with _soccer_store(mode) as conn:
         matches = sml.match_markets(conn, competition=competition, since=since, as_of=stamp)
         checks = {f: c.get(competition) for f, c in sml.latest_checks(conn).items()}
