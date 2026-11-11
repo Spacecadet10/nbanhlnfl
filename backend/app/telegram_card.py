@@ -232,7 +232,7 @@ def render_card(message):
         note = next((line for line in group if line in ('Small sample.', 'No settled matching examples.')), '')
         label_lines = max(1,int(draw.textlength(pick,font=_font(34,True))/470)+1)
         opposite_lines = max(1,int(draw.textlength(opposite,font=_font(24,True))/820)+1) if opposite else 0
-        past = next((line for line in group if line.startswith('Past seasons, ')), None)
+        past = next((line for line in group if line.startswith('Past seasons ')), None)
         height=130+(label_lines-1)*44+(30 if provenance else 0)+(30 if past else 0)+(opposite_lines*32+12 if opposite else 0)
         draw.rounded_rectangle((58,y,1022,y+height),radius=25,fill=cream,outline=border,width=2)
         draw.rounded_rectangle((78,y+25,149,y+86),radius=17,fill=pale)

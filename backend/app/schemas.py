@@ -169,6 +169,7 @@ class PercentageHistorySource(BaseModel):
     wins: int
     losses: int
     settled: int
+    small_sample: bool = False     # settled < threshold_overview.MIN_LIVE_GRADED, as the live record's flag
 
 
 class ForecastPercentageRecord(BaseModel):

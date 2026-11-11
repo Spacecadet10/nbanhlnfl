@@ -83,7 +83,7 @@ def test_history_is_a_separate_record_on_the_same_exact_key(store, tmp_path):
     out = to.percentage_record("nba", "total", rec, "live-game", {}, AS_OF, history_index=index)
     assert (out["wins"], out["losses"], out["settled"]) == (0, 0, 0)          # the live record is untouched
     assert out["history"] == {"source": to.HISTORY_SOURCE, "line_source": "model", "wins": wins, "losses": losses,
-                              "settled": wins + losses} and wins + losses > 0
+                              "settled": wins + losses, "small_sample": wins + losses < to.MIN_LIVE_GRADED} and wins + losses > 0
     bookmaker = to.percentage_record("nba", "total", {**rec, "line_source": "bookmaker"}, "live-game", {}, AS_OF,
                                      history_index=index)
     assert bookmaker["history"]["settled"] == 0                                # a model line never stands in for a bookmaker line
@@ -126,7 +126,7 @@ def test_card_names_past_seasons_on_their_own_line_and_fits():
     _, text = tg.message_batches(d, "123")[0]
     lines = text.split("\n")
     record = lines.index("<b>Model 51.8%</b> · 0W–2L (2 settled)")              # the live record line, unchanged
-    assert "Past seasons, recomputed, model line: 41W–37L" in lines[record:]
+    assert "Past seasons 2024-26, recomputed, model line: 41W–37L" in lines[record:]
     assert "past seasons" not in lines[record].lower()
     plain = copy.deepcopy(report())
     assert "Past seasons" not in tg.message_batches(plain, "123")[0][1]
@@ -140,7 +140,8 @@ def test_card_names_past_seasons_on_their_own_line_and_fits():
     from app import telegram_card
     draw = ImageDraw.Draw(Image.new("RGB", (10, 10)))
     for longest in ("12W–10L (22 settled) · rank 12 of 120 · AVOID · Small sample.",
-                    "Past seasons, recomputed, model line: 1234W–1199L"):
+                    "Past seasons 2024-26, recomputed, model line: 1234W–1199L",
+                    "Past seasons 2024-26, recomputed, model line: 29W–0L · Small sample."):
         text_out, font = telegram_card.fit_record(draw, longest)
-        assert text_out == longest and font.size == 22 and draw.textlength(text_out, font=font) <= telegram_card.RECORD_WIDTH
+        assert text_out == longest and font.size >= 17 and draw.textlength(text_out, font=font) <= telegram_card.RECORD_WIDTH
     assert telegram_card.render_card(text)                                      # the picture still renders

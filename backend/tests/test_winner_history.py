@@ -169,12 +169,37 @@ def test_winner_card_line_is_named_without_model_line_fits_and_keeps_identity():
     _, text = tg.message_batches(d, "123")[0]
     lines = text.split("\n")
     record = lines.index("<b>Model 51.8%</b> · 0W–2L (2 settled)")
-    assert "Past seasons, recomputed: 61W–44L" in lines[record:]
+    assert "Past seasons 2024-26, recomputed: 61W–44L" in lines[record:]
     assert "model line: 61W" not in text
     assert tg.message_batches(d, "123")[0][0] == tg.message_batches(plain, "123")[0][0]   # no resend
     from PIL import Image, ImageDraw
     from app import telegram_card
     draw = ImageDraw.Draw(Image.new("RGB", (10, 10)))
-    text_out, font = telegram_card.fit_record(draw, "Past seasons, recomputed: 1234W–1199L")
-    assert draw.textlength(text_out, font=font) <= telegram_card.RECORD_WIDTH
+    for longest in ("Past seasons 2024-26, recomputed: 1234W–1199L", "Past seasons 2024-26, recomputed: 29W–0L · Small sample."):
+        text_out, font = telegram_card.fit_record(draw, longest)
+        assert text_out == longest and draw.textlength(text_out, font=font) <= telegram_card.RECORD_WIDTH
     assert telegram_card.render_card(text)
+
+
+def test_past_seasons_line_names_its_seasons_and_flags_a_small_sample_like_the_live_line():
+    """Review MEDIUM: a short history gets the live line's own small-sample wording and threshold (MIN_LIVE_GRADED)."""
+    from app import points_history as ph
+    clean = sorted(s for s in wh.HISTORY_SEASONS["nba"] if s not in wh.TUNED_SEASONS["nba"])
+    for seasons in (clean, sorted(s for s in wh.HISTORY_SEASONS["nhl"] if s not in wh.TUNED_SEASONS["nhl"]),
+                    list(ph.HISTORY_SEASONS["nba"])):
+        assert f"{seasons[0] - 1}-{str(seasons[-1])[2:]}" == tg.PAST_SEASONS
+    for line_source, prefix in (("none", "Past seasons 2024-26, recomputed: "),
+                                ("model", "Past seasons 2024-26, recomputed, model line: ")):
+        for wins, losses, small in ((1, 0, True), (to.MIN_LIVE_GRADED - 1, 0, True), (to.MIN_LIVE_GRADED, 0, False)):
+            d = report()
+            d["picks"][0]["percentage_history"].update(line_source=line_source)
+            plain = copy.deepcopy(d)
+            d["picks"][0]["percentage_history"]["history"] = {"source": "history_recomputed", "line_source": line_source,
+                                                              "wins": wins, "losses": losses, "settled": wins + losses}
+            key, text = tg.message_batches(d, "123")[0]
+            want = f"{prefix}{wins}W–{losses}L" + (" · Small sample." if small else "")
+            assert want in text.split("\n")
+            assert key == tg.message_batches(plain, "123")[0][0]
+            assert tg.card_identity(text) == tg.card_identity(tg.message_batches(plain, "123")[0][1])
+            from app import telegram_card
+            assert telegram_card.render_card(text)

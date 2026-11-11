@@ -159,8 +159,9 @@ def controls(bot, settings, conn):
     return _get(conn, 'enabled', '1') == '1'
 
 
-PAST_PREFIX = 'Past seasons, recomputed, model line: '
-PAST_PREFIX_NO_LINE = 'Past seasons, recomputed: '    # winner (no line): app/winner_history.py, clean seasons only
+PAST_SEASONS = '2024-26'      # the only seasons any history counts (points_history.HISTORY_SEASONS, winner_history clean seasons)
+PAST_PREFIX = f'Past seasons {PAST_SEASONS}, recomputed, model line: '
+PAST_PREFIX_NO_LINE = f'Past seasons {PAST_SEASONS}, recomputed: '    # winner (no line): app/winner_history.py
 
 
 def message_batches(report, chat_id, lineup_lines=None):
@@ -187,7 +188,7 @@ LINEUP_PREFIX = 'Lineup: '
 
 def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None):
     """One shared message layout. Preview retains actual past times/results and is prominently labelled."""
-    from .threshold_overview import displayed_percentage
+    from .threshold_overview import MIN_LIVE_GRADED, displayed_percentage
     now = datetime.fromisoformat(report['as_of'].replace('Z', '+00:00'))
     from . import sports
     order = {market: i for i, market in enumerate(sports.store(report['sport']).markets)}
@@ -250,7 +251,9 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
         past = h.get('history')
         if past and past['settled']:
             prefix = PAST_PREFIX_NO_LINE if past['line_source'] == 'none' else PAST_PREFIX
-            lines.append(f"{prefix}{past['wins']}W–{past['losses']}L")
+            # Review MEDIUM (Nov 11): the live line's own small-sample threshold and wording, so a short history is not read as proof.
+            small = ' · Small sample.' if past['settled'] < MIN_LIVE_GRADED else ''
+            lines.append(f"{prefix}{past['wins']}W–{past['losses']}L{small}")
         if preview:
             result = {'win': 'Won', 'loss': 'Lost', 'push': 'Push'}.get(pick['grade'], pick['grade'])
             lines.append('Result: ' + escape(result))

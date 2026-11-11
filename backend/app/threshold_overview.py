@@ -126,7 +126,7 @@ def history_record(rec: dict, game_id: str, history_index: Optional[dict]) -> Op
     grades = Counter(grade for gid, grade in history_index.get(key, {}).items() if gid != game_id)
     wins, losses = grades['win'], grades['loss']
     return {'source': HISTORY_SOURCE, 'line_source': rec['line_source'], 'wins': wins, 'losses': losses,
-            'settled': wins + losses}
+            'settled': wins + losses, 'small_sample': wins + losses < MIN_LIVE_GRADED}
 
 
 def percentage_record(sport: str, market: str, rec: dict, game_id: str, index: dict, as_of: str,

@@ -890,7 +890,7 @@ export interface ForecastPercentageHistory {
   ci95: [number, number] | null; small_sample: boolean; excluded: Record<string, number>; as_of: string;
   /** Recomputed past seasons at the same exact percentage, side, model and line source (spread, total, team totals of
    *  NBA; winner of NBA/NHL, clean seasons only); a separate source, never part of wins/losses above. Absent or null where no history exists. */
-  history?: { source: 'history_recomputed'; line_source: CanonicalRecord['line_source']; wins: number; losses: number; settled: number } | null;
+  history?: { source: 'history_recomputed'; line_source: CanonicalRecord['line_source']; wins: number; losses: number; settled: number; small_sample?: boolean } | null;
 }
 
 /** GET /api/paper-rules: the frozen paper rules of a sport (no money; app/paper_rules.py). */
