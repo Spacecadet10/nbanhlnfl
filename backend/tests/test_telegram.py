@@ -485,7 +485,7 @@ def test_a_connection_that_never_opened_is_retried_and_nothing_else_is():
         return httpx.MockTransport(handler)
 
     bot = Telegram('t', transport=transport(httpx.ConnectError, 2))
-    assert bot.call('getMe', pause=waits.append) == {'id': 1} and len(calls) == 3 and waits == [5, 15]
+    assert bot.call('getMe', pause=waits.append) == {'id': 1} and len(calls) == 3 and waits == [3, 7]
     calls.clear(); waits.clear()
     bot = Telegram('t', transport=transport(httpx.ConnectError, 3))
     with pytest.raises(DeliveryError, match='connection unavailable'):

@@ -27,7 +27,7 @@ def test_backup_is_verified_by_a_restore_and_never_overwritten(tmp_path, monkeyp
     path = ledger(tmp_path)
     made = bl.backup(path, tmp_path / 'b', NOW)
     assert made['expected']['deliveries'] == 1 and Path(made['backup']).stat().st_mode & 0o077 == 0
-    check = bl.verify_restore(Path(made['backup']), made['expected'])
+    check = bl.verify_restore(Path(made['backup']), made['expected'], made['sha256'])
     assert check['status'] == 'verified' and check['sent_deliveries'] == 1 and check['problems'] == []
     with pytest.raises(SystemExit):
         bl.backup(path, tmp_path / 'b', NOW)
@@ -49,3 +49,13 @@ def test_schedules_back_up_daily_and_keep_the_mac_awake_on_power():
     assert len(b['StartCalendarInterval']) == 1 and b['RunAtLoad'] is False
     k = plistlib.loads((ROOT / 'scripts/launchd/com.nba-predictor.keep-awake.plist').read_bytes())
     assert k['ProgramArguments'] == ['/usr/bin/caffeinate', '-s'] and k['KeepAlive'] is True and k['RunAtLoad'] is True
+
+
+def test_a_backup_missing_a_table_or_altered_after_hashing_fails(tmp_path, monkeypatch):
+    monkeypatch.delenv('NBA_RELEASE_GUARD', raising=False)
+    made = bl.backup(ledger(tmp_path), tmp_path / 'b', NOW)
+    c = sqlite3.connect(made['backup'])
+    c.execute("DROP TABLE settings"); c.commit(); c.close()
+    check = bl.verify_restore(Path(made['backup']), made['expected'], made['sha256'])
+    assert check['status'] == 'FAILED' and "restored file differs from the backup's sha256" in check['problems']
+    assert 'settings: table missing from the backup' in check['problems']

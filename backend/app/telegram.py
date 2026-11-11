@@ -36,11 +36,12 @@ class Telegram:
         self._token = token
         self._transport = transport
 
-    CONNECT_RETRIES = (5, 15)   # seconds; Nov 10: 59 of 77 failed runs happened while the Mac was going to sleep
+    CONNECT_RETRIES = (3, 7)   # seconds, kept short: a card's 'sending' claim waits meanwhile. Nov 10: 59 of 77 failed runs
+                               # happened while the Mac was going to sleep
 
     def call(self, method, payload=None, *, photo=None, pause=time.sleep):
         """One Telegram request. A connection that could not be opened (ConnectError/ConnectTimeout: the request never
-        reached Telegram, so nothing can have been sent) is retried after 5 and 15 seconds; anything else is not."""
+        reached Telegram, so nothing can have been sent) is retried after 3 and 7 seconds; anything else is not."""
         for wait in (*self.CONNECT_RETRIES, None):
             try:
                 return self._call(method, payload, photo=photo)
