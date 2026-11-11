@@ -1,0 +1,8 @@
+URL: https://www.oddschecker.com/robots.txt
+UTC: 2026-11-11T04:53:24Z
+HTTP: 200 text/plain;charset=UTF-8 https://www.oddschecker.com/robots.txt
+
+URL: https://www.oddschecker.com/terms-and-conditions
+UTC: 2026-11-11T04:53:58Z
+HTTP: 403 text/html; charset=UTF-8 https://www.oddschecker.com/terms-and-conditions
+

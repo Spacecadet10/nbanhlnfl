@@ -1,0 +1,5317 @@
+{
+ "_fetched_at": "2026-11-11T04:51:36+00:00",
+ "_url": "https://therundown.io/api/v2/sports/2/events/2026-11-16?market_ids=94",
+ "_status": 200,
+ "_headers": {
+  "date": "Wed, 11 Nov 2026 04:51:36 GMT",
+  "content-type": "application/json",
+  "x-data-delay-seconds": "300",
+  "x-datapoints": "406",
+  "x-datapoints-breakdown": "events=1,odds=404,scores=1",
+  "x-datapoints-limit": "20000",
+  "x-datapoints-monthly-limit": "200000",
+  "x-datapoints-monthly-remaining": "196774",
+  "x-datapoints-monthly-reset": "2026-12-01T00:00:00Z",
+  "x-datapoints-monthly-used": "3226",
+  "x-datapoints-period": "daily",
+  "x-datapoints-remaining": "16902",
+  "x-datapoints-reset": "2026-11-12T00:00:00Z",
+  "x-datapoints-used": "3098",
+  "x-rate-limit": "1"
+ },
+ "body": {
+  "meta": {
+   "delta_last_id": "5540434686",
+   "affiliate_visibility_token": "enabled-2faa301d57efbaae"
+  },
+  "events": [
+   {
+    "event_id": "30f6d78df8719c1e4fef36c265afef7d",
+    "event_uuid": "11f1-e15b-d78fe000-83eb-60f8410d5e7c",
+    "sport_id": 2,
+    "event_date": "2026-11-16T01:20:00Z",
+    "rotation_number_away": 283,
+    "rotation_number_home": 284,
+    "score": {
+     "event_id": "30f6d78df8719c1e4fef36c265afef7d",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 68,
+     "team_id_home": 66,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [],
+     "score_home_by_period": [],
+     "venue_name": "Paycor Stadium",
+     "venue_location": "Cincinnati, OH",
+     "game_clock": 0,
+     "display_clock": "0.00",
+     "game_period": 0,
+     "broadcast": "NBC",
+     "event_status_detail": "11/15 - 8:20 PM EST",
+     "updated_at": "2026-05-15T03:25:49Z"
+    },
+    "teams": [
+     {
+      "team_id": 68,
+      "name": "Pittsburgh",
+      "mascot": "Steelers",
+      "abbreviation": "PIT",
+      "conference_id": 33,
+      "division_id": 8,
+      "ranking": 0,
+      "record": "6-2",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 33,
+       "sport_id": 2,
+       "name": "American Football Conference"
+      },
+      "division": {
+       "division_id": 8,
+       "conference_id": 33,
+       "sport_id": 2,
+       "name": "AFC North"
+      }
+     },
+     {
+      "team_id": 66,
+      "name": "Cincinnati",
+      "mascot": "Bengals",
+      "abbreviation": "CIN",
+      "conference_id": 33,
+      "division_id": 8,
+      "ranking": 0,
+      "record": "6-2",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 33,
+       "sport_id": 2,
+       "name": "American Football Conference"
+      },
+      "division": {
+       "division_id": 8,
+       "conference_id": 33,
+       "sport_id": 2,
+       "name": "AFC North"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 68,
+      "name": "Pittsburgh",
+      "mascot": "Steelers",
+      "abbreviation": "PIT",
+      "conference_id": 33,
+      "division_id": 8,
+      "ranking": 0,
+      "record": "6-2",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 33,
+       "sport_id": 2,
+       "name": "American Football Conference"
+      },
+      "division": {
+       "division_id": 8,
+       "conference_id": 33,
+       "sport_id": 2,
+       "name": "AFC North"
+      }
+     },
+     {
+      "team_id": 66,
+      "name": "Cincinnati",
+      "mascot": "Bengals",
+      "abbreviation": "CIN",
+      "conference_id": 33,
+      "division_id": 8,
+      "ranking": 0,
+      "record": "6-2",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 33,
+       "sport_id": 2,
+       "name": "American Football Conference"
+      },
+      "division": {
+       "division_id": 8,
+       "conference_id": 33,
+       "sport_id": 2,
+       "name": "AFC North"
+      }
+     }
+    ],
+    "schedule": {
+     "league_name": "National Football League",
+     "conference_competition": false,
+     "season_type": "Regular Season",
+     "season_year": 2026,
+     "week": 10,
+     "event_name": "Pittsburgh at Cincinnati - 2026-11-16T01:20:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 4480431,
+      "market_id": 1,
+      "period_id": 0,
+      "name": "moneyline",
+      "market_description": "Win the game outright.",
+      "participants": [
+       {
+        "id": 66,
+        "type": "TYPE_TEAM",
+        "name": "Cincinnati Bengals",
+        "lines": [
+         {
+          "id": "a3d0e9796af3fcbaf2c5f887361c90e1",
+          "prices": {
+           "19": {
+            "id": "361971353",
+            "price": -180,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:21:53Z",
+            "source_id": "0ML84695547_1"
+           },
+           "22": {
+            "id": "712910189",
+            "price": -190,
+            "price_delta": 10,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T18:30:58Z",
+            "source_id": "44036-3451304-5411290"
+           },
+           "23": {
+            "id": "708549696",
+            "price": -196,
+            "price_delta": -6,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.195640530-HOME"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 68,
+        "type": "TYPE_TEAM",
+        "name": "Pittsburgh Steelers",
+        "lines": [
+         {
+          "id": "8871531c9df249202752167138922f53",
+          "prices": {
+           "23": {
+            "id": "708549695",
+            "price": 164,
+            "price_delta": 4,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.195640530-AWAY"
+           },
+           "19": {
+            "id": "361971352",
+            "price": 150,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:21:53Z",
+            "source_id": "0ML84695547_3"
+           },
+           "22": {
+            "id": "712910188",
+            "price": 160,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T21:57:55Z",
+            "source_id": "44036-3451304-5411289"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 4480432,
+      "market_id": 2,
+      "period_id": 0,
+      "name": "handicap",
+      "market_description": "Win or lose by a specified margin.",
+      "participants": [
+       {
+        "id": 66,
+        "type": "TYPE_TEAM",
+        "name": "Cincinnati Bengals",
+        "lines": [
+         {
+          "id": "9c37d50ae65214d0e54bb1b01454a9ee",
+          "value": "-3.5",
+          "prices": {
+           "19": {
+            "id": "361971354",
+            "price": -110,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:21:53Z",
+            "source_id": "0HC84695547N350_1"
+           },
+           "23": {
+            "id": "708549698",
+            "price": -110,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T14:53:30Z",
+            "source_id": "36275765-734.195640529-HOME"
+           },
+           "22": {
+            "id": "712921958",
+            "price": -108,
+            "price_delta": 2,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T18:26:07Z",
+            "source_id": "44036-4467490-7297602"
+           }
+          }
+         },
+         {
+          "id": "e38733af240d1ef04700fd140e868fe2",
+          "value": "-4.5",
+          "prices": {
+           "19": {
+            "id": "708624709",
+            "price": -105,
+            "is_main_line": false,
+            "updated_at": "2026-11-03T20:59:10Z",
+            "closed_at": "2026-11-03T20:59:10Z",
+            "source_id": "0HC84695547N450_1"
+           },
+           "23": {
+            "id": "714115082",
+            "price": 100,
+            "price_delta": -2,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-12246906"
+           },
+           "22": {
+            "id": "713848534",
+            "price": 100,
+            "price_delta": 202,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:13Z",
+            "source_id": "44036-4475000-7317783"
+           }
+          }
+         },
+         {
+          "id": "8094d2dfa06ed282827de6015ffe9012",
+          "value": "+1.5",
+          "prices": {
+           "22": {
+            "id": "713848560",
+            "price": -235,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:55Z",
+            "source_id": "44036-4475013-7317809"
+           },
+           "23": {
+            "id": "714115068",
+            "price": -225,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799042-12213416"
+           }
+          }
+         },
+         {
+          "id": "ea3788d6ab1155dde1b1ae0a697a84b6",
+          "value": "+10.5",
+          "prices": {
+           "23": {
+            "id": "714115081",
+            "price": -1600,
+            "price_delta": -150,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-12246905"
+           }
+          }
+         },
+         {
+          "id": "f4bba7ebf71ae9e531b987c728fd06ec",
+          "value": "+11.5",
+          "prices": {
+           "23": {
+            "id": "714115083",
+            "price": -1800,
+            "price_delta": -200,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:43Z",
+            "source_id": "36275765-734.196799042-12246907"
+           }
+          }
+         },
+         {
+          "id": "50a561a743a0b6aae0011b23a3e9f4aa",
+          "value": "+12.5",
+          "prices": {
+           "23": {
+            "id": "714115100",
+            "price": -2200,
+            "price_delta": -200,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-15070496"
+           }
+          }
+         },
+         {
+          "id": "1ea0390d6668fe0d9d330d68165d0a9a",
+          "value": "+13.5",
+          "prices": {
+           "23": {
+            "id": "714115101",
+            "price": -2500,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-15070499"
+           }
+          }
+         },
+         {
+          "id": "02b5e7426d948b37f61f37e016020442",
+          "value": "+14.5",
+          "prices": {
+           "23": {
+            "id": "714115102",
+            "price": -3500,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-15070502"
+           }
+          }
+         },
+         {
+          "id": "5377ca9cb366a9e052d2766d509e69b0",
+          "value": "+15.5",
+          "prices": {
+           "23": {
+            "id": "714115103",
+            "price": -4000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-15070506"
+           }
+          }
+         },
+         {
+          "id": "9a92cf9243683f6980cd5f647e2daef7",
+          "value": "+16.5",
+          "prices": {
+           "23": {
+            "id": "714115104",
+            "price": -4500,
+            "price_delta": 500,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799042-15070511"
+           }
+          }
+         },
+         {
+          "id": "7a86ba31c69d9c8db59de1095896dc5c",
+          "value": "+17.5",
+          "prices": {
+           "23": {
+            "id": "714115132",
+            "price": -6000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-15846177"
+           }
+          }
+         },
+         {
+          "id": "c573ed5608e7ca237d2b2dda758a1b08",
+          "value": "+18.5",
+          "prices": {
+           "23": {
+            "id": "714115131",
+            "price": -7000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-15846176"
+           }
+          }
+         },
+         {
+          "id": "f8658726892a8d09eff65ebeb7e31a2c",
+          "value": "+19.5",
+          "prices": {
+           "23": {
+            "id": "714115130",
+            "price": -10000,
+            "price_delta": -3000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-15846175"
+           }
+          }
+         },
+         {
+          "id": "d9a1d6c02c068c53627eae2dac9d74bb",
+          "value": "+2.5",
+          "prices": {
+           "23": {
+            "id": "714115070",
+            "price": -250,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799042-12213420"
+           },
+           "22": {
+            "id": "713848568",
+            "price": -275,
+            "price_delta": -25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:45Z",
+            "source_id": "44036-4475018-7317818"
+           }
+          }
+         },
+         {
+          "id": "f35326c99c02ae550dedde8af999a6b2",
+          "value": "+20.5",
+          "prices": {
+           "23": {
+            "id": "714115129",
+            "price": -10000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-15846174"
+           }
+          }
+         },
+         {
+          "id": "8d1633cf62eb0bd191671b8279fb7511",
+          "value": "+21.5",
+          "prices": {
+           "23": {
+            "id": "714115128",
+            "price": -20000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-15846173"
+           }
+          }
+         },
+         {
+          "id": "334b823a95c23312b8f071ed168fedc0",
+          "value": "+22.5",
+          "prices": {
+           "23": {
+            "id": "714115127",
+            "price": -20000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-15846172"
+           }
+          }
+         },
+         {
+          "id": "2c838247b711e013d8758ac613a201d1",
+          "value": "+3.5",
+          "prices": {
+           "23": {
+            "id": "714115072",
+            "price": -350,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-12213424"
+           },
+           "22": {
+            "id": "713848576",
+            "price": -375,
+            "price_delta": -25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:56Z",
+            "source_id": "44036-4475023-7317827"
+           }
+          }
+         },
+         {
+          "id": "626ddcab3eea08a78f8c11401e2e72bf",
+          "value": "+4.5",
+          "prices": {
+           "22": {
+            "id": "713848584",
+            "price": -450,
+            "price_delta": -50,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:55Z",
+            "source_id": "44036-4475027-7317835"
+           },
+           "23": {
+            "id": "714115075",
+            "price": -400,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-12246899"
+           }
+          }
+         },
+         {
+          "id": "9ca317dd0cfd2740e86478a74e0bb5d8",
+          "value": "+5.5",
+          "prices": {
+           "23": {
+            "id": "714115076",
+            "price": -460,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-12246900"
+           },
+           "22": {
+            "id": "713848592",
+            "price": -500,
+            "price_delta": -25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:46Z",
+            "source_id": "44036-4475031-7317843"
+           }
+          }
+         },
+         {
+          "id": "170c6f291401ca768b443a793789101f",
+          "value": "+6.5",
+          "prices": {
+           "23": {
+            "id": "714115077",
+            "price": -560,
+            "price_delta": -30,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-12246901"
+           },
+           "22": {
+            "id": "713848600",
+            "price": -600,
+            "price_delta": -75,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:56Z",
+            "source_id": "44036-4475035-7317851"
+           }
+          }
+         },
+         {
+          "id": "58c2661a63d4df286dfc7f795dec7494",
+          "value": "+7.5",
+          "prices": {
+           "23": {
+            "id": "714115078",
+            "price": -850,
+            "price_delta": -50,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:25Z",
+            "source_id": "36275765-734.196799042-12246902"
+           }
+          }
+         },
+         {
+          "id": "defcd526fa1446e7bb3ebf7fa0ae997a",
+          "value": "+8.5",
+          "prices": {
+           "23": {
+            "id": "714115079",
+            "price": -1000,
+            "price_delta": -50,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:25Z",
+            "source_id": "36275765-734.196799042-12246903"
+           }
+          }
+         },
+         {
+          "id": "1a20a50f85372498cff1898e81af06a3",
+          "value": "+9.5",
+          "prices": {
+           "23": {
+            "id": "714115080",
+            "price": -1100,
+            "price_delta": -100,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:25Z",
+            "source_id": "36275765-734.196799042-12246904"
+           }
+          }
+         },
+         {
+          "id": "41faab72d88ccd8d02c29101fb8a8ae3",
+          "value": "-1.5",
+          "prices": {
+           "23": {
+            "id": "714115064",
+            "price": -174,
+            "price_delta": 4,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-12213404"
+           },
+           "22": {
+            "id": "713848542",
+            "price": -175,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:30:59Z",
+            "source_id": "44036-4475004-7317791"
+           }
+          }
+         },
+         {
+          "id": "430d775929c39a9377cb9d9a10258252",
+          "value": "-10.5",
+          "prices": {
+           "23": {
+            "id": "714115069",
+            "price": 240,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799042-12213418"
+           },
+           "22": {
+            "id": "713848574",
+            "price": 240,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T13:20:34Z",
+            "source_id": "44036-4475022-7317825"
+           }
+          }
+         },
+         {
+          "id": "3c9aee73ebbf0f9c8f88ef0c5bdcc2a3",
+          "value": "-11.5",
+          "prices": {
+           "23": {
+            "id": "714115071",
+            "price": 255,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-12213422"
+           },
+           "22": {
+            "id": "713848582",
+            "price": 275,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:47Z",
+            "source_id": "44036-4475026-7317833"
+           }
+          }
+         },
+         {
+          "id": "7e8a864522a0abaf48e5058ef1d639f6",
+          "value": "-12.5",
+          "prices": {
+           "23": {
+            "id": "714115073",
+            "price": 285,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799042-12213426"
+           },
+           "22": {
+            "id": "713848590",
+            "price": 290,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T13:20:35Z",
+            "source_id": "44036-4475030-7317841"
+           }
+          }
+         },
+         {
+          "id": "a3e3ca4bdb9c7eb1f9b856dc04817ff3",
+          "value": "-13.5",
+          "prices": {
+           "22": {
+            "id": "713848598",
+            "price": 333,
+            "price_delta": 13,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:46Z",
+            "source_id": "44036-4475034-7317849"
+           },
+           "23": {
+            "id": "714115105",
+            "price": 310,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-15721093"
+           }
+          }
+         },
+         {
+          "id": "627189616dfec4b85f14e20689e7fadf",
+          "value": "-14.5",
+          "prices": {
+           "23": {
+            "id": "714115106",
+            "price": 360,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799042-15721094"
+           },
+           "22": {
+            "id": "713848606",
+            "price": 400,
+            "price_delta": -25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T13:20:35Z",
+            "source_id": "44036-4475038-7317857"
+           }
+          }
+         },
+         {
+          "id": "ebf56a34db265fbce3633011fcda32a3",
+          "value": "-15.5",
+          "prices": {
+           "23": {
+            "id": "714115107",
+            "price": 400,
+            "price_delta": -20,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799042-15721095"
+           }
+          }
+         },
+         {
+          "id": "fb4d3d0a972ff19aa0e2f9d315448a0e",
+          "value": "-16.5",
+          "prices": {
+           "23": {
+            "id": "714115108",
+            "price": 430,
+            "price_delta": -20,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799042-15721098"
+           }
+          }
+         },
+         {
+          "id": "4d204b24298ab47aaa1f0f3b28c7598e",
+          "value": "-17.5",
+          "prices": {
+           "23": {
+            "id": "714115109",
+            "price": 500,
+            "price_delta": -20,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799042-15721099"
+           }
+          }
+         },
+         {
+          "id": "1ce99ad269fb8823ca2326ee15228ef2",
+          "value": "-18.5",
+          "prices": {
+           "23": {
+            "id": "714115133",
+            "price": 560,
+            "price_delta": -40,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799042-15846178"
+           }
+          }
+         },
+         {
+          "id": "fbc627c138d04b8b91a5675f96d87837",
+          "value": "-19.5",
+          "prices": {
+           "23": {
+            "id": "714115134",
+            "price": 630,
+            "price_delta": 30,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T16:13:16Z",
+            "source_id": "36275765-734.196799042-15846179"
+           }
+          }
+         },
+         {
+          "id": "c9f07390a5d11b383be075eed26b0e61",
+          "value": "-2.5",
+          "prices": {
+           "23": {
+            "id": "714115061",
+            "price": -160,
+            "price_delta": -2,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799042-12213399"
+           },
+           "22": {
+            "id": "713848530",
+            "price": -160,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T13:11:25Z",
+            "source_id": "44036-4474998-7317779"
+           }
+          }
+         },
+         {
+          "id": "72351630ef3a441c54e439586a5eea2f",
+          "value": "-20.5",
+          "prices": {
+           "23": {
+            "id": "714115135",
+            "price": 750,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-15846180"
+           }
+          }
+         },
+         {
+          "id": "5ed06c4d7c22aeebb064a6b02d951bcf",
+          "value": "-21.5",
+          "prices": {
+           "23": {
+            "id": "714115136",
+            "price": 870,
+            "price_delta": -30,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799042-15966315"
+           }
+          }
+         },
+         {
+          "id": "b4541187c0183a2d0ca492a35774f251",
+          "value": "-22.5",
+          "prices": {
+           "23": {
+            "id": "714115137",
+            "price": 900,
+            "price_delta": -100,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799042-16039676"
+           }
+          }
+         },
+         {
+          "id": "311769242a72b5fc36fc0e0d6f4d9ce1",
+          "value": "-23.5",
+          "prices": {
+           "23": {
+            "id": "714115138",
+            "price": 1000,
+            "price_delta": -60,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-16039677"
+           }
+          }
+         },
+         {
+          "id": "05dab6d5c0deab9f7a618ef6f4f51a38",
+          "value": "-24.5",
+          "prices": {
+           "23": {
+            "id": "714115144",
+            "price": 1100,
+            "price_delta": -100,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799042-16157518"
+           }
+          }
+         },
+         {
+          "id": "02f3bcb0cff1087f7cdc0b60679d83d1",
+          "value": "-25.5",
+          "prices": {
+           "23": {
+            "id": "714115143",
+            "price": 1300,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-16157517"
+           }
+          }
+         },
+         {
+          "id": "75cb479fa33abd2c17e41c4f392fd50b",
+          "value": "-26.5",
+          "prices": {
+           "23": {
+            "id": "714115142",
+            "price": 1400,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-16157516"
+           }
+          }
+         },
+         {
+          "id": "4e0f3346bc32c848d4baf1bd45635d7a",
+          "value": "-27.5",
+          "prices": {
+           "23": {
+            "id": "714115141",
+            "price": 1500,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-16157515"
+           }
+          }
+         },
+         {
+          "id": "fddf917cec41407b1e857d7999826fd1",
+          "value": "-28.5",
+          "prices": {
+           "23": {
+            "id": "714115140",
+            "price": 1700,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-16157514"
+           }
+          }
+         },
+         {
+          "id": "759cc7de02813a1189a16accbcfb8e21",
+          "value": "-29.5",
+          "prices": {
+           "23": {
+            "id": "714115139",
+            "price": 1700,
+            "price_delta": -100,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-16157513"
+           }
+          }
+         },
+         {
+          "id": "8ba01d800ed1b0b1ad425f5e15859027",
+          "value": "-3",
+          "prices": {
+           "23": {
+            "id": "711403694",
+            "price": -110,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:27:25Z",
+            "closed_at": "2026-11-08T14:27:25Z",
+            "source_id": "36275765-734.195640529-HOME"
+           },
+           "22": {
+            "id": "713848532",
+            "price": -135,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:55:01Z",
+            "source_id": "44036-4474999-7317781"
+           }
+          }
+         },
+         {
+          "id": "4c1aa5c05c9a50eb64ee84a38c9b1ef6",
+          "value": "-5.5",
+          "prices": {
+           "22": {
+            "id": "713848540",
+            "price": 110,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T13:20:35Z",
+            "source_id": "44036-4475003-7317789"
+           },
+           "23": {
+            "id": "714115062",
+            "price": 112,
+            "price_delta": -2,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-12213401"
+           }
+          }
+         },
+         {
+          "id": "86484c8d0790010325420c6c42c99056",
+          "value": "-6.5",
+          "prices": {
+           "23": {
+            "id": "714115063",
+            "price": 130,
+            "price_delta": -4,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-12213402"
+           },
+           "22": {
+            "id": "713848548",
+            "price": 130,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:44Z",
+            "source_id": "44036-4475007-7317797"
+           }
+          }
+         },
+         {
+          "id": "1a2ac71eb745207c34f5da6e915d1d29",
+          "value": "-7.5",
+          "prices": {
+           "22": {
+            "id": "713848552",
+            "price": 170,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:48Z",
+            "source_id": "44036-4475009-7317801"
+           },
+           "23": {
+            "id": "714115065",
+            "price": 172,
+            "price_delta": -4,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-12213406"
+           }
+          }
+         },
+         {
+          "id": "624ec7d89bdbacffd70733d777149569",
+          "value": "-8.5",
+          "prices": {
+           "23": {
+            "id": "714115066",
+            "price": 200,
+            "price_delta": 4,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:25Z",
+            "source_id": "36275765-734.196799042-12213410"
+           },
+           "22": {
+            "id": "713848558",
+            "price": 195,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:48Z",
+            "source_id": "44036-4475012-7317807"
+           }
+          }
+         },
+         {
+          "id": "646adfabde47429ad623e5406c36a12c",
+          "value": "-9.5",
+          "prices": {
+           "23": {
+            "id": "714115067",
+            "price": 210,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799042-12213414"
+           },
+           "22": {
+            "id": "713848566",
+            "price": 200,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T13:20:35Z",
+            "source_id": "44036-4475016-7317815"
+           }
+          }
+         },
+         {
+          "id": "6078463c7d09db8a2e65b26807d9bb38",
+          "value": "+1",
+          "prices": {
+           "22": {
+            "id": "713848556",
+            "price": -225,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:55Z",
+            "source_id": "44036-4475011-7317805"
+           }
+          }
+         },
+         {
+          "id": "3c3367ffc40899d89cd3751ea050a1b7",
+          "value": "+2",
+          "prices": {
+           "22": {
+            "id": "713848562",
+            "price": -250,
+            "price_delta": -15,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:56Z",
+            "source_id": "44036-4475014-7317811"
+           }
+          }
+         },
+         {
+          "id": "cdbdfaa3c2dbf6d6792db92e05b93b7b",
+          "value": "+3",
+          "prices": {
+           "22": {
+            "id": "713848572",
+            "price": -325,
+            "price_delta": -25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:56Z",
+            "source_id": "44036-4475021-7317823"
+           }
+          }
+         },
+         {
+          "id": "aa03bf8f0ff3081bc13677c367493823",
+          "value": "+4",
+          "prices": {
+           "22": {
+            "id": "713848578",
+            "price": -425,
+            "price_delta": -50,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:55Z",
+            "source_id": "44036-4475024-7317829"
+           }
+          }
+         },
+         {
+          "id": "14d5da24729ace4e94fe946a76eb641a",
+          "value": "+5",
+          "prices": {
+           "22": {
+            "id": "713848588",
+            "price": -475,
+            "price_delta": -25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:55Z",
+            "source_id": "44036-4475029-7317839"
+           }
+          }
+         },
+         {
+          "id": "ad26a16ae9aaf7e080866b93c325ffef",
+          "value": "+6",
+          "prices": {
+           "22": {
+            "id": "713848596",
+            "price": -550,
+            "price_delta": -50,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:56Z",
+            "source_id": "44036-4475033-7317847"
+           }
+          }
+         },
+         {
+          "id": "a13697c112045bf0ae0b564bb2389491",
+          "value": "+7",
+          "prices": {
+           "22": {
+            "id": "713848604",
+            "price": -750,
+            "price_delta": -100,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:56Z",
+            "source_id": "44036-4475037-7317855"
+           }
+          }
+         },
+         {
+          "id": "d9fba02fcbfd9cce790d7af53d965348",
+          "value": "-1",
+          "prices": {
+           "22": {
+            "id": "713848544",
+            "price": -190,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T02:34:53Z",
+            "source_id": "44036-4475005-7317793"
+           }
+          }
+         },
+         {
+          "id": "d87c60a0f6dd613ef5712c3ab40e23c7",
+          "value": "-10",
+          "prices": {
+           "22": {
+            "id": "713848570",
+            "price": 230,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:12Z",
+            "source_id": "44036-4475020-7317821"
+           }
+          }
+         },
+         {
+          "id": "5f233d6803f7f8ce70ab454bf5929462",
+          "value": "-11",
+          "prices": {
+           "22": {
+            "id": "713848580",
+            "price": 270,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:46Z",
+            "source_id": "44036-4475025-7317831"
+           }
+          }
+         },
+         {
+          "id": "9d201608a56778d32263b8c0d3275855",
+          "value": "-12",
+          "prices": {
+           "22": {
+            "id": "713848586",
+            "price": 290,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:47Z",
+            "source_id": "44036-4475028-7317837"
+           }
+          }
+         },
+         {
+          "id": "f9ff5da42ef27655532fcaa0edbfaedd",
+          "value": "-13",
+          "prices": {
+           "22": {
+            "id": "713848594",
+            "price": 320,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:55Z",
+            "source_id": "44036-4475032-7317845"
+           }
+          }
+         },
+         {
+          "id": "8951d4c8d1bfe79dd5e0eabf1794c594",
+          "value": "-14",
+          "prices": {
+           "22": {
+            "id": "713848602",
+            "price": 380,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:13Z",
+            "source_id": "44036-4475036-7317853"
+           }
+          }
+         },
+         {
+          "id": "1ebc01c211dc032e1cb4c379f61f0d2e",
+          "value": "-2",
+          "prices": {
+           "22": {
+            "id": "713848538",
+            "price": -175,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:56Z",
+            "source_id": "44036-4475002-7317787"
+           }
+          }
+         },
+         {
+          "id": "0d69773634b62a4df70c7a8dd95f7d07",
+          "value": "-4",
+          "prices": {
+           "22": {
+            "id": "712910191",
+            "price": -105,
+            "price_delta": 3,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:47Z",
+            "source_id": "44036-4466914-7296342"
+           }
+          }
+         },
+         {
+          "id": "4d431590e303c5814e17594249b9c51f",
+          "value": "-5",
+          "prices": {
+           "22": {
+            "id": "713848536",
+            "price": 105,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T13:20:34Z",
+            "source_id": "44036-4475001-7317785"
+           }
+          }
+         },
+         {
+          "id": "4c4a42430359e8082b1058acea1c718f",
+          "value": "-6",
+          "prices": {
+           "22": {
+            "id": "713848546",
+            "price": 120,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T13:20:34Z",
+            "source_id": "44036-4475006-7317795"
+           }
+          }
+         },
+         {
+          "id": "3be4aece9a273ff88c715524802f5450",
+          "value": "-7",
+          "prices": {
+           "22": {
+            "id": "713848550",
+            "price": 150,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T13:20:33Z",
+            "source_id": "44036-4475008-7317799"
+           }
+          }
+         },
+         {
+          "id": "83678fb2c33d98e35a2724069cce0808",
+          "value": "-8",
+          "prices": {
+           "22": {
+            "id": "713848554",
+            "price": 185,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:12Z",
+            "source_id": "44036-4475010-7317803"
+           }
+          }
+         },
+         {
+          "id": "351358c20d6e1b2584c7976c8e140fb0",
+          "value": "-9",
+          "prices": {
+           "22": {
+            "id": "713848564",
+            "price": 200,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:13Z",
+            "source_id": "44036-4475015-7317813"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 68,
+        "type": "TYPE_TEAM",
+        "name": "Pittsburgh Steelers",
+        "lines": [
+         {
+          "id": "0e38b737f967d05c075d24132bfdd56a",
+          "value": "+3.5",
+          "prices": {
+           "19": {
+            "id": "361971361",
+            "price": -110,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:21:53Z",
+            "source_id": "0HC84695547P350_3"
+           },
+           "23": {
+            "id": "708549697",
+            "price": -110,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T14:53:30Z",
+            "source_id": "36275765-734.195640529-AWAY"
+           },
+           "22": {
+            "id": "712921957",
+            "price": -110,
+            "price_delta": -2,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T18:26:07Z",
+            "source_id": "44036-4467490-7297601"
+           }
+          }
+         },
+         {
+          "id": "7d522d4714a016f6464ed64ed19fa118",
+          "value": "+4.5",
+          "prices": {
+           "19": {
+            "id": "708624708",
+            "price": -115,
+            "is_main_line": false,
+            "updated_at": "2026-11-03T20:59:10Z",
+            "closed_at": "2026-11-03T20:59:10Z",
+            "source_id": "0HC84695547P450_3"
+           },
+           "23": {
+            "id": "714115057",
+            "price": -128,
+            "price_delta": 2,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-12213291"
+           },
+           "22": {
+            "id": "713848533",
+            "price": -135,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:05Z",
+            "source_id": "44036-4475000-7317782"
+           }
+          }
+         },
+         {
+          "id": "719a25af080bbe6f30a566b7d6508cb4",
+          "value": "+1.5",
+          "prices": {
+           "23": {
+            "id": "714115052",
+            "price": 136,
+            "price_delta": 2,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799042-12213279"
+           },
+           "22": {
+            "id": "713848541",
+            "price": 135,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:55Z",
+            "source_id": "44036-4475004-7317790"
+           }
+          }
+         },
+         {
+          "id": "136d9bb3a8c02fd91f88e76f466cf97b",
+          "value": "+10.5",
+          "prices": {
+           "23": {
+            "id": "714115096",
+            "price": -330,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799042-12387553"
+           },
+           "22": {
+            "id": "713848573",
+            "price": -350,
+            "price_delta": -25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:46Z",
+            "source_id": "44036-4475022-7317824"
+           }
+          }
+         },
+         {
+          "id": "fa4052ef45acdf87072b4f800cd3df7e",
+          "value": "+11.5",
+          "prices": {
+           "23": {
+            "id": "714115097",
+            "price": -350,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-12387554"
+           },
+           "22": {
+            "id": "713848581",
+            "price": -400,
+            "price_delta": -25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:47Z",
+            "source_id": "44036-4475026-7317832"
+           }
+          }
+         },
+         {
+          "id": "5af570d6abe82e59c4bb45eb5015807a",
+          "value": "+12.5",
+          "prices": {
+           "23": {
+            "id": "714115098",
+            "price": -400,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799042-12387555"
+           },
+           "22": {
+            "id": "713848589",
+            "price": -425,
+            "price_delta": 25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T13:20:35Z",
+            "source_id": "44036-4475030-7317840"
+           }
+          }
+         },
+         {
+          "id": "f6f08dccc844089401edb8ea4b68a1ef",
+          "value": "+13.5",
+          "prices": {
+           "23": {
+            "id": "714115099",
+            "price": -440,
+            "price_delta": 20,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-12387556"
+           },
+           "22": {
+            "id": "713848597",
+            "price": -475,
+            "price_delta": 25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T13:20:35Z",
+            "source_id": "44036-4475034-7317848"
+           }
+          }
+         },
+         {
+          "id": "25b898fd85c4fe5ecb64f8913ddc62d5",
+          "value": "+14.5",
+          "prices": {
+           "22": {
+            "id": "713848605",
+            "price": -625,
+            "price_delta": -25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:46Z",
+            "source_id": "44036-4475038-7317856"
+           },
+           "23": {
+            "id": "714115122",
+            "price": -530,
+            "price_delta": 30,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799042-15778775"
+           }
+          }
+         },
+         {
+          "id": "7bee6d3b663a858093102d508f8861dd",
+          "value": "+15.5",
+          "prices": {
+           "23": {
+            "id": "714115121",
+            "price": -620,
+            "price_delta": 30,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799042-15778774"
+           }
+          }
+         },
+         {
+          "id": "1d30c0ac789e87ab1766944a4a986b95",
+          "value": "+16.5",
+          "prices": {
+           "23": {
+            "id": "714115120",
+            "price": -670,
+            "price_delta": 50,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799042-15778773"
+           }
+          }
+         },
+         {
+          "id": "60a008407d65a5f7f865fbf54fb9b8c4",
+          "value": "+17.5",
+          "prices": {
+           "23": {
+            "id": "714115119",
+            "price": -850,
+            "price_delta": 50,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799042-15778771"
+           }
+          }
+         },
+         {
+          "id": "a1bb4146ed067f3c5301cb1ed2bfb45b",
+          "value": "+18.5",
+          "prices": {
+           "23": {
+            "id": "714115118",
+            "price": -1000,
+            "price_delta": 100,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799042-15778769"
+           }
+          }
+         },
+         {
+          "id": "804e64b2de5d752b927975225e1469d4",
+          "value": "+19.5",
+          "prices": {
+           "23": {
+            "id": "714115117",
+            "price": -1200,
+            "price_delta": -100,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T16:13:16Z",
+            "source_id": "36275765-734.196799042-15778767"
+           }
+          }
+         },
+         {
+          "id": "3f60fc54457658a16e828e13bdba530b",
+          "value": "+2.5",
+          "prices": {
+           "23": {
+            "id": "714115054",
+            "price": 124,
+            "price_delta": -2,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:43Z",
+            "source_id": "36275765-734.196799042-12213283"
+           },
+           "22": {
+            "id": "713848529",
+            "price": 120,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T13:11:25Z",
+            "source_id": "44036-4474998-7317778"
+           }
+          }
+         },
+         {
+          "id": "9a76f19b7789d36d69af723a6b7f7654",
+          "value": "+20.5",
+          "prices": {
+           "23": {
+            "id": "714115116",
+            "price": -1600,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-15778765"
+           }
+          }
+         },
+         {
+          "id": "844df0943267f40b14d8508b89611d9f",
+          "value": "+21.5",
+          "prices": {
+           "23": {
+            "id": "714115115",
+            "price": -2200,
+            "price_delta": 300,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799042-15778763"
+           }
+          }
+         },
+         {
+          "id": "ec1faed527ad0bca1228d557e3debc5c",
+          "value": "+22.5",
+          "prices": {
+           "23": {
+            "id": "714115114",
+            "price": -2500,
+            "price_delta": 500,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799042-15778761"
+           }
+          }
+         },
+         {
+          "id": "a15c9ed2b8c4dbb7e91d62e25b5cfec8",
+          "value": "+23.5",
+          "prices": {
+           "23": {
+            "id": "714115113",
+            "price": -3000,
+            "price_delta": 500,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-15778759"
+           }
+          }
+         },
+         {
+          "id": "3811bd4aa10d7562deb2ff8d38583305",
+          "value": "+24.5",
+          "prices": {
+           "23": {
+            "id": "714115112",
+            "price": -4000,
+            "price_delta": 500,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799042-15778757"
+           }
+          }
+         },
+         {
+          "id": "1a5d4cd02726be72ac4f2a408083941b",
+          "value": "+25.5",
+          "prices": {
+           "23": {
+            "id": "714115111",
+            "price": -5000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-15778755"
+           }
+          }
+         },
+         {
+          "id": "4a0cc770f59f57cd7d52382a5892683a",
+          "value": "+26.5",
+          "prices": {
+           "23": {
+            "id": "714115110",
+            "price": -6000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-15778753"
+           }
+          }
+         },
+         {
+          "id": "0c9c55cf88901d88eec2c88c699e4fd0",
+          "value": "+27.5",
+          "prices": {
+           "23": {
+            "id": "714115145",
+            "price": -7000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-16438030"
+           }
+          }
+         },
+         {
+          "id": "12987c464368d5b9f74d87663d4baf6e",
+          "value": "+28.5",
+          "prices": {
+           "23": {
+            "id": "714115146",
+            "price": -10000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-16438031"
+           }
+          }
+         },
+         {
+          "id": "b10e22987e9fea72c7e6d94a699c6f97",
+          "value": "+29.5",
+          "prices": {
+           "23": {
+            "id": "714115147",
+            "price": -10000,
+            "price_delta": 10000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799042-20058158"
+           }
+          }
+         },
+         {
+          "id": "a14441db4197d1f5d9050ddc117ae235",
+          "value": "+3",
+          "prices": {
+           "23": {
+            "id": "711403693",
+            "price": -110,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:27:25Z",
+            "closed_at": "2026-11-08T14:27:25Z",
+            "source_id": "36275765-734.195640529-AWAY"
+           },
+           "22": {
+            "id": "713848531",
+            "price": 105,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T13:20:34Z",
+            "source_id": "44036-4474999-7317780"
+           }
+          }
+         },
+         {
+          "id": "dec360b61228246715354c5a6f163f74",
+          "value": "+5.5",
+          "prices": {
+           "22": {
+            "id": "713848539",
+            "price": -145,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T13:20:35Z",
+            "source_id": "44036-4475003-7317788"
+           },
+           "23": {
+            "id": "714115059",
+            "price": -142,
+            "price_delta": 4,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-12213295"
+           }
+          }
+         },
+         {
+          "id": "ed0f1fce76df4eef1f053ab0632016dc",
+          "value": "+6.5",
+          "prices": {
+           "23": {
+            "id": "714115092",
+            "price": -166,
+            "price_delta": 6,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-12352148"
+           },
+           "22": {
+            "id": "713848547",
+            "price": -175,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:44Z",
+            "source_id": "44036-4475007-7317796"
+           }
+          }
+         },
+         {
+          "id": "c9e167c3d0409dbf6bd5964274a8f141",
+          "value": "+7.5",
+          "prices": {
+           "22": {
+            "id": "713848551",
+            "price": -225,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:12Z",
+            "source_id": "44036-4475009-7317800"
+           },
+           "23": {
+            "id": "714115093",
+            "price": -225,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-12352149"
+           }
+          }
+         },
+         {
+          "id": "6d9ffb948b3da15f291e490334fde865",
+          "value": "+8.5",
+          "prices": {
+           "23": {
+            "id": "714115094",
+            "price": -265,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:25Z",
+            "source_id": "36275765-734.196799042-12352151"
+           },
+           "22": {
+            "id": "713848557",
+            "price": -275,
+            "price_delta": -25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:13Z",
+            "source_id": "44036-4475012-7317806"
+           }
+          }
+         },
+         {
+          "id": "d8517e0c26d0cda18436a5b31818076e",
+          "value": "+9.5",
+          "prices": {
+           "23": {
+            "id": "714115095",
+            "price": -280,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799042-12387552"
+           },
+           "22": {
+            "id": "713848565",
+            "price": -275,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T13:20:35Z",
+            "source_id": "44036-4475016-7317814"
+           }
+          }
+         },
+         {
+          "id": "f8ad7e7942006c63dc64f72f21970df1",
+          "value": "-1.5",
+          "prices": {
+           "23": {
+            "id": "714115048",
+            "price": 172,
+            "price_delta": 4,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799042-12213267"
+           },
+           "22": {
+            "id": "713848559",
+            "price": 175,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:55Z",
+            "source_id": "44036-4475013-7317808"
+           }
+          }
+         },
+         {
+          "id": "44311d5667179210792b98995795a35b",
+          "value": "-10.5",
+          "prices": {
+           "23": {
+            "id": "714115060",
+            "price": 750,
+            "price_delta": 50,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-12213297"
+           }
+          }
+         },
+         {
+          "id": "7f876f552c9cde508e5c001cfe41dab6",
+          "value": "-11.5",
+          "prices": {
+           "23": {
+            "id": "714115084",
+            "price": 800,
+            "price_delta": 50,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:43Z",
+            "source_id": "36275765-734.196799042-12246908"
+           }
+          }
+         },
+         {
+          "id": "52ad2e75a45a8faaebbb2ec38f8f152b",
+          "value": "-12.5",
+          "prices": {
+           "23": {
+            "id": "714115085",
+            "price": 870,
+            "price_delta": 40,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-12272357"
+           }
+          }
+         },
+         {
+          "id": "c1cc8235dc601167d6bd7f5248eb8e75",
+          "value": "-13.5",
+          "prices": {
+           "23": {
+            "id": "714115086",
+            "price": 900,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-12291000"
+           }
+          }
+         },
+         {
+          "id": "70cd8d922ca553b06ceab2f20a3e8f7a",
+          "value": "-14.5",
+          "prices": {
+           "23": {
+            "id": "714115087",
+            "price": 1060,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-12291001"
+           }
+          }
+         },
+         {
+          "id": "e9410398522bccf7ca920104b137f125",
+          "value": "-15.5",
+          "prices": {
+           "23": {
+            "id": "714115088",
+            "price": 1100,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-12291002"
+           }
+          }
+         },
+         {
+          "id": "3674f5fdea8cabfe4d464fd05b0ce9ec",
+          "value": "-16.5",
+          "prices": {
+           "23": {
+            "id": "714115089",
+            "price": 1200,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-12291003"
+           }
+          }
+         },
+         {
+          "id": "9cb8a5b25b80941aacf9139d18203c57",
+          "value": "-17.5",
+          "prices": {
+           "23": {
+            "id": "714115090",
+            "price": 1400,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-12291004"
+           }
+          }
+         },
+         {
+          "id": "6725dff29b8c194196665356b1fffbb8",
+          "value": "-18.5",
+          "prices": {
+           "23": {
+            "id": "714115091",
+            "price": 1500,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-12291005"
+           }
+          }
+         },
+         {
+          "id": "3ed514eac4d316457ecaac8f53f67fd8",
+          "value": "-19.5",
+          "prices": {
+           "23": {
+            "id": "714115123",
+            "price": 1700,
+            "price_delta": 200,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-15778780"
+           }
+          }
+         },
+         {
+          "id": "4664634eb0dae93c8e98128c2266c1df",
+          "value": "-2.5",
+          "prices": {
+           "23": {
+            "id": "714115074",
+            "price": 190,
+            "price_delta": 4,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799042-12246898"
+           },
+           "22": {
+            "id": "713848567",
+            "price": 190,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:56Z",
+            "source_id": "44036-4475018-7317817"
+           }
+          }
+         },
+         {
+          "id": "3c1bd4d54dc83542239c0c74189ac535",
+          "value": "-20.5",
+          "prices": {
+           "23": {
+            "id": "714115124",
+            "price": 1700,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-15778782"
+           }
+          }
+         },
+         {
+          "id": "00b18cb047ad0d0e687a5080b65941f1",
+          "value": "-21.5",
+          "prices": {
+           "23": {
+            "id": "714115125",
+            "price": 2200,
+            "price_delta": 200,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-15778784"
+           }
+          }
+         },
+         {
+          "id": "b2be87166cfebab0bd5b12cd751bca63",
+          "value": "-22.5",
+          "prices": {
+           "23": {
+            "id": "714115126",
+            "price": 2500,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-15778786"
+           }
+          }
+         },
+         {
+          "id": "821ae95b7a73d75e3f445871fbec8baa",
+          "value": "-3.5",
+          "prices": {
+           "23": {
+            "id": "714115049",
+            "price": 255,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-12213272"
+           },
+           "22": {
+            "id": "713848575",
+            "price": 260,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:56Z",
+            "source_id": "44036-4475023-7317826"
+           }
+          }
+         },
+         {
+          "id": "72b824676ac83b779e1ab0193bb6c513",
+          "value": "-4.5",
+          "prices": {
+           "23": {
+            "id": "714115050",
+            "price": 290,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799042-12213273"
+           },
+           "22": {
+            "id": "713848583",
+            "price": 300,
+            "price_delta": 20,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:55Z",
+            "source_id": "44036-4475027-7317834"
+           }
+          }
+         },
+         {
+          "id": "0f4e9bd927005e0956737817ffeb94fb",
+          "value": "-5.5",
+          "prices": {
+           "23": {
+            "id": "714115051",
+            "price": 320,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:21Z",
+            "source_id": "36275765-734.196799042-12213277"
+           },
+           "22": {
+            "id": "713848591",
+            "price": 333,
+            "price_delta": 23,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:55Z",
+            "source_id": "44036-4475031-7317842"
+           }
+          }
+         },
+         {
+          "id": "05d2aaac1e3bc4055f6727b157d5e60c",
+          "value": "-6.5",
+          "prices": {
+           "23": {
+            "id": "714115053",
+            "price": 370,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799042-12213281"
+           },
+           "22": {
+            "id": "713848599",
+            "price": 380,
+            "price_delta": 20,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:56Z",
+            "source_id": "44036-4475035-7317850"
+           }
+          }
+         },
+         {
+          "id": "0cd04aba1adf7d4f7b709873fa70111e",
+          "value": "-7.5",
+          "prices": {
+           "23": {
+            "id": "714115055",
+            "price": 500,
+            "price_delta": 20,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:25Z",
+            "source_id": "36275765-734.196799042-12213285"
+           }
+          }
+         },
+         {
+          "id": "93be5ad37f7c6079debbc0e7a70e5d00",
+          "value": "-8.5",
+          "prices": {
+           "23": {
+            "id": "714115056",
+            "price": 560,
+            "price_delta": 20,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:25Z",
+            "source_id": "36275765-734.196799042-12213289"
+           }
+          }
+         },
+         {
+          "id": "9a3990d001fbcf65eb82a7037ddaba5a",
+          "value": "-9.5",
+          "prices": {
+           "23": {
+            "id": "714115058",
+            "price": 600,
+            "price_delta": 40,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:25Z",
+            "source_id": "36275765-734.196799042-12213293"
+           }
+          }
+         },
+         {
+          "id": "b5980d30e1cb3789ee31285cacdc55d1",
+          "value": "+1",
+          "prices": {
+           "22": {
+            "id": "713848543",
+            "price": 145,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:55Z",
+            "source_id": "44036-4475005-7317792"
+           }
+          }
+         },
+         {
+          "id": "a2cf426ab2e7be6376a0bd720169eac7",
+          "value": "+10",
+          "prices": {
+           "22": {
+            "id": "713848569",
+            "price": -325,
+            "price_delta": -25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:45Z",
+            "source_id": "44036-4475020-7317820"
+           }
+          }
+         },
+         {
+          "id": "63c6b483ac54f8cb683db50822b71341",
+          "value": "+11",
+          "prices": {
+           "22": {
+            "id": "713848579",
+            "price": -375,
+            "price_delta": 25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T13:20:35Z",
+            "source_id": "44036-4475025-7317830"
+           }
+          }
+         },
+         {
+          "id": "bf6f8ec8032efb41ee02b9b65556c984",
+          "value": "+12",
+          "prices": {
+           "22": {
+            "id": "713848585",
+            "price": -425,
+            "price_delta": -25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:47Z",
+            "source_id": "44036-4475028-7317836"
+           }
+          }
+         },
+         {
+          "id": "743a65ab39c4286f50bb48b70255f454",
+          "value": "+13",
+          "prices": {
+           "22": {
+            "id": "713848593",
+            "price": -475,
+            "price_delta": -25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:48Z",
+            "source_id": "44036-4475032-7317844"
+           }
+          }
+         },
+         {
+          "id": "cb10f38cc551468442293752eeafef3b",
+          "value": "+14",
+          "prices": {
+           "22": {
+            "id": "713848601",
+            "price": -600,
+            "price_delta": -50,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:44Z",
+            "source_id": "44036-4475036-7317852"
+           }
+          }
+         },
+         {
+          "id": "3f1b9b80a96d851fc33e1fe5d8e69b3b",
+          "value": "+2",
+          "prices": {
+           "22": {
+            "id": "713848537",
+            "price": 130,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:56Z",
+            "source_id": "44036-4475002-7317786"
+           }
+          }
+         },
+         {
+          "id": "d75d32427b860ec33d247e251d053c71",
+          "value": "+4",
+          "prices": {
+           "22": {
+            "id": "712910190",
+            "price": -125,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:06Z",
+            "source_id": "44036-4466914-7296341"
+           }
+          }
+         },
+         {
+          "id": "6b0340f97deb4abb0357203af3f8b3d1",
+          "value": "+5",
+          "prices": {
+           "22": {
+            "id": "713848535",
+            "price": -140,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:13Z",
+            "source_id": "44036-4475001-7317784"
+           }
+          }
+         },
+         {
+          "id": "593349d1ba8a4069c8dbf9903ac10b06",
+          "value": "+6",
+          "prices": {
+           "22": {
+            "id": "713848545",
+            "price": -160,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:12Z",
+            "source_id": "44036-4475006-7317794"
+           }
+          }
+         },
+         {
+          "id": "1c511fc72c775c5a30baf3b36ff90aef",
+          "value": "+7",
+          "prices": {
+           "22": {
+            "id": "713848549",
+            "price": -210,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:46Z",
+            "source_id": "44036-4475008-7317798"
+           }
+          }
+         },
+         {
+          "id": "638caaf07c9f0c0eafb9408ffc818321",
+          "value": "+8",
+          "prices": {
+           "22": {
+            "id": "713848553",
+            "price": -250,
+            "price_delta": -15,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:12Z",
+            "source_id": "44036-4475010-7317802"
+           }
+          }
+         },
+         {
+          "id": "cfd0b2847d3b0492fa427d8eb343dc18",
+          "value": "+9",
+          "prices": {
+           "22": {
+            "id": "713848563",
+            "price": -275,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T13:20:35Z",
+            "source_id": "44036-4475015-7317812"
+           }
+          }
+         },
+         {
+          "id": "55e29fae5e00303e04a082f8f2544204",
+          "value": "-1",
+          "prices": {
+           "22": {
+            "id": "713848555",
+            "price": 165,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:55Z",
+            "source_id": "44036-4475011-7317804"
+           }
+          }
+         },
+         {
+          "id": "f1392051be7a64cffe3b7a4a57798afd",
+          "value": "-2",
+          "prices": {
+           "22": {
+            "id": "713848561",
+            "price": 185,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:56Z",
+            "source_id": "44036-4475014-7317810"
+           }
+          }
+         },
+         {
+          "id": "b18c68fe4ab4cbccb89cd827a4bd6cb2",
+          "value": "-3",
+          "prices": {
+           "22": {
+            "id": "713848571",
+            "price": 240,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:56Z",
+            "source_id": "44036-4475021-7317822"
+           }
+          }
+         },
+         {
+          "id": "cce96daaed636ca0680a9fdafd92762d",
+          "value": "-4",
+          "prices": {
+           "22": {
+            "id": "713848577",
+            "price": 290,
+            "price_delta": 15,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:55Z",
+            "source_id": "44036-4475024-7317828"
+           }
+          }
+         },
+         {
+          "id": "bc02069f51088bc62677963ad7b77a5d",
+          "value": "-5",
+          "prices": {
+           "22": {
+            "id": "713848587",
+            "price": 333,
+            "price_delta": 13,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:46Z",
+            "source_id": "44036-4475029-7317838"
+           }
+          }
+         },
+         {
+          "id": "ba7049c67a744f2cd311d880aea98d6a",
+          "value": "-6",
+          "prices": {
+           "22": {
+            "id": "713848595",
+            "price": 375,
+            "price_delta": 25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:56Z",
+            "source_id": "44036-4475033-7317846"
+           }
+          }
+         },
+         {
+          "id": "fb41642a868efa1f2be7427c8d94ac03",
+          "value": "-7",
+          "prices": {
+           "22": {
+            "id": "713848603",
+            "price": 500,
+            "price_delta": 25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:48Z",
+            "source_id": "44036-4475037-7317854"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 4480433,
+      "market_id": 3,
+      "period_id": 0,
+      "name": "totals",
+      "market_description": "Over/under on the combined score.",
+      "participants": [
+       {
+        "id": 9,
+        "type": "TYPE_RESULT",
+        "name": "Over",
+        "lines": [
+         {
+          "id": "0ea3a1ab741963ef4783f6d5e434bf32",
+          "value": "47.5",
+          "prices": {
+           "19": {
+            "id": "361971359",
+            "price": -112,
+            "price_delta": -2,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T14:35:31Z",
+            "closed_at": "2026-11-09T14:35:31Z",
+            "source_id": "0OU84695547O4750_1"
+           },
+           "23": {
+            "id": "708549699",
+            "price": -142,
+            "price_delta": 6,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799067-12213371"
+           },
+           "22": {
+            "id": "713199824",
+            "price": -145,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:47Z",
+            "source_id": "44036-4468688-7299992"
+           }
+          }
+         },
+         {
+          "id": "5accd919e0486b6bcbf9862db732e133",
+          "value": "48.5",
+          "prices": {
+           "19": {
+            "id": "712881195",
+            "price": -118,
+            "price_delta": -6,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:24:19Z",
+            "closed_at": "2026-11-10T18:24:19Z",
+            "source_id": "0OU84695547O4850_1"
+           },
+           "23": {
+            "id": "708628631",
+            "price": -128,
+            "price_delta": -3,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799067-12213228"
+           },
+           "22": {
+            "id": "712910192",
+            "price": -130,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:46Z",
+            "source_id": "44036-4466913-7296339"
+           }
+          }
+         },
+         {
+          "id": "f67e8e4916dfdbaeac4752a29a24a4fb",
+          "value": "49.5",
+          "prices": {
+           "19": {
+            "id": "714215989",
+            "price": -108,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:21:53Z",
+            "source_id": "0OU84695547O4950_1"
+           },
+           "23": {
+            "id": "713555665",
+            "price": -110,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T18:27:54Z",
+            "source_id": "36275765-734.195640531-OVER"
+           },
+           "22": {
+            "id": "713848227",
+            "price": -110,
+            "price_delta": -2,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T23:45:46Z",
+            "source_id": "44036-4475044-7317868"
+           }
+          }
+         },
+         {
+          "id": "693de8564d35ddf94faf98de30b14475",
+          "value": "21.5",
+          "prices": {
+           "23": {
+            "id": "713555716",
+            "price": -50000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:25Z",
+            "closed_at": "2026-11-10T18:25:24Z",
+            "source_id": "36275765-734.196799067-12235570"
+           }
+          }
+         },
+         {
+          "id": "0d75adee05853ddc384aca67fb44fd3d",
+          "value": "22.5",
+          "prices": {
+           "23": {
+            "id": "713555707",
+            "price": -50000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:57Z",
+            "source_id": "36275765-734.196799067-12213252"
+           }
+          }
+         },
+         {
+          "id": "058cdaaf8d6cd3664fd7137fbea09d2f",
+          "value": "23.5",
+          "prices": {
+           "23": {
+            "id": "713555711",
+            "price": -50000,
+            "price_delta": -30000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12213375"
+           }
+          }
+         },
+         {
+          "id": "926e536ac06062f989e829d5ebd70d46",
+          "value": "24.5",
+          "prices": {
+           "23": {
+            "id": "713555705",
+            "price": -20000,
+            "price_delta": -10000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T16:13:16Z",
+            "source_id": "36275765-734.196799067-12213246"
+           }
+          }
+         },
+         {
+          "id": "75c6542c6e9eb6ed7effce117ce199ae",
+          "value": "25.5",
+          "prices": {
+           "23": {
+            "id": "713555709",
+            "price": -20000,
+            "price_delta": -10000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799067-12213373"
+           }
+          }
+         },
+         {
+          "id": "c1a05d2bce83b3b3a7cf7515d39843bb",
+          "value": "26.5",
+          "prices": {
+           "23": {
+            "id": "713555703",
+            "price": -10000,
+            "price_delta": -3000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799067-12213239"
+           }
+          }
+         },
+         {
+          "id": "cb99f5d5249c8fa2380cd1c552c27f76",
+          "value": "27.5",
+          "prices": {
+           "23": {
+            "id": "713555699",
+            "price": -7000,
+            "price_delta": -1000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799067-12197205"
+           }
+          }
+         },
+         {
+          "id": "a9f2809811dba4e5cb061e2b5488e95a",
+          "value": "28.5",
+          "prices": {
+           "23": {
+            "id": "713555659",
+            "price": -6000,
+            "price_delta": -1000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799067-12194344"
+           }
+          }
+         },
+         {
+          "id": "88f44ccc0eac80224dd858fa4403722a",
+          "value": "29.5",
+          "prices": {
+           "23": {
+            "id": "713555695",
+            "price": -4500,
+            "price_delta": -500,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12197201"
+           }
+          }
+         },
+         {
+          "id": "2a2b503089fc591cf990ef401b07395f",
+          "value": "30.5",
+          "prices": {
+           "23": {
+            "id": "713555655",
+            "price": -3000,
+            "price_delta": 500,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799067-12194340"
+           }
+          }
+         },
+         {
+          "id": "6d0e74ae34a34e3fe51b92dde312d7b7",
+          "value": "31.5",
+          "prices": {
+           "23": {
+            "id": "713555691",
+            "price": -2500,
+            "price_delta": -300,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:43Z",
+            "source_id": "36275765-734.196799067-12197197"
+           }
+          }
+         },
+         {
+          "id": "bfa3644af792e304d5cf48986c733770",
+          "value": "32.5",
+          "prices": {
+           "23": {
+            "id": "713555651",
+            "price": -2000,
+            "price_delta": 200,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799067-12194336"
+           }
+          }
+         },
+         {
+          "id": "02a3d3d07383f7571353423515263307",
+          "value": "33.5",
+          "prices": {
+           "23": {
+            "id": "713555687",
+            "price": -1400,
+            "price_delta": 50,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799067-12197193"
+           }
+          }
+         },
+         {
+          "id": "d2b117fdda1dd60ea9962b00500278f8",
+          "value": "34.5",
+          "prices": {
+           "23": {
+            "id": "713555647",
+            "price": -1100,
+            "price_delta": -100,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:43Z",
+            "source_id": "36275765-734.196799067-12194332"
+           }
+          }
+         },
+         {
+          "id": "0a5a14be7a86a1f2d31a97d750b6da41",
+          "value": "35.5",
+          "prices": {
+           "23": {
+            "id": "713555683",
+            "price": -950,
+            "price_delta": 50,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799067-12197189"
+           }
+          }
+         },
+         {
+          "id": "620c60396c208ab7f7b7b528be6e8c27",
+          "value": "36.5",
+          "prices": {
+           "23": {
+            "id": "713555643",
+            "price": -750,
+            "price_delta": 20,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12194328"
+           }
+          }
+         },
+         {
+          "id": "a8aa867fa325f65c4abf7d563a365c96",
+          "value": "37.5",
+          "prices": {
+           "23": {
+            "id": "713555679",
+            "price": -590,
+            "price_delta": 30,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12197185"
+           }
+          }
+         },
+         {
+          "id": "b5656ac704e7e5ae11059abd3b41ed2d",
+          "value": "38.5",
+          "prices": {
+           "23": {
+            "id": "713555639",
+            "price": -520,
+            "price_delta": 40,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799067-12194324"
+           },
+           "22": {
+            "id": "713848281",
+            "price": -450,
+            "price_delta": -25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:24:15Z",
+            "closed_at": "2026-11-10T18:24:15Z",
+            "source_id": "44036-4475071-7317922"
+           }
+          }
+         },
+         {
+          "id": "2b2df972257ea5ddd728a1dcad2f0553",
+          "value": "39.5",
+          "prices": {
+           "23": {
+            "id": "713555675",
+            "price": -440,
+            "price_delta": 20,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12197181"
+           },
+           "22": {
+            "id": "713848273",
+            "price": -425,
+            "price_delta": -25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:48Z",
+            "source_id": "44036-4475067-7317914"
+           }
+          }
+         },
+         {
+          "id": "f2f1add3eb8c045da49d248557975eb9",
+          "value": "40.5",
+          "prices": {
+           "23": {
+            "id": "713555635",
+            "price": -390,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799067-12194320"
+           },
+           "22": {
+            "id": "713848265",
+            "price": -350,
+            "price_delta": -25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:06Z",
+            "source_id": "44036-4475063-7317906"
+           }
+          }
+         },
+         {
+          "id": "142175950471af8d367531e820927097",
+          "value": "41.5",
+          "prices": {
+           "23": {
+            "id": "713555671",
+            "price": -320,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12197177"
+           },
+           "22": {
+            "id": "713848257",
+            "price": -300,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:48Z",
+            "source_id": "44036-4475059-7317898"
+           }
+          }
+         },
+         {
+          "id": "100b847f925b7afae667135cb1466c9a",
+          "value": "42.5",
+          "prices": {
+           "23": {
+            "id": "713555631",
+            "price": -295,
+            "price_delta": 15,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799067-12194316"
+           },
+           "22": {
+            "id": "713848249",
+            "price": -275,
+            "price_delta": -25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:24:15Z",
+            "source_id": "44036-4475055-7317890"
+           }
+          }
+         },
+         {
+          "id": "0d3a1891d10ea64e332e5ca2c80d76b0",
+          "value": "43.5",
+          "prices": {
+           "23": {
+            "id": "713555667",
+            "price": -245,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12197173"
+           },
+           "22": {
+            "id": "713848241",
+            "price": -235,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:07Z",
+            "source_id": "44036-4475051-7317882"
+           }
+          }
+         },
+         {
+          "id": "711c17c2e206fc246eef14efa2ae9c57",
+          "value": "44.5",
+          "prices": {
+           "23": {
+            "id": "713555627",
+            "price": -210,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12194312"
+           },
+           "22": {
+            "id": "713848231",
+            "price": -210,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:46Z",
+            "source_id": "44036-4475046-7317872"
+           }
+          }
+         },
+         {
+          "id": "3abd8851c3b0ab197ec8f89897b9c469",
+          "value": "45.5",
+          "prices": {
+           "23": {
+            "id": "713555663",
+            "price": -186,
+            "price_delta": 2,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12197169"
+           },
+           "22": {
+            "id": "713848225",
+            "price": -185,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:06Z",
+            "source_id": "44036-4475043-7317866"
+           }
+          }
+         },
+         {
+          "id": "a978fa08e1a4499be466f2775323e7ac",
+          "value": "46.5",
+          "prices": {
+           "22": {
+            "id": "713848221",
+            "price": -165,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:06Z",
+            "source_id": "44036-4475041-7317862"
+           },
+           "23": {
+            "id": "713555623",
+            "price": -170,
+            "price_delta": 2,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12194308"
+           }
+          }
+         },
+         {
+          "id": "452046eb30135a239e0d359b2df9b5bc",
+          "value": "50.5",
+          "prices": {
+           "23": {
+            "id": "713555625",
+            "price": 100,
+            "price_delta": 202,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12194310"
+           },
+           "22": {
+            "id": "713848235",
+            "price": -105,
+            "price_delta": -3,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:46Z",
+            "source_id": "44036-4475048-7317876"
+           }
+          }
+         },
+         {
+          "id": "d6b2294f7205e2d050f23893798c9a1d",
+          "value": "51.5",
+          "prices": {
+           "23": {
+            "id": "713555669",
+            "price": 120,
+            "price_delta": 4,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12197175"
+           },
+           "22": {
+            "id": "713848243",
+            "price": 110,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:45Z",
+            "source_id": "44036-4475052-7317884"
+           }
+          }
+         },
+         {
+          "id": "c08e532c25359b5ddeddba47148cb195",
+          "value": "52.5",
+          "prices": {
+           "23": {
+            "id": "713555629",
+            "price": 132,
+            "price_delta": 4,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12194314"
+           },
+           "22": {
+            "id": "713848251",
+            "price": 125,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:06Z",
+            "source_id": "44036-4475056-7317892"
+           }
+          }
+         },
+         {
+          "id": "967053ee6d3c164116f2ccf99072ccf0",
+          "value": "53.5",
+          "prices": {
+           "23": {
+            "id": "713555673",
+            "price": 146,
+            "price_delta": 2,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12197179"
+           },
+           "22": {
+            "id": "713848259",
+            "price": 135,
+            "price_delta": -3,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:46Z",
+            "source_id": "44036-4475060-7317900"
+           }
+          }
+         },
+         {
+          "id": "91e237d95bf114b790c2e2e26d755363",
+          "value": "54.5",
+          "prices": {
+           "23": {
+            "id": "713555633",
+            "price": 164,
+            "price_delta": 2,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799067-12194318"
+           },
+           "22": {
+            "id": "713848267",
+            "price": 150,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:45Z",
+            "source_id": "44036-4475064-7317908"
+           }
+          }
+         },
+         {
+          "id": "b6f7fe10601813de04e3de6e294235a0",
+          "value": "55.5",
+          "prices": {
+           "23": {
+            "id": "713555677",
+            "price": 190,
+            "price_delta": -6,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799067-12197183"
+           },
+           "22": {
+            "id": "713848275",
+            "price": 175,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:06Z",
+            "source_id": "44036-4475068-7317916"
+           }
+          }
+         },
+         {
+          "id": "2f4d18b8145848c76a50c6d8130dea4b",
+          "value": "56.5",
+          "prices": {
+           "23": {
+            "id": "713555637",
+            "price": 210,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12194322"
+           },
+           "22": {
+            "id": "713848283",
+            "price": 185,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:47Z",
+            "source_id": "44036-4475072-7317924"
+           }
+          }
+         },
+         {
+          "id": "cbbb7c73c948b3a57a0f682966714b07",
+          "value": "57.5",
+          "prices": {
+           "23": {
+            "id": "713555681",
+            "price": 240,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12197187"
+           },
+           "22": {
+            "id": "713848287",
+            "price": 210,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:06Z",
+            "source_id": "44036-4475076-7317932"
+           }
+          }
+         },
+         {
+          "id": "ee6321e93891d331c5dc43169670cc22",
+          "value": "58.5",
+          "prices": {
+           "23": {
+            "id": "713555641",
+            "price": 280,
+            "price_delta": 15,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12194326"
+           },
+           "22": {
+            "id": "713848291",
+            "price": 240,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:05Z",
+            "source_id": "44036-4475583-7318977"
+           }
+          }
+         },
+         {
+          "id": "3876bf4a3d29b13786f04104f334daf7",
+          "value": "59.5",
+          "prices": {
+           "23": {
+            "id": "713555685",
+            "price": 300,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12197191"
+           },
+           "22": {
+            "id": "714272538",
+            "price": 260,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:47Z",
+            "source_id": "44036-4495739-7362777"
+           }
+          }
+         },
+         {
+          "id": "c976433fece549780c4aede494a73709",
+          "value": "60.5",
+          "prices": {
+           "23": {
+            "id": "713555645",
+            "price": 330,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12194330"
+           }
+          }
+         },
+         {
+          "id": "32dd5934320a6d0db842495bcd98a8f4",
+          "value": "61.5",
+          "prices": {
+           "23": {
+            "id": "713555689",
+            "price": 370,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12197195"
+           }
+          }
+         },
+         {
+          "id": "1e1624e5998f907156830baba8141259",
+          "value": "62.5",
+          "prices": {
+           "23": {
+            "id": "713555649",
+            "price": 420,
+            "price_delta": 20,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12194334"
+           }
+          }
+         },
+         {
+          "id": "5b606d5a339be95720d03b3f7d9d133d",
+          "value": "63.5",
+          "prices": {
+           "23": {
+            "id": "713555693",
+            "price": 450,
+            "price_delta": -30,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799067-12197199"
+           }
+          }
+         },
+         {
+          "id": "1c418867b94d1e8761f3018bae22fbc2",
+          "value": "64.5",
+          "prices": {
+           "23": {
+            "id": "713555653",
+            "price": 520,
+            "price_delta": 20,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12194338"
+           }
+          }
+         },
+         {
+          "id": "e2779334af16470bcf600e4c2ea75ac2",
+          "value": "65.5",
+          "prices": {
+           "23": {
+            "id": "713555697",
+            "price": 600,
+            "price_delta": 40,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799067-12197203"
+           }
+          }
+         },
+         {
+          "id": "33dd387150f45b59c603f50cd054b260",
+          "value": "66.5",
+          "prices": {
+           "23": {
+            "id": "713555657",
+            "price": 630,
+            "price_delta": -50,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799067-12194342"
+           }
+          }
+         },
+         {
+          "id": "a59c5615adf8a87f75381719c3c4eca3",
+          "value": "67.5",
+          "prices": {
+           "23": {
+            "id": "713555701",
+            "price": 750,
+            "price_delta": -50,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:43Z",
+            "source_id": "36275765-734.196799067-12197207"
+           }
+          }
+         },
+         {
+          "id": "ba8f9cb9b44647155141cdfce1bcf11f",
+          "value": "68.5",
+          "prices": {
+           "23": {
+            "id": "713555661",
+            "price": 830,
+            "price_delta": 30,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799067-12194346"
+           }
+          }
+         },
+         {
+          "id": "690182c9603abd4d33bd6cfbb6373fbd",
+          "value": "69.5",
+          "prices": {
+           "23": {
+            "id": "713555713",
+            "price": 900,
+            "price_delta": -100,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:43Z",
+            "source_id": "36275765-734.196799067-12215021"
+           }
+          }
+         },
+         {
+          "id": "937cca1df76e042db628edd3bd5bd384",
+          "value": "70.5",
+          "prices": {
+           "23": {
+            "id": "713555718",
+            "price": 1000,
+            "price_delta": -60,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799067-12247073"
+           }
+          }
+         },
+         {
+          "id": "e13dfe1763aafee93844bd486b653982",
+          "value": "71.5",
+          "prices": {
+           "23": {
+            "id": "713555715",
+            "price": 1100,
+            "price_delta": -100,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:43Z",
+            "source_id": "36275765-734.196799067-12215027"
+           }
+          }
+         },
+         {
+          "id": "205401bd107e29285dd363841f265ae1",
+          "value": "72.5",
+          "prices": {
+           "23": {
+            "id": "713555720",
+            "price": 1200,
+            "price_delta": -100,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:43Z",
+            "source_id": "36275765-734.196799067-12247075"
+           }
+          }
+         },
+         {
+          "id": "a06a8ee7cd99e80b7eae262e039f07ef",
+          "value": "73.5",
+          "prices": {
+           "23": {
+            "id": "713555726",
+            "price": 1300,
+            "price_delta": -100,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799067-12386718"
+           }
+          }
+         },
+         {
+          "id": "3aac0b2b435280d9d053a09f41c13f0e",
+          "value": "74.5",
+          "prices": {
+           "23": {
+            "id": "713555722",
+            "price": 1400,
+            "price_delta": -100,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:43Z",
+            "source_id": "36275765-734.196799067-12291345"
+           }
+          }
+         },
+         {
+          "id": "048679cb3945b2fa88d23b80c4c93643",
+          "value": "75.5",
+          "prices": {
+           "23": {
+            "id": "713555728",
+            "price": 1500,
+            "price_delta": -200,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:43Z",
+            "source_id": "36275765-734.196799067-12386720"
+           }
+          }
+         },
+         {
+          "id": "188d983e6c03714d44b935819f165f75",
+          "value": "76.5",
+          "prices": {
+           "23": {
+            "id": "713555724",
+            "price": 1700,
+            "price_delta": -100,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T16:13:16Z",
+            "source_id": "36275765-734.196799067-12291347"
+           }
+          }
+         },
+         {
+          "id": "8e292fb085d3529e8855c8917bc5e12b",
+          "value": "77.5",
+          "prices": {
+           "23": {
+            "id": "713555730",
+            "price": 1800,
+            "price_delta": 100,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799067-12386722"
+           }
+          }
+         },
+         {
+          "id": "a16549b2cc6f15f0281a6084a12eeaf7",
+          "value": "78.5",
+          "prices": {
+           "23": {
+            "id": "713555731",
+            "price": 2000,
+            "price_delta": -200,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:43Z",
+            "source_id": "36275765-734.196799067-15516343"
+           }
+          }
+         },
+         {
+          "id": "07ad2dae859f5b1d1c0dafb069ab3c97",
+          "value": "39",
+          "prices": {
+           "22": {
+            "id": "713848277",
+            "price": -450,
+            "price_delta": -25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:05Z",
+            "closed_at": "2026-11-10T18:26:05Z",
+            "source_id": "44036-4475069-7317918"
+           }
+          }
+         },
+         {
+          "id": "c28c55a516f43e0154dc239e716ad3a6",
+          "value": "40",
+          "prices": {
+           "22": {
+            "id": "713848269",
+            "price": -400,
+            "price_delta": -25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:47Z",
+            "source_id": "44036-4475065-7317910"
+           }
+          }
+         },
+         {
+          "id": "d259980e816947963b3180f81913934c",
+          "value": "41",
+          "prices": {
+           "22": {
+            "id": "713848261",
+            "price": -350,
+            "price_delta": -25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:45Z",
+            "source_id": "44036-4475061-7317902"
+           }
+          }
+         },
+         {
+          "id": "1d0bbf7f481db5243b8433e90dddd0c9",
+          "value": "42",
+          "prices": {
+           "22": {
+            "id": "713848253",
+            "price": -295,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:46Z",
+            "source_id": "44036-4475057-7317894"
+           }
+          }
+         },
+         {
+          "id": "bbfbc60d301ae7c1808b7a90ca43198a",
+          "value": "43",
+          "prices": {
+           "22": {
+            "id": "713848245",
+            "price": -275,
+            "price_delta": -25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:06Z",
+            "source_id": "44036-4475053-7317886"
+           }
+          }
+         },
+         {
+          "id": "1ff6fb6295778f27423871b5a831bb36",
+          "value": "44",
+          "prices": {
+           "22": {
+            "id": "713848239",
+            "price": -225,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:07Z",
+            "source_id": "44036-4475050-7317880"
+           }
+          }
+         },
+         {
+          "id": "dc546d2016b1204cca85ef758002a33d",
+          "value": "45",
+          "prices": {
+           "22": {
+            "id": "713848229",
+            "price": -200,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:46Z",
+            "source_id": "44036-4475045-7317870"
+           }
+          }
+         },
+         {
+          "id": "55a28facdf3b6b668020227c48739e01",
+          "value": "46",
+          "prices": {
+           "22": {
+            "id": "713848219",
+            "price": -175,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:06Z",
+            "source_id": "44036-4475040-7317860"
+           }
+          }
+         },
+         {
+          "id": "4087621e268c669cda2b05b4199af3e3",
+          "value": "47",
+          "prices": {
+           "22": {
+            "id": "713848217",
+            "price": -160,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:45Z",
+            "source_id": "44036-4475039-7317858"
+           }
+          }
+         },
+         {
+          "id": "eb98d7dfe335addf64fac8e0f13ab475",
+          "value": "48",
+          "prices": {
+           "22": {
+            "id": "712921959",
+            "price": -135,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:06Z",
+            "source_id": "44036-4467486-7297593"
+           }
+          }
+         },
+         {
+          "id": "9ec939280d122b877605dffd7d811adc",
+          "value": "49",
+          "prices": {
+           "22": {
+            "id": "713848223",
+            "price": -120,
+            "price_delta": -8,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:07Z",
+            "source_id": "44036-4475042-7317864"
+           }
+          }
+         },
+         {
+          "id": "f848d1a092c44851d1d4970ff1880cbe",
+          "value": "50",
+          "prices": {
+           "22": {
+            "id": "713848233",
+            "price": -110,
+            "price_delta": -2,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:45Z",
+            "source_id": "44036-4475047-7317874"
+           }
+          }
+         },
+         {
+          "id": "07fa743c283c3ddbc160dde1216bc33e",
+          "value": "51",
+          "prices": {
+           "22": {
+            "id": "713848237",
+            "price": 105,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:06Z",
+            "source_id": "44036-4475049-7317878"
+           }
+          }
+         },
+         {
+          "id": "74963f2761cb8f10b5854ee899c9dc6d",
+          "value": "52",
+          "prices": {
+           "22": {
+            "id": "713848247",
+            "price": 120,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:06Z",
+            "source_id": "44036-4475054-7317888"
+           }
+          }
+         },
+         {
+          "id": "816f2a2f6a43db8f1c091f2eda991aaa",
+          "value": "53",
+          "prices": {
+           "22": {
+            "id": "713848255",
+            "price": 130,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:55Z",
+            "source_id": "44036-4475058-7317896"
+           }
+          }
+         },
+         {
+          "id": "69f01c9a26e24c9472c861aae156c7f4",
+          "value": "54",
+          "prices": {
+           "22": {
+            "id": "713848263",
+            "price": 145,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:56Z",
+            "source_id": "44036-4475062-7317904"
+           }
+          }
+         },
+         {
+          "id": "dd7b9129da3be6211e3aacbf2a2ce585",
+          "value": "55",
+          "prices": {
+           "22": {
+            "id": "713848271",
+            "price": 165,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:47Z",
+            "source_id": "44036-4475066-7317912"
+           }
+          }
+         },
+         {
+          "id": "dd117439fe95d899c837f19a3203b4d9",
+          "value": "56",
+          "prices": {
+           "22": {
+            "id": "713848279",
+            "price": 180,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:45Z",
+            "source_id": "44036-4475070-7317920"
+           }
+          }
+         },
+         {
+          "id": "323e85d33f6d6212ec94c7c42da1bbe6",
+          "value": "57",
+          "prices": {
+           "22": {
+            "id": "713848285",
+            "price": 200,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:44Z",
+            "source_id": "44036-4475074-7317928"
+           }
+          }
+         },
+         {
+          "id": "ace7823aa7e2c80a2f68c998da412188",
+          "value": "58",
+          "prices": {
+           "22": {
+            "id": "713848289",
+            "price": 230,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:05Z",
+            "source_id": "44036-4475561-7318941"
+           }
+          }
+         },
+         {
+          "id": "8c0a34896339c67241bb6517e1d517fc",
+          "value": "59",
+          "prices": {
+           "22": {
+            "id": "714272536",
+            "price": 260,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:41:10Z",
+            "source_id": "44036-4495733-7362766"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 10,
+        "type": "TYPE_RESULT",
+        "name": "Under",
+        "lines": [
+         {
+          "id": "1a5aa5d85bd4d72541851ef862e7069d",
+          "value": "47.5",
+          "prices": {
+           "19": {
+            "id": "361971360",
+            "price": -108,
+            "price_delta": 2,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T14:35:31Z",
+            "closed_at": "2026-11-09T14:35:31Z",
+            "source_id": "0OU84695547U4750_3"
+           },
+           "23": {
+            "id": "708549700",
+            "price": 112,
+            "price_delta": -4,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799067-12213370"
+           },
+           "22": {
+            "id": "713199825",
+            "price": 110,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:47Z",
+            "source_id": "44036-4468688-7299993"
+           }
+          }
+         },
+         {
+          "id": "6048f6f1b12cd699b121111d34033b3c",
+          "value": "48.5",
+          "prices": {
+           "19": {
+            "id": "712881196",
+            "price": -102,
+            "price_delta": 6,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:24:19Z",
+            "closed_at": "2026-11-10T18:24:19Z",
+            "source_id": "0OU84695547U4850_3"
+           },
+           "23": {
+            "id": "708628632",
+            "price": 100,
+            "price_delta": 202,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799067-12213226"
+           },
+           "22": {
+            "id": "712910193",
+            "price": -105,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:41:10Z",
+            "source_id": "44036-4466913-7296340"
+           }
+          }
+         },
+         {
+          "id": "8a623decd4444debd39f3c8b5eec01e1",
+          "value": "49.5",
+          "prices": {
+           "19": {
+            "id": "714215990",
+            "price": -112,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:21:53Z",
+            "source_id": "0OU84695547U4950_3"
+           },
+           "23": {
+            "id": "713555664",
+            "price": -110,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T18:27:54Z",
+            "source_id": "36275765-734.195640531-UNDER"
+           },
+           "22": {
+            "id": "713848228",
+            "price": -108,
+            "price_delta": 2,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T23:45:46Z",
+            "source_id": "44036-4475044-7317869"
+           }
+          }
+         },
+         {
+          "id": "3a4ed3f0f7f5c2232e4fb895295297ce",
+          "value": "21.5",
+          "prices": {
+           "23": {
+            "id": "714123478",
+            "price": 3500,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:25Z",
+            "closed_at": "2026-11-10T18:25:24Z",
+            "source_id": "36275765-734.196799067-12235569"
+           }
+          }
+         },
+         {
+          "id": "94e99f0a0968a1c7580b5f3b3b2f5f8d",
+          "value": "22.5",
+          "prices": {
+           "23": {
+            "id": "713555706",
+            "price": 3500,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:57Z",
+            "source_id": "36275765-734.196799067-12213250"
+           }
+          }
+         },
+         {
+          "id": "4f552ec4709578ed1c09fcfdfbf63f53",
+          "value": "23.5",
+          "prices": {
+           "23": {
+            "id": "713555710",
+            "price": 3000,
+            "price_delta": 500,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799067-12213374"
+           }
+          }
+         },
+         {
+          "id": "e4bb23345361e800d9e3d0abaede1db5",
+          "value": "24.5",
+          "prices": {
+           "23": {
+            "id": "713555704",
+            "price": 2500,
+            "price_delta": 300,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799067-12213244"
+           }
+          }
+         },
+         {
+          "id": "cce28df6a6a61c149fbbcda52790380d",
+          "value": "25.5",
+          "prices": {
+           "23": {
+            "id": "713555708",
+            "price": 2000,
+            "price_delta": 200,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799067-12213372"
+           }
+          }
+         },
+         {
+          "id": "8a89a8a71dc5286e25aeb95e8c55c46c",
+          "value": "26.5",
+          "prices": {
+           "23": {
+            "id": "713555702",
+            "price": 1700,
+            "price_delta": 200,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799067-12213237"
+           }
+          }
+         },
+         {
+          "id": "f90566d950fd66ec48cfd99990b3fc59",
+          "value": "27.5",
+          "prices": {
+           "23": {
+            "id": "713555698",
+            "price": 1400,
+            "price_delta": -100,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799067-12197204"
+           }
+          }
+         },
+         {
+          "id": "9fa863d7809af737bc6d25faebb0c397",
+          "value": "28.5",
+          "prices": {
+           "23": {
+            "id": "713555658",
+            "price": 1400,
+            "price_delta": 100,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799067-12194343"
+           }
+          }
+         },
+         {
+          "id": "582a1562268231f00198db135151f01f",
+          "value": "29.5",
+          "prices": {
+           "23": {
+            "id": "713555694",
+            "price": 1200,
+            "price_delta": 100,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12197200"
+           }
+          }
+         },
+         {
+          "id": "adc724b8514e3915ac32c0ee0585067f",
+          "value": "30.5",
+          "prices": {
+           "23": {
+            "id": "713555654",
+            "price": 1000,
+            "price_delta": -60,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799067-12194339"
+           }
+          }
+         },
+         {
+          "id": "3ce1cbd616192c63b9a5915d15effb23",
+          "value": "31.5",
+          "prices": {
+           "23": {
+            "id": "713555690",
+            "price": 900,
+            "price_delta": 30,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:43Z",
+            "source_id": "36275765-734.196799067-12197196"
+           }
+          }
+         },
+         {
+          "id": "7f8cbde15846b0029cba055b9e3e57e8",
+          "value": "32.5",
+          "prices": {
+           "23": {
+            "id": "713555650",
+            "price": 830,
+            "price_delta": -40,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799067-12194335"
+           }
+          }
+         },
+         {
+          "id": "f483304e38fd1f0196bf824eefadb4b9",
+          "value": "33.5",
+          "prices": {
+           "23": {
+            "id": "713555686",
+            "price": 680,
+            "price_delta": -20,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799067-12197192"
+           }
+          }
+         },
+         {
+          "id": "c33cfd66be470e32ca8680998d214eea",
+          "value": "34.5",
+          "prices": {
+           "23": {
+            "id": "713555646",
+            "price": 600,
+            "price_delta": 40,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:43Z",
+            "source_id": "36275765-734.196799067-12194331"
+           }
+          }
+         },
+         {
+          "id": "0afc922acc85e231d3146c2f3d471a22",
+          "value": "35.5",
+          "prices": {
+           "23": {
+            "id": "713555682",
+            "price": 540,
+            "price_delta": -20,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799067-12197188"
+           }
+          }
+         },
+         {
+          "id": "098219ab362870351b9929857dbd9455",
+          "value": "36.5",
+          "prices": {
+           "23": {
+            "id": "713555642",
+            "price": 460,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12194327"
+           }
+          }
+         },
+         {
+          "id": "8ab24a79e89e7b0b600b4cc0948c24a6",
+          "value": "37.5",
+          "prices": {
+           "23": {
+            "id": "713555678",
+            "price": 390,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12197184"
+           }
+          }
+         },
+         {
+          "id": "8075d0f0b54a20adce85ef4cfe5dafe1",
+          "value": "38.5",
+          "prices": {
+           "23": {
+            "id": "713555638",
+            "price": 350,
+            "price_delta": -20,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799067-12194323"
+           },
+           "22": {
+            "id": "713848282",
+            "price": 300,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:24:15Z",
+            "closed_at": "2026-11-10T18:24:15Z",
+            "source_id": "44036-4475071-7317923"
+           }
+          }
+         },
+         {
+          "id": "d2d80ba19d43dd3df174493f1e2d4be6",
+          "value": "39.5",
+          "prices": {
+           "23": {
+            "id": "713555674",
+            "price": 310,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12197180"
+           },
+           "22": {
+            "id": "713848274",
+            "price": 290,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:48Z",
+            "source_id": "44036-4475067-7317915"
+           }
+          }
+         },
+         {
+          "id": "cd839f46e47186cb2dd86a7308b7718b",
+          "value": "40.5",
+          "prices": {
+           "23": {
+            "id": "713555634",
+            "price": 280,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799067-12194319"
+           },
+           "22": {
+            "id": "713848266",
+            "price": 250,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:06Z",
+            "source_id": "44036-4475063-7317907"
+           }
+          }
+         },
+         {
+          "id": "27e12345340bfa627e4ca45dfa1cd70a",
+          "value": "41.5",
+          "prices": {
+           "23": {
+            "id": "713555670",
+            "price": 235,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12197176"
+           },
+           "22": {
+            "id": "713848258",
+            "price": 220,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:48Z",
+            "source_id": "44036-4475059-7317899"
+           }
+          }
+         },
+         {
+          "id": "e2d18c216930ad1f8f0dc51041356814",
+          "value": "42.5",
+          "prices": {
+           "23": {
+            "id": "713555630",
+            "price": 220,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799067-12194315"
+           },
+           "22": {
+            "id": "713848250",
+            "price": 200,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:06Z",
+            "source_id": "44036-4475055-7317891"
+           }
+          }
+         },
+         {
+          "id": "944f73d709cd13893cd8693f1a2932db",
+          "value": "43.5",
+          "prices": {
+           "23": {
+            "id": "713555666",
+            "price": 186,
+            "price_delta": -4,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12197172"
+           },
+           "22": {
+            "id": "713848242",
+            "price": 180,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:46Z",
+            "source_id": "44036-4475051-7317883"
+           }
+          }
+         },
+         {
+          "id": "649dddb82a0b2902b8c93e3a859026c6",
+          "value": "44.5",
+          "prices": {
+           "23": {
+            "id": "713555626",
+            "price": 162,
+            "price_delta": -2,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12194311"
+           },
+           "22": {
+            "id": "713848232",
+            "price": 150,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:30:59Z",
+            "source_id": "44036-4475046-7317873"
+           }
+          }
+         },
+         {
+          "id": "b6cacccf980909e07e349b3b1e261191",
+          "value": "45.5",
+          "prices": {
+           "23": {
+            "id": "713555662",
+            "price": 144,
+            "price_delta": -2,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12197168"
+           },
+           "22": {
+            "id": "713848226",
+            "price": 138,
+            "price_delta": 3,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:46Z",
+            "source_id": "44036-4475043-7317867"
+           }
+          }
+         },
+         {
+          "id": "86860e416d245564b21395b38a37c167",
+          "value": "46.5",
+          "prices": {
+           "23": {
+            "id": "713555622",
+            "price": 132,
+            "price_delta": -2,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12194307"
+           },
+           "22": {
+            "id": "713848222",
+            "price": 125,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:06Z",
+            "source_id": "44036-4475041-7317863"
+           }
+          }
+         },
+         {
+          "id": "871a05e2246dfe8ca6520a01b64505e2",
+          "value": "50.5",
+          "prices": {
+           "23": {
+            "id": "713555624",
+            "price": -128,
+            "price_delta": -3,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12194309"
+           },
+           "22": {
+            "id": "713848236",
+            "price": -125,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:46Z",
+            "source_id": "44036-4475048-7317877"
+           }
+          }
+         },
+         {
+          "id": "58c6894eab1d0312cf7e08938c7b3a23",
+          "value": "51.5",
+          "prices": {
+           "23": {
+            "id": "713555668",
+            "price": -154,
+            "price_delta": -6,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12197174"
+           },
+           "22": {
+            "id": "713848244",
+            "price": -145,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:45Z",
+            "source_id": "44036-4475052-7317885"
+           }
+          }
+         },
+         {
+          "id": "988cfd1349baf4526911e9e8313c0c1c",
+          "value": "52.5",
+          "prices": {
+           "23": {
+            "id": "713555628",
+            "price": -170,
+            "price_delta": -6,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12194313"
+           },
+           "22": {
+            "id": "713848252",
+            "price": -165,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:06Z",
+            "source_id": "44036-4475056-7317893"
+           }
+          }
+         },
+         {
+          "id": "398a3685578ea586d08179b72d4194b8",
+          "value": "53.5",
+          "prices": {
+           "23": {
+            "id": "713555672",
+            "price": -188,
+            "price_delta": -2,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12197178"
+           },
+           "22": {
+            "id": "713848260",
+            "price": -185,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:07Z",
+            "source_id": "44036-4475060-7317901"
+           }
+          }
+         },
+         {
+          "id": "06536bf34c01d25cadc9c03fd5e25555",
+          "value": "54.5",
+          "prices": {
+           "23": {
+            "id": "713555632",
+            "price": -215,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799067-12194317"
+           },
+           "22": {
+            "id": "713848268",
+            "price": -200,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:45Z",
+            "source_id": "44036-4475064-7317909"
+           }
+          }
+         },
+         {
+          "id": "673fc9422447440747cd948000f825e9",
+          "value": "55.5",
+          "prices": {
+           "22": {
+            "id": "713848276",
+            "price": -235,
+            "price_delta": 15,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:06Z",
+            "source_id": "44036-4475068-7317917"
+           },
+           "23": {
+            "id": "713555676",
+            "price": -250,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799067-12197182"
+           }
+          }
+         },
+         {
+          "id": "0b3d5740843ec8deffdbcce03a919ec2",
+          "value": "56.5",
+          "prices": {
+           "22": {
+            "id": "713848284",
+            "price": -250,
+            "price_delta": 25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:05Z",
+            "source_id": "44036-4475072-7317925"
+           },
+           "23": {
+            "id": "713555636",
+            "price": -280,
+            "price_delta": -15,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12194321"
+           }
+          }
+         },
+         {
+          "id": "d58a92fd01894fa667ccb24611ad3069",
+          "value": "57.5",
+          "prices": {
+           "23": {
+            "id": "713555680",
+            "price": -330,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12197186"
+           },
+           "22": {
+            "id": "713848288",
+            "price": -285,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:47Z",
+            "source_id": "44036-4475076-7317933"
+           }
+          }
+         },
+         {
+          "id": "456f5141a46a72039d358fe270152bb5",
+          "value": "58.5",
+          "prices": {
+           "23": {
+            "id": "713555640",
+            "price": -390,
+            "price_delta": -20,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12194325"
+           },
+           "22": {
+            "id": "713848292",
+            "price": -325,
+            "price_delta": 25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:44Z",
+            "source_id": "44036-4475583-7318978"
+           }
+          }
+         },
+         {
+          "id": "3fdce3ebf183b88c2c4504fac601c154",
+          "value": "59.5",
+          "prices": {
+           "23": {
+            "id": "713555684",
+            "price": -430,
+            "price_delta": -20,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12197190"
+           },
+           "22": {
+            "id": "714272539",
+            "price": -375,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:41:10Z",
+            "source_id": "44036-4495739-7362778"
+           }
+          }
+         },
+         {
+          "id": "752c97089456df40930db6124b3e9cc2",
+          "value": "60.5",
+          "prices": {
+           "23": {
+            "id": "713555644",
+            "price": -480,
+            "price_delta": -20,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12194329"
+           }
+          }
+         },
+         {
+          "id": "d848ece2fe851e58f2bf494a3409cce7",
+          "value": "61.5",
+          "prices": {
+           "23": {
+            "id": "713555688",
+            "price": -560,
+            "price_delta": -30,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12197194"
+           }
+          }
+         },
+         {
+          "id": "d24639183c17baaf54026feaff3ac8d9",
+          "value": "62.5",
+          "prices": {
+           "23": {
+            "id": "713555648",
+            "price": -650,
+            "price_delta": -30,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799067-12194333"
+           }
+          }
+         },
+         {
+          "id": "2dbd9e590ae366b8d38bec5bc49ad7db",
+          "value": "63.5",
+          "prices": {
+           "23": {
+            "id": "713555692",
+            "price": -750,
+            "price_delta": -30,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12197198"
+           }
+          }
+         },
+         {
+          "id": "82caf018a0b969c36bd5ab3f88e56b74",
+          "value": "64.5",
+          "prices": {
+           "23": {
+            "id": "713555652",
+            "price": -900,
+            "price_delta": -50,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T20:49:48Z",
+            "source_id": "36275765-734.196799067-12194337"
+           }
+          }
+         },
+         {
+          "id": "32c4358468b7ccce76b8e4dedadf42d7",
+          "value": "65.5",
+          "prices": {
+           "23": {
+            "id": "713555696",
+            "price": -1100,
+            "price_delta": -100,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799067-12197202"
+           }
+          }
+         },
+         {
+          "id": "820a4f386f6cd11b4957578589db1b60",
+          "value": "66.5",
+          "prices": {
+           "23": {
+            "id": "713555656",
+            "price": -1200,
+            "price_delta": 200,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799067-12194341"
+           }
+          }
+         },
+         {
+          "id": "d1a0266f4f0a520fbf7f3a4de95b7cf7",
+          "value": "67.5",
+          "prices": {
+           "23": {
+            "id": "713555700",
+            "price": -1600,
+            "price_delta": 200,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:43Z",
+            "source_id": "36275765-734.196799067-12197206"
+           }
+          }
+         },
+         {
+          "id": "a2a6d9e437b55cc046745b366880d649",
+          "value": "68.5",
+          "prices": {
+           "23": {
+            "id": "713555660",
+            "price": -2000,
+            "price_delta": -200,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:27:55Z",
+            "source_id": "36275765-734.196799067-12194345"
+           }
+          }
+         },
+         {
+          "id": "67bada62df51e2ef35ad13691212c5b8",
+          "value": "69.5",
+          "prices": {
+           "23": {
+            "id": "713555712",
+            "price": -2500,
+            "price_delta": 500,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:43Z",
+            "source_id": "36275765-734.196799067-12215019"
+           }
+          }
+         },
+         {
+          "id": "47054afeb19be751de627323bb5e8618",
+          "value": "70.5",
+          "prices": {
+           "23": {
+            "id": "713555717",
+            "price": -3000,
+            "price_delta": 500,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799067-12247072"
+           }
+          }
+         },
+         {
+          "id": "c6c018603bbdafa15d6dd7102d7337d5",
+          "value": "71.5",
+          "prices": {
+           "23": {
+            "id": "713555714",
+            "price": -4000,
+            "price_delta": 500,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:25Z",
+            "source_id": "36275765-734.196799067-12215025"
+           }
+          }
+         },
+         {
+          "id": "1e9c6f75dc38669b8b0f8130098250b3",
+          "value": "72.5",
+          "prices": {
+           "23": {
+            "id": "713555719",
+            "price": -4500,
+            "price_delta": 500,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:43Z",
+            "source_id": "36275765-734.196799067-12247074"
+           }
+          }
+         },
+         {
+          "id": "3e56597a8557e9766e87652004637193",
+          "value": "73.5",
+          "prices": {
+           "23": {
+            "id": "713555725",
+            "price": -5000,
+            "price_delta": 1000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799067-12386717"
+           }
+          }
+         },
+         {
+          "id": "3c4ad8912cea2a9cbb19cae79c37cdbe",
+          "value": "74.5",
+          "prices": {
+           "23": {
+            "id": "713555721",
+            "price": -6000,
+            "price_delta": 1000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T19:48:18Z",
+            "source_id": "36275765-734.196799067-12291344"
+           }
+          }
+         },
+         {
+          "id": "abf52c884dc087efebe0d81b867080ef",
+          "value": "75.5",
+          "prices": {
+           "23": {
+            "id": "713555727",
+            "price": -7000,
+            "price_delta": 3000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:43Z",
+            "source_id": "36275765-734.196799067-12386719"
+           }
+          }
+         },
+         {
+          "id": "239c5306b5ff62791b07fd788c594b6a",
+          "value": "76.5",
+          "prices": {
+           "23": {
+            "id": "713555723",
+            "price": -10000,
+            "price_delta": 10000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T14:48:22Z",
+            "source_id": "36275765-734.196799067-12291346"
+           }
+          }
+         },
+         {
+          "id": "608c8e7a8489362e510c25c753e291a4",
+          "value": "77.5",
+          "prices": {
+           "23": {
+            "id": "713555729",
+            "price": -10000,
+            "price_delta": 10000,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:25:43Z",
+            "source_id": "36275765-734.196799067-12386721"
+           }
+          }
+         },
+         {
+          "id": "f34633b375ec688873fcc89e513b91ad",
+          "value": "78.5",
+          "prices": {
+           "23": {
+            "id": "713555732",
+            "price": -20000,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T22:04:07Z",
+            "source_id": "36275765-734.196799067-15516344"
+           }
+          }
+         },
+         {
+          "id": "0691ef1d5d835584ea6e51b31476ca53",
+          "value": "39",
+          "prices": {
+           "22": {
+            "id": "713848278",
+            "price": 300,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:05Z",
+            "closed_at": "2026-11-10T18:26:05Z",
+            "source_id": "44036-4475069-7317919"
+           }
+          }
+         },
+         {
+          "id": "af8921aab87de242e382a74da6ffc276",
+          "value": "40",
+          "prices": {
+           "22": {
+            "id": "713848270",
+            "price": 280,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:47Z",
+            "source_id": "44036-4475065-7317911"
+           }
+          }
+         },
+         {
+          "id": "be8079b5257efedd7d5d58c07e338969",
+          "value": "41",
+          "prices": {
+           "22": {
+            "id": "713848262",
+            "price": 240,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:06Z",
+            "source_id": "44036-4475061-7317903"
+           }
+          }
+         },
+         {
+          "id": "e7eae81ab640f5b2f612b8dcdf356937",
+          "value": "42",
+          "prices": {
+           "22": {
+            "id": "713848254",
+            "price": 210,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:06Z",
+            "source_id": "44036-4475057-7317895"
+           }
+          }
+         },
+         {
+          "id": "106da7d5ffe8cc272743981efb2f032c",
+          "value": "43",
+          "prices": {
+           "22": {
+            "id": "713848246",
+            "price": 195,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T21:57:56Z",
+            "source_id": "44036-4475053-7317887"
+           }
+          }
+         },
+         {
+          "id": "792bc0f71752c5778c9f9cd4016da860",
+          "value": "44",
+          "prices": {
+           "22": {
+            "id": "713848240",
+            "price": 170,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:48Z",
+            "source_id": "44036-4475050-7317881"
+           }
+          }
+         },
+         {
+          "id": "dba4cc9cd76d879e8f0d9859bb3941dd",
+          "value": "45",
+          "prices": {
+           "22": {
+            "id": "713848230",
+            "price": 145,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:05Z",
+            "source_id": "44036-4475045-7317871"
+           }
+          }
+         },
+         {
+          "id": "634318614b4f7342bac6bc3c8be5cd00",
+          "value": "46",
+          "prices": {
+           "22": {
+            "id": "713848220",
+            "price": 130,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:30:59Z",
+            "source_id": "44036-4475040-7317861"
+           }
+          }
+         },
+         {
+          "id": "ba27c851a786543c6c97de07d8bbed3a",
+          "value": "47",
+          "prices": {
+           "22": {
+            "id": "713848218",
+            "price": 120,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:45Z",
+            "source_id": "44036-4475039-7317859"
+           }
+          }
+         },
+         {
+          "id": "7b8ae62a03eca8b6c56aa443d20ff5e2",
+          "value": "48",
+          "prices": {
+           "22": {
+            "id": "712921960",
+            "price": 105,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:47Z",
+            "source_id": "44036-4467486-7297594"
+           }
+          }
+         },
+         {
+          "id": "fb1343319eb20b4d875c6f35451d3cda",
+          "value": "49",
+          "prices": {
+           "22": {
+            "id": "713848224",
+            "price": -108,
+            "price_delta": 2,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:48Z",
+            "source_id": "44036-4475042-7317865"
+           }
+          }
+         },
+         {
+          "id": "5615a89fdb1aee4b8e9262e5ffe04135",
+          "value": "50",
+          "prices": {
+           "22": {
+            "id": "713848234",
+            "price": -120,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:05Z",
+            "source_id": "44036-4475047-7317875"
+           }
+          }
+         },
+         {
+          "id": "a2b806b647695fd2ac2091d30caa63a4",
+          "value": "51",
+          "prices": {
+           "22": {
+            "id": "713848238",
+            "price": -135,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:48Z",
+            "source_id": "44036-4475049-7317879"
+           }
+          }
+         },
+         {
+          "id": "45e79a8a51c5c1544958c79feef7e5b1",
+          "value": "52",
+          "prices": {
+           "22": {
+            "id": "713848248",
+            "price": -160,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:06Z",
+            "source_id": "44036-4475054-7317889"
+           }
+          }
+         },
+         {
+          "id": "0598c0da180b1d67696d2cf5d63e09f2",
+          "value": "53",
+          "prices": {
+           "22": {
+            "id": "713848256",
+            "price": -175,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:07Z",
+            "source_id": "44036-4475058-7317897"
+           }
+          }
+         },
+         {
+          "id": "ba53a8b81410f98af02f475337c427e3",
+          "value": "54",
+          "prices": {
+           "22": {
+            "id": "713848264",
+            "price": -190,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:48Z",
+            "source_id": "44036-4475062-7317905"
+           }
+          }
+         },
+         {
+          "id": "145dc67300e7b6c4c7df46127c9f4a87",
+          "value": "55",
+          "prices": {
+           "22": {
+            "id": "713848272",
+            "price": -220,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:47Z",
+            "source_id": "44036-4475066-7317913"
+           }
+          }
+         },
+         {
+          "id": "6c1975078919c0be449d9cb77f75fe0a",
+          "value": "56",
+          "prices": {
+           "22": {
+            "id": "713848280",
+            "price": -235,
+            "price_delta": 15,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:45Z",
+            "source_id": "44036-4475070-7317921"
+           }
+          }
+         },
+         {
+          "id": "628347bc8410bea9a45b7841769bfe6f",
+          "value": "57",
+          "prices": {
+           "22": {
+            "id": "713848286",
+            "price": -275,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:44Z",
+            "source_id": "44036-4475074-7317929"
+           }
+          }
+         },
+         {
+          "id": "865721fa4f22331687574b749e766323",
+          "value": "58",
+          "prices": {
+           "22": {
+            "id": "713848290",
+            "price": -325,
+            "price_delta": 25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T18:26:05Z",
+            "source_id": "44036-4475561-7318942"
+           }
+          }
+         },
+         {
+          "id": "8b803b804e4256bf2062620eae8aed62",
+          "value": "59",
+          "prices": {
+           "22": {
+            "id": "714272537",
+            "price": -350,
+            "price_delta": 25,
+            "is_main_line": false,
+            "updated_at": "2026-11-10T23:45:47Z",
+            "source_id": "44036-4495733-7362767"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "11": "491172776",
+     "19": "84695547",
+     "2": "29514589",
+     "22": "44036",
+     "7": "44742413-28F8-437F-8A5C-5493A664065C",
+     "16": "33521371759500023",
+     "18": "474645894",
+     "25": "26NOV15PITCIN",
+     "26": "nfl-pit-cin-2026-11-16",
+     "28": "6961286800035938734",
+     "30": "01a1a3d7-a33f-7890-9544-dd8ce5a5f310",
+     "35": "bef26888-c936-283e-3a39-429917081091",
+     "6": "491172776",
+     "9": "44742413-28F8-437F-8A5C-5493A664065C",
+     "21": "1028824798",
+     "24": "69718334-8116-4987-a5a2-1e509383bfd0",
+     "29": "1700008846",
+     "33": "197769141",
+     "34": "197769141",
+     "31": "217055",
+     "3": "1639660819",
+     "4": "491172776",
+     "14": "6232801",
+     "23": "36275765",
+     "32": "600740"
+    },
+    "affiliate_deep_links": {
+     "22": "https://sports.nj.betmgm.com/en/sports/events/6:44036",
+     "16": "https://www.matchbook.com/events/33521371759500023",
+     "11": "https://sports.lowvig.ag/sportsbook/football/nfl/game/491172776",
+     "25": "https://kalshi.com/markets/kxnflgame/nfl-game/kxnflgame-26nov15pitcin",
+     "26": "https://polymarket.com/event/nfl-pit-cin-2026-11-16",
+     "3": "https://www.pinnacle.com/en/football/nfl/pittsburgh-steelers-vs-cincinnati-bengals/1639660819/",
+     "30": "https://novig.com/event-markets/01a1a3d7-a33f-7890-9544-dd8ce5a5f310",
+     "14": "https://sports.everygame.eu/",
+     "7": "https://www.bookmaker.eu/",
+     "31": "https://polymarket.us/sports/nfl/nfl-pit-cin-2026-11-15",
+     "4": "https://www.sportsbetting.ag/sportsbook/football/nfl/game/491172776",
+     "33": "https://bet105.ag/",
+     "2": "https://www.bovada.lv/sports/football/nfl/pittsburgh-steelers-cincinnati-bengals-202611152020",
+     "24": "https://sportsbook.thescore.bet/sport/football/organization/united-states/competition/nfl/event/69718334-8116-4987-a5a2-1e509383bfd0",
+     "28": "https://app.hardrock.bet/competition/football/6961286800035938734",
+     "32": "https://www.circasports.com/",
+     "19": "https://sportsbook.draftkings.com/event/pit-steelers-%40-cin-bengals/34118114",
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/197769141",
+     "21": "https://www.unibet.co.uk/betting/odds/contest/8aff26b36e0c152b208f6ed00f615a69",
+     "9": "https://sportsbook.betcris.com/",
+     "18": "https://landings.youwager.lv/partners/landing-a/index.shtml?affid=THERUNDOWN&A=41782&B=0&T=I&source=TheRunDown_RunDownLP",
+     "35": "https://sportsbook.caesars.com/",
+     "29": "https://www.prophetx.co/event/1700008846",
+     "23": "https://sportsbook.fanduel.com/football/nfl/pittsburgh-steelers-@-cincinnati-bengals-36275765",
+     "6": "https://www.betonline.ag/sportsbook/football/nfl/game/491172776"
+    },
+    "affiliate_deep_link_types": {
+     "35": "catalog",
+     "14": "catalog",
+     "7": "catalog",
+     "9": "catalog",
+     "18": "catalog",
+     "33": "catalog",
+     "32": "catalog"
+    }
+   }
+  ]
+ }
+}

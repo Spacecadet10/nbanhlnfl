@@ -1,0 +1,24 @@
+# *
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /cms/
+
+# Host
+Host: https://www.dailyfaceoff.com
+
+# Main sitemap
+Sitemap: https://www.dailyfaceoff.com/sitemap.xml
+
+# Google News sitemap
+Sitemap: https://www.dailyfaceoff.com/googlenewssitemap
+
+# News sitemaps
+Sitemap: https://www.dailyfaceoff.com/news-sitemap-2026.xml
+Sitemap: https://www.dailyfaceoff.com/news-sitemap-2025.xml
+Sitemap: https://www.dailyfaceoff.com/news-sitemap-2024.xml
+Sitemap: https://www.dailyfaceoff.com/news-sitemap-2023.xml
+Sitemap: https://www.dailyfaceoff.com/news-sitemap-2022.xml
+Sitemap: https://www.dailyfaceoff.com/news-sitemap-2021.xml
+Sitemap: https://www.dailyfaceoff.com/news-sitemap-2020.xml
+

@@ -1,0 +1,1 @@
+robots.txt fetches for D/E candidates on 2026-11-11 ~04:50 UTC (2026-11-10 ~23:50 ET; first pass https://<host>/robots.txt without following redirects) and L-*.txt (second pass following redirects, ~05:05 UTC). Status codes listed in notes-D-E.md.

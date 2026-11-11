@@ -1,0 +1,31 @@
+https://gamma-api.polymarket.com/sports | 2026-11-11T04:53:04Z | HTTP 200
+https://gamma-api.polymarket.com/sports/market-types | 2026-11-11T04:53:05Z | HTTP 200
+https://gamma-api.polymarket.com/events?series_id=10345&closed=false&limit=100 | 2026-11-11T04:53:16Z | HTTP 200
+https://gamma-api.polymarket.com/events?series_id=10346&closed=false&limit=100 | 2026-11-11T04:53:37Z | HTTP 200
+https://gamma-api.polymarket.com/events?series_id=12185&closed=false&limit=100 | 2026-11-11T04:53:40Z | HTTP 200
+https://gamma-api.polymarket.com/events?series_id=11446&closed=false&limit=100 | 2026-11-11T04:53:43Z | HTTP 200
+https://gamma-api.polymarket.com/events?series_id=10188&closed=false&limit=100 | 2026-11-11T04:53:45Z | HTTP 200
+https://gamma-api.polymarket.com/events/slug/unl-eng-hrv-2026-11-12 | 2026-11-11T04:54:03Z | HTTP 200
+https://gamma-api.polymarket.com/events/slug/unl-eng-hrv-2026-11-12-more-markets | 2026-11-11T04:54:05Z | HTTP 200
+https://gamma-api.polymarket.com/events/slug/unl-eng-hrv-2026-11-12-total-corners | 2026-11-11T04:54:06Z | HTTP 200
+https://gamma-api.polymarket.com/events/slug/epl-mac-ful-2026-11-21-more-markets | 2026-11-11T04:54:07Z | HTTP 200
+https://gamma-api.polymarket.com/events/slug/epl-mac-ful-2026-11-21-total-corners | 2026-11-11T04:54:09Z | HTTP 200
+https://gamma-api.polymarket.com/events/slug/nhl-tb-buf-2026-11-11 | 2026-11-11T04:54:10Z | HTTP 200
+https://gamma-api.polymarket.com/events/slug/nfl-was-nyg-2026-11-13 | 2026-11-11T04:54:11Z | HTTP 200
+https://gamma-api.polymarket.com/markets/keyset?sports_market_types=hockey_team_regulation_winner&closed=false&limit=20 | 2026-11-11T04:54:12Z | HTTP 200
+https://gamma-api.polymarket.com/markets/keyset?sports_market_types=double_chance&closed=false&limit=20 | 2026-11-11T04:54:13Z | HTTP 200
+https://gamma-api.polymarket.com/markets/keyset?sports_market_types=team_totals_home&closed=false&limit=20 | 2026-11-11T04:54:15Z | HTTP 200
+https://gamma-api.polymarket.com/markets/keyset?sports_market_types=soccer_home_team_totals&closed=false&limit=20 | 2026-11-11T04:54:16Z | HTTP 200
+https://clob.polymarket.com/prices-history?market=97027489307032215110972186201344895417806718551177800302359478222488814352091&interval=max&fidelity=60 | 2026-11-11T04:54:34Z | HTTP 200
+https://clob.polymarket.com/prices-history?market=43750464061270184309619685145079329482233307710980322143400674568977494665028&interval=max&fidelity=60 | 2026-11-11T04:54:45Z | HTTP 200
+https://gamma-api.polymarket.com/events?series_id=10188&closed=true&limit=50&order=startDate&ascending=true | 2026-11-11T04:54:47Z | HTTP 200
+https://gamma-api.polymarket.com/markets?sports_market_types=team_totals&closed=true&limit=20&order=startDate&ascending=true | 2026-11-11T04:54:48Z | HTTP 200
+https://gamma-api.polymarket.com/markets?sports_market_types=total_corners&closed=true&limit=5&order=startDate&ascending=true | 2026-11-11T04:54:57Z | HTTP 200
+https://gamma-api.polymarket.com/markets?sports_market_types=both_teams_to_score&closed=true&limit=5&order=startDate&ascending=true | 2026-11-11T04:54:59Z | HTTP 200
+https://gamma-api.polymarket.com/markets?sports_market_types=soccer_team_totals&closed=true&limit=5&order=startDate&ascending=true | 2026-11-11T04:55:02Z | HTTP 500
+https://gamma-api.polymarket.com/markets?sports_market_types=hockey_team_regulation_winner&closed=true&limit=5&order=startDate&ascending=true | 2026-11-11T04:55:03Z | HTTP 200
+https://polymarket.com/tos | 2026-11-11T04:55:25Z
+NOTE: large *-series-events.json files gzip-compressed locally after download (content unchanged).
+nba-cle-nyk-2026-11-11.event.json = one event extracted locally from nba-series-events.json.gz (not a separate request)
+
+2026-11-11 (main session): data bodies (*.json) deleted unused: the E-polymarket terms forbid automated collection/storage. Only terms, docs, robots and this file are kept.

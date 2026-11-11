@@ -1,0 +1,200 @@
+game_id,competition,season,round,date,home_team,away_team,home_score,away_score,avg_home_odds,avg_draw_odds,avg_away_odds,home_p1,away_p1,home_p2,away_p2,home_ot,away_ot,has_closing_odds
+1,NBA,1997-98,,1998-01-01,Memphis Grizzlies,Philadelphia 76ers,104,115,,,,,,,,,,False
+2,NHL,1997-98,,1998-01-01,Arizona Coyotes,Los Angeles Kings,4,0,,,,,,,,,,False
+3,NHL,1997-98,,1998-01-01,Boston Bruins,Ottawa Senators,0,0,,,,,,,,,,False
+4,NHL,1997-98,,1998-01-01,Chicago Blackhawks,Toronto Maple Leafs,3,3,,,,,,,,,,False
+5,NHL,1997-98,,1998-01-01,Florida Panthers,New Jersey Devils,2,1,,,,,,,,,,False
+6,NHL,1997-98,,1998-01-01,Washington Capitals,Anaheim Ducks,3,2,,,,,,,,,,False
+7,NBA,1997-98,,1998-01-02,Boston Celtics,Minnesota Timberwolves,93,89,,,,,,,,,,False
+8,NBA,1997-98,,1998-01-02,Brooklyn Nets,New York Knicks,103,98,,,,,,,,,,False
+9,NBA,1997-98,,1998-01-02,Charlotte Hornets,Miami Heat,99,88,,,,,,,,,,False
+10,NBA,1997-98,,1998-01-02,Chicago Bulls,Milwaukee Bucks,114,100,,,,,,,,,,False
+11,NBA,1997-98,,1998-01-02,Denver Nuggets,Houston Rockets,115,116,,,,,,,,,,False
+12,NBA,1997-98,,1998-01-02,Golden State Warriors,Los Angeles Clippers,79,94,,,,,,,,,,False
+13,NBA,1997-98,,1998-01-02,Los Angeles Lakers,Atlanta Hawks,116,106,,,,,,,,,,False
+14,NBA,1997-98,,1998-01-02,Oklahoma City Thunder,Philadelphia 76ers,90,73,,,,,,,,,,False
+15,NBA,1997-98,,1998-01-02,Orlando Magic,Cleveland Cavaliers,71,81,,,,,,,,,,False
+16,NBA,1997-98,,1998-01-02,Phoenix Suns,Dallas Mavericks,92,85,,,,,,,,,,False
+17,NBA,1997-98,,1998-01-02,Sacramento Kings,Memphis Grizzlies,94,80,,,,,,,,,,False
+18,NBA,1997-98,,1998-01-02,San Antonio Spurs,Portland Trail Blazers,85,69,,,,,,,,,,False
+19,NBA,1997-98,,1998-01-02,Toronto Raptors,Detroit Pistons,88,91,,,,,,,,,,False
+20,NBA,1997-98,,1998-01-02,Washington Wizards,Indiana Pacers,81,99,,,,,,,,,,False
+21,NHL,1997-98,,1998-01-02,Buffalo Sabres,Colorado Avalanche,2,2,,,,,,,,,,False
+22,NHL,1997-98,,1998-01-02,Dallas Stars,New York Islanders,2,1,,,,,,,,,,False
+23,NHL,1997-98,,1998-01-02,Detroit Red Wings,San Jose Sharks,1,4,,,,,,,,,,False
+24,NHL,1997-98,,1998-01-02,Edmonton Oilers,Montreal Canadiens,3,5,,,,,,,,,,False
+25,NHL,1997-98,,1998-01-02,Tampa Bay Lightning,Florida Panthers,2,2,,,,,,,,,,False
+26,NBA,1997-98,,1998-01-03,Cleveland Cavaliers,Brooklyn Nets,95,81,,,,,,,,,,False
+27,NBA,1997-98,,1998-01-03,Detroit Pistons,Chicago Bulls,96,105,,,,,,,,,,False
+28,NBA,1997-98,,1998-01-03,Houston Rockets,Portland Trail Blazers,95,97,,,,,,,,,,False
+29,NBA,1997-98,,1998-01-03,Indiana Pacers,Toronto Raptors,89,77,,,,,,,,,,False
+30,NBA,1997-98,,1998-01-03,Los Angeles Clippers,Dallas Mavericks,97,88,,,,,,,,,,False
+31,NBA,1997-98,,1998-01-03,Miami Heat,San Antonio Spurs,77,84,,,,,,,,,,False
+32,NBA,1997-98,,1998-01-03,Milwaukee Bucks,Boston Celtics,99,106,,,,,,,,,,False
+33,NBA,1997-98,,1998-01-03,Minnesota Timberwolves,Denver Nuggets,109,87,,,,,,,,,,False
+34,NBA,1997-98,,1998-01-03,New York Knicks,Orlando Magic,88,84,,,,,,,,,,False
+35,NBA,1997-98,,1998-01-03,Utah Jazz,Atlanta Hawks,97,82,,,,,,,,,,False
+36,NHL,1997-98,,1998-01-03,Arizona Coyotes,New York Islanders,2,1,,,,,,,,,,False
+37,NHL,1997-98,,1998-01-03,Boston Bruins,San Jose Sharks,3,0,,,,,,,,,,False
+38,NHL,1997-98,,1998-01-03,Carolina Hurricanes,Dallas Stars,1,6,,,,,,,,,,False
+39,NHL,1997-98,,1998-01-03,New Jersey Devils,Toronto Maple Leafs,4,2,,,,,,,,,,False
+40,NHL,1997-98,,1998-01-03,Ottawa Senators,Philadelphia Flyers,2,7,,,,,,,,,,False
+41,NHL,1997-98,,1998-01-03,Pittsburgh Penguins,Colorado Avalanche,4,5,,,,,,,,,,False
+42,NHL,1997-98,,1998-01-03,St. Louis Blues,Calgary Flames,4,3,,,,,,,,,,False
+43,NHL,1997-98,,1998-01-03,Tampa Bay Lightning,Anaheim Ducks,1,4,,,,,,,,,,False
+44,NHL,1997-98,,1998-01-03,Vancouver Canucks,Montreal Canadiens,2,4,,,,,,,,,,False
+45,NHL,1997-98,,1998-01-03,Washington Capitals,New York Rangers,2,3,,,,,,,,,,False
+46,NBA,1997-98,,1998-01-04,Los Angeles Lakers,Philadelphia 76ers,107,113,,,,,,,,,,False
+47,NBA,1997-98,,1998-01-04,Memphis Grizzlies,Oklahoma City Thunder,108,120,,,,,,,,,,False
+48,NBA,1997-98,,1998-01-04,Sacramento Kings,Charlotte Hornets,106,90,,,,,,,,,,False
+49,NBA,1997-98,,1998-01-04,Washington Wizards,Phoenix Suns,109,99,,,,,,,,,,False
+50,NHL,1997-98,,1998-01-04,Chicago Blackhawks,Detroit Red Wings,3,1,,,,,,,,,,False
+51,NHL,1997-98,,1998-01-04,Edmonton Oilers,Los Angeles Kings,2,3,,,,,,,,,,False
+52,NHL,1997-98,,1998-01-04,Florida Panthers,Anaheim Ducks,3,3,,,,,,,,,,False
+53,NBA,1997-98,,1998-01-05,New York Knicks,Washington Wizards,106,113,,,,,,,,,,False
+54,NBA,1997-98,,1998-01-05,Orlando Magic,San Antonio Spurs,69,74,,,,,,,,,,False
+55,NBA,1997-98,,1998-01-05,Portland Trail Blazers,Milwaukee Bucks,92,98,,,,,,,,,,False
+56,NBA,1997-98,,1998-01-05,Toronto Raptors,Houston Rockets,96,120,,,,,,,,,,False
+57,NHL,1997-98,,1998-01-05,Carolina Hurricanes,Ottawa Senators,4,1,,,,,,,,,,False
+58,NHL,1997-98,,1998-01-05,Chicago Blackhawks,Calgary Flames,1,1,,,,,,,,,,False
+59,NHL,1997-98,,1998-01-05,New Jersey Devils,Dallas Stars,3,4,,,,,,,,,,False
+60,NHL,1997-98,,1998-01-05,Vancouver Canucks,Los Angeles Kings,3,2,,,,,,,,,,False
+61,NBA,1997-98,,1998-01-06,Chicago Bulls,Boston Celtics,90,79,,,,,,,,,,False
+62,NBA,1997-98,,1998-01-06,Cleveland Cavaliers,Houston Rockets,100,70,,,,,,,,,,False
+63,NBA,1997-98,,1998-01-06,Dallas Mavericks,Denver Nuggets,108,90,,,,,,,,,,False
+64,NBA,1997-98,,1998-01-06,Indiana Pacers,Phoenix Suns,80,81,,,,,,,,,,False
+65,NBA,1997-98,,1998-01-06,Memphis Grizzlies,Los Angeles Lakers,87,100,,,,,,,,,,False
+66,NBA,1997-98,,1998-01-06,Oklahoma City Thunder,Charlotte Hornets,102,81,,,,,,,,,,False
+67,NBA,1997-98,,1998-01-06,Sacramento Kings,Los Angeles Clippers,105,89,,,,,,,,,,False
+68,NBA,1997-98,,1998-01-06,Utah Jazz,Philadelphia 76ers,88,88,,,,,,,,,,False
+69,NHL,1997-98,,1998-01-06,Colorado Avalanche,Calgary Flames,1,3,,,,,,,,,,False
+70,NHL,1997-98,,1998-01-06,Detroit Red Wings,Arizona Coyotes,2,0,,,,,,,,,,False
+71,NHL,1997-98,,1998-01-06,New York Islanders,Pittsburgh Penguins,2,4,,,,,,,,,,False
+72,NHL,1997-98,,1998-01-06,New York Rangers,Carolina Hurricanes,4,2,,,,,,,,,,False
+73,NHL,1997-98,,1998-01-06,San Jose Sharks,St. Louis Blues,1,5,,,,,,,,,,False
+74,NHL,1997-98,,1998-01-06,Washington Capitals,Toronto Maple Leafs,5,3,,,,,,,,,,False
+75,NBA,1997-98,,1998-01-07,Golden State Warriors,Atlanta Hawks,86,106,,,,,,,,,,False
+76,NBA,1997-98,,1998-01-07,Los Angeles Clippers,Memphis Grizzlies,110,102,,,,,,,,,,False
+77,NBA,1997-98,,1998-01-07,Los Angeles Lakers,Milwaukee Bucks,114,102,,,,,,,,,,False
+78,NBA,1997-98,,1998-01-07,Miami Heat,Chicago Bulls,99,72,,,,,,,,,,False
+79,NBA,1997-98,,1998-01-07,Minnesota Timberwolves,Phoenix Suns,77,92,,,,,,,,,,False
+80,NBA,1997-98,,1998-01-07,New York Knicks,Brooklyn Nets,89,88,,,,,,,,,,False
+81,NBA,1997-98,,1998-01-07,Portland Trail Blazers,Charlotte Hornets,89,91,,,,,,,,,,False
+82,NBA,1997-98,,1998-01-07,San Antonio Spurs,Denver Nuggets,96,89,,,,,,,,,,False
+83,NBA,1997-98,,1998-01-07,Toronto Raptors,Orlando Magic,81,83,,,,,,,,,,False
+84,NBA,1997-98,,1998-01-07,Washington Wizards,Boston Celtics,110,108,,,,,,,,,,False
+85,NHL,1997-98,,1998-01-07,Anaheim Ducks,Buffalo Sabres,2,3,,,,,,,,,,False
+86,NHL,1997-98,,1998-01-07,Dallas Stars,Ottawa Senators,0,2,,,,,,,,,,False
+87,NHL,1997-98,,1998-01-07,Edmonton Oilers,Florida Panthers,3,2,,,,,,,,,,False
+88,NHL,1997-98,,1998-01-07,Montreal Canadiens,Boston Bruins,1,2,,,,,,,,,,False
+89,NHL,1997-98,,1998-01-07,New Jersey Devils,Pittsburgh Penguins,3,1,,,,,,,,,,False
+90,NHL,1997-98,,1998-01-07,Tampa Bay Lightning,Toronto Maple Leafs,2,5,,,,,,,,,,False
+91,NHL,1997-98,,1998-01-07,Vancouver Canucks,St. Louis Blues,2,3,,,,,,,,,,False
+92,NBA,1997-98,,1998-01-08,Brooklyn Nets,Orlando Magic,89,87,,,,,,,,,,False
+93,NBA,1997-98,,1998-01-08,Cleveland Cavaliers,Oklahoma City Thunder,84,109,,,,,,,,,,False
+94,NBA,1997-98,,1998-01-08,Dallas Mavericks,Sacramento Kings,92,103,,,,,,,,,,False
+95,NBA,1997-98,,1998-01-08,Houston Rockets,Indiana Pacers,80,87,,,,,,,,,,False
+96,NBA,1997-98,,1998-01-08,Utah Jazz,Milwaukee Bucks,116,109,,,,,,,,,,False
+97,NHL,1997-98,,1998-01-08,Boston Bruins,Arizona Coyotes,5,2,,,,,,,,,,False
+98,NHL,1997-98,,1998-01-08,Carolina Hurricanes,Philadelphia Flyers,3,3,,,,,,,,,,False
+99,NHL,1997-98,,1998-01-08,Colorado Avalanche,Vancouver Canucks,4,4,,,,,,,,,,False
+100,NHL,1997-98,,1998-01-08,Los Angeles Kings,Buffalo Sabres,2,2,,,,,,,,,,False
+101,NHL,1997-98,,1998-01-08,New York Islanders,Montreal Canadiens,2,8,,,,,,,,,,False
+102,NHL,1997-98,,1998-01-08,New York Rangers,Washington Capitals,3,5,,,,,,,,,,False
+103,NBA,1997-98,,1998-01-09,Atlanta Hawks,Washington Wizards,82,77,,,,,,,,,,False
+104,NBA,1997-98,,1998-01-09,Boston Celtics,Oklahoma City Thunder,92,111,,,,,,,,,,False
+105,NBA,1997-98,,1998-01-09,Denver Nuggets,Miami Heat,79,98,,,,,,,,,,False
+106,NBA,1997-98,,1998-01-09,Detroit Pistons,Golden State Warriors,101,72,,,,,,,,,,False
+107,NBA,1997-98,,1998-01-09,Los Angeles Clippers,Los Angeles Lakers,115,124,,,,,,,,,,False
+108,NBA,1997-98,,1998-01-09,Memphis Grizzlies,Charlotte Hornets,90,98,,,,,,,,,,False
+109,NBA,1997-98,,1998-01-09,Minnesota Timberwolves,Portland Trail Blazers,96,91,,,,,,,,,,False
+110,NBA,1997-98,,1998-01-09,New York Knicks,Chicago Bulls,89,90,,,,,,,,,,False
+111,NBA,1997-98,,1998-01-09,Phoenix Suns,San Antonio Spurs,100,79,,,,,,,,,,False
+112,NHL,1997-98,,1998-01-09,Anaheim Ducks,Edmonton Oilers,1,5,,,,,,,,,,False
+113,NHL,1997-98,,1998-01-09,Calgary Flames,Florida Panthers,3,3,,,,,,,,,,False
+114,NHL,1997-98,,1998-01-09,Chicago Blackhawks,Arizona Coyotes,2,4,,,,,,,,,,False
+115,NHL,1997-98,,1998-01-09,Dallas Stars,Detroit Red Wings,3,3,,,,,,,,,,False
+116,NHL,1997-98,,1998-01-09,New Jersey Devils,Tampa Bay Lightning,4,1,,,,,,,,,,False
+117,NHL,1997-98,,1998-01-09,Washington Capitals,Philadelphia Flyers,4,1,,,,,,,,,,False
+118,NBA,1997-98,,1998-01-10,Brooklyn Nets,Minnesota Timberwolves,101,108,,,,,,,,,,False
+119,NBA,1997-98,,1998-01-10,Chicago Bulls,Golden State Warriors,87,82,,,,,,,,,,False
+120,NBA,1997-98,,1998-01-10,Cleveland Cavaliers,Toronto Raptors,93,102,,,,,,,,,,False
+121,NBA,1997-98,,1998-01-10,Dallas Mavericks,Indiana Pacers,79,84,,,,,,,,,,False
+122,NBA,1997-98,,1998-01-10,Houston Rockets,Utah Jazz,84,111,,,,,,,,,,False
+123,NBA,1997-98,,1998-01-10,Milwaukee Bucks,Portland Trail Blazers,95,90,,,,,,,,,,False
+124,NBA,1997-98,,1998-01-10,Orlando Magic,Boston Celtics,90,82,,,,,,,,,,False
+125,NBA,1997-98,,1998-01-10,San Antonio Spurs,Sacramento Kings,109,67,,,,,,,,,,False
+126,NHL,1997-98,,1998-01-10,Calgary Flames,St. Louis Blues,1,5,,,,,,,,,,False
+127,NHL,1997-98,,1998-01-10,Colorado Avalanche,Ottawa Senators,3,3,,,,,,,,,,False
+128,NHL,1997-98,,1998-01-10,Los Angeles Kings,Edmonton Oilers,3,4,,,,,,,,,,False
+129,NHL,1997-98,,1998-01-10,New York Islanders,Carolina Hurricanes,1,2,,,,,,,,,,False
+130,NHL,1997-98,,1998-01-10,Pittsburgh Penguins,New Jersey Devils,4,1,,,,,,,,,,False
+131,NHL,1997-98,,1998-01-10,San Jose Sharks,Buffalo Sabres,5,2,,,,,,,,,,False
+132,NHL,1997-98,,1998-01-10,Toronto Maple Leafs,Chicago Blackhawks,3,4,,,,,,,,,,False
+133,NHL,1997-98,,1998-01-10,Vancouver Canucks,Florida Panthers,2,2,,,,,,,,,,False
+134,NBA,1997-98,,1998-01-11,Detroit Pistons,Los Angeles Clippers,113,85,,,,,,,,,,False
+135,NBA,1997-98,,1998-01-11,Los Angeles Lakers,Charlotte Hornets,93,98,,,,,,,,,,False
+136,NBA,1997-98,,1998-01-11,Memphis Grizzlies,Miami Heat,90,96,,,,,,,,,,False
+137,NBA,1997-98,,1998-01-11,New York Knicks,Oklahoma City Thunder,92,91,,,,,,,,,,False
+138,NBA,1997-98,,1998-01-11,Washington Wizards,Atlanta Hawks,102,107,,,,,,,,,,False
+139,NHL,1997-98,,1998-01-11,Anaheim Ducks,Dallas Stars,2,1,,,,,,,,,,False
+140,NHL,1997-98,,1998-01-11,Arizona Coyotes,Ottawa Senators,4,4,,,,,,,,,,False
+141,NHL,1997-98,,1998-01-11,Detroit Red Wings,Washington Capitals,2,0,,,,,,,,,,False
+142,NHL,1997-98,,1998-01-11,Tampa Bay Lightning,Philadelphia Flyers,2,5,,,,,,,,,,False
+143,NBA,1997-98,,1998-01-12,Milwaukee Bucks,Los Angeles Clippers,110,95,,,,,,,,,,False
+144,NBA,1997-98,,1998-01-12,Minnesota Timberwolves,Golden State Warriors,103,87,,,,,,,,,,False
+145,NBA,1997-98,,1998-01-12,Sacramento Kings,Phoenix Suns,96,90,,,,,,,,,,False
+146,NBA,1997-98,,1998-01-12,Toronto Raptors,Brooklyn Nets,100,108,,,,,,,,,,False
+147,NBA,1997-98,,1998-01-12,Utah Jazz,Cleveland Cavaliers,106,99,,,,,,,,,,False
+148,NHL,1997-98,,1998-01-12,Boston Bruins,New Jersey Devils,1,1,,,,,,,,,,False
+149,NHL,1997-98,,1998-01-12,Carolina Hurricanes,Pittsburgh Penguins,1,4,,,,,,,,,,False
+150,NHL,1997-98,,1998-01-12,Chicago Blackhawks,Vancouver Canucks,3,2,,,,,,,,,,False
+151,NHL,1997-98,,1998-01-12,Colorado Avalanche,Florida Panthers,3,1,,,,,,,,,,False
+152,NHL,1997-98,,1998-01-12,Edmonton Oilers,St. Louis Blues,2,1,,,,,,,,,,False
+153,NHL,1997-98,,1998-01-12,Los Angeles Kings,Anaheim Ducks,3,2,,,,,,,,,,False
+154,NHL,1997-98,,1998-01-12,New York Islanders,Detroit Red Wings,1,1,,,,,,,,,,False
+155,NHL,1997-98,,1998-01-12,New York Rangers,Toronto Maple Leafs,3,2,,,,,,,,,,False
+156,NHL,1997-98,,1998-01-12,San Jose Sharks,Dallas Stars,1,3,,,,,,,,,,False
+157,NHL,1997-98,,1998-01-12,Tampa Bay Lightning,Montreal Canadiens,3,6,,,,,,,,,,False
+158,NBA,1997-98,,1998-01-13,Boston Celtics,San Antonio Spurs,88,97,,,,,,,,,,False
+159,NBA,1997-98,,1998-01-13,Charlotte Hornets,Brooklyn Nets,68,81,,,,,,,,,,False
+160,NBA,1997-98,,1998-01-13,Chicago Bulls,Oklahoma City Thunder,101,91,,,,,,,,,,False
+161,NBA,1997-98,,1998-01-13,Denver Nuggets,Orlando Magic,84,98,,,,,,,,,,False
+162,NBA,1997-98,,1998-01-13,Houston Rockets,Dallas Mavericks,100,87,,,,,,,,,,False
+163,NBA,1997-98,,1998-01-13,New York Knicks,Atlanta Hawks,89,91,,,,,,,,,,False
+164,NBA,1997-98,,1998-01-13,Philadelphia 76ers,Memphis Grizzlies,107,89,,,,,,,,,,False
+165,NBA,1997-98,,1998-01-13,Phoenix Suns,Cleveland Cavaliers,84,102,,,,,,,,,,False
+166,NBA,1997-98,,1998-01-13,Portland Trail Blazers,Miami Heat,68,76,,,,,,,,,,False
+167,NHL,1997-98,,1998-01-13,Washington Capitals,Ottawa Senators,4,0,,,,,,,,,,False
+168,NBA,1997-98,,1998-01-14,Atlanta Hawks,Dallas Mavericks,108,82,,,,,,,,,,False
+169,NBA,1997-98,,1998-01-14,Indiana Pacers,Detroit Pistons,100,93,,,,,,,,,,False
+170,NBA,1997-98,,1998-01-14,Los Angeles Lakers,Denver Nuggets,132,114,,,,,,,,,,False
+171,NBA,1997-98,,1998-01-14,Milwaukee Bucks,Golden State Warriors,101,95,,,,,,,,,,False
+172,NBA,1997-98,,1998-01-14,Sacramento Kings,Orlando Magic,108,96,,,,,,,,,,False
+173,NBA,1997-98,,1998-01-14,Toronto Raptors,Los Angeles Clippers,109,101,,,,,,,,,,False
+174,NBA,1997-98,,1998-01-14,Washington Wizards,San Antonio Spurs,79,89,,,,,,,,,,False
+175,NHL,1997-98,,1998-01-14,Anaheim Ducks,Colorado Avalanche,0,2,,,,,,,,,,False
+176,NHL,1997-98,,1998-01-14,Arizona Coyotes,Florida Panthers,3,2,,,,,,,,,,False
+177,NHL,1997-98,,1998-01-14,Boston Bruins,Pittsburgh Penguins,5,2,,,,,,,,,,False
+178,NHL,1997-98,,1998-01-14,Carolina Hurricanes,Chicago Blackhawks,1,4,,,,,,,,,,False
+179,NHL,1997-98,,1998-01-14,Detroit Red Wings,Vancouver Canucks,4,0,,,,,,,,,,False
+180,NHL,1997-98,,1998-01-14,Edmonton Oilers,Calgary Flames,5,2,,,,,,,,,,False
+181,NHL,1997-98,,1998-01-14,New Jersey Devils,New York Rangers,4,1,,,,,,,,,,False
+182,NHL,1997-98,,1998-01-14,Philadelphia Flyers,Montreal Canadiens,3,3,,,,,,,,,,False
+183,NHL,1997-98,,1998-01-14,San Jose Sharks,Los Angeles Kings,2,4,,,,,,,,,,False
+184,NHL,1997-98,,1998-01-14,St. Louis Blues,Dallas Stars,1,2,,,,,,,,,,False
+185,NHL,1997-98,,1998-01-14,Tampa Bay Lightning,New York Islanders,1,7,,,,,,,,,,False
+186,NHL,1997-98,,1998-01-14,Toronto Maple Leafs,Buffalo Sabres,1,4,,,,,,,,,,False
+187,NBA,1997-98,,1998-01-15,Boston Celtics,Memphis Grizzlies,97,93,,,,,,,,,,False
+188,NBA,1997-98,,1998-01-15,Brooklyn Nets,Los Angeles Clippers,116,119,,,,,,,,,,False
+189,NBA,1997-98,,1998-01-15,Detroit Pistons,Charlotte Hornets,95,94,,,,,,,,,,False
+190,NBA,1997-98,,1998-01-15,Oklahoma City Thunder,Miami Heat,103,85,,,,,,,,,,False
+191,NBA,1997-98,,1998-01-15,Philadelphia 76ers,Chicago Bulls,106,96,,,,,,,,,,False
+192,NHL,1997-98,,1998-01-15,Buffalo Sabres,Vancouver Canucks,6,2,,,,,,,,,,False
+193,NHL,1997-98,,1998-01-15,Colorado Avalanche,San Jose Sharks,2,2,,,,,,,,,,False
+194,NHL,1997-98,,1998-01-15,Washington Capitals,Chicago Blackhawks,3,2,,,,,,,,,,False
+195,NBA,1997-98,,1998-01-16,Atlanta Hawks,Golden State Warriors,102,89,,,,,,,,,,False
+196,NBA,1997-98,,1998-01-16,Charlotte Hornets,San Antonio Spurs,71,76,,,,,,,,,,False
+197,NBA,1997-98,,1998-01-16,Denver Nuggets,Cleveland Cavaliers,74,99,,,,,,,,,,False
+198,NBA,1997-98,,1998-01-16,Houston Rockets,Minnesota Timberwolves,115,116,,,,,,,,,,False
+199,NBA,1997-98,,1998-01-16,Indiana Pacers,Sacramento Kings,117,92,,,,,,,,,,False

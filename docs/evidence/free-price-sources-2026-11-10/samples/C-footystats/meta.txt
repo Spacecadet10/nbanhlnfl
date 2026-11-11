@@ -1,0 +1,8 @@
+URL: https://footystats.org/robots.txt
+UTC: 2026-11-11T04:53:29Z
+HTTP: 200 text/plain https://footystats.org/robots.txt
+
+URL: https://footystats.org/terms
+UTC: 2026-11-11T04:54:08Z
+HTTP: 403 text/html; charset=UTF-8 https://footystats.org/terms
+

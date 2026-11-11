@@ -1,0 +1,6 @@
+2026-11-11T04:54:36Z | HTTP 200 | 2189969 bytes | https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv -> games.csv
+full file games.csv was 2189969 bytes, 7549 lines; trimmed to first200 + 2026 rows
+2026-11-11T04:58:54Z | HTTP 200 | 17642 bytes | https://raw.githubusercontent.com/nflverse/nfldata/master/DATASETS.md -> DATASETS.md
+2026-11-11T04:58:56Z | HTTP 200 | 5992 bytes | https://api.github.com/repos/nflverse/nfldata -> repo-api.json
+2026-11-11T05:00:19Z | HTTP 404 | 14 bytes | https://raw.githubusercontent.com/robots.txt -> raw-github-robots.txt
+2026-11-11T05:00:20Z | HTTP 404 | 106 bytes | https://api.github.com/robots.txt -> api-github-robots.txt

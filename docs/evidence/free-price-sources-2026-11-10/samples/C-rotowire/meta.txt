@@ -1,0 +1,18 @@
+URL: https://www.rotowire.com/robots.txt
+UTC: 2026-11-11T04:53:19Z
+HTTP: 200 text/plain https://www.rotowire.com/robots.txt
+
+URL: https://www.rotowire.com/terms.php
+UTC: 2026-11-11T04:54:03Z
+HTTP: 404 text/html; charset=UTF-8 https://www.rotowire.com/terms.php
+
+URL: https://www.rotowire.com/
+UTC: 2026-11-11T04:56:29Z
+HTTP: 200 text/html; charset=UTF-8 https://www.rotowire.com/
+
+URL: https://www.rotowire.com/termsandconditions.php
+UTC: 2026-11-11T04:56:42Z
+HTTP: 200 text/html; charset=UTF-8 https://www.rotowire.com/termsandconditions.php
+
+
+2026-11-11 (main session): home.html deleted unused after review: terms forbid scraping/reproduction or access unverified.

@@ -1,0 +1,17 @@
+# Polymarket US - robots.txt
+# All crawlers, including search and AI/LLM crawlers, may crawl the full site.
+# Blocked below: the JSON/telemetry API, the authenticated portfolio surface,
+# internal search results, and the link-card copies of pages (events, games, home, sports
+# lists) that link-preview crawlers get in place of the page. Nothing on the render path
+# is blocked: /api/og/ stays open - X, Slack, and Google image crawlers fetch event share
+# cards there.
+# Do not add a Disallow for /_next/ - JS bundles load from /_next/static/.
+
+User-agent: *
+Allow: /api/og/
+Disallow: /api/
+Disallow: /portfolio
+Disallow: /search
+Disallow: /link-card$
+Disallow: /*/link-card$
+Sitemap: https://polymarket.us/sitemap.xml

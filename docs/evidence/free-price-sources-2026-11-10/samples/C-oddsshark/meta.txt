@@ -1,0 +1,16 @@
+URL: https://www.oddsshark.com/robots.txt
+UTC: 2026-11-11T04:53:06Z
+HTTP: 410 application/json https://www.oddsshark.com/robots.txt
+
+URL: https://www.oddsshark.com/terms-use
+UTC: 2026-11-11T04:54:05Z
+HTTP: 200 text/html; charset=utf-8 https://www.covers.com/terms#oddsshark
+
+URL: https://www.oddsshark.com/nhl/odds
+UTC: 2026-11-11T04:55:48Z
+HTTP: 200 text/html; charset=utf-8 https://www.covers.com/sport/hockey/nhl/odds#oddsshark
+
+URL: https://www.oddsshark.com/nba/odds
+UTC: 2026-11-11T04:55:50Z
+HTTP: 200 text/html; charset=utf-8 https://www.covers.com/sport/basketball/nba/odds#oddsshark
+

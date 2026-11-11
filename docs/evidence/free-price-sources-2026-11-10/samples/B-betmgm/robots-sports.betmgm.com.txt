@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=3.0, user-scalable=yes" name="viewport">
+<meta name="robots" content="noindex,nofollow">
+  
+<title>betmgm.com</title>
+<style>
+
+body, div, dl, dt, dd, ul, ol, li, h1, h2, h3, h4, h5, h6, pre, form, fieldset, input, textarea, p, blockquote, th, td {margin:0; padding:0;box-sizing:border-box;}
+
+/*
+Style definition
+================
+*/
+
+body {
+    color:#cccccc;
+    background:#0F0F0F;
+    font: 13px/1.6 Verdana, Arial, Helvetica, sans-serif;
+    font:13px/1.6 Verdana, Arial, Helvetica, sans-serif;
+    position:relative;
+    -webkit-text-size-adjust:none;
+    -ms-text-size-adjust:none;
+    text-size-adjust:none;
+}
+.container {
+    margin:0 auto;
+    width: 100%;
+	max-width:800px;
+}
+
+header {
+	background-color:#000000;
+	color:#FFCC00;;
+	padding-top:20px;
+	padding-bottom:10px;
+}
+
+.logo {padding:0 10px;}
+
+.logo > img {max-height:45px; width:auto;}
+
+
+/*
+TYPOGRAPHY
+==========
+*/
+h3 { font-weight: bold;	line-height: 1.2;}
+p { font-size: 1em; }
+
+/*
+Navigation/language Switcher
+==========
+*/
+nav {background-color: #272727;}
+nav ul li {display:inline-block; list-style-type:none; padding:5px; border-bottom:2px #272727 solid;}
+nav ul li:hover {display:inline-block; list-style-type:none; border-bottom:2px #FFFFFF solid;}
+nav ul li a {text-decoration:none; color:#FFFFFF; font-size:11px;}
+
+/*
+Maincontentarea
+==========
+*/
+main {background-color: #0F0F0F;}
+main .container{background-color:#1e1e1e; padding:5px 0 5px 0;}
+main .container .block{ padding:5px 10px 5px 10px;}
+main .container .block .copy-header{ padding:10px; background-color:#000000; color:#ffffff; }
+main .container .block .copy-text{ padding:10px; background-color:#0F0F0F;  color:#FFFFFF;}
+
+footer .copyright {font-size:11px; text-align:center; padding-top:20px; color: #fff;}
+footer a{color:#cccccc;text-decoration:underline;}
+    
+.ep div.block > div > h1:before { content:'Something went wrong: ';}
+.ep div.block > div.cf-im-under-attack > div > h1,
+.ep div.block > h1,
+.ep div.block > div > h1 { padding: 10px; color:#ffffff; font-size:16px;}
+.ep div.block > div.cf-im-under-attack > div > h2,
+.ep div.block > div > h2 { padding: 10px; font-size:15px;}
+.ep div.block > div.cf-im-under-attack > div > h3,
+.ep div.block > div > h3 { padding: 10px; font-size:14px;}
+    
+.ep div.block > div.cf-im-under-attack > div > p,
+.ep div.block > div > p { padding: 10px;}
+    
+.ep div.block > div.cf-im-under-attack > div > ul,
+.ep div.block > div > ul { padding: 10px; list-style-position:inside;}
+    
+.ep div.block > div.cf-im-under-attack > div > a.cf_reload_button,
+.ep div.block > div > a.cf_reload_button { margin:10px 10px 20px 10px; display:inline-block; background-color:#ffffff; border-radius:3px; padding:10px 20px; color:#000000; text-decoration:none; }
+
+
+footer svg{max-width:32px;}
+path.st0{fill:#d5d5d5}
+
+@media only screen and (max-width: 1024px) {
+    .logo {text-align:center;}
+}
+
+.de, .es, .it, .sv, .tr, .bg, .fr, .el, .pl, .da, .cs, .hu, .nl, .pt, .ru, .sl, .hr, .sk, .ro, .fi, .ca, .nb, .pt-br{
+  display: none;
+}
+</style>
+
+</head>
+<body>
+    <section>
+        <header>
+            <div class="container">
+    <div class="logo">
+        <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4NCjwhLS0gR2VuZXJhdG9yOiBBZG9iZSBJbGx1c3RyYXRvciAyMi4wLjEsIFNWRyBFeHBvcnQgUGx1Zy1JbiAuIFNWRyBWZXJzaW9uOiA2LjAwIEJ1aWxkIDApICAtLT4NCjxzdmcgdmVyc2lvbj0iMS4xIiBpZD0iTGF5ZXJfMSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgeD0iMHB4IiB5PSIwcHgiDQoJIHZpZXdCb3g9IjAgMCAzNTAgMTAwIiBzdHlsZT0iZW5hYmxlLWJhY2tncm91bmQ6bmV3IDAgMCAzNTAgMTAwOyIgeG1sOnNwYWNlPSJwcmVzZXJ2ZSI+DQo8c3R5bGUgdHlwZT0idGV4dC9jc3MiPg0KCS5zdDB7ZmlsbDojQkZBODcxO30NCgkuc3Qxe2ZpbGw6I0ZGRkZGRjt9DQo8L3N0eWxlPg0KPGc+DQoJPGc+DQoJCTxyZWN0IHg9IjEuOSIgeT0iMi44IiBjbGFzcz0ic3QwIiB3aWR0aD0iOTQuNCIgaGVpZ2h0PSI5NC43Ii8+DQoJCTxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik05NS40LDMuN3Y5Mi45SDIuOFYzLjdIOTUuNCBNOTcuMiwxLjloLTEuOEgyLjhIMXYxLjh2OTIuOXYxLjhoMS44aDkyLjZoMS44di0xLjhWMy43VjEuOUw5Ny4yLDEuOXoiLz4NCgk8L2c+DQoJPGc+DQoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xNDIuNiw1OC43YzAsNi4zLTQuNywxMC0xNCwxMGgtMTcuMVYzMS40aDE2LjFjOC4zLDAsMTMuMSwzLjUsMTMuMSw5LjZjMCw0LjMtMi4zLDcuMS01LjcsOC41DQoJCQlDMTM5LjcsNTAuNSwxNDIuNiw1My42LDE0Mi42LDU4Ljd6IE0xMTUuMywzNC42djEzLjVoMTEuOWM2LDAsOS40LTIuMyw5LjQtNi44cy0zLjUtNi44LTkuNC02LjhIMTE1LjN6IE0xMzguNiw1OC40DQoJCQljMC00LjgtMy42LTctMTAuMS03aC0xMy4ydjE0aDEzLjJDMTM1LDY1LjQsMTM4LjYsNjMuMywxMzguNiw1OC40eiIvPg0KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTc0LjksNjUuMnYzLjRoLTI2LjRWMzEuNGgyNS42djMuNGgtMjEuNlY0OGgxOS4zdjMuNGgtMTkuM3YxMy44SDE3NC45eiIvPg0KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTkxLjQsMzQuOGgtMTMuMXYtMy40aDMwLjF2My40aC0xMy4xdjMzLjloLTMuOVYzNC44eiIvPg0KCQk8Zz4NCgkJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yNDYsNjguNmwtMC4xLTE5LjhMMjM2LjMsNjVoLTQuN2wtOS41LTE1LjV2MTkuMmgtOS43VjMxLjRoOC43bDEzLjEsMjEuNWwxMi44LTIxLjVoOC43bDAuMSwzNy4zSDI0NnoiLz4NCgkJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yODguMSw0OS4yaDkuM3YxNS40Yy00LjMsMy4xLTEwLjIsNC43LTE1LjcsNC43Yy0xMS45LDAtMjAuNi04LTIwLjYtMTkuNGMwLTExLjMsOC43LTE5LjQsMjAuOC0xOS40DQoJCQkJYzcsMCwxMi42LDIuNCwxNi4zLDYuOGwtNi43LDYuMWMtMi42LTIuOC01LjUtNC4yLTkuMS00LjJjLTYuNCwwLTEwLjYsNC4yLTEwLjYsMTAuNmMwLDYuMyw0LjMsMTAuNiwxMC41LDEwLjYNCgkJCQljMiwwLDMuOC0wLjQsNS43LTEuMlY0OS4yeiIvPg0KCQkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTMzNy44LDY4LjZsLTAuMS0xOS44TDMyOC4xLDY1aC00LjdsLTkuNS0xNS41djE5LjJoLTkuN1YzMS40aDguN2wxMy4xLDIxLjVsMTIuOC0yMS41aDguN2wwLjEsMzcuM0gzMzcuOHoNCgkJCQkiLz4NCgkJPC9nPg0KCTwvZz4NCgk8Zz4NCgkJPHBhdGggZD0iTTcuMyw0MS43YzAsOC4yLDEuMywxNS44LDUuNSwyMi4ydi01LjVjMC02LjksNS41LTExLjYsMTEuMS0xNC44QzE4LjEsNDUuNiwxMS43LDQ0LjMsNy4zLDQxLjciLz4NCgkJPHBhdGggZD0iTTEyLDM1LjloLTEuOGMtMC4zLTEuMSwyLjYtMi45LDMuNC0xLjZMMTIsMzUuOXogTTYuMiwzNS4xYzEuNiwxLjEsMy43LDEuNiw2LjEsMS4zYzEuOCwxLjMsNC41LTIuNCw3LjEtMi40DQoJCQljNC0wLjUsOS0xLjEsMTEuNiwyLjRsLTEuMy0yLjZjLTMuNy0wLjMtNi45LTEuNi05LjgtMy4yQzE0LjEsMjgsMTEuMiwzNi40LDYuMiwzNS4xIi8+DQoJCTxwYXRoIGQ9Ik0yLjgsMjEuNmMxLjgsMC41LDMuNywxLjEsNS41LDEuMWM0LTEuNiw1LTQuOCwzLjQtOWMtMi40LTMuNC01LjUtNS4zLTktNi4xVjIxLjZ6Ii8+DQoJCTxwYXRoIGQ9Ik0yOS4yLDk2LjZjMC41LTAuNSwxLjMtMS4zLDEuOC0yLjFjMTAuNi0xMy43LTEwLTIxLjYtOS41LTM0LjhjMC41LTUuMywzLjQtOS4yLDYuOS0xMy41bC0wLjMtMC4zDQoJCQljLTMuMiwzLjItNC41LDUuMy02LjYsOC40Yy02LjMsMTIuOSwyLjYsMzAuOS02LjYsNDJMMjkuMiw5Ni42eiIvPg0KCQk8cGF0aCBkPSJNNzEuOSw1MC4xYzAsMTktOSwzNS42LTIzLDQ2LjVoNDYuNVYzLjdINDlDNjIuOSwxNC4yLDcxLjksMzEuMSw3MS45LDUwLjEiLz4NCgkJPHBhdGggZD0iTTIuOCw5Ni42aDcuOWwxLjgtMS44QzIzLjQsODAsMTAuNCw2OS43LDIuNSw1OEwyLjgsOTYuNnoiLz4NCgkJPHBhdGggZD0iTTI0LjcsMy43SDIuOHYxLjZjMi4xLDAuMyw0LjUsMS4xLDYuMywxLjhjNC41LDIuNiw3LjksNi45LDcuNCwxMi4xbDkuOC0xLjFjMS4zLTMuMiwxLjgtOC4yLDAuNS0xMC44DQoJCQlDMjYuMyw1LjgsMjUuNSw0LjUsMjQuNywzLjciLz4NCgkJPHBhdGggZD0iTTI5LjIsMy43YzIuMSwyLjksMi4xLDYuNiwyLjQsOS41YzQtMi45LDguNy00LjgsMTMuNy0zLjRjLTMuNC0yLjYtNS44LTQuOC0xMC02LjNMMjkuMiwzLjd6Ii8+DQoJCTxwYXRoIGQ9Ik00OC43LDUwLjlMNDcuOSw1M2wtMS4xLTIuNmMtMi40LDAuNS00LjgsMS4zLTYuMSw0Yy0wLjMsMC44LDAuMywyLjEtMC41LDIuNmMtMS42LTAuMy0wLjgtMi45LTAuOC00LjUNCgkJCWMxLjgtMS44LDYuOS01LjgsOC43LTQuMkM0OC43LDQ4LjUsNDksNDkuOSw0OC43LDUwLjkgTTM4LjEsNjkuOWMtMS4zLTEuMS0wLjgtMi45LTAuOC00LjJsMC44LTAuOGMxLjMsNC4yLDQuOC0wLjgsNy40LTAuMw0KCQkJYzEuMy0wLjUsMC44LTIuNCwyLjEtMi4xQzQ5LjcsNjkuMSw0MS44LDY3LjgsMzguMSw2OS45IE01Ny4xLDcwLjdjMS4xLTguNywwLjMtMTcuOS02LjEtMjRjLTEuMy0wLjMtMy4yLDAuNS00LjItMC44DQoJCQljLTIuOSwyLjYtNi42LDMuNy05LjIsNi42Yy0yLjksMC44LTUuOC0xLjEtOC43LTEuNmMwLTAuNSwwLTAuOCwwLTEuMWMtNCwyLjYtMi45LDcuOS0zLjcsMTEuOWMxLjEsNC41LDYuMSw2LjMsOS4yLDkNCgkJCWM1LDAuOCw5LjUtMS4zLDEzLjctMi45YzAuOCwwLjgsMS44LDEuMywxLjMsMi40Yy0zLjQsNC44LTguNCw2LjktMTQuMyw2LjNjMy40LDYuNiwxLjEsMTQuMy0yLjYsMjAuMUgzNg0KCQkJQzQ2LjYsOTEuOCw1Ni4zLDg0LjQsNTcuMSw3MC43Ii8+DQoJCTxwYXRoIGQ9Ik02NC44LDM1LjFjLTIuOS0xMC0xMS45LTIzLjUtMjMuOC0yMi43Yy00LjUsMC4zLTksMy43LTEwLjYsNi4zYzMuMiwxLjgsNi42LDQuNSw5LjUsNy4xYy0wLjMsMS4xLDAuNSwyLjQtMC44LDIuOQ0KCQkJYy0xLjYtMS4zLTIuOS00LjUtNS0zLjRjMS42LDMuNCw1LjgsMy43LDksNC41YzEuMywxLjMsMC44LDMuNCwzLjQsMi40YzEuMywwLjMsMS44LDEuOCwyLjEsMi45Yy0yLjEsNC03LjksMS4zLTExLjEsMi4xDQoJCQljMi42LDEuMSw1LjUsMS4zLDcuOSwyLjljMi40LDEuNiwzLjItMi4xLDQuMi0zLjRjNC4yLDEuMSwxLjgsNS41LDMuNyw3LjljOSw5LjIsNy4xLDI1LjYsMi42LDM2LjINCgkJCUM2OC41LDY5LjksNjcuNCw0NS4xLDY0LjgsMzUuMSIvPg0KCTwvZz4NCjwvZz4NCjwvc3ZnPg0K" alt="logo">
+    </div>
+</div>
+
+        </header>
+        <main>
+            <div class="ep">
+  <div class="container">
+    <div class="block">
+        <div>24.225.130.162</div>
+        <div>a58aaeb1be0d7b4f</div>
+    </div>
+  </div>
+</div>
+
+        </main>
+        <footer>
+            <div class="container copyright">
+    <p><span class="copyright-text">&copy; <script>document.write(new Date().getFullYear())</script> BetMGM</span></p><br>
+    <svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewbox="0 0 32 32" style="enable-background:new 0 0 32 32;" xml:space="preserve"> <path class="st0" d="M16,0C7.2,0,0,7.2,0,16s7.2,16,16,16s16-7.2,16-16S24.8,0,16,0z M16,30C8.3,30,2,23.7,2,16S8.3,2,16,2 s14,6.3,14,14S23.7,30,16,30z"></path> <path class="st0" d="M12.1,21.7H5.4v-1.5l3.1-3.9c0.4-0.6,0.7-1.1,0.9-1.5s0.3-0.8,0.3-1.2c0-0.5-0.1-0.9-0.3-1.2s-0.5-0.4-0.8-0.4 c-0.4,0-0.6,0.2-0.8,0.5c-0.2,0.4-0.3,0.8-0.3,1.4H5.2l0,0c0-1,0.3-1.9,0.9-2.6s1.4-1.1,2.4-1.1c1,0,1.9,0.3,2.4,0.9 s0.9,1.4,0.9,2.5c0,0.7-0.2,1.3-0.5,1.9s-0.9,1.4-1.6,2.3l-1.5,2.1h3.8L12.1,21.7L12.1,21.7z"></path> <path class="st0" d="M18,21.7h-2.2v-9.1l-2.1,0v-1.6l4.3-0.8V21.7z"></path> <path class="st0" d="M25.6,15.3h2.4v2h-2.4v3.2h-2.1v-3.2h-2.4v-2h2.4v-3.1h2.1C25.6,12.3,25.6,15.3,25.6,15.3z"></path> </svg>
+</div>
+
+        </footer>
+    </section>
+    
+</body>
+</html>

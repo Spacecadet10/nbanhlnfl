@@ -1,0 +1,7 @@
+User-Agent: *
+Allow: /
+Disallow: /board
+Disallow: /pay-near-me/payment-result
+Disallow: /api-status
+
+Sitemap: https://www.prophetx.co/sitemap.xml

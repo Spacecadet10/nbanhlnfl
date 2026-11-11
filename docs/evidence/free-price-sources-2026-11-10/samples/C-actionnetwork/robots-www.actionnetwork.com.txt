@@ -1,0 +1,23 @@
+User-agent: *
+Disallow: /health
+Disallow: /redirect
+Disallow: /fb-*
+Disallow: /fb-*/*
+Disallow: /*/embed
+Disallow: /*/embed?*
+Disallow: /*?*
+Disallow: /content/
+Disallow: /*intcid=
+Disallow: /*_ts=
+Disallow: /*AN_SESSION_TOKEN_V1=
+Disallow: /*etf=
+Disallow: /*shortlink=
+Disallow: /*source_caller=
+Disallow: /*redirecturl=
+Disallow: /*edge=
+Disallow: /*_hsmi=
+Disallow: /*_hsenc=
+Disallow: /*mon=
+Disallow: /*segment=
+
+Sitemap: https://www.actionnetwork.com/sitemap_index.xml

@@ -1,0 +1,9 @@
+URL: https://eu-offering-api.kambicdn.com/offering/v2018/ub/listView/basketball/nba.json?lang=en_GB&market=GB
+UTC: 2026-11-11T04:57:29Z
+HTTP: 200 application/json https://eu-offering-api.kambicdn.com/offering/v2018/ub/listView/basketball/nba.json?lang=en_GB&market=GB
+
+NOTE: this odds request was sent before Unibet/Kambi terms were verified (process slip). Response was HTTP 200 JSON (24719 bytes, NBA listView events). Body deleted without use pending terms check; only status, size, and event count were recorded.
+URL: https://eu-offering-api.kambicdn.com/robots.txt
+UTC: 2026-11-11T04:57:41Z
+HTTP: 429 text/plain; charset=utf-8 https://eu-offering-api.kambicdn.com/robots.txt
+

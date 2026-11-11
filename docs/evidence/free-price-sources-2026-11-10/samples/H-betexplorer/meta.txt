@@ -1,0 +1,2 @@
+2026-11-11T04:57:40Z | HTTP 200 | 575 bytes | https://www.betexplorer.com/robots.txt -> robots.txt
+2026-11-11T04:58:27Z | HTTP 404 | 0 bytes | https://www.betexplorer.com/terms-of-use/ -> terms.html

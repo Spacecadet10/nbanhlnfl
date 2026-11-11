@@ -1,0 +1,188 @@
+v1.1
+Kalshi Developer Agreement
+This Developer Agreement (“Agreement”) constitutes a binding agreement between KalshiEx
+LLC (“Kalshi” or “Exchange”) and any user of Kalshi’s application programming interface
+(“API”).
+1. Acceptance of this Agreement
+Accessing or using Kalshi’s API shall be considered a binding acceptance of this Agreement. If
+you are entering into this Agreement on behalf of a company or other legal entity, you hereby
+represent that you have the authority to bind such entity to this Agreement. This Agreement is
+effective as of the first date that you use the API.
+2. Updates to this Agreement and API
+2.1. Kalshi’
+s Right to Update this Agreement
+We reserve the right to update this Agreement at any time, so please check periodically to make
+sure you are familiar with the most current version.
+2.2. Kalshi’
+s Right to Update the API
+Kalshi reserves the right to update the API without prior notice.
+APIs designated as “beta” may be changed at any time without notice. For APIs designated as
+“stable”, we will make a best effort to notify you in advance of upcoming major changes to give
+you sufficient time to update your code. Failure to update the code may break your application.
+2.3. Kalshi’
+s Right to Enforce and Update Rate Limits
+Kalshi enforces rate limits to protect the integrity of the exchange and ensure fair access for all
+members. Kalshi may update these rate limits whenever needed, without prior notice, as
+required to protect the integrity of the exchange.
+3. Prohibitions
+Use of Kalshi APIs is expressly limited to facilitating a members own trading on the Exchange;
+all other usages are disallowed and may result in account suspension.
+The following are all explicitly prohibited:
+3.1. Collecting, caching, aggregating, or storing data or content accessed via the API
+except for purposes of facilitating your own trading on Kalshi. Y ou may not share
+such data or content with third parties in any manner without prior written
+authorization from Kalshi.
+3.2. Facilitating trading or account creation by other members, or inducing users to
+enter their Kalshi password into another site.
+3.3. Using the API to undermine the integrity of the markets, e.g. spoofing or wash
+sales, or to facilitate any other violation of Kalshi’s Rules or other illegal activity.
+3.4. Attempting to interfere or disrupt the APIs or the exchange, for example with
+denial of service attacks.
+3.5. Accessing the API for purposes of monitoring the availability, performance, or
+functionality of any of Kalshi’s services or for any other benchmarking or
+competitive purposes.
+3.6. Attempting to access data belonging to other members.
+3.7. Sublicensing the API for use by a third party.
+3.8. Attempting to transmit data to Kalshi on any channel that is not secure and
+encrypted (e.g. HTTPS).
+4. Y our Responsibilities
+4.1. Registration
+In order to use the API, you are required to:
+4.1.1. Y ou must be a Member of Kalshi’s Exchange and comply with Kalsh’s
+4.1.2. 4.1.3. Rulebook.
+Review and accept this Kalshi Developer Agreement.
+Provide contact information (email and phone number) that we can use to
+contact you if there are any issues or questions about your usage of the
+API.
+4.2. Account security
+Y ou are responsible for all use that occurs under your account and API login, including any
+activities by you or any third parties that have access to your account information whether
+authorized or not. Y ou must secure your password and application to prevent third parties from
+accessing it.
+4.3. API Best practices
+Y ou must use the API efficiently and responsibly, and follow API best practices.
+For example, you must follow standard best practices for retries on errors, including rate limit
+exceeded errors:
+● Retry with exponential backoff, not immediately.
+● Retry a bounded number of times; persistent errors after many retries may indicate a bug
+in your application.
+● Monitor your application to ensure that it is behaving as expected, with any dashboards
+and alerting required.
+4.4. Responsiveness
+Y ou must respond to questions about your usage of the API sent to the email you provide us. Y ou
+must provide Kalshi updated contact information if your original contact information changes.
+When the breaking changes are planned to the API, you must update your code in a timely
+fashion.
+Kalshi shall be entitled to inspect and audit any records or activity related to your access to or
+use of API for the purpose of verifying compliance with this Agreement. Kalshi may exercise its
+audit right at any time upon notice. Y ou will provide your full cooperation and assistance with
+such audit.
+5. API Calls and Compliance Limits
+Kalshi may set limits on the number of API calls that you can make or anything else about the
+API at its sole discretion without notice. For example, we may limit your API calls in the interest
+of service stability. If you exceed the limits, Kalshi may moderate your activity or cease offering
+you access to the Kalshi APIs altogether at Kalshi's sole discretion. Y ou agree to such limitations
+and will not attempt to circumvent such limitations.
+Kalshi may immediately suspend or terminate your access to the API without notice if Kalshi
+believes, in its sole discretion, that you are in violation of this Agreement.
+6. Licenses
+6.1. Kalshi’
+s intellectual property
+Except as expressly granted in this Agreement, neither party grants the other party any
+intellectual property rights or other proprietary rights. Kalshi, its affiliates, and its licensors retain
+all intellectual property rights (including all patent, trademark, copyright, trade secret, and other
+proprietary rights) in and to the API and any derivative works thereof. Y ou may use the Kalshi
+Marks only as expressly authorized in this Agreement. If you use any Kalshi Marks, you will at
+no time contest or aid in contesting the validity or ownership of those Kalshi Marks or Kalshi’s
+rights in them.
+6.2. Sample code
+All sample code provided by Kalshi is for illustrative purposes only and comes with no
+guarantee of fitness for any particular purpose. API users bear full responsibility for any usage of
+the API and sample code
+6.3. Open Source and Third Party Software.
+The API may include open source or third party software, and such software is made available to
+you under the terms of the applicable licenses.
+6.4. Public Statements.
+Y ou must obtain prior written approval from Kalshi prior to releasing any statements, written
+media releases, public announcements and public disclosures, including promotional or
+marketing materials, relating to Kalshi, the Kalshi Marks, Kalshi Services, Kalshi API, or this
+Agreement.
+7. Confidentiality
+Y ou may be given access to non-public information relating to the Kalshi services or API which
+is confidential and proprietary to Kalshi. Y ou may use this Confidential Information only as
+necessary in exercising your rights granted in this Agreement. Y ou may not disclose any of this
+Confidential Information to any third party without Kalshi’s prior written consent. Y ou agree that
+you will protect this Confidential Information from unauthorized use, access, or disclosure.
+8. Termination
+Kalshi may immediately terminate or suspend this Agreement, any rights granted herein, and/or
+your license to the API, at its sole discretion, at any time, for any reason by providing notice to
+you. Y ou may terminate your use of the API at any time by discontinuing your use of the API.
+Without limiting the foregoing, we may limit your Application’s access to the API in our sole
+discretion which may negatively affect your Application and/or your business, our Kalshi
+Services, or our ability to provide the Kalshi Services. We will not be liable to you or any third
+party for any costs or damages as a result of termination of this Agreement.
+Upon termination of this Agreement your licenses and rights to our API are terminated
+immediately.
+9. General Provisions
+9.1. Indemnification
+To the maximum extent permitted by law, you agree to defend, indemnify and hold harmless
+Kalshi, its affiliates and their respective directors, officers, employees and agents from and
+against any and all third party claims, actions, suits or proceedings, as well as any and all losses,
+liabilities, damages, costs and expenses (including reasonable attorney’s fees) arising out of or
+accruing from (a) your access or use of the Kalshi API, Kalshi Data, Kalshi Marks, Kalshi
+Services, API or your Kalshi Account in violation of this Agreement, (b) your infringement of
+any copyright, trademark, trade secret, trade dress, patent or other intellectual property right of
+any person or defamation of any person or violation of a person’s rights of publicity or privacy,
+© your breach or alleged breach of any provisions, conditions and representations in the
+Agreement, (d) your Application or business; (e) your gross negligence or willful misconduct; or
+(f) your failure to secure and keep secret your Security Code, such as your OAuth Token(s) or
+API key(s).
+9.2. Limitation of Liability
+IN NO EVENT SHALL KALSHI OR ITS EMPLOYEES, AGENTS, USERS OR PARTNERS
+BE LIABLE TO YOU OR ANY END USERS FOR ANY INDIRECT, SPECIAL,
+INCIDENTAL, EXEMPLARY , PUNITIVE OR CONSEQUENTIAL DAMAGES OR ANY
+LOSS OF OR DAMAGE TO USE, DA TA, BUSINESS, GOODWILL OR PROFITS ARISING
+OUT OF OR IN CONNECTION WITH THIS AGREEMENT, ANY AUTHORIZED OR
+UNAUTHORIZED USE OF YOUR APPLICA TION, OR YOUR USE OF THE KALSHI API,
+KALSHI DA TA, OR KALSHI SERVICES. IN ANY CASE, KALSHI’S AGGREGA TE
+LIABILITY FOR ANY AND ALL CLAIMS UNDER THIS AGREEMENT WILL NOT
+EXCEED $50.00 USD. THE FOREGOING LIMITA TIONS, EXCLUSIONS AND
+DISCLAIMERS SHALL APPL Y REGARDLESS OF WHETHER SUCH LIABILITY ARISES
+FROM ANY CLAIM BASED UPON CONTRACT, W ARRANTY , TORT (INCLUDING
+NEGLIGENCE), STRICT LIABILITY OR OTHERWISE, AND WHETHER OR NOT
+KALSHI HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH LOSS OR DAMAGE.
+INSOFAR AS APPLICABLE LAW PROHIBITS ANY LIMITA TION ON LIABILITY
+HEREIN, THE PARTIES AGREE THA T SUCH LIMITA TION WILL BE AUTOMA TICALL Y
+MODIFIED, BUT ONL Y TO THE EXTENT SO AS TO MAKE THE LIMITA TION
+COMPLIANT WITH APPLICABLE LAW. THE PARTIES AGREE THA T THE
+LIMITA TIONS ON LIABILITIES SET FORTH HEREIN ARE AGREED ALLOCA TIONS OF
+RISK AND SUCH LIMITA TIONS WILL APPL Y NOTWITHSTANDING THE FAILURE OF
+ESSENTIAL PURPOSE OF ANY LIMITED REMEDY .
+9.3. Warranty Disclaimer
+THE KALSHI API, KALSHI DA TA, AND KALSHI SERVICES ARE PROVIDED TO YOU
+“AS IS”, “WHERE IS”, WITH ALL FAULTS, ON AN “AS-A V AILABLE” BASIS, WITHOUT
+W ARRANTY OF ANY KIND, AND KALSHI DISCLAIMS ALL W ARRANTIES, WHETHER
+EXPRESS, IMPLIED, STA TUTORY , OR OTHERWISE, INCLUDING WITHOUT
+LIMITA TION W ARRANTIES OF MERCHANTABILITY , NONINFRINGEMENT, FITNESS
+FOR A PARTICULAR PURPOSE, AND ANY W ARRANTIES OR CONDITIONS ARISING
+OUT OF THIS AGREEMENT, COURSE OF DEALING OR USAGE OF TRADE. KALSHI
+DOES NOT W ARRANT THA T KALSHI DA TA, KALSHI API, KALSHI SERVICES OR ANY
+OTHER KALSHI PRODUCT OR SERVICE PROVIDED HEREUNDER WILL MEET ANY
+OF YOUR REQUIREMENTS OR THA T USE OF SUCH API OR OTHER PRODUCTS OR
+SERVICES WILL BE ERROR-FREE, UNINTERRUPTED, VIRUS-FREE OR SECURE. THIS
+DISCLAIMER OF W ARRANTY MAY NOT BE V ALID IN SOME JURISDICTIONS AND
+YOU MAY HA VE W ARRANTY RIGHTS UNDER LAW WHICH MAY NOT BE W AIVED
+OR DISCLAIMED. ANY SUCH W ARRANTY EXTENDS ONL Y FOR THIRTY (30) DAYS
+FROM THE EFFECTIVE DA TE OF THIS AGREEMENT (UNLESS SUCH LAW PROVIDES
+OTHERWISE).
+9.4. Conflict of Law
+Y ou agree that the laws of the State of New Y ork, without regard to principles of conflict of laws,
+will govern this Agreement and any claim or dispute that has arisen or may arise between you
+and Kalshi, except to the extent governed by federal law.
+9.5. Feedback
+In the event you choose to provide Kalshi with feedback, suggestions or comments regarding the
+API or your use thereof, you agree to provide a fully-paid up, royalty-free, non-exclusive,
+worldwide, transferable, sublicensable, irrevocable right and license under all of your intellectual
+property rights to Kalshi to use, copy, modify, create derivative works, distribute, publicly
+perform, grant sublicenses to, and otherwise exploit in any manner such feedback, suggestions or
+comments, for any and all purposes, with no obligation of any kind to you.

@@ -1,0 +1,8 @@
+URL: https://api.odds-api.io/robots.txt
+UTC: 2026-11-11T04:53:33Z
+HTTP: 200 text/plain; charset=utf-8 https://api.odds-api.io/robots.txt
+
+URL: https://api.odds-api.io/v3/events?sport=football
+UTC: 2026-11-11T04:57:28Z
+HTTP: 401 application/json; charset=utf-8 https://api.odds-api.io/v3/events?sport=football
+

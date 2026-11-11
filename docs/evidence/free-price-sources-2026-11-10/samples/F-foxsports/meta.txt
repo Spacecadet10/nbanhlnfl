@@ -1,0 +1,2 @@
+2026-11-11T04:53:24Z | HTTP 200 | 183 bytes | https://www.foxsports.com/robots.txt -> robots.txt
+2026-11-11T04:53:26Z | HTTP 200 | 26 bytes | https://api.foxsports.com/robots.txt -> api-robots.txt

@@ -1,0 +1,10 @@
+2026-11-11T04:51:35Z | HTTP 200 | 2676 bytes | https://api-web.nhle.com/robots.txt -> robots.txt
+2026-11-11T04:51:36Z | HTTP 200 | 255 bytes | https://www.nhl.com/robots.txt -> www-robots.txt
+2026-11-11T04:51:49Z | HTTP 200 | 8723 bytes | https://api-web.nhle.com/v1/partner-game/US/now -> partner-game-US-now.json
+2026-11-11T04:51:50Z | HTTP 200 | 7485 bytes | https://api-web.nhle.com/v1/partner-game/CA/now -> partner-game-CA-now.json
+2026-11-11T04:51:52Z | HTTP 200 | 90471 bytes | https://api-web.nhle.com/v1/schedule/2026-11-12 -> schedule-2026-11-12.json
+2026-11-11T04:52:02Z | HTTP 404 | 374 bytes | https://api-web.nhle.com/v1/partner-game/US/2026-11-12 -> partner-game-US-2026-11-12.json
+2026-11-11T04:52:03Z | HTTP 404 | 374 bytes | https://api-web.nhle.com/v1/partner-game/US/2026-11-11 -> partner-game-US-2026-11-11.json
+2026-11-11T04:52:05Z | HTTP 404 | 374 bytes | https://api-web.nhle.com/v1/partner-game/US/2025-11-12 -> partner-game-US-2025-11-12.json
+2026-11-11T04:52:14Z | HTTP 200 | 21909 bytes | https://api-web.nhle.com/v1/gamecenter/2026020293/landing -> gamecenter-2026020293-landing.json
+2026-11-11T05:00:18Z | coordinator rule: robots.txt names ClaudeBot/anthropic-ai -> data bodies deleted, only robots.txt + meta.txt kept

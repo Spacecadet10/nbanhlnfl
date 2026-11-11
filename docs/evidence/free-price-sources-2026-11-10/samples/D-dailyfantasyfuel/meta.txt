@@ -1,0 +1,4 @@
+https://www.dailyfantasyfuel.com/terms | 2026-11-11T05:01:55Z | HTTP 404
+https://www.dailyfantasyfuel.com/nba/projections/ | 2026-11-11T05:01:57Z | HTTP 200
+(terms.html = guessed URL; returned 404/error page, kept as served)
+https://www.dailyfantasyfuel.com/terms-of-service | 2026-11-11T05:02:37Z | HTTP 200

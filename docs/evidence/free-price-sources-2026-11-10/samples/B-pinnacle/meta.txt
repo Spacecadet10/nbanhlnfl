@@ -1,0 +1,8 @@
+URL: https://www.pinnacle.com/robots.txt
+UTC: 2026-11-11T04:51:38Z
+HTTP: 200 text/plain https://www.pinnacle.com/robots.txt
+
+URL: https://www.pinnacle.com/en/future/terms-and-conditions
+UTC: 2026-11-11T04:52:24Z
+HTTP: 200 text/html https://www.pinnacle.com/en/
+

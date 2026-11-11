@@ -1,0 +1,22 @@
+2026-11-11T04:59:11Z | HTTP 404 | 5317 bytes | https://www.kaggle.com/robots.txt -> robots.txt
+2026-11-11T04:59:21Z | HTTP 200 | 34297253 bytes | https://www.kaggle.com/api/v1/datasets/download/hugomathien/soccer -> download-attempt-hugomathien-soccer.bin
+download-attempt-hugomathien-soccer.bin (34297253 bytes, zip with database.sqlite) deleted after confirming it downloads without login
+2026-11-11T04:59:32Z | HTTP 200 | 45186 bytes | https://www.kaggle.com/api/v1/datasets/list?search=corner%20odds -> api-list-search-corner-odds.json
+2026-11-11T04:59:33Z | HTTP 200 | 78493 bytes | https://www.kaggle.com/api/v1/datasets/list?search=nhl%20odds -> api-list-search-nhl-odds.json
+2026-11-11T04:59:35Z | HTTP 200 | 75669 bytes | https://www.kaggle.com/api/v1/datasets/list?search=team%20totals%20odds -> api-list-search-team-total.json
+2026-11-11T04:59:46Z | HTTP 200 | 438 bytes | https://www.kaggle.com/api/v1/datasets/list/cviaxmiwnptr/nba-betting-data-october-2007-to-june-2024 -> files-cviaxmiwnptr_nba-betting-data-october-2007-to-june-2024.json
+2026-11-11T04:59:47Z | HTTP 200 | 1461 bytes | https://www.kaggle.com/api/v1/datasets/list/jonathanncoletti/nhl-historical-game-data -> files-jonathanncoletti_nhl-historical-game-data.json
+2026-11-11T04:59:48Z | HTTP 200 | 812 bytes | https://www.kaggle.com/api/v1/datasets/list/michaelmallari/sportsbook-odds-on-nhl-games -> files-michaelmallari_sportsbook-odds-on-nhl-games.json
+2026-11-11T04:59:50Z | HTTP 200 | 3404 bytes | https://www.kaggle.com/api/v1/datasets/list/archangel0x01/football-odds-movements-2018-2026 -> files-archangel0x01_football-odds-movements-2018-2026.json
+2026-11-11T04:59:51Z | HTTP 200 | 2098 bytes | https://www.kaggle.com/api/v1/datasets/list/archangel0x01/nba-nhl-and-college-basketball-results-and-odds -> files-archangel0x01_nba-nhl-and-college-basketball-results-and-odds.json
+2026-11-11T05:00:41Z | HTTP 200 | 2523 bytes | https://www.kaggle.com/api/v1/datasets/download/archangel0x01/nba-nhl-and-college-basketball-results-and-odds/data_dictionary.csv -> archangel0x01-nba-nhl-data_dictionary.csv
+2026-11-11T05:00:42Z | HTTP 200 | 69192 bytes | https://www.kaggle.com/api/v1/datasets/download/michaelmallari/sportsbook-odds-on-nhl-games/sportsbook-nhl-2022-2023.csv -> michaelmallari-sportsbook-nhl-2022-2023.csv
+2026-11-11T05:00:44Z | HTTP 200 | 2493308 bytes | https://www.kaggle.com/api/v1/datasets/download/cviaxmiwnptr/nba-betting-data-october-2007-to-june-2024/nba_2008-2026.csv -> cviaxmiwnptr-nba_2008-2026.csv
+2026-11-11T05:01:06Z | HTTP 200 | 5966 bytes | https://www.kaggle.com/api/v1/datasets/metadata/archangel0x01/nba-nhl-and-college-basketball-results-and-odds -> archangel0x01-metadata.json
+2026-11-11T05:01:08Z | HTTP 200 | 8569907 bytes | https://www.kaggle.com/api/v1/datasets/download/archangel0x01/nba-nhl-and-college-basketball-results-and-odds/closing_odds.csv -> archangel0x01-closing_odds.csv
+2026-11-11T05:01:10Z | HTTP 200 | 15697620 bytes | https://www.kaggle.com/api/v1/datasets/download/archangel0x01/nba-nhl-and-college-basketball-results-and-odds/games.csv -> archangel0x01-games.csv
+2026-11-11T05:01:30Z | trimmed: archangel0x01-games.csv (15697620 B) -> first200 + NHL 2026-27 rows; archangel0x01-closing_odds.csv (8569907 B) -> first200; cviaxmiwnptr nba_2008-2026.csv (2493308 B) -> first200 + season 2027 rows
+2026-11-11T05:01:39Z | HTTP 206 | range 0-6000 | https://www.kaggle.com/api/v1/datasets/download/jonathanncoletti/nhl-historical-game-data/nhl_data_plus.csv
+2026-11-11T05:01:48Z | HTTP 200 | 19825 bytes | https://www.kaggle.com/api/v1/datasets/metadata/archangel0x01/football-odds-movements-2018-2026 -> archangel0x01-football-movements-metadata.json
+2026-11-11T05:02:03Z | HTTP 206 | range 0-20000 (file is 41097148 B) | https://www.kaggle.com/api/v1/datasets/download/archangel0x01/football-odds-movements-2018-2026/match_closing.csv
+2026-11-11T05:02:04Z | HTTP 206 | range 0-6000 (file is 10250984 B) | https://www.kaggle.com/api/v1/datasets/download/archangel0x01/football-odds-movements-2018-2026/matches.csv

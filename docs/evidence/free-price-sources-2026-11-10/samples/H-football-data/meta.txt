@@ -1,0 +1,9 @@
+2026-11-11T04:54:47Z | HTTP 200 | 732 bytes | https://www.football-data.co.uk/robots.txt -> robots.txt
+2026-11-11T04:54:49Z | HTTP 200 | 7750 bytes | https://www.football-data.co.uk/notes.txt -> notes.txt
+2026-11-11T04:55:02Z | HTTP 200 | 49046 bytes | https://www.football-data.co.uk/mmz4281/2627/E0.csv -> E0-2627.csv
+2026-11-11T04:55:04Z | HTTP 200 | 690147 bytes | https://www.football-data.co.uk/new/BRA.csv -> new-BRA.csv
+2026-11-11T04:55:18Z | HTTP 200 | 45324 bytes | https://www.football-data.co.uk/fixtures.csv -> fixtures.csv
+2026-11-11T04:55:20Z | HTTP 200 | 62076 bytes | https://www.football-data.co.uk/mmz4281/0001/E0.csv -> tmp-E0-0001.csv
+2026-11-11T04:55:22Z | HTTP 200 | 175475 bytes | https://www.football-data.co.uk/mmz4281/1920/E0.csv -> tmp-E0-1920.csv
+2026-11-11T04:58:29Z | HTTP 200 | 36616 bytes | https://www.football-data.co.uk/disclaimer.php -> disclaimer.html
+2026-11-11T05:00:18Z | coordinator rule: robots.txt names ClaudeBot/anthropic-ai -> data bodies deleted, only robots.txt + meta.txt kept

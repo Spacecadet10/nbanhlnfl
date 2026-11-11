@@ -1,0 +1,8 @@
+URL: https://1xbet.com/robots.txt
+UTC: 2026-11-11T04:51:48Z
+HTTP: 200 text/plain; charset=utf-8 https://1xbet.com/robots.txt
+
+URL: https://1xbet.com/en/information/rules
+UTC: 2026-11-11T04:52:26Z
+HTTP: 200 text/html;charset=utf-8 https://ca.1xbet.com/en/information/rules
+

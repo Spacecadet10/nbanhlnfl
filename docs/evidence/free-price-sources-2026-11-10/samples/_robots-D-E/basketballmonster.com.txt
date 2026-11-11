@@ -1,0 +1,4 @@
+User-agent: *
+Disallow:
+
+Sitemap: https://basketballmonster.com/sitemap.xml

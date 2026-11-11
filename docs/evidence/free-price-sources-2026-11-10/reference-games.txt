@@ -1,0 +1,194 @@
+nba | espn:401909966 | 2026-11-12T00:00:00Z | WSH @ IND
+nba | espn:401909967 | 2026-11-12T00:00:00Z | CLE @ NY
+nba | espn:401909968 | 2026-11-12T00:00:00Z | BOS @ TOR
+nba | espn:401909969 | 2026-11-12T01:00:00Z | SA @ CHI
+nba | espn:401909970 | 2026-11-12T01:00:00Z | DEN @ MEM
+nba | espn:401909971 | 2026-11-12T01:00:00Z | LAL @ MIL
+nba | espn:401909972 | 2026-11-12T01:00:00Z | BKN @ NO
+nba | espn:401909973 | 2026-11-12T02:00:00Z | ORL @ UTAH
+nba | espn:401909974 | 2026-11-12T02:30:00Z | GS @ HOU
+nba | espn:401909975 | 2026-11-12T03:00:00Z | OKC @ POR
+nba | espn:401909976 | 2026-11-13T00:00:00Z | TOR @ PHI
+nba | espn:401909977 | 2026-11-13T00:00:00Z | DET @ WSH
+nba | espn:401909978 | 2026-11-13T01:00:00Z | DAL @ MIN
+nba | espn:401909979 | 2026-11-13T02:00:00Z | CHA @ PHX
+nba | espn:401909296 | 2026-11-14T00:00:00Z | NY @ IND
+nba | espn:401909297 | 2026-11-14T00:00:00Z | MIL @ ORL
+nba | espn:401909298 | 2026-11-14T01:00:00Z | CLE @ MIA
+nba | espn:401909299 | 2026-11-14T01:00:00Z | ATL @ CHI
+nba | espn:401909300 | 2026-11-14T01:00:00Z | MEM @ NO
+nba | espn:401909301 | 2026-11-14T01:30:00Z | UTAH @ HOU
+nba | espn:401909302 | 2026-11-14T02:30:00Z | GS @ SA
+nba | espn:401909303 | 2026-11-14T03:00:00Z | POR @ SAC
+nba | espn:401909304 | 2026-11-14T03:30:00Z | OKC @ LAC
+nba | espn:401909980 | 2026-11-15T00:00:00Z | DEN @ NO
+nba | espn:401909981 | 2026-11-15T00:30:00Z | DAL @ CLE
+nba | espn:401909982 | 2026-11-15T01:00:00Z | DET @ MIA
+nba | espn:401909983 | 2026-11-15T01:00:00Z | BKN @ MEM
+nba | espn:401909984 | 2026-11-15T01:00:00Z | CHI @ MIN
+nba | espn:401909985 | 2026-11-15T18:00:00Z | IND @ PHI
+nba | espn:401909986 | 2026-11-15T21:00:00Z | LAL @ PHX
+nba | espn:401909987 | 2026-11-15T21:30:00Z | CHA @ LAC
+nba | espn:401909988 | 2026-11-15T22:00:00Z | SA @ UTAH
+nba | espn:401909989 | 2026-11-15T23:00:00Z | DAL @ BOS
+nba | espn:401909990 | 2026-11-15T23:00:00Z | NY @ TOR
+nba | espn:401909991 | 2026-11-16T00:00:00Z | HOU @ WSH
+nba | espn:401909992 | 2026-11-16T01:00:00Z | ATL @ MIL
+nba | espn:401909993 | 2026-11-16T02:00:00Z | OKC @ SAC
+nba | espn:401909994 | 2026-11-17T00:00:00Z | ORL @ BOS
+nba | espn:401909995 | 2026-11-17T00:00:00Z | CHI @ CLE
+nba | espn:401909996 | 2026-11-17T00:00:00Z | MEM @ WSH
+nhl | nhl:2026020293 | 2026-11-12T00:00:00Z | TBL @ BUF
+nhl | nhl:2026020294 | 2026-11-12T00:30:00Z | NYR @ CGY
+nhl | nhl:2026020295 | 2026-11-12T02:00:00Z | PHI @ EDM
+nhl | nhl:2026020296 | 2026-11-12T02:30:00Z | UTA @ VGK
+nhl | nhl:2026020297 | 2026-11-12T03:00:00Z | NSH @ ANA
+nhl | nhl:2026020298 | 2026-11-12T03:00:00Z | PIT @ SJS
+nhl | nhl:2026020309 | 2026-11-12T17:00:00Z | CAR @ SEA
+nhl | nhl:2026020299 | 2026-11-13T00:00:00Z | MTL @ BOS
+nhl | nhl:2026020300 | 2026-11-13T00:00:00Z | MIN @ TOR
+nhl | nhl:2026020301 | 2026-11-13T00:00:00Z | COL @ OTT
+nhl | nhl:2026020303 | 2026-11-13T00:00:00Z | WSH @ NJD
+nhl | nhl:2026020304 | 2026-11-13T00:00:00Z | TBL @ CBJ
+nhl | nhl:2026020302 | 2026-11-13T00:30:00Z | DET @ FLA
+nhl | nhl:2026020305 | 2026-11-13T01:00:00Z | BUF @ CHI
+nhl | nhl:2026020306 | 2026-11-13T01:00:00Z | WPG @ DAL
+nhl | nhl:2026020307 | 2026-11-13T02:00:00Z | STL @ UTA
+nhl | nhl:2026020308 | 2026-11-13T03:00:00Z | NYI @ LAK
+nhl | nhl:2026020310 | 2026-11-14T02:00:00Z | NYR @ VAN
+nhl | nhl:2026020311 | 2026-11-14T03:00:00Z | NSH @ VGK
+nhl | nhl:2026020321 | 2026-11-14T18:00:00Z | SEA @ CAR
+nhl | nhl:2026020312 | 2026-11-14T20:30:00Z | WPG @ CHI
+nhl | nhl:2026020313 | 2026-11-15T00:00:00Z | MIN @ BOS
+nhl | nhl:2026020314 | 2026-11-15T00:00:00Z | EDM @ TOR
+nhl | nhl:2026020315 | 2026-11-15T00:00:00Z | COL @ MTL
+nhl | nhl:2026020316 | 2026-11-15T00:00:00Z | DET @ TBL
+nhl | nhl:2026020317 | 2026-11-15T00:00:00Z | OTT @ PIT
+nhl | nhl:2026020318 | 2026-11-15T00:00:00Z | NJD @ WSH
+nhl | nhl:2026020319 | 2026-11-15T00:00:00Z | PHI @ CBJ
+nhl | nhl:2026020320 | 2026-11-15T00:00:00Z | FLA @ STL
+nhl | nhl:2026020322 | 2026-11-15T01:00:00Z | BUF @ DAL
+nhl | nhl:2026020323 | 2026-11-15T02:00:00Z | SJS @ UTA
+nhl | nhl:2026020324 | 2026-11-15T03:00:00Z | NYI @ ANA
+nhl | nhl:2026020325 | 2026-11-15T03:00:00Z | CGY @ LAK
+nhl | nhl:2026020326 | 2026-11-16T00:30:00Z | EDM @ PHI
+nhl | nhl:2026020327 | 2026-11-16T01:00:00Z | FLA @ DAL
+nhl | nhl:2026020328 | 2026-11-16T01:00:00Z | CGY @ ANA
+nhl | nhl:2026020329 | 2026-11-16T02:00:00Z | VAN @ VGK
+nhl | nhl:2026020330 | 2026-11-16T02:00:00Z | NSH @ SJS
+nhl | nhl:2026020331 | 2026-11-17T00:30:00Z | MTL @ NYR
+nhl | nhl:2026020332 | 2026-11-17T02:30:00Z | VAN @ UTA
+nfl | nfl:401873052 | 2026-11-13T01:15:00Z | WSH @ NYG
+nfl | nfl:401873053 | 2026-11-15T14:30:00Z | NE @ DET
+nfl | nfl:401873058 | 2026-11-15T18:00:00Z | KC @ ATL
+nfl | nfl:401873056 | 2026-11-15T18:00:00Z | HOU @ CLE
+nfl | nfl:401873060 | 2026-11-15T18:00:00Z | MIN @ GB
+nfl | nfl:401873057 | 2026-11-15T18:00:00Z | JAX @ TEN
+nfl | nfl:401873059 | 2026-11-15T18:00:00Z | MIA @ IND
+nfl | nfl:401873055 | 2026-11-15T18:00:00Z | CAR @ NO
+nfl | nfl:401873054 | 2026-11-15T18:00:00Z | BUF @ NYJ
+nfl | nfl:401873062 | 2026-11-15T21:05:00Z | SEA @ LV
+nfl | nfl:401873061 | 2026-11-15T21:05:00Z | LAR @ ARI
+nfl | nfl:401873063 | 2026-11-15T21:25:00Z | SF @ DAL
+nfl | nfl:401873064 | 2026-11-16T01:20:00Z | PIT @ CIN
+nfl | nfl:401873065 | 2026-11-17T01:15:00Z | LAC @ BAL
+soccer fifa.friendly | soccer:fifa.friendly:401930244 | 2026-11-11T12:00:00Z | Chinese Taipei @ Vietnam
+soccer fifa.friendly | soccer:fifa.friendly:401906458 | 2026-11-12T06:10:00Z | India @ New Zealand
+soccer fifa.friendly | soccer:fifa.friendly:401930962 | 2026-11-12T15:00:00Z | Russia @ Uzbekistan
+soccer caf.nations_qual | soccer:caf.nations_qual:401927214 | 2026-11-12T15:00:00Z | Somalia @ Ghana
+soccer caf.nations_qual | soccer:caf.nations_qual:401927211 | 2026-11-12T16:00:00Z | Sierra Leone @ Congo DR
+soccer caf.nations_qual | soccer:caf.nations_qual:401927210 | 2026-11-12T16:00:00Z | Zimbabwe @ Equatorial Guinea
+soccer caf.nations_qual | soccer:caf.nations_qual:401927184 | 2026-11-12T16:00:00Z | Guinea-Bissau @ Madagascar
+soccer uefa.nations | soccer:uefa.nations:401861146 | 2026-11-12T17:00:00Z | Cyprus @ Armenia
+soccer uefa.nations | soccer:uefa.nations:401861145 | 2026-11-12T17:00:00Z | Belgium @ Türkiye
+soccer fifa.friendly | soccer:fifa.friendly:401933115 | 2026-11-12T17:00:00Z | Suriname @ Lithuania
+soccer caf.nations_qual | soccer:caf.nations_qual:401927189 | 2026-11-12T17:00:00Z | Eritrea @ Guinea
+soccer fifa.friendly | soccer:fifa.friendly:401931296 | 2026-11-12T17:30:00Z | Eswatini @ Malta
+soccer concacaf.nations.league | soccer:concacaf.nations.league:401929778 | 2026-11-12T19:00:00Z | Guadeloupe @ Barbados
+soccer concacaf.nations.league | soccer:concacaf.nations.league:401929797 | 2026-11-12T19:00:00Z | Guyana @ Cayman Islands
+soccer caf.nations_qual | soccer:caf.nations_qual:401927209 | 2026-11-12T19:00:00Z | Central African Republic @ Benin
+soccer caf.nations_qual | soccer:caf.nations_qual:401927207 | 2026-11-12T19:00:00Z | Namibia @ Cameroon
+soccer caf.nations_qual | soccer:caf.nations_qual:401927213 | 2026-11-12T19:00:00Z | Gambia @ Ivory Coast
+soccer caf.nations_qual | soccer:caf.nations_qual:401927202 | 2026-11-12T19:00:00Z | Sudan @ Senegal
+soccer uefa.nations | soccer:uefa.nations:401861147 | 2026-11-12T19:45:00Z | Finland @ Albania
+soccer uefa.nations | soccer:uefa.nations:401861148 | 2026-11-12T19:45:00Z | Spain @ Czechia
+soccer uefa.nations | soccer:uefa.nations:401861150 | 2026-11-12T19:45:00Z | Croatia @ England
+soccer uefa.nations | soccer:uefa.nations:401861151 | 2026-11-12T19:45:00Z | France @ Italy
+soccer uefa.nations | soccer:uefa.nations:401861152 | 2026-11-12T19:45:00Z | Latvia @ Montenegro
+soccer uefa.nations | soccer:uefa.nations:401861149 | 2026-11-12T19:45:00Z | Belarus @ San Marino
+soccer concacaf.nations.league | soccer:concacaf.nations.league:401929777 | 2026-11-12T20:00:00Z | Cuba @ Bonaire
+soccer concacaf.nations.league | soccer:concacaf.nations.league:401929779 | 2026-11-12T22:00:00Z | Martinique @ Aruba
+soccer concacaf.nations.league | soccer:concacaf.nations.league:401929796 | 2026-11-12T23:00:00Z | Trinidad and Tobago @ Antigua and Barbuda
+soccer concacaf.nations.league | soccer:concacaf.nations.league:401929776 | 2026-11-13T00:30:00Z | Panama @ Curaçao
+soccer fifa.friendly | soccer:fifa.friendly:401916338 | 2026-11-13T12:00:00Z | Paraguay @ Singapore
+soccer caf.nations_qual | soccer:caf.nations_qual:401927206 | 2026-11-13T13:00:00Z | Congo @ Comoros
+soccer caf.nations_qual | soccer:caf.nations_qual:401927187 | 2026-11-13T13:00:00Z | Ethiopia @ Mozambique
+soccer caf.nations_qual | soccer:caf.nations_qual:401927203 | 2026-11-13T13:00:00Z | Burundi @ Zambia
+soccer fifa.friendly | soccer:fifa.friendly:401931978 | 2026-11-13T14:00:00Z | Syria @ Kuwait
+soccer fifa.friendly | soccer:fifa.friendly:401931957 | 2026-11-13T14:10:00Z | Honduras @ United Arab Emirates
+soccer fifa.friendly | soccer:fifa.friendly:401931476 | 2026-11-13T14:30:00Z | South Korea @ Saudi Arabia
+soccer fifa.friendly | soccer:fifa.friendly:401919978 | 2026-11-13T14:45:00Z | Australia @ Qatar
+soccer fifa.friendly | soccer:fifa.friendly:401933636 | 2026-11-13T15:00:00Z | Lebanon @ Iraq
+soccer caf.nations_qual | soccer:caf.nations_qual:401927208 | 2026-11-13T16:00:00Z | Mauritania @ Burkina Faso
+soccer caf.nations_qual | soccer:caf.nations_qual:401927186 | 2026-11-13T16:00:00Z | Liberia @ Cape Verde
+soccer caf.nations_qual | soccer:caf.nations_qual:401927192 | 2026-11-13T16:00:00Z | Lesotho @ Gabon
+soccer caf.nations_qual | soccer:caf.nations_qual:401927183 | 2026-11-13T16:00:00Z | Tanzania @ Nigeria
+soccer caf.nations_qual | soccer:caf.nations_qual:401927212 | 2026-11-13T16:00:00Z | Kenya @ South Africa
+soccer caf.nations_qual | soccer:caf.nations_qual:401927205 | 2026-11-13T16:00:00Z | Libya @ Tunisia
+soccer uefa.nations | soccer:uefa.nations:401861162 | 2026-11-13T17:00:00Z | Kazakhstan @ Moldova
+soccer concacaf.nations.league | soccer:concacaf.nations.league:401929714 | 2026-11-13T19:00:00Z | St. Lucia @ Bermuda
+soccer concacaf.nations.league | soccer:concacaf.nations.league:401929795 | 2026-11-13T19:00:00Z | Dominica @ Puerto Rico
+soccer caf.nations_qual | soccer:caf.nations_qual:401927190 | 2026-11-13T19:00:00Z | Malawi @ Egypt
+soccer caf.nations_qual | soccer:caf.nations_qual:401927185 | 2026-11-13T19:00:00Z | Rwanda @ Mali
+soccer uefa.nations | soccer:uefa.nations:401861155 | 2026-11-13T19:45:00Z | Gibraltar @ Andorra
+soccer uefa.nations | soccer:uefa.nations:401861157 | 2026-11-13T19:45:00Z | Iceland @ Bulgaria
+soccer uefa.nations | soccer:uefa.nations:401861153 | 2026-11-13T19:45:00Z | Azerbaijan @ Liechtenstein
+soccer uefa.nations | soccer:uefa.nations:401861154 | 2026-11-13T19:45:00Z | Estonia @ Luxembourg
+soccer uefa.nations | soccer:uefa.nations:401861159 | 2026-11-13T19:45:00Z | Greece @ Netherlands
+soccer uefa.nations | soccer:uefa.nations:401861161 | 2026-11-13T19:45:00Z | North Macedonia @ Scotland
+soccer uefa.nations | soccer:uefa.nations:401861158 | 2026-11-13T19:45:00Z | Germany @ Serbia
+soccer uefa.nations | soccer:uefa.nations:401861160 | 2026-11-13T19:45:00Z | Faroe Islands @ Slovakia
+soccer uefa.nations | soccer:uefa.nations:401861156 | 2026-11-13T19:45:00Z | Switzerland @ Slovenia
+soccer concacaf.nations.league | soccer:concacaf.nations.league:401929713 | 2026-11-13T20:00:00Z | St. Kitts and Nevis @ Grenada
+soccer caf.nations_qual | soccer:caf.nations_qual:401927191 | 2026-11-13T20:00:00Z | Niger @ Morocco
+soccer concacaf.nations.league | soccer:concacaf.nations.league:401929712 | 2026-11-13T23:00:00Z | El Salvador @ St. Martin
+soccer ger.1 | soccer:ger.1:401884736 | 2026-11-20T19:30:00Z | FC Cologne @ Bayern Munich
+soccer fra.1 | soccer:fra.1:401876395 | 2026-11-20T19:45:00Z | Le Havre AC @ Troyes
+soccer esp.1 | soccer:esp.1:401882805 | 2026-11-20T20:00:00Z | Espanyol @ Athletic Club
+soccer eng.1 | soccer:eng.1:401879233 | 2026-11-21T12:30:00Z | Fulham @ Manchester City
+soccer esp.1 | soccer:esp.1:401882806 | 2026-11-21T13:00:00Z | Deportivo @ Alavés
+soccer ita.1 | soccer:ita.1:401875056 | 2026-11-21T14:00:00Z | Cagliari @ Como
+soccer ita.1 | soccer:ita.1:401874981 | 2026-11-21T14:00:00Z | Lecce @ Lazio
+soccer ger.1 | soccer:ger.1:401884732 | 2026-11-21T14:30:00Z | RB Leipzig @ 1. FC Union Berlin
+soccer ger.1 | soccer:ger.1:401884735 | 2026-11-21T14:30:00Z | SC Paderborn 07 @ Bayer Leverkusen
+soccer ger.1 | soccer:ger.1:401884731 | 2026-11-21T14:30:00Z | Borussia Dortmund @ Borussia Mönchengladbach
+soccer ger.1 | soccer:ger.1:401884734 | 2026-11-21T14:30:00Z | TSG Hoffenheim @ Eintracht Frankfurt
+soccer ger.1 | soccer:ger.1:401884728 | 2026-11-21T14:30:00Z | SC Freiburg @ SV Elversberg
+soccer eng.1 | soccer:eng.1:401879238 | 2026-11-21T15:00:00Z | Nottingham Forest @ AFC Bournemouth
+soccer eng.1 | soccer:eng.1:401878756 | 2026-11-21T15:00:00Z | Sunderland @ Aston Villa
+soccer eng.1 | soccer:eng.1:401879236 | 2026-11-21T15:00:00Z | Leeds United @ Chelsea
+soccer eng.1 | soccer:eng.1:401879235 | 2026-11-21T15:00:00Z | Crystal Palace @ Coventry City
+soccer eng.1 | soccer:eng.1:401878754 | 2026-11-21T15:00:00Z | Ipswich Town @ Tottenham Hotspur
+soccer esp.1 | soccer:esp.1:401882799 | 2026-11-21T15:15:00Z | Valencia @ Rayo Vallecano
+soccer fra.1 | soccer:fra.1:401876398 | 2026-11-21T16:15:00Z | Paris Saint-Germain @ Nice
+soccer ita.1 | soccer:ita.1:401874967 | 2026-11-21T17:00:00Z | AS Roma @ Parma
+soccer eng.1 | soccer:eng.1:401879232 | 2026-11-21T17:30:00Z | Arsenal @ Newcastle United
+soccer esp.1 | soccer:esp.1:401882797 | 2026-11-21T17:30:00Z | Real Betis @ Sevilla
+soccer ger.1 | soccer:ger.1:401884729 | 2026-11-21T17:30:00Z | VfB Stuttgart @ Schalke 04
+soccer fra.1 | soccer:fra.1:401876399 | 2026-11-21T19:45:00Z | AJ Auxerre @ AS Monaco
+soccer fra.1 | soccer:fra.1:401876403 | 2026-11-21T19:45:00Z | Toulouse @ Lens
+soccer fra.1 | soccer:fra.1:401876402 | 2026-11-21T19:45:00Z | Lyon @ Lille
+soccer fra.1 | soccer:fra.1:401876396 | 2026-11-21T19:45:00Z | Brest @ Strasbourg
+soccer ita.1 | soccer:ita.1:401875067 | 2026-11-21T19:45:00Z | Torino @ Napoli
+soccer esp.1 | soccer:esp.1:401882798 | 2026-11-21T20:00:00Z | Celta Vigo @ Real Madrid
+soccer ita.1 | soccer:ita.1:401875008 | 2026-11-22T11:30:00Z | Venezia @ Juventus
+soccer esp.1 | soccer:esp.1:401882804 | 2026-11-22T13:00:00Z | Villarreal @ Barcelona
+soccer eng.1 | soccer:eng.1:401879234 | 2026-11-22T14:00:00Z | Brighton & Hove Albion @ Hull City
+soccer fra.1 | soccer:fra.1:401876397 | 2026-11-22T14:00:00Z | Angers @ Paris FC
+soccer ita.1 | soccer:ita.1:401875047 | 2026-11-22T14:00:00Z | Udinese @ Bologna
+soccer ita.1 | soccer:ita.1:401874960 | 2026-11-22T14:00:00Z | Genoa @ Sassuolo
+soccer ger.1 | soccer:ger.1:401884733 | 2026-11-22T14:30:00Z | Mainz @ FC Augsburg
+soccer esp.1 | soccer:esp.1:401882800 | 2026-11-22T15:15:00Z | Real Sociedad @ Racing Santander
+soccer fra.1 | soccer:fra.1:401876401 | 2026-11-22T16:15:00Z | Stade Rennais @ Lorient
+soccer eng.1 | soccer:eng.1:401878755 | 2026-11-22T16:30:00Z | Manchester United @ Liverpool
+soccer ger.1 | soccer:ger.1:401884730 | 2026-11-22T16:30:00Z | Hamburg SV @ Werder Bremen

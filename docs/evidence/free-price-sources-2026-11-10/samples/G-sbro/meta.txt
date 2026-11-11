@@ -1,0 +1,7 @@
+2026-11-11T04:55:46Z | HTTP 200 | 55 bytes | https://www.sportsbookreviewsonline.com/robots.txt -> robots.txt
+2026-11-11T04:55:48Z | HTTP 200 | 41329 bytes | https://www.sportsbookreviewsonline.com/scoresoddsarchives/nhl/nhloddsarchives.htm -> nhl-archive-index.html
+2026-11-11T04:56:04Z | HTTP 200 | 165007 bytes | https://www.sportsbookreviewsonline.com/scoresoddsarchives/nhl-odds-2022-23 -> nhl-odds-2022-23.html
+2026-11-11T04:56:05Z | HTTP 200 | 19841 bytes | https://www.sportsbookreviewsonline.com/terms/ -> terms.html
+
+2026-11-11 (main session): nhl-odds-2022-23.html deleted unused after review: terms forbid scraping/reproduction or access unverified.
+2026-11-11: nhl-archive-index.html deleted too (same terms).

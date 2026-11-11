@@ -1,0 +1,8 @@
+URL: https://bet99.com/robots.txt
+UTC: 2026-11-11T04:51:52Z
+HTTP: 200 text/plain https://bet99.com/robots.txt
+
+URL: https://bet99.com/en/terms-and-conditions
+UTC: 2026-11-11T04:52:34Z
+HTTP: 200 text/html https://bet99.com/en/terms-and-conditions
+

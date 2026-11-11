@@ -1,0 +1,1 @@
+2026-11-11T04:59:10Z | HTTP 200 | 108493 bytes | https://raw.githubusercontent.com/openfootball/football.json/master/2025-26/en.1.json -> en1-2025-26.json

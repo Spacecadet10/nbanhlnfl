@@ -1,0 +1,359 @@
+# https://www.robotstxt.org/robotstxt.html
+
+# Disallowed Bots
+User-agent: AhrefsBot
+User-agent: SemrushBot
+User-agent: SemrushBot-*
+User-agent: botify
+User-agent: ContentKing
+User-agent: Amazonbot
+User-agent: Omgilibot
+User-agent: Diffbot
+User-agent: ImagesiftBot
+User-agent: Omgili
+User-agent: YouBot
+User-agent: AhrefsSiteAudit 
+User-agent: SiteAuditBot
+User-agent: SplitSignalBot
+User-agent: RyteBot
+Disallow: /
+
+#All Bots
+User-agent: GPTBot
+User-agent: ChatGPT-User
+User-agent: Google-Extended
+User-agent: PerplexityBot
+User-agent: ClaudeBot
+User-agent: anthropic-ai
+User-agent: Bytespider
+User-agent: Claude-Web
+User-agent: *
+Disallow:
+
+# Above line allows all except those explicitly disallowed below, with exceptions via Allow
+
+#Locale Blocking Rules
+Disallow: /_app/immutable/chunks/*.js
+Disallow: /en$
+Disallow: /en/*
+Disallow: /sitemap/*-en.xml$
+
+#User Account Rules
+Disallow: /welcome$
+Disallow: /*/welcome$
+Disallow: /chat$
+Disallow: /*/chat$
+Disallow: */my-bets$
+Disallow: */my-bets*=*
+Disallow: */favourites$
+Disallow: */transactions$
+Disallow: */transactions/*
+Disallow: */settings/*
+
+#Sportsbook Rules
+Disallow: */sports/all$
+Disallow: */sports/all?*
+Disallow: */sports/home/live*
+Disallow: */sports/home/promotion*
+Disallow: */sports/esports/*
+Disallow: */sports/*/*/*/all$
+Disallow: */sports/*/*/all$
+Disallow: */sports/* *
+Disallow: */sports/* */all
+Disallow: */sports/*%20*/all
+Disallow: */sports/*%20*
+Disallow: */sports/racing/*/*/calendar/20*-*-*
+Disallow: */sports/racing/*/meeting/*/*
+Allow: */sports/*/all$
+
+#Casino Rules
+Disallow: */casino/games/*/play$
+Disallow: */casino/games/*/play*?*mode=*
+Disallow: */casino/games/*/demo$
+Disallow: */casino/games/*-*plinko*
+Disallow: */casino/home/*
+Allow: */casino/games/plinko$
+Allow: */casino/games/stake-plinko$
+Allow: */casino/games/lk7-plinko-100000
+
+
+#Blog Rules
+Disallow: */blog/category/uncategorized*
+Allow: */blog/*transactions*
+
+
+#Other Rules
+Disallow: */info/postback-tracking$
+Disallow: *betId=*
+Disallow: *clientSeed=*
+Disallow: *currency=*
+Disallow: *drop=*
+Disallow: *entry=*
+Disallow: *modal=auth*
+Disallow: *modal=user*
+Disallow: *modal=vip*
+Disallow: *modal=bet*
+Disallow: *modal=promotions*
+Disallow: *modal=logout*
+Disallow: *modal=walletSettings*
+Disallow: *modal=redeemBonus*
+Disallow: *modal=sessionExpire*
+Disallow: *name=*
+Disallow: *operation=*
+Disallow: *tab=register*
+Disallow: *tab=progress*
+Disallow: *type=giveaway*
+Disallow: *type=race*
+Disallow: *tab=*
+Disallow: *nonce=*
+Disallow: *serverSeed=*
+Disallow: *transaction=*
+Disallow: *u=*
+Disallow: *vmcid=*
+
+
+# Sitemaps
+Sitemap: https://stake.com/sitemap/sitemap.xml
+## EN-Sitemaps
+Sitemap: https://stake.com/sitemap/casino.xml
+Sitemap: https://stake.com/sitemap/sports.xml
+Sitemap: https://stake.com/sitemap/sports-categories.xml
+Sitemap: https://stake.com/sitemap/sports-tournaments.xml
+Sitemap: https://stake.com/sitemap/sports-outrights.xml
+Sitemap: https://stake.com/sitemap/sports-fixtures.xml
+Sitemap: https://stake.com/sitemap/pages.xml
+Sitemap: https://stake.com/sitemap/promotions.xml
+Sitemap: https://stake.com/sitemap/racing.xml
+Sitemap: https://stake.com/sitemap/racing-group.xml
+Sitemap: https://stake.com/sitemap/racing-event.xml
+Sitemap: https://stake.com/sitemap/sponsorships.xml
+Sitemap: https://stake.com/sitemap/blogs.xml
+
+## AR-Sitemaps
+Sitemap: https://stake.com/sitemap/casino-ar.xml
+Sitemap: https://stake.com/sitemap/sports-ar.xml
+Sitemap: https://stake.com/sitemap/sports-categories-ar.xml
+Sitemap: https://stake.com/sitemap/sports-tournaments-ar.xml
+Sitemap: https://stake.com/sitemap/sports-outrights-ar.xml
+Sitemap: https://stake.com/sitemap/sports-fixtures-ar.xml
+Sitemap: https://stake.com/sitemap/pages-ar.xml
+Sitemap: https://stake.com/sitemap/promotions-ar.xml
+Sitemap: https://stake.com/sitemap/racing-ar.xml
+Sitemap: https://stake.com/sitemap/racing-group-ar.xml
+Sitemap: https://stake.com/sitemap/racing-event-ar.xml
+Sitemap: https://stake.com/sitemap/sponsorships-ar.xml
+Sitemap: https://stake.com/sitemap/blogs-ar.xml
+## DE-Sitemaps
+Sitemap: https://stake.com/sitemap/casino-de.xml
+Sitemap: https://stake.com/sitemap/sports-de.xml
+Sitemap: https://stake.com/sitemap/sports-categories-de.xml
+Sitemap: https://stake.com/sitemap/sports-tournaments-de.xml
+Sitemap: https://stake.com/sitemap/sports-outrights-de.xml
+Sitemap: https://stake.com/sitemap/sports-fixtures-de.xml
+Sitemap: https://stake.com/sitemap/pages-de.xml
+Sitemap: https://stake.com/sitemap/promotions-de.xml
+Sitemap: https://stake.com/sitemap/racing-de.xml
+Sitemap: https://stake.com/sitemap/racing-group-de.xml
+Sitemap: https://stake.com/sitemap/racing-event-de.xml
+Sitemap: https://stake.com/sitemap/sponsorships-de.xml
+Sitemap: https://stake.com/sitemap/blogs-de.xml
+## ES-Sitemaps
+Sitemap: https://stake.com/sitemap/casino-es.xml
+Sitemap: https://stake.com/sitemap/sports-es.xml
+Sitemap: https://stake.com/sitemap/sports-categories-es.xml
+Sitemap: https://stake.com/sitemap/sports-tournaments-es.xml
+Sitemap: https://stake.com/sitemap/sports-outrights-es.xml
+Sitemap: https://stake.com/sitemap/sports-fixtures-es.xml
+Sitemap: https://stake.com/sitemap/pages-es.xml
+Sitemap: https://stake.com/sitemap/promotions-es.xml
+Sitemap: https://stake.com/sitemap/racing-es.xml
+Sitemap: https://stake.com/sitemap/racing-group-es.xml
+Sitemap: https://stake.com/sitemap/racing-event-es.xml
+Sitemap: https://stake.com/sitemap/sponsorships-es.xml
+Sitemap: https://stake.com/sitemap/blogs-es.xml
+## FI-Sitemaps
+Sitemap: https://stake.com/sitemap/casino-fi.xml
+Sitemap: https://stake.com/sitemap/sports-fi.xml
+Sitemap: https://stake.com/sitemap/sports-categories-fi.xml
+Sitemap: https://stake.com/sitemap/sports-tournaments-fi.xml
+Sitemap: https://stake.com/sitemap/sports-outrights-fi.xml
+Sitemap: https://stake.com/sitemap/sports-fixtures-fi.xml
+Sitemap: https://stake.com/sitemap/pages-fi.xml
+Sitemap: https://stake.com/sitemap/promotions-fi.xml
+Sitemap: https://stake.com/sitemap/racing-fi.xml
+Sitemap: https://stake.com/sitemap/racing-group-fi.xml
+Sitemap: https://stake.com/sitemap/racing-event-fi.xml
+Sitemap: https://stake.com/sitemap/sponsorships-fi.xml
+Sitemap: https://stake.com/sitemap/blogs-fi.xml
+## FR-Sitemaps
+Sitemap: https://stake.com/sitemap/casino-fr.xml
+Sitemap: https://stake.com/sitemap/sports-fr.xml
+Sitemap: https://stake.com/sitemap/sports-categories-fr.xml
+Sitemap: https://stake.com/sitemap/sports-tournaments-fr.xml
+Sitemap: https://stake.com/sitemap/sports-outrights-fr.xml
+Sitemap: https://stake.com/sitemap/sports-fixtures-fr.xml
+Sitemap: https://stake.com/sitemap/pages-fr.xml
+Sitemap: https://stake.com/sitemap/promotions-fr.xml
+Sitemap: https://stake.com/sitemap/racing-fr.xml
+Sitemap: https://stake.com/sitemap/racing-group-fr.xml
+Sitemap: https://stake.com/sitemap/racing-event-fr.xml
+Sitemap: https://stake.com/sitemap/sponsorships-fr.xml
+Sitemap: https://stake.com/sitemap/blogs-fr.xml
+## HI-Sitemaps
+Sitemap: https://stake.com/sitemap/casino-hi.xml
+Sitemap: https://stake.com/sitemap/sports-hi.xml
+Sitemap: https://stake.com/sitemap/sports-categories-hi.xml
+Sitemap: https://stake.com/sitemap/sports-tournaments-hi.xml
+Sitemap: https://stake.com/sitemap/sports-outrights-hi.xml
+Sitemap: https://stake.com/sitemap/sports-fixtures-hi.xml
+Sitemap: https://stake.com/sitemap/pages-hi.xml
+Sitemap: https://stake.com/sitemap/promotions-hi.xml
+Sitemap: https://stake.com/sitemap/racing-hi.xml
+Sitemap: https://stake.com/sitemap/racing-group-hi.xml
+Sitemap: https://stake.com/sitemap/racing-event-hi.xml
+Sitemap: https://stake.com/sitemap/sponsorships-hi.xml
+Sitemap: https://stake.com/sitemap/blogs-hi.xml
+## ID-Sitemaps
+Sitemap: https://stake.com/sitemap/casino-id.xml
+Sitemap: https://stake.com/sitemap/sports-id.xml
+Sitemap: https://stake.com/sitemap/sports-categories-id.xml
+Sitemap: https://stake.com/sitemap/sports-tournaments-id.xml
+Sitemap: https://stake.com/sitemap/sports-outrights-id.xml
+Sitemap: https://stake.com/sitemap/sports-fixtures-id.xml
+Sitemap: https://stake.com/sitemap/pages-id.xml
+Sitemap: https://stake.com/sitemap/promotions-id.xml
+Sitemap: https://stake.com/sitemap/racing-id.xml
+Sitemap: https://stake.com/sitemap/racing-group-id.xml
+Sitemap: https://stake.com/sitemap/racing-event-id.xml
+Sitemap: https://stake.com/sitemap/sponsorships-id.xml
+Sitemap: https://stake.com/sitemap/blogs-id.xml
+## JA-Sitemaps
+Sitemap: https://stake.com/sitemap/casino-ja.xml
+Sitemap: https://stake.com/sitemap/sports-ja.xml
+Sitemap: https://stake.com/sitemap/sports-categories-ja.xml
+Sitemap: https://stake.com/sitemap/sports-tournaments-ja.xml
+Sitemap: https://stake.com/sitemap/sports-outrights-ja.xml
+Sitemap: https://stake.com/sitemap/sports-fixtures-ja.xml
+Sitemap: https://stake.com/sitemap/pages-ja.xml
+Sitemap: https://stake.com/sitemap/promotions-ja.xml
+Sitemap: https://stake.com/sitemap/racing-ja.xml
+Sitemap: https://stake.com/sitemap/racing-group-ja.xml
+Sitemap: https://stake.com/sitemap/racing-event-ja.xml
+Sitemap: https://stake.com/sitemap/sponsorships-ja.xml
+Sitemap: https://stake.com/sitemap/blogs-ja.xml
+## KO-Sitemaps
+Sitemap: https://stake.com/sitemap/casino-ko.xml
+Sitemap: https://stake.com/sitemap/sports-ko.xml
+Sitemap: https://stake.com/sitemap/sports-categories-ko.xml
+Sitemap: https://stake.com/sitemap/sports-tournaments-ko.xml
+Sitemap: https://stake.com/sitemap/sports-outrights-ko.xml
+Sitemap: https://stake.com/sitemap/sports-fixtures-ko.xml
+Sitemap: https://stake.com/sitemap/pages-ko.xml
+Sitemap: https://stake.com/sitemap/promotions-ko.xml
+Sitemap: https://stake.com/sitemap/racing-ko.xml
+Sitemap: https://stake.com/sitemap/racing-group-ko.xml
+Sitemap: https://stake.com/sitemap/racing-event-ko.xml
+Sitemap: https://stake.com/sitemap/sponsorships-ko.xml
+Sitemap: https://stake.com/sitemap/blogs-ko.xml
+## PL-Sitemaps
+Sitemap: https://stake.com/sitemap/casino-pl.xml
+Sitemap: https://stake.com/sitemap/sports-pl.xml
+Sitemap: https://stake.com/sitemap/sports-categories-pl.xml
+Sitemap: https://stake.com/sitemap/sports-tournaments-pl.xml
+Sitemap: https://stake.com/sitemap/sports-outrights-pl.xml
+Sitemap: https://stake.com/sitemap/sports-fixtures-pl.xml
+Sitemap: https://stake.com/sitemap/pages-pl.xml
+Sitemap: https://stake.com/sitemap/promotions-pl.xml
+Sitemap: https://stake.com/sitemap/racing-pl.xml
+Sitemap: https://stake.com/sitemap/racing-group-pl.xml
+Sitemap: https://stake.com/sitemap/racing-event-pl.xml
+Sitemap: https://stake.com/sitemap/sponsorships-pl.xml
+Sitemap: https://stake.com/sitemap/blogs-pl.xml
+## PT-Sitemaps
+Sitemap: https://stake.com/sitemap/casino-pt.xml
+Sitemap: https://stake.com/sitemap/sports-pt.xml
+Sitemap: https://stake.com/sitemap/sports-categories-pt.xml
+Sitemap: https://stake.com/sitemap/sports-tournaments-pt.xml
+Sitemap: https://stake.com/sitemap/sports-outrights-pt.xml
+Sitemap: https://stake.com/sitemap/sports-fixtures-pt.xml
+Sitemap: https://stake.com/sitemap/pages-pt.xml
+Sitemap: https://stake.com/sitemap/promotions-pt.xml
+Sitemap: https://stake.com/sitemap/racing-pt.xml
+Sitemap: https://stake.com/sitemap/racing-group-pt.xml
+Sitemap: https://stake.com/sitemap/racing-event-pt.xml
+Sitemap: https://stake.com/sitemap/sponsorships-pt.xml
+Sitemap: https://stake.com/sitemap/blogs-pt.xml
+## RU-Sitemaps
+Sitemap: https://stake.com/sitemap/casino-ru.xml
+Sitemap: https://stake.com/sitemap/sports-ru.xml
+Sitemap: https://stake.com/sitemap/sports-categories-ru.xml
+Sitemap: https://stake.com/sitemap/sports-tournaments-ru.xml
+Sitemap: https://stake.com/sitemap/sports-outrights-ru.xml
+Sitemap: https://stake.com/sitemap/sports-fixtures-ru.xml
+Sitemap: https://stake.com/sitemap/pages-ru.xml
+Sitemap: https://stake.com/sitemap/promotions-ru.xml
+Sitemap: https://stake.com/sitemap/racing-ru.xml
+Sitemap: https://stake.com/sitemap/racing-group-ru.xml
+Sitemap: https://stake.com/sitemap/racing-event-ru.xml
+Sitemap: https://stake.com/sitemap/sponsorships-ru.xml
+Sitemap: https://stake.com/sitemap/blogs-ru.xml
+## TR-Sitemaps
+Sitemap: https://stake.com/sitemap/casino-tr.xml
+Sitemap: https://stake.com/sitemap/sports-tr.xml
+Sitemap: https://stake.com/sitemap/sports-categories-tr.xml
+Sitemap: https://stake.com/sitemap/sports-tournaments-tr.xml
+Sitemap: https://stake.com/sitemap/sports-outrights-tr.xml
+Sitemap: https://stake.com/sitemap/sports-fixtures-tr.xml
+Sitemap: https://stake.com/sitemap/pages-tr.xml
+Sitemap: https://stake.com/sitemap/promotions-tr.xml
+Sitemap: https://stake.com/sitemap/racing-tr.xml
+Sitemap: https://stake.com/sitemap/racing-group-tr.xml
+Sitemap: https://stake.com/sitemap/racing-event-tr.xml
+Sitemap: https://stake.com/sitemap/sponsorships-tr.xml
+Sitemap: https://stake.com/sitemap/blogs-tr.xml
+## VI-Sitemaps
+Sitemap: https://stake.com/sitemap/casino-vi.xml
+Sitemap: https://stake.com/sitemap/sports-vi.xml
+Sitemap: https://stake.com/sitemap/sports-categories-vi.xml
+Sitemap: https://stake.com/sitemap/sports-tournaments-vi.xml
+Sitemap: https://stake.com/sitemap/sports-outrights-vi.xml
+Sitemap: https://stake.com/sitemap/sports-fixtures-vi.xml
+Sitemap: https://stake.com/sitemap/pages-vi.xml
+Sitemap: https://stake.com/sitemap/promotions-vi.xml
+Sitemap: https://stake.com/sitemap/racing-vi.xml
+Sitemap: https://stake.com/sitemap/racing-group-vi.xml
+Sitemap: https://stake.com/sitemap/racing-event-vi.xml
+Sitemap: https://stake.com/sitemap/sponsorships-vi.xml
+Sitemap: https://stake.com/sitemap/blogs-vi.xml
+## ZH-Sitemaps
+Sitemap: https://stake.com/sitemap/casino-zh.xml
+Sitemap: https://stake.com/sitemap/sports-zh.xml
+Sitemap: https://stake.com/sitemap/sports-categories-zh.xml
+Sitemap: https://stake.com/sitemap/sports-tournaments-zh.xml
+Sitemap: https://stake.com/sitemap/sports-outrights-zh.xml
+Sitemap: https://stake.com/sitemap/sports-fixtures-zh.xml
+Sitemap: https://stake.com/sitemap/pages-zh.xml
+Sitemap: https://stake.com/sitemap/promotions-zh.xml
+Sitemap: https://stake.com/sitemap/racing-zh.xml
+Sitemap: https://stake.com/sitemap/racing-group-zh.xml
+Sitemap: https://stake.com/sitemap/racing-event-zh.xml
+Sitemap: https://stake.com/sitemap/sponsorships-zh.xml
+Sitemap: https://stake.com/sitemap/blogs-zh.xml
+
+#		              &&,                                                               
+#		    &&&&&&&&&&&&&&&&&&                                                         
+#		 &&&&&&&           &&&&&                                                       
+#		&&&&&&              &&&&       (&&&&                     &&&&                  
+#		&&&&&             &&&&&&      &&&&&                     &&&&&                  
+#		&&&&&             &&&         &&&&&                    (&&&&&     &&           
+#		&&&&&&&                      &&&&&&&&&&&               &&&&&    &&&&,          
+#		  &&&&&&&&&           &&&&&&&&&&&&&&&&      &&        &&&&&  &&&&&       &&&&  
+#		      &&&&&&&&&&     &&&&&&&&&&&&       &&&&&&&&&&    &&&&&&&&&      &&&&&  &&&
+#		           &&&&&&&&&       &&&&&      &&&&&   &&&    &&&&&&&&      &&&&&    &&&
+#		      &&       *&&&&&&     &&&&&     &&&&    &&&&    &&&& &&&&    &&&&&  &&&&  
+#		 ,&&&&&&&         &&&&&   &&&&&     &&&&     &&&&   &&&&& (&&&    &&&&&        
+#		&&&&&             &&&&&   &&&&&& &&&&&&&&,&&&&&&&,&&&&&&&  &&&&    &&&&&&&&&&&&
+#		&&&&            *&&&&&     &&&&&&&    &&&&&    &&&  &&&&#    &&&&    &&&&&&    
+#		&&&&          &&&&&&&                                         &&&&&         
+#		&&&&&&&&&&&&&&&&&&                                                
+#		   &&&&&&&&        

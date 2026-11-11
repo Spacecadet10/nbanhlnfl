@@ -1,0 +1,94 @@
+# www.robotstxt.org/
+# ADA crawler: allow full public-site crawl for ADA accessibility review
+User-agent: AdaWebCrawler
+Allow: /
+
+User-agent: *
+
+Allow: /
+Allow: /*.css$
+Allow: /*.js$
+
+# Safety net only: modal/private flows are not expected as direct crawlable URLs.
+Disallow: /account
+Disallow: /account/
+Disallow: /*/account
+Disallow: /*/account/
+Disallow: /profile
+Disallow: /profile/
+Disallow: /*/profile
+Disallow: /*/profile/
+Disallow: /settings
+Disallow: /settings/
+Disallow: /*/settings
+Disallow: /*/settings/
+Disallow: /login
+Disallow: /login/
+Disallow: /*/login
+Disallow: /*/login/
+Disallow: /register
+Disallow: /register/
+Disallow: /*/register
+Disallow: /*/register/
+Disallow: /signup
+Disallow: /signup/
+Disallow: /*/signup
+Disallow: /*/signup/
+Disallow: /wallet
+Disallow: /wallet/
+Disallow: /*/wallet
+Disallow: /*/wallet/
+Disallow: /deposit
+Disallow: /deposit/
+Disallow: /*/deposit
+Disallow: /*/deposit/
+Disallow: /withdraw
+Disallow: /withdraw/
+Disallow: /withdrawal
+Disallow: /withdrawal/
+Disallow: /*/withdraw
+Disallow: /*/withdraw/
+Disallow: /*/withdrawal
+Disallow: /*/withdrawal/
+
+# Defensive non-public technical/admin paths.
+Disallow: /api
+Disallow: /api/
+Disallow: /*/api
+Disallow: /*/api/
+Disallow: /bo
+Disallow: /bo/
+Disallow: /*/bo
+Disallow: /*/bo/
+Disallow: /backoffice
+Disallow: /backoffice/
+Disallow: /*/backoffice
+Disallow: /*/backoffice/
+Disallow: /admin
+Disallow: /admin/
+Disallow: /*/admin
+Disallow: /*/admin/
+Disallow: /cms
+Disallow: /cms/
+Disallow: /*/cms
+Disallow: /*/cms/
+Disallow: /internal
+Disallow: /internal/
+Disallow: /*/internal
+Disallow: /*/internal/
+Disallow: /hidden
+Disallow: /hidden/
+Disallow: /*/hidden
+Disallow: /*/hidden/
+
+# Duplicate and testing URL parameters
+Disallow: /*?preview=
+Disallow: /*?test=
+Disallow: /*?debug=
+
+Allow: /hc
+Allow: /hc/
+Allow: /*/hc
+Allow: /*/hc/
+
+Sitemap: https://bet99.com/sitemap.xml

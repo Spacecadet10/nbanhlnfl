@@ -1,0 +1,2 @@
+2026-11-11T04:57:38Z | HTTP 200 | 1579 bytes | https://www.oddsportal.com/robots.txt -> robots.txt
+2026-11-11T04:58:25Z | HTTP 200 | 375928 bytes | https://www.oddsportal.com/terms/ -> terms.html

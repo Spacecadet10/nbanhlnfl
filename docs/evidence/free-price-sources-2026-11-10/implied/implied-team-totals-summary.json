@@ -1,0 +1,108 @@
+{
+ "generated_at": "2026-11-11T04:53:48Z",
+ "window": [
+  "2026-10-12T04:53:48Z",
+  "2026-11-11T04:53:48Z"
+ ],
+ "label": "implied from spread and total",
+ "nba": {
+  "forecasts_with_implied": 292,
+  "forecasts_without_quote": 0,
+  "settled_games": 189,
+  "spread_lines_seen": [
+   -16.5,
+   -15.5,
+   -14.5,
+   -13.5,
+   -12.5,
+   -11.5,
+   -10.5,
+   -9.5,
+   -8.5,
+   -7.5,
+   -6.5,
+   -5.5
+  ],
+  "model_minus_implied": {
+   "mean": -1.64,
+   "mean_abs": 2.66,
+   "within_0_5": 0.226,
+   "within_1": 0.349,
+   "within_2": 0.469
+  },
+  "mean_abs_error_vs_actual": {
+   "model_line": 10.03,
+   "implied_at_forecast": 9.55,
+   "implied_at_close": 9.53
+  },
+  "app_picks": {
+   "n": 292,
+   "wins": 142,
+   "losses": 150,
+   "win_rate": 0.486
+  },
+  "picks_market_agrees": {
+   "n": 134,
+   "wins": 81,
+   "losses": 53,
+   "win_rate": 0.604
+  },
+  "picks_market_disagrees": {
+   "n": 139,
+   "wins": 54,
+   "losses": 85,
+   "win_rate": 0.388
+  },
+  "market_side_vs_model_line": {
+   "n": 273,
+   "wins": 166,
+   "losses": 107,
+   "win_rate": 0.608
+  }
+ },
+ "nhl": {
+  "forecasts_with_implied": 366,
+  "forecasts_without_quote": 0,
+  "settled_games": 205,
+  "spread_lines_seen": [
+   -1.5,
+   1.5
+  ],
+  "model_minus_implied": {
+   "mean": -0.1,
+   "mean_abs": 0.5,
+   "within_0_5": 0.751,
+   "within_1": 0.943,
+   "within_2": 1.0
+  },
+  "mean_abs_error_vs_actual": {
+   "model_line": 1.36,
+   "implied_at_forecast": 1.32,
+   "implied_at_close": 1.33
+  },
+  "app_picks": {
+   "n": 366,
+   "wins": 188,
+   "losses": 178,
+   "win_rate": 0.514
+  },
+  "picks_market_agrees": {
+   "n": 114,
+   "wins": 74,
+   "losses": 40,
+   "win_rate": 0.649
+  },
+  "picks_market_disagrees": {
+   "n": 139,
+   "wins": 60,
+   "losses": 79,
+   "win_rate": 0.432
+  },
+  "market_side_vs_model_line": {
+   "n": 253,
+   "wins": 153,
+   "losses": 100,
+   "win_rate": 0.605
+  }
+ }
+}

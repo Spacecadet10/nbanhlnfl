@@ -1,0 +1,10 @@
+https://docs.novig.com/llms.txt | 2026-11-11 (moved from E-exchanges-misc) | HTTP 200
+https://docs.novig.com/robots.txt | 2026-11-11T05:00:22Z | HTTP 200
+https://docs.novig.com/public-data/overview.md | 2026-11-11T05:00:23Z | HTTP 200
+https://docs.novig.com/public-data/markets.md | 2026-11-11T05:00:24Z | HTTP 200
+https://data.novig.com/robots.txt | 2026-11-11T05:00:31Z | HTTP 403
+https://data.novig.com/reporting/trade-data/index.json | 2026-11-11T05:00:32Z | HTTP 200
+https://data.novig.com/reporting/trade-data/2026-11-09/markets.csv | 2026-11-11T05:00:43Z
+
+2026-11-11 (main session): markets-2026-11-09.csv.gz deleted unused after review: terms forbid scraping/reproduction or access unverified.
+2026-11-11: index.json deleted too (same host).

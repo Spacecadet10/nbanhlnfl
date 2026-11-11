@@ -1,0 +1,8 @@
+URL: https://www.vegasinsider.com/robots.txt
+UTC: 2026-11-11T04:53:26Z
+HTTP: 200 text/plain https://www.vegasinsider.com/robots.txt
+
+URL: https://www.vegasinsider.com/terms-of-use/
+UTC: 2026-11-11T04:53:52Z
+HTTP: 200 text/html;charset=UTF-8 https://www.vegasinsider.com/terms-of-use/
+

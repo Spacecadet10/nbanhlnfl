@@ -1,0 +1,39 @@
+# 1. Allow search engine crawlers access to public pages
+User-agent: *
+Disallow: /search
+Disallow: /utility/
+Disallow: /admin/
+Disallow: /api/
+Disallow: /401
+Disallow: /404
+
+# 2. Block Webflow draft and preview pages
+Disallow: /*?*preview=
+Disallow: /*?*webflow_
+Disallow: /drafts/
+
+# 3. Block AI scrapers (Optional - remove if you want AI models to crawl your content)
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: Anthropic-ai
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+# 4. Define XML Sitemap Location
+Sitemap: https://www.betr.app/sitemap.xml
+
+
+
+Sitemap: https://www.betr.app/sitemap.xml

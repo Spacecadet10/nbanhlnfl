@@ -1,0 +1,5 @@
+2026-11-11T04:58:06Z | HTTP 200 | 83395052 bytes | https://zenodo.org/api/records?q=%22corner%22%20AND%20odds%20AND%20football&size=25 -> search-corner-odds.json
+2026-11-11T04:58:09Z | HTTP 200 | 201192 bytes | https://zenodo.org/api/records?q=%22betting%20odds%22%20hockey%20OR%20NHL&size=25 -> search-nhl-odds.json
+search-corner-odds.json (83395052 bytes, mostly embedded metadata) deleted after extracting titles to search-corner-odds-titles.txt
+2026-11-11T05:00:22Z | HTTP 200 | 272 bytes | https://zenodo.org/robots.txt -> robots.txt
+2026-11-11T05:00:39Z | zenodo robots.txt (fetched after the searches) has 'Disallow: /api' for all agents -> the two /api/records search bodies were deleted; nothing from them is used

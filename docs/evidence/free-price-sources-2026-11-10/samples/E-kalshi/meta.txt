@@ -1,0 +1,32 @@
+https://docs.kalshi.com/llms.txt | 2026-11-11T04:55:38Z | HTTP 200
+https://docs.kalshi.com/getting_started/quick_start_market_data.md | 2026-11-11T04:55:43Z | HTTP 200
+https://docs.kalshi.com/getting_started/rate_limits.md | 2026-11-11T04:55:44Z | HTTP 200
+https://external-api.kalshi.com/robots.txt | 2026-11-11T04:55:53Z | HTTP 404
+https://external-api.kalshi.com/trade-api/v2/series?category=Sports | 2026-11-11T04:55:55Z | HTTP 200
+https://external-api.kalshi.com/trade-api/v2/markets?series_ticker=KXNBATEAMTOTAL&status=open&limit=1000 | 2026-11-11T04:56:16Z | HTTP 200
+https://external-api.kalshi.com/trade-api/v2/markets?series_ticker=KXNHLTEAMTOTAL&status=open&limit=1000 | 2026-11-11T04:56:18Z | HTTP 200
+https://external-api.kalshi.com/trade-api/v2/markets?series_ticker=KXNHLGAME&status=open&limit=1000 | 2026-11-11T04:56:19Z | HTTP 200
+https://external-api.kalshi.com/trade-api/v2/markets?series_ticker=KXNFLTEAMTOTAL&status=open&limit=1000 | 2026-11-11T04:56:21Z | HTTP 200
+https://external-api.kalshi.com/trade-api/v2/markets?series_ticker=KXUEFANLGAME&status=open&limit=1000 | 2026-11-11T04:56:22Z | HTTP 200
+https://external-api.kalshi.com/trade-api/v2/markets?series_ticker=KXEPLGAME&status=open&limit=1000 | 2026-11-11T04:56:23Z | HTTP 200
+https://external-api.kalshi.com/trade-api/v2/markets?series_ticker=KXEPLCORNERS&status=open&limit=1000 | 2026-11-11T04:56:25Z | HTTP 200
+https://external-api.kalshi.com/trade-api/v2/markets?series_ticker=KXEPLTCORNERS&status=open&limit=1000 | 2026-11-11T04:56:26Z | HTTP 200
+https://external-api.kalshi.com/trade-api/v2/markets?series_ticker=KXEPLBTTS&status=open&limit=1000 | 2026-11-11T04:56:27Z | HTTP 200
+https://external-api.kalshi.com/trade-api/v2/markets?series_ticker=KXEPLTEAMTOTAL&status=open&limit=1000 | 2026-11-11T04:56:28Z | HTTP 200
+https://external-api.kalshi.com/trade-api/v2/markets?series_ticker=KXEPLTOTAL&status=open&limit=1000 | 2026-11-11T04:56:30Z | HTTP 200
+https://external-api.kalshi.com/trade-api/v2/markets?series_ticker=KXINTLFRIENDLYTOTAL&status=open&limit=1000 | 2026-11-11T04:56:56Z | HTTP 200
+https://external-api.kalshi.com/trade-api/v2/markets?series_ticker=KXINTLFRIENDLYBTTS&status=open&limit=1000 | 2026-11-11T04:56:57Z | HTTP 200
+https://external-api.kalshi.com/trade-api/v2/markets?series_ticker=KXEPLCORNERS&status=settled&limit=1000 | 2026-11-11T04:56:58Z | HTTP 200
+https://external-api.kalshi.com/trade-api/v2/markets?series_ticker=KXEPLTCORNERS&status=settled&limit=1000 | 2026-11-11T04:57:00Z | HTTP 200
+https://external-api.kalshi.com/trade-api/v2/historical/cutoff | 2026-11-11T04:57:01Z | HTTP 200
+https://external-api.kalshi.com/trade-api/v2/series/KXEPLCORNERS/markets/KXEPLCORNERS-26NOV07FULNEW-10/candlesticks?start_ts=1761955200&end_ts=1762560000&period_interval=60 | 2026-11-11T04:57:10Z | HTTP 200
+https://external-api.kalshi.com/trade-api/v2/historical/markets?series_ticker=KXEPLCORNERS&limit=1000 | 2026-11-11T04:57:11Z | HTTP 200
+https://external-api.kalshi.com/trade-api/v2/series/KXEPLCORNERS/markets/KXEPLCORNERS-26NOV07FULNEW-10/candlesticks?start_ts=1793491200&end_ts=1794096000&period_interval=60 | 2026-11-11T04:57:22Z | HTTP 200
+https://external-api.kalshi.com/trade-api/v2/historical/markets/KXEPLCORNERS-26AUG21ARSCOV-10/candlesticks?start_ts=1786752000&end_ts=1787356800&period_interval=60 | 2026-11-11T04:57:23Z | HTTP 200
+https://external-api.kalshi.com/trade-api/v2/historical/markets?series_ticker=KXNHLTEAMTOTAL&limit=1000 | 2026-11-11T04:57:33Z | HTTP 200
+https://external-api.kalshi.com/trade-api/v2/historical/markets?series_ticker=KXNBATEAMTOTAL&limit=1000 | 2026-11-11T04:57:35Z | HTTP 200
+https://external-api.kalshi.com/trade-api/v2/markets?series_ticker=KXNHLTEAMTOTAL&status=settled&limit=1000 | 2026-11-11T04:57:44Z
+https://kalshi-public-docs.s3.amazonaws.com/Kalshi-Developer-Agreement.pdf | 2026-11-11T04:58:12Z
+NOTE: files >3MB gzip-compressed locally after download (content unchanged).
+
+2026-11-11 (main session): data bodies (*.json) deleted unused: the E-kalshi terms forbid automated collection/storage. Only terms, docs, robots and this file are kept.

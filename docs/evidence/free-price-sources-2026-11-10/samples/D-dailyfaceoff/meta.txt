@@ -1,0 +1,4 @@
+https://www.dailyfaceoff.com/terms-of-service | 2026-11-11T05:02:08Z | HTTP 404
+https://www.dailyfaceoff.com/ | 2026-11-11T05:02:09Z | HTTP 200
+(terms.html = guessed URL; returned 404/error page, kept as served)
+https://www.dailyfaceoff.com/terms-and-conditions | 2026-11-11T05:03:02Z | HTTP 404

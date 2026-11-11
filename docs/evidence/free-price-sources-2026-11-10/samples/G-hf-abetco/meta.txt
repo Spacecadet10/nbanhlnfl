@@ -1,0 +1,5 @@
+2026-11-11T04:56:43Z | HTTP 200 | 2602 bytes | https://huggingface.co/datasets/abetco/odds-history-archive/resolve/main/archive_manifest.json -> archive_manifest.json
+2026-11-11T04:57:03Z | HTTP 200 | 193645 bytes | https://huggingface.co/datasets/abetco/odds-history-archive/resolve/main/odds_nba_20261105.jsonl.gz -> odds_nba_20261105.jsonl.gz
+2026-11-11T04:57:11Z | HTTP 200 | 421896 bytes | https://huggingface.co/datasets/abetco/odds-history-archive/resolve/main/odds_nhl_20261110.jsonl.gz -> odds_nhl_20261110.jsonl.gz
+
+2026-11-11 (main session): odds_*.jsonl.gz deleted unused after review: no licence; notes describe it as a redistributed paid feed.

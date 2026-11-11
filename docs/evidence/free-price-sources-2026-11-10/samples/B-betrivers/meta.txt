@@ -1,0 +1,8 @@
+URL: https://www.betrivers.com/robots.txt
+UTC: 2026-11-11T04:51:35Z
+HTTP: 200  https://www.betrivers.com/robots.txt
+
+URL: https://www.betrivers.com/terms-and-conditions
+UTC: 2026-11-11T04:52:32Z
+HTTP: 404 text/plain;charset=UTF-8 https://www.betrivers.com/terms-and-conditions
+

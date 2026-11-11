@@ -1,0 +1,27 @@
+User-agent: *
+Disallow: /
+
+User-agent: Googlebot
+User-agent: AdsBot-Google
+User-agent: AdsBot-Google-Mobile
+User-agent: Bingbot
+User-agent: DuckDuckBot
+User-agent: Slurp
+Disallow: /*admin*
+Disallow: /payments
+Disallow: /deposit
+Disallow: /matches
+Disallow: /faq
+Disallow: /account/referrals
+Disallow: /account/logout
+Disallow: /account/update
+Disallow: /account/password-reset
+Disallow: /challenges/history
+Disallow: /challenges/pending
+Disallow: /challenges/referral
+Disallow: /sports/teams/*
+Disallow: /challenges/sp/*
+Allow: /challenges/sp/upcoming
+Disallow: /challenges/mp/*
+Disallow: /dashboard/*
+Disallow: /landing

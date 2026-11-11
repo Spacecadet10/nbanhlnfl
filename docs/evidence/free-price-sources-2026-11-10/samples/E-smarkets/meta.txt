@@ -1,0 +1,3 @@
+https://docs.smarkets.com/ | 2026-11-11T04:59:17Z | HTTP 200
+https://smarkets.com/legal/terms-and-conditions | 2026-11-11T04:59:18Z | HTTP 200
+https://api.smarkets.com/v0/control/openapi/?tags=trading_api | 2026-11-11T04:59:26Z

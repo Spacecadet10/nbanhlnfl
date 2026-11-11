@@ -1,0 +1,8 @@
+User-Agent: *
+Allow: /
+Disallow: /portfolio/*
+Disallow: /settings/*
+Disallow: /native-app/*
+Disallow: /cftc/*
+
+Sitemap: https://smarkets.com/sitemap.xml

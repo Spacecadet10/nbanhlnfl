@@ -1,0 +1,122 @@
+{
+  "generated_at": "2026-10-23T22:00:56.586383+00:00",
+  "schema": "odds_history_v1",
+  "backfill": true,
+  "note": "Backfilled from currently retained SQLite snapshots; earlier rows were not retained by the old pipeline.",
+  "files": [
+    {
+      "name": "odds_mlb_20261019.jsonl.gz",
+      "sport": "mlb",
+      "date": "20261019",
+      "rows": 192
+    },
+    {
+      "name": "odds_mlb_20261020.jsonl.gz",
+      "sport": "mlb",
+      "date": "20261020",
+      "rows": 200
+    },
+    {
+      "name": "odds_mlb_20261021.jsonl.gz",
+      "sport": "mlb",
+      "date": "20261021",
+      "rows": 1646
+    },
+    {
+      "name": "odds_mlb_20261022.jsonl.gz",
+      "sport": "mlb",
+      "date": "20261022",
+      "rows": 1616
+    },
+    {
+      "name": "odds_mlb_20261023.jsonl.gz",
+      "sport": "mlb",
+      "date": "20261023",
+      "rows": 784
+    },
+    {
+      "name": "odds_nba_20261017.jsonl.gz",
+      "sport": "nba",
+      "date": "20261017",
+      "rows": 5664
+    },
+    {
+      "name": "odds_nba_20261020.jsonl.gz",
+      "sport": "nba",
+      "date": "20261020",
+      "rows": 4464
+    },
+    {
+      "name": "odds_nba_20261021.jsonl.gz",
+      "sport": "nba",
+      "date": "20261021",
+      "rows": 26540
+    },
+    {
+      "name": "odds_nba_20261022.jsonl.gz",
+      "sport": "nba",
+      "date": "20261022",
+      "rows": 24336
+    },
+    {
+      "name": "odds_nba_20261023.jsonl.gz",
+      "sport": "nba",
+      "date": "20261023",
+      "rows": 10844
+    },
+    {
+      "name": "odds_nfl_20261018.jsonl.gz",
+      "sport": "nfl",
+      "date": "20261018",
+      "rows": 7400
+    },
+    {
+      "name": "odds_nfl_20261020.jsonl.gz",
+      "sport": "nfl",
+      "date": "20261020",
+      "rows": 4254
+    },
+    {
+      "name": "odds_nfl_20261021.jsonl.gz",
+      "sport": "nfl",
+      "date": "20261021",
+      "rows": 26092
+    },
+    {
+      "name": "odds_nfl_20261022.jsonl.gz",
+      "sport": "nfl",
+      "date": "20261022",
+      "rows": 26790
+    },
+    {
+      "name": "odds_nfl_20261023.jsonl.gz",
+      "sport": "nfl",
+      "date": "20261023",
+      "rows": 15126
+    },
+    {
+      "name": "odds_nhl_20261020.jsonl.gz",
+      "sport": "nhl",
+      "date": "20261020",
+      "rows": 2364
+    },
+    {
+      "name": "odds_nhl_20261021.jsonl.gz",
+      "sport": "nhl",
+      "date": "20261021",
+      "rows": 8796
+    },
+    {
+      "name": "odds_nhl_20261022.jsonl.gz",
+      "sport": "nhl",
+      "date": "20261022",
+      "rows": 18632
+    },
+    {
+      "name": "odds_nhl_20261023.jsonl.gz",
+      "sport": "nhl",
+      "date": "20261023",
+      "rows": 4814
+    }
+  ]
+}

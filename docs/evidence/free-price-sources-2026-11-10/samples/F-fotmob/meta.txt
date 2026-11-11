@@ -1,0 +1,1 @@
+2026-11-11T04:53:41Z | HTTP 200 | 16091 bytes | https://www.fotmob.com/robots.txt -> robots.txt

@@ -1,0 +1,8 @@
+User-Agent: *
+Disallow:
+
+Sitemap: https://www.prizepicks.com/sitemap.xml
+Sitemap: https://www.prizepicks.com/sport/sitemap.xml
+Sitemap: https://www.prizepicks.com/research/sitemap.xml
+
+Sitemap: https://www.prizepicks.com/sitemap.xml

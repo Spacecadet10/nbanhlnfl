@@ -1,0 +1,8 @@
+URL: https://sportsbook.caesars.com/robots.txt
+UTC: 2026-11-11T04:51:34Z
+HTTP: 200 text/plain https://sportsbook.caesars.com/robots.txt
+
+URL: https://www.caesars.com/sportsbook-and-casino/nv/support/terms-and-conditions-privacy/
+UTC: 2026-11-11T04:52:22Z
+HTTP: 200 text/html https://www.caesars.com/sportsbook-and-casino/nv/support/terms-and-conditions-privacy/
+

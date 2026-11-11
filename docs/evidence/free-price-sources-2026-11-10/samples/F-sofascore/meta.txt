@@ -1,0 +1,2 @@
+2026-11-11T04:53:38Z | HTTP 403 | 48 bytes | https://www.sofascore.com/robots.txt -> robots.txt
+2026-11-11T04:53:40Z | HTTP 403 | 48 bytes | https://api.sofascore.com/robots.txt -> api-robots.txt

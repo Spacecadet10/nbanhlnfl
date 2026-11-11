@@ -1,0 +1,3 @@
+2026-11-11T04:51:38Z | HTTP 403 | 263 bytes | https://cdn.nba.com/robots.txt -> robots.txt
+2026-11-11T04:51:39Z | HTTP 200 | 10036 bytes | https://www.nba.com/robots.txt -> www-robots.txt
+2026-11-11T04:52:25Z | HTTP 403 | 436 bytes | https://cdn.nba.com/static/json/liveData/odds/odds_todaysGames.json -> odds_todaysGames.json

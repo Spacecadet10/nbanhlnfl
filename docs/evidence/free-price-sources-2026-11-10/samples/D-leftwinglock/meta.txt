@@ -1,0 +1,6 @@
+https://leftwinglock.com/terms/ | 2026-11-11T05:02:02Z | HTTP 404
+https://leftwinglock.com/ | 2026-11-11T05:02:04Z | HTTP 200
+(terms.html = guessed URL; returned 404/error page, kept as served)
+https://leftwinglock.com/tos.php | 2026-11-11T05:02:38Z | HTTP 200
+
+2026-11-11 (main session): home.html deleted unused after review: terms forbid scraping/reproduction or access unverified.

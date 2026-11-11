@@ -1,0 +1,8 @@
+URL: https://www.oddsportal.com/robots.txt
+UTC: 2026-11-11T04:53:25Z
+HTTP: 200 text/plain; charset=utf-8 https://www.oddsportal.com/robots.txt
+
+URL: https://www.oddsportal.com/terms/
+UTC: 2026-11-11T04:53:57Z
+HTTP: 200 text/html; charset=utf-8 https://www.oddsportal.com/terms/
+

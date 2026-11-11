@@ -1,0 +1,8 @@
+URL: https://sports.williamhill.com/robots.txt
+UTC: 2026-11-11T04:51:44Z
+HTTP: 200 text/plain; charset=utf-8 https://sports.williamhill.com/robots.txt
+
+URL: https://www.williamhill.com/terms
+UTC: 2026-11-11T04:52:30Z
+HTTP: 500 text/html https://www.williamhill.com/terms
+

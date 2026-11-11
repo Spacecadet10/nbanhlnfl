@@ -1,0 +1,18 @@
+URL: https://www.betexplorer.com/robots.txt
+UTC: 2026-11-11T04:53:11Z
+HTTP: 200 text/plain https://www.betexplorer.com/robots.txt
+
+URL: https://www.betexplorer.com/terms-of-use/
+UTC: 2026-11-11T04:53:55Z
+HTTP: 404  https://www.betexplorer.com/terms-of-use/
+
+URL: https://www.betexplorer.com/
+UTC: 2026-11-11T04:56:27Z
+HTTP: 200 text/html;charset=utf-8 https://www.betexplorer.com/
+
+URL: https://www.betexplorer.com/terms-of-service.php
+UTC: 2026-11-11T04:56:41Z
+HTTP: 200 text/html;charset=utf-8 https://www.betexplorer.com/terms-of-service.php
+
+
+2026-11-11 (main session): home.html deleted unused after review: terms forbid scraping/reproduction or access unverified.

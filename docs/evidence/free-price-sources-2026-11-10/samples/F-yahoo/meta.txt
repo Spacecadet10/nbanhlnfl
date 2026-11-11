@@ -1,0 +1,4 @@
+2026-11-11T04:53:23Z | HTTP 200 | 2167 bytes | https://sports.yahoo.com/robots.txt -> robots.txt
+2026-11-11T04:54:22Z | HTTP 200 | 862818 bytes | https://sports.yahoo.com/nba/odds/ -> nba-odds.html
+2026-11-11T04:54:24Z | HTTP 200 | 1030443 bytes | https://sports.yahoo.com/nhl/odds/ -> nhl-odds.html
+2026-11-11T05:00:18Z | coordinator rule: robots.txt names ClaudeBot/anthropic-ai -> data bodies deleted, only robots.txt + meta.txt kept

@@ -1,0 +1,8 @@
+URL: https://the-odds-api.com/robots.txt
+UTC: 2026-11-11T04:53:22Z
+HTTP: 200 text/html https://the-odds-api.com/404.html
+
+URL: https://api.the-odds-api.com/v4/sports
+UTC: 2026-11-11T04:57:12Z
+HTTP: 401 application/json; charset=utf-8 https://api.the-odds-api.com/v4/sports
+

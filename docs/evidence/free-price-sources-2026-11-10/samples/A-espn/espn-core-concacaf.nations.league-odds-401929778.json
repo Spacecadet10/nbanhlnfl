@@ -1,0 +1,317 @@
+{
+ "_fetched_at": "2026-11-11T04:52:44+00:00",
+ "_url": "https://sports.core.api.espn.com/v2/sports/soccer/leagues/concacaf.nations.league/events/401929778/competitions/401929778/odds",
+ "_status": 200,
+ "_headers": {
+  "date": "Wed, 11 Nov 2026 04:52:44 GMT",
+  "content-type": "application/json;charset=utf-8",
+  "cache-control": "max-age=628, stale-while-revalidate=7200"
+ },
+ "body": {
+  "count": 1,
+  "pageIndex": 1,
+  "pageSize": 25,
+  "pageCount": 1,
+  "items": [
+   {
+    "$ref": "http://sports.core.api.espn.com/v2/sports/soccer/leagues/concacaf.nations.league/events/401929778/competitions/401929778/odds/100?lang=en&region=us",
+    "provider": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/soccer/leagues/concacaf.nations.league/providers/100?lang=en&region=us",
+     "id": "100",
+     "name": "DraftKings",
+     "priority": 1
+    },
+    "details": "GDL +135",
+    "overUnder": 2.5,
+    "spread": 0.5,
+    "overOdds": -160.0,
+    "underOdds": 110.0,
+    "awayTeamOdds": {
+     "favorite": true,
+     "underdog": false,
+     "moneyLine": 135,
+     "spreadOdds": 125.0,
+     "open": {
+      "favorite": true,
+      "pointSpread": {
+       "alternateDisplayValue": "-0.5",
+       "american": "-0.5"
+      },
+      "spread": {
+       "value": 2.15,
+       "displayValue": "23/20",
+       "alternateDisplayValue": "+115",
+       "decimal": 2.15,
+       "fraction": "23/20",
+       "american": "+115"
+      },
+      "moneyLine": {
+       "value": 2.2,
+       "displayValue": "6/5",
+       "alternateDisplayValue": "+120",
+       "decimal": 2.2,
+       "fraction": "6/5",
+       "american": "+120"
+      }
+     },
+     "current": {
+      "pointSpread": {
+       "alternateDisplayValue": "-0.5",
+       "american": "-0.5"
+      },
+      "spread": {
+       "value": 2.25,
+       "displayValue": "5/4",
+       "alternateDisplayValue": "+125",
+       "decimal": 2.25,
+       "fraction": "5/4",
+       "american": "+125"
+      },
+      "moneyLine": {
+       "value": 2.35,
+       "displayValue": "27/20",
+       "alternateDisplayValue": "+135",
+       "decimal": 2.35,
+       "fraction": "27/20",
+       "american": "+135"
+      }
+     },
+     "team": {
+      "$ref": "http://sports.core.api.espn.com/v2/sports/soccer/leagues/concacaf.nations.league/seasons/2026/teams/7657?lang=en&region=us"
+     }
+    },
+    "homeTeamOdds": {
+     "favorite": false,
+     "underdog": true,
+     "moneyLine": 170,
+     "spreadOdds": -185.0,
+     "open": {
+      "favorite": false,
+      "pointSpread": {
+       "alternateDisplayValue": "+0.5",
+       "american": "+0.5"
+      },
+      "spread": {
+       "value": 1.58,
+       "displayValue": "10/17",
+       "alternateDisplayValue": "-170",
+       "decimal": 1.58,
+       "fraction": "10/17",
+       "american": "-170"
+      },
+      "moneyLine": {
+       "value": 2.8,
+       "displayValue": "9/5",
+       "alternateDisplayValue": "+180",
+       "decimal": 2.8,
+       "fraction": "9/5",
+       "american": "+180"
+      }
+     },
+     "current": {
+      "pointSpread": {
+       "alternateDisplayValue": "+0.5",
+       "american": "+0.5"
+      },
+      "spread": {
+       "value": 1.54,
+       "displayValue": "20/37",
+       "alternateDisplayValue": "-185",
+       "decimal": 1.54,
+       "fraction": "20/37",
+       "american": "-185"
+      },
+      "moneyLine": {
+       "value": 2.7,
+       "displayValue": "17/10",
+       "alternateDisplayValue": "+170",
+       "decimal": 2.7,
+       "fraction": "17/10",
+       "american": "+170"
+      }
+     },
+     "team": {
+      "$ref": "http://sports.core.api.espn.com/v2/sports/soccer/leagues/concacaf.nations.league/seasons/2026/teams/2637?lang=en&region=us"
+     }
+    },
+    "drawOdds": {
+     "moneyLine": 235.0
+    },
+    "links": [
+     {
+      "language": "en-US",
+      "rel": [
+       "home",
+       "desktop",
+       "bets",
+       "draftkings"
+      ],
+      "href": "https://sportsbook.draftkings.com/gateway?s=__s__&wpcid=__wpcid__&wpsrc=413&wpcn=ESPN&wpscn=Widget&wpcrn=BetSlipDeepLink&wpscid=__wpscid__&wpcrid=xx&preurl=https%3A%2F%2Fsportsbook.draftkings.com%2Fevent%2F34998559%3Foutcomes%3D0ML87188365_1",
+      "text": "Home Bet",
+      "shortText": "Home Bet",
+      "isExternal": true,
+      "isPremium": false
+     },
+     {
+      "language": "en-US",
+      "rel": [
+       "away",
+       "desktop",
+       "bets",
+       "draftkings"
+      ],
+      "href": "https://sportsbook.draftkings.com/gateway?s=__s__&wpcid=__wpcid__&wpsrc=413&wpcn=ESPN&wpscn=Widget&wpcrn=BetSlipDeepLink&wpscid=__wpscid__&wpcrid=xx&preurl=https%3A%2F%2Fsportsbook.draftkings.com%2Fevent%2F34998559%3Foutcomes%3D0ML87188365_3",
+      "text": "Away Bet",
+      "shortText": "Away Bet",
+      "isExternal": true,
+      "isPremium": false
+     },
+     {
+      "language": "en-US",
+      "rel": [
+       "draw",
+       "desktop",
+       "bets",
+       "draftkings"
+      ],
+      "href": "https://sportsbook.draftkings.com/gateway?s=__s__&wpcid=__wpcid__&wpsrc=413&wpcn=ESPN&wpscn=Widget&wpcrn=BetSlipDeepLink&wpscid=__wpscid__&wpcrid=xx&preurl=https%3A%2F%2Fsportsbook.draftkings.com%2Fevent%2F34998559%3Foutcomes%3D0ML87188365_2",
+      "text": "Draw Bet",
+      "shortText": "Draw Bet",
+      "isExternal": true,
+      "isPremium": false
+     },
+     {
+      "language": "en-US",
+      "rel": [
+       "homeSpread",
+       "desktop",
+       "bets"
+      ],
+      "href": "https://sportsbook.draftkings.com/gateway?s=__s__&wpcid=__wpcid__&wpsrc=413&wpcn=ESPN&wpscn=Widget&wpcrn=BetSlipDeepLink&wpscid=__wpscid__&wpcrid=xx&preurl=https%3A%2F%2Fsportsbook.draftkings.com%2Fevent%2F34998559%3Foutcomes%3D0HC87188375P50_1",
+      "text": "Home Point Spread",
+      "shortText": "Home Point Spread",
+      "isExternal": true,
+      "isPremium": false
+     },
+     {
+      "language": "en-US",
+      "rel": [
+       "awaySpread",
+       "desktop",
+       "bets"
+      ],
+      "href": "https://sportsbook.draftkings.com/gateway?s=__s__&wpcid=__wpcid__&wpsrc=413&wpcn=ESPN&wpscn=Widget&wpcrn=BetSlipDeepLink&wpscid=__wpscid__&wpcrid=xx&preurl=https%3A%2F%2Fsportsbook.draftkings.com%2Fevent%2F34998559%3Foutcomes%3D0HC87188375N50_3",
+      "text": "Away Point Spread",
+      "shortText": "Away Point Spread",
+      "isExternal": true,
+      "isPremium": false
+     },
+     {
+      "language": "en-US",
+      "rel": [
+       "over",
+       "desktop",
+       "bets"
+      ],
+      "href": "https://sportsbook.draftkings.com/gateway?s=__s__&wpcid=__wpcid__&wpsrc=413&wpcn=ESPN&wpscn=Widget&wpcrn=BetSlipDeepLink&wpscid=__wpscid__&wpcrid=xx&preurl=https%3A%2F%2Fsportsbook.draftkings.com%2Fevent%2F34998559%3Foutcomes%3D0OU87188372O250_1",
+      "text": "Over Odds",
+      "shortText": "Over Odds",
+      "isExternal": true,
+      "isPremium": false
+     },
+     {
+      "language": "en-US",
+      "rel": [
+       "under",
+       "desktop",
+       "bets"
+      ],
+      "href": "https://sportsbook.draftkings.com/gateway?s=__s__&wpcid=__wpcid__&wpsrc=413&wpcn=ESPN&wpscn=Widget&wpcrn=BetSlipDeepLink&wpscid=__wpscid__&wpcrid=xx&preurl=https%3A%2F%2Fsportsbook.draftkings.com%2Fevent%2F34998559%3Foutcomes%3D0OU87188372U250_3",
+      "text": "Under Odds",
+      "shortText": "Under Odds",
+      "isExternal": true,
+      "isPremium": false
+     },
+     {
+      "language": "en-US",
+      "rel": [
+       "game",
+       "desktop",
+       "bets"
+      ],
+      "href": "https://sportsbook.draftkings.com/gateway?s=__s__&wpcid=__wpcid__&wpsrc=413&wpcn=ESPN&wpscn=Widget&wpcrn=BetSlipDeepLink&wpscid=__wpscid__&wpcrid=xx&preurl=https%3A%2F%2Fsportsbook.draftkings.com%2Fevent%2F34998559",
+      "text": "Game",
+      "shortText": "Game",
+      "isExternal": true,
+      "isPremium": false
+     }
+    ],
+    "moneylineWinner": false,
+    "spreadWinner": false,
+    "open": {
+     "over": {
+      "value": 1.66,
+      "displayValue": "4/6",
+      "alternateDisplayValue": "-150",
+      "decimal": 1.66,
+      "fraction": "4/6",
+      "american": "-150"
+     },
+     "under": {
+      "value": 2.05,
+      "displayValue": "21/20",
+      "alternateDisplayValue": "+105",
+      "decimal": 2.05,
+      "fraction": "21/20",
+      "american": "+105"
+     },
+     "total": {
+      "alternateDisplayValue": "2.5",
+      "american": "2.5"
+     },
+     "draw": {
+      "value": 3.5,
+      "displayValue": "5/2",
+      "alternateDisplayValue": "+250",
+      "decimal": 3.5,
+      "fraction": "5/2",
+      "american": "+250"
+     }
+    },
+    "current": {
+     "over": {
+      "value": 1.62,
+      "displayValue": "5/8",
+      "alternateDisplayValue": "-160",
+      "decimal": 1.62,
+      "fraction": "5/8",
+      "american": "-160"
+     },
+     "under": {
+      "value": 2.1,
+      "displayValue": "11/10",
+      "alternateDisplayValue": "+110",
+      "decimal": 2.1,
+      "fraction": "11/10",
+      "american": "+110"
+     },
+     "total": {
+      "alternateDisplayValue": "2.5",
+      "american": "2.5"
+     },
+     "draw": {
+      "value": 3.35,
+      "displayValue": "47/20",
+      "alternateDisplayValue": "+235",
+      "decimal": 3.35,
+      "fraction": "47/20",
+      "american": "+235"
+     }
+    },
+    "propBets": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/soccer/leagues/concacaf.nations.league/events/401929778/competitions/401929778/odds/100/propBets?lang=en&region=us"
+    }
+   }
+  ]
+ }
+}

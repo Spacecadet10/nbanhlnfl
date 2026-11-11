@@ -1,0 +1,5 @@
+User-Agent: *
+Allow: /
+
+Host: https://sleeper.com
+Sitemap: https://sleeper.com/sitemap.xml

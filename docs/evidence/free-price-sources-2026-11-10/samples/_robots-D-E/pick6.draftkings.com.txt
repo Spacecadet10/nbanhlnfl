@@ -1,0 +1,7 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Disallow: /embed/
+Disallow:*referrer*
+
+User-agent: Bytespider
+Disallow: /

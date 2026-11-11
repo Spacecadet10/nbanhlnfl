@@ -1,0 +1,16 @@
+URL: https://www.sportsoddshistory.com/robots.txt
+UTC: 2026-11-11T04:53:08Z
+HTTP: 503 text/html https://www.sportsoddshistory.com/robots.txt
+
+URL: https://www.sportsoddshistory.com/robots.txt
+UTC: 2026-11-11T04:56:32Z
+HTTP: 503 text/html https://www.sportsoddshistory.com/robots.txt
+
+URL: https://www.sportsoddshistory.com/
+UTC: 2026-11-11T04:56:45Z
+HTTP: 503 text/html https://www.covers.com:443/sportsoddshistory/
+
+URL: https://www.covers.com/sportsoddshistory/
+UTC: 2026-11-11T04:57:31Z
+HTTP: 503 text/html https://www.covers.com/sportsoddshistory/
+

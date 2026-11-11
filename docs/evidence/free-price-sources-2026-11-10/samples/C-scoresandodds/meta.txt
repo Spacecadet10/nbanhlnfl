@@ -1,0 +1,21 @@
+URL: https://www.scoresandodds.com/robots.txt
+UTC: 2026-11-11T04:53:09Z
+HTTP: 200 text/plain https://www.scoresandodds.com/robots.txt
+
+URL: https://www.scoresandodds.com/terms
+UTC: 2026-11-11T04:53:51Z
+HTTP: 404 text/html;charset=UTF-8 https://www.scoresandodds.com/terms
+
+URL: https://www.scoresandodds.com/nba
+UTC: 2026-11-11T04:55:58Z
+HTTP: 200 text/html;charset=UTF-8 https://www.scoresandodds.com/nba
+
+URL: https://www.scoresandodds.com/terms-of-service
+UTC: 2026-11-11T04:56:12Z
+HTTP: 200 text/html;charset=UTF-8 https://www.scoresandodds.com/terms-of-service
+
+URL: https://www.scoresandodds.com/nba/more-lines
+UTC: 2026-11-11T04:56:13Z
+HTTP: 200 text/html;charset=UTF-8 https://www.scoresandodds.com/nba/more-lines
+
+NOTE: /nba (schedule) and /nba/more-lines were fetched 2026-11-10 before the terms were read; terms forbid automated access, so both odds responses were deleted unread (only grep counts of words were taken).

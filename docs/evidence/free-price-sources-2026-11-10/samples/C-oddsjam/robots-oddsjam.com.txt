@@ -1,0 +1,45 @@
+# *
+User-agent: *
+Disallow: /api/backend/*
+
+# *
+User-agent: *
+Disallow: /wp/*
+
+# *
+User-agent: *
+Disallow: /cdn-cgi/*
+
+# *
+User-agent: *
+Disallow: /sale/*
+
+# *
+User-agent: *
+Disallow: /_next/image
+
+# *
+User-agent: *
+Disallow: /_next/static
+
+# *
+User-agent: *
+Disallow: /go?*
+
+# *
+User-agent: *
+Disallow: /go/*
+
+# *
+User-agent: *
+Disallow: /polymarket
+
+# *
+User-agent: *
+Disallow: /onboarding-survey/*
+
+# Host
+Host: https://oddsjam.com
+
+# Sitemaps
+Sitemap: https://oddsjam.com/sitemap.xml

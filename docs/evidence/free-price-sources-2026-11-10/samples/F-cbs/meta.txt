@@ -1,0 +1,3 @@
+2026-11-11T04:53:22Z | HTTP 200 | 875 bytes | https://www.cbssports.com/robots.txt -> robots.txt
+2026-11-11T04:54:01Z | HTTP 200 | 894338 bytes | https://www.cbssports.com/nba/odds/ -> nba-odds.html
+2026-11-11T04:54:03Z | HTTP 200 | 848136 bytes | https://www.cbssports.com/nhl/odds/ -> nhl-odds.html

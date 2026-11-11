@@ -1,0 +1,8 @@
+URL: https://oddsjam.com/robots.txt
+UTC: 2026-11-11T04:53:12Z
+HTTP: 200 text/plain; charset=UTF-8 https://oddsjam.com/robots.txt
+
+URL: https://oddsjam.com/terms
+UTC: 2026-11-11T04:54:04Z
+HTTP: 403 text/html; charset=UTF-8 https://oddsjam.com/terms
+

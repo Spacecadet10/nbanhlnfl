@@ -1,0 +1,20 @@
+User-agent: *
+Disallow: /ext/
+Disallow: /slp/
+Disallow: /tipit/
+Disallow: /bet/en-gb/bet/
+Disallow: /*results/
+Disallow: /*?aff_*
+Disallow: /*?casino*
+Disallow: /*window.open
+Disallow: /bet/en-gb/betting/y/31/Test+Horse+Racing.html
+Disallow: /search/
+Disallow: /fragments/eventEntity/
+
+# Remove pages duplicated or with errors in the locale en-gb
+Allow: /betting/en-gb$
+Allow: /betting/en-gb/*
+Disallow: /betting/en-gb
+
+
+Sitemap: https://sitemapxml.williamhill.com/wh-sports-x-default.xml

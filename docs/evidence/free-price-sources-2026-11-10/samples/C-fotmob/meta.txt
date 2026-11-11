@@ -1,0 +1,8 @@
+URL: https://www.fotmob.com/robots.txt
+UTC: 2026-11-11T04:53:17Z
+HTTP: 200 text/plain https://www.fotmob.com/robots.txt
+
+URL: https://www.fotmob.com/terms
+UTC: 2026-11-11T04:54:01Z
+HTTP: 200 text/html; charset=utf-8 https://www.fotmob.com/
+

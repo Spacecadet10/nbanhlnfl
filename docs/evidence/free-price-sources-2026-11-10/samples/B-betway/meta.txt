@@ -1,0 +1,8 @@
+URL: https://betway.com/robots.txt
+UTC: 2026-11-11T04:51:55Z
+HTTP: 200 text/plain https://betway.com/robots.txt
+
+URL: https://betway.com/en/terms-and-conditions
+UTC: 2026-11-11T04:52:33Z
+HTTP: 404 text/plain https://betway.com/en/terms-and-conditions
+

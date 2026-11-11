@@ -1,0 +1,4 @@
+URL: https://sportsbook.fanatics.com/robots.txt
+UTC: 2026-11-11T04:51:39Z
+HTTP: 404 application/xml https://sportsbook.fanatics.com/robots.txt
+

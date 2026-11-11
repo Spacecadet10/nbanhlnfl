@@ -1,0 +1,4 @@
+URL: https://www.sportsinteraction.com/robots.txt
+UTC: 2026-11-11T04:51:54Z
+HTTP: 403 text/html; charset=UTF-8 https://www.sportsinteraction.com/robots.txt
+

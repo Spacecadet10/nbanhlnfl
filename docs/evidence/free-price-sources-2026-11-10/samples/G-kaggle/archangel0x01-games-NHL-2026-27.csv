@@ -1,0 +1,202 @@
+game_id,competition,season,round,date,home_team,away_team,home_score,away_score,avg_home_odds,avg_draw_odds,avg_away_odds,home_p1,away_p1,home_p2,away_p2,home_ot,away_ot,has_closing_odds
+177979,NHL,2026-27,,2026-09-20,Anaheim Ducks,San Jose Sharks,6,2,1.52,4.78,4.64,,,,,,,False
+177980,NHL,2026-27,,2026-09-20,Boston Bruins,Washington Capitals,3,2,2.89,4.18,2.01,,,,,,,False
+177981,NHL,2026-27,,2026-09-20,Edmonton Oilers,Winnipeg Jets,5,2,1.47,4.93,4.97,,,,,,,False
+177982,NHL,2026-27,,2026-09-20,Los Angeles Kings,Vegas Golden Knights,2,4,2.14,4.14,2.69,,,,,,,False
+177983,NHL,2026-27,,2026-09-20,Minnesota Wild,Chicago Blackhawks,3,2,2.0,4.22,2.87,,,,,,,False
+177984,NHL,2026-27,,2026-09-20,Montreal Canadiens,Toronto Maple Leafs,4,3,3.75,4.6,1.68,,,,,,,False
+177985,NHL,2026-27,,2026-09-20,New Jersey Devils,New York Islanders,2,1,2.46,4.17,2.31,,,,,,,False
+177986,NHL,2026-27,,2026-09-20,Seattle Kraken,Vancouver Canucks,4,2,2.26,4.17,2.5,,,,,,,False
+177987,NHL,2026-27,,2026-09-20,St. Louis Blues,Dallas Stars,1,2,2.19,4.12,2.62,,,,,,,False
+177988,NHL,2026-27,,2026-09-20,Tampa Bay Lightning,Nashville Predators,2,1,1.54,4.64,4.61,,,,,,,False
+177989,NHL,2026-27,,2026-09-20,Toronto Maple Leafs,Montreal Canadiens,1,4,1.73,4.6,3.58,,,,,,,False
+177990,NHL,2026-27,,2026-09-21,Calgary Flames,Seattle Kraken,2,4,2.12,4.14,2.71,,,,,,,False
+177991,NHL,2026-27,,2026-09-21,Colorado Avalanche,Utah Mammoth,4,1,1.86,4.32,3.21,,,,,,,False
+177992,NHL,2026-27,,2026-09-21,Florida Panthers,Carolina Hurricanes,6,3,1.45,5.03,5.15,,,,,,,False
+177993,NHL,2026-27,,2026-09-22,Chicago Blackhawks,Minnesota Wild,4,3,1.64,4.53,4.01,,,,,,,False
+177994,NHL,2026-27,,2026-09-22,Columbus Blue Jackets,Detroit Red Wings,1,0,2.29,4.2,2.46,,,,,,,False
+177995,NHL,2026-27,,2026-09-22,Dallas Stars,St. Louis Blues,2,1,1.96,4.24,2.98,,,,,,,False
+177996,NHL,2026-27,,2026-09-22,Montreal Canadiens,Ottawa Senators,3,2,2.0,4.32,2.87,,,,,,,False
+177997,NHL,2026-27,,2026-09-22,New Jersey Devils,New York Rangers,3,2,1.44,5.1,5.32,,,,,,,False
+177998,NHL,2026-27,,2026-09-22,Pittsburgh Penguins,Buffalo Sabres,4,1,1.92,4.33,3.04,,,,,,,False
+177999,NHL,2026-27,,2026-09-22,Washington Capitals,Philadelphia Flyers,5,2,2.09,4.25,2.72,,,,,,,False
+178000,NHL,2026-27,,2026-09-22,Winnipeg Jets,Colorado Avalanche,3,1,1.67,4.49,3.82,,,,,,,False
+178001,NHL,2026-27,,2026-09-23,Boston Bruins,Philadelphia Flyers,5,1,1.61,4.55,4.16,,,,,,,False
+178002,NHL,2026-27,,2026-09-23,Buffalo Sabres,Columbus Blue Jackets,5,1,1.5,5.04,4.72,,,,,,,False
+178003,NHL,2026-27,,2026-09-23,Calgary Flames,Vancouver Canucks,3,1,1.74,4.38,3.59,,,,,,,False
+178004,NHL,2026-27,,2026-09-23,Carolina Hurricanes,Florida Panthers,3,2,4.69,4.8,1.52,,,,,,,False
+178005,NHL,2026-27,,2026-09-23,Los Angeles Kings,Utah Mammoth,3,6,2.34,4.18,2.4,,,,,,,False
+178006,NHL,2026-27,,2026-09-23,Nashville Predators,Tampa Bay Lightning,3,2,1.71,4.44,3.7,,,,,,,False
+178007,NHL,2026-27,,2026-09-23,New York Rangers,New York Islanders,3,4,2.22,4.16,2.57,,,,,,,False
+178008,NHL,2026-27,,2026-09-23,Pittsburgh Penguins,Detroit Red Wings,4,7,1.8,4.53,3.31,,,,,,,False
+178009,NHL,2026-27,,2026-09-23,San Jose Sharks,Vegas Golden Knights,1,2,1.84,4.43,3.2,,,,,,,False
+178010,NHL,2026-27,,2026-09-23,Winnipeg Jets,Edmonton Oilers,1,2,2.38,4.18,2.37,,,,,,,False
+178011,NHL,2026-27,,2026-09-24,Anaheim Ducks,Los Angeles Kings,1,2,2.1,4.17,2.73,,,,,,,False
+178012,NHL,2026-27,,2026-09-24,Dallas Stars,Minnesota Wild,2,0,1.77,4.27,3.52,,,,,,,False
+178013,NHL,2026-27,,2026-09-24,Ottawa Senators,Toronto Maple Leafs,2,4,2.45,4.41,3.1,,,,,,,False
+178014,NHL,2026-27,,2026-09-24,Toronto Maple Leafs,Ottawa Senators,6,1,1.64,4.73,3.9,,,,,,,False
+178015,NHL,2026-27,,2026-09-25,Carolina Hurricanes,Nashville Predators,6,5,2.02,4.24,2.87,,,,,,,False
+178016,NHL,2026-27,,2026-09-25,Columbus Blue Jackets,Pittsburgh Penguins,4,0,1.56,4.67,4.4,,,,,,,False
+178017,NHL,2026-27,,2026-09-25,Detroit Red Wings,Buffalo Sabres,3,2,1.57,4.71,4.31,,,,,,,False
+178018,NHL,2026-27,,2026-09-25,New York Rangers,New Jersey Devils,4,3,2.02,4.27,2.85,,,,,,,False
+178019,NHL,2026-27,,2026-09-25,Philadelphia Flyers,Boston Bruins,2,0,1.54,4.72,4.58,,,,,,,False
+178020,NHL,2026-27,,2026-09-25,San Jose Sharks,Anaheim Ducks,10,0,1.55,4.69,4.39,,,,,,,False
+178021,NHL,2026-27,,2026-09-25,Seattle Kraken,Calgary Flames,4,3,1.49,4.87,4.83,,,,,,,False
+178022,NHL,2026-27,,2026-09-25,St. Louis Blues,Chicago Blackhawks,1,0,2.34,4.15,2.41,,,,,,,False
+178023,NHL,2026-27,,2026-09-25,Tampa Bay Lightning,Florida Panthers,3,5,1.38,5.43,5.93,,,,,,,False
+178024,NHL,2026-27,,2026-09-25,Vancouver Canucks,Edmonton Oilers,1,2,1.61,4.54,4.16,,,,,,,False
+178025,NHL,2026-27,,2026-09-25,Vegas Golden Knights,Utah Mammoth,5,4,1.74,4.41,3.55,,,,,,,False
+178026,NHL,2026-27,,2026-09-26,Buffalo Sabres,Pittsburgh Penguins,1,3,2.07,4.25,2.74,,,,,,,False
+178027,NHL,2026-27,,2026-09-26,Colorado Avalanche,Winnipeg Jets,5,2,1.79,4.42,3.39,,,,,,,False
+178028,NHL,2026-27,,2026-09-26,Florida Panthers,Tampa Bay Lightning,2,3,2.62,4.09,2.19,,,,,,,False
+178029,NHL,2026-27,,2026-09-26,Los Angeles Kings,Anaheim Ducks,6,2,1.94,4.33,2.94,,,,,,,False
+178030,NHL,2026-27,,2026-09-26,Minnesota Wild,Dallas Stars,1,2,2.14,4.17,2.66,,,,,,,False
+178031,NHL,2026-27,,2026-09-26,Nashville Predators,Carolina Hurricanes,0,6,2.81,4.37,2.02,,,,,,,False
+178032,NHL,2026-27,,2026-09-26,New York Islanders,New York Rangers,1,6,3.84,4.49,1.67,,,,,,,False
+178033,NHL,2026-27,,2026-09-26,Philadelphia Flyers,Washington Capitals,1,5,1.51,4.77,4.72,,,,,,,False
+178034,NHL,2026-27,,2026-09-26,Utah Mammoth,Colorado Avalanche,2,0,1.57,4.68,4.15,,,,,,,False
+178035,NHL,2026-27,,2026-09-26,Washington Capitals,Boston Bruins,3,2,1.93,4.27,3.03,,,,,,,False
+178036,NHL,2026-27,,2026-09-27,Chicago Blackhawks,St. Louis Blues,3,2,2.84,4.2,2.04,,,,,,,False
+178037,NHL,2026-27,,2026-09-27,Detroit Red Wings,Columbus Blue Jackets,2,4,2.55,4.15,2.23,,,,,,,False
+178038,NHL,2026-27,,2026-09-27,Edmonton Oilers,Calgary Flames,4,1,1.55,4.75,4.35,,,,,,,False
+178039,NHL,2026-27,,2026-09-27,Montreal Canadiens,Ottawa Senators,4,2,1.36,5.75,5.4,,,,,,,False
+178040,NHL,2026-27,,2026-09-27,New York Islanders,New Jersey Devils,1,4,2.75,4.12,2.11,,,,,,,False
+178041,NHL,2026-27,,2026-09-27,Ottawa Senators,Montreal Canadiens,4,3,3.85,4.73,1.71,,,,,,,False
+178042,NHL,2026-27,,2026-09-27,Vancouver Canucks,Seattle Kraken,4,3,2.5,4.15,2.26,,,,,,,False
+178043,NHL,2026-27,,2026-09-27,Vegas Golden Knights,San Jose Sharks,2,4,1.89,4.35,3.09,,,,,,,False
+178044,NHL,2026-27,,2026-09-29,Carolina Hurricanes,Florida Panthers,0,1,2.24,4.16,2.65,,,,,,,False
+178045,NHL,2026-27,,2026-09-30,Boston Bruins,New York Rangers,3,0,2.47,4.11,2.4,,,,,,,False
+178046,NHL,2026-27,,2026-09-30,Edmonton Oilers,Vancouver Canucks,5,6,1.53,4.83,4.83,,,,,,,False
+178047,NHL,2026-27,,2026-09-30,Toronto Maple Leafs,Montreal Canadiens,2,3,2.45,4.18,2.38,,,,,,,False
+178048,NHL,2026-27,,2026-09-30,Vegas Golden Knights,Chicago Blackhawks,5,2,1.65,4.55,4.2,,,,,,,False
+178049,NHL,2026-27,,2026-10-01,Colorado Avalanche,Los Angeles Kings,8,4,1.82,4.35,3.5,,,,,,,False
+178050,NHL,2026-27,,2026-10-01,Philadelphia Flyers,Pittsburgh Penguins,0,7,2.1,4.17,2.88,,,,,,,False
+178051,NHL,2026-27,,2026-10-01,Toronto Maple Leafs,New York Islanders,2,1,2.14,4.2,2.79,,,,,,,False
+178052,NHL,2026-27,,2026-10-02,Calgary Flames,Seattle Kraken,1,6,2.43,4.05,2.45,,,,,,,False
+178053,NHL,2026-27,,2026-10-02,Columbus Blue Jackets,Buffalo Sabres,6,3,2.5,4.12,2.37,,,,,,,False
+178054,NHL,2026-27,,2026-10-02,Detroit Red Wings,New York Rangers,0,2,2.25,4.13,2.64,,,,,,,False
+178055,NHL,2026-27,,2026-10-02,Nashville Predators,Minnesota Wild,1,3,2.92,4.14,2.09,,,,,,,False
+178056,NHL,2026-27,,2026-10-02,New Jersey Devils,Philadelphia Flyers,3,2,1.89,4.2,3.36,,,,,,,False
+178057,NHL,2026-27,,2026-10-02,New York Rangers,Tampa Bay Lightning,5,1,2.95,4.08,2.08,,,,,,,False
+178058,NHL,2026-27,,2026-10-02,San Jose Sharks,Florida Panthers,4,3,2.94,4.25,2.04,,,,,,,False
+178059,NHL,2026-27,,2026-10-02,Utah Mammoth,Chicago Blackhawks,6,0,1.73,4.43,3.86,,,,,,,False
+178060,NHL,2026-27,,2026-10-02,Vancouver Canucks,Edmonton Oilers,7,9,3.84,4.57,1.71,,,,,,,False
+178061,NHL,2026-27,,2026-10-03,Carolina Hurricanes,Washington Capitals,2,5,2.08,4.18,2.92,,,,,,,False
+178062,NHL,2026-27,,2026-10-03,Dallas Stars,St. Louis Blues,0,4,1.88,4.19,3.42,,,,,,,False
+178063,NHL,2026-27,,2026-10-03,Vegas Golden Knights,Anaheim Ducks,3,4,1.75,4.54,3.64,,,,,,,False
+178064,NHL,2026-27,,2026-10-03,Winnipeg Jets,Boston Bruins,3,4,2.33,4.02,2.6,,,,,,,False
+178066,NHL,2026-27,,2026-10-04,Buffalo Sabres,Chicago Blackhawks,4,3,1.7,4.42,4.01,,,,,,,False
+178067,NHL,2026-27,,2026-10-04,Colorado Avalanche,St. Louis Blues,6,1,1.57,4.74,4.69,,,,,,,False
+178068,NHL,2026-27,,2026-10-04,Columbus Blue Jackets,Utah Mammoth,1,4,2.49,4.09,2.39,,,,,,,False
+178069,NHL,2026-27,,2026-10-04,Detroit Red Wings,Winnipeg Jets,2,3,2.59,4.06,2.32,,,,,,,False
+178070,NHL,2026-27,,2026-10-04,Edmonton Oilers,Seattle Kraken,3,1,1.8,4.4,3.57,,,,,,,False
+178071,NHL,2026-27,,2026-10-04,Minnesota Wild,Boston Bruins,4,1,1.77,4.36,3.69,,,,,,,False
+178072,NHL,2026-27,,2026-10-04,Nashville Predators,Dallas Stars,2,1,2.82,4.18,2.12,,,,,,,False
+178073,NHL,2026-27,,2026-10-04,New York Islanders,New Jersey Devils,6,0,2.79,4.07,2.17,,,,,,,False
+178074,NHL,2026-27,,2026-10-04,New York Rangers,Utah Mammoth,4,2,2.33,4.07,2.58,,,,,,,False
+178075,NHL,2026-27,,2026-10-04,Philadelphia Flyers,Carolina Hurricanes,2,3,2.76,4.11,2.18,,,,,,,False
+178076,NHL,2026-27,,2026-10-04,Pittsburgh Penguins,Montreal Canadiens,6,5,2.46,4.12,2.4,,,,,,,False
+178077,NHL,2026-27,,2026-10-04,San Jose Sharks,Los Angeles Kings,5,4,2.43,4.12,2.45,,,,,,,False
+178078,NHL,2026-27,,2026-10-04,Tampa Bay Lightning,Washington Capitals,3,1,1.81,4.32,3.55,,,,,,,False
+178079,NHL,2026-27,,2026-10-04,Toronto Maple Leafs,Ottawa Senators,2,3,2.41,4.11,2.46,,,,,,,False
+178080,NHL,2026-27,,2026-10-04,Vancouver Canucks,Calgary Flames,4,1,2.42,4.12,2.45,,,,,,,False
+178083,NHL,2026-27,,2026-10-05,Anaheim Ducks,Florida Panthers,3,2,2.81,4.13,2.14,,,,,,,False
+178084,NHL,2026-27,,2026-10-05,Seattle Kraken,Calgary Flames,6,1,2.01,4.14,3.08,,,,,,,False
+178085,NHL,2026-27,,2026-10-05,Vancouver Canucks,Vegas Golden Knights,2,3,4.82,4.76,1.55,,,,,,,False
+178091,NHL,2026-27,,2026-10-06,Boston Bruins,Ottawa Senators,1,4,2.49,4.12,2.38,,,,,,,False
+178092,NHL,2026-27,,2026-10-06,Dallas Stars,San Jose Sharks,5,0,1.83,4.33,3.5,,,,,,,False
+178093,NHL,2026-27,,2026-10-06,Pittsburgh Penguins,Winnipeg Jets,2,3,1.89,4.31,3.31,,,,,,,False
+178094,NHL,2026-27,,2026-10-06,Tampa Bay Lightning,Philadelphia Flyers,4,1,1.72,4.37,3.96,,,,,,,False
+178099,NHL,2026-27,,2026-10-07,Buffalo Sabres,Minnesota Wild,3,2,2.46,4.12,2.41,,,,,,,False
+178100,NHL,2026-27,,2026-10-07,Chicago Blackhawks,St. Louis Blues,4,2,2.9,4.12,2.1,,,,,,,False
+178101,NHL,2026-27,,2026-10-07,Detroit Red Wings,Ottawa Senators,5,3,2.3,4.09,2.6,,,,,,,False
+178102,NHL,2026-27,,2026-10-07,Los Angeles Kings,Florida Panthers,1,2,2.52,4.06,2.37,,,,,,,False
+178103,NHL,2026-27,,2026-10-07,Montreal Canadiens,Carolina Hurricanes,4,6,2.66,4.15,2.23,,,,,,,False
+178104,NHL,2026-27,,2026-10-07,New Jersey Devils,Utah Mammoth,3,5,2.26,4.18,2.61,,,,,,,False
+178105,NHL,2026-27,,2026-10-07,New York Rangers,New York Islanders,5,2,2.01,4.18,3.04,,,,,,,False
+178106,NHL,2026-27,,2026-10-07,Seattle Kraken,Vegas Golden Knights,2,6,3.13,4.21,1.97,,,,,,,False
+178107,NHL,2026-27,,2026-10-07,Toronto Maple Leafs,Nashville Predators,5,4,1.98,4.19,3.13,,,,,,,False
+178113,NHL,2026-27,,2026-10-08,Anaheim Ducks,Edmonton Oilers,2,5,2.76,4.23,2.15,,,,,,,False
+178114,NHL,2026-27,,2026-10-08,Washington Capitals,Pittsburgh Penguins,5,3,2.02,4.28,2.97,,,,,,,False
+178115,NHL,2026-27,,2026-10-08,Winnipeg Jets,Colorado Avalanche,3,2,3.55,4.4,1.79,,,,,,,False
+178123,NHL,2026-27,,2026-10-09,Boston Bruins,Utah Mammoth,6,1,2.73,4.14,2.19,,,,,,,False
+178124,NHL,2026-27,,2026-10-09,Buffalo Sabres,Dallas Stars,0,4,2.59,4.13,2.28,,,,,,,False
+178125,NHL,2026-27,,2026-10-09,Calgary Flames,Colorado Avalanche,3,7,4.03,4.51,1.69,,,,,,,False
+178126,NHL,2026-27,,2026-10-09,Carolina Hurricanes,Vancouver Canucks,7,2,1.47,5.11,5.35,,,,,,,False
+178127,NHL,2026-27,,2026-10-09,Montreal Canadiens,Nashville Predators,2,5,1.99,4.22,3.08,,,,,,,False
+178128,NHL,2026-27,,2026-10-09,New York Islanders,Chicago Blackhawks,4,1,1.88,4.24,3.36,,,,,,,False
+178129,NHL,2026-27,,2026-10-09,Ottawa Senators,Philadelphia Flyers,2,1,1.91,4.18,3.29,,,,,,,False
+178130,NHL,2026-27,,2026-10-09,St. Louis Blues,San Jose Sharks,2,3,2.0,4.16,3.1,,,,,,,False
+178131,NHL,2026-27,,2026-10-09,Tampa Bay Lightning,Minnesota Wild,3,2,2.08,4.2,2.9,,,,,,,False
+178132,NHL,2026-27,,2026-10-09,Vegas Golden Knights,Toronto Maple Leafs,4,3,1.94,4.3,3.15,,,,,,,False
+178135,NHL,2026-27,,2026-10-10,Boston Bruins,Philadelphia Flyers,5,1,2.11,4.11,2.91,,,,,,,False
+178136,NHL,2026-27,,2026-10-10,Columbus Blue Jackets,Pittsburgh Penguins,3,2,2.33,4.27,2.49,,,,,,,False
+178137,NHL,2026-27,,2026-10-10,Detroit Red Wings,Seattle Kraken,3,6,2.07,4.19,2.92,,,,,,,False
+178138,NHL,2026-27,,2026-10-10,Florida Panthers,Minnesota Wild,1,4,2.17,4.14,2.79,,,,,,,False
+178139,NHL,2026-27,,2026-10-10,New Jersey Devils,Vancouver Canucks,4,1,1.58,4.76,4.59,,,,,,,False
+178140,NHL,2026-27,,2026-10-10,San Jose Sharks,Edmonton Oilers,1,3,2.93,4.38,2.04,,,,,,,False
+178141,NHL,2026-27,,2026-10-10,Washington Capitals,New York Rangers,3,1,2.12,4.14,2.84,,,,,,,False
+178142,NHL,2026-27,,2026-10-10,Winnipeg Jets,Anaheim Ducks,1,5,2.3,4.19,2.56,,,,,,,False
+178151,NHL,2026-27,,2026-10-11,Buffalo Sabres,Utah Mammoth,1,4,2.48,4.18,2.38,,,,,,,False
+178152,NHL,2026-27,,2026-10-11,Calgary Flames,Anaheim Ducks,2,4,2.54,4.24,2.31,,,,,,,False
+178153,NHL,2026-27,,2026-10-11,Chicago Blackhawks,Carolina Hurricanes,2,5,4.25,4.58,1.64,,,,,,,False
+178154,NHL,2026-27,,2026-10-11,Colorado Avalanche,Toronto Maple Leafs,3,6,1.73,4.53,3.8,,,,,,,False
+178155,NHL,2026-27,,2026-10-11,Montreal Canadiens,Detroit Red Wings,1,0,1.87,4.37,3.36,,,,,,,False
+178156,NHL,2026-27,,2026-10-11,New York Islanders,Tampa Bay Lightning,3,5,3.32,4.22,1.91,,,,,,,False
+178157,NHL,2026-27,,2026-10-11,New York Rangers,Vancouver Canucks,6,2,1.6,4.68,4.47,,,,,,,False
+178158,NHL,2026-27,,2026-10-11,Ottawa Senators,Nashville Predators,3,2,1.95,4.24,3.21,,,,,,,False
+178159,NHL,2026-27,,2026-10-11,Pittsburgh Penguins,Dallas Stars,2,1,3.27,4.27,1.92,,,,,,,False
+178160,NHL,2026-27,,2026-10-11,St. Louis Blues,Columbus Blue Jackets,5,3,2.34,4.12,2.55,,,,,,,False
+178161,NHL,2026-27,,2026-10-11,Vegas Golden Knights,Los Angeles Kings,2,1,1.97,4.26,3.12,,,,,,,False
+178162,NHL,2026-27,,2026-10-11,Washington Capitals,Seattle Kraken,3,5,1.79,4.45,3.58,,,,,,,False
+178165,NHL,2026-27,,2026-10-12,Buffalo Sabres,Florida Panthers,5,3,2.37,4.08,2.51,,,,,,,False
+178166,NHL,2026-27,,2026-10-12,Philadelphia Flyers,Carolina Hurricanes,1,4,3.75,4.4,1.76,,,,,,,False
+178171,NHL,2026-27,,2026-10-13,Carolina Hurricanes,Washington Capitals,4,2,2.04,4.23,2.95,,,,,,,False
+178172,NHL,2026-27,,2026-10-13,Columbus Blue Jackets,Florida Panthers,3,7,2.21,4.14,2.71,,,,,,,False
+178173,NHL,2026-27,,2026-10-13,Detroit Red Wings,New Jersey Devils,4,5,2.45,4.09,2.43,,,,,,,False
+178174,NHL,2026-27,,2026-10-13,Minnesota Wild,Vegas Golden Knights,4,2,2.46,4.1,2.41,,,,,,,False
+178175,NHL,2026-27,,2026-10-13,Montreal Canadiens,Buffalo Sabres,4,3,2.02,4.24,3.01,,,,,,,False
+178176,NHL,2026-27,,2026-10-13,New Jersey Devils,Ottawa Senators,1,4,2.33,4.1,2.55,,,,,,,False
+178182,NHL,2026-27,,2026-10-14,Anaheim Ducks,Calgary Flames,2,4,1.92,4.32,3.22,,,,,,,False
+178183,NHL,2026-27,,2026-10-14,Chicago Blackhawks,Pittsburgh Penguins,5,3,3.01,4.23,2.01,,,,,,,False
+178184,NHL,2026-27,,2026-10-14,Dallas Stars,Colorado Avalanche,2,3,2.38,4.09,2.5,,,,,,,False
+178185,NHL,2026-27,,2026-10-14,Los Angeles Kings,Edmonton Oilers,1,4,2.66,4.18,2.22,,,,,,,False
+178186,NHL,2026-27,,2026-10-14,Nashville Predators,Vegas Golden Knights,2,5,2.72,4.16,2.18,,,,,,,False
+178187,NHL,2026-27,,2026-10-14,New York Islanders,Vancouver Canucks,3,2,1.76,4.46,3.71,,,,,,,False
+178188,NHL,2026-27,,2026-10-14,New York Rangers,Tampa Bay Lightning,4,1,3.1,4.19,1.99,,,,,,,False
+178189,NHL,2026-27,,2026-10-14,Ottawa Senators,St. Louis Blues,2,7,2.62,4.09,2.28,,,,,,,False
+178190,NHL,2026-27,,2026-10-14,Philadelphia Flyers,Seattle Kraken,2,3,2.4,4.08,2.48,,,,,,,False
+178191,NHL,2026-27,,2026-10-14,San Jose Sharks,Boston Bruins,3,6,2.66,4.17,2.23,,,,,,,False
+178192,NHL,2026-27,,2026-10-14,Utah Mammoth,Toronto Maple Leafs,5,4,1.96,4.32,3.08,,,,,,,False
+178193,NHL,2026-27,,2026-10-14,Winnipeg Jets,Minnesota Wild,5,2,2.44,4.13,2.42,,,,,,,False
+178201,NHL,2026-27,,2026-10-15,Colorado Avalanche,Dallas Stars,2,3,2.01,4.21,3.04,,,,,,,False
+178202,NHL,2026-27,,2026-10-15,Washington Capitals,Montreal Canadiens,5,4,2.28,4.21,2.57,,,,,,,False
+178205,NHL,2026-27,,2026-10-16,Chicago Blackhawks,Winnipeg Jets,4,3,2.6,4.18,2.27,,,,,,,False
+178206,NHL,2026-27,,2026-10-16,Detroit Red Wings,Philadelphia Flyers,2,1,2.12,4.1,2.87,,,,,,,False
+178207,NHL,2026-27,,2026-10-16,Edmonton Oilers,Utah Mammoth,2,4,2.47,4.23,2.36,,,,,,,False
+178208,NHL,2026-27,,2026-10-16,Florida Panthers,Vancouver Canucks,3,2,1.56,4.7,4.67,,,,,,,False
+178209,NHL,2026-27,,2026-10-16,Minnesota Wild,St. Louis Blues,5,4,2.13,4.16,2.84,,,,,,,False
+178210,NHL,2026-27,,2026-10-16,Nashville Predators,San Jose Sharks,2,3,2.21,4.18,2.67,,,,,,,False
+178211,NHL,2026-27,,2026-10-16,New Jersey Devils,New York Rangers,7,1,2.18,4.13,2.74,,,,,,,False
+178212,NHL,2026-27,,2026-10-16,Ottawa Senators,New York Islanders,2,1,1.99,4.11,3.14,,,,,,,False
+178213,NHL,2026-27,,2026-10-16,Tampa Bay Lightning,Seattle Kraken,4,3,1.59,4.74,4.41,,,,,,,False
+178214,NHL,2026-27,,2026-10-16,Toronto Maple Leafs,Buffalo Sabres,4,5,2.32,4.19,2.51,,,,,,,False
+178215,NHL,2026-27,,2026-10-16,Vegas Golden Knights,Calgary Flames,6,2,1.59,4.7,4.51,,,,,,,False
+178228,NHL,2026-27,,2026-10-17,Anaheim Ducks,Boston Bruins,2,4,2.43,4.2,2.4,,,,,,,False
+178229,NHL,2026-27,,2026-10-17,Colorado Avalanche,Pittsburgh Penguins,5,2,1.77,4.51,3.61,,,,,,,False
+178230,NHL,2026-27,,2026-10-17,Florida Panthers,Seattle Kraken,8,3,1.84,4.29,3.46,,,,,,,False
+178231,NHL,2026-27,,2026-10-17,Tampa Bay Lightning,Vancouver Canucks,4,2,1.42,5.34,5.81,,,,,,,False
+178232,NHL,2026-27,,2026-10-17,Washington Capitals,New Jersey Devils,4,2,2.37,4.12,2.5,,,,,,,False
+178233,NHL,2026-27,,2026-10-17,Winnipeg Jets,Carolina Hurricanes,2,3,3.55,4.36,1.81,,,,,,,False
+178234,NHL,2026-27,,2026-10-18,Chicago Blackhawks,Dallas Stars,0,4,3.71,4.37,1.76,,,,,,,False
+178235,NHL,2026-27,,2026-10-18,Columbus Blue Jackets,New York Rangers,1,0,2.17,4.21,2.73,,,,,,,False
+178236,NHL,2026-27,,2026-10-18,Detroit Red Wings,San Jose Sharks,4,3,2.1,4.2,2.87,,,,,,,False
+178237,NHL,2026-27,,2026-10-18,Los Angeles Kings,Boston Bruins,1,4,2.08,4.13,2.94,,,,,,,False
+178238,NHL,2026-27,,2026-10-18,Minnesota Wild,Columbus Blue Jackets,2,1,1.84,4.41,3.42,,,,,,,False
+178239,NHL,2026-27,,2026-10-18,Montreal Canadiens,Buffalo Sabres,4,3,2.1,4.23,2.84,,,,,,,False
+178240,NHL,2026-27,,2026-10-18,Nashville Predators,St. Louis Blues,5,2,2.47,4.12,2.41,,,,,,,False
+178241,NHL,2026-27,,2026-10-18,Philadelphia Flyers,Ottawa Senators,3,1,3.06,4.04,2.04,,,,,,,False
+178242,NHL,2026-27,,2026-10-18,Toronto Maple Leafs,New York Islanders,1,4,2.18,4.16,2.73,,,,,,,False
+178243,NHL,2026-27,,2026-10-18,Utah Mammoth,Edmonton Oilers,2,6,2.06,4.25,2.91,,,,,,,False
+178244,NHL,2026-27,,2026-10-18,Vegas Golden Knights,Pittsburgh Penguins,6,2,1.74,4.54,3.71,,,,,,,False
+178245,NHL,2026-27,,2026-10-19,Calgary Flames,Carolina Hurricanes,3,2,3.67,4.45,1.76,,,,,,,False

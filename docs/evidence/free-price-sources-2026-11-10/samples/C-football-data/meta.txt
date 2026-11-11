@@ -1,0 +1,4 @@
+URL: https://www.football-data.co.uk/robots.txt
+UTC: 2026-11-11T04:53:31Z
+HTTP: 200 text/plain https://football-data.co.uk/robots.txt
+

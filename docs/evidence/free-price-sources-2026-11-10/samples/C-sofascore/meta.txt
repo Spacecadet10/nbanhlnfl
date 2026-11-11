@@ -1,0 +1,8 @@
+URL: https://www.sofascore.com/robots.txt
+UTC: 2026-11-11T04:53:14Z
+HTTP: 403 application/json https://www.sofascore.com/robots.txt
+
+URL: https://api.sofascore.com/robots.txt
+UTC: 2026-11-11T04:53:16Z
+HTTP: 403 application/json https://api.sofascore.com/robots.txt
+

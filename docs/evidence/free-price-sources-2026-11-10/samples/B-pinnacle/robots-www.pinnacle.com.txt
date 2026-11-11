@@ -1,0 +1,5 @@
+User-agent: *
+Disallow: */account/*
+Disallow: */search/*
+
+Sitemap: https://www.pinnacle.com/sitemap/sitemap.xml

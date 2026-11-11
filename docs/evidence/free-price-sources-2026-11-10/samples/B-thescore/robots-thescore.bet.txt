@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /account/help
+Allow: /account/about
+Disallow: /account
+Disallow: /my-bets
+Disallow: /wallet
+Disallow: /dev-tools
+Disallow: /oauth_callback
+Disallow: /forgot-password
+
+Sitemap: https://sportsbook.thescore.bet/sitemap.xml

@@ -1,0 +1,1904 @@
+{
+ "_fetched_at": "2026-11-11T04:51:31+00:00",
+ "_url": "https://therundown.io/api/v2/sports/11/events/2026-11-22?market_ids=94,330,331,508,899,954,1418",
+ "_status": 200,
+ "_headers": {
+  "date": "Wed, 11 Nov 2026 04:51:31 GMT",
+  "content-type": "application/json",
+  "x-data-delay-seconds": "300",
+  "x-datapoints": "137",
+  "x-datapoints-breakdown": "events=2,odds=133,scores=2",
+  "x-datapoints-limit": "20000",
+  "x-datapoints-monthly-limit": "200000",
+  "x-datapoints-monthly-remaining": "197911",
+  "x-datapoints-monthly-reset": "2026-12-01T00:00:00Z",
+  "x-datapoints-monthly-used": "2089",
+  "x-datapoints-period": "daily",
+  "x-datapoints-remaining": "18039",
+  "x-datapoints-reset": "2026-11-12T00:00:00Z",
+  "x-datapoints-used": "1961",
+  "x-rate-limit": "1"
+ },
+ "body": {
+  "meta": {
+   "delta_last_id": "5540429101",
+   "affiliate_visibility_token": "enabled-2faa301d57efbaae"
+  },
+  "events": [
+   {
+    "event_id": "2ff986711c82d5bd7a3459bab69a27a9",
+    "event_uuid": "11f1-e5bc-391cd800-83ac-3ff4e0183d02",
+    "sport_id": 11,
+    "event_date": "2026-11-22T14:00:00Z",
+    "score": {
+     "event_id": "2ff986711c82d5bd7a3459bab69a27a9",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 3438,
+     "team_id_home": 131655,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [
+      0,
+      0
+     ],
+     "score_home_by_period": [
+      0,
+      0
+     ],
+     "venue_name": "The MKM Stadium",
+     "venue_location": "Hull",
+     "game_clock": 0,
+     "display_clock": "0'",
+     "game_period": 0,
+     "broadcast": "",
+     "event_status_detail": "Scheduled",
+     "updated_at": "2026-09-30T23:06:19Z"
+    },
+    "teams": [
+     {
+      "team_id": 3438,
+      "name": "Brighton & Hove Albion",
+      "mascot": "",
+      "abbreviation": "BHA",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "7-1-2",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     },
+     {
+      "team_id": 131655,
+      "name": "Hull City",
+      "mascot": "",
+      "abbreviation": "HUL",
+      "record": "2-5-3",
+      "is_away": false,
+      "is_home": true
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 3438,
+      "name": "Brighton & Hove Albion",
+      "mascot": "",
+      "abbreviation": "BHA",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "7-1-2",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     },
+     {
+      "team_id": 131655,
+      "name": "Hull City",
+      "mascot": "",
+      "abbreviation": "HUL",
+      "record": "2-5-3",
+      "is_away": false,
+      "is_home": true
+     }
+    ],
+    "schedule": {
+     "conference_competition": false,
+     "season_type": "2026-27 English Premier League",
+     "season_year": 2026,
+     "event_name": "Brighton & Hove Albion at Hull City - 2026-11-22T14:00:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 7902787,
+      "market_id": 1,
+      "period_id": 0,
+      "name": "moneyline",
+      "market_description": "Win the game outright.",
+      "participants": [
+       {
+        "id": 3438,
+        "type": "TYPE_TEAM",
+        "name": "Brighton & Hove Albion",
+        "lines": [
+         {
+          "id": "f5540bf0fdfd90b0ea08c3ba6ffce0d5",
+          "prices": {
+           "19": {
+            "id": "709178563",
+            "price": -200,
+            "price_delta": -10,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T15:37:05Z",
+            "source_id": "0ML87095913_3"
+           },
+           "23": {
+            "id": "712487036",
+            "price": -195,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618088-AWAY"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 131655,
+        "type": "TYPE_TEAM",
+        "name": "Hull City",
+        "lines": [
+         {
+          "id": "30be6be5abfcd40bd54b11c2b9eda51e",
+          "prices": {
+           "19": {
+            "id": "709178561",
+            "price": 475,
+            "price_delta": 25,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T15:37:05Z",
+            "source_id": "0ML87095913_1"
+           },
+           "23": {
+            "id": "712487037",
+            "price": 470,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618088-HOME"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 3,
+        "type": "TYPE_RESULT",
+        "name": "Draw",
+        "lines": [
+         {
+          "id": "4e1a06497e129acea88999e741e28315",
+          "prices": {
+           "23": {
+            "id": "712487038",
+            "price": 340,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618088-DRAW"
+           },
+           "19": {
+            "id": "709178562",
+            "price": 330,
+            "is_main_line": true,
+            "updated_at": "2026-11-04T17:22:38Z",
+            "source_id": "0ML87095913_2"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 7902828,
+      "market_id": 2,
+      "period_id": 0,
+      "name": "handicap",
+      "market_description": "Win or lose by a specified margin.",
+      "participants": [
+       {
+        "id": 3438,
+        "type": "TYPE_TEAM",
+        "name": "Brighton & Hove Albion",
+        "lines": [
+         {
+          "id": "e76e3bf67c6c78606017b207805370e2",
+          "value": "+0.5",
+          "prices": {
+           "19": {
+            "id": "709179205",
+            "price": -900,
+            "price_delta": -100,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T15:37:05Z",
+            "source_id": "0HC87096138P50_3"
+           }
+          }
+         },
+         {
+          "id": "9c74faef04010ab994fe228da4cfa4fe",
+          "value": "-0.5",
+          "prices": {
+           "19": {
+            "id": "709179198",
+            "price": -225,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T15:37:05Z",
+            "source_id": "0HC87096138N50_3"
+           }
+          }
+         },
+         {
+          "id": "478985aa2106accbab17b477163a18d1",
+          "value": "-1.5",
+          "prices": {
+           "23": {
+            "id": "712487047",
+            "price": 130,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618137-Brighton -1.5 Goals"
+           },
+           "19": {
+            "id": "709179195",
+            "price": 130,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T15:37:05Z",
+            "source_id": "0HC87096138N150_3"
+           }
+          }
+         },
+         {
+          "id": "98acbfc575d104098d1a8f31e82f22cf",
+          "value": "-2.5",
+          "prices": {
+           "19": {
+            "id": "709179200",
+            "price": 310,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T15:37:05Z",
+            "source_id": "0HC87096138N250_3"
+           },
+           "23": {
+            "id": "712487291",
+            "price": 350,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618087-Brighton -2.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "709964c33671336fb6ea4c0156cdf524",
+          "value": "-3.5",
+          "prices": {
+           "19": {
+            "id": "709179199",
+            "price": 650,
+            "is_main_line": false,
+            "updated_at": "2026-11-04T17:22:48Z",
+            "source_id": "0HC87096138N350_3"
+           },
+           "23": {
+            "id": "712487288",
+            "price": 650,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618049-Brighton -3.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "f41da13f9e48485d4d72bd3d5c9eb71c",
+          "value": "+1.5",
+          "prices": {
+           "23": {
+            "id": "712487293",
+            "price": -3000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618131-Brighton +1.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "b655bfbb771500d97cc09683d4d51139",
+          "value": "-4.5",
+          "prices": {
+           "23": {
+            "id": "712487286",
+            "price": 1140,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618047-Brighton -4.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "86095cf5fec2fc7c2e4f92d43e6a8f9f",
+          "value": "-5.5",
+          "prices": {
+           "23": {
+            "id": "712487295",
+            "price": 3400,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618151-Brighton -5.5 Goals"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 131655,
+        "type": "TYPE_TEAM",
+        "name": "Hull City",
+        "lines": [
+         {
+          "id": "d23c5c85b6bae051f90a5c75170c76f2",
+          "value": "+0.5",
+          "prices": {
+           "19": {
+            "id": "709179201",
+            "price": 140,
+            "is_main_line": false,
+            "updated_at": "2026-11-04T17:22:48Z",
+            "source_id": "0HC87096138P50_1"
+           }
+          }
+         },
+         {
+          "id": "3bf97283910cc0cacd8210766c69c891",
+          "value": "+1.5",
+          "prices": {
+           "19": {
+            "id": "709179196",
+            "price": -200,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T15:37:05Z",
+            "source_id": "0HC87096138P150_1"
+           },
+           "23": {
+            "id": "712487046",
+            "price": -182,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618137-Hull +1.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "e6b3e10b967940992f79f5c0d35a9215",
+          "value": "+2.5",
+          "prices": {
+           "19": {
+            "id": "709179203",
+            "price": -600,
+            "price_delta": 50,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T15:37:05Z",
+            "source_id": "0HC87096138P250_1"
+           },
+           "23": {
+            "id": "712487290",
+            "price": -600,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618087-Hull +2.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "7fefa98b0a61a667ef045f47ffe3d4cb",
+          "value": "+3.5",
+          "prices": {
+           "19": {
+            "id": "709179204",
+            "price": -3000,
+            "price_delta": 500,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T15:37:05Z",
+            "source_id": "0HC87096138P350_1"
+           },
+           "23": {
+            "id": "712487289",
+            "price": -1800,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618049-Hull +3.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "b4c4b6f9c4aa4454e072de5c43e1ed17",
+          "value": "-0.5",
+          "prices": {
+           "19": {
+            "id": "709179202",
+            "price": 380,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T15:37:05Z",
+            "source_id": "0HC87096138N50_1"
+           }
+          }
+         },
+         {
+          "id": "0fb0e58a8e3a4c1b70e3c7c590171c96",
+          "value": "+4.5",
+          "prices": {
+           "23": {
+            "id": "712487287",
+            "price": -6000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618047-Hull +4.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "241a35717e6af80d6405e35d982f0aa0",
+          "value": "-1.5",
+          "prices": {
+           "23": {
+            "id": "712487294",
+            "price": 800,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618131-Hull -1.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "f2d3e90654a7373f39cc2bf1684c11d6",
+          "value": "-2.5",
+          "prices": {
+           "23": {
+            "id": "712487292",
+            "price": 2400,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618122-Hull -2.5 Goals"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 7902826,
+      "market_id": 3,
+      "period_id": 0,
+      "name": "totals",
+      "market_description": "Over/under on the combined score.",
+      "participants": [
+       {
+        "id": 9,
+        "type": "TYPE_RESULT",
+        "name": "Over",
+        "lines": [
+         {
+          "id": "3f05b93def8807474621c2ab21b3e33c",
+          "value": "0.5",
+          "prices": {
+           "19": {
+            "id": "709179181",
+            "price": -8000,
+            "is_main_line": false,
+            "updated_at": "2026-11-04T17:22:47Z",
+            "source_id": "0OU87096133O50_1"
+           },
+           "23": {
+            "id": "712487058",
+            "price": -4500,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618139-Over 0.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "12d2cfa2b0bfd73195976e07e06ba98d",
+          "value": "1.5",
+          "prices": {
+           "19": {
+            "id": "709179174",
+            "price": -500,
+            "is_main_line": false,
+            "updated_at": "2026-11-04T17:22:47Z",
+            "source_id": "0OU87096133O150_1"
+           },
+           "23": {
+            "id": "712487062",
+            "price": -520,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618145-Over 1.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "90ad3382263a174c6a4e53c39ed68739",
+          "value": "2.5",
+          "prices": {
+           "19": {
+            "id": "709179183",
+            "price": -160,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T15:37:06Z",
+            "source_id": "0OU87096133O250_1"
+           },
+           "23": {
+            "id": "712487056",
+            "price": -154,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T14:54:33Z",
+            "source_id": "36296140-734.196618129-Over 2.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "7a15d8a7ae41fe52eb069f8dbadae44d",
+          "value": "3.5",
+          "prices": {
+           "23": {
+            "id": "712487054",
+            "price": 172,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618119-Over 3.5 Goals"
+           },
+           "19": {
+            "id": "709179179",
+            "price": 155,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T15:37:06Z",
+            "source_id": "0OU87096133O350_1"
+           }
+          }
+         },
+         {
+          "id": "539be0a7daa4759617b24055b9a44e56",
+          "value": "4.5",
+          "prices": {
+           "19": {
+            "id": "709179177",
+            "price": 350,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T15:37:06Z",
+            "source_id": "0OU87096133O450_1"
+           },
+           "23": {
+            "id": "712487050",
+            "price": 410,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618089-Over 4.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "ed1407116178524cbb6ec786062ce73b",
+          "value": "5.5",
+          "prices": {
+           "19": {
+            "id": "709179175",
+            "price": 700,
+            "price_delta": -50,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T15:37:06Z",
+            "source_id": "0OU87096133O550_1"
+           },
+           "23": {
+            "id": "712487060",
+            "price": 920,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618144-Over 5.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "23c1fa44a10b3a16b2872430a67ed961",
+          "value": "6.5",
+          "prices": {
+           "23": {
+            "id": "712487048",
+            "price": 1800,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618065-Over 6.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "8bed5a3435439218097df3dea3c7da0f",
+          "value": "7.5",
+          "prices": {
+           "23": {
+            "id": "712487053",
+            "price": 3500,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618117-Over 7.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "0587e3c8b3a1eb859a27b8a1d81820ec",
+          "value": "8.5",
+          "prices": {
+           "23": {
+            "id": "712487052",
+            "price": 8000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618092-Over 8.5 Goals"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 10,
+        "type": "TYPE_RESULT",
+        "name": "Under",
+        "lines": [
+         {
+          "id": "a93d29622d964514bca6499b2803c8b2",
+          "value": "0.5",
+          "prices": {
+           "19": {
+            "id": "709179197",
+            "price": 1100,
+            "is_main_line": false,
+            "updated_at": "2026-11-04T17:22:48Z",
+            "source_id": "0OU87096133U50_3"
+           },
+           "23": {
+            "id": "712487059",
+            "price": 1300,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618139-Under 0.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "667b1e6a5bd1d1168f622cce13c4ee77",
+          "value": "1.5",
+          "prices": {
+           "19": {
+            "id": "709179176",
+            "price": 320,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T15:37:06Z",
+            "source_id": "0OU87096133U150_3"
+           },
+           "23": {
+            "id": "712487063",
+            "price": 370,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618145-Under 1.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "6657d95be6ea9336e124940c4782f93e",
+          "value": "2.5",
+          "prices": {
+           "19": {
+            "id": "709179184",
+            "price": 115,
+            "is_main_line": true,
+            "updated_at": "2026-11-04T17:22:47Z",
+            "source_id": "0OU87096133U250_3"
+           },
+           "23": {
+            "id": "712487057",
+            "price": 126,
+            "is_main_line": true,
+            "updated_at": "2026-11-08T14:54:33Z",
+            "source_id": "36296140-734.196618129-Under 2.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "a76d9ef08ed1b8c52940ececb34dd0cd",
+          "value": "3.5",
+          "prices": {
+           "19": {
+            "id": "709179182",
+            "price": -215,
+            "price_delta": 5,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T15:37:06Z",
+            "source_id": "0OU87096133U350_3"
+           },
+           "23": {
+            "id": "712487055",
+            "price": -215,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618119-Under 3.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "6df565a61d5dd1d4ac000f855d674ec9",
+          "value": "4.5",
+          "prices": {
+           "19": {
+            "id": "709179180",
+            "price": -550,
+            "price_delta": 25,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T15:37:06Z",
+            "source_id": "0OU87096133U450_3"
+           },
+           "23": {
+            "id": "712487051",
+            "price": -590,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618089-Under 4.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "1870c1a3706a8c3e18121051fe162235",
+          "value": "5.5",
+          "prices": {
+           "19": {
+            "id": "709179178",
+            "price": -1800,
+            "price_delta": 200,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T15:37:06Z",
+            "source_id": "0OU87096133U550_3"
+           },
+           "23": {
+            "id": "712487061",
+            "price": -2000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618144-Under 5.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "53289e47d84c778ba5f74224df67afc2",
+          "value": "6.5",
+          "prices": {
+           "23": {
+            "id": "712487049",
+            "price": -8000,
+            "is_main_line": false,
+            "updated_at": "2026-11-08T14:52:55Z",
+            "source_id": "36296140-734.196618065-Under 6.5 Goals"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "24": "394677fd-0904-4d42-8906-01f252763c05",
+     "30": "01a1c584-bcbf-7a52-a393-dd42722801db",
+     "34": "207324291",
+     "3": "1639740189",
+     "4": "491178186",
+     "19": "87095913",
+     "7": "A4CD7EF2-D7E4-4786-B15C-C0B636DD52FB",
+     "11": "491178186",
+     "14": "6231954",
+     "21": "1028072758",
+     "23": "36296140",
+     "25": "26NOV22HULBRI",
+     "28": "6489668540789031311",
+     "33": "207324291",
+     "2": "33042982",
+     "9": "A4CD7EF2-D7E4-4786-B15C-C0B636DD52FB",
+     "6": "491178186"
+    },
+    "affiliate_deep_links": {
+     "11": "https://sports.lowvig.ag/sportsbook/soccer/epl/game/491178186",
+     "4": "https://www.sportsbetting.ag/sportsbook/soccer/epl/game/491178186",
+     "28": "https://app.hardrock.bet/competition/englandPremierLeague/6489668540789031311",
+     "25": "https://kalshi.com/markets/kxeplgame/kxeplgame-26nov22hulbri",
+     "3": "https://www.pinnacle.com/en/soccer/england-premier-league/hull-city-vs-brighton-hove-albion/1639740189/",
+     "24": "https://sportsbook.thescore.bet/sport/soccer/organization/england/competition/premier-league/event/394677fd-0904-4d42-8906-01f252763c05",
+     "30": "https://novig.com/event-markets/01a1c584-bcbf-7a52-a393-dd42722801db",
+     "9": "https://sportsbook.betcris.com/",
+     "7": "https://www.bookmaker.eu/",
+     "14": "https://sports.everygame.eu/",
+     "21": "https://www.unibet.co.uk/betting/odds/contest/bf6835589a7e79cd1a65cabfda439cf6",
+     "19": "https://sportsbook.draftkings.com/event/hull-city-vs-brighton/34962899",
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/207324291",
+     "2": "https://www.bovada.lv/sports/soccer/europe/england/premier-league/hull-city-brighton-hove-albion-202611220900",
+     "6": "https://www.betonline.ag/sportsbook/soccer/epl/game/491178186",
+     "23": "https://sportsbook.fanduel.com/soccer/english-premier-league/hull-v-brighton-36296140",
+     "33": "https://bet105.ag/"
+    },
+    "affiliate_deep_link_types": {
+     "33": "catalog",
+     "14": "catalog",
+     "7": "catalog",
+     "9": "catalog"
+    }
+   },
+   {
+    "event_id": "f4345ad428d5014171ce1908dd2352b5",
+    "event_uuid": "11f1-e5bc-391cd800-817e-d7764decc5cb",
+    "sport_id": 11,
+    "event_date": "2026-11-22T16:30:00Z",
+    "score": {
+     "event_id": "f4345ad428d5014171ce1908dd2352b5",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 3448,
+     "team_id_home": 3446,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [
+      0,
+      0
+     ],
+     "score_home_by_period": [
+      0,
+      0
+     ],
+     "venue_name": "Anfield",
+     "venue_location": "Liverpool",
+     "game_clock": 0,
+     "display_clock": "0'",
+     "game_period": 0,
+     "broadcast": "",
+     "event_status_detail": "Scheduled",
+     "updated_at": "2026-09-30T23:06:19Z"
+    },
+    "teams": [
+     {
+      "team_id": 3448,
+      "name": "Manchester United",
+      "mascot": "",
+      "abbreviation": "MAN",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "1-5-4",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     },
+     {
+      "team_id": 3446,
+      "name": "Liverpool",
+      "mascot": "",
+      "abbreviation": "LIV",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "5-3-2",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 3448,
+      "name": "Manchester United",
+      "mascot": "",
+      "abbreviation": "MAN",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "1-5-4",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     },
+     {
+      "team_id": 3446,
+      "name": "Liverpool",
+      "mascot": "",
+      "abbreviation": "LIV",
+      "conference_id": 117,
+      "division_id": 0,
+      "ranking": 0,
+      "record": "5-3-2",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 117,
+       "sport_id": 11,
+       "name": "English Premiership 2001-2002"
+      }
+     }
+    ],
+    "schedule": {
+     "conference_competition": false,
+     "season_type": "2026-27 English Premier League",
+     "season_year": 2026,
+     "event_name": "Manchester United at Liverpool - 2026-11-22T16:30:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 7353855,
+      "market_id": 1,
+      "period_id": 0,
+      "name": "moneyline",
+      "market_description": "Win the game outright.",
+      "participants": [
+       {
+        "id": 3446,
+        "type": "TYPE_TEAM",
+        "name": "Liverpool",
+        "lines": [
+         {
+          "id": "6252d89280d7d081e42ff4dffb18c350",
+          "prices": {
+           "23": {
+            "id": "699759103",
+            "price": -145,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T15:13:39Z",
+            "source_id": "36225147-734.193293052-HOME"
+           },
+           "19": {
+            "id": "709178845",
+            "price": -145,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T09:15:48Z",
+            "source_id": "0ML87095911_1"
+           },
+           "22": {
+            "id": "713327625",
+            "price": -150,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T12:32:23Z",
+            "source_id": "7901765-206873012-800321874"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 3448,
+        "type": "TYPE_TEAM",
+        "name": "Manchester United",
+        "lines": [
+         {
+          "id": "3d1c8d4f7162b2ea9190c0b0171f37a2",
+          "prices": {
+           "23": {
+            "id": "699759102",
+            "price": 330,
+            "price_delta": -10,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T22:49:15Z",
+            "source_id": "36225147-734.193293052-AWAY"
+           },
+           "19": {
+            "id": "709178847",
+            "price": 320,
+            "price_delta": -10,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T18:15:42Z",
+            "source_id": "0ML87095911_3"
+           },
+           "22": {
+            "id": "713327624",
+            "price": 290,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T12:32:23Z",
+            "source_id": "7901765-206873012-800321876"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 3,
+        "type": "TYPE_RESULT",
+        "name": "Draw",
+        "lines": [
+         {
+          "id": "5fc2a4a83ba8faa7dfb3a76600c01146",
+          "prices": {
+           "23": {
+            "id": "699759104",
+            "price": 300,
+            "price_delta": -20,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T10:21:01Z",
+            "source_id": "36225147-734.193293052-DRAW"
+           },
+           "19": {
+            "id": "709178846",
+            "price": 310,
+            "price_delta": 10,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T09:15:48Z",
+            "source_id": "0ML87095911_2"
+           },
+           "22": {
+            "id": "713327626",
+            "price": 280,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T12:32:23Z",
+            "source_id": "7901765-206873012-800321875"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 7353870,
+      "market_id": 2,
+      "period_id": 0,
+      "name": "handicap",
+      "market_description": "Win or lose by a specified margin.",
+      "participants": [
+       {
+        "id": 3446,
+        "type": "TYPE_TEAM",
+        "name": "Liverpool",
+        "lines": [
+         {
+          "id": "a9773ac38f7be88425bf9bbe00f4ff60",
+          "value": "+1.5",
+          "prices": {
+           "19": {
+            "id": "709179465",
+            "price": -3000,
+            "price_delta": 500,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T18:15:43Z",
+            "source_id": "0HC87096206P150_1"
+           },
+           "23": {
+            "id": "699759359",
+            "price": -1800,
+            "price_delta": 200,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T22:49:15Z",
+            "source_id": "36225147-734.193293054-Liverpool +1.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "29160efe5740b7dbb5da5c28b769466e",
+          "value": "+2.5",
+          "prices": {
+           "23": {
+            "id": "699759353",
+            "price": -8000,
+            "price_delta": -2000,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T10:21:01Z",
+            "source_id": "36225147-734.193293017-Liverpool +2.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "fda473623a218a5b772f8bec5f0f47ad",
+          "value": "-1.5",
+          "prices": {
+           "23": {
+            "id": "699759112",
+            "price": 182,
+            "price_delta": 2,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T22:49:15Z",
+            "source_id": "36225147-734.193293130-Liverpool -1.5 Goals"
+           },
+           "19": {
+            "id": "709179459",
+            "price": 170,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:15:49Z",
+            "source_id": "0HC87096206N150_1"
+           }
+          }
+         },
+         {
+          "id": "c217453c75a1b1d13be920b777e228c5",
+          "value": "-2.5",
+          "prices": {
+           "23": {
+            "id": "699759354",
+            "price": 440,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T15:13:39Z",
+            "source_id": "36225147-734.193293022-Liverpool -2.5 Goals"
+           },
+           "19": {
+            "id": "709179461",
+            "price": 390,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:15:49Z",
+            "source_id": "0HC87096206N250_1"
+           }
+          }
+         },
+         {
+          "id": "d5a228d6481c4703c52816a3769f0094",
+          "value": "-3.5",
+          "prices": {
+           "23": {
+            "id": "699759356",
+            "price": 790,
+            "price_delta": 40,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T10:21:01Z",
+            "source_id": "36225147-734.193293024-Liverpool -3.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "3eedaa4b5fb0df6bdf843e221d232d81",
+          "value": "-4.5",
+          "prices": {
+           "23": {
+            "id": "699759360",
+            "price": 1700,
+            "price_delta": 220,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T10:21:01Z",
+            "source_id": "36225147-734.193293055-Liverpool -4.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "77ab94c05ad62813f3816b28cc639b7e",
+          "value": "+0.5",
+          "prices": {
+           "19": {
+            "id": "709179466",
+            "price": -500,
+            "price_delta": 25,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T18:15:43Z",
+            "source_id": "0HC87096206P50_1"
+           }
+          }
+         },
+         {
+          "id": "f53d76281f516002dfa2a45e6c386f5e",
+          "value": "-0.5",
+          "prices": {
+           "22": {
+            "id": "713327631",
+            "price": -150,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T12:32:23Z",
+            "source_id": "7901765-206873476-800323496"
+           },
+           "19": {
+            "id": "709179458",
+            "price": -160,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T09:15:49Z",
+            "source_id": "0HC87096206N50_1"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 3448,
+        "type": "TYPE_TEAM",
+        "name": "Manchester United",
+        "lines": [
+         {
+          "id": "969d83ad247f26fbc34fafd134b374f5",
+          "value": "+1.5",
+          "prices": {
+           "23": {
+            "id": "699759113",
+            "price": -260,
+            "price_delta": -20,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T10:21:01Z",
+            "source_id": "36225147-734.193293130-Man Utd +1.5 Goals"
+           },
+           "19": {
+            "id": "709179463",
+            "price": -270,
+            "price_delta": 15,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:15:49Z",
+            "source_id": "0HC87096206P150_3"
+           }
+          }
+         },
+         {
+          "id": "14f1a6162a929762176d512566c3211c",
+          "value": "+2.5",
+          "prices": {
+           "19": {
+            "id": "709179464",
+            "price": -900,
+            "price_delta": 100,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:15:49Z",
+            "source_id": "0HC87096206P250_3"
+           },
+           "23": {
+            "id": "699759355",
+            "price": -850,
+            "price_delta": -50,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T15:13:39Z",
+            "source_id": "36225147-734.193293022-Man Utd +2.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "d431d618b02eaf2d5e2da851c7f36a57",
+          "value": "+3.5",
+          "prices": {
+           "23": {
+            "id": "699759357",
+            "price": -3000,
+            "price_delta": -600,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T10:21:01Z",
+            "source_id": "36225147-734.193293024-Man Utd +3.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "fd799c1d71314ea0f5c29bad60e2f3b1",
+          "value": "+4.5",
+          "prices": {
+           "23": {
+            "id": "699759361",
+            "price": -8000,
+            "is_main_line": false,
+            "updated_at": "2026-11-03T18:17:20Z",
+            "source_id": "36225147-734.193293055-Man Utd +4.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "95a797b6853ebb4788c19408b85a95bd",
+          "value": "-1.5",
+          "prices": {
+           "23": {
+            "id": "699759358",
+            "price": 650,
+            "price_delta": -20,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T15:13:39Z",
+            "source_id": "36225147-734.193293054-Man Utd -1.5 Goals"
+           },
+           "19": {
+            "id": "709179460",
+            "price": 650,
+            "price_delta": -50,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:15:49Z",
+            "source_id": "0HC87096206N150_3"
+           }
+          }
+         },
+         {
+          "id": "287759ad9a4e69229a4c7a89fdae5018",
+          "value": "-2.5",
+          "prices": {
+           "23": {
+            "id": "699759352",
+            "price": 1300,
+            "price_delta": -40,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T22:49:15Z",
+            "source_id": "36225147-734.193293017-Man Utd -2.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "eeb6b707a7ee64986193fb062d95c110",
+          "value": "+0.5",
+          "prices": {
+           "19": {
+            "id": "709179457",
+            "price": 105,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T09:15:49Z",
+            "source_id": "0HC87096206P50_3"
+           },
+           "22": {
+            "id": "713327630",
+            "price": 105,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T12:32:23Z",
+            "source_id": "7901765-206873476-800323497"
+           }
+          }
+         },
+         {
+          "id": "f1beca57646eb888329f289158468d06",
+          "value": "-0.5",
+          "prices": {
+           "19": {
+            "id": "709179462",
+            "price": 270,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T18:15:43Z",
+            "source_id": "0HC87096206N50_3"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 7353860,
+      "market_id": 3,
+      "period_id": 0,
+      "name": "totals",
+      "market_description": "Over/under on the combined score.",
+      "participants": [
+       {
+        "id": 9,
+        "type": "TYPE_RESULT",
+        "name": "Over",
+        "lines": [
+         {
+          "id": "7b652eaaefa2ca93267dafeacb7b41ab",
+          "value": "0.5",
+          "prices": {
+           "22": {
+            "id": "713327640",
+            "price": -10000,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:23Z",
+            "source_id": "7901765-206873416-800323322"
+           },
+           "23": {
+            "id": "699759114",
+            "price": -5000,
+            "price_delta": 1000,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T15:13:39Z",
+            "source_id": "36225147-734.193293021-Over 0.5 Goals"
+           },
+           "19": {
+            "id": "709179450",
+            "price": -20000,
+            "price_delta": -10000,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T18:15:43Z",
+            "closed_at": "2026-11-09T18:15:42Z",
+            "source_id": "0OU87096201O50_1"
+           }
+          }
+         },
+         {
+          "id": "824fad19e525e599ad42581b5541df80",
+          "value": "1.5",
+          "prices": {
+           "22": {
+            "id": "713327636",
+            "price": -625,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:23Z",
+            "source_id": "7901765-206873414-800323318"
+           },
+           "23": {
+            "id": "699759122",
+            "price": -650,
+            "price_delta": -30,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T22:49:15Z",
+            "source_id": "36225147-734.193293096-Over 1.5 Goals"
+           },
+           "19": {
+            "id": "709179447",
+            "price": -700,
+            "price_delta": -50,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T18:45:21Z",
+            "source_id": "0OU87096201O150_1"
+           }
+          }
+         },
+         {
+          "id": "8b8bda26b3fdffe8fae04b1f50f4aa80",
+          "value": "2.5",
+          "prices": {
+           "19": {
+            "id": "709179448",
+            "price": -210,
+            "price_delta": -5,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T18:45:21Z",
+            "source_id": "0OU87096201O250_1"
+           },
+           "22": {
+            "id": "713327632",
+            "price": -190,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:23Z",
+            "source_id": "7901765-206873412-800323314"
+           },
+           "23": {
+            "id": "699759124",
+            "price": -188,
+            "price_delta": -12,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:28:42Z",
+            "source_id": "36225147-734.193293097-Over 2.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "892b929776457f4807d10f0ef785cacc",
+          "value": "3.5",
+          "prices": {
+           "19": {
+            "id": "709179446",
+            "price": 120,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T18:45:21Z",
+            "source_id": "0OU87096201O350_1"
+           },
+           "22": {
+            "id": "713327634",
+            "price": 130,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T12:32:23Z",
+            "source_id": "7901765-206873413-800323316"
+           },
+           "23": {
+            "id": "699759116",
+            "price": 140,
+            "price_delta": 2,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T10:21:01Z",
+            "source_id": "36225147-734.193293057-Over 3.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "66dbeb87ea545794f3226a49eb3b61a1",
+          "value": "4.5",
+          "prices": {
+           "23": {
+            "id": "699759127",
+            "price": 330,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T10:21:01Z",
+            "source_id": "36225147-734.193293103-Over 4.5 Goals"
+           },
+           "19": {
+            "id": "709179449",
+            "price": 265,
+            "price_delta": -10,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T18:45:21Z",
+            "source_id": "0OU87096201O450_1"
+           },
+           "22": {
+            "id": "713327638",
+            "price": 300,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:23Z",
+            "source_id": "7901765-206873415-800323320"
+           }
+          }
+         },
+         {
+          "id": "4fbac0af491af618ee98862e758c0000",
+          "value": "5.5",
+          "prices": {
+           "23": {
+            "id": "699759120",
+            "price": 790,
+            "price_delta": 30,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T22:49:15Z",
+            "source_id": "36225147-734.193293074-Over 5.5 Goals"
+           },
+           "19": {
+            "id": "709179451",
+            "price": 550,
+            "price_delta": -50,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T18:15:43Z",
+            "source_id": "0OU87096201O550_1"
+           },
+           "22": {
+            "id": "713327642",
+            "price": 650,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:23Z",
+            "source_id": "7901765-206873417-800323324"
+           }
+          }
+         },
+         {
+          "id": "22826959da217328afe5d8c44c76fac4",
+          "value": "6.5",
+          "prices": {
+           "23": {
+            "id": "699759118",
+            "price": 1500,
+            "price_delta": -100,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:10:27Z",
+            "source_id": "36225147-734.193293059-Over 6.5 Goals"
+           },
+           "19": {
+            "id": "709179456",
+            "price": 1000,
+            "price_delta": -100,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T18:45:21Z",
+            "source_id": "0OU87096201O650_1"
+           },
+           "22": {
+            "id": "713327644",
+            "price": 1400,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:23Z",
+            "source_id": "7901765-206873418-800323326"
+           }
+          }
+         },
+         {
+          "id": "98a671e1c1a18405fde7a77b2645e69b",
+          "value": "7.5",
+          "prices": {
+           "23": {
+            "id": "699759126",
+            "price": 3000,
+            "price_delta": -500,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:10:27Z",
+            "source_id": "36225147-734.193293102-Over 7.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "e95616d11d5ee1dc9b3fd3e3eef9f514",
+          "value": "8.5",
+          "prices": {
+           "23": {
+            "id": "699759129",
+            "price": 7000,
+            "price_delta": -1000,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:10:27Z",
+            "source_id": "36225147-734.193293110-Over 8.5 Goals"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 10,
+        "type": "TYPE_RESULT",
+        "name": "Under",
+        "lines": [
+         {
+          "id": "5383c84e5a2701659fe744bc0ac94ff2",
+          "value": "0.5",
+          "prices": {
+           "23": {
+            "id": "699759115",
+            "price": 1500,
+            "price_delta": 100,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:10:27Z",
+            "source_id": "36225147-734.193293021-Under 0.5 Goals"
+           },
+           "19": {
+            "id": "709179454",
+            "price": 1200,
+            "price_delta": 100,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T18:15:43Z",
+            "closed_at": "2026-11-09T18:15:42Z",
+            "source_id": "0OU87096201U50_3"
+           },
+           "22": {
+            "id": "713327641",
+            "price": 1550,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:23Z",
+            "source_id": "7901765-206873416-800323323"
+           }
+          }
+         },
+         {
+          "id": "514be1cde820c30cfbb622e12067e936",
+          "value": "1.5",
+          "prices": {
+           "23": {
+            "id": "699759123",
+            "price": 440,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T22:49:15Z",
+            "source_id": "36225147-734.193293096-Under 1.5 Goals"
+           },
+           "19": {
+            "id": "709179453",
+            "price": 400,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T18:45:21Z",
+            "source_id": "0OU87096201U150_3"
+           },
+           "22": {
+            "id": "713327637",
+            "price": 380,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:23Z",
+            "source_id": "7901765-206873414-800323319"
+           }
+          }
+         },
+         {
+          "id": "412fcd1d6474f2efc7a83e3eaa774a5e",
+          "value": "2.5",
+          "prices": {
+           "23": {
+            "id": "699759125",
+            "price": 152,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:28:42Z",
+            "source_id": "36225147-734.193293097-Under 2.5 Goals"
+           },
+           "19": {
+            "id": "709179468",
+            "price": 150,
+            "price_delta": 10,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T18:15:43Z",
+            "source_id": "0OU87096201U250_3"
+           },
+           "22": {
+            "id": "713327633",
+            "price": 135,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:23Z",
+            "source_id": "7901765-206873412-800323315"
+           }
+          }
+         },
+         {
+          "id": "ee00fcfb9797f7e6f7661ab69b8177c1",
+          "value": "3.5",
+          "prices": {
+           "19": {
+            "id": "709179452",
+            "price": -165,
+            "price_delta": 10,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T18:15:43Z",
+            "source_id": "0OU87096201U350_3"
+           },
+           "22": {
+            "id": "713327635",
+            "price": -185,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T12:32:23Z",
+            "source_id": "7901765-206873413-800323317"
+           },
+           "23": {
+            "id": "699759117",
+            "price": -172,
+            "price_delta": -2,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T10:21:01Z",
+            "source_id": "36225147-734.193293057-Under 3.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "1c233e90e5e98f4b053335399ff67701",
+          "value": "4.5",
+          "prices": {
+           "19": {
+            "id": "709179467",
+            "price": -400,
+            "price_delta": 25,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T18:45:21Z",
+            "source_id": "0OU87096201U450_3"
+           },
+           "22": {
+            "id": "713327639",
+            "price": -475,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:23Z",
+            "source_id": "7901765-206873415-800323321"
+           },
+           "23": {
+            "id": "699759128",
+            "price": -450,
+            "price_delta": -20,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T10:21:01Z",
+            "source_id": "36225147-734.193293103-Under 4.5 Goals"
+           }
+          }
+         },
+         {
+          "id": "cb31db9eaf2484abb6fe4500e98a5266",
+          "value": "5.5",
+          "prices": {
+           "23": {
+            "id": "699759121",
+            "price": -1500,
+            "price_delta": -100,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T22:49:15Z",
+            "source_id": "36225147-734.193293074-Under 5.5 Goals"
+           },
+           "19": {
+            "id": "709179455",
+            "price": -1100,
+            "price_delta": 100,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T18:45:21Z",
+            "source_id": "0OU87096201U550_3"
+           },
+           "22": {
+            "id": "713327643",
+            "price": -1200,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:23Z",
+            "source_id": "7901765-206873417-800323325"
+           }
+          }
+         },
+         {
+          "id": "7e57454b19e15486875da5d830019f81",
+          "value": "6.5",
+          "prices": {
+           "23": {
+            "id": "699759119",
+            "price": -5000,
+            "price_delta": 1000,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T09:10:27Z",
+            "source_id": "36225147-734.193293059-Under 6.5 Goals"
+           },
+           "19": {
+            "id": "709179469",
+            "price": -6000,
+            "price_delta": 2000,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T18:45:21Z",
+            "source_id": "0OU87096201U650_3"
+           },
+           "22": {
+            "id": "713327645",
+            "price": -5000,
+            "is_main_line": false,
+            "updated_at": "2026-11-09T12:32:23Z",
+            "source_id": "7901765-206873418-800323327"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "28": "3083835493834686851",
+     "2": "32613599",
+     "7": "8CB9DFC0-8496-4ABA-B9C3-94BD35EC84DC",
+     "11": "491178188",
+     "14": "6232045",
+     "21": "1028072756",
+     "23": "36225147",
+     "3": "1638976350",
+     "9": "8CB9DFC0-8496-4ABA-B9C3-94BD35EC84DC",
+     "6": "491178188",
+     "19": "87095911",
+     "30": "01a1c584-bd0c-75e2-ab2f-1aa6411de65c",
+     "33": "206158401",
+     "34": "206158401",
+     "4": "491178188",
+     "24": "88bf6bb3-f847-4a5d-9ccd-1db9a62110e7",
+     "22": "7901765",
+     "25": "26NOV22LFCMUN"
+    },
+    "affiliate_deep_links": {
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/206158401",
+     "3": "https://www.pinnacle.com/en/soccer/england-premier-league/liverpool-vs-manchester-united/1638976350/",
+     "24": "https://sportsbook.thescore.bet/sport/soccer/organization/england/competition/premier-league/event/88bf6bb3-f847-4a5d-9ccd-1db9a62110e7",
+     "23": "https://sportsbook.fanduel.com/soccer/english-premier-league/liverpool-v-man-utd-36225147",
+     "21": "https://www.unibet.co.uk/betting/odds/contest/8c7056dc4ebb2fe2ed09b3e26698ad43",
+     "28": "https://app.hardrock.bet/competition/englandPremierLeague/3083835493834686851",
+     "30": "https://novig.com/event-markets/01a1c584-bd0c-75e2-ab2f-1aa6411de65c",
+     "33": "https://bet105.ag/",
+     "14": "https://sports.everygame.eu/",
+     "2": "https://www.bovada.lv/sports/soccer/europe/england/premier-league/liverpool-manchester-united-202611221130",
+     "4": "https://www.sportsbetting.ag/sportsbook/soccer/epl/game/491178188",
+     "6": "https://www.betonline.ag/sportsbook/soccer/epl/game/491178188",
+     "11": "https://sports.lowvig.ag/sportsbook/soccer/epl/game/491178188",
+     "22": "https://sports.nj.betmgm.com/en/sports/events/2:7901765",
+     "7": "https://www.bookmaker.eu/",
+     "9": "https://sportsbook.betcris.com/",
+     "25": "https://kalshi.com/markets/kxeplgame/kxeplgame-26nov22lfcmun",
+     "19": "https://sportsbook.draftkings.com/event/liverpool-vs-man-utd/34962901"
+    },
+    "affiliate_deep_link_types": {
+     "9": "catalog",
+     "7": "catalog",
+     "33": "catalog",
+     "14": "catalog"
+    }
+   }
+  ]
+ }
+}

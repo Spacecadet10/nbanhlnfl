@@ -1,0 +1,8 @@
+URL: https://oddspedia.com/robots.txt
+UTC: 2026-11-11T04:53:18Z
+HTTP: 200 text/plain; charset=UTF-8 https://oddspedia.com/robots.txt
+
+URL: https://oddspedia.com/terms-and-conditions
+UTC: 2026-11-11T04:53:53Z
+HTTP: 403 text/html; charset=UTF-8 https://oddspedia.com/terms-and-conditions
+
