@@ -363,6 +363,11 @@ def forecast_row(conn, r, as_of: str, markets) -> dict:
             "label": LABEL[r["family"]], "selections": sels}
 
 
+# Ticket snapshots read the same window as GET /api/soccer/markets (kickoff within the last 2 days, or later), so a
+# snapshot never recomputes every stored forecast ever (review MEDIUM 1, Nov 9).
+TICKET_WINDOW_DAYS = 2
+
+
 def match_markets(conn, *, competition: Optional[str] = None, day: Optional[str] = None, since: Optional[str] = None,
                   as_of: Optional[str] = None) -> list[dict]:
     """Per match: the served families' latest forecasts with their selections, and double chance / draw no bet from the

@@ -302,3 +302,22 @@ def test_a_both_zero_corner_count_never_settles_and_never_blocks_the_family(live
                at=(datetime.combine(TOMORROW, datetime.min.time(), timezone.utc) + timedelta(hours=18)).strftime("%Y-%m-%dT%H:%M:%SZ"))
     g = sml.grade(live, c["forecast_id"], "corners_total", "under", 9.5, later)
     assert g["grade"] == "unscorable" and g["counts"] is None
+
+
+def test_ticket_market_picks_only_cover_matches_in_the_api_window(live):
+    # Review MEDIUM 1 (Nov 9): every snapshot recomputed every stored goal/corner forecast ever (no date window).
+    sml.run(live, day=TOMORROW.isoformat())
+    now_picks = tickets.soccer_market_picks(live, STAMP)
+    assert {p["game_id"] for p in now_picks} >= {"soccer:eng.1:90003", "soccer:eng.1:90004"}
+    later = (NOW + timedelta(days=4)).strftime("%Y-%m-%dT%H:%M:%SZ")       # tomorrow's kickoffs are now 3 days old
+    assert tickets.soccer_market_picks(live, later) == []
+    calls, real = [], sml.match_markets
+    import pytest as _p
+    mp = _p.MonkeyPatch()
+    mp.setattr(sml, "match_markets", lambda conn, **kw: (calls.append(kw), real(conn, **kw))[1])
+    try:
+        tickets.soccer_market_picks(live, STAMP)
+    finally:
+        mp.undo()
+    since = (datetime.strptime(STAMP, "%Y-%m-%dT%H:%M:%SZ") - timedelta(days=sml.TICKET_WINDOW_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    assert calls and calls[0]["since"] == since and calls[0]["as_of"] == STAMP

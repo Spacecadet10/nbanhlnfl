@@ -370,7 +370,8 @@ def soccer_market_picks(conn, stamp):
     served (no tested model) give no selection."""
     from app import soccer_markets as sm, soccer_markets_live as sml
     out = []
-    for m in sml.match_markets(conn, as_of=stamp):
+    since = (datetime.strptime(stamp, '%Y-%m-%dT%H:%M:%SZ') - timedelta(days=sml.TICKET_WINDOW_DAYS)).strftime('%Y-%m-%dT%H:%M:%SZ')
+    for m in sml.match_markets(conn, since=since, as_of=stamp):
         home, away = m['home'], m['away']
         common = dict(game_id=m['match_id'], matchup=f"{home} vs {away}", tipoff=m['kickoff_at'], competition=m['competition'],
                       skill_proven=False)
