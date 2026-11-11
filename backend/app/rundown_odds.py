@@ -12,6 +12,7 @@ import math
 import os
 import stat
 import time
+import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -204,8 +205,8 @@ def credentials():
 
 
 def fetch(now=None, *, opener=urllib.request.urlopen, pause=time.sleep):
-    """Today and tomorrow for three sports: six requests a run and at most DAY_REQUESTS a UTC day, one a second,
-    no retries. Stops when the provider reports a low remaining allowance; the request caps hold when it reports none. Nothing printed or stored contains the
+    """Today and tomorrow for three sports: six requests a run and at most DAY_REQUESTS a UTC day, one a second. The one
+    retry: a request with an extra market (NHL 563) that the provider refuses or garbles is asked again once without it. Stops when the provider reports a low remaining allowance; the request caps hold when it reports none. Nothing printed or stored contains the
     key, a URL or an error message. Every response is saved whole, once, and never overwritten."""
     clock = (lambda: now) if now else (lambda: datetime.now(timezone.utc))
     started = clock()
@@ -231,25 +232,41 @@ def fetch(now=None, *, opener=urllib.request.urlopen, pause=time.sleep):
                 if count >= DAY_REQUESTS:
                     return {'status': 'request_cap', 'requests_today': count, 'results': results}
                 day = (started + timedelta(days=offset)).date().isoformat()
-                with usage.open('a') as f:
-                    f.write(json.dumps({'day': today, 'at': stamp(clock()), 'sport': sport, 'date': day}) + '\n')
-                count += 1
-                ids = ','.join(str(m) for m in SPORT_MARKETS[sport])
-                url = f'{BASE}/sports/{sid}/events/{day}?market_ids={ids}&affiliate_ids=19,22,23&main_line=true&hide_closed=true'
-                request = urllib.request.Request(url, headers={'X-TheRundown-Key': key, 'User-Agent': 'Courtside-odds'})
+                markets, without = SPORT_MARKETS[sport], []
+                while True:
+                    with usage.open('a') as f:
+                        f.write(json.dumps({'day': today, 'at': stamp(clock()), 'sport': sport, 'date': day}) + '\n')
+                    count += 1
+                    ids = ','.join(str(m) for m in markets)
+                    url = f'{BASE}/sports/{sid}/events/{day}?market_ids={ids}&affiliate_ids=19,22,23&main_line=true&hide_closed=true'
+                    request = urllib.request.Request(url, headers={'X-TheRundown-Key': key, 'User-Agent': 'Courtside-odds'})
+                    try:
+                        with opener(request, timeout=30) as response:
+                            data = json.loads(response.read())
+                            headers = {k: v for k, v in dict(response.headers).items() if k.lower().startswith('x-data')}
+                        if not isinstance(data, dict) or not isinstance(data.get('events'), list):
+                            raise ValueError('Response schema')
+                    except (urllib.error.HTTPError, ValueError) as exc:
+                        # Review MEDIUM (7f10f71): the provider refused or garbled a request with an extra market (NHL 563).
+                        # Ask once more for the normal markets so the sport's usual prices and later sports still arrive.
+                        if markets is not MARKETS and count < DAY_REQUESTS:
+                            without = sorted(set(markets.values()) - set(MARKETS.values()))
+                            markets = MARKETS
+                            pause(1.1)
+                            continue
+                        return {'status': 'failed', 'error': type(exc).__name__, 'results': results}
+                    except Exception as exc:
+                        return {'status': 'failed', 'error': type(exc).__name__, 'results': results}
+                    break
                 try:
-                    with opener(request, timeout=30) as response:
-                        data = json.loads(response.read())
-                        headers = {k: v for k, v in dict(response.headers).items() if k.lower().startswith('x-data')}
-                    if not isinstance(data, dict) or not isinstance(data.get('events'), list):
-                        raise ValueError('Response schema')
                     retrieved = clock()
                     data.update(_fetched_at=stamp(retrieved), _sport=sport, _date=day, _quota=headers)
                     dest = directory / f'{retrieved:%Y%m%dT%H%M%SZ}-{sport}-{day}-{uuid4().hex}.json'
                     tmp = dest.with_suffix('.tmp')   # a reader never sees half a file
                     tmp.write_text(json.dumps(data))
                     tmp.rename(dest)
-                    results.append({'sport': sport, 'date': day, 'events': len(data['events']), 'quota': headers})
+                    results.append({'sport': sport, 'date': day, 'events': len(data['events']), 'quota': headers,
+                                    **({'without': without} if without else {})})
                     for name, low in (('x-datapoints-remaining', LOW_QUOTA), ('x-datapoints-monthly-remaining', LOW_MONTHLY)):
                         remaining = next((v for k, v in headers.items() if k.lower() == name), None)
                         if remaining is not None and int(remaining) < low:

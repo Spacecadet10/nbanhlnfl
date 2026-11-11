@@ -4,6 +4,8 @@ import copy
 import json
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from app import rundown_odds as odds, tickets
 
 NOW = datetime(2026, 11, 11, 0, 10, tzinfo=timezone.utc)
@@ -364,3 +366,45 @@ def test_fetch_asks_for_the_three_way_market_on_nhl_requests_only(tmp_path, monk
     nhl = [u for u in calls if '/sports/6/' in u]
     assert len(nhl) == 2 and all('market_ids=1,2,3,563&' in u for u in nhl)
     assert all('market_ids=1,2,3&' in u for u in calls if '/sports/6/' not in u)
+
+
+@pytest.mark.parametrize('refusal', ['http', 'schema'])
+def test_a_refused_three_way_market_still_gets_normal_nhl_and_nfl_prices(tmp_path, monkeypatch, refusal):
+    """Review MEDIUM (7f10f71): if TheRundown refuses market 563, the normal NHL prices and the NFL pull must still
+    complete. The NHL request is repeated once without 563; that retry counts toward the daily request cap."""
+    import io
+    import urllib.error
+    monkeypatch.setenv('NBA_DATA_DIR', str(tmp_path))
+    monkeypatch.setenv('THERUNDOWN_API_KEY', 'test-key-do-not-save')
+    calls = []
+
+    class Bad(Response):
+        def read(self): return b'{"error": "market not allowed"}'
+
+    def run(request, timeout):
+        calls.append(request.full_url)
+        if '563' in request.full_url:
+            if refusal == 'http':
+                raise urllib.error.HTTPError(request.full_url, 403, 'Forbidden', {}, io.BytesIO(b''))
+            return Bad({})
+        return Response({})
+    result = odds.fetch(NOW, opener=run, pause=lambda _: None)
+    assert result['status'] == 'ok' and len(calls) == 8
+    assert [r['sport'] for r in result['results']] == ['nba', 'nba', 'nhl', 'nhl', 'nfl', 'nfl']
+    assert sum('market_ids=1,2,3&' in u and '/sports/6/' in u for u in calls) == 2
+    assert all(r.get('without') == ['reg3'] for r in result['results'] if r['sport'] == 'nhl')
+    log = (tmp_path / 'odds-books' / 'requests.jsonl').read_text().splitlines()
+    assert len(log) == 8 and 'test-key-do-not-save' not in ''.join(log)
+
+
+def test_a_network_failure_still_stops_the_run_without_a_retry(tmp_path, monkeypatch):
+    monkeypatch.setenv('NBA_DATA_DIR', str(tmp_path))
+    monkeypatch.setenv('THERUNDOWN_API_KEY', 'test-key-do-not-save')
+    calls = []
+
+    def run(request, timeout):
+        calls.append(request.full_url)
+        if '/sports/6/' in request.full_url:
+            raise OSError('down')
+        return Response({})
+    assert odds.fetch(NOW, opener=run, pause=lambda _: None)['status'] == 'failed' and len(calls) == 3
