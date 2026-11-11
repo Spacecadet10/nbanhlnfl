@@ -6,8 +6,8 @@ retrieved it, never changed, never mixed into a model probability. Seen for EPL,
 Champions League (one match each); other competitions are asked too and simply have no quote when Bet365 is absent.
 
 Light requests: one GET per scheduled match kicking off within WINDOW, at most once per REFRESH per match, at most
-MAX_PER_RUN per run, one a second (the hourly soccer cycle calls `fetch`). Every response is saved whole, once, under
-`<data>/bet365-dc/` and never overwritten; reading picks the newest file retrieved at or before the moment asked.
+MAX_PER_RUN per run, one a second (the hourly soccer cycle calls `fetch`). The part of each response that is read (provider
+names and their betting-odds team refs and team odds) is saved once under `<data>/bet365-dc/` and never overwritten; reading picks the newest file retrieved at or before the moment asked.
 """
 import json
 import re
@@ -148,12 +148,12 @@ def fetch(conn, now: Optional[datetime] = None, *, get: Callable[[str], tuple[in
         dest = d / f"{retrieved:%Y%m%dT%H%M%SZ}-{uuid4().hex}.json"
         tmp = dest.with_suffix('.tmp')
         # Only what is read is kept (review LOW 3: whole responses carry goal-scorer odds, ~40 KB each): each provider's
-        # name and Bet365's team odds with the team refs. The kept part is byte-for-byte what ESPN sent for those fields.
+        # name and, where present, its betting-odds team refs and team odds, as ESPN sent them (a missing field is null).
         kept = {'items': [{'provider': i.get('provider'),
                            **({'bettingOdds': {k: (i.get('bettingOdds') or {}).get(k) for k in ('homeTeam', 'awayTeam', 'teamOdds')}}
                               if i.get('bettingOdds') else {})} for i in body.get('items') or []]}
         tmp.write_text(json.dumps({'retrieved_at': retrieved.strftime(FMT), 'match_id': r['match_id'], 'url': url,
-                                   'kept': 'provider names and Bet365 team odds only', 'body': kept}))
+                                   'kept': 'provider names and betting-odds team refs and team odds only', 'body': kept}))
         tmp.rename(dest)
         out['saved'] += 1
         if any(((i.get('provider') or {}).get('name') or '').replace(' ', '').lower() == 'bet365'
