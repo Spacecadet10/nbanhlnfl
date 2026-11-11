@@ -259,14 +259,16 @@ def card_line(sport: str, fact: Optional[dict], matchup: str) -> Optional[str]:
     else:
         if fact['report'].get('problem') or any(fact[s].get('flagged') is None for s in ('away', 'home')):
             return 'Injury report not available'
-        missing = [abbr[s] for s in ('away', 'home') if fact[s].get('report_status') != 'submitted']
+        unsent = [abbr[s] for s in ('away', 'home') if fact[s].get('report_status') == 'not_submitted']
+        absent = [abbr[s] for s in ('away', 'home') if fact[s].get('report_status') not in ('submitted', 'not_submitted')]
         by_status = defaultdict(list)
         for s in ('away', 'home'):
             for f in fact[s].get('flagged') or []:
                 by_status[f['status']].append(_short(f['player']))
-        parts = [f'{status}: ' + ', '.join(by_status[status]) for status in FLAGGED if by_status[status]]
-        if missing:
-            parts.append('No injury report yet: ' + ', '.join(missing))
+        # Unknown first, so a long Out list is what gets shortened (review LOW 2).
+        parts = (['No injury report yet: ' + ', '.join(unsent)] if unsent else []) + \
+                (['Not on injury report: ' + ', '.join(absent)] if absent else []) + \
+                [f'{status}: ' + ', '.join(by_status[status]) for status in FLAGGED if by_status[status]]
     return ' · '.join(parts) or None
 
 
@@ -303,8 +305,10 @@ def review_flags(sport: str, pick: dict, fact: Optional[dict]) -> list:
                 what = {'no_report': 'no injury report received', 'report_unreadable': 'injury report not readable',
                         'no_player_minutes': 'player minutes file missing'}.get(s.get('problem'), str(s.get('problem')))
                 flags.append(f"{abbr[side]} {what}")
+            elif s.get('report_status') == 'not_submitted':
+                flags.append(f"{abbr[side]} injury report not submitted")
             elif s.get('report_status') != 'submitted':
-                flags.append(f"{abbr[side]} injury report {s.get('report_status', 'status unknown').replace('_', ' ')}")
+                flags.append(f"{abbr[side]} not on the injury report")
             for f in s.get('flagged') or []:
                 flags.append(f"{abbr[side]} top player {f['player']} {f['status']}")
             for name in s.get('unmatched_names') or []:

@@ -151,7 +151,11 @@ def test_a_team_not_yet_submitted_or_missing_from_the_report_is_unknown_not_heal
         ['BOS injury report not submitted']
     c = nba_store(monkeypatch, [entry('Bench', 'Ja', 'Out')])
     f = lineup.facts(c, 'nba', ['g'], AT)['g']
-    assert f['away']['report_status'] == 'not_on_report' and lineup.card_line('nba', f, 'BOS @ TOR') == 'No injury report yet: BOS'
+    assert f['away']['report_status'] == 'not_on_report' and lineup.card_line('nba', f, 'BOS @ TOR') == 'Not on injury report: BOS'
+    assert lineup.review_flags('nba', {'market': 'winner', 'matchup': 'BOS @ TOR', 'pick_label': 'BOS win'}, f) == \
+        ['BOS not on the injury report']
+    c = nba_store(monkeypatch, [entry('Barnes', 'Scottie', 'Out')], not_submitted=[{'game_date': '2026-11-11', 'team': 'Boston'}])
+    assert lineup.card_line('nba', lineup.facts(c, 'nba', ['g'], AT)['g'], 'BOS @ TOR') == 'No injury report yet: BOS · Out: S. Barnes'
 
 
 def test_a_suffix_glued_to_the_surname_is_still_matched_or_said(monkeypatch):
