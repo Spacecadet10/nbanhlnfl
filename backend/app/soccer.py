@@ -303,6 +303,9 @@ FORECAST_STATES = ("recorded", "awaiting", "out_of_scope", "no_live_store")
 FORECASTS_AWAITING = ("A sealed 90-minute model covers this competition, but no forecast has been recorded for it yet. Each "
                       "match is forecast by 06:00 UTC on its match day, once the earlier results it depends on are stored; "
                       "none is made after that cutoff.")
+# One match past its cutoff (or no longer scheduled) with no recorded forecast: closed, whatever the competition's state.
+FORECASTS_MATCH_CLOSED = ("No forecast was recorded for this match before its cutoff (06:00 UTC on its match day), and "
+                          "none is made after it.")
 FORECASTS_OUT_OF_SCOPE = "No live forecast: this competition did not pass its held-out test (too few test matches)."
 # With live forecasts recorded, "none recorded / none to grade" would be false; the pages themselves are not built yet.
 RECORDED_PAGES = {
@@ -506,8 +509,13 @@ def match_detail(conn: sqlite3.Connection, match_id: str) -> Optional[dict]:
         f"SELECT revision, {', '.join(RESULT_FIELDS)}, home_team_id, away_team_id, observed_at, basis FROM soccer_result_revisions "
         "WHERE match_id = ? "
         "ORDER BY revision", (match_id,))]
+    live = live_forecasts_of(conn, [match_id]).get(match_id)
+    cutoff = forecast_cutoff(r["competition_id"], r["kickoff_at"])
+    caps = capabilities(state)
+    closed = r["status"] != "scheduled" or (cutoff is not None and datetime.now(timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ") >= cutoff)
+    if live is None and closed and state in ("awaiting", "recorded"):   # never "not recorded yet" nor "available" here
+        caps[0] = {"id": "forecasts", "label": "Match forecasts", "available": False, "reason": FORECASTS_MATCH_CLOSED}
     return {"match": _match(r), "head_to_head": [_match(x) for x in h2h], "home_recent": recent(r["home_team_id"]),
-            "away_recent": recent(r["away_team_id"]), "result_revisions": revisions,
-            "live_forecast": live_forecasts_of(conn, [match_id]).get(match_id),
-            "forecast_cutoff_at": forecast_cutoff(r["competition_id"], r["kickoff_at"]),
-            "forecast_state": state, "capabilities": capabilities(state)}
+            "away_recent": recent(r["away_team_id"]), "result_revisions": revisions, "live_forecast": live,
+            "forecast_cutoff_at": cutoff, "forecast_state": state, "capabilities": caps}

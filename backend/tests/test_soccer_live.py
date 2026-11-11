@@ -278,3 +278,19 @@ def test_the_api_reports_each_match_forecast_cutoff(live, monkeypatch):
     assert soccer.forecast_cutoff("fifa.world", "2026-11-12T17:00:00Z") is None       # never forecast: no cutoff to report
     world = client.get("/api/soccer/matches", params={"competition": "fifa.world", "date": TOMORROW.isoformat()}).json()
     assert world["forecast_cutoffs"] == {}
+
+
+# --- 2026-11-10: a finished match with no forecast never reads "not recorded yet" nor "available" -----------------------
+def test_a_finished_match_without_a_forecast_is_described_as_closed(live, monkeypatch):
+    client = _client(monkeypatch)
+    finished = soccer.match_id_of("eng.1", "1") if hasattr(soccer, "match_id_of") else "soccer:eng.1:1"
+    for when in ("awaiting", "recorded"):          # before and after the competition's first live forecast
+        if when == "recorded":
+            soccer_live.run(live, day=TOMORROW.isoformat())
+        detail = client.get("/api/soccer/matches/" + finished).json()
+        assert detail["forecast_state"] == when and detail["live_forecast"] is None
+        cap = detail["capabilities"][0]
+        assert cap["id"] == "forecasts" and cap["available"] is False, (when, cap)
+        assert "yet" not in cap["reason"] and "none is made after" in cap["reason"], (when, cap["reason"])
+    upcoming_match = client.get("/api/soccer/matches/soccer:eng.1:3").json()   # an upcoming match keeps its forecast line
+    assert upcoming_match["live_forecast"] is not None and upcoming_match["capabilities"][0]["available"] is True
