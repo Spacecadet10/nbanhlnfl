@@ -8,6 +8,7 @@ import os
 import re
 import secrets
 import sqlite3
+import sys
 import time
 from collections import Counter
 from contextlib import contextmanager
@@ -103,6 +104,11 @@ def ledger(path=None):
           attempted_at TEXT NOT NULL, next_attempt_at TEXT, message_id INTEGER, error TEXT);
         CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     ''')
+    try:   # Step F paper recorder's append-only table (app/best_pick_record.py); a problem here never blocks delivery
+        from . import best_pick_record
+        conn.executescript(best_pick_record.SCHEMA)
+    except Exception:
+        pass
     try:
         yield conn
     finally:
@@ -164,7 +170,7 @@ PAST_PREFIX = f'Past seasons {PAST_SEASONS}, recomputed, model line: '
 PAST_PREFIX_NO_LINE = f'Past seasons {PAST_SEASONS}, recomputed: '    # winner (no line): app/winner_history.py
 
 
-def message_batches(report, chat_id, lineup_lines=None):
+def message_batches(report, chat_id, lineup_lines=None, games_by_key=None):
     """One summary per game/version, using the same backend best-pick ranking and exact-percentage record as the UI."""
     now = datetime.fromisoformat(report['as_of'].replace('Z', '+00:00'))
     games = {}
@@ -180,6 +186,8 @@ def message_batches(report, chat_id, lineup_lines=None):
         batch = format_batch(report, chat_id, gid, picks, lineup_line=(lineup_lines or {}).get(gid))
         if batch:
             batches.append(batch)
+            if games_by_key is not None:     # which game each card is (output only; the card itself is unchanged)
+                games_by_key[batch[0]] = gid
     return batches
 
 
@@ -307,6 +315,28 @@ def card_implied_lines(conn, sport, report, now):
         pass
 
 
+def best_pick_pictures(conn, sport, report, now):
+    """Step F paper recorder (docs/preregistration/best-pick-2026-11-11-v4.md): what the preregistered rule would name for
+    each card that may go out now, and the full picture behind it. Never shown on a card; never stops one."""
+    try:
+        from . import best_pick_record
+        return best_pick_record.card_pictures(conn, sport, report, now)
+    except Exception as exc:
+        print(f'best-pick recorder (card unaffected): pictures failed: {type(exc).__name__}', file=sys.stderr, flush=True)
+        return None
+
+
+def record_best_pick(conn, sport, key, game_id, pictures, as_of):
+    """One append-only best_picks row for a card that was just sent; a missing picture is recorded as an error row.
+    Never raises: a card already sent is never affected."""
+    try:
+        from . import best_pick_record
+        return best_pick_record.record(conn, key, sport, game_id, (pictures or {}).get(game_id), as_of)
+    except Exception as exc:
+        print(f'best-pick recorder (card unaffected): record failed: {type(exc).__name__}', file=sys.stderr, flush=True)
+        return False
+
+
 def card_identity(text):
     """What makes a game card the same card for its reader: sport, matchup and start (its first three lines) and the
     recommended pick without its line number ('DET -10.5' and 'DET -9.5' are one pick; 'DET' and 'WSH' are not).
@@ -402,12 +432,18 @@ def run_once(bot, settings, conn, *, now=None):
                 else:
                     report = RealProvider(source, now.strftime('%Y-%m-%dT%H:%M:%SZ')).ranked_picks(now.astimezone(TORONTO).date())
                 lineups = card_lineups(source, sport, report, now)
+                pictures = best_pick_pictures(source, sport, report, now)
                 card_implied_lines(source, sport, report, now)
             finally:
                 source.close()
-            batches = message_batches(report, settings['TELEGRAM_CHAT_ID'], lineup_lines=lineups)
-            result['sports'][sport] = {'eligible_summaries': len(batches), **dict(Counter(
-                deliver_card(bot, conn, settings['TELEGRAM_CHAT_ID'], key, text, report['as_of']) for key, text in batches))}
+            games_by_key, outcomes = {}, Counter()
+            batches = message_batches(report, settings['TELEGRAM_CHAT_ID'], lineup_lines=lineups, games_by_key=games_by_key)
+            for key, text in batches:
+                status = deliver_card(bot, conn, settings['TELEGRAM_CHAT_ID'], key, text, report['as_of'])
+                outcomes[status] += 1
+                if status == 'sent':
+                    record_best_pick(conn, sport, key, games_by_key.get(key), pictures, report['as_of'])
+            result['sports'][sport] = {'eligible_summaries': len(batches), **dict(outcomes)}
         except Exception as exc:
             # Do not echo arbitrary exception text (URLs/credentials). Other sport can continue.
             result['sports'][sport] = {'status': 'failed', 'error_type': type(exc).__name__}
