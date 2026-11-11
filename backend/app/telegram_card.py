@@ -400,7 +400,7 @@ def _ticket_card(day, tickets, *, preview, number_from, total, book_lines, shape
             if shape_lines:     # the ticket's shape in plain words: how often all legs land, and which leg is weakest
                 from .tickets import ticket_shape
                 try:
-                    shape = ticket.get('shape') or ticket_shape(ticket['legs'])
+                    shape = ticket_shape(ticket['legs'])     # never a stored shape: those may carry the removed price label (Step 1)
                     line(shape['all_land_line'],size=27,color=INK)
                     line(shape['weakest_line'],size=27,color=INK)
                 except Exception:

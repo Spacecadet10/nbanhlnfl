@@ -15,7 +15,7 @@ def leg(label, probability, price=None, sport='nba', market='winner', game=None)
 def test_weakest_leg_is_the_lowest_percentage_and_the_chance_is_in_plain_words():
     legs = [leg('DET win', .878, -500), leg('DAL win', .672, -192), leg('MIN win', .869, -700)]
     s = t.ticket_shape(legs)
-    assert s['weakest'] == 'DAL win' and s['weakest_line'] == 'Weakest leg: DAL win (67%)' and not s['price_asks_a_lot']
+    assert s['weakest'] == 'DAL win' and s['weakest_line'] == 'Weakest leg: DAL win (67%)'
     assert abs(s['all_land'] - .878 * .672 * .869) < 1e-9 and s['all_land_line'] == 'All legs land about 1 time in 2'
     assert t.land_words(.33) == 'about 1 time in 3' and t.land_words(.21) == 'about 1 time in 5'
     assert t.land_words(.64) == 'about 6 times in 10' and t.land_words(.99) == 'about 9 times in 10'
@@ -23,17 +23,17 @@ def test_weakest_leg_is_the_lowest_percentage_and_the_chance_is_in_plain_words()
     assert t.land_words(.0) == 'about 1 time in 1000'
 
 
-def test_a_leg_whose_price_asks_a_lot_counts_as_the_weakest_even_when_another_percentage_is_lower():
-    # Nov 9, CLE @ CHA: the price needed 74%, the app said 55%; that leg lost the owner's five-leg ticket.
+def test_the_weakest_leg_is_simply_the_lowest_app_percentage_and_no_price_label_is_shown():
+    # Step 1, Nov 11: the "price asks a lot" label is removed (H2: those legs mostly won). A leg whose price needs far
+    # more than the app's percentage is no longer called weakest; the lowest app percentage is.
     cle, low = leg('CLE win', .552, -290), leg('LAL win', .506, 121)
     s = t.ticket_shape([leg('DET win', .878, -500), cle, low])
-    assert s['weakest'] == 'CLE win' and s['weakest_line'] == 'Weakest leg: CLE win (55%) · price asks a lot'
-    assert s['price_asks_a_lot'] == ['CLE win'] and s['lowest_probability'] == .506
-    assert t.leg_assessment('nba', cle)['price_asks_a_lot'] is True
-    assert t.leg_assessment('nba', low)['price_asks_a_lot'] is False                 # the price asks for less than the app says
-    assert t.leg_assessment('nba', leg('X win', .60))['price_asks_a_lot'] is False   # no price: nothing to compare
-    exactly = leg('Y win', .60, -300)                                                # needs 75%: exactly 15 points more
-    assert t.leg_assessment('nba', exactly)['price_asks_a_lot'] is True
+    assert s['weakest'] == 'LAL win' and s['weakest_line'] == 'Weakest leg: LAL win (51%)'
+    assert s['weakest_probability'] == .506 and s['lowest_probability'] == .506 and s['weakest_sport'] == 'nba'
+    assert not any('asks_a_lot' in key for key in s) and not hasattr(t, 'PRICE_ASKS_A_LOT')
+    for one in (cle, low, leg('X win', .60), leg('Y win', .60, -300)):
+        assert 'price_asks_a_lot' not in t.leg_assessment('nba', one)
+    assert t.leg_assessment('nba', cle)['model_gap'] < -.15           # the price comparison itself stays in the assessment
 
 
 @pytest.mark.parametrize('count,probability,allowed', [
@@ -67,7 +67,7 @@ def test_the_picture_shows_both_shape_lines_and_never_fails_because_of_them(monk
     png = card.render_ticket_card('2026-11-11', [dict(label='Pair', ticket_id='T1', legs=legs)])
     drawn = ' '.join(seen)
     assert png[:4] == b'\x89PNG' and 'All legs land about 1 time in 2' in drawn
-    assert 'Weakest leg: CLE win (55%)' in drawn and 'price asks a lot' in drawn
+    assert 'Weakest leg: CLE win (55%)' in drawn and 'asks a lot' not in drawn
     # A picture too tall with the extra lines is drawn without them, exactly as before this change.
     long = ' '.join(['Pelicans'] * 8)
 
@@ -87,6 +87,20 @@ def test_the_picture_shows_both_shape_lines_and_never_fails_because_of_them(monk
             assert card.render_ticket_card('2026-11-11', tickets) == without
             return
     raise AssertionError('no layout found where only the shape lines overflow')
+
+
+def test_a_ticket_stored_before_the_label_was_removed_is_drawn_without_it(monkeypatch):
+    # Tickets resolved before Step 1 carry a stored shape with the old label; a retry or re-render must not show it.
+    from app import telegram_card as card
+    monkeypatch.setattr(card, '_logo', lambda *a: None)
+    seen = []
+    real = card.ImageDraw.ImageDraw.text
+    monkeypatch.setattr(card.ImageDraw.ImageDraw, 'text', lambda self, xy, text, **kw: (seen.append(text), real(self, xy, text, **kw))[1])
+    legs = [leg('DET win', .878, -500), leg('CLE win', .552, -290), leg('LAL win', .506, 121)]
+    old = dict(t.ticket_shape(legs), weakest='CLE win', weakest_line='Weakest leg: CLE win (55%) · price asks a lot')
+    card.render_ticket_card('2026-11-11', [dict(label='Old', ticket_id='T1', legs=legs, shape=old)])
+    drawn = ' '.join(seen)
+    assert 'Weakest leg: LAL win (51%)' in drawn and 'asks a lot' not in drawn
 
 
 def test_check_refuses_a_long_ticket_with_a_weak_leg_and_accepts_it_short(tmp_path, monkeypatch):
