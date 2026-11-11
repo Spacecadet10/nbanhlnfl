@@ -444,6 +444,16 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
         if m.get("status") == "failed":
             status = "failed"
         out["markets"] = {k: m.get(k) for k in ("created", "already_recorded", "reason", "error") if k in m}
+    if accepted and research_live.enabled():
+        # adaptive-v1 forecasts from the artifacts in force (docs/ADAPTIVE_SYSTEM.md); no fit here, never raises. Before
+        # the research steps: it reads only games, results and features, never this cycle's research rows.
+        out["adaptive"] = adaptive_record(conn, game_ids=accepted, now=now, write=not dry_run)
+    # Every game (preseason included) and market: the adaptive forecast, else the sealed primary, else a recorded reason.
+    # Right after the primary, market and adaptive steps and BEFORE the slow research work (Nov 10 investigation: run
+    # 1886 recorded coverage 41 minutes after its forecasts, when three games had started, and lost them). Isolated per
+    # game and market; never changes the primary run's status.
+    cov = coverage.record(conn, now=now, write=not dry_run)
+    out["coverage"] = {k: v for k, v in cov.items() if k != "rows"}
     if accepted:
         collect = {} if research_live.enabled() else None
         run = research_forecasts(conn, write=not dry_run, now=now, game_ids=accepted, collect=collect, keep=True)
@@ -462,14 +472,8 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
                                                    defn=(out["research"] or {}).get("definition"))
             # Agreement tracking (tracking-v2): one observation per registered group and cohort; never raises.
             out["tracking"] = agreement_tracking(conn, game_ids=accepted, now=now, write=not dry_run)
-            # adaptive-v1 forecasts from the artifacts in force (docs/ADAPTIVE_SYSTEM.md); no fit here, never raises.
-            out["adaptive"] = adaptive_record(conn, game_ids=accepted, now=now, write=not dry_run)
         else:
             out["research"] = {"status": "disabled", "reason": "RESEARCH_SELECTION=0"}
-    # Every game (preseason included) and market: the adaptive forecast, else the sealed primary, else a recorded reason.
-    # Last, so it sees this cycle's rows; isolated per game and market; never changes the primary run's status.
-    cov = coverage.record(conn, now=now, write=not dry_run)
-    out["coverage"] = {k: v for k, v in cov.items() if k != "rows"}
     return {"status": status, **out} if dry_run else _finish(conn, run_id, status, 1, out)
 
 
