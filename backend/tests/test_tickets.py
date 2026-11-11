@@ -18,6 +18,7 @@ def setup(tmp_path, monkeypatch):
     from app import telegram_card
     monkeypatch.setattr(telegram_card,'_logo',lambda *a:None)
     monkeypatch.setattr(t,'SKILL',tmp_path/'SKILL.md');t.SKILL.write_text('fixture')
+    monkeypatch.setattr(t,'SHAPE_FLOORS',{})   # these fixtures' 75% legs fill long menus; the shape rules have tests/test_ticket_shape.py
     picks = [dict(forecast_id=i,game_id=f'g{i}',market='winner',matchup=f'A{i} @ B{i}',
                   pick_label=f'B{i} win',probability=.75,status='scheduled',grade='pending',
                   generated_at='2026-11-08T16:30:00Z',tipoff='2026-11-08T18:00:00Z',lineup_flags=[]) for i in range(1,6)]

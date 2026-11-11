@@ -296,15 +296,19 @@ def _market_line_source(leg):
 def render_ticket_card(day, tickets, *, preview=False, number_from=1, total=None):
     """Ticket layout using the shared fonts, team logos and published palettes. A picture too tall with the per-leg
     sportsbook prices is drawn without them: they never make a ticket fail that would otherwise be drawn."""
-    try:
-        return _ticket_card(day, tickets, preview=preview, number_from=number_from, total=total, book_lines=True)
-    except ValueError as exc:
-        if 'layout bounds' not in str(exc):
-            raise
-        return _ticket_card(day, tickets, preview=preview, number_from=number_from, total=total, book_lines=False)
+    last = None
+    for book_lines, shape_lines in ((True, True), (False, True), (False, False)):   # extras go before a ticket fails
+        try:
+            return _ticket_card(day, tickets, preview=preview, number_from=number_from, total=total,
+                                book_lines=book_lines, shape_lines=shape_lines)
+        except ValueError as exc:
+            if 'layout bounds' not in str(exc):
+                raise
+            last = exc
+    raise last
 
 
-def _ticket_card(day, tickets, *, preview, number_from, total, book_lines):
+def _ticket_card(day, tickets, *, preview, number_from, total, book_lines, shape_lines=True):
     from .tickets import CARD_TICKETS, MAX_TICKETS, MIN_LEGS, MAX_LEGS, bet_type
     if not tickets or len(tickets) > MAX_TICKETS or any(not MIN_LEGS <= len(t['legs']) <= MAX_LEGS for t in tickets):
         raise ValueError('Ticket cards require one to six tickets of two to seven legs.')
@@ -393,6 +397,14 @@ def _ticket_card(day, tickets, *, preview, number_from, total, book_lines):
             if best and book_lines:
                 line(best,size=30,bold=True,color=primary)
                 priced = True
+            if shape_lines:     # the ticket's shape in plain words: how often all legs land, and which leg is weakest
+                from .tickets import ticket_shape
+                try:
+                    shape = ticket.get('shape') or ticket_shape(ticket['legs'])
+                    line(shape['all_land_line'],size=27,color=INK)
+                    line(shape['weakest_line'],size=27,color=INK)
+                except Exception:
+                    pass
         y += 36
     if extra > 0:
         line(f"+{extra} more option{'s' if extra > 1 else ''} in the message above.",size=27,bold=True,color=primary)

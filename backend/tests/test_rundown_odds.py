@@ -228,26 +228,28 @@ def test_scheduled_job_runs_the_guarded_release_within_the_daily_request_cap():
 
 def test_a_picture_too_tall_with_the_prices_is_drawn_without_them():
     from app import telegram_card as card
+    long = ' '.join(['Pelicans'] * 8)
 
-    def tickets_of(words):
+    def tickets_of(wrapped):     # 21 legs; the first `wrapped` carry a pick name long enough to wrap (small height steps)
         def leg(i):
-            p = pick(label=' '.join(['Pelicans'] * words) + f' +11.5 {i}', game=f'g{i}')
+            p = pick(label=(long if i < wrapped else 'NO') + f' +11.5 {i}', game=f'g{i}')
             p['book_comparison'] = dict(checked_at=odds.stamp(NOW), prices={'DraftKings': -113, 'FanDuel': -110, 'BetMGM': -115})
             return p
-        return [dict(label='Layout check', ticket_id=f'T{k}', legs=[leg(k * 10 + i) for i in range(7)]) for k in range(3)]
+        return [dict(label='Layout check', ticket_id=f'T{k}', legs=[leg(k * 7 + i) for i in range(7)]) for k in range(3)]
 
     def drawn(tickets, book_lines):
         try:
             return card._ticket_card('2026-11-11', tickets, preview=False, number_from=1, total=None, book_lines=book_lines)
         except ValueError:
             return None
-    for words in range(1, 40):      # longer and longer pick names, until the prices no longer fit
-        full = tickets_of(words)
+    for wrapped in range(22):
+        full = tickets_of(wrapped)
         with_prices, without = drawn(full, True), drawn(full, False)
         if with_prices is None and without is not None:
             assert card.render_ticket_card('2026-11-11', full) == without
             return
-        assert with_prices is None or card.render_ticket_card('2026-11-11', full) == with_prices
+        if with_prices is not None:
+            assert card.render_ticket_card('2026-11-11', full) == with_prices
     raise AssertionError('no layout found where only the prices overflow')
 
 

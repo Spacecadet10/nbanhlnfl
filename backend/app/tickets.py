@@ -308,8 +308,64 @@ def leg_assessment(sport, pick):
                 book_prices=book_prices, best_book=best_book, best_book_price=book_prices.get(best_book),
                 best_book_gap=None if best_book is None else pick['probability'] - 1 / decimal_odds(book_prices[best_book]),
                 book_prices_checked_at=books.get('checked_at') if book_prices else None,
+                price_asks_a_lot=break_even is not None and pick['probability'] - break_even <= -PRICE_ASKS_A_LOT + 1e-9,
                 app_rank=pick.get('game_rank'), skill_proven=pick.get('skill_proven'),
                 line_source=quote.get('line_source') or _field(history, 'line_source'), app_note=markets.LIMITATIONS.get((sport, pick['market'])))
+
+
+# Ticket shape (owner, Nov 11: his own tickets kept losing by exactly one leg). A long ticket needs every leg to land, so
+# the weakest leg decides it: the longer the ticket, the stronger its weakest leg must be. Starting values, not proven
+# ones; scripts/ticket_shapes.py replays sent tickets under them on paper. Tickets of two or three legs have no floor.
+SHAPE_FLOORS = {4: .75, 5: .80, 6: .80, 7: .80}
+PRICE_ASKS_A_LOT = .15      # the price needs at least this much more than the app's percentage
+PUCK_LINE_DOGS = 1          # NHL +1.5 legs allowed on one ticket
+
+
+def _puck_line_dog(leg):
+    return leg.get('sport') == 'nhl' and leg.get('market') == 'spread' and '+' in str(leg.get('pick_label'))
+
+
+def land_words(probability):
+    """'about 1 time in 3' / 'about 7 times in 10': a ticket's chance that every leg lands, in plain words."""
+    if probability >= .55:
+        return f"about {min(9, max(6, round(probability * 10)))} times in 10"
+    return f"about 1 time in {max(2, round(1 / max(probability, .001)))}"
+
+
+def ticket_shape(legs):
+    """Facts about a ticket's shape from the app's own percentages: its weakest leg (a leg whose price asks a lot counts
+    first, largest gap first; otherwise the lowest percentage), the chance every leg lands (independence assumption) and
+    the legs whose price needs PRICE_ASKS_A_LOT more than the app's percentage. No verdict."""
+    rows = []
+    for leg in legs:
+        a = leg.get('assessment')
+        if not isinstance(a, dict) or 'probability' not in a:
+            a = leg_assessment(leg['sport'], leg)
+        gap = a.get('model_gap')
+        rows.append((leg, a['probability'], gap is not None and gap <= -PRICE_ASKS_A_LOT + 1e-9, gap or 0))
+    asking = [r for r in rows if r[2]]
+    leg, probability, asks, _ = min(asking, key=lambda r: (r[3], r[1])) if asking else min(rows, key=lambda r: r[1])
+    all_land = math.prod(r[1] for r in rows)
+    return dict(legs=len(rows), weakest=leg['pick_label'], weakest_probability=probability, weakest_asks_a_lot=asks,
+                weakest_line=f"Weakest leg: {leg['pick_label']} ({probability:.0%})" + (' · price asks a lot' if asks else ''),
+                price_asks_a_lot=[r[0]['pick_label'] for r in asking], all_land=all_land,
+                all_land_line=f"All legs land {land_words(all_land)}",
+                lowest_probability=min(r[1] for r in rows),
+                puck_line_dogs=[r[0]['pick_label'] for r in rows if _puck_line_dog(r[0])])
+
+
+def shape_problems(legs):
+    """Why this ticket's shape is refused (empty: allowed). Length against its weakest leg, and stacked NHL +1.5 legs."""
+    shape, out = ticket_shape(legs), []
+    floor = SHAPE_FLOORS.get(len(legs))
+    if floor is not None:
+        weak = [f"{leg['pick_label']} ({leg['probability']:.0%})" for leg in legs if leg['probability'] < floor - 1e-9]
+        if weak:
+            out.append(f"a {len(legs)}-leg ticket needs every leg at {floor:.0%} or better; too weak: {', '.join(weak)}. "
+                       "Move them to a ticket of two or three legs")
+    if len(shape['puck_line_dogs']) > PUCK_LINE_DOGS:
+        out.append(f"at most {PUCK_LINE_DOGS} NHL +1.5 leg on one ticket; this one has {', '.join(shape['puck_line_dogs'])}")
+    return out
 
 
 def attach_assessments(sport, picks):
@@ -1012,6 +1068,9 @@ def check(plan):
             legs.append({**pick, 'sport': sport, 'rationale': leg['rationale'], 'assessment': leg_assessment(sport, pick),
                          **({'lineup_reason': str(leg['lineup_reason']).strip()} if flags else {}),
                          **({'status_refreshed_at': refreshed} if refreshed else {})})
+        problems = shape_problems(legs)
+        if problems:
+            raise ValueError(f"Ticket shape ({ticket['label']}): {'; '.join(problems)}; review again")
         combination = tuple(sorted(((p['sport'], p['forecast_id']) for p in legs), key=_identity_key))
         if combination in combinations:
             raise ValueError('Duplicate ticket combination')
@@ -1019,7 +1078,8 @@ def check(plan):
         signature = sha(json.dumps(combination).encode())
         resolved.append({'ticket_id': old['date'] + '-' + signature[:12], 'signature': signature,
                          'label': ticket['label'], 'legs': legs, 'stake_usd': ticket.get('stake_usd'),
-                         'payout_assessment': ticket['payout_assessment'].strip(), 'assessment': ticket_assessment(legs)})
+                         'payout_assessment': ticket['payout_assessment'].strip(), 'assessment': ticket_assessment(legs),
+                         'shape': ticket_shape(legs)})
     text = ticket_text(fresh['date'], resolved)
     result = dict(snapshot=old, plan=plan, resolved=resolved, text=text, as_of=fresh['as_of'], date=fresh['date'],
                   locks=locks, **({'locks_error': lock_error} if lock_error else {}),
