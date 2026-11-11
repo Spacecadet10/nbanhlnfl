@@ -120,22 +120,23 @@ def counted_cards(ledger, sport: str, reviewed_at, reviewed: set) -> dict:
     rows = {r['delivery_key']: dict(r) for r in ledger.execute('SELECT * FROM best_picks WHERE sport=?', (sport,))} \
         if ledger.execute("SELECT 1 FROM sqlite_master WHERE name='best_picks'").fetchone() else {}
     head = f'<b>PROP51 PICKS · {sport.upper()}</b>'
-    sent = []
-    for d in ledger.execute("SELECT delivery_key, text, attempted_at FROM deliveries WHERE status='sent' AND attempted_at>=? "
-                            "ORDER BY attempted_at, delivery_key", (bpr.T0,)):
+    every = []          # every sent card, before T0 too: a game whose earliest card predates T0 does not count (review L1)
+    for d in ledger.execute("SELECT delivery_key, text, attempted_at FROM deliveries WHERE status='sent' "
+                            "ORDER BY attempted_at, delivery_key"):
         ident = tg.card_identity(d['text'])
         if ident and ident[0] == head:
-            sent.append((d['delivery_key'], d['attempted_at'], ident[:3]))
+            every.append((d['delivery_key'], d['attempted_at'], ident[:3]))
+    sent = [s for s in every if s[1] >= bpr.T0]
     game_of_ident = {}
-    for key, _, ident in sent:
+    for key, _, ident in every:
         if key in rows:
             game_of_ident.setdefault(ident, rows[key]['game_id'])
     games = {}
-    for key, at, ident in sent:
+    for key, at, ident in every:
         gid = rows[key]['game_id'] if key in rows else game_of_ident.get(ident, ('unrecorded',) + ident)
         games.setdefault(gid, []).append((at, key))
     out = {'sent': len(sent), 'rows': len(rows), 'error_rows': sum(r['status'] != 'ok' for r in rows.values()),
-           'rows_without_sent_card': len(set(rows) - {k for k, _, _ in sent}),
+           'rows_without_sent_card': len(set(rows) - {k for k, _, _ in every}),
            'sent_without_row': sum(k not in rows for k, _, _ in sent),
            'sent_without_row_after_review': sum(k not in rows and reviewed_at is not None and at >= reviewed_at
                                                 for k, at, _ in sent),
@@ -143,7 +144,8 @@ def counted_cards(ledger, sport: str, reviewed_at, reviewed: set) -> dict:
     for gid, cards in games.items():
         at, key = min(cards)
         r = rows.get(key)
-        why = ('earliest card has no row' if r is None else
+        why = ('earliest card sent before T0' if at < bpr.T0 else
+               'earliest card has no row' if r is None else
                'error row' if r['status'] != 'ok' else
                'preregistration hash differs' if r['prereg_sha256'] != bpr.PREREG_SHA256 else
                'no review time given' if reviewed_at is None else
@@ -207,7 +209,9 @@ def evaluate(store, cards: list, now: datetime) -> dict:
     bset, base_states = [], {}
     for c in base_cards:
         p = _pick(c, c['baseline_forecast_id'])
-        state = g(p['forecast_id'])[0]
+        state, when = g(p['forecast_id'])
+        if done_at is not None and state != 'pending' and (when is None or when > done_at):
+            state = 'pending_at_completion'   # review M1: graded as of the completion time, never with later results
         base_states[state] = base_states.get(state, 0) + 1
         if state in ('win', 'loss'):
             bset.append({'fid': p['forecast_id'], 'win': int(state == 'win'), 'q': p['book_raw'],

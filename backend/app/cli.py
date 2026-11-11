@@ -455,6 +455,7 @@ def main(argv=None) -> int:
             if info["problems"]:
                 print(json.dumps({"status": "failed", "reason": "release guard", **info}))
                 return 1
+            os.environ[release.COMMIT_ENV] = info["commit"]   # which commit sent (best_picks.code_commit), as other jobs
         if args.interval < 30:
             p.error('Telegram interval must be at least 30 seconds.')
         try:

@@ -31,6 +31,8 @@ PREREG_PATH = Path(__file__).resolve().parents[2] / 'docs' / 'preregistration' /
 PREREG_SHA256 = 'cc46737d788556b31bd8e062eb423946e988eaaacd756e40a7eb308a826412d6'
 T0 = '2026-11-11T22:04:29Z'                 # committer time of ed33e28, the commit that first adds the v4 file
 TORONTO = ZoneInfo('America/Toronto')
+# The recorder code that was imported (not the file on disk at record time, which a later release could change).
+RECORDER_SHA256 = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 
 RULE_MARKETS = {'nba': ('winner', 'spread', 'total'), 'nhl': ('winner', 'spread', 'total', 'reg3')}   # v4 section 2.1
 MARKET_ORDER = {'winner': 0, 'spread': 1, 'total': 2, 'reg3': 3}
@@ -62,6 +64,8 @@ BEGIN SELECT RAISE(ABORT, 'best_picks is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS best_picks_no_delete BEFORE DELETE ON best_picks
 BEGIN SELECT RAISE(ABORT, 'best_picks is append-only'); END;
 '''
+# Review L3: INSERT OR REPLACE would delete a row without firing the delete trigger (sqlite fires it only with
+# recursive_triggers on). This module only ever uses INSERT OR IGNORE; nothing else writes best_picks.
 
 
 def _sha256(path: Path) -> Optional[str]:
@@ -371,7 +375,7 @@ def record(conn, key: str, sport: str, game_id: Optional[str], picture: Optional
         conn.execute('INSERT OR IGNORE INTO best_picks VALUES (' + ','.join('?' * 27) + ')', (
             key, recorded_at, written_at or _stamp(datetime.now(timezone.utc)), sport,
             game_id or (picture or {}).get('game_id') or '', (pic or {}).get('matchup'), (pic or {}).get('tipoff_at'),
-            'error' if error else 'ok', error, prereg, RECORDER_VERSION, _sha256(Path(__file__)),
+            'error' if error else 'ok', error, prereg, RECORDER_VERSION, RECORDER_SHA256,
             os.environ.get('NBA_RELEASE_COMMIT'), int(sport in RULE_MARKETS),
             named and named['forecast_id'], named and named['score'], named and named['market'], named and named['pick_label'],
             baseline and baseline['forecast_id'], baseline and baseline['book_pct'], baseline and baseline['book_raw'],

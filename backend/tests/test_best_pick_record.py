@@ -519,8 +519,9 @@ def test_report_counts_only_the_earliest_reviewed_v4_card_of_each_game(tmp_path)
         assert info['sent_without_row'] == 2 and info['sent_without_row_after_review'] == 2
         assert [c['game_id'] for c in info['cards']] == ['g0', 'g4', 'g5']
         assert info['cards'][0]['delivery_key'] == 'k0'
-        assert info['excluded'] == {'recorded before the independent review': 1, 'earliest card has no row': 2}
-        assert info['rows_without_sent_card'] == 1                                # the pre-T0 row: its send is before T0
+        assert info['excluded'] == {'recorded before the independent review': 1, 'earliest card has no row': 2,
+                                    'earliest card sent before T0': 1}
+        assert info['rows_without_sent_card'] == 0 and info['sent'] == 8          # since T0: k0 k0b k1 k3 k3x k4 k5 k9
         assert m.counted_cards(led, 'nba', None, {sha})['cards'] == []
         assert m.counted_cards(led, 'nba', REVIEWED, {'other'})['cards'] == []
 
@@ -550,3 +551,50 @@ def test_a_pending_earlier_named_pick_holds_the_evaluation(tmp_path):
     store_ = result_store(res)
     assert m.evaluate(store_, info['cards'], datetime(2026, 11, 20, tzinfo=timezone.utc))['state'] == 'counting'
     assert m.evaluate(store_, info['cards'], datetime(2027, 7, 1, tzinfo=timezone.utc))['state'] != 'counting'
+
+
+def test_a_game_whose_earliest_card_was_sent_before_t0_does_not_count(tmp_path):
+    m = rep_mod()
+    cards, _ = cards_for(2)
+    pre = ('kpre', 'g0', '2026-11-11T21:30:00Z', cards[0][3])                     # same game, first card before T0, no row
+    path = ledger_with(tmp_path, cards, extra_sent=[pre])
+    sha = hashlib.sha256(Path(bpr.__file__).read_bytes()).hexdigest()
+    with sqlite3.connect(path) as led:
+        led.row_factory = sqlite3.Row
+        info = m.counted_cards(led, 'nba', REVIEWED, {sha})
+    assert [c['game_id'] for c in info['cards']] == ['g1'] and info['excluded'] == {'earliest card sent before T0': 1}
+    assert info['sent'] == 2 and info['sent_without_row'] == 0                    # since-T0 counts are unchanged
+
+
+def test_baseline_picks_are_graded_as_of_the_completion_time(tmp_path):
+    m = rep_mod()
+    cards, res = cards_for(103)
+    gid, tip, won, _ = res[197]                                                    # card 98's own baseline pick (not shared)
+    res[197] = (gid + 'x', tip, won, '2026-11-29T12:00:00Z')                       # result first seen after the 100th named
+    path = ledger_with(tmp_path, cards)
+    sha = hashlib.sha256(Path(bpr.__file__).read_bytes()).hexdigest()
+    with sqlite3.connect(path) as led:
+        led.row_factory = sqlite3.Row
+        info = m.counted_cards(led, 'nba', REVIEWED, {sha})
+    out = m.evaluate(result_store(res), info['cards'], datetime(2026, 12, 31, tzinfo=timezone.utc))
+    assert out['n'] == 100 and out['baseline_states'].get('pending_at_completion') == 1
+    assert out['test_b']['baseline_only'] == 65 and out['full_hit_rate']['baseline_n'] == 99
+
+
+def test_the_guarded_telegram_command_records_which_commit_ran(monkeypatch):
+    import os
+    from app import cli, release
+    seen = {}
+    monkeypatch.delenv('NBA_RELEASE_COMMIT', raising=False)
+    monkeypatch.setattr(release, 'enabled', lambda: True)
+    monkeypatch.setattr(release, 'delivery_check', lambda: {'commit': 'abc1234def', 'problems': []})
+    monkeypatch.setattr(tg, 'command', lambda args: seen.setdefault('commit', os.environ.get('NBA_RELEASE_COMMIT')) and 0)
+    assert cli.main(['telegram', 'run', '--once']) == 0 and seen['commit'] == 'abc1234def'
+
+
+def test_recorder_identity_is_the_code_that_was_imported(tmp_path, monkeypatch):
+    assert bpr.RECORDER_SHA256 == hashlib.sha256(Path(bpr.__file__).read_bytes()).hexdigest()
+    monkeypatch.setattr(bpr, 'RECORDER_SHA256', 'imported-code')                 # the file changing on disk later is not it
+    with tg.ledger(tmp_path / 'l.sqlite') as conn:
+        bpr.record(conn, 'k', 'nfl', 'g', bpr.card_pictures(None, 'nfl', report(pick(1, 'winner', 'a', .8, .85), sport='nfl'), NOW)['g'], AS_OF)
+        assert conn.execute('SELECT recorder_sha256 FROM best_picks').fetchone()[0] == 'imported-code'
