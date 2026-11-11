@@ -1,6 +1,6 @@
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
-import type { SoccerLiveForecast, SoccerLiveResponse, SoccerMatch, SoccerMeta } from '../api/types';
+import type { SoccerForecastBlocker, SoccerLiveForecast, SoccerLiveRecord, SoccerLiveResponse, SoccerMatch, SoccerMeta, SoccerRecordForecast } from '../api/types';
 import { useApi } from '../api/useApi';
 import type { ApiState } from '../api/useApi';
 import { useCarriedSearch, useCompetition } from '../components/Selection';
@@ -90,6 +90,7 @@ function SoccerEspnScreens({ researchError }: { researchError: string | null }) 
         if (pathname === '/') return <SoccerGameDay meta={m} />;
         const page = pathname.startsWith('/performance') ? 'performance' : pathname.startsWith('/history') ? 'history'
           : pathname.startsWith('/daily-learning') ? 'research' : null;
+        if (page === 'history' || page === 'performance') return <SoccerRecordPage meta={m} page={page} />;
         return page ? <SoccerUnavailable meta={m} page={page} />
           : <Empty>Page not found. <Link to="/?sport=soccer">Go to soccer matches</Link></Empty>;
       }}
@@ -233,7 +234,8 @@ function SoccerSlate({ meta, date, onChange, live }: {
                 {d.next_date && <button type="button" className="link-btn" onClick={() => onChange(d.next_date)}>Next match day ({calendarDate(d.next_date)})</button>}
               </Empty>
             ) : <ul className="game-grid">{d.matches.map((m) => <SoccerCard key={m.match_id} match={m} date={date}
-                note={matchForecastNote(stateOf(meta.forecast_state, meta.capabilities), m.status, d.live_forecasts?.[m.match_id],
+                note={!d.live_forecasts?.[m.match_id] && d.forecast_blockers?.[m.match_id] ? blockerNote(d.forecast_blockers[m.match_id])
+                  : matchForecastNote(stateOf(meta.forecast_state, meta.capabilities), m.status, d.live_forecasts?.[m.match_id],
                   m.home.name, m.away.name, cutoffOf(d.forecast_cutoffs?.[m.match_id]))} />)}</ul>}
           </>
         );
@@ -367,12 +369,17 @@ function SoccerMatchPage({ id }: { id: string }) {
               <div className="card">
                 <h2>Forecast</h2>
                 {d.live_forecast ? <SoccerLiveCard f={d.live_forecast} />
+                  : d.forecast_blocker ? <EmptyForecastState>{blockerNote(d.forecast_blocker)} No probability, pick, odds or accuracy is shown.</EmptyForecastState>
                   : <EmptyForecastState>{matchForecastNote(stateOf(d.forecast_state, d.capabilities), m.status, null, m.home.name, m.away.name,
                       cutoffOf(d.forecast_cutoff_at))} No probability, pick, odds or accuracy is shown.</EmptyForecastState>}
                 <ul className="nfl-capabilities small">
                   {d.capabilities.filter((c) => ['forecasts', 'odds', 'injuries'].includes(c.id)).map((c) =>
                     <li key={c.id}><strong>{c.label}:</strong> {c.available ? 'available. ' : 'not available. '}<span className="muted">{c.reason}</span></li>)}
                 </ul>
+                {(d.forecast_versions?.length ?? 0) > 1 && <>
+                  <h3 className="small">Every recorded version ({d.forecast_versions!.length})</h3>
+                  <RecordTable rows={d.forecast_versions!} showMatch={false} />
+                </>}
               </div>
               <div className="card">
                 <h2>Earlier meetings in the {m.competition}</h2>
@@ -451,6 +458,72 @@ function SoccerUnavailable({ meta, page }: { meta: SoccerMeta; page: keyof typeo
         <MetricCard icon="history" label="Last imported" tone="lavender" value={meta.last_refresh_at ? dateTime(meta.last_refresh_at) : '—'}
           hint="Latest scoreboard request for this competition." />
       </div>
+    </section>
+  );
+}
+
+/** The stored reason a match has no live forecast (backend soccer.forecast_blockers); shown on that match, never guessed. */
+function blockerNote(b: SoccerForecastBlocker) {
+  return b.text;
+}
+
+const SIDE = { home: 'Home', draw: 'Draw', away: 'Away' } as const;
+
+function RecordTable({ rows, showMatch = true }: { rows: SoccerRecordForecast[]; showMatch?: boolean }) {
+  const carried = useCarriedSearch();
+  return (
+    <div className="table-wrap">
+      <table className="table compare small">
+        <thead><tr>
+          {showMatch && <th>Match</th>}<th>Kickoff</th><th>Home</th><th>Draw</th><th>Away</th><th>Pick</th><th>90-min result</th><th>Recorded</th>
+        </tr></thead>
+        <tbody>{rows.map((f) => (
+          <tr key={f.forecast_id} className={f.latest ? undefined : 'muted'}>
+            {showMatch && <td><Link to={`/games/${encodeURIComponent(f.match_id)}${carried}`}>{f.home} v {f.away}</Link>
+              {!f.latest && <span className="muted"> (superseded v{f.version})</span>}</td>}
+            <td>{dateTime(f.kickoff_at)}</td>
+            {(['home', 'draw', 'away'] as const).map((o) => <td key={o}>{f.most_likely === o ? <strong>{pct(f.probabilities[o])}</strong> : pct(f.probabilities[o])}</td>)}
+            <td>{SIDE[f.most_likely]}</td>
+            <td>{f.result ? <>{SIDE[f.result]} {f.pick_correct ? '✓' : '✗'}</>
+              : <span className="muted">{['postponed', 'canceled', 'abandoned'].includes(f.match_status) ? `Void (${f.match_status})`
+                : f.match_status === 'final' ? 'Not graded (not a 90-minute result)' : 'Not played yet'}</span>}</td>
+            <td>{dateTime(f.generated_at)}{!showMatch && ` · v${f.version}`}</td>
+          </tr>))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** Soccer Prediction History / Performance: every recorded live forecast of this competition with its eventual result,
+ * and the plain record over each match's latest version. Nothing is filtered for performing poorly. */
+function SoccerRecordPage({ meta, page }: { meta: SoccerMeta; page: 'history' | 'performance' }) {
+  const { state, retry } = useApi((s) => api.soccerLiveRecord(meta.competition_id, s), [meta.competition_id]);
+  const title = page === 'history' ? 'Soccer Prediction History' : 'Soccer Performance';
+  return (
+    <section>
+      <PageTitle icon={page === 'history' ? 'history' : 'performance'} title={title}
+        sub={`${meta.competition}: every recorded live 90-minute forecast and its result.`} />
+      <AsyncView state={state} retry={retry}>
+        {(r: SoccerLiveRecord) => {
+          const s = r.summary;
+          return (
+            <>
+              <p className="notice small">{r.limitations}</p>
+              {s && <div className="metrics today-metrics">
+                <MetricCard icon="layers" label="Matches forecast" tone="lime" value={s.matches_forecast}
+                  hint={`${s.versions} recorded version${s.versions === 1 ? '' : 's'} in all.`} />
+                <MetricCard icon="scale" label="Picks correct" tone="dark" value={s.graded ? `${s.picks_correct} / ${s.graded}` : '—'}
+                  hint={s.graded ? `${pct(s.picks_correct / s.graded)} of graded matches (latest version each).` : 'No graded result yet.'} />
+                <MetricCard icon="history" label="Mean log loss" tone="lavender" value={s.mean_log_loss != null ? s.mean_log_loss.toFixed(3) : '—'}
+                  hint={`Lower is better; always guessing one third each scores ${s.uniform_log_loss.toFixed(3)}.`} />
+              </div>}
+              {page === 'history' && (r.forecasts.length ? <RecordTable rows={r.forecasts} />
+                : <Empty>No live {meta.competition} forecast has been recorded yet.</Empty>)}
+            </>
+          );
+        }}
+      </AsyncView>
     </section>
   );
 }

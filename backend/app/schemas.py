@@ -874,6 +874,8 @@ class SoccerMatchesResponse(BaseModel):
     forecast_cutoffs: dict[str, str] = Field(default_factory=dict, description="match_id -> the UTC time by which that "
                                              "match's live forecast must be recorded (none is made after it); only for "
                                              "competitions that are forecast.")
+    forecast_blockers: dict[str, dict] = Field(default_factory=dict, description="match_id -> why that listed match has "
+                                               "no recorded live forecast (code, text; from stored checks only).")
 
 
 class SoccerResultRevision(BaseModel):
@@ -905,6 +907,10 @@ class SoccerMatchDetail(BaseModel):
                                                                 "recorded; null for a competition that is never forecast.")
     forecast_state: Literal["recorded", "awaiting", "out_of_scope", "no_live_store"]
     capabilities: list[NflCapability]
+    forecast_blocker: Optional[dict] = Field(None, description="Why this match has no recorded live forecast (code, text; "
+                                                               "from stored checks only); null when it has one.")
+    forecast_versions: list[dict] = Field(default_factory=list, description="Every recorded live forecast version of this "
+                                                                             "match, newest first (append-only).")
 
 
 # --- Soccer research (openfootball history + the append-only 1X2 forecast ledger; app/soccer_forecasts.py). Every forecast

@@ -294,3 +294,62 @@ def test_a_finished_match_without_a_forecast_is_described_as_closed(live, monkey
         assert "yet" not in cap["reason"] and "none is made after" in cap["reason"], (when, cap["reason"])
     upcoming_match = client.get("/api/soccer/matches/soccer:eng.1:3").json()   # an upcoming match keeps its forecast line
     assert upcoming_match["live_forecast"] is not None and upcoming_match["capabilities"][0]["available"] is True
+
+
+# --- 2026-11-10: every recorded forecast is shown, and a match without one names its specific blocker ------------------
+def test_each_listed_match_without_a_forecast_names_its_blocker(live, monkeypatch):
+    client = _client(monkeypatch)
+    get = lambda path, **params: client.get(path, params=params).json()
+    past = get("/api/soccer/matches", competition="eng.1", date=YESTERDAY.isoformat())
+    assert {b["code"] for b in past["forecast_blockers"].values()} == {"listed_after_cutoff"}      # first seen today
+    assert set(past["forecast_blockers"]) == {m["match_id"] for m in past["matches"]}
+    nxt = get("/api/soccer/matches", competition="eng.1", date=TOMORROW.isoformat())
+    assert {b["code"] for b in nxt["forecast_blockers"].values()} == {"not_checked"}
+    live.execute("INSERT INTO soccer_live_checks (checked_at, competition_id, match_date, ok, problems_json, forecasts) "
+                 "VALUES (?, 'eng.1', ?, 0, ?, 0)", (STAMP, TOMORROW.isoformat(), json.dumps(["clubs not in the club map: X"])))
+    live.commit()
+    nxt = get("/api/soccer/matches", competition="eng.1", date=TOMORROW.isoformat())
+    for b in nxt["forecast_blockers"].values():
+        assert b["code"] == "refused" and b["problems"] == ["clubs not in the club map: X"] and "club map" in b["text"]
+    soccer_live.run(live, day=TOMORROW.isoformat())
+    nxt = get("/api/soccer/matches", competition="eng.1", date=TOMORROW.isoformat())
+    assert nxt["forecast_blockers"] == {} and len(nxt["live_forecasts"]) == 2
+
+
+def test_the_record_lists_every_forecast_version_with_pick_kickoff_and_result(live, monkeypatch):
+    client = _client(monkeypatch)
+    empty = client.get("/api/soccer/live/record").json()
+    assert empty["forecasts"] == [] and empty["summary"]["graded"] == 0 and "none is hidden" in empty["limitations"]
+    soccer_live.run(live, day=TOMORROW.isoformat())
+    rec = client.get("/api/soccer/live/record", params={"competition": "eng.1"}).json()
+    assert rec["summary"]["matches_forecast"] == 2 and rec["summary"]["versions"] == 2
+    for f in rec["forecasts"]:
+        assert set(f["probabilities"]) == {"home", "draw", "away"} and f["most_likely"] in f["probabilities"]
+        assert f["kickoff_at"] and f["generated_at"] <= f["cutoff_at"] and f["result"] is None and f["pick_correct"] is None
+        assert f["latest"] is True and f["version"] == 1
+    assert client.get("/api/soccer/live/record", params={"competition": "esp.1"}).json()["forecasts"] == []
+
+
+def test_the_match_page_names_its_blocker_and_lists_every_forecast_version(live, monkeypatch):
+    client = _client(monkeypatch)
+    finished = client.get("/api/soccer/matches/soccer:eng.1:1").json()
+    assert finished["forecast_blocker"]["code"] == "listed_after_cutoff" and finished["forecast_versions"] == []
+    soccer_live.run(live, day=TOMORROW.isoformat())
+    upcoming_match = client.get("/api/soccer/matches/soccer:eng.1:3").json()
+    assert upcoming_match["forecast_blocker"] is None
+    assert [v["version"] for v in upcoming_match["forecast_versions"]] == [1]
+    assert upcoming_match["forecast_versions"][0]["forecast_id"] == upcoming_match["live_forecast"]["forecast_id"]
+
+
+def test_a_newer_refusal_of_the_competition_outranks_an_older_passed_check_for_the_date(live, monkeypatch):
+    # Look-ahead runs do not record refusals for future dates, so the date's last stored check can be an old pass while
+    # the competition's newest check (for another date) refuses on shared inputs. The match must show the refusal.
+    client = _client(monkeypatch)
+    ins = "INSERT INTO soccer_live_checks (checked_at, competition_id, match_date, ok, problems_json, forecasts) VALUES (?, 'eng.1', ?, ?, ?, 0)"
+    older = (NOW - timedelta(hours=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    live.execute(ins, (older, TOMORROW.isoformat(), 1, "[]"))
+    live.execute(ins, (STAMP, TODAY.isoformat(), 0, json.dumps(["teams not in the team map: Tahiti (soccer:4863)"])))
+    live.commit()
+    nxt = client.get("/api/soccer/matches", params={"competition": "eng.1", "date": TOMORROW.isoformat()}).json()
+    for b in nxt["forecast_blockers"].values():
+        assert b["code"] == "refused" and b["checked_at"] == STAMP and "Tahiti" in b["text"], b

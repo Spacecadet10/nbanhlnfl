@@ -450,6 +450,93 @@ def forecast_cutoff(competition: str, kickoff_at: str) -> Optional[str]:
     return None
 
 
+def forecast_day_of(competition: str, kickoff_at: str) -> Optional[str]:
+    """The match date its live checks are recorded under (soccer_live_checks.match_date); None if never forecast."""
+    from . import intl_live, soccer_live
+    if competition in intl_live.LAUNCH:
+        return intl_live.match_day(kickoff_at)
+    if competition in soccer_live.LAUNCH:
+        return soccer_live.local_date(kickoff_at, competition)
+    return None
+
+
+def forecast_blockers(conn: sqlite3.Connection, rows: list, forecasts: dict, now: Optional[str] = None) -> dict:
+    """match_id -> why the match has no recorded live forecast, from stored facts only (read-only; never a guess):
+    {"code", "text", "checked_at"?, "problems"?}. Matches with a recorded forecast are absent.
+    Codes: no_live_store, out_of_scope, void, listed_after_cutoff, refused, missed, waiting, not_checked."""
+    from . import intl_live, soccer_live
+    now = now or soccer_live.utc_now()
+    live = soccer_live.has_tables(conn)
+    checks: dict = {}
+    out = {}
+    for r in rows:
+        mid, comp = r["match_id"], r["competition_id"]
+        if mid in forecasts:
+            continue
+        if not live:
+            out[mid] = {"code": "no_live_store", "text": "This data store records no live soccer forecasts."}
+            continue
+        cutoff = forecast_cutoff(comp, r["kickoff_at"])
+        club_out = comp in soccer_live.LAUNCH and comp.startswith("uefa.") and r["stage"] not in soccer_live.UEFA_STAGES
+        if cutoff is None or club_out:
+            why = ("its stage is outside the model's tested scope (league phase only)" if club_out
+                   else "this competition is outside the live models' tested scope")
+            out[mid] = {"code": "out_of_scope", "text": f"Not forecast: {why}."}
+            continue
+        if r["status"] in ("postponed", "canceled", "abandoned"):
+            out[mid] = {"code": "void", "text": f"Not forecast: the match is {r['status']}."}
+            continue
+        if r["first_seen_at"] and r["first_seen_at"] > cutoff:
+            out[mid] = {"code": "listed_after_cutoff",
+                        "text": f"Not forecast: ESPN data first listed this match at {r['first_seen_at']}, after its forecast "
+                                f"cutoff {cutoff}. No forecast is ever made after the cutoff."}
+            continue
+        day = forecast_day_of(comp, r["kickoff_at"])
+        key = (comp, day)
+        if key not in checks:
+            c = conn.execute("SELECT checked_at, ok, problems_json FROM soccer_live_checks WHERE competition_id = ? AND "
+                             "match_date = ? ORDER BY check_id DESC LIMIT 1", key).fetchone()
+            checks[key] = c
+        c = checks[key]
+        passed = now >= cutoff
+        if not passed:                  # a newer refusal of the competition (shared inputs) outranks an older pass
+            if comp not in checks:
+                checks[comp] = conn.execute("SELECT checked_at, ok, problems_json, match_date FROM soccer_live_checks WHERE "
+                                            "competition_id = ? ORDER BY check_id DESC LIMIT 1", (comp,)).fetchone()
+            newest = checks[comp]
+            if newest is not None and not newest["ok"] and (c is None or newest["checked_at"] > c["checked_at"]):
+                problems = json.loads(newest["problems_json"])
+                out[mid] = {"code": "refused", "checked_at": newest["checked_at"], "problems": problems,
+                            "text": f"Blocked: the latest input check for this competition ({newest['checked_at']}, for "
+                                    f"{newest['match_date']}) refused its inputs: " + "; ".join(problems) + ". Forecasts "
+                                    f"resume once that is fixed, if before the cutoff {cutoff}."}
+                continue
+        if c is None:
+            out[mid] = ({"code": "missed", "text": f"No forecast: no completed input check was recorded for its date before "
+                                                   f"the cutoff {cutoff}, and none is made after it."} if passed else
+                        {"code": "not_checked", "text": f"No completed input check for its date yet. Forecasts are attempted "
+                                                        f"hourly from 7 days before the match day until the cutoff {cutoff}."})
+            continue
+        problems = json.loads(c["problems_json"])
+        if not c["ok"]:
+            out[mid] = {"code": "refused", "checked_at": c["checked_at"], "problems": problems,
+                        "text": ("No forecast: " if passed else "Blocked: ") + f"the input check at {c['checked_at']} refused "
+                                f"its date: " + "; ".join(problems) + "."}
+            continue
+        if comp in intl_live.LAUNCH:
+            reason = ("an earlier match involving one of its teams (or a team they have since played) was not settled "
+                      "yet, so its rating could still change")
+        else:
+            reason = "this match was not among those forecast at that check; the hourly run retries until the cutoff"
+        out[mid] = ({"code": "missed", "checked_at": c["checked_at"],
+                     "text": f"No forecast before the cutoff {cutoff}: the last check for its date ({c['checked_at']}) found "
+                             f"no input problem, but no forecast was recorded for this match."} if passed else
+                    {"code": "waiting", "checked_at": c["checked_at"],
+                     "text": f"Waiting: the last check for its date ({c['checked_at']}) passed, but {reason}. It is forecast "
+                             f"once that is settled, if before the cutoff {cutoff}."})
+    return out
+
+
 def live_forecasts_of(conn: sqlite3.Connection, match_ids: list) -> dict:
     """match_id -> its latest recorded live forecast (soccer_live.forecast_dict), for the matches that have one."""
     from . import soccer_live
@@ -461,6 +548,48 @@ def live_forecasts_of(conn: sqlite3.Connection, match_ids: list) -> dict:
         for r in conn.execute(soccer_live.LATEST_SQL + f"AND f.match_id IN ({','.join('?' * len(chunk))})", chunk):
             out[r["match_id"]] = soccer_live.forecast_dict(r, as_of)
     return out
+
+
+RECORD_LIMITATIONS = (
+    "Every recorded live forecast is listed, including superseded versions; none is hidden for performing poorly. "
+    "The model's pick is its most likely 90-minute outcome. A match that went to extra time or penalties is not graded "
+    "(the 90-minute score is not validated). The models were tested once on held-out seasons; a short live record says "
+    "little, and none of this is a betting edge.")
+
+
+def forecast_record(conn: sqlite3.Connection, competition: Optional[str] = None, match_id: Optional[str] = None) -> dict:
+    """Every recorded live forecast version (append-only soccer_live_forecasts), newest kickoff first, each with its
+    probabilities, pick, kickoff and eventual 90-minute result; plus a summary over each match's latest pre-cutoff version.
+    Read-only; a result counts only once stored (result_available_at <= now)."""
+    import math
+    from . import soccer_live
+    now = soccer_live.utc_now()
+    if not soccer_live.has_tables(conn):
+        return {"as_of": now, "competition": competition, "forecasts": [], "summary": None, "limitations": RECORD_LIMITATIONS}
+    where = [(c, v) for c, v in (("f.competition_id = ?", competition), ("f.match_id = ?", match_id)) if v]
+    q = soccer_live.BASE_SQL + ("WHERE " + " AND ".join(c for c, _ in where) + " " if where else "") + \
+        "ORDER BY m.kickoff_at DESC, f.match_id, f.version DESC"
+    rows = conn.execute(q, tuple(v for _, v in where)).fetchall()
+    latest = {}
+    for r in rows:
+        latest.setdefault(r["match_id"], r["version"])
+    out, graded, correct, logloss = [], 0, 0, 0.0
+    for r in rows:
+        f = soccer_live.forecast_dict(r, now)
+        f["version"] = r["version"]
+        f["latest"] = r["version"] == latest[r["match_id"]]
+        f["model"] = r["model"]
+        f["match_status"] = r["status"]
+        f["pick_correct"] = None if f["result"] is None else f["result"] == f["most_likely"]
+        if f["latest"] and f["result"] is not None:
+            graded += 1
+            correct += f["pick_correct"]
+            logloss -= math.log(max(f["probabilities"][f["result"]], 1e-12))
+        out.append(f)
+    summary = {"matches_forecast": len(latest), "versions": len(rows), "graded": graded, "picks_correct": correct,
+               "mean_log_loss": logloss / graded if graded else None, "uniform_log_loss": math.log(3)}
+    return {"as_of": now, "competition": competition, "forecasts": out, "summary": summary,
+            "limitations": RECORD_LIMITATIONS}
 
 
 def refresh_state(conn: sqlite3.Connection, competition: str, now: datetime) -> dict:
@@ -483,6 +612,7 @@ def matches_on(conn: sqlite3.Connection, competition: str, day: date) -> dict:
     return {"competition_id": competition, "date": d, "fetched": d in fetched_dates(conn, competition),
             "matches": [_match(r) for r in rows], "live_forecasts": live_forecasts_of(conn, [r["match_id"] for r in rows]),
             "forecast_cutoffs": {r["match_id"]: c for r in rows if (c := forecast_cutoff(competition, r["kickoff_at"]))},
+            "forecast_blockers": forecast_blockers(conn, rows, live_forecasts_of(conn, [r["match_id"] for r in rows])),
             "prev_date": earlier[-1] if earlier else None,
             "next_date": later[0] if later else None, "last_refresh_at": last_refresh_at(conn, competition)}
 
@@ -518,4 +648,6 @@ def match_detail(conn: sqlite3.Connection, match_id: str) -> Optional[dict]:
         caps[0] = {"id": "forecasts", "label": "Match forecasts", "available": False, "reason": FORECASTS_MATCH_CLOSED}
     return {"match": _match(r), "head_to_head": [_match(x) for x in h2h], "home_recent": recent(r["home_team_id"]),
             "away_recent": recent(r["away_team_id"]), "result_revisions": revisions, "live_forecast": live,
-            "forecast_cutoff_at": cutoff, "forecast_state": state, "capabilities": caps}
+            "forecast_cutoff_at": cutoff, "forecast_state": state, "capabilities": caps,
+            "forecast_blocker": forecast_blockers(conn, [r], {match_id: live} if live else {}).get(match_id),
+            "forecast_versions": forecast_record(conn, match_id=match_id)["forecasts"]}

@@ -1016,6 +1016,20 @@ export interface SoccerMatchesResponse {
   live_forecasts?: Record<string, SoccerLiveForecast>;
   /** match_id -> UTC time by which that match's forecast must be recorded (none is made after it). */
   forecast_cutoffs?: Record<string, string>;
+  /** match_id -> why that listed match has no recorded live forecast (from stored checks only). */
+  forecast_blockers?: Record<string, SoccerForecastBlocker>;
+}
+export interface SoccerForecastBlocker {
+  code: 'no_live_store' | 'out_of_scope' | 'void' | 'listed_after_cutoff' | 'refused' | 'missed' | 'waiting' | 'not_checked';
+  text: string; checked_at?: string; problems?: string[];
+}
+export interface SoccerRecordForecast extends SoccerLiveForecast {
+  version: number; latest: boolean; model: string; match_status: string; pick_correct: boolean | null;
+}
+export interface SoccerLiveRecord {
+  as_of: string; competition: SoccerCompetitionId | null; forecasts: SoccerRecordForecast[]; limitations: string;
+  summary: { matches_forecast: number; versions: number; graded: number; picks_correct: number;
+    mean_log_loss: number | null; uniform_log_loss: number } | null;
 }
 export interface SoccerResultRevision {
   revision: number; decided_in: 'regulation' | 'extra_time' | 'penalties' | 'unknown'; home_score: number; away_score: number;
@@ -1031,6 +1045,9 @@ export interface SoccerMatchDetail {
   live_forecast?: SoccerLiveForecast | null;
   forecast_cutoff_at?: string | null;
   forecast_state?: SoccerMeta['forecast_state'];
+  forecast_blocker?: SoccerForecastBlocker | null;
+  /** Every recorded live forecast version of this match, newest first. */
+  forecast_versions?: SoccerRecordForecast[];
 }
 
 // --- Soccer research (backend app/soccer_forecasts.py; /api/soccer/research/*). openfootball history and the stored,

@@ -4,7 +4,7 @@ import type { CandidateGameView } from './types';
 import type { CanonicalHistory, CanonicalPerformance, PaperRules, RankedPicks, ThresholdOverview, CoverageReport, DailyEvidence, DailyReport, AdaptiveGame, CombinationAnalysis, RuleLedger, SubsetSearch, ThresholdExplorer, AdaptiveStatus, HistoricalStart,
   JointReport, ThresholdReport, AgreementPerformance, GameDetail, GamesResponse, HistoryResponse, MarketHistoryResponse, MarketId, MarketPerformanceResponse, Meta,
   PerformanceResponse, Policy, ResearchGame, ResearchHistory, ResearchReport, ResearchSlate, Retrospective, RuleReport, CandidateRoster, PoolReport, SelectionStatus, Sport,
-  DataFreshness, Health, NflRecord, PolledLeague, SoccerCompetitionId, SoccerMatchDetail, SoccerMatchesResponse, SoccerMeta, SoccerLiveResponse,
+  DataFreshness, Health, NflRecord, PolledLeague, SoccerCompetitionId, SoccerMatchDetail, SoccerMatchesResponse, SoccerMeta, SoccerLiveResponse, SoccerLiveRecord,
   SoccerPerformance, SoccerResearchHistory, SoccerResearchMatchDetail, SoccerResearchMatches, SoccerResearchMeta, NflGameDetail, NflGamesResponse, NflMeta, TrainingRun, TrainingStatus, TrackingCheck, TrackingEvidence, TrackingGame, TrackingKind, TrackingReport,
 } from './types';
 
@@ -57,6 +57,7 @@ export const api = {
   // European soccer: data-only reads (fixtures, results, matchup facts) for one competition at a time; never a `sport`.
   soccerMeta: (competition: SoccerCompetitionId, signal?: AbortSignal) => get<SoccerMeta>('/soccer/meta', { competition }, signal),
   soccerLive: (competition: SoccerCompetitionId, signal?: AbortSignal) => get<SoccerLiveResponse>('/soccer/live', { competition }, signal),
+  soccerLiveRecord: (competition: SoccerCompetitionId, signal?: AbortSignal) => get<SoccerLiveRecord>('/soccer/live/record', { competition }, signal),
   soccerMatches: (competition: SoccerCompetitionId, date: string, signal?: AbortSignal) =>
     get<SoccerMatchesResponse>('/soccer/matches', { competition, date }, signal),
   soccerMatch: (id: string, signal?: AbortSignal) => get<SoccerMatchDetail>(`/soccer/matches/${encodeURIComponent(id)}`, undefined, signal),

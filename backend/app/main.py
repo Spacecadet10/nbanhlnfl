@@ -321,6 +321,16 @@ def soccer_live_forecasts(competition: str = COMPETITION, mode: str = Depends(ap
             "check": check, "refresh": refresh, "forecasts": rows}
 
 
+@app.get("/api/soccer/live/record")
+def soccer_live_record(competition: Optional[str] = None, mode: str = Depends(api_mode)):
+    """Every recorded live soccer forecast version (all competitions, or one), newest kickoff first, with probabilities,
+    the model's pick, kickoff, generation/cutoff times and the eventual 90-minute result; plus a summary and the
+    limitations. Nothing is filtered for performance; never computed on request."""
+    from . import soccer
+    with _soccer_store(mode) as conn:
+        return soccer.forecast_record(conn, competition)
+
+
 from datetime import date as _dt_date   # noqa: E402  (calendar check of the research date parameter)
 
 
