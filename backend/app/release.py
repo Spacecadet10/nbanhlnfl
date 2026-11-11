@@ -5,8 +5,9 @@ work in the development checkout can no longer reach the live jobs or change a r
 NBA_RELEASE_GUARD=1 (set only in the release plists) every scheduled command first checks that:
 - the code being imported is the release checkout named by NBA_RELEASE_ROOT;
 - that checkout has no uncommitted changes;
-- that checkout is at the pinned commit (the release-pin file in its git folder, written by `python -m app.release pin`
-  after each reviewed fast-forward): a checkout moved without a release decision is refused;
+- the pinned commit (the release-pin file in its git folder, written by `python -m app.release pin`) is compared with the
+  checkout, but a missing or different pin only writes one line to the job's log (stderr) and `pin_note`; it never refuses
+  a job (owner, Nov 11 2026);
 - NBA_DATA_DIR is set (otherwise the release would use its own, empty data folder);
 - the store's schema version equals the highest migration this release ships (a newer store was migrated by newer code; an
   older one would be migrated by this release: both are release decisions, never a side effect of a scheduled job).
@@ -16,6 +17,7 @@ a release records the commit it ran (`release` in job_runs.detail).
 import os
 import sqlite3
 import subprocess
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -97,16 +99,29 @@ def _checkout(root: Path) -> tuple[Optional[str], list[str]]:
         changed = [line for line in _git(root, "status", "--porcelain").splitlines() if line.strip()]
         if changed:
             problems.append(f"the release checkout has uncommitted changes: {', '.join(c[3:] for c in changed[:5])}")
-        pinned = pinned_commit(root)
-        if not pinned:
-            problems.append(f"no pinned release commit ({PIN_FILE} in the checkout's git folder; `python -m app.release pin`)")
-        elif not commit.startswith(pinned.lower()):
-            problems.append(f"the release checkout is at {commit[:12]}, not the pinned commit {pinned[:12]}")
     except (OSError, subprocess.SubprocessError) as exc:
         problems.append(f"cannot verify the release checkout with git: {type(exc).__name__}")
     if not os.environ.get("NBA_DATA_DIR"):
         problems.append("NBA_DATA_DIR is not set: the release would use its own empty data folder")
     return commit, problems
+
+
+def pin_note(root: Path, commit: Optional[str]) -> Optional[str]:
+    """Owner, Nov 11 2026: a missing or mismatched pin never stops a job. It is written as one line to the job's log
+    (stderr, which launchd sends to the job's log file) and returned for the record; no Telegram message, no refusal."""
+    try:
+        pinned = pinned_commit(root)
+    except (OSError, subprocess.SubprocessError) as exc:
+        note = f"cannot read the pinned release commit: {type(exc).__name__}"
+    else:
+        if not pinned:
+            note = f"no pinned release commit ({PIN_FILE} in the checkout's git folder; `python -m app.release pin`)"
+        elif commit and not commit.startswith(pinned.lower()):
+            note = f"the release checkout is at {commit[:12]}, not the pinned commit {pinned[:12]}"
+        else:
+            return None
+    print(f"release pin (not a refusal): {note}", file=sys.stderr, flush=True)
+    return note
 
 
 def check(sport: str, root: Optional[Path] = None) -> dict:
@@ -119,7 +134,7 @@ def check(sport: str, root: Optional[Path] = None) -> dict:
     elif stored != shipped:
         problems.append(f"store schema {stored} differs from this release's schema {shipped}: update the release deliberately")
     return {"commit": commit, "root": str(root), "data_dir": str(config.data_dir()), "store_schema": stored,
-            "release_schema": shipped, "problems": problems}
+            "release_schema": shipped, "problems": problems, "pin_note": pin_note(root, commit)}
 
 
 def migration_context(sport: str, info: Optional[dict] = None) -> list[str]:
@@ -196,11 +211,11 @@ def delivery_check(root: Optional[Path] = None) -> dict:
         elif not path.is_file():
             problems.append(f"the {what} {path} does not exist; it is never created by a release")
     return {"commit": commit, "root": str(root), "data_dir": str(config.data_dir()),
-            "ledger": named[TELEGRAM_LEDGER_ENV_NAME], "credentials": named[TELEGRAM_CREDENTIALS_ENV_NAME], "problems": problems}
+            "ledger": named[TELEGRAM_LEDGER_ENV_NAME], "credentials": named[TELEGRAM_CREDENTIALS_ENV_NAME], "problems": problems,
+            "pin_note": pin_note(root, commit)}
 
 
 if __name__ == "__main__":
-    import sys
     if sys.argv[1:] != ["pin"]:
         raise SystemExit("usage: python -m app.release pin   (pins this checkout's current commit for the scheduled jobs)")
     print(write_pin(code_root().resolve()))

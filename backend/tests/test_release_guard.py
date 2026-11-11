@@ -93,25 +93,38 @@ def test_job_runs_record_the_release_commit(store, monkeypatch):
     assert json.loads(conn.execute("SELECT detail FROM job_runs WHERE run_id=?", (stamped["run_id"],)).fetchone()[0])["release"] == "abc123"
 
 
-def test_a_checkout_not_at_its_pinned_commit_is_refused(tmp_path, store, monkeypatch):
-    # Owner, Nov 10: the guard never compared the checkout with a pinned commit, so a moved checkout still ran.
+def test_a_checkout_not_at_its_pinned_commit_only_logs_a_line(tmp_path, store, monkeypatch, capsys):
+    # Owner, Nov 11: "A missing or mismatched pin only writes a line to the log; jobs run as before." (was a refusal, Nov 10)
     root = git_repo(tmp_path / "release")
     monkeypatch.setenv(release.ROOT_ENV, str(root))
     pinned = release.pinned_commit(root)
     (root / "NEXT").write_text("later\n")
     subprocess.run(["git", "-C", str(root), "add", "NEXT"], check=True)
     subprocess.run(["git", "-C", str(root), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "moved"], check=True)
-    problems = release.check("nhl", root=root)["problems"]
-    assert problems == [f"the release checkout is at {release._git(root, 'rev-parse', 'HEAD')[:12]}, not the pinned commit {pinned[:12]}"]
-    monkeypatch.setenv(release.COMMIT_ENV, release._git(root, "rev-parse", "HEAD").strip())   # only records; never pins
-    assert release.check("nhl", root=root)["problems"] != []
-    monkeypatch.delenv(release.COMMIT_ENV)
+    capsys.readouterr()
+    info = release.check("nhl", root=root)
+    head = release._git(root, 'rev-parse', 'HEAD')[:12]
+    assert info["problems"] == []
+    assert info["pin_note"] == f"the release checkout is at {head}, not the pinned commit {pinned[:12]}"
+    assert f"release pin (not a refusal): {info['pin_note']}" in capsys.readouterr().err
     release.write_pin(root)
-    assert release.check("nhl", root=root)["problems"] == [] and not release._git(root, "status", "--porcelain").strip()
+    info = release.check("nhl", root=root)
+    assert info["problems"] == [] and info["pin_note"] is None and "release pin" not in capsys.readouterr().err
 
 
-def test_a_checkout_without_any_pin_is_refused(tmp_path, store, monkeypatch):
+def test_a_checkout_without_any_pin_only_logs_a_line(tmp_path, store, monkeypatch, capsys):
     root = git_repo(tmp_path / "release")
     release.pin_path(root).unlink()
     monkeypatch.setenv(release.ROOT_ENV, str(root))
-    assert any(p.startswith("no pinned release commit") for p in release.check("nhl", root=root)["problems"])
+    capsys.readouterr()
+    info = release.check("nhl", root=root)
+    assert info["problems"] == [] and info["pin_note"].startswith("no pinned release commit")
+    assert "release pin (not a refusal): no pinned release commit" in capsys.readouterr().err
+
+
+def test_an_unclean_checkout_is_still_refused_with_a_correct_pin(tmp_path, store, monkeypatch):
+    root = git_repo(tmp_path / "release")
+    monkeypatch.setenv(release.ROOT_ENV, str(root))
+    (root / "README").write_text("edited\n")
+    problems = release.check("nhl", root=root)["problems"]
+    assert len(problems) == 1 and problems[0].startswith("the release checkout has uncommitted changes")

@@ -196,3 +196,20 @@ def test_an_unguarded_run_from_another_checkout_still_finds_the_main_ledger(tmp_
     assert config.telegram_ledger_path() == main / ".telegram-delivery.sqlite"
     monkeypatch.setenv("NBA_DATA_DIR", str(main / "data") + "/")
     assert config.telegram_ledger_path() == main / ".telegram-delivery.sqlite"
+
+
+def test_a_moved_or_missing_pin_does_not_stop_the_sender_or_helper(tmp_path, state, monkeypatch, capsys):
+    # Owner, Nov 11: the pin never stops a job; it only writes a log line. The clean-checkout check stays.
+    main, ledger, creds = state
+    root = git_repo(tmp_path / "release")
+    monkeypatch.setenv(release.ROOT_ENV, str(root))
+    monkeypatch.setenv(config.TELEGRAM_LEDGER_ENV, str(ledger))
+    monkeypatch.setenv(config.TELEGRAM_CREDENTIALS_ENV, str(creds))
+    release.pin_path(root).write_text("0000000\n")
+    info = release.delivery_check(root)
+    assert info["problems"] == [] and "not the pinned commit" in info["pin_note"]
+    assert "release pin (not a refusal)" in capsys.readouterr().err
+    release.pin_path(root).unlink()
+    assert release.delivery_check(root)["problems"] == []
+    (root / "README").write_text("edited\n")
+    assert any("uncommitted changes" in p for p in release.delivery_check(root)["problems"])
