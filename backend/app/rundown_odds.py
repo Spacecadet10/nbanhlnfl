@@ -23,6 +23,9 @@ BASE = 'https://therundown.io/api/v2'
 SPORT_IDS = {'nba': 4, 'nhl': 6, 'nfl': 2}
 BOOKS = {'19': 'DraftKings', '22': 'BetMGM', '23': 'FanDuel'}
 MARKETS = {1: 'winner', 2: 'spread', 3: 'total'}
+# NHL only: TheRundown's 60-minute 3-way moneyline (home/draw/away in regulation; OT/SO = draw), the app's reg3 market.
+# Seen on the free key at FanDuel only (docs/evidence/free-prices-2026-11-10). Team totals (94) are not served.
+SPORT_MARKETS = {'nba': MARKETS, 'nfl': MARKETS, 'nhl': {**MARKETS, 563: 'reg3'}}
 ALIASES = {'NYK': 'NY', 'GSW': 'GS', 'SAS': 'SA', 'NOP': 'NO', 'WAS': 'WSH', 'PHO': 'PHX',
            'TBL': 'TB', 'NJD': 'NJ', 'SJS': 'SJ', 'LAK': 'LA', 'MON': 'MTL', 'CLB': 'CBJ', 'NAS': 'NSH',
            'KCC': 'KC', 'GBP': 'GB', 'NEP': 'NE', 'NOS': 'NO', 'SFO': 'SF', 'TBB': 'TB', 'LVR': 'LV',
@@ -93,7 +96,7 @@ def comparison(sport, pick, cache, now):
     'other_lines': [{book, line, price}]}. 'prices' is empty unless status is 'available'."""
     q = pick.get('quote_check') or {}
     out = {'status': 'unavailable', 'source': 'TheRundown', 'checked_at': None, 'prices': {}, 'best': None, 'other_lines': []}
-    if sport not in SPORT_IDS or pick.get('market') not in MARKETS.values() or q.get('line_source') == 'model':
+    if sport not in SPORT_IDS or pick.get('market') not in SPORT_MARKETS[sport].values() or q.get('line_source') == 'model':
         return dict(out, status='unsupported_market')
     if q.get('line_moved'):
         return dict(out, status='forecast_line_changed')
@@ -101,7 +104,8 @@ def comparison(sport, pick, cache, now):
     if side not in ('a', 'b') or ' @ ' not in str(pick.get('matchup')):
         return dict(out, status='identity_unavailable')
     expected = q.get('line_at_forecast')
-    if pick['market'] != 'winner' and expected is None:
+    lineless = pick['market'] in ('winner', 'reg3')
+    if not lineless and expected is None:
         return dict(out, status='no_forecast_line')
     away, home = [canon(sport, x.strip()) for x in pick['matchup'].split(' @ ')]
     matches = []
@@ -133,16 +137,18 @@ def comparison(sport, pick, cache, now):
     exact, other = {}, []
     for market in event.get('markets') or []:
         try:
-            if MARKETS.get(market.get('market_id')) != pick['market'] or market.get('period_id') != 0:
+            if SPORT_MARKETS[sport].get(market.get('market_id')) != pick['market'] or market.get('period_id') != 0:
                 continue
             for participant in market.get('participants') or []:
                 name = str(participant.get('name') or '').lower()
                 actual = ({'over': 'a', 'under': 'b'}.get(name) if pick['market'] == 'total' else
                           'a' if participant.get('id') == home_id else 'b' if participant.get('id') == away_id else None)
+                if pick['market'] == 'reg3' and participant.get('type') != 'TYPE_TEAM':
+                    continue   # the Draw outcome (TYPE_RESULT) is never read as a team
                 if actual != side:
                     continue
                 for line in participant.get('lines') or []:
-                    if pick['market'] == 'winner':
+                    if lineless:
                         value, same = None, True
                     else:
                         value = float(line['value'])
@@ -228,7 +234,8 @@ def fetch(now=None, *, opener=urllib.request.urlopen, pause=time.sleep):
                 with usage.open('a') as f:
                     f.write(json.dumps({'day': today, 'at': stamp(clock()), 'sport': sport, 'date': day}) + '\n')
                 count += 1
-                url = f'{BASE}/sports/{sid}/events/{day}?market_ids=1,2,3&affiliate_ids=19,22,23&main_line=true&hide_closed=true'
+                ids = ','.join(str(m) for m in SPORT_MARKETS[sport])
+                url = f'{BASE}/sports/{sid}/events/{day}?market_ids={ids}&affiliate_ids=19,22,23&main_line=true&hide_closed=true'
                 request = urllib.request.Request(url, headers={'X-TheRundown-Key': key, 'User-Agent': 'Courtside-odds'})
                 try:
                     with opener(request, timeout=30) as response:

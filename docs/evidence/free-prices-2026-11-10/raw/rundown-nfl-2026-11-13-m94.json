@@ -1,0 +1,499 @@
+{
+ "_fetched_at": "2026-11-11T04:40:21+00:00",
+ "_url": "https://therundown.io/api/v2/sports/2/events/2026-11-13?market_ids=94&affiliate_ids=19,22,23&main_line=true&hide_closed=true",
+ "_status": 200,
+ "_headers": {
+  "date": "Wed, 11 Nov 2026 04:40:21 GMT",
+  "content-type": "application/json",
+  "x-data-delay-seconds": "300",
+  "x-datapoints": "20",
+  "x-datapoints-breakdown": "events=1,odds=18,scores=1",
+  "x-datapoints-limit": "20000",
+  "x-datapoints-monthly-limit": "200000",
+  "x-datapoints-monthly-remaining": "199124",
+  "x-datapoints-monthly-reset": "2026-12-01T00:00:00Z",
+  "x-datapoints-monthly-used": "876",
+  "x-datapoints-period": "daily",
+  "x-datapoints-remaining": "19252",
+  "x-datapoints-reset": "2026-11-12T00:00:00Z",
+  "x-datapoints-used": "748",
+  "x-rate-limit": "1"
+ },
+ "body": {
+  "meta": {
+   "delta_last_id": "5539459738",
+   "affiliate_visibility_token": "enabled-2faa301d57efbaae"
+  },
+  "events": [
+   {
+    "event_id": "d19262a64ffeff776a443d73db0d310e",
+    "event_uuid": "11f1-deff-a5824200-8b7f-2607d47ffc82",
+    "sport_id": 2,
+    "event_date": "2026-11-13T01:15:00Z",
+    "rotation_number_away": 113,
+    "rotation_number_home": 114,
+    "score": {
+     "event_id": "d19262a64ffeff776a443d73db0d310e",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 80,
+     "team_id_home": 78,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [],
+     "score_home_by_period": [],
+     "venue_name": "MetLife Stadium",
+     "venue_location": "East Rutherford, NJ",
+     "game_clock": 0,
+     "display_clock": "0.00",
+     "game_period": 0,
+     "broadcast": "Prime Video",
+     "event_status_detail": "11/12 - 8:15 PM EST",
+     "updated_at": "2026-05-15T10:48:27Z"
+    },
+    "teams": [
+     {
+      "team_id": 80,
+      "name": "Washington",
+      "mascot": "Commanders",
+      "abbreviation": "WSH",
+      "conference_id": 34,
+      "division_id": 11,
+      "ranking": 0,
+      "record": "2-5-1",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 34,
+       "sport_id": 2,
+       "name": "National Football Conference"
+      },
+      "division": {
+       "division_id": 11,
+       "conference_id": 34,
+       "sport_id": 2,
+       "name": "NFC East"
+      }
+     },
+     {
+      "team_id": 78,
+      "name": "New York",
+      "mascot": "Giants",
+      "abbreviation": "NYG",
+      "conference_id": 34,
+      "division_id": 11,
+      "ranking": 0,
+      "record": "5-2-1",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 34,
+       "sport_id": 2,
+       "name": "National Football Conference"
+      },
+      "division": {
+       "division_id": 11,
+       "conference_id": 34,
+       "sport_id": 2,
+       "name": "NFC East"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 80,
+      "name": "Washington",
+      "mascot": "Commanders",
+      "abbreviation": "WSH",
+      "conference_id": 34,
+      "division_id": 11,
+      "ranking": 0,
+      "record": "2-5-1",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 34,
+       "sport_id": 2,
+       "name": "National Football Conference"
+      },
+      "division": {
+       "division_id": 11,
+       "conference_id": 34,
+       "sport_id": 2,
+       "name": "NFC East"
+      }
+     },
+     {
+      "team_id": 78,
+      "name": "New York",
+      "mascot": "Giants",
+      "abbreviation": "NYG",
+      "conference_id": 34,
+      "division_id": 11,
+      "ranking": 0,
+      "record": "5-2-1",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 34,
+       "sport_id": 2,
+       "name": "National Football Conference"
+      },
+      "division": {
+       "division_id": 11,
+       "conference_id": 34,
+       "sport_id": 2,
+       "name": "NFC East"
+      }
+     }
+    ],
+    "schedule": {
+     "league_name": "National Football League",
+     "conference_competition": false,
+     "season_type": "Regular Season",
+     "season_year": 2026,
+     "week": 10,
+     "event_name": "Washington at New York - 2026-11-13T01:15:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 4480614,
+      "market_id": 1,
+      "period_id": 0,
+      "name": "moneyline",
+      "market_description": "Win the game outright.",
+      "participants": [
+       {
+        "id": 78,
+        "type": "TYPE_TEAM",
+        "name": "New York Giants",
+        "lines": [
+         {
+          "id": "5908de21da7a50ca2adfde5b709c0484",
+          "prices": {
+           "22": {
+            "id": "712910236",
+            "price": -135,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T00:51:47Z",
+            "source_id": "44040-3451308-5411298"
+           },
+           "19": {
+            "id": "362003049",
+            "price": -135,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T23:23:59Z",
+            "source_id": "0ML84695535_1"
+           },
+           "23": {
+            "id": "708548252",
+            "price": -134,
+            "price_delta": -4,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T00:50:26Z",
+            "source_id": "36275757-734.195640195-HOME"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 80,
+        "type": "TYPE_TEAM",
+        "name": "Washington Commanders",
+        "lines": [
+         {
+          "id": "bdd0b742812866dc34553bdb317ac05a",
+          "prices": {
+           "19": {
+            "id": "362003051",
+            "price": 114,
+            "price_delta": 4,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T23:23:59Z",
+            "source_id": "0ML84695535_3"
+           },
+           "23": {
+            "id": "708548251",
+            "price": 114,
+            "price_delta": 4,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T00:50:26Z",
+            "source_id": "36275757-734.195640195-AWAY"
+           },
+           "22": {
+            "id": "712910235",
+            "price": 115,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T04:46:43Z",
+            "source_id": "44040-3451308-5411297"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 7869468,
+      "market_id": 2,
+      "period_id": 0,
+      "name": "handicap",
+      "market_description": "Win or lose by a specified margin.",
+      "participants": [
+       {
+        "id": 78,
+        "type": "TYPE_TEAM",
+        "name": "New York Giants",
+        "lines": [
+         {
+          "id": "104e7697d974b872716092bee3cfa13f",
+          "value": "-1.5",
+          "prices": {
+           "23": {
+            "id": "708548254",
+            "price": -120,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T00:50:26Z",
+            "source_id": "36275757-734.195640198-HOME"
+           }
+          }
+         },
+         {
+          "id": "ec4ae65e67f32c22f5ebf57acac5914f",
+          "value": "-2.5",
+          "prices": {
+           "19": {
+            "id": "713333772",
+            "price": -110,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T22:55:44Z",
+            "source_id": "0HC84695535N250_1"
+           },
+           "22": {
+            "id": "713848928",
+            "price": -110,
+            "price_delta": -2,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T00:51:42Z",
+            "source_id": "44040-4474033-7315526"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 80,
+        "type": "TYPE_TEAM",
+        "name": "Washington Commanders",
+        "lines": [
+         {
+          "id": "e556cabed0c6a6caf028281c9cc98254",
+          "value": "+1.5",
+          "prices": {
+           "23": {
+            "id": "708548253",
+            "price": 100,
+            "price_delta": 205,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T00:50:26Z",
+            "source_id": "36275757-734.195640198-AWAY"
+           }
+          }
+         },
+         {
+          "id": "db39da91fa7bc986495037d52440b803",
+          "value": "+2.5",
+          "prices": {
+           "19": {
+            "id": "713333818",
+            "price": -110,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-09T22:55:44Z",
+            "source_id": "0HC84695535P250_3"
+           },
+           "22": {
+            "id": "713848927",
+            "price": -108,
+            "price_delta": 2,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T00:51:42Z",
+            "source_id": "44040-4474033-7315525"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 7869469,
+      "market_id": 3,
+      "period_id": 0,
+      "name": "totals",
+      "market_description": "Over/under on the combined score.",
+      "participants": [
+       {
+        "id": 9,
+        "type": "TYPE_RESULT",
+        "name": "Over",
+        "lines": [
+         {
+          "id": "630e8dbeb25b357a50f90aabaf782895",
+          "value": "41.5",
+          "prices": {
+           "23": {
+            "id": "713183357",
+            "price": 100,
+            "price_delta": 205,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T23:25:25Z",
+            "source_id": "36275757-734.195640196-OVER"
+           },
+           "19": {
+            "id": "713333865",
+            "price": -105,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T15:51:04Z",
+            "source_id": "0OU84695535O4150_1"
+           }
+          }
+         },
+         {
+          "id": "b58f46321e408caf281b0dfa91f2fbbb",
+          "value": "41",
+          "prices": {
+           "22": {
+            "id": "713849061",
+            "price": -110,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T21:20:22Z",
+            "source_id": "44040-4474075-7315607"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 10,
+        "type": "TYPE_RESULT",
+        "name": "Under",
+        "lines": [
+         {
+          "id": "73ab9450df0b7564aace79c35d9bcb5a",
+          "value": "41.5",
+          "prices": {
+           "23": {
+            "id": "713183356",
+            "price": -120,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T23:25:25Z",
+            "source_id": "36275757-734.195640196-UNDER"
+           },
+           "19": {
+            "id": "713333896",
+            "price": -115,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T15:51:04Z",
+            "source_id": "0OU84695535U4150_3"
+           }
+          }
+         },
+         {
+          "id": "be5db7d40d9116cd114e86d2bb293631",
+          "value": "41",
+          "prices": {
+           "22": {
+            "id": "713849062",
+            "price": -110,
+            "price_delta": -2,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T00:51:43Z",
+            "source_id": "44040-4474075-7315608"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "34": "197763871",
+     "6": "491172765",
+     "9": "787D18BF-86EE-4250-85CB-173886401B8A",
+     "18": "474645956",
+     "23": "36275757",
+     "24": "6958f23a-2edc-4c47-a71e-5d63bffb27e1",
+     "29": "1700008776",
+     "32": "600728",
+     "7": "787D18BF-86EE-4250-85CB-173886401B8A",
+     "14": "6232783",
+     "19": "84695535",
+     "26": "nfl-was-nyg-2026-11-13",
+     "30": "01a1a3d7-9d33-7361-99bb-73a1d663face",
+     "35": "c796d163-b86a-4881-9050-e7ed67267a8e",
+     "31": "205606",
+     "2": "29512574",
+     "21": "1028823932",
+     "25": "26NOV12WASNYG",
+     "28": "6207724188376105358",
+     "33": "197763871",
+     "22": "44040",
+     "3": "1639394521",
+     "4": "491172765",
+     "11": "491172765",
+     "16": "33332854769300023"
+    },
+    "affiliate_deep_links": {
+     "18": "https://landings.youwager.lv/partners/landing-a/index.shtml?affid=THERUNDOWN&A=41782&B=0&T=I&source=TheRunDown_RunDownLP",
+     "35": "https://sportsbook.caesars.com/",
+     "3": "https://www.pinnacle.com/en/football/nfl/washington-commanders-vs-new-york-giants/1639394521/",
+     "32": "https://www.circasports.com/",
+     "6": "https://www.betonline.ag/sportsbook/football/nfl/game/491172765",
+     "19": "https://sportsbook.draftkings.com/event/was-commanders-%40-ny-giants/34118102",
+     "16": "https://www.matchbook.com/events/33332854769300023",
+     "24": "https://sportsbook.thescore.bet/sport/football/organization/united-states/competition/nfl/event/6958f23a-2edc-4c47-a71e-5d63bffb27e1",
+     "9": "https://sportsbook.betcris.com/",
+     "33": "https://bet105.ag/",
+     "25": "https://kalshi.com/markets/kxnflgame/nfl-game/kxnflgame-26nov12wasnyg",
+     "22": "https://sports.nj.betmgm.com/en/sports/events/6:44040",
+     "31": "https://polymarket.us/sports/nfl/nfl-was-nyg-2026-11-12",
+     "28": "https://app.hardrock.bet/competition/football/6207724188376105358",
+     "21": "https://www.unibet.co.uk/betting/odds/contest/ae6e3f72a58eb102d3ae7fbf9536fbf1",
+     "7": "https://www.bookmaker.eu/",
+     "11": "https://sports.lowvig.ag/sportsbook/football/nfl/game/491172765",
+     "23": "https://sportsbook.fanduel.com/football/nfl/washington-commanders-@-new-york-giants-36275757",
+     "30": "https://novig.com/event-markets/01a1a3d7-9d33-7361-99bb-73a1d663face",
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/197763871",
+     "29": "https://www.prophetx.co/event/1700008776",
+     "2": "https://www.bovada.lv/sports/football/nfl/washington-commanders-new-york-giants-202611122015",
+     "4": "https://www.sportsbetting.ag/sportsbook/football/nfl/game/491172765",
+     "26": "https://polymarket.com/event/nfl-was-nyg-2026-11-13",
+     "14": "https://sports.everygame.eu/"
+    },
+    "affiliate_deep_link_types": {
+     "14": "catalog",
+     "33": "catalog",
+     "7": "catalog",
+     "35": "catalog",
+     "9": "catalog",
+     "32": "catalog",
+     "18": "catalog"
+    }
+   }
+  ]
+ }
+}

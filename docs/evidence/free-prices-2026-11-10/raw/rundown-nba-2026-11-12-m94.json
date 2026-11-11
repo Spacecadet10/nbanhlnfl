@@ -1,0 +1,3587 @@
+{
+ "_fetched_at": "2026-11-11T04:40:19+00:00",
+ "_url": "https://therundown.io/api/v2/sports/4/events/2026-11-12?market_ids=94&affiliate_ids=19,22,23&main_line=true&hide_closed=true",
+ "_status": 200,
+ "_headers": {
+  "date": "Wed, 11 Nov 2026 04:40:19 GMT",
+  "content-type": "application/json",
+  "x-data-delay-seconds": "300",
+  "x-datapoints": "127",
+  "x-datapoints-breakdown": "events=10,odds=107,scores=10",
+  "x-datapoints-limit": "20000",
+  "x-datapoints-monthly-limit": "200000",
+  "x-datapoints-monthly-remaining": "199144",
+  "x-datapoints-monthly-reset": "2026-12-01T00:00:00Z",
+  "x-datapoints-monthly-used": "856",
+  "x-datapoints-period": "daily",
+  "x-datapoints-remaining": "19272",
+  "x-datapoints-reset": "2026-11-12T00:00:00Z",
+  "x-datapoints-used": "728",
+  "x-rate-limit": "1"
+ },
+ "body": {
+  "meta": {
+   "delta_last_id": "5539454402",
+   "affiliate_visibility_token": "enabled-2faa301d57efbaae"
+  },
+  "events": [
+   {
+    "event_id": "2312092210be5f1dab46f138595acad5",
+    "event_uuid": "11f1-de2c-00e30000-8a93-e9530748e711",
+    "sport_id": 4,
+    "event_date": "2026-11-12T00:00:00Z",
+    "rotation_number_away": 533,
+    "rotation_number_home": 534,
+    "score": {
+     "event_id": "2312092210be5f1dab46f138595acad5",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 15,
+     "team_id_home": 9,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [],
+     "score_home_by_period": [],
+     "venue_name": "Gainbridge Fieldhouse",
+     "venue_location": "Indianapolis, IN",
+     "game_clock": 0,
+     "display_clock": "0.0",
+     "game_period": 0,
+     "broadcast": "MNMT",
+     "event_status_detail": "11/11 - 7:00 PM EST",
+     "updated_at": "2026-09-30T14:22:21Z"
+    },
+    "teams": [
+     {
+      "team_id": 15,
+      "name": "Washington",
+      "mascot": "Wizards",
+      "abbreviation": "WSH",
+      "conference_id": 39,
+      "division_id": 17,
+      "ranking": 0,
+      "record": "4-7",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 17,
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Southeast"
+      }
+     },
+     {
+      "team_id": 9,
+      "name": "Indiana",
+      "mascot": "Pacers",
+      "abbreviation": "IND",
+      "conference_id": 39,
+      "division_id": 16,
+      "ranking": 0,
+      "record": "3-8",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 16,
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Central"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 15,
+      "name": "Washington",
+      "mascot": "Wizards",
+      "abbreviation": "WSH",
+      "conference_id": 39,
+      "division_id": 17,
+      "ranking": 0,
+      "record": "4-7",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 17,
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Southeast"
+      }
+     },
+     {
+      "team_id": 9,
+      "name": "Indiana",
+      "mascot": "Pacers",
+      "abbreviation": "IND",
+      "conference_id": 39,
+      "division_id": 16,
+      "ranking": 0,
+      "record": "3-8",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 16,
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Central"
+      }
+     }
+    ],
+    "schedule": {
+     "league_name": "National Basketball Association",
+     "conference_competition": false,
+     "season_type": "Regular Season",
+     "season_year": 2027,
+     "event_name": "Washington at Indiana - 2026-11-12T00:00:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 8152139,
+      "market_id": 1,
+      "period_id": 0,
+      "name": "moneyline",
+      "market_description": "Win the game outright.",
+      "participants": [
+       {
+        "id": 9,
+        "type": "TYPE_TEAM",
+        "name": "Indiana Pacers",
+        "lines": [
+         {
+          "id": "0cf148d748e046e2777101374410cae3",
+          "prices": {
+           "19": {
+            "id": "714279320",
+            "price": -166,
+            "price_delta": -6,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:51:39Z",
+            "source_id": "0ML87164375_1"
+           },
+           "22": {
+            "id": "714445749",
+            "price": -170,
+            "price_delta": -10,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:51:58Z",
+            "source_id": "20050393-1571884975-2333238660",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050393?options=20050393-1571884975-2333238660"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 15,
+        "type": "TYPE_TEAM",
+        "name": "Washington Wizards",
+        "lines": [
+         {
+          "id": "9fc496e872fc9ca051f3846430975d47",
+          "prices": {
+           "19": {
+            "id": "714279321",
+            "price": 139,
+            "price_delta": 4,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:51:39Z",
+            "source_id": "0ML87164375_3"
+           },
+           "22": {
+            "id": "714445748",
+            "price": 140,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:51:58Z",
+            "source_id": "20050393-1571884975-2333238659",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050393?options=20050393-1571884975-2333238659"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 8152140,
+      "market_id": 2,
+      "period_id": 0,
+      "name": "handicap",
+      "market_description": "Win or lose by a specified margin.",
+      "participants": [
+       {
+        "id": 9,
+        "type": "TYPE_TEAM",
+        "name": "Indiana Pacers",
+        "lines": [
+         {
+          "id": "d7fcada9b2d89c4ea37e6da29256e962",
+          "value": "-3.5",
+          "prices": {
+           "19": {
+            "id": "714663004",
+            "price": -112,
+            "price_delta": 6,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:19:38Z",
+            "source_id": "0HC87164375N350_1"
+           }
+          }
+         },
+         {
+          "id": "bd642418ece0896ab7319e9f9fdb4634",
+          "value": "+2.5",
+          "prices": {
+           "22": {
+            "id": "714662974",
+            "price": -210,
+            "price_delta": 10,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:12:27Z",
+            "source_id": "20050393-1577518503-2348436776"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 15,
+        "type": "TYPE_TEAM",
+        "name": "Washington Wizards",
+        "lines": [
+         {
+          "id": "9450de1680918c8c601a987acc2c5f0c",
+          "value": "+3.5",
+          "prices": {
+           "19": {
+            "id": "714663005",
+            "price": -108,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:19:38Z",
+            "source_id": "0HC87164375P350_3"
+           }
+          }
+         },
+         {
+          "id": "d585165c6c50be6b58838954f3bf597d",
+          "value": "-2.5",
+          "prices": {
+           "22": {
+            "id": "714662973",
+            "price": 170,
+            "price_delta": -10,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:12:27Z",
+            "source_id": "20050393-1577518503-2348436775"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 8152141,
+      "market_id": 3,
+      "period_id": 0,
+      "name": "totals",
+      "market_description": "Over/under on the combined score.",
+      "participants": [
+       {
+        "id": 9,
+        "type": "TYPE_RESULT",
+        "name": "Over",
+        "lines": [
+         {
+          "id": "547c46b0e60d318833f48209a32bdce8",
+          "value": "225.5",
+          "prices": {
+           "19": {
+            "id": "714698715",
+            "price": -110,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:12:42Z",
+            "source_id": "0OU87164375O22550_1"
+           }
+          }
+         },
+         {
+          "id": "7e82cafd61fce77dbc6db51ccea3eb24",
+          "value": "226.5",
+          "prices": {
+           "22": {
+            "id": "714445772",
+            "price": -110,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:12:25Z",
+            "source_id": "20050393-1577470133-2348314258",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050393?options=20050393-1577470133-2348314258"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 10,
+        "type": "TYPE_RESULT",
+        "name": "Under",
+        "lines": [
+         {
+          "id": "0cd6adf14f17f721537b356dea46b3b3",
+          "value": "225.5",
+          "prices": {
+           "19": {
+            "id": "714698716",
+            "price": -110,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:12:42Z",
+            "source_id": "0OU87164375U22550_3"
+           }
+          }
+         },
+         {
+          "id": "c026d337ed1b983433b67b3de217c93b",
+          "value": "226.5",
+          "prices": {
+           "22": {
+            "id": "714445773",
+            "price": -110,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:12:25Z",
+            "source_id": "20050393-1577470133-2348314259",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050393?options=20050393-1577470133-2348314259"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "21": "1028754133",
+     "29": "1704712706",
+     "30": "01a1c569-ec06-7931-96e3-874070d80e19",
+     "32": "607773",
+     "11": "491178247",
+     "19": "87164375",
+     "35": "e85fd1cb-7818-46be-9ef0-4815b7c91741",
+     "31": "200739",
+     "25": "26NOV11WASIND",
+     "26": "nba-was-ind-2026-11-11",
+     "2": "33214591",
+     "3": "1639936022",
+     "7": "7466264C-3A8D-4B0D-B915-07F7EE14836F",
+     "18": "476271637",
+     "22": "20050393",
+     "24": "98ed81b2-3f59-47c8-8776-89109a8fa684",
+     "33": "207744301",
+     "34": "207744301",
+     "28": "3941309639827784088",
+     "4": "491178247",
+     "6": "491178247",
+     "9": "7466264C-3A8D-4B0D-B915-07F7EE14836F"
+    },
+    "affiliate_deep_links": {
+     "22": "https://sports.nj.betmgm.com/en/sports/events/20050393",
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/207744301",
+     "29": "https://www.prophetx.co/event/1704712706",
+     "19": "https://sportsbook.draftkings.com/event/was-wizards-%40-ind-pacers/34988942",
+     "24": "https://sportsbook.thescore.bet/",
+     "32": "https://www.circasports.com/",
+     "2": "https://www.bovada.lv/sports/basketball/nba/washington-wizards-indiana-pacers-202611111900",
+     "4": "https://www.sportsbetting.ag/sportsbook/basketball/nba/game/491178247",
+     "33": "https://bet105.ag/",
+     "9": "https://sportsbook.betcris.com/",
+     "18": "https://landings.youwager.lv/partners/landing-a/index.shtml?affid=THERUNDOWN&A=41782&B=0&T=I&source=TheRunDown_RunDownLP",
+     "30": "https://novig.us/",
+     "11": "https://sports.lowvig.ag/sportsbook/basketball/nba/game/491178247",
+     "6": "https://www.betonline.ag/sportsbook/basketball/nba/game/491178247",
+     "35": "https://sportsbook.caesars.com/",
+     "31": "https://polymarket.us/sports/nba/nba-was-ind-2026-11-11",
+     "28": "https://app.hardrock.bet/competition/nba/3941309639827784088",
+     "7": "https://www.bookmaker.eu/",
+     "26": "https://polymarket.com/event/nba-was-ind-2026-11-11",
+     "25": "https://kalshi.com/markets/kxnbagame/kxnbagame-26nov11wasind",
+     "3": "https://www.pinnacle.com/en/basketball/nba/washington-wizards-vs-indiana-pacers/1639936022/",
+     "21": "https://www.unibet.com/"
+    },
+    "affiliate_deep_link_types": {
+     "24": "catalog",
+     "21": "catalog",
+     "32": "catalog",
+     "9": "catalog",
+     "7": "catalog",
+     "18": "catalog",
+     "30": "catalog",
+     "33": "catalog",
+     "35": "catalog"
+    }
+   },
+   {
+    "event_id": "39f413ae93e2c11098de0f8d43c7a3aa",
+    "event_uuid": "11f1-de2c-00e30000-8c03-1f67fe4404c6",
+    "sport_id": 4,
+    "event_date": "2026-11-12T00:00:00Z",
+    "rotation_number_away": 531,
+    "rotation_number_home": 532,
+    "score": {
+     "event_id": "39f413ae93e2c11098de0f8d43c7a3aa",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 1,
+     "team_id_home": 5,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [],
+     "score_home_by_period": [],
+     "venue_name": "Scotiabank Arena",
+     "venue_location": "Toronto, ON",
+     "game_clock": 0,
+     "display_clock": "0.0",
+     "game_period": 0,
+     "broadcast": "",
+     "event_status_detail": "11/11 - 7:00 PM EST",
+     "updated_at": "2026-09-30T14:22:21Z"
+    },
+    "teams": [
+     {
+      "team_id": 1,
+      "name": "Boston",
+      "mascot": "Celtics",
+      "abbreviation": "BOS",
+      "conference_id": 39,
+      "division_id": 15,
+      "ranking": 0,
+      "record": "9-2",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 15,
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Atlantic"
+      }
+     },
+     {
+      "team_id": 5,
+      "name": "Toronto",
+      "mascot": "Raptors",
+      "abbreviation": "TOR",
+      "conference_id": 39,
+      "division_id": 15,
+      "ranking": 0,
+      "record": "5-5",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 15,
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Atlantic"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 1,
+      "name": "Boston",
+      "mascot": "Celtics",
+      "abbreviation": "BOS",
+      "conference_id": 39,
+      "division_id": 15,
+      "ranking": 0,
+      "record": "9-2",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 15,
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Atlantic"
+      }
+     },
+     {
+      "team_id": 5,
+      "name": "Toronto",
+      "mascot": "Raptors",
+      "abbreviation": "TOR",
+      "conference_id": 39,
+      "division_id": 15,
+      "ranking": 0,
+      "record": "5-5",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 15,
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Atlantic"
+      }
+     }
+    ],
+    "schedule": {
+     "league_name": "National Basketball Association",
+     "conference_competition": false,
+     "season_type": "Regular Season",
+     "season_year": 2027,
+     "event_name": "Boston at Toronto - 2026-11-12T00:00:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 8166391,
+      "market_id": 1,
+      "period_id": 0,
+      "name": "moneyline",
+      "market_description": "Win the game outright.",
+      "participants": [
+       {
+        "id": 1,
+        "type": "TYPE_TEAM",
+        "name": "Boston Celtics",
+        "lines": [
+         {
+          "id": "85ad58f2581614da5d038f3ab17ef0ec",
+          "prices": {
+           "19": {
+            "id": "714698259",
+            "price": -249,
+            "price_delta": -26,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:32:41Z",
+            "source_id": "0ML87164377_3"
+           },
+           "22": {
+            "id": "714719353",
+            "price": -250,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:30:30Z",
+            "source_id": "20050395-1571884981-2333238663",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050395?options=20050395-1571884981-2333238663"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 5,
+        "type": "TYPE_TEAM",
+        "name": "Toronto Raptors",
+        "lines": [
+         {
+          "id": "a76634ac0300a0629fbff66daed65b94",
+          "prices": {
+           "19": {
+            "id": "714698258",
+            "price": 206,
+            "price_delta": 21,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:32:41Z",
+            "source_id": "0ML87164377_1"
+           },
+           "22": {
+            "id": "714719354",
+            "price": 200,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:30:30Z",
+            "source_id": "20050395-1571884981-2333238664",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050395?options=20050395-1571884981-2333238664"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 8166392,
+      "market_id": 2,
+      "period_id": 0,
+      "name": "handicap",
+      "market_description": "Win or lose by a specified margin.",
+      "participants": [
+       {
+        "id": 1,
+        "type": "TYPE_TEAM",
+        "name": "Boston Celtics",
+        "lines": [
+         {
+          "id": "d64599a36e5d291f4f4d5e90cafeb1f1",
+          "value": "-6.5",
+          "prices": {
+           "19": {
+            "id": "714698260",
+            "price": -112,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:10:28Z",
+            "source_id": "0HC87164377N650_3"
+           },
+           "22": {
+            "id": "714719355",
+            "price": -115,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:30:30Z",
+            "source_id": "20050395-1577533874-2348478402",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050395?options=20050395-1577533874-2348478402"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 5,
+        "type": "TYPE_TEAM",
+        "name": "Toronto Raptors",
+        "lines": [
+         {
+          "id": "67927f9863e542eaea79212765dfc229",
+          "value": "+6.5",
+          "prices": {
+           "19": {
+            "id": "714698261",
+            "price": -108,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:10:28Z",
+            "source_id": "0HC87164377P650_1"
+           },
+           "22": {
+            "id": "714719356",
+            "price": -105,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:30:30Z",
+            "source_id": "20050395-1577533874-2348478403",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050395?options=20050395-1577533874-2348478403"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 8166393,
+      "market_id": 3,
+      "period_id": 0,
+      "name": "totals",
+      "market_description": "Over/under on the combined score.",
+      "participants": [
+       {
+        "id": 9,
+        "type": "TYPE_RESULT",
+        "name": "Over",
+        "lines": [
+         {
+          "id": "09415469ad79237a624bf192150ee1f3",
+          "value": "216.5",
+          "prices": {
+           "19": {
+            "id": "714720943",
+            "price": -110,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:33:07Z",
+            "source_id": "0OU87164377O21650_1"
+           },
+           "22": {
+            "id": "714719387",
+            "price": -110,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:32:55Z",
+            "source_id": "20050395-1577533803-2348478216",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050395?options=20050395-1577533803-2348478216"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 10,
+        "type": "TYPE_RESULT",
+        "name": "Under",
+        "lines": [
+         {
+          "id": "6a0e68fd525bcda867e01c7b7184ad23",
+          "value": "216.5",
+          "prices": {
+           "19": {
+            "id": "714720944",
+            "price": -110,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:33:07Z",
+            "source_id": "0OU87164377U21650_3"
+           },
+           "22": {
+            "id": "714719388",
+            "price": -110,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:32:55Z",
+            "source_id": "20050395-1577533803-2348478217",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050395?options=20050395-1577533803-2348478217"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "34": "207797501",
+     "22": "20050395",
+     "24": "75b4ea7d-d93a-41bd-a06b-c400c1dedadc",
+     "25": "26NOV11BOSTOR",
+     "26": "nba-bos-tor-2026-11-11",
+     "28": "7111843777496613261",
+     "29": "1704712904",
+     "32": "607772",
+     "35": "7aea9172-06b8-47f9-9057-9a434d4d4f4a",
+     "31": "200740",
+     "19": "87164377",
+     "21": "1028754114",
+     "30": "01a1c569-ec5c-78c3-b4bb-721356cc61bc"
+    },
+    "affiliate_deep_links": {
+     "19": "https://sportsbook.draftkings.com/event/bos-celtics-%40-tor-raptors/34988944",
+     "25": "https://kalshi.com/markets/kxnbagame/kxnbagame-26nov11bostor",
+     "28": "https://app.hardrock.bet/competition/nba/7111843777496613261",
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/207797501",
+     "21": "https://www.unibet.com/",
+     "22": "https://sports.nj.betmgm.com/en/sports/events/20050395",
+     "31": "https://polymarket.us/sports/nba/nba-bos-tor-2026-11-11",
+     "29": "https://www.prophetx.co/event/1704712904",
+     "26": "https://polymarket.com/event/nba-bos-tor-2026-11-11",
+     "24": "https://sportsbook.thescore.bet/",
+     "32": "https://www.circasports.com/",
+     "35": "https://sportsbook.caesars.com/",
+     "30": "https://novig.us/"
+    },
+    "affiliate_deep_link_types": {
+     "32": "catalog",
+     "35": "catalog",
+     "21": "catalog",
+     "24": "catalog",
+     "30": "catalog"
+    }
+   },
+   {
+    "event_id": "e4146b56b8ea1bdabaa3516046624cec",
+    "event_uuid": "11f1-de2c-00e30000-8f9f-bac5dfc233f9",
+    "sport_id": 4,
+    "event_date": "2026-11-12T00:00:00Z",
+    "rotation_number_away": 529,
+    "rotation_number_home": 530,
+    "score": {
+     "event_id": "e4146b56b8ea1bdabaa3516046624cec",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 7,
+     "team_id_home": 3,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [],
+     "score_home_by_period": [],
+     "venue_name": "Madison Square Garden",
+     "venue_location": "New York, NY",
+     "game_clock": 0,
+     "display_clock": "0.0",
+     "game_period": 0,
+     "broadcast": "ESPN",
+     "event_status_detail": "11/11 - 7:00 PM EST",
+     "updated_at": "2026-09-30T14:22:21Z"
+    },
+    "teams": [
+     {
+      "team_id": 7,
+      "name": "Cleveland",
+      "mascot": "Cavaliers",
+      "abbreviation": "CLE",
+      "conference_id": 39,
+      "division_id": 16,
+      "ranking": 0,
+      "record": "5-6",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 16,
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Central"
+      }
+     },
+     {
+      "team_id": 3,
+      "name": "New York",
+      "mascot": "Knicks",
+      "abbreviation": "NYK",
+      "conference_id": 39,
+      "division_id": 15,
+      "ranking": 0,
+      "record": "6-4",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 15,
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Atlantic"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 7,
+      "name": "Cleveland",
+      "mascot": "Cavaliers",
+      "abbreviation": "CLE",
+      "conference_id": 39,
+      "division_id": 16,
+      "ranking": 0,
+      "record": "5-6",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 16,
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Central"
+      }
+     },
+     {
+      "team_id": 3,
+      "name": "New York",
+      "mascot": "Knicks",
+      "abbreviation": "NYK",
+      "conference_id": 39,
+      "division_id": 15,
+      "ranking": 0,
+      "record": "6-4",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 15,
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Atlantic"
+      }
+     }
+    ],
+    "schedule": {
+     "league_name": "National Basketball Association",
+     "conference_competition": false,
+     "season_type": "Regular Season",
+     "season_year": 2027,
+     "event_name": "Cleveland at New York - 2026-11-12T00:00:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 8164441,
+      "market_id": 1,
+      "period_id": 0,
+      "name": "moneyline",
+      "market_description": "Win the game outright.",
+      "participants": [
+       {
+        "id": 3,
+        "type": "TYPE_TEAM",
+        "name": "New York Knicks",
+        "lines": [
+         {
+          "id": "3d37091cad7b761ddda61af95bd5e20f",
+          "prices": {
+           "19": {
+            "id": "714625379",
+            "price": -166,
+            "price_delta": 11,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:17:20Z",
+            "source_id": "0ML87164376_1"
+           },
+           "22": {
+            "id": "714657531",
+            "price": -170,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:17:07Z",
+            "source_id": "20050394-1571884978-2333238662",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050394?options=20050394-1571884978-2333238662"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 7,
+        "type": "TYPE_TEAM",
+        "name": "Cleveland Cavaliers",
+        "lines": [
+         {
+          "id": "dbd36550d1b28f5fa99a2a67645e25ec",
+          "prices": {
+           "22": {
+            "id": "714657530",
+            "price": 140,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:17:07Z",
+            "source_id": "20050394-1571884978-2333238661",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050394?options=20050394-1571884978-2333238661"
+           },
+           "19": {
+            "id": "714625380",
+            "price": 140,
+            "price_delta": -8,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:17:20Z",
+            "source_id": "0ML87164376_3"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 8164442,
+      "market_id": 2,
+      "period_id": 0,
+      "name": "handicap",
+      "market_description": "Win or lose by a specified margin.",
+      "participants": [
+       {
+        "id": 3,
+        "type": "TYPE_TEAM",
+        "name": "New York Knicks",
+        "lines": [
+         {
+          "id": "dcdaae113e8e34cfd751d413df3e1f1f",
+          "value": "-3.5",
+          "prices": {
+           "19": {
+            "id": "714657921",
+            "price": -115,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:17:20Z",
+            "source_id": "0HC87164376N350_1"
+           }
+          }
+         },
+         {
+          "id": "5ddc1331dd555dd0346eeca2607947aa",
+          "value": "+2.5",
+          "prices": {
+           "22": {
+            "id": "714658216",
+            "price": -220,
+            "price_delta": -10,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:28:16Z",
+            "source_id": "20050394-1577516880-2348432592"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 7,
+        "type": "TYPE_TEAM",
+        "name": "Cleveland Cavaliers",
+        "lines": [
+         {
+          "id": "a9c74fa1b13cd62883c497284f776245",
+          "value": "+3.5",
+          "prices": {
+           "19": {
+            "id": "714657924",
+            "price": -106,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:17:20Z",
+            "source_id": "0HC87164376P350_3"
+           }
+          }
+         },
+         {
+          "id": "e2dc4e12a5722ab30f46d859d7eaf155",
+          "value": "-2.5",
+          "prices": {
+           "22": {
+            "id": "714658215",
+            "price": 180,
+            "price_delta": 10,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:28:16Z",
+            "source_id": "20050394-1577516880-2348432591"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 8164443,
+      "market_id": 3,
+      "period_id": 0,
+      "name": "totals",
+      "market_description": "Over/under on the combined score.",
+      "participants": [
+       {
+        "id": 9,
+        "type": "TYPE_RESULT",
+        "name": "Over",
+        "lines": [
+         {
+          "id": "508babe82feafc4c92e9ec02b79b4c65",
+          "value": "221.5",
+          "prices": {
+           "19": {
+            "id": "714625383",
+            "price": -110,
+            "price_delta": -4,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:27:20Z",
+            "source_id": "0OU87164376O22150_1"
+           },
+           "22": {
+            "id": "714657554",
+            "price": -110,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:27:36Z",
+            "source_id": "20050394-1577516630-2348431928",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050394?options=20050394-1577516630-2348431928"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 10,
+        "type": "TYPE_RESULT",
+        "name": "Under",
+        "lines": [
+         {
+          "id": "fd00532bad3816099929895ec6c3f21f",
+          "value": "221.5",
+          "prices": {
+           "22": {
+            "id": "714657555",
+            "price": -110,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:27:36Z",
+            "source_id": "20050394-1577516630-2348431929",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050394?options=20050394-1577516630-2348431929"
+           },
+           "19": {
+            "id": "714625384",
+            "price": -110,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:27:20Z",
+            "source_id": "0OU87164376U22150_3"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "19": "87164376",
+     "21": "1028754132",
+     "30": "01a1c569-ecb9-7520-a2ee-d359d8078ed9",
+     "6": "491178249",
+     "25": "26NOV11CLENYK",
+     "32": "607771",
+     "33": "207797451",
+     "31": "200741",
+     "22": "20050394",
+     "4": "491178249",
+     "29": "1704712880",
+     "11": "491178249",
+     "26": "nba-cle-nyk-2026-11-11",
+     "28": "8675718748101017993",
+     "34": "207797451",
+     "35": "eec5a2c7-a8b4-4f75-bc80-0bbf182e3d88",
+     "3": "1639986819",
+     "18": "476271638"
+    },
+    "affiliate_deep_links": {
+     "3": "https://www.pinnacle.com/en/basketball/nba/cleveland-cavaliers-vs-new-york-knicks/1639986819/",
+     "22": "https://sports.nj.betmgm.com/en/sports/events/20050394",
+     "31": "https://polymarket.us/sports/nba/nba-cle-ny-2026-11-11",
+     "18": "https://landings.youwager.lv/partners/landing-a/index.shtml?affid=THERUNDOWN&A=41782&B=0&T=I&source=TheRunDown_RunDownLP",
+     "28": "https://app.hardrock.bet/competition/nba/8675718748101017993",
+     "25": "https://kalshi.com/markets/kxnbagame/kxnbagame-26nov11clenyk",
+     "6": "https://www.betonline.ag/sportsbook/basketball/nba/game/491178249",
+     "32": "https://www.circasports.com/",
+     "21": "https://www.unibet.com/",
+     "4": "https://www.sportsbetting.ag/sportsbook/basketball/nba/game/491178249",
+     "19": "https://sportsbook.draftkings.com/event/cle-cavaliers-%40-ny-knicks/34988943",
+     "33": "https://bet105.ag/",
+     "30": "https://novig.us/",
+     "11": "https://sports.lowvig.ag/sportsbook/basketball/nba/game/491178249",
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/207797451",
+     "29": "https://www.prophetx.co/event/1704712880",
+     "26": "https://polymarket.com/event/nba-cle-nyk-2026-11-11",
+     "35": "https://sportsbook.caesars.com/"
+    },
+    "affiliate_deep_link_types": {
+     "32": "catalog",
+     "30": "catalog",
+     "21": "catalog",
+     "18": "catalog",
+     "35": "catalog",
+     "33": "catalog"
+    }
+   },
+   {
+    "event_id": "08ac9d5d1f862bfe3ba05f9589dcccfb",
+    "event_uuid": "11f1-de34-62a76800-8088-498fff257cf9",
+    "sport_id": 4,
+    "event_date": "2026-11-12T01:00:00Z",
+    "rotation_number_away": 539,
+    "rotation_number_home": 540,
+    "score": {
+     "event_id": "08ac9d5d1f862bfe3ba05f9589dcccfb",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 30,
+     "team_id_home": 6,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [],
+     "score_home_by_period": [],
+     "venue_name": "United Center",
+     "venue_location": "Chicago, IL",
+     "game_clock": 0,
+     "display_clock": "0.0",
+     "game_period": 0,
+     "broadcast": "DAZN SAS",
+     "event_status_detail": "11/11 - 8:00 PM EST",
+     "updated_at": "2026-10-22T04:56:27Z"
+    },
+    "teams": [
+     {
+      "team_id": 30,
+      "name": "San Antonio",
+      "mascot": "Spurs",
+      "abbreviation": "SA",
+      "conference_id": 757,
+      "division_id": 20,
+      "ranking": 0,
+      "record": "9-2",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 20,
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Southwest"
+      }
+     },
+     {
+      "team_id": 6,
+      "name": "Chicago",
+      "mascot": "Bulls",
+      "abbreviation": "CHI",
+      "conference_id": 39,
+      "division_id": 16,
+      "ranking": 0,
+      "record": "1-8",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 16,
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Central"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 30,
+      "name": "San Antonio",
+      "mascot": "Spurs",
+      "abbreviation": "SA",
+      "conference_id": 757,
+      "division_id": 20,
+      "ranking": 0,
+      "record": "9-2",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 20,
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Southwest"
+      }
+     },
+     {
+      "team_id": 6,
+      "name": "Chicago",
+      "mascot": "Bulls",
+      "abbreviation": "CHI",
+      "conference_id": 39,
+      "division_id": 16,
+      "ranking": 0,
+      "record": "1-8",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 16,
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Central"
+      }
+     }
+    ],
+    "schedule": {
+     "league_name": "National Basketball Association",
+     "conference_competition": false,
+     "season_type": "Regular Season",
+     "season_year": 2027,
+     "event_name": "San Antonio at Chicago - 2026-11-12T01:00:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 8151856,
+      "market_id": 1,
+      "period_id": 0,
+      "name": "moneyline",
+      "market_description": "Win the game outright.",
+      "participants": [
+       {
+        "id": 6,
+        "type": "TYPE_TEAM",
+        "name": "Chicago Bulls",
+        "lines": [
+         {
+          "id": "5218c1973314648a27e0e94639f92f6e",
+          "prices": {
+           "19": {
+            "id": "714276324",
+            "price": 750,
+            "price_delta": 120,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:03:27Z",
+            "source_id": "0ML87164378_1"
+           },
+           "22": {
+            "id": "714463458",
+            "price": 725,
+            "price_delta": 25,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:14:46Z",
+            "source_id": "20050396-1571884984-2333238666",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050396?options=20050396-1571884984-2333238666"
+           },
+           "23": {
+            "id": "714317638",
+            "price": 730,
+            "price_delta": 90,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T02:47:38Z",
+            "source_id": "36298490-734.196723438-HOME"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 30,
+        "type": "TYPE_TEAM",
+        "name": "San Antonio Spurs",
+        "lines": [
+         {
+          "id": "a9b57aed0245bb6af392262201713ad1",
+          "prices": {
+           "19": {
+            "id": "714276325",
+            "price": -1200,
+            "price_delta": -260,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:03:27Z",
+            "source_id": "0ML87164378_3"
+           },
+           "22": {
+            "id": "714463457",
+            "price": -1200,
+            "price_delta": -100,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:14:46Z",
+            "source_id": "20050396-1571884984-2333238665",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050396?options=20050396-1571884984-2333238665"
+           },
+           "23": {
+            "id": "714317637",
+            "price": -1150,
+            "price_delta": -200,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T02:47:38Z",
+            "source_id": "36298490-734.196723438-AWAY"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 8151857,
+      "market_id": 2,
+      "period_id": 0,
+      "name": "handicap",
+      "market_description": "Win or lose by a specified margin.",
+      "participants": [
+       {
+        "id": 6,
+        "type": "TYPE_TEAM",
+        "name": "Chicago Bulls",
+        "lines": [
+         {
+          "id": "a6a10670d38639ba444dfb9e5404dda8",
+          "value": "+15.5",
+          "prices": {
+           "19": {
+            "id": "714279917",
+            "price": -111,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T22:30:53Z",
+            "source_id": "0HC87164378P1550_1"
+           }
+          }
+         },
+         {
+          "id": "46e500ddd0f7f73e8846d462934e28b0",
+          "value": "+14.5",
+          "prices": {
+           "22": {
+            "id": "714463460",
+            "price": -105,
+            "price_delta": -3,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:13:36Z",
+            "source_id": "20050396-1577472036-2348318890",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050396?options=20050396-1577472036-2348318890"
+           },
+           "23": {
+            "id": "714317640",
+            "price": -105,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T02:47:22Z",
+            "source_id": "36298490-734.196723477-HOME"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 30,
+        "type": "TYPE_TEAM",
+        "name": "San Antonio Spurs",
+        "lines": [
+         {
+          "id": "2c516dfbff437b2b5e189086d61bcdc7",
+          "value": "-15.5",
+          "prices": {
+           "19": {
+            "id": "714279914",
+            "price": -109,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T22:30:53Z",
+            "source_id": "0HC87164378N1550_3"
+           }
+          }
+         },
+         {
+          "id": "2b4d545632c424e8316d460256e0d5ee",
+          "value": "-14.5",
+          "prices": {
+           "22": {
+            "id": "714463459",
+            "price": -115,
+            "price_delta": 3,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:13:36Z",
+            "source_id": "20050396-1577472036-2348318889",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050396?options=20050396-1577472036-2348318889"
+           },
+           "23": {
+            "id": "714317639",
+            "price": -115,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T02:47:22Z",
+            "source_id": "36298490-734.196723477-AWAY"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 8151858,
+      "market_id": 3,
+      "period_id": 0,
+      "name": "totals",
+      "market_description": "Over/under on the combined score.",
+      "participants": [
+       {
+        "id": 9,
+        "type": "TYPE_RESULT",
+        "name": "Over",
+        "lines": [
+         {
+          "id": "d994384691a3dfdedf9c720475efda8b",
+          "value": "240.5",
+          "prices": {
+           "19": {
+            "id": "714312874",
+            "price": -109,
+            "price_delta": -3,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:13:25Z",
+            "source_id": "0OU87164378O24050_1"
+           }
+          }
+         },
+         {
+          "id": "02a9530ae0ca55aacd8cf5d0e7d725e3",
+          "value": "239.5",
+          "prices": {
+           "22": {
+            "id": "714463495",
+            "price": -115,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:14:46Z",
+            "source_id": "20050396-1577472073-2348318969",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050396?options=20050396-1577472073-2348318969"
+           },
+           "23": {
+            "id": "714317641",
+            "price": -105,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T23:53:49Z",
+            "source_id": "36298490-734.197043010-OVER"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 10,
+        "type": "TYPE_RESULT",
+        "name": "Under",
+        "lines": [
+         {
+          "id": "158fcddf650001436f675226d5be7fec",
+          "value": "240.5",
+          "prices": {
+           "19": {
+            "id": "714312875",
+            "price": -111,
+            "price_delta": 4,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:13:25Z",
+            "source_id": "0OU87164378U24050_3"
+           }
+          }
+         },
+         {
+          "id": "4efa2f1f911963efb8d82dba722839ca",
+          "value": "239.5",
+          "prices": {
+           "22": {
+            "id": "714463496",
+            "price": -105,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:14:46Z",
+            "source_id": "20050396-1577472073-2348318981",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050396?options=20050396-1577472073-2348318981"
+           },
+           "23": {
+            "id": "714317642",
+            "price": -115,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T23:53:49Z",
+            "source_id": "36298490-734.197043010-UNDER"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "31": "200743",
+     "2": "33232575",
+     "24": "ba6aa32e-31a4-4d2b-b402-cc891d949d21",
+     "25": "26NOV11SASCHI",
+     "33": "207797341",
+     "6": "491178244",
+     "9": "6C83BA16-E4AE-41FF-ADBC-80CE206E3C3A",
+     "18": "476271631",
+     "26": "nba-sas-chi-2026-11-11",
+     "29": "1704712704",
+     "30": "01a1c5a0-db53-7560-afd5-944bc8796b97",
+     "34": "207797341",
+     "7": "6C83BA16-E4AE-41FF-ADBC-80CE206E3C3A",
+     "11": "491178244",
+     "21": "1028754054",
+     "35": "a836b038-5621-45ca-a3d7-57431179c75d",
+     "22": "20050396",
+     "3": "1639986816",
+     "4": "491178244",
+     "19": "87164378",
+     "23": "36298490",
+     "28": "8034542557620994452",
+     "32": "607776"
+    },
+    "affiliate_deep_links": {
+     "25": "https://kalshi.com/markets/kxnbagame/kxnbagame-26nov11saschi",
+     "23": "https://sportsbook.fanduel.com/basketball/nba/san-antonio-spurs-@-chicago-bulls-36298490",
+     "11": "https://sports.lowvig.ag/sportsbook/basketball/nba/game/491178244",
+     "26": "https://polymarket.com/event/nba-sas-chi-2026-11-11",
+     "29": "https://www.prophetx.co/event/1704712704",
+     "32": "https://www.circasports.com/",
+     "31": "https://polymarket.us/sports/nba/nba-sa-chi-2026-11-11",
+     "30": "https://novig.us/",
+     "24": "https://sportsbook.thescore.bet/",
+     "9": "https://sportsbook.betcris.com/",
+     "18": "https://landings.youwager.lv/partners/landing-a/index.shtml?affid=THERUNDOWN&A=41782&B=0&T=I&source=TheRunDown_RunDownLP",
+     "28": "https://app.hardrock.bet/competition/nba/8034542557620994452",
+     "22": "https://sports.nj.betmgm.com/en/sports/events/20050396",
+     "35": "https://sportsbook.caesars.com/",
+     "2": "https://www.bovada.lv/sports/basketball/nba/san-antonio-spurs-chicago-bulls-202611112000",
+     "19": "https://sportsbook.draftkings.com/event/sa-spurs-%40-chi-bulls/34988945",
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/207797341",
+     "3": "https://www.pinnacle.com/en/basketball/nba/san-antonio-spurs-vs-chicago-bulls/1639986816/",
+     "33": "https://bet105.ag/",
+     "7": "https://www.bookmaker.eu/",
+     "21": "https://www.unibet.com/",
+     "4": "https://www.sportsbetting.ag/sportsbook/basketball/nba/game/491178244",
+     "6": "https://www.betonline.ag/sportsbook/basketball/nba/game/491178244"
+    },
+    "affiliate_deep_link_types": {
+     "33": "catalog",
+     "30": "catalog",
+     "9": "catalog",
+     "7": "catalog",
+     "35": "catalog",
+     "32": "catalog",
+     "21": "catalog",
+     "24": "catalog",
+     "18": "catalog"
+    }
+   },
+   {
+    "event_id": "4e49b14dad399330ee0fd68ccf42b4c5",
+    "event_uuid": "11f1-de34-62a76800-82d8-dffa357a7b56",
+    "sport_id": 4,
+    "event_date": "2026-11-12T01:00:00Z",
+    "rotation_number_away": 535,
+    "rotation_number_home": 536,
+    "score": {
+     "event_id": "4e49b14dad399330ee0fd68ccf42b4c5",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 2,
+     "team_id_home": 29,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [],
+     "score_home_by_period": [],
+     "venue_name": "Smoothie King Center",
+     "venue_location": "New Orleans, LA",
+     "game_clock": 0,
+     "display_clock": "0.0",
+     "game_period": 0,
+     "broadcast": "DAZN (YES)",
+     "event_status_detail": "11/11 - 8:00 PM EST",
+     "updated_at": "2026-10-21T19:47:18Z"
+    },
+    "teams": [
+     {
+      "team_id": 2,
+      "name": "Brooklyn",
+      "mascot": "Nets",
+      "abbreviation": "BKN",
+      "conference_id": 39,
+      "division_id": 15,
+      "ranking": 0,
+      "record": "2-8",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 15,
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Atlantic"
+      }
+     },
+     {
+      "team_id": 29,
+      "name": "New Orleans",
+      "mascot": "Pelicans",
+      "abbreviation": "NO",
+      "conference_id": 757,
+      "division_id": 20,
+      "ranking": 0,
+      "record": "4-7",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 20,
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Southwest"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 2,
+      "name": "Brooklyn",
+      "mascot": "Nets",
+      "abbreviation": "BKN",
+      "conference_id": 39,
+      "division_id": 15,
+      "ranking": 0,
+      "record": "2-8",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 15,
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Atlantic"
+      }
+     },
+     {
+      "team_id": 29,
+      "name": "New Orleans",
+      "mascot": "Pelicans",
+      "abbreviation": "NO",
+      "conference_id": 757,
+      "division_id": 20,
+      "ranking": 0,
+      "record": "4-7",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 20,
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Southwest"
+      }
+     }
+    ],
+    "schedule": {
+     "league_name": "National Basketball Association",
+     "conference_competition": false,
+     "season_type": "Regular Season",
+     "season_year": 2027,
+     "event_name": "Brooklyn at New Orleans - 2026-11-12T01:00:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 8151886,
+      "market_id": 1,
+      "period_id": 0,
+      "name": "moneyline",
+      "market_description": "Win the game outright.",
+      "participants": [
+       {
+        "id": 2,
+        "type": "TYPE_TEAM",
+        "name": "Brooklyn Nets",
+        "lines": [
+         {
+          "id": "1d87f2093bc36b0737843f701b629f8f",
+          "prices": {
+           "22": {
+            "id": "714448778",
+            "price": 165,
+            "price_delta": 11,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:21:49Z",
+            "source_id": "20050399-1571884993-2333238671",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050399?options=20050399-1571884993-2333238671"
+           },
+           "19": {
+            "id": "714276794",
+            "price": 160,
+            "price_delta": 6,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:17:21Z",
+            "source_id": "0ML87164381_3"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 29,
+        "type": "TYPE_TEAM",
+        "name": "New Orleans Pelicans",
+        "lines": [
+         {
+          "id": "9d9df6cb98d5cf5fb160c8ae7b3dddff",
+          "prices": {
+           "22": {
+            "id": "714448779",
+            "price": -200,
+            "price_delta": -10,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:21:49Z",
+            "source_id": "20050399-1571884993-2333238672",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050399?options=20050399-1571884993-2333238672"
+           },
+           "19": {
+            "id": "714276793",
+            "price": -191,
+            "price_delta": -7,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:17:21Z",
+            "source_id": "0ML87164381_1"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 8151887,
+      "market_id": 2,
+      "period_id": 0,
+      "name": "handicap",
+      "market_description": "Win or lose by a specified margin.",
+      "participants": [
+       {
+        "id": 2,
+        "type": "TYPE_TEAM",
+        "name": "Brooklyn Nets",
+        "lines": [
+         {
+          "id": "e71bf7ff8dca3571b94615d0f43e0735",
+          "value": "+4.5",
+          "prices": {
+           "19": {
+            "id": "714276796",
+            "price": -110,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T02:25:41Z",
+            "source_id": "0HC87164381P450_3"
+           },
+           "22": {
+            "id": "714448780",
+            "price": -110,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T02:25:59Z",
+            "source_id": "20050399-1577470655-2348315533",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050399?options=20050399-1577470655-2348315533"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 29,
+        "type": "TYPE_TEAM",
+        "name": "New Orleans Pelicans",
+        "lines": [
+         {
+          "id": "a99a8aa044079840f682e66c16621aba",
+          "value": "-4.5",
+          "prices": {
+           "19": {
+            "id": "714276795",
+            "price": -110,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T02:25:41Z",
+            "source_id": "0HC87164381N450_1"
+           },
+           "22": {
+            "id": "714448781",
+            "price": -110,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T02:25:59Z",
+            "source_id": "20050399-1577470655-2348315534",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050399?options=20050399-1577470655-2348315534"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 8151888,
+      "market_id": 3,
+      "period_id": 0,
+      "name": "totals",
+      "market_description": "Over/under on the combined score.",
+      "participants": [
+       {
+        "id": 9,
+        "type": "TYPE_RESULT",
+        "name": "Over",
+        "lines": [
+         {
+          "id": "6d4a09d8ee3211256ba87350a0240c12",
+          "value": "228.5",
+          "prices": {
+           "19": {
+            "id": "714711962",
+            "price": -107,
+            "price_delta": 4,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:19:44Z",
+            "source_id": "0OU87164381O22850_1"
+           },
+           "22": {
+            "id": "714448810",
+            "price": -110,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:21:49Z",
+            "source_id": "20050399-1577470603-2348315408",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050399?options=20050399-1577470603-2348315408"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 10,
+        "type": "TYPE_RESULT",
+        "name": "Under",
+        "lines": [
+         {
+          "id": "ff0c216e9822d7f59161037ea5c8bdf1",
+          "value": "228.5",
+          "prices": {
+           "19": {
+            "id": "714711963",
+            "price": -113,
+            "price_delta": -4,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:19:44Z",
+            "source_id": "0OU87164381U22850_3"
+           },
+           "22": {
+            "id": "714448811",
+            "price": -110,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:21:50Z",
+            "source_id": "20050399-1577470603-2348315409",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050399?options=20050399-1577470603-2348315409"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "3": "1639986815",
+     "9": "E3D6BC05-08C2-4092-9F26-DB22929963FD",
+     "11": "491178251",
+     "21": "1028754061",
+     "26": "nba-bkn-nop-2026-11-11",
+     "4": "491178251",
+     "6": "491178251",
+     "28": "815272354946089358",
+     "29": "1704712708",
+     "30": "01a1c5a0-dab1-77d0-b004-062c2144232b",
+     "31": "200742",
+     "2": "33232573",
+     "7": "E3D6BC05-08C2-4092-9F26-DB22929963FD",
+     "24": "95cf5878-8573-4463-8ca4-27840b608e80",
+     "32": "607774",
+     "33": "207797321",
+     "35": "7e58f8bb-da9f-4d55-b48b-7e8fa71ed5b7",
+     "22": "20050399",
+     "18": "476271633",
+     "19": "87164381",
+     "25": "26NOV11BKNNOP",
+     "34": "207797321"
+    },
+    "affiliate_deep_links": {
+     "29": "https://www.prophetx.co/event/1704712708",
+     "2": "https://www.bovada.lv/sports/basketball/nba/brooklyn-nets-new-orleans-pelicans-202611112000",
+     "4": "https://www.sportsbetting.ag/sportsbook/basketball/nba/game/491178251",
+     "11": "https://sports.lowvig.ag/sportsbook/basketball/nba/game/491178251",
+     "24": "https://sportsbook.thescore.bet/",
+     "22": "https://sports.nj.betmgm.com/en/sports/events/20050399",
+     "31": "https://polymarket.us/sports/nba/nba-bkn-no-2026-11-11",
+     "18": "https://landings.youwager.lv/partners/landing-a/index.shtml?affid=THERUNDOWN&A=41782&B=0&T=I&source=TheRunDown_RunDownLP",
+     "32": "https://www.circasports.com/",
+     "9": "https://sportsbook.betcris.com/",
+     "21": "https://www.unibet.com/",
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/207797321",
+     "3": "https://www.pinnacle.com/en/basketball/nba/brooklyn-nets-vs-new-orleans-pelicans/1639986815/",
+     "30": "https://novig.us/",
+     "26": "https://polymarket.com/event/nba-bkn-nop-2026-11-11",
+     "25": "https://kalshi.com/markets/kxnbagame/kxnbagame-26nov11bknnop",
+     "19": "https://sportsbook.draftkings.com/event/bkn-nets-%40-no-pelicans/34988948",
+     "6": "https://www.betonline.ag/sportsbook/basketball/nba/game/491178251",
+     "33": "https://bet105.ag/",
+     "7": "https://www.bookmaker.eu/",
+     "35": "https://sportsbook.caesars.com/",
+     "28": "https://app.hardrock.bet/competition/nba/815272354946089358"
+    },
+    "affiliate_deep_link_types": {
+     "33": "catalog",
+     "7": "catalog",
+     "30": "catalog",
+     "35": "catalog",
+     "9": "catalog",
+     "18": "catalog",
+     "32": "catalog",
+     "24": "catalog",
+     "21": "catalog"
+    }
+   },
+   {
+    "event_id": "5b59da901abfa8524b4c285e6f10a0e8",
+    "event_uuid": "11f1-de34-62a76800-8eb2-e4900a07bf83",
+    "sport_id": 4,
+    "event_date": "2026-11-12T01:00:00Z",
+    "rotation_number_away": 537,
+    "rotation_number_home": 538,
+    "score": {
+     "event_id": "5b59da901abfa8524b4c285e6f10a0e8",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 16,
+     "team_id_home": 28,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [],
+     "score_home_by_period": [],
+     "venue_name": "FedExForum",
+     "venue_location": "Memphis, TN",
+     "game_clock": 0,
+     "display_clock": "0.0",
+     "game_period": 0,
+     "broadcast": "",
+     "event_status_detail": "11/11 - 8:00 PM EST",
+     "updated_at": "2026-09-30T14:22:21Z"
+    },
+    "teams": [
+     {
+      "team_id": 16,
+      "name": "Denver",
+      "mascot": "Nuggets",
+      "abbreviation": "DEN",
+      "conference_id": 757,
+      "division_id": 18,
+      "ranking": 0,
+      "record": "5-4",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 18,
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Northwest"
+      }
+     },
+     {
+      "team_id": 28,
+      "name": "Memphis",
+      "mascot": "Grizzlies",
+      "abbreviation": "MEM",
+      "conference_id": 757,
+      "division_id": 20,
+      "ranking": 0,
+      "record": "7-3",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 20,
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Southwest"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 16,
+      "name": "Denver",
+      "mascot": "Nuggets",
+      "abbreviation": "DEN",
+      "conference_id": 757,
+      "division_id": 18,
+      "ranking": 0,
+      "record": "5-4",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 18,
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Northwest"
+      }
+     },
+     {
+      "team_id": 28,
+      "name": "Memphis",
+      "mascot": "Grizzlies",
+      "abbreviation": "MEM",
+      "conference_id": 757,
+      "division_id": 20,
+      "ranking": 0,
+      "record": "7-3",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 20,
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Southwest"
+      }
+     }
+    ],
+    "schedule": {
+     "league_name": "National Basketball Association",
+     "conference_competition": false,
+     "season_type": "Regular Season",
+     "season_year": 2027,
+     "event_name": "Denver at Memphis - 2026-11-12T01:00:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 8158026,
+      "market_id": 1,
+      "period_id": 0,
+      "name": "moneyline",
+      "market_description": "Win the game outright.",
+      "participants": [
+       {
+        "id": 16,
+        "type": "TYPE_TEAM",
+        "name": "Denver Nuggets",
+        "lines": [
+         {
+          "id": "9d48b0daaad81a7d4a780bf5803c24bd",
+          "prices": {
+           "19": {
+            "id": "714405463",
+            "price": -158,
+            "price_delta": 1,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:12:50Z",
+            "source_id": "0ML87164379_3"
+           },
+           "22": {
+            "id": "714468502",
+            "price": -165,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T01:08:14Z",
+            "source_id": "20050397-1571884987-2333238667",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050397?options=20050397-1571884987-2333238667"
+           },
+           "23": {
+            "id": "714318278",
+            "price": -172,
+            "price_delta": -10,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:21:36Z",
+            "source_id": "36298491-734.196723494-AWAY"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 28,
+        "type": "TYPE_TEAM",
+        "name": "Memphis Grizzlies",
+        "lines": [
+         {
+          "id": "913d0e06deb7ab09745765c2481beac9",
+          "prices": {
+           "19": {
+            "id": "714405464",
+            "price": 133,
+            "price_delta": -1,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:12:50Z",
+            "source_id": "0ML87164379_1"
+           },
+           "22": {
+            "id": "714468503",
+            "price": 135,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T01:08:14Z",
+            "source_id": "20050397-1571884987-2333238668",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050397?options=20050397-1571884987-2333238668"
+           },
+           "23": {
+            "id": "714318279",
+            "price": 144,
+            "price_delta": 8,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:21:36Z",
+            "source_id": "36298491-734.196723494-HOME"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 8158027,
+      "market_id": 2,
+      "period_id": 0,
+      "name": "handicap",
+      "market_description": "Win or lose by a specified margin.",
+      "participants": [
+       {
+        "id": 16,
+        "type": "TYPE_TEAM",
+        "name": "Denver Nuggets",
+        "lines": [
+         {
+          "id": "c45c57e266c4b170c749d716e2498838",
+          "value": "-4.5",
+          "prices": {
+           "19": {
+            "id": "714405459",
+            "price": -106,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:21:13Z",
+            "source_id": "0HC87164379N450_3"
+           },
+           "22": {
+            "id": "714468504",
+            "price": -105,
+            "price_delta": -205,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:26:03Z",
+            "source_id": "20050397-1577473169-2348321838",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050397?options=20050397-1577473169-2348321838"
+           },
+           "23": {
+            "id": "714318280",
+            "price": -104,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T23:53:49Z",
+            "source_id": "36298491-734.196723498-AWAY"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 28,
+        "type": "TYPE_TEAM",
+        "name": "Memphis Grizzlies",
+        "lines": [
+         {
+          "id": "208f56de9f98313098fc1398fa1480b5",
+          "value": "+4.5",
+          "prices": {
+           "19": {
+            "id": "714405460",
+            "price": -114,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:21:13Z",
+            "source_id": "0HC87164379P450_1"
+           },
+           "22": {
+            "id": "714468505",
+            "price": -115,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:26:03Z",
+            "source_id": "20050397-1577473169-2348321839",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050397?options=20050397-1577473169-2348321839"
+           },
+           "23": {
+            "id": "714318281",
+            "price": -118,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T23:53:49Z",
+            "source_id": "36298491-734.196723498-HOME"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 8158028,
+      "market_id": 3,
+      "period_id": 0,
+      "name": "totals",
+      "market_description": "Over/under on the combined score.",
+      "participants": [
+       {
+        "id": 9,
+        "type": "TYPE_RESULT",
+        "name": "Over",
+        "lines": [
+         {
+          "id": "d05cd6a7b7e2047397e3dd5694042719",
+          "value": "227.5",
+          "prices": {
+           "19": {
+            "id": "714661204",
+            "price": -111,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:21:13Z",
+            "source_id": "0OU87164379O22750_1"
+           },
+           "22": {
+            "id": "714468544",
+            "price": -110,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:19:08Z",
+            "source_id": "20050397-1577473248-2348322009",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050397?options=20050397-1577473248-2348322009"
+           },
+           "23": {
+            "id": "714444268",
+            "price": -112,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T00:59:11Z",
+            "source_id": "36298491-734.197047135-OVER"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 10,
+        "type": "TYPE_RESULT",
+        "name": "Under",
+        "lines": [
+         {
+          "id": "c8e0e5cef89762e647c8338f38a0de5e",
+          "value": "227.5",
+          "prices": {
+           "19": {
+            "id": "714661205",
+            "price": -109,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:21:13Z",
+            "source_id": "0OU87164379U22750_3"
+           },
+           "22": {
+            "id": "714468545",
+            "price": -110,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:19:08Z",
+            "source_id": "20050397-1577473248-2348322030",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050397?options=20050397-1577473248-2348322030"
+           },
+           "23": {
+            "id": "714444269",
+            "price": -108,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T00:59:11Z",
+            "source_id": "36298491-734.197047135-UNDER"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "29": "1704712778",
+     "4": "491178250",
+     "11": "491178250",
+     "21": "1028754050",
+     "30": "01a1c5a0-dbe5-7e12-89a1-701eead7c392",
+     "34": "207797461",
+     "22": "20050397",
+     "6": "491178250",
+     "32": "607775",
+     "35": "012841f4-24a7-40ae-9e3e-2eb845db8357",
+     "19": "87164379",
+     "25": "26NOV11DENMEM",
+     "31": "200745",
+     "23": "36298491",
+     "24": "a3ec809f-77e9-492f-83b5-4ab5cebf8889",
+     "26": "nba-den-mem-2026-11-11",
+     "28": "3900238099694879144"
+    },
+    "affiliate_deep_links": {
+     "29": "https://www.prophetx.co/event/1704712778",
+     "21": "https://www.unibet.com/",
+     "23": "https://sportsbook.fanduel.com/basketball/nba/denver-nuggets-@-memphis-grizzlies-36298491",
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/207797461",
+     "4": "https://www.sportsbetting.ag/sportsbook/basketball/nba/game/491178250",
+     "35": "https://sportsbook.caesars.com/",
+     "24": "https://sportsbook.thescore.bet/",
+     "31": "https://polymarket.us/sports/nba/nba-den-mem-2026-11-11",
+     "26": "https://polymarket.com/event/nba-den-mem-2026-11-11",
+     "6": "https://www.betonline.ag/sportsbook/basketball/nba/game/491178250",
+     "25": "https://kalshi.com/markets/kxnbagame/kxnbagame-26nov11denmem",
+     "11": "https://sports.lowvig.ag/sportsbook/basketball/nba/game/491178250",
+     "19": "https://sportsbook.draftkings.com/event/den-nuggets-%40-mem-grizzlies/34988946",
+     "22": "https://sports.nj.betmgm.com/en/sports/events/20050397",
+     "32": "https://www.circasports.com/",
+     "28": "https://app.hardrock.bet/competition/nba/3900238099694879144",
+     "30": "https://novig.us/"
+    },
+    "affiliate_deep_link_types": {
+     "35": "catalog",
+     "32": "catalog",
+     "21": "catalog",
+     "24": "catalog",
+     "30": "catalog"
+    }
+   },
+   {
+    "event_id": "f80ac789b16c7adcdad36932fd092d8c",
+    "event_uuid": "11f1-de34-62a76800-8cac-b2e36b62d9fa",
+    "sport_id": 4,
+    "event_date": "2026-11-12T01:00:00Z",
+    "rotation_number_away": 541,
+    "rotation_number_home": 542,
+    "score": {
+     "event_id": "f80ac789b16c7adcdad36932fd092d8c",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 23,
+     "team_id_home": 10,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [],
+     "score_home_by_period": [],
+     "venue_name": "Fiserv Forum",
+     "venue_location": "Milwaukee, WI",
+     "game_clock": 0,
+     "display_clock": "0.0",
+     "game_period": 0,
+     "broadcast": "Spectrum Sports Net",
+     "event_status_detail": "11/11 - 8:00 PM EST",
+     "updated_at": "2026-10-21T19:47:18Z"
+    },
+    "teams": [
+     {
+      "team_id": 23,
+      "name": "Los Angeles",
+      "mascot": "Lakers",
+      "abbreviation": "LAL",
+      "conference_id": 757,
+      "division_id": 19,
+      "ranking": 0,
+      "record": "10-2",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 19,
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Pacific"
+      }
+     },
+     {
+      "team_id": 10,
+      "name": "Milwaukee",
+      "mascot": "Bucks",
+      "abbreviation": "MIL",
+      "conference_id": 39,
+      "division_id": 16,
+      "ranking": 0,
+      "record": "1-10",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 16,
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Central"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 23,
+      "name": "Los Angeles",
+      "mascot": "Lakers",
+      "abbreviation": "LAL",
+      "conference_id": 757,
+      "division_id": 19,
+      "ranking": 0,
+      "record": "10-2",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 19,
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Pacific"
+      }
+     },
+     {
+      "team_id": 10,
+      "name": "Milwaukee",
+      "mascot": "Bucks",
+      "abbreviation": "MIL",
+      "conference_id": 39,
+      "division_id": 16,
+      "ranking": 0,
+      "record": "1-10",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 16,
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Central"
+      }
+     }
+    ],
+    "schedule": {
+     "league_name": "National Basketball Association",
+     "conference_competition": false,
+     "season_type": "Regular Season",
+     "season_year": 2027,
+     "event_name": "Los Angeles at Milwaukee - 2026-11-12T01:00:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 8166410,
+      "market_id": 1,
+      "period_id": 0,
+      "name": "moneyline",
+      "market_description": "Win the game outright.",
+      "participants": [
+       {
+        "id": 10,
+        "type": "TYPE_TEAM",
+        "name": "Milwaukee Bucks",
+        "lines": [
+         {
+          "id": "161a6435c45a72d09b1892cec3c36e9e",
+          "prices": {
+           "22": {
+            "id": "714720200",
+            "price": 450,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:32:00Z",
+            "source_id": "20050398-1571884990-2333238670",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050398?options=20050398-1571884990-2333238670"
+           },
+           "19": {
+            "id": "714698912",
+            "price": 473,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:13:18Z",
+            "source_id": "0ML87164380_1"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 23,
+        "type": "TYPE_TEAM",
+        "name": "Los Angeles Lakers",
+        "lines": [
+         {
+          "id": "5fc7a0f052d7ff0ccbc065d272a058bd",
+          "prices": {
+           "19": {
+            "id": "714698913",
+            "price": -650,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:13:18Z",
+            "source_id": "0ML87164380_3"
+           },
+           "22": {
+            "id": "714720199",
+            "price": -625,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:32:00Z",
+            "source_id": "20050398-1571884990-2333238669",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050398?options=20050398-1571884990-2333238669"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 8166411,
+      "market_id": 2,
+      "period_id": 0,
+      "name": "handicap",
+      "market_description": "Win or lose by a specified margin.",
+      "participants": [
+       {
+        "id": 10,
+        "type": "TYPE_TEAM",
+        "name": "Milwaukee Bucks",
+        "lines": [
+         {
+          "id": "d396129101eb01f833caf9250c5542dc",
+          "value": "+10.5",
+          "prices": {
+           "22": {
+            "id": "714720202",
+            "price": -105,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:32:00Z",
+            "source_id": "20050398-1577534327-2348479645",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050398?options=20050398-1577534327-2348479645"
+           },
+           "19": {
+            "id": "714698915",
+            "price": -105,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:13:18Z",
+            "source_id": "0HC87164380P1050_1"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 23,
+        "type": "TYPE_TEAM",
+        "name": "Los Angeles Lakers",
+        "lines": [
+         {
+          "id": "25cb4180dfab850ca4e9fd753c2c4bfc",
+          "value": "-10.5",
+          "prices": {
+           "19": {
+            "id": "714698914",
+            "price": -115,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:13:18Z",
+            "source_id": "0HC87164380N1050_3"
+           },
+           "22": {
+            "id": "714720201",
+            "price": -115,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:32:00Z",
+            "source_id": "20050398-1577534327-2348479635",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050398?options=20050398-1577534327-2348479635"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 8166412,
+      "market_id": 3,
+      "period_id": 0,
+      "name": "totals",
+      "market_description": "Over/under on the combined score.",
+      "participants": [
+       {
+        "id": 9,
+        "type": "TYPE_RESULT",
+        "name": "Over",
+        "lines": [
+         {
+          "id": "22dba4eea2b7edfe779ad1d2b808d9fd",
+          "value": "233.5",
+          "prices": {
+           "19": {
+            "id": "714698916",
+            "price": -106,
+            "price_delta": -1,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:29:15Z",
+            "source_id": "0OU87164380O23350_1"
+           },
+           "22": {
+            "id": "714720223",
+            "price": -110,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:32:00Z",
+            "source_id": "20050398-1577534333-2348479631",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050398?options=20050398-1577534333-2348479631"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 10,
+        "type": "TYPE_RESULT",
+        "name": "Under",
+        "lines": [
+         {
+          "id": "8064538ce011313f0601c271f36a75b7",
+          "value": "233.5",
+          "prices": {
+           "19": {
+            "id": "714698917",
+            "price": -114,
+            "price_delta": 1,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:29:15Z",
+            "source_id": "0OU87164380U23350_3"
+           },
+           "22": {
+            "id": "714720224",
+            "price": -110,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:32:00Z",
+            "source_id": "20050398-1577534333-2348479647",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050398?options=20050398-1577534333-2348479647"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "22": "20050398",
+     "19": "87164380",
+     "21": "1028754063",
+     "24": "9c48f690-e36e-44fc-85dc-d630c10a1784",
+     "25": "26NOV11LALMIL",
+     "26": "nba-lal-mil-2026-11-11",
+     "32": "607777",
+     "35": "96f01a7f-a993-462a-bb31-f4055c9d8b06",
+     "31": "200744",
+     "28": "2040251453590864283",
+     "29": "1704712919",
+     "30": "01a1c5a0-db8f-73f0-834f-fa8d64f85d38",
+     "34": "207797471"
+    },
+    "affiliate_deep_links": {
+     "19": "https://sportsbook.draftkings.com/event/la-lakers-%40-mil-bucks/34988947",
+     "26": "https://polymarket.com/event/nba-lal-mil-2026-11-11",
+     "22": "https://sports.nj.betmgm.com/en/sports/events/20050398",
+     "24": "https://sportsbook.thescore.bet/",
+     "35": "https://sportsbook.caesars.com/",
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/207797471",
+     "25": "https://kalshi.com/markets/kxnbagame/kxnbagame-26nov11lalmil",
+     "29": "https://www.prophetx.co/event/1704712919",
+     "32": "https://www.circasports.com/",
+     "30": "https://novig.us/",
+     "31": "https://polymarket.us/sports/nba/nba-lal-mil-2026-11-11",
+     "28": "https://app.hardrock.bet/competition/nba/2040251453590864283",
+     "21": "https://www.unibet.com/"
+    },
+    "affiliate_deep_link_types": {
+     "35": "catalog",
+     "32": "catalog",
+     "21": "catalog",
+     "24": "catalog",
+     "30": "catalog"
+    }
+   },
+   {
+    "event_id": "a4cf6f61a9650cf171854cef89a2c1ac",
+    "event_uuid": "11f1-de3c-c46bd000-8fed-a12031d01eef",
+    "sport_id": 4,
+    "event_date": "2026-11-12T02:00:00Z",
+    "rotation_number_away": 543,
+    "rotation_number_home": 544,
+    "score": {
+     "event_id": "a4cf6f61a9650cf171854cef89a2c1ac",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 14,
+     "team_id_home": 20,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [],
+     "score_home_by_period": [],
+     "venue_name": "Delta Center",
+     "venue_location": "Salt Lake City, UT",
+     "game_clock": 0,
+     "display_clock": "0.0",
+     "game_period": 0,
+     "broadcast": "KJZZ-TV",
+     "event_status_detail": "11/11 - 9:00 PM EST",
+     "updated_at": "2026-10-21T19:47:18Z"
+    },
+    "teams": [
+     {
+      "team_id": 14,
+      "name": "Orlando",
+      "mascot": "Magic",
+      "abbreviation": "ORL",
+      "conference_id": 39,
+      "division_id": 17,
+      "ranking": 0,
+      "record": "2-7",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 17,
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Southeast"
+      }
+     },
+     {
+      "team_id": 20,
+      "name": "Utah",
+      "mascot": "Jazz",
+      "abbreviation": "UTAH",
+      "conference_id": 757,
+      "division_id": 18,
+      "ranking": 0,
+      "record": "1-9",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 18,
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Northwest"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 14,
+      "name": "Orlando",
+      "mascot": "Magic",
+      "abbreviation": "ORL",
+      "conference_id": 39,
+      "division_id": 17,
+      "ranking": 0,
+      "record": "2-7",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 17,
+       "conference_id": 39,
+       "sport_id": 4,
+       "name": "Southeast"
+      }
+     },
+     {
+      "team_id": 20,
+      "name": "Utah",
+      "mascot": "Jazz",
+      "abbreviation": "UTAH",
+      "conference_id": 757,
+      "division_id": 18,
+      "ranking": 0,
+      "record": "1-9",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 18,
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Northwest"
+      }
+     }
+    ],
+    "schedule": {
+     "league_name": "National Basketball Association",
+     "conference_competition": false,
+     "season_type": "Regular Season",
+     "season_year": 2027,
+     "event_name": "Orlando at Utah - 2026-11-12T02:00:00Z",
+     "attendance": "0"
+    },
+    "markets": [],
+    "affiliate_source_ids": {
+     "32": "607778",
+     "31": "200746",
+     "22": "49633",
+     "25": "26NOV11ORLUTA",
+     "26": "nba-orl-uta-2026-11-11"
+    },
+    "affiliate_deep_links": {
+     "26": "https://polymarket.com/event/nba-orl-uta-2026-11-11",
+     "31": "https://polymarket.us/sports/nba/nba-orl-uta-2026-11-11",
+     "25": "https://kalshi.com/markets/kxnbagame/kxnbagame-26nov11orluta",
+     "32": "https://www.circasports.com/",
+     "22": "https://mediaserver.betmgmpartners.com/renderBanner.do?zoneId=1721362"
+    },
+    "affiliate_deep_link_types": {
+     "32": "catalog",
+     "22": "catalog"
+    }
+   },
+   {
+    "event_id": "2bfb0be1eda48293d463565111543759",
+    "event_uuid": "11f1-de40-f54e0400-8e57-23a40c818b6d",
+    "sport_id": 4,
+    "event_date": "2026-11-12T02:30:00Z",
+    "rotation_number_away": 545,
+    "rotation_number_home": 546,
+    "score": {
+     "event_id": "2bfb0be1eda48293d463565111543759",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 21,
+     "team_id_home": 27,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [],
+     "score_home_by_period": [],
+     "venue_name": "Toyota Center (Houston)",
+     "venue_location": "Houston, TX",
+     "game_clock": 0,
+     "display_clock": "0.0",
+     "game_period": 0,
+     "broadcast": "ESPN",
+     "event_status_detail": "11/11 - 9:30 PM EST",
+     "updated_at": "2026-09-30T14:22:21Z"
+    },
+    "teams": [
+     {
+      "team_id": 21,
+      "name": "Golden State",
+      "mascot": "Warriors",
+      "abbreviation": "GS",
+      "conference_id": 757,
+      "division_id": 19,
+      "ranking": 0,
+      "record": "8-3",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 19,
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Pacific"
+      }
+     },
+     {
+      "team_id": 27,
+      "name": "Houston",
+      "mascot": "Rockets",
+      "abbreviation": "HOU",
+      "conference_id": 757,
+      "division_id": 20,
+      "ranking": 0,
+      "record": "8-3",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 20,
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Southwest"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 21,
+      "name": "Golden State",
+      "mascot": "Warriors",
+      "abbreviation": "GS",
+      "conference_id": 757,
+      "division_id": 19,
+      "ranking": 0,
+      "record": "8-3",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 19,
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Pacific"
+      }
+     },
+     {
+      "team_id": 27,
+      "name": "Houston",
+      "mascot": "Rockets",
+      "abbreviation": "HOU",
+      "conference_id": 757,
+      "division_id": 20,
+      "ranking": 0,
+      "record": "8-3",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 20,
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Southwest"
+      }
+     }
+    ],
+    "schedule": {
+     "league_name": "National Basketball Association",
+     "conference_competition": false,
+     "season_type": "Regular Season",
+     "season_year": 2027,
+     "event_name": "Golden State at Houston - 2026-11-12T02:30:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 8151919,
+      "market_id": 1,
+      "period_id": 0,
+      "name": "moneyline",
+      "market_description": "Win the game outright.",
+      "participants": [
+       {
+        "id": 21,
+        "type": "TYPE_TEAM",
+        "name": "Golden State Warriors",
+        "lines": [
+         {
+          "id": "63fb8f717316bb1d7ddd828700b6562c",
+          "prices": {
+           "19": {
+            "id": "714277158",
+            "price": 180,
+            "price_delta": 10,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:34:39Z",
+            "source_id": "0ML87164383_3"
+           },
+           "22": {
+            "id": "714470874",
+            "price": 180,
+            "price_delta": 10,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:18:24Z",
+            "source_id": "20050401-1571884999-2333238675",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050401?options=20050401-1571884999-2333238675"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 27,
+        "type": "TYPE_TEAM",
+        "name": "Houston Rockets",
+        "lines": [
+         {
+          "id": "e07fa982836e17fe32fed634be4d0a41",
+          "prices": {
+           "19": {
+            "id": "714277157",
+            "price": -217,
+            "price_delta": -13,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:34:39Z",
+            "source_id": "0ML87164383_1"
+           },
+           "22": {
+            "id": "714470875",
+            "price": -220,
+            "price_delta": -10,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:18:24Z",
+            "source_id": "20050401-1571884999-2333238676",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050401?options=20050401-1571884999-2333238676"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 8151920,
+      "market_id": 2,
+      "period_id": 0,
+      "name": "handicap",
+      "market_description": "Win or lose by a specified margin.",
+      "participants": [
+       {
+        "id": 21,
+        "type": "TYPE_TEAM",
+        "name": "Golden State Warriors",
+        "lines": [
+         {
+          "id": "049d15915e4a56c0c6d1d961dbf2e146",
+          "value": "+5.5",
+          "prices": {
+           "19": {
+            "id": "714277160",
+            "price": -110,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:34:39Z",
+            "source_id": "0HC87164383P550_3"
+           },
+           "22": {
+            "id": "714470996",
+            "price": -110,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T01:34:22Z",
+            "source_id": "20050401-1577473977-2348323663"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 27,
+        "type": "TYPE_TEAM",
+        "name": "Houston Rockets",
+        "lines": [
+         {
+          "id": "c4cb72ccefe3454fade2fa7d9afbe4ff",
+          "value": "-5.5",
+          "prices": {
+           "22": {
+            "id": "714470997",
+            "price": -110,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T01:34:22Z",
+            "source_id": "20050401-1577473977-2348323675"
+           },
+           "19": {
+            "id": "714277159",
+            "price": -110,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:34:39Z",
+            "source_id": "0HC87164383N550_1"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": 8160270,
+      "market_id": 3,
+      "period_id": 0,
+      "name": "totals",
+      "market_description": "Over/under on the combined score.",
+      "participants": [
+       {
+        "id": 9,
+        "type": "TYPE_RESULT",
+        "name": "Over",
+        "lines": [
+         {
+          "id": "5561592ef449b5edc7484e6244928fc6",
+          "value": "222.5",
+          "prices": {
+           "22": {
+            "id": "714470974",
+            "price": -110,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:05:20Z",
+            "source_id": "20050401-1577473952-2348323600"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 10,
+        "type": "TYPE_RESULT",
+        "name": "Under",
+        "lines": [
+         {
+          "id": "763af7a0878487d1952547db60700840",
+          "value": "222.5",
+          "prices": {
+           "22": {
+            "id": "714470975",
+            "price": -110,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:05:20Z",
+            "source_id": "20050401-1577473952-2348323613"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "3": "1639982145",
+     "9": "8C5B780B-9E3E-48D2-836D-83F7894AC87E",
+     "11": "491178243",
+     "19": "87164383",
+     "29": "1704712707",
+     "22": "20050401",
+     "2": "33233965",
+     "6": "491178243",
+     "21": "1028754074",
+     "25": "26NOV11GSWHOU",
+     "28": "6358992390006636935",
+     "32": "607779",
+     "34": "207797441",
+     "4": "491178243",
+     "7": "8C5B780B-9E3E-48D2-836D-83F7894AC87E",
+     "31": "200747",
+     "18": "476271628",
+     "26": "nba-gsw-hou-2026-11-11",
+     "30": "01a1c5f3-6053-7c82-9235-c9f39477778f",
+     "33": "207797441",
+     "35": "0b649fe5-f85d-4bdd-b1cb-a1ac8f467e4c"
+    },
+    "affiliate_deep_links": {
+     "9": "https://sportsbook.betcris.com/",
+     "3": "https://www.pinnacle.com/en/basketball/nba/golden-state-warriors-vs-houston-rockets/1639982145/",
+     "31": "https://polymarket.us/sports/nba/nba-gs-hou-2026-11-11",
+     "26": "https://polymarket.com/event/nba-gsw-hou-2026-11-11",
+     "32": "https://www.circasports.com/",
+     "21": "https://www.unibet.com/",
+     "33": "https://bet105.ag/",
+     "19": "https://sportsbook.draftkings.com/event/gs-warriors-%40-hou-rockets/34988950",
+     "18": "https://landings.youwager.lv/partners/landing-a/index.shtml?affid=THERUNDOWN&A=41782&B=0&T=I&source=TheRunDown_RunDownLP",
+     "28": "https://app.hardrock.bet/competition/nba/6358992390006636935",
+     "11": "https://sports.lowvig.ag/sportsbook/basketball/nba/game/491178243",
+     "30": "https://novig.us/",
+     "35": "https://sportsbook.caesars.com/",
+     "2": "https://www.bovada.lv/sports/basketball/nba/golden-state-warriors-houston-rockets-202611112130",
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/207797441",
+     "25": "https://kalshi.com/markets/kxnbagame/kxnbagame-26nov11gswhou",
+     "29": "https://www.prophetx.co/event/1704712707",
+     "6": "https://www.betonline.ag/sportsbook/basketball/nba/game/491178243",
+     "22": "https://sports.nj.betmgm.com/en/sports/events/20050401",
+     "7": "https://www.bookmaker.eu/",
+     "4": "https://www.sportsbetting.ag/sportsbook/basketball/nba/game/491178243"
+    },
+    "affiliate_deep_link_types": {
+     "9": "catalog",
+     "18": "catalog",
+     "30": "catalog",
+     "35": "catalog",
+     "21": "catalog",
+     "7": "catalog",
+     "32": "catalog",
+     "33": "catalog"
+    }
+   },
+   {
+    "event_id": "ff52f567fb0781b8f354ba3a111d89e7",
+    "event_uuid": "11f1-de45-26303800-855b-f62232b762cb",
+    "sport_id": 4,
+    "event_date": "2026-11-12T03:00:00Z",
+    "rotation_number_away": 547,
+    "rotation_number_home": 548,
+    "score": {
+     "event_id": "ff52f567fb0781b8f354ba3a111d89e7",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 18,
+     "team_id_home": 19,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [],
+     "score_home_by_period": [],
+     "venue_name": "Moda Center",
+     "venue_location": "Portland, OR",
+     "game_clock": 0,
+     "display_clock": "0.0",
+     "game_period": 0,
+     "broadcast": "KUNP 16",
+     "event_status_detail": "11/11 - 10:00 PM EST",
+     "updated_at": "2026-10-21T19:47:18Z"
+    },
+    "teams": [
+     {
+      "team_id": 18,
+      "name": "Oklahoma City",
+      "mascot": "Thunder",
+      "abbreviation": "OKC",
+      "conference_id": 757,
+      "division_id": 18,
+      "ranking": 0,
+      "record": "8-2",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 18,
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Northwest"
+      }
+     },
+     {
+      "team_id": 19,
+      "name": "Portland",
+      "mascot": "Trailblazers",
+      "abbreviation": "POR",
+      "conference_id": 757,
+      "division_id": 18,
+      "ranking": 0,
+      "record": "6-3",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 18,
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Northwest"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 18,
+      "name": "Oklahoma City",
+      "mascot": "Thunder",
+      "abbreviation": "OKC",
+      "conference_id": 757,
+      "division_id": 18,
+      "ranking": 0,
+      "record": "8-2",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 18,
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Northwest"
+      }
+     },
+     {
+      "team_id": 19,
+      "name": "Portland",
+      "mascot": "Trailblazers",
+      "abbreviation": "POR",
+      "conference_id": 757,
+      "division_id": 18,
+      "ranking": 0,
+      "record": "6-3",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 18,
+       "conference_id": 757,
+       "sport_id": 4,
+       "name": "Northwest"
+      }
+     }
+    ],
+    "schedule": {
+     "league_name": "National Basketball Association",
+     "conference_competition": false,
+     "season_type": "Regular Season",
+     "season_year": 2027,
+     "event_name": "Oklahoma City at Portland - 2026-11-12T03:00:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 8160332,
+      "market_id": 1,
+      "period_id": 0,
+      "name": "moneyline",
+      "market_description": "Win the game outright.",
+      "participants": [
+       {
+        "id": 19,
+        "type": "TYPE_TEAM",
+        "name": "Portland Trailblazers",
+        "lines": [
+         {
+          "id": "2968fbb62cb4e6abd1b28dfea34916a6",
+          "prices": {
+           "22": {
+            "id": "714472818",
+            "price": 115,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T01:10:29Z",
+            "source_id": "20050402-1571885002-2333238678",
+            "deep_link": "https://sports.nj.betmgm.com/en/sports/events/20050402?options=20050402-1571885002-2333238678"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "4": "491178252",
+     "19": "87164384",
+     "25": "26NOV11OKCPOR",
+     "29": "1704712705",
+     "30": "01a1c60e-e132-74d3-808e-a94c09076d96",
+     "34": "207797381",
+     "31": "200748",
+     "22": "20050402",
+     "6": "491178252",
+     "11": "491178252",
+     "26": "nba-okc-por-2026-11-11",
+     "32": "607780"
+    },
+    "affiliate_deep_links": {
+     "19": "https://sportsbook.draftkings.com/event/okc-thunder-%40-por-trail-blazers/34988951",
+     "11": "https://sports.lowvig.ag/sportsbook/basketball/nba/game/491178252",
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/207797381",
+     "25": "https://kalshi.com/markets/kxnbagame/kxnbagame-26nov11okcpor",
+     "31": "https://polymarket.us/",
+     "32": "https://www.circasports.com/",
+     "29": "https://www.prophetx.co/event/1704712705",
+     "22": "https://sports.nj.betmgm.com/en/sports/events/20050402",
+     "30": "https://novig.us/",
+     "6": "https://www.betonline.ag/sportsbook/basketball/nba/game/491178252",
+     "26": "https://polymarket.com/event/nba-okc-por-2026-11-11",
+     "4": "https://www.sportsbetting.ag/sportsbook/basketball/nba/game/491178252"
+    },
+    "affiliate_deep_link_types": {
+     "30": "catalog",
+     "31": "catalog",
+     "32": "catalog"
+    }
+   }
+  ]
+ }
+}

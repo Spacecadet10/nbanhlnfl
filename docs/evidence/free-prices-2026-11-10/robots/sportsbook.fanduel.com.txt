@@ -1,0 +1,26 @@
+User-agent: *
+Disallow: /baseball/mlb$/
+Disallow: /basketball/nba$/
+Disallow: /basketball/ncaab$/
+Disallow: /basketball/ncaa-basketball$/
+Disallow: /basketball/ncaa-basketball-mens-matches$/
+Disallow: /football/nfl$/
+Disallow: /football/ncaaf$/
+Disallow: /football/ncaa-football$/
+Disallow: /football/ncaa-football-matches$/
+Disallow: /ice-hockey/nhl$/
+Disallow: /forgot-password/
+Disallow: /join/
+Disallow: /login/
+Disallow: /reality-check/
+Disallow: /faq/
+Disallow: /my-bets/
+Disallow: /privacy/
+Disallow: /refer/
+Disallow: /*?ampSessionId=/
+Disallow: /*?ampDeviceId=/
+Disallow: /*?amp_session_id=/
+Disallow: /*?amp_device_id=/
+ 
+
+Sitemap: https://sportsbook.fanduel.com/sitemaps/sitemap-index.xml
