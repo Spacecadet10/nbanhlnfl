@@ -39,6 +39,14 @@ def _parse(value: str) -> datetime:
     return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
 
 
+def rest_days(conn, season: int, team_id: str, tipoff: str) -> Optional[float]:
+    """Days since the team's previous scheduled game this season (start to start, one decimal), or None."""
+    prev = conn.execute(
+        "SELECT MAX(tipoff_at) FROM games WHERE season=? AND tipoff_at < ? AND status NOT IN ('postponed', 'canceled') "
+        "AND season_type <> 'other' AND (home_team_id=? OR away_team_id=?)", (season, tipoff, team_id, team_id)).fetchone()[0]
+    return round((_parse(tipoff) - _parse(prev)).total_seconds() / 86400, 1) if prev else None
+
+
 def eastern_date(ts: str) -> date:
     return _parse(ts).astimezone(EASTERN).date()
 
@@ -252,16 +260,12 @@ class RealProvider:
             results.append((r["season_type"], pf, pa))
         regular = [x for x in results if x[0] == "regular"]
         last10 = results[-10:]
-        prev = self.conn.execute(
-            "SELECT MAX(tipoff_at) FROM games WHERE season=? AND tipoff_at < ? AND status NOT IN ('postponed', 'canceled') "
-            "AND season_type <> 'other' AND (home_team_id=? OR away_team_id=?)", (season, tipoff, team_id, team_id)
-        ).fetchone()[0]
         return TeamStats(
             wins=sum(pf > pa for _, pf, pa in regular), losses=sum(pf < pa for _, pf, pa in regular),
             last10_wins=sum(pf > pa for _, pf, pa in last10), last10_games=len(last10),
             points_for_avg=round(sum(pf for _, pf, _ in results) / len(results), 1) if results else None,
             points_against_avg=round(sum(pa for _, _, pa in results) / len(results), 1) if results else None,
-            rest_days=round((_parse(tipoff) - _parse(prev)).total_seconds() / 86400, 1) if prev else None)
+            rest_days=rest_days(self.conn, season, team_id, tipoff))
 
     # ---- endpoints -----------------------------------------------------------------------------------------------
     def meta(self) -> Meta:
@@ -779,14 +783,8 @@ class RealProvider:
     def _winner_quote_prob(self, game_id: str, at: str) -> Optional[float]:
         """De-vigged home probability of the latest moneyline retrieved no later than `at` (a quote the forecast could
         have seen), or None."""
-        q = self.conn.execute(
-            "SELECT home_prob_devig FROM odds_quotes WHERE game_id=? AND retrieved_at <= ? "
-            "ORDER BY retrieved_at DESC, price_label = 'current' DESC, quote_id DESC LIMIT 1"
-            if self.sport == "nba" else     # NHL moneylines: market_quotes
-            "SELECT p_a_devig FROM market_quotes WHERE game_id=? AND market='winner' AND retrieved_at <= ? "
-            "ORDER BY retrieved_at DESC, price_label = 'current' DESC, quote_id DESC LIMIT 1",
-            (game_id, at)).fetchone()
-        return None if q is None else q[0]
+        q = coverage.winner_quote(self.conn, self.sport, game_id, at)
+        return None if q is None else q["p_home"]
 
     # ---- canonical forecast (game_forecasts; one record per game and market) -------------------------------------------
     def _canonical_games(self, start: Optional[str] = None, end: Optional[str] = None,
