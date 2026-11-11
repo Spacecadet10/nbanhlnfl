@@ -331,6 +331,46 @@ def soccer_live_record(competition: Optional[str] = None, mode: str = Depends(ap
         return soccer.forecast_record(conn, competition)
 
 
+@app.get("/api/soccer/markets")
+def soccer_markets(competition: str = COMPETITION, mode: str = Depends(api_mode)):
+    """Goal, corner, double-chance and draw-no-bet selections of one competition (app/soccer_markets_live.py): upcoming
+    matches and those kicked off in the last 2 days, from stored forecasts only (never computed on request). Each selection
+    says whether its line is a bookmaker offer (price, retrieval time) or a model line (fair odds); a family without a
+    tested model is reported as not served, with the reason."""
+    from . import soccer_live, soccer_markets_live as sml
+    from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+    now = _dt.now(_tz.utc)
+    stamp, since = now.strftime("%Y-%m-%dT%H:%M:%SZ"), (now - _td(days=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with _soccer_store(mode) as conn:
+        matches = sml.match_markets(conn, competition=competition, since=since, as_of=stamp)
+        checks = {f: c.get(competition) for f, c in sml.latest_checks(conn).items()}
+    return {"competition": competition, "as_of": stamp,
+            "families": {f: sml.state(f) for f in sml.FAMILIES},
+            "derived": {"markets": list(sml.DERIVED), "served": competition in soccer_live.LAUNCH or competition in _intl_launch(),
+                        "note": "Double chance and draw no bet are exact functions of the tested 90-minute 1X2 forecast."},
+            "settlement_rule": sml.SETTLEMENT_RULE, "notes": {"model_line": sml.MODEL_LINE, "bookmaker_line": sml.BOOKMAKER_LINE,
+                                                              "no_proven_skill": sml.NO_PROVEN_SKILL,
+                                                              "corners_no_bookmaker": sml.NO_BOOKMAKER_CORNERS},
+            "checks": checks, "matches": matches, "ranking": sml.ranking(matches)}
+
+
+def _intl_launch():
+    from . import intl_live
+    return intl_live.LAUNCH
+
+
+@app.get("/api/soccer/markets/history")
+def soccer_markets_history(competition: str = COMPETITION, mode: str = Depends(api_mode)):
+    """Settled live goal/corner forecasts of one competition and their record per market line (mean predicted vs
+    observed rate, Brier). Live rows only; never research or backtest rows."""
+    from . import soccer_markets_live as sml
+    with _soccer_store(mode) as conn:
+        out = sml.history(conn, competition=competition)
+    out["competition"] = competition
+    out["families_state"] = {f: sml.state(f) for f in sml.FAMILIES}
+    return out
+
+
 from datetime import date as _dt_date   # noqa: E402  (calendar check of the research date parameter)
 
 

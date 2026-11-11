@@ -1,0 +1,92 @@
+{
+ "as_of": "2026-11-10T00:26:04Z",
+ "date": "2026-11-20",
+ "cutoff_at": "2026-11-20T06:00:00Z",
+ "families": {
+  "goals": {
+   "family": "goals",
+   "status": "ok",
+   "competitions": {
+    "eng.1": {
+     "ok": true,
+     "problems": [],
+     "matches": 0,
+     "recorded": 0
+    },
+    "esp.1": {
+     "ok": true,
+     "problems": [],
+     "matches": 1,
+     "recorded": 1
+    },
+    "fra.1": {
+     "ok": true,
+     "problems": [],
+     "matches": 1,
+     "recorded": 1
+    },
+    "ger.1": {
+     "ok": true,
+     "problems": [],
+     "matches": 1,
+     "recorded": 1
+    },
+    "ita.1": {
+     "ok": true,
+     "problems": [],
+     "matches": 0,
+     "recorded": 0
+    },
+    "uefa.champions": {
+     "ok": true,
+     "problems": [],
+     "matches": 0,
+     "recorded": 0
+    }
+   }
+  },
+  "corners": {
+   "family": "corners",
+   "status": "ok",
+   "competitions": {
+    "eng.1": {
+     "ok": true,
+     "problems": [],
+     "matches": 0,
+     "recorded": 0
+    },
+    "esp.1": {
+     "ok": true,
+     "problems": [],
+     "matches": 1,
+     "recorded": 1
+    },
+    "fra.1": {
+     "ok": true,
+     "problems": [],
+     "matches": 1,
+     "recorded": 1
+    },
+    "ger.1": {
+     "ok": true,
+     "problems": [],
+     "matches": 1,
+     "recorded": 1
+    },
+    "ita.1": {
+     "ok": true,
+     "problems": [],
+     "matches": 0,
+     "recorded": 0
+    },
+    "uefa.champions": {
+     "ok": true,
+     "problems": [],
+     "matches": 0,
+     "recorded": 0
+    }
+   }
+  }
+ },
+ "status": "ok"
+}

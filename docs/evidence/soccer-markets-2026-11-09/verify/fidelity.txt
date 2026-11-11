@@ -1,0 +1,8 @@
+goals soccer:esp.1:401882805 identical 1.384008 0.856924
+goals soccer:fra.1:401876395 identical 1.17705 1.065785
+goals soccer:ger.1:401884736 identical 3.937463 0.816922
+goals inputs available by the cutoff: 33320 of which 2026-27: 644
+corners soccer:esp.1:401882805 identical 6.867424 3.299617
+corners soccer:fra.1:401876395 identical 5.576166 3.284715
+corners soccer:ger.1:401884736 identical 8.204829 3.388505
+corners inputs available by the cutoff: 32127 of which 2026-27: 644

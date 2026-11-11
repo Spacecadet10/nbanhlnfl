@@ -51,7 +51,8 @@ mixed-sport parlays. Nothing here is live until the gates in §1 pass and the us
 ## 3. App, Telegram and tickets
 - **App:** soccer Game day shows upcoming forecasts (label "Upcoming forecast · 90-minute result") apart from Research
   backtest screens. The settlement rule is shown on every card: home/draw/away after 90 minutes plus stoppage time;
-  extra time and penalties do not count. No other soccer market is shown as forecast.
+  extra time and penalties do not count. Goal, corner, double-chance and draw-no-bet markets have their own models,
+  tests and gates: docs/SOCCER_MARKETS_PLAN.md (2026-11-09).
 - **Tickets:**
   - soccer joins the joint review as market `1x2_regulation`;
   - pick = the outcome the reviewer selects, with that outcome's exact probability;

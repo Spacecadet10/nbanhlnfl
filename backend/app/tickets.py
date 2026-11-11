@@ -18,7 +18,23 @@ CARD_TICKETS = 3
 PROVIDER_SHORT = {'DraftKings': 'DK'}
 SNAPSHOT_TTL = timedelta(minutes=10)   # check() refuses older snapshots; a start older than this can never complete                             # the PNG shows the first three; the text lists every option
 BET_TYPES = {'winner': 'Moneyline', 'spread': 'Spread', 'total': 'Over/Under', 'team_total_home': 'Team total',
-             'team_total_away': 'Team total', 'reg3': '60-min result', '1x2_regulation': 'Match result (90 min)'}
+             'team_total_away': 'Team total', 'reg3': '60-min result', '1x2_regulation': 'Match result (90 min)',
+             'goals_total': 'Match goals (90 min)', 'goals_home': 'Team goals (90 min)', 'goals_away': 'Team goals (90 min)',
+             'btts': 'Both teams to score (90 min)', 'corners_total': 'Match corners (90 min)',
+             'corners_home': 'Team corners (90 min)', 'corners_away': 'Team corners (90 min)',
+             'corners_handicap': 'Corner handicap (90 min)', 'double_chance': 'Double chance (90 min)',
+             'draw_no_bet': 'Draw no bet (90 min)'}
+# Soccer markets: forecast at the evaluated point in time (06:00 UTC on match day or earlier), settled on 90 minutes.
+SOCCER_MARKETS = frozenset({'1x2_regulation', 'goals_total', 'goals_home', 'goals_away', 'btts', 'corners_total',
+                            'corners_home', 'corners_away', 'corners_handicap', 'double_chance', 'draw_no_bet'})
+
+
+def _identity_key(item):
+    """Sort key of a (sport, forecast_id) leg identity: integer ids (every NBA/NHL/NFL and 1X2 soccer forecast) keep
+    their numeric order, so existing ticket signatures are unchanged; the string ids of soccer market selections
+    ('goals:17:goals_total:over:2.5') sort after them. Never compares an int with a str."""
+    sport, fid = item
+    return (sport, 1, 0, fid) if isinstance(fid, str) else (sport, 0, fid, '')
 
 
 def bet_type(leg):
@@ -306,18 +322,116 @@ def soccer_section(now):
                               generated_at=f['generated_at'], tipoff=f['kickoff_at'], cutoff_at=f['cutoff_at'],
                               competition=f['competition'], source_retrieved_at=f['source_retrieved_at'],
                               settlement_rule=f['settlement_rule']))
+        try:
+            picks.extend(soccer_market_picks(conn, stamp))
+        except Exception as exc:          # a market problem never hides the 1X2 picks; it is reported on the section
+            market_error = type(exc).__name__
+        else:
+            market_error = None
         live = [c for c in (*soccer_live.LAUNCH, *intl_live.LAUNCH) if c not in refused]
-        return {'freshness': {'source_state': 'fresh' if live else 'stale', 'failing': [] if live else sorted(refused),
+        return {**({'markets_error': market_error} if market_error else {}),
+                'freshness': {'source_state': 'fresh' if live else 'stale', 'failing': [] if live else sorted(refused),
                               'competitions_live': live}, 'report': {'mode': 'real', 'picks': picks},
                 'missing_due_games': [], 'refused': refused}
     finally:
         conn.close()
 
 
+def _half_line(line):
+    """The half line a selection uses when no bookmaker line is listed: floor(model fair line) + 0.5."""
+    return math.floor(line) + 0.5
+
+
+def _soccer_label(market, side, line, home, away):
+    """'Over 2.5 goals (90 min)', 'Arsenal over 1.5 goals (90 min)', 'Arsenal -1.5 corners (90 min)',
+    'Both teams to score: yes (90 min)', 'Arsenal or draw (90 min)', 'Arsenal (draw no bet, 90 min)'."""
+    team = {'home': home, 'away': away}
+    if market == 'double_chance':
+        a, b = side.split('_')
+        return ' or '.join('draw' if x == 'draw' else team[x] for x in (a, b)) + ' (90 min)'
+    if market == 'draw_no_bet':
+        return f"{team[side]} (draw no bet, 90 min)"
+    if market == 'btts':
+        return f"Both teams to score: {side} (90 min)"
+    if market == 'corners_handicap':
+        return f"{team[side]} {line:+g} corners (90 min)"
+    what = 'goals' if market.startswith('goals') else 'corners'
+    if market.endswith('_total'):
+        return f"{side.capitalize()} {line:g} {what} (90 min)"
+    return f"{team[market.rsplit('_', 1)[1]]} {side} {line:g} {what} (90 min)"
+
+
+def soccer_market_picks(conn, stamp):
+    """Soccer selections beside the 1X2 pick (app/soccer_markets_live.py): per match, double chance (the side without
+    the least likely 1X2 outcome) and draw no bet (the more likely team) from the tested 1X2 forecast; and per served goal
+    or corner market one selection: the side the model favours at the bookmaker's listed line (match goals, when
+    DraftKings lists one) or else at the half line next to the model's fair line. `probability` = the chance the leg
+    wins outright (a push returns the stake, a half result is listed in outcome_probabilities). Families that are not
+    served (no tested model) give no selection."""
+    from app import soccer_markets as sm, soccer_markets_live as sml
+    out = []
+    for m in sml.match_markets(conn, as_of=stamp):
+        home, away = m['home'], m['away']
+        common = dict(game_id=m['match_id'], matchup=f"{home} vs {away}", tipoff=m['kickoff_at'], competition=m['competition'],
+                      skill_proven=False)
+        d = m.get('derived')
+        if d:
+            p1 = d['probabilities_1x2']
+            least = min(('home', 'draw', 'away'), key=lambda k: (p1[k], k))
+            dc_side = {'home': 'draw_away', 'draw': 'home_away', 'away': 'home_draw'}[least]
+            dnb_side = 'home' if p1['home'] >= p1['away'] else 'away'
+            row = conn.execute("SELECT status, generated_at, cutoff_at FROM soccer_live_forecasts f JOIN soccer_matches s ON "
+                               "s.match_id = f.match_id WHERE f.forecast_id = ?", (d['forecast_id'],)).fetchone()
+            for market, side in (('double_chance', dc_side), ('draw_no_bet', dnb_side)):
+                probs = sm.probabilities_1x2((p1['home'], p1['draw'], p1['away']), market, side)
+                result = next(x['result'] for x in d['selections'] if x['market'] == market and x['side'] == side)
+                out.append(dict(common, forecast_id=f"1x2:{d['forecast_id']}:{market}:{side}", row_id=d['forecast_id'],
+                                market=market, market_title=sm.TITLES[market], side=side, line=None,
+                                pick_label=_soccer_label(market, side, None, home, away), probability=probs['win'],
+                                outcome_probabilities=probs, status=row['status'], generated_at=row['generated_at'],
+                                cutoff_at=row['cutoff_at'], grade=result or 'pending',
+                                quote_check={'line_source': 'model', 'price_now': None},
+                                settlement_rule=sml.SETTLEMENT_RULE))
+        for family, f in m['families'].items():
+            joint = json.loads(conn.execute("SELECT joint_json FROM soccer_market_forecasts WHERE forecast_id = ?",
+                                            (f['forecast_id'],)).fetchone()[0])
+            markets = sorted({s['market'] for s in f['selections']})
+            for market in markets:
+                book = [s for s in f['selections'] if s['market'] == market and s['source'] == 'bookmaker']
+                if book:
+                    line = sorted({s['line'] for s in book})[0]
+                    cands = [s for s in book if s['line'] == line]
+                elif market in sm.LINED:
+                    fair = next(s['line'] for s in f['selections'] if s['market'] == market and s['side'] == sm.SIDES[market][0])
+                    line = _half_line(fair)
+                    cands = [dict(side=side, line=-line if (market == 'corners_handicap' and side == 'away') else line,
+                                  probabilities=sm.probabilities(joint, market, side,
+                                                                 -line if (market == 'corners_handicap' and side == 'away') else line),
+                                  source='model') for side in sm.SIDES[market]]
+                else:
+                    cands = [s for s in f['selections'] if s['market'] == market and s['source'] == 'model']
+                best = sorted(cands, key=lambda s: (-s['probabilities']['win'], s['side']))[0]
+                result = best.get('result') or (sm.grade_market(market, best['side'], best['line'], f['counts'])
+                                                if f['counts'] else None)
+                quote = ({'line_source': 'bookmaker', 'provider': best['provider'], 'price_now': best['american'],
+                          'line_now': best['line'], 'line_at_forecast': best['line'], 'line_moved': False,
+                          'retrieved_at': best['retrieved_at']} if best['source'] == 'bookmaker'
+                         else {'line_source': 'model', 'price_now': None})
+                out.append(dict(common, forecast_id=f"{family}:{f['forecast_id']}:{market}:{best['side']}"
+                                + (f":{best['line']:g}" if best['line'] is not None else ''),
+                                row_id=f['forecast_id'], market=market, market_title=sm.TITLES[market], side=best['side'],
+                                line=best['line'], pick_label=_soccer_label(market, best['side'], best['line'], home, away),
+                                probability=best['probabilities']['win'], outcome_probabilities=best['probabilities'],
+                                status=f['status'], generated_at=f['generated_at'], cutoff_at=f['cutoff_at'],
+                                grade=result or 'pending', quote_check=quote,
+                                settlement_rule=sml.SETTLEMENT_RULE))
+    return out
+
+
 def eligible(pick, now):
     start = datetime.fromisoformat(pick['tipoff'].replace('Z', '+00:00'))
     made = datetime.fromisoformat(pick['generated_at'].replace('Z', '+00:00'))
-    if pick.get('market') == '1x2_regulation':
+    if pick.get('market') in SOCCER_MARKETS:
         # Soccer is forecast at its evaluated point in time (06:00 UTC on match day or earlier), not in the last 2 hours;
         # the ticket window itself (start within 2 h of the check) is the same as for every sport.
         cutoff = datetime.fromisoformat(pick['cutoff_at'].replace('Z', '+00:00'))
@@ -431,7 +545,7 @@ def _was_reviewable(pick, day):
     `eligible`); the soccer list holds every recorded match, so only this Toronto day's matches that were actually
     played count."""
     tip, made = _parse(pick['tipoff']), _parse(pick['generated_at'])
-    if pick.get('market') == '1x2_regulation':
+    if pick.get('market') in SOCCER_MARKETS:
         return (made <= _parse(pick['cutoff_at']) <= tip and tip.astimezone(TORONTO).date().isoformat() == day
                 and pick.get('status') not in ('postponed', 'canceled', 'abandoned'))
     return tip - timedelta(hours=2) <= made <= tip
@@ -443,7 +557,7 @@ def _review_window(pick):
         return None
     tip, made = _parse(pick['tipoff']), _parse(pick['generated_at'])
     opens = tip - timedelta(hours=2)
-    if pick.get('market') == '1x2_regulation':
+    if pick.get('market') in SOCCER_MARKETS:
         return (opens, tip) if made <= _parse(pick['cutoff_at']) <= tip else None
     return (max(opens, made), tip) if opens <= made <= tip else None
 
@@ -800,7 +914,7 @@ def check(plan):
             seen[key] = identity
             legs.append({**pick, 'sport': sport, 'rationale': leg['rationale'], 'assessment': leg_assessment(sport, pick),
                          **({'status_refreshed_at': refreshed} if refreshed else {})})
-        combination = tuple(sorted((p['sport'], p['forecast_id']) for p in legs))
+        combination = tuple(sorted(((p['sport'], p['forecast_id']) for p in legs), key=_identity_key))
         if combination in combinations:
             raise ValueError('Duplicate ticket combination')
         combinations.add(combination)
@@ -884,8 +998,11 @@ def ticket_text(day, tickets, prior_exposure=None):
     for sport, stamp in sorted(delays.items()):
         lines += ['', f"{sport.upper()} game status last refreshed {_parse(stamp).astimezone(TORONTO):%I:%M %p %Z} "
                       f"(app forecast job still running). Confirm each game is still on before betting."]
-    if any(p['sport'] == 'soccer' for t in tickets for p in t['legs']):
+    if any(p['sport'] == 'soccer' and p.get('market', '1x2_regulation') == '1x2_regulation' for t in tickets for p in t['legs']):
         lines += ['', 'Soccer legs settle on the 90-minute result (home/draw/away incl. stoppage time); extra time and penalties do not count.']
+    if any(p['sport'] == 'soccer' and p.get('market', '1x2_regulation') != '1x2_regulation' for t in tickets for p in t['legs']):
+        lines += ['', 'Soccer goal, corner, double-chance and draw-no-bet legs settle on 90 minutes plus stoppage time; '
+                      'draw no bet and whole lines push (stake back); no proven skill against the bookmaker.']
     legs = list({f"{p['sport']}:{p['forecast_id']}": p for t in tickets for p in t['legs']}.values())
     model = [p for p in legs if (p.get('quote_check') or {}).get('line_source') == 'model']
     if model:
@@ -1220,7 +1337,7 @@ def schema(conn):
 
 def normalized_ticket(t, day):
     out = dict(t)
-    combination = tuple(sorted((p['sport'], p['forecast_id']) for p in t['legs']))
+    combination = tuple(sorted(((p['sport'], p['forecast_id']) for p in t['legs']), key=_identity_key))
     out['signature'] = sha(json.dumps(combination).encode())
     out['ticket_id'] = day + '-' + out['signature'][:12]
     return out
@@ -1244,7 +1361,7 @@ def existing_tickets(conn, chat, day):
             tickets = data.get('resolved', [])
             if not tickets:
                 continue
-            identity = sorted((p['sport'],p['forecast_id']) for t in tickets for p in t['legs'])
+            identity = sorted(((p['sport'],p['forecast_id']) for t in tickets for p in t['legs']), key=_identity_key)
             key = 'ai-ticket-review-v2:' + day + ':' + chat + ':' + sha(json.dumps(identity).encode())
             if key in legacy:
                 out.extend(normalized_ticket(t,day) for t in tickets); legacy.remove(key)
@@ -1274,6 +1391,23 @@ def health_alerts(snap):
 def grade_leg(leg, as_of):
     """Resolve the immutable forecast ID, not today's replacement canonical pick."""
     from app import db, coverage
+    if leg['sport'] == 'soccer' and leg.get('market', '1x2_regulation') != '1x2_regulation':
+        from app import soccer_markets_live as sml
+        conn = db.connect_readonly('soccer')
+        try:
+            if leg['market'] in sml.DERIVED:
+                g = sml.grade_derived(conn, leg['row_id'], leg['market'], leg['side'], as_of)
+            else:
+                g = sml.grade(conn, leg['row_id'], leg['market'], leg['side'], leg['line'], as_of)
+        finally:
+            conn.close()
+        if g['match_id'] != leg['game_id']:
+            raise ValueError('Archived forecast identity mismatch')
+        counts = g.get('counts') or (g.get('home_score'), g.get('away_score'))
+        return {'sport': 'soccer', 'forecast_id': leg['forecast_id'], 'game_id': leg['game_id'], 'pick_label': leg['pick_label'],
+                'market': leg['market'], 'line': leg.get('line'), 'side': leg['side'], 'grade': g['grade'],
+                'home_score': counts[0] if counts else None, 'away_score': counts[1] if counts else None,
+                'result_available_at': g['result_available_at']}
     if leg['sport'] == 'soccer':
         from app import soccer_live
         conn = db.connect_readonly('soccer')
@@ -1310,6 +1444,9 @@ def grade_leg(leg, as_of):
 
 
 def ticket_grade(legs):
+    """loss if any leg lost; pending while any leg is open; void if every leg pushed or was void; partial when a leg
+    settled as half win or half loss (a quarter line: the ticket returns the product of the legs' return factors, see
+    soccer_markets.return_factor); otherwise win."""
     grades = [p['grade'] for p in legs]
     if 'loss' in grades:
         return 'loss'
@@ -1317,11 +1454,13 @@ def ticket_grade(legs):
         return 'pending'
     if all(g in ('push','void') for g in grades):
         return 'void'
+    if any(g in ('half_win', 'half_loss') for g in grades):
+        return 'partial'
     return 'win'
 
 
 CORRECTED_LINE = 'Corrected result: it replaces the result sent before.'
-SETTLED_GRADES = ('win', 'loss', 'push', 'void')
+SETTLED_GRADES = ('win', 'loss', 'push', 'void', 'half_win', 'half_loss')
 
 
 REACHED = ('sent', 'uncertain', 'sending')   # a notice the user has or may have; one Telegram rejected or deferred is neither

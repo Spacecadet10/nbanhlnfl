@@ -176,17 +176,22 @@ def main(argv=None) -> int:
                                        "90-minute forecasts (app/soccer_live.py). Ignores --sport; always opens the soccer store.")
     sc.add_argument("action", choices=("migrate", "ingest", "replay", "coverage", "history-download", "history-replay",
                                        "history-coverage", "eval-develop", "eval-record", "eval-test", "live-refresh",
-                                       "live-forecast", "live-status"))
+                                       "live-forecast", "live-status", "history-months", "markets-develop", "markets-test",
+                                       "markets-forecast", "markets-status"))
     sc.add_argument("--competition", action="append", choices=(*soccer_competitions(), "all"),
                     help="ingest: competition slug (repeatable) or 'all' (default all)")
-    sc.add_argument("--from", dest="start", help="ingest: first day YYYYMMDD")
-    sc.add_argument("--to", dest="end", help="ingest: last day YYYYMMDD (at most 62 days per run)")
+    sc.add_argument("--from", dest="start", help="ingest: first day YYYYMMDD; history-months: first month YYYYMM")
+    sc.add_argument("--to", dest="end", help="ingest: last day YYYYMMDD (at most 62 days per run); history-months: last "
+                                             "month YYYYMM (whole-month ESPN scoreboards with corners, for the market models; "
+                                             "a month already retrieved is skipped)")
     sc.add_argument("--sleep", type=float, default=1.0, help="ingest: seconds between requests")
     sc.add_argument("--pin", action="append", default=[], metavar="REPO=SHA",
                     help="history-download: openfootball repo commit to download (repeatable; default: current HEAD)")
     sc.add_argument("--out", help="eval-develop / eval-test: output folder (must not exist for eval-test); eval-record: "
                                   "a finished eval-develop folder")
-    sc.add_argument("--sealed", help="eval-test: the sealed candidate JSON (the one-shot reserved test; needs review + go)")
+    sc.add_argument("--sealed", help="eval-test / markets-test: the sealed candidate JSON (the one-shot reserved test)")
+    sc.add_argument("--family", choices=("goals", "corners"),
+                    help="markets-develop: the market family to develop (app/soccer_markets_eval.py; once per family)")
     sc.add_argument("--if-ready", action="store_true", help="live-forecast: an early attempt; when inputs are not settled yet, "
                                                          "record nothing and exit 0 (the scheduled cycle's look-ahead)")
     sc.add_argument("--day", help="live-forecast: match date YYYY-MM-DD (default today, UTC); refused after its 06:00 UTC "
@@ -900,6 +905,30 @@ def _soccer(args, p) -> int:
         print(json.dumps({"status": "ok", "selected": res["sealed"]["model"], "candidate_sha256": res["sealed"]["sha256"],
                           "out": args.out}))
         return 0
+    if args.action in ("markets-develop", "markets-test"):     # read-only on the store; logs outside data/
+        from . import soccer_markets_eval as sme
+        conn = db.connect_readonly("soccer")
+        if args.action == "markets-develop":
+            if not (args.family and args.out):
+                p.error("soccer markets-develop needs --family goals|corners --out <folder>")
+            res = sme.develop(conn, args.family, out_dir=Path(args.out), experiments_log=sme.experiments_log_path(),
+                              progress=lambda m: print(m, file=sys.stderr, flush=True))
+            v = res["report"]["validation"]["choice"]
+            print(json.dumps({"status": "ok", "family": args.family, "chosen": v["chosen"], "beats_baseline": v["beats_baseline"],
+                              "candidate_sha256": res["sealed"]["sha256"] if res["sealed"] else None, "out": args.out}))
+            return 0
+        if not (args.sealed and args.out):
+            p.error("soccer markets-test needs --sealed <file> --out <new folder>")
+        rep = sme.run_test(conn, json.loads(Path(args.sealed).read_text()), access_log=sme.access_log_path(),
+                           experiments_log=sme.experiments_log_path(), out_dir=Path(args.out))
+        print(json.dumps({"status": "ok", "family": rep["family"], "reading": rep["reading"], "out": args.out}))
+        return 0
+    if args.action == "markets-status":       # read-only: which families are served, latest checks, upcoming forecasts
+        from . import soccer_markets_live as sml
+        conn = db.connect_readonly("soccer")
+        print(json.dumps({"families": {f: sml.state(f) for f in sml.FAMILIES}, "checks": sml.latest_checks(conn),
+                          "matches": len(sml.match_markets(conn))}, indent=1))
+        return 0
     if args.action == "eval-record" and not args.out:
         p.error("soccer eval-record needs --out <finished eval-develop folder>")      # before any store is opened
     if args.action == "eval-test":
@@ -939,6 +968,13 @@ def _soccer(args, p) -> int:
         args.end = args.end or (today + _td(days=7)).strftime("%Y%m%d")
         from . import intl_live
         args.competition = args.competition or [*soccer_live.LAUNCH, *soccer_live.INPUT_ONLY, *intl_live.COMPETITIONS]
+    if args.action == "history-months":
+        if not (args.start and args.end):
+            p.error("soccer history-months needs --from YYYYMM --to YYYYMM")
+        try:
+            soccer.months(args.start, args.end)
+        except ValueError as exc:
+            p.error(f"soccer history-months: {exc}")
     if args.action in ("ingest", "live-refresh"):
         if not (args.start and args.end):
             p.error("soccer ingest needs --from YYYYMMDD --to YYYYMMDD")
@@ -993,6 +1029,16 @@ def _soccer(args, p) -> int:
             print(json.dumps(report, indent=1))
             ok = all(r.get("status") == "ok" for r in report.values())
             return 0 if ok or args.if_ready else 1
+        if args.action == "markets-forecast":
+            from . import soccer_markets_live as sml
+            report = sml.run(conn, day=args.day, record_refusal=not args.if_ready)
+            print(json.dumps(report, indent=1))
+            return 0 if report.get("status") == "ok" or args.if_ready else 1
+        if args.action == "history-months":
+            results = soccer.ingest_months(conn, competitions, args.start, args.end, sleep=args.sleep)
+            failed = [f"{r['competition']}:{r['month']}" for r in results if "error" in r]
+            print(json.dumps({"status": "failed" if failed else "ok", "requested": len(results), "failed": failed}))
+            return 1 if failed else 0
         results = soccer.ingest_range(conn, competitions, args.start, args.end, sleep=args.sleep)
         failed = [f"{r['competition']}:{r['date']}" for r in results if "error" in r]
         print(json.dumps({"status": "failed" if failed else "ok", "failed": failed}))

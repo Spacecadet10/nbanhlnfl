@@ -1406,4 +1406,15 @@ h1,h2,h3,.hero-matchup,.metric-value,.tile-value,.brand { font-family:'Barlow Co
 .soccer-live-probs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .soccer-live-prob { display: flex; flex-direction: column; gap: 2px; padding: 8px; border-radius: 12px; background: var(--surface-raised); min-width: 0; overflow-wrap: anywhere; }
 .soccer-live-prob.is-top { outline: 2px solid var(--text); }
+.soccer-markets-status { margin: 6px 0 10px; padding-left: 18px; }
+.soccer-markets-list { display: grid; gap: 10px; }
+.soccer-markets-match, .soccer-markets-ranking { border: 1px solid var(--border); border-radius: 16px; padding: 10px 14px; background: var(--surface); color: var(--text); min-width: 0; }
+.soccer-markets-match summary, .soccer-markets-ranking summary { cursor: pointer; overflow-wrap: anywhere; }
+.soccer-markets-ranking { margin-top: 12px; }
+.soccer-markets-group { margin-top: 10px; min-width: 0; }
+.soccer-markets-group h4 { margin: 4px 0; }
+.soccer-markets-table td, .soccer-markets-table th { white-space: normal; vertical-align: top; }
+.soccer-markets-table td:first-child { min-width: 9em; }
+.soccer-src-book { background: var(--accent-lime); color: #1E1B4B; font-weight: 700; }
+.soccer-src-model { background: var(--surface-raised); color: var(--text); border: 1px dashed var(--border); }
 .soccer-live-prob strong { font-size: 1.25em; }

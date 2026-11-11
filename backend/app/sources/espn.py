@@ -451,6 +451,26 @@ def fetch_soccer_day(competition: str, yyyymmdd: str, timeout: float = 30) -> by
     return _get(params, timeout, endpoint)
 
 
+# Whole calendar months (dates=YYYYMM, limit=1000) for the market-model history (docs/SOCCER_MARKETS_PLAN.md): checked
+# 2026-11-09 on EPL 2010-08 (30 events), EPL 2018-12 (69), La Liga 2013-04 (42), UCL 2023-10 (32), Serie A 2026-05 (40),
+# every final with both teams' `wonCorners`. A month response is its own source (SOCCER_MONTH_SOURCE) so that it never
+# counts as a day fetched or as a fresh retrieval for the live completeness checks (soccer.fetched_dates/last_refresh_at).
+SOCCER_MONTH_SOURCE = "espn_soccer_month"
+
+
+def soccer_month_request(competition: str, yyyymm: str) -> tuple[str, str, dict]:
+    """(request_key, endpoint, params) for one competition's scoreboard over one calendar month."""
+    if competition not in SOCCER_COMPETITIONS:
+        raise ValueError(f"Unknown soccer competition {competition!r}; expected one of {', '.join(SOCCER_COMPETITIONS)}")
+    key, params = month_request(yyyymm)
+    return f"competition={competition}&{key}", SOCCER_ENDPOINT.format(competition=competition), params
+
+
+def fetch_soccer_month(competition: str, yyyymm: str, timeout: float = 60) -> bytes:
+    _, endpoint, params = soccer_month_request(competition, yyyymm)
+    return _get(params, timeout, endpoint)
+
+
 @dataclass
 class SoccerMatchRow:
     match_id: str
@@ -478,6 +498,8 @@ class SoccerMatchRow:
     qualified_team_id: Optional[str] = None
     note: Optional[str] = None
     decision_note: Optional[str] = None     # why decided_in is 'unknown' (conflicting source fields), else None
+    home_corners: Optional[int] = None      # final only: each side's `wonCorners` (incl. extra time when played)
+    away_corners: Optional[int] = None
 
 
 def _whole(value) -> Optional[int]:
@@ -670,5 +692,88 @@ def parse_soccer_scoreboard(payload: dict, competition: str) -> list[SoccerMatch
                         row.qualified_team_id = f"soccer:{winners[0]}"
                 notes = [n.get("headline") for n in comp.get("notes") or [] if n.get("headline")]
                 row.note = notes[0] if notes else None
+                row.home_corners, row.away_corners = soccer_corners(sides["home"]), soccer_corners(sides["away"])
+                if row.home_corners is None or row.away_corners is None:
+                    row.home_corners = row.away_corners = None        # one side only is not a usable pair
         out.append(row)
+    return out
+
+
+SOCCER_STATS_PARSER = "espn-soccer-stats-1"
+SOCCER_ODDS_PARSER = "espn-soccer-odds-1"
+
+
+def soccer_corners(competitor: dict) -> Optional[int]:
+    """A team's corners from its scoreboard `statistics` entry named `wonCorners`; None when absent or not a whole number."""
+    for s in competitor.get("statistics") or []:
+        if s.get("name") == "wonCorners":
+            return _whole(s.get("displayValue") if s.get("displayValue") not in (None, "") else s.get("value"))
+    return None
+
+
+def american_to_decimal(a: int) -> float:
+    """Decimal odds of an American price (+150 -> 2.5, -200 -> 1.5)."""
+    return 1 + (a / 100 if a > 0 else 100 / -a)
+
+
+def _line(text, prefix: str = "") -> Optional[float]:
+    """'o2.5' / 'u2.5' (prefix 'o'/'u') or '-0.5' / '+1.5' as a number; None when missing or malformed."""
+    if text is None:
+        return None
+    t = str(text).strip().lower()
+    if prefix:
+        if not t.startswith(prefix):
+            return None
+        t = t[len(prefix):]
+    try:
+        return float(t)
+    except ValueError:
+        return None
+
+
+@dataclass(frozen=True)
+class SoccerQuote:
+    match_id: str
+    provider: str
+    market: str            # '1x2' | 'total_goals' | 'handicap'
+    side: str              # home/draw/away | over/under | home/away
+    price_kind: str        # 'open' | 'current' (the scoreboard's 'close' price while the match is scheduled)
+    line: Optional[float]
+    american: int
+
+
+def parse_soccer_odds(payload: dict, competition: str) -> list[SoccerQuote]:
+    """Bookmaker prices of SCHEDULED matches exactly as the scoreboard's `odds` entries list them: 3-way moneyline
+    (`moneyline.home/away/draw`), match goals total (`total.over/under`, line 'o2.5'/'u2.5') and goal handicap
+    (`pointSpread.home/away`, each side's own line). A price without a valid number, or a total/handicap without a
+    valid line, is skipped (never guessed). The scoreboard's other odds fields are summaries of the same prices."""
+    if {lg.get("slug") for lg in payload.get("leagues") or []} != {competition}:
+        raise SoccerPayloadMismatch(f"Scoreboard is not {competition!r}")
+    out = []
+    for ev in payload.get("events", []):
+        comp = ev["competitions"][0]
+        if comp["status"]["type"].get("name") != "STATUS_SCHEDULED":
+            continue
+        mid = f"soccer:{competition}:{ev['id']}"
+        for o in comp.get("odds") or []:
+            if not o:
+                continue
+            provider = ((o.get("provider") or {}).get("name") or "").strip()
+            if not provider:
+                continue
+            for kind, src in (("open", "open"), ("current", "close")):
+                for side in ("home", "draw", "away"):
+                    a = parse_american(((o.get("moneyline") or {}).get(side) or {}).get(src, {}).get("odds"))
+                    if a is not None:
+                        out.append(SoccerQuote(mid, provider, "1x2", side, kind, None, a))
+                for side, pre in (("over", "o"), ("under", "u")):
+                    v = ((o.get("total") or {}).get(side) or {}).get(src) or {}
+                    a, ln = parse_american(v.get("odds")), _line(v.get("line"), pre)
+                    if a is not None and ln is not None:
+                        out.append(SoccerQuote(mid, provider, "total_goals", side, kind, ln, a))
+                for side in ("home", "away"):
+                    v = ((o.get("pointSpread") or {}).get(side) or {}).get(src) or {}
+                    a, ln = parse_american(v.get("odds")), _line(v.get("line"))
+                    if a is not None and ln is not None:
+                        out.append(SoccerQuote(mid, provider, "handicap", side, kind, ln, a))
     return out

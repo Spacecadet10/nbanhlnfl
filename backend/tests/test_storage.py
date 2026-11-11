@@ -70,7 +70,8 @@ def test_migrations_are_idempotent(conn):
          "0029_game_forecasts.sql", "0030_result_revisions.sql", "0031_training_inputs_job.sql",
          "0032_nfl_store_identity.sql", "0033_nfl_market_quotes.sql", "0034_soccer_store.sql",
          "0035_result_integrity.sql", "0036_soccer_history.sql",
-         "0037_soccer_forecasts.sql", "0038_soccer_live.sql", "0039_soccer_international.sql"]
+         "0037_soccer_forecasts.sql", "0038_soccer_live.sql", "0039_soccer_international.sql",
+         "0040_soccer_markets.sql"]
 
 
 def test_repeated_ingestion_creates_no_duplicates(conn):

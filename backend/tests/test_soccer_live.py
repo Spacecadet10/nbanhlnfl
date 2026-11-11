@@ -140,8 +140,19 @@ def test_ticket_snapshot_offers_soccer_picks_with_their_rules(live, monkeypatch)
     kickoff = datetime.fromisoformat(at(TOMORROW, "15:00").replace("Z", "+00:00"))
     section = tickets.soccer_section(kickoff - timedelta(hours=1))
     assert section["freshness"]["source_state"] == "fresh" and not section["refused"]
-    picks = {p["game_id"]: p for p in section["report"]["picks"]}
-    p = picks["soccer:eng.1:3"]
+    # Several selections per match since the market expansion (2026-11-09): the 1X2 pick plus double chance and draw no
+    # bet from the same 1X2 forecast (goal/corner selections appear only for a served, tested family).
+    by_market = {(p["game_id"], p["market"]): p for p in section["report"]["picks"]}
+    assert {m for g, m in by_market if g == "soccer:eng.1:3"} == {"1x2_regulation", "double_chance", "draw_no_bet"}
+    p = by_market[("soccer:eng.1:3", "1x2_regulation")]
+    dc, dnb = by_market[("soccer:eng.1:3", "double_chance")], by_market[("soccer:eng.1:3", "draw_no_bet")]
+    one = p["probabilities"]
+    assert dc["probability"] == pytest.approx(1 - min(one.values())) and isinstance(dc["forecast_id"], str)
+    assert dnb["probability"] == pytest.approx(max(one["home"], one["away"]))
+    assert dnb["outcome_probabilities"]["push"] == pytest.approx(one["draw"])
+    assert dc["forecast_id"].startswith(f"1x2:{p['forecast_id']}:double_chance:") and dc["row_id"] == p["forecast_id"]
+    assert tickets.eligible(dc, kickoff - timedelta(hours=1))
+    assert tickets.grade_leg({**dnb, "sport": "soccer"}, STAMP)["grade"] == "pending"
     assert p["market"] == "1x2_regulation" and p["pick_label"].endswith("(90 min)")
     assert p["probability"] == max(p["probabilities"].values()) and p["outcome"] in soccer_live.OUTCOMES
     assert tickets.eligible(p, kickoff - timedelta(hours=1))

@@ -1,0 +1,481 @@
+........................................................................ [  3%]
+........................................................................ [  6%]
+........................................................................ [ 10%]
+........................................................................ [ 13%]
+........................................................................ [ 17%]
+........................................................................ [ 20%]
+........................................................................ [ 23%]
+........................................................................ [ 27%]
+....FFFFF.F.FF.......................................................... [ 30%]
+........................................................................ [ 34%]
+........................................................................ [ 37%]
+........................................................................ [ 40%]
+........................................................................ [ 44%]
+....F................................................................... [ 47%]
+........................................................................ [ 51%]
+......................................F................................. [ 54%]
+........................................................................ [ 57%]
+........................................................................ [ 61%]
+........................................................................ [ 64%]
+........................................................................ [ 68%]
+........................................................................ [ 71%]
+........................................................................ [ 74%]
+........................................................................ [ 78%]
+........................................................................ [ 81%]
+........................................................................ [ 85%]
+..........................................F............................. [ 88%]
+........................................................................ [ 91%]
+........................................................................ [ 95%]
+........................................................................ [ 98%]
+..........................                                               [100%]
+=================================== FAILURES ===================================
+_ test_a_network_never_sees_the_season_it_predicts_and_is_reproducible[torch] __
+
+lib = 'torch'
+
+    @pytest.mark.parametrize("lib", ["torch", "keras"])
+    def test_a_network_never_sees_the_season_it_predicts_and_is_reproducible(lib):
+        rs = rows()
+>       res = walk(lib, rs=rs)
+              ^^^^^^^^^^^^^^^^
+
+tests/test_deep_study.py:28: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_deep_study.py:22: in walk
+    return dl.deep_walk(sport, name, lib, head, rs or rows(), log=lambda *_: None)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/deep_study.py:245: in deep_walk
+    model = fit(lib, head, train, names)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/deep_study.py:206: in fit
+    nets, e = _ensemble(lib, "class", Zi, target(inner, won), Zv, target(val, won), Z, target(train, won))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/deep_study.py:184: in _ensemble
+    epochs = NETS[lib](target, SEEDS[0]).fit(Z_inner, y_inner, val=(Z_val, y_val)).epochs_
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.deep_study.TorchNet object at 0x1147431a0>
+Z = array([[ 2.22294578,  1.70138014,  0.8801137 , ...,  0.60301289,
+         0.95159809, -1.30277071],
+       [-1.0534218...,
+       [ 0.06470289,  0.6974213 , -1.63310738, ...,  1.19676016,
+        -1.91031902,  0.76807935]], shape=(260, 12))
+y = array([1., 0., 1., 1., 1., 0., 0., 0., 1., 1., 0., 1., 1., 1., 0., 0., 0.,
+       1., 1., 0., 1., 0., 1., 0., 1., 0., ... 1., 1., 1., 0.,
+       0., 0., 0., 1., 1., 0., 0., 1., 1., 1., 1., 0., 1., 0., 1., 0., 1.,
+       0., 0., 1., 0., 1.])
+val = (array([[-0.17356617, -0.42665303, -0.16791169, ..., -0.48630506,
+        -0.70002322, -1.05592617],
+       [ 0.660915...1., 1., 0., 0.,
+       1., 1., 1., 0., 0., 1., 0., 1., 0., 1., 1., 1., 1., 0., 1., 0., 0.,
+       1., 0., 1., 0., 1.]))
+epochs = None
+
+    def fit(self, Z, y, val: Optional[tuple] = None, epochs: Optional[int] = None):
+>       import torch
+E       ModuleNotFoundError: No module named 'torch'
+
+app/deep_study.py:80: ModuleNotFoundError
+_ test_a_network_never_sees_the_season_it_predicts_and_is_reproducible[keras] __
+
+lib = 'keras'
+
+    @pytest.mark.parametrize("lib", ["torch", "keras"])
+    def test_a_network_never_sees_the_season_it_predicts_and_is_reproducible(lib):
+        rs = rows()
+>       res = walk(lib, rs=rs)
+              ^^^^^^^^^^^^^^^^
+
+tests/test_deep_study.py:28: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_deep_study.py:22: in walk
+    return dl.deep_walk(sport, name, lib, head, rs or rows(), log=lambda *_: None)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/deep_study.py:245: in deep_walk
+    model = fit(lib, head, train, names)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/deep_study.py:206: in fit
+    nets, e = _ensemble(lib, "class", Zi, target(inner, won), Zv, target(val, won), Z, target(train, won))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/deep_study.py:184: in _ensemble
+    epochs = NETS[lib](target, SEEDS[0]).fit(Z_inner, y_inner, val=(Z_val, y_val)).epochs_
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.deep_study.KerasNet object at 0x119865d30>
+Z = array([[ 2.22294578,  1.70138014,  0.8801137 , ...,  0.60301289,
+         0.95159809, -1.30277071],
+       [-1.0534218...,
+       [ 0.06470289,  0.6974213 , -1.63310738, ...,  1.19676016,
+        -1.91031902,  0.76807935]], shape=(260, 12))
+y = array([1., 0., 1., 1., 1., 0., 0., 0., 1., 1., 0., 1., 1., 1., 0., 0., 0.,
+       1., 1., 0., 1., 0., 1., 0., 1., 0., ... 1., 1., 1., 0.,
+       0., 0., 0., 1., 1., 0., 0., 1., 1., 1., 1., 0., 1., 0., 1., 0., 1.,
+       0., 0., 1., 0., 1.])
+val = (array([[-0.17356617, -0.42665303, -0.16791169, ..., -0.48630506,
+        -0.70002322, -1.05592617],
+       [ 0.660915...1., 1., 0., 0.,
+       1., 1., 1., 0., 0., 1., 0., 1., 0., 1., 1., 1., 1., 0., 1., 0., 0.,
+       1., 0., 1., 0., 1.]))
+epochs = None
+
+    def fit(self, Z, y, val: Optional[tuple] = None, epochs: Optional[int] = None):
+>       import keras
+E       ModuleNotFoundError: No module named 'keras'
+
+app/deep_study.py:145: ModuleNotFoundError
+_________________ test_the_torch_network_learns_a_real_signal __________________
+
+    def test_the_torch_network_learns_a_real_signal():
+>       res = walk("torch")
+              ^^^^^^^^^^^^^
+
+tests/test_deep_study.py:44: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_deep_study.py:22: in walk
+    return dl.deep_walk(sport, name, lib, head, rs or rows(), log=lambda *_: None)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/deep_study.py:245: in deep_walk
+    model = fit(lib, head, train, names)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/deep_study.py:206: in fit
+    nets, e = _ensemble(lib, "class", Zi, target(inner, won), Zv, target(val, won), Z, target(train, won))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/deep_study.py:184: in _ensemble
+    epochs = NETS[lib](target, SEEDS[0]).fit(Z_inner, y_inner, val=(Z_val, y_val)).epochs_
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.deep_study.TorchNet object at 0x11aad2ed0>
+Z = array([[ 2.22294578,  1.70138014,  0.8801137 , ...,  0.60301289,
+         0.95159809, -1.30277071],
+       [-1.0534218...,
+       [ 0.06470289,  0.6974213 , -1.63310738, ...,  1.19676016,
+        -1.91031902,  0.76807935]], shape=(260, 12))
+y = array([1., 0., 1., 1., 1., 0., 0., 0., 1., 1., 0., 1., 1., 1., 0., 0., 0.,
+       1., 1., 0., 1., 0., 1., 0., 1., 0., ... 1., 1., 1., 0.,
+       0., 0., 0., 1., 1., 0., 0., 1., 1., 1., 1., 0., 1., 0., 1., 0., 1.,
+       0., 0., 1., 0., 1.])
+val = (array([[-0.17356617, -0.42665303, -0.16791169, ..., -0.48630506,
+        -0.70002322, -1.05592617],
+       [ 0.660915...1., 1., 0., 0.,
+       1., 1., 1., 0., 0., 1., 0., 1., 0., 1., 1., 1., 1., 0., 1., 0., 0.,
+       1., 0., 1., 0., 1.]))
+epochs = None
+
+    def fit(self, Z, y, val: Optional[tuple] = None, epochs: Optional[int] = None):
+>       import torch
+E       ModuleNotFoundError: No module named 'torch'
+
+app/deep_study.py:80: ModuleNotFoundError
+______________ test_score_heads_produce_engine_compatible_outputs ______________
+
+    def test_score_heads_produce_engine_compatible_outputs():
+>       res = walk("torch", "normal", rs=rows(seasons=(2018, 2019, 2020, 2021, 2022)), name="net:normal")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_deep_study.py:53: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_deep_study.py:22: in walk
+    return dl.deep_walk(sport, name, lib, head, rs or rows(), log=lambda *_: None)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/deep_study.py:245: in deep_walk
+    model = fit(lib, head, train, names)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/deep_study.py:212: in fit
+    nets, e = _ensemble(lib, "reg", Zi, target(inner, k), Zv, target(val, k), Z, target(train, k))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/deep_study.py:184: in _ensemble
+    epochs = NETS[lib](target, SEEDS[0]).fit(Z_inner, y_inner, val=(Z_val, y_val)).epochs_
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.deep_study.TorchNet object at 0x119c2f920>
+Z = array([[ 2.22294578,  1.70138014,  0.8801137 , ...,  0.60301289,
+         0.95159809, -1.30277071],
+       [-1.0534218...,
+       [ 0.06470289,  0.6974213 , -1.63310738, ...,  1.19676016,
+        -1.91031902,  0.76807935]], shape=(260, 12))
+y = array([  7., -11.,  10.,   8.,   9.,  -7.,   2.,  -2.,   6.,   7.,  -4.,
+         9.,  -7.,  18.,  10.,   7.,  -2.,  -...      9.,  23.,  -4., -12.,   4.,   2.,  19.,   1.,   4., -26.,   8.,
+       -16.,   1.,  21.,  -8.,   4.,   2.,  -4.])
+val = (array([[-0.17356617, -0.42665303, -0.16791169, ..., -0.48630506,
+        -0.70002322, -1.05592617],
+       [ 0.660915...    31.,  -9., -26.,   8.,  -5.,  13.,   1.,  13.,  -1., -15.,  11.,
+         4., -11.,  -4.,   8.,  -1.,   3.,  22.]))
+epochs = None
+
+    def fit(self, Z, y, val: Optional[tuple] = None, epochs: Optional[int] = None):
+>       import torch
+E       ModuleNotFoundError: No module named 'torch'
+
+app/deep_study.py:80: ModuleNotFoundError
+___________ test_goals_head_fits_poisson_rates_on_regulation_scores ____________
+
+    def test_goals_head_fits_poisson_rates_on_regulation_scores():
+        rng = random.Random(4)
+        rs = []
+        for s in (2018, 2019, 2020, 2021):
+            for i in range(260):
+                x = {k: rng.gauss(0, 1) for k in dl.features.FEATURE_SETS["nhl_base"]}
+                x["neutral"] = 0.0
+                lam_h, lam_a = np.exp(1.0 + 0.2 * x["elo_diff"]), np.exp(0.9 - 0.2 * x["elo_diff"])
+                h, a = int(np.random.default_rng(1000 * s + i).poisson(lam_h)), int(np.random.default_rng(7 + 1000 * s + i).poisson(lam_a))
+                won = h > a if h != a else rng.random() < 0.5
+                day = f"{s - 1}-11-{1 + i % 28:02d}"
+                rs.append(Row(f"g{s}-{i}", s, f"{day}T23:00:00Z", f"{day}T04:00:00Z", x,
+                              result_available_at=f"{s - 1}-12-31T00:00:00Z",
+                              y={"home_won": won, "margin": (h - a) or (1 if won else -1), "total": h + a + (h == a),
+                                 "regulation": (h, a)}))
+>       res = walk("torch", "goals", rs=rs, sport="nhl", name="net:goals")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_deep_study.py:75: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_deep_study.py:22: in walk
+    return dl.deep_walk(sport, name, lib, head, rs or rows(), log=lambda *_: None)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/deep_study.py:245: in deep_walk
+    model = fit(lib, head, train, names)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/deep_study.py:226: in fit
+    nets, e = _ensemble(lib, "poisson", Zik, target(ri, k), Zvk, target(rv, k), Zk, target(rt, k))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/deep_study.py:184: in _ensemble
+    epochs = NETS[lib](target, SEEDS[0]).fit(Z_inner, y_inner, val=(Z_val, y_val)).epochs_
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.deep_study.TorchNet object at 0x11a1fa1e0>
+Z = array([[ 0.04755378,  0.38915785, -0.4444278 , ...,  0.02704779,
+        -0.79627229, -0.77237143],
+       [-0.5871661...,
+       [-0.81895443,  0.71359997,  0.35300882, ...,  1.76816526,
+        -0.00568038, -0.63515474]], shape=(260, 11))
+y = array([3., 2., 3., 2., 0., 6., 6., 2., 2., 1., 2., 4., 0., 1., 5., 1., 3.,
+       4., 1., 2., 5., 3., 7., 1., 2., 3., ... 4., 3., 2., 0.,
+       1., 7., 2., 4., 2., 3., 2., 2., 2., 3., 0., 2., 5., 2., 2., 2., 2.,
+       3., 8., 0., 4., 1.])
+val = (array([[ 0.87321137, -0.21753985, -0.09342446, ...,  1.4490568 ,
+         0.11281526, -1.13119067],
+       [-0.448494...  5.,  2.,  3.,  1.,  3.,  0.,  0.,  2.,  1.,
+        3.,  1.,  7.,  2.,  2.,  1.,  5.,  5.,  5.,  2.,  1.,  2.,  3.]))
+epochs = None
+
+    def fit(self, Z, y, val: Optional[tuple] = None, epochs: Optional[int] = None):
+>       import torch
+E       ModuleNotFoundError: No module named 'torch'
+
+app/deep_study.py:80: ModuleNotFoundError
+___ test_numpy_export_reproduces_both_libraries_and_needs_neither_to_predict ___
+
+    def test_numpy_export_reproduces_both_libraries_and_needs_neither_to_predict():
+        from app.candidates import deep
+        rs = rows()
+        names = dl.features.FEATURE_SETS["nba_base"]
+        train = [r for r in rs if r.season < 2021]
+        for lib in ("torch", "keras"):
+>           model = dl.fit(lib, "binary", train, names)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_deep_study.py:97: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/deep_study.py:206: in fit
+    nets, e = _ensemble(lib, "class", Zi, target(inner, won), Zv, target(val, won), Z, target(train, won))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/deep_study.py:184: in _ensemble
+    epochs = NETS[lib](target, SEEDS[0]).fit(Z_inner, y_inner, val=(Z_val, y_val)).epochs_
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.deep_study.TorchNet object at 0x119864680>
+Z = array([[ 2.37030677,  1.5956239 ,  0.83125435, ...,  0.59704578,
+         0.93548032, -1.24412622],
+       [ 0.9988187...,
+       [ 0.78008138,  0.24391745, -1.20784259, ..., -0.14165048,
+         0.84194147,  1.42421925]], shape=(520, 12))
+y = array([1., 0., 1., 1., 1., 0., 0., 0., 1., 0., 1., 1., 1., 1., 1., 1., 0.,
+       0., 0., 1., 0., 0., 0., 0., 1., 0., ...    0., 1., 1., 0., 0., 0., 1., 1., 1., 0., 1., 1., 0., 1., 0., 1., 1.,
+       1., 0., 1., 1., 0., 1., 1., 0., 1., 1.])
+val = (array([[ 0.46922297,  0.62566219, -0.41322619, ...,  0.04977446,
+        -0.40368891, -0.34207946],
+       [-0.757947...1., 0., 0., 1.,
+       1., 0., 0., 1., 0., 1., 1., 1., 0., 1., 1., 1., 1., 1., 1., 0., 0.,
+       0., 1., 1., 0., 0.]))
+epochs = None
+
+    def fit(self, Z, y, val: Optional[tuple] = None, epochs: Optional[int] = None):
+>       import torch
+E       ModuleNotFoundError: No module named 'torch'
+
+app/deep_study.py:80: ModuleNotFoundError
+____ test_a_deep_candidate_is_fitted_once_then_applied_without_its_library _____
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-640/test_a_deep_candidate_is_fitte0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x11b076d50>
+
+    def test_a_deep_candidate_is_fitted_once_then_applied_without_its_library(tmp_path, monkeypatch):
+        from app.candidates import deep, live as pool_live, registry
+        monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path))
+        monkeypatch.setitem(registry.MIN_TRAIN, "nba", 200)
+        spec = registry.BY_NAME["torch_mlp:nba_base"]
+        rs = rows()
+>       art = pool_live.ensure_fit(spec, rs, 2021)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_deep_study.py:139: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/candidates/live.py:88: in ensure_fit
+    art = _fit(spec, train, season, defn, fp)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/candidates/live.py:111: in _fit
+    model = deep.fit(spec, train) if is_deep else engine.fit(spec, train)
+            ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+spec = Spec(name='torch_mlp:nba_base', sport='nba', family='torch_mlp', head='binary', features='nba_base', role='candidate',...ch network (64-32 units, dropout, 5 seeds; epochs chosen on the latest earlier season).', refit='season', extra='deep')
+train = [Row(game_id='g2018-0', season=2018, tipoff_at='2017-11-01T23:00:00Z', cutoff_at='2017-11-01T04:00:00Z', x={'elo_diff'...lable_at='2017-12-31T00:00:00Z', y={'home_won': False, 'margin': -14, 'total': 193, 'regulation': None}, meta={}), ...]
+
+    def fit(spec, train: list) -> learners.Fitted:
+        """The season fit of a deep candidate (same rule as deep-v1: epochs chosen on the latest earlier season, then a refit
+        on every training row), exported to NumPy. Raises DependencyMissing where the pinned library is not installed."""
+        if not libraries_present(spec):
+>           raise DependencyMissing(f"{spec.name} is fitted in the research environment only "
+                                    f"({LIBRARY_PACKAGE[FAMILIES[spec.family]]}=={PINNED[LIBRARY_PACKAGE[FAMILIES[spec.family]]]} not installed here)")
+E           app.candidates.deep.DependencyMissing: torch_mlp:nba_base is fitted in the research environment only (torch==2.14.1 not installed here)
+
+app/candidates/deep.py:93: DependencyMissing
+_ test_normal_head_deep_candidate_gets_its_spread_from_its_own_earlier_residuals _
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-640/test_normal_head_deep_candidat0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x11a77d1f0>
+
+    def test_normal_head_deep_candidate_gets_its_spread_from_its_own_earlier_residuals(tmp_path, monkeypatch):
+        from app.candidates import live as pool_live, registry
+        monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path))
+        monkeypatch.setitem(registry.MIN_TRAIN, "nba", 200)
+        spec = registry.BY_NAME["torch_mlp:nba_base:normal"]
+        rs = rows(seasons=(2018, 2019, 2020, 2021, 2022))
+>       art = pool_live.ensure_fit(spec, rs, 2022)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_deep_study.py:157: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/candidates/live.py:88: in ensure_fit
+    art = _fit(spec, train, season, defn, fp)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/candidates/live.py:111: in _fit
+    model = deep.fit(spec, train) if is_deep else engine.fit(spec, train)
+            ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+spec = Spec(name='torch_mlp:nba_base:normal', sport='nba', family='torch_mlp', head='normal', features='nba_base', role='cand...total networks; in deep-v1 better than gbt_points on spreads, not than the best member.', refit='season', extra='deep')
+train = [Row(game_id='g2018-0', season=2018, tipoff_at='2017-11-01T23:00:00Z', cutoff_at='2017-11-01T04:00:00Z', x={'elo_diff'...lable_at='2017-12-31T00:00:00Z', y={'home_won': False, 'margin': -14, 'total': 193, 'regulation': None}, meta={}), ...]
+
+    def fit(spec, train: list) -> learners.Fitted:
+        """The season fit of a deep candidate (same rule as deep-v1: epochs chosen on the latest earlier season, then a refit
+        on every training row), exported to NumPy. Raises DependencyMissing where the pinned library is not installed."""
+        if not libraries_present(spec):
+>           raise DependencyMissing(f"{spec.name} is fitted in the research environment only "
+                                    f"({LIBRARY_PACKAGE[FAMILIES[spec.family]]}=={PINNED[LIBRARY_PACKAGE[FAMILIES[spec.family]]]} not installed here)")
+E           app.candidates.deep.DependencyMissing: torch_mlp:nba_base:normal is fitted in the research environment only (torch==2.14.1 not installed here)
+
+app/candidates/deep.py:93: DependencyMissing
+_______________ test_odds_job_migration_keeps_existing_job_runs ________________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-640/test_odds_job_migration_keeps_0')
+
+    def test_odds_job_migration_keeps_existing_job_runs(tmp_path):
+        conn = db.connect(tmp_path / "m.sqlite")
+        db.migrate(conn, upto=3)
+        conn.execute("INSERT INTO job_runs (job, started_at, status) VALUES ('refresh', '2026-09-30T00:00:00Z', 'success')")
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute("INSERT INTO job_runs (job, started_at, status) VALUES ('odds', '2026-09-30T00:00:00Z', 'success')")
+>       assert db.migrate(conn) == ["0004_odds_job.sql", "0005_team_possession_stats.sql",
+                                      "0006_possession_observations.sql", "0007_possession_fetch_events.sql", "0008_shadow_jobs.sql",
+             "0009_box_fetch_attempts.sql", "0010_injury_report_attempts.sql", "0011_near_tipoff.sql",
+             "0012_markets.sql", "0013_market_forecast_checks.sql",
+             "0014_goalie_snapshots.sql", "0015_two_hour_forecasts.sql",
+             "0016_research_selection.sql", "0017_nhl_shots.sql", "0018_model_fits.sql",
+             "0019_candidate_forecasts.sql", "0020_pool_selection.sql", "0021_agreement_observations.sql", "0022_agreement_observation_inputs.sql",
+             "0023_two_hour_guards.sql", "0024_adaptive.sql", "0025_recovery.sql",
+             "0026_adaptive_recovery.sql", "0027_adaptive_recovery_attempts.sql", "0028_exact_rule_observations.sql",
+             "0029_game_forecasts.sql", "0030_result_revisions.sql", "0031_training_inputs_job.sql",
+             "0032_nfl_store_identity.sql", "0033_nfl_market_quotes.sql", "0034_soccer_store.sql",
+             "0035_result_integrity.sql", "0036_soccer_history.sql",
+             "0037_soccer_forecasts.sql", "0038_soccer_live.sql", "0039_soccer_international.sql"]
+E       AssertionError: assert ['0004_odds_j...pts.sql', ...] == ['0004_odds_j...pts.sql', ...]
+E         
+E         Left contains one more item: '0040_soccer_markets.sql'
+E         Use -v to get more diff
+
+tests/test_live.py:223: AssertionError
+________ test_quote_migration_preserves_existing_references_and_guards _________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-640/test_quote_migration_preserves0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x119aa75f0>
+
+    def test_quote_migration_preserves_existing_references_and_guards(tmp_path,monkeypatch):
+        import sqlite3
+        from test_storage import event,payload
+        monkeypatch.setenv('NBA_DATA_DIR',str(tmp_path))
+        c=db.connect(tmp_path/'legacy.sqlite')
+        db.migrate(c,upto=32)
+        ingest.ingest_month(c,'202401',fetch=lambda _:payload(event()),retrieved_at='2024-01-15T12:00:00Z')
+        c.execute("INSERT INTO market_quotes(sport,game_id,provider,market,price_label,line,price_a,price_b,p_a_devig,p_b_devig,retrieved_at,fetch_id,raw_id) VALUES('nba','espn:1001','Book','spread','current',-1.5,-110,-110,.5,.5,'2024-01-15T12:00:00Z',1,1)")
+        c.execute("INSERT INTO market_forecasts(idempotency_key,sport,game_id,market,line,line_source,market_quote_id,policy,run_type,model_version,dataset_version,feature_version,cutoff_at,generated_at,tipoff_at,p_a,p_mid,p_b) VALUES('legacy','nba','espn:1001','spread',-1.5,'market',1,'pregame','demo','test','test','test','2024-01-15T18:00:00Z','2024-01-15T12:00:00Z','2024-01-15T18:00:00Z',.5,0,.5)")
+        old=tuple(c.execute('SELECT * FROM market_quotes').fetchone())
+>       assert db.migrate(c)==['0033_nfl_market_quotes.sql','0034_soccer_store.sql','0035_result_integrity.sql','0036_soccer_history.sql','0037_soccer_forecasts.sql','0038_soccer_live.sql','0039_soccer_international.sql']
+E       AssertionError: assert ['0033_nfl_ma...ive.sql', ...] == ['0033_nfl_ma...ive.sql', ...]
+E         
+E         Left contains one more item: '0040_soccer_markets.sql'
+E         Use -v to get more diff
+
+tests/test_nfl_live.py:146: AssertionError
+________________________ test_migrations_are_idempotent ________________________
+
+conn = <sqlite3.Connection object at 0x1146cee30>
+
+    def test_migrations_are_idempotent(conn):
+        assert db.migrate(conn) == []
+>       assert [r["name"] for r in conn.execute("SELECT name FROM schema_migrations")] == \
+            ["0001_initial.sql", "0002_block_conflicting_inserts.sql", "0003_job_runs.sql",
+             "0004_odds_job.sql", "0005_team_possession_stats.sql", "0006_possession_observations.sql",
+             "0007_possession_fetch_events.sql", "0008_shadow_jobs.sql",
+             "0009_box_fetch_attempts.sql", "0010_injury_report_attempts.sql", "0011_near_tipoff.sql",
+             "0012_markets.sql", "0013_market_forecast_checks.sql",
+             "0014_goalie_snapshots.sql", "0015_two_hour_forecasts.sql",
+             "0016_research_selection.sql", "0017_nhl_shots.sql", "0018_model_fits.sql",
+             "0019_candidate_forecasts.sql", "0020_pool_selection.sql", "0021_agreement_observations.sql", "0022_agreement_observation_inputs.sql",
+             "0023_two_hour_guards.sql", "0024_adaptive.sql", "0025_recovery.sql",
+             "0026_adaptive_recovery.sql", "0027_adaptive_recovery_attempts.sql", "0028_exact_rule_observations.sql",
+             "0029_game_forecasts.sql", "0030_result_revisions.sql", "0031_training_inputs_job.sql",
+             "0032_nfl_store_identity.sql", "0033_nfl_market_quotes.sql", "0034_soccer_store.sql",
+             "0035_result_integrity.sql", "0036_soccer_history.sql",
+             "0037_soccer_forecasts.sql", "0038_soccer_live.sql", "0039_soccer_international.sql"]
+E       AssertionError: assert ['0001_initia...ons.sql', ...] == ['0001_initia...ons.sql', ...]
+E         
+E         Left contains one more item: '0040_soccer_markets.sql'
+E         Use -v to get more diff
+
+tests/test_storage.py:59: AssertionError
+=============================== warnings summary ===============================
+../../../nba-predictor-delivery/backend/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/andry/nba-predictor-delivery/backend/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_deep_study.py::test_a_network_never_sees_the_season_it_predicts_and_is_reproducible[torch]
+FAILED tests/test_deep_study.py::test_a_network_never_sees_the_season_it_predicts_and_is_reproducible[keras]
+FAILED tests/test_deep_study.py::test_the_torch_network_learns_a_real_signal
+FAILED tests/test_deep_study.py::test_score_heads_produce_engine_compatible_outputs
+FAILED tests/test_deep_study.py::test_goals_head_fits_poisson_rates_on_regulation_scores
+FAILED tests/test_deep_study.py::test_numpy_export_reproduces_both_libraries_and_needs_neither_to_predict
+FAILED tests/test_deep_study.py::test_a_deep_candidate_is_fitted_once_then_applied_without_its_library
+FAILED tests/test_deep_study.py::test_normal_head_deep_candidate_gets_its_spread_from_its_own_earlier_residuals
+FAILED tests/test_live.py::test_odds_job_migration_keeps_existing_job_runs - ...
+FAILED tests/test_nfl_live.py::test_quote_migration_preserves_existing_references_and_guards
+FAILED tests/test_storage.py::test_migrations_are_idempotent - AssertionError...
+11 failed, 2103 passed, 1 warning in 1267.82s (0:21:07)

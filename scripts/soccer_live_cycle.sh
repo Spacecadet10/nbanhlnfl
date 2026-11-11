@@ -4,6 +4,7 @@
 #    national-team competitions (app/intl_live.py).
 # 2. Before 06:00 UTC: forecast today's matches; a refusal is recorded and alerted by the ticket health check.
 # 3. Look ahead 7 days: each day's matches are forecast once their inputs are settled (else that day waits quietly).
+# 4. The same for the goal / corner market families (step 4 below).
 # Every step refuses from a dirty or development checkout (NBA_RELEASE_GUARD; app/release.py).
 set -u
 LIVE=/Users/andry/nba-predictor-delivery
@@ -16,5 +17,11 @@ py live-refresh || status=1
 if [ "$(date -u +%H)" -lt 6 ]; then py live-forecast || status=1; fi
 for i in 1 2 3 4 5 6 7; do              # national teams publish days ahead once their teams' earlier games are settled
   py live-forecast --day "$(date -u -v+${i}d +%Y-%m-%d)" --if-ready || status=1
+done
+# 4. Goal / corner market forecasts (docs/SOCCER_MARKETS_PLAN.md): only families with a tested, pinned model; a refused
+#    family records its check and never affects the 1X2 forecasts above.
+if [ "$(date -u +%H)" -lt 6 ]; then py markets-forecast || status=1; fi
+for i in 1 2 3 4 5 6 7; do
+  py markets-forecast --day "$(date -u -v+${i}d +%Y-%m-%d)" --if-ready || status=1
 done
 exit $status

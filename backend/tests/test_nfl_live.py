@@ -143,7 +143,7 @@ def test_quote_migration_preserves_existing_references_and_guards(tmp_path,monke
     c.execute("INSERT INTO market_quotes(sport,game_id,provider,market,price_label,line,price_a,price_b,p_a_devig,p_b_devig,retrieved_at,fetch_id,raw_id) VALUES('nba','espn:1001','Book','spread','current',-1.5,-110,-110,.5,.5,'2024-01-15T12:00:00Z',1,1)")
     c.execute("INSERT INTO market_forecasts(idempotency_key,sport,game_id,market,line,line_source,market_quote_id,policy,run_type,model_version,dataset_version,feature_version,cutoff_at,generated_at,tipoff_at,p_a,p_mid,p_b) VALUES('legacy','nba','espn:1001','spread',-1.5,'market',1,'pregame','demo','test','test','test','2024-01-15T18:00:00Z','2024-01-15T12:00:00Z','2024-01-15T18:00:00Z',.5,0,.5)")
     old=tuple(c.execute('SELECT * FROM market_quotes').fetchone())
-    assert db.migrate(c)==['0033_nfl_market_quotes.sql','0034_soccer_store.sql','0035_result_integrity.sql','0036_soccer_history.sql','0037_soccer_forecasts.sql','0038_soccer_live.sql','0039_soccer_international.sql']
+    assert db.migrate(c)==['0033_nfl_market_quotes.sql','0034_soccer_store.sql','0035_result_integrity.sql','0036_soccer_history.sql','0037_soccer_forecasts.sql','0038_soccer_live.sql','0039_soccer_international.sql','0040_soccer_markets.sql']
     assert tuple(c.execute('SELECT * FROM market_quotes').fetchone())==old
     assert c.execute('SELECT market_quote_id FROM market_forecasts').fetchone()[0]==1
     assert c.execute('PRAGMA foreign_key_check').fetchall()==[]

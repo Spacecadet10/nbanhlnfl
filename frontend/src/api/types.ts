@@ -1009,6 +1009,50 @@ export interface SoccerLiveResponse {
   refresh?: { last_refresh_at: string | null; max_age_hours: number; stale: boolean };
   forecasts: SoccerLiveForecast[];
 }
+/** Goal, corner, double-chance and draw-no-bet selections (backend app/soccer_markets_live.py; /api/soccer/markets). */
+export type SoccerMarketKey = 'goals_total' | 'goals_home' | 'goals_away' | 'btts' | 'corners_total' | 'corners_home'
+  | 'corners_away' | 'corners_handicap' | 'double_chance' | 'draw_no_bet';
+export interface SoccerMarketOutcomes { win: number; half_win: number; push: number; half_loss: number; loss: number }
+export interface SoccerMarketSelection {
+  market: SoccerMarketKey; market_title: string; side: string; line: number | null;
+  /** 'bookmaker' = a price the source lists (provider, price, retrieval time); 'model' = the model's own line. */
+  source: 'model' | 'bookmaker'; note: string;
+  probabilities: SoccerMarketOutcomes; win_share: number; fair_decimal: number | null;
+  provider?: string; american?: number; decimal?: number; retrieved_at?: string; market_probability?: number | null;
+  expected_return?: number; result: 'win' | 'half_win' | 'push' | 'half_loss' | 'loss' | null;
+}
+export interface SoccerMarketForecast {
+  forecast_id: number; family: 'goals' | 'corners'; match_id: string; competition: string; kickoff_at: string;
+  home: string; away: string; mean_home: number; mean_away: number; generated_at: string; cutoff_at: string;
+  source_retrieved_at: string; inputs_through: string | null; candidate_sha256: string; model: string; status: string;
+  counts: [number, number] | null; label: string; selections: SoccerMarketSelection[];
+}
+export interface SoccerMarketMatch {
+  match_id: string; competition: string; kickoff_at: string; home: string; away: string;
+  families: Partial<Record<'goals' | 'corners', SoccerMarketForecast>>;
+  derived: { forecast_id: number; generated_at: string; cutoff_at: string; candidate_sha256: string; label: string;
+    probabilities_1x2: { home: number; draw: number; away: number }; selections: SoccerMarketSelection[] } | null;
+}
+export interface SoccerMarketFamilyState {
+  family: 'goals' | 'corners'; served: boolean; reason: string | null; candidate_sha256?: string; model?: string;
+  competitions: string[]; markets: SoccerMarketKey[]; withheld_markets?: SoccerMarketKey[]; disclosed_lines?: string[];
+}
+export interface SoccerMarketCheck { checked_at: string; ok: boolean; problems: string[]; match_date: string; forecasts: number }
+export interface SoccerMarketsResponse {
+  competition: SoccerCompetitionId; as_of: string; families: Record<'goals' | 'corners', SoccerMarketFamilyState>;
+  derived: { markets: SoccerMarketKey[]; served: boolean; note: string }; settlement_rule: string;
+  notes: { model_line: string; bookmaker_line: string; no_proven_skill: string; corners_no_bookmaker: string };
+  checks: Partial<Record<'goals' | 'corners', SoccerMarketCheck | null>>; matches: SoccerMarketMatch[];
+  ranking: (SoccerMarketSelection & { match_id: string; competition: string; kickoff_at: string; home: string; away: string })[];
+}
+export interface SoccerMarketsHistory {
+  as_of: string; competition: SoccerCompetitionId;
+  families: Partial<Record<'goals' | 'corners', { settled: number;
+    record: Record<string, { n: number; mean_predicted: number; observed: number; brier: number }>;
+    matches: { forecast_id: number; match_id: string; competition: string; kickoff_at: string; home: string; away: string;
+      counts: [number, number]; mean_home: number; mean_away: number; generated_at: string }[] }>>;
+  families_state: Record<'goals' | 'corners', SoccerMarketFamilyState>;
+}
 export interface SoccerMatchesResponse {
   competition_id: SoccerCompetitionId; date: string; fetched: boolean; matches: SoccerMatch[];
   prev_date: string | null; next_date: string | null; last_refresh_at: string | null;

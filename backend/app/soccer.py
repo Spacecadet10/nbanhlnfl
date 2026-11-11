@@ -10,7 +10,8 @@ score fields include extra time; a 90-minute score could be derived from goal mi
 validated yet, so the regulation result after extra time is reported as unavailable. A qualifier is never presented as
 the winner of the match.
 
-This module holds match facts only: no forecast, odds, injury or metric is stored or derived here. Live 90-minute
+This module holds match facts only: results, team corner counts (soccer_match_stats) and bookmaker prices as the
+scoreboard lists them (soccer_odds_quotes, migration 0040); no forecast, injury or metric is stored or derived here. Live 90-minute
 forecasts are recorded separately (app/soccer_live.py, app/intl_live.py); the read views below report where a
 competition's forecasts stand (forecast_state) and return them beside, never inside, a match. The API reads this store
 through /api/soccer/* only.
@@ -94,7 +95,8 @@ def import_raw(conn: sqlite3.Connection, raw_id: int, competition: str, *, retri
     a transaction on a soccer store. An event the store cannot hold (home and away the same team) is recorded in
     soccer_rejections and skipped; the other matches of the day are still imported."""
     _require_soccer(conn)
-    rows = espn.parse_soccer_scoreboard(json.loads(raw_cache.load(conn, raw_id, cache_dir)), competition)
+    payload = json.loads(raw_cache.load(conn, raw_id, cache_dir))
+    rows = espn.parse_soccer_scoreboard(payload, competition)
     stats = {"raw_id": raw_id, "matches_seen": len(rows), "matches_inserted": 0, "matches_updated": 0, "revisions": 0,
              "rejected": 0, "reclassified": 0}
     for m in rows:
@@ -113,7 +115,85 @@ def import_raw(conn: sqlite3.Connection, raw_id: int, competition: str, *, retri
             teams_changed = before is not None and tuple(before) != (m.home.team_id, m.away.team_id)
             stats["revisions"] += _record_revision(conn, m.match_id, raw_id, retrieved_at, fetch_id, teams_changed=teams_changed,
                                                    basis="reclassified" if outcome == "reclassified" else "observed")
+        if _has_market_tables(conn):
+            stats["stats_revisions"] = stats.get("stats_revisions", 0) + _record_stats(conn, m, raw_id, retrieved_at)
+    if _has_market_tables(conn):
+        listed = {m.match_id for m in rows if m.status == "scheduled" and m.home.team_id != m.away.team_id}
+        stats["quotes"] = record_quotes(conn, espn.parse_soccer_odds(payload, competition), listed, raw_id, retrieved_at)
     return stats
+
+
+def _has_market_tables(conn: sqlite3.Connection) -> bool:
+    """Migration 0040 applied (a store migrated before it imports exactly as before)."""
+    return conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'soccer_odds_quotes'").fetchone() is not None
+
+
+def _record_stats(conn: sqlite3.Connection, m: espn.SoccerMatchRow, raw_id: int, retrieved_at: str) -> int:
+    """Appends the match's corner counts when it is final in this retrieval and they differ from its latest stats row.
+    Availability is never earlier than the match result's: first row = the later of (this retrieval if it came within the
+    observed window after kickoff, else kickoff + 4 h) and the result's stored result_available_at; a later different pair
+    = this retrieval. A retrieval not newer than the latest stats row (replay, late import) adds nothing; absent counts
+    never remove a stored row."""
+    if m.status != "final" or m.home_corners is None or m.away_corners is None:
+        return 0
+    row = conn.execute("SELECT status, kickoff_at, result_available_at FROM soccer_matches WHERE match_id = ?",
+                       (m.match_id,)).fetchone()
+    if row is None or row["status"] != "final" or row["result_available_at"] is None:
+        return 0
+    last = conn.execute("SELECT revision, home_corners, away_corners, observed_at FROM soccer_match_stats WHERE match_id = ? "
+                        "ORDER BY revision DESC LIMIT 1", (m.match_id,)).fetchone()
+    if last is not None and (last["observed_at"] >= retrieved_at
+                             or (last["home_corners"], last["away_corners"]) == (m.home_corners, m.away_corners)):
+        return 0
+    if last is not None:
+        available = retrieved_at
+    else:
+        observed = _ts(retrieved_at) - _ts(row["kickoff_at"]) <= OBSERVED_WINDOW
+        rule = retrieved_at if observed else _fmt(_ts(row["kickoff_at"]) + RESULT_ASSUMED_DELAY)
+        available = max(rule, row["result_available_at"])
+    conn.execute("INSERT INTO soccer_match_stats (match_id, revision, home_corners, away_corners, observed_at, available_at, "
+                 "raw_id, parser_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                 (m.match_id, (last["revision"] + 1) if last else 1, m.home_corners, m.away_corners, retrieved_at,
+                  available, raw_id, espn.SOCCER_STATS_PARSER))
+    return 1
+
+
+def record_quotes(conn: sqlite3.Connection, quotes: list, listed: set, raw_id: int, retrieved_at: str) -> int:
+    """Appends each listed price that differs from the latest stored row of its key (match, provider, market, side, kind),
+    and a withdrawn row for a key a match listed before but no longer lists in this retrieval. `listed`: the scheduled
+    matches this response contains (only they can withdraw a price). Only matches still scheduled in the store and
+    retrieved before kickoff; a retrieval not newer than the latest stored row of the match changes nothing."""
+    by_match: dict = defaultdict(dict)
+    for q in quotes:
+        by_match[q.match_id][(q.provider, q.market, q.side, q.price_kind)] = q
+    n = 0
+    for mid in sorted(listed | set(by_match)):
+        m = conn.execute("SELECT status, kickoff_at FROM soccer_matches WHERE match_id = ?", (mid,)).fetchone()
+        if m is None or m["status"] != "scheduled" or retrieved_at >= m["kickoff_at"]:
+            continue
+        latest = {(r["provider"], r["market"], r["side"], r["price_kind"]): r for r in conn.execute(
+            "SELECT q.* FROM soccer_odds_quotes q WHERE q.match_id = ? AND q.quote_id = (SELECT MAX(quote_id) FROM "
+            "soccer_odds_quotes p WHERE p.match_id = q.match_id AND p.provider = q.provider AND p.market = q.market "
+            "AND p.side = q.side AND p.price_kind = q.price_kind)", (mid,))}
+        if any(r["retrieved_at"] >= retrieved_at for r in latest.values()):
+            continue                                        # not newer than what is stored: replay or late import
+        now = by_match.get(mid, {})
+        for key in sorted(set(now) | set(latest)):
+            q, last = now.get(key), latest.get(key)
+            if q is not None:
+                if last is not None and last["offered"] and last["line"] == q.line and last["american"] == q.american:
+                    continue
+                conn.execute("INSERT INTO soccer_odds_quotes (match_id, provider, market, side, price_kind, offered, line, "
+                             "american, decimal_odds, retrieved_at, raw_id, parser_version) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)",
+                             (mid, *key, q.line, q.american, espn.american_to_decimal(q.american), retrieved_at, raw_id,
+                              espn.SOCCER_ODDS_PARSER))
+                n += 1
+            elif last is not None and last["offered"]:
+                conn.execute("INSERT INTO soccer_odds_quotes (match_id, provider, market, side, price_kind, offered, line, "
+                             "american, decimal_odds, retrieved_at, raw_id, parser_version) VALUES (?, ?, ?, ?, ?, 0, NULL, "
+                             "NULL, NULL, ?, ?, ?)", (mid, *key, retrieved_at, raw_id, espn.SOCCER_ODDS_PARSER))
+                n += 1
+    return n
 
 
 def _upsert_match(conn: sqlite3.Connection, m: espn.SoccerMatchRow, raw_id: int, retrieved_at: str,
@@ -243,8 +323,64 @@ def ingest_range(conn: sqlite3.Connection, competitions: list[str], start: str, 
 
 def _replay_fetches(conn: sqlite3.Connection) -> list:
     return conn.execute("SELECT f.fetch_id, f.raw_id, f.retrieved_at, r.request_key FROM raw_fetches f "
-                        "JOIN raw_responses r ON r.raw_id = f.raw_id WHERE r.source = ? ORDER BY f.retrieved_at, f.fetch_id",
-                        (espn.SOCCER_SOURCE,)).fetchall()
+                        "JOIN raw_responses r ON r.raw_id = f.raw_id WHERE r.source IN (?, ?) ORDER BY f.retrieved_at, f.fetch_id",
+                        (espn.SOCCER_SOURCE, espn.SOCCER_MONTH_SOURCE)).fetchall()
+
+
+def months(start: str, end: str) -> list[str]:
+    """YYYYMM months from `start` to `end`, inclusive."""
+    a, b = datetime.strptime(start, "%Y%m"), datetime.strptime(end, "%Y%m")
+    if b < a:
+        raise ValueError("--to is before --from")
+    out, y, mth = [], a.year, a.month
+    while (y, mth) <= (b.year, b.month):
+        out.append(f"{y}{mth:02d}")
+        y, mth = (y + 1, 1) if mth == 12 else (y, mth + 1)
+    return out
+
+
+def ingest_month(conn: sqlite3.Connection, competition: str, yyyymm: str, *,
+                 fetch: Callable[[str, str], bytes] = espn.fetch_soccer_month, retrieved_at: Optional[str] = None,
+                 cache_dir: Optional[Path] = None) -> dict:
+    """One competition's scoreboard for a whole month (history for the market models), cached as SOCCER_MONTH_SOURCE and
+    imported exactly like a day: same parser, same append-only result and stats revisions, availability rules unchanged
+    (a final first seen long after kickoff counts as known at kickoff + 4 h)."""
+    request_key, endpoint, _ = espn.soccer_month_request(_competition(competition), yyyymm)
+    body = fetch(competition, yyyymm)
+    espn.parse_soccer_scoreboard(json.loads(body), competition)     # validate first: a mismatch writes nothing
+    retrieved_at = retrieved_at or utc_now()
+    with transaction(conn):
+        claim_store(conn, sports.SOCCER.id)
+        raw_id, fetch_id = raw_cache.store_fetch(conn, source=espn.SOCCER_MONTH_SOURCE, endpoint=endpoint,
+                                                 request_key=request_key, body=body, retrieved_at=retrieved_at,
+                                                 importer_version=espn.SOCCER_IMPORTER_VERSION, cache_dir=cache_dir)
+        return {"competition": competition, "month": yyyymm,
+                **import_raw(conn, raw_id, competition, retrieved_at=retrieved_at, fetch_id=fetch_id, cache_dir=cache_dir)}
+
+
+def ingest_months(conn: sqlite3.Connection, competitions: list[str], start: str, end: str, *, sleep: float = 1.0,
+                  fetch: Callable[[str, str], bytes] = espn.fetch_soccer_month, skip_fetched: bool = True,
+                  log: Callable[[str], None] = print) -> list[dict]:
+    """Month by month for each competition; a failed month is reported and the rest continue. `skip_fetched`: a month
+    already retrieved once is not asked for again (a resumable backfill; corrections come from the live day refresh)."""
+    done = {r[0] for r in conn.execute("SELECT request_key FROM raw_responses WHERE source = ?", (espn.SOCCER_MONTH_SOURCE,))}
+    out, first = [], True
+    for competition in competitions:
+        for month in months(start, end):
+            if skip_fetched and espn.soccer_month_request(competition, month)[0] in done:
+                continue
+            if not first and sleep:
+                time.sleep(sleep)
+            first = False
+            try:
+                stats = ingest_month(conn, competition, month, fetch=fetch)
+                stats.pop("raw_id", None)
+            except Exception as exc:
+                stats = {"competition": competition, "month": month,
+                         "error": f"{type(exc).__name__}: {str(exc).splitlines()[0] if str(exc) else ''}"}
+            log(json.dumps(stats))
+            out.append(stats)
+    return out
 
 
 def replay_missing(conn: sqlite3.Connection, cache_dir: Optional[Path] = None) -> list[int]:
@@ -319,9 +455,10 @@ MATCH_SQL = """
     FROM soccer_matches m JOIN teams h ON h.team_id = m.home_team_id JOIN teams a ON a.team_id = m.away_team_id"""
 
 
-LIVE_FORECASTS = ("Match forecasts", "Live: the 90-minute home/draw/away result only, from the sealed Elo model for this "
-                                     "competition (held-out test passed). No totals, both-teams-to-score, double "
-                                     "chance, qualification or other soccer market is forecast.")
+LIVE_FORECASTS = ("Match forecasts", "Live: the 90-minute home/draw/away result from the sealed Elo model for this "
+                                     "competition (held-out test passed), with double chance and draw no bet derived "
+                                     "from it; goal and corner markets only where their own tested model covers the "
+                                     "competition (see Markets). Qualification and other soccer markets are not forecast.")
 
 
 def capabilities(state: str = "no_live_store") -> list[dict]:

@@ -13,6 +13,7 @@ import { EmptyForecastState, Icon, MetricCard, PageTitle } from '../components/u
 import { calendarDate, dateTime, FULL_DATE, tipoffTime } from '../format';
 import { GameDateControl } from './NflPages';
 import { ResearchGameDay, ResearchHistory, ResearchMatchPage, ResearchPerformance } from './SoccerResearch';
+import { SoccerMarketsHistoryPanel, SoccerMarketsPanel } from './SoccerMarkets';
 
 // Soccer fixtures and results (backend app/soccer.py), one competition at a time through /api/soccer/*, with the live
 // 90-minute forecasts recorded by the sealed models (app/soccer_live.py, app/intl_live.py) where a competition has them.
@@ -90,7 +91,9 @@ function SoccerEspnScreens({ researchError }: { researchError: string | null }) 
         if (pathname === '/') return <SoccerGameDay meta={m} />;
         const page = pathname.startsWith('/performance') ? 'performance' : pathname.startsWith('/history') ? 'history'
           : pathname.startsWith('/daily-learning') ? 'research' : null;
-        if (page === 'history' || page === 'performance') return <SoccerRecordPage meta={m} page={page} />;
+        if (page === 'history') return <><SoccerRecordPage meta={m} page={page} />
+          {stateOf(m.forecast_state, m.capabilities) !== 'no_live_store' && <SoccerMarketsHistoryPanel competition={m.competition_id} name={m.competition} />}</>;
+        if (page === 'performance') return <SoccerRecordPage meta={m} page={page} />;
         return page ? <SoccerUnavailable meta={m} page={page} />
           : <Empty>Page not found. <Link to="/?sport=soccer">Go to soccer matches</Link></Empty>;
       }}
@@ -135,6 +138,7 @@ function SoccerGameDay({ meta }: { meta: SoccerMeta }) {
         right={date && <GameDateControl date={date} dates={meta.match_dates} defaultDate={meta.default_date} onChange={setDate} />} />
       <ForecastStatus meta={meta} />
       {stateOf(meta.forecast_state, meta.capabilities) !== 'no_live_store' && <SoccerLivePanel state={live.state} name={meta.competition} />}
+      {stateOf(meta.forecast_state, meta.capabilities) !== 'no_live_store' && <SoccerMarketsPanel competition={meta.competition_id} name={meta.competition} />}
       {date ? <SoccerSlate meta={meta} date={date} onChange={setDate} live={live.state.status === 'success' ? live.state.data : null} />
         : <Empty>{emptyCompetition(meta.competition, meta.fetched_dates.length, meta.last_refresh_at, dateTime)}</Empty>}
     </section>

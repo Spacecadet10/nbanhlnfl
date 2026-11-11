@@ -16,7 +16,18 @@ Use a new snapshot filename per review; never overwrite prior evidence. Prefligh
 
 The review plan retains `snapshot_path`, `review`, `tickets`. Review includes `skill_sha256`, `helper_sha256` (hash of app/tickets.py), `snapshot_sha256`, `markets_reviewed`, `notes` and **`combination_comparison`** explaining the joint NBA/NHL/NFL candidate comparison, exclusions, timing and missing coverage. Each ticket has a label and two or three legs; no staking amount or daily allocation is required. Optional explicitly requested dollar amounts remain supported for compatibility. Legs have with sport, forecast_id and rationale. Shared identical core forecasts may recur across batches; the message shows joint dollar exposure and ticket IDs. Conflicting forecasts for a shared game and identical complete combinations are rejected. Original reservations and uncertain receipts remain immutable; there is no daily dollar cap or fixed staking template. No sport quotas; mixed-sport tickets are supported, not mandatory.
 
-Soccer is explicitly reported as unavailable: its current adapter stores schedules/results but has no prediction model. Adding soccer predictions requires its separate model/data validation milestone. Source freshness does not establish forecast coverage or bookmaker availability.
+Soccer picks come from the live soccer store (docs/SOCCER_LIVE_PLAN.md):
+- the tested 90-minute 1X2 pick (`1x2_regulation`, numeric forecast ID);
+- double chance and draw no bet derived from that same forecast;
+- goal and corner selections, only for a family whose sealed model passed its reserved test (docs/SOCCER_MARKETS_PLAN.md).
+
+The non-1X2 selections have string forecast IDs (`1x2:42:double_chance:home_draw`, `goals:17:goals_total:over:2.5`). Leg
+identities sort with integers first, so the signatures of integer-only tickets are unchanged. `probability` is the chance
+the leg wins outright; `outcome_probabilities` lists win / half win / push / half loss / loss.
+
+A goal or corner selection uses DraftKings' line when ESPN lists one (match goals only). Otherwise it uses the half line
+next to the model's fair line and is marked as the app's own line. No such market has proven skill against the bookmaker.
+Source freshness does not establish forecast coverage or bookmaker availability.
 
 ## What Telegram receives
 
@@ -26,7 +37,16 @@ One readable message per selected batch, with numbered tickets, permanent IDs, e
 
 ## Settlement
 
-The existing `coverage.grade` grades the **original immutable forecast ID** and line against recorded results, with result-availability checks. It does not replace an earlier forecast with a later canonical selection. Each ticket's complete leg list is retained, including pending/unavailable/loss/push/void. Any loss loses the ticket; all pushes/voids means void; otherwise unresolved legs keep it pending and a fully resolved remaining win wins. This is model settlement: exact sportsbook payout rules and promotions can differ.
+The existing `coverage.grade` grades the **original immutable forecast ID** and line against recorded results, with result-availability checks. It does not replace an earlier forecast with a later canonical selection. Each ticket's complete leg list is retained, including pending/unavailable/loss/push/void and, for soccer quarter lines,
+half_win/half_loss. Grading:
+- any loss loses the ticket;
+- all pushes/voids means void;
+- unresolved legs keep it pending;
+- a settled ticket with a half win or half loss is `partial` (returns the product of the legs' factors: d, (d+1)/2, 1, 1/2);
+- otherwise a fully resolved remaining win wins.
+
+Soccer market legs settle through app/soccer_markets_live.grade / grade_derived on 90 minutes plus stoppage time from the
+immutable stored forecast (an extra-time match is unscorable). This is model settlement: exact sportsbook payout rules and promotions can differ.
 
 `ticket_grades` appends only changed evidence snapshots; original batches and old grades cannot be updated/deleted. Result corrections append a new entry. Confirmed v3 deliveries can get one deduplicated result notification per evidence revision. Legacy tickets are graded without repeating their earlier result alerts. Suggested stakes do not establish an actual placed bet or profit.
 

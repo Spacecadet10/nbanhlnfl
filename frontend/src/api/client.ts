@@ -1,5 +1,5 @@
 // The app's single API client. All screens fetch through here; there is no local fallback data.
-import type { AutoresearchStatus } from './types';
+import type { AutoresearchStatus, SoccerMarketsResponse, SoccerMarketsHistory } from './types';
 import type { CandidateGameView } from './types';
 import type { CanonicalHistory, CanonicalPerformance, PaperRules, RankedPicks, ThresholdOverview, CoverageReport, DailyEvidence, DailyReport, AdaptiveGame, CombinationAnalysis, RuleLedger, SubsetSearch, ThresholdExplorer, AdaptiveStatus, HistoricalStart,
   JointReport, ThresholdReport, AgreementPerformance, GameDetail, GamesResponse, HistoryResponse, MarketHistoryResponse, MarketId, MarketPerformanceResponse, Meta,
@@ -58,6 +58,9 @@ export const api = {
   soccerMeta: (competition: SoccerCompetitionId, signal?: AbortSignal) => get<SoccerMeta>('/soccer/meta', { competition }, signal),
   soccerLive: (competition: SoccerCompetitionId, signal?: AbortSignal) => get<SoccerLiveResponse>('/soccer/live', { competition }, signal),
   soccerLiveRecord: (competition: SoccerCompetitionId, signal?: AbortSignal) => get<SoccerLiveRecord>('/soccer/live/record', { competition }, signal),
+  soccerMarkets: (competition: SoccerCompetitionId, signal?: AbortSignal) => get<SoccerMarketsResponse>('/soccer/markets', { competition }, signal),
+  soccerMarketsHistory: (competition: SoccerCompetitionId, signal?: AbortSignal) =>
+    get<SoccerMarketsHistory>('/soccer/markets/history', { competition }, signal),
   soccerMatches: (competition: SoccerCompetitionId, date: string, signal?: AbortSignal) =>
     get<SoccerMatchesResponse>('/soccer/matches', { competition, date }, signal),
   soccerMatch: (id: string, signal?: AbortSignal) => get<SoccerMatchDetail>(`/soccer/matches/${encodeURIComponent(id)}`, undefined, signal),

@@ -24,7 +24,7 @@ const pct = (p: number) => `${(p * 100).toFixed(1)}%`;
 /** The notice above a competition's matches. `kind` picks the styling; `more` labels the expandable capability list. */
 export function forecastBanner(state: SoccerForecastState, competition: string): { kind: 'live' | 'awaiting' | 'none'; title: string; text: string; more: string } {
   if (state === 'recorded') {
-    return { kind: 'live', title: 'Live soccer forecasts:', text: 'the 90-minute home/draw/away result only.', more: 'What else is not available' };
+    return { kind: 'live', title: 'Live soccer forecasts:', text: 'the 90-minute home/draw/away result (with double chance and draw no bet from it); goal and corner markets only where their own tested model covers this competition.', more: 'What else is not available' };
   }
   if (state === 'awaiting') {
     return { kind: 'awaiting', title: `No ${competition} forecast is recorded yet:`,
@@ -89,8 +89,8 @@ export function liveLoadProblem(error: string): string {
 
 /** The forecast sentence of the "Real data" note in the header. */
 export function dataSourceForecastText(state: SoccerForecastState): string {
-  const rest = ' No soccer odds or injury information is collected.';
-  if (state === 'recorded') return `Live forecasts cover the 90-minute result only.${rest}`;
+  const rest = ' Bookmaker prices: DraftKings as listed on ESPN (result, goals total, goal handicap) where available; no injury information is collected.';
+  if (state === 'recorded') return `Live forecasts cover the 90-minute result, and goal and corner markets where tested.${rest}`;
   if (state === 'awaiting') return `A live 90-minute forecast model covers this competition; none is recorded for it yet.${rest}`;
   if (state === 'out_of_scope') return `No live forecast is made for this competition.${rest}`;
   if (state === 'unknown') return rest.trim();

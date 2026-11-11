@@ -1929,3 +1929,28 @@ back three days). Headless Chrome 156 with DevTools device metrics: real 1280×9
   the script: **38/38 ok**.
 - Not verified by this session: the live app (nothing deployed); NBA/NHL/NFL screens (unchanged; the reviewers' own
   captures found no regression).
+
+## Soccer goal / corner / double-chance / draw-no-bet markets — 2026-11-10 (branch `soccer-markets-20261109`, not deployed)
+
+**Setup:**
+- Worktree `~/Desktop/nba-predictor-soccer-markets` on `39fadb1`, uncommitted.
+- The API came from the worktree (`uvicorn app.main:app --port 8191`, `NBA_API_MODE=real`) and the built frontend from
+  `vite preview --port 4191` with `API_PROXY_TARGET=http://127.0.0.1:8191`.
+- Store: a scratch copy of the research store, plus ESPN day scoreboards for Nov 6-22.
+- Real forecasts were recorded there, never in `data/`:
+  - goals and corners, from the tested and pinned models;
+  - the 1X2 for the Nov 20 club matches (Athletic–Espanyol, Troyes–Le Havre, Bayern–Köln).
+
+**Browser:** headless Chrome over DevTools at 1280×900 and 390×844 mobile.
+- `node docs/evidence/soccer-markets-2026-11-09/verify/markets_browser_check.mjs 9391 <out>`: **8/8 ok**.
+  - Cases: La Liga and Bundesliga Game day with the match panels opened; soccer History (markets live record, empty); and
+    Game day with `/api/soccer/markets` blocked.
+  - Checked: viewport = requested width and no horizontal page overflow (tables scroll inside `.table-wrap`); the
+    expected text is present; 0 JS exceptions; 0 failed API calls.
+  - Expected text: "Markets: goals, corners, double chance, draw no bet", "DraftKings", "Model line", "Bookmaker offer",
+    "No proven skill", "Over 2.5 goals", "Bayern Munich -4.5 corners", "Both teams to score: yes",
+    "Bayern Munich or draw", "split stake".
+  - Blocked API: "Couldn't load data … Try again" is shown under the Markets heading.
+- `markets_dark_check.mjs`: lowest WCAG contrast of 389 market texts is 8.59 in dark and 6.11 in light; no overflow.
+- `npm run typecheck`, `npm run test:unit` (27 passed) and `npm run build`: passed.
+- **Not verified:** the live app (nothing deployed); NBA/NHL/NFL screens (no frontend change there).

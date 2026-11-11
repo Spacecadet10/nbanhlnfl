@@ -15,7 +15,8 @@ test('recorded forecasts: the banner and the data note say they exist', () => {
   assert.equal(b.kind, 'live');
   assert.match(b.title + ' ' + b.text, /Live soccer forecasts.*90-minute/);
   assert.doesNotMatch(b.title + ' ' + b.text, NEVER);
-  assert.match(dataSourceForecastText('recorded'), /Live forecasts cover the 90-minute result only/);
+  assert.match(dataSourceForecastText('recorded'), /Live forecasts cover the 90-minute result, and goal and corner markets where tested/);
+  assert.match(b.text, /goal and corner markets only where their own tested model covers/);
   assert.doesNotMatch(dataSourceForecastText('recorded'), /No live soccer forecast/);
 });
 
@@ -89,7 +90,7 @@ test('an API older than this page (no forecast_state, no refresh, no forecast ma
   assert.doesNotMatch(b.title + ' ' + b.text, /No live soccer forecasts|not available/);
   assert.match(matchForecastNote('unknown', 'scheduled', undefined, 'A', 'B'), /not reported by this server/);
   assert.equal(importHint('Premier League', { check: null }, when, 'unknown'), 'Latest Premier League scoreboard request.');
-  assert.equal(dataSourceForecastText('unknown'), 'No soccer odds or injury information is collected.');
+  assert.equal(dataSourceForecastText('unknown'), 'Bookmaker prices: DraftKings as listed on ESPN (result, goals total, goal handicap) where available; no injury information is collected.');
 });
 
 test('stale data is only said to block forecasts for competitions that are forecast', () => {

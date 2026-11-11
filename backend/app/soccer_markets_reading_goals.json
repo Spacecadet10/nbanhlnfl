@@ -1,0 +1,38 @@
+{
+ "R1_family_skill": true,
+ "R2_market_calibration": {
+  "btts_yes": true,
+  "goals_away_over": true,
+  "goals_home_over": true,
+  "goals_total_over": true
+ },
+ "R3_competition_scope": {
+  "eng.1": true,
+  "esp.1": true,
+  "fra.1": true,
+  "ger.1": true,
+  "ita.1": true,
+  "uefa.champions": true,
+  "uefa.europa": true
+ },
+ "R4_disclosed_lines": [],
+ "candidate_sha256": "cfe78bf98a8e48215474de26d020fc5a0fdb45830957b38e24e47db88efbd432",
+ "family": "goals",
+ "served_competitions": [
+  "eng.1",
+  "esp.1",
+  "fra.1",
+  "ger.1",
+  "ita.1",
+  "uefa.champions"
+ ],
+ "served_markets": [
+  "btts_yes",
+  "goals_away_over",
+  "goals_home_over",
+  "goals_total_over"
+ ],
+ "source": "docs/evidence/soccer-markets-2026-11-09/test_goals/reading.json",
+ "source_sha256": "069555343c51aba8b898dc8b5741a5eedacef0f9066d88a098469c17459684f1",
+ "verdict": "serve"
+}
