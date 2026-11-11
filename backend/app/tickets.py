@@ -56,6 +56,13 @@ def snapshot():
     day = now.astimezone(TORONTO).date()
     result = dict(as_of=stamp, date=str(day), skill_sha256=sha(SKILL.read_bytes()),
                   helper_sha256=sha(Path(__file__).read_bytes()), sports={})
+    try:   # stored prices of the same picks at three sportsbooks; a problem here never hides a forecast
+        from app import rundown_odds
+        books = rundown_odds.read_cache(now)
+    except Exception as exc:
+        rundown_odds, books = None, {'error': type(exc).__name__}
+    result['book_prices'] = ({'fresh_responses': len(books['responses']), 'stale_responses': books['stale_responses'],
+                              'invalid_files': len(books['invalid_files'])} if 'responses' in books else books)
     for sport in ('nba', 'nhl', 'nfl'):
         try:
             if sport == 'nfl' and not activation():
@@ -78,6 +85,8 @@ def snapshot():
                         pick['quote_check'] = quote_check(conn, pick, stamp)
                     except Exception as exc:   # a quote lookup problem is reported on the pick, never hides the forecast
                         pick['quote_check'] = {'error': type(exc).__name__}
+                    if 'responses' in books:
+                        rundown_odds.attach(sport, pick, books, now)
                 attach_assessments(sport, report['picks'])
                 due = conn.execute("SELECT game_id FROM games WHERE status='scheduled' AND season_type IN ('regular','play_in','postseason') AND tipoff_at>? AND tipoff_at<=?",
                                    (stamp, (now+timedelta(minutes=110)).strftime('%Y-%m-%dT%H:%M:%SZ'))).fetchall()
@@ -222,7 +231,9 @@ def leg_assessment(sport, pick):
     """What the reviewer weighs together for one market, side by side; facts only, no verdict and no threshold:
     the app probability and recommendation, the exact stored price and its break-even probability, the record of similar
     past picks with its 95% interval (the app's own Wilson interval, threshold_overview.wilson) and the evidence quality
-    the app states. A negative model_gap is a warning that the price asks for more than the app estimates, not proof of a
+    the app states. book_prices are the same pick on the same line at other sportsbooks (rundown_odds), best_book the one
+    paying most and best_book_gap the model_gap at that price; the app's own stored quote stays the basis of `price`.
+    A negative model_gap is a warning that the price asks for more than the app estimates, not proof of a
     loss; a positive one is not a value claim (the estimate may be wrong; a past group does not fix today's probability)."""
     from app import markets, threshold_overview
     quote = pick.get('quote_check') or {}
@@ -230,6 +241,9 @@ def leg_assessment(sport, pick):
     history = pick.get('percentage_history') or {}
     decimal = decimal_odds(quote.get('price_now'))
     break_even = None if decimal is None else 1 / decimal
+    books = pick.get('book_comparison') or {}
+    book_prices = {b: p for b, p in (books.get('prices') or {}).items() if decimal_odds(p)}
+    best_book = max(book_prices, key=lambda b: decimal_odds(book_prices[b]), default=None)
     record = None
     if evidence.get('settled'):
         n = evidence['settled']
@@ -241,6 +255,9 @@ def leg_assessment(sport, pick):
                 [record['interval'][0] - break_even, record['interval'][1] - break_even],
                 exact=f"{_field(history, 'wins', 0) or 0}-{_field(history, 'losses', 0) or 0} ({_field(history, 'settled', 0) or 0} settled)",
                 exact_rank=(f"{_field(history, 'rank')} of {_field(history, 'ranked')}" if _field(history, 'rank') else None),
+                book_prices=book_prices, best_book=best_book, best_book_price=book_prices.get(best_book),
+                best_book_gap=None if best_book is None else pick['probability'] - 1 / decimal_odds(book_prices[best_book]),
+                book_prices_checked_at=books.get('checked_at') if book_prices else None,
                 app_rank=pick.get('game_rank'), skill_proven=pick.get('skill_proven'),
                 line_source=quote.get('line_source') or _field(history, 'line_source'), app_note=markets.LIMITATIONS.get((sport, pick['market'])))
 
@@ -258,12 +275,18 @@ def ticket_assessment(legs):
     """The whole ticket: payout at the stored prices (decimal prices multiplied, as a parlay pays for distinct games), its
     break-even probability and the model estimate (independence assumption), plus each leg's own record of similar picks.
     No ticket-level range is computed from those records (review, Nov 8): multiplying historical intervals does not give
-    today's ticket a win-probability interval. Lists legs priced above the model, unpriced legs and legs without a record."""
+    today's ticket a win-probability interval. book_payouts is what the whole ticket pays at each sportsbook that prices
+    every leg on the same line (stored prices), best_book the one paying most. Lists legs priced above the model, unpriced legs and legs without a record."""
     rows = [(f"{leg['sport'].upper()} {leg['pick_label']}", leg.get('assessment') or leg_assessment(leg['sport'], leg)) for leg in legs]
     payout = math.prod(a['decimal'] for _, a in rows) if all(a['decimal'] for _, a in rows) else None
     estimate = math.prod(a['probability'] for _, a in rows)
     break_even = None if payout is None else 1 / payout
+    # A parlay is placed at ONE sportsbook: a book counts only when it prices every leg on the forecast's exact line.
+    shared = set.intersection(*(set(a.get('book_prices') or {}) for _, a in rows)) if rows else set()
+    book_payouts = {b: math.prod(decimal_odds(a['book_prices'][b]) for _, a in rows) for b in sorted(shared)}
+    best_book = max(book_payouts, key=book_payouts.get, default=None)
     return dict(legs=len(rows), payout=payout, break_even=break_even, model_estimate=estimate,
+                book_payouts=book_payouts, best_book=best_book,
                 model_minus_break_even=None if payout is None else estimate - break_even,
                 leg_records=[dict(label=label, record=a['record']) for label, a in rows],
                 priced_above_model=[label for label, a in rows if a['model_gap'] is not None and a['model_gap'] < 0],
@@ -1162,6 +1185,12 @@ def ticket_pages(tickets):
     return pages
 
 
+def best_book_line(assessment):
+    """'Pays most at FanDuel: about ×4.72', or None when no sportsbook prices every leg of the ticket."""
+    book = (assessment or {}).get('best_book')
+    return f"Pays most at {book}: about ×{assessment['book_payouts'][book]:.2f}" if book else None
+
+
 def ticket_captions(result):
     """One caption per picture: its tickets' legs with the stored price and what each pays at those prices. Telegram
     captions hold 1,024 characters. A caption that is too long first drops the ticket labels, then the prices; if the legs
@@ -1171,6 +1200,9 @@ def ticket_captions(result):
     quoted = [p['quote_check']['retrieved_at'] for t in tickets for p in t['legs'] if (p.get('quote_check') or {}).get('price_now') is not None]
     footer = 'Each numbered ticket is ONE parlay with all its legs.' + (
         ' Prices: stored DraftKings quotes, ' + _parse(max(quoted)).astimezone(TORONTO).strftime('%I:%M %p %Z') + '; confirm before betting.' if quoted else '')
+    checked = [p['book_comparison']['checked_at'] for t in tickets for p in t['legs'] if (p.get('book_comparison') or {}).get('prices')]
+    if checked:
+        footer += ' Other sportsbooks: prices stored ' + _parse(min(checked)).astimezone(TORONTO).strftime('%I:%M %p %Z') + '.'
 
     def market_note(page):
         # Picture-only delivery sends no text: each caption says what the text would, for its own legs (review MEDIUM 2).
@@ -1195,10 +1227,12 @@ def ticket_captions(result):
                 legs = ' + '.join(p['pick_label'] + (f" ({p['quote_check']['price_now']:+d})" if prices and (p.get('quote_check') or {}).get('price_now') is not None else '')
                                   for p in t['legs'])
                 try:
-                    payout = (t.get('assessment') or ticket_assessment(t['legs']))['payout']
+                    a = t.get('assessment') or ticket_assessment(t['legs'])
+                    payout, best = a['payout'], best_book_line(a)
                 except Exception:
-                    payout = None
+                    payout, best = None, None
                 lines.append(f"#{n}" + (f" {t['label']}" if labels else '') + f": {legs}" + (f" — pays about ×{payout:.2f}" if payout else '')
+                             + (f" — {best}" if best and prices and (not payout or a['book_payouts'][a['best_book']] > payout + .005) else '')
                              + (f" — ${t['stake_usd']:.2f}" if t.get('stake_usd') is not None else ''))
             return '\n'.join(lines + [footer + market_note(page)])
         caption = next((c for c in (build(True, True), build(False, True), build(False, False)) if len(c) <= 1024), None)

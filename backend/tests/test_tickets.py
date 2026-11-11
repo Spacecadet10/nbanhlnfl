@@ -929,7 +929,7 @@ def test_no_ticket_level_historical_range_or_verdict_but_leg_records_stay_visibl
     legs = [dict(priced(snap, 'nba', 0, -790, .796, 607), sport='nba'), dict(priced(snap, 'nba', 1, -700, .882, 186), sport='nba')]
     a = t.ticket_assessment([dict(l, assessment=t.leg_assessment('nba', l)) for l in legs])
     assert set(a) == {'legs', 'payout', 'break_even', 'model_estimate', 'model_minus_break_even', 'leg_records',
-                      'priced_above_model', 'unpriced', 'no_record'}
+                      'priced_above_model', 'unpriced', 'no_record', 'book_payouts', 'best_book'}
     assert a['leg_records'] == [dict(label='NBA B1 win', record=t.leg_assessment('nba', legs[0])['record']),
                                 dict(label='NBA B2 win', record=t.leg_assessment('nba', legs[1])['record'])]
     text = t.ticket_text('2026-11-08', [dict(ticket_id='T1', label='Pair', legs=legs, assessment=a)])

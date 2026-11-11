@@ -259,7 +259,17 @@ def _market_line_source(leg):
 
 
 def render_ticket_card(day, tickets, *, preview=False, number_from=1, total=None):
-    """Ticket layout using the shared fonts, team logos and published palettes."""
+    """Ticket layout using the shared fonts, team logos and published palettes. A picture too tall with the per-leg
+    sportsbook prices is drawn without them: they never make a ticket fail that would otherwise be drawn."""
+    try:
+        return _ticket_card(day, tickets, preview=preview, number_from=number_from, total=total, book_lines=True)
+    except ValueError as exc:
+        if 'layout bounds' not in str(exc):
+            raise
+        return _ticket_card(day, tickets, preview=preview, number_from=number_from, total=total, book_lines=False)
+
+
+def _ticket_card(day, tickets, *, preview, number_from, total, book_lines):
     from .tickets import CARD_TICKETS, MAX_TICKETS, MIN_LEGS, MAX_LEGS, bet_type
     if not tickets or len(tickets) > MAX_TICKETS or any(not MIN_LEGS <= len(t['legs']) <= MAX_LEGS for t in tickets):
         raise ValueError('Ticket cards require one to six tickets of two to seven legs.')
@@ -271,6 +281,7 @@ def render_ticket_card(day, tickets, *, preview=False, number_from=1, total=None
     canvas = Image.new('RGB', (1080, 6000), _mix(accent, PAPER, .96))
     draw = ImageDraw.Draw(canvas)
     y = 48
+    priced = False
 
     def line(text, *, size=29, bold=False, color=INK, x=72, width=936):
         nonlocal y
@@ -326,6 +337,9 @@ def render_ticket_card(day, tickets, *, preview=False, number_from=1, total=None
             else:
                 source = _market_line_source(leg)      # same line: a separate one overflows 3 x 7 market legs
                 line(f"Model probability {leg['probability']:.1%}" + (f" · {source}" if source else ''),size=27,color=MUTED,x=240,width=760)
+                books = (leg.get('book_comparison') or {}).get('prices') or {}
+                if books and book_lines:   # the same pick on the same line at each sportsbook
+                    line(' · '.join(f"{book} {price:+d}" for book, price in sorted(books.items())),size=23,color=MUTED,x=240,width=760)
             y += 18
             draw.line((72,y,1008,y),fill=_mix(accent,PAPER,.65),width=2)
             y += 24
@@ -335,6 +349,15 @@ def render_ticket_card(day, tickets, *, preview=False, number_from=1, total=None
         line(f"{'Pregame model estimate' if preview else 'Model estimate'} / {probability:.1%}",size=30,bold=True,color=primary)
         if preview:
             line(ticket['result'],size=34,bold=True,color='#11664D')
+        else:
+            from .tickets import best_book_line, ticket_assessment
+            try:
+                best = best_book_line(ticket.get('assessment') or ticket_assessment(ticket['legs']))
+            except Exception:
+                best = None
+            if best and book_lines:
+                line(best,size=30,bold=True,color=primary)
+                priced = True
         y += 36
     if extra > 0:
         line(f"+{extra} more option{'s' if extra > 1 else ''} in the message above.",size=27,bold=True,color=primary)
@@ -343,7 +366,8 @@ def render_ticket_card(day, tickets, *, preview=False, number_from=1, total=None
     line('App forecasts + AI selection. Distinct games within each ticket.',size=24,color=MUTED)
     if shared:
         line('Shared core picks: one loss can affect multiple tickets.',size=24,color=MUTED)
-    line('Joint estimates assume independence. Sportsbook prices unverified.',size=24,color=MUTED)
+    line('Joint estimates assume independence. ' + ('Sportsbook prices are stored quotes: confirm before betting.' if priced
+                                                   else 'Sportsbook prices unverified.'),size=24,color=MUTED)
     if any(_soccer_market(p) for t in tickets for p in t['legs']):
         line(SOCCER_MARKET_NOTE,size=24,color=MUTED)
     y += 35
