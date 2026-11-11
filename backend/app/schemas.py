@@ -160,6 +160,16 @@ class CanonicalGradeRevision(BaseModel):
     grade: Literal["win", "loss", "push", "pending", "void", "unscorable", "unresolved"]
 
 
+class PercentageHistorySource(BaseModel):
+    """Recomputed past-season forecasts of the sealed points model at the same exact percentage, side, model and line source
+    (app/points_history.py). A separate source: never added to the live record."""
+    source: Literal['history_recomputed']
+    line_source: Literal['bookmaker', 'model', 'none']
+    wins: int
+    losses: int
+    settled: int
+
+
 class ForecastPercentageRecord(BaseModel):
     """Current observed live record for the exact displayed percentage, excluding the target game."""
     sport: Literal['nba', 'nhl', 'nfl']
@@ -184,6 +194,8 @@ class ForecastPercentageRecord(BaseModel):
     rank: Optional[int] = Field(default=None, description="Place of this exact percentage among the market's exact percentages "
                                                           "with at least three settled results, best record first; None below that.")
     ranked: int = Field(default=0, description="How many exact percentages of this sport and market are ranked.")
+    history: Optional[PercentageHistorySource] = Field(default=None, description="Recomputed past seasons (spread, total, team "
+                                                       "totals of NBA and NHL), apart from the live record; None when not available.")
 
 
 class CanonicalForecast(BaseModel):

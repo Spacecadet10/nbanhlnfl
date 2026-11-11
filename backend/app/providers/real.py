@@ -181,7 +181,8 @@ class RealProvider:
             _, cohort, _ = self._canonical_cohort(c['market'])
             self._percentage_indexes[c['market']] = to.percentage_index(cohort, self.now)
         percentage_history = to.percentage_record(self.sport, c['market'], rec, g['game_id'],
-                                                 self._percentage_indexes[c['market']], self.now)
+                                                 self._percentage_indexes[c['market']], self.now,
+                                                 history_index=self._points_history_index(c['market']))
         labels = markets.side_labels(c["market"], rec["line"], self._team(g["home_team_id"]).abbr,
                                      self._team(g["away_team_id"]).abbr)
         idx = {"a": 0, "mid": 1, "b": 2}
@@ -189,6 +190,27 @@ class RealProvider:
         return CanonicalForecast(**{**c, "record": {**rec, "pick_label": labels[idx[rec["side"]]], "opposite_pick_label": opposite},
                                     "percentage_history": percentage_history,
                                     "result_label": None if c["result_side"] is None else labels[idx[c["result_side"]]]})
+
+    def _points_history_index(self, market: str) -> Optional[dict]:
+        """Recomputed past-season record index of a points market (app/points_history.py), once per market; None without
+        the history file. A broken history file never takes the live record down: it is reported as unavailable (None)."""
+        from .. import points_history
+        if not hasattr(self, '_history_indexes'):
+            self._history_indexes = {}
+        if market not in self._history_indexes:
+            index = None
+            if self.sport in points_history.HISTORY_SEASONS and market in points_history.MARKETS:
+                try:
+                    hist = points_history.connect(points_history.path(self.sport))
+                    if hist is not None:
+                        try:
+                            index = points_history.history_index(self.conn, hist, market, self.now)
+                        finally:
+                            hist.close()
+                except sqlite3.Error:
+                    index = None
+            self._history_indexes[market] = index
+        return self._history_indexes[market]
 
     def _agreement(self, game_id: str, policy: str, tipoff_at: Optional[str] = None) -> dict:
         """Winner agreement for a game card, from ONE research definition: if the latest cohort's members come from more

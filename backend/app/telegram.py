@@ -238,8 +238,13 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
         # Owner request Nov 9: where this exact percentage stands among the market's ranked exact percentages, and a plain
         # AVOID when its own record is a losing one. Only percentages with three or more results are ranked.
         standing = '' if not h.get('rank') else f" · rank {h['rank']} of {h['ranked']}" + (' · AVOID' if losses > wins else '')
+        # Step 3 (Nov 11): the recomputed past seasons at the same exact percentage, side, model and line source, counted
+        # apart from the live record above (app/points_history.py). Shown only when it has settled examples (spread and total
+        # picks at a bookmaker line never do: past seasons have model lines only).
+        past = h.get('history')
+        past = '' if not past or not past['settled'] else f" · past seasons {past['wins']}W–{past['losses']}L"
         lines += [f"<b>{escape(pick['market_title'])}</b>", f"{escape(pick['pick_label'])}{source}",
-                  f"<b>Model {escape(h['percentage'])}%</b> · {wins}W–{losses}L ({settled} settled){standing}"]
+                  f"<b>Model {escape(h['percentage'])}%</b> · {wins}W–{losses}L ({settled} settled){standing}{past}"]
         if preview:
             result = {'win': 'Won', 'loss': 'Lost', 'push': 'Push'}.get(pick['grade'], pick['grade'])
             lines.append('Result: ' + escape(result))

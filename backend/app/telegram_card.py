@@ -91,6 +91,18 @@ def _team_palette(league, abbr):
     return (team['primary'],team['secondary']) if team else ('#09283F','#8495A2')
 
 
+RECORD_WIDTH = 800          # x 200 to the card's inner edge (1022) less padding
+
+
+def fit_record(draw, text, width=RECORD_WIDTH):
+    """(text, font) for a market's record line: 22 px, smaller down to 17 px when the live record plus the past-seasons
+    record is longer; only beyond that is it shortened by fit_line. Never overflows the card."""
+    for size in range(22, 16, -1):
+        if draw.textlength(text, font=_font(size)) <= width:
+            return text, _font(size)
+    return fit_line(draw, text, _font(17), width), _font(17)
+
+
 def fit_line(draw, text, font, width):
     """The text on one line of `width` px: whole items (split at ' · ' then ', ') are dropped from the end and replaced
     with '…' until it fits; a single item that is still too long is cut with '…'. Never wraps, never overflows."""
@@ -237,7 +249,8 @@ def render_card(message):
         prob=probability.removeprefix('Model ')
         w=draw.textlength(prob,font=_font(34,True))
         draw.text((925-w/2,y+41),prob,font=_font(34,True),fill=primary)
-        draw.text((200,end+4),record+(' · '+note if note else ''),font=_font(22),fill=INK)
+        record_text, record_font = fit_record(draw, record+(' · '+note if note else ''))
+        draw.text((200,end+4),record_text,font=record_font,fill=INK)
         if provenance:
             draw.text((200,end+33),provenance.capitalize(),font=_font(20),fill=MUTED)
         if opposite:

@@ -113,10 +113,27 @@ def percentage_ranking(index: dict, exclude_game: Optional[str] = None) -> list:
     return rows
 
 
-def percentage_record(sport: str, market: str, rec: dict, game_id: str, index: dict, as_of: str) -> dict:
+HISTORY_SOURCE = "history_recomputed"   # app/points_history.py: recomputed past seasons, a source of its own
+
+
+def history_record(rec: dict, game_id: str, history_index: Optional[dict]) -> Optional[dict]:
+    """The same exact displayed percentage, side, model version and line source among the recomputed past-season forecasts
+    (app/points_history.py), counted apart from the live record and never added to it. None when no history is supplied."""
+    if history_index is None:
+        return None
+    key = (displayed_percentage(rec['confidence']), rec['side'], HISTORY_SOURCE, rec['model_version'], rec['line_source'])
+    grades = Counter(grade for gid, grade in history_index.get(key, {}).items() if gid != game_id)
+    wins, losses = grades['win'], grades['loss']
+    return {'source': HISTORY_SOURCE, 'line_source': rec['line_source'], 'wins': wins, 'losses': losses,
+            'settled': wins + losses}
+
+
+def percentage_record(sport: str, market: str, rec: dict, game_id: str, index: dict, as_of: str,
+                      history_index: Optional[dict] = None) -> dict:
     """Exact displayed percentage and direction, same model/source and line provenance; exclude this game.
 
     Deliberately no fallback to a range, cumulative threshold, other direction, version, or historical study.
+    `history_index` (points_history.history_index): the recomputed past seasons, reported apart as `history`.
     """
     from . import markets
     grades = Counter(grade for gid, grade in index.get(_percentage_key(rec), {}).items() if gid != game_id)
@@ -137,7 +154,8 @@ def percentage_record(sport: str, market: str, rec: dict, game_id: str, index: d
             'win_rate': wins / settled if settled else None, 'loss_rate': losses / settled if settled else None,
             'ci95': wilson(wins, settled), 'small_sample': settled < MIN_LIVE_GRADED,
             'rank': rank, 'ranked': len(ranking),
-            'excluded': {k: v for k, v in grades.items() if k not in ('win', 'loss')}, 'as_of': as_of}
+            'excluded': {k: v for k, v in grades.items() if k not in ('win', 'loss')}, 'as_of': as_of,
+            'history': history_record(rec, game_id, history_index)}
 
 
 def calibration_state(rate: Optional[float], ci: Optional[list], stated: Optional[float], n: int, min_n: int) -> str:

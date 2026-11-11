@@ -168,6 +168,8 @@ export function ForecastPercentageRecord({ history: h, grade, opposite, startAt 
       <br /><span className="muted">{pregame ? 'Current comparison; not a validated betting rule.' : 'Comparison now; no pregame opposite call was recorded.'}</span>
       <br /><span className="muted">{h.line_source === 'model' ? 'Model line only; no bookmaker offer verified.' : 'Current opposite-side price unverified.'}</span>
     </> : <span className="muted">{h.market === 'reg3' ? 'Three-way market: no single opposite pick.' : 'Opposite side unavailable.'}</span>}</>}
+    {h.history && h.history.settled > 0 && <><br />Past seasons (recomputed, {h.history.line_source === 'bookmaker' ? 'bookmaker lines' : 'model lines'}): {h.history.wins}W–{h.history.losses}L
+      <span className="muted"> · separate from the live record</span></>}
     <br /><span className="muted">Live record · same model · as of {dateTime(h.as_of)}</span>
   </span>;
 }
