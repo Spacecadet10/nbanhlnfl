@@ -1,0 +1,383 @@
+#!/usr/bin/env python3
+"""Weekly plain-language page for all four sports (Step H, owner Nov 11 2026). READ-ONLY: the sport stores, the scorecard
+files and the Telegram ledger are opened with mode=ro URIs; the only thing written is one Markdown file,
+<out-dir>/weekly-YYYY-MM-DD.md (default <data>/reports). Sends nothing.
+
+Sections: 1. best picks named on paper (scripts/best_picks.py: counted cards and the v4 evaluation, not reimplemented);
+2. hypotheses H1-H7 on new games (the recorder's own H items on counted cards); 3. cards where the named pick lost: what
+won on that card and its full picture; 4. exact percentages that came up again (scripts/scorecard_report.py readers; key =
+threshold_overview.percentage_record's: displayed % to one decimal, side, source, model version, line source; never ranges).
+
+No interim look (docs/preregistration/best-pick-2026-11-11-v4.md section 9). Until a sport's 100-pick evaluation set is
+complete (or the rule is dropped for too few games), sections 1-3 show COUNTS ONLY for that sport. Decided here (Step H):
+H1-H7 on new games are the rule's score items on the very cards and picks the test grades (named = score >= 2, baseline =
+highest book %), so their win counts are an interim look and are hidden too; section 3 is the named pick's outcome
+itself, hidden; section 4 holds back every forecast the recorder stored as a named or baseline pick (all rows, reviewed or
+not) for that sport, and if the ledger cannot be read, every NBA/NHL rule-market pick of a game after T0.
+Every line carries its n; a comparison with fewer than scorecard_report.MIN_N (30) on a side says "too few to tell".
+
+  NBA_DATA_DIR=<copy> python scripts/weekly_report.py --ledger <ledger copy> [--out-dir DIR] [--now ...]
+      [--reviewed-at UTC --reviewed-recorder SHA256]      (without them no card counts yet, as in best_picks.py)
+"""
+import argparse
+import importlib.util
+import json
+import os
+import sqlite3
+import sys
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent / 'backend'))
+
+
+def _load(name: str, file: str):
+    spec = importlib.util.spec_from_file_location(name, HERE / file)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+bp = _load('best_picks_report', 'best_picks.py')
+sr = _load('scorecard_report', 'scorecard_report.py')
+from app import best_pick_record as bpr  # noqa: E402
+from app import config  # noqa: E402
+
+MIN_N = sr.MIN_N
+SPORTS = ('nba', 'nhl', 'nfl', 'soccer')
+FMT = '%Y-%m-%dT%H:%M:%SZ'
+MAX_REPEAT_LINES = 10
+
+# H item: (sport, plain meaning of +1, of 0, of -1, the two values compared: better first)
+H_ITEMS = {
+    'H1': ('nba', 'winner, sportsbook 72%+', None, 'winner, sportsbook 58% or less', (1, -1)),
+    'H2': ('nba', 'winner, app below sportsbook', None, 'winner, app 5.6+ points above sportsbook', (1, -1)),
+    'H3': ('nba', "winner, app's spread pick on the other team", None, "winner, app's spread pick on the same team", (1, -1)),
+    'H4': ('nba', 'winner, sportsbook moved 3+ toward the pick', None, 'winner, sportsbook moved 3+ away', (1, -1)),
+    'H5a': ('nhl', 'puck line on the team the app picks to win', None, 'puck line on the other team', (1, -1)),
+    'H5b': ('nhl', 'puck line, app 67%+', 'puck line, app below 67%', None, (1, 0)),
+    'H5c': ('nhl', None, 'puck line, picked team rested', 'puck line, picked team played the day before', (0, -1)),
+    'H6': (None, None, 'total, neither team played the day before', 'total, a team played the day before', (0, -1)),
+    'H7': ('nhl', 'regulation pick on the winner pick at 60%+', None, 'regulation pick otherwise', (1, -1)),
+}
+
+
+def _t(ts: str) -> datetime:
+    return datetime.fromisoformat(ts.replace('Z', '+00:00'))
+
+
+def _ro(path) -> sqlite3.Connection:
+    conn = sqlite3.connect(f'file:{path}?mode=ro', uri=True)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _wl(w: int, n: int) -> str:
+    return f'{w} won, {n - w} lost (n={n})'
+
+
+def _rate(w: int, n: int) -> str:
+    return 'too few to tell' if n < MIN_N else f'won {100 * w / n:.1f}%'
+
+
+# ---- output folder ------------------------------------------------------------------------------------------------------
+def check_out_dir(out_dir) -> Path:
+    """Inside a live data folder only its reports/ folder is allowed; anywhere else outside live data is fine."""
+    out = Path(out_dir).expanduser().resolve()
+    for p in (out, *out.parents):
+        if config.protected_data_dir(p):
+            allowed = (p / 'reports').resolve()
+            if out != allowed and allowed not in out.parents:
+                raise SystemExit(f'refused: {out} is inside the live data folder {p}; only {allowed} may be written')
+            break
+    return out
+
+
+# ---- the running test (scripts/best_picks.py) ---------------------------------------------------------------------------
+def test_state(ledger, store, sport: str, now: datetime, reviewed_at, reviewed: set) -> dict:
+    """Counted cards, the v4 evaluation (counts only until complete) and whether results may be shown ('open')."""
+    out = {'sport': sport, 'error': None, 'info': None, 'eval': None, 'open': False, 'held': None}
+    if ledger is None:
+        out['error'] = 'ledger not readable'
+        return out
+    try:
+        info = bp.counted_cards(ledger, sport, reviewed_at, reviewed)
+        has = ledger.execute("SELECT 1 FROM sqlite_master WHERE name='best_picks'").fetchone()
+        out['held'] = set() if not has else {
+            f for r in ledger.execute('SELECT named_forecast_id, baseline_forecast_id FROM best_picks WHERE sport=?', (sport,))
+            for f in r if f is not None}
+    except sqlite3.Error as exc:
+        out['error'] = f'ledger not readable ({type(exc).__name__})'
+        return out
+    out['info'] = info
+    if sport not in bpr.RULE_MARKETS:
+        return out
+    if info['cards']:
+        if store is None:
+            out['error'] = 'store not readable'
+            return out
+        out['eval'] = bp.evaluate(store, info['cards'], now)
+        state = out['eval']['state']
+        out['open'] = 'W' in out['eval'] or state.startswith('too few games')
+    elif now > _t(bp.DEADLINE):
+        out['open'] = True
+    return out
+
+
+def _grades(store, cards, now) -> dict:
+    fids = {p['forecast_id'] for c in cards for p in json.loads(c['picture'])['picks'] if p.get('forecast_id') is not None}
+    return {f: bp.grade(store, f, now)[0] for f in sorted(fids)}
+
+
+HIDDEN = ('hidden until {s} has {n} decided named picks (decided so far n={d}); preregistered test v4, no interim looks '
+          '(sections 7 and 9)')
+
+
+def section_best(states: dict) -> list:
+    lines = ['## 1. Best picks named on paper', '']
+    for sport in SPORTS:
+        st, S = states[sport], sport.upper()
+        if sport == 'soccer':
+            lines.append('- SOCCER: the card job sends no soccer cards, so nothing is recorded or named (n=0).')
+            continue
+        if st['error']:
+            lines.append(f"- {S}: {st['error']}; counts unknown (n=0 shown).")
+            continue
+        info = st['info']
+        base = (f"- {S}: game cards sent since T0 n={info['sent']}; recorded n={info['rows']}; counted "
+                f"n={len(info['cards'])}")
+        if sport not in bpr.RULE_MARKETS:
+            lines.append(base + '; no pick is named for this sport (v4 section 8), named n=0.')
+            continue
+        ev = st['eval'] or {'named': 0, 'named_decided': 0, 'state': 'counting'}
+        lines.append(base + f"; named n={ev['named']}; decided n={ev['named_decided']}; not decided "
+                     f"n={ev['named'] - ev['named_decided']}.")
+        if not st['open']:
+            lines.append(f"- {S} results: " + HIDDEN.format(s=S, n=bp.N_EVAL, d=min(ev['named_decided'], bp.N_EVAL)) + '.')
+        elif 'W' in ev:
+            lines.append(f"- {S} evaluation set: {_wl(ev['W'], ev['n'])}; result: {ev['state']}; the comparison pick "
+                         f"(highest sportsbook %) won {100 * ev['full_hit_rate']['baseline']:.1f}% "
+                         f"(n={ev['full_hit_rate']['baseline_n']}).")
+        else:
+            lines.append(f"- {S}: {ev['state']} (named n={ev['named']}).")
+    return lines + ['']
+
+
+def section_hypotheses(states: dict, stores: dict, now: datetime) -> list:
+    lines = ['## 2. Hypotheses H1-H7 on new games', '',
+             'Only cards counted by the test (after T0, reviewed recorder). Descriptive; not the preregistered test.', '']
+    for sport in ('nba', 'nhl'):
+        st, S = states[sport], sport.upper()
+        if st['error'] or not st['info'] or not st['info']['cards']:
+            n = 0 if st['error'] or not st['info'] else len(st['info']['cards'])
+            lines.append(f"- {S}: no counted card yet (n={n}); {st['error'] or 'nothing to show'}.")
+            continue
+        cards = st['info']['cards']
+        grades = _grades(stores[sport], cards, now)
+        buckets = defaultdict(lambda: defaultdict(list))
+        for c in cards:
+            for p in json.loads(c['picture'])['picks']:
+                for item, v in (p.get('h') or {}).items():
+                    buckets[item][v].append(grades.get(p['forecast_id']))
+        if not st['open']:
+            d = st['eval']['named_decided'] if st['eval'] else 0
+            lines.append(f"- {S} wins: " + HIDDEN.format(s=S, n=bp.N_EVAL, d=min(d, bp.N_EVAL))
+                         + '. H1-H7 are the rule\'s own score on the same picks, so their results would be an interim look.')
+        for item, (only, plus, zero, minus, (good, bad)) in H_ITEMS.items():
+            if only not in (None, sport):
+                continue
+            parts = []
+            for v, label in ((1, plus), (0, zero), (-1, minus)):
+                if label is None:
+                    continue
+                gs = buckets[item][v]
+                dec = [g for g in gs if g in ('win', 'loss')]
+                if st['open']:
+                    w = sum(g == 'win' for g in dec)
+                    parts.append(f'{label}: {_wl(w, len(dec))}, {_rate(w, len(dec))}')
+                else:
+                    parts.append(f'{label}: picks n={len(gs)}, decided n={len(dec)}')
+            verdict = ''
+            if st['open']:
+                dg = [[g for g in buckets[item][v] if g in ('win', 'loss')] for v in (good, bad)]
+                if min(len(x) for x in dg) < MIN_N:
+                    verdict = ' -> too few to tell'
+                else:
+                    rg, rb = (sum(g == 'win' for g in x) / len(x) for x in dg)
+                    verdict = f" -> {'holding' if rg > rb else 'failing'} ({100 * (rg - rb):+.1f} pts)"
+            lines.append(f"- {S} {item}: " + '; '.join(parts) + verdict)
+    return lines + ['']
+
+
+def section_lost(states: dict, stores: dict, now: datetime) -> list:
+    lines = ['## 3. Cards where the named pick lost', '']
+    for sport in ('nba', 'nhl'):
+        st, S = states[sport], sport.upper()
+        if not st['open']:
+            d = st['eval']['named_decided'] if st['eval'] else 0
+            lines.append(f"- {S}: " + HIDDEN.format(s=S, n=bp.N_EVAL, d=min(d, bp.N_EVAL)) + '.')
+            continue
+        cards = st['info']['cards'] if st['info'] else []
+        grades = _grades(stores[sport], cards, now) if cards else {}
+        lost = [c for c in cards if c['named_forecast_id'] is not None and grades.get(c['named_forecast_id']) == 'loss']
+        decided = sum(grades.get(c['named_forecast_id']) in ('win', 'loss') for c in cards if c['named_forecast_id'] is not None)
+        lines.append(f"- {S}: the named pick lost on n={len(lost)} of n={decided} decided named picks.")
+        for c in lost[-MAX_REPEAT_LINES:]:
+            pic = json.loads(c['picture'])
+            picks = pic['picks']
+            named = next(p for p in picks if p['forecast_id'] == c['named_forecast_id'])
+            won = [p for p in picks if grades.get(p['forecast_id']) == 'win']
+            dec = sum(grades.get(p['forecast_id']) in ('win', 'loss') for p in picks)
+            b2b = pic.get('played_previous_day') or {}
+            won_txt = '; '.join(f"{p.get('market')} {p.get('pick_label')} app {p.get('app_pct')}% book {p.get('book_pct')}%"
+                                f" H {json.dumps(p.get('h') or {}, sort_keys=True)}" for p in won) or 'nothing'
+            lines.append(f"  - {c['matchup']} ({(c['tipoff_at'] or '')[:10]}): named {named.get('pick_label')} app "
+                         f"{named.get('app_pct')}% book {named.get('book_pct')}% lost. Won on that card ({len(won)} of "
+                         f"n={dec} decided picks): {won_txt}. Picture: home played the day before "
+                         f"{'yes' if b2b.get('home') else 'no'}, away {'yes' if b2b.get('away') else 'no'}; lineup-flagged "
+                         f"picks n={pic.get('excluded_lineup', 0)}, AVOID picks n={pic.get('excluded_avoid', 0)}.")
+        if len(lost) > MAX_REPEAT_LINES:
+            lines.append(f"  - older cards not listed: n={len(lost) - MAX_REPEAT_LINES}.")
+    return lines + ['']
+
+
+# ---- exact percentages that came up again (scorecard) -------------------------------------------------------------------
+KEY = ('market', 'displayed_pct', 'side', 'source', 'model_version', 'line_source')
+
+
+def section_repeats(data_dir: Path, states: dict, now: datetime) -> list:
+    as_of, week = now.strftime(FMT), now - timedelta(days=7)
+    lines = ['## 4. Exact percentages that came up again', '',
+             f'Same exact displayed % (one decimal), side, model and line source; no ranges. Listed when a pick at that '
+             f'exact % was decided in the last 7 days and the % has 2+ decided picks. "Too few to tell" below n={MIN_N}.', '']
+    for sport in SPORTS:
+        S = sport.upper()
+        if not sr_path(data_dir, sport).is_file():
+            lines.append(f'- {S}: scorecard file missing, nothing to read (n=0).')
+            continue
+        try:
+            rows = sr.graded_rows(data_dir, sport, as_of)
+        except sqlite3.Error as exc:
+            lines.append(f'- {S}: scorecard not readable ({type(exc).__name__}) (n=0).')
+            continue
+        st, held_n = states.get(sport) or {}, 0
+        if sport in bpr.RULE_MARKETS and not st.get('open'):
+            held = st.get('held')
+            keep = []
+            for r in rows:
+                if (r['forecast_id'] in held) if held is not None else (
+                        r['market'] in bpr.RULE_MARKETS[sport] and _t(r['tipoff_at']) > _t(bpr.T0)):
+                    held_n += 1
+                else:
+                    keep.append(r)
+            rows = keep
+            lines.append(f'- {S}: held back while the best-pick test runs (named or comparison picks'
+                         f"{'' if held is not None else '; ledger not readable, so every new winner/spread/total/reg3 pick'}"
+                         f'): n={held_n}.')
+        groups = defaultdict(list)
+        for r in rows:
+            groups[tuple(r.get(k) for k in KEY)].append(r)
+        shown = [(k, rs) for k, rs in groups.items()
+                 if len(rs) >= 2 and any(week <= _t(r['tipoff_at']) <= now for r in rs)]
+        shown.sort(key=lambda kv: (-len(kv[1]), kv[0][0], float(kv[0][1])))
+        lines.append(f'- {S}: decided picks n={len(rows)}; exact percentages repeated this week n={len(shown)}.')
+        for (market, p, side, source, model, line_source), rs in shown[:MAX_REPEAT_LINES]:
+            w = sum(r['grade'] == 'win' for r in rs)
+            wk = [r for r in rs if week <= _t(r['tipoff_at']) <= now]
+            ww = sum(r['grade'] == 'win' for r in wk)
+            lines.append(f'  - {S} {market} {p}% side {side} (model {_model(model)}, line {line_source}): {_wl(w, len(rs))}, '
+                         f'{_rate(w, len(rs))}; this week {_wl(ww, len(wk))}.')
+        if len(shown) > MAX_REPEAT_LINES:
+            lines.append(f'  - more repeated percentages not listed: n={len(shown) - MAX_REPEAT_LINES}.')
+    return lines + ['']
+
+
+def _model(version) -> str:
+    """Short model label: family plus a 6-character tag of the full version (different versions stay apart)."""
+    if not version:
+        return 'unknown'
+    import hashlib
+    return f"{str(version).split('-')[0].split(':')[0]} #{hashlib.sha256(str(version).encode()).hexdigest()[:6]}"
+
+
+def sr_path(data_dir: Path, sport: str) -> Path:
+    return Path(data_dir) / 'scorecard' / f'{sport}.sqlite'
+
+
+# ---- page ---------------------------------------------------------------------------------------------------------------
+def build(data_dir: Path, ledger_path, now: datetime, reviewed_at, reviewed: set) -> str:
+    ledger = None
+    try:
+        if ledger_path and Path(ledger_path).is_file():
+            ledger = _ro(ledger_path)
+            ledger.execute('SELECT 1 FROM deliveries LIMIT 1')
+    except sqlite3.Error:
+        ledger = None
+    stores = {}
+    for sport in ('nba', 'nhl', 'nfl'):
+        p = Path(data_dir) / f'{sport}.sqlite'
+        stores[sport] = _ro(p) if p.is_file() else None
+    states = {s: test_state(ledger, stores.get(s), s, now, reviewed_at, reviewed) for s in ('nba', 'nhl', 'nfl')}
+    states['soccer'] = {'open': True, 'error': None, 'info': None, 'held': set()}
+    closed = [s.upper() for s in ('nba', 'nhl') if not states[s]['open']]
+    missing = [s.upper() for s in SPORTS if not sr_path(data_dir, s).is_file()]
+    head = [f"# Weekly report, week to {now:%Y-%m-%d}", '',
+            f"Made {now.strftime(FMT)} from read-only copies of the stores, scorecard and ledger. Nothing was changed or sent.",
+            '', '## Limits first', '',
+            '- Win counts and sample sizes only. No profit claim follows from anything here.',
+            f'- A preregistered best-pick test is running (v4, T0 {bpr.T0}). No interim looks: until a sport has '
+            f'{bp.N_EVAL} decided named picks, sections 1-3 show counts only'
+            + (f" (still closed: {', '.join(closed)})." if closed else ' (all evaluations complete).'),
+            '- Why hypotheses are hidden too: H1-H7 are the rule\'s own score, counted on the same cards and picks the test '
+            'grades; their win counts on new games would show how the test is going.',
+            '- Exact-percentage records leave out every pick the test grades (named or comparison pick) until that test '
+            'is complete; the number held back is shown.',
+            f'- "Too few to tell" whenever a side has fewer than {MIN_N} decided picks (scorecard report threshold). '
+            'Patterns from old games are candidates, not facts.',
+            '- Counted cards need the recorder\'s independent review time: '
+            + (f'{reviewed_at}.' if reviewed_at else 'not given, so no card counts yet.')]
+    if missing:
+        head.append(f"- Scorecard file missing for: {', '.join(missing)} (section 4 has nothing for them).")
+    if ledger is None:
+        head.append('- Telegram ledger not readable: test counts unknown; section 4 holds back every new NBA/NHL '
+                    'winner, spread, total and reg3 pick.')
+    body = (section_best(states) + section_hypotheses(states, stores, now) + section_lost(states, stores, now)
+            + section_repeats(data_dir, states, now))
+    for c in [ledger, *stores.values()]:
+        if c is not None:
+            c.close()
+    return '\n'.join(head + [''] + body).rstrip() + '\n'
+
+
+def main(argv=None) -> str:
+    ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
+    ap.add_argument('--data-dir', help='data folder (default: NBA_DATA_DIR)')
+    ap.add_argument('--ledger', required=True, help='Telegram ledger (opened read-only)')
+    ap.add_argument('--out-dir', help='where the page goes (default <data>/reports)')
+    ap.add_argument('--reviewed-at', help="UTC time the recorder's independent review was written in HANDOFF.md")
+    ap.add_argument('--reviewed-recorder', action='append', default=[], help='recorder_sha256 of a reviewed recorder')
+    ap.add_argument('--now', help='report time (default: now, UTC)')
+    a = ap.parse_args(argv)
+    data_dir = Path(a.data_dir) if a.data_dir else config.data_dir()
+    if config.protected_data_dir(data_dir):
+        from app import release
+        # Only a report file is written, never a store: the checkout checks apply, the store-schema check does not.
+        if not release.enabled() or release._checkout(release.code_root().resolve())[1]:
+            raise SystemExit('release guard: the weekly report on live data requires the clean release checkout')
+    out_dir = check_out_dir(a.out_dir or Path(data_dir) / 'reports')
+    now = _t(a.now) if a.now else datetime.now(timezone.utc).replace(microsecond=0)
+    text = build(data_dir, a.ledger, now, a.reviewed_at, set(a.reviewed_recorder))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    target = out_dir / f'weekly-{now:%Y-%m-%d}.md'
+    tmp = target.with_suffix('.md.tmp')
+    tmp.write_text(text)
+    os.replace(tmp, target)
+    print(target)
+    return str(target)
+
+
+if __name__ == '__main__':
+    main()
+    raise SystemExit(0)
