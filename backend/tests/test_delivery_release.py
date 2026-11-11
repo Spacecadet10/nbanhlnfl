@@ -199,6 +199,7 @@ def test_an_unguarded_run_from_another_checkout_still_finds_the_main_ledger(tmp_
 
 
 def test_a_moved_or_missing_pin_does_not_stop_the_sender_or_helper(tmp_path, state, monkeypatch, capsys):
+    monkeypatch.setattr(release, "_PIN_LOGGED", set())
     # Owner, Nov 11: the pin never stops a job; it only writes a log line. The clean-checkout check stays.
     main, ledger, creds = state
     root = git_repo(tmp_path / "release")

@@ -18,6 +18,11 @@ def git_repo(path):
     return path
 
 
+@pytest.fixture(autouse=True)
+def _fresh_pin_log(monkeypatch):
+    monkeypatch.setattr(release, "_PIN_LOGGED", set())
+
+
 @pytest.fixture
 def store(tmp_path, monkeypatch):
     data = tmp_path / "data"
@@ -128,3 +133,22 @@ def test_an_unclean_checkout_is_still_refused_with_a_correct_pin(tmp_path, store
     (root / "README").write_text("edited\n")
     problems = release.check("nhl", root=root)["problems"]
     assert len(problems) == 1 and problems[0].startswith("the release checkout has uncommitted changes")
+
+
+def test_a_pin_file_that_is_not_text_does_not_stop_a_job(tmp_path, store, monkeypatch):
+    # Review L1, Nov 11: a corrupted pin raised UnicodeDecodeError and would have crashed every guarded job.
+    root = git_repo(tmp_path / "release")
+    monkeypatch.setenv(release.ROOT_ENV, str(root))
+    release.pin_path(root).write_bytes(b"\xff\xfe\x00")
+    info = release.check("nhl", root=root)
+    assert info["problems"] == [] and info["pin_note"].startswith("cannot read the pinned release commit")
+
+
+def test_the_pin_line_is_logged_once_per_process(tmp_path, store, monkeypatch, capsys):
+    root = git_repo(tmp_path / "release")
+    release.pin_path(root).unlink()
+    monkeypatch.setenv(release.ROOT_ENV, str(root))
+    capsys.readouterr()
+    release.check("nhl", root=root)
+    release.check("nhl", root=root)
+    assert capsys.readouterr().err.count("release pin (not a refusal)") == 1

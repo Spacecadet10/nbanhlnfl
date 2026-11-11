@@ -111,7 +111,7 @@ def pin_note(root: Path, commit: Optional[str]) -> Optional[str]:
     (stderr, which launchd sends to the job's log file) and returned for the record; no Telegram message, no refusal."""
     try:
         pinned = pinned_commit(root)
-    except (OSError, subprocess.SubprocessError) as exc:
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:     # ValueError: a pin file that is not text
         note = f"cannot read the pinned release commit: {type(exc).__name__}"
     else:
         if not pinned:
@@ -120,8 +120,13 @@ def pin_note(root: Path, commit: Optional[str]) -> Optional[str]:
             note = f"the release checkout is at {commit[:12]}, not the pinned commit {pinned[:12]}"
         else:
             return None
-    print(f"release pin (not a refusal): {note}", file=sys.stderr, flush=True)
+    if note not in _PIN_LOGGED:        # once per process: a guarded run calls the checks many times
+        _PIN_LOGGED.add(note)
+        print(f"release pin (not a refusal): {note}", file=sys.stderr, flush=True)
     return note
+
+
+_PIN_LOGGED: set = set()
 
 
 def check(sport: str, root: Optional[Path] = None) -> dict:
