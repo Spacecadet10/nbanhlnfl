@@ -64,7 +64,8 @@ def test_an_unmatched_game_is_recorded_as_such_and_a_failed_request_writes_nothi
     c.execute("UPDATE game_forecasts SET tipoff_at='2026-11-12T03:00:00Z'")          # start differs from DRatings'
     assert d.run({'nba': c}, NOW, get=lambda u: (503, b''), pause=lambda s: None, clock=lambda: NOW)['sports']['nba']['error'] == 'HTTP 503'
     assert not (tmp_path / 'dratings' / 'captures.jsonl').exists()
-    d.run({'nba': c}, NOW, get=lambda u: (200, NBA), pause=lambda s: None, clock=lambda: NOW)
+    later = NOW.replace(minute=26)                                                   # after the 20-minute backoff
+    d.run({'nba': c}, later, get=lambda u: (200, NBA), pause=lambda s: None, clock=lambda: later)
     (r,) = [json.loads(x) for x in (tmp_path / 'dratings' / 'captures.jsonl').read_text().splitlines()]
     assert r['matched'] is False and 'dr_p_home' not in r
 
@@ -80,7 +81,11 @@ def test_an_empty_parse_records_nothing_and_a_cut_line_is_closed_first(tmp_path,
     out = d.run({'nba': c}, NOW, get=lambda u: (200, b'<html>changed layout</html>'), pause=lambda s: None, clock=lambda: NOW)
     assert out['sports']['nba']['error'] == 'no upcoming rows parsed' and not (tmp_path / 'dratings' / 'captures.jsonl').exists()
     (tmp_path / 'dratings' / 'captures.jsonl').write_text('{"sport": "nba", "forec')          # a crash mid-write
-    d.run({'nba': c}, NOW, get=lambda u: (200, NBA), pause=lambda s: None, clock=lambda: NOW)
+    calls = []
+    d.run({'nba': c}, NOW, get=lambda u: calls.append(u) or (200, NBA), pause=lambda s: None, clock=lambda: NOW)
+    assert calls == []                                       # backing off 20 minutes after the unreadable page
+    later = NOW.replace(minute=30)
+    d.run({'nba': c}, later, get=lambda u: (200, NBA), pause=lambda s: None, clock=lambda: later)
     lines = (tmp_path / 'dratings' / 'captures.jsonl').read_text().splitlines()
     assert len(lines) == 2 and json.loads(lines[1])['forecast_id'] == 1
 

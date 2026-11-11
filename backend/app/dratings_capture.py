@@ -30,6 +30,7 @@ PAGES = {'nba': 'https://www.dratings.com/predictor/nba-basketball-predictions/'
          'nhl': 'https://www.dratings.com/predictor/nhl-hockey-predictions/'}
 USER_AGENT = 'personal research (non-commercial)'
 LOOKBACK = timedelta(hours=3)           # forecasts recorded this recently and not yet captured are captured now
+BACKOFF = timedelta(minutes=20)        # after a failed or unreadable page, that sport waits this long (delta review LOW 1)
 START_SLACK = timedelta(minutes=30)     # DRatings lists the start a few minutes after the schedule (NBA +10, NHL +7)
 ALIAS = {'los angeles clippers': 'la clippers', 'utah hockey club': 'utah mammoth'}
 FMT = '%Y-%m-%dT%H:%M:%SZ'
@@ -131,6 +132,10 @@ def run(stores: dict, now: Optional[datetime] = None, *, get: Callable[[str], tu
             if not todo:
                 out['sports'][sport] = {'pending': 0}
                 continue
+            mark = folder() / f'.backoff-{sport}'
+            if mark.exists() and mark.read_text().strip() > (now - BACKOFF).strftime(FMT):
+                out['sports'][sport] = {'pending': len(todo), 'backoff_until': mark.read_text().strip()}
+                continue
             if requests:
                 pause(2.0)
             requests += 1
@@ -138,10 +143,12 @@ def run(stores: dict, now: Optional[datetime] = None, *, get: Callable[[str], tu
                 status, body = get(PAGES[sport])
             except Exception as exc:
                 out['sports'][sport] = {'pending': len(todo), 'error': type(exc).__name__}
+                mark.write_text(now.strftime(FMT))
                 continue
             got = clock()
             if status != 200:
                 out['sports'][sport] = {'pending': len(todo), 'error': f'HTTP {status}'}
+                mark.write_text(now.strftime(FMT))
                 continue
             digest = hashlib.sha256(body).hexdigest()
             pages = folder() / 'pages' / sport
@@ -154,6 +161,7 @@ def run(stores: dict, now: Optional[datetime] = None, *, get: Callable[[str], tu
             rows = upcoming_rows(body.decode('utf-8', 'replace'))
             if not rows:     # a layout change or an empty page: nothing is recorded, the forecasts stay pending (review LOW 7)
                 out['sports'][sport] = {'pending': len(todo), 'error': 'no upcoming rows parsed'}
+                mark.write_text(now.strftime(FMT))
                 continue
             matched = 0
             path = folder() / 'captures.jsonl'
