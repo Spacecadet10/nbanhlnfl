@@ -103,11 +103,12 @@ def down(calls):
 
 
 def test_outage_never_exceeds_the_run_slot_or_day_budgets(conn, monkeypatch):
-    now = datetime(2026, 10, 20, 21, 31, tzinfo=UTC)     # 48 :00/:30 slots + 9 :15/:45 slots (17:15Z-21:15Z) due
+    monkeypatch.setattr(injuries, "QUARTER_WINDOW_BEFORE_TIPOFF", timedelta(0))   # :00/:30 retry rules only (quarters: below)
+    now = datetime(2026, 10, 20, 21, 31, tzinfo=UTC)     # 48 slots due
     calls = []
     first = collect(conn, down(calls), now=now)
-    assert first["due"] == 57 and len(calls) == 8 == first["attempts"] and first["status"] == "failed"
-    assert len(first["failed"]) == 4 and first["deferred"] == 53      # 2 attempts on each of the 4 newest slots
+    assert first["due"] == 48 and len(calls) == 8 == first["attempts"] and first["status"] == "failed"
+    assert len(first["failed"]) == 4 and first["deferred"] == 44      # 2 attempts on each of the 4 newest slots
     second = collect(conn, down(calls), now=now)
     assert len(calls) == 16 and len(second["given_up"]) == 4          # those 4 slots have used their 4 attempts
     third = collect(conn, down(calls), now=now)
@@ -419,11 +420,29 @@ def test_quarter_hour_reports_are_due_only_in_the_six_hours_before_a_tipoff(conn
     assert [s.at for s in due] == sorted(s.at for s in due) and len({s.name for s in due}) == len(due)
 
 
-def test_a_full_game_day_stays_inside_the_daily_budget(conn):
-    ingest_events(conn, [event("9002", "2026-10-21T02:30:00Z", "3", "4")], "2026-10-18T12:00:00Z")   # a late game too
-    now = datetime(2026, 10, 21, 3, 0, tzinfo=UTC)
-    due = injuries.due_slots(conn, now - timedelta(hours=24), now)
-    assert len(due) <= injuries.MAX_ATTEMPTS_PER_DAY // 2   # one request per report, with room for retries
+def test_missing_quarter_files_never_starve_the_evening_reports(conn):
+    """Review MEDIUM, Nov 11: with every :15/:45 file missing (403) and an early-afternoon game, a whole day of 15-minute
+    runs must still store every evening :00/:30 report on time; a missing quarter file costs one request."""
+    ingest_events(conn, [event("9002", "2026-10-20T17:00:00Z", "3", "4"),          # 1 pm ET matinees and evening games
+                         event("9003", "2026-10-21T02:30:00Z", "5", "6"),
+                         event("9004", "2026-10-19T17:00:00Z", "7", "8"),
+                         event("9005", "2026-10-19T23:00:00Z", "9", "10"),
+                         event("9006", "2026-10-20T02:30:00Z", "11", "12")], "2026-10-18T12:00:00Z")
+    def fetch(name):
+        return Response(403, None, None, 0, b"") if name[-8:-6] in ("15", "45") else ok(pdf(name))
+    t = datetime(2026, 10, 18, 12, 2, tzinfo=UTC)
+    while t <= datetime(2026, 10, 21, 3, 0, tzinfo=UTC):
+        collect(conn, fetch, now=t)
+        t += timedelta(minutes=15)
+    rows = conn.execute("SELECT file_name, slot_at, MIN(completed_at) done, COUNT(*) n FROM injury_report_attempts "
+                        "WHERE purpose='collect' GROUP BY file_name").fetchall()
+    quarter = [r for r in rows if r["slot_at"][14:16] in ("15", "45")]
+    assert quarter and all(r["n"] == 1 for r in quarter)
+    evening = [r for r in rows if "2026-10-20T21:00:00Z" <= r["slot_at"] <= "2026-10-21T02:30:00Z" and r["slot_at"][14:16] in ("00", "30")]
+    assert len(evening) == 12 and all((injuries._parse(r["done"]) - injuries._parse(r["slot_at"])).total_seconds() <= 20 * 60
+                                      for r in evening)
+    day = conn.execute("SELECT COUNT(*) FROM injury_report_attempts WHERE started_at > '2026-10-20T03:00:00Z'").fetchone()[0]
+    assert day <= injuries.MAX_ATTEMPTS_PER_DAY
 
 
 def test_the_job_runs_two_minutes_after_every_quarter_hour():
