@@ -284,3 +284,9 @@ Display and review only (no model uses it): `app/lineup.py`.
 - NHL: latest ESPN goalie listing at or before the moment; usual No.1 = most starts (first goalie in net, stored play-by-play) in the team's earlier games this season, at least 5 known starts and no tie; otherwise nothing is said about a backup.
 - NBA: latest official injury report received; top players = up to 3 per team averaging 24+ minutes in 3+ games this season (stored player box file); Out, Doubtful, Questionable. A report name that cannot be matched but shares a surname with a top player is reported as "not matched".
 - Ticket snapshot: every NBA/NHL pick has `lineup` and `lineup_flags` (picked side; totals and team totals: both sides). `check` refuses a flagged leg unless the plan gives `lineup_reason` on that leg (flags of the reviewed and the fresh snapshot). Missing or unreadable facts are flags, never "all clear".
+
+## DRatings on paper (Nov 11, 2026)
+
+`data/dratings/` (app/dratings_capture.py) holds DRatings' public numbers saved when the app records a forecast, for the
+paper comparison in `scripts/value_audit.py` only. It is never shown in the app or on Telegram, and the ticket review must
+not read or cite it (DRatings gives no reuse licence).

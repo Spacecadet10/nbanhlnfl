@@ -2,7 +2,7 @@
 
 A fair test needs both forecasts made at the same moment (docs/evidence/dratings-map-2026-11-11: DRatings' published
 numbers are updated about a minute before the start, the app's about 90 minutes before). Every run (launchd, every
-10 minutes) looks for canonical NBA/NHL winner forecasts recorded since the last capture; only when there is one does it
+2 minutes, so a forecast made minutes before the start is still caught) looks for canonical NBA/NHL winner forecasts recorded since the last capture; only when there is one does it
 fetch that sport's public DRatings predictions page (one request per sport, 2 s apart, public page, robots allows it).
 The page is saved whole, write-once (`<data>/dratings/pages/`), and one row per forecast is appended to
 `<data>/dratings/captures.jsonl` (append-only; a forecast is captured once). Nothing here is shown in the app or on
@@ -152,8 +152,19 @@ def run(stores: dict, now: Optional[datetime] = None, *, get: Callable[[str], tu
                 tmp.write_bytes(gzip.compress(body))
                 tmp.rename(dest)
             rows = upcoming_rows(body.decode('utf-8', 'replace'))
+            if not rows:     # a layout change or an empty page: nothing is recorded, the forecasts stay pending (review LOW 7)
+                out['sports'][sport] = {'pending': len(todo), 'error': 'no upcoming rows parsed'}
+                continue
             matched = 0
-            with (folder() / 'captures.jsonl').open('a') as f:
+            path = folder() / 'captures.jsonl'
+            if path.exists() and path.stat().st_size:
+                with path.open('rb') as f:
+                    f.seek(-1, os.SEEK_END)
+                    cut = f.read(1) != b'\n'
+                if cut:      # a line cut off by a crash is closed first, so the next row is never glued to it (LOW 8)
+                    with path.open('a') as f:
+                        f.write('\n')
+            with path.open('a') as f:
                 for r in todo:
                     d = match(r, rows)
                     matched += d is not None

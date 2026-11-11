@@ -72,3 +72,20 @@ def test_an_unmatched_game_is_recorded_as_such_and_a_failed_request_writes_nothi
 def test_two_sports_are_spaced_and_names_are_normalised():
     assert d.norm('Montréal Canadiens') == 'montreal canadiens' and d.norm('Los Angeles Clippers') == 'la clippers'
     assert d.norm('St. Louis Blues') == 'st louis blues'
+
+
+def test_an_empty_parse_records_nothing_and_a_cut_line_is_closed_first(tmp_path, monkeypatch):
+    monkeypatch.setenv('NBA_DATA_DIR', str(tmp_path))
+    c = store([(1, 'g1', 'winner', 'forecast', '2026-11-11T22:00:00Z', '2026-11-12T00:00:00Z', 0.55)])
+    out = d.run({'nba': c}, NOW, get=lambda u: (200, b'<html>changed layout</html>'), pause=lambda s: None, clock=lambda: NOW)
+    assert out['sports']['nba']['error'] == 'no upcoming rows parsed' and not (tmp_path / 'dratings' / 'captures.jsonl').exists()
+    (tmp_path / 'dratings' / 'captures.jsonl').write_text('{"sport": "nba", "forec')          # a crash mid-write
+    d.run({'nba': c}, NOW, get=lambda u: (200, NBA), pause=lambda s: None, clock=lambda: NOW)
+    lines = (tmp_path / 'dratings' / 'captures.jsonl').read_text().splitlines()
+    assert len(lines) == 2 and json.loads(lines[1])['forecast_id'] == 1
+
+
+def test_the_job_runs_every_two_minutes():
+    import plistlib
+    plist = plistlib.loads((Path(__file__).resolve().parents[2] / 'scripts/launchd/com.nba-predictor.dratings-capture.plist').read_bytes())
+    assert plist['StartInterval'] == 120 and plist['ProgramArguments'][-2:] == ['app.dratings_capture', 'run']
