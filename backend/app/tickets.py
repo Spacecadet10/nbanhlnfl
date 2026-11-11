@@ -90,6 +90,7 @@ def snapshot():
                 attach_assessments(sport, report['picks'])
                 attach_lineups(conn, sport, report['picks'], stamp)
                 attach_prices(conn, sport, report['picks'], stamp)
+                attach_facts(conn, sport, report['picks'], stamp)
                 due = conn.execute("SELECT game_id FROM games WHERE status='scheduled' AND season_type IN ('regular','play_in','postseason') AND tipoff_at>? AND tipoff_at<=?",
                                    (stamp, (now+timedelta(minutes=110)).strftime('%Y-%m-%dT%H:%M:%SZ'))).fetchall()
                 covered = {p['game_id'] for p in report['picks'] if p['grade']=='pending'}
@@ -107,6 +108,7 @@ def snapshot():
     except Exception as exc:
         result['sports']['soccer'] = {'error': type(exc).__name__}
     attach_assessments('soccer', (result['sports']['soccer'].get('report') or {}).get('picks', []))
+    attach_facts(None, 'soccer', (result['sports']['soccer'].get('report') or {}).get('picks', []), stamp)
     result['alerts'] = health_alerts(result)
     from fastapi.encoders import jsonable_encoder
     return jsonable_encoder(result)
@@ -146,6 +148,106 @@ def attach_prices(conn, sport, picks, stamp):
             except Exception as exc:
                 pick['implied_line'] = {'error': type(exc).__name__}
             pick['ticket_rule'] = 'Team totals stay off tickets (owner, Nov 11).'
+
+
+FACT_SPORTS = ('nba', 'nhl', 'nfl')
+
+
+def attach_facts(conn, sport, picks, stamp):
+    """Owner STEP G (Nov 11): back-to-back and line-movement facts beside every NBA/NHL/NFL pick, as of the snapshot
+    (`stamp`), as plain facts for the review. Nothing here favours, bans, reorders or flags a pick, and the ticket picture
+    and text never show them: H4 (line move) and H6 (back-to-back) were found on old games and are untested on new ones.
+    `game_facts` = {as_of, rest, line_move}; a fact that cannot be known by the snapshot is None with a reason, never a
+    later value. Soccer: not applicable (no rest or opening-quote facts are kept for it). A failure is reported on the pick,
+    never hides it."""
+    for pick in picks:
+        if sport not in FACT_SPORTS:
+            pick['game_facts'] = {'as_of': stamp, 'state': 'not_applicable',
+                                  'note': f'no back-to-back or line-move facts are kept for {sport}'}
+            continue
+        try:
+            pick['game_facts'] = game_facts(conn, sport, pick, stamp)
+        except Exception as exc:
+            pick['game_facts'] = {'as_of': stamp, 'error': type(exc).__name__}
+
+
+def _team_side(market, side):
+    """'home' / 'away' / None: the team a pick is on (totals and the regulation draw are on neither)."""
+    if market in ('team_total_home', 'team_total_away'):
+        return market.rsplit('_', 1)[1]
+    if market in ('winner', 'spread', 'reg3'):
+        return {'a': 'home', 'b': 'away'}.get(side)
+    return None
+
+
+def game_facts(conn, sport, pick, stamp):
+    """Rest: both teams (a total needs both; `picked_team` names the side a winner/spread/team-total pick is on), days from
+    each team's previous scheduled start this season to this start (providers.real.rest_days; the schedule is known in
+    advance), back-to-back = under scorecard.B2B_BELOW_DAYS (1.5) days, the models' own rest feature (NFL: None, teams
+    never play on consecutive days). Line move, the scorecard's definition (scorecard._open, review M2) as of the
+    snapshot: `current` = the latest stored quote of the pick's market retrieved by the snapshot (moneyline:
+    coverage.winner_quote); `opening` = the first quote of the SAME sportsbook retrieved by then, at whatever line;
+    `move_pct_points` = the pick side's de-vigged % at `current` minus the same sportsbook's first quote AT `current`'s
+    line (`move_base`), never across lines, 0 = no move; `move_line` = the picked side's line change since the opening
+    line (spread: the picked team's handicap). Every timestamp is given."""
+    from app import scorecard
+    none = lambda why: {'state': 'missing', 'note': why}
+    g = conn.execute('SELECT * FROM games WHERE game_id=?', (pick['game_id'],)).fetchone()
+    row = conn.execute('SELECT * FROM game_forecasts WHERE forecast_id=?', (pick['forecast_id'],)).fetchone()
+    if g is None or row is None:
+        why = 'game or forecast not found in the store at the snapshot'
+        return {'as_of': stamp, 'rest': none(why), 'line_move': dict(none(why), opening=None, current=None,
+                                                                      move_pct_points=None, move_line=None)}
+    market, side = row['market'], scorecard._side_of(row['market'], row)
+    (state, note), days = scorecard._rest(conn, g, g['tipoff_at'], sport)
+    rest = {'state': state, 'note': note, 'picked_team': _team_side(market, side),
+            'rule': f'back-to-back: previous start under {scorecard.B2B_BELOW_DAYS:g} days before this start',
+            **{s: {'team': scorecard._abbr(conn, g[f'{s}_team_id']), 'rest_days': days[f'{s}_rest_days'],
+                   'back_to_back': None if days[f'{s}_b2b'] is None else bool(days[f'{s}_b2b'])} for s in ('home', 'away')}}
+    return {'as_of': stamp, 'rest': rest, 'line_move': _line_move(conn, sport, g, row, market, side, stamp)}
+
+
+def _line_move(conn, sport, g, row, market, side, stamp):
+    from app import coverage, scorecard
+    pct = lambda p: None if p is None else round(100 * p, 2)
+    out = {'state': 'missing', 'note': None, 'provider': None, 'pick_line': row['line'], 'line_source': row['line_source'],
+           'opening': None, 'current': None, 'move_pct_points': None, 'move_line': None, 'sign': '+ = toward the pick',
+           'move_base': None,
+           'line_is': {'spread': "opening/current: the home team's handicap; move_line: the picked team's", 'winner': None}
+           .get(market, 'points')}
+    if market == 'reg3':
+        return dict(out, note='no regulation three-way bookmaker quotes are collected')
+    if market == 'winner':
+        q = coverage.winner_quote(conn, sport, g['game_id'], stamp)
+        if q is None:
+            return dict(out, note='no moneyline stored by the snapshot time')
+        current = {'retrieved_at': q['retrieved_at'], 'label': q['price_label'], 'line': None,
+                   'price': q['price_home'] if side == 'a' else q['price_away'],
+                   'devig': q['p_home'] if side == 'a' else (None if q['p_home'] is None else 1 - q['p_home'])}
+    else:
+        q = conn.execute("SELECT * FROM market_quotes WHERE game_id=? AND market=? AND retrieved_at<=? "
+                         "ORDER BY retrieved_at DESC, price_label='current' DESC, quote_id DESC LIMIT 1",
+                         (g['game_id'], market, stamp)).fetchone() if scorecard._has(conn, 'market_quotes') else None
+        if q is None:
+            return dict(out, note='no sportsbook quote of this market stored by the snapshot time')
+        current = {'retrieved_at': q['retrieved_at'], 'label': q['price_label'], 'line': q['line'],
+                   'price': {'a': q['price_a'], 'mid': q['price_mid'], 'b': q['price_b']}[side],
+                   'devig': scorecard._picked(market, side, q['p_a_devig'])}
+    (state, note), o = scorecard._open(conn, sport, g, {'market': market, 'side': side, 'generated_at': stamp},
+                                       {'book_devig': current['devig'], 'book_line': current['line']}, provider=q['provider'])
+    notes = [note] if note else []
+    if row['line_source'] == 'bookmaker' and row['line'] is not None and current['line'] is not None \
+            and abs(row['line'] - current['line']) > 1e-9:
+        notes.append("the sportsbook line is no longer the pick's line")
+    if row['line_source'] == 'model' and market != 'winner':
+        notes.append("the pick uses the app's own line; the quotes are the sportsbook's line")
+    return dict(out, state=state, note='; '.join(notes) or None, provider=q['provider'],
+                opening=None if not o else {'retrieved_at': o['open_retrieved_at'], 'label': o['open_label'],
+                                            'line': o['open_line'], 'price': o['open_price'], 'devig_pct': pct(o['open_devig'])},
+                current={k: v for k, v in current.items() if k != 'devig'} | {'devig_pct': pct(current['devig'])},
+                move_base=None if o.get('move_base_retrieved_at') is None else
+                {'retrieved_at': o['move_base_retrieved_at'], 'devig_pct': pct(o['move_base_devig'])},
+                move_pct_points=o.get('move_pts'), move_line=o.get('move_line'))
 
 
 def lineup_flags(sport, picks):

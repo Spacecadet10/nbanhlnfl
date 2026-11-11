@@ -2101,3 +2101,200 @@ def test_team_total_picks_carry_the_implied_line_and_soccer_double_chance_its_qu
     dnb=t.soccer_price_facts(prices,'draw_no_bet','home')
     assert 'book_quote' not in dnb and dnb['derived_price']['decimal']==1.236
     assert t.soccer_price_facts({},'double_chance','home_draw')=={}
+
+
+# ---- STEP G (owner, Nov 11): back-to-back and line-movement facts per pick, plain facts as of the snapshot -------------
+from tests.test_scorecard import store as fact_store, forecast as fact_forecast   # noqa: E402
+
+FACT_T = '2026-11-11T23:00:00Z'   # the snapshot time of these fixtures (test_scorecard's T)
+
+
+def _odds(c, rows):
+    c.executemany('INSERT INTO odds_quotes (game_id, provider, price_label, home_american, away_american, home_prob_devig, '
+                  'retrieved_at) VALUES (?,?,?,?,?,?,?)', [('g',) + r for r in rows])
+
+
+def _mq(c, rows):
+    c.executemany('INSERT INTO market_quotes (game_id, provider, market, price_label, line, price_a, price_b, p_a_devig, '
+                  'p_b_devig, retrieved_at, fetch_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)', [('g',) + r for r in rows])
+
+
+def _all_times(obj):
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k.endswith('retrieved_at') and v is not None:
+                yield v
+            yield from _all_times(v)
+    elif isinstance(obj, list):
+        for v in obj:
+            yield from _all_times(v)
+
+
+def test_winner_pick_carries_rest_and_line_move_facts_as_of_the_snapshot_never_later():
+    c = fact_store()
+    fact_forecast(c, 1, 'winner', 0.60)                                   # TOR (home) to win
+    _odds(c, [('FanDuel', 'open', -400, 300, 0.20, '2026-11-11T08:00:00Z'),        # other provider: never the opening
+              ('DraftKings', 'open', -120, 100, 0.53, '2026-11-11T10:00:00Z'),
+              ('DraftKings', 'current', -125, 105, 0.54, '2026-11-11T10:00:00Z'),
+              ('DraftKings', 'current', -150, 130, 0.58, '2026-11-11T22:30:00Z'),
+              ('DraftKings', 'current', -300, 250, 0.74, '2026-11-11T23:00:01Z'),     # one second after the snapshot
+              ('DraftKings', 'open', -400, 300, 0.79, '2026-11-11T23:30:00Z')])
+    picks = [dict(forecast_id=1, game_id='g', market='winner', pick_label='TOR win')]
+    t.attach_facts(c, 'nba', picks, FACT_T)
+    f = picks[0]['game_facts']
+    assert f['as_of'] == FACT_T
+    rest = f['rest']
+    assert rest['state'] == 'present' and rest['picked_team'] == 'home'
+    assert rest['home'] == {'team': 'TOR', 'rest_days': 1.0, 'back_to_back': True}
+    assert rest['away'] == {'team': 'BOS', 'rest_days': 3.0, 'back_to_back': False}
+    move = f['line_move']
+    assert move['state'] == 'present' and move['provider'] == 'DraftKings'
+    assert move['opening'] == {'retrieved_at': '2026-11-11T10:00:00Z', 'label': 'open', 'line': None, 'price': -120,
+                               'devig_pct': 53.0}
+    assert move['current'] == {'retrieved_at': '2026-11-11T22:30:00Z', 'label': 'current', 'line': None, 'price': -150,
+                               'devig_pct': 58.0}
+    assert move['move_pct_points'] == pytest.approx(5.0) and move['move_line'] is None
+    assert move['move_base'] == {'retrieved_at': '2026-11-11T10:00:00Z', 'devig_pct': 53.0}
+    assert all(ts <= FACT_T for ts in _all_times(f))
+
+
+def test_line_pick_move_is_on_the_picks_side_and_line_same_provider_and_away_pick_names_the_away_team():
+    c = fact_store('nhl')
+    _mq(c, [('DraftKings', 'spread', 'open', -1.5, 150, -180, 0.38, 0.62, '2026-11-11T09:00:00Z', 1),
+            ('ESPN BET', 'spread', 'open', -1.5, 200, -250, 0.30, 0.70, '2026-11-11T08:00:00Z', 2),   # other provider, earlier
+            ('DraftKings', 'spread', 'current', -1.5, 170, -205, 0.35, 0.65, '2026-11-11T22:55:00Z', 3),
+            ('DraftKings', 'spread', 'current', -2.5, 300, -400, 0.20, 0.80, '2026-11-11T23:10:00Z', 4)])
+    fact_forecast(c, 1, 'spread', 0.30, line=-1.5, line_source='bookmaker', quote=1)     # BOS +1.5 (away)
+    picks = [dict(forecast_id=1, game_id='g', market='spread', pick_label='BOS +1.5')]
+    t.attach_facts(c, 'nhl', picks, FACT_T)
+    f = picks[0]['game_facts']
+    assert f['rest']['picked_team'] == 'away'
+    move = f['line_move']
+    assert move['provider'] == 'DraftKings' and move['pick_line'] == -1.5 and move['line_source'] == 'bookmaker'
+    assert move['opening']['retrieved_at'] == '2026-11-11T09:00:00Z' and move['opening']['price'] == -180
+    assert move['opening']['devig_pct'] == 62.0 and move['current']['devig_pct'] == 65.0
+    assert move['current']['retrieved_at'] == '2026-11-11T22:55:00Z' and move['current']['line'] == -1.5
+    assert move['move_pct_points'] == pytest.approx(3.0) and move['move_line'] == 0
+    assert all(ts <= FACT_T for ts in _all_times(f))
+
+
+def test_line_move_is_measured_only_at_the_picks_line_like_the_scorecard_and_line_change_is_pick_oriented():
+    # Scorecard review M2: the % move compares the same sportsbook's quotes at ONE line (the pick's quote's line); the
+    # line change is told separately, from the opening line, on the picked side (spread: the picked team's handicap).
+    from app import scorecard as sc
+    c = fact_store()
+    _mq(c, [('DraftKings', 'spread', 'open', 6.5, -110, -110, 0.50, 0.50, '2026-11-11T04:00:00Z', 1),
+            ('DraftKings', 'spread', 'current', 6.0, -112, -108, 0.52, 0.48, '2026-11-11T10:00:00Z', 2),
+            ('DraftKings', 'spread', 'current', 5.5, -105, -115, 0.48, 0.52, '2026-11-11T15:00:00Z', 3),
+            ('DraftKings', 'spread', 'current', 5.5, -112, -108, 0.51, 0.49, '2026-11-11T22:00:00Z', 4),
+            ('DraftKings', 'spread', 'current', 5.5, -150, 130, 0.60, 0.40, '2026-11-11T23:30:00Z', 5)])   # after the snapshot
+    fact_forecast(c, 1, 'spread', 0.55, line=5.5, line_source='bookmaker', quote=4)    # TOR +5.5 (home)
+    fact_forecast(c, 2, 'spread', 0.40, line=5.5, line_source='bookmaker', quote=4)    # BOS -5.5 (away)
+    picks = [dict(forecast_id=1, game_id='g', market='spread'), dict(forecast_id=2, game_id='g', market='spread')]
+    t.attach_facts(c, 'nba', picks, FACT_T)
+    home, away = (p['game_facts']['line_move'] for p in picks)
+    assert home['opening']['line'] == 6.5 and home['current']['line'] == 5.5 and home['current']['retrieved_at'] == '2026-11-11T22:00:00Z'
+    assert home['move_base'] == {'retrieved_at': '2026-11-11T15:00:00Z', 'devig_pct': 48.0}
+    assert home['move_pct_points'] == pytest.approx(3.0) and away['move_pct_points'] == pytest.approx(-3.0)
+    assert home['move_line'] == pytest.approx(-1.0) and away['move_line'] == pytest.approx(1.0)
+    # the same numbers the scorecard computes for these quotes as of the snapshot time
+    g = c.execute("SELECT * FROM games WHERE game_id='g'").fetchone()
+    _, o = sc._open(c, 'nba', g, {'market': 'spread', 'side': 'a', 'generated_at': FACT_T},
+                    {'book_devig': 0.51, 'book_line': 5.5, 'book_provider': 'DraftKings'})
+    assert (o['move_pts'], o['move_line'], o['open_line']) == (home['move_pct_points'], home['move_line'], home['opening']['line'])
+    assert all(ts <= FACT_T for p in picks for ts in _all_times(p['game_facts']))
+
+
+def test_nfl_rest_days_are_kept_but_back_to_back_is_not_applicable():
+    c = fact_store('nfl')
+    fact_forecast(c, 1, 'winner', 0.60)
+    picks = [dict(forecast_id=1, game_id='g', market='winner')]
+    t.attach_facts(c, 'nfl', picks, FACT_T)
+    rest = picks[0]['game_facts']['rest']
+    assert rest['home'] == {'team': 'TOR', 'rest_days': 1.0, 'back_to_back': None}
+
+
+def test_missing_facts_are_null_with_a_reason_and_a_failure_never_hides_the_pick():
+    c = fact_store()
+    c.execute("DELETE FROM games WHERE game_id='prev2'")                 # BOS: no earlier game this season
+    fact_forecast(c, 1, 'total', 0.55, line=221.5, line_source='model')
+    _mq(c, [('DraftKings', 'total', 'current', 220.5, -110, -110, 0.5, 0.5, '2026-11-11T23:30:00Z', 1)])   # after the snapshot
+    fact_forecast(c, 2, 'team_total_home', 0.55, line=112.5, line_source='model')
+    picks = [dict(forecast_id=1, game_id='g', market='total'), dict(forecast_id=2, game_id='g', market='team_total_home'),
+             dict(forecast_id=99, game_id='nope', market='winner')]
+    t.attach_facts(c, 'nba', picks, FACT_T)
+    total = picks[0]['game_facts']
+    assert total['rest']['state'] == 'missing' and 'away' in total['rest']['note']
+    assert total['rest']['away']['rest_days'] is None and total['rest']['away']['back_to_back'] is None
+    assert total['rest']['home']['back_to_back'] is True and total['rest']['picked_team'] is None
+    assert total['line_move']['state'] == 'missing' and total['line_move']['current'] is None
+    assert total['line_move']['opening'] is None and total['line_move']['move_pct_points'] is None
+    assert 'snapshot' in total['line_move']['note']
+    assert picks[1]['game_facts']['line_move']['state'] == 'missing' and picks[1]['game_facts']['rest']['picked_team'] == 'home'
+    gone = picks[2]['game_facts']
+    assert gone['rest']['state'] == 'missing' and gone['line_move']['state'] == 'missing' and gone['rest']['note']
+    broken = [dict(forecast_id=1, game_id='g', market='winner')]
+    t.attach_facts(None, 'nba', broken, FACT_T)
+    assert broken[0]['game_facts'] == {'as_of': FACT_T, 'error': 'AttributeError'}
+    soccer = [dict(game_id='s')]
+    t.attach_facts(None, 'soccer', soccer, FACT_T)
+    assert soccer[0]['game_facts']['state'] == 'not_applicable' and soccer[0]['game_facts']['as_of'] == FACT_T
+
+
+def test_snapshot_attaches_the_facts_to_every_game_sport_pick(tmp_path, monkeypatch):
+    from app import db, freshness, nfl_live, lineup
+    from app.providers import real
+    monkeypatch.setenv('NBA_DATA_DIR', str(tmp_path))
+    monkeypatch.setattr(t, 'SKILL', tmp_path / 'SKILL.md'); t.SKILL.write_text('fixture')
+
+    def connect(sport):
+        c = fact_store(sport)
+        fact_forecast(c, 1, 'winner', 0.60)
+        _odds(c, [('DraftKings', 'open', -120, 100, 0.53, '2026-11-11T10:00:00Z'),
+                  ('DraftKings', 'current', -300, 250, 0.74, '2099-01-01T00:00:00Z')])     # never visible now
+        _mq(c, [('DraftKings', 'winner', 'open', None, -120, 100, 0.53, 0.47, '2026-11-11T10:00:00Z', 1),
+                ('DraftKings', 'winner', 'current', None, -300, 250, 0.74, 0.26, '2099-01-01T00:00:00Z', 2)])
+        c.commit()
+        return c
+
+    class Provider:
+        def __init__(self, conn, stamp):
+            pass
+
+        def ranked_picks(self, day):
+            return {'mode': 'real', 'picks': [dict(forecast_id=1, game_id='g', market='winner', matchup='BOS @ TOR',
+                    pick_label='TOR win', probability=.6, grade='pending', tipoff='2099-01-01T00:00:00Z',
+                    generated_at=FACT_T, percentage_history={'side': 'a'})]}
+    monkeypatch.setattr(db, 'connect_readonly', connect)
+    monkeypatch.setattr(freshness, 'summary', lambda conn, sport, now: dict(source_state='fresh', failing=False))
+    monkeypatch.setattr(real, 'RealProvider', Provider)
+    monkeypatch.setattr(nfl_live, 'Views', Provider)
+    monkeypatch.setattr(nfl_live, 'activation', lambda: True)
+    monkeypatch.setattr(lineup, 'facts', lambda conn, sport, ids, at: {})
+    snap = t.snapshot()
+    for sport in ('nba', 'nhl', 'nfl'):
+        f = snap['sports'][sport]['report']['picks'][0]['game_facts']
+        assert f['as_of'] == snap['as_of'] and f['rest']['home']['back_to_back'] is (None if sport == 'nfl' else True)
+        assert f['line_move']['current']['devig_pct'] == 53.0 and f['line_move']['move_pct_points'] == 0
+        assert all(ts <= snap['as_of'] for ts in _all_times(f))
+
+
+def test_the_ticket_picture_and_text_are_unchanged_by_the_facts(setup, monkeypatch):
+    from app import telegram_card
+    plan, snap, sent, path = setup
+    plan['tickets'] = [ticket([('nba', 1), ('nhl', 2)], 3)]
+    before = t.check(plan)
+    facts = {'as_of': NOW, 'rest': {'state': 'present', 'home': {'team': 'B1', 'rest_days': 1.0, 'back_to_back': True}},
+             'line_move': {'state': 'present', 'move_pct_points': 4.0}}
+    for sport in ('nba', 'nhl', 'nfl'):
+        for p in snap['sports'][sport]['report']['picks']:
+            p['game_facts'] = facts
+    sp = Path(plan['snapshot_path']); sp.write_text(json.dumps(snap)); plan['review']['snapshot_sha256'] = t.sha(sp.read_bytes())
+    monkeypatch.setattr(t, 'snapshot', lambda: copy.deepcopy(snap))
+    after = t.check(plan)
+    assert after['resolved'][0]['legs'][0]['game_facts'] == facts                    # kept in the archived review
+    assert after['text'] == before['text'] and t.ticket_captions(after) == t.ticket_captions(before)
+    assert t.selection_identity(after['resolved']) == t.selection_identity(before['resolved'])
+    assert (telegram_card.render_ticket_card(snap['date'], after['resolved']) ==
+            telegram_card.render_ticket_card(snap['date'], before['resolved']))
+    assert sent == []

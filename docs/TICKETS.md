@@ -285,6 +285,20 @@ Display and review only (no model uses it): `app/lineup.py`.
 - NBA: latest official injury report received; top players = up to 3 per team averaging 24+ minutes in 3+ games this season (stored player box file); Out, Doubtful, Questionable. A report name that cannot be matched but shares a surname with a top player is reported as "not matched".
 - Ticket snapshot: every NBA/NHL pick has `lineup` and `lineup_flags` (picked side; totals and team totals: both sides). `check` refuses a flagged leg unless the plan gives `lineup_reason` on that leg (flags of the reviewed and the fresh snapshot). Missing or unreadable facts are flags, never "all clear".
 
+## Back-to-back and line-movement facts (Nov 11, 2026, step G)
+
+Ticket snapshot only, plain facts (`app/tickets.py` `attach_facts`): every NBA/NHL/NFL pick has `game_facts` = {`as_of` (the
+snapshot time), `rest`, `line_move`}. Rest: both teams' days since their previous scheduled start this season and
+`back_to_back` (under 1.5 days, the models' own rest feature), `picked_team` home/away/none. Line move: the latest stored
+quote of the pick's market retrieved by the snapshot; the opening = the first quote of the same sportsbook retrieved by
+then (the book's own 'open' price first) and its line; the pick side's de-vigged % move in points (+ = toward the pick)
+measured only against that sportsbook's first quote at the current quote's line (the scorecard's definition, never across
+lines, 0 = no move); `move_line` = the picked side's line change since the opening line; every timestamp. NFL: rest days
+kept, back-to-back not applicable. Unknown by the snapshot = null with a reason, never a later value. Soccer: not applicable. No rule reads
+these facts, the ticket picture and text never show them, and the skill gets no instruction about them until the paper
+record shows H4 and H6 hold on new games (owner, Nov 11). Adding them changed the helper hash: a review made before this
+release is refused with "review again".
+
 ## DRatings on paper (Nov 11, 2026)
 
 `data/dratings/` (app/dratings_capture.py) holds DRatings' public numbers saved when the app records a forecast, for the
