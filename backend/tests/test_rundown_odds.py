@@ -389,6 +389,10 @@ def test_a_refused_three_way_market_still_gets_normal_nhl_and_nfl_prices(tmp_pat
             return Bad({})
         return Response({})
     result = odds.fetch(NOW, opener=run, pause=lambda _: None)
+    if refusal == 'schema':          # a garbled answer is retried each time but never remembered: 8 requests, no note
+        assert result['status'] == 'ok' and len(calls) == 8
+        assert '"refused"' not in (tmp_path / 'odds-books' / 'requests.jsonl').read_text()
+        return
     assert result['status'] == 'ok' and len(calls) == 7                     # refused once, then remembered
     assert [r['sport'] for r in result['results']] == ['nba', 'nba', 'nhl', 'nhl', 'nfl', 'nfl']
     assert sum('market_ids=1,2,3&' in u and '/sports/6/' in u for u in calls) == 2
@@ -430,3 +434,13 @@ def test_a_rate_limit_or_server_error_is_not_a_refusal_of_the_market(tmp_path, m
             raise urllib.error.HTTPError(request.full_url, code, 'x', {}, io.BytesIO(b''))
         return Response({})
     assert odds.fetch(NOW, opener=run, pause=lambda _: None)['status'] == 'failed' and len(calls) == 3
+
+
+def test_a_damaged_refusal_note_never_stops_price_collection(tmp_path, monkeypatch):
+    monkeypatch.setenv('NBA_DATA_DIR', str(tmp_path))
+    monkeypatch.setenv('THERUNDOWN_API_KEY', 'test-key-do-not-save')
+    (tmp_path / 'odds-books').mkdir()
+    (tmp_path / 'odds-books' / 'requests.jsonl').write_text(json.dumps({'day': NOW.date().isoformat(), 'refused': 5}) + '\n')
+    calls = []
+    assert odds.fetch(NOW, opener=lambda r, timeout: calls.append(r) or Response({}), pause=lambda _: None)['status'] == 'ok'
+    assert len(calls) == 6

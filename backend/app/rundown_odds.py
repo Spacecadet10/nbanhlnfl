@@ -233,8 +233,8 @@ def fetch(now=None, *, opener=urllib.request.urlopen, pause=time.sleep):
             try:
                 entry = json.loads(x)
                 if entry.get('day') == today:
-                    refused.update(entry.get('refused') or [])
-            except (ValueError, AttributeError):
+                    refused.update(str(x) for x in entry.get('refused') or [])
+            except (ValueError, AttributeError, TypeError):   # a damaged note never stops price collection
                 pass
         results = []
         for sport, sid in SPORT_IDS.items():
@@ -265,11 +265,12 @@ def fetch(now=None, *, opener=urllib.request.urlopen, pause=time.sleep):
                         extra = sorted(set(markets.values()) - set(MARKETS.values()))
                         refusal = not isinstance(exc, urllib.error.HTTPError) or exc.code in (400, 403, 404, 422)
                         if extra and refusal and count < DAY_REQUESTS:
-                            refused.update(extra)
                             without = sorted(set(without) | set(extra))
-                            with usage.open('a') as f:
-                                f.write(json.dumps({'day': today, 'at': stamp(clock()), 'sport': sport, 'date': day,
-                                                    'refused': extra, 'status': getattr(exc, 'code', type(exc).__name__)}) + '\n')
+                            if isinstance(exc, urllib.error.HTTPError):   # a clear refusal is remembered for the UTC day;
+                                refused.update(extra)                      # a garbled answer only costs this one retry
+                                with usage.open('a') as f:
+                                    f.write(json.dumps({'day': today, 'at': stamp(clock()), 'sport': sport, 'date': day,
+                                                        'refused': extra, 'status': exc.code}) + '\n')
                             markets = dict(MARKETS)
                             pause(1.1)
                             continue
