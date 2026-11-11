@@ -122,7 +122,7 @@ def test_newest_response_replaces_older_and_future_or_old_files_are_not_used(tmp
     assert p['book_comparison']['status'] == 'no_current_event'
     later = odds.read_cache(NOW + timedelta(hours=4), tmp_path)
     assert not later['responses'] and later['stale_responses'] == 1 and later['stale_sports'] == ['nhl']
-    assert odds.read_cache(NOW, tmp_path / 'missing') == {'responses': [], 'stale_responses': 0, 'invalid_files': [], 'stale_sports': []}
+    assert odds.read_cache(NOW, tmp_path / 'missing') == {'responses': [], 'stale_responses': 0, 'invalid_files': [], 'stale_sports': [], 'stale_days': []}
 
 
 def test_ticket_names_the_one_sportsbook_that_pays_most_for_the_whole_parlay():
@@ -305,3 +305,14 @@ def test_the_picture_and_caption_name_a_better_book_only_when_it_pays_more_than_
         odds.attach('nhl', leg, cache(), NOW)
     same = tickets.ticket_assessment([p, q])
     assert same['best_book'] == 'DraftKings' and tickets.best_book_line(same) is None
+
+
+def test_a_game_whose_own_day_has_only_old_prices_is_stale_even_when_the_sport_has_fresh_ones(tmp_path):
+    # Delta review LOW 1: a run that stopped after today's file leaves tomorrow's (UTC) evening games with old prices.
+    old = response(NOW - timedelta(hours=4))
+    fresh_other_day = dict(response(), _date='2026-11-10', events=[])
+    for name, data in (('old', old), ('fresh', fresh_other_day)):
+        (tmp_path / f'{name}.json').write_text(json.dumps(data))
+    c = odds.read_cache(NOW, tmp_path)
+    assert c['stale_sports'] == [] and c['stale_days'] == ['nhl 2026-11-11']
+    assert odds.comparison('nhl', pick(), c, NOW)['status'] == 'stale_prices'

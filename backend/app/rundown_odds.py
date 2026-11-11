@@ -79,7 +79,8 @@ def read_cache(now, directory=None):
     return {'responses': fresh,
             'stale_responses': sum(now - at > MAX_AGE for at, d in latest.values()), 'invalid_files': errors,
             # sports whose saved prices are all too old: reported as stale, not as a game the books do not list
-            'stale_sports': sorted({d['_sport'] for at, d in latest.values()} - {d['_sport'] for d in fresh})}
+            'stale_sports': sorted({d['_sport'] for at, d in latest.values()} - {d['_sport'] for d in fresh}),
+            'stale_days': sorted(f"{d['_sport']} {d['_date']}" for at, d in latest.values() if now - at > MAX_AGE)}
 
 
 def _side(pick):
@@ -122,7 +123,8 @@ def comparison(sport, pick, cache, now):
             except (KeyError, TypeError, ValueError, AttributeError):
                 continue
     if len({m[1].get('event_id') for m in matches}) != 1:
-        if not matches and sport in (cache.get('stale_sports') or []):
+        day = moment(pick['tipoff']).date().isoformat() if pick.get('tipoff') else None   # TheRundown files are per UTC date
+        if not matches and (sport in (cache.get('stale_sports') or []) or f"{sport} {day}" in (cache.get('stale_days') or [])):
             return dict(out, status='stale_prices')
         return dict(out, status='ambiguous_event' if matches else 'no_current_event')
     response, event, home_id, away_id = max(matches, key=lambda m: m[0]['_fetched_at'])
