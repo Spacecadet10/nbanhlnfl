@@ -575,3 +575,11 @@ def test_implied_lines_never_stop_a_card(monkeypatch):
     d = report()
     tg.card_implied_lines(None, 'nba', d, datetime(2026, 11, 2, 20, 0, tzinfo=timezone.utc))
     assert 'implied_line' not in d['picks'][0]
+
+
+def test_an_nhl_implied_team_total_says_rough():
+    d = report()
+    d['sport'] = 'nhl'
+    d['picks'][0]['percentage_history']['sport'] = 'nhl'
+    d['picks'][0].update(pick_label='BUF over 2.5', matchup='TB @ BUF', implied_line={'line': 2.5})
+    assert 'implied from spread and total 2.5 (rough)</i>' in tg.message_batches(d, '123')[0][1]

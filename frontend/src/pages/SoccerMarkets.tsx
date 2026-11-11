@@ -76,8 +76,8 @@ function MatchPrices({ m }: { m: SoccerMarketMatch }) {
       <h4>Prices</h4>
       {b && (
         <p className="small"><span className="pill soccer-src-book">Bet365 quote</span>{' '}
-          Double chance: {DC_SIDES.filter((s) => b.prices[s]).map((s) => `${dc(s)} ${b.prices[s]!.decimal.toFixed(2)}`).join(' · ')}
-          <span className="muted"> · retrieved {dateTime(b.retrieved_at)}</span></p>
+          Double chance: {DC_SIDES.filter((s) => b.prices[s]).map((s) => `${dc(s)} ${b.prices[s]!.decimal.toFixed(2)} (${b.prices[s]!.fractional})`).join(' · ')}
+          <span className="muted"> · retrieved {dateTime(b.retrieved_at)}; ESPN gives no time of its own.</span></p>
       )}
       {d && (
         <p className="small"><span className="pill soccer-src-model">Derived from match result prices</span>{' '}

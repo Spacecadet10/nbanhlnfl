@@ -233,7 +233,8 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
             source = (source[:-4] + ' · ' if source else ' · <i>') + f"sportsbook {displayed_percentage(book)}% · {price_tag(pick['probability'], book)}</i>"
         implied = pick.get('implied_line') or {}
         if implied.get('line') is not None:   # owner request Nov 11: labelled, never a price to bet at
-            source = (source[:-4] + ' · ' if source else ' · <i>') + f"implied from spread and total {implied['line']:g}</i>"
+            rough = ' (rough)' if report['sport'] == 'nhl' else ''   # NHL puck line is always 1.5 (review MEDIUM 2)
+            source = (source[:-4] + ' · ' if source else ' · <i>') + f"implied from spread and total {implied['line']:g}{rough}</i>"
         # Owner request Nov 9: where this exact percentage stands among the market's ranked exact percentages, and a plain
         # AVOID when its own record is a losing one. Only percentages with three or more results are ranked.
         standing = '' if not h.get('rank') else f" · rank {h['rank']} of {h['ranked']}" + (' · AVOID' if losses > wins else '')

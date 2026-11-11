@@ -92,3 +92,40 @@ def test_implied_team_totals_use_one_response_and_say_what_they_are():
     assert 'puck line' in implied_lines.implied_team_total(c, 'g', 'team_total_home', '2026-10-20T23:00:00Z', 'nhl')['note']
     assert implied_lines.implied_team_total(c, 'g', 'team_total_home', '2026-10-20T21:00:00Z') is None
     assert implied_lines.implied_team_total(c, 'g', 'total', '2026-10-20T23:00:00Z') is None
+
+
+def test_the_command_refuses_on_live_data_outside_the_clean_release(tmp_path, monkeypatch):
+    """Review MEDIUM 1: same rule as the TheRundown job; never a request from a development checkout onto live data."""
+    import pytest
+    from app import config, release
+    monkeypatch.setenv('NBA_DATA_DIR', str(tmp_path))
+    monkeypatch.setattr(config, 'protected_data_dir', lambda p: True)
+    monkeypatch.delenv(release.GUARD_ENV, raising=False)
+    monkeypatch.setattr(bet365_dc, 'fetch', lambda *a, **k: (_ for _ in ()).throw(AssertionError('no request')))
+    with pytest.raises(SystemExit, match='release guard'):
+        bet365_dc.main(['fetch'])
+
+
+def test_only_the_read_part_is_saved_and_a_decimal_looking_value_is_not_guessed(tmp_path, monkeypatch):
+    monkeypatch.setenv('NBA_DATA_DIR', str(tmp_path))
+    big = {'items': REAL['items'] + [{'provider': {'name': 'Other'}, 'propBets': ['x' * 50000]}]}
+    bet365_dc.fetch(store(), NOW, get=lambda url: (200, json.dumps(big).encode()), pause=lambda s: None)
+    (f,) = (tmp_path / 'bet365-dc').rglob('*.json')
+    assert f.stat().st_size < 5000 and 'propBets' not in f.read_text()
+    assert bet365_dc.latest('soccer:eng.1:401879233', 'soccer:382', 'soccer:370', '2026-11-21T00:00:00Z')['prices']['home_draw']['decimal'] == 1.1111
+    assert bet365_dc.decimal('1.5') is None and bet365_dc.decimal('2/11') == 1.1818
+
+
+def test_a_quote_saved_after_kickoff_is_never_shown(tmp_path, monkeypatch):
+    from app import soccer_markets_live as sml
+    monkeypatch.setenv('NBA_DATA_DIR', str(tmp_path))
+    late = datetime(2026, 11, 21, 12, 31, tzinfo=timezone.utc)                       # kickoff 12:30
+    bet365_dc.fetch(store(), datetime(2026, 11, 21, 12, 0, tzinfo=timezone.utc), get=lambda u: (200, json.dumps(REAL).encode()),
+                    pause=lambda s: None)
+    c = store()
+    c.execute("UPDATE soccer_matches SET kickoff_at='2026-11-21T11:59:00Z' WHERE match_id='soccer:eng.1:401879233'")
+    monkeypatch.setattr(sml, 'quotes', lambda conn, mid, at: [])
+    assert sml.match_prices(c, 'soccer:eng.1:401879233', late.strftime('%Y-%m-%dT%H:%M:%SZ'))['bet365_double_chance'] is None
+    c.execute("UPDATE soccer_matches SET kickoff_at='2026-11-21T12:30:00Z' WHERE match_id='soccer:eng.1:401879233'")
+    assert sml.match_prices(c, 'soccer:eng.1:401879233', late.strftime('%Y-%m-%dT%H:%M:%SZ'))['bet365_double_chance']['retrieved_at'] \
+        == '2026-11-21T12:00:00Z'

@@ -54,8 +54,11 @@ def _files(match_id: str) -> list[tuple[str, Path]]:
 
 def decimal(fractional) -> Optional[float]:
     """'15/4' -> 4.75; anything else (missing, malformed, not above evens-zero) -> None."""
+    text = str(fractional).strip()
+    if '/' not in text:          # every Bet365 value seen is fractional; anything else is not guessed (review LOW 4)
+        return None
     try:
-        value = 1 + Fraction(str(fractional).strip())
+        value = 1 + Fraction(text)
     except (ValueError, ZeroDivisionError):
         return None
     return round(float(value), 4) if value > 1 else None
@@ -119,7 +122,7 @@ def fetch(conn, now: Optional[datetime] = None, *, get: Callable[[str], tuple[in
     out = {'as_of': stamp, 'matches': len(rows), 'requests': 0, 'saved': 0, 'with_quote': 0, 'failed': 0, 'skipped_recent': 0}
     for r in rows:
         files = _files(r['match_id'])
-        if files and files[-1][0] > (now - REFRESH).strftime(FMT):
+        if files and files[-1][0] > (now - REFRESH + timedelta(minutes=10)).strftime(FMT):   # hourly runs jitter
             out['skipped_recent'] += 1
             continue
         if out['requests'] >= MAX_PER_RUN:
@@ -144,8 +147,13 @@ def fetch(conn, now: Optional[datetime] = None, *, get: Callable[[str], tuple[in
         d.mkdir(parents=True, exist_ok=True)
         dest = d / f"{retrieved:%Y%m%dT%H%M%SZ}-{uuid4().hex}.json"
         tmp = dest.with_suffix('.tmp')
+        # Only what is read is kept (review LOW 3: whole responses carry goal-scorer odds, ~40 KB each): each provider's
+        # name and Bet365's team odds with the team refs. The kept part is byte-for-byte what ESPN sent for those fields.
+        kept = {'items': [{'provider': i.get('provider'),
+                           **({'bettingOdds': {k: (i.get('bettingOdds') or {}).get(k) for k in ('homeTeam', 'awayTeam', 'teamOdds')}}
+                              if i.get('bettingOdds') else {})} for i in body.get('items') or []]}
         tmp.write_text(json.dumps({'retrieved_at': retrieved.strftime(FMT), 'match_id': r['match_id'], 'url': url,
-                                   'body': body}))
+                                   'kept': 'provider names and Bet365 team odds only', 'body': kept}))
         tmp.rename(dest)
         out['saved'] += 1
         if any(((i.get('provider') or {}).get('name') or '').replace(' ', '').lower() == 'bet365'
@@ -160,11 +168,10 @@ def main(argv=None) -> int:
         print('usage: python -m app.bet365_dc fetch', file=sys.stderr)
         return 2
     from . import db, release
-    if release.enabled():
-        info = release.check('soccer')
-        if info['problems']:
-            print(json.dumps({'status': 'refused', 'reason': 'release guard', 'problems': info['problems']}))
-            return 1
+    if config.protected_data_dir(config.data_dir()):
+        # Only files are written, never a store: the checkout checks apply (review MEDIUM 1, same rule as rundown_odds).
+        if not release.enabled() or release._checkout(release.code_root().resolve())[1]:
+            raise SystemExit('release guard: Bet365 collection requires the clean release checkout')
     conn = db.connect_readonly('soccer')
     try:
         print(json.dumps(fetch(conn)))
