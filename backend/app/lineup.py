@@ -13,6 +13,7 @@ These are the definitions of the Nov 11 lineup research (docs/evidence/lineup-in
 a missing report or listing is reported as such, never as "all clear".
 """
 import csv
+import re
 import gzip
 import json
 import sqlite3
@@ -27,7 +28,6 @@ TOP_MINUTES = 24.0
 MIN_APPEARANCES = 3
 TOP_PLAYERS = 3
 FLAGGED = ('Out', 'Doubtful', 'Questionable')
-CARD_LINE_CHARS = 58          # one line in the pick panel at 26 px (the renderer also measures and shortens)
 
 
 def _side_abbrs(matchup: str) -> dict:
@@ -41,7 +41,7 @@ def _norm(name: Optional[str]) -> Optional[str]:
     return normalise(name)
 
 
-def _pbp_starters(conn, game_ids: set) -> dict:
+def _pbp_starters(conn, game_ids: set, at: str) -> dict:
     """game_id -> {'home': normalised name, 'away': ...} for the first complete play-by-play import of each game. Reads the
     research goalie cache when present (never writes it) and parses only what it lacks."""
     if not game_ids:
@@ -55,8 +55,8 @@ def _pbp_starters(conn, game_ids: set) -> dict:
         cache = {}
     out = {}
     marks = ','.join('?' * len(game_ids))
-    for r in conn.execute(f"SELECT game_id, fetch_id, raw_id FROM nhl_pbp_imports WHERE complete=1 AND game_id IN ({marks}) "
-                          "ORDER BY available_at, fetch_id", tuple(game_ids)):
+    for r in conn.execute(f"SELECT game_id, fetch_id, raw_id FROM nhl_pbp_imports WHERE complete=1 AND available_at<=? AND "
+                          f"game_id IN ({marks}) ORDER BY available_at, fetch_id", (at, *game_ids)):
         if r['game_id'] in out:
             continue
         det = cache.get(str(r['fetch_id']))
@@ -75,7 +75,8 @@ def usual_no1(conn, team_id: str, season: int, before: str, starters: dict) -> O
     """Normalised name of the team's No.1 this season before `before`, or None (too few known starts, or a tie)."""
     counts = Counter()
     for g in conn.execute("SELECT game_id, home_team_id FROM games WHERE season=? AND status='final' AND tipoff_at<? "
-                          "AND (home_team_id=? OR away_team_id=?)", (season, before, team_id, team_id)):
+                          "AND result_available_at<=? AND (home_team_id=? OR away_team_id=?)",
+                          (season, before, before, team_id, team_id)):
         name = starters.get(g['game_id'], {}).get('home' if g['home_team_id'] == team_id else 'away')
         if name:
             counts[name] += 1
@@ -95,8 +96,9 @@ def nhl_facts(conn, games: list, at: str) -> dict:
     earlier = set()
     for team, season in teams:
         earlier |= {r[0] for r in conn.execute("SELECT game_id FROM games WHERE season=? AND status='final' AND tipoff_at<? "
-                                               "AND (home_team_id=? OR away_team_id=?)", (season, at, team, team))}
-    starters = _pbp_starters(conn, earlier)
+                                               "AND result_available_at<=? AND (home_team_id=? OR away_team_id=?)",
+                                               (season, at, at, team, team))}
+    starters = _pbp_starters(conn, earlier, at)
     out = {}
     for g in games:
         sides = {}
@@ -126,6 +128,14 @@ def _box(season: int):
     path = av.player_box_path(season)
     with path.open(newline='') as f:
         return av.parse_player_rows(csv.DictReader(f), season)
+
+
+def _same_surname(a: str, b: str) -> bool:
+    """Surnames equal after dropping a suffix the PDF may glue on ('CarterJr.', 'LivelyII')."""
+    from . import availability as av
+    def bare(x):
+        return re.sub(r'(jr|sr|ii|iii|iv|v)$', '', av.norm_name(x)) or av.norm_name(x)
+    return bare(a) == bare(b)
 
 
 def top_players(apps: dict, names: dict, team: str, day: str, season: int) -> list:
@@ -166,25 +176,27 @@ def nba_facts(conn, games: list, at: str) -> dict:
         info = {'file': report['file_name'] if report else None, 'received_at': report['completed_at'] if report else None,
                 'problem': problem}
         entries = [e for e in (parsed.entries if parsed and not problem else []) if e['game_date'] == day]
-        listed_teams = {by_name.get(e['team']) for e in (parsed.entries + parsed.not_submitted if parsed and not problem else [])
-                        if e['game_date'] == day}
+        listed_teams = {by_name.get(e['team']) for e in entries}
+        unsubmitted = {by_name.get(e['team']) for e in (parsed.not_submitted if parsed and not problem else [])
+                       if e['game_date'] == day}
         if season not in boxes:
             try:
-                boxes[season] = _box(season)
+                b = _box(season)
+                boxes[season] = (b, av.PlayerIndex({season: b}, av.load_aliases()))
             except (OSError, ValueError):
-                boxes[season] = None
-        box = boxes[season]
+                boxes[season] = (None, None)
+        box, index = boxes[season]
         result = {'report': info}
         for side in ('home', 'away'):
             team_id = g[f'{side}_team_id']
             if problem or box is None:
-                result[side] = {'top_players': None, 'flagged': None,
-                                'problem': problem or 'no_player_minutes'}
+                result[side] = {'top_players': None, 'flagged': None, 'problem': problem or 'no_player_minutes'}
                 continue
             team = team_id.split(':', 1)[1]
             apps, names = box
             top = top_players(apps, names, team, day, season)
-            index = av.PlayerIndex({season: box}, {})
+            # Review HIGH, Nov 11: a team the report lists as NOT YET SUBMITTED, or does not list, is unknown, never healthy.
+            status = 'not_submitted' if team_id in unsubmitted else 'submitted' if team_id in listed_teams else 'not_on_report'
             flagged, unmatched = [], []
             for e in entries:
                 if by_name.get(e['team']) != team_id or e['status'] not in FLAGGED:
@@ -193,14 +205,14 @@ def nba_facts(conn, games: list, at: str) -> dict:
                 if pid is None:
                     # A top player has 3+ games this season, so the index normally resolves him; a name it cannot resolve
                     # is said (never treated as "not top") only when it shares a surname with one of the team's top players.
-                    if any(av.norm_name(t[1].split(' ', 1)[-1]) == av.norm_name(e['last']) for t in top):
+                    if any(_same_surname(t[1].split(' ', 1)[-1], e['last']) for t in top):
                         unmatched.append(f"{e['first']} {e['last']} ({e['status']})")
                     continue
                 hit = next((t for t in top if t[0] == pid), None)
                 if hit:
                     flagged.append({'player': hit[1], 'status': e['status'], 'avg_minutes': round(hit[2], 1)})
             result[side] = {'top_players': [t[1] for t in top], 'flagged': flagged, 'unmatched_names': unmatched,
-                            'on_report': team_id in listed_teams}
+                            'report_status': status}
         out[g['game_id']] = result
     return out
 
@@ -228,8 +240,10 @@ def _short(name: str) -> str:
 
 def card_line(sport: str, fact: Optional[dict], matchup: str) -> Optional[str]:
     """One short plain line for the card, or None when there is nothing to say."""
-    if not fact or 'error' in fact:
+    if not fact:
         return None
+    if 'error' in fact:   # review MEDIUM 4: unknown is said, never shown as all clear
+        return 'Goalie facts not available' if sport == 'nhl' else 'Injury report not available'
     abbr = _side_abbrs(matchup)
     parts = []
     if sport == 'nhl':
@@ -243,13 +257,16 @@ def card_line(sport: str, fact: Optional[dict], matchup: str) -> Optional[str]:
         elif open_:
             parts.append('Goalie not confirmed: ' + open_[0])
     else:
-        if fact['report'].get('problem') == 'no_report':
-            return None
+        if fact['report'].get('problem') or any(fact[s].get('flagged') is None for s in ('away', 'home')):
+            return 'Injury report not available'
+        missing = [abbr[s] for s in ('away', 'home') if fact[s].get('report_status') != 'submitted']
         by_status = defaultdict(list)
         for s in ('away', 'home'):
             for f in fact[s].get('flagged') or []:
                 by_status[f['status']].append(_short(f['player']))
         parts = [f'{status}: ' + ', '.join(by_status[status]) for status in FLAGGED if by_status[status]]
+        if missing:
+            parts.append('No injury report yet: ' + ', '.join(missing))
     return ' · '.join(parts) or None
 
 
@@ -277,11 +294,17 @@ def review_flags(sport: str, pick: dict, fact: Optional[dict]) -> list:
         if sport == 'nhl':
             if s['backup']:
                 flags.append(f"backup goalie listed for {abbr[side]} ({s['goalie']}, {s['status']})")
+            elif s['backup'] is None and s['goalie']:
+                flags.append(f"{abbr[side]} usual No.1 unknown (too few known starts this season, or a tie)")
             if s['status'] != 'confirmed':
                 flags.append(f"{abbr[side]} goalie not confirmed ({s['status'].replace('_', ' ')})")
         else:
             if s.get('flagged') is None:
-                flags.append(f"{abbr[side]} injury report not readable ({s.get('problem')})")
+                what = {'no_report': 'no injury report received', 'report_unreadable': 'injury report not readable',
+                        'no_player_minutes': 'player minutes file missing'}.get(s.get('problem'), str(s.get('problem')))
+                flags.append(f"{abbr[side]} {what}")
+            elif s.get('report_status') != 'submitted':
+                flags.append(f"{abbr[side]} injury report {s.get('report_status', 'status unknown').replace('_', ' ')}")
             for f in s.get('flagged') or []:
                 flags.append(f"{abbr[side]} top player {f['player']} {f['status']}")
             for name in s.get('unmatched_names') or []:

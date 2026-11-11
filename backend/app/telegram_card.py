@@ -184,17 +184,30 @@ def render_card(message):
     # A full outline replaces the asymmetric stripe from the reference.
     # Owner request Nov 11: one plain "who is playing" line under the pick, only when there is something to say.
     lineup=next((line.removeprefix('Lineup: ') for line in lines[rec+2:markets] if line.startswith('Lineup: ')),None)
-    panel_h=218+(40 if lineup else 0)
+    pick_size=72 if len(lines[rec+1])<22 else 48
+    detail=next((line for line in lines[rec+2:markets] if line and line!='━━━━━━━━━━━━━━' and not line.startswith('Lineup: ')),'')
+    def rows(text,width,size,bold=False):
+        n,row=0,''
+        for word in text.split():
+            cand=(row+' '+word).strip()
+            if row and draw.textlength(cand,font=_font(size,bold,bold))>width:
+                n,row=n+1,word
+            else:
+                row=cand
+        return n+(1 if row else 0)
+    detail_top=max(155,59+rows(lines[rec+1],810,pick_size,True)*int(pick_size*1.28)+6)
+    detail_end=detail_top+rows(detail,835,27)*int(27*1.28)
+    lineup_top=max(168,detail_end+4)          # review LOW 10: never over a pick or detail that wraps
+    panel_h=max(218,lineup_top+50) if lineup else 218
     gradient=ImageOps.colorize(Image.linear_gradient('L').rotate(90).resize((964,panel_h)),panel,_mix(home_primary,panel,.7))
     mask=Image.new('L',(964,panel_h),0);ImageDraw.Draw(mask).rounded_rectangle((0,0,963,panel_h-1),radius=27,fill=255)
     image.paste(gradient,(58,y),mask)
     draw.rounded_rectangle((58,y,1022,y+panel_h),radius=27,outline=accent,width=3)
     draw.text((92,y+18),'RECOMMENDED PICK',font=_font(26,True),fill=_mix(accent,'#FFFFFF',.65))
-    end=wrapped(lines[rec+1],92,y+59,810,size=72 if len(lines[rec+1])<22 else 48,bold=True,fill='white',display=True)
-    detail=next((line for line in lines[rec+2:markets] if line and line!='━━━━━━━━━━━━━━' and not line.startswith('Lineup: ')),'')
+    end=wrapped(lines[rec+1],92,y+59,810,size=pick_size,bold=True,fill='white',display=True)
     wrapped(detail,95,max(y+155,end+6),835,size=27,fill='#E0E6EC')
     if lineup:
-        draw.text((95,y+panel_h-50),fit_line(draw,lineup,_font(26,True),860),font=_font(26,True),fill='#FFD27A')
+        draw.text((95,y+lineup_top),fit_line(draw,lineup,_font(26,True),860),font=_font(26,True),fill='#FFD27A')
     y+=panel_h+24
     draw.text((64,y),'MARKET BREAKDOWN',font=_font(31,True,True),fill=primary)
     y+=53

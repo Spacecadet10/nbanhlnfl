@@ -530,7 +530,7 @@ def test_lineup_line_renders_on_one_line_inside_the_card(line):
     assert shown == line or shown.endswith('…')
     without = telegram_card.render_card(tg.message_batches(priced_card(), '123')[0][1])
     from io import BytesIO
-    assert Image.open(BytesIO(telegram_card.render_card(text))).height == Image.open(BytesIO(without)).height + 40
+    assert Image.open(BytesIO(telegram_card.render_card(text))).height > Image.open(BytesIO(without)).height
 
 
 def test_a_lineup_problem_never_stops_a_card(monkeypatch):
@@ -541,3 +541,14 @@ def test_a_lineup_problem_never_stops_a_card(monkeypatch):
     monkeypatch.setattr(lineup, 'facts', lambda conn, sport, ids, at: {g: 'x' for g in ids})
     monkeypatch.setattr(lineup, 'card_line', lambda sport, fact, matchup: f'{sport} {matchup}')
     assert tg.card_lineups(None, 'nba', strong_report(), now) == {'g1': 'nba BOS @ ORL'}
+
+
+def test_a_long_wrapped_pick_pushes_the_lineup_line_down_instead_of_overlapping():
+    """Review LOW 10: a 48 px pick label that wraps to two lines must not run into the lineup line."""
+    from io import BytesIO
+    from PIL import Image
+    from app import telegram_card
+    short = tg.message_batches(priced_card(), '123', lineup_lines={'g1': 'Goalies not confirmed'})[0][1]
+    long = short.replace('<b>CLE win</b>', '<b>Cleveland Cavaliers to win in regulation time tonight</b>', 1)
+    heights = [Image.open(BytesIO(telegram_card.render_card(t))).height for t in (short, long)]
+    assert heights[1] > heights[0]

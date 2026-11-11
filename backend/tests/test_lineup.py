@@ -15,7 +15,8 @@ def store():
     c.row_factory = sqlite3.Row
     c.executescript('''
       CREATE TABLE teams (team_id TEXT, abbr TEXT, name TEXT);
-      CREATE TABLE games (game_id TEXT, season INT, status TEXT, tipoff_at TEXT, home_team_id TEXT, away_team_id TEXT);
+      CREATE TABLE games (game_id TEXT, season INT, status TEXT, tipoff_at TEXT, home_team_id TEXT, away_team_id TEXT,
+                          result_available_at TEXT);
       CREATE TABLE goalie_snapshots (snapshot_id INTEGER PRIMARY KEY, game_id TEXT, side TEXT, retrieved_at TEXT,
                                      source_status TEXT, player_name TEXT);
       CREATE TABLE nhl_pbp_imports (game_id TEXT, fetch_id INT, raw_id INT, complete INT, available_at TEXT);
@@ -32,13 +33,14 @@ def nhl_store(monkeypatch, home_starters, listing):
     starters = {}
     for i, name in enumerate(home_starters):
         gid = f'old{i}'
-        c.execute("INSERT INTO games VALUES (?,2027,'final',?, 'espn:1','espn:2')", (gid, f'2026-10-{10 + i:02d}T23:00:00Z'))
+        c.execute("INSERT INTO games VALUES (?,2027,'final',?, 'espn:1','espn:2',?)",
+                  (gid, f'2026-10-{10 + i:02d}T23:00:00Z', f'2026-10-{10 + i:02d}T23:59:00Z'))
         starters[gid] = {'home': name, 'away': 'jeremy swayman'}
-    c.execute("INSERT INTO games VALUES ('g',2027,'scheduled','2026-11-12T00:00:00Z','espn:1','espn:2')")
+    c.execute("INSERT INTO games VALUES ('g',2027,'scheduled','2026-11-12T00:00:00Z','espn:1','espn:2',NULL)")
     for side, (status, name, at) in listing.items():
         c.execute('INSERT INTO goalie_snapshots (game_id, side, retrieved_at, source_status, player_name) VALUES (?,?,?,?,?)',
                   ('g', side, at, status, name))
-    monkeypatch.setattr(lineup, '_pbp_starters', lambda conn, ids: {g: s for g, s in starters.items() if g in ids})
+    monkeypatch.setattr(lineup, '_pbp_starters', lambda conn, ids, at: {g: s for g, s in starters.items() if g in ids})
     return c
 
 
@@ -73,13 +75,14 @@ def test_no_clear_no1_says_nothing_about_a_backup(monkeypatch, starts):
                                         'away': ('confirmed', 'Jeremy Swayman', '2026-11-11T21:00:00Z')})
     f = lineup.facts(c, 'nhl', ['g'], AT)['g']
     assert f['home']['usual_no1'] is None and f['home']['backup'] is None
-    assert lineup.card_line('nhl', f, 'BOS @ TOR') is None and lineup.review_flags(
-        'nhl', {'market': 'winner', 'matchup': 'BOS @ TOR', 'pick_label': 'TOR win'}, f) == []
+    assert lineup.card_line('nhl', f, 'BOS @ TOR') is None          # nothing on the card; the review is told
+    assert lineup.review_flags('nhl', {'market': 'winner', 'matchup': 'BOS @ TOR', 'pick_label': 'TOR win'}, f) == \
+        ['TOR usual No.1 unknown (too few known starts this season, or a tie)']
 
 
-def nba_store(monkeypatch, entries, *, report=True, reconciled=True):
+def nba_store(monkeypatch, entries, *, report=True, reconciled=True, not_submitted=None):
     c = store()
-    c.execute("INSERT INTO games VALUES ('g',2027,'scheduled','2026-11-12T00:30:00Z','espn:1','espn:2')")
+    c.execute("INSERT INTO games VALUES ('g',2027,'scheduled','2026-11-12T00:30:00Z','espn:1','espn:2',NULL)")
     if report:
         c.execute("INSERT INTO raw_fetches VALUES (5, 9)")
         c.execute("INSERT INTO injury_report_attempts VALUES (1,5,'Injury-Report_2026-11-11_04_45PM.pdf',"
@@ -87,7 +90,7 @@ def nba_store(monkeypatch, entries, *, report=True, reconciled=True):
         c.execute("INSERT INTO raw_fetches VALUES (6, 10)")     # a later report is not yet received at AT
         c.execute("INSERT INTO injury_report_attempts VALUES (2,6,'Injury-Report_2026-11-11_05_00PM.pdf',"
                   "'2026-11-11T22:00:00Z','2026-11-11T22:01:00Z','stored')")
-    parsed = SimpleNamespace(entries=entries, not_submitted=[], reconciled=reconciled)
+    parsed = SimpleNamespace(entries=entries, not_submitted=not_submitted or [], reconciled=reconciled)
     monkeypatch.setattr(av, 'parse_report', lambda pdf, name, teams: parsed if name.endswith('04_45PM.pdf') else 1 / 0)
     monkeypatch.setattr(lineup.raw_cache, 'load', lambda conn, raw_id: b'%PDF')
     A = av.Appearance
@@ -96,6 +99,7 @@ def nba_store(monkeypatch, entries, *, report=True, reconciled=True):
             'p3': [A(f'2026-10-{d}', 2027, '2', 30.0, True) for d in (20, 22, 24)]}     # BOS top player
     names = {'p1': 'Scottie Barnes', 'p2': 'Ja Bench', 'p3': 'Jaylen Brown'}
     monkeypatch.setattr(lineup, '_box', lambda season: (apps, names))
+    monkeypatch.setattr(av, 'load_aliases', lambda: {'scottiebarnesjr': 'p1'})
     return c
 
 
@@ -115,21 +119,46 @@ def test_top_player_out_or_questionable_on_the_latest_received_report(monkeypatc
 
 
 def test_an_unmatched_name_is_said_and_a_missing_report_is_unknown(monkeypatch):
-    c = nba_store(monkeypatch, [entry('Barnes', 'Scotty', 'Out'), entry('Isaac', 'Jonathan', 'Out')])
+    c = nba_store(monkeypatch, [entry('Barnes', 'Scotty', 'Out'), entry('Isaac', 'Jonathan', 'Out'),
+                                entry('Nobody', 'Al', 'Probable', 'Boston')])
     f = lineup.facts(c, 'nba', ['g'], AT)['g']
     assert lineup.card_line('nba', f, 'BOS @ TOR') is None
     # 'Scotty Barnes' may be the top player Scottie Barnes: said. 'Jonathan Isaac' has no game this season: not a top player.
     assert lineup.review_flags('nba', {'market': 'winner', 'matchup': 'BOS @ TOR', 'pick_label': 'TOR win'}, f) == \
         ['TOR report name not matched to a player: Scotty Barnes (Out)']
     f = lineup.facts(nba_store(monkeypatch, [], report=False), 'nba', ['g'], AT)['g']
-    assert lineup.card_line('nba', f, 'BOS @ TOR') is None
+    assert lineup.card_line('nba', f, 'BOS @ TOR') == 'Injury report not available'
     assert lineup.review_flags('nba', {'market': 'winner', 'matchup': 'BOS @ TOR', 'pick_label': 'TOR win'}, f) == \
-        ['TOR injury report not readable (no_report)']
+        ['TOR no injury report received']
 
 
 def test_errors_never_raise_and_other_sports_have_nothing():
     c = sqlite3.connect(':memory:')
     assert lineup.facts(c, 'nhl', ['g'], AT) == {'g': {'error': 'OperationalError'}}
-    assert lineup.card_line('nhl', {'error': 'x'}, 'A @ B') is None
+    assert lineup.card_line('nhl', {'error': 'x'}, 'A @ B') == 'Goalie facts not available'
+    assert lineup.card_line('nba', {'error': 'x'}, 'A @ B') == 'Injury report not available'
     assert lineup.review_flags('nhl', {'market': 'winner'}, {'error': 'x'}) == ['lineup facts unavailable']
     assert lineup.facts(c, 'nfl', ['g'], AT) == {} and lineup.review_flags('soccer', {}, None) == []
+
+
+def test_a_team_not_yet_submitted_or_missing_from_the_report_is_unknown_not_healthy(monkeypatch):
+    """Review HIGH, Nov 11: a NOT YET SUBMITTED team (seen every day in the 7 AM / 1 PM reports) was shown as healthy."""
+    c = nba_store(monkeypatch, [entry('Bench', 'Ja', 'Out')], not_submitted=[{'game_date': '2026-11-11', 'team': 'Boston'}])
+    f = lineup.facts(c, 'nba', ['g'], AT)['g']
+    assert (f['home']['report_status'], f['away']['report_status']) == ('submitted', 'not_submitted')
+    assert lineup.card_line('nba', f, 'BOS @ TOR') == 'No injury report yet: BOS'
+    assert lineup.review_flags('nba', {'market': 'winner', 'matchup': 'BOS @ TOR', 'pick_label': 'BOS win'}, f) == \
+        ['BOS injury report not submitted']
+    c = nba_store(monkeypatch, [entry('Bench', 'Ja', 'Out')])
+    f = lineup.facts(c, 'nba', ['g'], AT)['g']
+    assert f['away']['report_status'] == 'not_on_report' and lineup.card_line('nba', f, 'BOS @ TOR') == 'No injury report yet: BOS'
+
+
+def test_a_suffix_glued_to_the_surname_is_still_matched_or_said(monkeypatch):
+    """Review MEDIUM 3: the PDF prints 'BarnesJr.'; the alias list resolves it, and an unresolved one is still said."""
+    c = nba_store(monkeypatch, [entry('BarnesJr.', 'Scottie', 'Out'), entry('Nobody', 'Al', 'Probable', 'Boston')])
+    f = lineup.facts(c, 'nba', ['g'], AT)['g']
+    assert [p['player'] for p in f['home']['flagged']] == ['Scottie Barnes']
+    c = nba_store(monkeypatch, [entry('BarnesJr.', 'Scotty', 'Questionable'), entry('Nobody', 'Al', 'Probable', 'Boston')])
+    f = lineup.facts(c, 'nba', ['g'], AT)['g']
+    assert f['home']['unmatched_names'] == ['Scotty BarnesJr. (Questionable)']
