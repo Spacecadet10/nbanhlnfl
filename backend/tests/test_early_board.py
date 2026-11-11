@@ -46,10 +46,12 @@ def test_grade_is_saved_write_once_and_says_when_the_sample_is_too_small(tmp_pat
         json.dumps(entry('2026-11-11T16:00:00Z')) + '\n' + json.dumps(entry('2026-11-11T16:00:00Z', game='gone')) + '\n')
     monkeypatch.setattr(eb, 'copy_store', lambda root, sport, dest: store())
     summary = eb.grade('unused', str(tmp_path), 'unused', NOW)
-    assert summary['graded'] == 1 and summary['leans'] == 1           # the game missing from the store is skipped
+    assert summary['graded'] == 1 and summary['leans'] == 1
+    assert summary['skipped'] == {'game missing from the store': 1}      # reported, not silently dropped
     row = summary['by_sport_market']['nba total']
-    assert row == dict(leans=1, settled=1, paper_return_units=0.91, line_toward=1, line_away=0, line_unchanged=0)
-    assert summary['sample_note'].startswith('too small to judge')
+    assert (row['toward'], row['away'], row['unchanged'], row['settled'], row['paper_return_units']) == (1, 0, 0, 1, 0.91)
+    assert row['readable'] is False and row['baseline_not_leans'] == dict(n=0, toward=0, away=0, unchanged=0)
+    assert summary['sample_note'] == 'too small to judge in every sport and market' and summary['min_moved'] == 136
     saved = list((tmp_path / 'grades').glob('grade-*.json'))
     assert len(saved) == 1 and json.loads(saved[0].read_text())['rows'][0]['unit_return'] == pytest.approx(100 / 110)
     with pytest.raises(FileExistsError):                               # never overwrites an earlier grade
@@ -79,4 +81,19 @@ def test_boards_default_to_the_data_folder_and_the_schedule_is_paper_only():
     assert not any('telegram' in l.lower() or 'release_tickets' in l or 'send' in l for l in commands)
     plist = plistlib.loads((ROOT / 'scripts/launchd/com.nba-predictor.early-board.plist').read_bytes())
     assert plist['ProgramArguments'] == ['/bin/sh', '/Users/andry/nba-predictor-delivery/scripts/early_board.sh']
-    assert plist['RunAtLoad'] is False and len(plist['StartCalendarInterval']) == 2
+    assert plist['RunAtLoad'] is False and sorted(t['Hour'] for t in plist['StartCalendarInterval']) == [11, 18, 20, 23]
+
+
+def test_sign_test_and_a_failing_sport_does_not_stop_the_other(monkeypatch):
+    assert eb.sign_test(0, 0) is None and eb.sign_test(5, 5) == 1.0 and eb.sign_test(10, 0) == 0.002
+    calls = []
+
+    def fake(root, sport, now, lo, hi, dest, cache, picks, waiting):
+        calls.append(sport)
+        if sport == 'nba':
+            raise RuntimeError('boom')
+        picks.append(dict(sport=sport))
+    monkeypatch.setattr(eb, 'sport_board', fake)
+    monkeypatch.setattr(eb.rundown_odds, 'read_cache', lambda now, d: {'responses': []})
+    picks, waiting = eb.board('r', NOW, 3, 40, 'd')
+    assert calls == ['nba', 'nhl'] and picks == [dict(sport='nhl')] and waiting == [dict(sport='nba', reason='board failed: RuntimeError')]

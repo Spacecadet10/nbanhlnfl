@@ -14,7 +14,8 @@ already saved (app.rundown_odds, data/odds-books); this script never fetches.
     PYTHONPATH=backend backend/.venv/bin/python scripts/early_board.py --root <live root>            # board, games 3-40 h ahead
     PYTHONPATH=backend backend/.venv/bin/python scripts/early_board.py --root <live root> --grade    # grade earlier boards
 """
-import argparse, copy, glob, json, os, sqlite3, sys, tempfile
+import argparse, copy, glob, json, math, os, sqlite3, sys, tempfile
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -73,11 +74,21 @@ def board(root, now, lo_h, hi_h, dest):
     picks, waiting = [], []
     cache = rundown_odds.read_cache(now, Path(root) / "data" / "odds-books")
     for sport in SPORTS:
-        conn = copy_store(root, sport, dest)
+        try:
+            sport_board(root, sport, now, lo_h, hi_h, dest, cache, picks, waiting)
+        except Exception as exc:     # one sport failing never stops the other's board (review of 6d2715f)
+            waiting.append(dict(sport=sport, reason=f"board failed: {type(exc).__name__}"))
+    return picks, waiting
+
+
+def sport_board(root, sport, now, lo_h, hi_h, dest, cache, picks, waiting):
+    stamp = now.strftime(FMT)
+    conn = copy_store(root, sport, dest)
+    try:
         direct = coverage._Direct(conn, stamp)
         if direct.stale or direct.market_model is None:
             waiting.append(dict(sport=sport, reason=direct.stale or direct.market_error))
-            continue
+            return
         teams = {r["team_id"]: r["abbr"] for r in conn.execute("SELECT team_id, abbr FROM teams")}
         games = conn.execute("SELECT * FROM games WHERE status='scheduled' AND season_type IN ('regular','play_in','postseason') AND tipoff_at>? AND tipoff_at<=? "
                              "ORDER BY tipoff_at", ((now + timedelta(hours=lo_h)).strftime(FMT), (now + timedelta(hours=hi_h)).strftime(FMT))).fetchall()
@@ -95,6 +106,9 @@ def board(root, now, lo_h, hi_h, dest):
                                  "AND retrieved_at<=? ORDER BY retrieved_at DESC, quote_id DESC LIMIT 1", (g["game_id"], market, stamp)).fetchone()
                 if q is None or (now - ts(q["retrieved_at"])) > timedelta(hours=2):
                     continue
+                first = conn.execute("SELECT line, retrieved_at FROM market_quotes WHERE game_id=? AND market=? AND price_label='current' "
+                                     "AND price_a IS NOT NULL AND price_b IS NOT NULL AND retrieved_at<=? ORDER BY retrieved_at, quote_id LIMIT 1",
+                                     (g["game_id"], market, stamp)).fetchone()
                 if market == "winner":
                     pa, pb = p_home, 1 - p_home
                 else:
@@ -109,7 +123,9 @@ def board(root, now, lo_h, hi_h, dest):
                                   quote_retrieved_at=q["retrieved_at"], model_prob=round(max(pa, pb), 4), break_even=round(1 / dec(price), 4),
                                   market_prob=round((ia if side == "a" else ib) / (ia + ib), 4), edge=round(max(pa, pb) - 1 / dec(price), 4),
                                   model_line=fair, hours_ahead=round((ts(g["tipoff_at"]) - now).total_seconds() / 3600, 1),
-                                  model=direct.winner_version if market == "winner" else direct.market_version))
+                                  model=direct.winner_version if market == "winner" else direct.market_version,
+                                  first_line=first["line"], first_quote_at=first["retrieved_at"],
+                                  hours_since_first_line=round((now - ts(first["retrieved_at"])).total_seconds() / 3600, 1)))
                 offers, books_at = book_offers(sport, home, away, g["tipoff_at"], market, side, q["line"], now, cache)
                 if offers:
                     offers["DraftKings"] = (q["line"], price)   # the app's own DraftKings quote is fresher than the relayed one
@@ -120,8 +136,8 @@ def board(root, now, lo_h, hi_h, dest):
                     lines = sorted({o[0] for o in offers.values() if o[0] is not None})
                     picks[-1].update(books={b: list(o) for b, o in offers.items()}, books_fetched_at=books_at, best_book=best[0],
                                      best_line=best[1][0], best_price=best[1][1], books_disagree_points=round(lines[-1] - lines[0], 1) if len(lines) > 1 else 0.0)
+    finally:
         conn.close()
-    return picks, waiting
 
 
 def best_text(p):
@@ -189,17 +205,47 @@ def first_entries(out_dir):
     return [first[k] for k in sorted(first)]
 
 
+# Fixed before any grade was read (review of 6d2715f): a cell needs this many lines that MOVED (toward + away) before its
+# toward-rate is called readable. 136 moved lines give a two-sided 5% sign test 80% power to tell 62% toward (the Nov 9
+# lead) from 50%: n = (1.96 + 0.84)^2 * 0.25 / 0.12^2. It is a reading threshold, not a promise of profit.
+MIN_MOVED = 136
+
+
+def sign_test(toward, away):
+    """Two-sided exact binomial p-value of `toward` out of toward+away moved lines against 50%."""
+    n = toward + away
+    if n == 0:
+        return None
+    k = max(toward, away)
+    tail = sum(math.comb(n, i) for i in range(k, n + 1)) / 2 ** n
+    return round(min(1.0, 2 * tail), 4)
+
+
+def direction(r):
+    """+1 when the market moved toward the pick by the close, -1 away, 0 unchanged."""
+    v = r["market_prob_change"] if r["market"] == "winner" else r["line_move_toward_pick"]
+    return (v > 0) - (v < 0)
+
+
 def grade(root, out_dir, dest, now):
     conns = {s: copy_store(root, s, dest) for s in SPORTS}
-    rows = []
+    rows, skipped = [], Counter()
     for p in first_entries(out_dir):
         c = conns[p["sport"]]
         g = c.execute("SELECT * FROM games WHERE game_id=?", (p["game_id"],)).fetchone()
         if g is None:
+            skipped["game missing from the store"] += 1
+            continue
+        if g["tipoff_at"] != p["tipoff"]:
+            skipped["start time changed after the board"] += 1
+            continue
+        if g["tipoff_at"] > now.strftime(FMT):
+            skipped["not started yet"] += 1
             continue
         cl = c.execute("SELECT * FROM market_quotes WHERE game_id=? AND market=? AND price_label='current' AND price_a IS NOT NULL AND price_b IS NOT NULL "
-                       "AND retrieved_at<? ORDER BY retrieved_at DESC LIMIT 1", (p["game_id"], p["market"], g["tipoff_at"])).fetchone()
-        if g["tipoff_at"] != p["tipoff"] or cl is None or (ts(g["tipoff_at"]) - ts(cl["retrieved_at"])) > timedelta(minutes=30):
+                       "AND retrieved_at<? ORDER BY retrieved_at DESC, quote_id DESC LIMIT 1", (p["game_id"], p["market"], g["tipoff_at"])).fetchone()
+        if cl is None or (ts(g["tipoff_at"]) - ts(cl["retrieved_at"])) > timedelta(minutes=30):
+            skipped["no stored price in the last 30 minutes before the start"] += 1
             continue
         ia, ib = 1 / dec(cl["price_a"]), 1 / dec(cl["price_b"])
         close_prob = (ia if p["side"] == "a" else ib) / (ia + ib)
@@ -212,29 +258,38 @@ def grade(root, out_dir, dest, now):
         rows.append(dict(p, close_line=cl["line"], line_move_toward_pick=move, close_market_prob=round(close_prob, 4),
                          market_prob_change=round(close_prob - p["market_prob"], 4), result=real if real in ("a", "b", "mid") else None, unit_return=ret))
     leans = [r for r in rows if r["edge"] > 0]
-    summary = dict(graded_at=now.strftime(FMT), graded=len(rows), leans=len(leans), by_sport_market={})
+    summary = dict(graded_at=now.strftime(FMT), graded=len(rows), leans=len(leans), skipped=dict(skipped), min_moved=MIN_MOVED, by_sport_market={})
     lines = [f"graded {len(rows)} logged game-markets (first board only) with a closing quote; {len(leans)} were leans (model above break-even)"]
+    if skipped:
+        lines.append("  not graded: " + "; ".join(f"{n} {why}" for why, n in sorted(skipped.items())))
+    readable = []
     for sport in SPORTS:
         for m in MARKETS:
             rs = [r for r in leans if r["market"] == m and r["sport"] == sport]
+            base = [r for r in rows if r["market"] == m and r["sport"] == sport and r["edge"] <= 0]
             if not rs:
                 continue
             done = [r for r in rs if r["unit_return"] is not None]
-            entry = dict(leans=len(rs), settled=len(done), paper_return_units=round(sum(r["unit_return"] for r in done), 2))
+            tow, aw = sum(direction(r) > 0 for r in rs), sum(direction(r) < 0 for r in rs)
+            btow, baw = sum(direction(r) > 0 for r in base), sum(direction(r) < 0 for r in base)
+            ok = tow + aw >= MIN_MOVED
+            readable.append(ok)
+            entry = dict(leans=len(rs), toward=tow, away=aw, unchanged=len(rs) - tow - aw, sign_test_p=sign_test(tow, aw),
+                         baseline_not_leans=dict(n=len(base), toward=btow, away=baw, unchanged=len(base) - btow - baw),
+                         settled=len(done), paper_return_units=round(sum(r["unit_return"] for r in done), 2),
+                         readable=ok)
             if m == "winner":
-                mv = sum(r["market_prob_change"] for r in rs) / len(rs)
-                entry.update(mean_market_prob_change_toward_pick=round(mv, 4))
-                lines.append(f"  {sport} {m}: {len(rs)} leans; market probability moved {100 * mv:+.2f} pts toward the pick on average; "
-                             f"settled {len(done)}, paper return {entry['paper_return_units']:+.2f} units")
-            else:
-                tow, aw = sum(r["line_move_toward_pick"] > 0 for r in rs), sum(r["line_move_toward_pick"] < 0 for r in rs)
-                entry.update(line_toward=tow, line_away=aw, line_unchanged=len(rs) - tow - aw)
-                lines.append(f"  {sport} {m}: {len(rs)} leans; line moved toward {tow}, away {aw}, unchanged {len(rs) - tow - aw}; "
-                             f"settled {len(done)}, paper return {entry['paper_return_units']:+.2f} units")
+                entry.update(mean_market_prob_change_toward_pick=round(sum(r["market_prob_change"] for r in rs) / len(rs), 4))
+            what = "market probability" if m == "winner" else "line"
+            lines.append(f"  {sport} {m}: {len(rs)} leans; {what} moved toward {tow}, away {aw}, unchanged {len(rs) - tow - aw} "
+                         f"(sign test p={entry['sign_test_p']}); other priced picks: toward {btow}, away {baw} of {len(base)}; "
+                         f"settled {len(done)}, paper return {entry['paper_return_units']:+.2f} units; "
+                         + ("readable" if ok else f"too small ({tow + aw} of {MIN_MOVED} moved lines needed)"))
             summary["by_sport_market"][f"{sport} {m}"] = entry
-    summary["sample_note"] = ("too small to judge: fewer than 200 leans" if len(leans) < 200 else
-                              "a few hundred leans: enough to look at line movement, not enough to prove profit")
-    lines.append(f"Sample: {summary['sample_note']}. Judge on line movement toward the pick, never on return alone.")
+    summary["sample_note"] = ("too small to judge in every sport and market" if not any(readable) else
+                              "readable in some sport-markets only (see each line)" if not all(readable) else
+                              "every sport-market has enough moved lines to read the direction; still not proof of profit")
+    lines.append(f"Sample: {summary['sample_note']}. Judge on line movement toward the pick against the other priced picks, never on return alone.")
     os.makedirs(os.path.join(out_dir, "grades"), exist_ok=True)
     path = os.path.join(out_dir, "grades", f"grade-{now.strftime('%Y%m%dT%H%M%SZ')}.json")
     with open(path, "x") as fh:                       # write-once: every daily grade is kept
