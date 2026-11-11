@@ -222,17 +222,28 @@ def fetch(now=None, *, opener=urllib.request.urlopen, pause=time.sleep):
         today = started.date().isoformat()
         def used_today(entry):   # a damaged line (e.g. cut off mid-write) counts as a request: the cap stays safe
             try:
-                return json.loads(entry)['day'] == today
+                e = json.loads(entry)
+                return e['day'] == today and 'refused' not in e      # a refusal note is not a request
             except (ValueError, KeyError, TypeError):
                 return True
-        count = sum(used_today(x) for x in usage.read_text().splitlines() if x.strip()) if usage.exists() else 0
+        lines = [x for x in usage.read_text().splitlines() if x.strip()] if usage.exists() else []
+        count = sum(used_today(x) for x in lines)
+        refused = set()      # extra markets the provider refused earlier this UTC day: not asked again today (review MEDIUM)
+        for x in lines:
+            try:
+                entry = json.loads(x)
+                if entry.get('day') == today:
+                    refused.update(entry.get('refused') or [])
+            except (ValueError, AttributeError):
+                pass
         results = []
         for sport, sid in SPORT_IDS.items():
             for offset in range(2):
                 if count >= DAY_REQUESTS:
                     return {'status': 'request_cap', 'requests_today': count, 'results': results}
                 day = (started + timedelta(days=offset)).date().isoformat()
-                markets, without = SPORT_MARKETS[sport], []
+                markets = {m: name for m, name in SPORT_MARKETS[sport].items() if m in MARKETS or name not in refused}
+                without = sorted(set(SPORT_MARKETS[sport].values()) - set(markets.values()))
                 while True:
                     with usage.open('a') as f:
                         f.write(json.dumps({'day': today, 'at': stamp(clock()), 'sport': sport, 'date': day}) + '\n')
@@ -247,11 +258,19 @@ def fetch(now=None, *, opener=urllib.request.urlopen, pause=time.sleep):
                         if not isinstance(data, dict) or not isinstance(data.get('events'), list):
                             raise ValueError('Response schema')
                     except (urllib.error.HTTPError, ValueError) as exc:
-                        # Review MEDIUM (7f10f71): the provider refused or garbled a request with an extra market (NHL 563).
-                        # Ask once more for the normal markets so the sport's usual prices and later sports still arrive.
-                        if markets is not MARKETS and count < DAY_REQUESTS:
-                            without = sorted(set(markets.values()) - set(MARKETS.values()))
-                            markets = MARKETS
+                        # Review MEDIUM (7f10f71): the provider refused (400/403/404/422) or garbled a request with an extra
+                        # market (NHL 563). Ask once more for the normal markets so the sport's usual prices and later sports
+                        # still arrive, and note the refusal so the extra market is not asked again this UTC day. A rate
+                        # limit or server error is not a refusal of the market: the run stops as before.
+                        extra = sorted(set(markets.values()) - set(MARKETS.values()))
+                        refusal = not isinstance(exc, urllib.error.HTTPError) or exc.code in (400, 403, 404, 422)
+                        if extra and refusal and count < DAY_REQUESTS:
+                            refused.update(extra)
+                            without = sorted(set(without) | set(extra))
+                            with usage.open('a') as f:
+                                f.write(json.dumps({'day': today, 'at': stamp(clock()), 'sport': sport, 'date': day,
+                                                    'refused': extra, 'status': getattr(exc, 'code', type(exc).__name__)}) + '\n')
+                            markets = dict(MARKETS)
                             pause(1.1)
                             continue
                         return {'status': 'failed', 'error': type(exc).__name__, 'results': results}

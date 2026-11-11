@@ -389,12 +389,18 @@ def test_a_refused_three_way_market_still_gets_normal_nhl_and_nfl_prices(tmp_pat
             return Bad({})
         return Response({})
     result = odds.fetch(NOW, opener=run, pause=lambda _: None)
-    assert result['status'] == 'ok' and len(calls) == 8
+    assert result['status'] == 'ok' and len(calls) == 7                     # refused once, then remembered
     assert [r['sport'] for r in result['results']] == ['nba', 'nba', 'nhl', 'nhl', 'nfl', 'nfl']
     assert sum('market_ids=1,2,3&' in u and '/sports/6/' in u for u in calls) == 2
     assert all(r.get('without') == ['reg3'] for r in result['results'] if r['sport'] == 'nhl')
     log = (tmp_path / 'odds-books' / 'requests.jsonl').read_text().splitlines()
-    assert len(log) == 8 and 'test-key-do-not-save' not in ''.join(log)
+    assert len(log) == 8 and 'test-key-do-not-save' not in ''.join(log)       # 7 requests + 1 refusal note
+    assert sum('"refused"' in x for x in log) == 1
+    # The refusal is remembered for the rest of the UTC day: later runs ask 6, so 7 runs stay under the daily cap.
+    for _ in range(6):
+        assert odds.fetch(NOW, opener=run, pause=lambda _: None)['status'] == 'ok'
+    assert len(calls) == 7 + 6 * 6 <= odds.DAY_REQUESTS
+    assert not any('563' in u for u in calls[7:])
 
 
 def test_a_network_failure_still_stops_the_run_without_a_retry(tmp_path, monkeypatch):
@@ -406,5 +412,21 @@ def test_a_network_failure_still_stops_the_run_without_a_retry(tmp_path, monkeyp
         calls.append(request.full_url)
         if '/sports/6/' in request.full_url:
             raise OSError('down')
+        return Response({})
+    assert odds.fetch(NOW, opener=run, pause=lambda _: None)['status'] == 'failed' and len(calls) == 3
+
+
+@pytest.mark.parametrize('code', [429, 500, 503])
+def test_a_rate_limit_or_server_error_is_not_a_refusal_of_the_market(tmp_path, monkeypatch, code):
+    import io
+    import urllib.error
+    monkeypatch.setenv('NBA_DATA_DIR', str(tmp_path))
+    monkeypatch.setenv('THERUNDOWN_API_KEY', 'test-key-do-not-save')
+    calls = []
+
+    def run(request, timeout):
+        calls.append(request.full_url)
+        if '/sports/6/' in request.full_url:
+            raise urllib.error.HTTPError(request.full_url, code, 'x', {}, io.BytesIO(b''))
         return Response({})
     assert odds.fetch(NOW, opener=run, pause=lambda _: None)['status'] == 'failed' and len(calls) == 3
