@@ -136,7 +136,7 @@ openfootball feed is not used for live inputs because it is stale. football-data
 **Code:**
 - `app/intl_eval.py` (sealed module), `app/intl_live.py`;
 - migration `0039_soccer_international.sql`, a parent rebuild that adds 18 ESPN national-team competitions;
-- `app/intl_teams.json`: 175 ESPN teams, 165 exact names plus 10 reviewed aliases;
+- `app/intl_teams.json`: 177 ESPN teams, 167 exact names plus 10 reviewed aliases (Tahiti, Cook Islands added 2026-11-10 by build_team_map.py, exact names);
 - `app/intl_sealed_candidate.json`;
 - tests: `tests/test_intl_eval.py` and `tests/test_intl_live.py`, on a byte-for-byte real excerpt in
   `tests/fixtures/international_real`. No invented rows.

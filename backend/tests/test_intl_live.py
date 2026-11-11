@@ -60,3 +60,11 @@ def test_waiting_only_for_affected_teams_gives_exactly_the_settled_forecast():
                 assert all(m.home in waiting or m.away in waiting for m in targets if m not in ready)
                 return
     raise AssertionError("no real pair with both ready and blocked targets found")
+
+
+def test_the_team_map_covers_the_ofc_friendly_teams_listed_on_2026_11_11():
+    # ESPN listed Tahiti v Cook Islands friendlies (Nov 14, Nov 17); an unmapped team refuses every international run.
+    m = intl_live.teams()
+    for team, name in (("soccer:4863", "Tahiti"), ("soccer:4884", "Cook Islands")):
+        assert m["espn"][team] == name and m["evidence"][team] == {"team": name, "basis": "exact name"}
+    assert set(m["espn"]) == set(m["evidence"]) and all(m["evidence"][k]["team"] == v for k, v in m["espn"].items())

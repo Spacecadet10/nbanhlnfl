@@ -1,5 +1,5 @@
 {
- "version": "2026-11-08.1",
+ "version": "2026-11-10.1",
  "source": "ESPN national-team ids (soccer_matches) -> martj42/international_results team names @ b0948cb5",
  "espn": {
   "soccer:1038": "Jamaica",
@@ -176,7 +176,9 @@
   "soccer:8937": "Niger",
   "soccer:8938": "Equatorial Guinea",
   "soccer:8939": "Mozambique",
-  "soccer:8940": "Mauritania"
+  "soccer:8940": "Mauritania",
+  "soccer:4863": "Tahiti",
+  "soccer:4884": "Cook Islands"
  },
  "evidence": {
   "soccer:1038": {
@@ -887,6 +889,14 @@
   },
   "soccer:8940": {
    "team": "Mauritania",
+   "basis": "exact name"
+  },
+  "soccer:4863": {
+   "team": "Tahiti",
+   "basis": "exact name"
+  },
+  "soccer:4884": {
+   "team": "Cook Islands",
    "basis": "exact name"
   }
  }
