@@ -11,7 +11,7 @@ better line, or the same line at a higher payout. It is not a profit claim; scri
 
     PYTHONPATH=backend backend/.venv/bin/python scripts/closing_value.py --root <live root>
 """
-import argparse, json, os, re, sqlite3, tempfile
+import argparse, fcntl, json, os, re, sqlite3, tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -146,8 +146,10 @@ def collect(root, ledger_path, dest, now, done):
     rows = []
 
     def started(conn, game_id):
+        """The game once it has really started (in progress or final, start passed). A postponed, canceled or rescheduled
+        game is left for a later run: it never gets a row until it is played (review of fc35463)."""
         g = conn.execute("SELECT * FROM games WHERE game_id=?", (game_id,)).fetchone()
-        return g if g is not None and g["tipoff_at"] <= stamp else None
+        return g if g is not None and g["tipoff_at"] <= stamp and g["status"] in ("in_progress", "final") else None
 
     for key, sport, fid, side, market, shown_at, sent_at, ticket_id in ticket_legs(ledger):
         if key in done or sport not in stores or market not in PRICED:
@@ -157,30 +159,35 @@ def collect(root, ledger_path, dest, now, done):
         g = f and started(conn, f["game_id"])
         if not g:
             continue
-        # the price printed on the ticket; older tickets did not keep it: the latest stored quote when the ticket was sent
+        # the price printed on the ticket; older tickets did not keep it: the latest stored quote when the ticket was sent,
+        # used only when it is on the forecast's own line (review of fc35463)
         basis = "price shown on the ticket" if shown_at else "stored quote at send time"
         q = quote_at(conn, g["game_id"], market, shown_at or sent_at)
+        fc = conn.execute("SELECT * FROM game_forecasts WHERE forecast_id=?", (fid,)).fetchone()
         if side not in ("a", "b"):
-            f = conn.execute("SELECT * FROM game_forecasts WHERE forecast_id=?", (fid,)).fetchone()
-            side = pick_side(market, (f["p_a"], f["p_mid"], f["p_b"]))
-        rows.append(row("ticket_leg", key, sport, conn, g, market, side, sent_at, q, odds_dir,
-                        dict(ticket_id=ticket_id, forecast_id=fid, pick_price_basis=basis)))
+            side = pick_side(market, (fc["p_a"], fc["p_mid"], fc["p_b"]))
+        if q is not None and market != "winner" and q["line"] != fc["line"]:
+            q = None
+        rows.append(row("ticket_leg", key, sport, conn, g, market, side, shown_at or sent_at, q, odds_dir,
+                        dict(ticket_id=ticket_id, forecast_id=fid, sent_at=sent_at, pick_price_basis=basis)))
         done.add(key)
 
     for d in ledger.execute("SELECT delivery_key, text, attempted_at FROM deliveries WHERE status='sent' AND length(delivery_key)=64 ORDER BY attempted_at"):
-        key = f"card:{d['delivery_key']}"
         parsed = card_pick(d["text"])
-        if key in done or parsed is None or parsed[0] not in stores:
+        if parsed is None or parsed[0] not in stores or parsed[3] == "No strong pick":   # a card without a pick: nothing to score
             continue
         sport, away, home, label = parsed
         conn = stores[sport]
         ids = {r["abbr"]: r["team_id"] for r in conn.execute("SELECT team_id, abbr FROM teams")}
         g = conn.execute("SELECT * FROM games WHERE home_team_id=? AND away_team_id=? AND tipoff_at>? ORDER BY tipoff_at LIMIT 1",
                          (ids.get(home), ids.get(away), d["attempted_at"])).fetchone()
-        if g is None or g["tipoff_at"] > stamp:
+        # One row per game and pick: a resent card (new delivery key, same pick) is the same pick, scored from its FIRST send
+        # (deliveries are read oldest first). Review of fc35463: keying on the delivery counted resends several times.
+        key = None if g is None else f"card:{sport}:{g['game_id']}:{label}"
+        if g is None or key in done or not started(conn, g["game_id"]):
             continue
         pick = parse_label(label, home, away)
-        if pick is None:   # team totals and three-way picks have no stored sportsbook price to compare
+        if pick is None:   # e.g. a team total or a three-way pick: no stored sportsbook price to compare
             rows.append(dict(version=VERSION, kind="card_pick", key=key, sport=sport, game_id=g["game_id"], tipoff=g["tipoff_at"],
                              pick_at=d["attempted_at"], label=label, status="not_priced_market"))
             done.add(key)
@@ -195,6 +202,20 @@ def collect(root, ledger_path, dest, now, done):
     return rows
 
 
+def read_keys(path):
+    """Keys already recorded, and how many damaged lines (e.g. cut off by a crash) were skipped; never raises on one."""
+    keys, damaged = set(), 0
+    if path.exists():
+        for line in path.read_text().splitlines():
+            if not line.strip():
+                continue
+            try:
+                keys.add(json.loads(line)["key"])
+            except (ValueError, KeyError, TypeError):
+                damaged += 1
+    return keys, damaged
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--root", default=os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -203,18 +224,28 @@ def main():
     a = ap.parse_args()
     out = Path(a.out or os.path.join(a.root, "data", "closing-value", "records.jsonl"))
     out.parent.mkdir(parents=True, exist_ok=True)
-    done = {json.loads(x)["key"] for x in out.read_text().splitlines() if x.strip()} if out.exists() else set()
-    now = datetime.now(timezone.utc).replace(microsecond=0)
-    with tempfile.TemporaryDirectory(prefix="closing-value-") as dest:
-        os.environ["NBA_DATA_DIR"] = dest       # app code never looks at the live data folder from here
-        rows = collect(a.root, a.ledger or os.path.join(a.root, ".telegram-delivery.sqlite"), dest, now, done)
-    with out.open("a") as fh:                     # append-only: earlier rows are never rewritten
-        for r in rows:
-            fh.write(json.dumps(dict(r, recorded_at=now.strftime(FMT)), sort_keys=True) + "\n")
+    with open(out.parent / ".lock", "a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)    # one run at a time: two runs would append the same keys
+        except OSError:
+            print(json.dumps({"status": "already_running"}))
+            return
+        done, damaged = read_keys(out)
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        with tempfile.TemporaryDirectory(prefix="closing-value-") as dest:
+            os.environ["NBA_DATA_DIR"] = dest       # app code never looks at the live data folder from here
+            rows = collect(a.root, a.ledger or os.path.join(a.root, ".telegram-delivery.sqlite"), dest, now, done)
+        with out.open("a") as fh:                     # append-only: earlier rows are never rewritten
+            if out.stat().st_size and not out.read_bytes().endswith(b"\n"):
+                fh.write("\n")                       # a line cut off by a crash stays as it was; new rows start on their own line
+            for r in rows:
+                fh.write(json.dumps(dict(r, recorded_at=now.strftime(FMT)), sort_keys=True) + "\n")
+            fh.flush()
+            os.fsync(fh.fileno())
     counts = {}
     for r in rows:
         counts[(r["kind"], r.get("draftkings") or r["status"])] = counts.get((r["kind"], r.get("draftkings") or r["status"]), 0) + 1
-    print(json.dumps({"appended": len(rows), "by_kind": {f"{k} {v}": n for (k, v), n in sorted(counts.items())}, "file": str(out)}))
+    print(json.dumps({"appended": len(rows), "damaged_lines_skipped": damaged, "by_kind": {f"{k} {v}": n for (k, v), n in sorted(counts.items())}, "file": str(out)}))
 
 
 if __name__ == "__main__":
