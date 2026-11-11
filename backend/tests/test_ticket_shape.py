@@ -36,6 +36,13 @@ def test_the_weakest_leg_is_simply_the_lowest_app_percentage_and_no_price_label_
     assert t.leg_assessment('nba', cle)['model_gap'] < -.15           # the price comparison itself stays in the assessment
 
 
+def test_a_tie_for_the_lowest_percentage_names_the_first_leg_in_plan_order():
+    first, second = leg('BOS win', .62, -300), leg('NYK win', .62, 150)
+    for legs, name in (([leg('DET win', .88), first, second], 'BOS win'), ([leg('DET win', .88), second, first], 'NYK win')):
+        s = t.ticket_shape(legs)
+        assert s['weakest'] == name and s['weakest_line'] == f'Weakest leg: {name} (62%)'
+
+
 @pytest.mark.parametrize('count,probability,allowed', [
     (2, .51, True), (3, .51, True), (4, .75, True), (4, .749, False), (5, .80, True), (5, .79, False),
     (6, .80, True), (7, .80, True), (7, .78, False)])
