@@ -20,7 +20,7 @@ def setup(tmp_path, monkeypatch):
     monkeypatch.setattr(t,'SKILL',tmp_path/'SKILL.md');t.SKILL.write_text('fixture')
     picks = [dict(forecast_id=i,game_id=f'g{i}',market='winner',matchup=f'A{i} @ B{i}',
                   pick_label=f'B{i} win',probability=.75,status='scheduled',grade='pending',
-                  generated_at='2026-11-08T16:30:00Z',tipoff='2026-11-08T18:00:00Z') for i in range(1,6)]
+                  generated_at='2026-11-08T16:30:00Z',tipoff='2026-11-08T18:00:00Z',lineup_flags=[]) for i in range(1,6)]
     snap = dict(as_of=NOW,date='2026-11-08',skill_sha256=t.sha(t.SKILL.read_bytes()),
                 helper_sha256=t.sha(Path(t.__file__).read_bytes()),sports={s:dict(freshness=dict(source_state='fresh',failing=False),
                 report=dict(picks=copy.deepcopy(picks),without_forecast={})) for s in ('nba','nhl','nfl')})
@@ -2024,3 +2024,49 @@ def test_nfl_percentage_rankings_populates_lazy_market_indexes():
     ranking = t.percentage_rankings('nfl', LazyProvider(), NOW)
     assert set(ranking) == {'winner', 'spread', 'total', 'team_total_home', 'team_total_away'}
     assert ranking['total'][0]['settled'] == 3
+
+
+def _flag(snap, sport, fid, flags):
+    for p in snap['sports'][sport]['report']['picks']:
+        if p['forecast_id'] == fid:
+            p['lineup_flags'] = flags
+
+
+def test_a_pick_with_a_lineup_flag_needs_a_stated_reason(setup, monkeypatch):
+    """Owner request Nov 11: an unconfirmed/backup goalie or a top player out/questionable on the picked side keeps a pick
+    off tickets unless the reviewer states why it still stands. The flag may first appear in the fresh snapshot."""
+    plan, snap, sent, path = setup
+    fresh = copy.deepcopy(snap)
+    _flag(fresh, 'nhl', 2, ['B2 goalie not confirmed (expected)'])
+    monkeypatch.setattr(t, 'snapshot', lambda: copy.deepcopy(fresh))
+    plan['tickets'] = [ticket([('nba', 1), ('nhl', 2)], 3)]
+    with pytest.raises(ValueError, match=r'A2 @ B2 B2 win: B2 goalie not confirmed \(expected\)\. Leave this pick off'):
+        t.check(plan)
+    plan['tickets'][0]['legs'][1]['lineup_reason'] = '   '
+    with pytest.raises(ValueError, match='lineup_reason'):
+        t.check(plan)
+    plan['tickets'][0]['legs'][1]['lineup_reason'] = 'Both listed goalies are the usual starters; price unchanged since'
+    leg = t.check(plan)['resolved'][0]['legs'][1]
+    assert leg['lineup_reason'].startswith('Both listed') and leg['lineup_flags'] == ['B2 goalie not confirmed (expected)']
+    assert 'lineup_reason' not in t.check(plan)['resolved'][0]['legs'][0]
+    assert sent == []
+
+
+def test_a_snapshot_pick_without_lineup_facts_is_flagged_not_waved_through():
+    assert t.lineup_flags('nhl', [{}]) == ['lineup facts missing from the snapshot']
+    assert t.lineup_flags('nfl', [{}]) == [] and t.lineup_flags('nba', [{'lineup_flags': []}]) == []
+
+
+def test_snapshot_attaches_lineup_facts_and_flags_and_survives_a_failure(monkeypatch):
+    from app import lineup
+    picks = [dict(game_id='g', market='winner', matchup='BOS @ TOR', pick_label='TOR win')]
+    monkeypatch.setattr(lineup, 'facts', lambda conn, sport, ids, at: {'g': {'home': {'backup': True, 'goalie': 'X',
+                        'status': 'confirmed'}, 'away': {'backup': False, 'status': 'confirmed'}}})
+    t.attach_lineups(None, 'nhl', picks, NOW)
+    assert picks[0]['lineup_flags'] == ['backup goalie listed for TOR (X, confirmed)'] and picks[0]['lineup']['home']['backup']
+    monkeypatch.setattr(lineup, 'facts', lambda *a: 1 / 0)
+    t.attach_lineups(None, 'nhl', picks, NOW)
+    assert picks[0]['lineup'] == {'error': 'ZeroDivisionError'} and picks[0]['lineup_flags'] == ['lineup facts unavailable']
+    soccer = [dict(game_id='s')]
+    t.attach_lineups(None, 'soccer', soccer, NOW)
+    assert soccer == [dict(game_id='s')]

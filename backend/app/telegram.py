@@ -159,7 +159,7 @@ def controls(bot, settings, conn):
     return _get(conn, 'enabled', '1') == '1'
 
 
-def message_batches(report, chat_id):
+def message_batches(report, chat_id, lineup_lines=None):
     """One summary per game/version, using the same backend best-pick ranking and exact-percentage record as the UI."""
     now = datetime.fromisoformat(report['as_of'].replace('Z', '+00:00'))
     games = {}
@@ -172,13 +172,16 @@ def message_batches(report, chat_id):
         games.setdefault(pick['game_id'], []).append(pick)
     batches = []
     for gid, picks in games.items():
-        batch = format_batch(report, chat_id, gid, picks)
+        batch = format_batch(report, chat_id, gid, picks, lineup_line=(lineup_lines or {}).get(gid))
         if batch:
             batches.append(batch)
     return batches
 
 
-def format_batch(report, chat_id, gid, picks, *, preview=False):
+LINEUP_PREFIX = 'Lineup: '
+
+
+def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None):
     """One shared message layout. Preview retains actual past times/results and is prominently labelled."""
     from .threshold_overview import displayed_percentage
     now = datetime.fromisoformat(report['as_of'].replace('Z', '+00:00'))
@@ -203,6 +206,10 @@ def format_batch(report, chat_id, gid, picks, *, preview=False):
             detail = ('App ' + displayed_percentage(strong[0]['probability']) + '% · Sportsbook ' + displayed_percentage(book) + '% · '
                       + price_tag(strong[0]['probability'], book).upper())
         lines.append(detail)
+    if lineup_line:
+        # Owner request Nov 11: who is playing, one plain line under the pick. Text only: the delivery key and the card's
+        # identity are unchanged, so a later lineup change never resends a card.
+        lines.append(LINEUP_PREFIX + escape(lineup_line))
     lines += ['<i>' + ('App ranking for this past game.' if preview else 'Based on the app’s existing ranking.') + '</i>',
               divider, '', '<b>Market breakdown</b>', '']
     versions = []
@@ -253,6 +260,19 @@ def format_batch(report, chat_id, gid, picks, *, preview=False):
     key = hashlib.sha256(json.dumps(['preview-card-1' if preview else 'pregame', str(chat_id), report['sport'], gid, versions,
                                    strong[0]['market'] if strong else None], sort_keys=True).encode()).hexdigest()
     return key, text
+
+
+def card_lineups(conn, sport, report, now):
+    """{game_id: one plain lineup line} for the games whose card may go out now (start within two hours). A problem
+    here never stops or changes a card: the line is simply left out."""
+    try:
+        from . import lineup
+        soon = {p['game_id']: p['matchup'] for p in report['picks']
+                if now < datetime.fromisoformat(p['tipoff'].replace('Z', '+00:00')) <= now + timedelta(hours=2)}
+        found = lineup.facts(conn, sport, soon, now.strftime('%Y-%m-%dT%H:%M:%SZ'))
+        return {gid: line for gid, m in soon.items() if (line := lineup.card_line(sport, found.get(gid), m))}
+    except Exception:
+        return {}
 
 
 def card_identity(text):
@@ -349,9 +369,10 @@ def run_once(bot, settings, conn, *, now=None):
                     report = Views(source, now.strftime('%Y-%m-%dT%H:%M:%SZ')).ranked_picks(now.astimezone(TORONTO).date())
                 else:
                     report = RealProvider(source, now.strftime('%Y-%m-%dT%H:%M:%SZ')).ranked_picks(now.astimezone(TORONTO).date())
+                lineups = card_lineups(source, sport, report, now)
             finally:
                 source.close()
-            batches = message_batches(report, settings['TELEGRAM_CHAT_ID'])
+            batches = message_batches(report, settings['TELEGRAM_CHAT_ID'], lineup_lines=lineups)
             result['sports'][sport] = {'eligible_summaries': len(batches), **dict(Counter(
                 deliver_card(bot, conn, settings['TELEGRAM_CHAT_ID'], key, text, report['as_of']) for key, text in batches))}
         except Exception as exc:

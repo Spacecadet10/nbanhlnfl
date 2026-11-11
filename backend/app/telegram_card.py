@@ -91,6 +91,23 @@ def _team_palette(league, abbr):
     return (team['primary'],team['secondary']) if team else ('#09283F','#8495A2')
 
 
+def fit_line(draw, text, font, width):
+    """The text on one line of `width` px: whole items (split at ' · ' then ', ') are dropped from the end and replaced
+    with '…' until it fits; a single item that is still too long is cut with '…'. Never wraps, never overflows."""
+    if draw.textlength(text, font=font) <= width:
+        return text
+    words = text.split(' ')
+    while len(words) > 1:
+        words.pop()
+        candidate = ' '.join(words).rstrip(',·: ') + ' …'
+        if draw.textlength(candidate, font=font) <= width:
+            return candidate
+    cut = text
+    while cut and draw.textlength(cut + '…', font=font) > width:
+        cut = cut[:-1]
+    return cut + '…'
+
+
 def render_card(message):
     parser = Plain()
     parser.feed(message)
@@ -165,15 +182,20 @@ def render_card(message):
         draw.text((88,y+12),'TEST PREVIEW / DESIGN EXAMPLE — NOT A NEW LIVE PICK',font=_font(25,True),fill=primary)
         y+=74
     # A full outline replaces the asymmetric stripe from the reference.
-    gradient=ImageOps.colorize(Image.linear_gradient('L').rotate(90).resize((964,218)),panel,_mix(home_primary,panel,.7))
-    mask=Image.new('L',(964,218),0);ImageDraw.Draw(mask).rounded_rectangle((0,0,963,217),radius=27,fill=255)
+    # Owner request Nov 11: one plain "who is playing" line under the pick, only when there is something to say.
+    lineup=next((line.removeprefix('Lineup: ') for line in lines[rec+2:markets] if line.startswith('Lineup: ')),None)
+    panel_h=218+(40 if lineup else 0)
+    gradient=ImageOps.colorize(Image.linear_gradient('L').rotate(90).resize((964,panel_h)),panel,_mix(home_primary,panel,.7))
+    mask=Image.new('L',(964,panel_h),0);ImageDraw.Draw(mask).rounded_rectangle((0,0,963,panel_h-1),radius=27,fill=255)
     image.paste(gradient,(58,y),mask)
-    draw.rounded_rectangle((58,y,1022,y+218),radius=27,outline=accent,width=3)
+    draw.rounded_rectangle((58,y,1022,y+panel_h),radius=27,outline=accent,width=3)
     draw.text((92,y+18),'RECOMMENDED PICK',font=_font(26,True),fill=_mix(accent,'#FFFFFF',.65))
     end=wrapped(lines[rec+1],92,y+59,810,size=72 if len(lines[rec+1])<22 else 48,bold=True,fill='white',display=True)
-    detail=next((line for line in lines[rec+2:markets] if line and line!='━━━━━━━━━━━━━━'),'')
+    detail=next((line for line in lines[rec+2:markets] if line and line!='━━━━━━━━━━━━━━' and not line.startswith('Lineup: ')),'')
     wrapped(detail,95,max(y+155,end+6),835,size=27,fill='#E0E6EC')
-    y+=242
+    if lineup:
+        draw.text((95,y+panel_h-50),fit_line(draw,lineup,_font(26,True),860),font=_font(26,True),fill='#FFD27A')
+    y+=panel_h+24
     draw.text((64,y),'MARKET BREAKDOWN',font=_font(31,True,True),fill=primary)
     y+=53
     for number, group in enumerate(groups, 1):

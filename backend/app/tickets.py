@@ -88,6 +88,7 @@ def snapshot():
                     if 'responses' in books:
                         rundown_odds.attach(sport, pick, books, now)
                 attach_assessments(sport, report['picks'])
+                attach_lineups(conn, sport, report['picks'], stamp)
                 due = conn.execute("SELECT game_id FROM games WHERE status='scheduled' AND season_type IN ('regular','play_in','postseason') AND tipoff_at>? AND tipoff_at<=?",
                                    (stamp, (now+timedelta(minutes=110)).strftime('%Y-%m-%dT%H:%M:%SZ'))).fetchall()
                 covered = {p['game_id'] for p in report['picks'] if p['grade']=='pending'}
@@ -108,6 +109,38 @@ def snapshot():
     result['alerts'] = health_alerts(result)
     from fastapi.encoders import jsonable_encoder
     return jsonable_encoder(result)
+
+
+def attach_lineups(conn, sport, picks, stamp):
+    """Owner request Nov 11: who is playing, for every NBA/NHL pick (app/lineup.py facts as of the snapshot, plus
+    `lineup_flags`: plain reasons a pick must stay off tickets unless the review states `lineup_reason`). A problem here
+    never hides a forecast; it becomes a flag."""
+    if sport not in ('nba', 'nhl'):
+        return
+    try:
+        from app import lineup
+        found = lineup.facts(conn, sport, {p['game_id'] for p in picks}, stamp)
+    except Exception as exc:
+        found = {p['game_id']: {'error': type(exc).__name__} for p in picks}
+    for pick in picks:
+        fact = found.get(pick['game_id'])
+        pick['lineup'] = fact
+        try:
+            pick['lineup_flags'] = lineup.review_flags(sport, pick, fact)
+        except Exception as exc:
+            pick['lineup_flags'] = [f'lineup facts unavailable ({type(exc).__name__})']
+
+
+def lineup_flags(sport, picks):
+    """Every lineup flag of a selected forecast in the review's snapshot and the fresh one (later news counts too)."""
+    if sport not in ('nba', 'nhl'):
+        return []
+    flags = []
+    for pick in picks:
+        for flag in pick.get('lineup_flags', ['lineup facts missing from the snapshot']):
+            if flag not in flags:
+                flags.append(flag)
+    return flags
 
 
 def percentage_rankings(sport, provider, stamp):
@@ -928,6 +961,10 @@ def check(plan):
             if quote.get('line_moved'):
                 raise ValueError(f"Line changed since forecast ({pick['matchup']} {pick['market']}: {quote['line_at_forecast']:g} "
                                  f"-> {quote['line_now']:g}); review again")
+            flags = lineup_flags(sport, picks)
+            if flags and not str(leg.get('lineup_reason') or '').strip():
+                raise ValueError(f"{pick['matchup']} {pick['pick_label']}: {'; '.join(flags)}. Leave this pick off, or state "
+                                 "lineup_reason on the leg saying why it still stands; review again")
             key = (sport, pick['game_id'])
             if key in ticket_games or not _text(leg['rationale'], 'leg rationale'):
                 raise ValueError('Repeated game within ticket or missing rationale')
@@ -937,6 +974,7 @@ def check(plan):
             ticket_games.add(key)
             seen[key] = identity
             legs.append({**pick, 'sport': sport, 'rationale': leg['rationale'], 'assessment': leg_assessment(sport, pick),
+                         **({'lineup_reason': str(leg['lineup_reason']).strip()} if flags else {}),
                          **({'status_refreshed_at': refreshed} if refreshed else {})})
         combination = tuple(sorted(((p['sport'], p['forecast_id']) for p in legs), key=_identity_key))
         if combination in combinations:

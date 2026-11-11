@@ -496,3 +496,48 @@ def test_a_connection_that_never_opened_is_retried_and_nothing_else_is():
     with pytest.raises(DeliveryError, match='not confirmed'):
         bot.call('sendMessage', {'text': 'x'}, pause=waits.append)
     assert len(calls) == 1 and waits == []
+
+
+def test_lineup_line_sits_under_the_pick_and_never_changes_the_card_key_or_identity(tmp_path):
+    """Owner request Nov 11: who is playing, one plain line under the pick; a late lineup change never resends the card."""
+    d = strong_report()
+    key, plain = tg.message_batches(d, '123')[0]
+    key2, text = tg.message_batches(d, '123', lineup_lines={'g1': 'Out: L. James'})[0]
+    lines = text.split('\n')
+    pick = lines.index('<b>Recommended pick</b>')
+    assert 'Lineup: Out: L. James' in lines[pick + 2:pick + 4] and 'Lineup:' not in plain
+    assert key2 == key and tg.card_identity(text) == tg.card_identity(plain)
+    assert tg.message_batches(d, '123', lineup_lines={'other': 'x'})[0][1] == plain
+    bot = Bot()
+    with tg.ledger(tmp_path / 'cards.sqlite') as conn:
+        assert tg.deliver_card(bot, conn, '123', key, plain, NOW) == 'sent'
+        later = tg.message_batches(strong_report(forecast_id=2), '123', lineup_lines={'g1': 'Backup goalie starting: TOR'})[0]
+        assert tg.deliver_card(bot, conn, '123', *later, NOW) == 'already_sent_for_game'
+        assert tg.deliver_card(bot, conn, '123', key2, text, NOW) == 'already_recorded'
+    assert len(bot.sends) == 1
+
+
+@pytest.mark.parametrize('line', ['Goalies not confirmed', 'Out: S. Barnes, R. Barrett, I. Quickley · Doubtful: J. Brown, '
+                                  'D. White, J. Tatum · Questionable: K. Porzingis, A. Simons, P. Pritchard'])
+def test_lineup_line_renders_on_one_line_inside_the_card(line):
+    from PIL import Image, ImageDraw
+    from app import telegram_card
+    text = tg.message_batches(priced_card(), '123', lineup_lines={'g1': line})[0][1]
+    assert telegram_card.render_card(text).startswith(b'\x89PNG')
+    probe = ImageDraw.Draw(Image.new('RGB', (10, 10)))
+    shown = telegram_card.fit_line(probe, line, telegram_card._font(26, True), 860)
+    assert 95 + probe.textlength(shown, font=telegram_card._font(26, True)) <= 1000
+    assert shown == line or shown.endswith('…')
+    without = telegram_card.render_card(tg.message_batches(priced_card(), '123')[0][1])
+    from io import BytesIO
+    assert Image.open(BytesIO(telegram_card.render_card(text))).height == Image.open(BytesIO(without)).height + 40
+
+
+def test_a_lineup_problem_never_stops_a_card(monkeypatch):
+    from app import lineup
+    monkeypatch.setattr(lineup, 'facts', lambda *a: 1 / 0)
+    now = datetime(2026, 11, 2, 20, 0, tzinfo=timezone.utc)
+    assert tg.card_lineups(None, 'nba', strong_report(), now) == {}
+    monkeypatch.setattr(lineup, 'facts', lambda conn, sport, ids, at: {g: 'x' for g in ids})
+    monkeypatch.setattr(lineup, 'card_line', lambda sport, fact, matchup: f'{sport} {matchup}')
+    assert tg.card_lineups(None, 'nba', strong_report(), now) == {'g1': 'nba BOS @ ORL'}
