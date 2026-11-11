@@ -160,6 +160,7 @@ def controls(bot, settings, conn):
 
 
 PAST_PREFIX = 'Past seasons, recomputed, model line: '
+PAST_PREFIX_NO_LINE = 'Past seasons, recomputed: '    # winner (no line): app/winner_history.py, clean seasons only
 
 
 def message_batches(report, chat_id, lineup_lines=None):
@@ -248,7 +249,8 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
         # examples (spread and total picks at a bookmaker line never have any: past seasons have model lines only).
         past = h.get('history')
         if past and past['settled']:
-            lines.append(f"{PAST_PREFIX}{past['wins']}W–{past['losses']}L")
+            prefix = PAST_PREFIX_NO_LINE if past['line_source'] == 'none' else PAST_PREFIX
+            lines.append(f"{prefix}{past['wins']}W–{past['losses']}L")
         if preview:
             result = {'win': 'Won', 'loss': 'Lost', 'push': 'Push'}.get(pick['grade'], pick['grade'])
             lines.append('Result: ' + escape(result))

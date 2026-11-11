@@ -113,12 +113,13 @@ def percentage_ranking(index: dict, exclude_game: Optional[str] = None) -> list:
     return rows
 
 
-HISTORY_SOURCE = "history_recomputed"   # app/points_history.py: recomputed past seasons, a source of its own
+HISTORY_SOURCE = "history_recomputed"   # app/points_history.py, app/winner_history.py: recomputed past seasons, a source of its own
 
 
 def history_record(rec: dict, game_id: str, history_index: Optional[dict]) -> Optional[dict]:
     """The same exact displayed percentage, side, model version and line source among the recomputed past-season forecasts
-    (app/points_history.py), counted apart from the live record and never added to it. None when no history is supplied."""
+    (app/points_history.py, app/winner_history.py), counted apart from the live record and never added to it, never part of
+    rank or AVOID (those read the live index only). None when no history is supplied."""
     if history_index is None:
         return None
     key = (displayed_percentage(rec['confidence']), rec['side'], HISTORY_SOURCE, rec['model_version'], rec['line_source'])

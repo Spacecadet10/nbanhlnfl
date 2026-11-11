@@ -889,7 +889,7 @@ export interface ForecastPercentageHistory {
   wins: number; losses: number; settled: number; win_rate: number | null; loss_rate: number | null;
   ci95: [number, number] | null; small_sample: boolean; excluded: Record<string, number>; as_of: string;
   /** Recomputed past seasons at the same exact percentage, side, model and line source (spread, total, team totals of
-   *  NBA/NHL); a separate source, never part of wins/losses above. Absent or null where no history exists. */
+   *  NBA; winner of NBA/NHL, clean seasons only); a separate source, never part of wins/losses above. Absent or null where no history exists. */
   history?: { source: 'history_recomputed'; line_source: CanonicalRecord['line_source']; wins: number; losses: number; settled: number } | null;
 }
 

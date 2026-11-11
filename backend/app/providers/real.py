@@ -192,22 +192,25 @@ class RealProvider:
                                     "result_label": None if c["result_side"] is None else labels[idx[c["result_side"]]]})
 
     def _points_history_index(self, market: str, season_type: str) -> Optional[dict]:
-        """Recomputed past-season record index of a points market (app/points_history.py), once per market; None for a
-        non-competitive game (history is competitive games only), a sport without history, or a missing file. Any problem
-        with the history file (corrupt, wrong schema) never takes the live record down: no history is shown."""
-        from .. import points_history
+        """Recomputed past-season record index of a points market (app/points_history.py) or of the winner
+        (app/winner_history.py, clean seasons only), once per market; None for a non-competitive game (history is
+        competitive games only), a sport without history, or a missing file. Any problem with the history file (corrupt,
+        wrong schema) never takes the live record down: no history is shown."""
+        from .. import points_history, winner_history
         if season_type not in points_history.COMPETITIVE:
             return None
         if not hasattr(self, '_history_indexes'):
             self._history_indexes = {}
         if market not in self._history_indexes:
             index = None
-            if self.sport in points_history.HISTORY_SEASONS and market in points_history.MARKETS:
+            source = (winner_history if market == winner_history.MARKET
+                      else points_history if market in points_history.MARKETS else None)
+            if source is not None and self.sport in source.HISTORY_SEASONS:
                 hist = None
                 try:
-                    hist = points_history.connect(points_history.path(self.sport))
+                    hist = source.connect(source.path(self.sport))
                     if hist is not None:
-                        index = points_history.history_index(self.conn, hist, market, self.now)
+                        index = source.history_index(self.conn, hist, market, self.now)
                 except Exception:      # noqa: BLE001  (optional source: a broken file means no history, never a broken card)
                     index = None
                 finally:
