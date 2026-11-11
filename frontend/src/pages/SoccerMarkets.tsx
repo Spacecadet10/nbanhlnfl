@@ -63,6 +63,32 @@ const HEAD = (
   </thead>
 );
 
+const DC_SIDES = ['home_draw', 'draw_away', 'home_away'] as const;
+
+/** Owner request Nov 11: a sportsbook quote with its time, and clearly labelled derived fair prices (never a bet price). */
+function MatchPrices({ m }: { m: SoccerMarketMatch }) {
+  const b = m.prices?.bet365_double_chance;
+  const d = m.prices?.derived_from_match_result_prices;
+  if (!b && !d) return null;
+  const dc = (side: string) => selectionLabel('double_chance', side, null, m.home, m.away);
+  return (
+    <div className="soccer-markets-group soccer-prices">
+      <h4>Prices</h4>
+      {b && (
+        <p className="small"><span className="pill soccer-src-book">Bet365 quote</span>{' '}
+          Double chance: {DC_SIDES.filter((s) => b.prices[s]).map((s) => `${dc(s)} ${b.prices[s]!.decimal.toFixed(2)}`).join(' · ')}
+          <span className="muted"> · retrieved {dateTime(b.retrieved_at)}</span></p>
+      )}
+      {d && (
+        <p className="small"><span className="pill soccer-src-model">Derived from match result prices</span>{' '}
+          Double chance: {DC_SIDES.filter((s) => d.double_chance[s] != null).map((s) => `${dc(s)} ${d.double_chance[s]!.toFixed(2)}`).join(' · ')}
+          {' · '}Draw no bet: {m.home} {d.draw_no_bet.home.toFixed(2)} · {m.away} {d.draw_no_bet.away.toFixed(2)}
+          <span className="muted"> · from {d.provider} prices retrieved {dateTime(d.retrieved_at)}. Not a price you can bet at.</span></p>
+      )}
+    </div>
+  );
+}
+
 function MatchMarkets({ m }: { m: SoccerMarketMatch }) {
   const groups: { title: string; sub: string; sels: SoccerMarketSelection[] }[] = [];
   for (const f of ['goals', 'corners'] as const) {
@@ -89,6 +115,7 @@ function MatchMarkets({ m }: { m: SoccerMarketMatch }) {
           </tbody></table></div>
         </div>
       ))}
+      <MatchPrices m={m} />
     </details>
   );
 }

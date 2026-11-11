@@ -24,4 +24,8 @@ if [ "$(date -u +%H)" -lt 6 ]; then py markets-forecast || status=1; fi
 for i in 1 2 3 4 5 6 7; do
   py markets-forecast --day "$(date -u -v+${i}d +%Y-%m-%d)" --if-ready || status=1
 done
+# 5. Bet365 double chance quotes from ESPN (app/bet365_dc.py, owner request Nov 11): one request per club match kicking
+#    off within 48 h, at most every 2 h, 24 a run; saved write-once under data/bet365-dc. Never changes the cycle status.
+env NBA_RELEASE_GUARD=1 NBA_RELEASE_ROOT="$LIVE" NBA_DATA_DIR="$MAIN/data" PYTHONDONTWRITEBYTECODE=1 \
+  "$LIVE/backend/.venv/bin/python" -m app.bet365_dc fetch || true
 exit $status

@@ -231,6 +231,9 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
         book = pick.get('market_prob')
         if book is not None:   # on the small grey line under the pick, so the record line keeps its length and never runs off the card
             source = (source[:-4] + ' · ' if source else ' · <i>') + f"sportsbook {displayed_percentage(book)}% · {price_tag(pick['probability'], book)}</i>"
+        implied = pick.get('implied_line') or {}
+        if implied.get('line') is not None:   # owner request Nov 11: labelled, never a price to bet at
+            source = (source[:-4] + ' · ' if source else ' · <i>') + f"implied from spread and total {implied['line']:g}</i>"
         # Owner request Nov 9: where this exact percentage stands among the market's ranked exact percentages, and a plain
         # AVOID when its own record is a losing one. Only percentages with three or more results are ranked.
         standing = '' if not h.get('rank') else f" · rank {h['rank']} of {h['ranked']}" + (' · AVOID' if losses > wins else '')
@@ -273,6 +276,20 @@ def card_lineups(conn, sport, report, now):
         return {gid: line for gid, m in soon.items() if (line := lineup.card_line(sport, found.get(gid), m))}
     except Exception:
         return {}
+
+
+def card_implied_lines(conn, sport, report, now):
+    """Owner request Nov 11: the team-total line implied from DraftKings' spread and total beside each team-total pick of a
+    card that may go out now. Never stops a card."""
+    try:
+        from . import implied_lines
+        stamp = now.strftime('%Y-%m-%dT%H:%M:%SZ')
+        for p in report['picks']:
+            if p.get('market') in ('team_total_home', 'team_total_away') and \
+                    now < datetime.fromisoformat(p['tipoff'].replace('Z', '+00:00')) <= now + timedelta(hours=2):
+                p['implied_line'] = implied_lines.implied_team_total(conn, p['game_id'], p['market'], stamp, sport)
+    except Exception:
+        pass
 
 
 def card_identity(text):
@@ -370,6 +387,7 @@ def run_once(bot, settings, conn, *, now=None):
                 else:
                     report = RealProvider(source, now.strftime('%Y-%m-%dT%H:%M:%SZ')).ranked_picks(now.astimezone(TORONTO).date())
                 lineups = card_lineups(source, sport, report, now)
+                card_implied_lines(source, sport, report, now)
             finally:
                 source.close()
             batches = message_batches(report, settings['TELEGRAM_CHAT_ID'], lineup_lines=lineups)

@@ -89,6 +89,7 @@ def snapshot():
                         rundown_odds.attach(sport, pick, books, now)
                 attach_assessments(sport, report['picks'])
                 attach_lineups(conn, sport, report['picks'], stamp)
+                attach_prices(conn, sport, report['picks'], stamp)
                 due = conn.execute("SELECT game_id FROM games WHERE status='scheduled' AND season_type IN ('regular','play_in','postseason') AND tipoff_at>? AND tipoff_at<=?",
                                    (stamp, (now+timedelta(minutes=110)).strftime('%Y-%m-%dT%H:%M:%SZ'))).fetchall()
                 covered = {p['game_id'] for p in report['picks'] if p['grade']=='pending'}
@@ -129,6 +130,22 @@ def attach_lineups(conn, sport, picks, stamp):
             pick['lineup_flags'] = lineup.review_flags(sport, pick, fact)
         except Exception as exc:
             pick['lineup_flags'] = [f'lineup facts unavailable ({type(exc).__name__})']
+
+
+OFF_TICKETS = ('team_total_home', 'team_total_away')
+
+
+def attach_prices(conn, sport, picks, stamp):
+    """Owner request Nov 11: the team-total line implied from DraftKings' spread and total (app/implied_lines.py) beside
+    each NBA/NHL/NFL team-total pick. Information only: never a price, and team totals never go on tickets."""
+    from app import implied_lines
+    for pick in picks:
+        if pick.get('market') in OFF_TICKETS:
+            try:
+                pick['implied_line'] = implied_lines.implied_team_total(conn, pick['game_id'], pick['market'], stamp, sport)
+            except Exception as exc:
+                pick['implied_line'] = {'error': type(exc).__name__}
+            pick['ticket_rule'] = 'Team totals stay off tickets (owner, Nov 11).'
 
 
 def lineup_flags(sport, picks):
@@ -448,6 +465,7 @@ def soccer_market_picks(conn, stamp):
                                 outcome_probabilities=probs, status=row['status'], generated_at=row['generated_at'],
                                 cutoff_at=row['cutoff_at'], grade=result or 'pending',
                                 quote_check={'line_source': 'model', 'price_now': None},
+                                **soccer_price_facts(m.get('prices') or {}, market, side),
                                 settlement_rule=sml.SETTLEMENT_RULE))
         for family, f in m['families'].items():
             joint = json.loads(conn.execute("SELECT joint_json FROM soccer_market_forecasts WHERE forecast_id = ?",
@@ -482,6 +500,21 @@ def soccer_market_picks(conn, stamp):
                                 status=f['status'], generated_at=f['generated_at'], cutoff_at=f['cutoff_at'],
                                 grade=result or 'pending', quote_check=quote,
                                 settlement_rule=sml.SETTLEMENT_RULE))
+    return out
+
+
+def soccer_price_facts(prices, market, side):
+    """Owner request Nov 11, for a double chance / draw no bet leg: Bet365's double chance quote with its retrieval time
+    (`book_quote`) and the fair price derived from DraftKings' 1X2 (`derived_price`, never a price to bet). Information
+    beside the pick; the leg's own stored price (`quote_check`) is unchanged."""
+    out = {}
+    b = prices.get('bet365_double_chance')
+    if market == 'double_chance' and b and side in b['prices']:
+        out['book_quote'] = {'provider': b['provider'], 'label': b['label'], 'retrieved_at': b['retrieved_at'], **b['prices'][side]}
+    d = prices.get('derived_from_match_result_prices')
+    if d and side in (d.get(market) or {}):
+        out['derived_price'] = {'decimal': d[market][side], 'label': d['label'], 'note': d['note'],
+                                'provider': d['provider'], 'retrieved_at': d['retrieved_at']}
     return out
 
 
@@ -961,6 +994,9 @@ def check(plan):
             if quote.get('line_moved'):
                 raise ValueError(f"Line changed since forecast ({pick['matchup']} {pick['market']}: {quote['line_at_forecast']:g} "
                                  f"-> {quote['line_now']:g}); review again")
+            if pick['market'] in OFF_TICKETS:
+                raise ValueError(f"{pick['matchup']} {pick['pick_label']}: team totals stay off tickets (owner, Nov 11: the line "
+                                 "implied from spread and total beat the app's own team-total line); review again")
             flags = lineup_flags(sport, picks)
             if flags and not str(leg.get('lineup_reason') or '').strip():
                 raise ValueError(f"{pick['matchup']} {pick['pick_label']}: {'; '.join(flags)}. Leave this pick off, or state "

@@ -1032,6 +1032,15 @@ export interface SoccerMarketMatch {
   families: Partial<Record<'goals' | 'corners', SoccerMarketForecast>>;
   derived: { forecast_id: number; generated_at: string; cutoff_at: string; candidate_sha256: string; label: string;
     probabilities_1x2: { home: number; draw: number; away: number }; selections: SoccerMarketSelection[] } | null;
+  /** Owner request Nov 11: Bet365's double chance (a sportsbook quote, with our retrieval time) and fair prices derived
+   *  from DraftKings' 1X2 (never a price to bet at). */
+  prices?: {
+    bet365_double_chance: { provider: string; label: string; retrieved_at: string; note: string;
+      prices: Partial<Record<'home_draw' | 'draw_away' | 'home_away', { fractional: string; decimal: number }>> } | null;
+    derived_from_match_result_prices: { label: string; note: string; provider: string; retrieved_at: string;
+      double_chance: Record<'home_draw' | 'draw_away' | 'home_away', number | null>;
+      draw_no_bet: Record<'home' | 'away', number> } | null;
+  };
 }
 export interface SoccerMarketFamilyState {
   family: 'goals' | 'corners'; served: boolean; reason: string | null; candidate_sha256?: string; model?: string;

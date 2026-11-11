@@ -552,3 +552,26 @@ def test_a_long_wrapped_pick_pushes_the_lineup_line_down_instead_of_overlapping(
     long = short.replace('<b>CLE win</b>', '<b>Cleveland Cavaliers to win in regulation time tonight</b>', 1)
     heights = [Image.open(BytesIO(telegram_card.render_card(t))).height for t in (short, long)]
     assert heights[1] > heights[0]
+
+
+def test_a_team_total_pick_shows_the_implied_line_labelled_and_the_card_fits():
+    """Owner request Nov 11: 'implied from spread and total', clearly labelled, never as a price; no overflow."""
+    from PIL import Image, ImageDraw
+    from app import telegram_card
+    d = report()
+    d['picks'][0]['implied_line'] = {'line': 113.5, 'label': 'implied from spread and total'}
+    text = tg.message_batches(d, '123')[0][1]
+    assert 'ORL over 109.5 · <i>model line · implied from spread and total 113.5</i>' in text
+    assert tg.message_batches(d, '123')[0][0] == tg.message_batches(report(), '123')[0][0]     # same card key
+    assert telegram_card.render_card(text).startswith(b'\x89PNG')
+    probe = ImageDraw.Draw(Image.new('RGB', (10, 10)))
+    longest = 'Model line · sportsbook 50.4% · underpriced · implied from spread and total 113.5'
+    assert 200 + probe.textlength(longest, font=telegram_card._font(20)) <= 1000
+
+
+def test_implied_lines_never_stop_a_card(monkeypatch):
+    from app import implied_lines
+    monkeypatch.setattr(implied_lines, 'implied_team_total', lambda *a: 1 / 0)
+    d = report()
+    tg.card_implied_lines(None, 'nba', d, datetime(2026, 11, 2, 20, 0, tzinfo=timezone.utc))
+    assert 'implied_line' not in d['picks'][0]

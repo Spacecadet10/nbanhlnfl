@@ -531,7 +531,7 @@ def test_brief_preflight_is_compact_but_keeps_trigger_settlement_and_alerts(setu
 # --- Varied, intuitive menu (owner request Nov 8): up to 6 options of 2-6 legs, bet type on every leg ---
 
 def mixed_markets(snap):
-    kinds=['winner','spread','total','team_total_home','winner']
+    kinds=['winner','spread','total','reg3','winner']
     for sport in ('nba','nhl','nfl'):
         for p,kind in zip(snap['sports'][sport]['report']['picks'],kinds):
             p['market']=kind
@@ -541,7 +541,7 @@ def mixed_markets(snap):
 def test_varied_menu_sends_options_of_different_sizes_with_bet_types(setup):
     plan,snap,sent,path=setup;mixed_markets(snap)
     path.joinpath('snapshot.json').write_text(json.dumps(snap));plan['review']['snapshot_sha256']=t.sha(path.joinpath('snapshot.json').read_bytes())
-    plan['review']['markets_reviewed']={s:{m:'Reviewed' for m in ('winner','spread','total','team_total_home')} for s in ('nba','nhl','nfl')}
+    plan['review']['markets_reviewed']={s:{m:'Reviewed' for m in ('winner','spread','total','reg3')} for s in ('nba','nhl','nfl')}
     plan['tickets']=[ticket([('nba',1),('nhl',2)]),ticket([('nba',2),('nhl',3),('nfl',4)]),
                      ticket([('nba',3),('nhl',4),('nfl',5),('nba',5)]),ticket([('nhl',1),('nfl',1),('nfl',2),('nba',4),('nhl',5)])]
     for i,(x,label) in enumerate(zip(plan['tickets'],['Safer pair','Mixed markets','Four-leg mix','Bigger five-leg'])):
@@ -549,7 +549,7 @@ def test_varied_menu_sends_options_of_different_sizes_with_bet_types(setup):
     assert t.send(t.check(plan))=='sent'
     text=stored_texts()[0]
     assert '4 options:' in text and '#1 2 legs' in text and '#4 5 legs' in text
-    assert 'Moneyline' in text and 'Puck line' in text and 'Over/Under' in text and 'Team total' in text and 'Spread' in text
+    assert 'Moneyline' in text and 'Puck line' in text and 'Over/Under' in text and '60-min result' in text and 'Spread' in text
     assert 'Ticket 4: Bigger five-leg' in text and len(text)<=3900
     assert [m for m,p in sent]==['sendPhoto','sendPhoto']   # 2+3+4 legs on the first picture, the five-leg ticket on its own
     first,second=sent[0][1]['caption'],sent[1][1]['caption']
@@ -799,15 +799,15 @@ def test_ticket_text_shows_latest_stored_price_and_model_line_note(setup):
     plan,snap,sent,path=setup
     snap['sports']['nba']['report']['picks'][0]['quote_check']=dict(provider='DraftKings',retrieved_at='2026-11-08T16:55:00Z',
         line_source='none',line_at_forecast=None,line_now=None,price_now=-700,price_at_forecast=-650,line_moved=False)
-    snap['sports']['nhl']['report']['picks'][1].update(market='team_total_home',pick_label='B2 over 2.5',quote_check=dict(
+    snap['sports']['nhl']['report']['picks'][1].update(market='total',pick_label='Over 5.5',quote_check=dict(
         provider=None,retrieved_at=None,line_source='model',line_at_forecast=2.5,line_now=None,price_now=None,price_at_forecast=None,line_moved=False))
     sp=Path(plan['snapshot_path']);sp.write_text(json.dumps(snap));plan['review']['snapshot_sha256']=t.sha(sp.read_bytes())
-    plan['review']['markets_reviewed']['nhl']['team_total_home']='Reviewed'
+    plan['review']['markets_reviewed']['nhl']['total']='Reviewed'
     plan['tickets']=[ticket([('nba',1),('nhl',2)])]
     text=t.check(plan)['text']
     assert 'B1 win</b> / Nov 08 01:00 PM EST / 75.0% / DK -700 (was -650)' in text
     assert 'Prices: latest stored DraftKings quotes, 11:55 AM EST' in text and 'confirm before betting' in text
-    assert "NHL B2 over 2.5: the app's own line; no sportsbook line stored" in text
+    assert "NHL Over 5.5: the app's own line; no sportsbook line stored" in text
 
 
 def test_interrupted_review_is_recorded_as_a_retryable_failure_and_alerted_once(setup,monkeypatch,capsys):
@@ -2070,3 +2070,33 @@ def test_snapshot_attaches_lineup_facts_and_flags_and_survives_a_failure(monkeyp
     soccer = [dict(game_id='s')]
     t.attach_lineups(None, 'soccer', soccer, NOW)
     assert soccer == [dict(game_id='s')]
+
+
+def test_team_totals_stay_off_tickets(setup):
+    """Owner, Nov 11: the line implied from spread and total beat the app's own team-total line, so team totals stay off."""
+    plan,snap,sent,path=setup
+    snap['sports']['nhl']['report']['picks'][1].update(market='team_total_home',pick_label='B2 over 2.5')
+    sp=Path(plan['snapshot_path']);sp.write_text(json.dumps(snap));plan['review']['snapshot_sha256']=t.sha(sp.read_bytes())
+    plan['review']['markets_reviewed']['nhl']['team_total_home']='Reviewed'
+    plan['tickets']=[ticket([('nba',1),('nhl',2)])]
+    with pytest.raises(ValueError,match='team totals stay off tickets'):
+        t.check(plan)
+    assert sent==[]
+
+
+def test_team_total_picks_carry_the_implied_line_and_soccer_double_chance_its_quotes(monkeypatch):
+    from app import implied_lines
+    monkeypatch.setattr(implied_lines,'implied_team_total',lambda conn,gid,market,at,sport:{'line':113.5,'label':'implied from spread and total'})
+    picks=[dict(game_id='g',market='team_total_home'),dict(game_id='g',market='winner')]
+    t.attach_prices(None,'nba',picks,NOW)
+    assert picks[0]['implied_line']['line']==113.5 and 'off tickets' in picks[0]['ticket_rule'] and 'implied_line' not in picks[1]
+    prices={'bet365_double_chance':{'provider':'Bet365','label':'Bet365 quote','retrieved_at':'2026-11-20T12:00:00Z',
+            'prices':{'home_draw':{'fractional':'1/9','decimal':1.1111}}},
+            'derived_from_match_result_prices':{'label':'derived from match result prices','note':'Not a price you can bet at.',
+            'provider':'DraftKings','retrieved_at':'2026-11-20T11:00:00Z','double_chance':{'home_draw':1.183},'draw_no_bet':{'home':1.236}}}
+    dc=t.soccer_price_facts(prices,'double_chance','home_draw')
+    assert dc['book_quote']['decimal']==1.1111 and dc['book_quote']['retrieved_at']=='2026-11-20T12:00:00Z'
+    assert dc['derived_price']['decimal']==1.183 and 'Not a price' in dc['derived_price']['note']
+    dnb=t.soccer_price_facts(prices,'draw_no_bet','home')
+    assert 'book_quote' not in dnb and dnb['derived_price']['decimal']==1.236
+    assert t.soccer_price_facts({},'double_chance','home_draw')=={}

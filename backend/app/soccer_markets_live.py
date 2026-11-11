@@ -408,7 +408,28 @@ def match_markets(conn, *, competition: Optional[str] = None, day: Optional[str]
         m["derived"] = {"forecast_id": f["forecast_id"], "generated_at": f["generated_at"], "cutoff_at": f["cutoff_at"],
                         "candidate_sha256": f["candidate_sha256"], "probabilities_1x2": f["probabilities"],
                         "selections": sels, "label": "From the tested 90-minute 1X2 forecast"}
+    for m in by_match.values():
+        m["prices"] = match_prices(conn, m["match_id"], as_of)
     return sorted(by_match.values(), key=lambda m: (m["kickoff_at"], m["match_id"]))
+
+
+def match_prices(conn, match_id: str, as_of: str) -> dict:
+    """Owner request Nov 11: Bet365's double chance as a sportsbook quote with its retrieval time (app/bet365_dc.py), and
+    double chance / draw no bet derived from DraftKings' stored 1X2 prices (app/implied_lines.py; never a price to bet).
+    Both as of min(as_of, kickoff). A problem here never hides a forecast."""
+    from . import bet365_dc, implied_lines
+    out = {"bet365_double_chance": None, "derived_from_match_result_prices": None}
+    try:
+        r = conn.execute("SELECT home_team_id, away_team_id, kickoff_at FROM soccer_matches WHERE match_id = ?",
+                         (match_id,)).fetchone()
+        if r is None:
+            return out
+        at = min(as_of, r["kickoff_at"])
+        out["bet365_double_chance"] = bet365_dc.latest(match_id, r["home_team_id"], r["away_team_id"], at)
+        out["derived_from_match_result_prices"] = implied_lines.derived_dc_dnb(quotes(conn, match_id, at))
+    except Exception as exc:
+        out["error"] = type(exc).__name__
+    return out
 
 
 def ranking(matches: list[dict], limit: int = 50) -> list[dict]:
