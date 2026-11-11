@@ -142,3 +142,10 @@ def test_review_fix_only_plus_one_and_a_half_counts_as_an_nhl_puck_line_dog():
 def test_review_fix_land_words_rounds_halves_up():
     assert t.land_words(.65) == 'about 7 times in 10' and t.land_words(.85) == 'about 9 times in 10'
     assert t.land_words(.75) == 'about 8 times in 10' and t.land_words(.40) == 'about 1 time in 3'
+
+
+def test_review_fix_the_refusal_says_what_a_shorter_ticket_allows():
+    four = t.shape_problems([leg('A win', .90), leg('B win', .90), leg('C win', .90), leg('Weak win', .70)])
+    assert four[0].endswith('Move them to a shorter ticket (two or three legs have no floor)')
+    five = t.shape_problems([leg(f'T{i} win', .90) for i in range(4)] + [leg('Weak win', .76)])
+    assert five[0].endswith('Move them to a shorter ticket (4 legs need 75%; two or three legs have no floor)')

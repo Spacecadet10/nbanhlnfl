@@ -355,13 +355,20 @@ def ticket_shape(legs):
     asking = [r for r in rows if r[2]]
     leg, probability, asks, _ = min(asking, key=lambda r: (r[3], r[1])) if asking else min(rows, key=lambda r: r[1])
     all_land = math.prod(r[1] for r in rows)
-    return dict(legs=len(rows), weakest=leg['pick_label'], weakest_forecast_id=leg.get('forecast_id'),
+    return dict(legs=len(rows), weakest=leg['pick_label'], weakest_forecast_id=leg.get('forecast_id'), weakest_sport=leg.get('sport'),
                 weakest_probability=probability, weakest_asks_a_lot=asks,
                 weakest_line=f"Weakest leg: {leg_name(leg, legs)} ({probability:.0%})" + (' · price asks a lot' if asks else ''),
                 price_asks_a_lot=[r[0]['pick_label'] for r in asking], all_land=all_land,
                 all_land_line=f"All legs land {land_words(all_land)}",
                 lowest_probability=min(r[1] for r in rows),
                 puck_line_dogs=[r[0]['pick_label'] for r in rows if _puck_line_dog(r[0])])
+
+
+def _shorter_hint(count):
+    """What a shorter ticket allows, from SHAPE_FLOORS (delta review LOW: never a stale literal)."""
+    floored = [n for n in sorted(SHAPE_FLOORS) if n < count]
+    hint = f"{floored[0]} legs need {SHAPE_FLOORS[floored[0]]:.0%}; " if floored else ''
+    return hint + 'two or three legs have no floor'
 
 
 def shape_problems(legs):
@@ -372,7 +379,7 @@ def shape_problems(legs):
         weak = [f"{leg_name(leg)} ({leg['probability']:.0%})" for leg in legs if leg['probability'] < floor - 1e-9]
         if weak:
             out.append(f"a {len(legs)}-leg ticket needs every leg at {floor:.0%} or better; too weak: {', '.join(weak)}. "
-                       "Move them to a shorter ticket (4 legs need 75%; two or three legs have no floor)")
+                       f"Move them to a shorter ticket ({_shorter_hint(len(legs))})")
     if len(shape['puck_line_dogs']) > PUCK_LINE_DOGS:
         out.append(f"at most {PUCK_LINE_DOGS} NHL +1.5 leg on one ticket; this one has {', '.join(shape['puck_line_dogs'])}")
     return out
