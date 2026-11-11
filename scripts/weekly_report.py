@@ -12,8 +12,9 @@ No interim look (docs/preregistration/best-pick-2026-11-11-v4.md section 9). Unt
 complete (or the rule is dropped for too few games), sections 1-3 show COUNTS ONLY for that sport. Decided here (Step H):
 H1-H7 on new games are the rule's score items on the very cards and picks the test grades (named = score >= 2, baseline =
 highest book %), so their win counts are an interim look and are hidden too; section 3 is the named pick's outcome
-itself, hidden; section 4 holds back every forecast the recorder stored as a named or baseline pick (all rows, reviewed or
-not) for that sport, and if the ledger cannot be read, every NBA/NHL rule-market pick of a game after T0.
+itself, hidden; section 4 holds back every market of every GAME the recorder stored with a named or baseline pick (all rows,
+reviewed or not; by game because the scorecard's canonical forecast is often regenerated after the card was sent, and the
+other markets of the card are correlated), and if the ledger cannot be read, every NBA/NHL pick of a game after T0.
 Every line carries its n; a comparison with fewer than scorecard_report.MIN_N (30) on a side says "too few to tell".
 
   NBA_DATA_DIR=<copy> python scripts/weekly_report.py --ledger <ledger copy> [--out-dir DIR] [--now ...]
@@ -48,7 +49,7 @@ from app import config  # noqa: E402
 MIN_N = sr.MIN_N
 SPORTS = ('nba', 'nhl', 'nfl', 'soccer')
 FMT = '%Y-%m-%dT%H:%M:%SZ'
-MAX_REPEAT_LINES = 10
+MAX_REPEAT_LINES = 5            # per sport and market in section 4; newest lost cards in section 3
 # The recorder's independent review (time written in HANDOFF.md, reviewed recorder sha256): kept in one small file next to
 # this script; --reviewed-at / --reviewed-recorder override it.
 REVIEW_CONFIG = HERE / 'weekly_report_review.json'
@@ -117,9 +118,12 @@ def test_state(ledger, store, sport: str, now: datetime, reviewed_at, reviewed: 
     try:
         info = bp.counted_cards(ledger, sport, reviewed_at, reviewed)
         has = ledger.execute("SELECT 1 FROM sqlite_master WHERE name='best_picks'").fetchone()
+        # Games, not forecast ids: the scorecard's canonical pick is the latest forecast before the start and is often
+        # regenerated after the card was sent, so its id differs from the recorded one; and the other markets of the same
+        # card are correlated with the named pick. Every market of such a game is held back (review HIGH, Nov 11).
         out['held'] = set() if not has else {
-            f for r in ledger.execute('SELECT named_forecast_id, baseline_forecast_id FROM best_picks WHERE sport=?', (sport,))
-            for f in r if f is not None}
+            r[0] for r in ledger.execute('SELECT game_id FROM best_picks WHERE sport=? AND (named_forecast_id IS NOT NULL '
+                                         'OR baseline_forecast_id IS NOT NULL)', (sport,))}
     except sqlite3.Error as exc:
         out['error'] = f'ledger not readable ({type(exc).__name__})'
         return out
@@ -281,31 +285,40 @@ def section_repeats(data_dir: Path, states: dict, now: datetime) -> list:
             held = st.get('held')
             keep = []
             for r in rows:
-                if (r['forecast_id'] in held) if held is not None else (
-                        r['market'] in bpr.RULE_MARKETS[sport] and _t(r['tipoff_at']) > _t(bpr.T0)):
+                if (r['game_id'] in held) if held is not None else _t(r['tipoff_at']) > _t(bpr.T0):
                     held_n += 1
                 else:
                     keep.append(r)
             rows = keep
-            lines.append(f'- {S}: held back while the best-pick test runs (named or comparison picks'
-                         f"{'' if held is not None else '; ledger not readable, so every new winner/spread/total/reg3 pick'}"
-                         f'): n={held_n}.')
+            games = (f'games with a recorded named or comparison pick: games n={len(held)}' if held is not None
+                     else 'ledger not readable, so every game after T0')
+            lines.append(f'- {S}: held back while the best-pick test runs, every market of {games}; picks n={held_n}.')
         groups = defaultdict(list)
         for r in rows:
             groups[tuple(r.get(k) for k in KEY)].append(r)
         shown = [(k, rs) for k, rs in groups.items()
                  if len(rs) >= 2 and any(week <= _t(r['tipoff_at']) <= now for r in rs)]
-        shown.sort(key=lambda kv: (-len(kv[1]), kv[0][0], float(kv[0][1])))
+        shown.sort(key=lambda kv: (kv[0][0], -len(kv[1]), float(kv[0][1])))
         lines.append(f'- {S}: decided picks with a scorecard row n={len(rows)}; exact percentages repeated this week '
                      f'n={len(shown)}.')
-        for (market, p, side, source, model, line_source), rs in shown[:MAX_REPEAT_LINES]:
+        by_market = defaultdict(list)
+        for k, rs in shown:
+            by_market[k[0]].append((k, rs))
+        listed = []
+        for market in sorted(by_market):
+            listed += by_market[market][:MAX_REPEAT_LINES]
+            if len(by_market[market]) > MAX_REPEAT_LINES:
+                listed.append((market, len(by_market[market]) - MAX_REPEAT_LINES))
+        for item in listed:
+            if isinstance(item[1], int):
+                lines.append(f'  - {S} {item[0]}: more repeated percentages not listed: n={item[1]}.')
+                continue
+            (market, p, side, source, model, line_source), rs = item
             w = sum(r['grade'] == 'win' for r in rs)
             wk = [r for r in rs if week <= _t(r['tipoff_at']) <= now]
             ww = sum(r['grade'] == 'win' for r in wk)
             lines.append(f'  - {S} {market} {p}% side {side} (model {_model(model)}, line {line_source}): {_wl(w, len(rs))}, '
                          f'{_rate(w, len(rs))}; this week {_wl(ww, len(wk))}.')
-        if len(shown) > MAX_REPEAT_LINES:
-            lines.append(f'  - more repeated percentages not listed: n={len(shown) - MAX_REPEAT_LINES}.')
     return lines + ['']
 
 
@@ -347,8 +360,8 @@ def build(data_dir: Path, ledger_path, now: datetime, reviewed_at, reviewed: set
             + (f" (still closed: {', '.join(closed)})." if closed else ' (all evaluations complete).'),
             '- Why hypotheses are hidden too: H1-H7 are the rule\'s own score, counted on the same cards and picks the test '
             'grades; their win counts on new games would show how the test is going.',
-            '- Exact-percentage records leave out every pick the test grades (named or comparison pick) until that test '
-            'is complete; the number held back is shown.',
+            '- Exact-percentage records leave out every market of every game whose card has a named or comparison pick '
+            'until that test is complete; the numbers held back are shown.',
             f'- "Too few to tell" whenever a side has fewer than {MIN_N} decided picks (scorecard report threshold). '
             'Patterns from old games are candidates, not facts.',
             '- Counted cards need the recorder\'s independent review time: '
@@ -356,8 +369,8 @@ def build(data_dir: Path, ledger_path, now: datetime, reviewed_at, reviewed: set
     if missing:
         head.append(f"- Scorecard file missing for: {', '.join(missing)} (section 4 has nothing for them).")
     if ledger is None:
-        head.append('- Telegram ledger not readable: test counts unknown; section 4 holds back every new NBA/NHL '
-                    'winner, spread, total and reg3 pick.')
+        head.append('- Telegram ledger not readable: test counts unknown; section 4 holds back every NBA/NHL pick of a '
+                    'game after T0.')
     body = (section_best(states) + section_hypotheses(states, stores, now) + section_lost(states, stores, now)
             + section_repeats(data_dir, states, now))
     for c in [ledger, *stores.values()]:

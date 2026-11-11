@@ -65,8 +65,9 @@ def write_store(path, results):
     c.close()
 
 
-def sc_row(fid, pct, grade, tip, sport='nba', market='winner', side='a'):
-    return dict(forecast_id=fid, sport=sport, market=market, displayed_pct=pct, side=side, source='s', model_version='m',
+def sc_row(fid, pct, grade, tip, sport='nba', market='winner', side='a', game='other'):
+    return dict(forecast_id=fid, game_id=game, sport=sport, market=market, displayed_pct=pct, side=side, source='s',
+                model_version='m',
                 line_source='none', tipoff_at=tip, game_date=tip[:10], matchup='X @ Y', pick_label='Y', grade=grade,
                 book_devig=.6, confidence=float(pct) / 100)
 
@@ -98,8 +99,15 @@ def section(text, number):
 def test_before_completion_named_picks_hypotheses_and_lost_cards_show_counts_only(tmp_path, monkeypatch):
     m = wr()
     named_fid = 2                                          # card g1 names forecast 2 (cards_for: 2i), after T0
-    repeats = [sc_row(named_fid, '60.0', 'win', '2026-11-16T04:00:00Z'), sc_row(3, '60.0', 'loss', '2026-11-16T04:00:00Z'),
-               sc_row(9001, '60.0', 'win', '2026-12-28T00:00:00Z'), sc_row(9002, '60.0', 'loss', '2026-12-29T00:00:00Z')]
+    # Real shape: the scorecard's canonical pick is the LATEST forecast before the start, often regenerated after the card
+    # was sent, so its forecast id differs from the recorder's named/baseline id for the same game and market (review HIGH).
+    repeats = [sc_row(7001, '60.0', 'win', '2026-11-16T04:00:00Z', game='g1'),                     # canonical winner of g1
+               sc_row(7002, '62.0', 'loss', '2026-11-16T04:00:00Z', game='g1', market='total'),   # other market, same game
+               sc_row(7003, '62.0', 'win', '2026-11-16T04:00:00Z', game='g2', market='team_total_home'),
+               sc_row(9001, '60.0', 'win', '2026-12-28T00:00:00Z'), sc_row(9002, '60.0', 'loss', '2026-12-29T00:00:00Z'),
+               sc_row(9003, '62.0', 'win', '2026-12-28T00:00:00Z', market='total'),
+               sc_row(9004, '62.0', 'loss', '2026-12-29T00:00:00Z', market='total')]
+    assert named_fid not in {r['forecast_id'] for r in repeats}
     data, _, _ = setup(tmp_path, 99, monkeypatch, m, repeats)
     m.bp.poisson_binomial_sf = m.bp.permutation_p = lambda *a, **k: pytest.fail('no test before completion')
     text = page(m, tmp_path, data)
@@ -110,8 +118,10 @@ def test_before_completion_named_picks_hypotheses_and_lost_cards_show_counts_onl
     assert 'H1' in s2 and 'hidden until' in s2 and 'v4' in s2          # the reason is on the page
     assert 'hidden until' in s3
     s4 = section(text, 4)
-    assert 'held back' in s4 and re.search(r'held back[^\n]*n=2\b', s4)   # named 2 and baseline 3 of card g1
-    assert '1 won, 1 lost (n=2)' in s4                                 # the two picks the test never grades
+    assert re.search(r'held back[^\n]*games n=99\b[^\n]*picks n=3\b', s4), s4   # every market of g1 and g2
+    winner = next(line for line in s4.splitlines() if 'winner 60.0%' in line)
+    total = next(line for line in s4.splitlines() if 'total 62.0%' in line)
+    assert '1 won, 1 lost (n=2)' in winner and '1 won, 1 lost (n=2)' in total     # only games with no recorded card
 
 
 def test_after_completion_the_page_shows_wins(tmp_path, monkeypatch):
@@ -136,7 +146,7 @@ def test_unreadable_ledger_fails_closed_holding_back_every_new_rule_market_pick(
     text = Path(m.main(['--data-dir', str(data), '--ledger', str(tmp_path / 'missing.sqlite'), '--out-dir', str(out),
                         '--now', '2026-12-31T00:00:00Z'])).read_text()
     s4 = section(text, 4)
-    assert re.search(r'held back[^\n]*n=2\b', s4) and '60.0%' not in s4 and '61.0%' in s4
+    assert re.search(r'held back[^\n]*picks n=4\b', s4) and '60.0%' not in s4 and '61.0%' not in s4   # every market
     assert 'not readable' in section(text, 1)
 
 
@@ -241,3 +251,20 @@ def test_a_named_pick_carried_by_a_pre_t0_earliest_card_never_counts(tmp_path, m
                     (f'<b>PROP51 PICKS · NBA</b>\n<b>A @ g0</b>\nStarts {cards[0][3]}\n<b>Recommended pick</b>\nX win',))
     text = page(m, tmp_path, data)
     assert 'counted n=2' in section(text, 1)
+
+
+def test_repeats_are_capped_per_market_so_winner_lines_are_not_crowded_out(tmp_path, monkeypatch):
+    m = wr()
+    rows = [sc_row(10000 + 10 * i + j, f'50.{i}', 'win', '2026-12-28T00:00:00Z', market='team_total_home')
+            for i in range(9) for j in range(5)]
+    rows += [sc_row(20000 + j, '64.4', 'win', '2026-12-29T00:00:00Z') for j in range(2)]
+    data, _, _ = setup(tmp_path, 103, monkeypatch, m, rows)
+    s4 = section(page(m, tmp_path, data), 4)
+    assert 'winner 64.4%' in s4
+    assert sum('team_total_home' in line and '%' in line for line in s4.splitlines()) == m.MAX_REPEAT_LINES
+    assert re.search(r'team_total_home[^\n]*not listed[^\n]*n=%d' % (9 - m.MAX_REPEAT_LINES), s4)
+
+
+def test_launch_agent_logs_into_the_reports_folder():
+    p = plistlib.loads((ROOT / 'scripts' / 'launchd' / 'com.nba-predictor.weekly-report.plist').read_bytes())
+    assert p['StandardOutPath'] == p['StandardErrorPath'] == '/Users/andry/Desktop/nba-predictor-sprint1/data/reports/weekly-report.log'
