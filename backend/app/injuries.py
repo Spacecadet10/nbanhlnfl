@@ -30,6 +30,8 @@ PUBLISH_MARGIN = timedelta(seconds=60)            # a slot is not requested unti
 LATE_AFTER = timedelta(minutes=30)
 MAX_ATTEMPTS_PER_RUN = 8
 MAX_ATTEMPTS_PER_SLOT = 4
+MAX_ATTEMPTS_PER_QUARTER_SLOT = 1                 # a missing :15/:45 file costs one request (review MEDIUM, Nov 11): the next
+                                                  # report is 15 minutes away, and retries must never starve the evening ones
 MAX_ATTEMPTS_PER_DAY = 160                        # ~67 reports on a full game day (Nov 11: :15/:45 added) + retries
 MAX_ATTEMPTS_PER_SLOT_PER_RUN = 2
 OVERWRITE_CHECKS_PER_DAY = 2
@@ -86,6 +88,11 @@ def due_slots(conn: sqlite3.Connection, start: datetime, end: datetime) -> list[
     return out
 
 
+def slot_limit(slot: Slot) -> int:
+    """Lifetime attempts a slot may use: four for :00/:30, one for :15/:45."""
+    return MAX_ATTEMPTS_PER_SLOT if _parse(slot.at).minute % SLOT_MINUTES == 0 else MAX_ATTEMPTS_PER_QUARTER_SLOT
+
+
 def _slot_state(conn: sqlite3.Connection, name: str) -> tuple[bool, int]:
     """(already stored, collect attempts ever made) for one report."""
     row = conn.execute("SELECT COALESCE(SUM(outcome = 'stored'), 0), COUNT(*) FROM injury_report_attempts "
@@ -101,7 +108,7 @@ def plan(conn: sqlite3.Connection, now: datetime) -> dict:
         stored, attempts = _slot_state(conn, s.name)
         if stored:
             out["stored"] += 1
-        elif attempts >= MAX_ATTEMPTS_PER_SLOT:
+        elif attempts >= slot_limit(s):
             out["given_up"].append(s)
         else:
             out["pending"].append(s)
@@ -209,7 +216,7 @@ def run(conn: sqlite3.Connection, *, now: Optional[datetime] = None, dry_run: bo
         _, lifetime = _slot_state(conn, slot.name)
         tries, outcome = 0, None
         while outcome not in ("stored", "not_available") and tries < MAX_ATTEMPTS_PER_SLOT_PER_RUN \
-                and lifetime + tries < MAX_ATTEMPTS_PER_SLOT and budget > 0:
+                and lifetime + tries < slot_limit(slot) and budget > 0:
             spend(BACKOFF_SECONDS[min(tries - 1, len(BACKOFF_SECONDS) - 1)] if tries else 0)
             outcome = _download(conn, slot, "collect", fetch, clock)
             tries += 1
@@ -299,7 +306,7 @@ def summary(conn: sqlite3.Connection, now: Optional[datetime] = None, days: int 
             day["stored"] += 1
             day["stored_late"] += row["late"]
             day["lags"].append((_parse(row["completed_at"]) - _parse(s.at)).total_seconds() / 60)
-        elif _slot_state(conn, s.name)[1] >= MAX_ATTEMPTS_PER_SLOT:
+        elif _slot_state(conn, s.name)[1] >= slot_limit(s):
             day["given_up"] += 1
         else:
             day["not_stored_yet"] += 1
