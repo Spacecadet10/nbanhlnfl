@@ -3,8 +3,7 @@
 <plist version="1.0">
 <dict>
 	<!-- Weekly plain-language page (scripts/weekly_report.py): Monday 09:00 local. Read-only; writes data/reports/weekly-YYYY-MM-DD.md only.
-	     NOT installed. Once the best-pick recorder's independent review is written in HANDOFF.md, add
-	     -\-reviewed-at <UTC> and -\-reviewed-recorder <sha256> (until then no card counts, as in scripts/best_picks.py). -->
+	     NOT installed. The recorder review time and reviewed recorder sha256 live only in scripts/weekly_report_review.json. -->
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>NBA_DATA_DIR</key>
@@ -32,6 +31,8 @@
 		<string>/Users/andry/nba-predictor-delivery/scripts/weekly_report.py</string>
 		<string>--ledger</string>
 		<string>/Users/andry/Desktop/nba-predictor-sprint1/.telegram-delivery.sqlite</string>
+		<string>--review-config</string>
+		<string>/Users/andry/nba-predictor-delivery/scripts/weekly_report_review.json</string>
 	</array>
 	<key>RunAtLoad</key>
 	<false/>

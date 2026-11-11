@@ -79,7 +79,7 @@ def setup(tmp_path, n_cards, monkeypatch, m, repeats=()):
     write_store(data / 'nba.sqlite', res)
     (data / 'scorecard').mkdir()
     (data / 'scorecard' / 'nba.sqlite').write_bytes(b'')            # present; its reader is replaced below
-    monkeypatch.setattr(m.sr, 'graded_rows', lambda d, sport, as_of: [r for r in repeats if r['sport'] == sport])
+    monkeypatch.setattr(m.sr, 'graded_rows', lambda d, sport, as_of: ([r for r in repeats if r['sport'] == sport], {}))
     return data, cards, res
 
 
@@ -211,3 +211,33 @@ def test_launch_agent_is_weekly_guarded_and_points_at_the_release_checkout():
     assert p['StartCalendarInterval'] == {'Weekday': 1, 'Hour': 9, 'Minute': 0} and p['RunAtLoad'] is False
     assert p['ProgramArguments'][1] == '/Users/andry/nba-predictor-delivery/scripts/weekly_report.py'
     assert '--ledger' in p['ProgramArguments'] and 'StartInterval' not in p
+    args = p['ProgramArguments']
+    assert args[args.index('--review-config') + 1] == '/Users/andry/nba-predictor-delivery/scripts/weekly_report_review.json'
+    raw = (ROOT / 'scripts' / 'launchd' / 'com.nba-predictor.weekly-report.plist').read_text()
+    assert '023a26a4' not in raw and '23:52' not in raw                      # the values live in the config only
+
+
+def test_review_time_and_recorder_come_from_the_config_unless_given(tmp_path, monkeypatch):
+    m = wr()
+    at, shas = m.review_defaults()
+    assert at == '2026-11-11T23:52:00Z'
+    assert shas == ['023a26a40abe23a4f388e2c3ba91088c5ceb5a6aa8e4886cc46ad55db9bd376e'] == [bpr.RECORDER_SHA256]
+    data, _, _ = setup(tmp_path, 3, monkeypatch, m)
+    cfg = tmp_path / 'review.json'
+    cfg.write_text('{"reviewed_at": "%s", "reviewed_recorder_sha256": ["%s"]}' % (REVIEWED, SHA))
+    args = ['--data-dir', str(data), '--ledger', str(tmp_path / 'ledger.sqlite'), '--out-dir', str(tmp_path / 'o'),
+            '--now', '2026-12-31T00:00:00Z']
+    text = Path(m.main(args + ['--review-config', str(cfg)])).read_text()
+    assert 'counted n=3' in section(text, 1) and REVIEWED in text
+    text = Path(m.main(args + ['--review-config', str(tmp_path / 'none.json')])).read_text()
+    assert 'counted n=0' in section(text, 1) and 'not given' in text
+
+
+def test_a_named_pick_carried_by_a_pre_t0_earliest_card_never_counts(tmp_path, monkeypatch):
+    m = wr()
+    data, cards, _ = setup(tmp_path, 3, monkeypatch, m)
+    with sqlite3.connect(tmp_path / 'ledger.sqlite') as led:                    # an earlier card of game g0, before T0
+        led.execute("INSERT INTO deliveries VALUES ('pre','1',?,'sent','2026-11-11T21:00:00Z',NULL,1,NULL)",
+                    (f'<b>PROP51 PICKS · NBA</b>\n<b>A @ g0</b>\nStarts {cards[0][3]}\n<b>Recommended pick</b>\nX win',))
+    text = page(m, tmp_path, data)
+    assert 'counted n=2' in section(text, 1)

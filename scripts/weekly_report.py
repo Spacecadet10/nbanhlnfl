@@ -49,6 +49,18 @@ MIN_N = sr.MIN_N
 SPORTS = ('nba', 'nhl', 'nfl', 'soccer')
 FMT = '%Y-%m-%dT%H:%M:%SZ'
 MAX_REPEAT_LINES = 10
+# The recorder's independent review (time written in HANDOFF.md, reviewed recorder sha256): kept in one small file next to
+# this script; --reviewed-at / --reviewed-recorder override it.
+REVIEW_CONFIG = HERE / 'weekly_report_review.json'
+
+
+def review_defaults(path=REVIEW_CONFIG) -> tuple:
+    """(reviewed_at or None, [recorder sha256, ...]) from the review config; (None, []) when it is absent."""
+    p = Path(path)
+    if not p.is_file():
+        return None, []
+    cfg = json.loads(p.read_text())
+    return cfg.get('reviewed_at'), list(cfg.get('reviewed_recorder_sha256') or [])
 
 # H item: (sport, plain meaning of +1, of 0, of -1, the two values compared: better first)
 H_ITEMS = {
@@ -258,10 +270,12 @@ def section_repeats(data_dir: Path, states: dict, now: datetime) -> list:
             lines.append(f'- {S}: scorecard file missing, nothing to read (n=0).')
             continue
         try:
-            rows = sr.graded_rows(data_dir, sport, as_of)
+            rows, without = sr.graded_rows(data_dir, sport, as_of)
         except sqlite3.Error as exc:
             lines.append(f'- {S}: scorecard not readable ({type(exc).__name__}) (n=0).')
             continue
+        if any(without.values()):
+            lines.append(f'- {S}: decided picks with no scorecard row, left out: n={sum(without.values())}.')
         st, held_n = states.get(sport) or {}, 0
         if sport in bpr.RULE_MARKETS and not st.get('open'):
             held = st.get('held')
@@ -282,7 +296,8 @@ def section_repeats(data_dir: Path, states: dict, now: datetime) -> list:
         shown = [(k, rs) for k, rs in groups.items()
                  if len(rs) >= 2 and any(week <= _t(r['tipoff_at']) <= now for r in rs)]
         shown.sort(key=lambda kv: (-len(kv[1]), kv[0][0], float(kv[0][1])))
-        lines.append(f'- {S}: decided picks n={len(rows)}; exact percentages repeated this week n={len(shown)}.')
+        lines.append(f'- {S}: decided picks with a scorecard row n={len(rows)}; exact percentages repeated this week '
+                     f'n={len(shown)}.')
         for (market, p, side, source, model, line_source), rs in shown[:MAX_REPEAT_LINES]:
             w = sum(r['grade'] == 'win' for r in rs)
             wk = [r for r in rs if week <= _t(r['tipoff_at']) <= now]
@@ -358,8 +373,13 @@ def main(argv=None) -> str:
     ap.add_argument('--out-dir', help='where the page goes (default <data>/reports)')
     ap.add_argument('--reviewed-at', help="UTC time the recorder's independent review was written in HANDOFF.md")
     ap.add_argument('--reviewed-recorder', action='append', default=[], help='recorder_sha256 of a reviewed recorder')
+    ap.add_argument('--review-config', default=str(REVIEW_CONFIG),
+                    help='JSON {reviewed_at, reviewed_recorder_sha256: [...]} used when the two options above are not given')
     ap.add_argument('--now', help='report time (default: now, UTC)')
     a = ap.parse_args(argv)
+    cfg_at, cfg_sha = review_defaults(a.review_config)
+    if a.reviewed_at is None and not a.reviewed_recorder:
+        a.reviewed_at, a.reviewed_recorder = cfg_at, cfg_sha
     data_dir = Path(a.data_dir) if a.data_dir else config.data_dir()
     if config.protected_data_dir(data_dir):
         from app import release

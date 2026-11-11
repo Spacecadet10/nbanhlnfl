@@ -1,0 +1,5 @@
+{
+  "note": "Best-pick recorder independent review (HANDOFF.md): review time and the reviewed recorder's sha256 (app.best_pick_record.RECORDER_SHA256). Read by scripts/weekly_report.py.",
+  "reviewed_at": "2026-11-11T23:52:00Z",
+  "reviewed_recorder_sha256": ["023a26a40abe23a4f388e2c3ba91088c5ceb5a6aa8e4886cc46ad55db9bd376e"]
+}
