@@ -113,8 +113,32 @@ def test_check_refuses_a_long_ticket_with_a_weak_leg_and_accepts_it_short(tmp_pa
         return dict(snapshot_path=str(path), review=review, tickets=[dict(
             label='Shape', stake_usd=1, payout_assessment='Fixture payout judgment',
             legs=[dict(sport='nba', forecast_id=i, rationale='Fixture reason') for i in ids])])
-    with pytest.raises(ValueError, match=r'Ticket shape \(Shape\): a 5-leg ticket needs every leg at 80% or better; too weak: B5 win \(70%\)'):
+    with pytest.raises(ValueError, match=r'Ticket shape \(Shape\): a 5-leg ticket needs every leg at 80% or better; too weak: B5 win in A5 @ B5 \(70%\)\. Move them to a shorter ticket'):
         t.check(plan([1, 2, 3, 4, 5]))
     ok = t.check(plan([1, 2, 5]))
     assert ok['resolved'][0]['shape']['weakest'] == 'B5 win' and ok['resolved'][0]['shape']['legs'] == 3
     assert t.check(plan([1, 2, 3, 4]))['resolved'][0]['shape']['weakest_probability'] == .90
+
+
+def test_review_fix_legs_with_the_same_label_are_named_by_their_game():
+    # Delta review MEDIUM (Nov 11): "too weak: Over 6.5 (70%), Over 6.5 (70%)" did not say which leg to move.
+    a = dict(leg('Over 6.5', .70, sport='nhl', market='total', game='g1'), matchup='TB @ BUF', forecast_id=1)
+    b = dict(leg('Over 6.5', .60, sport='nhl', market='total', game='g2'), matchup='NSH @ ANA', forecast_id=2)
+    legs = [a, b, leg('DET win', .90), leg('MIN win', .90)]
+    problems = t.shape_problems(legs)
+    assert 'Over 6.5 in TB @ BUF (70%)' in problems[0] and 'Over 6.5 in NSH @ ANA (60%)' in problems[0]
+    s = t.ticket_shape(legs)
+    assert s['weakest_line'] == 'Weakest leg: Over 6.5 in NSH @ ANA (60%)' and s['weakest_forecast_id'] == 2
+    # a label that names its leg on its own keeps the short line on the picture
+    assert t.ticket_shape([leg('DET win', .90), leg('DAL win', .67)])['weakest_line'] == 'Weakest leg: DAL win (67%)'
+
+
+def test_review_fix_only_plus_one_and_a_half_counts_as_an_nhl_puck_line_dog():
+    alt = leg('CBJ +2.5', .80, sport='nhl', market='spread')
+    dog = leg('OTT +1.5', .71, sport='nhl', market='spread')
+    assert t.shape_problems([alt, dog, leg('DET win', .88)]) == []
+
+
+def test_review_fix_land_words_rounds_halves_up():
+    assert t.land_words(.65) == 'about 7 times in 10' and t.land_words(.85) == 'about 9 times in 10'
+    assert t.land_words(.75) == 'about 8 times in 10' and t.land_words(.40) == 'about 1 time in 3'

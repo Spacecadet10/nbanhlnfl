@@ -65,7 +65,7 @@ def main():
         full = result(legs, graded)
         losses = sum(g['grade'] == 'loss' for g in graded)
         lost_by_one += full[0] == 'loss' and losses == 1
-        rest = [leg for leg in legs if leg['pick_label'] != shape['weakest']]
+        rest = [leg for leg in legs if (leg.get('forecast_id'), leg['pick_label']) != (shape['weakest_forecast_id'], shape['weakest'])]   # one leg only (review LOW)
         safety = result(rest, graded) if len(rest) >= tickets.MIN_LEGS else ('none', None)
         for name, (state, payout) in (('full', full), ('safety', safety)):
             if state in ('win', 'loss'):
