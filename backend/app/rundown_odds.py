@@ -27,8 +27,9 @@ ALIASES = {'NYK': 'NY', 'GSW': 'GS', 'SAS': 'SA', 'NOP': 'NO', 'WAS': 'WSH', 'PH
            'TBL': 'TB', 'NJD': 'NJ', 'SJS': 'SJ', 'LAK': 'LA', 'MON': 'MTL', 'CLB': 'CBJ', 'NAS': 'NSH',
            'KCC': 'KC', 'GBP': 'GB', 'NEP': 'NE', 'NOS': 'NO', 'SFO': 'SF', 'TBB': 'TB', 'LVR': 'LV',
            'JAC': 'JAX', 'VEG': 'VGK'}
+NHL_ALIASES = {'CAL': 'CGY', 'LAS': 'VGK'}   # TheRundown's NHL codes for Calgary and Vegas (seen in the Nov 11 responses)
 MAX_AGE = timedelta(hours=3)
-DAY_REQUESTS, LOW_QUOTA = 40, 1000   # six requests a run (three sports, today and tomorrow), six scheduled runs a day
+DAY_REQUESTS, LOW_QUOTA, LOW_MONTHLY = 48, 1000, 5000   # six requests a run (three sports, today and tomorrow), seven scheduled runs a day
 
 
 def stamp(now):
@@ -48,6 +49,8 @@ def canon(sport, value):
         return 'UTAH'
     if sport == 'nhl' and value in ('UTAH_NHL', 'UTAH'):
         return 'UTA'
+    if sport == 'nhl' and value in NHL_ALIASES:
+        return NHL_ALIASES[value]
     return ALIASES.get(value, value)
 
 
@@ -72,8 +75,11 @@ def read_cache(now, directory=None):
                 latest[sport, day] = (at, d)
         except (ValueError, KeyError, OSError, TypeError):
             errors.append(path.name)
-    return {'responses': [d for at, d in latest.values() if now - at <= MAX_AGE],
-            'stale_responses': sum(now - at > MAX_AGE for at, d in latest.values()), 'invalid_files': errors}
+    fresh = [d for at, d in latest.values() if now - at <= MAX_AGE]
+    return {'responses': fresh,
+            'stale_responses': sum(now - at > MAX_AGE for at, d in latest.values()), 'invalid_files': errors,
+            # sports whose saved prices are all too old: reported as stale, not as a game the books do not list
+            'stale_sports': sorted({d['_sport'] for at, d in latest.values()} - {d['_sport'] for d in fresh})}
 
 
 def _side(pick):
@@ -116,6 +122,8 @@ def comparison(sport, pick, cache, now):
             except (KeyError, TypeError, ValueError, AttributeError):
                 continue
     if len({m[1].get('event_id') for m in matches}) != 1:
+        if not matches and sport in (cache.get('stale_sports') or []):
+            return dict(out, status='stale_prices')
         return dict(out, status='ambiguous_event' if matches else 'no_current_event')
     response, event, home_id, away_id = max(matches, key=lambda m: m[0]['_fetched_at'])
     fetched = moment(response['_fetched_at'])
@@ -203,7 +211,12 @@ def fetch(now=None, *, opener=urllib.request.urlopen, pause=time.sleep):
             return {'status': 'already_running', 'results': []}
         usage = directory / 'requests.jsonl'
         today = started.date().isoformat()
-        count = sum(json.loads(x)['day'] == today for x in usage.read_text().splitlines() if x.strip()) if usage.exists() else 0
+        def used_today(entry):   # a damaged line (e.g. cut off mid-write) counts as a request: the cap stays safe
+            try:
+                return json.loads(entry)['day'] == today
+            except (ValueError, KeyError, TypeError):
+                return True
+        count = sum(used_today(x) for x in usage.read_text().splitlines() if x.strip()) if usage.exists() else 0
         results = []
         for sport, sid in SPORT_IDS.items():
             for offset in range(2):
@@ -228,9 +241,10 @@ def fetch(now=None, *, opener=urllib.request.urlopen, pause=time.sleep):
                     tmp.write_text(json.dumps(data))
                     tmp.rename(dest)
                     results.append({'sport': sport, 'date': day, 'events': len(data['events']), 'quota': headers})
-                    remaining = next((v for k, v in headers.items() if k.lower() == 'x-datapoints-remaining'), None)
-                    if remaining is not None and int(remaining) < LOW_QUOTA:
-                        return {'status': 'quota_low', 'results': results}
+                    for name, low in (('x-datapoints-remaining', LOW_QUOTA), ('x-datapoints-monthly-remaining', LOW_MONTHLY)):
+                        remaining = next((v for k, v in headers.items() if k.lower() == name), None)
+                        if remaining is not None and int(remaining) < low:
+                            return {'status': 'quota_low', 'results': results}
                 except Exception as exc:
                     return {'status': 'failed', 'error': type(exc).__name__, 'results': results}
                 pause(1.1)

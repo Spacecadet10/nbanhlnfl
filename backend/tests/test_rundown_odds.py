@@ -121,8 +121,8 @@ def test_newest_response_replaces_older_and_future_or_old_files_are_not_used(tmp
     odds.attach('nhl', p, c, NOW)
     assert p['book_comparison']['status'] == 'no_current_event'
     later = odds.read_cache(NOW + timedelta(hours=4), tmp_path)
-    assert not later['responses'] and later['stale_responses'] == 1
-    assert odds.read_cache(NOW, tmp_path / 'missing') == {'responses': [], 'stale_responses': 0, 'invalid_files': []}
+    assert not later['responses'] and later['stale_responses'] == 1 and later['stale_sports'] == ['nhl']
+    assert odds.read_cache(NOW, tmp_path / 'missing') == {'responses': [], 'stale_responses': 0, 'invalid_files': [], 'stale_sports': []}
 
 
 def test_ticket_names_the_one_sportsbook_that_pays_most_for_the_whole_parlay():
@@ -247,3 +247,61 @@ def test_a_picture_too_tall_with_the_prices_is_drawn_without_them():
             return
         assert with_prices is None or card.render_ticket_card('2026-11-11', full) == with_prices
     raise AssertionError('no layout found where only the prices overflow')
+
+
+def test_therundown_nhl_codes_for_calgary_and_vegas_match_the_app():
+    # Review of d608906 (MEDIUM 1): TheRundown sends CAL and LAS; the app stores CGY and VGK. Only for the NHL.
+    assert odds.canon('nhl', 'CAL') == 'CGY' and odds.canon('nhl', 'LAS') == 'VGK' and odds.canon('nhl', 'VEG') == 'VGK'
+    assert odds.canon('nfl', 'LAS') == 'LAS' and odds.canon('nba', 'CAL') == 'CAL'
+    r = response()
+    r['events'][0]['teams'][0]['abbreviation'] = 'LAS'
+    r['events'][0]['teams'][1]['abbreviation'] = 'CAL'
+    p = pick(matchup='CGY @ VGK')
+    assert odds.comparison('nhl', p, cache(r), NOW)['prices'] == {'DraftKings': -125, 'FanDuel': -110}
+
+
+def test_only_old_prices_for_the_sport_are_reported_as_stale_not_as_a_missing_game(tmp_path):
+    # Review of d608906 (MEDIUM 2): before the first fetch of the day the status said the game did not exist.
+    (tmp_path / 'old.json').write_text(json.dumps(response(NOW - timedelta(hours=4))))
+    c = odds.read_cache(NOW, tmp_path)
+    assert c['responses'] == [] and c['stale_sports'] == ['nhl']
+    out = odds.comparison('nhl', pick(), c, NOW)
+    assert out['status'] == 'stale_prices' and out['prices'] == {}
+    assert odds.comparison('nhl', pick(), cache(), NOW)['status'] == 'available'
+
+
+def test_a_morning_price_check_runs_before_reviews_start():
+    import plistlib
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    plist = plistlib.loads((root / 'scripts/launchd/com.nba-predictor.rundown-odds.plist').read_bytes())
+    assert min(s['Hour'] for s in plist['StartCalendarInterval']) <= 10
+
+
+def test_a_low_monthly_allowance_also_stops_the_fetch(tmp_path, monkeypatch):
+    monkeypatch.setenv('NBA_DATA_DIR', str(tmp_path))
+    monkeypatch.setenv('THERUNDOWN_API_KEY', 'k')
+    calls = []
+
+    def opener(request, timeout):
+        calls.append(request)
+        return Response({'X-Datapoints-Remaining': '19000', 'X-Datapoints-Monthly-Remaining': '500'})
+    assert odds.fetch(NOW, opener=opener, pause=lambda _: None)['status'] == 'quota_low' and len(calls) == 1
+
+
+def test_a_damaged_request_log_line_does_not_stop_price_collection(tmp_path, monkeypatch):
+    monkeypatch.setenv('NBA_DATA_DIR', str(tmp_path))
+    monkeypatch.setenv('THERUNDOWN_API_KEY', 'k')
+    (tmp_path / 'odds-books').mkdir()
+    (tmp_path / 'odds-books' / 'requests.jsonl').write_text('{"day": "2026-11-11"\n')   # cut off mid-write
+    result = odds.fetch(NOW, opener=lambda request, timeout: Response({}), pause=lambda _: None)
+    assert result['status'] == 'ok' and len(result['results']) == 6
+
+
+def test_the_picture_and_caption_name_a_better_book_only_when_it_pays_more_than_the_stored_price():
+    # Review of d608906 (LOW 1): the picture printed "Pays most at DraftKings" even when that paid no more.
+    p, q = pick(), pick('winner', 'a', None, -150, 'WPG win', game='g2')
+    for leg in (p, q):
+        odds.attach('nhl', leg, cache(), NOW)
+    same = tickets.ticket_assessment([p, q])
+    assert same['best_book'] == 'DraftKings' and tickets.best_book_line(same) is None

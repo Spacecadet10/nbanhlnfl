@@ -1186,9 +1186,13 @@ def ticket_pages(tickets):
 
 
 def best_book_line(assessment):
-    """'Pays most at FanDuel: about ×4.72', or None when no sportsbook prices every leg of the ticket."""
+    """'Pays most at FanDuel: about ×4.72', or None when no sportsbook prices every leg of the ticket or the best one pays
+    no more than the stored prices already shown (picture and caption use this same rule)."""
     book = (assessment or {}).get('best_book')
-    return f"Pays most at {book}: about ×{assessment['book_payouts'][book]:.2f}" if book else None
+    if not book:
+        return None
+    pays, stored = assessment['book_payouts'][book], assessment.get('payout')
+    return f"Pays most at {book}: about ×{pays:.2f}" if not stored or pays > stored + .005 else None
 
 
 def ticket_captions(result):
