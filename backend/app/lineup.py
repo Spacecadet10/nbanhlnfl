@@ -18,7 +18,7 @@ import gzip
 import json
 import sqlite3
 from collections import Counter, defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from . import config, raw_cache
@@ -151,8 +151,20 @@ def top_players(apps: dict, names: dict, team: str, day: str, season: int) -> li
     return sorted(rows, key=lambda r: -r[2])[:TOP_PLAYERS]
 
 
-def nba_facts(conn, games: list, at: str) -> dict:
-    """game_id -> {'report': {...}, 'home': {...}, 'away': {...}} top-player injury facts (see module docstring)."""
+def _box_written_after(season: int, at: str) -> bool:
+    """The player box file was last written after `at`: its rows are not what the file held at `at`."""
+    from . import availability as av
+    try:
+        written = datetime.fromtimestamp(av.player_box_path(season).stat().st_mtime, tz=timezone.utc)
+    except OSError:
+        return False
+    return written.strftime('%Y-%m-%dT%H:%M:%SZ') > at
+
+
+def nba_facts(conn, games: list, at: str, box_as_of: bool = False) -> dict:
+    """game_id -> {'report': {...}, 'home': {...}, 'away': {...}} top-player injury facts (see module docstring).
+    `box_as_of` (the scorecard, review M1 Nov 11): the player box file is used only if it was last written at or before
+    `at`; otherwise top players are unknown ('player_file_after_forecast') and the report's own listings are kept."""
     from . import availability as av
     if not games:
         return {}
@@ -179,6 +191,8 @@ def nba_facts(conn, games: list, at: str) -> dict:
         listed_teams = {by_name.get(e['team']) for e in entries}
         unsubmitted = {by_name.get(e['team']) for e in (parsed.not_submitted if parsed and not problem else [])
                        if e['game_date'] == day}
+        if season not in boxes and box_as_of and _box_written_after(season, at):
+            boxes[season] = ('after', None)
         if season not in boxes:
             try:
                 b = _box(season)
@@ -189,7 +203,15 @@ def nba_facts(conn, games: list, at: str) -> dict:
         result = {'report': info}
         for side in ('home', 'away'):
             team_id = g[f'{side}_team_id']
-            if problem or box is None:
+            if box == 'after' and not problem:
+                status = ('not_submitted' if team_id in unsubmitted else 'submitted' if team_id in listed_teams
+                          else 'not_on_report')
+                listed = [{'player': f"{e['first']} {e['last']}", 'status': e['status']} for e in entries
+                          if by_name.get(e['team']) == team_id and e['status'] in FLAGGED]
+                result[side] = {'top_players': None, 'flagged': None, 'problem': 'player_file_after_forecast',
+                                'report_status': status, 'listed': listed}
+                continue
+            if problem or box is None or box == 'after':
                 result[side] = {'top_players': None, 'flagged': None, 'problem': problem or 'no_player_minutes'}
                 continue
             team = team_id.split(':', 1)[1]
@@ -218,7 +240,7 @@ def nba_facts(conn, games: list, at: str) -> dict:
 
 
 # --- Shared ------------------------------------------------------------------------------------------------------------
-def facts(conn, sport: str, game_ids, at: str) -> dict:
+def facts(conn, sport: str, game_ids, at: str, box_as_of: bool = False) -> dict:
     """game_id -> facts for NBA/NHL games; {} for other sports. Never raises: a problem is returned as {'error': ...}."""
     if sport not in ('nba', 'nhl'):
         return {}
@@ -228,7 +250,7 @@ def facts(conn, sport: str, game_ids, at: str) -> dict:
     try:
         marks = ','.join('?' * len(ids))
         games = list(conn.execute(f'SELECT * FROM games WHERE game_id IN ({marks})', ids))
-        return (nhl_facts if sport == 'nhl' else nba_facts)(conn, games, at)
+        return nhl_facts(conn, games, at) if sport == 'nhl' else nba_facts(conn, games, at, box_as_of)
     except Exception as exc:
         return {gid: {'error': type(exc).__name__} for gid in ids}
 
@@ -303,7 +325,9 @@ def review_flags(sport: str, pick: dict, fact: Optional[dict]) -> list:
         else:
             if s.get('flagged') is None:
                 what = {'no_report': 'no injury report received', 'report_unreadable': 'injury report not readable',
-                        'no_player_minutes': 'player minutes file missing'}.get(s.get('problem'), str(s.get('problem')))
+                        'no_player_minutes': 'player minutes file missing',
+                        'player_file_after_forecast': 'top players unknown (player file updated after forecast time)'
+                        }.get(s.get('problem'), str(s.get('problem')))
                 flags.append(f"{abbr[side]} {what}")
             elif s.get('report_status') == 'not_submitted':
                 flags.append(f"{abbr[side]} injury report not submitted")

@@ -16,7 +16,7 @@ the sport does not have (soccer spread, NFL lineup, DRatings outside NBA/NHL win
 'missing'. DRatings numbers are captured by app/dratings_capture a few minutes AFTER the forecast (its page is published
 before; the capture time and lag are kept): they sit in their own table and are appended when a capture appears.
 
-Writer: `python -m app.scorecard sync` (its own LaunchAgent, every minute), a separate process from the forecast jobs, so
+Writer: `python -m app.scorecard sync` (its own LaunchAgent, every 120 s), a separate process from the forecast jobs, so
 a scorecard failure or a slow run can never stop, delay or alter a forecast. Idempotent on forecast_id; never rewrites.
 """
 import json
@@ -35,15 +35,13 @@ JOB_LOOKBACK_HOURS = 12        # `sync` without --backfill looks at forecasts ma
 
 _STATE_COLS = "".join(f"  {g}_state TEXT NOT NULL CHECK ({g}_state IN ('present','missing','not_applicable')),\n"
                       f"  {g}_note TEXT,\n" for g in GROUPS)
-SCHEMA = f"""
-CREATE TABLE IF NOT EXISTS scorecard (
-  forecast_id INTEGER PRIMARY KEY,
-  sport TEXT NOT NULL, source_table TEXT NOT NULL, game_id TEXT NOT NULL, game_date TEXT, matchup TEXT,
+PICK_COLUMNS = f"""  sport TEXT NOT NULL, source_table TEXT NOT NULL, game_id TEXT NOT NULL, game_date TEXT, matchup TEXT,
   season_type TEXT, market TEXT NOT NULL, side TEXT NOT NULL, pick_label TEXT, line REAL, line_source TEXT,
   displayed_pct TEXT NOT NULL, confidence REAL NOT NULL, p_json TEXT NOT NULL, source TEXT, model_version TEXT,
   generated_at TEXT NOT NULL, tipoff_at TEXT NOT NULL,
 {_STATE_COLS}  book_provider TEXT, book_retrieved_at TEXT, book_line REAL, book_price INTEGER, book_devig REAL,
-  open_retrieved_at TEXT, open_label TEXT, open_line REAL, open_price INTEGER, open_devig REAL, move_pts REAL, move_line REAL,
+  open_retrieved_at TEXT, open_label TEXT, open_line REAL, open_price INTEGER, open_devig REAL,
+  move_base_retrieved_at TEXT, move_base_devig REAL, move_pts REAL, move_line REAL,
   card_others TEXT, spread_on_winner INTEGER,
   home_rest_days REAL, away_rest_days REAL, home_b2b INTEGER, away_b2b INTEGER,
   lineup_facts TEXT, lineup_flags TEXT, lineup_flag_count INTEGER,
@@ -51,8 +49,22 @@ CREATE TABLE IF NOT EXISTS scorecard (
   scorecard_version TEXT NOT NULL, written_by TEXT NOT NULL CHECK (written_by IN ('job','backfill')), written_at TEXT NOT NULL,
   CHECK (book_retrieved_at IS NULL OR book_retrieved_at <= generated_at),
   CHECK (open_retrieved_at IS NULL OR open_retrieved_at <= generated_at),
+  CHECK (move_base_retrieved_at IS NULL OR move_base_retrieved_at <= generated_at),
   CHECK (generated_at <= written_at)
-);
+"""
+SCHEMA = f"""
+CREATE TABLE IF NOT EXISTS scorecard (
+  forecast_id INTEGER PRIMARY KEY,
+{PICK_COLUMNS});
+-- soccer goals/corners: one row per served market and line of a stored forecast (the side the forecast favours)
+CREATE TABLE IF NOT EXISTS scorecard_soccer_markets (
+  forecast_id INTEGER NOT NULL, selection_key TEXT NOT NULL,
+{PICK_COLUMNS},
+  PRIMARY KEY (forecast_id, selection_key));
+CREATE TRIGGER IF NOT EXISTS scorecard_soccer_markets_no_update BEFORE UPDATE ON scorecard_soccer_markets
+BEGIN SELECT RAISE(ABORT, 'scorecard_soccer_markets is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS scorecard_soccer_markets_no_delete BEFORE DELETE ON scorecard_soccer_markets
+BEGIN SELECT RAISE(ABORT, 'scorecard_soccer_markets is append-only'); END;
 CREATE TABLE IF NOT EXISTS scorecard_dratings (
   forecast_id INTEGER PRIMARY KEY REFERENCES scorecard(forecast_id),
   sport TEXT NOT NULL, captured_at TEXT NOT NULL, lag_seconds INTEGER, matched INTEGER NOT NULL,
@@ -136,39 +148,57 @@ def _book(conn, sport: str, g, rec: dict) -> tuple:
                                                                      pa if market == "reg3" else None)}
 
 
-def _open(conn, sport: str, g, rec: dict, book: dict) -> tuple:
-    """The opening quote: the first quote of this game and market retrieved by T (the book's own 'open' price of that
-    retrieval first), its pick-side de-vigged % and the move to the pick's quote (points; + = toward the pick)."""
+def _first_quote(conn, sport: str, game_id: str, market: str, at: str, *, provider: Optional[str] = None,
+                 line: Optional[float] = None) -> Optional[dict]:
+    """The first quote of this game and market retrieved by `at` (the book's own 'open' price of that retrieval first), as
+    {retrieved_at, label, line, price: {a, mid, b}, devig: (a, mid, b)}; only `provider`'s and only at `line` when given."""
     from . import coverage
-    market, side, at = rec["market"], rec["side"], rec["generated_at"]
     if market == "winner":
-        q = coverage.winner_quote(conn, sport, g["game_id"], at, earliest=True)
-        if q is None:
-            return _state(False, "no moneyline retrieved by the forecast time"), {}
-        out = {"open_retrieved_at": q["retrieved_at"], "open_label": q["price_label"], "open_line": None,
-               "open_price": q["price_home"] if side == "a" else q["price_away"],
-               "open_devig": q["p_home"] if side == "a" else 1 - q["p_home"]}
-    else:
-        if not _has(conn, "market_quotes"):
-            return _state(False, "no market quotes table"), {}
-        q = conn.execute("SELECT * FROM market_quotes WHERE game_id=? AND market=? AND retrieved_at<=? "
-                         "ORDER BY retrieved_at, price_label='open' DESC, quote_id LIMIT 1",
-                         (g["game_id"], market, at)).fetchone()
-        if q is None:
-            return _state(False, "no quote of this market retrieved by the forecast time"
-                          if market != "reg3" else "no regulation three-way bookmaker quotes are collected"), {}
-        vec = (q["p_a_devig"], q["p_mid_devig"], q["p_b_devig"])
-        out = {"open_retrieved_at": q["retrieved_at"], "open_label": q["price_label"], "open_line": q["line"],
-               "open_price": {"a": q["price_a"], "mid": q["price_mid"], "b": q["price_b"]}[side],
-               "open_devig": _picked(market, side, q["p_a_devig"], vec)}
-    if book.get("book_devig") is not None and out["open_devig"] is not None:
-        out["move_pts"] = round(100 * (book["book_devig"] - out["open_devig"]), 2)
-        if out["open_line"] is not None and book.get("book_line") is not None:
-            out["move_line"] = book["book_line"] - out["open_line"]
-        note = None
-    else:
-        note = "no move: the pick has no sportsbook quote at its own line"
-    return _state(True, note), out
+        q = coverage.winner_quote(conn, sport, game_id, at, earliest=True, provider=provider)
+        return None if q is None else {"retrieved_at": q["retrieved_at"], "label": q["price_label"], "line": None,
+                                       "provider": q["provider"], "price": {"a": q["price_home"], "b": q["price_away"]},
+                                       "devig": (q["p_home"], None, 1 - q["p_home"])}
+    if not _has(conn, "market_quotes"):
+        return None
+    only = (" AND provider=?" if provider is not None else "") + (" AND abs(line - ?) < 1e-9" if line is not None else "")
+    args = (game_id, market, at) + ((provider,) if provider is not None else ()) + ((line,) if line is not None else ())
+    q = conn.execute(f"SELECT * FROM market_quotes WHERE game_id=? AND market=? AND retrieved_at<=?{only} "
+                     "ORDER BY retrieved_at, price_label='open' DESC, quote_id LIMIT 1", args).fetchone()
+    return None if q is None else {"retrieved_at": q["retrieved_at"], "label": q["price_label"], "line": q["line"],
+                                   "provider": q["provider"], "price": {"a": q["price_a"], "mid": q["price_mid"], "b": q["price_b"]},
+                                   "devig": (q["p_a_devig"], q["p_mid_devig"], q["p_b_devig"])}
+
+
+def _side_p(market: str, side: str, devig: tuple) -> Optional[float]:
+    return _picked(market, side, devig[0], devig)
+
+
+def _open(conn, sport: str, g, rec: dict, book: dict, *, provider: Optional[str] = None) -> tuple:
+    """Opening quote and the move to the pick's quote, as of T (review M2, Nov 11):
+    - open_*: the first quote of this game and market retrieved by T from the pick's sportsbook (`provider`, else the
+      provider of the pick's quote, else any), at whatever line it had; open_line is that line.
+    - move_pts: the pick side's de-vigged % at the pick's quote minus the same sportsbook's first quote AT THE PICK'S LINE
+      (points; + = toward the pick). Never across lines. 0 is "no move".
+    - move_line: how the pick side's own line changed since open_line (spread: the picked team's handicap; totals: the
+      total), only when the pick has a sportsbook line."""
+    market, side, at = rec["market"], rec["side"], rec["generated_at"]
+    prov = provider if provider is not None else book.get("book_provider")
+    q = _first_quote(conn, sport, g["game_id"], market, at, provider=prov)
+    if q is None:
+        return _state(False, "no quote of this market retrieved by the forecast time" if market != "reg3"
+                      else "no regulation three-way bookmaker quotes are collected"), {}
+    out = {"open_retrieved_at": q["retrieved_at"], "open_label": q["label"], "open_line": q["line"],
+           "open_price": q["price"].get(side), "open_devig": _side_p(market, side, q["devig"])}
+    if book.get("book_devig") is None:
+        return _state(True, "no move: the pick has no sportsbook quote at its own line"), out
+    base = _first_quote(conn, sport, g["game_id"], market, at, provider=prov, line=book.get("book_line"))
+    if base is not None:
+        out.update(move_base_retrieved_at=base["retrieved_at"], move_base_devig=_side_p(market, side, base["devig"]))
+        out["move_pts"] = round(100 * (book["book_devig"] - out["move_base_devig"]), 2)
+    if q["line"] is not None and book.get("book_line") is not None:
+        change = book["book_line"] - q["line"]
+        out["move_line"] = -change if (market == "spread" and side == "b") else change
+    return _state(True), out
 
 
 def _card(conn, g, rec: dict, home: str, away: str) -> tuple:
@@ -201,14 +231,15 @@ def _spread_on_winner(rec: dict, others: list) -> tuple:
     return _state(True), int(by["winner"] == by["spread"])
 
 
-def _rest(conn, g, tipoff: str) -> tuple:
-    """Days from each team's previous start to this start as the forecast knew it (its tipoff_at), and back-to-back."""
+def _rest(conn, g, tipoff: str, sport: str = "") -> tuple:
+    """Days from each team's previous start to this start as the forecast knew it (its tipoff_at), and back-to-back.
+    NFL: no back-to-back (teams never play on consecutive days): b2b stays NULL, rest days are kept."""
     from .providers.real import rest_days
     out = {}
     for s in ("home", "away"):
         days = rest_days(conn, g["season"], g[f"{s}_team_id"], tipoff)
         out[f"{s}_rest_days"] = days
-        out[f"{s}_b2b"] = None if days is None else int(days < B2B_BELOW_DAYS)
+        out[f"{s}_b2b"] = None if days is None or sport == "nfl" else int(days < B2B_BELOW_DAYS)
     gaps = [s for s in ("home", "away") if out[f"{s}_rest_days"] is None]
     return _state(not gaps, ("no earlier game this season: " + ", ".join(gaps)) if gaps else None), out
 
@@ -219,7 +250,7 @@ def _lineup(conn, sport: str, g, rec: dict, matchup: str, cache: dict) -> tuple:
         return NA(f"no lineup facts are collected for {sport.upper()}"), {}
     key = (g["game_id"], rec["generated_at"])
     if key not in cache:
-        cache[key] = lineup.facts(conn, sport, [g["game_id"]], rec["generated_at"]).get(g["game_id"])
+        cache[key] = lineup.facts(conn, sport, [g["game_id"]], rec["generated_at"], box_as_of=True).get(g["game_id"])
     fact = cache[key]
     flags = lineup.review_flags(sport, {"market": rec["market"], "matchup": matchup, "pick_label": rec["pick_label"]}, fact)
     out = {"lineup_facts": json.dumps(fact, sort_keys=True), "lineup_flags": json.dumps(flags), "lineup_flag_count": len(flags)}
@@ -229,18 +260,21 @@ def _lineup(conn, sport: str, g, rec: dict, matchup: str, cache: dict) -> tuple:
         problems = sorted({p for p in [fact.get("report", {}).get("problem")] +
                            [fact.get(s, {}).get("problem") for s in ("home", "away")] if p})
         if problems:
-            return _state(False, "injury report facts unknown at forecast time: " + ", ".join(problems)), out
+            return _state(False, "lineup facts unknown at forecast time: " + ", ".join(problems)), out
     return _state(True), out
 
 
-def _books3(sport: str, rec: dict, matchup: str, books_dir: Optional[Path]) -> tuple:
+def _books3(sport: str, rec: dict, matchup: str, books_dir: Optional[Path], caches: Optional[dict] = None) -> tuple:
     from . import rundown_odds
     if sport not in rundown_odds.SPORT_IDS or rec["market"] not in rundown_odds.SPORT_MARKETS[sport].values():
         return NA("TheRundown does not price this market"), {}
     if rec["line_source"] == "model":
         return _state(False, "model line: no sportsbook line at forecast time"), {}
     at = rundown_odds.moment(rec["generated_at"])
-    cache = rundown_odds.read_cache(at, books_dir)            # only responses fetched at or before T, at most 3 h old
+    caches = {} if caches is None else caches                  # one directory read per forecast time per run
+    if rec["generated_at"] not in caches:
+        caches[rec["generated_at"]] = rundown_odds.read_cache(at, books_dir)   # fetched <= T, at most 3 h old
+    cache = caches[rec["generated_at"]]
     pick = {"market": rec["market"], "matchup": matchup, "tipoff": rec["tipoff_at"], "percentage_history": {"side": rec["side"]},
             "quote_check": {"line_source": rec["line_source"], "line_moved": False, "line_at_forecast": rec["line"]}}
     if not any(r["_sport"] == sport for r in cache["responses"]):
@@ -251,7 +285,8 @@ def _books3(sport: str, rec: dict, matchup: str, books_dir: Optional[Path]) -> t
     return _state(True), {"books3": json.dumps(c, sort_keys=True)}
 
 
-def game_picture(conn, sport: str, row, *, books_dir: Optional[Path] = None, lineup_cache: Optional[dict] = None) -> dict:
+def game_picture(conn, sport: str, row, *, books_dir: Optional[Path] = None, lineup_cache: Optional[dict] = None,
+                 books_cache: Optional[dict] = None) -> dict:
     """The scorecard columns of one game_forecasts row (status 'forecast'), every fact as of its generated_at."""
     from . import markets
     from .threshold_overview import displayed_percentage
@@ -283,9 +318,9 @@ def game_picture(conn, sport: str, row, *, books_dir: Optional[Path] = None, lin
     others = part("card", lambda: (lambda st, o: (st, {"others": o}))(*_card(conn, g, rec, home, away))).get("others", [])
     out["card_others"] = json.dumps(others)
     out.update(part("spread", lambda: (lambda st, v: (st, {"spread_on_winner": v}))(*_spread_on_winner(rec, others))))
-    out.update(part("rest", lambda: _rest(conn, g, rec["tipoff_at"])))
+    out.update(part("rest", lambda: _rest(conn, g, rec["tipoff_at"], sport)))
     out.update(part("lineup", lambda: _lineup(conn, sport, g, rec, matchup, lineup_cache if lineup_cache is not None else {})))
-    out.update(part("books3", lambda: _books3(sport, rec, matchup, books_dir)))
+    out.update(part("books3", lambda: _books3(sport, rec, matchup, books_dir, books_cache)))
     if row["market"] in ("team_total_home", "team_total_away"):
         try:
             from .implied_lines import implied_team_total
@@ -305,31 +340,138 @@ def _eastern(ts: str) -> Optional[str]:
 SOCCER_OUTCOMES = ("home", "draw", "away")
 
 
-def _soccer_1x2(conn, match_id: str, at: str, *, earliest: bool) -> Optional[dict]:
-    """One retrieval of a book's three offered 1X2 prices by `at` (latest, or the first), margin removed proportionally."""
+def _soccer_prices(conn, match_id: str, at: str, market: str, sides: tuple, *, earliest: bool,
+                   provider: Optional[str] = None, line: Optional[float] = None, any_line: bool = False) -> Optional[dict]:
+    """One retrieval of a book's offered prices for all `sides` of a soccer market by `at` (latest, or the first; the
+    book's 'open' price first when earliest), margin removed proportionally. 1X2: no line; total goals: at `line` unless
+    `any_line`. Only `provider` when given (DraftKings first otherwise)."""
     if not _has(conn, "soccer_odds_quotes"):
         return None
     order = "ASC" if earliest else "DESC"
-    for prov, ts, kind in conn.execute(
-            "SELECT provider, retrieved_at, price_kind FROM soccer_odds_quotes WHERE match_id=? AND market='1x2' AND offered=1 "
-            f"AND retrieved_at<=? GROUP BY provider, retrieved_at, price_kind HAVING COUNT(DISTINCT side)=3 "
+    where = "match_id=? AND market=? AND offered=1 AND retrieved_at<=?"
+    args = [match_id, market, at]
+    if provider is not None:
+        where += " AND provider=?"
+        args.append(provider)
+    if line is not None and not any_line:
+        where += " AND abs(line - ?) < 1e-9"
+        args.append(line)
+    for prov, ts, kind, ln in conn.execute(
+            f"SELECT provider, retrieved_at, price_kind, line FROM soccer_odds_quotes WHERE {where} "
+            f"GROUP BY provider, retrieved_at, price_kind, line HAVING COUNT(DISTINCT side)={len(sides)} "
             f"ORDER BY retrieved_at {order}, price_kind = '{'open' if earliest else 'current'}' DESC, provider='DraftKings' DESC",
-            (match_id, at)):
-        rows = {r["side"]: r for r in conn.execute("SELECT * FROM soccer_odds_quotes WHERE match_id=? AND market='1x2' AND "
-                                                    "offered=1 AND provider=? AND retrieved_at=? AND price_kind=?",
-                                                    (match_id, prov, ts, kind))}
-        inv = {s: 1 / rows[s]["decimal_odds"] for s in SOCCER_OUTCOMES}
+            args):
+        rows = {r["side"]: r for r in conn.execute(
+            "SELECT * FROM soccer_odds_quotes WHERE match_id=? AND market=? AND offered=1 AND provider=? AND retrieved_at=? "
+            "AND price_kind=? AND line IS ?", (match_id, market, prov, ts, kind, ln))}
+        if set(rows) != set(sides):
+            continue
+        inv = {x: 1 / rows[x]["decimal_odds"] for x in sides}
         total = sum(inv.values())
-        return {"provider": prov, "retrieved_at": ts, "label": kind, "devig": {s: inv[s] / total for s in SOCCER_OUTCOMES},
-                "price": {s: rows[s]["american"] for s in SOCCER_OUTCOMES}}
+        return {"provider": prov, "retrieved_at": ts, "label": kind, "line": ln,
+                "devig": {x: inv[x] / total for x in sides}, "price": {x: rows[x]["american"] for x in sides}}
     return None
 
 
-def soccer_picture(conn, row) -> dict:
+def _soccer_book_open(conn, match_id: str, T: str, market: str, sides: tuple, side: str, line: Optional[float]) -> dict:
+    """Sportsbook, opening and move columns of one soccer pick (review M2: the move only at the pick's own line, same book)."""
+    out = {}
+    try:
+        q = _soccer_prices(conn, match_id, T, market, sides, earliest=False, line=line)
+        o = q and _soccer_prices(conn, match_id, T, market, sides, earliest=True, provider=q["provider"], any_line=True)
+        base = q and _soccer_prices(conn, match_id, T, market, sides, earliest=True, provider=q["provider"], line=line)
+        err = None
+    except Exception as exc:
+        q = o = base = None
+        err = f"error: {type(exc).__name__}"
+    what = "1X2" if market == "1x2" else "goal-line"
+    if not q:
+        out.update(book_state="missing", book_note=err or f"no {what} prices retrieved by the forecast time",
+                   open_state="missing", open_note=err or f"no {what} prices retrieved by the forecast time")
+        return out
+    out.update(book_state="present", book_note=None, book_provider=q["provider"], book_retrieved_at=q["retrieved_at"],
+               book_line=q["line"], book_price=q["price"][side], book_devig=q["devig"][side])
+    out.update(open_state="present", open_note=None, open_retrieved_at=o["retrieved_at"], open_label=o["label"],
+               open_line=o["line"], open_price=o["price"][side], open_devig=o["devig"][side])
+    if base:
+        out.update(move_base_retrieved_at=base["retrieved_at"], move_base_devig=base["devig"][side],
+                   move_pts=round(100 * (q["devig"][side] - base["devig"][side]), 2))
+    if o["line"] is not None and q["line"] is not None:
+        out["move_line"] = q["line"] - o["line"]
+    return out
+
+
+def _soccer_match(conn, match_id: str):
+    return conn.execute("SELECT m.*, ht.name AS home_name, at.name AS away_name FROM soccer_matches m JOIN teams ht ON "
+                        "ht.team_id=m.home_team_id JOIN teams at ON at.team_id=m.away_team_id WHERE m.match_id=?",
+                        (match_id,)).fetchone()
+
+
+def _family_markets(family: str) -> tuple:
+    from . import soccer_markets_live as sml
+    try:
+        served = sml.state(family).get("markets")
+    except Exception:
+        served = None
+    return tuple(served or sml.FAMILY_MARKETS[family])
+
+
+def _favoured(selections: list) -> list:
+    """Per market and line (model fair line, or a book's offered line): the side the forecast favours (higher win share;
+    ties: the first side listed)."""
+    groups: dict = {}
+    for sel in selections:
+        line = sel["line"]
+        if sel["market"] == "corners_handicap" and sel["side"] == "away" and line is not None:
+            line = -line
+        key = f"{sel['market']}|{sel['source']}|{sel.get('provider') or ''}|{'' if line is None else line:g}" \
+            if line is not None else f"{sel['market']}|{sel['source']}|{sel.get('provider') or ''}|"
+        if key not in groups or sel["win_share"] > groups[key]["win_share"]:
+            groups[key] = sel
+    return list(groups.items())
+
+
+def _soccer_card(conn, match_id: str, T: str, *, own: tuple) -> list:
+    """Every soccer prediction on this match as shown at T (the latest 1X2 forecast and its double chance / draw no bet,
+    and the latest goals/corners forecast of each family, all generated <= T, with the book lines retrieved <= T), except
+    the pick itself (`own` = (forecast table, forecast_id, market, side, line))."""
+    from . import soccer_markets_live as sml
     from .threshold_overview import displayed_percentage
-    m = conn.execute("SELECT m.*, ht.name AS home_name, at.name AS away_name FROM soccer_matches m JOIN teams ht ON "
-                     "ht.team_id=m.home_team_id JOIN teams at ON at.team_id=m.away_team_id WHERE m.match_id=?",
-                     (row["match_id"],)).fetchone()
+    out = []
+    if _has(conn, "soccer_live_forecasts"):
+        f = conn.execute("SELECT * FROM soccer_live_forecasts WHERE match_id=? AND generated_at<=? ORDER BY version DESC "
+                         "LIMIT 1", (match_id, T)).fetchone()
+        if f is not None:
+            p = (f["p_home"], f["p_draw"], f["p_away"])
+            for side, x in zip(SOCCER_OUTCOMES, p):
+                out.append({"table": "soccer_live_forecasts", "forecast_id": f["forecast_id"], "market": "1x2_regulation",
+                            "side": side, "line": None, "displayed_pct": displayed_percentage(x), "source": "model"})
+            for sel in sml.derived_selections(p):
+                out.append({"table": "soccer_live_forecasts", "forecast_id": f["forecast_id"], "market": sel["market"],
+                            "side": sel["side"], "line": None, "displayed_pct": displayed_percentage(sel["win_share"]),
+                            "source": "model"})
+    if _has(conn, "soccer_market_forecasts"):
+        quotes = sml.quotes(conn, match_id, T)
+        for r in conn.execute("SELECT * FROM soccer_market_forecasts f WHERE match_id=? AND generated_at<=? AND "
+                              "version=(SELECT MAX(version) FROM soccer_market_forecasts h WHERE h.match_id=f.match_id "
+                              "AND h.family=f.family AND h.generated_at<=?) ORDER BY family", (match_id, T, T)):
+            for sel in sml.market_selections(json.loads(r["joint_json"]), r["family"], _family_markets(r["family"]), quotes):
+                out.append({"table": "soccer_market_forecasts", "forecast_id": r["forecast_id"], "market": sel["market"],
+                            "side": sel["side"], "line": sel["line"], "displayed_pct": displayed_percentage(sel["win_share"]),
+                            "source": sel["source"], "provider": sel.get("provider")})
+    return [o for o in out if (o["table"], o["forecast_id"], o["market"], o["side"], o["line"]) != own]
+
+
+_SOCCER_FIXED = dict(spread_state="not_applicable", spread_note="soccer has no spread pick",
+                     rest_state="missing", rest_note="not collected for soccer (earlier matches in other competitions are not stored)",
+                     lineup_state="missing", lineup_note="not collected for soccer (no lineup source)",
+                     books3_state="missing", books3_note="not collected for soccer (TheRundown prices: NBA/NHL/NFL only)")
+
+
+def soccer_picture(conn, row) -> dict:
+    """The 90-minute 1X2 pick (soccer_live_forecasts): the most likely outcome."""
+    from .threshold_overview import displayed_percentage
+    m = _soccer_match(conn, row["match_id"])
     p = (row["p_home"], row["p_draw"], row["p_away"])
     i = max(range(3), key=lambda k: p[k])
     side = SOCCER_OUTCOMES[i]
@@ -340,40 +482,53 @@ def soccer_picture(conn, row) -> dict:
            "season_type": row["competition_id"], "market": row["market"], "side": side, "pick_label": label, "line": None,
            "line_source": "none", "displayed_pct": displayed_percentage(p[i]), "confidence": p[i], "p_json": json.dumps(p),
            "source": "soccer_live", "model_version": row["model"], "generated_at": T, "tipoff_at": m["kickoff_at"]}
+    out.update(_soccer_book_open(conn, row["match_id"], T, "1x2", SOCCER_OUTCOMES, side, None))
     try:
-        q = _soccer_1x2(conn, row["match_id"], T, earliest=False)
-        o = _soccer_1x2(conn, row["match_id"], T, earliest=True)
+        others = _soccer_card(conn, row["match_id"], T, own=("soccer_live_forecasts", row["forecast_id"], row["market"], side, None))
+        out.update(card_state="present", card_note=None, card_others=json.dumps(others))
     except Exception as exc:
-        q = o = None
-        err = f"error: {type(exc).__name__}"
-    else:
-        err = None
-    if q:
-        out.update(book_state="present", book_note=None, book_provider=q["provider"], book_retrieved_at=q["retrieved_at"],
-                   book_price=q["price"][side], book_devig=q["devig"][side])
-    else:
-        out.update(book_state="missing", book_note=err or "no 1X2 prices retrieved by the forecast time")
-    if o:
-        out.update(open_state="present", open_note=None, open_retrieved_at=o["retrieved_at"], open_label=o["label"],
-                   open_price=o["price"][side], open_devig=o["devig"][side],
-                   move_pts=round(100 * (q["devig"][side] - o["devig"][side]), 2) if q else None)
-    else:
-        out.update(open_state="missing", open_note=err or "no 1X2 prices retrieved by the forecast time")
-    others = []
-    if _has(conn, "soccer_market_forecasts"):
-        others = [{"family": r["family"], "forecast_id": r["forecast_id"], "mean_home": r["mean_home"], "mean_away": r["mean_away"],
-                   "generated_at": r["generated_at"]}
-                  for r in conn.execute("SELECT * FROM soccer_market_forecasts f WHERE match_id=? AND generated_at<=? AND "
-                                        "version=(SELECT MAX(version) FROM soccer_market_forecasts h WHERE h.match_id=f.match_id "
-                                        "AND h.family=f.family AND h.generated_at<=?)", (row["match_id"], T, T))]
-    out.update(card_state="present", card_note=None if others else "no goals/corners forecast of this match by the forecast time",
-               card_others=json.dumps(others),
-               spread_state="not_applicable", spread_note="soccer has no spread pick",
-               rest_state="missing", rest_note="not collected for soccer (earlier matches in other competitions are not stored)",
-               lineup_state="not_applicable", lineup_note="no lineup facts are collected for soccer",
-               books3_state="not_applicable", books3_note="TheRundown prices are collected for NBA/NHL/NFL only",
-               detail=json.dumps({"cutoff_at": row["cutoff_at"], "inputs_through": row["inputs_through"],
-                                  "source_retrieved_at": row["source_retrieved_at"]}))
+        out.update(card_state="missing", card_note=f"error: {type(exc).__name__}: {exc}"[:300], card_others="[]")
+    out.update(_SOCCER_FIXED, detail=json.dumps({"cutoff_at": row["cutoff_at"], "inputs_through": row["inputs_through"],
+                                                 "source_retrieved_at": row["source_retrieved_at"]}))
+    return out
+
+
+def soccer_market_pictures(conn, row) -> list:
+    """One row per served market and line of a goals/corners forecast (soccer_market_forecasts): the favoured side, its
+    win share as displayed, the book's line retrieved <= T where one exists, and the other predictions on the match."""
+    from . import soccer_markets_live as sml
+    from .threshold_overview import displayed_percentage
+    m = _soccer_match(conn, row["match_id"])
+    T = row["generated_at"]
+    sels = sml.market_selections(json.loads(row["joint_json"]), row["family"], _family_markets(row["family"]),
+                                 sml.quotes(conn, row["match_id"], T))
+    out = []
+    for key, sel in _favoured(sels):
+        r = {"forecast_id": row["forecast_id"], "selection_key": key, "sport": "soccer", "source_table": "soccer_market_forecasts",
+             "game_id": row["match_id"], "game_date": m["kickoff_at"][:10], "matchup": f"{m['home_name']} v {m['away_name']}",
+             "season_type": row["competition_id"], "market": sel["market"], "side": sel["side"],
+             "pick_label": f"{sel['market']} {sel['side']}" + ("" if sel["line"] is None else f" {sel['line']:g}"),
+             "line": sel["line"], "line_source": "bookmaker" if sel["source"] == "bookmaker" else "model",
+             "displayed_pct": displayed_percentage(sel["win_share"]), "confidence": sel["win_share"],
+             "p_json": json.dumps(sel["probabilities"]), "source": row["family"], "model_version": row["model"],
+             "generated_at": T, "tipoff_at": m["kickoff_at"]}
+        if sel["source"] == "bookmaker" and sel["market"] == "goals_total":
+            r.update(_soccer_book_open(conn, row["match_id"], T, "total_goals", ("over", "under"), sel["side"], sel["line"]))
+        else:
+            why = "model line: no bookmaker price for this line" if sel["market"] in ("goals_total",) else \
+                "no bookmaker prices for this market in the free source"
+            r.update(book_state="missing", book_note=why, open_state="missing", open_note=why)
+        try:
+            others = _soccer_card(conn, row["match_id"], T,
+                                  own=("soccer_market_forecasts", row["forecast_id"], sel["market"], sel["side"], sel["line"]))
+            r.update(card_state="present", card_note=None, card_others=json.dumps(others))
+        except Exception as exc:
+            r.update(card_state="missing", card_note=f"error: {type(exc).__name__}: {exc}"[:300], card_others="[]")
+        r.update(_SOCCER_FIXED, detail=json.dumps({"cutoff_at": row["cutoff_at"], "inputs_through": row["inputs_through"],
+                                                   "source_retrieved_at": row["source_retrieved_at"], "selection": {
+                                                       k: sel.get(k) for k in ("provider", "american", "retrieved_at",
+                                                                               "market_probability", "fair_decimal")}}))
+        out.append(r)
     return out
 
 
@@ -430,7 +585,8 @@ def sync(conn, card, sport: str, *, now: str, backfill: bool = False, books_dir:
     except Exception as exc:
         return {**out, "status": "failed", "error": f"{type(exc).__name__}: {exc}"}
     build = picture or (soccer_picture if sport == "soccer" else
-                        (lambda c, r, cache: game_picture(c, sport, r, books_dir=books_dir, lineup_cache=cache)))
+                        (lambda c, r, cache: game_picture(c, sport, r, books_dir=books_dir, lineup_cache=cache,
+                                                         books_cache=cache.setdefault("_books3", {}))))
     cache: dict = {}
     for r in todo:
         try:
@@ -448,6 +604,24 @@ def sync(conn, card, sport: str, *, now: str, backfill: bool = False, books_dir:
             out["dratings"] = _dratings(card, sport, captures, now)
     except Exception as exc:
         out["errors"]["dratings"] = f"{type(exc).__name__}: {exc}"[:300]
+    if sport == "soccer" and picture is None and _has(conn, "soccer_market_forecasts"):
+        out["market_rows"] = 0
+        have = {r[0] for r in card.execute("SELECT DISTINCT forecast_id FROM scorecard_soccer_markets")}
+        sql = "SELECT * FROM soccer_market_forecasts" + ("" if since is None else " WHERE generated_at >= ?")
+        for r in conn.execute(sql + " ORDER BY generated_at, forecast_id", () if since is None else (since,)):
+            if r["forecast_id"] in have:
+                continue
+            try:
+                rows = soccer_market_pictures(conn, r)
+                with card:
+                    for row in rows:
+                        row.update(scorecard_version=VERSION, written_by="backfill" if backfill else "job", written_at=now)
+                        cols = list(row)
+                        card.execute(f"INSERT INTO scorecard_soccer_markets ({','.join(cols)}) VALUES "
+                                     f"({','.join('?' * len(cols))})", [row[c] for c in cols])
+                out["market_rows"] += len(rows)
+            except Exception as exc:
+                out["errors"][f"market:{r['forecast_id']}"] = f"{type(exc).__name__}: {exc}"[:300]
     if out["errors"]:
         out["status"] = "partial"
     return out
@@ -464,6 +638,12 @@ def main(argv: Optional[list] = None) -> int:
     ap.add_argument("--explicit-release", action="store_true",
                     help="required to write next to protected live stores (the scheduled job, a release decision)")
     a = ap.parse_args(argv)
+    from . import release
+    if config.protected_data_dir(config.data_dir()):
+        # Only scorecard files are written, never a store: the checkout checks apply (as app.dratings_capture and
+        # app.rundown_odds), the store-schema check does not.
+        if not release.enabled() or release._checkout(release.code_root().resolve())[1]:
+            raise SystemExit("release guard: the scorecard writer requires the clean release checkout")
     now, results = utc_now(), []
     for sport in a.sport or SPORTS:
         store = config.db_path(sport)

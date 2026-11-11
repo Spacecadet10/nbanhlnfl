@@ -49,7 +49,7 @@ def forecast(c, fid, market, p_a, at=T, line=None, line_source='none', quote=Non
 @pytest.fixture(autouse=True)
 def _no_lineup(monkeypatch):
     from app import lineup
-    monkeypatch.setattr(lineup, 'facts', lambda conn, sport, ids, at: {i: {'error': 'not in this test'} for i in ids}
+    monkeypatch.setattr(lineup, 'facts', lambda conn, sport, ids, at, box_as_of=False: {i: {'error': 'not in this test'} for i in ids}
                         if sport in ('nba', 'nhl') else {})
 
 
@@ -86,19 +86,34 @@ def test_no_quote_by_the_forecast_time_is_missing_never_a_later_one():
     assert 'forecast time' in row['book_note']
 
 
-def test_line_market_uses_its_own_quote_and_opening_line_move():
+def test_line_market_move_is_measured_only_at_the_picks_own_line_and_book():
     c = store('nhl')
     c.executemany('INSERT INTO market_quotes (game_id, provider, market, price_label, line, price_a, price_b, p_a_devig, '
                   'p_b_devig, retrieved_at, fetch_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-                  [('g', 'DraftKings', 'total', 'open', 6.5, -110, -110, 0.5, 0.5, '2026-11-11T09:00:00Z', 1),
-                   ('g', 'DraftKings', 'total', 'current', 6.0, -120, 100, 0.53, 0.47, '2026-11-11T22:00:00Z', 2),
-                   ('g', 'DraftKings', 'total', 'current', 5.5, -140, 120, 0.57, 0.43, '2026-11-11T23:20:00Z', 3)])
-    forecast(c, 1, 'total', 0.40, line=6.0, line_source='bookmaker', quote=2, p_mid=0.05)
+                  [('g', 'FanDuel', 'total', 'current', 6.0, -110, -110, 0.60, 0.40, '2026-11-11T08:00:00Z', 0),   # other book
+                   ('g', 'DraftKings', 'total', 'open', 6.5, -110, -110, 0.5, 0.5, '2026-11-11T09:00:00Z', 1),
+                   ('g', 'DraftKings', 'total', 'current', 6.0, -110, -110, 0.50, 0.50, '2026-11-11T10:00:00Z', 2),
+                   ('g', 'DraftKings', 'total', 'current', 6.0, -120, 100, 0.53, 0.47, '2026-11-11T22:00:00Z', 3),
+                   ('g', 'DraftKings', 'total', 'current', 5.5, -140, 120, 0.57, 0.43, '2026-11-11T23:20:00Z', 4)])
+    forecast(c, 1, 'total', 0.40, line=6.0, line_source='bookmaker', quote=4, p_mid=0.05)
     row = sc.game_picture(c, 'nhl', c.execute('SELECT * FROM game_forecasts').fetchone())
     assert row['side'] == 'b' and row['pick_label'] == 'Under 6'
     assert row['book_price'] == 100 and row['book_devig'] == pytest.approx(0.47) and row['book_line'] == 6.0
-    assert row['open_line'] == 6.5 and row['open_devig'] == pytest.approx(0.5)
-    assert row['move_pts'] == pytest.approx(-3.0) and row['move_line'] == pytest.approx(-0.5)
+    assert row['open_line'] == 6.5 and row['open_retrieved_at'] == '2026-11-11T09:00:00Z'      # the book's first quote
+    assert row['move_base_retrieved_at'] == '2026-11-11T10:00:00Z'                            # first quote at 6.0, same book
+    assert row['move_pts'] == pytest.approx(-3.0)                                             # 50% -> 47%, never 6.5 vs 6.0
+    assert row['move_line'] == pytest.approx(-0.5)
+
+
+def test_spread_line_move_is_oriented_to_the_pick_side():
+    c = store()
+    c.executemany('INSERT INTO market_quotes (game_id, provider, market, price_label, line, price_a, price_b, p_a_devig, '
+                  'p_b_devig, retrieved_at, fetch_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+                  [('g', 'DraftKings', 'spread', 'open', -3.5, -110, -110, 0.5, 0.5, '2026-11-11T09:00:00Z', 1),
+                   ('g', 'DraftKings', 'spread', 'current', -4.5, -110, -110, 0.5, 0.5, '2026-11-11T22:00:00Z', 2)])
+    forecast(c, 1, 'spread', 0.40, line=-4.5, line_source='bookmaker', quote=2)        # BOS +4.5 (was +3.5)
+    row = sc.game_picture(c, 'nba', c.execute('SELECT * FROM game_forecasts').fetchone())
+    assert row['pick_label'] == 'BOS +4.5' and row['move_line'] == pytest.approx(1.0) and row['move_pts'] == 0
 
 
 def test_card_holds_only_predictions_recorded_by_the_forecast_time_and_spread_side():
@@ -149,7 +164,7 @@ def test_three_book_prices_fetched_after_the_forecast_are_excluded(tmp_path):
 
 def test_nba_lineup_without_a_report_by_the_forecast_time_is_missing(monkeypatch):
     from app import lineup
-    monkeypatch.setattr(lineup, 'facts', lambda conn, sport, ids, at: {i: {'report': {'problem': 'no_report'},
+    monkeypatch.setattr(lineup, 'facts', lambda conn, sport, ids, at, box_as_of=False: {i: {'report': {'problem': 'no_report'},
         'home': {'flagged': None, 'problem': 'no_report'}, 'away': {'flagged': None, 'problem': 'no_report'}} for i in ids})
     c = store()
     forecast(c, 1, 'winner', 0.6)
@@ -261,7 +276,10 @@ def test_soccer_row_uses_prices_retrieved_by_the_forecast_time():
     inv = (1 / 2.0) / (1 / 2.0 + 1 / 3.2 + 1 / 4.0)
     assert r['side'] == 'home' and r['displayed_pct'] == '50.0' and r['book_devig'] == pytest.approx(inv)
     assert r['book_retrieved_at'] == '2026-11-11T20:00:00Z'
-    assert r['spread_state'] == 'not_applicable' and r['lineup_state'] == 'not_applicable' and r['rest_state'] == 'missing'
+    assert r['spread_state'] == 'not_applicable' and r['lineup_state'] == 'missing' and r['rest_state'] == 'missing'
+    others = {(o['market'], o['side']): o['displayed_pct'] for o in json.loads(r['card_others'])}
+    assert others[('1x2_regulation', 'draw')] == '30.0' and ('1x2_regulation', 'home') not in others
+    assert others[('double_chance', 'home_draw')] == '80.0' and ('draw_no_bet', 'home') in others
 
 
 # ---- the read-only report ----------------------------------------------------------------------------------------------
@@ -287,3 +305,82 @@ def test_report_lists_each_exact_percentage_that_both_won_and_lost_side_by_side(
     assert 'won 2, lost 1' in text
     assert 'too few to tell' in text                                                    # n on every line, never a claim
     assert 'n=' in text
+
+
+def test_soccer_goals_forecast_gets_its_own_rows_and_appears_on_the_1x2_card(monkeypatch):
+    import math
+    from app import soccer_markets_live as sml
+    monkeypatch.setattr(sml, 'state', lambda family: {'markets': ['goals_total']})
+    c = sqlite3.connect(':memory:')
+    c.row_factory = sqlite3.Row
+    c.executescript('''CREATE TABLE teams (team_id TEXT, name TEXT);
+      CREATE TABLE soccer_matches (match_id TEXT, kickoff_at TEXT, home_team_id TEXT, away_team_id TEXT);
+      CREATE TABLE soccer_live_forecasts (forecast_id INTEGER PRIMARY KEY, match_id TEXT, competition_id TEXT, market TEXT,
+        version INT, model TEXT, p_home REAL, p_draw REAL, p_away REAL, cutoff_at TEXT, generated_at TEXT, inputs_through TEXT,
+        source_retrieved_at TEXT);
+      CREATE TABLE soccer_market_forecasts (forecast_id INTEGER PRIMARY KEY, match_id TEXT, competition_id TEXT, family TEXT,
+        version INT, model TEXT, mean_home REAL, mean_away REAL, joint_json TEXT, cutoff_at TEXT, generated_at TEXT,
+        inputs_through TEXT, source_retrieved_at TEXT);
+      CREATE TABLE soccer_odds_quotes (quote_id INTEGER PRIMARY KEY, match_id TEXT, provider TEXT, market TEXT, side TEXT,
+        price_kind TEXT, offered INT, line REAL, american INT, decimal_odds REAL, retrieved_at TEXT);
+      INSERT INTO teams VALUES ('h','Arsenal'),('a','Fulham');
+      INSERT INTO soccer_matches VALUES ('m','2026-11-12T19:45:00Z','h','a');''')
+    c.execute("INSERT INTO soccer_live_forecasts VALUES (1,'m','eng.1','1x2_regulation',1,'clubs',0.6,0.25,0.15,"
+              "'2026-11-12T06:00:00Z',?,NULL,?)", (T, T))
+    pois = lambda lam, k: math.exp(-lam) * lam ** k / math.factorial(k)                       # noqa: E731
+    joint = [[pois(1.8, h) * pois(0.9, a) for a in range(8)] for h in range(8)]
+    c.execute("INSERT INTO soccer_market_forecasts VALUES (1,'m','eng.1','goals',1,'goals-model',1.8,0.9,?,"
+              "'2026-11-12T06:00:00Z',?,NULL,?)", (json.dumps(joint), T, T))
+    for side, am, d in (('over', -120, 1.83), ('under', 100, 2.0)):
+        c.execute("INSERT INTO soccer_odds_quotes (match_id, provider, market, side, price_kind, offered, line, american, "
+                  "decimal_odds, retrieved_at) VALUES ('m','DraftKings','total_goals',?,'current',1,2.5,?,?,'2026-11-11T20:00:00Z')",
+                  (side, am, d))
+    k = card()
+    out = sc.sync(c, k, 'soccer', now='2026-11-11T23:40:00Z')
+    assert out['written'] == 1 and out['market_rows'] == 2                                  # fair line + book line 2.5
+    rows = {r['selection_key']: r for r in k.execute('SELECT * FROM scorecard_soccer_markets')}
+    book = next(r for key, r in rows.items() if '|bookmaker|' in key)
+    assert book['line'] == 2.5 and book['book_state'] == 'present' and book['book_retrieved_at'] == '2026-11-11T20:00:00Z'
+    one = k.execute('SELECT card_others FROM scorecard').fetchone()[0]
+    assert any(o['market'] == 'goals_total' and o['line'] == 2.5 for o in json.loads(one))
+    assert sc.sync(c, k, 'soccer', now='2026-11-11T23:41:00Z')['market_rows'] == 0          # idempotent
+
+
+def test_scheduled_writer_runs_only_from_the_clean_release_checkout(monkeypatch, tmp_path):
+    import plistlib
+    from app import config, release
+    env = plistlib.loads((ROOT / 'scripts/launchd/com.nba-predictor.scorecard.plist').read_bytes())['EnvironmentVariables']
+    assert env['NBA_RELEASE_GUARD'] == '1' and env['NBA_RELEASE_ROOT'] == '/Users/andry/nba-predictor-delivery'
+    monkeypatch.setattr(config, 'protected_data_dir', lambda p: True)
+    monkeypatch.setattr(config, 'protected_path', lambda p: True)
+    monkeypatch.setattr(release, 'enabled', lambda: False)
+    with pytest.raises(SystemExit, match='release guard'):
+        sc.main(['sync', '--explicit-release'])
+
+
+def test_box_file_written_after_the_forecast_makes_top_players_unknown_but_keeps_the_report(monkeypatch):
+    import test_lineup as tl
+    from app import lineup
+    c = tl.nba_store(monkeypatch, [tl.entry('Barnes', 'Scottie', 'Out')])
+    monkeypatch.setattr(lineup, '_box_written_after', lambda season, at: True)
+    games = list(c.execute("SELECT * FROM games WHERE game_id='g'"))     # facts() is stubbed in this file: call the builder
+    f = lineup.nba_facts(c, games, tl.AT, box_as_of=True)['g']
+    assert f['home']['problem'] == 'player_file_after_forecast' and f['home']['top_players'] is None
+    assert f['home']['report_status'] == 'submitted' and f['home']['listed'] == [{'player': 'Scottie Barnes', 'status': 'Out'}]
+    assert 'TOR top players unknown (player file updated after forecast time)' in \
+        lineup.review_flags('nba', {'market': 'winner', 'matchup': 'BOS @ TOR', 'pick_label': 'TOR win'}, f)
+    assert lineup.nba_facts(c, games, tl.AT)['g']['home']['flagged']                     # the card's default is unchanged
+
+
+def test_report_move_zero_is_no_move_lineup_kinds_and_missing_rows():
+    rep = report_module()
+    base = dict(sport='nba', market='winner', displayed_pct='60.0', pick_label='X win', book_devig=None, confidence=0.6,
+                game_date='2026-11-01', matchup='A @ B', spread_on_winner=None, home_b2b=None, away_b2b=None,
+                card_others='[]', book_state='present', open_state='present', side='a', lineup_state='present')
+    rows = [dict(base, forecast_id=1, grade='win', move_pts=0.0, lineup_flags='["B top player X Out"]', lineup_flag_count=1),
+            dict(base, forecast_id=2, grade='loss', move_pts=2.0, lineup_flags='["B goalie not confirmed (expected)"]',
+                 lineup_flag_count=1)]
+    text = rep.render(rows, without_row={('nba', 'winner'): 3})
+    assert 'no move 1W-0L' in text and 'toward pick 0W-1L' in text
+    assert 'injury/backup 1W-0L' in text and 'unconfirmed/unknown 0W-1L' in text
+    assert 'canonical picks without a scorecard row: nba winner 3' in text

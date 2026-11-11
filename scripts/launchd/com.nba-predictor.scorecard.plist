@@ -6,6 +6,10 @@
 	<dict>
 		<key>NBA_DATA_DIR</key>
 		<string>/Users/andry/Desktop/nba-predictor-sprint1/data</string>
+		<key>NBA_RELEASE_GUARD</key>
+		<string>1</string>
+		<key>NBA_RELEASE_ROOT</key>
+		<string>/Users/andry/nba-predictor-delivery</string>
 		<key>OMP_NUM_THREADS</key>
 		<string>2</string>
 		<key>PYTHONDONTWRITEBYTECODE</key>

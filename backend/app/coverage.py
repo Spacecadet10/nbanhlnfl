@@ -683,20 +683,22 @@ def matched_quote(conn, market: str, g, c: dict):
     return (s[0], q, s[1]), None
 
 
-def winner_quote(conn, sport: str, game_id: str, at: str, *, earliest: bool = False):
+def winner_quote(conn, sport: str, game_id: str, at: str, *, earliest: bool = False, provider: Optional[str] = None):
     """The moneyline a winner forecast made at `at` could see: the latest retrieved no later than `at` (NBA: odds_quotes;
     other sports: market_quotes, market 'winner'), as {quote_id, provider, price_label, retrieved_at, p_home, price_home,
     price_away}, or None. `earliest`: the first one retrieved by `at` instead (the opening quote), the book's own 'open'
-    price of that retrieval first."""
+    price of that retrieval first. `provider`: that sportsbook's quotes only (None: any)."""
     order = ("retrieved_at, price_label = 'open' DESC, quote_id" if earliest else
              "retrieved_at DESC, price_label = 'current' DESC, quote_id DESC")
+    only = " AND provider = ?" if provider is not None else ""
     q = conn.execute(
         "SELECT quote_id, provider, price_label, retrieved_at, home_prob_devig AS p_home, home_american AS price_home, "
-        f"away_american AS price_away FROM odds_quotes WHERE game_id=? AND retrieved_at <= ? ORDER BY {order} LIMIT 1"
+        f"away_american AS price_away FROM odds_quotes WHERE game_id=? AND retrieved_at <= ?{only} ORDER BY {order} LIMIT 1"
         if sport == "nba" else
         "SELECT quote_id, provider, price_label, retrieved_at, p_a_devig AS p_home, price_a AS price_home, "
-        f"price_b AS price_away FROM market_quotes WHERE game_id=? AND market='winner' AND retrieved_at <= ? ORDER BY {order} LIMIT 1",
-        (game_id, at)).fetchone()
+        f"price_b AS price_away FROM market_quotes WHERE game_id=? AND market='winner' AND retrieved_at <= ?{only} "
+        f"ORDER BY {order} LIMIT 1",
+        (game_id, at) + ((provider,) if provider is not None else ())).fetchone()
     return None if q is None else dict(zip(("quote_id", "provider", "price_label", "retrieved_at", "p_home", "price_home",
                                              "price_away"), tuple(q)))
 
