@@ -321,3 +321,35 @@ def test_ticket_market_picks_only_cover_matches_in_the_api_window(live):
         mp.undo()
     since = (datetime.strptime(STAMP, "%Y-%m-%dT%H:%M:%SZ") - timedelta(days=sml.TICKET_WINDOW_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
     assert calls and calls[0]["since"] == since and calls[0]["as_of"] == STAMP
+
+
+def test_picture_and_caption_carry_line_source_no_proven_skill_and_push_for_market_legs(live, monkeypatch):
+    # Review MEDIUM 2 (Nov 9): in picture-only delivery the text is not sent, so the card and caption must say it.
+    from PIL import ImageDraw
+    from app import telegram_card
+    sml.run(live, day=TOMORROW.isoformat())
+    picks = {p["market"]: p for p in tickets.soccer_market_picks(live, STAMP) if p["game_id"].endswith("90003")}
+    model_leg = {**picks["corners_total"], "sport": "soccer", "rationale": "r"}
+    book_leg = {**picks["goals_total"], "sport": "soccer", "rationale": "r", "game_id": "g-book",
+                "quote_check": {"line_source": "bookmaker", "provider": "DraftKings", "price_now": -110, "line_now": 2.5,
+                                "retrieved_at": STAMP}}
+    dnb_leg = {**model_leg, "market": "draw_no_bet", "market_title": sm.TITLES["draw_no_bet"], "side": "home", "line": None,
+               "pick_label": "Team 100 (draw no bet, 90 min)", "game_id": "g-dnb"}
+    legs = [model_leg, book_leg, dnb_leg]
+    texts, original = [], ImageDraw.ImageDraw.text
+    monkeypatch.setattr(ImageDraw.ImageDraw, "text", lambda self, xy, text, *a, **kw: (texts.append(text), original(self, xy, text, *a, **kw))[1])
+    ticket = {"label": "Soccer markets", "ticket_id": "2026-11-09-abc", "legs": legs, "assessment": tickets.ticket_assessment(legs)}
+    telegram_card.render_ticket_card("2026-11-09", [ticket])
+    card = " ".join(texts)
+    assert "Model line (no sportsbook line stored)" in card
+    assert "DraftKings line" in card
+    assert "No proven skill against the bookmaker" in card
+    assert "push" in card.lower()
+    caption = tickets.ticket_captions({"resolved": [ticket], "date": "2026-11-09"})[0]
+    assert "model line" in caption.lower() and "no proven skill against the bookmaker" in caption.lower()
+    assert "push" in caption.lower() and len(caption) <= 1024
+    one_x_two = {"sport": "soccer", "market": "1x2_regulation", "pick_label": "A win (90 min)", "probability": 0.5,
+                 "matchup": "A vs B", "game_id": "x", "forecast_id": 1, "quote_check": {}}
+    plain = tickets.ticket_captions({"resolved": [{"label": "x", "legs": [one_x_two, {**one_x_two, "game_id": "y"}]}],
+                                     "date": "2026-11-09"})[0]
+    assert "no proven skill" not in plain.lower()          # 1X2-only tickets are unchanged

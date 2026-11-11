@@ -230,6 +230,32 @@ def render_card(message):
     return output.getvalue()
 
 
+# Soccer goal/corner/double-chance/draw-no-bet legs (review MEDIUM 2, Nov 9): picture-only delivery sends no text, so the
+# card itself names each leg's line source and the limits that the text version states.
+SOCCER_MARKET_NOTE = ('Soccer goal/corner/DC/DNB legs: 90 min + stoppage time; draw no bet and whole lines push (stake back). '
+                      'No proven skill against the bookmaker.')
+
+
+def _soccer_market(leg):
+    return leg.get('sport') == 'soccer' and leg.get('market', '1x2_regulation') != '1x2_regulation'
+
+
+def _market_line_source(leg):
+    """'DraftKings line ... retrieved ...' or 'Model line (no sportsbook line stored)' for a soccer market leg, else None."""
+    if not _soccer_market(leg):
+        return None
+    q = leg.get('quote_check') or {}
+    if q.get('line_source') == 'bookmaker':
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        at = q.get('retrieved_at')
+        when = (datetime.fromisoformat(at.replace('Z', '+00:00')).astimezone(ZoneInfo('America/Toronto')).strftime('%b %d %I:%M %p %Z')
+                if at else 'time not stored')
+        price = f" {q['price_now']:+d}" if q.get('price_now') is not None else ''
+        return f"{q.get('provider') or 'DraftKings'} line{price}, retrieved {when}. No proven skill against the bookmaker."
+    return 'Model line (no sportsbook line stored). No proven skill against the bookmaker.'
+
+
 def render_ticket_card(day, tickets, *, preview=False, number_from=1, total=None):
     """Ticket layout using the shared fonts, team logos and published palettes."""
     from .tickets import CARD_TICKETS, MAX_TICKETS, MIN_LEGS, MAX_LEGS, bet_type
@@ -297,6 +323,9 @@ def render_ticket_card(day, tickets, *, preview=False, number_from=1, total=None
                 line(leg['result'],size=27,color='#11664D',x=240,width=760)
             else:
                 line(f"Model probability {leg['probability']:.1%}",size=27,color=MUTED,x=240,width=760)
+            source = _market_line_source(leg)
+            if source:
+                line(source,size=23,color=MUTED,x=240,width=760)
             y += 18
             draw.line((72,y,1008,y),fill=_mix(accent,PAPER,.65),width=2)
             y += 24
@@ -315,6 +344,8 @@ def render_ticket_card(day, tickets, *, preview=False, number_from=1, total=None
     if shared:
         line('Shared core picks: one loss can affect multiple tickets.',size=24,color=MUTED)
     line('Joint estimates assume independence. Sportsbook prices unverified.',size=24,color=MUTED)
+    if any(_soccer_market(p) for t in tickets for p in t['legs']):
+        line(SOCCER_MARKET_NOTE,size=24,color=MUTED)
     y += 35
     if y > 6000:
         raise ValueError('Ticket card exceeds layout bounds.')

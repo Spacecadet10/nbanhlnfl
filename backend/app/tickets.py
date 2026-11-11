@@ -1171,6 +1171,13 @@ def ticket_captions(result):
     quoted = [p['quote_check']['retrieved_at'] for t in tickets for p in t['legs'] if (p.get('quote_check') or {}).get('price_now') is not None]
     footer = 'Each numbered ticket is ONE parlay with all its legs.' + (
         ' Prices: stored DraftKings quotes, ' + _parse(max(quoted)).astimezone(TORONTO).strftime('%I:%M %p %Z') + '; confirm before betting.' if quoted else '')
+    market_legs = [p for t in tickets for p in t['legs']
+                   if p.get('sport') == 'soccer' and p.get('market', '1x2_regulation') != '1x2_regulation']
+    if market_legs:      # picture-only delivery sends no text: the caption says what the text would (review MEDIUM 2)
+        model = sum((p.get('quote_check') or {}).get('line_source') != 'bookmaker' for p in market_legs)
+        footer += (f" Soccer market legs: {model} on a model line (no sportsbook line stored), "
+                   f"{len(market_legs) - model} on a DraftKings line; draw no bet and whole lines push; "
+                   "no proven skill against the bookmaker.")
     out, number = [], 0
     for index, page in enumerate(pages, 1):
         first = number + 1
