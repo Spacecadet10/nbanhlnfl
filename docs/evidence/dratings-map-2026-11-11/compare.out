@@ -1,0 +1,170 @@
+{
+ "nba": {
+  "store_settled_games": 102,
+  "matched": 100,
+  "dratings_rows_in_pages": 112,
+  "app_vs_dratings": {
+   "both": 93,
+   "agree": 83,
+   "disagree": 10,
+   "app_when_agree": {
+    "n": 83,
+    "wins": 63,
+    "losses": 20,
+    "rate": 0.759
+   },
+   "app_when_disagree": {
+    "n": 10,
+    "wins": 4,
+    "losses": 6,
+    "rate": 0.4
+   },
+   "dratings_when_disagree": {
+    "n": 10,
+    "wins": 6,
+    "losses": 4,
+    "rate": 0.6
+   }
+  },
+  "pick_records": {
+   "app": {
+    "n": 93,
+    "wins": 67,
+    "losses": 26,
+    "rate": 0.72
+   },
+   "dratings": {
+    "n": 93,
+    "wins": 69,
+    "losses": 24,
+    "rate": 0.742
+   },
+   "draftkings_devig": {
+    "n": 93,
+    "wins": 69,
+    "losses": 24,
+    "rate": 0.742
+   }
+  },
+  "brier_same_games": {
+   "app": 0.1933,
+   "dratings": 0.1825,
+   "draftkings": 0.1756,
+   "n": 93
+  },
+  "logloss_same_games": {
+   "app": 0.568,
+   "dratings": 0.5443
+  },
+  "team_scores": {
+   "dratings_proj_vs_implied_mae": [
+    1.35,
+    200
+   ],
+   "dratings_proj_vs_app_tt_mae": [
+    1.94,
+    186
+   ],
+   "actual_mae": {
+    "dratings_proj": [
+     9.66,
+     200
+    ],
+    "implied": [
+     9.35,
+     200
+    ],
+    "app_tt_line": [
+     9.83,
+     186
+    ]
+   },
+   "detail_pages_parsed": 100
+  },
+  "unmatched_n": 2
+ },
+ "nhl": {
+  "store_settled_games": 93,
+  "matched": 91,
+  "dratings_rows_in_pages": 112,
+  "app_vs_dratings": {
+   "both": 88,
+   "agree": 72,
+   "disagree": 16,
+   "app_when_agree": {
+    "n": 72,
+    "wins": 51,
+    "losses": 21,
+    "rate": 0.708
+   },
+   "app_when_disagree": {
+    "n": 16,
+    "wins": 6,
+    "losses": 10,
+    "rate": 0.375
+   },
+   "dratings_when_disagree": {
+    "n": 16,
+    "wins": 10,
+    "losses": 6,
+    "rate": 0.625
+   }
+  },
+  "pick_records": {
+   "app": {
+    "n": 88,
+    "wins": 57,
+    "losses": 31,
+    "rate": 0.648
+   },
+   "dratings": {
+    "n": 88,
+    "wins": 61,
+    "losses": 27,
+    "rate": 0.693
+   },
+   "draftkings_devig": {
+    "n": 86,
+    "wins": 55,
+    "losses": 31,
+    "rate": 0.64
+   }
+  },
+  "brier_same_games": {
+   "app": 0.2184,
+   "dratings": 0.2106,
+   "draftkings": 0.2131,
+   "n": 88
+  },
+  "logloss_same_games": {
+   "app": 0.6273,
+   "dratings": 0.6103
+  },
+  "team_scores": {
+   "dratings_proj_vs_implied_mae": [
+    0.43,
+    182
+   ],
+   "dratings_proj_vs_app_tt_mae": [
+    0.29,
+    176
+   ],
+   "actual_mae": {
+    "dratings_proj": [
+     1.25,
+     182
+    ],
+    "implied": [
+     1.27,
+     182
+    ],
+    "app_tt_line": [
+     1.34,
+     176
+    ]
+   },
+   "detail_pages_parsed": 91
+  },
+  "unmatched_n": 2
+ }
+}

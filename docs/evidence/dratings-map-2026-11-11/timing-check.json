@@ -1,0 +1,28 @@
+{
+ "nba": {
+  "dratings_update_minutes_before_listed_start": {
+   "min": 0.0,
+   "median": 1.0,
+   "max": 1.8,
+   "after_listed_start": 0
+  },
+  "app_forecast_minutes_before_scheduled_start": {
+   "min": 2,
+   "median": 88,
+   "max": 115
+  }
+ },
+ "nhl": {
+  "dratings_update_minutes_before_listed_start": {
+   "min": -8.4,
+   "median": 0.7,
+   "max": 1.5,
+   "after_listed_start": 1
+  },
+  "app_forecast_minutes_before_scheduled_start": {
+   "min": 11,
+   "median": 95,
+   "max": 111
+  }
+ }
+}
