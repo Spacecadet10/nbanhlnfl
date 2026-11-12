@@ -598,3 +598,32 @@ def test_recorder_identity_is_the_code_that_was_imported(tmp_path, monkeypatch):
     with tg.ledger(tmp_path / 'l.sqlite') as conn:
         bpr.record(conn, 'k', 'nfl', 'g', bpr.card_pictures(None, 'nfl', report(pick(1, 'winner', 'a', .8, .85), sport='nfl'), NOW)['g'], AS_OF)
         assert conn.execute('SELECT recorder_sha256 FROM best_picks').fetchone()[0] == 'imported-code'
+
+
+def real_record(sport, market, side, wins=0, losses=0, rank=None):
+    """The object the real provider puts on a pick (schemas.ForecastPercentageRecord), not a dict (live bug Nov 12)."""
+    from app.schemas import ForecastPercentageRecord
+    return ForecastPercentageRecord(sport=sport, market=market, market_title=market, percentage='70.0', side=side,
+                                    direction='x', source='primary_direct', model_version='m', line_source='none',
+                                    state='no_history', wins=wins, losses=losses, settled=wins + losses, win_rate=None,
+                                    loss_rate=None, ci95=None, small_sample=True, excluded={}, as_of=AS_OF, rank=rank)
+
+
+def test_the_real_providers_record_objects_are_read_like_dicts(tmp_path):
+    c = store()
+    _, rep = nba_card(c)
+    for p in rep['picks']:
+        ph = p['percentage_history']
+        p['percentage_history'] = real_record('nba', p['market'], ph['side'])
+    pic = picture(c, rep)
+    assert 'error' not in pic and pic['named_forecast_id'] == 1 and by_id(pic)[1]['h'] == {'H1': 1, 'H2': 1, 'H3': 1, 'H4': 1}
+    assert by_id(pic)[1]['record']['side'] == 'a'
+    rep['picks'][0]['percentage_history'] = real_record('nba', 'winner', 'a', wins=2, losses=3, rank=4)
+    assert by_id(picture(c, rep))[1]['excluded'] == ['AVOID']
+    with tg.ledger(tmp_path / 'l.sqlite') as conn:
+        assert bpr.record(conn, 'k', 'nba', 'g', picture(c, rep), AS_OF)
+        assert conn.execute('SELECT status FROM best_picks').fetchone()[0] == 'ok'
+    nhl = report(pick(1, 'winner', 'a', .61, .58), pick(2, 'spread', 'a', .68, .40), sport='nhl')
+    for p in nhl['picks']:
+        p['percentage_history'] = real_record('nhl', p['market'], p['percentage_history']['side'])
+    assert by_id(picture(c, nhl, 'nhl'))[2]['h']['H5a'] == 1

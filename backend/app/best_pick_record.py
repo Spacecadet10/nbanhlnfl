@@ -207,6 +207,15 @@ def _h4(conn, pick: dict, side: str) -> dict:
 
 
 # ---- the picture of one card --------------------------------------------------------------------------------------------
+def _record(p: dict) -> dict:
+    """A pick's exact live record as a dict: the real provider gives a schemas.ForecastPercentageRecord (pydantic), the
+    card code reads it the same way (telegram.format_batch: model_dump). Live bug Nov 12: .get on the object."""
+    h = p.get('percentage_history')
+    if h is None:
+        return {}
+    return h.model_dump(mode='json') if hasattr(h, 'model_dump') else dict(h)
+
+
 def _avoid(ph: dict) -> bool:
     """v4 section 2.4: the card's own AVOID on the live exact-percentage record (history never counts)."""
     return ph.get('rank') is not None and (ph.get('losses') or 0) > (ph.get('wins') or 0)
@@ -234,7 +243,7 @@ def _score(sport: str, c: dict, same: dict, b2b: dict) -> dict:
     h = {}
 
     def side_of(p):
-        return (p.get('percentage_history') or {}).get('side')
+        return _record(p).get('side')
     if sport == 'nba' and m == 'winner':
         h['H1'] = 1 if book >= H1_HIGH else -1 if book <= H1_LOW else 0
         h['H2'] = 1 if app < book else -1 if app - book >= H2_ABOVE else 0
@@ -271,7 +280,7 @@ def card_picture(conn, sport: str, report: dict, game_id: str, facts) -> dict:
         same.setdefault(p.get('market'), p)
     rows = []
     for p in picks:
-        ph = p.get('percentage_history') or {}
+        ph = _record(p)
         c = {'forecast_id': p.get('forecast_id'), 'market': p.get('market'), 'pick_label': p.get('pick_label'),
              'side': ph.get('side'), 'generated_at': p.get('generated_at'),
              'app_raw': p.get('probability'), 'app_pct': None if p.get('probability') is None else str(pct(p['probability'])),
