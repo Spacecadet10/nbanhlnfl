@@ -170,7 +170,7 @@ PAST_PREFIX = f'Past seasons {PAST_SEASONS}, recomputed, model line: '
 PAST_PREFIX_NO_LINE = f'Past seasons {PAST_SEASONS}, recomputed: '    # winner (no line): app/winner_history.py
 
 
-def message_batches(report, chat_id, lineup_lines=None, games_by_key=None):
+def message_batches(report, chat_id, lineup_lines=None, games_by_key=None, *, best_pick_pictures=None):
     """One summary per game/version, using the same backend best-pick ranking and exact-percentage record as the UI."""
     now = datetime.fromisoformat(report['as_of'].replace('Z', '+00:00'))
     games = {}
@@ -183,7 +183,8 @@ def message_batches(report, chat_id, lineup_lines=None, games_by_key=None):
         games.setdefault(pick['game_id'], []).append(pick)
     batches = []
     for gid, picks in games.items():
-        batch = format_batch(report, chat_id, gid, picks, lineup_line=(lineup_lines or {}).get(gid))
+        batch = format_batch(report, chat_id, gid, picks, lineup_line=(lineup_lines or {}).get(gid),
+                             best_pick_picture=(best_pick_pictures or {}).get(gid))
         if batch:
             batches.append(batch)
             if games_by_key is not None:     # which game each card is (output only; the card itself is unchanged)
@@ -192,9 +193,10 @@ def message_batches(report, chat_id, lineup_lines=None, games_by_key=None):
 
 
 LINEUP_PREFIX = 'Lineup: '
+STRONGEST_PREFIX = 'Strongest on this card (trial): '
 
 
-def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None):
+def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None, best_pick_picture=None):
     """One shared message layout. Preview retains actual past times/results and is prominently labelled."""
     from .threshold_overview import MIN_LIVE_GRADED, displayed_percentage
     now = datetime.fromisoformat(report['as_of'].replace('Z', '+00:00'))
@@ -223,6 +225,14 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
         # Owner request Nov 11: who is playing, one plain line under the pick. Text only: the delivery key and the card's
         # identity are unchanged, so a later lineup change never resends a card.
         lines.append(LINEUP_PREFIX + escape(lineup_line))
+    if not preview and best_pick_picture and best_pick_picture.get('rule_applies'):
+        named_id = best_pick_picture.get('named_forecast_id')
+        if named_id is None:
+            lines.append(STRONGEST_PREFIX + 'No qualifying pick')
+        else:
+            label = next((p.get('pick_label') for p in picks if p.get('forecast_id') == named_id), None)
+            if label:
+                lines.append(STRONGEST_PREFIX + escape(label))
     lines += ['<i>' + ('App ranking for this past game.' if preview else 'Based on the app’s existing ranking.') + '</i>',
               divider, '', '<b>Market breakdown</b>', '']
     versions = []
@@ -317,7 +327,7 @@ def card_implied_lines(conn, sport, report, now):
 
 def best_pick_pictures(conn, sport, report, now):
     """Step F paper recorder (docs/preregistration/best-pick-2026-11-11-v4.md): what the preregistered rule would name for
-    each card that may go out now, and the full picture behind it. Never shown on a card; never stops one."""
+    each card that may go out now, and the full picture behind it. Used for the trial card line and the paper record."""
     try:
         from . import best_pick_record
         return best_pick_record.card_pictures(conn, sport, report, now)
@@ -437,7 +447,8 @@ def run_once(bot, settings, conn, *, now=None):
             finally:
                 source.close()
             games_by_key, outcomes = {}, Counter()
-            batches = message_batches(report, settings['TELEGRAM_CHAT_ID'], lineup_lines=lineups, games_by_key=games_by_key)
+            batches = message_batches(report, settings['TELEGRAM_CHAT_ID'], lineup_lines=lineups, games_by_key=games_by_key,
+                                      best_pick_pictures=pictures)
             for key, text in batches:
                 status = deliver_card(bot, conn, settings['TELEGRAM_CHAT_ID'], key, text, report['as_of'])
                 outcomes[status] += 1

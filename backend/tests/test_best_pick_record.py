@@ -373,22 +373,26 @@ def run_job(tmp_path, monkeypatch, name, *, broken=False):
     return first, second, sent, rows, bot
 
 
-def test_the_card_job_records_each_sent_card_once_and_the_card_is_byte_identical_with_or_without_it(tmp_path, monkeypatch):
+def test_the_card_job_shows_the_trial_pick_and_preserves_identity_if_recorder_fails(tmp_path, monkeypatch):
     first, second, sent, rows, bot = run_job(tmp_path, monkeypatch, 'with.sqlite')
     assert first['sports']['nba'] == {'eligible_summaries': 1, 'sent': 1} and first['status'] == 'ok'
     assert 'sent' not in second['sports']['nba'] and len(bot.sends) == 1 and len(rows) == 1
     r = rows[0]
     assert r['delivery_key'] == sent[0][0] and r['status'] == 'ok' and r['recorded_at'] == '2026-11-02T20:00:00Z'
     assert r['game_id'] == 'g1' and r['named_forecast_id'] == 1 and r['named_score'] == 3       # CLE win: H1 H2 H3, no H4 quote
-    assert 'Best pick' not in sent[0][1] and 'stands out' not in sent[0][1]
+    assert tg.STRONGEST_PREFIX + 'CLE win' in sent[0][1]
     monkeypatch.undo()
     from app import lineup, telegram_card
     monkeypatch.setattr(telegram_card, '_logo', lambda *_: None)
     monkeypatch.setattr(lineup, 'facts', lambda conn, sport, ids, at: {g: {} for g in ids})
     monkeypatch.setattr(lineup, 'review_flags', lambda sport, pick, fact: [])
     first_b, _, sent_b, rows_b, bot_b = run_job(tmp_path, monkeypatch, 'broken.sqlite', broken=True)
-    assert first_b == first and sent_b == sent and rows_b == []                 # recorder broken: card and key unchanged
-    assert bot_b.sends == bot.sends and bot_b.photos == bot.photos and bot.photos[0].startswith(b'\x89PNG')
+    assert first_b == first and sent_b[0][0] == sent[0][0] and rows_b == []
+    assert tg.card_identity(sent_b[0][1]) == tg.card_identity(sent[0][1])
+    assert tg.STRONGEST_PREFIX not in sent_b[0][1]
+    from io import BytesIO
+    from PIL import Image
+    assert Image.open(BytesIO(bot.photos[0])).height > Image.open(BytesIO(bot_b.photos[0])).height
 
 
 # ---- the report (scripts/best_picks.py) ---------------------------------------------------------------------------------
