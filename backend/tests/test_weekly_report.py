@@ -230,8 +230,8 @@ def test_launch_agent_is_weekly_guarded_and_points_at_the_release_checkout():
 def test_review_time_and_recorder_come_from_the_config_unless_given(tmp_path, monkeypatch):
     m = wr()
     at, shas = m.review_defaults()
-    assert at == '2026-11-11T23:52:00Z'
-    assert shas == ['023a26a40abe23a4f388e2c3ba91088c5ceb5a6aa8e4886cc46ad55db9bd376e'] == [bpr.RECORDER_SHA256]
+    assert at == '2026-11-12T00:20:00Z'
+    assert shas == ['ff2d53ab3985fae70e9ee8214bf43ffe32f7d3c096bd697202f076f8a7c8de3e'] == [bpr.RECORDER_SHA256]
     data, _, _ = setup(tmp_path, 3, monkeypatch, m)
     cfg = tmp_path / 'review.json'
     cfg.write_text('{"reviewed_at": "%s", "reviewed_recorder_sha256": ["%s"]}' % (REVIEWED, SHA))
