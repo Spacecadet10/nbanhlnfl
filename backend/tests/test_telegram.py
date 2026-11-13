@@ -583,3 +583,122 @@ def test_an_nhl_implied_team_total_says_rough():
     d['picks'][0]['percentage_history']['sport'] = 'nhl'
     d['picks'][0].update(pick_label='BUF over 2.5', matchup='TB @ BUF', implied_line={'line': 2.5})
     assert 'implied from spread and total 2.5 (rough)</i>' in tg.message_batches(d, '123')[0][1]
+
+
+def test_context_card_names_detroit_close_to_book_without_paper_score_floor():
+    d = strong_report('DET win')
+    p = d['picks'][0]
+    p.update(market='winner', market_title='Winner', probability=.811, market_prob=.7821,
+             strong=False, lineup_flags=[], quote_check={'price_now': -400, 'line_moved': False})
+    p['percentage_history'].update(market='winner', percentage='81.1')
+    _, text = tg.message_batches(d, '123', context_selection=True)[0]
+    assert '<b>Recommended pick</b>\n<b>DET win</b>' in text
+    assert 'sportsbook 78.2%' in text and 'gap +2.9 points' in text
+    assert 'No qualifying pick' not in text
+
+
+def test_distance_warning_at_eight_and_nhl_totals_neutral():
+    from app.tickets import card_choice
+    p = {'forecast_id':1, 'market':'winner', 'pick_label':'A win', 'probability':.68, 'market_prob':.60}
+    result = card_choice('nba', [p])
+    assert result['pick'] is None and '8 points' in result['reason']
+    p.update(market='total', pick_label='Over 5.5')
+    result = card_choice('nhl', [p])
+    assert result['pick'] == p and result['assessments'][0]['warnings'] == []
+
+
+def test_context_prefers_clean_alternative_and_explains_all_flagged():
+    from app.tickets import card_choice
+    p = {'forecast_id':1, 'market':'winner', 'pick_label':'A win', 'probability':.7, 'market_prob':.72,
+         'lineup_flags':['Starting goalie unconfirmed']}
+    q = dict(p, forecast_id=2, market='total', pick_label='Under 5.5', probability=.55, market_prob=.54, lineup_flags=[])
+    assert card_choice('nhl', [p,q])['pick']['forecast_id'] == 2
+    result = card_choice('nhl', [p])
+    assert result['pick'] is None and 'goalie unconfirmed' in result['reason']
+    q['quote_check'] = {'line_moved':True}
+    assert card_choice('nhl', [q])['pick'] is None
+
+
+def soccer_report():
+    return {'sport':'soccer', 'as_of':NOW, 'mode':'real', 'picks':[
+        dict(game_id='s1', forecast_id='1x2:1:double_chance:home_draw', market='double_chance',
+             market_title='Double chance (90 min)', matchup='Senegal vs Belarus', pick_label='Senegal or draw (90 min)',
+             probability=.92, status='scheduled', grade='pending', generated_at='2026-11-02T05:00:00Z',
+             cutoff_at='2026-11-02T06:00:00Z', tipoff='2026-11-02T21:00:00Z', competition='friendly',
+             strong=False, game_rank=None)]}
+
+
+def test_soccer_uses_morning_cutoff_and_never_fabricates_history_or_odds():
+    from app.telegram_card import render_card
+    d = soccer_report()
+    batch = tg.message_batches(d, '123', context_selection=True)
+    assert len(batch) == 1
+    text = batch[0][1]
+    assert 'Senegal or draw' in text and 'Exact-% history unavailable' in text
+    assert 'sportsbook probability unavailable' in text and '0W' not in text
+    assert render_card(text).startswith(b'\x89PNG')
+    for update in ({'generated_at':'2026-11-02T07:00:00Z'}, {'tipoff':NOW}, {'status':'postponed'},
+                   {'generated_at':'2026-11-03T05:00:00Z'}):
+        x=copy.deepcopy(d); x['picks'][0].update(update)
+        assert tg.message_batches(x, '123', context_selection=True) == []
+
+
+def test_card_method_change_does_not_resend_an_existing_game(tmp_path):
+    d = strong_report()
+    old_key, old_text = tg.message_batches(d, '123')[0]
+    new = copy.deepcopy(d)
+    new['picks'][0]['forecast_id'] += 100
+    key, text = tg.message_batches(new, '123', context_selection=True)[0]
+    bot=Bot()
+    with tg.ledger(tmp_path/'receipts.sqlite') as conn:
+        assert tg.deliver_card(bot,conn,'123',old_key,old_text,NOW) == 'sent'
+        assert tg.deliver_card(bot,conn,'123',key,text,NOW) == 'already_sent_for_game'
+    assert len(bot.sends)==1
+
+
+def test_soccer_job_sends_once_and_respects_competition_refusal(tmp_path,monkeypatch):
+    from app import tickets, db, freshness
+    monkeypatch.setattr(tg,'controls',lambda *a:True)
+    # No NBA/NHL stores; soccer uses its own existing contract, not RealProvider.
+    monkeypatch.setattr(db,'connect_readonly',lambda *a: (_ for _ in ()).throw(FileNotFoundError()))
+    (tmp_path/'soccer.sqlite').touch()
+    section={'report':soccer_report(), 'refused':{}}
+    monkeypatch.setattr(tickets,'soccer_section',lambda now:section)
+    bot=Bot();now=datetime.fromisoformat(NOW.replace('Z','+00:00'))
+    with tg.ledger(tmp_path/'receipts.sqlite') as conn:
+        first=tg.run_once(bot,{'TELEGRAM_CHAT_ID':'123'},conn,now=now)
+        second=tg.run_once(bot,{'TELEGRAM_CHAT_ID':'123'},conn,now=now)
+        assert first['sports']['soccer']['sent']==1
+        assert second['sports']['soccer']['already_recorded']==1
+        section['refused']={'friendly':['cutoff missing']}
+        refused=tg.run_once(bot,{'TELEGRAM_CHAT_ID':'123'},conn,now=now)
+        assert refused['sports']['soccer']['eligible_summaries']==0
+        assert refused['sports']['soccer']['refused']
+    assert len(bot.sends)==1
+
+
+def test_soccer_card_shows_actual_quote_but_never_calls_derived_price_a_quote():
+    d=soccer_report();p=d['picks'][0]
+    p['book_quote']={'provider':'Bet365','decimal':1.23}
+    text=tg.message_batches(d,'123',context_selection=True)[0][1]
+    assert 'Bet365 return 1.23x' in text
+    assert 'sportsbook probability unavailable' in text
+    del p['book_quote']
+    p['derived_price']={'decimal':1.19,'provider':'DraftKings'}
+    text=tg.message_batches(d,'123',context_selection=True)[0][1]
+    assert 'Stored price unavailable' in text and 'return 1.19x' not in text
+
+
+def test_soccer_many_markets_and_long_names_render_without_overflow():
+    from app.telegram_card import render_card
+    from app.tickets import SOCCER_MARKETS, BET_TYPES
+    from PIL import Image
+    from io import BytesIO
+    d=soccer_report();base=d['picks'][0]
+    d['picks']=[dict(base,market=m,market_title=BET_TYPES[m],forecast_id='fixture:'+m,
+                     pick_label='Bosnia and Herzegovina over 10.5 (90 min)',
+                     matchup='Bosnia and Herzegovina vs Trinidad and Tobago') for m in sorted(SOCCER_MARKETS)]
+    text=tg.message_batches(d,'123',context_selection=True)[0][1]
+    assert len(text.split('<b>Model '))-1==len(SOCCER_MARKETS)
+    im=Image.open(BytesIO(render_card(text)))
+    assert im.width==1080 and im.height<7000

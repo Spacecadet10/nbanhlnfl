@@ -373,14 +373,15 @@ def run_job(tmp_path, monkeypatch, name, *, broken=False):
     return first, second, sent, rows, bot
 
 
-def test_the_card_job_shows_the_trial_pick_and_preserves_identity_if_recorder_fails(tmp_path, monkeypatch):
+def test_context_card_is_independent_of_frozen_paper_recorder(tmp_path, monkeypatch):
     first, second, sent, rows, bot = run_job(tmp_path, monkeypatch, 'with.sqlite')
     assert first['sports']['nba'] == {'eligible_summaries': 1, 'sent': 1} and first['status'] == 'ok'
     assert 'sent' not in second['sports']['nba'] and len(bot.sends) == 1 and len(rows) == 1
     r = rows[0]
     assert r['delivery_key'] == sent[0][0] and r['status'] == 'ok' and r['recorded_at'] == '2026-11-02T20:00:00Z'
     assert r['game_id'] == 'g1' and r['named_forecast_id'] == 1 and r['named_score'] == 3       # CLE win: H1 H2 H3, no H4 quote
-    assert tg.STRONGEST_PREFIX + 'CLE win' in sent[0][1]
+    assert '<b>Recommended pick</b>\n<b>CLE win</b>' in sent[0][1]
+    assert 'Context comparison' in sent[0][1] and tg.STRONGEST_PREFIX not in sent[0][1]
     monkeypatch.undo()
     from app import lineup, telegram_card
     monkeypatch.setattr(telegram_card, '_logo', lambda *_: None)
@@ -392,7 +393,8 @@ def test_the_card_job_shows_the_trial_pick_and_preserves_identity_if_recorder_fa
     assert tg.STRONGEST_PREFIX not in sent_b[0][1]
     from io import BytesIO
     from PIL import Image
-    assert Image.open(BytesIO(bot.photos[0])).height > Image.open(BytesIO(bot_b.photos[0])).height
+    assert sent_b[0][1] == sent[0][1]
+    assert bot.photos[0] == bot_b.photos[0]
 
 
 # ---- the report (scripts/best_picks.py) ---------------------------------------------------------------------------------

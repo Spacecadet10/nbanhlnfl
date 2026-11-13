@@ -1954,3 +1954,7 @@ back three days). Headless Chrome 156 with DevTools device metrics: real 1280×9
 - `markets_dark_check.mjs`: lowest WCAG contrast of 389 market texts is 8.59 in dark and 6.11 in light; no overflow.
 - `npm run typecheck`, `npm run test:unit` (27 passed) and `npm run build`: passed.
 - **Not verified:** the live app (nothing deployed); NBA/NHL/NFL screens (no frontend change there).
+
+## Nov 12 — Telegram card context and soccer
+
+338 focused tests passed; exact command and source review in docs/evidence/card-output-2026-11-12/REVIEW.md. Archived Detroit and Senegal–Sudan snapshots rendered locally as labelled previews and visually inspected; repeated sends, missing data, cutoff/refusal and long all-market soccer cases tested. No test Telegram messages. Browser/API/frontend desktop and phone flows unverified in this sender-only change; no frontend/API modifications or full-app-ready claim. Scheduled production delivery to be checked after release.

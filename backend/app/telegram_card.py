@@ -137,7 +137,7 @@ def render_card(message):
             group = []
     preview = any('TEST PREVIEW' in line for line in lines[:brand])
     league = lines[brand].rsplit(' · ', 1)[-1]
-    if league not in ('NBA','NHL','NFL'):
+    if league not in ('NBA','NHL','NFL','SOCCER'):
         raise ValueError('Telegram card requires a recognized league label.')
     matchup = lines[brand + 1]
     teams = re.fullmatch(r'([A-Z]{2,5}) @ ([A-Z]{2,5})', matchup)
@@ -175,7 +175,7 @@ def render_card(message):
     draw.line((319,47,319,89), fill=accent, width=2)
     draw.text((345, 53), 'GAME CARD', font=_font(27, True), fill=INK)
     draw.rounded_rectangle((820, 41, 1005, 98), radius=27, fill=pale)
-    draw.text((865, 48), league, font=_font(35, True), fill=primary)
+    draw.text((838 if league == 'SOCCER' else 865, 48), league, font=_font(32 if league == 'SOCCER' else 35, True), fill=primary)
     draw.line((73,113,1007,113), fill=accent, width=2)
     if teams:
         for abbr, logo, x, team_ink in zip(teams.groups(), logos, (260,820), (primary,home_primary)):
@@ -212,7 +212,7 @@ def render_card(message):
     detail_top=max(155,59+rows(lines[rec+1],810,pick_size,True)*int(pick_size*1.28)+6)
     detail_end=detail_top+rows(detail,835,27)*int(27*1.28)
     lineup_top=max(168,detail_end+4)          # review LOW 10: never over a pick or detail that wraps
-    panel_h=max(218,lineup_top+50) if lineup else 218
+    panel_h=max(218,detail_end+24,lineup_top+50 if lineup else 0)
     strongest_top = max(panel_h - 16, detail_end + 4)
     if strongest:
         panel_h = strongest_top + 48
@@ -269,7 +269,8 @@ def render_card(message):
             wrapped(opposite,200,y+height-opposite_lines*32-8,800,size=24,bold=True,fill=primary)
         y+=height+8
     y += 9
-    note = 'Same sport, market, direction, percentage and model.'
+    note = ('90-minute markets. Draw-no-bet draws return the stake. Model selections may lack sportsbook offers.'
+            if league == 'SOCCER' else 'Same sport, market, direction, percentage and model.')
     if preview and any(line in ('Result: Won','Result: Lost') for line in lines):
         note += ' Records include this game’s result.'
     y = wrapped(note, 58, y, 964, size=24, fill=MUTED)

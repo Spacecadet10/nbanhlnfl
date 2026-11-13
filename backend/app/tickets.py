@@ -491,6 +491,98 @@ def shape_problems(legs):
     return out
 
 
+CARD_METHOD = 'context-card-v1'
+
+
+def card_choice(sport, picks):
+    """Visible, deterministic context comparison, separate from the frozen v4 paper rule.
+
+    Reuses ticket facts. Warnings demote; correlated preferences are one support group,
+    never added scores/probabilities. This is a card lean, not an AI ticket review.
+    """
+    from decimal import Decimal
+    candidates, blocked = [], []
+    for p in picks:
+        market = p['market']
+        q = p.get('quote_check') or {}
+        if market in OFF_TICKETS and sport != 'soccer':
+            blocked.append('Team totals are excluded from selection.')
+            continue
+        if q.get('line_moved') or q.get('error'):
+            blocked.append('The original line changed or could not be checked.')
+            continue
+        h = p.get('percentage_history')
+        book, app = p.get('market_prob'), p['probability']
+        gap = None if book is None else float((Decimal(str(app))-Decimal(str(book)))*100)
+        flags = list(p.get('lineup_flags') or [])
+        warnings = list(flags)
+        support = []
+        distance_market = sport in ('nba', 'nhl') and market in ('winner', 'spread', 'total') and (sport, market) != ('nhl', 'total')
+        if gap is not None and distance_market:
+            if gap >= 8:
+                warnings.append('App is at least 8 points above sportsbook.')
+            elif ((sport, market) == ('nba', 'winner') and 1 <= gap <= 4 or
+                  (sport, market) == ('nhl', 'winner') and -1 <= gap <= 2 or
+                  (sport, market) == ('nhl', 'spread') and 2 <= gap < 8 or
+                  (sport, market) == ('nba', 'total') and 1 <= gap < 8 or
+                  (sport, market) == ('nba', 'spread') and abs(gap) <= 1):
+                support.append('Distance matches the current preference.')
+            elif (sport, market) == ('nba', 'spread') and gap > 1:
+                warnings.append('Spread distance is above the preferred range.')
+        if sport == 'nba' and market == 'winner' and book is not None and book >= .72:
+            support.append('Strong sportsbook support.')
+        exact_win = bool(_field(h, 'rank') and _field(h, 'wins', 0) > _field(h, 'losses', 0))
+        if _field(h, 'rank') and _field(h, 'losses', 0) > _field(h, 'wins', 0):
+            warnings.append('Losing ranked exact-percentage record.')
+        if exact_win:
+            support.append('Winning ranked exact-percentage record.')
+        facts = p.get('game_facts') or {}
+        rest = facts.get('rest') or {}
+        move = facts.get('line_move') or {}
+        if sport == 'nba' and market == 'winner' and move.get('move_pct_points', 0) is not None and move.get('move_pct_points', 0) > 0:
+            support.append('Stored same-provider movement favours this side.')
+        if market == 'total' and sport in ('nba', 'nhl') and any((rest.get(side) or {}).get('back_to_back') for side in ('home', 'away')):
+            warnings.append('A team is on a back-to-back.')
+        if sport == 'nhl' and market == 'spread' and p['pick_label'].endswith('+1.5'):
+            team = p['pick_label'].rsplit(' ', 1)[0]
+            if any(x['market'] == 'winner' and x['pick_label'] == team+' win' for x in picks):
+                support.append('Same team is also the winner pick.')
+            if app >= .67:
+                support.append('Meets the 67% puck-line preference.')
+            if (rest.get(rest.get('picked_team')) or {}).get('back_to_back'):
+                warnings.append('Picked team is on a back-to-back.')
+        if sport == 'nba' and market == 'winner':
+            team = p['pick_label'].removesuffix(' win')
+            if any(x['market'] == 'spread' and ' +' in x['pick_label'] and not x['pick_label'].startswith(team+' ') for x in picks):
+                support.append('Opposing spread pick supports the winner context.')
+        # Compare warnings first, then the support group, then likelihood. No sum of correlated votes.
+        rank = (not warnings, bool(support), book if book is not None else app, exact_win, app)
+        candidates.append((rank, p, gap, support, warnings))
+    if not candidates:
+        return dict(method=CARD_METHOD, pick=None, reason=' '.join(dict.fromkeys(blocked)) or 'No eligible forecast.', assessments=[])
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    _, chosen, gap, support, warnings = candidates[0]
+    assessments = [dict(forecast_id=p['forecast_id'], distance=g, support=sp, warnings=w) for _,p,g,sp,w in candidates]
+    if warnings and not support:
+        return dict(method=CARD_METHOD, pick=None, reason='No supported lean: '+warnings[0], assessments=assessments)
+    book = chosen.get('market_prob')
+    numbers = (f"App {100*chosen['probability']:.1f}% / sportsbook {100*book:.1f}% / gap {gap:+.1f} points."
+               if book is not None else f"App {100*chosen['probability']:.1f}%; sportsbook probability unavailable.")
+    reason = numbers+' '+(support[0] if support else 'Highest available likelihood after context checks.')
+    if warnings:
+        reason += ' Caution: '+'; '.join(warnings)
+    if (chosen.get('book_quote') or {}).get('decimal') is not None:
+        quote = chosen['book_quote']
+        reason += f" Stored {quote['provider']} return {quote['decimal']:.2f}x; no proven price edge."
+    elif (chosen.get('quote_check') or {}).get('price_now') is None:
+        reason += ' Stored price unavailable; value unassessed.'
+    else:
+        reason += f" Stored price {chosen['quote_check']['price_now']:+g}; no proven price edge."
+    if sport == 'soccer':
+        reason += ' Soccer selection is provisional; no proven bookmaker edge.'
+    return dict(method=CARD_METHOD, pick=chosen, reason=reason, assessments=assessments)
+
+
 def attach_assessments(sport, picks):
     """Every snapshot pick carries its assessment (review F2: soccer too); a problem is reported on the pick, never hides it."""
     for pick in picks:

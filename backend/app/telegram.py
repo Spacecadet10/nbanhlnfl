@@ -170,21 +170,25 @@ PAST_PREFIX = f'Past seasons {PAST_SEASONS}, recomputed, model line: '
 PAST_PREFIX_NO_LINE = f'Past seasons {PAST_SEASONS}, recomputed: '    # winner (no line): app/winner_history.py
 
 
-def message_batches(report, chat_id, lineup_lines=None, games_by_key=None, *, best_pick_pictures=None):
+def message_batches(report, chat_id, lineup_lines=None, games_by_key=None, *, best_pick_pictures=None, context_selection=False):
     """One summary per game/version, using the same backend best-pick ranking and exact-percentage record as the UI."""
     now = datetime.fromisoformat(report['as_of'].replace('Z', '+00:00'))
     games = {}
     for pick in report['picks']:
         start = datetime.fromisoformat(pick['tipoff'].replace('Z', '+00:00'))
         generated = datetime.fromisoformat(pick['generated_at'].replace('Z', '+00:00'))
-        if (pick['status'] != 'scheduled' or pick['grade'] != 'pending' or not now < start <= now + timedelta(hours=2)
+        if report['sport'] == 'soccer':
+            from .tickets import eligible
+            if not eligible(pick, now) or generated > now:
+                continue
+        elif (pick['status'] != 'scheduled' or pick['grade'] != 'pending' or not now < start <= now + timedelta(hours=2)
                 or not start - timedelta(hours=2) <= generated <= now):
             continue
         games.setdefault(pick['game_id'], []).append(pick)
     batches = []
     for gid, picks in games.items():
         batch = format_batch(report, chat_id, gid, picks, lineup_line=(lineup_lines or {}).get(gid),
-                             best_pick_picture=(best_pick_pictures or {}).get(gid))
+                             best_pick_picture=(best_pick_pictures or {}).get(gid), context_selection=context_selection)
         if batch:
             batches.append(batch)
             if games_by_key is not None:     # which game each card is (output only; the card itself is unchanged)
@@ -196,23 +200,31 @@ LINEUP_PREFIX = 'Lineup: '
 STRONGEST_PREFIX = 'Strongest on this card (trial): '
 
 
-def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None, best_pick_picture=None):
+def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None, best_pick_picture=None, context_selection=False):
     """One shared message layout. Preview retains actual past times/results and is prominently labelled."""
     from .threshold_overview import MIN_LIVE_GRADED, displayed_percentage
     now = datetime.fromisoformat(report['as_of'].replace('Z', '+00:00'))
     from . import sports
-    order = {market: i for i, market in enumerate(sports.store(report['sport']).markets)}
+    order = ({market: i for i, market in enumerate(dict.fromkeys(p['market'] for p in picks))} if report['sport'] == 'soccer'
+             else {market: i for i, market in enumerate(sports.store(report['sport']).markets)})
     picks = sorted(picks, key=lambda p: order.get(p['market'], len(order)))
     start = datetime.fromisoformat(picks[0]['tipoff'].replace('Z', '+00:00')).astimezone(TORONTO)
     strong = sorted((p for p in picks if p['strong']), key=lambda p: p['game_rank'])
+    choice = None
+    if context_selection:
+        from .tickets import card_choice
+        choice = card_choice(report['sport'], picks)
+    chosen = choice['pick'] if choice else (strong[0] if strong else None)
     divider = '━━━━━━━━━━━━━━'
     lines = (['<b>TEST PREVIEW — PAST GAME, NOT A LIVE PICK</b>', ''] if preview else []) + [
         f"<b>PROP51 PICKS · {escape(report['sport'].upper())}</b>",
         f"<b>{escape(picks[0]['matchup'])}</b>",
         f"{'Started' if preview else 'Starts'} {start:%b %d, %I:%M %p %Z}", '', divider,
         '<b>Recommended pick</b>',
-        '<b>' + escape(strong[0]['pick_label'] if strong else 'No strong pick') + '</b>']
-    if strong:
+        '<b>' + escape(chosen['pick_label'] if chosen else ('No supported pick' if choice else 'No strong pick')) + '</b>']
+    if choice:
+        lines.append(escape(choice['reason']))
+    elif strong:
         # Owner request Nov 9: say what the sportsbook's own price implies next to the model, and say so plainly when the
         # price asks for more than the model gives (a likely winner is not a value pick at any price).
         book = strong[0].get('market_prob')
@@ -225,7 +237,7 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
         # Owner request Nov 11: who is playing, one plain line under the pick. Text only: the delivery key and the card's
         # identity are unchanged, so a later lineup change never resends a card.
         lines.append(LINEUP_PREFIX + escape(lineup_line))
-    if not preview and best_pick_picture and best_pick_picture.get('rule_applies'):
+    if not context_selection and not preview and best_pick_picture and best_pick_picture.get('rule_applies'):
         named_id = best_pick_picture.get('named_forecast_id')
         if named_id is None:
             lines.append(STRONGEST_PREFIX + 'No qualifying pick')
@@ -233,12 +245,25 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
             label = next((p.get('pick_label') for p in picks if p.get('forecast_id') == named_id), None)
             if label:
                 lines.append(STRONGEST_PREFIX + escape(label))
-    lines += ['<i>' + ('App ranking for this past game.' if preview else 'Based on the app’s existing ranking.') + '</i>',
+    lines += ['<i>' + ('App ranking for this past game.' if preview else ('Context comparison · provisional lean, not a ticket. Method context-card-v1.' if choice else 'Based on the app’s existing ranking.')) + '</i>',
               divider, '', '<b>Market breakdown</b>', '']
     versions = []
     for pick in picks:
         h = pick.get('percentage_history')
         if h is None:
+            if report['sport'] == 'soccer':
+                versions.append([pick['market'], pick['forecast_id'], pick['generated_at'], pick['cutoff_at']])
+                quote = pick.get('quote_check') or {}
+                provenance = 'bookmaker line' if quote.get('line_source') == 'bookmaker' else 'model selection'
+                actual = pick.get('book_quote') or {}
+                if actual.get('decimal') is not None:
+                    provenance += f"; {actual['provider']} return {actual['decimal']:.2f}x"
+                elif quote.get('price_now') is not None:
+                    provenance += f"; stored price {quote['price_now']:+g}"
+                else:
+                    provenance += '; price unavailable'
+                lines += [f"<b>{escape(pick['market_title'])}</b>", f"{escape(pick['pick_label'])} · {escape(provenance)}",
+                          f"<b>Model {displayed_percentage(pick['probability'])}%</b> · Exact-% history unavailable", '']
             continue   # absent history must not be manufactured as a zero record
         if hasattr(h, 'model_dump'):
             h = h.model_dump(mode='json')
@@ -290,7 +315,7 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
         lines.append('<i>Records include this game’s result. This is a formatting example.</i>')
     lines.append('Updated ' + now.astimezone(TORONTO).strftime('%I:%M %p %Z'))
     text = '\n'.join(lines)
-    if len(text) > 4000:
+    if len(text) > (12000 if report['sport'] == 'soccer' else 4000):
         raise DeliveryError('Pick summary exceeds Telegram message length; not sent.')
     versions.sort(key=lambda version: version[0])  # Preserve live deduplication across layout-only changes.
     key = hashlib.sha256(json.dumps(['preview-card-1' if preview else 'pregame', str(chat_id), report['sport'], gid, versions,
@@ -377,7 +402,10 @@ def deliver_card(bot, conn, chat_id, key, text, now):
         since = (datetime.fromisoformat(now.replace('Z', '+00:00')) - timedelta(days=2)).strftime('%Y-%m-%dT%H:%M:%SZ')
         for row in conn.execute("SELECT text FROM deliveries WHERE chat_id=? AND attempted_at>=? AND status IN ('sent','uncertain','sending')",
                                 (str(chat_id), since)):
-            if card_identity(row['text']) == identity:
+            if (card_identity(row['text']) == identity or
+                    (card_identity(row['text']) and card_identity(row['text'])[:3] == identity[:3]
+                     and 'Context comparison · provisional lean' in text
+                     and 'Context comparison · provisional lean' not in row['text'])):
                 return 'already_sent_for_game'
     return deliver(bot, conn, chat_id, key, text, now)
 
@@ -444,11 +472,16 @@ def run_once(bot, settings, conn, *, now=None):
                 lineups = card_lineups(source, sport, report, now)
                 pictures = best_pick_pictures(source, sport, report, now)
                 card_implied_lines(source, sport, report, now)
+                from . import tickets
+                for pick in report['picks']:
+                    pick['quote_check'] = tickets.quote_check(source, pick, report['as_of'])
+                tickets.attach_lineups(source, sport, report['picks'], report['as_of'])
+                tickets.attach_facts(source, sport, report['picks'], report['as_of'])
             finally:
                 source.close()
             games_by_key, outcomes = {}, Counter()
             batches = message_batches(report, settings['TELEGRAM_CHAT_ID'], lineup_lines=lineups, games_by_key=games_by_key,
-                                      best_pick_pictures=pictures)
+                                      best_pick_pictures=pictures, context_selection=True)
             for key, text in batches:
                 status = deliver_card(bot, conn, settings['TELEGRAM_CHAT_ID'], key, text, report['as_of'])
                 outcomes[status] += 1
@@ -458,6 +491,26 @@ def run_once(bot, settings, conn, *, now=None):
         except Exception as exc:
             # Do not echo arbitrary exception text (URLs/credentials). Other sport can continue.
             result['sports'][sport] = {'status': 'failed', 'error_type': type(exc).__name__}
+    # Reuse the ticket soccer contract and its competition refusals; do not route soccer through RealProvider.
+    from . import tickets
+    if config.db_path('soccer').is_file():
+        try:
+            section = tickets.soccer_section(now)
+            if 'error' in section or section.get('markets_error'):
+                result['sports']['soccer'] = {'status': 'failed', 'reason': section.get('error') or section['markets_error']}
+            else:
+                report = dict(section['report'], sport='soccer', as_of=result['as_of'])
+                report['picks'] = [p for p in report['picks'] if p['competition'] not in section['refused']]
+                for pick in report['picks']:
+                    pick.setdefault('strong', False)
+                    pick.setdefault('game_rank', None)
+                outcomes = Counter()
+                batches = message_batches(report, settings['TELEGRAM_CHAT_ID'], context_selection=True)
+                for key, text in batches:
+                    outcomes[deliver_card(bot, conn, settings['TELEGRAM_CHAT_ID'], key, text, report['as_of'])] += 1
+                result['sports']['soccer'] = dict(eligible_summaries=len(batches), **dict(outcomes), refused=section['refused'])
+        except Exception as exc:
+            result['sports']['soccer'] = {'status': 'failed', 'error_type': type(exc).__name__}
     if any(s.get('status') == 'failed' or any(s.get(k, 0) for k in ('failed', 'uncertain', 'retry'))
            for s in result['sports'].values()):
         result['status'] = 'delivery_issue'
