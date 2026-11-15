@@ -9,7 +9,7 @@ from .models.elo import EloConfig
 
 
 # Commands that work for every sport; everything else is NBA-only until generalised.
-SPORT_COMMANDS = {"nhl-pbp-import", "nhl-xg-research", "migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies", "refresh", "odds", "tick", "predict",
+SPORT_COMMANDS = {"nhl-pbp-import", "nhl-xg-research", "migrate", "replay", "coverage", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies", "refresh", "odds", "tick", "predict", "recover",
                   "score", "daily", "scheduler", "predict-now", "score-near-tipoff", "markets", "score-markets", "agreement", "thresholds",
                   "combination-study", "selector-decide", "research-report", "retrain-cadence", "catboost-challenger", "combination-search", "expanded-search", "selective-study", "rules-registry",
                   "daily-cadence", "features-nhl", "tracking-report", "tracking-record", "pool-screen", "pool-assess", "pool-record", "pool-roster", "pool-report",
@@ -278,6 +278,9 @@ def main(argv=None) -> int:
     rf.add_argument("--force", action="store_true")
     sub.add_parser("predict", help="Refresh and record supported forecasts only within two hours of tipoff")
     sub.add_parser("thresholds", help="Read-only two-hour threshold records for every stored market and model")
+    rv = sub.add_parser("recover", help="Reconstruct missed primary-market forecasts of games since a date (labelled reconstructed; never live records or training)")
+    rv.add_argument("--since", required=True, help="first start date, YYYY-MM-DD")
+    rv.add_argument("--limit", type=int, default=25, help="games per run")
     cs = sub.add_parser("combination-study", help="One-time retrospective combination/selection study (docs/MODEL_SELECTION.md §5)")
     cs.add_argument("--out", help="Report directory (default data/reports/combination-<sport>-<time>)")
     rc = sub.add_parser("retrain-cadence", help="Exploratory retraining-cadence comparison (docs/MODEL_SELECTION.md §9)")
@@ -1402,6 +1405,11 @@ def _run(args, p, conn, applied) -> int:
     elif args.cmd == "research-report":
         from . import research_live
         print(json.dumps(research_live.report(conn, args.market), indent=2, default=str))
+    elif args.cmd == "recover":
+        from . import recovery
+        result = recovery.recover(conn, limit=args.limit, since=args.since)
+        print(json.dumps(result, indent=2, default=str))
+        return 0 if result["status"] in ("success", "partial") else 1
     elif args.cmd == "thresholds":
         from . import tracking
         print(json.dumps(tracking.report(conn), indent=2))

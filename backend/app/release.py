@@ -29,7 +29,7 @@ COMMIT_ENV = "NBA_RELEASE_COMMIT"
 PIN_FILE = "release-pin"   # in the release checkout's git folder: the commit the scheduled jobs may run
 # Scheduled commands and the job_runs name a refusal is recorded under (job_runs.job has a fixed set of names).
 GUARDED = {"odds": "odds", "tick": "odds", "daily": "refresh", "refresh": "refresh", "injuries": "injuries", "score": "score",
-           "predict-now": "near_tipoff", "predict": "near_tipoff", "markets": "markets", "boxscores": "boxscores"}
+           "predict-now": "near_tipoff", "predict": "near_tipoff", "recover": "near_tipoff", "markets": "markets", "boxscores": "boxscores"}
 
 
 def enabled() -> bool:

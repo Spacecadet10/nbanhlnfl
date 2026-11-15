@@ -23,6 +23,29 @@ def test_missed_nba_winner_is_reconstructed_without_changing_live_records(ready,
     assert len(report['records']) == 1 and report['records'][0]['outcome'] in ('win','loss')
 
 
+
+def test_games_before_the_recording_era_are_reconstructed_only_since_an_explicit_date(ready, monkeypatch):
+    from datetime import datetime, timedelta
+    from app import sports
+    from dataclasses import replace
+    real = sports.get
+    monkeypatch.setattr(sports, 'get', lambda s: replace(real(s), markets=('winner',)))
+    near_tipoff.predict_now(ready, now=NOW)
+    fmt = '%Y-%m-%dT%H:%M:%SZ'
+    era = datetime.strptime(ready.execute('select min(generated_at) from near_tipoff_forecasts').fetchone()[0], fmt)
+    tip = era - timedelta(days=1)
+    ingest_events(ready, [event('g0', tip.strftime(fmt), '1', '2', 'STATUS_FINAL', 100, 90)], (tip + timedelta(hours=4)).strftime(fmt))
+    later = (era + timedelta(hours=1)).strftime(fmt)
+    before = ready.execute('select count(*) from predictions').fetchone()[0]
+    recovery.recover(ready, now=later)
+    assert not ready.execute("select 1 from recovered_forecasts where game_id='espn:g0'").fetchone()
+    out = recovery.recover(ready, now=later, since=(tip - timedelta(days=1)).strftime('%Y-%m-%d'))
+    assert not out['errors'], out
+    row = ready.execute("select * from recovered_forecasts where game_id='espn:g0'").fetchone()
+    assert row and row['cutoff_at'] < row['tipoff_at'] <= row['reconstructed_at']
+    assert row['latest_result_at'] is None or row['latest_result_at'] <= row['cutoff_at']
+    assert ready.execute('select count(*) from predictions').fetchone()[0] == before
+
 def test_nhl_all_markets_recover_with_no_odds_and_ignore_own_outcome(sealed, monkeypatch):
     from test_live_markets import add_upcoming
     from test_research_live import GID
