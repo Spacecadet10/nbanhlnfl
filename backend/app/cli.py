@@ -1409,7 +1409,7 @@ def _run(args, p, conn, applied) -> int:
         from . import recovery
         result = recovery.recover(conn, limit=args.limit, since=args.since)
         print(json.dumps(result, indent=2, default=str))
-        return 0 if result["status"] in ("success", "partial") else 1
+        return 0 if result["status"] == "success" else 1      # partial: some games failed to reconstruct
     elif args.cmd == "thresholds":
         from . import tracking
         print(json.dumps(tracking.report(conn), indent=2))
