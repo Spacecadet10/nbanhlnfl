@@ -1,0 +1,186 @@
+....FFFF                                                                 [100%]
+=================================== FAILURES ===================================
+____________ test_an_nfl_store_is_backed_up_verified_and_restorable ____________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-119/test_an_nfl_store_is_backed_up0')
+
+    def test_an_nfl_store_is_backed_up_verified_and_restorable(tmp_path):
+        data, dest = tmp_path / "data", tmp_path / "backups"
+        live = _data_store(data / "nfl.sqlite", "nfl", upto=34)
+>       out = backup.run(data, dest, stamp="pre35", sports=["nfl"])
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_backup_restore.py:113: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/backup.py:64: in run
+    src = Path(data_dir) / _db_file(sport)
+                           ^^^^^^^^^^^^^^^
+app/backup.py:162: in _db_file
+    return sport_defs.get(sport).db_file
+           ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+sport = 'nfl'
+
+    def get(sport: str) -> Sport:
+        """A served sport. Raises for data-only sports (NFL, soccer) and unknown ids."""
+        try:
+            return SPORTS[sport]
+        except KeyError:
+>           raise UnsupportedSport(f"Unknown sport {sport!r}; expected one of {', '.join(SPORT_IDS)}") from None
+E           app.sports.UnsupportedSport: Unknown sport 'nfl'; expected one of nba, nhl
+
+app/sports.py:75: UnsupportedSport
+______________ test_the_cli_backs_up_and_restores_nfl_and_soccer _______________
+
+self = ArgumentParser(prog='__main__.py', usage=None, description='Store backup and restore around a release migration (READM...-sport nhl\n', formatter_class=<class 'argparse.RawDescriptionHelpFormatter'>, conflict_handler='error', add_help=True)
+args = ['--dest', '/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-119/test_the_cli_backs_up_and_rest0/backups', '--sport', 'nfl', '--sport', 'soccer']
+namespace = Namespace(dest=PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-119/test_the_cli_backs_up_and_rest0/backups'), restore=None, sport=None)
+intermixed = False
+
+    def _parse_known_args2(self, args, namespace, intermixed):
+        if args is None:
+            # args default to the system args
+            args = _sys.argv[1:]
+        else:
+            # make sure that args are mutable
+            args = list(args)
+    
+        # default Namespace built from parser defaults
+        if namespace is None:
+            namespace = Namespace()
+    
+        # add any action defaults that aren't present
+        for action in self._actions:
+            if action.dest is not SUPPRESS:
+                if not hasattr(namespace, action.dest):
+                    if action.default is not SUPPRESS:
+                        setattr(namespace, action.dest, action.default)
+    
+        # add any parser defaults that aren't present
+        for dest in self._defaults:
+            if not hasattr(namespace, dest):
+                setattr(namespace, dest, self._defaults[dest])
+    
+        # parse the arguments and exit if there are any errors
+        if self.exit_on_error:
+            try:
+>               namespace, args = self._parse_known_args(args, namespace, intermixed)
+                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../../../.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/argparse.py:1943: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/argparse.py:2184: in _parse_known_args
+    start_index = consume_optional(start_index)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/argparse.py:2113: in consume_optional
+    take_action(action, args, option_string)
+../../../.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/argparse.py:2003: in take_action
+    argument_values = self._get_values(action, argument_strings)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/argparse.py:2514: in _get_values
+    self._check_value(action, value)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = ArgumentParser(prog='__main__.py', usage=None, description='Store backup and restore around a release migration (READM...-sport nhl\n', formatter_class=<class 'argparse.RawDescriptionHelpFormatter'>, conflict_handler='error', add_help=True)
+action = _AppendAction(option_strings=['--sport'], dest='sport', nargs=None, const=None, default=None, type=None, choices=('nba', 'nhl'), required=False, help='Default: both for a backup; required for a restore', metavar=None)
+value = 'nfl'
+
+    def _check_value(self, action, value):
+        # converted value must be one of the choices (if specified)
+        choices = action.choices
+        if choices is not None:
+            if isinstance(choices, str):
+                choices = iter(choices)
+            if value not in choices:
+                args = {'value': str(value),
+                        'choices': ', '.join(map(str, action.choices))}
+                msg = _('invalid choice: %(value)r (choose from %(choices)s)')
+>               raise ArgumentError(action, msg % args)
+E               argparse.ArgumentError: argument --sport: invalid choice: 'nfl' (choose from nba, nhl)
+
+../../../.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/argparse.py:2573: ArgumentError
+
+During handling of the above exception, another exception occurred:
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-119/test_the_cli_backs_up_and_rest0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10a9f3c20>
+capsys = <_pytest.capture.CaptureFixture object at 0x10a9f3a70>
+
+    def test_the_cli_backs_up_and_restores_nfl_and_soccer(tmp_path, monkeypatch, capsys):
+        data, dest = tmp_path / "data", tmp_path / "backups"
+        for s in ("nfl", "soccer"):
+            _data_store(data / f"{s}.sqlite", s).close()
+        monkeypatch.setenv("NBA_DATA_DIR", str(data))
+>       backup.main(["--dest", str(dest), "--sport", "nfl", "--sport", "soccer"])
+
+tests/test_backup_restore.py:154: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/backup.py:170: in main
+    args = ap.parse_args(argv)
+           ^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/argparse.py:1904: in parse_args
+    args, argv = self.parse_known_args(args, namespace)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/argparse.py:1914: in parse_known_args
+    return self._parse_known_args2(args, namespace, intermixed=False)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/argparse.py:1945: in _parse_known_args2
+    self.error(str(err))
+../../../.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/argparse.py:2650: in error
+    self.exit(2, _('%(prog)s: error: %(message)s\n') % args)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = ArgumentParser(prog='__main__.py', usage=None, description='Store backup and restore around a release migration (READM...-sport nhl\n', formatter_class=<class 'argparse.RawDescriptionHelpFormatter'>, conflict_handler='error', add_help=True)
+status = 2
+message = "__main__.py: error: argument --sport: invalid choice: 'nfl' (choose from nba, nhl)\n"
+
+    def exit(self, status=0, message=None):
+        if message:
+            self._print_message(message, _sys.stderr)
+>       _sys.exit(status)
+E       SystemExit: 2
+
+../../../.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/argparse.py:2637: SystemExit
+----------------------------- Captured stderr call -----------------------------
+usage: __main__.py [-h] [--dest DEST] [--restore RESTORE] [--sport {nba,nhl}]
+__main__.py: error: argument --sport: invalid choice: 'nfl' (choose from nba, nhl)
+__ test_a_default_backup_includes_every_existing_store_and_skips_absent_ones ___
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-119/test_a_default_backup_includes0')
+
+    def test_a_default_backup_includes_every_existing_store_and_skips_absent_ones(tmp_path):
+        data, dest = tmp_path / "data", tmp_path / "backups"
+        data.mkdir()
+>       with pytest.raises(backup.BackupError, match="No store"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: Regex pattern did not match.
+E         Expected regex: 'No store'
+E         Actual message: 'No nba store at /private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-119/test_a_default_backup_includes0/data/nba.sqlite'
+
+tests/test_backup_restore.py:171: AssertionError
+_ test_a_default_backup_with_the_nba_nhl_and_nfl_stores_present_backs_up_all_three _
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-119/test_a_default_backup_with_the0')
+
+    def test_a_default_backup_with_the_nba_nhl_and_nfl_stores_present_backs_up_all_three(tmp_path):
+        data, dest = tmp_path / "data", tmp_path / "backups"
+        for s in ("nba", "nhl"):
+            _store(data / f"{s}.sqlite", s).close()
+        _data_store(data / "nfl.sqlite", "nfl").close()
+        out = backup.run(data, dest, stamp="live")
+        man = json.loads((dest / "live" / "manifest.json").read_text())
+>       assert set(man["stores"]) == {"nba", "nhl", "nfl"} and out["skipped"] == ["soccer"]
+E       AssertionError: assert ({'nba', 'nhl'} == {'nba', 'nfl', 'nhl'}
+E         
+E         Extra items in the right set:
+E         'nfl'
+E         Use -v to get more diff)
+
+tests/test_backup_restore.py:189: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_backup_restore.py::test_an_nfl_store_is_backed_up_verified_and_restorable
+FAILED tests/test_backup_restore.py::test_the_cli_backs_up_and_restores_nfl_and_soccer
+FAILED tests/test_backup_restore.py::test_a_default_backup_includes_every_existing_store_and_skips_absent_ones
+FAILED tests/test_backup_restore.py::test_a_default_backup_with_the_nba_nhl_and_nfl_stores_present_backs_up_all_three
+4 failed, 4 passed in 3.28s

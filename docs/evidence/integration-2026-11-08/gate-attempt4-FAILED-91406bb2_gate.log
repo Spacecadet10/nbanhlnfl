@@ -1,0 +1,80 @@
+Structure guard passed. This does not prove semantic uniqueness or app correctness.
+
+> nba-predictor-frontend@0.1.0 typecheck
+> tsc --noEmit
+
+
+> nba-predictor-frontend@0.1.0 build
+> tsc --noEmit && vite build
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 80 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.80 kB │ gzip:   0.45 kB
+dist/assets/index-Bp_HB52X.css   83.58 kB │ gzip:  16.32 kB
+dist/assets/index-BL7-embV.js   571.74 kB │ gzip: 158.09 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 645ms
+........................................................................ [  3%]
+........................................................................ [  7%]
+........................................................................ [ 11%]
+........................................................................ [ 15%]
+........................................................................ [ 18%]
+........................................................................ [ 22%]
+........................................................................ [ 26%]
+........................................................................ [ 30%]
+........................................................................ [ 33%]
+........................................................................ [ 37%]
+........................................................................ [ 41%]
+........................................................................ [ 45%]
+........................................................................ [ 49%]
+........................................................................ [ 52%]
+........................................................................ [ 56%]
+........................................................................ [ 60%]
+........................................................................ [ 64%]
+........................................................................ [ 67%]
+........................................................................ [ 71%]
+........................................................................ [ 75%]
+........................................................................ [ 79%]
+........................................................................ [ 82%]
+........................................................................ [ 86%]
+........................................................................ [ 90%]
+........F............................................................... [ 94%]
+........................................................................ [ 98%]
+......................................                                   [100%]
+=================================== FAILURES ===================================
+________________ test_the_api_serves_national_team_competitions ________________
+
+live = <sqlite3.Connection object at 0x134e20f40>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1369f2510>
+
+    def test_the_api_serves_national_team_competitions(live, monkeypatch):
+        from fastapi.testclient import TestClient
+        from app import main
+        monkeypatch.setenv("NBA_API_MODE", "real")
+        client = TestClient(main.app)
+        for comp in ("uefa.nations", "fifa.friendly", "caf.nations_qual"):
+            r = client.get("/api/soccer/live", params={"competition": comp})
+>           assert r.status_code == 200 and r.json()["in_scope"] is True, (comp, r.text[:200])
+E           AssertionError: ('uefa.nations', '{"detail":"There is no soccer demo. Start the API in real mode to see the stored soccer fixtures and results."}')
+E           assert (404 == 200)
+E            +  where 404 = <Response [404 Not Found]>.status_code
+
+tests/test_soccer_live.py:190: AssertionError
+=============================== warnings summary ===============================
+../../nba-predictor-sprint1/backend/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_soccer_live.py::test_the_api_serves_national_team_competitions
+1 failed, 1909 passed, 1 warning in 2070.74s (0:34:30)
+exit=1
+2026-11-08T23:10:41Z

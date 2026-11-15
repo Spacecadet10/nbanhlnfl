@@ -1,0 +1,7 @@
+{
+  "note": "Best-pick recorder independent review (HANDOFF.md): review time and the reviewed recorder's sha256 (app.best_pick_record.RECORDER_SHA256). Read by scripts/weekly_report.py. 023a26a4 (released 23:49Z Nov 11) was defective (every live row an error) and is excluded whole; ff2d53ab reviewed 2026-11-12T00:16Z.",
+  "reviewed_at": "2026-11-12T00:20:00Z",
+  "reviewed_recorder_sha256": [
+    "ff2d53ab3985fae70e9ee8214bf43ffe32f7d3c096bd697202f076f8a7c8de3e"
+  ]
+}

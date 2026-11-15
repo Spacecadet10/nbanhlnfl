@@ -1,0 +1,97 @@
+
+== nhl:winner (11870 games, seasons 2018-2026, configs 5994)
+  ALONE et_tuned:nhl_base            vs best prior existing +0.0030 [+0.0015,+0.0046] | vs untuned extra_trees:nhl_base +0.0003 [-0.0004,+0.0011] | seasons 2019:+0.0030 2020:+0.0013 2021:+0.0036 2022:+0.0035 2023:+0.0081 2024:+0.0013 2025:+0.0044 2026:-0.0011
+  ALONE hgb_tuned:nhl_base           vs best prior existing +0.0074 [+0.0053,+0.0095] | vs untuned hockey_gbt +0.0003 [-0.0022,+0.0029] | seasons 2019:+0.0185 2020:+0.0082 2021:+0.0032 2022:+0.0073 2023:+0.0047 2024:+0.0027 2025:+0.0083 2026:+0.0051
+  ALONE hgb_tuned:nhl_base:goals     vs best prior existing +0.0059 [+0.0038,+0.0081] | vs untuned poisson_draw:nhl_base +0.0036 [+0.0022,+0.0052] | seasons 2019:+0.0065 2020:+0.0051 2021:+0.0060 2022:+0.0133 2023:+0.0064 2024:+0.0067 2025:+0.0048 2026:-0.0015
+  ALONE hgb_tuned:nhl_base:reg3      vs best prior existing +0.0078 [+0.0055,+0.0102] | vs untuned multinomial_l2:nhl_base +0.0078 [+0.0057,+0.0101] | seasons 2019:+0.0175 2020:+0.0089 2021:+0.0088 2022:+0.0121 2023:+0.0043 2024:+0.0057 2025:+0.0078 2026:-0.0024
+  FROZEN without_tuned >=0.50: 0.592 n10515 (best 0.592, avg 0.591); >=0.55: 0.630 n6499 (best 0.634, avg 0.630); >=0.60: 0.662 n3727 (best 0.666, avg 0.658); >=0.65: 0.727 n1759 (best 0.728, avg 0.723); >=0.70: 0.740 n1556 (best 0.753, avg 0.737); >=0.75: 0.789 n394 (best 0.815, avg 0.797); >=0.80: 0.804 n107 (best 0.841, avg 0.822)
+  FROZEN with_tuned    >=0.50: 0.591 n10515 (best 0.592, avg 0.592); >=0.55: 0.633 n6272 (best 0.637, avg 0.633); >=0.60: 0.661 n3820 (best 0.666, avg 0.662); >=0.65: 0.715 n1986 (best 0.716, avg 0.708); >=0.70: 0.744 n1263 (best 0.754, avg 0.740); >=0.75: 0.783 n411 (best 0.810, avg 0.791); >=0.80: 0.791 n110 (best 0.845, avg 0.855)
+  qualified: {'without_tuned': [], 'with_tuned': []}
+  frozen rules containing a tuned member: 21; comparable with/without 19; with better in 13; pooled with 0.635 (n7347) vs without 0.632 (n7990)
+  final registry rules with a tuned member: 1 of 8
+
+== nhl:reg3 (11870 games, seasons 2018-2026, configs 2272)
+  ALONE hgb_tuned:nhl_base:goals     vs best prior existing +0.0045 [+0.0026,+0.0064] | vs untuned poisson_draw:nhl_base +0.0053 [+0.0035,+0.0071] | seasons 2019:+0.0098 2020:+0.0052 2021:+0.0051 2022:+0.0073 2023:+0.0016 2024:+0.0045 2025:+0.0008 2026:+0.0020
+  ALONE hgb_tuned:nhl_base:reg3      vs best prior existing +0.0150 [+0.0115,+0.0188] | vs untuned multinomial_l2:nhl_base +0.0157 [+0.0123,+0.0194] | seasons 2019:+0.0239 2020:+0.0226 2021:+0.0143 2022:+0.0138 2023:+0.0225 2024:+0.0122 2025:+0.0078 2026:+0.0042
+  FROZEN without_tuned >=0.35: 0.476 n10374 (best 0.476, avg 0.475); >=0.40: 0.477 n10293 (best 0.477, avg 0.475); >=0.45: 0.519 n5912 (best 0.521, avg 0.517); >=0.50: 0.569 n3254 (best 0.572, avg 0.565); >=0.55: 0.602 n1880 (best 0.610, avg 0.605); >=0.60: 0.636 n1254 (best 0.634, avg 0.616); >=0.65: 0.683 n218 (best 0.674, avg 0.665); >=0.70: 0.500 n4 (best 0.750, avg 0.750)
+  FROZEN with_tuned    >=0.35: 0.475 n10308 (best 0.477, avg 0.474); >=0.40: 0.476 n10275 (best 0.478, avg 0.474); >=0.45: 0.526 n4981 (best 0.525, avg 0.524); >=0.50: 0.552 n3432 (best 0.560, avg 0.552); >=0.55: 0.606 n2472 (best 0.621, avg 0.605); >=0.60: 0.614 n1018 (best 0.632, avg 0.637); >=0.65: 0.671 n310 (best 0.668, avg 0.671); >=0.70: 0.500 n4 (best 0.750, avg 0.750)
+  qualified: {'without_tuned': [], 'with_tuned': []}
+  frozen rules containing a tuned member: 30; comparable with/without 26; with better in 14; pooled with 0.512 (n10746) vs without 0.510 (n11435)
+  final registry rules with a tuned member: 4 of 9
+
+== nhl:spread (11870 games, seasons 2018-2026, configs 621)
+  ALONE hgb_tuned:nhl_base:goals     vs best prior existing +0.0039 [+0.0024,+0.0054] | vs untuned poisson_draw:nhl_base +0.0039 [+0.0024,+0.0054] | seasons 2019:+0.0049 2020:+0.0042 2021:-0.0004 2022:+0.0083 2023:+0.0023 2024:+0.0045 2025:+0.0040 2026:+0.0023
+  FROZEN without_tuned >=0.50: 0.568 n10515 (best 0.568, avg 0.562); >=0.55: 0.603 n5712 (best 0.605, avg 0.595); >=0.60: 0.630 n2034 (best 0.638, avg 0.620); >=0.65: 0.698 n553 (best 0.714, avg 0.669)
+  FROZEN with_tuned    >=0.50: 0.567 n10515 (best 0.568, avg 0.562); >=0.55: 0.604 n4714 (best 0.604, avg 0.598); >=0.60: 0.631 n2740 (best 0.637, avg 0.615); >=0.65: 0.695 n632 (best 0.712, avg 0.655); >=0.70: 0.742 n66 (best 0.803, avg 0.788)
+  qualified: {'without_tuned': [], 'with_tuned': []}
+  frozen rules containing a tuned member: 17; comparable with/without 13; with better in 6; pooled with 0.591 (n7569) vs without 0.590 (n8115)
+  final registry rules with a tuned member: 3 of 6
+
+== nhl:total (11870 games, seasons 2018-2026, configs 621)
+  ALONE hgb_tuned:nhl_base:goals     vs best prior existing +0.0013 [-0.0006,+0.0032] | vs untuned poisson_draw:nhl_base -0.0004 [-0.0021,+0.0012] | seasons 2019:+0.0035 2020:-0.0016 2021:+0.0032 2022:+0.0023 2023:+0.0057 2024:+0.0011 2025:-0.0025 2026:-0.0007
+  FROZEN without_tuned >=0.50: 0.530 n10515 (best 0.530, avg 0.530); >=0.55: 0.566 n2728 (best 0.556, avg 0.541); >=0.60: 0.731 n297 (best 0.667, avg 0.734); >=0.65: 0.670 n188 (best 0.660, avg 0.702)
+  FROZEN with_tuned    >=0.50: 0.529 n10515 (best 0.530, avg 0.530); >=0.55: 0.559 n1133 (best 0.558, avg 0.562); >=0.60: 0.740 n315 (best 0.670, avg 0.737); >=0.65: 0.678 n174 (best 0.678, avg 0.701)
+  qualified: {'without_tuned': [], 'with_tuned': []}
+  frozen rules containing a tuned member: 27; comparable with/without 19; with better in 10; pooled with 0.546 (n7211) vs without 0.544 (n7462)
+  final registry rules with a tuned member: 4 of 5
+
+== nhl:team_total_home (11870 games, seasons 2018-2026, configs 621)
+  ALONE hgb_tuned:nhl_base:goals     vs best prior existing +0.0002 [-0.0022,+0.0027] | vs untuned poisson_draw:nhl_base +0.0015 [-0.0001,+0.0032] | seasons 2019:+0.0092 2020:-0.0037 2021:+0.0039 2022:+0.0001 2023:+0.0019 2024:-0.0027 2025:-0.0010 2026:-0.0052
+  FROZEN without_tuned >=0.50: 0.555 n10265 (best 0.554, avg 0.556); >=0.55: 0.589 n5437 (best 0.583, avg 0.591); >=0.60: 0.622 n2848 (best 0.595, avg 0.618); >=0.65: 0.590 n483 (best 0.625, avg 0.619)
+  FROZEN with_tuned    >=0.50: 0.557 n10250 (best 0.554, avg 0.556); >=0.55: 0.587 n4926 (best 0.584, avg 0.593); >=0.60: 0.627 n2775 (best 0.595, avg 0.628); >=0.65: 0.613 n560 (best 0.629, avg 0.666); >=0.70: 0.674 n92 (best 0.609, avg 0.663)
+  qualified: {'without_tuned': [], 'with_tuned': []}
+  frozen rules containing a tuned member: 33; comparable with/without 26; with better in 17; pooled with 0.578 (n13153) vs without 0.573 (n13606)
+  final registry rules with a tuned member: 5 of 6
+
+== nhl:team_total_away (11870 games, seasons 2018-2026, configs 621)
+  ALONE hgb_tuned:nhl_base:goals     vs best prior existing +0.0028 [+0.0014,+0.0042] | vs untuned poisson_draw:nhl_base +0.0028 [+0.0014,+0.0042] | seasons 2019:+0.0030 2020:+0.0087 2021:+0.0028 2022:+0.0028 2023:+0.0027 2024:+0.0017 2025:+0.0022 2026:-0.0007
+  FROZEN without_tuned >=0.50: 0.571 n9973 (best 0.572, avg 0.570); >=0.55: 0.603 n4927 (best 0.604, avg 0.595); >=0.60: 0.631 n2068 (best 0.615, avg 0.595); >=0.65: 0.596 n478 (best 0.609, avg 0.577)
+  FROZEN with_tuned    >=0.50: 0.570 n9817 (best 0.573, avg 0.568); >=0.55: 0.600 n4487 (best 0.603, avg 0.598); >=0.60: 0.628 n2162 (best 0.612, avg 0.607); >=0.65: 0.585 n337 (best 0.605, avg 0.591)
+  qualified: {'without_tuned': [], 'with_tuned': []}
+  frozen rules containing a tuned member: 14; comparable with/without 14; with better in 8; pooled with 0.583 (n4917) vs without 0.577 (n6348)
+  final registry rules with a tuned member: 2 of 6
+
+== nba:winner (6605 games, seasons 2022-2026, configs 5985)
+  ALONE et_tuned:nba_base            vs best prior existing +0.0021 [+0.0000,+0.0044] | vs untuned extra_trees:nba_base -0.0002 [-0.0013,+0.0009] | seasons 2023:-0.0004 2024:+0.0058 2025:+0.0034 2026:-0.0002
+  ALONE hgb_tuned:nba_base           vs best prior existing +0.0081 [+0.0045,+0.0118] | vs untuned gbt_v1 +0.0043 [+0.0008,+0.0080] | seasons 2023:+0.0096 2024:+0.0137 2025:+0.0094 2026:-0.0003
+  FROZEN without_tuned >=0.50: 0.661 n5222 (best 0.660, avg 0.661); >=0.55: 0.698 n3909 (best 0.700, avg 0.700); >=0.60: 0.727 n3253 (best 0.725, avg 0.729); >=0.65: 0.781 n1927 (best 0.776, avg 0.781); >=0.70: 0.814 n1281 (best 0.810, avg 0.814); >=0.75: 0.832 n637 (best 0.841, avg 0.834); >=0.80: 0.855 n1046 (best 0.855, avg 0.858); >=0.85: 0.868 n152 (best 0.882, avg 0.855)
+  FROZEN with_tuned    >=0.50: 0.665 n5052 (best 0.663, avg 0.665); >=0.55: 0.699 n3957 (best 0.700, avg 0.700); >=0.60: 0.725 n3245 (best 0.726, avg 0.728); >=0.65: 0.768 n2090 (best 0.774, avg 0.775); >=0.70: 0.815 n1278 (best 0.809, avg 0.810); >=0.75: 0.839 n565 (best 0.839, avg 0.837); >=0.80: 0.855 n738 (best 0.854, avg 0.862); >=0.85: 0.891 n128 (best 0.891, avg 0.883)
+  qualified: {'without_tuned': [], 'with_tuned': []}
+  frozen rules containing a tuned member: 7; comparable with/without 7; with better in 6; pooled with 0.706 (n3976) vs without 0.698 (n4264)
+  final registry rules with a tuned member: 0 of 9
+
+== nba:spread (5282 games, seasons 2023-2026, configs 5985)
+  ALONE et_tuned:nba_base:normal     vs best prior existing +0.0026 [+0.0001,+0.0054] | vs untuned extra_trees:nba_base:normal +0.0006 [-0.0016,+0.0028] | seasons 2024:+0.0024 2025:+0.0027 2026:+0.0028
+  ALONE hgb_tuned:nba_base:normal    vs best prior existing +0.0051 [+0.0019,+0.0084] | vs untuned gbt_points -0.0013 [-0.0034,+0.0008] | seasons 2024:+0.0040 2025:+0.0045 2026:+0.0068
+  FROZEN without_tuned >=0.50: 0.542 n3962 (best 0.546, avg 0.538); >=0.55: 0.566 n1192 (best 0.583, avg 0.576); >=0.60: 0.598 n600 (best 0.623, avg 0.615); >=0.65: 0.588 n102 (best 0.657, avg 0.608)
+  FROZEN with_tuned    >=0.50: 0.543 n3962 (best 0.546, avg 0.540); >=0.55: 0.559 n1248 (best 0.585, avg 0.579); >=0.60: 0.597 n615 (best 0.623, avg 0.605); >=0.65: 0.580 n119 (best 0.639, avg 0.597)
+  qualified: {'without_tuned': [], 'with_tuned': []}
+  frozen rules containing a tuned member: 4; comparable with/without 3; with better in 1; pooled with 0.558 (n1049) vs without 0.557 (n1139)
+  final registry rules with a tuned member: 1 of 5
+
+== nba:total (5282 games, seasons 2023-2026, configs 5985)
+  ALONE et_tuned:nba_base:normal     vs best prior existing +0.0097 [+0.0033,+0.0169] | vs untuned extra_trees:nba_base:normal -0.0022 [-0.0050,+0.0007] | seasons 2024:+0.0052 2025:+0.0125 2026:+0.0113
+  ALONE hgb_tuned:nba_base:normal    vs best prior existing +0.0098 [+0.0034,+0.0170] | vs untuned gbt_points +0.0005 [-0.0019,+0.0029] | seasons 2024:+0.0041 2025:+0.0088 2026:+0.0166
+  FROZEN without_tuned >=0.50: 0.520 n2928 (best 0.515, avg 0.520); >=0.55: 0.542 n1589 (best 0.524, avg 0.536); >=0.60: 0.559 n467 (best 0.529, avg 0.546); >=0.65: 0.581 n267 (best 0.584, avg 0.562); >=0.70: 0.598 n373 (best 0.582, avg 0.576); >=0.75: 0.524 n42 (best 0.452, avg 0.524)
+  FROZEN with_tuned    >=0.50: 0.520 n2928 (best 0.515, avg 0.522); >=0.55: 0.542 n1589 (best 0.524, avg 0.539); >=0.60: 0.537 n836 (best 0.537, avg 0.549); >=0.65: 0.574 n272 (best 0.588, avg 0.562); >=0.70: 0.601 n321 (best 0.570, avg 0.570); >=0.75: 0.630 n46 (best 0.478, avg 0.543)
+  qualified: {'without_tuned': [], 'with_tuned': []}
+  frozen rules containing a tuned member: 6; comparable with/without 2; with better in 1; pooled with 0.534 (n388) vs without 0.535 (n497)
+  final registry rules with a tuned member: 2 of 8
+
+== nba:team_total_home (5282 games, seasons 2023-2026, configs 5985)
+  ALONE et_tuned:nba_base:normal     vs best prior existing +0.0032 [-0.0029,+0.0094] | vs untuned extra_trees:nba_base:normal -0.0019 [-0.0045,+0.0005] | seasons 2024:+0.0055 2025:+0.0029 2026:+0.0013
+  ALONE hgb_tuned:nba_base:normal    vs best prior existing +0.0043 [-0.0014,+0.0100] | vs untuned gbt_points +0.0007 [-0.0013,+0.0027] | seasons 2024:+0.0032 2025:-0.0004 2026:+0.0101
+  FROZEN without_tuned >=0.50: 0.518 n2428 (best 0.498, avg 0.538); >=0.55: 0.536 n2079 (best 0.493, avg 0.541); >=0.60: 0.526 n756 (best 0.504, avg 0.522); >=0.65: 0.550 n460 (best 0.491, avg 0.537); >=0.70: 0.596 n114 (best 0.439, avg 0.632); >=0.75: 0.588 n17 (best 0.471, avg 0.588)
+  FROZEN with_tuned    >=0.50: 0.523 n2028 (best 0.495, avg 0.538); >=0.55: 0.537 n1884 (best 0.490, avg 0.539); >=0.60: 0.545 n431 (best 0.497, avg 0.538); >=0.65: 0.559 n392 (best 0.464, avg 0.548); >=0.70: 0.615 n104 (best 0.462, avg 0.606); >=0.75: 0.588 n17 (best 0.471, avg 0.647)
+  qualified: {'without_tuned': [], 'with_tuned': []}
+  frozen rules containing a tuned member: 4; comparable with/without 4; with better in 1; pooled with 0.565 (n322) vs without 0.548 (n396)
+  final registry rules with a tuned member: 1 of 8
+
+== nba:team_total_away (5282 games, seasons 2023-2026, configs 5985)
+  ALONE et_tuned:nba_base:normal     vs best prior existing +0.0063 [+0.0005,+0.0125] | vs untuned extra_trees:nba_base:normal -0.0023 [-0.0051,+0.0004] | seasons 2024:+0.0045 2025:+0.0083 2026:+0.0062
+  ALONE hgb_tuned:nba_base:normal    vs best prior existing +0.0061 [+0.0003,+0.0125] | vs untuned gbt_points -0.0028 [-0.0051,-0.0003] | seasons 2024:+0.0058 2025:+0.0074 2026:+0.0052
+  FROZEN without_tuned >=0.50: 0.534 n2946 (best 0.524, avg 0.535); >=0.55: 0.547 n1498 (best 0.524, avg 0.549); >=0.60: 0.567 n478 (best 0.577, avg 0.579); >=0.65: 0.571 n543 (best 0.554, avg 0.578); >=0.70: 0.592 n71 (best 0.507, avg 0.577); >=0.75: 0.500 n8 (best 0.625, avg 0.500)
+  FROZEN with_tuned    >=0.50: 0.532 n2937 (best 0.524, avg 0.535); >=0.55: 0.548 n1511 (best 0.523, avg 0.545); >=0.60: 0.565 n428 (best 0.577, avg 0.579); >=0.65: 0.557 n332 (best 0.563, avg 0.587); >=0.70: 0.511 n90 (best 0.533, avg 0.544); >=0.75: 0.500 n8 (best 0.625, avg 0.500)
+  qualified: {'without_tuned': [], 'with_tuned': []}
+  frozen rules containing a tuned member: 10; comparable with/without 8; with better in 5; pooled with 0.539 (n3273) vs without 0.540 (n3338)
+  final registry rules with a tuned member: 2 of 7

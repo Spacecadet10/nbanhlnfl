@@ -1,0 +1,6 @@
+2026-11-08T20:49:11Z
+7a6683acc999760d49570cb10bb5e19d985cc6f4a266267c3b503dcd23b1d1ee  /Users/andry/Desktop/nba-predictor-batch1/docs/evidence/soccer-test-reading-plan-2026-11-08/READING_PLAN.md
+2026-11-08T20:51:44Z
+9d382ed829a37239b9dcfa5bcf2caf9227ef0d0b495dc3fed9e81d3f134e798a  /Users/andry/Desktop/nba-predictor-batch1/docs/evidence/soccer-test-reading-plan-2026-11-08/READING_PLAN.md
+2026-11-08T20:52:03Z
+ba761726cc1c65f7adc18ca99a3f6b7ff38d5b7d2cefaa4f0feca3e867e8ddd3  /Users/andry/Desktop/nba-predictor-batch1/docs/evidence/soccer-test-reading-plan-2026-11-08/read_test.py

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>NBA_DATA_DIR</key>
+		<string>/Users/andry/Desktop/nba-predictor-sprint1/data</string>
+		<key>NBA_INJURY_COLLECTION</key>
+		<string>1</string>
+		<key>NBA_RELEASE_GUARD</key>
+		<string>1</string>
+		<key>NBA_RELEASE_ROOT</key>
+		<string>/Users/andry/nba-predictor-live</string>
+	</dict>
+	<key>Label</key>
+	<string>com.nba-predictor.injuries</string>
+	<key>ProcessType</key>
+	<string>Standard</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/andry/nba-predictor-live/backend/.venv/bin/python</string>
+		<string>-m</string>
+		<string>app.cli</string>
+		<string>injuries</string>
+	</array>
+	<key>StandardErrorPath</key>
+	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/injuries-launchd.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/injuries-launchd.log</string>
+	<key>StartCalendarInterval</key>
+	<array>
+		<dict>
+			<key>Minute</key>
+			<integer>2</integer>
+		</dict>
+		<dict>
+			<key>Minute</key>
+			<integer>32</integer>
+		</dict>
+	</array>
+	<key>ThrottleInterval</key>
+	<integer>60</integer>
+	<key>WorkingDirectory</key>
+	<string>/Users/andry/nba-predictor-live/backend</string>
+</dict>
+</plist>

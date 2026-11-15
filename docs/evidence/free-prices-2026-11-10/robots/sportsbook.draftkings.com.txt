@@ -1,0 +1,4 @@
+User-agent: *
+Disallow:*wpsrc=*
+Disallow:/update-app$
+Disallow:*referrer*

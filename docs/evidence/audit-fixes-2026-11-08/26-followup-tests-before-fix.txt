@@ -1,0 +1,50 @@
+# New follow-up tests run against the code of 3f85fc5 (tests added, helper unchanged) — 2026-11-09T18:53:03Z
+# cd backend && NBA_DATA_DIR=<scratch> python -m pytest tests/test_tickets.py -q -p no:cacheprovider -k '<13 new tests>'
+tests/test_tickets.py:1513: 
+E           sqlite3.OperationalError: no such table: ticket_trigger_runs
+tests/test_tickets.py:1482: OperationalError
+tests/test_tickets.py:1527: 
+E           sqlite3.OperationalError: no such table: ticket_trigger_runs
+tests/test_tickets.py:1482: OperationalError
+tests/test_tickets.py:1541: 
+E           sqlite3.OperationalError: no such table: ticket_trigger_runs
+tests/test_tickets.py:1482: OperationalError
+E       assert (True is True and True is False)
+tests/test_tickets.py:1552: AssertionError
+E       assert "Blocker 'ina... or after it." == "Blocker 'ina... or after it."
+E         
+E         Skipping 66 identical leading characters in diff, use -v to show
+E         -  again at the first check at or after it.
+E         +  again at or after it.
+tests/test_tickets.py:1567: AssertionError
+E       assert (True is True and True is False)
+tests/test_tickets.py:1577: AssertionError
+E       assert (True is False)
+tests/test_tickets.py:1594: AssertionError
+E       assert (False is False and 'no check at or after the start is recorded yet' in "Blocker 'inactive' was last seen 15 minutes before the start and was not seen at or after it, so whether a review was possible in those 15 minutes is not established.")
+tests/test_tickets.py:1602: AssertionError
+        assert report['notification_errors'] == [{'ticket_id': ticket_id, 'status': 'failed'}]   # the failure itself, as before
+E       KeyError: 'undelivered_results'
+tests/test_tickets.py:1626: KeyError
+E       KeyError: 'undelivered_results'
+tests/test_tickets.py:1645: KeyError
+E       KeyError: 'undelivered_results'
+tests/test_tickets.py:1662: KeyError
+E       KeyError: 'undelivered_results'
+tests/test_tickets.py:1675: KeyError
+E       KeyError: 'undelivered_results'
+tests/test_tickets.py:1691: KeyError
+FAILED tests/test_tickets.py::test_every_trigger_run_is_recorded_including_clean_ones_and_status_records_none
+FAILED tests/test_tickets.py::test_observations_belong_to_their_run - sqlite3...
+FAILED tests/test_tickets.py::test_run_whose_review_state_could_not_be_evaluated_is_recorded_as_such
+FAILED tests/test_tickets.py::test_blocker_that_returns_later_does_not_explain_a_miss_when_the_first_check_after_the_start_was_clean
+FAILED tests/test_tickets.py::test_blocker_seen_at_the_checks_on_both_sides_of_the_start_explains_the_window
+FAILED tests/test_tickets.py::test_clean_check_between_a_blocker_and_the_start_leaves_the_miss_unexplained
+FAILED tests/test_tickets.py::test_first_check_after_the_start_that_could_not_evaluate_the_state_does_not_explain_the_miss
+FAILED tests/test_tickets.py::test_no_check_recorded_after_the_start_yet_does_not_explain_the_miss
+FAILED tests/test_tickets.py::test_rejected_correction_stays_visible_on_every_run_and_is_never_sent_again
+FAILED tests/test_tickets.py::test_rejected_notice_is_no_longer_listed_once_the_user_has_the_current_result
+FAILED tests/test_tickets.py::test_rejected_first_result_is_listed_with_nothing_delivered_before
+FAILED tests/test_tickets.py::test_unconfirmed_result_notice_is_still_treated_as_announced_and_is_not_listed_as_rejected
+FAILED tests/test_tickets.py::test_preflight_alerts_once_for_a_rejected_result_notice_and_lists_it_in_the_brief
+13 failed, 135 deselected in 1.03s

@@ -8,6 +8,7 @@ UPDATE/DELETE on stored predictions and live forecasts made after cutoff/tipoff.
 import hashlib
 import sqlite3
 from dataclasses import dataclass
+from typing import Optional
 
 from .db import transaction
 
@@ -52,4 +53,62 @@ def record(conn: sqlite3.Connection, f: Forecast) -> tuple[int, bool]:
             "feature_version, cutoff_at, generated_at, home_win_prob) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (f.idempotency_key, f.game_id, f.run_type, f.model_version, f.dataset_version, f.feature_version,
              f.cutoff_at, f.generated_at, f.home_win_prob))
+        return cur.lastrowid, True
+
+
+@dataclass(frozen=True)
+class MarketForecast:
+    """One market forecast at an exact line (docs/MARKETS.md). The line is part of the identity: a forecast at another
+    line is a different forecast and never replaces this one."""
+    sport: str
+    game_id: str
+    market: str
+    line: Optional[float]
+    line_source: Optional[str]
+    market_quote_id: Optional[int]
+    policy: str
+    run_type: str
+    model_version: str
+    dataset_version: str
+    feature_version: str
+    cutoff_at: str
+    generated_at: str
+    tipoff_at: str
+    p_a: float
+    p_mid: float
+    p_b: float
+    params: str = "{}"
+    revision: str = ""   # set to the generation time when the line returns to one already forecast (A -> B -> A)
+
+    @property
+    def idempotency_key(self) -> str:
+        line = None if self.line is None else float(self.line) + 0.0   # -4 == -4.0 and -0.0 == 0.0: one forecast
+        parts = (self.sport, self.game_id, self.market, repr(line), self.policy, self.run_type, self.model_version,
+                 self.dataset_version, self.feature_version, self.cutoff_at) + ((self.revision,) if self.revision else ())
+        return hashlib.sha256("\x1f".join(parts).encode()).hexdigest()
+
+
+def record_market(conn: sqlite3.Connection, f: MarketForecast) -> tuple[int, bool]:
+    """Stores a market forecast; returns (forecast_id, created). A retry returns the stored row; different
+    probabilities under the same identity are a conflict, never an overwrite."""
+    with transaction(conn):
+        key = f.idempotency_key
+        existing = conn.execute("SELECT forecast_id, p_a, p_mid, p_b, line_source FROM market_forecasts WHERE idempotency_key=?",
+                                (key,)).fetchone()
+        if existing and existing["line_source"] == "model" and f.line_source == "market":
+            # The bookmaker has since quoted the very line the model-only forecast was made at. Same line, same
+            # probabilities, but this forecast carries the quote: it is recorded once under its own identity, so the game
+            # enters the bookmaker comparison. The model-only row stays; a retry returns this row, never a third.
+            key = hashlib.sha256((key + "\x1fline_source=market").encode()).hexdigest()
+            existing = conn.execute("SELECT forecast_id, p_a, p_mid, p_b, line_source FROM market_forecasts "
+                                    "WHERE idempotency_key=?", (key,)).fetchone()
+        if existing:
+            if any(abs(existing[k] - getattr(f, k)) > PROB_TOLERANCE for k in ("p_a", "p_mid", "p_b")):
+                raise LedgerConflict(f"Market forecast {f.idempotency_key[:12]} already stored with other probabilities")
+            return existing["forecast_id"], False
+        cols = ("idempotency_key", "sport", "game_id", "market", "line", "line_source", "market_quote_id", "policy",
+                "run_type", "model_version", "dataset_version", "feature_version", "cutoff_at", "generated_at",
+                "tipoff_at", "p_a", "p_mid", "p_b", "params")
+        values = [key] + [getattr(f, c) for c in cols[1:]]
+        cur = conn.execute(f"INSERT INTO market_forecasts ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})", values)
         return cur.lastrowid, True

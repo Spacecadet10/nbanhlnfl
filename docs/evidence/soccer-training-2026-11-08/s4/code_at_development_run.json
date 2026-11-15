@@ -1,0 +1,16 @@
+{
+ "code": {
+  "soccer_eval.py": "e21624e594eb8a174e1e2413eaf14f23ab9df848d9bcfae35593361f30d7ead7",
+  "soccer_history.py": "b6d97ec47e6e8a9d4ee6b33b8aeebc8ff7bbf6a87b262b4f4e544674cae5a3ef",
+  "soccer_clubs.py": "8a9c6cca88d624aab1f591e38503e4501dcbd638f77b93c30c4c13d4ae6ffcfe",
+  "soccer_protocol.json": "f37946397ce971a28dd2d1603fad570273e9b7eb50a67583fbe9830ac32f70e9",
+  "backtest.py": "2dfbf70358befc762265e6c286917d9995481343e805f50ed1a357f41c66a52c",
+  "metrics.py": "cbdde1c8b7200e19dfec8e9e31562ba1fe52aefc470d5d6e3ae242e4e42baab8"
+ },
+ "environment": {
+  "python": "3.12.12",
+  "numpy": "2.5.3",
+  "scipy": "1.18.1"
+ },
+ "protocol_sha256": "f37946397ce971a28dd2d1603fad570273e9b7eb50a67583fbe9830ac32f70e9"
+}

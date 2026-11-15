@@ -1,0 +1,12 @@
+app imported from: /Users/andry/Desktop/nba-predictor-batch1/backend/app/__init__.py
+_write_refusal for the copy: None
+rc EXCEPTION OperationalError: unable to open database file 
+protected -wal changed by the dev command: False size 20632
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/p_wal_symlink.py", line 15, in <module>
+    print("copy sees live-only table:", ro(copy / "nhl.sqlite", "SELECT name FROM sqlite_master WHERE name='live_only'"))
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/lib.py", line 48, in ro
+    try: return c.execute(sql).fetchall()
+                ^^^^^^^^^^^^^^
+sqlite3.OperationalError: unable to open database file

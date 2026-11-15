@@ -1,0 +1,282 @@
+{
+  "models": [
+    "elo",
+    "efficiency_margin",
+    "logistic",
+    "logistic_v2",
+    "gbt_v1"
+  ],
+  "games": 3962,
+  "seasons": [
+    2022,
+    2023,
+    2024
+  ],
+  "coverage": {
+    "unanimous": {
+      "games": 3177,
+      "share": 0.8018677435638566
+    },
+    "disagreement": {
+      "games": 785,
+      "share": 0.19813225643614335
+    },
+    "abstention": {
+      "games": 0,
+      "share": 0.0
+    }
+  },
+  "unanimous": {
+    "games": 3177,
+    "wins": 2145,
+    "win_rate": 0.6751652502360718,
+    "wilson95": [
+      0.658677616758488,
+      0.6912297943425489
+    ],
+    "week_block_bootstrap95": [
+      0.6573988260735248,
+      0.6930555555555555
+    ],
+    "home_picks": 2192,
+    "away_picks": 985,
+    "mean_predicted_probability_of_pick": 0.6657700454516846,
+    "by_season": {
+      "2022": {
+        "games": 1034,
+        "wins": 700,
+        "win_rate": 0.6769825918762089,
+        "wilson95": [
+          0.6478698359296879,
+          0.7047851836476919
+        ],
+        "week_block_bootstrap95": [
+          0.6435643564356436,
+          0.7094266277939747
+        ]
+      },
+      "2023": {
+        "games": 1040,
+        "wins": 685,
+        "win_rate": 0.6586538461538461,
+        "wilson95": [
+          0.6292995485903892,
+          0.686840414228933
+        ],
+        "week_block_bootstrap95": [
+          0.6283292978208233,
+          0.6870026525198939
+        ]
+      },
+      "2024": {
+        "games": 1103,
+        "wins": 760,
+        "win_rate": 0.6890299184043518,
+        "wilson95": [
+          0.6610960597251778,
+          0.715651663857086
+        ],
+        "week_block_bootstrap95": [
+          0.660377358490566,
+          0.7183570829840737
+        ]
+      }
+    }
+  },
+  "each_model_on_unanimous_games": {
+    "elo": {
+      "games": 3177,
+      "picks": 3177,
+      "wins": 2145,
+      "accuracy": 0.6751652502360718,
+      "brier": 0.21350732610331985
+    },
+    "efficiency_margin": {
+      "games": 3177,
+      "picks": 3177,
+      "wins": 2145,
+      "accuracy": 0.6751652502360718,
+      "brier": 0.2150844467106736
+    },
+    "logistic": {
+      "games": 3177,
+      "picks": 3177,
+      "wins": 2145,
+      "accuracy": 0.6751652502360718,
+      "brier": 0.21296296764701578
+    },
+    "logistic_v2": {
+      "games": 3177,
+      "picks": 3177,
+      "wins": 2145,
+      "accuracy": 0.6751652502360718,
+      "brier": 0.21245225468130563
+    },
+    "gbt_v1": {
+      "games": 3177,
+      "picks": 3177,
+      "wins": 2145,
+      "accuracy": 0.6751652502360718,
+      "brier": 0.21564541999613868
+    }
+  },
+  "each_model_on_disagreement_games": {
+    "elo": {
+      "games": 785,
+      "picks": 785,
+      "wins": 404,
+      "accuracy": 0.5146496815286624,
+      "brier": 0.2496878074606855
+    },
+    "efficiency_margin": {
+      "games": 785,
+      "picks": 785,
+      "wins": 405,
+      "accuracy": 0.5159235668789809,
+      "brier": 0.25026125029361157
+    },
+    "logistic": {
+      "games": 785,
+      "picks": 785,
+      "wins": 412,
+      "accuracy": 0.5248407643312102,
+      "brier": 0.2501379892223924
+    },
+    "logistic_v2": {
+      "games": 785,
+      "picks": 785,
+      "wins": 407,
+      "accuracy": 0.5184713375796178,
+      "brier": 0.24938815621962052
+    },
+    "gbt_v1": {
+      "games": 785,
+      "picks": 785,
+      "wins": 385,
+      "accuracy": 0.49044585987261147,
+      "brier": 0.2548870239925628
+    }
+  },
+  "each_model_on_all_games": {
+    "elo": {
+      "games": 3962,
+      "picks": 3962,
+      "wins": 2549,
+      "accuracy": 0.6433619384149419,
+      "brier": 0.22067584651360064
+    },
+    "efficiency_margin": {
+      "games": 3962,
+      "picks": 3962,
+      "wins": 2550,
+      "accuracy": 0.6436143361938415,
+      "brier": 0.22205410617877183
+    },
+    "logistic": {
+      "games": 3962,
+      "picks": 3962,
+      "wins": 2557,
+      "accuracy": 0.6453811206461383,
+      "brier": 0.2203285385548074
+    },
+    "logistic_v2": {
+      "games": 3962,
+      "picks": 3962,
+      "wins": 2552,
+      "accuracy": 0.6441191317516406,
+      "brier": 0.21977044819659536
+    },
+    "gbt_v1": {
+      "games": 3962,
+      "picks": 3962,
+      "wins": 2530,
+      "accuracy": 0.6385663806158506,
+      "brier": 0.22342044754212365
+    }
+  },
+  "disagreement_home_win_rate": 0.5222929936305732,
+  "vote_splits": {
+    "models": [
+      "elo",
+      "efficiency_margin",
+      "logistic",
+      "logistic_v2",
+      "gbt_v1"
+    ],
+    "games": 3962,
+    "splits": {
+      "5-0": {
+        "games": 3177,
+        "wins": 2145,
+        "win_rate": 0.6751652502360718,
+        "wilson95": [
+          0.658677616758488,
+          0.6912297943425489
+        ],
+        "week_block_bootstrap95": [
+          0.6573988260735248,
+          0.6930555555555555
+        ],
+        "coverage": 0.8018677435638566
+      },
+      "4-1": {
+        "games": 496,
+        "wins": 262,
+        "win_rate": 0.5282258064516129,
+        "wilson95": [
+          0.48424516524413846,
+          0.5717725969932463
+        ],
+        "week_block_bootstrap95": [
+          0.4793028322440087,
+          0.5773381294964028
+        ],
+        "coverage": 0.12518929833417466
+      },
+      "3-2": {
+        "games": 289,
+        "wins": 153,
+        "win_rate": 0.5294117647058824,
+        "wilson95": [
+          0.47185715070878465,
+          0.5861947387502519
+        ],
+        "week_block_bootstrap95": [
+          0.47278911564625853,
+          0.5882352941176471
+        ],
+        "coverage": 0.0729429581019687
+      }
+    },
+    "at_50_percent_coverage": {
+      "most_confident_by_logistic_v2": {
+        "games": 1981,
+        "wins": 1442,
+        "win_rate": 0.7279151943462897,
+        "wilson95": [
+          0.7078906955830795,
+          0.7470574797280873
+        ],
+        "week_block_bootstrap95": [
+          0.7067448680351907,
+          0.7487992315081652
+        ]
+      },
+      "unanimous_then_most_confident_by_logistic_v2": {
+        "games": 1981,
+        "wins": 1441,
+        "win_rate": 0.7274103987884907,
+        "wilson95": [
+          0.7073755445756118,
+          0.7465649935809344
+        ],
+        "week_block_bootstrap95": [
+          0.7062267163384779,
+          0.7480353634577603
+        ]
+      },
+      "games_in_both_selections": 1956
+    }
+  },
+  "source": "data/reports/research-stacking-2026-10-01T012557Z/predictions.csv"
+}

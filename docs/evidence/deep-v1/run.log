@@ -1,0 +1,45 @@
+nhl: feature walk 14508 games, table 52c436fa49c3ac21, 33 s
+torch_mlp:nhl_base 2018: 2638 training games, epochs 14, 2.4 s
+torch_mlp:nhl_base 2019: 3993 training games, epochs 6, 0.3 s
+torch_mlp:nhl_base 2020: 5351 training games, epochs 14, 0.7 s
+torch_mlp:nhl_base 2021: 6563 training games, epochs 6, 0.5 s
+torch_mlp:nhl_base 2022: 7515 training games, epochs 8, 0.7 s
+torch_mlp:nhl_base 2023: 8916 training games, epochs 8, 0.8 s
+torch_mlp:nhl_base 2024: 10316 training games, epochs 5, 0.8 s
+torch_mlp:nhl_base 2025: 11716 training games, epochs 19, 2.2 s
+torch_mlp:nhl_base 2026: 13114 training games, epochs 7, 1.2 s
+keras_mlp:nhl_base 2018: 2638 training games, epochs 3, 2.5 s
+keras_mlp:nhl_base 2019: 3993 training games, epochs 4, 2.7 s
+keras_mlp:nhl_base 2020: 5351 training games, epochs 30, 6.5 s
+keras_mlp:nhl_base 2021: 6563 training games, epochs 2, 2.6 s
+keras_mlp:nhl_base 2022: 7515 training games, epochs 12, 4.2 s
+keras_mlp:nhl_base 2023: 8916 training games, epochs 3, 3.3 s
+keras_mlp:nhl_base 2024: 10316 training games, epochs 13, 5.5 s
+keras_mlp:nhl_base 2025: 11716 training games, epochs 13, 7.2 s
+keras_mlp:nhl_base 2026: 13114 training games, epochs 3, 4.0 s
+torch_goals:nhl_base 2018: 2638 training games, epochs {'home': 70, 'away': 38}, 3.0 s
+torch_goals:nhl_base 2019: 3993 training games, epochs {'home': 27, 'away': 33}, 2.5 s
+torch_goals:nhl_base 2020: 5351 training games, epochs {'home': 20, 'away': 30}, 2.9 s
+torch_goals:nhl_base 2021: 6563 training games, epochs {'home': 37, 'away': 47}, 6.1 s
+torch_goals:nhl_base 2022: 7515 training games, epochs {'home': 12, 'away': 28}, 3.4 s
+torch_goals:nhl_base 2023: 8916 training games, epochs {'home': 49, 'away': 29}, 7.4 s
+torch_goals:nhl_base 2024: 10316 training games, epochs {'home': 29, 'away': 18}, 5.6 s
+torch_goals:nhl_base 2025: 11716 training games, epochs {'home': 39, 'away': 27}, 8.5 s
+torch_goals:nhl_base 2026: 13114 training games, epochs {'home': 19, 'away': 34}, 7.8 s
+nba: feature walk 8919 games, table 8d95c301a1e9bcfd, 18 s
+torch_mlp:nba_base 2022: 2314 training games, epochs 6, 0.2 s
+torch_mlp:nba_base 2023: 3637 training games, epochs 7, 0.3 s
+torch_mlp:nba_base 2024: 4957 training games, epochs 17, 1.0 s
+torch_mlp:nba_base 2025: 6276 training games, epochs 6, 0.5 s
+torch_mlp:nba_base 2026: 7597 training games, epochs 19, 1.7 s
+keras_mlp:nba_base 2022: 2314 training games, epochs 4, 3.2 s
+keras_mlp:nba_base 2023: 3637 training games, epochs 7, 3.9 s
+keras_mlp:nba_base 2024: 4957 training games, epochs 14, 7.2 s
+keras_mlp:nba_base 2025: 6276 training games, epochs 11, 6.3 s
+keras_mlp:nba_base 2026: 7597 training games, epochs 5, 4.1 s
+torch_mlp:nba_base:normal 2022: 2314 training games, epochs {'margin': 6, 'total': 16}, 0.6 s
+torch_mlp:nba_base:normal 2023: 3637 training games, epochs {'margin': 3, 'total': 5}, 0.4 s
+torch_mlp:nba_base:normal 2024: 4957 training games, epochs {'margin': 6, 'total': 26}, 1.8 s
+torch_mlp:nba_base:normal 2025: 6276 training games, epochs {'margin': 4, 'total': 11}, 1.1 s
+torch_mlp:nba_base:normal 2026: 7597 training games, epochs {'margin': 20, 'total': 7}, 2.3 s
+{"output_dir": "/Users/andry/nba-predictor-deep-data/research/deep", "games": {"nhl": {"winner": 11870, "reg3": 11870, "spread": 11870, "total": 11870, "team_total_home": 11870, "team_total_away": 11870}, "nba": {"winner": 6605, "spread": 5282, "total": 5282, "team_total_home": 5282, "team_total_away": 5282}}}

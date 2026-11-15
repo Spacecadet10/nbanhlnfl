@@ -1,0 +1,9 @@
+# scripts/followup_check.py on copies of the live ledger and stores taken 2026-11-09 ~18:55Z, Telegram mocked, follow-up code.
+# The NFL 'REVIEW BLOCKER' mock call is the existing health alert for nfl 'inactive' / 'missing_activation' (0 unserved forecasts): the copied data folder has no NFL activation file. It is not part of this change.
+{"step": "before", "receipts": {"sent": 235, "uncertain": 8}, "grade_rows": 36, "trigger_runs": "no table", "observations_by_run": "no table"}
+{"step": "settle 1", "tickets": 14, "errors": [], "notification_errors": [], "undelivered_results": [], "telegram_calls": [], "grade_rows": 36}
+{"step": "settle 2", "tickets": 14, "errors": [], "notification_errors": [], "undelivered_results": [], "telegram_calls": [], "grade_rows": 36}
+{"step": "preflight 1", "exit": 0, "as_of": "2026-11-09T18:58:43Z", "due": false, "reason": "no_eligible_forecasts", "observations_error": null, "not_reviewed_now": 0, "missed_before_start": [], "undelivered_results": "absent (none owed)", "notification_errors": [], "mock_telegram_calls": ["PROP51 / REVIEW BLOCKER / NFL"]}
+{"step": "preflight 2", "exit": 0, "as_of": "2026-11-09T18:58:44Z", "due": false, "reason": "no_eligible_forecasts", "observations_error": null, "not_reviewed_now": 0, "missed_before_start": [], "undelivered_results": "absent (none owed)", "notification_errors": [], "mock_telegram_calls": []}
+{"step": "status", "exit": 0, "due": false}
+{"step": "after", "receipts": {"sent": 236, "uncertain": 8}, "grade_rows": 36, "trigger_runs": [[1, "2026-11-09T18:58:43Z", "2026-11-09", 0, "no_eligible_forecasts", 0], [2, "2026-11-09T18:58:44Z", "2026-11-09", 0, "no_eligible_forecasts", 0]], "observations_by_run": []}

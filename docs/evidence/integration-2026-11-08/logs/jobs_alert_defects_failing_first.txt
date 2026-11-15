@@ -1,0 +1,8 @@
+            if len(calls)==1:raise RuntimeError('early publication failed')
+>       if len(calls)==1:raise RuntimeError('early publication failed')
+E       RuntimeError: early publication failed
+FAILED tests/test_tickets.py::test_cycle_counts_stay_exact_when_the_final_pass_versions_an_early_row
+FAILED tests/test_tickets.py::test_early_publication_failure_does_not_skip_research_or_final_coverage
+FAILED tests/test_tickets.py::test_unclaimed_reservation_from_a_crash_is_alerted
+FAILED tests/test_tickets.py::test_identical_concurrent_review_archive_is_not_an_error
+4 failed, 42 passed in 2.16s

@@ -1,0 +1,54 @@
+
+=== ITEM 7 visual 1 ticket(s) ===
+exit 0 {"status": "sent"}
+PASS 7.1 PNG sent == archived file bytes == ticket_images.sha256 | (72343, 'e1e5b5172054')
+PASS 7.1 caption == archived caption, <=1024 | 175
+PASS 7.1 photo chat_id fixture
+PASS 7.1 text and image use different keys | ['ai-ticket-review-v3:2026-11-08:fixture-chat:c98906b6eb565f1fe78ed9dbe49e6f15786c834e3ee8e1c55bbdb200c51ba7dd', 'ticket-image:dcf698aa0df3526171927ea4939c2332606c0629d7cc1aa068ec077a25ed9f87']
+PASS 7.1 text has numbered tickets, every leg/matchup/side/Toronto time/ID/$stake
+PASS 7.1 caption lists every ticket id
+PASS 7.1 re-render byte-identical (logos off)
+
+=== ITEM 7 visual 2 ticket(s) ===
+exit 0 {"status": "sent"}
+PASS 7.2 PNG sent == archived file bytes == ticket_images.sha256 | (136268, '5ca2be722652')
+PASS 7.2 caption == archived caption, <=1024 | 217
+PASS 7.2 photo chat_id fixture
+PASS 7.2 text and image use different keys | ['ai-ticket-review-v3:2026-11-08:fixture-chat:b3b8d8e5f411107667e60167d0410390622d07b91d969a1f4eb7a49091971cbb', 'ticket-image:f1faa817dc38da80a9a91ddc81eb0d0a8dc8fcd95d65a3ed9ec29fd6dc746aef']
+PASS 7.2 text has numbered tickets, every leg/matchup/side/Toronto time/ID/$stake
+PASS 7.2 caption lists every ticket id
+PASS 7.2 re-render byte-identical (logos off)
+
+=== ITEM 7 visual 3 ticket(s) ===
+exit 0 {"status": "sent"}
+PASS 7.3 PNG sent == archived file bytes == ticket_images.sha256 | (204769, '436200a713c4')
+PASS 7.3 caption == archived caption, <=1024 | 259
+PASS 7.3 photo chat_id fixture
+PASS 7.3 text and image use different keys | ['ai-ticket-review-v3:2026-11-08:fixture-chat:5309a7aa93e78b95129edfe4ed70c2f13870292b7355520dd242bb71093f2945', 'ticket-image:4d41bc97a435f394a2e325f8775fb8333d2cd410a329bee0270e7f3c2f88af39']
+PASS 7.3 text has numbered tickets, every leg/matchup/side/Toronto time/ID/$stake
+PASS 7.3 caption lists every ticket id
+PASS 7.3 re-render byte-identical (logos off)
+
+=== PROBE: render_ticket_card raises after text sent ===
+exit 1 {"status": "failed", "error_type": "ValueError", "reason": "Ticket card exceeds layout bounds."} ['getMe', 'getWebhookInfo', 'getUpdates', 'sendMessage']
+deliveries [{'delivery_key': 'ai-ticket-review-v3:2026-11-08:fixture-chat:b3b8d8e5f411107667e60167d0410390622d07b91d969a1f4eb7a49091971cbb', 'status': 'sent'}] ticket_images []
+notify_alerts out []
+FAIL PROBE render-raise leaves alertable receipt (image delivery row or alert) | ([{'delivery_key': 'ai-ticket-review-v3:2026-11-08:fixture-chat:b3b8d8e5f411107667e60167d0410390622d07b91d969a1f4eb7a49091971cbb', 'status': 'sent'}], [])
+deterministic raise retry 1 {"status": "failed", "error_type": "ValueError", "reason": "Ticket card exceeds layout bounds."} ['getMe', 'getWebhookInfo', 'getUpdates']
+after transient error cleared 0 {"status": "sent"} ['getMe', 'getWebhookInfo', 'getUpdates', 'sendPhoto']
+PASS PROBE render transient -> later send recovers with photo only | ['getMe', 'getWebhookInfo', 'getUpdates', 'sendPhoto']
+
+=== PROBE: PNG written, ticket_images insert lost (crash), later re-render differs ===
+crash: simulated crash after PNG write, before ticket_images insert
+pngs ['2026-11-08-f1faa817dc38da80a9a91ddc81eb0d0a8dc8fcd95d65a3ed9ec29fd6dc746aef.png'] ticket_images [] deliveries [{'delivery_key': 'ai-ticket-review-v3:2026-11-08:fixture-chat:b3b8d8e5f411107667e60167d0410390622d07b91d969a1f4eb7a49091971cbb', 'status': 'sent'}]
+second 1 {"status": "failed", "error_type": "ValueError", "reason": "Archived ticket image hash mismatch"} ['getMe', 'getWebhookInfo', 'getUpdates'] [{'sha256': 'b9bd2eff4683a21b47f2496aefd3dba8b64a54b241c8391b430aac5610744f85'}]
+third (logos off again) 1 {"status": "failed", "error_type": "ValueError", "reason": "Archived ticket image hash mismatch"} ['getMe', 'getWebhookInfo', 'getUpdates']
+FAIL PROBE hash: image eventually deliverable after crash | (1, '{"status": "failed", "error_type": "ValueError", "reason": "Archived ticket image hash mismatch"}')
+alerts after hash mismatch []
+
+=== PROBE: retry after tipoff (snapshot/pregame window gone) ===
+first 1 {"status": "retry"}
+after tipoff 1 {"status": "failed", "error_type": "ValueError", "reason": "Forecast is settled or outside its pregame window"} []
+ledger [{'delivery_key': 'ai-ticket-review-v3:2026-11-08:fixture-chat:c98906b6eb565f1fe78ed9dbe49e6f15786c834e3ee8e1c55bbdb200c51ba7dd', 'status': 'retry', 'next_attempt_at': '2026-11-08T17:59:00Z'}] items 1
+
+SUMMARY 22 / 24

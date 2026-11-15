@@ -14,7 +14,7 @@ client = TestClient(app)
 def test_health():
     r = client.get("/api/health")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "mode": "demo", "api_version": "0.2.0"}
+    assert r.json() == {"status": "ok", "mode": "demo", "api_version": "0.3.0", "data_snapshot_at": None}
 
 
 def test_meta_lists_dates_and_teams():
@@ -120,6 +120,8 @@ def test_metric_helpers():
     assert metrics.brier([], []) is None
     bins = metrics.calibration([0.1, 0.9, 1.0], [False, True, True])
     assert [b.count for b in bins] == [1, 0, 0, 0, 2]
+    fine = metrics.calibration([0.1, 0.45, 0.55, 0.9, 1.0], [False, True, False, True, True], metrics.API_CALIBRATION_BINS)
+    assert [b.count for b in fine] == [0, 1, 0, 0, 1, 1, 0, 0, 0, 2] and fine[-1].upper == 1.0
 
 
 def test_team_stats_are_internally_consistent():
@@ -127,3 +129,29 @@ def test_team_stats_are_internally_consistent():
         for s in (g.home_stats, g.away_stats):
             assert 0 <= s.last10_wins <= min(10, s.wins)
             assert 10 - s.last10_wins <= s.losses
+
+
+def test_demo_history_supports_the_confidence_filter():
+    from app.schemas import pick_confidence
+    games = fixtures.games()
+    body = client.get("/api/predictions", params={"min_confidence": 0.65}).json()
+    expected = [g for g in games if pick_confidence(g.prediction.home_win_prob) >= 0.65 - 1e-9]
+    assert body["mode"] == "demo" and body["total"] == len(expected) and 0 < len(expected) < len(games)
+    assert all(r["confidence"] >= 0.65 - 1e-9 and r["pick"] in ("home", "away") for r in body["predictions"])
+    assert {r["pick"] for r in client.get("/api/predictions").json()["predictions"]} == {"home", "away"}
+    settled = [g for g in expected if g.outcome is not None]
+    wins = sum((g.prediction.home_win_prob >= 0.5) == g.outcome.home_won for g in settled)
+    assert body["record"] == {"min_confidence": 0.65, "selected": len(expected), "settled": len(settled), "wins": wins,
+                              "losses": len(settled) - wins, "pending": len(expected) - len(settled), "void": 0,
+                              "unscorable": 0, "win_rate": pytest.approx(wins / len(settled)) if settled else None}
+
+
+def test_demo_slate_selection_counts_match_the_picks():
+    day = fixtures.DEFAULT_DATE.isoformat()
+    body = client.get("/api/games", params={"date": day, "min_confidence": 0.65}).json()
+    picks = [g["slate_pick"] for g in body["games"]]
+    assert body["selection"] == {"market": "winner", "policy": "pregame", "min_confidence": 0.65, "games": len(picks),
+                                 "with_forecast": sum(p is not None for p in picks),
+                                 "selected": sum(bool(p and p["meets_confidence"]) for p in picks)}
+    near = client.get("/api/games", params={"date": day, "policy": "near_tipoff"}).json()
+    assert near["selection"]["with_forecast"] == 0 and all(g["slate_pick"] is None for g in near["games"])

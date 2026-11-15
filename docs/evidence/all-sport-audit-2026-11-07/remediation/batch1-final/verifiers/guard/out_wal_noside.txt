@@ -1,0 +1,6 @@
+app imported from: /Users/andry/Desktop/nba-predictor-batch1/backend/app/__init__.py
+header journal: WAL
+release-check raw_missing: {'count': 0, 'raw_ids': [], 'truncated': False} None files: ['nfl.sqlite', 'nfl.sqlite-shm', 'nfl.sqlite-wal', 'raw'] files before: ['nfl.sqlite', 'raw']
+preflight (_replay_refused) result: False files after: ['nfl.sqlite', 'nfl.sqlite-shm', 'nfl.sqlite-wal', 'raw'] main unchanged: True
+{"status": "refused", "reason": "replay would read 1 cached source response file(s) missing under /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/wal_noside/d/raw; nothing was migrated or replayed (a re-fetch is a new retrieval, never a recovery). The first 20 ids are listed; `nfl release-check` lists them all", "missing_raw": {"count": 1, "raw_ids": [1], "truncated": false}}
+preflight with the raw file missing: True

@@ -1,0 +1,2054 @@
+diff --git a/backend/app/backup.py b/backend/app/backup.py
+index cfe419a..0a0048c 100644
+--- a/backend/app/backup.py
++++ b/backend/app/backup.py
+@@ -4,7 +4,7 @@ version, store identity and row counts. A restore copies a backup back only if i
+ the store's job lock (no scheduled job can run against it), and moves the replaced files aside, never deleting them.
+ The raw response cache (`raw/`) is append-only and untouched by migrations; it is not copied.
+ 
+-    NBA_DATA_DIR=<store dir> python -m app.backup --dest <dir>            # backup (reads the stores only)
++    NBA_DATA_DIR=<store dir> python -m app.backup --dest <dir>            # backup of every store present (reads them only)
+     NBA_DATA_DIR=<store dir> python -m app.backup --restore <backup dir> --sport nhl
+ """
+ import argparse
+@@ -13,6 +13,7 @@ import hashlib
+ import json
+ import os
+ import sqlite3
++import sys
+ from datetime import datetime, timezone
+ from pathlib import Path
+ from typing import Optional
+@@ -20,9 +21,11 @@ from typing import Optional
+ from . import config
+ from . import sports as sport_defs
+ 
+-SPORTS = ("nba", "nhl")
++# Every sport with a store: the served ones and the data-only ones (NFL, soccer).
++SPORTS = (*sport_defs.SPORT_IDS, *sport_defs.DATA_ONLY)
+ COUNTED = ("games", "predictions", "market_forecasts", "game_forecasts", "result_revisions", "research_cohorts",
+-           "agreement_observations", "adaptive_forecasts", "job_runs", "teams")
++           "agreement_observations", "adaptive_forecasts", "job_runs", "teams", "soccer_matches", "market_quotes",
++           "raw_responses", "raw_fetches")
+ 
+ 
+ class BackupError(RuntimeError):
+@@ -53,8 +56,18 @@ def _describe(path: Path) -> dict:
+ 
+ 
+ def run(data_dir: Path, dest: Path, *, stamp: Optional[str] = None, sports: Optional[list] = None) -> dict:
+-    """Backs up each sport's store under `dest/<stamp>/`. Reads the source stores only; refuses an existing destination."""
+-    chosen = sports or list(SPORTS)
++    """Backs up each sport's store under `dest/<stamp>/`. Reads the source stores only; refuses an existing destination.
++    Without `sports`, every sport whose store file exists is backed up; each other sport is listed as `skipped` and named
++    in a warning on stderr. A sport named in `sports` must have a store."""
++    if sports:
++        chosen, skipped = list(dict.fromkeys(sports)), []
++    else:
++        chosen = [s for s in SPORTS if (Path(data_dir) / _db_file(s)).is_file()]
++        skipped = [s for s in SPORTS if s not in chosen]
++        if not chosen:
++            raise BackupError(f"No store in {data_dir} (looked for {', '.join(_db_file(s) for s in SPORTS)})")
++        for sport in skipped:
++            print(f"WARNING: no {sport} store at {Path(data_dir) / _db_file(sport)}; not backed up", file=sys.stderr)
+     stamp = stamp or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+     out_dir = Path(dest) / stamp
+     if out_dir.exists():
+@@ -82,15 +95,33 @@ def run(data_dir: Path, dest: Path, *, stamp: Optional[str] = None, sports: Opti
+         manifest["stores"][sport] = {"file": target.name, "source": str(src), "bytes": target.stat().st_size,
+                                      "sha256": sha256(target), **info}
+     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True))
+-    return {"status": "ok", "dir": str(out_dir), **manifest}
++    return {"status": "ok", "dir": str(out_dir), "skipped": skipped, **manifest}
+ 
+ 
+ def restore(backup_dir: Path, data_dir: Path, *, sports: list) -> dict:
+     """Puts the backed-up store of each sport back in `data_dir`, under the store's job lock, only if the manifest names
+-    that sport's own store file, the file matches the manifest and its identity is that sport. The new file is written and
+-    synced beside the store first; only then is the replaced store (and its -wal/-shm) moved to `<name>.replaced-<UTC>`,
+-    never deleted. Stop the scheduled jobs and the API first: a connection kept open across the swap writes to the
+-    replaced file."""
++    that sport's own store file, the file matches the manifest and its identity is that sport (a data-only store, always
++    claimed on its first write, must carry it; a served store from before identities may have none). The new file is
++    written and synced beside the store first; only then is the replaced store (and its -wal/-shm) moved to
++    `<name>.replaced-<UTC>` (a name no earlier safety copy uses), never deleted. Stop the scheduled jobs and the API
++    first: a connection kept open across the swap writes to the replaced file.
++
++    Steps 1-2 (checks, locks, staged copies) touch no store: a failure there leaves every store as it was. Step 3 renames
++    files one at a time, so it can stop half-way:
++    - An exception during step 3 (a failed rename, a safety-copy name in use, ...) is rolled back in this process: every
++      rename already done, across all sports, is undone in reverse order (never overwriting a file), the folder is synced,
++      the staged `<name>.restoring` copies are removed and the original exception is raised. If the rollback itself
++      fails, nothing is deleted and a BackupError lists, per sport, the active path, its safety copies and its staged
++      copy, and the renames still to be done by hand, in order.
++    - A crash or power loss during step 3 cannot be rolled back automatically. Per sport the folder may then hold
++      `<name>.replaced-<suffix>` (the original store), `<name>-wal.replaced-<suffix>` / `<name>-shm.replaced-<suffix>`
++      (its WAL files, if it had them), `<name>.restoring` (the backup copy, not yet installed) and either no `<name>` or
++      a `<name>` that is already the restored copy (its sha256 equals the manifest's; then there is no `.restoring`).
++      With the jobs and the API stopped: to put the original back, move a restored `<name>` (if any) to
++      `<name>.restoring`, then move `<name>.replaced-<suffix>`, `<name>-wal.replaced-<suffix>` and
++      `<name>-shm.replaced-<suffix>` (the newest suffix) back to `<name>`, `<name>-wal` and `<name>-shm`; to finish the
++      restore instead, move the remaining live `<name>-wal`/`<name>-shm` aside too and then `<name>.restoring` to
++      `<name>`. The other sports of the same restore may each be in either state: check every one."""
+     try:
+         manifest = json.loads((Path(backup_dir) / "manifest.json").read_text())
+         stores = manifest["stores"]
+@@ -98,8 +129,8 @@ def restore(backup_dir: Path, data_dir: Path, *, sports: list) -> dict:
+         raise BackupError(f"Unreadable backup manifest in {backup_dir}: {type(exc).__name__}: {exc}") from None
+     checked, locks = [], []
+     try:
+-        # 1. Every sport is checked and locked before any store is touched (a two-sport restore never half-completes).
+-        for sport in sports:
++        # 1. Every sport is checked and locked before any store is touched (a failure in steps 1-2 changes no store).
++        for sport in dict.fromkeys(sports):
+             m = stores.get(sport)
+             if m is None:
+                 raise BackupError(f"The backup has no {sport} store")
+@@ -109,7 +140,8 @@ def restore(backup_dir: Path, data_dir: Path, *, sports: list) -> dict:
+             src = Path(backup_dir) / m["file"]
+             if not src.is_file() or sha256(src) != m.get("sha256"):
+                 raise BackupError(f"{src} does not match the manifest (sha256); not restored")
+-            if _describe(src)["identity"] not in (sport, None):
++            identity = _describe(src)["identity"]
++            if identity != sport and (identity is not None or sport in sport_defs.DATA_ONLY):
+                 raise BackupError(f"{src} is not the {sport} store (store identity); not restored")
+             lock = os.open(Path(data_dir) / f".{sport}-jobs.lock", os.O_RDWR | os.O_CREAT, 0o644)
+             try:
+@@ -137,36 +169,98 @@ def restore(backup_dir: Path, data_dir: Path, *, sports: list) -> dict:
+                 tmp.unlink(missing_ok=True)
+             raise
+         # 3. Swap: the replaced store and its -wal/-shm are moved aside (a stale WAL must never be replayed onto the
+-        # restored file), never deleted; the directory entry is synced.
+-        out = {}
+-        suffix = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+-        for sport, m, src, target in checked:
+-            for part in ("", "-wal", "-shm"):
+-                p = Path(f"{target}{part}")
+-                if p.exists():
+-                    p.rename(Path(f"{target}{part}.replaced-{suffix}"))
+-            Path(f"{target}.restoring").rename(target)
+-            out[sport] = {"path": str(target), "sha256": m["sha256"], **_describe(target)}
+-        folder = os.open(data_dir, os.O_RDONLY)
++        # restored file), never deleted; the directory entry is synced. Every rename is recorded so that an exception
++        # undoes all of them, across all sports (a crash cannot be undone here: see the docstring).
++        out, done = {}, []
++        where = {sport: {"active": target, "safety": [], "staged": Path(f"{target}.restoring")}
++                 for sport, m, src, target in checked}
++        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+         try:
+-            os.fsync(folder)
+-        finally:
+-            os.close(folder)
++            for sport, m, src, target in checked:
++                parts = ("", "-wal", "-shm")
++                # An earlier safety copy is never overwritten (rename replaces silently): a name no part uses yet.
++                n, suffix = 0, stamp
++                while any(os.path.lexists(f"{target}{part}.replaced-{suffix}") for part in parts):
++                    n += 1
++                    suffix = f"{stamp}-{n}"
++                for part in parts:
++                    p, aside = Path(f"{target}{part}"), Path(f"{target}{part}.replaced-{suffix}")
++                    if p.exists():
++                        if os.path.lexists(aside):
++                            raise BackupError(f"{aside} already exists; the earlier safety copy is not overwritten")
++                        p.rename(aside)
++                        done.append((p, aside))
++                        where[sport]["safety"].append(aside)
++                where[sport]["staged"].rename(target)
++                done.append((where[sport]["staged"], target))
++                out[sport] = {"path": str(target), "sha256": m["sha256"], **_describe(target)}
++        except BaseException as exc:
++            _undo_swap(done, where, data_dir, exc)      # raises a BackupError if the rollback is incomplete
++            raise
++        _fsync_dir(data_dir)
+         return out
+     finally:
+         for lock in locks:
+             os.close(lock)
+ 
+ 
++def _fsync_dir(data_dir: Path) -> None:
++    folder = os.open(data_dir, os.O_RDONLY)
++    try:
++        os.fsync(folder)
++    finally:
++        os.close(folder)
++
++
++def _undo_swap(done: list, where: dict, data_dir: Path, exc: BaseException) -> None:
++    """Rolls back the renames of a failed swap (restore step 3), newest first, never overwriting a file. Complete: the
++    folder is synced and the staged copies are removed; the caller re-raises `exc`. Incomplete: nothing is deleted and a
++    BackupError (chained to `exc`) lists every path and the renames left to do by hand, in order."""
++    left, errors = [], []
++    for original, moved in reversed(done):
++        try:
++            if os.path.lexists(original):
++                raise FileExistsError(f"{original} exists; not overwritten")
++            moved.rename(original)
++        except OSError as err:
++            errors.append(f"{moved} -> {original}: {type(err).__name__}: {err}")
++            left.append((moved, original))
++    if not errors:
++        for w in where.values():
++            try:
++                w["staged"].unlink(missing_ok=True)
++            except OSError:
++                pass                                    # a leftover copy of the backup is harmless
++        try:
++            _fsync_dir(data_dir)
++        except OSError as err:
++            raise BackupError(f"The restore failed ({type(exc).__name__}: {exc}); every original store is back in place, "
++                              f"but syncing {data_dir} failed: {type(err).__name__}: {err}") from exc
++        return
++    try:
++        _fsync_dir(data_dir)
++    except OSError as err:
++        errors.append(f"directory sync: {type(err).__name__}: {err}")
++    lines = [f"The restore failed ({type(exc).__name__}: {exc}) and the automatic rollback did not complete "
++             f"({'; '.join(errors)}). Nothing was deleted. Stop every job and the API, then finish the rollback by hand."]
++    for sport, w in where.items():
++        lines.append(f"  {sport}: active store {w['active']}; safety copies "
++                     f"{', '.join(map(str, w['safety'])) or 'none'}; staged backup copy {w['staged']}")
++    lines.append("Renames still to do, in this order (never overwrite an existing file):")
++    lines += [f"  {i}. move {moved} to {original}" for i, (moved, original) in enumerate(left, 1)]
++    lines.append("Afterwards each staged .restoring file is only a copy of the backup and may be deleted.")
++    raise BackupError("\n".join(lines)) from exc
++
++
+ def _db_file(sport: str) -> str:
+-    return sport_defs.get(sport).db_file
++    return sport_defs.store(sport).db_file
+ 
+ 
+ def main(argv: Optional[list] = None) -> None:
+     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+     ap.add_argument("--dest", type=Path, help="Directory for a new backup (a timestamped folder is created inside)")
+     ap.add_argument("--restore", type=Path, help="A backup folder (with manifest.json) to restore from")
+-    ap.add_argument("--sport", choices=SPORTS, action="append", help="Default: both for a backup; required for a restore")
++    ap.add_argument("--sport", choices=SPORTS, action="append", help="Default for a backup: every store present; required for a restore")
+     args = ap.parse_args(argv)
+     if bool(args.dest) == bool(args.restore):
+         ap.error("give exactly one of --dest or --restore")
+diff --git a/backend/app/cli.py b/backend/app/cli.py
+index f0eeb13..b6e708e 100644
+--- a/backend/app/cli.py
++++ b/backend/app/cli.py
+@@ -46,6 +46,105 @@ def _record_lock_busy(sport: str, reason: str):
+         return None
+ 
+ 
++def _write_refusal(sport: str, *, migrate: bool = False, info=None, paths=()):
++    """None when this command may open `sport`'s store for writing. A store in a protected live data folder
++    (config.protected_data_dir: REPO/data, the live stores) is written only in the verified release environment
++    (release.migration_context empty) and migrated only by the explicit `migrate` command there, whatever its schema
++    (audit H1). Decided from paths and the release facts alone: before any lock, connection, directory or file.
++    `info`: a release.check result the caller already has; `paths`: other files the command writes. Links are followed
++    (a store file, raw/ or research/ folder or lock linked into the live folder is protected too)."""
++    targets = (config.data_dir(), config.db_path(sport), config.raw_dir(), config.data_dir() / "research",
++               config.lock_path(sport), *paths)
++    hit = next((t for t in targets if config.protected_path(t)), None)
++    store = config.db_path(sport)
++    links = store.stat().st_nlink if hit is None and store.is_file() else 1
++    if hit is None and links <= 1:
++        return None
++    # A hard-linked store file may be the live store under another name (no path leads into the live folder): fail closed.
++    where = (f"{hit} is in a protected live data folder" if hit is not None else
++             f"{store} has {links} hard links (it may be a live store under another name)")
++    hint = "use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)"
++    problems = release.migration_context(sport, info)
++    if problems:
++        return {"status": "refused", "reason": f"{where} and this is not the verified release environment "
++                                              f"({'; '.join(problems)}): development commands never write there "
++                                              f"(store, migration, new store, activation, access log); {hint}",
++                "problems": problems}
++    stored, shipped = release.store_schema(sport), release.shipped_schema()
++    if stored != shipped and not migrate:
++        return {"status": "refused", "reason": f"{where} at schema {stored}; this release ships {shipped}: only the explicit "
++                                              "`migrate` command migrates it"}
++    return None
++
++
++def _refused(sport: str, *, migrate: bool = False, info=None, paths=()) -> bool:
++    """Prints the structured refusal (status 'refused') when `_write_refusal` gives one; the caller then exits 1."""
++    refusal = _write_refusal(sport, migrate=migrate, info=info, paths=paths)
++    if refusal:
++        print(json.dumps(refusal))
++    return refusal is not None
++
++
++def _open_ro(path):
++    """A connection the SQLite library itself opens read-only (mode=ro): unlike connect_readonly it cannot checkpoint a
++    WAL into the store file on close."""
++    import sqlite3
++    conn = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
++    conn.row_factory = sqlite3.Row
++    return conn
++
++
++def _has_raw_log(conn) -> bool:
++    return conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='raw_responses'").fetchone() is not None
++
++
++def _replay_refused(sport: str, missing_fn) -> bool:
++    """Read-only preflight of `replay` (audit C4/I9): every cached file it will read must exist, checked before the store
++    is migrated or replayed; otherwise a structured refusal with the missing raw ids and nothing written. No store file
++    or no raw_responses table: nothing is logged, nothing to read. An empty (0-byte) store file or any other read error
++    refuses (fails closed)."""
++    import sqlite3
++    path = config.db_path(sport)
++    if not path.is_file():
++        return False
++    if path.stat().st_size == 0:
++        print(json.dumps({"status": "refused", "reason": f"the store file {path} is empty; nothing to replay from; nothing "
++                                                         "was migrated or replayed"}))
++        return True
++    try:
++        conn = _open_ro(path)
++        try:
++            if not _has_raw_log(conn):
++                return False
++            missing = missing_fn(conn)
++        finally:
++            conn.close()
++    except sqlite3.Error as exc:
++        print(json.dumps({"status": "refused", "reason": f"replay preflight could not read the store {path}: "
++                                                         f"{type(exc).__name__}: {exc}; nothing was migrated or replayed"}))
++        return True
++    if not missing:
++        return False
++    full = {"nfl": "`nfl release-check` lists them all", "soccer": "soccer has no release-check"}.get(
++        sport, f"`--sport {sport} release-check` lists them all")
++    print(json.dumps({"status": "refused", "reason": f"replay would read {len(missing)} cached source response file(s) "
++                      f"missing under {config.raw_dir()}; nothing was migrated or replayed (a re-fetch is a new retrieval, "
++                      f"never a recovery). The first {RAW_LIST_LIMIT} ids are listed; {full}",
++                      "missing_raw": {"count": len(missing), "raw_ids": missing[:RAW_LIST_LIMIT],
++                                      "truncated": len(missing) > RAW_LIST_LIMIT}}))
++    return True
++
++
++RAW_LIST_LIMIT = 20     # raw ids listed in a refusal or release-check (the count is always complete)
++
++
++def _raw_missing(conn) -> dict:
++    """The full missing-bytes scan, for `release-check` output only (never in release.check, which runs every tick)."""
++    from . import raw_cache
++    missing = raw_cache.missing_raw_ids(conn)
++    return {"count": len(missing), "raw_ids": missing[:RAW_LIST_LIMIT], "truncated": len(missing) > RAW_LIST_LIMIT}
++
++
+ def _any_failed(result) -> bool:
+     """True if any job result (nested dicts/lists) has status 'failed'."""
+     if isinstance(result, list):
+@@ -86,7 +185,7 @@ def main(argv=None) -> int:
+     pp.add_argument("--max-lag-minutes", type=float, default=10, help="republish when the copy's source time lags live this much")
+     pp.add_argument("--once", action="store_true")
+     nfl_p.add_argument("action", choices=("migrate", "ingest", "replay", "coverage", "refresh", "tick", "evaluate", "collect-lines",
+-                                                "test-run", "activate"))
++                                                "test-run", "activate", "release-check"))
+     nfl_p.add_argument("--out", help="evaluate: directory for the report and the sealed choice (development + validation "
+                                      "only; 2022-2025 are never read)")
+     nfl_p.add_argument("--sealed", help="test-run / collect-lines --test: the sealed choice JSON (digest checked)")
+@@ -402,6 +501,8 @@ def main(argv=None) -> int:
+     if args.cmd == "tuning-study":       # opens (and migrates) both stores: run on copies
+         from pathlib import Path
+         import importlib.util
++        if any(_refused(s) for s in sports.SPORT_IDS):      # the stores conn_for opens; never the live ones
++            return 1
+         if importlib.util.find_spec("optuna") is None:      # refuse before any store is opened or migrated
+             p.error("tuning-study needs the research extra (optuna==5.0.0); install it in a research venv, not the live one")
+         from . import tuning_study
+@@ -422,6 +523,8 @@ def main(argv=None) -> int:
+     if args.cmd == "adaptive-train":     # its own locking (docs/ADAPTIVE_SYSTEM.md §7): the job lock only for the snapshot and
+         from . import adaptive           # the publication, the training itself under a separate training lock
+         log = lambda m: print(m, file=sys.stderr)   # noqa: E731
++        if not args.dry_run and _refused(args.sport):   # writes fit records / a deferral row: never from a dev checkout
++            return 1
+         # The training walks read the cached source responses from this data directory; a directory copied without them
+         # failed hours into retrain attempt 1 (2026-10-14), so it is refused before any training starts. Fail-closed over
+         # every cached source, not only those the members read today; `--force` does not bypass it; nothing is written.
+@@ -485,6 +588,8 @@ def main(argv=None) -> int:
+     if args.cmd == "deep-study":         # opens (and migrates) both stores: run on copies
+         from pathlib import Path
+         import importlib.util
++        if any(_refused(s) for s in sports.SPORT_IDS):      # the stores conn_for opens; never the live ones
++            return 1
+         if any(importlib.util.find_spec(m) is None for m in ("torch", "tensorflow")):   # refuse before any store is opened
+             p.error("deep-study needs the deep extra (torch, tensorflow); install it in a research venv, not the live one")
+         from . import deep_study
+@@ -557,6 +662,9 @@ def main(argv=None) -> int:
+                               "run_id": release.record_refusal(args.sport, args.cmd, info)}))
+             return 1
+         os.environ[release.COMMIT_ENV] = info["commit"]          # recorded in every job run of this command
++        guard_info = info
++    else:
++        guard_info = None
+     if args.cmd in READ_ONLY_COMMANDS:
+         try:
+             conn = db.connect_readonly(args.sport)
+@@ -565,6 +673,10 @@ def main(argv=None) -> int:
+         if not db.has_table(conn, "job_runs") or db.store_sport(conn) not in (args.sport, None):
+             p.error(f"the {args.sport} store is not migrated or holds another sport's data")
+         return _run(args, p, conn, [])
++    if _refused(args.sport, migrate=args.cmd == "migrate", info=guard_info):
++        return 1
++    if args.cmd == "replay" and _replay_refused(args.sport, ingest.replay_missing):
++        return 1
+     # One job per store at a time: every command below opens (and migrates) the sport's store. The periodic odds cycle
+     # waits out a short job but does not queue behind another full cycle (that cycle is doing the same work; the next
+     # interval follows); other commands wait, then fail visibly. `scheduler` holds the lock per iteration, not while asleep.
+@@ -578,7 +690,7 @@ def main(argv=None) -> int:
+             print(json.dumps(busy))      # tick: no row (it runs every minute; the next one follows)
+             return 0 if args.cmd in ("odds", "tick") else 1
+         conn = db.connect(sport=args.sport)
+-        applied = db.migrate(conn)
++        applied = db.migrate(conn, explicit=args.cmd == "migrate")
+         db.claim_store(conn, args.sport)
+         if args.cmd != "scheduler":
+             return _run(args, p, conn, applied)
+@@ -589,6 +701,7 @@ def _nfl(args, p) -> int:
+     """NFL data-only commands on the NFL store, under its own job lock. Nothing here touches the NBA or NHL stores."""
+     import time
+     from . import nfl
++    guard_info = None
+     if release.enabled() and args.action in ("tick", "refresh"):
+         info = release.check("nfl")
+         if info["problems"]:
+@@ -596,11 +709,14 @@ def _nfl(args, p) -> int:
+                               "run_id": release.record_refusal("nfl", "tick", info)}))
+             return 1
+         os.environ[release.COMMIT_ENV] = info["commit"]
++        guard_info = info
+     if args.action == "activate":
+         from pathlib import Path
+         from . import nfl_live
+         if not (args.sealed and args.report and args.access_log):
+             p.error("nfl activate requires --sealed FILE --report FILE --access-log FILE")
++        if _refused("nfl", paths=(nfl_live.activation_path(),)):    # would replace the live activation file
++            return 1
+         with db.store_lock("nfl", wait_seconds=LOCK_WAIT_SECONDS) as held:
+             if not held:
+                 p.error("another NFL job is running")
+@@ -615,6 +731,8 @@ def _nfl(args, p) -> int:
+     if args.action == "collect-lines":
+         from . import nfl_eval
+         from .sources import espn_odds_history as eoh
++        if args.test and _refused("nfl", paths=(nfl_eval.access_log_path(),)):     # appends to the one-shot access log
++            return 1
+         try:
+             conn = db.connect_readonly("nfl")
+         except FileNotFoundError as exc:
+@@ -651,6 +769,8 @@ def _nfl(args, p) -> int:
+         from . import nfl_eval
+         if not (args.sealed and args.out):
+             p.error("nfl test-run needs --sealed FILE and --out DIR (DIR must not exist)")
++        if _refused("nfl", paths=(nfl_eval.access_log_path(),)):    # appends to the one-shot access log
++            return 1
+         try:
+             conn = db.connect_readonly("nfl")
+         except FileNotFoundError as exc:
+@@ -671,12 +791,39 @@ def _nfl(args, p) -> int:
+             p.error(f"{exc}; run `nfl migrate` and `nfl ingest` first")
+         print(json.dumps(nfl.coverage(conn), indent=1))
+         return 0
++    if args.action == "release-check":     # read-only: the release facts plus the full missing-bytes scan (audit C4)
++        import sqlite3
++        info = release.check("nfl")
++        out = {**info, "guard_enabled": release.enabled(), "raw_missing": None}
++        path = config.db_path("nfl")
++        if not path.is_file():
++            out["raw_missing_reason"] = f"no nfl store at {path}"
++        else:
++            try:
++                conn = _open_ro(path)
++                try:
++                    if _has_raw_log(conn):
++                        out["raw_missing"] = _raw_missing(conn)
++                    else:
++                        out["raw_missing_reason"] = "the store has no raw_responses table (not a migrated store)"
++                finally:
++                    conn.close()
++            except sqlite3.Error as exc:
++                out["raw_missing_reason"] = f"could not read the store: {type(exc).__name__}: {exc}"
++        print(json.dumps(out, indent=1))
++        return 1 if info["problems"] else 0
++    from . import nfl_eval, nfl_live      # a tick/refresh reads the activation and may append to the access log
++    if _refused("nfl", migrate=args.action == "migrate", info=guard_info,
++                paths=(nfl_live.activation_path(), nfl_eval.access_log_path())):
++        return 1
++    if args.action == "replay" and _replay_refused("nfl", ingest.replay_missing):
++        return 1
+     with db.store_lock("nfl", wait_seconds=LOCK_WAIT_SECONDS) as held:
+         if not held:
+             print(json.dumps({"status": "failed", "reason": "another job is running on the nfl store"}))
+             return 1
+         conn = db.connect(sport="nfl")
+-        applied = db.migrate(conn)
++        applied = db.migrate(conn, explicit=args.action == "migrate")
+         db.claim_store(conn, "nfl")
+         if args.action == "migrate":
+             print(json.dumps({"db": str(config.db_path("nfl")), "sport": "nfl", "applied": applied}))
+@@ -727,12 +874,16 @@ def _soccer(args, p) -> int:
+             p.error(f"soccer ingest: {exc}")
+     chosen = args.competition or ["all"]
+     competitions = list(soccer.COMPETITIONS) if "all" in chosen else list(dict.fromkeys(chosen))
++    if _refused("soccer", migrate=args.action == "migrate"):
++        return 1
++    if args.action == "replay" and _replay_refused("soccer", soccer.replay_missing):
++        return 1
+     with db.store_lock("soccer", wait_seconds=LOCK_WAIT_SECONDS) as held:
+         if not held:
+             print(json.dumps({"status": "failed", "reason": "another job is running on the soccer store"}))
+             return 1
+         conn = db.connect(sport="soccer")
+-        applied = db.migrate(conn)
++        applied = db.migrate(conn, explicit=args.action == "migrate")
+         db.claim_store(conn, "soccer")
+         if args.action == "migrate":
+             print(json.dumps({"db": str(config.db_path("soccer")), "sport": "soccer", "applied": applied}))
+@@ -1136,7 +1287,7 @@ def _run(args, p, conn, applied) -> int:
+         info = release.check(args.sport)
+         print(json.dumps({**info, "app": str(release.code_root() / "backend" / "app"),
+                           "research_definition": research_live.definition(conn), "selector": selector.version(),
+-                          "guard_enabled": release.enabled()}, indent=1))
++                          "guard_enabled": release.enabled(), "raw_missing": _raw_missing(conn)}, indent=1))
+         return 1 if info["problems"] else 0
+     return 0
+ 
+diff --git a/backend/app/config.py b/backend/app/config.py
+index 1595ce8..826d0b8 100644
+--- a/backend/app/config.py
++++ b/backend/app/config.py
+@@ -44,6 +44,37 @@ def data_dir() -> Path:
+     return Path(os.environ.get("NBA_DATA_DIR", REPO_ROOT / "data"))
+ 
+ 
++def protected_data_dir(path: Path) -> bool:
++    """A data folder holding live stores: this checkout's own `data/` folder (the default data directory) or the folder
++    directly inside the root of a main git checkout (its parent has a `.git` DIRECTORY; linked worktrees have a `.git`
++    file; copies, scratch and test folders have none). Development commands never write, migrate or create a store there
++    (cli._write_refusal, db.migrate); only the verified release environment may (release.migration_context).
++    Path checks only: no subprocess, nothing at import time."""
++    p, own = Path(path).expanduser().resolve(), (REPO_ROOT / "data").resolve()
++    if p == own:
++        return True
++    try:            # by file identity when both exist: another spelling (case variant, firmlink) of the same folder
++        if os.path.samefile(p, own):
++            return True
++    except (FileNotFoundError, NotADirectoryError):
++        pass
++    except OSError:
++        return True     # cannot tell: fail closed
++    return (p.parent / ".git").is_dir()
++
++
++def protected_path(path: Path) -> bool:
++    """True when `path`, with links followed, is a protected data folder or lies inside one (a store file, its raw/ or
++    research/ folder, a lock file), so a link from an unprotected folder into the live one is caught too."""
++    p = Path(path).expanduser().resolve()
++    return any(protected_data_dir(a) for a in (p, *p.parents))
++
++
++def lock_path(sport: str) -> Path:
++    """The store's job-lock file (db.store_lock)."""
++    return data_dir() / f".{sport}-jobs.lock"
++
++
+ def db_path(sport: str = "nba") -> Path:
+     """Each sport has its own store (docs/MULTISPORT_PLAN.md); the NBA store keeps its original file name.
+     Data-only sports (NFL) have a store path too; serving them is refused elsewhere (sports.get, live.engine)."""
+diff --git a/backend/app/db.py b/backend/app/db.py
+index c9186b3..640ff2b 100644
+--- a/backend/app/db.py
++++ b/backend/app/db.py
+@@ -19,6 +19,10 @@ class StoreMismatch(RuntimeError):
+     pass
+ 
+ 
++class ProtectedStoreError(RuntimeError):
++    """A migration of a store in a protected live data folder outside the release migration (config.protected_data_dir)."""
++
++
+ def connect(path: Optional[Path] = None, *, check_same_thread: bool = True, sport: Optional[str] = None) -> sqlite3.Connection:
+     """check_same_thread=False is for the API only: one connection per request, never shared concurrently, but
+     FastAPI may run the dependency and the endpoint on different thread-pool threads.
+@@ -67,7 +71,7 @@ class store_lock:
+     on the same store together; the two sports' stores are independent."""
+ 
+     def __init__(self, sport: str, wait_seconds: Optional[float] = None, poll_seconds: float = 2.0):
+-        self.path = config.data_dir() / f".{sport}-jobs.lock"
++        self.path = config.lock_path(sport)
+         self.wait, self.poll, self.fd = wait_seconds, poll_seconds, None
+ 
+     def __enter__(self) -> bool:
+@@ -96,8 +100,12 @@ class store_lock:
+         return False
+ 
+ 
+-def migrate(conn: sqlite3.Connection, upto: Optional[int] = None) -> list[str]:
+-    """Applies pending migrations in order (optionally only through version `upto`); returns the names applied."""
++def migrate(conn: sqlite3.Connection, upto: Optional[int] = None, *, explicit: bool = False) -> list[str]:
++    """Applies pending migrations in order (optionally only through version `upto`); returns the names applied.
++    A store in a protected live data folder is migrated only by the explicit `migrate` command (`explicit`) in the
++    verified release environment; otherwise ProtectedStoreError before anything is written (defence in depth behind the
++    CLI's own refusal, for any other caller)."""
++    _refuse_protected(conn, upto, explicit)
+     conn.execute("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)")
+     done = {r["version"] for r in conn.execute("SELECT version FROM schema_migrations")}
+     applied = []
+@@ -124,6 +132,32 @@ def migrate(conn: sqlite3.Connection, upto: Optional[int] = None) -> list[str]:
+     return applied
+ 
+ 
++def _refuse_protected(conn: sqlite3.Connection, upto: Optional[int], explicit: bool) -> None:
++    """Raises ProtectedStoreError when `migrate` would apply a migration to a store file in a protected live data folder
++    outside the explicit release migration. In-memory and temporary databases (no file) are never protected."""
++    main = next((r[2] for r in conn.execute("PRAGMA database_list") if r[1] == "main"), "")
++    if not main:                       # '' would resolve to the working directory (a checkout's backend/): not a store
++        return
++    path = Path(main)
++    if not config.protected_path(path):        # links followed: a link into the live folder is protected too
++        return
++    done = {r[0] for r in conn.execute("SELECT version FROM schema_migrations")} if has_table(conn, "schema_migrations") else set()
++    pending = [f.name for f in sorted(MIGRATIONS_DIR.glob("[0-9][0-9][0-9][0-9]_*.sql"))
++               if int(f.name[:4]) not in done and (upto is None or int(f.name[:4]) <= upto)]
++    if not pending:
++        return
++    if not explicit:
++        problems = ["only the explicit `migrate` command migrates it"]
++    else:
++        from . import release, sports
++        sport = next((s for s in (*sports.SPORTS, *sports.DATA_ONLY) if config.db_path(s).resolve() == path.resolve()), None)
++        problems = release.migration_context(sport) if sport else [f"{path.name} is not this data folder's store of any sport"]
++    if problems:
++        raise ProtectedStoreError(f"refusing to migrate {path} ({len(pending)} pending, first {pending[0]}): it is in a "
++                                  f"protected live data folder; {'; '.join(problems)}. Use scripts/dev.sh or "
++                                  "NBA_DATA_DIR=<a copy>; a live migration is the release procedure.")
++
++
+ def _split(sql: str) -> list[str]:
+     """Splits a migration into statements, keeping trigger bodies (BEGIN ... END;) intact."""
+     out, buf = [], ""
+diff --git a/backend/app/ingest.py b/backend/app/ingest.py
+index d415fbd..6064d08 100644
+--- a/backend/app/ingest.py
++++ b/backend/app/ingest.py
+@@ -257,15 +257,46 @@ def rebuild_team_box(conn: sqlite3.Connection, cache_dir: Optional[Path] = None)
+     by replay and after migrations 0006/0007."""
+     importers = {sdv_team_box.SOURCE: import_team_box_fetch, espn.SUMMARY_SOURCE: import_box_summary_fetch}
+     totals = {"fetches": 0, "recorded": 0}
+-    for r in conn.execute(f"SELECT f.fetch_id, r.source FROM raw_fetches f JOIN raw_responses r ON r.raw_id = f.raw_id "
+-                          f"WHERE r.source IN ({', '.join('?' * len(importers))}) ORDER BY f.retrieved_at, f.fetch_id",
+-                          tuple(importers)).fetchall():
++    for r in _team_box_fetches(conn, tuple(importers)):
+         with transaction(conn):
+             totals["recorded"] += importers[r["source"]](conn, r["fetch_id"], cache_dir=cache_dir)["recorded"]
+         totals["fetches"] += 1
+     return totals
+ 
+ 
++def _team_box_fetches(conn: sqlite3.Connection, sources: tuple = (sdv_team_box.SOURCE, espn.SUMMARY_SOURCE)) -> list:
++    """The possession retrievals rebuild_team_box imports, in its order (each reads its own fetch's cached file)."""
++    return conn.execute(f"SELECT f.fetch_id, f.raw_id, r.source FROM raw_fetches f JOIN raw_responses r ON r.raw_id = f.raw_id "
++                        f"WHERE r.source IN ({', '.join('?' * len(sources))}) ORDER BY f.retrieved_at, f.fetch_id",
++                        sources).fetchall()
++
++
++def _replay_fetches(conn: sqlite3.Connection) -> list:
++    """replay's schedule/result/line pass: every logged retrieval in retrieval order, plus each cached response without a
++    logged retrieval at its first retrieval (fetch_id NULL)."""
++    sources = (espn.SOURCE, nhl_stats.SOURCE, espn.NHL_SOURCE, espn.NFL_SOURCE)
++    return conn.execute(
++        "SELECT f.fetch_id, f.raw_id, f.retrieved_at, r.source FROM raw_fetches f JOIN raw_responses r ON r.raw_id = f.raw_id "
++        "WHERE r.source IN (?, ?, ?, ?) "
++        "UNION ALL SELECT NULL, r.raw_id, r.first_retrieved_at, r.source FROM raw_responses r "
++        "WHERE r.source IN (?, ?, ?, ?) AND NOT EXISTS (SELECT 1 FROM raw_fetches f WHERE f.raw_id = r.raw_id) "
++        "ORDER BY 3, 1, 2", sources * 2).fetchall()
++
++
++def _replay_reads(f) -> bool:
++    """Whether replay reads this row's cached file: every logged retrieval; an unlogged response only for the ESPN
++    NBA/NFL scoreboards (unlogged NHL responses are skipped in replay)."""
++    return f["fetch_id"] is not None or f["source"] in (espn.SOURCE, espn.NFL_SOURCE)
++
++
++def replay_missing(conn: sqlite3.Connection, cache_dir: Optional[Path] = None) -> list[int]:
++    """raw_ids of the cached files `replay` would read that are absent. Read-only (a query-only connection is enough), so
++    the CLI refuses a replay before it migrates the store or writes anything (audit C4/I9): replay commits one
++    transaction per response and would otherwise stop half-way at the first missing file."""
++    wanted = {f["raw_id"] for f in _replay_fetches(conn) if _replay_reads(f)} | {r["raw_id"] for r in _team_box_fetches(conn)}
++    return raw_cache.missing_raw_ids(conn, wanted, cache_dir)
++
++
+ def replay(conn: sqlite3.Connection, cache_dir: Optional[Path] = None) -> dict:
+     """Re-imports every logged retrieval in retrieval order, each at its own fetch time, so content that returns after
+     an intervening correction (A → B → A) is applied again rather than mistaken for the older response. Schedule and
+@@ -279,14 +310,7 @@ def replay(conn: sqlite3.Connection, cache_dir: Optional[Path] = None) -> dict:
+     # One pass over every schedule/result and line retrieval in retrieval order, so each line quote is matched against
+     # the games as they were stored at its own retrieval, exactly as live ingestion matched it. A cached response without
+     # any logged retrieval (a cache copied without its log) replays once at its first retrieval.
+-    sources = (espn.SOURCE, nhl_stats.SOURCE, espn.NHL_SOURCE, espn.NFL_SOURCE)
+-    fetches = conn.execute(
+-        "SELECT f.fetch_id, f.raw_id, f.retrieved_at, r.source FROM raw_fetches f JOIN raw_responses r ON r.raw_id = f.raw_id "
+-        "WHERE r.source IN (?, ?, ?, ?) "
+-        "UNION ALL SELECT NULL, r.raw_id, r.first_retrieved_at, r.source FROM raw_responses r "
+-        "WHERE r.source IN (?, ?, ?, ?) AND NOT EXISTS (SELECT 1 FROM raw_fetches f WHERE f.raw_id = r.raw_id) "
+-        "ORDER BY 3, 1, 2", sources * 2).fetchall()
+-    for f in fetches:
++    for f in _replay_fetches(conn):
+         with transaction(conn):
+             if f["source"] == espn.SOURCE:
+                 s = import_raw(conn, f["raw_id"], cache_dir=cache_dir, retrieved_at=f["retrieved_at"], fetch_id=f["fetch_id"])
+diff --git a/backend/app/raw_cache.py b/backend/app/raw_cache.py
+index 38aeffc..5391171 100644
+--- a/backend/app/raw_cache.py
++++ b/backend/app/raw_cache.py
+@@ -3,7 +3,7 @@ import gzip
+ import hashlib
+ import sqlite3
+ from pathlib import Path
+-from typing import Optional
++from typing import Iterable, Optional
+ 
+ from . import config
+ 
+@@ -53,6 +53,15 @@ def missing_files(conn: sqlite3.Connection, cache_dir: Optional[Path] = None) ->
+     return [r[0] for r in conn.execute("SELECT path FROM raw_responses ORDER BY raw_id") if not (cache_dir / r[0]).is_file()]
+ 
+ 
++def missing_raw_ids(conn: sqlite3.Connection, raw_ids: Optional[Iterable[int]] = None,
++                    cache_dir: Optional[Path] = None) -> list[int]:
++    """raw_ids (every cached response, or only `raw_ids`) whose file is absent, ascending. Existence only, read-only."""
++    cache_dir = cache_dir or config.raw_dir()
++    wanted = None if raw_ids is None else set(raw_ids)
++    return [r[0] for r in conn.execute("SELECT raw_id, path FROM raw_responses ORDER BY raw_id")
++            if (wanted is None or r[0] in wanted) and not (cache_dir / r[1]).is_file()]
++
++
+ def load(conn: sqlite3.Connection, raw_id: int, cache_dir: Optional[Path] = None) -> bytes:
+     """Reads cached bytes and verifies them against the recorded hash."""
+     cache_dir = cache_dir or config.raw_dir()
+diff --git a/backend/app/release.py b/backend/app/release.py
+index ca2db50..a63dd9d 100644
+--- a/backend/app/release.py
++++ b/backend/app/release.py
+@@ -86,6 +86,36 @@ def check(sport: str, root: Optional[Path] = None) -> dict:
+             "release_schema": shipped, "problems": problems}
+ 
+ 
++def migration_context(sport: str, info: Optional[dict] = None) -> list[str]:
++    """Why this process is not the verified release environment, the only one that may write to a protected live data
++    folder (config.protected_data_dir) and, with the explicit `migrate` command, migrate it: NBA_RELEASE_GUARD unset, or
++    any `check` problem other than the store-schema line (README release procedure, step 4). Empty: it may. `info` is a
++    `check(sport)` result already computed by the caller; `check` itself is unchanged."""
++    if not enabled():
++        return [f"{GUARD_ENV} is not 1 (not the release environment)"]
++    info = info if info is not None else check(sport)
++    problems = [p for p in info["problems"] if not (p.startswith("store schema ") and "differs from this release's schema" in p)]
++    root = code_root().resolve()
++    held = []
++    try:            # by file identity: another spelling of the same folder (case variant, firmlink) is the same folder
++        st = root.stat()
++        for t in (config.data_dir().expanduser().resolve(), config.db_path(sport).resolve()):
++            for a in (t, *t.parents):
++                try:
++                    s = a.stat()
++                except FileNotFoundError:   # not created yet: cannot be the existing code root
++                    continue
++                if (s.st_dev, s.st_ino) == (st.st_dev, st.st_ino):
++                    held.append(t)
++                    break
++    except OSError as exc:
++        problems.append(f"cannot tell whether the checkout {root} holds this data folder: {type(exc).__name__}: {exc}")
++    if held:       # the development main checkout with the release variables set is still not a release
++        problems.append(f"the code runs from {root}, the checkout that holds this data folder ({held[0]}); a release runs "
++                        "from its own checkout")
++    return problems
++
++
+ def record_refusal(sport: str, cmd: str, info: dict) -> Optional[int]:
+     """A failed job_runs row for a refused scheduled command; never migrates, never raises."""
+     from . import jobs
+diff --git a/backend/app/soccer.py b/backend/app/soccer.py
+index d6acf20..8b37145 100644
+--- a/backend/app/soccer.py
++++ b/backend/app/soccer.py
+@@ -239,13 +239,22 @@ def ingest_range(conn: sqlite3.Connection, competitions: list[str], start: str,
+     return out
+ 
+ 
++def _replay_fetches(conn: sqlite3.Connection) -> list:
++    return conn.execute("SELECT f.fetch_id, f.raw_id, f.retrieved_at, r.request_key FROM raw_fetches f "
++                        "JOIN raw_responses r ON r.raw_id = f.raw_id WHERE r.source = ? ORDER BY f.retrieved_at, f.fetch_id",
++                        (espn.SOCCER_SOURCE,)).fetchall()
++
++
++def replay_missing(conn: sqlite3.Connection, cache_dir: Optional[Path] = None) -> list[int]:
++    """raw_ids of the cached files `replay` would read that are absent; read-only, checked by the CLI before it migrates
++    or replays anything (replay commits one transaction per retrieval and would otherwise stop half-way)."""
++    return raw_cache.missing_raw_ids(conn, {f["raw_id"] for f in _replay_fetches(conn)}, cache_dir)
++
++
+ def replay(conn: sqlite3.Connection, cache_dir: Optional[Path] = None) -> dict:
+     """Re-imports every logged soccer retrieval in retrieval order, each at its own fetch time, from the cached bytes."""
+     totals = {"responses": 0, "matches_inserted": 0, "matches_updated": 0, "revisions": 0, "reclassified": 0}
+-    fetches = conn.execute("SELECT f.fetch_id, f.raw_id, f.retrieved_at, r.request_key FROM raw_fetches f "
+-                           "JOIN raw_responses r ON r.raw_id = f.raw_id WHERE r.source = ? ORDER BY f.retrieved_at, f.fetch_id",
+-                           (espn.SOCCER_SOURCE,)).fetchall()
+-    for f in fetches:
++    for f in _replay_fetches(conn):
+         with transaction(conn):
+             s = import_raw(conn, f["raw_id"], _request_competition(f["request_key"]), retrieved_at=f["retrieved_at"],
+                            fetch_id=f["fetch_id"], cache_dir=cache_dir)
+diff --git a/backend/tests/conftest.py b/backend/tests/conftest.py
+index d35f42f..5401334 100644
+--- a/backend/tests/conftest.py
++++ b/backend/tests/conftest.py
+@@ -1,4 +1,7 @@
+-"""Test-wide guard: the NHL play-by-play adapter never reaches the network from tests (pass a fake `fetch` instead)."""
++"""Test-wide guards: the NHL play-by-play adapter never reaches the network from tests (pass a fake `fetch` instead), and
++no test ever uses the checkout's own data folder (REPO/data holds the live stores)."""
++import os
++
+ import pytest
+ 
+ 
+@@ -9,3 +12,14 @@ def _no_nhl_pbp_network(monkeypatch):
+     def blocked(game_id, timeout=30):
+         raise RuntimeError("network disabled in tests")
+     monkeypatch.setattr(nhl_pbp, "fetch", blocked)
++
++
++@pytest.fixture(autouse=True)
++def _never_the_live_data_dir(monkeypatch, tmp_path_factory):
++    """NBA_DATA_DIR is a fresh temporary folder unless it is already set to a folder that is not protected (e.g. a
++    module-scoped fixture's store). Unset or protected (REPO/data, a main checkout's data folder) is replaced, so a test
++    that forgets to set it can never read, write or migrate the live stores. Tests still set or unset it themselves."""
++    from app import config
++    current = os.environ.get("NBA_DATA_DIR")
++    if not current or config.protected_path(current):
++        monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path_factory.mktemp("nba-data-dir")))
+diff --git a/backend/tests/test_backup_restore.py b/backend/tests/test_backup_restore.py
+index 629fd7b..4b87bca 100644
+--- a/backend/tests/test_backup_restore.py
++++ b/backend/tests/test_backup_restore.py
+@@ -1,6 +1,8 @@
+ """Store backup before a release migration (app/backup.py): a consistent online copy of each sport's store, verified, with
+ a manifest that a restore is checked against. Synthetic stores under tmp_path only."""
++import fcntl
+ import json
++import os
+ import sqlite3
+ 
+ import pytest
+@@ -65,8 +67,6 @@ def test_a_restore_refuses_a_manifest_naming_another_store_or_path_and_a_held_lo
+         with pytest.raises(backup.BackupError, match="not the nba store"):
+             backup.restore(folder, data, sports=["nba"])
+     (folder / "manifest.json").write_text(json.dumps(man))
+-    import fcntl
+-    import os
+     fd = os.open(data / ".nhl-jobs.lock", os.O_RDWR | os.O_CREAT)
+     fcntl.flock(fd, fcntl.LOCK_EX)                              # a scheduled job holding the NHL store
+     try:
+@@ -94,3 +94,276 @@ def test_a_backup_includes_committed_rows_still_in_the_wal_and_leaves_no_sidecar
+     assert out["stores"]["nba"]["rows"]["teams"] == 23
+     assert sorted(p.name for p in (dest / "w").iterdir()) == ["manifest.json", "nba.sqlite"]
+     conn.close()
++
++
++# Every store sport, served or data-only (NFL is a live data-only store; soccer has no live store yet).
++
++def _data_store(path, sport, upto=None):
++    conn = db.connect(path)
++    db.migrate(conn, upto=upto)
++    conn.execute("INSERT INTO store_identity (sport, claimed_at) VALUES (?, '2026-11-01T00:00:00Z')", (sport,))
++    conn.execute("INSERT INTO teams (team_id, abbr, name, first_seen_at) VALUES (?, 'T1', 'Team 1', '2026-11-01T00:00:00Z')",
++                 (f"{sport}:1",))
++    return conn
++
++
++def test_an_nfl_store_is_backed_up_verified_and_restorable(tmp_path):
++    data, dest = tmp_path / "data", tmp_path / "backups"
++    live = _data_store(data / "nfl.sqlite", "nfl", upto=34)
++    out = backup.run(data, dest, stamp="pre35", sports=["nfl"])
++    man = json.loads((dest / "pre35" / "manifest.json").read_text())
++    assert out["status"] == "ok" and set(man["stores"]) == {"nfl"}
++    m = man["stores"]["nfl"]
++    assert m["file"] == "nfl.sqlite" and m["identity"] == "nfl" and m["integrity"] == "ok" and m["schema_version"] == 34
++    assert m["rows"]["teams"] == 1 and {"market_quotes", "raw_responses", "raw_fetches"} <= set(m["rows"])
++    assert backup.sha256(dest / "pre35" / "nfl.sqlite") == m["sha256"]
++    assert sorted(p.name for p in (dest / "pre35").iterdir()) == ["manifest.json", "nfl.sqlite"]
++    # The release migration (0035 rebuilds tables) is rolled back by restoring the backup, under the NFL job lock.
++    db.migrate(live)
++    live.execute("INSERT INTO teams (team_id, abbr, name, first_seen_at) VALUES ('nfl:2', 'T2', 'Team 2', '2026-11-07T00:00:00Z')")
++    assert live.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] > 34
++    live.close()
++    fd = os.open(data / ".nfl-jobs.lock", os.O_RDWR | os.O_CREAT)
++    fcntl.flock(fd, fcntl.LOCK_EX)                              # an NFL job holding the store
++    try:
++        with pytest.raises(backup.BackupError, match="holds the nfl store lock"):
++            backup.restore(dest / "pre35", data, sports=["nfl"])
++    finally:
++        os.close(fd)
++    restored = backup.restore(dest / "pre35", data, sports=["nfl"])
++    assert restored["nfl"]["identity"] == "nfl" and restored["nfl"]["schema_version"] == 34
++    assert restored["nfl"]["rows"]["teams"] == 1 and restored["nfl"]["sha256"] == m["sha256"]
++    assert backup.sha256(data / "nfl.sqlite") == m["sha256"] and list(data.glob("nfl.sqlite.replaced-*"))
++    # A backup of another sport's store is never restored as the NFL store.
++    _store(data / "nba.sqlite", "nba").close()
++    backup.run(data, dest, stamp="nba", sports=["nba"])
++    other = json.loads((dest / "nba" / "manifest.json").read_text())
++    (dest / "nba" / "manifest.json").write_text(json.dumps({**other, "stores": {"nfl": {**other["stores"]["nba"], "file": "nfl.sqlite"}}}))
++    (dest / "nba" / "nba.sqlite").rename(dest / "nba" / "nfl.sqlite")
++    with pytest.raises(backup.BackupError, match="not the nfl store"):
++        backup.restore(dest / "nba", data, sports=["nfl"])
++
++
++def test_the_cli_backs_up_and_restores_nfl_and_soccer(tmp_path, monkeypatch, capsys):
++    data, dest = tmp_path / "data", tmp_path / "backups"
++    for s in ("nfl", "soccer"):
++        _data_store(data / f"{s}.sqlite", s).close()
++    monkeypatch.setenv("NBA_DATA_DIR", str(data))
++    backup.main(["--dest", str(dest), "--sport", "nfl", "--sport", "soccer"])
++    out = json.loads(capsys.readouterr().out)
++    assert out["status"] == "ok" and set(out["stores"]) == {"nfl", "soccer"}
++    for s in ("nfl", "soccer"):
++        assert out["stores"][s]["identity"] == s and out["stores"][s]["integrity"] == "ok" and out["stores"][s]["rows"]["teams"] == 1
++    assert out["stores"]["soccer"]["rows"]["soccer_matches"] == 0
++    folder = dest / out["dir"].rsplit("/", 1)[-1]
++    assert sorted(p.name for p in folder.iterdir()) == ["manifest.json", "nfl.sqlite", "soccer.sqlite"]
++    backup.main(["--restore", str(folder), "--sport", "nfl", "--sport", "soccer"])
++    restored = json.loads(capsys.readouterr().out)
++    assert {s: restored[s]["identity"] for s in restored} == {"nfl": "nfl", "soccer": "soccer"}
++    assert all(restored[s]["sha256"] == out["stores"][s]["sha256"] for s in restored)
++
++
++def test_a_default_backup_includes_every_existing_store_and_skips_absent_ones(tmp_path):
++    data, dest = tmp_path / "data", tmp_path / "backups"
++    data.mkdir()
++    with pytest.raises(backup.BackupError, match="No store"):
++        backup.run(data, dest, stamp="none")
++    assert not (dest / "none").exists()
++    for s in ("nfl", "soccer"):
++        _data_store(data / f"{s}.sqlite", s).close()
++    out = backup.run(data, dest, stamp="s")
++    man = json.loads((dest / "s" / "manifest.json").read_text())
++    assert set(out["stores"]) == set(man["stores"]) == {"nfl", "soccer"} and out["skipped"] == ["nba", "nhl"]
++    assert sorted(p.name for p in (dest / "s").iterdir()) == ["manifest.json", "nfl.sqlite", "soccer.sqlite"]
++
++
++def test_a_default_backup_with_the_nba_nhl_and_nfl_stores_present_backs_up_all_three(tmp_path):
++    data, dest = tmp_path / "data", tmp_path / "backups"
++    for s in ("nba", "nhl"):
++        _store(data / f"{s}.sqlite", s).close()
++    _data_store(data / "nfl.sqlite", "nfl").close()
++    out = backup.run(data, dest, stamp="live")
++    man = json.loads((dest / "live" / "manifest.json").read_text())
++    assert set(man["stores"]) == {"nba", "nhl", "nfl"} and out["skipped"] == ["soccer"]
++    assert {s: (m["file"], m["identity"], m["integrity"]) for s, m in man["stores"].items()} == {
++        "nba": ("nba.sqlite", "nba", "ok"), "nhl": ("nhl.sqlite", "nhl", "ok"), "nfl": ("nfl.sqlite", "nfl", "ok")}
++    assert sorted(p.name for p in (dest / "live").iterdir()) == ["manifest.json", "nba.sqlite", "nfl.sqlite", "nhl.sqlite"]
++    # The NBA/NHL entries keep the manifest's existing fields.
++    assert set(man["stores"]["nba"]) == {"file", "source", "bytes", "sha256", "integrity", "schema_version", "identity", "rows"}
++
++
++def test_a_default_backup_warns_on_stderr_for_each_store_it_skips(tmp_path, capsys):
++    data, dest = tmp_path / "data", tmp_path / "backups"
++    _store(data / "nhl.sqlite", "nhl").close()
++    _data_store(data / "nfl.sqlite", "nfl").close()
++    out = backup.run(data, dest, stamp="s")
++    assert set(out["stores"]) == {"nhl", "nfl"} and out["skipped"] == ["nba", "soccer"]
++    err = capsys.readouterr().err.splitlines()
++    assert err == [f"WARNING: no nba store at {data / 'nba.sqlite'}; not backed up",
++                   f"WARNING: no soccer store at {data / 'soccer.sqlite'}; not backed up"]
++    backup.run(data, dest, stamp="named", sports=["nhl", "nfl"])           # named sports: nothing skipped, no warning
++    assert capsys.readouterr().err == ""
++
++
++def test_a_named_missing_store_is_refused_before_any_folder_is_made(tmp_path):
++    data, dest = tmp_path / "data", tmp_path / "backups"
++    _data_store(data / "nfl.sqlite", "nfl").close()
++    for named in (["soccer"], ["nfl", "soccer"]):
++        with pytest.raises(backup.BackupError, match="No soccer store"):
++            backup.run(data, dest, stamp="x", sports=named)
++        assert not (dest / "x").exists()
++
++
++def test_a_restore_refuses_a_data_only_store_without_its_identity(tmp_path):
++    data, dest = tmp_path / "data", tmp_path / "backups"
++    _data_store(data / "nfl.sqlite", "nfl").close()
++    backup.run(data, dest, stamp="s", sports=["nfl"])
++    copy = sqlite3.connect(dest / "s" / "nfl.sqlite")
++    copy.execute("DROP TRIGGER store_identity_no_delete")
++    copy.execute("DELETE FROM store_identity")
++    copy.commit()
++    copy.close()
++    man = json.loads((dest / "s" / "manifest.json").read_text())        # the manifest matches the altered file,
++    man["stores"]["nfl"]["sha256"] = backup.sha256(dest / "s" / "nfl.sqlite")   # so only the identity check can refuse
++    (dest / "s" / "manifest.json").write_text(json.dumps(man))
++    before = backup.sha256(data / "nfl.sqlite")
++    with pytest.raises(backup.BackupError, match="not the nfl store"):
++        backup.restore(dest / "s", data, sports=["nfl"])
++    assert backup.sha256(data / "nfl.sqlite") == before and not list(data.glob("*.replaced-*"))
++
++
++def test_a_held_soccer_job_lock_refuses_a_soccer_restore(tmp_path):
++    data, dest = tmp_path / "data", tmp_path / "backups"
++    _data_store(data / "soccer.sqlite", "soccer").close()
++    backup.run(data, dest, stamp="s", sports=["soccer"])
++    fd = os.open(data / ".soccer-jobs.lock", os.O_RDWR | os.O_CREAT)
++    fcntl.flock(fd, fcntl.LOCK_EX)
++    try:
++        with pytest.raises(backup.BackupError, match="holds the soccer store lock"):
++            backup.restore(dest / "s", data, sports=["soccer"])
++    finally:
++        os.close(fd)
++    assert backup.restore(dest / "s", data, sports=["soccer"])["soccer"]["identity"] == "soccer"
++
++
++def test_a_sport_named_twice_is_backed_up_and_restored_once(tmp_path, monkeypatch, capsys):
++    data, dest = tmp_path / "data", tmp_path / "backups"
++    _store(data / "nhl.sqlite", "nhl").close()
++    monkeypatch.setenv("NBA_DATA_DIR", str(data))
++    backup.main(["--dest", str(dest), "--sport", "nhl", "--sport", "nhl"])
++    out = json.loads(capsys.readouterr().out)
++    assert set(out["stores"]) == {"nhl"}
++    backup.main(["--restore", out["dir"], "--sport", "nhl", "--sport", "nhl"])   # not refused by its own lock
++    restored = json.loads(capsys.readouterr().out)
++    assert set(restored) == {"nhl"} and restored["nhl"]["sha256"] == out["stores"]["nhl"]["sha256"]
++    assert len(list(data.glob("nhl.sqlite.replaced-*"))) == 1
++
++
++def test_two_restores_in_the_same_second_keep_both_safety_copies(tmp_path, monkeypatch):
++    """The replaced store is never overwritten: a second restore within the same clock second keeps the first safety copy."""
++    from datetime import datetime as real_datetime, timezone
++
++    class Frozen(real_datetime):
++        @classmethod
++        def now(cls, tz=None):
++            return real_datetime(2026, 11, 8, 6, 4, 29, 123456, tzinfo=timezone.utc)
++    data, dest = tmp_path / "data", tmp_path / "backups"
++    _store(data / "nhl.sqlite", "nhl").close()
++    backup.run(data, dest, stamp="b", sports=["nhl"])
++    monkeypatch.setattr(backup, "datetime", Frozen)
++    replaced = []
++    for mark in ("first", "second"):
++        conn = db.connect(data / "nhl.sqlite")
++        conn.execute("INSERT INTO teams (team_id, abbr, name, first_seen_at) VALUES (?, 'M', ?, '2026-11-08T00:00:00Z')",
++                     (f"nhl:{mark}", mark))
++        conn.close()
++        replaced.append(backup.sha256(data / "nhl.sqlite"))
++        backup.restore(dest / "b", data, sports=["nhl"])
++    copies = sorted(data.glob("nhl.sqlite.replaced-*"))
++    assert len(copies) == 2 and sorted(backup.sha256(p) for p in copies) == sorted(replaced), copies
++    assert replaced[0] != replaced[1]
++
++
++# A failure during the swap (step 3) is rolled back: every renamed file goes back, in reverse order, across all sports.
++def _swap_setup(tmp_path):
++    """nba + nfl backed up, then live files (main, -wal, -shm) with distinct bytes; restore never opens them."""
++    data, dest = tmp_path / "data", tmp_path / "backups"
++    _store(data / "nba.sqlite", "nba").close()
++    _data_store(data / "nfl.sqlite", "nfl").close()
++    backup.run(data, dest, stamp="b", sports=["nba", "nfl"])
++    originals = {}
++    for sport in ("nba", "nfl"):
++        for part in ("", "-wal", "-shm"):
++            p = data / f"{sport}.sqlite{part}"
++            p.write_bytes(f"original {sport}{part}".encode())
++            originals[p.name] = p.read_bytes()
++    return data, dest / "b", originals
++
++
++def _inject(monkeypatch, fail):
++    """Path.rename raising OSError(5) when fail(source name, target name); every rename is recorded."""
++    from pathlib import Path
++    real, calls = Path.rename, []
++
++    def rename(self, target):
++        calls.append((Path(self).name, Path(target).name))
++        if fail(Path(self).name, Path(target).name):
++            raise OSError(5, "injected")
++        return real(self, target)
++    monkeypatch.setattr(Path, "rename", rename)
++    return calls
++
++
++def _forward(sport, stage):
++    store = f"{sport}.sqlite"
++    if stage == "install":
++        return lambda a, b: (a, b) == (f"{store}.restoring", store)
++    src = store + {"main": "", "wal": "-wal", "shm": "-shm"}[stage]
++    return lambda a, b: a == src and b.startswith(f"{src}.replaced-")
++
++
++def _files(data):
++    return {p.name: p.read_bytes() for p in data.iterdir() if p.is_file() and not p.name.endswith("-jobs.lock")}
++
++
++@pytest.mark.parametrize("stage", ["main", "wal", "shm", "install"])
++@pytest.mark.parametrize("sport", ["nba", "nfl"])     # nfl: a later sport, after nba was fully swapped
++def test_a_failed_swap_is_rolled_back_for_every_sport(tmp_path, monkeypatch, sport, stage):
++    data, folder, originals = _swap_setup(tmp_path)
++    calls = _inject(monkeypatch, _forward(sport, stage))
++    synced, real_sync = [], backup._fsync_dir
++    monkeypatch.setattr(backup, "_fsync_dir", lambda d: (synced.append(sorted(_files(data))), real_sync(d)))
++    with pytest.raises(OSError, match="injected"):
++        backup.restore(folder, data, sports=["nba", "nfl"])
++    assert synced                                                 # the folder is synced after the rollback
++    if sport == "nfl":
++        assert ("nba.sqlite.restoring", "nba.sqlite") in calls    # the earlier sport was fully swapped first
++    assert _files(data) == originals                              # originals back, -wal/-shm too; staged copies removed
++
++
++def test_a_failed_rollback_deletes_nothing_and_names_the_manual_recovery(tmp_path, monkeypatch):
++    import re
++    data, folder, originals = _swap_setup(tmp_path)
++    install_nfl = _forward("nfl", "install")
++    _inject(monkeypatch, lambda a, b: install_nfl(a, b) or (a.startswith("nba.sqlite.replaced-") and b == "nba.sqlite"))
++    with pytest.raises(backup.BackupError) as err:
++        backup.restore(folder, data, sports=["nba", "nfl"])
++    msg = str(err.value)
++    assert isinstance(err.value.__cause__, OSError) and "injected" in str(err.value.__cause__)
++    files = _files(data)
++    restored = {s: (folder / f"{s}.sqlite").read_bytes() for s in ("nba", "nfl")}
++    for s in ("nba", "nfl"):                                      # nothing deleted: both staged copies are kept
++        assert files[f"{s}.sqlite.restoring"] == restored[s]
++    assert sorted(originals.values()) == sorted(v for k, v in files.items() if not k.endswith(".restoring"))
++    (replaced,) = data.glob("nba.sqlite.replaced-*")              # the rename back that failed: still a safety copy
++    for s in ("nba", "nfl"):
++        assert str(data / f"{s}.sqlite") in msg and str(data / f"{s}.sqlite.restoring") in msg
++    assert str(replaced) in msg and f"move {replaced} to {data / 'nba.sqlite'}" in msg
++    # The listed steps, done by hand in order, put every original back.
++    steps = re.findall(r"^\s*\d+\. move (\S+) to (\S+)$", msg, flags=re.M)
++    assert steps
++    monkeypatch.undo()
++    for a, b in steps:
++        assert not os.path.lexists(b), (a, b)
++        os.rename(a, b)
++    assert {k: v for k, v in _files(data).items() if not k.endswith(".restoring")} == originals
+diff --git a/backend/tests/test_live_store_guard.py b/backend/tests/test_live_store_guard.py
+new file mode 100644
+index 0000000..b24e6d0
+--- /dev/null
++++ b/backend/tests/test_live_store_guard.py
+@@ -0,0 +1,664 @@
++"""Live-store guard (audit 2026-11-07, H1 and C4/I9).
++
++H1: the data folder of a main checkout (REPO/data: the live NBA, NHL and NFL stores) is never opened for writing, migrated
++or created by a development command. Only the verified release environment (release.check problems other than the schema
++line are empty: NBA_RELEASE_GUARD=1, clean release checkout named by NBA_RELEASE_ROOT, NBA_DATA_DIR set) may write there,
++and only the explicit `migrate` command may migrate. A refusal is a JSON line with status "refused" and exit 1, before any
++lock, connection, directory or file. Copies (scripts/dev.sh), tests and in-memory databases are unaffected.
++
++C4/I9: `replay` / `nfl replay` / `soccer replay` check, read-only, that every cached response they will read exists before
++the CLI migrates the store or replays anything; `release-check` lists the missing files; release.check() itself does not
++scan them. Temporary directories only: a fake main checkout is `tmp/repo/.git/` (a directory) + `tmp/repo/data`."""
++import hashlib
++import json
++import os
++import shutil
++import sqlite3
++import subprocess
++from pathlib import Path
++
++import pytest
++
++from app import cli, config, db, ingest, release, soccer
++from test_nfl import nfl_event, nfl_payload
++from test_soccer import event as soccer_event, payload as soccer_payload
++from test_storage import event, payload
++
++
++# --- helpers ----------------------------------------------------------------------------------------------------------
++def git_repo(path):
++    subprocess.run(["git", "init", "-q", str(path)], check=True)
++    (path / "README").write_text("release\n")
++    subprocess.run(["git", "-C", str(path), "add", "README"], check=True)
++    subprocess.run(["git", "-C", str(path), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "r"], check=True)
++    return path
++
++
++@pytest.fixture
++def checkout(tmp_path, monkeypatch):
++    """A fake main checkout whose data folder is the default data directory (NBA_DATA_DIR unset), outside any release."""
++    repo = tmp_path / "repo"
++    (repo / ".git").mkdir(parents=True)
++    (repo / "data").mkdir()
++    monkeypatch.setattr(config, "REPO_ROOT", repo)
++    for key in ("NBA_DATA_DIR", release.GUARD_ENV, release.ROOT_ENV):
++        monkeypatch.delenv(key, raising=False)
++    assert config.data_dir() == repo / "data"
++    return repo / "data"
++
++
++def build_store(tmp_path, dest, sport, upto=None):
++    """A migrated, claimed store built outside the protected folder, then copied into `dest` (closed, no WAL left)."""
++    build = tmp_path / "build" / f"{sport}-{upto}.sqlite"
++    build.parent.mkdir(parents=True, exist_ok=True)
++    conn = db.connect(build)
++    db.migrate(conn, upto=upto)
++    db.claim_store(conn, sport)
++    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
++    conn.execute("PRAGMA journal_mode = DELETE")
++    conn.close()
++    shutil.copy(build, dest)
++    return dest
++
++
++def schema(path):
++    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
++    try:
++        return conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0]
++    finally:
++        conn.close()
++
++
++def tree(path):
++    """Every file under `path` with its content hash: nothing created, changed or removed."""
++    return {str(p.relative_to(path)): hashlib.sha256(p.read_bytes()).hexdigest()
++            for p in sorted(path.rglob("*")) if p.is_file()}
++
++
++def dump(path):
++    """Every row of every table, read-only."""
++    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
++    try:
++        tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")]
++        return {t: sorted(map(repr, conn.execute(f'SELECT * FROM "{t}"'))) for t in tables}
++    finally:
++        conn.close()
++
++
++def run(argv, capsys):
++    """cli.main's exit code (or the exception it raised) and its last JSON line."""
++    try:
++        rc = cli.main(argv)
++    except (Exception, SystemExit) as exc:          # the unguarded code raises instead of refusing
++        rc = f"{type(exc).__name__}: {exc}"
++    out = [line for line in capsys.readouterr().out.splitlines() if line.startswith("{")]
++    try:
++        last = json.loads(out[-1]) if out else {}
++    except json.JSONDecodeError:
++        last = {}
++    return rc, last
++
++
++def no_run(monkeypatch):
++    """The command's own work is not under test: only what happens to the store before it."""
++    monkeypatch.setattr(cli, "_run", lambda *a, **k: 0)
++
++
++# --- H1: protected data folder ----------------------------------------------------------------------------------------
++def test_tests_never_default_to_the_checkout_data_dir():
++    """conftest.py: a test that sets no NBA_DATA_DIR gets a temporary one, never REPO/data."""
++    assert os.environ.get("NBA_DATA_DIR")
++    assert config.data_dir().resolve() != (config.REPO_ROOT / "data").resolve()
++    assert not config.protected_data_dir(config.data_dir())
++
++
++def test_protected_data_dir_is_a_main_checkout_data_folder_only(tmp_path, monkeypatch):
++    main = tmp_path / "main"
++    (main / ".git").mkdir(parents=True)
++    linked = tmp_path / "linked"
++    linked.mkdir()
++    (linked / ".git").write_text("gitdir: elsewhere\n")          # a linked worktree has a .git FILE
++    monkeypatch.setattr(config, "REPO_ROOT", linked)
++    assert config.protected_data_dir(main / "data")              # any main checkout's data folder
++    assert config.protected_data_dir(linked / "data")            # this checkout's own default data folder
++    assert not config.protected_data_dir(tmp_path / "copy")      # dev copies, scratch, tests
++    assert not config.protected_data_dir(tmp_path / "other" / "data")
++
++
++def test_implicit_command_never_migrates_the_checkout_store(tmp_path, checkout, monkeypatch, capsys):
++    store = build_store(tmp_path, checkout / "nhl.sqlite", "nhl", upto=release.shipped_schema() - 1)
++    before = tree(checkout)
++    no_run(monkeypatch)
++    rc, out = run(["--sport", "nhl", "score"], capsys)
++    assert schema(store) == release.shipped_schema() - 1
++    assert tree(checkout) == before                               # no lock file, no WAL, no change
++    assert (rc, out.get("status")) == (1, "refused") and "protected" in out["reason"]
++
++
++def test_explicit_nba_data_dir_naming_the_checkout_store_is_refused(tmp_path, checkout, monkeypatch, capsys):
++    store = build_store(tmp_path, checkout / "nhl.sqlite", "nhl", upto=release.shipped_schema() - 1)
++    monkeypatch.setenv("NBA_DATA_DIR", str(checkout))
++    no_run(monkeypatch)
++    rc, out = run(["--sport", "nhl", "score"], capsys)
++    assert schema(store) == release.shipped_schema() - 1
++    assert (rc, out.get("status")) == (1, "refused")
++
++
++def test_explicit_migrate_outside_a_release_checkout_is_refused(tmp_path, checkout, capsys):
++    nhl = build_store(tmp_path, checkout / "nhl.sqlite", "nhl", upto=release.shipped_schema() - 1)
++    nfl = build_store(tmp_path, checkout / "nfl.sqlite", "nfl", upto=release.shipped_schema() - 1)
++    before = tree(checkout)
++    for argv, store in ((["--sport", "nhl", "migrate"], nhl), (["nfl", "migrate"], nfl)):
++        rc, out = run(argv, capsys)
++        assert schema(store) == release.shipped_schema() - 1, argv
++        assert (rc, out.get("status")) == (1, "refused"), argv
++    assert tree(checkout) == before
++
++
++def test_no_store_file_is_created_in_a_protected_dir(checkout, monkeypatch, capsys):
++    def no_network(*a, **k):
++        raise AssertionError("a refused command must not make a request")
++    monkeypatch.setattr(soccer, "ingest_range", no_network)
++    for argv in (["soccer", "ingest", "--from", "20261101", "--to", "20261102"], ["soccer", "migrate"], ["migrate"],
++                 ["nfl", "ingest", "--from", "202410", "--to", "202410"]):
++        rc, out = run(argv, capsys)
++        assert (rc, out.get("status")) == (1, "refused"), argv
++    assert list(checkout.iterdir()) == []                         # no store, no lock file, no raw folder
++
++
++def test_dev_checkout_write_on_protected_store_at_shipped_schema_is_refused(tmp_path, checkout, monkeypatch, capsys):
++    """After a release the live stores are at this checkout's schema: a dev write must still be refused (CHALLENGE M1)."""
++    for sport in ("nba", "nhl", "nfl", "soccer"):
++        build_store(tmp_path, checkout / f"{sport}.sqlite", sport)
++    before = tree(checkout)
++    no_run(monkeypatch)
++    monkeypatch.setattr(ingest, "replay", lambda *a, **k: pytest.fail("replay ran on a protected store"))
++    monkeypatch.setattr(soccer, "replay", lambda *a, **k: pytest.fail("replay ran on a protected store"))
++    for argv in (["--sport", "nhl", "score"], ["predict"], ["--sport", "nhl", "odds", "--force"], ["replay"],
++                 ["nfl", "replay"], ["nfl", "refresh"], ["soccer", "replay"], ["tuning-study"], ["deep-study"],
++                 ["--sport", "nhl", "adaptive-train"]):
++        rc, out = run(argv, capsys)
++        assert (rc, out.get("status")) == (1, "refused"), (argv, rc, out)
++    assert tree(checkout) == before
++
++
++def test_read_only_commands_still_read_a_protected_store(tmp_path, checkout, capsys):
++    store = build_store(tmp_path, checkout / "nhl.sqlite", "nhl")
++    rc, out = run(["--sport", "nhl", "coverage"], capsys)
++    assert rc == 0 and out.get("status") != "refused"
++    assert schema(store) == release.shipped_schema()
++
++
++def test_release_migration_context_may_migrate(tmp_path, checkout, monkeypatch, capsys):
++    """The documented release migration: release checkout + NBA_RELEASE_GUARD/ROOT + NBA_DATA_DIR=the live folder."""
++    store = build_store(tmp_path, checkout / "nhl.sqlite", "nhl", upto=release.shipped_schema() - 1)
++    root = git_repo(tmp_path / "release")
++    monkeypatch.setattr(release, "code_root", lambda: root)
++    monkeypatch.setenv(release.GUARD_ENV, "1")
++    monkeypatch.setenv(release.ROOT_ENV, str(root))
++    monkeypatch.setenv("NBA_DATA_DIR", str(checkout))
++    real_run = cli._run
++    no_run(monkeypatch)
++    rc, out = run(["--sport", "nhl", "adaptive-record"], capsys)  # an unguarded implicit command never migrates
++    assert (rc, out.get("status")) == (1, "refused") and schema(store) == release.shipped_schema() - 1
++    monkeypatch.setattr(cli, "_run", real_run)
++    assert cli.main(["--sport", "nhl", "migrate"]) == 0
++    assert schema(store) == release.shipped_schema()
++    no_run(monkeypatch)
++    assert cli.main(["--sport", "nhl", "score"]) == 0            # the guarded jobs after a release: not blocked
++
++
++def test_release_context_without_the_guard_is_not_a_release(tmp_path, checkout, monkeypatch, capsys):
++    store = build_store(tmp_path, checkout / "nhl.sqlite", "nhl")
++    root = git_repo(tmp_path / "release")
++    monkeypatch.setattr(release, "code_root", lambda: root)
++    monkeypatch.setenv(release.ROOT_ENV, str(root))
++    monkeypatch.setenv("NBA_DATA_DIR", str(checkout))
++    no_run(monkeypatch)
++    rc, out = run(["--sport", "nhl", "score"], capsys)
++    assert (rc, out.get("status")) == (1, "refused") and "NBA_RELEASE_GUARD" in out["reason"]
++    assert schema(store) == release.shipped_schema()
++
++
++def test_copies_still_migrate_implicitly(tmp_path, monkeypatch, capsys):
++    """scripts/dev.sh's copy (and any scratch folder) keeps today's behaviour: commands upgrade it as before."""
++    copy = tmp_path / "copy"
++    copy.mkdir()
++    monkeypatch.setenv("NBA_DATA_DIR", str(copy))
++    store = build_store(tmp_path, copy / "nhl.sqlite", "nhl", upto=release.shipped_schema() - 1)
++    no_run(monkeypatch)
++    assert cli.main(["--sport", "nhl", "score"]) == 0
++    assert schema(store) == release.shipped_schema()
++    assert cli.main(["soccer", "migrate"]) == 0 and schema(copy / "soccer.sqlite") == release.shipped_schema()
++
++
++def test_db_migrate_refuses_protected_pending_without_context(tmp_path, checkout):
++    store = build_store(tmp_path, checkout / "nhl.sqlite", "nhl", upto=release.shipped_schema() - 1)
++    for explicit in (False, True):                               # explicit, but not in the release environment
++        conn = db.connect(store)
++        try:
++            raised = None
++            try:
++                db.migrate(conn, explicit=explicit) if explicit else db.migrate(conn)
++            except Exception as exc:
++                raised = exc
++        finally:
++            conn.close()
++        assert schema(store) == release.shipped_schema() - 1
++        assert type(raised).__name__ == "ProtectedStoreError", raised
++    conn = db.connect(store)                                     # nothing pending through `upto`: a no-op, not refused
++    try:
++        assert db.migrate(conn, upto=release.shipped_schema() - 1) == []
++    finally:
++        conn.close()
++
++
++def test_in_memory_and_temporary_databases_are_never_protected(tmp_path, checkout, monkeypatch):
++    """PRAGMA database_list reports '' for them; '' must not resolve to the working directory (a checkout's backend/)."""
++    backend = checkout.parent / "backend"
++    backend.mkdir()
++    monkeypatch.chdir(backend)                                   # Path('').resolve() would be here, beside .git/
++    for target in (":memory:", ""):
++        conn = sqlite3.connect(target, isolation_level=None)
++        conn.row_factory = sqlite3.Row
++        try:
++            assert db.migrate(conn)[-1].startswith(f"{release.shipped_schema():04d}_")
++        finally:
++            conn.close()
++    conn = db.connect(tmp_path / "scratch.sqlite")
++    try:
++        assert db.migrate(conn)
++    finally:
++        conn.close()
++
++
++# --- C4/I9: replay preflight --------------------------------------------------------------------------------------------
++def _rebuild_target(data, src, target, upto):
++    """`target`: an empty store (migrated through `upto`, unclaimed) holding `src`'s cached-response log, as when a store
++    is rebuilt from its cache."""
++    conn = db.connect(target)
++    db.migrate(conn, upto=upto)
++    for table in ("raw_responses", "raw_fetches"):
++        have = {c[1] for c in conn.execute(f"PRAGMA table_info({table})")}
++        for r in src.execute(f"SELECT * FROM {table}"):
++            cols = [c for c in r.keys() if c in have]
++            conn.execute(f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})",
++                         tuple(r[c] for c in cols))
++    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
++    conn.close()
++    later = src.execute("SELECT r.raw_id, r.path FROM raw_responses r JOIN raw_fetches f ON f.raw_id = r.raw_id "
++                        "ORDER BY f.retrieved_at DESC LIMIT 1").fetchone()
++    (data / "raw" / later["path"]).unlink()                       # the LATER response's bytes are gone; the earlier is present
++    return later["raw_id"]
++
++
++UPTO = {"schema31": 31, "schema33": 33, "shipped-1": release.shipped_schema() - 1, "shipped": release.shipped_schema()}
++
++
++@pytest.mark.parametrize("at", sorted(UPTO))
++@pytest.mark.parametrize("sport", ["nba", "nfl", "soccer"])
++def test_replay_refuses_before_writing_when_a_later_raw_file_is_missing(tmp_path, monkeypatch, capsys, sport, at):
++    """Older schemas (the live NBA/NHL 31, NFL 33, shipped-1): the CLI must not migrate before refusing; shipped: replay
++    must not import the earlier, present response and then stop half-way at the missing one."""
++    data = tmp_path / "data"
++    monkeypatch.setenv("NBA_DATA_DIR", str(data))
++    src = db.connect(data / "source.sqlite")
++    db.migrate(src)
++    if sport == "nba":
++        ingest.ingest_month(src, "202401", fetch=lambda _m: payload(event(eid="1001")), retrieved_at="2024-01-20T12:00:00Z")
++        ingest.ingest_month(src, "202402", fetch=lambda _m: payload(event(eid="1002", date="2024-02-15T18:00Z")),
++                            retrieved_at="2024-02-20T12:00:00Z")
++        argv = ["replay"]
++    elif sport == "nfl":
++        ingest.ingest_nfl_month(src, "202409", fetch=lambda _m: nfl_payload(nfl_event(eid="401671000", date="2024-09-29T17:00Z",
++                                                                                      week=4)),
++                                retrieved_at="2024-09-30T12:00:00Z")
++        ingest.ingest_nfl_month(src, "202410", fetch=lambda _m: nfl_payload(nfl_event()), retrieved_at="2024-10-07T12:00:00Z")
++        argv = ["nfl", "replay"]
++    else:
++        soccer.ingest_day(src, "eng.1", "20261107", fetch=lambda *_: soccer_payload("eng.1", soccer_event()),
++                          retrieved_at="2026-11-07T20:00:00Z")
++        soccer.ingest_day(src, "eng.1", "20261108", fetch=lambda *_: soccer_payload("eng.1", soccer_event(
++            eid="401878759", date="2026-11-08T15:00Z")), retrieved_at="2026-11-08T20:00:00Z")
++        argv = ["soccer", "replay"]
++    store_file = config.db_path(sport)
++    missing = _rebuild_target(data, src, store_file, upto=UPTO[at])
++    src.close()
++    before = dump(store_file)
++    rc, out = run(argv, capsys)
++    assert dump(store_file) == before                             # schema, games/matches, revisions, fetches, identity
++    assert (rc, out.get("status")) == (1, "refused"), (rc, out)
++    assert out["missing_raw"]["count"] == 1 and out["missing_raw"]["raw_ids"] == [missing]
++    if sport != "soccer":                                         # where the complete list comes from
++        assert "release-check" in out["reason"]
++
++
++def test_replay_with_every_file_present_still_runs(tmp_path, monkeypatch, capsys):
++    data = tmp_path / "data"
++    monkeypatch.setenv("NBA_DATA_DIR", str(data))
++    src = db.connect(data / "source.sqlite")
++    db.migrate(src)
++    ingest.ingest_nfl_month(src, "202410", fetch=lambda _m: nfl_payload(nfl_event()), retrieved_at="2024-10-07T12:00:00Z")
++    ingest.ingest_nfl_month(src, "202411", fetch=lambda _m: nfl_payload(nfl_event(eid="401671009", date="2024-11-03T18:00Z",
++                                                                                  week=9)),
++                            retrieved_at="2024-11-04T12:00:00Z")
++    target = db.connect(config.db_path("nfl"))
++    db.migrate(target)
++    for table in ("raw_responses", "raw_fetches"):
++        for r in src.execute(f"SELECT * FROM {table}"):
++            target.execute(f"INSERT INTO {table} ({', '.join(r.keys())}) VALUES ({', '.join('?' * len(r))})", tuple(r))
++    target.close()
++    src.close()
++    rc, out = run(["nfl", "replay"], capsys)
++    assert rc == 0 and out["games_inserted"] == 2
++
++
++def test_release_check_lists_missing_raw_files_but_release_check_function_does_not_scan(tmp_path, monkeypatch, capsys):
++    data = tmp_path / "data"
++    monkeypatch.setenv("NBA_DATA_DIR", str(data))
++    conn = db.connect(sport="nba")
++    db.migrate(conn)
++    db.claim_store(conn, "nba")
++    ingest.ingest_month(conn, "202401", fetch=lambda _m: payload(event(eid="1001")), retrieved_at="2024-01-20T12:00:00Z")
++    ingest.ingest_month(conn, "202402", fetch=lambda _m: payload(event(eid="1002", date="2024-02-15T18:00Z")),
++                        retrieved_at="2024-02-20T12:00:00Z")
++    gone = conn.execute("SELECT raw_id, path FROM raw_responses ORDER BY raw_id DESC LIMIT 1").fetchone()
++    conn.close()
++    (data / "raw" / gone["path"]).unlink()
++    assert "raw_missing" not in release.check("nba")              # every guarded tick: no file scan
++    from app import research_live, selector
++    monkeypatch.setattr(research_live, "definition", lambda _c: "synthetic")   # needs sealed research files
++    monkeypatch.setattr(selector, "version", lambda: "synthetic")
++    cli.main(["release-check"])
++    out = json.loads(capsys.readouterr().out)
++    assert out["raw_missing"]["count"] == 1 and out["raw_missing"]["raw_ids"] == [gone["raw_id"]]
++
++
++def test_nfl_release_check_lists_missing_raw_files(tmp_path, monkeypatch, capsys):
++    """NFL is the store with byte-less responses (audit C4): its release check reports them, read-only, without failing."""
++    data = tmp_path / "data"
++    monkeypatch.setenv("NBA_DATA_DIR", str(data))
++    conn = db.connect(sport="nfl")
++    db.migrate(conn)
++    ingest.ingest_nfl_month(conn, "202410", fetch=lambda _m: nfl_payload(nfl_event()), retrieved_at="2024-10-07T12:00:00Z")
++    gone = conn.execute("SELECT raw_id, path FROM raw_responses").fetchone()
++    conn.close()
++    (data / "raw" / gone["path"]).unlink()
++    before = dump(config.db_path("nfl"))
++    cli.main(["nfl", "release-check"])
++    out = json.loads(capsys.readouterr().out)
++    assert out["raw_missing"] == {"count": 1, "raw_ids": [gone["raw_id"]], "truncated": False}
++    assert "raw_missing" not in release.check("nfl") and dump(config.db_path("nfl")) == before
++
++
++# --- Review round 2 (2026-11-07) ---------------------------------------------------------------------------------------
++def _files(tmp_path, *names):
++    for name in names:
++        (tmp_path / name).write_text("{}")
++    return [str(tmp_path / n) for n in names]
++
++
++def test_nfl_activate_on_a_protected_folder_is_refused(tmp_path, checkout, monkeypatch, capsys):
++    """A dev-checkout activation would replace the live activation file (another definition hash: NFL goes inactive)."""
++    from app import nfl_live
++    build_store(tmp_path, checkout / "nfl.sqlite", "nfl")
++    before = tree(checkout)
++    monkeypatch.setattr(nfl_live, "activate", lambda *a, **k: pytest.fail("activation ran on a protected folder"))
++    sealed, report, log = _files(tmp_path, "sealed.json", "report.json", "access.jsonl")
++    rc, out = run(["nfl", "activate", "--sealed", sealed, "--report", report, "--access-log", log], capsys)
++    assert (rc, out.get("status")) == (1, "refused"), (rc, out)
++    assert tree(checkout) == before
++
++
++def test_nfl_test_run_and_reserved_line_collection_on_a_protected_folder_are_refused(tmp_path, checkout, monkeypatch,
++                                                                                       capsys):
++    """Both append to the live one-shot access log (data/research/nfl_eval/nfl_test_access.jsonl)."""
++    from app import nfl_eval
++    build_store(tmp_path, checkout / "nfl.sqlite", "nfl")
++    before = tree(checkout)
++    monkeypatch.setattr(nfl_eval, "run_test", lambda *a, **k: pytest.fail("test run on a protected folder"))
++    monkeypatch.setattr(nfl_eval, "line_events", lambda *a, **k: pytest.fail("reserved lines on a protected folder"))
++    (sealed,) = _files(tmp_path, "sealed.json")
++    for argv in (["nfl", "test-run", "--sealed", sealed, "--out", str(tmp_path / "out")],
++                 ["nfl", "collect-lines", "--test", "--sealed", sealed]):
++        rc, out = run(argv, capsys)
++        assert (rc, out.get("status")) == (1, "refused"), (argv, rc, out)
++    assert tree(checkout) == before
++
++
++@pytest.mark.parametrize("link", ["store", "raw"])
++def test_a_symlink_into_a_protected_folder_is_refused(tmp_path, checkout, monkeypatch, capsys, link):
++    """NBA_DATA_DIR names an unprotected folder whose store file (or raw/ folder) is a link into the live folder."""
++    build_store(tmp_path, checkout / "nhl.sqlite", "nhl")
++    (checkout / "raw").mkdir()
++    copy = tmp_path / "copy"
++    copy.mkdir()
++    if link == "store":
++        (copy / "nhl.sqlite").symlink_to(checkout / "nhl.sqlite")
++    else:
++        build_store(tmp_path, copy / "nhl.sqlite", "nhl")
++        (copy / "raw").symlink_to(checkout / "raw")
++    monkeypatch.setenv("NBA_DATA_DIR", str(copy))
++    before = tree(checkout)
++    no_run(monkeypatch)
++    rc, out = run(["--sport", "nhl", "score"], capsys)
++    assert (rc, out.get("status")) == (1, "refused"), (rc, out)
++    assert tree(checkout) == before
++
++
++def test_db_migrate_backstop_follows_a_store_symlink(tmp_path, checkout, monkeypatch):
++    store = build_store(tmp_path, checkout / "nhl.sqlite", "nhl", upto=release.shipped_schema() - 1)
++    copy = tmp_path / "copy"
++    copy.mkdir()
++    (copy / "nhl.sqlite").symlink_to(store)
++    conn = db.connect(copy / "nhl.sqlite")
++    try:
++        with pytest.raises(db.ProtectedStoreError):
++            db.migrate(conn)
++    finally:
++        conn.close()
++    assert schema(store) == release.shipped_schema() - 1
++
++
++def _other_spelling(path, how):
++    """The same existing folder under another path spelling (case-swapped last component on a case-insensitive file
++    system, or macOS's /System/Volumes/Data firmlink), or None when this file system has no such spelling."""
++    other = (path.parent / path.name.upper() if how == "case" else
++             Path("/System/Volumes/Data" + str(path.resolve())))
++    try:
++        return other if str(other) != str(path) and os.path.samefile(other, path) else None
++    except OSError:
++        return None
++
++
++@pytest.mark.parametrize("spelling", ["exact", "data-case", "data-firmlink", "root-case"])
++def test_the_checkout_holding_the_data_folder_is_never_a_release_environment(tmp_path, monkeypatch, capsys, spelling):
++    """Setting NBA_RELEASE_GUARD/ROOT in the development main checkout itself (clean, data/ ignored) does not make it a
++    release: the release is a separate checkout. Decided by file identity, so another spelling of the same data folder
++    or code root (case variant, firmlink) is caught too."""
++    repo = tmp_path / "repo"
++    repo.mkdir()
++    git_repo(repo)
++    (repo / ".gitignore").write_text("data/\n")
++    subprocess.run(["git", "-C", str(repo), "add", ".gitignore"], check=True)
++    subprocess.run(["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "ignore"], check=True)
++    (repo / "data").mkdir()
++    store = build_store(tmp_path, repo / "data" / "nhl.sqlite", "nhl")
++    root, data = repo, repo / "data"
++    if spelling != "exact":
++        other = _other_spelling(repo, spelling.split("-")[1])
++        if other is None:
++            pytest.skip(f"no {spelling} spelling of {repo} on this file system")
++        root, data = (other, data) if spelling == "root-case" else (repo, other / "data")
++    monkeypatch.setattr(config, "REPO_ROOT", root)
++    monkeypatch.setattr(release, "code_root", lambda: root)
++    for key, value in ((release.GUARD_ENV, "1"), (release.ROOT_ENV, str(root)), ("NBA_DATA_DIR", str(data))):
++        monkeypatch.setenv(key, value)
++    assert release.check("nhl")["problems"] == []                 # release.check itself is unchanged
++    assert any("holds this data folder" in p for p in release.migration_context("nhl"))
++    before = tree(repo / "data")
++    no_run(monkeypatch)
++    rc, out = run(["--sport", "nhl", "score"], capsys)
++    assert (rc, out.get("status")) == (1, "refused"), (rc, out)
++    assert tree(repo / "data") == before and schema(store) == release.shipped_schema()
++
++
++def test_the_own_data_folder_is_protected_under_another_spelling(tmp_path, monkeypatch):
++    """A linked worktree's own data/ folder (no .git directory beside it) is matched by identity, not by path string."""
++    linked = tmp_path / "linked"
++    (linked / "data").mkdir(parents=True)
++    (linked / ".git").write_text("gitdir: elsewhere\n")
++    monkeypatch.setattr(config, "REPO_ROOT", linked)
++    others = [o / "data" for o in (_other_spelling(linked, "case"), _other_spelling(linked, "firmlink")) if o is not None]
++    if not others:
++        pytest.skip("no other spelling of the folder on this file system")
++    for other in others:
++        assert config.protected_data_dir(other) and config.protected_path(other / "nhl.sqlite"), other
++    assert not config.protected_data_dir(tmp_path / "copy")
++
++
++def _nfl_store_with_one_response(data):
++    conn = db.connect(data / "nfl.sqlite")
++    db.migrate(conn)
++    ingest.ingest_nfl_month(conn, "202410", fetch=lambda _m: nfl_payload(nfl_event()), retrieved_at="2024-10-07T12:00:00Z")
++    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
++    return conn
++
++
++def test_replay_preflight_fails_closed_when_it_cannot_read_the_store(tmp_path, monkeypatch, capsys):
++    """Only an absent raw_responses table means "nothing to check"; any other read error is a refusal, never a pass."""
++    data = tmp_path / "data"
++    monkeypatch.setenv("NBA_DATA_DIR", str(data))
++    conn = _nfl_store_with_one_response(data)
++    conn.close()
++    plain = sqlite3.connect(data / "nfl.sqlite", isolation_level=None)
++    plain.execute("PRAGMA foreign_keys = OFF")
++    plain.execute("DROP TABLE raw_fetches")                       # the log replay reads is unreadable
++    plain.close()
++    before = dump(data / "nfl.sqlite")
++    rc, out = run(["nfl", "replay"], capsys)
++    assert dump(data / "nfl.sqlite") == before
++    assert (rc, out.get("status")) == (1, "refused") and "could not read" in out["reason"], (rc, out)
++    (data / "nfl.sqlite").write_bytes(b"not a database" * 100)    # unreadable file
++    rc, out = run(["nfl", "replay"], capsys)
++    assert (rc, out.get("status")) == (1, "refused") and "could not read" in out["reason"], (rc, out)
++
++
++def test_nfl_release_check_without_a_cache_log_reports_it_instead_of_crashing(tmp_path, monkeypatch, capsys):
++    data = tmp_path / "data"
++    data.mkdir()
++    monkeypatch.setenv("NBA_DATA_DIR", str(data))
++    (data / "nfl.sqlite").write_bytes(b"")                       # a 0-byte store
++    try:
++        rc = cli.main(["nfl", "release-check"])
++    except Exception as exc:
++        rc = f"{type(exc).__name__}: {exc}"
++    out = json.loads(capsys.readouterr().out)
++    assert rc == 1 and out["raw_missing"] is None and out["raw_missing_reason"], (rc, out)
++    assert (data / "nfl.sqlite").read_bytes() == b""
++
++
++def test_an_unlogged_nhl_response_replay_skips_is_not_a_missing_input(tmp_path, monkeypatch, capsys):
++    """False-positive guard: replay never reads a cached NHL response without a logged retrieval."""
++    from test_replay_same_store import _nhl
++    data = tmp_path / "data"
++    monkeypatch.setenv("NBA_DATA_DIR", str(data))
++    conn = db.connect(config.db_path("nhl"))
++    db.migrate(conn)
++    ingest.ingest_nhl_season(conn, 2027, fetch=lambda _s: _nhl(4, 1, 3), retrieved_at="2026-10-13T03:00:00Z")
++    r = conn.execute("SELECT * FROM raw_responses").fetchone()
++    conn.execute("INSERT INTO raw_responses (source, endpoint, request_key, content_hash, byte_size, path, importer_version, "
++                 "first_retrieved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
++                 (r["source"], r["endpoint"], r["request_key"] + "&unlogged", "0" * 64, 1, "nhl_stats/00/missing.json.gz",
++                  r["importer_version"], "2026-10-13T04:00:00Z"))
++    conn.close()
++    rc, out = run(["--sport", "nhl", "replay"], capsys)
++    assert rc == 0 and out.get("status") != "refused", (rc, out)
++
++
++@pytest.mark.parametrize("source", ["sportsdataverse", "espn_summary"])
++def test_a_missing_team_box_file_refuses_replay(tmp_path, monkeypatch, capsys, source):
++    """Possession files (rebuild_team_box) are read by replay too: a missing one refuses before the scoreboards import."""
++    data = tmp_path / "data"
++    monkeypatch.setenv("NBA_DATA_DIR", str(data))
++    src = db.connect(data / "source.sqlite")
++    db.migrate(src)
++    ingest.ingest_month(src, "202401", fetch=lambda _m: payload(event(eid="1001")), retrieved_at="2024-01-20T12:00:00Z")
++    target = config.db_path("nba")
++    conn = db.connect(target)
++    db.migrate(conn)
++    for table in ("raw_responses", "raw_fetches"):
++        for r in src.execute(f"SELECT * FROM {table}"):
++            conn.execute(f"INSERT INTO {table} ({', '.join(r.keys())}) VALUES ({', '.join('?' * len(r))})", tuple(r))
++    src.close()
++    raw_id = conn.execute("INSERT INTO raw_responses (source, endpoint, request_key, content_hash, byte_size, path, "
++                          "importer_version, first_retrieved_at) VALUES (?, 'box', 'box?1', ?, 1, ?, 'test', ?)",
++                          (source, "1" * 64, f"{source}/11/{'1' * 64}.json.gz", "2024-01-21T12:00:00Z")).lastrowid
++    conn.execute("INSERT INTO raw_fetches (raw_id, retrieved_at) VALUES (?, ?)", (raw_id, "2024-01-21T12:00:00Z"))
++    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
++    conn.close()
++    before = dump(target)
++    rc, out = run(["replay"], capsys)
++    assert dump(target) == before
++    assert (rc, out.get("status")) == (1, "refused") and out["missing_raw"]["raw_ids"] == [raw_id], (rc, out)
++
++
++def test_a_hard_link_to_a_protected_store_is_refused(tmp_path, checkout, monkeypatch, capsys):
++    """A store file hard-linked to the live one (same inode, no path into the live folder) is refused, fail-closed: a
++    store file with more than one link may be the live store under another name."""
++    build_store(tmp_path, checkout / "nhl.sqlite", "nhl")
++    copy = tmp_path / "copy"
++    copy.mkdir()
++    os.link(checkout / "nhl.sqlite", copy / "nhl.sqlite")
++    monkeypatch.setenv("NBA_DATA_DIR", str(copy))
++    before = tree(checkout)
++    no_run(monkeypatch)
++    rc, out = run(["--sport", "nhl", "score"], capsys)
++    assert (rc, out.get("status")) == (1, "refused") and "hard link" in out["reason"], (rc, out)
++    assert tree(checkout) == before
++
++
++@pytest.mark.parametrize("action", ["tick", "refresh"])
++def test_a_research_folder_linked_into_a_protected_folder_is_refused(tmp_path, checkout, monkeypatch, capsys, action):
++    """A copy with its own store but research/ linked into the live folder: the scheduled NFL commands may append to the
++    live one-shot access log (nfl_live.record -> nfl_eval.load_rows) or read the live activation, so they are refused."""
++    from app import jobs, nfl_eval
++    build_store(tmp_path, checkout / "nfl.sqlite", "nfl")
++    (checkout / "research" / "nfl_eval").mkdir(parents=True)
++    (checkout / "research" / "nfl_eval" / "nfl_test_access.jsonl").write_text('{"live": "entry"}\n')
++    copy = tmp_path / "copy"
++    copy.mkdir()
++    build_store(tmp_path, copy / "nfl.sqlite", "nfl")
++    (copy / "research").symlink_to(checkout / "research")
++    monkeypatch.setenv("NBA_DATA_DIR", str(copy))
++
++    def appends(conn, **kw):              # the access-log write NFL live makes during a tick (nfl_live.record)
++        nfl_eval.access_log_path().parent.mkdir(parents=True, exist_ok=True)
++        with open(nfl_eval.access_log_path(), "a") as f:
++            f.write('{"from": "a copy"}\n')
++        return {"status": "ok"}
++    monkeypatch.setattr(jobs, "tick", appends)
++    monkeypatch.setattr(jobs, "refresh", appends)
++    before = tree(checkout)
++    rc, out = run(["nfl", action], capsys)
++    assert (rc, out.get("status")) == (1, "refused"), (rc, out)
++    assert tree(checkout) == before
++    (copy / "research").unlink()                                  # the same copy without the link still runs
++    (copy / "research").mkdir()
++    rc, _ = run(["nfl", action], capsys)
++    assert rc == 0 and tree(checkout) == before
++    assert (copy / "research" / "nfl_eval" / "nfl_test_access.jsonl").read_text() == '{"from": "a copy"}\n'
++
++
++@pytest.mark.parametrize("argv", [["replay"], ["nfl", "replay"], ["soccer", "replay"]], ids=lambda a: a[0])
++def test_replay_on_an_empty_store_file_is_refused(tmp_path, monkeypatch, capsys, argv):
++    """A 0-byte store file has no cached-response log to replay from: refused before any lock, migration or side file (a
++    store file that does not exist at all is still created and migrated as before)."""
++    data = tmp_path / "data"
++    data.mkdir()
++    monkeypatch.setenv("NBA_DATA_DIR", str(data))
++    store = config.db_path({"replay": "nba"}.get(argv[0], argv[0]))
++    store.write_bytes(b"")
++    rc, out = run(argv, capsys)
++    assert (rc, out.get("status")) == (1, "refused") and "empty" in out["reason"], (rc, out)
++    assert store.read_bytes() == b"" and sorted(p.name for p in data.iterdir()) == [store.name]
+diff --git a/frontend/package.json b/frontend/package.json
+index b4a8925..a9cf9b8 100644
+--- a/frontend/package.json
++++ b/frontend/package.json
+@@ -8,7 +8,7 @@
+     "typecheck": "tsc --noEmit",
+     "build": "tsc --noEmit && vite build",
+     "preview": "vite preview",
+-    "test:unit": "node --test --experimental-strip-types src/components/competition.test.mjs"
++    "test:unit": "node --test --experimental-strip-types src/components/*.test.mjs"
+   },
+   "dependencies": {
+     "react": "^18.3.1",
+diff --git a/frontend/src/components/Canonical.tsx b/frontend/src/components/Canonical.tsx
+index dbbd479..ef838d0 100644
+--- a/frontend/src/components/Canonical.tsx
++++ b/frontend/src/components/Canonical.tsx
+@@ -132,7 +132,7 @@ export function CanonicalHistory({ sport, market, filters, limit }: { sport: Spo
+         {h.total > h.rows.length && ` Showing the latest ${h.rows.length} of ${h.total}; the record covers all ${h.total}.`}
+       </p>
+       {h.rows.length === 0 ? <Empty>{h.recording_began_at ? 'No records match these filters.' : 'Recording has not started in this data store.'}</Empty> : (
+-        <table className="table history">
++        <div className="table-wrap"><table className="table history">
+           <thead><tr><th>Date</th><th>Game</th><th>Forecast</th><th>Result</th><th>Grade</th><th>Record</th><th>Model</th></tr></thead>
+           <tbody>
+             {h.rows.map((row) => {
+@@ -154,7 +154,7 @@ export function CanonicalHistory({ sport, market, filters, limit }: { sport: Spo
+               );
+             })}
+           </tbody>
+-        </table>
++        </table></div>
+       )}
+     </>}</AsyncView>
+   );
+diff --git a/frontend/src/components/Layout.tsx b/frontend/src/components/Layout.tsx
+index ac499d9..056b73f 100644
+--- a/frontend/src/components/Layout.tsx
++++ b/frontend/src/components/Layout.tsx
+@@ -45,9 +45,11 @@ export function Layout() {
+   const label = sport.toUpperCase();
+   const fresh = useFreshnessPoll(sport);
+   const meta = useApi((s) => (sport === 'nfl' ? api.nflMeta(s) : sport === 'soccer' ? api.soccerMeta(competition, s) : api.meta(sport, s))
+-    .then((m) => ({ mode: m.mode, last_refresh_at: m.last_refresh_at })), [sport, competition], fresh.changes);
++    .then((m) => ({ mode: m.mode, last_refresh_at: m.last_refresh_at,
++      forecasts: 'capabilities' in m && m.capabilities.some((c) => c.id === 'forecasts' && c.available) })), [sport, competition], fresh.changes);
+   const mode = meta.state.status === 'success' ? meta.state.data.mode : null;
+   const lastRefresh = meta.state.status === 'success' ? meta.state.data.last_refresh_at : null;
++  const nflForecasts = sport === 'nfl' && meta.state.status === 'success' && meta.state.data.forecasts;
+   const health = useApi((s) => api.health(s), []);
+   const snapshot = health.state.status === 'success' ? health.state.data.data_snapshot_at : null;
+   const section = SECTION.find(([re]) => re.test(location.pathname))?.[1] ?? 'Prediction Dashboard';
+@@ -121,7 +123,9 @@ export function Layout() {
+                   {sport === 'soccer'
+                     ? <p>Fixtures and results from ESPN's public soccer scoreboards, one competition and one day per request{lastRefresh ? `; this competition last imported ${dateTime(lastRefresh)}` : ''}. Data only: there is no soccer model, so no soccer forecast, odds, injury or performance record is shown.</p>
+                     : sport === 'nfl'
+-                    ? <p>Schedule and results from ESPN's public NFL scoreboard{lastRefresh ? `, last imported ${dateTime(lastRefresh)}` : ''}. Data only: there is no NFL model, so no NFL forecast, odds, injury or performance record is shown.</p>
++                    ? <p>Schedule and results from ESPN's public NFL scoreboard{lastRefresh ? `, last imported ${dateTime(lastRefresh)}` : ''}. {nflForecasts
++                      ? 'Live forecasts are recorded within two hours of kickoff for regular-season and playoff games: the winner from an NFL Elo model; spread, total and team totals from a points model, against a bookmaker line collected 2–4 hours before kickoff when there is one, otherwise a model line. No injury or weather information.'
++                      : 'NFL live forecasts are not active for this data store, so no NFL forecast, odds or record is shown. No injury information.'}</p>
+                     : sport === 'nhl'
+                     ? <p>Schedule and results from the NHL's own stats API{lastRefresh ? `, last refreshed ${dateTime(lastRefresh)}` : ''}. Winner forecasts come from an NHL Elo model; puck line, totals and the regulation result from a goals model. No goalie, injury or line-up information.</p>
+                     : <p>Schedule and results from ESPN's unofficial API{lastRefresh ? `, last refreshed ${dateTime(lastRefresh)}` : ''}. Forecasts come from an Elo model.</p>}
+diff --git a/frontend/src/components/MarketView.tsx b/frontend/src/components/MarketView.tsx
+index fa0702e..d3de83f 100644
+--- a/frontend/src/components/MarketView.tsx
++++ b/frontend/src/components/MarketView.tsx
+@@ -152,7 +152,7 @@ export function MarketVersionSelect({ versions, value, onChange }: {
+ export function MarketHistoryTable({ rows }: { rows: MarketRecord[] }) {
+   const carried = useCarriedSearch();
+   return (
+-    <table className="table history">
++    <div className="table-wrap"><table className="table history">
+       <thead>
+         <tr><th>Date</th><th>Game</th><th>Line</th><th>Pick</th><th>Model probability</th><th>Result</th><th>Outcome of pick</th><th>Recorded</th></tr>
+       </thead>
+@@ -170,7 +170,7 @@ export function MarketHistoryTable({ rows }: { rows: MarketRecord[] }) {
+           </tr>
+         ))}
+       </tbody>
+-    </table>
++    </table></div>
+   );
+ }
+ 
+diff --git a/frontend/src/components/nflWording.test.mjs b/frontend/src/components/nflWording.test.mjs
+new file mode 100644
+index 0000000..6012b47
+--- /dev/null
++++ b/frontend/src/components/nflWording.test.mjs
+@@ -0,0 +1,41 @@
++// Wording guard for the NFL screens (run: npm run test:unit). Reads the .tsx sources as text. NFL live forecasts, odds
++// and a prospective record exist once the store's activation is valid (backend nfl.capabilities()), so the UI must not
++// say the NFL is "data only" or has "no NFL model" (audit M11 / NFL-C F2). What it says instead follows the API's
++// `forecasts` capability, and names only what exists: no accuracy, edge or performance claim.
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { readFileSync } from 'node:fs';
++
++const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
++const layout = read('./Layout.tsx');
++const nfl = read('../pages/NflPages.tsx');
++
++test('no NFL screen calls the NFL data only or says there is no NFL model', () => {
++  assert.doesNotMatch(layout, /no NFL model/i);
++  assert.doesNotMatch(nfl, /no NFL model/i);
++  assert.doesNotMatch(nfl, /NFL is data only/i);   // Daily Learning subtitle and the Game day notice
++});
++
++test('the Real-data note describes NFL forecasts when they are active, and says when they are not', () => {
++  // Order-sensitive: the active text is the true branch of `nflForecasts ?`, the inactive text its false branch.
++  assert.match(layout, /\{nflForecasts\s*\?\s*'Live forecasts are recorded within two hours of kickoff for regular-season and playoff games: [^']*'\s*:\s*'NFL live forecasts are not active for this data store[^']*'/,
++    'the NFL note must show the active text only when the forecasts capability is available');
++  assert.match(layout, /the winner from an NFL Elo model; spread, total and team totals from a points model/);
++  // nfl_live.record: a quote counts only if retrieved in [cutoff - 2 h, cutoff], cutoff = kickoff - 120 min.
++  assert.match(layout, /against a bookmaker line collected 2–4 hours before kickoff when there is one, otherwise a model line\. No injury or weather information\./);
++});
++
++test('NFL pages without content name what is missing and do not deny recorded forecasts', () => {
++  // Order-sensitive: the active subtitle is the true branch of `forecastsActive ?`.
++  assert.match(nfl, /sub=\{forecastsActive\s*\?\s*'Not available for the NFL\. NFL live forecasts and their record are on Game Day, Prediction History and Performance\.'\s*:\s*'Not available: NFL live forecasts are not active for this data store\.'\}/);
++  // "No recorded NFL forecasts to classify" is only true while forecasts are not active.
++  assert.match(nfl, /\{!forecastsActive && <NflThresholdRecord capabilities=\{meta\.capabilities\} \/>\}/);
++  assert.match(nfl, /NFL live forecasts are not active:<\/strong> schedule and results only/);
++});
++
++test('the new NFL wording makes no accuracy, edge or performance claim', () => {
++  const said = [...layout.matchAll(/nflForecasts\s*\?[\s\S]*?: sport === 'nhl'/g), ...nfl.matchAll(/sub=\{forecastsActive[^}]*\}/g)]
++    .map((m) => m[0]).join('\n');
++  assert.ok(said.length > 0, 'new wording not found');
++  assert.doesNotMatch(said, /accura|edge|profit|beat|reliable|proven|model performance/i);
++});
+diff --git a/frontend/src/components/tables.test.mjs b/frontend/src/components/tables.test.mjs
+new file mode 100644
+index 0000000..a0503f0
+--- /dev/null
++++ b/frontend/src/components/tables.test.mjs
+@@ -0,0 +1,55 @@
++// Layout guard for the history tables (run: npm run test:unit). Reads the .tsx sources as text, like competition.test.mjs
++// stays free of a DOM. A `.table.history` collapses to cards only at <= 580 px (styles.css); between that and the desktop
++// width its seven or eight columns are wider than the page, so each one must sit directly inside a `.table-wrap` scroll
++// container, or the whole page scrolls sideways (audit M14: page scrollWidth 694 / 710 at 600 px).
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { readdirSync, readFileSync } from 'node:fs';
++import { join, relative } from 'node:path';
++import { fileURLToPath } from 'node:url';
++
++const SRC = fileURLToPath(new URL('..', import.meta.url));
++
++function tsxFiles(dir) {
++  return readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
++    e.isDirectory() ? tsxFiles(join(dir, e.name)) : e.name.endsWith('.tsx') ? [join(dir, e.name)] : []);
++}
++
++/** Every <table> whose className names the `history` class, with what directly surrounds it. */
++function historyTables() {
++  const found = [];
++  for (const file of tsxFiles(SRC)) {
++    const text = readFileSync(file, 'utf8');
++    const open = /<table\b[^>]*className="([^"]*)"[^>]*>/g;
++    for (let m; (m = open.exec(text));) {
++      if (!m[1].split(/\s+/).includes('history')) continue;
++      const line = text.slice(0, m.index).split('\n').length;
++      const close = text.indexOf('</table>', m.index);
++      found.push({
++        where: `${relative(SRC, file)}:${line}`,
++        before: text.slice(0, m.index).trimEnd(),
++        after: close < 0 ? '' : text.slice(close + '</table>'.length).trimStart(),
++      });
++    }
++  }
++  return found;
++}
++
++test('the history tables are found (the guard is not vacuous)', () => {
++  // Canonical history, legacy history and market history (Canonical.tsx, HistoryPage.tsx, MarketView.tsx).
++  assert.ok(historyTables().length >= 3, `expected at least 3 history tables, found ${historyTables().length}`);
++});
++
++test('.table-wrap is a horizontal scroll container', () => {
++  const css = readFileSync(join(SRC, 'styles.css'), 'utf8');
++  const rule = css.match(/(?:^|\n)\.table-wrap\s*\{([^}]*)\}/);
++  assert.ok(rule, '.table-wrap rule not found in styles.css');
++  assert.match(rule[1], /overflow-x:\s*auto/);
++});
++
++test('every history table sits directly inside a .table-wrap scroll container', () => {
++  const bad = historyTables()
++    .filter((t) => !t.before.endsWith('<div className="table-wrap">') || !t.after.startsWith('</div>'))
++    .map((t) => t.where);
++  assert.deepEqual(bad, [], `history tables without a directly enclosing <div className="table-wrap">: ${bad.join(', ')}`);
++});
+diff --git a/frontend/src/pages/HistoryPage.tsx b/frontend/src/pages/HistoryPage.tsx
+index 147c60c..37eee5a 100644
+--- a/frontend/src/pages/HistoryPage.tsx
++++ b/frontend/src/pages/HistoryPage.tsx
+@@ -173,7 +173,7 @@ function scopeLabel(f: { date_from?: string; date_to?: string; team?: string }):
+ function HistoryTable({ rows }: { rows: PredictionRecord[] }) {
+   const carried = useCarriedSearch();   // keeps sport=nhl on the game link (the game is read from that sport's store)
+   return (
+-    <table className="table history">
++    <div className="table-wrap"><table className="table history">
+       <thead>
+         <tr><th>Date</th><th>Game</th><th>Pick</th><th>Model confidence</th><th>Result</th><th>Outcome of pick</th><th>Recorded / computed</th><th>Model</th></tr>
+       </thead>
+@@ -196,6 +196,6 @@ function HistoryTable({ rows }: { rows: PredictionRecord[] }) {
+           </tr>
+         ))}
+       </tbody>
+-    </table>
++    </table></div>
+   );
+ }
+diff --git a/frontend/src/pages/NflPages.tsx b/frontend/src/pages/NflPages.tsx
+index 0f6dc9d..f1d2799 100644
+--- a/frontend/src/pages/NflPages.tsx
++++ b/frontend/src/pages/NflPages.tsx
+@@ -103,7 +103,7 @@ function ForecastUnavailable({ capabilities }: { capabilities: NflCapability[] }
+   if (capabilities.some(c => c.id === "forecasts" && c.available)) return <p className="notice">NFL live predictions active. Winner recommendations use the frozen 75% threshold. Spread and total markets are informational; injuries and weather are not included.</p>;
+   return (
+     <details className="notice nfl-notice">
+-      <summary><strong>NFL is data only:</strong> schedule and results, with no forecasts, odds or injuries yet. <span className="link-btn">Why</span></summary>
++      <summary><strong>NFL live forecasts are not active:</strong> schedule and results only, with no forecasts, odds or injuries. <span className="link-btn">Why</span></summary>
+       <ul className="nfl-capabilities small">
+         {capabilities.map((c) => <li key={c.id}><strong>{c.label}:</strong> {c.available ? "active" : "not available"}. <span className="muted">{c.reason}</span></li>)}
+       </ul>
+@@ -278,21 +278,25 @@ const PAGES = {
+   research: { icon: 'learning', title: 'NFL Daily Learning', capability: 'research' },
+ } as const;
+ 
+-/** Performance, history and daily learning have nothing to show for a data-only league: say so, and show what is stored. */
++/** A page with nothing to show for the NFL (Daily Learning always; Performance and History while live forecasts are not
++ *  active): say so, and show what is stored. */
+ function NflUnavailable({ meta, page }: { meta: NflMeta; page: keyof typeof PAGES }) {
+   const carried = useCarriedSearch();
+   const p = PAGES[page];
+   const cap = meta.capabilities.find((c) => c.id === p.capability);
+   const first = meta.seasons[0];
+   const last = meta.seasons[meta.seasons.length - 1];
++  const forecastsActive = meta.capabilities.some((c) => c.id === 'forecasts' && c.available);
+   return (
+     <section>
+-      <PageTitle icon={p.icon} title={p.title} sub="Not available: the NFL is data only for now." />
++      <PageTitle icon={p.icon} title={p.title} sub={forecastsActive
++        ? 'Not available for the NFL. NFL live forecasts and their record are on Game Day, Prediction History and Performance.'
++        : 'Not available: NFL live forecasts are not active for this data store.'} />
+       <Empty>
+         <strong>{cap?.label ?? p.title}: not available.</strong> {cap?.reason}{' '}
+         <Link to={`/${carried}`}>See the NFL schedule and results</Link>.
+       </Empty>
+-      <NflThresholdRecord capabilities={meta.capabilities} />
++      {!forecastsActive && <NflThresholdRecord capabilities={meta.capabilities} />}
+       <div className="metrics today-metrics">
+         <MetricCard icon="calendar" label="Seasons stored" tone="lime" value={meta.seasons.length || '—'}
+           hint={first != null ? `${seasonLabel(first)} to ${seasonLabel(last)} (regular season and playoffs).` : 'No season stored yet.'} />

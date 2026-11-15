@@ -1,0 +1,268 @@
+
+Live-state audit, Nov 8 21:05–21:13 ET (02:05–02:13Z), read-only
+
+I changed nothing in the repo or settings, and I sent no Telegram messages. I worked from copies of the databases in the scratchpad.
+
+The live system changed while I was auditing. At 21:08 ET the delivery release moved from d700e3f to 3b74e51. At 21:09 ET the web app moved to the delivery release, with a new api-delivery launchd job on port 8101 and a new web process on 4173. HANDOFF.md says 3b74e51 was "NOT deployed", and it has no entry for the web switch (0 matches for api-delivery or 8101). My earlier probes of the old web app are superseded, and I note them below where they matter.
+
+Status table
+
+#: 1
+Area: Rev-4 hashes: tickets.py 2a053998, test_tickets.py 0993990a,
+  skill d7bd95bf, automation 1fc034d8, switch 01:46Z
+Status: Verified
+Evidence / severity: Matches HANDOFF. Skill and automation files are
+  dated Nov 8 20:46:39.
+────────────────────────────────────────
+#: 1
+Area: Release 3b74e51 live (tickets.py d8cbdbce, test ea4398f8)
+Status: Verified, but unrecorded
+Evidence / severity: Release HEAD at 21:08:18. The skill and
+  automation were not changed to go with it. HANDOFF still says "not
+  deployed". Medium.
+────────────────────────────────────────
+#: 1
+Area: Web app switch to the delivery release
+Status: Verified, but unrecorded
+Evidence / severity: com.nba-predictor.web and the new api-delivery
+  plist. Medium.
+────────────────────────────────────────
+#: 1
+Area: Three code versions run at once
+Status: Mismatch
+Evidence / severity: The old nba-predictor-live (a55c874) still serves
+  port 8100, the forecast jobs (odds, injuries, daily, NHL,
+  adaptive-train) and the old API. The delivery release serves
+  Telegram, soccer, tickets and the web app. The NFL tick job runs
+  from ~/.codex/worktrees/nfl-live-release, using the Desktop venv.
+  This is by design for the split proxy. The risk is that it is
+  undocumented. Low.
+────────────────────────────────────────
+#: 2
+Area: Soccer: 85 forecasts, version 1 only
+Status: Verified
+Evidence / severity: soccer_live_forecasts: caf.nations_qual 24,
+  concacaf.nations.league 16, fifa.friendly 19, uefa.nations 26. All
+  generated 00:39Z, all cutoffs at or before kickoff, none generated
+  after kickoff, no duplicate keys.
+────────────────────────────────────────
+#: 2
+Area: Soccer: club leagues
+Status: Unverified
+Evidence / severity: There are zero club forecasts. There are no club
+  matches Nov 11–17 (international break), so zero is plausible. The
+  15 club matches from Nov 6–8 predate the launch (first check 00:39Z)
+   and have no forecasts. Info.
+────────────────────────────────────────
+#: 2
+Area: Soccer: tickets
+Status: Verified
+Evidence / severity: eligible() requires kickoff within 2 hours of the
+  check. All 85 forecasts are recorded but none is eligible today.
+────────────────────────────────────────
+#: 2
+Area: Soccer: 90-minute rule
+Status: Verified in wording
+Evidence / severity: The API and page text say "90 minutes plus
+  stoppage; extra time and penalties don't count". I did not run a
+  grading test.
+────────────────────────────────────────
+#: 2
+Area: Soccer: missing competitions
+Status: Observed
+Evidence / severity: Stored matches are 0 for uefa.euroq, afc.cupq and
+  all fifa.worldq.*. None is refused. Hourly checks passed (ok=1)
+  across all 25 competitions.
+────────────────────────────────────────
+#: 2
+Area: Soccer page copy contradicts itself
+Status: Broken
+Evidence / severity: The page at /?sport=soccer shows "Soccer
+  predictions are not available… no forecasts", "No soccer forecast:
+  no validated model exists" and "Not refreshed automatically". The
+  Premier League view says no forecast yet, which is true, but the
+  banner is wrong while 85 forecasts exist. Medium.
+────────────────────────────────────────
+#: 2
+Area: /soccer path
+Status: Observed
+Evidence / severity: Returns "Page not found" (the route is
+  /?sport=soccer). Low.
+────────────────────────────────────────
+#: 3
+Area: Freshness
+Status: Verified
+Evidence / severity: All three sports fresh at 02:11Z. Last failures:
+  NBA/NHL Oct 27 (DNS), NFL Nov 2.
+────────────────────────────────────────
+#: 3
+Area: Migrations and records
+Status: Verified, limited
+Evidence / severity: Compared with
+  data/backups/stores-before-webapp-20261109 (taken Nov 8 20:50):
+  migrations unchanged (31/31/33/39) and no table shrank. I could not
+  compare against an earlier baseline.
+────────────────────────────────────────
+#: 3
+Area: Injury, lineup and odds coverage
+Status: Partial
+Evidence / severity: Quotes cover all games Nov 8–9 (NBA 7/7, NHL 6/6,
+  NFL 13/13). NBA injury reports are stored on every slot since Nov 8
+  (53), with no failures in the last 96. NHL goalie snapshots cover
+  6/6. NHL  and NFL injury_report_attempts are empty. NBA lineups and
+  NFL injuries are unverified.
+────────────────────────────────────────
+#: 4
+Area: Ticket selection
+Status: Partly verified
+Evidence / severity: Review 11 and the batch 7 plan account for every
+  eligible forecast (10/10 and 31/31). MIN_LEGS 2, MAX_LEGS 6 and
+  MAX_TICKETS 6 are the only size limits in the code. I found no stake
+   or budget logic in the selection path, and no market exclusion in
+  the code.
+────────────────────────────────────────
+#: 4
+Area: Boilerplate in per-forecast reasons
+Status: Broken (evidence quality)
+Evidence / severity: Batch 7's forecasts_reviewed entries for
+  nba:1187–1190 repeat an NFL sentence ("NFL unchanged CHI71…").
+  Reasons are partly pasted text, not specific to the forecast.
+  Medium.
+────────────────────────────────────────
+#: 4
+Area: Lock on the original forecast
+Status: Observed
+Evidence / severity: A later canonical forecast for a game already in
+  a sent ticket is blocked ("original 1204 immutable"). Review 11
+  produced no ticket for that reason. This is a real selection
+  restriction, and the owner should decide on it.
+────────────────────────────────────────
+#: 4
+Area: Missed games
+Status: Broken
+Evidence / severity: missed_before_start: CIN @ ATL (14:30Z) and HOU @
+  LAC (21:05Z), 5 forecasts each, never reviewed before they started.
+  I could not establish the cause.
+────────────────────────────────────────
+#: 4
+Area: Plan refusals
+Status: Confirmed
+Evidence / severity: Reviews 9 and 10 refused the plan (a list-valued
+  note, and a missing market note). The fix 3b74e51 is now live. A
+  real post-rev4 ticket with payout lines has not been seen.
+────────────────────────────────────────
+#: 5
+Area: Receipts, batches 2–7
+Status: Verified
+Evidence / severity: Each ticket has a text receipt and an image
+  receipt (e.g. 258/259, 270/271, 286/287). Batch 1 (16:17Z) has no
+  image, which predates the image feature. These are API acceptance,
+  not proof the user saw them.
+────────────────────────────────────────
+#: 5
+Area: Interrupted review 8
+Status: Verified
+Evidence / severity: Snapshot 00:46Z was never checked or sent. It was
+  recorded as an operational failure with retryable: true, and a later
+   review ran at 01:57Z.
+────────────────────────────────────────
+#: 5
+Area: Uncertain deliveries
+Status: Broken, unresolved
+Evidence / severity: There are 8 uncertain rows, all "PROP51 PICKS"
+  game cards (Nov 3–8, latest TBL @ WPG at 21:15Z). They are
+  unreviewed and never retried, as designed. They are game cards, not
+  tickets. Medium.
+────────────────────────────────────────
+#: 5
+Area: Stale legacy budget reservations
+Status: Low
+Evidence / severity: ticket_budget_reservations still holds 2 rows
+  (Nov 7). legacy.update in tickets.py:858 still reads them.
+────────────────────────────────────────
+#: 6
+Area: Grading
+Status: Verified for settled legs
+Evidence / severity: Ticket f02719e1 graded a loss (PHI win, BUF +1.5
+  lost 1–4). Ticket cd2a6a716c85 graded a loss at 01:41Z when DET
+  lost, with WPG still pending, and the loss receipt was sent at
+  01:43Z. KC+DET and KC+DEN graded wins. Grades are append-only (20
+  rows, 11 tickets). I saw no push or void case.
+────────────────────────────────────────
+#: 6
+Area: Pending tickets
+Status: Unverified
+Evidence / severity: NHL 2026020280 is now final (4–3, 02:00Z) but the
+  ticket's last grade is older. NHL 279, 281, 282, NFL 50 and NBA
+  47–49 are in progress. The settlement job should catch up at its
+  next run.
+────────────────────────────────────────
+#: 6
+Area: Personal slips
+Status: Verified
+Evidence / severity: personal_tickets has 0 rows, so nothing is mixed
+  in.
+────────────────────────────────────────
+#: 7
+Area: Tests
+Status: Partial
+Evidence / severity: A clean export of 3b74e51 (the scratchpad rel/,
+  not the live checkout) passed test_tickets, test_soccer_live,
+  test_telegram and test_delivery_release: 149 passed. The full suite
+  (excluding test_deep_study.py) had not finished when I stopped; its
+  log is in the scratchpad (full-tests.log).
+────────────────────────────────────────
+#: 7
+Area: UI
+Status: Partial
+Evidence / severity: Desktop (1440 wide) loads, shows "Real data", and
+  has an NBA/NHL/NFL/Soccer switch. The browser window did not resize,
+   so phone width was not  tested. I confirmed API routes through port
+   4173 return 200.
+
+Handoff for Fable 5.1 (confirmed issues only, no fixes applied)
+
+1. Record the Nov 8 21:08–21:09 deployments in HANDOFF.md (medium).
+   - Reproduce: git -C ~/nba-predictor-delivery log -1 shows 3b74e51, while HANDOFF says "NOT deployed".
+   - Fix: write the activation entry with hashes, the launchd labels (api-delivery, web) and the first-run result.
+   - Acceptance: the entry matches the output of shasum, git log and launchctl list.
+2. Soccer page says no forecasts exist (medium).
+   - Reproduce: open /?sport=soccer after the first live forecasts. It shows the "not available" banner, "no validated model exists" and "Not refreshed automatically", while /api/soccer/live and the database have forecasts.
+   - Fix: make the banner and per-match copy follow soccer_live_forecasts and the hourly refresh. Files: frontend/src/pages/SoccerPages.tsx, plus the competition.ts helper.
+   - Acceptance: tests for a forecasted match, an unforecasted match, and "Last imported" wording.
+3. Boilerplate reasons in ticket reviews (medium).
+   - Reproduce: batch 7's forecasts_reviewed for nba:1187–1190 repeats the NFL CHI71 sentence.
+   - Fix: reject identical reason text across unrelated forecasts in check() (tickets.py, test_tickets.py).
+   - Acceptance: a failing-first test with a repeated reason returns a retryable refusal.
+4. Missed pre-start reviews (unresolved cause).
+   - Reproduce: release_tickets.sh status lists CIN @ ATL and HOU @ LAC under missed_before_start.
+   - Fix: first find out why no review ran for them (the heartbeat cadence, the 2-hour window, or the order of snapshots), using the Codex run logs. Do not change code before the cause is known.
+   - Acceptance: a documented cause, then a test that a game with eligible forecasts cannot start unreviewed unless a blocker is recorded.
+5. Eight uncertain PROP51 deliveries (medium).
+   - Reproduce: deliveries rows with status='uncertain' in the Telegram ledger.
+   - Fix: the owner or reviewer checks Telegram for each, then records it as sent or failed. Never auto-retry.
+   - Acceptance: zero uncertain rows, each resolution logged.
+6. Legacy budget reservation read (low).
+   - Fix: confirm whether tickets.py:858 still needs ticket_budget_reservations. Remove it only if the owner agrees.
+   - Acceptance: the existing lock behaviour is unchanged in tests.
+
+Owner decisions, not bugs.
+- The rule that a game's original forecast stays locked after a ticket is sent is blocking some later combinations.
+- Rev 4's payout and break-even lines have not yet appeared in a real Telegram ticket.
+- NHL and NFL injury-report coverage and club soccer forecasts have not yet been observed in a live match week.
+- Re-run the phone-width check in a real narrow viewport.
+
+I did not save a handoff file; the section above is the handoff.
+
+✻ Brewed for 5m 50s · done 9:12 PM
+
+※ recap: I audited what's live after today's changes, read-only, and the findings plus a handoff for Fable 5.1 are in my last message. Next, someone should record the 21:08 release and web-app deployments in HANDOFF.md, since it still says they weren't deployed. (disable recaps in /config)
+
+───────────────────────────────────────────────────────────────────────
+❯
+───────────────────────────────────────────────────────────────────────
+  branch:nfl-dev | !31 ?14
+  [OMC#4.15.7L] | Model: Sonnet 5.5
+  5h:[##------]24%(2h47m) wk:[##------]19%(6d2h) | thinking | sessio…
+  ctx:[#---------]14% | 🔧67
+  ⏵⏵ auto mode on (shift+t

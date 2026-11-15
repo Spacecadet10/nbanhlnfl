@@ -1,0 +1,486 @@
+{
+  "source": "ESPN team branding metadata (color and alternateColor fields)",
+  "sources": {
+    "NBA": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams?limit=1000",
+    "NHL": "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/teams?limit=1000",
+    "NFL": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams?limit=1000"
+  },
+  "teams": {
+    "NBA": {
+      "ATL": {
+        "name": "Atlanta Hawks",
+        "primary": "#C8102E",
+        "secondary": "#FDB927"
+      },
+      "BOS": {
+        "name": "Boston Celtics",
+        "primary": "#008348",
+        "secondary": "#FFFFFF"
+      },
+      "BKN": {
+        "name": "Brooklyn Nets",
+        "primary": "#000000",
+        "secondary": "#FFFFFF"
+      },
+      "CHA": {
+        "name": "Charlotte Hornets",
+        "primary": "#008CA8",
+        "secondary": "#1D1060"
+      },
+      "CHI": {
+        "name": "Chicago Bulls",
+        "primary": "#CE1141",
+        "secondary": "#000000"
+      },
+      "CLE": {
+        "name": "Cleveland Cavaliers",
+        "primary": "#860038",
+        "secondary": "#BC945C"
+      },
+      "DAL": {
+        "name": "Dallas Mavericks",
+        "primary": "#0064B1",
+        "secondary": "#BBC4CA"
+      },
+      "DEN": {
+        "name": "Denver Nuggets",
+        "primary": "#0E2240",
+        "secondary": "#FEC524"
+      },
+      "DET": {
+        "name": "Detroit Pistons",
+        "primary": "#1D428A",
+        "secondary": "#C8102E"
+      },
+      "GS": {
+        "name": "Golden State Warriors",
+        "primary": "#FDB927",
+        "secondary": "#1D428A"
+      },
+      "HOU": {
+        "name": "Houston Rockets",
+        "primary": "#CE0E2D",
+        "secondary": "#000000"
+      },
+      "IND": {
+        "name": "Indiana Pacers",
+        "primary": "#0C2340",
+        "secondary": "#FFD520"
+      },
+      "LAC": {
+        "name": "LA Clippers",
+        "primary": "#12173F",
+        "secondary": "#C8102E"
+      },
+      "LAL": {
+        "name": "Los Angeles Lakers",
+        "primary": "#552583",
+        "secondary": "#FDB927"
+      },
+      "MEM": {
+        "name": "Memphis Grizzlies",
+        "primary": "#5D76A9",
+        "secondary": "#12173F"
+      },
+      "MIA": {
+        "name": "Miami Heat",
+        "primary": "#98002E",
+        "secondary": "#000000"
+      },
+      "MIL": {
+        "name": "Milwaukee Bucks",
+        "primary": "#00471B",
+        "secondary": "#EEE1C6"
+      },
+      "MIN": {
+        "name": "Minnesota Timberwolves",
+        "primary": "#266092",
+        "secondary": "#79BC43"
+      },
+      "NO": {
+        "name": "New Orleans Pelicans",
+        "primary": "#0A2240",
+        "secondary": "#B4975A"
+      },
+      "NY": {
+        "name": "New York Knicks",
+        "primary": "#1D428A",
+        "secondary": "#F58426"
+      },
+      "OKC": {
+        "name": "Oklahoma City Thunder",
+        "primary": "#007AC1",
+        "secondary": "#EF3B24"
+      },
+      "ORL": {
+        "name": "Orlando Magic",
+        "primary": "#0150B5",
+        "secondary": "#9CA0A3"
+      },
+      "PHI": {
+        "name": "Philadelphia 76ers",
+        "primary": "#1D428A",
+        "secondary": "#E01234"
+      },
+      "PHX": {
+        "name": "Phoenix Suns",
+        "primary": "#29127A",
+        "secondary": "#E56020"
+      },
+      "POR": {
+        "name": "Portland Trail Blazers",
+        "primary": "#E03A3E",
+        "secondary": "#000000"
+      },
+      "SAC": {
+        "name": "Sacramento Kings",
+        "primary": "#5A2D81",
+        "secondary": "#6A7A82"
+      },
+      "SA": {
+        "name": "San Antonio Spurs",
+        "primary": "#000000",
+        "secondary": "#C4CED4"
+      },
+      "TOR": {
+        "name": "Toronto Raptors",
+        "primary": "#D91244",
+        "secondary": "#000000"
+      },
+      "UTAH": {
+        "name": "Utah Jazz",
+        "primary": "#4E008E",
+        "secondary": "#79A3DC"
+      },
+      "WSH": {
+        "name": "Washington Wizards",
+        "primary": "#E31837",
+        "secondary": "#002B5C"
+      }
+    },
+    "NHL": {
+      "ANA": {
+        "name": "Anaheim Ducks",
+        "primary": "#FC4C02",
+        "secondary": "#000000"
+      },
+      "BOS": {
+        "name": "Boston Bruins",
+        "primary": "#231F20",
+        "secondary": "#FDB71A"
+      },
+      "BUF": {
+        "name": "Buffalo Sabres",
+        "primary": "#00468B",
+        "secondary": "#FDB71A"
+      },
+      "CGY": {
+        "name": "Calgary Flames",
+        "primary": "#DD1A32",
+        "secondary": "#000000"
+      },
+      "CAR": {
+        "name": "Carolina Hurricanes",
+        "primary": "#E30426",
+        "secondary": "#000000"
+      },
+      "CHI": {
+        "name": "Chicago Blackhawks",
+        "primary": "#E31937",
+        "secondary": "#000000"
+      },
+      "COL": {
+        "name": "Colorado Avalanche",
+        "primary": "#860038",
+        "secondary": "#005EA3"
+      },
+      "CBJ": {
+        "name": "Columbus Blue Jackets",
+        "primary": "#002D62",
+        "secondary": "#E31937"
+      },
+      "DAL": {
+        "name": "Dallas Stars",
+        "primary": "#20864C",
+        "secondary": "#000000"
+      },
+      "DET": {
+        "name": "Detroit Red Wings",
+        "primary": "#E30526",
+        "secondary": "#FFFFFF"
+      },
+      "EDM": {
+        "name": "Edmonton Oilers",
+        "primary": "#00205B",
+        "secondary": "#FF4C00"
+      },
+      "FLA": {
+        "name": "Florida Panthers",
+        "primary": "#E51937",
+        "secondary": "#002D62"
+      },
+      "LA": {
+        "name": "Los Angeles Kings",
+        "primary": "#121212",
+        "secondary": "#A2AAAD"
+      },
+      "MIN": {
+        "name": "Minnesota Wild",
+        "primary": "#124734",
+        "secondary": "#AE122A"
+      },
+      "MTL": {
+        "name": "Montreal Canadiens",
+        "primary": "#C41230",
+        "secondary": "#013A81"
+      },
+      "NSH": {
+        "name": "Nashville Predators",
+        "primary": "#FDBA31",
+        "secondary": "#002D62"
+      },
+      "NJ": {
+        "name": "New Jersey Devils",
+        "primary": "#E30B2B",
+        "secondary": "#000000"
+      },
+      "NYI": {
+        "name": "New York Islanders",
+        "primary": "#00529B",
+        "secondary": "#F47D31"
+      },
+      "NYR": {
+        "name": "New York Rangers",
+        "primary": "#0056AE",
+        "secondary": "#E51937"
+      },
+      "OTT": {
+        "name": "Ottawa Senators",
+        "primary": "#DD1A32",
+        "secondary": "#B79257"
+      },
+      "PHI": {
+        "name": "Philadelphia Flyers",
+        "primary": "#FE5823",
+        "secondary": "#000000"
+      },
+      "PIT": {
+        "name": "Pittsburgh Penguins",
+        "primary": "#000000",
+        "secondary": "#FDB71A"
+      },
+      "SJ": {
+        "name": "San Jose Sharks",
+        "primary": "#00788A",
+        "secondary": "#070707"
+      },
+      "SEA": {
+        "name": "Seattle Kraken",
+        "primary": "#000D33",
+        "secondary": "#A3DCE4"
+      },
+      "STL": {
+        "name": "St. Louis Blues",
+        "primary": "#0070B9",
+        "secondary": "#FDB71A"
+      },
+      "TB": {
+        "name": "Tampa Bay Lightning",
+        "primary": "#003E7E",
+        "secondary": "#FFFFFF"
+      },
+      "TOR": {
+        "name": "Toronto Maple Leafs",
+        "primary": "#003E7E",
+        "secondary": "#FFFFFF"
+      },
+      "UTAH": {
+        "name": "Utah Mammoth",
+        "primary": "#000000",
+        "secondary": "#7AB2E1"
+      },
+      "VAN": {
+        "name": "Vancouver Canucks",
+        "primary": "#003E7E",
+        "secondary": "#008752"
+      },
+      "VGK": {
+        "name": "Vegas Golden Knights",
+        "primary": "#344043",
+        "secondary": "#B4975A"
+      },
+      "WSH": {
+        "name": "Washington Capitals",
+        "primary": "#D71830",
+        "secondary": "#0B1F41"
+      },
+      "WPG": {
+        "name": "Winnipeg Jets",
+        "primary": "#002D62",
+        "secondary": "#C41230"
+      }
+    },
+    "NFL": {
+      "ARI": {
+        "name": "Arizona Cardinals",
+        "primary": "#A40227",
+        "secondary": "#FFFFFF"
+      },
+      "ATL": {
+        "name": "Atlanta Falcons",
+        "primary": "#A71930",
+        "secondary": "#000000"
+      },
+      "BAL": {
+        "name": "Baltimore Ravens",
+        "primary": "#29126F",
+        "secondary": "#000000"
+      },
+      "BUF": {
+        "name": "Buffalo Bills",
+        "primary": "#00338D",
+        "secondary": "#D50A0A"
+      },
+      "CAR": {
+        "name": "Carolina Panthers",
+        "primary": "#0085CA",
+        "secondary": "#000000"
+      },
+      "CHI": {
+        "name": "Chicago Bears",
+        "primary": "#0B1C3A",
+        "secondary": "#E64100"
+      },
+      "CIN": {
+        "name": "Cincinnati Bengals",
+        "primary": "#FB4F14",
+        "secondary": "#000000"
+      },
+      "CLE": {
+        "name": "Cleveland Browns",
+        "primary": "#472A08",
+        "secondary": "#FF3C00"
+      },
+      "DAL": {
+        "name": "Dallas Cowboys",
+        "primary": "#002A5C",
+        "secondary": "#B0B7BC"
+      },
+      "DEN": {
+        "name": "Denver Broncos",
+        "primary": "#0A2343",
+        "secondary": "#FC4C02"
+      },
+      "DET": {
+        "name": "Detroit Lions",
+        "primary": "#0076B6",
+        "secondary": "#BBBBBB"
+      },
+      "GB": {
+        "name": "Green Bay Packers",
+        "primary": "#204E32",
+        "secondary": "#FFB612"
+      },
+      "HOU": {
+        "name": "Houston Texans",
+        "primary": "#021018",
+        "secondary": "#EB0028"
+      },
+      "IND": {
+        "name": "Indianapolis Colts",
+        "primary": "#003B75",
+        "secondary": "#FFFFFF"
+      },
+      "JAX": {
+        "name": "Jacksonville Jaguars",
+        "primary": "#007487",
+        "secondary": "#D7A22A"
+      },
+      "KC": {
+        "name": "Kansas City Chiefs",
+        "primary": "#E31837",
+        "secondary": "#FFB612"
+      },
+      "LV": {
+        "name": "Las Vegas Raiders",
+        "primary": "#000000",
+        "secondary": "#A5ACAF"
+      },
+      "LAC": {
+        "name": "Los Angeles Chargers",
+        "primary": "#0080C6",
+        "secondary": "#FFC20E"
+      },
+      "LAR": {
+        "name": "Los Angeles Rams",
+        "primary": "#003594",
+        "secondary": "#FFD100"
+      },
+      "MIA": {
+        "name": "Miami Dolphins",
+        "primary": "#008E97",
+        "secondary": "#FC4C02"
+      },
+      "MIN": {
+        "name": "Minnesota Vikings",
+        "primary": "#4F2683",
+        "secondary": "#FFC62F"
+      },
+      "NE": {
+        "name": "New England Patriots",
+        "primary": "#002A5C",
+        "secondary": "#C60C30"
+      },
+      "NO": {
+        "name": "New Orleans Saints",
+        "primary": "#D3BC8D",
+        "secondary": "#000000"
+      },
+      "NYG": {
+        "name": "New York Giants",
+        "primary": "#003C7F",
+        "secondary": "#C9243F"
+      },
+      "NYJ": {
+        "name": "New York Jets",
+        "primary": "#115740",
+        "secondary": "#FFFFFF"
+      },
+      "PHI": {
+        "name": "Philadelphia Eagles",
+        "primary": "#06424D",
+        "secondary": "#000000"
+      },
+      "PIT": {
+        "name": "Pittsburgh Steelers",
+        "primary": "#000000",
+        "secondary": "#FFB612"
+      },
+      "SF": {
+        "name": "San Francisco 49ers",
+        "primary": "#AA0000",
+        "secondary": "#B3995D"
+      },
+      "SEA": {
+        "name": "Seattle Seahawks",
+        "primary": "#002A5C",
+        "secondary": "#69BE28"
+      },
+      "TB": {
+        "name": "Tampa Bay Buccaneers",
+        "primary": "#BD1C36",
+        "secondary": "#3E3A35"
+      },
+      "TEN": {
+        "name": "Tennessee Titans",
+        "primary": "#4495D2",
+        "secondary": "#001532"
+      },
+      "WSH": {
+        "name": "Washington Commanders",
+        "primary": "#5A1414",
+        "secondary": "#FFB612"
+      }
+    }
+  }
+}

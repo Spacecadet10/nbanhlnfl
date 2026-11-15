@@ -1,0 +1,18 @@
+cwd: /Users/andry/Desktop/nba-predictor-batch1/frontend
+cmd: npm run test:unit
+# Subtest: every history table sits directly inside a .table-wrap scroll container
+ok 10 - every history table sits directly inside a .table-wrap scroll container
+  ---
+  duration_ms: 1.578708
+  type: 'test'
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 74.845375
+exit=0

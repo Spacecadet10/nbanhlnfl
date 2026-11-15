@@ -1,0 +1,9 @@
+# Second follow-up tree (acd984a + delta-review fixes), 2026-11-09T19:59:58Z. Isolated temp data per test, Telegram mocked.
+# 1. the 7 delta-review tests + the snapshot-failure test
+8 passed, 148 deselected in 0.85s
+# 2. python -m pytest tests/test_tickets.py -q -p no:cacheprovider
+156 passed in 9.20s
+# 3. nine focused files
+326 passed, 1 warning in 21.42s
+# 4. python3 scripts/check_project.py
+Structure guard passed. This does not prove semantic uniqueness or app correctness.

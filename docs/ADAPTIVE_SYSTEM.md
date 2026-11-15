@@ -1,0 +1,430 @@
+# Adaptive prediction system `adaptive-v1` (NBA and NHL)
+
+Design written before implementation (2026-10-05). Results and limitations are appended at the end once the replay has
+run. The adaptive system is a separately versioned research layer: it never changes a primary forecast, a research
+cohort, a candidate forecast, a selector decision or any existing identity.
+
+## 1. What it extends
+
+| Need | Existing code reused (not edited: every file below is hashed into a live identity) | New code |
+|---|---|---|
+| Point-in-time walk of a learned member with within-season refits | `retrain_cadence.Cadenced` (weekly cadence; `member._refit(season+1)` trains on every delivered result), `backtest.run(..., deliver_until=now)` | `adaptive.Adaptive(Cadenced)`: weekly period by `retrain_cadence.period_key`, refit only when new eligible results were delivered since the member's last fit (the `cadence_daily.Daily` rule), `frozen` flag so the forecast path never refits |
+| Registry candidates incl. the neural networks (`mlp`, `torch_mlp`, `keras_mlp`) | `candidates.features.walk` (shared feature walk), `candidates.engine.fit/outputs/vector/ready`, `candidates.deep.fit`, `registry.SPECS`, `registry.MIN_TRAIN` | `adaptive.scheduled_walk`: weekly refit on every labelled row whose result was available at the fit cutoff (all seasons, current one included); residual spread from the candidate's own out-of-sample residuals so far |
+| Combination weights | `combine.fit_stack` / `combine.stack` (log-linear pool, unconstrained weights), `combination_research.STACK_MIN_TRAIN`, `research_live.STACK_SEASONS` | `adaptive.fit_combiner`: training rows = out-of-sample predictions of the last two completed seasons plus the current season to date; settled prospective `adaptive_forecasts` rows replace the reconstruction of the same game; greedy member admission by common out-of-sample coverage; L2 chosen on the newest quarter of the training rows (time ordered) from a registered grid; leave-one-out fallback stacks for one missing member, plus one stack without all the members that share the player-cache guards (`stale_inputs`), since they abstain together |
+| Lines, quotes, settlement | `market_live` primary two-hour forecast (exact line, line source, quote id), `research_live._winner_quote`, `markets.settle`, `markets.model_line` | — |
+| Pick / abstain | `selector.decide` / `selector.apply` with the unchanged thresholds, MIN_PICKS, coverage and week gates | decisions computed at combiner fit time from settled prospective adaptive forecasts only; the source is `adaptive` |
+| Artifacts | `candidates.live._write` (data then digest, atomic renames), `_load_verified`, `_locked`, `_results_fingerprint`; `fit_register.record` (`model_fits`) | `adaptive_fits` run log, `adaptive_forecasts` ledger (migration 0024) |
+| Jobs | `jobs.daily` (nightly, off the forecast path) and `jobs.predict_now` (two-hour cycle, after the pool steps) | `jobs.adaptive_train`, `jobs.adaptive_record` (never raise into the cycle) |
+| Replay / comparison | `candidates.study.existing_tables` (existing members at identical lines), `combination_research._stack_walk` (existing season-start stacker), `_summary` (calibration), `backtest.block_bootstrap` | `adaptive_replay.run` |
+
+## 2. Members evaluated as contributors (per sport)
+
+- Online (state replayed, no stored fit): NBA `elo`, `points_normal`, `efficiency_margin`; NHL `hockey_elo`, `goals_poisson`.
+- Learned core members, each wrapped as `<name>@adaptive`: NBA `logistic`, `logistic_v2`, `gbt_v1`, `ridge_points`, `gbt_points`;
+  NHL `hockey_logistic`, `hockey_gbt`, `hockey_logistic_xg`, `goals_draw`, `goals_glm`.
+- Registry candidates as `cand:<spec>@adaptive`: every `registry.SPECS` entry of the sport, including the scikit-learn
+  `mlp`, `torch_mlp` and `keras_mlp` networks.
+- NBA only: `players_injuries_v1@adaptive` (`player_ratings.PlayersInjuriesV1`, docs/PLAYER_RATINGS_STUDY.md §11), winner
+  market: `logistic_v2` + the injury-report features + the expected-roster player-rating difference after reported absences.
+  Its inputs are the availability research cache of the data directory (`research/availability/player_box/*.csv`,
+  `reports/`), read on the first forecast or delivered result and shared per process — never by `members()` or an API
+  read. Each game uses only the latest report published before its row cutoff (tipoff minus two hours, matching the live two-hour forecast cycle: in practice the
+  same-day 5:30 PM report when the game tips off later, otherwise the prior evening's) and only rosters and
+  ratings from results delivered before that cutoff; both teams must be positively listed on that report, else the
+  declared `report_missing` state. The member artifact holds the ratings and the delivered-game index (results whose
+  game has no box rows are counted, not indexed); rosters are rebuilt from the box after a thaw. What the member read
+  (box seasons and digest, report count, facts coverage, name matching) is recorded in its fit detail (`inputs`). Two
+  forecast-path guards make it `missing` with the reason: the serving process's resolved player box must match the
+  digest/seasons recorded in the fit (else "inputs changed since the fit … retrain"), and a team's recent finals of the
+  season must have player-box rows (else "stale inputs … without player box rows"), mirroring the possession-box
+  staleness check. NHL has no historical injury reports or player box in the cache: no such NHL member.
+- Recorded exclusions: `availability_two_hour` (forward-only injury inputs, no out-of-sample history), the season-start
+  version and the existing `@weekly` shadow of a member that has an adaptive version (same model), `ngboost` where the
+  dependency is missing, deep networks where neither library nor artifact is available, `nhl_goalie` feature sets
+  (historical rows use the actual starter, known only after the start), `players_injuries_v1` where the data directory
+  has no player box cache.
+- Markets: a member contributes to every market its output supports at the exact line of the primary forecast.
+  A member that cannot predict a game/market is `missing` with a reason; the combination then uses the registered
+  leave-one-out fallback (or, when exactly the members guarded by the shared player cache are missing together, the
+  stack trained without that group) or abstains. Probabilities are never substituted.
+
+## 3. Schedules (registered constants, `adaptive.SCHEDULE`)
+
+- Period: ISO week of the game's Eastern date (`retrain_cadence.period_key("weekly", ...)`).
+- Member refit: at the first forecast of a new period, only if eligible results were delivered since that member's last
+  fit, and only with at least the member's minimum training size. Deep networks additionally wait until the current
+  season has delivered `MIN_DEEP_VALIDATION = 100` results (their epoch count is chosen on the latest season in the
+  training set). The season-start refit of each member is unchanged.
+- Combiner refit: same period rule, trained on rows whose outcome was available at the cutoff.
+- Live trigger: `jobs.daily` runs `adaptive.train` when the next eligible scheduled game's period differs from the
+  period of the combiner fit in force (or none exists) and new eligible results exist; otherwise it is skipped with the
+  reason. The two-hour cycle (`adaptive.record`) only loads artifacts, delivers results that arrived after each
+  artifact's cutoff to the frozen state, and predicts. No fit happens in the forecast path.
+
+## 4. Identities and artifacts
+
+- `adaptive.definition(conn)`: `adaptive-v1` + research definition + agreement digest + every candidate definition +
+  this module's code (+ `player_ratings.py` for NBA, the player-rating/injury member's code). Model versions:
+  `adaptive-v1:<member>:<definition>`; combiner: `adaptive-v1:combiner:<definition>`.
+- `data/research/adaptive/<sport>/members/<name>/<definition>-<period>-<fingerprint>.pkl` (+ `.sha256`),
+  `.../history-<definition>.pkl` (out-of-sample history store, checkpointed per member),
+  `.../combiner/<definition>-<period>-<fingerprint>.pkl`. A file is loaded only after its digest matches.
+- `model_fits` gets one row per adaptive member fit (`adaptive:<name>`, schedule `weekly`), so the existing training
+  monitor lists them. `adaptive_fits` logs every attempt (success / failed / skipped) with the error; the forecast path
+  loads the latest successful artifact, so a failed refit leaves the previous valid one in force and visible.
+
+## 5. How adaptive forecasts reach the application
+
+- `adaptive_forecasts` row per game, market and line: adaptive probability vector (or `unavailable` with the reason),
+  contributing members with their probabilities and fit ids, missing members with reasons, weights, combiner fit id,
+  training cutoff, weight-update time, bookmaker quote at the same line or `odds_status` "unavailable", selection
+  (pick / no pick with the selector's reason).
+- API: `GET /api/research/adaptive` (status, fits in force, weights, exclusions, schedule, prospective record, replay
+  summary) and `GET /api/research/adaptive/game/{game_id}`. UI: an "Adaptive combination (adaptive-v1)" card on the
+  Game page and an adaptive section in the Performance page's training card, both labelled research and distinct from
+  the primary forecast.
+
+## 6. Validation plan
+
+`adaptive-replay --sport nba|nhl`: NBA warm-up + validation seasons (2020–2024, evaluated 2022–2024); NHL warm-up +
+development seasons (2016–2021, evaluated 2018–2021). Reserved test seasons are never loaded (`backtest.LOADABLE`,
+`nhl_eval.LOADABLE`). The full schedule is replayed chronologically; the existing system (primary, core average, core
+season-start stacker) is scored on identical games and lines. Reported per market: n, coverage, log loss, Brier,
+calibration, accuracy, paired differences with ISO-week block bootstrap. Leakage assertions: no training row's
+outcome is available after the fit cutoff; no fit's results reach the cutoff of a game it predicts.
+
+## 7. Operation (implemented 2026-10-05)
+
+- Tables: migration `0024_adaptive.sql` (`adaptive_fits`, `adaptive_forecasts`; append-only, two-hour and current-start
+  guards). The pinned release refuses a store migrated past the schema it ships, so the live stores are migrated only by
+  the release move that carries this code, never before.
+- Commands (`backend/`): `.venv/bin/python -m app.cli [--sport nhl] adaptive-train [--dry-run|--force]`,
+  `adaptive-record [--dry-run]`, `adaptive-status`, `adaptive-replay [--out DIR] [--skip-deep]`. `daily` only reports the
+  due state; `predict-now` runs `adaptive-record` after the pool steps. Off switch: `RESEARCH_SELECTION=0`.
+- Locking (`adaptive.run_scheduled`): the per-sport training lock (`data/research/adaptive/<sport>/train.lock`) is
+  taken first and held through the whole run — snapshot, training, publication, cleanup — so two trainers can never share
+  or delete each other's snapshot or republish each other's records; the store's job lock is held only briefly inside it,
+  twice — for the due check plus a consistent SQLite online-backup snapshot, and for verifying and publishing the fit
+  records — so the two-hour odds/forecast cycles are never blocked by a refit. The training cutoff (`now`) is taken under
+  that first lock, before the snapshot, so a result committed by a later job is after the cutoff and delivered at serving.
+  Walk artifacts record `delivered_digest` (the results, and `events_digest` the box/shot observations, available at
+  the cutoff); when the store's view of either differs at serving (a corrected score, a late result or backfill dated
+  before the cutoff), the member is `missing` with the reason until the next fit. Only learned members make the
+  training-time forecast of the next game (their period's refit, `_training_forecast`); online members are frozen as
+  walked and start a new season in walk order at serving, exactly as a fresh walk. A learned member whose fit already
+  started a later season is `missing` when a result of an earlier season arrives after its cutoff (`_season_changed`;
+  the fit records the season as `consumed.season`, so the run is due). An online member's frozen state has its own
+  cutoff (`adaptive.frozen_at`): the latest time at or before the training cutoff at which no game was in flight (its
+  forecast cutoff passed, its result not yet available; scheduled and in-progress games from the store, postponed and
+  canceled ones excluded), recorded as `consumed.cutoff` and `frozen_at` in the run output. Frozen later, a game in
+  flight would be forecast at serving with a state already holding results and box scores of after its cutoff (a fresh
+  walk forecasts it before them), and the forecast is part of the state (efficiency_margin's residuals, the next season's
+  sigma). Results and box/shot data after that cutoff are replayed at serving, so a late result of a game in flight at
+  training no longer makes online members missing. A game still scheduled or in progress more than
+  `ingest.OBSERVED_WINDOW` (24 h) after its start is stuck, not in flight (`_in_flight`): it would hold the state back
+  for as long as it stays so. If it later turns final with an assumed availability before the fit, every walk member
+  is missing until the next fit (`_results_changed`); with a later one, serving replays it at its cutoff, which is exact
+  except for members whose forecast is part of their state (`adaptive.FORECAST_IN_STATE`: efficiency_margin, pinned by
+  a test against every online member) or when its forecast starts a season ahead of an earlier season's result
+  delivered in between: those are missing until the next fit (`_landed_in_flight`). At serving (`_advance`) a box/shot list of a game whose result the state
+  already holds joins the delivery queue by its effective time (`adaptive._Delivered`; `backtest.run` unchanged), after the
+  results and before the forecasts of its time, as a walk over every row delivers it (it was delivered ahead of every newer
+  forecast until 2026-10-16). Training writes no ledger row; `publish` re-verifies every artifact
+  digest and refuses if the live definition changed meanwhile. Scheduled by
+  `scripts/launchd/com.nba-predictor.adaptive-train.plist` (research-environment Python; not installed).
+- Cost: a training run re-walks every learned member from the first stored season with its weekly refits (the walk is
+  what makes the history out of sample), so the first run of a definition takes tens of minutes per sport (NHL
+  `hockey_gbt` dominates); later runs reuse the candidate history store and only add new periods. Training is weekly and
+  nightly, never in the two-hour cycle. Set `OMP_NUM_THREADS` when running several sports at once.
+- Deep networks (`torch_mlp`, `keras_mlp`) are fitted only in the research environment (`~/nba-predictor-deep`); in the
+  release environment their fit is recorded as `skipped` with the reason and the member is `missing` in every forecast.
+- Forecast path: artifacts are loaded only when their digest matches; results that arrived after an artifact's cutoff
+  are delivered to the frozen state (no refit; a season a learned member has no fit for makes it `missing`); one missing
+  member uses the registered leave-one-out stack, more abstain with the reason; probabilities are never substituted.
+
+## 8. Replay results (run 2026-10-06 UTC on store copies, research environment with torch/tensorflow)
+
+Chronological replay (`adaptive-replay`), full schedule, identical games and lines; log loss (lower is better), paired
+difference adaptive − source with a seeded ISO-week block bootstrap 95% interval; negative favours the adaptive
+combination. Evidence: `docs/evidence/adaptive/{nhl,nba}-replay.json`. Exploratory development data only; the reserved
+test seasons were not read. Pushes are excluded from log loss (as in the combiner's objective).
+
+**NHL** — development seasons 2018–2021 (loaded 2016–2021), 15 members (5 online/learned core incl. the xG member, 10
+candidates incl. `mlp`, `torch_mlp`, `keras_mlp`; goalie feature sets excluded), 4,877 winner games, 4,846 line games,
+133 weekly combiner refits per market, 34 min.
+
+| Market | Primary | Core average | Core season stacker | Adaptive | Adaptive − primary | Adaptive − stacker |
+|---|---|---|---|---|---|---|
+| winner | 0.6743 | 0.6749 | 0.6744 | 0.6731 | −0.0011 [−0.0031, +0.0008] | −0.0013 [−0.0033, +0.0007] |
+| reg3 | 1.0633 | 1.0552 | 1.0509 | 1.0487 | **−0.0147 [−0.0191, −0.0104]** | **−0.0022 [−0.0043, −0.0000]** |
+| spread | 0.6830 | 0.6813 | 0.6803 | 0.6801 | **−0.0029 [−0.0045, −0.0011]** | −0.0002 [−0.0017, +0.0013] |
+| total | 0.6908 | 0.6920 | 0.6913 | 0.6911 | +0.0003 [−0.0008, +0.0013] | −0.0002 [−0.0011, +0.0006] |
+| team_total_home | 0.6805 | 0.6806 | 0.6818 | 0.6805 | +0.0001 [−0.0013, +0.0015] | −0.0012 [−0.0026, +0.0001] |
+| team_total_away | 0.6852 | 0.6844 | 0.6844 | 0.6840 | −0.0013 [−0.0028, +0.0002] | −0.0004 [−0.0015, +0.0006] |
+
+Reading: a clear gain on the regulation 3-way market (every season negative, interval below zero against every existing
+source) and a small one on the puck line against the primary (not against the existing stacker). On the winner market the
+best single member (`hockey_logistic_xg@adaptive`, 0.6719) beats the adaptive combination (0.6731): the combination does
+not beat its best member there. Totals: indistinguishable. "Adaptive weights on the core members" (the same weekly
+combiner over the existing season-start members only) sits between: most of the reg3 gain comes from the adaptive
+members (`poisson_draw`, `multinomial_l2` candidates with within-season refits), not from the weights alone.
+
+**NBA** — validation seasons 2022–2024 (loaded 2020–2024), 20 members (6 online/learned core, 14 candidates incl. the
+three deep networks; `ngboost` missing), 3,962 winner games; line markets 2,639 common games (2023–2024 only: the
+existing season-start line stacker needs two earlier out-of-sample seasons and so has no 2022 forecasts — adaptive
+coverage is 100% but the comparison is restricted to games every source forecast), 105 weekly combiner refits, 63 min.
+
+| Market | Primary | Core average | Core season stacker | Adaptive | Adaptive − primary | Adaptive − stacker |
+|---|---|---|---|---|---|---|
+| winner | 0.6316 | 0.6298 | 0.6318 | 0.6303 | −0.0013 [−0.0042, +0.0017] | −0.0015 [−0.0049, +0.0018] |
+| spread | 0.6928 | 0.6863 | 0.6858 | 0.6852 | **−0.0076 [−0.0119, −0.0030]** | −0.0006 [−0.0025, +0.0013] |
+| total | 0.6930 | 0.6939 | 0.6907 | 0.6915 | −0.0014 [−0.0048, +0.0019] | +0.0008 [−0.0016, +0.0030] |
+| team_total_home | 0.6925 | 0.6937 | 0.6918 | 0.6918 | −0.0007 [−0.0040, +0.0029] | −0.0000 [−0.0017, +0.0018] |
+| team_total_away | 0.6935 | 0.6924 | 0.6917 | 0.6907 | −0.0028 [−0.0060, +0.0001] | −0.0011 [−0.0032, +0.0010] |
+
+Reading: on the spread the adaptive combination beats the primary points model clearly but is level with the existing
+season-start stacker and the core average; elsewhere nothing is distinguishable from the existing combinations with
+three seasons. On the winner market the L2 choice settled at 1000 (near-equal weights over 18 members): the data did not
+support learning distinct weights, and the equal core average (0.6298) is as good. The best single members are
+`logistic_v2@adaptive` (winner, 0.6290) and `hetero_linear@adaptive` (spread, 0.6862).
+
+**What the replay does not show:** any live or prospective result (no adaptive forecast has settled yet), any
+bookmaker comparison (development seasons carry no quotes; the replay never fabricates them), or a reason to replace the
+primary system. Weekly refits plus the learned combination help where the members themselves improve within the season
+(NHL regulation 3-way, puck line); on winners and totals they are a wash.
+
+## 9. Live state after this task
+
+- Artifacts and fits exist only on the session's store copies (NHL: 15 member fits + combiner for period
+  `2027:2026-W41`, trained on 2,831 window rows, 0 prospective; NBA: 20 member fits + combiner for period `2027:2026-W43`, 2,643 window rows; definition `1e34742836491cfa`). The live
+  stores are not migrated and hold no adaptive rows. Nothing is deployed; the pinned release is unchanged.
+- First real adaptive forecasts will be recorded by the first two-hour cycle after a release move that (1) migrates the
+  stores, (2) runs `adaptive-train` once (deep fits need the research environment's Python, otherwise the deep members
+  are skipped with the reason), and (3) keeps the nightly `daily` job. The selector will report "insufficient evidence"
+  (no picks) until 100+ settled adaptive picks with quotes exist, exactly as for the research selector.
+
+## 10. Review fixes (Codex review 2026-10-06; fixed the same day)
+
+1. **Immutable, content-addressed artifacts.** `_save` names every artifact by the digest of its bytes
+   (`…-<fingerprint>-<sha12>.pkl`); an identical fit maps to the same file, a different one to a new file, so a retry or a
+   forced refit of the same period never overwrites an earlier artifact. Every loader (`load_fit`) verifies the bytes
+   against the digest recorded on the fit row it is loading (and the sidecar) before unpickling; a mismatch is
+   `ArtifactMismatch` and the member is `missing`, never substituted. The candidate history checkpoint is the one mutable
+   file, and no fit row refers to it.
+2. **History checkpoint vs live-prepared fit.** `live_fit` prepares the next period's fit on a copy of the history store;
+   the checkpoint keeps each period's own fit, so a walk resumed after the live preparation reproduces the uninterrupted
+   one (Codex's reproduction is now `test_resume_after_the_live_preparation_reproduces_the_uninterrupted_walk`).
+3. **Partial runs are retried.** A combiner row is `success` only when every market with two or more available members
+   got a combination and no member refit failed; otherwise it is `partial`. The forecast path applies the usable markets
+   of the latest usable fit and keeps the most recent earlier combination for the others (`combiners_in_force`,
+   per-market `combiner_fit_id` on every forecast row); `due` is true again while the period's latest run is partial.
+   An exception while fitting one market's combination (or its daily rule or selection) is that market's failure only:
+   the fit is `partial` with `combiner fit failed for <market>: …`, the other markets are fitted, and the failed market
+   keeps its earlier combination and daily decision. Likewise an exception while combining one market at forecast time is
+   recorded in the cycle's `errors[<market>]` and the other markets are still recorded (2026-10-13 audit).
+4. **Missing deep libraries no longer drop the networks.** A member whose fitting library is missing keeps its stored
+   fit (`kept_for_dependency`), is applied from the NumPy weights, and stays in the combination; only a member with no
+   fit at all is skipped. `due` becomes true in an environment that can refit the kept members, so the research
+   environment's scheduled run (`scripts/launchd/com.nba-predictor.adaptive-train.plist`, not installed) refits what the
+   release environment could only apply. Both runs are idempotent.
+
+The migration (never applied to a live store) now allows status `partial`. The replay numbers in §8 are unaffected
+(these paths are not used by the replay); the real-copy NHL training was rerun with the final code (SMOKE_TEST).
+5. **Training outside the store's job lock** (second review, same day). `adaptive-train` no longer runs inside
+   `cli.main`'s job lock nor inside `daily`: `run_scheduled` snapshots under the lock, trains from the snapshot under a
+   separate training lock, and publishes under the lock again (artifacts verified against each record's digest; a
+   record whose artifact does not verify is published as `failed`). `jobs.daily` reports the due state only. Tests:
+   the store lock is free and a two-hour forecast cycle runs while a training run is blocked mid-fit; an ordinary
+   next-period run (new week + a settled prospective forecast) trains and publishes through the scheduled command on
+   both the synthetic NHL and the synthetic NBA store.
+6. **Snapshot ownership and retryable publication** (third review). The training lock is now acquired before the
+   snapshot and held through publication and cleanup (snapshot names also carry the pid); a concurrent trainer is refused
+   before it touches anything. `publish` verifies the whole batch first; when a usable member's artifact fails, the
+   combiner of the same run is published as `partial` with the reason, never `success`, so `due` retries the week.
+   Tests: a second `run_scheduled` during a blocked first one is refused and the first snapshot survives; a tampered
+   member record → member `failed`, combiner `partial`, `due` true; a clean republication → `success`, not due.
+7. **Member record write failures** (fourth review). `publish` writes member records first and the combiner last; a
+   usable member whose record could not be written (not only one whose artifact failed to verify) downgrades the
+   combiner to `partial` with the reason, so the week stays due and the ordinary scheduled retry completes it. Test:
+   forced write failure → member row absent, combiner `partial`, `due` true → unforced `run_scheduled` → success, not due.
+
+## 11. Retrospective recovery of missed adaptive forecasts (implemented 2026-10-09, not deployed)
+- Ledger `adaptive_recovered_forecasts` (migration 0026), append-only, never read by live forecasts, the selector,
+  `prospective_rows` or combiner training. Rows are `reconstructed` (probabilities) or `unreconstructable` (reason).
+- `adaptive.record(..., replay=<game>, now=<tipoff - 1 s>, write=False)` is the read-only replay: the same evaluator, with
+  fits chosen by training cutoff (not publication time) and accepted only if both the fit's `training_cutoff` and the
+  artifact's information time (`cutoff`) are at or before the simulated cutoff. Lines come from a primary two-hour
+  forecast made before the cutoff, else from the primary reconstruction; quotes only if retrieved before the cutoff.
+- `recovery.recover_adaptive` runs in `jobs.forecast_due` after live work and primary recovery, one replayed game per
+  cycle (about 40 s on the real NHL store). It defers when no current-definition combiner exists yet (training pending)
+  or a primary line is missing; it records `unreconstructable` only when every current-definition combiner was trained
+  after the cutoff, or the replay itself abstains. A replay error records nothing and is retried (bounded since §12).
+- Era: games from the first combiner in force (any definition) or the first adaptive attempt. Reported under
+  `adaptive` in `/api/recovered-forecasts`; not shown in the UI.
+- Any edit to `adaptive.py` changes the adaptive definition (the file's bytes are hashed). Deploying this code therefore
+  starts a new definition: both sports retrain, and games before the new fits' snapshot become unreconstructable.
+
+## 12. Recovery review fixes (review of deployed 8fda360, 2026-10-10; implemented, not deployed)
+Findings (read-only agent review, reproduced; Codex coordinating): H1 an unreadable combiner artifact was recorded as a
+permanent `unreconstructable` row; M1 an unreadable member artifact or a candidate evaluation error was recorded permanently
+(abstention, or a reconstruction without that member); H2 a kept candidate model could carry a residual spread recomputed
+after the cutoff (possibly from the replayed game itself) and still pass both replay checks; M2 one failing game took the
+only replay slot every cycle.
+
+Fixes:
+- **Transient vs permanent.** In a replay, an artifact that cannot be read (missing file, I/O error, digest mismatch) raises
+  `adaptive.ReplayUnavailable`; a candidate evaluation exception is a replay error. Either way the replay records nothing.
+  A newer fit is passed over for an older one only for an established reason (trained or informed after the cutoff), and the
+  passed-over fits are listed per member (`passed_over`) in the ledger's `members` JSON. `unreconstructable` remains only for:
+  every current-definition combiner trained after the cutoff, or the evaluator's own abstention with every artifact read.
+- **Information time of every component.** Candidate artifacts record `components = {model: <fit cutoff>, sd: <latest residual
+  time used>}`; `adaptive.information_at(art)` is the latest of `cutoff` and every component, and `_informed_by` requires it at
+  or before the replay cutoff. A candidate artifact with a spread but no recorded spread time is never informed (unknown is not
+  allowed). Ledger rows record `information_at` and `components` per member.
+- **Bounded retries without starvation.** Migration 0027 adds `adaptive_recovery_attempts` (operational state, not a record):
+  a failed replay, or one that records nothing, waits 30 min × 2^(attempts−1) (cap 24 h); never-attempted games go first, then
+  attempted ones least recently tried first; after 8 attempts the game leaves automatic retries (`retries_exhausted` in the
+  job output, `retrying` in `/api/recovered-forecasts` adaptive). The per-cycle limit (1 replay) is unchanged.
+- Regression tests (`tests/test_adaptive_recovery.py`): unreadable combiner / member → nothing recorded, reconstructed after
+  the artifact is readable; candidate evaluation error → retried; rotation, backoff and exhaustion with a strict limit; and
+  outcome independence: two NBA stores differing only in the game's final score, with ridge's model kept and its spread
+  recomputed after the result — every artifact eligible at the cutoff is byte-identical between them and the reconstructions
+  are equal. Each new test fails on the deployed code.
+
+**Inventory of stored rows (live stores, read-only, 2026-10-10 ~18:45 UTC).** NBA: 0 rows. NHL: 120 rows — 60 `reconstructed`
+under `2c63d35ec5a24519` (Oct 8–9 backfill) and 60 `unreconstructable` under `8631cc578d16aa5c` (reason: every combiner
+trained after the cutoff; a permanent, established reason). None has a load-failure or evaluation-error reason or missing
+member; no member fit was a fallback past a newer eligible fit; and no NHL candidate artifact used carries a residual spread
+(NHL has no normal-output candidates), every artifact's information time ≤ the cutoff. **No stored row is affected**; nothing
+needs correcting.
+
+**Correction mechanism (proposal; not implemented, nothing to correct now).** The ledger stays append-only. A correction is
+a new append-only table `adaptive_recovery_supersessions (recovery_id UNIQUE REFERENCES adaptive_recovered_forecasts,
+superseded_at, reason, review_ref)`; reports and the API exclude superseded rows from scoring and list them separately with
+the reason. Re-reconstructing a superseded game under the same definition would need a `revision` column added to the
+ledger's unique key (a separate migration); until then a superseded game is reported as withdrawn, not replayed.
+
+### Deployment plan (stop for Codex review before any step)
+Editing `adaptive.py` changes both sports' adaptive definitions, and migration 0027 must match the release (the release guard
+refuses every job when the store schema differs). To avoid a gap with no usable fits:
+1. Codex reviews the commit. The exact reviewed commit is the only one used below (the definition hash includes the bytes).
+2. **Pre-train the new definitions without switching.** Runner: `~/nba-predictor-pretrain-logs/pretrain.py`, run as
+   `caffeinate -i /Users/andry/nba-predictor-deep/backend/.venv/bin/python ~/nba-predictor-pretrain-logs/pretrain.py`. It runs
+   `app.cli --sport {nhl,nba} adaptive-train` from the clean detached worktree `~/nba-predictor-pretrain` at the reviewed
+   commit (checked before every attempt), deep venv, `NBA_DATA_DIR` = the live data folder, NHL first and NBA only after NHL
+   verifies. `adaptive-train` does not migrate; it publishes fit rows under the new definition, which the running release
+   ignores (every adaptive read filters by its own definition).
+   - **Lock contention does not wait.** A held training lock (`research/adaptive/{sport}/train.lock`, e.g. the 09:30 scheduled
+     refit) returns `status: skipped` immediately with exit code 0; a store job lock still busy after 120 s at the snapshot is
+     also `skipped` (exit 0), and at publication it is `failed` (exit 1, nothing published; a rerun walks the members again).
+     The exit code therefore never proves training. The runner parses the JSON, retries only the two lock-skip reasons every
+     10 min up to 12 h per sport, and stops on anything else (failed, partial, unparseable output, unexpected definition).
+   - **Success = published rows, verified read-only:** latest combiner under the expected definition (NHL `abfc617c4309ed33`,
+     NBA `71d234fa8993bf9a` for d52b248) with status `success`, every market weighted, and the same successful member set as the
+     definition in force (NHL 15, NBA 21). Expected durations from Oct 10: NHL ~2 h, NBA ~7 h. Old definitions keep serving.
+   - Start outside NHL games' two-hour windows (long near-tipoff cycles hold the job lock; publication waits only 120 s) and
+     with both `train.lock` files free. Artifacts are written during training before publication; an interrupted run leaves
+     unreferenced artifacts and a snapshot that the next run of that sport clears or rewrites.
+3. **Switch.** Locks only stop *new* lock-takers; they do not stop a process that already imported the old code. Because
+   `definition()` re-reads `adaptive.py` from disk at call time and jobs import `adaptive`/`recovery` lazily, any process
+   started from the release checkout before the fast-forward that runs after it can write rows labelled with the new
+   definition while executing old code (append-only: they cannot be removed). So every such process is stopped first:
+   1. **Window:** no eligible game in either sport starts within the next ~2.5 h and the nightly jobs (22:00 NBA daily,
+      22:15 NHL daily, 09:30 adaptive-train) are not due during the switch; the pre-training runner has finished.
+   2. **Pause launches:** for each scheduled agent `com.nba-predictor.{odds,nhl-odds,daily,nhl-daily,injuries,adaptive-train}`
+      wait until `launchctl print gui/$(id -u)/<label>` shows `state = not running`, then `launchctl bootout gui/$(id -u)
+      ~/Library/LaunchAgents/<label>.plist` (booting out a running job would kill it mid-cycle; wait instead).
+   3. **Stop long-lived processes:** `launchctl bootout` `com.nba-predictor.api` and `com.nba-predictor.web` (KeepAlive would
+      restart them from the changed files otherwise).
+   4. **Drain and confirm quiet:** `pgrep -fl 'nba-predictor-live|app.cli|adaptive-train|pretrain.py'` prints nothing (this
+      also covers manual commands and trainers from any checkout); both `.{sport}-jobs.lock` and both `train.lock` can be
+      taken without waiting (`python -c` with `db.store_lock(s, wait_seconds=0)` / `adaptive.training_lock(s)` returning True,
+      released immediately). If anything is running, wait or stop the switch; never kill a writer mid-transaction.
+      Then record per store the row-ID boundaries `max(forecast_id)` of `adaptive_forecasts` and `max(recovery_id)` of
+      `adaptive_recovered_forecasts` (read-only), the drain time, and the definitions in force before the move.
+   5. **Back up** both stores while holding that sport's job lock (one process: take `db.store_lock(s, wait_seconds=0)`,
+      SQLite online backup to `data/backups/{sport}-before-0027-<date>.sqlite`, `PRAGMA quick_check` = ok, release). The CLI
+      takes the job lock itself, so the holder must exit before the next step; with launches paused and step 4 clean,
+      nothing else can take it in between.
+   6. **Move the release:** fast-forward `~/nba-predictor-live` (`release`) to the reviewed commit; confirm `git rev-parse HEAD`.
+   7. **Migrate and check** from the release checkout with its venv and the plist environment (`NBA_DATA_DIR`,
+      `NBA_RELEASE_ROOT=~/nba-predictor-live`): `app.cli --sport {nhl,nba} migrate`, then `release-check` for both
+      (problems `[]`, schema 27/27, commit = reviewed commit). Rebuild the frontend if it changed.
+   8. **Restart:** bootstrap `api` and `web`; check `/api/research/adaptive` reports the new definition, `due: false`, and
+      the pre-trained fits. Then bootstrap the six scheduled agents (resume).
+   9. **Verify no mixed rows (only rows appended after the step-4 boundaries are checked):** no row with an ID above its
+      boundary has `generated_at` / `reconstructed_at` between the drain time and the restart time (nothing was written
+      while code was moving), and every row above the boundary carries the definition the moved release computes
+      (`/api/research/adaptive`). Rows at or below the boundary are earlier history and are not judged here.
+4. **After the switch:** recovery under the new definitions will add `unreconstructable` rows for earlier games that have no
+   live adaptive forecast (e.g. Oct 8–9 NHL), because the new combiners' training snapshots follow those games (expected;
+   the old-definition reconstructions remain). Verify the next eligible game's forecasts are written under the new definition.
+5. **Rollback:** the old definitions' fits stay in the store. Rolling back = a release commit that restores the previous
+   `adaptive.py` and `recovery.py` bytes but keeps migration 0027 (the schema cannot go back without restoring a backup):
+   the old definition hashes, and so their fits, are in force again. The rollback moves code under the same running
+   processes, so it uses the same sequence as step 3 (window, pause, stop api/web, drain and record row-ID boundaries, backup,
+   move, `release-check` with no migration, restart, resume). The step-9 check applies only to rows above the boundaries
+   recorded before the rollback: the restored definitions already have legitimate history from before the switch, so a
+   time-based check over all rows of that definition would wrongly fail. The old recovery code ignores the attempts table.
+Risks: the weekly scheduled refit of the old definition (Mondays 09:30) and pre-training exclude each other through the
+training lock without waiting: whichever starts second skips (exit 0). The runner retries pre-training; a skipped scheduled
+refit retries only at the next 09:30 run, so the old definition keeps its previous fit one more day. If the reviewed commit
+changes after pre-training, its fits are under a different definition and step 2 repeats.
+
+## 13. Transferring trained fits between data directories (implemented 2026-10-15, not deployed)
+
+The 2026-10-14 retrain ran on an isolated copy (`~/nba-predictor-research-data/retrain-20261014/data`) and published its fit
+rows there, not in the live store. `app.cli --sport {nhl,nba} adaptive-import --from <dir> [--cadence weekly|daily|both]`
+(`app/fit_transfer.py`) moves them: for the definition the running code and store compute, it verifies every artifact
+(and the history checkpoint) against its fit row and sidecar before writing anything, copies them under this data
+directory's `research/adaptive/<sport>/` (never overwriting), writes the `model_fits` identities with the training
+environment's library versions, and publishes the rows through `adaptive.publish` (digests re-verified, definition
+re-checked). A target that already has fits of the definition is refused; a source without them is reported, never
+substituted. Rows are stamped when written (`finished_at` = transfer time), so the fits are in force from the transfer on;
+`idempotency_key`, training cutoffs and fingerprints are the originals. The serving guards (results and box/shot digests at
+each fit's cutoff) still decide in the target store whether a member forecasts.
+
+Identity requirements found while preparing the release (2026-10-15):
+- `adaptive.py` is part of every adaptive definition. The raw-cache completeness guard therefore lives in the
+  `adaptive-train` command (`cli.py`), not in `run_scheduled`; `adaptive.py` is byte-identical to the frozen export
+  `9efe26f3`, which gives the trained definitions NHL `eb0b7519…` (weekly) / `3728ae13…` (daily), NBA `4a4f1e0e…` /
+  `39b484bc…`.
+- Candidate identities include library versions (`registry.definition`): the release venv (`~/nba-predictor-live/backend/.venv`,
+  with ngboost 0.5.11) and the deep venv give the same definitions; an environment without ngboost (e.g. the checkout's
+  `backend/.venv`) gives different ones and finds no fits. Deep members are applied from stored NumPy weights; the release
+  venv needs no torch/tensorflow.
+- The scheduled `adaptive-train` plist refits the weekly cadence only; daily-cadence fits refresh only if `--cadence daily`
+  is scheduled too.
+
+## 14. Collection before training; daily operation (implemented 2026-10-15, not deployed)
+
+Dependency order, per sport, in `com.nba-predictor.adaptive-train` (09:30 local, retry 15:30): `training-inputs` (collect,
+then check) → `adaptive-train` (weekly, if due) → `adaptive-train --cadence daily` (if due); the two-hour cycle then records
+weekly and (with `NBA_DAILY_AGREEMENT=1`) daily rows; the nightly jobs settle; the System status panel reports.
+- Collect (`training_inputs.collect`, each step isolated): results refresh; NHL shots (`jobs.nhl_pbp`); NHL player boxes for
+  new finals of the current season (`nhl_player_ratings.collect_bulk_boxes`, opt-in `NHL_PLAYER_BOX_REFRESH=1`; two requests
+  per 128 games); NBA team boxes and the season player-box file.
+- Check (`training_inputs.check`, read-only), gating: results refresh within 3 h; NHL shots for finals whose results
+  arrived in the last 3 days, until a game has stayed missing after 3 collection runs (then reported as given up: a source
+  that never publishes cannot stop every later refit; manual runs count too). Recent shots are imported first, newest
+  first, so an old backlog cannot starve them. Older gaps are reported. NBA inputs are reported only (their guard covers
+  consumed rows).
+- NHL boxes are collected last, only after every other gate passed (a run that defers training adds none, since a box
+  that appears for a result the fit was offered without one retires the NHL injury member), right before training, and
+  they never gate it: training is how a retired member comes back (a still-missing box only affects that team's games). A failed collection step marks the `training_inputs` run failed on the panel without stopping training (the command's exit code follows readiness only). Box files and raw bulk responses written in the last 7 days that are truncated (JSON that does not parse; a `bulk-*.raw` whose bytes no longer match the sha256 in its name — a run killed mid-write; `collect_bulk_boxes` writes in place and is part of the NHL definition, so it is not edited) are renamed aside (`.corrupt-<time>`) before each collection, so they are fetched again; files modified in the last 10 minutes are left alone (another collector may be writing them); game files that name a quarantined raw are set aside with it, so they are refetched. Dry run on the real box folder: 14,846 files checked, 0 flagged.
+- Why boxes are collected only here: the NHL injury member's guard covers the boxes of the results its fit was offered
+  (since 2026-10-16; before, it digested the whole box folder, so any box added after a fit retired the member). A box
+  that appears after the fit for a result it was offered without one still retires it until the next fit, so boxes are
+  collected right before training; boxes of later games no longer do.
+- `adaptive-train` re-checks (read-only) and returns `deferred` (exit 1, nothing trained, fits in force unchanged) when not
+  ready; `--force` does not bypass it, and the deferral is written as a failed `training_inputs` row. Each `training-inputs`
+  run is a `job_runs` row (migration 0031); the panel shows its last failure at once, a run that never finished after 2 h,
+  and staleness after 30 h. A new period after new NHL boxes makes the weekly definition due as well (its fit consumed the
+  old box set), so NHL refits both cadences nightly once boxes are collected.
+- Known, not changed here: the panel text in `daily_agreement.py` still says no scheduler is installed (that file is part of
+  the daily definition, so it is not edited); a snapshot that finds the store lock busy returns `skipped` with exit 0
+  (pre-existing); a collection longer than the odds cycle's 120 s lock wait makes that cycle skip with `lock_busy`
+  (measured collection: 4.5 s NHL, 0.8 s NBA).
+- Overlap: collection takes the store's job lock; training the per-sport training lock (non-blocking: a second trainer
+  skips); the transfer refuses while a training lock is held.
+- Measured (isolated clone holding the imported fits, frozen tree 6b6c0917, 4 threads): incremental daily refit NHL 1,015 s, NBA 916 s (forced; no new NBA results); both succeeded and published 17 / 24 records.

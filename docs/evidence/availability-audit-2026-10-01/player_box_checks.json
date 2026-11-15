@@ -1,0 +1,72 @@
+{
+ "2020": {
+  "our_final_games": 1143,
+  "games_with_both_teams": 1143,
+  "games_with_5plus_players_with_minutes_per_team": 1143,
+  "team_games": 2286,
+  "team_games_minutes_sum_240_or_overtime": 2284,
+  "played_rows": 24111,
+  "played_rows_missing_minutes": 0,
+  "rows_missing_athlete_id": 0
+ },
+ "2021": {
+  "our_final_games": 1171,
+  "games_with_both_teams": 1171,
+  "games_with_5plus_players_with_minutes_per_team": 1165,
+  "team_games": 2342,
+  "team_games_minutes_sum_240_or_overtime": 2327,
+  "played_rows": 25054,
+  "played_rows_missing_minutes": 137,
+  "rows_missing_athlete_id": 0
+ },
+ "2022": {
+  "our_final_games": 1323,
+  "games_with_both_teams": 1323,
+  "games_with_5plus_players_with_minutes_per_team": 1323,
+  "team_games": 2646,
+  "team_games_minutes_sum_240_or_overtime": 2644,
+  "played_rows": 28051,
+  "played_rows_missing_minutes": 0,
+  "rows_missing_athlete_id": 0
+ },
+ "2023": {
+  "our_final_games": 1320,
+  "games_with_both_teams": 1320,
+  "games_with_5plus_players_with_minutes_per_team": 1320,
+  "team_games": 2640,
+  "team_games_minutes_sum_240_or_overtime": 2640,
+  "played_rows": 27743,
+  "played_rows_missing_minutes": 0,
+  "rows_missing_athlete_id": 0
+ },
+ "2024": {
+  "our_final_games": 1319,
+  "games_with_both_teams": 1319,
+  "games_with_5plus_players_with_minutes_per_team": 1319,
+  "team_games": 2638,
+  "team_games_minutes_sum_240_or_overtime": 2635,
+  "played_rows": 28366,
+  "played_rows_missing_minutes": 0,
+  "rows_missing_athlete_id": 0
+ },
+ "2025": {
+  "our_final_games": 1321,
+  "games_with_both_teams": 1321,
+  "games_with_5plus_players_with_minutes_per_team": 1321,
+  "team_games": 2642,
+  "team_games_minutes_sum_240_or_overtime": 2642,
+  "played_rows": 28348,
+  "played_rows_missing_minutes": 83,
+  "rows_missing_athlete_id": 0
+ },
+ "2026": {
+  "our_final_games": 1322,
+  "games_with_both_teams": 1322,
+  "games_with_5plus_players_with_minutes_per_team": 1322,
+  "team_games": 2644,
+  "team_games_minutes_sum_240_or_overtime": 2629,
+  "played_rows": 28738,
+  "played_rows_missing_minutes": 46,
+  "rows_missing_athlete_id": 33
+ }
+}

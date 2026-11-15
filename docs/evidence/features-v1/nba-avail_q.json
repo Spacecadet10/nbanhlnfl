@@ -1,0 +1,323 @@
+{
+ "study": "features-v1",
+ "part": "NBA avail_q",
+ "exploratory": true,
+ "generated_at": "2026-10-03T00:35:11Z",
+ "cutoff": "17:45 ET game day; report publication times assumed (header / Last-Modified)",
+ "scored_games": 3667,
+ "seasons": [
+  2022,
+  2023,
+  2024
+ ],
+ "coverage": {
+  "quality_no_reference_season": 8617,
+  "unresolved": 374,
+  "usable": 1002,
+  "quality_ok": 38892,
+  "quality_no_history": 2295
+ },
+ "models": {
+  "elo": {
+   "n": 3667,
+   "wins": 2359,
+   "losses": 1308,
+   "accuracy": 0.6433051540769021,
+   "accuracy_ci95": [
+    0.6276583696297935,
+    0.6586520068254993
+   ],
+   "brier": 0.22088435897834832,
+   "log_loss": 0.6319788478710013,
+   "top25": {
+    "games": 917,
+    "accuracy": 0.7677208287895311
+   },
+   "version": "elo-carry=0.75-home_advantage=50-k=15-mov=True"
+  },
+  "logistic_v2": {
+   "n": 3667,
+   "wins": 2365,
+   "losses": 1302,
+   "accuracy": 0.6449413689664576,
+   "accuracy_ci95": [
+    0.6293087881396471,
+    0.6602705935653732
+   ],
+   "brier": 0.2198985279333745,
+   "log_loss": 0.6299783787143663,
+   "top25": {
+    "games": 917,
+    "accuracy": 0.787350054525627
+   },
+   "version": "logistic_v2-elo=k15-h50-c0.75-movTrue-features=elo_diff+net_diff+rest_diff+b2b_home+b2b_away+neutral-l2=1.0"
+  },
+  "avail_v1": {
+   "n": 3667,
+   "wins": 2419,
+   "losses": 1248,
+   "accuracy": 0.659667302972457,
+   "accuracy_ci95": [
+    0.6441715118222271,
+    0.6748289171303397
+   ],
+   "brier": 0.2177036638317947,
+   "log_loss": 0.6250839372447677,
+   "top25": {
+    "games": 917,
+    "accuracy": 0.7786259541984732
+   },
+   "version": "avail_v1-elo=k15-h50-c0.75-movTrue-features=elo_diff+net_diff+rest_diff+b2b_home+b2b_away+neutral+new_absent_diff+all_absent_diff+report_missing-l2=1.0"
+  },
+  "avail_q_v1": {
+   "n": 3667,
+   "wins": 2410,
+   "losses": 1257,
+   "accuracy": 0.6572129806381238,
+   "accuracy_ci95": [
+    0.6416932611675807,
+    0.6724036599103951
+   ],
+   "brier": 0.2170101269342979,
+   "log_loss": 0.623478129019056,
+   "top25": {
+    "games": 917,
+    "accuracy": 0.781897491821156
+   },
+   "version": "avail_q_v1-elo=k15-h50-c0.75-movTrue-features=elo_diff+net_diff+rest_diff+b2b_home+b2b_away+neutral+new_absent_diff+all_absent_diff+report_missing+new_absent_q_diff+all_absent_q_diff-l2=1.0"
+  },
+  "avail_q_only": {
+   "n": 3667,
+   "wins": 2356,
+   "losses": 1311,
+   "accuracy": 0.6424870466321243,
+   "accuracy_ci95": [
+    0.6268332341914044,
+    0.6578426396390246
+   ],
+   "brier": 0.2184552440401292,
+   "log_loss": 0.6266328622166807,
+   "top25": {
+    "games": 917,
+    "accuracy": 0.7938931297709924
+   },
+   "version": "avail_q_only-elo=k15-h50-c0.75-movTrue-features=elo_diff+net_diff+rest_diff+b2b_home+b2b_away+neutral+new_absent_q_diff+all_absent_q_diff+report_missing-l2=1.0"
+  }
+ },
+ "comparisons": {
+  "avail_q_v1_minus_avail_v1_log_loss": {
+   "mean": -0.0016058082257107329,
+   "ci95": [
+    -0.0032764684002194837,
+    -4.4480814718782856e-05
+   ],
+   "weeks": 105,
+   "games": 3667,
+   "seed": 20260930,
+   "samples": 2000,
+   "bonferroni_interval": [
+    -0.0036651708174567877,
+    0.00045355436603532195
+   ]
+  },
+  "avail_q_v1_minus_avail_v1_brier": {
+   "mean": -0.0006935368974968286,
+   "ci95": [
+    -0.0014246097322645084,
+    1.3278758300509459e-05
+   ],
+   "weeks": 105,
+   "games": 3667,
+   "seed": 20260930,
+   "samples": 2000,
+   "bonferroni_interval": [
+    -0.0016097327956048524,
+    0.00022265900061119528
+   ]
+  },
+  "avail_q_v1_minus_logistic_v2_log_loss": {
+   "mean": -0.006500249695307065,
+   "ci95": [
+    -0.011075651685786649,
+    -0.001785760551479963
+   ],
+   "weeks": 105,
+   "games": 3667,
+   "seed": 20260930,
+   "samples": 2000,
+   "bonferroni_interval": [
+    -0.012419596158520875,
+    -0.000580903232093255
+   ]
+  },
+  "avail_q_v1_minus_logistic_v2_brier": {
+   "mean": -0.002888400999076615,
+   "ci95": [
+    -0.004945618339697491,
+    -0.0007857410770965476
+   ],
+   "weeks": 105,
+   "games": 3667,
+   "seed": 20260930,
+   "samples": 2000,
+   "bonferroni_interval": [
+    -0.005538997696689922,
+    -0.00023780430146330776
+   ]
+  },
+  "avail_q_only_minus_avail_v1_log_loss": {
+   "mean": 0.0015489249719125829,
+   "ci95": [
+    -0.002205311210643256,
+    0.005428736092170969
+   ],
+   "weeks": 105,
+   "games": 3667,
+   "seed": 20260930,
+   "samples": 2000,
+   "bonferroni_interval": [
+    -0.0033153484892739764,
+    0.006413198433099142
+   ]
+  },
+  "avail_q_only_minus_avail_v1_brier": {
+   "mean": 0.0007515802083344867,
+   "ci95": [
+    -0.0009612241648466509,
+    0.0025151014208183047
+   ],
+   "weeks": 105,
+   "games": 3667,
+   "seed": 20260930,
+   "samples": 2000,
+   "bonferroni_interval": [
+    -0.0014634700288523083,
+    0.002966630445521282
+   ]
+  },
+  "avail_q_only_minus_logistic_v2_log_loss": {
+   "mean": -0.0033455164976837494,
+   "ci95": [
+    -0.005499716264767886,
+    -0.0012135623034927679
+   ],
+   "weeks": 105,
+   "games": 3667,
+   "seed": 20260930,
+   "samples": 2000,
+   "bonferroni_interval": [
+    -0.006076574367433179,
+    -0.0006144586279343196
+   ]
+  },
+  "avail_q_only_minus_logistic_v2_brier": {
+   "mean": -0.0014432838932452996,
+   "ci95": [
+    -0.002437404034520864,
+    -0.0004757622021127053
+   ],
+   "weeks": 105,
+   "games": 3667,
+   "seed": 20260930,
+   "samples": 2000,
+   "bonferroni_interval": [
+    -0.002693205714167056,
+    -0.0001933620723235435
+   ]
+  }
+ },
+ "incremental_average_with_elo": {
+  "avail_v1": {
+   "n": 3667,
+   "wins": 2406,
+   "losses": 1261,
+   "accuracy": 0.6561221707117535,
+   "accuracy_ci95": [
+    0.64059196263223,
+    0.6713256216125943
+   ],
+   "brier": 0.21808063880224296,
+   "log_loss": 0.6258570919619758,
+   "top25": {
+    "games": 917,
+    "accuracy": 0.7753544165757906
+   }
+  },
+  "avail_q_v1": {
+   "n": 3667,
+   "wins": 2413,
+   "losses": 1254,
+   "accuracy": 0.6580310880829016,
+   "accuracy_ci95": [
+    0.6425192940437846,
+    0.6732121296590549
+   ],
+   "brier": 0.21745767370123512,
+   "log_loss": 0.6244997116335007,
+   "top25": {
+    "games": 917,
+    "accuracy": 0.7840785169029444
+   }
+  },
+  "avail_q_only": {
+   "n": 3667,
+   "wins": 2377,
+   "losses": 1290,
+   "accuracy": 0.6482137987455686,
+   "accuracy_ci95": [
+    0.6326102178309297,
+    0.6635071743735453
+   ],
+   "brier": 0.21892797409318523,
+   "log_loss": 0.6277066088414227,
+   "top25": {
+    "games": 917,
+    "accuracy": 0.7884405670665212
+   }
+  }
+ },
+ "weights_last_fit": {
+  "avail_v1": {
+   "intercept": 0.2409,
+   "elo_diff": 0.3485,
+   "net_diff": 0.2985,
+   "rest_diff": 0.0351,
+   "b2b_home": -0.1134,
+   "b2b_away": 0.2038,
+   "neutral": -0.1437,
+   "new_absent_diff": 0.0451,
+   "all_absent_diff": 0.2204,
+   "report_missing": -0.059
+  },
+  "avail_q_v1": {
+   "intercept": 0.2416,
+   "elo_diff": 0.3597,
+   "net_diff": 0.3065,
+   "rest_diff": 0.0311,
+   "b2b_home": -0.1094,
+   "b2b_away": 0.2018,
+   "neutral": -0.144,
+   "new_absent_diff": 0.0167,
+   "all_absent_diff": 0.2154,
+   "report_missing": -0.0582,
+   "new_absent_q_diff": 0.0443,
+   "all_absent_q_diff": 0.0874
+  },
+  "avail_q_only": {
+   "intercept": 0.2362,
+   "elo_diff": 0.3218,
+   "net_diff": 0.3832,
+   "rest_diff": 0.0369,
+   "b2b_home": -0.1213,
+   "b2b_away": 0.2263,
+   "neutral": -0.1466,
+   "new_absent_q_diff": 0.0685,
+   "all_absent_q_diff": 0.1028,
+   "report_missing": -0.0596
+  }
+ },
+ "reading": {
+  "avail_q_v1": "no evidence of information beyond avail_v1",
+  "avail_q_only": "no evidence of information beyond avail_v1"
+ }
+}

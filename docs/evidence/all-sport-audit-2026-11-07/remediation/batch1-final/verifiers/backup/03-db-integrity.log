@@ -1,0 +1,6 @@
+files ['manifest.json', 'nba.sqlite', 'nfl.sqlite', 'nhl.sqlite', 'soccer.sqlite']
+{'sport': 'nba', 'sha_ok': True, 'bytes_ok': True, 'integrity': 'ok', 'fk_backup': [], 'fk_src': [], 'uv': (0, 0), 'schema_eq': True, 'ident': ([('nba',)], [('nba',)]), 'dump_eq': True, 'counts_ok': True}
+{'sport': 'nfl', 'sha_ok': True, 'bytes_ok': True, 'integrity': 'ok', 'fk_backup': [], 'fk_src': [], 'uv': (0, 0), 'schema_eq': True, 'ident': ([('nfl',)], [('nfl',)]), 'dump_eq': True, 'counts_ok': True}
+{'sport': 'nhl', 'sha_ok': True, 'bytes_ok': True, 'integrity': 'ok', 'fk_backup': [], 'fk_src': [], 'uv': (0, 0), 'schema_eq': True, 'ident': ([('nhl',)], [('nhl',)]), 'dump_eq': True, 'counts_ok': True}
+{'sport': 'soccer', 'sha_ok': True, 'bytes_ok': True, 'integrity': 'ok', 'fk_backup': [], 'fk_src': [], 'uv': (0, 0), 'schema_eq': True, 'ident': ([('soccer',)], [('soccer',)]), 'dump_eq': True, 'counts_ok': True}
+ALL OK

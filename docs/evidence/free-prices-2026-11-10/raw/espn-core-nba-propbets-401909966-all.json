@@ -1,0 +1,16 @@
+{
+ "_fetched_at": "2026-11-11T04:39:21+00:00",
+ "_url": "https://sports.core.api.espn.com/v2/sports/basketball/leagues/nba/events/401909966/competitions/401909966/odds/100/propBets?lang=en&region=us&limit=1000",
+ "_status": 404,
+ "_headers": {
+  "date": "Wed, 11 Nov 2026 04:39:21 GMT",
+  "content-type": "application/json;charset=utf-8",
+  "cache-control": "max-age=4, stale-while-revalidate=7200"
+ },
+ "body": {
+  "error": {
+   "message": "No propBets found for eventId 401909966 and provider 100",
+   "code": 404
+  }
+ }
+}

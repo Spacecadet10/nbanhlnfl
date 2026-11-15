@@ -1,0 +1,2 @@
+2022 matches 2054 2054 max abs prob difference (walk 2020-22 vs walk 2022 only): 0.0
+live loop vs frozen walk on the 6 busiest 2022 matchdays: 147 forecasts, max abs difference 0

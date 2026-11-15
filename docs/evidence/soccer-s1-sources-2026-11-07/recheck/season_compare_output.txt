@@ -1,0 +1,9 @@
+ESPN events CY2023+CY2024 784 | duplicate event ids 0
+ESPN events dated 2023-07-01..2024-06-30 380 | status {'STATUS_FULL_TIME': 380} | season.year values {'2023': 380} | first 2023-08-11T19:00Z last 2024-05-19T15:00Z
+openfootball 2023-24 rows 380 | with ft score 380 | date range 2023-08-11 2024-05-19
+ESPN distinct (home, away) pairs 380 | events 380 | pairs with >1 event 0
+openfootball rows paired to exactly one ESPN event by (home, away) within the season 380 | same calendar date (ESPN UTC date vs openfootball local date) 380 | same full-time score 380
+date differences []
+score differences []
+unmatched openfootball rows 0 [] | ESPN events not paired 0
+openfootball local time minus ESPN UTC (hours), by month: {('2023-08', 1.0): 29, ('2023-09', 1.0): 38, ('2023-10', 0.0): 5, ('2023-10', 1.0): 28, ('2023-11', 0.0): 30, ('2023-12', 0.0): 66, ('2024-01', 0.0): 20, ('2024-02', 0.0): 42, ('2024-03', 0.0): 33, ('2024-03', 1.0): 2, ('2024-04', 1.0): 53, ('2024-05', 1.0): 34}

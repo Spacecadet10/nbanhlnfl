@@ -1,0 +1,112 @@
+........F.F.F                                                            [100%]
+=================================== FAILURES ===================================
+________ test_a_default_backup_warns_on_stderr_for_each_store_it_skips _________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-136/test_a_default_backup_warns_on0')
+capsys = <_pytest.capture.CaptureFixture object at 0x106ba2d50>
+
+    def test_a_default_backup_warns_on_stderr_for_each_store_it_skips(tmp_path, capsys):
+        data, dest = tmp_path / "data", tmp_path / "backups"
+        _store(data / "nhl.sqlite", "nhl").close()
+        _data_store(data / "nfl.sqlite", "nfl").close()
+        out = backup.run(data, dest, stamp="s")
+        assert set(out["stores"]) == {"nhl", "nfl"} and out["skipped"] == ["nba", "soccer"]
+        err = capsys.readouterr().err.splitlines()
+>       assert err == [f"WARNING: no nba store at {data / 'nba.sqlite'}; not backed up",
+                       f"WARNING: no soccer store at {data / 'soccer.sqlite'}; not backed up"]
+E       AssertionError: assert [] == ['WARNING: no...ot backed up']
+E         
+E         Right contains 2 more items, first extra item: 'WARNING: no nba store at /private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-136/test_a_default_backup_warns_on0/data/nba.sqlite; not backed up'
+E         Use -v to get more diff
+
+tests/test_backup_restore.py:202: AssertionError
+________ test_a_restore_refuses_a_data_only_store_without_its_identity _________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-136/test_a_restore_refuses_a_data_0')
+
+    def test_a_restore_refuses_a_data_only_store_without_its_identity(tmp_path):
+        data, dest = tmp_path / "data", tmp_path / "backups"
+        _data_store(data / "nfl.sqlite", "nfl").close()
+        backup.run(data, dest, stamp="s", sports=["nfl"])
+        copy = sqlite3.connect(dest / "s" / "nfl.sqlite")
+        copy.execute("DROP TRIGGER store_identity_no_delete")
+        copy.execute("DELETE FROM store_identity")
+        copy.commit()
+        copy.close()
+        man = json.loads((dest / "s" / "manifest.json").read_text())        # the manifest matches the altered file,
+        man["stores"]["nfl"]["sha256"] = backup.sha256(dest / "s" / "nfl.sqlite")   # so only the identity check can refuse
+        (dest / "s" / "manifest.json").write_text(json.dumps(man))
+        before = backup.sha256(data / "nfl.sqlite")
+>       with pytest.raises(backup.BackupError, match="not the nfl store"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE BackupError
+
+tests/test_backup_restore.py:230: Failed
+___________ test_a_sport_named_twice_is_backed_up_and_restored_once ____________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-136/test_a_sport_named_twice_is_ba0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x106b6f800>
+capsys = <_pytest.capture.CaptureFixture object at 0x106b6d4c0>
+
+    def test_a_sport_named_twice_is_backed_up_and_restored_once(tmp_path, monkeypatch, capsys):
+        data, dest = tmp_path / "data", tmp_path / "backups"
+        _store(data / "nhl.sqlite", "nhl").close()
+        monkeypatch.setenv("NBA_DATA_DIR", str(data))
+        backup.main(["--dest", str(dest), "--sport", "nhl", "--sport", "nhl"])
+        out = json.loads(capsys.readouterr().out)
+        assert set(out["stores"]) == {"nhl"}
+>       backup.main(["--restore", out["dir"], "--sport", "nhl", "--sport", "nhl"])   # not refused by its own lock
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_backup_restore.py:256: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/backup.py:187: in main
+    restore(args.restore, config.data_dir(), sports=args.sport))
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+backup_dir = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-136/test_a_sport_named_twice_is_ba0/backups/20261108T000024Z')
+data_dir = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-136/test_a_sport_named_twice_is_ba0/data')
+sports = ['nhl', 'nhl']
+
+    def restore(backup_dir: Path, data_dir: Path, *, sports: list) -> dict:
+        """Puts the backed-up store of each sport back in `data_dir`, under the store's job lock, only if the manifest names
+        that sport's own store file, the file matches the manifest and its identity is that sport (a data-only store, always
+        claimed on its first write, must carry it; a served store from before identities may have none). The new file is
+        written and synced beside the store first; only then is the replaced store (and its -wal/-shm) moved to
+        `<name>.replaced-<UTC>`, never deleted. Stop the scheduled jobs and the API first: a connection kept open across the swap writes to the
+        replaced file."""
+        try:
+            manifest = json.loads((Path(backup_dir) / "manifest.json").read_text())
+            stores = manifest["stores"]
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise BackupError(f"Unreadable backup manifest in {backup_dir}: {type(exc).__name__}: {exc}") from None
+        checked, locks = [], []
+        try:
+            # 1. Every sport is checked and locked before any store is touched (a two-sport restore never half-completes).
+            for sport in sports:
+                m = stores.get(sport)
+                if m is None:
+                    raise BackupError(f"The backup has no {sport} store")
+                if m.get("file") != _db_file(sport):
+                    raise BackupError(f"The manifest entry for {sport} names {m.get('file')!r}, not the {sport} store "
+                                      f"({_db_file(sport)}); not restored")
+                src = Path(backup_dir) / m["file"]
+                if not src.is_file() or sha256(src) != m.get("sha256"):
+                    raise BackupError(f"{src} does not match the manifest (sha256); not restored")
+                if _describe(src)["identity"] not in (sport, None):
+                    raise BackupError(f"{src} is not the {sport} store (store identity); not restored")
+                lock = os.open(Path(data_dir) / f".{sport}-jobs.lock", os.O_RDWR | os.O_CREAT, 0o644)
+                try:
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    os.close(lock)
+>                   raise BackupError(f"A job holds the {sport} store lock; stop the scheduled jobs first") from None
+E                   app.backup.BackupError: A job holds the nhl store lock; stop the scheduled jobs first
+
+app/backup.py:130: BackupError
+=========================== short test summary info ============================
+FAILED tests/test_backup_restore.py::test_a_default_backup_warns_on_stderr_for_each_store_it_skips
+FAILED tests/test_backup_restore.py::test_a_restore_refuses_a_data_only_store_without_its_identity
+FAILED tests/test_backup_restore.py::test_a_sport_named_twice_is_backed_up_and_restored_once
+3 failed, 10 passed in 0.78s

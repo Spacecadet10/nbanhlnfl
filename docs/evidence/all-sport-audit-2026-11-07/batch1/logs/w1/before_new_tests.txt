@@ -1,0 +1,573 @@
+FFFFFFF.FF.F.FFFFFF.F                                                    [100%]
+=================================== FAILURES ===================================
+______________ test_tests_never_default_to_the_checkout_data_dir _______________
+
+    def test_tests_never_default_to_the_checkout_data_dir():
+        """conftest.py: a test that sets no NBA_DATA_DIR gets a temporary one, never REPO/data."""
+>       assert os.environ.get("NBA_DATA_DIR")
+E       AssertionError: assert None
+E        +  where None = get('NBA_DATA_DIR')
+E        +    where get = environ({'COMMAND_MODE': 'unix2003', 'HOME': '/Users/andry', 'LOGNAME': 'andry', 'LaunchInstanceID': 'FE4A9E8A-B1C6-42...1', 'PYTEST_CURRENT_TEST': 'tests/test_live_store_guard.py::test_tests_never_default_to_the_checkout_data_dir (call)'}).get
+E        +      where environ({'COMMAND_MODE': 'unix2003', 'HOME': '/Users/andry', 'LOGNAME': 'andry', 'LaunchInstanceID': 'FE4A9E8A-B1C6-42...1', 'PYTEST_CURRENT_TEST': 'tests/test_live_store_guard.py::test_tests_never_default_to_the_checkout_data_dir (call)'}) = os.environ
+
+tests/test_live_store_guard.py:109: AssertionError
+_________ test_protected_data_dir_is_a_main_checkout_data_folder_only __________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_protected_data_dir_is_a_m0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x109f462d0>
+
+    def test_protected_data_dir_is_a_main_checkout_data_folder_only(tmp_path, monkeypatch):
+        main = tmp_path / "main"
+        (main / ".git").mkdir(parents=True)
+        linked = tmp_path / "linked"
+        linked.mkdir()
+        (linked / ".git").write_text("gitdir: elsewhere\n")          # a linked worktree has a .git FILE
+        monkeypatch.setattr(config, "REPO_ROOT", linked)
+>       assert config.protected_data_dir(main / "data")              # any main checkout's data folder
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'app.config' has no attribute 'protected_data_dir'
+
+tests/test_live_store_guard.py:121: AttributeError
+___________ test_implicit_command_never_migrates_the_checkout_store ____________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_implicit_command_never_mi0')
+checkout = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_implicit_command_never_mi0/repo/data')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x109f97590>
+capsys = <_pytest.capture.CaptureFixture object at 0x109f96090>
+
+    def test_implicit_command_never_migrates_the_checkout_store(tmp_path, checkout, monkeypatch, capsys):
+        store = build_store(tmp_path, checkout / "nhl.sqlite", "nhl", upto=release.shipped_schema() - 1)
+        before = tree(checkout)
+        no_run(monkeypatch)
+        rc, out = run(["--sport", "nhl", "score"], capsys)
+>       assert schema(store) == release.shipped_schema() - 1
+E       AssertionError: assert 35 == (35 - 1)
+E        +  where 35 = schema(PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_implicit_command_never_mi0/repo/data/nhl.sqlite'))
+E        +  and   35 = <function shipped_schema at 0x1097f5760>()
+E        +    where <function shipped_schema at 0x1097f5760> = release.shipped_schema
+
+tests/test_live_store_guard.py:132: AssertionError
+_______ test_explicit_nba_data_dir_naming_the_checkout_store_is_refused ________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_explicit_nba_data_dir_nam0')
+checkout = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_explicit_nba_data_dir_nam0/repo/data')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x109fdf170>
+capsys = <_pytest.capture.CaptureFixture object at 0x109fdcdd0>
+
+    def test_explicit_nba_data_dir_naming_the_checkout_store_is_refused(tmp_path, checkout, monkeypatch, capsys):
+        store = build_store(tmp_path, checkout / "nhl.sqlite", "nhl", upto=release.shipped_schema() - 1)
+        monkeypatch.setenv("NBA_DATA_DIR", str(checkout))
+        no_run(monkeypatch)
+        rc, out = run(["--sport", "nhl", "score"], capsys)
+>       assert schema(store) == release.shipped_schema() - 1
+E       AssertionError: assert 35 == (35 - 1)
+E        +  where 35 = schema(PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_explicit_nba_data_dir_nam0/repo/data/nhl.sqlite'))
+E        +  and   35 = <function shipped_schema at 0x1097f5760>()
+E        +    where <function shipped_schema at 0x1097f5760> = release.shipped_schema
+
+tests/test_live_store_guard.py:142: AssertionError
+_________ test_explicit_migrate_outside_a_release_checkout_is_refused __________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_explicit_migrate_outside_0')
+checkout = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_explicit_migrate_outside_0/repo/data')
+capsys = <_pytest.capture.CaptureFixture object at 0x109f96f60>
+
+    def test_explicit_migrate_outside_a_release_checkout_is_refused(tmp_path, checkout, capsys):
+        nhl = build_store(tmp_path, checkout / "nhl.sqlite", "nhl", upto=release.shipped_schema() - 1)
+        nfl = build_store(tmp_path, checkout / "nfl.sqlite", "nfl", upto=release.shipped_schema() - 1)
+        before = tree(checkout)
+        for argv, store in ((["--sport", "nhl", "migrate"], nhl), (["nfl", "migrate"], nfl)):
+            rc, out = run(argv, capsys)
+>           assert schema(store) == release.shipped_schema() - 1, argv
+E           AssertionError: ['--sport', 'nhl', 'migrate']
+E           assert 35 == (35 - 1)
+E            +  where 35 = schema(PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_explicit_migrate_outside_0/repo/data/nhl.sqlite'))
+E            +  and   35 = <function shipped_schema at 0x1097f5760>()
+E            +    where <function shipped_schema at 0x1097f5760> = release.shipped_schema
+
+tests/test_live_store_guard.py:152: AssertionError
+_______________ test_no_store_file_is_created_in_a_protected_dir _______________
+
+checkout = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_no_store_file_is_created_0/repo/data')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10a03baa0>
+capsys = <_pytest.capture.CaptureFixture object at 0x10a038d40>
+
+    def test_no_store_file_is_created_in_a_protected_dir(checkout, monkeypatch, capsys):
+        def no_network(*a, **k):
+            raise AssertionError("a refused command must not make a request")
+        monkeypatch.setattr(soccer, "ingest_range", no_network)
+        for argv in (["soccer", "ingest", "--from", "20261101", "--to", "20261102"], ["soccer", "migrate"], ["migrate"],
+                     ["nfl", "ingest", "--from", "202410", "--to", "202410"]):
+            rc, out = run(argv, capsys)
+>           assert (rc, out.get("status")) == (1, "refused"), argv
+E           AssertionError: ['soccer', 'ingest', '--from', '20261101', '--to', '20261102']
+E           assert ('AssertionEr...equest', None) == (1, 'refused')
+E             
+E             At index 0 diff: 'AssertionError: a refused command must not make a request' != 1
+E             Use -v to get more diff
+
+tests/test_live_store_guard.py:164: AssertionError
+___ test_dev_checkout_write_on_protected_store_at_shipped_schema_is_refused ____
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_dev_checkout_write_on_pro0')
+checkout = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_dev_checkout_write_on_pro0/repo/data')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10a038800>
+capsys = <_pytest.capture.CaptureFixture object at 0x10a03a1b0>
+
+    def test_dev_checkout_write_on_protected_store_at_shipped_schema_is_refused(tmp_path, checkout, monkeypatch, capsys):
+        """After a release the live stores are at this checkout's schema: a dev write must still be refused (CHALLENGE M1)."""
+        for sport in ("nba", "nhl", "nfl", "soccer"):
+            build_store(tmp_path, checkout / f"{sport}.sqlite", sport)
+        before = tree(checkout)
+        no_run(monkeypatch)
+        monkeypatch.setattr(ingest, "replay", lambda *a, **k: pytest.fail("replay ran on a protected store"))
+        monkeypatch.setattr(soccer, "replay", lambda *a, **k: pytest.fail("replay ran on a protected store"))
+        for argv in (["--sport", "nhl", "score"], ["predict"], ["--sport", "nhl", "odds", "--force"], ["replay"],
+                     ["nfl", "replay"], ["nfl", "refresh"], ["soccer", "replay"], ["tuning-study"], ["deep-study"],
+                     ["--sport", "nhl", "adaptive-train"]):
+            rc, out = run(argv, capsys)
+>           assert (rc, out.get("status")) == (1, "refused"), (argv, rc, out)
+E           AssertionError: (['--sport', 'nhl', 'score'], 0, {})
+E           assert (0, None) == (1, 'refused')
+E             
+E             At index 0 diff: 0 != 1
+E             Use -v to get more diff
+
+tests/test_live_store_guard.py:180: AssertionError
+__________________ test_release_migration_context_may_migrate __________________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_release_migration_context0')
+checkout = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_release_migration_context0/repo/data')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10a02af60>
+capsys = <_pytest.capture.CaptureFixture object at 0x10a02be30>
+
+    def test_release_migration_context_may_migrate(tmp_path, checkout, monkeypatch, capsys):
+        """The documented release migration: release checkout + NBA_RELEASE_GUARD/ROOT + NBA_DATA_DIR=the live folder."""
+        store = build_store(tmp_path, checkout / "nhl.sqlite", "nhl", upto=release.shipped_schema() - 1)
+        root = git_repo(tmp_path / "release")
+        monkeypatch.setattr(release, "code_root", lambda: root)
+        monkeypatch.setenv(release.GUARD_ENV, "1")
+        monkeypatch.setenv(release.ROOT_ENV, str(root))
+        monkeypatch.setenv("NBA_DATA_DIR", str(checkout))
+        real_run = cli._run
+        no_run(monkeypatch)
+        rc, out = run(["--sport", "nhl", "adaptive-record"], capsys)  # an unguarded implicit command never migrates
+>       assert (rc, out.get("status")) == (1, "refused") and schema(store) == release.shipped_schema() - 1
+E       AssertionError: assert ((0, None) == (1, 'refused')
+E         
+E         At index 0 diff: 0 != 1
+E         Use -v to get more diff)
+
+tests/test_live_store_guard.py:202: AssertionError
+___________ test_release_context_without_the_guard_is_not_a_release ____________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_release_context_without_t0')
+checkout = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_release_context_without_t0/repo/data')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10a08ac00>
+capsys = <_pytest.capture.CaptureFixture object at 0x10a08aed0>
+
+    def test_release_context_without_the_guard_is_not_a_release(tmp_path, checkout, monkeypatch, capsys):
+        store = build_store(tmp_path, checkout / "nhl.sqlite", "nhl")
+        root = git_repo(tmp_path / "release")
+        monkeypatch.setattr(release, "code_root", lambda: root)
+        monkeypatch.setenv(release.ROOT_ENV, str(root))
+        monkeypatch.setenv("NBA_DATA_DIR", str(checkout))
+        no_run(monkeypatch)
+        rc, out = run(["--sport", "nhl", "score"], capsys)
+>       assert (rc, out.get("status")) == (1, "refused") and "NBA_RELEASE_GUARD" in out["reason"]
+E       AssertionError: assert ((0, None) == (1, 'refused')
+E         
+E         At index 0 diff: 0 != 1
+E         Use -v to get more diff)
+
+tests/test_live_store_guard.py:218: AssertionError
+__________ test_db_migrate_refuses_protected_pending_without_context ___________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_db_migrate_refuses_protec0')
+checkout = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_db_migrate_refuses_protec0/repo/data')
+
+    def test_db_migrate_refuses_protected_pending_without_context(tmp_path, checkout):
+        store = build_store(tmp_path, checkout / "nhl.sqlite", "nhl", upto=release.shipped_schema() - 1)
+        for explicit in (False, True):                               # explicit, but not in the release environment
+            conn = db.connect(store)
+            try:
+                raised = None
+                try:
+                    db.migrate(conn, explicit=explicit) if explicit else db.migrate(conn)
+                except Exception as exc:
+                    raised = exc
+            finally:
+                conn.close()
+>           assert schema(store) == release.shipped_schema() - 1
+E           AssertionError: assert 35 == (35 - 1)
+E            +  where 35 = schema(PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_db_migrate_refuses_protec0/repo/data/nhl.sqlite'))
+E            +  and   35 = <function shipped_schema at 0x1097f5760>()
+E            +    where <function shipped_schema at 0x1097f5760> = release.shipped_schema
+
+tests/test_live_store_guard.py:246: AssertionError
+_ test_replay_refuses_before_writing_when_a_later_raw_file_is_missing[nba-older_schema] _
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_replay_refuses_before_wri0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x109f96390>
+capsys = <_pytest.capture.CaptureFixture object at 0x109f97fb0>, sport = 'nba'
+at = 'older_schema'
+
+    @pytest.mark.parametrize("at", ["older_schema", "shipped_schema"])
+    @pytest.mark.parametrize("sport", ["nba", "nfl", "soccer"])
+    def test_replay_refuses_before_writing_when_a_later_raw_file_is_missing(tmp_path, monkeypatch, capsys, sport, at):
+        """older_schema: the CLI must not migrate before refusing; shipped_schema: replay must not import the earlier,
+        present response and then stop half-way at the missing one."""
+        data = tmp_path / "data"
+        monkeypatch.setenv("NBA_DATA_DIR", str(data))
+        src = db.connect(data / "source.sqlite")
+        db.migrate(src)
+        if sport == "nba":
+            ingest.ingest_month(src, "202401", fetch=lambda _m: payload(event(eid="1001")), retrieved_at="2024-01-20T12:00:00Z")
+            ingest.ingest_month(src, "202402", fetch=lambda _m: payload(event(eid="1002", date="2024-02-15T18:00Z")),
+                                retrieved_at="2024-02-20T12:00:00Z")
+            argv = ["replay"]
+        elif sport == "nfl":
+            ingest.ingest_nfl_month(src, "202409", fetch=lambda _m: nfl_payload(nfl_event(eid="401671000", date="2024-09-29T17:00Z",
+                                                                                          week=4)),
+                                    retrieved_at="2024-09-30T12:00:00Z")
+            ingest.ingest_nfl_month(src, "202410", fetch=lambda _m: nfl_payload(nfl_event()), retrieved_at="2024-10-07T12:00:00Z")
+            argv = ["nfl", "replay"]
+        else:
+            soccer.ingest_day(src, "eng.1", "20261107", fetch=lambda *_: soccer_payload("eng.1", soccer_event()),
+                              retrieved_at="2026-11-07T20:00:00Z")
+            soccer.ingest_day(src, "eng.1", "20261108", fetch=lambda *_: soccer_payload("eng.1", soccer_event(
+                eid="401878759", date="2026-11-08T15:00Z")), retrieved_at="2026-11-08T20:00:00Z")
+            argv = ["soccer", "replay"]
+        store_file = config.db_path(sport)
+        missing = _rebuild_target(data, src, store_file, upto=release.shipped_schema() - (at == "older_schema"))
+        src.close()
+        before = dump(store_file)
+        rc, out = run(argv, capsys)
+>       assert dump(store_file) == before                             # schema, games/matches, revisions, fetches, identity
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       assert {'adaptive_fi...pts': [], ...} == {'adaptive_fi...pts': [], ...}
+E         
+E         Omitting 35 identical items, use -vv to show
+E         Differing items:
+E         {'schema_migrations': ["(1, '0001_initial.sql', '2026-11-07T23:31:52Z')", "(10, '0010_injury_report_attempts.sql', '20...rket_forecast_checks.sql', '2026-11-07T23:31:52Z')", "(14, '0014_goalie_snapshots.sql', '2026-11-07T23:31:52Z')", ...]} != {'schema_migrations': ["(1, '0001_initial.sql', '2026-11-07T23:31:52Z')", "(10, '0010_injury_report_attempts.sql', '20...rket_forecast_checks.sql', '2026-11-07T23:31:52Z')", "(14, '0014_goalie_snapshots.sql', '2026-11-07T23:31:52Z')", ...]}
+E         {'games': ["('espn:1001', 2024, ...
+E         
+E         ...Full output truncated (6 lines hidden), use '-vv' to show
+
+tests/test_live_store_guard.py:322: AssertionError
+_ test_replay_refuses_before_writing_when_a_later_raw_file_is_missing[nba-shipped_schema] _
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_replay_refuses_before_wri1')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x109ff6960>
+capsys = <_pytest.capture.CaptureFixture object at 0x109e33770>, sport = 'nba'
+at = 'shipped_schema'
+
+    @pytest.mark.parametrize("at", ["older_schema", "shipped_schema"])
+    @pytest.mark.parametrize("sport", ["nba", "nfl", "soccer"])
+    def test_replay_refuses_before_writing_when_a_later_raw_file_is_missing(tmp_path, monkeypatch, capsys, sport, at):
+        """older_schema: the CLI must not migrate before refusing; shipped_schema: replay must not import the earlier,
+        present response and then stop half-way at the missing one."""
+        data = tmp_path / "data"
+        monkeypatch.setenv("NBA_DATA_DIR", str(data))
+        src = db.connect(data / "source.sqlite")
+        db.migrate(src)
+        if sport == "nba":
+            ingest.ingest_month(src, "202401", fetch=lambda _m: payload(event(eid="1001")), retrieved_at="2024-01-20T12:00:00Z")
+            ingest.ingest_month(src, "202402", fetch=lambda _m: payload(event(eid="1002", date="2024-02-15T18:00Z")),
+                                retrieved_at="2024-02-20T12:00:00Z")
+            argv = ["replay"]
+        elif sport == "nfl":
+            ingest.ingest_nfl_month(src, "202409", fetch=lambda _m: nfl_payload(nfl_event(eid="401671000", date="2024-09-29T17:00Z",
+                                                                                          week=4)),
+                                    retrieved_at="2024-09-30T12:00:00Z")
+            ingest.ingest_nfl_month(src, "202410", fetch=lambda _m: nfl_payload(nfl_event()), retrieved_at="2024-10-07T12:00:00Z")
+            argv = ["nfl", "replay"]
+        else:
+            soccer.ingest_day(src, "eng.1", "20261107", fetch=lambda *_: soccer_payload("eng.1", soccer_event()),
+                              retrieved_at="2026-11-07T20:00:00Z")
+            soccer.ingest_day(src, "eng.1", "20261108", fetch=lambda *_: soccer_payload("eng.1", soccer_event(
+                eid="401878759", date="2026-11-08T15:00Z")), retrieved_at="2026-11-08T20:00:00Z")
+            argv = ["soccer", "replay"]
+        store_file = config.db_path(sport)
+        missing = _rebuild_target(data, src, store_file, upto=release.shipped_schema() - (at == "older_schema"))
+        src.close()
+        before = dump(store_file)
+        rc, out = run(argv, capsys)
+>       assert dump(store_file) == before                             # schema, games/matches, revisions, fetches, identity
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       assert {'adaptive_fi...pts': [], ...} == {'adaptive_fi...pts': [], ...}
+E         
+E         Omitting 37 identical items, use -vv to show
+E         Differing items:
+E         {'games': ["('espn:1001', 2024, 'regular', '2024-01-15T18:00:00Z', 'espn:20', 'espn:10', 0, 'scheduled', None, None, '2024-01-20T12:00:00Z', None, None, None, 1, '2024-01-20T12:00:00Z', '2024-01-20T12:00:00Z', 1)"]} != {'games': []}
+E         {'store_identity': ["('nba', '2026-11-07T23:31:53Z')"]} != {'store_identity': []}
+E         {'teams': ["('espn:10', 'HOU', 'Team HOU', '2024-01-20T12:00:00Z')", "('espn:20', 'PHI', 'Team PHI', '2024-01-20T12:00:00Z')"]} != {'teams': []}
+E         Use -v to get more diff
+
+tests/test_live_store_guard.py:322: AssertionError
+_ test_replay_refuses_before_writing_when_a_later_raw_file_is_missing[nfl-older_schema] _
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_replay_refuses_before_wri2')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10a0ec320>
+capsys = <_pytest.capture.CaptureFixture object at 0x10a0ee2d0>, sport = 'nfl'
+at = 'older_schema'
+
+    @pytest.mark.parametrize("at", ["older_schema", "shipped_schema"])
+    @pytest.mark.parametrize("sport", ["nba", "nfl", "soccer"])
+    def test_replay_refuses_before_writing_when_a_later_raw_file_is_missing(tmp_path, monkeypatch, capsys, sport, at):
+        """older_schema: the CLI must not migrate before refusing; shipped_schema: replay must not import the earlier,
+        present response and then stop half-way at the missing one."""
+        data = tmp_path / "data"
+        monkeypatch.setenv("NBA_DATA_DIR", str(data))
+        src = db.connect(data / "source.sqlite")
+        db.migrate(src)
+        if sport == "nba":
+            ingest.ingest_month(src, "202401", fetch=lambda _m: payload(event(eid="1001")), retrieved_at="2024-01-20T12:00:00Z")
+            ingest.ingest_month(src, "202402", fetch=lambda _m: payload(event(eid="1002", date="2024-02-15T18:00Z")),
+                                retrieved_at="2024-02-20T12:00:00Z")
+            argv = ["replay"]
+        elif sport == "nfl":
+            ingest.ingest_nfl_month(src, "202409", fetch=lambda _m: nfl_payload(nfl_event(eid="401671000", date="2024-09-29T17:00Z",
+                                                                                          week=4)),
+                                    retrieved_at="2024-09-30T12:00:00Z")
+            ingest.ingest_nfl_month(src, "202410", fetch=lambda _m: nfl_payload(nfl_event()), retrieved_at="2024-10-07T12:00:00Z")
+            argv = ["nfl", "replay"]
+        else:
+            soccer.ingest_day(src, "eng.1", "20261107", fetch=lambda *_: soccer_payload("eng.1", soccer_event()),
+                              retrieved_at="2026-11-07T20:00:00Z")
+            soccer.ingest_day(src, "eng.1", "20261108", fetch=lambda *_: soccer_payload("eng.1", soccer_event(
+                eid="401878759", date="2026-11-08T15:00Z")), retrieved_at="2026-11-08T20:00:00Z")
+            argv = ["soccer", "replay"]
+        store_file = config.db_path(sport)
+        missing = _rebuild_target(data, src, store_file, upto=release.shipped_schema() - (at == "older_schema"))
+        src.close()
+        before = dump(store_file)
+        rc, out = run(argv, capsys)
+>       assert dump(store_file) == before                             # schema, games/matches, revisions, fetches, identity
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       assert {'adaptive_fi...pts': [], ...} == {'adaptive_fi...pts': [], ...}
+E         
+E         Omitting 34 identical items, use -vv to show
+E         Differing items:
+E         {'schema_migrations': ["(1, '0001_initial.sql', '2026-11-07T23:31:53Z')", "(10, '0010_injury_report_attempts.sql', '20...rket_forecast_checks.sql', '2026-11-07T23:31:53Z')", "(14, '0014_goalie_snapshots.sql', '2026-11-07T23:31:53Z')", ...]} != {'schema_migrations': ["(1, '0001_initial.sql', '2026-11-07T23:31:53Z')", "(10, '0010_injury_report_attempts.sql', '20...rket_forecast_checks.sql', '2026-11-07T23:31:53Z')", "(14, '0014_goalie_snapshots.sql', '2026-11-07T23:31:53Z')", ...]}
+E         {'teams': ["('nfl:16', 'MIN', 'M...
+E         
+E         ...Full output truncated (7 lines hidden), use '-vv' to show
+
+tests/test_live_store_guard.py:322: AssertionError
+_ test_replay_refuses_before_writing_when_a_later_raw_file_is_missing[nfl-shipped_schema] _
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_replay_refuses_before_wri3')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10a13aa50>
+capsys = <_pytest.capture.CaptureFixture object at 0x10a139250>, sport = 'nfl'
+at = 'shipped_schema'
+
+    @pytest.mark.parametrize("at", ["older_schema", "shipped_schema"])
+    @pytest.mark.parametrize("sport", ["nba", "nfl", "soccer"])
+    def test_replay_refuses_before_writing_when_a_later_raw_file_is_missing(tmp_path, monkeypatch, capsys, sport, at):
+        """older_schema: the CLI must not migrate before refusing; shipped_schema: replay must not import the earlier,
+        present response and then stop half-way at the missing one."""
+        data = tmp_path / "data"
+        monkeypatch.setenv("NBA_DATA_DIR", str(data))
+        src = db.connect(data / "source.sqlite")
+        db.migrate(src)
+        if sport == "nba":
+            ingest.ingest_month(src, "202401", fetch=lambda _m: payload(event(eid="1001")), retrieved_at="2024-01-20T12:00:00Z")
+            ingest.ingest_month(src, "202402", fetch=lambda _m: payload(event(eid="1002", date="2024-02-15T18:00Z")),
+                                retrieved_at="2024-02-20T12:00:00Z")
+            argv = ["replay"]
+        elif sport == "nfl":
+            ingest.ingest_nfl_month(src, "202409", fetch=lambda _m: nfl_payload(nfl_event(eid="401671000", date="2024-09-29T17:00Z",
+                                                                                          week=4)),
+                                    retrieved_at="2024-09-30T12:00:00Z")
+            ingest.ingest_nfl_month(src, "202410", fetch=lambda _m: nfl_payload(nfl_event()), retrieved_at="2024-10-07T12:00:00Z")
+            argv = ["nfl", "replay"]
+        else:
+            soccer.ingest_day(src, "eng.1", "20261107", fetch=lambda *_: soccer_payload("eng.1", soccer_event()),
+                              retrieved_at="2026-11-07T20:00:00Z")
+            soccer.ingest_day(src, "eng.1", "20261108", fetch=lambda *_: soccer_payload("eng.1", soccer_event(
+                eid="401878759", date="2026-11-08T15:00Z")), retrieved_at="2026-11-08T20:00:00Z")
+            argv = ["soccer", "replay"]
+        store_file = config.db_path(sport)
+        missing = _rebuild_target(data, src, store_file, upto=release.shipped_schema() - (at == "older_schema"))
+        src.close()
+        before = dump(store_file)
+        rc, out = run(argv, capsys)
+>       assert dump(store_file) == before                             # schema, games/matches, revisions, fetches, identity
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       assert {'adaptive_fi...pts': [], ...} == {'adaptive_fi...pts': [], ...}
+E         
+E         Omitting 36 identical items, use -vv to show
+E         Differing items:
+E         {'result_revisions': ["(1, 'nfl:401671000', 1, 23, 17, None, '2024-09-30T12:00:00Z', 1, 'observed', 'nfl:16', 'nfl:20', 1)"]} != {'result_revisions': []}
+E         {'games': ["('nfl:401671000', 2024, 'regular', '2024-09-29T17:00:00Z', 'nfl:16', 'nfl:20', 0, 'final', 23, 17, '2024-0...9-30T12:00:00Z', '2024-09-30T12:00:00Z', 'observed_retrieval', 1, '2024-09-30T12:00:00Z', '2024-09-30T12:00:00Z', 1)"]} != {'games': []}
+E         {'store_identity': ["('nfl', '2026-11-07T23:31:53Z')"]} != {'store_identity': []}
+E         {'teams': ["('nfl:16', 'M...
+E         
+E         ...Full output truncated (2 lines hidden), use '-vv' to show
+
+tests/test_live_store_guard.py:322: AssertionError
+_ test_replay_refuses_before_writing_when_a_later_raw_file_is_missing[soccer-older_schema] _
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_replay_refuses_before_wri4')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10a078d10>
+capsys = <_pytest.capture.CaptureFixture object at 0x10a07a6f0>
+sport = 'soccer', at = 'older_schema'
+
+    @pytest.mark.parametrize("at", ["older_schema", "shipped_schema"])
+    @pytest.mark.parametrize("sport", ["nba", "nfl", "soccer"])
+    def test_replay_refuses_before_writing_when_a_later_raw_file_is_missing(tmp_path, monkeypatch, capsys, sport, at):
+        """older_schema: the CLI must not migrate before refusing; shipped_schema: replay must not import the earlier,
+        present response and then stop half-way at the missing one."""
+        data = tmp_path / "data"
+        monkeypatch.setenv("NBA_DATA_DIR", str(data))
+        src = db.connect(data / "source.sqlite")
+        db.migrate(src)
+        if sport == "nba":
+            ingest.ingest_month(src, "202401", fetch=lambda _m: payload(event(eid="1001")), retrieved_at="2024-01-20T12:00:00Z")
+            ingest.ingest_month(src, "202402", fetch=lambda _m: payload(event(eid="1002", date="2024-02-15T18:00Z")),
+                                retrieved_at="2024-02-20T12:00:00Z")
+            argv = ["replay"]
+        elif sport == "nfl":
+            ingest.ingest_nfl_month(src, "202409", fetch=lambda _m: nfl_payload(nfl_event(eid="401671000", date="2024-09-29T17:00Z",
+                                                                                          week=4)),
+                                    retrieved_at="2024-09-30T12:00:00Z")
+            ingest.ingest_nfl_month(src, "202410", fetch=lambda _m: nfl_payload(nfl_event()), retrieved_at="2024-10-07T12:00:00Z")
+            argv = ["nfl", "replay"]
+        else:
+            soccer.ingest_day(src, "eng.1", "20261107", fetch=lambda *_: soccer_payload("eng.1", soccer_event()),
+                              retrieved_at="2026-11-07T20:00:00Z")
+            soccer.ingest_day(src, "eng.1", "20261108", fetch=lambda *_: soccer_payload("eng.1", soccer_event(
+                eid="401878759", date="2026-11-08T15:00Z")), retrieved_at="2026-11-08T20:00:00Z")
+            argv = ["soccer", "replay"]
+        store_file = config.db_path(sport)
+        missing = _rebuild_target(data, src, store_file, upto=release.shipped_schema() - (at == "older_schema"))
+        src.close()
+        before = dump(store_file)
+        rc, out = run(argv, capsys)
+>       assert dump(store_file) == before                             # schema, games/matches, revisions, fetches, identity
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       assert {'adaptive_fi...pts': [], ...} == {'adaptive_fi...pts': [], ...}
+E         
+E         Omitting 34 identical items, use -vv to show
+E         Differing items:
+E         {'soccer_matches': ["('soccer:eng.1:401878758', 'eng.1', '401878758', 2026, 14308, '2026-27-english-premier-league', '...0:00:00Z', '2026-11-07T20:00:00Z', 'observed_retrieval', None, '2026-11-07T20:00:00Z', 1, 1, '2026-11-07T20:00:00Z')"]} != {'soccer_matches': []}
+E         {'schema_migrations': ["(1, '0001_initial.sql', '2026-11-07T23:31:53Z')", "(10, '0010_injury_report_attempts.sql', '20...rket_forecast_checks.sql', '2026-11-07T23:31:53Z')", "(14, '0014_goalie_snapshots.sql', '2026-11-07T23:31:53Z')", ...]} != {'sche...
+E         
+E         ...Full output truncated (7 lines hidden), use '-vv' to show
+
+tests/test_live_store_guard.py:322: AssertionError
+_ test_replay_refuses_before_writing_when_a_later_raw_file_is_missing[soccer-shipped_schema] _
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_replay_refuses_before_wri5')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x108d4d010>
+capsys = <_pytest.capture.CaptureFixture object at 0x108d4d1c0>
+sport = 'soccer', at = 'shipped_schema'
+
+    @pytest.mark.parametrize("at", ["older_schema", "shipped_schema"])
+    @pytest.mark.parametrize("sport", ["nba", "nfl", "soccer"])
+    def test_replay_refuses_before_writing_when_a_later_raw_file_is_missing(tmp_path, monkeypatch, capsys, sport, at):
+        """older_schema: the CLI must not migrate before refusing; shipped_schema: replay must not import the earlier,
+        present response and then stop half-way at the missing one."""
+        data = tmp_path / "data"
+        monkeypatch.setenv("NBA_DATA_DIR", str(data))
+        src = db.connect(data / "source.sqlite")
+        db.migrate(src)
+        if sport == "nba":
+            ingest.ingest_month(src, "202401", fetch=lambda _m: payload(event(eid="1001")), retrieved_at="2024-01-20T12:00:00Z")
+            ingest.ingest_month(src, "202402", fetch=lambda _m: payload(event(eid="1002", date="2024-02-15T18:00Z")),
+                                retrieved_at="2024-02-20T12:00:00Z")
+            argv = ["replay"]
+        elif sport == "nfl":
+            ingest.ingest_nfl_month(src, "202409", fetch=lambda _m: nfl_payload(nfl_event(eid="401671000", date="2024-09-29T17:00Z",
+                                                                                          week=4)),
+                                    retrieved_at="2024-09-30T12:00:00Z")
+            ingest.ingest_nfl_month(src, "202410", fetch=lambda _m: nfl_payload(nfl_event()), retrieved_at="2024-10-07T12:00:00Z")
+            argv = ["nfl", "replay"]
+        else:
+            soccer.ingest_day(src, "eng.1", "20261107", fetch=lambda *_: soccer_payload("eng.1", soccer_event()),
+                              retrieved_at="2026-11-07T20:00:00Z")
+            soccer.ingest_day(src, "eng.1", "20261108", fetch=lambda *_: soccer_payload("eng.1", soccer_event(
+                eid="401878759", date="2026-11-08T15:00Z")), retrieved_at="2026-11-08T20:00:00Z")
+            argv = ["soccer", "replay"]
+        store_file = config.db_path(sport)
+        missing = _rebuild_target(data, src, store_file, upto=release.shipped_schema() - (at == "older_schema"))
+        src.close()
+        before = dump(store_file)
+        rc, out = run(argv, capsys)
+>       assert dump(store_file) == before                             # schema, games/matches, revisions, fetches, identity
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       assert {'adaptive_fi...pts': [], ...} == {'adaptive_fi...pts': [], ...}
+E         
+E         Omitting 36 identical items, use -vv to show
+E         Differing items:
+E         {'soccer_matches': ["('soccer:eng.1:401878758', 'eng.1', '401878758', 2026, 14308, '2026-27-english-premier-league', '...0:00:00Z', '2026-11-07T20:00:00Z', 'observed_retrieval', None, '2026-11-07T20:00:00Z', 1, 1, '2026-11-07T20:00:00Z')"]} != {'soccer_matches': []}
+E         {'soccer_result_revisions': ["(1, 'soccer:eng.1:401878758', 1, 'regulation', 1, 0, None, None, None, None, None, 'soccer:357', 'soccer:367', '2026-11-07T20:00:00Z', 1, 1, 'observed')"]} != {'soccer_result_revisions': []}
+E         {'store_identity': ["('soccer'...
+E         
+E         ...Full output truncated (3 lines hidden), use '-vv' to show
+
+tests/test_live_store_guard.py:322: AssertionError
+_ test_release_check_lists_missing_raw_files_but_release_check_function_does_not_scan _
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_release_check_lists_missi0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x108d4d2e0>
+capsys = <_pytest.capture.CaptureFixture object at 0x10a029fd0>
+
+    def test_release_check_lists_missing_raw_files_but_release_check_function_does_not_scan(tmp_path, monkeypatch, capsys):
+        data = tmp_path / "data"
+        monkeypatch.setenv("NBA_DATA_DIR", str(data))
+        conn = db.connect(sport="nba")
+        db.migrate(conn)
+        db.claim_store(conn, "nba")
+        ingest.ingest_month(conn, "202401", fetch=lambda _m: payload(event(eid="1001")), retrieved_at="2024-01-20T12:00:00Z")
+        ingest.ingest_month(conn, "202402", fetch=lambda _m: payload(event(eid="1002", date="2024-02-15T18:00Z")),
+                            retrieved_at="2024-02-20T12:00:00Z")
+        gone = conn.execute("SELECT raw_id, path FROM raw_responses ORDER BY raw_id DESC LIMIT 1").fetchone()
+        conn.close()
+        (data / "raw" / gone["path"]).unlink()
+        assert "raw_missing" not in release.check("nba")              # every guarded tick: no file scan
+        from app import research_live, selector
+        monkeypatch.setattr(research_live, "definition", lambda _c: "synthetic")   # needs sealed research files
+        monkeypatch.setattr(selector, "version", lambda: "synthetic")
+        cli.main(["release-check"])
+        out = json.loads(capsys.readouterr().out)
+>       assert out["raw_missing"]["count"] == 1 and out["raw_missing"]["raw_ids"] == [gone["raw_id"]]
+               ^^^^^^^^^^^^^^^^^^
+E       KeyError: 'raw_missing'
+
+tests/test_live_store_guard.py:365: KeyError
+=============================== warnings summary ===============================
+../../nba-predictor-sprint1/backend/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+==================================== PASSES ====================================
+_____________________ test_copies_still_migrate_implicitly _____________________
+----------------------------- Captured stdout call -----------------------------
+{"db": "/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-126/test_copies_still_migrate_impl0/copy/soccer.sqlite", "sport": "soccer", "applied": ["0001_initial.sql", "0002_block_conflicting_inserts.sql", "0003_job_runs.sql", "0004_odds_job.sql", "0005_team_possession_stats.sql", "0006_possession_observations.sql", "0007_possession_fetch_events.sql", "0008_shadow_jobs.sql", "0009_box_fetch_attempts.sql", "0010_injury_report_attempts.sql", "0011_near_tipoff.sql", "0012_markets.sql", "0013_market_forecast_checks.sql", "0014_goalie_snapshots.sql", "0015_two_hour_forecasts.sql", "0016_research_selection.sql", "0017_nhl_shots.sql", "0018_model_fits.sql", "0019_candidate_forecasts.sql", "0020_pool_selection.sql", "0021_agreement_observations.sql", "0022_agreement_observation_inputs.sql", "0023_two_hour_guards.sql", "0024_adaptive.sql", "0025_recovery.sql", "0026_adaptive_recovery.sql", "0027_adaptive_recovery_attempts.sql", "0028_exact_rule_observations.sql", "0029_game_forecasts.sql", "0030_result_revisions.sql", "0031_training_inputs_job.sql", "0032_nfl_store_identity.sql", "0033_nfl_market_quotes.sql", "0034_soccer_store.sql", "0035_result_integrity.sql"]}
+=========================== short test summary info ============================
+PASSED tests/test_live_store_guard.py::test_read_only_commands_still_read_a_protected_store
+PASSED tests/test_live_store_guard.py::test_copies_still_migrate_implicitly
+PASSED tests/test_live_store_guard.py::test_in_memory_and_temporary_databases_are_never_protected
+PASSED tests/test_live_store_guard.py::test_replay_with_every_file_present_still_runs
+FAILED tests/test_live_store_guard.py::test_tests_never_default_to_the_checkout_data_dir
+FAILED tests/test_live_store_guard.py::test_protected_data_dir_is_a_main_checkout_data_folder_only
+FAILED tests/test_live_store_guard.py::test_implicit_command_never_migrates_the_checkout_store
+FAILED tests/test_live_store_guard.py::test_explicit_nba_data_dir_naming_the_checkout_store_is_refused
+FAILED tests/test_live_store_guard.py::test_explicit_migrate_outside_a_release_checkout_is_refused
+FAILED tests/test_live_store_guard.py::test_no_store_file_is_created_in_a_protected_dir
+FAILED tests/test_live_store_guard.py::test_dev_checkout_write_on_protected_store_at_shipped_schema_is_refused
+FAILED tests/test_live_store_guard.py::test_release_migration_context_may_migrate
+FAILED tests/test_live_store_guard.py::test_release_context_without_the_guard_is_not_a_release
+FAILED tests/test_live_store_guard.py::test_db_migrate_refuses_protected_pending_without_context
+FAILED tests/test_live_store_guard.py::test_replay_refuses_before_writing_when_a_later_raw_file_is_missing[nba-older_schema]
+FAILED tests/test_live_store_guard.py::test_replay_refuses_before_writing_when_a_later_raw_file_is_missing[nba-shipped_schema]
+FAILED tests/test_live_store_guard.py::test_replay_refuses_before_writing_when_a_later_raw_file_is_missing[nfl-older_schema]
+FAILED tests/test_live_store_guard.py::test_replay_refuses_before_writing_when_a_later_raw_file_is_missing[nfl-shipped_schema]
+FAILED tests/test_live_store_guard.py::test_replay_refuses_before_writing_when_a_later_raw_file_is_missing[soccer-older_schema]
+FAILED tests/test_live_store_guard.py::test_replay_refuses_before_writing_when_a_later_raw_file_is_missing[soccer-shipped_schema]
+FAILED tests/test_live_store_guard.py::test_release_check_lists_missing_raw_files_but_release_check_function_does_not_scan
+17 failed, 4 passed, 1 warning in 2.16s
+exit 1

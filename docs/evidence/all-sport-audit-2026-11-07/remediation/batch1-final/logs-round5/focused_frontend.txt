@@ -1,0 +1,11 @@
+cwd: /Users/andry/Desktop/nba-predictor-batch1/frontend
+cmd: npm run test:unit
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 80.445584
+exit=0

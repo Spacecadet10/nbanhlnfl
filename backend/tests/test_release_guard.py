@@ -1,0 +1,154 @@
+"""Pinned release guard (app/release.py): scheduled commands run only from a clean release checkout that uses the shared
+data folder at the schema the release ships; a refusal happens before any request, lock or migration and is a failed job
+run; every guarded job run records its release commit. Temporary git repositories and stores only."""
+import json
+import subprocess
+
+import pytest
+
+from app import cli, db, jobs, release
+
+
+def git_repo(path):
+    subprocess.run(["git", "init", "-q", str(path)], check=True)
+    (path / "README").write_text("release\n")
+    subprocess.run(["git", "-C", str(path), "add", "README"], check=True)
+    subprocess.run(["git", "-C", str(path), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "r"], check=True)
+    release.write_pin(path)      # a release pins its commit (app.release pin), as the release procedure does
+    return path
+
+
+@pytest.fixture(autouse=True)
+def _fresh_pin_log(monkeypatch):
+    monkeypatch.setattr(release, "_PIN_LOGGED", set())
+
+
+@pytest.fixture
+def store(tmp_path, monkeypatch):
+    data = tmp_path / "data"
+    monkeypatch.setenv("NBA_DATA_DIR", str(data))
+    conn = db.connect(sport="nhl")
+    db.migrate(conn)
+    db.claim_store(conn, "nhl")
+    conn.close()
+    return data
+
+
+def test_a_clean_release_checkout_with_the_shared_store_passes(tmp_path, store, monkeypatch):
+    root = git_repo(tmp_path / "release")
+    monkeypatch.setenv(release.ROOT_ENV, str(root))
+    info = release.check("nhl", root=root)
+    assert info["problems"] == [] and len(info["commit"]) == 40
+    assert info["store_schema"] == info["release_schema"] == release.shipped_schema()
+
+
+def test_every_unsafe_state_is_refused_with_its_reason(tmp_path, store, monkeypatch):
+    root = git_repo(tmp_path / "release")
+    monkeypatch.setenv(release.ROOT_ENV, str(tmp_path / "elsewhere"))
+    (root / "README").write_text("edited\n")
+    monkeypatch.delenv("NBA_DATA_DIR")
+    problems = " | ".join(release.check("nhl", root=root)["problems"])
+    assert "not the release checkout" in problems and "uncommitted changes: README" in problems
+    assert "NBA_DATA_DIR is not set" in problems
+
+
+def test_a_store_at_another_schema_is_refused(tmp_path, monkeypatch):
+    monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path / "data"))
+    conn = db.connect(sport="nhl")
+    db.migrate(conn, upto=release.shipped_schema() - 1)
+    conn.close()
+    root = git_repo(tmp_path / "release")
+    monkeypatch.setenv(release.ROOT_ENV, str(root))
+    problems = release.check("nhl", root=root)["problems"]
+    assert any("differs from this release's schema" in p for p in problems)
+
+
+def test_the_cli_refuses_before_any_request_lock_or_migration_and_records_it(tmp_path, store, monkeypatch, capsys):
+    monkeypatch.setenv(release.GUARD_ENV, "1")
+    monkeypatch.setenv(release.ROOT_ENV, str(tmp_path / "not-this-checkout"))
+    def no_network(*a, **k):
+        raise AssertionError("a refused command must not make a request")
+    monkeypatch.setattr(jobs, "odds_snapshot", no_network)
+    monkeypatch.setattr(db, "store_lock", no_network)
+    monkeypatch.setattr(db, "migrate", no_network)
+    assert cli.main(["--sport", "nhl", "odds"]) == 1
+    out = json.loads(capsys.readouterr().out)
+    assert out["status"] == "failed" and any("not the release checkout" in p for p in out["problems"])
+    conn = db.connect(sport="nhl")
+    row = conn.execute("SELECT job, status, detail FROM job_runs WHERE run_id=?", (out["run_id"],)).fetchone()
+    assert (row["job"], row["status"]) == ("odds", "failed")
+    assert json.loads(row["detail"])["reason"] == "release guard refused the scheduled command"
+
+
+def test_commands_outside_the_guard_and_dev_runs_are_unaffected(tmp_path, store, monkeypatch, capsys):
+    monkeypatch.delenv(release.GUARD_ENV, raising=False)              # the development checkout: no guard
+    assert not release.enabled()
+    monkeypatch.setenv(release.GUARD_ENV, "1")
+    assert "coverage" not in release.GUARDED and "odds" in release.GUARDED and "daily" in release.GUARDED
+
+
+def test_job_runs_record_the_release_commit(store, monkeypatch):
+    conn = db.connect(sport="nhl")
+    monkeypatch.delenv(release.COMMIT_ENV, raising=False)
+    plain = jobs._finish(conn, jobs._start(conn, "odds"), "skipped", 0, {"reason": "x"})
+    assert "release" not in plain
+    monkeypatch.setenv(release.COMMIT_ENV, "abc123")
+    stamped = jobs._finish(conn, jobs._start(conn, "odds"), "skipped", 0, {"reason": "x"})
+    assert stamped["release"] == "abc123"
+    assert json.loads(conn.execute("SELECT detail FROM job_runs WHERE run_id=?", (stamped["run_id"],)).fetchone()[0])["release"] == "abc123"
+
+
+def test_a_checkout_not_at_its_pinned_commit_only_logs_a_line(tmp_path, store, monkeypatch, capsys):
+    # Owner, Nov 11: "A missing or mismatched pin only writes a line to the log; jobs run as before." (was a refusal, Nov 10)
+    root = git_repo(tmp_path / "release")
+    monkeypatch.setenv(release.ROOT_ENV, str(root))
+    pinned = release.pinned_commit(root)
+    (root / "NEXT").write_text("later\n")
+    subprocess.run(["git", "-C", str(root), "add", "NEXT"], check=True)
+    subprocess.run(["git", "-C", str(root), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "moved"], check=True)
+    capsys.readouterr()
+    info = release.check("nhl", root=root)
+    head = release._git(root, 'rev-parse', 'HEAD')[:12]
+    assert info["problems"] == []
+    assert info["pin_note"] == f"the release checkout is at {head}, not the pinned commit {pinned[:12]}"
+    assert f"release pin (not a refusal): {info['pin_note']}" in capsys.readouterr().err
+    release.write_pin(root)
+    info = release.check("nhl", root=root)
+    assert info["problems"] == [] and info["pin_note"] is None and "release pin" not in capsys.readouterr().err
+
+
+def test_a_checkout_without_any_pin_only_logs_a_line(tmp_path, store, monkeypatch, capsys):
+    root = git_repo(tmp_path / "release")
+    release.pin_path(root).unlink()
+    monkeypatch.setenv(release.ROOT_ENV, str(root))
+    capsys.readouterr()
+    info = release.check("nhl", root=root)
+    assert info["problems"] == [] and info["pin_note"].startswith("no pinned release commit")
+    assert "release pin (not a refusal): no pinned release commit" in capsys.readouterr().err
+
+
+def test_an_unclean_checkout_is_still_refused_with_a_correct_pin(tmp_path, store, monkeypatch):
+    root = git_repo(tmp_path / "release")
+    monkeypatch.setenv(release.ROOT_ENV, str(root))
+    (root / "README").write_text("edited\n")
+    problems = release.check("nhl", root=root)["problems"]
+    assert len(problems) == 1 and problems[0].startswith("the release checkout has uncommitted changes")
+
+
+def test_a_pin_file_that_is_not_text_does_not_stop_a_job(tmp_path, store, monkeypatch):
+    # Review L1, Nov 11: a corrupted pin raised UnicodeDecodeError and would have crashed every guarded job.
+    root = git_repo(tmp_path / "release")
+    monkeypatch.setenv(release.ROOT_ENV, str(root))
+    release.pin_path(root).write_bytes(b"\xff\xfe\x00")
+    info = release.check("nhl", root=root)
+    assert info["problems"] == [] and info["pin_note"].startswith("cannot read the pinned release commit")
+
+
+def test_the_pin_line_is_logged_once_per_process(tmp_path, store, monkeypatch, capsys):
+    root = git_repo(tmp_path / "release")
+    release.pin_path(root).unlink()
+    monkeypatch.setenv(release.ROOT_ENV, str(root))
+    capsys.readouterr()
+    release.check("nhl", root=root)
+    release.check("nhl", root=root)
+    assert capsys.readouterr().err.count("release pin (not a refusal)") == 1

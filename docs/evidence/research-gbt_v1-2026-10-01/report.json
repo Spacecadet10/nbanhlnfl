@@ -1,0 +1,478 @@
+{
+  "period": "validation",
+  "seasons": [
+    2022,
+    2023,
+    2024
+  ],
+  "generated_at": "2026-10-01T00:59:30Z",
+  "dataset_version": "08fe2552c1aa4579",
+  "feature_version": "pregame-ids-v1+prior-day-et-cutoff+possession-obs-v1",
+  "cutoff_rule": "00:00 America/New_York on game date; results with result_available_at <= cutoff (historical availability assumed tipoff+4h)",
+  "models": {
+    "constant": {
+      "model_version": "constant-p=0.5",
+      "n": 3962,
+      "first_game": "2021-10-19",
+      "last_game": "2024-06-18",
+      "accuracy": 0.5588086824835942,
+      "brier": 0.25,
+      "log_loss": 0.6931471805599587,
+      "calibration": [
+        {
+          "lower": 0.0,
+          "upper": 0.2,
+          "count": 0,
+          "mean_predicted": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.4,
+          "count": 0,
+          "mean_predicted": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.6,
+          "count": 3962,
+          "mean_predicted": 0.5,
+          "observed_rate": 0.5588086824835942
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.8,
+          "count": 0,
+          "mean_predicted": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 1.0,
+          "count": 0,
+          "mean_predicted": null,
+          "observed_rate": null
+        }
+      ],
+      "by_season": {
+        "2022": {
+          "n": 1323,
+          "accuracy": 0.5479969765684052,
+          "brier": 0.25,
+          "log_loss": 0.693147180559922
+        },
+        "2023": {
+          "n": 1320,
+          "accuracy": 0.581060606060606,
+          "brier": 0.25,
+          "log_loss": 0.693147180559922
+        },
+        "2024": {
+          "n": 1319,
+          "accuracy": 0.5473843821076573,
+          "brier": 0.25,
+          "log_loss": 0.6931471805599221
+        }
+      }
+    },
+    "home_rate": {
+      "model_version": "home_rate-smoothing=laplace",
+      "n": 3962,
+      "first_game": "2021-10-19",
+      "last_game": "2024-06-18",
+      "accuracy": 0.5588086824835942,
+      "brier": 0.2466353031624768,
+      "log_loss": 0.6864039654543327,
+      "calibration": [
+        {
+          "lower": 0.0,
+          "upper": 0.2,
+          "count": 0,
+          "mean_predicted": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.4,
+          "count": 0,
+          "mean_predicted": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.6,
+          "count": 3962,
+          "mean_predicted": 0.5541663504782894,
+          "observed_rate": 0.5588086824835942
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.8,
+          "count": 0,
+          "mean_predicted": null,
+          "observed_rate": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 1.0,
+          "count": 0,
+          "mean_predicted": null,
+          "observed_rate": null
+        }
+      ],
+      "by_season": {
+        "2022": {
+          "n": 1323,
+          "accuracy": 0.5479969765684052,
+          "brier": 0.24778766269832017,
+          "log_loss": 0.6887171699866599
+        },
+        "2023": {
+          "n": 1320,
+          "accuracy": 0.581060606060606,
+          "brier": 0.24419516472639335,
+          "log_loss": 0.6815046130566167
+        },
+        "2024": {
+          "n": 1319,
+          "accuracy": 0.5473843821076573,
+          "brier": 0.24792143740789713,
+          "log_loss": 0.6889868127391874
+        }
+      }
+    },
+    "elo": {
+      "model_version": "elo-carry=0.75-home_advantage=50-k=15-mov=True",
+      "n": 3962,
+      "first_game": "2021-10-19",
+      "last_game": "2024-06-18",
+      "accuracy": 0.6433619384149419,
+      "brier": 0.2206758452837707,
+      "log_loss": 0.631576237544597,
+      "calibration": [
+        {
+          "lower": 0.0,
+          "upper": 0.2,
+          "count": 44,
+          "mean_predicted": 0.16729520342612794,
+          "observed_rate": 0.18181818181818182
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.4,
+          "count": 628,
+          "mean_predicted": 0.3216865889790587,
+          "observed_rate": 0.3057324840764331
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.6,
+          "count": 1597,
+          "mean_predicted": 0.5129147332258788,
+          "observed_rate": 0.5222291797119599
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.8,
+          "count": 1404,
+          "mean_predicted": 0.686572797837402,
+          "observed_rate": 0.6723646723646723
+        },
+        {
+          "lower": 0.8,
+          "upper": 1.0,
+          "count": 289,
+          "mean_predicted": 0.8401066399261982,
+          "observed_rate": 0.8166089965397924
+        }
+      ],
+      "by_season": {
+        "2022": {
+          "n": 1323,
+          "accuracy": 0.6462585034013606,
+          "brier": 0.22138662365570677,
+          "log_loss": 0.6341690600118263
+        },
+        "2023": {
+          "n": 1320,
+          "accuracy": 0.6318181818181818,
+          "brier": 0.2279443780501846,
+          "log_loss": 0.6479879125612455
+        },
+        "2024": {
+          "n": 1319,
+          "accuracy": 0.6520090978013646,
+          "brier": 0.21268886799966327,
+          "log_loss": 0.6125514345528434
+        }
+      }
+    },
+    "logistic_v2": {
+      "model_version": "logistic_v2-elo=k15-h50-c0.75-movTrue-features=elo_diff+net_diff+rest_diff+b2b_home+b2b_away+neutral-l2=1.0",
+      "n": 3962,
+      "first_game": "2021-10-19",
+      "last_game": "2024-06-18",
+      "accuracy": 0.6441191317516406,
+      "brier": 0.21977044438797586,
+      "log_loss": 0.6296814773600838,
+      "calibration": [
+        {
+          "lower": 0.0,
+          "upper": 0.2,
+          "count": 88,
+          "mean_predicted": 0.1642584460647258,
+          "observed_rate": 0.19318181818181818
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.4,
+          "count": 716,
+          "mean_predicted": 0.3177489469795094,
+          "observed_rate": 0.31564245810055863
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.6,
+          "count": 1566,
+          "mean_predicted": 0.5095520989202301,
+          "observed_rate": 0.541507024265645
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.8,
+          "count": 1278,
+          "mean_predicted": 0.6880320266297151,
+          "observed_rate": 0.6791862284820032
+        },
+        {
+          "lower": 0.8,
+          "upper": 1.0,
+          "count": 314,
+          "mean_predicted": 0.8441504290805316,
+          "observed_rate": 0.8121019108280255
+        }
+      ],
+      "by_season": {
+        "2022": {
+          "n": 1323,
+          "accuracy": 0.653817082388511,
+          "brier": 0.22123665997630104,
+          "log_loss": 0.634011122529593
+        },
+        "2023": {
+          "n": 1320,
+          "accuracy": 0.625,
+          "brier": 0.22751022407982807,
+          "log_loss": 0.6467748857413843
+        },
+        "2024": {
+          "n": 1319,
+          "accuracy": 0.6535253980288097,
+          "brier": 0.21055413474688472,
+          "log_loss": 0.608232334355852
+        }
+      }
+    },
+    "gbt_v1": {
+      "model_version": "gbt_v1-early_stopping=False-elo=k15-h50-c0.75-movTrue-features=elo_diff+mov10_diff+rest_diff+b2b_home+b2b_away+neutral+net_diff+net_home+net_away+pace+games_home+games_away-l2_regularization=1.0-learning_rate=0.05-loss=log_loss-max_bins=255-max_depth=3-max_iter=200-max_leaf_nodes=8-min_samples_leaf=50-monotonic=elo_diff+net_diff+mov10_diff-random_state=20260930",
+      "n": 3962,
+      "first_game": "2021-10-19",
+      "last_game": "2024-06-18",
+      "accuracy": 0.6385663806158506,
+      "brier": 0.22342044269160885,
+      "log_loss": 0.6381875439991584,
+      "calibration": [
+        {
+          "lower": 0.0,
+          "upper": 0.2,
+          "count": 92,
+          "mean_predicted": 0.1644927589868693,
+          "observed_rate": 0.2391304347826087
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.4,
+          "count": 790,
+          "mean_predicted": 0.3187827855090683,
+          "observed_rate": 0.3227848101265823
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.6,
+          "count": 1386,
+          "mean_predicted": 0.5038975096700518,
+          "observed_rate": 0.5432900432900433
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.8,
+          "count": 1386,
+          "mean_predicted": 0.6898869003537109,
+          "observed_rate": 0.6767676767676768
+        },
+        {
+          "lower": 0.8,
+          "upper": 1.0,
+          "count": 308,
+          "mean_predicted": 0.8420663845336157,
+          "observed_rate": 0.7987012987012987
+        }
+      ],
+      "by_season": {
+        "2022": {
+          "n": 1323,
+          "accuracy": 0.6349206349206349,
+          "brier": 0.22802330387700284,
+          "log_loss": 0.6494586310490761
+        },
+        "2023": {
+          "n": 1320,
+          "accuracy": 0.6181818181818182,
+          "brier": 0.22993341694610983,
+          "log_loss": 0.6519248913578019
+        },
+        "2024": {
+          "n": 1319,
+          "accuracy": 0.6626231993934799,
+          "brier": 0.2122857108006176,
+          "log_loss": 0.6131345139154224
+        }
+      }
+    }
+  },
+  "elo_vs_home_rate_brier": {
+    "mean_diff": -0.02595945787870609,
+    "ci95": [
+      -0.031206893385534586,
+      -0.02098331409850783
+    ],
+    "weeks": 105,
+    "games": 3962,
+    "seed": 20260930,
+    "samples": 2000
+  },
+  "market_comparison": {
+    "matched_games": 0,
+    "coverage": 0.0,
+    "note": "No historical odds stored; market comparison not possible."
+  },
+  "kind": "research",
+  "candidate": "gbt_v1",
+  "box_version": "9ad11c5aa1590a46",
+  "box_events": 6270,
+  "elo_config": {
+    "k": 15,
+    "home_advantage": 50,
+    "carry": 0.75,
+    "mov": true
+  },
+  "sklearn_version": "1.9.1",
+  "candidate_config": {
+    "features": "elo_diff+mov10_diff+rest_diff+b2b_home+b2b_away+neutral+net_diff+net_home+net_away+pace+games_home+games_away",
+    "monotonic": "elo_diff+net_diff+mov10_diff",
+    "loss": "log_loss",
+    "learning_rate": 0.05,
+    "max_iter": 200,
+    "max_depth": 3,
+    "max_leaf_nodes": 8,
+    "min_samples_leaf": 50,
+    "l2_regularization": 1.0,
+    "max_bins": 255,
+    "early_stopping": false,
+    "random_state": 20260930,
+    "elo": "k15-h50-c0.75-movTrue"
+  },
+  "fits": [
+    {
+      "season": 2021,
+      "training_games": 1143,
+      "training_seasons": [
+        2020
+      ]
+    },
+    {
+      "season": 2022,
+      "training_games": 2314,
+      "training_seasons": [
+        2020,
+        2021
+      ]
+    },
+    {
+      "season": 2023,
+      "training_games": 3637,
+      "training_seasons": [
+        2020,
+        2021,
+        2022
+      ]
+    },
+    {
+      "season": 2024,
+      "training_games": 4957,
+      "training_seasons": [
+        2020,
+        2021,
+        2022,
+        2023
+      ]
+    }
+  ],
+  "comparisons": {
+    "elo": {
+      "brier_diff": {
+        "mean_diff": 0.002744597407838132,
+        "ci95": [
+          0.00036741527733225694,
+          0.004968790564649532
+        ],
+        "weeks": 105,
+        "games": 3962
+      },
+      "accuracy_diff": {
+        "diff": -0.004795557799091368,
+        "only_first_right": 247,
+        "only_second_right": 266,
+        "ci95": [
+          -0.015755550250656482,
+          0.006009929448654298
+        ],
+        "games": 3962,
+        "weeks": 105,
+        "seed": 20260930,
+        "samples": 2000
+      }
+    },
+    "logistic_v2": {
+      "brier_diff": {
+        "mean_diff": 0.0036499983036330117,
+        "ci95": [
+          0.001673560345559717,
+          0.005553180731419139
+        ],
+        "weeks": 105,
+        "games": 3962
+      },
+      "accuracy_diff": {
+        "diff": -0.005552751135790005,
+        "only_first_right": 193,
+        "only_second_right": 215,
+        "ci95": [
+          -0.015388373229115779,
+          0.00411522633744856
+        ],
+        "games": 3962,
+        "weeks": 105,
+        "seed": 20260930,
+        "samples": 2000
+      }
+    }
+  },
+  "step4_screen_against_elo": {
+    "rule": "Brier below Elo's and paired 95% upper bound of (candidate - Elo) Brier < 0.001",
+    "would_pass": false
+  },
+  "note": "Development research only. Validation seasons were already used to tune Elo and screen three candidates; this result cannot enter the sealed 2026-27 shadow experiment.",
+  "output_dir": "/Users/andry/Desktop/nba-predictor-sprint1/data/reports/research-gbt_v1-2026-10-01T005930Z"
+}

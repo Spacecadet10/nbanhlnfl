@@ -1,0 +1,5 @@
+B1 nfl g1 explained: False [{'issue': 'inactive', 'detail': 'definition_mismatch', 'first_seen_at': '2026-11-08T17:00:00Z', 'last_seen_at': '2026-11-08T17:00:00Z', 'observations': 1}]
+P1 rows: ['win', 'pending', 'win']
+P2 notices: ["PARLAY RESULT / 2026-11-08-6515a0981162 / LOSS\nB1 win: loss\nB2 win: pending"]
+P3 rows: [('loss', False), ('win', False), ('loss', True), ('win', True), ('loss', True)]
+5 passed in 0.89s

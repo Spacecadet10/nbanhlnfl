@@ -1,0 +1,8 @@
+#     throw new ERR_MODULE_NOT_FOUND(
+# Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/Users/andry/Desktop/nba-predictor-audit-fixes/frontend/src/components/soccerStatus.ts' imported from /Users/andry/Desktop/nba-predictor-audit-fixes
+#   code: 'ERR_MODULE_NOT_FOUND',
+#   url: 'file:///Users/andry/Desktop/nba-predictor-audit-fixes/frontend/src/components/soccerStatus.ts'
+# Subtest: src/components/soccerStatus.test.mjs
+not ok 4 - src/components/soccerStatus.test.mjs
+  location: '/Users/andry/Desktop/nba-predictor-audit-fixes/frontend/src/components/soccerStatus.test.mjs:1:1'
+# tests 16

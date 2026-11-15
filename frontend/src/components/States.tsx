@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { Component, type ReactNode } from 'react';
 import type { ApiState } from '../api/useApi';
 
 export function Loading({ label = 'Loading…' }: { label?: string }) {
@@ -24,4 +24,13 @@ export function AsyncView<T>({ state, retry, children }: { state: ApiState<T>; r
   if (state.status === 'loading') return <Loading />;
   if (state.status === 'error') return <ErrorState message={state.error} onRetry={retry} />;
   return <>{children(state.data)}</>;
+}
+
+/** Keeps one broken page from blanking the whole app: the header and league switch stay usable and the reader gets a way
+ * back. Keyed by the caller on the location, so navigating elsewhere clears the error. */
+export class PageErrorBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch(error: unknown) { console.error('Page failed to render', error); }
+  render() { return this.state.failed ? this.props.fallback : this.props.children; }
 }

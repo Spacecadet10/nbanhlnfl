@@ -1,0 +1,25 @@
+Structure guard passed. This does not prove semantic uniqueness or app correctness.
+
+> nba-predictor-frontend@0.1.0 typecheck
+> tsc --noEmit
+
+
+> nba-predictor-frontend@0.1.0 build
+> tsc --noEmit && vite build
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 80 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.80 kB │ gzip:   0.45 kB
+dist/assets/index-DuoORwL8.css   82.53 kB │ gzip:  16.12 kB
+dist/assets/index-Ci48Q3T-.js   567.67 kB │ gzip: 156.83 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 740ms
+........................................................................ [  3%]
+.........

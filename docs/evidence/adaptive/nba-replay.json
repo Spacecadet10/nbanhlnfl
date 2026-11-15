@@ -1,0 +1,1513 @@
+{
+ "kind": "adaptive-replay",
+ "version": "adaptive-v1",
+ "sport": "nba",
+ "started_at": "2026-10-06T00:39:58Z",
+ "finished_at": "2026-10-06T01:42:56Z",
+ "dataset_version": "08fe2552c1aa4579",
+ "evaluated_seasons": [
+  2022,
+  2023,
+  2024
+ ],
+ "loaded_seasons": [
+  2020,
+  2021,
+  2022,
+  2023,
+  2024
+ ],
+ "exploratory": true,
+ "schedule": {
+  "period": "ISO week of the game's Eastern date",
+  "member": "first forecast of a new period, only when eligible results were delivered since the member's last fit",
+  "deep": "as member, and within a season only once 100 current-season results exist",
+  "combiner": "first forecast of a new period, only when newly settled results exist; L2 chosen on the newest 25% of the training rows from [1.0, 10.0, 100.0, 1000.0]",
+  "live_trigger": "jobs.daily (nightly) when the next eligible game's period differs from the fit in force and new eligible results exist"
+ },
+ "members": [
+  "cand:elastic_net:nba_base@adaptive",
+  "cand:extra_trees:nba_base:normal@adaptive",
+  "cand:extra_trees:nba_base@adaptive",
+  "cand:hetero_linear:nba_base@adaptive",
+  "cand:keras_mlp:nba_base@adaptive",
+  "cand:logit_l2:nba_base@adaptive",
+  "cand:mlp:nba_base:normal@adaptive",
+  "cand:mlp:nba_base@adaptive",
+  "cand:random_forest:nba_base@adaptive",
+  "cand:ridge:nba_base@adaptive",
+  "cand:torch_mlp:nba_base:normal@adaptive",
+  "cand:torch_mlp:nba_base@adaptive",
+  "efficiency_margin",
+  "elo",
+  "gbt_points@adaptive",
+  "gbt_v1@adaptive",
+  "logistic@adaptive",
+  "logistic_v2@adaptive",
+  "points_normal",
+  "ridge_points@adaptive"
+ ],
+ "excluded": {
+  "logistic": "season-start version: superseded by its adaptive (within-season refit) version",
+  "logistic_v2": "season-start version: superseded by its adaptive (within-season refit) version",
+  "gbt_v1": "season-start version: superseded by its adaptive (within-season refit) version",
+  "ridge_points": "season-start version: superseded by its adaptive (within-season refit) version",
+  "gbt_points": "season-start version: superseded by its adaptive (within-season refit) version",
+  "ridge_points@weekly": "existing weekly shadow: superseded by the adaptive version of the same model",
+  "gbt_points@weekly": "existing weekly shadow: superseded by the adaptive version of the same model",
+  "cand:ngboost:nba_base": "optional dependency research not installed"
+ },
+ "seconds": 3778,
+ "member_fits": {
+  "elo": {
+   "refits_within_season": 0,
+   "skipped_no_new_results": null,
+   "seconds": 0.0
+  },
+  "logistic@adaptive": {
+   "refits_within_season": 132,
+   "skipped_no_new_results": 0,
+   "seconds": 5.3
+  },
+  "logistic_v2@adaptive": {
+   "refits_within_season": 132,
+   "skipped_no_new_results": 0,
+   "seconds": 17.6
+  },
+  "efficiency_margin": {
+   "refits_within_season": 0,
+   "skipped_no_new_results": null,
+   "seconds": 12.4
+  },
+  "gbt_v1@adaptive": {
+   "refits_within_season": 132,
+   "skipped_no_new_results": 0,
+   "seconds": 37.4
+  },
+  "points_normal": {
+   "refits_within_season": 0,
+   "skipped_no_new_results": null,
+   "seconds": 0.1
+  },
+  "ridge_points@adaptive": {
+   "refits_within_season": 132,
+   "skipped_no_new_results": 0,
+   "seconds": 12.9
+  },
+  "gbt_points@adaptive": {
+   "refits_within_season": 132,
+   "skipped_no_new_results": 0,
+   "seconds": 61.7
+  },
+  "cand:logit_l2:nba_base@adaptive": {
+   "fits": 163,
+   "periods": 168,
+   "kept": 5,
+   "seconds": 2.1,
+   "reasons": [
+    "too few labelled results (0 < 200)",
+    "too few labelled results (137 < 200)",
+    "too few labelled results (187 < 200)",
+    "too few labelled results (39 < 200)",
+    "too few labelled results (89 < 200)"
+   ]
+  },
+  "cand:extra_trees:nba_base@adaptive": {
+   "fits": 163,
+   "periods": 168,
+   "kept": 5,
+   "seconds": 27.2,
+   "reasons": [
+    "too few labelled results (0 < 200)",
+    "too few labelled results (137 < 200)",
+    "too few labelled results (187 < 200)",
+    "too few labelled results (39 < 200)",
+    "too few labelled results (89 < 200)"
+   ]
+  },
+  "cand:random_forest:nba_base@adaptive": {
+   "fits": 163,
+   "periods": 168,
+   "kept": 5,
+   "seconds": 46.0,
+   "reasons": [
+    "too few labelled results (0 < 200)",
+    "too few labelled results (137 < 200)",
+    "too few labelled results (187 < 200)",
+    "too few labelled results (39 < 200)",
+    "too few labelled results (89 < 200)"
+   ]
+  },
+  "cand:mlp:nba_base@adaptive": {
+   "fits": 163,
+   "periods": 168,
+   "kept": 5,
+   "seconds": 173.9,
+   "reasons": [
+    "too few labelled results (0 < 200)",
+    "too few labelled results (137 < 200)",
+    "too few labelled results (187 < 200)",
+    "too few labelled results (39 < 200)",
+    "too few labelled results (89 < 200)"
+   ]
+  },
+  "cand:ridge:nba_base@adaptive": {
+   "fits": 163,
+   "periods": 168,
+   "kept": 5,
+   "seconds": 2.0,
+   "reasons": [
+    "too few labelled results (0 < 200)",
+    "too few labelled results (137 < 200)",
+    "too few labelled results (187 < 200)",
+    "too few labelled results (39 < 200)",
+    "too few labelled results (89 < 200)"
+   ]
+  },
+  "cand:elastic_net:nba_base@adaptive": {
+   "fits": 163,
+   "periods": 168,
+   "kept": 5,
+   "seconds": 2.1,
+   "reasons": [
+    "too few labelled results (0 < 200)",
+    "too few labelled results (137 < 200)",
+    "too few labelled results (187 < 200)",
+    "too few labelled results (39 < 200)",
+    "too few labelled results (89 < 200)"
+   ]
+  },
+  "cand:extra_trees:nba_base:normal@adaptive": {
+   "fits": 163,
+   "periods": 168,
+   "kept": 5,
+   "seconds": 34.3,
+   "reasons": [
+    "too few labelled results (0 < 200)",
+    "too few labelled results (137 < 200)",
+    "too few labelled results (187 < 200)",
+    "too few labelled results (39 < 200)",
+    "too few labelled results (89 < 200)"
+   ]
+  },
+  "cand:mlp:nba_base:normal@adaptive": {
+   "fits": 163,
+   "periods": 168,
+   "kept": 5,
+   "seconds": 1529.6,
+   "reasons": [
+    "too few labelled results (0 < 200)",
+    "too few labelled results (137 < 200)",
+    "too few labelled results (187 < 200)",
+    "too few labelled results (39 < 200)",
+    "too few labelled results (89 < 200)"
+   ]
+  },
+  "cand:hetero_linear:nba_base@adaptive": {
+   "fits": 163,
+   "periods": 168,
+   "kept": 5,
+   "seconds": 6.0,
+   "reasons": [
+    "too few labelled results (0 < 200)",
+    "too few labelled results (137 < 200)",
+    "too few labelled results (187 < 200)",
+    "too few labelled results (39 < 200)",
+    "too few labelled results (89 < 200)"
+   ]
+  },
+  "cand:torch_mlp:nba_base@adaptive": {
+   "fits": 128,
+   "periods": 168,
+   "kept": 40,
+   "seconds": 109.9,
+   "reasons": [
+    "deep network keeps its fit until 100 current-season results (38 so far)",
+    "deep network keeps its fit until 100 current-season results (41 so far)",
+    "deep network keeps its fit until 100 current-season results (90 so far)",
+    "deep network keeps its fit until 100 current-season results (92 so far)",
+    "deep network keeps its fit until 100 current-season results (93 so far)",
+    "no earlier season to choose the number of epochs",
+    "too few labelled results (0 < 200)",
+    "too few labelled results (137 < 200)",
+    "too few labelled results (187 < 200)",
+    "too few labelled results (39 < 200)",
+    "too few labelled results (89 < 200)"
+   ]
+  },
+  "cand:keras_mlp:nba_base@adaptive": {
+   "fits": 128,
+   "periods": 168,
+   "kept": 40,
+   "seconds": 1063.1,
+   "reasons": [
+    "deep network keeps its fit until 100 current-season results (38 so far)",
+    "deep network keeps its fit until 100 current-season results (41 so far)",
+    "deep network keeps its fit until 100 current-season results (90 so far)",
+    "deep network keeps its fit until 100 current-season results (92 so far)",
+    "deep network keeps its fit until 100 current-season results (93 so far)",
+    "no earlier season to choose the number of epochs",
+    "too few labelled results (0 < 200)",
+    "too few labelled results (137 < 200)",
+    "too few labelled results (187 < 200)",
+    "too few labelled results (39 < 200)",
+    "too few labelled results (89 < 200)"
+   ]
+  },
+  "cand:torch_mlp:nba_base:normal@adaptive": {
+   "fits": 128,
+   "periods": 168,
+   "kept": 40,
+   "seconds": 234.3,
+   "reasons": [
+    "deep network keeps its fit until 100 current-season results (38 so far)",
+    "deep network keeps its fit until 100 current-season results (41 so far)",
+    "deep network keeps its fit until 100 current-season results (90 so far)",
+    "deep network keeps its fit until 100 current-season results (92 so far)",
+    "deep network keeps its fit until 100 current-season results (93 so far)",
+    "no earlier season to choose the number of epochs",
+    "too few labelled results (0 < 200)",
+    "too few labelled results (137 < 200)",
+    "too few labelled results (187 < 200)",
+    "too few labelled results (39 < 200)",
+    "too few labelled results (89 < 200)"
+   ]
+  }
+ },
+ "markets": {
+  "winner": {
+   "primary": "elo",
+   "core_members": [
+    "elo",
+    "logistic",
+    "logistic_v2",
+    "efficiency_margin",
+    "gbt_v1"
+   ],
+   "adaptive_members": [
+    "elo",
+    "logistic@adaptive",
+    "logistic_v2@adaptive",
+    "efficiency_margin",
+    "gbt_v1@adaptive",
+    "points_normal",
+    "cand:logit_l2:nba_base@adaptive",
+    "cand:extra_trees:nba_base@adaptive",
+    "cand:random_forest:nba_base@adaptive",
+    "cand:mlp:nba_base@adaptive",
+    "cand:ridge:nba_base@adaptive",
+    "cand:elastic_net:nba_base@adaptive",
+    "cand:extra_trees:nba_base:normal@adaptive",
+    "cand:mlp:nba_base:normal@adaptive",
+    "cand:hetero_linear:nba_base@adaptive",
+    "cand:torch_mlp:nba_base@adaptive",
+    "cand:keras_mlp:nba_base@adaptive",
+    "cand:torch_mlp:nba_base:normal@adaptive"
+   ],
+   "evaluated_games": 3962,
+   "scored_games": 3962,
+   "pushes": 0,
+   "coverage": {
+    "primary": 1.0,
+    "average": 1.0,
+    "stack": 1.0,
+    "adaptive_core": 1.0,
+    "adaptive": 1.0
+   },
+   "sources": {
+    "primary": {
+     "n": 3962,
+     "accuracy": 0.6433619384149419,
+     "accuracy_ci95": [
+      0.6283143380693232,
+      0.6581318075414617
+     ],
+     "log_loss": 0.6315762375558713,
+     "brier": 0.44135169057536555,
+     "calibration": [
+      {
+       "n": 1597,
+       "mean_p": 0.5494801001721977,
+       "win_rate": 0.5616781465247339
+      },
+      {
+       "n": 1271,
+       "mean_p": 0.6474936420660888,
+       "win_rate": 0.6404405979543666
+      },
+      {
+       "n": 761,
+       "mean_p": 0.7450257703350875,
+       "win_rate": 0.7437582128777924
+      },
+      {
+       "n": 315,
+       "mean_p": 0.8346755864190473,
+       "win_rate": 0.8095238095238095
+      },
+      {
+       "n": 18,
+       "mean_p": 0.9170566816111112,
+       "win_rate": 0.9444444444444444
+      }
+     ]
+    },
+    "average": {
+     "n": 3962,
+     "accuracy": 0.6433619384149419,
+     "accuracy_ci95": [
+      0.6283143380693232,
+      0.6581318075414617
+     ],
+     "log_loss": 0.6298033206301958,
+     "brier": 0.4397628257694351,
+     "calibration": [
+      {
+       "n": 1616,
+       "mean_p": 0.5484466659568451,
+       "win_rate": 0.5488861386138614
+      },
+      {
+       "n": 1297,
+       "mean_p": 0.6477489238283352,
+       "win_rate": 0.653816499614495
+      },
+      {
+       "n": 758,
+       "mean_p": 0.7425865662399996,
+       "win_rate": 0.7532981530343008
+      },
+      {
+       "n": 285,
+       "mean_p": 0.8310154885416343,
+       "win_rate": 0.8315789473684211
+      },
+      {
+       "n": 6,
+       "mean_p": 0.9093794721284937,
+       "win_rate": 1.0
+      }
+     ]
+    },
+    "stack": {
+     "n": 3962,
+     "accuracy": 0.6446239273094396,
+     "accuracy_ci95": [
+      0.6295869041688003,
+      0.6593807744139106
+     ],
+     "log_loss": 0.6318182946454601,
+     "brier": 0.44162898960861907,
+     "calibration": [
+      {
+       "n": 1821,
+       "mean_p": 0.5482031520506033,
+       "win_rate": 0.5606809445359693
+      },
+      {
+       "n": 1248,
+       "mean_p": 0.6455553014713086,
+       "win_rate": 0.6618589743589743
+      },
+      {
+       "n": 699,
+       "mean_p": 0.744059066758129,
+       "win_rate": 0.7782546494992847
+      },
+      {
+       "n": 182,
+       "mean_p": 0.8338854408270449,
+       "win_rate": 0.8351648351648352
+      },
+      {
+       "n": 12,
+       "mean_p": 0.915977517837388,
+       "win_rate": 0.9166666666666666
+      }
+     ]
+    },
+    "adaptive_core": {
+     "n": 3962,
+     "accuracy": 0.6415951539626451,
+     "accuracy_ci95": [
+      0.626532934678877,
+      0.6563830647712117
+     ],
+     "log_loss": 0.6299473067658083,
+     "brier": 0.43977386792915485,
+     "calibration": [
+      {
+       "n": 1639,
+       "mean_p": 0.5489702301537521,
+       "win_rate": 0.5472849298352654
+      },
+      {
+       "n": 1303,
+       "mean_p": 0.6474831815464305,
+       "win_rate": 0.649270913277053
+      },
+      {
+       "n": 737,
+       "mean_p": 0.7442514454043422,
+       "win_rate": 0.7666214382632293
+      },
+      {
+       "n": 268,
+       "mean_p": 0.8331929087798504,
+       "win_rate": 0.8246268656716418
+      },
+      {
+       "n": 15,
+       "mean_p": 0.9149480342666667,
+       "win_rate": 0.8666666666666667
+      }
+     ]
+    },
+    "adaptive": {
+     "n": 3962,
+     "accuracy": 0.648914689550732,
+     "accuracy_ci95": [
+      0.6339144749677748,
+      0.6636264157194844
+     ],
+     "log_loss": 0.630290403361081,
+     "brier": 0.43989138498384645,
+     "calibration": [
+      {
+       "n": 1578,
+       "mean_p": 0.5502807739372618,
+       "win_rate": 0.5564005069708492
+      },
+      {
+       "n": 1275,
+       "mean_p": 0.6477005621607854,
+       "win_rate": 0.6564705882352941
+      },
+      {
+       "n": 814,
+       "mean_p": 0.7440192375442263,
+       "win_rate": 0.757985257985258
+      },
+      {
+       "n": 279,
+       "mean_p": 0.832747371014337,
+       "win_rate": 0.8028673835125448
+      },
+      {
+       "n": 16,
+       "mean_p": 0.91558975075,
+       "win_rate": 0.9375
+      }
+     ]
+    }
+   },
+   "paired": {
+    "adaptive_minus_primary": {
+     "mean": -0.0012858341947903872,
+     "ci95": [
+      -0.004230480749298727,
+      0.0017219142758089548
+     ],
+     "per_season": {
+      "2022": 0.001006656714487544,
+      "2023": -0.0018721822578838274,
+      "2024": -0.0029984847100984705
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 3962
+    },
+    "adaptive_minus_average": {
+     "mean": 0.0004870827308850476,
+     "ci95": [
+      -0.001248723839124013,
+      0.002350380670852763
+     ],
+     "per_season": {
+      "2022": 0.0011830428728335832,
+      "2023": 0.0003788764464596607,
+      "2024": -0.00010269965907431711
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 3962
+    },
+    "adaptive_minus_stack": {
+     "mean": -0.0015278912843791383,
+     "ci95": [
+      -0.004902753566691191,
+      0.0017658387042476808
+     ],
+     "per_season": {
+      "2022": 0.00023624526963646165,
+      "2023": -0.002697646431868031,
+      "2024": -0.002126735762223945
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 3962
+    },
+    "adaptive_minus_adaptive_core": {
+     "mean": 0.0003430965952726279,
+     "ci95": [
+      -0.0019134137364207582,
+      0.0025248216291742028
+     ],
+     "per_season": {
+      "2022": 0.0013134044036317175,
+      "2023": -0.00015287944285492298,
+      "2024": -0.00013380170657021395
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 3962
+    }
+   },
+   "single_members_log_loss": {
+    "elo": 0.6315762375558713,
+    "logistic@adaptive": 0.6302145906359905,
+    "logistic_v2@adaptive": 0.6290476736478771,
+    "efficiency_margin": 0.63453198367196,
+    "gbt_v1@adaptive": 0.639709346319125,
+    "points_normal": 0.6353025700956949,
+    "cand:logit_l2:nba_base@adaptive": 0.6295331756876489,
+    "cand:extra_trees:nba_base@adaptive": 0.631706196446964,
+    "cand:random_forest:nba_base@adaptive": 0.6352820780043327,
+    "cand:mlp:nba_base@adaptive": 0.6298973901606493,
+    "cand:ridge:nba_base@adaptive": 0.6291949543592044,
+    "cand:elastic_net:nba_base@adaptive": 0.6291516572418591,
+    "cand:extra_trees:nba_base:normal@adaptive": 0.6307598628191255,
+    "cand:mlp:nba_base:normal@adaptive": 0.6306388951241063,
+    "cand:hetero_linear:nba_base@adaptive": 0.6292230183115491,
+    "cand:torch_mlp:nba_base@adaptive": 0.6314422963702874,
+    "cand:keras_mlp:nba_base@adaptive": 0.6317695100287233,
+    "cand:torch_mlp:nba_base:normal@adaptive": 0.6304595713866661
+   },
+   "adaptive_fit_count": 105,
+   "adaptive_weights_last": {
+    "elo": 0.06002547141391209,
+    "logistic@adaptive": 0.05881310268092457,
+    "logistic_v2@adaptive": 0.060676534401357646,
+    "efficiency_margin": 0.05695745688935643,
+    "gbt_v1@adaptive": 0.05181156833685304,
+    "points_normal": 0.05581320389860324,
+    "cand:logit_l2:nba_base@adaptive": 0.05901651012262416,
+    "cand:extra_trees:nba_base@adaptive": 0.05653877525670415,
+    "cand:random_forest:nba_base@adaptive": 0.053299256542118846,
+    "cand:mlp:nba_base@adaptive": 0.059223947045867226,
+    "cand:ridge:nba_base@adaptive": 0.0593038189988753,
+    "cand:elastic_net:nba_base@adaptive": 0.05919783537948518,
+    "cand:extra_trees:nba_base:normal@adaptive": 0.05877757861956141,
+    "cand:mlp:nba_base:normal@adaptive": 0.06081242181618865,
+    "cand:hetero_linear:nba_base@adaptive": 0.05919154332617429,
+    "cand:torch_mlp:nba_base@adaptive": 0.05733034606205813,
+    "cand:keras_mlp:nba_base@adaptive": 0.05697210331307618,
+    "cand:torch_mlp:nba_base:normal@adaptive": 0.05775255232255266
+   },
+   "adaptive_excluded_last": {},
+   "adaptive_l2_last": 1000.0
+  },
+  "spread": {
+   "primary": "points_normal",
+   "core_members": [
+    "points_normal",
+    "ridge_points",
+    "gbt_points"
+   ],
+   "adaptive_members": [
+    "points_normal",
+    "ridge_points@adaptive",
+    "gbt_points@adaptive",
+    "cand:ridge:nba_base@adaptive",
+    "cand:elastic_net:nba_base@adaptive",
+    "cand:extra_trees:nba_base:normal@adaptive",
+    "cand:mlp:nba_base:normal@adaptive",
+    "cand:hetero_linear:nba_base@adaptive",
+    "cand:torch_mlp:nba_base:normal@adaptive"
+   ],
+   "evaluated_games": 3962,
+   "scored_games": 2639,
+   "pushes": 0,
+   "coverage": {
+    "primary": 1.0,
+    "average": 1.0,
+    "stack": 0.666077738515901,
+    "adaptive_core": 0.666077738515901,
+    "adaptive": 1.0
+   },
+   "sources": {
+    "primary": {
+     "n": 2639,
+     "accuracy": 0.504357711254263,
+     "accuracy_ci95": [
+      0.4852894821992242,
+      0.5234132721497771
+     ],
+     "log_loss": 0.6928082493472741,
+     "brier": 0.4996611632062623,
+     "calibration": [
+      {
+       "n": 2639,
+       "mean_p": 0.5074059518768476,
+       "win_rate": 0.504357711254263
+      }
+     ]
+    },
+    "average": {
+     "n": 2639,
+     "accuracy": 0.5449033724895794,
+     "accuracy_ci95": [
+      0.5258524018478825,
+      0.5638238060092173
+     ],
+     "log_loss": 0.6863480950778692,
+     "brier": 0.4932386743643599,
+     "calibration": [
+      {
+       "n": 2598,
+       "mean_p": 0.5318477445764198,
+       "win_rate": 0.5423402617397999
+      },
+      {
+       "n": 41,
+       "mean_p": 0.6172299164257046,
+       "win_rate": 0.7073170731707317
+      }
+     ]
+    },
+    "stack": {
+     "n": 2639,
+     "accuracy": 0.5608184918529746,
+     "accuracy_ci95": [
+      0.5418088122281468,
+      0.579651368034001
+     ],
+     "log_loss": 0.6858220761981902,
+     "brier": 0.4927167827454821,
+     "calibration": [
+      {
+       "n": 2589,
+       "mean_p": 0.5304103797831864,
+       "win_rate": 0.5589030513711858
+      },
+      {
+       "n": 50,
+       "mean_p": 0.6190097135190905,
+       "win_rate": 0.66
+      }
+     ]
+    },
+    "adaptive_core": {
+     "n": 2639,
+     "accuracy": 0.5547555892383479,
+     "accuracy_ci95": [
+      0.5357278659674982,
+      0.5736241343308219
+     ],
+     "log_loss": 0.6858411814002495,
+     "brier": 0.49273577908744376,
+     "calibration": [
+      {
+       "n": 2536,
+       "mean_p": 0.5335261813044161,
+       "win_rate": 0.5512618296529969
+      },
+      {
+       "n": 101,
+       "mean_p": 0.6203175695544555,
+       "win_rate": 0.6435643564356436
+      },
+      {
+       "n": 2,
+       "mean_p": 0.701970608,
+       "win_rate": 0.5
+      }
+     ]
+    },
+    "adaptive": {
+     "n": 2639,
+     "accuracy": 0.5490716180371353,
+     "accuracy_ci95": [
+      0.5300295673936731,
+      0.5679710141885584
+     ],
+     "log_loss": 0.6851919108680135,
+     "brier": 0.49208980612182013,
+     "calibration": [
+      {
+       "n": 2460,
+       "mean_p": 0.5378679711654462,
+       "win_rate": 0.5443089430894309
+      },
+      {
+       "n": 177,
+       "mean_p": 0.623473386214689,
+       "win_rate": 0.615819209039548
+      },
+      {
+       "n": 2,
+       "mean_p": 0.722052166,
+       "win_rate": 0.5
+      }
+     ]
+    }
+   },
+   "paired": {
+    "adaptive_minus_primary": {
+     "mean": -0.0076163384792606445,
+     "ci95": [
+      -0.011879909173440365,
+      -0.00304850575212355
+     ],
+     "per_season": {
+      "2022": null,
+      "2023": -0.006668492567812295,
+      "2024": -0.008564903000194551
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 2639
+    },
+    "adaptive_minus_average": {
+     "mean": -0.0011561842098556515,
+     "ci95": [
+      -0.0033311326769967756,
+      0.0012344648751000348
+     ],
+     "per_season": {
+      "2022": null,
+      "2023": -0.00039268371975271794,
+      "2024": -0.0019202635479419836
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 2639
+    },
+    "adaptive_minus_stack": {
+     "mean": -0.0006301653301768447,
+     "ci95": [
+      -0.002481125426585374,
+      0.001344917668844683
+     ],
+     "per_season": {
+      "2022": null,
+      "2023": -0.0010458211502816762,
+      "2024": -0.0002141943805647314
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 2639
+    },
+    "adaptive_minus_adaptive_core": {
+     "mean": -0.0006492705322360514,
+     "ci95": [
+      -0.0022565721596167227,
+      0.0009679185713126498
+     ],
+     "per_season": {
+      "2022": null,
+      "2023": -0.0007686596713493951,
+      "2024": -0.0005297908782333115
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 2639
+    }
+   },
+   "single_members_log_loss": {
+    "points_normal": 0.6931224185573986,
+    "ridge_points@adaptive": 0.6864299797579108,
+    "gbt_points@adaptive": 0.6918759300793593,
+    "cand:ridge:nba_base@adaptive": 0.686440395860567,
+    "cand:elastic_net:nba_base@adaptive": 0.6862809415981547,
+    "cand:extra_trees:nba_base:normal@adaptive": 0.6863872833846142,
+    "cand:mlp:nba_base:normal@adaptive": 0.6881492774030558,
+    "cand:hetero_linear:nba_base@adaptive": 0.6861584551965519,
+    "cand:torch_mlp:nba_base:normal@adaptive": 0.6862107344890814
+   },
+   "adaptive_fit_count": 105,
+   "adaptive_weights_last": {
+    "points_normal": 0.10822927839809783,
+    "ridge_points@adaptive": 0.12027594465190522,
+    "gbt_points@adaptive": 0.11253051112547019,
+    "cand:ridge:nba_base@adaptive": 0.12018668893651378,
+    "cand:elastic_net:nba_base@adaptive": 0.12166328952375233,
+    "cand:extra_trees:nba_base:normal@adaptive": 0.14828700956926127,
+    "cand:mlp:nba_base:normal@adaptive": 0.1231110335603436,
+    "cand:hetero_linear:nba_base@adaptive": 0.12485202872031427,
+    "cand:torch_mlp:nba_base:normal@adaptive": 0.1283255727661517
+   },
+   "adaptive_excluded_last": {},
+   "adaptive_l2_last": 100.0
+  },
+  "total": {
+   "primary": "points_normal",
+   "core_members": [
+    "points_normal",
+    "ridge_points",
+    "gbt_points"
+   ],
+   "adaptive_members": [
+    "points_normal",
+    "ridge_points@adaptive",
+    "gbt_points@adaptive",
+    "cand:ridge:nba_base@adaptive",
+    "cand:elastic_net:nba_base@adaptive",
+    "cand:extra_trees:nba_base:normal@adaptive",
+    "cand:mlp:nba_base:normal@adaptive",
+    "cand:hetero_linear:nba_base@adaptive",
+    "cand:torch_mlp:nba_base:normal@adaptive"
+   ],
+   "evaluated_games": 3962,
+   "scored_games": 2639,
+   "pushes": 0,
+   "coverage": {
+    "primary": 1.0,
+    "average": 1.0,
+    "stack": 0.666077738515901,
+    "adaptive_core": 0.666077738515901,
+    "adaptive": 1.0
+   },
+   "sources": {
+    "primary": {
+     "n": 2639,
+     "accuracy": 0.5070102311481622,
+     "accuracy_ci95": [
+      0.4879392945900844,
+      0.5260607884930917
+     ],
+     "log_loss": 0.6929521947315074,
+     "brier": 0.4998050391348715,
+     "calibration": [
+      {
+       "n": 2639,
+       "mean_p": 0.505440444552862,
+       "win_rate": 0.5070102311481622
+      }
+     ]
+    },
+    "average": {
+     "n": 2639,
+     "accuracy": 0.5179992421371732,
+     "accuracy_ci95": [
+      0.4989227992877819,
+      0.5370233599798319
+     ],
+     "log_loss": 0.6939134285850915,
+     "brier": 0.5007194726100417,
+     "calibration": [
+      {
+       "n": 2269,
+       "mean_p": 0.5395609182365135,
+       "win_rate": 0.5068312031732041
+      },
+      {
+       "n": 352,
+       "mean_p": 0.6303632481623148,
+       "win_rate": 0.5767045454545454
+      },
+      {
+       "n": 18,
+       "mean_p": 0.7159049392193091,
+       "win_rate": 0.7777777777777778
+      }
+     ]
+    },
+    "stack": {
+     "n": 2639,
+     "accuracy": 0.5164835164835165,
+     "accuracy_ci95": [
+      0.4974072858352148,
+      0.5355118284414422
+     ],
+     "log_loss": 0.6907370616939519,
+     "brier": 0.4976096078818239,
+     "calibration": [
+      {
+       "n": 2604,
+       "mean_p": 0.5266184208258614,
+       "win_rate": 0.5134408602150538
+      },
+      {
+       "n": 35,
+       "mean_p": 0.6169987792254231,
+       "win_rate": 0.7428571428571429
+      }
+     ]
+    },
+    "adaptive_core": {
+     "n": 2639,
+     "accuracy": 0.5293671845395983,
+     "accuracy_ci95": [
+      0.5102947413646088,
+      0.5483542553351821
+     ],
+     "log_loss": 0.6901792668243021,
+     "brier": 0.4970521299341245,
+     "calibration": [
+      {
+       "n": 2559,
+       "mean_p": 0.5309548521391161,
+       "win_rate": 0.5248143806174287
+      },
+      {
+       "n": 80,
+       "mean_p": 0.6173961846874998,
+       "win_rate": 0.675
+      }
+     ]
+    },
+    "adaptive": {
+     "n": 2639,
+     "accuracy": 0.5172413793103449,
+     "accuracy_ci95": [
+      0.49816502065685353,
+      0.536267616115282
+     ],
+     "log_loss": 0.6915289328744365,
+     "brier": 0.4983995446215372,
+     "calibration": [
+      {
+       "n": 2528,
+       "mean_p": 0.5330803653516614,
+       "win_rate": 0.5122626582278481
+      },
+      {
+       "n": 111,
+       "mean_p": 0.6208989851261262,
+       "win_rate": 0.6306306306306306
+      }
+     ]
+    }
+   },
+   "paired": {
+    "adaptive_minus_primary": {
+     "mean": -0.0014232618570710338,
+     "ci95": [
+      -0.004780917400067117,
+      0.0018675097408005548
+     ],
+     "per_season": {
+      "2022": null,
+      "2023": -0.003195102861577662,
+      "2024": 0.000349922468894659
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 2639
+    },
+    "adaptive_minus_average": {
+     "mean": -0.0023844957106551423,
+     "ci95": [
+      -0.006307390140321593,
+      0.0010852209964708876
+     ],
+     "per_season": {
+      "2022": null,
+      "2023": -0.0007502863921678057,
+      "2024": -0.004019944005123136
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 2639
+    },
+    "adaptive_minus_stack": {
+     "mean": 0.0007918711804845701,
+     "ci95": [
+      -0.0016202841666495625,
+      0.002998692166388127
+     ],
+     "per_season": {
+      "2022": null,
+      "2023": -0.0013659342376621953,
+      "2024": 0.0029513125390544944
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 2639
+    },
+    "adaptive_minus_adaptive_core": {
+     "mean": 0.0013496660501343446,
+     "ci95": [
+      -0.0011006933539269657,
+      0.0037836156108912145
+     ],
+     "per_season": {
+      "2022": null,
+      "2023": -0.0001638703160571437,
+      "2024": 0.002864349904093984
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 2639
+    }
+   },
+   "single_members_log_loss": {
+    "points_normal": 0.6929586673475866,
+    "ridge_points@adaptive": 0.7008436589634247,
+    "gbt_points@adaptive": 0.701409986999636,
+    "cand:ridge:nba_base@adaptive": 0.700684924801305,
+    "cand:elastic_net:nba_base@adaptive": 0.6998645147466049,
+    "cand:extra_trees:nba_base:normal@adaptive": 0.704313881227124,
+    "cand:mlp:nba_base:normal@adaptive": 0.6936187261947617,
+    "cand:hetero_linear:nba_base@adaptive": 0.6995046025802191,
+    "cand:torch_mlp:nba_base:normal@adaptive": 0.6975940859400246
+   },
+   "adaptive_fit_count": 105,
+   "adaptive_weights_last": {
+    "points_normal": 0.4568688152698903,
+    "ridge_points@adaptive": -0.3044541720357876,
+    "gbt_points@adaptive": 0.0851412657470325,
+    "cand:ridge:nba_base@adaptive": -0.3022720782294962,
+    "cand:elastic_net:nba_base@adaptive": 0.011864572294182044,
+    "cand:extra_trees:nba_base:normal@adaptive": 0.21316382132045544,
+    "cand:mlp:nba_base:normal@adaptive": 0.33076002719321573,
+    "cand:hetero_linear:nba_base@adaptive": 0.2102637292053493,
+    "cand:torch_mlp:nba_base:normal@adaptive": 0.3084994085877149
+   },
+   "adaptive_excluded_last": {},
+   "adaptive_l2_last": 1.0
+  },
+  "team_total_home": {
+   "primary": "points_normal",
+   "core_members": [
+    "points_normal",
+    "ridge_points",
+    "gbt_points"
+   ],
+   "adaptive_members": [
+    "points_normal",
+    "ridge_points@adaptive",
+    "gbt_points@adaptive",
+    "cand:ridge:nba_base@adaptive",
+    "cand:elastic_net:nba_base@adaptive",
+    "cand:extra_trees:nba_base:normal@adaptive",
+    "cand:mlp:nba_base:normal@adaptive",
+    "cand:hetero_linear:nba_base@adaptive",
+    "cand:torch_mlp:nba_base:normal@adaptive"
+   ],
+   "evaluated_games": 3962,
+   "scored_games": 2639,
+   "pushes": 0,
+   "coverage": {
+    "primary": 1.0,
+    "average": 1.0,
+    "stack": 0.666077738515901,
+    "adaptive_core": 0.666077738515901,
+    "adaptive": 1.0
+   },
+   "sources": {
+    "primary": {
+     "n": 2639,
+     "accuracy": 0.5217885562713149,
+     "accuracy_ci95": [
+      0.5027123498380894,
+      0.5408014219069168
+     ],
+     "log_loss": 0.6924785778536787,
+     "brier": 0.4993315561619921,
+     "calibration": [
+      {
+       "n": 2639,
+       "mean_p": 0.5087835360060634,
+       "win_rate": 0.5217885562713149
+      }
+     ]
+    },
+    "average": {
+     "n": 2639,
+     "accuracy": 0.5214096248579008,
+     "accuracy_ci95": [
+      0.5023333454622596,
+      0.5404236650350074
+     ],
+     "log_loss": 0.6936961741780215,
+     "brier": 0.5004595584610112,
+     "calibration": [
+      {
+       "n": 2371,
+       "mean_p": 0.5379701957855697,
+       "win_rate": 0.5170814002530578
+      },
+      {
+       "n": 264,
+       "mean_p": 0.6271819495399528,
+       "win_rate": 0.5568181818181818
+      },
+      {
+       "n": 4,
+       "mean_p": 0.7110354725027552,
+       "win_rate": 0.75
+      }
+     ]
+    },
+    "stack": {
+     "n": 2639,
+     "accuracy": 0.5308829101932551,
+     "accuracy_ci95": [
+      0.5118117468177859,
+      0.5498642948729622
+     ],
+     "log_loss": 0.6917921832303668,
+     "brier": 0.49864372020613895,
+     "calibration": [
+      {
+       "n": 2612,
+       "mean_p": 0.5239271812623395,
+       "win_rate": 0.5306278713629403
+      },
+      {
+       "n": 27,
+       "mean_p": 0.6129521455823238,
+       "win_rate": 0.5555555555555556
+      }
+     ]
+    },
+    "adaptive_core": {
+     "n": 2639,
+     "accuracy": 0.5308829101932551,
+     "accuracy_ci95": [
+      0.5118117468177859,
+      0.5498642948729622
+     ],
+     "log_loss": 0.6916000142013132,
+     "brier": 0.49843710500517296,
+     "calibration": [
+      {
+       "n": 2556,
+       "mean_p": 0.5301141620696389,
+       "win_rate": 0.5301251956181534
+      },
+      {
+       "n": 83,
+       "mean_p": 0.6176324149638555,
+       "win_rate": 0.5542168674698795
+      }
+     ]
+    },
+    "adaptive": {
+     "n": 2639,
+     "accuracy": 0.5312618416066692,
+     "accuracy_ci95": [
+      0.5121910256662306,
+      0.5502417772722566
+     ],
+     "log_loss": 0.6917785068091918,
+     "brier": 0.4986020849922592,
+     "calibration": [
+      {
+       "n": 2540,
+       "mean_p": 0.5325474106425209,
+       "win_rate": 0.5303149606299212
+      },
+      {
+       "n": 99,
+       "mean_p": 0.6211379400909092,
+       "win_rate": 0.5555555555555556
+      }
+     ]
+    }
+   },
+   "paired": {
+    "adaptive_minus_primary": {
+     "mean": -0.0007000710444868145,
+     "ci95": [
+      -0.0039986348455379175,
+      0.0028918444623071463
+     ],
+     "per_season": {
+      "2022": null,
+      "2023": -0.0037407081111096563,
+      "2024": 0.0023428712814738757
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 2639
+    },
+    "adaptive_minus_average": {
+     "mean": -0.0019176673688295562,
+     "ci95": [
+      -0.0046899874357351455,
+      0.0005193283299121114
+     ],
+     "per_season": {
+      "2022": null,
+      "2023": -0.000959710702038841,
+      "2024": -0.0028763503105761405
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 2639
+    },
+    "adaptive_minus_stack": {
+     "mean": -1.3676421175020338e-05,
+     "ci95": [
+      -0.0017171818200348873,
+      0.0017638531444649009
+     ],
+     "per_season": {
+      "2022": null,
+      "2023": -0.0023491228760850525,
+      "2024": 0.0023235406527303943
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 2639
+    },
+    "adaptive_minus_adaptive_core": {
+     "mean": 0.0001784926078786377,
+     "ci95": [
+      -0.0012511129788094141,
+      0.0015884625702731357
+     ],
+     "per_season": {
+      "2022": null,
+      "2023": -0.0014803730220676083,
+      "2024": 0.001838615906990878
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 2639
+    }
+   },
+   "single_members_log_loss": {
+    "points_normal": 0.6926791317583094,
+    "ridge_points@adaptive": 0.6995405748912531,
+    "gbt_points@adaptive": 0.7029032043468711,
+    "cand:ridge:nba_base@adaptive": 0.6995337901572437,
+    "cand:elastic_net:nba_base@adaptive": 0.6991670476626544,
+    "cand:extra_trees:nba_base:normal@adaptive": 0.7042333189310628,
+    "cand:mlp:nba_base:normal@adaptive": 0.6956531941542298,
+    "cand:hetero_linear:nba_base@adaptive": 0.6989403863836632,
+    "cand:torch_mlp:nba_base:normal@adaptive": 0.697955668491947
+   },
+   "adaptive_fit_count": 105,
+   "adaptive_weights_last": {
+    "points_normal": 0.7018221659514638,
+    "ridge_points@adaptive": -0.008265380923725923,
+    "gbt_points@adaptive": 0.011997195313902802,
+    "cand:ridge:nba_base@adaptive": -0.01485988613534777,
+    "cand:elastic_net:nba_base@adaptive": -0.277174486229211,
+    "cand:extra_trees:nba_base:normal@adaptive": 0.22280895132359593,
+    "cand:mlp:nba_base:normal@adaptive": 0.18336910748911986,
+    "cand:hetero_linear:nba_base@adaptive": -0.06587207035738407,
+    "cand:torch_mlp:nba_base:normal@adaptive": 0.33684818687343393
+   },
+   "adaptive_excluded_last": {},
+   "adaptive_l2_last": 1.0
+  },
+  "team_total_away": {
+   "primary": "points_normal",
+   "core_members": [
+    "points_normal",
+    "ridge_points",
+    "gbt_points"
+   ],
+   "adaptive_members": [
+    "points_normal",
+    "ridge_points@adaptive",
+    "gbt_points@adaptive",
+    "cand:ridge:nba_base@adaptive",
+    "cand:elastic_net:nba_base@adaptive",
+    "cand:extra_trees:nba_base:normal@adaptive",
+    "cand:mlp:nba_base:normal@adaptive",
+    "cand:hetero_linear:nba_base@adaptive",
+    "cand:torch_mlp:nba_base:normal@adaptive"
+   ],
+   "evaluated_games": 3962,
+   "scored_games": 2639,
+   "pushes": 0,
+   "coverage": {
+    "primary": 1.0,
+    "average": 1.0,
+    "stack": 0.666077738515901,
+    "adaptive_core": 0.666077738515901,
+    "adaptive": 1.0
+   },
+   "sources": {
+    "primary": {
+     "n": 2639,
+     "accuracy": 0.4960212201591512,
+     "accuracy_ci95": [
+      0.47696498820893646,
+      0.5150890186898015
+     ],
+     "log_loss": 0.6935132196914305,
+     "brier": 0.5003659494184441,
+     "calibration": [
+      {
+       "n": 2639,
+       "mean_p": 0.5086538697332323,
+       "win_rate": 0.4960212201591512
+      }
+     ]
+    },
+    "average": {
+     "n": 2639,
+     "accuracy": 0.5297461159530125,
+     "accuracy_ci95": [
+      0.5106739762398502,
+      0.54873178170768
+     ],
+     "log_loss": 0.6923540336480912,
+     "brier": 0.49912413718942544,
+     "calibration": [
+      {
+       "n": 2374,
+       "mean_p": 0.5389662604450847,
+       "win_rate": 0.5244313395113732
+      },
+      {
+       "n": 258,
+       "mean_p": 0.6277806498413049,
+       "win_rate": 0.5852713178294574
+      },
+      {
+       "n": 7,
+       "mean_p": 0.7191057005838666,
+       "win_rate": 0.2857142857142857
+      }
+     ]
+    },
+    "stack": {
+     "n": 2639,
+     "accuracy": 0.5229253505115574,
+     "accuracy_ci95": [
+      0.5038494287539086,
+      0.5419346267343155
+     ],
+     "log_loss": 0.6917443008205585,
+     "brier": 0.49859538275591037,
+     "calibration": [
+      {
+       "n": 2631,
+       "mean_p": 0.5195478819413845,
+       "win_rate": 0.5233751425313569
+      },
+      {
+       "n": 8,
+       "mean_p": 0.6138233083187592,
+       "win_rate": 0.375
+      }
+     ]
+    },
+    "adaptive_core": {
+     "n": 2639,
+     "accuracy": 0.5244410761652141,
+     "accuracy_ci95": [
+      0.5053656875232799,
+      0.543445412955901
+     ],
+     "log_loss": 0.6914548936954904,
+     "brier": 0.49831197314502834,
+     "calibration": [
+      {
+       "n": 2516,
+       "mean_p": 0.5339035101991263,
+       "win_rate": 0.5210651828298887
+      },
+      {
+       "n": 123,
+       "mean_p": 0.6250148742357725,
+       "win_rate": 0.5934959349593496
+      }
+     ]
+    },
+    "adaptive": {
+     "n": 2639,
+     "accuracy": 0.5346722243273967,
+     "accuracy_ci95": [
+      0.515605030367099,
+      0.5536386238010412
+     ],
+     "log_loss": 0.6906644260638134,
+     "brier": 0.49752328523434836,
+     "calibration": [
+      {
+       "n": 2517,
+       "mean_p": 0.5337218630071522,
+       "win_rate": 0.532777115613826
+      },
+      {
+       "n": 120,
+       "mean_p": 0.6216871790166666,
+       "win_rate": 0.5666666666666667
+      },
+      {
+       "n": 2,
+       "mean_p": 0.7152765855000001,
+       "win_rate": 1.0
+      }
+     ]
+    }
+   },
+   "paired": {
+    "adaptive_minus_primary": {
+     "mean": -0.002848793627617181,
+     "ci95": [
+      -0.0060068758529000415,
+      0.00013986093991617238
+     ],
+     "per_season": {
+      "2022": null,
+      "2023": -0.002683810226438028,
+      "2024": -0.0030139021109807005
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 2639
+    },
+    "adaptive_minus_average": {
+     "mean": -0.0016896075842779132,
+     "ci95": [
+      -0.004148728873509747,
+      0.001001489974497164
+     ],
+     "per_season": {
+      "2022": null,
+      "2023": 0.00012903822677309135,
+      "2024": -0.0035096322018573875
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 2639
+    },
+    "adaptive_minus_stack": {
+     "mean": -0.0010798747567450668,
+     "ci95": [
+      -0.0032306162497659704,
+      0.0010175519140843484
+     ],
+     "per_season": {
+      "2022": null,
+      "2023": -0.0013574074197954867,
+      "2024": -0.0008021316822745936
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 2639
+    },
+    "adaptive_minus_adaptive_core": {
+     "mean": -0.0007904676316770011,
+     "ci95": [
+      -0.0029218576822279117,
+      0.0017651818129148194
+     ],
+     "per_season": {
+      "2022": null,
+      "2023": -0.0008909475360697215,
+      "2024": -0.0006899115484333383
+     },
+     "metric": "log loss (negative favours the adaptive source)",
+     "games": 2639
+    }
+   },
+   "single_members_log_loss": {
+    "points_normal": 0.6930600923940365,
+    "ridge_points@adaptive": 0.6976662500984723,
+    "gbt_points@adaptive": 0.7018239579550558,
+    "cand:ridge:nba_base@adaptive": 0.6976607964046956,
+    "cand:elastic_net:nba_base@adaptive": 0.6971677638605,
+    "cand:extra_trees:nba_base:normal@adaptive": 0.701867938884439,
+    "cand:mlp:nba_base:normal@adaptive": 0.6945157080549044,
+    "cand:hetero_linear:nba_base@adaptive": 0.6971684280990775,
+    "cand:torch_mlp:nba_base:normal@adaptive": 0.6955528021940374
+   },
+   "adaptive_fit_count": 105,
+   "adaptive_weights_last": {
+    "points_normal": 0.13032496810245042,
+    "ridge_points@adaptive": -0.05451060327725037,
+    "gbt_points@adaptive": 0.02540152195878776,
+    "cand:ridge:nba_base@adaptive": -0.054965437754666106,
+    "cand:elastic_net:nba_base@adaptive": -0.009974256183020941,
+    "cand:extra_trees:nba_base:normal@adaptive": 0.16023563087848305,
+    "cand:mlp:nba_base:normal@adaptive": 0.16503751687214474,
+    "cand:hetero_linear:nba_base@adaptive": 0.07168338001975154,
+    "cand:torch_mlp:nba_base:normal@adaptive": 0.20345224716419055
+   },
+   "adaptive_excluded_last": {},
+   "adaptive_l2_last": 10.0
+  }
+ }
+}

@@ -1,0 +1,7 @@
+E       KeyError: 'forecast_state'
+E       KeyError: 'refresh'
+E       AttributeError: module 'app.soccer' has no attribute 'forecast_state'
+FAILED tests/test_soccer_live.py::test_the_api_says_whether_forecasts_are_recorded_awaited_or_out_of_scope
+FAILED tests/test_soccer_live.py::test_the_live_response_reports_the_age_of_the_source_data
+FAILED tests/test_soccer_live.py::test_a_store_without_live_tables_says_so - ...
+3 failed, 16 deselected, 1 warning in 1.24s

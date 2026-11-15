@@ -1,0 +1,16 @@
+=== ITEM 4 alerts ===
+out ['sent', 'sent'] alert keys ['ticket-health:2026-11-08:delivery:1bbfc1ef03799f497a5219d3295c6aca3bda42928b9434144c5c188bcfba646e', 'ticket-health:2026-11-08:delivery:bbe4733f845dbfdf3d6a4d7badc04011d5d001803a077086bf91aa14562dc9f5']
+PASS 4.only (c) and (d) alert | ['ticket-health:2026-11-08:delivery:1bbfc1ef03799f497a5219d3295c6aca3bda42928b9434144c5c188bcfba646e', 'ticket-health:2026-11-08:delivery:bbe4733f845dbfdf3d6a4d7badc04011d5d001803a077086bf91aa14562dc9f5']
+PASS 4.(b) previous Toronto day excluded
+PASS 4.failed ticket-result notice NOT alerted (observation)
+PASS 4.re-run dedups (no new alerts) | ['already_recorded', 'already_recorded']
+PASS 4.later different ticket failure -> NEW alert | ['already_recorded', 'already_recorded', 'sent']
+PASS 4.(c) status retry->uncertain -> NEW alert | ['sent', 'already_recorded', 'already_recorded']
+alert texts sample ['PROP51 / TICKET DELIVERY REVIEW REQUIRED / uncertain. Reservation retained; inspect original receipt.']
+img retry first alert 1 same status recurring later alert 0 (observation: same key+status recurrence is deduped)
+
+=== ITEM 4 DST boundaries ===
+PASS 4.DST 2026-03-08 window correct | ['2026-03-08T05:00:00Z', '2026-03-09T03:59:59Z']
+PASS 4.DST 2026-11-01 window correct | ['2026-11-01T04:00:00Z', '2026-11-02T04:59:59Z']
+
+SUMMARY 8 / 8

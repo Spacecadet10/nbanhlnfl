@@ -1,0 +1,139 @@
+.FFFF                                                                    [100%]
+=================================== FAILURES ===================================
+_ test_the_checkout_holding_the_data_folder_is_never_a_release_environment[data-case] _
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-158/test_the_checkout_holding_the_1')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10bfd73e0>
+capsys = <_pytest.capture.CaptureFixture object at 0x10bfd69f0>
+spelling = 'data-case'
+
+    @pytest.mark.parametrize("spelling", ["exact", "data-case", "data-firmlink", "root-case"])
+    def test_the_checkout_holding_the_data_folder_is_never_a_release_environment(tmp_path, monkeypatch, capsys, spelling):
+        """Setting NBA_RELEASE_GUARD/ROOT in the development main checkout itself (clean, data/ ignored) does not make it a
+        release: the release is a separate checkout. Decided by file identity, so another spelling of the same data folder
+        or code root (case variant, firmlink) is caught too."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        git_repo(repo)
+        (repo / ".gitignore").write_text("data/\n")
+        subprocess.run(["git", "-C", str(repo), "add", ".gitignore"], check=True)
+        subprocess.run(["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "ignore"], check=True)
+        (repo / "data").mkdir()
+        store = build_store(tmp_path, repo / "data" / "nhl.sqlite", "nhl")
+        root, data = repo, repo / "data"
+        if spelling != "exact":
+            other = _other_spelling(repo, spelling.split("-")[1])
+            if other is None:
+                pytest.skip(f"no {spelling} spelling of {repo} on this file system")
+            root, data = (other, data) if spelling == "root-case" else (repo, other / "data")
+        monkeypatch.setattr(config, "REPO_ROOT", root)
+        monkeypatch.setattr(release, "code_root", lambda: root)
+        for key, value in ((release.GUARD_ENV, "1"), (release.ROOT_ENV, str(root)), ("NBA_DATA_DIR", str(data))):
+            monkeypatch.setenv(key, value)
+        assert release.check("nhl")["problems"] == []                 # release.check itself is unchanged
+>       assert any("holds this data folder" in p for p in release.migration_context("nhl"))
+E       assert False
+E        +  where False = any(<generator object test_the_checkout_holding_the_data_folder_is_never_a_release_environment.<locals>.<genexpr> at 0x10bf9bd30>)
+
+tests/test_live_store_guard.py:498: AssertionError
+_ test_the_checkout_holding_the_data_folder_is_never_a_release_environment[data-firmlink] _
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-158/test_the_checkout_holding_the_2')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10c022de0>
+capsys = <_pytest.capture.CaptureFixture object at 0x10c023e90>
+spelling = 'data-firmlink'
+
+    @pytest.mark.parametrize("spelling", ["exact", "data-case", "data-firmlink", "root-case"])
+    def test_the_checkout_holding_the_data_folder_is_never_a_release_environment(tmp_path, monkeypatch, capsys, spelling):
+        """Setting NBA_RELEASE_GUARD/ROOT in the development main checkout itself (clean, data/ ignored) does not make it a
+        release: the release is a separate checkout. Decided by file identity, so another spelling of the same data folder
+        or code root (case variant, firmlink) is caught too."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        git_repo(repo)
+        (repo / ".gitignore").write_text("data/\n")
+        subprocess.run(["git", "-C", str(repo), "add", ".gitignore"], check=True)
+        subprocess.run(["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "ignore"], check=True)
+        (repo / "data").mkdir()
+        store = build_store(tmp_path, repo / "data" / "nhl.sqlite", "nhl")
+        root, data = repo, repo / "data"
+        if spelling != "exact":
+            other = _other_spelling(repo, spelling.split("-")[1])
+            if other is None:
+                pytest.skip(f"no {spelling} spelling of {repo} on this file system")
+            root, data = (other, data) if spelling == "root-case" else (repo, other / "data")
+        monkeypatch.setattr(config, "REPO_ROOT", root)
+        monkeypatch.setattr(release, "code_root", lambda: root)
+        for key, value in ((release.GUARD_ENV, "1"), (release.ROOT_ENV, str(root)), ("NBA_DATA_DIR", str(data))):
+            monkeypatch.setenv(key, value)
+        assert release.check("nhl")["problems"] == []                 # release.check itself is unchanged
+>       assert any("holds this data folder" in p for p in release.migration_context("nhl"))
+E       assert False
+E        +  where False = any(<generator object test_the_checkout_holding_the_data_folder_is_never_a_release_environment.<locals>.<genexpr> at 0x10c054fb0>)
+
+tests/test_live_store_guard.py:498: AssertionError
+_ test_the_checkout_holding_the_data_folder_is_never_a_release_environment[root-case] _
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-158/test_the_checkout_holding_the_3')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10c03b410>
+capsys = <_pytest.capture.CaptureFixture object at 0x10c03a6c0>
+spelling = 'root-case'
+
+    @pytest.mark.parametrize("spelling", ["exact", "data-case", "data-firmlink", "root-case"])
+    def test_the_checkout_holding_the_data_folder_is_never_a_release_environment(tmp_path, monkeypatch, capsys, spelling):
+        """Setting NBA_RELEASE_GUARD/ROOT in the development main checkout itself (clean, data/ ignored) does not make it a
+        release: the release is a separate checkout. Decided by file identity, so another spelling of the same data folder
+        or code root (case variant, firmlink) is caught too."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        git_repo(repo)
+        (repo / ".gitignore").write_text("data/\n")
+        subprocess.run(["git", "-C", str(repo), "add", ".gitignore"], check=True)
+        subprocess.run(["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "ignore"], check=True)
+        (repo / "data").mkdir()
+        store = build_store(tmp_path, repo / "data" / "nhl.sqlite", "nhl")
+        root, data = repo, repo / "data"
+        if spelling != "exact":
+            other = _other_spelling(repo, spelling.split("-")[1])
+            if other is None:
+                pytest.skip(f"no {spelling} spelling of {repo} on this file system")
+            root, data = (other, data) if spelling == "root-case" else (repo, other / "data")
+        monkeypatch.setattr(config, "REPO_ROOT", root)
+        monkeypatch.setattr(release, "code_root", lambda: root)
+        for key, value in ((release.GUARD_ENV, "1"), (release.ROOT_ENV, str(root)), ("NBA_DATA_DIR", str(data))):
+            monkeypatch.setenv(key, value)
+        assert release.check("nhl")["problems"] == []                 # release.check itself is unchanged
+>       assert any("holds this data folder" in p for p in release.migration_context("nhl"))
+E       assert False
+E        +  where False = any(<generator object test_the_checkout_holding_the_data_folder_is_never_a_release_environment.<locals>.<genexpr> at 0x10c21c860>)
+
+tests/test_live_store_guard.py:498: AssertionError
+_________ test_the_own_data_folder_is_protected_under_another_spelling _________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-158/test_the_own_data_folder_is_pr0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10c03a570>
+
+    def test_the_own_data_folder_is_protected_under_another_spelling(tmp_path, monkeypatch):
+        """A linked worktree's own data/ folder (no .git directory beside it) is matched by identity, not by path string."""
+        linked = tmp_path / "linked"
+        (linked / "data").mkdir(parents=True)
+        (linked / ".git").write_text("gitdir: elsewhere\n")
+        monkeypatch.setattr(config, "REPO_ROOT", linked)
+        others = [o / "data" for o in (_other_spelling(linked, "case"), _other_spelling(linked, "firmlink")) if o is not None]
+        if not others:
+            pytest.skip("no other spelling of the folder on this file system")
+        for other in others:
+>           assert config.protected_data_dir(other) and config.protected_path(other / "nhl.sqlite"), other
+E           AssertionError: PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-158/test_the_own_data_folder_is_pr0/LINKED/data')
+E           assert (False)
+E            +  where False = <function protected_data_dir at 0x10ae12200>(PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-158/test_the_own_data_folder_is_pr0/LINKED/data'))
+E            +    where <function protected_data_dir at 0x10ae12200> = config.protected_data_dir
+
+tests/test_live_store_guard.py:516: AssertionError
+=============================== warnings summary ===============================
+../../nba-predictor-sprint1/backend/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+4 failed, 1 passed, 39 deselected, 1 warning in 1.09s

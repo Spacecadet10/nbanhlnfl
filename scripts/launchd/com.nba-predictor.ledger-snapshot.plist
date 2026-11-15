@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PYTHONPATH</key>
+		<string>/Users/andry/nba-predictor-delivery/backend</string>
+		<key>PYTHONDONTWRITEBYTECODE</key>
+		<string>1</string>
+	</dict>
+	<key>Label</key>
+	<string>com.nba-predictor.ledger-snapshot</string>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/andry/nba-predictor-delivery/backend/.venv/bin/python</string>
+		<string>/Users/andry/nba-predictor-delivery/scripts/backup_ledger.py</string>
+		<string>--ledger</string>
+		<string>/Users/andry/Desktop/nba-predictor-sprint1/.telegram-delivery.sqlite</string>
+		<string>--dest</string>
+		<string>/Users/andry/nba-predictor-backups/telegram-delivery</string>
+	</array>
+	<key>RunAtLoad</key>
+	<false/>
+	<key>StandardErrorPath</key>
+	<string>/Users/andry/nba-predictor-backups/telegram-delivery/backup.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/andry/nba-predictor-backups/telegram-delivery/backup.log</string>
+	<key>StartCalendarInterval</key>
+	<array>
+		<dict><key>Hour</key><integer>4</integer><key>Minute</key><integer>30</integer></dict>
+	</array>
+	<key>WorkingDirectory</key>
+	<string>/Users/andry/nba-predictor-delivery</string>
+</dict>
+</plist>

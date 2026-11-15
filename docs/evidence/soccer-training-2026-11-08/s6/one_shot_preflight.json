@@ -1,0 +1,16 @@
+{
+ "store": "/Users/andry/nba-predictor-research-data/soccer-train-20261108/data/soccer.sqlite",
+ "candidate_sha256": "7dbc668c214f33862541156c0630913194e8a3421c0e7c3495f4de296ecd9c47",
+ "access_log": "/Users/andry/nba-predictor-research-data/soccer-eval-logs/soccer_test_access.jsonl",
+ "access_log_exists": false,
+ "checks": {
+  "seal valid": "pass",
+  "output folder absent": "pass",
+  "no earlier test-run start": "pass",
+  "exactly one development start for this candidate": "pass",
+  "this candidate is the only seal": "pass",
+  "code, protocol and open data unchanged": "pass",
+  "dataset pins": "pass",
+  "reserved seasons present (counts only)": "pass"
+ }
+}

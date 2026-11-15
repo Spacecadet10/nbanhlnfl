@@ -12,10 +12,15 @@ dependencies = [
   "uvicorn[standard]>=0.29",
   "pydantic>=2.6,<3",
   "httpx>=0.27",
+  "pypdf>=4,<6",
+  "scikit-learn>=1.5,<2",  # prospective research candidates
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+notifications = ["Pillow>=10.4,<14"]  # locally rendered Telegram cards; not a model dependency
+dev = ["pytest>=8", "hypothesis>=6.150"]
+research = ["catboost==1.2.10", "ngboost==0.5.11", "optuna==5.0.0"]  # MODEL_SELECTION §10, §21, CANDIDATE_POOL §1; research only
+deep = ["torch==2.14.1", "tensorflow==2.21.0"]  # MODEL_SELECTION §22 (deep-v1); research venv only, never the release venv
 
 [tool.setuptools.packages.find]
 include = ["app*"]

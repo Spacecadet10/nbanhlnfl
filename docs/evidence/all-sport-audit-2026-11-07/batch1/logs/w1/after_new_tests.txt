@@ -1,0 +1,39 @@
+......................                                                   [100%]
+=============================== warnings summary ===============================
+../../nba-predictor-sprint1/backend/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+==================================== PASSES ====================================
+__________________ test_release_migration_context_may_migrate __________________
+----------------------------- Captured stdout call -----------------------------
+{"db": "/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-131/test_release_migration_context0/repo/data/nhl.sqlite", "sport": "nhl", "applied": ["0035_result_integrity.sql"]}
+_____________________ test_copies_still_migrate_implicitly _____________________
+----------------------------- Captured stdout call -----------------------------
+{"db": "/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-131/test_copies_still_migrate_impl0/copy/soccer.sqlite", "sport": "soccer", "applied": ["0001_initial.sql", "0002_block_conflicting_inserts.sql", "0003_job_runs.sql", "0004_odds_job.sql", "0005_team_possession_stats.sql", "0006_possession_observations.sql", "0007_possession_fetch_events.sql", "0008_shadow_jobs.sql", "0009_box_fetch_attempts.sql", "0010_injury_report_attempts.sql", "0011_near_tipoff.sql", "0012_markets.sql", "0013_market_forecast_checks.sql", "0014_goalie_snapshots.sql", "0015_two_hour_forecasts.sql", "0016_research_selection.sql", "0017_nhl_shots.sql", "0018_model_fits.sql", "0019_candidate_forecasts.sql", "0020_pool_selection.sql", "0021_agreement_observations.sql", "0022_agreement_observation_inputs.sql", "0023_two_hour_guards.sql", "0024_adaptive.sql", "0025_recovery.sql", "0026_adaptive_recovery.sql", "0027_adaptive_recovery_attempts.sql", "0028_exact_rule_observations.sql", "0029_game_forecasts.sql", "0030_result_revisions.sql", "0031_training_inputs_job.sql", "0032_nfl_store_identity.sql", "0033_nfl_market_quotes.sql", "0034_soccer_store.sql", "0035_result_integrity.sql"]}
+=========================== short test summary info ============================
+PASSED tests/test_live_store_guard.py::test_tests_never_default_to_the_checkout_data_dir
+PASSED tests/test_live_store_guard.py::test_protected_data_dir_is_a_main_checkout_data_folder_only
+PASSED tests/test_live_store_guard.py::test_implicit_command_never_migrates_the_checkout_store
+PASSED tests/test_live_store_guard.py::test_explicit_nba_data_dir_naming_the_checkout_store_is_refused
+PASSED tests/test_live_store_guard.py::test_explicit_migrate_outside_a_release_checkout_is_refused
+PASSED tests/test_live_store_guard.py::test_no_store_file_is_created_in_a_protected_dir
+PASSED tests/test_live_store_guard.py::test_dev_checkout_write_on_protected_store_at_shipped_schema_is_refused
+PASSED tests/test_live_store_guard.py::test_read_only_commands_still_read_a_protected_store
+PASSED tests/test_live_store_guard.py::test_release_migration_context_may_migrate
+PASSED tests/test_live_store_guard.py::test_release_context_without_the_guard_is_not_a_release
+PASSED tests/test_live_store_guard.py::test_copies_still_migrate_implicitly
+PASSED tests/test_live_store_guard.py::test_db_migrate_refuses_protected_pending_without_context
+PASSED tests/test_live_store_guard.py::test_in_memory_and_temporary_databases_are_never_protected
+PASSED tests/test_live_store_guard.py::test_replay_refuses_before_writing_when_a_later_raw_file_is_missing[nba-older_schema]
+PASSED tests/test_live_store_guard.py::test_replay_refuses_before_writing_when_a_later_raw_file_is_missing[nba-shipped_schema]
+PASSED tests/test_live_store_guard.py::test_replay_refuses_before_writing_when_a_later_raw_file_is_missing[nfl-older_schema]
+PASSED tests/test_live_store_guard.py::test_replay_refuses_before_writing_when_a_later_raw_file_is_missing[nfl-shipped_schema]
+PASSED tests/test_live_store_guard.py::test_replay_refuses_before_writing_when_a_later_raw_file_is_missing[soccer-older_schema]
+PASSED tests/test_live_store_guard.py::test_replay_refuses_before_writing_when_a_later_raw_file_is_missing[soccer-shipped_schema]
+PASSED tests/test_live_store_guard.py::test_replay_with_every_file_present_still_runs
+PASSED tests/test_live_store_guard.py::test_release_check_lists_missing_raw_files_but_release_check_function_does_not_scan
+PASSED tests/test_live_store_guard.py::test_nfl_release_check_lists_missing_raw_files
+22 passed, 1 warning in 2.35s
+exit 0

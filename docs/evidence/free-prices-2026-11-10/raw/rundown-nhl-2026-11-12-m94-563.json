@@ -1,0 +1,1746 @@
+{
+ "_fetched_at": "2026-11-11T04:40:16+00:00",
+ "_url": "https://therundown.io/api/v2/sports/6/events/2026-11-12?market_ids=94,563&affiliate_ids=19,22,23&main_line=true&hide_closed=true",
+ "_status": 200,
+ "_headers": {
+  "date": "Wed, 11 Nov 2026 04:40:16 GMT",
+  "content-type": "application/json",
+  "x-data-delay-seconds": "300",
+  "x-datapoints": "32",
+  "x-datapoints-breakdown": "events=7,odds=18,scores=7",
+  "x-datapoints-limit": "20000",
+  "x-datapoints-monthly-limit": "200000",
+  "x-datapoints-monthly-remaining": "199271",
+  "x-datapoints-monthly-reset": "2026-12-01T00:00:00Z",
+  "x-datapoints-monthly-used": "729",
+  "x-datapoints-period": "daily",
+  "x-datapoints-remaining": "19399",
+  "x-datapoints-reset": "2026-11-12T00:00:00Z",
+  "x-datapoints-used": "601",
+  "x-rate-limit": "1"
+ },
+ "body": {
+  "meta": {
+   "delta_last_id": "5539449337",
+   "affiliate_visibility_token": "enabled-2faa301d57efbaae"
+  },
+  "events": [
+   {
+    "event_id": "a663e771248c63958a498fa2bf8bef41",
+    "event_uuid": "11f1-de30-31c53400-88d0-2b50079a6d02",
+    "sport_id": 6,
+    "event_date": "2026-11-12T00:00:00Z",
+    "rotation_number_away": 57,
+    "rotation_number_home": 58,
+    "score": {
+     "event_id": "a663e771248c63958a498fa2bf8bef41",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 105,
+     "team_id_home": 99,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [],
+     "score_home_by_period": [],
+     "venue_name": "KeyBank Center",
+     "venue_location": "Buffalo, NY",
+     "game_clock": 0,
+     "display_clock": "0.00",
+     "game_period": 0,
+     "broadcast": "TNT",
+     "event_status_detail": "11/11 - 7:00 PM EST",
+     "updated_at": "2026-09-30T20:04:25Z"
+    },
+    "teams": [
+     {
+      "team_id": 105,
+      "name": "Tampa Bay",
+      "mascot": "Lightning",
+      "abbreviation": "TB",
+      "conference_id": 35,
+      "division_id": 27,
+      "ranking": 0,
+      "record": "11-4",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 35,
+       "sport_id": 6,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 27,
+       "conference_id": 35,
+       "sport_id": 6,
+       "name": "Atlantic Division"
+      }
+     },
+     {
+      "team_id": 99,
+      "name": "Buffalo",
+      "mascot": "Sabres",
+      "abbreviation": "BUF",
+      "conference_id": 35,
+      "division_id": 27,
+      "ranking": 0,
+      "record": "8-6",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 35,
+       "sport_id": 6,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 27,
+       "conference_id": 35,
+       "sport_id": 6,
+       "name": "Atlantic Division"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 105,
+      "name": "Tampa Bay",
+      "mascot": "Lightning",
+      "abbreviation": "TB",
+      "conference_id": 35,
+      "division_id": 27,
+      "ranking": 0,
+      "record": "11-4",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 35,
+       "sport_id": 6,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 27,
+       "conference_id": 35,
+       "sport_id": 6,
+       "name": "Atlantic Division"
+      }
+     },
+     {
+      "team_id": 99,
+      "name": "Buffalo",
+      "mascot": "Sabres",
+      "abbreviation": "BUF",
+      "conference_id": 35,
+      "division_id": 27,
+      "ranking": 0,
+      "record": "8-6",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 35,
+       "sport_id": 6,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 27,
+       "conference_id": 35,
+       "sport_id": 6,
+       "name": "Atlantic Division"
+      }
+     }
+    ],
+    "schedule": {
+     "league_name": "National Hockey League",
+     "conference_competition": false,
+     "season_type": "Regular Season",
+     "season_year": 2027,
+     "event_name": "Tampa Bay at Buffalo - 2026-11-12T00:00:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 8147993,
+      "market_id": 563,
+      "period_id": 0,
+      "name": "moneyline_3_way_no_push",
+      "market_description": "3-way moneyline for regulation (home/draw/away).",
+      "participants": [
+       {
+        "id": 99,
+        "type": "TYPE_TEAM",
+        "name": "Buffalo Sabres",
+        "lines": [
+         {
+          "id": "604d04e3ccb440051d909a8b78887eed",
+          "prices": {
+           "23": {
+            "id": "714202922",
+            "price": 160,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:56:59Z",
+            "source_id": "36305487-734.196970374-HOME"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 105,
+        "type": "TYPE_TEAM",
+        "name": "Tampa Bay Lightning",
+        "lines": [
+         {
+          "id": "80d9ba85ecce66955c8f19fef25f5012",
+          "prices": {
+           "23": {
+            "id": "714202921",
+            "price": 125,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:33:12Z",
+            "source_id": "36305487-734.196970374-AWAY"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 3,
+        "type": "TYPE_RESULT",
+        "name": "Draw",
+        "lines": [
+         {
+          "id": "85101db0a217239ce08742d4085a00c0",
+          "prices": {
+           "23": {
+            "id": "714202923",
+            "price": 330,
+            "price_delta": -10,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:56:59Z",
+            "source_id": "36305487-734.196970374-DRAW"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "4": "491177551",
+     "7": "8EB43EF0-F875-4C9B-B07B-E06E9D291C55",
+     "11": "491177551",
+     "23": "36305487",
+     "25": "26NOV11TBBUF",
+     "29": "1704712460",
+     "30": "01a1c7fd-dc4d-7da3-aa78-251912c64d9c",
+     "31": "240454",
+     "9": "8EB43EF0-F875-4C9B-B07B-E06E9D291C55",
+     "16": "34835833680000072",
+     "18": "476271636",
+     "19": "87172526",
+     "26": "nhl-tb-buf-2026-11-11",
+     "34": "208441971",
+     "3": "1639982174",
+     "21": "1028410174",
+     "28": "1568864798710563236",
+     "32": "607781",
+     "33": "208441971",
+     "2": "33471768",
+     "6": "491177551",
+     "22": "20075788",
+     "35": "796bf91d-aafc-4639-8005-227f2f00b2e5"
+    },
+    "affiliate_deep_links": {
+     "3": "https://www.pinnacle.com/en/hockey/nhl/tampa-bay-lightning-vs-buffalo-sabres/1639982174/",
+     "7": "https://www.bookmaker.eu/",
+     "6": "https://www.betonline.ag/sportsbook/hockey/nhl/game/491177551",
+     "11": "https://sports.lowvig.ag/sportsbook/hockey/nhl/game/491177551",
+     "2": "https://www.bovada.lv/sports/hockey/nhl/tampa-bay-lightning-buffalo-sabres-202611111900",
+     "25": "https://kalshi.com/markets/kxnhlgame/kxnhlgame-26nov11tbbuf",
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/208441971",
+     "16": "https://www.matchbook.com/events/34835833680000072",
+     "28": "https://app.hardrock.bet/competition/nhl/1568864798710563236",
+     "22": "https://sports.nj.betmgm.com/en/sports/events/20075788",
+     "29": "https://www.prophetx.co/event/1704712460",
+     "26": "https://polymarket.com/event/nhl-tb-buf-2026-11-11",
+     "19": "https://sportsbook.draftkings.com/event/tb-lightning-%40-buf-sabres/34992000",
+     "23": "https://sportsbook.fanduel.com/hockey/nhl/tampa-bay-lightning-@-buffalo-sabres-36305487",
+     "9": "https://sportsbook.betcris.com/",
+     "18": "https://landings.youwager.lv/partners/landing-a/index.shtml?affid=THERUNDOWN&A=41782&B=0&T=I&source=TheRunDown_RunDownLP",
+     "35": "https://sportsbook.caesars.com/",
+     "30": "https://novig.com/event-markets/01a1c7fd-dc4d-7da3-aa78-251912c64d9c",
+     "31": "https://polymarket.us/event/nhl-tb-buf-2026-11-11",
+     "4": "https://www.sportsbetting.ag/sportsbook/hockey/nhl/game/491177551",
+     "33": "https://bet105.ag/",
+     "21": "https://www.unibet.com/",
+     "32": "https://www.circasports.com/"
+    },
+    "affiliate_deep_link_types": {
+     "7": "catalog",
+     "18": "catalog",
+     "35": "catalog",
+     "9": "catalog",
+     "33": "catalog",
+     "21": "catalog",
+     "32": "catalog"
+    }
+   },
+   {
+    "event_id": "6a45d6611ece5f37b1c8cfa04f9b8779",
+    "event_uuid": "11f1-de30-31c53400-81c0-5c90fcd955ff",
+    "sport_id": 6,
+    "event_date": "2026-11-12T00:30:00Z",
+    "rotation_number_away": 59,
+    "rotation_number_home": 60,
+    "score": {
+     "event_id": "6a45d6611ece5f37b1c8cfa04f9b8779",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 95,
+     "team_id_home": 113,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [],
+     "score_home_by_period": [],
+     "venue_name": "Scotiabank Saddledome",
+     "venue_location": "Calgary, AB",
+     "game_clock": 0,
+     "display_clock": "0.00",
+     "game_period": 0,
+     "broadcast": "ESPN+",
+     "event_status_detail": "11/11 - 7:30 PM EST",
+     "updated_at": "2026-10-20T04:20:42Z"
+    },
+    "teams": [
+     {
+      "team_id": 95,
+      "name": "New York",
+      "mascot": "Rangers",
+      "abbreviation": "NYR",
+      "conference_id": 35,
+      "division_id": 29,
+      "ranking": 0,
+      "record": "10-8",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 35,
+       "sport_id": 6,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 29,
+       "conference_id": 35,
+       "sport_id": 6,
+       "name": "Metropolitan Division"
+      }
+     },
+     {
+      "team_id": 113,
+      "name": "Calgary",
+      "mascot": "Flames",
+      "abbreviation": "CAL",
+      "conference_id": 36,
+      "division_id": 31,
+      "ranking": 0,
+      "record": "8-9",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 31,
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Pacific Division"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 95,
+      "name": "New York",
+      "mascot": "Rangers",
+      "abbreviation": "NYR",
+      "conference_id": 35,
+      "division_id": 29,
+      "ranking": 0,
+      "record": "10-8",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 35,
+       "sport_id": 6,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 29,
+       "conference_id": 35,
+       "sport_id": 6,
+       "name": "Metropolitan Division"
+      }
+     },
+     {
+      "team_id": 113,
+      "name": "Calgary",
+      "mascot": "Flames",
+      "abbreviation": "CAL",
+      "conference_id": 36,
+      "division_id": 31,
+      "ranking": 0,
+      "record": "8-9",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 31,
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Pacific Division"
+      }
+     }
+    ],
+    "schedule": {
+     "league_name": "National Hockey League",
+     "conference_competition": false,
+     "season_type": "Regular Season",
+     "season_year": 2027,
+     "event_name": "New York at Calgary - 2026-11-12T00:30:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 8148013,
+      "market_id": 563,
+      "period_id": 0,
+      "name": "moneyline_3_way_no_push",
+      "market_description": "3-way moneyline for regulation (home/draw/away).",
+      "participants": [
+       {
+        "id": 95,
+        "type": "TYPE_TEAM",
+        "name": "New York Rangers",
+        "lines": [
+         {
+          "id": "ec427651e17eb24c756a671ce7b5e34b",
+          "prices": {
+           "23": {
+            "id": "714205126",
+            "price": 115,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:29:07Z",
+            "source_id": "36305490-734.196970456-AWAY"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 113,
+        "type": "TYPE_TEAM",
+        "name": "Calgary Flames",
+        "lines": [
+         {
+          "id": "b6c29fce7615a3f2c7387b1582b4db54",
+          "prices": {
+           "23": {
+            "id": "714205127",
+            "price": 175,
+            "price_delta": -10,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:56:15Z",
+            "source_id": "36305490-734.196970456-HOME"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 3,
+        "type": "TYPE_RESULT",
+        "name": "Draw",
+        "lines": [
+         {
+          "id": "e268e681c5ee33954fdb68627688fbb6",
+          "prices": {
+           "23": {
+            "id": "714205128",
+            "price": 310,
+            "price_delta": -10,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:57:20Z",
+            "source_id": "36305490-734.196970456-DRAW"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "4": "491177549",
+     "16": "34835837945700072",
+     "25": "26NOV11NYRCGY",
+     "32": "607782",
+     "6": "491177549",
+     "11": "491177549",
+     "23": "36305490",
+     "34": "208442061",
+     "35": "613ca5c9-5633-43e4-a8b5-53351ed33bb2",
+     "9": "D59AFFE2-9E2A-461D-9C72-2DF54CE61125",
+     "19": "34992002",
+     "21": "1028410203",
+     "24": "099000fc-631a-4f33-860a-5efa3f86229c",
+     "26": "nhl-nyr-cal-2026-11-11",
+     "28": "4280606045874815385",
+     "30": "01a1c818-de55-72c2-a571-ebbd28cc1f78",
+     "33": "208442061",
+     "7": "D59AFFE2-9E2A-461D-9C72-2DF54CE61125",
+     "18": "476271635",
+     "22": "20075793",
+     "29": "1704712464",
+     "31": "240456",
+     "2": "33471568",
+     "3": "1639984905"
+    },
+    "affiliate_deep_links": {
+     "30": "https://novig.com/event-markets/01a1c818-de55-72c2-a571-ebbd28cc1f78",
+     "4": "https://www.sportsbetting.ag/sportsbook/hockey/nhl/game/491177549",
+     "35": "https://sportsbook.caesars.com/",
+     "32": "https://www.circasports.com/",
+     "16": "https://www.matchbook.com/events/34835837945700072",
+     "21": "https://www.unibet.com/",
+     "18": "https://landings.youwager.lv/partners/landing-a/index.shtml?affid=THERUNDOWN&A=41782&B=0&T=I&source=TheRunDown_RunDownLP",
+     "24": "https://sportsbook.thescore.bet/sport/hockey/organization/united-states/competition/nhl/event/099000fc-631a-4f33-860a-5efa3f86229c",
+     "19": "https://sportsbook.draftkings.com/event/ny-rangers-%40-cgy-flames/34992002",
+     "22": "https://sports.nj.betmgm.com/en/sports/events/20075793",
+     "11": "https://sports.lowvig.ag/sportsbook/hockey/nhl/game/491177549",
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/208442061",
+     "3": "https://www.pinnacle.com/en/hockey/nhl/new-york-rangers-vs-calgary-flames/1639984905/",
+     "7": "https://www.bookmaker.eu/",
+     "33": "https://bet105.ag/",
+     "26": "https://polymarket.com/event/nhl-nyr-cal-2026-11-11",
+     "28": "https://app.hardrock.bet/competition/nhl/4280606045874815385",
+     "2": "https://www.bovada.lv/sports/hockey/nhl/new-york-rangers-calgary-flames-202611111930",
+     "9": "https://sportsbook.betcris.com/",
+     "23": "https://sportsbook.fanduel.com/hockey/nhl/new-york-rangers-@-calgary-flames-36305490",
+     "31": "https://polymarket.us/event/nhl-nyr-cgy-2026-11-11",
+     "29": "https://www.prophetx.co/event/1704712464",
+     "6": "https://www.betonline.ag/sportsbook/hockey/nhl/game/491177549",
+     "25": "https://kalshi.com/markets/kxnhlgame/kxnhlgame-26nov11nyrcgy"
+    },
+    "affiliate_deep_link_types": {
+     "33": "catalog",
+     "7": "catalog",
+     "9": "catalog",
+     "32": "catalog",
+     "35": "catalog",
+     "18": "catalog",
+     "21": "catalog"
+    }
+   },
+   {
+    "event_id": "7c2902d5a941df2aca442c7610d2b2e4",
+    "event_uuid": "11f1-de3c-c46bd000-8171-3b5cbde43223",
+    "sport_id": 6,
+    "event_date": "2026-11-12T02:00:00Z",
+    "rotation_number_away": 61,
+    "rotation_number_home": 62,
+    "score": {
+     "event_id": "7c2902d5a941df2aca442c7610d2b2e4",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 96,
+     "team_id_home": 115,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [],
+     "score_home_by_period": [],
+     "venue_name": "Rogers Place",
+     "venue_location": "Edmonton, AB",
+     "game_clock": 0,
+     "display_clock": "0.00",
+     "game_period": 0,
+     "broadcast": "ESPN+",
+     "event_status_detail": "11/11 - 9:00 PM EST",
+     "updated_at": "2026-10-20T04:20:42Z"
+    },
+    "teams": [
+     {
+      "team_id": 96,
+      "name": "Philadelphia",
+      "mascot": "Flyers",
+      "abbreviation": "PHI",
+      "conference_id": 35,
+      "division_id": 29,
+      "ranking": 0,
+      "record": "5-10",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 35,
+       "sport_id": 6,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 29,
+       "conference_id": 35,
+       "sport_id": 6,
+       "name": "Metropolitan Division"
+      }
+     },
+     {
+      "team_id": 115,
+      "name": "Edmonton",
+      "mascot": "Oilers",
+      "abbreviation": "EDM",
+      "conference_id": 36,
+      "division_id": 31,
+      "ranking": 0,
+      "record": "13-3",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 31,
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Pacific Division"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 96,
+      "name": "Philadelphia",
+      "mascot": "Flyers",
+      "abbreviation": "PHI",
+      "conference_id": 35,
+      "division_id": 29,
+      "ranking": 0,
+      "record": "5-10",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 35,
+       "sport_id": 6,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 29,
+       "conference_id": 35,
+       "sport_id": 6,
+       "name": "Metropolitan Division"
+      }
+     },
+     {
+      "team_id": 115,
+      "name": "Edmonton",
+      "mascot": "Oilers",
+      "abbreviation": "EDM",
+      "conference_id": 36,
+      "division_id": 31,
+      "ranking": 0,
+      "record": "13-3",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 31,
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Pacific Division"
+      }
+     }
+    ],
+    "schedule": {
+     "league_name": "National Hockey League",
+     "conference_competition": false,
+     "season_type": "Regular Season",
+     "season_year": 2027,
+     "event_name": "Philadelphia at Edmonton - 2026-11-12T02:00:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 8148019,
+      "market_id": 563,
+      "period_id": 0,
+      "name": "moneyline_3_way_no_push",
+      "market_description": "3-way moneyline for regulation (home/draw/away).",
+      "participants": [
+       {
+        "id": 96,
+        "type": "TYPE_TEAM",
+        "name": "Philadelphia Flyers",
+        "lines": [
+         {
+          "id": "594281db2f7df9dd5cc110be811b25ed",
+          "prices": {
+           "23": {
+            "id": "714205431",
+            "price": 260,
+            "price_delta": -10,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:17:29Z",
+            "source_id": "36305493-734.196970522-AWAY"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 115,
+        "type": "TYPE_TEAM",
+        "name": "Edmonton Oilers",
+        "lines": [
+         {
+          "id": "886164895bfd87513f9ddca3f5899425",
+          "prices": {
+           "23": {
+            "id": "714205432",
+            "price": -130,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:54:58Z",
+            "source_id": "36305493-734.196970522-HOME"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 3,
+        "type": "TYPE_RESULT",
+        "name": "Draw",
+        "lines": [
+         {
+          "id": "f080c1b56346a3098bc798d878cfacfa",
+          "prices": {
+           "23": {
+            "id": "714205433",
+            "price": 350,
+            "price_delta": 10,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:31:00Z",
+            "source_id": "36305493-734.196970522-DRAW"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "28": "3539135123960234377",
+     "30": "01a1c86a-f0e5-79e2-956f-fbd4291cd796",
+     "31": "240511",
+     "2": "33471972",
+     "4": "491177550",
+     "7": "8B7C646E-15D5-4D2C-B338-E20B0BFBBAE9",
+     "34": "208442041",
+     "9": "8B7C646E-15D5-4D2C-B338-E20B0BFBBAE9",
+     "18": "476271629",
+     "21": "1028410212",
+     "25": "26NOV11PHIEDM",
+     "6": "491177550",
+     "16": "34834495457000072",
+     "19": "87189624",
+     "23": "36305493",
+     "29": "1704712461",
+     "32": "607783",
+     "33": "208442041",
+     "35": "edbef651-20cb-476c-adcd-f5935613a74b",
+     "3": "1639984921",
+     "11": "491177550",
+     "22": "20075794",
+     "24": "60ac5486-aca9-43aa-a181-e98466b51d11",
+     "26": "nhl-phi-edm-2026-11-11"
+    },
+    "affiliate_deep_links": {
+     "4": "https://www.sportsbetting.ag/sportsbook/hockey/nhl/game/491177550",
+     "25": "https://kalshi.com/markets/kxnhlgame/kxnhlgame-26nov11phiedm",
+     "30": "https://novig.com/event-markets/01a1c86a-f0e5-79e2-956f-fbd4291cd796",
+     "16": "https://www.matchbook.com/events/34834495457000072",
+     "23": "https://sportsbook.fanduel.com/hockey/nhl/philadelphia-flyers-@-edmonton-oilers-36305493",
+     "9": "https://sportsbook.betcris.com/",
+     "33": "https://bet105.ag/",
+     "7": "https://www.bookmaker.eu/",
+     "29": "https://www.prophetx.co/event/1704712461",
+     "26": "https://polymarket.com/event/nhl-phi-edm-2026-11-11",
+     "24": "https://sportsbook.thescore.bet/sport/hockey/organization/united-states/competition/nhl/event/60ac5486-aca9-43aa-a181-e98466b51d11",
+     "6": "https://www.betonline.ag/sportsbook/hockey/nhl/game/491177550",
+     "18": "https://landings.youwager.lv/partners/landing-a/index.shtml?affid=THERUNDOWN&A=41782&B=0&T=I&source=TheRunDown_RunDownLP",
+     "2": "https://www.bovada.lv/sports/hockey/nhl/philadelphia-flyers-edmonton-oilers-202611112100",
+     "32": "https://www.circasports.com/",
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/208442041",
+     "31": "https://polymarket.us/event/nhl-phi-edm-2026-11-11",
+     "19": "https://sportsbook.draftkings.com/event/phi-flyers-%40-edm-oilers/34992003",
+     "11": "https://sports.lowvig.ag/sportsbook/hockey/nhl/game/491177550",
+     "21": "https://www.unibet.com/",
+     "35": "https://sportsbook.caesars.com/",
+     "28": "https://app.hardrock.bet/competition/nhl/3539135123960234377",
+     "22": "https://sports.nj.betmgm.com/en/sports/events/20075794",
+     "3": "https://www.pinnacle.com/en/hockey/nhl/philadelphia-flyers-vs-edmonton-oilers/1639984921/"
+    },
+    "affiliate_deep_link_types": {
+     "32": "catalog",
+     "9": "catalog",
+     "21": "catalog",
+     "33": "catalog",
+     "18": "catalog",
+     "7": "catalog",
+     "35": "catalog"
+    }
+   },
+   {
+    "event_id": "51398517f979d8dc3d01335195334590",
+    "event_uuid": "11f1-de45-26303800-85b2-3aae99db83e3",
+    "sport_id": 6,
+    "event_date": "2026-11-12T02:30:00Z",
+    "rotation_number_away": 67,
+    "rotation_number_home": 68,
+    "score": {
+     "event_id": "51398517f979d8dc3d01335195334590",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 10712,
+     "team_id_home": 361,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [],
+     "score_home_by_period": [],
+     "venue_name": "T-Mobile Arena",
+     "venue_location": "Las Vegas, NV",
+     "game_clock": 0,
+     "display_clock": "0.00",
+     "game_period": 0,
+     "broadcast": "TNT",
+     "event_status_detail": "11/11 - 9:30 PM EST",
+     "updated_at": "2026-09-30T20:04:25Z"
+    },
+    "teams": [
+     {
+      "team_id": 10712,
+      "name": "Utah",
+      "mascot": "Mammoth",
+      "abbreviation": "UTAH",
+      "conference_id": 36,
+      "division_id": 30,
+      "record": "10-7",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 30,
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Central Division"
+      }
+     },
+     {
+      "team_id": 361,
+      "name": "Vegas",
+      "mascot": "Golden Knights",
+      "abbreviation": "LAS",
+      "conference_id": 36,
+      "division_id": 31,
+      "ranking": 0,
+      "record": "12-5",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 31,
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Pacific Division"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 10712,
+      "name": "Utah",
+      "mascot": "Mammoth",
+      "abbreviation": "UTAH",
+      "conference_id": 36,
+      "division_id": 30,
+      "record": "10-7",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 30,
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Central Division"
+      }
+     },
+     {
+      "team_id": 361,
+      "name": "Vegas",
+      "mascot": "Golden Knights",
+      "abbreviation": "LAS",
+      "conference_id": 36,
+      "division_id": 31,
+      "ranking": 0,
+      "record": "12-5",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 31,
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Pacific Division"
+      }
+     }
+    ],
+    "schedule": {
+     "league_name": "National Hockey League",
+     "conference_competition": false,
+     "season_type": "Regular Season",
+     "season_year": 2027,
+     "event_name": "Utah at Vegas - 2026-11-12T02:30:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 8148010,
+      "market_id": 563,
+      "period_id": 0,
+      "name": "moneyline_3_way_no_push",
+      "market_description": "3-way moneyline for regulation (home/draw/away).",
+      "participants": [
+       {
+        "id": 361,
+        "type": "TYPE_TEAM",
+        "name": "Vegas Golden Knights",
+        "lines": [
+         {
+          "id": "2cce9fafe4aad6032e74b71c9e4a673f",
+          "prices": {
+           "23": {
+            "id": "714206314",
+            "price": 130,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:16:12Z",
+            "source_id": "36305489-734.196970435-HOME"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 10712,
+        "type": "TYPE_TEAM",
+        "name": "Utah Mammoth",
+        "lines": [
+         {
+          "id": "7c3e2d12817c8b187521247fc6c01437",
+          "prices": {
+           "23": {
+            "id": "714206313",
+            "price": 155,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:50:38Z",
+            "source_id": "36305489-734.196970435-AWAY"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 3,
+        "type": "TYPE_RESULT",
+        "name": "Draw",
+        "lines": [
+         {
+          "id": "48e4f1f73f4d6e40713df63c22d61268",
+          "prices": {
+           "23": {
+            "id": "714206315",
+            "price": 330,
+            "price_delta": 20,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:50:38Z",
+            "source_id": "36305489-734.196970435-DRAW"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "16": "34835061588000072",
+     "22": "20075795",
+     "29": "1704712463",
+     "31": "240603",
+     "33": "208442081",
+     "9": "1E3FE5C2-99B9-47FB-A936-C9906285216C",
+     "21": "1028410209",
+     "26": "nhl-utah-las-2026-11-11",
+     "28": "3363425048353440156",
+     "32": "607786",
+     "4": "491177548",
+     "7": "1E3FE5C2-99B9-47FB-A936-C9906285216C",
+     "11": "491177548",
+     "2": "33471569",
+     "18": "476271624",
+     "19": "87189602",
+     "23": "36305489",
+     "25": "26NOV11UTAVGK",
+     "30": "01a1c886-c06c-75d1-95ac-3ad82125170d",
+     "34": "208442081",
+     "35": "54e54085-092f-48a7-b4dc-8476cc8c89e7",
+     "3": "1639986887",
+     "6": "491177548"
+    },
+    "affiliate_deep_links": {
+     "7": "https://www.bookmaker.eu/",
+     "33": "https://bet105.ag/",
+     "16": "https://www.matchbook.com/events/34835061588000072",
+     "30": "https://novig.com/event-markets/01a1c886-c06c-75d1-95ac-3ad82125170d",
+     "19": "https://sportsbook.draftkings.com/event/uta-mammoth-%40-vgk-golden-knights/34992008",
+     "23": "https://sportsbook.fanduel.com/hockey/nhl/utah-mammoth-@-vegas-golden-knights-36305489",
+     "26": "https://polymarket.com/event/nhl-utah-las-2026-11-11",
+     "22": "https://sports.nj.betmgm.com/en/sports/events/20075795",
+     "32": "https://www.circasports.com/",
+     "6": "https://www.betonline.ag/sportsbook/hockey/nhl/game/491177548",
+     "11": "https://sports.lowvig.ag/sportsbook/hockey/nhl/game/491177548",
+     "29": "https://www.prophetx.co/event/1704712463",
+     "2": "https://www.bovada.lv/sports/hockey/nhl/utah-mammoth-vegas-golden-knights-202611112130",
+     "31": "https://polymarket.us/event/nhl-uta-veg-2026-11-11",
+     "9": "https://sportsbook.betcris.com/",
+     "35": "https://sportsbook.caesars.com/",
+     "25": "https://kalshi.com/markets/kxnhlgame/kxnhlgame-26nov11utavgk",
+     "28": "https://app.hardrock.bet/competition/nhl/3363425048353440156",
+     "3": "https://www.pinnacle.com/en/hockey/nhl/utah-mammoth-vs-vegas-golden-knights/1639986887/",
+     "18": "https://landings.youwager.lv/partners/landing-a/index.shtml?affid=THERUNDOWN&A=41782&B=0&T=I&source=TheRunDown_RunDownLP",
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/208442081",
+     "4": "https://www.sportsbetting.ag/sportsbook/hockey/nhl/game/491177548",
+     "21": "https://www.unibet.com/"
+    },
+    "affiliate_deep_link_types": {
+     "9": "catalog",
+     "7": "catalog",
+     "33": "catalog",
+     "35": "catalog",
+     "32": "catalog",
+     "18": "catalog",
+     "21": "catalog"
+    }
+   },
+   {
+    "event_id": "5b6df17610c2bba5f27f8611f63dae27",
+    "event_uuid": "11f1-de45-26303800-83d1-69682848adf3",
+    "sport_id": 6,
+    "event_date": "2026-11-12T03:00:00Z",
+    "rotation_number_away": 63,
+    "rotation_number_home": 64,
+    "score": {
+     "event_id": "5b6df17610c2bba5f27f8611f63dae27",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 97,
+     "team_id_home": 122,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [],
+     "score_home_by_period": [],
+     "venue_name": "SAP Center at San Jose",
+     "venue_location": "San Jose, CA",
+     "game_clock": 0,
+     "display_clock": "0.00",
+     "game_period": 0,
+     "broadcast": "ESPN+",
+     "event_status_detail": "11/11 - 10:00 PM EST",
+     "updated_at": "2026-10-20T04:20:42Z"
+    },
+    "teams": [
+     {
+      "team_id": 97,
+      "name": "Pittsburgh",
+      "mascot": "Penguins",
+      "abbreviation": "PIT",
+      "conference_id": 35,
+      "division_id": 29,
+      "ranking": 0,
+      "record": "6-10",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 35,
+       "sport_id": 6,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 29,
+       "conference_id": 35,
+       "sport_id": 6,
+       "name": "Metropolitan Division"
+      }
+     },
+     {
+      "team_id": 122,
+      "name": "San Jose",
+      "mascot": "Sharks",
+      "abbreviation": "SJ",
+      "conference_id": 36,
+      "division_id": 31,
+      "ranking": 0,
+      "record": "8-11",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 31,
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Pacific Division"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 97,
+      "name": "Pittsburgh",
+      "mascot": "Penguins",
+      "abbreviation": "PIT",
+      "conference_id": 35,
+      "division_id": 29,
+      "ranking": 0,
+      "record": "6-10",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 35,
+       "sport_id": 6,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 29,
+       "conference_id": 35,
+       "sport_id": 6,
+       "name": "Metropolitan Division"
+      }
+     },
+     {
+      "team_id": 122,
+      "name": "San Jose",
+      "mascot": "Sharks",
+      "abbreviation": "SJ",
+      "conference_id": 36,
+      "division_id": 31,
+      "ranking": 0,
+      "record": "8-11",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 31,
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Pacific Division"
+      }
+     }
+    ],
+    "schedule": {
+     "league_name": "National Hockey League",
+     "conference_competition": false,
+     "season_type": "Regular Season",
+     "season_year": 2027,
+     "event_name": "Pittsburgh at San Jose - 2026-11-12T03:00:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 8147992,
+      "market_id": 563,
+      "period_id": 0,
+      "name": "moneyline_3_way_no_push",
+      "market_description": "3-way moneyline for regulation (home/draw/away).",
+      "participants": [
+       {
+        "id": 97,
+        "type": "TYPE_TEAM",
+        "name": "Pittsburgh Penguins",
+        "lines": [
+         {
+          "id": "c7f5c208c509a5959d2db9227edc0341",
+          "prices": {
+           "23": {
+            "id": "714206151",
+            "price": 115,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:53:58Z",
+            "source_id": "36305485-734.196970350-AWAY"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 122,
+        "type": "TYPE_TEAM",
+        "name": "San Jose Sharks",
+        "lines": [
+         {
+          "id": "c43408553b9e768f29bd84dea7019bd8",
+          "prices": {
+           "23": {
+            "id": "714206152",
+            "price": 165,
+            "price_delta": -5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T04:04:07Z",
+            "source_id": "36305485-734.196970350-HOME"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 3,
+        "type": "TYPE_RESULT",
+        "name": "Draw",
+        "lines": [
+         {
+          "id": "69ce36c9a16314ed673acf871766c0e1",
+          "prices": {
+           "23": {
+            "id": "714206153",
+            "price": 350,
+            "price_delta": 20,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:53:58Z",
+            "source_id": "36305485-734.196970350-DRAW"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "23": "36305485",
+     "28": "7031264627363283345",
+     "30": "01a1c8a2-0ff7-7302-a2eb-264977724060",
+     "32": "607784",
+     "33": "208442351",
+     "7": "C759D234-332A-45AD-B4CD-58A069B85881",
+     "24": "c9b58975-b03e-4d32-a156-b8b95cc7ea34",
+     "4": "491177547",
+     "16": "34835662477900072",
+     "19": "34992013",
+     "21": "1028410194",
+     "25": "26NOV11PITSJ",
+     "26": "nhl-pit-sj-2026-11-11",
+     "34": "208442351",
+     "3": "1639989862",
+     "6": "491177547",
+     "18": "476271627",
+     "22": "20075797",
+     "29": "1704712465",
+     "31": "240606",
+     "35": "563668d0-ddef-4504-b8e6-865b952799e0",
+     "2": "33471973",
+     "9": "C759D234-332A-45AD-B4CD-58A069B85881",
+     "11": "491177547"
+    },
+    "affiliate_deep_links": {
+     "29": "https://www.prophetx.co/event/1704712465",
+     "19": "https://sportsbook.draftkings.com/event/pit-penguins-%40-sj-sharks/34992013",
+     "3": "https://www.pinnacle.com/en/hockey/nhl/pittsburgh-penguins-vs-san-jose-sharks/1639989862/",
+     "11": "https://sports.lowvig.ag/sportsbook/hockey/nhl/game/491177547",
+     "33": "https://bet105.ag/",
+     "23": "https://sportsbook.fanduel.com/hockey/nhl/pittsburgh-penguins-@-san-jose-sharks-36305485",
+     "32": "https://www.circasports.com/",
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/208442351",
+     "28": "https://app.hardrock.bet/competition/nhl/7031264627363283345",
+     "22": "https://sports.nj.betmgm.com/en/sports/events/20075797",
+     "4": "https://www.sportsbetting.ag/sportsbook/hockey/nhl/game/491177547",
+     "21": "https://www.unibet.com/",
+     "7": "https://www.bookmaker.eu/",
+     "30": "https://novig.com/event-markets/01a1c8a2-0ff7-7302-a2eb-264977724060",
+     "2": "https://www.bovada.lv/sports/hockey/nhl/pittsburgh-penguins-san-jose-sharks-202611112200",
+     "24": "https://sportsbook.thescore.bet/sport/hockey/organization/united-states/competition/nhl/event/c9b58975-b03e-4d32-a156-b8b95cc7ea34",
+     "6": "https://www.betonline.ag/sportsbook/hockey/nhl/game/491177547",
+     "26": "https://polymarket.com/event/nhl-pit-sj-2026-11-11",
+     "31": "https://polymarket.us/event/nhl-pit-sj-2026-11-11",
+     "25": "https://kalshi.com/markets/kxnhlgame/kxnhlgame-26nov11pitsj",
+     "35": "https://sportsbook.caesars.com/",
+     "9": "https://sportsbook.betcris.com/",
+     "16": "https://www.matchbook.com/events/34835662477900072",
+     "18": "https://landings.youwager.lv/partners/landing-a/index.shtml?affid=THERUNDOWN&A=41782&B=0&T=I&source=TheRunDown_RunDownLP"
+    },
+    "affiliate_deep_link_types": {
+     "33": "catalog",
+     "9": "catalog",
+     "18": "catalog",
+     "32": "catalog",
+     "7": "catalog",
+     "35": "catalog",
+     "21": "catalog"
+    }
+   },
+   {
+    "event_id": "689e9e52315510aac3601922e4ce9ddd",
+    "event_uuid": "11f1-de45-26303800-8db3-16c676cc69de",
+    "sport_id": 6,
+    "event_date": "2026-11-12T03:00:00Z",
+    "rotation_number_away": 400,
+    "rotation_number_home": 401,
+    "score": {
+     "event_id": "689e9e52315510aac3601922e4ce9ddd",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 111,
+     "team_id_home": 118,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [],
+     "score_home_by_period": [],
+     "venue_name": "Honda Center",
+     "venue_location": "Anaheim, CA",
+     "game_clock": 0,
+     "display_clock": "0.00",
+     "game_period": 0,
+     "broadcast": "ESPN+",
+     "event_status_detail": "11/11 - 10:00 PM EST",
+     "updated_at": "2026-10-20T04:20:42Z"
+    },
+    "teams": [
+     {
+      "team_id": 111,
+      "name": "Nashville",
+      "mascot": "Predators",
+      "abbreviation": "NSH",
+      "conference_id": 36,
+      "division_id": 30,
+      "ranking": 0,
+      "record": "8-4",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 30,
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Central Division"
+      }
+     },
+     {
+      "team_id": 118,
+      "name": "Anaheim",
+      "mascot": "Ducks",
+      "abbreviation": "ANA",
+      "conference_id": 36,
+      "division_id": 31,
+      "ranking": 0,
+      "record": "10-7",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 31,
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Pacific Division"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 111,
+      "name": "Nashville",
+      "mascot": "Predators",
+      "abbreviation": "NSH",
+      "conference_id": 36,
+      "division_id": 30,
+      "ranking": 0,
+      "record": "8-4",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 30,
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Central Division"
+      }
+     },
+     {
+      "team_id": 118,
+      "name": "Anaheim",
+      "mascot": "Ducks",
+      "abbreviation": "ANA",
+      "conference_id": 36,
+      "division_id": 31,
+      "ranking": 0,
+      "record": "10-7",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 31,
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Pacific Division"
+      }
+     }
+    ],
+    "schedule": {
+     "league_name": "National Hockey League",
+     "conference_competition": false,
+     "season_type": "Regular Season",
+     "season_year": 2027,
+     "event_name": "Nashville at Anaheim - 2026-11-12T03:00:00Z",
+     "attendance": "0"
+    },
+    "markets": [
+     {
+      "id": 8148001,
+      "market_id": 563,
+      "period_id": 0,
+      "name": "moneyline_3_way_no_push",
+      "market_description": "3-way moneyline for regulation (home/draw/away).",
+      "participants": [
+       {
+        "id": 111,
+        "type": "TYPE_TEAM",
+        "name": "Nashville Predators",
+        "lines": [
+         {
+          "id": "8f41a0cb0453fc232723b5c67e641ced",
+          "prices": {
+           "23": {
+            "id": "714205935",
+            "price": 190,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:17:12Z",
+            "source_id": "36305488-734.196970388-AWAY"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 118,
+        "type": "TYPE_TEAM",
+        "name": "Anaheim Ducks",
+        "lines": [
+         {
+          "id": "f56fd8fc36c1328bfd0a1f05cc4cc77a",
+          "prices": {
+           "23": {
+            "id": "714205936",
+            "price": 105,
+            "price_delta": 5,
+            "is_main_line": true,
+            "updated_at": "2026-11-10T18:47:12Z",
+            "source_id": "36305488-734.196970388-HOME"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": 3,
+        "type": "TYPE_RESULT",
+        "name": "Draw",
+        "lines": [
+         {
+          "id": "8bf1fff3c2c5816c25bb8c7e362c49a1",
+          "prices": {
+           "23": {
+            "id": "714205937",
+            "price": 340,
+            "price_delta": -10,
+            "is_main_line": true,
+            "updated_at": "2026-11-11T03:17:12Z",
+            "source_id": "36305488-734.196970388-DRAW"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "affiliate_source_ids": {
+     "2": "33471974",
+     "4": "491177552",
+     "16": "34835137289500072",
+     "18": "476271626",
+     "21": "1028410197",
+     "25": "26NOV11NSHANA",
+     "11": "491177552",
+     "19": "87189660",
+     "30": "01a1c8a2-1090-7f61-acab-0c361b4afc6b",
+     "31": "240607",
+     "34": "208442291",
+     "35": "15aba188-4e03-43d4-8e3a-53141d97c258",
+     "26": "nhl-nsh-ana-2026-11-11",
+     "6": "491177552",
+     "22": "20075796",
+     "23": "36305488",
+     "28": "4546987958556819875",
+     "29": "1704712462"
+    },
+    "affiliate_deep_links": {
+     "22": "https://sports.nj.betmgm.com/en/sports/events/20075796",
+     "2": "https://www.bovada.lv/sports/hockey/nhl/nashville-predators-anaheim-ducks-202611112200",
+     "31": "https://polymarket.us/event/nhl-nas-ana-2026-11-11",
+     "26": "https://polymarket.com/event/nhl-nsh-ana-2026-11-11",
+     "25": "https://kalshi.com/markets/kxnhlgame/kxnhlgame-26nov11nshana",
+     "35": "https://sportsbook.caesars.com/",
+     "21": "https://www.unibet.com/",
+     "29": "https://www.prophetx.co/event/1704712462",
+     "6": "https://www.betonline.ag/sportsbook/hockey/nhl/game/491177552",
+     "16": "https://www.matchbook.com/events/34835137289500072",
+     "23": "https://sportsbook.fanduel.com/hockey/nhl/nashville-predators-@-anaheim-ducks-36305488",
+     "18": "https://landings.youwager.lv/partners/landing-a/index.shtml?affid=THERUNDOWN&A=41782&B=0&T=I&source=TheRunDown_RunDownLP",
+     "30": "https://novig.com/event-markets/01a1c8a2-1090-7f61-acab-0c361b4afc6b",
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/208442291",
+     "4": "https://www.sportsbetting.ag/sportsbook/hockey/nhl/game/491177552",
+     "19": "https://sportsbook.draftkings.com/event/nsh-predators-%40-ana-ducks/34992012",
+     "28": "https://app.hardrock.bet/competition/nhl/4546987958556819875",
+     "11": "https://sports.lowvig.ag/sportsbook/hockey/nhl/game/491177552"
+    },
+    "affiliate_deep_link_types": {
+     "18": "catalog",
+     "35": "catalog",
+     "21": "catalog"
+    }
+   },
+   {
+    "event_id": "579be30dbc81dbca3ea713c453fda973",
+    "event_uuid": "11f1-deba-7eede800-8529-a88efce73d5e",
+    "sport_id": 6,
+    "event_date": "2026-11-12T17:00:00Z",
+    "score": {
+     "event_id": "579be30dbc81dbca3ea713c453fda973",
+     "event_status": "STATUS_SCHEDULED",
+     "team_id_away": 103,
+     "team_id_home": 3501,
+     "winner_away": 0,
+     "winner_home": 0,
+     "score_away": 0,
+     "score_home": 0,
+     "score_away_by_period": [],
+     "score_home_by_period": [],
+     "venue_name": "Veikkaus Arena",
+     "venue_location": "Helsinki",
+     "game_clock": 0,
+     "display_clock": "0.00",
+     "game_period": 0,
+     "broadcast": "NHL Net",
+     "event_status_detail": "11/12 - 12:00 PM EST",
+     "updated_at": "2026-10-19T19:47:17Z"
+    },
+    "teams": [
+     {
+      "team_id": 103,
+      "name": "Carolina",
+      "mascot": "Hurricanes",
+      "abbreviation": "CAR",
+      "conference_id": 35,
+      "division_id": 29,
+      "ranking": 0,
+      "record": "14-3",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 35,
+       "sport_id": 6,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 29,
+       "conference_id": 35,
+       "sport_id": 6,
+       "name": "Metropolitan Division"
+      }
+     },
+     {
+      "team_id": 3501,
+      "name": "Seattle",
+      "mascot": "Kraken",
+      "abbreviation": "SEA",
+      "conference_id": 36,
+      "division_id": 31,
+      "ranking": 0,
+      "record": "9-6",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 31,
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Pacific Division"
+      }
+     }
+    ],
+    "teams_normalized": [
+     {
+      "team_id": 103,
+      "name": "Carolina",
+      "mascot": "Hurricanes",
+      "abbreviation": "CAR",
+      "conference_id": 35,
+      "division_id": 29,
+      "ranking": 0,
+      "record": "14-3",
+      "is_away": true,
+      "is_home": false,
+      "conference": {
+       "conference_id": 35,
+       "sport_id": 6,
+       "name": "Eastern Conference"
+      },
+      "division": {
+       "division_id": 29,
+       "conference_id": 35,
+       "sport_id": 6,
+       "name": "Metropolitan Division"
+      }
+     },
+     {
+      "team_id": 3501,
+      "name": "Seattle",
+      "mascot": "Kraken",
+      "abbreviation": "SEA",
+      "conference_id": 36,
+      "division_id": 31,
+      "ranking": 0,
+      "record": "9-6",
+      "is_away": false,
+      "is_home": true,
+      "conference": {
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Western Conference"
+      },
+      "division": {
+       "division_id": 31,
+       "conference_id": 36,
+       "sport_id": 6,
+       "name": "Pacific Division"
+      }
+     }
+    ],
+    "schedule": {
+     "league_name": "National Hockey League",
+     "conference_competition": false,
+     "season_type": "Regular Season",
+     "season_year": 2027,
+     "event_headline": "NHL Global Series",
+     "event_name": "NHL Global Series - Carolina at Seattle - 2026-11-12T17:00:00Z",
+     "attendance": "0"
+    },
+    "markets": [],
+    "affiliate_source_ids": {
+     "28": "8508481478160679299",
+     "31": "244563",
+     "34": "208525181",
+     "35": "b81f85fc-1092-49c0-afcf-f0aec4c02088",
+     "21": "1028410191",
+     "25": "26NOV12CARSEA",
+     "26": "nhl-car-sea-2026-11-12"
+    },
+    "affiliate_deep_links": {
+     "34": "https://ppm.heritage.linepros.com/live/#!/event/208525181",
+     "25": "https://kalshi.com/markets/kxnhlgame/kxnhlgame-26nov12carsea",
+     "28": "https://app.hardrock.bet/competition/nhl/8508481478160679299",
+     "31": "https://polymarket.us/event/nhl-car-sea-2026-11-12",
+     "26": "https://polymarket.com/event/nhl-car-sea-2026-11-12",
+     "35": "https://sportsbook.caesars.com/",
+     "21": "https://www.unibet.com/"
+    },
+    "affiliate_deep_link_types": {
+     "21": "catalog",
+     "35": "catalog"
+    }
+   }
+  ]
+ }
+}

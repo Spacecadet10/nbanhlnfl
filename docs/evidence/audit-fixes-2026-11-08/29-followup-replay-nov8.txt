@@ -1,0 +1,26 @@
+# Real Nov 8 reviewer snapshots replayed through the follow-up code on a copy of the ledger (scripts/replay_missed.py), 2026-11-09T18:56:47Z
+12:14:16 | recorded 0 [] | missed []
+13:10:58 | recorded 1 [('nfl', '401873038', 'single_game_window')] | missed []
+14:10:11 | recorded 1 [('nfl', '401873038', 'single_game_window')] | missed []
+15:13:00 | recorded 0 [] | missed ['CIN @ ATL: blocker_observed=True explained=True | Single-game window: no other game became eligible between the last check and the start.']
+16:14:14 | recorded 0 [] | missed ['CIN @ ATL: blocker_observed=True explained=True | Single-game window: no other game became eligible between the last check and the start.']
+17:06:48 | recorded 0 [] | missed ['CIN @ ATL: blocker_observed=True explained=True | Single-game window: no other game became eligible between the last check and the start.']
+18:05:56 | recorded 0 [] | missed ['CIN @ ATL: blocker_observed=True explained=True | Single-game window: no other game became eligible between the last check and the start.']
+19:08:14 | recorded 1 [('nfl', '-', 'inactive')] | missed []
+19:10:01 | recorded 1 [('nfl', '-', 'inactive')] | missed []
+20:07:27 | recorded 1 [('nfl', '-', 'inactive')] | missed []
+21:06:30 | recorded 0 [] | missed ['CIN @ ATL: blocker_observed=True explained=True | Single-game window: no other game became eligible between the last check and the start.', "HOU @ LAC: blocker_observed=True explained=False | Blocker 'inactive' was last seen 57 minutes before the start and no check at or after the start is recorded yet, so whether a review was possible in those 57 minutes is not established."]
+21:55:38 | recorded 0 [] | missed ['CIN @ ATL: blocker_observed=True explained=True | Single-game window: no other game became eligible between the last check and the start.', "HOU @ LAC: blocker_observed=True explained=False | Blocker 'inactive' was last seen 57 minutes before the start and was not seen at the first check at or after it (2026-11-08T21:06:30Z), so whether a review was possible in those 57 minutes is not established."]
+# trigger runs recorded:
+(1, '2026-11-08T12:14:16Z', 0, 'no_eligible_forecasts', 0)
+(2, '2026-11-08T13:10:58Z', 0, 'single_game_window', 1)
+(3, '2026-11-08T14:10:11Z', 0, 'single_game_window', 1)
+(4, '2026-11-08T15:13:00Z', 0, 'no_eligible_forecasts', 0)
+(5, '2026-11-08T16:14:14Z', 0, 'no_new_forecasts', 0)
+(6, '2026-11-08T17:06:48Z', 0, 'no_new_forecasts', 0)
+(7, '2026-11-08T18:05:56Z', 0, 'no_eligible_forecasts', 0)
+(8, '2026-11-08T19:08:14Z', 0, 'no_new_forecasts', 1)
+(9, '2026-11-08T19:10:01Z', 0, 'no_new_forecasts', 1)
+(10, '2026-11-08T20:07:27Z', 0, 'no_new_forecasts', 1)
+(11, '2026-11-08T21:06:30Z', 0, 'no_new_forecasts', 0)
+(12, '2026-11-08T21:55:38Z', 0, 'no_new_forecasts', 0)

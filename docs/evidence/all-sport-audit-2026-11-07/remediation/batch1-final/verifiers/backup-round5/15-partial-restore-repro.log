@@ -1,0 +1,3 @@
+raised [Errno 5] injected
+['.nba-jobs.lock', '.nfl-jobs.lock', 'nba.sqlite', 'nba.sqlite.replaced-20261108T141400771618Z', 'nfl.sqlite-shm.replaced-20261108T141400771618Z', 'nfl.sqlite-wal.replaced-20261108T141400771618Z', 'nfl.sqlite.replaced-20261108T141400771618Z', 'nfl.sqlite.restoring']
+nfl active path exists: False

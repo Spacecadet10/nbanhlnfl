@@ -1,0 +1,442 @@
+diff --git a/backend/app/tickets.py b/backend/app/tickets.py
+index ec103d5..e0d681e 100644
+--- a/backend/app/tickets.py
++++ b/backend/app/tickets.py
+@@ -470,12 +470,12 @@ def review_state(snap):
+                                       'first_forecast_at': pick['generated_at']})
+             entry['forecasts'] += 1
+             entry['first_forecast_at'] = min(entry['first_forecast_at'], pick['generated_at'])
+-    if missed:   # why: blockers the trigger recorded and reviews that failed while the game was still pending
++    if missed:   # why: what the trigger recorded and which reviews failed while the game was still pending
+         try:
+             explain_missed(snap['date'], missed.values())
+         except Exception as exc:
+             state['missed_explanation_error'] = type(exc).__name__
+-    # Pending games this run does not send to review, each with its reason (recorded by preflight: record_blockers).
++    # Pending games this run does not send to review, each with its reason (recorded by preflight: record_observations).
+     # A refused sport hides its games, so it is recorded for the sport unless it reports that it excludes no forecast now.
+     waiting = [{'sport': sport, 'game_id': None, 'issue': section['error'], 'detail': str(section.get('reason') or '')}
+                for sport, section in unavailable.items()
+@@ -501,41 +501,60 @@ def review_state(snap):
+     return state
+ 
+ 
+-def record_blockers(state):
+-    """Append what this trigger run saw standing between a pending game and its review (review_state's not_reviewed_now):
+-    a refused sport or source, a moved line, a single-game window. One row per observation, so a game that later starts
+-    unreviewed carries the blockers seen during its own pregame window. Never selects or sends."""
++REVIEW_DUE = 'review_due'
++
++
++def record_observations(state):
++    """Append what this trigger run saw for each pending game: what stood between it and a review (review_state's
++    not_reviewed_now: a refused sport or source, a moved line, a single-game window), or that a review of it was due
++    (REVIEW_DUE). One row per observation, so a game that later starts unreviewed carries what the trigger last saw
++    before its start. Never selects or sends."""
+     from app import telegram
+     rows = [(state['as_of'], state['date'], w['sport'], w['game_id'], w['issue'], w['detail'][:300])
+             for w in state.get('not_reviewed_now', [])]
++    if state.get('due') is True:
++        rows += [(state['as_of'], state['date'], sport, game, REVIEW_DUE, '')
++                 for sport, game in sorted({(u['sport'], u['game_id']) for u in state['unreviewed']
++                                            if not u['blocked_by_prior_ticket']})]
+     if rows:
+         with telegram.ledger() as conn:
+             schema(conn)
+-            conn.executemany('INSERT INTO ticket_review_blockers (recorded_at,day,sport,game_id,issue,detail) VALUES (?,?,?,?,?,?)', rows)
++            conn.executemany('INSERT INTO ticket_trigger_observations (recorded_at,day,sport,game_id,issue,detail) VALUES (?,?,?,?,?,?)', rows)
+     return len(rows)
+ 
+ 
+ def explain_missed(day, entries):
+-    """Attach to each game that started unreviewed the blockers recorded, and the reviews that failed, between its first
+-    pregame forecast and its start. `explained` is False when neither exists: a review was possible and none finished."""
++    """Attach to each game that started unreviewed what the trigger recorded, and the reviews that failed, between its
++    first pregame forecast and its start. `explained` is True only when the LAST thing the trigger saw before the start
++    was a blocker, or a review failed after the trigger last said one was due. A blocker that cleared while reviews were
++    then due and none ran does not explain the miss; `last_observation` shows how long before the start it was made."""
+     from app import telegram
+     with telegram.ledger() as conn:
+         schema(conn)
+-        blockers = [dict(r) for r in conn.execute('SELECT * FROM ticket_review_blockers WHERE day=? ORDER BY blocker_id', (day,))]
++        seen = [dict(r) for r in conn.execute('SELECT * FROM ticket_trigger_observations WHERE day=? ORDER BY recorded_at, observation_id', (day,))]
+         failures = [dict(r) for r in conn.execute("SELECT review_id,recorded_at,stage,outcome,detail FROM ticket_reviews "
+                                                   "WHERE day=? AND outcome='operational_failure' ORDER BY review_id", (day,))]
+     for entry in entries:
+         lo, hi = _parse(entry['first_forecast_at']), _parse(entry['tipoff'])
+-        seen = {}
+-        for b in blockers:
+-            if b['sport'] == entry['sport'] and b['game_id'] in (None, entry['game_id']) and lo <= _parse(b['recorded_at']) <= hi:
+-                item = seen.setdefault((b['issue'], b['detail']), {'issue': b['issue'], 'detail': b['detail'],
+-                                       'first_seen_at': b['recorded_at'], 'last_seen_at': b['recorded_at'], 'observations': 0})
+-                item['last_seen_at'] = b['recorded_at']
++        mine = [o for o in seen if o['sport'] == entry['sport'] and o['game_id'] in (None, entry['game_id'])
++                and lo <= _parse(o['recorded_at']) <= hi]
++        blockers, due = {}, [o['recorded_at'] for o in mine if o['issue'] == REVIEW_DUE]
++        for o in mine:
++            if o['issue'] != REVIEW_DUE:
++                item = blockers.setdefault((o['issue'], o['detail']), {'issue': o['issue'], 'detail': o['detail'],
++                                           'first_seen_at': o['recorded_at'], 'last_seen_at': o['recorded_at'], 'observations': 0})
++                item['last_seen_at'] = o['recorded_at']
+                 item['observations'] += 1
+-        entry['recorded_blockers'] = list(seen.values())
+-        entry['failed_reviews'] = [dict(f, detail=f['detail'][:200]) for f in failures if lo <= _parse(f['recorded_at']) <= hi]
+-        entry['explained'] = bool(entry['recorded_blockers'] or entry['failed_reviews'])
++        failed = [dict(f, detail=f['detail'][:200]) for f in failures if lo <= _parse(f['recorded_at']) <= hi]
++        last = mine[-1] if mine else None
++        entry['recorded_blockers'] = list(blockers.values())
++        entry['review_due_seen'] = {'first_seen_at': due[0], 'last_seen_at': due[-1], 'observations': len(due)} if due else None
++        entry['last_observation'] = ({'issue': last['issue'], 'at': last['recorded_at'],
++                                      'minutes_before_start': int((hi - _parse(last['recorded_at'])).total_seconds() // 60)}
++                                     if last else None)
++        entry['failed_reviews'] = failed
++        entry['explained'] = bool((last and last['issue'] != REVIEW_DUE)
++                                  or (failed and (not due or max(f['recorded_at'] for f in failed) >= due[-1])))
+ 
+ 
+ def _text(value, what):
+@@ -915,13 +934,13 @@ def schema(conn):
+         detail TEXT NOT NULL, snapshot_sha256 TEXT, snapshot_as_of TEXT, payload TEXT NOT NULL);
+       CREATE TABLE IF NOT EXISTS ticket_review_starts (
+         snapshot_sha256 TEXT PRIMARY KEY, day TEXT NOT NULL, started_at TEXT NOT NULL, earliest_tipoff TEXT);
+-      CREATE TABLE IF NOT EXISTS ticket_review_blockers (
+-        blocker_id INTEGER PRIMARY KEY AUTOINCREMENT, recorded_at TEXT NOT NULL, day TEXT NOT NULL, sport TEXT NOT NULL,
++      CREATE TABLE IF NOT EXISTS ticket_trigger_observations (
++        observation_id INTEGER PRIMARY KEY AUTOINCREMENT, recorded_at TEXT NOT NULL, day TEXT NOT NULL, sport TEXT NOT NULL,
+         game_id TEXT, issue TEXT NOT NULL, detail TEXT NOT NULL);
+-      CREATE TRIGGER IF NOT EXISTS ticket_review_blockers_no_update BEFORE UPDATE ON ticket_review_blockers
+-        BEGIN SELECT RAISE(ABORT,'ticket review blockers are append-only'); END;
+-      CREATE TRIGGER IF NOT EXISTS ticket_review_blockers_no_delete BEFORE DELETE ON ticket_review_blockers
+-        BEGIN SELECT RAISE(ABORT,'ticket review blockers are append-only'); END;
++      CREATE TRIGGER IF NOT EXISTS ticket_trigger_observations_no_update BEFORE UPDATE ON ticket_trigger_observations
++        BEGIN SELECT RAISE(ABORT,'ticket trigger observations are append-only'); END;
++      CREATE TRIGGER IF NOT EXISTS ticket_trigger_observations_no_delete BEFORE DELETE ON ticket_trigger_observations
++        BEGIN SELECT RAISE(ABORT,'ticket trigger observations are append-only'); END;
+       CREATE TRIGGER IF NOT EXISTS ticket_review_starts_no_update BEFORE UPDATE ON ticket_review_starts
+         BEGIN SELECT RAISE(ABORT,'ticket review starts are append-only'); END;
+       CREATE TRIGGER IF NOT EXISTS ticket_review_starts_no_delete BEFORE DELETE ON ticket_review_starts
+@@ -1043,6 +1062,37 @@ def ticket_grade(legs):
+     return 'win'
+ 
+ 
++CORRECTED_LINE = 'Corrected result: it replaces the result sent before.'
++SETTLED_GRADES = ('win', 'loss', 'push', 'void')
++
++
++def result_notice(conn, chat, ticket_id, grade, legs, digest):
++    """(delivery key, text) of the result notice a settled ticket is owed, decided by what was last ANNOUNCED for it, not
++    by what was last stored: the notice says the ticket's grade and each leg's grade, so a reading that changes neither
++    (a pending spell in between, a corrected score with the same grades) reuses the key of the notice already recorded
++    and nothing is sent again. "Announced" means sent or unconfirmed; a notice Telegram rejected or deferred never
++    reached the user, so it is not what later results are compared with (a deferred one with this same content is
++    retried under its own key). Different content gets a new key; it carries the correction line only when a leg that
++    was announced as settled now has another grade (a leg that was open and settles is an update, not a correction)."""
++    lines = [(str(p.get('pick_label', p['forecast_id'])), p['grade']) for p in legs]
++    text = f"PARLAY RESULT / {ticket_id} / {grade.upper()}\n" + '\n'.join(f"{label}: {g}" for label, g in lines)
++    said = lambda row: row['text'].split('\n' + CORRECTED_LINE)[0]
++    rows = conn.execute("SELECT delivery_key,text,status FROM deliveries WHERE chat_id=? AND delivery_key LIKE ? "
++                        "ORDER BY attempted_at DESC, rowid DESC", (chat, 'ticket-result:' + ticket_id + ':%')).fetchall()
++    announced = next((r for r in rows if r['status'] in ('sent', 'uncertain', 'sending')), None)
++    if announced and said(announced) == text:
++        return announced['delivery_key'], announced['text']
++    deferred = next((r for r in rows if r['status'] == 'retry' and said(r) == text), None)
++    if deferred:
++        return deferred['delivery_key'], deferred['text']
++    reversed_leg = False
++    if announced:
++        earlier = [line.rsplit(': ', 1) for line in said(announced).split('\n')[1:] if ': ' in line]
++        reversed_leg = len(earlier) == len(lines) and any(old[1] in SETTLED_GRADES and old[1] != new[1]
++                                                         for old, new in zip(earlier, lines))
++    return 'ticket-result:' + ticket_id + ':' + digest, text + ('\n' + CORRECTED_LINE if reversed_leg else '')
++
++
+ def settle(*, now=None, notify=False):
+     """Append grade changes, even when there are no new picks or the budget is exhausted."""
+     from app import telegram, config
+@@ -1072,14 +1122,13 @@ def settle(*, now=None, notify=False):
+                     report['errors'].append({'ticket_id':t['ticket_id'],'error':'settlement_unavailable'})
+                 result = {'ticket_id':t['ticket_id'], 'label':t['label'], 'grade':ticket_grade(legs), 'legs':legs,
+                           'kind':'suggested_ticket', 'profit':None}
+-                # Append-only: a row is added whenever the result differs from the ticket's latest stored result, also when
+-                # a correction returns to an earlier one (that row names the result it supersedes, so its evidence hash
+-                # and its notice are new). First and unchanged results keep the original hashing. A result with a leg
+-                # that could not be graded ('unavailable') is a failed reading, never a correction: it is stored as
+-                # before and skipped when looking for the latest result, so a passing error cannot repeat a notice.
++                # Append-only evidence: a row is added whenever the result differs from the ticket's latest stored result,
++                # also when it returns to an earlier one (that row names the result it supersedes, so its evidence hash
++                # is new). First and unchanged results keep the original hashing. A result with a leg that could not
++                # be graded ('unavailable') is a failed reading: stored as before, skipped when looking for the latest
++                # result. What is ANNOUNCED is decided separately (result_notice).
+                 raw = json.dumps(result,sort_keys=True)
+                 digest = sha(raw.encode())
+-                corrected = False
+                 if any(p['grade']=='unavailable' for p in legs):
+                     conn.execute('INSERT OR IGNORE INTO ticket_grades VALUES (?,?,?,?)', (t['ticket_id'],digest,now,raw))
+                 else:
+@@ -1095,17 +1144,14 @@ def settle(*, now=None, notify=False):
+                         if conn.execute('SELECT 1 FROM ticket_grades WHERE ticket_id=? AND evidence_hash=?', (t['ticket_id'],digest)).fetchone():
+                             raw = json.dumps({**result, 'supersedes': latest[0]},sort_keys=True)
+                             digest = sha(raw.encode())
+-                            corrected = True
+                         conn.execute('INSERT OR IGNORE INTO ticket_grades VALUES (?,?,?,?)', (t['ticket_id'],digest,now,raw))
+                 report['tickets'].append(result)
+                 # Only confirmed sent batches receive a settlement notification.
+                 batch = conn.execute('SELECT batch_key FROM ticket_items WHERE ticket_id=? AND chat_id=?', (t['ticket_id'],chat)).fetchone()
+                 confirmed = batch and conn.execute("SELECT 1 FROM deliveries WHERE delivery_key=? AND status='sent'",(batch['batch_key'],)).fetchone()
+-                if confirmed and result['grade'] != 'pending':
+-                    text = f"PARLAY RESULT / {t['ticket_id']} / {result['grade'].upper()}\n" + '\n'.join(f"{p.get('pick_label',p['forecast_id'])}: {p['grade']}" for p in legs)
+-                    if corrected:
+-                        text += '\nCorrected result: it replaces the result sent before.'
+-                    notices.append((result,'ticket-result:'+t['ticket_id']+':'+digest,text))
++                # A result with a leg that could not be read is stored above but never announced.
++                if confirmed and result['grade'] != 'pending' and not any(p['grade']=='unavailable' for p in legs):
++                    notices.append((result, *result_notice(conn, chat, t['ticket_id'], result['grade'], legs, digest)))
+         # All grading is committed before ANY external call. Notification failure cannot suppress outcomes.
+         if notify and notices:
+             try:
+@@ -1364,9 +1410,9 @@ def main():
+                 except Exception as exc:
+                     report['review'] = {'due': None, 'reason': 'review_state_unavailable', 'error': type(exc).__name__}
+                 try:
+-                    record_blockers(report['review'])
++                    record_observations(report['review'])
+                 except Exception as exc:   # recording never blocks settlement, alerts or the trigger
+-                    report['review']['blockers_error'] = type(exc).__name__
++                    report['review']['observations_error'] = type(exc).__name__
+                 try:
+                     gone = record_interrupted(snap)
+                 except Exception as exc:
+diff --git a/backend/tests/test_tickets.py b/backend/tests/test_tickets.py
+index 48f240e..229953a 100644
+--- a/backend/tests/test_tickets.py
++++ b/backend/tests/test_tickets.py
+@@ -1069,8 +1069,8 @@ def test_game_blocked_until_kickoff_is_reported_with_its_recorded_blocker(setup,
+     # NBA was reviewable (a review was due) and no review ran: nothing explains that miss
+     assert missed[('nba','g1')]['explained'] is False and missed[('nba','g1')]['recorded_blockers']==[]
+     with tg.ledger() as c:
+-        with pytest.raises(Exception,match='append-only'):c.execute("update ticket_review_blockers set issue='x'")
+-        with pytest.raises(Exception,match='append-only'):c.execute('delete from ticket_review_blockers')
++        with pytest.raises(Exception,match='append-only'):c.execute("update ticket_trigger_observations set issue='x'")
++        with pytest.raises(Exception,match='append-only'):c.execute('delete from ticket_trigger_observations')
+ 
+ 
+ def test_blocked_sport_that_recovers_before_kickoff_triggers_a_review_and_is_not_missed(setup,monkeypatch,capsys):
+@@ -1099,7 +1099,7 @@ def test_single_game_window_that_starts_unreviewed_is_explained_by_the_trigger_r
+     code,out=run_cli(monkeypatch,capsys,'preflight','--brief')
+     assert json.loads(out)['review']['reason']=='single_game_window'
+     code,out=run_cli(monkeypatch,capsys,'status')                   # status stays read-only: records nothing
+-    with tg.ledger() as c:assert c.execute('select count(*) from ticket_review_blockers').fetchone()[0]==1
++    with tg.ledger() as c:assert c.execute('select count(*) from ticket_trigger_observations').fetchone()[0]==1
+     idle=copy.deepcopy(snap);idle['sports']['nfl']={'error':'inactive','reason':'definition_mismatch','unserved_forecasts':0,'unserved_games':0}
+     assert [w['issue'] for w in t.review_state(idle)['not_reviewed_now']]==['single_game_window']   # an idle refused sport blocks nothing
+     started(snap)
+@@ -1142,10 +1142,10 @@ def test_correction_back_to_an_earlier_result_is_appended_and_notified(setup,mon
+         with pytest.raises(Exception,match='append-only'):c.execute('delete from ticket_grades')
+     notices=[p['text'].split('\n')[0].rsplit(' / ',1)[1] for m,p in sent[before:]]
+     assert notices==['LOSS','WIN','LOSS']
+-    assert ['Corrected result' in p['text'] for m,p in sent[before:]]==[False,False,True]
++    assert ['Corrected result' in p['text'] for m,p in sent[before:]]==[False,True,True]   # every reversal of an announced leg
+ 
+ 
+-def test_leg_that_cannot_be_graded_for_a_while_never_repeats_a_result_notice(setup,monkeypatch):
++def test_leg_that_cannot_be_graded_for_a_while_is_never_announced_and_never_repeats_a_notice(setup,monkeypatch):
+     grades={1:'loss',2:'win'};sent=settled_ticket(setup,monkeypatch,grades);before=len(sent)
+     t.settle(now='2026-11-08T21:00:00Z',notify=True)
+     grades[2]='unavailable';report=t.settle(now='2026-11-08T21:01:00Z',notify=True)   # e.g. the store could not be read
+@@ -1155,7 +1155,7 @@ def test_leg_that_cannot_be_graded_for_a_while_never_repeats_a_result_notice(set
+         rows=[json.loads(r[0]) for r in c.execute('select payload from ticket_grades order by rowid')]
+     assert len(rows)==2 and not any('supersedes' in r for r in rows)                 # the failed reading is kept, no correction
+     texts=[p['text'] for m,p in sent[before:]]
+-    assert len(texts)==2 and sum('B2 win: win' in x for x in texts)==1               # the good result was announced once
++    assert len(texts)==1 and 'B2 win: win' in texts[0] and 'unavailable' not in texts[0]   # announced once; the failed reading never
+ 
+ 
+ @pytest.mark.parametrize('grades,ticket_result,lines',[
+@@ -1192,3 +1192,113 @@ def test_push_and_void_are_graded_from_the_original_forecast_line(monkeypatch,ma
+     monkeypatch.setattr(db,'connect_readonly',lambda sport:c)
+     result=t.grade_leg(dict(sport='nba',forecast_id=1,game_id='g',market=market,pick_label='fixture'),'2026-11-08T21:00:00Z')
+     assert result['grade']==expected and result['line']==line
++
++
++# --- Independent review of 635a4ec (session 43, 2026-11-08): notices follow what was last ANNOUNCED; `explained` follows
++# --- the last thing the trigger saw before the start.
++def notice_texts(sent, before):
++    return [p['text'] for m, p in sent[before:] if m == 'sendMessage']
++
++
++def test_result_that_goes_pending_and_returns_is_not_announced_again(setup, monkeypatch):
++    grades = {1: 'win', 2: 'win'}; sent = settled_ticket(setup, monkeypatch, grades); before = len(sent)
++    t.settle(now='2026-11-08T21:00:00Z', notify=True)
++    grades[2] = 'unresolved'; t.settle(now='2026-11-08T21:15:00Z', notify=True)   # ticket pending: stored, never announced
++    grades[2] = 'win'; t.settle(now='2026-11-08T21:30:00Z', notify=True)          # the result already sent
++    assert len(notice_texts(sent, before)) == 1
++    with tg.ledger() as c: assert c.execute('select count(*) from ticket_grades').fetchone()[0] == 3   # every reading is kept
++
++
++def test_score_only_change_with_the_same_grades_is_stored_but_not_announced(setup, monkeypatch):
++    plan, snap, sent, path = setup; plan['tickets'] = [ticket([('nba', 1), ('nhl', 2)])]; assert t.send(t.check(plan)) == 'sent'
++    score = {2: (4, 3)}
++    monkeypatch.setattr(t, 'grade_leg', lambda p, now: dict(forecast_id=p['forecast_id'], pick_label=p['pick_label'],
++                        grade='loss' if p['forecast_id'] == 1 else 'win', home_score=score.get(p['forecast_id'], (3, 4))[0],
++                        away_score=score.get(p['forecast_id'], (3, 4))[1]))
++    before = len(sent)
++    t.settle(now='2026-11-08T21:00:00Z', notify=True)
++    score[2] = (5, 3); t.settle(now='2026-11-08T21:15:00Z', notify=True)   # score corrected, every grade the same
++    score[2] = (4, 3); t.settle(now='2026-11-08T21:30:00Z', notify=True)   # and corrected back
++    assert len(notice_texts(sent, before)) == 1
++    with tg.ledger() as c: assert c.execute('select count(*) from ticket_grades').fetchone()[0] == 3
++
++
++def test_leg_settling_later_is_an_update_and_a_reversed_leg_is_a_correction(setup, monkeypatch):
++    grades = {1: 'loss', 2: 'pending'}; sent = settled_ticket(setup, monkeypatch, grades); before = len(sent)
++    t.settle(now='2026-11-08T21:00:00Z', notify=True)
++    grades[2] = 'win'; t.settle(now='2026-11-08T21:15:00Z', notify=True)    # the open leg settles: an update
++    grades[1] = 'win'; t.settle(now='2026-11-08T21:30:00Z', notify=True)    # an announced loss becomes a win: a correction
++    texts = notice_texts(sent, before)
++    assert [x.split('\n')[0].rsplit(' / ', 1)[1] for x in texts] == ['LOSS', 'LOSS', 'WIN']
++    assert ['Corrected result' in x for x in texts] == [False, False, True]
++
++
++def test_unreadable_leg_is_stored_but_never_announced(setup, monkeypatch):
++    plan, snap, sent, path = setup; plan['tickets'] = [ticket([('nba', 1), ('nhl', 2)])]; assert t.send(t.check(plan)) == 'sent'
++    state = {2: 'pending'}
++    def grade(p, now):
++        if state.get(p['forecast_id']) == 'RAISE':
++            raise OSError('store briefly unreadable')
++        return dict(forecast_id=p['forecast_id'], pick_label=p['pick_label'], grade=state.get(p['forecast_id'], 'loss'))
++    monkeypatch.setattr(t, 'grade_leg', grade); before = len(sent)
++    t.settle(now='2026-11-08T21:00:00Z', notify=True)                         # LOSS announced, one leg still open
++    state[2] = 'RAISE'; report = t.settle(now='2026-11-08T21:15:00Z', notify=True)
++    assert report['errors'] == [{'ticket_id': report['tickets'][0]['ticket_id'], 'error': 'settlement_unavailable'}]
++    state[2] = 'pending'; t.settle(now='2026-11-08T21:30:00Z', notify=True)
++    texts = notice_texts(sent, before)
++    assert len(texts) == 1 and 'unavailable' not in texts[0]
++    with tg.ledger() as c: assert c.execute('select count(*) from ticket_grades').fetchone()[0] == 2   # the failed reading is kept
++
++
++def test_blocker_that_cleared_does_not_explain_a_review_that_was_due_and_never_ran(setup, monkeypatch, capsys):
++    plan, snap, sent, path = setup
++    monkeypatch.setattr(t, 'settle', lambda **kw: {'errors': [], 'tickets': []})
++    healthy = copy.deepcopy(snap['sports']['nfl'])
++    snap['sports']['nfl'] = {'error': 'inactive', 'reason': 'definition_mismatch', 'unserved_forecasts': 5, 'unserved_games': 5}
++    run_cli(monkeypatch, capsys, 'preflight', '--brief')                     # 17:00 NFL refused
++    snap['sports']['nfl'] = healthy
++    for at in ('2026-11-08T17:15:00Z', '2026-11-08T17:30:00Z', '2026-11-08T17:45:00Z'):   # recovered: due each run, nobody reviews
++        snap['as_of'] = at
++        code, out = run_cli(monkeypatch, capsys, 'preflight', '--brief')
++        assert json.loads(out)['review']['due'] is True
++    started(snap)
++    entry = {(e['sport'], e['game_id']): e for e in t.review_state(snap)['missed_before_start']}[('nfl', 'g1')]
++    assert entry['explained'] is False                                       # the blocker was gone 45 minutes before the start
++    assert entry['recorded_blockers'][0]['last_seen_at'] == NOW              # still shown, as history
++    assert entry['review_due_seen'] == dict(first_seen_at='2026-11-08T17:15:00Z', last_seen_at='2026-11-08T17:45:00Z', observations=3)
++    assert entry['last_observation'] == dict(issue='review_due', at='2026-11-08T17:45:00Z', minutes_before_start=15)
++
++
++def test_review_that_failed_after_the_trigger_was_due_explains_the_miss(setup, monkeypatch, capsys):
++    plan, snap, sent, path = setup
++    monkeypatch.setattr(t, 'settle', lambda **kw: {'errors': [], 'tickets': []})
++    run_cli(monkeypatch, capsys, 'preflight', '--brief')                     # 17:00 due
++    monkeypatch.setattr(t, '_stamp', lambda moment=None: '2026-11-08T17:05:00Z')
++    bad = copy.deepcopy(plan); bad['review']['combination_comparison'] = ''
++    assert run_cli(monkeypatch, capsys, 'check', '--plan', str(plan_file(bad, path, 'bad.json')))[0] == 1
++    started(snap)
++    entry = t.review_state(snap)['missed_before_start'][0]
++    assert entry['explained'] is True and entry['failed_reviews'][0]['recorded_at'] == '2026-11-08T17:05:00Z'
++    assert entry['last_observation']['issue'] == 'review_due'
++
++
++def test_rejected_notice_is_not_what_was_announced_and_a_deferred_one_is_retried_once(setup, monkeypatch):
++    grades = {1: 'loss', 2: 'win'}; sent = settled_ticket(setup, monkeypatch, grades); before = len(sent)
++    t.settle(now='2026-11-08T21:00:00Z', notify=True)                          # LOSS reaches the user
++    delivered = tg.Telegram.call
++    def rejected(self, method, payload, **kw): raise tg.DeliveryError('Telegram rejected sendMessage (HTTP 400).')
++    monkeypatch.setattr(tg.Telegram, 'call', rejected)
++    grades[1] = 'win'; report = t.settle(now='2026-11-08T21:15:00Z', notify=True)   # WIN is rejected: never delivered
++    assert report['notification_errors']
++    monkeypatch.setattr(tg.Telegram, 'call', delivered)
++    grades[1] = 'loss'; t.settle(now='2026-11-08T21:30:00Z', notify=True)      # back to what the user last received
++    assert len(notice_texts(sent, before)) == 1
++    def busy(self, method, payload, **kw): raise tg.DeliveryError('429', retry_after=60)
++    monkeypatch.setattr(tg.Telegram, 'call', busy)
++    grades[2] = 'push'; t.settle(now='2026-11-08T21:45:00Z', notify=True)      # a real change, deferred by Telegram
++    monkeypatch.setattr(tg.Telegram, 'call', delivered)
++    t.settle(now='2026-11-08T21:45:30Z', notify=True)                          # before the retry time: nothing
++    assert len(notice_texts(sent, before)) == 1
++    t.settle(now='2026-11-08T21:47:00Z', notify=True); t.settle(now='2026-11-08T21:48:00Z', notify=True)
++    texts = notice_texts(sent, before)
++    assert len(texts) == 2 and texts[1].endswith('B2 win: push\n' + t.CORRECTED_LINE)   # sent once, after the retry time
+diff --git a/docs/SMOKE_TEST.md b/docs/SMOKE_TEST.md
+index 68347cc..22844bb 100644
+--- a/docs/SMOKE_TEST.md
++++ b/docs/SMOKE_TEST.md
+@@ -1919,4 +1919,8 @@ back three days). Headless Chrome 156 with DevTools device metrics: real 1280×9
+   League); empty competition (Euro qualifying); stale source (scratch copy); failed live read (request blocked in the
+   browser); match with and without a forecast; soccer Performance page; header "Real data" note.
+ - `npm run test:unit`: 21 passed. `npm run build`: passed.
+-- Not verified: the live app (nothing deployed); NBA/NHL/NFL screens (not changed, not re-run); dark theme.
++- After the independent review (dark-theme finding): the live forecast card now uses the theme tokens. Same script with
++  dark-theme cases and a contrast measurement of the card text: **30/30 ok**; lowest contrast 7.26 in dark and 5.87 in
++  light (it was 1.08 in dark on commit 635a4ec: `17-dark-card-before-fix.txt`).
++- Not verified by this session: the live app (nothing deployed); NBA/NHL/NFL screens (unchanged; the reviewer's 160
++  captures found no regression).
+diff --git a/docs/TICKETS.md b/docs/TICKETS.md
+index 7651b71..33e1ec5 100644
+--- a/docs/TICKETS.md
++++ b/docs/TICKETS.md
+@@ -166,16 +166,24 @@ Evidence and causes: `docs/evidence/audit-fixes-2026-11-08/README.md`.
+   under `locks` (ticket IDs, the ticket's forecast and pick). An entry the reviewer wrote is kept as written. Forecasts
+   that are not locked still need the reviewer's own decision and reason. Reason text is never compared or deduplicated:
+   one explanation may be attached to several forecasts.
+-- **Why a game started unreviewed.** `preflight` appends to `ticket_review_blockers` (new append-only table in the
+-  Telegram ledger, created on first use) what kept a pending game out of review at that run: a refused sport (when it
+-  excludes forecasts), an unusable source, a moved line, a single-game window. `review.not_reviewed_now` shows the same
+-  list. Each `missed_before_start` entry now carries `recorded_blockers` (issue, first/last seen, observations) and
+-  `failed_reviews` from its own pregame window, and `explained`: false means a review was possible and none finished.
+-  `status` records nothing.
+-- **Corrections back to an earlier result.** `ticket_grades` gets a row whenever the result differs from the ticket's
+-  latest stored result, including a return to an earlier one; that row carries `supersedes` (the hash it replaces), so it
+-  is stored and announced once ("Corrected result: it replaces the result sent before."). Hashes of first and unchanged
+-  results are as before, so nothing already stored or sent is repeated. A result with a leg that could not be graded is
+-  stored as before and ignored when comparing, so a passing read error cannot repeat a notice.
++- **Why a game started unreviewed.** `preflight` appends to `ticket_trigger_observations` (new append-only table in the
++  Telegram ledger, created on first use) what it saw for each pending game at that run: what kept it out of review (a
++  refused sport when it excludes forecasts, an unusable source, a moved line, a single-game window; also shown as
++  `review.not_reviewed_now`), or that a review of it was due (`review_due`). Each `missed_before_start` entry carries, from
++  its own pregame window, `recorded_blockers`, `review_due_seen`, `failed_reviews` and `last_observation` (what, when, and
++  how many minutes before the start). `explained` is true only when the last thing the trigger saw before the start was
++  a blocker, or a review failed after the trigger last said one was due. A blocker that cleared while reviews were then
++  due and none ran leaves `explained` false. `status` records nothing.
++- **Stored results and announced results are decided separately.**
++  - *Stored:* `ticket_grades` gets a row whenever the result differs from the ticket's latest stored result, including a
++    return to an earlier one (that row carries `supersedes`, the hash it replaces). Hashes of first and unchanged
++    results are as before. A result with a leg that could not be graded is stored as before and skipped when comparing.
++  - *Announced:* a result notice says the ticket's grade and each leg's grade. It is compared with the last notice that
++    reached the user for that ticket (sent or unconfirmed; a rejected or deferred notice does not count): identical
++    content reuses that notice's key, so nothing is sent again (a pending spell in between, or a corrected score with
++    the same grades, changes nothing the notice says). A deferred notice with the same content is retried under its own
++    key. Different content is sent once under a new key. It ends with "Corrected result: it replaces the result sent before." only when a leg that was
++    announced as settled now has another grade; a leg that was open and settles is an update without that line.
++  - A result with a leg that could not be graded is never announced (the `settlement_unavailable` error and alert remain).
+ - **Unchanged:** selection method, forecast-version lock, 2–6 legs and at most 6 tickets, legacy reservation read,
+   existing rows.
+diff --git a/frontend/src/styles.css b/frontend/src/styles.css
+index 3a73479..4c7118c 100644
+--- a/frontend/src/styles.css
++++ b/frontend/src/styles.css
+@@ -1398,11 +1398,11 @@ h1,h2,h3,.hero-matchup,.metric-value,.tile-value,.brand { font-family:'Barlow Co
+ .soccer-live { margin: 0 0 24px; }
+ .soccer-live-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+ .soccer-live-head h2 { margin: 0; }
+-.soccer-live-badge { background: var(--lime, #A3E635); color: #1E1B4B; font-weight: 700; }
++.soccer-live-badge { background: var(--accent-lime); color: #1E1B4B; font-weight: 700; }
+ .soccer-live-list { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); }
+-.soccer-live-card { border: 1px solid rgba(30, 27, 75, .12); border-radius: 16px; padding: 14px 16px; background: var(--panel, #fff); min-width: 0; }
++.soccer-live-card { border: 1px solid var(--border); border-radius: 16px; padding: 14px 16px; background: var(--surface); color: var(--text); min-width: 0; }
+ .soccer-live-card header { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+ .soccer-live-probs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+-.soccer-live-prob { display: flex; flex-direction: column; gap: 2px; padding: 8px; border-radius: 12px; background: rgba(30, 27, 75, .04); min-width: 0; overflow-wrap: anywhere; }
+-.soccer-live-prob.is-top { outline: 2px solid #1E1B4B; }
++.soccer-live-prob { display: flex; flex-direction: column; gap: 2px; padding: 8px; border-radius: 12px; background: var(--surface-raised); min-width: 0; overflow-wrap: anywhere; }
++.soccer-live-prob.is-top { outline: 2px solid var(--text); }
+ .soccer-live-prob strong { font-size: 1.25em; }

@@ -1,0 +1,43 @@
+describe fail -> RuntimeError
+originals intact (True, [])
+fail#1 rb#1: OSError (rollback rename #1 never reached)
+fail#1 rb#2: OSError (rollback rename #2 never reached)
+fail#1 rb#3: OSError (rollback rename #3 never reached)
+fail#1 rb#4: OSError (rollback rename #4 never reached)
+fail#1 rb#5: OSError (rollback rename #5 never reached)
+fail#2 rb#1: BackupError lost_originals=[] every_safety_file_named=True manual_steps=1 -> originals_intact_after_steps=True diff=[] staged_before=['nba.sqlite.restoring', 'nfl.sqlite.restoring'] staged_after_steps=[]
+fail#2 rb#2: OSError (rollback rename #2 never reached)
+fail#2 rb#3: OSError (rollback rename #3 never reached)
+fail#2 rb#4: OSError (rollback rename #4 never reached)
+fail#2 rb#5: OSError (rollback rename #5 never reached)
+fail#3 rb#1: BackupError lost_originals=[] every_safety_file_named=True manual_steps=1 -> originals_intact_after_steps=True diff=[] staged_before=['nba.sqlite.restoring', 'nfl.sqlite.restoring'] staged_after_steps=[]
+fail#3 rb#2: BackupError lost_originals=[] every_safety_file_named=True manual_steps=1 -> originals_intact_after_steps=True diff=[] staged_before=['nba.sqlite.restoring', 'nfl.sqlite.restoring'] staged_after_steps=[]
+fail#3 rb#3: OSError (rollback rename #3 never reached)
+fail#3 rb#4: OSError (rollback rename #4 never reached)
+fail#3 rb#5: OSError (rollback rename #5 never reached)
+fail#4 rb#1: BackupError lost_originals=[] every_safety_file_named=True manual_steps=1 -> originals_intact_after_steps=True diff=[] staged_before=['nba.sqlite.restoring', 'nfl.sqlite.restoring'] staged_after_steps=[]
+fail#4 rb#2: BackupError lost_originals=[] every_safety_file_named=True manual_steps=1 -> originals_intact_after_steps=True diff=[] staged_before=['nba.sqlite.restoring', 'nfl.sqlite.restoring'] staged_after_steps=[]
+fail#4 rb#3: BackupError lost_originals=[] every_safety_file_named=True manual_steps=1 -> originals_intact_after_steps=True diff=[] staged_before=['nba.sqlite.restoring', 'nfl.sqlite.restoring'] staged_after_steps=[]
+fail#4 rb#4: OSError (rollback rename #4 never reached)
+fail#4 rb#5: OSError (rollback rename #5 never reached)
+fail#5 rb#1: BackupError lost_originals=[] every_safety_file_named=True manual_steps=2 -> originals_intact_after_steps=True diff=[] staged_before=['nfl.sqlite.restoring'] staged_after_steps=[]
+fail#5 rb#2: BackupError lost_originals=[] every_safety_file_named=True manual_steps=1 -> originals_intact_after_steps=True diff=[] staged_before=['nba.sqlite.restoring', 'nfl.sqlite.restoring'] staged_after_steps=[]
+fail#5 rb#3: BackupError lost_originals=[] every_safety_file_named=True manual_steps=1 -> originals_intact_after_steps=True diff=[] staged_before=['nba.sqlite.restoring', 'nfl.sqlite.restoring'] staged_after_steps=[]
+fail#5 rb#4: BackupError lost_originals=[] every_safety_file_named=True manual_steps=1 -> originals_intact_after_steps=True diff=[] staged_before=['nba.sqlite.restoring', 'nfl.sqlite.restoring'] staged_after_steps=[]
+fail#5 rb#5: OSError (rollback rename #5 never reached)
+fail#6 rb#1: BackupError lost_originals=[] every_safety_file_named=True manual_steps=1 -> originals_intact_after_steps=True diff=[] staged_before=['nba.sqlite.restoring', 'nfl.sqlite.restoring'] staged_after_steps=[]
+fail#6 rb#2: BackupError lost_originals=[] every_safety_file_named=True manual_steps=2 -> originals_intact_after_steps=True diff=[] staged_before=['nfl.sqlite.restoring'] staged_after_steps=[]
+fail#6 rb#3: BackupError lost_originals=[] every_safety_file_named=True manual_steps=1 -> originals_intact_after_steps=True diff=[] staged_before=['nba.sqlite.restoring', 'nfl.sqlite.restoring'] staged_after_steps=[]
+fail#6 rb#4: BackupError lost_originals=[] every_safety_file_named=True manual_steps=1 -> originals_intact_after_steps=True diff=[] staged_before=['nba.sqlite.restoring', 'nfl.sqlite.restoring'] staged_after_steps=[]
+fail#6 rb#5: BackupError lost_originals=[] every_safety_file_named=True manual_steps=1 -> originals_intact_after_steps=True diff=[] staged_before=['nba.sqlite.restoring', 'nfl.sqlite.restoring'] staged_after_steps=[]
+fail#7 rb#1: BackupError lost_originals=[] every_safety_file_named=True manual_steps=1 -> originals_intact_after_steps=True diff=[] staged_before=['nba.sqlite.restoring', 'nfl.sqlite.restoring'] staged_after_steps=[]
+fail#7 rb#2: BackupError lost_originals=[] every_safety_file_named=True manual_steps=1 -> originals_intact_after_steps=True diff=[] staged_before=['nba.sqlite.restoring', 'nfl.sqlite.restoring'] staged_after_steps=[]
+fail#7 rb#3: BackupError lost_originals=[] every_safety_file_named=True manual_steps=2 -> originals_intact_after_steps=True diff=[] staged_before=['nfl.sqlite.restoring'] staged_after_steps=[]
+fail#7 rb#4: BackupError lost_originals=[] every_safety_file_named=True manual_steps=1 -> originals_intact_after_steps=True diff=[] staged_before=['nba.sqlite.restoring', 'nfl.sqlite.restoring'] staged_after_steps=[]
+fail#7 rb#5: BackupError lost_originals=[] every_safety_file_named=True manual_steps=1 -> originals_intact_after_steps=True diff=[] staged_before=['nba.sqlite.restoring', 'nfl.sqlite.restoring'] staged_after_steps=[]
+fail#8 rb#1: BackupError lost_originals=[] every_safety_file_named=True manual_steps=1 -> originals_intact_after_steps=True diff=[] staged_before=['nba.sqlite.restoring', 'nfl.sqlite.restoring'] staged_after_steps=[]
+fail#8 rb#2: BackupError lost_originals=[] every_safety_file_named=True manual_steps=1 -> originals_intact_after_steps=True diff=[] staged_before=['nba.sqlite.restoring', 'nfl.sqlite.restoring'] staged_after_steps=[]
+fail#8 rb#3: BackupError lost_originals=[] every_safety_file_named=True manual_steps=1 -> originals_intact_after_steps=True diff=[] staged_before=['nba.sqlite.restoring', 'nfl.sqlite.restoring'] staged_after_steps=[]
+fail#8 rb#4: BackupError lost_originals=[] every_safety_file_named=True manual_steps=2 -> originals_intact_after_steps=True diff=[] staged_before=['nfl.sqlite.restoring'] staged_after_steps=[]
+fail#8 rb#5: BackupError lost_originals=[] every_safety_file_named=True manual_steps=1 -> originals_intact_after_steps=True diff=[] staged_before=['nba.sqlite.restoring', 'nfl.sqlite.restoring'] staged_after_steps=[]
+ALL MANUAL RECOVERIES OK

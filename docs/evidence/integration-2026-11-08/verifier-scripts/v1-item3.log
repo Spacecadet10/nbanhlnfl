@@ -1,0 +1,89 @@
+
+=== ITEM 3 settle a_getMe_connect ===
+report.notification_errors [{'error': 'DeliveryError'}] per-ticket notification [None, None]
+methods ['getMe'] grades(new conn) [{'ticket_id': '2026-11-08-538543b19345', 'g': 'loss'}, {'ticket_id': '2026-11-08-6515a0981162', 'g': 'win'}]
+result deliveries []
+PASS 3.a_getMe_connect grades committed (2 tickets) | [{'ticket_id': '2026-11-08-538543b19345', 'g': 'loss'}, {'ticket_id': '2026-11-08-6515a0981162', 'g': 'win'}]
+PASS 3.a_getMe_connect settle did not raise | None
+
+=== ITEM 3 settle b1_getUpdates_connect ===
+report.notification_errors [{'error': 'DeliveryError'}] per-ticket notification [None, None]
+methods ['getMe', 'getWebhookInfo', 'getUpdates'] grades(new conn) [{'ticket_id': '2026-11-08-538543b19345', 'g': 'loss'}, {'ticket_id': '2026-11-08-6515a0981162', 'g': 'win'}]
+result deliveries []
+PASS 3.b1_getUpdates_connect grades committed (2 tickets) | [{'ticket_id': '2026-11-08-538543b19345', 'g': 'loss'}, {'ticket_id': '2026-11-08-6515a0981162', 'g': 'win'}]
+PASS 3.b1_getUpdates_connect settle did not raise | None
+
+=== ITEM 3 settle b2_getUpdates_badjson ===
+report.notification_errors [{'error': 'DeliveryError'}] per-ticket notification [None, None]
+methods ['getMe', 'getWebhookInfo', 'getUpdates'] grades(new conn) [{'ticket_id': '2026-11-08-538543b19345', 'g': 'loss'}, {'ticket_id': '2026-11-08-6515a0981162', 'g': 'win'}]
+result deliveries []
+PASS 3.b2_getUpdates_badjson grades committed (2 tickets) | [{'ticket_id': '2026-11-08-538543b19345', 'g': 'loss'}, {'ticket_id': '2026-11-08-6515a0981162', 'g': 'win'}]
+PASS 3.b2_getUpdates_badjson settle did not raise | None
+
+=== ITEM 3 settle b3_getUpdates_missing_update_id ===
+RAISED KeyError: 'update_id'
+methods ['getMe', 'getWebhookInfo', 'getUpdates'] grades(new conn) [{'ticket_id': '2026-11-08-538543b19345', 'g': 'loss'}, {'ticket_id': '2026-11-08-6515a0981162', 'g': 'win'}]
+result deliveries []
+PASS 3.b3_getUpdates_missing_update_id grades committed (2 tickets) | [{'ticket_id': '2026-11-08-538543b19345', 'g': 'loss'}, {'ticket_id': '2026-11-08-6515a0981162', 'g': 'win'}]
+FAIL 3.b3_getUpdates_missing_update_id settle did not raise | KeyError: 'update_id'
+
+=== ITEM 3 settle b4_getUpdates_result_dict ===
+RAISED AttributeError: 'str' object has no attribute 'get'
+methods ['getMe', 'getWebhookInfo', 'getUpdates'] grades(new conn) [{'ticket_id': '2026-11-08-538543b19345', 'g': 'loss'}, {'ticket_id': '2026-11-08-6515a0981162', 'g': 'win'}]
+result deliveries []
+PASS 3.b4_getUpdates_result_dict grades committed (2 tickets) | [{'ticket_id': '2026-11-08-538543b19345', 'g': 'loss'}, {'ticket_id': '2026-11-08-6515a0981162', 'g': 'win'}]
+FAIL 3.b4_getUpdates_result_dict settle did not raise | AttributeError: 'str' object has no attribute 'get'
+
+=== ITEM 3 settle b5_getUpdates_body_list ===
+RAISED AttributeError: 'list' object has no attribute 'get'
+methods ['getMe', 'getWebhookInfo', 'getUpdates'] grades(new conn) [{'ticket_id': '2026-11-08-538543b19345', 'g': 'loss'}, {'ticket_id': '2026-11-08-6515a0981162', 'g': 'win'}]
+result deliveries []
+PASS 3.b5_getUpdates_body_list grades committed (2 tickets) | [{'ticket_id': '2026-11-08-538543b19345', 'g': 'loss'}, {'ticket_id': '2026-11-08-6515a0981162', 'g': 'win'}]
+FAIL 3.b5_getUpdates_body_list settle did not raise | AttributeError: 'list' object has no attribute 'get'
+
+=== ITEM 3 settle b6_getUpdates_private_no_chat_id ===
+RAISED KeyError: 'id'
+methods ['getMe', 'getWebhookInfo', 'getUpdates'] grades(new conn) [{'ticket_id': '2026-11-08-538543b19345', 'g': 'loss'}, {'ticket_id': '2026-11-08-6515a0981162', 'g': 'win'}]
+result deliveries []
+PASS 3.b6_getUpdates_private_no_chat_id grades committed (2 tickets) | [{'ticket_id': '2026-11-08-538543b19345', 'g': 'loss'}, {'ticket_id': '2026-11-08-6515a0981162', 'g': 'win'}]
+FAIL 3.b6_getUpdates_private_no_chat_id settle did not raise | KeyError: 'id'
+
+=== ITEM 3 settle b7_getMe_result_list ===
+RAISED AttributeError: 'list' object has no attribute 'get'
+methods ['getMe'] grades(new conn) [{'ticket_id': '2026-11-08-538543b19345', 'g': 'loss'}, {'ticket_id': '2026-11-08-6515a0981162', 'g': 'win'}]
+result deliveries []
+PASS 3.b7_getMe_result_list grades committed (2 tickets) | [{'ticket_id': '2026-11-08-538543b19345', 'g': 'loss'}, {'ticket_id': '2026-11-08-6515a0981162', 'g': 'win'}]
+FAIL 3.b7_getMe_result_list settle did not raise | AttributeError: 'list' object has no attribute 'get'
+
+=== ITEM 3 settle c1_sendMessage_400 ===
+report.notification_errors [] per-ticket notification ['failed', 'failed']
+methods ['getMe', 'getWebhookInfo', 'getUpdates', 'sendMessage', 'sendMessage'] grades(new conn) [{'ticket_id': '2026-11-08-538543b19345', 'g': 'loss'}, {'ticket_id': '2026-11-08-6515a0981162', 'g': 'win'}]
+result deliveries [{'delivery_key': 'ticket-result:2026-11-08-6515a0981162:fae9e4d4963fe843c111ab3c31296c57acea1061909dc1222d1173bf29ee25b9', 'status': 'failed', 'next_attempt_at': None}, {'delivery_key': 'ticket-result:2026-11-08-538543b19345:1f9594c5172e30d8866f13fdbdbd4fba4d99eb91fa9c9f0ba52956e677a5bf51', 'status': 'failed', 'next_attempt_at': None}]
+PASS 3.c1_sendMessage_400 grades committed (2 tickets) | [{'ticket_id': '2026-11-08-538543b19345', 'g': 'loss'}, {'ticket_id': '2026-11-08-6515a0981162', 'g': 'win'}]
+PASS 3.c1_sendMessage_400 settle did not raise | None
+
+=== ITEM 3 settle c2_sendMessage_connect ===
+report.notification_errors [] per-ticket notification ['retry', 'retry']
+methods ['getMe', 'getWebhookInfo', 'getUpdates', 'sendMessage', 'sendMessage'] grades(new conn) [{'ticket_id': '2026-11-08-538543b19345', 'g': 'loss'}, {'ticket_id': '2026-11-08-6515a0981162', 'g': 'win'}]
+result deliveries [{'delivery_key': 'ticket-result:2026-11-08-6515a0981162:fae9e4d4963fe843c111ab3c31296c57acea1061909dc1222d1173bf29ee25b9', 'status': 'retry', 'next_attempt_at': '2026-11-08T22:01:00Z'}, {'delivery_key': 'ticket-result:2026-11-08-538543b19345:1f9594c5172e30d8866f13fdbdbd4fba4d99eb91fa9c9f0ba52956e677a5bf51', 'status': 'retry', 'next_attempt_at': '2026-11-08T22:01:00Z'}]
+PASS 3.c2_sendMessage_connect grades committed (2 tickets) | [{'ticket_id': '2026-11-08-538543b19345', 'g': 'loss'}, {'ticket_id': '2026-11-08-6515a0981162', 'g': 'win'}]
+PASS 3.c2_sendMessage_connect settle did not raise | None
+
+=== ITEM 3 preflight --notify, network down (getMe connect for every call) ===
+exit 1 stdout {"status": "failed", "error_type": "DeliveryError", "reason": "Inspect local inputs or backend compatibility"}
+grades [{'ticket_id': '2026-11-08-538543b19345', 'g': 'loss'}, {'ticket_id': '2026-11-08-6515a0981162', 'g': 'win'}] methods ['getMe', 'getMe']
+PASS 3.preflight exit nonzero | 1
+PASS 3.preflight grades persisted | [{'ticket_id': '2026-11-08-538543b19345', 'g': 'loss'}, {'ticket_id': '2026-11-08-6515a0981162', 'g': 'win'}]
+FAIL 3.preflight settlement report printed | {"status": "failed", "error_type": "DeliveryError", "reason": "Inspect local inputs or backend compatibility"}
+
+=== ITEM 3 preflight --notify, malformed getUpdates (KeyError) ===
+exit 1 stdout {"status": "failed", "error_type": "KeyError", "reason": "Inspect local inputs or backend compatibility"}
+grades [{'ticket_id': '2026-11-08-538543b19345', 'g': 'loss'}, {'ticket_id': '2026-11-08-6515a0981162', 'g': 'win'}]
+PASS 3.preflight-keyerror grades persisted | [{'ticket_id': '2026-11-08-538543b19345', 'g': 'loss'}, {'ticket_id': '2026-11-08-6515a0981162', 'g': 'win'}]
+FAIL 3.preflight-keyerror report printed | {"status": "failed", "error_type": "KeyError", "reason": "Inspect local inputs or backend compatibility"}
+
+=== ITEM 3 retry of failed notification on next settle (c2 connect then ok) ===
+second settle notifications ['sent', 'sent'] ['sendMessage', 'sendMessage']
+PASS 3.renotify later settle re-sends retry notices | ['getMe', 'getWebhookInfo', 'getUpdates', 'sendMessage', 'sendMessage']
+
+SUMMARY 19 / 26

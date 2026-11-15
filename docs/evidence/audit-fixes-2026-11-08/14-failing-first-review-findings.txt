@@ -1,0 +1,21 @@
+E       AssertionError: assert 2 == 1
+E        +  where 2 = len(['PARLAY RESULT / 2026-11-08-6515a0981162 / WIN\nB1 win: win\nB2 win: win', 'PARLAY RESULT / 2026-11-08-6515a0981162 / WIN\nB1 win: win\nB2 win: win\nCorrected resu
+E        +    where ['PARLAY RESULT / 2026-11-08-6515a0981162 / WIN\nB1 win: win\nB2 win: win', 'PARLAY RESULT / 2026-11-08-6515a0981162 / WIN\nB1 win: win\nB2 win: win\nCorrected result: it
+E       AssertionError: assert 3 == 1
+E        +  where 3 = len(['PARLAY RESULT / 2026-11-08-6515a0981162 / LOSS\nB1 win: loss\nB2 win: win', 'PARLAY RESULT / 2026-11-08-6515a0981162...LT / 2026-11-08-6515a0981162 / LOSS\nB1 win
+E        +    where ['PARLAY RESULT / 2026-11-08-6515a0981162 / LOSS\nB1 win: loss\nB2 win: win', 'PARLAY RESULT / 2026-11-08-6515a0981162...LT / 2026-11-08-6515a0981162 / LOSS\nB1 win: loss
+E       assert [False, False, False] == [False, False, True]
+E         
+E         At index 2 diff: False != True
+E         Use -v to get more diff
+E       AssertionError: assert (2 == 1)
+E        +  where 2 = len(['PARLAY RESULT / 2026-11-08-6515a0981162 / LOSS\nB1 win: loss\nB2 win: pending', 'PARLAY RESULT / 2026-11-08-6515a0981162 / LOSS\nB1 win: loss\n2: unavailable'])
+E       assert True is False
+E       KeyError: 'last_observation'
+FAILED tests/test_tickets.py::test_result_that_goes_pending_and_returns_is_not_announced_again
+FAILED tests/test_tickets.py::test_score_only_change_with_the_same_grades_is_stored_but_not_announced
+FAILED tests/test_tickets.py::test_leg_settling_later_is_an_update_and_a_reversed_leg_is_a_correction
+FAILED tests/test_tickets.py::test_unreadable_leg_is_stored_but_never_announced
+FAILED tests/test_tickets.py::test_blocker_that_cleared_does_not_explain_a_review_that_was_due_and_never_ran
+FAILED tests/test_tickets.py::test_review_that_failed_after_the_trigger_was_due_explains_the_miss
+6 failed, 118 deselected in 4.09s

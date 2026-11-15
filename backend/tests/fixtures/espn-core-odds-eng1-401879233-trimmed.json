@@ -1,0 +1,57 @@
+{
+ "_source": "ESPN core odds, eng.1 event 401879233 (Fulham @ Man City), fetched 2026-11-11T04:51:54+00:00; trimmed to provider + Bet365 teamOdds",
+ "items": [
+  {
+   "provider": {
+    "$ref": "http://sports.core.api.espn.com/v2/sports/soccer/leagues/eng.1/providers/100?lang=en&region=us",
+    "id": "100",
+    "name": "DraftKings",
+    "priority": 1
+   }
+  },
+  {
+   "provider": {
+    "id": "2000",
+    "name": "Bet 365",
+    "priority": 0
+   },
+   "bettingOdds": {
+    "homeTeam": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/soccer/leagues/eng.1/seasons/2026/teams/382?lang=en&region=us"
+    },
+    "awayTeam": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/soccer/leagues/eng.1/seasons/2026/teams/370?lang=en&region=us"
+    },
+    "teamOdds": {
+     "preMatchFullTimeResultDraw": {
+      "value": "15/4"
+     },
+     "preMatchFullTimeResultAway": {
+      "value": "11/2"
+     },
+     "preMatchDoubleChanceDrawOrAway": {
+      "value": "7/4"
+     },
+     "preMatchDoubleChanceHomeOrAway": {
+      "value": "2/11"
+     },
+     "preMatchOverUnderHandicap": {
+      "value": "3.25"
+     },
+     "preMatchFullTimeResultHome": {
+      "value": "21/50"
+     },
+     "preMatchGoalLineUnder": {
+      "value": "33/40"
+     },
+     "preMatchGoalLineOver": {
+      "value": "41/40"
+     },
+     "preMatchDoubleChanceHomeOrDraw": {
+      "value": "1/9"
+     }
+    }
+   }
+  }
+ ]
+}

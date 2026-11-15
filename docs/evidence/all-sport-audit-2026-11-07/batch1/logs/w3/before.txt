@@ -1,0 +1,1109 @@
+TAP version 13
+# Subtest: no NFL screen calls the NFL data only or says there is no NFL model
+not ok 1 - no NFL screen calls the NFL data only or says there is no NFL model
+  ---
+  duration_ms: 1.527917
+  type: 'test'
+  location: '/Users/andry/Desktop/nba-predictor-batch1-w3/frontend/src/components/nflWording.test.mjs:13:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input was expected to not match the regular expression /no NFL model/i. Input:
+    
+    "import { NavLink, Outlet, useLocation } from 'react-router-dom';\n" +
+      "import { useEffect, useState } from 'react';\n" +
+      "import { api } from '../api/client';\n" +
+      "import type { League } from '../api/types';\n" +
+      "import { FreshnessContext, useFreshnessPoll } from '../api/freshness';\n" +
+      "import { useApi } from '../api/useApi';\n" +
+      "import { dateTime } from '../format';\n" +
+      "import { NflScreens } from '../pages/NflPages';\n" +
+      "import { SoccerScreens } from '../pages/SoccerPages';\n" +
+      "import { FreshnessBar } from './Freshness';\n" +
+      "import { CompetitionSelect, SportToggle, useCarriedSearch, useCompetition, useLeague, useSoccerMatchUrlSync } from './Selection';\n" +
+      "import { Icon } from './ui';\n" +
+      '\n' +
+      'const NAV = [\n' +
+      "  { to: '/daily-learning', label: 'Daily Learning', icon: 'learning' },\n" +
+      "  { to: '/', label: 'Game Day', icon: 'gameday', end: true },\n" +
+      "  { to: '/performance', label: 'Performance', icon: 'performance' },\n" +
+      "  { to: '/history', label: 'Prediction History', icon: 'history' },\n" +
+      '];\n' +
+      '\n' +
+      'const SECTION: [RegExp, string][] = [\n' +
+      "  [/^\\/games\\//, 'Prediction Dashboard'], [/^\\/daily-learning/, 'Daily Learning'], [/^\\/performance/, 'Performance'],\n" +
+      "  [/^\\/history/, 'Prediction History'], [/^\\/$/, 'Game Day'],\n" +
+      '];\n' +
+      '\n' +
+      '/** The last game page opened in this tab, so "Prediction dashboard" can return to it (Game day until one is opened). */\n' +
+      "const LAST_GAME = 'courtside-last-game';\n" +
+      '\n' +
+      "type Theme = 'light' | 'dark';\n" +
+      "const THEME_KEY = 'courtside-theme-choice';\n" +
+      '\n' +
+      'export function Layout() {\n' +
+      '  // Light is the primary theme; dark stays available. Only an explicit choice is stored (THEME_KEY): the old key was written\n' +
+      '  // on every visit with the old dark default, so it says nothing about what a user chose. index.html applies it before paint.\n' +
+      '  const [theme, setTheme] = useState<Theme>(() => {\n' +
+      "    try { return localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light'; }\n" +
+      "    catch { return 'light'; }\n" +
+      '  });\n' +
+      '  // `sport` is the selected league: NBA and NHL are served; NFL and soccer are data-only with their own screens.\n' +
+      '  const [sport, setSport] = useLeague();\n' +
+      '  const [competition, setCompetition] = useCompetition();\n' +
+      '  useSoccerMatchUrlSync();\n' +
+      '  const carried = useCarriedSearch();\n' +
+      '  const location = useLocation();\n' +
+      '  const label = sport.toUpperCase();\n' +
+      '  const fresh = useFreshnessPoll(sport);\n' +
+      "  const meta = useApi((s) => (sport === 'nfl' ? api.nflMeta(s) : sport === 'soccer' ? api.soccerMeta(competition, s) : api.meta(sport, s))\n" +
+      '    .then((m) => ({ mode: m.mode, last_refresh_at: m.last_refresh_at })), [sport, competition], fresh.changes);\n' +
+      "  const mode = meta.state.status === 'success' ? meta.state.data.mode : null;\n" +
+      "  const lastRefresh = meta.state.status === 'success' ? meta.state.data.last_refresh_at : null;\n" +
+      '  const health = useApi((s) => api.health(s), []);\n' +
+      "  const snapshot = health.state.status === 'success' ? health.state.data.data_snapshot_at : null;\n" +
+      "  const section = SECTION.find(([re]) => re.test(location.pathname))?.[1] ?? 'Prediction Dashboard';\n" +
+      "  const onGame = location.pathname.startsWith('/games/');\n" +
+      '  const [lastGames, setLastGames] = useState<Record<League, string | null>>(() => {\n' +
+      '    try {\n' +
+      '      return { nba: sessionStorage.getItem(`${LAST_GAME}-nba`), nhl: sessionStorage.getItem(`${LAST_GAME}-nhl`),\n' +
+      '        nfl: sessionStorage.getItem(`${LAST_GAME}-nfl`), soccer: sessionStorage.getItem(`${LAST_GAME}-soccer`) };\n' +
+      '    } catch { return { nba: null, nhl: null, nfl: null, soccer: null }; }\n' +
+      '  });\n' +
+      '  const lastGame = lastGames[sport];\n' +
+      '  useEffect(() => {\n' +
+      '    if (!onGame) return;\n' +
+      '    setLastGames((previous) => ({ ...previous, [sport]: location.pathname }));\n' +
+      '    try { sessionStorage.setItem(`${LAST_GAME}-${sport}`, location.pathname); } catch { /* the link then falls back to Game day */ }\n' +
+      '  }, [onGame, location.pathname, sport]);\n' +
+      '  useEffect(() => { window.scrollTo(0, 0); }, [location.pathname, sport]);\n' +
+      '  useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);\n' +
+      '  const choose = (t: Theme) => {\n' +
+      '    setTheme(t);\n' +
+      '    try { localStorage.setItem(THEME_KEY, t); } catch { /* Theme still works for this session. */ }\n' +
+      '  };\n' +
+      "  const next: Theme = theme === 'dark' ? 'light' : 'dark';\n" +
+      '  return (\n' +
+      '    <div className={`app sport-${sport}`}>\n' +
+      '      <aside className="topbar">\n' +
+      '        <div className="brand-block">\n' +
+      '          <NavLink to={`/${carried}`} className="brand">\n' +
+      '            <svg className="brand-mark" viewBox="0 0 40 40" aria-hidden="true">\n' +
+      '              <ellipse cx="21" cy="18" rx="19" ry="8" transform="rotate(-46 21 18)" fill="none" stroke="#F8FAFC" strokeWidth="1.2" />\n' +
+      '              <path d="M3 35C15 34 28 19 35 8l-1 10C26 29 13 38 3 35Z" fill="#A3E635" />\n' +
+      '              <circle cx="29" cy="12" r="5" fill="#C084FC" stroke="#1E1B4B" />\n' +
+      '              <path d="M25 9l8 6m-8-1l7-5" fill="none" stroke="#1E1B4B" strokeWidth=".9" />\n' +
+      '            </svg>\n' +
+      `            COURTSIDE<span className="brand-sub">{sport === 'nhl' ? 'HOCKEY' : sport === 'nfl' ? 'FOOTBALL' : sport === 'soccer' ? 'SOCCER' : 'BASKETBALL'} INTELLIGENCE</span>\n` +
+      '          </NavLink>\n' +
+      '        </div>\n' +
+      '        <nav className="nav" aria-label="Main">\n' +
+      '          <span className="nav-caption"><Icon name="workspace" />Workspace</span>\n' +
+      '          {NAV.slice(0, 3).map((n) => (\n' +
+      "            <NavLink key={n.to} to={`${n.to}${carried}`} end={n.end} className={({ isActive }) => (isActive ? 'active' : '')}>\n" +
+      '              <Icon name={n.icon} />{n.label}\n' +
+      '            </NavLink>\n' +
+      '          ))}\n' +
+      '          <NavLink to={onGame ? `${location.pathname}${carried}` : lastGame ? `${lastGame}${carried}` : `/${carried}`}\n' +
+      "            className={() => (onGame ? 'active' : '')} aria-current={onGame ? 'page' : undefined} title={lastGame || onGame ? 'The game you opened last' : 'Open a game from Game day'}>\n" +
+      '            <Icon name="dashboard" />Prediction Dashboard\n' +
+      '          </NavLink>\n' +
+      '          {NAV.slice(3).map((n) => (\n' +
+      "            <NavLink key={n.to} to={`${n.to}${carried}`} className={({ isActive }) => (isActive ? 'active' : '')}>\n" +
+      '              <Icon name={n.icon} />{n.label}\n' +
+      '            </NavLink>\n' +
+      '          ))}\n' +
+      '        </nav>\n' +
+      '        <div className="sidebar-note">\n' +
+      '          <div className="sidebar-note-copy"><span className="league-mark">{label}</span><strong>The game, in perspective.</strong></div>\n' +
+      '        </div>\n' +
+      '      </aside>\n' +
+      '      <div className="workspace">\n' +
+      '        <header className="workspace-header">\n' +
+      '          <span className="breadcrumb">{label} <span className="header-divider">/</span> <strong>{section}</strong></span>\n' +
+      "          <div className={`header-tools${sport === 'soccer' ? ' has-competition' : ''}`}>\n" +
+      '            <SportToggle value={sport} onChange={setSport} />\n' +
+      "            {sport === 'soccer' && <CompetitionSelect value={competition} onChange={setCompetition} />}\n" +
+      `            {mode === 'demo' && <span className="preview-pill is-demo"><span /> Demo workspace</span>}\n` +
+      "            {mode === 'real' && (\n" +
+      '              <details className="source-pop">\n' +
+      '                <summary className="preview-pill" title="Where the data comes from"><span /> Real data</summary>\n' +
+      '                <div className="source-pop-panel" role="note">\n' +
+      '                  <strong>REAL {label} DATA</strong>\n' +
+      "                  {sport === 'soccer'\n" +
+      "                    ? <p>Fixtures and results from ESPN's public soccer scoreboards, one competition and one day per request{lastRefresh ? `; this competition last imported ${dateTime(lastRefresh)}` : ''}. Data only: there is no soccer model, so no soccer forecast, odds, injury or performance record is shown.</p>\n" +
+      "                    : sport === 'nfl'\n" +
+      "                    ? <p>Schedule and results from ESPN's public NFL scoreboard{lastRefresh ? `, last imported ${dateTime(lastRefresh)}` : ''}. Data only: there is no NFL model, so no NFL forecast, odds, injury or performance record is shown.</p>\n" +
+      "                    : sport === 'nhl'\n" +
+      "                    ? <p>Schedule and results from the NHL's own stats API{lastRefresh ? `, last refreshed ${dateTime(lastRefresh)}` : ''}. Winner forecasts come from an NHL Elo model; puck line, totals and the regulation result from a goals model. No goalie, injury or line-up information.</p>\n" +
+      "                    : <p>Schedule and results from ESPN's unofficial API{lastRefresh ? `, last refreshed ${dateTime(lastRefresh)}` : ''}. Forecasts come from an Elo model.</p>}\n" +
+      "                  <p>{sport === 'nfl' || sport === 'soccer' ? '' : 'Backtests are labelled Backtest; forecasts recorded before the game are labelled Live. '}Team logos are loaded from {sport === 'nhl' ? 'the NHL' : 'ESPN'}. No betting advice.</p>\n" +
+      '                </div>\n' +
+      '              </details>\n' +
+      '            )}\n' +
+      '            <button className="theme-toggle" type="button" aria-label={`Switch to ${next} theme`} title={`Switch to ${next} theme`}\n' +
+      "              aria-pressed={theme === 'dark'} onClick={() => choose(next)}>\n" +
+      "              <Icon name={theme === 'dark' ? 'moon' : 'sun'} size={20} />\n" +
+      '            </button>\n' +
+      '          </div>\n' +
+      '        </header>\n' +
+      `        {health.state.status === 'error' && <div className="demo-banner error-banner" role="alert"><strong>API NOT REACHABLE</strong><span>{health.state.error} Start the app with <code>sh scripts/dev.sh</code> from the repository folder.</span><button type="button" onClick={() => window.location.reload()}>Reconnect</button></div>}\n` +
+      "        {snapshot && (fresh.data?.mode === 'auto_snapshot'\n" +
+      '          ? <div className="demo-banner" role="note"><strong>DEVELOPMENT COPY</strong><span>Games, results and forecasts come from a copy of the live data, republished automatically when it changes (checked every {Math.round((fresh.data.publish_interval_seconds ?? 60))} s; last copy {dateTime(fresh.data.published_at ?? snapshot)}). Training status reads the live system directly.</span></div>\n' +
+      "          : fresh.data?.mode === 'frozen_snapshot'\n" +
+      '          ? <div className="demo-banner" role="note"><strong>DEVELOPMENT COPY</strong><span>Results and games come from a copy of the live data taken {dateTime(snapshot)}. It will not update automatically; restart <code>scripts/dev.sh</code> to refresh it. Training status reads the live system directly.</span'... 883 more characters
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    import { NavLink, Outlet, useLocation } from 'react-router-dom';
+    import { useEffect, useState } from 'react';
+    import { api } from '../api/client';
+    import type { League } from '../api/types';
+    import { FreshnessContext, useFreshnessPoll } from '../api/freshness';
+    import { useApi } from '../api/useApi';
+    import { dateTime } from '../format';
+    import { NflScreens } from '../pages/NflPages';
+    import { SoccerScreens } from '../pages/SoccerPages';
+    import { FreshnessBar } from './Freshness';
+    import { CompetitionSelect, SportToggle, useCarriedSearch, useCompetition, useLeague, useSoccerMatchUrlSync } from './Selection';
+    import { Icon } from './ui';
+    
+    const NAV = [
+      { to: '/daily-learning', label: 'Daily Learning', icon: 'learning' },
+      { to: '/', label: 'Game Day', icon: 'gameday', end: true },
+      { to: '/performance', label: 'Performance', icon: 'performance' },
+      { to: '/history', label: 'Prediction History', icon: 'history' },
+    ];
+    
+    const SECTION: [RegExp, string][] = [
+      [/^\/games\//, 'Prediction Dashboard'], [/^\/daily-learning/, 'Daily Learning'], [/^\/performance/, 'Performance'],
+      [/^\/history/, 'Prediction History'], [/^\/$/, 'Game Day'],
+    ];
+    
+    /** The last game page opened in this tab, so "Prediction dashboard" can return to it (Game day until one is opened). */
+    const LAST_GAME = 'courtside-last-game';
+    
+    type Theme = 'light' | 'dark';
+    const THEME_KEY = 'courtside-theme-choice';
+    
+    export function Layout() {
+      // Light is the primary theme; dark stays available. Only an explicit choice is stored (THEME_KEY): the old key was written
+      // on every visit with the old dark default, so it says nothing about what a user chose. index.html applies it before paint.
+      const [theme, setTheme] = useState<Theme>(() => {
+        try { return localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light'; }
+        catch { return 'light'; }
+      });
+      // `sport` is the selected league: NBA and NHL are served; NFL and soccer are data-only with their own screens.
+      const [sport, setSport] = useLeague();
+      const [competition, setCompetition] = useCompetition();
+      useSoccerMatchUrlSync();
+      const carried = useCarriedSearch();
+      const location = useLocation();
+      const label = sport.toUpperCase();
+      const fresh = useFreshnessPoll(sport);
+      const meta = useApi((s) => (sport === 'nfl' ? api.nflMeta(s) : sport === 'soccer' ? api.soccerMeta(competition, s) : api.meta(sport, s))
+        .then((m) => ({ mode: m.mode, last_refresh_at: m.last_refresh_at })), [sport, competition], fresh.changes);
+      const mode = meta.state.status === 'success' ? meta.state.data.mode : null;
+      const lastRefresh = meta.state.status === 'success' ? meta.state.data.last_refresh_at : null;
+      const health = useApi((s) => api.health(s), []);
+      const snapshot = health.state.status === 'success' ? health.state.data.data_snapshot_at : null;
+      const section = SECTION.find(([re]) => re.test(location.pathname))?.[1] ?? 'Prediction Dashboard';
+      const onGame = location.pathname.startsWith('/games/');
+      const [lastGames, setLastGames] = useState<Record<League, string | null>>(() => {
+        try {
+          return { nba: sessionStorage.getItem(`${LAST_GAME}-nba`), nhl: sessionStorage.getItem(`${LAST_GAME}-nhl`),
+            nfl: sessionStorage.getItem(`${LAST_GAME}-nfl`), soccer: sessionStorage.getItem(`${LAST_GAME}-soccer`) };
+        } catch { return { nba: null, nhl: null, nfl: null, soccer: null }; }
+      });
+      const lastGame = lastGames[sport];
+      useEffect(() => {
+        if (!onGame) return;
+        setLastGames((previous) => ({ ...previous, [sport]: location.pathname }));
+        try { sessionStorage.setItem(`${LAST_GAME}-${sport}`, location.pathname); } catch { /* the link then falls back to Game day */ }
+      }, [onGame, location.pathname, sport]);
+      useEffect(() => { window.scrollTo(0, 0); }, [location.pathname, sport]);
+      useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
+      const choose = (t: Theme) => {
+        setTheme(t);
+        try { localStorage.setItem(THEME_KEY, t); } catch { /* Theme still works for this session. */ }
+      };
+      const next: Theme = theme === 'dark' ? 'light' : 'dark';
+      return (
+        <div className={`app sport-${sport}`}>
+          <aside className="topbar">
+            <div className="brand-block">
+              <NavLink to={`/${carried}`} className="brand">
+                <svg className="brand-mark" viewBox="0 0 40 40" aria-hidden="true">
+                  <ellipse cx="21" cy="18" rx="19" ry="8" transform="rotate(-46 21 18)" fill="none" stroke="#F8FAFC" strokeWidth="1.2" />
+                  <path d="M3 35C15 34 28 19 35 8l-1 10C26 29 13 38 3 35Z" fill="#A3E635" />
+                  <circle cx="29" cy="12" r="5" fill="#C084FC" stroke="#1E1B4B" />
+                  <path d="M25 9l8 6m-8-1l7-5" fill="none" stroke="#1E1B4B" strokeWidth=".9" />
+                </svg>
+                COURTSIDE<span className="brand-sub">{sport === 'nhl' ? 'HOCKEY' : sport === 'nfl' ? 'FOOTBALL' : sport === 'soccer' ? 'SOCCER' : 'BASKETBALL'} INTELLIGENCE</span>
+              </NavLink>
+            </div>
+            <nav className="nav" aria-label="Main">
+              <span className="nav-caption"><Icon name="workspace" />Workspace</span>
+              {NAV.slice(0, 3).map((n) => (
+                <NavLink key={n.to} to={`${n.to}${carried}`} end={n.end} className={({ isActive }) => (isActive ? 'active' : '')}>
+                  <Icon name={n.icon} />{n.label}
+                </NavLink>
+              ))}
+              <NavLink to={onGame ? `${location.pathname}${carried}` : lastGame ? `${lastGame}${carried}` : `/${carried}`}
+                className={() => (onGame ? 'active' : '')} aria-current={onGame ? 'page' : undefined} title={lastGame || onGame ? 'The game you opened last' : 'Open a game from Game day'}>
+                <Icon name="dashboard" />Prediction Dashboard
+              </NavLink>
+              {NAV.slice(3).map((n) => (
+                <NavLink key={n.to} to={`${n.to}${carried}`} className={({ isActive }) => (isActive ? 'active' : '')}>
+                  <Icon name={n.icon} />{n.label}
+                </NavLink>
+              ))}
+            </nav>
+            <div className="sidebar-note">
+              <div className="sidebar-note-copy"><span className="league-mark">{label}</span><strong>The game, in perspective.</strong></div>
+            </div>
+          </aside>
+          <div className="workspace">
+            <header className="workspace-header">
+              <span className="breadcrumb">{label} <span className="header-divider">/</span> <strong>{section}</strong></span>
+              <div className={`header-tools${sport === 'soccer' ? ' has-competition' : ''}`}>
+                <SportToggle value={sport} onChange={setSport} />
+                {sport === 'soccer' && <CompetitionSelect value={competition} onChange={setCompetition} />}
+                {mode === 'demo' && <span className="preview-pill is-demo"><span /> Demo workspace</span>}
+                {mode === 'real' && (
+                  <details className="source-pop">
+                    <summary className="preview-pill" title="Where the data comes from"><span /> Real data</summary>
+                    <div className="source-pop-panel" role="note">
+                      <strong>REAL {label} DATA</strong>
+                      {sport === 'soccer'
+                        ? <p>Fixtures and results from ESPN's public soccer scoreboards, one competition and one day per request{lastRefresh ? `; this competition last imported ${dateTime(lastRefresh)}` : ''}. Data only: there is no soccer model, so no soccer forecast, odds, injury or performance record is shown.</p>
+                        : sport === 'nfl'
+                        ? <p>Schedule and results from ESPN's public NFL scoreboard{lastRefresh ? `, last imported ${dateTime(lastRefresh)}` : ''}. Data only: there is no NFL model, so no NFL forecast, odds, injury or performance record is shown.</p>
+                        : sport === 'nhl'
+                        ? <p>Schedule and results from the NHL's own stats API{lastRefresh ? `, last refreshed ${dateTime(lastRefresh)}` : ''}. Winner forecasts come from an NHL Elo model; puck line, totals and the regulation result from a goals model. No goalie, injury or line-up information.</p>
+                        : <p>Schedule and results from ESPN's unofficial API{lastRefresh ? `, last refreshed ${dateTime(lastRefresh)}` : ''}. Forecasts come from an Elo model.</p>}
+                      <p>{sport === 'nfl' || sport === 'soccer' ? '' : 'Backtests are labelled Backtest; forecasts recorded before the game are labelled Live. '}Team logos are loaded from {sport === 'nhl' ? 'the NHL' : 'ESPN'}. No betting advice.</p>
+                    </div>
+                  </details>
+                )}
+                <button className="theme-toggle" type="button" aria-label={`Switch to ${next} theme`} title={`Switch to ${next} theme`}
+                  aria-pressed={theme === 'dark'} onClick={() => choose(next)}>
+                  <Icon name={theme === 'dark' ? 'moon' : 'sun'} size={20} />
+                </button>
+              </div>
+            </header>
+            {health.state.status === 'error' && <div className="demo-banner error-banner" role="alert"><strong>API NOT REACHABLE</strong><span>{health.state.error} Start the app with <code>sh scripts/dev.sh</code> from the repository folder.</span><button type="button" onClick={() => window.location.reload()}>Reconnect</button></div>}
+            {snapshot && (fresh.data?.mode === 'auto_snapshot'
+              ? <div className="demo-banner" role="note"><strong>DEVELOPMENT COPY</strong><span>Games, results and forecasts come from a copy of the live data, republished automatically when it changes (checked every {Math.round((fresh.data.publish_interval_seconds ?? 60))} s; last copy {dateTime(fresh.data.published_at ?? snapshot)}). Training status reads the live system directly.</span></div>
+              : fresh.data?.mode === 'frozen_snapshot'
+              ? <div className="demo-banner" role="note"><strong>DEVELOPMENT COPY</strong><span>Results and games come from a copy of the live data taken {dateTime(snapshot)}. It will not update automatically; restart <code>scripts/dev.sh</code> to refresh it. Training status reads the live system directly.</span></div>
+              : <div className="demo-banner" role="note"><strong>DEVELOPMENT COPY</strong><span>Results and games come from a copy of the live data (last copied {dateTime(snapshot)}). Training status reads the live system directly.</span></div>)}
+            {mode === 'demo' && <div className="demo-banner" role="note"><strong>DEMO MODE</strong><span>Explore the app with synthetic games and predictions. These are not real NBA forecasts or results.</span></div>}
+            <FreshnessBar check={fresh} />
+            <FreshnessContext.Provider value={fresh}>
+              <main className="content">{sport === 'nfl' ? <NflScreens /> : sport === 'soccer' ? <SoccerScreens /> : <Outlet />}</main>
+            </FreshnessContext.Provider>
+            <footer className="app-footer"><span>COURTSIDE / {label}</span><span>Every probability deserves context.</span></footer>
+          </div>
+        </div>
+      );
+    }
+    
+  operator: 'doesNotMatch'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/andry/Desktop/nba-predictor-batch1-w3/frontend/src/components/nflWording.test.mjs:14:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: the Real-data note describes NFL forecasts when they are active, and says when they are not
+not ok 2 - the Real-data note describes NFL forecasts when they are active, and says when they are not
+  ---
+  duration_ms: 0.099
+  type: 'test'
+  location: '/Users/andry/Desktop/nba-predictor-batch1-w3/frontend/src/components/nflWording.test.mjs:19:1'
+  failureType: 'testCodeFailure'
+  error: 'the NFL note must depend on the forecasts capability'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    import { NavLink, Outlet, useLocation } from 'react-router-dom';
+    import { useEffect, useState } from 'react';
+    import { api } from '../api/client';
+    import type { League } from '../api/types';
+    import { FreshnessContext, useFreshnessPoll } from '../api/freshness';
+    import { useApi } from '../api/useApi';
+    import { dateTime } from '../format';
+    import { NflScreens } from '../pages/NflPages';
+    import { SoccerScreens } from '../pages/SoccerPages';
+    import { FreshnessBar } from './Freshness';
+    import { CompetitionSelect, SportToggle, useCarriedSearch, useCompetition, useLeague, useSoccerMatchUrlSync } from './Selection';
+    import { Icon } from './ui';
+    
+    const NAV = [
+      { to: '/daily-learning', label: 'Daily Learning', icon: 'learning' },
+      { to: '/', label: 'Game Day', icon: 'gameday', end: true },
+      { to: '/performance', label: 'Performance', icon: 'performance' },
+      { to: '/history', label: 'Prediction History', icon: 'history' },
+    ];
+    
+    const SECTION: [RegExp, string][] = [
+      [/^\/games\//, 'Prediction Dashboard'], [/^\/daily-learning/, 'Daily Learning'], [/^\/performance/, 'Performance'],
+      [/^\/history/, 'Prediction History'], [/^\/$/, 'Game Day'],
+    ];
+    
+    /** The last game page opened in this tab, so "Prediction dashboard" can return to it (Game day until one is opened). */
+    const LAST_GAME = 'courtside-last-game';
+    
+    type Theme = 'light' | 'dark';
+    const THEME_KEY = 'courtside-theme-choice';
+    
+    export function Layout() {
+      // Light is the primary theme; dark stays available. Only an explicit choice is stored (THEME_KEY): the old key was written
+      // on every visit with the old dark default, so it says nothing about what a user chose. index.html applies it before paint.
+      const [theme, setTheme] = useState<Theme>(() => {
+        try { return localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light'; }
+        catch { return 'light'; }
+      });
+      // `sport` is the selected league: NBA and NHL are served; NFL and soccer are data-only with their own screens.
+      const [sport, setSport] = useLeague();
+      const [competition, setCompetition] = useCompetition();
+      useSoccerMatchUrlSync();
+      const carried = useCarriedSearch();
+      const location = useLocation();
+      const label = sport.toUpperCase();
+      const fresh = useFreshnessPoll(sport);
+      const meta = useApi((s) => (sport === 'nfl' ? api.nflMeta(s) : sport === 'soccer' ? api.soccerMeta(competition, s) : api.meta(sport, s))
+        .then((m) => ({ mode: m.mode, last_refresh_at: m.last_refresh_at })), [sport, competition], fresh.changes);
+      const mode = meta.state.status === 'success' ? meta.state.data.mode : null;
+      const lastRefresh = meta.state.status === 'success' ? meta.state.data.last_refresh_at : null;
+      const health = useApi((s) => api.health(s), []);
+      const snapshot = health.state.status === 'success' ? health.state.data.data_snapshot_at : null;
+      const section = SECTION.find(([re]) => re.test(location.pathname))?.[1] ?? 'Prediction Dashboard';
+      const onGame = location.pathname.startsWith('/games/');
+      const [lastGames, setLastGames] = useState<Record<League, string | null>>(() => {
+        try {
+          return { nba: sessionStorage.getItem(`${LAST_GAME}-nba`), nhl: sessionStorage.getItem(`${LAST_GAME}-nhl`),
+            nfl: sessionStorage.getItem(`${LAST_GAME}-nfl`), soccer: sessionStorage.getItem(`${LAST_GAME}-soccer`) };
+        } catch { return { nba: null, nhl: null, nfl: null, soccer: null }; }
+      });
+      const lastGame = lastGames[sport];
+      useEffect(() => {
+        if (!onGame) return;
+        setLastGames((previous) => ({ ...previous, [sport]: location.pathname }));
+        try { sessionStorage.setItem(`${LAST_GAME}-${sport}`, location.pathname); } catch { /* the link then falls back to Game day */ }
+      }, [onGame, location.pathname, sport]);
+      useEffect(() => { window.scrollTo(0, 0); }, [location.pathname, sport]);
+      useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
+      const choose = (t: Theme) => {
+        setTheme(t);
+        try { localStorage.setItem(THEME_KEY, t); } catch { /* Theme still works for this session. */ }
+      };
+      const next: Theme = theme === 'dark' ? 'light' : 'dark';
+      return (
+        <div className={`app sport-${sport}`}>
+          <aside className="topbar">
+            <div className="brand-block">
+              <NavLink to={`/${carried}`} className="brand">
+                <svg className="brand-mark" viewBox="0 0 40 40" aria-hidden="true">
+                  <ellipse cx="21" cy="18" rx="19" ry="8" transform="rotate(-46 21 18)" fill="none" stroke="#F8FAFC" strokeWidth="1.2" />
+                  <path d="M3 35C15 34 28 19 35 8l-1 10C26 29 13 38 3 35Z" fill="#A3E635" />
+                  <circle cx="29" cy="12" r="5" fill="#C084FC" stroke="#1E1B4B" />
+                  <path d="M25 9l8 6m-8-1l7-5" fill="none" stroke="#1E1B4B" strokeWidth=".9" />
+                </svg>
+                COURTSIDE<span className="brand-sub">{sport === 'nhl' ? 'HOCKEY' : sport === 'nfl' ? 'FOOTBALL' : sport === 'soccer' ? 'SOCCER' : 'BASKETBALL'} INTELLIGENCE</span>
+              </NavLink>
+            </div>
+            <nav className="nav" aria-label="Main">
+              <span className="nav-caption"><Icon name="workspace" />Workspace</span>
+              {NAV.slice(0, 3).map((n) => (
+                <NavLink key={n.to} to={`${n.to}${carried}`} end={n.end} className={({ isActive }) => (isActive ? 'active' : '')}>
+                  <Icon name={n.icon} />{n.label}
+                </NavLink>
+              ))}
+              <NavLink to={onGame ? `${location.pathname}${carried}` : lastGame ? `${lastGame}${carried}` : `/${carried}`}
+                className={() => (onGame ? 'active' : '')} aria-current={onGame ? 'page' : undefined} title={lastGame || onGame ? 'The game you opened last' : 'Open a game from Game day'}>
+                <Icon name="dashboard" />Prediction Dashboard
+              </NavLink>
+              {NAV.slice(3).map((n) => (
+                <NavLink key={n.to} to={`${n.to}${carried}`} className={({ isActive }) => (isActive ? 'active' : '')}>
+                  <Icon name={n.icon} />{n.label}
+                </NavLink>
+              ))}
+            </nav>
+            <div className="sidebar-note">
+              <div className="sidebar-note-copy"><span className="league-mark">{label}</span><strong>The game, in perspective.</strong></div>
+            </div>
+          </aside>
+          <div className="workspace">
+            <header className="workspace-header">
+              <span className="breadcrumb">{label} <span className="header-divider">/</span> <strong>{section}</strong></span>
+              <div className={`header-tools${sport === 'soccer' ? ' has-competition' : ''}`}>
+                <SportToggle value={sport} onChange={setSport} />
+                {sport === 'soccer' && <CompetitionSelect value={competition} onChange={setCompetition} />}
+                {mode === 'demo' && <span className="preview-pill is-demo"><span /> Demo workspace</span>}
+                {mode === 'real' && (
+                  <details className="source-pop">
+                    <summary className="preview-pill" title="Where the data comes from"><span /> Real data</summary>
+                    <div className="source-pop-panel" role="note">
+                      <strong>REAL {label} DATA</strong>
+                      {sport === 'soccer'
+                        ? <p>Fixtures and results from ESPN's public soccer scoreboards, one competition and one day per request{lastRefresh ? `; this competition last imported ${dateTime(lastRefresh)}` : ''}. Data only: there is no soccer model, so no soccer forecast, odds, injury or performance record is shown.</p>
+                        : sport === 'nfl'
+                        ? <p>Schedule and results from ESPN's public NFL scoreboard{lastRefresh ? `, last imported ${dateTime(lastRefresh)}` : ''}. Data only: there is no NFL model, so no NFL forecast, odds, injury or performance record is shown.</p>
+                        : sport === 'nhl'
+                        ? <p>Schedule and results from the NHL's own stats API{lastRefresh ? `, last refreshed ${dateTime(lastRefresh)}` : ''}. Winner forecasts come from an NHL Elo model; puck line, totals and the regulation result from a goals model. No goalie, injury or line-up information.</p>
+                        : <p>Schedule and results from ESPN's unofficial API{lastRefresh ? `, last refreshed ${dateTime(lastRefresh)}` : ''}. Forecasts come from an Elo model.</p>}
+                      <p>{sport === 'nfl' || sport === 'soccer' ? '' : 'Backtests are labelled Backtest; forecasts recorded before the game are labelled Live. '}Team logos are loaded from {sport === 'nhl' ? 'the NHL' : 'ESPN'}. No betting advice.</p>
+                    </div>
+                  </details>
+                )}
+                <button className="theme-toggle" type="button" aria-label={`Switch to ${next} theme`} title={`Switch to ${next} theme`}
+                  aria-pressed={theme === 'dark'} onClick={() => choose(next)}>
+                  <Icon name={theme === 'dark' ? 'moon' : 'sun'} size={20} />
+                </button>
+              </div>
+            </header>
+            {health.state.status === 'error' && <div className="demo-banner error-banner" role="alert"><strong>API NOT REACHABLE</strong><span>{health.state.error} Start the app with <code>sh scripts/dev.sh</code> from the repository folder.</span><button type="button" onClick={() => window.location.reload()}>Reconnect</button></div>}
+            {snapshot && (fresh.data?.mode === 'auto_snapshot'
+              ? <div className="demo-banner" role="note"><strong>DEVELOPMENT COPY</strong><span>Games, results and forecasts come from a copy of the live data, republished automatically when it changes (checked every {Math.round((fresh.data.publish_interval_seconds ?? 60))} s; last copy {dateTime(fresh.data.published_at ?? snapshot)}). Training status reads the live system directly.</span></div>
+              : fresh.data?.mode === 'frozen_snapshot'
+              ? <div className="demo-banner" role="note"><strong>DEVELOPMENT COPY</strong><span>Results and games come from a copy of the live data taken {dateTime(snapshot)}. It will not update automatically; restart <code>scripts/dev.sh</code> to refresh it. Training status reads the live system directly.</span></div>
+              : <div className="demo-banner" role="note"><strong>DEVELOPMENT COPY</strong><span>Results and games come from a copy of the live data (last copied {dateTime(snapshot)}). Training status reads the live system directly.</span></div>)}
+            {mode === 'demo' && <div className="demo-banner" role="note"><strong>DEMO MODE</strong><span>Explore the app with synthetic games and predictions. These are not real NBA forecasts or results.</span></div>}
+            <FreshnessBar check={fresh} />
+            <FreshnessContext.Provider value={fresh}>
+              <main className="content">{sport === 'nfl' ? <NflScreens /> : sport === 'soccer' ? <SoccerScreens /> : <Outlet />}</main>
+            </FreshnessContext.Provider>
+            <footer className="app-footer"><span>COURTSIDE / {label}</span><span>Every probability deserves context.</span></footer>
+          </div>
+        </div>
+      );
+    }
+    
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/andry/Desktop/nba-predictor-batch1-w3/frontend/src/components/nflWording.test.mjs:20:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: NFL pages without content name what is missing and do not deny recorded forecasts
+not ok 3 - NFL pages without content name what is missing and do not deny recorded forecasts
+  ---
+  duration_ms: 0.488958
+  type: 'test'
+  location: '/Users/andry/Desktop/nba-predictor-batch1-w3/frontend/src/components/nflWording.test.mjs:26:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /Not available for the NFL\. NFL live forecasts and their record are on Game Day, Prediction History and Performance\./. Input:
+    
+    "import { Link, useLocation, useSearchParams } from 'react-router-dom';\n" +
+      "import { CanonicalBlock, CanonicalSummaryLine, GradeText } from '../components/Canonical';\n" +
+      "import { ForecastPercentageRecord } from '../components/ThresholdOverview';\n" +
+      "import { pct } from '../format';\n" +
+      "import { api } from '../api/client';\n" +
+      "import type { NflCapability, NflGame, NflMeta } from '../api/types';\n" +
+      "import { useApi } from '../api/useApi';\n" +
+      "import { useDataRevision } from '../api/freshness';\n" +
+      "import { useCarriedSearch } from '../components/Selection';\n" +
+      "import { AsyncView, Empty } from '../components/States';\n" +
+      "import { TeamLogo } from '../components/TeamLogo';\n" +
+      "import { EmptyForecastState, Icon, MetricCard, PageTitle } from '../components/ui';\n" +
+      "import { calendarDate, dateTime, FULL_DATE, tipoffTime } from '../format';\n" +
+      '\n' +
+      '// NFL is data-only (docs/NFL_PLAN.md): schedule, results and when each was learned, from the NFL store through /api/nfl/*.\n' +
+      '// Nothing here shows or derives a forecast, odds, injury or metric; every such section states that it is not available\n' +
+      '// and why (the reasons come from the API). The layout renders these screens in place of the NBA/NHL routes.\n' +
+      '\n' +
+      "const SEASON_TYPE: Record<NflGame['season_type'], string> = {\n" +
+      "  preseason: 'PRESEASON', regular: '', play_in: '', postseason: 'PLAYOFFS', other: 'EXHIBITION',\n" +
+      '};\n' +
+      '\n' +
+      'const seasonLabel = (season: number) => `${season}–${String(season + 1).slice(2)} season`;\n' +
+      '\n' +
+      'function statusLabel(g: NflGame, date: string) {\n' +
+      "  if (g.status === 'final') return g.winner === 'tie' ? 'FINAL · TIE' : 'FINAL';\n" +
+      "  if (g.status === 'postponed' || g.status === 'canceled') return g.status.toUpperCase();\n" +
+      "  if (g.status === 'in_progress') return 'IN PROGRESS';\n" +
+      '  return tipoffTime(g.kickoff, date);\n' +
+      '}\n' +
+      '\n' +
+      'function learned(g: NflGame) {\n' +
+      '  if (!g.result_available_at) return null;\n' +
+      "  return g.result_availability_basis === 'assumed_tipoff_plus_4h'\n" +
+      '    ? `Result imported later; counted as known 4 h after kickoff (${dateTime(g.result_available_at)})`\n' +
+      '    : `Result first seen ${dateTime(g.result_available_at)}`;\n' +
+      '}\n' +
+      '\n' +
+      '/** Routes the NFL selection: Game day, a matchup, or the honest "not available" screens for everything else. */\n' +
+      'export function NflScreens() {\n' +
+      '  const { pathname } = useLocation();\n' +
+      '  const rev = useDataRevision();\n' +
+      '  const meta = useApi((s) => api.nflMeta(s), [], rev);\n' +
+      '  return (\n' +
+      '    <AsyncView state={meta.state} retry={meta.retry}>\n' +
+      '      {(m) => {\n' +
+      "        if (pathname.startsWith('/games/')) return <NflMatchup id={decodeURIComponent(pathname.slice('/games/'.length))} />;\n" +
+      "        if (pathname === '/') return <NflGameDay meta={m} />;\n" +
+      "        const page = pathname.startsWith('/performance') ? 'performance' : pathname.startsWith('/history') ? 'history'\n" +
+      "          : pathname.startsWith('/daily-learning') ? 'research' : null;\n" +
+      `        return page && page !== 'research' && m.capabilities.some(c => c.id === 'forecasts' && c.available) ? <NflRecords page={page} /> : page ? <NflUnavailable meta={m} page={page} /> : <Empty>Page not found. <Link to="/?sport=nfl">Go to NFL games</Link></Empty>;\n` +
+      '      }}\n' +
+      '    </AsyncView>\n' +
+      '  );\n' +
+      '}\n' +
+      '\n' +
+      'function NflGameDay({ meta }: { meta: NflMeta }) {\n' +
+      '  const [params, setParams] = useSearchParams();\n' +
+      "  const date = params.get('date') ?? meta.default_date;\n" +
+      '  const setDate = (d: string | null) => {\n' +
+      '    if (!d) return;\n' +
+      '    const next = new URLSearchParams(params);\n' +
+      "    next.set('date', d);\n" +
+      '    setParams(next);\n' +
+      '  };\n' +
+      '  return (\n' +
+      '    <section>\n' +
+      '      <PageTitle icon="football" plain title="NFL Games" sub={meta.capabilities.some(c => c.id === "forecasts" && c.available) ? "Live forecasts within two hours of kickoff · results update automatically." : "NFL schedule and results."}\n' +
+      '        right={date && <GameDateControl date={date} dates={meta.game_dates} defaultDate={meta.default_date} onChange={setDate} />} />\n' +
+      '      <ForecastUnavailable capabilities={meta.capabilities} />\n' +
+      '      {date ? <NflSlate date={date} onChange={setDate} /> : <Empty>No NFL games are stored yet.</Empty>}\n' +
+      '    </section>\n' +
+      '  );\n' +
+      '}\n' +
+      '\n' +
+      '/** Steps between dates that have stored games (NFL and soccer play on a few days a week), plus a free date picker. */\n' +
+      'export function GameDateControl({ date, dates, defaultDate, onChange }: {\n' +
+      '  date: string; dates: string[]; defaultDate: string | null; onChange: (d: string | null) => void;\n' +
+      '}) {\n' +
+      '  const earlier = dates.filter((d) => d < date);\n' +
+      '  const later = dates.filter((d) => d > date);\n' +
+      '  return (\n' +
+      '    <div className="date-control">\n' +
+      '      <button type="button" className="date-step prev" disabled={!earlier.length} onClick={() => onChange(earlier[earlier.length - 1] ?? null)}\n' +
+      '        aria-label="Previous game day"><Icon name="chevron" size={16} /></button>\n' +
+      '      <button type="button" className="date-step" disabled={!later.length} onClick={() => onChange(later[0] ?? null)}\n' +
+      '        aria-label="Next game day"><Icon name="chevron" size={16} /></button>\n' +
+      '      <label className="date-button">\n' +
+      '        <span>{calendarDate(date, FULL_DATE)}</span><Icon name="chevronDown" size={18} />\n' +
+      '        <input type="date" value={date} onChange={(e) => onChange(e.target.value || null)} aria-label="Game date" />\n' +
+      '      </label>\n' +
+      '      {defaultDate && date !== defaultDate && (\n' +
+      '        <button type="button" className="link-btn" onClick={() => onChange(defaultDate)}>Next games</button>\n' +
+      '      )}\n' +
+      '    </div>\n' +
+      '  );\n' +
+      '}\n' +
+      '\n' +
+      '/** The capabilities that concern a single game. */\n' +
+      "const GAME_LEVEL = ['forecasts', 'odds', 'injuries'];\n" +
+      '\n' +
+      'function ForecastUnavailable({ capabilities }: { capabilities: NflCapability[] }) {\n' +
+      '  if (capabilities.some(c => c.id === "forecasts" && c.available)) return <p className="notice">NFL live predictions active. Winner recommendations use the frozen 75% threshold. Spread and total markets are informational; injuries and weather are not included.</p>;\n' +
+      '  return (\n' +
+      '    <details className="notice nfl-notice">\n' +
+      '      <summary><strong>NFL is data only:</strong> schedule and results, with no forecasts, odds or injuries yet. <span className="link-btn">Why</span></summary>\n' +
+      '      <ul className="nfl-capabilities small">\n' +
+      '        {capabilities.map((c) => <li key={c.id}><strong>{c.label}:</strong> {c.available ? "active" : "not available"}. <span className="muted">{c.reason}</span></li>)}\n' +
+      '      </ul>\n' +
+      '    </details>\n' +
+      '  );\n' +
+      '}\n' +
+      '\n' +
+      'function NflThresholdRecord({ capabilities }: { capabilities: NflCapability[] }) {\n' +
+      "  const forecast = capabilities.find((c) => c.id === 'forecasts');\n" +
+      '  return <div className="card">\n' +
+      '    <h2>Confidence thresholds by market</h2>\n' +
+      '    <EmptyForecastState>No recorded NFL forecasts to classify by market and threshold.</EmptyForecastState>\n' +
+      '    <p className="small muted">{forecast?.reason} Schedule results alone cannot provide prediction win rates.</p>\n' +
+      '  </div>;\n' +
+      '}\n' +
+      '\n' +
+      'function NflSlate({ date, onChange }: { date: string; onChange: (d: string | null) => void }) {\n' +
+      '  const rev = useDataRevision();\n' +
+      '  const { state, retry } = useApi((s) => api.nflGames(date, s), [date], rev);\n' +
+      '  return (\n' +
+      '    <AsyncView state={state} retry={retry}>\n' +
+      '      {(d) => {\n' +
+      "        const finals = d.games.filter((g) => g.status === 'final').length;\n" +
+      '        return (\n' +
+      '          <>\n' +
+      '            <div className="metrics today-metrics">\n' +
+      '              <MetricCard icon="calendar" label="Games on this date" tone="lime" value={d.games.length}\n' +
+      "                hint={d.games.length ? `${finals} final, ${d.games.length - finals} not final.` : 'No NFL game is scheduled on this date.'} />\n" +
+      '              <MetricCard icon="layers" label="Games with forecasts" tone="dark" value={d.games.filter(g => g.forecasts?.some(c => c.record)).length} hint="Recorded within two hours of kickoff; older games are never filled in." />\n' +
+      '              <MetricCard icon="history" label="Schedule refreshed" tone="lavender"\n' +
+      `                value={d.last_refresh_at ? dateTime(d.last_refresh_at) : '—'} hint="Last ESPN NFL scoreboard import." />\n` +
+      '            </div>\n' +
+      '            {d.games.length === 0 ? (\n' +
+      '              <Empty>\n' +
+      "                No NFL games on {calendarDate(date, FULL_DATE)}.{' '}\n" +
+      '                {d.prev_date && <button type="button" className="link-btn" onClick={() => onChange(d.prev_date)}>Previous game day ({calendarDate(d.prev_date)})</button>}\n' +
+      "                {d.prev_date && d.next_date && ' · '}\n" +
+      '                {d.next_date && <button type="button" className="link-btn" onClick={() => onChange(d.next_date)}>Next game day ({calendarDate(d.next_date)})</button>}\n' +
+      '              </Empty>\n' +
+      '            ) : <ul className="game-grid">{d.games.map((g) => <NflGameCard key={g.game_id} game={g} date={date} />)}</ul>}\n' +
+      '          </>\n' +
+      '        );\n' +
+      '      }}\n' +
+      '    </AsyncView>\n' +
+      '  );\n' +
+      '}\n' +
+      '\n' +
+      'function NflGameCard({ game: g, date }: { game: NflGame; date: string }) {\n' +
+      '  const carried = useCarriedSearch();\n' +
+      "  const tags = [SEASON_TYPE[g.season_type], g.neutral_site ? 'NEUTRAL SITE' : ''].filter(Boolean);\n" +
+      "  const score = (home: boolean) => (g.status === 'final' ? (home ? g.home_score : g.away_score) : null);\n" +
+      "  const won = (home: boolean) => g.winner === (home ? 'home' : 'away');\n" +
+      '  return (\n' +
+      '    <li className="card game-card">\n' +
+      '      <Link to={`/games/${encodeURIComponent(g.game_id)}${carried}`} className="card-link">\n' +
+      '        <div className="game-card-head">\n' +
+      '          <span className="game-time">{statusLabel(g, date)}{tags.map((t) => ` · ${t}`).join(\'\')}</span>\n' +
+      '        </div>\n' +
+      '        <div className={`team-line${won(false) ? \' is-winner\' : \'\'}`}><TeamLogo team={g.away} sport="nfl" size={44} /><div><strong>{g.away.name}</strong><span>{g.neutral_site ? \'Listed away\' : \'Away\'}</span></div><b>{score(false)}</b></div>\n' +
+      '        <div className={`team-line${won(true) ? \' is-winner\' : \'\'}`}><TeamLogo team={g.home} sport="nfl" size={44} /><div><strong>{g.home.name}</strong><span>{g.neutral_site ? \'Listed home\' : \'Home\'}</span></div><b>{score(true)}</b></div>\n' +
+      '        <NflForecasts game={g} />\n' +
+      '        <div className="card-bottom small muted">\n' +
+      "          <span>{learned(g) ?? (g.status === 'scheduled' ? `Kickoff ${dateTime(g.kickoff)}`\n" +
+      "            : g.status === 'in_progress' ? 'Live scores are not collected; the final score follows the game.'\n" +
+      '            : `Last updated '... 10406 more characters
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    import { Link, useLocation, useSearchParams } from 'react-router-dom';
+    import { CanonicalBlock, CanonicalSummaryLine, GradeText } from '../components/Canonical';
+    import { ForecastPercentageRecord } from '../components/ThresholdOverview';
+    import { pct } from '../format';
+    import { api } from '../api/client';
+    import type { NflCapability, NflGame, NflMeta } from '../api/types';
+    import { useApi } from '../api/useApi';
+    import { useDataRevision } from '../api/freshness';
+    import { useCarriedSearch } from '../components/Selection';
+    import { AsyncView, Empty } from '../components/States';
+    import { TeamLogo } from '../components/TeamLogo';
+    import { EmptyForecastState, Icon, MetricCard, PageTitle } from '../components/ui';
+    import { calendarDate, dateTime, FULL_DATE, tipoffTime } from '../format';
+    
+    // NFL is data-only (docs/NFL_PLAN.md): schedule, results and when each was learned, from the NFL store through /api/nfl/*.
+    // Nothing here shows or derives a forecast, odds, injury or metric; every such section states that it is not available
+    // and why (the reasons come from the API). The layout renders these screens in place of the NBA/NHL routes.
+    
+    const SEASON_TYPE: Record<NflGame['season_type'], string> = {
+      preseason: 'PRESEASON', regular: '', play_in: '', postseason: 'PLAYOFFS', other: 'EXHIBITION',
+    };
+    
+    const seasonLabel = (season: number) => `${season}–${String(season + 1).slice(2)} season`;
+    
+    function statusLabel(g: NflGame, date: string) {
+      if (g.status === 'final') return g.winner === 'tie' ? 'FINAL · TIE' : 'FINAL';
+      if (g.status === 'postponed' || g.status === 'canceled') return g.status.toUpperCase();
+      if (g.status === 'in_progress') return 'IN PROGRESS';
+      return tipoffTime(g.kickoff, date);
+    }
+    
+    function learned(g: NflGame) {
+      if (!g.result_available_at) return null;
+      return g.result_availability_basis === 'assumed_tipoff_plus_4h'
+        ? `Result imported later; counted as known 4 h after kickoff (${dateTime(g.result_available_at)})`
+        : `Result first seen ${dateTime(g.result_available_at)}`;
+    }
+    
+    /** Routes the NFL selection: Game day, a matchup, or the honest "not available" screens for everything else. */
+    export function NflScreens() {
+      const { pathname } = useLocation();
+      const rev = useDataRevision();
+      const meta = useApi((s) => api.nflMeta(s), [], rev);
+      return (
+        <AsyncView state={meta.state} retry={meta.retry}>
+          {(m) => {
+            if (pathname.startsWith('/games/')) return <NflMatchup id={decodeURIComponent(pathname.slice('/games/'.length))} />;
+            if (pathname === '/') return <NflGameDay meta={m} />;
+            const page = pathname.startsWith('/performance') ? 'performance' : pathname.startsWith('/history') ? 'history'
+              : pathname.startsWith('/daily-learning') ? 'research' : null;
+            return page && page !== 'research' && m.capabilities.some(c => c.id === 'forecasts' && c.available) ? <NflRecords page={page} /> : page ? <NflUnavailable meta={m} page={page} /> : <Empty>Page not found. <Link to="/?sport=nfl">Go to NFL games</Link></Empty>;
+          }}
+        </AsyncView>
+      );
+    }
+    
+    function NflGameDay({ meta }: { meta: NflMeta }) {
+      const [params, setParams] = useSearchParams();
+      const date = params.get('date') ?? meta.default_date;
+      const setDate = (d: string | null) => {
+        if (!d) return;
+        const next = new URLSearchParams(params);
+        next.set('date', d);
+        setParams(next);
+      };
+      return (
+        <section>
+          <PageTitle icon="football" plain title="NFL Games" sub={meta.capabilities.some(c => c.id === "forecasts" && c.available) ? "Live forecasts within two hours of kickoff · results update automatically." : "NFL schedule and results."}
+            right={date && <GameDateControl date={date} dates={meta.game_dates} defaultDate={meta.default_date} onChange={setDate} />} />
+          <ForecastUnavailable capabilities={meta.capabilities} />
+          {date ? <NflSlate date={date} onChange={setDate} /> : <Empty>No NFL games are stored yet.</Empty>}
+        </section>
+      );
+    }
+    
+    /** Steps between dates that have stored games (NFL and soccer play on a few days a week), plus a free date picker. */
+    export function GameDateControl({ date, dates, defaultDate, onChange }: {
+      date: string; dates: string[]; defaultDate: string | null; onChange: (d: string | null) => void;
+    }) {
+      const earlier = dates.filter((d) => d < date);
+      const later = dates.filter((d) => d > date);
+      return (
+        <div className="date-control">
+          <button type="button" className="date-step prev" disabled={!earlier.length} onClick={() => onChange(earlier[earlier.length - 1] ?? null)}
+            aria-label="Previous game day"><Icon name="chevron" size={16} /></button>
+          <button type="button" className="date-step" disabled={!later.length} onClick={() => onChange(later[0] ?? null)}
+            aria-label="Next game day"><Icon name="chevron" size={16} /></button>
+          <label className="date-button">
+            <span>{calendarDate(date, FULL_DATE)}</span><Icon name="chevronDown" size={18} />
+            <input type="date" value={date} onChange={(e) => onChange(e.target.value || null)} aria-label="Game date" />
+          </label>
+          {defaultDate && date !== defaultDate && (
+            <button type="button" className="link-btn" onClick={() => onChange(defaultDate)}>Next games</button>
+          )}
+        </div>
+      );
+    }
+    
+    /** The capabilities that concern a single game. */
+    const GAME_LEVEL = ['forecasts', 'odds', 'injuries'];
+    
+    function ForecastUnavailable({ capabilities }: { capabilities: NflCapability[] }) {
+      if (capabilities.some(c => c.id === "forecasts" && c.available)) return <p className="notice">NFL live predictions active. Winner recommendations use the frozen 75% threshold. Spread and total markets are informational; injuries and weather are not included.</p>;
+      return (
+        <details className="notice nfl-notice">
+          <summary><strong>NFL is data only:</strong> schedule and results, with no forecasts, odds or injuries yet. <span className="link-btn">Why</span></summary>
+          <ul className="nfl-capabilities small">
+            {capabilities.map((c) => <li key={c.id}><strong>{c.label}:</strong> {c.available ? "active" : "not available"}. <span className="muted">{c.reason}</span></li>)}
+          </ul>
+        </details>
+      );
+    }
+    
+    function NflThresholdRecord({ capabilities }: { capabilities: NflCapability[] }) {
+      const forecast = capabilities.find((c) => c.id === 'forecasts');
+      return <div className="card">
+        <h2>Confidence thresholds by market</h2>
+        <EmptyForecastState>No recorded NFL forecasts to classify by market and threshold.</EmptyForecastState>
+        <p className="small muted">{forecast?.reason} Schedule results alone cannot provide prediction win rates.</p>
+      </div>;
+    }
+    
+    function NflSlate({ date, onChange }: { date: string; onChange: (d: string | null) => void }) {
+      const rev = useDataRevision();
+      const { state, retry } = useApi((s) => api.nflGames(date, s), [date], rev);
+      return (
+        <AsyncView state={state} retry={retry}>
+          {(d) => {
+            const finals = d.games.filter((g) => g.status === 'final').length;
+            return (
+              <>
+                <div className="metrics today-metrics">
+                  <MetricCard icon="calendar" label="Games on this date" tone="lime" value={d.games.length}
+                    hint={d.games.length ? `${finals} final, ${d.games.length - finals} not final.` : 'No NFL game is scheduled on this date.'} />
+                  <MetricCard icon="layers" label="Games with forecasts" tone="dark" value={d.games.filter(g => g.forecasts?.some(c => c.record)).length} hint="Recorded within two hours of kickoff; older games are never filled in." />
+                  <MetricCard icon="history" label="Schedule refreshed" tone="lavender"
+                    value={d.last_refresh_at ? dateTime(d.last_refresh_at) : '—'} hint="Last ESPN NFL scoreboard import." />
+                </div>
+                {d.games.length === 0 ? (
+                  <Empty>
+                    No NFL games on {calendarDate(date, FULL_DATE)}.{' '}
+                    {d.prev_date && <button type="button" className="link-btn" onClick={() => onChange(d.prev_date)}>Previous game day ({calendarDate(d.prev_date)})</button>}
+                    {d.prev_date && d.next_date && ' · '}
+                    {d.next_date && <button type="button" className="link-btn" onClick={() => onChange(d.next_date)}>Next game day ({calendarDate(d.next_date)})</button>}
+                  </Empty>
+                ) : <ul className="game-grid">{d.games.map((g) => <NflGameCard key={g.game_id} game={g} date={date} />)}</ul>}
+              </>
+            );
+          }}
+        </AsyncView>
+      );
+    }
+    
+    function NflGameCard({ game: g, date }: { game: NflGame; date: string }) {
+      const carried = useCarriedSearch();
+      const tags = [SEASON_TYPE[g.season_type], g.neutral_site ? 'NEUTRAL SITE' : ''].filter(Boolean);
+      const score = (home: boolean) => (g.status === 'final' ? (home ? g.home_score : g.away_score) : null);
+      const won = (home: boolean) => g.winner === (home ? 'home' : 'away');
+      return (
+        <li className="card game-card">
+          <Link to={`/games/${encodeURIComponent(g.game_id)}${carried}`} className="card-link">
+            <div className="game-card-head">
+              <span className="game-time">{statusLabel(g, date)}{tags.map((t) => ` · ${t}`).join('')}</span>
+            </div>
+            <div className={`team-line${won(false) ? ' is-winner' : ''}`}><TeamLogo team={g.away} sport="nfl" size={44} /><div><strong>{g.away.name}</strong><span>{g.neutral_site ? 'Listed away' : 'Away'}</span></div><b>{score(false)}</b></div>
+            <div className={`team-line${won(true) ? ' is-winner' : ''}`}><TeamLogo team={g.home} sport="nfl" size={44} /><div><strong>{g.home.name}</strong><span>{g.neutral_site ? 'Listed home' : 'Home'}</span></div><b>{score(true)}</b></div>
+            <NflForecasts game={g} />
+            <div className="card-bottom small muted">
+              <span>{learned(g) ?? (g.status === 'scheduled' ? `Kickoff ${dateTime(g.kickoff)}`
+                : g.status === 'in_progress' ? 'Live scores are not collected; the final score follows the game.'
+                : `Last updated ${dateTime(g.updated_at)}`)}</span>
+              <span className="matchup-link">Matchup <Icon name="arrow" size={14} /></span>
+            </div>
+          </Link>
+        </li>
+      );
+    }
+    
+    function NflMatchup({ id }: { id: string }) {
+      const carried = useCarriedSearch();
+      const rev = useDataRevision();
+      const { state, retry } = useApi((s) => api.nflGame(id, s), [id], rev);
+      return (
+        <section>
+          <Link to={`/${carried}`} className="back">‹ NFL games</Link>
+          <AsyncView state={state} retry={retry}>
+            {(d) => {
+              const g = d.game;
+              const title = g.status === 'final'
+                ? <>Final{g.winner === 'tie' ? ' (tie)' : ''}: {g.away.abbr} {g.away_score} – {g.home_score} {g.home.abbr}</>
+                : <>Kickoff: {dateTime(g.kickoff)}{g.status !== 'scheduled' && ` · ${g.status.replace('_', ' ')}`}</>;
+              return (
+                <>
+                  <section className="hero" aria-label="Matchup">
+                    <TeamLogo team={g.away} sport="nfl" size={104} />
+                    <div className="hero-center">
+                      <span className="league-chip">NFL</span>
+                      <h2 className="hero-matchup">{g.away.name} <span>{g.neutral_site ? 'vs' : '@'}</span> {g.home.name}</h2>
+                      <p className="hero-time">{title}</p>
+                    </div>
+                    <TeamLogo team={g.home} sport="nfl" size={104} />
+                  </section>
+                  <div className="nfl-detail-grid">
+                    <div className="card">
+                      <h2>Game facts</h2>
+                      <dl className="facts">
+                        <dt>Season</dt><dd>{seasonLabel(g.season)}{SEASON_TYPE[g.season_type] ? ` · ${SEASON_TYPE[g.season_type].toLowerCase()}` : ' · regular season'}</dd>
+                        <dt>Kickoff</dt><dd>{dateTime(g.kickoff)}</dd>
+                        <dt>Status</dt><dd>{g.status === 'final' ? (g.winner === 'tie' ? 'Final, tie' : `Final, ${g.winner === 'home' ? g.home.name : g.away.name} won`) : g.status.replace('_', ' ')}</dd>
+                        <dt>Site</dt><dd>{g.neutral_site ? 'Neutral site (no home field)' : `${g.home.name} home game`}</dd>
+                        <dt>First listed</dt><dd>{dateTime(g.first_seen_at)}</dd>
+                        <dt>Last updated</dt><dd>{dateTime(g.updated_at)}</dd>
+                        {g.result_available_at && <><dt>Result known</dt><dd>{learned(g)}</dd></>}
+                      </dl>
+                      <p className="small muted">Source: ESPN's public NFL scoreboard. Team names are each franchise's current name, also for older games.</p>
+                    </div>
+                    <div className="card">
+                      <h2>Forecast</h2>
+                      <NflForecasts game={g} detail />
+                      <ul className="nfl-capabilities small">
+                        {d.capabilities.filter((c) => GAME_LEVEL.includes(c.id)).map((c) => <li key={c.id}><strong>{c.label}:</strong> {c.available ? "active" : "not available"}. <span className="muted">{c.reason}</span></li>)}
+                      </ul>
+                    </div>
+                  </div>
+                  {!g.forecasts && <NflThresholdRecord capabilities={d.capabilities} />}
+                  <div className="card">
+                    <h2>Earlier meetings</h2>
+                    <p className="small muted">Final regular-season and playoff results between these teams before this kickoff, newest first.</p>
+                    <ResultTable games={d.head_to_head} empty="No earlier meeting is stored." />
+                  </div>
+                  <div className="nfl-detail-grid">
+                    {([[g.away, d.away_recent], [g.home, d.home_recent]] as const).map(([team, games]) => (
+                      <div className="card" key={team.team_id}>
+                        <h2><span className="team-cell"><TeamLogo team={team} sport="nfl" size={28} />{team.name}: last results</span></h2>
+                        <p className="small muted">Before this kickoff (up to five).</p>
+                        <ResultTable games={games} team={team.team_id} empty="No earlier result is stored." />
+                      </div>
+                    ))}
+                  </div>
+                </>
+              );
+            }}
+          </AsyncView>
+        </section>
+      );
+    }
+    
+    /** Final results as a table; with `team`, each row also says W/L/T for that team. */
+    function ResultTable({ games, team, empty }: { games: NflGame[]; team?: string; empty: string }) {
+      const carried = useCarriedSearch();
+      if (!games.length) return <p className="muted">{empty}</p>;
+      const outcome = (g: NflGame) => {
+        if (!team || !g.winner) return null;
+        if (g.winner === 'tie') return <span className="muted">T</span>;
+        return (g.winner === 'home') === (g.home.team_id === team) ? <span className="ok">W</span> : <span className="bad">L</span>;
+      };
+      return (
+        <div className="table-wrap"><table className="table compare">
+          <thead><tr><th>Date</th><th>Game</th><th>Score (away–home)</th>{team && <th>Result</th>}</tr></thead>
+          <tbody>
+            {games.map((g) => (
+              <tr key={g.game_id}>
+                <td>{new Date(g.kickoff).toLocaleDateString([], FULL_DATE)}</td>
+                <td><Link to={`/games/${encodeURIComponent(g.game_id)}${carried}`}>{g.away.abbr} {g.neutral_site ? 'vs' : '@'} {g.home.abbr}</Link>
+                  {SEASON_TYPE[g.season_type] && <span className="muted small"> · {SEASON_TYPE[g.season_type].toLowerCase()}</span>}</td>
+                <td>{g.away_score}–{g.home_score}</td>
+                {team && <td>{outcome(g)}</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table></div>
+      );
+    }
+    
+    const PAGES = {
+      performance: { icon: 'performance', title: 'NFL Performance', capability: 'performance' },
+      history: { icon: 'history', title: 'NFL Prediction History', capability: 'history' },
+      research: { icon: 'learning', title: 'NFL Daily Learning', capability: 'research' },
+    } as const;
+    
+    /** Performance, history and daily learning have nothing to show for a data-only league: say so, and show what is stored. */
+    function NflUnavailable({ meta, page }: { meta: NflMeta; page: keyof typeof PAGES }) {
+      const carried = useCarriedSearch();
+      const p = PAGES[page];
+      const cap = meta.capabilities.find((c) => c.id === p.capability);
+      const first = meta.seasons[0];
+      const last = meta.seasons[meta.seasons.length - 1];
+      return (
+        <section>
+          <PageTitle icon={p.icon} title={p.title} sub="Not available: the NFL is data only for now." />
+          <Empty>
+            <strong>{cap?.label ?? p.title}: not available.</strong> {cap?.reason}{' '}
+            <Link to={`/${carried}`}>See the NFL schedule and results</Link>.
+          </Empty>
+          <NflThresholdRecord capabilities={meta.capabilities} />
+          <div className="metrics today-metrics">
+            <MetricCard icon="calendar" label="Seasons stored" tone="lime" value={meta.seasons.length || '—'}
+              hint={first != null ? `${seasonLabel(first)} to ${seasonLabel(last)} (regular season and playoffs).` : 'No season stored yet.'} />
+            <MetricCard icon="layers" label="Games stored" tone="dark" value={meta.games_stored.toLocaleString()}
+              hint="Every listed game, including preseason and the Pro Bowl." />
+            <MetricCard icon="history" label="Schedule refreshed" tone="lavender" value={meta.last_refresh_at ? dateTime(meta.last_refresh_at) : '—'}
+              hint="Last ESPN NFL scoreboard import." />
+          </div>
+        </section>
+      );
+    }
+    
+    function NflForecasts({ game: g, detail = false }: { game: NflGame; detail?: boolean }) {
+      if (!g.forecasts) return <p className="forecast-note">NFL live forecasts have not been activated.</p>;
+      if (!g.forecasts.some(c => c.record)) {
+        const first = g.forecasts[0];
+        return <p className="forecast-note">{first?.state === 'upcoming'
+          ? `Forecast window opens ${dateTime(new Date(new Date(g.kickoff).getTime()-2*60*60*1000).toISOString())}.`
+          : first?.reason ?? 'No forecast was recorded for this game.'}</p>;
+      }
+      return <>
+        <div className="notice"><strong>Recommended pick: {g.recommended_pick ?? 'No strong pick'}</strong>
+          <p className="small">Winner requires at least 75% model probability under the frozen NFL rule. Other markets are informational.</p></div>
+        {g.forecasts.map(c => <CanonicalBlock key={c.market} c={c} home={g.home} away={g.away} detail={detail} />)}
+      </>;
+    }
+    
+    function NflRecords({ page }: { page: 'performance' | 'history' }) {
+      const rev = useDataRevision();
+      const { state, retry } = useApi(s => api.nflRecord(s), [], rev);
+      const carried = useCarriedSearch();
+      return <section><PageTitle icon={page === 'history' ? 'history' : 'performance'} title={page === 'history' ? 'NFL Prediction History' : 'NFL Performance'}
+        sub="Prospective forecasts only. Exact percentages stay separate by market, side, model and line source." />
+        <AsyncView state={state} retry={retry}>{r => <>
+          <p className="notice">Live recording {r.recording_began_at ? `began ${dateTime(r.recording_began_at)}` : 'has no picks yet. The first forecast appears within two hours of kickoff.'}</p>
+          {r.historical_test && <details className="card"><summary>Separate historical test · frozen winner 75%+</summary>
+            <p>{r.historical_test.won} wins, {r.historical_test.graded-r.historical_test.won} losses ({r.historical_test.graded} picks; {pct(r.historical_test.win_rate,1)}).
+            95% interval {pct(r.historical_test.ci95[0],1)}–{pct(r.historical_test.ci95[1],1)}. These games are excluded from the live records below.</p></details>}
+          {r.markets.map(m => <div className="card" key={m.market}><h2>{m.title}</h2><CanonicalSummaryLine s={m.summary} />
+            {!m.rows.length ? <p className="muted">No started NFL forecast in this market yet.</p> :
+              <div className="table-wrap"><table className="table"><thead><tr><th>Game</th><th>Recorded pick</th><th>Result</th><th>Exact percentage record</th></tr></thead><tbody>
+                {m.rows.map(row => <tr key={row.game_id}><td><Link to={`/games/${encodeURIComponent(row.game_id)}${carried}`}>{dateTime(row.tipoff)} · {row.game_id}</Link></td>
+                  <td>{row.forecast.record?.pick_label} · {pct(row.forecast.record?.confidence,1)}</td><td><GradeText grade={row.forecast.grade} /></td>
+                  <td><ForecastPercentageRecord history={row.forecast.percentage_history} grade={row.forecast.grade} opposite={row.forecast.record?.opposite_pick_label} startAt={row.forecast.record?.start_at} /></td></tr>)}
+              </tbody></table></div>}
+          </div>)}
+        </>}</AsyncView></section>;
+    }
+    
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/andry/Desktop/nba-predictor-batch1-w3/frontend/src/components/nflWording.test.mjs:27:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: the new NFL wording makes no accuracy, edge or performance claim
+not ok 4 - the new NFL wording makes no accuracy, edge or performance claim
+  ---
+  duration_ms: 0.145792
+  type: 'test'
+  location: '/Users/andry/Desktop/nba-predictor-batch1-w3/frontend/src/components/nflWording.test.mjs:34:1'
+  failureType: 'testCodeFailure'
+  error: 'new wording not found'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///Users/andry/Desktop/nba-predictor-batch1-w3/frontend/src/components/nflWording.test.mjs:37:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: the history tables are found (the guard is not vacuous)
+ok 5 - the history tables are found (the guard is not vacuous)
+  ---
+  duration_ms: 8.390542
+  type: 'test'
+  ...
+# Subtest: every history table sits directly inside a .table-wrap scroll container
+not ok 6 - every history table sits directly inside a .table-wrap scroll container
+  ---
+  duration_ms: 1.788708
+  type: 'test'
+  location: '/Users/andry/Desktop/nba-predictor-batch1-w3/frontend/src/components/tables.test.mjs:43:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    history tables without a directly enclosing <div className="table-wrap">: components/Canonical.tsx:135, components/MarketView.tsx:155, pages/HistoryPage.tsx:176
+    + actual - expected
+    
+    + [
+    +   'components/Canonical.tsx:135',
+    +   'components/MarketView.tsx:155',
+    +   'pages/HistoryPage.tsx:176'
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0: 'components/Canonical.tsx:135'
+    1: 'components/MarketView.tsx:155'
+    2: 'pages/HistoryPage.tsx:176'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/andry/Desktop/nba-predictor-batch1-w3/frontend/src/components/tables.test.mjs:47:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 1
+# fail 5
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 50.058042
+exit=1

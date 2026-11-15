@@ -1,0 +1,8 @@
+ngboost 0.5.11 sklearn 1.9.1 numpy 2.5.3 scipy 1.18.1
+fit_time_s=16.7  n_estimators=600 lr=0.03
+sigma corr pearson=0.881 spearman=0.942  mean pred sigma=9.01 true=11.23
+80% interval coverage=0.685  PIT deciles=[265, 147, 120, 143, 125, 119, 122, 124, 128, 207]
+test NLL heteroscedastic=3.9216 vs same-mean constant-SD(9.99)=4.0580  (oracle=3.7484)
+determinism same seed: max|dloc|= 5.054345607774577 max|dscale|= 1.9493688302399228
+different seed: max|dloc|= 5.8519205143545125
+early stopping: best_val_loss_itr=76 fit_time=3.1s n_base_models=127

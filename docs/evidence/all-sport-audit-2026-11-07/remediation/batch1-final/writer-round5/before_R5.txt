@@ -1,0 +1,186 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.12, pytest-9.1.1, pluggy-1.6.0 -- /Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/bin/python
+hypothesis profile 'default'
+rootdir: /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/writer/r5_base/backend
+plugins: hypothesis-6.168.3, anyio-4.15.1
+collecting ... collected 23 items / 14 deselected / 9 selected
+
+tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nba-main] FAILED [ 11%]
+tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nba-wal] FAILED [ 22%]
+tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nba-shm] FAILED [ 33%]
+tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nba-install] FAILED [ 44%]
+tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nfl-main] FAILED [ 55%]
+tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nfl-wal] FAILED [ 66%]
+tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nfl-shm] FAILED [ 77%]
+tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nfl-install] FAILED [ 88%]
+tests/test_backup_restore.py::test_a_failed_rollback_deletes_nothing_and_names_the_manual_recovery FAILED [100%]
+
+=================================== FAILURES ===================================
+_________ test_a_failed_swap_is_rolled_back_for_every_sport[nba-main] __________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-187/test_a_failed_swap_is_rolled_b0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x107c6f470>
+sport = 'nba', stage = 'main'
+
+    @pytest.mark.parametrize("stage", ["main", "wal", "shm", "install"])
+    @pytest.mark.parametrize("sport", ["nba", "nfl"])     # nfl: a later sport, after nba was fully swapped
+    def test_a_failed_swap_is_rolled_back_for_every_sport(tmp_path, monkeypatch, sport, stage):
+        data, folder, originals = _swap_setup(tmp_path)
+        calls = _inject(monkeypatch, _forward(sport, stage))
+>       synced, real_sync = [], backup._fsync_dir
+                                ^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'app.backup' has no attribute '_fsync_dir'
+
+tests/test_backup_restore.py:334: AttributeError
+__________ test_a_failed_swap_is_rolled_back_for_every_sport[nba-wal] __________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-187/test_a_failed_swap_is_rolled_b1')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x107cae480>
+sport = 'nba', stage = 'wal'
+
+    @pytest.mark.parametrize("stage", ["main", "wal", "shm", "install"])
+    @pytest.mark.parametrize("sport", ["nba", "nfl"])     # nfl: a later sport, after nba was fully swapped
+    def test_a_failed_swap_is_rolled_back_for_every_sport(tmp_path, monkeypatch, sport, stage):
+        data, folder, originals = _swap_setup(tmp_path)
+        calls = _inject(monkeypatch, _forward(sport, stage))
+>       synced, real_sync = [], backup._fsync_dir
+                                ^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'app.backup' has no attribute '_fsync_dir'
+
+tests/test_backup_restore.py:334: AttributeError
+__________ test_a_failed_swap_is_rolled_back_for_every_sport[nba-shm] __________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-187/test_a_failed_swap_is_rolled_b2')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x107cae1e0>
+sport = 'nba', stage = 'shm'
+
+    @pytest.mark.parametrize("stage", ["main", "wal", "shm", "install"])
+    @pytest.mark.parametrize("sport", ["nba", "nfl"])     # nfl: a later sport, after nba was fully swapped
+    def test_a_failed_swap_is_rolled_back_for_every_sport(tmp_path, monkeypatch, sport, stage):
+        data, folder, originals = _swap_setup(tmp_path)
+        calls = _inject(monkeypatch, _forward(sport, stage))
+>       synced, real_sync = [], backup._fsync_dir
+                                ^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'app.backup' has no attribute '_fsync_dir'
+
+tests/test_backup_restore.py:334: AttributeError
+________ test_a_failed_swap_is_rolled_back_for_every_sport[nba-install] ________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-187/test_a_failed_swap_is_rolled_b3')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x107cae150>
+sport = 'nba', stage = 'install'
+
+    @pytest.mark.parametrize("stage", ["main", "wal", "shm", "install"])
+    @pytest.mark.parametrize("sport", ["nba", "nfl"])     # nfl: a later sport, after nba was fully swapped
+    def test_a_failed_swap_is_rolled_back_for_every_sport(tmp_path, monkeypatch, sport, stage):
+        data, folder, originals = _swap_setup(tmp_path)
+        calls = _inject(monkeypatch, _forward(sport, stage))
+>       synced, real_sync = [], backup._fsync_dir
+                                ^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'app.backup' has no attribute '_fsync_dir'
+
+tests/test_backup_restore.py:334: AttributeError
+_________ test_a_failed_swap_is_rolled_back_for_every_sport[nfl-main] __________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-187/test_a_failed_swap_is_rolled_b4')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x107cd1c40>
+sport = 'nfl', stage = 'main'
+
+    @pytest.mark.parametrize("stage", ["main", "wal", "shm", "install"])
+    @pytest.mark.parametrize("sport", ["nba", "nfl"])     # nfl: a later sport, after nba was fully swapped
+    def test_a_failed_swap_is_rolled_back_for_every_sport(tmp_path, monkeypatch, sport, stage):
+        data, folder, originals = _swap_setup(tmp_path)
+        calls = _inject(monkeypatch, _forward(sport, stage))
+>       synced, real_sync = [], backup._fsync_dir
+                                ^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'app.backup' has no attribute '_fsync_dir'
+
+tests/test_backup_restore.py:334: AttributeError
+__________ test_a_failed_swap_is_rolled_back_for_every_sport[nfl-wal] __________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-187/test_a_failed_swap_is_rolled_b5')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x107cac920>
+sport = 'nfl', stage = 'wal'
+
+    @pytest.mark.parametrize("stage", ["main", "wal", "shm", "install"])
+    @pytest.mark.parametrize("sport", ["nba", "nfl"])     # nfl: a later sport, after nba was fully swapped
+    def test_a_failed_swap_is_rolled_back_for_every_sport(tmp_path, monkeypatch, sport, stage):
+        data, folder, originals = _swap_setup(tmp_path)
+        calls = _inject(monkeypatch, _forward(sport, stage))
+>       synced, real_sync = [], backup._fsync_dir
+                                ^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'app.backup' has no attribute '_fsync_dir'
+
+tests/test_backup_restore.py:334: AttributeError
+__________ test_a_failed_swap_is_rolled_back_for_every_sport[nfl-shm] __________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-187/test_a_failed_swap_is_rolled_b6')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x107cd3260>
+sport = 'nfl', stage = 'shm'
+
+    @pytest.mark.parametrize("stage", ["main", "wal", "shm", "install"])
+    @pytest.mark.parametrize("sport", ["nba", "nfl"])     # nfl: a later sport, after nba was fully swapped
+    def test_a_failed_swap_is_rolled_back_for_every_sport(tmp_path, monkeypatch, sport, stage):
+        data, folder, originals = _swap_setup(tmp_path)
+        calls = _inject(monkeypatch, _forward(sport, stage))
+>       synced, real_sync = [], backup._fsync_dir
+                                ^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'app.backup' has no attribute '_fsync_dir'
+
+tests/test_backup_restore.py:334: AttributeError
+________ test_a_failed_swap_is_rolled_back_for_every_sport[nfl-install] ________
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-187/test_a_failed_swap_is_rolled_b7')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x107cd23f0>
+sport = 'nfl', stage = 'install'
+
+    @pytest.mark.parametrize("stage", ["main", "wal", "shm", "install"])
+    @pytest.mark.parametrize("sport", ["nba", "nfl"])     # nfl: a later sport, after nba was fully swapped
+    def test_a_failed_swap_is_rolled_back_for_every_sport(tmp_path, monkeypatch, sport, stage):
+        data, folder, originals = _swap_setup(tmp_path)
+        calls = _inject(monkeypatch, _forward(sport, stage))
+>       synced, real_sync = [], backup._fsync_dir
+                                ^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'app.backup' has no attribute '_fsync_dir'
+
+tests/test_backup_restore.py:334: AttributeError
+_____ test_a_failed_rollback_deletes_nothing_and_names_the_manual_recovery _____
+
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-187/test_a_failed_rollback_deletes0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x107cd41d0>
+
+    def test_a_failed_rollback_deletes_nothing_and_names_the_manual_recovery(tmp_path, monkeypatch):
+        import re
+        data, folder, originals = _swap_setup(tmp_path)
+        install_nfl = _forward("nfl", "install")
+        _inject(monkeypatch, lambda a, b: install_nfl(a, b) or (a.startswith("nba.sqlite.replaced-") and b == "nba.sqlite"))
+        with pytest.raises(backup.BackupError) as err:
+>           backup.restore(folder, data, sports=["nba", "nfl"])
+
+tests/test_backup_restore.py:350: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/backup.py:171: in restore
+    Path(f"{target}.restoring").rename(target)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-187/test_a_failed_rollback_deletes0/data/nfl.sqlite.restoring')
+target = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-187/test_a_failed_rollback_deletes0/data/nfl.sqlite')
+
+    def rename(self, target):
+        calls.append((Path(self).name, Path(target).name))
+        if fail(Path(self).name, Path(target).name):
+>           raise OSError(5, "injected")
+E           OSError: [Errno 5] injected
+
+tests/test_backup_restore.py:311: OSError
+=========================== short test summary info ============================
+FAILED tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nba-main]
+FAILED tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nba-wal]
+FAILED tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nba-shm]
+FAILED tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nba-install]
+FAILED tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nfl-main]
+FAILED tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nfl-wal]
+FAILED tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nfl-shm]
+FAILED tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nfl-install]
+FAILED tests/test_backup_restore.py::test_a_failed_rollback_deletes_nothing_and_names_the_manual_recovery
+======================= 9 failed, 14 deselected in 0.74s =======================

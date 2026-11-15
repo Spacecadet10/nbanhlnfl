@@ -1,0 +1,63 @@
+app imported from: /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/round4/release/SELFREPO/backend/app/__init__.py
+code_root(): /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/round4/release/SELFREPO | cwd: /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/round4/release/selfrepo/backend
+[exact NBA_DATA_DIR: nhl score] release.check problems: []
+  migration_context: ['the code runs from /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-']
+--- exact NBA_DATA_DIR: nhl score
+rc: 1
+stdout: {"status": "refused", "reason": "$G4/release/selfrepo/data is in a protected live data folder and this is not the verified release environment (the code runs from $G4/release/SELFREPO, the checkout that holds this data folder ($G4/release/selfrepo/data); a rel
+tree unchanged: True
+[exact NBA_DATA_DIR: nfl migrate] release.check problems: []
+  migration_context: ['the code runs from /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-']
+--- exact NBA_DATA_DIR: nfl migrate
+rc: 1
+stdout: {"status": "refused", "reason": "$G4/release/selfrepo/data is in a protected live data folder and this is not the verified release environment (the code runs from $G4/release/SELFREPO, the checkout that holds this data folder ($G4/release/selfrepo/data); a rel
+tree unchanged: True
+[case-variant NBA_DATA_DIR: nhl score] release.check problems: []
+  migration_context: ['the code runs from /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-']
+--- case-variant NBA_DATA_DIR: nhl score
+rc: 1
+stdout: {"status": "refused", "reason": "$G4/release/SELFREPO/data is in a protected live data folder and this is not the verified release environment (the code runs from $G4/release/SELFREPO, the checkout that holds this data folder ($G4/release/SELFREPO/data); a rel
+tree unchanged: True
+[case-variant NBA_DATA_DIR: nfl migrate] release.check problems: []
+  migration_context: ['the code runs from /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-']
+--- case-variant NBA_DATA_DIR: nfl migrate
+rc: 1
+stdout: {"status": "refused", "reason": "$G4/release/SELFREPO/data is in a protected live data folder and this is not the verified release environment (the code runs from $G4/release/SELFREPO, the checkout that holds this data folder ($G4/release/SELFREPO/data); a rel
+tree unchanged: True
+[firmlink NBA_DATA_DIR: nhl score] release.check problems: []
+  migration_context: ['the code runs from /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-']
+--- firmlink NBA_DATA_DIR: nhl score
+rc: 1
+stdout: {"status": "refused", "reason": "/System/Volumes/Data$G4/release/selfrepo/data is in a protected live data folder and this is not the verified release environment (the code runs from $G4/release/SELFREPO, the checkout that holds this data folder (/System/Volum
+tree unchanged: True
+[firmlink NBA_DATA_DIR: nfl migrate] release.check problems: []
+  migration_context: ['the code runs from /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-']
+--- firmlink NBA_DATA_DIR: nfl migrate
+rc: 1
+stdout: {"status": "refused", "reason": "/System/Volumes/Data$G4/release/selfrepo/data is in a protected live data folder and this is not the verified release environment (the code runs from $G4/release/SELFREPO, the checkout that holds this data folder (/System/Volum
+tree unchanged: True
+[dotdot NBA_DATA_DIR: nhl score] release.check problems: []
+  migration_context: ['the code runs from /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-']
+--- dotdot NBA_DATA_DIR: nhl score
+rc: 1
+stdout: {"status": "refused", "reason": "$G4/release/selfrepo/backend/../data is in a protected live data folder and this is not the verified release environment (the code runs from $G4/release/SELFREPO, the checkout that holds this data folder ($G4/release/selfrepo/d
+tree unchanged: True
+[dotdot NBA_DATA_DIR: nfl migrate] release.check problems: []
+  migration_context: ['the code runs from /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-']
+--- dotdot NBA_DATA_DIR: nfl migrate
+rc: 1
+stdout: {"status": "refused", "reason": "$G4/release/selfrepo/backend/../data is in a protected live data folder and this is not the verified release environment (the code runs from $G4/release/SELFREPO, the checkout that holds this data folder ($G4/release/selfrepo/d
+tree unchanged: True
+[trailing-dot NBA_DATA_DIR: nhl score] release.check problems: []
+  migration_context: ['the code runs from /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-']
+--- trailing-dot NBA_DATA_DIR: nhl score
+rc: 1
+stdout: {"status": "refused", "reason": "$G4/release/selfrepo/data is in a protected live data folder and this is not the verified release environment (the code runs from $G4/release/SELFREPO, the checkout that holds this data folder ($G4/release/selfrepo/data); a rel
+tree unchanged: True
+[trailing-dot NBA_DATA_DIR: nfl migrate] release.check problems: []
+  migration_context: ['the code runs from /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-']
+--- trailing-dot NBA_DATA_DIR: nfl migrate
+rc: 1
+stdout: {"status": "refused", "reason": "$G4/release/selfrepo/data is in a protected live data folder and this is not the verified release environment (the code runs from $G4/release/SELFREPO, the checkout that holds this data folder ($G4/release/selfrepo/data); a rel
+tree unchanged: True
+final schemas: nhl 35 nfl 33

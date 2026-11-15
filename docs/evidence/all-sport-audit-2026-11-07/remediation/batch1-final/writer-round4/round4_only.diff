@@ -1,0 +1,273 @@
+--- a/backend/app/release.py
++++ b/backend/app/release.py
+@@ -96,7 +96,20 @@
+     info = info if info is not None else check(sport)
+     problems = [p for p in info["problems"] if not (p.startswith("store schema ") and "differs from this release's schema" in p)]
+     root = code_root().resolve()
+-    held = [t for t in (config.data_dir().expanduser().resolve(), config.db_path(sport).resolve()) if root in t.parents]
++    held = []
++    try:            # by file identity: another spelling of the same folder (case variant, firmlink) is the same folder
++        st = root.stat()
++        for t in (config.data_dir().expanduser().resolve(), config.db_path(sport).resolve()):
++            for a in (t, *t.parents):
++                try:
++                    s = a.stat()
++                except FileNotFoundError:   # not created yet: cannot be the existing code root
++                    continue
++                if (s.st_dev, s.st_ino) == (st.st_dev, st.st_ino):
++                    held.append(t)
++                    break
++    except OSError as exc:
++        problems.append(f"cannot tell whether the checkout {root} holds this data folder: {type(exc).__name__}: {exc}")
+     if held:       # the development main checkout with the release variables set is still not a release
+         problems.append(f"the code runs from {root}, the checkout that holds this data folder ({held[0]}); a release runs "
+                         "from its own checkout")
+--- a/backend/app/config.py
++++ b/backend/app/config.py
+@@ -50,8 +50,17 @@
+     file; copies, scratch and test folders have none). Development commands never write, migrate or create a store there
+     (cli._write_refusal, db.migrate); only the verified release environment may (release.migration_context).
+     Path checks only: no subprocess, nothing at import time."""
+-    p = Path(path).expanduser().resolve()
+-    return p == (REPO_ROOT / "data").resolve() or (p.parent / ".git").is_dir()
++    p, own = Path(path).expanduser().resolve(), (REPO_ROOT / "data").resolve()
++    if p == own:
++        return True
++    try:            # by file identity when both exist: another spelling (case variant, firmlink) of the same folder
++        if os.path.samefile(p, own):
++            return True
++    except (FileNotFoundError, NotADirectoryError):
++        pass
++    except OSError:
++        return True     # cannot tell: fail closed
++    return (p.parent / ".git").is_dir()
+ 
+ 
+ def protected_path(path: Path) -> bool:
+--- a/backend/app/cli.py
++++ b/backend/app/cli.py
+@@ -52,8 +52,9 @@
+     (release.migration_context empty) and migrated only by the explicit `migrate` command there, whatever its schema
+     (audit H1). Decided from paths and the release facts alone: before any lock, connection, directory or file.
+     `info`: a release.check result the caller already has; `paths`: other files the command writes. Links are followed
+-    (a store file, raw/ folder or lock linked into the live folder is protected too)."""
+-    targets = (config.data_dir(), config.db_path(sport), config.raw_dir(), config.lock_path(sport), *paths)
++    (a store file, raw/ or research/ folder or lock linked into the live folder is protected too)."""
++    targets = (config.data_dir(), config.db_path(sport), config.raw_dir(), config.data_dir() / "research",
++               config.lock_path(sport), *paths)
+     hit = next((t for t in targets if config.protected_path(t)), None)
+     store = config.db_path(sport)
+     links = store.stat().st_nlink if hit is None and store.is_file() else 1
+@@ -100,11 +101,16 @@
+ def _replay_refused(sport: str, missing_fn) -> bool:
+     """Read-only preflight of `replay` (audit C4/I9): every cached file it will read must exist, checked before the store
+     is migrated or replayed; otherwise a structured refusal with the missing raw ids and nothing written. No store file
+-    or no raw_responses table: nothing is logged, nothing to read. Any other read error refuses (fails closed)."""
++    or no raw_responses table: nothing is logged, nothing to read. An empty (0-byte) store file or any other read error
++    refuses (fails closed)."""
+     import sqlite3
+     path = config.db_path(sport)
+     if not path.is_file():
+         return False
++    if path.stat().st_size == 0:
++        print(json.dumps({"status": "refused", "reason": f"the store file {path} is empty; nothing to replay from; nothing "
++                                                         "was migrated or replayed"}))
++        return True
+     try:
+         conn = _open_ro(path)
+         try:
+@@ -806,7 +812,9 @@
+                 out["raw_missing_reason"] = f"could not read the store: {type(exc).__name__}: {exc}"
+         print(json.dumps(out, indent=1))
+         return 1 if info["problems"] else 0
+-    if _refused("nfl", migrate=args.action == "migrate", info=guard_info):
++    from . import nfl_eval, nfl_live      # a tick/refresh reads the activation and may append to the access log
++    if _refused("nfl", migrate=args.action == "migrate", info=guard_info,
++                paths=(nfl_live.activation_path(), nfl_eval.access_log_path())):
+         return 1
+     if args.action == "replay" and _replay_refused("nfl", ingest.replay_missing):
+         return 1
+--- a/backend/app/backup.py
++++ b/backend/app/backup.py
+@@ -154,12 +154,20 @@
+         # 3. Swap: the replaced store and its -wal/-shm are moved aside (a stale WAL must never be replayed onto the
+         # restored file), never deleted; the directory entry is synced.
+         out = {}
+-        suffix = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
++        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+         for sport, m, src, target in checked:
+-            for part in ("", "-wal", "-shm"):
+-                p = Path(f"{target}{part}")
++            parts = ("", "-wal", "-shm")
++            # An earlier safety copy is never overwritten (rename replaces silently): a name no part uses yet.
++            n, suffix = 0, stamp
++            while any(os.path.lexists(f"{target}{part}.replaced-{suffix}") for part in parts):
++                n += 1
++                suffix = f"{stamp}-{n}"
++            for part in parts:
++                p, aside = Path(f"{target}{part}"), Path(f"{target}{part}.replaced-{suffix}")
+                 if p.exists():
+-                    p.rename(Path(f"{target}{part}.replaced-{suffix}"))
++                    if os.path.lexists(aside):
++                        raise BackupError(f"{aside} already exists; the earlier safety copy is not overwritten")
++                    p.rename(aside)
+             Path(f"{target}.restoring").rename(target)
+             out[sport] = {"path": str(target), "sha256": m["sha256"], **_describe(target)}
+         folder = os.open(data_dir, os.O_RDONLY)
+--- a/backend/tests/test_live_store_guard.py
++++ b/backend/tests/test_live_store_guard.py
+@@ -15,6 +15,7 @@
+ import shutil
+ import sqlite3
+ import subprocess
++from pathlib import Path
+ 
+ import pytest
+ 
+@@ -459,9 +460,22 @@
+     assert schema(store) == release.shipped_schema() - 1
+ 
+ 
+-def test_the_checkout_holding_the_data_folder_is_never_a_release_environment(tmp_path, monkeypatch, capsys):
++def _other_spelling(path, how):
++    """The same existing folder under another path spelling (case-swapped last component on a case-insensitive file
++    system, or macOS's /System/Volumes/Data firmlink), or None when this file system has no such spelling."""
++    other = (path.parent / path.name.upper() if how == "case" else
++             Path("/System/Volumes/Data" + str(path.resolve())))
++    try:
++        return other if str(other) != str(path) and os.path.samefile(other, path) else None
++    except OSError:
++        return None
++
++
++@pytest.mark.parametrize("spelling", ["exact", "data-case", "data-firmlink", "root-case"])
++def test_the_checkout_holding_the_data_folder_is_never_a_release_environment(tmp_path, monkeypatch, capsys, spelling):
+     """Setting NBA_RELEASE_GUARD/ROOT in the development main checkout itself (clean, data/ ignored) does not make it a
+-    release: the release is a separate checkout."""
++    release: the release is a separate checkout. Decided by file identity, so another spelling of the same data folder
++    or code root (case variant, firmlink) is caught too."""
+     repo = tmp_path / "repo"
+     repo.mkdir()
+     git_repo(repo)
+@@ -470,9 +484,15 @@
+     subprocess.run(["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "ignore"], check=True)
+     (repo / "data").mkdir()
+     store = build_store(tmp_path, repo / "data" / "nhl.sqlite", "nhl")
+-    monkeypatch.setattr(config, "REPO_ROOT", repo)
+-    monkeypatch.setattr(release, "code_root", lambda: repo)
+-    for key, value in ((release.GUARD_ENV, "1"), (release.ROOT_ENV, str(repo)), ("NBA_DATA_DIR", str(repo / "data"))):
++    root, data = repo, repo / "data"
++    if spelling != "exact":
++        other = _other_spelling(repo, spelling.split("-")[1])
++        if other is None:
++            pytest.skip(f"no {spelling} spelling of {repo} on this file system")
++        root, data = (other, data) if spelling == "root-case" else (repo, other / "data")
++    monkeypatch.setattr(config, "REPO_ROOT", root)
++    monkeypatch.setattr(release, "code_root", lambda: root)
++    for key, value in ((release.GUARD_ENV, "1"), (release.ROOT_ENV, str(root)), ("NBA_DATA_DIR", str(data))):
+         monkeypatch.setenv(key, value)
+     assert release.check("nhl")["problems"] == []                 # release.check itself is unchanged
+     assert any("holds this data folder" in p for p in release.migration_context("nhl"))
+@@ -483,6 +503,20 @@
+     assert tree(repo / "data") == before and schema(store) == release.shipped_schema()
+ 
+ 
++def test_the_own_data_folder_is_protected_under_another_spelling(tmp_path, monkeypatch):
++    """A linked worktree's own data/ folder (no .git directory beside it) is matched by identity, not by path string."""
++    linked = tmp_path / "linked"
++    (linked / "data").mkdir(parents=True)
++    (linked / ".git").write_text("gitdir: elsewhere\n")
++    monkeypatch.setattr(config, "REPO_ROOT", linked)
++    others = [o / "data" for o in (_other_spelling(linked, "case"), _other_spelling(linked, "firmlink")) if o is not None]
++    if not others:
++        pytest.skip("no other spelling of the folder on this file system")
++    for other in others:
++        assert config.protected_data_dir(other) and config.protected_path(other / "nhl.sqlite"), other
++    assert not config.protected_data_dir(tmp_path / "copy")
++
++
+ def _nfl_store_with_one_response(data):
+     conn = db.connect(data / "nfl.sqlite")
+     db.migrate(conn)
+@@ -581,4 +615,50 @@
+     no_run(monkeypatch)
+     rc, out = run(["--sport", "nhl", "score"], capsys)
+     assert (rc, out.get("status")) == (1, "refused") and "hard link" in out["reason"], (rc, out)
++    assert tree(checkout) == before
++
++
++@pytest.mark.parametrize("action", ["tick", "refresh"])
++def test_a_research_folder_linked_into_a_protected_folder_is_refused(tmp_path, checkout, monkeypatch, capsys, action):
++    """A copy with its own store but research/ linked into the live folder: the scheduled NFL commands may append to the
++    live one-shot access log (nfl_live.record -> nfl_eval.load_rows) or read the live activation, so they are refused."""
++    from app import jobs, nfl_eval
++    build_store(tmp_path, checkout / "nfl.sqlite", "nfl")
++    (checkout / "research" / "nfl_eval").mkdir(parents=True)
++    (checkout / "research" / "nfl_eval" / "nfl_test_access.jsonl").write_text('{"live": "entry"}\n')
++    copy = tmp_path / "copy"
++    copy.mkdir()
++    build_store(tmp_path, copy / "nfl.sqlite", "nfl")
++    (copy / "research").symlink_to(checkout / "research")
++    monkeypatch.setenv("NBA_DATA_DIR", str(copy))
++
++    def appends(conn, **kw):              # the access-log write NFL live makes during a tick (nfl_live.record)
++        nfl_eval.access_log_path().parent.mkdir(parents=True, exist_ok=True)
++        with open(nfl_eval.access_log_path(), "a") as f:
++            f.write('{"from": "a copy"}\n')
++        return {"status": "ok"}
++    monkeypatch.setattr(jobs, "tick", appends)
++    monkeypatch.setattr(jobs, "refresh", appends)
++    before = tree(checkout)
++    rc, out = run(["nfl", action], capsys)
++    assert (rc, out.get("status")) == (1, "refused"), (rc, out)
+     assert tree(checkout) == before
++    (copy / "research").unlink()                                  # the same copy without the link still runs
++    (copy / "research").mkdir()
++    rc, _ = run(["nfl", action], capsys)
++    assert rc == 0 and tree(checkout) == before
++    assert (copy / "research" / "nfl_eval" / "nfl_test_access.jsonl").read_text() == '{"from": "a copy"}\n'
++
++
++@pytest.mark.parametrize("argv", [["replay"], ["nfl", "replay"], ["soccer", "replay"]], ids=lambda a: a[0])
++def test_replay_on_an_empty_store_file_is_refused(tmp_path, monkeypatch, capsys, argv):
++    """A 0-byte store file has no cached-response log to replay from: refused before any lock, migration or side file (a
++    store file that does not exist at all is still created and migrated as before)."""
++    data = tmp_path / "data"
++    data.mkdir()
++    monkeypatch.setenv("NBA_DATA_DIR", str(data))
++    store = config.db_path({"replay": "nba"}.get(argv[0], argv[0]))
++    store.write_bytes(b"")
++    rc, out = run(argv, capsys)
++    assert (rc, out.get("status")) == (1, "refused") and "empty" in out["reason"], (rc, out)
++    assert store.read_bytes() == b"" and sorted(p.name for p in data.iterdir()) == [store.name]
+--- a/backend/tests/test_backup_restore.py
++++ b/backend/tests/test_backup_restore.py
+@@ -257,3 +257,28 @@
+     restored = json.loads(capsys.readouterr().out)
+     assert set(restored) == {"nhl"} and restored["nhl"]["sha256"] == out["stores"]["nhl"]["sha256"]
+     assert len(list(data.glob("nhl.sqlite.replaced-*"))) == 1
++
++
++def test_two_restores_in_the_same_second_keep_both_safety_copies(tmp_path, monkeypatch):
++    """The replaced store is never overwritten: a second restore within the same clock second keeps the first safety copy."""
++    from datetime import datetime as real_datetime, timezone
++
++    class Frozen(real_datetime):
++        @classmethod
++        def now(cls, tz=None):
++            return real_datetime(2026, 11, 8, 6, 4, 29, 123456, tzinfo=timezone.utc)
++    data, dest = tmp_path / "data", tmp_path / "backups"
++    _store(data / "nhl.sqlite", "nhl").close()
++    backup.run(data, dest, stamp="b", sports=["nhl"])
++    monkeypatch.setattr(backup, "datetime", Frozen)
++    replaced = []
++    for mark in ("first", "second"):
++        conn = db.connect(data / "nhl.sqlite")
++        conn.execute("INSERT INTO teams (team_id, abbr, name, first_seen_at) VALUES (?, 'M', ?, '2026-11-08T00:00:00Z')",
++                     (f"nhl:{mark}", mark))
++        conn.close()
++        replaced.append(backup.sha256(data / "nhl.sqlite"))
++        backup.restore(dest / "b", data, sports=["nhl"])
++    copies = sorted(data.glob("nhl.sqlite.replaced-*"))
++    assert len(copies) == 2 and sorted(backup.sha256(p) for p in copies) == sorted(replaced), copies
++    assert replaced[0] != replaced[1]

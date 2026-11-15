@@ -1,0 +1,52 @@
+Uncertain Telegram game-card receipts: inventory from a read-only copy of .telegram-delivery.sqlite taken 2026-11-09T02:3xZ.
+Nothing was resent, edited or marked resolved. Totals: {'sent': 225, 'uncertain': 8}
+All 8 are single-game cards ('PROP51 PICKS'); none is a combined ticket. Each row's error: 'Telegram response not confirmed; review delivery before retrying.'
+
+Message-ID evidence (assumption: the bot's message IDs in the paired chat form one increasing sequence shared by
+everything the bot sends and receives there). 'IDs between' = IDs strictly between the nearest recorded sent
+messages before and after the attempt that no ledger row accounts for.
+
+- 2026-11-03T23:28:00Z  NHL CAR @ NSH  key 90ca1e637e30…
+    nearest sent before: id 114 at 2026-11-03T22:56:50Z; after: id 117 at 2026-11-04T00:25:51Z
+    IDs between: [115, 116] -> unaccounted ID(s) [115, 116]: one of them may be this card, or a message the owner sent to the bot; not established
+    other delivered cards for the same game within 6 h: none
+    status kept: uncertain
+- 2026-11-04T22:28:42Z  NBA PHI @ DET  key 97f3b1b14781…
+    nearest sent before: id 119 at 2026-11-04T22:28:42Z; after: id 121 at 2026-11-05T01:12:47Z
+    IDs between: [120] -> unaccounted ID(s) [120]: one of them may be this card, or a message the owner sent to the bot; not established
+    other delivered cards for the same game within 6 h: none
+    status kept: uncertain
+- 2026-11-05T01:40:21Z  NBA TOR @ DEN  key 7da4a0593015…
+    nearest sent before: id 130 at 2026-11-05T01:40:21Z; after: id 131 at 2026-11-05T01:57:23Z
+    IDs between: none -> no unaccounted ID: consistent with NOT delivered (under the assumption above a delivered card would have taken an ID here); not proof either way
+    other delivered cards for the same game within 6 h: ['124 at 2026-11-05T01:12:47Z', '131 at 2026-11-05T01:57:23Z']
+    status kept: uncertain
+- 2026-11-07T00:47:29Z  NBA OKC @ MEM  key bfecfbcbb6d4…
+    nearest sent before: id 166 at 2026-11-07T00:47:29Z; after: id 167 at 2026-11-07T01:01:03Z
+    IDs between: none -> no unaccounted ID: consistent with NOT delivered (under the assumption above a delivered card would have taken an ID here); not proof either way
+    other delivered cards for the same game within 6 h: ['154 at 2026-11-06T23:57:27Z', '164 at 2026-11-07T00:31:52Z']
+    status kept: uncertain
+- 2026-11-07T15:45:22Z  NHL FLA @ WSH  key 1585012bded4…
+    nearest sent before: id 173 at 2026-11-07T02:53:16Z; after: id 175 at 2026-11-07T16:14:32Z
+    IDs between: [174] -> unaccounted ID(s) [174]: one of them may be this card, or a message the owner sent to the bot; not established
+    other delivered cards for the same game within 6 h: none
+    status kept: uncertain
+- 2026-11-07T21:26:38Z  NBA DEN @ IND  key c436d372e5e0…
+    nearest sent before: id 185 at 2026-11-07T21:20:14Z; after: id 187 at 2026-11-07T21:58:12Z
+    IDs between: [186] -> unaccounted ID(s) [186]: one of them may be this card, or a message the owner sent to the bot; not established
+    other delivered cards for the same game within 6 h: ['181 at 2026-11-07T20:37:14Z', '183 at 2026-11-07T20:56:46Z', '184 at 2026-11-07T21:16:51Z', '187 at 2026-11-07T21:58:12Z']
+    status kept: uncertain
+- 2026-11-08T00:28:09Z  NBA HOU @ PHX  key aed0628244d2…
+    nearest sent before: id 206 at 2026-11-08T00:28:09Z; after: id 208 at 2026-11-08T00:33:39Z
+    IDs between: [207] -> unaccounted ID(s) [207]: one of them may be this card, or a message the owner sent to the bot; not established
+    other delivered cards for the same game within 6 h: ['212 at 2026-11-08T00:59:04Z', '215 at 2026-11-08T01:02:02Z', '220 at 2026-11-08T01:23:44Z']
+    status kept: uncertain
+- 2026-11-08T21:15:00Z  NHL TBL @ WPG  key f00c50ba61b4…
+    nearest sent before: id 252 at 2026-11-08T21:15:00Z; after: id 254 at 2026-11-08T21:47:05Z
+    IDs between: [253] -> unaccounted ID(s) [253]: one of them may be this card, or a message the owner sent to the bot; not established
+    other delivered cards for the same game within 6 h: ['255 at 2026-11-08T21:48:17Z']
+    status kept: uncertain
+
+To settle a row, the owner looks in the Telegram chat for the listed message ID(s) (or for a card of that game at that
+time) and says what is there; only then is a row recorded as delivered or not delivered. No command exists or was added
+to change these rows automatically.

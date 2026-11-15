@@ -1,0 +1,85 @@
+app imported from: /Users/andry/Desktop/nba-predictor-batch1/backend/app/__init__.py
+--- 5a corrupt
+rc: 1
+stdout: {"status": "refused", "reason": "replay preflight could not read the store /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_5_9/corrupt/nfl.sqlite: DatabaseError: file is not a database; nothing was migrated or replayed"}
+files before/after: ['nfl.sqlite'] ['nfl.sqlite']  store sha before/after: f69d41e00fdc462d f69d41e00fdc462d
+--- 5b zero-byte
+rc: 0
+stdout: {"responses": 0, "games_inserted": 0, "games_updated": 0, "line_quotes": 0}
+files before/after: ['nfl.sqlite'] ['.nfl-jobs.lock', 'nfl.sqlite', 'nfl.sqlite-shm', 'nfl.sqlite-wal']  store sha before/after: e3b0c44298fc1c14 5c9dec1886cc01f5
+--- 5d unreadable(chmod 000)
+rc: 1
+stdout: {"status": "refused", "reason": "replay preflight could not read the store /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_5_9/unreadable/nfl.sqlite: OperationalError: unable to open database file; nothing was migrated or replayed"}
+files before/after: ['nfl.sqlite', 'raw'] ['nfl.sqlite', 'raw']  store sha before/after: unreadable unreadable
+--- 5e raw_fetches dropped
+rc: 1
+stdout: {"status": "refused", "reason": "replay preflight could not read the store /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_5_9/droppedfetches/nfl.sqlite: OperationalError: no such table: raw_fetches; nothing was migrated or replayed"}
+files before/after: ['nfl.sqlite', 'raw'] ['nfl.sqlite', 'raw']  store sha before/after: 735ed7772ddad193 735ed7772ddad193
+--- 5f corrupted page 1
+rc: 1
+stdout: {"status": "refused", "reason": "replay preflight could not read the store /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_5_9/header/nfl.sqlite: DatabaseError: database disk image is malformed; nothing was migrated or replayed"}
+files before/after: ['nfl.sqlite', 'raw'] ['nfl.sqlite', 'raw']  store sha before/after: 4717c7001f7f60ce 4717c7001f7f60ce
+--- 5c locked (EXCLUSIVE held by another connection)
+rc: 1  secs: 5.2
+stdout: {"status": "refused", "reason": "replay preflight could not read the store /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_5_9/locked/nfl.sqlite: OperationalError: database is locked; nothing was migrated or replayed"}
+files before/after: ['nfl.sqlite', 'raw'] ['nfl.sqlite', 'raw']  sha before/after: 9887f111093a3581 9887f111093a3581
+--- 5g older-schema via symlink: nfl replay
+rc: 1
+stdout: {"status": "refused", "reason": "$G/runs/items_5_9/symcopy/nfl.sqlite is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, acces
+tree unchanged: True
+--- 5g older-schema via symlink: --sport nhl replay
+rc: 1
+stdout: {"status": "refused", "reason": "$G/runs/items_5_9/symcopy/nhl.sqlite is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, acces
+tree unchanged: True
+--- 5g older-schema via symlink: --sport nhl score
+rc: 1
+stdout: {"status": "refused", "reason": "$G/runs/items_5_9/symcopy/nhl.sqlite is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, acces
+tree unchanged: True
+--- 5g older-schema via symlink: nfl refresh
+rc: 1
+stdout: {"status": "refused", "reason": "$G/runs/items_5_9/symcopy/nfl.sqlite is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never write there (store, migration, new store, activation, acces
+tree unchanged: True
+5g schemas after: 33 31
+--- 6a WAL store, preflight refusal
+rc: 1
+stdout: {"status": "refused", "reason": "replay would read 1 cached source response file(s) missing under /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_5_9/wal/raw; nothing was migrated or replayed (a re-fetch
+main sha before/after: 8ced7d069437f10f 8ced7d069437f10f  wal sha before/after: de2af8ace92f3733 de2af8ace92f3733
+files before/after: ['nfl.sqlite', 'nfl.sqlite-shm', 'nfl.sqlite-wal', 'raw'] ['nfl.sqlite', 'nfl.sqlite-shm', 'nfl.sqlite-wal', 'raw']
+--- 6b WAL store, nfl release-check
+rc: 1
+raw_missing: {'count': 1, 'raw_ids': [2], 'truncated': False}
+main sha before/after: 8ced7d069437f10f 8ced7d069437f10f  wal sha: de2af8ace92f3733 de2af8ace92f3733
+files after: ['nfl.sqlite', 'nfl.sqlite-shm', 'nfl.sqlite-wal', 'raw']
+6 note: writer closed; main sha now: 5a85002f949388ce (writer close may checkpoint, expected)
+--- 6c DELETE-journal store
+replay rc 1: {"status": "refused", "reason": "replay would read 1 cached source response file(s) missing under /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143
+release-check rc 1 raw_missing: {'count': 1, 'raw_ids': [2], 'truncated': False}
+sha before/after: 06677ace591f4960 06677ace591f4960  files before/after: ['nfl.sqlite', 'raw'] ['nfl.sqlite', 'raw']
+--- 7a zero-byte
+rc: 1
+{'raw_missing': None, 'raw_missing_reason': 'the store has no raw_responses table (not a migrated store)'}
+sha/files before/after: ('e3b0c44298fc1c14', ['nfl.sqlite']) ('e3b0c44298fc1c14', ['nfl.sqlite'])
+--- 7b sqlite without raw tables
+rc: 1
+{'raw_missing': None, 'raw_missing_reason': 'the store has no raw_responses table (not a migrated store)'}
+sha/files before/after: ('a608bae2c377baaf', ['nfl.sqlite']) ('a608bae2c377baaf', ['nfl.sqlite'])
+--- 7c corrupt
+rc: 1
+{'raw_missing': None, 'raw_missing_reason': 'could not read the store: DatabaseError: file is not a database'}
+sha/files before/after: ('d0fabd13df4bcc84', ['nfl.sqlite']) ('d0fabd13df4bcc84', ['nfl.sqlite'])
+--- 7d no store
+rc: 1
+{'raw_missing': None, 'raw_missing_reason': 'no nfl store at /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_5_9/rc_7d/nfl.sqlite'}
+sha/files before/after: (None, []) (None, [])
+--- 8 nfl replay with 25 missing
+rc: 1
+reason: _9/many/raw; nothing was migrated or replayed (a re-fetch is a new retrieval, never a recovery). The first 20 ids are listed; `nfl release-check` lists them all
+missing_raw: count=25 listed=20 truncated=True
+sha unchanged: True
+8b nfl release-check raw_missing: {'count': 25, 'raw_ids': 20, 'truncated': True}
+9 earlier raw present: True later present: False
+--- 9 hand repro NBA schema 31
+rc: 1
+stdout: {"status": "refused", "reason": "replay would read 1 cached source response file(s) missing under /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/runs/items_5_9/hand9/raw; nothing was migrated or replayed (a re-fetch is a new retrieval, never a recovery). The first 20 ids are listed; `--sport nba release-check` lists them all", "missing_raw": {"count": 1, "raw_ids": [2], "truncated": false}}
+store sha before/after: baeedeb92d0fee67 baeedeb92d0fee67  schema before/after: 31 31  all tables equal: True  files: ['nba.sqlite', 'raw', 'source.sqlite'] ['nba.sqlite', 'raw', 'source.sqlite']
+later raw_id: 2

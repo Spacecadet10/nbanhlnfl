@@ -1,0 +1,32 @@
+/Users/andry/Desktop/nba-predictor-batch1/backend/app/__init__.py
+backup exit=0 warnings=0
+ALL OK
+restore exit=0
+nba identical
+nhl identical
+nfl identical
+soccer identical
+0
+overwrite-existing
+exit=0
+2
+0
+tamper
+does not match the manifest (sha256); not restored
+       0
+lock
+exit 1 BackupError: A job holds the soccer store lock; stop the scheduled jobs first
+.nfl-jobs.lock
+.soccer-jobs.lock
+nfl.sqlite
+identity
+x1 REFUSED
+x2 REFUSED
+x3 REFUSED
+x4 RESTORED
+x5 REFUSED
+x6 REFUSED
+missing
+3
+named-missing exit=1
+ls: /private/tmp/cla

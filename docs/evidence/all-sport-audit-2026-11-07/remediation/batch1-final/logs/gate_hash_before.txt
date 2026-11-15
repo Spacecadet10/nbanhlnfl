@@ -1,0 +1,6 @@
+cwd=/Users/andry/Desktop/nba-predictor-batch1
+HEAD=79ff6ecb134b83e623c73ebe4a224bd38d7f7f67
+recipe: { git diff -- . ':(exclude)HANDOFF.md'; git ls-files -o --exclude-standard | sort | xargs shasum; } | shasum
+CODE_TREE_BEFORE=3c2ec4a6023b2602e160bdae0d701d76aa19529b
+untracked=0
+HASH_TIME=2026-11-08T06:23:00Z

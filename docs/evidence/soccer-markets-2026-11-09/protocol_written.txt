@@ -1,0 +1,7 @@
+protocol v1 written 2026-11-09T23:46:07Z
+sha256 403b78140ae7d6d218bbc80252b5acd192797f1746bbc6dd61c6c9f5edd77e47
+no model fitted; no goal/corner count, rate or score of the ESPN month history computed
+amendment 1 written 2026-11-10T00:11:49Z
+sha256 47f79fba2199fd1f17575db911ded4c36ee155b99c86b3e28ab158add8de7a82
+amendment 2 written 2026-11-10T00:22:53Z (after the corners v1 development; user's go)
+sha256 fa64ec9657a4568138f416923377c6ff00fc4176439c2c7789f907cf430db7de

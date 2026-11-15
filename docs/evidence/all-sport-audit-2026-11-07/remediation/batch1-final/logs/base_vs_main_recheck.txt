@@ -1,0 +1,12 @@
+absent in main: backend/tests/test_live_store_guard.py
+absent in main: frontend/src/components/nflWording.test.mjs
+absent in main: frontend/src/components/tables.test.mjs
+compared 350 differing 0 at 2026-11-08T07:18:16Z
+backend/app/migrations/0035_result_integrity.sql
+backend/tests/test_replay_same_store.py
+frontend/src/components/competition.test.mjs
+frontend/src/components/competition.ts
+ls: /Users/andry/Desktop/nba-predictor-sprint1/docs/evidence/all-sport-audit-2026-11-07/remediation/BATCH1_FINAL_REPORT.md: No such file or directory
+ M HANDOFF.md
+ M docs/SMOKE_TEST.md
+ M docs/SOCCER_PLAN.md

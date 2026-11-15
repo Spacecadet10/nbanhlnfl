@@ -1,0 +1,1517 @@
+{
+ "plan": "docs/NFL_PLAN.md (NFL evaluation plan, amended 2026-11-01)",
+ "generated_at": "2026-11-01T21:40:06Z",
+ "dataset_version": "f59df479f5769084",
+ "seasons": {
+  "warmup": [
+   2002,
+   2003,
+   2004
+  ],
+  "development": [
+   2005,
+   2016
+  ],
+  "validation": [
+   2017,
+   2021
+  ],
+  "reserved_not_read": [
+   2022,
+   2023,
+   2024,
+   2025
+  ]
+ },
+ "games": {
+  "development_scored": 3198,
+  "development_ties": 6,
+  "validation_scored": 1350,
+  "validation_ties": 5
+ },
+ "development": {
+  "selected": {
+   "k": 20,
+   "home_advantage": 50,
+   "carry": 0.5,
+   "mov": true
+  },
+  "grid_size": 160,
+  "top5": [
+   {
+    "k": 20,
+    "home_advantage": 50,
+    "carry": 0.5,
+    "mov": true,
+    "brier": 0.2177173072830495
+   },
+   {
+    "k": 25,
+    "home_advantage": 50,
+    "carry": 0.5,
+    "mov": true,
+    "brier": 0.2178237631574134
+   },
+   {
+    "k": 20,
+    "home_advantage": 50,
+    "carry": 0.67,
+    "mov": true,
+    "brier": 0.21793488493312232
+   },
+   {
+    "k": 15,
+    "home_advantage": 50,
+    "carry": 0.67,
+    "mov": true,
+    "brier": 0.21827412796616555
+   },
+   {
+    "k": 25,
+    "home_advantage": 75,
+    "carry": 0.5,
+    "mov": true,
+    "brier": 0.21843567823220728
+   }
+  ]
+ },
+ "validation": {
+  "constant": {
+   "n": 1350,
+   "brier": 0.25,
+   "log_loss": 0.6931471805599213,
+   "accuracy": 0.5407407407407407,
+   "reliability": [
+    {
+     "lower": 0.0,
+     "upper": 0.1,
+     "count": 0,
+     "mean_predicted": null,
+     "observed_rate": null
+    },
+    {
+     "lower": 0.1,
+     "upper": 0.2,
+     "count": 0,
+     "mean_predicted": null,
+     "observed_rate": null
+    },
+    {
+     "lower": 0.2,
+     "upper": 0.3,
+     "count": 0,
+     "mean_predicted": null,
+     "observed_rate": null
+    },
+    {
+     "lower": 0.3,
+     "upper": 0.4,
+     "count": 0,
+     "mean_predicted": null,
+     "observed_rate": null
+    },
+    {
+     "lower": 0.4,
+     "upper": 0.5,
+     "count": 0,
+     "mean_predicted": null,
+     "observed_rate": null
+    },
+    {
+     "lower": 0.5,
+     "upper": 0.6,
+     "count": 1350,
+     "mean_predicted": 0.5,
+     "observed_rate": 0.5407407407407407
+    },
+    {
+     "lower": 0.6,
+     "upper": 0.7,
+     "count": 0,
+     "mean_predicted": null,
+     "observed_rate": null
+    },
+    {
+     "lower": 0.7,
+     "upper": 0.8,
+     "count": 0,
+     "mean_predicted": null,
+     "observed_rate": null
+    },
+    {
+     "lower": 0.8,
+     "upper": 0.9,
+     "count": 0,
+     "mean_predicted": null,
+     "observed_rate": null
+    },
+    {
+     "lower": 0.9,
+     "upper": 1.0,
+     "count": 0,
+     "mean_predicted": null,
+     "observed_rate": null
+    }
+   ]
+  },
+  "home_rate": {
+   "n": 1350,
+   "brier": 0.2491307357864741,
+   "log_loss": 0.6914326163322679,
+   "accuracy": 0.5407407407407407,
+   "reliability": [
+    {
+     "lower": 0.0,
+     "upper": 0.1,
+     "count": 0,
+     "mean_predicted": null,
+     "observed_rate": null
+    },
+    {
+     "lower": 0.1,
+     "upper": 0.2,
+     "count": 0,
+     "mean_predicted": null,
+     "observed_rate": null
+    },
+    {
+     "lower": 0.2,
+     "upper": 0.3,
+     "count": 0,
+     "mean_predicted": null,
+     "observed_rate": null
+    },
+    {
+     "lower": 0.3,
+     "upper": 0.4,
+     "count": 0,
+     "mean_predicted": null,
+     "observed_rate": null
+    },
+    {
+     "lower": 0.4,
+     "upper": 0.5,
+     "count": 0,
+     "mean_predicted": null,
+     "observed_rate": null
+    },
+    {
+     "lower": 0.5,
+     "upper": 0.6,
+     "count": 1350,
+     "mean_predicted": 0.5720980751968775,
+     "observed_rate": 0.5407407407407407
+    },
+    {
+     "lower": 0.6,
+     "upper": 0.7,
+     "count": 0,
+     "mean_predicted": null,
+     "observed_rate": null
+    },
+    {
+     "lower": 0.7,
+     "upper": 0.8,
+     "count": 0,
+     "mean_predicted": null,
+     "observed_rate": null
+    },
+    {
+     "lower": 0.8,
+     "upper": 0.9,
+     "count": 0,
+     "mean_predicted": null,
+     "observed_rate": null
+    },
+    {
+     "lower": 0.9,
+     "upper": 1.0,
+     "count": 0,
+     "mean_predicted": null,
+     "observed_rate": null
+    }
+   ]
+  },
+  "elo": {
+   "n": 1350,
+   "brier": 0.22261893301999222,
+   "log_loss": 0.636238134826389,
+   "accuracy": 0.6414814814814814,
+   "reliability": [
+    {
+     "lower": 0.0,
+     "upper": 0.1,
+     "count": 0,
+     "mean_predicted": null,
+     "observed_rate": null
+    },
+    {
+     "lower": 0.1,
+     "upper": 0.2,
+     "count": 14,
+     "mean_predicted": 0.17518014770632284,
+     "observed_rate": 0.2857142857142857
+    },
+    {
+     "lower": 0.2,
+     "upper": 0.3,
+     "count": 61,
+     "mean_predicted": 0.2596624105296206,
+     "observed_rate": 0.29508196721311475
+    },
+    {
+     "lower": 0.3,
+     "upper": 0.4,
+     "count": 127,
+     "mean_predicted": 0.3548295765936146,
+     "observed_rate": 0.2755905511811024
+    },
+    {
+     "lower": 0.4,
+     "upper": 0.5,
+     "count": 232,
+     "mean_predicted": 0.4537093202996737,
+     "observed_rate": 0.39655172413793105
+    },
+    {
+     "lower": 0.5,
+     "upper": 0.6,
+     "count": 312,
+     "mean_predicted": 0.5539340870161358,
+     "observed_rate": 0.5192307692307693
+    },
+    {
+     "lower": 0.6,
+     "upper": 0.7,
+     "count": 322,
+     "mean_predicted": 0.647149755625333,
+     "observed_rate": 0.6273291925465838
+    },
+    {
+     "lower": 0.7,
+     "upper": 0.8,
+     "count": 203,
+     "mean_predicted": 0.7453330183032498,
+     "observed_rate": 0.7438423645320197
+    },
+    {
+     "lower": 0.8,
+     "upper": 0.9,
+     "count": 74,
+     "mean_predicted": 0.8405293508395455,
+     "observed_rate": 0.8378378378378378
+    },
+    {
+     "lower": 0.9,
+     "upper": 1.0,
+     "count": 5,
+     "mean_predicted": 0.9127017972937164,
+     "observed_rate": 0.8
+    }
+   ]
+  }
+ },
+ "validation_by_season": {
+  "constant": {
+   "2017": 0.25,
+   "2018": 0.25,
+   "2019": 0.25,
+   "2020": 0.25,
+   "2021": 0.25
+  },
+  "home_rate": {
+   "2017": 0.24459485175261356,
+   "2018": 0.24051912456966298,
+   "2019": 0.2522391208091129,
+   "2020": 0.25548845830760725,
+   "2021": 0.2525196722576364
+  },
+  "elo": {
+   "2017": 0.21712499835920918,
+   "2018": 0.22172839990501675,
+   "2019": 0.22332008699417363,
+   "2020": 0.21717609977471092,
+   "2021": 0.23309444070485386
+  }
+ },
+ "choice": {
+  "model": "elo",
+  "validation_brier": {
+   "constant": 0.25,
+   "home_rate": 0.2491307357864741,
+   "elo": 0.22261893301999222
+  },
+  "elo_vs_home_rate": {
+   "mean_diff": -0.026511802766481865,
+   "ci95": [
+    -0.033785748710486466,
+    -0.01947425262793341
+   ],
+   "weeks": 106,
+   "games": 1350,
+   "beats": true
+  },
+  "home_rate_vs_constant": {
+   "mean_diff": -0.0008692642135259133,
+   "ci95": [
+    -0.004856545798294317,
+    0.003024757760580108
+   ],
+   "weeks": 106,
+   "games": 1350,
+   "beats": false
+  }
+ },
+ "calibration": {
+  "accepted": false,
+  "reason": "Brier not lower; log loss not lower; Brier interval does not exclude 0",
+  "brier_calibrated": 0.22267892429429165,
+  "brier_raw": 0.22261893301999222,
+  "log_loss_calibrated": 0.6367384109300558,
+  "log_loss_raw": 0.636238134826389,
+  "brier_diff": 5.999127429940125e-05,
+  "brier_ci95": [
+   -0.0005802796049354273,
+   0.0006975269174068688
+  ],
+  "fits": {
+   "2005": "fallback: 0 pairs (< 50)",
+   "2006": "fitted on 2005-2005 (267 pairs)",
+   "2007": "fitted on 2005-2006 (534 pairs)",
+   "2008": "fitted on 2005-2007 (801 pairs)",
+   "2009": "fitted on 2005-2008 (1067 pairs)",
+   "2010": "fitted on 2005-2009 (1334 pairs)",
+   "2011": "fitted on 2005-2010 (1601 pairs)",
+   "2012": "fitted on 2005-2011 (1868 pairs)",
+   "2013": "fitted on 2005-2012 (2134 pairs)",
+   "2014": "fitted on 2005-2013 (2400 pairs)",
+   "2015": "fitted on 2005-2014 (2666 pairs)",
+   "2016": "fitted on 2005-2015 (2933 pairs)",
+   "2017": "fitted on 2005-2016 (3198 pairs)",
+   "2018": "fitted on 2005-2017 (3465 pairs)",
+   "2019": "fitted on 2005-2018 (3730 pairs)",
+   "2020": "fitted on 2005-2019 (3996 pairs)",
+   "2021": "fitted on 2005-2020 (4264 pairs)"
+  },
+  "validation_reliability_calibrated": [
+   {
+    "lower": 0.0,
+    "upper": 0.1,
+    "count": 0,
+    "mean_predicted": null,
+    "observed_rate": null
+   },
+   {
+    "lower": 0.1,
+    "upper": 0.2,
+    "count": 21,
+    "mean_predicted": 0.16581648134973692,
+    "observed_rate": 0.3333333333333333
+   },
+   {
+    "lower": 0.2,
+    "upper": 0.3,
+    "count": 74,
+    "mean_predicted": 0.258816438635613,
+    "observed_rate": 0.25675675675675674
+   },
+   {
+    "lower": 0.3,
+    "upper": 0.4,
+    "count": 121,
+    "mean_predicted": 0.3550842512905369,
+    "observed_rate": 0.2975206611570248
+   },
+   {
+    "lower": 0.4,
+    "upper": 0.5,
+    "count": 223,
+    "mean_predicted": 0.45243379281713125,
+    "observed_rate": 0.4080717488789238
+   },
+   {
+    "lower": 0.5,
+    "upper": 0.6,
+    "count": 273,
+    "mean_predicted": 0.5531990145997461,
+    "observed_rate": 0.5128205128205128
+   },
+   {
+    "lower": 0.6,
+    "upper": 0.7,
+    "count": 322,
+    "mean_predicted": 0.6483291308451337,
+    "observed_rate": 0.6086956521739131
+   },
+   {
+    "lower": 0.7,
+    "upper": 0.8,
+    "count": 204,
+    "mean_predicted": 0.7468909238417331,
+    "observed_rate": 0.7156862745098039
+   },
+   {
+    "lower": 0.8,
+    "upper": 0.9,
+    "count": 101,
+    "mean_predicted": 0.8409975967469806,
+    "observed_rate": 0.8613861386138614
+   },
+   {
+    "lower": 0.9,
+    "upper": 1.0,
+    "count": 11,
+    "mean_predicted": 0.9178966900487292,
+    "observed_rate": 0.7272727272727273
+   }
+  ]
+ },
+ "line_markets": {
+  "status": "run",
+  "score_model": {
+   "name": "nfl_points_normal",
+   "selected": {
+    "eta": 0.05,
+    "carry": 0.75
+   },
+   "trials": [
+    {
+     "eta": 0.01,
+     "carry": 1.0,
+     "criterion": 388.44247954271714
+    },
+    {
+     "eta": 0.01,
+     "carry": 0.75,
+     "criterion": 389.832771616473
+    },
+    {
+     "eta": 0.01,
+     "carry": 0.5,
+     "criterion": 395.82557791937325
+    },
+    {
+     "eta": 0.02,
+     "carry": 1.0,
+     "criterion": 382.84669828123583
+    },
+    {
+     "eta": 0.02,
+     "carry": 0.75,
+     "criterion": 379.3198301768293
+    },
+    {
+     "eta": 0.02,
+     "carry": 0.5,
+     "criterion": 384.5144237685184
+    },
+    {
+     "eta": 0.05,
+     "carry": 1.0,
+     "criterion": 378.8465525464832
+    },
+    {
+     "eta": 0.05,
+     "carry": 0.75,
+     "criterion": 371.4489921474595
+    },
+    {
+     "eta": 0.05,
+     "carry": 0.5,
+     "criterion": 371.99721813496285
+    },
+    {
+     "eta": 0.1,
+     "carry": 1.0,
+     "criterion": 387.05893036777206
+    },
+    {
+     "eta": 0.1,
+     "carry": 0.75,
+     "criterion": 378.6463156384064
+    },
+    {
+     "eta": 0.1,
+     "carry": 0.5,
+     "criterion": 375.7048102488976
+    }
+   ]
+  },
+  "lines": {
+   "events_with_raw_odds": 1355,
+   "validation_games_with_spread": 1352,
+   "validation_games_with_total": 1352,
+   "validation_games": 1355
+  },
+  "markets": {
+   "spread": {
+    "counts": {
+     "scored": 1325,
+     "push": 27,
+     "no_line": 3
+    },
+    "skill": {
+     "proven": false,
+     "scope": "retrospective closing-line test",
+     "note": "probability skill vs a coin flip at the consensus closing line, judged after the fact: the close is not known two hours before kickoff, so this is not evidence that these picks were available then, and a lower Brier score is not a profitable edge (no prices, vig or line movement are tested)",
+     "brier": 0.25668258139560657,
+     "brier_coin": 0.25,
+     "log_loss": 0.7085013183012078,
+     "brier_diff": 0.006682581395606576,
+     "ci95": [
+      0.0009991258572906497,
+      0.013038985307550766
+     ],
+     "games": 1325,
+     "reliability": [
+      {
+       "lower": 0.0,
+       "upper": 0.1,
+       "count": 0,
+       "mean_predicted": null,
+       "observed_rate": null
+      },
+      {
+       "lower": 0.1,
+       "upper": 0.2,
+       "count": 5,
+       "mean_predicted": 0.17323196983642866,
+       "observed_rate": 0.4
+      },
+      {
+       "lower": 0.2,
+       "upper": 0.3,
+       "count": 32,
+       "mean_predicted": 0.27425207472792346,
+       "observed_rate": 0.40625
+      },
+      {
+       "lower": 0.3,
+       "upper": 0.4,
+       "count": 218,
+       "mean_predicted": 0.3582188830935401,
+       "observed_rate": 0.45871559633027525
+      },
+      {
+       "lower": 0.4,
+       "upper": 0.5,
+       "count": 468,
+       "mean_predicted": 0.4539022692882231,
+       "observed_rate": 0.4807692307692308
+      },
+      {
+       "lower": 0.5,
+       "upper": 0.6,
+       "count": 435,
+       "mean_predicted": 0.5453272222944673,
+       "observed_rate": 0.48735632183908045
+      },
+      {
+       "lower": 0.6,
+       "upper": 0.7,
+       "count": 135,
+       "mean_predicted": 0.640286400578989,
+       "observed_rate": 0.5259259259259259
+      },
+      {
+       "lower": 0.7,
+       "upper": 0.8,
+       "count": 28,
+       "mean_predicted": 0.7273143649169006,
+       "observed_rate": 0.5714285714285714
+      },
+      {
+       "lower": 0.8,
+       "upper": 0.9,
+       "count": 3,
+       "mean_predicted": 0.8464628283517192,
+       "observed_rate": 0.0
+      },
+      {
+       "lower": 0.9,
+       "upper": 1.0,
+       "count": 1,
+       "mean_predicted": 0.9187155641718062,
+       "observed_rate": 0.0
+      }
+     ]
+    },
+    "thresholds": {
+     "rows": [
+      {
+       "threshold": 0.5,
+       "graded": 1325,
+       "won": 682,
+       "win_rate": 0.5147169811320754,
+       "ci95": [
+        0.48780281678134474,
+        0.5415460568102669
+       ],
+       "stated": 0.5813726092538876,
+       "calibration": "overconfident"
+      },
+      {
+       "threshold": 0.55,
+       "graded": 808,
+       "won": 437,
+       "win_rate": 0.5408415841584159,
+       "ci95": [
+        0.5063687345360622,
+        0.574927926626016
+       ],
+       "stated": 0.6175023736580832,
+       "calibration": "overconfident"
+      },
+      {
+       "threshold": 0.6,
+       "graded": 422,
+       "won": 227,
+       "win_rate": 0.5379146919431279,
+       "ci95": [
+        0.4902190430159661,
+        0.5849262941338393
+       ],
+       "stated": 0.6576484066118394,
+       "calibration": "overconfident"
+      },
+      {
+       "threshold": 0.65,
+       "graded": 196,
+       "won": 105,
+       "win_rate": 0.5357142857142857,
+       "ci95": [
+        0.4658787549552984,
+        0.6041767784578952
+       ],
+       "stated": 0.6966822301234291,
+       "calibration": "too_few"
+      },
+      {
+       "threshold": 0.7,
+       "graded": 69,
+       "won": 38,
+       "win_rate": 0.5507246376811594,
+       "ci95": [
+        0.43378767413268543,
+        0.6623114445218069
+       ],
+       "stated": 0.74174898589021,
+       "calibration": "too_few"
+      },
+      {
+       "threshold": 0.75,
+       "graded": 19,
+       "won": 7,
+       "win_rate": 0.3684210526315789,
+       "ci95": [
+        0.19149512641954003,
+        0.5896046699645555
+       ],
+       "stated": 0.8033774065373303,
+       "calibration": "too_few"
+      },
+      {
+       "threshold": 0.8,
+       "graded": 9,
+       "won": 3,
+       "win_rate": 0.3333333333333333,
+       "ci95": [
+        0.12058381743407343,
+        0.6457978664749412
+       ],
+       "stated": 0.8435493555605356,
+       "calibration": "too_few"
+      },
+      {
+       "threshold": 0.85,
+       "graded": 3,
+       "won": 1,
+       "win_rate": 0.3333333333333333,
+       "ci95": [
+        0.06149194402093078,
+        0.7923404011921757
+       ],
+       "stated": 0.895793728190872,
+       "calibration": "too_few"
+      },
+      {
+       "threshold": 0.9,
+       "graded": 1,
+       "won": 0,
+       "win_rate": 0.0,
+       "ci95": [
+        0.0,
+        0.7934506882081973
+       ],
+       "stated": 0.9187155641718062,
+       "calibration": "too_few"
+      }
+     ],
+     "break_even": 0.5238095238095238,
+     "best_pick_allowed": false,
+     "best_pick_note": "closing-line retrospective only: a best pick needs a prospective record at forecast-time lines",
+     "best": null,
+     "strong": false,
+     "reason": "no proven skill against the line: never a best pick"
+    },
+    "implied_line": false
+   },
+   "total": {
+    "counts": {
+     "scored": 1339,
+     "push": 13,
+     "no_line": 3
+    },
+    "skill": {
+     "proven": false,
+     "scope": "retrospective closing-line test",
+     "note": "probability skill vs a coin flip at the consensus closing line, judged after the fact: the close is not known two hours before kickoff, so this is not evidence that these picks were available then, and a lower Brier score is not a profitable edge (no prices, vig or line movement are tested)",
+     "brier": 0.26229308769943066,
+     "brier_coin": 0.25,
+     "log_loss": 0.7207857980162843,
+     "brier_diff": 0.012293087699430641,
+     "ci95": [
+      0.0076687845795931795,
+      0.016990571777652983
+     ],
+     "games": 1339,
+     "reliability": [
+      {
+       "lower": 0.0,
+       "upper": 0.1,
+       "count": 0,
+       "mean_predicted": null,
+       "observed_rate": null
+      },
+      {
+       "lower": 0.1,
+       "upper": 0.2,
+       "count": 0,
+       "mean_predicted": null,
+       "observed_rate": null
+      },
+      {
+       "lower": 0.2,
+       "upper": 0.3,
+       "count": 2,
+       "mean_predicted": 0.2972066373026525,
+       "observed_rate": 0.5
+      },
+      {
+       "lower": 0.3,
+       "upper": 0.4,
+       "count": 132,
+       "mean_predicted": 0.36913691065884435,
+       "observed_rate": 0.5909090909090909
+      },
+      {
+       "lower": 0.4,
+       "upper": 0.5,
+       "count": 500,
+       "mean_predicted": 0.4582859168384234,
+       "observed_rate": 0.47
+      },
+      {
+       "lower": 0.5,
+       "upper": 0.6,
+       "count": 523,
+       "mean_predicted": 0.5460952490871506,
+       "observed_rate": 0.47609942638623326
+      },
+      {
+       "lower": 0.6,
+       "upper": 0.7,
+       "count": 150,
+       "mean_predicted": 0.6373607982879819,
+       "observed_rate": 0.4533333333333333
+      },
+      {
+       "lower": 0.7,
+       "upper": 0.8,
+       "count": 30,
+       "mean_predicted": 0.7315978978901121,
+       "observed_rate": 0.43333333333333335
+      },
+      {
+       "lower": 0.8,
+       "upper": 0.9,
+       "count": 1,
+       "mean_predicted": 0.8477559571646166,
+       "observed_rate": 1.0
+      },
+      {
+       "lower": 0.9,
+       "upper": 1.0,
+       "count": 1,
+       "mean_predicted": 0.9891971435106183,
+       "observed_rate": 0.0
+      }
+     ]
+    },
+    "thresholds": {
+     "rows": [
+      {
+       "threshold": 0.5,
+       "graded": 1339,
+       "won": 651,
+       "win_rate": 0.48618371919342795,
+       "ci95": [
+        0.45949069660340464,
+        0.5129557900944187
+       ],
+       "stated": 0.5679860949606954,
+       "calibration": "overconfident"
+      },
+      {
+       "threshold": 0.55,
+       "graded": 728,
+       "won": 347,
+       "win_rate": 0.4766483516483517,
+       "ci95": [
+        0.4405851460910588,
+        0.5129567042818718
+       ],
+       "stated": 0.6044722077168225,
+       "calibration": "overconfident"
+      },
+      {
+       "threshold": 0.6,
+       "graded": 316,
+       "won": 137,
+       "win_rate": 0.43354430379746833,
+       "ci95": [
+        0.3800265270758463,
+        0.48865841406060706
+       ],
+       "stated": 0.6457864693006429,
+       "calibration": "overconfident"
+      },
+      {
+       "threshold": 0.65,
+       "graded": 105,
+       "won": 42,
+       "win_rate": 0.4,
+       "ci95": [
+        0.31142601307008944,
+        0.4956328024231603
+       ],
+       "stated": 0.6924978538417583,
+       "calibration": "too_few"
+      },
+      {
+       "threshold": 0.7,
+       "graded": 34,
+       "won": 15,
+       "win_rate": 0.4411764705882353,
+       "ci95": [
+        0.28883482142347944,
+        0.6054610086461933
+       ],
+       "stated": 0.7408963753756851,
+       "calibration": "too_few"
+      },
+      {
+       "threshold": 0.75,
+       "graded": 9,
+       "won": 2,
+       "win_rate": 0.2222222222222222,
+       "ci95": [
+        0.06322510654056959,
+        0.5474110333077882
+       ],
+       "stated": 0.809052390048816,
+       "calibration": "too_few"
+      },
+      {
+       "threshold": 0.8,
+       "graded": 2,
+       "won": 1,
+       "win_rate": 0.5,
+       "ci95": [
+        0.09453120463920084,
+        0.9054687953607992
+       ],
+       "stated": 0.9184765503376174,
+       "calibration": "too_few"
+      },
+      {
+       "threshold": 0.85,
+       "graded": 1,
+       "won": 0,
+       "win_rate": 0.0,
+       "ci95": [
+        0.0,
+        0.7934506882081973
+       ],
+       "stated": 0.9891971435106183,
+       "calibration": "too_few"
+      },
+      {
+       "threshold": 0.9,
+       "graded": 1,
+       "won": 0,
+       "win_rate": 0.0,
+       "ci95": [
+        0.0,
+        0.7934506882081973
+       ],
+       "stated": 0.9891971435106183,
+       "calibration": "too_few"
+      }
+     ],
+     "break_even": 0.5238095238095238,
+     "best_pick_allowed": false,
+     "best_pick_note": "closing-line retrospective only: a best pick needs a prospective record at forecast-time lines",
+     "best": null,
+     "strong": false,
+     "reason": "no proven skill against the line: never a best pick"
+    },
+    "implied_line": false
+   },
+   "team_total_home": {
+    "counts": {
+     "scored": 1343,
+     "push": 9,
+     "no_line": 3
+    },
+    "skill": {
+     "proven": false,
+     "scope": "retrospective closing-line test",
+     "note": "probability skill vs a coin flip at the consensus closing line, judged after the fact: the close is not known two hours before kickoff, so this is not evidence that these picks were available then, and a lower Brier score is not a profitable edge (no prices, vig or line movement are tested)",
+     "brier": 0.2637168805192073,
+     "brier_coin": 0.25,
+     "log_loss": 0.7233858457963498,
+     "brier_diff": 0.013716880519207266,
+     "ci95": [
+      0.008325824481087454,
+      0.019344263302088136
+     ],
+     "games": 1343,
+     "reliability": [
+      {
+       "lower": 0.0,
+       "upper": 0.1,
+       "count": 0,
+       "mean_predicted": null,
+       "observed_rate": null
+      },
+      {
+       "lower": 0.1,
+       "upper": 0.2,
+       "count": 0,
+       "mean_predicted": null,
+       "observed_rate": null
+      },
+      {
+       "lower": 0.2,
+       "upper": 0.3,
+       "count": 11,
+       "mean_predicted": 0.2748622979650648,
+       "observed_rate": 0.5454545454545454
+      },
+      {
+       "lower": 0.3,
+       "upper": 0.4,
+       "count": 191,
+       "mean_predicted": 0.36749525197324184,
+       "observed_rate": 0.44502617801047123
+      },
+      {
+       "lower": 0.4,
+       "upper": 0.5,
+       "count": 502,
+       "mean_predicted": 0.4543626836411239,
+       "observed_rate": 0.4940239043824701
+      },
+      {
+       "lower": 0.5,
+       "upper": 0.6,
+       "count": 454,
+       "mean_predicted": 0.5436154130592136,
+       "observed_rate": 0.4977973568281938
+      },
+      {
+       "lower": 0.6,
+       "upper": 0.7,
+       "count": 141,
+       "mean_predicted": 0.6366218437402468,
+       "observed_rate": 0.3546099290780142
+      },
+      {
+       "lower": 0.7,
+       "upper": 0.8,
+       "count": 37,
+       "mean_predicted": 0.7345417281601716,
+       "observed_rate": 0.3783783783783784
+      },
+      {
+       "lower": 0.8,
+       "upper": 0.9,
+       "count": 5,
+       "mean_predicted": 0.838410279958633,
+       "observed_rate": 0.2
+      },
+      {
+       "lower": 0.9,
+       "upper": 1.0,
+       "count": 2,
+       "mean_predicted": 0.9375746689766071,
+       "observed_rate": 0.5
+      }
+     ]
+    },
+    "thresholds": {
+     "rows": [
+      {
+       "threshold": 0.5,
+       "graded": 1343,
+       "won": 657,
+       "win_rate": 0.4892032762472077,
+       "ci95": [
+        0.46253729110739367,
+        0.5159308501806775
+       ],
+       "stated": 0.5752086199430986,
+       "calibration": "overconfident"
+      },
+      {
+       "threshold": 0.55,
+       "graded": 799,
+       "won": 377,
+       "win_rate": 0.4718397997496871,
+       "ci95": [
+        0.437442947479148,
+        0.5065061354908516
+       ],
+       "stated": 0.6103733643024716,
+       "calibration": "overconfident"
+      },
+      {
+       "threshold": 0.6,
+       "graded": 387,
+       "won": 177,
+       "win_rate": 0.4573643410852713,
+       "ci95": [
+        0.4083922902292364,
+        0.5071744971467607
+       ],
+       "stated": 0.6506300936499809,
+       "calibration": "overconfident"
+      },
+      {
+       "threshold": 0.65,
+       "graded": 146,
+       "won": 69,
+       "win_rate": 0.4726027397260274,
+       "ci95": [
+        0.3933647925333179,
+        0.5532454443148326
+       ],
+       "stated": 0.7008072405308846,
+       "calibration": "too_few"
+      },
+      {
+       "threshold": 0.7,
+       "graded": 55,
+       "won": 21,
+       "win_rate": 0.38181818181818183,
+       "ci95": [
+        0.26515954178218065,
+        0.5139077987094005
+       ],
+       "stated": 0.7494865345828547,
+       "calibration": "too_few"
+      },
+      {
+       "threshold": 0.75,
+       "graded": 18,
+       "won": 7,
+       "win_rate": 0.3888888888888889,
+       "ci95": [
+        0.2030524646285427,
+        0.6138095855788537
+       ],
+       "stated": 0.8042023340969386,
+       "calibration": "too_few"
+      },
+      {
+       "threshold": 0.8,
+       "graded": 7,
+       "won": 2,
+       "win_rate": 0.2857142857142857,
+       "ci95": [
+        0.08221892324928332,
+        0.6410655504689458
+       ],
+       "stated": 0.866742962535197,
+       "calibration": "too_few"
+      },
+      {
+       "threshold": 0.85,
+       "graded": 3,
+       "won": 1,
+       "win_rate": 0.3333333333333333,
+       "ci95": [
+        0.06149194402093078,
+        0.7923404011921757
+       ],
+       "stated": 0.9092859820472007,
+       "calibration": "too_few"
+      },
+      {
+       "threshold": 0.9,
+       "graded": 2,
+       "won": 1,
+       "win_rate": 0.5,
+       "ci95": [
+        0.09453120463920084,
+        0.9054687953607992
+       ],
+       "stated": 0.9375746689766071,
+       "calibration": "too_few"
+      }
+     ],
+     "break_even": 0.5238095238095238,
+     "best_pick_allowed": false,
+     "best_pick_note": "closing-line retrospective only: a best pick needs a prospective record at forecast-time lines",
+     "best": null,
+     "strong": false,
+     "reason": "implied team line (no quoted NFL team totals): never a best pick"
+    },
+    "implied_line": true
+   },
+   "team_total_away": {
+    "counts": {
+     "scored": 1338,
+     "push": 14,
+     "no_line": 3
+    },
+    "skill": {
+     "proven": false,
+     "scope": "retrospective closing-line test",
+     "note": "probability skill vs a coin flip at the consensus closing line, judged after the fact: the close is not known two hours before kickoff, so this is not evidence that these picks were available then, and a lower Brier score is not a profitable edge (no prices, vig or line movement are tested)",
+     "brier": 0.2591623651806911,
+     "brier_coin": 0.25,
+     "log_loss": 0.7128357113118405,
+     "brier_diff": 0.009162365180691053,
+     "ci95": [
+      0.004323386050745305,
+      0.013913447563866461
+     ],
+     "games": 1338,
+     "reliability": [
+      {
+       "lower": 0.0,
+       "upper": 0.1,
+       "count": 0,
+       "mean_predicted": null,
+       "observed_rate": null
+      },
+      {
+       "lower": 0.1,
+       "upper": 0.2,
+       "count": 1,
+       "mean_predicted": 0.18062490835225065,
+       "observed_rate": 1.0
+      },
+      {
+       "lower": 0.2,
+       "upper": 0.3,
+       "count": 7,
+       "mean_predicted": 0.28621433293981946,
+       "observed_rate": 0.5714285714285714
+      },
+      {
+       "lower": 0.3,
+       "upper": 0.4,
+       "count": 126,
+       "mean_predicted": 0.370778023360028,
+       "observed_rate": 0.5158730158730159
+      },
+      {
+       "lower": 0.4,
+       "upper": 0.5,
+       "count": 495,
+       "mean_predicted": 0.45772658464974897,
+       "observed_rate": 0.5171717171717172
+      },
+      {
+       "lower": 0.5,
+       "upper": 0.6,
+       "count": 480,
+       "mean_predicted": 0.5444948458438665,
+       "observed_rate": 0.5125
+      },
+      {
+       "lower": 0.6,
+       "upper": 0.7,
+       "count": 182,
+       "mean_predicted": 0.6403296991959175,
+       "observed_rate": 0.5
+      },
+      {
+       "lower": 0.7,
+       "upper": 0.8,
+       "count": 42,
+       "mean_predicted": 0.7312774712170929,
+       "observed_rate": 0.47619047619047616
+      },
+      {
+       "lower": 0.8,
+       "upper": 0.9,
+       "count": 4,
+       "mean_predicted": 0.8215810899184445,
+       "observed_rate": 0.5
+      },
+      {
+       "lower": 0.9,
+       "upper": 1.0,
+       "count": 1,
+       "mean_predicted": 0.9560676277536947,
+       "observed_rate": 1.0
+      }
+     ]
+    },
+    "thresholds": {
+     "rows": [
+      {
+       "threshold": 0.5,
+       "graded": 1338,
+       "won": 663,
+       "win_rate": 0.49551569506726456,
+       "ci95": [
+        0.4687769133575684,
+        0.5222801523482383
+       ],
+       "stated": 0.5727778486198342,
+       "calibration": "overconfident"
+      },
+      {
+       "threshold": 0.55,
+       "graded": 746,
+       "won": 373,
+       "win_rate": 0.5,
+       "ci95": [
+        0.4642123340990889,
+        0.5357876659009111
+       ],
+       "stated": 0.6113809564340457,
+       "calibration": "overconfident"
+      },
+      {
+       "threshold": 0.6,
+       "graded": 363,
+       "won": 178,
+       "win_rate": 0.4903581267217631,
+       "ci95": [
+        0.4393028114330453,
+        0.5416153758914003
+       ],
+       "stated": 0.6517738150135203,
+       "calibration": "overconfident"
+      },
+      {
+       "threshold": 0.65,
+       "graded": 141,
+       "won": 66,
+       "win_rate": 0.46808510638297873,
+       "ci95": [
+        0.38766558276227614,
+        0.5501975120345257
+       ],
+       "stated": 0.6988777501028406,
+       "calibration": "too_few"
+      },
+      {
+       "threshold": 0.7,
+       "graded": 55,
+       "won": 26,
+       "win_rate": 0.4727272727272727,
+       "ci95": [
+        0.34693098269865225,
+        0.6020845574147897
+       ],
+       "stated": 0.741307646174807,
+       "calibration": "too_few"
+      },
+      {
+       "threshold": 0.75,
+       "graded": 16,
+       "won": 8,
+       "win_rate": 0.5,
+       "ci95": [
+        0.27999563470387406,
+        0.7200043652961259
+       ],
+       "stated": 0.7991362682835542,
+       "calibration": "too_few"
+      },
+      {
+       "threshold": 0.8,
+       "graded": 6,
+       "won": 3,
+       "win_rate": 0.5,
+       "ci95": [
+        0.18761630498040816,
+        0.8123836950195918
+       ],
+       "stated": 0.843627846512537,
+       "calibration": "too_few"
+      },
+      {
+       "threshold": 0.85,
+       "graded": 1,
+       "won": 1,
+       "win_rate": 1.0,
+       "ci95": [
+        0.2065493117918027,
+        1.0
+       ],
+       "stated": 0.9560676277536947,
+       "calibration": "too_few"
+      },
+      {
+       "threshold": 0.9,
+       "graded": 1,
+       "won": 1,
+       "win_rate": 1.0,
+       "ci95": [
+        0.2065493117918027,
+        1.0
+       ],
+       "stated": 0.9560676277536947,
+       "calibration": "too_few"
+      }
+     ],
+     "break_even": 0.5238095238095238,
+     "best_pick_allowed": false,
+     "best_pick_note": "closing-line retrospective only: a best pick needs a prospective record at forecast-time lines",
+     "best": null,
+     "strong": false,
+     "reason": "implied team line (no quoted NFL team totals): never a best pick"
+    },
+    "implied_line": true
+   },
+   "winner": {
+    "thresholds": {
+     "rows": [
+      {
+       "threshold": 0.5,
+       "graded": 1350,
+       "won": 866,
+       "win_rate": 0.6414814814814814,
+       "ci95": [
+        0.6155315193011986,
+        0.6666285501028314
+       ],
+       "stated": 0.6404882166499537,
+       "calibration": "holds"
+      },
+      {
+       "threshold": 0.55,
+       "graded": 1087,
+       "won": 718,
+       "win_rate": 0.6605335786568537,
+       "ci95": [
+        0.6318621234988355,
+        0.688074377959327
+       ],
+       "stated": 0.6685154109547552,
+       "calibration": "holds"
+      },
+      {
+       "threshold": 0.6,
+       "graded": 806,
+       "won": 564,
+       "win_rate": 0.6997518610421837,
+       "ci95": [
+        0.6672211670441348,
+        0.730387521012916
+       ],
+       "stated": 0.7011069722554931,
+       "calibration": "holds"
+      },
+      {
+       "threshold": 0.65,
+       "graded": 542,
+       "won": 399,
+       "win_rate": 0.7361623616236163,
+       "ci95": [
+        0.6974912363927195,
+        0.771509415416824
+       ],
+       "stated": 0.7373702205621994,
+       "calibration": "holds"
+      },
+      {
+       "threshold": 0.7,
+       "graded": 357,
+       "won": 270,
+       "win_rate": 0.7563025210084033,
+       "ci95": [
+        0.709194145295393,
+        0.797953787670371
+       ],
+       "stated": 0.7696732620559084,
+       "calibration": "holds"
+      },
+      {
+       "threshold": 0.75,
+       "graded": 204,
+       "won": 165,
+       "win_rate": 0.8088235294117647,
+       "ci95": [
+        0.74935215452782,
+        0.8568791560018184
+       ],
+       "stated": 0.8045414819256863,
+       "calibration": "holds"
+      },
+      {
+       "threshold": 0.8,
+       "graded": 93,
+       "won": 76,
+       "win_rate": 0.8172043010752689,
+       "ci95": [
+        0.7266221573255273,
+        0.8826210395610418
+       ],
+       "stated": 0.8420447191473809,
+       "calibration": "too_few"
+      },
+      {
+       "threshold": 0.85,
+       "graded": 35,
+       "won": 27,
+       "win_rate": 0.7714285714285715,
+       "ci95": [
+        0.6098268297026581,
+        0.8793412022723046
+       ],
+       "stated": 0.875179661471717,
+       "calibration": "too_few"
+      },
+      {
+       "threshold": 0.9,
+       "graded": 5,
+       "won": 4,
+       "win_rate": 0.8,
+       "ci95": [
+        0.375534627029995,
+        0.9637758917743693
+       ],
+       "stated": 0.9127017972937164,
+       "calibration": "too_few"
+      }
+     ],
+     "break_even": null,
+     "best_pick_allowed": true,
+     "best_pick_note": null,
+     "best": 0.75,
+     "strong": true,
+     "reason": null
+    }
+   }
+  }
+ }
+}

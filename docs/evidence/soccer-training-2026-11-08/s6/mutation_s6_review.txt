@@ -1,0 +1,9 @@
+## M11 forecast reads unscoped (any run type, any development run)
+FAILED tests/test_soccer_forecasts.py::test_research_reads_show_backtest_rows_of_the_latest_development_run_only
+1 failed, 13 passed, 1 warning in 1.12s
+## M12 no season cap
+FAILED tests/test_soccer_forecasts.py::test_research_reads_never_serve_a_reserved_season
+1 failed, 13 passed, 1 warning in 1.30s
+## M13 retry with other numbers accepted
+FAILED tests/test_soccer_forecasts.py::test_a_retry_with_the_same_key_but_other_numbers_is_refused
+1 failed, 13 passed, 1 warning in 1.15s

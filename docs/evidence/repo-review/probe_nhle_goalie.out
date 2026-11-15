@@ -1,0 +1,7 @@
+schedule 200
+upcoming games found: 53
+game 2026020053 2 2026-10-07T23:30:00Z PIT @ WSH
+landing 200
+top-level keys: ['id', 'season', 'gameType', 'limitedScoring', 'gameDate', 'venue', 'venueLocation', 'startTimeUTC', 'easternUTCOffset', 'venueUTCOffset', 'venueTimezone', 'tvBroadcasts', 'gameState', 'gameScheduleState', 'awayTeam', 'homeTeam', 'shootoutInUse', 'maxPeriods', 'regPeriods', 'otInUse', 'tiesInUse', 'ticketsLink', 'ticketsLinkFr', 'matchup']
+matchup keys: ['season', 'gameType', 'skaterComparison', 'goalieComparison', 'skaterSeasonStats', 'goalieSeasonStats']
+goalieComparison: {"contextLabel": "regular_season", "contextSeason": 20252026, "homeTeam": {"teamTotals": {"record": "43-30-9", "gaa": 2.902439, "savePctg": 0.896836, "shutouts": 5, "gamesPlayed": 82}, "leaders": [{"playerId": 8480313, "name": {"default": "L. Thompson"}, "firstName": {"default": "Logan"}, "lastName": {"default": "Thompson"}, "sweaterNumber": 48, "headshot": "https://assets.nhle.com/mugs/nhl/20262027/WSH/8480313.png", "positionCode": "G", "gamesPlayed": 58, "seasonPoints": 68, "record": "31-21-6", "gaa": 2.44, "savePctg": 0.912, "shutouts": 4}, {"playerId": 8479292, "name": {"default": "C. Lindgren"}, "firstName": {"default": "Charlie"}, "lastName": {"default": "Lindgren"}, "sweaterNumber": 79, "headshot": "https://assets.nhle.com/mugs/nhl/20262027/WSH/8479292.png", "positionCode": "G", "gamesPlayed": 21, "seasonPoints": 21, "record": "9-8-3", "gaa": 3.52, "savePctg": 0.879, "shutouts": 1

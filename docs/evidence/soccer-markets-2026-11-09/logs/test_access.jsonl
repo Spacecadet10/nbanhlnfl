@@ -1,0 +1,2 @@
+{"at": "2026-11-10T00:14:14Z", "candidate_sha256": "cfe78bf98a8e48215474de26d020fc5a0fdb45830957b38e24e47db88efbd432", "family": "goals", "purpose": "reserved test goals (one-shot)", "through": 2025}
+{"at": "2026-11-10T00:25:05Z", "candidate_sha256": "f50224ddd00ef8abd3d949180b8324ab934ac4fa65035cb2c0ff49c364d90377", "family": "corners", "purpose": "reserved test corners (one-shot)", "through": 2025}

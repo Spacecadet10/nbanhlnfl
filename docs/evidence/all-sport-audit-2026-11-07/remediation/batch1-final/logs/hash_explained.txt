@@ -1,0 +1,5 @@
+current recipe (real index):
+376ee756af15cdf0fcc11560df8e0b17d85b7220  -
+same recipe, temp index without the 3 intent-to-add entries:
+a50b99265a3fdd58cd14c1216e4fbef7c70aa924  -
+85

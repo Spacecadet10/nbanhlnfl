@@ -1,0 +1,22 @@
+== item2 missing
+exit=0
+STDERR
+WARNING: no nhl store at /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/backup-verify/miss/nhl.sqlite; not backed up
+WARNING: no soccer store at /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/backup-verify/miss/soccer.sqlite; not backed up
+skipped ['nhl', 'soccer'] stores ['nba', 'nfl']
+== named missing
+exit=1
+    raise BackupError(f"No {sport} store at {src}")
+BackupError: No soccer store at /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/backup-verify/miss/soccer.sqlite
+ls: /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/backup-verify/outn: No such file or directory
+exit=1
+BackupError: No nhl store at /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/backup-verify/miss/nhl.sqlite
+ls: /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/backup-verify/outn: No such file or directory
+== dest exists/-- unknown sport
+backup.py: error: argument --sport: invalid choice: 'bogus' (choose from nba, nhl, nfl, soccer)
+== empty dir
+BackupError: No store in /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/backup-verify/empty (looked for nba.sqlite, nhl.sqlite, nfl.sqlite, soccer.sqlite)
+ls: /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/backup-verify/oute: No such file or directory
+== nonexistent data dir
+BackupError: No store in /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/backup-verify/nodir (looked for nba.sqlite, nhl.sqlite, nfl.sqlite, soccer.sqlite)
+ls: /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/backup-verify/nodir: No such file or directory

@@ -1,0 +1,27 @@
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/521fb68a-4a38-473b-b828-d5deae90ab31/scratchpad/repos/probes/probe_gbm.py", line 1, in <module>
+    import time, numpy as np, subprocess, xgboost as xgb, lightgbm as lgb, sklearn
+  File "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/521fb68a-4a38-473b-b828-d5deae90ab31/scratchpad/repos/.venv/lib/python3.12/site-packages/xgboost/__init__.py", line 6, in <module>
+    from . import (
+  File "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/521fb68a-4a38-473b-b828-d5deae90ab31/scratchpad/repos/.venv/lib/python3.12/site-packages/xgboost/collective.py", line 14, in <module>
+    from .core import _LIB, _check_call, build_info, c_str, make_jcargs, py_str
+  File "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/521fb68a-4a38-473b-b828-d5deae90ab31/scratchpad/repos/.venv/lib/python3.12/site-packages/xgboost/core.py", line 42, in <module>
+    from ._c_api import (
+  File "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/521fb68a-4a38-473b-b828-d5deae90ab31/scratchpad/repos/.venv/lib/python3.12/site-packages/xgboost/_c_api.py", line 184, in <module>
+    _LIB = _load_lib()
+           ^^^^^^^^^^^
+  File "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/521fb68a-4a38-473b-b828-d5deae90ab31/scratchpad/repos/.venv/lib/python3.12/site-packages/xgboost/_c_api.py", line 148, in _load_lib
+    raise XGBoostError(f"""
+xgboost._c_api.XGBoostError: 
+XGBoost Library (libxgboost.dylib) could not be loaded.
+Likely causes:
+  * OpenMP runtime is not installed
+    - vcomp140.dll or libgomp-1.dll for Windows
+    - libomp.dylib for Mac OSX
+    - libgomp.so for Linux and other UNIX-like OSes
+    Mac OSX users: Run `brew install libomp` to install OpenMP runtime.
+
+  * You are running 32-bit Python on a 64-bit OS
+
+Error message(s): ["dlopen(/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/521fb68a-4a38-473b-b828-d5deae90ab31/scratchpad/repos/.venv/lib/python3.12/site-packages/xgboost/lib/libxgboost.dylib, 0x0006): Library not loaded: @rpath/libomp.dylib\n  Referenced from: <09B43001-8527-34F6-AAE4-B97DA8A6CBC0> /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/521fb68a-4a38-473b-b828-d5deae90ab31/scratchpad/repos/.venv/lib/python3.12/site-packages/xgboost/lib/libxgboost.dylib\n  Reason: tried: '/opt/homebrew/opt/libomp/lib/libomp.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OS/opt/homebrew/opt/libomp/lib/libomp.dylib' (no such file), '/opt/homebrew/opt/libomp/lib/libomp.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OS/opt/homebrew/opt/libomp/lib/libomp.dylib' (no such file), '/Users/andry/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/libomp.dylib' (no such file)"]
+

@@ -1,0 +1,15 @@
+>       assert t.send(t.check(plan))=='partial_failed' and [m for m,p in sent]==['sendMessage']
+__________________ test_failed_settlement_notice_is_reported ___________________
+setup = ({'snapshot_path': '/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-312/test_failed_se...'/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-312/test_failed_settlement_notice_0'))
+    def test_failed_settlement_notice_is_reported(setup,monkeypatch):
+>       assert report['notification_errors']==[{'ticket_id':report['tickets'][0]['ticket_id'],'status':'failed'}]
+E       AssertionError: assert [] == [{'ticket_id'...s': 'failed'}]
+E         Right contains one more item: {'ticket_id': '2026-11-08-6515a0981162', 'status': 'failed'}
+>       assert out['tickets'][0]['grade']=='win' and out['status']=='failed' and out['alerts_error']=='DeliveryError'
+FAILED tests/test_tickets.py::test_orphan_png_from_a_crash_before_its_record_never_blocks_the_image
+FAILED tests/test_tickets.py::test_render_failure_after_text_leaves_an_image_receipt_and_alerts
+FAILED tests/test_tickets.py::test_malformed_telegram_update_cannot_abort_settlement
+FAILED tests/test_tickets.py::test_non_object_telegram_body_is_an_unconfirmed_delivery
+FAILED tests/test_tickets.py::test_failed_settlement_notice_is_reported - Ass...
+FAILED tests/test_tickets.py::test_offline_preflight_still_prints_the_settlement_report
+6 failed, 36 passed in 2.08s

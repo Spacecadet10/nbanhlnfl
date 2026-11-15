@@ -1,0 +1,19 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.12, pytest-9.1.1, pluggy-1.6.0 -- /Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/bin/python
+hypothesis profile 'default'
+rootdir: /Users/andry/Desktop/nba-predictor-batch1/backend
+configfile: pyproject.toml
+plugins: hypothesis-6.168.3, anyio-4.15.1
+collecting ... collected 23 items / 14 deselected / 9 selected
+
+tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nba-main] PASSED [ 11%]
+tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nba-wal] PASSED [ 22%]
+tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nba-shm] PASSED [ 33%]
+tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nba-install] PASSED [ 44%]
+tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nfl-main] PASSED [ 55%]
+tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nfl-wal] PASSED [ 66%]
+tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nfl-shm] PASSED [ 77%]
+tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nfl-install] PASSED [ 88%]
+tests/test_backup_restore.py::test_a_failed_rollback_deletes_nothing_and_names_the_manual_recovery PASSED [100%]
+
+======================= 9 passed, 14 deselected in 0.64s =======================

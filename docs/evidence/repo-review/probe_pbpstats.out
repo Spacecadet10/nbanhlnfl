@@ -1,0 +1,6 @@
+pbpstats 1.3.11
+stats.nba.com playbyplayv2: FAIL after 0.4s: FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/521fb68a-4a38-473b-b828-d5deae90ab31/scratchpad/repos/probes/pbp_cache/pbp/stats_0022300001.json'
+live S3 playbyplay: FAIL after 0.4s: FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/521fb68a-4a38-473b-b828-d5deae90ab31/scratchpad/repos/probes/pbp_cache/pbp/live_0022300001.json'
+pbpstats 1.3.11
+stats.nba.com playbyplayv2: FAIL after 0.2s: KeyError: 'resultSets'
+live S3 playbyplay: OK items=576 t=0.3s first={'actionNumber': 2, 'clock': 'PT12M00.00S', 'timeActual': '2023-11-03T23:11:09.0Z', 'period': 1, 'periodType': 'REGULAR', 'actionType': 'period', 'subType': 'start', 'qualifiers': [], 'personId': 0, 'x': None, 'y': None, 'possession': 0, 'scoreHome': '0', 'scoreAway': '0', 'edited': '2023-11-03T23:11:09Z', 'orderNumber': 20000, 'isTargetScoreLastPeriod

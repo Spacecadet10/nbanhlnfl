@@ -1,0 +1,1611 @@
+{
+ "study": "deep-v1",
+ "started_at": "2026-10-03T21:58:26Z",
+ "markets": {
+  "nhl:winner": {
+   "games": 11870,
+   "existing_members": [
+    "hockey_elo",
+    "goals_poisson",
+    "hockey_logistic",
+    "hockey_gbt",
+    "hockey_logistic_xg",
+    "extra_trees:nhl_base",
+    "logit_l2:nhl_base",
+    "mlp:nhl_base",
+    "multinomial_l2:nhl_base",
+    "poisson_draw:nhl_base"
+   ],
+   "deep": {
+    "keras_mlp:nhl_base": {
+     "games": 10515,
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.0009353766938286249,
+      "ci95": [
+       -0.00028038664880072927,
+       0.0021126840197759414
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "counterpart": "mlp:nhl_base",
+     "log_loss_minus_counterpart": {
+      "mean": 0.0007335047905923853,
+      "ci95": [
+       -7.919679436144818e-05,
+       0.0015667035569852726
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "per_season": {
+      "2019": {
+       "games": 1358,
+       "reserved_test_season": false,
+       "log_loss": 0.6774826452220739,
+       "brier": 0.4843607762441748,
+       "accuracy": 0.5802650957290133,
+       "best_prior_existing": "hockey_logistic_xg",
+       "best_log_loss": 0.6759407608647017,
+       "best_brier": 0.4830115075909465,
+       "best_accuracy": 0.5736377025036818,
+       "minus_best": 0.001541884357372356,
+       "minus_counterpart": 0.0007928772364146418
+      },
+      "2020": {
+       "games": 1212,
+       "reserved_test_season": false,
+       "log_loss": 0.6807001021082201,
+       "brier": 0.4879025533087819,
+       "accuracy": 0.5651815181518152,
+       "best_prior_existing": "hockey_logistic_xg",
+       "best_log_loss": 0.6784955901002891,
+       "best_brier": 0.4858475189889966,
+       "best_accuracy": 0.566006600660066,
+       "minus_best": 0.0022045120079309363,
+       "minus_counterpart": 0.002658465076988398
+      },
+      "2021": {
+       "games": 952,
+       "reserved_test_season": false,
+       "log_loss": 0.6605507978774997,
+       "brier": 0.4681788532006036,
+       "accuracy": 0.6060924369747899,
+       "best_prior_existing": "hockey_logistic_xg",
+       "best_log_loss": 0.6587074912268746,
+       "best_brier": 0.46666842978994294,
+       "best_accuracy": 0.6113445378151261,
+       "minus_best": 0.0018433066506251172,
+       "minus_counterpart": 0.0016049789906995258
+      },
+      "2022": {
+       "games": 1401,
+       "reserved_test_season": false,
+       "log_loss": 0.6451420437106086,
+       "brier": 0.4531966453903282,
+       "accuracy": 0.6316916488222698,
+       "best_prior_existing": "hockey_logistic_xg",
+       "best_log_loss": 0.6437531911138119,
+       "best_brier": 0.45198285464826693,
+       "best_accuracy": 0.6359743040685225,
+       "minus_best": 0.0013888525967965873,
+       "minus_counterpart": 0.0014415410675428218
+      },
+      "2023": {
+       "games": 1400,
+       "reserved_test_season": false,
+       "log_loss": 0.6612398242346151,
+       "brier": 0.46906355243764525,
+       "accuracy": 0.6064285714285714,
+       "best_prior_existing": "hockey_logistic_xg",
+       "best_log_loss": 0.6580579864886803,
+       "best_brier": 0.466187502402568,
+       "best_accuracy": 0.6107142857142858,
+       "minus_best": 0.0031818377459349153,
+       "minus_counterpart": 0.002337105711207663
+      },
+      "2024": {
+       "games": 1400,
+       "reserved_test_season": false,
+       "log_loss": 0.6553117817116669,
+       "brier": 0.46376760059258865,
+       "accuracy": 0.6078571428571429,
+       "best_prior_existing": "hockey_logistic_xg",
+       "best_log_loss": 0.656010468509648,
+       "best_brier": 0.4645751735229746,
+       "best_accuracy": 0.6014285714285714,
+       "minus_best": -0.0006986867979809687,
+       "minus_counterpart": -0.0014253030740476137
+      },
+      "2025": {
+       "games": 1398,
+       "reserved_test_season": true,
+       "log_loss": 0.6621813097710589,
+       "brier": 0.470284719744277,
+       "accuracy": 0.5836909871244635,
+       "best_prior_existing": "hockey_logistic_xg",
+       "best_log_loss": 0.6620152468561694,
+       "best_brier": 0.4701805289845034,
+       "best_accuracy": 0.5886981402002861,
+       "minus_best": 0.00016606291488954907,
+       "minus_counterpart": 0.00015192303580671335
+      },
+      "2026": {
+       "games": 1394,
+       "reserved_test_season": true,
+       "log_loss": 0.6864587371914198,
+       "brier": 0.49317798347056935,
+       "accuracy": 0.5581061692969871,
+       "best_prior_existing": "hockey_logistic_xg",
+       "best_log_loss": 0.6881369576196654,
+       "best_brier": 0.49474645963469416,
+       "best_accuracy": 0.5480631276901005,
+       "minus_best": -0.001678220428245485,
+       "minus_counterpart": -0.0011638703143022852
+      }
+     },
+     "qualifies": false
+    },
+    "torch_goals:nhl_base": {
+     "games": 10515,
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.002046736758173503,
+      "ci95": [
+       0.00037505305306540827,
+       0.0037360632297916817
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "counterpart": "poisson_draw:nhl_base",
+     "log_loss_minus_counterpart": {
+      "mean": -0.00022121282779426522,
+      "ci95": [
+       -0.0012237908995981611,
+       0.0008202282934998064
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "per_season": {
+      "2019": {
+       "games": 1358,
+       "reserved_test_season": false,
+       "log_loss": 0.6767091280373743,
+       "brier": 0.4837719677442605,
+       "accuracy": 0.5743740795287187,
+       "best_prior_existing": "hockey_logistic_xg",
+       "best_log_loss": 0.6759407608647017,
+       "best_brier": 0.4830115075909465,
+       "best_accuracy": 0.5736377025036818,
+       "minus_best": 0.0007683671726726388,
+       "minus_counterpart": -0.0007562387662927941
+      },
+      "2020": {
+       "games": 1212,
+       "reserved_test_season": false,
+       "log_loss": 0.6800390513119018,
+       "brier": 0.48717122113592365,
+       "accuracy": 0.5503300330033003,
+       "best_prior_existing": "hockey_logistic_xg",
+       "best_log_loss": 0.6784955901002891,
+       "best_brier": 0.4858475189889966,
+       "best_accuracy": 0.566006600660066,
+       "minus_best": 0.0015434612116126856,
+       "minus_counterpart": 0.0002472165362750089
+      },
+      "2021": {
+       "games": 952,
+       "reserved_test_season": false,
+       "log_loss": 0.6602067410258645,
+       "brier": 0.46780129098002654,
+       "accuracy": 0.6197478991596639,
+       "best_prior_existing": "hockey_logistic_xg",
+       "best_log_loss": 0.6587074912268746,
+       "best_brier": 0.46666842978994294,
+       "best_accuracy": 0.6113445378151261,
+       "minus_best": 0.0014992497989899237,
+       "minus_counterpart": -0.003817609119127585
+      },
+      "2022": {
+       "games": 1401,
+       "reserved_test_season": false,
+       "log_loss": 0.6526845665428944,
+       "brier": 0.4603259348582487,
+       "accuracy": 0.6295503211991434,
+       "best_prior_existing": "hockey_logistic_xg",
+       "best_log_loss": 0.6437531911138119,
+       "best_brier": 0.45198285464826693,
+       "best_accuracy": 0.6359743040685225,
+       "minus_best": 0.008931375429082327,
+       "minus_counterpart": 0.000807037644019774
+      },
+      "2023": {
+       "games": 1400,
+       "reserved_test_season": false,
+       "log_loss": 0.6608896640616008,
+       "brier": 0.4686568816869023,
+       "accuracy": 0.6128571428571429,
+       "best_prior_existing": "hockey_logistic_xg",
+       "best_log_loss": 0.6580579864886803,
+       "best_brier": 0.466187502402568,
+       "best_accuracy": 0.6107142857142858,
+       "minus_best": 0.002831677572920437,
+       "minus_counterpart": -9.81548287670483e-05
+      },
+      "2024": {
+       "games": 1400,
+       "reserved_test_season": false,
+       "log_loss": 0.6593808913120714,
+       "brier": 0.4674010549070185,
+       "accuracy": 0.6021428571428571,
+       "best_prior_existing": "hockey_logistic_xg",
+       "best_log_loss": 0.656010468509648,
+       "best_brier": 0.4645751735229746,
+       "best_accuracy": 0.6014285714285714,
+       "minus_best": 0.0033704228024235474,
+       "minus_counterpart": 0.00031582551568195107
+      },
+      "2025": {
+       "games": 1398,
+       "reserved_test_season": true,
+       "log_loss": 0.6634817669450169,
+       "brier": 0.4712388359235552,
+       "accuracy": 0.5879828326180258,
+       "best_prior_existing": "hockey_logistic_xg",
+       "best_log_loss": 0.6620152468561694,
+       "best_brier": 0.4701805289845034,
+       "best_accuracy": 0.5886981402002861,
+       "minus_best": 0.0014665200888474446,
+       "minus_counterpart": 0.0007161266782442197
+      },
+      "2026": {
+       "games": 1394,
+       "reserved_test_season": true,
+       "log_loss": 0.6837854805814713,
+       "brier": 0.49077059902401154,
+       "accuracy": 0.5459110473457676,
+       "best_prior_existing": "hockey_logistic_xg",
+       "best_log_loss": 0.6881369576196654,
+       "best_brier": 0.49474645963469416,
+       "best_accuracy": 0.5480631276901005,
+       "minus_best": -0.004351477038194179,
+       "minus_counterpart": -0.00028758034241385867
+      }
+     },
+     "qualifies": false
+    },
+    "torch_mlp:nhl_base": {
+     "games": 10515,
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.0006532059093918757,
+      "ci95": [
+       -0.00041037640949838583,
+       0.0017251373025446422
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "counterpart": "mlp:nhl_base",
+     "log_loss_minus_counterpart": {
+      "mean": 0.00045133400615563607,
+      "ci95": [
+       -0.00018303943095349576,
+       0.0010635054977771968
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "per_season": {
+      "2019": {
+       "games": 1358,
+       "reserved_test_season": false,
+       "log_loss": 0.6766157764808604,
+       "brier": 0.48360326292523553,
+       "accuracy": 0.5787923416789397,
+       "best_prior_existing": "hockey_logistic_xg",
+       "best_log_loss": 0.6759407608647017,
+       "best_brier": 0.4830115075909465,
+       "best_accuracy": 0.5736377025036818,
+       "minus_best": 0.0006750156161587112,
+       "minus_counterpart": -7.39915047990031e-05
+      },
+      "2020": {
+       "games": 1212,
+       "reserved_test_season": false,
+       "log_loss": 0.6791585924489146,
+       "brier": 0.4863494945261257,
+       "accuracy": 0.5594059405940595,
+       "best_prior_existing": "hockey_logistic_xg",
+       "best_log_loss": 0.6784955901002891,
+       "best_brier": 0.4858475189889966,
+       "best_accuracy": 0.566006600660066,
+       "minus_best": 0.0006630023486255774,
+       "minus_counterpart": 0.0011169554176830392
+      },
+      "2021": {
+       "games": 952,
+       "reserved_test_season": false,
+       "log_loss": 0.6595484682641388,
+       "brier": 0.4672983791744448,
+       "accuracy": 0.6081932773109243,
+       "best_prior_existing": "hockey_logistic_xg",
+       "best_log_loss": 0.6587074912268746,
+       "best_brier": 0.46666842978994294,
+       "best_accuracy": 0.6113445378151261,
+       "minus_best": 0.0008409770372641723,
+       "minus_counterpart": 0.0006026493773385809
+      },
+      "2022": {
+       "games": 1401,
+       "reserved_test_season": false,
+       "log_loss": 0.6442962794074706,
+       "brier": 0.45241590664475645,
+       "accuracy": 0.6388294075660242,
+       "best_prior_existing": "hockey_logistic_xg",
+       "best_log_loss": 0.6437531911138119,
+       "best_brier": 0.45198285464826693,
+       "best_accuracy": 0.6359743040685225,
+       "minus_best": 0.0005430882936586588,
+       "minus_counterpart": 0.0005957767644048931
+      },
+      "2023": {
+       "games": 1400,
+       "reserved_test_season": false,
+       "log_loss": 0.6609265225492202,
+       "brier": 0.46883984392420447,
+       "accuracy": 0.6078571428571429,
+       "best_prior_existing": "hockey_logistic_xg",
+       "best_log_loss": 0.6580579864886803,
+       "best_brier": 0.466187502402568,
+       "best_accuracy": 0.6107142857142858,
+       "minus_best": 0.0028685360605399963,
+       "minus_counterpart": 0.002023804025812744
+      },
+      "2024": {
+       "games": 1400,
+       "reserved_test_season": false,
+       "log_loss": 0.6564896629204756,
+       "brier": 0.46490429410373774,
+       "accuracy": 0.6071428571428571,
+       "best_prior_existing": "hockey_logistic_xg",
+       "best_log_loss": 0.656010468509648,
+       "best_brier": 0.4645751735229746,
+       "best_accuracy": 0.6014285714285714,
+       "minus_best": 0.0004791944108276867,
+       "minus_counterpart": -0.0002474218652389582
+      },
+      "2025": {
+       "games": 1398,
+       "reserved_test_season": true,
+       "log_loss": 0.6626097068401923,
+       "brier": 0.47068743620838654,
+       "accuracy": 0.5801144492131617,
+       "best_prior_existing": "hockey_logistic_xg",
+       "best_log_loss": 0.6620152468561694,
+       "best_brier": 0.4701805289845034,
+       "best_accuracy": 0.5886981402002861,
+       "minus_best": 0.0005944599840227823,
+       "minus_counterpart": 0.0005803201049399463
+      },
+      "2026": {
+       "games": 1394,
+       "reserved_test_season": true,
+       "log_loss": 0.6867516459464286,
+       "brier": 0.4935355559264458,
+       "accuracy": 0.5588235294117647,
+       "best_prior_existing": "hockey_logistic_xg",
+       "best_log_loss": 0.6881369576196654,
+       "best_brier": 0.49474645963469416,
+       "best_accuracy": 0.5480631276901005,
+       "minus_best": -0.001385311673236753,
+       "minus_counterpart": -0.0008709615592935535
+      }
+     },
+     "qualifies": false
+    }
+   }
+  },
+  "nhl:reg3": {
+   "games": 11870,
+   "existing_members": [
+    "goals_poisson",
+    "goals_draw",
+    "goals_glm",
+    "multinomial_l2:nhl_base",
+    "poisson_draw:nhl_base"
+   ],
+   "deep": {
+    "torch_goals:nhl_base": {
+     "games": 10515,
+     "log_loss_minus_best_prior_existing": {
+      "mean": -1.908698908391524e-05,
+      "ci95": [
+       -0.0012628042255479934,
+       0.0012837121455300264
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "counterpart": "poisson_draw:nhl_base",
+     "log_loss_minus_counterpart": {
+      "mean": 0.000756332344748245,
+      "ci95": [
+       -0.0003926929976511761,
+       0.0019250893435400287
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "per_season": {
+      "2019": {
+       "games": 1358,
+       "reserved_test_season": false,
+       "log_loss": 1.0422453790873232,
+       "brier": 0.6286422339717725,
+       "accuracy": 0.47054491899852724,
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "best_log_loss": 1.0426552243631046,
+       "best_brier": 0.6288468597618375,
+       "best_accuracy": 0.4653902798232695,
+       "minus_best": -0.0004098452757815023,
+       "minus_counterpart": -0.0004098452757815023
+      },
+      "2020": {
+       "games": 1212,
+       "reserved_test_season": false,
+       "log_loss": 1.0563845527059406,
+       "brier": 0.638063619027548,
+       "accuracy": 0.44224422442244227,
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "best_log_loss": 1.0542218624440074,
+       "best_brier": 0.6364490807218942,
+       "best_accuracy": 0.45544554455445546,
+       "minus_best": 0.0021626902619330834,
+       "minus_counterpart": 0.0021626902619330834
+      },
+      "2021": {
+       "games": 952,
+       "reserved_test_season": false,
+       "log_loss": 1.039219471629582,
+       "brier": 0.6247944778629779,
+       "accuracy": 0.4831932773109244,
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "best_log_loss": 1.0414391638980818,
+       "best_brier": 0.6263019140231249,
+       "best_accuracy": 0.4695378151260504,
+       "minus_best": -0.0022196922684997004,
+       "minus_counterpart": -0.0022196922684997004
+      },
+      "2022": {
+       "games": 1401,
+       "reserved_test_season": false,
+       "log_loss": 1.0237965420296555,
+       "brier": 0.6142310840634144,
+       "accuracy": 0.5003568879371877,
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "best_log_loss": 1.0220668626920357,
+       "best_brier": 0.6128814226907342,
+       "best_accuracy": 0.5117773019271948,
+       "minus_best": 0.0017296793376197304,
+       "minus_counterpart": 0.0017296793376197304
+      },
+      "2023": {
+       "games": 1400,
+       "reserved_test_season": false,
+       "log_loss": 1.0374669363488287,
+       "brier": 0.6229235690555287,
+       "accuracy": 0.4907142857142857,
+       "best_prior_existing": "multinomial_l2:nhl_base",
+       "best_log_loss": 1.038086450077781,
+       "best_brier": 0.6223758289142174,
+       "best_accuracy": 0.49714285714285716,
+       "minus_best": -0.0006195137289524248,
+       "minus_counterpart": 0.0015680261158741225
+      },
+      "2024": {
+       "games": 1400,
+       "reserved_test_season": false,
+       "log_loss": 1.0231190301769548,
+       "brier": 0.6149191857276793,
+       "accuracy": 0.48928571428571427,
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "best_log_loss": 1.0217998276782503,
+       "best_brier": 0.6139819465734285,
+       "best_accuracy": 0.49642857142857144,
+       "minus_best": 0.001319202498704717,
+       "minus_counterpart": 0.001319202498704717
+      },
+      "2025": {
+       "games": 1398,
+       "reserved_test_season": true,
+       "log_loss": 1.0333312099825818,
+       "brier": 0.6224057810423473,
+       "accuracy": 0.4792560801144492,
+       "best_prior_existing": "multinomial_l2:nhl_base",
+       "best_log_loss": 1.0365156829528814,
+       "best_brier": 0.6245105300057495,
+       "best_accuracy": 0.4742489270386266,
+       "minus_best": -0.003184472970299722,
+       "minus_counterpart": 0.00045714256080757313
+      },
+      "2026": {
+       "games": 1394,
+       "reserved_test_season": true,
+       "log_loss": 1.0713259472152532,
+       "brier": 0.6478172699761245,
+       "accuracy": 0.42898134863701576,
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "best_log_loss": 1.070682557818364,
+       "best_brier": 0.6473185771478117,
+       "best_accuracy": 0.4232424677187948,
+       "minus_best": 0.0006433893968890159,
+       "minus_counterpart": 0.0006433893968890159
+      }
+     },
+     "qualifies": false
+    }
+   }
+  },
+  "nhl:spread": {
+   "games": 11870,
+   "existing_members": [
+    "goals_poisson",
+    "goals_draw",
+    "goals_glm",
+    "poisson_draw:nhl_base"
+   ],
+   "deep": {
+    "torch_goals:nhl_base": {
+     "games": 10515,
+     "log_loss_minus_best_prior_existing": {
+      "mean": 4.3141954980842275e-05,
+      "ci95": [
+       -0.0009562888011458809,
+       0.001115050421852472
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "counterpart": "poisson_draw:nhl_base",
+     "log_loss_minus_counterpart": {
+      "mean": 4.3141954980842275e-05,
+      "ci95": [
+       -0.0009562888011458809,
+       0.001115050421852472
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "per_season": {
+      "2019": {
+       "games": 1358,
+       "reserved_test_season": false,
+       "log_loss": 0.6820538283441716,
+       "brier": 0.4888122071023401,
+       "accuracy": 0.5684830633284241,
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "best_log_loss": 0.682433075969687,
+       "best_brier": 0.48920911407152384,
+       "best_accuracy": 0.5640648011782032,
+       "minus_best": -0.0003792476255154241,
+       "minus_counterpart": -0.0003792476255154241
+      },
+      "2020": {
+       "games": 1212,
+       "reserved_test_season": false,
+       "log_loss": 0.6825696733878401,
+       "brier": 0.4895162985451525,
+       "accuracy": 0.5478547854785478,
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "best_log_loss": 0.6818238484319821,
+       "best_brier": 0.4888270684575642,
+       "best_accuracy": 0.5635313531353136,
+       "minus_best": 0.0007458249558581208,
+       "minus_counterpart": 0.0007458249558581208
+      },
+      "2021": {
+       "games": 952,
+       "reserved_test_season": false,
+       "log_loss": 0.6745096693016024,
+       "brier": 0.4815039636364235,
+       "accuracy": 0.5966386554621849,
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "best_log_loss": 0.6779667714191309,
+       "best_brier": 0.48494159202235665,
+       "best_accuracy": 0.5766806722689075,
+       "minus_best": -0.0034571021175284337,
+       "minus_counterpart": -0.0034571021175284337
+      },
+      "2022": {
+       "games": 1401,
+       "reserved_test_season": false,
+       "log_loss": 0.6738304460957759,
+       "brier": 0.48081859215515727,
+       "accuracy": 0.5881513204853676,
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "best_log_loss": 0.6732071698513951,
+       "best_brier": 0.480234910688706,
+       "best_accuracy": 0.5960028551034975,
+       "minus_best": 0.0006232762443808142,
+       "minus_counterpart": 0.0006232762443808142
+      },
+      "2023": {
+       "games": 1400,
+       "reserved_test_season": false,
+       "log_loss": 0.6777036293419253,
+       "brier": 0.4848515262190639,
+       "accuracy": 0.5778571428571428,
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "best_log_loss": 0.677137647103824,
+       "best_brier": 0.4842574947027065,
+       "best_accuracy": 0.5735714285714286,
+       "minus_best": 0.000565982238101326,
+       "minus_counterpart": 0.000565982238101326
+      },
+      "2024": {
+       "games": 1400,
+       "reserved_test_season": false,
+       "log_loss": 0.6799458234545229,
+       "brier": 0.48693631674122295,
+       "accuracy": 0.5642857142857143,
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "best_log_loss": 0.6798915639945174,
+       "best_brier": 0.4868965237412459,
+       "best_accuracy": 0.5721428571428572,
+       "minus_best": 5.425946000549131e-05,
+       "minus_counterpart": 5.425946000549131e-05
+      },
+      "2025": {
+       "games": 1398,
+       "reserved_test_season": true,
+       "log_loss": 0.6828084024583974,
+       "brier": 0.4898409461984691,
+       "accuracy": 0.5550786838340487,
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "best_log_loss": 0.6812810513277808,
+       "best_brier": 0.4882832288267764,
+       "best_accuracy": 0.5622317596566524,
+       "minus_best": 0.0015273511306165975,
+       "minus_counterpart": 0.0015273511306165975
+      },
+      "2026": {
+       "games": 1394,
+       "reserved_test_season": true,
+       "log_loss": 0.6842420655247885,
+       "brier": 0.49120601846127865,
+       "accuracy": 0.5451936872309899,
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "best_log_loss": 0.6846157441294287,
+       "best_brier": 0.4916565642438928,
+       "best_accuracy": 0.5380200860832137,
+       "minus_best": -0.000373678604640272,
+       "minus_counterpart": -0.000373678604640272
+      }
+     },
+     "qualifies": false
+    }
+   }
+  },
+  "nhl:total": {
+   "games": 11870,
+   "existing_members": [
+    "goals_poisson",
+    "goals_draw",
+    "goals_glm",
+    "poisson_draw:nhl_base"
+   ],
+   "deep": {
+    "torch_goals:nhl_base": {
+     "games": 10515,
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.004371776093426333,
+      "ci95": [
+       0.0029164694165637007,
+       0.005866350522798672
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "counterpart": "poisson_draw:nhl_base",
+     "log_loss_minus_counterpart": {
+      "mean": 0.002614214380727489,
+      "ci95": [
+       0.0014720975719210417,
+       0.0037352028195072853
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "per_season": {
+      "2019": {
+       "games": 1358,
+       "reserved_test_season": false,
+       "log_loss": 0.6940826754827173,
+       "brier": 0.5009174420502365,
+       "accuracy": 0.5044182621502209,
+       "best_prior_existing": "goals_poisson",
+       "best_log_loss": 0.686289644494576,
+       "best_brier": 0.493183694375717,
+       "best_accuracy": 0.5434462444771723,
+       "minus_best": 0.007793030988141183,
+       "minus_counterpart": 0.002262245527672424
+      },
+      "2020": {
+       "games": 1212,
+       "reserved_test_season": false,
+       "log_loss": 0.701468268835335,
+       "brier": 0.5081177150372873,
+       "accuracy": 0.5008250825082509,
+       "best_prior_existing": "goals_poisson",
+       "best_log_loss": 0.6943644857796062,
+       "best_brier": 0.5011830488502561,
+       "best_accuracy": 0.5082508250825083,
+       "minus_best": 0.0071037830557289525,
+       "minus_counterpart": 0.004630519639582563
+      },
+      "2021": {
+       "games": 952,
+       "reserved_test_season": false,
+       "log_loss": 0.693325068026804,
+       "brier": 0.5001570898758486,
+       "accuracy": 0.5168067226890757,
+       "best_prior_existing": "goals_draw",
+       "best_log_loss": 0.6893047612881649,
+       "best_brier": 0.49618459176379853,
+       "best_accuracy": 0.5409663865546218,
+       "minus_best": 0.004020306738639225,
+       "minus_counterpart": 0.005523910829772385
+      },
+      "2022": {
+       "games": 1401,
+       "reserved_test_season": false,
+       "log_loss": 0.6949990258244403,
+       "brier": 0.5018233969259639,
+       "accuracy": 0.5053533190578159,
+       "best_prior_existing": "goals_draw",
+       "best_log_loss": 0.6884712977390708,
+       "best_brier": 0.49534878736948046,
+       "best_accuracy": 0.53604568165596,
+       "minus_best": 0.006527728085369429,
+       "minus_counterpart": 0.00342138304137142
+      },
+      "2023": {
+       "games": 1400,
+       "reserved_test_season": false,
+       "log_loss": 0.6941171290693294,
+       "brier": 0.5009660354194951,
+       "accuracy": 0.5121428571428571,
+       "best_prior_existing": "goals_draw",
+       "best_log_loss": 0.6889289937736309,
+       "best_brier": 0.4957981635811255,
+       "best_accuracy": 0.5378571428571428,
+       "minus_best": 0.005188135295698564,
+       "minus_counterpart": 0.000991270459403492
+      },
+      "2024": {
+       "games": 1400,
+       "reserved_test_season": false,
+       "log_loss": 0.6964953148476412,
+       "brier": 0.5032755152257785,
+       "accuracy": 0.515,
+       "best_prior_existing": "goals_draw",
+       "best_log_loss": 0.6941847385914721,
+       "best_brier": 0.5010325556549274,
+       "best_accuracy": 0.5035714285714286,
+       "minus_best": 0.002310576256168991,
+       "minus_counterpart": 0.002890062359440241
+      },
+      "2025": {
+       "games": 1398,
+       "reserved_test_season": true,
+       "log_loss": 0.6912126023496579,
+       "brier": 0.49804843267965787,
+       "accuracy": 0.5336194563662375,
+       "best_prior_existing": "goals_draw",
+       "best_log_loss": 0.6907238999870533,
+       "best_brier": 0.49755919497308243,
+       "best_accuracy": 0.5400572246065808,
+       "minus_best": 0.0004887023626046073,
+       "minus_counterpart": 0.0014946404185796273
+      },
+      "2026": {
+       "games": 1394,
+       "reserved_test_season": true,
+       "log_loss": 0.6933252699895244,
+       "brier": 0.5001439658620349,
+       "accuracy": 0.5329985652797704,
+       "best_prior_existing": "goals_poisson",
+       "best_log_loss": 0.6914440480823394,
+       "best_brier": 0.49830159317411804,
+       "best_accuracy": 0.5272596843615495,
+       "minus_best": 0.0018812219071848938,
+       "minus_counterpart": 0.0008813852088494384
+      }
+     },
+     "qualifies": false
+    }
+   }
+  },
+  "nhl:team_total_home": {
+   "games": 11870,
+   "existing_members": [
+    "goals_poisson",
+    "goals_draw",
+    "goals_glm",
+    "poisson_draw:nhl_base"
+   ],
+   "deep": {
+    "torch_goals:nhl_base": {
+     "games": 10515,
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.0007885976912986555,
+      "ci95": [
+       -0.0012837595801710403,
+       0.003041282010462518
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "counterpart": "poisson_draw:nhl_base",
+     "log_loss_minus_counterpart": {
+      "mean": 0.002073970839385917,
+      "ci95": [
+       0.0008916457987241187,
+       0.00321374570340003
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "per_season": {
+      "2019": {
+       "games": 1358,
+       "reserved_test_season": false,
+       "log_loss": 0.6861779412675121,
+       "brier": 0.492869488720807,
+       "accuracy": 0.5603829160530192,
+       "best_prior_existing": "goals_draw",
+       "best_log_loss": 0.6766459851278074,
+       "best_brier": 0.4836310228193141,
+       "best_accuracy": 0.5795287187039765,
+       "minus_best": 0.009531956139704631,
+       "minus_counterpart": 0.002891817997259892
+      },
+      "2020": {
+       "games": 1212,
+       "reserved_test_season": false,
+       "log_loss": 0.6798270654912902,
+       "brier": 0.48663087424515017,
+       "accuracy": 0.5759075907590759,
+       "best_prior_existing": "goals_poisson",
+       "best_log_loss": 0.6775661569462683,
+       "best_brier": 0.48453484850136536,
+       "best_accuracy": 0.5734323432343235,
+       "minus_best": 0.002260908545021955,
+       "minus_counterpart": 0.0026825659820093905
+      },
+      "2021": {
+       "games": 952,
+       "reserved_test_season": false,
+       "log_loss": 0.6874696208276557,
+       "brier": 0.49425481793570075,
+       "accuracy": 0.5388655462184874,
+       "best_prior_existing": "goals_poisson",
+       "best_log_loss": 0.6832395406759412,
+       "best_brier": 0.49014964013463513,
+       "best_accuracy": 0.5525210084033614,
+       "minus_best": 0.004230080151714696,
+       "minus_counterpart": 0.005688753027988008
+      },
+      "2022": {
+       "games": 1401,
+       "reserved_test_season": false,
+       "log_loss": 0.6940508546304996,
+       "brier": 0.5006144897216027,
+       "accuracy": 0.5403283369022127,
+       "best_prior_existing": "goals_poisson",
+       "best_log_loss": 0.6919425521356459,
+       "best_brier": 0.4987524787160745,
+       "best_accuracy": 0.5346181299072091,
+       "minus_best": 0.0021083024948536865,
+       "minus_counterpart": 0.003859366287018158
+      },
+      "2023": {
+       "games": 1400,
+       "reserved_test_season": false,
+       "log_loss": 0.6897000422499783,
+       "brier": 0.49649819595942185,
+       "accuracy": 0.5471428571428572,
+       "best_prior_existing": "goals_poisson",
+       "best_log_loss": 0.6905935037204756,
+       "best_brier": 0.49742719542868813,
+       "best_accuracy": 0.5378571428571428,
+       "minus_best": -0.0008934614704972185,
+       "minus_counterpart": 0.0007964401280478022
+      },
+      "2024": {
+       "games": 1400,
+       "reserved_test_season": false,
+       "log_loss": 0.6815037039334401,
+       "brier": 0.488422673510025,
+       "accuracy": 0.5678571428571428,
+       "best_prior_existing": "goals_poisson",
+       "best_log_loss": 0.685080926497586,
+       "best_brier": 0.4920003857630806,
+       "best_accuracy": 0.55,
+       "minus_best": -0.0035772225641459844,
+       "minus_counterpart": 0.000542567666752923
+      },
+      "2025": {
+       "games": 1398,
+       "reserved_test_season": true,
+       "log_loss": 0.6921349870314901,
+       "brier": 0.4989912554134681,
+       "accuracy": 0.5286123032904149,
+       "best_prior_existing": "goals_poisson",
+       "best_log_loss": 0.6916929081288589,
+       "best_brier": 0.4985241278734743,
+       "best_accuracy": 0.5300429184549357,
+       "minus_best": 0.00044207890263134965,
+       "minus_counterpart": 0.0021948737582394504
+      },
+      "2026": {
+       "games": 1394,
+       "reserved_test_season": true,
+       "log_loss": 0.6766257924004464,
+       "brier": 0.4836801573675074,
+       "accuracy": 0.5753228120516499,
+       "best_prior_existing": "goals_poisson",
+       "best_log_loss": 0.6828900317314225,
+       "best_brier": 0.4897878921990161,
+       "best_accuracy": 0.569583931133429,
+       "minus_best": -0.006264239330976103,
+       "minus_counterpart": -0.0008151111275668448
+      }
+     },
+     "qualifies": false
+    }
+   }
+  },
+  "nhl:team_total_away": {
+   "games": 11870,
+   "existing_members": [
+    "goals_poisson",
+    "goals_draw",
+    "goals_glm",
+    "poisson_draw:nhl_base"
+   ],
+   "deep": {
+    "torch_goals:nhl_base": {
+     "games": 10515,
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.0012957686127762612,
+      "ci95": [
+       0.00019536982356878186,
+       0.0024249641655278236
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "counterpart": "poisson_draw:nhl_base",
+     "log_loss_minus_counterpart": {
+      "mean": 0.0012957686127762612,
+      "ci95": [
+       0.00019536982356878186,
+       0.0024249641655278236
+      ],
+      "games": 10515,
+      "weeks": 282
+     },
+     "per_season": {
+      "2019": {
+       "games": 1358,
+       "reserved_test_season": false,
+       "log_loss": 0.6881774401901102,
+       "brier": 0.49501806153402667,
+       "accuracy": 0.5338733431516937,
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "best_log_loss": 0.6871223740960171,
+       "best_brier": 0.49396387820546434,
+       "best_accuracy": 0.5522827687776142,
+       "minus_best": 0.001055066094093163,
+       "minus_counterpart": 0.001055066094093163
+      },
+      "2020": {
+       "games": 1212,
+       "reserved_test_season": false,
+       "log_loss": 0.6907540715909652,
+       "brier": 0.4973752986249378,
+       "accuracy": 0.5429042904290429,
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "best_log_loss": 0.6854356915830501,
+       "best_brier": 0.49221478925446405,
+       "best_accuracy": 0.5627062706270627,
+       "minus_best": 0.005318380007915199,
+       "minus_counterpart": 0.005318380007915199
+      },
+      "2021": {
+       "games": 952,
+       "reserved_test_season": false,
+       "log_loss": 0.6768740427180212,
+       "brier": 0.48388836976293687,
+       "accuracy": 0.5819327731092437,
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "best_log_loss": 0.6779448333974706,
+       "best_brier": 0.48486324566884054,
+       "best_accuracy": 0.5766806722689075,
+       "minus_best": -0.0010707906794493042,
+       "minus_counterpart": -0.0010707906794493042
+      },
+      "2022": {
+       "games": 1401,
+       "reserved_test_season": false,
+       "log_loss": 0.6880400947114984,
+       "brier": 0.494818798212091,
+       "accuracy": 0.5389007851534618,
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "best_log_loss": 0.6858222873498109,
+       "best_brier": 0.4926805667696373,
+       "best_accuracy": 0.5510349750178444,
+       "minus_best": 0.0022178073616875545,
+       "minus_counterpart": 0.0022178073616875545
+      },
+      "2023": {
+       "games": 1400,
+       "reserved_test_season": false,
+       "log_loss": 0.6871035906158206,
+       "brier": 0.49377270952095603,
+       "accuracy": 0.5557142857142857,
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "best_log_loss": 0.6861322887619019,
+       "best_brier": 0.4929113620412196,
+       "best_accuracy": 0.5621428571428572,
+       "minus_best": 0.0009713018539186551,
+       "minus_counterpart": 0.0009713018539186551
+      },
+      "2024": {
+       "games": 1400,
+       "reserved_test_season": false,
+       "log_loss": 0.6812045847533391,
+       "brier": 0.48817827771758887,
+       "accuracy": 0.5721428571428572,
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "best_log_loss": 0.6797738772420533,
+       "best_brier": 0.48676908936122315,
+       "best_accuracy": 0.5735714285714286,
+       "minus_best": 0.0014307075112858479,
+       "minus_counterpart": 0.0014307075112858479
+      },
+      "2025": {
+       "games": 1398,
+       "reserved_test_season": true,
+       "log_loss": 0.6805005276614445,
+       "brier": 0.48733148328662274,
+       "accuracy": 0.575107296137339,
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "best_log_loss": 0.680864628189328,
+       "best_brier": 0.4877524540763893,
+       "best_accuracy": 0.572961373390558,
+       "minus_best": -0.00036410052788342123,
+       "minus_counterpart": -0.00036410052788342123
+      },
+      "2026": {
+       "games": 1394,
+       "reserved_test_season": true,
+       "log_loss": 0.6739226114187402,
+       "brier": 0.48093472241476337,
+       "accuracy": 0.5839311334289814,
+       "best_prior_existing": "poisson_draw:nhl_base",
+       "best_log_loss": 0.6733452838163179,
+       "best_brier": 0.48033329057768687,
+       "best_accuracy": 0.6040172166427547,
+       "minus_best": 0.0005773276024224122,
+       "minus_counterpart": 0.0005773276024224122
+      }
+     },
+     "qualifies": false
+    }
+   }
+  },
+  "nba:winner": {
+   "games": 6605,
+   "existing_members": [
+    "elo",
+    "logistic",
+    "logistic_v2",
+    "efficiency_margin",
+    "gbt_v1",
+    "elastic_net:nba_base",
+    "extra_trees:nba_base",
+    "extra_trees:nba_base:normal",
+    "hetero_linear:nba_base",
+    "mlp:nba_base",
+    "mlp:nba_base:normal",
+    "ngboost:nba_base",
+    "random_forest:nba_base"
+   ],
+   "deep": {
+    "keras_mlp:nba_base": {
+     "games": 5282,
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.0010749028713794599,
+      "ci95": [
+       -0.0009684501023526149,
+       0.003088917139787343
+      ],
+      "games": 5282,
+      "weeks": 140
+     },
+     "counterpart": "mlp:nba_base",
+     "log_loss_minus_counterpart": {
+      "mean": 0.0015876829439508062,
+      "ci95": [
+       0.0005092839406304169,
+       0.0026582031065329136
+      ],
+      "games": 5282,
+      "weeks": 140
+     },
+     "per_season": {
+      "2023": {
+       "games": 1320,
+       "reserved_test_season": false,
+       "log_loss": 0.6447718934283466,
+       "brier": 0.4529896482924967,
+       "accuracy": 0.6363636363636364,
+       "best_prior_existing": "logistic_v2",
+       "best_log_loss": 0.6467748857413844,
+       "best_brier": 0.45502044815965603,
+       "best_accuracy": 0.625,
+       "minus_best": -0.002002992313037947,
+       "minus_counterpart": 0.0013231191971139916
+      },
+      "2024": {
+       "games": 1319,
+       "reserved_test_season": false,
+       "log_loss": 0.6116081509264275,
+       "brier": 0.4239476953154621,
+       "accuracy": 0.6542835481425322,
+       "best_prior_existing": "elastic_net:nba_base",
+       "best_log_loss": 0.6085162686707996,
+       "best_brier": 0.4210545787984951,
+       "best_accuracy": 0.6557998483699773,
+       "minus_best": 0.003091882255627928,
+       "minus_counterpart": 0.0019226603693580752
+      },
+      "2025": {
+       "games": 1321,
+       "reserved_test_season": true,
+       "log_loss": 0.6074189948505929,
+       "brier": 0.4201010948168662,
+       "accuracy": 0.6593489780469342,
+       "best_prior_existing": "elastic_net:nba_base",
+       "best_log_loss": 0.6056811952144429,
+       "best_brier": 0.41879661710760613,
+       "best_accuracy": 0.6616199848599545,
+       "minus_best": 0.001737799636150216,
+       "minus_counterpart": 0.0007103101220173614
+      },
+      "2026": {
+       "games": 1322,
+       "reserved_test_season": true,
+       "log_loss": 0.6025596820753972,
+       "brier": 0.4148631103211869,
+       "accuracy": 0.6845688350983359,
+       "best_prior_existing": "elastic_net:nba_base",
+       "best_log_loss": 0.6010863380471757,
+       "best_brier": 0.4135053114472333,
+       "best_accuracy": 0.6845688350983359,
+       "minus_best": 0.001473344028221426,
+       "minus_counterpart": 0.0023943383293414935
+      }
+     },
+     "qualifies": false
+    },
+    "torch_mlp:nba_base": {
+     "games": 5282,
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.0001086713679895633,
+      "ci95": [
+       -0.001771957012843354,
+       0.002116822306309521
+      ],
+      "games": 5282,
+      "weeks": 140
+     },
+     "counterpart": "mlp:nba_base",
+     "log_loss_minus_counterpart": {
+      "mean": 0.0006214514405609099,
+      "ci95": [
+       -0.00043043158869499455,
+       0.0016932013221523368
+      ],
+      "games": 5282,
+      "weeks": 140
+     },
+     "per_season": {
+      "2023": {
+       "games": 1320,
+       "reserved_test_season": false,
+       "log_loss": 0.6440369456840053,
+       "brier": 0.4524401967835102,
+       "accuracy": 0.6431818181818182,
+       "best_prior_existing": "logistic_v2",
+       "best_log_loss": 0.6467748857413844,
+       "best_brier": 0.45502044815965603,
+       "best_accuracy": 0.625,
+       "minus_best": -0.0027379400573791296,
+       "minus_counterpart": 0.000588171452772809
+      },
+      "2024": {
+       "games": 1319,
+       "reserved_test_season": false,
+       "log_loss": 0.6106403624224024,
+       "brier": 0.4229794369537496,
+       "accuracy": 0.6512509476876421,
+       "best_prior_existing": "elastic_net:nba_base",
+       "best_log_loss": 0.6085162686707996,
+       "best_brier": 0.4210545787984951,
+       "best_accuracy": 0.6557998483699773,
+       "minus_best": 0.0021240937516029844,
+       "minus_counterpart": 0.000954871865333133
+      },
+      "2025": {
+       "games": 1321,
+       "reserved_test_season": true,
+       "log_loss": 0.6061869462212515,
+       "brier": 0.41893483000835835,
+       "accuracy": 0.6616199848599545,
+       "best_prior_existing": "elastic_net:nba_base",
+       "best_log_loss": 0.6056811952144429,
+       "best_brier": 0.41879661710760613,
+       "best_accuracy": 0.6616199848599545,
+       "minus_best": 0.0005057510068086834,
+       "minus_counterpart": -0.0005217385073241716
+      },
+      "2026": {
+       "games": 1322,
+       "reserved_test_season": true,
+       "log_loss": 0.6016296862340915,
+       "brier": 0.41399923478446765,
+       "accuracy": 0.686838124054463,
+       "best_prior_existing": "elastic_net:nba_base",
+       "best_log_loss": 0.6010863380471757,
+       "best_brier": 0.4135053114472333,
+       "best_accuracy": 0.6845688350983359,
+       "minus_best": 0.0005433481869158225,
+       "minus_counterpart": 0.0014643424880358901
+      }
+     },
+     "qualifies": false
+    }
+   }
+  },
+  "nba:spread": {
+   "games": 5282,
+   "existing_members": [
+    "points_normal",
+    "ridge_points",
+    "gbt_points",
+    "ridge_points@weekly",
+    "gbt_points@weekly",
+    "elastic_net:nba_base",
+    "extra_trees:nba_base:normal",
+    "hetero_linear:nba_base",
+    "mlp:nba_base:normal",
+    "ngboost:nba_base"
+   ],
+   "deep": {
+    "torch_mlp:nba_base:normal": {
+     "games": 3962,
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.0013600511580256194,
+      "ci95": [
+       -0.0005563242262344176,
+       0.0032878418700757264
+      ],
+      "games": 3962,
+      "weeks": 105
+     },
+     "counterpart": "gbt_points",
+     "log_loss_minus_counterpart": {
+      "mean": -0.005023485303626656,
+      "ci95": [
+       -0.00786845534489766,
+       -0.0021429826657924987
+      ],
+      "games": 3962,
+      "weeks": 105
+     },
+     "per_season": {
+      "2024": {
+       "games": 1319,
+       "reserved_test_season": false,
+       "log_loss": 0.683893014882804,
+       "brier": 0.4908437543149692,
+       "accuracy": 0.558756633813495,
+       "best_prior_existing": "elastic_net:nba_base",
+       "best_log_loss": 0.6841344470664112,
+       "best_brier": 0.49106747880952534,
+       "best_accuracy": 0.555724033358605,
+       "minus_best": -0.00024143218360744032,
+       "minus_counterpart": -0.009000895578461244
+      },
+      "2025": {
+       "games": 1321,
+       "reserved_test_season": true,
+       "log_loss": 0.6873907178887957,
+       "brier": 0.49426499427395687,
+       "accuracy": 0.546555639666919,
+       "best_prior_existing": "elastic_net:nba_base",
+       "best_log_loss": 0.6859022979827375,
+       "best_brier": 0.492822473120706,
+       "best_accuracy": 0.546555639666919,
+       "minus_best": 0.0014884199060581013,
+       "minus_counterpart": -0.004137703340020513
+      },
+      "2026": {
+       "games": 1322,
+       "reserved_test_season": true,
+       "log_loss": 0.6952121382464477,
+       "brier": 0.501912617195757,
+       "accuracy": 0.5264750378214826,
+       "best_prior_existing": "hetero_linear:nba_base",
+       "best_log_loss": 0.6923825096213546,
+       "best_brier": 0.49915554246244975,
+       "best_accuracy": 0.5347957639939486,
+       "minus_best": 0.0028296286250930162,
+       "minus_counterpart": -0.0019402128538663663
+      }
+     },
+     "qualifies": false
+    }
+   }
+  },
+  "nba:total": {
+   "games": 5282,
+   "existing_members": [
+    "points_normal",
+    "ridge_points",
+    "gbt_points",
+    "ridge_points@weekly",
+    "gbt_points@weekly",
+    "elastic_net:nba_base",
+    "extra_trees:nba_base:normal",
+    "hetero_linear:nba_base",
+    "mlp:nba_base:normal",
+    "ngboost:nba_base"
+   ],
+   "deep": {
+    "torch_mlp:nba_base:normal": {
+     "games": 3962,
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.008179014375905392,
+      "ci95": [
+       0.0017237541950167296,
+       0.014871549611602477
+      ],
+      "games": 3962,
+      "weeks": 105
+     },
+     "counterpart": "gbt_points",
+     "log_loss_minus_counterpart": {
+      "mean": -0.001108694934967111,
+      "ci95": [
+       -0.005108727250944191,
+       0.0025184537724474614
+      ],
+      "games": 3962,
+      "weeks": 105
+     },
+     "per_season": {
+      "2024": {
+       "games": 1319,
+       "reserved_test_season": false,
+       "log_loss": 0.7130534978729696,
+       "brier": 0.517986207366244,
+       "accuracy": 0.5253980288097043,
+       "best_prior_existing": "hetero_linear:nba_base",
+       "best_log_loss": 0.7115815065646593,
+       "best_brier": 0.5171742598397157,
+       "best_accuracy": 0.5026535253980288,
+       "minus_best": 0.001471991308310222,
+       "minus_counterpart": -0.0012706096249855382
+      },
+      "2025": {
+       "games": 1321,
+       "reserved_test_season": true,
+       "log_loss": 0.7047588405683928,
+       "brier": 0.5107462774834641,
+       "accuracy": 0.5071915215745647,
+       "best_prior_existing": "points_normal",
+       "best_log_loss": 0.6930099664501395,
+       "best_brier": 0.49986276405936564,
+       "best_accuracy": 0.5291445874337622,
+       "minus_best": 0.011748874118253268,
+       "minus_counterpart": 0.0023923699069042124
+      },
+      "2026": {
+       "games": 1322,
+       "reserved_test_season": true,
+       "log_loss": 0.7039324252591443,
+       "brier": 0.5100351074817898,
+       "accuracy": 0.516641452344932,
+       "best_prior_existing": "points_normal",
+       "best_log_loss": 0.6926287673836046,
+       "best_brier": 0.49948165318542276,
+       "best_accuracy": 0.5075642965204236,
+       "minus_best": 0.011303657875539653,
+       "minus_counterpart": -0.004445564208777787
+      }
+     },
+     "qualifies": false
+    }
+   }
+  },
+  "nba:team_total_home": {
+   "games": 5282,
+   "existing_members": [
+    "points_normal",
+    "ridge_points",
+    "gbt_points",
+    "ridge_points@weekly",
+    "gbt_points@weekly",
+    "elastic_net:nba_base",
+    "extra_trees:nba_base:normal",
+    "hetero_linear:nba_base",
+    "mlp:nba_base:normal",
+    "ngboost:nba_base"
+   ],
+   "deep": {
+    "torch_mlp:nba_base:normal": {
+     "games": 3962,
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.00048745824052769885,
+      "ci95": [
+       -0.004281429509405622,
+       0.005145019866882843
+      ],
+      "games": 3962,
+      "weeks": 105
+     },
+     "counterpart": "gbt_points",
+     "log_loss_minus_counterpart": {
+      "mean": -0.0030980784184800824,
+      "ci95": [
+       -0.006625987749588443,
+       0.00034334363990324587
+      ],
+      "games": 3962,
+      "weeks": 105
+     },
+     "per_season": {
+      "2024": {
+       "games": 1319,
+       "reserved_test_season": false,
+       "log_loss": 0.7085910575239216,
+       "brier": 0.5141093338976841,
+       "accuracy": 0.5155420773313116,
+       "best_prior_existing": "hetero_linear:nba_base",
+       "best_log_loss": 0.7108910784633378,
+       "best_brier": 0.5165163528049069,
+       "best_accuracy": 0.5140257771038665,
+       "minus_best": -0.002300020939416127,
+       "minus_counterpart": -0.006210681243537247
+      },
+      "2025": {
+       "games": 1321,
+       "reserved_test_season": true,
+       "log_loss": 0.6949000294244191,
+       "brier": 0.5014999600315297,
+       "accuracy": 0.5352006056018168,
+       "best_prior_existing": "points_normal",
+       "best_log_loss": 0.6940256019701173,
+       "best_brier": 0.5008781366016645,
+       "best_accuracy": 0.49507948523845574,
+       "minus_best": 0.0008744274543018346,
+       "minus_counterpart": 0.0037154162577907744
+      },
+      "2026": {
+       "games": 1322,
+       "reserved_test_season": true,
+       "log_loss": 0.6960302960098025,
+       "brier": 0.5026531357653696,
+       "accuracy": 0.5204236006051437,
+       "best_prior_existing": "points_normal",
+       "best_log_loss": 0.6931483606838358,
+       "best_brier": 0.5000011460971916,
+       "best_accuracy": 0.5037821482602118,
+       "minus_best": 0.0028819353259666347,
+       "minus_counterpart": -0.006800879735502323
+      }
+     },
+     "qualifies": false
+    }
+   }
+  },
+  "nba:team_total_away": {
+   "games": 5282,
+   "existing_members": [
+    "points_normal",
+    "ridge_points",
+    "gbt_points",
+    "ridge_points@weekly",
+    "gbt_points@weekly",
+    "elastic_net:nba_base",
+    "extra_trees:nba_base:normal",
+    "hetero_linear:nba_base",
+    "mlp:nba_base:normal",
+    "ngboost:nba_base"
+   ],
+   "deep": {
+    "torch_mlp:nba_base:normal": {
+     "games": 3962,
+     "log_loss_minus_best_prior_existing": {
+      "mean": 0.0047069943585469785,
+      "ci95": [
+       -0.0006867705169517,
+       0.010056509851905775
+      ],
+      "games": 3962,
+      "weeks": 105
+     },
+     "counterpart": "gbt_points",
+     "log_loss_minus_counterpart": {
+      "mean": -0.004224032775156763,
+      "ci95": [
+       -0.007838704168441634,
+       -0.0006063617208547784
+      ],
+      "games": 3962,
+      "weeks": 105
+     },
+     "per_season": {
+      "2024": {
+       "games": 1319,
+       "reserved_test_season": false,
+       "log_loss": 0.705001031301075,
+       "brier": 0.5106239880255593,
+       "accuracy": 0.533737680060652,
+       "best_prior_existing": "hetero_linear:nba_base",
+       "best_log_loss": 0.7018251509872094,
+       "best_brier": 0.507545942337738,
+       "best_accuracy": 0.5231235784685367,
+       "minus_best": 0.0031758803138656703,
+       "minus_counterpart": -0.004916555575637685
+      },
+      "2025": {
+       "games": 1321,
+       "reserved_test_season": true,
+       "log_loss": 0.6980746859353155,
+       "brier": 0.5045380665309951,
+       "accuracy": 0.5230885692657078,
+       "best_prior_existing": "points_normal",
+       "best_log_loss": 0.692801332165843,
+       "best_brier": 0.4996541785488153,
+       "best_accuracy": 0.5147615442846328,
+       "minus_best": 0.005273353769472585,
+       "minus_counterpart": -0.007850088175365859
+      },
+      "2026": {
+       "games": 1322,
+       "reserved_test_season": true,
+       "log_loss": 0.697865691799139,
+       "brier": 0.5043325204842273,
+       "accuracy": 0.5310136157337367,
+       "best_prior_existing": "points_normal",
+       "best_log_loss": 0.6921969889359764,
+       "best_brier": 0.4990500123698688,
+       "best_accuracy": 0.5226928895612708,
+       "minus_best": 0.005668702863162648,
+       "minus_counterpart": 9.023103536558855e-05
+      }
+     },
+     "qualifies": false
+    }
+   }
+  }
+ },
+ "decision_rule": "proposed for prospective recording only if the pooled log-loss difference against the best earlier-chosen existing member has a 95% interval entirely below 0",
+ "finished_at": "2026-10-03T21:58:31Z"
+}

@@ -1,0 +1,85 @@
+app imported from: /Users/andry/Desktop/nba-predictor-batch1/backend/app/__init__.py
+--- X1 research/ -> protected research: nfl tick
+rc: 1
+stdout: {"status": "refused", "reason": "$G4/runs/main/x1/research is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never
+tree unchanged: True
+  stub reached: False
+--- X1 research/ -> protected research: nfl refresh
+rc: 1
+stdout: {"status": "refused", "reason": "$G4/runs/main/x1/research is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never
+tree unchanged: True
+  stub reached: False
+--- X1 research/ -> protected research: nfl migrate
+rc: 1
+stdout: {"status": "refused", "reason": "$G4/runs/main/x1/research is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never
+tree unchanged: True
+  stub reached: False
+--- X1 research/ -> protected research: nfl ingest
+rc: 1
+stdout: {"status": "refused", "reason": "$G4/runs/main/x1/research is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never
+tree unchanged: True
+  stub reached: False
+--- X2 nested research/nfl_eval -> protected: nfl tick
+rc: 1
+stdout: {"status": "refused", "reason": "$G4/runs/main/x2/research/nfl_eval/nfl_test_access.jsonl is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment
+tree unchanged: True
+  stub reached: False
+--- X3 nested research/nfl_live -> protected: nfl refresh
+rc: 1
+stdout: {"status": "refused", "reason": "$G4/runs/main/x3/research/nfl_live/activation.json is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): de
+tree unchanged: True
+  stub reached: False
+--- X4 research -> checkout root: nfl tick
+rc: 1
+stdout: {"status": "refused", "reason": "$G4/runs/main/x4/research/nfl_live/activation.json is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): de
+tree unchanged: True
+  stub reached: False
+--- X5 research is a plain file (unprotected): nfl tick
+rc: EXCEPTION NotADirectoryError: [Errno 20] Not a directory: '/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/guard-verify/round4/runs/main/x5/research/nfl_eval'
+stdout: 
+tree unchanged: True
+  stub reached: True
+--- X6 research -> protected store FILE: nfl tick
+rc: 1
+stdout: {"status": "refused", "reason": "$G4/runs/main/x6/research is in a protected live data folder and this is not the verified release environment (NBA_RELEASE_GUARD is not 1 (not the release environment)): development commands never
+tree unchanged: True
+  stub reached: False
+X7 nested research/adaptive -> protected: _write_refusal('nhl') = None (guard-level only)
+protected access log lines after X1-X7: 1
+--- 0-byte nfl replay: rc 1 | {"status": "refused", "reason": "the store file /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchp | files after ['nfl.sqlite'] sizes [0]
+--- 0-byte nhl replay: rc 1 | {"status": "refused", "reason": "the store file /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchp | files after ['nhl.sqlite'] sizes [0]
+--- 0-byte nba replay: rc 1 | {"status": "refused", "reason": "the store file /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchp | files after ['nba.sqlite'] sizes [0]
+--- 0-byte soccer replay: rc 1 | {"status": "refused", "reason": "the store file /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchp | files after ['soccer.sqlite'] sizes [0]
+--- nonexistent nfl store replay: rc 0 | {"responses": 0, "games_inserted": 0, "games_updated": 0, "line_quotes": 0} | created: ['.nfl-jobs.lock', 'nfl.sqlite', 'nfl.sqlite-shm', 'nfl.sqlite-wal'] schema 35
+--- dev_research: nfl tick rc 0 stub reached True | {
+  "status": "ok",
+  "stub": "appended via access_log_path()"
+}
+--- dev_research: nfl refresh rc 0 stub reached True | {
+  "status": "ok",
+  "stub": "appended via access_log_path()"
+}
+--- dev_research: nfl migrate rc 0 stub reached False | {"db": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-4
+--- dev_research: nhl score rc 0 {"status": "REACHED_RUN"}
+    dev_research own access log lines: 2
+--- dev_noresearch: nfl tick rc 0 stub reached True | {
+  "status": "ok",
+  "stub": "appended via access_log_path()"
+}
+--- dev_noresearch: nfl refresh rc 0 stub reached True | {
+  "status": "ok",
+  "stub": "appended via access_log_path()"
+}
+--- dev_noresearch: nfl migrate rc 0 stub reached False | {"db": "/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-4
+--- dev_noresearch: nhl score rc 0 {"status": "REACHED_RUN"}
+    dev_noresearch own access log lines: 2
+--- new dev dir nhl migrate rc 0 schema 35
+--- RO nfl release-check: rc 1 refused=False content unchanged=True
+--- RO nfl coverage: rc 0 refused=False content unchanged=True
+--- RO --sport nhl coverage: rc 0 refused=False content unchanged=True
+--- RO --sport nhl thresholds: rc 0 refused=False content unchanged=True
+NFD spelling differs as a string: True exists: True
+--- spelling NFD of NFC-named checkout: rc 1 refused=True tree unchanged=True
+--- spelling trailing /.: rc 1 refused=True tree unchanged=True
+--- spelling case: rc 1 refused=True tree unchanged=True
+protected final: ['nfl.sqlite', 'nhl.sqlite', 'research'] | log lines: 1

@@ -1,0 +1,172 @@
+"""Ticket shape: the weakest leg decides a long ticket (owner, Nov 11: his own tickets kept losing by exactly one leg)."""
+import copy
+
+import pytest
+
+from app import tickets as t
+
+
+def leg(label, probability, price=None, sport='nba', market='winner', game=None):
+    return dict(sport=sport, market=market, matchup='AAA @ BBB', pick_label=label, probability=probability,
+                game_id=game or label, tipoff='2026-11-12T00:00:00Z',
+                quote_check=dict(provider='DraftKings', price_now=price, line_source='bookmaker') if price is not None else {})
+
+
+def test_weakest_leg_is_the_lowest_percentage_and_the_chance_is_in_plain_words():
+    legs = [leg('DET win', .878, -500), leg('DAL win', .672, -192), leg('MIN win', .869, -700)]
+    s = t.ticket_shape(legs)
+    assert s['weakest'] == 'DAL win' and s['weakest_line'] == 'Weakest leg: DAL win (67%)'
+    assert abs(s['all_land'] - .878 * .672 * .869) < 1e-9 and s['all_land_line'] == 'All legs land about 1 time in 2'
+    assert t.land_words(.33) == 'about 1 time in 3' and t.land_words(.21) == 'about 1 time in 5'
+    assert t.land_words(.64) == 'about 6 times in 10' and t.land_words(.99) == 'about 9 times in 10'
+    assert t.land_words(.55) == 'about 6 times in 10' and t.land_words(.54) == 'about 1 time in 2' and t.land_words(.72) == 'about 7 times in 10'
+    assert t.land_words(.0) == 'about 1 time in 1000'
+
+
+def test_the_weakest_leg_is_simply_the_lowest_app_percentage_and_no_price_label_is_shown():
+    # Step 1, Nov 11: the "price asks a lot" label is removed (H2: those legs mostly won). A leg whose price needs far
+    # more than the app's percentage is no longer called weakest; the lowest app percentage is.
+    cle, low = leg('CLE win', .552, -290), leg('LAL win', .506, 121)
+    s = t.ticket_shape([leg('DET win', .878, -500), cle, low])
+    assert s['weakest'] == 'LAL win' and s['weakest_line'] == 'Weakest leg: LAL win (51%)'
+    assert s['weakest_probability'] == .506 and s['lowest_probability'] == .506 and s['weakest_sport'] == 'nba'
+    assert not any('asks_a_lot' in key for key in s) and not hasattr(t, 'PRICE_ASKS_A_LOT')
+    for one in (cle, low, leg('X win', .60), leg('Y win', .60, -300)):
+        assert 'price_asks_a_lot' not in t.leg_assessment('nba', one)
+    assert t.leg_assessment('nba', cle)['model_gap'] < -.15           # the price comparison itself stays in the assessment
+
+
+def test_a_tie_for_the_lowest_percentage_names_the_first_leg_in_plan_order():
+    first, second = leg('BOS win', .62, -300), leg('NYK win', .62, 150)
+    for legs, name in (([leg('DET win', .88), first, second], 'BOS win'), ([leg('DET win', .88), second, first], 'NYK win')):
+        s = t.ticket_shape(legs)
+        assert s['weakest'] == name and s['weakest_line'] == f'Weakest leg: {name} (62%)'
+
+
+@pytest.mark.parametrize('count,probability,allowed', [
+    (2, .51, True), (3, .51, True), (4, .75, True), (4, .749, False), (5, .80, True), (5, .79, False),
+    (6, .80, True), (7, .80, True), (7, .78, False)])
+def test_ticket_length_must_match_its_weakest_leg(count, probability, allowed):
+    legs = [leg(f'T{i} win', .90) for i in range(count - 1)] + [leg('Weak win', probability)]
+    problems = t.shape_problems(legs)
+    assert (problems == []) is allowed
+    if not allowed:
+        assert 'Weak win' in problems[0] and f'{count}-leg ticket' in problems[0] and 'two or three legs' in problems[0]
+
+
+def test_at_most_one_nhl_plus_one_and_a_half_leg_per_ticket():
+    dog = lambda name: leg(f'{name} +1.5', .71, -260, sport='nhl', market='spread')
+    assert t.shape_problems([dog('CBJ'), leg('DET win', .88)]) == []
+    two = t.shape_problems([dog('CBJ'), dog('OTT'), leg('DET win', .88)])
+    assert len(two) == 1 and 'CBJ +1.5, OTT +1.5' in two[0]
+    favourite = leg('WPG -1.5', .40, 180, sport='nhl', market='spread')
+    nba = leg('NO +11.5', .60, -110, sport='nba', market='spread')
+    assert t.shape_problems([favourite, dict(favourite, pick_label='TB -1.5'), nba]) == []
+
+
+def test_the_picture_shows_both_shape_lines_and_never_fails_because_of_them(monkeypatch):
+    from app import telegram_card as card
+    monkeypatch.setattr(card, '_logo', lambda *a: None)
+    seen = []
+    real = card.ImageDraw.ImageDraw.text
+    monkeypatch.setattr(card.ImageDraw.ImageDraw, 'text', lambda self, xy, text, **kw: (seen.append(text), real(self, xy, text, **kw))[1])
+    legs = [leg('DET win', .878, -500), leg('CLE win', .552, -290)]
+    png = card.render_ticket_card('2026-11-11', [dict(label='Pair', ticket_id='T1', legs=legs)])
+    drawn = ' '.join(seen)
+    assert png[:4] == b'\x89PNG' and 'All legs land about 1 time in 2' in drawn
+    assert 'Weakest leg: CLE win (55%)' in drawn and 'asks a lot' not in drawn
+    # A picture too tall with the extra lines is drawn without them, exactly as before this change.
+    long = ' '.join(['Pelicans'] * 8)
+
+    def tall(wrapped):      # 21 legs; the first `wrapped` carry a pick name long enough to wrap (small height steps)
+        return [dict(label='Layout', ticket_id=f'T{k}', legs=[leg((long if k * 7 + i < wrapped else 'NO') + f' {k}{i}', .85) for i in range(7)])
+                for k in range(3)]
+
+    def drawn_or_none(tickets, shape_lines):
+        try:
+            return card._ticket_card('2026-11-11', tickets, preview=False, number_from=1, total=None, book_lines=False, shape_lines=shape_lines)
+        except ValueError:
+            return None
+    for wrapped in range(22):
+        tickets = tall(wrapped)
+        with_lines, without = drawn_or_none(tickets, True), drawn_or_none(tickets, False)
+        if with_lines is None and without is not None:
+            assert card.render_ticket_card('2026-11-11', tickets) == without
+            return
+    raise AssertionError('no layout found where only the shape lines overflow')
+
+
+def test_a_ticket_stored_before_the_label_was_removed_is_drawn_without_it(monkeypatch):
+    # Tickets resolved before Step 1 carry a stored shape with the old label; a retry or re-render must not show it.
+    from app import telegram_card as card
+    monkeypatch.setattr(card, '_logo', lambda *a: None)
+    seen = []
+    real = card.ImageDraw.ImageDraw.text
+    monkeypatch.setattr(card.ImageDraw.ImageDraw, 'text', lambda self, xy, text, **kw: (seen.append(text), real(self, xy, text, **kw))[1])
+    legs = [leg('DET win', .878, -500), leg('CLE win', .552, -290), leg('LAL win', .506, 121)]
+    old = dict(t.ticket_shape(legs), weakest='CLE win', weakest_line='Weakest leg: CLE win (55%) · price asks a lot')
+    card.render_ticket_card('2026-11-11', [dict(label='Old', ticket_id='T1', legs=legs, shape=old)])
+    drawn = ' '.join(seen)
+    assert 'Weakest leg: LAL win (51%)' in drawn and 'asks a lot' not in drawn
+
+
+def test_check_refuses_a_long_ticket_with_a_weak_leg_and_accepts_it_short(tmp_path, monkeypatch):
+    import json
+    from pathlib import Path
+    monkeypatch.setenv('NBA_DATA_DIR', str(tmp_path))
+    monkeypatch.setattr(t, 'SKILL', tmp_path / 'SKILL.md'); t.SKILL.write_text('fixture')
+    now = '2026-11-08T17:00:00Z'
+    picks = [dict(forecast_id=i, game_id=f'g{i}', market='winner', matchup=f'A{i} @ B{i}', pick_label=f'B{i} win',
+                  probability=.90 if i < 5 else .70, status='scheduled', grade='pending',
+                  generated_at='2026-11-08T16:30:00Z', tipoff='2026-11-08T18:00:00Z', lineup_flags=[]) for i in range(1, 6)]
+    snap = dict(as_of=now, date='2026-11-08', skill_sha256=t.sha(t.SKILL.read_bytes()), helper_sha256=t.sha(Path(t.__file__).read_bytes()),
+                sports={s: dict(freshness=dict(source_state='fresh', failing=False), report=dict(picks=copy.deepcopy(picks), without_forecast={}))
+                        for s in ('nba', 'nhl', 'nfl')})
+    snap['sports']['soccer'] = {'error': 'forecasts_unavailable'}
+    monkeypatch.setattr(t, 'snapshot', lambda: copy.deepcopy(snap))
+    path = tmp_path / 'snapshot.json'; path.write_text(json.dumps(snap))
+    review = dict(skill_sha256=snap['skill_sha256'], helper_sha256=snap['helper_sha256'], snapshot_sha256=t.sha(path.read_bytes()),
+                  notes='Fixture review', combination_comparison='Compared',
+                  markets_reviewed={s: {'winner': 'Reviewed'} for s in ('nba', 'nhl', 'nfl')},
+                  forecasts_reviewed={f'{s}:{i}': dict(decision='candidate', reason='Compared market, side and evidence')
+                                      for s in ('nba', 'nhl', 'nfl') for i in range(1, 6)})
+    def plan(ids):
+        return dict(snapshot_path=str(path), review=review, tickets=[dict(
+            label='Shape', stake_usd=1, payout_assessment='Fixture payout judgment',
+            legs=[dict(sport='nba', forecast_id=i, rationale='Fixture reason') for i in ids])])
+    with pytest.raises(ValueError, match=r'Ticket shape \(Shape\): a 5-leg ticket needs every leg at 80% or better; too weak: B5 win in A5 @ B5 \(70%\)\. Move them to a shorter ticket'):
+        t.check(plan([1, 2, 3, 4, 5]))
+    ok = t.check(plan([1, 2, 5]))
+    assert ok['resolved'][0]['shape']['weakest'] == 'B5 win' and ok['resolved'][0]['shape']['legs'] == 3
+    assert t.check(plan([1, 2, 3, 4]))['resolved'][0]['shape']['weakest_probability'] == .90
+
+
+def test_review_fix_legs_with_the_same_label_are_named_by_their_game():
+    # Delta review MEDIUM (Nov 11): "too weak: Over 6.5 (70%), Over 6.5 (70%)" did not say which leg to move.
+    a = dict(leg('Over 6.5', .70, sport='nhl', market='total', game='g1'), matchup='TB @ BUF', forecast_id=1)
+    b = dict(leg('Over 6.5', .60, sport='nhl', market='total', game='g2'), matchup='NSH @ ANA', forecast_id=2)
+    legs = [a, b, leg('DET win', .90), leg('MIN win', .90)]
+    problems = t.shape_problems(legs)
+    assert 'Over 6.5 in TB @ BUF (70%)' in problems[0] and 'Over 6.5 in NSH @ ANA (60%)' in problems[0]
+    s = t.ticket_shape(legs)
+    assert s['weakest_line'] == 'Weakest leg: Over 6.5 in NSH @ ANA (60%)' and s['weakest_forecast_id'] == 2
+    # a label that names its leg on its own keeps the short line on the picture
+    assert t.ticket_shape([leg('DET win', .90), leg('DAL win', .67)])['weakest_line'] == 'Weakest leg: DAL win (67%)'
+
+
+def test_review_fix_only_plus_one_and_a_half_counts_as_an_nhl_puck_line_dog():
+    alt = leg('CBJ +2.5', .80, sport='nhl', market='spread')
+    dog = leg('OTT +1.5', .71, sport='nhl', market='spread')
+    assert t.shape_problems([alt, dog, leg('DET win', .88)]) == []
+
+
+def test_review_fix_land_words_rounds_halves_up():
+    assert t.land_words(.65) == 'about 7 times in 10' and t.land_words(.85) == 'about 9 times in 10'
+    assert t.land_words(.75) == 'about 8 times in 10' and t.land_words(.40) == 'about 1 time in 3'
+
+
+def test_review_fix_the_refusal_says_what_a_shorter_ticket_allows():
+    four = t.shape_problems([leg('A win', .90), leg('B win', .90), leg('C win', .90), leg('Weak win', .70)])
+    assert four[0].endswith('Move them to a shorter ticket (two or three legs have no floor)')
+    five = t.shape_problems([leg(f'T{i} win', .90) for i in range(4)] + [leg('Weak win', .76)])
+    assert five[0].endswith('Move them to a shorter ticket (4 legs need 75%; two or three legs have no floor)')

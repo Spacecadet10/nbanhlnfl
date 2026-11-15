@@ -1,0 +1,62 @@
+
+=== ITEM 1 text connect ===
+T0 exit 1 {"status": "retry"} [{'delivery_key': 'ai-ticket-review-v3:2026-11-08:fixture-chat:b3b8d8e5f411107667e60167d0410390622d07b91d969a1f4eb7a49091971cbb', 'status': 'retry', 'attempted_at': '2026-11-08T17:00:00Z', 'next_attempt_at': '2026-11-08T17:01:00Z', 'error': 'Telegram connection unavailable.'}] ['getMe', 'getWebhookInfo', 'getUpdates', 'sendMessage']
+PASS 1.connect first send status retry | {"status": "retry"}
+PASS 1.connect exit nonzero | 1
+PASS 1.connect next_attempt_at=17:01 | [{'delivery_key': 'ai-ticket-review-v3:2026-11-08:fixture-chat:b3b8d8e5f411107667e60167d0410390622d07b91d969a1f4eb7a49091971cbb', 'status': 'retry', 'attempted_at': '2026-11-08T17:00:00Z', 'next_attempt_at': '2026-11-08T17:01:00Z', 'error': 'Telegram connection unavailable.'}]
+T1 exit 1 {"status": "retry_pending"} ['getMe', 'getWebhookInfo', 'getUpdates']
+PASS 1.connect before next_attempt -> retry_pending | ('{"status": "retry_pending"}', ['getMe', 'getWebhookInfo', 'getUpdates'])
+PASS 1.connect retry_pending exit nonzero | 1
+T2 exit 0 {"status": "sent"} ['getMe', 'getWebhookInfo', 'getUpdates', 'sendMessage', 'sendPhoto'] [{'delivery_key': 'ai-ticket-review-v3:2026-11-08:fixture-chat:b3b8d8e5f411107667e60167d0410390622d07b91d969a1f4eb7a49091971cbb', 'status': 'sent', 'attempted_at': '2026-11-08T17:03:00Z', 'next_attempt_at': '2026-11-08T17:01:00Z', 'message_id': 1}, {'delivery_key': 'ticket-image:f1faa817dc38da80a9a91ddc81eb0d0a8dc8fcd95d65a3ed9ec29fd6dc746aef', 'status': 'sent', 'attempted_at': '2026-11-08T17:03:00Z', 'next_attempt_at': None, 'message_id': 2}]
+PASS 1.connect later send status sent exit0 | (0, '{"status": "sent"}')
+PASS 1.connect resent text == archived original == first attempt
+PASS 1.connect attempted_at is current attempt | {'delivery_key': 'ai-ticket-review-v3:2026-11-08:fixture-chat:b3b8d8e5f411107667e60167d0410390622d07b91d969a1f4eb7a49091971cbb', 'status': 'sent', 'attempted_at': '2026-11-08T17:03:00Z', 'next_attempt_at': '2026-11-08T17:01:00Z', 'message_id': 1}
+PASS 1.connect ticket_items unchanged, one per ticket, 1 batch | (2, [{'n': 1}])
+PASS 1.connect stakes unchanged | [3, 1]
+PASS 1.connect sendPhoto follows sendMessage | ['getMe', 'getWebhookInfo', 'getUpdates', 'sendMessage', 'sendPhoto']
+
+=== ITEM 1 text 429 ===
+T0 exit 1 {"status": "retry"} [{'delivery_key': 'ai-ticket-review-v3:2026-11-08:fixture-chat:b3b8d8e5f411107667e60167d0410390622d07b91d969a1f4eb7a49091971cbb', 'status': 'retry', 'attempted_at': '2026-11-08T17:00:00Z', 'next_attempt_at': '2026-11-08T17:01:00Z', 'error': 'Telegram rejected sendMessage (HTTP 429).'}] ['getMe', 'getWebhookInfo', 'getUpdates', 'sendMessage']
+PASS 1.429 first send status retry | {"status": "retry"}
+PASS 1.429 exit nonzero | 1
+PASS 1.429 next_attempt_at=17:01 | [{'delivery_key': 'ai-ticket-review-v3:2026-11-08:fixture-chat:b3b8d8e5f411107667e60167d0410390622d07b91d969a1f4eb7a49091971cbb', 'status': 'retry', 'attempted_at': '2026-11-08T17:00:00Z', 'next_attempt_at': '2026-11-08T17:01:00Z', 'error': 'Telegram rejected sendMessage (HTTP 429).'}]
+T1 exit 1 {"status": "retry_pending"} ['getMe', 'getWebhookInfo', 'getUpdates']
+PASS 1.429 before next_attempt -> retry_pending | ('{"status": "retry_pending"}', ['getMe', 'getWebhookInfo', 'getUpdates'])
+PASS 1.429 retry_pending exit nonzero | 1
+T2 exit 0 {"status": "sent"} ['getMe', 'getWebhookInfo', 'getUpdates', 'sendMessage', 'sendPhoto'] [{'delivery_key': 'ai-ticket-review-v3:2026-11-08:fixture-chat:b3b8d8e5f411107667e60167d0410390622d07b91d969a1f4eb7a49091971cbb', 'status': 'sent', 'attempted_at': '2026-11-08T17:03:00Z', 'next_attempt_at': '2026-11-08T17:01:00Z', 'message_id': 3}, {'delivery_key': 'ticket-image:f1faa817dc38da80a9a91ddc81eb0d0a8dc8fcd95d65a3ed9ec29fd6dc746aef', 'status': 'sent', 'attempted_at': '2026-11-08T17:03:00Z', 'next_attempt_at': None, 'message_id': 4}]
+PASS 1.429 later send status sent exit0 | (0, '{"status": "sent"}')
+PASS 1.429 resent text == archived original == first attempt
+PASS 1.429 attempted_at is current attempt | {'delivery_key': 'ai-ticket-review-v3:2026-11-08:fixture-chat:b3b8d8e5f411107667e60167d0410390622d07b91d969a1f4eb7a49091971cbb', 'status': 'sent', 'attempted_at': '2026-11-08T17:03:00Z', 'next_attempt_at': '2026-11-08T17:01:00Z', 'message_id': 3}
+PASS 1.429 ticket_items unchanged, one per ticket, 1 batch | (2, [{'n': 1}])
+PASS 1.429 stakes unchanged | [3, 1]
+PASS 1.429 sendPhoto follows sendMessage | ['getMe', 'getWebhookInfo', 'getUpdates', 'sendMessage', 'sendPhoto']
+
+=== ITEM 2 text readtimeout ===
+T0 1 {"status": "uncertain"} [{'status': 'uncertain', 'error': 'Telegram response not confirmed; review delivery before retrying.'}]
+PASS 2.readtimeout first status uncertain, exit!=0 | {"status": "uncertain"}
+2026-11-08T17:03:00Z 1 {"status": "existing_uncertain"} ['getMe', 'getWebhookInfo', 'getUpdates']
+PASS 2.readtimeout 2026-11-08T17:03:00Z existing_uncertain, no sendMessage, exit!=0 | {"status": "existing_uncertain"}
+2026-11-08T17:09:00Z 1 {"status": "existing_uncertain"} ['getMe', 'getWebhookInfo', 'getUpdates']
+PASS 2.readtimeout 2026-11-08T17:09:00Z existing_uncertain, no sendMessage, exit!=0 | {"status": "existing_uncertain"}
+
+=== ITEM 2 text 500 ===
+T0 1 {"status": "uncertain"} [{'status': 'uncertain', 'error': 'Telegram server response not confirmed.'}]
+PASS 2.500 first status uncertain, exit!=0 | {"status": "uncertain"}
+2026-11-08T17:03:00Z 1 {"status": "existing_uncertain"} ['getMe', 'getWebhookInfo', 'getUpdates']
+PASS 2.500 2026-11-08T17:03:00Z existing_uncertain, no sendMessage, exit!=0 | {"status": "existing_uncertain"}
+2026-11-08T17:09:00Z 1 {"status": "existing_uncertain"} ['getMe', 'getWebhookInfo', 'getUpdates']
+PASS 2.500 2026-11-08T17:09:00Z existing_uncertain, no sendMessage, exit!=0 | {"status": "existing_uncertain"}
+
+=== ITEM 2 image uncertain ===
+T0 1 {"status": "partial_uncertain"} [{'delivery_key': 'ai-ticket-review-v3:2026-11-08:fixture-chat:b3b8d8e5f411107667e60167d0410390622d07b91d969a1f4eb7a49091971cbb', 'status': 'sent', 'next_attempt_at': None}, {'delivery_key': 'ticket-image:f1faa817dc38da80a9a91ddc81eb0d0a8dc8fcd95d65a3ed9ec29fd6dc746aef', 'status': 'uncertain', 'next_attempt_at': None}]
+PASS 2.img-uncertain first status partial_uncertain, exit!=0 | {"status": "partial_uncertain"}
+T2 1 {"status": "partial_uncertain"} ['getMe', 'getWebhookInfo', 'getUpdates'] [{'delivery_key': 'ai-ticket-review-v3:2026-11-08:fixture-chat:b3b8d8e5f411107667e60167d0410390622d07b91d969a1f4eb7a49091971cbb', 'status': 'sent', 'attempted_at': '2026-11-08T17:00:00Z'}, {'delivery_key': 'ticket-image:f1faa817dc38da80a9a91ddc81eb0d0a8dc8fcd95d65a3ed9ec29fd6dc746aef', 'status': 'uncertain', 'attempted_at': '2026-11-08T17:00:00Z'}]
+PASS 2.img-uncertain later: neither sendMessage nor sendPhoto | ('{"status": "partial_uncertain"}', ['getMe', 'getWebhookInfo', 'getUpdates'])
+
+=== ITEM 2 image connect ===
+T0 1 {"status": "partial_retry"} [{'delivery_key': 'ai-ticket-review-v3:2026-11-08:fixture-chat:b3b8d8e5f411107667e60167d0410390622d07b91d969a1f4eb7a49091971cbb', 'status': 'sent', 'next_attempt_at': None}, {'delivery_key': 'ticket-image:f1faa817dc38da80a9a91ddc81eb0d0a8dc8fcd95d65a3ed9ec29fd6dc746aef', 'status': 'retry', 'next_attempt_at': '2026-11-08T17:01:00Z'}]
+PASS 2.img-connect first status partial_retry, exit!=0 | {"status": "partial_retry"}
+T2 0 {"status": "sent"} ['getMe', 'getWebhookInfo', 'getUpdates', 'sendPhoto'] [{'delivery_key': 'ai-ticket-review-v3:2026-11-08:fixture-chat:b3b8d8e5f411107667e60167d0410390622d07b91d969a1f4eb7a49091971cbb', 'status': 'sent', 'attempted_at': '2026-11-08T17:00:00Z'}, {'delivery_key': 'ticket-image:f1faa817dc38da80a9a91ddc81eb0d0a8dc8fcd95d65a3ed9ec29fd6dc746aef', 'status': 'sent', 'attempted_at': '2026-11-08T17:03:00Z'}]
+PASS 2.img-connect later: ONLY photo resent, same bytes, exit0 | ('{"status": "sent"}', ['getMe', 'getWebhookInfo', 'getUpdates', 'sendPhoto'])
+
+SUMMARY 32 / 32

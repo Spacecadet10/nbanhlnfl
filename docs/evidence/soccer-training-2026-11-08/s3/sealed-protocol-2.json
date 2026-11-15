@@ -1,0 +1,238 @@
+{
+ "name": "soccer-1x2-openfootball",
+ "version": 2,
+ "written_at": "2026-11-08",
+ "written_before_any_model_fit": true,
+ "target": "90-minute result of a match: home win / draw / away win; three probabilities summing to 1",
+ "dataset": {
+  "store_tables": [
+   "soccer_hist_matches",
+   "soccer_hist_revisions"
+  ],
+  "source_pins": {
+   "football.json": "e6744429ee395bc86f247348c6184bb08d4eb361",
+   "champions-league": "abfaeddc2ee3d14f99ecc163c9ddb46cb4d67cef"
+  },
+  "importer_version": "openfootball-1",
+  "club_map_version": "2026-11-08.1",
+  "competitions": [
+   "eng.1",
+   "esp.1",
+   "ger.1",
+   "ita.1",
+   "fra.1",
+   "uefa.champions",
+   "uefa.europa"
+  ]
+ },
+ "periods": {
+  "warmup": [
+   2010,
+   2011,
+   2012
+  ],
+  "development_tune": [
+   2013,
+   2014,
+   2015,
+   2016,
+   2017
+  ],
+  "development_calibration": [
+   2018,
+   2019
+  ],
+  "validation": [
+   2020,
+   2021,
+   2022
+  ],
+  "reserved_test": [
+   2023,
+   2024,
+   2025
+  ],
+  "prospective_locked": [
+   2026
+  ],
+  "last_open_season": 2022,
+  "season_meaning": "start year: 2020 = 2020-21",
+  "league_first_season_not_scored": {
+   "eng.1": 2010,
+   "ger.1": 2010,
+   "esp.1": 2012,
+   "ita.1": 2013,
+   "fra.1": 2014
+  },
+  "uefa_scored_from_first_available_season": true
+ },
+ "point_in_time": {
+  "forecast_cutoff": "06:00:00 UTC on the match's listed local date (earliest listed kickoff in the data is 12:00 local); every forecast for one date uses the same state",
+  "result_available_at": "a match's revision becomes usable at its result_available_at: a result seen in the first retrieval that lists the match = next day 06:00 UTC (assumed; the source publishes no time); a first result appearing in a later retrieval of a match already listed without one, or a change of whether it may be used = that retrieval ('observed_retrieval'); a different result or a different date = that retrieval ('observed_correction'); never before the day after the match",
+  "input_rule": "an input is a revision with result_available_at <= cutoff whose state is final, has no extra-time/shoot-out note and is not a UEFA deciding match (= grading 'gradable' at that revision); the 90-minute score of that revision is used",
+  "same_day": "matches on the same date never inform each other (their results become available the next day)",
+  "never_inputs": [
+   "scheduled",
+   "result_missing",
+   "cancelled",
+   "awarded",
+   "extra_time_noted",
+   "deciding_match_unverified",
+   "matches rejected at import"
+  ],
+  "kickoff_time": "not used (zone unknown; times may be carried from the line above)",
+  "online_models_and_corrections": "Elo consumes each match once, when its result first becomes available, using the revision available then; a later correction does not rewrite earlier updates. Poisson refits from the as-of snapshot at each cutoff. Frequencies are fixed (see candidates)."
+ },
+ "scoring": {
+  "scored_matches": "latest revision grading 'gradable' (final, no extra-time/shoot-out note, not a UEFA deciding match) in a scored season of the period; label = sign of the latest 90-minute score",
+  "excluded_and_counted": [
+   "not final",
+   "cancelled",
+   "awarded",
+   "extra-time/shoot-out noted",
+   "UEFA deciding match",
+   "league first season",
+   "warm-up seasons",
+   "rejected at import (incl. 66 EPL 2019-20 restart matches dated July 2019)"
+  ],
+  "primary_metric": "multiclass log loss (natural log, probabilities clipped to [1e-15, 1-1e-15])",
+  "reported_metrics": [
+   "multiclass Brier score (sum over 3 outcomes; 0 best, 2 worst)",
+   "per-outcome reliability: 10 equal-width bins of predicted probability, count / mean predicted / observed rate, and expected calibration error (count-weighted mean |predicted - observed|)",
+   "mean predicted vs observed home/draw/away rates",
+   "accuracy of the most likely outcome (reported only)",
+   "sample sizes"
+  ],
+  "breakdowns": [
+   "overall",
+   "per competition",
+   "per season"
+  ],
+  "uncertainty": "backtest.block_bootstrap: ISO-week blocks of the forecast cutoff, seed 20260930, 2000 resamples, 95% percentile interval; for a model's mean log loss and for paired per-match log-loss differences"
+ },
+ "candidates": {
+  "frequency": {
+   "description": "home/draw/away relative frequencies per competition from every match whose latest revision is gradable in seasons 2010-2019 (warm-up and development, incl. league first seasons); fixed afterwards; uefa.europa (no development data) uses uefa.champions frequencies",
+   "parameters": "none tuned"
+  },
+  "elo": {
+   "description": "one rating scale for all clubs and competitions. Expected score E = 1/(1+10^(-(R_home + H - R_away)/400)); actual 1 / 0.5 / 0 for home win / draw / away win; R_home += K*m*(actual - E), R_away -= same. m = 1 (mov off) or the World Football Elo goal multiplier (mov on: 1 for |gd|<=1, 1.5 for 2, (11+|gd|)/8 for >=3). H applies to every listed home side (UEFA finals are deciding matches and never scored or used).",
+   "initial_rating": "league membership per (league, season) comes from the schedule (every listed match of any status). When the model first touches a league-season (its first input or forecast): if the league was not covered in the previous season, every member club is set to 1500 (replacing any UEFA-only rating); otherwise M = mean current rating of the previous season's members (before any change), each returning member moves to M + C*(R - M), and each member not in the previous season (promoted) is set to M - P, replacing any older rating. A club first seen in a UEFA competition while not a member of any covered league starts at 1500 - F",
+   "season_carry": "domestic: as above, at the league-season start. Clubs not in a covered league in season s: at their first input or forecast of season s, R = Mf + C*(R - Mf) with Mf the mean current rating of all such clubs",
+   "draw_model": "ordered logit on x = (R_home + H - R_away)/400: P(away) = sigmoid(a_c - b*x), P(away or draw) = sigmoid(a_c + d_c - b*x) with d_c > 0; one slope b; cut points a_c, d_c per competition (uefa.europa uses uefa.champions); fitted by maximum likelihood (L-BFGS-B, d_c parameterised as exp) on scored development_tune matches using the walk-forward ratings of the same configuration",
+   "grid": {
+    "K": [
+     15,
+     20,
+     25,
+     30
+    ],
+    "H": [
+     50,
+     75,
+     100
+    ],
+    "C": [
+     1.0,
+     0.8,
+     0.6
+    ],
+    "P": [
+     0,
+     100,
+     200
+    ],
+    "F": [
+     0,
+     100,
+     200
+    ],
+    "mov": [
+     false,
+     true
+    ]
+   },
+   "selection": "lowest development_tune log loss (after fitting the draw model on development_tune); ties within 1e-9 broken by smaller K, then smaller H, then larger C, then smaller P, then smaller F, then mov false"
+  },
+  "poisson": {
+   "description": "independent Poisson goals: log lambda_home = mu_c + h_c + att_home - def_away; log lambda_away = mu_c + att_away - def_home; mu_c and h_c per competition, unpenalised (uefa.europa always shares uefa.champions' mu_c and h_c: one UEFA pair); att/def per club. Probabilities from the outer product of the two Poisson pmfs over 0..10 goals, renormalised. No low-score correction.",
+   "fit": "refit at every forecast cutoff from the as-of snapshot: inputs with match date in the 730 days before the cutoff, weight exp(-ln2 * age_days / half_life); maximum weighted likelihood with ridge penalty tau * sum((att - prior_att)^2 + (def - prior_def)^2) (tau in pseudo-matches); L-BFGS-B, warm-started from the previous cutoff, tolerance 1e-8, max 200 iterations",
+   "priors": "prior centre 0 for every club, except a club in a league-season it was not in during the previous covered season of that league (promoted): centre = (mean att, mean def) of the league-season's other members present in the previous cutoff's fit (promoted ones included) - D; a newly covered league (no previous season) or no such member: 0. The season used is that of the club's forecast match at this cutoff, otherwise of its latest input row. A club with no input in the window is predicted at its prior centre",
+   "grid": {
+    "half_life_days": [
+     180,
+     365,
+     730
+    ],
+    "tau": [
+     3,
+     10
+    ],
+    "D": [
+     0.1,
+     0.25
+    ]
+   },
+   "selection": "lowest development_tune log loss; ties within 1e-9 broken by larger half_life_days, then larger tau, then smaller D"
+  }
+ },
+ "model_choice_on_validation": {
+  "complexity_order": [
+   "frequency",
+   "elo",
+   "poisson"
+  ],
+  "rule": "current = frequency. For elo then poisson (each with its development-selected configuration): if its validation log loss is lower than current's AND the 95% bootstrap interval of the paired per-match log-loss difference (candidate - current) lies entirely below 0 AND its mean log loss is lower than current's in at least 2 of the 3 validation seasons, current = candidate. The final current is the selected model. Otherwise the simpler model is kept. A more complex model is compared with the current choice only.",
+  "pooled_over": "all scored validation matches of all competitions; per-competition results are reported but do not change the choice"
+ },
+ "calibration": {
+  "applies_to": "the selected model only (not attempted for frequency)",
+  "method": "multinomial logistic recalibration of the model's log-probabilities: q_k proportional to exp(s*log p_k + c_k), c_home = 0; parameters s, c_draw, c_away; L2 penalty 1e-3 on (s-1, c_draw, c_away); fitted by maximum likelihood",
+  "fit_data": "the selected model's walk-forward forecasts of scored development_calibration matches (2018-19, 2019-20), with that model's configuration chosen on development_tune only",
+  "minimum_matches": 1000,
+  "acceptance": "keep calibration only if on validation (a) mean log loss is lower AND the 95% bootstrap interval of the paired per-match difference (calibrated - uncalibrated) lies entirely below 0 AND mean log loss is lower in at least 2 of the 3 validation seasons, and (b) the expected calibration error of no outcome (home, draw, away; 10 bins) is worse by more than 0.005 than uncalibrated. Otherwise the uncalibrated model is used.",
+  "clip": "probabilities clipped to [1e-6, 1-1e-6] and renormalised after calibration",
+  "minimum_matches_rule": "fewer than minimum_matches calibration matches: calibration not attempted, uncalibrated"
+ },
+ "frozen_for_test": "selected model, its development-selected configuration, its draw model / priors as fitted on development_tune, the calibration decision and parameters fitted on development_calibration. Nothing is refitted for the test run; the walk-forward continues through validation into test using only results available at each cutoff.",
+ "reserved_test_access": "development runs on a store copy holding only seasons <= 2022 (results files of later seasons are not copied); the loader refuses seasons after 2025 always and seasons 2023-2025 unless given a valid sealed candidate and an access log, written before anything is read; the one-shot runner refuses an invalid seal, an existing output, any earlier test-run start in the access log, a candidate that is not the only seal in the experiments log, and changed code, protocol, open data or dataset pins; this task stops before running it",
+ "pre_fit_inspection_disclosure": "before this protocol was written the lead inspected source integrity only: file/match counts per competition-season, grading/status counts, rejected lines, a handful of individual match lines and scores (incl. 2023-24 and 2025-26 samples) while checking parser formats, and club names; no outcome rate, home/draw/away share, goal average or any metric was computed for any period",
+ "not_claimed": [
+  "betting edge",
+  "comparison with bookmaker odds (none available)",
+  "quality of totals, both-teams-to-score or qualification markets (not evaluated)"
+ ],
+ "amendments": [
+  {
+   "number": 1,
+   "date": "2026-11-08",
+   "before_any_model_fit": true,
+   "why": "independent S3 leakage/evaluation review (REQUEST CHANGES) and S2 data-quality review, both before any fit, development or validation metric existed; version 1 sha256 043b5ede4ee58cb4e97de7e9159e172f08bc8f79637d25494be6eba3758fb051",
+   "changes": [
+    "model choice and calibration acceptance also need a lower mean log loss in at least 2 of the 3 validation seasons (COVID 2020-21 cannot decide alone)",
+    "calibration with fewer than 1000 calibration matches is not attempted (uncalibrated) instead of failing",
+    "Poisson prior centres: season = the forecast match's season (other clubs: their latest input row's season); centres from the previous cutoff's fit; 'other clubs' = the league-season's other members present in that fit, promoted ones included; newly covered league or no such member: 0",
+    "result availability: a first result appearing in a later retrieval of a match already listed without one, or a change of whether a result may be used (second leg appears, match listed again), counts only from that retrieval ('observed_retrieval'); a date change counts as a correction; never before the day after the match",
+    "disclosed: 66 EPL 2019-20 matches (played after the June 2020 restart, dated July 2019 by the source) rejected at import: absent from frequencies, inputs and the calibration set (EPL 2019-20 has 314 of 380)",
+    "reserved access: seasons after 2025 always refused; one test run per access log whatever the seal; the candidate must be the only seal the mandatory experiments log recorded (a start entry precedes every development load); the store's commits, importer and club map must equal the dataset pins; development runs on a copy holding only seasons <= 2022",
+    "code digest also covers backtest.py and metrics.py; numpy/scipy/python versions recorded",
+    "reporting: exclusion counts, reliability tables for every model on validation, validation with and without UEL 2020-21, Elo development_tune log loss labelled in-sample for its draw model"
+   ]
+  }
+ ],
+ "frozen_inputs": {
+  "code_files": [
+   "soccer_eval.py",
+   "soccer_history.py",
+   "soccer_clubs.py",
+   "soccer_protocol.json",
+   "backtest.py",
+   "metrics.py"
+  ],
+  "environment_recorded": [
+   "python",
+   "numpy",
+   "scipy"
+  ]
+ }
+}

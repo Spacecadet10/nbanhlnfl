@@ -1,0 +1,33 @@
+/Users/andry/Desktop/nba-predictor-batch1/backend/app/__init__.py
+backup exit=0
+{'sport': 'nba', 'sha_ok': True, 'bytes_ok': True, 'integrity': 'ok', 'fk_backup': [], 'fk_src': [], 'uv': (0, 0), 'schema_eq': True, 'ident': ([('nba',)], [('nba',)]), 'dump_eq': True, 'counts_ok': True}
+{'sport': 'nfl', 'sha_ok': True, 'bytes_ok': True, 'integrity': 'ok', 'fk_backup': [], 'fk_src': [], 'uv': (0, 0), 'schema_eq': True, 'ident': ([('nfl',)], [('nfl',)]), 'dump_eq': True, 'counts_ok': True}
+{'sport': 'nhl', 'sha_ok': True, 'bytes_ok': True, 'integrity': 'ok', 'fk_backup': [], 'fk_src': [], 'uv': (0, 0), 'schema_eq': True, 'ident': ([('nhl',)], [('nhl',)]), 'dump_eq': True, 'counts_ok': True}
+{'sport': 'soccer', 'sha_ok': True, 'bytes_ok': True, 'integrity': 'ok', 'fk_backup': [], 'fk_src': [], 'uv': (0, 0), 'schema_eq': True, 'ident': ([('soccer',)], [('soccer',)]), 'dump_eq': True, 'counts_ok': True}
+ALL OK
+== 05 roundtrip
+exit=0
+nba identical
+nhl identical
+nfl identical
+soccer identical
+== 08 tamper
+BackupError: /private/tmp/claude-501/-Usound4/t1/nfl.sqlite does not match the manifest (sha256); not restored
+.nba-jobs.lock
+does not match the manifest (sha256); not restored
+== 09 lock + identity
+exit 1 BackupError: A job holds the soccer store lock; stop the scheduled jobs first
+nfl untouched
+.nfl-jobs.lock
+.soccer-jobs.lock
+nfl.sqlite
+x1 REFUSED
+x2 REFUSED
+x3 REFUSED
+x4 RESTORED
+x5 REFUSED
+x6 REFUSED
+== missing store
+3
+named-missing exit=1
+ls: /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/backup-verify/round4/on: No such file or directory

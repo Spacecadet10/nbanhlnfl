@@ -1,0 +1,115 @@
+"""Prospective tracking of registered combination rules (docs/MODEL_SELECTION.md §15) on stored cohorts."""
+import json
+
+import pytest
+
+from app import rule_tracking as rt
+from test_research_live import GID, game, run  # noqa: F401  (fixture)
+from test_live_markets import sealed  # noqa: F401
+from test_nhl_eval import nhl_store  # noqa: F401
+
+
+def registry(effective="2026-10-01T00:00:00Z"):
+    members = ["hockey_elo", "goals_poisson", "hockey_logistic", "hockey_gbt", "hockey_logistic_xg"]
+    rules = [
+        {"id": "single|hockey_elo|0.5|all", "kind": "single", "members": ["hockey_elo"], "t": 0.5, "level": "all",
+         "selected": "unqualified research", "why": "test", "prospective_only": False, "historical": []},
+        {"id": "unanimous_min|hockey_elo+hockey_logistic_xg|0.5|all", "kind": "unanimous_min",
+         "members": ["hockey_elo", "hockey_logistic_xg"], "t": 0.5, "level": "all", "selected": None, "why": None,
+         "prospective_only": False, "historical": []},
+        {"id": "single|goals_glm|0.99|all", "kind": "single", "members": ["goals_glm"], "t": 0.99, "level": "all",
+         "selected": "unqualified research", "why": "test", "prospective_only": True, "historical": []}]
+    reg = {"study": "selective-v1", "version": 1, "effective_from": effective,
+           "markets": {"nhl:winner": {"sport": "nhl", "market": "winner", "cohort": "core", "members": members,
+                                      "comparator": "hockey_elo", "frontier": [], "rules": rules}}}
+    return rt.seal(reg)
+
+
+def test_registry_seal_detects_any_change(tmp_path):
+    reg = registry()
+    p = tmp_path / "r.json"
+    p.write_text(json.dumps(reg))
+    assert rt.load_registry(p)["sha256"] == reg["sha256"]
+    reg["effective_from"] = "2020-01-01T00:00:00Z"
+    p.write_text(json.dumps(reg))
+    with pytest.raises(rt.RegistryError):
+        rt.load_registry(p)
+
+
+def test_one_canonical_decision_per_game_and_abstention_reasons(game):
+    run(game, "2026-10-12T21:30:00Z")
+    run(game, "2026-10-12T21:40:00Z")                     # retries never add games
+    rep = rt.report(game, "nhl", "winner", "all", registry())
+    assert rep["cohorts"] == 1
+    single = next(r for r in rep["rules"] if r["id"].startswith("single|hockey_elo"))
+    assert single["prospective"]["picks"] == 1 and single["prospective"]["pending"] == 1 and single["prospective"]["accuracy"] is None
+    glm = next(r for r in rep["rules"] if r["id"].startswith("single|goals_glm"))
+    assert glm["prospective"]["picks"] == 0 and glm["prospective"]["recent"][0]["reason"].startswith("member missing")
+    assert len(rt.report(game, "nhl", "winner", "selected", registry())["rules"]) == 2
+
+
+def test_cohorts_before_the_effective_date_do_not_count(game):
+    run(game, "2026-10-12T21:30:00Z")
+    rep = rt.report(game, "nhl", "winner", "all", registry(effective="2026-10-12T22:00:00Z"))
+    assert rep["cohorts"] == 0 and all(r["prospective"]["picks"] == 0 for r in rep["rules"])
+
+
+def test_settled_outcomes_count_wins_and_compare_at_matched_coverage(game):
+    from test_live_markets import add_upcoming
+    run(game, "2026-10-12T21:30:00Z")
+    add_upcoming(game, start="2026-10-12T19:00:00", state=7, hs=4, vs=1, period=3, at="2026-10-13T02:00:00Z")
+    rep = rt.report(game, "nhl", "winner", "all", registry())
+    single = next(r for r in rep["rules"] if r["id"].startswith("single|hockey_elo"))["prospective"]
+    assert single["win"] + single["loss"] == 1 and single["pending"] == 0
+    assert single["strongest_single_matched"]["games"] == 1
+
+
+def test_games_outside_a_rules_condition_record_the_reason(game, monkeypatch):
+    from app import selective_study
+    monkeypatch.setattr(selective_study, "CLEAR", 0.999)        # no game is a 'clear favourite'
+    reg = registry()
+    reg["markets"]["nhl:winner"]["rules"][0]["level"] = "clear"
+    reg["markets"]["nhl:winner"]["rules"][0]["id"] = "single|hockey_elo|0.5|clear"
+    run(game, "2026-10-12T21:30:00Z")
+    rep = rt.report(game, "nhl", "winner", "selected", rt.seal({k: v for k, v in reg.items() if k != "sha256"}))
+    r = next(x for x in rep["rules"] if x["level"] == "clear")["prospective"]
+    assert r["picks"] == 0 and r["recent"][0]["reason"] == "condition 'clear' not met"
+
+
+def test_conditions_and_stack_constituents_use_the_studied_members():
+    """Audit P3/P5: the sealed NBA winner registry lists availability_two_hour, which the study never saw; conditions and
+    the stack's constituents use the five studied members (the live stacker's inputs), without editing the sealed file."""
+    from app import research_live
+    reg = rt.load_registry()
+    m = reg["markets"]["nba:winner"]
+    assert "availability_two_hour" in m["members"]
+    assert rt.studied_members(m) == list(research_live.CORE["nba"])
+    assert rt.studied_members(reg["markets"]["nhl:winner"])[:4] == list(research_live.CORE["nhl"])
+
+
+def test_recent_probability_is_the_rule_statistic():
+    """Audit P4: an average rule shows the averaged probability, a unanimous-minimum rule its minimum, not member[0]'s."""
+    v = {"a": (0.8, 0.0, 0.2), "b": (0.6, 0.0, 0.4), "stack": (0.7, 0.0, 0.3)}
+    assert rt.rule_statistic({"kind": "avg", "members": ["a", "b"]}, v, "winner", 0) == ("average probability", pytest.approx(0.7))
+    assert rt.rule_statistic({"kind": "unanimous_min", "members": ["a", "b"]}, v, "winner", 0)[1] == 0.6
+    assert rt.rule_statistic({"kind": "single", "members": ["b"]}, v, "winner", 0)[1] == 0.6
+    assert rt.rule_statistic({"kind": "stack", "members": ["a", "b"]}, v, "winner", 0)[1] == 0.7
+
+
+def test_stack_rule_report_compares_with_its_constituents(game):
+    from test_live_markets import add_upcoming
+    reg = registry()
+    body = {k: v for k, v in reg.items() if k != "sha256"}
+    body["markets"]["nhl:winner"]["rules"].append(
+        {"id": "stack|all|0.5|all", "kind": "stack", "members": body["markets"]["nhl:winner"]["members"][:4], "t": 0.5,
+         "level": "all", "selected": "unqualified research", "why": "test", "prospective_only": False, "historical": []})
+    run(game, "2026-10-12T21:30:00Z")
+    add_upcoming(game, start="2026-10-12T19:00:00", state=7, hs=4, vs=1, period=3, at="2026-10-13T02:00:00Z")
+    rep = rt.report(game, "nhl", "winner", "all", rt.seal(body))
+    stack = next(r for r in rep["rules"] if r["kind"] == "stack")["prospective"]
+    if stack["win"] + stack["loss"]:
+        assert [c["model"] for c in stack["constituents_matched"]] == rep["studied_members"]
+    else:                                   # no stacker in this small cohort: the reason is recorded, never a fallback
+        assert stack["recent"][0]["reason"] == "no stacker probability in this cohort"
+    # This fixture's non-stack rules were studied with hockey_elo and hockey_logistic_xg only.
+    assert "cutoff_note" in rep and rep["studied_members"] == ["hockey_elo", "hockey_logistic_xg"]

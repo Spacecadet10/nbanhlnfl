@@ -1,0 +1,21 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.12, pytest-9.1.1, pluggy-1.6.0 -- /Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/bin/python
+hypothesis profile 'default'
+rootdir: /Users/andry/Desktop/nba-predictor-batch1/backend
+configfile: pyproject.toml
+plugins: hypothesis-6.168.3, anyio-4.15.1
+collecting ... collected 44 items / 39 deselected / 5 selected
+
+tests/test_live_store_guard.py::test_the_checkout_holding_the_data_folder_is_never_a_release_environment[exact] PASSED [ 20%]
+tests/test_live_store_guard.py::test_the_checkout_holding_the_data_folder_is_never_a_release_environment[data-case] PASSED [ 40%]
+tests/test_live_store_guard.py::test_the_checkout_holding_the_data_folder_is_never_a_release_environment[data-firmlink] PASSED [ 60%]
+tests/test_live_store_guard.py::test_the_checkout_holding_the_data_folder_is_never_a_release_environment[root-case] PASSED [ 80%]
+tests/test_live_store_guard.py::test_the_own_data_folder_is_protected_under_another_spelling PASSED [100%]
+
+=============================== warnings summary ===============================
+../../nba-predictor-sprint1/backend/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================= 5 passed, 39 deselected, 1 warning in 1.09s ==================

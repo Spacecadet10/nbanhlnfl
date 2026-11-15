@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!-- Keeps the Mac from sleeping while it is on AC power (caffeinate -s has no effect on battery), so the forecast,
+     price and Telegram jobs keep running. Nov 10 investigation: the Mac sleeps after 1 minute idle; 29 of 37 missed
+     forecasts and 59 of 77 failed Telegram runs happened while it was asleep or going to sleep. Undo:
+     launchctl bootout gui/$(id -u)/com.nba-predictor.keep-awake -->
+<dict>
+	<key>Label</key>
+	<string>com.nba-predictor.keep-awake</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/bin/caffeinate</string>
+		<string>-s</string>
+	</array>
+	<key>KeepAlive</key>
+	<true/>
+	<key>RunAtLoad</key>
+	<true/>
+</dict>
+</plist>

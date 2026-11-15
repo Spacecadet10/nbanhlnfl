@@ -1,0 +1,71 @@
+{
+ "sport": "nfl",
+ "market": "winner",
+ "model": "elo",
+ "config": {
+  "k": 20,
+  "home_advantage": 50,
+  "carry": 0.5,
+  "mov": true
+ },
+ "cutoff": "kickoff - 120 min",
+ "calibration": {
+  "accepted": false,
+  "final": null
+ },
+ "line_markets": {
+  "score_model": {
+   "name": "nfl_points_normal",
+   "eta": 0.05,
+   "carry": 0.75,
+   "priors": {
+    "points": 22.0,
+    "sd_margin": 13.5,
+    "sd_total": 13.5
+   }
+  },
+  "line": "consensus close (ESPN core odds), never a model input",
+  "markets": {
+   "spread": {
+    "closing_line_skill": false,
+    "scope": "retrospective closing-line test",
+    "best_threshold": null,
+    "strong": false,
+    "best_pick_allowed": false,
+    "implied_line": false
+   },
+   "total": {
+    "closing_line_skill": false,
+    "scope": "retrospective closing-line test",
+    "best_threshold": null,
+    "strong": false,
+    "best_pick_allowed": false,
+    "implied_line": false
+   },
+   "team_total_home": {
+    "closing_line_skill": false,
+    "scope": "retrospective closing-line test",
+    "best_threshold": null,
+    "strong": false,
+    "best_pick_allowed": false,
+    "implied_line": true
+   },
+   "team_total_away": {
+    "closing_line_skill": false,
+    "scope": "retrospective closing-line test",
+    "best_threshold": null,
+    "strong": false,
+    "best_pick_allowed": false,
+    "implied_line": true
+   },
+   "winner": {
+    "best_threshold": 0.75,
+    "strong": true
+   }
+  }
+ },
+ "dataset_version": "f59df479f5769084",
+ "chosen_at": "2026-11-01T21:40:06Z",
+ "plan": "docs/NFL_PLAN.md (NFL evaluation plan, amended 2026-11-01)",
+ "sha256": "d0e51f91c3acd3b45dcb0b8d72c55fabf9db9d2c789c7e3e6926bf885efc8b9a"
+}

@@ -1,0 +1,56 @@
+      19
+error: backend/tests/test_live_store_guard.py: already exists in working directory
+error: frontend/src/components/nflWording.test.mjs: already exists in working directory
+error: frontend/src/components/tables.test.mjs: already exists in working directory
+apply-check rc in scratch: 0
+error: backend/tests/test_live_store_guard.py: already exists in working directory
+error: frontend/src/components/nflWording.test.mjs: already exists in working directory
+error: frontend/src/components/tables.test.mjs: already exists in working directory
+apply rc 1
+uniq: invalid option -- w
+usage: uniq [-cdiu] [-D[septype]] [-f fields] [-s chars] [input [output]]
+DIFFER backend/app/backup.py
+DIFFER backend/app/cli.py
+DIFFER backend/app/config.py
+DIFFER backend/app/db.py
+DIFFER backend/app/ingest.py
+DIFFER backend/app/raw_cache.py
+DIFFER backend/app/release.py
+DIFFER backend/app/soccer.py
+DIFFER backend/tests/conftest.py
+DIFFER backend/tests/test_backup_restore.py
+DIFFER backend/tests/test_live_store_guard.py
+DIFFER frontend/package.json
+DIFFER frontend/src/components/Canonical.tsx
+DIFFER frontend/src/components/Layout.tsx
+DIFFER frontend/src/components/MarketView.tsx
+DIFFER frontend/src/components/nflWording.test.mjs
+DIFFER frontend/src/components/tables.test.mjs
+DIFFER frontend/src/pages/HistoryPage.tsx
+DIFFER frontend/src/pages/NflPages.tsx
+--- main apply --check
+rc 0
+--- patch files
+      19
+-rw-r--r--@ 1 andry  staff  98549 Nov  7 19:51 /Users/andry/Desktop/nba-predictor-sprint1/docs/evidence/all-sport-audit-2026-11-07/batch1/batch1.patch
+-rw-r--r--@ 1 andry  wheel  60918 Nov  7 19:27 /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/batch1/batch1-gated.patch
+ frontend/src/pages/HistoryPage.tsx          |   4 +-
+ frontend/src/pages/NflPages.tsx             |  12 +-
+ 19 files changed, 1191 insertions(+), 53 deletions(-)
+--- gated files
+b/backend/app/backup.py
+b/backend/app/cli.py
+b/backend/app/config.py
+b/backend/app/db.py
+b/backend/app/ingest.py
+b/backend/app/raw_cache.py
+b/backend/app/release.py
+b/backend/app/soccer.py
+b/backend/tests/conftest.py
+b/backend/tests/test_backup_restore.py
+b/frontend/package.json
+b/frontend/src/components/Canonical.tsx
+b/frontend/src/components/Layout.tsx
+b/frontend/src/components/MarketView.tsx
+b/frontend/src/pages/HistoryPage.tsx
+b/frontend/src/pages/NflPages.tsx

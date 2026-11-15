@@ -1,20 +1,119 @@
+import { useEffect, useState } from 'react';
+import { RecoveredThresholds, ThresholdResearch } from '../components/ConfidenceFilter';
 import { api } from '../api/client';
-import type { PerformanceResponse } from '../api/types';
+import type { MarketId, PerformanceResponse, Policy, Sport } from '../api/types';
 import { useApi } from '../api/useApi';
 import { RunBadge } from '../components/Badges';
-import { RunTypeToggle, useRunType } from '../components/RunTypeToggle';
+import { MarketReport, MarketVersionSelect } from '../components/MarketView';
+import { AgreementTracking } from '../components/Tracking';
+import { SystemStatusPanel, TrainingStatusCard } from '../components/Training';
+import { AdaptiveStatusCard } from '../components/Adaptive';
+import { CoverageCard } from '../components/Coverage';
+import { ThresholdExplorerCard } from '../components/ThresholdExplorer';
+import { CandidateRosterCard, CombinationAnalysisCard, HistoricalStartCard, CombinationRules, PoolSelectionCard, SelectionStatusCard, ResearchPerformance, RetrospectiveStudy } from '../components/Research';
+import { DetailsToggle, MarketSelect, useDetails, useMarket, useSport } from '../components/Selection';
+import { PolicyToggle, RunTypeToggle, usePolicy, useRunType } from '../components/RunTypeToggle';
 import { AsyncView, Empty } from '../components/States';
 import { calendarDate, FULL_DATE, num, pct } from '../format';
+import { canonicalFor, CanonicalReport } from '../components/Canonical';
+import { ThresholdOverviewCard } from '../components/ThresholdOverview';
+import { PaperRulesCard } from '../components/PaperRules';
+import { Icon, PageTitle } from '../components/ui';
 
 const SMALL_SAMPLE = 200;
 
 export function PerformancePage() {
+  const [sport] = useSport();
+  const [market, setMarket] = useMarket();
   const [run, setRun] = useRunType();
-  const { state, retry } = useApi((s) => api.performance(run, s), [run]);
+  const [policyChoice, setPolicy] = usePolicy(canonicalFor(sport));
+  const [details] = useDetails();
+  const chosen: Policy = policyChoice === 'canonical' && !canonicalFor(sport, market) ? 'near_tipoff' : policyChoice;
+  const policy: Policy = run === 'live' || market !== 'winner' ? chosen : 'pregame';
+  const canonical = (run === 'live' || market !== 'winner') && policy === 'canonical';   // non-winner markets are live only
+  const meta = useApi((s) => api.meta(sport, s), [sport]);
+  const { state, retry } = useApi((s): Promise<PerformanceResponse | null> => (canonical ? Promise.resolve(null) : api.performance(sport, run, policy, s)),
+    [sport, run, policy, canonical]);
+  const markets = meta.state.status === 'success' ? meta.state.data.markets : [];
+  if (canonical) {
+    const title = markets.find((m) => m.id === market)?.title;
+    return (
+      <section className="performance-page">
+        <PageTitle icon="performance" soft title="Model Performance" sub={`Canonical forecasts${title ? `: ${title}` : ''}`}
+          right={markets.length > 0 ? <MarketSelect value={market} markets={markets} onChange={setMarket} /> : undefined} />
+        <div className="tab-row">
+          <PolicyToggle value={policy} onChange={setPolicy} canonical />
+          {market === 'winner' && <RunTypeToggle value={run} onChange={setRun} />}
+        </div>
+        <CanonicalReport sport={sport} market={market} />
+        <ThresholdOverviewCard sport={sport} />
+        <PaperRulesCard sport={sport} />
+        <ResearchSection sport={sport} market={market} show={details} />
+        <PerformanceStatus sport={sport} />
+      </section>
+    );
+  }
+  if (market !== 'winner') {
+    return (
+      <section>
+        <div className="page-head"><h1><Icon name="performance" size={28} /> Model performance <RunBadge runType="live" /></h1></div>
+        {meta.state.status === 'success'
+          ? <MarketSelect value={market} markets={markets} onChange={setMarket} />
+          : meta.state.status === 'error' ? <p className="warn small">Market list unavailable: {meta.state.error}</p> : null}
+        <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} canonical={canonicalFor(sport, market)} /></div>
+        <CoverageCard sport={sport} market={market} />
+        {policy === 'near_tipoff' && <><ThresholdResearch sport={sport} market={market} /><RecoveredThresholds sport={sport} market={market} /></>}
+        <MarketPerformance sport={sport} market={market} policy={policy} />
+        <ResearchSection sport={sport} market={market} show={details} />
+        <PerformanceStatus sport={sport} />
+      </section>
+    );
+  }
   return (
     <section>
-      <AsyncView state={state} retry={retry}>{(p) => <Report perf={p} run={run} setRun={setRun} />}</AsyncView>
+      {markets.length > 0 && <MarketSelect value={market} markets={markets} onChange={setMarket} />}
+      <AsyncView state={state} retry={retry}>
+        {(p) => p && (
+          <>
+            {p.mode === 'real' && run === 'live' && <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} canonical={canonicalFor(sport, market)} /></div>}
+            {p.mode === 'real' && run === 'live' && <CoverageCard sport={sport} market={market} />}
+            {run === 'live' && policy === 'near_tipoff' && <><ThresholdResearch sport={sport} market={market} /><RecoveredThresholds sport={sport} market={market} /></>}
+            <Report perf={p} run={run} setRun={setRun} />
+          </>
+        )}
+      </AsyncView>
+      {run === 'live' && policy === 'near_tipoff' && <AgreementReport sport={sport} />}
+      <ResearchSection sport={sport} market={market} show={details} />
+      <PerformanceStatus sport={sport} />
     </section>
+  );
+}
+
+/** Research and model-selection cards: loaded only when research details are shown, so the default page is the record. */
+function ResearchSection({ sport, market, show }: { sport: Sport; market: MarketId; show: boolean }) {
+  return (
+    <>
+      <div className="card">
+        <h2>Research</h2>
+        <p className="small muted">Model agreement, candidate models and the research selector. Research only: none of it is the primary forecast or a betting recommendation.</p>
+        <DetailsToggle />
+        {show && <p><a href="#joint-agreement">Explore model agreement + confidence ranges</a></p>}
+      </div>
+      <HistoricalStartCard sport={sport} market={market} />
+      <CombinationAnalysisCard sport={sport} market={market} />
+      <ThresholdExplorerCard sport={sport} market={market} />
+      {show && <>
+        <SelectionStatusCard sport={sport} market={market} />
+        <ResearchPerformance sport={sport} market={market} />
+        <AgreementTracking sport={sport} market={market} />
+        <CombinationRules sport={sport} market={market} />
+        <CandidateRosterCard sport={sport} market={market} />
+        <TrainingStatusCard sport={sport} />
+        <AdaptiveStatusCard sport={sport} />
+        <PoolSelectionCard sport={sport} market={market} />
+        <RetrospectiveStudy sport={sport} market={market} />
+      </>}
+    </>
   );
 }
 
@@ -22,14 +121,16 @@ function Report({ perf: p, run, setRun }: { perf: PerformanceResponse; run: 'liv
   return (
     <>
       <div className="page-head">
-        <h1>Model performance <RunBadge runType={p.run_type} /></h1>
+        <h1><Icon name="performance" size={28} /> Model performance <RunBadge runType={p.run_type} /></h1>
         {p.mode === 'real' && <RunTypeToggle value={run} onChange={setRun} />}
       </div>
       <p className="muted">{p.title}</p>
       <p className="notice" role="note">{p.note}</p>
       {p.sample_size === 0 ? (
         <Empty>
-          {p.run_type === 'live'
+          {p.policy === 'near_tipoff'
+            ? <>No two-hour forecasts have been scored yet. The scheduled odds jobs record them within two hours before eligible games; results are scored after the final.</>
+            : p.run_type === 'live'
             ? <>No live forecasts have been scored yet. Live forecasts are recorded before regular-season and playoff games and scored after the final. <button type="button" className="link-btn" onClick={() => setRun('backtest')}>See the final test</button></>
             : 'No completed games have been scored yet.'}
         </Empty>
@@ -59,6 +160,7 @@ function Report({ perf: p, run, setRun }: { perf: PerformanceResponse; run: 'liv
                   ))}
                 </tbody>
               </table>
+              {p.baselines.some((b) => b.accuracy == null) && <p className="small muted">— : a baseline that always says 50% never picks a winner, so it has no picked-winner rate. Compare it on Brier score and log loss.</p>}
             </div>
           )}
 
@@ -92,7 +194,7 @@ function Report({ perf: p, run, setRun }: { perf: PerformanceResponse; run: 'liv
             <p className="small muted">
               Only games with a market quote are compared: {p.market.matched_games} of {p.sample_size} ({pct(p.market.coverage)} coverage).
             </p>
-            {p.market.matched_games === 0 ? <Empty>No games with market odds.</Empty> : (
+            {p.market.matched_games === 0 ? <Empty>No games with market odds.</Empty> : (<>
               <table className="table compare">
                 <thead><tr><th /><th>Brier score</th></tr></thead>
                 <tbody>
@@ -100,7 +202,12 @@ function Report({ perf: p, run, setRun }: { perf: PerformanceResponse; run: 'liv
                   <tr><th scope="row">Market</th><td>{num(p.market.market_brier)}</td></tr>
                 </tbody>
               </table>
-            )}
+              {p.market.model_brier != null && p.market.market_brier != null && (
+                <p className="small">{p.market.market_brier < p.market.model_brier
+                  ? <>The market's Brier is lower by {num(p.market.model_brier - p.market.market_brier)} — the market is the better forecaster on these games. The model is a record, not a market edge.</>
+                  : <>The model's Brier is lower by {num(p.market.market_brier - p.market.model_brier)} on these {p.market.matched_games} games; that is not yet evidence of a betting edge.</>}</p>
+              )}
+            </>)}
           </div>
 
           <details className="card">
@@ -118,6 +225,16 @@ function Report({ perf: p, run, setRun }: { perf: PerformanceResponse; run: 'liv
   );
 }
 
+function MarketPerformance({ sport, market, policy }: { sport: Sport; market: MarketId; policy: Policy }) {
+  const [version, setVersion] = useState('');     // '' = current sealed market model
+  useEffect(() => setVersion(''), [sport, market, policy]);
+  const { state, retry } = useApi((s) => api.marketPerformance(sport, market, policy, s, version), [sport, market, policy, version]);
+  return <AsyncView state={state} retry={retry}>{(p) => <>
+    <MarketVersionSelect versions={p.versions ?? []} value={version} onChange={setVersion} />
+    <MarketReport perf={p} />
+  </>}</AsyncView>;
+}
+
 function Tile({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
     <div className="tile">
@@ -125,5 +242,35 @@ function Tile({ label, value, hint }: { label: string; value: string; hint: stri
       <div className="tile-value">{value}</div>
       <div className="tile-hint">{hint}</div>
     </div>
+  );
+}
+
+function AgreementReport({ sport }: { sport: Sport }) {
+  const { state, retry } = useApi((s) => api.agreementPerformance(sport, s), [sport]);
+  return <div className="card"><h2>Winner agreement · Forward research</h2>
+    <AsyncView state={state} retry={retry}>{p => <>
+      <p className="small muted">{p.note}</p>
+      {p.groups.length === 0 && <Empty>No complete model comparisons recorded yet.</Empty>}
+      {p.groups.map(g => <div key={g.definition}>
+        <p className="small muted">Definition {g.definition.slice(0, 8)} · {g.pending} pending · {g.excluded} excluded</p>
+        <div className="table-wrap"><table className="table"><thead><tr><th>Rule</th><th>Record</th><th>Accuracy</th><th>Coverage</th></tr></thead>
+          <tbody>{(['majority', 'unanimous'] as const).map(rule => <tr key={rule}>
+            <th scope="row">{rule === 'majority' ? 'Strict majority' : 'All models agree'}</th>
+            <td>{g[rule].wins}–{g[rule].losses} ({g[rule].picks} games)</td>
+            <td>{pct(g[rule].accuracy, 1)}</td><td>{pct(g[rule].coverage, 1)}</td>
+          </tr>)}</tbody></table></div>
+      </div>)}
+      <p className="small muted">{p.partial_games} games with incomplete model coverage. This descriptive record does not establish that agreement beats confidence filtering.</p>
+    </>}</AsyncView></div>;
+}
+
+/** Freshness, training and recovery diagnostics: kept for review, folded away so the record and the market
+ * benchmark are what the page opens with. */
+function PerformanceStatus({ sport }: { sport: Sport }) {
+  return (
+    <details className="card today-more">
+      <summary><strong>System status and data collection</strong> <span className="muted small">freshness, training and recovery diagnostics</span></summary>
+      <SystemStatusPanel sport={sport} />
+    </details>
   );
 }

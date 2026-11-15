@@ -1,0 +1,786 @@
+{
+ "definitions": {
+  "hetero_linear:nba_base": "ae72919ece0276e1",
+  "multinomial_l2:nhl_base": "5e515989b074d196",
+  "multinomial_l2:nhl_goalie": "9a65e00e183bf862",
+  "poisson_draw:nhl_base": "a291dc748d4a7553",
+  "poisson_draw:nhl_goalie": "27a452cfccc5f26e"
+ },
+ "effective_from": "2026-10-02T20:22:45Z",
+ "registry": "pool-v1",
+ "routes": {
+  "combination": "the equal average with minus without the candidate: 95% upper bound < 0 (week-block bootstrap, held-out seasons), and the average beats the strongest member",
+  "standalone": "alone beats the strongest existing member: 95% upper bound of the log-loss difference < 0"
+ },
+ "rule": "Registry membership only makes a source selectable; selection needs the selector's own evidence thresholds on settled prospective cohorts made before the decision time. A candidate qualifying only inside a combination is never a source alone.",
+ "selector": "selector-v1",
+ "sha256": "99c3f7cf1a080c6f363a2d8a8459c8753fe86251b0474c4f5d6bf48540ff5764",
+ "sports": {
+  "nba": {
+   "team_total_home": [
+    {
+     "candidates": [
+      "hetero_linear:nba_base"
+     ],
+     "evidence": {
+      "ci95": [
+       -0.006160442228190401,
+       -0.00034386298282878673
+      ],
+      "comparison": "avg:points_normal+hetero_linear:nba_base vs points_normal (ablation: remove hetero_linear:nba_base)",
+      "file": "docs/evidence/candidate-pool/nba-assess.json",
+      "games": 2643,
+      "key": "markets.team_total_home.combinations[5].with_minus_without",
+      "log_loss_with": 0.6902409541565835,
+      "mean": -0.0033458612147959166,
+      "seasons": [
+       2025,
+       2026
+      ],
+      "strongest_log_loss": 0.6935868153713795,
+      "weeks": 69
+     },
+     "kind": "average",
+     "members": [
+      "points_normal",
+      "cand:hetero_linear:nba_base"
+     ],
+     "qualified_by": [
+      "hetero_linear:nba_base"
+     ],
+     "route": "combination",
+     "source": "avg:points_normal+cand:hetero_linear:nba_base"
+    }
+   ]
+  },
+  "nhl": {
+   "reg3": [
+    {
+     "candidates": [
+      "multinomial_l2:nhl_base"
+     ],
+     "evidence": {
+      "ci95": [
+       -0.010013537187195892,
+       -0.003113017291762985
+      ],
+      "comparison": "multinomial_l2:nhl_base minus goals_draw (log loss)",
+      "file": "docs/evidence/candidate-pool/nhl-assess.json",
+      "games": null,
+      "key": "markets.reg3.candidates['multinomial_l2:nhl_base'].minus_strongest",
+      "mean": -0.0065880680826164995,
+      "seasons": [
+       2022,
+       2023,
+       2024,
+       2025,
+       2026
+      ],
+      "weeks": null
+     },
+     "kind": "single",
+     "members": [
+      "cand:multinomial_l2:nhl_base"
+     ],
+     "route": "standalone",
+     "source": "cand:multinomial_l2:nhl_base"
+    },
+    {
+     "candidates": [
+      "multinomial_l2:nhl_goalie"
+     ],
+     "evidence": {
+      "ci95": [
+       -0.009638998250644636,
+       -0.0026944958743877053
+      ],
+      "comparison": "multinomial_l2:nhl_goalie minus goals_draw (log loss)",
+      "file": "docs/evidence/candidate-pool/nhl-assess.json",
+      "games": null,
+      "key": "markets.reg3.candidates['multinomial_l2:nhl_goalie'].minus_strongest",
+      "mean": -0.006188207505327375,
+      "seasons": [
+       2022,
+       2023,
+       2024,
+       2025,
+       2026
+      ],
+      "weeks": null
+     },
+     "kind": "single",
+     "members": [
+      "cand:multinomial_l2:nhl_goalie"
+     ],
+     "route": "standalone",
+     "source": "cand:multinomial_l2:nhl_goalie"
+    },
+    {
+     "candidates": [
+      "poisson_draw:nhl_base"
+     ],
+     "evidence": {
+      "ci95": [
+       -0.009141630034402434,
+       -0.005279726122995169
+      ],
+      "comparison": "poisson_draw:nhl_base minus goals_draw (log loss)",
+      "file": "docs/evidence/candidate-pool/nhl-assess.json",
+      "games": null,
+      "key": "markets.reg3.candidates['poisson_draw:nhl_base'].minus_strongest",
+      "mean": -0.007271044610064635,
+      "seasons": [
+       2022,
+       2023,
+       2024,
+       2025,
+       2026
+      ],
+      "weeks": null
+     },
+     "kind": "single",
+     "members": [
+      "cand:poisson_draw:nhl_base"
+     ],
+     "route": "standalone",
+     "source": "cand:poisson_draw:nhl_base"
+    },
+    {
+     "candidates": [
+      "multinomial_l2:nhl_base"
+     ],
+     "evidence": {
+      "ci95": [
+       -0.007883601482578408,
+       -0.004436613345932672
+      ],
+      "comparison": "avg:goals_draw+multinomial_l2:nhl_base vs goals_draw (ablation: remove multinomial_l2:nhl_base)",
+      "file": "docs/evidence/candidate-pool/nhl-assess.json",
+      "games": 6993,
+      "key": "markets.reg3.combinations[1].with_minus_without",
+      "log_loss_with": 1.0377309331690927,
+      "mean": -0.006174365632544774,
+      "seasons": [
+       2022,
+       2023,
+       2024,
+       2025,
+       2026
+      ],
+      "strongest_log_loss": 1.0439052988016375,
+      "weeks": 183
+     },
+     "kind": "average",
+     "members": [
+      "goals_draw",
+      "cand:multinomial_l2:nhl_base"
+     ],
+     "qualified_by": [
+      "multinomial_l2:nhl_base"
+     ],
+     "route": "combination",
+     "source": "avg:goals_draw+cand:multinomial_l2:nhl_base"
+    },
+    {
+     "candidates": [
+      "multinomial_l2:nhl_goalie"
+     ],
+     "evidence": {
+      "ci95": [
+       -0.007786455527325063,
+       -0.0043427557655944795
+      ],
+      "comparison": "avg:goals_draw+multinomial_l2:nhl_goalie vs goals_draw (ablation: remove multinomial_l2:nhl_goalie)",
+      "file": "docs/evidence/candidate-pool/nhl-assess.json",
+      "games": 6993,
+      "key": "markets.reg3.combinations[3].with_minus_without",
+      "log_loss_with": 1.0378164392711657,
+      "mean": -0.006088859530471767,
+      "seasons": [
+       2022,
+       2023,
+       2024,
+       2025,
+       2026
+      ],
+      "strongest_log_loss": 1.0439052988016375,
+      "weeks": 183
+     },
+     "kind": "average",
+     "members": [
+      "goals_draw",
+      "cand:multinomial_l2:nhl_goalie"
+     ],
+     "qualified_by": [
+      "multinomial_l2:nhl_goalie"
+     ],
+     "route": "combination",
+     "source": "avg:goals_draw+cand:multinomial_l2:nhl_goalie"
+    },
+    {
+     "candidates": [
+      "poisson_draw:nhl_base"
+     ],
+     "evidence": {
+      "ci95": [
+       -0.005416625770505192,
+       -0.003491945823012767
+      ],
+      "comparison": "avg:goals_draw+poisson_draw:nhl_base vs goals_draw (ablation: remove poisson_draw:nhl_base)",
+      "file": "docs/evidence/candidate-pool/nhl-assess.json",
+      "games": 6993,
+      "key": "markets.reg3.combinations[5].with_minus_without",
+      "log_loss_with": 1.039423681826855,
+      "mean": -0.004481616974782538,
+      "seasons": [
+       2022,
+       2023,
+       2024,
+       2025,
+       2026
+      ],
+      "strongest_log_loss": 1.0439052988016375,
+      "weeks": 183
+     },
+     "kind": "average",
+     "members": [
+      "goals_draw",
+      "cand:poisson_draw:nhl_base"
+     ],
+     "qualified_by": [
+      "poisson_draw:nhl_base"
+     ],
+     "route": "combination",
+     "source": "avg:goals_draw+cand:poisson_draw:nhl_base"
+    },
+    {
+     "candidates": [
+      "multinomial_l2:nhl_base"
+     ],
+     "evidence": {
+      "ci95": [
+       -0.007197424985989601,
+       -0.0048303907270885365
+      ],
+      "comparison": "avg:goals_draw+goals_poisson+multinomial_l2:nhl_base vs avg:goals_draw+goals_poisson (ablation: remove multinomial_l2:nhl_base)",
+      "file": "docs/evidence/candidate-pool/nhl-assess.json",
+      "games": 6993,
+      "key": "markets.reg3.combinations[2].with_minus_without",
+      "log_loss_with": 1.0410211755224277,
+      "mean": -0.006022882537684742,
+      "seasons": [
+       2022,
+       2023,
+       2024,
+       2025,
+       2026
+      ],
+      "strongest_log_loss": 1.0439052988016375,
+      "weeks": 183
+     },
+     "kind": "average",
+     "members": [
+      "goals_draw",
+      "goals_poisson",
+      "cand:multinomial_l2:nhl_base"
+     ],
+     "qualified_by": [
+      "multinomial_l2:nhl_base"
+     ],
+     "route": "combination",
+     "source": "avg:goals_draw+goals_poisson+cand:multinomial_l2:nhl_base"
+    },
+    {
+     "candidates": [
+      "multinomial_l2:nhl_goalie"
+     ],
+     "evidence": {
+      "ci95": [
+       -0.007044296821468005,
+       -0.004728532939879816
+      ],
+      "comparison": "avg:goals_draw+goals_poisson+multinomial_l2:nhl_goalie vs avg:goals_draw+goals_poisson (ablation: remove multinomial_l2:nhl_goalie)",
+      "file": "docs/evidence/candidate-pool/nhl-assess.json",
+      "games": 6993,
+      "key": "markets.reg3.combinations[4].with_minus_without",
+      "log_loss_with": 1.041146805758845,
+      "mean": -0.005897252301267293,
+      "seasons": [
+       2022,
+       2023,
+       2024,
+       2025,
+       2026
+      ],
+      "strongest_log_loss": 1.0439052988016375,
+      "weeks": 183
+     },
+     "kind": "average",
+     "members": [
+      "goals_draw",
+      "goals_poisson",
+      "cand:multinomial_l2:nhl_goalie"
+     ],
+     "qualified_by": [
+      "multinomial_l2:nhl_goalie"
+     ],
+     "route": "combination",
+     "source": "avg:goals_draw+goals_poisson+cand:multinomial_l2:nhl_goalie"
+    },
+    {
+     "candidates": [
+      "poisson_draw:nhl_base"
+     ],
+     "evidence": {
+      "ci95": [
+       -0.005661323633261697,
+       -0.003927143990536158
+      ],
+      "comparison": "avg:goals_draw+goals_poisson+poisson_draw:nhl_base vs avg:goals_draw+goals_poisson (ablation: remove poisson_draw:nhl_base)",
+      "file": "docs/evidence/candidate-pool/nhl-assess.json",
+      "games": 6993,
+      "key": "markets.reg3.combinations[6].with_minus_without",
+      "log_loss_with": 1.0422357732522878,
+      "mean": -0.004808284807824755,
+      "seasons": [
+       2022,
+       2023,
+       2024,
+       2025,
+       2026
+      ],
+      "strongest_log_loss": 1.0439052988016375,
+      "weeks": 183
+     },
+     "kind": "average",
+     "members": [
+      "goals_draw",
+      "goals_poisson",
+      "cand:poisson_draw:nhl_base"
+     ],
+     "qualified_by": [
+      "poisson_draw:nhl_base"
+     ],
+     "route": "combination",
+     "source": "avg:goals_draw+goals_poisson+cand:poisson_draw:nhl_base"
+    }
+   ],
+   "spread": [
+    {
+     "candidates": [
+      "poisson_draw:nhl_base"
+     ],
+     "evidence": {
+      "ci95": [
+       -0.006525230544105035,
+       -0.0032224609858695088
+      ],
+      "comparison": "poisson_draw:nhl_base minus goals_glm (log loss)",
+      "file": "docs/evidence/candidate-pool/nhl-assess.json",
+      "games": null,
+      "key": "markets.spread.candidates['poisson_draw:nhl_base'].minus_strongest",
+      "mean": -0.004886062827356277,
+      "seasons": [
+       2022,
+       2023,
+       2024,
+       2025,
+       2026
+      ],
+      "weeks": null
+     },
+     "kind": "single",
+     "members": [
+      "cand:poisson_draw:nhl_base"
+     ],
+     "route": "standalone",
+     "source": "cand:poisson_draw:nhl_base"
+    },
+    {
+     "candidates": [
+      "poisson_draw:nhl_goalie"
+     ],
+     "evidence": {
+      "ci95": [
+       -0.006578758664551174,
+       -0.003303165925942678
+      ],
+      "comparison": "poisson_draw:nhl_goalie minus goals_glm (log loss)",
+      "file": "docs/evidence/candidate-pool/nhl-assess.json",
+      "games": null,
+      "key": "markets.spread.candidates['poisson_draw:nhl_goalie'].minus_strongest",
+      "mean": -0.004925511204638759,
+      "seasons": [
+       2022,
+       2023,
+       2024,
+       2025,
+       2026
+      ],
+      "weeks": null
+     },
+     "kind": "single",
+     "members": [
+      "cand:poisson_draw:nhl_goalie"
+     ],
+     "route": "standalone",
+     "source": "cand:poisson_draw:nhl_goalie"
+    },
+    {
+     "candidates": [
+      "poisson_draw:nhl_base"
+     ],
+     "evidence": {
+      "ci95": [
+       -0.0037571451746981287,
+       -0.0020974170876053508
+      ],
+      "comparison": "avg:goals_glm+poisson_draw:nhl_base vs goals_glm (ablation: remove poisson_draw:nhl_base)",
+      "file": "docs/evidence/candidate-pool/nhl-assess.json",
+      "games": 6993,
+      "key": "markets.spread.combinations[1].with_minus_without",
+      "log_loss_with": 0.6811702383240786,
+      "mean": -0.002936387576657301,
+      "seasons": [
+       2022,
+       2023,
+       2024,
+       2025,
+       2026
+      ],
+      "strongest_log_loss": 0.6841066259007359,
+      "weeks": 183
+     },
+     "kind": "average",
+     "members": [
+      "goals_glm",
+      "cand:poisson_draw:nhl_base"
+     ],
+     "qualified_by": [
+      "poisson_draw:nhl_base"
+     ],
+     "route": "combination",
+     "source": "avg:goals_glm+cand:poisson_draw:nhl_base"
+    },
+    {
+     "candidates": [
+      "poisson_draw:nhl_goalie"
+     ],
+     "evidence": {
+      "ci95": [
+       -0.003784350095748879,
+       -0.0021373161278952697
+      ],
+      "comparison": "avg:goals_glm+poisson_draw:nhl_goalie vs goals_glm (ablation: remove poisson_draw:nhl_goalie)",
+      "file": "docs/evidence/candidate-pool/nhl-assess.json",
+      "games": 6993,
+      "key": "markets.spread.combinations[3].with_minus_without",
+      "log_loss_with": 0.6811551436791109,
+      "mean": -0.0029514822216250847,
+      "seasons": [
+       2022,
+       2023,
+       2024,
+       2025,
+       2026
+      ],
+      "strongest_log_loss": 0.6841066259007359,
+      "weeks": 183
+     },
+     "kind": "average",
+     "members": [
+      "goals_glm",
+      "cand:poisson_draw:nhl_goalie"
+     ],
+     "qualified_by": [
+      "poisson_draw:nhl_goalie"
+     ],
+     "route": "combination",
+     "source": "avg:goals_glm+cand:poisson_draw:nhl_goalie"
+    },
+    {
+     "candidates": [
+      "poisson_draw:nhl_base"
+     ],
+     "evidence": {
+      "ci95": [
+       -0.0023083064218155903,
+       -0.0013777205496346282
+      ],
+      "comparison": "avg:goals_glm+goals_poisson+poisson_draw:nhl_base vs avg:goals_glm+goals_poisson (ablation: remove poisson_draw:nhl_base)",
+      "file": "docs/evidence/candidate-pool/nhl-assess.json",
+      "games": 6993,
+      "key": "markets.spread.combinations[2].with_minus_without",
+      "log_loss_with": 0.6818096383368434,
+      "mean": -0.0018411445361178214,
+      "seasons": [
+       2022,
+       2023,
+       2024,
+       2025,
+       2026
+      ],
+      "strongest_log_loss": 0.6841066259007359,
+      "weeks": 183
+     },
+     "kind": "average",
+     "members": [
+      "goals_glm",
+      "goals_poisson",
+      "cand:poisson_draw:nhl_base"
+     ],
+     "qualified_by": [
+      "poisson_draw:nhl_base"
+     ],
+     "route": "combination",
+     "source": "avg:goals_glm+goals_poisson+cand:poisson_draw:nhl_base"
+    },
+    {
+     "candidates": [
+      "poisson_draw:nhl_goalie"
+     ],
+     "evidence": {
+      "ci95": [
+       -0.002320434792618054,
+       -0.0014067827077914475
+      ],
+      "comparison": "avg:goals_glm+goals_poisson+poisson_draw:nhl_goalie vs avg:goals_glm+goals_poisson (ablation: remove poisson_draw:nhl_goalie)",
+      "file": "docs/evidence/candidate-pool/nhl-assess.json",
+      "games": 6993,
+      "key": "markets.spread.combinations[4].with_minus_without",
+      "log_loss_with": 0.6817904833763604,
+      "mean": -0.0018602994966009118,
+      "seasons": [
+       2022,
+       2023,
+       2024,
+       2025,
+       2026
+      ],
+      "strongest_log_loss": 0.6841066259007359,
+      "weeks": 183
+     },
+     "kind": "average",
+     "members": [
+      "goals_glm",
+      "goals_poisson",
+      "cand:poisson_draw:nhl_goalie"
+     ],
+     "qualified_by": [
+      "poisson_draw:nhl_goalie"
+     ],
+     "route": "combination",
+     "source": "avg:goals_glm+goals_poisson+cand:poisson_draw:nhl_goalie"
+    }
+   ],
+   "team_total_away": [
+    {
+     "candidates": [
+      "poisson_draw:nhl_base"
+     ],
+     "evidence": {
+      "ci95": [
+       -0.004825599465336108,
+       -0.001133883131733284
+      ],
+      "comparison": "poisson_draw:nhl_base minus goals_draw (log loss)",
+      "file": "docs/evidence/candidate-pool/nhl-assess.json",
+      "games": null,
+      "key": "markets.team_total_away.candidates['poisson_draw:nhl_base'].minus_strongest",
+      "mean": -0.002964178279451697,
+      "seasons": [
+       2022,
+       2023,
+       2024,
+       2025,
+       2026
+      ],
+      "weeks": null
+     },
+     "kind": "single",
+     "members": [
+      "cand:poisson_draw:nhl_base"
+     ],
+     "route": "standalone",
+     "source": "cand:poisson_draw:nhl_base"
+    },
+    {
+     "candidates": [
+      "poisson_draw:nhl_goalie"
+     ],
+     "evidence": {
+      "ci95": [
+       -0.004784289447512248,
+       -0.0009228777435973052
+      ],
+      "comparison": "poisson_draw:nhl_goalie minus goals_draw (log loss)",
+      "file": "docs/evidence/candidate-pool/nhl-assess.json",
+      "games": null,
+      "key": "markets.team_total_away.candidates['poisson_draw:nhl_goalie'].minus_strongest",
+      "mean": -0.0028012461910585317,
+      "seasons": [
+       2022,
+       2023,
+       2024,
+       2025,
+       2026
+      ],
+      "weeks": null
+     },
+     "kind": "single",
+     "members": [
+      "cand:poisson_draw:nhl_goalie"
+     ],
+     "route": "standalone",
+     "source": "cand:poisson_draw:nhl_goalie"
+    },
+    {
+     "candidates": [
+      "poisson_draw:nhl_base"
+     ],
+     "evidence": {
+      "ci95": [
+       -0.003143223807913401,
+       -0.0012904557268064985
+      ],
+      "comparison": "avg:goals_draw+poisson_draw:nhl_base vs goals_draw (ablation: remove poisson_draw:nhl_base)",
+      "file": "docs/evidence/candidate-pool/nhl-assess.json",
+      "games": 6993,
+      "key": "markets.team_total_away.combinations[1].with_minus_without",
+      "log_loss_with": 0.6819474035889238,
+      "mean": -0.002211931680553597,
+      "seasons": [
+       2022,
+       2023,
+       2024,
+       2025,
+       2026
+      ],
+      "strongest_log_loss": 0.6841593352694775,
+      "weeks": 183
+     },
+     "kind": "average",
+     "members": [
+      "goals_draw",
+      "cand:poisson_draw:nhl_base"
+     ],
+     "qualified_by": [
+      "poisson_draw:nhl_base"
+     ],
+     "route": "combination",
+     "source": "avg:goals_draw+cand:poisson_draw:nhl_base"
+    },
+    {
+     "candidates": [
+      "poisson_draw:nhl_goalie"
+     ],
+     "evidence": {
+      "ci95": [
+       -0.003158825728156059,
+       -0.0012390296361580976
+      ],
+      "comparison": "avg:goals_draw+poisson_draw:nhl_goalie vs goals_draw (ablation: remove poisson_draw:nhl_goalie)",
+      "file": "docs/evidence/candidate-pool/nhl-assess.json",
+      "games": 6993,
+      "key": "markets.team_total_away.combinations[3].with_minus_without",
+      "log_loss_with": 0.6819886470409353,
+      "mean": -0.0021706882285420946,
+      "seasons": [
+       2022,
+       2023,
+       2024,
+       2025,
+       2026
+      ],
+      "strongest_log_loss": 0.6841593352694775,
+      "weeks": 183
+     },
+     "kind": "average",
+     "members": [
+      "goals_draw",
+      "cand:poisson_draw:nhl_goalie"
+     ],
+     "qualified_by": [
+      "poisson_draw:nhl_goalie"
+     ],
+     "route": "combination",
+     "source": "avg:goals_draw+cand:poisson_draw:nhl_goalie"
+    },
+    {
+     "candidates": [
+      "poisson_draw:nhl_base"
+     ],
+     "evidence": {
+      "ci95": [
+       -0.0021632446728031343,
+       -0.0009802700870821563
+      ],
+      "comparison": "avg:goals_draw+goals_poisson+poisson_draw:nhl_base vs avg:goals_draw+goals_poisson (ablation: remove poisson_draw:nhl_base)",
+      "file": "docs/evidence/candidate-pool/nhl-assess.json",
+      "games": 6993,
+      "key": "markets.team_total_away.combinations[2].with_minus_without",
+      "log_loss_with": 0.6825297201373206,
+      "mean": -0.0015643481574820815,
+      "seasons": [
+       2022,
+       2023,
+       2024,
+       2025,
+       2026
+      ],
+      "strongest_log_loss": 0.6841593352694775,
+      "weeks": 183
+     },
+     "kind": "average",
+     "members": [
+      "goals_draw",
+      "goals_poisson",
+      "cand:poisson_draw:nhl_base"
+     ],
+     "qualified_by": [
+      "poisson_draw:nhl_base"
+     ],
+     "route": "combination",
+     "source": "avg:goals_draw+goals_poisson+cand:poisson_draw:nhl_base"
+    },
+    {
+     "candidates": [
+      "poisson_draw:nhl_goalie"
+     ],
+     "evidence": {
+      "ci95": [
+       -0.002175234958000976,
+       -0.0009362203732695673
+      ],
+      "comparison": "avg:goals_draw+goals_poisson+poisson_draw:nhl_goalie vs avg:goals_draw+goals_poisson (ablation: remove poisson_draw:nhl_goalie)",
+      "file": "docs/evidence/candidate-pool/nhl-assess.json",
+      "games": 6993,
+      "key": "markets.team_total_away.combinations[4].with_minus_without",
+      "log_loss_with": 0.6825456459912846,
+      "mean": -0.0015484223035179925,
+      "seasons": [
+       2022,
+       2023,
+       2024,
+       2025,
+       2026
+      ],
+      "strongest_log_loss": 0.6841593352694775,
+      "weeks": 183
+     },
+     "kind": "average",
+     "members": [
+      "goals_draw",
+      "goals_poisson",
+      "cand:poisson_draw:nhl_goalie"
+     ],
+     "qualified_by": [
+      "poisson_draw:nhl_goalie"
+     ],
+     "route": "combination",
+     "source": "avg:goals_draw+goals_poisson+cand:poisson_draw:nhl_goalie"
+    }
+   ]
+  }
+ }
+}

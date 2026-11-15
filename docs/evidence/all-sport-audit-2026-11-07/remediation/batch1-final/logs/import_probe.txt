@@ -1,0 +1,9 @@
+cwd: /Users/andry/Desktop/nba-predictor-batch1/backend
+cmd: OMP_NUM_THREADS=4 /Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/bin/python -m pytest -q -s -p no:cacheprovider /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/probe/test_import_probe.py
+IMPORT app /Users/andry/Desktop/nba-predictor-batch1/backend/app/__init__.py
+IMPORT app.cli /Users/andry/Desktop/nba-predictor-batch1/backend/app/cli.py
+IMPORT app.config /Users/andry/Desktop/nba-predictor-batch1/backend/app/config.py
+IMPORT app.backup /Users/andry/Desktop/nba-predictor-batch1/backend/app/backup.py
+IMPORT app.db /Users/andry/Desktop/nba-predictor-batch1/backend/app/db.py
+.
+1 passed in 0.18s

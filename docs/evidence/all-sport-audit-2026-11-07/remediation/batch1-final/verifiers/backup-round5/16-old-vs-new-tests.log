@@ -1,0 +1,23 @@
+== OLD code (pre-round-5 backup.py), NEW tests, tree in scratch
+/private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/final/backup-verify/round5/oldtree/app/__init__.py
+>           raise OSError(5, "injected")
+E           OSError: [Errno 5] injected
+
+tests/test_backup_restore.py:311: OSError
+=========================== short test summary info ============================
+FAILED tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nba-main]
+FAILED tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nba-wal]
+FAILED tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nba-shm]
+FAILED tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nba-install]
+FAILED tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nfl-main]
+FAILED tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nfl-wal]
+FAILED tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nfl-shm]
+FAILED tests/test_backup_restore.py::test_a_failed_swap_is_rolled_back_for_every_sport[nfl-install]
+FAILED tests/test_backup_restore.py::test_a_failed_rollback_deletes_nothing_and_names_the_manual_recovery
+9 failed, 14 passed in 1.42s
+== NEW code (batch1)
+.......................                                                  [100%]
+23 passed in 1.31s
+tests/test_backup_restore.py::test_a_failed_rollback_deletes_nothing_and_names_the_manual_recovery
+
+23 tests collected in 0.06s

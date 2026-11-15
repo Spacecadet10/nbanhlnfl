@@ -1,0 +1,75 @@
+
+> nba-predictor-frontend@0.1.0 test:unit
+> node --test --experimental-strip-types src/components/*.test.mjs
+
+TAP version 13
+# Subtest: a match path names its competition, whatever the query says
+ok 1 - a match path names its competition, whatever the query says
+  ---
+  duration_ms: 0.872708
+  type: 'test'
+  ...
+# Subtest: outside a soccer match the query decides, with documented defaults only
+ok 2 - outside a soccer match the query decides, with documented defaults only
+  ---
+  duration_ms: 0.069667
+  type: 'test'
+  ...
+# Subtest: malformed or unknown soccer ids never select a competition
+ok 3 - malformed or unknown soccer ids never select a competition
+  ---
+  duration_ms: 0.070416
+  type: 'test'
+  ...
+# Subtest: no NFL screen calls the NFL data only or says there is no NFL model
+ok 4 - no NFL screen calls the NFL data only or says there is no NFL model
+  ---
+  duration_ms: 0.736917
+  type: 'test'
+  ...
+# Subtest: the Real-data note describes NFL forecasts when they are active, and says when they are not
+ok 5 - the Real-data note describes NFL forecasts when they are active, and says when they are not
+  ---
+  duration_ms: 0.594208
+  type: 'test'
+  ...
+# Subtest: NFL pages without content name what is missing and do not deny recorded forecasts
+ok 6 - NFL pages without content name what is missing and do not deny recorded forecasts
+  ---
+  duration_ms: 0.196708
+  type: 'test'
+  ...
+# Subtest: the new NFL wording makes no accuracy, edge or performance claim
+ok 7 - the new NFL wording makes no accuracy, edge or performance claim
+  ---
+  duration_ms: 0.1885
+  type: 'test'
+  ...
+# Subtest: the history tables are found (the guard is not vacuous)
+ok 8 - the history tables are found (the guard is not vacuous)
+  ---
+  duration_ms: 5.79
+  type: 'test'
+  ...
+# Subtest: .table-wrap is a horizontal scroll container
+ok 9 - .table-wrap is a horizontal scroll container
+  ---
+  duration_ms: 0.740584
+  type: 'test'
+  ...
+# Subtest: every history table sits directly inside a .table-wrap scroll container
+ok 10 - every history table sits directly inside a .table-wrap scroll container
+  ---
+  duration_ms: 1.567583
+  type: 'test'
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 66.411542
+exit=0

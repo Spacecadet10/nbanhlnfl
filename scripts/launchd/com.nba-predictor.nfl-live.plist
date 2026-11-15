@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>NBA_DATA_DIR</key>
+		<string>/Users/andry/Desktop/nba-predictor-sprint1/data</string>
+		<key>NBA_RELEASE_GUARD</key>
+		<string>1</string>
+		<key>NBA_RELEASE_ROOT</key>
+		<string>/Users/andry/.codex/worktrees/nfl-live-release/nba-predictor-sprint1</string>
+		<key>OMP_NUM_THREADS</key>
+		<string>1</string>
+		<key>PYTHONDONTWRITEBYTECODE</key>
+		<string>1</string>
+		<key>PYTHONUNBUFFERED</key>
+		<string>1</string>
+	</dict>
+	<key>Label</key>
+	<string>com.nba-predictor.nfl-live</string>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/bin/python</string>
+		<string>-m</string>
+		<string>app.cli</string>
+		<string>nfl</string>
+		<string>tick</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>/Users/andry/Desktop/nba-predictor-sprint1/.nfl-live-error.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/andry/Desktop/nba-predictor-sprint1/.nfl-live.log</string>
+	<key>StartInterval</key>
+	<integer>60</integer>
+	<key>WorkingDirectory</key>
+	<string>/Users/andry/.codex/worktrees/nfl-live-release/nba-predictor-sprint1/backend</string>
+</dict>
+</plist>

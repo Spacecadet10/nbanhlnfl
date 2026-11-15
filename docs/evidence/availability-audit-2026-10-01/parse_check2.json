@@ -1,0 +1,137 @@
+{
+ "Injury-Report_2019-12-01_05PM.pdf": {
+  "report_published_utc": "2019-12-01T22:30:00Z",
+  "entries": 132,
+  "mapping": {
+   "same_season": 123,
+   "unresolved": 3,
+   "other_season": 6
+  },
+  "unresolved": [
+   "Claxton, Nicolas (Available)",
+   "Rabb, Ivan (Out)",
+   "Brown Jr., Charles (Out)"
+  ],
+  "ambiguous_names": [
+   "Macon, Daryl"
+  ],
+  "pregame_check": {
+   "Out": {
+    "listed": 28,
+    "played": 1
+   },
+   "Available": {
+    "listed": 3,
+    "played": 3
+   }
+  },
+  "excluded_game_already_started": 60,
+  "excluded_team_not_playing_that_day": 32
+ },
+ "Injury-Report_2023-01-10_05PM.pdf": {
+  "report_published_utc": "2023-01-10T22:30:00Z",
+  "entries": 123,
+  "mapping": {
+   "same_season": 119,
+   "other_season": 4
+  },
+  "unresolved": [],
+  "ambiguous_names": [],
+  "pregame_check": {
+   "Out": {
+    "listed": 52,
+    "played": 0
+   },
+   "Available": {
+    "listed": 6,
+    "played": 4
+   },
+   "Questionable": {
+    "listed": 7,
+    "played": 3
+   },
+   "Probable": {
+    "listed": 6,
+    "played": 6
+   },
+   "Doubtful": {
+    "listed": 1,
+    "played": 0
+   }
+  },
+  "excluded_game_already_started": 0,
+  "excluded_team_not_playing_that_day": 47
+ },
+ "Injury-Report_2025-12-01_05PM.pdf": {
+  "report_published_utc": "2025-12-01T22:30:00Z",
+  "entries": 145,
+  "mapping": {
+   "same_season": 139,
+   "unresolved": 2,
+   "other_season": 4
+  },
+  "unresolved": [
+   "Ndiaye, EliJohn (Out)",
+   "Djurisic, Nikola (Out)"
+  ],
+  "ambiguous_names": [],
+  "pregame_check": {
+   "Out": {
+    "listed": 72,
+    "played": 0
+   },
+   "Questionable": {
+    "listed": 8,
+    "played": 4
+   },
+   "Probable": {
+    "listed": 7,
+    "played": 7
+   },
+   "Available": {
+    "listed": 16,
+    "played": 12
+   }
+  },
+  "excluded_game_already_started": 0,
+  "excluded_team_not_playing_that_day": 36
+ },
+ "Injury-Report_2026-03-01_05_00PM.pdf": {
+  "report_published_utc": "2026-03-01T22:00:00Z",
+  "entries": 134,
+  "mapping": {
+   "same_season": 129,
+   "other_season": 3,
+   "unresolved": 2
+  },
+  "unresolved": [
+   "Yang, Hansen (Questionable)",
+   "Sorber, Thomas (Out)"
+  ],
+  "ambiguous_names": [],
+  "pregame_check": {
+   "Out": {
+    "listed": 43,
+    "played": 0
+   },
+   "Available": {
+    "listed": 6,
+    "played": 5
+   },
+   "Questionable": {
+    "listed": 8,
+    "played": 5
+   },
+   "Doubtful": {
+    "listed": 2,
+    "played": 0
+   },
+   "Probable": {
+    "listed": 1,
+    "played": 1
+   }
+  },
+  "excluded_game_already_started": 58,
+  "excluded_team_not_playing_that_day": 11
+ }
+}

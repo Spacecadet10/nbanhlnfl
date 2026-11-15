@@ -1,0 +1,354 @@
+cwd: /Users/andry/Desktop/nba-predictor-soccer-train
+cmd: OMP_NUM_THREADS=4 backend/.venv/bin/python scripts/check_project.py --ready (backend/.venv -> /Users/andry/Desktop/nba-predictor-sprint1/backend/.venv)
+START=2026-11-08T18:26:07Z
+Structure guard passed. This does not prove semantic uniqueness or app correctness.
+
+> nba-predictor-frontend@0.1.0 typecheck
+> tsc --noEmit
+
+
+> nba-predictor-frontend@0.1.0 build
+> tsc --noEmit && vite build
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 79 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.80 kB │ gzip:   0.45 kB
+dist/assets/index-DuoORwL8.css   82.53 kB │ gzip:  16.12 kB
+dist/assets/index-BnrehH0P.js   566.52 kB │ gzip: 156.48 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 578ms
+........................................................................ [  3%]
+........................................................................ [  7%]
+........................................................................ [ 11%]
+........................................................................ [ 15%]
+........................................................................ [ 19%]
+........................................................................ [ 23%]
+........................................................................ [ 27%]
+........................................................................ [ 31%]
+........................................................................ [ 35%]
+........................................................................ [ 39%]
+........................................................................ [ 43%]
+........................................................................ [ 47%]
+........................................................................ [ 51%]
+........................................................................ [ 55%]
+........................................................................ [ 59%]
+........................................................................ [ 63%]
+........................................................................ [ 67%]
+...........................................................FFFFFFFF..F.. [ 71%]
+.F.FF..FF......F....F................................................... [ 74%]
+........................................................................ [ 78%]
+........................................................................ [ 82%]
+........................................................................ [ 86%]
+........................................................................ [ 90%]
+........................................................................ [ 94%]
+........................................................................ [ 98%]
+.........................                                                [100%]
+=================================== FAILURES ===================================
+__________ test_an_agent_run_proposes_runs_and_records_each_decision ___________
+
+agent = {'ws': PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-289/test_an_agent_ru.../pytest-of-andry/pytest-289/test_an_agent_run_proposes_run0/experiments/sports-autoresearch-v2-d1c045f7508f/nba'), ...}
+
+    def test_an_agent_run_proposes_runs_and_records_each_decision(agent):
+        rep = agent["go"]([("commit", WORSE, "winner at 0.5: expect worse"), ("broker", ["trial", "--sport", "nba"])])
+>       assert rep["stopped"] == "agent finished" and rep["attempts"][0]["exit"] == 0, rep
+E       AssertionError: {'run_id': '20261108T190653Z-3d10', 'branch': 'autoresearch/agent-20261108T190653Z-3d10', 'base': '502f9f0ddca9cdaa26a5b3a144af4f46a6b060b0', 'budget': {'max_trials': 3, 'max_minutes': 5, 'max_usd': 5.0, 'trial_timeout_s': 300, ...}, ...}
+E       assert ('agent failed to start' == 'agent finished'
+E         
+E         - agent finished
+E         + agent failed to start)
+
+tests/test_research_agent.py:129: AssertionError
+________ test_commits_the_agent_did_not_run_are_evaluated_after_it_ends ________
+
+agent = {'ws': PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-289/test_commits_the.../pytest-of-andry/pytest-289/test_commits_the_agent_did_not0/experiments/sports-autoresearch-v2-d1c045f7508f/nba'), ...}
+
+    def test_commits_the_agent_did_not_run_are_evaluated_after_it_ends(agent):
+        rep = agent["go"]([("commit", WORSE, "proposal never run by the agent")])
+>       assert [t["description"] for t in rep["trials"]] == ["proposal never run by the agent"]
+E       AssertionError: assert [] == ['proposal ne...by the agent']
+E         
+E         Right contains one more item: 'proposal never run by the agent'
+E         Use -v to get more diff
+
+tests/test_research_agent.py:148: AssertionError
+_______ test_the_agent_shell_runs_python_from_path_like_program_md_says ________
+
+agent = {'ws': PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-289/test_the_agent_s.../pytest-of-andry/pytest-289/test_the_agent_shell_runs_pyth0/experiments/sports-autoresearch-v2-d1c045f7508f/nba'), ...}
+
+    def test_the_agent_shell_runs_python_from_path_like_program_md_says(agent):
+        # Regression (real run 20261014T133022Z-cd1c): the `python` shim sat in the run directory, which the sandbox denies, so
+        # every `python prepare.py ...` failed with "Operation not permitted" and the agent could not run a single trial.
+        rep = agent["go"]([("shell", "python -c 'print(41 + 1)'"), ("shell", 'echo "exit 0" > "$(command -v python)"')])
+>       run_python, tamper = tool_lines(rep)
+        ^^^^^^^^^^^^^^^^^^
+E       ValueError: not enough values to unpack (expected 2, got 0)
+
+tests/test_research_agent.py:156: ValueError
+________ test_trials_beyond_the_run_budget_are_refused_by_the_evaluator ________
+
+agent = {'ws': PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-289/test_trials_beyo.../pytest-of-andry/pytest-289/test_trials_beyond_the_run_bud0/experiments/sports-autoresearch-v2-d1c045f7508f/nba'), ...}
+
+    def test_trials_beyond_the_run_budget_are_refused_by_the_evaluator(agent):
+        rep = agent["go"]([("commit", WORSE, "first"), ("broker", ["trial", "--sport", "nba"]),
+                           ("commit", WORSE + "\n# second\n", "second"), ("broker", ["trial", "--sport", "nba"])], max_trials=1)
+        tools = tool_lines(rep)
+>       assert tools[0]["exit"] == 0 and tools[1]["exit"] == 2 and "trial budget spent (1/1)" in tools[1]["output"], tools
+               ^^^^^^^^
+E       IndexError: list index out of range
+
+tests/test_research_agent.py:166: IndexError
+________ test_the_deadline_kills_the_agent_tree_and_the_trial_in_flight ________
+
+agent = {'ws': PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-289/test_the_deadlin.../pytest-of-andry/pytest-289/test_the_deadline_kills_the_ag0/experiments/sports-autoresearch-v2-d1c045f7508f/nba'), ...}
+tmp_path = PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-289/test_the_deadline_kills_the_ag0')
+
+    def test_the_deadline_kills_the_agent_tree_and_the_trial_in_flight(agent, tmp_path):
+        pidfile = tmp_path / "sleeper.pid"
+        rep = agent["go"]([("sleeper", str(pidfile)), ("commit", SLOW, "slow fit"), ("broker", ["trial", "--sport", "nba"]),
+                           ("sleep", 600)], max_minutes=0.25)
+>       assert rep["stopped"].startswith("time budget reached") and "still alive" not in rep["stopped"]
+E       AssertionError: assert (False)
+E        +  where False = <built-in method startswith of str object at 0x10a185d70>('time budget reached')
+E        +    where <built-in method startswith of str object at 0x10a185d70> = 'agent failed to start'.startswith
+
+tests/test_research_agent.py:177: AssertionError
+________ test_a_stop_during_a_trial_kills_it_and_records_it_interrupted ________
+
+agent = {'ws': PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-289/test_a_stop_duri.../pytest-of-andry/pytest-289/test_a_stop_during_a_trial_kil0/experiments/sports-autoresearch-v2-d1c045f7508f/nba'), ...}
+
+    def test_a_stop_during_a_trial_kills_it_and_records_it_interrupted(agent):
+        def press_stop_mid_trial():
+            for _ in range(600):
+                if any(r["event"] == "started" and r.get("agent_run") for r in records(agent["root"])):
+                    time.sleep(2)
+                    ra.stop(agent["exp"], "test stop mid-trial")
+                    return
+                time.sleep(0.1)
+        threading.Thread(target=press_stop_mid_trial, daemon=True).start()
+        rep = agent["go"]([("commit", SLOW, "slow fit"), ("broker", ["trial", "--sport", "nba"]), ("sleep", 600)])
+>       assert rep["stopped"] == "stopped" and rep["trial_left_alive"] == []
+E       AssertionError: assert ('agent failed to start' == 'stopped'
+E         
+E         - stopped
+E         + agent failed to start)
+
+tests/test_research_agent.py:195: AssertionError
+___ test_stop_kills_a_running_agent_and_blocks_trials_and_runs_until_cleared ___
+
+agent = {'ws': PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-289/test_stop_kills_.../pytest-of-andry/pytest-289/test_stop_kills_a_running_agen0/experiments/sports-autoresearch-v2-d1c045f7508f/nba'), ...}
+
+    def test_stop_kills_a_running_agent_and_blocks_trials_and_runs_until_cleared(agent):
+        def press_stop():
+            for _ in range(200):
+                a = ra.active(agent["exp"])
+                if a and a.get("agent_pid"):
+                    time.sleep(1)
+                    ra.stop(agent["exp"], "test stop")
+                    return
+                time.sleep(0.1)
+        threading.Thread(target=press_stop, daemon=True).start()
+        rep = agent["go"]([("sleep", 600)])
+        assert rep["stopped"] == "stopped" and rep["sweep"] is None
+        # Regression (real run 20261014T134010Z-5f7f): a killed agent reports no cost; that is unknown, never $0.
+        assert rep["cost_usd"] is None and ra.runs(agent["exp"])[-1]["cost_usd"] is None
+        assert ra.runs(agent["exp"])[-1]["stopped"] == "stopped"
+        with pytest.raises(ar.Refused, match="stopped"):
+            ar.run_trial("nba", agent["exp"], agent["ws"])
+        with pytest.raises(ar.Refused, match="stopped"):
+            agent["go"]([])
+        ra.stop(agent["exp"], clear=True)
+>       assert agent["go"]([])["stopped"] == "agent finished"
+E       AssertionError: assert 'agent failed to start' == 'agent finished'
+E         
+E         - agent finished
+E         + agent failed to start
+
+tests/test_research_agent.py:224: AssertionError
+_____________ test_a_launch_failure_is_retried_once_then_recorded ______________
+
+agent = {'ws': PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-289/test_a_launch_fa.../pytest-of-andry/pytest-289/test_a_launch_failure_is_retri0/experiments/sports-autoresearch-v2-d1c045f7508f/nba'), ...}
+
+    def test_a_launch_failure_is_retried_once_then_recorded(agent):
+        rep = agent["go"]([("exit", 3)])
+>       assert [a["exit"] for a in rep["attempts"]] == [3, 3] and rep["stopped"] == "agent failed to start"
+E       assert ([1, 1] == [3, 3]
+E         
+E         At index 0 diff: 1 != 3
+E         Use -v to get more diff)
+
+tests/test_research_agent.py:229: AssertionError
+_ test_uncommitted_edits_are_saved_not_evaluated_and_the_workspace_is_restored _
+
+agent = {'ws': PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-289/test_uncommitted.../pytest-of-andry/pytest-289/test_uncommitted_edits_are_sav0/experiments/sports-autoresearch-v2-d1c045f7508f/nba'), ...}
+
+    def test_uncommitted_edits_are_saved_not_evaluated_and_the_workspace_is_restored(agent):
+        rep = agent["go"]([("dirty",)])
+>       assert "# not committed" in Path(rep["uncommitted_diff"]).read_text()
+                                         ^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'uncommitted_diff'
+
+tests/test_research_agent.py:258: KeyError
+___ test_the_agent_process_cannot_read_or_write_data_logs_or_the_repository ____
+
+agent = {'ws': PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-289/test_the_agent_p.../pytest-of-andry/pytest-289/test_the_agent_process_cannot_0/experiments/sports-autoresearch-v2-d1c045f7508f/nba'), ...}
+
+    def test_the_agent_process_cannot_read_or_write_data_logs_or_the_repository(agent):
+        exp, data, ws = agent["exp"], agent["data"], agent["ws"]
+        assert not (ar.APP_DIR / "x.py").exists()
+        try:
+            rep = agent["go"]([("read", str(data / "nba.sqlite")), ("read", str(agent["root"] / "protocol.json")),
+                               ("read", str(agent["root"] / "search.pkl")), ("read", str(ar.REPO_ROOT / "HANDOFF.md")),
+                               ("write", str(exp / "agent" / "STOP")), ("write", str(agent["root"] / "trials.jsonl")),
+                               ("write", str(ar.APP_DIR / "x.py")), ("read", str(ws / "program.md")),
+                               ("read", str(ar.APP_DIR / "autoresearch.py")), ("write", str(ws / "scratch.txt"))])
+        finally:
+            leaked = (ar.APP_DIR / "x.py").exists()
+            (ar.APP_DIR / "x.py").unlink(missing_ok=True)           # never leave a probe in the source tree
+        probes = {(p["op"], p["path"]): p["ok"] for p in tool_lines(rep)}
+>       assert [ok for (op, path), ok in probes.items()] == [False] * 7 + [True] * 3, probes
+E       AssertionError: {}
+E       assert [] == [False, False...e, False, ...]
+E         
+E         Right contains 10 more items, first extra item: False
+E         Use -v to get more diff
+
+tests/test_research_agent.py:303: AssertionError
+___ test_the_agent_can_commit_and_reset_on_its_branch_without_sandbox_errors ___
+
+agent = {'ws': PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-289/test_the_agent_c.../pytest-of-andry/pytest-289/test_the_agent_can_commit_and_0/experiments/sports-autoresearch-v2-d1c045f7508f/nba'), ...}
+
+    def test_the_agent_can_commit_and_reset_on_its_branch_without_sandbox_errors(agent):
+        # Real run 20261014T150510Z-0809: commit and reset printed "cannot lock ref 'AUTO_MERGE' ... Operation not permitted".
+        rep = agent["go"]([("shell", f"{GIT} commit -qm idea --allow-empty"), ("shell", "git reset -q --hard HEAD~1")])
+>       assert [(t["exit"], "not permitted" in t["output"]) for t in tool_lines(rep)] == [(0, False), (0, False)], tool_lines(rep)
+E       AssertionError: []
+E       assert [] == [(0, False), (0, False)]
+E         
+E         Right contains 2 more items, first extra item: (0, False)
+E         Use -v to get more diff
+
+tests/test_research_agent.py:327: AssertionError
+_____ test_f1_the_agent_cannot_rewrite_git_config_hooks_or_the_fixed_files _____
+
+agent = {'ws': PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-289/test_f1_the_agen.../pytest-of-andry/pytest-289/test_f1_the_agent_cannot_rewri0/experiments/sports-autoresearch-v2-d1c045f7508f/nba'), ...}
+
+    def test_f1_the_agent_cannot_rewrite_git_config_hooks_or_the_fixed_files(agent):
+        # Reviewer's escape: write .git/config through `git log --output` (an allowed command), so the driver's next unsandboxed
+        # git call runs core.fsmonitor. The agent's sandbox must deny those writes.
+        pwned = agent["tmp"] / "pwned"
+        payload = f'[core]\n\tfsmonitor = "echo RAN > {pwned}; false"\n'
+        rep = agent["go"]([("shell", f"{GIT} commit -q --allow-empty -m '{payload}'"),
+                           ("shell", "git log -1 --format=%B --output=.git/config"),
+                           ("shell", "printf x > .git/hooks/post-checkout"), ("shell", "printf x > .git/info/attributes"),
+                           ("shell", "printf x > .git/config.worktree"), ("shell", "printf x >> prepare.py"),
+                           ("shell", "printf x >> program.md")])
+        tools = tool_lines(rep)
+>       assert tools[0]["exit"] == 0                                  # an ordinary commit still works
+               ^^^^^^^^
+E       IndexError: list index out of range
+
+tests/test_research_agent.py:341: IndexError
+__ test_f2_the_agent_cannot_read_files_elsewhere_in_home_or_open_local_ports ___
+
+agent = {'ws': PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-289/test_f2_the_agen.../pytest-of-andry/pytest-289/test_f2_the_agent_cannot_read_0/experiments/sports-autoresearch-v2-d1c045f7508f/nba'), ...}
+
+    def test_f2_the_agent_cannot_read_files_elsewhere_in_home_or_open_local_ports(agent):
+        import socket
+        secret = Path.home() / f".ar-review-probe-{os.getpid()}.sqlite"
+        secret.write_text("store copy")
+        srv = socket.socket()
+        srv.bind(("127.0.0.1", 0))
+        srv.listen(1)
+        try:
+            rep = agent["go"]([("read", str(secret)), ("connect", srv.getsockname()[1])])
+        finally:
+            secret.unlink()
+            srv.close()
+>       assert [p["ok"] for p in tool_lines(rep)] == [False, False]
+E       assert [] == [False, False]
+E         
+E         Right contains 2 more items, first extra item: False
+E         Use -v to get more diff
+
+tests/test_research_agent.py:394: AssertionError
+________________ test_f3_the_agent_gets_an_explicit_environment ________________
+
+agent = {'ws': PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-289/test_f3_the_agen.../pytest-of-andry/pytest-289/test_f3_the_agent_gets_an_expl0/experiments/sports-autoresearch-v2-d1c045f7508f/nba'), ...}
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x130c5f3e0>
+
+    def test_f3_the_agent_gets_an_explicit_environment(agent, monkeypatch):
+        monkeypatch.setenv("AR_REVIEW_SECRET", "x")
+        monkeypatch.setenv("NBA_DATA_DIR", os.environ["NBA_DATA_DIR"])
+        rep = agent["go"]([("env",)])
+>       [e] = tool_lines(rep)
+        ^^^
+E       ValueError: not enough values to unpack (expected 1, got 0)
+
+tests/test_research_agent.py:401: ValueError
+_ test_n3_the_agent_cannot_touch_claude_code_config_transcripts_or_preferences _
+
+agent = {'ws': PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-289/test_n3_the_agen.../pytest-of-andry/pytest-289/test_n3_the_agent_cannot_touch0/experiments/sports-autoresearch-v2-d1c045f7508f/nba'), ...}
+
+    def test_n3_the_agent_cannot_touch_claude_code_config_transcripts_or_preferences(agent):
+        # The user's own (unsandboxed) Claude Code sessions load hooks and MCP commands from ~/.claude*: never writable, and
+        # other sessions' transcripts are not readable. Only the Claude Code install and the login keychain are read.
+        home = Path.home()
+        probe = home / ".claude" / f"ar-review-probe-{os.getpid()}"
+        try:
+            rep = agent["go"]([("write", str(probe)), ("read", str(home / ".claude.json")),
+                               ("read", str(home / "Library" / "Preferences" / ".GlobalPreferences.plist")),
+                               ("shell", f"ls {home / '.claude' / 'projects'}")])
+        finally:
+            leaked = probe.exists()
+            probe.unlink(missing_ok=True)
+>       w, r1, r2, ls = tool_lines(rep)
+        ^^^^^^^^^^^^^
+E       ValueError: not enough values to unpack (expected 4, got 0)
+
+tests/test_research_agent.py:490: ValueError
+______ test_a_staged_uncommitted_change_is_saved_and_never_left_on_master ______
+
+agent = {'ws': PosixPath('/private/var/folders/tc/v7yt8snn3c9_cdbwdg3n_pvr0000gn/T/pytest-of-andry/pytest-289/test_a_staged_un.../pytest-of-andry/pytest-289/test_a_staged_uncommitted_chan0/experiments/sports-autoresearch-v2-d1c045f7508f/nba'), ...}
+
+    def test_a_staged_uncommitted_change_is_saved_and_never_left_on_master(agent):
+        # Real run 20261014T155928Z-1593: the agent staged train.py but could not commit; the finish saved only unstaged edits
+        # and the staged change was carried onto master (next run refused: dirty workspace).
+        rep = agent["go"]([("shell", "printf '\\n# staged idea\\n' >> train.py && git add train.py")])
+>       assert "# staged idea" in Path(rep["uncommitted_diff"]).read_text()
+                                       ^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'uncommitted_diff'
+
+tests/test_research_agent.py:555: KeyError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/andry/Desktop/nba-predictor-soccer-train/backend/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_research_agent.py::test_an_agent_run_proposes_runs_and_records_each_decision
+FAILED tests/test_research_agent.py::test_commits_the_agent_did_not_run_are_evaluated_after_it_ends
+FAILED tests/test_research_agent.py::test_the_agent_shell_runs_python_from_path_like_program_md_says
+FAILED tests/test_research_agent.py::test_trials_beyond_the_run_budget_are_refused_by_the_evaluator
+FAILED tests/test_research_agent.py::test_the_deadline_kills_the_agent_tree_and_the_trial_in_flight
+FAILED tests/test_research_agent.py::test_a_stop_during_a_trial_kills_it_and_records_it_interrupted
+FAILED tests/test_research_agent.py::test_stop_kills_a_running_agent_and_blocks_trials_and_runs_until_cleared
+FAILED tests/test_research_agent.py::test_a_launch_failure_is_retried_once_then_recorded
+FAILED tests/test_research_agent.py::test_uncommitted_edits_are_saved_not_evaluated_and_the_workspace_is_restored
+FAILED tests/test_research_agent.py::test_the_agent_process_cannot_read_or_write_data_logs_or_the_repository
+FAILED tests/test_research_agent.py::test_the_agent_can_commit_and_reset_on_its_branch_without_sandbox_errors
+FAILED tests/test_research_agent.py::test_f1_the_agent_cannot_rewrite_git_config_hooks_or_the_fixed_files
+FAILED tests/test_research_agent.py::test_f2_the_agent_cannot_read_files_elsewhere_in_home_or_open_local_ports
+FAILED tests/test_research_agent.py::test_f3_the_agent_gets_an_explicit_environment
+FAILED tests/test_research_agent.py::test_n3_the_agent_cannot_touch_claude_code_config_transcripts_or_preferences
+FAILED tests/test_research_agent.py::test_a_staged_uncommitted_change_is_saved_and_never_left_on_master
+16 failed, 1809 passed, 1 warning in 2248.36s (0:37:28)
+EXIT=1
+END=2026-11-08T19:19:12Z

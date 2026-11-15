@@ -1,0 +1,6 @@
+The restore failed (OSError: [Errno 5] injected) and the automatic rollback did not complete (<tmp>/data/nba.sqlite.replaced-20261108T142709802266Z -> <tmp>/data/nba.sqlite: OSError: [Errno 5] injected). Nothing was deleted. Stop every job and the API, then finish the rollback by hand.
+  nba: active store <tmp>/data/nba.sqlite; safety copies <tmp>/data/nba.sqlite.replaced-20261108T142709802266Z, <tmp>/data/nba.sqlite-wal.replaced-20261108T142709802266Z, <tmp>/data/nba.sqlite-shm.replaced-20261108T142709802266Z; staged backup copy <tmp>/data/nba.sqlite.restoring
+  nfl: active store <tmp>/data/nfl.sqlite; safety copies <tmp>/data/nfl.sqlite.replaced-20261108T142709802266Z, <tmp>/data/nfl.sqlite-wal.replaced-20261108T142709802266Z, <tmp>/data/nfl.sqlite-shm.replaced-20261108T142709802266Z; staged backup copy <tmp>/data/nfl.sqlite.restoring
+Renames still to do, in this order (never overwrite an existing file):
+  1. move <tmp>/data/nba.sqlite.replaced-20261108T142709802266Z to <tmp>/data/nba.sqlite
+Afterwards each staged .restoring file is only a copy of the backup and may be deleted.

@@ -1,0 +1,258 @@
+{
+ "name": "soccer-markets-goals-corners",
+ "version": 1,
+ "written_at": "2026-11-09",
+ "written_before_any_model_fit": true,
+ "written_before_any_outcome_statistic": "no goal or corner count, rate or score of the ESPN month history had been computed when this file was written; only request counts and the parse of 5 sample payloads (corner fields present) were looked at",
+ "user_decisions": [
+  "2026-11-09 (pasted brief): Expand soccer beyond 90-minute 1X2: match goals over/under, home and away team goals over/under, both teams to score, double chance and draw no bet, match corners over/under, team corners over/under, corner handicaps. Never derive corner probabilities from the existing Elo winner probability or invent missing statistics. Use chronological evaluation without future-data leakage; report sample sizes, calibration and baseline comparisons separately for each market and competition. Deliver goals markets first, then corners. No purchases or deployment.",
+  "2026-11-09 (answer to 'may I run the one-shot reserved test myself once the models are sealed?'): 'Run it after sealing (Recommended)'"
+ ],
+ "families": {
+  "goals": "the 90-minute (regulation + stoppage) goal counts of the home and away team; markets: match goals over/under, home team goals over/under, away team goals over/under, both teams to score",
+  "corners": "the 90-minute corner counts of the home and away team (ESPN scoreboard `wonCorners`); markets: match corners over/under, home team corners over/under, away team corners over/under, corner handicap"
+ },
+ "not_modelled_here": {
+  "double_chance": "exact sums of the tested 90-minute 1X2 forecast (soccer_live / intl_live): 1X = 1 - P(away), X2 = 1 - P(home), 12 = 1 - P(draw). Its calibration is the tested per-outcome calibration of the 1X2 forecast (the complement of one outcome), so no new model and no new test",
+  "draw_no_bet": "P(home | no draw) = P(home) / (P(home) + P(away)) from the same 1X2 forecast; a draw is a push (stake returned). Not a new model; reported on the 1X2 validation seasons 2020-2022 with the frozen Elo (open seasons only; the 1X2 reserved test is not rerun)",
+  "corners_from_1x2": "never: corner probabilities come only from the corner count models below, fitted on corner counts"
+ },
+ "dataset": {
+  "source": "ESPN soccer scoreboards: whole months (app/soccer.ingest_months, source espn_soccer_month, retrieved 2026-11-09) plus the live store's day scoreboards (source espn_soccer); store tables soccer_matches (results) and soccer_match_stats (corners)",
+  "competitions": [
+   "eng.1",
+   "esp.1",
+   "ger.1",
+   "ita.1",
+   "fra.1",
+   "uefa.champions",
+   "uefa.europa"
+  ],
+  "team_identity": "ESPN team id (global across competitions and seasons); no name matching",
+  "season": "ESPN season year = start year (2020 = 2020-21)"
+ },
+ "periods": {
+  "warmup": [
+   2010,
+   2011,
+   2012
+  ],
+  "development_tune": [
+   2013,
+   2014,
+   2015,
+   2016,
+   2017
+  ],
+  "development_fit": [
+   2018,
+   2019
+  ],
+  "validation": [
+   2020,
+   2021,
+   2022
+  ],
+  "reserved_test": [
+   2023,
+   2024,
+   2025
+  ],
+  "prospective_locked": [
+   2026
+  ],
+  "last_open_season": 2022,
+  "reserved_test_disclosure": "goals: seasons 2023-2025 of these competitions were read once before, on 2026-11-08, by the one-shot test of the 90-minute 1X2 Elo (openfootball results; aggregate metrics only). Goal counts were not a target there, but they decide 1X2 outcomes: this goals test is a disclosed second use of those seasons. corners: no corner count of any season had been read before; the corners test is a first use."
+ },
+ "eligibility": {
+  "usable_match": "status final, decided_in 'regulation' (ESPN STATUS_FULL_TIME confirmed by period/clock/goal minutes: app/sources/espn._soccer_ending), home and away team ids differ, competition in the list, a league match of the regular season, or a UEFA match of the group stage / league phase. A match decided in extra time or on penalties, or whose ending is 'unknown', is never an input and never scored (ESPN counts then include extra time). UEFA knockout matches (first legs included) are excluded entirely, so inclusion never depends on the outcome",
+  "league_regular_season_and_uefa_group_stage": "fixed by amendment 1 from a structure-only listing of ESPN season types and stage slugs per competition (no outcome read), before any fit",
+  "goals_label": "home_score, away_score of the latest result revision (90-minute score of a regulation final)",
+  "corners_label": "home_corners, away_corners of the latest soccer_match_stats revision; a usable match without a stats row has no corner label (counted, never imputed)",
+  "corner_season_coverage": "a (competition, season) whose usable matches have a corner label in fewer than 90 % of cases is not scored for corners (its labelled matches remain inputs); listed in the report",
+  "zero_zero_corners": "kept as delivered (no imputation); their count per competition-season is reported as a data-quality disclosure"
+ },
+ "point_in_time": {
+  "forecast_cutoff": "06:00:00 UTC on the match's local date (kickoff converted to the league's zone; UEFA: Europe/Paris), as app/soccer_live.local_date; every match of that date is forecast from the same state",
+  "result_available_at": "soccer_matches.result_available_at (the retrieval itself, or kickoff + 4 h for a final first seen long after kickoff; a correction from its retrieval)",
+  "corners_available_at": "soccer_match_stats.available_at: never earlier than the result's availability; a corrected count from its retrieval",
+  "input_rule": "an input of a family is a usable match whose label of that family is available at or before the cutoff; the label value used is the latest revision available at the cutoff",
+  "same_day": "matches of the same local date never inform each other",
+  "reads": "seasons after last_open_season are read only through a valid sealed candidate of the family, and every such read is logged before it happens (soccer-markets access log); prospective seasons are never read by an evaluation"
+ },
+ "count_grid": {
+  "goals": "joint probability grid over home 0..10 x away 0..10; the last cell of each axis holds that count or more (the tail mass is folded in, never dropped)",
+  "corners": "joint grid over home 0..25 x away 0..25, last cell = that count or more"
+ },
+ "candidates": {
+  "frequency": {
+   "description": "baseline: per competition, the empirical marginal distribution of the home count and of the away count (grid cells as above, tail folded), each with 0.5 added to every cell, over usable labelled matches of seasons 2010-2019 (warm-up and development); joint = product of the two marginals; fixed afterwards",
+   "parameters": "none tuned"
+  },
+  "poisson": {
+   "description": "team-strength Poisson, one per family: log mean_home = mu_c + h_c + att_home - def_away; log mean_away = mu_c + att_away - def_home; mu_c and h_c per competition, unpenalised; att and def per team. Joint = product of the two Poisson pmfs on the grid (tail folded)",
+   "fit": "refit at every cutoff from the inputs available then whose match date lies in the 730 days before the cutoff; weight exp(-ln 2 * age_days / half_life_days); maximum weighted likelihood with ridge penalty tau * sum((att - centre_att)^2 + (def - centre_def)^2); L-BFGS-B started from the centres (no state carried between cutoffs), tolerance 1e-9, at most 500 iterations",
+   "centres": "0 for every team, except a team that is a member of the forecast league-season but was not a member of that league's previous season (promoted): centre (-D, -D). Membership = every team listed in the league-season's regular-season schedule (any status). A team with no input in the window is predicted at its centre; a competition with no input in the window uses mu = log of the family's default mean (goals 1.35, corners 5.0) and h = 0",
+   "grid": {
+    "goals": {
+     "half_life_days": [
+      180,
+      365,
+      730
+     ],
+     "tau": [
+      3,
+      10
+     ],
+     "D": [
+      0.1,
+      0.25
+     ]
+    },
+    "corners": {
+     "half_life_days": [
+      180,
+      365,
+      730
+     ],
+     "tau": [
+      3,
+      10
+     ],
+     "D": [
+      0.0,
+      0.1
+     ]
+    }
+   },
+   "selection": "lowest mean joint log loss (negative log of the grid probability of the observed pair) over scored development_tune matches; ties within 1e-9 broken by larger half_life_days, then larger tau, then smaller D"
+  },
+  "dixon_coles": {
+   "family": "goals",
+   "description": "the selected goals Poisson with the Dixon-Coles low-score adjustment: cells (0,0), (0,1), (1,0), (1,1) multiplied by 1 - lh*la*rho, 1 + lh*rho, 1 + la*rho, 1 - rho; per match rho is clipped to [max(-1/lh, -1/la), min(1/(lh*la), 1)]; the grid is renormalised",
+   "fit": "one rho for all competitions, maximum likelihood (bounded scalar search on [-0.3, 0.3], xatol 1e-6) over scored development_fit matches, using the selected Poisson's walk-forward means"
+  },
+  "negative_binomial": {
+   "family": "corners",
+   "description": "the selected corners Poisson's means with negative-binomial counts: Var = mean + mean^2 / k for both sides; joint = product of the two pmfs on the grid (tail folded)",
+   "fit": "one k for all competitions and both sides, maximum likelihood (bounded scalar search of log k on [log 0.5, log 10000], xatol 1e-6) over scored development_fit matches, using the selected Poisson's walk-forward means"
+  }
+ },
+ "choice_on_validation": {
+  "goals": "dixon_coles is chosen if the 95 % interval of its paired per-match joint log-loss difference to the selected poisson on validation lies entirely below 0; otherwise poisson",
+  "corners": "negative_binomial is chosen if the 95 % interval of its paired per-match joint log-loss difference to the selected poisson on validation lies entirely below 0; otherwise poisson",
+  "against_the_baseline": "the chosen model proceeds to sealing and the reserved test only if the 95 % interval of its paired per-match joint log-loss difference to frequency on validation lies entirely below 0. Otherwise the family stops: nothing is sealed, tested or served for it",
+  "bootstrap": "backtest.block_bootstrap: ISO-week blocks of the forecast cutoff, seed 20260930, 2000 resamples, 95 % percentile interval",
+  "calibration": "none: no post-hoc recalibration of any market (the joint grid is used as is, so every market stays consistent)"
+ },
+ "metrics": {
+  "primary": "mean joint log loss of the observed (home, away) count pair (natural log; probabilities clipped to [1e-15, 1])",
+  "markets_reported": {
+   "goals_total_over": [
+    0.5,
+    1.5,
+    2.5,
+    3.5,
+    4.5
+   ],
+   "goals_home_over": [
+    0.5,
+    1.5,
+    2.5
+   ],
+   "goals_away_over": [
+    0.5,
+    1.5,
+    2.5
+   ],
+   "btts_yes": [
+    null
+   ],
+   "corners_total_over": [
+    7.5,
+    8.5,
+    9.5,
+    10.5,
+    11.5,
+    12.5
+   ],
+   "corners_home_over": [
+    2.5,
+    3.5,
+    4.5,
+    5.5,
+    6.5,
+    7.5
+   ],
+   "corners_away_over": [
+    1.5,
+    2.5,
+    3.5,
+    4.5,
+    5.5,
+    6.5
+   ],
+   "corners_handicap_home": [
+    -3.5,
+    -2.5,
+    -1.5,
+    -0.5,
+    0.5,
+    1.5
+   ]
+  },
+  "per_market_line": "n, Brier, log loss, mean predicted vs observed rate, 10 equal-width reliability bins (count, mean predicted, observed rate) and ECE (count-weighted mean |predicted - observed|); the baseline's Brier and the paired Brier difference with its 95 % interval",
+  "exact_total": "mean predicted vs observed share of each total: goals 0..5 and 6+; corners <=6, 7..14 one by one, 15+",
+  "breakdowns": "overall, per competition, per season; per competition always with n",
+  "half_lines_only_in_metrics": "integer and quarter lines are exact functions of the same grid; their settlement probabilities are reported for the bookmaker lines live, not scored as binary events"
+ },
+ "reserved_test_reading": {
+  "R1_family_skill": "PASS only if the 95 % interval of the sealed model's paired per-match joint log-loss difference to frequency on the pooled test matches lies entirely below 0. If R1 fails, nothing of the family is served",
+  "R2_market_calibration": "a market (all its lines) is served only if every reported line of it has overall test ECE <= 0.05 (the threshold of the 1X2 reading plan R2). A failing market is reported and not served; the other markets of the family are unaffected",
+  "R3_competition_scope": "a competition is served for the family only if its test n >= 300 and the 95 % interval of its paired joint log-loss difference to frequency lies entirely below 0 (the n >= 300 of the 1X2 reading plan R3)",
+  "R4_descriptive": "per season and per line: Brier, log loss, reliability, predicted vs observed rates. A reported line with |mean predicted - observed rate| > 0.03 overall is disclosed as a limitation, never a gate",
+  "served_set": "markets passing R2 x competitions passing R3, only if R1 passes, and only competitions also in the live 1X2 launch scope (app/soccer_live.LAUNCH; UEL stays input only)",
+  "fixed_regardless_of_outcome": "the result is recorded unchanged and copied in full into docs/evidence; no refit, tuning, recalibration, re-seal or second run follows; the runner refuses a second run of a family"
+ },
+ "live": {
+  "point_in_time": "as evaluated: forecasts of date D made at or before D 06:00 UTC from inputs available by then, only when every input competition's current-season matches before the cutoff are settled and their labels present (otherwise that family records nothing and the refusal is visible; another family and the 1X2 forecast are unaffected)",
+  "model_identity": "the sealed candidate's sha256 per family, byte copy in the repository",
+  "stored": "the joint grid of the forecast (immutable); every market probability is computed from the stored grid",
+  "no_proven_skill_against_the_line": "no historical bookmaker prices for these markets exist in a free source (ESPN lists none for past matches), so every goal and corner market is labelled 'no proven skill against the bookmaker'; bookmaker prices are shown as information and never turn a pick into a 'best pick'",
+  "bookmaker_offers": "only prices the ESPN scoreboard lists with an explicit side and line (DraftKings: 3-way result, match goals total, goal handicap), recorded before kickoff with their retrieval time; every other line shown is a model line (fair odds from the model), labelled as such"
+ },
+ "settlement": {
+  "basis": "90 minutes plus stoppage time; extra time and penalties never count. A match decided in extra time or on penalties is unscorable for these markets (ESPN does not give the 90-minute count); a postponed, cancelled or abandoned match is void",
+  "half_line": "win or loss",
+  "integer_line": "push (stake returned) when the count equals the line",
+  "quarter_line": "split stake: x.25 = half on x.0 and half on x.5; x.75 = half on x.5 and half on x+1.0; results win, half win, push, half loss, loss",
+  "corner_handicap": "home corners + line compared with away corners (away line = minus the home line)",
+  "draw_no_bet": "home or away win; a 90-minute draw is a push",
+  "double_chance": "win if the 90-minute result is one of the two named outcomes",
+  "return_factor": "per unit stake at decimal odds d: win d, half win (d + 1) / 2, push or void 1, half loss 1/2, loss 0; a ticket returns the product over its legs"
+ },
+ "amendments": [
+  {
+   "number": 1,
+   "written_at": "2026-11-09",
+   "before_any_fit": true,
+   "basis": "a structure-only listing of the ESPN month history (docs/evidence/soccer-markets-2026-11-09/coverage_counts.json and the stage-slug listing in the evidence README): match counts per competition, season, season type and stage, and how many regulation finals have a corner row. No goal or corner value, rate or score was read.",
+   "stage_rules": {
+    "league_regular_season": "per (league, season) the ESPN season type with the most listed matches (ties: the lower type id). Excluded by it: relegation play-offs and a few matches listed under another type (esp.1 2010: 3, fra.1 2016-2018: 2/4/4, ger.1 2010-2011: 5/2, ita.1 2022: 1)",
+    "uefa_group_stages": [
+     "group-stage",
+     "league-phase",
+     "2010-first-round",
+     "2011-first-round",
+     "2012-first-round",
+     "2013-first-round",
+     "2014-first-round",
+     "2015-first-round",
+     "201617-group-stage"
+    ],
+    "uefa_group_stage_note": "every UEFA group stage / league phase slug ESPN uses 2010-2026 (UEL 2010-2015 name it '<year>-first-round', 2016 '201617-group-stage'); qualifying rounds, play-offs and all knockout rounds are excluded"
+   },
+   "coverage_disclosed": "regulation finals with a corner row: complete or nearly so in every league-season except eng.1 2011 (207 of 380, a warm-up season, so inputs only; below the 90 % rule it is never scored for corners); fra.1 2019 has 279 finals (season stopped in 2020)."
+  }
+ ]
+}

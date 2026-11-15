@@ -12,6 +12,7 @@ class PregameGame:
     home_team_id: str
     away_team_id: str
     neutral_site: bool
+    cutoff_at: str | None = None  # explicit information time, supplied by the adaptive walk/live caller
 
 
 @dataclass(frozen=True)

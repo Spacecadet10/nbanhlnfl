@@ -1,0 +1,104 @@
+{
+  "candidate": "logistic_v2",
+  "model_version": "logistic_v2-shadow-32e5d9e9d514",
+  "definition": {
+    "candidate": "logistic_v2",
+    "logistic": {
+      "l2": 1.0,
+      "intercept_penalised": false,
+      "features": [
+        "elo_diff",
+        "net_diff",
+        "rest_diff",
+        "b2b_home",
+        "b2b_away",
+        "neutral"
+      ],
+      "standardised_on_training_examples_only": [
+        "elo_diff",
+        "net_diff",
+        "rest_diff"
+      ],
+      "refit": "at each season start on every labelled example from earlier seasons; features are the pregame snapshots captured at predict time",
+      "before_first_fit": "frozen Elo probability",
+      "rest_cap_days": 4.0,
+      "back_to_back_below_days": 1.5
+    },
+    "elo": {
+      "k": 15,
+      "home_advantage": 50,
+      "carry": 0.75,
+      "mov": true
+    },
+    "efficiency": {
+      "possessions": "FGA - OREB + TOV + 0.44*FTA per team, mean of both teams",
+      "half_life_days": 30.0,
+      "prior_games": 10.0,
+      "iterations": 20,
+      "hca_prior": 1.25,
+      "hca_prior_games": 100.0,
+      "default_ratings": {
+        "ortg": 110.0,
+        "drtg": 110.0,
+        "pace": 100.0
+      },
+      "missing_data": "latest complete observation among those delivered; incomplete observations are counted and ignored"
+    },
+    "delivery": "a box score is used only when both its own availability and its game's result availability are at or before the generation time",
+    "cutoff": "00:00 America/New_York on the game's Eastern date; the forecast must be generated before it",
+    "feature_version": "pregame-ids-v1+prior-day-et-cutoff+possession-obs-v1",
+    "stale_inputs": {
+      "recent_games": 5,
+      "rule": "no shadow forecast is recorded for a game if either team lacks a complete delivered box score for any of its most recent finals of the current season (results available at generation time); the skip is reported and a later run may record it. Older gaps are tolerated and counted."
+    }
+  },
+  "promotion_rule": {
+    "season": "2026-27",
+    "decision_set": "regular-season and play-in games where frozen Elo and the candidate each have a live forecast generated before the cutoff, and a final result; games missing either forecast are excluded and counted",
+    "comparison": "paired per-game Brier difference (candidate - Elo); ISO-week block bootstrap, seed 20260930, 2000 resamples",
+    "candidates_in_shadow": 1,
+    "interval": "95% (Bonferroni: 97.5% with 2 candidates, 95% with 1)",
+    "promote_if": "interval upper bound < 0 AND candidate log loss <= Elo log loss",
+    "minimum_games": 800,
+    "below_minimum": "inconclusive; Elo stays",
+    "applied": "once, after the last play-in game; interim reports are operational only and never used for decisions",
+    "baselines_reported": [
+      "constant 0.5",
+      "home-rate",
+      "frozen Elo",
+      "DraftKings via ESPN, latest quote retrieved no later than the forecast's generated_at, proportional de-vig, coverage reported"
+    ],
+    "market": "reported alongside; does not affect promotion",
+    "changes": "none mid-season; a changed definition is a new model_version, reported separately"
+  },
+  "frozen_elo_sha256": "fc51893b9e27169c4b0b2b7d6f96f52c2149be1b04dec4722b576d3cf92e989e",
+  "screening": {
+    "report": "data/reports/screening-2026-10-01T000121Z/report.json",
+    "generated_at": "2026-10-01T00:01:21Z",
+    "dataset_version": "08fe2552c1aa4579",
+    "box_version": "9ad11c5aa1590a46",
+    "rule": "Brier below Elo's and paired 95% upper bound of (candidate - Elo) Brier < 0.001; at most 2 by lowest validation Brier",
+    "elo": {
+      "brier": 0.2206758452837707,
+      "log_loss": 0.631576237544597,
+      "accuracy": 0.6433619384149419
+    },
+    "result": {
+      "brier": 0.21977044438797586,
+      "log_loss": 0.6296814773600838,
+      "accuracy": 0.6441191317516406,
+      "diff_vs_elo": -0.0009054008957948799,
+      "ci95": [
+        -0.0020923015779880485,
+        0.0002521372471586069
+      ],
+      "passed": true
+    },
+    "shadow_shortlist": [
+      "logistic_v2"
+    ],
+    "note": "screening on validation seasons only; not evidence of improvement"
+  },
+  "sealed_at": "2026-10-01T00:13:13Z",
+  "sha256": "a0ae1e8f1dc274bbcc2c21c9a611dd34fd6ac30c3b356199614b69aebb37cff4"
+}

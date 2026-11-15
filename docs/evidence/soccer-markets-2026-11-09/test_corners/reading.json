@@ -1,0 +1,36 @@
+{
+ "R1_family_skill": true,
+ "R2_market_calibration": {
+  "corners_away_over": true,
+  "corners_handicap_home": true,
+  "corners_home_over": true,
+  "corners_total_over": true
+ },
+ "R3_competition_scope": {
+  "eng.1": true,
+  "esp.1": true,
+  "fra.1": true,
+  "ger.1": true,
+  "ita.1": true,
+  "uefa.champions": true,
+  "uefa.europa": false
+ },
+ "R4_disclosed_lines": [
+  "corners_total_over@7.5"
+ ],
+ "served_competitions": [
+  "eng.1",
+  "esp.1",
+  "fra.1",
+  "ger.1",
+  "ita.1",
+  "uefa.champions"
+ ],
+ "served_markets": [
+  "corners_away_over",
+  "corners_handicap_home",
+  "corners_home_over",
+  "corners_total_over"
+ ],
+ "verdict": "serve"
+}

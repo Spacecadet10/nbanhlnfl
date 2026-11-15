@@ -1,0 +1,18 @@
+--- /private/tmp/claude-501/-Users-andry-Desktop-nba-predictor-sprint1/9adf6978-28aa-417d-9e17-e71bdb15143a/scratchpad/batch1/w1/r3_cli_before.py	2026-11-07 19:25:55
++++ app/cli.py	2026-11-07 19:25:55
+@@ -55,9 +55,13 @@
+     (a store file, raw/ folder or lock linked into the live folder is protected too)."""
+     targets = (config.data_dir(), config.db_path(sport), config.raw_dir(), config.lock_path(sport), *paths)
+     hit = next((t for t in targets if config.protected_path(t)), None)
+-    if hit is None:
++    store = config.db_path(sport)
++    links = store.stat().st_nlink if hit is None and store.is_file() else 1
++    if hit is None and links <= 1:
+         return None
+-    where = f"{hit} is in a protected live data folder"
++    # A hard-linked store file may be the live store under another name (no path leads into the live folder): fail closed.
++    where = (f"{hit} is in a protected live data folder" if hit is not None else
++             f"{store} has {links} hard links (it may be a live store under another name)")
+     hint = "use scripts/dev.sh or NBA_DATA_DIR=<a copy>; a live migration is the release procedure (README)"
+     problems = release.migration_context(sport, info)
+     if problems:

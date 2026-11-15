@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.nba-predictor.api-delivery</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/andry/nba-predictor-delivery/backend/.venv/bin/python</string>
+    <string>-m</string><string>uvicorn</string><string>app.main:app</string>
+    <string>--host</string><string>127.0.0.1</string><string>--port</string><string>8101</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/andry/nba-predictor-delivery/backend</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>NBA_DATA_DIR</key><string>/Users/andry/Desktop/nba-predictor-sprint1/data</string>
+    <key>NBA_API_MODE</key><string>real</string>
+    <key>CORS_ORIGINS</key><string>http://127.0.0.1:4173,http://localhost:4173</string>
+    <key>PYTHONDONTWRITEBYTECODE</key><string>1</string>
+  </dict>
+  <key>KeepAlive</key><true/>
+  <key>RunAtLoad</key><true/>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>ProcessType</key><string>Standard</string>
+  <key>StandardOutPath</key><string>/Users/andry/Desktop/nba-predictor-sprint1/data/api-delivery.log</string>
+  <key>StandardErrorPath</key><string>/Users/andry/Desktop/nba-predictor-sprint1/data/api-delivery.log</string>
+</dict>
+</plist>

@@ -1,0 +1,130 @@
+[
+ {
+  "case": "gameday-esp1",
+  "width": 1280,
+  "innerWidth": 1280,
+  "scrollWidth": 1280,
+  "overflow": false,
+  "wide": [],
+  "missing": [],
+  "exceptions": [],
+  "apiErrors": [],
+  "marketsApi": [
+   [
+    200,
+    "/api/soccer/markets?competition=esp.1"
+   ]
+  ]
+ },
+ {
+  "case": "gameday-ger1",
+  "width": 1280,
+  "innerWidth": 1280,
+  "scrollWidth": 1280,
+  "overflow": false,
+  "wide": [],
+  "missing": [],
+  "exceptions": [],
+  "apiErrors": [],
+  "marketsApi": [
+   [
+    200,
+    "/api/soccer/markets?competition=ger.1"
+   ]
+  ]
+ },
+ {
+  "case": "history-ger1",
+  "width": 1280,
+  "innerWidth": 1280,
+  "scrollWidth": 1280,
+  "overflow": false,
+  "wide": [],
+  "missing": [],
+  "exceptions": [],
+  "apiErrors": [],
+  "marketsApi": [
+   [
+    200,
+    "/api/soccer/markets/history?competition=ger.1"
+   ]
+  ]
+ },
+ {
+  "case": "gameday-eng1-api-down",
+  "width": 1280,
+  "innerWidth": 1280,
+  "scrollWidth": 1280,
+  "overflow": false,
+  "wide": [],
+  "missing": [],
+  "exceptions": [],
+  "apiErrors": [],
+  "marketsApi": [],
+  "blockedErrorShown": true
+ },
+ {
+  "case": "gameday-esp1",
+  "width": 390,
+  "innerWidth": 390,
+  "scrollWidth": 390,
+  "overflow": false,
+  "wide": [],
+  "missing": [],
+  "exceptions": [],
+  "apiErrors": [],
+  "marketsApi": [
+   [
+    200,
+    "/api/soccer/markets?competition=esp.1"
+   ]
+  ]
+ },
+ {
+  "case": "gameday-ger1",
+  "width": 390,
+  "innerWidth": 390,
+  "scrollWidth": 390,
+  "overflow": false,
+  "wide": [],
+  "missing": [],
+  "exceptions": [],
+  "apiErrors": [],
+  "marketsApi": [
+   [
+    200,
+    "/api/soccer/markets?competition=ger.1"
+   ]
+  ]
+ },
+ {
+  "case": "history-ger1",
+  "width": 390,
+  "innerWidth": 390,
+  "scrollWidth": 390,
+  "overflow": false,
+  "wide": [],
+  "missing": [],
+  "exceptions": [],
+  "apiErrors": [],
+  "marketsApi": [
+   [
+    200,
+    "/api/soccer/markets/history?competition=ger.1"
+   ]
+  ]
+ },
+ {
+  "case": "gameday-eng1-api-down",
+  "width": 390,
+  "innerWidth": 390,
+  "scrollWidth": 390,
+  "overflow": false,
+  "wide": [],
+  "missing": [],
+  "exceptions": [],
+  "apiErrors": [],
+  "marketsApi": [],
+  "blockedErrorShown": true
+ }
+]

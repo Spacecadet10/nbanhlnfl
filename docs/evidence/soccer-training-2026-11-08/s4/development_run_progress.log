@@ -1,0 +1,26 @@
+elo 1/648 0s
+elo 51/648 3s
+elo 101/648 46s
+elo 151/648 50s
+elo 201/648 53s
+elo 251/648 57s
+elo 301/648 60s
+elo 351/648 64s
+elo 401/648 67s
+elo 451/648 71s
+elo 501/648 74s
+elo 551/648 78s
+elo 601/648 81s
+poisson {'half_life_days': 180, 'tau': 3, 'D': 0.1} ll=0.96910 5s
+poisson {'half_life_days': 180, 'tau': 3, 'D': 0.25} ll=0.96868 43s
+poisson {'half_life_days': 180, 'tau': 10, 'D': 0.1} ll=0.97543 4s
+poisson {'half_life_days': 180, 'tau': 10, 'D': 0.25} ll=0.97464 4s
+poisson {'half_life_days': 365, 'tau': 3, 'D': 0.1} ll=0.96841 5s
+poisson {'half_life_days': 365, 'tau': 3, 'D': 0.25} ll=0.96805 5s
+poisson {'half_life_days': 365, 'tau': 10, 'D': 0.1} ll=0.97174 4s
+poisson {'half_life_days': 365, 'tau': 10, 'D': 0.25} ll=0.97107 4s
+poisson {'half_life_days': 730, 'tau': 3, 'D': 0.1} ll=0.96908 5s
+poisson {'half_life_days': 730, 'tau': 3, 'D': 0.25} ll=0.96873 5s
+poisson {'half_life_days': 730, 'tau': 10, 'D': 0.1} ll=0.97103 4s
+poisson {'half_life_days': 730, 'tau': 10, 'D': 0.25} ll=0.97041 4s
+exit=0

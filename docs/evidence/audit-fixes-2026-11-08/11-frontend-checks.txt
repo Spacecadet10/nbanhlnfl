@@ -1,0 +1,20 @@
+== npm run typecheck
+exit 0
+== npm run test:unit
+# tests 21
+# pass 21
+# fail 0
+== npm run build
+✓ built in 600ms
+== after the review fixes
+npm run typecheck: exit 0
+# tests 21
+# pass 21
+# fail 0
+✓ built in 593ms
+== final consolidated tree (Nov 9)
+npm run typecheck: exit 0
+# tests 24
+# pass 24
+# fail 0
+✓ built in 684ms

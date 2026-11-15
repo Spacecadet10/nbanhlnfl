@@ -1,0 +1,929 @@
+diff --git a/backend/app/schemas.py b/backend/app/schemas.py
+index 3a3beb9..77f2b5b 100644
+--- a/backend/app/schemas.py
++++ b/backend/app/schemas.py
+@@ -868,6 +868,9 @@ class SoccerMatchesResponse(BaseModel):
+     live_forecasts: dict[str, dict] = Field(default_factory=dict, description="match_id -> the latest recorded live 90-minute "
+                                             "forecast (as in /api/soccer/live) of the listed matches that have one. Kept "
+                                             "beside the matches: a match record itself never carries a forecast.")
++    forecast_cutoffs: dict[str, str] = Field(default_factory=dict, description="match_id -> the UTC time by which that "
++                                             "match's live forecast must be recorded (none is made after it); only for "
++                                             "competitions that are forecast.")
+ 
+ 
+ class SoccerResultRevision(BaseModel):
+@@ -895,6 +898,8 @@ class SoccerMatchDetail(BaseModel):
+     result_revisions: list[SoccerResultRevision]
+     live_forecast: Optional[dict] = Field(None, description="This match's latest recorded live 90-minute forecast "
+                                                             "(as in /api/soccer/live), or null when none was recorded.")
++    forecast_cutoff_at: Optional[str] = Field(None, description="UTC time by which this match's live forecast must be "
++                                                                "recorded; null for a competition that is never forecast.")
+     forecast_state: Literal["recorded", "awaiting", "out_of_scope", "no_live_store"]
+     capabilities: list[NflCapability]
+ 
+diff --git a/backend/app/soccer.py b/backend/app/soccer.py
+index 05a0226..8ee7b95 100644
+--- a/backend/app/soccer.py
++++ b/backend/app/soccer.py
+@@ -301,7 +301,8 @@ CAPABILITIES = [
+ # never say "no forecasts" beside recorded ones (live-state audit, 2026-11-08).
+ FORECAST_STATES = ("recorded", "awaiting", "out_of_scope", "no_live_store")
+ FORECASTS_AWAITING = ("A sealed 90-minute model covers this competition, but no forecast has been recorded for it yet. Each "
+-                      "match is forecast before it starts, once the earlier results it depends on are stored.")
++                      "match is forecast by 06:00 UTC on its match day, once the earlier results it depends on are stored; "
++                      "none is made after that cutoff.")
+ FORECASTS_OUT_OF_SCOPE = "No live forecast: this competition did not pass its held-out test (too few test matches)."
+ # With live forecasts recorded, "none recorded / none to grade" would be false; the pages themselves are not built yet.
+ RECORDED_PAGES = {
+@@ -435,6 +436,17 @@ def forecast_state(conn: sqlite3.Connection, competition: str) -> str:
+     return "recorded" if recorded else "awaiting"
+ 
+ 
++def forecast_cutoff(competition: str, kickoff_at: str) -> Optional[str]:
++    """The time by which this match's live forecast must be recorded (none is ever made after it), by the rule of the
++    model that covers the competition; None for a competition that is never forecast."""
++    from . import intl_eval, intl_live, soccer_eval, soccer_live
++    if competition in intl_live.LAUNCH:
++        return intl_eval.cutoff_for(intl_live.match_day(kickoff_at))
++    if competition in soccer_live.LAUNCH:
++        return soccer_eval.cutoff_for(soccer_live.local_date(kickoff_at, competition))
++    return None
++
++
+ def live_forecasts_of(conn: sqlite3.Connection, match_ids: list) -> dict:
+     """match_id -> its latest recorded live forecast (soccer_live.forecast_dict), for the matches that have one."""
+     from . import soccer_live
+@@ -467,6 +479,7 @@ def matches_on(conn: sqlite3.Connection, competition: str, day: date) -> dict:
+     earlier, later = [x for x in dates if x < d], [x for x in dates if x > d]
+     return {"competition_id": competition, "date": d, "fetched": d in fetched_dates(conn, competition),
+             "matches": [_match(r) for r in rows], "live_forecasts": live_forecasts_of(conn, [r["match_id"] for r in rows]),
++            "forecast_cutoffs": {r["match_id"]: c for r in rows if (c := forecast_cutoff(competition, r["kickoff_at"]))},
+             "prev_date": earlier[-1] if earlier else None,
+             "next_date": later[0] if later else None, "last_refresh_at": last_refresh_at(conn, competition)}
+ 
+@@ -496,4 +509,5 @@ def match_detail(conn: sqlite3.Connection, match_id: str) -> Optional[dict]:
+     return {"match": _match(r), "head_to_head": [_match(x) for x in h2h], "home_recent": recent(r["home_team_id"]),
+             "away_recent": recent(r["away_team_id"]), "result_revisions": revisions,
+             "live_forecast": live_forecasts_of(conn, [match_id]).get(match_id),
++            "forecast_cutoff_at": forecast_cutoff(r["competition_id"], r["kickoff_at"]),
+             "forecast_state": state, "capabilities": capabilities(state)}
+diff --git a/backend/app/tickets.py b/backend/app/tickets.py
+index e0d681e..a1df776 100644
+--- a/backend/app/tickets.py
++++ b/backend/app/tickets.py
+@@ -397,11 +397,34 @@ def lock_facts(day, snaps):
+ 
+ def _lock_reason(key, lock):
+     sport = key.split(':')[0]
+-    return (f"Locked: {lock['matchup']} is already in sent ticket(s) {', '.join(lock['tickets'])} with forecast "
++    return (f"Locked: {lock['matchup']} is already in reserved or sent ticket(s) {', '.join(lock['tickets'])} with forecast "
+             f"{sport}:{lock['ticket_forecast_id']} ({lock['ticket_pick']}); only that forecast may be used again, so "
+             f"{lock['pick_label']} ({lock['market']}) cannot be a leg.")
+ 
+ 
++def _was_reviewable(pick, day):
++    """A started game's forecast that a review could have used before the start. NBA/NHL/NFL forecasts are made in the two
++    hours before the start. A soccer forecast is made at its cutoff, days earlier, so its own rule applies (as in
++    `eligible`); the soccer list holds every recorded match, so only this Toronto day's matches that were actually
++    played count."""
++    tip, made = _parse(pick['tipoff']), _parse(pick['generated_at'])
++    if pick.get('market') == '1x2_regulation':
++        return (made <= _parse(pick['cutoff_at']) <= tip and tip.astimezone(TORONTO).date().isoformat() == day
++                and pick.get('status') not in ('postponed', 'canceled', 'abandoned'))
++    return tip - timedelta(hours=2) <= made <= tip
++
++
++def _review_window(pick):
++    """(from, to) during which this forecast was eligible for a ticket (see `eligible`), or None if it never was."""
++    if pick.get('status') in ('postponed', 'canceled', 'abandoned'):   # never played: never a leg
++        return None
++    tip, made = _parse(pick['tipoff']), _parse(pick['generated_at'])
++    opens = tip - timedelta(hours=2)
++    if pick.get('market') == '1x2_regulation':
++        return (opens, tip) if made <= _parse(pick['cutoff_at']) <= tip else None
++    return (max(opens, made), tip) if opens <= made <= tip else None
++
++
+ def review_state(snap):
+     """Deterministic review trigger: due when a fresh, combinable forecast has not been accounted for by any review today.
+ 
+@@ -411,14 +434,19 @@ def review_state(snap):
+         raise ValueError('Snapshot lacks as_of/date')
+     now = _parse(snap['as_of'])
+     ticketable, blocked, unavailable, started, delayed, moved = [], {}, {}, [], {}, []
++    windows = {}   # (sport, game) -> when its forecasts were eligible: tells whether a lone game stayed alone
+     for sport, section in snap['sports'].items():
+         if section.get('error'):
+             unavailable[sport] = dict(section)
+             continue
+         picks = section['report']['picks']
+         current = [p for p in picks if eligible(p, now)]
+-        started += [(sport, p) for p in picks if _parse(p['tipoff']) <= now
+-                    and _parse(p['tipoff']) - timedelta(hours=2) <= _parse(p['generated_at']) <= _parse(p['tipoff'])]
++        for p in picks:
++            w = _review_window(p)
++            if w:
++                a, b = windows.get((sport, p['game_id']), w)
++                windows[(sport, p['game_id'])] = (min(a, w[0]), max(b, w[1]))
++        started += [(sport, p) for p in picks if _parse(p['tipoff']) <= now and _was_reviewable(p, snap['date'])]
+         usable = [p for p in current if source_usable(section, p)]
+         refused = [p for p in current if not source_usable(section, p)]
+         if refused:
+@@ -467,14 +495,19 @@ def review_state(snap):
+         if (sport, pick['game_id']) not in reviewed_games:
+             entry = missed.setdefault((sport, pick['game_id']), {'sport': sport, 'game_id': pick['game_id'],
+                                       'matchup': pick.get('matchup'), 'tipoff': pick['tipoff'], 'forecasts': 0,
+-                                      'first_forecast_at': pick['generated_at']})
++                                      'first_forecast_at': pick['generated_at'],
++                                      'review_window_from': (_parse(pick['tipoff']) - timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M:%SZ')})
+             entry['forecasts'] += 1
+             entry['first_forecast_at'] = min(entry['first_forecast_at'], pick['generated_at'])
+     if missed:   # why: what the trigger recorded and which reviews failed while the game was still pending
++        for key, entry in missed.items():
++            entry['_other_windows'] = [w for other, w in windows.items() if other != key]
+         try:
+             explain_missed(snap['date'], missed.values())
+         except Exception as exc:
+             state['missed_explanation_error'] = type(exc).__name__
++        for entry in missed.values():
++            entry.pop('_other_windows', None)
+     # Pending games this run does not send to review, each with its reason (recorded by preflight: record_observations).
+     # A refused sport hides its games, so it is recorded for the sport unless it reports that it excludes no forecast now.
+     waiting = [{'sport': sport, 'game_id': None, 'issue': section['error'], 'detail': str(section.get('reason') or '')}
+@@ -524,10 +557,17 @@ def record_observations(state):
+ 
+ 
+ def explain_missed(day, entries):
+-    """Attach to each game that started unreviewed what the trigger recorded, and the reviews that failed, between its
+-    first pregame forecast and its start. `explained` is True only when the LAST thing the trigger saw before the start
+-    was a blocker, or a review failed after the trigger last said one was due. A blocker that cleared while reviews were
+-    then due and none ran does not explain the miss; `last_observation` shows how long before the start it was made."""
++    """Attach to each game that started unreviewed what the trigger recorded, and the reviews that failed, in its review
++    window: the two hours before its start, in which its forecasts were eligible (`review_window_from`).
++
++    Two different facts are reported. `blocker_observed`: a blocker was recorded at some check in the window.
++    `explained`: the ENTIRE window is accounted for, which needs more than one sighting:
++    - a review failed after the trigger last said one was due; or
++    - the last check before the start saw a blocker AND it is shown to have lasted to the start: the same blocker of
++      that sport was recorded again at or after the start, or, for a single-game window, no other game became eligible
++      between that check and the start.
++    A blocker seen at the last check and gone at the next one leaves the minutes in between unaccounted for: `explained`
++    is false and `explanation` says how many minutes. No time threshold is used anywhere."""
+     from app import telegram
+     with telegram.ledger() as conn:
+         schema(conn)
+@@ -535,7 +575,7 @@ def explain_missed(day, entries):
+         failures = [dict(r) for r in conn.execute("SELECT review_id,recorded_at,stage,outcome,detail FROM ticket_reviews "
+                                                   "WHERE day=? AND outcome='operational_failure' ORDER BY review_id", (day,))]
+     for entry in entries:
+-        lo, hi = _parse(entry['first_forecast_at']), _parse(entry['tipoff'])
++        lo, hi = _parse(entry['review_window_from']), _parse(entry['tipoff'])
+         mine = [o for o in seen if o['sport'] == entry['sport'] and o['game_id'] in (None, entry['game_id'])
+                 and lo <= _parse(o['recorded_at']) <= hi]
+         blockers, due = {}, [o['recorded_at'] for o in mine if o['issue'] == REVIEW_DUE]
+@@ -547,14 +587,34 @@ def explain_missed(day, entries):
+                 item['observations'] += 1
+         failed = [dict(f, detail=f['detail'][:200]) for f in failures if lo <= _parse(f['recorded_at']) <= hi]
+         last = mine[-1] if mine else None
++        minutes = int((hi - _parse(last['recorded_at'])).total_seconds() // 60) if last else None
++        failed_after_due = bool(failed and (not due or max(f['recorded_at'] for f in failed) >= due[-1]))
++        if failed_after_due:
++            explained, why = True, 'A review failed after the trigger last reported one due.'
++        elif last is None:
++            explained, why = False, 'Nothing was recorded for this game in its review window: no trigger run saw it before its start.'
++        elif last['issue'] == REVIEW_DUE:
++            explained, why = False, f"A review was due at the last check, {minutes} minutes before the start, and none finished."
++        elif last['issue'] == 'single_game_window':
++            at = _parse(last['recorded_at'])
++            joined = any(a < hi and b > at for a, b in entry.get('_other_windows', []))
++            explained = not joined
++            why = ('Single-game window: no other game became eligible between the last check and the start.' if explained else
++                   f"Single-game window at the last check, {minutes} minutes before the start, but another game became "
++                   f"eligible before the start and no review ran.")
++        else:
++            explained = last['issue'] != 'line_changed' and any(
++                o['sport'] == entry['sport'] and o['issue'] == last['issue'] and _parse(o['recorded_at']) >= hi for o in seen)
++            why = (f"Blocker '{last['issue']}' was seen at the last check before the start and again at or after it." if explained else
++                   f"Blocker '{last['issue']}' was last seen {minutes} minutes before the start and was not seen at or after "
++                   f"it, so whether a review was possible in those {minutes} minutes is not established.")
+         entry['recorded_blockers'] = list(blockers.values())
+         entry['review_due_seen'] = {'first_seen_at': due[0], 'last_seen_at': due[-1], 'observations': len(due)} if due else None
+-        entry['last_observation'] = ({'issue': last['issue'], 'at': last['recorded_at'],
+-                                      'minutes_before_start': int((hi - _parse(last['recorded_at'])).total_seconds() // 60)}
+-                                     if last else None)
++        entry['last_observation'] = {'issue': last['issue'], 'at': last['recorded_at'], 'minutes_before_start': minutes} if last else None
+         entry['failed_reviews'] = failed
+-        entry['explained'] = bool((last and last['issue'] != REVIEW_DUE)
+-                                  or (failed and (not due or max(f['recorded_at'] for f in failed) >= due[-1])))
++        entry['blocker_observed'] = bool(blockers)
++        entry['explained'] = explained
++        entry['explanation'] = why
+ 
+ 
+ def _text(value, what):
+@@ -630,6 +690,11 @@ def check(plan):
+         for leg in ticket['legs']:
+             sport = leg['sport']
+             decision = accounted.get(f"{sport}:{leg['forecast_id']}", {})
++            if f"{sport}:{leg['forecast_id']}" in locks:   # send would refuse it without a retry; say so here instead
++                lock = locks[f"{sport}:{leg['forecast_id']}"]
++                raise ValueError(f"Selected forecast {sport}:{leg['forecast_id']} is locked: {lock['matchup']} is already in "
++                                 f"ticket(s) {', '.join(lock['tickets'])} with forecast {sport}:{lock['ticket_forecast_id']}, and "
++                                 f"shared games must preserve the identical forecast; review again")
+             if decision.get('decision') != 'candidate':
+                 raise ValueError('Selected leg must have been reviewed as a candidate')
+             sections = [old['sports'][sport], fresh['sports'][sport]]
+@@ -1067,30 +1132,42 @@ SETTLED_GRADES = ('win', 'loss', 'push', 'void')
+ 
+ 
+ def result_notice(conn, chat, ticket_id, grade, legs, digest):
+-    """(delivery key, text) of the result notice a settled ticket is owed, decided by what was last ANNOUNCED for it, not
+-    by what was last stored: the notice says the ticket's grade and each leg's grade, so a reading that changes neither
+-    (a pending spell in between, a corrected score with the same grades) reuses the key of the notice already recorded
+-    and nothing is sent again. "Announced" means sent or unconfirmed; a notice Telegram rejected or deferred never
+-    reached the user, so it is not what later results are compared with (a deferred one with this same content is
+-    retried under its own key). Different content gets a new key; it carries the correction line only when a leg that
+-    was announced as settled now has another grade (a leg that was open and settles is an update, not a correction)."""
++    """(delivery key, text) of the result notice a ticket is owed now, or None. Every reading is archived in ticket_grades;
++    what the user is TOLD is decided here, against the last notice that reached them for this ticket (sent or
++    unconfirmed; one Telegram rejected or deferred did not reach them):
++    - nothing announced yet: the first settled result (a loss as soon as one leg loses, a win or void once all are in);
++    - a genuine correction: a leg announced as settled (win/loss/push/void) now has another settled grade. Announced
++      with the correction line, also when it reopens the ticket (PENDING);
++    - one final recap: every leg is settled now and the announced notice still had an open leg;
++    - otherwise nothing: an unchanged losing ticket is not announced again when another leg settles, and a leg that
++      reads as open for a while (or a corrected score with the same grades) changes nothing the user was told.
++    When nothing new is owed the announced notice's own key is returned, so delivery reports it as already recorded.
++    A deferred notice with exactly the owed text is retried under its own key."""
+     lines = [(str(p.get('pick_label', p['forecast_id'])), p['grade']) for p in legs]
+     text = f"PARLAY RESULT / {ticket_id} / {grade.upper()}\n" + '\n'.join(f"{label}: {g}" for label, g in lines)
+     said = lambda row: row['text'].split('\n' + CORRECTED_LINE)[0]
+     rows = conn.execute("SELECT delivery_key,text,status FROM deliveries WHERE chat_id=? AND delivery_key LIKE ? "
+                         "ORDER BY attempted_at DESC, rowid DESC", (chat, 'ticket-result:' + ticket_id + ':%')).fetchall()
+     announced = next((r for r in rows if r['status'] in ('sent', 'uncertain', 'sending')), None)
+-    if announced and said(announced) == text:
+-        return announced['delivery_key'], announced['text']
+-    deferred = next((r for r in rows if r['status'] == 'retry' and said(r) == text), None)
+-    if deferred:
+-        return deferred['delivery_key'], deferred['text']
+-    reversed_leg = False
+-    if announced:
+-        earlier = [line.rsplit(': ', 1) for line in said(announced).split('\n')[1:] if ': ' in line]
+-        reversed_leg = len(earlier) == len(lines) and any(old[1] in SETTLED_GRADES and old[1] != new[1]
+-                                                         for old, new in zip(earlier, lines))
+-    return 'ticket-result:' + ticket_id + ':' + digest, text + ('\n' + CORRECTED_LINE if reversed_leg else '')
++    settled_now = all(g in SETTLED_GRADES for _, g in lines)
++    if not announced:
++        owed = text if grade != 'pending' else None
++    else:
++        earlier = [line.rsplit(': ', 1)[1] for line in said(announced).split('\n')[1:] if ': ' in line]
++        comparable = len(earlier) == len(lines)
++        corrected = comparable and any(old in SETTLED_GRADES and new in SETTLED_GRADES and old != new
++                                       for old, (_, new) in zip(earlier, lines))
++        was_final = comparable and all(old in SETTLED_GRADES for old in earlier)
++        if corrected:
++            owed = text + '\n' + CORRECTED_LINE
++        elif said(announced) != text and settled_now and grade != 'pending' and not was_final:
++            owed = text
++        else:
++            owed = None
++    if owed is None:
++        return (announced['delivery_key'], announced['text']) if announced else None
++    deferred = next((r for r in rows if r['status'] == 'retry' and r['text'] == owed), None)
++    return (deferred['delivery_key'], deferred['text']) if deferred else ('ticket-result:' + ticket_id + ':' + digest, owed)
+ 
+ 
+ def settle(*, now=None, notify=False):
+@@ -1133,7 +1210,7 @@ def settle(*, now=None, notify=False):
+                     conn.execute('INSERT OR IGNORE INTO ticket_grades VALUES (?,?,?,?)', (t['ticket_id'],digest,now,raw))
+                 else:
+                     latest = None
+-                    for row in conn.execute('SELECT evidence_hash,payload FROM ticket_grades WHERE ticket_id=? ORDER BY rowid DESC', (t['ticket_id'],)):
++                    for row in conn.execute('SELECT evidence_hash,payload FROM ticket_grades WHERE ticket_id=? ORDER BY as_of DESC, rowid DESC', (t['ticket_id'],)):
+                         stored = json.loads(row['payload'])
+                         if not any(p.get('grade')=='unavailable' for p in stored.get('legs', [])):
+                             latest = (row['evidence_hash'], json.dumps({k:v for k,v in stored.items() if k!='supersedes'},sort_keys=True))
+@@ -1150,8 +1227,10 @@ def settle(*, now=None, notify=False):
+                 batch = conn.execute('SELECT batch_key FROM ticket_items WHERE ticket_id=? AND chat_id=?', (t['ticket_id'],chat)).fetchone()
+                 confirmed = batch and conn.execute("SELECT 1 FROM deliveries WHERE delivery_key=? AND status='sent'",(batch['batch_key'],)).fetchone()
+                 # A result with a leg that could not be read is stored above but never announced.
+-                if confirmed and result['grade'] != 'pending' and not any(p['grade']=='unavailable' for p in legs):
+-                    notices.append((result, *result_notice(conn, chat, t['ticket_id'], result['grade'], legs, digest)))
++                if confirmed and not any(p['grade']=='unavailable' for p in legs):
++                    owed = result_notice(conn, chat, t['ticket_id'], result['grade'], legs, digest)
++                    if owed:
++                        notices.append((result, *owed))
+         # All grading is committed before ANY external call. Notification failure cannot suppress outcomes.
+         if notify and notices:
+             try:
+@@ -1287,6 +1366,15 @@ SEND_OUTCOMES = {'sent': 'ticket_sent', 'existing_sent': 'ticket_sent', 'no_tick
+ RETRYABLE = {'retry', 'retry_pending'}   # uncertain/failed/partial need receipt inspection and are never re-triggered
+ 
+ 
++def _snapshot_day(plan):
++    """The slate date of the snapshot a plan reviewed, or None when the plan or its snapshot cannot be read."""
++    try:
++        day = json.loads(Path(plan['snapshot_path']).read_text())['date']
++        return day if isinstance(day, str) and len(day) == 10 else None
++    except Exception:
++        return None
++
++
+ def record_review(stage, outcome, detail, *, plan=None, result=None, retryable=False, snapshot_sha256=None, day=None):
+     """Append what one review attempt produced: a ticket, no ticket (insufficient evidence), a pause or an operational failure."""
+     from app import telegram
+@@ -1299,7 +1387,9 @@ def record_review(stage, outcome, detail, *, plan=None, result=None, retryable=F
+     if result:
+         payload.update(coverage=result['coverage'], ticket_ids=[t['ticket_id'] for t in result['resolved']],
+                        alerts=result['snapshot'].get('alerts', []))
+-    day = result['date'] if result else day or datetime.now(timezone.utc).astimezone(TORONTO).date().isoformat()
++    # A refused review belongs to the day of the snapshot it reviewed (the trigger looks failures up by that day), not to
++    # the wall-clock day: around Toronto midnight, and in tests with a fixed slate date, the two differ.
++    day = result['date'] if result else day or _snapshot_day(plan) or datetime.now(timezone.utc).astimezone(TORONTO).date().isoformat()
+     with telegram.ledger() as conn:
+         schema(conn)
+         cursor = conn.execute('INSERT INTO ticket_reviews (recorded_at,day,stage,outcome,detail,snapshot_sha256,snapshot_as_of,payload) '
+diff --git a/backend/tests/test_soccer_live.py b/backend/tests/test_soccer_live.py
+index 93d48ea..b0f473c 100644
+--- a/backend/tests/test_soccer_live.py
++++ b/backend/tests/test_soccer_live.py
+@@ -263,3 +263,18 @@ def test_a_store_without_live_tables_says_so(tmp_path, monkeypatch):
+     assert soccer.forecast_state(c, "eng.1") == "no_live_store"
+     assert "records no live soccer forecasts" in soccer.capabilities("no_live_store")[0]["reason"]
+     c.close()
++
++
++# --- Consolidated review: a match past its forecast cutoff must not be described as still awaiting a forecast ----------
++def test_the_api_reports_each_match_forecast_cutoff(live, monkeypatch):
++    client = _client(monkeypatch)
++    day = client.get("/api/soccer/matches", params={"competition": "eng.1", "date": TOMORROW.isoformat()}).json()
++    assert day["forecast_cutoffs"] == {m["match_id"]: f"{TOMORROW.isoformat()}T06:00:00Z" for m in day["matches"]}
++    detail = client.get("/api/soccer/matches/" + day["matches"][0]["match_id"]).json()
++    assert detail["forecast_cutoff_at"] == f"{TOMORROW.isoformat()}T06:00:00Z" and "cutoff" not in json.dumps(detail["match"])
++    # national teams: the match day runs 06:00–06:00 UTC, so a 02:00 UTC kickoff belongs to the day before
++    assert soccer.forecast_cutoff("uefa.nations", "2026-11-12T17:00:00Z") == "2026-11-12T06:00:00Z"
++    assert soccer.forecast_cutoff("uefa.nations", "2026-11-13T02:00:00Z") == "2026-11-12T06:00:00Z"
++    assert soccer.forecast_cutoff("fifa.world", "2026-11-12T17:00:00Z") is None       # never forecast: no cutoff to report
++    world = client.get("/api/soccer/matches", params={"competition": "fifa.world", "date": TOMORROW.isoformat()}).json()
++    assert world["forecast_cutoffs"] == {}
+diff --git a/backend/tests/test_tickets.py b/backend/tests/test_tickets.py
+index 229953a..e80c073 100644
+--- a/backend/tests/test_tickets.py
++++ b/backend/tests/test_tickets.py
+@@ -1060,10 +1060,12 @@ def test_game_blocked_until_kickoff_is_reported_with_its_recorded_blocker(setup,
+     assert code==0 and 'nfl' in json.loads(out)['review']['unavailable']
+     snap['as_of']='2026-11-08T17:15:00Z'
+     assert run_cli(monkeypatch,capsys,'preflight','--brief')[0]==0  # still refused at the next 15-minute run
+-    snap['sports']['nfl']=healthy;started(snap)                     # readable again only after kickoff
++    refused=snap['sports']['nfl'];started(snap,'2026-11-08T18:02:00Z');snap['sports']['nfl']=refused
++    assert run_cli(monkeypatch,capsys,'preflight','--brief')[0]==0  # still refused at the first run after kickoff
++    snap['sports']['nfl']=healthy;started(snap)                     # readable again only later
+     missed={(m['sport'],m['game_id']):m for m in t.review_state(snap)['missed_before_start']}
+     entry=missed[('nfl','g1')]
+-    assert entry['explained'] is True
++    assert entry['blocker_observed'] is True and entry['explained'] is True   # blocked at the checks on both sides of the start
+     assert entry['recorded_blockers']==[dict(issue='inactive',detail='definition_mismatch',first_seen_at=NOW,
+                                              last_seen_at='2026-11-08T17:15:00Z',observations=2)]
+     # NBA was reviewable (a review was due) and no review ran: nothing explains that miss
+@@ -1302,3 +1304,166 @@ def test_rejected_notice_is_not_what_was_announced_and_a_deferred_one_is_retried
+     t.settle(now='2026-11-08T21:47:00Z', notify=True); t.settle(now='2026-11-08T21:48:00Z', notify=True)
+     texts = notice_texts(sent, before)
+     assert len(texts) == 2 and texts[1].endswith('B2 win: push\n' + t.CORRECTED_LINE)   # sent once, after the retry time
++
++
++# --- Consolidated review of 635a4ec (three reviewers) and the owner's notification rule, 2026-11-08 -----------------------
++# Rule: every reading is archived; the user is told the first result, genuine grade corrections, and one final recap
++# when every leg is settled. An unchanged losing ticket is not announced again each time another leg settles, and an
++# unreadable leg never produces a result notice.
++def three_leg_ticket(setup, monkeypatch, grades, raises=None):
++    plan, snap, sent, path = setup; plan['tickets'] = [ticket([('nba', 1), ('nhl', 2), ('nfl', 3)])]
++    assert t.send(t.check(plan)) == 'sent'
++    def grade(p, now):
++        if raises and raises.get(p['forecast_id']):
++            raise raises[p['forecast_id']]
++        return dict(forecast_id=p['forecast_id'], pick_label=p['pick_label'], grade=grades[p['forecast_id']])
++    monkeypatch.setattr(t, 'grade_leg', grade)
++    return sent
++
++
++def grade_rows():
++    with tg.ledger() as c:
++        return [json.loads(r[0]) for r in c.execute('select payload from ticket_grades order by as_of, rowid')]
++
++
++def test_lost_ticket_is_announced_once_then_only_recapped_when_every_leg_is_settled(setup, monkeypatch):
++    grades = {1: 'loss', 2: 'pending', 3: 'pending'}; sent = three_leg_ticket(setup, monkeypatch, grades); before = len(sent)
++    t.settle(now='2026-11-08T21:00:00Z', notify=True)                       # the initial loss
++    grades[2] = 'win'; t.settle(now='2026-11-08T22:00:00Z', notify=True)    # another leg settles: archived, not announced
++    assert len(notice_texts(sent, before)) == 1
++    grades[3] = 'push'; t.settle(now='2026-11-08T23:00:00Z', notify=True)   # the last leg settles: one recap
++    t.settle(now='2026-11-08T23:15:00Z', notify=True)                       # unchanged: nothing
++    texts = notice_texts(sent, before)
++    assert [x.split('\n')[1:] for x in texts] == [['B1 win: loss', 'B2 win: pending', 'B3 win: pending'],
++                                                  ['B1 win: loss', 'B2 win: win', 'B3 win: push']]
++    assert not any(t.CORRECTED_LINE in x for x in texts)                    # an update is not a correction
++    assert [[p['grade'] for p in r['legs']] for r in grade_rows()] == [['loss', 'pending', 'pending'],
++                                                                      ['loss', 'win', 'pending'], ['loss', 'win', 'push']]
++
++
++def test_announced_loss_that_is_corrected_while_other_legs_are_open_is_announced_as_a_correction(setup, monkeypatch):
++    grades = {1: 'loss', 2: 'pending', 3: 'pending'}; sent = three_leg_ticket(setup, monkeypatch, grades); before = len(sent)
++    t.settle(now='2026-11-08T21:00:00Z', notify=True)
++    grades[1] = 'win'; t.settle(now='2026-11-08T21:30:00Z', notify=True)    # the announced loss was wrong: ticket is open again
++    grades[2] = 'win'; t.settle(now='2026-11-08T22:00:00Z', notify=True)    # a leg settles: archived only
++    grades[3] = 'win'; t.settle(now='2026-11-08T23:00:00Z', notify=True)    # all settled: the final result
++    texts = notice_texts(sent, before)
++    assert [x.split('\n')[0].rsplit(' / ', 1)[1] for x in texts] == ['LOSS', 'PENDING', 'WIN']
++    assert [t.CORRECTED_LINE in x for x in texts] == [False, True, False]
++
++
++def test_unreadable_legs_of_any_kind_never_produce_a_result_notice(setup, monkeypatch):
++    grades = {1: 'loss', 2: 'pending', 3: 'pending'}; raises = {}
++    sent = three_leg_ticket(setup, monkeypatch, grades, raises); before = len(sent)
++    t.settle(now='2026-11-08T21:00:00Z', notify=True)
++    for minute, error in enumerate((OSError('disk'), ValueError('identity'), KeyError('row'), None), start=1):
++        raises[2] = error; raises[3] = error if minute % 2 else None
++        t.settle(now=f'2026-11-08T21:{minute:02d}:00Z', notify=True)
++    assert len(notice_texts(sent, before)) == 1
++    assert len(grade_rows()) >= 4                                           # each distinct failed reading is still archived
++
++
++def test_correction_computed_while_notices_were_off_is_still_labelled_when_it_is_sent(setup, monkeypatch):
++    grades = {1: 'loss', 2: 'win'}; sent = settled_ticket(setup, monkeypatch, grades); before = len(sent)
++    t.settle(now='2026-11-08T21:00:00Z', notify=True)
++    grades[1] = 'win'; t.settle(now='2026-11-08T21:30:00Z')                 # stored by a run without --notify
++    t.settle(now='2026-11-08T21:45:00Z', notify=True)
++    texts = notice_texts(sent, before)
++    assert len(texts) == 2 and texts[1].split('\n')[0].endswith('/ WIN') and texts[1].endswith(t.CORRECTED_LINE)
++
++
++def soccer_pick(i, tipoff, **over):
++    return dict(dict(forecast_id=i, game_id=f'soccer:eng.1:{i}', market='1x2_regulation', matchup=f'Home{i} vs Away{i}',
++                     pick_label=f'Home{i} win (90 min)', outcome='home', probability=.5, status='scheduled', grade='pending',
++                     generated_at='2026-11-06T03:00:00Z', cutoff_at='2026-11-08T06:00:00Z', tipoff=tipoff, competition='eng.1'), **over)
++
++
++def test_soccer_match_that_starts_unreviewed_is_reported_and_explained_like_any_game(setup, monkeypatch, capsys):
++    plan, snap, sent, path = setup
++    monkeypatch.setattr(t, 'settle', lambda **kw: {'errors': [], 'tickets': []})
++    for sport in ('nba', 'nhl', 'nfl'): snap['sports'][sport]['report']['picks'] = []
++    snap['sports']['soccer'] = dict(freshness=dict(source_state='fresh', failing=[], competitions_live=['eng.1']), refused={},
++                                    missing_due_games=[], report=dict(mode='real', picks=[
++                                        soccer_pick(1, '2026-11-08T18:00:00Z'),
++                                        soccer_pick(9, '2026-11-07T15:00:00Z', status='final', grade='win'),         # yesterday's match
++                                        soccer_pick(8, '2026-11-08T18:00:00Z', status='postponed')]))                # never started
++    code, out = run_cli(monkeypatch, capsys, 'preflight', '--brief')         # 17:00: one eligible match, a single-game window
++    assert json.loads(out)['review']['reason'] == 'single_game_window'
++    snap['as_of'] = '2026-11-08T18:05:00Z'
++    snap['sports']['soccer']['report']['picks'][0]['status'] = 'in_progress'
++    missed = t.review_state(snap)['missed_before_start']
++    assert [(m['sport'], m['game_id']) for m in missed] == [('soccer', 'soccer:eng.1:1')]
++    assert missed[0]['explained'] is True and missed[0]['recorded_blockers'][0]['issue'] == 'single_game_window'
++    assert missed[0]['review_window_from'] == '2026-11-08T16:00:00Z'
++
++
++def test_observation_made_before_the_review_window_opened_does_not_explain_a_miss(setup, monkeypatch, capsys):
++    plan, snap, sent, path = setup
++    monkeypatch.setattr(t, 'settle', lambda **kw: {'errors': [], 'tickets': []})
++    healthy = copy.deepcopy(snap['sports']['nfl'])
++    snap['as_of'] = '2026-11-08T15:30:00Z'                                   # 2.5 h before kickoff: outside the window
++    for sport in ('nba', 'nhl'): snap['sports'][sport]['report']['picks'] = []
++    snap['sports']['nfl'] = {'error': 'inactive', 'reason': 'definition_mismatch', 'unserved_forecasts': 5, 'unserved_games': 5}
++    run_cli(monkeypatch, capsys, 'preflight', '--brief')
++    snap['sports']['nfl'] = healthy; started(snap)
++    entry = t.review_state(snap)['missed_before_start'][0]
++    assert entry['recorded_blockers'] == [] and entry['last_observation'] is None and entry['explained'] is False
++
++
++def test_locked_forecast_selected_as_a_leg_is_refused_at_check_with_a_retryable_reason(setup):
++    plan, snap, sent, path = setup; plan['tickets'] = [ticket([('nba', 1), ('nhl', 2)])]
++    assert t.send(t.check(plan)) == 'sent'
++    snap['sports']['nba']['report']['picks'][3]['game_id'] = 'g1'            # nba:4 is another forecast of ticketed game g1
++    relock(plan, snap); plan['tickets'] = [ticket([('nba', 4), ('nfl', 5)])]
++    with pytest.raises(ValueError, match=r'nba:4 is locked.*review again'):
++        t.check(plan)
++    plan['tickets'] = []
++    del plan['review']['forecasts_reviewed']['nba:4']
++    reason = t.check(plan)['plan']['review']['forecasts_reviewed']['nba:4']['reason']
++    assert 'reserved or sent ticket(s)' in reason                           # a reservation locks too, delivered or not
++
++
++# --- Owner, 2026-11-08: "a blocker was observed" is not "the entire missed window is explained" (HOU @ LAC) ---------------
++def test_blocker_seen_before_the_start_but_gone_at_the_next_check_does_not_explain_the_whole_window(setup, monkeypatch, capsys):
++    plan, snap, sent, path = setup
++    monkeypatch.setattr(t, 'settle', lambda **kw: {'errors': [], 'tickets': []})
++    healthy = copy.deepcopy(snap['sports']['nfl'])
++    for sport in ('nba', 'nhl'): snap['sports'][sport]['report']['picks'] = []
++    snap['sports']['nfl'] = {'error': 'inactive', 'reason': 'definition_mismatch', 'unserved_forecasts': 5, 'unserved_games': 5}
++    run_cli(monkeypatch, capsys, 'preflight', '--brief')                     # 17:00: the last check before the 18:00 start
++    snap['sports']['nfl'] = healthy; started(snap, '2026-11-08T18:01:30Z')   # first check after the start: readable again
++    run_cli(monkeypatch, capsys, 'preflight', '--brief')
++    entry = t.review_state(snap)['missed_before_start'][0]
++    assert entry['blocker_observed'] is True and entry['explained'] is False
++    assert entry['last_observation'] == dict(issue='inactive', at=NOW, minutes_before_start=60)
++    assert entry['explanation'] == ("Blocker 'inactive' was last seen 60 minutes before the start and was not seen at or after "
++                                    "it, so whether a review was possible in those 60 minutes is not established.")
++
++
++def test_single_game_window_explains_the_whole_window_only_while_no_other_game_became_eligible(setup, monkeypatch, capsys):
++    plan, snap, sent, path = setup
++    monkeypatch.setattr(t, 'settle', lambda **kw: {'errors': [], 'tickets': []})
++    for sport in ('nhl', 'nfl'): snap['sports'][sport]['report']['picks'] = []
++    lone = [p for p in snap['sports']['nba']['report']['picks'] if p['game_id'] == 'g1']
++    snap['sports']['nba']['report']['picks'] = lone
++    run_cli(monkeypatch, capsys, 'preflight', '--brief')                     # 17:00: one game, a single-game window
++    later = dict(lone[0], forecast_id=77, game_id='h77', generated_at='2026-11-08T17:30:00Z', tipoff='2026-11-08T19:30:00Z')
++    snap['sports']['nhl']['report']['picks'] = [later]                       # a second game became eligible at 17:30
++    snap['as_of'] = '2026-11-08T18:05:00Z'; lone[0]['status'] = 'in_progress'
++    entry = t.review_state(snap)['missed_before_start'][0]
++    assert entry['blocker_observed'] is True and entry['explained'] is False
++    assert 'another game became eligible' in entry['explanation']
++    snap['sports']['nhl']['report']['picks'] = []                            # without it the lone window lasted to the start
++    entry = t.review_state(snap)['missed_before_start'][0]
++    assert entry['explained'] is True and entry['explanation'].startswith('Single-game window')
++
++
++def test_refused_review_is_filed_under_the_day_of_its_snapshot_whatever_the_calendar_says(setup, monkeypatch, capsys):
++    # Found when the suite ran past midnight: the refusal was filed under the wall-clock day, so on any other day than
++    # the fixture's the trigger could not find it (the release has this too).
++    plan, snap, sent, path = setup
++    bad = copy.deepcopy(plan); bad['review']['combination_comparison'] = ''
++    assert run_cli(monkeypatch, capsys, 'check', '--plan', str(plan_file(bad, path, 'bad.json')))[0] == 1
++    with tg.ledger() as c:
++        assert [r[0] for r in c.execute('select day from ticket_reviews')] == [snap['date']]
++    assert t._snapshot_day({'snapshot_path': str(path / 'missing.json')}) is None and t._snapshot_day(None) is None
+diff --git a/docs/SMOKE_TEST.md b/docs/SMOKE_TEST.md
+index 22844bb..7c3540a 100644
+--- a/docs/SMOKE_TEST.md
++++ b/docs/SMOKE_TEST.md
+@@ -1922,5 +1922,10 @@ back three days). Headless Chrome 156 with DevTools device metrics: real 1280×9
+ - After the independent review (dark-theme finding): the live forecast card now uses the theme tokens. Same script with
+   dark-theme cases and a contrast measurement of the card text: **30/30 ok**; lowest contrast 7.26 in dark and 5.87 in
+   light (it was 1.08 in dark on commit 635a4ec: `17-dark-card-before-fix.txt`).
+-- Not verified by this session: the live app (nothing deployed); NBA/NHL/NFL screens (unchanged; the reviewer's 160
++- After the consolidated review (three reviewers): the page no longer crashes when served by an API older than itself
++  (base-commit API behind the new build: 3 screens × 2 widths ok; the pre-fix build crashed on the match-day page,
++  `21-old-api-pairing-before-fix.txt`); a scheduled match past its forecast cutoff reads "No forecast: none was recorded
++  before this match's cutoff …" (clock moved 10 days ahead in the browser); `.error-notice` has a style. Final run of
++  the script: **38/38 ok**.
++- Not verified by this session: the live app (nothing deployed); NBA/NHL/NFL screens (unchanged; the reviewers' own
+   captures found no regression).
+diff --git a/docs/TICKETS.md b/docs/TICKETS.md
+index 33e1ec5..940953f 100644
+--- a/docs/TICKETS.md
++++ b/docs/TICKETS.md
+@@ -160,30 +160,48 @@ Still open: guarded-release operation of the sender/helper, cross-window stake p
+ 
+ Evidence and causes: `docs/evidence/audit-fixes-2026-11-08/README.md`.
+ 
+-- **Locks are recorded by the helper.** A forecast whose game is already in a sent ticket with a different forecast cannot
+-  be a leg. `check` now records that itself for every such forecast the reviewer left out
++- **Locks are recorded by the helper.** A forecast whose game is already in a reserved or sent ticket with a different
++  forecast cannot be a leg. `check` records that itself for every such forecast the reviewer left out
+   (`forecasts_reviewed[key] = {decision: excluded, reason: "Locked: …", recorded_by: helper}`) and archives every lock
+-  under `locks` (ticket IDs, the ticket's forecast and pick). An entry the reviewer wrote is kept as written. Forecasts
+-  that are not locked still need the reviewer's own decision and reason. Reason text is never compared or deduplicated:
+-  one explanation may be attached to several forecasts.
++  under `locks` (ticket IDs, the ticket's forecast and pick). An entry the reviewer wrote is kept as written. A locked
++  forecast selected as a leg is refused by `check` with a "review again" reason (before, only `send` refused it, without
++  a retry). Forecasts that are not locked still need the reviewer's own decision and reason. Reason text is never
++  compared or deduplicated: one explanation may be attached to several forecasts.
+ - **Why a game started unreviewed.** `preflight` appends to `ticket_trigger_observations` (new append-only table in the
+   Telegram ledger, created on first use) what it saw for each pending game at that run: what kept it out of review (a
+   refused sport when it excludes forecasts, an unusable source, a moved line, a single-game window; also shown as
+   `review.not_reviewed_now`), or that a review of it was due (`review_due`). Each `missed_before_start` entry carries, from
+-  its own pregame window, `recorded_blockers`, `review_due_seen`, `failed_reviews` and `last_observation` (what, when, and
+-  how many minutes before the start). `explained` is true only when the last thing the trigger saw before the start was
+-  a blocker, or a review failed after the trigger last said one was due. A blocker that cleared while reviews were then
+-  due and none ran leaves `explained` false. `status` records nothing.
+-- **Stored results and announced results are decided separately.**
+-  - *Stored:* `ticket_grades` gets a row whenever the result differs from the ticket's latest stored result, including a
+-    return to an earlier one (that row carries `supersedes`, the hash it replaces). Hashes of first and unchanged
+-    results are as before. A result with a leg that could not be graded is stored as before and skipped when comparing.
+-  - *Announced:* a result notice says the ticket's grade and each leg's grade. It is compared with the last notice that
+-    reached the user for that ticket (sent or unconfirmed; a rejected or deferred notice does not count): identical
+-    content reuses that notice's key, so nothing is sent again (a pending spell in between, or a corrected score with
+-    the same grades, changes nothing the notice says). A deferred notice with the same content is retried under its own
+-    key. Different content is sent once under a new key. It ends with "Corrected result: it replaces the result sent before." only when a leg that was
+-    announced as settled now has another grade; a leg that was open and settles is an update without that line.
++  its review window (the two hours before its start, `review_window_from`), `recorded_blockers`, `review_due_seen`,
++  `failed_reviews` and `last_observation` (what, when, and how many minutes before the start). Soccer matches are
++  covered too (their forecasts are made at the cutoff, days before, so they have their own "was reviewable" rule).
++  `status` records nothing.
++  - Two different facts are reported. **`blocker_observed`**: a blocker was recorded at some check in the window.
++    **`explained`**: the entire window is accounted for. That needs either a review that failed after the trigger last
++    said one was due, or a blocker at the last check before the start that is shown to have lasted to the start: the
++    same blocker of that sport recorded again at or after the start, or, for a single-game window, no other game
++    becoming eligible between that check and the start.
++  - A blocker seen at the last check and gone at the next one leaves the minutes in between unaccounted for:
++    `explained` is false and `explanation` says how many (HOU @ LAC on Nov 8: 57). A blocker that cleared while reviews
++    were then due and none ran also leaves `explained` false. No time threshold is used.
++- **What is stored and what is announced are decided separately.**
++  - *Stored (the archive):* `ticket_grades` gets a row whenever the result differs from the ticket's latest stored
++    result, including every leg update and a return to an earlier result (that row carries `supersedes`, the hash it
++    replaces). Hashes of first and unchanged results are as before. A result with a leg that could not be graded is
++    stored as before and skipped when comparing.
++  - *Announced (owner's rule, Nov 8):* the user is told (1) the first settled result of a ticket: a loss as soon as one
++    leg loses, a win or void once every leg is in; (2) a genuine correction: a leg that was announced as settled now has
++    another settled grade, sent with "Corrected result: it replaces the result sent before.", also when it reopens the
++    ticket (`PENDING`); (3) one final recap when every leg is settled and the last notice still showed an open leg.
++    Nothing else is sent: an unchanged losing ticket is not announced again when another leg settles; a leg that reads
++    as open for a while, or a corrected score with the same grades, changes nothing the user was told.
++  - The comparison is with the last notice that reached the user for that ticket (sent or unconfirmed). A notice
++    Telegram rejected or deferred does not count; a deferred notice with the owed text is retried under its own key.
+   - A result with a leg that could not be graded is never announced (the `settlement_unavailable` error and alert remain).
++- **A refused review is filed under the day of the snapshot it reviewed**, not the wall-clock day (they differ around
++  Toronto midnight). The trigger looks refusals up by the snapshot's day, so a "review again" refusal just after midnight
++  is found again. The release files it under the wall-clock day; one of its own tests fails on any date but Nov 8.
++- **Known delivery limits, unchanged from the release:** a result notice Telegram rejected stays `failed` and is not
++  sent again or reported on later runs; a deferred notice whose content was overtaken by a newer result stays `retry`
++  and is never sent. Both are visible in `deliveries`; neither is retried automatically.
+ - **Unchanged:** selection method, forecast-version lock, 2–6 legs and at most 6 tickets, legacy reservation read,
+   existing rows.
+diff --git a/frontend/src/api/types.ts b/frontend/src/api/types.ts
+index 7425838..c676bc1 100644
+--- a/frontend/src/api/types.ts
++++ b/frontend/src/api/types.ts
+@@ -991,8 +991,9 @@ export interface SoccerMeta {
+   mode: 'real'; sport: 'soccer'; competition_id: SoccerCompetitionId; competition: string; competitions: SoccerCompetition[];
+   default_date: string | null; match_dates: string[]; fetched_dates: string[]; seasons: number[]; matches_stored: number;
+   last_refresh_at: string | null; capabilities: NflCapability[];
+-  /** Live forecasts of this competition in this store (backend app/soccer.py forecast_state). */
+-  forecast_state: 'recorded' | 'awaiting' | 'out_of_scope' | 'no_live_store';
++  /** Live forecasts of this competition in this store (backend app/soccer.py forecast_state). Optional here and below:
++   * while an update is being switched on, the page can briefly be served by an API that does not send these fields yet. */
++  forecast_state?: 'recorded' | 'awaiting' | 'out_of_scope' | 'no_live_store';
+ }
+ export interface SoccerLiveForecast {
+   forecast_id: number; match_id: string; competition: SoccerCompetitionId; kickoff_at: string; home: string; away: string;
+@@ -1005,14 +1006,16 @@ export interface SoccerLiveResponse {
+   scope_note: string | null; model: { name: string; candidate_sha256: string };
+   check: { checked_at: string; ok: boolean; problems: string[]; match_date: string; forecasts: number } | null;
+   /** Age of this competition's ESPN data against the age beyond which a new forecast is refused. */
+-  refresh: { last_refresh_at: string | null; max_age_hours: number; stale: boolean };
++  refresh?: { last_refresh_at: string | null; max_age_hours: number; stale: boolean };
+   forecasts: SoccerLiveForecast[];
+ }
+ export interface SoccerMatchesResponse {
+   competition_id: SoccerCompetitionId; date: string; fetched: boolean; matches: SoccerMatch[];
+   prev_date: string | null; next_date: string | null; last_refresh_at: string | null;
+   /** match_id -> the latest recorded live forecast of the listed matches that have one (never inside a match record). */
+-  live_forecasts: Record<string, SoccerLiveForecast>;
++  live_forecasts?: Record<string, SoccerLiveForecast>;
++  /** match_id -> UTC time by which that match's forecast must be recorded (none is made after it). */
++  forecast_cutoffs?: Record<string, string>;
+ }
+ export interface SoccerResultRevision {
+   revision: number; decided_in: 'regulation' | 'extra_time' | 'penalties' | 'unknown'; home_score: number; away_score: number;
+@@ -1025,8 +1028,9 @@ export interface SoccerMatchDetail {
+   match: SoccerMatch; head_to_head: SoccerMatch[]; home_recent: SoccerMatch[]; away_recent: SoccerMatch[];
+   result_revisions: SoccerResultRevision[]; capabilities: NflCapability[];
+   /** This match's latest recorded live forecast, or null when none was recorded. */
+-  live_forecast: SoccerLiveForecast | null;
+-  forecast_state: SoccerMeta['forecast_state'];
++  live_forecast?: SoccerLiveForecast | null;
++  forecast_cutoff_at?: string | null;
++  forecast_state?: SoccerMeta['forecast_state'];
+ }
+ 
+ // --- Soccer research (backend app/soccer_forecasts.py; /api/soccer/research/*). openfootball history and the stored,
+diff --git a/frontend/src/components/Layout.tsx b/frontend/src/components/Layout.tsx
+index 1bfb0d9..83cbd7e 100644
+--- a/frontend/src/components/Layout.tsx
++++ b/frontend/src/components/Layout.tsx
+@@ -50,7 +50,7 @@ export function Layout() {
+   const meta = useApi((s) => (sport === 'nfl' ? api.nflMeta(s) : sport === 'soccer' ? api.soccerMeta(competition, s) : api.meta(sport, s))
+     .then((m) => ({ mode: m.mode, last_refresh_at: m.last_refresh_at,
+       forecasts: 'capabilities' in m && m.capabilities.some((c) => c.id === 'forecasts' && c.available),
+-      soccerForecasts: 'forecast_state' in m ? m.forecast_state : null })), [sport, competition], fresh.changes);
++      soccerForecasts: 'forecast_state' in m ? m.forecast_state ?? null : null })), [sport, competition], fresh.changes);
+   const mode = meta.state.status === 'success' ? meta.state.data.mode : null;
+   const lastRefresh = meta.state.status === 'success' ? meta.state.data.last_refresh_at : null;
+   const nflForecasts = sport === 'nfl' && meta.state.status === 'success' && meta.state.data.forecasts;
+diff --git a/frontend/src/components/soccerStatus.test.mjs b/frontend/src/components/soccerStatus.test.mjs
+index 11d6219..c68a804 100644
+--- a/frontend/src/components/soccerStatus.test.mjs
++++ b/frontend/src/components/soccerStatus.test.mjs
+@@ -43,7 +43,7 @@ test('matches awaiting forecasts, out-of-scope competitions and stores without f
+   });
+   assert.equal(new Set(texts).size, 4);
+   assert.match(texts[1], /No Premier League forecast is recorded yet/);
+-  assert.match(texts[1], /each match is forecast before it starts/);
++  assert.match(texts[1], /each match is forecast by 06:00 UTC on its match day/);   // the cutoff, not "before it starts"
+   assert.match(texts[2], /did not pass its held-out test/);
+   assert.match(texts[3], /data store/);
+ });
+@@ -66,3 +66,35 @@ test('an empty competition and a failed source are not described as "no predicti
+   assert.match(emptyCompetition('UEFA Euro qualifying', 0, null, when), /no day has been requested/);
+   assert.match(liveLoadProblem('503 Service Unavailable'), /could not be loaded \(503 Service Unavailable\).*not affected/);
+ });
++
++// --- Consolidated review of 635a4ec -------------------------------------------------------------------------------
++import { forecastStateOf } from './soccerStatus.ts';
++
++test('a match past its forecast cutoff is not described as awaiting a forecast', () => {
++  const cutoff = { passed: false, when: '<2026-11-15T06:00:00Z>' };
++  assert.equal(matchForecastNote('recorded', 'scheduled', null, 'A', 'B', cutoff),
++    'Awaiting forecast: recorded by <2026-11-15T06:00:00Z> at the latest, once the earlier results it depends on are stored.');
++  assert.equal(matchForecastNote('recorded', 'scheduled', null, 'A', 'B', { ...cutoff, passed: true }),
++    'No forecast: none was recorded before this match’s cutoff (<2026-11-15T06:00:00Z>), and none is made after it.');
++  assert.doesNotMatch(matchForecastNote('awaiting', 'scheduled', null, 'A', 'B', { ...cutoff, passed: true }), /Awaiting/);
++  assert.match(forecastBanner('awaiting', 'Premier League').text, /forecast by 06:00 UTC on its match day/);
++});
++
++test('an API older than this page (no forecast_state, no refresh, no forecast map) gets honest fallbacks, not a crash', () => {
++  assert.equal(forecastStateOf(undefined, true), 'recorded');      // the old capability line already said forecasts exist
++  assert.equal(forecastStateOf(undefined, false), 'unknown');
++  assert.equal(forecastStateOf('awaiting', false), 'awaiting');
++  const b = forecastBanner('unknown', 'Premier League');
++  assert.match(b.title + ' ' + b.text, /not reported/);
++  assert.doesNotMatch(b.title + ' ' + b.text, /No live soccer forecasts|not available/);
++  assert.match(matchForecastNote('unknown', 'scheduled', undefined, 'A', 'B'), /not reported by this server/);
++  assert.equal(importHint('Premier League', { check: null }, when, 'unknown'), 'Latest Premier League scoreboard request.');
++  assert.equal(dataSourceForecastText('unknown'), 'No soccer odds or injury information is collected.');
++});
++
++test('stale data is only said to block forecasts for competitions that are forecast', () => {
++  const stale = { check: null, refresh: { last_refresh_at: '2026-11-07T20:00:00Z', max_age_hours: 26, stale: true } };
++  assert.match(importHint('Ligue 1', stale, when, 'awaiting'), /more than 26 h old, so new forecasts are refused/);
++  assert.equal(importHint('UEFA Europa League', stale, when, 'out_of_scope'), 'Latest UEFA Europa League scoreboard request: more than 26 h old.');
++  assert.doesNotMatch(importHint('UEFA Europa League', { ...stale, refresh: { ...stale.refresh, last_refresh_at: null } }, when, 'out_of_scope'), /forecast/);
++});
+diff --git a/frontend/src/components/soccerStatus.ts b/frontend/src/components/soccerStatus.ts
+index 5761157..75b50cc 100644
+--- a/frontend/src/components/soccerStatus.ts
++++ b/frontend/src/components/soccerStatus.ts
+@@ -3,12 +3,20 @@
+ // never say "no forecasts" beside recorded ones, and must tell apart forecasts recorded, matches still awaiting theirs,
+ // a competition with nothing stored, and a source that failed or went stale.
+ 
+-export type SoccerForecastState = 'recorded' | 'awaiting' | 'out_of_scope' | 'no_live_store';
++/** 'unknown': the API serving this page is older than the page and does not report the state (during an update). */
++export type SoccerForecastState = 'recorded' | 'awaiting' | 'out_of_scope' | 'no_live_store' | 'unknown';
+ type Side = 'home' | 'draw' | 'away';
+ interface MatchForecast { probabilities: Record<Side, number>; most_likely: Side; result: Side | null }
+ interface LiveFacts {
+   check: { checked_at: string } | null;
+-  refresh: { last_refresh_at: string | null; max_age_hours: number; stale: boolean };
++  refresh?: { last_refresh_at: string | null; max_age_hours: number; stale: boolean };   // absent from an older API
++}
++/** A match's forecast cutoff: `when` is the formatted time, `passed` whether it is already behind us. */
++export interface ForecastCutoff { passed: boolean; when: string }
++
++/** The state to describe: the API's own, or for an API that does not send it yet, what its capability line allows. */
++export function forecastStateOf(state: SoccerForecastState | undefined, forecastsAvailable: boolean): SoccerForecastState {
++  return state ?? (forecastsAvailable ? 'recorded' : 'unknown');
+ }
+ 
+ const pct = (p: number) => `${(p * 100).toFixed(1)}%`;
+@@ -20,37 +28,45 @@ export function forecastBanner(state: SoccerForecastState, competition: string):
+   }
+   if (state === 'awaiting') {
+     return { kind: 'awaiting', title: `No ${competition} forecast is recorded yet:`,
+-      text: 'the live 90-minute model covers this competition, and each match is forecast before it starts.', more: 'Details' };
++      text: 'the live 90-minute model covers this competition, and each match is forecast by 06:00 UTC on its match day.', more: 'Details' };
+   }
+   if (state === 'out_of_scope') {
+     return { kind: 'none', title: `No live forecast for ${competition}:`,
+       text: 'it did not pass its held-out test, so only fixtures and results are shown.', more: 'Details' };
+   }
++  if (state === 'unknown') {
++    return { kind: 'none', title: 'Forecast status not reported:',
++      text: 'this server version does not say whether this competition is forecast; fixtures and results are shown.', more: 'Details' };
++  }
+   return { kind: 'none', title: 'No live soccer forecasts in this data store:', text: 'fixtures and results only.', more: 'Details' };
+ }
+ 
+ /** One match's forecast line: its recorded probabilities, or why there is none (yet). */
+-export function matchForecastNote(state: SoccerForecastState, status: string, forecast: MatchForecast | null | undefined, home: string, away: string): string {
++export function matchForecastNote(state: SoccerForecastState, status: string, forecast: MatchForecast | null | undefined, home: string, away: string,
++  cutoff?: ForecastCutoff | null): string {
+   if (forecast) {
+     const names: Record<Side, string> = { home: `${home} win`, draw: 'Draw', away: `${away} win` };
+     const p = forecast.probabilities;
+     return `90-minute forecast: ${names.home} ${pct(p.home)} · Draw ${pct(p.draw)} · ${names.away} ${pct(p.away)}.`
+       + (forecast.result ? ` 90-minute result: ${names[forecast.result]}.` : '');
+   }
++  if (state === 'unknown') return 'Forecast status is not reported by this server version.';
+   if (state === 'no_live_store') return 'No forecast: this data store records none.';
+   if (state === 'out_of_scope') return 'No forecast: this competition is outside the live model’s tested scope.';
+-  if (status === 'scheduled') return 'Awaiting forecast: recorded before kickoff, once the earlier results it depends on are stored.';
+-  return 'No forecast was recorded for this match.';
++  if (status !== 'scheduled') return 'No forecast was recorded for this match.';
++  // A forecast is never made after its cutoff, so a scheduled match past it is no longer waiting for one.
++  if (cutoff?.passed) return `No forecast: none was recorded before this match’s cutoff (${cutoff.when}), and none is made after it.`;
++  return `Awaiting forecast: recorded ${cutoff ? `by ${cutoff.when} at the latest` : 'before its cutoff'}, once the earlier results it depends on are stored.`;
+ }
+ 
+ /** Hint under "Last imported": what refreshes this competition, and whether its data is too old for new forecasts. */
+-export function importHint(competition: string, live: LiveFacts | null, when: (iso: string) => string): string {
++export function importHint(competition: string, live: LiveFacts | null, when: (iso: string) => string, state: SoccerForecastState = 'recorded'): string {
+   const base = `Latest ${competition} scoreboard request`;
+-  if (!live) return `${base}.`;
++  if (!live || !live.refresh) return `${base}.`;
+   if (live.refresh.stale) {
+-    return live.refresh.last_refresh_at
+-      ? `${base}: more than ${live.refresh.max_age_hours} h old, so new forecasts are refused until it refreshes.`
+-      : `No ${competition} scoreboard request is stored, so no forecast can be made.`;
++    const forecast = state === 'recorded' || state === 'awaiting';   // only these competitions have forecasts to refuse
++    if (!live.refresh.last_refresh_at) return `No ${competition} scoreboard request is stored${forecast ? ', so no forecast can be made' : ''}.`;
++    return `${base}: more than ${live.refresh.max_age_hours} h old${forecast ? ', so new forecasts are refused until it refreshes' : ''}.`;
+   }
+   return live.check
+     ? `${base}. The live soccer job last checked this competition ${when(live.check.checked_at)}.`
+@@ -77,5 +93,6 @@ export function dataSourceForecastText(state: SoccerForecastState): string {
+   if (state === 'recorded') return `Live forecasts cover the 90-minute result only.${rest}`;
+   if (state === 'awaiting') return `A live 90-minute forecast model covers this competition; none is recorded for it yet.${rest}`;
+   if (state === 'out_of_scope') return `No live forecast is made for this competition.${rest}`;
++  if (state === 'unknown') return rest.trim();
+   return `This data store records no live soccer forecast.${rest}`;
+ }
+diff --git a/frontend/src/pages/SoccerPages.tsx b/frontend/src/pages/SoccerPages.tsx
+index 9f220b6..63f0e16 100644
+--- a/frontend/src/pages/SoccerPages.tsx
++++ b/frontend/src/pages/SoccerPages.tsx
+@@ -6,7 +6,8 @@ import type { ApiState } from '../api/useApi';
+ import { useCarriedSearch, useCompetition } from '../components/Selection';
+ import { AsyncView, Empty } from '../components/States';
+ import { gameRoute } from '../components/gameRoute';
+-import { emptyCompetition, forecastBanner, importHint, liveLoadProblem, matchForecastNote } from '../components/soccerStatus';
++import { emptyCompetition, forecastBanner, forecastStateOf, importHint, liveLoadProblem, matchForecastNote } from '../components/soccerStatus';
++import type { NflCapability } from '../api/types';
+ import { TeamLogo } from '../components/TeamLogo';
+ import { EmptyForecastState, Icon, MetricCard, PageTitle } from '../components/ui';
+ import { calendarDate, dateTime, FULL_DATE, tipoffTime } from '../format';
+@@ -98,8 +99,14 @@ function SoccerEspnScreens({ researchError }: { researchError: string | null })
+ }
+ 
+ /** What this competition has: recorded forecasts, forecasts still to come, or none (and why), with the capability list. */
++/** The forecast state to describe, also when the API is older than this page (see forecastStateOf). */
++const stateOf = (state: SoccerMeta['forecast_state'], capabilities: NflCapability[]) =>
++  forecastStateOf(state, capabilities.some((c) => c.id === 'forecasts' && c.available));
++/** A match's forecast cutoff for its note, or null when the API reports none. */
++const cutoffOf = (at: string | null | undefined) => (at ? { passed: new Date(at).getTime() <= Date.now(), when: dateTime(at) } : null);
++
+ function ForecastStatus({ meta }: { meta: SoccerMeta }) {
+-  const banner = forecastBanner(meta.forecast_state, meta.competition);
++  const banner = forecastBanner(stateOf(meta.forecast_state, meta.capabilities), meta.competition);
+   return (
+     <details className="notice nfl-notice">
+       <summary><strong>{banner.title}</strong> {banner.text} <span className="link-btn">{banner.more}</span></summary>
+@@ -126,7 +133,7 @@ function SoccerGameDay({ meta }: { meta: SoccerMeta }) {
+       <PageTitle icon="ball" plain title={`${meta.competition} matches`} sub="Fixtures and results from ESPN. Kickoff dates are US Eastern."
+         right={date && <GameDateControl date={date} dates={meta.match_dates} defaultDate={meta.default_date} onChange={setDate} />} />
+       <ForecastStatus meta={meta} />
+-      {meta.forecast_state !== 'no_live_store' && <SoccerLivePanel state={live.state} name={meta.competition} />}
++      {stateOf(meta.forecast_state, meta.capabilities) !== 'no_live_store' && <SoccerLivePanel state={live.state} name={meta.competition} />}
+       {date ? <SoccerSlate meta={meta} date={date} onChange={setDate} live={live.state.status === 'success' ? live.state.data : null} />
+         : <Empty>{emptyCompetition(meta.competition, meta.fetched_dates.length, meta.last_refresh_at, dateTime)}</Empty>}
+     </section>
+@@ -153,7 +160,7 @@ function SoccerLivePanel({ state, name }: { state: ApiState<SoccerLiveResponse>;
+       <p className="small muted">{d.settlement_rule} Model: {d.model.name}, frozen and tested once on held-out seasons; not a betting edge.</p>
+       {!d.in_scope ? <Empty>{d.scope_note}</Empty> : (
+         <>
+-          {d.refresh.stale && (
++          {d.refresh?.stale && (
+             <div className="notice error-notice" role="alert">
+               <strong>ESPN data for {name} is out of date.</strong> {d.refresh.last_refresh_at
+                 ? <>Last retrieved {dateTime(d.refresh.last_refresh_at)}, more than {d.refresh.max_age_hours} h ago.</>
+@@ -214,7 +221,7 @@ function SoccerSlate({ meta, date, onChange, live }: {
+               <MetricCard icon="scale" label="Draws" tone="dark" value={finals.length ? draws : '—'}
+                 hint={finals.length ? 'Level when play ended (a shoot-out does not change the score).' : 'No final result on this date.'} />
+               <MetricCard icon="history" label="Last imported" tone="lavender" value={d.last_refresh_at ? dateTime(d.last_refresh_at) : '—'}
+-                hint={importHint(meta.competition, live, dateTime)} />
++                hint={importHint(meta.competition, live, dateTime, stateOf(meta.forecast_state, meta.capabilities))} />
+             </div>
+             {d.matches.length === 0 ? (
+               <Empty>
+@@ -226,7 +233,8 @@ function SoccerSlate({ meta, date, onChange, live }: {
+                 {d.next_date && <button type="button" className="link-btn" onClick={() => onChange(d.next_date)}>Next match day ({calendarDate(d.next_date)})</button>}
+               </Empty>
+             ) : <ul className="game-grid">{d.matches.map((m) => <SoccerCard key={m.match_id} match={m} date={date}
+-                note={matchForecastNote(meta.forecast_state, m.status, d.live_forecasts[m.match_id], m.home.name, m.away.name)} />)}</ul>}
++                note={matchForecastNote(stateOf(meta.forecast_state, meta.capabilities), m.status, d.live_forecasts?.[m.match_id],
++                  m.home.name, m.away.name, cutoffOf(d.forecast_cutoffs?.[m.match_id]))} />)}</ul>}
+           </>
+         );
+       }}
+@@ -359,7 +367,8 @@ function SoccerMatchPage({ id }: { id: string }) {
+               <div className="card">
+                 <h2>Forecast</h2>
+                 {d.live_forecast ? <SoccerLiveCard f={d.live_forecast} />
+-                  : <EmptyForecastState>{matchForecastNote(d.forecast_state, m.status, null, m.home.name, m.away.name)} No probability, pick, odds or accuracy is shown.</EmptyForecastState>}
++                  : <EmptyForecastState>{matchForecastNote(stateOf(d.forecast_state, d.capabilities), m.status, null, m.home.name, m.away.name,
++                      cutoffOf(d.forecast_cutoff_at))} No probability, pick, odds or accuracy is shown.</EmptyForecastState>}
+                 <ul className="nfl-capabilities small">
+                   {d.capabilities.filter((c) => ['forecasts', 'odds', 'injuries'].includes(c.id)).map((c) =>
+                     <li key={c.id}><strong>{c.label}:</strong> {c.available ? 'available. ' : 'not available. '}<span className="muted">{c.reason}</span></li>)}
+diff --git a/frontend/src/styles.css b/frontend/src/styles.css
+index 4c7118c..9819c20 100644
+--- a/frontend/src/styles.css
++++ b/frontend/src/styles.css
+@@ -1395,6 +1395,7 @@ h1,h2,h3,.hero-matchup,.metric-value,.tile-value,.brand { font-family:'Barlow Co
+ .state span, .state { overflow-wrap: anywhere; }
+ 
+ /* Live soccer forecasts (SoccerLivePanel) */
++.error-notice { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 8%, transparent); }
+ .soccer-live { margin: 0 0 24px; }
+ .soccer-live-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+ .soccer-live-head h2 { margin: 0; }

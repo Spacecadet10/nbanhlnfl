@@ -1,0 +1,12 @@
+{
+ "R1": true,
+ "R2": true,
+ "launch_scope": [
+  "continental_finals",
+  "continental_qualification",
+  "friendly",
+  "nations_league",
+  "wc_qualification"
+ ],
+ "verdict": "SUPPORTS LAUNCH (model quality only) for continental_finals, continental_qualification, friendly, nations_league, wc_qualification"
+}

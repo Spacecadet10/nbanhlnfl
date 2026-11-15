@@ -1,0 +1,10 @@
+app imported from: /Users/andry/Desktop/nba-predictor-batch1/backend/app/__init__.py
+--- protected nhl: rc=EXCEPTION NhlEvaluationError: NHL validation data changed since sealing (dfa8a0b70fd2b799 -> 8e2d0c61b0acc423)
+  
+  main files unchanged (ignoring -wal/-shm): True
+--- copy nhl: rc=EXCEPTION NhlEvaluationError: NHL validation data changed since sealing (dfa8a0b70fd2b799 -> 8e2d0c61b0acc423)
+  
+  main files unchanged (ignoring -wal/-shm): True
+--- protected nba: rc=EXCEPTION FrozenDecisionError: Validation data changed since the decision was frozen (08fe2552c1aa4579 → e3b0c44298fc1c14)
+  
+  main files unchanged (ignoring -wal/-shm): True

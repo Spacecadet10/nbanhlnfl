@@ -1,0 +1,18 @@
+## M5 label passed to predict
+FAILED tests/test_soccer_eval.py::test_a_model_never_receives_the_label_of_the_match_it_forecasts
+1 failed, 35 passed in 1.71s
+## M6 no per-season condition
+FAILED tests/test_soccer_eval.py::test_choice_needs_the_candidate_better_in_two_of_three_validation_seasons
+1 failed, 35 passed in 1.81s
+## M7 one run per seal only
+FAILED tests/test_soccer_eval.py::test_one_shot_runner_refuses_bad_seal_second_run_and_existing_output
+FAILED tests/test_soccer_eval.py::test_one_test_run_per_access_log_whatever_the_seal
+2 failed, 34 passed in 1.70s
+## M8 several seals accepted
+FAILED tests/test_soccer_eval.py::test_the_candidate_must_be_the_only_seal_the_development_log_recorded
+1 failed, 35 passed in 1.68s
+## M9 prospective seasons readable
+FAILED tests/test_soccer_eval.py::test_seasons_after_the_reserved_test_are_refused_even_with_a_seal
+1 failed, 35 passed in 1.66s
+## M10 (control: same object, expect pass)
+36 passed in 1.65s

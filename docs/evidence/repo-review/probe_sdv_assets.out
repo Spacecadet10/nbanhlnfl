@@ -1,0 +1,104 @@
+=== goalie_box_2025.parquet: shape=(5592, 24)
+columns: ['home_away', 'team_id', 'team_abbrev', 'player_id', 'player_name', 'sweater_number', 'even_strength_shots_against', 'power_play_shots_against', 'shorthanded_shots_against', 'save_shots_against', 'save_pctg', 'even_strength_goals_against', 'power_play_goals_against', 'shorthanded_goals_against', 'pim', 'goals_against', 'toi', 'starter', 'decision', 'shots_against', 'saves', 'game_id', 'season', 'game_date']
+  season: min=20242025 max=20242025
+  game_date: min=2024-10-04 max=2025-06-17
+                                        0           1
+home_away                            away        away
+team_id                                 1           1
+team_abbrev                           NJD         NJD
+player_id                         8474593     8474596
+player_name                  J. Markstrom    J. Allen
+sweater_number                         25          34
+even_strength_shots_against         25/26         0/0
+power_play_shots_against              5/5         0/0
+shorthanded_shots_against             0/0         0/0
+save_shots_against                  30/31         0/0
+save_pctg                          0.9677         NaN
+even_strength_goals_against             1           0
+power_play_goals_against                0           0
+shorthanded_goals_against               0           0
+pim                                     0           0
+goals_against                           1           0
+toi                                 59:38       00:00
+starter                              True       False
+decision                                W         NaN
+shots_against                          31           0
+saves                                  30           0
+game_id                        2024020001  2024020001
+season                           20242025    20242025
+game_date                      2024-10-04  2024-10-04
+=== player_boxscores_2025.parquet: shape=(35114, 37)
+columns: ['team_id', 'team_city', 'team_name', 'team_tricode', 'team_slug', 'side', 'person_id', 'first_name', 'family_name', 'name_i', 'player_slug', 'position', 'comment', 'jersey_num', 'minutes', 'field_goals_made', 'field_goals_attempted', 'field_goals_percentage', 'three_pointers_made', 'three_pointers_attempted', 'three_pointers_percentage', 'free_throws_made', 'free_throws_attempted', 'free_throws_percentage', 'rebounds_offensive', 'rebounds_defensive', 'rebounds_total', 'assists', 'steals', 'blocks', 'turnovers', 'fouls_personal', 'points', 'plus_minus_points', 'game_id', 'season', 'season_type_id']
+  season: min=2025 max=2025
+  season_type_id: min=2 max=6
+                                      0             1
+team_id                      1610612738    1610612738
+team_city                        Boston        Boston
+team_name                       Celtics       Celtics
+team_tricode                        BOS           BOS
+team_slug                       celtics       celtics
+side                               home          home
+person_id                       1627759       1628369
+first_name                       Jaylen        Jayson
+family_name                       Brown         Tatum
+name_i                         J. Brown      J. Tatum
+player_slug                jaylen-brown  jayson-tatum
+position                              F             F
+comment                                              
+jersey_num                                           
+minutes                           35:56         37:26
+field_goals_made                     14             5
+field_goals_attempted                22            16
+field_goals_percentage            0.636         0.313
+three_pointers_made                   3             2
+three_pointers_attempted              6             9
+three_pointers_percentage           0.5         0.222
+free_throws_made                      6             8
+free_throws_attempted                10             8
+free_throws_percentage              0.6           1.0
+rebounds_offensive                    2             0
+rebounds_defensive                    3             6
+rebounds_total                        5             6
+assists                               2             8
+steals                                1             1
+blocks                                0             2
+turnovers                             6             5
+fouls_personal                        3             3
+points                               37            20
+plus_minus_points                   0.0           4.0
+game_id                      0022400001    0022400001
+season                             2025          2025
+season_type_id                        2             2
+=== nba_player_impact_2025.parquet: shape=(788, 28)
+columns: ['player_id', 'player_name', 'team_id', 'team_abbreviation', 'team_name', 'teams', 'season', 'season_type', 'o_rapm', 'd_rapm', 'rapm', 'off_poss', 'def_poss', 'o_adj_rapm', 'd_adj_rapm', 'adj_rapm', 'ospm', 'dspm', 'spm', 'min', 'gp', 'obpm', 'dbpm', 'bpm', 'war', 'darko_filtered_skill', 'darko_projected_rating', 'darko_projected_sd']
+  season: min=2025 max=2025
+  season_type: min=Playoffs max=Regular Season
+                                         0                  1
+player_id                             2544             101108
+player_name                   LeBron James         Chris Paul
+team_id                         1610612747         1610612759
+team_abbreviation                      LAL                SAS
+team_name               Los Angeles Lakers  San Antonio Spurs
+teams                                  LAL                SAS
+season                                2025               2025
+season_type                 Regular Season     Regular Season
+o_rapm                           -0.231955           1.115747
+d_rapm                           -1.020777          -0.370526
+rapm                             -1.252733           0.745221
+off_poss                              5012               4740
+def_poss                              5032               4738
+o_adj_rapm                        9.445317          16.226474
+d_adj_rapm                      -15.776607         -12.531011
+adj_rapm                          -6.33129           3.695462
+ospm                              0.791133           0.383528
+dspm                             -0.149588           0.015948
+spm                               0.641544           0.399477
+min                                 2447.0             2291.0
+gp                                      70                 82
+obpm                               2.46614          -3.784478
+dbpm                              4.845215           5.200855
+bpm                               7.311355           1.416377
+war                               2.002712           6.942723
+darko_filtered_skill             -1.205331           0.745225
+darko_projected_rating           -1.654825           0.295732
+darko_projected_sd                1.932761           1.932765

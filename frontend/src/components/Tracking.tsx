@@ -1,0 +1,379 @@
+// Persistent agreement tracking tracking-v2 (docs/MODEL_SELECTION.md §18). Research only; never betting advice.
+import { useEffect, useMemo, useState } from 'react';
+import { api } from '../api/client';
+import type {
+  ExactRule, ExactRulesReport, MarketId, Sport, TrackingCell, TrackingCheck, TrackingEvidence, TrackingGame, TrackingGroup, TrackingKind,
+  TrackingReport,
+} from '../api/types';
+import { useApi } from '../api/useApi';
+import { AsyncView, Empty } from './States';
+import { modelName } from './Research';
+import { dateTime, pct } from '../format';
+
+const KIND: Record<TrackingKind, string> = {
+  single: 'alone', unanimous: 'all agree', avg: 'probability average', majority: 'strict majority',
+  stack: 'learned stacker', stack_pool: 'pool stacker',
+};
+const SIDE: Record<string, string> = { a: 'home / over', mid: 'draw / push', b: 'away / under' };
+const sideName = (market: string, side: string) => {
+  if (market === 'winner' || market === 'reg3') return ({ a: 'home', mid: 'regulation draw', b: 'away' } as Record<string, string>)[side];
+  if (market === 'spread') return ({ a: 'home covers', mid: 'push', b: 'away covers' } as Record<string, string>)[side];
+  return ({ a: 'over', mid: 'push', b: 'under' } as Record<string, string>)[side];
+};
+const STATUS: Record<string, string> = {
+  pick: 'pick', disagree: 'members disagree', tie: 'tie', no_majority: 'no majority', incomplete: 'incomplete',
+  below_threshold: 'below a member threshold',
+};
+const ci = (c: [number, number] | null) => (c ? `${pct(c[0], 0)}–${pct(c[1], 0)}` : '');
+const rec = (c: TrackingCell) => `${c.wins}–${c.losses}${c.pushes ? `–${c.pushes}P` : ''}${c.voids ? ` · ${c.voids} void` : ''}${c.unscorable ? ` · ${c.unscorable} unscorable` : ''}`;
+
+export const groupLabel = (g: { kind: TrackingKind; members: string[] }) => {
+  if (g.kind === 'stack_pool') return `Pool stacker (${g.members.length} inputs)`;
+  const names = g.members.map(modelName).join(' + ');
+  return g.kind === 'single' ? names : `${names} · ${KIND[g.kind]}`;
+};
+
+type View = { type: 'threshold'; value: number | null } | { type: 'band'; index: number };
+type Sort = 'evidence' | 'win_rate' | 'coverage';
+
+/** Every registered model subset × rule × confidence threshold/band for one market, prospective or historical. */
+export function AgreementTracking({ sport, market }: { sport: Sport; market: MarketId }) {
+  const [evidence, setEvidence] = useState<TrackingEvidence>('prospective');
+  const [kind, setKind] = useState<TrackingKind | ''>('');
+  const [member, setMember] = useState('');
+  const [line, setLine] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [version, setVersion] = useState('');
+  const [view, setView] = useState<View>({ type: 'threshold', value: null });
+  const [sort, setSort] = useState<Sort>('evidence');
+  const [all, setAll] = useState(false);
+  // Model and line options belong to one sport and market: a value kept across a switch would filter silently while the
+  // select (which no longer lists it) shows "any model" / "every line".
+  useEffect(() => { setMember(''); setLine(''); }, [sport, market]);
+  const { state, retry } = useApi((s) => api.researchTracking(sport, market, {
+    evidence, kind, member: member || undefined, line: line || undefined, date_from: from || undefined, date_to: to || undefined,
+    version: version.trim() || undefined,
+  }, s), [sport, market, evidence, kind, member, line, from, to, version]);
+  return <div className="card tracking">
+    <JointAgreement key={`${sport}:${market}`} sport={sport} market={market} />
+    <h2>Agreement tracking <span className="badge badge-research">Research</span></h2>
+    <p className="small muted">Every registered model, pair, triple and larger subset with each agreement rule, by confidence
+      threshold and band. Research records continue even when no recommendation is made. Sparse groups stay visible as
+      “insufficient evidence”.</p>
+    <div className="segmented small" role="group" aria-label="Evidence">
+      <button type="button" aria-pressed={evidence === 'prospective'} onClick={() => setEvidence('prospective')}>Prospective (recorded live)</button>
+      <button type="button" aria-pressed={evidence === 'historical'} onClick={() => setEvidence('historical')}>Historical (exploratory)</button>
+    </div>
+    <AsyncView state={state} retry={retry}>{(r) => <TrackingBody r={r} sport={sport} market={market} f={{ kind, setKind, member, setMember,
+      line, setLine, from, setFrom, to, setTo, version, setVersion, view, setView, sort, setSort, all, setAll }} />}</AsyncView>
+  </div>;
+}
+
+interface Filters {
+  kind: TrackingKind | ''; setKind: (k: TrackingKind | '') => void; member: string; setMember: (m: string) => void;
+  line: string; setLine: (l: string) => void; from: string; setFrom: (d: string) => void; to: string; setTo: (d: string) => void;
+  version: string; setVersion: (v: string) => void; view: View; setView: (v: View) => void; sort: Sort; setSort: (s: Sort) => void;
+  all: boolean; setAll: (a: boolean) => void;
+}
+
+function cellOf(g: TrackingGroup, view: View): TrackingCell {
+  if (view.type === 'band') return g.bands[view.index] ?? g.all_picks;
+  return view.value == null ? g.all_picks : g.thresholds.find((c) => c.threshold === view.value) ?? g.all_picks;
+}
+
+function TrackingBody({ r, sport, market, f }: { r: TrackingReport; sport: Sport; market: MarketId; f: Filters }) {
+  const members = useMemo(() => Array.from(new Set(r.groups.flatMap((g) => g.members))).sort(), [r.groups]);
+  if (r.mode === 'demo') return <Empty>{r.note}</Empty>;
+  if (r.status === 'historical_table_outdated') return <Empty><span className="warn">The saved historical table was built under an earlier calculation and is not used. Rebuild it with <code>tracking-historical</code>.</span></Empty>;
+  const rows = [...r.groups].map((g) => ({ g, c: cellOf(g, f.view) })).sort((a, b) =>
+    f.sort === 'evidence' ? b.c.decided - a.c.decided || (b.c.win_rate ?? -1) - (a.c.win_rate ?? -1)
+      : f.sort === 'win_rate' ? (b.c.win_rate ?? -1) - (a.c.win_rate ?? -1) || b.c.decided - a.c.decided
+        : (b.c.coverage ?? -1) - (a.c.coverage ?? -1));
+  const shown = f.all ? rows : rows.slice(0, 25);
+  const viewValue = f.view.type === 'band' ? `b${f.view.index}` : f.view.value == null ? 'all' : `t${f.view.value}`;
+  const rcm = r.recommendation;
+  return <>
+    <div className="filters tracking-filters">
+      <label>Rule<select value={f.kind} onChange={(e) => f.setKind(e.target.value as TrackingKind | '')}>
+        <option value="">every rule</option>
+        {(Object.keys(KIND) as TrackingKind[]).map((k) => <option key={k} value={k}>{KIND[k]}</option>)}
+      </select></label>
+      <label>Includes model<select value={f.member} onChange={(e) => f.setMember(e.target.value)}>
+        <option value="">any model</option>
+        {members.map((m) => <option key={m} value={m}>{modelName(m)}</option>)}
+      </select></label>
+      <label>Confidence<select value={viewValue} onChange={(e) => {
+        const v = e.target.value;
+        f.setView(v === 'all' ? { type: 'threshold', value: null } : v.startsWith('t') ? { type: 'threshold', value: Number(v.slice(1)) }
+          : { type: 'band', index: Number(v.slice(1)) });
+      }}>
+        <option value="all">every pick</option>
+        <optgroup label="At least (cumulative)">{(r.thresholds ?? []).map((t) => <option key={t} value={`t${t}`}>≥ {pct(t, 0)}{r.sealed_thresholds && !r.sealed_thresholds.includes(t) ? ' (descriptive)' : ''}</option>)}</optgroup>
+        <optgroup label="Band (non-overlapping)">{(r.bands ?? []).map((b, i) => <option key={b.label} value={`b${i}`}>{b.label}</option>)}</optgroup>
+      </select></label>
+      {market !== 'winner' && market !== 'reg3' && <label>Exact line<select value={f.line} onChange={(e) => f.setLine(e.target.value)}>
+        <option value="">every line</option>
+        {(r.lines ?? []).map((l) => <option key={l} value={String(l)}>{l}</option>)}
+      </select></label>}
+      <label>From<input type="date" value={f.from} onChange={(e) => f.setFrom(e.target.value)} /></label>
+      <label>To<input type="date" value={f.to} onChange={(e) => f.setTo(e.target.value)} /></label>
+      {r.evidence === 'prospective' && (r.definitions ?? []).length > 1 && <label>Research definition<select
+        value={f.version && (r.definitions ?? []).some((d) => d.definition === r.definition_applied) ? r.definition_applied! : ''}
+        onChange={(e) => f.setVersion(e.target.value)}>
+        <option value="">newest ({r.definitions![0].definition.slice(0, 12)})</option>
+        {r.definitions!.map((d) => <option key={d.definition} value={d.definition}>{d.definition.slice(0, 12)} · {d.games} {d.games === 1 ? 'game' : 'games'} in these filters</option>)}
+      </select></label>}
+      {r.evidence === 'prospective' && <label>Version<input type="text" value={f.version} placeholder="definition or member signature"
+        onChange={(e) => f.setVersion(e.target.value)} /></label>}
+      <label>Sort<select value={f.sort} onChange={(e) => f.setSort(e.target.value as Sort)}>
+        <option value="evidence">most evidence</option><option value="win_rate">win rate</option><option value="coverage">coverage</option>
+      </select></label>
+    </div>
+    <p className="small"><strong>{r.evidence === 'historical' ? 'Historical, exploratory' : 'Prospective'}</strong>: {r.games ?? 0} games ·
+      {' '}{r.registered_groups} registered groups, {r.configurations_searched} rule configurations ({r.skipped_allocation} more held back by the
+      allocation cap) · anchor {r.anchor && modelName(r.anchor)} · registry <code>{r.registry_sha256?.slice(0, 10)}</code>
+      {r.evidence === 'prospective' && r.effective_from && <> · recording since {dateTime(r.effective_from)}</>}</p>
+    {r.evidence === 'prospective' && r.definition_applied && <p className="small muted">One research definition per record:{' '}
+      <code>{r.definition_applied.slice(0, 16)}</code>
+      {r.signature_applied && <> · member versions <code>{r.signature_applied.slice(0, 16)}</code></>}
+      {(r.definitions ?? []).length > 1 && <> · {r.definitions!.length - 1} other definition(s) recorded, shown separately, never pooled</>}</p>}
+    <p className={r.evidence === 'historical' ? 'small warn' : 'small muted'}>{r.note}</p>
+    <div className="tracking-reco small">
+      <strong>Active recommendation:</strong>{' '}
+      {rcm?.core?.rule || rcm?.pool?.rule
+        ? <span className="ok">{modelName((rcm.pool?.rule ?? rcm.core.rule)!.source)} — chosen by the weekly selector on earlier evidence</span>
+        : <span className="muted">none for this market ({rcm?.status ?? 'no decision'}). The leaderboard below is exploratory.</span>}
+    </div>
+    <h3>Exploratory leaderboard</h3>
+    <p className="small muted">{r.leaderboard_note}</p>
+    {r.leaderboard.length === 0
+      ? <Empty>No configuration has {r.min_evidence ?? 100}+ decided picks and 5%+ coverage yet: insufficient evidence everywhere.</Empty>
+      : <div className="table-wrap"><table className="table small">
+        <thead><tr><th>Group</th><th>At least</th><th>Picks (coverage)</th><th>Win rate (95%)</th><th>Anchor, same count</th><th>Difference</th><th>Adjusted lower bound</th></tr></thead>
+        <tbody>{r.leaderboard.slice(0, 10).map((l) => <tr key={`${l.id}|${l.threshold}`}>
+          <th scope="row" className="wrap">{groupLabel(l)}</th><td>{l.threshold == null ? 'every pick' : pct(l.threshold, 0)}</td>
+          <td>{l.decided} ({pct(l.coverage, 0)})</td><td>{pct(l.win_rate, 1)} <span className="muted">{ci(l.ci95)}</span></td>
+          <td>{pct(l.anchor_win_rate, 1)} <span className="muted">({modelName(l.anchor)})</span></td>
+          <td>{(l.lift * 100).toFixed(1)} pts</td><td className={l.lower_adjusted > 0 && r.evidence === 'prospective' ? 'ok' : 'muted'}>{(l.lower_adjusted * 100).toFixed(1)} pts</td></tr>)}</tbody>
+      </table></div>}
+    <h3>All groups</h3>
+    {r.groups.length === 0 ? <Empty>No group matches these filters.</Empty> : <div className="table-wrap"><table className="table small tracking-table">
+      <thead><tr><th>Group</th><th>Eligible</th><th>Selected (coverage)</th><th>Pending</th><th>Record</th><th>Win rate (95%)</th>
+        <th>Mean confidence</th><th title="Brier summed over all outcomes (0 to 2): twice the 0–1 Brier score on the main Performance tiles for a two-way result.">Brier (0–2 scale) / log loss</th><th>Anchor, same count{f.view.type === 'band' ? ' (thresholds only)' : ''}</th><th>Evidence</th></tr></thead>
+      <tbody>{shown.map(({ g, c }) => <tr key={g.id}>
+        <th scope="row" className="wrap">{groupLabel(g)}<div className="muted">{g.cohort === 'expanded' ? 'expanded cohort' : 'core cohort'} · {g.priority}</div>
+          {Object.keys(g.missing_reasons).length > 0 && <div className="warn">incomplete {g.status_counts.incomplete ?? 0}×: {Object.keys(g.missing_reasons).map(modelName).join(', ')}</div>}
+        </th>
+        <td>{g.eligible}<div className="muted">{Object.entries(g.status_counts).filter(([k]) => k !== 'pick').map(([k, n]) => `${n} ${STATUS[k] ?? k}`).join(' · ')}</div></td>
+        <td>{c.selected} ({pct(c.coverage, 0)})</td><td>{c.pending}</td><td>{rec(c)}</td>
+        <td>{pct(c.win_rate, 1)} <span className="muted">{ci(c.ci95)}</span></td><td>{pct(c.mean_confidence, 1)}</td>
+        <td>{c.brier == null ? <span className="muted">n/a</span> : `${c.brier.toFixed(3)} / ${c.log_loss?.toFixed(3)}`}</td>
+        <td>{c.matched?.[0] ? `${pct(c.matched[0].win_rate, 1)} (${c.matched[0].games})` : '—'}</td>
+        <td className={c.evidence === 'sufficient' ? 'ok' : 'muted'}>{c.evidence}</td></tr>)}</tbody>
+    </table></div>}
+    {rows.length > 25 && <button type="button" className="link-button" onClick={() => f.setAll(!f.all)}>
+      {f.all ? 'Show the first 25' : `Show all ${rows.length} groups`}</button>}
+    <details className="small"><summary>How confidence is defined per rule</summary>
+      <ul>{Object.entries(r.kinds ?? {}).map(([k, v]) => <li key={k}><strong>{KIND[k as TrackingKind] ?? k}</strong>: {v}</li>)}</ul>
+      <p className="muted">Brier and log loss are shown only for rules that output a probability (single, average, stackers); the
+        minimum of agreeing members and the majority confidence are thresholds, not forecasts.</p>
+    </details>
+    {r.evidence === 'historical' && <ChronologicalCheck sport={sport} market={market} />}
+    <ExactRules x={r.exact_rules} evidence={r.evidence} />
+  </>;
+}
+
+const ruleLabel = (x: ExactRule) => x.members.map((m, i) => `${modelName(m)} ≥ ${pct(x.member_thresholds[i], 0)}`).join(' & ');
+
+/** exact-rules-v1: registered member/threshold rules, prospective record only (never the explorer's historical record). */
+function ExactRules({ x, evidence }: { x: ExactRulesReport | undefined; evidence: TrackingEvidence }) {
+  if (!x) return null;
+  return <>
+    <h3>Registered exact rules <span className="badge badge-research">Prospective only</span></h3>
+    {evidence === 'historical' || x.status === 'not_applicable'
+      ? <p className="small muted">{x.note}</p>
+      : x.status === 'failed'
+        ? <Empty><span className="warn">Exact-rule tracking unavailable: the registry file could not be loaded ({x.error}). Registered rules are unknown until it is repaired; the sealed groups above are unaffected.</span></Empty>
+        : x.status === 'schema_required'
+          ? <Empty><span className="warn">Not recorded on this store: {x.reason} Registered for this market: {(x.registered_rules ?? []).join(', ') || 'none listed'}.</span></Empty>
+          : <>
+        <p className="small muted">{x.note}{x.registration && <> Registration: {x.registration}.</>}</p>
+        {x.status === 'demo'
+          ? <Empty>{x.note}</Empty>
+          : x.status === 'no_registered_rules' || x.rules.length === 0
+          ? <Empty>No exact rule is registered for this market.</Empty>
+          : <div className="table-wrap"><table className="table small tracking-table">
+            <thead><tr><th>Rule (each member at its own threshold)</th><th>Tracked since</th><th>Eligible</th><th>Picks (coverage)</th><th>Pending</th>
+              <th>Record</th><th>Win rate (95%)</th><th title="Mean of the rule's statistic: the minimum member confidence for the agreed side. Descriptive; not an ensemble probability.">Mean min. confidence</th>
+              <th>Anchor, same count</th><th>Evidence</th></tr></thead>
+            <tbody>{x.rules.map((g) => { const c = g.all_picks; return <tr key={g.id}>
+              <th scope="row" className="wrap">{ruleLabel(g)}<div className="muted">{g.cohort === 'expanded' ? 'expanded cohort' : 'core cohort'} · registry v{g.registered_version}
+                {g.provenance?.explorer && <> · explorer {g.provenance.explorer.list} list, rank {g.provenance.explorer.rank}</>}</div>
+                {Object.keys(g.missing_reasons).length > 0 && <div className="muted">reasons: {Object.entries(g.missing_reasons).map(([m, n]) => `${modelName(m)} ${n}×`).join(', ')}</div>}
+              </th>
+              <td>{dateTime(g.effective_from)}<div className="muted">{g.first_observed ? `first game ${dateTime(g.first_observed)}` : 'no game yet'}</div></td>
+              <td>{g.eligible}<div className="muted">{Object.entries(g.status_counts).filter(([k]) => k !== 'pick').map(([k, n]) => `${n} ${STATUS[k] ?? k}`).join(' · ')}</div></td>
+              <td>{c.selected} ({pct(c.coverage, 0)})</td><td>{c.pending}</td><td>{rec(c)}</td>
+              <td>{pct(c.win_rate, 1)} <span className="muted">{ci(c.ci95)}</span></td><td>{pct(c.mean_confidence, 1)}</td>
+              <td>{c.matched?.[0] ? `${pct(c.matched[0].win_rate, 1)} (${c.matched[0].games})` : '—'}</td>
+              <td className={c.evidence === 'sufficient' ? 'ok' : 'muted'}>{c.evidence}</td></tr>; })}</tbody>
+          </table></div>}
+        {x.versions_note && x.rules.length > 0 && <p className="small muted">{x.versions_note}</p>}
+      </>}
+  </>;
+}
+
+function ChronologicalCheck({ sport, market }: { sport: Sport; market: MarketId }) {
+  const [open, setOpen] = useState(false);
+  return <details className="small" onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+    <summary>Chosen on earlier seasons, checked on the next (exploratory)</summary>
+    {open && <CheckBody sport={sport} market={market} />}
+  </details>;
+}
+
+function CheckBody({ sport, market }: { sport: Sport; market: MarketId }) {
+  const { state, retry } = useApi((s) => api.researchTrackingCheck(sport, market, s), [sport, market]);
+  return <AsyncView state={state} retry={retry}>{(c: TrackingCheck) => c.folds.length === 0 ? <Empty>{c.status === 'historical_table_outdated'
+    ? <span className="warn">The saved historical table was built under an earlier calculation and is not used. Rebuild it with <code>tracking-historical</code>.</span>
+    : 'No historical table.'}</Empty> : <>
+    <div className="table-wrap"><table className="table small">
+      <thead><tr><th>Season</th><th>First on earlier seasons</th><th>Earlier</th><th>Next season</th><th>Anchor, same count</th></tr></thead>
+      <tbody>{c.folds.map((x) => <tr key={x.season}><th scope="row">{x.season}{x.reserved_test_season && <span className="warn small" title="This season is one of the reserved final-test seasons and has been reused by research: exploratory only"> · reused test season</span>}</th>
+        {x.chosen && x.earlier && x.later ? <><td className="wrap">{x.chosen} · ≥ {pct(x.threshold ?? null, 0)}</td>
+          <td>{pct(x.earlier.win_rate, 1)} on {x.earlier.decided}</td>
+          <td>{pct(x.later.win_rate, 1)} on {x.later.decided} <span className="muted">{ci(x.later.ci95)}</span></td>
+          <td>{x.later.matched[0] ? pct(x.later.matched[0].win_rate, 1) : '—'}</td></>
+          : <td colSpan={4} className="muted">{x.reason}</td>}</tr>)}</tbody>
+    </table></div><p className="muted">{c.note}</p></>}</AsyncView>;
+}
+
+/** Game page: how the registered groups classified this game from forecasts stored before the start. */
+export function TrackingGameCard({ sport, gameId }: { sport: Sport; gameId: string }) {
+  const { state, retry } = useApi((s) => api.researchTrackingGame(sport, gameId, s), [sport, gameId]);
+  return <div className="card">
+    <h2>Agreement tracking <span className="badge badge-research">Research</span></h2>
+    <AsyncView state={state} retry={retry}>{(t: TrackingGame) => <>
+      {t.exact_rules_error && <p role="alert" className="small warn">Exact-rule results unavailable for this game: the registry file could not be loaded ({t.exact_rules_error}). Registered rules are unknown until it is repaired; this does not mean no rules exist. The sealed groups below are unaffected.</p>}
+      {t.mode === 'demo' || t.markets.length === 0
+      ? <Empty>{t.mode === 'demo' ? 'Agreement tracking reads the real stores; none in demo mode.'
+        : 'No tracking observations for this game (they are recorded during the two hours before the start).'}</Empty>
+      : <>{t.markets.map((m) => <details key={m.market} className="tracking-game">
+        <summary><strong>{m.market}</strong>{m.line != null && ` ${m.line}`} — {m.groups} groups:{' '}
+          {Object.entries(m.counts).map(([k, n]) => `${n} ${sideName(m.market, k) ?? STATUS[k] ?? k}`).join(' · ')}</summary>
+        {m.definition_note && <p className="small muted">{m.definition_note}</p>}
+        {m.state_reason && <p className="small warn"><strong>{m.state === 'void' ? 'Void' : 'Not recorded'}</strong> · {m.state_reason}</p>}
+        {m.recorded_at && <p className="small muted">Recorded {dateTime(m.recorded_at)} · definition {(m.definition ?? '').slice(0, 16)}</p>}
+        {m.picks.length > 0 && <details className="small"><summary>Classifications by group (research; not picks, regardless of evidence)</summary>
+          <div className="table-wrap"><table className="table small">
+          <thead><tr><th>Group (highest rule statistic first)</th><th>Side</th><th>Rule statistic</th></tr></thead>
+          <tbody>{m.picks.map((p) => <tr key={p.group}><th scope="row" className="wrap">{p.group}</th><td>{sideName(m.market, p.side) ?? SIDE[p.side] ?? p.side}</td>
+            <td>{pct(p.statistic, 1)}{p.votes && <span className="muted"> ({p.votes.a ?? 0}–{p.votes.b ?? 0}{p.votes.mid ? `–${p.votes.mid}` : ''} votes)</span>}</td></tr>)}</tbody>
+        </table></div></details>}
+        {m.incomplete.length > 0 && <p className="small warn">Incomplete: {m.incomplete.map((x) => `${x.group} (${Object.keys(x.missing).join(', ')})`).join('; ')}</p>}
+      </details>)}<p className="small muted">{t.note}</p></>}</>}</AsyncView>
+  </div>;
+}
+
+
+function JointAgreement({ sport, market }: { sport: Sport; market: MarketId }) {
+  const [members, setMembers] = useState<string[]>([]);
+  const [evidence, setEvidence] = useState('historical');
+  const [confidence, setConfidence] = useState('supporters_mean');
+  const [agreementMin, setAgreementMin] = useState('0.6');
+  const [agreementMax, setAgreementMax] = useState('');
+  const [confidenceMin, setConfidenceMin] = useState('0.65');
+  const [confidenceMax, setConfidenceMax] = useState('');
+  const [line, setLine] = useState('');
+  const [version, setVersion] = useState('');
+  const [evaluate, setEvaluate] = useState(false);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const params = { members: members.join(','), evidence, confidence, agreement_min: agreementMin,
+    agreement_max: agreementMax || undefined, confidence_min: confidenceMin, confidence_max: confidenceMax || undefined,
+    line: line || undefined, version: version || undefined, evaluate: String(evaluate),
+    date_from: dateFrom || undefined, date_to: dateTo || undefined };
+  const { state, retry } = useApi((signal) => api.jointTracking(sport, market, params, signal),
+    [sport, market, members.join(','), evidence, confidence, agreementMin, agreementMax, confidenceMin, confidenceMax, line, version, evaluate, dateFrom, dateTo]);
+  const fractions = Array.from({ length: 21 }, (_, i) => (i / 20).toFixed(2));
+  // An upper bound must exceed its lower bound: options at or below it are disabled, and raising a lower bound past the
+  // chosen upper bound clears that upper bound, so the controls can never send a range the API rejects.
+  const range = (label: string, value: string, set: (x: string) => void, upper = false, lower?: string) =>
+    <label>{label}<select value={value} onChange={(e) => { setEvaluate(false); set(e.target.value); }}>
+      {upper && <option value="">No upper limit</option>}
+      {fractions.map((x) => <option key={x} value={x} disabled={upper && lower != null && Number(x) <= Number(lower)}>{pct(Number(x), 0)}</option>)}
+    </select></label>;
+  const setMin = (set: (x: string) => void, max: string, clearMax: (x: string) => void) => (x: string) => {
+    if (max && Number(max) <= Number(x)) clearMax('');
+    set(x);
+  };
+  // The model list stays mounted while results load (keyboard focus stays on the checkbox just toggled).
+  const [options, setOptions] = useState<string[]>([]);
+  useEffect(() => { if (state.status === 'success') setOptions(state.data.options ?? []); }, [state]);
+  // Match select values to their two-decimal options.
+  return <section className="joint-research" id="joint-agreement">
+    <h2>Explore agreement + confidence <span className="badge badge-research">Research</span></h2>
+    <p>Choose an exact model subset. Agreement is the fraction voting for the same outcome; confidence is a separate probability filter.
+      For example, four of five votes is 80% agreement, even if their average confidence is 67%.</p>
+    <div className="filters tracking-filters">
+      <label>Results<select value={evidence} onChange={(e) => { setEvaluate(false); setEvidence(e.target.value); setVersion(''); }}>
+        <option value="historical">Historical out-of-sample</option><option value="prospective">Recorded live</option>
+      </select></label>
+      {range('Minimum agreement (inclusive)', Number(agreementMin).toFixed(2), setMin(setAgreementMin, agreementMax, setAgreementMax))}
+      {range('Maximum agreement (exclusive)', agreementMax ? Number(agreementMax).toFixed(2) : '', setAgreementMax, true, agreementMin)}
+      <label>Confidence definition<select value={confidence} onChange={(e) => { setEvaluate(false); setConfidence(e.target.value); }}>
+        <option value="supporters_mean">Agreeing models: mean</option><option value="supporters_min">Agreeing models: minimum</option>
+        <option value="all_mean">All models: mean (includes dissenters)</option>
+      </select></label>
+      {range('Minimum confidence (inclusive)', Number(confidenceMin).toFixed(2), setMin(setConfidenceMin, confidenceMax, setConfidenceMax))}
+      {range('Maximum confidence (exclusive)', confidenceMax ? Number(confidenceMax).toFixed(2) : '', setConfidenceMax, true, confidenceMin)}
+      <label>From (Eastern date)<input type="date" value={dateFrom} onChange={(e) => { setEvaluate(false); setDateFrom(e.target.value); }} /></label>
+      <label>Through (Eastern date)<input type="date" value={dateTo} onChange={(e) => { setEvaluate(false); setDateTo(e.target.value); }} /></label>
+      {evidence === 'prospective' && <label>Research definition<input value={version} placeholder="optional definition prefix"
+        onChange={(e) => { setEvaluate(false); setVersion(e.target.value); }} /></label>}
+    </div>
+    {state.status === 'error' && <button type="button" onClick={() => {
+      setMembers([]); setLine(''); setVersion(''); setEvaluate(false); setDateFrom(''); setDateTo('');
+      setAgreementMin('0.6'); setAgreementMax(''); setConfidenceMin('0.65'); setConfidenceMax(''); retry();
+    }}>Reset research filters</button>}
+    {options.length > 0 && <fieldset className="joint-models"><legend>Exact subset: choose 2–8 models ({members.length} selected)</legend>
+      {options.map((m) => <label key={m}><input type="checkbox" checked={members.includes(m)}
+        disabled={!members.includes(m) && members.length >= 8} onChange={(e) => { setEvaluate(false);
+          setMembers(e.target.checked ? [...members, m] : members.filter((x) => x !== m)); }} />{modelName(m)}</label>)}
+    </fieldset>}
+    <AsyncView state={state} retry={retry}>{(r) => <>
+      <div className="filters">
+        {!!r.lines?.length && <label>Exact line<select value={line} onChange={(e) => { setLine(e.target.value); setEvaluate(false); }}>
+          <option value="">All lines (pooled)</option>{r.lines.map((x) => <option key={x} value={String(x)}>{x}</option>)}
+        </select></label>}
+      </div>
+      <p className="small muted">{r.note} Upper bounds are exclusive. Ties and missing members produce no pick.</p>
+      {r.definition_applied && <p className="small muted">One research definition: <code>{r.definition_applied.slice(0, 16)}</code>
+        {r.definitions.length > 1 && <> ({r.definitions.length - 1} other definition(s) recorded; enter one under Research definition, never pooled)</>}</p>}
+      {r.status === 'invalid_historical_inputs' && <p role="alert" className="warn">Historical evaluation unavailable for this goalie subset.</p>}
+      {members.length < 2 && <p>Select at least two models to compare their joint rule.</p>}
+      <div className="table-wrap"><table><thead><tr><th>Method / member versions</th><th>Eligible</th><th>Selected</th><th>Record</th>
+        <th>Coverage</th><th>Win rate (95% interval)</th><th>Pending</th><th>Missing members</th></tr></thead><tbody>
+        {(r.by_definition ?? []).map((g) => <tr key={g.definition}><td><code title={g.definition}>{g.definition}</code></td>
+          <td>{g.games}</td><td>{g.cell.selected}</td><td>{rec(g.cell)}</td><td>{pct(g.cell.coverage)}</td>
+          <td>{pct(g.cell.win_rate)} {ci(g.cell.ci95)}<div className="small muted">{g.cell.evidence}</div></td>
+          <td>{g.cell.pending}</td><td>{g.status_counts.incomplete ?? 0}</td></tr>)}
+      </tbody></table></div>
+      {r.status === 'no_records' && <p>No recorded cohorts for this filter yet. No synthetic forecasts are substituted.</p>}
+      {evidence === 'historical' && members.length >= 2 && r.status === 'available' && <>
+        <button type="button" onClick={() => setEvaluate(true)}>Explore joint rules on later seasons (not a validation)</button>
+        <p className="small muted">Searches feasible agreement ranges and confidence thresholds/bands for this subset. Freezes the rule and best constituent on earlier seasons. Changing the controls does not change live recommendations.</p>
+      </>}
+      {r.walk && <><h3>Later-season evaluation</h3><p className="small muted">{r.walk.configurations} configurations · {r.walk.note}</p>
+        <div className="table-wrap"><table><thead><tr><th>Season</th><th>Earlier-selected rule</th><th>Later picks</th><th>Win rate</th><th>Earlier-selected single, matched coverage</th></tr></thead>
+          <tbody>{r.walk.folds.map((f) => <tr key={f.season}><td>{f.season}{f.reserved_test_season && <span className="warn small" title="This season is one of the reserved final-test seasons and has been reused by research: exploratory only"> · reused test season</span>}</td><td>{f.chosen
+            ? `Agreement ≥ ${pct(f.chosen.agreement_min)}${f.chosen.agreement_max ? ` and < ${pct(f.chosen.agreement_max)}` : ''}, confidence ≥ ${pct(f.chosen.confidence_min)}${f.chosen.confidence_max ? ` and < ${pct(f.chosen.confidence_max)}` : ''}` : f.reason}</td>
+            <td>{f.later?.decided ?? '—'}</td><td>{pct(f.later?.win_rate ?? null)}</td>
+            <td>{f.matched ? `${modelName(f.matched.model)}: ${pct(f.matched.win_rate)} (${f.matched.games})` : '—'}</td></tr>)}</tbody></table></div></>}
+      {!!r.recent?.length && <details><summary>Inspect last 20 classifications</summary><div className="table-wrap"><table>
+        <thead><tr><th>Game</th><th>Line</th><th>Votes</th><th>Agreement</th><th>Confidence</th><th>Matches filters</th><th>Status</th></tr></thead>
+        <tbody>{r.recent.map((x) => <tr key={x.game_id}><td>{x.game_id}</td><td>{x.line ?? '—'}</td><td>{JSON.stringify(x.votes)}</td>
+          <td>{pct(x.agreement)}</td><td>{pct(x.statistic)}</td><td>{x.matches_filter ? 'Yes' : 'No'}</td><td>{x.status} · {x.state}</td></tr>)}</tbody></table></div></details>}
+    </>}</AsyncView>
+  </section>;
+}

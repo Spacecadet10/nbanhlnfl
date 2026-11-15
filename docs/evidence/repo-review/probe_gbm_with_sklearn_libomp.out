@@ -1,0 +1,5 @@
+xgboost 3.4.1 lightgbm 4.7.0 sklearn 1.9.1 numpy 2.5.3
+libxgboost.dylib -> ['@rpath/libxgboost.3.dylib', '@rpath/libomp.dylib', '/usr/lib/libc++.1.dylib', '/usr/lib/libSystem.B.dylib']
+lib_lightgbm.dylib -> ['@rpath/lib_lightgbm.dylib', '@rpath/libomp.dylib', '/usr/lib/libc++.1.dylib', '/usr/lib/libSystem.B.dylib']
+xgboost: fit=0.25s rmse=13.046 same-seed max|diff|=0.0 diff-seed max|diff|=9.4538
+lightgbm: fit=0.12s rmse=13.057 same-seed max|diff|=0.0 diff-seed max|diff|=7.6765

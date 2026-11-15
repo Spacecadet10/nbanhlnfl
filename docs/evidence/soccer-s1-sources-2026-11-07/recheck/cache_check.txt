@@ -1,0 +1,6 @@
+2026-11-07T19:39:57Z
+files in s1-downloads:      115
+count.py exit 0
+count.py output byte-identical to count_output.txt
+## 0. Probe log
+requests 115 total_bytes 27382716 status {200: 106, 400: 1, 403: 3, 502: 5} hash_or_size_mismatch 0

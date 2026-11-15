@@ -1,0 +1,4782 @@
+{
+ "by_season": {
+  "2020": {
+   "dates_sampled": 10,
+   "dates_with_any_report": 10,
+   "reports_found": 20,
+   "reports_checked": 30,
+   "hourly_format": 20,
+   "quarter_format": 0,
+   "missing": [
+    "2020-07-31 13h",
+    "2020-07-31 20h",
+    "2020-08-13 13h",
+    "2020-08-13 20h",
+    "2020-08-20 13h",
+    "2020-08-20 20h",
+    "2020-08-31 13h",
+    "2020-08-31 20h",
+    "2020-09-25 13h",
+    "2020-09-25 20h"
+   ]
+  },
+  "2021": {
+   "dates_sampled": 10,
+   "dates_with_any_report": 10,
+   "reports_found": 30,
+   "reports_checked": 30,
+   "hourly_format": 30,
+   "quarter_format": 0,
+   "missing": []
+  },
+  "2022": {
+   "dates_sampled": 10,
+   "dates_with_any_report": 10,
+   "reports_found": 30,
+   "reports_checked": 30,
+   "hourly_format": 30,
+   "quarter_format": 0,
+   "missing": []
+  },
+  "2023": {
+   "dates_sampled": 10,
+   "dates_with_any_report": 10,
+   "reports_found": 30,
+   "reports_checked": 30,
+   "hourly_format": 30,
+   "quarter_format": 0,
+   "missing": []
+  },
+  "2024": {
+   "dates_sampled": 10,
+   "dates_with_any_report": 10,
+   "reports_found": 30,
+   "reports_checked": 30,
+   "hourly_format": 30,
+   "quarter_format": 0,
+   "missing": []
+  },
+  "2025": {
+   "dates_sampled": 10,
+   "dates_with_any_report": 10,
+   "reports_found": 30,
+   "reports_checked": 30,
+   "hourly_format": 30,
+   "quarter_format": 0,
+   "missing": []
+  },
+  "2026": {
+   "dates_sampled": 10,
+   "dates_with_any_report": 10,
+   "reports_found": 30,
+   "reports_checked": 30,
+   "hourly_format": 6,
+   "quarter_format": 24,
+   "missing": []
+  }
+ },
+ "samples": [
+  {
+   "season": 2020,
+   "date": "2019-11-22",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Fri, 22 Nov 2019 18:30:24 GMT",
+    "minutes_after_named_time": 30.4,
+    "bytes": 42883
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2019-11-22",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Fri, 22 Nov 2019 22:30:06 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 46963
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2019-11-22",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sat, 23 Nov 2019 01:30:21 GMT",
+    "minutes_after_named_time": 30.4,
+    "bytes": 49458
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2019-12-22",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sun, 22 Dec 2019 18:30:24 GMT",
+    "minutes_after_named_time": 30.4,
+    "bytes": 30583
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2019-12-22",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sun, 22 Dec 2019 22:30:08 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 36666
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2019-12-22",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 23 Dec 2019 01:30:23 GMT",
+    "minutes_after_named_time": 30.4,
+    "bytes": 41301
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2020-01-14",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 14 Jan 2020 18:30:24 GMT",
+    "minutes_after_named_time": 30.4,
+    "bytes": 29821
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2020-01-14",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 14 Jan 2020 22:30:07 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 36518
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2020-01-14",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 15 Jan 2020 01:30:23 GMT",
+    "minutes_after_named_time": 30.4,
+    "bytes": 41363
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2020-01-24",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Fri, 24 Jan 2020 18:30:24 GMT",
+    "minutes_after_named_time": 30.4,
+    "bytes": 35488
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2020-01-24",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Fri, 24 Jan 2020 22:30:08 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 40889
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2020-01-24",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sat, 25 Jan 2020 01:30:22 GMT",
+    "minutes_after_named_time": 30.4,
+    "bytes": 41157
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2020-02-01",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sat, 01 Feb 2020 18:30:24 GMT",
+    "minutes_after_named_time": 30.4,
+    "bytes": 31048
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2020-02-01",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sat, 01 Feb 2020 22:30:06 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 36897
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2020-02-01",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sun, 02 Feb 2020 01:30:21 GMT",
+    "minutes_after_named_time": 30.4,
+    "bytes": 40930
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2020-07-31",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2020-07-31",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Fri, 31 Jul 2020 21:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 20600
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2020-07-31",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2020-08-13",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2020-08-13",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Thu, 13 Aug 2020 21:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 26882
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2020-08-13",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2020-08-20",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2020-08-20",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Thu, 20 Aug 2020 21:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 20663
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2020-08-20",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2020-08-31",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2020-08-31",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 31 Aug 2020 21:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 15313
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2020-08-31",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2020-09-25",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2020-09-25",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Fri, 25 Sep 2020 21:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 14741
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2020,
+   "date": "2020-09-25",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-01-01",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Fri, 01 Jan 2021 18:30:05 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 26060
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-01-01",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Fri, 01 Jan 2021 22:30:05 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 31523
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-01-01",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sat, 02 Jan 2021 01:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 31785
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-01-11",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 11 Jan 2021 18:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 29707
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-01-11",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 11 Jan 2021 22:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 31755
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-01-11",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 12 Jan 2021 01:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 35925
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-01-26",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 26 Jan 2021 18:30:05 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 21057
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-01-26",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 26 Jan 2021 22:30:05 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 26616
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-01-26",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 27 Jan 2021 01:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 31463
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-01-30",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sat, 30 Jan 2021 18:30:05 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 25865
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-01-30",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sat, 30 Jan 2021 22:30:05 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 31075
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-01-30",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sun, 31 Jan 2021 01:30:05 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 31705
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-02-08",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 08 Feb 2021 18:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 30638
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-02-08",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 08 Feb 2021 22:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 36076
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-02-08",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 09 Feb 2021 01:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 36836
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-02-09",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 09 Feb 2021 18:30:05 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 26378
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-02-09",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 09 Feb 2021 22:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 31654
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-02-09",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 10 Feb 2021 01:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 41082
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-02-15",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 15 Feb 2021 18:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 26366
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-02-15",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 15 Feb 2021 22:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 31443
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-02-15",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 16 Feb 2021 01:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 36589
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-04-04",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sun, 04 Apr 2021 17:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 25505
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-04-04",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sun, 04 Apr 2021 21:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 30334
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-04-04",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 05 Apr 2021 00:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 31865
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-04-25",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sun, 25 Apr 2021 17:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 29729
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-04-25",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sun, 25 Apr 2021 21:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 32055
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-04-25",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 26 Apr 2021 00:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 36761
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-06-25",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Fri, 25 Jun 2021 17:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 14578
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-06-25",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Fri, 25 Jun 2021 21:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 14578
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2021,
+   "date": "2021-06-25",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sat, 26 Jun 2021 00:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 15061
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2021-12-08",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 08 Dec 2021 18:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 36451
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2021-12-08",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 08 Dec 2021 22:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 41435
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2021-12-08",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Thu, 09 Dec 2021 01:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 41401
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2021-12-11",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sat, 11 Dec 2021 18:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 29199
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2021-12-11",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sat, 11 Dec 2021 22:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 34593
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2021-12-11",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sun, 12 Dec 2021 01:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 34754
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2021-12-25",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sat, 25 Dec 2021 18:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 34812
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2021-12-25",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sat, 25 Dec 2021 22:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 39911
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2021-12-25",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sun, 26 Dec 2021 01:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 45871
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2021-12-28",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 28 Dec 2021 18:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 35469
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2021-12-28",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 28 Dec 2021 22:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 46351
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2021-12-28",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 29 Dec 2021 01:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 51440
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2022-01-16",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sun, 16 Jan 2022 18:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 24813
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2022-01-16",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sun, 16 Jan 2022 22:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 35925
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2022-01-16",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 17 Jan 2022 01:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 41174
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2022-01-29",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sat, 29 Jan 2022 18:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 25213
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2022-01-29",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sat, 29 Jan 2022 22:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 36100
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2022-01-29",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sun, 30 Jan 2022 01:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 40656
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2022-03-20",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sun, 20 Mar 2022 17:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 35542
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2022-03-20",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sun, 20 Mar 2022 21:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 42009
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2022-03-20",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 21 Mar 2022 00:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 42113
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2022-05-19",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Thu, 19 May 2022 17:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 14759
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2022-05-19",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Thu, 19 May 2022 21:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 14957
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2022-05-19",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Fri, 20 May 2022 00:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 15196
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2022-06-08",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 08 Jun 2022 17:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 14520
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2022-06-08",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 08 Jun 2022 21:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 14586
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2022-06-08",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Thu, 09 Jun 2022 00:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 14452
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2022-06-13",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 13 Jun 2022 17:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 14207
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2022-06-13",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 13 Jun 2022 21:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 14334
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2022,
+   "date": "2022-06-13",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 14 Jun 2022 00:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 14449
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2022-10-24",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 24 Oct 2022 17:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 20978
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2022-10-24",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 24 Oct 2022 21:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 25971
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2022-10-24",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 25 Oct 2022 00:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 30299
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2022-12-18",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sun, 18 Dec 2022 18:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 30159
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2022-12-18",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sun, 18 Dec 2022 22:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 36546
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2022-12-18",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 19 Dec 2022 01:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 40719
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2022-12-22",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Thu, 22 Dec 2022 18:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 20785
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2022-12-22",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Thu, 22 Dec 2022 22:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 34835
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2022-12-22",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Fri, 23 Dec 2022 01:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 40148
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2022-12-27",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 27 Dec 2022 18:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 30554
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2022-12-27",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 27 Dec 2022 22:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 36858
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2022-12-27",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 28 Dec 2022 01:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 40676
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2023-01-09",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 09 Jan 2023 18:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 25144
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2023-01-09",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 09 Jan 2023 22:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 31871
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2023-01-09",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 10 Jan 2023 01:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 36584
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2023-02-13",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 13 Feb 2023 18:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 34559
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2023-02-13",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 13 Feb 2023 22:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 35439
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2023-02-13",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 14 Feb 2023 01:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 36402
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2023-02-26",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sun, 26 Feb 2023 18:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 26242
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2023-02-26",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sun, 26 Feb 2023 22:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 31711
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2023-02-26",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 27 Feb 2023 01:30:05 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 31999
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2023-03-16",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Thu, 16 Mar 2023 17:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 25108
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2023-03-16",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Thu, 16 Mar 2023 21:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 31166
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2023-03-16",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Fri, 17 Mar 2023 00:30:02 GMT",
+    "minutes_after_named_time": 30.0,
+    "bytes": 36184
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2023-05-12",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Fri, 12 May 2023 17:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 61656
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2023-05-12",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Fri, 12 May 2023 21:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 61655
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2023-05-12",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sat, 13 May 2023 00:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 61896
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2023-06-07",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 07 Jun 2023 17:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 58974
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2023-06-07",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 07 Jun 2023 21:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 59019
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2023,
+   "date": "2023-06-07",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Thu, 08 Jun 2023 00:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 59143
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2023-11-08",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 08 Nov 2023 18:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 85164
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2023-11-08",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 08 Nov 2023 22:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 86023
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2023-11-08",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Thu, 09 Nov 2023 01:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 86503
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2023-12-14",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Thu, 14 Dec 2023 18:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 74451
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2023-12-14",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Thu, 14 Dec 2023 22:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 83244
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2023-12-14",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Fri, 15 Dec 2023 01:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 88428
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2024-01-29",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 29 Jan 2024 18:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 77958
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2024-01-29",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 29 Jan 2024 22:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 83991
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2024-01-29",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 30 Jan 2024 01:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 84351
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2024-02-05",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 05 Feb 2024 18:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 74913
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2024-02-05",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 05 Feb 2024 22:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 81035
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2024-02-05",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 06 Feb 2024 01:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 85358
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2024-02-27",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 27 Feb 2024 18:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 80442
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2024-02-27",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 27 Feb 2024 22:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 85030
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2024-02-27",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 28 Feb 2024 01:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 88190
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2024-03-11",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 11 Mar 2024 17:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 75894
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2024-03-11",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 11 Mar 2024 21:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 77750
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2024-03-11",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 12 Mar 2024 00:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 86282
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2024-04-03",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 03 Apr 2024 17:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 78850
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2024-04-03",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 03 Apr 2024 21:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 87191
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2024-04-03",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Thu, 04 Apr 2024 00:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 89146
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2024-04-23",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 23 Apr 2024 17:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 60666
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2024-04-23",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 23 Apr 2024 21:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 62848
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2024-04-23",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 24 Apr 2024 00:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 62776
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2024-05-07",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 07 May 2024 17:30:05 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 60850
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2024-05-07",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 07 May 2024 21:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 61331
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2024-05-07",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 08 May 2024 00:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 61580
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2024-05-15",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 15 May 2024 17:30:05 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 61219
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2024-05-15",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 15 May 2024 21:30:07 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 61347
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2024,
+   "date": "2024-05-15",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Thu, 16 May 2024 00:30:05 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 61316
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2024-11-19",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 19 Nov 2024 18:30:05 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 74950
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2024-11-19",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 19 Nov 2024 22:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 76609
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2024-11-19",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 20 Nov 2024 01:30:05 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 84220
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2024-11-23",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sat, 23 Nov 2024 18:30:05 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 73186
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2024-11-23",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sat, 23 Nov 2024 22:30:05 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 85354
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2024-11-23",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sun, 24 Nov 2024 01:30:06 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 86984
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2024-12-08",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sun, 08 Dec 2024 18:30:06 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 85961
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2024-12-08",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sun, 08 Dec 2024 22:30:05 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 88638
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2024-12-08",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 09 Dec 2024 01:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 88635
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2025-01-31",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Fri, 31 Jan 2025 18:30:15 GMT",
+    "minutes_after_named_time": 30.2,
+    "bytes": 76708
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2025-01-31",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Fri, 31 Jan 2025 22:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 85386
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2025-01-31",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sat, 01 Feb 2025 01:30:05 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 88798
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2025-02-11",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 11 Feb 2025 18:30:14 GMT",
+    "minutes_after_named_time": 30.2,
+    "bytes": 73354
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2025-02-11",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 11 Feb 2025 22:30:06 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 84084
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2025-02-11",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 12 Feb 2025 01:30:06 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 90382
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2025-03-04",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 04 Mar 2025 18:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 79059
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2025-03-04",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 04 Mar 2025 22:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 91149
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2025-03-04",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 05 Mar 2025 01:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 94570
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2025-03-06",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Thu, 06 Mar 2025 18:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 75328
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2025-03-06",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Thu, 06 Mar 2025 22:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 80429
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2025-03-06",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Fri, 07 Mar 2025 01:30:09 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 89358
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2025-04-10",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Thu, 10 Apr 2025 17:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 74458
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2025-04-10",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Thu, 10 Apr 2025 21:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 85008
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2025-04-10",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Fri, 11 Apr 2025 00:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 94830
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2025-04-28",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 28 Apr 2025 17:30:06 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 63782
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2025-04-28",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 28 Apr 2025 21:30:06 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 64532
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2025-04-28",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 29 Apr 2025 00:30:06 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 64878
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2025-05-03",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sat, 03 May 2025 17:30:06 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 59220
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2025-05-03",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sat, 03 May 2025 21:30:07 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 59872
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2025,
+   "date": "2025-05-03",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sun, 04 May 2025 00:30:06 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 59895
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2025-10-25",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sat, 25 Oct 2025 17:30:05 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 69293
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2025-10-25",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sat, 25 Oct 2025 21:30:05 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 74301
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2025-10-25",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Sun, 26 Oct 2025 00:30:05 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 78975
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2025-11-03",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 03 Nov 2025 18:30:06 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 74098
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2025-11-03",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Mon, 03 Nov 2025 22:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 80773
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2025-11-03",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 04 Nov 2025 01:30:09 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 85305
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2025-12-22",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Mon, 22 Dec 2025 18:00:10 GMT",
+    "minutes_after_named_time": 0.2,
+    "bytes": 80278
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2025-12-22",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Mon, 22 Dec 2025 22:00:11 GMT",
+    "minutes_after_named_time": 0.2,
+    "bytes": 87788
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2025-12-22",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 23 Dec 2025 01:00:08 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 91353
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2026-01-03",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Sat, 03 Jan 2026 18:00:07 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 74251
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2026-01-03",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Sat, 03 Jan 2026 22:00:07 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 84275
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2026-01-03",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Sun, 04 Jan 2026 01:00:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 90319
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2026-02-19",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Thu, 19 Feb 2026 18:00:07 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 79897
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2026-02-19",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Thu, 19 Feb 2026 22:00:06 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 82003
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2026-02-19",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Fri, 20 Feb 2026 01:00:07 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 88599
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2026-03-02",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Mon, 02 Mar 2026 18:00:06 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 69077
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2026-03-02",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Mon, 02 Mar 2026 22:00:08 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 79322
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2026-03-02",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 03 Mar 2026 01:00:08 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 85865
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2026-03-12",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Thu, 12 Mar 2026 17:00:06 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 97449
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2026-03-12",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Thu, 12 Mar 2026 21:00:07 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 99828
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2026-03-12",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Fri, 13 Mar 2026 00:00:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 106215
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2026-03-22",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Sun, 22 Mar 2026 17:00:06 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 73701
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2026-03-22",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Sun, 22 Mar 2026 21:00:07 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 85919
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2026-03-22",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Mon, 23 Mar 2026 00:00:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 91005
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2026-05-06",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Wed, 06 May 2026 17:00:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 79642
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2026-05-06",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Wed, 06 May 2026 21:00:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 79814
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2026-05-06",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Thu, 07 May 2026 00:00:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81376
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2026-05-09",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Sat, 09 May 2026 17:00:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 79975
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2026-05-09",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Sat, 09 May 2026 21:00:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 80599
+   }
+  },
+  {
+   "season": 2026,
+   "date": "2026-05-09",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Sun, 10 May 2026 00:00:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 80507
+   }
+  }
+ ],
+ "full_day_hourly_2023-01-10": [
+  {
+   "date": "2023-01-10",
+   "hour": 0,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 10 Jan 2023 05:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 29953
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2023-01-10",
+   "hour": 1,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 10 Jan 2023 06:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 30159
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2023-01-10",
+   "hour": 2,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 10 Jan 2023 07:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 30165
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2023-01-10",
+   "hour": 3,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 10 Jan 2023 08:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 30165
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2023-01-10",
+   "hour": 4,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 10 Jan 2023 09:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 30265
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2023-01-10",
+   "hour": 5,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 10 Jan 2023 10:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 30316
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2023-01-10",
+   "hour": 6,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 10 Jan 2023 11:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 30362
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2023-01-10",
+   "hour": 7,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 10 Jan 2023 12:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 30231
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2023-01-10",
+   "hour": 8,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 10 Jan 2023 13:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 30417
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2023-01-10",
+   "hour": 9,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 10 Jan 2023 14:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 30342
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2023-01-10",
+   "hour": 10,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 10 Jan 2023 15:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 30171
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2023-01-10",
+   "hour": 11,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 10 Jan 2023 16:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 30175
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2023-01-10",
+   "hour": 12,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 10 Jan 2023 17:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 30203
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2023-01-10",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 10 Jan 2023 18:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 30193
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2023-01-10",
+   "hour": 14,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 10 Jan 2023 19:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 30381
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2023-01-10",
+   "hour": 15,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 10 Jan 2023 20:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 30709
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2023-01-10",
+   "hour": 16,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 10 Jan 2023 21:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 36059
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2023-01-10",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 10 Jan 2023 22:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 36709
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2023-01-10",
+   "hour": 18,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Tue, 10 Jan 2023 23:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 40089
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2023-01-10",
+   "hour": 19,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 11 Jan 2023 00:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 40345
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2023-01-10",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 11 Jan 2023 01:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 40521
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2023-01-10",
+   "hour": 21,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 11 Jan 2023 02:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 40019
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2023-01-10",
+   "hour": 22,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 11 Jan 2023 03:30:04 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 39858
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2023-01-10",
+   "hour": 23,
+   "minute": 0,
+   "hourly": {
+    "status": 200,
+    "last_modified": "Wed, 11 Jan 2023 04:30:03 GMT",
+    "minutes_after_named_time": 30.1,
+    "bytes": 39856
+   },
+   "quarter": {
+    "status": 403
+   }
+  }
+ ],
+ "full_day_quarter_2026-03-10": [
+  {
+   "date": "2026-03-10",
+   "hour": 0,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 04:00:07 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 80893
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 0,
+   "minute": 15,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 04:15:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81005
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 0,
+   "minute": 30,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 04:30:06 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 80893
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 0,
+   "minute": 45,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 04:45:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81109
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 1,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 05:00:06 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 80892
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 1,
+   "minute": 15,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 05:15:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81005
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 1,
+   "minute": 30,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 05:30:08 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 80892
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 1,
+   "minute": 45,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 05:45:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81109
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 2,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 06:00:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 80893
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 2,
+   "minute": 15,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 06:15:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81005
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 2,
+   "minute": 30,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 06:30:06 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 80892
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 2,
+   "minute": 45,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 06:45:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81109
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 3,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 07:00:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 80888
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 3,
+   "minute": 15,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 07:15:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81000
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 3,
+   "minute": 30,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 07:30:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 80889
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 3,
+   "minute": 45,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 07:45:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81104
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 4,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 08:00:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 80994
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 4,
+   "minute": 15,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 08:15:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81109
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 4,
+   "minute": 30,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 08:30:07 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 80993
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 4,
+   "minute": 45,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 08:45:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81109
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 5,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 09:00:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81005
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 5,
+   "minute": 15,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 09:15:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81005
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 5,
+   "minute": 30,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 09:30:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81004
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 5,
+   "minute": 45,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 09:45:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81109
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 6,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 10:00:17 GMT",
+    "minutes_after_named_time": 0.3,
+    "bytes": 80893
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 6,
+   "minute": 15,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 10:15:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81006
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 6,
+   "minute": 30,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 10:30:06 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 80894
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 6,
+   "minute": 45,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 10:45:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81110
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 7,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 11:00:08 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 80973
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 7,
+   "minute": 15,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 11:15:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81086
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 7,
+   "minute": 30,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 11:30:06 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 80974
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 7,
+   "minute": 45,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 11:45:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81186
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 8,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 12:00:06 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81133
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 8,
+   "minute": 15,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 12:15:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81251
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 8,
+   "minute": 30,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 12:30:06 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81135
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 8,
+   "minute": 45,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 12:45:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81348
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 9,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 13:00:15 GMT",
+    "minutes_after_named_time": 0.2,
+    "bytes": 81061
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 9,
+   "minute": 15,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 13:15:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81174
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 9,
+   "minute": 30,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 13:30:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81061
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 9,
+   "minute": 45,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 13:45:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81270
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 10,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 14:00:06 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 80889
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 10,
+   "minute": 15,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 14:15:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81004
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 10,
+   "minute": 30,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 14:30:08 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 80891
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 10,
+   "minute": 45,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 14:45:06 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 81108
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 11,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 15:00:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 80890
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 11,
+   "minute": 15,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 15:15:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 95288
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 11,
+   "minute": 30,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 15:30:06 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 95175
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 11,
+   "minute": 45,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 15:45:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 95392
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 12,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 16:00:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 95028
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 12,
+   "minute": 15,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 16:15:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 95484
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 12,
+   "minute": 30,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 16:30:06 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 95227
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 12,
+   "minute": 45,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 16:45:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 95435
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 13,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 17:00:07 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 97454
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 13,
+   "minute": 15,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 17:15:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 98501
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 13,
+   "minute": 30,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 17:30:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 98391
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 13,
+   "minute": 45,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 17:45:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 98603
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 14,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 18:00:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 98382
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 14,
+   "minute": 15,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 18:15:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 98498
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 14,
+   "minute": 30,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 18:30:06 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 98392
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 14,
+   "minute": 45,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 18:45:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 98605
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 15,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 19:00:06 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 98383
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 15,
+   "minute": 15,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 19:15:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 99899
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 15,
+   "minute": 30,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 19:30:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 99789
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 15,
+   "minute": 45,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 19:45:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 100963
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 16,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 20:00:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 100905
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 16,
+   "minute": 15,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 20:15:06 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 101021
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 16,
+   "minute": 30,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 20:30:08 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 100906
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 16,
+   "minute": 45,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 20:45:06 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 101021
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 21:00:08 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 102487
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 17,
+   "minute": 15,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 21:15:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 102768
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 17,
+   "minute": 30,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 21:30:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 102763
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 17,
+   "minute": 45,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 21:45:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 103295
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 18,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 22:00:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 103700
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 18,
+   "minute": 15,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 22:15:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 103796
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 18,
+   "minute": 30,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 22:30:07 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 103685
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 18,
+   "minute": 45,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 22:45:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 104108
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 19,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 23:00:06 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 105629
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 19,
+   "minute": 15,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 23:15:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 105742
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 19,
+   "minute": 30,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 23:30:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 105626
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 19,
+   "minute": 45,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Tue, 10 Mar 2026 23:45:06 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 105839
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 20,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Wed, 11 Mar 2026 00:00:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 106096
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 20,
+   "minute": 15,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Wed, 11 Mar 2026 00:15:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 106217
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 20,
+   "minute": 30,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Wed, 11 Mar 2026 00:30:07 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 106066
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 20,
+   "minute": 45,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Wed, 11 Mar 2026 00:45:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 106284
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 21,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Wed, 11 Mar 2026 01:00:06 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 106028
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 21,
+   "minute": 15,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Wed, 11 Mar 2026 01:15:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 106135
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 21,
+   "minute": 30,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Wed, 11 Mar 2026 01:30:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 106019
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 21,
+   "minute": 45,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Wed, 11 Mar 2026 01:45:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 106237
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 22,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Wed, 11 Mar 2026 02:00:06 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 105844
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 22,
+   "minute": 15,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Wed, 11 Mar 2026 02:15:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 106053
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 22,
+   "minute": 30,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Wed, 11 Mar 2026 02:30:08 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 105939
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 22,
+   "minute": 45,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Wed, 11 Mar 2026 02:45:06 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 106281
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 23,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Wed, 11 Mar 2026 03:00:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 106063
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 23,
+   "minute": 15,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Wed, 11 Mar 2026 03:15:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 106177
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 23,
+   "minute": 30,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Wed, 11 Mar 2026 03:30:04 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 106064
+   }
+  },
+  {
+   "date": "2026-03-10",
+   "hour": 23,
+   "minute": 45,
+   "quarter": {
+    "status": 200,
+    "last_modified": "Wed, 11 Mar 2026 03:45:05 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 106278
+   }
+  }
+ ],
+ "format_change": {
+  "last_hourly_seen": "2025-12-21",
+  "first_quarter_seen": "2025-12-22",
+  "trail": [
+   {
+    "date": "2026-01-15",
+    "hourly": 403,
+    "quarter": 200
+   },
+   {
+    "date": "2025-12-23",
+    "hourly": 403,
+    "quarter": 200
+   },
+   {
+    "date": "2025-12-12",
+    "hourly": 200,
+    "quarter": 403
+   },
+   {
+    "date": "2025-12-17",
+    "hourly": 200,
+    "quarter": 403
+   },
+   {
+    "date": "2025-12-20",
+    "hourly": 200,
+    "quarter": 403
+   },
+   {
+    "date": "2025-12-21",
+    "hourly": 200,
+    "quarter": 403
+   },
+   {
+    "date": "2025-12-22",
+    "hourly": 403,
+    "quarter": 200
+   }
+  ]
+ },
+ "before_our_data": [
+  {
+   "date": "2018-12-01",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2017-12-01",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2016-12-01",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 403
+   }
+  }
+ ],
+ "off_season_and_preseason": [
+  {
+   "date": "2026-07-15",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 200,
+    "last_modified": "Wed, 15 Jul 2026 21:00:08 GMT",
+    "minutes_after_named_time": 0.1,
+    "bytes": 82862
+   }
+  },
+  {
+   "date": "2026-09-30",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 403
+   }
+  },
+  {
+   "date": "2025-10-10",
+   "hour": 17,
+   "minute": 0,
+   "hourly": {
+    "status": 403
+   },
+   "quarter": {
+    "status": 403
+   }
+  }
+ ]
+}

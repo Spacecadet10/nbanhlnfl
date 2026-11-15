@@ -1,0 +1,168 @@
+nhl:total 0 configs: no shortlisted candidate; every subset of the existing members already evaluated (§11, §15)
+nhl:team_total_home 0 configs: no shortlisted candidate; every subset of the existing members already evaluated (§11, §15)
+
+== nhl:winner: members ['hockey_elo', 'goals_poisson', 'hockey_logistic', 'hockey_gbt', 'hockey_logistic_xg', 'multinomial_l2:nhl_base', 'mlp:nhl_base'] games 6993 configs 497 evaluated {'full': 1, 'pair': 21, 'triple': 35, 'larger': 11} omitted {'larger': 52}
+  fold sel [2022] -> 2023 best mlp:nhl_base bonf_n 2393 qualified 0
+    highest accuracy avg|goals_poisson+hockey_logistic+mlp:nhl_base|0.7|all                 sel acc 0.777 lift 0.039 lower -0.206 | assess n 145 cov 0.104 acc 0.772 vs best 0.793 primary 0.724 strongest 0.793 avg 0.786
+  fold sel [2022, 2023] -> 2024 best hockey_logistic_xg bonf_n 2393 qualified 0
+    highest accuracy unanimous_min|hockey_logistic+multinomial_l2:nhl_base+mlp:nhl_base|0.7 sel acc 0.791 lift 0.004 lower -0.141 | assess n 144 cov 0.103 acc 0.778 vs best 0.778 primary 0.778 strongest 0.771 avg 0.764
+    top point lift   unanimous_min|hockey_logistic+hockey_logistic_xg+mlp:nhl_base|0.7|all  sel acc 0.783 lift 0.010 lower -0.130 | assess n 153 cov 0.109 acc 0.778 vs best 0.778 primary 0.771 strongest 0.778 avg 0.765
+  fold sel [2022, 2023, 2024] -> 2025 best hockey_logistic_xg bonf_n 2393 qualified 0
+    highest accuracy unanimous_min|hockey_elo+multinomial_l2:nhl_base+mlp:nhl_base|0.7|all  sel acc 0.787 lift -0.006 lower -0.138 | assess n 78 cov 0.056 acc 0.756 vs best 0.833 primary 0.756 strongest 0.769 avg 0.795
+    top point lift   unanimous_min|hockey_logistic+hockey_logistic_xg+mlp:nhl_base|0.7|all  sel acc 0.781 lift 0.007 lower -0.107 | assess n 117 cov 0.084 acc 0.778 vs best 0.761 primary 0.692 strongest 0.761 avg 0.744
+  fold sel [2022, 2023, 2024, 2025] -> 2026 best hockey_logistic_xg bonf_n 2393 qualified 0
+    highest accuracy unanimous_min|hockey_logistic+multinomial_l2:nhl_base+mlp:nhl_base|0.7 sel acc 0.786 lift 0.002 lower -0.103 | assess n 44 cov 0.032 acc 0.636 vs best 0.705 primary 0.614 strongest 0.705 avg 0.682
+    top point lift   unanimous_min|hockey_logistic+hockey_logistic_xg+mlp:nhl_base|0.7|all  sel acc 0.781 lift 0.009 lower -0.093 | assess n 55 cov 0.039 acc 0.655 vs best 0.691 primary 0.600 strongest 0.691 avg 0.673
+  probability: 0 of 68 subset averages with CI below 0 vs best prior single; top 5:
+  route B: 51 of 56 with/without comparisons where adding the candidate lowers log loss (95% CI < 0); top 5:
+    goals_poisson+multinomial_l2:nhl_base vs without multinomial_l2:nhl_base: -0.0057 [-0.0073, -0.0041] per season {2023: -0.0082, 2024: -0.0061, 2025: -0.0043, 2026: -0.0041}
+    hockey_gbt+multinomial_l2:nhl_base vs without multinomial_l2:nhl_base: -0.0055 [-0.0071, -0.0040] per season {2023: -0.0071, 2024: -0.0046, 2025: -0.0049, 2026: -0.0052}
+    goals_poisson+mlp:nhl_base vs without mlp:nhl_base: -0.0053 [-0.0069, -0.0037] per season {2023: -0.0075, 2024: -0.0060, 2025: -0.0044, 2026: -0.0032}
+    hockey_gbt+mlp:nhl_base vs without mlp:nhl_base: -0.0048 [-0.0063, -0.0034] per season {2023: -0.0061, 2024: -0.0044, 2025: -0.0049, 2026: -0.0040}
+    hockey_elo+multinomial_l2:nhl_base vs without multinomial_l2:nhl_base: -0.0036 [-0.0047, -0.0024] per season {2023: -0.0042, 2024: -0.0029, 2025: -0.0034, 2026: -0.0037}
+
+== nhl:reg3: members ['goals_poisson', 'goals_draw', 'goals_glm', 'multinomial_l2:nhl_base', 'multinomial_l2:nhl_goalie', 'poisson_draw:nhl_base'] games 6993 configs 366 evaluated {'full': 1, 'pair': 15, 'triple': 20, 'larger': 21} omitted {}
+  fold sel [2022] -> 2023 best multinomial_l2:nhl_goalie bonf_n 1008 qualified 0
+    highest accuracy unanimous_min|goals_poisson+goals_draw+multinomial_l2:nhl_base|0.55|al sel acc 0.645 lift -0.018 lower -0.268 | assess n 102 cov 0.073 acc 0.647 vs best 0.627 primary 0.627 strongest 0.627 avg 0.667
+    top point lift   avg|goals_poisson+goals_glm+multinomial_l2:nhl_base+multinomial_l2:nhl sel acc 0.620 lift 0.033 lower -0.122 | assess n 338 cov 0.241 acc 0.601 vs best 0.624 primary 0.556 strongest 0.624 avg 0.595
+  fold sel [2022, 2023] -> 2024 best multinomial_l2:nhl_base bonf_n 1008 qualified 0
+    highest accuracy unanimous_min|goals_poisson+goals_draw+poisson_draw:nhl_base|0.55|all  sel acc 0.682 lift 0.046 lower -0.141 | assess n 124 cov 0.089 acc 0.637 vs best 0.645 primary 0.605 strongest 0.653 avg 0.669
+    top point lift   unanimous_min|goals_poisson+goals_draw+goals_glm+multinomial_l2:nhl_ba sel acc 0.677 lift 0.048 lower -0.155 | assess n 118 cov 0.084 acc 0.627 vs best 0.653 primary 0.610 strongest 0.653 avg 0.661
+  fold sel [2022, 2023, 2024] -> 2025 best multinomial_l2:nhl_base bonf_n 1008 qualified 0
+    highest accuracy unanimous_min|goals_poisson+goals_draw+poisson_draw:nhl_base|0.55|all  sel acc 0.665 lift 0.016 lower -0.131 | assess n 89 cov 0.064 acc 0.539 vs best 0.596 primary 0.573 strongest 0.584 avg 0.573
+  fold sel [2022, 2023, 2024, 2025] -> 2026 best multinomial_l2:nhl_base bonf_n 1008 qualified 0
+    highest accuracy unanimous_min|goals_poisson+goals_draw+poisson_draw:nhl_base|0.55|all  sel acc 0.637 lift -0.012 lower -0.143 | assess n 32 cov 0.023 acc 0.594 vs best 0.688 primary 0.594 strongest 0.625 avg 0.531
+    top point lift   avg|goals_poisson+multinomial_l2:nhl_base+multinomial_l2:nhl_goalie+po sel acc 0.612 lift 0.008 lower -0.070 | assess n 137 cov 0.098 acc 0.547 vs best 0.562 primary 0.540 strongest 0.562 avg 0.540
+  probability: 4 of 57 subset averages with CI below 0 vs best prior single; top 5:
+    multinomial_l2:nhl_base+poisson_draw:nhl_base: -0.0023 [-0.0035, -0.0011] brier -0.00134 n 5592
+    multinomial_l2:nhl_goalie+poisson_draw:nhl_base: -0.0021 [-0.0033, -0.0009] brier -0.00126 n 5592
+    multinomial_l2:nhl_base+multinomial_l2:nhl_goalie+poisson_draw:nhl_base: -0.0017 [-0.0026, -0.0009] brier -0.00105 n 5592
+    goals_draw+multinomial_l2:nhl_base+multinomial_l2:nhl_goalie+poisson_draw:nhl_base: -0.0015 [-0.0031, -0.0000] brier -0.00085 n 5592
+  route B: 84 of 93 with/without comparisons where adding the candidate lowers log loss (95% CI < 0); top 5:
+    goals_poisson+multinomial_l2:nhl_base vs without multinomial_l2:nhl_base: -0.0138 [-0.0166, -0.0111] per season {2023: -0.0173, 2024: -0.0123, 2025: -0.0093, 2026: -0.0164}
+    goals_poisson+poisson_draw:nhl_base vs without poisson_draw:nhl_base: -0.0136 [-0.0162, -0.0113] per season {2023: -0.0175, 2024: -0.0102, 2025: -0.0094, 2026: -0.0175}
+    goals_poisson+multinomial_l2:nhl_goalie vs without multinomial_l2:nhl_goalie: -0.0134 [-0.0161, -0.0108] per season {2023: -0.0165, 2024: -0.0121, 2025: -0.0097, 2026: -0.0154}
+    goals_glm+poisson_draw:nhl_base vs without poisson_draw:nhl_base: -0.0114 [-0.0137, -0.0091] per season {2023: -0.0146, 2024: -0.0087, 2025: -0.0076, 2026: -0.0147}
+    goals_glm+multinomial_l2:nhl_base vs without multinomial_l2:nhl_base: -0.0113 [-0.0139, -0.0089] per season {2023: -0.0142, 2024: -0.0107, 2025: -0.0070, 2026: -0.0134}
+
+== nhl:spread: members ['goals_poisson', 'goals_draw', 'goals_glm', 'poisson_draw:nhl_base', 'poisson_draw:nhl_goalie'] games 6993 configs 182 evaluated {'full': 1, 'pair': 10, 'triple': 10, 'larger': 5} omitted {}
+  fold sel [2022] -> 2023 best poisson_draw:nhl_goalie bonf_n 822 qualified 0
+    highest accuracy unanimous_min|poisson_draw:nhl_base+poisson_draw:nhl_goalie|0.65|all   sel acc 0.683 lift 0.000 lower -0.252 | assess n 80 cov 0.057 acc 0.713 vs best 0.725 primary 0.550 strongest 0.725 avg 0.713
+    top point lift   unanimous_min|goals_poisson+goals_draw+poisson_draw:nhl_goalie|0.6|all sel acc 0.671 lift 0.019 lower -0.184 | assess n 142 cov 0.101 acc 0.662 vs best 0.718 primary 0.585 strongest 0.718 avg 0.683
+  fold sel [2022, 2023] -> 2024 best poisson_draw:nhl_goalie bonf_n 822 qualified 0
+    highest accuracy stack|goals_poisson+goals_draw+goals_glm+poisson_draw:nhl_base+poisson sel acc 0.710 lift 0.017 lower -0.146 | assess n 175 cov 0.125 acc 0.663 vs best 0.651 primary 0.589 strongest 0.651 avg 0.629
+  fold sel [2022, 2023, 2024] -> 2025 best poisson_draw:nhl_goalie bonf_n 822 qualified 0
+    highest accuracy unanimous_min|poisson_draw:nhl_base+poisson_draw:nhl_goalie|0.65|all   sel acc 0.696 lift -0.008 lower -0.170 | assess n 79 cov 0.057 acc 0.684 vs best 0.696 primary 0.620 strongest 0.696 avg 0.658
+    top point lift   unanimous_min|poisson_draw:nhl_base+poisson_draw:nhl_goalie|0.6|all    sel acc 0.649 lift 0.008 lower -0.071 | assess n 340 cov 0.243 acc 0.609 vs best 0.612 primary 0.576 strongest 0.612 avg 0.621
+  fold sel [2022, 2023, 2024, 2025] -> 2026 best poisson_draw:nhl_goalie bonf_n 822 qualified 0
+    highest accuracy avg|poisson_draw:nhl_base+poisson_draw:nhl_goalie|0.65|all             sel acc 0.696 lift -0.003 lower -0.137 | assess n 45 cov 0.032 acc 0.756 vs best 0.733 primary 0.600 strongest 0.733 avg 0.711
+    top point lift   unanimous_min|poisson_draw:nhl_base+poisson_draw:nhl_goalie|0.6|all    sel acc 0.639 lift 0.006 lower -0.064 | assess n 250 cov 0.179 acc 0.652 vs best 0.672 primary 0.604 strongest 0.672 avg 0.632
+  probability: 0 of 26 subset averages with CI below 0 vs best prior single; top 5:
+  route B: 28 of 30 with/without comparisons where adding the candidate lowers log loss (95% CI < 0); top 5:
+    goals_draw+poisson_draw:nhl_goalie vs without poisson_draw:nhl_goalie: -0.0040 [-0.0049, -0.0031] per season {2023: -0.0049, 2024: -0.0045, 2025: -0.0028, 2026: -0.0038}
+    goals_draw+poisson_draw:nhl_base vs without poisson_draw:nhl_base: -0.0040 [-0.0049, -0.0031] per season {2023: -0.0050, 2024: -0.0044, 2025: -0.0026, 2026: -0.0040}
+    goals_poisson+poisson_draw:nhl_goalie vs without poisson_draw:nhl_goalie: -0.0035 [-0.0045, -0.0026] per season {2023: -0.0038, 2024: -0.0036, 2025: -0.0027, 2026: -0.0040}
+    goals_poisson+poisson_draw:nhl_base vs without poisson_draw:nhl_base: -0.0035 [-0.0045, -0.0026] per season {2023: -0.0039, 2024: -0.0035, 2025: -0.0025, 2026: -0.0042}
+    goals_poisson+goals_draw+poisson_draw:nhl_goalie vs without poisson_draw:nhl_goalie: -0.0026 [-0.0032, -0.0020] per season {2023: -0.0030, 2024: -0.0028, 2025: -0.0019, 2026: -0.0027}
+
+== nhl:team_total_away: members ['goals_poisson', 'goals_draw', 'goals_glm', 'poisson_draw:nhl_base', 'poisson_draw:nhl_goalie'] games 6993 configs 182 evaluated {'full': 1, 'pair': 10, 'triple': 10, 'larger': 5} omitted {}
+  fold sel [2022] -> 2023 best poisson_draw:nhl_base bonf_n 822 qualified 0
+    highest accuracy avg|goals_poisson+goals_draw|0.6|all                                   sel acc 0.648 lift 0.028 lower -0.190 | assess n 175 cov 0.125 acc 0.640 vs best 0.589 primary 0.606 strongest 0.606 avg 0.589
+    top point lift   avg|goals_poisson+goals_draw+poisson_draw:nhl_goalie|0.6|all           sel acc 0.636 lift 0.031 lower -0.176 | assess n 186 cov 0.133 acc 0.602 vs best 0.602 primary 0.608 strongest 0.608 avg 0.575
+  fold sel [2022, 2023] -> 2024 best poisson_draw:nhl_base bonf_n 822 qualified 0
+    highest accuracy unanimous_min|goals_poisson+goals_draw+poisson_draw:nhl_base|0.6|all   sel acc 0.662 lift 0.101 lower -0.115 | assess n 91 cov 0.065 acc 0.593 vs best 0.637 primary 0.538 strongest 0.637 avg 0.604
+  fold sel [2022, 2023, 2024] -> 2025 best poisson_draw:nhl_base bonf_n 822 qualified 0
+    highest accuracy unanimous_min|goals_poisson+goals_draw+poisson_draw:nhl_base|0.6|all   sel acc 0.636 lift 0.038 lower -0.133 | assess n 81 cov 0.058 acc 0.617 vs best 0.630 primary 0.506 strongest 0.630 avg 0.617
+    top point lift   unanimous_min|goals_poisson+poisson_draw:nhl_base|0.6|all              sel acc 0.634 lift 0.055 lower -0.106 | assess n 84 cov 0.060 acc 0.619 vs best 0.643 primary 0.500 strongest 0.643 avg 0.619
+  fold sel [2022, 2023, 2024, 2025] -> 2026 best poisson_draw:nhl_base bonf_n 822 qualified 0
+    highest accuracy unanimous_min|goals_draw+poisson_draw:nhl_base+poisson_draw:nhl_goalie sel acc 0.633 lift 0.046 lower -0.092 | assess n 123 cov 0.088 acc 0.626 vs best 0.577 primary 0.610 strongest 0.577 avg 0.593
+    top point lift   unanimous_min|goals_poisson+poisson_draw:nhl_base+poisson_draw:nhl_goa sel acc 0.627 lift 0.047 lower -0.097 | assess n 121 cov 0.087 acc 0.603 vs best 0.579 primary 0.612 strongest 0.579 avg 0.595
+  probability: 0 of 26 subset averages with CI below 0 vs best prior single; top 5:
+  route B: 28 of 30 with/without comparisons where adding the candidate lowers log loss (95% CI < 0); top 5:
+    goals_glm+poisson_draw:nhl_base vs without poisson_draw:nhl_base: -0.0035 [-0.0045, -0.0026] per season {2023: -0.0064, 2024: -0.0024, 2025: -0.0018, 2026: -0.0035}
+    goals_glm+poisson_draw:nhl_goalie vs without poisson_draw:nhl_goalie: -0.0035 [-0.0044, -0.0025] per season {2023: -0.0063, 2024: -0.0024, 2025: -0.0019, 2026: -0.0034}
+    goals_draw+poisson_draw:nhl_base vs without poisson_draw:nhl_base: -0.0024 [-0.0034, -0.0014] per season {2023: -0.0026, 2024: -0.0034, 2025: -0.0025, 2026: -0.0011}
+    goals_draw+poisson_draw:nhl_goalie vs without poisson_draw:nhl_goalie: -0.0024 [-0.0034, -0.0014] per season {2023: -0.0026, 2024: -0.0034, 2025: -0.0026, 2026: -0.0011}
+    goals_poisson+poisson_draw:nhl_goalie vs without poisson_draw:nhl_goalie: -0.0024 [-0.0033, -0.0014] per season {2023: -0.0021, 2024: -0.0032, 2025: -0.0028, 2026: -0.0014}
+
+== nba:winner: members ['elo', 'logistic', 'logistic_v2', 'efficiency_margin', 'gbt_v1', 'elastic_net:nba_base', 'hetero_linear:nba_base'] games 2643 configs 497 evaluated {'full': 1, 'pair': 21, 'triple': 35, 'larger': 11} omitted {'larger': 52}
+  fold sel [2025] -> 2026 best logistic_v2 bonf_n 4257 qualified 0
+    highest accuracy unanimous_min|elo+logistic_v2|0.8|all                                  sel acc 0.882 lift 0.007 lower -0.160 | assess n 150 cov 0.113 acc 0.840 vs best 0.860 primary 0.827 strongest 0.860 avg 0.847
+    top point lift   unanimous_min|logistic_v2+efficiency_margin|0.7|all                    sel acc 0.841 lift 0.022 lower -0.105 | assess n 313 cov 0.237 acc 0.824 vs best 0.821 primary 0.824 strongest 0.821 avg 0.818
+  probability: 0 of 68 subset averages with CI below 0 vs best prior single; top 5:
+  route B: 4 of 56 with/without comparisons where adding the candidate lowers log loss (95% CI < 0); top 5:
+    efficiency_margin+hetero_linear:nba_base vs without hetero_linear:nba_base: -0.0034 [-0.0065, -0.0003] per season {2026: -0.0034}
+    efficiency_margin+elastic_net:nba_base vs without elastic_net:nba_base: -0.0034 [-0.0067, -0.0002] per season {2026: -0.0034}
+    elo+hetero_linear:nba_base vs without hetero_linear:nba_base: -0.0032 [-0.0064, -0.0001] per season {2026: -0.0032}
+    elo+elastic_net:nba_base vs without elastic_net:nba_base: -0.0030 [-0.0060, -0.0001] per season {2026: -0.0030}
+
+== nba:spread: members ['points_normal', 'ridge_points', 'gbt_points', 'ridge_points@weekly', 'gbt_points@weekly', 'extra_trees:nba_base:normal', 'hetero_linear:nba_base', 'elastic_net:nba_base'] games 2643 configs 499 evaluated {'full': 1, 'pair': 28, 'triple': 35, 'larger': 1} omitted {'triple': 21, 'larger': 161}
+  fold sel [2025] -> 2026 best hetero_linear:nba_base bonf_n 2792 qualified 0
+    highest accuracy avg|ridge_points+hetero_linear:nba_base|0.6|all                        sel acc 0.685 lift 0.000 lower -0.238 | assess n 151 cov 0.114 acc 0.563 vs best 0.550 primary 0.483 strongest 0.550 avg 0.510
+    top point lift   avg|gbt_points+hetero_linear:nba_base|0.55|all                         sel acc 0.603 lift 0.033 lower -0.087 | assess n 586 cov 0.443 acc 0.543 vs best 0.546 primary 0.539 strongest 0.546 avg 0.551
+  probability: 4 of 65 subset averages with CI below 0 vs best prior single; top 5:
+    points_normal+ridge_points@weekly+hetero_linear:nba_base: -0.0017 [-0.0035, -0.0001] brier -0.00166 n 1322
+    points_normal+ridge_points@weekly+elastic_net:nba_base: -0.0017 [-0.0034, -0.0000] brier -0.00160 n 1322
+    points_normal+ridge_points+hetero_linear:nba_base: -0.0016 [-0.0033, -0.0001] brier -0.00156 n 1322
+    points_normal+ridge_points+elastic_net:nba_base: -0.0016 [-0.0032, -0.0001] brier -0.00150 n 1322
+  route B: 9 of 72 with/without comparisons where adding the candidate lowers log loss (95% CI < 0); top 5:
+    gbt_points+hetero_linear:nba_base vs without hetero_linear:nba_base: -0.0038 [-0.0065, -0.0013] per season {2026: -0.0038}
+    gbt_points+elastic_net:nba_base vs without elastic_net:nba_base: -0.0037 [-0.0065, -0.0011] per season {2026: -0.0037}
+    gbt_points@weekly+hetero_linear:nba_base vs without hetero_linear:nba_base: -0.0032 [-0.0060, -0.0005] per season {2026: -0.0032}
+    gbt_points+extra_trees:nba_base:normal vs without extra_trees:nba_base:normal: -0.0032 [-0.0062, -0.0003] per season {2026: -0.0032}
+    gbt_points@weekly+elastic_net:nba_base vs without elastic_net:nba_base: -0.0031 [-0.0059, -0.0003] per season {2026: -0.0031}
+
+== nba:total: members ['points_normal', 'ridge_points', 'gbt_points', 'ridge_points@weekly', 'gbt_points@weekly', 'ngboost:nba_base', 'extra_trees:nba_base:normal', 'hetero_linear:nba_base'] games 2643 configs 499 evaluated {'full': 1, 'pair': 28, 'triple': 35, 'larger': 1} omitted {'triple': 21, 'larger': 161}
+  fold sel [2025] -> 2026 best points_normal bonf_n 2792 qualified 0
+    highest accuracy unanimous_min|ngboost:nba_base+hetero_linear:nba_base|0.65|all         sel acc 0.595 lift 0.130 lower -0.123 | assess n 119 cov 0.090 acc 0.546 vs best 0.580 primary 0.580 strongest 0.546 avg 0.580
+    top point lift   avg|points_normal+ridge_points@weekly+hetero_linear:nba_base|0.6|all   sel acc 0.587 lift 0.135 lower -0.123 | assess n 154 cov 0.116 acc 0.519 vs best 0.584 primary 0.584 strongest 0.584 avg 0.565
+  probability: 0 of 65 subset averages with CI below 0 vs best prior single; top 5:
+  route B: 27 of 72 with/without comparisons where adding the candidate lowers log loss (95% CI < 0); top 5:
+    gbt_points+extra_trees:nba_base:normal vs without extra_trees:nba_base:normal: -0.0057 [-0.0097, -0.0017] per season {2026: -0.0057}
+    ridge_points+extra_trees:nba_base:normal vs without extra_trees:nba_base:normal: -0.0051 [-0.0095, -0.0013] per season {2026: -0.0051}
+    gbt_points@weekly+extra_trees:nba_base:normal vs without extra_trees:nba_base:normal: -0.0050 [-0.0088, -0.0014] per season {2026: -0.0050}
+    ridge_points+ngboost:nba_base vs without ngboost:nba_base: -0.0039 [-0.0075, -0.0009] per season {2026: -0.0039}
+    gbt_points+ngboost:nba_base vs without ngboost:nba_base: -0.0035 [-0.0058, -0.0012] per season {2026: -0.0035}
+
+== nba:team_total_home: members ['points_normal', 'ridge_points', 'gbt_points', 'ridge_points@weekly', 'gbt_points@weekly', 'ngboost:nba_base', 'extra_trees:nba_base:normal', 'hetero_linear:nba_base'] games 2643 configs 499 evaluated {'full': 1, 'pair': 28, 'triple': 35, 'larger': 1} omitted {'triple': 21, 'larger': 161}
+  fold sel [2025] -> 2026 best gbt_points bonf_n 2792 qualified 0
+    highest accuracy avg|gbt_points+gbt_points@weekly|0.65|all                              sel acc 0.647 lift 0.030 lower -0.214 | assess n 185 cov 0.140 acc 0.605 vs best 0.611 primary 0.524 strongest 0.611 avg 0.611
+    top point lift   avg|ridge_points@weekly+ngboost:nba_base+extra_trees:nba_base:normal|0 sel acc 0.627 lift 0.032 lower -0.222 | assess n 136 cov 0.103 acc 0.610 vs best 0.610 primary 0.544 strongest 0.618 avg 0.618
+  probability: 64 of 65 subset averages with CI below 0 vs best prior single; top 5:
+    points_normal+extra_trees:nba_base:normal: -0.0152 [-0.0225, -0.0080] brier -0.01462 n 1322
+    points_normal+extra_trees:nba_base:normal+hetero_linear:nba_base: -0.0141 [-0.0202, -0.0080] brier -0.01350 n 1322
+    points_normal+ridge_points@weekly+extra_trees:nba_base:normal: -0.0140 [-0.0198, -0.0080] brier -0.01338 n 1322
+    points_normal+ridge_points+extra_trees:nba_base:normal: -0.0138 [-0.0197, -0.0078] brier -0.01320 n 1322
+    points_normal+ngboost:nba_base+extra_trees:nba_base:normal: -0.0137 [-0.0203, -0.0073] brier -0.01306 n 1322
+  route B: 20 of 72 with/without comparisons where adding the candidate lowers log loss (95% CI < 0); top 5:
+    gbt_points+extra_trees:nba_base:normal vs without extra_trees:nba_base:normal: -0.0079 [-0.0128, -0.0036] per season {2026: -0.0079}
+    gbt_points@weekly+extra_trees:nba_base:normal vs without extra_trees:nba_base:normal: -0.0067 [-0.0110, -0.0027] per season {2026: -0.0067}
+    gbt_points+hetero_linear:nba_base vs without hetero_linear:nba_base: -0.0053 [-0.0082, -0.0022] per season {2026: -0.0053}
+    gbt_points@weekly+hetero_linear:nba_base vs without hetero_linear:nba_base: -0.0045 [-0.0080, -0.0009] per season {2026: -0.0045}
+    ridge_points+gbt_points+extra_trees:nba_base:normal vs without extra_trees:nba_base:normal: -0.0041 [-0.0074, -0.0008] per season {2026: -0.0041}
+
+== nba:team_total_away: members ['points_normal', 'ridge_points', 'gbt_points', 'ridge_points@weekly', 'gbt_points@weekly', 'hetero_linear:nba_base', 'extra_trees:nba_base:normal', 'elastic_net:nba_base'] games 2643 configs 499 evaluated {'full': 1, 'pair': 28, 'triple': 35, 'larger': 1} omitted {'triple': 21, 'larger': 161}
+  fold sel [2025] -> 2026 best points_normal bonf_n 2792 qualified 0
+    highest accuracy unanimous_min|hetero_linear:nba_base+elastic_net:nba_base|0.65|all     sel acc 0.637 lift 0.157 lower -0.127 | assess n 78 cov 0.059 acc 0.603 vs best 0.564 primary 0.564 strongest 0.590 avg 0.577
+    top point lift   avg|points_normal+ridge_points@weekly+hetero_linear:nba_base|0.6|all   sel acc 0.630 lift 0.160 lower -0.127 | assess n 79 cov 0.060 acc 0.532 vs best 0.570 primary 0.570 strongest 0.570 avg 0.570
+  probability: 0 of 65 subset averages with CI below 0 vs best prior single; top 5:
+  route B: 4 of 72 with/without comparisons where adding the candidate lowers log loss (95% CI < 0); top 5:
+    ridge_points+hetero_linear:nba_base vs without hetero_linear:nba_base: -0.0008 [-0.0014, -0.0002] per season {2026: -0.0008}
+    hetero_linear:nba_base+elastic_net:nba_base vs without hetero_linear:nba_base: -0.0004 [-0.0007, -0.0001] per season {2026: -0.0004}
+    ridge_points+elastic_net:nba_base vs without elastic_net:nba_base: -0.0004 [-0.0007, -0.0000] per season {2026: -0.0004}
+    ridge_points+ridge_points@weekly+hetero_linear:nba_base vs without hetero_linear:nba_base: -0.0003 [-0.0006, -0.0000] per season {2026: -0.0003}
+
+== nba_evening:winner: members ['elo', 'logistic', 'logistic_v2', 'efficiency_margin', 'gbt_v1', 'avail_v1'] games 3667 configs 366 evaluated {'full': 1, 'pair': 15, 'triple': 20, 'larger': 21} omitted {}
+  fold sel [2022] -> 2023 best avail_v1 bonf_n 4126 qualified 0
+    highest accuracy unanimous_min|logistic+gbt_v1|0.8|all                                  sel acc 0.822 lift -0.010 lower -0.235 | assess n 27 cov 0.022 acc 0.926 vs best 0.889 primary 0.815 strongest 0.852 avg 0.889
+    top point lift   majority|elo+logistic+efficiency_margin+avail_v1|None|all              sel acc 0.662 lift 0.003 lower -0.079 | assess n 1129 cov 0.933 acc 0.652 vs best 0.665 primary 0.644 strongest 0.665 avg 0.647
+  fold sel [2022, 2023] -> 2024 best avail_v1 bonf_n 4126 qualified 0
+    highest accuracy unanimous_min|logistic+gbt_v1|0.8|all                                  sel acc 0.844 lift -0.008 lower -0.197 | assess n 87 cov 0.071 acc 0.862 vs best 0.851 primary 0.874 strongest 0.885 avg 0.908
+    top point lift   avg|logistic_v2+gbt_v1+avail_v1|0.6|all                                sel acc 0.702 lift 0.002 lower -0.069 | assess n 770 cov 0.632 acc 0.730 vs best 0.713 primary 0.718 strongest 0.713 avg 0.722
+  probability: 0 of 57 subset averages with CI below 0 vs best prior single; top 5:
+  route B: 31 of 31 with/without comparisons where adding the candidate lowers log loss (95% CI < 0); top 5:
+    efficiency_margin+avail_v1 vs without avail_v1: -0.0084 [-0.0116, -0.0048] per season {2023: -0.0091, 2024: -0.0077}
+    gbt_v1+avail_v1 vs without avail_v1: -0.0071 [-0.0103, -0.0037] per season {2023: -0.0094, 2024: -0.0048}
+    elo+avail_v1 vs without avail_v1: -0.0059 [-0.0090, -0.0029] per season {2023: -0.0073, 2024: -0.0045}
+    elo+efficiency_margin+avail_v1 vs without avail_v1: -0.0046 [-0.0067, -0.0024] per season {2023: -0.0051, 2024: -0.0041}
+    efficiency_margin+gbt_v1+avail_v1 vs without avail_v1: -0.0041 [-0.0061, -0.0020] per season {2023: -0.0048, 2024: -0.0034}
