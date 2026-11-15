@@ -46,7 +46,7 @@ export function Layout() {
   const carried = useCarriedSearch();
   const location = useLocation();
   const label = sport.toUpperCase();
-  const showCompetition = sport === 'soccer' && location.pathname !== '/';
+  const showCompetition = sport === 'soccer' && (location.pathname !== '/' || new URLSearchParams(location.search).has('competition'));
   const fresh = useFreshnessPoll(sport);
   const meta = useApi((s) => (sport === 'nfl' ? api.nflMeta(s) : sport === 'soccer' ? api.soccerMeta(competition, s) : api.meta(sport, s))
     .then((m) => ({ mode: m.mode, last_refresh_at: m.last_refresh_at,

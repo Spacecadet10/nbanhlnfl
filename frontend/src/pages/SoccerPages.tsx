@@ -95,6 +95,12 @@ function AllSoccerMatches() {
     next.set('date', day);
     setParams(next);
   };
+  // The single-competition Game Day keeps the live panel and the goal/corner/double-chance/draw-no-bet markets panel.
+  const openCompetition = (id: string) => {
+    const next = new URLSearchParams(params);
+    next.set('competition', id);
+    setParams(next);
+  };
 
   return <section>
     <PageTitle icon="ball" plain title="Soccer matches" sub="All competitions · kickoff dates are US Eastern"
@@ -107,7 +113,8 @@ function AllSoccerMatches() {
         {unimported > 0 && <p className="small muted">Match data for {unimported} competitions has not been imported for this date.</p>}
         {leagues.length === 0 && <Empty>No stored matches for {calendarDate(date, FULL_DATE)}.</Empty>}
         {leagues.map(slate => <section key={slate.competition_id}>
-          <h2>{slate.matches[0].competition}</h2>
+          <h2>{slate.matches[0].competition}{' '}
+            <button type="button" className="link-btn small" onClick={() => openCompetition(slate.competition_id)}>Competition page and markets</button></h2>
           <ul className="game-grid">{slate.matches.map(match => {
             const forecast = slate.live_forecasts?.[match.match_id];
             const blocker = slate.forecast_blockers?.[match.match_id];
