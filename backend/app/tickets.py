@@ -186,7 +186,7 @@ def game_facts(conn, sport, pick, stamp):
     advance), back-to-back = under scorecard.B2B_BELOW_DAYS (1.5) days, the models' own rest feature (NFL: None, teams
     never play on consecutive days). Line move, the scorecard's definition (scorecard._open, review M2) as of the
     snapshot: `current` = the latest stored quote of the pick's market retrieved by the snapshot (moneyline:
-    coverage.winner_quote); `opening` = the first quote of the SAME sportsbook retrieved by then, at whatever line;
+    odds.winner_quote); `opening` = the first quote of the SAME sportsbook retrieved by then, at whatever line;
     `move_pct_points` = the pick side's de-vigged % at `current` minus the same sportsbook's first quote AT `current`'s
     line (`move_base`), never across lines, 0 = no move; `move_line` = the picked side's line change since the opening
     line (spread: the picked team's handicap). Every timestamp is given."""
@@ -213,7 +213,7 @@ MOVE_LINE_SIGN = {'spread': "+ = the picked team's handicap went up (more points
 
 
 def _line_move(conn, sport, g, row, market, side, stamp):
-    from app import coverage, scorecard
+    from app import odds, scorecard
     pct = lambda p: None if p is None else round(100 * p, 2)
     out = {'state': 'missing', 'note': None, 'provider': None, 'pick_line': row['line'], 'line_source': row['line_source'],
            'opening': None, 'current': None, 'move_pct_points': None, 'move_line': None,
@@ -223,7 +223,7 @@ def _line_move(conn, sport, g, row, market, side, stamp):
     if market == 'reg3':
         return dict(out, note='no regulation three-way bookmaker quotes are collected')
     if market == 'winner':
-        q = coverage.winner_quote(conn, sport, g['game_id'], stamp)
+        q = odds.winner_quote(conn, sport, g['game_id'], stamp)
         if q is None:
             return dict(out, note='no moneyline stored by the snapshot time')
         current = {'retrieved_at': q['retrieved_at'], 'label': q['price_label'], 'line': None,

@@ -130,9 +130,9 @@ def played_previous_day(conn, team_id: str, tipoff_at: str) -> bool:
 # ---- the quote behind a pick's sportsbook % ------------------------------------------------------------------------------
 def _quote(conn, sport: str, pick: dict, side: str) -> dict:
     """The quote the recorded market_prob came from, its American prices and both de-vig values for the picked side.
-    winner: the app's own _winner_quote_prob selection (coverage.winner_quote, latest retrieved <= generated_at);
+    winner: the app's own _winner_quote_prob selection (odds.winner_quote, latest retrieved <= generated_at);
     other markets: the forecast's market_quote_id (coverage.forecast_quote acceptance, as ranked_picks uses)."""
-    from . import coverage, odds
+    from . import odds
     from .threshold_overview import _picked
     out = {'table': None, 'quote_id': None, 'provider': None, 'retrieved_at': None, 'price_label': None, 'prices': None,
            'picked_index': None, 'proportional_from_prices': None, 'power': None, 'power_note': None,
@@ -142,7 +142,7 @@ def _quote(conn, sport: str, pick: dict, side: str) -> dict:
         return out
     market, gid, at = pick['market'], pick['game_id'], pick['generated_at']
     if market == 'winner':
-        q = coverage.winner_quote(conn, sport, gid, at)
+        q = odds.winner_quote(conn, sport, gid, at)
         if q is None:
             out['note'] = 'no moneyline retrieved by generated_at'
             return out
@@ -179,11 +179,11 @@ def _quote(conn, sport: str, pick: dict, side: str) -> dict:
 def _h4(conn, pick: dict, side: str) -> dict:
     """H4 (NBA winner): movement of the displayed picked-side % from the earliest same-provider odds_quotes row retrieved
     <= generated_at ("opening": ties price_label 'open' first, then lowest quote_id) to the app's "now" quote."""
-    from . import coverage
+    from . import odds
     from .threshold_overview import _picked
     out = {'item': 0, 'now_quote_id': None, 'open_quote_id': None, 'provider': None, 'now_pct': None, 'open_pct': None,
            'movement': None, 'note': None}
-    now = coverage.winner_quote(conn, 'nba', pick['game_id'], pick['generated_at'])
+    now = odds.winner_quote(conn, 'nba', pick['game_id'], pick['generated_at'])
     if now is None:
         out['note'] = 'no now quote'
         return out
