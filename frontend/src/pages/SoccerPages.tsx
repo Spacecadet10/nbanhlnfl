@@ -5,12 +5,13 @@ import { useApi } from '../api/useApi';
 import type { ApiState } from '../api/useApi';
 import { useCarriedSearch, useCompetition } from '../components/Selection';
 import { AsyncView, Empty } from '../components/States';
+import { COMPETITION_IDS } from '../components/competition';
 import { gameRoute } from '../components/gameRoute';
 import { emptyCompetition, forecastBanner, forecastStateOf, importHint, liveLoadProblem, matchForecastNote } from '../components/soccerStatus';
 import type { NflCapability } from '../api/types';
 import { TeamLogo } from '../components/TeamLogo';
 import { EmptyForecastState, Icon, MetricCard, PageTitle } from '../components/ui';
-import { calendarDate, dateTime, FULL_DATE, tipoffTime } from '../format';
+import { calendarDate, dateTime, FULL_DATE, shiftDate, tipoffTime } from '../format';
 import { GameDateControl } from './NflPages';
 import { ResearchGameDay, ResearchHistory, ResearchMatchPage, ResearchPerformance } from './SoccerResearch';
 import { SoccerMarketsHistoryPanel, SoccerMarketsPanel } from './SoccerMarkets';
@@ -58,22 +59,73 @@ function learned(m: SoccerMatch) {
  * day, Performance and History show those, labelled Research backtest; otherwise the ESPN fixture screens and the honest
  * "not available" screens. A history match id (of:…) always opens its research page. */
 export function SoccerScreens() {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const [competition] = useCompetition();
-  const research = useApi((s) => api.soccerResearchMeta(competition, s), [competition]);
+  const allMatches = pathname === '/' && !new URLSearchParams(search).has('competition');
+  const research = useApi((s) => allMatches ? Promise.resolve(null) : api.soccerResearchMeta(competition, s), [allMatches, competition]);
+  if (allMatches) return <AllSoccerMatches />;
   let matchId: string | null = null;
   if (pathname.startsWith('/games/')) {
     try { matchId = decodeURIComponent(pathname.slice('/games/'.length)); } catch { matchId = ''; }   // malformed: not found
   }
   if (matchId?.startsWith('of:')) return <ResearchMatchPage id={matchId} />;
   if (research.state.status === 'loading') return <AsyncView state={research.state} retry={research.retry}>{() => null}</AsyncView>;
-  const r = research.state.status === 'success' && research.state.data.runs.length ? research.state.data : null;
+  const r = research.state.status === 'success' && research.state.data?.runs.length ? research.state.data : null;
   if (r && !matchId) {
     if (pathname === '/') return <ResearchGameDay meta={r} />;
     if (pathname.startsWith('/performance')) return <ResearchPerformance meta={r} />;
     if (pathname.startsWith('/history')) return <ResearchHistory meta={r} />;
   }
   return <SoccerEspnScreens researchError={research.state.status === 'error' ? research.state.error : null} />;
+}
+
+function AllSoccerMatches() {
+  const [params, setParams] = useSearchParams();
+  const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  const date = params.get('date') || today;
+  const { state, retry } = useApi(async (signal) => {
+    const responses = await Promise.allSettled(COMPETITION_IDS.map(id => api.soccerMatches(id, date, signal)));
+    const slates = responses.flatMap(response => response.status === 'fulfilled' ? [response.value] : []);
+    if (!slates.length) throw new Error('Could not load soccer matches.');
+    return { slates, unavailable: responses.length - slates.length };
+  }, [date]);
+  const setDate = (day: string | null) => {
+    if (!day) return;
+    const next = new URLSearchParams(params);
+    next.set('date', day);
+    setParams(next);
+  };
+  // The single-competition Game Day keeps the live panel and the goal/corner/double-chance/draw-no-bet markets panel.
+  const openCompetition = (id: string) => {
+    const next = new URLSearchParams(params);
+    next.set('competition', id);
+    setParams(next);
+  };
+
+  return <section>
+    <PageTitle icon="ball" plain title="Soccer matches" sub="All competitions · kickoff dates are US Eastern"
+      right={<GameDateControl date={date} dates={[shiftDate(date, -1), shiftDate(date, 1)]} defaultDate={null} onChange={setDate} />} />
+    <AsyncView state={state} retry={retry}>{({ slates, unavailable }) => {
+      const leagues = slates.filter(slate => slate.matches.length);
+      const unimported = slates.filter(slate => !slate.fetched).length;
+      return <>
+        {unavailable > 0 && <p className="notice">Could not load {unavailable} competitions. <button type="button" className="link-btn" onClick={retry}>Retry</button></p>}
+        {unimported > 0 && <p className="small muted">Match data for {unimported} competitions has not been imported for this date.</p>}
+        {leagues.length === 0 && <Empty>No stored matches for {calendarDate(date, FULL_DATE)}.</Empty>}
+        {leagues.map(slate => <section key={slate.competition_id}>
+          <h2>{slate.matches[0].competition}{' '}
+            <button type="button" className="link-btn small" onClick={() => openCompetition(slate.competition_id)}>Competition page and markets</button></h2>
+          <ul className="game-grid">{slate.matches.map(match => {
+            const forecast = slate.live_forecasts?.[match.match_id];
+            const blocker = slate.forecast_blockers?.[match.match_id];
+            const note = forecast ? `Forecast: ${pct(forecast.probabilities.home)} home · ${pct(forecast.probabilities.draw)} draw · ${pct(forecast.probabilities.away)} away`
+              : blocker ? blockerNote(blocker) : 'No recorded forecast for this match.';
+            return <SoccerCard key={match.match_id} match={match} date={date} note={note} />;
+          })}</ul>
+        </section>)}
+      </>;
+    }}</AsyncView>
+  </section>;
 }
 
 function SoccerEspnScreens({ researchError }: { researchError: string | null }) {

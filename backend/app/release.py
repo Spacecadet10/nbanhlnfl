@@ -172,6 +172,9 @@ def migration_context(sport: str, info: Optional[dict] = None) -> list[str]:
     return problems
 
 
+REFUSAL_REPEAT = {"tick": 15 * 60}   # seconds: a once-a-minute command records a repeated refusal at most this often
+
+
 def record_refusal(sport: str, cmd: str, info: dict) -> Optional[int]:
     """A failed job_runs row for a refused scheduled command; never migrates, never raises."""
     from . import jobs
@@ -182,6 +185,12 @@ def record_refusal(sport: str, cmd: str, info: dict) -> Optional[int]:
         try:
             if not db.has_table(conn, "job_runs"):
                 return None
+            if cmd in REFUSAL_REPEAT:
+                from datetime import datetime, timedelta, timezone
+                since = (datetime.now(timezone.utc) - timedelta(seconds=REFUSAL_REPEAT[cmd])).strftime("%Y-%m-%dT%H:%M:%SZ")
+                if conn.execute("SELECT 1 FROM job_runs WHERE job = ? AND status = 'failed' AND started_at > ? "
+                                "AND json_extract(detail, '$.command') = ?", (GUARDED.get(cmd, "odds"), since, cmd)).fetchone():
+                    return None
             run_id = jobs._start(conn, GUARDED.get(cmd, "odds"))
             return jobs._finish(conn, run_id, "failed", 0, {"reason": "release guard refused the scheduled command",
                                                             "command": cmd, "release_check": info})["run_id"]

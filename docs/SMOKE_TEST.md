@@ -1,3 +1,13 @@
+# Smoke test — post-reset rebuild (real data), Nov 15, 2026
+Tester: Devin on the owner's Mac (macOS arm64). Code e26474f (main 877ec1e + recovery commit).
+- `backend/.venv/bin/python -m pytest -q tests/test_best_pick_record.py tests/test_coverage.py tests/test_nfl_activation_compat.py tests/test_scorecard.py tests/test_ticket_shape.py tests/test_tickets.py tests/test_winner_history.py tests/test_espn_odds_history.py` (NBA_DATA_DIR=~/nba-predictor-dev-data) → 301 passed, 1 warning, 161 s.
+- `npm run test:unit` → 27 passed. `npm run build` → OK.
+- `python3 scripts/check_project.py` and `--ready` → FAIL (exit 1), only on four committed files flagged as possible duplicates: docs/preregistration/best-pick-2026-11-11-v2/v3/v4.md, docs/evidence/soccer-markets-2026-11-09/review/focused-final.txt. Pre-existing in main; not changed here. `--ready` therefore stopped before its own test run.
+- Full pytest suite: not run to completion (stopped at 3% after ~6 min; ~hours at that rate while live jobs share the CPU).
+- curl via :4173 proxy: /api/health ok (8100, 8101); /api/meta nba/nhl ok; /api/games nba 2026-11-15 → 9 games; nhl → 5 games; /api/nfl/games → 12 games; /api/soccer/meta → 25 competitions; /api/soccer/matches eng.1 2026-11-21 → matches.
+- Browser (headless Chrome screenshots, 1440×1000): NBA, NHL, NFL, Soccer Game Day pages render real data. Phone width (390×844): NBA page captured but content is clipped on the right; headless Chrome's minimum window width may cause this, so phone layout is UNVERIFIED.
+- Gaps: no Telegram/TheRundown credentials; old forecast ledger not recoverable.
+
 # Smoke test — milestone 1 (demo data)
 
 Date: 2026-09-30. Tester: Claude (Opus 5.5) via Claude-in-Chrome on macOS Chrome.

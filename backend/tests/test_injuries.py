@@ -103,6 +103,7 @@ def down(calls):
 
 
 def test_outage_never_exceeds_the_run_slot_or_day_budgets(conn, monkeypatch):
+    monkeypatch.setattr(injuries, "QUARTER_WINDOW_BEFORE_TIPOFF", timedelta(0))   # :00/:30 retry rules only (quarters: below)
     now = datetime(2026, 10, 20, 21, 31, tzinfo=UTC)     # 48 slots due
     calls = []
     first = collect(conn, down(calls), now=now)
@@ -403,3 +404,49 @@ def test_missing_older_reports_never_delay_the_newest_one(conn, monkeypatch):
         return ok(pdf(name)) if name == NAMES[2] else Response(404, None, None, None)
     out = collect(conn, fetch)
     assert calls == [NAMES[2]] and out["stored"] == [NAMES[2]] and out["deferred"] == 2
+
+
+# ---- Nov 11: the quarter-hour reports in the hours before games ------------------------------------------------------
+
+def test_quarter_hour_reports_are_due_only_in_the_six_hours_before_a_tipoff(conn):
+    """Owner, Nov 11: the official report is published every 15 minutes; fetch every published one in the hours before
+    games. :00/:30 keep their 36 h / 6 h window; :15/:45 only when a game tips off within six hours after the slot."""
+    due = injuries.due_slots(conn, datetime(2026, 10, 19, 0, 0, tzinfo=UTC), datetime(2026, 10, 22, 0, 0, tzinfo=UTC))
+    quarter = [s.at for s in due if s.at[14:16] in ("15", "45")]
+    assert (quarter[0], quarter[-1], len(quarter)) == ("2026-10-20T17:15:00Z", "2026-10-20T22:45:00Z", 12)
+    assert "Injury-Report_2026-10-20_06_45PM.pdf" in [s.name for s in due]
+    half = [s.at for s in due if s.at[14:16] in ("00", "30")]
+    assert (half[0], half[-1]) == ("2026-10-19T11:00:00Z", "2026-10-21T04:30:00Z")   # unchanged
+    assert [s.at for s in due] == sorted(s.at for s in due) and len({s.name for s in due}) == len(due)
+
+
+def test_missing_quarter_files_never_starve_the_evening_reports(conn):
+    """Review MEDIUM, Nov 11: with every :15/:45 file missing (403) and an early-afternoon game, a whole day of 15-minute
+    runs must still store every evening :00/:30 report on time; a missing quarter file costs one request."""
+    ingest_events(conn, [event("9002", "2026-10-20T17:00:00Z", "3", "4"),          # 1 pm ET matinees and evening games
+                         event("9003", "2026-10-21T02:30:00Z", "5", "6"),
+                         event("9004", "2026-10-19T17:00:00Z", "7", "8"),
+                         event("9005", "2026-10-19T23:00:00Z", "9", "10"),
+                         event("9006", "2026-10-20T02:30:00Z", "11", "12")], "2026-10-18T12:00:00Z")
+    def fetch(name):
+        return Response(403, None, None, 0, b"") if name[-8:-6] in ("15", "45") else ok(pdf(name))
+    t = datetime(2026, 10, 18, 12, 2, tzinfo=UTC)
+    while t <= datetime(2026, 10, 21, 3, 0, tzinfo=UTC):
+        collect(conn, fetch, now=t)
+        t += timedelta(minutes=15)
+    rows = conn.execute("SELECT file_name, slot_at, MIN(completed_at) done, COUNT(*) n FROM injury_report_attempts "
+                        "WHERE purpose='collect' GROUP BY file_name").fetchall()
+    quarter = [r for r in rows if r["slot_at"][14:16] in ("15", "45")]
+    assert quarter and all(r["n"] == 1 for r in quarter)
+    evening = [r for r in rows if "2026-10-20T21:00:00Z" <= r["slot_at"] <= "2026-10-21T02:30:00Z" and r["slot_at"][14:16] in ("00", "30")]
+    assert len(evening) == 12 and all((injuries._parse(r["done"]) - injuries._parse(r["slot_at"])).total_seconds() <= 20 * 60
+                                      for r in evening)
+    day = conn.execute("SELECT COUNT(*) FROM injury_report_attempts WHERE started_at > '2026-10-20T03:00:00Z'").fetchone()[0]
+    assert day <= injuries.MAX_ATTEMPTS_PER_DAY
+
+
+def test_the_job_runs_two_minutes_after_every_quarter_hour():
+    import plistlib
+    from pathlib import Path
+    plist = plistlib.loads((Path(__file__).resolve().parents[2] / "scripts/launchd/com.nba-predictor.injuries.plist").read_bytes())
+    assert sorted(i["Minute"] for i in plist["StartCalendarInterval"]) == [2, 17, 32, 47]

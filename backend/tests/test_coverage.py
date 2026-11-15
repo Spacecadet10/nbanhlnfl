@@ -466,3 +466,24 @@ def test_a_game_reforecast_for_its_new_date_is_graded_from_the_new_forecast_in_b
     (w,) = p.predictions("live", None, None, None, 50, None, policy="pregame").predictions
     hist["winner"] = "void" if w.void else "win" if w.correct else "loss"
     assert cells == hist and "void" not in cells.values()
+
+
+def test_a_slow_research_step_after_the_start_does_not_lose_the_games_canonical_forecast(game, monkeypatch):
+    """Nov 10 investigation: on Oct 28 run 1886 wrote the primary forecasts at 01:53Z, but coverage.record ran only at
+    02:34Z after the research/pool/tracking steps, when the games had started, and recorded nothing for them (3 NHL games
+    lost). The canonical record must be taken right after the primary and market steps, before the research work."""
+    from app import db, near_tipoff
+    jobs = _no_network(monkeypatch)
+    clock = {"now": CYCLE_AT}
+    for module in (db, near_tipoff, jobs):
+        if hasattr(module, "utc_now"):
+            monkeypatch.setattr(module, "utc_now", lambda: clock["now"])
+    real = jobs.research_forecasts
+
+    def slow_research(*a, **k):
+        clock["now"] = "2026-10-12T23:59:00Z"          # the research steps finish after the game has started
+        return real(*a, **k)
+    monkeypatch.setattr(jobs, "research_forecasts", slow_research)
+    out = jobs.predict_now(game)
+    assert out["coverage"]["games"] >= 1 and out["coverage"]["forecast"] >= 1, out["coverage"]
+    assert game.execute("SELECT COUNT(*) FROM game_forecasts WHERE game_id=? AND status='forecast'", (GID,)).fetchone()[0] >= 1

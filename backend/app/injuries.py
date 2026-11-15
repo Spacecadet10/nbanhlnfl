@@ -21,14 +21,18 @@ from .live import ELIGIBLE_TYPES
 from .sources import nba_injury
 
 SLOT_MINUTES = 30                                 # the :00 and :30 reports
+QUARTER_MINUTES = 15                              # the :15 and :45 reports (owner, Nov 11: every published report before games)
 LOOKBACK = timedelta(hours=24)                    # unfinished slots this old are still collected (late)
-WINDOW_BEFORE_TIPOFF = timedelta(hours=36)        # a slot is due if an eligible game tips off within this time after it
+WINDOW_BEFORE_TIPOFF = timedelta(hours=36)        # a :00/:30 slot is due if an eligible game tips off within this time after it
 WINDOW_AFTER_TIPOFF = timedelta(hours=6)          # ... or tipped off within this time before it
+QUARTER_WINDOW_BEFORE_TIPOFF = timedelta(hours=6) # a :15/:45 slot only if a game tips off within this time after it
 PUBLISH_MARGIN = timedelta(seconds=60)            # a slot is not requested until this long after its time
 LATE_AFTER = timedelta(minutes=30)
 MAX_ATTEMPTS_PER_RUN = 8
 MAX_ATTEMPTS_PER_SLOT = 4
-MAX_ATTEMPTS_PER_DAY = 120
+MAX_ATTEMPTS_PER_QUARTER_SLOT = 1                 # a missing :15/:45 file costs one request (review MEDIUM, Nov 11): the next
+                                                  # report is 15 minutes away, and retries must never starve the evening ones
+MAX_ATTEMPTS_PER_DAY = 160                        # ~67 reports on a full game day (Nov 11: :15/:45 added) + retries
 MAX_ATTEMPTS_PER_SLOT_PER_RUN = 2
 OVERWRITE_CHECKS_PER_DAY = 2
 OVERWRITE_CHECK_AGE = (timedelta(hours=24), timedelta(hours=48))
@@ -50,34 +54,43 @@ def _fmt(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).strftime(FMT)
 
 
-def slots_between(start: datetime, end: datetime) -> list[Slot]:
-    """Half-hour slots with start < time <= end, oldest first. When clocks go back, the repeated Eastern hour maps two
-    instants to one file name; the first instant is kept. When clocks go forward, the skipped hour has no slot."""
+def slots_between(start: datetime, end: datetime, step: int = SLOT_MINUTES) -> list[Slot]:
+    """Slots every `step` minutes with start < time <= end, oldest first. When clocks go back, the repeated Eastern hour
+    maps two instants to one file name; the first instant is kept. When clocks go forward, the skipped hour has no slot."""
     first = start.astimezone(timezone.utc).replace(second=0, microsecond=0)
-    first = first.replace(minute=first.minute - first.minute % SLOT_MINUTES) + timedelta(minutes=SLOT_MINUTES)
+    first = first.replace(minute=first.minute - first.minute % step) + timedelta(minutes=step)
     out, seen, t = [], set(), first
     while t <= end:
         name = nba_injury.file_name(t)
         if name not in seen:
             seen.add(name)
             out.append(Slot(_fmt(t), name))
-        t += timedelta(minutes=SLOT_MINUTES)
+        t += timedelta(minutes=step)
     return out
 
 
 def due_slots(conn: sqlite3.Connection, start: datetime, end: datetime) -> list[Slot]:
-    """Slots inside a game window: an eligible game (not postponed or canceled) tips off within WINDOW_BEFORE_TIPOFF
-    after the slot or tipped off within WINDOW_AFTER_TIPOFF before it. No game nearby means no request."""
+    """Slots inside a game window: a :00/:30 slot when an eligible game (not postponed or canceled) tips off within
+    WINDOW_BEFORE_TIPOFF after it or tipped off within WINDOW_AFTER_TIPOFF before it; a :15/:45 slot only when a game
+    tips off within QUARTER_WINDOW_BEFORE_TIPOFF after it. No game nearby means no request."""
     tipoffs = [_parse(r[0]) for r in conn.execute(
         f"SELECT tipoff_at FROM games WHERE status NOT IN ('postponed', 'canceled') AND tipoff_at > ? AND tipoff_at <= ? "
         f"AND season_type IN ({', '.join('?' * len(ELIGIBLE_TYPES))})",
         (_fmt(start - WINDOW_AFTER_TIPOFF), _fmt(end + WINDOW_BEFORE_TIPOFF), *ELIGIBLE_TYPES))]
     out = []
-    for s in slots_between(start, end):
+    for s in slots_between(start, end, QUARTER_MINUTES):
         t = _parse(s.at)
-        if any(t - WINDOW_AFTER_TIPOFF < tip <= t + WINDOW_BEFORE_TIPOFF for tip in tipoffs):
+        if t.minute % SLOT_MINUTES == 0:
+            if any(t - WINDOW_AFTER_TIPOFF < tip <= t + WINDOW_BEFORE_TIPOFF for tip in tipoffs):
+                out.append(s)
+        elif any(t < tip <= t + QUARTER_WINDOW_BEFORE_TIPOFF for tip in tipoffs):
             out.append(s)
     return out
+
+
+def slot_limit(slot: Slot) -> int:
+    """Lifetime attempts a slot may use: four for :00/:30, one for :15/:45."""
+    return MAX_ATTEMPTS_PER_SLOT if _parse(slot.at).minute % SLOT_MINUTES == 0 else MAX_ATTEMPTS_PER_QUARTER_SLOT
 
 
 def _slot_state(conn: sqlite3.Connection, name: str) -> tuple[bool, int]:
@@ -95,7 +108,7 @@ def plan(conn: sqlite3.Connection, now: datetime) -> dict:
         stored, attempts = _slot_state(conn, s.name)
         if stored:
             out["stored"] += 1
-        elif attempts >= MAX_ATTEMPTS_PER_SLOT:
+        elif attempts >= slot_limit(s):
             out["given_up"].append(s)
         else:
             out["pending"].append(s)
@@ -203,7 +216,7 @@ def run(conn: sqlite3.Connection, *, now: Optional[datetime] = None, dry_run: bo
         _, lifetime = _slot_state(conn, slot.name)
         tries, outcome = 0, None
         while outcome not in ("stored", "not_available") and tries < MAX_ATTEMPTS_PER_SLOT_PER_RUN \
-                and lifetime + tries < MAX_ATTEMPTS_PER_SLOT and budget > 0:
+                and lifetime + tries < slot_limit(slot) and budget > 0:
             spend(BACKOFF_SECONDS[min(tries - 1, len(BACKOFF_SECONDS) - 1)] if tries else 0)
             outcome = _download(conn, slot, "collect", fetch, clock)
             tries += 1
@@ -293,7 +306,7 @@ def summary(conn: sqlite3.Connection, now: Optional[datetime] = None, days: int 
             day["stored"] += 1
             day["stored_late"] += row["late"]
             day["lags"].append((_parse(row["completed_at"]) - _parse(s.at)).total_seconds() / 60)
-        elif _slot_state(conn, s.name)[1] >= MAX_ATTEMPTS_PER_SLOT:
+        elif _slot_state(conn, s.name)[1] >= slot_limit(s):
             day["given_up"] += 1
         else:
             day["not_stored_yet"] += 1

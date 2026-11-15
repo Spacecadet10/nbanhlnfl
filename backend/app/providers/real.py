@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 import json
 
-from .. import agreement, backtest, config, coverage, live, market_live, markets, metrics, near_tipoff, sports
+from .. import agreement, backtest, config, coverage, live, market_live, markets, metrics, near_tipoff, odds, sports
 from .. import db
 from ..db import utc_now
 from ..live import LATEST_LIVE_SQL
@@ -783,7 +783,7 @@ class RealProvider:
     def _winner_quote_prob(self, game_id: str, at: str) -> Optional[float]:
         """De-vigged home probability of the latest moneyline retrieved no later than `at` (a quote the forecast could
         have seen), or None."""
-        q = coverage.winner_quote(self.conn, self.sport, game_id, at)
+        q = odds.winner_quote(self.conn, self.sport, game_id, at)
         return None if q is None else q["p_home"]
 
     # ---- canonical forecast (game_forecasts; one record per game and market) -------------------------------------------

@@ -129,10 +129,10 @@ def _side_of(market: str, row) -> str:
 def _book(conn, sport: str, g, rec: dict) -> tuple:
     """((state, note), quote fields) of the quote the pick could see: winner = latest moneyline retrieved <= T; other
     markets = the quote the forecast used (coverage.forecast_quote: same game, market and line, retrieved <= T)."""
-    from . import coverage
+    from . import coverage, odds
     side, market = rec["side"], rec["market"]
     if market == "winner":
-        q = coverage.winner_quote(conn, sport, g["game_id"], rec["generated_at"])
+        q = odds.winner_quote(conn, sport, g["game_id"], rec["generated_at"])
         if q is None:
             return _state(False, "no moneyline retrieved by the forecast time"), {}
         p = q["p_home"] if side == "a" else 1 - q["p_home"]
@@ -152,9 +152,9 @@ def _first_quote(conn, sport: str, game_id: str, market: str, at: str, *, provid
                  line: Optional[float] = None) -> Optional[dict]:
     """The first quote of this game and market retrieved by `at` (the book's own 'open' price of that retrieval first), as
     {retrieved_at, label, line, price: {a, mid, b}, devig: (a, mid, b)}; only `provider`'s and only at `line` when given."""
-    from . import coverage
+    from . import coverage, odds
     if market == "winner":
-        q = coverage.winner_quote(conn, sport, game_id, at, earliest=True, provider=provider)
+        q = odds.winner_quote(conn, sport, game_id, at, earliest=True, provider=provider)
         return None if q is None else {"retrieved_at": q["retrieved_at"], "label": q["price_label"], "line": None,
                                        "provider": q["provider"], "price": {"a": q["price_home"], "b": q["price_away"]},
                                        "devig": (q["p_home"], None, 1 - q["p_home"])}
