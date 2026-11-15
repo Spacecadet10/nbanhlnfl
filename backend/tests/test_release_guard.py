@@ -152,3 +152,22 @@ def test_the_pin_line_is_logged_once_per_process(tmp_path, store, monkeypatch, c
     release.check("nhl", root=root)
     release.check("nhl", root=root)
     assert capsys.readouterr().err.count("release pin (not a refusal)") == 1
+
+
+def test_a_refused_tick_is_recorded_at_most_every_15_minutes(tmp_path, store, monkeypatch, capsys):
+    """tick runs every minute: a lasting refusal must not write 1,440 failed rows a day (review P2-3); the JSON line
+    is still printed every time."""
+    monkeypatch.setenv(release.GUARD_ENV, "1")
+    monkeypatch.setenv(release.ROOT_ENV, str(tmp_path / "not-this-checkout"))
+    for _ in range(3):
+        assert cli.main(["--sport", "nhl", "tick"]) == 1
+    outs = [json.loads(line) for line in capsys.readouterr().out.strip().splitlines()]
+    assert len(outs) == 3 and all(o["status"] == "failed" for o in outs)
+    assert outs[0]["run_id"] and outs[1]["run_id"] is None and outs[2]["run_id"] is None
+    conn = db.connect(sport="nhl")
+    rows = conn.execute("SELECT job, detail FROM job_runs").fetchall()
+    assert len(rows) == 1 and rows[0]["job"] == "odds" and json.loads(rows[0]["detail"])["command"] == "tick"
+    conn.execute("UPDATE job_runs SET started_at = '2000-01-01T00:00:00Z'")
+    conn.commit()
+    assert cli.main(["--sport", "nhl", "tick"]) == 1
+    assert json.loads(capsys.readouterr().out)["run_id"]
