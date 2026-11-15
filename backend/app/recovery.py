@@ -29,7 +29,8 @@ def missing(conn, game, market):
     return not found
 
 
-def recover(conn, now=None, limit=12):
+def recover(conn, now=None, limit=12, since=None):
+    """`since`: an earlier first start date (the explicit `recover` command); otherwise the recording era start."""
     now = now or utc_now()
     out = {'status': 'success', 'created': 0, 'errors': {}, 'note': NOTE}
     if not exists(conn):
@@ -38,6 +39,8 @@ def recover(conn, now=None, limit=12):
     # Start at the observed two-hour recording era, never backfill the historical database.
     start = conn.execute("SELECT min(at) FROM (SELECT min(generated_at) AS at FROM near_tipoff_forecasts "
                          "UNION ALL SELECT min(started_at) AS at FROM job_runs WHERE job='near_tipoff')").fetchone()[0]
+    if since and (not start or since < start):
+        start = since
     if not start:
         return {**out, 'reason': 'no two-hour recording start in this store'}
     games = conn.execute(f"SELECT * FROM games WHERE tipoff_at>=? AND tipoff_at<=? AND status IN ('scheduled','in_progress','final') "

@@ -4,7 +4,8 @@
 - launchd jobs installed from scripts/launchd with paths rewritten (Desktop folder, Homebrew node): api, api-delivery, web, keep-awake, odds, injuries, daily, nba-markets, nhl-daily, nhl-odds, nfl-live, soccer-live, scorecard. Soccer cycle runs a path-rewritten copy at `~/nba-predictor-jobs/soccer_live_cycle.sh`. All exit 0 on first runs.
 - Not installed (need credentials or review): telegram, ledger-snapshot (Telegram), rundown-odds (TheRundown key), dratings-capture, early-board, closing-value, weekly-report, adaptive-train.
 - The `release` branch (0ccdd76) cannot run against the rebuilt stores (schema 40 vs its 31). Its box-score, coverage-ordering and :15/:45 injury-report fixes are cherry-picked here; the refused-tick rate limit is ported from 7a83e27; 6d55e00 is superseded by main's own refresh/tick code. Injuries launchd job now also runs at :17/:47. 429 backend tests (13 files) passed.
-- Next: merge PR #2 into main; restore Telegram/TheRundown credentials; review the nba-predictor-sprint1 snapshot (46285e1).
+- Reconstructed this season after the rebuild (`recover --since`, run from ~/nba-predictor-live with the guard): NBA 188 games since 2026-10-20, NHL 325 since 2026-09-29, in `recovered_forecasts` (shown under Game Day > How we're doing; game cards stay live-only by user decision). NFL/soccer have no reconstruction engine. Telegram chat export requested from the user for a separate import; not yet received.
+- Next: restore Telegram/TheRundown credentials; review the nba-predictor-sprint1 snapshot (46285e1).
 
 ## Post-reset local recovery — Nov 15, 2026
 - Main at 877ec1e includes the recovered delivery code. Local changes make Soccer Game Day show all stored competitions and move the moneyline quote helper out of the sealed NFL files. The verified Nov 2 activation is restored in the rebuilt local store.
