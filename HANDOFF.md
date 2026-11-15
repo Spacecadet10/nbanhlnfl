@@ -1,3 +1,11 @@
+## Post-reset rebuild and scheduled jobs — Devin, Nov 15, 2026
+- Rebuilt stores (from the other chat's runtime copy, SQLite backup API, integrity ok) are in `~/Desktop/nbanhlnfl/data`; raw/research/assets copied too. Old live forecast ledger and old odds history are not recoverable (no Time Machine/iCloud/external/snapshot copy).
+- Pre-reset layout restored: `~/nba-predictor-live` (forecast jobs, research API 8100) and `~/nba-predictor-delivery` (API 8101, web 4173, NFL, soccer, scorecard), both clean worktrees at e26474f with pinned release commit, Python 3.12 venvs, `NBA_DATA_DIR=~/Desktop/nbanhlnfl/data`. Guarded `migrate` applied nothing (stores already at schema 40); `release-check` nba/nhl: no problems in both checkouts.
+- launchd jobs installed from scripts/launchd with paths rewritten (Desktop folder, Homebrew node): api, api-delivery, web, keep-awake, odds, injuries, daily, nba-markets, nhl-daily, nhl-odds, nfl-live, soccer-live, scorecard. Soccer cycle runs a path-rewritten copy at `~/nba-predictor-jobs/soccer_live_cycle.sh`. All exit 0 on first runs.
+- Not installed (need credentials or review): telegram, ledger-snapshot (Telegram), rundown-odds (TheRundown key), dratings-capture, early-board, closing-value, weekly-report, adaptive-train.
+- The `release` branch (0ccdd76, pre-reset forecast-job version) cannot run against the rebuilt stores: store schema 40 vs its 31. Its 7 commits (15-minute injury reports, box-score retry, activity-aware refresh) need a reviewed merge into main.
+- Next: merge `release` fixes into main with tests; restore Telegram/TheRundown credentials; review the nba-predictor-sprint1 snapshot (46285e1).
+
 ## Post-reset local recovery — Nov 15, 2026
 - Main at 877ec1e includes the recovered delivery code. Local changes make Soccer Game Day show all stored competitions and move the moneyline quote helper out of the sealed NFL files. The verified Nov 2 activation is restored in the rebuilt local store.
 - Verified Soccer Game Day showed UEFA Nations League and other competitions in the browser. Frontend build and eight selection/router tests passed. Fifty NFL activation/scorecard/best-pick backend tests and three ticket rendering/mock delivery tests passed. NFL returned 12 games and 35 forecast records across seven games in the first window.
