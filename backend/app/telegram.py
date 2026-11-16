@@ -268,7 +268,7 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
                     comparison = f"App {displayed_percentage(pick['card_app_prob'])}% / " + comparison
                 if pick.get('card_comparison_basis'):
                     comparison += f" ({pick['card_comparison_basis']})"
-                lines += [f"<b>{escape(pick['market_title'])}</b>", f"{escape(pick['pick_label'])} · {comparison} · {escape(provenance)}",
+                lines += [f"<b>{escape(pick['market_title'])}</b>", f"{escape(pick['pick_label'])} · {escape(comparison)} · {escape(provenance)}",
                           f"<b>Model {displayed_percentage(pick['probability'])}%</b> · Exact-% history unavailable", '']
             continue   # absent history must not be manufactured as a zero record
         if hasattr(h, 'model_dump'):
@@ -452,7 +452,7 @@ def deliver(bot, conn, chat_id, key, text, now, *, photo=None, caption=None, sen
 
 
 def run_once(bot, settings, conn, *, now=None):
-    from . import db, freshness
+    from . import additional_odds, db, freshness
     from .providers.real import RealProvider
     now = now or datetime.now(timezone.utc)
     if not controls(bot, settings, conn):
@@ -490,6 +490,12 @@ def run_once(bot, settings, conn, *, now=None):
                         pick['card_market_prob'] = tickets.card_market_prob(source, pick)
                         if cached_odds is not None and pick['card_market_prob'] is None and pick['market'] == 'reg3':
                             pick.update(rundown_odds.regulation_card_comparison(pick, cached_odds, now))
+                    if pick['market'] in ('team_total_home', 'team_total_away'):
+                        history = pick.get('percentage_history')
+                        model_side = history.get('side') if isinstance(history, dict) else getattr(history, 'side', None)
+                        side = {'a': 'over', 'b': 'under'}.get(model_side)
+                        pick.update(additional_odds.comparison(sport, pick, report['as_of'], side=side,
+                                                               line=pick['quote_check']['line_at_forecast']))
                 tickets.attach_lineups(source, sport, report['picks'], report['as_of'])
                 tickets.attach_facts(source, sport, report['picks'], report['as_of'])
             finally:
@@ -519,6 +525,9 @@ def run_once(bot, settings, conn, *, now=None):
                 for pick in report['picks']:
                     pick.setdefault('strong', False)
                     pick.setdefault('game_rank', None)
+                    if pick.get('card_market_prob') is None:
+                        pick.update(additional_odds.comparison('soccer', pick, report['as_of'],
+                                                               side=pick.get('side'), line=pick.get('line')))
                 outcomes = Counter()
                 batches = message_batches(report, settings['TELEGRAM_CHAT_ID'], context_selection=True)
                 for key, text in batches:
