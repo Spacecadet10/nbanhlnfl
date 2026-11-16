@@ -100,6 +100,16 @@ class store_lock:
         return False
 
 
+def migration_paths(sport: Optional[str] = None):
+    paths = sorted(MIGRATIONS_DIR.glob("[0-9][0-9][0-9][0-9]_*.sql"))
+    return [p for p in paths if sport == "soccer" or p.name != "0041_soccer_pregame_window.sql"]
+
+
+def _migration_sport(conn: sqlite3.Connection) -> Optional[str]:
+    main = next((row[2] for row in conn.execute("PRAGMA database_list") if row[1] == "main"), "")
+    return store_sport(conn) or ("soccer" if Path(main).name == "soccer.sqlite" else None)
+
+
 def migrate(conn: sqlite3.Connection, upto: Optional[int] = None, *, explicit: bool = False) -> list[str]:
     """Applies pending migrations in order (optionally only through version `upto`); returns the names applied.
     A store in a protected live data folder is migrated only by the explicit `migrate` command (`explicit`) in the
@@ -109,7 +119,7 @@ def migrate(conn: sqlite3.Connection, upto: Optional[int] = None, *, explicit: b
     conn.execute("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)")
     done = {r["version"] for r in conn.execute("SELECT version FROM schema_migrations")}
     applied = []
-    for f in sorted(MIGRATIONS_DIR.glob("[0-9][0-9][0-9][0-9]_*.sql")):
+    for f in migration_paths(_migration_sport(conn)):
         version = int(f.name[:4])
         if version in done or (upto is not None and version > upto):
             continue
@@ -142,7 +152,7 @@ def _refuse_protected(conn: sqlite3.Connection, upto: Optional[int], explicit: b
     if not config.protected_path(path):        # links followed: a link into the live folder is protected too
         return
     done = {r[0] for r in conn.execute("SELECT version FROM schema_migrations")} if has_table(conn, "schema_migrations") else set()
-    pending = [f.name for f in sorted(MIGRATIONS_DIR.glob("[0-9][0-9][0-9][0-9]_*.sql"))
+    pending = [f.name for f in migration_paths(_migration_sport(conn))
                if int(f.name[:4]) not in done and (upto is None or int(f.name[:4]) <= upto)]
     if not pending:
         return

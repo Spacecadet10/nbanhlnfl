@@ -672,7 +672,8 @@ def soccer_section(now):
         if not soccer_live.has_tables(conn):
             return {'error': 'forecasts_unavailable', 'reason': 'Live soccer forecast tables are not migrated.'}
         today = now.date().isoformat()
-        checks, after_cutoff = soccer_live.checks_for(conn, today), stamp > today + 'T06:00:00Z'
+        checks = soccer_live.checks_for(conn, today)
+        after_cutoff = not soccer_live.pregame_enabled(conn) and stamp > today + 'T06:00:00Z'
         refused = {}
         from app import intl_live
         for c in (*soccer_live.LAUNCH, *intl_live.LAUNCH):

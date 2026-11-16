@@ -132,12 +132,13 @@ def forecast_core(sealed: dict, inputs: list, targets: list, day: str) -> dict:
     return {m.mid: tuple(float(v) for v in model.predict(m)) for m in targets}
 
 
-def run(conn: sqlite3.Connection, *, day: Optional[str] = None, write: bool = True, record_refusal: bool = True) -> dict:
+def run(conn: sqlite3.Connection, *, day: Optional[str] = None, write: bool = True, record_refusal: bool = True,
+        pregame_targets: Optional[dict[str, str]] = None) -> dict:
     now = utc_now()
     day = day or _t(now).date().isoformat()
     cutoff = intl_eval.cutoff_for(day)
     report = {"as_of": now, "date": day, "cutoff_at": cutoff, "competitions": {}}
-    if now > cutoff or day < _t(now).date().isoformat():
+    if pregame_targets is None and (now > cutoff or day < _t(now).date().isoformat()):
         report.update(status="refused", reason=f"after the cutoff {cutoff}: a live forecast is never made after its cutoff")
         return report
     sealed, team_map = sealed_candidate(), teams()
@@ -153,16 +154,19 @@ def run(conn: sqlite3.Connection, *, day: Optional[str] = None, write: bool = Tr
         for r in rows:
             g, d = GROUP[r["competition_id"]], match_day(r["kickoff_at"])
             neutral = bool(r["neutral_site"])
-            if r["status"] == "final" and d < day:
+            result_ready = r["status"] == "final" and (pregame_targets is None or
+                (r["result_available_at"] is not None and r["result_available_at"] <= cutoff))
+            if result_ready and d < day:
                 hs, as_ = r["home_score"], r["away_score"]
                 label = 1 if r["decided_in"] in ("extra_time", "penalties") else (0 if hs > as_ else (1 if hs == as_ else 2))
                 current.append(intl_eval.Match(r["match_id"], d, tmap[r["home_team_id"]], tmap[r["away_team_id"]], neutral,
                                                r["competition_id"], g, hs, as_, label, None))
                 inputs_current.append((r["match_id"], r["result_available_at"], hs, as_, r["decided_in"]))
-            elif d < day and r["status"] not in ("final", "postponed", "canceled", "abandoned"):
+            elif d < day and r["status"] not in ("postponed", "canceled", "abandoned"):
                 pending.append(intl_eval.Match(r["match_id"], d, tmap[r["home_team_id"]], tmap[r["away_team_id"]], neutral,
                                                r["competition_id"], g, None, None, None, "pending"))
-            elif d == day and r["status"] == "scheduled" and r["competition_id"] in LAUNCH:
+            elif d == day and r["status"] == "scheduled" and r["competition_id"] in LAUNCH and (
+                    pregame_targets is None or r["match_id"] in pregame_targets):
                 current.append(intl_eval.Match(r["match_id"], d, tmap[r["home_team_id"]], tmap[r["away_team_id"]], neutral,
                                                r["competition_id"], g, None, None, None, "target"))
         waiting = affected_teams(hist + current, pending, day)
@@ -178,7 +182,8 @@ def run(conn: sqlite3.Connection, *, day: Optional[str] = None, write: bool = Tr
         mine = [(mid, p) for mid, p in probs.items() if comp_of[mid] == c] if ok else []
         inserted = 0
         for mid, p in mine:
-            inserted += _record(conn, mid, c, p, cutoff=cutoff, digest=digest, through=through,
+            inserted += _record(conn, mid, c, p, cutoff=cutoff if pregame_targets is None else pregame_targets[mid],
+                                pregame=pregame_targets is not None, digest=digest, through=through,
                                 retrieved=checks[c]["retrieved_at"], write=write)
         problems = checks[c]["problems"] + [x for x in shared if not x.startswith(f"input competition {c}:")]
         if write and (ok or record_refusal):
@@ -189,7 +194,10 @@ def run(conn: sqlite3.Connection, *, day: Optional[str] = None, write: bool = Tr
     return report
 
 
-def _record(conn, match_id, competition, p, *, cutoff, digest, through, retrieved, write) -> int:
+def _record(conn, match_id, competition, p, *, cutoff, digest, through, retrieved, write, pregame=False) -> int:
+    generated_at = utc_now()
+    if pregame and not soccer_live.in_pregame_window(generated_at, cutoff):
+        return 0
     key = hashlib.sha256(json.dumps([match_id, soccer_live.MARKET, cutoff, CANDIDATE_SHA256, digest]).encode()).hexdigest()
     old = conn.execute("SELECT p_home, p_draw, p_away FROM soccer_live_forecasts WHERE idempotency_key = ?", (key,)).fetchone()
     if old:
@@ -208,5 +216,5 @@ def _record(conn, match_id, competition, p, *, cutoff, digest, through, retrieve
                  "idempotency_key, inputs_digest, inputs_through, source_retrieved_at, p_home, p_draw, p_away, cutoff_at, "
                  "generated_at) VALUES (?, ?, ?, ?, ?, 'intl-elo', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                  (match_id, competition, soccer_live.MARKET, version, CANDIDATE_SHA256, key, digest, through, retrieved,
-                  p[0], p[1], p[2], cutoff, utc_now()))
+                  p[0], p[1], p[2], cutoff, generated_at))
     return 1

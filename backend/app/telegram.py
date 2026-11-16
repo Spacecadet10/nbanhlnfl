@@ -521,7 +521,10 @@ def run_once(bot, settings, conn, *, now=None):
                 result['sports']['soccer'] = {'status': 'failed', 'reason': section.get('error') or section['markets_error']}
             else:
                 report = dict(section['report'], sport='soccer', as_of=result['as_of'])
-                report['picks'] = [p for p in report['picks'] if p['competition'] not in section['refused']]
+                report['picks'] = [
+                    p for p in report['picks']
+                    if p['competition'] not in section['refused'] or p['cutoff_at'] == p['tipoff']
+                ]
                 for pick in report['picks']:
                     pick.setdefault('strong', False)
                     pick.setdefault('game_rank', None)

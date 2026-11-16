@@ -230,7 +230,7 @@ def test_copies_still_migrate_implicitly(tmp_path, monkeypatch, capsys):
     no_run(monkeypatch)
     assert cli.main(["--sport", "nhl", "score"]) == 0
     assert schema(store) == release.shipped_schema()
-    assert cli.main(["soccer", "migrate"]) == 0 and schema(copy / "soccer.sqlite") == release.shipped_schema()
+    assert cli.main(["soccer", "migrate"]) == 0 and schema(copy / "soccer.sqlite") == release.shipped_schema("soccer")
 
 
 def test_db_migrate_refuses_protected_pending_without_context(tmp_path, checkout):
@@ -680,7 +680,7 @@ def test_only_the_verified_release_creates_a_new_store_and_only_with_explicit_mi
     rc, out = run(["soccer", "ingest", "--from", "20261101", "--to", "20261102"], capsys)
     assert (rc, out.get("status")) == (1, "refused") and not (checkout / "soccer.sqlite").exists()
     assert cli.main(["soccer", "migrate"]) == 0
-    assert schema(checkout / "soccer.sqlite") == release.shipped_schema()
+    assert schema(checkout / "soccer.sqlite") == release.shipped_schema("soccer")
     monkeypatch.delenv(release.GUARD_ENV)                         # the same command outside the release: refused
     (checkout / "soccer.sqlite").rename(tmp_path / "moved.sqlite")
     for f in checkout.glob("soccer.sqlite*"):
