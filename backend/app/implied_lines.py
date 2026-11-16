@@ -37,16 +37,26 @@ def fair_decimal(p: float) -> Optional[float]:
     return round(1 / p, 3) if p > 0 else None
 
 
-def derived_dc_dnb(quotes: list[dict], provider: str = 'DraftKings') -> Optional[dict]:
-    """Fair double chance / draw no bet from one retrieval of the provider's three 1X2 prices, or None."""
+def match_result_probabilities(quotes: list[dict], provider: str = 'DraftKings') -> Optional[dict]:
+    """Remove the margin from one complete sportsbook 1X2 quote."""
     sides = {q['side']: q for q in quotes if q.get('market') == '1x2' and q.get('provider') == provider}
     if set(sides) != {'home', 'draw', 'away'} or len({q['retrieved_at'] for q in sides.values()}) != 1:
         return None
+    if len({q.get('raw_id') for q in sides.values()}) != 1:
+        return None
     inv = {k: 1 / float(q['decimal_odds']) for k, q in sides.items()}
-    s = sum(inv.values())
-    p = {k: v / s for k, v in inv.items()}
+    total = sum(inv.values())
+    return {k: value / total for k, value in inv.items()}
+
+
+def derived_dc_dnb(quotes: list[dict], provider: str = 'DraftKings') -> Optional[dict]:
+    """Fair double chance / draw no bet from one retrieval of the provider's three 1X2 prices, or None."""
+    p = match_result_probabilities(quotes, provider)
+    if p is None:
+        return None
+    retrieved_at = next(q['retrieved_at'] for q in quotes if q.get('market') == '1x2' and q.get('provider') == provider)
     return {'label': DERIVED_LABEL, 'note': NOT_A_PRICE + ' Fair prices with the sportsbook margin removed.',
-            'provider': provider, 'retrieved_at': next(iter(sides.values()))['retrieved_at'],
+            'provider': provider, 'retrieved_at': retrieved_at,
             'double_chance': {'home_draw': fair_decimal(p['home'] + p['draw']),
                               'draw_away': fair_decimal(p['draw'] + p['away']),
                               'home_away': fair_decimal(p['home'] + p['away'])},
