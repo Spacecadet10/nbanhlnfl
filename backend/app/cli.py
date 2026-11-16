@@ -72,7 +72,7 @@ def _write_refusal(sport: str, *, migrate: bool = False, info=None, paths=()):
                                               f"({'; '.join(problems)}): development commands never write there "
                                               f"(store, migration, new store, activation, access log); {hint}",
                 "problems": problems}
-    stored, shipped = release.store_schema(sport), release.shipped_schema()
+    stored, shipped = release.store_schema(sport), release.shipped_schema(sport)
     if stored != shipped and not migrate:
         return {"status": "refused", "reason": f"{where} at schema {stored}; this release ships {shipped}: only the explicit "
                                               "`migrate` command migrates it"}
