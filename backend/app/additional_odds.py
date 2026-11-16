@@ -30,6 +30,7 @@ MARKETS = {
     'corners_home': 'alternate_team_totals_corners', 'corners_away': 'alternate_team_totals_corners',
 }
 MAX_AGE = timedelta(minutes=90)
+DAILY_CREDITS = 12
 
 
 def _now():
@@ -102,7 +103,7 @@ def _matches(event, kickoff, home, away):
         return False
 
 
-def collect(*, limit=6):
+def collect(*, limit=2):
     key = _credentials()
     if not key:
         return {'status': 'missing_key', 'saved': 0, 'failed': 0}
@@ -113,11 +114,25 @@ def collect(*, limit=6):
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             return {'status': 'already_running', 'saved': 0, 'failed': 0}
-        return _collect(key, limit)
+        return _collect(key, limit, directory / "budget.json")
 
 
-def _collect(key, limit):
+def _collect(key, limit, budget_path):
     now = _now()
+    day = now.date().isoformat()
+    budget = {"day": day, "used": 0, "quota_low": False}
+    if budget_path.exists():
+        previous_budget = json.loads(budget_path.read_text())
+        if previous_budget["day"] == day:
+            budget = previous_budget
+    if budget["quota_low"] or budget["used"] >= DAILY_CREDITS:
+        return {"status": "budget_reached", "saved": 0, "failed": 0, "credits_today": budget["used"]}
+
+    def save_budget():
+        temporary = budget_path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(budget))
+        temporary.replace(budget_path)
+
     calendars = {}
     saved = failed = requests = 0
     with httpx.Client(base_url=HOST, headers={'x-api-key': key}, timeout=12) as client:
@@ -135,11 +150,20 @@ def _collect(key, limit):
                     continue
                 event_id = matches[0]['id']
                 requested = sorted(set(MARKETS.values())) if sport == 'soccer' else ['team_totals']
+                reserved = len(requested)  # one credit per returned market, requesting a single region
+                if budget["used"] + reserved > DAILY_CREDITS:
+                    continue
+                budget["used"] += reserved
+                save_budget()
                 requests += 1
                 response = client.get(f'/sports/{league}/events/{event_id}/odds',
                                       params={'regions': 'uk' if sport == 'soccer' else 'us',
                                               'markets': ','.join(requested), 'oddsFormat': 'decimal'})
                 response.raise_for_status()
+                actual = int(response.headers.get('x-requests-last', reserved))
+                budget["used"] += max(0, actual) - reserved
+                budget["quota_low"] = int(response.headers.get('x-requests-remaining', '1000')) < 6
+                save_budget()
                 event = response.json()
                 retrieved = _now()
                 if event.get('id') != event_id or not _matches(event, start, home, away):
@@ -151,7 +175,7 @@ def _collect(key, limit):
                     temp.write_text(json.dumps({'kickoff': start, 'retrieved_at': _stamp(retrieved), 'event': event}))
                     temp.replace(path)
                     saved += 1
-                if int(response.headers.get('x-requests-remaining', '1000')) < 6:
+                if budget["quota_low"]:
                     break
             except httpx.HTTPStatusError as exc:
                 failed += 1
@@ -165,7 +189,7 @@ def _collect(key, limit):
                     calendars[league] = []
             if requests >= limit:
                 break
-    return {'status': 'failed' if failed else 'ok', 'saved': saved, 'failed': failed}
+    return {'status': 'failed' if failed else 'ok', 'saved': saved, 'failed': failed, 'credits_today': budget['used']}
 
 
 def _pair(event, market, side, line, moment):
@@ -235,8 +259,8 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=('fetch',))
-    parser.add_argument('--limit', type=int, choices=range(1, 13), default=6)
+    parser.add_argument('--limit', type=int, choices=range(1, 13), default=2)
     args = parser.parse_args()
     result = collect(limit=args.limit)
     print(json.dumps(result))
-    raise SystemExit(0 if result['status'] in ('ok', 'already_running') else 1)
+    raise SystemExit(0 if result['status'] in ('ok', 'already_running', 'budget_reached') else 1)
