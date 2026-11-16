@@ -41,3 +41,21 @@ def test_corner_handicap_requires_opposite_signed_line(monkeypatch):
             'outcome_probabilities': {'win': .6, 'loss': .4, 'half_win': 0, 'half_loss': 0, 'push': 0}}
     assert odds.comparison('soccer', pick, now, side='away', line=1.5)['card_market_prob'] == .5
     assert odds.comparison('soccer', pick, now, side='away', line=-1.5) == {}
+
+
+
+def test_daily_budget_blocks_requests_across_runs(tmp_path, monkeypatch):
+    import json
+    import httpx
+
+    monkeypatch.setenv('NBA_DATA_DIR', str(tmp_path))
+    monkeypatch.setenv('THE_ODDS_API_KEY', 'test-key')
+    directory = tmp_path / 'additional-odds'
+    directory.mkdir()
+    budget = {'day': odds._now().date().isoformat(), 'used': odds.DAILY_CREDITS, 'quota_low': False}
+    (directory / 'budget.json').write_text(json.dumps(budget))
+    def unexpected_request(*args, **kwargs):
+        raise AssertionError('The collector opened a client after reaching the daily cap')
+    monkeypatch.setattr(httpx, 'Client', unexpected_request)
+    assert odds.collect()['status'] == 'budget_reached'
+    assert odds.collect()['credits_today'] == odds.DAILY_CREDITS
