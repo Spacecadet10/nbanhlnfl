@@ -176,7 +176,7 @@ def main(argv=None) -> int:
                                        "90-minute forecasts (app/soccer_live.py). Ignores --sport; always opens the soccer store.")
     sc.add_argument("action", choices=("migrate", "ingest", "replay", "coverage", "history-download", "history-replay",
                                        "history-coverage", "eval-develop", "eval-record", "eval-test", "live-refresh",
-                                       "live-forecast", "live-status", "history-months", "markets-develop", "markets-test",
+                                       "live-forecast", "pregame-forecast", "live-status", "history-months", "markets-develop", "markets-test",
                                        "markets-forecast", "markets-status"))
     sc.add_argument("--competition", action="append", choices=(*soccer_competitions(), "all"),
                     help="ingest: competition slug (repeatable) or 'all' (default all)")
@@ -1019,6 +1019,11 @@ def _soccer(args, p) -> int:
             print(json.dumps({"status": "ok", "commits": report["commits"], "files": len(report["files"]),
                               "bytes": sum(f["bytes"] for f in report["files"]), "import": replayed}))
             return 0
+        if args.action == "pregame-forecast":
+            from . import soccer_live
+            report = soccer_live.run_pregame(conn)
+            print(json.dumps(report))
+            return int(any(group["status"] != "ok" for group in report["groups"]))
         if args.action == "live-forecast":
             from . import soccer_live
             from . import intl_live

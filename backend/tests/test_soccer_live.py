@@ -166,6 +166,7 @@ def test_ticket_snapshot_offers_soccer_picks_with_their_rules(live, monkeypatch)
 
 
 def test_refused_competitions_alert_in_the_ticket_health_check(live, monkeypatch):
+    monkeypatch.setattr(soccer_live, "pregame_enabled", lambda conn: False)
     monkeypatch.setattr(soccer_live, "clubs", lambda: {"version": "test", "espn": {}})
     soccer_live.run(live, day=TOMORROW.isoformat())
     section = tickets.soccer_section(datetime.fromisoformat(at(TOMORROW, "10:00")[:-1] + "+00:00"))
@@ -182,6 +183,7 @@ def test_without_a_live_store_soccer_is_reported_unavailable(tmp_path, monkeypat
 
 
 def test_an_early_look_ahead_waits_silently_and_a_missing_run_alerts_only_after_the_cutoff(live, monkeypatch):
+    monkeypatch.setattr(soccer_live, "pregame_enabled", lambda conn: False)
     ingest(live, TODAY, event(eid="9", date=at(TODAY, "23:30"), status="STATUS_SCHEDULED", state="pre", home=ARS, away=MCI))
     rep = soccer_live.run(live, day=TOMORROW.isoformat(), record_refusal=False)   # today's late match not played yet
     assert rep["status"] == "refused" and live.execute("SELECT COUNT(*) FROM soccer_live_checks").fetchone()[0] == 0
@@ -364,3 +366,19 @@ def test_a_newer_refusal_of_the_competition_outranks_an_older_passed_check_for_t
     nxt = client.get("/api/soccer/matches", params={"competition": "eng.1", "date": TOMORROW.isoformat()}).json()
     for b in nxt["forecast_blockers"].values():
         assert b["code"] == "refused" and b["checked_at"] == STAMP and "Tahiti" in b["text"], b
+
+
+def test_pregame_run_records_only_matches_in_two_hour_window(live):
+    def event_at(eid, offset):
+        kickoff = NOW + offset
+        return upcoming(eid, kickoff.date(), ARS, CHE, kickoff.strftime("%H:%M:%S"))
+
+    ingest(live, TODAY, event_at("10", timedelta(hours=1)),
+           event_at("11", timedelta(hours=3)), event_at("12", -timedelta(minutes=10)))
+    report = soccer_live.run_pregame(live)
+    assert any(group["status"] == "ok" for group in report["groups"]), report
+    rows = live.execute("SELECT match_id, generated_at, cutoff_at FROM soccer_live_forecasts").fetchall()
+    assert len(rows) == 1
+    assert rows[0]["match_id"] == "soccer:eng.1:10"
+    assert soccer_live.in_pregame_window(rows[0]["generated_at"], rows[0]["cutoff_at"])
+    assert soccer_live.run_pregame(live)["groups"] == []

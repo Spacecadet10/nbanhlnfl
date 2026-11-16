@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from . import config, soccer, soccer_eval
+from . import config, db, soccer, soccer_eval
 from .db import utc_now
 
 CANDIDATE_SHA256 = "7dbc668c214f33862541156c0630913194e8a3421c0e7c3495f4de296ecd9c47"
@@ -92,7 +92,8 @@ def season_rows(conn: sqlite3.Connection, competitions) -> list:
     return [r for r in rows if _in_scope(r)]
 
 
-def check(conn: sqlite3.Connection, competition: str, now: str, horizon: str, club_map: dict) -> dict:
+def check(conn: sqlite3.Connection, competition: str, now: str, horizon: str, club_map: dict, *,
+          target_day: Optional[str] = None) -> dict:
     """Whether `competition`'s current-season inputs are complete for a forecast whose cutoff is `horizon`: data retrieved
     within 26 h of `now`, every season date before the horizon's date fetched, every match that kicks off before the
     horizon settled (final in regulation, or postponed/cancelled/abandoned), and every club in the map."""
@@ -114,6 +115,8 @@ def check(conn: sqlite3.Connection, competition: str, now: str, horizon: str, cl
         for team, name in ((r["home_team_id"], r["home_name"]), (r["away_team_id"], r["away_name"])):
             if team not in club_map["espn"]:
                 unmapped.add(f"{name} ({team})")
+        if target_day is not None and local_date(r["kickoff_at"], competition) >= target_day:
+            continue
         if r["kickoff_at"] >= horizon or r["status"] in ("postponed", "canceled", "abandoned"):
             continue
         if r["status"] != "final":
@@ -153,7 +156,8 @@ def dataset(conn: sqlite3.Connection, sealed: dict, club_map: dict) -> tuple[soc
     return ds, current
 
 
-def forecast_day(sealed: dict, ds: soccer_eval.Dataset, current: list, day: str) -> tuple[dict, Optional[str], str]:
+def forecast_day(sealed: dict, ds: soccer_eval.Dataset, current: list, day: str, *,
+                 target_cutoff: Optional[str] = None) -> tuple[dict, Optional[str], str]:
     """The frozen walk-forward over the current season, exactly as soccer_eval.walk: every earlier played match is
     forecast on its own date (so the model's state evolves as in the evaluation), then `day`'s scheduled matches at
     `day`'s cutoff. Returns {mid: (p_home, p_draw, p_away)} for `day`, the latest input availability, the inputs digest."""
@@ -169,7 +173,7 @@ def forecast_day(sealed: dict, ds: soccer_eval.Dataset, current: list, day: str)
     revs, avail = ds.revisions, [r.available_at for r in ds.revisions]
     i, out, fed = 0, {}, []
     for d in sorted(targets):
-        cutoff = soccer_eval.cutoff_for(d)
+        cutoff = target_cutoff if d == day and target_cutoff is not None else soccer_eval.cutoff_for(d)
         j = bisect.bisect_right(avail, cutoff)
         soccer_eval.feed(model, revs[i:j], cutoff_at=cutoff)
         fed.extend(revs[i:j])
@@ -185,7 +189,8 @@ def forecast_day(sealed: dict, ds: soccer_eval.Dataset, current: list, day: str)
     return out, through, digest
 
 
-def run(conn: sqlite3.Connection, *, day: Optional[str] = None, write: bool = True, record_refusal: bool = True) -> dict:
+def run(conn: sqlite3.Connection, *, day: Optional[str] = None, write: bool = True, record_refusal: bool = True,
+        pregame_targets: Optional[dict[str, str]] = None) -> dict:
     """One forecast run for the matches dated `day` (default: today, UTC) in the launch competitions. It is the evaluated
     point in time: made before `day` 06:00 UTC, and only when every match of all input competitions kicking off before
     that cutoff is settled, so the inputs are exactly those the cutoff would see. Any incomplete input competition
@@ -194,21 +199,24 @@ def run(conn: sqlite3.Connection, *, day: Optional[str] = None, write: bool = Tr
     day = day or _t(now).date().isoformat()
     cutoff = soccer_eval.cutoff_for(day)
     report = {"as_of": now, "date": day, "cutoff_at": cutoff, "competitions": {}}
-    if now > cutoff or day < _t(now).date().isoformat():
+    if pregame_targets is None and (now > cutoff or day < _t(now).date().isoformat()):
         report.update(status="refused", reason=f"after the cutoff {cutoff}: a live forecast is never made after its cutoff")
         return report
     sealed, club_map = sealed_candidate(), clubs()
-    checks = {c: check(conn, c, now, cutoff, club_map) for c in (*LAUNCH, *INPUT_ONLY)}
+    target_cutoff = min(now, cutoff) if pregame_targets is not None else cutoff
+    checks = {c: check(conn, c, now, cutoff, club_map, target_day=day if pregame_targets is not None else None)
+              for c in (*LAUNCH, *INPUT_ONLY)}
     shared = [f"input competition {c}: {p}" for c in (*LAUNCH, *INPUT_ONLY) for p in checks[c]["problems"]]
     probs, through, digest, by_mid = {}, None, None, {}
     if not shared:
         ds, current = dataset(conn, sealed, club_map)
-        probs, through, digest = forecast_day(sealed, ds, current, day)
+        probs, through, digest = forecast_day(sealed, ds, current, day, target_cutoff=target_cutoff)
         by_mid = {m.mid: m for m, _ in current}
     for c in LAUNCH:
         ok = not shared
-        rows = [(mid, p) for mid, p in probs.items() if by_mid[mid].competition == c] if ok else []
-        inserted = sum(record(conn, mid, c, p, cutoff_at=cutoff, inputs_digest=digest, inputs_through=through,
+        rows = [(mid, p) for mid, p in probs.items() if by_mid[mid].competition == c and (pregame_targets is None or mid in pregame_targets)] if ok else []
+        inserted = sum(record(conn, mid, c, p, cutoff_at=cutoff if pregame_targets is None else pregame_targets[mid],
+                              pregame=pregame_targets is not None, inputs_digest=digest, inputs_through=through,
                               retrieved_at=checks[c]["retrieved_at"], write=write) for mid, p in rows)
         problems = checks[c]["problems"] + [x for x in shared if not x.startswith(f"input competition {c}:")]
         if write and (ok or record_refusal):     # an early attempt that must still wait is not a refusal
@@ -220,7 +228,10 @@ def run(conn: sqlite3.Connection, *, day: Optional[str] = None, write: bool = Tr
     return report
 
 
-def record(conn, match_id, competition, p, *, cutoff_at, inputs_digest, inputs_through, retrieved_at, write=True) -> int:
+def record(conn, match_id, competition, p, *, cutoff_at, inputs_digest, inputs_through, retrieved_at, write=True, pregame=False) -> int:
+    generated_at = utc_now()
+    if pregame and not in_pregame_window(generated_at, cutoff_at):
+        return 0
     key = hashlib.sha256(json.dumps([match_id, MARKET, cutoff_at, CANDIDATE_SHA256, inputs_digest]).encode()).hexdigest()
     old = conn.execute("SELECT p_home, p_draw, p_away FROM soccer_live_forecasts WHERE idempotency_key = ?", (key,)).fetchone()
     if old:
@@ -235,7 +246,7 @@ def record(conn, match_id, competition, p, *, cutoff_at, inputs_digest, inputs_t
                  "idempotency_key, inputs_digest, inputs_through, source_retrieved_at, p_home, p_draw, p_away, cutoff_at, "
                  "generated_at) VALUES (?, ?, ?, ?, ?, 'elo', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                  (match_id, competition, MARKET, version, CANDIDATE_SHA256, key, inputs_digest, inputs_through,
-                  retrieved_at, p[0], p[1], p[2], cutoff_at, utc_now()))
+                  retrieved_at, p[0], p[1], p[2], cutoff_at, generated_at))
     return 1
 
 
@@ -319,3 +330,44 @@ def grade(conn, forecast_id: int, outcome: str, as_of: str) -> dict:
         g = "win" if OUTCOMES[outcome_of(r)] == outcome else "loss"
     return {"grade": g, "match_id": r["match_id"], "home_score": r["home_score"] if g in ("win", "loss") else None,
             "away_score": r["away_score"] if g in ("win", "loss") else None, "result_available_at": r["result_available_at"]}
+
+
+
+def in_pregame_window(now: str, kickoff: str) -> bool:
+    return timedelta() < _t(kickoff) - _t(now) <= timedelta(hours=2)
+
+
+def run_pregame(conn: sqlite3.Connection) -> dict:
+    """Record due 1X2 forecasts using the sealed models' existing input snapshots."""
+    from . import intl_live
+
+    now = utc_now()
+    deadline = (_t(now) + timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    rows = conn.execute(
+        "SELECT match_id, competition_id, kickoff_at FROM soccer_matches AS m "
+        "WHERE status = 'scheduled' AND kickoff_at > ? AND kickoff_at <= ? "
+        "AND NOT EXISTS (SELECT 1 FROM soccer_live_forecasts AS f WHERE f.match_id = m.match_id "
+        "AND f.cutoff_at = m.kickoff_at)",
+        (now, deadline),
+    )
+    groups = defaultdict(dict)
+    for match_id, competition, kickoff in rows:
+        if competition in LAUNCH:
+            groups[(run, local_date(kickoff, competition))][match_id] = kickoff
+        elif competition in intl_live.LAUNCH:
+            groups[(intl_live.run, intl_live.match_day(kickoff))][match_id] = kickoff
+
+    reports = []
+    for (forecast, day), targets in groups.items():
+        try:
+            reports.append(forecast(conn, day=day, pregame_targets=targets))
+        except (LiveRefused, FileNotFoundError) as exc:
+            reports.append({"status": "refused", "date": day, "reason": str(exc)})
+    return {"as_of": now, "groups": reports}
+
+
+
+def pregame_enabled(conn: sqlite3.Connection) -> bool:
+    return db.has_table(conn, "schema_migrations") and conn.execute(
+        "SELECT 1 FROM schema_migrations WHERE name = '0041_soccer_pregame_window.sql'"
+    ).fetchone() is not None

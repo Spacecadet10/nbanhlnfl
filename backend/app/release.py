@@ -41,8 +41,8 @@ def code_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def shipped_schema() -> int:
-    return max(int(f.name[:4]) for f in db.MIGRATIONS_DIR.glob("[0-9][0-9][0-9][0-9]_*.sql"))
+def shipped_schema(sport: Optional[str] = None) -> int:
+    return max(int(f.name[:4]) for f in db.migration_paths(sport))
 
 
 def store_schema(sport: str) -> Optional[int]:
@@ -133,7 +133,7 @@ def check(sport: str, root: Optional[Path] = None) -> dict:
     """The release facts and every reason the scheduled jobs must not run from here (empty `problems`: they may)."""
     root = (root or code_root()).resolve()
     commit, problems = _checkout(root)
-    shipped, stored = shipped_schema(), store_schema(sport)
+    shipped, stored = shipped_schema(sport), store_schema(sport)
     if stored is None:
         problems.append(f"no migrated {sport} store at {config.db_path(sport)}")
     elif stored != shipped:
