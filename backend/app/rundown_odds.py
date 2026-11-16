@@ -102,7 +102,8 @@ def comparison(sport, pick, cache, now):
     if q.get('line_moved'):
         return dict(out, status='forecast_line_changed')
     side = _side(pick)
-    if side not in ('a', 'b') or ' @ ' not in str(pick.get('matchup')):
+    sides = ('a', 'mid', 'b') if pick['market'] == 'reg3' else ('a', 'b')
+    if side not in sides or ' @ ' not in str(pick.get('matchup')):
         return dict(out, status='identity_unavailable')
     expected = q.get('line_at_forecast')
     lineless = pick['market'] in ('winner', 'reg3')
@@ -144,8 +145,11 @@ def comparison(sport, pick, cache, now):
                 name = str(participant.get('name') or '').lower()
                 actual = ({'over': 'a', 'under': 'b'}.get(name) if pick['market'] == 'total' else
                           'a' if participant.get('id') == home_id else 'b' if participant.get('id') == away_id else None)
-                if pick['market'] == 'reg3' and participant.get('type') != 'TYPE_TEAM':
-                    continue   # the Draw outcome (TYPE_RESULT) is never read as a team
+                if pick['market'] == 'reg3':
+                    if participant.get('type') == 'TYPE_RESULT':
+                        actual = 'mid' if name.strip() == 'draw' else None
+                    elif participant.get('type') != 'TYPE_TEAM':
+                        continue
                 if actual != side:
                     continue
                 for line in participant.get('lines') or []:
@@ -179,6 +183,27 @@ def comparison(sport, pick, cache, now):
         out['best'] = dict(book=book, price=out['prices'][book])
     out['status'] = 'available' if out['prices'] else 'no_exact_line'
     return out
+
+
+def regulation_card_comparison(pick, cache, now):
+    """One complete, current NHL 60-minute market from the same sportsbook and response."""
+    from .odds import american_to_implied
+
+    side = _side(pick)
+    if pick.get('market') != 'reg3' or side not in ('a', 'mid', 'b'):
+        return {}
+    outcomes = {
+        k: comparison('nhl', {**pick, 'percentage_history': {'side': k}}, cache, now)
+        for k in ('a', 'mid', 'b')
+    }
+    if len({result['checked_at'] for result in outcomes.values()}) != 1:
+        return {}
+    for book in BOOKS.values():
+        if all(book in result['prices'] for result in outcomes.values()):
+            implied = {k: american_to_implied(result['prices'][book]) for k, result in outcomes.items()}
+            return {'card_market_prob': implied[side] / sum(implied.values()),
+                    'card_comparison_basis': f'{book} 60-minute quote'}
+    return {}
 
 
 def attach(sport, pick, cache, now):

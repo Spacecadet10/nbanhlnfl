@@ -284,7 +284,9 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
         source = {'model': ' · <i>model line</i>', 'bookmaker': ' · <i>bookmaker line at forecast</i>', 'none': ''}[h['line_source']]
         book = pick.get('card_market_prob', pick.get('market_prob'))
         if book is not None:   # on the small grey line under the pick, so the record line keeps its length and never runs off the card
-            source = (source[:-4] + ' · ' if source else ' · <i>') + f"sportsbook {displayed_percentage(book)}% · {price_tag(pick['probability'], book)}</i>"
+            basis = pick.get('card_comparison_basis')
+            detail = f" ({escape(basis)})" if basis else f" · {price_tag(pick['probability'], book)}"
+            source = (source[:-4] + ' · ' if source else ' · <i>') + f"sportsbook {displayed_percentage(book)}%{detail}</i>"
         elif report['sport'] in ('nhl', 'nfl'):
             source = (source[:-4] + ' · ' if source else ' · <i>') + 'sportsbook probability unavailable</i>'
         implied = pick.get('implied_line') or {}
@@ -480,11 +482,14 @@ def run_once(bot, settings, conn, *, now=None):
                 lineups = card_lineups(source, sport, report, now)
                 pictures = best_pick_pictures(source, sport, report, now)
                 card_implied_lines(source, sport, report, now)
-                from . import tickets
+                from . import rundown_odds, tickets
+                cached_odds = rundown_odds.read_cache(now) if sport == 'nhl' else None
                 for pick in report['picks']:
                     pick['quote_check'] = tickets.quote_check(source, pick, report['as_of'])
                     if sport in ('nhl', 'nfl'):
                         pick['card_market_prob'] = tickets.card_market_prob(source, pick)
+                        if cached_odds is not None and pick['card_market_prob'] is None and pick['market'] == 'reg3':
+                            pick.update(rundown_odds.regulation_card_comparison(pick, cached_odds, now))
                 tickets.attach_lineups(source, sport, report['picks'], report['as_of'])
                 tickets.attach_facts(source, sport, report['picks'], report['as_of'])
             finally:
