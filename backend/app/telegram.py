@@ -264,6 +264,10 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
                     provenance += '; price unavailable'
                 book = pick.get('card_market_prob')
                 comparison = f"Sportsbook {displayed_percentage(book)}%" if book is not None else "Sportsbook probability unavailable"
+                if 'card_app_prob' in pick:
+                    comparison = f"App {displayed_percentage(pick['card_app_prob'])}% / " + comparison
+                if pick.get('card_comparison_basis'):
+                    comparison += f" ({pick['card_comparison_basis']})"
                 lines += [f"<b>{escape(pick['market_title'])}</b>", f"{escape(pick['pick_label'])} · {comparison} · {escape(provenance)}",
                           f"<b>Model {displayed_percentage(pick['probability'])}%</b> · Exact-% history unavailable", '']
             continue   # absent history must not be manufactured as a zero record
@@ -281,7 +285,7 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
         book = pick.get('card_market_prob', pick.get('market_prob'))
         if book is not None:   # on the small grey line under the pick, so the record line keeps its length and never runs off the card
             source = (source[:-4] + ' · ' if source else ' · <i>') + f"sportsbook {displayed_percentage(book)}% · {price_tag(pick['probability'], book)}</i>"
-        elif report['sport'] == 'nhl':
+        elif report['sport'] in ('nhl', 'nfl'):
             source = (source[:-4] + ' · ' if source else ' · <i>') + 'sportsbook probability unavailable</i>'
         implied = pick.get('implied_line') or {}
         if implied.get('line') is not None:   # owner request Nov 11: labelled, never a price to bet at
@@ -479,8 +483,8 @@ def run_once(bot, settings, conn, *, now=None):
                 from . import tickets
                 for pick in report['picks']:
                     pick['quote_check'] = tickets.quote_check(source, pick, report['as_of'])
-                    if sport == 'nhl':
-                        pick['card_market_prob'] = tickets.nhl_card_market_prob(source, pick)
+                    if sport in ('nhl', 'nfl'):
+                        pick['card_market_prob'] = tickets.card_market_prob(source, pick)
                 tickets.attach_lineups(source, sport, report['picks'], report['as_of'])
                 tickets.attach_facts(source, sport, report['picks'], report['as_of'])
             finally:

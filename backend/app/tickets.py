@@ -341,8 +341,8 @@ def quote_check(conn, pick, stamp):
                 line_now=now['line'] if now else None, price_now=price(now), price_at_forecast=price(first), line_moved=moved)
 
 
-def nhl_card_market_prob(conn, pick):
-    """A stored NHL quote at the forecast time, for exactly the same game, market, and line."""
+def card_market_prob(conn, pick):
+    """A stored quote at the forecast time, for exactly the same game, market, and line."""
     from app import threshold_overview
 
     if pick.get('market_prob') is not None:
@@ -588,9 +588,12 @@ def card_choice(sport, picks):
     if warnings and not support:
         return dict(method=CARD_METHOD, pick=None, reason='No supported lean: '+warnings[0], assessments=assessments)
     book = chosen.get('card_market_prob', chosen.get('market_prob'))
+    app_compare = chosen.get('card_app_prob', chosen['probability'])
+    basis = chosen.get('card_comparison_basis')
     if book is not None:
-        gap = (Decimal(str(chosen['probability'])) - Decimal(str(book))) * 100
-    numbers = (f"App {100*chosen['probability']:.1f}% / sportsbook {100*book:.1f}% / gap {gap:+.1f} points."
+        gap = (Decimal(str(app_compare)) - Decimal(str(book))) * 100
+    qualifier = f' ({basis})' if basis else ''
+    numbers = (f"App {100*app_compare:.1f}% / sportsbook {100*book:.1f}% / gap {gap:+.1f} points{qualifier}."
                if book is not None else f"App {100*chosen['probability']:.1f}%; sportsbook probability unavailable.")
     reason = numbers+' '+(support[0] if support else 'Highest available likelihood after context checks.')
     if warnings:
@@ -739,7 +742,7 @@ def soccer_market_picks(conn, stamp):
     DraftKings lists one) or else at the half line next to the model's fair line. `probability` = the chance the leg
     wins outright (a push returns the stake, a half result is listed in outcome_probabilities). Families that are not
     served (no tested model) give no selection."""
-    from app import soccer_markets as sm, soccer_markets_live as sml
+    from app import implied_lines, soccer_markets as sm, soccer_markets_live as sml
     out = []
     since = (datetime.strptime(stamp, '%Y-%m-%dT%H:%M:%SZ') - timedelta(days=sml.TICKET_WINDOW_DAYS)).strftime('%Y-%m-%dT%H:%M:%SZ')
     for m in sml.match_markets(conn, since=since, as_of=stamp):
@@ -754,16 +757,27 @@ def soccer_market_picks(conn, stamp):
             dnb_side = 'home' if p1['home'] >= p1['away'] else 'away'
             row = conn.execute("SELECT status, generated_at, cutoff_at FROM soccer_live_forecasts f JOIN soccer_matches s ON "
                                "s.match_id = f.match_id WHERE f.forecast_id = ?", (d['forecast_id'],)).fetchone()
+            book_1x2 = implied_lines.match_result_probabilities(
+                sml.quotes(conn, m['match_id'], min(row['generated_at'], m['kickoff_at'])))
             for market, side in (('double_chance', dc_side), ('draw_no_bet', dnb_side)):
                 probs = sm.probabilities_1x2((p1['home'], p1['draw'], p1['away']), market, side)
                 result = next(x['result'] for x in d['selections'] if x['market'] == market and x['side'] == side)
+                comparison = {}
+                if book_1x2 is not None:
+                    if market == 'double_chance':
+                        comparison = {'card_market_prob': sum(book_1x2[k] for k in side.split('_')),
+                                      'card_comparison_basis': 'derived from 1X2 prices'}
+                    else:
+                        comparison = {'card_market_prob': book_1x2[side] / (book_1x2['home'] + book_1x2['away']),
+                                      'card_app_prob': probs['win'] / (probs['win'] + probs['loss']),
+                                      'card_comparison_basis': 'draws excluded, derived from 1X2 prices'}
                 out.append(dict(common, forecast_id=f"1x2:{d['forecast_id']}:{market}:{side}", row_id=d['forecast_id'],
                                 market=market, market_title=sm.TITLES[market], side=side, line=None,
                                 pick_label=_soccer_label(market, side, None, home, away), probability=probs['win'],
                                 outcome_probabilities=probs, status=row['status'], generated_at=row['generated_at'],
                                 cutoff_at=row['cutoff_at'], grade=result or 'pending',
                                 quote_check={'line_source': 'model', 'price_now': None},
-                                **soccer_price_facts(m.get('prices') or {}, market, side),
+                                **comparison, **soccer_price_facts(m.get('prices') or {}, market, side),
                                 settlement_rule=sml.SETTLEMENT_RULE))
         for family, f in m['families'].items():
             joint = json.loads(conn.execute("SELECT joint_json FROM soccer_market_forecasts WHERE forecast_id = ?",
@@ -790,6 +804,17 @@ def soccer_market_picks(conn, stamp):
                           'line_now': best['line'], 'line_at_forecast': best['line'], 'line_moved': False,
                           'retrieved_at': best['retrieved_at']} if best['source'] == 'bookmaker'
                          else {'line_source': 'model', 'price_now': None})
+                comparison = {}
+                book_prob = best.get('market_probability')
+                if book_prob is not None and best['retrieved_at'] <= f['generated_at']:
+                    probs = best['probabilities']
+                    win = sm.win_share(probs)
+                    loss = probs['loss'] + probs['half_loss'] / 2
+                    if win + loss > 0:
+                        comparison['card_market_prob'] = book_prob
+                        if probs['push'] or probs['half_win'] or probs['half_loss']:
+                            comparison.update(card_app_prob=win / (win + loss),
+                                              card_comparison_basis='adjusted for settlement')
                 out.append(dict(common, forecast_id=f"{family}:{f['forecast_id']}:{market}:{best['side']}"
                                 + (f":{best['line']:g}" if best['line'] is not None else ''),
                                 row_id=f['forecast_id'], market=market, market_title=sm.TITLES[market], side=best['side'],
@@ -797,8 +822,7 @@ def soccer_market_picks(conn, stamp):
                                 probability=best['probabilities']['win'], outcome_probabilities=best['probabilities'],
                                 status=f['status'], generated_at=f['generated_at'], cutoff_at=f['cutoff_at'],
                                 grade=result or 'pending', quote_check=quote,
-                                card_market_prob=best.get('market_probability') if best['source'] == 'bookmaker'
-                                and best['retrieved_at'] <= f['generated_at'] and best['line'] % 1 == .5 else None,
+                                **comparison,
                                 settlement_rule=sml.SETTLEMENT_RULE))
     return out
 
