@@ -341,6 +341,28 @@ def quote_check(conn, pick, stamp):
                 line_now=now['line'] if now else None, price_now=price(now), price_at_forecast=price(first), line_moved=moved)
 
 
+def nhl_card_market_prob(conn, pick):
+    """A stored NHL quote at the forecast time, for exactly the same game, market, and line."""
+    from app import threshold_overview
+
+    if pick.get('market_prob') is not None:
+        return pick['market_prob']
+    row = conn.execute(
+        "SELECT q.p_a_devig, q.p_mid_devig, q.p_b_devig FROM game_forecasts f "
+        "JOIN market_quotes q ON q.game_id = f.game_id AND q.market = f.market AND q.line IS f.line "
+        "WHERE f.forecast_id = ? AND q.price_label = 'current' AND q.retrieved_at <= f.generated_at "
+        "AND q.retrieved_at < f.tipoff_at AND (f.market <> 'reg3' OR q.p_mid_devig IS NOT NULL) "
+        "ORDER BY q.retrieved_at DESC, q.quote_id DESC LIMIT 1",
+        (pick['forecast_id'],),
+    ).fetchone()
+    if row is None:
+        return None
+    probabilities = tuple(row[k] for k in ('p_a_devig', 'p_mid_devig', 'p_b_devig')) if pick['market'] == 'reg3' else row['p_a_devig']
+    history = pick.get('percentage_history')
+    side = history.get('side') if isinstance(history, dict) else getattr(history, 'side', None)
+    return threshold_overview._picked(pick['market'], probabilities, side) if side is not None else None
+
+
 def _stamp(moment=None):
     return (moment or datetime.now(timezone.utc)).strftime('%Y-%m-%dT%H:%M:%SZ')
 
@@ -565,7 +587,9 @@ def card_choice(sport, picks):
     assessments = [dict(forecast_id=p['forecast_id'], distance=g, support=sp, warnings=w) for _,p,g,sp,w in candidates]
     if warnings and not support:
         return dict(method=CARD_METHOD, pick=None, reason='No supported lean: '+warnings[0], assessments=assessments)
-    book = chosen.get('market_prob')
+    book = chosen.get('card_market_prob', chosen.get('market_prob'))
+    if book is not None:
+        gap = (Decimal(str(chosen['probability'])) - Decimal(str(book))) * 100
     numbers = (f"App {100*chosen['probability']:.1f}% / sportsbook {100*book:.1f}% / gap {gap:+.1f} points."
                if book is not None else f"App {100*chosen['probability']:.1f}%; sportsbook probability unavailable.")
     reason = numbers+' '+(support[0] if support else 'Highest available likelihood after context checks.')
@@ -636,7 +660,7 @@ def soccer_section(now):
     """Live soccer picks (app/soccer_live.py): the sealed Elo's 90-minute home/draw/away forecast per match, made at or
     before 06:00 UTC on match day. Each pick is the model's most likely outcome with its exact probability; all three
     probabilities travel with it for review. Competitions refused by the completeness check have no picks and alert."""
-    from app import config, db, soccer_live
+    from app import config, db, implied_lines, soccer_live, soccer_markets_live
     if not config.db_path('soccer').is_file():
         return {'error': 'forecasts_unavailable', 'reason': 'No live soccer store in this data directory.'}
     stamp = now.strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -660,7 +684,10 @@ def soccer_section(now):
             out, p = f['most_likely'], f['probabilities']
             label = (f['home'] + ' win' if out == 'home' else f['away'] + ' win' if out == 'away' else names['draw']) + ' (90 min)'
             grade = 'pending' if f['result'] is None else ('win' if f['result'] == out else 'loss')
+            quote_at = min(f['generated_at'], f['kickoff_at'])
+            book = implied_lines.match_result_probabilities(soccer_markets_live.quotes(conn, f['match_id'], quote_at))
             picks.append(dict(forecast_id=f['forecast_id'], game_id=f['match_id'], market='1x2_regulation',
+                              card_market_prob=book[out] if book else None,
                               market_title='Match result (90 min)', matchup=f"{f['home']} vs {f['away']}", pick_label=label,
                               outcome=out, probability=p[out], probabilities=p, status=f['status'], grade=grade,
                               generated_at=f['generated_at'], tipoff=f['kickoff_at'], cutoff_at=f['cutoff_at'],
@@ -770,6 +797,8 @@ def soccer_market_picks(conn, stamp):
                                 probability=best['probabilities']['win'], outcome_probabilities=best['probabilities'],
                                 status=f['status'], generated_at=f['generated_at'], cutoff_at=f['cutoff_at'],
                                 grade=result or 'pending', quote_check=quote,
+                                card_market_prob=best.get('market_probability') if best['source'] == 'bookmaker'
+                                and best['retrieved_at'] <= f['generated_at'] and best['line'] % 1 == .5 else None,
                                 settlement_rule=sml.SETTLEMENT_RULE))
     return out
 
