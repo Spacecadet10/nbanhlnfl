@@ -771,13 +771,18 @@ def soccer_market_picks(conn, stamp):
                         comparison = {'card_market_prob': book_1x2[side] / (book_1x2['home'] + book_1x2['away']),
                                       'card_app_prob': probs['win'] / (probs['win'] + probs['loss']),
                                       'card_comparison_basis': 'draws excluded, derived from 1X2 prices'}
+                price_facts = soccer_price_facts(m.get('prices') or {}, market, side)
+                offer = price_facts.get('book_quote')
+                if offer and offer['retrieved_at'] < m['kickoff_at']:
+                    comparison = {'card_market_prob': 1 / offer['decimal'],
+                                  'card_comparison_basis': f"{offer['provider']} offer, includes margin"}
                 out.append(dict(common, forecast_id=f"1x2:{d['forecast_id']}:{market}:{side}", row_id=d['forecast_id'],
                                 market=market, market_title=sm.TITLES[market], side=side, line=None,
                                 pick_label=_soccer_label(market, side, None, home, away), probability=probs['win'],
                                 outcome_probabilities=probs, status=row['status'], generated_at=row['generated_at'],
                                 cutoff_at=row['cutoff_at'], grade=result or 'pending',
                                 quote_check={'line_source': 'model', 'price_now': None},
-                                **comparison, **soccer_price_facts(m.get('prices') or {}, market, side),
+                                **comparison, **price_facts,
                                 settlement_rule=sml.SETTLEMENT_RULE))
         for family, f in m['families'].items():
             joint = json.loads(conn.execute("SELECT joint_json FROM soccer_market_forecasts WHERE forecast_id = ?",
