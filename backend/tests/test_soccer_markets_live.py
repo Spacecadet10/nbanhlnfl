@@ -383,3 +383,27 @@ def test_caption_counts_market_legs_per_picture_and_names_dc_dnb_without_a_line(
     first, second = tickets.ticket_captions({"resolved": [plain, mixed], "date": "2026-11-21"})
     assert "Soccer market legs" not in first
     assert "1 on a model line" in second and "1 double chance / draw no bet (no line)" in second
+
+
+def test_the_1x2_margin_is_removed_when_only_some_sides_changed_price(live):
+    # Review finding (Nov 15): the store appends a side's price only when it changes (soccer.record_quotes), but the
+    # de-vig demanded one shared retrieval for all three sides, so a match where only home and away moved lost its
+    # market comparison. Through the real storage path: retrieval 2 changes home and away; the draw is unchanged.
+    from app import implied_lines
+    from app.sources.espn import SoccerQuote
+    mid = live.execute("SELECT match_id FROM soccer_matches WHERE status='scheduled' ORDER BY kickoff_at LIMIT 1").fetchone()[0]
+    raw = live.execute("SELECT MAX(raw_id) FROM raw_responses").fetchone()[0]
+    t1 = (NOW + timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    t2 = (NOW + timedelta(minutes=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    first = [SoccerQuote(mid, "DraftKings", "1x2", s, "current", None, a) for s, a in (("home", -110), ("draw", 260), ("away", 280))]
+    second = [SoccerQuote(mid, "DraftKings", "1x2", s, "current", None, a) for s, a in (("home", -120), ("draw", 260), ("away", 300))]
+    assert soccer.record_quotes(live, first, {mid}, raw, t1) == 3
+    assert soccer.record_quotes(live, second, {mid}, raw, t2) == 2          # the unchanged draw is not stored again
+    got = implied_lines.match_result_probabilities(sml.quotes(live, mid, t2))
+    dec = {"home": 1 + 100 / 120, "draw": 3.6, "away": 4.0}               # retrieval 2's prices, worked by hand
+    total = sum(1 / d for d in dec.values())
+    assert got is not None and got == pytest.approx({k: (1 / d) / total for k, d in dec.items()})
+    # A side withdrawn in a later retrieval leaves no complete quote (never a stale three-way mix).
+    t3 = (NOW + timedelta(minutes=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    soccer.record_quotes(live, second[:2], {mid}, raw, t3)
+    assert implied_lines.match_result_probabilities(sml.quotes(live, mid, t3)) is None

@@ -7,7 +7,7 @@ UPDATE/DELETE on stored predictions and live forecasts made after cutoff/tipoff.
 """
 import hashlib
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional
 
 from .db import transaction
@@ -93,6 +93,13 @@ def record_market(conn: sqlite3.Connection, f: MarketForecast) -> tuple[int, boo
     probabilities under the same identity are a conflict, never an overwrite."""
     with transaction(conn):
         key = f.idempotency_key
+        if f.revision:
+            # A revision only separates a forecast whose plain identity is already taken (the line returned to one
+            # forecast earlier). The first forecast at a new line keeps the plain identity, so the next cycle at that
+            # line, which carries no revision, is a retry and not a second row.
+            plain = replace(f, revision="").idempotency_key
+            if conn.execute("SELECT 1 FROM market_forecasts WHERE idempotency_key=?", (plain,)).fetchone() is None:
+                key = plain
         existing = conn.execute("SELECT forecast_id, p_a, p_mid, p_b, line_source FROM market_forecasts WHERE idempotency_key=?",
                                 (key,)).fetchone()
         if existing and existing["line_source"] == "model" and f.line_source == "market":

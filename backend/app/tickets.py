@@ -321,7 +321,8 @@ def source_usable(section, pick=None):
 def quote_check(conn, pick, stamp):
     """The forecast's line against the latest stored sportsbook quote (market_quotes 'current', retrieved by `stamp`).
     A bookmaker line that moved since the forecast means its probability belongs to a line no longer offered. Prices are
-    reported, never judged: value depends on the exact price the user gets. Model-line markets have no stored quote."""
+    reported, never judged: value depends on the exact price the user gets. A model-line forecast gets a price only from a
+    quote at exactly its line; otherwise it has none."""
     row = conn.execute('SELECT line, line_source, market_quote_id FROM game_forecasts WHERE forecast_id=?',
                        (pick['forecast_id'],)).fetchone()
     history = pick.get('percentage_history')   # a dict, or the provider's ForecastPercentageRecord before JSON encoding
@@ -334,6 +335,11 @@ def quote_check(conn, pick, stamp):
            ' ORDER BY retrieved_at DESC, quote_id DESC LIMIT 1')
     now = conn.execute(sql, (pick['game_id'], pick['market'], stamp) + ((first['provider'],) if first else ())).fetchone()
     line_at = row['line'] if row else None
+    # A forecast at the app's own line is priced only by a quote at exactly that line: a price for another line is a
+    # different bet, and its break-even would be compared with this line's probability.
+    if (row and row['line_source'] != 'bookmaker' and line_at is not None and now is not None
+            and (now['line'] is None or abs(now['line'] - line_at) > 1e-9)):
+        now = None
     moved = bool(row and row['line_source'] == 'bookmaker' and now is not None and now['line'] is not None
                  and line_at is not None and abs(now['line'] - line_at) > 1e-9)
     return dict(provider=now['provider'] if now else None, retrieved_at=now['retrieved_at'] if now else None,
@@ -410,6 +416,18 @@ def _field(obj, key, default=None):
     return obj.get(key, default) if isinstance(obj, dict) else getattr(obj, key, default)
 
 
+def price_probability(pick, decimal):
+    """The probability to set against a price's break-even (1/decimal). Equal to the win probability unless the market
+    can push or settle half (soccer whole and quarter lines): then it is the expected return per unit staked divided by
+    the decimal price, win*d + half_win*(1+d)/2 + push + half_loss/2, over d, so that it beats 1/d exactly when the bet's
+    expected return is positive, and multiplies across independent legs like a plain probability."""
+    o = pick.get('outcome_probabilities') or {}
+    if decimal is None or not any(o.get(k) for k in ('push', 'half_win', 'half_loss')):
+        return pick['probability']
+    return (o.get('win', 0) * decimal + o.get('half_win', 0) * (1 + decimal) / 2 + o.get('push', 0)
+            + o.get('half_loss', 0) / 2) / decimal
+
+
 def leg_assessment(sport, pick):
     """What the reviewer weighs together for one market, side by side; facts only, no verdict and no threshold:
     the app probability and recommendation, the exact stored price and its break-even probability, the record of similar
@@ -433,13 +451,15 @@ def leg_assessment(sport, pick):
         record = dict(win_rate=evidence['win_rate'], settled=n,
                       interval=threshold_overview.wilson(round(evidence['win_rate'] * n), n), source=evidence.get('source'))
     return dict(probability=pick['probability'], price=quote.get('price_now'), decimal=decimal, break_even=break_even,
-                model_gap=None if break_even is None else pick['probability'] - break_even, record=record,
+                price_probability=price_probability(pick, decimal),
+                model_gap=None if break_even is None else price_probability(pick, decimal) - break_even, record=record,
                 record_minus_break_even=None if record is None or break_even is None else
                 [record['interval'][0] - break_even, record['interval'][1] - break_even],
                 exact=f"{_field(history, 'wins', 0) or 0}-{_field(history, 'losses', 0) or 0} ({_field(history, 'settled', 0) or 0} settled)",
                 exact_rank=(f"{_field(history, 'rank')} of {_field(history, 'ranked')}" if _field(history, 'rank') else None),
                 book_prices=book_prices, best_book=best_book, best_book_price=book_prices.get(best_book),
-                best_book_gap=None if best_book is None else pick['probability'] - 1 / decimal_odds(book_prices[best_book]),
+                best_book_gap=None if best_book is None else
+                price_probability(pick, decimal_odds(book_prices[best_book])) - 1 / decimal_odds(book_prices[best_book]),
                 book_prices_checked_at=books.get('checked_at') if book_prices else None,
                 app_rank=pick.get('game_rank'), skill_proven=pick.get('skill_proven'),
                 line_source=quote.get('line_source') or _field(history, 'line_source'), app_note=markets.LIMITATIONS.get((sport, pick['market'])))
@@ -624,7 +644,9 @@ def ticket_assessment(legs):
     break-even probability and the model estimate (independence assumption), plus each leg's own record of similar picks.
     No ticket-level range is computed from those records (review, Nov 8): multiplying historical intervals does not give
     today's ticket a win-probability interval. book_payouts is what the whole ticket pays at each sportsbook that prices
-    every leg on the same line (stored prices), best_book the one paying most. Lists legs priced above the model, unpriced legs and legs without a record."""
+    every leg on the same line (stored prices), best_book the one paying most. Lists legs priced above the model, unpriced legs and legs without a record.
+    model_estimate is the chance every leg fully wins; model_minus_break_even uses each leg's price_probability, so a
+    leg that can push or settle half (soccer whole/quarter lines) counts its refunds and half results."""
     rows = [(f"{leg['sport'].upper()} {leg['pick_label']}", leg.get('assessment') or leg_assessment(leg['sport'], leg)) for leg in legs]
     payout = math.prod(a['decimal'] for _, a in rows) if all(a['decimal'] for _, a in rows) else None
     estimate = math.prod(a['probability'] for _, a in rows)
@@ -635,7 +657,8 @@ def ticket_assessment(legs):
     best_book = max(book_payouts, key=book_payouts.get, default=None)
     return dict(legs=len(rows), payout=payout, break_even=break_even, model_estimate=estimate,
                 book_payouts=book_payouts, best_book=best_book,
-                model_minus_break_even=None if payout is None else estimate - break_even,
+                model_minus_break_even=None if payout is None else
+                math.prod(a.get('price_probability', a['probability']) for _, a in rows) - break_even,
                 leg_records=[dict(label=label, record=a['record']) for label, a in rows],
                 priced_above_model=[label for label, a in rows if a['model_gap'] is not None and a['model_gap'] < 0],
                 unpriced=[label for label, a in rows if a['decimal'] is None],

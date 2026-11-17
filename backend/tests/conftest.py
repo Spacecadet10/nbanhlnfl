@@ -23,3 +23,10 @@ def _never_the_live_data_dir(monkeypatch, tmp_path_factory):
     current = os.environ.get("NBA_DATA_DIR")
     if not current or config.protected_path(current):
         monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path_factory.mktemp("nba-data-dir")))
+
+
+@pytest.fixture(autouse=True)
+def _private_nfl_test_run_registry(monkeypatch, tmp_path_factory):
+    """The machine-wide NFL test-run registry (test_run_guard.nfl_registry) lives in the user's home folder; each test gets
+    its own, so tests neither write there nor see each other's runs."""
+    monkeypatch.setenv("NFL_EVAL_LOG_DIR", str(tmp_path_factory.mktemp("nfl-eval-logs")))

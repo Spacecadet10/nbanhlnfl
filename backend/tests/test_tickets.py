@@ -784,6 +784,20 @@ def test_quote_check_reports_current_price_and_a_moved_bookmaker_line():
                        price_at_forecast=None,line_moved=False)
 
 
+
+def test_a_model_line_forecast_never_gets_a_sportsbook_price_quoted_at_another_line():
+    # Review finding (Nov 15): a forecast at the app's own line (-14.0) was given DraftKings' -12.5 price, so its
+    # break-even, model gap and ticket payout compared a probability with a price for a different line.
+    conn=quote_store()
+    conn.execute("INSERT INTO game_forecasts VALUES (4,-14.0,'model',NULL)")
+    other=t.quote_check(conn,qpick(4,'spread','b'),NOW)
+    assert other['price_now'] is None and other['line_source']=='model' and other['line_moved'] is False
+    assert t.leg_assessment('nba',dict(forecast_id=4,game_id='g1',market='spread',probability=.55,quote_check=other))['break_even'] is None
+    # The same line at the sportsbook is the same bet: its price is kept.
+    conn.execute("INSERT INTO game_forecasts VALUES (5,-12.5,'model',NULL)")
+    same=t.quote_check(conn,qpick(5,'spread','b'),NOW)
+    assert same['price_now']==-112 and same['line_now']==-12.5
+
 def test_moved_line_is_excluded_from_the_trigger_and_refused_at_check(setup):
     plan,snap,sent,path=setup
     snap['sports']['nhl']['report']['picks'][1]['quote_check']=dict(provider='DraftKings',retrieved_at=NOW,line_source='bookmaker',
@@ -2328,3 +2342,25 @@ def test_line_move_prefers_the_picks_own_sportsbook_when_providers_share_the_lat
     t.attach_facts(c, 'nba', picks, FACT_T)
     move = picks[0]['game_facts']['line_move']
     assert move['provider'] == 'DraftKings' and move['current']['line'] == 221.5 and move['move_pct_points'] == pytest.approx(3.0)
+
+
+def test_soccer_push_and_quarter_lines_are_compared_with_the_price_by_expected_return():
+    # Review finding (Nov 15): pushes and half results were ignored, so a whole/quarter-line leg's model_gap and the
+    # ticket's model_minus_break_even were biased low. Worked by hand at +100 (decimal 2.0, break-even 0.5):
+    # 2.0 line, win .45 / push .20 / loss .35: return .45*2 + .20 = 1.10 per unit, i.e. a fair-equivalent 0.55.
+    whole = dict(forecast_id=1, game_id='g', market='goals_total', probability=.45, quote_check=dict(price_now=100),
+                 outcome_probabilities=dict(win=.45, half_win=0, push=.2, half_loss=0, loss=.35))
+    a = t.leg_assessment('soccer', whole)
+    assert a['probability'] == .45 and a['break_even'] == .5
+    assert a['model_gap'] == pytest.approx(.05)
+    # 2.25 line, win .40 / half-win .10 / loss .50: return .40*2 + .10*1.5 = .95 per unit -> 0.475.
+    quarter = dict(whole, probability=.4, outcome_probabilities=dict(win=.4, half_win=.1, push=0, half_loss=0, loss=.5))
+    assert t.leg_assessment('soccer', quarter)['model_gap'] == pytest.approx(-.025)
+    # A ticket: the whole-line leg with a plain .60 leg at +100 pays 4.0; expected return 1.10 * 1.20 = 1.32 = .33 * 4.
+    plain = dict(forecast_id=2, game_id='h', market='winner', probability=.6, quote_check=dict(price_now=100))
+    legs = [dict(l, sport='soccer', pick_label=str(i), assessment=t.leg_assessment('soccer', l)) for i, l in enumerate((whole, plain))]
+    tk = t.ticket_assessment(legs)
+    assert tk['payout'] == 4.0 and tk['model_estimate'] == pytest.approx(.27)          # both legs fully win: .45 * .6
+    assert tk['model_minus_break_even'] == pytest.approx(.33 - .25)
+    # Without push or half mass nothing changes.
+    assert t.leg_assessment('soccer', plain)['model_gap'] == pytest.approx(.1)

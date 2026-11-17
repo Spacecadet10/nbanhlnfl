@@ -66,6 +66,11 @@ def template(tmp_path_factory):
         c.close()
 
 
+def conn_basis_assumed(gid) -> bool:
+    """Games in `recent` are first written live at their start, so ingest records their results as observed."""
+    return False
+
+
 @st.composite
 def recent(draw):
     """Writes (write time, kind, args) around the training run, and which of them change what the fit consumed."""
@@ -98,8 +103,11 @@ def recent(draw):
             if shot_at <= cycle or backfill_late:
                 when = train + timedelta(minutes=2) if backfill_late else shot_at
                 writes.append((when, "shots", {"gid": gid, "at": _ts(when)}))
-                # imported over 24 h after the start, a historical backfill is dated at the result time (nhl_shots)
-                historical = when - start > nhl_shots.OBSERVED_WINDOW
+                # nhl_shots dates a late import back to the result time only when that result's time was assumed
+                # (tipoff + 4 h, a historical backfill). These games are tracked live from their start, so their results
+                # are observed: shots are dated at their fetch and never change what an earlier fit consumed (review
+                # fix, Nov 15; before it, a late import was always backdated and made the fit stale).
+                historical = (when - start > nhl_shots.OBSERVED_WINDOW and conn_basis_assumed(gid))
                 causes |= {"events"} if (historical and when > train and fin <= train) else set()
     if draw(st.integers(0, 3)) == 0:      # the last 2026 game in progress at training, final after it (season boundary)
         game = {"gid": 2026021999, "start": "2026-10-12T14:00:00", "home": 6, "away": 16, "season": 2026}
@@ -141,12 +149,15 @@ def _fresh(conn, name, market, line, cache):
 
 
 def _backfill_only():
-    """A final consumed by the fit whose shots are a historical backfill imported after it (dated at the result time)."""
+    """A final consumed by the fit whose shots are imported after it. The result was observed live, so since the review
+    fix (Nov 15) the shots are dated at their fetch, after the fit: nothing the fit consumed changed (no cause), and the
+    cycle must still serve the fresh walk's forecasts. Assumed (backfilled) results keep the staleness guard, covered by
+    test_adaptive.test_a_backfilled_shot_import_dated_before_the_fit_cutoff_makes_the_shot_member_missing_until_a_retrain."""
     game = {"gid": 2026020100, "start": "2026-10-10T16:00:00", "home": 6, "away": 16}
     start, fin, when = _t("2026-10-10T20:00:00Z"), _t("2026-10-10T23:00:00Z"), _t(TRAIN_AT) + timedelta(minutes=2)
     return ([(start, "live", {**game, "state": 3, "hs": 0, "vs": 0, "period": 1, "at": _ts(start)}),
              (fin, "final", {**game, "hs": 3, "vs": 1, "at": _ts(fin)}),
-             (when, "shots", {"gid": game["gid"], "at": _ts(when)})], {"events"})
+             (when, "shots", {"gid": game["gid"], "at": _ts(when)})], set())
 
 
 @settings(max_examples=EXAMPLES, deadline=None, suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture])

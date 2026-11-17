@@ -45,7 +45,13 @@ def pending(conn, seasons: Optional[Iterable[int]] = None) -> list:
 
 def import_game(conn, g, body: bytes, retrieved_at: str) -> dict:
     policy = _policy(retrieved_at, g["tipoff_at"])
-    available = retrieved_at if policy == nhl_pbp.OBSERVED else max(g["result_available_at"], g["tipoff_at"])
+    # A late fetch is dated back to the result only when that result's own time was assumed (tipoff + 4 h, a historical
+    # backfill), as for NBA boxes (ingest._record_observation). A result observed live means the store has run since the
+    # game, so these shots were not there before this fetch.
+    basis = conn.execute("SELECT result_availability_basis FROM games WHERE game_id=?", (g["game_id"],)).fetchone()
+    backdate = (policy == nhl_pbp.HISTORICAL_BACKFILL and basis is not None and basis[0] == "assumed_tipoff_plus_4h"
+                and g["result_available_at"] <= retrieved_at)
+    available = max(g["result_available_at"], g["tipoff_at"]) if backdate else retrieved_at
     complete, shots = nhl_pbp.parse(json.loads(body))
     with transaction(conn):
         raw_id, fetch_id = raw_cache.store_fetch(conn, source=nhl_pbp.SOURCE, endpoint=nhl_pbp.ENDPOINT,

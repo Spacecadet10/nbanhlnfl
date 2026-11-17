@@ -68,6 +68,22 @@ def test_market_forecasts_keep_exact_lines_and_ignore_price_only_moves(sealed):
     assert latest["spread"]["line"] == -2.5 and latest["spread"]["quote_retrieved_at"] == "2026-10-10T16:30:00Z"
 
 
+
+def test_the_cycle_after_a_line_move_is_a_retry_not_a_second_row(sealed):
+    # Review finding (Nov 15), reproduced: the first forecast at a new line was keyed as a revision, so the next cycle at
+    # that same line (keyed without one) inserted an identical second row. Only a line that returns to one already
+    # forecast (A -> B -> A) needs a revision (ledger.MarketForecast.revision).
+    add_upcoming(sealed, start="2026-10-11T19:00:00")
+    quote(sealed, "2026-10-10T14:00:00Z")
+    market_live.forecast(sealed, now=NOW)
+    quote(sealed, "2026-10-10T16:30:00Z", spread=("-2.5", "+2.5"))
+    assert market_live.forecast(sealed, now="2026-10-10T17:00:00Z")["created"] == 1
+    retry = market_live.forecast(sealed, now="2026-10-10T17:30:00Z")
+    assert retry["created"] == 0 and retry["already_recorded"] == 5
+    spread = [(r[0], r[1]) for r in sealed.execute(
+        "SELECT line, generated_at FROM market_forecasts WHERE market='spread' ORDER BY forecast_id")]
+    assert spread == [(-1.5, NOW), (-2.5, "2026-10-10T17:00:00Z")]
+
 def test_a_quote_retrieved_after_generation_is_never_used(sealed):
     add_upcoming(sealed, start="2026-10-11T19:00:00")
     quote(sealed, "2026-10-10T16:00:00Z")

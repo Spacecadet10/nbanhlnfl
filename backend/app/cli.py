@@ -803,9 +803,17 @@ def _nfl(args, p) -> int:
             conn = db.connect_readonly("nfl")
         except FileNotFoundError as exc:
             p.error(f"{exc}; run `nfl migrate` and `nfl ingest` first")
+        from . import config as _config, nfl_live, test_run_guard
+        sealed_choice = json.loads(open(args.sealed).read())
         try:
-            rep = nfl_eval.run_test(conn, json.loads(open(args.sealed).read()), access_log=nfl_eval.access_log_path(),
-                                    out_dir=_P(args.out))
+            test_run_guard.nfl_test(nfl_eval.access_log_path(), activation=nfl_live.activation_path())
+        except test_run_guard.Refused as exc:
+            p.error(f"nfl test-run refused: {exc}")
+        try:
+            if not _P(args.out).exists():
+                nfl_eval._check_frozen(conn, sealed_choice)      # a bad seal is refused before anything is recorded
+                test_run_guard.record_nfl_start(sealed_choice, data_dir=_config.data_dir())
+            rep = nfl_eval.run_test(conn, sealed_choice, access_log=nfl_eval.access_log_path(), out_dir=_P(args.out))
         except (nfl_eval.TestSeasonsLocked, nfl_eval.TestRunAlreadyDone) as exc:
             p.error(f"nfl test-run refused: {exc}")
         w = rep["winner"]
@@ -915,6 +923,11 @@ def _soccer(args, p) -> int:
         if args.action == "markets-develop":
             if not (args.family and args.out):
                 p.error("soccer markets-develop needs --family goals|corners --out <folder>")
+            from . import test_run_guard
+            try:
+                test_run_guard.soccer_markets_develop(args.family, sme.experiments_log_path())
+            except test_run_guard.Refused as exc:
+                p.error(f"soccer markets-develop refused: {exc}")
             res = sme.develop(conn, args.family, out_dir=Path(args.out), experiments_log=sme.experiments_log_path(),
                               progress=lambda m: print(m, file=sys.stderr, flush=True))
             v = res["report"]["validation"]["choice"]
@@ -923,7 +936,13 @@ def _soccer(args, p) -> int:
             return 0
         if not (args.sealed and args.out):
             p.error("soccer markets-test needs --sealed <file> --out <new folder>")
-        rep = sme.run_test(conn, json.loads(Path(args.sealed).read_text()), access_log=sme.access_log_path(),
+        from . import test_run_guard
+        sealed_candidate = json.loads(Path(args.sealed).read_text())
+        try:
+            test_run_guard.soccer_markets_test(sealed_candidate, sme.experiments_log_path())
+        except test_run_guard.Refused as exc:
+            p.error(f"soccer markets-test refused: {exc}")
+        rep = sme.run_test(conn, sealed_candidate, access_log=sme.access_log_path(),
                            experiments_log=sme.experiments_log_path(), out_dir=Path(args.out))
         print(json.dumps({"status": "ok", "family": rep["family"], "reading": rep["reading"], "out": args.out}))
         return 0

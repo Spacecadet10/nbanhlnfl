@@ -84,3 +84,41 @@ def test_xg_uses_only_earlier_seasons_and_future_shots_never_change_past_forecas
     assert xi.unvalued == 1 and xi.fits[first.game.season] is None           # no earlier season: nothing valued
     early = [e for e in events if e.available_at <= rows[0].cutoff_at]
     assert not early                                                           # shots never precede their own cutoff
+
+
+def test_shots_fetched_late_for_a_result_observed_live_are_available_only_when_fetched(tmp_path, monkeypatch):
+    # Review finding (Nov 15): a late play-by-play fetch was always dated back to the game's result time, even when that
+    # result had been observed live (not assumed), so walks gave the xG model shots days before the store had them.
+    # Expected rule (ingest._record_observation for NBA boxes): backdate only an assumed (tipoff + 4 h) result.
+    from datetime import datetime, timedelta
+    from app import db, ingest
+    from test_nhl_eval import TEAMS, synthetic_season
+    monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path))
+    c = db.connect(tmp_path / "nhl.sqlite")
+    db.migrate(c)
+    ingest.ingest_nhl_teams(c, fetch=lambda: TEAMS, retrieved_at="2015-09-01T00:00:00Z")
+    body = synthetic_season(2018, random.Random(7), {6: 0.25, 16: -0.2, 8: 0.0})
+    probe = db.connect(tmp_path / "probe.sqlite")          # only to read the season's last tipoff in UTC
+    db.migrate(probe)
+    ingest.ingest_nhl_teams(probe, fetch=lambda: TEAMS, retrieved_at="2015-09-01T00:00:00Z")
+    ingest.ingest_nhl_season(probe, 2018, fetch=lambda _s: body, retrieved_at="2018-07-01T00:00:00Z")
+    last = probe.execute("SELECT MAX(tipoff_at) FROM games").fetchone()[0]
+    probe.close()
+    fmt = "%Y-%m-%dT%H:%M:%SZ"
+    seen = (datetime.strptime(last, fmt) + timedelta(hours=3)).strftime(fmt)
+    ingest.ingest_nhl_season(c, 2018, fetch=lambda _s: body, retrieved_at=seen)
+    g = c.execute("SELECT game_id, tipoff_at, result_available_at FROM games WHERE result_availability_basis='observed_retrieval' "
+                  "AND status='final' ORDER BY tipoff_at DESC LIMIT 1").fetchone()
+    assert g is not None and g["result_available_at"] == seen
+    late = (datetime.strptime(seen, fmt) + timedelta(hours=48)).strftime(fmt)
+    imp = nhl_shots.import_game(c, g, fake_fetch(c)(g["game_id"]), late)
+    assert imp["policy"] == "historical_backfill"
+    assert c.execute("SELECT available_at FROM nhl_pbp_imports WHERE game_id=?", (g["game_id"],)).fetchone()[0] == late
+    # An assumed result (first seen long after the game) is still backdated, as before.
+    old = c.execute("SELECT game_id, tipoff_at, result_available_at FROM games WHERE result_availability_basis='assumed_tipoff_plus_4h' "
+                    "AND status='final' LIMIT 1").fetchone()
+    if old is not None:
+        nhl_shots.import_game(c, old, fake_fetch(c)(old["game_id"]), late)
+        assert c.execute("SELECT available_at FROM nhl_pbp_imports WHERE game_id=?", (old["game_id"],)).fetchone()[0] == \
+            max(old["result_available_at"], old["tipoff_at"])
+    c.close()

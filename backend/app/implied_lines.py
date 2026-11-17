@@ -38,11 +38,12 @@ def fair_decimal(p: float) -> Optional[float]:
 
 
 def match_result_probabilities(quotes: list[dict], provider: str = 'DraftKings') -> Optional[dict]:
-    """Remove the margin from one complete sportsbook 1X2 quote."""
+    """Remove the margin from the provider's current 1X2 prices: the latest offered row of each side
+    (soccer_markets_live.quotes). The store appends a side only when its price changes (soccer.record_quotes) and records
+    a withdrawal as an unoffered row, so these rows are the prices of the latest retrieval even when their retrieval
+    times differ. All three sides are required."""
     sides = {q['side']: q for q in quotes if q.get('market') == '1x2' and q.get('provider') == provider}
-    if set(sides) != {'home', 'draw', 'away'} or len({q['retrieved_at'] for q in sides.values()}) != 1:
-        return None
-    if len({q.get('raw_id') for q in sides.values()}) != 1:
+    if set(sides) != {'home', 'draw', 'away'}:
         return None
     inv = {k: 1 / float(q['decimal_odds']) for k, q in sides.items()}
     total = sum(inv.values())
@@ -50,11 +51,12 @@ def match_result_probabilities(quotes: list[dict], provider: str = 'DraftKings')
 
 
 def derived_dc_dnb(quotes: list[dict], provider: str = 'DraftKings') -> Optional[dict]:
-    """Fair double chance / draw no bet from one retrieval of the provider's three 1X2 prices, or None."""
+    """Fair double chance / draw no bet from the provider's current three 1X2 prices, or None. `retrieved_at` is the
+    newest of the three rows: the retrieval these prices were current at."""
     p = match_result_probabilities(quotes, provider)
     if p is None:
         return None
-    retrieved_at = next(q['retrieved_at'] for q in quotes if q.get('market') == '1x2' and q.get('provider') == provider)
+    retrieved_at = max(q['retrieved_at'] for q in quotes if q.get('market') == '1x2' and q.get('provider') == provider)
     return {'label': DERIVED_LABEL, 'note': NOT_A_PRICE + ' Fair prices with the sportsbook margin removed.',
             'provider': provider, 'retrieved_at': retrieved_at,
             'double_chance': {'home_draw': fair_decimal(p['home'] + p['draw']),

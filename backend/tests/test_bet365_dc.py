@@ -73,7 +73,10 @@ def test_derived_double_chance_and_draw_no_bet_match_the_research_figures():
     assert d['label'] == 'derived from match result prices' and 'Not a price you can bet at' in d['note']
     assert d['double_chance']['home_draw'] == round(1 / ((p['home'] + p['draw']) / sum(p.values())), 3)
     assert implied_lines.derived_dc_dnb(quotes[:2]) is None                                # all three sides needed
-    assert implied_lines.derived_dc_dnb(quotes[:2] + [q('away', 7.0, '2026-11-11T03:00:00Z')]) is None   # one retrieval
+    # Unchanged sides are not stored again (soccer.record_quotes), so the latest row per side is the current price
+    # set even when retrieval times differ (review finding, Nov 15); the newest time is reported.
+    mixed = implied_lines.derived_dc_dnb(quotes[:2] + [q('away', 7.0, '2026-11-11T03:00:00Z')])
+    assert mixed is not None and mixed['retrieved_at'] == '2026-11-11T03:00:00Z'
 
 
 def test_implied_team_totals_use_one_response_and_say_what_they_are():
