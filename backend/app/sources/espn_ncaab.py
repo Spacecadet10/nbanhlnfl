@@ -106,6 +106,8 @@ def parse_scoreboard(payload: dict) -> list[NcaabGame]:
         sides = {c["homeAway"]: c for c in comp["competitors"]}
         if set(sides) != {"home", "away"}:
             continue
+        if not all(str(c["team"].get("id", "")).isdigit() for c in sides.values()):
+            continue                       # a placeholder opponent ('TBD', ids -1/-2 in March 2020): not a team, not a game
         source_status = comp["status"]["type"]["name"]
         status = espn.STATUS.get(source_status, "other")
         scores = {k: _score(c) for k, c in sides.items()}

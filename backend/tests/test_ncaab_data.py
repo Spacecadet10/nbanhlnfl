@@ -64,6 +64,15 @@ def test_postponed_and_canceled_games_have_no_result_and_are_not_final():
         assert by_status[status].ot_periods is None and not by_status[status].home_stats
 
 
+def test_placeholder_tbd_teams_are_skipped_not_stored():
+    """March 2020 lists canceled tournament games against 'TBD' teams with ids -1 / -2 (checked 2026-11-17)."""
+    payload = json.loads(raw("scoreboard_2021-01-09.json"))
+    away = next(c for c in payload["events"][0]["competitions"][0]["competitors"] if c["homeAway"] == "away")
+    away["team"].update(id="-2", displayName="TBD TBD")
+    parsed = espn_ncaab.parse_scoreboard(payload)
+    assert len(parsed) == len(payload["events"]) - 1 and all(g.home.team_id[6:].isdigit() and g.away.team_id[6:].isdigit() for g in parsed)
+
+
 def test_upcoming_games_carry_neutral_flag_tournament_note_and_no_scores():
     gs = games("scoreboard_2026-11-17.json")
     assert all(g.status == "scheduled" and g.home_score is None and g.season == 2027 for g in gs.values())
