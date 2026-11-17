@@ -247,7 +247,7 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
                 lines.append(STRONGEST_PREFIX + escape(label))
     lines += ['<i>' + ('App ranking for this past game.' if preview else ('Context comparison · provisional lean, not a ticket. Method context-card-v1.' if choice else 'Based on the app’s existing ranking.')) + '</i>',
               divider, '', '<b>Market breakdown</b>', '']
-    versions = []
+    versions, priced_at = [], []   # forecast times of the picks that show a sportsbook % (label below)
     for pick in picks:
         h = pick.get('percentage_history')
         if h is None:
@@ -264,6 +264,8 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
                     provenance += '; price unavailable'
                 book = pick.get('card_market_prob')
                 comparison = f"Sportsbook {displayed_percentage(book)}%" if book is not None else "Sportsbook probability unavailable"
+                if book is not None and _forecast_time_price(pick):
+                    priced_at.append(pick['generated_at'])
                 if 'card_app_prob' in pick:
                     comparison = f"App {displayed_percentage(pick['card_app_prob'])}% / " + comparison
                 if pick.get('card_comparison_basis'):
@@ -284,6 +286,8 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
         source = {'model': ' · <i>model line</i>', 'bookmaker': ' · <i>bookmaker line at forecast</i>', 'none': ''}[h['line_source']]
         book = pick.get('card_market_prob', pick.get('market_prob'))
         if book is not None:   # on the small grey line under the pick, so the record line keeps its length and never runs off the card
+            if _forecast_time_price(pick):
+                priced_at.append(pick['generated_at'])
             basis = pick.get('card_comparison_basis')
             detail = f" ({escape(basis)})" if basis else f" · {price_tag(pick['probability'], book)}"
             source = (source[:-4] + ' · ' if source else ' · <i>') + f"sportsbook {displayed_percentage(book)}%{detail}</i>"
@@ -321,9 +325,18 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
     if not versions:
         return None
     lines += [divider, '<i>Records match the sport, market, direction, percentage and model.</i>']
+
     if preview:
         lines.append('<i>Records include this game’s result. This is a formatting example.</i>')
-    lines.append('Updated ' + now.astimezone(TORONTO).strftime('%I:%M %p %Z'))
+    updated = 'Updated ' + now.astimezone(TORONTO).strftime('%I:%M %p %Z')
+    if priced_at:
+        # Owner request Nov 17: a sportsbook % without a source note is the no-vig price saved at or before its forecast,
+        # which can be minutes older than the newest price when the card goes out. On the last line, which the card image
+        # draws (wrapped); text only: the delivery key is unchanged (no resend).
+        local = lambda t: datetime.fromisoformat(t.replace('Z', '+00:00')).astimezone(TORONTO).strftime('%I:%M %p %Z')
+        first, last = local(min(priced_at)), local(max(priced_at))
+        updated += f" · Sportsbook % = no-vig price as of the forecast ({first if first == last else f'{first} to {last}'})"
+    lines.append(updated)
     text = '\n'.join(lines)
     if len(text) > (12000 if report['sport'] == 'soccer' else 4000):
         raise DeliveryError('Pick summary exceeds Telegram message length; not sent.')
@@ -331,6 +344,15 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
     key = hashlib.sha256(json.dumps(['preview-card-1' if preview else 'pregame', str(chat_id), report['sport'], gid, versions,
                                    strong[0]['market'] if strong else None], sort_keys=True).encode()).hexdigest()
     return key, text
+
+
+def _forecast_time_price(pick) -> bool:
+    """The pick's sportsbook % comes from a quote saved at or before its forecast: the ranked pick's market_prob and
+    tickets.card_market_prob (both <= generated_at), and Soccer prices derived from 1X2 quotes as of the forecast. A % with
+    another source note (an Odds API pregame quote, a 60-minute TheRundown quote, a Soccer offer) is priced near send
+    time and keeps its own note."""
+    basis = pick.get('card_comparison_basis')
+    return bool(pick.get('generated_at')) and (basis is None or 'derived from 1X2 prices' in basis)
 
 
 def card_lineups(conn, sport, report, now):

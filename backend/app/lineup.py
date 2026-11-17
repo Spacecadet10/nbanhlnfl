@@ -151,14 +151,47 @@ def top_players(apps: dict, names: dict, team: str, day: str, season: int) -> li
     return sorted(rows, key=lambda r: -r[2])[:TOP_PLAYERS]
 
 
+_CACHE: dict = {}     # _box_written_after: parsed download log and file digests, keyed by path, mtime and size
+
+
 def _box_written_after(season: int, at: str) -> bool:
-    """The player box file was last written after `at`: its rows are not what the file held at `at`."""
+    """The player box file's rows are not what the file held at `at`. A file last written at or before `at` is as of
+    `at`. One written later is still as of `at` when its content is byte-identical to the latest download stored at or
+    before `at` (availability attempts.jsonl: name, completed_at, sha256): a re-download of unchanged data (Nov 17
+    finding: a refresh between a forecast and its scorecard row made the row unknown with no change in minutes). A file
+    whose content was first stored after `at`, or with no stored download by `at`, stays after."""
+    import hashlib
+    import json
     from . import availability as av
+    path = av.player_box_path(season)
     try:
-        written = datetime.fromtimestamp(av.player_box_path(season).stat().st_mtime, tz=timezone.utc)
+        written = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
     except OSError:
         return False
-    return written.strftime('%Y-%m-%dT%H:%M:%SZ') > at
+    if written.strftime('%Y-%m-%dT%H:%M:%SZ') <= at:
+        return False
+    log = av.research_dir() / 'attempts.jsonl'
+    try:
+        st = log.stat()
+        key = (str(log), st.st_mtime_ns, st.st_size)
+        if _CACHE.get('log_key') != key:   # parsed once per log version (review LOW: called once per scorecard row)
+            rows = [json.loads(line) for line in log.read_text().splitlines() if line.strip()]
+            _CACHE.update(log_key=key, log=[a for a in rows if a.get('kind') == 'player_box' and a.get('outcome') == 'stored'])
+        stored = _CACHE['log']
+    except (OSError, ValueError):
+        return True
+    before = [a for a in stored if a.get('name') == path.name and (a.get('completed_at') or '') <= at]
+    if not before:
+        return True
+    latest = max(before, key=lambda a: a['completed_at'])
+    try:
+        st = path.stat()
+        key = (str(path), st.st_mtime_ns, st.st_size)
+        if key not in _CACHE:              # hashed once per file version
+            _CACHE[key] = 'sha256:' + hashlib.sha256(path.read_bytes()).hexdigest()
+        return _CACHE[key] != latest.get('sha256')
+    except OSError:
+        return True
 
 
 def nba_facts(conn, games: list, at: str, box_as_of: bool = False) -> dict:
