@@ -13,7 +13,11 @@
   review fixes, 256 after (ncaab_cards, ncaab_app_delivery, tickets, telegram); structure guard passed. One Sonnet review: no blocking
   defects; fixed side flip (1) and quote age (2). UNRESOLVED (low): push mass not removed from app % on integer lines (same as cards);
   a stale source at 11 AM delays the selection to the first fresh run; a transient compute failure stops that day's cards.
-- Next: evaluate selected vs not-selected from `ncaab_card_selections` + graded game_forecasts after a few weeks.
+- Released: delivery 42f4c18 → 61376d9 (0bce042 without HANDOFF.md; delivery tests 262 passed); telegram job kickstarted.
+  41 NCAAB cards had already gone out Nov 17 under the old rule. First selection 2026-11-17T23:26:10Z (late, so only the 11 games
+  tipping >= 01:26Z): 401921729 total +33.3, 401917533 total +22.1, 401920426 spread +19.1, 401924922 total +17.1 (DK quotes
+  23:25:30Z). Run 23:26:10Z: ncaab eligible 0, no other sport changed. NOT YET OBSERVED: one of these cards actually sent.
+- Next: confirm a selected card is sent (first: 401924922, 01:30Z tip); evaluate selected vs not-selected from `ncaab_card_selections` + graded game_forecasts after a few weeks.
 
 ## NCAAB fifth sport — RELEASED to delivery, first live forecast verified — Claude (lead), Nov 17, 2026 15:45Z
 - GitHub: main 16c17c3..f859bc0 pushed. Delivery (~/nba-predictor-delivery, detached): 8e7d35a → 4d52088 (main 16c17c3..f859bc0
