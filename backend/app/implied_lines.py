@@ -5,8 +5,8 @@ anyone can bet at, never a model input, never a ticket price.
   response (one fetch), the latest retrieved at or before the moment asked. home = total/2 - home spread/2, away =
   total/2 + home spread/2 (the stored spread line is the home handicap). NHL: the puck line is always +/-1.5, so the NHL
   number is rough (docs/evidence/free-price-sources-2026-11-10 section 5).
-- Soccer double chance and draw no bet, labelled "derived from match result prices": DraftKings' three 1X2 prices of one
-  retrieval with the margin removed proportionally, turned into fair decimal prices.
+- Soccer double chance and draw no bet, labelled "derived from match result prices": DraftKings' three current 1X2 prices
+  (latest row of each side; see match_result_probabilities) with the margin removed proportionally, as fair decimal prices.
 """
 from typing import Optional
 
@@ -38,12 +38,18 @@ def fair_decimal(p: float) -> Optional[float]:
 
 
 def match_result_probabilities(quotes: list[dict], provider: str = 'DraftKings') -> Optional[dict]:
-    """Remove the margin from the provider's current 1X2 prices: the latest offered row of each side
-    (soccer_markets_live.quotes). The store appends a side only when its price changes (soccer.record_quotes) and records
-    a withdrawal as an unoffered row, so these rows are the prices of the latest retrieval even when their retrieval
-    times differ. All three sides are required."""
-    sides = {q['side']: q for q in quotes if q.get('market') == '1x2' and q.get('provider') == provider}
-    if set(sides) != {'home', 'draw', 'away'}:
+    """Remove the margin from the provider's 1X2 prices as of one moment: `quotes` must be the latest row of each side
+    retrieved at or before that moment (soccer_markets_live.quotes / soccer_book). The store appends a side only when its
+    price changes and saves a withdrawal row for a side a listing retrieval no longer carries (soccer.record_quotes), so an
+    older row of an unchanged side is still that side's offered price at the newest retrieval. One sportsbook only, all
+    three sides required, a withdrawn (unoffered) side means no quote."""
+    rows = [q for q in quotes if q.get('market') == '1x2' and q.get('provider') == provider]
+    sides = {q['side']: q for q in rows}
+    if set(sides) != {'home', 'draw', 'away'} or len(rows) != 3:
+        return None
+    if any(not q.get('offered', 1) or not q.get('decimal_odds') for q in sides.values()):
+        return None
+    if len({q.get('price_kind', 'current') for q in sides.values()}) != 1 or len({q.get('match_id') for q in sides.values()}) != 1:
         return None
     inv = {k: 1 / float(q['decimal_odds']) for k, q in sides.items()}
     total = sum(inv.values())
@@ -52,7 +58,7 @@ def match_result_probabilities(quotes: list[dict], provider: str = 'DraftKings')
 
 def derived_dc_dnb(quotes: list[dict], provider: str = 'DraftKings') -> Optional[dict]:
     """Fair double chance / draw no bet from the provider's current three 1X2 prices, or None. `retrieved_at` is the
-    newest of the three rows: the retrieval these prices were current at."""
+    newest of the three rows: the retrieval these prices were all current at."""
     p = match_result_probabilities(quotes, provider)
     if p is None:
         return None

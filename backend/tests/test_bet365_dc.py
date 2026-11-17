@@ -73,10 +73,18 @@ def test_derived_double_chance_and_draw_no_bet_match_the_research_figures():
     assert d['label'] == 'derived from match result prices' and 'Not a price you can bet at' in d['note']
     assert d['double_chance']['home_draw'] == round(1 / ((p['home'] + p['draw']) / sum(p.values())), 3)
     assert implied_lines.derived_dc_dnb(quotes[:2]) is None                                # all three sides needed
-    # Unchanged sides are not stored again (soccer.record_quotes), so the latest row per side is the current price
-    # set even when retrieval times differ (review finding, Nov 15); the newest time is reported.
+    # The latest row of each side may come from different retrievals (the store saves a side only when its price changes);
+    # retrieved_at is the newest of the three: the retrieval these prices were all current at.
     mixed = implied_lines.derived_dc_dnb(quotes[:2] + [q('away', 7.0, '2026-11-11T03:00:00Z')])
     assert mixed is not None and mixed['retrieved_at'] == '2026-11-11T03:00:00Z'
+    # never a mix of sportsbooks, and never a withdrawn side
+    assert implied_lines.derived_dc_dnb(quotes[:2] + [{**quotes[2], 'provider': 'Bet365'}]) is None
+    assert implied_lines.derived_dc_dnb(quotes[:2] + [{**quotes[2], 'offered': 0}]) is None
+    # never a mix of price types (opening vs current) or of fixtures
+    assert implied_lines.derived_dc_dnb([{**x, 'price_kind': 'current'} for x in quotes[:2]] + [{**quotes[2], 'price_kind': 'open'}]) is None
+    assert implied_lines.derived_dc_dnb([{**x, 'match_id': 'm1'} for x in quotes[:2]] + [{**quotes[2], 'match_id': 'm2'}]) is None
+    assert implied_lines.derived_dc_dnb([{**x, 'match_id': 'm1', 'price_kind': 'current'} for x in quotes]) is not None
+    assert implied_lines.derived_dc_dnb(quotes + [{**quotes[2], 'decimal_odds': 9.0}]) is None   # two rows for one side
 
 
 def test_implied_team_totals_use_one_response_and_say_what_they_are():
