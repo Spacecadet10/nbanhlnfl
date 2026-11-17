@@ -177,7 +177,77 @@ Eligible finals total 77,007 (D-I games stored 78,654). Odds games = eligible ga
   cutoff (None when no box); `ncaab.dataset_version(rows)` is the 16-hex hash of those rows (current full-store value `b75c61f7137ef67b`).
 
 ## Results
-(Model agent fills in.)
+Filled by the model agent, 2026-11-17 (branch `ncaab-model`). Snapshot store `$HOME/nba-ncaab-scratch/model/ncaab.sqlite`,
+data cutoff 2026-11-17T12:00:00Z (all eligible finals: dataset_version b75c61f7137ef67b). Every number below is from the reports
+under `$HOME/nba-ncaab-scratch/reports/ncaab-{development,validation,test}/` (`report.json`, `predictions.csv`, `markets.csv`).
+
+Commands (from `backend/`, `NBA_DATA_DIR=$HOME/nba-ncaab-scratch/model`):
+- development (rerunnable, reads 2013-2021 only): `.venv/bin/python -m app.ncaab_eval development --cutoff 2026-11-17T12:00:00Z --out-dir $HOME/nba-ncaab-scratch/reports/ncaab-development`
+- validation, run once, sealed `app/models/ncaab_frozen_decision.json` at 2026-11-17T07:45:51Z: `... validation --cutoff 2026-11-17T12:00:00Z --out-dir $HOME/nba-ncaab-scratch/reports/ncaab-validation`
+- test, run once, logged at 2026-11-17T07:47:01Z in `$HOME/nba-ncaab-scratch/model/eval/test_access_ncaab.jsonl`: `... test --cutoff 2026-11-17T12:00:00Z --out-dir $HOME/nba-ncaab-scratch/reports/ncaab-test`
+
+Dataset versions: development (2013-2021 rows) 5fcff154d86c45bb, validation seasons e43ced8ae7453deb. Feature version
+`ncaab-pregame-ids-v1+prior-day-et-cutoff+scoreboard-poss-fga-fta-v1`. Scoreboard FGA+FTA coverage: 2013 4,703 of 5,471, 2014 to 2026
+≥ 99.9% (from `team_game_stats`, which `ncaab.load_rows` does not return; it is the same scoreboard retrieval as the final score
+and is read only for games whose result is available at the cutoff).
+
+**Operational choices fixed before validation was run** (the plan leaves them open): the cutoff is 00:00 ET on the game date, as in
+backtest.run. Market log loss is graded at each model's own half-point line AND at the other model's line ("both lines",
+the comparison; one model's own line alone always gives ≈0.693). Line-free point log score, MAE and bias are reported too.
+`college_eff` details: ratings relative to the D-I mean, step max(η, 1/(n+1)), league means EMA 0.002, home advantage = running mean
+of non-neutral residual margins. `running_points` = this season's means, else last season's, else the league mean. Calibration
+rule = deciles of the predicted points. Market rule: the model with the lower both-lines log loss ships if calibrated, else the other
+if calibrated, else research. Ties: |Δ| < 1e-6. For `college_eff`: smallest η, largest carry, smallest w0. Sigmas (dev RMS):
+Elo margin 11.64, eff margin 11.32, eff total 17.37, ρ 0.021, points total 17.76, home 11.04, away 10.88.
+
+**Tuning (development 2015-2021, n = 36,940):** `college_elo` K=50, H=100, carry 0.8, MOV on (dev LL 0.53834; the grid has no
+ties; K and H are at the top of the preregistered grid, which was not extended). `college_eff` η=0.04, carry 0.9, w0=4
+(dev LL 0.52705).
+
+**Winner** (n, Brier, log loss; the bootstrap is the paired ISO-week block bootstrap, seed 20260930, 2,000 resamples):
+
+| Period | n | constant | home_rate | college_elo | college_eff | college_eff+platt | eff − Elo log loss [95% CI] |
+|---|---|---|---|---|---|---|---|
+| Development 2015-21 (in-sample) | 36,940 | 0.25000 / 0.69315 | 0.23040 / 0.65336 | 0.18189 / 0.53834 | 0.17774 / 0.52705 | 0.17769 / 0.52690 | not bootstrapped |
+| Validation 2022-24 | 16,917 | 0.25000 / 0.69315 | 0.23188 / 0.65640 | 0.18625 / 0.54958 | 0.18300 / 0.54131 | 0.18289 / 0.54084 | −0.00828 [−0.01179, −0.00484] (Brier −0.00325 [−0.00455, −0.00195]) |
+| Test 2025-26 (once) | 11,516 | 0.25000 / 0.69315 | 0.23130 / 0.65520 | 0.18430 / 0.54356 | 0.17911 / 0.52740 | 0.17900 / 0.52726 | −0.01616 [−0.02099, −0.01150]; +platt −0.01631 [−0.02112, −0.01154] |
+
+By season (log loss, Elo / eff): 2021 0.5622 / 0.5485 (n 3,948, the thin season; worst in development); 2022 0.5415 / 0.5343;
+2023 0.5533 / 0.5470; 2024 0.5536 / 0.5423; 2025 0.5404 / 0.5268; 2026 0.5467 / 0.5280. Neutral sites (validation n 2,193):
+LL 0.6188 / 0.6088, mean predicted 0.570 vs observed listed-home win rate 0.576 (2021 postseason: all 89 games are flagged neutral).
+**First two weeks of each season are under-confident:** validation n 2,079, eff mean predicted 0.711 vs observed 0.732. In the test
+period, n 1,219, eff predicted 0.755 vs observed 0.783 (Elo 0.726). Many early games are home favourites against weak D-I teams.
+
+**Markets** (both-lines Brier / log loss; max decile gap in points; eff − baseline both-lines log loss [95% CI]):
+
+| Market | Period | n | college_eff | baseline | eff − baseline | Shipped |
+|---|---|---|---|---|---|---|
+| spread (baseline Elo/25) | validation | 16,917 | 0.49222 / 0.68528, gap 1.31 ✓ | 0.50665 / 0.70061, gap 1.02 ✓ | −0.01532 [−0.01936, −0.01133] | college_eff |
+| spread | test | 11,516 | 0.48895 / 0.68186, gap 1.32 | 0.51058 / 0.70525, gap 1.56 | −0.02339 [−0.02984, −0.01716] | |
+| total (baseline running points) | validation | 16,917 | 0.49549 / 0.68870, gap 3.80 ✗ | 0.50198 / 0.69573, gap 1.42 ✓ | −0.00704 [−0.01132, −0.00307] | running_points (eff fails calibration) |
+| total | test | 11,516 | 0.49485 / 0.68809, gap 3.94 | 0.50311 / 0.69673, gap 1.98 | −0.00864 [−0.01275, −0.00471] | |
+| team_total_home | validation | 16,917 | 0.48408 / 0.67664, gap 1.93 ✓ | 0.51075 / 0.70639, gap 3.33 ✗ | −0.02976 [−0.03730, −0.02309] | college_eff |
+| team_total_home | test | 11,516 | 0.48570 / 0.67818, gap 1.93 | 0.51184 / 0.70780, gap 2.78 | −0.02962 [−0.04194, −0.01885] | |
+| team_total_away | validation | 16,917 | 0.48398 / 0.67670, gap 2.00 ✓ | 0.51028 / 0.70549, gap 2.65 ✗ | −0.02879 [−0.03637, −0.02206] | college_eff |
+| team_total_away | test | 11,516 | 0.48186 / 0.67443, gap 2.00 (just above 2: fails the rule on test; descriptive) | 0.51299 / 0.70843, gap 3.34 | −0.03400 [−0.04139, −0.02622] | |
+
+**After-game lines (benchmark only; retrieved after the game, not a pregame quote):** none in development or validation. Test 2026 has 2,339 games
+with a DraftKings spread and total. At those lines, eff spread log loss is 0.70121 (Elo margin 0.71694) and running points total
+0.71979 (eff 0.71132). All are worse than 0.693, the log loss of treating the line as 50/50. The DraftKings line is a better point
+forecast: spread MAE 8.79 vs eff 8.91, total MAE 13.27 vs running points 13.86 and eff 13.68. Winner on the same games: the spread
+converted with the development σ gives LL 0.57342 / Brier 0.19703, vs eff+platt 0.58030 / 0.19984 and Elo 0.58915 / 0.20337.
+**The model does not beat the after-game market line.**
+
+**Chosen:** winner `ncaab-college_eff-carry=0.9-eta=0.04-w0=4+platt`. Eff had the best validation log loss and its bootstrap interval
+against Elo is entirely below 0, so the simple-baseline rule does not apply. The development-fit Platt (a 0.959, b 0.007) improved
+validation log loss from 0.54131 to 0.54084, so it ships.
+Markets: spread, team_total_home and team_total_away → `ncaab-college_eff-carry=0.9-eta=0.04-w0=4`; total → `ncaab-running_points`
+(eff is better on log loss but miscalibrated by up to 3.8 points in a decile). No market is research. NCAAB picks remain research only.
+
+**Known gaps:** the scoreboard FGA/FTA have no stored availability time. They are treated as part of the final result, and a later
+scoreboard correction would be used retroactively. True possessions (OREB/TOV) are not used; see the amendment. A single σ makes the
+first two weeks under-confident. There are no pregame sportsbook prices before 2026-27. Totals and team totals have no historical
+line of any kind except the 2026 DraftKings totals.
 
 ## Evidence
 Source probe 2026-11-17: 2026-11-17 68 D-I-group events (13 non-D-I team rows, 52 with DraftKings odds, 7 neutral);
