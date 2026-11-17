@@ -15,6 +15,7 @@ import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from uuid import uuid4
 
@@ -25,11 +26,15 @@ SPORT_IDS = {'nba': 4, 'nhl': 6, 'nfl': 2}
 # NCAAB (TheRundown sport 5): fetched only when asked for (`fetch(extra=('ncaab',))`, which the command does once an NCAAB store
 # exists). TheRundown files an event under its UTC date and about 54% of NCAAB tipoffs (ET evenings) fall on the next UTC date,
 # so both UTC dates (today and tomorrow) are asked for, after the three sports above. Budget: the three sports use 6 x 7 runs = 42
-# of DAY_REQUESTS (48); NCAAB gets at most EXTRA_DAY_REQUESTS (the 6 left over: 3 runs of 2 dates), and a request is made only
-# while the day's count after it still leaves EXTRA_RESERVE of the 48 for the existing sports.
+# of DAY_REQUESTS (48). NCAAB is asked only in runs inside EXTRA_RUN_WINDOW_ET (Eastern hours [15, 18): the 16:00 run, 2-7 h
+# before the evening slate; ESPN's DraftKings lines are saved at every odds tick besides), at most EXTRA_DAY_REQUESTS a UTC day
+# (one run of 2 dates: 44 of 48 in all), and a request is made only while the day's count after it is at most
+# DAY_REQUESTS - EXTRA_RESERVE, so retries and manual runs of the existing sports always keep real headroom.
+EASTERN = ZoneInfo('America/New_York')
 EXTRA_SPORT_IDS = {'ncaab': 5}
-EXTRA_DAY_REQUESTS = {'ncaab': 6}
-EXTRA_RESERVE = 6
+EXTRA_DAY_REQUESTS = {'ncaab': 2}
+EXTRA_RUN_WINDOW_ET = {'ncaab': (15, 18)}
+EXTRA_RESERVE = 10
 KNOWN_SPORT_IDS = {**SPORT_IDS, **EXTRA_SPORT_IDS}       # every sport whose saved responses may be read
 BOOKS = {'19': 'DraftKings', '22': 'BetMGM', '23': 'FanDuel'}
 MARKETS = {1: 'winner', 2: 'spread', 3: 'total'}
@@ -279,6 +284,8 @@ def fetch(now=None, *, opener=urllib.request.urlopen, pause=time.sleep, extra=()
             except (ValueError, AttributeError, TypeError):   # a damaged note never stops price collection
                 pass
         results = []
+        et_hour = started.astimezone(EASTERN).hour
+        extra = tuple(s for s in extra if EXTRA_RUN_WINDOW_ET[s][0] <= et_hour < EXTRA_RUN_WINDOW_ET[s][1])
         extra_used = {s: sum(_sport_request_today(x, today, s) for x in lines) for s in extra}
         plan = [(s, i, 2) for s, i in SPORT_IDS.items()] + [(s, EXTRA_SPORT_IDS[s], 2) for s in extra]
         for sport, sid, days in plan:

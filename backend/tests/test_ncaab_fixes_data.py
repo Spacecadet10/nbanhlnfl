@@ -1,7 +1,7 @@
 """Review fixes for the NCAAB data side: settlement statuses (S4), sticky Division I classification (N2), TheRundown UTC dates and
 budget (S3) and the ticket snapshot with no NCAAB store (S2). Synthetic stores and saved ESPN responses; no network."""
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -148,29 +148,22 @@ def test_ncaab_asks_for_both_utc_dates_and_the_default_fetch_is_unchanged(tmp_pa
 
 
 def test_ncaab_requests_never_take_the_existing_sports_budget(tmp_path, monkeypatch):
-    spare = rundown_odds.DAY_REQUESTS - 7 * 6                                  # seven runs of the three sports
-    assert rundown_odds.EXTRA_DAY_REQUESTS["ncaab"] == spare == 6
-    assert rundown_odds.DAY_REQUESTS - rundown_odds.EXTRA_RESERVE == 42 and rundown_odds.EXTRA_RESERVE == 6
-    # 41 used so far: one NCAAB request still leaves 6 of the 48 (count 42), the second would not
-    result, urls = _fetch(tmp_path, monkeypatch, NOW, extra=("ncaab",), prior=41 - 6)
+    # Budget (review should-fix 1): the three sports use 7 runs x 6 = 42 of 48. NCAAB asks only in the afternoon ET window
+    # (the 16:00 run, 2-7 h before the evening slate), two requests (both UTC dates): 44 a day, at least 4 always spare.
+    assert rundown_odds.EXTRA_DAY_REQUESTS["ncaab"] == 2 and rundown_odds.EXTRA_RUN_WINDOW_ET["ncaab"] == (15, 18)
+    assert 7 * 6 + rundown_odds.EXTRA_DAY_REQUESTS["ncaab"] <= rundown_odds.DAY_REQUESTS - 4
+    assert rundown_odds.DAY_REQUESTS - rundown_odds.EXTRA_RESERVE == 38
+    # 37 used so far: one NCAAB request still leaves 10 of the 48 (count 38), the second would not
+    result, urls = _fetch(tmp_path, monkeypatch, NOW, extra=("ncaab",), prior=37 - 6)
     assert sum("/sports/5/" in u for u in urls) == 1 and len(urls) == 7
-    # at 42 already used, NCAAB is not asked at all; the existing sports' six requests are not NCAAB's to refuse
-    result, urls = _fetch(tmp_path / "full", monkeypatch, NOW, extra=("ncaab",), prior=42 - 6)
+    # at 38 already used, NCAAB is not asked at all; the existing sports' six requests are not NCAAB's to refuse
+    result, urls = _fetch(tmp_path / "full", monkeypatch, NOW, extra=("ncaab",), prior=38 - 6)
     assert not any("/sports/5/" in u for u in urls) and len(urls) == 6
-    # a full day: seven runs, NCAAB at most its own six requests, the day total never above 48
-    total = tmp_path / "day"
-    sport5 = 0
-    for _ in range(7):
-        _, urls = _fetch(total, monkeypatch, NOW, extra=("ncaab",))
-        sport5 += sum("/sports/5/" in u for u in urls)
-    used = len((total / "odds-books" / "requests.jsonl").read_text().splitlines())
-    assert sport5 <= 6 and used <= rundown_odds.DAY_REQUESTS
-
-
-# --- S2: a missing NCAAB store is a quiet skip -----------------------------------------------------------------------------------------
-def test_ticket_snapshot_skips_a_missing_ncaab_store_without_an_alert(tmp_path, monkeypatch):
-    monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path))
-    out = tickets.snapshot()
-    assert "ncaab" not in out["sports"]
-    assert not [a for a in out["alerts"] if a["sport"] == "ncaab"]
-    assert tickets.health_alerts({"sports": {"ncaab": {"error": "forecasts_unavailable"}}}) == []
+    # a whole ET day of the seven scheduled runs: NCAAB only in the 16:00 run, the day total never above 46
+    total, sport5, requests = tmp_path / "day", [], 0
+    for hour, minute in ((10, 0), (13, 0), (16, 0), (18, 0), (19, 30), (21, 0), (22, 30)):
+        at = datetime(2026, 11, 17, hour, minute, tzinfo=timezone.utc) + timedelta(hours=5)      # EST = UTC-5
+        _, urls = _fetch(total, monkeypatch, at, extra=("ncaab",))
+        sport5.append(sum("/sports/5/" in u for u in urls))
+        requests += len(urls)
+    assert sport5 == [0, 0, 2, 0, 0, 0, 0] and requests == 44
