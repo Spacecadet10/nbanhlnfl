@@ -17,6 +17,9 @@ from .db import transaction, utc_now
 from .sources import espn
 
 SEED_SOURCE = 'nba_player_minutes_live'
+ROSTER_SOURCE = 'espn_nba_roster'           # jobs.roster_snapshot: ESPN team rosters, one fetch per team per few hours
+ROSTER_MAX_AGE_HOURS = 36
+_EMPTY_STAT = ('--', '', '0', '0-0', '+0', '-0')
 
 
 def prepare(conn):
@@ -90,6 +93,10 @@ def summary_players(data, game):
                     if len(values) <= index:
                         raise av.AvailabilityError('Missing player minutes')
                     value = str(values[index])
+                    if (value.strip() in ('--', '') and a.get('reason')
+                            and all(str(v).strip() in _EMPTY_STAT for i, v in enumerate(values) if i != index)):
+                        players[pid] = (name, 0.)      # ESPN DNP row with a stated reason and no counted stat
+                        continue
                     try:
                         parts = value.split(':')
                         minutes = float(parts[0]) + (float(parts[1])/60 if len(parts)==2 else 0)
@@ -166,6 +173,8 @@ def current_facts(conn, now):
         raise av.AvailabilityError('Injury report does not reconcile or has a future publication time')
     box, used = live_box(conn,now)
     index, hist = av.PlayerIndex(box,av.load_aliases()), av.MinutesHistory(box)
+    rosters = latest_rosters(conn, now)
+    unresolved, no_history = [], []
     facts = {}
     for entry in parsed.entries + parsed.not_submitted:
         day = entry['game_date']
@@ -181,17 +190,56 @@ def current_facts(conn, now):
         weight = av.STATUS_WEIGHT[entry['status']]
         if not weight:
             continue
+        label = f"{entry['first']} {entry['last']} ({entry['team']}, {entry['status']})"
         pid,_ = index.match(entry['last'],entry['first'],team,av.season_of(day))
+        roster = rosters.get(team)
+        rpid = roster['by_name'].get(av.norm_name(f"{entry['first']} {entry['last']}")) if roster else None
+        if pid is None or (rpid and rpid != pid):
+            pid = rpid if pid is None else None    # identity from the roster only when the box gives none
         if pid is None:
-            raise av.AvailabilityError('Unresolved unavailable player; no silent zero-minute assumption')
+            unresolved.append(label); continue
         minutes,basis = hist.expected(pid,day)
         if basis=='no_history':
-            raise av.AvailabilityError('Unavailable player has no trustworthy minute history')
+            athlete = roster['athletes'].get(pid) if roster else None
+            never = (entry['status'] == 'Out' and athlete is not None and athlete['years'] == 0
+                     and not any(a.played and a.date < day for a in hist.apps.get(pid, [])))
+            if not never:
+                no_history.append(label); continue
+            facts[day].zero_minute_out.append({'athlete_id': pid, 'name': athlete['name'], 'team': team,
+                                               'basis': 'roster_experience_0_no_minutes'})
+            minutes = 0.
         slot = facts[day].absent.setdefault(team,{'new':0.,'all':0.})
         slot['all'] += weight*minutes
         if hist.played_last_team_game(pid,team,day):
             slot['new'] += weight*minutes
-    return facts, [row['fetch_id'], *used]
+    problems = ([f"Unresolved unavailable player; no silent zero-minute assumption: {'; '.join(unresolved)}"] if unresolved else []) + \
+               ([f"Unavailable player has no trustworthy minute history: {'; '.join(no_history)}"] if no_history else [])
+    if problems:
+        raise av.AvailabilityError(' | '.join(problems))
+    return facts, [row['fetch_id'], *used, *sorted(r['fetch_id'] for r in rosters.values())]
+
+
+def latest_rosters(conn, now):
+    """{team id: {fetch_id, athletes: {athlete id: {name, years}}, by_name: {norm name: id}}} from the newest roster of each
+    team retrieved at or before `now` and at most ROSTER_MAX_AGE_HOURS old. A name two athletes share is left out."""
+    since = (av.datetime.fromisoformat(now.replace('Z', '+00:00')) - av.timedelta(hours=ROSTER_MAX_AGE_HOURS)).strftime('%Y-%m-%dT%H:%M:%SZ')
+    out = {}
+    for r in conn.execute('SELECT f.fetch_id, f.raw_id, r.request_key FROM raw_fetches f JOIN raw_responses r USING(raw_id) '
+                          'WHERE r.source=? AND f.retrieved_at<=? AND f.retrieved_at>=? ORDER BY f.retrieved_at DESC, f.fetch_id DESC',
+                          (ROSTER_SOURCE, now, since)):
+        team = r['request_key'].split('=', 1)[1]
+        if team in out:
+            continue
+        athletes, names = {}, defaultdict(set)
+        for a in json.loads(raw_cache.load(conn, r['raw_id'])).get('athletes', []):
+            pid, name = str(a.get('id', '')), a.get('fullName') or ''
+            years = (a.get('experience') or {}).get('years')
+            if pid and name and isinstance(years, int):
+                athletes[pid] = {'name': name, 'years': years}
+                names[av.norm_name(name)].add(pid)
+        out[team] = {'fetch_id': r['fetch_id'], 'athletes': athletes,
+                     'by_name': {k: next(iter(v)) for k, v in names.items() if len(v) == 1}}
+    return out
 
 
 def build(conn, elo_cfg, now, current_ids):
