@@ -64,8 +64,9 @@ export function Layout() {
   const [lastGames, setLastGames] = useState<Record<League, string | null>>(() => {
     try {
       return { nba: sessionStorage.getItem(`${LAST_GAME}-nba`), nhl: sessionStorage.getItem(`${LAST_GAME}-nhl`),
-        nfl: sessionStorage.getItem(`${LAST_GAME}-nfl`), soccer: sessionStorage.getItem(`${LAST_GAME}-soccer`) };
-    } catch { return { nba: null, nhl: null, nfl: null, soccer: null }; }
+        ncaab: sessionStorage.getItem(`${LAST_GAME}-ncaab`), nfl: sessionStorage.getItem(`${LAST_GAME}-nfl`),
+        soccer: sessionStorage.getItem(`${LAST_GAME}-soccer`) };
+    } catch { return { nba: null, nhl: null, ncaab: null, nfl: null, soccer: null }; }
   });
   const lastGame = lastGames[sport];
   useEffect(() => {
@@ -91,7 +92,7 @@ export function Layout() {
               <circle cx="29" cy="12" r="5" fill="#C084FC" stroke="#1E1B4B" />
               <path d="M25 9l8 6m-8-1l7-5" fill="none" stroke="#1E1B4B" strokeWidth=".9" />
             </svg>
-            COURTSIDE<span className="brand-sub">{sport === 'nhl' ? 'HOCKEY' : sport === 'nfl' ? 'FOOTBALL' : sport === 'soccer' ? 'SOCCER' : 'BASKETBALL'} INTELLIGENCE</span>
+            COURTSIDE<span className="brand-sub">{sport === 'nhl' ? 'HOCKEY' : sport === 'ncaab' ? 'COLLEGE BASKETBALL' : sport === 'nfl' ? 'FOOTBALL' : sport === 'soccer' ? 'SOCCER' : 'BASKETBALL'} INTELLIGENCE</span>
           </NavLink>
         </div>
         <nav className="nav" aria-label="Main">
@@ -133,10 +134,12 @@ export function Layout() {
                     ? <p>Schedule and results from ESPN's public NFL scoreboard{lastRefresh ? `, last imported ${dateTime(lastRefresh)}` : ''}. {nflForecasts
                       ? 'Live forecasts are recorded within two hours of kickoff for regular-season and playoff games: the winner from an NFL Elo model; spread, total and team totals from a points model, against a bookmaker line collected 2–4 hours before kickoff when there is one, otherwise a model line. No injury or weather information.'
                       : 'NFL live forecasts are not active for this data store, so no NFL forecast, odds or record is shown. No injury information.'}</p>
+                    : sport === 'ncaab'
+                    ? <p>Schedule, results and DraftKings lines from ESPN's public men's college basketball scoreboard (Division I games only){lastRefresh ? `, last refreshed ${dateTime(lastRefresh)}` : ''}. Forecasts are recorded within two hours of the start by a results-only college model; spread, total and team-total forecasts use a bookmaker line only when the model can price it, otherwise the model's own line. No injury, travel or line-up information. Research only: no pick rule is claimed for NCAAB.</p>
                     : sport === 'nhl'
                     ? <p>Schedule and results from the NHL's own stats API{lastRefresh ? `, last refreshed ${dateTime(lastRefresh)}` : ''}. Winner forecasts come from an NHL Elo model; puck line, totals and the regulation result from a goals model. No goalie, injury or line-up information.</p>
                     : <p>Schedule and results from ESPN's unofficial API{lastRefresh ? `, last refreshed ${dateTime(lastRefresh)}` : ''}. Forecasts come from an Elo model.</p>}
-                  <p>{sport === 'nfl' || sport === 'soccer' ? '' : 'Backtests are labelled Backtest; forecasts recorded before the game are labelled Live. '}Team logos are loaded from {sport === 'nhl' ? 'the NHL' : 'ESPN'}. No betting advice.</p>
+                  <p>{sport === 'nfl' || sport === 'soccer' ? '' : 'Backtests are labelled Backtest; forecasts recorded before the game are labelled Live. '}{sport === 'ncaab' ? 'Teams are shown by their ESPN abbreviation.' : <>Team logos are loaded from {sport === 'nhl' ? 'the NHL' : 'ESPN'}.</>} No betting advice.</p>
                 </div>
               </details>
             )}

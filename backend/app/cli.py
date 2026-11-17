@@ -16,6 +16,10 @@ SPORT_COMMANDS = {"nhl-pbp-import", "nhl-xg-research", "migrate", "replay", "cov
                   "release-check", "diagnostics", "historical-start", "model-audit", "calibration-study",
                   "adaptive-train", "adaptive-record", "adaptive-status", "adaptive-replay", "adaptive-import", "training-inputs",
                   "combination-export-adaptive", "combination-thresholds-report"}
+# NCAAB runs the shared production jobs and read-only reports only: no research, agreement, selection, adaptive or
+# paper-rule command exists for it (docs/NCAAB_PLAN.md). Anything else is refused by name below.
+NCAAB_COMMANDS = {"migrate", "refresh", "odds", "tick", "predict-now", "markets", "score", "score-near-tipoff", "score-markets",
+                  "daily", "scheduler", "coverage", "release-check", "telegram"}
 NHL_ONLY = {"nhl-pbp-import", "nhl-xg-research", "ingest-nhl", "nhl-validate", "nhl-test", "nhl-record-test", "nhl-agreement", "nhl-learned", "nhl-agreement-explore", "rebuild-goalies"}
 
 
@@ -463,6 +467,9 @@ def main(argv=None) -> int:
                     help="Required for --period test; the access is logged to data/eval/test_access.jsonl")
     bt.add_argument("--record", action="store_true", help="Also append predictions to the ledger as run_type=backtest")
     args = p.parse_args(argv)
+    if args.sport == "ncaab" and args.cmd not in NCAAB_COMMANDS:
+        p.error(f"`{args.cmd}` is not defined for NCAAB (it has no research, agreement or adaptive members); "
+                f"available: {', '.join(sorted(NCAAB_COMMANDS))}")
     if args.cmd == 'telegram':
         from . import telegram
         if release.enabled():          # guarded release: refuse before any request or ledger access (release.delivery_check)
@@ -543,7 +550,7 @@ def main(argv=None) -> int:
     if args.cmd == "tuning-study":       # opens (and migrates) both stores: run on copies
         from pathlib import Path
         import importlib.util
-        if any(_refused(s) for s in sports.SPORT_IDS):      # the stores conn_for opens; never the live ones
+        if any(_refused(s) for s in ("nba", "nhl")):      # the stores conn_for opens (NBA and NHL research only); never the live ones
             return 1
         if importlib.util.find_spec("optuna") is None:      # refuse before any store is opened or migrated
             p.error("tuning-study needs the research extra (optuna==5.0.0); install it in a research venv, not the live one")
@@ -630,7 +637,7 @@ def main(argv=None) -> int:
     if args.cmd == "deep-study":         # opens (and migrates) both stores: run on copies
         from pathlib import Path
         import importlib.util
-        if any(_refused(s) for s in sports.SPORT_IDS):      # the stores conn_for opens; never the live ones
+        if any(_refused(s) for s in ("nba", "nhl")):      # the stores conn_for opens (NBA and NHL research only); never the live ones
             return 1
         if any(importlib.util.find_spec(m) is None for m in ("torch", "tensorflow")):   # refuse before any store is opened
             p.error("deep-study needs the deep extra (torch, tensorflow); install it in a research venv, not the live one")

@@ -63,7 +63,7 @@ def test_ncaab_store_migrates_from_an_older_schema_keeping_rows_and_gaining_the_
     quote = tuple(conn.execute("SELECT * FROM market_quotes").fetchone())
     before = {t: rows for t, rows in snapshot(conn).items() if t in ("teams", "games", "raw_responses", "raw_fetches")}
     applied = db.migrate(conn)
-    assert applied == ["0042_ncaab.sql"] and all(db.has_table(conn, t) for t in NCAAB_TABLES)
+    assert applied == ["0042_ncaab.sql", "0043_ncaab_app.sql"] and all(db.has_table(conn, t) for t in NCAAB_TABLES)
     assert tuple(conn.execute("SELECT * FROM market_quotes").fetchone()) == quote
     assert {t: rows for t, rows in snapshot(conn).items() if t in before} == before
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == [] and conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1

@@ -1,0 +1,172 @@
+{
+ "source": "ESPN core API /v2/sports/basketball/leagues/mens-college-basketball/groups/<id>",
+ "retrieved": "2026-11-17",
+ "note": "Current ESPN labels; ids are the conference ids stored in ncaab_team_seasons.",
+ "conferences": {
+  "1": {
+   "name": "America East Conference",
+   "short": "Am. East",
+   "abbr": "aeast"
+  },
+  "2": {
+   "name": "Atlantic Coast Conference",
+   "short": "ACC",
+   "abbr": "acc"
+  },
+  "3": {
+   "name": "Atlantic 10 Conference",
+   "short": "A-10",
+   "abbr": "atl10"
+  },
+  "4": {
+   "name": "Big East Conference",
+   "short": "Big East",
+   "abbr": "bige"
+  },
+  "5": {
+   "name": "Big Sky Conference",
+   "short": "Big Sky",
+   "abbr": "bsky"
+  },
+  "6": {
+   "name": "Big South Conference",
+   "short": "Big South",
+   "abbr": "bsou"
+  },
+  "7": {
+   "name": "Big Ten Conference",
+   "short": "Big Ten",
+   "abbr": "big10"
+  },
+  "8": {
+   "name": "Big 12 Conference",
+   "short": "Big 12",
+   "abbr": "big12"
+  },
+  "9": {
+   "name": "Big West Conference",
+   "short": "Big West",
+   "abbr": "bigw"
+  },
+  "10": {
+   "name": "Coastal Athletic Association",
+   "short": "CAA",
+   "abbr": "col"
+  },
+  "11": {
+   "name": "Conference USA",
+   "short": "CUSA",
+   "abbr": "usa"
+  },
+  "12": {
+   "name": "Ivy League",
+   "short": "Ivy",
+   "abbr": "ivy"
+  },
+  "13": {
+   "name": "Metro Conference",
+   "short": "Metro",
+   "abbr": "Metro"
+  },
+  "14": {
+   "name": "Mid-American Conference",
+   "short": "MAC",
+   "abbr": "midam"
+  },
+  "16": {
+   "name": "Mid-Eastern Athletic Conference",
+   "short": "MEAC",
+   "abbr": "meac"
+  },
+  "18": {
+   "name": "Missouri Valley Conference",
+   "short": "MVC",
+   "abbr": "mvc"
+  },
+  "19": {
+   "name": "Northeast Conference",
+   "short": "NEC",
+   "abbr": "neast"
+  },
+  "20": {
+   "name": "Ohio Valley Conference",
+   "short": "OVC",
+   "abbr": "ovc"
+  },
+  "21": {
+   "name": "Pac-12 Conference",
+   "short": "Pac-12",
+   "abbr": "pac12"
+  },
+  "22": {
+   "name": "Patriot League",
+   "short": "Patriot",
+   "abbr": "pat"
+  },
+  "23": {
+   "name": "Southeastern Conference",
+   "short": "SEC",
+   "abbr": "sec"
+  },
+  "24": {
+   "name": "Southern Conference",
+   "short": "SoCon",
+   "abbr": "south"
+  },
+  "25": {
+   "name": "Southland Conference",
+   "short": "Southland",
+   "abbr": "land"
+  },
+  "26": {
+   "name": "Southwestern Athletic Conference",
+   "short": "SWAC",
+   "abbr": "swac"
+  },
+  "27": {
+   "name": "Sun Belt Conference",
+   "short": "Sun Belt",
+   "abbr": "belt"
+  },
+  "29": {
+   "name": "West Coast Conference",
+   "short": "WCC",
+   "abbr": "wcc"
+  },
+  "30": {
+   "name": "United Athletic Conference",
+   "short": "UAC",
+   "abbr": "UAC"
+  },
+  "43": {
+   "name": "Division I Independents",
+   "short": "Indep.",
+   "abbr": "ind"
+  },
+  "44": {
+   "name": "Mountain West Conference",
+   "short": "Mountain West",
+   "abbr": "mwest"
+  },
+  "45": {
+   "name": "Horizon League",
+   "short": "Horizon",
+   "abbr": "hor"
+  },
+  "46": {
+   "name": "Atlantic Sun Conference",
+   "short": "Atlantic Sun",
+   "abbr": "ASUN"
+  },
+  "49": {
+   "name": "Summit League",
+   "short": "Summit",
+   "abbr": "summ"
+  },
+  "62": {
+   "name": "American Conference",
+   "short": "American",
+   "abbr": "American"
+  }
+ }
+}

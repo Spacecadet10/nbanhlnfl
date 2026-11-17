@@ -9,10 +9,11 @@ from . import config
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 # Migrations that rebuild a table other tables reference: run with foreign keys off, every reference checked before commit.
 PARENT_REBUILDS = frozenset({"0033_nfl_market_quotes.sql", "0035_result_integrity.sql", "0039_soccer_international.sql",
-                             "0042_ncaab.sql"})
+                             "0042_ncaab.sql", "0043_ncaab_app.sql"})
 # Migrations that belong to one sport's store only: every other store skips them (never applied there, so those stores'
 # schema, rows and release schema number do not change).
-SPORT_ONLY_MIGRATIONS = {"0041_soccer_pregame_window.sql": "soccer", "0042_ncaab.sql": "ncaab"}
+SPORT_ONLY_MIGRATIONS = {"0041_soccer_pregame_window.sql": "soccer", "0042_ncaab.sql": "ncaab",
+                         "0043_ncaab_app.sql": "ncaab"}
 # A store without an identity yet (the first migration runs before it is claimed) is recognised by its file name.
 STORE_FILE_SPORTS = {"soccer.sqlite": "soccer", "ncaab.sqlite": "ncaab"}
 

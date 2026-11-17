@@ -83,6 +83,12 @@ Separate from every NBA/NHL rule; no parameter value is transferred.
   expected values blend the carried prior with current-season evidence by games played (prior weight w0 games). Margin and
   total are normal with σ fitted on development only; the joint score distribution gives winner, spread, total and team
   totals. Grid: η ∈ {0.02, 0.04, 0.08}, carry ∈ {0.5, 0.7, 0.9}, w0 ∈ {4, 8, 12}.
+- **Amendment 2026-11-17 (before any NCAAB model output; reason: box-score coverage).** Offensive rebounds and turnovers
+  exist only in per-game summaries, fetched for 2026-27 and part of 2025-26 (~74k pending, ~25 h at 1 req/s). `college_eff`
+  therefore uses scoreboard possessions `poss ≈ FGA + 0.475·FTA` (no OREB/TOV; ≥ 99.9% coverage from 2014, 86% in 2013)
+  for every period, live included, so training and live inputs match. Games without FGA/FTA update ratings from points only
+  (fixed tempo). True possessions (with OREB/TOV) are a later, separately versioned candidate once the summary backfill
+  completes; it never replaces the frozen choice silently.
 - **Market baselines:** spread from `college_elo` margin (Elo difference / 25 points per 1 point, σ fitted on development);
   total and team totals from each team's running points scored/allowed (opponent-unadjusted). `college_eff` ships for a
   market only if it beats that market's baseline on validation log loss; otherwise the baseline ships, or the market stays

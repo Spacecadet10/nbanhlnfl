@@ -10,7 +10,8 @@ import { useDataRevision } from '../api/freshness';
 import { ModeBadge, NearTipoffBadge, RunBadge, SourceList } from '../components/Badges';
 import { ConfidenceFilter, confidenceLevels, levelLabel, RangeRecords, useConfidence } from '../components/ConfidenceFilter';
 import { MarketCard } from '../components/MarketView';
-import { DetailsToggle, MarketSelect, useCarriedSearch, useDetails, useMarket, useSport } from '../components/Selection';
+import { DetailsToggle, MarketSelect, useCarriedSearch, useConference, useDetails, useMarket, useSport } from '../components/Selection';
+import { hasConferenceFilter, hasResearch } from '../components/sportCaps';
 import { PolicyToggle, usePolicy } from '../components/RunTypeToggle';
 import { ProbabilityBar } from '../components/ProbabilityBar';
 import { AsyncView, Empty } from '../components/States';
@@ -54,8 +55,10 @@ function Slate({ meta }: { meta: Meta }) {
     : policyChoice === 'canonical' && !canonicalFor(sport, market) ? 'near_tipoff' : policyChoice;
   const [level, setLevel] = useConfidence(sport, market, policy);
   const rev = useDataRevision();
-  const { state, retry } = useApi((s) => api.games(sport, date, policy, level, market, s), [sport, date, policy, level, market], rev);
-  const research = useApi((s) => api.researchSlate(sport, date, s), [sport, date], rev);
+  const conferences = useApi((s) => (hasConferenceFilter(sport) ? api.conferences(sport, s) : Promise.resolve([] as string[])), [sport], rev);
+  const [conference, setConference] = useConference(conferences.state.status === 'success' ? conferences.state.data : []);
+  const { state, retry } = useApi((s) => api.games(sport, date, policy, level, market, s, conference), [sport, date, policy, level, market, conference], rev);
+  const research = useApi((s) => (hasResearch(sport) ? api.researchSlate(sport, date, s) : Promise.resolve(null)), [sport, date], rev);
   const [showOverview, setShowOverview] = useState(false);
 
   return (
@@ -83,6 +86,15 @@ function Slate({ meta }: { meta: Meta }) {
       <div className="today-controls">
         <MarketSelect value={market} markets={meta.markets} onChange={setMarket} />
         <ConfidenceFilter value={level} onChange={setLevel} levels={confidenceLevels(sport, market, policy)} />
+        {hasConferenceFilter(sport) && conferences.state.status === 'success' && conferences.state.data.length > 0 && (
+          <label className="conference-select">
+            <span className="confidence-filter-label">Conference</span>
+            <select value={conference ?? ''} onChange={(e) => setConference(e.target.value || null)} aria-label="Conference">
+              <option value="">All tracked games</option>
+              {conferences.state.data.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
+        )}
       </div>
       <NoSkillNote market={market} />
       <AsyncView state={state} retry={retry}>
@@ -96,9 +108,9 @@ function Slate({ meta }: { meta: Meta }) {
               </Empty>
             ) : (
               <>
-                {research.state.status === 'error' && <p className="warn small">Research selections unavailable: {research.state.error}</p>}
+                {hasResearch(sport) && research.state.status === 'error' && <p className="warn small">Research selections unavailable: {research.state.error}</p>}
                 <FilteredSlate games={data.games} selection={data.selection} showAll={() => setLevel(null)} market={market} date={date}
-                  research={research.state.status === 'success' ? research.state.data.games : undefined} />
+                  research={research.state.status === 'success' && research.state.data ? research.state.data.games : undefined} />
               </>
             )}
             {meta.mode === 'real' && <RankedPicksCard sport={sport} date={date} />}
@@ -272,8 +284,8 @@ function GameCard({ game: g, policy, market = 'winner', date, research }: { game
             {other.home_win_prob >= 0.5 ? g.home.abbr : g.away.abbr} {pct(Math.max(other.home_win_prob, 1 - other.home_win_prob), 1)}
           </p>
         )}
-        {details && market === 'winner' && <ModelAgreement game={g} />}
-        {details && market === 'winner' && <ResearchSlateLine entry={research} market="winner" />}
+        {details && (g.agreement?.expected ?? 0) > 0 && market === 'winner' && <ModelAgreement game={g} />}
+        {details && research !== undefined && market === 'winner' && <ResearchSlateLine entry={research} market="winner" />}
         <div className="card-bottom small muted">
           {market !== 'winner' ? <span> </span>
             : g.market ? <span className="book-lines" title="The latest bookmaker quote retrieved before the start; it may be newer than the forecast above">

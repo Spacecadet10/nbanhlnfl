@@ -91,11 +91,9 @@ def test_team_list_parse():
     assert len(teams) == 5 and all(t.team_id.startswith("ncaab:") and t.name for t in teams)
 
 
-def test_registry_is_data_only():
-    assert sports.store("ncaab") is sports.NCAAB and "ncaab" in sports.DATA_ONLY and "ncaab" not in sports.SPORTS
+def test_registry_serves_ncaab_with_its_own_store():
+    assert sports.store("ncaab") is sports.NCAAB and sports.get("ncaab") is sports.NCAAB and "ncaab" not in sports.DATA_ONLY
     assert sports.NCAAB.eligible_season_types == ("regular", "postseason") and sports.NCAAB.id_prefix == "ncaab:"
-    with pytest.raises(ValueError):
-        sports.get("ncaab")
 
 
 # --- Ingestion -------------------------------------------------------------------------------------------------

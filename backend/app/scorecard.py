@@ -27,7 +27,7 @@ from typing import Callable, Optional
 from . import config, odds
 
 VERSION = "scorecard-v1"
-SPORTS = ("nba", "nhl", "nfl", "soccer")
+SPORTS = ("nba", "nhl", "nfl", "ncaab", "soccer")
 STATES = ("present", "missing", "not_applicable")
 GROUPS = ("book", "open", "card", "spread", "rest", "lineup", "books3")
 B2B_BELOW_DAYS = 1.5           # the models' back-to-back feature (app/models/logistic.py: rest < 1.5 days)
@@ -267,7 +267,7 @@ def _lineup(conn, sport: str, g, rec: dict, matchup: str, cache: dict) -> tuple:
 
 def _books3(sport: str, rec: dict, matchup: str, books_dir: Optional[Path], caches: Optional[dict] = None) -> tuple:
     from . import rundown_odds
-    if sport not in rundown_odds.SPORT_IDS or rec["market"] not in rundown_odds.SPORT_MARKETS[sport].values():
+    if sport not in rundown_odds.KNOWN_SPORT_IDS or rec["market"] not in rundown_odds.SPORT_MARKETS[sport].values():
         return NA("TheRundown does not price this market"), {}
     if rec["line_source"] == "model":
         return _state(False, "model line: no sportsbook line at forecast time"), {}
@@ -648,7 +648,7 @@ def main(argv: Optional[list] = None) -> int:
     ap = argparse.ArgumentParser(description="Append the full picture of every recorded pick to the scorecard (no forecast "
                                              "changes; the sport stores are only read).")
     ap.add_argument("cmd", choices=["sync"])
-    ap.add_argument("--sport", choices=SPORTS, action="append", help="default: all four")
+    ap.add_argument("--sport", choices=SPORTS, action="append", help="default: every sport")
     ap.add_argument("--backfill", action="store_true", help="every past forecast, labelled written_by='backfill'")
     ap.add_argument("--explicit-release", action="store_true",
                     help="required to write next to protected live stores (the scheduled job, a release decision)")
