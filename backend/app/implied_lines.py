@@ -10,6 +10,8 @@ anyone can bet at, never a model input, never a ticket price.
 """
 from typing import Optional
 
+from .odds import provider_key, same_provider
+
 IMPLIED_LABEL = 'implied from spread and total'
 DERIVED_LABEL = 'derived from match result prices'
 NOT_A_PRICE = 'Not a price you can bet at.'
@@ -22,9 +24,9 @@ def implied_team_total(conn, game_id: str, market: str, at: str, sport: str = ''
     row = conn.execute(
         "SELECT s.line AS spread, t.line AS total, s.retrieved_at FROM market_quotes s JOIN market_quotes t "
         "ON t.fetch_id = s.fetch_id AND t.game_id = s.game_id AND t.provider = s.provider AND t.price_label = s.price_label "
-        "WHERE s.game_id = ? AND s.provider = 'DraftKings' AND s.price_label = 'current' AND s.market = 'spread' "
+        f"WHERE s.game_id = ? AND {same_provider('s.provider')} AND s.price_label = 'current' AND s.market = 'spread' "
         "AND t.market = 'total' AND s.retrieved_at <= ? AND s.line IS NOT NULL AND t.line IS NOT NULL "
-        "ORDER BY s.retrieved_at DESC, s.fetch_id DESC LIMIT 1", (game_id, at)).fetchone()
+        "ORDER BY s.retrieved_at DESC, s.fetch_id DESC LIMIT 1", (game_id, 'DraftKings', at)).fetchone()
     if row is None:
         return None
     spread, total = float(row['spread']), float(row['total'])
@@ -43,7 +45,7 @@ def match_result_probabilities(quotes: list[dict], provider: str = 'DraftKings')
     price changes and saves a withdrawal row for a side a listing retrieval no longer carries (soccer.record_quotes), so an
     older row of an unchanged side is still that side's offered price at the newest retrieval. One sportsbook only, all
     three sides required, a withdrawn (unoffered) side means no quote."""
-    rows = [q for q in quotes if q.get('market') == '1x2' and q.get('provider') == provider]
+    rows = [q for q in quotes if q.get('market') == '1x2' and provider_key(q.get('provider')) == provider_key(provider)]
     sides = {q['side']: q for q in rows}
     if set(sides) != {'home', 'draw', 'away'} or len(rows) != 3:
         return None
@@ -62,7 +64,8 @@ def derived_dc_dnb(quotes: list[dict], provider: str = 'DraftKings') -> Optional
     p = match_result_probabilities(quotes, provider)
     if p is None:
         return None
-    retrieved_at = max(q['retrieved_at'] for q in quotes if q.get('market') == '1x2' and q.get('provider') == provider)
+    retrieved_at = max(q['retrieved_at'] for q in quotes
+                       if q.get('market') == '1x2' and provider_key(q.get('provider')) == provider_key(provider))
     return {'label': DERIVED_LABEL, 'note': NOT_A_PRICE + ' Fair prices with the sportsbook margin removed.',
             'provider': provider, 'retrieved_at': retrieved_at,
             'double_chance': {'home_draw': fair_decimal(p['home'] + p['draw']),

@@ -30,7 +30,7 @@ from typing import Optional
 
 import numpy as np
 
-from . import config, soccer, soccer_book, soccer_live, soccer_markets as sm, soccer_markets_eval as ev
+from . import config, odds, soccer, soccer_book, soccer_live, soccer_markets as sm, soccer_markets_eval as ev
 from .backtest import seal as _seal
 from .db import utc_now
 from .odds import devig_two_way
@@ -299,7 +299,7 @@ def quotes(conn, match_id: str, as_of: str) -> list[dict]:
         return []
     rows = conn.execute("SELECT q.* FROM soccer_odds_quotes q WHERE q.match_id = ? AND q.price_kind = 'current' AND "
                         "q.retrieved_at <= ? AND q.quote_id = (SELECT MAX(p.quote_id) FROM soccer_odds_quotes p WHERE "
-                        "p.match_id = q.match_id AND p.provider = q.provider AND p.market = q.market AND p.side = q.side "
+                        f"p.match_id = q.match_id AND {odds.same_provider_columns('p.provider', 'q.provider')} AND p.market = q.market AND p.side = q.side "
                         "AND p.price_kind = 'current' AND p.retrieved_at <= ?)", (match_id, as_of, as_of)).fetchall()
     return [dict(r) for r in rows if r["offered"]]
 
@@ -327,7 +327,7 @@ def market_selections(joint, family: str, markets, match_quotes: list[dict]) -> 
             by_line = defaultdict(dict)
             for q in match_quotes:
                 if q["market"] == "total_goals":
-                    by_line[(q["provider"], q["line"])][q["side"]] = q
+                    by_line[(odds.provider_key(q["provider"]), q["line"])][q["side"]] = q   # one book, any spelling
             for (provider, line), qs in sorted(by_line.items(), key=lambda x: (x[0][0], x[0][1])):
                 devig = (devig_two_way(qs["over"]["american"], qs["under"]["american"])
                          if {"over", "under"} <= set(qs) else None)

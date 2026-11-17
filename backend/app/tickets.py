@@ -15,7 +15,7 @@ MAX_TICKETS, MIN_LEGS, MAX_LEGS = 6, 2, 7   # owner request Nov 8: a varied menu
 # reader. They stay in the preflight report, the snapshot and the trigger observations; they are no longer sent to the chat.
 QUIET_HEALTH = ('source_unavailable_or_stale', 'missing_due_forecasts')
 CARD_TICKETS = 3
-PROVIDER_SHORT = {'DraftKings': 'DK'}
+PROVIDER_SHORT = {'draftkings': 'DK'}   # keyed by odds.provider_key (any spelling)
 SNAPSHOT_TTL = timedelta(minutes=10)   # check() refuses older snapshots; a start older than this can never complete                             # the PNG shows the first three; the text lists every option
 BET_TYPES = {'winner': 'Moneyline', 'spread': 'Spread', 'total': 'Over/Under', 'team_total_home': 'Team total',
              'team_total_away': 'Team total', 'reg3': '60-min result', '1x2_regulation': 'Match result (90 min)',
@@ -234,7 +234,8 @@ def _line_move(conn, sport, g, row, market, side, stamp):
         own = conn.execute('SELECT provider FROM market_quotes WHERE quote_id=?', (row['market_quote_id'],)).fetchone() \
             if row['market_quote_id'] and scorecard._has(conn, 'market_quotes') else None
         q = conn.execute("SELECT * FROM market_quotes WHERE game_id=? AND market=? AND retrieved_at<=? "
-                         "ORDER BY retrieved_at DESC, provider IS ? DESC, price_label='current' DESC, quote_id DESC LIMIT 1",
+                         "ORDER BY retrieved_at DESC, lower(replace(provider, ' ', '')) IS lower(replace(?, ' ', '')) DESC, "
+                         "price_label='current' DESC, quote_id DESC LIMIT 1",
                          (g['game_id'], market, stamp, own[0] if own else None)).fetchone() \
             if scorecard._has(conn, 'market_quotes') else None
         if q is None:
@@ -323,6 +324,7 @@ def quote_check(conn, pick, stamp):
     A bookmaker line that moved since the forecast means its probability belongs to a line no longer offered. Prices are
     reported, never judged: value depends on the exact price the user gets. A model-line forecast gets a price only from a
     quote at exactly its line; otherwise it has none."""
+    from app import odds
     row = conn.execute('SELECT line, line_source, market_quote_id FROM game_forecasts WHERE forecast_id=?',
                        (pick['forecast_id'],)).fetchone()
     history = pick.get('percentage_history')   # a dict, or the provider's ForecastPercentageRecord before JSON encoding
@@ -331,7 +333,7 @@ def quote_check(conn, pick, stamp):
     first = conn.execute('SELECT provider, price_a, price_mid, price_b FROM market_quotes WHERE quote_id=?',
                          (row['market_quote_id'],)).fetchone() if row and row['market_quote_id'] else None
     sql = ("SELECT provider, line, price_a, price_mid, price_b, retrieved_at FROM market_quotes WHERE game_id=? AND market=? "
-           "AND price_label='current' AND retrieved_at<=?" + (' AND provider=?' if first else '') +
+           "AND price_label='current' AND retrieved_at<=?" + (' AND ' + odds.same_provider() if first else '') +
            ' ORDER BY retrieved_at DESC, quote_id DESC LIMIT 1')
     now = conn.execute(sql, (pick['game_id'], pick['market'], stamp) + ((first['provider'],) if first else ())).fetchone()
     line_at = row['line'] if row else None
@@ -1395,6 +1397,7 @@ def check(plan):
 
 
 def ticket_text(day, tickets, prior_exposure=None):
+    from app import odds
     lines = [f'<b>PROP51 · COMBINED PARLAY TICKETS · {day}</b>',
              'Multi-game combinations from app forecasts + AI selection. Not a single-game card.']
     if tickets:   # one-glance menu: size and model estimate of every option
@@ -1413,7 +1416,7 @@ def ticket_text(day, tickets, prior_exposure=None):
             q = p.get('quote_check') or {}
             price = ''
             if q.get('price_now') is not None:
-                price = f" / {PROVIDER_SHORT.get(q['provider'], q['provider'])} {q['price_now']:+d}" + (
+                price = f" / {PROVIDER_SHORT.get(odds.provider_key(q['provider']), q['provider'])} {q['price_now']:+d}" + (
                     f" (was {q['price_at_forecast']:+d})" if q.get('price_at_forecast') not in (None, q['price_now']) else '')
             lines.append(f"{leg_number}. {p['sport'].upper()} / {escape(p['matchup'])} / {escape(bet_type(p))}: "
                          f"<b>{escape(p['pick_label'])}</b> / {start:%b %d %I:%M %p %Z} / {p['probability']:.1%}{escape(price)}")
