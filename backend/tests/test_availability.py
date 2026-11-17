@@ -165,3 +165,20 @@ def test_merged_team_names_are_recognized_and_wrapped_names_are_joined():
     assert r.reconciled and [(e["team"], e["last"]) for e in r.entries] == [("Portland Trail Blazers", "Brown"),
                                                                             ("Portland Trail Blazers", "Simons")]
     assert r.not_submitted == [{"game_date": "2024-01-10", "team": "Oklahoma City Thunder"}]
+
+
+# --- Owner (Nov 17): name suffixes written with an extra comma ("Udeh, Jr., Ernest") ----------------------------------
+def test_a_suffix_written_with_its_own_comma_stays_with_the_last_name_in_both_layouts():
+    """Live report Injury-Report_2026-11-16_08_45PM.pdf (GemBox rows) has 'Udeh,  Jr.,Ernest'; the row parser took the last
+    'X,Y' pair and produced last='Jr.', first='Ernest', which can never match 'Ernest Udeh Jr.'."""
+    rows = ["01/10/2024  08:00 (ET)  BOS@NOP   Boston Celtics       Udeh,  Jr.,Ernest          Out      G League - Two-Way",
+            "                                                       Pippen   Jr.,Scotty          Out"]
+    r = av.parse_layout([("Injury Report: 01/10/24 05:30 PM", rows)], "x", TEAMS, mode="rows")
+    assert r.reconciled and [(e["last"], e["first"]) for e in r.entries] == [("Udeh Jr.", "Ernest"), ("Pippen Jr.", "Scotty")]
+    cols = [H2024, row({"Game Date": "01/10/2024", "Team": "Boston Celtics", "Player Name": "Udeh, Jr., Ernest",
+                        "Current Status": "Out"}, H2024)]
+    c = av.parse_layout([("Injury Report: 01/10/24 05:30 PM", cols)], "x", TEAMS)
+    assert c.reconciled and [(e["last"], e["first"]) for e in c.entries] == [("Udeh Jr.", "Ernest")]
+    idx = av.PlayerIndex({2027: ({"5106261": [av.Appearance("2026-11-01", 2027, "5", 0.0, False)]},
+                                 {"5106261": "Ernest Udeh Jr."})}, {})
+    assert idx.match("Udeh Jr.", "Ernest", "5", 2027) == ("5106261", "team_season")

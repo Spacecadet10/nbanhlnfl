@@ -98,3 +98,78 @@ def test_live_definition_uses_two_hour_training_cutoff_and_unsubmitted_fails(sto
     current.unsubmitted.add('1')
     with pytest.raises(av.AvailabilityError,match='not submitted'):
         m._features(g)
+
+
+# --- Owner (Nov 17): confirmed-Out players who have never played, and blockers that stay visible -------------------------
+def roster(store, team='1', athletes=(), at='2026-10-21T21:00:00Z'):
+    body = json.dumps({'athletes': [dict(id=i, fullName=n, experience=dict(years=y)) for i, n, y in athletes]}).encode()
+    return raw_cache.store_fetch(store, source=al.ROSTER_SOURCE, endpoint='test', request_key=f'team={team}', body=body,
+                                 retrieved_at=at, importer_version='test', suffix='.json')[1]
+
+
+def rookie_report(store, monkeypatch, status='Out', last='Rookie', first='Ronnie'):
+    report(store)
+    monkeypatch.setattr(al.av, 'parse_report', lambda *a: av.ParsedReport('report', datetime.fromisoformat(
+        '2026-10-21T22:00:00+00:00'), entries=[dict(game_date='2026-10-21', team='Team 1', last=last, first=first,
+                                                    status=status)], loose_lines=1))
+    monkeypatch.setattr(al.av, 'load_aliases', lambda: {})
+
+
+def test_a_confirmed_out_player_who_has_never_played_gets_zero_minutes(store, monkeypatch):
+    rookie_report(store, monkeypatch)
+    monkeypatch.setattr(al, 'live_box', lambda *a: ({2026: ({}, {})}, []))
+    fid = roster(store, athletes=[('r1', 'Ronnie Rookie', 0)])
+    facts, fetches = al.current_facts(store, NOW)
+    day = facts['2026-10-21']
+    assert day.absent['1'] == {'new': 0.0, 'all': 0.0}
+    assert day.zero_minute_out == [{'athlete_id': 'r1', 'name': 'Ronnie Rookie', 'team': '1', 'basis': 'roster_experience_0_no_minutes'}]
+    assert fid in fetches
+
+
+def test_a_listed_rookie_who_never_played_is_identified_from_the_box_and_the_roster(store, monkeypatch):
+    rookie_report(store, monkeypatch)
+    box = {2027: ({'r1': [av.Appearance('2026-10-19', 2027, '1', 0.0, False)]}, {'r1': 'Ronnie Rookie'})}
+    monkeypatch.setattr(al, 'live_box', lambda *a: (box, []))
+    roster(store, athletes=[('r1', 'Ronnie Rookie', 0)])
+    facts, _ = al.current_facts(store, NOW)
+    assert facts['2026-10-21'].absent['1']['all'] == 0.0
+
+
+@pytest.mark.parametrize('case,match', [
+    ('not_on_roster', 'Unresolved unavailable player.*Ronnie Rookie'),
+    ('veteran', 'no trustworthy minute history.*Ronnie Rookie'),
+    ('questionable', 'no trustworthy minute history.*Ronnie Rookie'),
+    ('played_once', 'no trustworthy minute history.*Ronnie Rookie'),
+    ('roster_after_cutoff', 'Unresolved unavailable player.*Ronnie Rookie'),
+])
+def test_genuinely_missing_identity_or_minutes_stays_an_explicit_blocker(store, monkeypatch, case, match):
+    rookie_report(store, monkeypatch, status='Questionable' if case == 'questionable' else 'Out')
+    box = {2026: ({}, {})}
+    if case == 'played_once':
+        box = {2027: ({'r1': [av.Appearance('2026-10-19', 2027, '1', 4.0, True)]}, {'r1': 'Ronnie Rookie'})}   # this season
+    monkeypatch.setattr(al, 'live_box', lambda *a: (box, []))
+    athletes = [] if case == 'not_on_roster' else [('r1', 'Ronnie Rookie', 3 if case == 'veteran' else 0)]
+    roster(store, athletes=athletes, at='2026-10-21T22:30:05Z' if case == 'roster_after_cutoff' else '2026-10-21T21:00:00Z')
+    with pytest.raises(av.AvailabilityError, match=match):
+        al.current_facts(store, NOW)
+
+
+def test_a_benched_player_with_dashes_and_no_stats_has_zero_minutes_but_any_counted_stat_fails(monkeypatch):
+    """espn:401909985: Caleb Love listed with MIN '--', didNotPlay False, reason COACH'S DECISION."""
+    game = dict(game_id='espn:g', home_team_id='espn:1', away_team_id='espn:2')
+    monkeypatch.setattr(al.espn, 'parse_summary_box', lambda _: SimpleNamespace(completed=True, game_id='espn:g'))
+    body = summary()
+    stats = body['boxscore']['players'][0]['statistics'][0]
+    stats['labels'] = ['MIN', 'PTS']
+    for a in stats['athletes']:
+        a['stats'] = ['48', '10']
+    stats['athletes'].append(dict(athlete=dict(id='99', displayName='Benched Player'), stats=['--', '--'],
+                                  didNotPlay=False, reason="COACH'S DECISION"))
+    assert al.summary_players(body, game)['1']['99'] == ('Benched Player', 0.)
+    stats['athletes'][-1]['stats'] = ['--', '2']
+    with pytest.raises(av.AvailabilityError, match='Invalid player minutes'):
+        al.summary_players(body, game)
+    stats['athletes'][-1]['stats'] = ['--', '--']
+    stats['athletes'][-1].pop('reason')
+    with pytest.raises(av.AvailabilityError, match='Invalid player minutes'):
+        al.summary_players(body, game)

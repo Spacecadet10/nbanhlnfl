@@ -91,18 +91,39 @@ def model_files(built) -> list:
     return sorted(seen, key=lambda p: str(p.relative_to(app_root)))
 
 
+ALIASES_PATH = Path(__file__).parent / "reference" / "identity_aliases.json"
+
+
+def _load_aliases() -> dict:
+    """{computed digest: earlier identity}. Each entry records why a code change that cannot alter that sport's forecasts
+    keeps its identity (owner decision Nov 17 2026: NHL keeps its identities when the NBA injury code changes)."""
+    import json as _json
+    try:
+        return {k: v["identity"] for k, v in _json.loads(ALIASES_PATH.read_text())["agreement"].items()}
+    except FileNotFoundError:
+        return {}
+
+
+_ALIASES = _load_aliases()
+
+
 def definition_hash(built):
     """Changed model code/settings get a separate forward identity, not a relabelled history. Only files the members can
-    depend on (`model_files`) are hashed, plus the shared walk-forward, agreement and availability code."""
+    depend on (`model_files`) are hashed, plus the shared walk-forward and agreement code; the injury (availability) code
+    only for NBA, whose availability member uses it. A digest recorded in reference/identity_aliases.json keeps the
+    earlier identity it names."""
     h = hashlib.sha256()
     h.update(version("scikit-learn").encode())
     root = Path(__file__).parent
-    fixed = [root / "backtest.py", root / "agreement.py", root / "availability.py", root / "availability_live.py"]
+    nba = bool({m.name for m in built} & set(NAMES["nba"]))
+    fixed = [root / "backtest.py", root / "agreement.py"] + (
+        [root / "availability.py", root / "availability_live.py"] if nba else [])
     for path in [p for p in model_files(built) if p not in fixed] + fixed:
         h.update(str(path.relative_to(root)).encode())
         h.update(path.read_bytes())
     h.update(json.dumps([(m.name, m.config()) for m in built], sort_keys=True).encode())
-    return h.hexdigest()[:16]
+    digest = h.hexdigest()[:16]
+    return _ALIASES.get(digest, digest)
 
 
 def predict(conn, *, now=None, write=True, game_ids=None, collect=None):
