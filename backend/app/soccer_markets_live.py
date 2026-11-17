@@ -354,7 +354,8 @@ def forecast_row(conn, r, as_of: str, markets) -> dict:
     counts = counts_of(conn, r, as_of)
     match_quotes = quotes(conn, r["match_id"], min(as_of, r["kickoff_at"]))
     sels = market_selections(joint, r["family"], markets, match_quotes)
-    soccer_book.annotate_totals(sels, match_quotes)          # display only: the app's % against the book's de-vigged % at the same line
+    # display only: the app's % against the book's de-vigged % at the same line, from quotes saved at or before the forecast
+    soccer_book.annotate_totals(sels, quotes(conn, r["match_id"], min(as_of, r["kickoff_at"], r["generated_at"])))
     for s in sels:
         s["result"] = sm.grade_market(s["market"], s["side"], s["line"], counts) if counts else None
     return {"forecast_id": r["forecast_id"], "family": r["family"], "match_id": r["match_id"],

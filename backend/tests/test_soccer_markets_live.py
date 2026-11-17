@@ -493,3 +493,18 @@ def test_the_goals_market_rows_carry_the_comparison(live):
     assert book and all(s["sportsbook"]["status"] == "exact" and s["sportsbook"]["book_probability"] == pytest.approx(0.5) for s in book)
     assert all(s["sportsbook"]["status"] == "model_line" for s in goals if s["source"] == "model" and s["market"] == "goals_total")
     assert all("sportsbook" not in s for s in m["families"]["corners"]["selections"])
+
+
+def test_a_total_goals_quote_saved_only_after_the_forecast_is_never_compared(live):
+    # Same rule as every other card: the comparison is the exact-line quote saved at or before the forecast.
+    sml.run(live, day=TOMORROW.isoformat())
+    mid = "soccer:eng.1:90003"
+    gen = live.execute("SELECT generated_at FROM soccer_market_forecasts WHERE match_id=? AND family='goals'", (mid,)).fetchone()[0]
+    after = _iso(datetime.strptime(gen, "%Y-%m-%dT%H:%M:%SZ") + timedelta(minutes=1))
+    for side in ("over", "under"):
+        _put_quote(live, mid, "total_goals", side, -110, 2.5, after)
+    later = _iso(datetime.strptime(after, "%Y-%m-%dT%H:%M:%SZ") + timedelta(minutes=1))
+    m = next(x for x in sml.match_markets(live, as_of=later) if x["match_id"] == mid)
+    at_line = [s for s in m["families"]["goals"]["selections"] if s["market"] == "goals_total" and s["line"] == 2.5]
+    assert at_line and all(s["sportsbook"]["status"] == "no_quote" and s["sportsbook"]["book_probability"] is None
+                           for s in at_line)

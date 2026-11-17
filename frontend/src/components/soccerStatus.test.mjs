@@ -128,9 +128,17 @@ test('an all-upcoming day: two-hour forecasts saved vs not yet, with when the fi
 
 test('a moved kickoff is flagged only where the saved forecast says what the kickoff was', () => {
   const s = daySummary([match('m', iso(14)), match('n', iso(15))], { m: twoHour(iso(13)), n: daily }, NOW);
-  assert.deepEqual(s.moved, [{ matchId: 'm', from: iso(13), to: iso(14) }]);   // two-hour row: cutoff_at is the kickoff then
-  assert.equal(s.elapsed.twoHour, 1);                                           // still a two-hour forecast
-  assert.match(daySummaryText(s, when), /Kickoff moved from <2026-11-16T13:00:00Z> to <2026-11-16T14:00:00Z> after the forecast/);
+  assert.deepEqual(s.moved, [{ matchId: 'm', from: iso(13), to: iso(14), timelyForUpdated: true }]);   // cutoff_at = the kickoff then; 12:20 is inside both windows
+  // 401927173: made 1h26m before the original 13:00 kickoff, 2h26m before the updated 14:00 one. The count follows the
+  // updated kickoff; being on time for the original kickoff is shown separately.
+  assert.equal(forecastKind(twoHour(iso(13), 86), iso(14)), 'original_kickoff');
+  const s2 = daySummary([match('m', iso(14))], { m: twoHour(iso(13), 86) }, NOW);
+  assert.deepEqual([s2.elapsed.twoHour, s2.elapsed.originalOnly, s2.elapsed.dailyOnly, s2.elapsed.none], [0, 1, 0, 0]);
+  assert.match(daySummaryText(s2, when), /1 kicked off: 0 with a forecast saved in the two hours before kickoff, 1 on time only for its original kickoff\. Kickoff moved from <2026-11-16T13:00:00Z> to <2026-11-16T14:00:00Z> after the forecast: on time for the original kickoff, not the updated one\./);
+  // a small move that keeps the forecast inside the updated window still counts, and the move is still named
+  const s3 = daySummary([match('k', iso(13, 30))], { k: twoHour(iso(13)) }, NOW);
+  assert.deepEqual([s3.elapsed.twoHour, s3.elapsed.originalOnly], [1, 0]);
+  assert.match(daySummaryText(s3, when), /Kickoff moved from <2026-11-16T13:00:00Z> to <2026-11-16T13:30:00Z> after the forecast: on time for both\./);
   assert.equal(daySummary([match('n', iso(15))], { n: daily }, NOW).moved.length, 0);   // a daily row's 06:00 cutoff is not a kickoff
 });
 
