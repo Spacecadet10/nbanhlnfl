@@ -246,7 +246,7 @@ function GameCard({ game: g, policy, market = 'winner', date, research }: { game
         </div>
         <div className="team-line"><TeamLogo team={g.away} size={44} /><div><strong>{g.away.name}</strong><span>Away</span></div><b>{side(false)}</b></div>
         <div className="team-line"><TeamLogo team={g.home} size={44} /><div><strong>{g.home.name}</strong><span>Home</span></div><b>{side(true)}</b></div>
-        {canonical ? <CanonicalBlock c={g.canonical} home={g.home} away={g.away} market={g.market?.home_win_prob ?? null} /> : pick ? (
+        {canonical ? <CanonicalBlock c={g.canonical} home={g.home} away={g.away} /> : pick ? (
           <>
             <div className="card-section-label">
               {near ? 'NEAR-TIPOFF PROBABILITY' : p?.run_type === 'backtest' ? 'BACKTEST PROBABILITY' : 'MODEL PROBABILITY'}
@@ -275,7 +275,7 @@ function GameCard({ game: g, policy, market = 'winner', date, research }: { game
         {details && market === 'winner' && <ModelAgreement game={g} />}
         {details && market === 'winner' && <ResearchSlateLine entry={research} market="winner" />}
         <div className="card-bottom small muted">
-          {market !== 'winner' ? <span>{g.canonical?.record?.line_source === 'bookmaker' ? "At the bookmaker's line when forecast" : ' '}</span>
+          {market !== 'winner' ? <span> </span>
             : g.market ? <span className="book-lines" title="The latest bookmaker quote retrieved before the start; it may be newer than the forecast above">
                 <span>Bookmaker: <strong>{g.home.abbr} {pct(g.market.home_win_prob, 1)}</strong></span>
                 {g.market.home_price != null && g.market.away_price != null && <span>Odds: <strong>{g.away.abbr} {american(g.market.away_price)} / {g.home.abbr} {american(g.market.home_price)}</strong></span>}

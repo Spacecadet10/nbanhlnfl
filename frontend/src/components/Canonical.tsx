@@ -8,6 +8,7 @@ import type { CanonicalForecast, CanonicalGrade, CanonicalRecord, CanonicalState
 import { useApi } from '../api/useApi';
 import { calendarDate, dateTime, FULL_DATE, num, pct } from '../format';
 import { ProbabilityBar } from './ProbabilityBar';
+import { sportsbookLine } from './sportsbook';
 import { MARKET } from './Research';
 import { useCarriedSearch } from './Selection';
 import { AsyncView, Empty } from './States';
@@ -46,10 +47,8 @@ export function GradeText({ grade }: { grade: CanonicalGrade | null }) {
 }
 
 /** One game's canonical forecast, or the reason there is none. `detail` adds the provenance (Game page). */
-export function CanonicalBlock({ c, home, away, detail = false, market }: {
+export function CanonicalBlock({ c, home, away, detail = false }: {
   c: CanonicalForecast | null | undefined; home: Team; away: Team; detail?: boolean;
-  /** De-vigged market probability for the home side, shown beside the model estimate. */
-  market?: number | null;
 }) {
   if (!c) return null;
   const r = c.record;
@@ -63,7 +62,6 @@ export function CanonicalBlock({ c, home, away, detail = false, market }: {
     );
   }
   const winner = c.market === 'winner' && r.home_win_prob != null;
-  const marketSide = winner && market != null ? (r.pick === 'home' ? market : 1 - market) : null;
   return (
     <div className="canonical">
       <div className="card-section-label">CURRENT FORECAST · {(c.percentage_history?.market_title ?? MARKET[c.market] ?? c.market).toUpperCase()} · RECORD #{r.forecast_id}</div>
@@ -71,10 +69,11 @@ export function CanonicalBlock({ c, home, away, detail = false, market }: {
       <p className="pick-line small">
         Model estimate: <strong>{winner ? (r.pick === 'home' ? home : away).abbr : r.pick_label}</strong>
         {!winner && r.line_source !== 'none' && <span className="muted"> · {LINE_SOURCE[r.line_source]}</span>}
-        <span className="muted"> · {pct(r.confidence, 1)} model probability{marketSide != null && <> · market {pct(marketSide, 1)}</>} · made {Math.round(r.minutes_before_start)} min before the start</span>
+        <span className="muted"> · {pct(r.confidence, 1)} model probability · made {Math.round(r.minutes_before_start)} min before the start</span>
         {' · '}<GradeText grade={c.grade} />
         {!winner && c.result_label && <span className="muted"> · result: {c.result_label}</span>}
       </p>
+      {c.sportsbook && <p className="muted small">{sportsbookLine(c.sportsbook)}</p>}
       <p><ForecastPercentageRecord history={c.percentage_history} grade={c.grade} opposite={r.opposite_pick_label} startAt={r.start_at} /></p>
       {c.percentage_history?.sport === "nfl" && c.market !== "winner"
         ? <p className="no-skill small">Informational NFL score forecast. This market has no proven skill against the bookmaker’s line and is excluded from recommended picks.</p>

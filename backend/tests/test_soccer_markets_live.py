@@ -407,3 +407,89 @@ def test_the_1x2_margin_is_removed_when_only_some_sides_changed_price(live):
     t3 = (NOW + timedelta(minutes=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
     soccer.record_quotes(live, second[:2], {mid}, raw, t3)
     assert implied_lines.match_result_probabilities(sml.quotes(live, mid, t3)) is None
+
+
+# --- Sportsbook comparison (soccer 1X2 and total goals): app/soccer_book.py ----------------------------------------------
+def _put_quote(c, mid, market, side, american, line, at, kind="current", offered=1):
+    raw = c.execute("SELECT MAX(raw_id) FROM raw_responses").fetchone()[0]
+    dec = None if not offered else (1 + american / 100 if american > 0 else 1 + 100 / -american)
+    c.execute("INSERT INTO soccer_odds_quotes (match_id, provider, market, side, price_kind, offered, line, american, decimal_odds, "
+              "retrieved_at, raw_id, parser_version) VALUES (?, 'DraftKings', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'test')",
+              (mid, market, side, kind, offered, line, american if offered else None, dec, at, raw))
+
+
+def _iso(dt):
+    return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def test_the_1x2_comparison_uses_the_exact_quote_saved_at_or_before_the_forecast(live):
+    from app import soccer_book
+    mid = live.execute("SELECT match_id FROM soccer_matches WHERE status='scheduled' ORDER BY kickoff_at LIMIT 1").fetchone()[0]
+    ko = live.execute("SELECT kickoff_at FROM soccer_matches WHERE match_id=?", (mid,)).fetchone()[0]
+    gen = _iso(datetime.strptime(ko, "%Y-%m-%dT%H:%M:%SZ") - timedelta(minutes=30))
+    early, late = (_iso(NOW - timedelta(minutes=m)) for m in (3, 2))
+    for side, a in (("home", -110), ("draw", 260), ("away", 280)):
+        _put_quote(live, mid, "1x2", side, a, None, early)
+    for side, a in (("home", -300), ("draw", 500), ("away", 900)):          # a later quote, after the forecast: never used
+        _put_quote(live, mid, "1x2", side, a, None, _iso(datetime.strptime(gen, "%Y-%m-%dT%H:%M:%SZ") + timedelta(minutes=5)))
+    f = {"match_id": mid, "kickoff_at": ko, "generated_at": gen, "most_likely": "home",
+         "probabilities": {"home": 0.55, "draw": 0.25, "away": 0.20}}
+    # NOW-3min may be after `gen` when the fixture kicks off soon: put the forecast clearly after the early quote
+    f["generated_at"] = max(gen, _iso(NOW))
+    c = soccer_book.one_x_two(live, f)
+    inv = {"home": 1 / (1 + 100 / 110), "draw": 1 / 3.6, "away": 1 / 3.8}
+    book = inv["home"] / sum(inv.values())
+    assert c["status"] == "exact" and c["provider"] == "DraftKings" and c["price"] == "-110/+260/+280" and c["line"] is None
+    assert c["book_probability"] == pytest.approx(book) and c["app_probability"] == 0.55
+    assert c["gap_pp"] == pytest.approx(round(55.0 - round(book * 100, 1), 1)) and c["retrieved_at"] == early
+    # a forecast made before any quote: no quote, never a later one
+    none = soccer_book.one_x_two(live, {**f, "generated_at": _iso(NOW - timedelta(minutes=10))})
+    assert none["status"] == "no_quote" and none["book_probability"] is None and none["reason"]
+    # a withdrawn side leaves no complete three-way quote
+    _put_quote(live, mid, "1x2", "draw", None, None, late, offered=0)
+    assert soccer_book.one_x_two(live, {**f, "generated_at": _iso(NOW + timedelta(seconds=1))})["status"] == "no_quote"
+
+
+def test_a_match_with_no_1x2_quote_says_so(live):
+    from app import soccer_book
+    mid, ko = live.execute("SELECT match_id, kickoff_at FROM soccer_matches WHERE status='scheduled' LIMIT 1").fetchone()
+    c = soccer_book.one_x_two(live, {"match_id": mid, "kickoff_at": ko, "generated_at": STAMP, "most_likely": "draw",
+                                     "probabilities": {"home": 0.3, "draw": 0.4, "away": 0.3}})
+    assert c["status"] == "no_quote" and c["app_probability"] == 0.4 and c["gap_pp"] is None
+
+
+def _sel(side, line, win=0.6, loss=0.4, push=0.0, source="bookmaker"):
+    return {"market": "goals_total", "side": side, "line": line, "source": source,
+            "probabilities": {"win": win, "half_win": 0.0, "push": push, "half_loss": 0.0, "loss": loss}}
+
+
+def _q(side, line, american):
+    return {"market": "total_goals", "provider": "DraftKings", "side": side, "line": line, "american": american,
+            "decimal_odds": 2.0, "retrieved_at": STAMP, "quote_id": 7 if side == "over" else 8}
+
+
+def test_total_goals_comparison_is_for_the_same_line_and_side(live):
+    from app import soccer_book
+    both = [_q("over", 2.5, -110), _q("under", 2.5, -110)]
+    c = soccer_book.total_goals(_sel("over", 2.5), both)
+    assert c["status"] == "exact" and c["book_probability"] == pytest.approx(0.5) and c["app_probability"] == pytest.approx(0.6)
+    assert c["gap_pp"] == pytest.approx(10.0) and c["price"] == "-110/-110" and c["line"] == 2.5 and c["quote_id"] == 8
+    assert soccer_book.total_goals(_sel("under", 2.5, 0.4, 0.6), both)["gap_pp"] == pytest.approx(-10.0)
+    other = soccer_book.total_goals(_sel("over", 3.5), both)                 # the book quotes 2.5 only
+    assert other["status"] == "no_quote" and other["book_probability"] is None and "3.5" in other["reason"]
+    assert soccer_book.total_goals(_sel("over", 2.5), [])["status"] == "no_quote"
+    assert soccer_book.total_goals(_sel("over", 2.5), [_q("over", 2.5, -110)])["status"] == "no_quote"   # one side only
+    assert soccer_book.total_goals(_sel("over", 2.4, source="model"), both)["status"] == "model_line"
+
+
+def test_the_goals_market_rows_carry_the_comparison(live):
+    sml.run(live, day=TOMORROW.isoformat())
+    mid = "soccer:eng.1:90003"
+    for side in ("over", "under"):
+        _put_quote(live, mid, "total_goals", side, -110, 2.5, STAMP)
+    m = next(x for x in sml.match_markets(live) if x["match_id"] == mid)
+    goals = m["families"]["goals"]["selections"]
+    book = [s for s in goals if s["source"] == "bookmaker"]
+    assert book and all(s["sportsbook"]["status"] == "exact" and s["sportsbook"]["book_probability"] == pytest.approx(0.5) for s in book)
+    assert all(s["sportsbook"]["status"] == "model_line" for s in goals if s["source"] == "model" and s["market"] == "goals_total")
+    assert all("sportsbook" not in s for s in m["families"]["corners"]["selections"])

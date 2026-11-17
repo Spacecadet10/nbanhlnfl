@@ -172,6 +172,25 @@ class PercentageHistorySource(BaseModel):
     small_sample: bool = False     # settled < threshold_overview.MIN_LIVE_GRADED, as the live record's flag
 
 
+class SportsbookComparison(BaseModel):
+    """The app's pick against the saved sportsbook quote for the SAME game, market, side and line (no other line is ever used).
+
+    status: exact = a saved quote matches; no_quote = bookmaker line but no saved quote at it; model_line = the forecast used the
+    model's own line, so no sportsbook line exists to compare; unsupported = the market has no quote source.
+    Probabilities are of the picked side; book_probability is proportionally de-vigged (odds.devig_two_way)."""
+    status: Literal["exact", "no_quote", "model_line", "unsupported"]
+    app_probability: float
+    book_probability: Optional[float] = None
+    gap_pp: Optional[float] = Field(default=None, description="App % minus sportsbook %, both rounded to one decimal first, in "
+                                                              "percentage points (signed), so the shown numbers subtract exactly.")
+    provider: Optional[str] = None
+    price: Optional[str] = Field(default=None, description="American prices of the quote's two sides, e.g. '-110/-110'.")
+    line: Optional[float] = None
+    quote_id: Optional[int] = None
+    retrieved_at: Optional[datetime] = None
+    reason: Optional[str] = Field(default=None, description="Why there is no comparison (every status except exact).")
+
+
 class PercentageTelegramSource(BaseModel):
     """Graded picks from the owner's Telegram cards sent before the live ledger began (Nov 2-14 2026), at the same sport,
     market, exact percentage, side and line source. The cards do not show the model version. A separate source: never
@@ -234,6 +253,7 @@ class CanonicalForecast(BaseModel):
     attempts: int = Field(description="Rows recorded for this game and market before the start.")
     recording_began_at: Optional[datetime]
     percentage_history: Optional[ForecastPercentageRecord] = None
+    sportsbook: Optional[SportsbookComparison] = None
 
 
 class NearTipoffForecast(BaseModel):

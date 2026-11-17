@@ -7,7 +7,8 @@ import { useCarriedSearch, useCompetition } from '../components/Selection';
 import { AsyncView, Empty } from '../components/States';
 import { COMPETITION_IDS } from '../components/competition';
 import { gameRoute } from '../components/gameRoute';
-import { emptyCompetition, forecastBanner, forecastStateOf, importHint, liveLoadProblem, matchForecastNote } from '../components/soccerStatus';
+import { sportsbookLine } from '../components/sportsbook';
+import { daySummary, daySummaryText, emptyCompetition, forecastBanner, forecastKind, forecastStateOf, importHint, liveLoadProblem, matchForecastNote } from '../components/soccerStatus';
 import type { NflCapability } from '../api/types';
 import { TeamLogo } from '../components/TeamLogo';
 import { EmptyForecastState, Icon, MetricCard, PageTitle } from '../components/ui';
@@ -112,13 +113,17 @@ function AllSoccerMatches() {
         {unavailable > 0 && <p className="notice">Could not load {unavailable} competitions. <button type="button" className="link-btn" onClick={retry}>Retry</button></p>}
         {unimported > 0 && <p className="small muted">Match data for {unimported} competitions has not been imported for this date.</p>}
         {leagues.length === 0 && <Empty>No stored matches for {calendarDate(date, FULL_DATE)}.</Empty>}
+        {leagues.length > 0 && <DaySummaryNotice title="All competitions:" text={daySummaryText(daySummary(
+          leagues.flatMap(slate => slate.matches.map(m => ({ match_id: m.match_id, kickoff: m.kickoff }))),
+          Object.assign({}, ...leagues.map(slate => slate.live_forecasts ?? {})), Date.now()), dateTime)} />}
         {leagues.map(slate => <section key={slate.competition_id}>
           <h2>{slate.matches[0].competition}{' '}
             <button type="button" className="link-btn small" onClick={() => openCompetition(slate.competition_id)}>Competition page and markets</button></h2>
           <ul className="game-grid">{slate.matches.map(match => {
             const forecast = slate.live_forecasts?.[match.match_id];
             const blocker = slate.forecast_blockers?.[match.match_id];
-            const note = forecast ? `Forecast: ${pct(forecast.probabilities.home)} home · ${pct(forecast.probabilities.draw)} draw · ${pct(forecast.probabilities.away)} away`
+            const daily = forecast && forecastKind(forecast, match.kickoff) === 'daily';
+            const note = forecast ? `Forecast: ${pct(forecast.probabilities.home)} home · ${pct(forecast.probabilities.draw)} draw · ${pct(forecast.probabilities.away)} away${daily ? ' (older daily forecast, not a two-hour one)' : ''}`
               : blocker ? blockerNote(blocker) : 'No recorded forecast for this match.';
             return <SoccerCard key={match.match_id} match={match} date={date} note={note} />;
           })}</ul>
@@ -173,6 +178,21 @@ function ForecastStatus({ meta }: { meta: SoccerMeta }) {
   );
 }
 
+/** What the two-hour forecast job saved for the selected date (and competition); replaces the old "competition has ever had a
+ * forecast" banner. `meta` adds the capability list. */
+function DaySummaryNotice({ title, text, meta }: { title: string; text: string; meta?: SoccerMeta }) {
+  const body = <><strong>{title}</strong> {text}</>;
+  if (!meta) return <p className="notice">{body}</p>;
+  return (
+    <details className="notice nfl-notice">
+      <summary>{body} <span className="link-btn">What else is not available</span></summary>
+      <ul className="nfl-capabilities small">
+        {meta.capabilities.map((c) => <li key={c.id}><strong>{c.label}:</strong> {c.available ? 'available. ' : 'not available. '}<span className="muted">{c.reason}</span></li>)}
+      </ul>
+    </details>
+  );
+}
+
 function SoccerGameDay({ meta }: { meta: SoccerMeta }) {
   const [params, setParams] = useSearchParams();
   const date = params.get('date') ?? meta.default_date;
@@ -188,7 +208,7 @@ function SoccerGameDay({ meta }: { meta: SoccerMeta }) {
     <section>
       <PageTitle icon="ball" plain title={`${meta.competition} matches`} sub="Fixtures and results from ESPN. Kickoff dates are US Eastern."
         right={date && <GameDateControl date={date} dates={meta.match_dates} defaultDate={meta.default_date} onChange={setDate} />} />
-      <ForecastStatus meta={meta} />
+      {stateOf(meta.forecast_state, meta.capabilities) !== 'recorded' && <ForecastStatus meta={meta} />}
       {stateOf(meta.forecast_state, meta.capabilities) !== 'no_live_store' && <SoccerLivePanel state={live.state} name={meta.competition} />}
       {stateOf(meta.forecast_state, meta.capabilities) !== 'no_live_store' && <SoccerMarketsPanel competition={meta.competition_id} name={meta.competition} />}
       {date ? <SoccerSlate meta={meta} date={date} onChange={setDate} live={live.state.status === 'success' ? live.state.data : null} />
@@ -231,7 +251,7 @@ function SoccerLivePanel({ state, name }: { state: ApiState<SoccerLiveResponse>;
             </div>
           )}
           {d.forecasts.length === 0
-            ? <Empty>No live {name} forecast for the coming matches yet. Each match is forecast before 06:00 UTC on its date, once every earlier match is settled.</Empty>
+            ? <Empty>No live {name} forecast for the coming matches yet. Each match is forecast once, in the two hours before kickoff.</Empty>
             : <div className="soccer-live-list">{d.forecasts.map((f) => <SoccerLiveCard key={f.forecast_id} f={f} />)}</div>}
         </>
       )}
@@ -255,8 +275,9 @@ function SoccerLiveCard({ f }: { f: SoccerLiveForecast }) {
       </div>
       <p className="small muted">
         {f.result ? <>90-minute result: <strong>{names[f.result]}</strong> ({f.result === f.most_likely ? 'model\u2019s most likely outcome' : 'not the model\u2019s most likely outcome'}). </> : null}
-        Forecast {dateTime(f.generated_at)} (cutoff {dateTime(f.cutoff_at)}); results through {f.inputs_through ? dateTime(f.inputs_through) : '—'}; ESPN data retrieved {dateTime(f.source_retrieved_at)}.
+        Forecast {dateTime(f.generated_at)} (for kickoff {dateTime(f.cutoff_at)}); results through {f.inputs_through ? dateTime(f.inputs_through) : '—'}; ESPN data retrieved {dateTime(f.source_retrieved_at)}.
       </p>
+      {f.sportsbook && <p className="small sportsbook-line">{names[f.most_likely]}: {sportsbookLine(f.sportsbook)}</p>}
     </article>
   );
 }
@@ -270,8 +291,11 @@ function SoccerSlate({ meta, date, onChange, live }: {
       {(d) => {
         const finals = d.matches.filter((m) => m.status === 'final');
         const draws = finals.filter((m) => m.end_of_play_result === 'draw').length;
+        const recorded = stateOf(meta.forecast_state, meta.capabilities) === 'recorded';
         return (
           <>
+            {recorded && d.matches.length > 0 && <DaySummaryNotice title={`${meta.competition}, ${calendarDate(date, FULL_DATE)}:`} meta={meta}
+              text={daySummaryText(daySummary(d.matches.map((m) => ({ match_id: m.match_id, kickoff: m.kickoff })), d.live_forecasts ?? {}, Date.now()), dateTime)} />}
             <div className="metrics today-metrics">
               <MetricCard icon="calendar" label="Matches on this date" tone="lime" value={d.matches.length}
                 hint={d.matches.length ? `${finals.length} final, ${d.matches.length - finals.length} not final.` : d.fetched ? 'ESPN listed none.' : 'This day was not requested.'} />
@@ -292,7 +316,9 @@ function SoccerSlate({ meta, date, onChange, live }: {
             ) : <ul className="game-grid">{d.matches.map((m) => <SoccerCard key={m.match_id} match={m} date={date}
                 note={!d.live_forecasts?.[m.match_id] && d.forecast_blockers?.[m.match_id] ? blockerNote(d.forecast_blockers[m.match_id])
                   : matchForecastNote(stateOf(meta.forecast_state, meta.capabilities), m.status, d.live_forecasts?.[m.match_id],
-                  m.home.name, m.away.name, cutoffOf(d.forecast_cutoffs?.[m.match_id]))} />)}</ul>}
+                  m.home.name, m.away.name, cutoffOf(d.forecast_cutoffs?.[m.match_id]),
+                  { passed: new Date(m.kickoff).getTime() <= Date.now(), when: dateTime(new Date(new Date(m.kickoff).getTime() - 2 * 3600 * 1000).toISOString()) },
+                  d.live_forecasts?.[m.match_id] ? forecastKind(d.live_forecasts[m.match_id], m.kickoff) : undefined)} />)}</ul>}
           </>
         );
       }}
