@@ -172,6 +172,20 @@ class PercentageHistorySource(BaseModel):
     small_sample: bool = False     # settled < threshold_overview.MIN_LIVE_GRADED, as the live record's flag
 
 
+class PercentageTelegramSource(BaseModel):
+    """Graded picks from the owner's Telegram cards sent before the live ledger began (Nov 2-14 2026), at the same sport,
+    market, exact percentage, side and line source. The cards do not show the model version. A separate source: never
+    added to the live record, rank or AVOID (threshold_overview.telegram_record)."""
+    source: Literal['telegram_cards']
+    period: Optional[dict[str, str]] = None
+    line_source: Literal['bookmaker', 'model', 'none']
+    wins: int
+    losses: int
+    pushes: int = 0
+    settled: int
+    small_sample: bool = False
+
+
 class ForecastPercentageRecord(BaseModel):
     """Current observed live record for the exact displayed percentage, excluding the target game."""
     sport: Literal['nba', 'nhl', 'nfl']
@@ -198,6 +212,8 @@ class ForecastPercentageRecord(BaseModel):
     ranked: int = Field(default=0, description="How many exact percentages of this sport and market are ranked.")
     history: Optional[PercentageHistorySource] = Field(default=None, description="Recomputed past seasons (spread, total, team "
                                                        "totals of NBA; winner of NBA and NHL), apart from the live record; None when not available.")
+    telegram: Optional[PercentageTelegramSource] = Field(default=None, description="Telegram cards Nov 2-14 2026 at the same "
+                                                         "exact percentage, apart from the live record; None without the history file.")
 
 
 class CanonicalForecast(BaseModel):
