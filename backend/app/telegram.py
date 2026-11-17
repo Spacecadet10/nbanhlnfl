@@ -104,6 +104,11 @@ def ledger(path=None):
           attempted_at TEXT NOT NULL, next_attempt_at TEXT, message_id INTEGER, error TEXT);
         CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     ''')
+    try:   # the NCAAB card selection's append-only table (app/ncaab_cards.py)
+        from . import ncaab_cards
+        conn.executescript(ncaab_cards.SCHEMA)
+    except Exception:
+        pass
     try:   # Step F paper recorder's append-only table (app/best_pick_record.py); a problem here never blocks delivery
         from . import best_pick_record
         conn.executescript(best_pick_record.SCHEMA)
@@ -511,6 +516,10 @@ def run_once(bot, settings, conn, *, now=None):
                     report = Views(source, now.strftime('%Y-%m-%dT%H:%M:%SZ')).ranked_picks(now.astimezone(TORONTO).date())
                 else:
                     report = RealProvider(source, now.strftime('%Y-%m-%dT%H:%M:%SZ')).ranked_picks(now.astimezone(TORONTO).date())
+                if sport == 'ncaab':   # owner decision Nov 17: cards only for the day's top 4 gaps chosen at 11 AM ET (app/ncaab_cards.py)
+                    from . import ncaab_cards
+                    selection = ncaab_cards.ensure(conn, source, now)
+                    report['picks'] = ncaab_cards.annotate(report['picks'], selection)
                 lineups = card_lineups(source, sport, report, now)
                 pictures = best_pick_pictures(source, sport, report, now)
                 card_implied_lines(source, sport, report, now)
@@ -541,6 +550,9 @@ def run_once(bot, settings, conn, *, now=None):
                 if status == 'sent':
                     record_best_pick(conn, sport, key, games_by_key.get(key), pictures, report['as_of'])
             result['sports'][sport] = {'eligible_summaries': len(batches), **dict(outcomes)}
+            if sport == 'ncaab':
+                result['sports'][sport]['selection'] = (None if selection is None else
+                                                        {'status': selection['status'], 'selected': len(selection['selected'])})
         except Exception as exc:
             # Do not echo arbitrary exception text (URLs/credentials). Other sport can continue.
             result['sports'][sport] = {'status': 'failed', 'error_type': type(exc).__name__}

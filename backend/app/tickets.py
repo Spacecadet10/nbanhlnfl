@@ -520,6 +520,12 @@ def shape_problems(legs):
 CARD_METHOD = 'context-card-v1'
 
 
+def _eastern(stamp):
+    from zoneinfo import ZoneInfo
+    t = datetime.fromisoformat(stamp.replace('Z', '+00:00')).astimezone(ZoneInfo('America/Toronto'))
+    return t.strftime('%I:%M %p ET').lstrip('0')
+
+
 def card_choice(sport, picks):
     """Visible, deterministic context comparison, separate from the frozen v4 paper rule.
 
@@ -533,6 +539,9 @@ def card_choice(sport, picks):
         q = p.get('quote_check') or {}
         if market in OFF_TICKETS and sport != 'soccer':
             blocked.append('Team totals are excluded from selection.')
+            continue
+        sel = p.get('ncaab_selection') if sport == 'ncaab' else None
+        if sel and market != sel['market']:     # the card shows the market that put the game in the day's top 4
             continue
         if q.get('line_moved') or q.get('error'):
             blocked.append('The original line changed or could not be checked.')
@@ -555,6 +564,11 @@ def card_choice(sport, picks):
                 support.append('Distance matches the current preference.')
             elif (sport, market) == ('nba', 'spread') and gap > 1:
                 warnings.append('Spread distance is above the preferred range.')
+        if sel and _field(h, 'side') not in (None, sel['side']):     # review finding 1: the lean flipped since the selection
+            warnings.append("The model's side in this market changed since the selection; this is the current forecast.")
+        if sel:
+            support.append(f"Selected at {_eastern(sel['selected_at'])} as #{sel['rank']} of today's {sel['of']} largest "
+                           f"app-vs-sportsbook gaps ({sel['gap']:+.1f} points then); untested rule.")
         if sport == 'nba' and market == 'winner' and book is not None and book >= .72:
             support.append('Strong sportsbook support.')
         exact_win = bool(_field(h, 'rank') and _field(h, 'wins', 0) > _field(h, 'losses', 0))
