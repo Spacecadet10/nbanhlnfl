@@ -171,7 +171,7 @@ def test_ncaab_rundown_prices_are_requested_only_on_demand_and_within_a_daily_bu
     assert sum("/sports/5/" in u for u in calls) == 2 and len(calls) == 8                      # both UTC dates, two requests a run
     for _ in range(6):
         r.fetch(NOW_DT, opener=opener, pause=lambda _: None, extra=("ncaab",))
-    assert sum("/sports/5/" in u for u in calls) == r.EXTRA_DAY_REQUESTS["ncaab"]               # its own daily allowance, then none
+    assert sum("/sports/5/" in u for u in calls) == r.EXTRA_DAY_REQUESTS["ncaab"] == 2          # its own daily allowance, then none
     used = sum(1 for _ in (tmp_path / "odds-books" / "requests.jsonl").read_text().splitlines())
     assert used <= r.DAY_REQUESTS
 

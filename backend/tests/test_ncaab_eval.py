@@ -259,7 +259,8 @@ def test_predict_contract_used_by_the_adapter(store):
 def test_the_real_module_through_the_app_adapter(store, monkeypatch):
     monkeypatch.setattr(ncaab_app, "DECISION_PATH", college.DECISION_PATH)
     model = ncaab_app.CollegeModel(store)
-    assert model.version == college.load_decision()["model_version"]
+    d = college.load_decision()
+    assert model.version == f"{d['model_version']}-fit={d['sha256'][:8]}"
     model.as_of = CUTOFF
     game = PregameGame(sup.GAME, 2027, "regular", sup.GAME_START, "ncaab:1", "ncaab:2", False)
     p = model.predict(game)

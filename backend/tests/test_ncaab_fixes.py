@@ -31,15 +31,30 @@ def _model(conn, cutoff=CUTOFF):
 # --- B1: the stored winner id carries the frozen decision's version -----------------------------------------------------
 def test_winner_id_carries_the_decisions_version_and_a_model_change_is_not_a_ledger_conflict(real):
     first = near_tipoff.predict_now(real, now=NOW)
-    version = json.loads(college.DECISION_PATH.read_text())["model_version"]
+    d = json.loads(college.DECISION_PATH.read_text())
+    version = f"{d['model_version']}-fit={d['sha256'][:8]}"
     assert first["created"] == 1 and first["model_version"] == f"{version}-window=2h-policy=near_tipoff"
     assert first["model_version"].startswith("ncaab-college_elo-")
+    sealed = json.loads(college.DECISION_PATH.read_text())
+    assert f"-fit={sealed['sha256'][:8]}-window=2h" in first["model_version"]      # the fitted values are part of the id
     sealed_decision(real, college.DECISION_PATH, winner_model="college_eff", winner_calibration=[0.96, 0.007])
     second = near_tipoff.predict_now(real, now=NOW)              # same cycle, another sealed model: its own id, no LedgerConflict
     assert second["created"] == 1 and second["model_version"] != first["model_version"]
-    assert second["model_version"].startswith("ncaab-college_eff-") and "+platt-window=2h" in second["model_version"]
+    assert second["model_version"].startswith("ncaab-college_eff-") and "+platt-fit=" in second["model_version"]
     stored = {r[0] for r in real.execute("SELECT model_version FROM predictions WHERE run_type='live'")}
     assert stored == {first["model_version"], second["model_version"]}
+
+
+def test_a_refit_with_the_same_config_but_other_fitted_values_gets_its_own_ids(real):
+    """Review should-fix 2: sigmas and Platt coefficients change the probabilities, so they must change both ids."""
+    first = near_tipoff.predict_now(real, now=NOW)
+    m1 = ncaab_app.market_model(real)[1]
+    sigmas = {**json.loads(college.DECISION_PATH.read_text())["sigmas"]}
+    sigmas["elo_margin"] = sigmas["elo_margin"] + 1.0
+    sealed_decision(real, college.DECISION_PATH, sigmas=sigmas)
+    second = near_tipoff.predict_now(real, now=NOW)                # same config, refitted spread: no LedgerConflict, new ids
+    assert second["created"] == 1 and second["model_version"] != first["model_version"]
+    assert ncaab_app.market_model(real)[1] != m1
 
 
 def test_each_market_forecast_records_the_model_that_ships_for_it(real):

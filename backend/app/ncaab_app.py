@@ -91,9 +91,12 @@ def card_issue() -> Optional[str]:
 def base_version() -> str:
     """Model id of the winner forecasts: the frozen decision's id, else the model module's, else a labelled placeholder."""
     d = decision()
+    # The fitted values (sigmas, Platt coefficients) change the probabilities under the same config, so the stored id also
+    # carries the sealed file's digest: a refit is a new id, never a LedgerConflict or a re-stated forecast (review should-fix 2).
+    fit = f"-fit={d['sha256'][:8]}" if isinstance(d.get("sha256"), str) else ""
     for key in ("model_version", "winner_model_version", "winner_model"):
         if isinstance(d.get(key), str) and d[key]:
-            return d[key] if d[key].startswith("ncaab-") else f"ncaab-{d[key]}"
+            return (d[key] if d[key].startswith("ncaab-") else f"ncaab-{d[key]}") + fit
     try:
         v = getattr(_college(), "MODEL_VERSION", None)
     except CollegeModelUnavailable:
@@ -258,7 +261,8 @@ def _market_digest(d: dict) -> str:
     shipped = {m: v.get("model_version") or v.get("model") for m, v in (d.get("markets") or {}).items() if isinstance(v, dict)}
     if not any(shipped.values()):
         return ""
-    return "-" + hashlib.sha256(json.dumps(shipped, sort_keys=True).encode()).hexdigest()[:8]
+    # the sealed digest too: refitted sigmas change the market probabilities under the same assignment
+    return "-" + hashlib.sha256(json.dumps({"shipped": shipped, "fit": d.get("sha256")}, sort_keys=True).encode()).hexdigest()[:8]
 
 
 def market_line(model: CollegeModel, dist: CollegeDist, quote, market: str) -> tuple[float, Optional[object]]:
