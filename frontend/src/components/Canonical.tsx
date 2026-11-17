@@ -1,14 +1,13 @@
 // The canonical forecast: one record per game and market (game_forecasts), shown and graded the same way on Today, Game,
 // History and Performance. Each view names the record (#id) and model version so the pages can be compared.
 import { NoSkillNote } from './Skill';
-import { ForecastPercentageRecord } from './ThresholdOverview';
+import { PickEvidence } from './PickEvidence';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import type { CanonicalForecast, CanonicalGrade, CanonicalRecord, CanonicalState, CanonicalSummary, MarketId, Sport, Team } from '../api/types';
 import { useApi } from '../api/useApi';
 import { calendarDate, dateTime, FULL_DATE, num, pct } from '../format';
 import { ProbabilityBar } from './ProbabilityBar';
-import { sportsbookLine } from './sportsbook';
 import { MARKET } from './Research';
 import { useCarriedSearch } from './Selection';
 import { AsyncView, Empty } from './States';
@@ -73,8 +72,7 @@ export function CanonicalBlock({ c, home, away, detail = false }: {
         {' · '}<GradeText grade={c.grade} />
         {!winner && c.result_label && <span className="muted"> · result: {c.result_label}</span>}
       </p>
-      {c.sportsbook && <p className="muted small">{sportsbookLine(c.sportsbook)}</p>}
-      <p><ForecastPercentageRecord history={c.percentage_history} grade={c.grade} opposite={r.opposite_pick_label} startAt={r.start_at} /></p>
+      <p><PickEvidence sportsbook={c.sportsbook} recordBasis={c.record_basis} history={c.percentage_history} grade={c.grade} opposite={r.opposite_pick_label} startAt={r.start_at} /></p>
       {c.percentage_history?.sport === "nfl" && c.market !== "winner"
         ? <p className="no-skill small">Informational NFL score forecast. This market has no proven skill against the bookmaker’s line and is excluded from recommended picks.</p>
         : <NoSkillNote market={c.market} />}

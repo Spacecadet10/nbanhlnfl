@@ -6,7 +6,7 @@ import { useDataRevision } from '../api/freshness';
 import { pct, tipoffTime } from '../format';
 import { AsyncView } from './States';
 import { NoSkillNote } from './Skill';
-import { ForecastPercentageRecord } from './ThresholdOverview';
+import { PickEvidence } from './PickEvidence';
 import { formatGap, gapPoints } from './sportsbook';
 
 const TOP = 10;
@@ -48,7 +48,7 @@ function RankTable({ picks, date }: { picks: RankedPick[]; date: string }) {
           <td>{p.matchup}<br /><span className="small muted">{tipoffTime(p.tipoff, date)}{p.game_rank != null && ` · #${p.game_rank} of ${p.game_ranked} in this game`}</span></td>
           <td><strong>{p.pick_label}</strong><br /><span className="small muted">{p.market_title}</span>
             {!p.skill_proven && <><br /><NoSkillNote market={p.market} compact /></>}</td>
-          <td>{pct(p.probability, 1)}<br /><ForecastPercentageRecord history={p.percentage_history} grade={p.grade} opposite={p.opposite_pick_label} startAt={p.tipoff} /></td>
+          <td>{pct(p.probability, 1)}<br /><PickEvidence sportsbook={p.sportsbook} recordBasis={p.record_basis} history={p.percentage_history} grade={p.grade} opposite={p.opposite_pick_label} startAt={p.tipoff} /></td>
           <td>{p.threshold == null ? <span className="muted">below grid</span> : <span className="badge badge-threshold">{pct(p.threshold)}+</span>}</td>
           <td><Evidence e={p.evidence} /></td>
           <td><Market p={p} /></td>
@@ -71,7 +71,7 @@ function GamePickList({ picks }: { picks: RankedPick[] }) {
           {p.market_prob != null && <> · market {pct(p.market_prob, 1)}</>}
           {' '}<Result grade={p.grade} />
           {p.day_rank != null && <span className="small muted"> · #{p.day_rank} of the day</span>}
-          <br /><ForecastPercentageRecord history={p.percentage_history} grade={p.grade} opposite={p.opposite_pick_label} startAt={p.tipoff} />
+          <br /><PickEvidence sportsbook={p.sportsbook} recordBasis={p.record_basis} history={p.percentage_history} grade={p.grade} opposite={p.opposite_pick_label} startAt={p.tipoff} />
         </li>
     ))}</ol>
   );
@@ -101,7 +101,7 @@ function Simple({ p, date, game }: { p: RankedPick; date?: string; game?: boolea
       {' · '}model {pct(p.probability, 1)}
     </span>
     {' '}<Result grade={p.grade === 'pending' ? null : p.grade} />
-    <br /><ForecastPercentageRecord history={p.percentage_history} grade={p.grade} opposite={p.opposite_pick_label} startAt={p.tipoff} />
+    <br /><PickEvidence sportsbook={p.sportsbook} recordBasis={p.record_basis} history={p.percentage_history} grade={p.grade} opposite={p.opposite_pick_label} startAt={p.tipoff} />
   </>;
 }
 
@@ -205,7 +205,7 @@ export function GameRankedPicks({ sport, date, gameId, compact = false }: { spor
                 <p className="small muted">{best.market_title}
                   {' · '}model {pct(best.probability, 1)}
                   {best.day_rank != null && <> · #{best.day_rank} of the day</>}<br />
-                  <ForecastPercentageRecord history={best.percentage_history} grade={best.grade} opposite={best.opposite_pick_label} startAt={best.tipoff} /></p>
+                  <PickEvidence sportsbook={best.sportsbook} recordBasis={best.record_basis} history={best.percentage_history} grade={best.grade} opposite={best.opposite_pick_label} startAt={best.tipoff} /></p>
                 {rest.length > 0 && <>
                   <p className="best-label">Next best</p>
                   <ol className="best-list" start={2}>{rest.map((p) => <li key={p.market}><Simple p={p} /></li>)}</ol>

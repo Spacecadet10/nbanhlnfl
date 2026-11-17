@@ -17,7 +17,7 @@ import { TrackingGameCard } from '../components/Tracking';
 import { CandidateForecasts } from '../components/CandidateForecasts';
 import { CanonicalBlock, canonicalFor, GRADE_LABEL, STATE_LABEL } from '../components/Canonical';
 import { noProvenSkill } from '../components/Skill';
-import { ForecastPercentageRecord } from '../components/ThresholdOverview';
+import { PickEvidence } from '../components/PickEvidence';
 import { TeamLogo } from '../components/TeamLogo';
 import { EmptyForecastState, Icon, MetricCard, PageTitle } from '../components/ui';
 import { GameRankedPicks, useGamePicks } from '../components/RankedPicks';
@@ -194,7 +194,7 @@ function ForecastMetrics({ game: g, picks }: { game: GameDetail; picks: ReturnTy
         ? <MetricCard icon="targetArrow" label="Best Pick" tone="accent" value={best.pick_label}
             hint={<>{best.market_title} · model {pct(best.probability, 1)}
               {best.grade && best.grade !== 'pending' && <> · {GRADE_LABEL[best.grade as CanonicalGrade]?.split(' (')[0] ?? best.grade}</>}
-              <br /><ForecastPercentageRecord history={best.percentage_history} grade={best.grade} opposite={best.opposite_pick_label} startAt={best.tipoff} /></>} />
+              <br /><PickEvidence sportsbook={best.sportsbook} recordBasis={best.record_basis} history={best.percentage_history} grade={best.grade} opposite={best.opposite_pick_label} startAt={best.tipoff} /></>} />
         : <MetricCard icon="targetArrow" label="Best Pick" tone="plain"
             value={<span className="metric-na">{picks.picks == null ? (picks.error ? 'Unavailable' : '…') : picks.picks.length === 0 ? 'Not available yet' : 'No strong pick'}</span>}
             hint={picks.picks && picks.picks.length > 0 ? 'No pick here is of a kind that has won more often than not.' : 'Picks appear about two hours before the game starts.'} />}
@@ -218,13 +218,13 @@ function ForecastMetrics({ game: g, picks }: { game: GameDetail; picks: ReturnTy
                 <span className={away > home ? 'is-fav' : ''} style={{ width: `${away * 100}%` }} /><span className={home >= away ? 'is-fav' : ''} style={{ width: `${home * 100}%` }} />
               </span>
               {[`${r.pick === 'home' ? g.away.abbr : g.home.abbr} ${pct(r.pick === 'home' ? away : home, 1)}`, marketHint, graded].filter(Boolean).join(' · ')}
-              <br /><ForecastPercentageRecord history={c.percentage_history} grade={c.grade} opposite={r.opposite_pick_label} startAt={r.start_at} />
+              <br /><PickEvidence sportsbook={c.sportsbook} recordBasis={c.record_basis} history={c.percentage_history} grade={c.grade} opposite={r.opposite_pick_label} startAt={r.start_at} />
             </>} />;
         }
         const pick = c.market === 'winner' ? (r.pick === 'home' ? g.home.abbr : g.away.abbr) : r.pick_label;
         return <MetricCard key={c.market} icon={icon} label={title} tone="plain" value={pick ?? '—'}
           hint={<>{pct(r.confidence, 1)} model probability{graded ? ` · ${graded}` : ''}
-            <br /><ForecastPercentageRecord history={c.percentage_history} grade={c.grade} opposite={r.opposite_pick_label} startAt={r.start_at} />
+            <br /><PickEvidence sportsbook={c.sportsbook} recordBasis={c.record_basis} history={c.percentage_history} grade={c.grade} opposite={r.opposite_pick_label} startAt={r.start_at} />
             {noProvenSkill(c.market) && <><br /><span className="skill-chip" title="An observed win rate at this threshold does not establish an advantage against bookmaker prices. This market has no established edge against the bookmaker's line.">Market edge unproven</span></>}</>} />;
       })}
     </div>
