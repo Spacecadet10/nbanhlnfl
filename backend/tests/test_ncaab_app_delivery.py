@@ -89,12 +89,15 @@ def test_run_once_covers_ncaab_and_only_ever_calls_the_stub_sender(store, tmp_pa
             assert method in ("sendMessage", "sendPhoto")
             sends.append((method, body))
             return {"message_id": len(sends)}
+    from app import ncaab_cards
+    add_quote(store, GAME, "winner", None, -110, -110, "2026-11-17T15:00:00Z")    # seen by the 11 AM ET card selection
     with tg.ledger(tmp_path / "receipts.sqlite") as conn:
+        assert ncaab_cards.ensure(conn, store, datetime(2026, 11, 17, 16, 0, tzinfo=timezone.utc))["selected"] == [GAME]
         first = tg.run_once(Bot(), {"TELEGRAM_CHAT_ID": "123"}, conn, now=NOW_DT)
         second = tg.run_once(Bot(), {"TELEGRAM_CHAT_ID": "123"}, conn, now=NOW_DT)
     assert "ncaab" in first["sports"] and first["sports"]["ncaab"].get("status") != "failed", first
     sent = first["sports"]["ncaab"].get("sent", 0)
-    assert sent == 1 and first["sports"]["ncaab"]["eligible_summaries"] == 1, first        # one card for the one tracked game
+    assert sent == 1 and first["sports"]["ncaab"]["eligible_summaries"] == 1, first        # one card for the one selected game (app/ncaab_cards.py)
     assert second["sports"]["ncaab"].get("sent", 0) == 0                                 # the same card is never sent twice
     assert len(sends) >= sent and all(m in ("sendMessage", "sendPhoto") for m, _ in sends)
 

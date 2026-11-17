@@ -1,3 +1,20 @@
+## NCAAB Telegram cards: top 4 by gap at 11 AM ET (owner decision Nov 17) — Claude, Nov 17, 2026 ~23:40Z
+- Was: one card per forecast NCAAB game (~60/night). Now (`app/ncaab_cards.py`, rule `ncaab-top4-gap-v1`): at the first Telegram
+  run at/after 11:00 AM ET, every tracked game tipping >= 2 h later that Eastern day is priced by the shipped model as of that moment
+  vs the latest saved no-vig quote (<= 6 h old) for winner, spread, total (owner chose all three over winner-only); game gap = max
+  (app % − book %) on the model's side; the top 4 positive gaps are saved append-only with every candidate in the delivery ledger
+  (`ncaab_card_selections`, one row per ET day; an error row = no NCAAB cards that day). Only those games get a card at the usual
+  two-hour time; the card recommends the selected market and says "untested rule"; a side flip since 11 AM is flagged. Before 11 AM:
+  no NCAAB cards. Other sports unchanged (gated on sport == 'ncaab'). Team totals are not ranked.
+- Real data (scratch copy, as of 16:00Z Nov 17, 2.9 s, 54 candidates): top 4 = 3 totals + 1 spread at gaps 25.9–28.0 pts (e.g.
+  Stanford–UC Irvine total: running_points mean 158.9 vs DK 144.5). Owner was told these are likely early-season model errors
+  (small-sample season means; documented early-season under-confidence) and chose to test it. Winner-only top 4 would be 14.5–17.7.
+- Checks: tests/test_ncaab_cards.py 9 new (red→green for the quote-age and side-flip fixes); related suites 492 passed before the
+  review fixes, 256 after (ncaab_cards, ncaab_app_delivery, tickets, telegram); structure guard passed. One Sonnet review: no blocking
+  defects; fixed side flip (1) and quote age (2). UNRESOLVED (low): push mass not removed from app % on integer lines (same as cards);
+  a stale source at 11 AM delays the selection to the first fresh run; a transient compute failure stops that day's cards.
+- Next: evaluate selected vs not-selected from `ncaab_card_selections` + graded game_forecasts after a few weeks.
+
 ## NCAAB fifth sport — RELEASED to delivery, first live forecast verified — Claude (lead), Nov 17, 2026 15:45Z
 - GitHub: main 16c17c3..f859bc0 pushed. Delivery (~/nba-predictor-delivery, detached): 8e7d35a → 4d52088 (main 16c17c3..f859bc0
   without HANDOFF.md as one commit; recovery.py conflict kept delivery's recover() signature). Live checkout untouched (owner).
