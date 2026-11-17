@@ -37,7 +37,7 @@ def add(conn, event, tipoff, home, away, hs=None, aws=None, *, status="final", n
         add_team(conn, t)
     final = status == "final"
     sup.add_game(conn, event, tipoff, home, away, status, hs, aws, season_type or ("regular" if d1 else "other"), neutral,
-                 season, available or (_plus(tipoff, hours=4) if final else None))
+                 season, available or (_plus(tipoff, hours=4) if final else None), context=False)
     gid = f"ncaab:{event}"
     conn.execute("INSERT INTO ncaab_game_context (game_id, season_type_id, tournament_note, conference_competition, "
                  "home_conference_id, away_conference_id, both_d1, ot_periods, source_status, updated_at, last_raw_id) "

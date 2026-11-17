@@ -13,13 +13,14 @@ this module is the one place that knows the NCAAB specifics (docs/NCAAB_PLAN.md)
 Nothing here edits a sealed module. The adapter holds no state about results: `college.predict` reads the store at
 `cutoff`, so a result that became available after `cutoff` can never reach a forecast.
 """
+import hashlib
 import inspect
 import json
 import sqlite3
 from pathlib import Path
 from typing import Callable, Optional
 
-from . import backtest, sports
+from . import backtest, config, sports
 from .db import has_table
 from .models.base import PregameGame
 
@@ -57,12 +58,34 @@ def _college():
     return college
 
 
-def decision() -> dict:
-    """The frozen NCAAB decision (`app/models/ncaab_frozen_decision.json`) when it exists, else {} (unsealed)."""
+def _load_decision() -> tuple[dict, Optional[str]]:
+    """(decision, None) when the sealed decision loads through the model's own loader (sha256 of the canonical content, every
+    field present), else ({}, the reason)."""
     try:
-        return json.loads(DECISION_PATH.read_text())
-    except (OSError, ValueError):
-        return {}
+        college = _college()
+        return college.load_decision(DECISION_PATH), None
+    except CollegeModelUnavailable as exc:
+        return {}, str(exc)
+    except (AttributeError, OSError, ValueError, KeyError) as exc:      # FrozenDecisionError is a ValueError
+        return {}, f"No valid frozen NCAAB decision ({DECISION_PATH.name}): {exc}"
+
+
+def decision() -> dict:
+    """The sealed NCAAB decision (`app/models/ncaab_frozen_decision.json`) when it is valid, else {} (nothing is forecast)."""
+    return _load_decision()[0]
+
+
+def decision_issue() -> Optional[str]:
+    """Why NCAAB has no usable decision, or None."""
+    return None if decision() else (_load_decision()[1] or "No valid frozen NCAAB decision")
+
+
+def card_issue() -> Optional[str]:
+    """Why NCAAB Telegram cards must not be produced (the way NFL's activation gate works), or None: a store must exist in
+    this data directory and the sealed decision must be valid."""
+    if not config.db_path(SPORT).is_file():
+        return "No NCAAB store in this data directory"
+    return decision_issue()
 
 
 def base_version() -> str:
@@ -82,8 +105,10 @@ def _probs(raw) -> tuple[float, float, float]:
     """(home or over, push, away or under) from the model's `probs`: a dict (a / mid / b or home / push / away or
     over / push / under), a pair (no push) or a triple."""
     if isinstance(raw, dict):
-        keys = next(k for k in (("a", "mid", "b"), ("home", "push", "away"), ("over", "push", "under"),
-                                ("home", "mid", "away")) if k[0] in raw and k[2] in raw)
+        keys = next((k for k in (("a", "mid", "b"), ("home", "push", "away"), ("over", "push", "under"),
+                                 ("home", "mid", "away")) if k[0] in raw and k[2] in raw), None)
+        if keys is None:
+            raise ValueError(f"NCAAB model probabilities have no recognised sides: {sorted(raw)}")
         raw = (raw[keys[0]], raw.get(keys[1], 0.0), raw[keys[2]])
     raw = tuple(float(x) for x in raw)
     if len(raw) == 2:
@@ -103,8 +128,10 @@ class CollegeDist:
         self.pred = pred
         self._reprice = reprice
         self._by_line: dict = {}
+        markets = pred.get("markets") or {}
         self.params = {"model_version": pred.get("model_version"),
-                       "model_lines": {m: v.get("line") for m, v in (pred.get("markets") or {}).items()}}
+                       "model_lines": {m: v.get("line") for m, v in markets.items()},
+                       "market_models": {m: v.get("model_version") for m, v in markets.items() if v.get("model_version")}}
 
     def winner(self) -> tuple[float, float, float]:
         p = float(self.pred["home_win_prob"])
@@ -116,6 +143,23 @@ class CollegeDist:
             raise LineNotModelled(f"The NCAAB model gave no {market} line")
         return float(spec["line"])
 
+    def median(self, market: str) -> float:
+        """The middle of the market's quantity (what `markets.model_line` centres on): the home margin for the spread, the
+        total or the team's points. Normal, so the mean. A model that gives no mean: its own line (negated for the spread)."""
+        spec = (self.pred.get("markets") or {}).get(market) or {}
+        if spec.get("mean") is not None:
+            return float(spec["mean"])
+        own = self.model_line(market)
+        return -own if market == "spread" else own
+
+    def _normal(self, market: str, line: float) -> Optional[tuple[float, float, float]]:
+        """The model's own normal (mean, sd) priced at any line, when the model gave them and can price a line."""
+        spec = (self.pred.get("markets") or {}).get(market) or {}
+        price = getattr(_college(), "market_probs", None)
+        if price is None or spec.get("mean") is None or not spec.get("sd"):
+            return None
+        return _probs(price(market, float(line), float(spec["mean"]), float(spec["sd"])))
+
     def market(self, market: str, line: Optional[float] = None) -> tuple[float, float, float]:
         if market == "winner":
             return self.winner()
@@ -123,6 +167,8 @@ class CollegeDist:
         if line is None or abs(float(line) - own) < 1e-9:
             return _probs(self.pred["markets"][market]["probs"])
         key = (market, float(line))
+        if key not in self._by_line and (priced := self._normal(market, line)) is not None:
+            self._by_line[key] = priced
         if key not in self._by_line:
             if self._reprice is None:
                 raise LineNotModelled(f"The NCAAB model prices {market} only at its own line {own:g}, not {line:g}")
@@ -139,11 +185,12 @@ class CollegeModel:
     `distribution(game)`. `as_of` is the information time of the current calculation (the two-hour cycle sets it to its
     clock; unset, the night-before cutoff of the game's Eastern date). The model keeps no state, so `update` does nothing and a
     deep copy is itself."""
-    name = "ncaab-college"
+    name = "ncaab-college"      # replaced by the frozen decision's winner version on every instance (see __init__)
 
     def __init__(self, conn: sqlite3.Connection, version: Optional[str] = None):
         self.conn = conn
         self.version = version or base_version()
+        self.name = self.version    # `backtest.model_version(model)` = name + config(): the stored winner id carries the model
         self.as_of: Optional[str] = None
         self._cache: dict = {}
 
@@ -184,7 +231,11 @@ class CollegeModel:
 
 
 def primary(conn: sqlite3.Connection) -> tuple[dict, CollegeModel]:
-    return decision(), CollegeModel(conn)
+    """The winner model under the sealed decision; without a valid decision nothing is forecast (a stand-in id is never stored)."""
+    d = decision()
+    if not d:
+        raise CollegeModelUnavailable(decision_issue() or "No valid frozen NCAAB decision")
+    return d, CollegeModel(conn)
 
 
 def market_model(conn: sqlite3.Connection):
@@ -195,9 +246,19 @@ def market_model(conn: sqlite3.Connection):
         _college()
     except CollegeModelUnavailable as exc:
         raise MarketModelUnavailable(str(exc)) from exc
-    if not decision():
-        raise MarketModelUnavailable("No frozen NCAAB model decision (app/models/ncaab_frozen_decision.json)")
-    return CollegeModel(conn), base_version() + MARKET_SUFFIX
+    d = decision()
+    if not d:
+        raise MarketModelUnavailable(decision_issue() or "No valid frozen NCAAB model decision")
+    return CollegeModel(conn), base_version() + MARKET_SUFFIX + _market_digest(d)
+
+
+def _market_digest(d: dict) -> str:
+    """'-<8 hex>' of the model that ships for each line market, so the market id changes when the assignment does (a stored
+    forecast is never re-stated with other probabilities under the same id); '' when the decision names none."""
+    shipped = {m: v.get("model_version") or v.get("model") for m, v in (d.get("markets") or {}).items() if isinstance(v, dict)}
+    if not any(shipped.values()):
+        return ""
+    return "-" + hashlib.sha256(json.dumps(shipped, sort_keys=True).encode()).hexdigest()[:8]
 
 
 def market_line(model: CollegeModel, dist: CollegeDist, quote, market: str) -> tuple[float, Optional[object]]:
@@ -218,17 +279,29 @@ def pregame(r: sqlite3.Row) -> PregameGame:
                        bool(r["neutral_site"]))
 
 
+LATEST = "9999-12-31T00:00:00Z"
+
+
 def load_rows(conn: sqlite3.Connection) -> list[backtest.Row]:
-    types = sports.NCAAB.eligible_season_types
-    query = (f"SELECT * FROM games WHERE status = 'final' AND season_type IN ({', '.join('?' * len(types))}) "
-             "ORDER BY tipoff_at, game_id")
-    return [backtest.Row(pregame(r), backtest.cutoff_for(r["tipoff_at"]), r["home_score"], r["away_score"],
-                         r["result_available_at"]) for r in conn.execute(query, types)]
+    """Every eligible Division I final (the data module's `ncaab.load_rows`, the rows the Coverage section hashes)."""
+    return [backtest.Row(PregameGame(r["game_id"], r["season"], r["season_type"], r["tipoff_at"], r["home_team_id"],
+                                     r["away_team_id"], bool(r["neutral_site"])), backtest.cutoff_for(r["tipoff_at"]),
+                         r["home_score"], r["away_score"], r["result_available_at"])
+            for r in _data().load_rows(conn, cutoff=LATEST)]
+
+
+def dataset_version(rows: list) -> str:
+    """The data module's `ncaab.dataset_version` of backtest rows (the same fields and hash, so forecasts record the hash the
+    Coverage section shows)."""
+    return _data().dataset_version(
+        {"game_id": r.game.game_id, "season": r.game.season, "season_type": r.game.season_type, "tipoff_at": r.game.tipoff_at,
+         "home_team_id": r.game.home_team_id, "away_team_id": r.game.away_team_id, "neutral_site": int(r.game.neutral_site),
+         "home_score": r.home_score, "away_score": r.away_score, "result_available_at": r.result_available_at} for r in rows)
 
 
 def engine():
     from .live import Engine
-    return Engine(SPORT, sports.NCAAB.eligible_season_types, FEATURE_VERSION, load_rows, backtest.dataset_version,
+    return Engine(SPORT, sports.NCAAB.eligible_season_types, FEATURE_VERSION, load_rows, dataset_version,
                   pregame, primary)
 
 

@@ -6,7 +6,7 @@ this is explicitly retrospective, not proof of what a sleeping machine would hav
 """
 from datetime import timedelta
 from . import live, near_tipoff, market_live, markets, sports, tracking, combine
-from .db import utc_now
+from .db import store_sport, utc_now
 
 NOTE = ('Reconstructed after the start with the current primary models and stored pregame-available results. '
         'Not live predictions; never included in live win rates or adaptive training. Model lines are used when no '
@@ -29,9 +29,14 @@ def missing(conn, game, market):
     return not found
 
 
+NCAAB_NOT_DEFINED = {'status': 'not_defined', 'reason': 'NCAAB has no recovered forecasts'}
+
+
 def recover(conn, now=None, limit=12, since=None):
     """`since`: an earlier first start date (the explicit `recover` command); otherwise the recording era start."""
     now = now or utc_now()
+    if store_sport(conn) == 'ncaab':     # recovery replays NBA/NHL research forecasts; NCAAB has none
+        return dict(NCAAB_NOT_DEFINED)
     out = {'status': 'success', 'created': 0, 'errors': {}, 'note': NOTE}
     if not exists(conn):
         return {**out, 'status': 'unavailable', 'reason': 'recovery schema not migrated'}
@@ -218,6 +223,8 @@ def recover_adaptive(conn, now=None, limit=2):
     from . import adaptive
     from .db import transaction
     now = now or utc_now()
+    if store_sport(conn) == 'ncaab':
+        return dict(NCAAB_NOT_DEFINED)
     out = {'status': 'success', 'created': 0, 'unreconstructable': 0, 'deferred': {}, 'errors': {}, 'backing_off': {},
            'retries_exhausted': {}, 'note': ADAPTIVE_NOTE}
     if not (exists(conn) and adaptive._has(conn, 'adaptive_recovered_forecasts') and adaptive._has(conn, 'adaptive_forecasts')):

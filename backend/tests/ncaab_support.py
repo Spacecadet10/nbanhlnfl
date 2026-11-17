@@ -35,7 +35,7 @@ def make_store(tmp_path, monkeypatch, name="ncaab.sqlite"):
 
 
 def add_game(conn, event, tipoff, home, away, status="scheduled", hs=None, aws=None, season_type="regular", neutral=0,
-             season=2027, available=None):
+             season=2027, available=None, context=True):
     final = status == "final"
     conn.execute(
         "INSERT INTO games (game_id, season, season_type, tipoff_at, home_team_id, away_team_id, neutral_site, status, home_score, "
@@ -44,6 +44,12 @@ def add_game(conn, event, tipoff, home, away, status="scheduled", hs=None, aws=N
         (f"ncaab:{event}", season, season_type, tipoff, f"ncaab:{home}", f"ncaab:{away}", neutral, status, hs, aws, RAW,
          (available or tipoff) if final else None, (available or tipoff) if final else None,
          "observed_retrieval" if final else None, RAW))
+    if context:     # the data module's eligibility rows (ncaab.load_rows joins this table): D-I unless season_type is 'other'
+        d1 = int(season_type != "other")
+        conn.execute("INSERT INTO ncaab_game_context (game_id, season_type_id, tournament_note, conference_competition, "
+                     "home_conference_id, away_conference_id, both_d1, ot_periods, source_status, updated_at, last_raw_id) "
+                     "VALUES (?, 2, NULL, 0, '1', ?, ?, ?, ?, ?, 1)",
+                     (f"ncaab:{event}", "2" if d1 else None, d1, 0 if final else None, status.upper(), RAW))
     conn.commit()
 
 

@@ -906,9 +906,6 @@ def forecast_due(conn: sqlite3.Connection) -> dict:
     # Current pregame windows take priority; then recover a bounded batch of missed primary markets, then (needing
     # their lines) a bounded batch of missed adaptive research forecasts into their own retrospective ledger.
     result = _forecast_due(conn)
-    if sport(conn) == "ncaab":      # recovery replays NBA/NHL research forecasts; NCAAB has none
-        result["recovery"] = {"status": "not_defined", "reason": "NCAAB has no recovered forecasts"}
-        return result
     result["recovery"] = recover_missed(conn)
     result["adaptive_recovery"] = recover_adaptive_missed(conn)
     return result

@@ -51,7 +51,14 @@ ESPN terms: personal, non-commercial use only (docs/DATA_SOURCES.md) — same as
 
 ## Markets and settlement
 Winner, spread, game total, home and away team totals. Overtime counts for every market (full-game score).
-Half-point lines win/lose; whole-number lines can push (`mid`). Postponed/canceled → void. A start-time change after
+Half-point lines win/lose; whole-number lines can push (`mid`). Postponed/canceled → void. ESPN statuses the shared map lacks are
+mapped at parse time (`sources/espn_ncaab.STATUS`) because settlement voids only those two: FORFEIT and UNCONTESTED (no game was
+played) → `canceled`; SUSPENDED (unfinished, may resume) → `postponed`. A later STATUS_FINAL updates the game as for any other game
+(its result is then graded); the raw status stays in `ncaab_game_context.source_status`. Any other unknown status is still `other`.
+Division I classification is sticky: a scoreboard that lacks a conference id never downgrades a stored D-I game that has a forecast;
+without a forecast it downgrades only a team-season already known non-D-I (`ncaab_team_seasons.is_d1 = 0`). The sealed coverage
+fallback (`coverage._Direct`) reads the model at the night-before cutoff (00:00 ET of the game's date), so a game-day result is not
+in a fallback row while the two-hour forecast uses it; the fallback row has no generation time and says so. A start-time change after
 the forecast → void (existing rule). Result corrections are stored as result revisions; the original forecast row is
 never changed and the grade follows the corrected final. Model lines are labelled "model line"; a sportsbook comparison is
 shown only when an exact matching quote (same game, market, side, line) was saved at or before the forecast's generation time;

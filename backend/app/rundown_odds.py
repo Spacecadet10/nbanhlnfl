@@ -23,9 +23,13 @@ from . import config
 BASE = 'https://therundown.io/api/v2'
 SPORT_IDS = {'nba': 4, 'nhl': 6, 'nfl': 2}
 # NCAAB (TheRundown sport 5): fetched only when asked for (`fetch(extra=('ncaab',))`, which the command does once an NCAAB store
-# exists), today only, at most EXTRA_DAY_REQUESTS a UTC day, after the three sports above: 6 + 6 x 7 runs + 4 stays inside DAY_REQUESTS.
+# exists). TheRundown files an event under its UTC date and about 54% of NCAAB tipoffs (ET evenings) fall on the next UTC date,
+# so both UTC dates (today and tomorrow) are asked for, after the three sports above. Budget: the three sports use 6 x 7 runs = 42
+# of DAY_REQUESTS (48); NCAAB gets at most EXTRA_DAY_REQUESTS (the 6 left over: 3 runs of 2 dates), and a request is made only
+# while the day's count after it still leaves EXTRA_RESERVE of the 48 for the existing sports.
 EXTRA_SPORT_IDS = {'ncaab': 5}
-EXTRA_DAY_REQUESTS = {'ncaab': 4}
+EXTRA_DAY_REQUESTS = {'ncaab': 6}
+EXTRA_RESERVE = 6
 KNOWN_SPORT_IDS = {**SPORT_IDS, **EXTRA_SPORT_IDS}       # every sport whose saved responses may be read
 BOOKS = {'19': 'DraftKings', '22': 'BetMGM', '23': 'FanDuel'}
 MARKETS = {1: 'winner', 2: 'spread', 3: 'total'}
@@ -276,11 +280,12 @@ def fetch(now=None, *, opener=urllib.request.urlopen, pause=time.sleep, extra=()
                 pass
         results = []
         extra_used = {s: sum(_sport_request_today(x, today, s) for x in lines) for s in extra}
-        plan = [(s, i, 2) for s, i in SPORT_IDS.items()] + [(s, EXTRA_SPORT_IDS[s], 1) for s in extra]
+        plan = [(s, i, 2) for s, i in SPORT_IDS.items()] + [(s, EXTRA_SPORT_IDS[s], 2) for s in extra]
         for sport, sid, days in plan:
             for offset in range(days):
-                if sport in extra_used and extra_used[sport] >= EXTRA_DAY_REQUESTS[sport]:
-                    break     # this sport's own daily allowance is spent
+                if sport in extra_used and (extra_used[sport] >= EXTRA_DAY_REQUESTS[sport]
+                                            or count + 1 > DAY_REQUESTS - EXTRA_RESERVE):
+                    break     # its own daily allowance is spent, or the existing sports' reserve would be touched
                 if sport in extra_used:
                     extra_used[sport] += 1
                 if count >= DAY_REQUESTS:
