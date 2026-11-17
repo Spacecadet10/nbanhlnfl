@@ -122,8 +122,10 @@ function AllSoccerMatches() {
           <ul className="game-grid">{slate.matches.map(match => {
             const forecast = slate.live_forecasts?.[match.match_id];
             const blocker = slate.forecast_blockers?.[match.match_id];
-            const daily = forecast && forecastKind(forecast, match.kickoff) === 'daily';
-            const note = forecast ? `Forecast: ${pct(forecast.probabilities.home)} home · ${pct(forecast.probabilities.draw)} draw · ${pct(forecast.probabilities.away)} away${daily ? ' (older daily forecast, not a two-hour one)' : ''}`
+            const kind = forecast ? forecastKind(forecast, match.kickoff) : 'none';
+            const tag = kind === 'daily' ? ' (older daily forecast, not a two-hour one)'
+              : kind === 'original_kickoff' ? ' (two-hour forecast for the original kickoff; the kickoff moved later)' : '';
+            const note = forecast ? `Forecast: ${pct(forecast.probabilities.home)} home · ${pct(forecast.probabilities.draw)} draw · ${pct(forecast.probabilities.away)} away${tag}`
               : blocker ? blockerNote(blocker) : 'No recorded forecast for this match.';
             return <SoccerCard key={match.match_id} match={match} date={date} note={note} />;
           })}</ul>
