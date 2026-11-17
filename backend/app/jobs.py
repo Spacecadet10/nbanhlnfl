@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 from zoneinfo import ZoneInfo
 
-from . import agreement, config, coverage, ingest, injuries, live, market_live, near_tipoff, research_live
+from . import agreement, config, coverage, ingest, injuries, live, market_live, near_tipoff, raw_cache, research_live
 from .db import store_sport, utc_now
 from .sources import espn, nhl_stats
 
@@ -385,6 +385,49 @@ def nhl_pbp(conn: sqlite3.Connection, *, fetch: Optional[Callable] = None, limit
     return {"status": status, **out, "errors": dict(list(out["errors"].items())[:10]), "seasons": seasons}
 
 
+ROSTER_REFRESH = timedelta(hours=6)
+ROSTER_HORIZON = timedelta(hours=24)
+
+
+def roster_snapshot(conn: sqlite3.Connection, *, now: Optional[str] = None, fetch=None, sleep=time.sleep,
+                    clock: Optional[Callable[[], str]] = None, pause_seconds: float = 0.5) -> dict:
+    """NBA: saves the ESPN roster of every team with a scheduled game in the next 24 h, unless one was saved in the last
+    6 h. The injury-aware member reads them (availability_live.latest_rosters) to confirm identities and first-season
+    players. The retrieval time is read from the clock only after the response arrives. Never fatal."""
+    from . import availability_live
+    from .sources import espn as _espn
+    fetch = fetch or _espn.fetch_team_roster
+    clock = clock or utc_now
+    now = now or utc_now()
+    start = _parse(now)
+    teams = sorted({t.split(":")[1] for row in conn.execute(
+        "SELECT home_team_id, away_team_id FROM games WHERE status='scheduled' AND tipoff_at > ? AND tipoff_at <= ?",
+        (now, _fmt(start + ROSTER_HORIZON))) for t in row})
+    fresh_since = _fmt(start - ROSTER_REFRESH)
+    out = {"status": "success", "teams": len(teams), "fetched": 0, "fresh": 0, "failed": 0, "errors": {}}
+    for i, team in enumerate(teams):
+        if conn.execute("SELECT 1 FROM raw_fetches f JOIN raw_responses r USING(raw_id) WHERE r.source=? AND r.request_key=? "
+                        "AND f.retrieved_at>=?", (availability_live.ROSTER_SOURCE, f"team={team}", fresh_since)).fetchone():
+            out["fresh"] += 1
+            continue
+        if out["fetched"] or out["failed"]:
+            sleep(pause_seconds)
+        try:
+            body = fetch(team)
+            received = clock()               # after the whole response has arrived
+            json.loads(body)
+            raw_cache.store_fetch(conn, source=availability_live.ROSTER_SOURCE,
+                                  endpoint=_espn.ROSTER_ENDPOINT.format(team=team), request_key=f"team={team}", body=body,
+                                  retrieved_at=received, importer_version="roster-1", suffix=".json")
+            out["fetched"] += 1
+        except Exception as exc:
+            out["failed"] += 1
+            out["errors"][team] = f"{type(exc).__name__}: {exc}"
+    if out["failed"]:
+        out["status"] = "failed"
+    return out
+
+
 def injury_reports(conn: sqlite3.Connection, *, enabled: Optional[bool] = None, **kw) -> dict:
     """Raw injury-report collection (app/injuries.py), logged as job 'injuries'. Makes no request and writes nothing
     unless collection is switched on (config.injury_collection_enabled()). A dry run never needs the switch."""
@@ -440,6 +483,7 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
         from . import availability
         if (availability.research_dir() / 'forward-facts.json').exists():
             steps["injuries"] = injury_reports(conn, enabled=True, **(injury_kw or {}))
+            steps["rosters"] = roster_snapshot(conn) if not dry_run else {"status": "skipped", "reason": "dry run"}
     else:
         steps["nhl_injuries"] = nhl_injury_capture() if not dry_run else {"status": "skipped", "reason": "dry run"}
         if research_live.enabled():

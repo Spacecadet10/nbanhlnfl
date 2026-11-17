@@ -255,7 +255,15 @@ COLUMNS = ("Game Date", "Game Time", "Matchup", "Team", "Player Name", "Category
 STATUS_SET = set(STATUSES.split("|"))
 NAME = re.compile(r"^([^,]+?)\s*,\s*(.+)$")
 _NW = r"[A-Za-z'’.\-]+"
-ROW_ENTRY = re.compile(rf"([A-Z]{_NW}(?:\s{{1,5}}{_NW}){{0,3}})\s*,\s*({_NW}(?:\s{{1,2}}{_NW})?)\s{{2,}}({STATUSES})\b")
+ROW_ENTRY = re.compile(rf"([A-Z]{_NW}(?:\s{{1,5}}{_NW}){{0,3}})(?:\s*,\s*(Jr\.?|Sr\.?|II|III|IV|V))?\s*,\s*"
+                       rf"({_NW}(?:\s{{1,2}}{_NW})?)\s{{2,}}({STATUSES})\b")
+_SUFFIX_FIRST = re.compile(r"^(Jr\.?|Sr\.?|II|III|IV|V)\s*,\s*(.+)$")
+
+
+def _split_suffix(last: str, first: str) -> tuple[str, str]:
+    """'Udeh, Jr., Ernest' (the suffix written with its own comma) -> ('Udeh Jr.', 'Ernest'); other names unchanged."""
+    m = _SUFFIX_FIRST.match(first)
+    return (f"{last} {m.group(1)}", m.group(2)) if m else (last, first)
 
 
 def _label_re(label: str) -> re.Pattern:
@@ -360,7 +368,8 @@ def parse_layout(pages: list[tuple[str, list[str]]], name: str, team_names: list
                 continue
             m = NAME.match(" ".join(_field(line, cols, "Player Name").split()))
             if m:
-                out.entries.append({"game_date": game_date, "team": team, "last": m.group(1), "first": m.group(2),
+                last, first = _split_suffix(m.group(1), m.group(2))
+                out.entries.append({"game_date": game_date, "team": team, "last": last, "first": first,
                                     "status": status})
     return out
 
@@ -404,8 +413,9 @@ def _parse_rows(lines, out: ParsedReport, team_re, teams_by_key, game_date, team
             continue
         m = ROW_ENTRY.search(rest)
         if m:
-            out.entries.append({"game_date": game_date, "team": team, "last": " ".join(m.group(1).split()),
-                                "first": " ".join(m.group(2).split()), "status": m.group(3)})
+            last = " ".join(m.group(1).split()) + (f" {m.group(2)}" if m.group(2) else "")
+            out.entries.append({"game_date": game_date, "team": team, "last": last,
+                                "first": " ".join(m.group(3).split()), "status": m.group(4)})
     return game_date, team
 
 
@@ -538,6 +548,7 @@ class ReportFacts:
     absent: dict = field(default_factory=dict)         # team_id -> {"new": minutes, "all": minutes}
     unsubmitted: set = field(default_factory=set)      # team ids
     teams_on_report: set = field(default_factory=set)
+    zero_minute_out: list = field(default_factory=list)  # live only: confirmed-Out players with no NBA minute on record
 
 
 def build_report_facts(conn: sqlite3.Connection, box: dict, *, log: Callable[[str], None] = lambda _m: None) -> tuple[dict, dict]:

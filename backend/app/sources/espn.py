@@ -208,6 +208,16 @@ def fetch_summary(game_id: str, timeout: float = 30) -> bytes:
     return _get(summary_request(game_id)[1], timeout, SUMMARY_ENDPOINT)
 
 
+ROSTER_ENDPOINT = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/{team}/roster"
+
+
+def fetch_team_roster(team: str, timeout: float = 30) -> bytes:
+    """One NBA team's current roster (athlete id, name, experience.years) for the injury-aware member's identity check."""
+    if not str(team).isdigit():
+        raise ValueError(f"Expected an ESPN team id, got {team!r}")
+    return _get({}, timeout, ROSTER_ENDPOINT.format(team=team))
+
+
 @dataclass
 class SummaryLine:
     team_id: str

@@ -1,0 +1,10 @@
+{
+ "agreement": {
+  "81bd3525237af349": {
+   "identity": "d6f4f8d6b4f4fda8",
+   "sport": "nhl",
+   "since": "2026-11-17",
+   "reason": "Owner decision Nov 17 2026: the NBA injury (availability) files were removed from NHL's agreement digest and agreement.py gained this alias lookup; neither changes any NHL member's forecasts. NHL keeps its identities (agreement d6f4f8d6b4f4fda8, research f862a44ddaa1e76f, adaptive b921c537a765c65c). Any later change to NHL model files, backtest.py, agreement.py or settings gives a new digest that is not aliased."
+  }
+ }
+}
