@@ -9,6 +9,15 @@ ROOT = Path(__file__).resolve().parents[1]
 SKIP = {'.git', '.omc', '.venv', 'venv', 'node_modules', '__pycache__', '.pytest_cache', 'dist', 'data', '.mypy_cache', '.ruff_cache'}
 
 
+# Preserve these separately versioned preregistrations and archived test evidence.
+ARCHIVED_EVIDENCE = {
+    'docs/preregistration/best-pick-2026-11-11-v2.md',
+    'docs/preregistration/best-pick-2026-11-11-v3.md',
+    'docs/preregistration/best-pick-2026-11-11-v4.md',
+    'docs/evidence/soccer-markets-2026-11-09/review/focused-final.txt',
+}
+
+
 def inspect(root):
     errors = []
     files = [p for p in root.rglob('*') if p.is_file() and not any(x in SKIP for x in p.relative_to(root).parts)]
@@ -18,7 +27,7 @@ def inspect(root):
             errors.append(f'Unexpected top-level directory: {p.name}; use the canonical layout.')
     for p in files:
         rel = p.relative_to(root).as_posix()
-        if re.search(r'(?:[ _-](?:copy|backup|old|final|v[2-9])| \(\d+\))(?=\.|$)', p.name, re.I):
+        if rel not in ARCHIVED_EVIDENCE and re.search(r'(?:[ _-](?:copy|backup|old|final|v[2-9])| \(\d+\))(?=\.|$)', p.name, re.I):
             errors.append(f'Possible duplicate/backup file: {rel}; modify the original instead.')
         if p.name == 'package.json' and rel != 'frontend/package.json':
             errors.append(f'Extra JavaScript package: {rel}; one frontend only.')
