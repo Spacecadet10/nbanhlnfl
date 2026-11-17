@@ -31,8 +31,16 @@
   tickets or live or recovery"`; full suite not rerun), API restarted, health ok. So game 401927381's rows carry the pre-digest
   ids (…+platt-window=2h…, markets-1b3d7c2b); later forecasts carry …+platt-fit=41a07f9d. Same fitted model, label only.
 - Other session's uncommitted work in main (ncaab_cards.py "top 4 by gap", telegram.py, tickets.py) left untouched.
-- Next: a settled result traced to its forecast and History (first final ~19:00Z), a no-send render of a Telegram card and a
-  ticket image from settled games, the 21:00Z TheRundown run (quota), regressions in the other sports after tonight.
+- Settled, 19:26:56Z: ncaab:401927381 final MUR 82-66. 11 game_forecasts rows (1-5 at 15:00:54Z old id; 6-10 at 15:31:16Z
+  new fit id after the redeploy; 11 total re-forecast at 16:32:07Z after DK moved 148.5→147.5): append-only, latest pre-tip row
+  is canonical, as in NBA (≤5 rows per game-market) and NHL (≤3). Grades checked by hand: winner MUR W, HOF +11.5 L, Under 147.5
+  L, MUR o78.5 W, HOF o71.5 L. History (/api/predictions, /api/canonical/forecasts) lists it; Performance near_tipoff n=1,
+  Brier .0736 (=(1−.7286)²). The default pregame view shows n=0 (NCAAB has no pregame archive policy). No-send preview rendered with
+  telegram.format_batch(preview=True) on a scratch copy: correct results.
+- OPEN (shared, all sports): the Telegram card is sent from the first forecast (Under 148.5, would have WON at 148), while the
+  app grades the later canonical forecast (Under 147.5, LOST). Not changed; owner decision whether cards should follow re-forecasts.
+- Next: the 21:00Z TheRundown run (quota), a no-send ticket image from settled games, the 22:45 ncaab-daily run, and
+  regressions in the other sports after tonight.
 ## Released: data-quality fixes 546acba to delivery — Claude, Nov 17, 2026 04:42Z
 - Delivery (~/nba-predictor-delivery, detached): 853be06 → 8e7d35a (cherry-pick of 546acba; HANDOFF.md kept at delivery's version; tickets.quote_check docstring conflict kept at delivery's wording). Trial in a scratch clone first: 503 focused tests passed with the delivery venv (incl. test_quote_quality, scorecard, telegram, soccer*, tickets, bet365_dc, nfl_activation_compat, agreement_identity, api, best_pick_record). Switched by detached checkout (no dirty window); `launchctl kickstart -k` api-delivery (8101). Web unchanged (no frontend change).
 - Verified on the running app: API 200 (canonical, NFL with date); web 200; NFL activation definition b6074877a7e7ccfe; scorecard 04:45:12Z status ok (no release-guard refusal); Telegram sender 04:44/04:45Z ok, 2 soccer cards already sent or recorded, 0 deliveries since the switch (no resend). Soccer card prices on :8101 equal the corrected export (uefa.nations 401861182 0.7804, 401861184 0.8447, 401861185 0.5157, 401861186 0.5207).
