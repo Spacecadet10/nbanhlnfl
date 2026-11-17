@@ -170,6 +170,8 @@ export function ForecastPercentageRecord({ history: h, grade, opposite, startAt 
     </> : <span className="muted">{h.market === 'reg3' ? 'Three-way market: no single opposite pick.' : 'Opposite side unavailable.'}</span>}</>}
     {h.history && h.history.settled > 0 && <><br />Past seasons 2024-26, recomputed{h.history.line_source === 'none' ? '' : h.history.line_source === 'bookmaker' ? ', bookmaker line' : ', model line'}: {h.history.wins}W–{h.history.losses}L{h.history.small_sample ? ' · Small sample.' : ''}
       <span className="muted"> · separate from the live record</span></>}
+    {h.telegram && h.telegram.settled > 0 && <><br />Telegram history{h.telegram.period ? ` (${h.telegram.period.from.slice(5)} to ${h.telegram.period.to.slice(5)})` : ''}: {h.telegram.wins}W–{h.telegram.losses}L{h.telegram.pushes ? ` · ${h.telegram.pushes} push` : ''}{h.telegram.small_sample ? ' · Small sample.' : ''}
+      <span className="muted"> · separate from the live record; cards do not show the model version</span></>}
     <br /><span className="muted">Live record · same model · as of {dateTime(h.as_of)}</span>
   </span>;
 }
