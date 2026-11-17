@@ -4,7 +4,7 @@
 // awaiting theirs, a competition with nothing stored, and a source that failed or went stale.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { dataSourceForecastText, emptyCompetition, forecastBanner, importHint, liveLoadProblem, matchForecastNote } from './soccerStatus.ts';
+import { dataSourceForecastText, daySummary, daySummaryText, emptyCompetition, forecastBanner, forecastKind, importHint, liveLoadProblem, matchForecastNote } from './soccerStatus.ts';
 
 const when = (iso) => `<${iso}>`;
 const forecast = { probabilities: { home: 0.4512, draw: 0.27, away: 0.2788 }, most_likely: 'home', result: null };
@@ -44,7 +44,7 @@ test('matches awaiting forecasts, out-of-scope competitions and stores without f
   });
   assert.equal(new Set(texts).size, 4);
   assert.match(texts[1], /No Premier League forecast is recorded yet/);
-  assert.match(texts[1], /each match is forecast by 06:00 UTC on its match day/);   // the cutoff, not "before it starts"
+  assert.match(texts[1], /each match is forecast once, in the two hours before kickoff/);   // not the old 06:00 UTC deadline
   assert.match(texts[2], /did not pass its held-out test/);
   assert.match(texts[3], /data store/);
 });
@@ -78,7 +78,8 @@ test('a match past its forecast cutoff is not described as awaiting a forecast',
   assert.equal(matchForecastNote('recorded', 'scheduled', null, 'A', 'B', { ...cutoff, passed: true }),
     'No forecast: none was recorded before this match’s cutoff (<2026-11-15T06:00:00Z>), and none is made after it.');
   assert.doesNotMatch(matchForecastNote('awaiting', 'scheduled', null, 'A', 'B', { ...cutoff, passed: true }), /Awaiting/);
-  assert.match(forecastBanner('awaiting', 'Premier League').text, /forecast by 06:00 UTC on its match day/);
+  assert.match(forecastBanner('awaiting', 'Premier League').text, /two hours before kickoff/);
+  assert.doesNotMatch(forecastBanner('awaiting', 'Premier League').text, /06:00/);
 });
 
 test('an API older than this page (no forecast_state, no refresh, no forecast map) gets honest fallbacks, not a crash', () => {
@@ -98,4 +99,63 @@ test('stale data is only said to block forecasts for competitions that are forec
   assert.match(importHint('Ligue 1', stale, when, 'awaiting'), /more than 26 h old, so new forecasts are refused/);
   assert.equal(importHint('UEFA Europa League', stale, when, 'out_of_scope'), 'Latest UEFA Europa League scoreboard request: more than 26 h old.');
   assert.doesNotMatch(importHint('UEFA Europa League', { ...stale, refresh: { ...stale.refresh, last_refresh_at: null } }, when, 'out_of_scope'), /forecast/);
+});
+
+// --- Day summary: what the two-hour forecast job actually saved for the selected date and competition ---------------------
+const NOW = Date.parse('2026-11-16T20:00:00Z');
+const iso = (h, m = 0) => `2026-11-${h >= 24 ? '17' : '16'}T${String(h % 24).padStart(2, '0')}:${String(m).padStart(2, '0')}:00Z`;
+const match = (id, kickoff) => ({ match_id: id, kickoff });
+// A two-hour forecast: generated 40 min before the kickoff it was made for (cutoff_at = that kickoff).
+const twoHour = (kickoffAt, minutesBefore = 40) => ({ generated_at: new Date(Date.parse(kickoffAt) - minutesBefore * 60000).toISOString().replace('.000Z', 'Z'), cutoff_at: kickoffAt });
+// The older daily forecast: made the evening before, cutoff 06:00 UTC of the match day.
+const daily = { generated_at: '2026-11-15T19:05:00Z', cutoff_at: '2026-11-16T06:00:00Z' };
+
+test('an all-timely elapsed day: every match has a forecast made within two hours of kickoff', () => {
+  const ms = [match('a', iso(12)), match('b', iso(15))];
+  const s = daySummary(ms, { a: twoHour(iso(12)), b: twoHour(iso(15), 110) }, NOW);
+  assert.deepEqual([s.total, s.elapsed.count, s.elapsed.twoHour, s.elapsed.dailyOnly, s.elapsed.none, s.upcoming.count], [2, 2, 2, 0, 0, 0]);
+  assert.deepEqual(s.moved, []);
+  assert.match(daySummaryText(s, when), /2 matches.*2 kicked off.*2 with a forecast saved in the two hours before kickoff/);
+});
+
+test('an all-upcoming day: two-hour forecasts saved vs not yet, with when the first window opens', () => {
+  const ms = [match('a', iso(21)), match('b', iso(22)), match('c', iso(23))];
+  const s = daySummary(ms, { a: twoHour(iso(21)) }, NOW);
+  assert.deepEqual([s.elapsed.count, s.upcoming.count, s.upcoming.twoHourSaved, s.upcoming.notYet], [0, 3, 1, 2]);
+  assert.equal(s.upcoming.windowOpensAt, iso(20));                   // b kicks off 22:00, its window opens 20:00 (now), the earliest unsaved
+  assert.match(daySummaryText(s, when), /3 upcoming.*1 with its two-hour forecast saved.*2 not yet.*first window opens <2026-11-16T20:00:00Z>/);
+});
+
+test('a moved kickoff is flagged only where the saved forecast says what the kickoff was', () => {
+  const s = daySummary([match('m', iso(14)), match('n', iso(15))], { m: twoHour(iso(13)), n: daily }, NOW);
+  assert.deepEqual(s.moved, [{ matchId: 'm', from: iso(13), to: iso(14) }]);   // two-hour row: cutoff_at is the kickoff then
+  assert.equal(s.elapsed.twoHour, 1);                                           // still a two-hour forecast
+  assert.match(daySummaryText(s, when), /Kickoff moved from <2026-11-16T13:00:00Z> to <2026-11-16T14:00:00Z> after the forecast/);
+  assert.equal(daySummary([match('n', iso(15))], { n: daily }, NOW).moved.length, 0);   // a daily row's 06:00 cutoff is not a kickoff
+});
+
+test('daily-only rows: elapsed matches with only the older daily forecast are named, not counted as two-hour', () => {
+  const s = daySummary([match('a', iso(12)), match('b', iso(21)), match('c', iso(13))], { a: daily, b: daily, c: twoHour(iso(13)) }, NOW);
+  assert.deepEqual([s.elapsed.twoHour, s.elapsed.dailyOnly, s.elapsed.none], [1, 1, 0]);
+  assert.deepEqual([s.upcoming.twoHourSaved, s.upcoming.notYet, s.upcoming.dailyOnly], [0, 1, 1]);
+  assert.match(daySummaryText(s, when), /1 only with the older daily forecast/);
+  assert.equal(forecastKind(daily, iso(12)), 'daily');
+  assert.equal(forecastKind(twoHour(iso(12)), iso(12)), 'two_hour');
+  assert.equal(forecastKind(undefined, iso(12)), 'none');
+  assert.match(matchForecastNote('recorded', 'final', { ...forecast, ...daily }, 'A', 'B', null, undefined, 'daily'), /older daily forecast, not a two-hour one/);
+});
+
+test('a mix with a miss: an elapsed match with no two-hour forecast is counted and shown as a miss', () => {
+  const ms = [match('a', iso(12)), match('b', iso(13)), match('c', iso(14)), match('d', iso(23))];
+  const s = daySummary(ms, { a: twoHour(iso(12)), b: twoHour(iso(13), 150), c: undefined }, NOW);   // b was generated 2.5 h before: too early
+  assert.deepEqual([s.total, s.elapsed.count, s.elapsed.twoHour, s.elapsed.dailyOnly, s.elapsed.none, s.upcoming.notYet], [4, 3, 1, 1, 1, 1]);
+  assert.match(daySummaryText(s, when), /1 with no forecast/);
+  assert.equal(daySummaryText(daySummary([], {}, NOW), when), 'No matches on this date.');
+});
+
+test('the awaiting note describes the two-hour forecast, not a 06:00 UTC deadline', () => {
+  const n = matchForecastNote('recorded', 'scheduled', null, 'A', 'B', null, { passed: false, when: '<2026-11-16T20:00:00Z>' });
+  assert.match(n, /two-hour forecast.*<2026-11-16T20:00:00Z>/);
+  assert.doesNotMatch(n, /06:00/);
+  assert.match(matchForecastNote('recorded', 'scheduled', null, 'A', 'B', null, { passed: true, when: 'x' }), /No two-hour forecast was saved/);
 });

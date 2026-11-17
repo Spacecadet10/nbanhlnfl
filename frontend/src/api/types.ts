@@ -50,6 +50,14 @@ export interface Outcome { home_score: number; away_score: number; home_won: boo
 /** canonical = one record per game (game_forecasts); pregame and near_tipoff are the legacy ledgers. */
 export type Policy = 'pregame' | 'near_tipoff' | 'canonical';
 
+/** The pick against the saved sportsbook quote for the same game, market, side and line (backend schemas.SportsbookComparison). */
+export interface SportsbookComparison {
+  status: 'exact' | 'no_quote' | 'model_line' | 'unsupported';
+  app_probability: number; book_probability: number | null; gap_pp: number | null;
+  provider: string | null; price: string | null; line: number | null; quote_id: number | null; retrieved_at: string | null;
+  reason: string | null;
+}
+
 /** The selected game_forecasts row: the one record every page shows and grades for this game and market. */
 export interface CanonicalRecord {
   opposite_pick_label?: string | null;
@@ -64,6 +72,7 @@ export type CanonicalState = 'forecast' | 'missing' | 'upcoming' | 'unvalidated'
 export type CanonicalGrade = 'win' | 'loss' | 'push' | 'pending' | 'void' | 'unscorable' | 'unresolved';
 export interface CanonicalForecast {
   percentage_history?: ForecastPercentageHistory | null;
+  sportsbook?: SportsbookComparison | null;
   market: MarketId; state: CanonicalState; reason: string | null; record: CanonicalRecord | null; grade: CanonicalGrade | null;
   result_side?: 'a' | 'mid' | 'b' | null; result_label?: string | null;
   /** The grade under each recorded final result, oldest first (a score correction adds an entry); the last is `grade`. */
@@ -1007,6 +1016,10 @@ export interface SoccerLiveForecast {
   probabilities: { home: number; draw: number; away: number }; most_likely: 'home' | 'draw' | 'away';
   generated_at: string; cutoff_at: string; source_retrieved_at: string; inputs_through: string | null; candidate_sha256: string;
   status: string; result: 'home' | 'draw' | 'away' | null; label: string; settlement_rule: string;
+  /** Forecast version (1 = the older daily forecast; later = the two-hour job); absent from /api/soccer/live. */
+  version?: number;
+  /** The picked outcome against the saved DraftKings 1X2 quote as of generated_at (backend app/soccer_book.py). */
+  sportsbook?: SportsbookComparison | null;
 }
 export interface SoccerLiveResponse {
   competition: SoccerCompetitionId; in_scope: boolean; label: string; settlement_rule: string; market: '1x2_regulation';
@@ -1027,6 +1040,8 @@ export interface SoccerMarketSelection {
   probabilities: SoccerMarketOutcomes; win_share: number; fair_decimal: number | null;
   provider?: string; american?: number; decimal?: number; retrieved_at?: string; market_probability?: number | null;
   expected_return?: number; result: 'win' | 'half_win' | 'push' | 'half_loss' | 'loss' | null;
+  /** goals_total only: the app's % against the de-vigged sportsbook % at the same line and side. */
+  sportsbook?: SportsbookComparison | null;
 }
 export interface SoccerMarketForecast {
   forecast_id: number; family: 'goals' | 'corners'; match_id: string; competition: string; kickoff_at: string;

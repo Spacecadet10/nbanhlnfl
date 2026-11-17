@@ -28,7 +28,7 @@ export function forecastBanner(state: SoccerForecastState, competition: string):
   }
   if (state === 'awaiting') {
     return { kind: 'awaiting', title: `No ${competition} forecast is recorded yet:`,
-      text: 'the live 90-minute model covers this competition, and each match is forecast by 06:00 UTC on its match day.', more: 'Details' };
+      text: 'the live 90-minute model covers this competition; each match is forecast once, in the two hours before kickoff.', more: 'Details' };
   }
   if (state === 'out_of_scope') {
     return { kind: 'none', title: `No live forecast for ${competition}:`,
@@ -43,17 +43,21 @@ export function forecastBanner(state: SoccerForecastState, competition: string):
 
 /** One match's forecast line: its recorded probabilities, or why there is none (yet). */
 export function matchForecastNote(state: SoccerForecastState, status: string, forecast: MatchForecast | null | undefined, home: string, away: string,
-  cutoff?: ForecastCutoff | null): string {
+  cutoff?: ForecastCutoff | null, twoHour?: ForecastCutoff | null, kind?: ForecastKind): string {
   if (forecast) {
     const names: Record<Side, string> = { home: `${home} win`, draw: 'Draw', away: `${away} win` };
     const p = forecast.probabilities;
     return `90-minute forecast: ${names.home} ${pct(p.home)} · Draw ${pct(p.draw)} · ${names.away} ${pct(p.away)}.`
+      + (kind === 'daily' ? ' This is the older daily forecast, not a two-hour one.' : '')
       + (forecast.result ? ` 90-minute result: ${names[forecast.result]}.` : '');
   }
   if (state === 'unknown') return 'Forecast status is not reported by this server version.';
   if (state === 'no_live_store') return 'No forecast: this data store records none.';
   if (state === 'out_of_scope') return 'No forecast: this competition is outside the live model’s tested scope.';
   if (status !== 'scheduled') return 'No forecast was recorded for this match.';
+  // `twoHour.when` = when this match's two-hour window opens; `passed` = its kickoff is behind us.
+  if (twoHour) return twoHour.passed ? 'No two-hour forecast was saved for this match.'
+    : `No forecast yet: the two-hour forecast is saved from ${twoHour.when} until kickoff.`;
   // A forecast is never made after its cutoff, so a scheduled match past it is no longer waiting for one.
   if (cutoff?.passed) return `No forecast: none was recorded before this match’s cutoff (${cutoff.when}), and none is made after it.`;
   return `Awaiting forecast: recorded ${cutoff ? `by ${cutoff.when} at the latest` : 'before its cutoff'}, once the earlier results it depends on are stored.`;
@@ -95,4 +99,77 @@ export function dataSourceForecastText(state: SoccerForecastState): string {
   if (state === 'out_of_scope') return `No live forecast is made for this competition.${rest}`;
   if (state === 'unknown') return rest.trim();
   return `This data store records no live soccer forecast.${rest}`;
+}
+
+// --- What the two-hour forecast job saved for one date and competition -----------------------------------------------------
+const TWO_HOURS = 2 * 3600 * 1000;
+const t = (iso: string) => Date.parse(iso);
+export type ForecastKind = 'two_hour' | 'daily' | 'none';
+interface SavedForecast { generated_at: string; cutoff_at: string }
+interface DayMatch { match_id: string; kickoff: string }
+export interface DaySummary {
+  total: number;
+  elapsed: { count: number; twoHour: number; dailyOnly: number; none: number };
+  upcoming: { count: number; twoHourSaved: number; notYet: number; dailyOnly: number; windowOpensAt: string | null };
+  moved: { matchId: string; from: string; to: string }[];
+}
+
+/** 'two_hour': generated in the two hours before the kickoff it was made for (the forecast's own cutoff_at is that kickoff, so a
+ * later move of the kickoff does not change it; the current kickoff is accepted too); 'daily': any older forecast (the
+ * 06:00 UTC daily one); 'none'. */
+export function forecastKind(f: SavedForecast | null | undefined, kickoff: string): ForecastKind {
+  if (!f) return 'none';
+  const g = t(f.generated_at);
+  const inWindow = (k: string) => g >= t(k) - TWO_HOURS && g < t(k);
+  return inWindow(f.cutoff_at) || inWindow(kickoff) ? 'two_hour' : 'daily';
+}
+
+export function daySummary(matches: DayMatch[], live: Record<string, SavedForecast | null | undefined>, nowMs: number): DaySummary {
+  const s: DaySummary = { total: matches.length, elapsed: { count: 0, twoHour: 0, dailyOnly: 0, none: 0 },
+    upcoming: { count: 0, twoHourSaved: 0, notYet: 0, dailyOnly: 0, windowOpensAt: null }, moved: [] };
+  let opens: number | null = null;
+  for (const m of matches) {
+    const f = live[m.match_id];
+    const kind = forecastKind(f, m.kickoff);
+    // Saved data supports a move only for a two-hour row: its cutoff_at is the kickoff at forecast time (a daily row's is 06:00 UTC).
+    if (f && kind === 'two_hour' && Math.abs(t(f.cutoff_at) - t(m.kickoff)) >= 60000) s.moved.push({ matchId: m.match_id, from: f.cutoff_at, to: m.kickoff });
+    if (t(m.kickoff) <= nowMs) {
+      s.elapsed.count++;
+      if (kind === 'two_hour') s.elapsed.twoHour++; else if (kind === 'daily') s.elapsed.dailyOnly++; else s.elapsed.none++;
+    } else {
+      s.upcoming.count++;
+      if (kind === 'two_hour') s.upcoming.twoHourSaved++;
+      else {
+        s.upcoming.notYet++;
+        if (kind === 'daily') s.upcoming.dailyOnly++;
+        const open = t(m.kickoff) - TWO_HOURS;
+        if (opens === null || open < opens) opens = open;
+      }
+    }
+  }
+  if (opens !== null) s.upcoming.windowOpensAt = new Date(opens).toISOString().replace('.000Z', 'Z');
+  return s;
+}
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** One paragraph for the banner: counts only, from stored forecasts. `when` formats an ISO time. */
+export function daySummaryText(s: DaySummary, when: (iso: string) => string): string {
+  if (s.total === 0) return 'No matches on this date.';
+  const parts = [`${plural(s.total, 'match', 'matches')} on this date.`];
+  const e = s.elapsed;
+  if (e.count) {
+    const bits = [`${e.twoHour} with a forecast saved in the two hours before kickoff`];
+    if (e.dailyOnly) bits.push(`${e.dailyOnly} only with the older daily forecast`);
+    if (e.none) bits.push(`${e.none} with no forecast`);
+    parts.push(`${e.count} kicked off: ${bits.join(', ')}.`);
+  }
+  const u = s.upcoming;
+  if (u.count) {
+    parts.push(`${u.count} upcoming: ${u.twoHourSaved} with its two-hour forecast saved, ${u.notYet} not yet`
+      + (u.dailyOnly ? ` (${u.dailyOnly} of them hold only the older daily forecast)` : '')
+      + (u.windowOpensAt ? `; the first window opens ${when(u.windowOpensAt)}` : '') + '.');
+  }
+  for (const m of s.moved) parts.push(`Kickoff moved from ${when(m.from)} to ${when(m.to)} after the forecast.`);
+  return parts.join(' ');
 }

@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Callable, Optional
 from zoneinfo import ZoneInfo
 
-from . import raw_cache, sports
+from . import raw_cache, soccer_book, sports
 from .db import StoreMismatch, claim_store, store_sport, transaction, utc_now
 from .ingest import OBSERVED_WINDOW, RESULT_ASSUMED_DELAY, _fmt, _ts, _upsert_team, is_newer_retrieval
 from .sources import espn
@@ -684,6 +684,8 @@ def live_forecasts_of(conn: sqlite3.Connection, match_ids: list) -> dict:
         chunk = match_ids[i:i + 500]
         for r in conn.execute(soccer_live.LATEST_SQL + f"AND f.match_id IN ({','.join('?' * len(chunk))})", chunk):
             out[r["match_id"]] = soccer_live.forecast_dict(r, as_of)
+            out[r["match_id"]]["version"] = r["version"]
+    soccer_book.annotate(conn, list(out.values()))        # the pick against the saved 1X2 sportsbook quote (display only)
     return out
 
 

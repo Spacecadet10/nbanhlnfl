@@ -139,6 +139,16 @@ def meta(conn: sqlite3.Connection, today: date) -> dict:
             "last_refresh_at": last_refresh_at(conn), "capabilities": capabilities()}
 
 
+def _with_sportsbook(conn: sqlite3.Connection, game: dict) -> dict:
+    """Each recorded forecast of an attached NFL game gets its sportsbook comparison (display only, app/sportsbook.py)."""
+    from .sportsbook import sportsbook_comparison
+    g = conn.execute("SELECT game_id, tipoff_at FROM games WHERE game_id = ?", (game["game_id"],)).fetchone()
+    for c in game.get("forecasts") or []:
+        out = sportsbook_comparison(conn, "nfl", g, c["market"], c["record"])
+        c["sportsbook"] = None if out is None else out.model_dump()
+    return game
+
+
 def games_on(conn: sqlite3.Connection, day: date) -> dict:
     """Games whose kickoff falls on this Eastern date, with the nearest earlier and later game dates for navigation."""
     _require_nfl(conn)
@@ -149,7 +159,7 @@ def games_on(conn: sqlite3.Connection, day: date) -> dict:
     earlier, later = [x for x in dates if x < d], [x for x in dates if x > d]
     from .nfl_live import Views
     view = Views(conn)
-    return {"date": d, "games": [view.attach(_game(r)) for r in rows], "prev_date": earlier[-1] if earlier else None,
+    return {"date": d, "games": [_with_sportsbook(conn, view.attach(_game(r))) for r in rows], "prev_date": earlier[-1] if earlier else None,
             "next_date": later[0] if later else None, "last_refresh_at": last_refresh_at(conn)}
 
 
@@ -170,5 +180,5 @@ def game_detail(conn: sqlite3.Connection, game_id: str) -> Optional[dict]:
             f"{GAME_SQL} WHERE {eligible} AND (g.home_team_id = ? OR g.away_team_id = ?) ORDER BY g.tipoff_at DESC LIMIT ?",
             (r["tipoff_at"], team, team, RECENT))]
     from .nfl_live import Views
-    return {"game": Views(conn).attach(_game(r)), "head_to_head": [_game(x) for x in h2h], "home_recent": recent(r["home_id"]),
+    return {"game": _with_sportsbook(conn, Views(conn).attach(_game(r))), "head_to_head": [_game(x) for x in h2h], "home_recent": recent(r["home_id"]),
             "away_recent": recent(r["away_id"]), "capabilities": capabilities()}

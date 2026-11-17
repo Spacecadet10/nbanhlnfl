@@ -7,6 +7,7 @@ import { pct, tipoffTime } from '../format';
 import { AsyncView } from './States';
 import { NoSkillNote } from './Skill';
 import { ForecastPercentageRecord } from './ThresholdOverview';
+import { formatGap, gapPoints } from './sportsbook';
 
 const TOP = 10;
 const GRADE: Record<string, { text: string; cls: string }> = {
@@ -34,7 +35,7 @@ function Result({ grade }: { grade: string | null }) {
 function Market({ p }: { p: RankedPick }) {
   if (p.market_prob == null) return <span className="muted small">no quote</span>;
   const diff = p.probability - p.market_prob;
-  return <>{pct(p.market_prob, 1)}<br /><span className="small muted">{Math.abs(diff) < 0.005 ? 'same as model' : diff > 0 ? 'model higher' : 'model lower'}</span></>;
+  return <>{pct(p.market_prob, 1)}<br /><span className="small muted">{Math.abs(diff) < 0.005 ? 'same as model' : diff > 0 ? 'model higher' : 'model lower'} {formatGap(gapPoints(p.probability, p.market_prob))}</span></>;
 }
 
 function RankTable({ picks, date }: { picks: RankedPick[]; date: string }) {

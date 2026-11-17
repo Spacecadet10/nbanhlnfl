@@ -382,3 +382,15 @@ def test_pregame_run_records_only_matches_in_two_hour_window(live):
     assert rows[0]["match_id"] == "soccer:eng.1:10"
     assert soccer_live.in_pregame_window(rows[0]["generated_at"], rows[0]["cutoff_at"])
     assert soccer_live.run_pregame(live)["groups"] == []
+
+
+def test_live_forecasts_carry_their_version_and_the_sportsbook_comparison(live, monkeypatch):
+    soccer_live.run(live, day=TOMORROW.isoformat())
+    client = _client(monkeypatch)
+    day = client.get("/api/soccer/matches", params={"competition": "eng.1", "date": TOMORROW.isoformat()}).json()
+    assert day["live_forecasts"], "fixture should have forecasts"
+    for f in day["live_forecasts"].values():
+        assert f["version"] == 1 and f["sportsbook"]["status"] == "no_quote" and f["sportsbook"]["app_probability"] == \
+            f["probabilities"][f["most_likely"]]
+    rows = client.get("/api/soccer/live", params={"competition": "eng.1"}).json()["forecasts"]
+    assert rows and all(r["sportsbook"]["status"] == "no_quote" for r in rows)

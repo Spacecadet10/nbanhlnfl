@@ -183,6 +183,7 @@ class RealProvider:
             return CanonicalForecast(**c)
         rec = c["record"]
         from .. import threshold_overview as to
+        from ..sportsbook import sportsbook_comparison
         if not hasattr(self, '_percentage_indexes'):
             self._percentage_indexes = {}
         if c['market'] not in self._percentage_indexes:
@@ -197,6 +198,7 @@ class RealProvider:
         opposite = None if c['market'] == 'reg3' else labels[2 if rec['side'] == 'a' else 0]
         return CanonicalForecast(**{**c, "record": {**rec, "pick_label": labels[idx[rec["side"]]], "opposite_pick_label": opposite},
                                     "percentage_history": percentage_history,
+                                    "sportsbook": sportsbook_comparison(self.conn, self.sport, g, c["market"], rec),
                                     "result_label": None if c["result_side"] is None else labels[idx[c["result_side"]]]})
 
     def _points_history_index(self, market: str, season_type: str) -> Optional[dict]:

@@ -307,7 +307,8 @@ def soccer_live_forecasts(competition: str = COMPETITION, mode: str = Depends(ap
         rows = [f for f in soccer_live.forecasts(conn, competition=competition, as_of=now.strftime("%Y-%m-%dT%H:%M:%SZ"))
                 if f["kickoff_at"] >= since]
         check = soccer_live.latest_checks(conn).get(competition)
-        from . import soccer
+        from . import soccer, soccer_book
+        soccer_book.annotate(conn, rows)
         refresh = soccer.refresh_state(conn, competition, now)
     from . import intl_live
     in_scope = competition in soccer_live.LAUNCH or competition in intl_live.LAUNCH
