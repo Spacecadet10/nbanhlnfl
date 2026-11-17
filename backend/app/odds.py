@@ -50,6 +50,8 @@ def winner_quote(conn, sport: str, game_id: str, at: str, *, earliest: bool = Fa
     other sports: market_quotes, market 'winner'), as {quote_id, provider, price_label, retrieved_at, p_home, price_home,
     price_away}, or None. `earliest`: the first one retrieved by `at` instead (the opening quote), the book's own 'open'
     price of that retrieval first. `provider`: that sportsbook's quotes only (None: any)."""
+    if sport not in ("nba", "nhl", "nfl", "ncaab"):      # NBA: odds_quotes; every other sport: market_quotes (market 'winner')
+        raise ValueError(f"No moneyline source is defined for a {sport!r} store")
     order = ("retrieved_at, price_label = 'open' DESC, quote_id" if earliest else
              "retrieved_at DESC, price_label = 'current' DESC, quote_id DESC")
     only = " AND " + same_provider() if provider is not None else ""

@@ -6,8 +6,9 @@ live here and in the sport's own source adapter and models; shared infrastructur
 from dataclasses import dataclass, field
 
 # Served sports: the API, the UI, live jobs, research and every `--sport` command. Code that branches on the sport
-# (if "nba" ... else NHL) may assume one of these two, so a sport joins this tuple only once every such path handles it.
-SPORT_IDS = ("nba", "nhl")
+# (if "nba" ... else NHL) must handle every sport named here explicitly, so a sport joins this tuple only once every
+# such path does (NCAAB: docs/NCAAB_PLAN.md; its branches are app/ncaab_app.py and the `ncaab` cases of each site).
+SPORT_IDS = ("nba", "nhl", "ncaab")
 
 
 @dataclass(frozen=True)
@@ -42,6 +43,15 @@ NHL = Sport(
     rating_key={"nhl:59": "nhl:53", "nhl:68": "nhl:53"},
 )
 
+# NCAA men's Division I basketball (docs/NCAAB_PLAN.md): served like the NBA (same markets, same two-hour policy), with its
+# own store, ids ('ncaab:<ESPN id>'), model (app/models/college.py) and market specs (app/ncaab_markets.py). Non-D-I
+# opponents are stored with season_type 'other' and are never forecast, graded or shown. Neutral sites come per game.
+NCAAB = Sport(
+    id="ncaab", label="NCAAB", db_file="ncaab.sqlite", id_prefix="ncaab:",
+    eligible_season_types=("regular", "postseason"),
+    markets=("winner", "spread", "total", "team_total_home", "team_total_away"),
+)
+
 # NFL: a data-only store (schedule and results from ESPN's NFL scoreboard; docs/NFL_PLAN.md). It is not served and no
 # model forecasts it yet; `get` refuses it, so no served path can open or branch on an NFL store by accident.
 # International games (London, Germany, Brazil, ...) and the Super Bowl carry ESPN's neutral-site flag per game.
@@ -59,7 +69,7 @@ SOCCER = Sport(
     eligible_season_types=(), markets=(),
 )
 
-SPORTS = {s.id: s for s in (NBA, NHL)}
+SPORTS = {s.id: s for s in (NBA, NHL, NCAAB)}
 DATA_ONLY = {NFL.id: NFL, SOCCER.id: SOCCER}
 
 
@@ -86,3 +96,7 @@ def store(sport: str) -> Sport:
 
 def is_neutral(sport: Sport, flagged: bool, tipoff_at: str) -> bool:
     return flagged or any(a <= tipoff_at < b for a, b in sport.neutral_windows)
+
+
+# NCAAB market specs go into markets.SPEC at import (markets.py is hashed into the NFL activation and cannot be edited).
+from . import ncaab_markets  # noqa: E402,F401

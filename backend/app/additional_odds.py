@@ -225,6 +225,8 @@ def comparison(sport, pick, as_of, *, side, line):
     """Return a display-only comparison for a complete, current quote at the exact forecast line."""
     market = pick['market']
     kickoff = pick['tipoff']
+    if sport not in (*SPORT_KEYS, 'soccer'):   # NCAAB (and any unknown sport): none of the shared 500 free credits a month is spent on it
+        return {}
     if market not in MARKETS or not side or as_of >= kickoff or pick['status'] != 'scheduled':
         return {}
     cached = _read(sport, pick['game_id'])

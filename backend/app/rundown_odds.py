@@ -22,11 +22,16 @@ from . import config
 
 BASE = 'https://therundown.io/api/v2'
 SPORT_IDS = {'nba': 4, 'nhl': 6, 'nfl': 2}
+# NCAAB (TheRundown sport 5): fetched only when asked for (`fetch(extra=('ncaab',))`, which the command does once an NCAAB store
+# exists), today only, at most EXTRA_DAY_REQUESTS a UTC day, after the three sports above: 6 + 6 x 7 runs + 4 stays inside DAY_REQUESTS.
+EXTRA_SPORT_IDS = {'ncaab': 5}
+EXTRA_DAY_REQUESTS = {'ncaab': 4}
+KNOWN_SPORT_IDS = {**SPORT_IDS, **EXTRA_SPORT_IDS}       # every sport whose saved responses may be read
 BOOKS = {'19': 'DraftKings', '22': 'BetMGM', '23': 'FanDuel'}
 MARKETS = {1: 'winner', 2: 'spread', 3: 'total'}
 # NHL only: TheRundown's 60-minute 3-way moneyline (home/draw/away in regulation; OT/SO = draw), the app's reg3 market.
 # Seen on the free key at FanDuel only (docs/evidence/free-prices-2026-11-10). Team totals (94) are not served.
-SPORT_MARKETS = {'nba': MARKETS, 'nfl': MARKETS, 'nhl': {**MARKETS, 563: 'reg3'}}
+SPORT_MARKETS = {'nba': MARKETS, 'nfl': MARKETS, 'nhl': {**MARKETS, 563: 'reg3'}, 'ncaab': MARKETS}
 ALIASES = {'NYK': 'NY', 'GSW': 'GS', 'SAS': 'SA', 'NOP': 'NO', 'WAS': 'WSH', 'PHO': 'PHX',
            'TBL': 'TB', 'NJD': 'NJ', 'SJS': 'SJ', 'LAK': 'LA', 'MON': 'MTL', 'CLB': 'CBJ', 'NAS': 'NSH',
            'KCC': 'KC', 'GBP': 'GB', 'NEP': 'NE', 'NOS': 'NO', 'SFO': 'SF', 'TBB': 'TB', 'LVR': 'LV',
@@ -73,7 +78,7 @@ def read_cache(now, directory=None):
             d = json.loads(path.read_text())
             at = moment(d['_fetched_at'])
             sport, day = d['_sport'], d['_date']
-            if sport not in SPORT_IDS or not isinstance(d['events'], list) or at > now:
+            if sport not in KNOWN_SPORT_IDS or not isinstance(d['events'], list) or at > now:
                 raise ValueError('Invalid response metadata')
             if (sport, day) not in latest or at >= latest[sport, day][0]:
                 latest[sport, day] = (at, d)
@@ -97,7 +102,7 @@ def comparison(sport, pick, cache, now):
     'other_lines': [{book, line, price}]}. 'prices' is empty unless status is 'available'."""
     q = pick.get('quote_check') or {}
     out = {'status': 'unavailable', 'source': 'TheRundown', 'checked_at': None, 'prices': {}, 'best': None, 'other_lines': []}
-    if sport not in SPORT_IDS or pick.get('market') not in SPORT_MARKETS[sport].values() or q.get('line_source') == 'model':
+    if sport not in KNOWN_SPORT_IDS or pick.get('market') not in SPORT_MARKETS[sport].values() or q.get('line_source') == 'model':
         return dict(out, status='unsupported_market')
     if q.get('line_moved'):
         return dict(out, status='forecast_line_changed')
@@ -229,7 +234,15 @@ def credentials():
     raise ValueError('Odds API key unavailable')
 
 
-def fetch(now=None, *, opener=urllib.request.urlopen, pause=time.sleep):
+def _sport_request_today(entry, today, sport):
+    try:
+        e = json.loads(entry)
+        return e['day'] == today and e.get('sport') == sport and 'refused' not in e
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return False
+
+
+def fetch(now=None, *, opener=urllib.request.urlopen, pause=time.sleep, extra=()):
     """Today and tomorrow for three sports: six requests a run and at most DAY_REQUESTS a UTC day, one a second. The one
     retry: a request with an extra market (NHL 563) that the provider refuses or garbles is asked again once without it. Stops when the provider reports a low remaining allowance; the request caps hold when it reports none. Nothing printed or stored contains the
     key, a URL or an error message. Every response is saved whole, once, and never overwritten."""
@@ -262,8 +275,14 @@ def fetch(now=None, *, opener=urllib.request.urlopen, pause=time.sleep):
             except (ValueError, AttributeError, TypeError):   # a damaged note never stops price collection
                 pass
         results = []
-        for sport, sid in SPORT_IDS.items():
-            for offset in range(2):
+        extra_used = {s: sum(_sport_request_today(x, today, s) for x in lines) for s in extra}
+        plan = [(s, i, 2) for s, i in SPORT_IDS.items()] + [(s, EXTRA_SPORT_IDS[s], 1) for s in extra]
+        for sport, sid, days in plan:
+            for offset in range(days):
+                if sport in extra_used and extra_used[sport] >= EXTRA_DAY_REQUESTS[sport]:
+                    break     # this sport's own daily allowance is spent
+                if sport in extra_used:
+                    extra_used[sport] += 1
                 if count >= DAY_REQUESTS:
                     return {'status': 'request_cap', 'requests_today': count, 'results': results}
                 day = (started + timedelta(days=offset)).date().isoformat()
@@ -332,7 +351,8 @@ def main():
             # Only JSON files are written, no store: the checkout checks apply, the store-schema check does not.
             if not release.enabled() or release._checkout(release.code_root().resolve())[1]:
                 raise SystemExit('release guard: price collection requires the clean release checkout')
-        result = fetch()
+        extra = ('ncaab',) if config.db_path('ncaab').is_file() else ()   # NCAAB prices only once an NCAAB store exists
+        result = fetch(extra=extra)
         print(json.dumps(result))
         raise SystemExit(0 if result['status'] == 'ok' else 1)
     cache = read_cache(datetime.now(timezone.utc))

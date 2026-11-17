@@ -100,11 +100,14 @@ export const api = {
     get<CoverageReport>('/coverage', { sport, date_from: dateFrom, date_to: dateTo }, signal),
   agreementPerformance: (sport: Sport, signal?: AbortSignal) => get<AgreementPerformance>('/agreement-performance', { sport }, signal),
   meta: (sport: Sport, signal?: AbortSignal) => get<Meta>('/meta', { sport }, signal),
-  games: (sport: Sport, date: string, policy: Policy, minConfidence: number | null, market: MarketId, signal?: AbortSignal) =>
+  games: (sport: Sport, date: string, policy: Policy, minConfidence: number | null, market: MarketId, signal?: AbortSignal,
+    conference?: string | null) =>
     get<GamesResponse>('/games', {
       sport, date, policy: policyParam(policy), min_confidence: confParam(minConfidence),
-      market: market === 'winner' ? undefined : market,
+      market: market === 'winner' ? undefined : market, conference: conference ?? undefined,
     }, signal),
+  // NCAAB conference names for the Game Day filter ([] until the NCAAB context tables are in the store).
+  conferences: (sport: Sport, signal?: AbortSignal) => get<string[]>('/conferences', { sport }, signal),
   game: (sport: Sport, id: string, signal?: AbortSignal) =>
     get<GameDetail>(`/games/${encodeURIComponent(id)}`, { sport }, signal),
   predictions: (sport: Sport, f: { run_type?: 'live' | 'backtest'; date_from?: string; date_to?: string; team?: string;

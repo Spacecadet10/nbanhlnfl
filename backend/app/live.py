@@ -66,6 +66,9 @@ def engine(conn: sqlite3.Connection) -> Engine:
     sport = store_sport(conn)
     if sport == "nhl":
         return _nhl_engine()
+    if sport == "ncaab":
+        from . import ncaab_app
+        return ncaab_app.engine()
     if sport in ("nba", None):
         return NBA_ENGINE
     raise sports.UnsupportedSport(f"No serving engine for a {sport!r} store; only {', '.join(sports.SPORT_IDS)} are served")
@@ -108,7 +111,7 @@ def predict(conn: sqlite3.Connection, *, now: Optional[str] = None, horizon_days
             "ORDER BY tipoff_at, game_id", types):
         cutoff = backtest.cutoff_for(g["tipoff_at"])
         if now < cutoff <= horizon:
-            neutral = bool(g["neutral_site"]) if eng.sport == "nba" else eng.pregame(g).neutral_site
+            neutral = bool(g["neutral_site"]) if eng.sport in ("nba", "ncaab") else eng.pregame(g).neutral_site
             upcoming.append((cutoff, PregameGame(g["game_id"], g["season"], g["season_type"], g["tipoff_at"],
                                                  g["home_team_id"], g["away_team_id"], neutral)))
     created = existing = 0

@@ -8,7 +8,8 @@ from . import config
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 # Migrations that rebuild a table other tables reference: run with foreign keys off, every reference checked before commit.
-PARENT_REBUILDS = frozenset({"0033_nfl_market_quotes.sql", "0035_result_integrity.sql", "0039_soccer_international.sql"})
+PARENT_REBUILDS = frozenset({"0033_nfl_market_quotes.sql", "0035_result_integrity.sql", "0039_soccer_international.sql",
+                            "0043_ncaab_app.sql"})
 
 
 def utc_now() -> str:
