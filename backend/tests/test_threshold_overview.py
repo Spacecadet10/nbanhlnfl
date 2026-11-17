@@ -248,3 +248,40 @@ def test_the_ranked_endpoint_lists_every_market_pick_of_the_date_and_never_count
     assert next(p for p in picks if p["market"] == "winner")["market_prob"] is not None
     assert client.get("/api/canonical/ranked", params={"date": "2026-10-25"}).json()["picks"] == []
     assert client.get("/api/canonical/ranked").status_code == 422                       # the date is required
+
+
+def _telegram_file(tmp_path, monkeypatch, rows):
+    import json
+    monkeypatch.setenv('NBA_DATA_DIR', str(tmp_path))
+    path = to.telegram_history_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({'source': 'telegram_cards', 'period': {'from': '2026-11-02', 'to': '2026-11-14'}, 'rows': rows}))
+
+
+def _tg(gid, grade, pct='51.8', side='a', market='total', sport='nba', line_source='bookmaker'):
+    return dict(sport=sport, market=market, percentage=pct, side=side, line_source=line_source, game_id=gid, grade=grade)
+
+
+def test_telegram_history_counts_the_same_exact_percentage_apart_from_the_live_record(tmp_path, monkeypatch):
+    """Owner (Nov 16): the Nov 2-14 picks exist only in the Telegram export; show them as their own line (option A) at the
+    same sport, market, exact displayed percentage, side and line source, never added to the live record."""
+    _telegram_file(tmp_path, monkeypatch, [
+        _tg('w1', 'win'), _tg('w2', 'win'), _tg('l1', 'loss'), _tg('p1', 'push'),
+        _tg('self', 'loss'),                                   # the target game itself is excluded
+        _tg('near', 'win', pct='51.9'),                        # 51.9 is not 51.8: exact percentages only
+        _tg('side', 'win', side='b'), _tg('line', 'win', line_source='model'),
+        _tg('mkt', 'win', market='spread'), _tg('sport', 'win', sport='nhl')])
+    target = percentage_item('self', 'win')
+    idx = to.percentage_index([target, percentage_item('live', 'win')], AFTER)
+    r = to.percentage_record('nba', 'total', target[1]['record'], 'self', idx, AFTER)
+    assert (r['wins'], r['losses'], r['settled']) == (1, 0, 1)              # live record unchanged
+    t = r['telegram']
+    assert (t['source'], t['wins'], t['losses'], t['pushes'], t['settled']) == ('telegram_cards', 2, 1, 1, 3)
+    assert t['period'] == {'from': '2026-11-02', 'to': '2026-11-14'} and t['small_sample'] is True
+
+
+def test_no_telegram_history_file_means_no_telegram_line(tmp_path, monkeypatch):
+    monkeypatch.setenv('NBA_DATA_DIR', str(tmp_path))
+    target = percentage_item('self', 'win')
+    r = to.percentage_record('nba', 'total', target[1]['record'], 'self', {}, AFTER)
+    assert r['telegram'] is None

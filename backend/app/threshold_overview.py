@@ -129,6 +129,50 @@ def history_record(rec: dict, game_id: str, history_index: Optional[dict]) -> Op
             'settled': wins + losses, 'small_sample': wins + losses < MIN_LIVE_GRADED}
 
 
+TELEGRAM_SOURCE = "telegram_cards"   # picks transcribed from the owner's Telegram export (scripts/build_telegram_history.py)
+_telegram_cache: dict = {}
+
+
+def telegram_history_path():
+    from . import config
+    return config.data_dir() / "research" / "telegram_history.json"
+
+
+def _telegram_index() -> Optional[dict]:
+    """{(sport, market, percentage, side, line_source): {game_id: grade}} from the graded Telegram cards sent before each
+    sport's live ledger began (Nov 15 rebuild), cached by path and file mtime. None when the file is absent or unreadable."""
+    import json
+    path = telegram_history_path()
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        return None
+    if _telegram_cache.get('key') != (str(path), mtime):
+        try:
+            body = json.loads(path.read_text())
+            idx: dict = {}
+            for r in body['rows']:
+                idx.setdefault((r['sport'], r['market'], r['percentage'], r['side'], r['line_source']), {})[r['game_id']] = r['grade']
+            _telegram_cache.update(key=(str(path), mtime), index=idx, period=body.get('period'))
+        except (OSError, ValueError, KeyError, TypeError):
+            return None
+    return _telegram_cache
+
+
+def telegram_record(sport: str, market: str, rec: dict, game_id: str) -> Optional[dict]:
+    """Owner's option A (Nov 16): the same sport, market, exact displayed percentage, side and line source among the graded
+    Telegram cards, counted apart from the live record and never added to it, rank or AVOID. The cards do not show the
+    model version, so this line does not match on it. None without the history file."""
+    cache = _telegram_index()
+    if cache is None:
+        return None
+    key = (sport, market, displayed_percentage(rec['confidence']), rec['side'], rec['line_source'])
+    grades = Counter(grade for gid, grade in cache['index'].get(key, {}).items() if gid != game_id)
+    wins, losses = grades['win'], grades['loss']
+    return {'source': TELEGRAM_SOURCE, 'period': cache['period'], 'line_source': rec['line_source'], 'wins': wins,
+            'losses': losses, 'pushes': grades['push'], 'settled': wins + losses, 'small_sample': wins + losses < MIN_LIVE_GRADED}
+
+
 def percentage_record(sport: str, market: str, rec: dict, game_id: str, index: dict, as_of: str,
                       history_index: Optional[dict] = None) -> dict:
     """Exact displayed percentage and direction, same model/source and line provenance; exclude this game.
@@ -156,7 +200,8 @@ def percentage_record(sport: str, market: str, rec: dict, game_id: str, index: d
             'ci95': wilson(wins, settled), 'small_sample': settled < MIN_LIVE_GRADED,
             'rank': rank, 'ranked': len(ranking),
             'excluded': {k: v for k, v in grades.items() if k not in ('win', 'loss')}, 'as_of': as_of,
-            'history': history_record(rec, game_id, history_index)}
+            'history': history_record(rec, game_id, history_index),
+            'telegram': telegram_record(sport, market, rec, game_id)}
 
 
 def calibration_state(rate: Optional[float], ci: Optional[list], stated: Optional[float], n: int, min_n: int) -> str:

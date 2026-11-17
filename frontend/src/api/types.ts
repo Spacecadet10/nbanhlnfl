@@ -891,6 +891,10 @@ export interface ForecastPercentageHistory {
   /** Recomputed past seasons at the same exact percentage, side, model and line source (spread, total, team totals of
    *  NBA; winner of NBA/NHL, clean seasons only); a separate source, never part of wins/losses above. Absent or null where no history exists. */
   history?: { source: 'history_recomputed'; line_source: CanonicalRecord['line_source']; wins: number; losses: number; settled: number; small_sample?: boolean } | null;
+  /** Telegram cards sent before the live ledger began (Nov 2-14 2026) at the same sport, market, exact percentage, side and
+   *  line source; the cards do not show the model version. A separate source, never part of wins/losses above. */
+  telegram?: { source: 'telegram_cards'; period?: { from: string; to: string } | null; line_source: CanonicalRecord['line_source'];
+    wins: number; losses: number; pushes?: number; settled: number; small_sample?: boolean } | null;
 }
 
 /** GET /api/paper-rules: the frozen paper rules of a sport (no money; app/paper_rules.py). */
