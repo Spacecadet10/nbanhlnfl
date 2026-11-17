@@ -5,11 +5,11 @@
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>NBA_DATA_DIR</key>
-		<string>/Users/andry/Desktop/nba-predictor-sprint1/data</string>
+		<string>/Users/andry/Desktop/nbanhlnfl/data</string>
 		<key>NBA_RELEASE_GUARD</key>
 		<string>1</string>
 		<key>NBA_RELEASE_ROOT</key>
-		<string>/Users/andry/nba-predictor-live</string>
+		<string>/Users/andry/nba-predictor-delivery</string>
 	</dict>
 	<key>Label</key>
 	<string>com.nba-predictor.ncaab-odds</string>
@@ -17,7 +17,7 @@
 	<string>Standard</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/Users/andry/nba-predictor-live/backend/.venv/bin/python</string>
+		<string>/Users/andry/nba-predictor-delivery/backend/.venv/bin/python</string>
 		<string>-m</string>
 		<string>app.cli</string>
 		<string>--sport</string>
@@ -27,14 +27,14 @@
 	<key>RunAtLoad</key>
 	<true/>
 	<key>StandardErrorPath</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/ncaab-odds-launchd.log</string>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/ncaab-odds-launchd.log</string>
 	<key>StandardOutPath</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/ncaab-odds-launchd.log</string>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/ncaab-odds-launchd.log</string>
 	<key>StartInterval</key>
 	<integer>60</integer>
 	<key>ThrottleInterval</key>
 	<integer>60</integer>
 	<key>WorkingDirectory</key>
-	<string>/Users/andry/nba-predictor-live/backend</string>
+	<string>/Users/andry/nba-predictor-delivery/backend</string>
 </dict>
 </plist>

@@ -1,20 +1,24 @@
-## NCAAB fifth sport — in progress (branch `ncaab`, NOT released) — Claude (lead), Nov 17, 2026
-- Contract + preregistered eval plan: docs/NCAAB_PLAN.md (4d9ff50; amendment: scoreboard possessions FGA+0.475·FTA).
-- Merged ncaab-data (ESPN groups=50 collectors, 0042, backfill 2013–2027: 85,446 games, 78,654 D-I, rerun 0 dup/0 changed) and
-  ncaab-app (NCAAB in SPORTS, explicit branches, ncaab_markets runtime specs, jobs/Telegram/tickets/scorecard/frontend, plists
-  not installed) → f402f6a. 0042/0043 are NCAAB-store-only: copies of live nba/nhl/nfl/soccer stores migrate with [] and
-  identical schema/row counts. Lead fixes at merge: NCAAB test stores no longer reach the network; conference names from
-  app/reference/ncaab_conferences.json (ESPN core groups, 33 ids).
-- Checks: `cd backend && .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_ncaab_*.py tests/test_live.py
-  tests/test_freshness.py tests/test_storage.py tests/test_backup_restore.py tests/test_multisport.py
-  tests/test_nfl_activation_compat.py tests/test_api.py tests/test_telegram.py tests/test_tickets.py tests/test_scorecard.py
-  tests/test_near_tipoff.py tests/test_journal.py tests/test_release_guard.py` → 567 passed; check_project passed.
-- Running: box-score summary backfill into $HOME/nba-ncaab-scratch/data (log boxes-full.log; ~74k games); model agent on
-  branch ncaab-model against the frozen snapshot $HOME/nba-ncaab-scratch/model.
-- Known gaps: no free historical sportsbook odds 2013–2025 (after-game consensus lines only, labelled); TheRundown NCAAB
-  team totals unverified; autoresearch app_identity changes with any new app/*.py (not a forecast model id).
-- Next: merge model, independent review, browser checks, release to delivery/live with owner-visible evidence.
-
+## NCAAB fifth sport — RELEASED to delivery, live run pending — Claude (lead), Nov 17, 2026 09:40Z
+- GitHub: main 16c17c3..f859bc0 pushed. Delivery (~/nba-predictor-delivery, detached): 8e7d35a → 4d52088 (main 16c17c3..f859bc0
+  without HANDOFF.md as one commit; recovery.py conflict kept delivery's recover() signature). Live checkout untouched (owner).
+  Backup runner (~/nba-predictor-backup-runner): 267f855 → detached f859bc0 (backup code identical but NCAAB).
+- Store: data/ncaab.sqlite copied from the scratch backfill (85,446 games; raw espn_ncaab* dirs copied; 0 missing raw files;
+  schema 43 = shipped). New jobs (delivery, NBA_RELEASE_GUARD=1): com.nba-predictor.ncaab-odds (tick every 60 s) and
+  ncaab-daily (22:45 local), templates in scripts/launchd match the installed files. First tick 09:31Z ok (306 DK quotes).
+- Model (docs/NCAAB_PLAN.md Results): winner ncaab-college_eff-carry=0.9-eta=0.04-w0=4+platt-fit=41a07f9d; spread and team
+  totals college_eff; total ncaab-running_points. Validation 2022-24 n=16,917 LL .5408 vs Elo .5496 (Δ −.0083 [−.0118, −.0048]);
+  test 2025-26 n=11,516 LL .5273 (once, logged). DraftKings after-game lines (2026 only) beat the model.
+- Reviews: Opus review → B1-B2, S1-S5, N1-N3 fixed (741bcd7); re-review → should-fix 1-2 fixed (f859bc0). UNRESOLVED nits:
+  a 2022-24 result correction makes college.state() refuse (NCAAB stops until resealed); box FGA/FTA lack retrieval time
+  (historical features only); late old-season corrections not rolled; coverage._Direct fallback uses the night-before cutoff.
+- Checks: delivery trial full suite 2528 passed, 25 failed (8 deep_study torch, 1 weekly_report, 16 research_agent — the same 16
+  fail on an untouched delivery clone in the same folder; they pass in the main checkout); trial focused 561 passed; frontend
+  typecheck/build ok, unit 40/40. Backup: real nightly script → scratch root, NCAAB restored to scratch: identical counts, quick_check ok.
+- Browser: Chrome extension not connected; headless Chrome screenshots at 1440 and 390 px (iframe) ok. Until the first NCAAB
+  forecast (15:00Z) cards say "Before recording began" (coverage.recording_began = first game_forecasts row): transient.
+- Gaps: box-score summaries only for 2026-27 + part of 2025-26 in data/ (backfill holds the store lock; run in bounded chunks
+  later); no free historical sportsbook odds 2013-2025; TheRundown NCAAB team totals unverified; ~60 NCAAB Telegram cards/night.
+- Next: observe the 15:00Z two-hour run, card preview, ticket dry run, sportsbook trace, then a settled result after ~03:00Z.
 ## Released: data-quality fixes 546acba to delivery — Claude, Nov 17, 2026 04:42Z
 - Delivery (~/nba-predictor-delivery, detached): 853be06 → 8e7d35a (cherry-pick of 546acba; HANDOFF.md kept at delivery's version; tickets.quote_check docstring conflict kept at delivery's wording). Trial in a scratch clone first: 503 focused tests passed with the delivery venv (incl. test_quote_quality, scorecard, telegram, soccer*, tickets, bet365_dc, nfl_activation_compat, agreement_identity, api, best_pick_record). Switched by detached checkout (no dirty window); `launchctl kickstart -k` api-delivery (8101). Web unchanged (no frontend change).
 - Verified on the running app: API 200 (canonical, NFL with date); web 200; NFL activation definition b6074877a7e7ccfe; scorecard 04:45:12Z status ok (no release-guard refusal); Telegram sender 04:44/04:45Z ok, 2 soccer cards already sent or recorded, 0 deliveries since the switch (no resend). Soccer card prices on :8101 equal the corrected export (uefa.nations 401861182 0.7804, 401861184 0.8447, 401861185 0.5157, 401861186 0.5207).
