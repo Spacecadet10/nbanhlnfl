@@ -1,4 +1,4 @@
-## NCAAB fifth sport — RELEASED to delivery, live run pending — Claude (lead), Nov 17, 2026 09:40Z
+## NCAAB fifth sport — RELEASED to delivery, first live forecast verified — Claude (lead), Nov 17, 2026 15:45Z
 - GitHub: main 16c17c3..f859bc0 pushed. Delivery (~/nba-predictor-delivery, detached): 8e7d35a → 4d52088 (main 16c17c3..f859bc0
   without HANDOFF.md as one commit; recovery.py conflict kept delivery's recover() signature). Live checkout untouched (owner).
   Backup runner (~/nba-predictor-backup-runner): 267f855 → detached f859bc0 (backup code identical but NCAAB).
@@ -18,7 +18,21 @@
   forecast (15:00Z) cards say "Before recording began" (coverage.recording_began = first game_forecasts row): transient.
 - Gaps: box-score summaries only for 2026-27 + part of 2025-26 in data/ (backfill holds the store lock; run in bounded chunks
   later); no free historical sportsbook odds 2013-2025; TheRundown NCAAB team totals unverified; ~60 NCAAB Telegram cards/night.
-- Next: observe the 15:00Z two-hour run, card preview, ticket dry run, sportsbook trace, then a settled result after ~03:00Z.
+- Live run, Nov 17 15:00Z: first forecast HOF @ MUR (ncaab:401927381, tip 17:00Z), game_forecasts 1-5 generated 15:00:54Z
+  (119.1 min before tip), no duplicates. Sportsbook traced: winner app 72.9% vs DK no-vig 84.0% (−700/+500, quote 15360),
+  spread HOF +11.5 65.1% vs 51.1% (gap +14.0, quote 15361), total Under 148.5 56.2% vs 50.4% (quote 15362), all retrieved
+  15:00:49Z; stored de-vig = recomputed. Team totals: model lines, "No sportsbook quotes are collected for this market".
+  Scheduled Telegram card sent once (msg 506, 15:01:56Z); every later run "already_recorded". "Before recording began" cleared.
+  Ticket dry run: tickets.snapshot()+assess() on scratch copies (no send) for forecasts 1+3: payout 2.16, break-even .462,
+  model .409. Screens 1440/390 px: ~/nba-ncaab-scratch/shots/live-*.png. `telegram preview` and `tickets preview` SEND to the
+  chat, so they were not run (no manual sends); preview renders must call format_batch/preview_payload without deliver().
+- RELEASE GAP FOUND AND FIXED: 4d52088 was assembled from 281f830, not f859bc0 (no fit digest; TheRundown NCAAB 6 req/day, any
+  hour). Delivery 4d52088 → 42f4c18 (f859bc0's six files; 733 passed, 35 skipped on `pytest -k "ncaab or rundown or telegram or
+  tickets or live or recovery"`; full suite not rerun), API restarted, health ok. So game 401927381's rows carry the pre-digest
+  ids (…+platt-window=2h…, markets-1b3d7c2b); later forecasts carry …+platt-fit=41a07f9d. Same fitted model, label only.
+- Other session's uncommitted work in main (ncaab_cards.py "top 4 by gap", telegram.py, tickets.py) left untouched.
+- Next: a settled result traced to its forecast and History (first final ~19:00Z), a no-send render of a Telegram card and a
+  ticket image from settled games, the 21:00Z TheRundown run (quota), regressions in the other sports after tonight.
 ## Released: data-quality fixes 546acba to delivery — Claude, Nov 17, 2026 04:42Z
 - Delivery (~/nba-predictor-delivery, detached): 853be06 → 8e7d35a (cherry-pick of 546acba; HANDOFF.md kept at delivery's version; tickets.quote_check docstring conflict kept at delivery's wording). Trial in a scratch clone first: 503 focused tests passed with the delivery venv (incl. test_quote_quality, scorecard, telegram, soccer*, tickets, bet365_dc, nfl_activation_compat, agreement_identity, api, best_pick_record). Switched by detached checkout (no dirty window); `launchctl kickstart -k` api-delivery (8101). Web unchanged (no frontend change).
 - Verified on the running app: API 200 (canonical, NFL with date); web 200; NFL activation definition b6074877a7e7ccfe; scorecard 04:45:12Z status ok (no release-guard refusal); Telegram sender 04:44/04:45Z ok, 2 soccer cards already sent or recorded, 0 deliveries since the switch (no resend). Soccer card prices on :8101 equal the corrected export (uefa.nations 401861182 0.7804, 401861184 0.8447, 401861185 0.5157, 401861186 0.5207).
