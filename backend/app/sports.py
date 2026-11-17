@@ -59,8 +59,16 @@ SOCCER = Sport(
     eligible_season_types=(), markets=(),
 )
 
+# NCAA men's Division I basketball: data-only until the app phase moves it into SPORTS (docs/NCAAB_PLAN.md). Games are
+# 'ncaab:<ESPN event id>', teams 'ncaab:<ESPN team id>'; games with a non-Division I team are stored as 'other'.
+NCAAB = Sport(
+    id="ncaab", label="NCAAB", db_file="ncaab.sqlite", id_prefix="ncaab:",
+    eligible_season_types=("regular", "postseason"),
+    markets=("winner", "spread", "total", "team_total_home", "team_total_away"),
+)
+
 SPORTS = {s.id: s for s in (NBA, NHL)}
-DATA_ONLY = {NFL.id: NFL, SOCCER.id: SOCCER}
+DATA_ONLY = {NFL.id: NFL, SOCCER.id: SOCCER, NCAAB.id: NCAAB}
 
 
 class UnsupportedSport(ValueError):
