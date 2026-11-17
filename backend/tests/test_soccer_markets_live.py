@@ -484,3 +484,34 @@ def test_a_total_goals_quote_saved_only_after_the_forecast_is_never_compared(liv
     at_line = [s for s in m["families"]["goals"]["selections"] if s["market"] == "goals_total" and s["line"] == 2.5]
     assert at_line and all(s["sportsbook"]["status"] == "no_quote" and s["sportsbook"]["book_probability"] is None
                            for s in at_line)
+
+
+def test_the_1x2_margin_is_removed_when_only_some_sides_changed_price(live):
+    # Audit Nov 17 (AFCON 401927135/170/172): the store appends a side's price only when it changes (soccer.record_quotes)
+    # and saves a withdrawal row for a side a later retrieval no longer lists, so the latest row of each side is that
+    # side's price at the newest retrieval even when the retrieval times differ. Through the real storage path.
+    from app import implied_lines, soccer_book
+    from app.sources.espn import SoccerQuote
+    mid = live.execute("SELECT match_id FROM soccer_matches WHERE status='scheduled' ORDER BY kickoff_at LIMIT 1").fetchone()[0]
+    ko = live.execute("SELECT kickoff_at FROM soccer_matches WHERE match_id=?", (mid,)).fetchone()[0]
+    raw = live.execute("SELECT MAX(raw_id) FROM raw_responses").fetchone()[0]
+    t1, t2, t3, t4 = ((NOW + timedelta(minutes=m)).strftime("%Y-%m-%dT%H:%M:%SZ") for m in (1, 2, 3, 4))
+    first = [SoccerQuote(mid, "DraftKings", "1x2", s, "current", None, a) for s, a in (("home", -110), ("draw", 260), ("away", 280))]
+    second = [SoccerQuote(mid, "DraftKings", "1x2", s, "current", None, a) for s, a in (("home", -120), ("draw", 260), ("away", 300))]
+    assert soccer.record_quotes(live, first, {mid}, raw, t1) == 3
+    assert soccer.record_quotes(live, second, {mid}, raw, t2) == 2          # the unchanged draw is not stored again
+    got = implied_lines.match_result_probabilities(sml.quotes(live, mid, t2))
+    dec = {"home": 1 + 100 / 120, "draw": 3.6, "away": 4.0}               # retrieval 2's prices, worked by hand
+    total = sum(1 / d for d in dec.values())
+    assert got is not None and got == pytest.approx({k: (1 / d) / total for k, d in dec.items()})
+    # the card comparison as of a forecast made after retrieval 2 uses these prices
+    f = {"match_id": mid, "kickoff_at": ko, "generated_at": t2, "most_likely": "home", "probabilities": {"home": 0.6, "draw": 0.2, "away": 0.2}}
+    c = soccer_book.one_x_two(live, f)
+    assert c["status"] == "exact" and c["book_probability"] == pytest.approx(got["home"]) and c["retrieved_at"] == t2
+    # a price saved after the forecast is never used: as of t1 only retrieval 1 counts
+    assert soccer_book.one_x_two(live, {**f, "generated_at": t1})["price"] == "-110/+260/+280"
+    # a side withdrawn in a later retrieval leaves no complete quote (never a stale three-way mix)
+    soccer.record_quotes(live, second[:2], {mid}, raw, t3)
+    assert implied_lines.match_result_probabilities(sml.quotes(live, mid, t3)) is None
+    assert soccer_book.one_x_two(live, {**f, "generated_at": t4})["status"] == "no_quote"
+    # (one sportsbook only and withdrawn rows: also tests/test_bet365_dc.py)
