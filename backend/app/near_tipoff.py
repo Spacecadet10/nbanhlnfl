@@ -50,11 +50,28 @@ def feature_version(eng) -> str:
     return FEATURE_VERSION if eng.sport == "nba" else eng.feature_version.replace("prior-day-et-cutoff", "tipoff-cutoff+two-hour-v1")
 
 
+def limitation(sport: str) -> str:
+    if sport == "ncaab":
+        from . import ncaab_app
+        return ncaab_app.LIMITATION
+    return "Elo uses results only; it does not know about injuries, rest or line-ups."
+
+
+def stores_quote_id(sport: str) -> bool:
+    """NBA moneylines live in odds_quotes and their quote id is stored with the forecast; NHL and NCAAB moneylines live in
+    market_quotes (append-only), so the snapshot is found again from the forecast's generation time. Explicit per sport."""
+    if sport == "nba":
+        return True
+    if sport in ("nhl", "ncaab"):
+        return False
+    raise ValueError(f"No two-hour market snapshot rule for a {sport!r} store")
+
+
 def _market(conn: sqlite3.Connection, game_id: str, at: str) -> Optional[dict]:
     """Latest current moneyline retrieved at or before `at`. NBA: odds_quotes (its quote id is stored with the forecast).
     NHL: market_quotes (append-only, so the same snapshot is found again from the forecast's generation time; the
     freshness record keeps no quote id because its column refers to odds_quotes)."""
-    if live.engine(conn).sport == "nba":
+    if stores_quote_id(live.engine(conn).sport):
         row = conn.execute("SELECT quote_id, home_prob_devig, retrieved_at, provider FROM odds_quotes WHERE game_id = ? "
                            "AND price_label = 'current' AND retrieved_at <= ? ORDER BY retrieved_at DESC, quote_id DESC LIMIT 1",
                            (game_id, at)).fetchone()
@@ -92,6 +109,8 @@ def predict_now(conn: sqlite3.Connection, *, now: Optional[str] = None, write: b
     for r in sorted(rows, key=lambda r: (r.result_available_at, r.game.tipoff_at, r.game.game_id)):
         model.update(r.result)
     eng = live.engine(conn)
+    if eng.sport == "ncaab":
+        model.as_of = now          # information time of this cycle: the model reads nothing newer
     mv, data_version = model_version(model), eng.dataset_version(rows)
     refreshed = results_refreshed_at(conn, now)
     stale = refreshed is None or _parse(now) - _parse(refreshed) > MAX_DATA_AGE
@@ -100,7 +119,7 @@ def predict_now(conn: sqlite3.Connection, *, now: Optional[str] = None, write: b
            "latest_result_available_at": max((r.result_available_at for r in rows), default=None),
            "window_end": _fmt(_parse(now) + WINDOW), "written": write, "created": 0, "already_recorded": 0,
            "forecasts": [], "refused": [],
-           "limitation": "Elo uses results only; it does not know about injuries, rest or line-ups."}
+           "limitation": limitation(eng.sport)}
     types = eng.eligible_types
     games = conn.execute(
         f"SELECT * FROM games WHERE status IN ('scheduled', 'in_progress') AND tipoff_at > ? AND tipoff_at <= ? "
@@ -157,7 +176,7 @@ def predict_now(conn: sqlite3.Connection, *, now: Optional[str] = None, write: b
             "FROM predictions p JOIN near_tipoff_forecasts n ON n.prediction_id = p.prediction_id "
             "WHERE p.prediction_id = ?", (prediction_id,)).fetchone()
         market_prob, market_at = kept["market_home_prob"], kept["market_retrieved_at"]
-        if eng.sport != "nba":   # the NHL snapshot is not stored with the forecast; it is found again from generation time
+        if not stores_quote_id(eng.sport):   # the NHL and NCAAB snapshot is not stored with the forecast; it is found again from generation time
             snap = _market(conn, g["game_id"], kept["generated_at"])
             market_prob, market_at = (snap["home_prob_devig"], snap["retrieved_at"]) if snap else (None, None)
         out["forecasts"].append({
@@ -171,7 +190,7 @@ def market_at(conn: sqlite3.Connection, row) -> tuple[Optional[float], Optional[
     """(de-vigged home probability, retrieval time) of the moneyline a stored forecast could see. NBA: the snapshot stored
     with the forecast. NHL: the freshness record keeps no quote, so it is the latest current quote retrieved at or before
     the forecast's generation time (quotes are append-only, so this is the snapshot taken then)."""
-    if live.engine(conn).sport == "nba":
+    if stores_quote_id(live.engine(conn).sport):
         return row["market_home_prob"], row["market_retrieved_at"]
     snap = _market(conn, row["game_id"], row["generated_at"])
     return (snap["home_prob_devig"], snap["retrieved_at"]) if snap else (None, None)

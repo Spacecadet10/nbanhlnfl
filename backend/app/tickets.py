@@ -48,7 +48,7 @@ def sha(raw):
 
 
 def snapshot():
-    from app import db, freshness
+    from app import config, db, freshness
     from app.providers.real import RealProvider
     from app.nfl_live import Views, activation
     now = datetime.now(timezone.utc)
@@ -63,11 +63,13 @@ def snapshot():
         rundown_odds, books = None, {'error': type(exc).__name__}
     result['book_prices'] = ({'fresh_responses': len(books['responses']), 'stale_responses': books['stale_responses'],
                               'invalid_files': len(books['invalid_files'])} if 'responses' in books else books)
-    for sport in ('nba', 'nhl', 'nfl'):
+    for sport in ('nba', 'nhl', 'nfl', 'ncaab'):
         try:
             if sport == 'nfl' and not activation():
                 result['sports'][sport] = nfl_inactive_detail(stamp)
                 continue
+            if sport == 'ncaab' and not config.db_path('ncaab').is_file():
+                continue     # no NCAAB store here (not deployed): a quiet skip, never a health alert (as for soccer)
             conn = db.connect_readonly(sport)
             try:
                 conn.execute('BEGIN')
@@ -150,7 +152,7 @@ def attach_prices(conn, sport, picks, stamp):
             pick['ticket_rule'] = 'Team totals stay off tickets (owner, Nov 11).'
 
 
-FACT_SPORTS = ('nba', 'nhl', 'nfl')
+FACT_SPORTS = ('nba', 'nhl', 'nfl', 'ncaab')
 
 
 def attach_facts(conn, sport, picks, stamp):
@@ -1361,9 +1363,9 @@ def check(plan):
                   locks=locks, **({'locks_error': lock_error} if lock_error else {}),
                   coverage={'required':len(required), 'accounted':len(required & set(accounted)),
                             'unavailable_sports':{sport:section['error'] for sport,section in fresh['sports'].items()
-                                                  if sport in ('nba','nhl','nfl') and section.get('error')},
+                                                  if sport in ('nba','nhl','nfl','ncaab') and section.get('error')},
                             'complete_supported_sports':not any(section.get('error') for sport,section in fresh['sports'].items()
-                                                                 if sport in ('nba','nhl','nfl'))})
+                                                                 if sport in ('nba','nhl','nfl','ncaab'))})
     from app import config
     directory = config.data_dir() / 'reports/tickets/reviews'
     directory.mkdir(parents=True, exist_ok=True)

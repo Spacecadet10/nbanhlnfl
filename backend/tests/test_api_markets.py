@@ -31,7 +31,7 @@ def test_meta_describes_the_selected_sport_and_its_markets(api):
     assert set(markets) == {"winner", "reg3", "spread", "total", "team_total_home", "team_total_away"}
     assert all(m["available"] for m in markets.values())
     assert "draws were under-predicted" in markets["reg3"]["note"]
-    assert {s["id"]: s["available"] for s in meta["sports"]} == {"nba": False, "nhl": True}
+    assert {s["id"]: s["available"] for s in meta["sports"]} == {"nba": False, "nhl": True, "ncaab": False}
 
 
 def test_games_carry_only_the_selected_market_and_policy(api):

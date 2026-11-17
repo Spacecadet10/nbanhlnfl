@@ -137,7 +137,7 @@ def render_card(message):
             group = []
     preview = any('TEST PREVIEW' in line for line in lines[:brand])
     league = lines[brand].rsplit(' · ', 1)[-1]
-    if league not in ('NBA','NHL','NFL','SOCCER'):
+    if league not in ('NBA','NHL','NFL','NCAAB','SOCCER'):
         raise ValueError('Telegram card requires a recognized league label.')
     matchup = lines[brand + 1]
     teams = re.fullmatch(r'([A-Z]{2,5}) @ ([A-Z]{2,5})', matchup)

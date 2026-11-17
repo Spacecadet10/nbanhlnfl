@@ -3,7 +3,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
-import type { ConfidenceRecord, Sport, TrainingRun, TrainingRunRecord } from '../api/types';
+import type { ConfidenceRecord, ResearchSport as Sport, TrainingRun, TrainingRunRecord } from '../api/types';
 import { useApi, type ApiState } from '../api/useApi';
 import { calendarDate, dateTime, FULL_DATE, pct } from '../format';
 import { AsyncView, Loading } from './States';

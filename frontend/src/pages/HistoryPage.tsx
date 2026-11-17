@@ -7,6 +7,7 @@ import { RunBadge } from '../components/Badges';
 import { ConfidenceFilter, confidenceLevels, levelLabel, MarketRecordLine, RecordLine, useConfidence } from '../components/ConfidenceFilter';
 import { MarketHistoryTable, MarketVersionSelect } from '../components/MarketView';
 import { ResearchHistoryTable } from '../components/Research';
+import { hasResearch } from '../components/sportCaps';
 import { MarketSelect, useCarriedSearch, useMarket, useSport } from '../components/Selection';
 import { PolicyToggle, RunTypeToggle, usePolicy, useRunType } from '../components/RunTypeToggle';
 import { AsyncView, Empty } from '../components/States';
@@ -123,7 +124,7 @@ export function HistoryPage() {
               <MoreRows shown={data.predictions.length} total={data.total} onMore={() => setLimit((n) => Math.min(MAX_ROWS, n + PAGE))} />
             </>}
       </AsyncView>}
-      <ResearchHistoryTable sport={sport} />
+      {hasResearch(sport) && <ResearchHistoryTable sport={sport} />}
     </section>
   );
 }

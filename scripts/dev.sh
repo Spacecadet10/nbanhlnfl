@@ -110,7 +110,7 @@ check_paths >/dev/null   # again now that the directory exists (inode checks in 
 import os, sqlite3, sys
 from pathlib import Path
 live, dev = Path(sys.argv[1]), Path(sys.argv[2])
-for name in ("nba.sqlite", "nhl.sqlite", "nfl.sqlite", "soccer.sqlite"):
+for name in ("nba.sqlite", "nhl.sqlite", "nfl.sqlite", "ncaab.sqlite", "soccer.sqlite"):
     src = live / name
     tmp = dev / f".{name}.tmp"
     old = [dev / n for n in (name, f"{name}-wal", f"{name}-shm", f"{name}-journal", tmp.name)]
@@ -144,7 +144,7 @@ for sub in research raw eval; do
     || fail "copying $LIVE/$sub failed."
 done
 check_paths >/dev/null   # again after the copy: nothing written below may lead outside the development directory
-for sport in nba nhl nfl soccer; do
+for sport in nba nhl nfl ncaab soccer; do
   [ -f "$DEV/$sport.sqlite" ] || continue
   case "$sport" in nfl|soccer) set -- "$sport" migrate ;; *) set -- --sport "$sport" migrate ;; esac   # data-only commands
   (cd "$ROOT/backend" && NBA_DATA_DIR="$DEV" "$PY" -m app.cli "$@" >/dev/null) \

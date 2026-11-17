@@ -94,6 +94,8 @@ def test_stale_or_failed_sources_do_not_construct_or_send_picks(tmp_path, monkey
         def __init__(self, sport): self.sport = sport
         def execute(self, sql): assert sql == 'BEGIN'
         def close(self): pass
+    from app import config
+    config.db_path('ncaab').touch()      # NCAAB cards need a store (and the sealed decision, which is committed): otherwise 'inactive'
     monkeypatch.setattr(db, 'connect_readonly', Source)
     monkeypatch.setattr(db, 'store_sport', lambda s:s.sport)
     monkeypatch.setattr(freshness, 'summary', lambda *_:{'source_state':source_state,'failing':failing})
@@ -101,7 +103,7 @@ def test_stale_or_failed_sources_do_not_construct_or_send_picks(tmp_path, monkey
     bot = Bot()
     with tg.ledger(tmp_path / 'receipts.sqlite') as conn:
         result = tg.run_once(bot, {'TELEGRAM_CHAT_ID':'123'}, conn, now=datetime(2026,11,2,20,tzinfo=timezone.utc))
-    assert result['sports'] == {'nba':{'status':'source_not_fresh'},'nhl':{'status':'source_not_fresh'}}
+    assert result['sports'] == {sport:{'status':'source_not_fresh'} for sport in ('nba','nhl','ncaab')}   # NFL is inactive
     assert not bot.sends
 
 

@@ -2,12 +2,13 @@ import { useEffect } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import type { League, MarketId, MarketInfo, SoccerCompetitionId, Sport } from '../api/types';
 import { COMPETITION_IDS, competitionFrom, leagueFrom, soccerMatchCompetition } from './competition';
+import { conferenceFrom } from './sportCaps';
 
 /** Sport and market live in the URL (?sport=nhl, ?market=total) so Today, History and Performance always show the
  * same selection. Absent means NBA and the winner market. An unknown value is never silently replaced by data of
  * another sport or market: it falls back only to these documented defaults. */
-const LEAGUES: { id: League; label: string }[] = [{ id: 'nba', label: 'NBA' }, { id: 'nhl', label: 'NHL' }, { id: 'nfl', label: 'NFL' },
-  { id: 'soccer', label: 'Soccer' }];
+const LEAGUES: { id: League; label: string }[] = [{ id: 'nba', label: 'NBA' }, { id: 'nhl', label: 'NHL' }, { id: 'ncaab', label: 'NCAAB' },
+  { id: 'nfl', label: 'NFL' }, { id: 'soccer', label: 'Soccer' }];
 /** Soccer competitions (?competition=…, ESPN slugs). Absent means the Premier League; an unknown value never shows another
  * competition's data under its name: it falls back only to this documented default. On a soccer match page the match's
  * own competition wins (competition.ts). */
@@ -19,7 +20,7 @@ const COMPETITION_LABELS: Record<SoccerCompetitionId, string> = {
 export const COMPETITIONS = COMPETITION_IDS.map((id) => ({ id, label: COMPETITION_LABELS[id] }));
 const MARKETS: MarketId[] = ['winner', 'reg3', 'spread', 'total', 'team_total_home', 'team_total_away'];
 
-/** The league shown (?sport=nba|nhl|nfl|soccer). NFL and soccer are data-only: the layout shows their own screens and
+/** The league shown (?sport=nba|nhl|ncaab|nfl|soccer). NFL and soccer are data-only: the layout shows their own screens and
  * every forecast screen keeps using `useSport`, which never returns 'nfl' or 'soccer'. */
 export function useLeague(): [League, (l: League) => void] {
   const [params, setParams] = useSearchParams();
@@ -33,6 +34,7 @@ export function useLeague(): [League, (l: League) => void] {
     next.delete('team');
     next.delete('date');
     next.delete('conf');     // confidence levels are sport- and market-specific
+    next.delete('conference');   // conferences belong to NCAAB
     next.delete('competition');
     // Game identifiers belong to one league. Choose a game in the new league before opening its dashboard.
     if (s !== league && location.pathname.startsWith('/games/')) navigate({ pathname: '/', search: next.toString() });
@@ -41,10 +43,22 @@ export function useLeague(): [League, (l: League) => void] {
   return [league, set];
 }
 
-/** The served sport of the forecast screens: NBA or NHL only (NFL and soccer selections are handled by the layout). */
+/** The served sport of the forecast screens: NBA, NHL or NCAAB (NFL and soccer selections are handled by the layout). */
 export function useSport(): [Sport, (s: Sport) => void] {
   const [league, set] = useLeague();
-  return [league === 'nhl' ? 'nhl' : 'nba', set];
+  return [league === 'nhl' || league === 'ncaab' ? league : 'nba', set];
+}
+
+/** NCAAB Game Day: the conference filter (?conference=…), kept in the URL; absent means every tracked game. */
+export function useConference(available: readonly string[]): [string | null, (c: string | null) => void] {
+  const [params, setParams] = useSearchParams();
+  const value = conferenceFrom(params.get('conference'), available);
+  const set = (c: string | null) => {
+    const next = new URLSearchParams(params);
+    if (c === null) next.delete('conference'); else next.set('conference', c);
+    setParams(next);
+  };
+  return [value, set];
 }
 
 /** The soccer competition shown. Changing it clears the date and the research-history filters (season, page) and leaves an
@@ -123,7 +137,7 @@ export function DetailsToggle() {
 export function useCarriedSearch(): string {
   const [params] = useSearchParams();
   const keep = new URLSearchParams();
-  for (const k of ['sport', 'competition', 'market', 'policy', 'conf', 'details']) {
+  for (const k of ['sport', 'competition', 'market', 'policy', 'conf', 'details', 'conference']) {
     const v = params.get(k);
     if (v) keep.set(k, v);
   }

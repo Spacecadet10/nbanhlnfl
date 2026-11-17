@@ -385,6 +385,8 @@ def card_implied_lines(conn, sport, report, now):
 def best_pick_pictures(conn, sport, report, now):
     """Step F paper recorder (docs/preregistration/best-pick-2026-11-11-v4.md): what the preregistered rule would name for
     each card that may go out now, and the full picture behind it. Used for the trial card line and the paper record."""
+    if sport == 'ncaab':     # the preregistered rule (and the sealed recorder) has no NCAAB rule: no rule-based pick is claimed
+        return None
     try:
         from . import best_pick_record
         return best_pick_record.card_pictures(conn, sport, report, now)
@@ -396,6 +398,8 @@ def best_pick_pictures(conn, sport, report, now):
 def record_best_pick(conn, sport, key, game_id, pictures, as_of):
     """One append-only best_picks row for a card that was just sent; a missing picture is recorded as an error row.
     Never raises: a card already sent is never affected."""
+    if sport == 'ncaab':     # nothing to record: NCAAB has no best-pick rule (research only)
+        return False
     try:
         from . import best_pick_record
         return best_pick_record.record(conn, key, sport, game_id, (pictures or {}).get(game_id), as_of)
@@ -480,11 +484,17 @@ def run_once(bot, settings, conn, *, now=None):
     if not controls(bot, settings, conn):
         return {'status': 'paused'}
     result = {'status': 'ok', 'as_of': now.strftime('%Y-%m-%dT%H:%M:%SZ'), 'sports': {}}
-    for sport in ('nba', 'nhl', 'nfl'):
+    for sport in ('nba', 'nhl', 'nfl', 'ncaab'):
         try:
             if sport == 'nfl':
                 from .nfl_live import activation
                 if not activation():
+                    continue
+            if sport == 'ncaab':     # like NFL's activation: a valid sealed decision and a store, else a visible refusal, never a card
+                from . import ncaab_app
+                reason = ncaab_app.card_issue()
+                if reason:
+                    result['sports'][sport] = {'status': 'inactive', 'reason': reason}
                     continue
             source = db.connect_readonly(sport)
             try:

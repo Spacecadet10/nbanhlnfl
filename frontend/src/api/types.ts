@@ -6,7 +6,9 @@ export type Mode = 'real' | 'demo';
 
 export interface Team { abbr: string; name: string }
 
-export type Sport = 'nba' | 'nhl';
+export type Sport = 'nba' | 'nhl' | 'ncaab';
+/** Sports with research views (agreement, rules, training): NCAAB has none (docs/NCAAB_PLAN.md). */
+export type ResearchSport = 'nba' | 'nhl';
 /** Every league the app can show. NFL is data-only (schedule and results; docs/NFL_PLAN.md): it is never a `Sport`, so no
  * forecast, market, performance or research call can be made for it. */
 export type League = Sport | 'nfl' | 'soccer';

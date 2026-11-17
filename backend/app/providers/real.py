@@ -87,8 +87,14 @@ class RealProvider:
         if self.sport == "nhl":
             from .. import nhl_eval
             self.periods = nhl_eval.PERIODS
+        elif self.sport == "ncaab":
+            from .. import ncaab_app
+            self.periods = ncaab_app.PERIODS
         else:
             self.periods = backtest.PERIODS
+        # Rows the app never shows: a game against a non-Division I opponent is stored (reruns stay idempotent) with
+        # season_type 'other' and is never forecast, graded or listed (docs/NCAAB_PLAN.md "Game classification").
+        self.hidden_types = ("other",) if self.sport == "ncaab" else ()
 
     # ---- helpers -------------------------------------------------------------------------------------------------
     def _team(self, team_id: str) -> Team:
@@ -127,7 +133,7 @@ class RealProvider:
             results_refreshed_at=row["results_refreshed_at"], latest_result_available_at=row["latest_result_available_at"],
             results_used=row["results_used"], market_home_prob=market_prob,
             market_retrieved_at=market_at, correct=correct, void=void or g["status"] in ("postponed", "canceled"),
-            limitation="Elo uses results only; it does not know about injuries, rest or line-ups.")
+            limitation=near_tipoff.limitation(self.sport))
 
     def _forecast_note(self, g: sqlite3.Row) -> str:
         cutoff = backtest.cutoff_for(g["tipoff_at"])
@@ -144,7 +150,7 @@ class RealProvider:
         return "No pre-game archive forecast was recorded before the cutoff."
 
     def _market(self, game_id: str, tipoff: str) -> Optional[Market]:
-        if self.sport != "nba":   # NHL moneylines are stored with the other line quotes
+        if not near_tipoff.stores_quote_id(self.sport):   # NHL and NCAAB moneylines are stored with the other line quotes
             row = self.conn.execute(
                 "SELECT provider, price_label, quote_time, retrieved_at, p_a_devig AS home_prob_devig, price_a AS home_american, "
                 "price_b AS away_american FROM market_quotes "
@@ -233,6 +239,9 @@ class RealProvider:
         """Winner agreement for a game card, from ONE research definition: if the latest cohort's members come from more
         than one definition (a code change on unchanged data), only the newest definition's members are shown. Void when
         the game moved after the cohort, by the policy's own rule (two-hour: the exact start; archive: the Eastern date)."""
+        if self.sport == "ncaab":      # no research members exist for NCAAB (and agreement.py has no NCAAB member list)
+            from .. import ncaab_app
+            return ncaab_app.no_agreement(policy)
         out = agreement.summary(self.conn, game_id, self.sport, self.now, policy)
         definitions = {m["model_version"].rsplit(":", 1)[-1] for m in out["models"]}
         if len(definitions) > 1:
@@ -346,7 +355,12 @@ class RealProvider:
             forecast_note = "No eligible game started in the last 24 h; forecasts are made within two hours of a start."
         forecast_state = "stale" if started > covered else "fresh" if predict or not started else "missing"
         lines = self.conn.execute("SELECT MAX(retrieved_at) FROM market_quotes").fetchone()[0]
-        if self.sport == "nhl":
+        if self.sport == "ncaab":
+            schedule = SourceStatus(name="ESPN schedule & results (NCAA D-I)", kind="schedule", mode="real", last_updated=refresh,
+                                    freshness=results_state, note="ESPN men's college basketball scoreboard (Division I group); "
+                                    "refreshed by the daily job and each forecast cycle." + results_note)
+            odds, odds_note = lines, "DraftKings lines via ESPN for games in the next 36 h; no quote time published."
+        elif self.sport == "nhl":
             schedule = SourceStatus(name="NHL schedule & results", kind="schedule", mode="real", last_updated=refresh,
                                     freshness=results_state, note="NHL stats API season game list; refreshed by the daily job and each forecast cycle." + results_note)
             odds, odds_note = lines, "DraftKings lines via ESPN for games in the next 36 h; no quote time published."
@@ -370,7 +384,8 @@ class RealProvider:
     def _input_sources(self) -> list[SourceStatus]:
         """Injury, player and canonical-ledger inputs: an input without data is 'missing' or 'stale', never left out. Each
         entry is isolated: one that cannot be read is listed as missing with the error (the slate still loads)."""
-        builders = ([self._nba_injury_source, self._player_box_source] if self.sport == "nba" else [self._nhl_injury_source])
+        builders = {"nba": [self._nba_injury_source, self._player_box_source], "nhl": [self._nhl_injury_source],
+                    "ncaab": []}[self.sport]        # NCAAB has no injury or player inputs
         out = []
         for build in [*builders, self._canonical_source]:
             try:
@@ -522,11 +537,28 @@ class RealProvider:
         return SourceStatus(name=name, kind="canonical", mode="real", last_updated=last,
                             freshness="fresh" if full == len(games) and not unrecorded_pre else "stale", note=note)
 
+    def _in_conference(self, g, conference: str) -> bool:
+        """NCAAB: a team of the conference plays in the game (membership of the game's season; none known means no match)."""
+        from .. import ncaab_app
+        members = ncaab_app.conferences(self.conn, g["season"])
+        return conference in (members.get(g["home_team_id"]), members.get(g["away_team_id"]))
+
+    def conferences(self, season: Optional[int] = None) -> list[str]:
+        """NCAAB conference names for the season (default: the latest), [] until the context tables exist."""
+        from .. import ncaab_app
+        if self.sport != "ncaab":
+            return []
+        season = season or self.conn.execute("SELECT MAX(season) FROM games").fetchone()[0]
+        return sorted(set(ncaab_app.conferences(self.conn, season).values())) if season else []
+
     def games(self, day: date, policy: str = "pregame", min_confidence: Optional[float] = None,
-              market: str = "winner") -> GamesResponse:
+              market: str = "winner", conference: Optional[str] = None) -> GamesResponse:
         start, end = _day_bounds(day)
         rows = self.conn.execute("SELECT * FROM games WHERE tipoff_at >= ? AND tipoff_at < ? ORDER BY tipoff_at, game_id",
                                  (start, end)).fetchall()
+        rows = [g for g in rows if g["season_type"] not in self.hidden_types]
+        if conference is not None:
+            rows = [g for g in rows if self._in_conference(g, conference)]
         canon = coverage.canonical(self.conn, rows, "winner", self.now)    # one canonical read for the whole slate
         games = [GameSummary(**self._summary(g, policy, canon[g["game_id"]])) for g in rows]
         if market == "winner":
@@ -587,7 +619,7 @@ class RealProvider:
 
     def game(self, game_id: str) -> Optional[GameDetail]:
         g = self.conn.execute("SELECT * FROM games WHERE game_id=?", (game_id,)).fetchone()
-        if g is None:
+        if g is None or g["season_type"] in self.hidden_types:
             return None
         cutoff = backtest.cutoff_for(g["tipoff_at"])
         summary = self._summary(g)
@@ -796,8 +828,9 @@ class RealProvider:
         if began is None:
             return None, [], {}
         lo = max(began, start) if start else began
-        rows = self.conn.execute("SELECT * FROM games WHERE tipoff_at >= ? AND tipoff_at < ? ORDER BY tipoff_at DESC, game_id",
-                                 (lo, end or "9999")).fetchall()
+        rows = [g for g in self.conn.execute(
+            "SELECT * FROM games WHERE tipoff_at >= ? AND tipoff_at < ? ORDER BY tipoff_at DESC, game_id",
+            (lo, end or "9999")).fetchall() if g["season_type"] not in self.hidden_types]
         return began, rows, coverage.canonical(self.conn, rows, market, self.now, began)
 
     def canonical_history(self, date_from: Optional[date], date_to: Optional[date], team: Optional[str],
@@ -1005,13 +1038,16 @@ class RealProvider:
                 matched.append((r["home_win_prob"], q, r["home_score"] > r["away_score"]))
         days = [eastern_date(r["tipoff_at"]) for r in rows]
         if run_type == "backtest":
-            title = "Final test: retrospective backtest, 2024-25 to 2025-26"
+            title = ("Final test: retrospective backtest, 2024-25 to 2025-26" if self.sport != "ncaab" else
+                     "Backtest: reported by the model evaluation, not stored")
             note = ("Retrospective backtest of the model fixed on validation, evaluated once on held-out seasons. "
-                    "Not live forecasts. No historical odds, so no market comparison.")
+                    "Not live forecasts. No historical odds, so no market comparison." if self.sport != "ncaab" else
+                    "NCAAB backtests are reports (docs/NCAAB_PLAN.md) and are never stored beside, or counted in, the live record.")
         elif policy == "near_tipoff":
             title = "Near-tipoff live forecasts"
             note = ("Latest near-tipoff forecast per game, made before tipoff from the freshest stored results. Kept "
-                    "separate from the pre-game archive. Elo does not know about injuries or line-ups. Market "
+                    "separate from the pre-game archive. " + (near_tipoff.limitation(self.sport) if self.sport == "ncaab"
+                                                              else "Elo does not know about injuries or line-ups.") + " Market "
                     "comparison uses the latest quote retrieved no later than the forecast itself, where available.")
         else:
             title = "Pre-game archive: live forecasts"
@@ -1093,6 +1129,7 @@ def _dates(conn: sqlite3.Connection) -> list[date]:
     key = _cache_key(conn)
     if key not in _DATE_CACHE:
         _DATE_CACHE.clear()
+        hidden = " AND season_type <> 'other'" if db.store_sport(conn) == "ncaab" else ""   # non-D-I games are never listed
         _DATE_CACHE[key] = sorted({eastern_date(r[0]) for r in conn.execute(
-            "SELECT tipoff_at FROM games WHERE status NOT IN ('postponed', 'canceled')")})
+            "SELECT tipoff_at FROM games WHERE status NOT IN ('postponed', 'canceled')" + hidden)})
     return _DATE_CACHE[key]

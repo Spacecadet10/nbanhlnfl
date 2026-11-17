@@ -31,6 +31,11 @@ def market_model(conn: sqlite3.Connection):
         d = nhl_eval.load_decision(conn)
         model = GoalsPoisson(GoalsConfig(**{**d["goals_config"], "empty_net": True}), sports.NHL.rating_key)
         return model, backtest.model_version(model)
+    if eng.sport == "ncaab":
+        from . import ncaab_app
+        return ncaab_app.market_model(conn)
+    if eng.sport != "nba":
+        raise MarketModelUnavailable(f"No market model is defined for a {eng.sport!r} store")
     from . import nba_markets
     return nba_markets.sealed_model(conn)
 
@@ -64,6 +69,8 @@ def forecast(conn: sqlite3.Connection, *, now: Optional[str] = None, policy: str
     version = eng.dataset_version(rows)
     for r in sorted(rows, key=lambda r: (r.result_available_at, r.game.tipoff_at, r.game.game_id)):
         model.update(r.result)
+    if eng.sport == "ncaab":
+        model.as_of = now          # the model reads the store at this information time only
     mv, fv = model_version(base, policy), feature_version(eng, policy)
     types = eng.eligible_types
     candidates = conn.execute(
@@ -89,7 +96,11 @@ def forecast(conn: sqlite3.Connection, *, now: Optional[str] = None, policy: str
             line = quote = None
             if market != "reg3":
                 quote = latest_quote(conn, g["game_id"], market, now)
-                line = quote["line"] if quote else markets.model_line(dist, market)
+                if eng.sport == "ncaab":   # the model's own line unless it can price the bookmaker's
+                    from . import ncaab_app
+                    line, quote = ncaab_app.market_line(model, dist, quote, market)
+                else:
+                    line = quote["line"] if quote else markets.model_line(dist, market)
             pa, pmid, pb = (round(x, 9) for x in dist.market(market, line))
             pb = round(1 - pa - pmid, 9)
             # The latest stored forecast for this game, market and policy: if its line differs, this is a line change. When

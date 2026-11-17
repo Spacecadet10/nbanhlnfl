@@ -53,8 +53,17 @@ def api_mode() -> str:
 _STORE_TURN = threading.Lock()
 
 
+# Research, agreement and rule tracking exist for NBA and NHL only: NCAAB has no research members, no rules and no
+# paper rules (docs/NCAAB_PLAN.md). Refused by name instead of reaching code that assumes one of the other two sports.
+NCAAB_REFUSED = ("/api/research", "/api/agreement-performance", "/api/paper-rules", "/api/recovered-forecasts",
+                 "/api/thresholds", "/api/training-run")
+
+
 async def get_provider(request: Request, mode: str = Depends(api_mode), sport: str = SPORT) -> AsyncIterator:
     held = {"turn": False}
+    if sport == "ncaab" and request.url.path.startswith(NCAAB_REFUSED):
+        raise HTTPException(status_code=404, detail="Research, agreement and rule tracking are not defined for NCAAB: "
+                                                    "its model has no live record yet, so no pick rule is claimed.")
 
     def take_turn() -> None:
         _STORE_TURN.acquire()
@@ -116,7 +125,7 @@ def health(mode: str = Depends(api_mode)):
     return Health(status="ok", mode=mode, api_version=API_VERSION, data_snapshot_at=snapshot)
 
 
-LEAGUE = Query("nba", pattern="^(nba|nhl|nfl)$", description="Which sport's store; NFL is data-only (no forecasts)")
+LEAGUE = Query("nba", pattern="^(nba|nhl|nfl|ncaab)$", description="Which sport's store; NFL is data-only (no forecasts)")
 PUBLISH_STATUS = "PUBLISH_STATUS.json"     # written by `app.cli preview-publish` next to the copies it publishes
 
 
@@ -451,16 +460,27 @@ def games(date: date = Query(description="Game date (US Eastern), YYYY-MM-DD"),
           policy: str = Query("pregame", pattern="^(pregame|near_tipoff|canonical)$",
                               description="Which forecast the slate's picks and confidence filter use: canonical (one "
                                           "record per game and market) or a legacy ledger."),
-          min_confidence: Optional[float] = Query(None, ge=0, le=1), market: str = MARKET, p=Depends(get_provider)):
+          min_confidence: Optional[float] = Query(None, ge=0, le=1), market: str = MARKET,
+          conference: Optional[str] = Query(None, max_length=80, description="NCAAB only: games with a team of this conference."),
+          p=Depends(get_provider)):
     if market == "winner" and min_confidence is not None and min_confidence < 0.5:
         raise HTTPException(status_code=422, detail="min_confidence for the winner market is at least 0.5")
+    if conference is not None and getattr(p, "sport", None) != "ncaab":
+        raise HTTPException(status_code=422, detail="The conference filter exists for NCAAB only.")
     if market != "winner" and policy == "canonical":
         _canonical_market(p, market, min_confidence)
-        return p.games(date, policy, min_confidence, market)
+        return p.games(date, policy, min_confidence, market, conference)
     if market != "winner":
         _market_supported(p, market)
-        return p.games(date, policy, min_confidence, market)
-    return p.games(date, policy, min_confidence)
+        return p.games(date, policy, min_confidence, market, conference)
+    return p.games(date, policy, min_confidence, **({} if conference is None else {"conference": conference}))
+
+
+@app.get("/api/conferences", response_model=list[str])
+def conferences(season: Optional[int] = Query(None, ge=1990, le=2100), p=Depends(get_provider)):
+    """NCAAB conference names of a season (default: the latest in the store) for the Game Day filter; [] for the other
+    sports and until the NCAAB context tables are in the store."""
+    return p.conferences(season) if getattr(p, "mode", None) == "real" and hasattr(p, "conferences") else []
 
 
 def _market_supported(p, market: str) -> None:
@@ -632,8 +652,14 @@ def coverage_report(p=Depends(get_provider), date_from: Optional[date] = None, d
     if p.mode != "real":
         return {"status": "demo", "note": "Coverage requires the real store; demo mode records no forecasts."}
     start, end = coverage.et_bounds(date_from.isoformat(), date_to.isoformat())
-    return {"status": "available", "date_from": date_from.isoformat(), "date_to": date_to.isoformat(),
-            **coverage.games_report(p.conn, start=start, end=end, as_of=p.now)}
+    # coverage.source_schedule re-reads the NBA/NHL raw responses (its else-branch assumes NBA ESPN request keys, which an
+    # NCAAB store does not have: it would list every stored game as "not in the source"), so NCAAB skips that check.
+    ncaab = p.sport == "ncaab"
+    report = coverage.games_report(p.conn, start=start, end=end, as_of=p.now, with_source=not ncaab)
+    if ncaab:
+        report["source_schedule"] = {"available": False, "reason": "The raw-source schedule comparison is not defined for "
+                                     "NCAAB: its scoreboard responses are checked by the NCAAB data coverage report."}
+    return {"status": "available", "date_from": date_from.isoformat(), "date_to": date_to.isoformat(), **report}
 
 
 # --- Research: model agreement, combination and selection (docs/MODEL_SELECTION.md). Research/shadow only. ------------------

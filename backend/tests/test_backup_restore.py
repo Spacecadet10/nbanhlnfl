@@ -173,7 +173,7 @@ def test_a_default_backup_includes_every_existing_store_and_skips_absent_ones(tm
         _data_store(data / f"{s}.sqlite", s).close()
     out = backup.run(data, dest, stamp="s")
     man = json.loads((dest / "s" / "manifest.json").read_text())
-    assert set(out["stores"]) == set(man["stores"]) == {"nfl", "soccer"} and out["skipped"] == ["nba", "nhl"]
+    assert set(out["stores"]) == set(man["stores"]) == {"nfl", "soccer"} and out["skipped"] == ["nba", "nhl", "ncaab"]
     assert sorted(p.name for p in (dest / "s").iterdir()) == ["manifest.json", "nfl.sqlite", "soccer.sqlite"]
 
 
@@ -184,7 +184,7 @@ def test_a_default_backup_with_the_nba_nhl_and_nfl_stores_present_backs_up_all_t
     _data_store(data / "nfl.sqlite", "nfl").close()
     out = backup.run(data, dest, stamp="live")
     man = json.loads((dest / "live" / "manifest.json").read_text())
-    assert set(man["stores"]) == {"nba", "nhl", "nfl"} and out["skipped"] == ["soccer"]
+    assert set(man["stores"]) == {"nba", "nhl", "nfl"} and out["skipped"] == ["ncaab", "soccer"]
     assert {s: (m["file"], m["identity"], m["integrity"]) for s, m in man["stores"].items()} == {
         "nba": ("nba.sqlite", "nba", "ok"), "nhl": ("nhl.sqlite", "nhl", "ok"), "nfl": ("nfl.sqlite", "nfl", "ok")}
     assert sorted(p.name for p in (dest / "live").iterdir()) == ["manifest.json", "nba.sqlite", "nfl.sqlite", "nhl.sqlite"]
@@ -197,9 +197,10 @@ def test_a_default_backup_warns_on_stderr_for_each_store_it_skips(tmp_path, caps
     _store(data / "nhl.sqlite", "nhl").close()
     _data_store(data / "nfl.sqlite", "nfl").close()
     out = backup.run(data, dest, stamp="s")
-    assert set(out["stores"]) == {"nhl", "nfl"} and out["skipped"] == ["nba", "soccer"]
+    assert set(out["stores"]) == {"nhl", "nfl"} and out["skipped"] == ["nba", "ncaab", "soccer"]
     err = capsys.readouterr().err.splitlines()
     assert err == [f"WARNING: no nba store at {data / 'nba.sqlite'}; not backed up",
+                   f"WARNING: no ncaab store at {data / 'ncaab.sqlite'}; not backed up",
                    f"WARNING: no soccer store at {data / 'soccer.sqlite'}; not backed up"]
     backup.run(data, dest, stamp="named", sports=["nhl", "nfl"])           # named sports: nothing skipped, no warning
     assert capsys.readouterr().err == ""

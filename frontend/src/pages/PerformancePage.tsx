@@ -18,6 +18,7 @@ import { calendarDate, FULL_DATE, num, pct } from '../format';
 import { canonicalFor, CanonicalReport } from '../components/Canonical';
 import { ThresholdOverviewCard } from '../components/ThresholdOverview';
 import { PaperRulesCard } from '../components/PaperRules';
+import { hasResearch } from '../components/sportCaps';
 import { Icon, PageTitle } from '../components/ui';
 
 const SMALL_SAMPLE = 200;
@@ -47,7 +48,7 @@ export function PerformancePage() {
         </div>
         <CanonicalReport sport={sport} market={market} />
         <ThresholdOverviewCard sport={sport} />
-        <PaperRulesCard sport={sport} />
+        {hasResearch(sport) && <PaperRulesCard sport={sport} />}
         <ResearchSection sport={sport} market={market} show={details} />
         <PerformanceStatus sport={sport} />
       </section>
@@ -62,7 +63,7 @@ export function PerformancePage() {
           : meta.state.status === 'error' ? <p className="warn small">Market list unavailable: {meta.state.error}</p> : null}
         <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} canonical={canonicalFor(sport, market)} /></div>
         <CoverageCard sport={sport} market={market} />
-        {policy === 'near_tipoff' && <><ThresholdResearch sport={sport} market={market} /><RecoveredThresholds sport={sport} market={market} /></>}
+        {hasResearch(sport) && policy === 'near_tipoff' && <><ThresholdResearch sport={sport} market={market} /><RecoveredThresholds sport={sport} market={market} /></>}
         <MarketPerformance sport={sport} market={market} policy={policy} />
         <ResearchSection sport={sport} market={market} show={details} />
         <PerformanceStatus sport={sport} />
@@ -77,12 +78,12 @@ export function PerformancePage() {
           <>
             {p.mode === 'real' && run === 'live' && <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} canonical={canonicalFor(sport, market)} /></div>}
             {p.mode === 'real' && run === 'live' && <CoverageCard sport={sport} market={market} />}
-            {run === 'live' && policy === 'near_tipoff' && <><ThresholdResearch sport={sport} market={market} /><RecoveredThresholds sport={sport} market={market} /></>}
+            {hasResearch(sport) && run === 'live' && policy === 'near_tipoff' && <><ThresholdResearch sport={sport} market={market} /><RecoveredThresholds sport={sport} market={market} /></>}
             <Report perf={p} run={run} setRun={setRun} />
           </>
         )}
       </AsyncView>
-      {run === 'live' && policy === 'near_tipoff' && <AgreementReport sport={sport} />}
+      {hasResearch(sport) && run === 'live' && policy === 'near_tipoff' && <AgreementReport sport={sport} />}
       <ResearchSection sport={sport} market={market} show={details} />
       <PerformanceStatus sport={sport} />
     </section>
@@ -91,6 +92,7 @@ export function PerformancePage() {
 
 /** Research and model-selection cards: loaded only when research details are shown, so the default page is the record. */
 function ResearchSection({ sport, market, show }: { sport: Sport; market: MarketId; show: boolean }) {
+  if (!hasResearch(sport)) return null;     // NCAAB has no research members, selection or agreement
   return (
     <>
       <div className="card">
@@ -267,6 +269,7 @@ function AgreementReport({ sport }: { sport: Sport }) {
 /** Freshness, training and recovery diagnostics: kept for review, folded away so the record and the market
  * benchmark are what the page opens with. */
 function PerformanceStatus({ sport }: { sport: Sport }) {
+  if (!hasResearch(sport)) return null;     // the status panel reads the NBA/NHL training and recovery diagnostics
   return (
     <details className="card today-more">
       <summary><strong>System status and data collection</strong> <span className="muted small">freshness, training and recovery diagnostics</span></summary>

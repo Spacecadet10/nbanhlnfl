@@ -1,4 +1,5 @@
 import { ModelAgreement } from '../components/ModelAgreement';
+import { hasResearch } from '../components/sportCaps';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { CanonicalGrade, GameDetail, TeamStats } from '../api/types';
@@ -68,7 +69,7 @@ function Detail({ game: g }: { game: GameDetail }) {
   const SUB: Record<Exclude<Tab, 'forecast'>, { title: string; icon: string; sub: string }> = {
     markets: { title: 'Markets', icon: 'scale', sub: 'The bookmaker line and every market forecast for this game.' },
     teams: { title: 'Team Comparison', icon: 'bars', sub: 'Both teams side by side, from results known before the game.' },
-    research: { title: 'Research Details', icon: 'flask', sub: 'Legacy forecasts, model agreement and research models. None of it is the current forecast.' },
+    research: { title: 'Research Details', icon: 'flask', sub: sport === 'ncaab' ? 'Legacy forecasts. NCAAB has no model agreement or research models.' : 'Legacy forecasts, model agreement and research models. None of it is the current forecast.' },
   };
   const more = (
     <nav className="more-links" aria-label="More for this game">
@@ -101,9 +102,9 @@ function Detail({ game: g }: { game: GameDetail }) {
             <h2>Legacy – Within 2 Hours (Elo Ledger)</h2>
             <EmptyForecastState>No two-hour forecast recorded. New forecasts are made only during the two hours before the scheduled start, when fresh inputs are available.</EmptyForecastState>
           </div>)}
-          <div className="card"><ModelAgreement game={g} detail /></div>
-          <DetailsToggle />
-          {details && <>
+          {hasResearch(sport) && <div className="card"><ModelAgreement game={g} detail /></div>}
+          {hasResearch(sport) && <DetailsToggle />}
+          {hasResearch(sport) && details && <>
             <ResearchGameCard sport={sport} gameId={g.game_id} />
             <AdaptiveGameCard sport={sport} gameId={g.game_id} />
             <TrackingGameCard sport={sport} gameId={g.game_id} />

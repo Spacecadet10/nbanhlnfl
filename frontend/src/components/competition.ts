@@ -25,8 +25,8 @@ export function competitionFrom(pathname: string, raw: string | null): SoccerCom
   return soccerMatchCompetition(pathname) ?? (isCompetition(raw) ? raw : 'eng.1');
 }
 
-/** The selected league: soccer on a soccer match page; otherwise ?sport (nhl|nfl|soccer), defaulting to nba. */
+/** The selected league: soccer on a soccer match page; otherwise ?sport (nhl|ncaab|nfl|soccer), defaulting to nba. */
 export function leagueFrom(pathname: string, raw: string | null): League {
   if (soccerMatchCompetition(pathname)) return 'soccer';
-  return raw === 'nhl' || raw === 'nfl' || raw === 'soccer' ? raw : 'nba';
+  return raw === 'nhl' || raw === 'ncaab' || raw === 'nfl' || raw === 'soccer' ? raw : 'nba';
 }

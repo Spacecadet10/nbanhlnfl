@@ -80,6 +80,12 @@ def nhl_season_for(now: datetime) -> int:
     return d.year + 1 if d.month >= 7 else d.year
 
 
+def ncaab_days(now: datetime) -> list[str]:
+    """Eastern days (YYYYMMDD) of a broad NCAAB refresh: yesterday (late results) through two days ahead."""
+    today = now.astimezone(EASTERN)
+    return [f"{today + timedelta(days=i):%Y%m%d}" for i in range(-1, 3)]
+
+
 def refresh(conn: sqlite3.Connection, *, force: bool = False, fetch: Optional[Callable] = None,
             sleep: Callable[[float], None] = time.sleep, now: Optional[datetime] = None) -> dict:
     """Schedule, status and results refresh for this store's sport, when the activity policy says it is due
@@ -96,7 +102,18 @@ def refresh(conn: sqlite3.Connection, *, force: bool = False, fetch: Optional[Ca
                                                               f"every {plan['interval_seconds']} s)", "policy": _policy(plan)})
     scope = "broad" if force else plan["scope"]
     name = store_sport(conn) or "nba"       # an unlabelled store is the original NBA store (db.claim_store binds it)
-    if name == "nhl":
+    if name == "ncaab":
+        # ESPN's D-I scoreboard is one request per Eastern day (no month query). Broad: yesterday through two days ahead
+        # (4 requests, at most hourly); dates scope: only the days of the games in play or about to start.
+        from . import ncaab_app
+        keys = ncaab_days(now) if scope == "broad" else [d.replace("-", "") for d in plan["dates"]]
+        label = "days"
+        try:
+            fetch = fetch or ncaab_app.fetch_day()
+        except ncaab_app.NcaabDataUnavailable as exc:
+            return _finish(conn, run_id, "failed", 0, {"error": str(exc)})
+        one = lambda d: ncaab_app.ingest_day(conn, d, fetch=fetch)
+    elif name == "nhl":
         if scope == "broad":
             keys, label = [nhl_season_for(now)], "seasons"
             fetch = fetch or nhl_stats.fetch_season
@@ -177,6 +194,8 @@ def collect_props(conn: sqlite3.Connection, odds_run: Optional[dict] = None, now
     the periodic cycle can collect props AFTER the time-critical two-hour forecasts and still leave its trace."""
     try:
         from . import props_collect
+        if sport(conn) not in props_collect.PATHS:       # NCAAB: no prop collection (it would spend ESPN requests on games with none)
+            return {"status": "skipped", "reason": f"no prop collection is defined for a {sport(conn)!r} store"}
         out = props_collect.collect(conn, sport(conn), now=now)
     except Exception as exc:
         conn.rollback()
@@ -204,12 +223,21 @@ def odds_snapshot(conn: sqlite3.Connection, *, force: bool = False, fetch: Optio
     if not dates:
         return _finish(conn, run_id, "skipped", 0, {"reason": f"no scheduled game tips off within "
                                                               f"{ODDS_WINDOW.total_seconds() / 3600:g} h"})
-    if sport(conn) == "nhl":   # ESPN NHL day scoreboards: line quotes only (schedule and results come from the NHL)
+    if sport(conn) == "ncaab":   # the D-I day scoreboard carries the DraftKings block: one request per day, at most two days
+        from . import ncaab_app
+        try:
+            fetch = fetch or ncaab_app.fetch_day()
+        except ncaab_app.NcaabDataUnavailable as exc:
+            return _finish(conn, run_id, "failed", 0, {"dates": dates, "error": str(exc)})
+        results, attempts, failure = _fetch_each(dates, lambda d: ncaab_app.ingest_day(conn, d, fetch=fetch), sleep)
+    elif sport(conn) == "nhl":   # ESPN NHL day scoreboards: line quotes only (schedule and results come from the NHL)
         fetch = fetch or espn.fetch_nhl_day
         results, attempts, failure = _fetch_each(dates, lambda d: ingest.ingest_nhl_day(conn, d, fetch=fetch), sleep)
-    else:
+    elif sport(conn) in ("nba", "nfl"):
         fetch = fetch or espn.fetch_day
         results, attempts, failure = _fetch_each(dates, lambda d: ingest.ingest_day(conn, d, fetch=fetch), sleep)
+    else:
+        return _finish(conn, run_id, "failed", 0, {"error": f"no odds snapshot is defined for a {sport(conn)!r} store"})
     if failure:
         return _finish(conn, run_id, "failed", attempts, {"dates": dates, "failed_date": failure[0],
                                                           "error": failure[1], "completed": results})
@@ -478,6 +506,8 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
     it). Stale data or a missing result makes the job 'failed' so it is visible; a dry run stores no forecast."""
     # Prop lines are never collected in front of the forecasts (up to ~50 s of requests): the odds cycle does it afterwards.
     steps = {"refresh": refresh(conn, **(refresh_kw or {})), "odds": odds_snapshot(conn, **{"props": False, **(odds_kw or {})})}
+    if sport(conn) == "ncaab":
+        return _ncaab_predict_now(conn, steps, dry_run=dry_run, now=now)
     if sport(conn) == "nba":
         steps["boxscores"] = boxscores(conn, **(box_kw or {}))
         from . import availability
@@ -537,6 +567,34 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
             out["tracking"] = agreement_tracking(conn, game_ids=accepted, now=now, write=not dry_run)
         else:
             out["research"] = {"status": "disabled", "reason": "RESEARCH_SELECTION=0"}
+    return {"status": status, **out} if dry_run else _finish(conn, run_id, status, 1, out)
+
+
+def _ncaab_predict_now(conn: sqlite3.Connection, steps: dict, *, dry_run: bool, now: Optional[str]) -> dict:
+    """The NCAAB two-hour cycle: the same winner, market and canonical steps as the NBA, with none of the NBA/NHL research
+    steps (agreement, adaptive, selection, candidate pool, tracking): NCAAB has no research members, and nothing here
+    reaches the sealed agreement code. The refresh and odds steps were run by the caller."""
+    run_id = None if dry_run else _start(conn, "near_tipoff")
+    out: dict = {"steps": {k: v.get("status") for k, v in steps.items()}}
+    try:
+        out.update(near_tipoff.predict_now(conn, now=now, write=not dry_run))
+    except Exception as exc:
+        error = {"error": f"{type(exc).__name__}: {exc}", "steps": out["steps"],
+                 "coverage": {k: v for k, v in coverage.record(conn, now=now, write=not dry_run).items() if k != "rows"}}
+        return {"status": "failed", **error} if dry_run else _finish(conn, run_id, "failed", 1, error)
+    out["steps"] = {**{k: v.get("status") for k, v in steps.items()}}
+    blocked = [r for r in out["refused"] if r["reason"] in ("stale_results", "missing_result")]
+    status = "failed" if blocked else "success" if out["forecasts"] else "skipped"
+    accepted = [f["game_id"] for f in out["forecasts"]]
+    if accepted:
+        m = market_forecasts(conn, policy="near_tipoff", write=not dry_run, now=now, game_ids=accepted)
+        out["steps"]["markets"] = m.get("status")
+        if m.get("status") == "failed":
+            status = "failed"
+        out["markets"] = {k: m.get(k) for k in ("created", "already_recorded", "reason", "error") if k in m}
+    cov = coverage.record(conn, now=now, write=not dry_run)
+    out["coverage"] = {k: v for k, v in cov.items() if k != "rows"}
+    out["research"] = {"status": "not_defined", "reason": "NCAAB has no research members, selection or agreement"}
     return {"status": status, **out} if dry_run else _finish(conn, run_id, status, 1, out)
 
 
@@ -695,6 +753,8 @@ def pool_selection(conn: sqlite3.Connection, **kw) -> dict:
 def selector_decisions(conn: sqlite3.Connection, now: Optional[str] = None) -> dict:
     """The weekly selector decisions (Monday 14:00 UTC), written by the first odds cycle after that time; then the pool
     decisions for the same week (their failure never affects the core decisions)."""
+    if sport(conn) == "ncaab":
+        return {"status": "not_defined", "reason": "NCAAB has no research selection"}
     if not research_live.enabled():
         return {"status": "disabled", "reason": "RESEARCH_SELECTION=0"}
     try:
@@ -807,12 +867,18 @@ def daily(conn: sqlite3.Connection, *, force_refresh: bool = False, **refresh_kw
     out["two_hour_score"] = near_tipoff.score(conn)
     out["market_score"] = market_live.score(conn, policy="near_tipoff")
     out["forecast_policy"] = "two-hour-v1; night-before and sealed night-before shadow recording discontinued"
-    try:                     # reports newly settled results per fit and input freshness; never refits (non-fatal)
-        from . import training_monitor
-        out["training_check"] = training_monitor.status(conn)
-    except Exception as exc:
-        out["training_check"] = {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+    if sport(conn) == "ncaab":      # the training monitor tracks the NBA/NHL fitted members; NCAAB has none
+        out["training_check"] = {"status": "not_defined", "reason": "NCAAB has no fitted research members to monitor"}
+    else:
+        try:                 # reports newly settled results per fit and input freshness; never refits (non-fatal)
+            from . import training_monitor
+            out["training_check"] = training_monitor.status(conn)
+        except Exception as exc:
+            out["training_check"] = {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
     # adaptive-v1 (docs/ADAPTIVE_SYSTEM.md): due state only; the refits run as `adaptive-train` under their own lock.
+    if sport(conn) == "ncaab":      # no adaptive ensemble, research cohorts or recovery for NCAAB
+        out["adaptive_train"] = {"status": "not_defined", "reason": "NCAAB has no adaptive or research forecasts"}
+        return out
     out["adaptive_train"] = adaptive_train(conn) if research_live.enabled() else {"status": "disabled", "reason": "RESEARCH_SELECTION=0"}
     return out
 
@@ -872,7 +938,7 @@ def odds_cycle(conn: sqlite3.Connection, sport_name: str, *, force: bool = False
 
 
 # The odds cycle keeps its installed cadence inside `tick` (launchd StartInterval: NBA 900 s, NHL 1800 s).
-ODDS_CYCLE_EVERY = {"nba": timedelta(minutes=15), "nhl": timedelta(minutes=30)}
+ODDS_CYCLE_EVERY = {"nba": timedelta(minutes=15), "nhl": timedelta(minutes=30), "ncaab": timedelta(minutes=30)}
 
 
 def pending_forecasts(conn: sqlite3.Connection, now: datetime) -> list[sqlite3.Row]:
@@ -918,7 +984,7 @@ def tick(conn: sqlite3.Connection, *, now: Optional[datetime] = None, refresh_kw
     from . import freshness
     now = now or datetime.now(timezone.utc)
     name = store_sport(conn) or "nba"
-    if name not in ("nba", "nhl", "nfl"):
+    if name not in ("nba", "nhl", "nfl", "ncaab"):
         raise ValueError(f"no tick is defined for a {name!r} store")
     plan = freshness.plan(conn, now)
     out = {"sport": name, "as_of": _fmt(now), "policy": _policy(plan)}

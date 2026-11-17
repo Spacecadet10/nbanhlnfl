@@ -14,7 +14,7 @@ Mode = Literal["real", "demo"]
 GameStatus = Literal["scheduled", "in_progress", "final", "postponed", "canceled", "other"]
 SeasonType = Literal["preseason", "regular", "play_in", "postseason", "other"]
 Freshness = Literal["fresh", "stale", "missing"]
-Sport = Literal["nba", "nhl"]
+Sport = Literal["nba", "nhl", "ncaab"]
 MarketId = Literal["winner", "reg3", "spread", "total", "team_total_home", "team_total_away"]
 Settlement = Literal["win", "loss", "push", "void", "pending", "unscorable"]
 
@@ -31,7 +31,7 @@ class DataFreshness(BaseModel):
     """How current the served data is, per sport (docs/REFRESH_PLAN.md). The browser polls this cheap read and refetches
     game/forecast views only when `revision` changes. Three separate times: when the source was last fetched successfully,
     when the served copy was published (copies only), and when the latest forecast was generated (NBA/NHL only)."""
-    sport: Literal["nba", "nhl", "nfl"]
+    sport: Literal["nba", "nhl", "nfl", "ncaab"]
     as_of: str
     mode: Literal["live", "auto_snapshot", "frozen_snapshot", "demo"] = Field(description="live: the API reads the stores the "
         "jobs write. auto_snapshot: a copy republished periodically. frozen_snapshot: a one-time copy that will not update.")
@@ -207,7 +207,7 @@ class PercentageTelegramSource(BaseModel):
 
 class ForecastPercentageRecord(BaseModel):
     """Current observed live record for the exact displayed percentage, excluding the target game."""
-    sport: Literal['nba', 'nhl', 'nfl']
+    sport: Literal["nba", "nhl", "nfl", "ncaab"]
     market: MarketId
     market_title: str
     percentage: str

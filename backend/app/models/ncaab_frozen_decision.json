@@ -1,0 +1,62 @@
+{
+  "sport": "ncaab",
+  "winner_model": "college_eff",
+  "winner_calibration": [
+    0.9594431222288273,
+    0.0071671188244281725
+  ],
+  "college_elo_config": {
+    "k": 50,
+    "home_advantage": 100,
+    "carry": 0.8,
+    "mov": true
+  },
+  "college_eff_config": {
+    "eta": 0.04,
+    "carry": 0.9,
+    "w0": 4
+  },
+  "sigmas": {
+    "elo_margin": 11.639032341810998,
+    "eff_margin": 11.319247889236534,
+    "eff_total": 17.371548944377988,
+    "eff_rho": 0.02113770888985142,
+    "points_total": 17.762583342156923,
+    "points_home": 11.036668210469918,
+    "points_away": 10.878298511731172,
+    "fitted_on": "development"
+  },
+  "markets": {
+    "spread": {
+      "model": "college_eff",
+      "model_version": "ncaab-college_eff-carry=0.9-eta=0.04-w0=4"
+    },
+    "total": {
+      "model": "running_points",
+      "model_version": "ncaab-running_points"
+    },
+    "team_total_home": {
+      "model": "college_eff",
+      "model_version": "ncaab-college_eff-carry=0.9-eta=0.04-w0=4"
+    },
+    "team_total_away": {
+      "model": "college_eff",
+      "model_version": "ncaab-college_eff-carry=0.9-eta=0.04-w0=4"
+    }
+  },
+  "validation_dataset_version": "e43ced8ae7453deb",
+  "validation_seasons": [
+    2022,
+    2023,
+    2024
+  ],
+  "development_dataset_version": "5fcff154d86c45bb",
+  "selected_on": "validation",
+  "data_cutoff": "2026-11-17T12:00:00Z",
+  "feature_version": "ncaab-pregame-ids-v1+prior-day-et-cutoff+scoreboard-poss-fga-fta-v1",
+  "training_command": "cd backend && NBA_DATA_DIR=/Users/andry/nba-ncaab-scratch/model .venv/bin/python -m app.ncaab_eval validation --cutoff 2026-11-17T12:00:00Z --out-dir /Users/andry/nba-ncaab-scratch/reports/ncaab-validation",
+  "frozen_at": "2026-11-17T07:45:51Z",
+  "validation_report": "/Users/andry/nba-ncaab-scratch/reports/ncaab-validation",
+  "model_version": "ncaab-college_eff-carry=0.9-eta=0.04-w0=4+platt",
+  "sha256": "41a07f9dd6734f9ddf1be6f831d685cd2ca0afaaae963d47ab4c727a0150f7d5"
+}
