@@ -382,7 +382,8 @@ def test_context_card_is_independent_of_frozen_paper_recorder(tmp_path, monkeypa
     assert r['game_id'] == 'g1' and r['named_forecast_id'] == 1 and r['named_score'] == 3       # CLE win: H1 H2 H3, no H4 quote
     assert '<b>Recommended pick</b>\n<b>CLE win</b>' in sent[0][1]
     assert 'Context comparison' in sent[0][1] and tg.STRONGEST_PREFIX not in sent[0][1]
-    monkeypatch.undo()
+    monkeypatch.undo()                                   # undo also drops conftest's data-dir isolation: restore it, or a
+    monkeypatch.setenv('NBA_DATA_DIR', str(tmp_path / 'data'))   # live NFL activation in the real data dir adds an NFL pass
     from app import lineup, telegram_card
     monkeypatch.setattr(telegram_card, '_logo', lambda *_: None)
     monkeypatch.setattr(lineup, 'facts', lambda conn, sport, ids, at: {g: {} for g in ids})

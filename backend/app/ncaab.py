@@ -80,9 +80,10 @@ def ingest_day(conn: sqlite3.Connection, yyyymmdd: str, *, fetch: Callable[[str]
 def import_scoreboard_fetch(conn: sqlite3.Connection, raw_id: int, fetch_id: Optional[int], retrieved_at: str,
                             cache_dir: Optional[Path] = None) -> dict:
     """Imports one logged scoreboard retrieval (inside a transaction). Shared with `replay`."""
-    stats = ingest.import_raw(conn, raw_id, cache_dir=cache_dir, retrieved_at=retrieved_at,
-                              parse=espn_ncaab.parse_scoreboard, fetch_id=fetch_id)
-    games = espn_ncaab.parse_scoreboard(json.loads(raw_cache.load(conn, raw_id, cache_dir)))
+    def parse(payload):
+        return _keep_division_one(conn, espn_ncaab.parse_scoreboard(payload))
+    stats = ingest.import_raw(conn, raw_id, cache_dir=cache_dir, retrieved_at=retrieved_at, parse=parse, fetch_id=fetch_id)
+    games = parse(json.loads(raw_cache.load(conn, raw_id, cache_dir)))
     stats.update(d1_games=sum(g.both_d1 for g in games), non_d1_games=sum(not g.both_d1 for g in games), context_changed=0)
     for g in games:
         row = conn.execute("SELECT last_seen_at, last_seen_fetch_id FROM games WHERE game_id=?", (g.game_id,)).fetchone()
@@ -96,6 +97,36 @@ def import_scoreboard_fetch(conn: sqlite3.Connection, raw_id: int, fetch_id: Opt
                 ingest._upsert_stats(conn, g.game_id, team.team_id, is_home, s, raw_id, retrieved_at)
     stats["lines"] = ingest.import_lines_fetch(conn, fetch_id, "ncaab", cache_dir) if fetch_id is not None else {}
     return stats
+
+
+def _has_forecast(conn: sqlite3.Connection, game_id: str) -> bool:
+    return any(conn.execute(sql, (game_id,)).fetchone() for sql in (
+        "SELECT 1 FROM predictions WHERE game_id = ?", "SELECT 1 FROM market_forecasts WHERE game_id = ?",
+        "SELECT 1 FROM game_forecasts WHERE game_id = ? AND status = 'forecast'"))
+
+
+def _keep_division_one(conn: sqlite3.Connection, games: list) -> list:
+    """Division I status is read from one scoreboard, and a scoreboard that drops a team's conferenceId would turn a stored D-I
+    game into season_type 'other' (hiding it and its forecasts). A game stored as D-I keeps its conference ids, and so its
+    season type, when a retrieval lacks one, unless the game has no forecast and the missing team-season is known non-D-I
+    (a stored `ncaab_team_seasons` row with is_d1 = 0): then the downgrade stands."""
+    for g in games:
+        if g.both_d1:
+            continue
+        old = conn.execute("SELECT g.home_team_id, g.away_team_id, c.home_conference_id AS home, c.away_conference_id AS away "
+                           "FROM games g JOIN ncaab_game_context c ON c.game_id = g.game_id WHERE g.game_id = ? AND c.both_d1 = 1",
+                           (g.game_id,)).fetchone()
+        if old is None or (old["home_team_id"], old["away_team_id"]) != (g.home.team_id, g.away.team_id):
+            continue
+        if not _has_forecast(conn, g.game_id) and any(
+                not conf and conn.execute("SELECT 1 FROM ncaab_team_seasons WHERE season = ? AND team_id = ? AND is_d1 = 0",
+                                          (g.season, team.team_id)).fetchone()
+                for team, conf in ((g.home, g.home_conference_id), (g.away, g.away_conference_id))):
+            continue
+        g.home_conference_id = g.home_conference_id or old["home"]
+        g.away_conference_id = g.away_conference_id or old["away"]
+        g.season_type = espn_ncaab.SEASON_TYPES.get(g.season_type_id, "other")
+    return games
 
 
 def _upsert_team_season(conn: sqlite3.Connection, season: int, team_id: str, conference: Optional[str], at: str) -> None:

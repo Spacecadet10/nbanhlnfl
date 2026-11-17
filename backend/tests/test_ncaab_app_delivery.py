@@ -168,7 +168,7 @@ def test_ncaab_rundown_prices_are_requested_only_on_demand_and_within_a_daily_bu
     assert not any("/sports/5/" in u for u in calls)
     calls.clear()
     assert r.fetch(NOW_DT, opener=opener, pause=lambda _: None, extra=("ncaab",))["status"] == "ok"
-    assert sum("/sports/5/" in u for u in calls) == 1 and len(calls) == 7                      # today only, one request a run
+    assert sum("/sports/5/" in u for u in calls) == 2 and len(calls) == 8                      # both UTC dates, two requests a run
     for _ in range(6):
         r.fetch(NOW_DT, opener=opener, pause=lambda _: None, extra=("ncaab",))
     assert sum("/sports/5/" in u for u in calls) == r.EXTRA_DAY_REQUESTS["ncaab"]               # its own daily allowance, then none

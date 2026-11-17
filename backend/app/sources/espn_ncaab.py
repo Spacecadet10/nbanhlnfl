@@ -36,6 +36,11 @@ GROUP_DIVISION_I = "50"
 # Tournament, NIT and the other postseason events). Anything else is 'other'.
 SEASON_TYPES = {1: "preseason", 2: "regular", 3: "postseason"}
 
+# Statuses the shared ESPN map lacks. Settlement (app/markets.py) voids only postponed and canceled games, so a forfeit or an
+# uncontested game (no game was played) is 'canceled' and a suspended one (not finished, may be completed later) is
+# 'postponed'; a later STATUS_FINAL from ESPN updates the game normally (docs/NCAAB_PLAN.md "Markets and settlement").
+STATUS = {**espn.STATUS, "STATUS_FORFEIT": "canceled", "STATUS_UNCONTESTED": "canceled", "STATUS_SUSPENDED": "postponed"}
+
 
 def day_request(yyyymmdd: str) -> tuple[str, dict]:
     if len(yyyymmdd) != 8 or not yyyymmdd.isdigit():
@@ -109,7 +114,7 @@ def parse_scoreboard(payload: dict) -> list[NcaabGame]:
         if not all(str(c["team"].get("id", "")).isdigit() for c in sides.values()):
             continue                       # a placeholder opponent ('TBD', ids -1/-2 in March 2020): not a team, not a game
         source_status = comp["status"]["type"]["name"]
-        status = espn.STATUS.get(source_status, "other")
+        status = STATUS.get(source_status, "other")
         scores = {k: _score(c) for k, c in sides.items()}
         if status == "final" and None in scores.values():
             status = "other"

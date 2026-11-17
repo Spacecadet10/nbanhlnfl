@@ -490,6 +490,12 @@ def run_once(bot, settings, conn, *, now=None):
                 from .nfl_live import activation
                 if not activation():
                     continue
+            if sport == 'ncaab':     # like NFL's activation: a valid sealed decision and a store, else a visible refusal, never a card
+                from . import ncaab_app
+                reason = ncaab_app.card_issue()
+                if reason:
+                    result['sports'][sport] = {'status': 'inactive', 'reason': reason}
+                    continue
             source = db.connect_readonly(sport)
             try:
                 source.execute('BEGIN')  # one consistent read snapshot; never a forecast job lock

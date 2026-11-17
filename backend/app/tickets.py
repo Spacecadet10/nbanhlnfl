@@ -48,7 +48,7 @@ def sha(raw):
 
 
 def snapshot():
-    from app import db, freshness
+    from app import config, db, freshness
     from app.providers.real import RealProvider
     from app.nfl_live import Views, activation
     now = datetime.now(timezone.utc)
@@ -68,6 +68,8 @@ def snapshot():
             if sport == 'nfl' and not activation():
                 result['sports'][sport] = nfl_inactive_detail(stamp)
                 continue
+            if sport == 'ncaab' and not config.db_path('ncaab').is_file():
+                continue     # no NCAAB store here (not deployed): a quiet skip, never a health alert (as for soccer)
             conn = db.connect_readonly(sport)
             try:
                 conn.execute('BEGIN')
