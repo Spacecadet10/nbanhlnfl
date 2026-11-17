@@ -28,6 +28,23 @@ def parse_american(text: Optional[str]) -> Optional[int]:
     return value if value >= 100 or value <= -100 else None
 
 
+def provider_key(name: Optional[str]) -> Optional[str]:
+    """One key per sportsbook whatever the source's spelling: ESPN sent 'Draft Kings' instead of 'DraftKings' from
+    2026-11-16T20:41Z. Only spaces and case are ignored, so two different books never share a key. Saved rows keep the raw
+    name; lookups compare keys (SQL: same_provider)."""
+    return None if name is None else "".join(name.split()).casefold()
+
+
+def same_provider(column: str = "provider") -> str:
+    """SQL condition: `column` names the same sportsbook as the bound parameter (see provider_key)."""
+    return f"lower(replace({column}, ' ', '')) = lower(replace(?, ' ', ''))"
+
+
+def same_provider_columns(a: str, b: str) -> str:
+    """SQL condition: two provider columns name the same sportsbook (see provider_key)."""
+    return f"lower(replace({a}, ' ', '')) = lower(replace({b}, ' ', ''))"
+
+
 def winner_quote(conn, sport: str, game_id: str, at: str, *, earliest: bool = False, provider: Optional[str] = None):
     """The moneyline a winner forecast made at `at` could see: the latest retrieved no later than `at` (NBA: odds_quotes;
     other sports: market_quotes, market 'winner'), as {quote_id, provider, price_label, retrieved_at, p_home, price_home,
@@ -35,7 +52,7 @@ def winner_quote(conn, sport: str, game_id: str, at: str, *, earliest: bool = Fa
     price of that retrieval first. `provider`: that sportsbook's quotes only (None: any)."""
     order = ("retrieved_at, price_label = 'open' DESC, quote_id" if earliest else
              "retrieved_at DESC, price_label = 'current' DESC, quote_id DESC")
-    only = " AND provider = ?" if provider is not None else ""
+    only = " AND " + same_provider() if provider is not None else ""
     q = conn.execute(
         "SELECT quote_id, provider, price_label, retrieved_at, home_prob_devig AS p_home, home_american AS price_home, "
         f"away_american AS price_away FROM odds_quotes WHERE game_id=? AND retrieved_at <= ?{only} ORDER BY {order} LIMIT 1"

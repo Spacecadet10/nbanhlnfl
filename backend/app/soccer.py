@@ -163,18 +163,19 @@ def record_quotes(conn: sqlite3.Connection, quotes: list, listed: set, raw_id: i
     and a withdrawn row for a key a match listed before but no longer lists in this retrieval. `listed`: the scheduled
     matches this response contains (only they can withdraw a price). Only matches still scheduled in the store and
     retrieved before kickoff; a retrieval not newer than the latest stored row of the match changes nothing."""
+    from .odds import provider_key, same_provider_columns
     by_match: dict = defaultdict(dict)
-    for q in quotes:
-        by_match[q.match_id][(q.provider, q.market, q.side, q.price_kind)] = q
+    for q in quotes:      # keyed by sportsbook, not by its spelling (odds.provider_key): a new spelling is no withdrawal
+        by_match[q.match_id][(provider_key(q.provider), q.market, q.side, q.price_kind)] = q
     n = 0
     for mid in sorted(listed | set(by_match)):
         m = conn.execute("SELECT status, kickoff_at FROM soccer_matches WHERE match_id = ?", (mid,)).fetchone()
         if m is None or m["status"] != "scheduled" or retrieved_at >= m["kickoff_at"]:
             continue
-        latest = {(r["provider"], r["market"], r["side"], r["price_kind"]): r for r in conn.execute(
+        latest = {(provider_key(r["provider"]), r["market"], r["side"], r["price_kind"]): r for r in conn.execute(
             "SELECT q.* FROM soccer_odds_quotes q WHERE q.match_id = ? AND q.quote_id = (SELECT MAX(quote_id) FROM "
-            "soccer_odds_quotes p WHERE p.match_id = q.match_id AND p.provider = q.provider AND p.market = q.market "
-            "AND p.side = q.side AND p.price_kind = q.price_kind)", (mid,))}
+            f"soccer_odds_quotes p WHERE p.match_id = q.match_id AND {same_provider_columns('p.provider', 'q.provider')} "
+            "AND p.market = q.market AND p.side = q.side AND p.price_kind = q.price_kind)", (mid,))}
         if any(r["retrieved_at"] >= retrieved_at for r in latest.values()):
             continue                                        # not newer than what is stored: replay or late import
         now = by_match.get(mid, {})
@@ -185,13 +186,13 @@ def record_quotes(conn: sqlite3.Connection, quotes: list, listed: set, raw_id: i
                     continue
                 conn.execute("INSERT INTO soccer_odds_quotes (match_id, provider, market, side, price_kind, offered, line, "
                              "american, decimal_odds, retrieved_at, raw_id, parser_version) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)",
-                             (mid, *key, q.line, q.american, espn.american_to_decimal(q.american), retrieved_at, raw_id,
-                              espn.SOCCER_ODDS_PARSER))
+                             (mid, q.provider, *key[1:], q.line, q.american, espn.american_to_decimal(q.american),
+                              retrieved_at, raw_id, espn.SOCCER_ODDS_PARSER))
                 n += 1
             elif last is not None and last["offered"]:
                 conn.execute("INSERT INTO soccer_odds_quotes (match_id, provider, market, side, price_kind, offered, line, "
                              "american, decimal_odds, retrieved_at, raw_id, parser_version) VALUES (?, ?, ?, ?, ?, 0, NULL, "
-                             "NULL, NULL, ?, ?, ?)", (mid, *key, retrieved_at, raw_id, espn.SOCCER_ODDS_PARSER))
+                             "NULL, NULL, ?, ?, ?)", (mid, last["provider"], *key[1:], retrieved_at, raw_id, espn.SOCCER_ODDS_PARSER))
                 n += 1
     return n
 

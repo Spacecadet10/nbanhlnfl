@@ -24,7 +24,7 @@ import sqlite3
 from pathlib import Path
 from typing import Callable, Optional
 
-from . import config
+from . import config, odds
 
 VERSION = "scorecard-v1"
 SPORTS = ("nba", "nhl", "nfl", "soccer")
@@ -160,7 +160,8 @@ def _first_quote(conn, sport: str, game_id: str, market: str, at: str, *, provid
                                        "devig": (q["p_home"], None, 1 - q["p_home"])}
     if not _has(conn, "market_quotes"):
         return None
-    only = (" AND provider=?" if provider is not None else "") + (" AND abs(line - ?) < 1e-9" if line is not None else "")
+    only = (" AND " + odds.same_provider() if provider is not None else "") + \
+        (" AND abs(line - ?) < 1e-9" if line is not None else "")
     args = (game_id, market, at) + ((provider,) if provider is not None else ()) + ((line,) if line is not None else ())
     q = conn.execute(f"SELECT * FROM market_quotes WHERE game_id=? AND market=? AND retrieved_at<=?{only} "
                      "ORDER BY retrieved_at, price_label='open' DESC, quote_id LIMIT 1", args).fetchone()
@@ -351,7 +352,7 @@ def _soccer_prices(conn, match_id: str, at: str, market: str, sides: tuple, *, e
     where = "match_id=? AND market=? AND offered=1 AND retrieved_at<=?"
     args = [match_id, market, at]
     if provider is not None:
-        where += " AND provider=?"
+        where += " AND " + odds.same_provider()
         args.append(provider)
     if line is not None and not any_line:
         where += " AND abs(line - ?) < 1e-9"
@@ -359,7 +360,8 @@ def _soccer_prices(conn, match_id: str, at: str, market: str, sides: tuple, *, e
     for prov, ts, kind, ln in conn.execute(
             f"SELECT provider, retrieved_at, price_kind, line FROM soccer_odds_quotes WHERE {where} "
             f"GROUP BY provider, retrieved_at, price_kind, line HAVING COUNT(DISTINCT side)={len(sides)} "
-            f"ORDER BY retrieved_at {order}, price_kind = '{'open' if earliest else 'current'}' DESC, provider='DraftKings' DESC",
+            f"ORDER BY retrieved_at {order}, price_kind = '{'open' if earliest else 'current'}' DESC, "
+            "lower(replace(provider, ' ', ''))='draftkings' DESC",
             args):
         rows = {r["side"]: r for r in conn.execute(
             "SELECT * FROM soccer_odds_quotes WHERE match_id=? AND market=? AND offered=1 AND provider=? AND retrieved_at=? "
@@ -373,11 +375,22 @@ def _soccer_prices(conn, match_id: str, at: str, market: str, sides: tuple, *, e
     return None
 
 
-def _soccer_book_open(conn, match_id: str, T: str, market: str, sides: tuple, side: str, line: Optional[float]) -> dict:
-    """Sportsbook, opening and move columns of one soccer pick (review M2: the move only at the pick's own line, same book)."""
+def _soccer_book_open(conn, match_id: str, T: str, market: str, sides: tuple, side: str, line: Optional[float],
+                      kickoff_at: Optional[str] = None) -> dict:
+    """Sportsbook, opening and move columns of one soccer pick (review M2: the move only at the pick's own line, same book).
+    1X2 (owner request Nov 17): the price the card shows, soccer_book.latest_1x2 (latest offered row of each side as of T,
+    before kickoff); its per-side retrieval times go to `book_side_retrieved_at`. Before this, the scorecard took the last
+    retrieval holding all three sides, stale against the card when only some sides had moved."""
+    from . import soccer_book
     out = {}
     try:
-        q = _soccer_prices(conn, match_id, T, market, sides, earliest=False, line=line)
+        if market == "1x2":      # no kickoff time: no quote, never the older all-sides rule (review LOW, Nov 17)
+            q = soccer_book.latest_1x2(conn, match_id, T, kickoff_at) if kickoff_at else None
+            if q is not None:
+                q = dict(q, label="current", line=None)
+                out["book_side_retrieved_at"] = q["side_retrieved_at"]
+        else:
+            q = _soccer_prices(conn, match_id, T, market, sides, earliest=False, line=line)
         o = q and _soccer_prices(conn, match_id, T, market, sides, earliest=True, provider=q["provider"], any_line=True)
         base = q and _soccer_prices(conn, match_id, T, market, sides, earliest=True, provider=q["provider"], line=line)
         err = None
@@ -482,14 +495,16 @@ def soccer_picture(conn, row) -> dict:
            "season_type": row["competition_id"], "market": row["market"], "side": side, "pick_label": label, "line": None,
            "line_source": "none", "displayed_pct": displayed_percentage(p[i]), "confidence": p[i], "p_json": json.dumps(p),
            "source": "soccer_live", "model_version": row["model"], "generated_at": T, "tipoff_at": m["kickoff_at"]}
-    out.update(_soccer_book_open(conn, row["match_id"], T, "1x2", SOCCER_OUTCOMES, side, None))
+    out.update(_soccer_book_open(conn, row["match_id"], T, "1x2", SOCCER_OUTCOMES, side, None, m["kickoff_at"]))
+    sides_at = out.pop("book_side_retrieved_at", None)
     try:
         others = _soccer_card(conn, row["match_id"], T, own=("soccer_live_forecasts", row["forecast_id"], row["market"], side, None))
         out.update(card_state="present", card_note=None, card_others=json.dumps(others))
     except Exception as exc:
         out.update(card_state="missing", card_note=f"error: {type(exc).__name__}: {exc}"[:300], card_others="[]")
     out.update(_SOCCER_FIXED, detail=json.dumps({"cutoff_at": row["cutoff_at"], "inputs_through": row["inputs_through"],
-                                                 "source_retrieved_at": row["source_retrieved_at"]}))
+                                                 "source_retrieved_at": row["source_retrieved_at"],
+                                                 **({"book_side_retrieved_at": sides_at} if sides_at else {})}))
     return out
 
 

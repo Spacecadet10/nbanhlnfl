@@ -515,3 +515,24 @@ def test_the_1x2_margin_is_removed_when_only_some_sides_changed_price(live):
     assert implied_lines.match_result_probabilities(sml.quotes(live, mid, t3)) is None
     assert soccer_book.one_x_two(live, {**f, "generated_at": t4})["status"] == "no_quote"
     # (one sportsbook only and withdrawn rows: also tests/test_bet365_dc.py)
+
+
+def test_a_new_spelling_of_the_same_sportsbook_is_not_a_withdrawal(live):
+    # Review HIGH, Nov 17: ESPN sent 'Draft Kings' for 'DraftKings' (NBA/NHL/NFL, Nov 16). The same prices under the new
+    # spelling are no change; a changed price is stored under the name received; no side is ever withdrawn by a spelling.
+    from app import soccer_book
+    from app.sources.espn import SoccerQuote
+    mid = live.execute("SELECT match_id FROM soccer_matches WHERE status='scheduled' ORDER BY kickoff_at LIMIT 1").fetchone()[0]
+    ko = live.execute("SELECT kickoff_at FROM soccer_matches WHERE match_id=?", (mid,)).fetchone()[0]
+    raw = live.execute("SELECT MAX(raw_id) FROM raw_responses").fetchone()[0]
+    t1, t2, t3 = ((NOW + timedelta(minutes=m)).strftime("%Y-%m-%dT%H:%M:%SZ") for m in (1, 2, 3))
+    old = [SoccerQuote(mid, "DraftKings", "1x2", s, "current", None, a) for s, a in (("home", -110), ("draw", 260), ("away", 280))]
+    new = [SoccerQuote(mid, "Draft Kings", "1x2", s, "current", None, a) for s, a in (("home", -110), ("draw", 260), ("away", 280))]
+    assert soccer.record_quotes(live, old, {mid}, raw, t1) == 3
+    assert soccer.record_quotes(live, new, {mid}, raw, t2) == 0               # same book, same prices: nothing new
+    moved = [SoccerQuote(mid, "Draft Kings", "1x2", "home", "current", None, -125)] + new[1:]
+    assert soccer.record_quotes(live, moved, {mid}, raw, t3) == 1
+    rows = live.execute("SELECT provider, side, offered FROM soccer_odds_quotes WHERE match_id=? AND retrieved_at=?", (mid, t3)).fetchall()
+    assert [tuple(r) for r in rows] == [("Draft Kings", "home", 1)]           # raw name kept, no withdrawal row
+    f = {"match_id": mid, "kickoff_at": ko, "generated_at": t3, "most_likely": "home", "probabilities": {"home": .6, "draw": .2, "away": .2}}
+    assert soccer_book.one_x_two(live, f)["price"] == "-125/+260/+280"
