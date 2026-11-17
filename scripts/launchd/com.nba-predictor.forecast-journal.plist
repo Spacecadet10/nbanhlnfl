@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>NBA_DATA_DIR</key>
+		<string>/Users/andry/Desktop/nbanhlnfl/data</string>
+		<key>PYTHONPATH</key>
+		<string>/Users/andry/nba-predictor-backup-runner/backend</string>
+		<key>PYTHONDONTWRITEBYTECODE</key>
+		<string>1</string>
+	</dict>
+	<key>Label</key>
+	<string>com.nba-predictor.forecast-journal</string>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/andry/nba-predictor-delivery/backend/.venv/bin/python</string>
+		<string>-m</string>
+		<string>app.journal</string>
+		<string>export</string>
+		<string>--journal</string>
+		<string>/Users/andry/nba-predictor-backups/journal</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StartInterval</key>
+	<integer>900</integer>
+	<key>StandardErrorPath</key>
+	<string>/Users/andry/nba-predictor-backups/journal.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/andry/nba-predictor-backups/journal.log</string>
+	<key>WorkingDirectory</key>
+	<string>/Users/andry/nba-predictor-backup-runner/backend</string>
+</dict>
+</plist>

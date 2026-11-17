@@ -98,6 +98,37 @@ def run(data_dir: Path, dest: Path, *, stamp: Optional[str] = None, sports: Opti
     return {"status": "ok", "dir": str(out_dir), "skipped": skipped, **manifest}
 
 
+def mirror(backup_dir: Path, mirror_root: Path) -> dict:
+    """Copies one backup folder to `mirror_root/<same name>` (a second disk, a synced cloud folder), never overwriting.
+    Every store file is checked against the manifest before it is copied and again after, so a damaged backup is never
+    mirrored and a damaged copy is reported. Other files in the folder (a journal, a ledger copy) are copied as they are."""
+    src = Path(backup_dir)
+    try:
+        manifest = json.loads((src / "manifest.json").read_text())
+        stores = manifest["stores"]
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise BackupError(f"Unreadable backup manifest in {src}: {type(exc).__name__}: {exc}") from None
+    for m in stores.values():
+        if sha256(src / m["file"]) != m["sha256"]:
+            raise BackupError(f"{src / m['file']} does not match its manifest; not mirrored")
+    if not Path(mirror_root).is_dir():
+        raise BackupError(f"Mirror folder {mirror_root} does not exist (disk unplugged? cloud folder missing?); "
+                          "it is not created here, so a mirror never silently lands on the same disk")
+    out = Path(mirror_root) / src.name
+    if os.path.lexists(out):
+        raise BackupError(f"Mirror destination {out} exists; not overwritten")
+    tmp = Path(mirror_root) / f".{src.name}.partial"
+    if os.path.lexists(tmp):
+        raise BackupError(f"{tmp} is left from an interrupted mirror; remove it by hand first")
+    import shutil
+    shutil.copytree(src, tmp)
+    for m in stores.values():
+        if sha256(tmp / m["file"]) != m["sha256"]:
+            raise BackupError(f"The mirrored {m['file']} in {tmp} does not match the manifest; left there for inspection")
+    tmp.rename(out)
+    return {"status": "ok", "dir": str(out), "stores": sorted(stores)}
+
+
 def restore(backup_dir: Path, data_dir: Path, *, sports: list) -> dict:
     """Puts the backed-up store of each sport back in `data_dir`, under the store's job lock, only if the manifest names
     that sport's own store file, the file matches the manifest and its identity is that sport (a data-only store, always
