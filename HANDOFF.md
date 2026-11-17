@@ -1,3 +1,20 @@
+## NCAAB fifth sport — in progress (branch `ncaab`, NOT released) — Claude (lead), Nov 17, 2026
+- Contract + preregistered eval plan: docs/NCAAB_PLAN.md (4d9ff50; amendment: scoreboard possessions FGA+0.475·FTA).
+- Merged ncaab-data (ESPN groups=50 collectors, 0042, backfill 2013–2027: 85,446 games, 78,654 D-I, rerun 0 dup/0 changed) and
+  ncaab-app (NCAAB in SPORTS, explicit branches, ncaab_markets runtime specs, jobs/Telegram/tickets/scorecard/frontend, plists
+  not installed) → f402f6a. 0042/0043 are NCAAB-store-only: copies of live nba/nhl/nfl/soccer stores migrate with [] and
+  identical schema/row counts. Lead fixes at merge: NCAAB test stores no longer reach the network; conference names from
+  app/reference/ncaab_conferences.json (ESPN core groups, 33 ids).
+- Checks: `cd backend && .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_ncaab_*.py tests/test_live.py
+  tests/test_freshness.py tests/test_storage.py tests/test_backup_restore.py tests/test_multisport.py
+  tests/test_nfl_activation_compat.py tests/test_api.py tests/test_telegram.py tests/test_tickets.py tests/test_scorecard.py
+  tests/test_near_tipoff.py tests/test_journal.py tests/test_release_guard.py` → 567 passed; check_project passed.
+- Running: box-score summary backfill into $HOME/nba-ncaab-scratch/data (log boxes-full.log; ~74k games); model agent on
+  branch ncaab-model against the frozen snapshot $HOME/nba-ncaab-scratch/model.
+- Known gaps: no free historical sportsbook odds 2013–2025 (after-game consensus lines only, labelled); TheRundown NCAAB
+  team totals unverified; autoresearch app_identity changes with any new app/*.py (not a forecast model id).
+- Next: merge model, independent review, browser checks, release to delivery/live with owner-visible evidence.
+
 ## Released: data-quality fixes 546acba to delivery — Claude, Nov 17, 2026 04:42Z
 - Delivery (~/nba-predictor-delivery, detached): 853be06 → 8e7d35a (cherry-pick of 546acba; HANDOFF.md kept at delivery's version; tickets.quote_check docstring conflict kept at delivery's wording). Trial in a scratch clone first: 503 focused tests passed with the delivery venv (incl. test_quote_quality, scorecard, telegram, soccer*, tickets, bet365_dc, nfl_activation_compat, agreement_identity, api, best_pick_record). Switched by detached checkout (no dirty window); `launchctl kickstart -k` api-delivery (8101). Web unchanged (no frontend change).
 - Verified on the running app: API 200 (canonical, NFL with date); web 200; NFL activation definition b6074877a7e7ccfe; scorecard 04:45:12Z status ok (no release-guard refusal); Telegram sender 04:44/04:45Z ok, 2 soccer cards already sent or recorded, 0 deliveries since the switch (no resend). Soccer card prices on :8101 equal the corrected export (uefa.nations 401861182 0.7804, 401861184 0.8447, 401861185 0.5157, 401861186 0.5207).
