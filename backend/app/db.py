@@ -8,7 +8,13 @@ from . import config
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 # Migrations that rebuild a table other tables reference: run with foreign keys off, every reference checked before commit.
-PARENT_REBUILDS = frozenset({"0033_nfl_market_quotes.sql", "0035_result_integrity.sql", "0039_soccer_international.sql"})
+PARENT_REBUILDS = frozenset({"0033_nfl_market_quotes.sql", "0035_result_integrity.sql", "0039_soccer_international.sql",
+                             "0042_ncaab.sql"})
+# Migrations that belong to one sport's store only: every other store skips them (never applied there, so those stores'
+# schema, rows and release schema number do not change).
+SPORT_ONLY_MIGRATIONS = {"0041_soccer_pregame_window.sql": "soccer", "0042_ncaab.sql": "ncaab"}
+# A store without an identity yet (the first migration runs before it is claimed) is recognised by its file name.
+STORE_FILE_SPORTS = {"soccer.sqlite": "soccer", "ncaab.sqlite": "ncaab"}
 
 
 def utc_now() -> str:
@@ -102,12 +108,12 @@ class store_lock:
 
 def migration_paths(sport: Optional[str] = None):
     paths = sorted(MIGRATIONS_DIR.glob("[0-9][0-9][0-9][0-9]_*.sql"))
-    return [p for p in paths if sport == "soccer" or p.name != "0041_soccer_pregame_window.sql"]
+    return [p for p in paths if SPORT_ONLY_MIGRATIONS.get(p.name, sport) == sport]
 
 
 def _migration_sport(conn: sqlite3.Connection) -> Optional[str]:
     main = next((row[2] for row in conn.execute("PRAGMA database_list") if row[1] == "main"), "")
-    return store_sport(conn) or ("soccer" if Path(main).name == "soccer.sqlite" else None)
+    return store_sport(conn) or STORE_FILE_SPORTS.get(Path(main).name)
 
 
 def migrate(conn: sqlite3.Connection, upto: Optional[int] = None, *, explicit: bool = False) -> list[str]:

@@ -216,6 +216,18 @@ def main(argv=None) -> int:
     nfl_p.add_argument("--from", dest="start", help="ingest: first month YYYYMM")
     nfl_p.add_argument("--to", dest="end", help="ingest: last month YYYYMM")
     nfl_p.add_argument("--sleep", type=float, default=1.0, help="ingest: seconds between requests")
+    nc_p = sub.add_parser("ncaab", help="NCAA men's Division I basketball data-only store (app/ncaab.py): migrate, ingest "
+                                        "ESPN day scoreboards, teams (the Division I list), boxes (game summaries), backfill, "
+                                        "replay or coverage. Ignores --sport; always opens the NCAAB store.")
+    nc_p.add_argument("action", choices=("migrate", "ingest", "teams", "boxes", "backfill", "replay", "coverage"))
+    nc_p.add_argument("--from", dest="start", help="ingest: first day YYYYMMDD; backfill: first season (ending year)")
+    nc_p.add_argument("--to", dest="end", help="ingest: last day YYYYMMDD; backfill: last season (ending year)")
+    nc_p.add_argument("--sleep", type=float, default=1.0, help="seconds between requests (default 1)")
+    nc_p.add_argument("--season", type=int, help="boxes: only this season (ending year)")
+    nc_p.add_argument("--limit", type=int, help="boxes: at most this many summary requests in this run")
+    nc_p.add_argument("--oldest-first", action="store_true", help="boxes: oldest games first (default newest first)")
+    nc_p.add_argument("--with-boxes", action="store_true", help="backfill: fetch the pending game summaries after the days")
+    nc_p.add_argument("--no-resume", action="store_true", help="ingest/backfill: fetch days again even if already fetched")
     ni = sub.add_parser("nhl-player-inputs", help="Cache NHL historical injuries and/or player boxes; no training or store writes")
     ni.add_argument("--from-season", type=int, required=True)
     ni.add_argument("--to-season", type=int, required=True)
@@ -470,6 +482,8 @@ def main(argv=None) -> int:
         return _nfl(args, p)
     if args.cmd == "soccer":
         return _soccer(args, p)
+    if args.cmd == "ncaab":
+        return _ncaab(args, p)
     if args.cmd == "preview-publish":
         from pathlib import Path as _P
         from . import preview_publish
@@ -884,6 +898,70 @@ def _nfl(args, p) -> int:
             print(json.dumps(stats))
         print(json.dumps({"status": "failed" if failed else "ok", "failed_months": failed}))
         return 1 if failed else 0
+
+
+def _ncaab(args, p) -> int:
+    """NCAAB data-only commands on the NCAAB store, under its own job lock. Nothing here touches another sport's store."""
+    from datetime import datetime as _dt, timedelta as _td
+    from . import ncaab
+    if args.action == "coverage":
+        try:
+            conn = db.connect_readonly("ncaab")
+        except FileNotFoundError as exc:
+            p.error(f"{exc}; run `ncaab migrate` and `ncaab backfill` first")
+        print(json.dumps(ncaab.coverage(conn), indent=1))
+        return 0
+    days = ()
+    if args.action == "ingest":
+        try:
+            first, last = (_dt.strptime(v, "%Y%m%d") for v in (args.start or "", args.end or ""))
+        except ValueError:
+            p.error("ncaab ingest needs --from YYYYMMDD --to YYYYMMDD (from <= to)")
+        if first > last:
+            p.error("ncaab ingest needs --from YYYYMMDD --to YYYYMMDD (from <= to)")
+        days = [(first + _td(days=i)).strftime("%Y%m%d") for i in range((last - first).days + 1)]
+    seasons = ()
+    if args.action == "backfill":
+        if not (args.start and args.end and args.start.isdigit() and args.end.isdigit() and 2002 <= int(args.start) <= int(args.end)):
+            p.error("ncaab backfill needs --from SEASON --to SEASON (ending years, from <= to)")
+        seasons = range(int(args.start), int(args.end) + 1)
+    if _refused("ncaab", migrate=args.action == "migrate"):
+        return 1
+    with db.store_lock("ncaab", wait_seconds=LOCK_WAIT_SECONDS) as held:
+        if not held:
+            print(json.dumps({"status": "failed", "reason": "another job is running on the ncaab store"}))
+            return 1
+        conn = db.connect(sport="ncaab")
+        applied = db.migrate(conn, explicit=args.action == "migrate")
+        db.claim_store(conn, "ncaab")
+        if args.action == "migrate":
+            print(json.dumps({"db": str(config.db_path("ncaab")), "sport": "ncaab", "applied": applied}))
+            return 0
+        log = lambda m: print(m, flush=True)
+        if args.action == "replay":
+            print(json.dumps(ncaab.replay(conn)))
+            return 0
+        if args.action == "teams":
+            print(json.dumps(ncaab.ingest_teams(conn)))
+            return 0
+        if args.action == "ingest":
+            out = ncaab.ingest_range(conn, days, sleep=args.sleep, resume=not args.no_resume, log=log)
+        elif args.action == "backfill":
+            out = ncaab.backfill(conn, seasons, sleep=args.sleep, resume=not args.no_resume, log=log)
+            if args.with_boxes:
+                out["boxes"] = ncaab.fetch_boxes(conn, pause=args.sleep, newest_first=not args.oldest_first, log=log)
+        else:
+            out = ncaab.fetch_boxes(conn, season=args.season, limit=args.limit, pause=args.sleep,
+                                    newest_first=not args.oldest_first, log=log)
+        print(json.dumps({"status": "failed" if _ncaab_failed(out) else "ok", **({"result": out} if args.action != "backfill" else {"seasons": out})}))
+        return 1 if _ncaab_failed(out) else 0
+
+
+def _ncaab_failed(out: dict) -> bool:
+    """Any day that could not be fetched, or any game summary that failed, leaves the run 'failed' (the rerun resumes)."""
+    if "failed_days" in out or "failed" in out:
+        return bool(out.get("failed_days")) or bool(out.get("failed"))
+    return any(_ncaab_failed(v) for v in out.values() if isinstance(v, dict))
 
 
 def soccer_competitions() -> tuple[str, ...]:

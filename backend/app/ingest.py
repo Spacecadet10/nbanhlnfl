@@ -636,8 +636,8 @@ def _name_key(name: str) -> str:
 def _match_game(conn: sqlite3.Connection, sport: str, q: espn.LineQuote) -> Optional[str]:
     """NBA: ESPN event ids are the store's ids. NHL: the game with the same start time (±3 h) and the same home and away
     team names; ambiguous or missing matches return None (counted, never guessed)."""
-    if sport in ("nba", "nfl"):
-        gid = f"{'espn' if sport == 'nba' else 'nfl'}:{q.event_id}"
+    if sport in ("nba", "nfl", "ncaab"):
+        gid = f"{'espn' if sport == 'nba' else sport}:{q.event_id}"
         return gid if conn.execute("SELECT 1 FROM games WHERE game_id=?", (gid,)).fetchone() else None
     tip = datetime.strptime(q.tipoff_at, "%Y-%m-%dT%H:%M:%SZ")
     lo, hi = (_fmt((tip - timedelta(hours=3)).replace(tzinfo=timezone.utc)),
