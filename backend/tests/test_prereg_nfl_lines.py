@@ -67,6 +67,8 @@ def test_constants_and_document_checks(tmp_path, monkeypatch):
     assert pl.PREREG_SHA256 == "5ea6fef126ca9d4b8555f689d255a590f08261aac758a0e11101294d419e6e6c"
     assert pl.POLICY_SHA256 == "9503bca10a1120b3fd687f62105fd84467ea7ebf33269c79f3ebf5e15841cede"
     assert pl.T0 == "2026-11-18T14:25:37Z" and pl.N_MIN == 600 and pl.DEADLINE == "2029-02-28"
+    assert pl.ADDENDA_SHA256 == {"addendum-2026-11-18-nfl-evaluator-clarifications.md":
+                                 "5961a03c7e0bb69bb51cccabb8e3c6e946c01da2c0a762f3e963902b4ccfcec2"}
     bad = tmp_path / "p.json"
     bad.write_bytes(b"{}")
     monkeypatch.setattr(pl, "POLICY_PATH", bad)
@@ -205,7 +207,7 @@ def test_below_600_only_counts_and_no_metric_values():
     us = calibrated_units(570, weeks=30)
     r = pl.look_market(us, "spread", NOW)
     assert r["status"] == "insufficient evidence (n of 600)" and r["n_decided_bookmaker_line"] == 570
-    assert set(r) <= {"status", "n_decided_bookmaker_line", "n_required", "market"}
+    assert set(r) <= {"status", "n_decided_bookmaker_line", "n_required", "market", "coverage"}
 
 
 def test_look_at_exactly_600_hand_values():
@@ -377,11 +379,88 @@ def test_run_refuses_live_folder_and_writes_outside(tmp_path):
         pl.run(data, data / "inside", now=NOW)
 
 
-def test_single_look_is_stored_and_not_recomputed(tmp_path, monkeypatch):
-    out = tmp_path / "o"
-    out.mkdir()
+def test_single_look_is_keyed_to_document_and_market_not_to_the_report_folder(tmp_path, monkeypatch):
+    data = tmp_path / "copy"
+    make_store(data).close()
+    looks = tmp_path / "looks"
+    monkeypatch.setattr(pl, "look_market", lambda units, market, now, store=None: {"market": market, "status": "look", "n": 600, "stamp": str(now)})
+    first = pl.run(data, tmp_path / "out1", now=NOW, looks_dir=looks)
+    monkeypatch.setattr(pl, "look_market", lambda *a, **k: pytest.fail("a second look must not be computed"))
+    again = pl.run(data, tmp_path / "out2", now=datetime(2026, 12, 11, tzinfo=timezone.utc), looks_dir=looks)     # another --out folder
+    assert again["markets"] == first["markets"] and first["markets"]["spread"]["status"] == "look"
+
+
+def test_games_after_the_deadline_never_count_toward_600():
     us = calibrated_units(600, weeks=30)
-    first = pl.look_once(out, "spread", lambda: pl.look_market(us, "spread", NOW))
-    assert first["status"] == "look"
-    again = pl.look_once(out, "spread", lambda: pytest.fail("a second look must not be computed"))
-    assert again == first
+    for u in us[-5:]:
+        u["tipoff_at"] = "2029-03-01T18:00:00Z"
+    r = pl.look_market(us, "spread", NOW)
+    assert r["status"] == "insufficient evidence (n of 600)" and r["n_decided_bookmaker_line"] == 595
+    edge = calibrated_units(600, weeks=30)
+    edge[-1]["tipoff_at"] = "2029-03-01T03:00:00Z"            # 22:00 Eastern on 2029-02-28: still on the deadline day
+    assert pl.look_market(edge, "spread", NOW)["status"] == "look"
+
+
+def test_challenger_pairs_after_the_deadline_do_not_count(tmp_path):
+    inc = [unit("winner", p=0.6, y=1, q=0.5, gid="a1", tip="2029-03-02T18:00:00Z", line=None)]
+    r = dict(sha=pl.POLICY_SHA256, spec="nfl_elo_k10", game="a1", market="winner", line=None, p=0.7, cutoff="2029-03-02T16:00:00Z",
+             tip="2029-03-02T18:00:00Z", gen="2029-03-02T16:00:00Z")
+    cu = pl.challenger_units(challenger_db(tmp_path / "c.sqlite", [r]), inc, pl.load_policy(), "nfl_elo_k10", "winner")
+    assert cu["pairs"] == []
+
+
+def test_canonical_is_read_from_the_activation_time(tmp_path):
+    c = make_store(tmp_path)
+    add_game(c, "gx", "2026-12-20T18:00:00Z")                                                       # scheduled, no forecast row, in the future
+    add_game(c, "gy", "2026-12-28T18:00:00Z", forecast=[("spread", -3.5, "model", 0.6, "2026-12-28T16:00:00Z")])      # first row ever
+    assert pl.collect(c, now=NOW).counts["spread"]["upcoming"] == 1                                  # only gy: recording_began falls back to MIN(generated_at) = 2026-12-28T16:00
+    col = pl.collect(c, now=NOW, began="2026-11-20T00:00:00Z")
+    assert col.counts["spread"]["upcoming"] == 2                                                      # gx now counts as upcoming, not "before recording began"
+
+
+def test_activation_time_is_read_from_the_copy(tmp_path):
+    assert pl.activated_at(tmp_path) is None
+    f = tmp_path / "research" / "nfl_live"
+    f.mkdir(parents=True)
+    (f / "activation.json").write_text(json.dumps({"activated_at": "2026-11-20T00:00:00Z"}))
+    assert pl.activated_at(tmp_path) == "2026-11-20T00:00:00Z"
+
+
+def test_below_600_reports_allowed_coverage_counts_only(tmp_path):
+    c = build_world(tmp_path)
+    add_game(c, "gs", "2026-12-08T18:00:00Z", (24, 20), forecast=[("spread", -3.5, "bookmaker", 0.60, "2026-12-08T16:00:00Z")],
+             quote=("spread", -3.5, 0.55, "2026-12-08T15:00:00Z", "current", "DraftKings"))
+    c.execute("UPDATE games SET tipoff_at = '2026-12-08T19:00:00Z' WHERE game_id = 'gs'")             # kick-off moved after the forecast
+    c.commit()
+    col = pl.collect(c, now=NOW)
+    assert col.counts["spread"]["start_changed"] == 1
+    r = pl.look_market(col.units, "spread", NOW, c)
+    cov = r["coverage"]
+    assert cov["forecasts"] == 7 and cov["bookmaker_line"] == 3 and cov["model_line"] == 4
+    assert cov["t120_coverage"] == pytest.approx(3 / 7) and cov["generated_after_cutoff"] == 2 and cov["start_changed"] == 1
+    assert set(cov["close"]) == {"ok", "stale", "no_close", "of"} and cov["close"]["of"] == 3
+    blob = json.dumps(r)
+    for banned in ("log_loss", "hit_rate", "delta_ll", "clv", "excess", "calibration"):
+        assert banned not in blob
+
+
+def test_team_total_challenger_delta_is_descriptive_at_600_paired():
+    pairs = [{"game_id": f"t{i}", "week": f"w{i % 30:02d}", "p": 0.7, "p_ch": 0.6, "y": 1 if (i // 30) % 10 < 6 else 0, "q_book": None} for i in range(599)]
+    r = pl.look_team_total_challenger(pairs, "nfl_points_eta02", "team_total_home")
+    assert r["status"] == "insufficient evidence (n of 600)" and "delta_c" not in r and r["n_paired_decided"] == 599
+    pairs.append({"game_id": "t599", "week": "w00", "p": 0.7, "p_ch": 0.6, "y": 1, "q_book": None})
+    r = pl.look_team_total_challenger(pairs, "nfl_points_eta02", "team_total_home")
+    ll = lambda p, y: -(y * math.log(p) + (1 - y) * math.log(1 - p))      # noqa: E731
+    want = sum(ll(0.6, x["y"]) - ll(0.7, x["y"]) for x in pairs) / 600
+    assert r["status"] == "descriptive" and r["delta_c"] == pytest.approx(want) and "test" not in r and "p" not in r
+
+
+def test_run_reports_team_total_challengers_only_for_points_challengers(tmp_path):
+    from app import learning_challengers as lc
+    data = tmp_path / "copy"
+    make_store(data).close()
+    (data / "research").mkdir()
+    lc.open_store(data / "research" / "challengers.sqlite").close()
+    rep = pl.run(data, tmp_path / "out", now=NOW, looks_dir=tmp_path / "looks")
+    assert set(rep["challenger_team_totals"]) == {f"{n}:{m}" for n in ("nfl_points_eta02", "nfl_points_eta10") for m in ("team_total_home", "team_total_away")}
+    assert all(v["status"] == "insufficient evidence (n of 600)" for v in rep["challenger_team_totals"].values())

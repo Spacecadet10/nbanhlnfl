@@ -3,7 +3,8 @@
 Implements that frozen document; section numbers below refer to it. Read-only on a COPY of the NFL store and of the research
 challenger store (`--data-dir`); the live data folder is refused and the report goes outside the stores. Below n = 600 decided
 bookmaker-line games per market only counts and coverage are produced, never a skill metric value (section 6). The look of
-a market is computed once and stored (`nfl-looks.json` in the report folder); a second run returns the stored look.
+a market is computed once and stored by (document sha256, market) in the looks folder (not in the report folder); a second
+run returns the stored look.
 
 Written and tested on synthetic data only; independent review (section 9) comes before any outcome is read.
 
@@ -24,6 +25,7 @@ from . import coverage, nfl_eval, odds, prereg_common as pc
 
 PREREG_FILE = "nfl-line-eval-2026-11-18.md"
 PREREG_SHA256 = "5ea6fef126ca9d4b8555f689d255a590f08261aac758a0e11101294d419e6e6c"
+ADDENDA_SHA256 = {"addendum-2026-11-18-nfl-evaluator-clarifications.md": "5961a03c7e0bb69bb51cccabb8e3c6e946c01da2c0a762f3e963902b4ccfcec2"}
 POLICY_PATH = pc.REPO_ROOT / "backend" / "app" / "reference" / "learning_policies" / "nfl-challengers-v1.json"
 POLICY_SHA256 = "9503bca10a1120b3fd687f62105fd84467ea7ebf33269c79f3ebf5e15841cede"
 REPO_ROOT = pc.REPO_ROOT
@@ -45,6 +47,7 @@ INSUFFICIENT = "insufficient evidence (n of 600)"
 def check_document() -> None:
     """Refuses unless the frozen document and the registered challenger policy file are byte-identical to the registered hashes."""
     pc.check_prereg(PREREG_FILE, PREREG_SHA256, REPO_ROOT)
+    pc.check_addenda(ADDENDA_SHA256, REPO_ROOT)
     import hashlib
     try:
         sha = hashlib.sha256(Path(POLICY_PATH).read_bytes()).hexdigest()
@@ -72,6 +75,24 @@ def _ts(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _et_date(ts: str) -> str:
+    return _parse(ts).astimezone(NY).date().isoformat()
+
+
+def before_deadline(ts: str) -> bool:
+    """Addendum 3: only games with kick-off on or before 2029-02-28 (Eastern date) count toward 600."""
+    return _et_date(ts) <= DEADLINE
+
+
+def activated_at(data_dir) -> Optional[str]:
+    """The NFL live activation time of the copy (research/nfl_live/activation.json), the `began` the served pages pass to
+    coverage.canonical; None when the file is absent or unreadable."""
+    try:
+        return json.loads((Path(data_dir) / "research" / "nfl_live" / "activation.json").read_text()).get("activated_at")
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
 def week_key(season: int, tipoff_at: str) -> str:
     """Cluster = season + NFL week. The store has no week column: a week is the Tuesday-anchored Eastern week of the kickoff
     (Thursday night to Monday night share the Tuesday before)."""
@@ -88,10 +109,10 @@ class Collected:
 def _blank() -> dict:
     return {k: 0 for k in ("forecasts", "upcoming", "no_canonical_forecast", "other_order_version", "decided", "push", "void",
                            "unscorable", "past7", "pending", "bookmaker_line", "model_line", "decided_bookmaker_line",
-                           "open_label_t120", "generated_after_cutoff", "quote_line_mismatch")} | {"open_label_providers": {}}
+                           "open_label_t120", "generated_after_cutoff", "start_changed", "quote_line_mismatch")} | {"open_label_providers": {}}
 
 
-def collect(store: sqlite3.Connection, *, now: datetime) -> Collected:
+def collect(store: sqlite3.Connection, *, now: datetime, began: Optional[str] = None) -> Collected:
     now_s = _ts(now)
     games = [dict(g) for g in store.execute("SELECT * FROM games WHERE season_type IN ('regular','postseason') ORDER BY tipoff_at, game_id")]
     counted = [g for g in games if nfl_eval.cutoff_for(g["tipoff_at"]) > T0]       # tip-off after T0 + 120 min
@@ -102,7 +123,7 @@ def collect(store: sqlite3.Connection, *, now: datetime) -> Collected:
     out.games_counted = len(counted)
     for market in MARKETS:
         n = out.counts[market] = _blank()
-        cohort = coverage.canonical(store, counted, market, now_s) if counted else {}
+        cohort = coverage.canonical(store, counted, market, now_s, began=began) if counted else {}
         for g in counted:
             c = cohort[g["game_id"]]
             if c["state"] == "upcoming":
@@ -139,6 +160,8 @@ def collect(store: sqlite3.Connection, *, now: datetime) -> Collected:
             else:
                 n["model_line"] += 1
             n["generated_after_cutoff"] += rec["generated_at"] > cutoff
+            changed = rec["start_at"] != g["tipoff_at"]
+            n["start_changed"] += changed
             side = c["result_side"]
             if side in ("a", "b"):
                 state = "decided"
@@ -152,7 +175,7 @@ def collect(store: sqlite3.Connection, *, now: datetime) -> Collected:
             if state == "decided" and source == "bookmaker":
                 n["decided_bookmaker_line"] += 1
             out.units.append({"game_id": g["game_id"], "market": market, "week": week_key(g["season"], g["tipoff_at"]),
-                              "tipoff_at": g["tipoff_at"], "cutoff_at": cutoff, "generated_at": rec["generated_at"], "p": pa / (pa + pb),
+                              "tipoff_at": g["tipoff_at"], "cutoff_at": cutoff, "generated_at": rec["generated_at"], "start_changed": changed, "p": pa / (pa + pb),
                               "line": line, "line_source": source, "quote_id": qid, "q_book": q_book, "quote_label": label,
                               "quote_provider": provider, "state": state, "y": (1 if side == "a" else 0) if state == "decided" else None})
     return out
@@ -257,21 +280,38 @@ def _delta_book(u):
     return pc.log_loss(u["p"], u["y"]) - pc.log_loss(u["q_book"], u["y"])
 
 
+def _coverage(units: list, book: bool, now: datetime, store: Optional[sqlite3.Connection]) -> dict:
+    """Counts allowed below n = 600 (section 6): forecasts, T-120 quote coverage, generation lag, start changed, and the close
+    status counts of bookmaker-line games already started. Statuses only: no CLV or other value of a close is read out."""
+    n = len(units)
+    bl = [u for u in units if u["line_source"] == "bookmaker"]
+    out = {"forecasts": n, "bookmaker_line": len(bl), "model_line": n - len(bl), "t120_coverage": (len(bl) / n) if n and book else None,
+           "generated_after_cutoff": sum(u["generated_at"] > u["cutoff_at"] for u in units),
+           "start_changed": sum(bool(u.get("start_changed")) for u in units)}
+    if book and store is not None:
+        started = [u for u in bl if u["tipoff_at"] <= _ts(now) and u.get("q_book") is not None]
+        st = [close_for(store, u)["status"] for u in started]
+        out["close"] = {"ok": st.count("ok"), "stale": st.count("stale"), "no_close": st.count("no_close"), "of": len(started)}
+    return out
+
+
 def look_market(units: list, market: str, now: datetime, store: Optional[sqlite3.Connection] = None) -> dict:
     """The single look of a market (section 6): counts only below n = 600 decided bookmaker-line games (team totals: decided
     forecasts); at 600, the first 600 decided games, once every earlier game is final or past 7 days."""
     book = market in BOOK_MARKETS
-    elig = sorted((u for u in units if u["market"] == market and (not book or (u["line_source"] == "bookmaker" and u["q_book"] is not None))),
+    all_m = [u for u in units if u["market"] == market and before_deadline(u["tipoff_at"])]
+    elig = sorted((u for u in all_m if not book or (u["line_source"] == "bookmaker" and u["q_book"] is not None)),
                   key=lambda u: (u["tipoff_at"], u["game_id"]))
     decided = [i for i, u in enumerate(elig) if u["state"] == "decided"]
     key = "n_decided_bookmaker_line" if book else "n_decided_forecasts"
     if len(decided) < N_MIN:
         closed = now.astimezone(timezone.utc).date().isoformat() > DEADLINE
         return {"market": market, "status": f"insufficient evidence (closed at deadline {DEADLINE})" if closed else INSUFFICIENT,
-                key: len(decided), "n_required": N_MIN}
+                key: len(decided), "n_required": N_MIN, "coverage": _coverage(all_m, book, now, store)}
     last = decided[N_MIN - 1]
     if any(u["state"] == "pending" for u in elig[:last + 1]):
-        return {"market": market, "status": "waiting: an earlier game is neither final nor past 7 days", key: len(decided), "n_required": N_MIN}
+        return {"market": market, "status": "waiting: an earlier game is neither final nor past 7 days", key: len(decided), "n_required": N_MIN,
+                "coverage": _coverage(all_m, book, now, store)}
     look = [elig[i] for i in decided[:N_MIN]]
     out = {"market": market, "status": "look", "n": N_MIN, "metrics": metrics(look, book=book)}
     if store is not None and book:
@@ -295,19 +335,6 @@ def look_market(units: list, market: str, now: datetime, store: Optional[sqlite3
     return out
 
 
-def look_once(out: Path, key: str, compute) -> dict:
-    """One look per key: a stored look is returned verbatim, never recomputed."""
-    path = Path(out) / "nfl-looks.json"
-    stored = json.loads(path.read_text()) if path.is_file() else {}
-    if key in stored:
-        return stored[key]
-    result = compute()
-    if result.get("status") == "look":                    # only an actual look is stored; counts-only reports are rerunnable
-        stored[key] = result
-        path.write_text(json.dumps(stored, indent=2, sort_keys=True, default=str) + "\n")
-    return result
-
-
 # --- section 3: challengers -------------------------------------------------------------------------------------------------------------
 def challenger_units(conn: sqlite3.Connection, incumbent: list, pol: dict, name: str, market: str) -> dict:
     """Paired decided games of one challenger and market from the research store, at the incumbent's line."""
@@ -321,7 +348,7 @@ def challenger_units(conn: sqlite3.Connection, incumbent: list, pol: dict, name:
     counts = {"rows": len(rows), "incumbent_decided_after_start": 0, "missing_rows": 0, "late_rows": 0}
     pairs, pending = [], []
     for u in sorted((u for u in incumbent if u["market"] == market), key=lambda u: (u["tipoff_at"], u["game_id"])):
-        if start is None or nfl_eval.cutoff_for(u["tipoff_at"]) < start:
+        if start is None or nfl_eval.cutoff_for(u["tipoff_at"]) < start or not before_deadline(u["tipoff_at"]):
             continue
         if u["state"] == "pending":
             pending.append(u["tipoff_at"])
@@ -360,6 +387,16 @@ def look_challenger(pairs: list, name: str, market: str, now: datetime, pending_
             "verdict": f"{name} beats the incumbent on {market} (promotion proposal only)" if test["reject"] else "not shown"}
 
 
+def look_team_total_challenger(pairs: list, name: str, market: str) -> dict:
+    """Addendum 6: team-total delta_c of a points challenger (challenger minus incumbent log loss), descriptive at 600 paired
+    decided games: no test, no p-value; counts only below 600."""
+    if len(pairs) < N_MIN:
+        return {"challenger": name, "market": market, "status": INSUFFICIENT, "n_paired_decided": len(pairs), "n_required": N_MIN}
+    look = pairs[:N_MIN]
+    return {"challenger": name, "market": market, "status": "descriptive", "n": N_MIN,
+            "delta_c": sum(pc.log_loss(u["p_ch"], u["y"]) - pc.log_loss(u["p"], u["y"]) for u in look) / N_MIN}
+
+
 # --- entry point -------------------------------------------------------------------------------------------------------------------------
 def _readonly(path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
@@ -367,7 +404,7 @@ def _readonly(path: Path) -> sqlite3.Connection:
     return conn
 
 
-def run(data_dir, out, *, now: Optional[datetime] = None) -> dict:
+def run(data_dir, out, *, now: Optional[datetime] = None, looks_dir=None) -> dict:
     check_document()
     dd = pc.guard_data_dir(data_dir)
     outdir = pc.guard_out(out, dd)
@@ -377,8 +414,8 @@ def run(data_dir, out, *, now: Optional[datetime] = None) -> dict:
         raise pc.Refused(f"{store_file} not found")
     store = _readonly(store_file)
     try:
-        col = collect(store, now=now)
-        markets = {m: look_once(outdir, m, lambda m=m: look_market(col.units, m, now, store)) for m in MARKETS}
+        col = collect(store, now=now, began=activated_at(dd))
+        markets = {m: pc.look_once(looks_dir, PREREG_SHA256, m, lambda m=m: look_market(col.units, m, now, store)) for m in MARKETS}
         pol = load_policy()
         ch_file = dd / "research" / "challengers.sqlite"
         ch = _readonly(ch_file) if ch_file.is_file() else None
@@ -388,14 +425,22 @@ def run(data_dir, out, *, now: Optional[datetime] = None) -> dict:
                 challengers[f"{name}:{market}"] = {"challenger": name, "market": market, "status": INSUFFICIENT, "n_paired_decided": 0, "n_required": N_MIN}
                 continue
             cu = challenger_units(ch, col.units, pol, name, market)
-            r = look_once(outdir, f"{name}:{market}", lambda: look_challenger(cu["pairs"], name, market, now, cu["pending_tips"]))
+            r = pc.look_once(looks_dir, PREREG_SHA256, f"{name}:{market}", lambda: look_challenger(cu["pairs"], name, market, now, cu["pending_tips"]))
             challengers[f"{name}:{market}"] = {**r, "counts": cu["counts"], "start": cu["start"]}
+        team_totals = {}
+        for name in sorted({n for n, m in pol["hypotheses"] if m in LINE_MARKETS}):
+            for market in ("team_total_home", "team_total_away"):
+                if ch is None:
+                    team_totals[f"{name}:{market}"] = {"challenger": name, "market": market, "status": INSUFFICIENT, "n_paired_decided": 0, "n_required": N_MIN}
+                else:
+                    cu = challenger_units(ch, col.units, pol, name, market)
+                    team_totals[f"{name}:{market}"] = {**look_team_total_challenger(cu["pairs"], name, market), "counts": cu["counts"]}
         if ch is not None:
             ch.close()
         tested = {m: markets[m]["test"]["p"] for m in LINE_MARKETS if "test" in markets[m]}
         report = {"prereg_sha256": PREREG_SHA256, "policy_sha256": POLICY_SHA256, "evaluated_at": _ts(now), "games_counted": col.games_counted,
                   "counts": col.counts, "markets": markets, "primary_family_bonferroni": pc.bonferroni(tested, PRIMARY_ALPHA, m=PRIMARY_M) if tested else {},
-                  "challengers": challengers, "challenger_family_size": len(pol["hypotheses"])}
+                  "challengers": challengers, "challenger_team_totals": team_totals, "challenger_family_size": len(pol["hypotheses"])}
         pc.write_report(outdir, "nfl-line-eval-report.json", report)
         return report
     finally:
