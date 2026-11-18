@@ -710,3 +710,24 @@ def test_g2_the_path_check_itself_rejects_a_trailing_newline():
         with pytest.raises(ar.Refused, match="characters"):
             ra._safe(bad)
     assert ra._safe("/Users/x/a b/c.d_e-f") == "/Users/x/a b/c.d_e-f"
+
+
+def test_the_agent_profile_alone_cannot_start_launchd_jobs_or_open_apps(env, tmp_path):
+    label = f"com.nba-predictor.agent-sandbox-test-{os.getpid()}"
+    ws = env["ws"]
+    prof = tmp_path / "agent.sb"
+    prof.write_text(ra.agent_profile(env["exp"], ws, str(tmp_path / "broker.sock")))   # exec is allowed here: the shell runs them
+    cmd = ws / "x.command"
+    cmd.write_text("#!/bin/sh\ntouch " + str(ws / "ran") + "\n")
+    cmd.chmod(0o755)
+    try:
+        r = subprocess.run([ar.SANDBOX, "-f", str(prof), "/bin/sh", "-c",
+                            f"/bin/launchctl submit -l {label} -- /usr/bin/true; echo SUBMIT=$?; "
+                            f"/usr/bin/open -g {cmd}; echo OPEN=$?; /bin/echo EXEC-STILL-ALLOWED"],
+                           capture_output=True, text=True, cwd=str(ws), timeout=60)
+        listed = subprocess.run(["/bin/launchctl", "list"], capture_output=True, text=True).stdout
+    finally:
+        subprocess.run(["/bin/launchctl", "remove", label], capture_output=True)
+    assert "EXEC-STILL-ALLOWED" in r.stdout, r.stdout + r.stderr
+    assert "SUBMIT=0" not in r.stdout and "OPEN=0" not in r.stdout, r.stdout + r.stderr
+    assert label not in listed and not (ws / "ran").exists()

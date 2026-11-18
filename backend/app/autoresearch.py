@@ -692,28 +692,41 @@ def _profile(tmp: Path) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _group_rss_gb(pgid: int) -> float:
-    """Resident memory of every process in the group, in GB (0.0 when ps cannot be read)."""
+def _group_rss_gb(pgid: int) -> Optional[float]:
+    """Resident memory of every process in the group, in GB; None when ps cannot be read or the group is not listed."""
     try:
         out = subprocess.run(["/bin/ps", "-axo", "pgid=,rss="], capture_output=True, text=True, timeout=10).stdout
     except (OSError, subprocess.SubprocessError):
-        return 0.0
+        return None
     kb = sum(int(r[1]) for r in (ln.split() for ln in out.splitlines()) if len(r) == 2 and r[0] == str(pgid) and r[1].isdigit())
-    return kb / (1024 ** 2)
+    return kb / (1024 ** 2) if kb else None
 
 
 def _memory_guard(pgid: int, limit_gb: float, stop: threading.Event, state: dict) -> None:
-    """Polls the group's resident memory; above the limit kills the whole group and records the peak seen."""
-    while not stop.wait(1.0):
-        gb = _group_rss_gb(pgid)
-        state["peak_gb"] = max(state.get("peak_gb", 0.0), gb)
-        if gb > limit_gb:
-            state["killed"] = gb
-            try:
-                os.killpg(pgid, signal.SIGKILL)
-            except (ProcessLookupError, PermissionError):
-                pass
-            return
+    """Polls the group's resident memory; above the limit kills the whole group and records the peak seen. A guard that
+    cannot read memory (3 readings in a row, or an error) kills the group too: a trial never runs without its limit."""
+    def kill():
+        try:
+            os.killpg(pgid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+
+    blind = 0
+    try:
+        while not stop.wait(1.0):
+            gb = _group_rss_gb(pgid)
+            blind = blind + 1 if not gb else 0
+            if blind >= 3:
+                state["unavailable"] = True
+                return kill()
+            if gb:
+                state["peak_gb"] = max(state.get("peak_gb", 0.0), gb)
+            if gb and gb > limit_gb:
+                state["killed"] = gb
+                return kill()
+    except Exception:
+        state["unavailable"] = True
+        kill()
 
 
 def _kill_strays(tmp: Path) -> None:
@@ -807,7 +820,9 @@ def run_candidate(src: str, sport: str, data: dict, scored, timeout_s: float, td
         os.close(r_resp)
         log.close()
         shutil.rmtree(tmp, ignore_errors=True)            # the trial's scratch space (HOME, TMPDIR); logs and profile stay
-    if "killed" in guard_state:           # the guard's kill ends the pipe: a memory kill, not a crash
+    if guard_state.get("unavailable") and "killed" not in guard_state:
+        res = {"status": "killed", "reason": "killed: memory guard unavailable"}
+    elif "killed" in guard_state:           # the guard's kill ends the pipe: a memory kill, not a crash
         res = {"status": "killed", "reason": f"killed: memory (group resident {guard_state['killed']:.2f} GB > limit {limit_gb:g} GB)"}
     if res["status"] == "crash":
         res["reason"] += f" (exit {os.waitstatus_to_exitcode(status)}): {(tdir / 'run.log').read_text()[-400:]}"

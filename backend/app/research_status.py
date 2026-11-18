@@ -10,6 +10,8 @@ import os
 from pathlib import Path
 from typing import Optional
 
+from . import sports
+
 NOTE = ("Research only. Trials search the validation seasons of a read-only data snapshot; a 'keep' means a candidate beat "
         "the incumbent there (exploratory, repeated search), not that it is approved or used. Forecasts never come from "
         "here; promotion stays a separate, manual decision on the forward record.")
@@ -90,7 +92,8 @@ def sport_status(root: Path, meta: dict, recent: int) -> dict:
             "bar": {m: {"member": s["member"], "log_loss": s.get("log_loss")} for m, s in (meta.get("start_incumbent") or {}).items()},
             "search": {"distinct_train_py": len({r.get("train_sha256") for r in recs if r.get("event") == "started"
                                                  and r.get("train_sha256")}),
-                       "markets_per_trial": len(meta.get("start_incumbent") or {}), "uncorrected": True},
+                       "markets_per_trial": len(sports.SPORTS[meta.get("sport")].markets) if meta.get("sport") in sports.SPORTS else None,
+                       "uncorrected": True},
             "incumbents": incumbents, "trials": len(done), "by_status": by_status,
             "failures": sum(r.get("status") in FAILED for r in done),
             "running": sorted(started - {r.get("trial_id") for r in done}),

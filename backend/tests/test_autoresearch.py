@@ -732,3 +732,43 @@ def test_a_child_that_left_the_process_group_is_killed_with_the_trial(tmp_path):
     finally:
         for p in _procs_with_cwd_in(tmp):
             os.kill(p, 9)
+
+
+@pytest.mark.parametrize("broken", [lambda pgid: None, lambda pgid: 0.0, lambda pgid: 1 / 0])
+def test_a_memory_guard_that_cannot_read_memory_fails_the_trial_instead_of_running_unlimited(env, monkeypatch, broken):
+    spin = edit("def fit(spec, rows):\n    return engine.fit(spec, rows)", "def fit(spec, rows):\n    while True:\n        pass")
+    commit_train(env["ws"], spin, "spins")
+    monkeypatch.setattr(ar, "_group_rss_gb", broken)
+    rec = ar.run_trial("nba", env["exp"], env["ws"], timeout_s=100)
+    assert rec["status"] == "killed" and rec["reason"] == "killed: memory guard unavailable", rec
+    assert rec["resources"]["wall_s"] < 60
+
+
+@pytest.mark.parametrize("path", ["trial", "daily", "holdout"])
+def test_every_path_that_runs_train_py_uses_the_one_guarded_runner(env, monkeypatch, path):
+    """trial, daily and holdout all end in run_candidate: the sandbox profile (no exec/launchd/signals), the memory guard
+    (fail closed) and the stray-process cleanup apply to each. A blind guard must kill the run on every path."""
+    seen = {"profile": 0, "strays": 0, "guard": 0}
+    real_profile, real_strays, real_guard = ar._profile, ar._kill_strays, ar._memory_guard
+    monkeypatch.setattr(ar, "_profile", lambda tmp: (seen.__setitem__("profile", seen["profile"] + 1), real_profile(tmp))[1])
+    monkeypatch.setattr(ar, "_kill_strays", lambda tmp: (seen.__setitem__("strays", seen["strays"] + 1), real_strays(tmp))[1])
+    monkeypatch.setattr(ar, "_memory_guard", lambda *a: (seen.__setitem__("guard", seen["guard"] + 1), real_guard(*a))[1])
+    ws, exp = env["ws"], env["exp"]
+    if path == "daily":
+        ar.daily(["nba"], exp, ws, max_trials=1, max_minutes=30, timeout_s=300)          # the base commit
+    else:
+        ar.run_trial("nba", exp, ws)                                                       # a kept baseline for the holdout
+    seen.update(profile=0, strays=0, guard=0)
+    spin = edit("def fit(spec, rows):\n    return engine.fit(spec, rows)", "def fit(spec, rows):\n    while True:\n        pass")
+    commit_train(ws, spin, "spins")
+    if path != "holdout":                  # the holdout re-runs the kept trials' saved sources, which finish too fast to go blind
+        monkeypatch.setattr(ar, "_group_rss_gb", lambda pgid: None)
+    if path == "trial":
+        rec = ar.run_trial("nba", exp, ws, timeout_s=100)
+        assert rec["status"] == "killed" and rec["reason"] == "killed: memory guard unavailable"
+    elif path == "daily":
+        out = ar.daily(["nba"], exp, ws, max_trials=1, max_minutes=30, timeout_s=100)
+        assert [t["status"] for t in out["trials"]] == ["killed"]
+    else:
+        assert ar.holdout("nba", exp, ws, ask=lambda p: True)["status"] == "scored"
+    assert seen == {"profile": 1, "strays": 1, "guard": 1}

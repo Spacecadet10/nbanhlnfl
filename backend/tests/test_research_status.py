@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from app import main
+from app import main, sports
 
 
 @pytest.fixture
@@ -121,4 +121,4 @@ def test_the_search_size_is_reported_and_labelled_uncorrected(client, monkeypatc
                                             {"event": "started", "trial_id": "t2", "train_sha256": "bb"},
                                             {"event": "started", "trial_id": "t3", "train_sha256": "aa"}])
     s = client.get("/api/research/autoresearch").json()["sports"]["nhl"]
-    assert s["search"] == {"distinct_train_py": 2, "markets_per_trial": 2, "uncorrected": True}
+    assert s["search"] == {"distinct_train_py": 2, "markets_per_trial": len(sports.SPORTS["nhl"].markets), "uncorrected": True}
