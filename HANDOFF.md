@@ -1,3 +1,36 @@
+## Adaptive-v1 activation: rehearsal done, live run pending (branch learning-activation, DRAFT) — Claude, Nov 18, 2026
+- Why: the live stores have 0 `adaptive_fits`, so every adaptive row is 'unavailable'. Plan: train in the live checkout (43d4b74, live
+  venv, release guard), never release main to live. Research-identity alias lets delivery (main) compute the live identities.
+- Identities (read-only on the live stores, worktree and live code agree): NBA research 94844709fc4412a5, weekly 4b3b8abf49973e4c,
+  daily 89dc8edda9de58ed; NHL research f862a44ddaa1e76f, weekly b921c537a765c65c, daily d11d95730c905f88. Delivery without the alias
+  computes different ids. Alias keys are the digests of this branch's research_live.py (NBA c63cfb988986629e, NHL 9f74e2786b977cd2): any
+  edit to a hashed file changes them. Release recipe and the nhl_shots note: docs/ADAPTIVE_SYSTEM.md section 15.
+- Isolated rehearsal on a copy (`~/nba-predictor-research-data/learning-rehearsal-2026-11-17/`, evidence in `evidence/`), live python, no
+  deep libraries: NHL training-inputs 44 s, weekly 1405 s, daily 3003 s; NBA weekly 3058 s, daily 11590 s (3 h 13 min), all exit 0.
+  Fit rows: NBA 48 (20 members success + 3 deep skipped + combiner success, per definition), NHL 34 (14 + 2 skipped + combiner); 0
+  failed; all four combiners 'success' under the four live ids. Deep members (torch_mlp, keras_mlp) are 'skipped' with the reason
+  "not installed here"; they are not fitted. `adaptive-record --dry-run`: eligible_games 0 at 04:35Z (no game within 2 h), so a
+  forecast row from these fits was NOT observed. A deep-python rerun was started and stopped at once: both sports exited 1 'deferred'
+  (results refresh older than 3 h on the copy), nothing trained. Deep (torch 2.14.1, tensorflow 2.21.0 env `~/nba-predictor-deep`,
+  PYTHONPATH=live backend) is unverified; run it in a free window with `perl -e 'alarm shift; exec @ARGV' 5400` per command.
+  A killed adaptive-train leaves no fit rows (they are written only at publication) and releases its flock; candidate history is reused.
+- Templates: every `scripts/launchd/*.plist` now reproduces the installed agent (no sprint1 path; before/after diffs in evidence);
+  `daily` and `api-delivery` add NBA_DAILY_AGREEMENT=1; the trainer template uses the live venv, NBA_RELEASE_GUARD/ROOT, 09:30 and 15:30,
+  not installed. Install steps in README. weekly-report reads `data/reports/weekly_report_review.json` (operator-maintained, append-only,
+  seeded from `scripts/weekly_report_review.json`); a missing, invalid or unlisted code commit counts nothing and the page says why.
+- Weekly report review fixes (faa32af): strict entries per (recorder, 40-hex commit, UTC time), fail-closed visible lines, overrides need
+  --reviewed-commit. Autoresearch hardening (final ff0ca02, frozen): no exec/launchd/signals/shm/pasteboard in the candidate sandbox, memory
+  guard that fails closed, CPU limit, survivor cleanup, SIGINT, agent needs explicit budgets. Agent login/API path on Claude Code 2.1.327 not re-run.
+- Verification run (commands in the worktree backend/, live venv python, nice): autoresearch+agent+status 135 passed; weekly report +
+  best_pick_record + launchd templates 70 passed; research/agreement identity 7 passed; check_project.py passed. Full suite NOT run.
+- Rollback: the rehearsal is a copy (delete the folder). Live steps (not done by this branch): S1 alias is code only until released; first live
+  training appends fit rows (append-only, no production effect; stop = do not install/bootout the trainer job and delete nothing);
+  trainer job install = `launchctl bootout gui/$(id -u)/com.nba-predictor.adaptive-train` + remove the plist; delivery back to its previous
+  commit + kickstart; plist templates are copies of the installed files, so restoring the saved installed plist undoes any install.
+- UNRESOLVED: forecast rows from the fits not yet seen; deep members unverified; delivery release of the alias not done; recorder identity
+  covers only its own file (best_pick_record.py change needs its own review); Telegram/Opus findings in review files, not this entry.
+- Next: live training run (lead), then proof of use (rows with generated_at after the fit, status 'forecast', combiner_fit_id set), deep later.
+
 ## NCAAB Telegram cards: top 4 by gap at 11 AM ET (owner decision Nov 17) — Claude, Nov 17, 2026 ~23:40Z
 - Was: one card per forecast NCAAB game (~60/night). Now (`app/ncaab_cards.py`, rule `ncaab-top4-gap-v1`): at the first Telegram
   run at/after 11:00 AM ET, every tracked game tipping >= 2 h later that Eastern day is priced by the shipped model as of that moment
