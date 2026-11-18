@@ -458,6 +458,16 @@ def result_store(results):
 
 
 REVIEWED = '2026-11-15T00:00:00Z'
+ROW_COMMIT = 'ab' * 20
+
+
+@pytest.fixture(autouse=True)
+def _row_commit(monkeypatch):
+    monkeypatch.setenv('NBA_RELEASE_COMMIT', ROW_COMMIT)      # the code commit recorded rows carry
+
+
+def rev(sha, commit=ROW_COMMIT):
+    return {sha: [{'reviewed_at': REVIEWED, 'code_commit': commit}]}
 
 
 def cards_for(n, *, start=datetime(2026, 11, 16, tzinfo=timezone.utc), shared_every=3):
@@ -484,7 +494,7 @@ def test_report_shows_counts_only_until_100_named_picks_are_decided(tmp_path, ca
     sha = hashlib.sha256(Path(bpr.__file__).read_bytes()).hexdigest()
     with sqlite3.connect(path) as led:
         led.row_factory = sqlite3.Row
-        info = m.counted_cards(led, 'nba', REVIEWED, {sha})
+        info = m.counted_cards(led, 'nba', REVIEWED, rev(sha))
     m.poisson_binomial_sf = m.permutation_p = m.wilson = lambda *a, **k: pytest.fail('no test before completion')
     out = m.evaluate(result_store(res), info['cards'], datetime(2026, 12, 31, tzinfo=timezone.utc))
     assert out['state'] == 'counting' and out['named'] == 99 and out['named_decided'] == 99
@@ -498,7 +508,7 @@ def test_report_runs_tests_a_and_b_once_the_set_is_complete(tmp_path):
     sha = hashlib.sha256(Path(bpr.__file__).read_bytes()).hexdigest()
     with sqlite3.connect(path) as led:
         led.row_factory = sqlite3.Row
-        info = m.counted_cards(led, 'nba', REVIEWED, {sha})
+        info = m.counted_cards(led, 'nba', REVIEWED, rev(sha))
     out = m.evaluate(result_store(res), info['cards'], datetime(2026, 12, 31, tzinfo=timezone.utc))
     assert out['n'] == 100 and out['W'] == 75 and out['cards_through_cut'] == 100
     assert out['test_a']['p_proportional'] == pytest.approx(m.poisson_binomial_sf(75, [.6] * 100))
@@ -522,15 +532,15 @@ def test_report_counts_only_the_earliest_reviewed_v4_card_of_each_game(tmp_path)
         led.row_factory = sqlite3.Row
         led.execute("INSERT INTO deliveries VALUES ('k3x','1',?, 'sent', '2026-11-16T08:00:00Z', NULL, 1, NULL)",
                     (f'<b>PROP51 PICKS · NBA</b>\n<b>A @ g3</b>\nStarts {cards[3][3]}\n<b>Recommended pick</b>\nX win',))
-        info = m.counted_cards(led, 'nba', REVIEWED, {sha})
+        info = m.counted_cards(led, 'nba', REVIEWED, rev(sha))
         assert info['sent_without_row'] == 2 and info['sent_without_row_after_review'] == 2
         assert [c['game_id'] for c in info['cards']] == ['g0', 'g4', 'g5']
         assert info['cards'][0]['delivery_key'] == 'k0'
         assert info['excluded'] == {'recorded before the independent review': 1, 'earliest card has no row': 2,
                                     'earliest card sent before T0': 1}
         assert info['rows_without_sent_card'] == 0 and info['sent'] == 8          # since T0: k0 k0b k1 k3 k3x k4 k5 k9
-        assert m.counted_cards(led, 'nba', None, {sha})['cards'] == []
-        assert m.counted_cards(led, 'nba', REVIEWED, {'other'})['cards'] == []
+        assert m.counted_cards(led, 'nba', None, rev(sha))['cards'] == []
+        assert m.counted_cards(led, 'nba', REVIEWED, rev('other'))['cards'] == []
 
 
 def test_grading_excludes_a_result_first_seen_more_than_7_days_after_the_start_and_pushes():
@@ -554,7 +564,7 @@ def test_a_pending_earlier_named_pick_holds_the_evaluation(tmp_path):
     sha = hashlib.sha256(Path(bpr.__file__).read_bytes()).hexdigest()
     with sqlite3.connect(path) as led:
         led.row_factory = sqlite3.Row
-        info = m.counted_cards(led, 'nba', REVIEWED, {sha})
+        info = m.counted_cards(led, 'nba', REVIEWED, rev(sha))
     store_ = result_store(res)
     assert m.evaluate(store_, info['cards'], datetime(2026, 11, 20, tzinfo=timezone.utc))['state'] == 'counting'
     assert m.evaluate(store_, info['cards'], datetime(2027, 7, 1, tzinfo=timezone.utc))['state'] != 'counting'
@@ -568,7 +578,7 @@ def test_a_game_whose_earliest_card_was_sent_before_t0_does_not_count(tmp_path):
     sha = hashlib.sha256(Path(bpr.__file__).read_bytes()).hexdigest()
     with sqlite3.connect(path) as led:
         led.row_factory = sqlite3.Row
-        info = m.counted_cards(led, 'nba', REVIEWED, {sha})
+        info = m.counted_cards(led, 'nba', REVIEWED, rev(sha))
     assert [c['game_id'] for c in info['cards']] == ['g1'] and info['excluded'] == {'earliest card sent before T0': 1}
     assert info['sent'] == 2 and info['sent_without_row'] == 0                    # since-T0 counts are unchanged
 
@@ -582,7 +592,7 @@ def test_baseline_picks_are_graded_as_of_the_completion_time(tmp_path):
     sha = hashlib.sha256(Path(bpr.__file__).read_bytes()).hexdigest()
     with sqlite3.connect(path) as led:
         led.row_factory = sqlite3.Row
-        info = m.counted_cards(led, 'nba', REVIEWED, {sha})
+        info = m.counted_cards(led, 'nba', REVIEWED, rev(sha))
     out = m.evaluate(result_store(res), info['cards'], datetime(2026, 12, 31, tzinfo=timezone.utc))
     assert out['n'] == 100 and out['baseline_states'].get('pending_at_completion') == 1
     assert out['test_b']['baseline_only'] == 65 and out['full_hit_rate']['baseline_n'] == 99
@@ -692,3 +702,20 @@ def test_two_commits_of_one_recorder_each_count_only_from_their_own_review_time(
         0, {'recorded before the independent review': 1})        # after B's time, but C is reviewed only from 01:03:20Z
     assert counted(one_row((tmp_path / 'c').mkdir() or tmp_path / 'c', monkeypatch, SHA_B, COMMIT_C, '2026-11-18T01:10:00Z')) == (1, {})
     assert counted(one_row((tmp_path / 'b').mkdir() or tmp_path / 'b', monkeypatch, SHA_B, COMMIT_B, '2026-11-18T01:10:00Z')) == (1, {})
+
+
+def test_the_cli_override_needs_a_commit_and_counts_only_rows_of_that_commit(tmp_path, capsys):
+    m = rep_mod()
+    cards, _ = cards_for(3)
+    path = ledger_with(tmp_path, cards)
+    sha = hashlib.sha256(Path(bpr.__file__).read_bytes()).hexdigest()
+    base = [str(path), '--reviewed-at', REVIEWED, '--reviewed-recorder', sha, '--now', '2026-12-31T00:00:00Z']
+    with pytest.raises(SystemExit):
+        m.main(base)                                                 # no commit: refused, not "any commit"
+    with pytest.raises(SystemExit):
+        m.main(base + ['--reviewed-commit', 'abc'])
+    m.main(base + ['--reviewed-commit', 'cd' * 20])                  # a commit no row carries
+    out = capsys.readouterr().out
+    assert '"code revision not reviewed": 3' in out.split('NBA:')[1].split('\n')[1]
+    m.main(base + ['--reviewed-commit', ROW_COMMIT])
+    assert "Games not counted: {}" in capsys.readouterr().out.split('NBA:')[1]

@@ -374,3 +374,14 @@ def test_page_wording_names_games_and_soccer_outside_the_recorder(tmp_path, monk
     text = page(wr(), tmp_path, setup(tmp_path, 3, monkeypatch, wr())[0])
     assert 'Counted cards need an independent review of their recorder and exact code commit' in text
     assert 'Soccer cards are sent outside the best-pick recorder, so none is recorded or named' in text
+
+
+@pytest.mark.parametrize("content", ["[]", '"x"', "3", "null"])
+def test_a_review_config_that_is_not_an_object_fails_closed_with_a_visible_line(tmp_path, monkeypatch, content):
+    m = wr()
+    data, _, _ = setup(tmp_path, 3, monkeypatch, m)
+    cfg = tmp_path / 'review.json'
+    cfg.write_text(content)
+    text = Path(m.main(['--data-dir', str(data), '--ledger', str(tmp_path / 'ledger.sqlite'), '--out-dir', str(tmp_path / 'o'),
+                        '--review-config', str(cfg), '--now', '2026-12-31T00:00:00Z'])).read_text()
+    assert 'counted n=0' in section(text, 1) and 'invalid review config: top level is not an object' in text

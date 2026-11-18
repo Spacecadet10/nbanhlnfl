@@ -18,7 +18,7 @@ other markets of the card are correlated), and if the ledger cannot be read, eve
 Every line carries its n; a comparison with fewer than scorecard_report.MIN_N (30) on a side says "too few to tell".
 
   NBA_DATA_DIR=<copy> python scripts/weekly_report.py --ledger <ledger copy> [--out-dir DIR] [--now ...]
-      [--reviewed-at UTC --reviewed-recorder SHA256]      (without them no card counts yet, as in best_picks.py)
+      [--reviewed-at UTC --reviewed-recorder SHA256 --reviewed-commit SHA40]      (without them no card counts yet, as in best_picks.py)
 """
 import argparse
 import importlib.util
@@ -52,36 +52,12 @@ SPORTS = ('nba', 'nhl', 'nfl', 'soccer')
 FMT = '%Y-%m-%dT%H:%M:%SZ'
 MAX_REPEAT_LINES = 5            # per sport and market in section 4; newest lost cards in section 3
 # The recorder's independent review (time written in HANDOFF.md, reviewed recorder sha256): kept in one small file next to
-# this script; --reviewed-at / --reviewed-recorder override it.
+# this script; --reviewed-at / --reviewed-recorder / --reviewed-commit override it.
 REVIEW_CONFIG = HERE / 'weekly_report_review.json'
 
 
 REVIEW_SOURCE = {'path': str(REVIEW_CONFIG), 'unavailable': None, 'invalid': None}    # set by main(); shown on the page
-HEX40, HEX64, STAMP = re.compile(r'[0-9a-f]{40}'), re.compile(r'[0-9a-f]{64}'), re.compile(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ')
-
-
-class ReviewConfigError(ValueError):
-    pass
-
-
-def check_entry(i: int, e) -> dict:
-    """One review entry, strictly: a full recorder sha256, a UTC reviewed_at, and the exact code commit (40 lowercase hex);
-    code_commit may be null only for the legacy recorder reviewed before commits were named."""
-    bad = lambda why: ReviewConfigError(f'invalid review entry #{i}: {why}')            # noqa: E731
-    if not isinstance(e, dict):
-        raise bad('not an object')
-    if not isinstance(e.get('recorder_sha256'), str) or not HEX64.fullmatch(e['recorder_sha256']):
-        raise bad('recorder_sha256 must be 64 lowercase hex characters')
-    if not isinstance(e.get('reviewed_at'), str) or not STAMP.fullmatch(e['reviewed_at']):
-        raise bad('reviewed_at must look like 2026-11-18T03:37:19Z')
-    if 'code_commit' not in e:
-        raise bad('code_commit is required (null only for the legacy recorder)')
-    if e['code_commit'] is None:
-        if e['recorder_sha256'] != bp.LEGACY_RECORDER:
-            raise bad('code_commit is null, which is allowed only for the legacy recorder')
-    elif not isinstance(e['code_commit'], str) or not HEX40.fullmatch(e['code_commit']):
-        raise bad('code_commit must be 40 lowercase hex characters')
-    return {'reviewed_at': e['reviewed_at'], 'code_commit': e['code_commit']}
+ReviewConfigError, check_entry = bp.ReviewConfigError, bp.check_entry          # one strict validator, shared with best_picks.py
 
 
 def review_defaults(path=REVIEW_CONFIG) -> tuple:
@@ -90,7 +66,10 @@ def review_defaults(path=REVIEW_CONFIG) -> tuple:
     p = Path(path)
     if not p.is_file():
         return None, {}
-    reviews = json.loads(p.read_text()).get('reviews')
+    cfg = json.loads(p.read_text())
+    if not isinstance(cfg, dict):
+        raise ReviewConfigError('invalid review config: top level is not an object')
+    reviews = cfg.get('reviews')
     if not isinstance(reviews, list) or not reviews:
         raise ReviewConfigError('invalid review entry #0: the config has no "reviews" list')
     out = {}
@@ -435,7 +414,7 @@ def main(argv=None) -> str:
     ap.add_argument('--reviewed-recorder', action='append', default=[], help='recorder_sha256 of a reviewed recorder')
     ap.add_argument('--reviewed-commit', help='the exact (40 hex) code commit the override covers; required with the two options above')
     ap.add_argument('--review-config', default=str(REVIEW_CONFIG),
-                    help='JSON {reviewed_at, reviewed_recorder_sha256: [...]} used when the two options above are not given')
+                    help='JSON {"reviews": [{recorder_sha256, code_commit, reviewed_at, ...}]} used when the three options above are not given')
     ap.add_argument('--now', help='report time (default: now, UTC)')
     a = ap.parse_args(argv)
     REVIEW_SOURCE.update(path=a.review_config, unavailable=None, invalid=None)
