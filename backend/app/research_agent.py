@@ -60,7 +60,7 @@ DENIED_TOOLS = ("Bash(git * --output*)", "Bash(git * --ext-diff*)", "Bash(git * 
 # The agent's environment is built from these names only (plus PATH and the broker socket), never the driver's whole one.
 AGENT_ENV = ("HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "ANTHROPIC_API_KEY",
              "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CONFIG_DIR", "__CF_USER_TEXT_ENCODING")
-# Under $HOME the agent reads only these, each required (verified 2026-10-14 with Claude Code 2.1.299, see AUTORESEARCH.md):
+# Under $HOME the agent reads only these, each required (verified 2026-10-14 with Claude Code 2.1.299; re-checked 2026-11-18 with 2.1.327: every flag below is in `claude --help` and the binary starts under this profile; the login/API path was not re-run, see AUTORESEARCH.md):
 # the Claude Code install; the login keychain, where macOS keeps Claude Code's login (encrypted; items are released by
 # securityd, and the agent's shell has no command to ask for them); git's user config (commit identity). It writes nothing
 # under $HOME: the user's own Claude Code sessions load hooks and MCP commands from ~/.claude*, so those are never
@@ -303,6 +303,7 @@ def agent_profile(exp_root: Path, workspace: Path, sock: str, bin_dir: Optional[
         f"(deny file-write* (subpath {q(ws / '.git')}) (literal {q(ws / 'prepare.py')}) (literal {q(ws / 'program.md')}))",
         f"(allow file-write* {sub(git_ok)})",
         f"(deny file-write* {sub([str(ws / '.git' / g) for g in GIT_READONLY_INSIDE])} (regex {json.dumps('^' + _regex_literal(_safe(ws)) + '/(.*/)?' + ATTRIBUTES_ANY_CASE + '$')}))",
+        "(deny job-creation)", "(deny lsopen)", "(deny appleevent-send)",      # no launchd job, app launch or Apple event
         "(deny network*)",
         '(allow network-outbound (remote tcp "*:443"))',                   # the model API; nothing else
         '(allow network-outbound (literal "/private/var/run/mDNSResponder"))',
@@ -542,6 +543,7 @@ def run_agent(sports_: list, exp_root: Path, workspace: Path, max_trials: int = 
                         "model": model, "sandbox": sandbox, "argv": [x if x != prompt else "<prompt.txt>" for x in argv]})
         terminated = []
         old = signal.signal(signal.SIGTERM, lambda *_: terminated.append(ar._now()))
+        old_int = signal.signal(signal.SIGINT, lambda *_: terminated.append(ar._now()))   # ^C stops the run like SIGTERM
         evaluator = Evaluator(exp_root, workspace, python, ar.APP_DIR.parent, data_dir)
         broker = Broker(sock, evaluator)
         report = {"run_id": run_id, "branch": branch, "base": base, "budget": budget | {"usd_per_attempt": per_attempt},
@@ -557,6 +559,7 @@ def run_agent(sports_: list, exp_root: Path, workspace: Path, max_trials: int = 
                 report |= _finish(exp_root, workspace, rdir, state, sports_, report, t0, terminated)
             finally:
                 signal.signal(signal.SIGTERM, old)
+                signal.signal(signal.SIGINT, old_int)
         return report
 
 

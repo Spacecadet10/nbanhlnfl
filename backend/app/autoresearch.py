@@ -26,11 +26,15 @@ import os
 import pickle
 import platform
 import random
+import resource
+import secrets
 import select
+import shutil
 import signal
 import struct
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import asdict, replace
 from datetime import datetime, timezone
@@ -77,7 +81,8 @@ PROTOCOL = {
     },
     "seed": 20261014,
 }
-BUDGETS = {"trial_timeout_s": 1800, "max_trials": 4, "max_minutes": 120, "max_retries": 2, "concurrency": 1}
+BUDGETS = {"trial_timeout_s": 1800, "max_trials": 4, "max_minutes": 120, "max_retries": 2, "concurrency": 1,
+           "memory_gb": 6.0}          # resident memory of the whole candidate process group; above it the group is killed
 FORBIDDEN_FEATURES = ("goalie_home", "goalie_away", "goalie_diff", "goalie_exp_home", "goalie_exp_away")
 PROTECTED_WORKSPACE = ("program.md", "prepare.py")
 EDITABLE = "train.py"
@@ -674,13 +679,139 @@ def _profile(tmp: Path) -> str:
     virtualenv, the app source and the trial's own tmp dir. Writes: only that tmp dir. No network."""
     q = lambda p: json.dumps(str(Path(p).resolve()))           # noqa: E731  (SBPL strings use the same escaping)
     allowed = sorted({sys.prefix, sys.base_prefix, str(Path(os.path.realpath(sys.executable)).parents[1]), str(APP_DIR), str(tmp)})
+    py = {os.path.realpath(sys.executable), str(Path(sys.executable).absolute())}
     lines = ["(version 1)", "(allow default)", "(deny network*)",
+             # No program but this Python can start (loky workers re-exec it; fork stays allowed), and nothing may reach
+             # launchd, Launch Services or another app: submitted jobs and opened files would run outside the sandbox.
+             "(deny process-exec*)", "(allow process-exec " + " ".join(f"(literal {json.dumps(p)})" for p in sorted(py)) + ")",
+             "(deny job-creation)", "(deny lsopen)", "(deny appleevent-send)",
+             "(deny ipc-posix-shm*)", "(deny ipc-sysv*)",             # no shared memory to pass data between trials
+             # POSIX semaphores only under the names loky ('/loky-<pid>-<rand>'), joblib's start-up probe ('/joblib-<pid>-<rand>') and multiprocessing ('/mp-<rand>') create
+             '(deny ipc-posix-sem*)', '(allow ipc-posix-sem* (ipc-posix-name-regex #"^/((loky|joblib)-[0-9]+|mp)-[A-Za-z0-9_]+$"))',
+             '(deny mach-lookup (global-name "com.apple.pasteboard.1") (global-name "com.apple.pbs.fetch_services"))',
+             "(deny signal)", "(allow signal (target same-sandbox))",      # no signal to the parent or any other process
              "(deny file-write* (subpath \"/\"))",
-             f"(allow file-write* (subpath {q(tmp)}) (literal \"/dev/null\") (regex #\"^/private/tmp/__KMP_REGISTERED_LIB_\"))",
+             f"(allow file-write* (subpath {q(tmp)}) (literal \"/dev/null\") (regex #\"^/private/tmp/__KMP_REGISTERED_LIB_[0-9]+$\"))",
              "(deny file-read* " + " ".join(f"(subpath {q(p)})" for p in READ_DENIED) + ")",
              "(allow file-read-metadata)",                       # stat only; contents stay denied
              "(allow file-read* " + " ".join(f"(subpath {q(p)})" for p in allowed) + f" (literal {q(APP_DIR.parent)}))"]
     return "\n".join(lines) + "\n"
+
+
+def _group_rss_gb(pgid: int) -> Optional[float]:
+    """Resident memory of every process in the group, in GB; None when ps cannot be read or the group is not listed."""
+    try:
+        out = subprocess.run(["/bin/ps", "-axo", "pgid=,rss="], capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    kb = sum(int(r[1]) for r in (ln.split() for ln in out.splitlines()) if len(r) == 2 and r[0] == str(pgid) and r[1].isdigit())
+    return kb / (1024 ** 2) if kb else None
+
+
+def _memory_guard(pgid: int, limit_gb: float, stop: threading.Event, state: dict) -> None:
+    """Polls the group's resident memory; above the limit kills the whole group and records the peak seen. A guard that
+    cannot read memory (3 readings in a row, or an error) kills the group too: a trial never runs without its limit."""
+    def kill():
+        try:
+            os.killpg(pgid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+
+    blind = 0
+    try:
+        while not stop.wait(1.0):
+            gb = _group_rss_gb(pgid)
+            blind = blind + 1 if not gb else 0
+            if blind >= 3:
+                state["unavailable"] = True
+                return kill()
+            if gb:
+                state["peak_gb"] = max(state.get("peak_gb", 0.0), gb)
+            if gb and gb > limit_gb:
+                state["killed"] = gb
+                return kill()
+    except Exception:
+        state["unavailable"] = True
+        kill()
+
+
+BOOT_MARK = "from app.autoresearch import serve"        # in the argv of the candidate process and of every fork of it
+NONCE_TAG = "ar-nonce-"                                  # followed by a random per-run token: a scan kills only this run's candidates
+KMP_DIR = Path("/private/tmp")                           # libomp registers itself here (__KMP_REGISTERED_LIB_<pid>)
+CPU_SLACK_S, CPU_FACTOR = 60, 4                          # CPU-time limit per process: timeout x threads (OMP_NUM_THREADS=4) + slack
+
+
+def _kill_strays(tmp: Path) -> list:
+    """Kills every process whose current directory is the trial's tmp dir: a candidate child that called setsid left the
+    process group the parent kills, but it started in (and is still in) that directory."""
+    prefix, killed = str(tmp.resolve()), []
+    for _ in range(3):
+        try:
+            out = subprocess.run(["/usr/sbin/lsof", "-a", "-d", "cwd", "-Fpn"], capture_output=True, text=True, timeout=30).stdout
+        except (OSError, subprocess.SubprocessError):
+            return killed
+        pid, found = None, []
+        for ln in out.splitlines():
+            if ln.startswith("p") and ln[1:].isdigit():
+                pid = int(ln[1:])
+            elif ln.startswith("n") and ln[1:].startswith(prefix) and pid:
+                found.append(pid)
+        if not found:
+            return killed
+        for p in found:
+            try:
+                os.kill(p, signal.SIGKILL)
+                killed.append(p)
+            except (ProcessLookupError, PermissionError):
+                pass
+        time.sleep(0.2)
+    return killed
+
+
+def _kmp_files(folder: Path = KMP_DIR) -> set:
+    return {f.name for f in folder.glob("__KMP_REGISTERED_LIB_*")}
+
+
+def _remove_new_kmp(before: set, folder: Path = KMP_DIR) -> int:
+    """Deletes the libomp registration files that appeared since `before` (the sandbox lets a candidate create them, and
+    nothing else removes them); returns how many. A concurrent OpenMP process's file may go too: libomp ignores that."""
+    n = 0
+    for name in _kmp_files(folder) - before:
+        try:
+            (folder / name).unlink()
+            n += 1
+        except OSError:
+            pass
+    return n
+
+
+def _kill_by_argv(nonce: str) -> list:
+    """Kills every process still running this run's candidate boot command line (a double-forked, setsid, chdir('/') child
+    has neither the group nor the directory); another run's candidates carry another nonce and are left alone. Returns the
+    pids killed."""
+    try:
+        out = subprocess.run(["/bin/ps", "-axo", "pid=,command="], capture_output=True, text=True, timeout=30).stdout
+    except (OSError, subprocess.SubprocessError):
+        return []
+    killed = []
+    for ln in out.splitlines():
+        parts = ln.split(None, 1)
+        if len(parts) == 2 and parts[0].isdigit() and BOOT_MARK in parts[1] and NONCE_TAG + nonce in parts[1] and int(parts[0]) != os.getpid():
+            try:
+                os.kill(int(parts[0]), signal.SIGKILL)
+                killed.append(int(parts[0]))
+            except (ProcessLookupError, PermissionError):
+                pass
+    return killed
+
+
+def _reap(tmp: Path, nonce: str) -> list:
+    """Everything of the trial that outlived its process group; the pids killed (recorded in the trial's resources)."""
+    return sorted(set(_kill_strays(tmp) + _kill_by_argv(nonce)))
+
+
+def _cpu_limit(timeout_s: float) -> int:
+    return int(timeout_s * CPU_FACTOR + CPU_SLACK_S)
 
 
 def run_candidate(src: str, sport: str, data: dict, scored, timeout_s: float, tdir: Path) -> dict:
@@ -694,17 +825,25 @@ def run_candidate(src: str, sport: str, data: dict, scored, timeout_s: float, td
     profile.write_text(_profile(tmp))
     r_req, w_req = os.pipe()
     r_resp, w_resp = os.pipe()
-    boot = f"import sys; sys.path.insert(0, {str(APP_DIR.parent)!r}); from app.autoresearch import serve; serve({w_resp})"
+    nonce = secrets.token_hex(8)
+    boot = f"import sys; sys.path.insert(0, {str(APP_DIR.parent)!r}); {BOOT_MARK}; _ = {NONCE_TAG + nonce!r}; serve({w_resp})"
+    kmp_before = _kmp_files()
     env = {"PATH": "/usr/bin:/bin", "HOME": str(tmp), "TMPDIR": str(tmp), "OMP_NUM_THREADS": "4",
            "PYTHONDONTWRITEBYTECODE": "1", "MPLCONFIGDIR": str(tmp)}
     t0 = time.time()
     log = (tdir / "run.log").open("w")
     proc = subprocess.Popen([SANDBOX, "-f", str(profile), sys.executable, "-I", "-B", "-c", boot], stdin=r_req, stdout=log,
-                            stderr=subprocess.STDOUT, pass_fds=(w_resp,), env=env, cwd=str(tmp), start_new_session=True)
+                            stderr=subprocess.STDOUT, pass_fds=(w_resp,), env=env, cwd=str(tmp), start_new_session=True,
+                            preexec_fn=lambda: resource.setrlimit(resource.RLIMIT_CPU, (_cpu_limit(timeout_s),) * 2))
     os.close(r_req)
     os.close(w_resp)
     conn = _Remote(w_req, r_resp, t0 + timeout_s)
     res = {"status": "ok"}
+    limit_gb = float(BUDGETS["memory_gb"])
+    guard_state, stop_guard = {}, threading.Event()
+    guard = threading.Thread(target=_memory_guard, args=(proc.pid, limit_gb, stop_guard, guard_state), daemon=True,
+                             name="ar-memory-guard")
+    guard.start()
     try:
         specs, mapping = check_specs(sport, conn.call({"source": src, "sport": sport, "seed": PROTOCOL["seed"]}))
         outs, fits, seconds = walk(conn, specs, data["rows"], max(scored))
@@ -735,19 +874,29 @@ def run_candidate(src: str, sport: str, data: dict, scored, timeout_s: float, td
     except TrialInvalid as exc:
         res = {"status": "invalid", "reason": str(exc)}
     finally:
+        stop_guard.set()
+        guard.join(15)                                    # its last reading is in guard_state before the result is read
         try:
             os.killpg(proc.pid, signal.SIGKILL)               # the whole group: no stray worker processes survive
         except (ProcessLookupError, PermissionError):         # macOS: EPERM once the group leader has already exited
             pass
         _, status, ru = os.wait4(proc.pid, 0)
+        survivors = _reap(tmp, nonce)                            # a child that left the group (setsid) is not reached by killpg
+        kmp_removed = _remove_new_kmp(kmp_before)         # libomp files the trial left in /private/tmp
         os.close(w_req)
         os.close(r_resp)
         log.close()
+        shutil.rmtree(tmp, ignore_errors=True)            # the trial's scratch space (HOME, TMPDIR); logs and profile stay
+    if guard_state.get("unavailable") and "killed" not in guard_state:
+        res = {"status": "killed", "reason": "killed: memory guard unavailable"}
+    elif "killed" in guard_state:           # the guard's kill ends the pipe: a memory kill, not a crash
+        res = {"status": "killed", "reason": f"killed: memory (group resident {guard_state['killed']:.2f} GB > limit {limit_gb:g} GB)"}
     if res["status"] == "crash":
         res["reason"] += f" (exit {os.waitstatus_to_exitcode(status)}): {(tdir / 'run.log').read_text()[-400:]}"
     res["resources"] = {"wall_s": round(time.time() - t0, 1), "cpu_s": round(ru.ru_utime + ru.ru_stime, 1),
                         "max_rss_gb": round(ru.ru_maxrss / (1024 ** 3 if sys.platform == "darwin" else 1024 ** 2), 2),
-                        "timed_out": res["status"] == "timeout"}
+                        "timed_out": res["status"] == "timeout", "memory_limit_gb": limit_gb, "survivors_killed": survivors, "kmp_files_removed": kmp_removed,
+                        "peak_group_rss_gb": round(max(guard_state.get("peak_gb", 0.0), guard_state.get("killed", 0.0)), 2)}
     return res
 
 
@@ -880,13 +1029,15 @@ def _tsv(root: Path, rec: dict) -> None:
     """upstream's results.tsv (commit, metric, memory, status, description), with sport and the kept markets' deltas."""
     p = root / "results.tsv"
     if not p.is_file():
-        p.write_text("commit\tsport\tkept_vs_incumbent\tpeak_rss_gb\tstatus\tdescription\n")
+        p.write_text("commit\tsport\tkept_vs_incumbent\tpeak_rss_gb\tstatus\tdescription\t"
+                     "distinct_train_py_uncorrected\tmarkets_per_trial\n")
     kept = [f"{m}:{s['vs_incumbent']['mean']:+.5f}" for m, s in (rec.get("markets") or {}).items() if s.get("decision") == "keep"]
     status = rec["status"] + (f" (cached {rec['cached_from']})" if rec.get("cached_from") else "")
     with p.open("a") as fh:
         fh.write(f"{rec['commit'][:7]}\t{rec['sport']}\t{','.join(kept) or '-'}\t"
                  f"{(rec.get('resources') or {}).get('max_rss_gb', 0.0):.2f}\t{status}\t"
-                 f"{rec.get('description', '').replace(chr(9), ' ')}\n")
+                 f"{rec.get('description', '').replace(chr(9), ' ')}\t"
+                 f"{(rec.get('search') or {}).get('distinct_train_py', '')}\t{(rec.get('search') or {}).get('markets_per_trial', '')}\n")
 
 
 def _finish(root: Path, rec: dict) -> dict:
@@ -1000,8 +1151,10 @@ def run_trial(sport: str, exp_root: Path, workspace: Path, description: str = ""
                        "data": {"snapshot": meta["snapshot"]["sha256"], "cache": meta["cache"]["sha256"],
                                 "dataset_version": meta["dataset_version"]},
                        "cutoff": PROTOCOL["cutoff"], "attempt": len(prior) + 1})
+        n_trials = len({r["train_sha256"] for r in _records(root) if r["event"] == "started"})
         rec = {**base, "event": "finished", "description": description, "train_sha256": state["train_sha256"], "seed": seed,
-               "incumbents": inc_state}
+               "incumbents": inc_state,        # the size of the search so far (validation seasons), never corrected for
+               "search": {"distinct_train_py": n_trials, "markets_per_trial": len(sports.SPORTS[sport].markets), "uncorrected": True}}
         problems = [f"{f} differs from the registered protected file" for f, h in state["protected"].items()
                     if h != meta["protected"][f]]
         extra = [f for f in state["changed"] if f not in (EDITABLE, *PROTECTED_WORKSPACE)]
@@ -1027,7 +1180,6 @@ def run_trial(sport: str, exp_root: Path, workspace: Path, description: str = ""
             markets[market] = score_market(data, market, cand, inc[market], scored) | {"spec": res["markets"].get(market, {}).get("spec")}
             agree[market] = agreement(data, market, cand, scored)
         kept = [m for m, s in markets.items() if s["decision"] == "keep"]
-        n_trials = len({r["train_sha256"] for r in _records(root) if r["event"] == "started"})
         rec |= {"status": "keep" if kept else "discard", "markets": markets, "agreement": agree, "specs": res["specs"],
                 "fits": res["fits"], "predictions": str(packed), "finished_at": _now(),
                 "reason": f"kept in {kept} (vs the incumbent; exploratory)" if kept else
@@ -1048,6 +1200,10 @@ def summary(rec: dict) -> str:
         lines.append(f"market_{m}: {s['decision']} coverage={s['forecast']}/{s['cohort']} "
                      f"delta={d.get('mean', float('nan')):+.5f} ci95={d.get('ci95')} vs={s['incumbent']} "
                      f"(vs primary {p.get('mean', float('nan')):+.5f})")
+    srch = rec.get("search") or {}
+    if srch:
+        lines += [f"distinct_train_py:   {srch['distinct_train_py']} (uncorrected: every kept result is one of this many looks)",
+                  f"markets_per_trial:   {srch['markets_per_trial']} (uncorrected)"]
     res = rec.get("resources") or {}
     lines += [f"wall_seconds:     {res.get('wall_s')}", f"peak_rss_gb:      {res.get('max_rss_gb')}",
               f"reason:           {rec.get('reason')}"]
@@ -1158,7 +1314,7 @@ def holdout(sport: str, exp_root: Path, workspace: Path, ask: Callable[[str], bo
                           "needs --reuse-reason (logged; results then are not an independent check)")
         if log and log[-1]["event"] == "pending":
             _holdout_append(root, {"event": "failed", "at": _now(), "reason": "no terminal record (process stopped)"})
-        if sum(h["event"] == "failed" for h in _holdout_log(root)) > BUDGETS["max_retries"]:
+        if sum(h["event"] == "failed" for h in _holdout_log(root)) >= BUDGETS["max_retries"]:       # at most 2 failures (doc)
             raise Refused("holdout failed too often; investigate before another attempt")
         inc = incumbents(root, sport, meta)
         kept = {m: c for m, c in inc.items() if c["trial"]}
@@ -1221,7 +1377,7 @@ def main(argv=None) -> int:
         s.add_argument("--description", default="")
         s.add_argument("--retry", action="store_true")
         s.add_argument("--timeout", type=int, default=BUDGETS["trial_timeout_s"])
-        s.add_argument("--max-trials", type=int, default=BUDGETS["max_trials"])
+        s.add_argument("--max-trials", type=int, default=None)       # daily falls back to BUDGETS; agent must name it
         s.add_argument("--max-minutes", type=float, default=BUDGETS["max_minutes"])
         s.add_argument("--reuse-reason")
         s.add_argument("--max-usd", type=float)
@@ -1230,6 +1386,10 @@ def main(argv=None) -> int:
         s.add_argument("--clear", action="store_true")
     a = p.parse_args(argv)
     chosen = a.sport or ["nba", "nhl"]
+    if a.cmd == "agent" and not (a.max_trials and a.max_trials > 0 and a.max_usd and a.max_usd > 0):
+        print("REFUSED: an agent run needs an explicit --max-trials > 0 and --max-usd > 0 (no defaults)", file=sys.stderr)
+        return 2
+    a.max_trials = a.max_trials if a.max_trials is not None else BUDGETS["max_trials"]
     try:
         if a.cmd == "prepare":
             for s in chosen:
@@ -1248,7 +1408,7 @@ def main(argv=None) -> int:
             from . import research_agent as ra
             r = ra.run_agent(chosen, a.exp_root, a.workspace, max_trials=min(a.max_trials, ra.AGENT["max_trials"]),
                              max_minutes=min(a.max_minutes, ra.AGENT["max_minutes"]),
-                             max_usd=min(a.max_usd or ra.AGENT["max_usd"], ra.AGENT["max_usd"]), model=a.model)
+                             max_usd=min(a.max_usd, ra.AGENT["max_usd"]), model=a.model)
             print(json.dumps({k: r.get(k) for k in ("run_id", "branch", "stopped", "outcome", "trials", "commits", "cost_usd",
                                                     "minutes", "sweep")}, indent=1, default=str))
         elif a.cmd == "stop":                     # the kill switch must work without a data directory

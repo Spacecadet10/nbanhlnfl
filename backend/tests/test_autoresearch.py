@@ -10,6 +10,8 @@ import math
 import os
 import random
 import subprocess
+import sys
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -454,7 +456,7 @@ def test_timeouts_kill_the_process_group_crashes_are_logged_and_retries_bounded(
     rec = ar.run_trial("nba", env["exp"], env["ws"], timeout_s=5)
     assert rec["status"] == "timeout" and rec["resources"]["timed_out"]
     trial_dir = str(env["root"] / "trials" / rec["trial_id"])
-    assert subprocess.run(["pgrep", "-f", trial_dir], capture_output=True, text=True).stdout.split() == []
+    assert _procs_with_cwd_in(trial_dir) == []                    # no process of the trial survives (cwd is its tmp dir)
     assert ar.run_trial("nba", env["exp"], env["ws"], timeout_s=5)["cached"]       # no silent rerun
     monkeypatch.setitem(ar.BUDGETS, "max_retries", 1)
     assert ar.run_trial("nba", env["exp"], env["ws"], retry=True, timeout_s=5)["status"] == "timeout"
@@ -597,3 +599,318 @@ def test_daily_evaluates_queued_commits_within_budget_without_touching_the_worki
     assert Path(third["report_file"]).is_file() and third["sports"]["nba"]["promotion"].startswith("none")
     assert (ws / "train.py").read_text() == "uncommitted, must stay\n"       # never checked anything out
     assert git(ws, "rev-parse", "--abbrev-ref", "HEAD") == branch and git(ws, "rev-parse", "HEAD") == head
+
+
+def _sandboxed(tmp_path, code):
+    tmp = tmp_path / "tmp"
+    tmp.mkdir()
+    prof = tmp_path / "sandbox.sb"
+    prof.write_text(ar._profile(tmp))
+    env = {"PATH": "/usr/bin:/bin", "HOME": str(tmp), "TMPDIR": str(tmp)}
+    return subprocess.run([ar.SANDBOX, "-f", str(prof), sys.executable, "-I", "-B", "-c", code], capture_output=True,
+                          text=True, env=env, cwd=str(tmp), timeout=120), tmp
+
+
+def test_the_candidate_sandbox_cannot_start_other_programs_launchd_jobs_or_apps(tmp_path):
+    label = f"com.nba-predictor.sandbox-test-{os.getpid()}"
+    cmd = tmp_path / "x.command"
+    cmd.write_text("#!/bin/sh\ntouch " + str(tmp_path / "ran") + "\n")
+    cmd.chmod(0o755)
+    code = ("import os\n"
+            f"a = os.system('/bin/launchctl submit -l {label} -- /usr/bin/true')\n"
+            f"b = os.system('/usr/bin/open -g {cmd}')\n"
+            "c = os.system('/bin/echo hi')\n"
+            "print('RC', a, b, c)\n")
+    try:
+        res, _ = _sandboxed(tmp_path, code)
+        listed = subprocess.run(["/bin/launchctl", "list"], capture_output=True, text=True).stdout
+    finally:
+        subprocess.run(["/bin/launchctl", "remove", label], capture_output=True)
+    assert "RC" in res.stdout, res.stderr
+    assert all(int(x) != 0 for x in res.stdout.split("RC")[1].split()), res.stdout
+    assert label not in listed
+    assert not (tmp_path / "ran").exists()
+
+
+def test_the_candidate_sandbox_still_runs_python_and_forks_workers(tmp_path):
+    code = ("import os, subprocess, sys\n"
+            "pid = os.fork()\n"
+            "if pid == 0:\n    os._exit(7)\n"
+            "_, st = os.waitpid(pid, 0)\n"
+            "out = subprocess.run([sys.executable, '-I', '-c', 'print(41 + 1)'], capture_output=True, text=True)\n"
+            "print('OK', os.waitstatus_to_exitcode(st), out.stdout.strip())\n")
+    res, _ = _sandboxed(tmp_path, code)
+    assert "OK 7 42" in res.stdout, res.stdout + res.stderr
+
+
+def test_the_candidate_sandbox_still_runs_loky_workers(tmp_path):
+    pytest.importorskip("joblib")
+    res, _ = _sandboxed(tmp_path, "from joblib import Parallel, delayed\n"
+                                  "print('LOKY', Parallel(n_jobs=2, backend='loky')(delayed(abs)(-i) for i in range(4)))\n")
+    assert "LOKY [0, 1, 2, 3]" in res.stdout, res.stdout + res.stderr
+
+
+def test_a_holdout_that_failed_twice_is_not_attempted_a_third_time(env, monkeypatch):
+    ar.run_trial("nba", env["exp"], env["ws"])
+
+    def broken(sport, period):
+        raise OSError("disk")
+
+    monkeypatch.setattr(ar, "build_dataset", broken)
+    for _ in range(2):                                           # docs/AUTORESEARCH.md: at most 2 failures
+        with pytest.raises(OSError):
+            ar.holdout("nba", env["exp"], env["ws"], ask=lambda p: True)
+    with pytest.raises(ar.Refused, match="failed too often"):
+        ar.holdout("nba", env["exp"], env["ws"], ask=lambda p: True)
+    assert [h["event"] for h in ar._holdout_log(env["root"])].count("failed") == 2
+
+
+def test_a_candidate_over_the_memory_limit_is_killed_and_recorded(env, monkeypatch):
+    hog = edit("def fit(spec, rows):\n    return engine.fit(spec, rows)",
+               "def fit(spec, rows):\n    import numpy\n    a = numpy.ones(60_000_000)\n    a[::512] = 2.0\n"
+               "    while True:\n        pass")
+    commit_train(env["ws"], hog, "allocates 480 MB")
+    monkeypatch.setitem(ar.BUDGETS, "memory_gb", 0.25)
+    rec = ar.run_trial("nba", env["exp"], env["ws"], timeout_s=100)
+    assert rec["status"] == "killed" and rec["reason"].startswith("killed: memory"), rec
+    trial_dir = str(env["root"] / "trials" / rec["trial_id"])
+    assert _procs_with_cwd_in(trial_dir) == []                    # no process of the trial survives (cwd is its tmp dir)
+    assert rec["resources"]["wall_s"] < 60
+    assert "killed" in (env["root"] / "results.tsv").read_text()
+
+
+def test_a_trials_tmp_dir_is_deleted_after_the_trial_but_its_logs_stay(env):
+    rec = ar.run_trial("nba", env["exp"], env["ws"])
+    tdir = env["root"] / "trials" / rec["trial_id"]
+    assert (tdir / "run.log").is_file() and (tdir / "sandbox.sb").is_file()
+    assert not (tdir / "tmp").exists()
+
+
+def test_the_search_size_is_in_the_record_the_summary_and_results_tsv_labelled_uncorrected(env):
+    rec = ar.run_trial("nba", env["exp"], env["ws"])
+    assert rec["search"] == {"distinct_train_py": 1, "markets_per_trial": 5, "uncorrected": True}
+    assert "uncorrected" in ar.summary(rec) and "distinct_train_py:   1" in ar.summary(rec)
+    head, row = (env["root"] / "results.tsv").read_text().splitlines()[:2]
+    assert head.split("\t")[-2:] == ["distinct_train_py_uncorrected", "markets_per_trial"] and row.split("\t")[-2:] == ["1", "5"]
+
+
+def test_the_candidate_cannot_signal_processes_outside_its_sandbox(tmp_path):
+    res, _ = _sandboxed(tmp_path, "import os\n"
+                                  f"try:\n    os.kill({os.getpid()}, 0)\n    print('SIGNALLED')\n"
+                                  "except PermissionError:\n    print('EPERM')\n"
+                                  "pid = os.fork()\n"
+                                  "if pid == 0:\n    os._exit(0)\n"
+                                  "os.kill(pid, 0) if False else None\nos.waitpid(pid, 0)\nprint('OWN-OK')\n")
+    assert "EPERM" in res.stdout and "SIGNALLED" not in res.stdout and "OWN-OK" in res.stdout, res.stdout + res.stderr
+
+
+def _procs_with_cwd_in(folder):
+    """Pids whose current directory is inside `folder` (lsof), the check that does not depend on process group or argv."""
+    out = subprocess.run(["/usr/sbin/lsof", "-a", "-d", "cwd", "-Fpn"], capture_output=True, text=True).stdout
+    pid, found = None, []
+    for ln in out.splitlines():
+        if ln.startswith("p"):
+            pid = int(ln[1:])
+        elif ln.startswith("n") and ln[1:].startswith(str(Path(folder).resolve())):
+            found.append(pid)
+    return found
+
+
+def test_a_child_that_left_the_process_group_is_killed_with_the_trial(tmp_path):
+    tmp = tmp_path / "tmp"
+    tmp.mkdir()
+    prof = tmp_path / "sandbox.sb"
+    prof.write_text(ar._profile(tmp))
+    code = ("import os, time\n"
+            "if os.fork() == 0:\n    os.setsid()\n    time.sleep(300)\n    os._exit(0)\n"
+            "time.sleep(2)\nprint('PARENT-DONE')\n")
+    subprocess.run([ar.SANDBOX, "-f", str(prof), sys.executable, "-I", "-B", "-c", code], stdout=subprocess.DEVNULL,
+                   stderr=subprocess.DEVNULL, env={"PATH": "/usr/bin:/bin", "HOME": str(tmp), "TMPDIR": str(tmp)}, cwd=str(tmp), timeout=60)
+    try:
+        assert _procs_with_cwd_in(tmp), "the setsid child should still be running before the cleanup"
+        ar._kill_strays(tmp)
+        assert _procs_with_cwd_in(tmp) == []
+    finally:
+        for p in _procs_with_cwd_in(tmp):
+            os.kill(p, 9)
+
+
+@pytest.mark.parametrize("broken", [lambda pgid: None, lambda pgid: 0.0, lambda pgid: 1 / 0])
+def test_a_memory_guard_that_cannot_read_memory_fails_the_trial_instead_of_running_unlimited(env, monkeypatch, broken):
+    spin = edit("def fit(spec, rows):\n    return engine.fit(spec, rows)", "def fit(spec, rows):\n    while True:\n        pass")
+    commit_train(env["ws"], spin, "spins")
+    monkeypatch.setattr(ar, "_group_rss_gb", broken)
+    rec = ar.run_trial("nba", env["exp"], env["ws"], timeout_s=100)
+    assert rec["status"] == "killed" and rec["reason"] == "killed: memory guard unavailable", rec
+    assert rec["resources"]["wall_s"] < 60
+
+
+@pytest.mark.parametrize("path", ["trial", "daily", "holdout"])
+def test_every_path_that_runs_train_py_uses_the_one_guarded_runner(env, monkeypatch, path):
+    """trial, daily and holdout all end in run_candidate: the sandbox profile (no exec/launchd/signals), the memory guard
+    (fail closed) and the stray-process cleanup apply to each. A blind guard must kill the run on every path."""
+    seen = {"profile": 0, "strays": 0, "guard": 0}
+    real_profile, real_strays, real_guard = ar._profile, ar._kill_strays, ar._memory_guard
+    monkeypatch.setattr(ar, "_profile", lambda tmp: (seen.__setitem__("profile", seen["profile"] + 1), real_profile(tmp))[1])
+    monkeypatch.setattr(ar, "_kill_strays", lambda tmp: (seen.__setitem__("strays", seen["strays"] + 1), real_strays(tmp))[1])
+    monkeypatch.setattr(ar, "_memory_guard", lambda *a: (seen.__setitem__("guard", seen["guard"] + 1), real_guard(*a))[1])
+    ws, exp = env["ws"], env["exp"]
+    if path == "daily":
+        ar.daily(["nba"], exp, ws, max_trials=1, max_minutes=30, timeout_s=300)          # the base commit
+    else:
+        ar.run_trial("nba", exp, ws)                                                       # a kept baseline for the holdout
+    seen.update(profile=0, strays=0, guard=0)
+    spin = edit("def fit(spec, rows):\n    return engine.fit(spec, rows)", "def fit(spec, rows):\n    while True:\n        pass")
+    commit_train(ws, spin, "spins")
+    if path != "holdout":                  # the holdout re-runs the kept trials' saved sources, which finish too fast to go blind
+        monkeypatch.setattr(ar, "_group_rss_gb", lambda pgid: None)
+    if path == "trial":
+        rec = ar.run_trial("nba", exp, ws, timeout_s=100)
+        assert rec["status"] == "killed" and rec["reason"] == "killed: memory guard unavailable"
+    elif path == "daily":
+        out = ar.daily(["nba"], exp, ws, max_trials=1, max_minutes=30, timeout_s=100)
+        assert [t["status"] for t in out["trials"]] == ["killed"]
+    else:
+        assert ar.holdout("nba", exp, ws, ask=lambda p: True)["status"] == "scored"
+    assert seen == {"profile": 1, "strays": 1, "guard": 1}
+
+
+def test_the_candidate_cannot_use_shared_memory_or_the_pasteboard_to_pass_data_between_trials(tmp_path):
+    from multiprocessing import shared_memory
+    name = f"nbaprobe{os.getpid()}"
+    make = ("from multiprocessing import shared_memory\n"
+            f"s = shared_memory.SharedMemory(name={name!r}, create=True, size=64)\ns.buf[:5] = b'LEAK!'\nprint('CREATED')\n")
+    peek = ("from multiprocessing import shared_memory\n"
+            f"s = shared_memory.SharedMemory(name={name!r})\nprint('READ', bytes(s.buf[:5]))\n")
+    paste = "import os\nprint('PBCOPY', os.system('/usr/bin/pbcopy < /dev/null'), os.system('/usr/bin/pbpaste > /dev/null'))\n"
+    try:
+        for d in "abc":
+            (tmp_path / d).mkdir()
+        first, _ = _sandboxed(tmp_path / "a", make)
+        second, _ = _sandboxed(tmp_path / "b", peek)
+        assert "CREATED" not in first.stdout, first.stdout + first.stderr
+        assert "LEAK!" not in second.stdout, second.stdout + second.stderr
+        third, _ = _sandboxed(tmp_path / "c", paste)
+        assert "PBCOPY 0 0" not in third.stdout, third.stdout + third.stderr       # exec is denied already; the mach name is too
+    finally:
+        try:
+            seg = shared_memory.SharedMemory(name=name)
+            seg.close()
+            seg.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def test_a_double_forked_setsid_chdir_child_is_reaped_with_the_trial(tmp_path):
+    tmp = tmp_path / "tmp"
+    tmp.mkdir()
+    prof = tmp_path / "sandbox.sb"
+    prof.write_text(ar._profile(tmp))
+    code = (f"# from app.autoresearch import serve {ar.NONCE_TAG}n1\n"          # the candidate's argv carries the boot string and run nonce
+            "import os, time\n"
+            "if os.fork() == 0:\n"
+            "    os.setsid()\n"
+            "    if os.fork() == 0:\n        os.chdir('/')\n        time.sleep(300)\n        os._exit(0)\n"
+            "    os._exit(0)\n"
+            "time.sleep(2)\n")
+    subprocess.run([ar.SANDBOX, "-f", str(prof), sys.executable, "-I", "-B", "-c", code], stdout=subprocess.DEVNULL,
+                   stderr=subprocess.DEVNULL, env={"PATH": "/usr/bin:/bin", "HOME": str(tmp), "TMPDIR": str(tmp)}, cwd=str(tmp), timeout=60)
+
+    def alive():
+        out = subprocess.run(["/bin/ps", "-axo", "pid=,command="], capture_output=True, text=True).stdout.splitlines()
+        return [int(ln.split()[0]) for ln in out if "from app.autoresearch import serve" in ln and "time.sleep(300)" in ln]
+    try:
+        assert alive(), "the detached grandchild should be running before the cleanup"
+        killed = ar._reap(tmp, 'n1')
+        time.sleep(0.5)
+        assert alive() == [] and killed, killed
+    finally:
+        for p in alive():
+            os.kill(p, 9)
+
+
+def test_the_candidate_has_a_cpu_time_limit_that_survives_setsid(env, monkeypatch):
+    monkeypatch.setattr(ar, "CPU_SLACK_S", 0)
+    monkeypatch.setattr(ar, "CPU_FACTOR", 0.05)                                   # 100 s wall -> 5 s of CPU
+    spin = edit("def fit(spec, rows):\n    return engine.fit(spec, rows)", "def fit(spec, rows):\n    while True:\n        pass")
+    commit_train(env["ws"], spin, "spins")
+    rec = ar.run_trial("nba", env["exp"], env["ws"], timeout_s=100)                  # wall limit far away: CPU limit fires first
+    assert rec["status"] == "crash" and rec["resources"]["wall_s"] < 60, rec
+
+
+def test_the_memory_guard_thread_is_joined_before_the_result_is_read(env):
+    import threading
+    ar.run_trial("nba", env["exp"], env["ws"])
+    assert not [t for t in threading.enumerate() if t.name == "ar-memory-guard"]
+
+
+def test_the_candidate_can_only_create_loky_and_multiprocessing_semaphore_names(tmp_path):
+    """A named semaphore outlives its creator: an arbitrary name would let one trial hand data to the next (count, existence)."""
+    make = ("import _multiprocessing\n"
+            "try:\n    _multiprocessing.SemLock(1, 777, 32767, '/lkX%d', False)\n    print('CREATED')\n"
+            "except OSError as e:\n    print('DENIED', e.errno)\n")
+    for d in "ab":
+        (tmp_path / d).mkdir()
+    name = f"/lkX{os.getpid()}"
+    try:
+        first, _ = _sandboxed(tmp_path / "a", make.replace("/lkX%d", name))
+        assert "CREATED" not in first.stdout and "DENIED" in first.stdout, first.stdout + first.stderr
+        ok, _ = _sandboxed(tmp_path / "b", "import multiprocessing as m\nl = m.Lock()\nl.acquire()\nprint('MPLOCK')\n")
+        assert "MPLOCK" in ok.stdout, ok.stdout + ok.stderr
+        (tmp_path / "c").mkdir()
+        jl, _ = _sandboxed(tmp_path / "c", "import warnings\nwarnings.simplefilter('error')\nimport joblib\nfrom joblib import Parallel, delayed\n"
+                                          "print('JOBLIB', Parallel(n_jobs=2, backend='loky')(delayed(abs)(-i) for i in range(3)))\n")
+        assert "JOBLIB [0, 1, 2]" in jl.stdout, jl.stdout + jl.stderr          # joblib did not fall back to serial mode
+    finally:
+        import _multiprocessing
+        try:
+            _multiprocessing.sem_unlink(name)
+        except OSError:
+            pass
+
+
+def test_the_candidate_can_only_write_numeric_kmp_registration_files(tmp_path):
+    """libomp writes /private/tmp/__KMP_REGISTERED_LIB_<pid>; any other suffix would be a file one trial leaves for the next."""
+    bad = Path(f"/private/tmp/__KMP_REGISTERED_LIB_abc{os.getpid()}")
+    code = ("try:\n    f = open(%r, 'w')\n    f.truncate(123456789)\n    print('CREATED')\n"
+            "except OSError as e:\n    print('DENIED', e.errno)\n") % str(bad)
+    try:
+        res, _ = _sandboxed(tmp_path, code)
+        assert "CREATED" not in res.stdout and "DENIED" in res.stdout, res.stdout + res.stderr
+        assert not bad.exists()
+    finally:
+        bad.unlink(missing_ok=True)
+
+
+def test_the_argv_scan_kills_only_candidates_carrying_this_runs_nonce():
+    def fake(nonce):
+        return subprocess.Popen([sys.executable, "-c", f"import time  # {ar.BOOT_MARK} {ar.NONCE_TAG}{nonce}\ntime.sleep(300)"])
+    mine, other = fake("mine"), fake("other")
+    try:
+        time.sleep(0.5)
+        killed = ar._kill_by_argv("mine")
+        mine.wait(10)
+        assert mine.pid in killed and other.pid not in killed
+        assert other.poll() is None, "a concurrent run's candidate must survive this run's scan"
+    finally:
+        for p in (mine, other):
+            p.kill()
+            p.wait()
+
+
+def test_kmp_files_a_trial_leaves_in_tmp_are_removed_and_older_ones_kept(tmp_path):
+    old = tmp_path / "__KMP_REGISTERED_LIB_1"
+    old.write_text("")
+    before = ar._kmp_files(tmp_path)
+    new = [tmp_path / "__KMP_REGISTERED_LIB_22", tmp_path / "__KMP_REGISTERED_LIB_333"]
+    for f in new:
+        f.write_text("x")
+    (tmp_path / "unrelated").write_text("")
+    assert ar._remove_new_kmp(before, tmp_path) == 2
+    assert old.exists() and (tmp_path / "unrelated").exists() and not any(f.exists() for f in new)
+
+
+def test_a_trial_records_the_kmp_files_it_cleaned_up(env, monkeypatch):
+    monkeypatch.setattr(ar, "_remove_new_kmp", lambda before, folder=None: 7)
+    rec = ar.run_trial("nba", env["exp"], env["ws"])
+    assert rec["resources"]["kmp_files_removed"] == 7
