@@ -10,7 +10,10 @@
      Order per sport (docs/ADAPTIVE_SYSTEM.md §14): `training-inputs` collects (results, NHL shots and player boxes, NBA boxes)
      and checks; only when it passes, `adaptive-train` (weekly) then `adaptive-train` with the daily cadence. A run that is not ready
      exits 1 (job_runs 'training_inputs' failed; adaptive-train 'deferred'); the 15:30 run is the retry (anything already
-     trained is not due and is skipped). Overlap: the store lock for collection, the per-sport training lock for training. -->
+     trained is not due and is skipped). Overlap: the store lock for collection, the per-sport training lock for training, and the machine-wide heavy lock
+     (<NBA_DATA_DIR>/.learning-heavy.lock) through the delivery release's app.learning_run, shared with the deep runs and the
+     autoresearch jobs: a second heavy job is refused (exit 75), never queued. No game-window deferral (empty defer-sports list), so
+     the schedule is unchanged; wall cap 300 min (first scheduled run: 105 min), memory cap 8 GB, effective nice 10. -->
 <plist version="1.0">
 <dict>
 	<key>EnvironmentVariables</key>
@@ -38,9 +41,25 @@
 	<array>
 		<string>/usr/bin/caffeinate</string>
 		<string>-i</string>
+		<string>/Users/andry/nba-predictor-delivery/backend/.venv/bin/python</string>
+		<string>-m</string>
+		<string>app.learning_run</string>
+		<string>--name</string>
+		<string>adaptive-train</string>
+		<string>--max-minutes</string>
+		<string>300</string>
+		<string>--max-rss-gb</string>
+		<string>8</string>
+		<string>--nice</string>
+		<string>0</string>
+		<string>--threads</string>
+		<string>4</string>
+		<string>--defer-sports</string>
+		<string></string>
+		<string>--</string>
 		<string>/bin/sh</string>
 		<string>-c</string>
-		<string>PY=/Users/andry/nba-predictor-live/backend/.venv/bin/python; rc=0; for s in nhl nba; do if $PY -m app.cli --sport $s training-inputs; then $PY -m app.cli --sport $s adaptive-train || rc=1; $PY -m app.cli --sport $s adaptive-train --cadence daily || rc=1; else rc=1; fi; done; exit $rc</string>
+		<string>cd /Users/andry/nba-predictor-live/backend &amp;&amp; PY=/Users/andry/nba-predictor-live/backend/.venv/bin/python; rc=0; for s in nhl nba; do if $PY -m app.cli --sport $s training-inputs; then $PY -m app.cli --sport $s adaptive-train || rc=1; $PY -m app.cli --sport $s adaptive-train --cadence daily || rc=1; else rc=1; fi; done; exit $rc</string>
 	</array>
 	<key>StandardErrorPath</key>
 	<string>/Users/andry/Desktop/nbanhlnfl/data/adaptive-train-launchd.log</string>
@@ -64,6 +83,6 @@
 	<key>ThrottleInterval</key>
 	<integer>60</integer>
 	<key>WorkingDirectory</key>
-	<string>/Users/andry/nba-predictor-live/backend</string>
+	<string>/Users/andry/nba-predictor-delivery/backend</string>
 </dict>
 </plist>

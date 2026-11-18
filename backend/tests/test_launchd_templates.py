@@ -30,7 +30,7 @@ def test_the_trainer_runs_on_the_live_release_with_the_release_guard():
     assert env['NBA_RELEASE_GUARD'] == '1' and env['NBA_RELEASE_ROOT'] == '/Users/andry/nba-predictor-live'
     command = p['ProgramArguments'][-1]
     assert 'PY=/Users/andry/nba-predictor-live/backend/.venv/bin/python;' in command
-    assert p['WorkingDirectory'] == '/Users/andry/nba-predictor-live/backend'
+    assert 'cd /Users/andry/nba-predictor-live/backend &&' in command   # the guard runs from delivery; training from live
 
 
 def test_the_trainer_runs_below_the_forecast_jobs_priority():
@@ -48,3 +48,19 @@ def test_challenger_recorder_template_is_research_only_on_the_delivery_release()
     assert p['ProgramArguments'][-1].endswith('/scripts/learning_challengers_cycle.sh')
     assert 'RunAtLoad' not in p
 
+
+
+def test_the_trainer_takes_the_shared_heavy_lock_without_changing_its_schedule():
+    # Owner 2026-11-18: every heavy job (both trainer slots, deep runs, research) uses the same enforced lock.
+    p = load('adaptive-train')
+    args = p['ProgramArguments']
+    i = args.index('app.learning_run')
+    assert args[i - 2] == '/Users/andry/nba-predictor-delivery/backend/.venv/bin/python' and args[i - 1] == '-m'
+    assert '--light' not in args
+    assert args[args.index('--nice') + 1] == '0'   # os.nice adds to the plist's Nice 10: the trainer stays at 10
+    assert p['WorkingDirectory'] == '/Users/andry/nba-predictor-delivery/backend'
+    assert args[args.index('--defer-sports') + 1] == ''        # lock only: no game-window deferral, timing unchanged
+    assert float(args[args.index('--max-minutes') + 1]) >= 240  # the first scheduled run took 105 min
+    assert args[args.index('--', i) + 1:args.index('--', i) + 3] == ['/bin/sh', '-c']
+    assert 'cd /Users/andry/nba-predictor-live/backend &&' in args[-1]
+    assert 'LEARNING_HEAVY_LOCK' not in p['EnvironmentVariables']   # default: <NBA_DATA_DIR>/.learning-heavy.lock
