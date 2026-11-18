@@ -273,3 +273,21 @@ def test_repeats_are_capped_per_market_so_winner_lines_are_not_crowded_out(tmp_p
 def test_launch_agent_logs_into_the_reports_folder():
     p = plistlib.loads((ROOT / 'scripts' / 'launchd' / 'com.nba-predictor.weekly-report.plist').read_bytes())
     assert p['StandardOutPath'] == p['StandardErrorPath'] == '/Users/andry/Desktop/nbanhlnfl/data/reports/weekly-report.log'
+
+
+def test_an_unreviewed_release_commit_is_excluded_with_a_visible_explanation(tmp_path, monkeypatch):
+    """Fail closed and say so: rows of a code commit with no review entry never count, and the page names the commit and the
+    file to append to, instead of showing silent zeros."""
+    m = wr()
+    new_commit = 'abcdef0123456789abcdef0123456789abcdef01'
+    monkeypatch.setenv('NBA_RELEASE_COMMIT', new_commit)
+    data, _, _ = setup(tmp_path, 3, monkeypatch, m)
+    cfg = tmp_path / 'review.json'
+    cfg.write_text('{"reviews": [{"recorder_sha256": "%s", "code_commit": "%s", "reviewed_at": "%s"}]}'
+                   % (SHA, '61376d9b44e21bd48db36df0d11b2a9c8112eb5f', REVIEWED))
+    text = Path(m.main(['--data-dir', str(data), '--ledger', str(tmp_path / 'ledger.sqlite'), '--out-dir', str(tmp_path / 'o'),
+                        '--review-config', str(cfg), '--now', '2026-12-31T00:00:00Z'])).read_text()
+    assert 'counted n=0' in section(text, 1)
+    assert 'code revision abcdef01 not reviewed' in section(text, 1)
+    assert 'append a review entry to scripts/weekly_report_review.json' in section(text, 1)
+    assert 'NBA: 3 cards excluded' in section(text, 1)

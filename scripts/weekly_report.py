@@ -172,6 +172,13 @@ def section_best(states: dict) -> list:
         info = st['info']
         base = (f"- {S}: game cards sent since T0 n={info['sent']}; recorded n={info['rows']}; counted "
                 f"n={len(info['cards'])}")
+        if info['excluded']:
+            lines.append(f"- {S}: {sum(info['excluded'].values())} cards excluded: "
+                         + ', '.join(f'{k} n={v}' for k, v in sorted(info['excluded'].items())) + '.')
+        for why, label in (('code revision not reviewed', 'code revision'), ('recorder version not reviewed', 'recorder version')):
+            for ident in sorted(info['unreviewed'].get(why, ())):
+                lines.append(f"- {S}: cards excluded: {label} {ident[:8]} not reviewed — append a review entry to "
+                             f"scripts/weekly_report_review.json.")
         if sport not in bpr.RULE_MARKETS:
             lines.append(base + '; no pick is named for this sport (v4 section 8), named n=0.')
             continue

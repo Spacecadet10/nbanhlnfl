@@ -154,7 +154,7 @@ def counted_cards(ledger, sport: str, reviewed_at, reviewed) -> dict:
            'sent_without_row': sum(k not in rows for k, _, _ in sent),
            'sent_without_row_after_review': sum(k not in rows and reviewed_at is not None and at >= reviewed_at
                                                 for k, at, _ in sent),
-           'excluded': {}, 'cards': []}
+           'excluded': {}, 'unreviewed': {}, 'cards': []}
     for gid, cards in games.items():
         at, key = min(cards)
         r = rows.get(key)
@@ -170,6 +170,10 @@ def counted_cards(ledger, sport: str, reviewed_at, reviewed) -> dict:
                'game starts before T0' if not (r['tipoff_at'] and _t(r['tipoff_at']) > _t(bpr.T0)) else None)
         if why:
             out['excluded'][why] = out['excluded'].get(why, 0) + 1
+            if why == 'code revision not reviewed':       # which commits, so the report can ask for a review entry
+                out['unreviewed'].setdefault(why, set()).add(r['code_commit'] or 'unknown')
+            elif why == 'recorder version not reviewed':
+                out['unreviewed'].setdefault(why, set()).add(r['recorder_sha256'] or 'unknown')
         else:
             out['cards'].append(r)
     out['cards'].sort(key=lambda r: (r['recorded_at'], r['delivery_key']))
