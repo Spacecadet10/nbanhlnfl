@@ -5,7 +5,7 @@ Research only, never served: nothing here writes a store, a page, a card, a tick
 function of the stored goals joint grid (`soccer_market_forecasts.joint_json`) and `soccer_markets.grade_handicap`; no model is
 fitted. Read-only on a COPY of the soccer store (`--data-dir`); the live data folder is refused and the report goes outside the
 stores. Before the single look (800 decided paired matches or kickoff date 2027-05-31) only counts are produced; the look is
-computed once and stored (`soccer-looks.json`).
+computed once and stored by the frozen document's sha256 in the looks folder (not in the report folder).
 
 Written and tested on synthetic data only; independent review (section 10) comes before any counted outcome is read.
 
@@ -25,6 +25,7 @@ from .soccer_book import app_share
 
 PREREG_FILE = "soccer-asian-handicap-research-2026-11-18.md"
 PREREG_SHA256 = "a3e1fc3b60ffb9316432213fc66567bcc8b269548576ce299e88e06ec031b2b4"
+ADDENDA_SHA256 = {"addendum-2026-11-18-soccer-evaluator-clarifications.md": "a85ad1313f59a9578e0043484ca54ef0ea82c1cc47c63b44786a777e2ffa8a53"}
 CANDIDATE_SHA256 = "cfe78bf98a8e48215474de26d020fc5a0fdb45830957b38e24e47db88efbd432"
 REPO_ROOT = pc.REPO_ROOT
 T0 = "2026-11-18T14:25:37Z"              # committer timestamp of 1afd91b (the commit that first added the document)
@@ -38,6 +39,7 @@ VERDICTS = ("app better than DraftKings", "DraftKings better than the app", "not
 
 def check_document() -> None:
     pc.check_prereg(PREREG_FILE, PREREG_SHA256, REPO_ROOT)
+    pc.check_addenda(ADDENDA_SHA256, REPO_ROOT)
     from . import soccer_markets_live
     if soccer_markets_live.CANDIDATES["goals"] != CANDIDATE_SHA256:
         raise pc.Refused("the served goals candidate differs from the pinned candidate sha256")
@@ -125,7 +127,7 @@ def pair_at(conn: sqlite3.Connection, match_id: str, at: str, kickoff_at: str, p
 class Collected:
     def __init__(self):
         self.units = []
-        self.counts = {"forecasts": 0, "not_pinned_candidate": 0, "knockout_excluded": 0, "not_regular_season": 0, "forecast_before_t0": 0,
+        self.counts = {"forecasts": 0, "no_goals_forecast": 0, "not_pinned_candidate": 0, "knockout_excluded": 0, "not_regular_season": 0, "forecast_before_t0": 0,
                        "after_stop_date": 0, "no_quote": 0, "unpaired": 0, "paired": {"half": 0, "whole": 0, "quarter": 0},
                        "decided_paired": 0, "push": 0, "void": 0, "unknown_ending": 0, "pending": 0, "past7": 0, "close_line_moved": 0,
                        "close_no_pair": 0}
@@ -158,7 +160,7 @@ def collect(conn: sqlite3.Connection, *, now: datetime) -> Collected:
         fcs = conn.execute("SELECT * FROM soccer_market_forecasts WHERE match_id = ? AND family = 'goals' ORDER BY version", (m["match_id"],)).fetchall()
         pinned = [f for f in fcs if f["candidate_sha256"] == CANDIDATE_SHA256]
         if not pinned:
-            n["not_pinned_candidate"] += bool(fcs)
+            n["not_pinned_candidate" if fcs else "no_goals_forecast"] += 1
             continue
         f = pinned[-1]
         if f["generated_at"] < T0:
@@ -321,7 +323,8 @@ def look(units: list, now: datetime, B: int = pc.BOOTSTRAP_B) -> dict:
                                                                           for x in pw) / W) if W else None}
         out["flat_stake"] = flat_stake(half)
         out["by_competition"] = {c: metrics([x for x in half if x["competition"] == c]) for c in sorted({x["competition"] for x in half})}
-        out["by_line_bin"] = {b: metrics([x for x in half if line_bin(x["line_home"]) == b]) for b in ("0.5", "1.5", ">=2.5")}
+        shown = [x for x in sel if x["line_type"] == "half" or out["by_line_type"][x["line_type"]].get("status") is None]      # addendum 3
+        out["by_line_bin"] = {b: metrics([x for x in shown if line_bin(x["line_home"]) == b]) for b in ("0.5", "1.5", ">=2.5")}
     if len(sel) < STOP_N:
         out["short_of_planned_n"] = f"n {len(sel)} of {STOP_N} (deadline {STOP_DATE})"
     if len(sel) < MIN_N_VERDICT:
@@ -329,19 +332,12 @@ def look(units: list, now: datetime, B: int = pc.BOOTSTRAP_B) -> dict:
     return out
 
 
-def look_once(out: Path, compute) -> dict:
-    path = Path(out) / "soccer-looks.json"
-    stored = json.loads(path.read_text()) if path.is_file() else {}
-    if "look" in stored:
-        return stored["look"]
-    result = compute()
-    if result["status"] == "look":
-        path.write_text(json.dumps({"look": result}, indent=2, sort_keys=True, default=str) + "\n")
-    return result
-
-
 # --- entry point -------------------------------------------------------------------------------------------------------------------------
-def run(data_dir, out, *, now: Optional[datetime] = None) -> dict:
+PRE_LOOK_COUNTS = ("forecasts", "no_goals_forecast", "not_pinned_candidate", "knockout_excluded", "not_regular_season", "forecast_before_t0",
+                   "after_stop_date", "no_quote", "unpaired", "paired", "decided_paired")
+
+
+def run(data_dir, out, *, now: Optional[datetime] = None, looks_dir=None) -> dict:
     check_document()
     dd = pc.guard_data_dir(data_dir)
     outdir = pc.guard_out(out, dd)
@@ -355,8 +351,13 @@ def run(data_dir, out, *, now: Optional[datetime] = None) -> dict:
         col = collect(conn, now=now)
     finally:
         conn.close()
-    report = {"prereg_sha256": PREREG_SHA256, "candidate_sha256": CANDIDATE_SHA256, "evaluated_at": _ts(now), "counts": col.counts,
-              "look": look_once(outdir, lambda: look(col.units, now))}
+    def compute() -> dict:
+        r = look(col.units, now)
+        return {**r, "counts_at_look": col.counts} if r["status"] == "look" else r
+    lk = pc.look_once(looks_dir, PREREG_SHA256, "look", compute)
+    # before the look only forecasts, paired quotes by line type and the stop count (addendum 5); the rest appears in the look
+    counts = lk.get("counts_at_look") if lk["status"] == "look" else {k: col.counts[k] for k in PRE_LOOK_COUNTS}
+    report = {"prereg_sha256": PREREG_SHA256, "candidate_sha256": CANDIDATE_SHA256, "evaluated_at": _ts(now), "counts": counts, "look": lk}
     pc.write_report(outdir, "soccer-ah-report.json", report)
     return report
 

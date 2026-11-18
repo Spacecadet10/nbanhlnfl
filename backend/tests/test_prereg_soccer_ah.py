@@ -20,6 +20,8 @@ def test_constants(tmp_path, monkeypatch):
     assert ps.PREREG_SHA256 == "a3e1fc3b60ffb9316432213fc66567bcc8b269548576ce299e88e06ec031b2b4"
     assert ps.CANDIDATE_SHA256 == soccer_markets_live.CANDIDATES["goals"] == "cfe78bf98a8e48215474de26d020fc5a0fdb45830957b38e24e47db88efbd432"
     assert ps.T0 == "2026-11-18T14:25:37Z" and ps.STOP_N == 800 and ps.STOP_DATE == "2027-05-31"
+    assert ps.ADDENDA_SHA256 == {"addendum-2026-11-18-soccer-evaluator-clarifications.md":
+                                 "a85ad1313f59a9578e0043484ca54ef0ea82c1cc47c63b44786a777e2ffa8a53"}
     monkeypatch.setattr(ps, "REPO_ROOT", tmp_path)
     with pytest.raises(pc.Refused):
         ps.check_document()
@@ -316,7 +318,7 @@ def test_run_refuses_live_and_stores_look(tmp_path):
     c = build_world(data)
     c.close()
     out = tmp_path / "report"
-    rep = ps.run(data, out, now=NOW)
+    rep = ps.run(data, out, now=NOW, looks_dir=tmp_path / "looks")
     assert rep["look"]["status"] == "no look yet (n of 800)" and (out / "soccer-ah-report.json").is_file()
     blob = json.dumps(rep["look"])
     assert "log_loss" not in blob and "delta" not in blob and "ci95" not in blob
@@ -332,3 +334,61 @@ def test_calibration_slope_test_on_calibrated_groups():
         us.append(dict(u(p=p, q=0.5, y=1 if hit else 0, day=f"2027-01-{1 + i % 10:02d}", mid=f"c{i}"), state="decided"))
     r = ps.slope_test(us, B=60)
     assert r["slope"] is not None and r["p"] > 0.5
+
+
+# ---- review fixes (addendum 2026-11-18 soccer) ---------------------------------------------------------------------------
+def test_before_the_look_only_forecasts_pairs_and_the_stop_count_are_reported(tmp_path):
+    data = tmp_path / "copy"
+    build_world(data).close()
+    rep = ps.run(data, tmp_path / "report", now=NOW, looks_dir=tmp_path / "looks")
+    assert rep["look"]["status"] == "no look yet (n of 800)"
+    banned = {"push", "void", "unknown_ending", "pending", "past7", "close_line_moved", "close_no_pair"}
+    assert not banned & set(rep["counts"])
+    assert rep["counts"]["forecasts"] == 9 and rep["counts"]["paired"] == {"half": 6, "whole": 1, "quarter": 1}
+    assert rep["counts"]["decided_paired"] == 3 and rep["counts"]["no_quote"] == 1
+
+
+def test_matches_without_any_goals_forecast_are_counted(tmp_path):
+    c = make_store(tmp_path)
+    add_match(c, 1, "2026-11-21T15:00:00Z", forecasts=())
+    add_match(c, 2, "2026-11-22T15:00:00Z", forecasts=((1, "a" * 64),))
+    n = ps.collect(c, now=NOW).counts
+    assert n["no_goals_forecast"] == 1 and n["not_pinned_candidate"] == 1
+
+
+def test_line_bins_include_whole_and_quarter_types_only_once_they_reach_100():
+    def mixed(n_whole):
+        return balanced(800 - n_whole) + [dict(x, line_home=-2.0, line_type="whole", mid=f"w{i}") for i, x in enumerate(balanced(n_whole))]
+    r = ps.look(mixed(100), NOW, B=60)
+    assert r["by_line_bin"]["1.5"]["n"] == 100 and r["by_line_bin"]["0.5"]["n"] == 700        # |line| 2.0 sits in the 1.5 bin
+    r = ps.look(mixed(99), NOW, B=60)
+    assert r["by_line_bin"]["1.5"]["n"] == 0 and r["by_line_bin"]["0.5"]["n"] == 701
+    assert r["by_line_type"]["whole"] == {"status": "counts only (n of 100)", "n": 99}
+
+
+def test_clv_set_is_the_look_sets_same_line_decided_half_matches():
+    us = balanced(800)
+    for x in us[:100]:
+        x["clv"], x["close_status"] = 0.02, "ok"
+    for x in us[100:150]:
+        x["close_status"] = "line_moved"                      # close pair at another line: no CLV
+    pend = dict(us[0], mid="zz-pending", state="pending", w=None, y=None, clv=0.5, close_status="ok", kickoff_at="2027-02-27T15:00:00Z")
+    r = ps.look(us + [pend], NOW, B=60)
+    assert r["status"] == "look" and r["secondary"]["S1"]["n"] == 100 and r["secondary"]["S1"]["theta"] == pytest.approx(0.02)
+
+
+def test_flat_stake_push_returns_the_stake_and_is_counted():
+    r = ps.flat_stake([dict(u(p=0.6, q=0.5, line=0.0), result_home="push", result_away="push", decimal_home=1.9, decimal_away=1.9),
+                       dict(u(p=0.6, q=0.5), result_home="loss", result_away="win", decimal_home=1.9, decimal_away=1.9)])
+    assert r["n"] == 2 and r["mean_return"] == pytest.approx(0.5)
+
+
+def test_single_look_is_keyed_to_the_document_not_to_the_report_folder(tmp_path, monkeypatch):
+    data = tmp_path / "copy"
+    make_store(data).close()
+    looks = tmp_path / "looks"
+    monkeypatch.setattr(ps, "look", lambda units, now, B=0: {"status": "look", "n": 800})
+    first = ps.run(data, tmp_path / "out1", now=NOW, looks_dir=looks)
+    monkeypatch.setattr(ps, "look", lambda *a, **k: pytest.fail("a second look must not be computed"))
+    again = ps.run(data, tmp_path / "out2", now=NOW, looks_dir=looks)
+    assert again["look"]["status"] == first["look"]["status"] == "look"
