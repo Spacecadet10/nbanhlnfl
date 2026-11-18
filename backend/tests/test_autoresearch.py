@@ -806,7 +806,7 @@ def test_a_double_forked_setsid_chdir_child_is_reaped_with_the_trial(tmp_path):
     tmp.mkdir()
     prof = tmp_path / "sandbox.sb"
     prof.write_text(ar._profile(tmp))
-    code = ("# from app.autoresearch import serve\n"                      # the candidate's argv carries the boot string
+    code = (f"# from app.autoresearch import serve {ar.NONCE_TAG}n1\n"          # the candidate's argv carries the boot string and run nonce
             "import os, time\n"
             "if os.fork() == 0:\n"
             "    os.setsid()\n"
@@ -821,7 +821,7 @@ def test_a_double_forked_setsid_chdir_child_is_reaped_with_the_trial(tmp_path):
         return [int(ln.split()[0]) for ln in out if "from app.autoresearch import serve" in ln and "time.sleep(300)" in ln]
     try:
         assert alive(), "the detached grandchild should be running before the cleanup"
-        killed = ar._reap(tmp)
+        killed = ar._reap(tmp, 'n1')
         time.sleep(0.5)
         assert alive() == [] and killed, killed
     finally:
@@ -880,3 +880,37 @@ def test_the_candidate_can_only_write_numeric_kmp_registration_files(tmp_path):
         assert not bad.exists()
     finally:
         bad.unlink(missing_ok=True)
+
+
+def test_the_argv_scan_kills_only_candidates_carrying_this_runs_nonce():
+    def fake(nonce):
+        return subprocess.Popen([sys.executable, "-c", f"import time  # {ar.BOOT_MARK} {ar.NONCE_TAG}{nonce}\ntime.sleep(300)"])
+    mine, other = fake("mine"), fake("other")
+    try:
+        time.sleep(0.5)
+        killed = ar._kill_by_argv("mine")
+        mine.wait(10)
+        assert mine.pid in killed and other.pid not in killed
+        assert other.poll() is None, "a concurrent run's candidate must survive this run's scan"
+    finally:
+        for p in (mine, other):
+            p.kill()
+            p.wait()
+
+
+def test_kmp_files_a_trial_leaves_in_tmp_are_removed_and_older_ones_kept(tmp_path):
+    old = tmp_path / "__KMP_REGISTERED_LIB_1"
+    old.write_text("")
+    before = ar._kmp_files(tmp_path)
+    new = [tmp_path / "__KMP_REGISTERED_LIB_22", tmp_path / "__KMP_REGISTERED_LIB_333"]
+    for f in new:
+        f.write_text("x")
+    (tmp_path / "unrelated").write_text("")
+    assert ar._remove_new_kmp(before, tmp_path) == 2
+    assert old.exists() and (tmp_path / "unrelated").exists() and not any(f.exists() for f in new)
+
+
+def test_a_trial_records_the_kmp_files_it_cleaned_up(env, monkeypatch):
+    monkeypatch.setattr(ar, "_remove_new_kmp", lambda before, folder=None: 7)
+    rec = ar.run_trial("nba", env["exp"], env["ws"])
+    assert rec["resources"]["kmp_files_removed"] == 7

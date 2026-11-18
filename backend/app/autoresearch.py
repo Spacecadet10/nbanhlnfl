@@ -27,6 +27,7 @@ import pickle
 import platform
 import random
 import resource
+import secrets
 import select
 import shutil
 import signal
@@ -735,6 +736,8 @@ def _memory_guard(pgid: int, limit_gb: float, stop: threading.Event, state: dict
 
 
 BOOT_MARK = "from app.autoresearch import serve"        # in the argv of the candidate process and of every fork of it
+NONCE_TAG = "ar-nonce-"                                  # followed by a random per-run token: a scan kills only this run's candidates
+KMP_DIR = Path("/private/tmp")                           # libomp registers itself here (__KMP_REGISTERED_LIB_<pid>)
 CPU_SLACK_S, CPU_FACTOR = 60, 4                          # CPU-time limit per process: timeout x threads (OMP_NUM_THREADS=4) + slack
 
 
@@ -765,9 +768,27 @@ def _kill_strays(tmp: Path) -> list:
     return killed
 
 
-def _kill_by_argv() -> list:
-    """Kills every process still running the candidate's boot command line (a double-forked, setsid, chdir('/') child has
-    neither the group nor the directory). Returns the pids killed."""
+def _kmp_files(folder: Path = KMP_DIR) -> set:
+    return {f.name for f in folder.glob("__KMP_REGISTERED_LIB_*")}
+
+
+def _remove_new_kmp(before: set, folder: Path = KMP_DIR) -> int:
+    """Deletes the libomp registration files that appeared since `before` (the sandbox lets a candidate create them, and
+    nothing else removes them); returns how many. A concurrent OpenMP process's file may go too: libomp ignores that."""
+    n = 0
+    for name in _kmp_files(folder) - before:
+        try:
+            (folder / name).unlink()
+            n += 1
+        except OSError:
+            pass
+    return n
+
+
+def _kill_by_argv(nonce: str) -> list:
+    """Kills every process still running this run's candidate boot command line (a double-forked, setsid, chdir('/') child
+    has neither the group nor the directory); another run's candidates carry another nonce and are left alone. Returns the
+    pids killed."""
     try:
         out = subprocess.run(["/bin/ps", "-axo", "pid=,command="], capture_output=True, text=True, timeout=30).stdout
     except (OSError, subprocess.SubprocessError):
@@ -775,7 +796,7 @@ def _kill_by_argv() -> list:
     killed = []
     for ln in out.splitlines():
         parts = ln.split(None, 1)
-        if len(parts) == 2 and parts[0].isdigit() and BOOT_MARK in parts[1] and int(parts[0]) != os.getpid():
+        if len(parts) == 2 and parts[0].isdigit() and BOOT_MARK in parts[1] and NONCE_TAG + nonce in parts[1] and int(parts[0]) != os.getpid():
             try:
                 os.kill(int(parts[0]), signal.SIGKILL)
                 killed.append(int(parts[0]))
@@ -784,9 +805,9 @@ def _kill_by_argv() -> list:
     return killed
 
 
-def _reap(tmp: Path) -> list:
+def _reap(tmp: Path, nonce: str) -> list:
     """Everything of the trial that outlived its process group; the pids killed (recorded in the trial's resources)."""
-    return sorted(set(_kill_strays(tmp) + _kill_by_argv()))
+    return sorted(set(_kill_strays(tmp) + _kill_by_argv(nonce)))
 
 
 def _cpu_limit(timeout_s: float) -> int:
@@ -804,7 +825,9 @@ def run_candidate(src: str, sport: str, data: dict, scored, timeout_s: float, td
     profile.write_text(_profile(tmp))
     r_req, w_req = os.pipe()
     r_resp, w_resp = os.pipe()
-    boot = f"import sys; sys.path.insert(0, {str(APP_DIR.parent)!r}); {BOOT_MARK}; serve({w_resp})"
+    nonce = secrets.token_hex(8)
+    boot = f"import sys; sys.path.insert(0, {str(APP_DIR.parent)!r}); {BOOT_MARK}; _ = {NONCE_TAG + nonce!r}; serve({w_resp})"
+    kmp_before = _kmp_files()
     env = {"PATH": "/usr/bin:/bin", "HOME": str(tmp), "TMPDIR": str(tmp), "OMP_NUM_THREADS": "4",
            "PYTHONDONTWRITEBYTECODE": "1", "MPLCONFIGDIR": str(tmp)}
     t0 = time.time()
@@ -858,7 +881,8 @@ def run_candidate(src: str, sport: str, data: dict, scored, timeout_s: float, td
         except (ProcessLookupError, PermissionError):         # macOS: EPERM once the group leader has already exited
             pass
         _, status, ru = os.wait4(proc.pid, 0)
-        survivors = _reap(tmp)                            # a child that left the group (setsid) is not reached by killpg
+        survivors = _reap(tmp, nonce)                            # a child that left the group (setsid) is not reached by killpg
+        kmp_removed = _remove_new_kmp(kmp_before)         # libomp files the trial left in /private/tmp
         os.close(w_req)
         os.close(r_resp)
         log.close()
@@ -871,7 +895,7 @@ def run_candidate(src: str, sport: str, data: dict, scored, timeout_s: float, td
         res["reason"] += f" (exit {os.waitstatus_to_exitcode(status)}): {(tdir / 'run.log').read_text()[-400:]}"
     res["resources"] = {"wall_s": round(time.time() - t0, 1), "cpu_s": round(ru.ru_utime + ru.ru_stime, 1),
                         "max_rss_gb": round(ru.ru_maxrss / (1024 ** 3 if sys.platform == "darwin" else 1024 ** 2), 2),
-                        "timed_out": res["status"] == "timeout", "memory_limit_gb": limit_gb, "survivors_killed": survivors,
+                        "timed_out": res["status"] == "timeout", "memory_limit_gb": limit_gb, "survivors_killed": survivors, "kmp_files_removed": kmp_removed,
                         "peak_group_rss_gb": round(max(guard_state.get("peak_gb", 0.0), guard_state.get("killed", 0.0)), 2)}
     return res
 
