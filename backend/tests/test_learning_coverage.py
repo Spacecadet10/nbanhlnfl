@@ -227,3 +227,43 @@ def test_soccer_and_nfl_challengers_are_counted_from_the_store_never_scheduled_n
     assert row(m, "soccer", "double_chance")["recording_prospectively"]["state"] == "yes"       # derived from the 1X2 rows
     assert row(m, "nfl", "spread")["recording_prospectively"]["state"] == "yes" and row(m, "nfl", "winner")["recording_prospectively"]["state"] == "no"
     assert row(m, "soccer", "goals_ou")["trained"]["state"] == "no"                              # fitted per cutoff in memory, nothing stored
+
+
+# ---- review fixes (d3a2fbd review) ------------------------------------------------------------------------------------
+def test_evaluated_counts_scored_pairs_with_an_incumbent_not_just_final_games(env, monkeypatch):
+    data, agents = env
+    from app import learning_challengers as ch, learning_eval as le
+    cc = ch.open_store(data / "research" / "challengers.sqlite")
+    cc.execute("INSERT INTO challenger_forecasts (policy_id, policy_sha, spec_name, spec_json, spec_hash, definition, game_id, market, line, "
+               "p_a, p_mid, p_b, cutoff_at, tipoff_at, generated_at, dataset_version, model_version) VALUES "
+               "('ncaab-challengers-v1','s','spec_a','{}','h','d','ncaab:final1','winner',NULL,.6,0,.4,'2026-11-18T18:30:00Z','2026-11-18T20:00:00Z','2026-11-18T18:30:00Z','v','m')")
+    cc.close()
+    store = make_store(data, "ncaab")
+    store.execute("PRAGMA foreign_keys = OFF")
+    store.execute("INSERT INTO games (game_id, season, season_type, tipoff_at, home_team_id, away_team_id, neutral_site, status, home_score, away_score, "
+                  "first_seen_at, result_first_seen_at, result_available_at, result_availability_basis, last_raw_id, updated_at) VALUES "
+                  "('ncaab:final1', 2027, 'regular', '2026-11-18T20:00:00Z', 'ncaab:1', 'ncaab:2', 0, 'final', 80, 70, 'x', 'x', '2026-11-18T23:00:00Z', 'observed_retrieval', 1, 'x')")
+    store.commit()
+    store.close()
+    r = row(lc.coverage(data, agents), "ncaab", "winner")
+    assert r["evaluated"]["state"] == "no" and "no scored pair" in r["evaluated"]["detail"]       # final, but no served incumbent to pair with
+    group = {"policy_id": "ncaab-challengers-v1", "market": "winner", "n_scored": 3, "n_no_incumbent": 0}
+    monkeypatch.setattr(le, "evaluate", lambda store, cc: {"groups": [group, {**group, "market": "spread", "n_scored": 9}]})
+    r = row(lc.coverage(data, agents), "ncaab", "winner")
+    assert r["evaluated"]["state"] == "yes" and "3 scored pair" in r["evaluated"]["detail"]
+
+
+def test_a_policy_error_makes_ncaab_rows_unknown_not_a_broken_coverage(env, monkeypatch):
+    from app import learning_challengers as ch
+    monkeypatch.setattr(ch, "load_policies", lambda sport, folder=None: (_ for _ in ()).throw(ch.PolicyError("bad policy file")))
+    m = lc.coverage(*env)
+    for r in (x for x in m["rows"] if x["sport"] == "ncaab"):
+        for k in ("trained", "recording_prospectively", "evaluated"):
+            assert r[k]["state"] == "unknown" and "bad policy file" in r[k]["detail"]
+    assert row(m, "nba", "winner")["implemented"]["state"] == "yes"
+
+
+def test_blocked_text_matches_learning_implemented_for_ncaab(env):
+    r = row(lc.coverage(*env), "ncaab", "winner")
+    text = " ".join(r["blocked_reason"])
+    assert r["learning_implemented"] is True and "adaptive-v1 is not used" in text and "challenger learning is implemented" in text and "not scheduled" in text

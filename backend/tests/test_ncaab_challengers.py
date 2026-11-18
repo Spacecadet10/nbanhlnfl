@@ -209,10 +209,88 @@ def test_eval_pairs_only_at_the_served_line(store, tmp_path):
     market_live.forecast(store, now=NOW, policy="near_tipoff", game_ids=[GAME], write=True)        # served at total 140.5
     add_quote(store, GAME, "total", 141.5, -110, -110, "2026-11-17T22:10:00Z")                     # the book moves before the challengers run
     nc.record(store, path, policies=policies(), now=NOW)
-    assert {r["line"] for r in rows_of(path) if r["market"] == "total"} == {141.5}
+    assert {r["line"] for r in rows_of(path) if r["market"] == "total"} == {140.5}                 # priced at the stored served line
+    g = {(x["spec_name"], x["market"]): x for x in _finalise_and_eval(store, path)["groups"]}
+    assert all(x["n_scored"] == 1 and x["n_no_incumbent"] == 0 for x in g.values())
+
+
+# ---- review fixes (d3a2fbd review) ------------------------------------------------------------------------------------
+def test_definition_changes_when_the_data_rows_change(store, tmp_path):
+    a, b = tmp_path / "a.sqlite", tmp_path / "b.sqlite"
+    nc.record(store, a, policies=policies(), now=NOW)
+    add_game(store, "961", "2026-11-14T23:00:00Z", "1", "4", "final", 70, 65)          # new data before the week cutoff
+    nc.record(store, b, policies=policies(), now=NOW)
+    da, db_ = {r["definition"] for r in rows_of(a)}, {r["definition"] for r in rows_of(b)}
+    assert da and db_ and da.isdisjoint(db_), (da, db_)
+
+
+def test_a_box_score_change_or_a_fit_code_change_misses_the_cache(store, tmp_path, monkeypatch):
+    path = tmp_path / "research" / "challengers.sqlite"
+    cache = path.parent / "challengers" / "ncaab"
+    gid = store.execute("SELECT game_id FROM games WHERE status='final' ORDER BY tipoff_at LIMIT 1").fetchone()[0]
+    store.execute("PRAGMA foreign_keys = OFF")
+    for home, team in ((1, "ncaab:1"), (0, "ncaab:2")):
+        store.execute("INSERT INTO team_game_stats (game_id, team_id, is_home, points, fga, fta, last_raw_id) VALUES (?,?,?,?,60,20,1)", (gid, team, home, 70))
+    store.commit()
+    nc.record(store, path, policies=policies(), now=NOW)
+    assert len(list(cache.glob("refit-*.json"))) == 1
+    store.execute("UPDATE team_game_stats SET fga = 61 WHERE game_id=? AND is_home=1", (gid,))
+    store.commit()
+    nc.record(store, path, policies=policies(), now=NOW)
+    assert len(list(cache.glob("refit-*.json"))) == 2                                  # the box score feeds CollegeEff
+    monkeypatch.setattr(nc, "MIN_FIT_GAMES", 6)                                          # fit code constant
+    nc.record(store, path, policies=policies(), now=NOW)
+    assert len(list(cache.glob("refit-*.json"))) == 3
+
+
+def test_a_cache_file_without_fits_is_a_miss_not_an_error(store, tmp_path):
+    path = tmp_path / "research" / "challengers.sqlite"
+    nc.record(store, path, policies=policies(), now=NOW)
+    f = next((path.parent / "challengers" / "ncaab").glob("refit-*.json"))
+    d = json.loads(f.read_text())
+    d.pop("fits")
+    f.write_text(json.dumps(d))
+    out = nc.record(store, path, policies=policies(), now=NOW, dry_run=True)
+    assert out["fits_cache"] == "miss" and out["status"] in ("success", "partial") and not out["errors"]
+
+
+def test_the_stored_served_line_is_priced_when_it_exists_and_the_choice_is_recorded(store, tmp_path):
+    near_tipoff.predict_now(store, now=NOW, write=True)
+    market_live.forecast(store, now=NOW, policy="near_tipoff", game_ids=[GAME], write=True)        # stored served total 140.5
+    add_quote(store, GAME, "total", 141.5, -110, -110, "2026-11-17T22:10:00Z")                     # the book moves before the challengers run
+    out = nc.record(store, tmp_path / "c.sqlite", policies=policies(), now=NOW)
+    assert {r["line"] for r in rows_of(tmp_path / "c.sqlite") if r["market"] == "total"} == {140.5}
+    assert out["lines_from"]["stored"] >= 1 and out["lines_from"]["recomputed"] == 0
+    g = {(x["spec_name"], x["market"]): x for x in _finalise_and_eval(store, tmp_path / "c.sqlite")["groups"]}
+    assert all(x["n_scored"] == 1 and x["n_no_incumbent"] == 0 for x in g.values())
+
+
+def test_without_a_stored_served_line_the_recomputed_one_is_used_and_said(store, tmp_path):
+    out = nc.record(store, tmp_path / "c.sqlite", policies=policies(), now=NOW)
+    assert out["lines_from"]["recomputed"] >= 1 and out["lines_from"]["stored"] == 0
+
+
+def _finalise_and_eval(store, path):
     store.execute("PRAGMA foreign_keys = OFF")
     store.execute("UPDATE games SET status='final', home_score=80, away_score=71, result_available_at='2026-11-18T03:00:00Z', "
                   "result_availability_basis='observed_retrieval' WHERE game_id=?", (GAME,))
-    g = {(x["spec_name"], x["market"]): x for x in le.evaluate(store, lc.open_ro(path))["groups"]}
-    assert all(x["n_no_incumbent"] == 1 and x["n_scored"] == 0 for k, x in g.items() if k[1] == "total")
-    assert all(x["n_scored"] == 1 for k, x in g.items() if k[1] != "total")
+    return le.evaluate(store, lc.open_ro(path))
+
+
+def test_the_ncaab_incumbent_ignores_research_forecasts(store, tmp_path):
+    near_tipoff.predict_now(store, now=NOW, write=True)
+    market_live.forecast(store, now=NOW, policy="near_tipoff", game_ids=[GAME], write=True)
+    nc.record(store, tmp_path / "c.sqlite", policies=policies(), now=NOW)
+    cols = [r[1] for r in store.execute("PRAGMA table_info(market_forecasts)") if r[1] not in ("forecast_id",)]
+    sel = ", ".join("'research-x' " if c == "model_version" else "'research-key' " if c == "idempotency_key" else
+                    "0.01" if c == "p_a" else "0.0" if c == "p_mid" else "0.99" if c == "p_b" else c
+                    for c in cols)
+    store.execute("PRAGMA foreign_keys = OFF")
+    for t in store.execute("SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name='market_forecasts'").fetchall():
+        store.execute(f"DROP TRIGGER {t[0]}")
+    store.execute(f"INSERT INTO market_forecasts ({', '.join(cols)}) SELECT {sel} FROM market_forecasts WHERE market='total' AND model_version NOT LIKE 'research-%'")
+    row = store.execute("SELECT p_a FROM market_forecasts WHERE market='total' AND model_version NOT LIKE 'research-%'").fetchone()[0]
+    g = {(x["spec_name"], x["market"]): x for x in _finalise_and_eval(store, tmp_path / "c.sqlite")["groups"]}
+    total = next(x for k, x in g.items() if k[1] == "total")
+    assert total["n_scored"] == 1 and row not in (0.01, 0.99)
+    assert total["log_loss_incumbent"] < 1.5 and total["brier_incumbent"] < 0.9      # the served forecast, not the 0.01 research row

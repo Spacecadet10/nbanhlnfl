@@ -20,6 +20,7 @@ never written, and the sport store is opened read-only.
 
   python -m app.learning_challengers record --sport ncaab [--dry-run] [--now T --store PATH]
 """
+import hashlib
 import json
 import math
 import os
@@ -116,20 +117,30 @@ def _walk_fit(rows: list, box: dict, d: dict) -> dict:
     return out
 
 
+def fit_code_version() -> str:
+    """Digest of everything the cached fit depends on besides the data: this module, the models it walks, the backtest walk,
+    the Platt fit, and the thresholds (MIN_FIT_GAMES, the season periods)."""
+    h = hashlib.sha256(json.dumps([MIN_FIT_GAMES, {k: list(v) for k, v in sorted(ncaab_app.PERIODS.items())}]).encode())
+    for f in (__file__, college.__file__, backtest.__file__, Path(__file__).with_name("ncaab_eval.py")):
+        h.update(Path(f).read_bytes())
+    return h.hexdigest()[:8]
+
+
 def refit(conn: sqlite3.Connection, now: str, cache_dir: Path, *, write_cache: bool) -> tuple:
     """(fits by fit_seasons, cache 'hit'|'miss', fingerprint). Rows are the eligible finals with result_available_at <= the
     week's start; the cache file is keyed by that week and the data fingerprint (rows hash + the frozen decision's digest)."""
     cutoff = week_start(now)
     d = college.load_decision()
     rows, box = college.rows_at(conn, cutoff)
-    fingerprint = f"{college.rows_version(rows)}-{d['sha256'][:8]}"
+    box_hash = hashlib.sha256(json.dumps(sorted(box.items()), default=str).encode()).hexdigest()[:8]     # the FGA/FTA CollegeEff reads
+    fingerprint = f"{college.rows_version(rows)[:12]}-{box_hash}-{fit_code_version()}-{d['sha256'][:8]}"
     path = Path(cache_dir) / f"refit-{cutoff[:10]}-{fingerprint}.json"
     if path.is_file():
         try:
             c = json.loads(path.read_text())
-            if c.get("fingerprint") == fingerprint and c.get("cutoff") == cutoff:
+            if c.get("fingerprint") == fingerprint and c.get("cutoff") == cutoff and isinstance(c.get("fits"), dict):
                 return c["fits"], "hit", fingerprint, cutoff
-        except ValueError:
+        except (ValueError, AttributeError):
             pass
     fits = _walk_fit(rows, box, d)
     if write_cache:
@@ -164,7 +175,7 @@ def record(conn, path: Path, *, policies: list, now: Optional[str] = None, dry_r
     now = now or utc_now()
     cache_dir = Path(cache_dir) if cache_dir else Path(path).parent / "challengers" / "ncaab"
     out = {"status": "success", "dry_run": dry_run, "now": now, "created": 0, "would_record": 0, "already_recorded": 0,
-           "eligible_games": 0, "skipped": {}, "errors": {}, "fits": {}, "fits_cache": None,
+           "eligible_games": 0, "skipped": {}, "errors": {}, "fits": {}, "fits_cache": None, "lines_from": {"stored": 0, "recomputed": 0},
            "policies": [{"policy_id": p.policy_id, "sha": p.sha} for p in policies]}
     try:
         lc.check_unique_names(policies)
@@ -189,7 +200,16 @@ def record(conn, path: Path, *, policies: list, now: Optional[str] = None, dry_r
             games[gid] = ({"eff": st.eff.expected(g), "points": st.points.expected(g)}, g.tipoff_at)
         except Exception as exc:
             out["errors"][gid] = f"{type(exc).__name__}: {exc}"
-    lines = [(e["game_id"], e["market"], e["line"]) for e in served["forecasts"]] + [(gid, "winner", None) for gid in accepted]
+    lines = []
+    for e in served["forecasts"]:
+        stored = conn.execute(
+            "SELECT line FROM market_forecasts WHERE game_id=? AND market=? AND policy='near_tipoff' AND run_type='live' AND tipoff_at=? "
+            "AND generated_at<=? AND model_version NOT LIKE 'research-%' ORDER BY generated_at DESC, forecast_id DESC LIMIT 1",
+            (e["game_id"], e["market"], games[e["game_id"]][1] if e["game_id"] in games else None, now)).fetchone() \
+            if e["game_id"] in games else None
+        out["lines_from"]["stored" if stored else "recomputed"] += 1       # the stored served line pairs with the incumbent
+        lines.append((e["game_id"], e["market"], stored[0] if stored else e["line"]))
+    lines += [(gid, "winner", None) for gid in accepted]
     for pol in policies:
         for c in pol.challengers:
             sp, fit = c.spec, fits[c.spec.extra["fit_seasons"]]
@@ -197,7 +217,7 @@ def record(conn, path: Path, *, policies: list, now: Optional[str] = None, dry_r
                 out["skipped"][sp.name] = f"fit refused: {fit['refused']}"
                 continue
             sig = {**st.decision["sigmas"], **fit["sigmas"]}
-            definition = f"{st.decision['sha256'][:8]}+refit={cutoff[:10]}-{fingerprint[-8:]}-{sp.extra['fit_seasons']}"
+            definition = f"{st.decision['sha256'][:8]}+refit={cutoff[:10]}-{fingerprint}-{sp.extra['fit_seasons']}"
             rows = []
             for gid, market, line in lines:
                 if gid not in games:

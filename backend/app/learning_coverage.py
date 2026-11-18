@@ -94,11 +94,20 @@ def _learning_row(conn, sport: str, market: str, trainer: dict, defs: dict) -> d
     return out
 
 
+def learning_challengers_error():
+    from . import learning_challengers
+    return learning_challengers.PolicyError
+
+
 def _ncaab_states(data_dir: Path, market: str, store, challengers: dict) -> dict:
     """NCAAB challenger states (learning_challengers/ncaab_challengers): implemented, but not scheduled and never serving.
     `trained` is yes only when a refit cache with fitted values exists in the data directory being read; `recording` and
     `evaluated` count challenger rows (settled ones need the NCAAB store); the served forecast stays frozen."""
     no = lambda why: _s("no", why)
+    if "error" in challengers:
+        u = _s("unknown", f"unknown: challenger policy files unreadable ({challengers['error']})")
+        return {"trained": u, "scheduled": no("no job is installed for NCAAB challengers"), "recording_prospectively": u,
+                "forecasting_with_fits": no("served NCAAB forecasts are frozen"), "evaluated": u}
     names = challengers["markets"].get(market)
     if not names:
         gone = no("no NCAAB challenger covers this market (C1-C4 cover winner, spread, total, team totals)")
@@ -132,12 +141,28 @@ def _ncaab_states(data_dir: Path, market: str, store, challengers: dict) -> dict
     cc.close()
     out["recording_prospectively"] = _s("yes", f"{n} challenger rows recorded for this market (separate store, before tip-off)") if n else \
         no("no challenger rows recorded for this market")
-    settled = 0
+    scored, err = 0, None
     if ids and store is not None and learning_ops.has_table(store, "games"):
-        settled = sum(store.execute("SELECT COUNT(*) FROM games WHERE status='final' AND game_id=?", (g,)).fetchone()[0] for g in ids)
-    out["evaluated"] = _s("yes", f"{settled} games with settled challenger rows (a count; no claim until the preregistered n)") if settled else \
-        no("no settled challenger row yet")
+        scored, err = _scored_pairs(store, data_dir, "ncaab-", (market,))
+    out["evaluated"] = _s("unknown", f"unknown: scoring failed ({err})") if err else \
+        _s("yes", f"{scored} scored pairs (settled, not void, paired with the served forecast; a count, no claim until the preregistered n)") if scored else \
+        no("no scored pair yet (settled, not void, with a served incumbent)")
     return out
+
+
+def _scored_pairs(store, data_dir: Path, prefix: str, markets) -> tuple:
+    """(scored pairs, error) for a sport's challenger rows: settled, not void, with an incumbent (learning_eval.evaluate)."""
+    from . import learning_eval
+    cc = learning_challengers_ro(data_dir)
+    if cc is None or store is None:
+        return 0, None
+    try:
+        groups = learning_eval.evaluate(store, cc)["groups"]
+    except (sqlite3.Error, ValueError, KeyError) as exc:
+        return 0, f"{type(exc).__name__}: {exc}"
+    finally:
+        cc.close()
+    return sum(g["n_scored"] for g in groups if g["policy_id"].startswith(prefix) and g["market"] in markets), None
 
 
 SPEC_STORE = {"soccer": ("soccer_matches", "match_id"), "nfl": ("games", "game_id")}
@@ -145,6 +170,7 @@ SPEC_MARKETS = {"soccer": {"1x2": ("soccer_1x2",), "double_chance": ("soccer_1x2
                            "goals_ou": ("soccer_goals_total",), "team_goals": ("soccer_goals_home", "soccer_goals_away"),
                            "btts": ("soccer_btts",)},
                 "nfl": {m: (m,) for m in ("winner", "spread", "total", "team_total_home", "team_total_away")}}
+SPEC_EVAL = {"double_chance": ("soccer_double_chance",), "draw_no_bet": ("soccer_1x2",)}     # derived from the 1X2 rows at read time
 SPEC_SKIPPED = {"soccer:corners": "corners are skipped: no corner challenger exists",
                 "soccer:corner_handicap": "corner handicap is skipped: no corner challenger exists",
                 "soccer:asian_handicap": "Asian handicap is research only and blocked on the owner's preregistration answers: no challenger",
@@ -178,11 +204,12 @@ def _spec_states(sport: str, data_dir: Path, market: str, store) -> dict:
     base["recording_prospectively"] = _s("yes", f"{n} challenger rows recorded for this market (separate store, before kickoff)") if n else \
         no("no challenger rows recorded for this market")
     table, col = SPEC_STORE[sport]
-    settled = 0
+    scored, err = 0, None
     if ids and store is not None and learning_ops.has_table(store, table):
-        settled = sum(store.execute(f"SELECT COUNT(*) FROM {table} WHERE status='final' AND {col}=?", (g,)).fetchone()[0] for g in ids)
-    base["evaluated"] = _s("yes", f"{settled} games with settled challenger rows (a count; no claim until the preregistered n)") if settled else \
-        no("no settled challenger row yet")
+        scored, err = _scored_pairs(store, data_dir, f"{sport}-", SPEC_EVAL.get(market, stored))
+    base["evaluated"] = _s("unknown", f"unknown: scoring failed ({err})") if err else \
+        _s("yes", f"{scored} scored pairs (settled, not void, paired with the served forecast; a count, no claim until the preregistered n)") if scored else \
+        no("no scored pair yet (settled, not void, with a served incumbent)")
     return base
 
 
@@ -215,7 +242,10 @@ def coverage(data_dir: Optional[Path] = None, folder: Optional[Path] = None) -> 
         if sport in ("ncaab", "nfl", "soccer"):
             ncaab_store, mode = learning_ops.open_ro(data_dir, sport)
         if sport == "ncaab":
-            ch = _ncaab_challengers()
+            try:
+                ch = _ncaab_challengers()
+            except learning_challengers_error() as exc:
+                ch = {"error": str(exc)}
         stores[sport] = mode
         defs = None
         if conn is not None:

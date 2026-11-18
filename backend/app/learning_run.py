@@ -3,7 +3,8 @@
 One heavy job per machine (non-blocking flock: a second one is refused, never queued), lowered priority, capped BLAS
 threads, a wall-clock limit and a resident-memory cap enforced on the child's whole process group, and no start within a
 window before any game tips off and while a game is in progress. The lock is inherited by the child, so it stays held while
-any process of the job lives, even if this guard is SIGKILLed. Every start, end and refusal is appended to
+any process of the job lives, even if this guard is SIGKILLed (then the children keep the lock but lose the RSS and wall-clock
+supervision; a grandchild that closed inherited descriptors, e.g. started with close_fds, does not hold the lock). Every start, end and refusal is appended to
 <data dir>/research/learning-runs.jsonl. Reads game times with read-only queries; writes nothing else.
 Exit codes: the child's own, or 64 usage, 75 refused (lock, game window or schedule unreadable), 120 command not started,
 121 wall-clock kill, 122 memory kill, 123 memory unreadable (killed: fail closed). These avoid the shell's 126/127 and

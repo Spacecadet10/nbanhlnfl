@@ -30,7 +30,8 @@ def _served_ncaab(store, row) -> Optional[list]:
         return None if r is None else [r[0], 0.0, 1 - r[0]]
     r = store.execute(
         "SELECT p_a, p_mid, p_b FROM market_forecasts WHERE game_id=? AND market=? AND line IS ? AND policy='near_tipoff' "
-        "AND run_type='live' AND tipoff_at=? AND generated_at<=? ORDER BY generated_at DESC, forecast_id DESC LIMIT 1",
+        "AND run_type='live' AND tipoff_at=? AND generated_at<=? AND model_version NOT LIKE 'research-%' "
+        "ORDER BY generated_at DESC, forecast_id DESC LIMIT 1",
         (row["game_id"], row["market"], row["line"], row["tipoff_at"], row["cutoff_at"])).fetchone()
     return None if r is None else list(r)
 
