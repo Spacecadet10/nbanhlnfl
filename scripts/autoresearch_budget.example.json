@@ -1,0 +1,14 @@
+{
+  "approved_by": "owner",
+  "approved_at": "2026-11-18T14:14:00Z",
+  "period": "weekly",
+  "period_usd_cap": 5.0,
+  "max_runs_per_period": 2,
+  "max_usd_per_run": 2.5,
+  "max_total_runs": 4,
+  "counting_from": "2026-11-18T14:14:00Z",
+  "model": "claude-opus-5-5",
+  "max_trials": 4,
+  "sports": ["nba", "nhl"],
+  "expires_at": "2026-12-31T00:00:00Z"
+}

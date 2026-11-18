@@ -2,7 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Scheduled autoresearch GENERATION (PAID): requires owner budget file ~/autoresearch-sports/AGENT_BUDGET.json. Weekly, Monday 13:00 local.
+	<!-- Scheduled autoresearch GENERATION (PAID): requires owner budget file ~/autoresearch-sports/AGENT_BUDGET.json. Tuesday and Friday 12:30 local (outside the trainer's 09:30/15:30 and the 11:00 daily eval).
 	     NOT installed. scripts/autoresearch_agent_scheduled.sh refuses (exit 78) unless the budget file validates and the period's recorded spend leaves room; it
 	     passes max-usd, model and max-trials from that file. Do not install without a new owner budget.
 	     The wrapper runs the command through app.learning_run (one heavy job per machine, nice, wall-clock and memory caps, no start within
@@ -35,14 +35,24 @@
 	<key>RunAtLoad</key>
 	<false/>
 	<key>StartCalendarInterval</key>
+	<array>
 	<dict>
 		<key>Weekday</key>
-		<integer>1</integer>
+		<integer>2</integer>
 		<key>Hour</key>
-		<integer>13</integer>
+		<integer>12</integer>
 		<key>Minute</key>
-		<integer>0</integer>
+		<integer>30</integer>
 	</dict>
+	<dict>
+		<key>Weekday</key>
+		<integer>5</integer>
+		<key>Hour</key>
+		<integer>12</integer>
+		<key>Minute</key>
+		<integer>30</integer>
+	</dict>
+	</array>
 	<key>StandardErrorPath</key>
 	<string>/Users/andry/Desktop/nbanhlnfl/data/research/autoresearch-agent.log</string>
 	<key>StandardOutPath</key>
