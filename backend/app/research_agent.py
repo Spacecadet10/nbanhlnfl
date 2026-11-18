@@ -303,6 +303,7 @@ def agent_profile(exp_root: Path, workspace: Path, sock: str, bin_dir: Optional[
         f"(deny file-write* (subpath {q(ws / '.git')}) (literal {q(ws / 'prepare.py')}) (literal {q(ws / 'program.md')}))",
         f"(allow file-write* {sub(git_ok)})",
         f"(deny file-write* {sub([str(ws / '.git' / g) for g in GIT_READONLY_INSIDE])} (regex {json.dumps('^' + _regex_literal(_safe(ws)) + '/(.*/)?' + ATTRIBUTES_ANY_CASE + '$')}))",
+        "(deny job-creation)", "(deny lsopen)", "(deny appleevent-send)",      # no launchd job, app launch or Apple event
         "(deny network*)",
         '(allow network-outbound (remote tcp "*:443"))',                   # the model API; nothing else
         '(allow network-outbound (literal "/private/var/run/mDNSResponder"))',

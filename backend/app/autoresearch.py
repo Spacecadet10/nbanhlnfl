@@ -674,7 +674,12 @@ def _profile(tmp: Path) -> str:
     virtualenv, the app source and the trial's own tmp dir. Writes: only that tmp dir. No network."""
     q = lambda p: json.dumps(str(Path(p).resolve()))           # noqa: E731  (SBPL strings use the same escaping)
     allowed = sorted({sys.prefix, sys.base_prefix, str(Path(os.path.realpath(sys.executable)).parents[1]), str(APP_DIR), str(tmp)})
+    py = {os.path.realpath(sys.executable), str(Path(sys.executable).absolute())}
     lines = ["(version 1)", "(allow default)", "(deny network*)",
+             # No program but this Python can start (loky workers re-exec it; fork stays allowed), and nothing may reach
+             # launchd, Launch Services or another app: submitted jobs and opened files would run outside the sandbox.
+             "(deny process-exec*)", "(allow process-exec " + " ".join(f"(literal {json.dumps(p)})" for p in sorted(py)) + ")",
+             "(deny job-creation)", "(deny lsopen)", "(deny appleevent-send)",
              "(deny file-write* (subpath \"/\"))",
              f"(allow file-write* (subpath {q(tmp)}) (literal \"/dev/null\") (regex #\"^/private/tmp/__KMP_REGISTERED_LIB_\"))",
              "(deny file-read* " + " ".join(f"(subpath {q(p)})" for p in READ_DENIED) + ")",

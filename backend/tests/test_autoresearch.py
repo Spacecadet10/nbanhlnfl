@@ -10,6 +10,7 @@ import math
 import os
 import random
 import subprocess
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -597,3 +598,52 @@ def test_daily_evaluates_queued_commits_within_budget_without_touching_the_worki
     assert Path(third["report_file"]).is_file() and third["sports"]["nba"]["promotion"].startswith("none")
     assert (ws / "train.py").read_text() == "uncommitted, must stay\n"       # never checked anything out
     assert git(ws, "rev-parse", "--abbrev-ref", "HEAD") == branch and git(ws, "rev-parse", "HEAD") == head
+
+
+def _sandboxed(tmp_path, code):
+    tmp = tmp_path / "tmp"
+    tmp.mkdir()
+    prof = tmp_path / "sandbox.sb"
+    prof.write_text(ar._profile(tmp))
+    env = {"PATH": "/usr/bin:/bin", "HOME": str(tmp), "TMPDIR": str(tmp)}
+    return subprocess.run([ar.SANDBOX, "-f", str(prof), sys.executable, "-I", "-B", "-c", code], capture_output=True,
+                          text=True, env=env, cwd=str(tmp), timeout=120), tmp
+
+
+def test_the_candidate_sandbox_cannot_start_other_programs_launchd_jobs_or_apps(tmp_path):
+    label = f"com.nba-predictor.sandbox-test-{os.getpid()}"
+    cmd = tmp_path / "x.command"
+    cmd.write_text("#!/bin/sh\ntouch " + str(tmp_path / "ran") + "\n")
+    cmd.chmod(0o755)
+    code = ("import os\n"
+            f"a = os.system('/bin/launchctl submit -l {label} -- /usr/bin/true')\n"
+            f"b = os.system('/usr/bin/open -g {cmd}')\n"
+            "c = os.system('/bin/echo hi')\n"
+            "print('RC', a, b, c)\n")
+    try:
+        res, _ = _sandboxed(tmp_path, code)
+        listed = subprocess.run(["/bin/launchctl", "list"], capture_output=True, text=True).stdout
+    finally:
+        subprocess.run(["/bin/launchctl", "remove", label], capture_output=True)
+    assert "RC" in res.stdout, res.stderr
+    assert all(int(x) != 0 for x in res.stdout.split("RC")[1].split()), res.stdout
+    assert label not in listed
+    assert not (tmp_path / "ran").exists()
+
+
+def test_the_candidate_sandbox_still_runs_python_and_forks_workers(tmp_path):
+    code = ("import os, subprocess, sys\n"
+            "pid = os.fork()\n"
+            "if pid == 0:\n    os._exit(7)\n"
+            "_, st = os.waitpid(pid, 0)\n"
+            "out = subprocess.run([sys.executable, '-I', '-c', 'print(41 + 1)'], capture_output=True, text=True)\n"
+            "print('OK', os.waitstatus_to_exitcode(st), out.stdout.strip())\n")
+    res, _ = _sandboxed(tmp_path, code)
+    assert "OK 7 42" in res.stdout, res.stdout + res.stderr
+
+
+def test_the_candidate_sandbox_still_runs_loky_workers(tmp_path):
+    pytest.importorskip("joblib")
+    res, _ = _sandboxed(tmp_path, "from joblib import Parallel, delayed\n"
+                                  "print('LOKY', Parallel(n_jobs=2, backend='loky')(delayed(abs)(-i) for i in range(4)))\n")
+    assert "LOKY [0, 1, 2, 3]" in res.stdout, res.stdout + res.stderr
