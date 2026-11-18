@@ -131,13 +131,14 @@ outcome is available after the fit cutoff; no fit's results reach the cutoff of 
   results and before the forecasts of its time, as a walk over every row delivers it (it was delivered ahead of every newer
   forecast until 2026-10-16). Training writes no ledger row; `publish` re-verifies every artifact
   digest and refuses if the live definition changed meanwhile. Scheduled by
-  `scripts/launchd/com.nba-predictor.adaptive-train.plist` (research-environment Python; not installed).
+  `scripts/launchd/com.nba-predictor.adaptive-train.plist` (live release Python and code, release-guard env; not installed).
 - Cost: a training run re-walks every learned member from the first stored season with its weekly refits (the walk is
   what makes the history out of sample), so the first run of a definition takes tens of minutes per sport (NHL
   `hockey_gbt` dominates); later runs reuse the candidate history store and only add new periods. Training is weekly and
   nightly, never in the two-hour cycle. Set `OMP_NUM_THREADS` when running several sports at once.
-- Deep networks (`torch_mlp`, `keras_mlp`) are fitted only in the research environment (`~/nba-predictor-deep`); in the
-  release environment their fit is recorded as `skipped` with the reason and the member is `missing` in every forecast.
+- Deep networks (`torch_mlp`, `keras_mlp`) are fitted only in an environment with torch/tensorflow (the research environment
+  `~/nba-predictor-deep` existed in October; it is not present now); in the release environment their fit is recorded as `skipped`
+  with the reason and the member is `missing` in every forecast.
 - Forecast path: artifacts are loaded only when their digest matches; results that arrived after an artifact's cutoff
   are delivered to the frozen state (no refit; a season a learned member has no fit for makes it `missing`); one missing
   member uses the registered leave-one-out stack, more abstain with the reason; probabilities are never substituted.
@@ -428,3 +429,17 @@ weekly and (with `NBA_DAILY_AGREEMENT=1`) daily rows; the nightly jobs settle; t
 - Overlap: collection takes the store's job lock; training the per-sport training lock (non-blocking: a second trainer
   skips); the transfer refuses while a training lock is held.
 - Measured (isolated clone holding the imported fits, frozen tree 6b6c0917, 4 threads): incremental daily refit NHL 1,015 s, NBA 916 s (forced; no new NBA results); both succeeded and published 17 / 24 records.
+
+## 15. Activation 2026-11 (facts; live steps pending)
+
+- Live state before activation: `adaptive_fits` 0 and `data/research/adaptive/` absent in the live data directory; live checkout
+  43d4b74, definitions NBA weekly 4b3b8abf49973e4c / daily 89dc8edda9de58ed, NHL weekly b921c537a765c65c / daily d11d95730c905f88.
+  Delivery (main efd5deb) computes different IDs (only `market_live.py` differs), so its page does not see live-identity fits.
+- Trainer template `scripts/launchd/com.nba-predictor.adaptive-train.plist` now uses the live checkout's Python and code,
+  `NBA_DATA_DIR=/Users/andry/Desktop/nbanhlnfl/data`, `NBA_RELEASE_GUARD=1`, `NBA_RELEASE_ROOT=/Users/andry/nba-predictor-live`
+  (the protected data directory refuses training without them). Not installed.
+- Phase 1 trains without the deep members (recorded `skipped`; the combiner uses the available members). Re-creating the deep
+  environment is an owner decision.
+- The `daily` and `api-delivery` templates still carry old `nba-predictor-sprint1` paths and differ from the installed agents;
+  `NBA_DAILY_AGREEMENT=1` is not added to them here.
+- Pending (not done): research-identity alias for delivery, first live training run, trainer job install, proof of use.
