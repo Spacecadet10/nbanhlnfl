@@ -403,10 +403,22 @@ def nhl_pbp(conn: sqlite3.Connection, *, fetch: Optional[Callable] = None, limit
     """NHL shot import for finals of the latest two seasons that have none yet (docs/MODEL_SELECTION.md §12), reported as
     a step of the calling job. Feeds only the xG research member; never gates a primary forecast."""
     from . import nhl_shots
+    from .sources import nhl_pbp
     seasons = [r[0] for r in conn.execute("SELECT DISTINCT season FROM games WHERE status='final' ORDER BY season DESC LIMIT 2")]
     try:
-        kw = {"fetch": fetch} if fetch else {}
-        out = nhl_shots.import_pending(conn, seasons, limit=limit, log=lambda _m: None, **kw)
+        # Newest finals first: oldest-first let a backlog of old games whose play-by-play keeps failing take every slot of
+        # the bounded slice, so the current season's recent finals stayed without shots (candidate recorder: stale inputs).
+        fetch = fetch or nhl_pbp.fetch
+        todo = sorted(nhl_shots.pending(conn, seasons), key=lambda g: (g["tipoff_at"], g["game_id"]), reverse=True)[:limit]
+        out = {"pending": len(todo), "imported": 0, "incomplete": 0, "errors": {}}
+        for g in todo:
+            try:
+                r = nhl_shots.import_game(conn, g, fetch(g["game_id"]), utc_now())
+                out["imported"] += 1
+                out["incomplete"] += not r["complete"]
+            except Exception as exc:        # reported; the game stays pending for the next run
+                out["errors"][g["game_id"]] = f"{type(exc).__name__}: {exc}"
+            time.sleep(0.25)
     except Exception as exc:
         return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
     status = "failed" if out["errors"] and not out["imported"] else "success" if out["imported"] else "skipped"
