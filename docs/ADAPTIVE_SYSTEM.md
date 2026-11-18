@@ -435,11 +435,12 @@ weekly and (with `NBA_DAILY_AGREEMENT=1`) daily rows; the nightly jobs settle; t
 - Live state before activation: `adaptive_fits` 0 and `data/research/adaptive/` absent in the live data directory; live checkout
   43d4b74, definitions NBA weekly 4b3b8abf49973e4c / daily 89dc8edda9de58ed, NHL weekly b921c537a765c65c / daily d11d95730c905f88.
   Delivery (main efd5deb) computes different IDs (only `market_live.py` differs), so its page does not see live-identity fits.
-- Trainer template `scripts/launchd/com.nba-predictor.adaptive-train.plist` now uses the live checkout's Python and code,
+- Trainer template `scripts/launchd/com.nba-predictor.adaptive-train.plist` now uses the deep environment's Python (`/Users/andry/nba-predictor-deep/backend/.venv/bin/python`, torch 2.14.1 / tensorflow 2.21.0, no `app` package) on the live checkout's code (`PYTHONPATH` and `WorkingDirectory` = `/Users/andry/nba-predictor-live/backend`),
   `NBA_DATA_DIR=/Users/andry/Desktop/nbanhlnfl/data`, `NBA_RELEASE_GUARD=1`, `NBA_RELEASE_ROOT=/Users/andry/nba-predictor-live`
   (the protected data directory refuses training without them). Not installed.
-- Phase 1 trains without the deep members (recorded `skipped`; the combiner uses the available members). Re-creating the deep
-  environment is an owner decision.
+- The owner chose to train the deep members too; the deep environment was rebuilt from the live freeze plus torch/tensorflow and
+  its four definitions equal the live ones. The first deep fit is expected to take hours. Without torch/tensorflow the deep
+  members are recorded `skipped` and the combiner uses the available members (the isolated rehearsal first ran that way).
 - The `daily` and `api-delivery` templates still carry old `nba-predictor-sprint1` paths and differ from the installed agents;
   `NBA_DAILY_AGREEMENT=1` is not added to them here.
 - Pending (not done): research-identity alias for delivery, first live training run, trainer job install, proof of use.

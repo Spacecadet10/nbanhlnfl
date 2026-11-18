@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- adaptive-v1 scheduled training (docs/ADAPTIVE_SYSTEM.md §7) run with the live release's Python and code
-     (/Users/andry/nba-predictor-live, release guard on, as the odds job). Without torch / tensorflow in that environment the
-     deep members are recorded 'skipped' and the combiner uses the available members. The command takes the store's job lock only to snapshot and to publish; the training reads
+<!-- adaptive-v1 scheduled training (docs/ADAPTIVE_SYSTEM.md §7) run with the deep environment's Python (torch / tensorflow;
+     otherwise the live freeze, no `app` package installed) on the live release's code (WorkingDirectory and PYTHONPATH
+     /Users/andry/nba-predictor-live/backend, release guard on, as the odds job), so the deep members are fitted. The command takes the store's job lock only to snapshot and to publish; the training reads
      the snapshot under its own lock, so the odds/forecast cycles keep running. Due-only and idempotent. Install only with a
      release move.
      Order per sport (docs/ADAPTIVE_SYSTEM.md §14): `training-inputs` collects (results, NHL shots and player boxes, NBA boxes)
@@ -25,6 +25,8 @@
 		<string>1</string>
 		<key>OMP_NUM_THREADS</key>
 		<string>4</string>
+		<key>PYTHONPATH</key>
+		<string>/Users/andry/nba-predictor-live/backend</string>
 	</dict>
 	<key>Label</key>
 	<string>com.nba-predictor.adaptive-train</string>
@@ -36,7 +38,7 @@
 		<string>-i</string>
 		<string>/bin/sh</string>
 		<string>-c</string>
-		<string>PY=/Users/andry/nba-predictor-live/backend/.venv/bin/python; rc=0; for s in nhl nba; do if $PY -m app.cli --sport $s training-inputs; then $PY -m app.cli --sport $s adaptive-train || rc=1; $PY -m app.cli --sport $s adaptive-train --cadence daily || rc=1; else rc=1; fi; done; exit $rc</string>
+		<string>PY=/Users/andry/nba-predictor-deep/backend/.venv/bin/python; rc=0; for s in nhl nba; do if $PY -m app.cli --sport $s training-inputs; then $PY -m app.cli --sport $s adaptive-train || rc=1; $PY -m app.cli --sport $s adaptive-train --cadence daily || rc=1; else rc=1; fi; done; exit $rc</string>
 	</array>
 	<key>StandardErrorPath</key>
 	<string>/Users/andry/Desktop/nbanhlnfl/data/adaptive-train-launchd.log</string>
