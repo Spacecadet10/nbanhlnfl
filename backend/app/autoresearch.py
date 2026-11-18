@@ -683,6 +683,8 @@ def _profile(tmp: Path) -> str:
              # launchd, Launch Services or another app: submitted jobs and opened files would run outside the sandbox.
              "(deny process-exec*)", "(allow process-exec " + " ".join(f"(literal {json.dumps(p)})" for p in sorted(py)) + ")",
              "(deny job-creation)", "(deny lsopen)", "(deny appleevent-send)",
+             "(deny ipc-posix-shm*)", "(deny ipc-sysv*)",             # no shared memory to pass data between trials (POSIX semaphores stay: loky)
+             '(deny mach-lookup (global-name "com.apple.pasteboard.1") (global-name "com.apple.pbs.fetch_services"))',
              "(deny signal)", "(allow signal (target same-sandbox))",      # no signal to the parent or any other process
              "(deny file-write* (subpath \"/\"))",
              f"(allow file-write* (subpath {q(tmp)}) (literal \"/dev/null\") (regex #\"^/private/tmp/__KMP_REGISTERED_LIB_\"))",

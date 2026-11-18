@@ -772,3 +772,29 @@ def test_every_path_that_runs_train_py_uses_the_one_guarded_runner(env, monkeypa
     else:
         assert ar.holdout("nba", exp, ws, ask=lambda p: True)["status"] == "scored"
     assert seen == {"profile": 1, "strays": 1, "guard": 1}
+
+
+def test_the_candidate_cannot_use_shared_memory_or_the_pasteboard_to_pass_data_between_trials(tmp_path):
+    from multiprocessing import shared_memory
+    name = f"nbaprobe{os.getpid()}"
+    make = ("from multiprocessing import shared_memory\n"
+            f"s = shared_memory.SharedMemory(name={name!r}, create=True, size=64)\ns.buf[:5] = b'LEAK!'\nprint('CREATED')\n")
+    peek = ("from multiprocessing import shared_memory\n"
+            f"s = shared_memory.SharedMemory(name={name!r})\nprint('READ', bytes(s.buf[:5]))\n")
+    paste = "import os\nprint('PBCOPY', os.system('/usr/bin/pbcopy < /dev/null'), os.system('/usr/bin/pbpaste > /dev/null'))\n"
+    try:
+        for d in "abc":
+            (tmp_path / d).mkdir()
+        first, _ = _sandboxed(tmp_path / "a", make)
+        second, _ = _sandboxed(tmp_path / "b", peek)
+        assert "CREATED" not in first.stdout, first.stdout + first.stderr
+        assert "LEAK!" not in second.stdout, second.stdout + second.stderr
+        third, _ = _sandboxed(tmp_path / "c", paste)
+        assert "PBCOPY 0 0" not in third.stdout, third.stdout + third.stderr       # exec is denied already; the mach name is too
+    finally:
+        try:
+            seg = shared_memory.SharedMemory(name=name)
+            seg.close()
+            seg.unlink()
+        except FileNotFoundError:
+            pass
