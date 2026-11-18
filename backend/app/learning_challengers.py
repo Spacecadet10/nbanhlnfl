@@ -10,6 +10,7 @@ Scoring against the incumbent is read-time only (learning_eval.py).
 """
 import argparse
 import hashlib
+import importlib
 import json
 import sqlite3
 import sys
@@ -24,7 +25,8 @@ from .db import utc_now
 
 POLICY_DIR = Path(__file__).parent / "reference" / "learning_policies"
 SOURCES = ("existing_pool", "autoresearch_trial", "manual")
-SPORTS = ("nba", "nhl", "ncaab")
+SPORTS = ("nba", "nhl", "ncaab", "nfl", "soccer")
+SPORT_MODULES = {"ncaab": "ncaab_challengers", "nfl": "nfl_challengers", "soccer": "soccer_challengers"}   # own spec families and recorders
 TRIAL_DECISIONS = ("keep", "discard", "crash", "invalid", "n/a")
 SPEC_FIELDS = {"name", "sport", "family", "head", "features", "role", "why", "refit", "extra"}
 PROVENANCE_FIELDS = ("source", "trial_id", "commit", "trial_decision", "registered_by", "registered_at", "note")
@@ -52,9 +54,8 @@ def _text(v) -> bool:
 
 
 def _spec(raw: dict, sport: str, source: str):
-    if sport == "ncaab":
-        from . import ncaab_challengers
-        return ncaab_challengers.spec(raw, sport)
+    if sport in SPORT_MODULES:
+        return importlib.import_module(f"{__package__}.{SPORT_MODULES[sport]}").spec(raw, sport)
     if not isinstance(raw, dict) or set(raw) - SPEC_FIELDS or not {"name", "sport", "family", "head", "features", "role", "why"} <= set(raw):
         raise PolicyError(f"spec fields must be within {sorted(SPEC_FIELDS)} and include name, sport, family, head, features, role, why")
     if raw["sport"] != sport:
@@ -138,18 +139,26 @@ def load_policies(sport: str, folder: Optional[Path] = None) -> list:
 
 
 # --- Store ----------------------------------------------------------------------------------------------------------
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS challenger_policies (
-  policy_sha TEXT PRIMARY KEY, policy_id TEXT NOT NULL, sport TEXT NOT NULL, content TEXT NOT NULL, first_seen_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS challenger_forecasts (
+MARKETS = ("winner", "reg3", "spread", "total", "team_total_home", "team_total_away",
+           "soccer_1x2", "soccer_goals_total", "soccer_goals_home", "soccer_goals_away", "soccer_btts")
+NO_LINE = ("winner", "reg3", "soccer_1x2", "soccer_btts")
+TABLE = """
+CREATE TABLE {name} (
   forecast_id INTEGER PRIMARY KEY, policy_id TEXT NOT NULL, policy_sha TEXT NOT NULL, spec_name TEXT NOT NULL,
   spec_json TEXT NOT NULL, spec_hash TEXT NOT NULL, definition TEXT NOT NULL, game_id TEXT NOT NULL,
-  market TEXT NOT NULL CHECK (market IN ('winner','reg3','spread','total','team_total_home','team_total_away')),
+  market TEXT NOT NULL CHECK (market IN ({markets})),
   line REAL, p_a REAL NOT NULL CHECK (p_a BETWEEN 0 AND 1), p_mid REAL NOT NULL CHECK (p_mid BETWEEN 0 AND 1),
   p_b REAL NOT NULL CHECK (p_b BETWEEN 0 AND 1), cutoff_at TEXT NOT NULL, tipoff_at TEXT NOT NULL, generated_at TEXT NOT NULL,
   dataset_version TEXT NOT NULL, model_version TEXT NOT NULL, recorded_at TEXT,
-  CHECK (abs(p_a + p_mid + p_b - 1) < 1e-6), CHECK ((market IN ('winner','reg3')) = (line IS NULL)),
+  CHECK (abs(p_a + p_mid + p_b - 1) < 1e-6), CHECK ((market IN ({no_line})) = (line IS NULL)),
   UNIQUE (policy_sha, spec_hash, game_id, market, cutoff_at));
+""".format(name="{name}", markets=", ".join(f"'{m}'" for m in MARKETS), no_line=", ".join(f"'{m}'" for m in NO_LINE))
+COLUMNS = ("forecast_id, policy_id, policy_sha, spec_name, spec_json, spec_hash, definition, game_id, market, line, p_a, p_mid, p_b, "
+           "cutoff_at, tipoff_at, generated_at, dataset_version, model_version, recorded_at")
+SCHEMA = (
+    "CREATE TABLE IF NOT EXISTS challenger_policies (\n"
+    "  policy_sha TEXT PRIMARY KEY, policy_id TEXT NOT NULL, sport TEXT NOT NULL, content TEXT NOT NULL, first_seen_at TEXT NOT NULL);\n"
+    + TABLE.replace("CREATE TABLE {name}", "CREATE TABLE IF NOT EXISTS challenger_forecasts") + """
 CREATE INDEX IF NOT EXISTS challenger_forecasts_game ON challenger_forecasts(game_id, market, spec_hash);
 CREATE TRIGGER IF NOT EXISTS challenger_forecasts_no_update BEFORE UPDATE ON challenger_forecasts
 BEGIN SELECT RAISE(ABORT, 'challenger_forecasts are append-only'); END;
@@ -160,9 +169,31 @@ BEGIN SELECT RAISE(ABORT, 'challenger_policies are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS challenger_policies_no_delete BEFORE DELETE ON challenger_policies
 BEGIN SELECT RAISE(ABORT, 'challenger_policies are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS challenger_forecasts_two_hour_window BEFORE INSERT ON challenger_forecasts
-WHEN NEW.generated_at < strftime('%Y-%m-%dT%H:%M:%SZ', NEW.tipoff_at, '-2 hours') OR NEW.generated_at >= NEW.tipoff_at
-BEGIN SELECT RAISE(ABORT, 'challenger forecast must be within two hours before tipoff and strictly before it'); END;
-"""
+WHEN NEW.generated_at >= NEW.tipoff_at
+  OR (substr(NEW.market, 1, 7) <> 'soccer_' AND NEW.generated_at < strftime('%Y-%m-%dT%H:%M:%SZ', NEW.tipoff_at, '-2 hours'))
+BEGIN SELECT RAISE(ABORT, 'challenger forecast must be within two hours before tipoff and strictly before it (soccer: before kickoff)'); END;
+""")
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Stores made before the soccer markets: rebuild challenger_forecasts with the wider market CHECK (rows and ids kept) and
+    replace the window trigger (soccer forecasts are made at the 06:00 UTC cutoff, not within two hours of kickoff)."""
+    sql = conn.execute("SELECT sql FROM sqlite_master WHERE name='challenger_forecasts'").fetchone()[0]
+    if "soccer_1x2" not in sql:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            conn.execute(TABLE.format(name="challenger_forecasts_new"))
+            conn.execute(f"INSERT INTO challenger_forecasts_new ({COLUMNS}) SELECT {COLUMNS} FROM challenger_forecasts")
+            conn.execute("DROP TABLE challenger_forecasts")
+            conn.execute("ALTER TABLE challenger_forecasts_new RENAME TO challenger_forecasts")
+            conn.execute("COMMIT")
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
+    trig = conn.execute("SELECT sql FROM sqlite_master WHERE name='challenger_forecasts_two_hour_window'").fetchone()
+    if trig is not None and "soccer_" not in trig[0]:
+        conn.execute("DROP TRIGGER challenger_forecasts_two_hour_window")
+    conn.executescript(SCHEMA)
 
 
 def store_path(data_dir: Optional[Path] = None) -> Path:
@@ -178,6 +209,7 @@ def open_store(path: Path) -> sqlite3.Connection:
     conn.executescript(SCHEMA)
     if "recorded_at" not in {r[1] for r in conn.execute("PRAGMA table_info(challenger_forecasts)")}:
         conn.execute("ALTER TABLE challenger_forecasts ADD COLUMN recorded_at TEXT")     # stores created before the column
+    _migrate(conn)
     return conn
 
 
@@ -289,8 +321,12 @@ def main(argv: Optional[list] = None) -> int:
     r.add_argument("--sport", choices=SPORTS, required=True)
     r.add_argument("--dry-run", action="store_true")
     r.add_argument("--now", help="fixed cutoff (UTC, for rehearsals and tests); default the clock. Needs --dry-run or --store")
+    r.add_argument("--day", help="soccer only: the match date to price (default the UTC date of now); needs --now")
     r.add_argument("--store", help="challenger store path (a rehearsal copy); the default is <data dir>/research/challengers.sqlite")
     a = p.parse_args(argv)
+    if a.day and (a.sport != "soccer" or not a.now):
+        print(json.dumps({"status": "refused", "reason": "--day is for soccer rehearsals and needs --now"}))
+        return 2
     if a.now and not a.dry_run and (not a.store or Path(a.store).resolve() == store_path().resolve()):
         print(json.dumps({"status": "refused", "reason": "--now backdates the cutoff: use --dry-run, or an explicit --store that is not the live store"}))
         return 2
@@ -305,12 +341,9 @@ def main(argv: Optional[list] = None) -> int:
         return 2
     conn = sqlite3.connect(f"{src.resolve().as_uri()}?mode=ro", uri=True)       # the sport store is never written
     conn.row_factory = sqlite3.Row
-    if a.sport == "ncaab":
-        from . import ncaab_challengers
-        recorder = ncaab_challengers.record
-    else:
-        recorder = record
-    out = recorder(conn, Path(a.store) if a.store else store_path(), policies=policies, now=a.now, dry_run=a.dry_run)
+    recorder = importlib.import_module(f"{__package__}.{SPORT_MODULES[a.sport]}").record if a.sport in SPORT_MODULES else record
+    extra = {"day": a.day} if a.day else {}
+    out = recorder(conn, Path(a.store) if a.store else store_path(), policies=policies, now=a.now, dry_run=a.dry_run, **extra)
     out.pop("skipped", None) if not out["skipped"] else None
     print(json.dumps(out, indent=2, sort_keys=True, default=str))
     return 0 if out["status"] in ("success", "partial") else 1

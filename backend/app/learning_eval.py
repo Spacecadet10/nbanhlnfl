@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from . import combine, config, learning_challengers as lc, markets
+from . import combine, config, learning_challengers as lc, markets, soccer_markets as sm
 
 LABEL = ("PROSPECTIVE, NO CLAIM until the preregistered sample size is reached: these are paired differences on the games "
          "settled so far, with counts, not evidence that a challenger is better. Registration is not promotion.")
@@ -35,9 +35,75 @@ def _served_ncaab(store, row) -> Optional[list]:
     return None if r is None else list(r)
 
 
+def _served_nfl(store, row) -> Optional[list]:
+    """NFL incumbent: the served live forecast of the same game, market and exact line made at or before the challenger's row."""
+    r = store.execute(
+        "SELECT p_a, p_mid, p_b FROM game_forecasts WHERE game_id=? AND market=? AND line IS ? AND order_version='nfl-live-v1' "
+        "AND status='forecast' AND tipoff_at=? AND generated_at<=? ORDER BY generated_at DESC, forecast_id DESC LIMIT 1",
+        (row["game_id"], row["market"], row["line"], row["tipoff_at"], row["cutoff_at"])).fetchone()
+    return None if r is None else list(r)
+
+
+def _served_soccer(store, row) -> Optional[list]:
+    """Soccer incumbent: the served 1X2 (Elo) triple, or the served Poisson goals joint priced at the challenger's own line."""
+    if row["market"] == "soccer_1x2":
+        r = store.execute("SELECT p_home, p_draw, p_away FROM soccer_live_forecasts WHERE match_id=? AND generated_at<=? "
+                          "ORDER BY version DESC LIMIT 1", (row["game_id"], row["cutoff_at"])).fetchone()
+        return None if r is None else list(r)
+    r = store.execute("SELECT joint_json FROM soccer_market_forecasts WHERE match_id=? AND family='goals' AND generated_at<=? "
+                      "ORDER BY version DESC LIMIT 1", (row["game_id"], row["cutoff_at"])).fetchone()
+    if r is None:
+        return None
+    joint = json.loads(r[0])
+    if row["market"] == "soccer_btts":
+        p = sm.probabilities(joint, "btts", "yes", None)
+        return [p["win"], 0.0, p["loss"]]
+    p = sm.probabilities(joint, row["market"][len("soccer_"):], "over", row["line"])
+    return [p["win"], p["push"], p["loss"]]
+
+
+def _soccer_side(store, row) -> str:
+    """The settled side ('a' first-named outcome, 'mid' push/draw, 'b'), or pending / void / unscorable."""
+    m = store.execute("SELECT status, decided_in, home_score, away_score, result_available_at FROM soccer_matches WHERE match_id=?",
+                      (row["game_id"],)).fetchone()
+    if m is None:
+        return "unscorable"
+    if m["status"] in ("postponed", "canceled", "abandoned"):
+        return "void"
+    if m["status"] != "final" or not m["result_available_at"]:
+        return "pending"
+    if m["decided_in"] != "regulation":
+        return "unscorable"
+    h, a = m["home_score"], m["away_score"]
+    if row["market"] == "soccer_1x2":
+        return "a" if h > a else "mid" if h == a else "b"
+    if row["market"] == "soccer_btts":
+        return "a" if h > 0 and a > 0 else "b"
+    count = {"soccer_goals_total": h + a, "soccer_goals_home": h, "soccer_goals_away": a}[row["market"]]
+    return "a" if count > row["line"] else "mid" if count == row["line"] else "b"
+
+
+DC_SIDES = ((0, 1), (1, 2), (0, 2))      # home or draw, draw or away, home or away
+
+
+def _dc(p, k: int) -> tuple:
+    """(log loss, brier) of the three double-chance selections of a 1X2 triple p, averaged: one unit per match."""
+    ll = br = 0.0
+    for s in DC_SIDES:
+        q = sum(p[i] for i in s)
+        o = 0 if k in s else 2
+        ll += combine.log_loss((q, 0.0, 1 - q), o) / 3
+        br += combine.brier((q, 0.0, 1 - q), o) / 3
+    return ll, br
+
+
 def _incumbent(store, row) -> Optional[list]:
     if row["policy_id"].startswith("ncaab-"):
         return _served_ncaab(store, row)
+    if row["policy_id"].startswith("nfl-"):
+        return _served_nfl(store, row)
+    if row["policy_id"].startswith("soccer-"):
+        return _served_soccer(store, row)
     c = store.execute(
         "SELECT members, primary_name FROM research_cohorts WHERE game_id=? AND market=? AND line IS ? AND tipoff_at=? "
         "AND definition NOT LIKE '%:expanded-v1' AND generated_at<=? ORDER BY generated_at DESC, cohort_id DESC LIMIT 1",
@@ -69,14 +135,17 @@ def evaluate(store, cc) -> dict:
         seen.add(once)
         g = groups.setdefault(key, {"n_scored": 0, "n_unsettled": 0, "n_void": 0, "n_unscorable": 0, "n_no_incumbent": 0,
                                     "ll_c": [], "ll_i": [], "br_c": [], "br_i": []})
-        game = store.execute("SELECT status, home_score, away_score, tipoff_at FROM games WHERE game_id=?", (r["game_id"],)).fetchone()
-        if game is None:
-            g["n_unscorable"] += 1
-            continue
-        decision = store.execute("SELECT decision FROM game_decisions WHERE game_id=?", (r["game_id"],)).fetchone() \
-            if r["market"] == "reg3" else None
-        side = markets.settle(r["market"], r["line"], status=game["status"], home=game["home_score"], away=game["away_score"],
-                              decision=decision[0] if decision else None, tipoff_at=game["tipoff_at"], forecast_tipoff_at=r["tipoff_at"])
+        if r["policy_id"].startswith("soccer-"):
+            side = _soccer_side(store, r)
+        else:
+            game = store.execute("SELECT status, home_score, away_score, tipoff_at FROM games WHERE game_id=?", (r["game_id"],)).fetchone()
+            if game is None:
+                g["n_unscorable"] += 1
+                continue
+            decision = store.execute("SELECT decision FROM game_decisions WHERE game_id=?", (r["game_id"],)).fetchone() \
+                if r["market"] == "reg3" else None
+            side = markets.settle(r["market"], r["line"], status=game["status"], home=game["home_score"], away=game["away_score"],
+                                  decision=decision[0] if decision else None, tipoff_at=game["tipoff_at"], forecast_tipoff_at=r["tipoff_at"])
         if side in ("pending",):
             g["n_unsettled"] += 1
             continue
@@ -94,6 +163,13 @@ def evaluate(store, cc) -> dict:
         g["ll_i"].append(combine.log_loss(inc, k))
         g["br_c"].append(combine.brier(c, k))
         g["br_i"].append(combine.brier(inc, k))
+        if r["market"] == "soccer_1x2":          # double chance: an exact function of the 1X2 triple, scored here and never stored
+            d = groups.setdefault((r["policy_id"], r["policy_sha"], r["spec_name"], r["spec_hash"], "soccer_double_chance"),
+                                  {"n_scored": 0, "n_unsettled": 0, "n_void": 0, "n_unscorable": 0, "n_no_incumbent": 0,
+                                   "ll_c": [], "ll_i": [], "br_c": [], "br_i": []})
+            (lc_, bc_), (li_, bi_) = _dc(c, k), _dc(inc, k)
+            d["n_scored"] += 1
+            d["ll_c"].append(lc_), d["ll_i"].append(li_), d["br_c"].append(bc_), d["br_i"].append(bi_)
     out = []
     for (pid, sha, name, h, market), g in groups.items():
         n, target = g["n_scored"], prereg.get((sha, name))
