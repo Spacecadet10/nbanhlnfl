@@ -10,6 +10,13 @@ from app import prereg_common as pc
 REAL_LOOKS = pc.LOOKS_DIR
 
 
+def _listing(d):
+    return None if not d.exists() else sorted((str(f.relative_to(d)), f.stat().st_mtime_ns) for f in [d, *d.rglob("*")])
+
+
+REAL_LOOKS_BEFORE = _listing(REAL_LOOKS)          # recorded at collection, before any test of the suite runs
+
+
 @pytest.fixture(autouse=True)
 def _looks_dir_in_tmp(tmp_path, monkeypatch):
     """No test may write to the real looks folder (~/nba-predictor-research-data/prereg-looks)."""
@@ -161,7 +168,7 @@ def test_boot_slope_mixed_sign_matches_an_independent_loop():
 def test_the_suite_never_creates_the_real_looks_folder():
     assert REAL_LOOKS == Path.home() / "nba-predictor-research-data" / "prereg-looks"
     assert pc.LOOKS_DIR != REAL_LOOKS                      # the autouse fixture redirected it
-    assert not REAL_LOOKS.exists()
+    assert _listing(REAL_LOOKS) == REAL_LOOKS_BEFORE         # absent or unchanged, whatever it held before the suite
 
 
 def test_look_write_is_atomic_and_a_held_lock_refuses_a_second_writer(tmp_path):

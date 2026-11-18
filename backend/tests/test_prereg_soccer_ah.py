@@ -352,8 +352,7 @@ def test_before_the_look_only_forecasts_pairs_and_the_stop_count_are_reported(tm
     assert not banned & set(rep["counts"])
     assert rep["counts"]["forecasts"] == 9 and rep["counts"]["paired"] == {"half": 6, "whole": 1, "quarter": 1}
     assert rep["counts"]["decided_paired"] == 3 and rep["counts"]["no_quote"] == 1
-    assert set(rep["counts"]) == set(ps.PRE_LOOK_COUNTS) == {"forecasts", "no_goals_forecast", "not_pinned_candidate", "knockout_excluded", "not_regular_season",
-                                                             "forecast_before_t0", "after_stop_date", "no_quote", "unpaired", "paired", "decided_paired"}
+    assert set(rep["counts"]) == set(ps.PRE_LOOK_COUNTS) == {"forecasts", "no_quote", "unpaired", "paired", "decided_paired"}     # addendum 5 exactly
     assert rep["look"] == {"status": "no look yet (n of 800)", "n_decided_paired": 3, "n_required": 800}
 
 
@@ -426,6 +425,6 @@ def test_pre_look_mode_reads_results_only_for_the_count_and_no_close(tmp_path, m
     monkeypatch.setattr(ps, "pair_at", lambda conn, mid, at, kickoff, *a, **k: seen.append((at, kickoff)) or orig(conn, mid, at, kickoff, *a, **k))
     rep = ps.run(data, tmp_path / "report", now=NOW, looks_dir=tmp_path / "looks")
     assert rep["look"]["status"].startswith("no look yet") and rep["counts"]["forecasts"] == 9
-    assert seen and all(at < kickoff and at[:10] == kickoff[:10] or at < kickoff for at, kickoff in seen)
+    assert seen and all(at == f"{kickoff[:10]}T05:00:00Z" for at, kickoff in seen)         # only the t_d query: the forecast time, never kick-off - 1 s
     assert all(at != ps._ts(ps._parse(k) - ps.timedelta(seconds=1)) for at, k in seen)      # never the closing query
     assert rep["counts"]["decided_paired"] == 3

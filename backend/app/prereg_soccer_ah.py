@@ -338,8 +338,7 @@ def look(units: list, now: datetime, B: int = pc.BOOTSTRAP_B) -> dict:
 
 
 # --- entry point -------------------------------------------------------------------------------------------------------------------------
-PRE_LOOK_COUNTS = ("forecasts", "no_goals_forecast", "not_pinned_candidate", "knockout_excluded", "not_regular_season", "forecast_before_t0",
-                   "after_stop_date", "no_quote", "unpaired", "paired", "decided_paired")
+PRE_LOOK_COUNTS = ("forecasts", "no_quote", "unpaired", "paired", "decided_paired")      # addendum 5: nothing else before the look
 
 
 def run(data_dir, out, *, now: Optional[datetime] = None, looks_dir=None) -> dict:

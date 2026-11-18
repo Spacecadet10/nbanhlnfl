@@ -88,7 +88,9 @@ def check_addenda(addenda: dict, root: Path = REPO_ROOT) -> None:
 
 def look_once(looks_dir, doc_sha256: str, key: str, compute, storable=lambda r: r.get("status") == "look", lock_timeout: float = 30.0) -> dict:
     """One look per (frozen document sha256, key): a stored look is returned verbatim and never recomputed, whatever the
-    report folder (--out) of this run. Only a result `storable` says is the look is stored; counts-only reports rerun."""
+    report folder (--out) of this run. Only a result `storable` says is the look is stored; counts-only reports rerun.
+    Fails closed: a run that crashed while holding the lock leaves the lock file, and every later run refuses until a person
+    removes that file (the refusal names its path)."""
     d = Path(looks_dir if looks_dir is not None else LOOKS_DIR).expanduser().resolve()
     if _inside(d, LIVE_DATA):
         raise Refused(f"{d} lies inside the live data folder: looks are stored outside the stores")
@@ -101,7 +103,7 @@ def look_once(looks_dir, doc_sha256: str, key: str, compute, storable=lambda r: 
             break
         except FileExistsError:
             if time.monotonic() >= deadline:
-                raise Refused(f"look store {path} is locked by another run ({lock}): refusing") from None
+                raise Refused(f"look store {path} is locked by another run or a crashed one; a person must remove the lock file {lock}: refusing") from None
             time.sleep(0.05)
     try:
         stored = json.loads(path.read_text()) if path.is_file() else {}
