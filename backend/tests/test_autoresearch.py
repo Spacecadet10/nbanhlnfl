@@ -647,3 +647,18 @@ def test_the_candidate_sandbox_still_runs_loky_workers(tmp_path):
     res, _ = _sandboxed(tmp_path, "from joblib import Parallel, delayed\n"
                                   "print('LOKY', Parallel(n_jobs=2, backend='loky')(delayed(abs)(-i) for i in range(4)))\n")
     assert "LOKY [0, 1, 2, 3]" in res.stdout, res.stdout + res.stderr
+
+
+def test_a_holdout_that_failed_twice_is_not_attempted_a_third_time(env, monkeypatch):
+    ar.run_trial("nba", env["exp"], env["ws"])
+
+    def broken(sport, period):
+        raise OSError("disk")
+
+    monkeypatch.setattr(ar, "build_dataset", broken)
+    for _ in range(2):                                           # docs/AUTORESEARCH.md: at most 2 failures
+        with pytest.raises(OSError):
+            ar.holdout("nba", env["exp"], env["ws"], ask=lambda p: True)
+    with pytest.raises(ar.Refused, match="failed too often"):
+        ar.holdout("nba", env["exp"], env["ws"], ask=lambda p: True)
+    assert [h["event"] for h in ar._holdout_log(env["root"])].count("failed") == 2

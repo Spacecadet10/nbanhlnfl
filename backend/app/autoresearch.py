@@ -1163,7 +1163,7 @@ def holdout(sport: str, exp_root: Path, workspace: Path, ask: Callable[[str], bo
                           "needs --reuse-reason (logged; results then are not an independent check)")
         if log and log[-1]["event"] == "pending":
             _holdout_append(root, {"event": "failed", "at": _now(), "reason": "no terminal record (process stopped)"})
-        if sum(h["event"] == "failed" for h in _holdout_log(root)) > BUDGETS["max_retries"]:
+        if sum(h["event"] == "failed" for h in _holdout_log(root)) >= BUDGETS["max_retries"]:       # at most 2 failures (doc)
             raise Refused("holdout failed too often; investigate before another attempt")
         inc = incumbents(root, sport, meta)
         kept = {m: c for m, c in inc.items() if c["trial"]}
