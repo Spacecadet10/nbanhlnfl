@@ -1,3 +1,17 @@
+## §10 evaluator review record (preregistrations of 2026-11-18) — lead nbanhlnfl-03, Nov 18, 2026 15:17Z
+- Reviewer: fresh, independent, read-only Claude Opus 5.5 sessions (no outcome, close, quote or result read; synthetic tests only).
+- Reviews: a27e81f (14:57:42Z, defects N1-N8/F1-F5/S1-S3 + ambiguity resolutions → addenda), a9cca25 (15:11:20Z CLEARED with fixes),
+  673c4f3 (15:15:12Z FIXES-REQUIRED: soccer pre-look keys, looks test), 9ab9264 (15:16:50Z CLEARED-FOR-OUTCOME-READS, whole set).
+- Evaluator commit 9ab9264 (branch learning-phase2). sha256: prereg_common.py 774bc21bd8b52e3ddd5a0238b250e21b0994707db2eed4280c2034b2a074def4;
+  prereg_ncaab_top4.py 4816b300db9dc505c4c5713c394d2b3ba777ce053b710786c6473952f1a7e90a; prereg_nfl_lines.py
+  53b6ea40ff5cf37c6fd49a703068e796de35943a6e2d3d5581b4420ca7d1b9b1; prereg_soccer_ah.py 75dbad85b6ab67f65a1c54c594eca67ae9c38c6026cad375b960a1f6597149de.
+- PREREG_SHA256: ncaab 55b8734a28eba1f56804810516fbf96ee1f0df6c2b7ce7c4dd1e6baa22bb9f3b (T0 14:29:50Z); nfl 5ea6fef126ca9d4b8555f689d255a590f08261aac758a0e11101294d419e6e6c
+  and soccer a3e1fc3b60ffb9316432213fc66567bcc8b269548576ce299e88e06ec031b2b4 (T0 14:25:37Z). ADDENDA_SHA256 (binding as of 2989bad, decided before any counted
+  outcome was read; their "(DRAFT)" heading is a leftover label, they are binding): ncaab da8d4ff0cb1ef96c16b46d7d74b8e7718d18031240a28112155cb6f23ab7fb2d,
+  nfl 5961a03c7e0bb69bb51cccabb8e3c6e946c01da2c0a762f3e963902b4ccfcec2, soccer a85ad1313f59a9578e0043484ca54ef0ea82c1cc47c63b44786a777e2ffa8a53.
+- Any later change to an evaluator file needs a new review entry here before its next outcome read. Evaluators have never been run on real data.
+  Single looks are stored under ~/nba-predictor-research-data/prereg-looks (absent today). A crashed run's lock file there fails closed until removed by a person.
+
 ## Learning expansion: all-sport challengers, coverage page, budget gate, preregistrations — Claude Opus 5.5 (lead, nbanhlnfl-03), Nov 18, 2026 12:00-15:15Z
 Full log: ~/nba-predictor-research-data/learning-plan.md. Claims stay separate: TRAINED / SCHEDULED / RECORDING / FORECASTING WITH FITS / IMPROVED.
 - Code (branch learning-phase2, pushed 1669cf7; later commits local): learning_ops + learning_coverage (GET /api/learning/ops, /coverage; Daily Learning
