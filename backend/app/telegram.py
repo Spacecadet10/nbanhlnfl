@@ -210,7 +210,8 @@ LINEUP_PREFIX = 'Lineup: '
 STRONGEST_PREFIX = 'Strongest on this card (trial): '
 
 
-def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None, best_pick_picture=None, context_selection=False):
+def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None, best_pick_picture=None, context_selection=False,
+                 compact=False):
     """One shared message layout. Preview retains actual past times/results and is prominently labelled."""
     from .threshold_overview import MIN_LIVE_GRADED, displayed_percentage
     now = datetime.fromisoformat(report['as_of'].replace('Z', '+00:00'))
@@ -237,7 +238,9 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
     elif strong:
         # Owner request Nov 9: say what the sportsbook's own price implies next to the model, and say so plainly when the
         # price asks for more than the model gives (a likely winner is not a value pick at any price).
-        book = strong[0].get('market_prob')
+        from .tickets import card_comparison
+        sb = _dump(strong[0].get('sportsbook'))
+        book = card_comparison(strong[0])[0] if sb and sb.get('status') == 'exact' else strong[0].get('market_prob')
         detail = escape(strong[0]['market_title']) + ' · Model ' + displayed_percentage(strong[0]['probability']) + '%'
         if book is not None:
             detail = ('App ' + displayed_percentage(strong[0]['probability']) + '% · Sportsbook ' + displayed_percentage(book) + '% · '
@@ -259,82 +262,19 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
               divider, '', '<b>Market breakdown</b>', '']
     versions, priced_at = [], []   # forecast times of the picks that show a sportsbook % (label below)
     for pick in picks:
-        h = pick.get('percentage_history')
-        if h is None:
-            if report['sport'] == 'soccer':
-                versions.append([pick['market'], pick['forecast_id'], pick['generated_at'], pick['cutoff_at']])
-                quote = pick.get('quote_check') or {}
-                provenance = 'bookmaker line' if quote.get('line_source') == 'bookmaker' else 'model selection'
-                actual = pick.get('book_quote') or {}
-                if actual.get('decimal') is not None:
-                    provenance += f"; {actual['provider']} return {actual['decimal']:.2f}x"
-                elif quote.get('price_now') is not None:
-                    provenance += f"; stored price {quote['price_now']:+g}"
-                else:
-                    provenance += '; price unavailable'
-                book = pick.get('card_market_prob')
-                comparison = f"Sportsbook {displayed_percentage(book)}%" if book is not None else "Sportsbook probability unavailable"
-                if book is not None and _forecast_time_price(pick):
-                    priced_at.append(pick['generated_at'])
-                if 'card_app_prob' in pick:
-                    comparison = f"App {displayed_percentage(pick['card_app_prob'])}% / " + comparison
-                if pick.get('card_comparison_basis'):
-                    comparison += f" ({pick['card_comparison_basis']})"
-                lines += [f"<b>{escape(pick['market_title'])}</b>", f"{escape(pick['pick_label'])} · {escape(comparison)} · {escape(provenance)}",
-                          f"<b>Model {displayed_percentage(pick['probability'])}%</b> · Exact-% history unavailable", '']
+        block = market_block(report['sport'], pick, preview=preview, compact=compact)
+        if block is None:
             continue   # absent history must not be manufactured as a zero record
-        if hasattr(h, 'model_dump'):
-            h = h.model_dump(mode='json')
-        if (h['sport'] != report['sport'] or h['market'] != pick['market']
-                or h['percentage'] != displayed_percentage(pick['probability'])):
-            raise DeliveryError('Pick market/probability does not match its history; not sent.')
-        versions.append([pick['market'], pick['forecast_id'], pick['generated_at'], h['model_version'], h['source'],
-                         h['losses'] > h['wins'], pick['strong']])
-        wins = h['wins'] + int(preview and pick['grade'] == 'win')
-        losses = h['losses'] + int(preview and pick['grade'] == 'loss')
-        settled = wins + losses
-        source = {'model': ' · <i>model line</i>', 'bookmaker': ' · <i>bookmaker line at forecast</i>', 'none': ''}[h['line_source']]
-        book = pick.get('card_market_prob', pick.get('market_prob'))
-        if book is not None:   # on the small grey line under the pick, so the record line keeps its length and never runs off the card
-            if _forecast_time_price(pick):
-                priced_at.append(pick['generated_at'])
-            basis = pick.get('card_comparison_basis')
-            detail = f" ({escape(basis)})" if basis else f" · {price_tag(pick['probability'], book)}"
-            source = (source[:-4] + ' · ' if source else ' · <i>') + f"sportsbook {displayed_percentage(book)}%{detail}</i>"
-        elif report['sport'] in ('nhl', 'nfl'):
-            source = (source[:-4] + ' · ' if source else ' · <i>') + 'sportsbook probability unavailable</i>'
-        implied = pick.get('implied_line') or {}
-        if implied.get('line') is not None:   # owner request Nov 11: labelled, never a price to bet at
-            rough = ' (rough)' if report['sport'] == 'nhl' else ''   # NHL puck line is always 1.5 (review MEDIUM 2)
-            source = (source[:-4] + ' · ' if source else ' · <i>') + f"implied from spread and total {implied['line']:g}{rough}</i>"
-        # Owner request Nov 9: where this exact percentage stands among the market's ranked exact percentages, and a plain
-        # AVOID when its own record is a losing one. Only percentages with three or more results are ranked.
-        standing = '' if not h.get('rank') else f" · rank {h['rank']} of {h['ranked']}" + (' · AVOID' if losses > wins else '')
-        lines += [f"<b>{escape(pick['market_title'])}</b>", f"{escape(pick['pick_label'])}{source}",
-                  f"<b>Model {escape(h['percentage'])}%</b> · {wins}W–{losses}L ({settled} settled){standing}"]
-        # Step 3 (Nov 11): the recomputed past seasons at the same exact percentage, side, model and line source, on a line of
-        # its own and named as such, so the live record and its notes are never read as history. Shown only with settled
-        # examples (spread and total picks at a bookmaker line never have any: past seasons have model lines only).
-        past = h.get('history')
-        if past and past['settled']:
-            prefix = PAST_PREFIX_NO_LINE if past['line_source'] == 'none' else PAST_PREFIX
-            # Review MEDIUM (Nov 11): the live line's own small-sample threshold and wording, so a short history is not read as proof.
-            small = ' · Small sample.' if past['settled'] < MIN_LIVE_GRADED else ''
-            lines.append(f"{prefix}{past['wins']}W–{past['losses']}L{small}")
-        if preview:
-            result = {'win': 'Won', 'loss': 'Lost', 'push': 'Push'}.get(pick['grade'], pick['grade'])
-            lines.append('Result: ' + escape(result))
-        if h['losses'] > h['wins'] and pick.get('opposite_pick_label'):
-            lines.append('<b>' + ('Opposite scenario — retrospective: ' if preview else 'Against model — EXPERIMENTAL: ') + escape(pick['opposite_pick_label']) + '</b>')
-            lines.append('<i>Current comparison only; not a validated betting rule. ' +
-                         ('Model line; no bookmaker offer verified.' if h['line_source'] == 'model'
-                          else 'Current opposite-side price unverified.') + '</i>')
-        if h['small_sample']:
-            lines.append('<i>' + ('Small sample.' if settled else 'No settled matching examples.') + '</i>')
-        lines.append('')
+        block_lines, version, priced = block
+        lines += block_lines
+        versions.append(version)
+        if priced:
+            priced_at.append(pick['generated_at'])
     if not versions:
         return None
     lines += [divider, '<i>Records match the sport, market, direction, percentage and model.</i>']
+    if not preview:   # the web card says the same: the counts are OTHER settled games (the API record excludes the card's game)
+        lines.append('<i>Counts are other settled games, not this game.</i>')
 
     if preview:
         lines.append('<i>Records include this game’s result. This is a formatting example.</i>')
@@ -349,11 +289,225 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
     lines.append(updated)
     text = '\n'.join(lines)
     if len(text) > (12000 if report['sport'] == 'soccer' else 4000):
+        if not compact:   # drop the optional detail lines (quote detail, empty-history notes) before refusing
+            return format_batch(report, chat_id, gid, picks, preview=preview, lineup_line=lineup_line,
+                                best_pick_picture=best_pick_picture, context_selection=context_selection, compact=True)
         raise DeliveryError('Pick summary exceeds Telegram message length; not sent.')
     versions.sort(key=lambda version: version[0])  # Preserve live deduplication across layout-only changes.
     key = hashlib.sha256(json.dumps(['preview-card-1' if preview else 'pregame', str(chat_id), report['sport'], gid, versions,
                                    strong[0]['market'] if strong else None], sort_keys=True).encode()).hexdigest()
     return key, text
+
+
+# Lines after a market's record line that the card image (telegram_card.render_card) draws under it. One list, both sides.
+BLOCK_EXTRA_PREFIXES = ('Sportsbook quote: ', 'Sportsbook: ', 'Recovered Telegram cards', 'No recovered Telegram history',
+                        'Record uses ', 'Telegram card sent ')
+TELEGRAM_LABEL = 'Recovered Telegram cards'
+
+
+def _dump(x):
+    return x.model_dump(mode='json') if hasattr(x, 'model_dump') else x
+
+
+def _hm(stamp):
+    """'02:15 PM EST' (Toronto) for an ISO string or datetime; None when absent or unreadable."""
+    if not stamp:
+        return None
+    try:
+        t = stamp if isinstance(stamp, datetime) else datetime.fromisoformat(str(stamp).replace('Z', '+00:00'))
+        return t.astimezone(TORONTO).strftime('%I:%M %p %Z')
+    except ValueError:
+        return None
+
+
+def _md(day):
+    return str(day)[5:10]
+
+
+def sportsbook_detail_line(sb):
+    """The contract's `sportsbook` object as one line: provider, price, line, no-vig %, signed gap, quote time and basis; or the
+    reason it is unavailable. None when the pick carries no such object (older API): the legacy note then stands alone."""
+    from .threshold_overview import displayed_percentage
+    sb = _dump(sb)
+    if not sb:
+        return None
+    if sb.get('status') != 'exact' or sb.get('book_probability') is None:
+        return 'Sportsbook: ' + escape(str(sb.get('reason') or 'No sportsbook comparison for this market'))
+    gap = sb.get('gap_pp')
+    if gap is None:
+        gap = round(float(displayed_percentage(sb['app_probability'])) - float(displayed_percentage(sb['book_probability'])), 1)
+    source = ' '.join(str(x) for x in (sb.get('provider'), sb.get('price'), f"at {sb['line']:g}" if sb.get('line') is not None else None) if x)
+    parts = [source or 'quote', f"no-vig {displayed_percentage(sb['book_probability'])}%",
+             f"gap {'+' if gap > 0 else '−' if gap < 0 else '±'}{abs(gap):.1f} pts",
+             price_tag(sb['app_probability'], sb['book_probability'])]
+    if _hm(sb.get('retrieved_at')):
+        parts.append('quote ' + _hm(sb['retrieved_at']))
+    if sb.get('basis'):
+        parts.append(str(sb['basis']))
+    return 'Sportsbook quote: ' + escape(' · '.join(parts))
+
+
+def telegram_history_line(sport, h):
+    """Recovered Telegram history at this exact %, labelled as such (the cards of Nov 2-14 do not show the model version).
+    None only when the API sent neither the sub-record nor coverage (older API): nothing is invented."""
+    tg, cov = _dump(h.get('telegram')), _dump(h.get('coverage'))
+    if tg:
+        label = tg.get('label') or TELEGRAM_LABEL
+        period = tg.get('period')
+        span = f" {_md(period['from'])} to {_md(period['to'])}" if period else ''
+        if not tg.get('settled'):
+            return f"{escape(label)}{span}: none settled at this exact % · model version not recorded"
+        pushes = f" · {tg['pushes']} push" if tg.get('pushes') else ''
+        small = ' · Small sample.' if tg.get('small_sample') else ''
+        return (f"{escape(label)}{span}: {tg['wins']}W–{tg['losses']}L{pushes} ({tg['settled']} settled){small}"
+                " · model version not recorded")
+    if cov is None and 'telegram' not in h:
+        return None
+    period = (cov or {}).get('telegram_period')
+    if period:
+        return f"{TELEGRAM_LABEL} {_md(period['from'])} to {_md(period['to'])}: none at this exact % · model version not recorded"
+    began = (cov or {}).get('live_since')
+    return f"No recovered Telegram history for {sport.upper()}" + (f" (recording began {str(began)[:10]})" if sport == 'ncaab' and began else '')
+
+
+def published_pick_text(pub, market, matchup):
+    """The pick a sent card carried in words ('ORL -9.5', 'Over 215.5', 'Draw'), never the raw side code. The API's own
+    pick_label wins; else the side is read through markets.SIDE_LABELS with the teams of 'AWAY @ HOME' (or 'HOME vs AWAY')."""
+    if pub.get('pick_label'):
+        return str(pub['pick_label'])
+    from . import markets
+    side, line = pub.get('side'), pub.get('line')
+    labels = markets.SIDE_LABELS.get(market)
+    word = labels[('a', 'mid', 'b').index(side)] if labels and side in ('a', 'mid', 'b') else (
+        {'a': 'home', 'b': 'away'}.get(side, side))     # Soccer markets outside SIDE_LABELS: a/b = home/away
+    away, home = None, None
+    if matchup and ' @ ' in matchup:
+        away, home = matchup.split(' @ ', 1)
+    elif matchup and ' vs ' in matchup:
+        home, away = matchup.split(' vs ', 1)
+    who = {'home': home, 'away': away}.get(word) or (word.capitalize() if word else '?')
+    if market in ('team_total_home', 'team_total_away') and home and word in ('over', 'under'):
+        who = f"{home if market.endswith('home') else away} {word}"
+    if line is None:
+        return who
+    signed = market in ('spread', 'winner') or market not in ('total', 'team_total_home', 'team_total_away')
+    return f"{who} {line:+g}" if signed else f"{who} {line:g}"
+
+
+def record_basis_lines(rb, market=None, matchup=None):
+    """Which forecast the record uses when a game has several, and how a card that was actually sent differs (contract item 4)."""
+    from .threshold_overview import displayed_percentage
+    rb = _dump(rb)
+    if not rb:
+        return []
+    out = []
+    n = rb.get('pregame_forecasts') or 1
+    if n > 1:
+        at = _hm(rb.get('generated_at'))
+        out.append(f"Record uses the latest pregame forecast (#{rb['forecast_id']}{', ' + at if at else ''}); {n - 1} earlier kept for audit")
+    pub = rb.get('published')
+    if pub and pub.get('forecast_id') != rb.get('forecast_id'):
+        what = published_pick_text(pub, market, matchup)
+        pct = f", {displayed_percentage(pub['probability'])}%" if pub.get('probability') is not None else ''
+        grade = {'win': 'won', 'loss': 'lost'}.get(pub.get('grade'), pub.get('grade') or 'not graded')
+        out.append(f"Telegram card sent forecast #{pub['forecast_id']} ({what}{pct}): {grade}")
+    return [escape(x) for x in out]
+
+
+def market_block(sport, pick, *, preview=False, compact=False):
+    """THE per-market block of a game card, the same for NBA, NHL, NFL, NCAAB and Soccer: title, pick (+ line source and the
+    sportsbook note), app %, the live exact-% record (other settled games, pushes), the past-seasons line, the sportsbook quote
+    detail or the reason it is missing, the recovered Telegram history, the record-basis note, result and notes.
+    Returns (lines, delivery_version, shows_forecast_time_price) or None for a pick without history (outside Soccer).
+    The version list is what the delivery key hashes; nothing here may change it."""
+    from .threshold_overview import MIN_LIVE_GRADED, displayed_percentage
+    from .tickets import card_comparison
+    h = _dump(pick.get('percentage_history'))
+    sb = _dump(pick.get('sportsbook'))
+    book, app_compared, comparison_basis = card_comparison(pick)    # the same source the pick summary line reads
+    one_line = bool(sb) and not compact    # the contract's sportsbook object: ONE sportsbook line, no legacy note beside it
+    if h is None:
+        if sport != 'soccer':
+            return None
+        version = [pick['market'], pick['forecast_id'], pick['generated_at'], pick['cutoff_at']]
+        quote = pick.get('quote_check') or {}
+        provenance = 'bookmaker line' if quote.get('line_source') == 'bookmaker' else 'model selection'
+        actual = pick.get('book_quote') or {}
+        if actual.get('decimal') is not None:
+            provenance += f"; {actual['provider']} return {actual['decimal']:.2f}x"
+        elif quote.get('price_now') is not None:
+            provenance += f"; stored price {quote['price_now']:+g}"
+        else:
+            provenance += '; price unavailable'
+        comparison = f"Sportsbook {displayed_percentage(book)}%" if book is not None else "Sportsbook probability unavailable"
+        priced = book is not None and (_forecast_time_price(pick) or bool(sb))
+        if app_compared != pick['probability'] or 'card_app_prob' in pick:
+            comparison = f"App {displayed_percentage(app_compared)}% / " + comparison
+        if comparison_basis:
+            comparison += f" ({comparison_basis})"
+        head = provenance if one_line else f"{comparison} · {provenance}"
+        lines = [f"<b>{escape(pick['market_title'])}</b>", f"{escape(pick['pick_label'])} · {escape(head)}",
+                 f"<b>Model {displayed_percentage(pick['probability'])}%</b> · Exact-% history unavailable"]
+        detail = sportsbook_detail_line(sb) if one_line else None
+        if detail:
+            lines.append(detail)
+        lines += record_basis_lines(pick.get('record_basis'), pick.get('market'), pick.get('matchup'))
+        return lines + [''], version, priced
+    if (h['sport'] != sport or h['market'] != pick['market']
+            or h['percentage'] != displayed_percentage(pick['probability'])):
+        raise DeliveryError('Pick market/probability does not match its history; not sent.')
+    version = [pick['market'], pick['forecast_id'], pick['generated_at'], h['model_version'], h['source'],
+               h['losses'] > h['wins'], pick['strong']]
+    wins = h['wins'] + int(preview and pick['grade'] == 'win')
+    losses = h['losses'] + int(preview and pick['grade'] == 'loss')
+    settled = wins + losses
+    source = {'model': ' · <i>model line</i>', 'bookmaker': ' · <i>bookmaker line at forecast</i>', 'none': ''}[h['line_source']]
+    priced = False
+    if one_line:     # the single sportsbook line below carries the %, the tag and the reason
+        priced = book is not None
+    elif book is not None:   # on the small grey line under the pick, so the record line keeps its length and never runs off the card
+        priced = _forecast_time_price(pick)
+        basis = pick.get('card_comparison_basis')
+        detail = f" ({escape(basis)})" if basis else f" · {price_tag(pick['probability'], book)}"
+        source = (source[:-4] + ' · ' if source else ' · <i>') + f"sportsbook {displayed_percentage(book)}%{detail}</i>"
+    elif sport in ('nhl', 'nfl') or pick.get('sportsbook'):
+        source = (source[:-4] + ' · ' if source else ' · <i>') + 'sportsbook probability unavailable</i>'
+    implied = pick.get('implied_line') or {}
+    if implied.get('line') is not None:   # owner request Nov 11: labelled, never a price to bet at
+        rough = ' (rough)' if sport == 'nhl' else ''   # NHL puck line is always 1.5 (review MEDIUM 2)
+        source = (source[:-4] + ' · ' if source else ' · <i>') + f"implied from spread and total {implied['line']:g}{rough}</i>"
+    # Owner request Nov 9: where this exact percentage stands among the market's ranked exact percentages, and a plain
+    # AVOID when its own record is a losing one. Only percentages with three or more results are ranked.
+    standing = '' if not h.get('rank') else f" · rank {h['rank']} of {h['ranked']}" + (' · AVOID' if losses > wins else '')
+    pushes = f" · {h['pushes']} push" if h.get('pushes') else ''
+    lines = [f"<b>{escape(pick['market_title'])}</b>", f"{escape(pick['pick_label'])}{source}",
+             f"<b>Model {escape(h['percentage'])}%</b> · {wins}W–{losses}L{pushes} ({settled} settled){standing}"]
+    # Step 3 (Nov 11): the recomputed past seasons at the same exact percentage, side, model and line source, on a line of
+    # its own and named as such, so the live record and its notes are never read as history. Shown only with settled examples.
+    past = h.get('history')
+    if past and past['settled']:
+        prefix = PAST_PREFIX_NO_LINE if past['line_source'] == 'none' else PAST_PREFIX
+        # Review MEDIUM (Nov 11): the live line's own small-sample threshold and wording, so a short history is not read as proof.
+        small = ' · Small sample.' if past['settled'] < MIN_LIVE_GRADED else ''
+        lines.append(f"{prefix}{past['wins']}W–{past['losses']}L{small}")
+    detail = sportsbook_detail_line(sb) if one_line else None
+    if detail:
+        lines.append(detail)
+    tline = telegram_history_line(sport, h)
+    if tline and not (compact and tline.startswith('No recovered')):
+        lines.append(tline)
+    lines += record_basis_lines(pick.get('record_basis'), pick.get('market'), pick.get('matchup'))
+    if preview:
+        result = {'win': 'Won', 'loss': 'Lost', 'push': 'Push'}.get(pick['grade'], pick['grade'])
+        lines.append('Result: ' + escape(result))
+    if h['losses'] > h['wins'] and pick.get('opposite_pick_label'):
+        lines.append('<b>' + ('Opposite scenario — retrospective: ' if preview else 'Against model — EXPERIMENTAL: ') + escape(pick['opposite_pick_label']) + '</b>')
+        lines.append('<i>Current comparison only; not a validated betting rule. ' +
+                     ('Model line; no bookmaker offer verified.' if h['line_source'] == 'model'
+                      else 'Current opposite-side price unverified.') + '</i>')
+    if h['small_sample']:
+        lines.append('<i>' + ('Small sample.' if settled else 'No settled matching examples.') + '</i>')
+    return lines + [''], version, priced
 
 
 def _forecast_time_price(pick) -> bool:
