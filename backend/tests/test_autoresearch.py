@@ -11,6 +11,7 @@ import os
 import random
 import subprocess
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -798,3 +799,46 @@ def test_the_candidate_cannot_use_shared_memory_or_the_pasteboard_to_pass_data_b
             seg.unlink()
         except FileNotFoundError:
             pass
+
+
+def test_a_double_forked_setsid_chdir_child_is_reaped_with_the_trial(tmp_path):
+    tmp = tmp_path / "tmp"
+    tmp.mkdir()
+    prof = tmp_path / "sandbox.sb"
+    prof.write_text(ar._profile(tmp))
+    code = ("# from app.autoresearch import serve\n"                      # the candidate's argv carries the boot string
+            "import os, time\n"
+            "if os.fork() == 0:\n"
+            "    os.setsid()\n"
+            "    if os.fork() == 0:\n        os.chdir('/')\n        time.sleep(300)\n        os._exit(0)\n"
+            "    os._exit(0)\n"
+            "time.sleep(2)\n")
+    subprocess.run([ar.SANDBOX, "-f", str(prof), sys.executable, "-I", "-B", "-c", code], stdout=subprocess.DEVNULL,
+                   stderr=subprocess.DEVNULL, env={"PATH": "/usr/bin:/bin", "HOME": str(tmp), "TMPDIR": str(tmp)}, cwd=str(tmp), timeout=60)
+
+    def alive():
+        out = subprocess.run(["/bin/ps", "-axo", "pid=,command="], capture_output=True, text=True).stdout.splitlines()
+        return [int(ln.split()[0]) for ln in out if "from app.autoresearch import serve" in ln and "time.sleep(300)" in ln]
+    try:
+        assert alive(), "the detached grandchild should be running before the cleanup"
+        killed = ar._reap(tmp)
+        time.sleep(0.5)
+        assert alive() == [] and killed, killed
+    finally:
+        for p in alive():
+            os.kill(p, 9)
+
+
+def test_the_candidate_has_a_cpu_time_limit_that_survives_setsid(env, monkeypatch):
+    monkeypatch.setattr(ar, "CPU_SLACK_S", 0)
+    monkeypatch.setattr(ar, "CPU_FACTOR", 0.05)                                   # 100 s wall -> 5 s of CPU
+    spin = edit("def fit(spec, rows):\n    return engine.fit(spec, rows)", "def fit(spec, rows):\n    while True:\n        pass")
+    commit_train(env["ws"], spin, "spins")
+    rec = ar.run_trial("nba", env["exp"], env["ws"], timeout_s=100)                  # wall limit far away: CPU limit fires first
+    assert rec["status"] == "crash" and rec["resources"]["wall_s"] < 60, rec
+
+
+def test_the_memory_guard_thread_is_joined_before_the_result_is_read(env):
+    import threading
+    ar.run_trial("nba", env["exp"], env["ws"])
+    assert not [t for t in threading.enumerate() if t.name == "ar-memory-guard"]

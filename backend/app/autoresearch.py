@@ -26,6 +26,7 @@ import os
 import pickle
 import platform
 import random
+import resource
 import select
 import shutil
 import signal
@@ -731,15 +732,19 @@ def _memory_guard(pgid: int, limit_gb: float, stop: threading.Event, state: dict
         kill()
 
 
-def _kill_strays(tmp: Path) -> None:
+BOOT_MARK = "from app.autoresearch import serve"        # in the argv of the candidate process and of every fork of it
+CPU_SLACK_S, CPU_FACTOR = 60, 4                          # CPU-time limit per process: timeout x threads (OMP_NUM_THREADS=4) + slack
+
+
+def _kill_strays(tmp: Path) -> list:
     """Kills every process whose current directory is the trial's tmp dir: a candidate child that called setsid left the
     process group the parent kills, but it started in (and is still in) that directory."""
-    prefix = str(tmp.resolve())
+    prefix, killed = str(tmp.resolve()), []
     for _ in range(3):
         try:
             out = subprocess.run(["/usr/sbin/lsof", "-a", "-d", "cwd", "-Fpn"], capture_output=True, text=True, timeout=30).stdout
         except (OSError, subprocess.SubprocessError):
-            return
+            return killed
         pid, found = None, []
         for ln in out.splitlines():
             if ln.startswith("p") and ln[1:].isdigit():
@@ -747,13 +752,43 @@ def _kill_strays(tmp: Path) -> None:
             elif ln.startswith("n") and ln[1:].startswith(prefix) and pid:
                 found.append(pid)
         if not found:
-            return
+            return killed
         for p in found:
             try:
                 os.kill(p, signal.SIGKILL)
+                killed.append(p)
             except (ProcessLookupError, PermissionError):
                 pass
         time.sleep(0.2)
+    return killed
+
+
+def _kill_by_argv() -> list:
+    """Kills every process still running the candidate's boot command line (a double-forked, setsid, chdir('/') child has
+    neither the group nor the directory). Returns the pids killed."""
+    try:
+        out = subprocess.run(["/bin/ps", "-axo", "pid=,command="], capture_output=True, text=True, timeout=30).stdout
+    except (OSError, subprocess.SubprocessError):
+        return []
+    killed = []
+    for ln in out.splitlines():
+        parts = ln.split(None, 1)
+        if len(parts) == 2 and parts[0].isdigit() and BOOT_MARK in parts[1] and int(parts[0]) != os.getpid():
+            try:
+                os.kill(int(parts[0]), signal.SIGKILL)
+                killed.append(int(parts[0]))
+            except (ProcessLookupError, PermissionError):
+                pass
+    return killed
+
+
+def _reap(tmp: Path) -> list:
+    """Everything of the trial that outlived its process group; the pids killed (recorded in the trial's resources)."""
+    return sorted(set(_kill_strays(tmp) + _kill_by_argv()))
+
+
+def _cpu_limit(timeout_s: float) -> int:
+    return int(timeout_s * CPU_FACTOR + CPU_SLACK_S)
 
 
 def run_candidate(src: str, sport: str, data: dict, scored, timeout_s: float, tdir: Path) -> dict:
@@ -767,20 +802,23 @@ def run_candidate(src: str, sport: str, data: dict, scored, timeout_s: float, td
     profile.write_text(_profile(tmp))
     r_req, w_req = os.pipe()
     r_resp, w_resp = os.pipe()
-    boot = f"import sys; sys.path.insert(0, {str(APP_DIR.parent)!r}); from app.autoresearch import serve; serve({w_resp})"
+    boot = f"import sys; sys.path.insert(0, {str(APP_DIR.parent)!r}); {BOOT_MARK}; serve({w_resp})"
     env = {"PATH": "/usr/bin:/bin", "HOME": str(tmp), "TMPDIR": str(tmp), "OMP_NUM_THREADS": "4",
            "PYTHONDONTWRITEBYTECODE": "1", "MPLCONFIGDIR": str(tmp)}
     t0 = time.time()
     log = (tdir / "run.log").open("w")
     proc = subprocess.Popen([SANDBOX, "-f", str(profile), sys.executable, "-I", "-B", "-c", boot], stdin=r_req, stdout=log,
-                            stderr=subprocess.STDOUT, pass_fds=(w_resp,), env=env, cwd=str(tmp), start_new_session=True)
+                            stderr=subprocess.STDOUT, pass_fds=(w_resp,), env=env, cwd=str(tmp), start_new_session=True,
+                            preexec_fn=lambda: resource.setrlimit(resource.RLIMIT_CPU, (_cpu_limit(timeout_s),) * 2))
     os.close(r_req)
     os.close(w_resp)
     conn = _Remote(w_req, r_resp, t0 + timeout_s)
     res = {"status": "ok"}
     limit_gb = float(BUDGETS["memory_gb"])
     guard_state, stop_guard = {}, threading.Event()
-    threading.Thread(target=_memory_guard, args=(proc.pid, limit_gb, stop_guard, guard_state), daemon=True).start()
+    guard = threading.Thread(target=_memory_guard, args=(proc.pid, limit_gb, stop_guard, guard_state), daemon=True,
+                             name="ar-memory-guard")
+    guard.start()
     try:
         specs, mapping = check_specs(sport, conn.call({"source": src, "sport": sport, "seed": PROTOCOL["seed"]}))
         outs, fits, seconds = walk(conn, specs, data["rows"], max(scored))
@@ -812,12 +850,13 @@ def run_candidate(src: str, sport: str, data: dict, scored, timeout_s: float, td
         res = {"status": "invalid", "reason": str(exc)}
     finally:
         stop_guard.set()
+        guard.join(15)                                    # its last reading is in guard_state before the result is read
         try:
             os.killpg(proc.pid, signal.SIGKILL)               # the whole group: no stray worker processes survive
         except (ProcessLookupError, PermissionError):         # macOS: EPERM once the group leader has already exited
             pass
         _, status, ru = os.wait4(proc.pid, 0)
-        _kill_strays(tmp)                                 # a child that left the group (setsid) is not reached by killpg
+        survivors = _reap(tmp)                            # a child that left the group (setsid) is not reached by killpg
         os.close(w_req)
         os.close(r_resp)
         log.close()
@@ -830,7 +869,7 @@ def run_candidate(src: str, sport: str, data: dict, scored, timeout_s: float, td
         res["reason"] += f" (exit {os.waitstatus_to_exitcode(status)}): {(tdir / 'run.log').read_text()[-400:]}"
     res["resources"] = {"wall_s": round(time.time() - t0, 1), "cpu_s": round(ru.ru_utime + ru.ru_stime, 1),
                         "max_rss_gb": round(ru.ru_maxrss / (1024 ** 3 if sys.platform == "darwin" else 1024 ** 2), 2),
-                        "timed_out": res["status"] == "timeout", "memory_limit_gb": limit_gb,
+                        "timed_out": res["status"] == "timeout", "memory_limit_gb": limit_gb, "survivors_killed": survivors,
                         "peak_group_rss_gb": round(max(guard_state.get("peak_gb", 0.0), guard_state.get("killed", 0.0)), 2)}
     return res
 
