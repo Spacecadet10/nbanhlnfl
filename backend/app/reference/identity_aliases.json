@@ -8,17 +8,17 @@
   }
  },
  "research": {
-  "142777bdd63e230b": {
+  "c63cfb988986629e": {
    "identity": "94844709fc4412a5",
    "sport": "nba",
    "since": "2026-11-17",
-   "reason": "Owner decision Nov 17 2026: the live release (43d4b74) and main differ only by market_live.py NCAAB-only branches, which cannot change an NBA/NHL forecast; main's research digest is aliased to the live identity so adaptive fits and rows trained under the live release stay valid for delivery. Any later change to a hashed research file gives a new digest that is not aliased."
+   "reason": "Owner decision Nov 17 2026, independent review 2026-11-18: this digest is main plus this branch's research_live.py alias loader (not only market_live.py). market_live.py's 3 hunks are ncaab-gated: market_model's ncaab/nba guard after the NHL early return, the forecast as_of used only for ncaab, and the line-selection ncaab branch whose else is byte-identical. The loader edit only returns identities. It is aliased to the live identity so adaptive fits and rows trained under the live release (43d4b74) stay valid for delivery. Any later change to a hashed research file gives a new digest that is not aliased."
   },
-  "0aba69f46bfff0bb": {
+  "9f74e2786b977cd2": {
    "identity": "f862a44ddaa1e76f",
    "sport": "nhl",
    "since": "2026-11-17",
-   "reason": "Owner decision Nov 17 2026: the live release (43d4b74) and main differ only by market_live.py NCAAB-only branches, which cannot change an NBA/NHL forecast; main's research digest is aliased to the live identity so adaptive fits and rows trained under the live release stay valid for delivery. Any later change to a hashed research file gives a new digest that is not aliased."
+   "reason": "Owner decision Nov 17 2026, independent review 2026-11-18: this digest is main plus this branch's research_live.py alias loader (not only market_live.py). market_live.py's 3 hunks are ncaab-gated: market_model's ncaab/nba guard after the NHL early return, the forecast as_of used only for ncaab, and the line-selection ncaab branch whose else is byte-identical. The loader edit only returns identities. It is aliased to the live identity so adaptive fits and rows trained under the live release (43d4b74) stay valid for delivery. Any later change to a hashed research file gives a new digest that is not aliased."
   }
  }
 }

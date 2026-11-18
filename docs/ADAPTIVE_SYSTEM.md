@@ -443,4 +443,13 @@ weekly and (with `NBA_DAILY_AGREEMENT=1`) daily rows; the nightly jobs settle; t
   `daily` and `api-delivery` also set `NBA_DAILY_AGREEMENT=1` (display only), pending install. Install one: copy it to
   `~/Library/LaunchAgents/`, `plutil -lint` it, then `launchctl bootout gui/$(id -u)/<label>` (if loaded) and
   `launchctl bootstrap gui/$(id -u) <file>`.
-- Pending (not done): research-identity alias for delivery, first live training run, trainer job install, proof of use.
+- Research-identity alias (branch `learning-activation`): `research_live.py` reads the `research` key of
+  `backend/app/reference/identity_aliases.json` (an entry applies only to its recorded sport) so delivery computes the live
+  research and adaptive identities. Release recipe: delivery carries `research_live.py` and `identity_aliases.json`
+  byte-identical to this branch, on a tree whose other hashed files equal main's. After the release, rerun the read-only id
+  check against the live stores and require NBA 94844709fc4412a5 / 4b3b8abf49973e4c / 89dc8edda9de58ed and NHL
+  f862a44ddaa1e76f / b921c537a765c65c / d11d95730c905f88 (research / weekly / daily). Any edit to a hashed file changes the
+  alias keys.
+- Not hashed: main's `nhl_shots.import_game` (2f3f596) no longer backdates live-observed late shots (the live checkout still
+  does). NHL identities continue across it at the next main-to-live release; the owner must accept that change explicitly then.
+- Pending (not done): release of the alias to delivery for delivery, first live training run, trainer job install, proof of use.
