@@ -662,3 +662,24 @@ def test_a_holdout_that_failed_twice_is_not_attempted_a_third_time(env, monkeypa
     with pytest.raises(ar.Refused, match="failed too often"):
         ar.holdout("nba", env["exp"], env["ws"], ask=lambda p: True)
     assert [h["event"] for h in ar._holdout_log(env["root"])].count("failed") == 2
+
+
+def test_a_candidate_over_the_memory_limit_is_killed_and_recorded(env, monkeypatch):
+    hog = edit("def fit(spec, rows):\n    return engine.fit(spec, rows)",
+               "def fit(spec, rows):\n    import numpy\n    a = numpy.ones(60_000_000)\n    a[::512] = 2.0\n"
+               "    while True:\n        pass")
+    commit_train(env["ws"], hog, "allocates 480 MB")
+    monkeypatch.setitem(ar.BUDGETS, "memory_gb", 0.25)
+    rec = ar.run_trial("nba", env["exp"], env["ws"], timeout_s=100)
+    assert rec["status"] == "killed" and rec["reason"].startswith("killed: memory"), rec
+    trial_dir = str(env["root"] / "trials" / rec["trial_id"])
+    assert subprocess.run(["pgrep", "-f", trial_dir], capture_output=True, text=True).stdout.split() == []
+    assert rec["resources"]["wall_s"] < 60
+    assert "killed" in (env["root"] / "results.tsv").read_text()
+
+
+def test_a_trials_tmp_dir_is_deleted_after_the_trial_but_its_logs_stay(env):
+    rec = ar.run_trial("nba", env["exp"], env["ws"])
+    tdir = env["root"] / "trials" / rec["trial_id"]
+    assert (tdir / "run.log").is_file() and (tdir / "sandbox.sb").is_file()
+    assert not (tdir / "tmp").exists()

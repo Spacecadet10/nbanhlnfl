@@ -27,10 +27,12 @@ import pickle
 import platform
 import random
 import select
+import shutil
 import signal
 import struct
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import asdict, replace
 from datetime import datetime, timezone
@@ -77,7 +79,8 @@ PROTOCOL = {
     },
     "seed": 20261014,
 }
-BUDGETS = {"trial_timeout_s": 1800, "max_trials": 4, "max_minutes": 120, "max_retries": 2, "concurrency": 1}
+BUDGETS = {"trial_timeout_s": 1800, "max_trials": 4, "max_minutes": 120, "max_retries": 2, "concurrency": 1,
+           "memory_gb": 6.0}          # resident memory of the whole candidate process group; above it the group is killed
 FORBIDDEN_FEATURES = ("goalie_home", "goalie_away", "goalie_diff", "goalie_exp_home", "goalie_exp_away")
 PROTECTED_WORKSPACE = ("program.md", "prepare.py")
 EDITABLE = "train.py"
@@ -688,6 +691,30 @@ def _profile(tmp: Path) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _group_rss_gb(pgid: int) -> float:
+    """Resident memory of every process in the group, in GB (0.0 when ps cannot be read)."""
+    try:
+        out = subprocess.run(["/bin/ps", "-axo", "pgid=,rss="], capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return 0.0
+    kb = sum(int(r[1]) for r in (ln.split() for ln in out.splitlines()) if len(r) == 2 and r[0] == str(pgid) and r[1].isdigit())
+    return kb / (1024 ** 2)
+
+
+def _memory_guard(pgid: int, limit_gb: float, stop: threading.Event, state: dict) -> None:
+    """Polls the group's resident memory; above the limit kills the whole group and records the peak seen."""
+    while not stop.wait(1.0):
+        gb = _group_rss_gb(pgid)
+        state["peak_gb"] = max(state.get("peak_gb", 0.0), gb)
+        if gb > limit_gb:
+            state["killed"] = gb
+            try:
+                os.killpg(pgid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
+            return
+
+
 def run_candidate(src: str, sport: str, data: dict, scored, timeout_s: float, tdir: Path) -> dict:
     """Runs train.py in the sandbox through the whole walk; returns per-market vectors or a failure status."""
     from .candidates import engine, registry
@@ -710,6 +737,9 @@ def run_candidate(src: str, sport: str, data: dict, scored, timeout_s: float, td
     os.close(w_resp)
     conn = _Remote(w_req, r_resp, t0 + timeout_s)
     res = {"status": "ok"}
+    limit_gb = float(BUDGETS["memory_gb"])
+    guard_state, stop_guard = {}, threading.Event()
+    threading.Thread(target=_memory_guard, args=(proc.pid, limit_gb, stop_guard, guard_state), daemon=True).start()
     try:
         specs, mapping = check_specs(sport, conn.call({"source": src, "sport": sport, "seed": PROTOCOL["seed"]}))
         outs, fits, seconds = walk(conn, specs, data["rows"], max(scored))
@@ -740,6 +770,7 @@ def run_candidate(src: str, sport: str, data: dict, scored, timeout_s: float, td
     except TrialInvalid as exc:
         res = {"status": "invalid", "reason": str(exc)}
     finally:
+        stop_guard.set()
         try:
             os.killpg(proc.pid, signal.SIGKILL)               # the whole group: no stray worker processes survive
         except (ProcessLookupError, PermissionError):         # macOS: EPERM once the group leader has already exited
@@ -748,11 +779,15 @@ def run_candidate(src: str, sport: str, data: dict, scored, timeout_s: float, td
         os.close(w_req)
         os.close(r_resp)
         log.close()
+        shutil.rmtree(tmp, ignore_errors=True)            # the trial's scratch space (HOME, TMPDIR); logs and profile stay
+    if "killed" in guard_state:           # the guard's kill ends the pipe: a memory kill, not a crash
+        res = {"status": "killed", "reason": f"killed: memory (group resident {guard_state['killed']:.2f} GB > limit {limit_gb:g} GB)"}
     if res["status"] == "crash":
         res["reason"] += f" (exit {os.waitstatus_to_exitcode(status)}): {(tdir / 'run.log').read_text()[-400:]}"
     res["resources"] = {"wall_s": round(time.time() - t0, 1), "cpu_s": round(ru.ru_utime + ru.ru_stime, 1),
                         "max_rss_gb": round(ru.ru_maxrss / (1024 ** 3 if sys.platform == "darwin" else 1024 ** 2), 2),
-                        "timed_out": res["status"] == "timeout"}
+                        "timed_out": res["status"] == "timeout", "memory_limit_gb": limit_gb,
+                        "peak_group_rss_gb": round(max(guard_state.get("peak_gb", 0.0), guard_state.get("killed", 0.0)), 2)}
     return res
 
 

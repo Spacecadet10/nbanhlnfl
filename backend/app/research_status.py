@@ -13,7 +13,7 @@ from typing import Optional
 NOTE = ("Research only. Trials search the validation seasons of a read-only data snapshot; a 'keep' means a candidate beat "
         "the incumbent there (exploratory, repeated search), not that it is approved or used. Forecasts never come from "
         "here; promotion stays a separate, manual decision on the forward record.")
-FAILED = ("crash", "timeout", "invalid", "interrupted")
+FAILED = ("crash", "timeout", "invalid", "interrupted", "killed")
 
 
 def experiment_dir() -> Optional[Path]:
