@@ -324,7 +324,7 @@ def _md(day):
     return str(day)[5:10]
 
 
-def sportsbook_detail_line(sb):
+def sportsbook_detail_line(sb, dnb=False):
     """The contract's `sportsbook` object as one line: provider, price, line, no-vig %, signed gap, quote time and basis; or the
     reason it is unavailable. None when the pick carries no such object (older API): the legacy note then stands alone."""
     from .threshold_overview import displayed_percentage
@@ -341,6 +341,10 @@ def sportsbook_detail_line(sb):
     # A conditional basis compares a different app % than the Model % above it: say which one, so the gap can be checked.
     book_text = (f"app {displayed_percentage(sb['app_probability'])}% vs no-vig {displayed_percentage(sb['book_probability'])}% "
                  f"(both {basis.group(1)})" if basis else f"no-vig {displayed_percentage(sb['book_probability'])}%")
+    if dnb:     # draw no bet: both percentages exclude draws; the Model % above is the 90-minute win chance (tickets.DNB_*)
+        from .tickets import DNB_APP, DNB_BOOK
+        book_text = (f"{DNB_APP}: {displayed_percentage(sb['app_probability'])}% · "
+                     f"{DNB_BOOK}: {displayed_percentage(sb['book_probability'])}% no-vig")
     parts = [source or 'quote', book_text,
              f"gap {'+' if gap > 0 else '−' if gap < 0 else '±'}{abs(gap):.1f} pts",
              price_tag(sb['app_probability'], sb['book_probability'])]
@@ -447,7 +451,7 @@ def market_block(sport, pick, *, preview=False, compact=False):
     Returns (lines, delivery_version, shows_forecast_time_price) or None for a pick without history (outside Soccer).
     The version list is what the delivery key hashes; nothing here may change it."""
     from .threshold_overview import MIN_LIVE_GRADED, displayed_percentage
-    from .tickets import card_comparison
+    from .tickets import DNB_APP, DNB_BOOK, DNB_MODEL_NOTE, DNB_BUCKET_NOTE, card_comparison, is_dnb
     h = _dump(pick.get('percentage_history'))
     sb = _dump(pick.get('sportsbook'))
     book, app_compared, comparison_basis = card_comparison(pick)    # the same source the pick summary line reads
@@ -467,14 +471,20 @@ def market_block(sport, pick, *, preview=False, compact=False):
             provenance += '; price unavailable'
         comparison = f"Sportsbook {displayed_percentage(book)}%" if book is not None else "Sportsbook probability unavailable"
         priced = book is not None and (_forecast_time_price(pick) or bool(sb))
-        if app_compared != pick['probability'] or 'card_app_prob' in pick:
-            comparison = f"App {displayed_percentage(app_compared)}% / " + comparison
-        if comparison_basis:
-            comparison += f" ({comparison_basis})"
+        if is_dnb(pick) and book is not None:
+            comparison = (f"{DNB_APP}: {displayed_percentage(app_compared)}% / {DNB_BOOK}: "
+                          f"{displayed_percentage(book)}% no-vig")
+        else:
+            if app_compared != pick['probability'] or 'card_app_prob' in pick:
+                comparison = f"App {displayed_percentage(app_compared)}% / " + comparison
+            if comparison_basis:
+                comparison += f" ({comparison_basis})"
         head = provenance if one_line else f"{comparison} · {provenance}"
         lines = [f"<b>{escape(pick['market_title'])}</b>", f"{escape(pick['pick_label'])} · {escape(head)}",
                  f"<b>Model {displayed_percentage(pick['probability'])}%</b> · Exact-% history unavailable"]
-        detail = sportsbook_detail_line(sb) if one_line else None
+        if is_dnb(pick):
+            lines.append(escape(DNB_MODEL_NOTE.format(pct=displayed_percentage(pick['probability']))))
+        detail = sportsbook_detail_line(sb, is_dnb(pick)) if one_line else None
         if detail:
             lines.append(detail)
         lines += record_basis_lines(pick.get('record_basis'), pick.get('market'), pick.get('matchup'))
@@ -518,7 +528,9 @@ def market_block(sport, pick, *, preview=False, compact=False):
         # Review MEDIUM (Nov 11): the live line's own small-sample threshold and wording, so a short history is not read as proof.
         small = ' · Small sample.' if past['settled'] < MIN_LIVE_GRADED else ''
         lines.append(f"{prefix}{past['wins']}W–{past['losses']}L{small}")
-    detail = sportsbook_detail_line(sb) if one_line else None
+    if is_dnb(pick):    # the stored % and its exact-% history keep their original definition: say which
+        lines.append(escape(DNB_MODEL_NOTE.format(pct=h['percentage']) + DNB_BUCKET_NOTE))
+    detail = sportsbook_detail_line(sb, is_dnb(pick)) if one_line else None
     if detail:
         lines.append(detail)
     tline = telegram_history_line(sport, h)

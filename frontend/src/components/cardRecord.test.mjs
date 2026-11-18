@@ -1,6 +1,7 @@
 // The shared card section's wording (run: npm run test:unit). Same facts as the Telegram card (backend telegram.market_block).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { dnbModelNote } from './sportsbook.ts';
 import { liveRecordLine, publishedPickText, recordBasisLines, recordLabel, telegramLine, thisGameLine } from './cardRecord.ts';
 
 test('a sent pick is written in words for every market shape, never as a side code', () => {
@@ -109,5 +110,6 @@ test('Telegram history with only pushes is not "none settled" (D6)', () => {
 test('a conditional basis says both percentages are conditional (D5)', () => {
   const book = { status: 'exact', app_probability: 0.882, book_probability: 0.95, gap_pp: -6.8, provider: 'DraftKings', price: '-150/+120',
     line: null, quote_id: 1, retrieved_at: null, reason: null, basis: 'conditional on no draw (derived from 1X2 prices)' };
-  assert.equal(sportsbookLine(book), 'App 88.2% vs Sportsbook 95.0% no-vig, both conditional on no draw (DraftKings -150/+120) · −6.8 pts · derived from 1X2 prices');
+  assert.equal(sportsbookLine(book), 'App DNB win chance, excluding draws: 88.2% · Sportsbook DNB win chance, excluding draws: 95.0% no-vig (DraftKings -150/+120) · −6.8 pts · derived from 1X2 prices');
+  assert.equal(dnbModelNote('35.7'), 'Model 35.7% = 90-minute win chance (draw possible); exact-% history is bucketed on this 90-minute %');
 });

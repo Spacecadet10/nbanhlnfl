@@ -24,6 +24,12 @@ const EMPTY: Record<Exclude<SportsbookComparison['status'], 'exact'>, string> = 
   unsupported: 'No sportsbook quotes are collected for this market',
 };
 
+export const DNB_APP = 'App DNB win chance, excluding draws';
+export const DNB_BOOK = 'Sportsbook DNB win chance, excluding draws';
+
+/** Draw no bet: the stored Model % is the 90-minute win chance (a draw is a push), and the exact-% history is bucketed on it. */
+export const dnbModelNote = (pct: string) => `Model ${pct}% = 90-minute win chance (draw possible); exact-% history is bucketed on this 90-minute %`;
+
 /** e.g. "App 61.0% · Sportsbook 52.4% no-vig (DraftKings -110/-110 at 223.5) · +8.6 pts · quote 2:29 PM · conditional on no push".
  *  Unavailable: the backend's own reason when it sent one, else the standard wording for the status. Never a number. */
 export function sportsbookLine(c: SportsbookComparison): string {
@@ -33,7 +39,10 @@ export function sportsbookLine(c: SportsbookComparison): string {
   const at = c.retrieved_at ? quoteTime(c.retrieved_at) : null;
   // A conditional basis compares a different app % than the Model % shown elsewhere on the card: say both are conditional.
   const cond = /^(conditional on [^(]+?)\s*(\(.*\))?$/.exec(c.basis ?? '');
-  const head = cond ? `App ${one(c.app_probability)}% vs Sportsbook ${one(c.book_probability)}% no-vig, both ${cond[1]}`
+  // Draw no bet (the only market whose basis is 'conditional on no draw'): the exact labels of the Telegram card.
+  const dnb = cond?.[1] === 'conditional on no draw';
+  const head = dnb ? `${DNB_APP}: ${one(c.app_probability)}% · ${DNB_BOOK}: ${one(c.book_probability)}% no-vig`
+    : cond ? `App ${one(c.app_probability)}% vs Sportsbook ${one(c.book_probability)}% no-vig, both ${cond[1]}`
     : `App ${one(c.app_probability)}% · Sportsbook ${one(c.book_probability)}% no-vig`;
   const note = cond ? cond[2]?.slice(1, -1) : c.basis;
   return `${head}${src ? ` (${src})` : ''} · ${formatGap(gap)}${at ? ` · quote ${at}` : ''}${note ? ` · ${note}` : ''}`;
