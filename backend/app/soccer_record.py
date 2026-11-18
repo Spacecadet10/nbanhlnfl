@@ -241,3 +241,12 @@ def attach_to_markets(conn, matches: list, as_of: str, since: str) -> None:
     attach(conn, picks, as_of)
     for m in matches:
         m['picks'] = [p for p in picks if p['game_id'] == m['match_id']]
+        # The page renders the match's own selections, so the pick's contract fields go onto the selection it is (same market,
+        # side and line); the other sides of a market have no forecast pick of their own and carry none.
+        sels = list((m.get('derived') or {}).get('selections') or []) + [s for f in m['families'].values() for s in f['selections']]
+        for p in m['picks']:
+            for s in sels:
+                if (s['market'], s['side'], s['line']) == (p['market'], p['side'], p.get('line')):
+                    for name in ('pick_label', 'percentage_history', 'sportsbook', 'record_basis'):
+                        if p.get(name) is not None:
+                            s[name] = p[name]

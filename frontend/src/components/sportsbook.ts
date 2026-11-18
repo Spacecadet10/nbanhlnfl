@@ -31,6 +31,10 @@ export function sportsbookLine(c: SportsbookComparison): string {
   const gap = c.gap_pp ?? gapPoints(c.app_probability, c.book_probability);
   const src = [c.provider, c.price, c.line != null ? `at ${c.line}` : null].filter(Boolean).join(' ');
   const at = c.retrieved_at ? quoteTime(c.retrieved_at) : null;
-  return `App ${one(c.app_probability)}% · Sportsbook ${one(c.book_probability)}% no-vig${src ? ` (${src})` : ''} · ${formatGap(gap)}`
-    + `${at ? ` · quote ${at}` : ''}${c.basis ? ` · ${c.basis}` : ''}`;
+  // A conditional basis compares a different app % than the Model % shown elsewhere on the card: say both are conditional.
+  const cond = /^(conditional on [^(]+?)\s*(\(.*\))?$/.exec(c.basis ?? '');
+  const head = cond ? `App ${one(c.app_probability)}% vs Sportsbook ${one(c.book_probability)}% no-vig, both ${cond[1]}`
+    : `App ${one(c.app_probability)}% · Sportsbook ${one(c.book_probability)}% no-vig`;
+  const note = cond ? cond[2]?.slice(1, -1) : c.basis;
+  return `${head}${src ? ` (${src})` : ''} · ${formatGap(gap)}${at ? ` · quote ${at}` : ''}${note ? ` · ${note}` : ''}`;
 }

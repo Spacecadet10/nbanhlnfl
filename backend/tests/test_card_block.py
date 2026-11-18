@@ -110,7 +110,8 @@ def test_soccer_dnb_basis_and_pushes_use_the_same_block():
     p['strong'] = False
     text = text_of(card('soccer', [p]), context_selection=True)
     assert '3W–1L · 4 push (4 settled)' in text
-    assert 'DraftKings -150/+120 · no-vig 50.4% · gap +6.7 pts · underpriced · quote 02:29 PM EST · conditional on no push' in text
+    assert ('DraftKings -150/+120 · app 57.1% vs no-vig 50.4% (both conditional on no push) · gap +6.7 pts · underpriced · '
+            'quote 02:29 PM EST') in text
     assert telegram_card.render_card(text).startswith(b'\x89PNG')
 
 
@@ -211,3 +212,51 @@ def test_soccer_delivery_key_is_the_same_with_or_without_the_contract_history():
     new_key, text = tg.message_batches(card('soccer', [with_history]), '123', context_selection=True)[0]
     assert new_key == old_key
     assert '1W–3L · 1 push (4 settled)' in text
+
+
+# --- verification findings D2-D6 ---------------------------------------------------------------------------------------------
+def test_soccer_published_picks_are_written_with_team_names_not_side_codes():
+    rb = lambda side, line: {'forecast_id': 7, 'generated_at': '2026-11-02T19:30:00Z', 'pregame_forecasts': 1,
+                             'published': {'forecast_id': 5, 'side': side, 'line': line, 'probability': 0.52, 'grade': 'loss'}}
+    cases = [('double_chance', 'home_away', None, 'Lebanon or Palestine'), ('double_chance', 'home_draw', None, 'Lebanon or draw'),
+             ('double_chance', 'draw_away', None, 'draw or Palestine'), ('draw_no_bet', 'away', None, 'Palestine (draw no bet)'),
+             ('goals_total', 'over', 2.5, 'Over 2.5 goals'), ('corners_total', 'under', 9.5, 'Under 9.5 corners'),
+             ('1x2_regulation', 'draw', None, 'Draw')]
+    for market, side, line, words in cases:
+        lines = tg.record_basis_lines(rb(side, line), market, 'Lebanon vs Palestine')
+        assert lines == [f'Telegram card sent forecast #5 ({words}, 52.0%): lost'], (market, lines)
+
+
+def test_the_sent_card_line_shows_only_when_the_pick_differs_not_when_only_the_id_does():
+    base = {'forecast_id': 7, 'generated_at': '2026-11-02T19:30:00Z', 'pregame_forecasts': 2, 'side': 'a', 'line': -8.5,
+            'probability': 0.5708}
+    pub = lambda **kw: {**base, 'published': {'forecast_id': 5, 'side': 'a', 'line': -8.5, 'probability': 0.5712, 'grade': 'win', **kw}}
+    same = tg.record_basis_lines(pub(), 'spread', 'BOS @ ORL')
+    assert len(same) == 1 and same[0].startswith('Record uses') and 'earlier kept for audit' in same[0]
+    for kw in ({'side': 'b'}, {'line': -9.5}, {'probability': 0.60}):
+        out = tg.record_basis_lines(pub(**kw), 'spread', 'BOS @ ORL')
+        assert len(out) == 2 and out[1].startswith('Telegram card sent forecast #5'), kw
+
+
+def test_nfl_summary_gap_is_the_rounded_app_minus_rounded_book_like_the_market_line():
+    from app import tickets
+    pick_ = pick('nfl', sportsbook={**SPORTSBOOK, 'app_probability': 0.40044, 'book_probability': 0.51356, 'gap_pp': -11.3})
+    # unrounded gap is -11.31 points; the card's own rounded numbers 40.0 and 51.4 give -11.4
+    assert tickets.card_gap_points(pick_) == pytest.approx(-11.4)
+
+
+def test_a_conditional_basis_shows_the_compared_app_percentage_on_the_sportsbook_line():
+    sb = {**SPORTSBOOK, 'app_probability': 0.882, 'book_probability': 0.95, 'gap_pp': -6.8, 'line': None, 'price': '-150/+120',
+          'basis': 'conditional on no draw (derived from 1X2 prices)'}
+    line = tg.sportsbook_detail_line(sb)
+    assert 'app 88.2% vs no-vig 95.0% (both conditional on no draw)' in line and 'gap −6.8 pts' in line
+    plain = tg.sportsbook_detail_line(SPORTSBOOK)
+    assert 'app ' not in plain and 'no-vig 50.4%' in plain
+
+
+def test_telegram_history_with_only_pushes_is_not_called_none_settled():
+    h = {'telegram': {**TELEGRAM, 'wins': 0, 'losses': 0, 'pushes': 2, 'settled': 0}}
+    line = tg.telegram_history_line('nfl', h)
+    assert '0W–0L · 2 push (0 settled)' in line and 'none settled' not in line
+    none = tg.telegram_history_line('nfl', {'telegram': {**TELEGRAM, 'wins': 0, 'losses': 0, 'pushes': 0, 'settled': 0}})
+    assert 'none settled at this exact %' in none

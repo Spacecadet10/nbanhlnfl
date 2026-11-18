@@ -363,6 +363,15 @@ def card_comparison(pick):
             pick.get('card_comparison_basis'))
 
 
+def card_gap_points(pick):
+    """The ONE gap definition of every card: the displayed app % minus the displayed sportsbook % (both rounded to one decimal),
+    so the numbers on the line subtract exactly. None when there is no sportsbook probability."""
+    from decimal import Decimal
+    from app.threshold_overview import displayed_percentage
+    book, app, _ = card_comparison(pick)
+    return None if book is None else float(Decimal(displayed_percentage(app)) - Decimal(displayed_percentage(book)))
+
+
 def card_market_prob(conn, pick):
     """A stored quote at the forecast time, for exactly the same game, market, and line."""
     from app import threshold_overview
@@ -638,10 +647,9 @@ def card_choice(sport, picks):
     if warnings and not support:
         return dict(method=CARD_METHOD, pick=None, reason='No supported lean: '+warnings[0], assessments=assessments)
     book, app_compare, basis = card_comparison(chosen)
-    if book is not None:
-        gap = (Decimal(str(app_compare)) - Decimal(str(book))) * 100
+    from app.threshold_overview import displayed_percentage
     qualifier = f' ({basis})' if basis else ''
-    numbers = (f"App {100*app_compare:.1f}% / sportsbook {100*book:.1f}% / gap {gap:+.1f} points{qualifier}."
+    numbers = (f"App {displayed_percentage(app_compare)}% / sportsbook {displayed_percentage(book)}% / gap {card_gap_points(chosen):+.1f} points{qualifier}."
                if book is not None else f"App {100*chosen['probability']:.1f}%; sportsbook probability unavailable.")
     reason = numbers+' '+(support[0] if support else 'Highest available likelihood after context checks.')
     if warnings:

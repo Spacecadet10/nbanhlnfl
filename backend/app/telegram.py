@@ -337,13 +337,19 @@ def sportsbook_detail_line(sb):
     if gap is None:
         gap = round(float(displayed_percentage(sb['app_probability'])) - float(displayed_percentage(sb['book_probability'])), 1)
     source = ' '.join(str(x) for x in (sb.get('provider'), sb.get('price'), f"at {sb['line']:g}" if sb.get('line') is not None else None) if x)
-    parts = [source or 'quote', f"no-vig {displayed_percentage(sb['book_probability'])}%",
+    basis = re.match(r'(conditional on [^(]+?)\s*(\(.*\))?$', str(sb.get('basis') or ''))
+    # A conditional basis compares a different app % than the Model % above it: say which one, so the gap can be checked.
+    book_text = (f"app {displayed_percentage(sb['app_probability'])}% vs no-vig {displayed_percentage(sb['book_probability'])}% "
+                 f"(both {basis.group(1)})" if basis else f"no-vig {displayed_percentage(sb['book_probability'])}%")
+    parts = [source or 'quote', book_text,
              f"gap {'+' if gap > 0 else '−' if gap < 0 else '±'}{abs(gap):.1f} pts",
              price_tag(sb['app_probability'], sb['book_probability'])]
     if _hm(sb.get('retrieved_at')):
         parts.append('quote ' + _hm(sb['retrieved_at']))
-    if sb.get('basis'):
+    if sb.get('basis') and not basis:
         parts.append(str(sb['basis']))
+    elif basis and basis.group(2):
+        parts.append(basis.group(2))
     return 'Sportsbook quote: ' + escape(' · '.join(parts))
 
 
@@ -355,7 +361,7 @@ def telegram_history_line(sport, h):
         label = tg.get('label') or TELEGRAM_LABEL
         period = tg.get('period')
         span = f" {_md(period['from'])} to {_md(period['to'])}" if period else ''
-        if not tg.get('settled'):
+        if not tg.get('settled') and not tg.get('pushes'):
             return f"{escape(label)}{span}: none settled at this exact % · model version not recorded"
         pushes = f" · {tg['pushes']} push" if tg.get('pushes') else ''
         small = ' · Small sample.' if tg.get('small_sample') else ''
@@ -378,6 +384,15 @@ def published_pick_text(pub, market, matchup):
     from . import markets
     side, line = pub.get('side'), pub.get('line')
     labels = markets.SIDE_LABELS.get(market)
+    if market in SOCCER_PICK_MARKETS or str(market).startswith(('goals_', 'corners_')):
+        if matchup and ' vs ' in matchup:
+            from .tickets import _soccer_label
+            home, away = matchup.split(' vs ', 1)
+            try:
+                label = _soccer_label(market, side, line, home, away)
+                return label.replace(', 90 min)', ')').replace(' (90 min)', '')
+            except (KeyError, ValueError, TypeError, AttributeError):
+                pass
     word = labels[('a', 'mid', 'b').index(side)] if labels and side in ('a', 'mid', 'b') else (
         {'a': 'home', 'b': 'away'}.get(side, side))     # Soccer markets outside SIDE_LABELS: a/b = home/away
     away, home = None, None
@@ -394,6 +409,17 @@ def published_pick_text(pub, market, matchup):
     return f"{who} {line:+g}" if signed else f"{who} {line:g}"
 
 
+SOCCER_PICK_MARKETS = ('double_chance', 'draw_no_bet', 'btts')
+
+
+def _published_differs(pub, rb):
+    """A sent card is worth a line only when its side, line or displayed % differs from the record's pick; the same pick
+    re-forecast under another id says nothing extra (the 'earlier kept for audit' line already covers it)."""
+    from .threshold_overview import displayed_percentage
+    pct = lambda p: None if p.get('probability') is None else displayed_percentage(p['probability'])
+    return pub.get('side') != rb.get('side') or pub.get('line') != rb.get('line') or pct(pub) != pct(rb)
+
+
 def record_basis_lines(rb, market=None, matchup=None):
     """Which forecast the record uses when a game has several, and how a card that was actually sent differs (contract item 4)."""
     from .threshold_overview import displayed_percentage
@@ -406,7 +432,7 @@ def record_basis_lines(rb, market=None, matchup=None):
         at = _hm(rb.get('generated_at'))
         out.append(f"Record uses the latest pregame forecast (#{rb['forecast_id']}{', ' + at if at else ''}); {n - 1} earlier kept for audit")
     pub = rb.get('published')
-    if pub and pub.get('forecast_id') != rb.get('forecast_id'):
+    if pub and pub.get('forecast_id') != rb.get('forecast_id') and _published_differs(pub, rb):
         what = published_pick_text(pub, market, matchup)
         pct = f", {displayed_percentage(pub['probability'])}%" if pub.get('probability') is not None else ''
         grade = {'win': 'won', 'loss': 'lost'}.get(pub.get('grade'), pub.get('grade') or 'not graded')

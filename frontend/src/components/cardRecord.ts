@@ -3,6 +3,7 @@
 // record counts are OTHER settled games; this game's own result is shown on its own line and never added to them.
 // Every field the older API does not send is simply left out: nothing is invented.
 import type { ForecastPercentageHistory, RecordBasis } from '../api/types';
+import { selectionLabel, type SoccerMarketKey } from './soccerMarkets.ts';
 
 const md = (day: string) => day.slice(5, 10);
 
@@ -39,7 +40,7 @@ export function telegramLine(h: ForecastPercentageHistory): string | null {
   if (t) {
     const label = t.label ?? 'Recovered Telegram cards';
     const span = t.period ? ` ${md(t.period.from)} to ${md(t.period.to)}` : '';
-    if (!t.settled) return `${label}${span}: none settled at this exact % · model version not recorded`;
+    if (!t.settled && !t.pushes) return `${label}${span}: none settled at this exact % · model version not recorded`;
     return `${label}${span}: ${t.wins}W–${t.losses}L${t.pushes ? ` · ${t.pushes} push` : ''} (${t.settled} settled)${t.small_sample ? ' · small sample' : ''} · model version not recorded`;
   }
   if (cov == null && h.telegram === undefined) return null;
@@ -59,6 +60,9 @@ export function teamsOf(matchup: string | null | undefined): { home: string; awa
  *  Sides follow markets.SIDE_LABELS: a/b = home/away (winner, spread, three-way) or over/under (totals); mid = draw. */
 export function publishedPickText(p: NonNullable<RecordBasis['published']>, market: string | undefined, teams?: { home: string; away: string }): string {
   if (p.pick_label) return p.pick_label;
+  if (teams && (market === 'double_chance' || market === 'draw_no_bet' || market === 'btts' || market?.startsWith('goals_') || market?.startsWith('corners_'))) {
+    return selectionLabel(market as SoccerMarketKey, p.side ?? '', p.line ?? null, teams.home, teams.away);
+  }
   const isTotal = market === 'total' || market === 'team_total_home' || market === 'team_total_away';
   const word = p.side === 'a' ? (isTotal ? 'over' : 'home') : p.side === 'b' ? (isTotal ? 'under' : 'away') : p.side === 'mid' ? 'draw' : (p.side ?? '?');
   let who = word === 'home' ? (teams?.home ?? 'Home') : word === 'away' ? (teams?.away ?? 'Away') : word.charAt(0).toUpperCase() + word.slice(1);
@@ -78,7 +82,9 @@ export function recordBasisLines(rb: RecordBasis | null | undefined, clock: (iso
     out.push(`Record uses the latest pregame forecast (#${rb.forecast_id}${at ? `, ${at}` : ''}); ${rb.pregame_forecasts - 1} earlier kept for audit`);
   }
   const p = rb.published;
-  if (p && p.forecast_id !== rb.forecast_id) {
+  // Only when the sent pick differs (side, line or displayed %); the same pick re-forecast under another id adds nothing.
+  const pct = (x: number | null | undefined) => (x == null ? null : (x * 100).toFixed(1));
+  if (p && p.forecast_id !== rb.forecast_id && (p.side !== rb.side || p.line !== rb.line || pct(p.probability) !== pct(rb.probability))) {
     const grade = p.grade === 'win' ? 'won' : p.grade === 'loss' ? 'lost' : (p.grade ?? 'not graded');
     out.push(`Telegram card sent forecast #${p.forecast_id} (${publishedPickText(p, ctx.market, ctx.teams)}${p.probability == null ? '' : `, ${(p.probability * 100).toFixed(1)}%`}): ${grade}`);
   }

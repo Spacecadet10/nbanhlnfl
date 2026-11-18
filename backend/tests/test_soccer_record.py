@@ -134,3 +134,20 @@ def test_attach_gives_every_soccer_pick_the_contract_fields_and_keeps_the_earlie
         assert b["pregame_forecasts"] == 1 and b["earlier"] == [] and b["published"] is None and b["probability"] == p["probability"]
         assert p["sportsbook"]["status"] in ("exact", "no_quote", "unsupported") and p["model_version"].startswith(("elo:", "intl-elo:"))
         assert "line" in p
+
+
+def test_markets_selections_the_page_reads_carry_the_contract_fields_of_their_pick(forecast):
+    """D1: the web page renders derived.selections / families[].selections, not matches[].picks."""
+    from app import soccer_markets_live as sml
+    as_of = stamp()
+    matches = sml.match_markets(forecast, competition="eng.1", since="", as_of=as_of)
+    sr.attach_to_markets(forecast, matches, as_of, "")
+    m = next(x for x in matches if x["match_id"] == MATCH)
+    assert m["picks"]
+    sels = m["derived"]["selections"] + [s for f in m["families"].values() for s in f["selections"]]
+    for p in m["picks"]:
+        hit = [s for s in sels if (s["market"], s["side"], s["line"]) == (p["market"], p["side"], p["line"])]
+        assert hit, p["market"]
+        for s in hit:
+            assert s["percentage_history"]["sport"] == "soccer" and s["record_basis"]["probability"] == p["probability"]
+            assert s["pick_label"] == p["pick_label"] and s["sportsbook"]["status"] in ("exact", "no_quote", "unsupported")

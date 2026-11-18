@@ -72,7 +72,42 @@ test('sportsbook line: backend reason, quote time and conditional basis', () => 
   const book = { status: 'exact', app_probability: 0.6, book_probability: 0.5, gap_pp: null, provider: 'DraftKings', price: '-150/+120',
     line: null, quote_id: 1, retrieved_at: '2026-11-02T19:29:30Z', reason: null, basis: 'conditional on no push' };
   assert.equal(quoteTime('2026-11-02T19:29:30Z'), '2:29 PM');
-  assert.equal(sportsbookLine(book), 'App 60.0% · Sportsbook 50.0% no-vig (DraftKings -150/+120) · +10.0 pts · quote 2:29 PM · conditional on no push');
+  assert.equal(sportsbookLine(book), 'App 60.0% vs Sportsbook 50.0% no-vig, both conditional on no push (DraftKings -150/+120) · +10.0 pts · quote 2:29 PM');
   const none = { ...book, status: 'no_quote', book_probability: null, reason: 'No quote saved before the forecast' };
   assert.equal(sportsbookLine(none), 'No quote saved before the forecast');
+});
+
+test('soccer sides of a sent card are written with team names, never as codes (D2)', () => {
+  const teams = { home: 'Lebanon', away: 'Palestine' };
+  const p = (side, line) => ({ forecast_id: 5, side, line });
+  assert.equal(publishedPickText(p('home_away', null), 'double_chance', teams), 'Lebanon or Palestine');
+  assert.equal(publishedPickText(p('home_draw', null), 'double_chance', teams), 'Lebanon or draw');
+  assert.equal(publishedPickText(p('draw_away', null), 'double_chance', teams), 'draw or Palestine');
+  assert.equal(publishedPickText(p('away', null), 'draw_no_bet', teams), 'Palestine (draw no bet)');
+  assert.equal(publishedPickText(p('over', 2.5), 'goals_total', teams), 'Over 2.5 goals');
+  assert.equal(publishedPickText(p('under', 9.5), 'corners_total', teams), 'Under 9.5 corners');
+});
+
+test('the sent-card line shows only when the side, line or displayed % differs, not when only the id does (D3)', () => {
+  const rb = (pub) => ({ forecast_id: 7, generated_at: '2026-11-02T19:30:00Z', pregame_forecasts: 2, side: 'a', line: -8.5, probability: 0.5708,
+    published: { forecast_id: 5, side: 'a', line: -8.5, probability: 0.5712, grade: 'win', ...pub } });
+  const ctx = { market: 'spread', teams: { home: 'ORL', away: 'BOS' } };
+  assert.equal(recordBasisLines(rb({}), clock, ctx).length, 1);
+  for (const pub of [{ side: 'b' }, { line: -9.5 }, { probability: 0.6 }]) {
+    const out = recordBasisLines(rb(pub), clock, ctx);
+    assert.equal(out.length, 2);
+    assert.match(out[1], /^Telegram card sent forecast #5/);
+  }
+});
+
+test('Telegram history with only pushes is not "none settled" (D6)', () => {
+  const t = { source: 'telegram_cards', wins: 0, losses: 0, pushes: 2, settled: 0, period: { from: '2026-11-02', to: '2026-11-14' } };
+  assert.equal(telegramLine({ ...h, telegram: t }), 'Recovered Telegram cards 11-02 to 11-14: 0W–0L · 2 push (0 settled) · model version not recorded');
+  assert.match(telegramLine({ ...h, telegram: { ...t, pushes: 0 } }), /none settled at this exact %/);
+});
+
+test('a conditional basis says both percentages are conditional (D5)', () => {
+  const book = { status: 'exact', app_probability: 0.882, book_probability: 0.95, gap_pp: -6.8, provider: 'DraftKings', price: '-150/+120',
+    line: null, quote_id: 1, retrieved_at: null, reason: null, basis: 'conditional on no draw (derived from 1X2 prices)' };
+  assert.equal(sportsbookLine(book), 'App 88.2% vs Sportsbook 95.0% no-vig, both conditional on no draw (DraftKings -150/+120) · −6.8 pts · derived from 1X2 prices');
 });
