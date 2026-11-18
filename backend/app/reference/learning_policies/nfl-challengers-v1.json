@@ -1,0 +1,170 @@
+{
+  "policy_id": "nfl-challengers-v1",
+  "sport": "nfl",
+  "version": 1,
+  "description": "Prospective NFL weekly challengers: winner Elo (K, home advantage) and points-model (eta) variants that already exist as configurable parameters, recorded at the served NFL cutoff (kickoff minus 120 minutes) at the served line, in the separate challenger store and scored at read time against the served forecast. Registration is never promotion; insufficient evidence is expected this season.",
+  "challengers": [
+    {
+      "spec": {
+        "name": "nfl_elo_k10",
+        "sport": "nfl",
+        "family": "nfl_param",
+        "head": "winner",
+        "features": "nfl_elo",
+        "role": "candidate",
+        "refit": "week",
+        "why": "Winner Elo with k=10 instead of the sealed 20; a value of the existing nfl_eval.GRID; all other parameters as sealed.",
+        "extra": {
+          "elo": {
+            "k": 10
+          }
+        }
+      },
+      "provenance": {
+        "source": "manual",
+        "trial_id": null,
+        "commit": null,
+        "trial_decision": null,
+        "registered_by": "learning-phase2 I10 seed (Claude Sonnet 5.5); owner decision 2026-11-18: challengers now",
+        "registered_at": "2026-11-18T14:00:00Z",
+        "note": "Manual operator seed (docs/NFL_PLAN.md): one existing configurable parameter varied, recorded at the served cutoff at the served line. NFL serving is untouched. Expect insufficient evidence this season (about 17 games a week)."
+      },
+      "preregistered_n": null
+    },
+    {
+      "spec": {
+        "name": "nfl_elo_k30",
+        "sport": "nfl",
+        "family": "nfl_param",
+        "head": "winner",
+        "features": "nfl_elo",
+        "role": "candidate",
+        "refit": "week",
+        "why": "Winner Elo with k=30 instead of the sealed 20; a value of the existing nfl_eval.GRID; all other parameters as sealed.",
+        "extra": {
+          "elo": {
+            "k": 30
+          }
+        }
+      },
+      "provenance": {
+        "source": "manual",
+        "trial_id": null,
+        "commit": null,
+        "trial_decision": null,
+        "registered_by": "learning-phase2 I10 seed (Claude Sonnet 5.5); owner decision 2026-11-18: challengers now",
+        "registered_at": "2026-11-18T14:00:00Z",
+        "note": "Manual operator seed (docs/NFL_PLAN.md): one existing configurable parameter varied, recorded at the served cutoff at the served line. NFL serving is untouched. Expect insufficient evidence this season (about 17 games a week)."
+      },
+      "preregistered_n": null
+    },
+    {
+      "spec": {
+        "name": "nfl_elo_ha25",
+        "sport": "nfl",
+        "family": "nfl_param",
+        "head": "winner",
+        "features": "nfl_elo",
+        "role": "candidate",
+        "refit": "week",
+        "why": "Winner Elo with home_advantage=25 instead of the sealed 50; a value of the existing nfl_eval.GRID; all other parameters as sealed.",
+        "extra": {
+          "elo": {
+            "home_advantage": 25
+          }
+        }
+      },
+      "provenance": {
+        "source": "manual",
+        "trial_id": null,
+        "commit": null,
+        "trial_decision": null,
+        "registered_by": "learning-phase2 I10 seed (Claude Sonnet 5.5); owner decision 2026-11-18: challengers now",
+        "registered_at": "2026-11-18T14:00:00Z",
+        "note": "Manual operator seed (docs/NFL_PLAN.md): one existing configurable parameter varied, recorded at the served cutoff at the served line. NFL serving is untouched. Expect insufficient evidence this season (about 17 games a week)."
+      },
+      "preregistered_n": null
+    },
+    {
+      "spec": {
+        "name": "nfl_elo_ha75",
+        "sport": "nfl",
+        "family": "nfl_param",
+        "head": "winner",
+        "features": "nfl_elo",
+        "role": "candidate",
+        "refit": "week",
+        "why": "Winner Elo with home_advantage=75 instead of the sealed 50; a value of the existing nfl_eval.GRID; all other parameters as sealed.",
+        "extra": {
+          "elo": {
+            "home_advantage": 75
+          }
+        }
+      },
+      "provenance": {
+        "source": "manual",
+        "trial_id": null,
+        "commit": null,
+        "trial_decision": null,
+        "registered_by": "learning-phase2 I10 seed (Claude Sonnet 5.5); owner decision 2026-11-18: challengers now",
+        "registered_at": "2026-11-18T14:00:00Z",
+        "note": "Manual operator seed (docs/NFL_PLAN.md): one existing configurable parameter varied, recorded at the served cutoff at the served line. NFL serving is untouched. Expect insufficient evidence this season (about 17 games a week)."
+      },
+      "preregistered_n": null
+    },
+    {
+      "spec": {
+        "name": "nfl_points_eta02",
+        "sport": "nfl",
+        "family": "nfl_param",
+        "head": "spread+total+team_totals",
+        "features": "nfl_points_normal",
+        "role": "candidate",
+        "refit": "week",
+        "why": "Points model with eta=0.02 instead of the sealed 0.05; a value of the existing nfl_eval.POINTS_GRID; all other parameters as sealed.",
+        "extra": {
+          "points": {
+            "eta": 0.02
+          }
+        }
+      },
+      "provenance": {
+        "source": "manual",
+        "trial_id": null,
+        "commit": null,
+        "trial_decision": null,
+        "registered_by": "learning-phase2 I10 seed (Claude Sonnet 5.5); owner decision 2026-11-18: challengers now",
+        "registered_at": "2026-11-18T14:00:00Z",
+        "note": "Manual operator seed (docs/NFL_PLAN.md): one existing configurable parameter varied, recorded at the served cutoff at the served line. NFL serving is untouched. Expect insufficient evidence this season (about 17 games a week)."
+      },
+      "preregistered_n": null
+    },
+    {
+      "spec": {
+        "name": "nfl_points_eta10",
+        "sport": "nfl",
+        "family": "nfl_param",
+        "head": "spread+total+team_totals",
+        "features": "nfl_points_normal",
+        "role": "candidate",
+        "refit": "week",
+        "why": "Points model with eta=0.1 instead of the sealed 0.05; a value of the existing nfl_eval.POINTS_GRID; all other parameters as sealed.",
+        "extra": {
+          "points": {
+            "eta": 0.1
+          }
+        }
+      },
+      "provenance": {
+        "source": "manual",
+        "trial_id": null,
+        "commit": null,
+        "trial_decision": null,
+        "registered_by": "learning-phase2 I10 seed (Claude Sonnet 5.5); owner decision 2026-11-18: challengers now",
+        "registered_at": "2026-11-18T14:00:00Z",
+        "note": "Manual operator seed (docs/NFL_PLAN.md): one existing configurable parameter varied, recorded at the served cutoff at the served line. NFL serving is untouched. Expect insufficient evidence this season (about 17 games a week)."
+      },
+      "preregistered_n": null
+    }
+  ]
+}
