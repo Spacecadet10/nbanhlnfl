@@ -1,6 +1,7 @@
 """Step H weekly page (scripts/weekly_report.py): read-only, no interim look at the preregistered best-pick test (v4 section
 9), a sample size on every line, "too few to tell" below the scorecard report's threshold."""
 import hashlib
+import json
 import importlib.util
 import plistlib
 import re
@@ -25,9 +26,13 @@ def wr():
     return m
 
 
+COMMIT = 'ab' * 20
+
+
 @pytest.fixture(autouse=True)
 def isolated(tmp_path, monkeypatch):
     monkeypatch.setenv('NBA_DATA_DIR', str(tmp_path / 'data'))
+    monkeypatch.setenv('NBA_RELEASE_COMMIT', COMMIT)           # the code commit every recorded row carries
 
 
 H_OF = {0: {'H1': 1, 'H2': 1, 'H3': 0, 'H4': 0}, 1: {'H1': -1, 'H2': 1, 'H3': -1, 'H4': 0}}
@@ -87,7 +92,7 @@ def setup(tmp_path, n_cards, monkeypatch, m, repeats=()):
 def page(m, tmp_path, data, **kw):
     out = tmp_path / 'out'
     path = m.main(['--data-dir', str(data), '--ledger', str(tmp_path / 'ledger.sqlite'), '--out-dir', str(out),
-                   '--reviewed-at', REVIEWED, '--reviewed-recorder', SHA, '--now', '2026-12-31T00:00:00Z', *kw.get('extra', ())])
+                   '--reviewed-at', REVIEWED, '--reviewed-recorder', SHA, '--reviewed-commit', COMMIT, '--now', '2026-12-31T00:00:00Z', *kw.get('extra', ())])
     return Path(path).read_text()
 
 
@@ -222,7 +227,7 @@ def test_launch_agent_is_weekly_guarded_and_points_at_the_release_checkout():
     assert p['ProgramArguments'][1] == '/Users/andry/nba-predictor-delivery/scripts/weekly_report.py'
     assert '--ledger' in p['ProgramArguments'] and 'StartInterval' not in p
     args = p['ProgramArguments']
-    assert args[args.index('--review-config') + 1] == '/Users/andry/nba-predictor-delivery/scripts/weekly_report_review.json'
+    assert args[args.index('--review-config') + 1] == '/Users/andry/Desktop/nbanhlnfl/data/reports/weekly_report_review.json'
     raw = (ROOT / 'scripts' / 'launchd' / 'com.nba-predictor.weekly-report.plist').read_text()
     assert '023a26a4' not in raw and '23:52' not in raw                      # the values live in the config only
 
@@ -231,16 +236,22 @@ def test_review_time_and_recorder_come_from_the_config_unless_given(tmp_path, mo
     m = wr()
     at, shas = m.review_defaults()
     assert at == '2026-11-12T00:20:00Z'
-    assert shas == ['ff2d53ab3985fae70e9ee8214bf43ffe32f7d3c096bd697202f076f8a7c8de3e'] == [bpr.RECORDER_SHA256]
+    assert 'ff2d53ab3985fae70e9ee8214bf43ffe32f7d3c096bd697202f076f8a7c8de3e' in shas
+    # tripwire: a recorder change without a new review entry fails here
+    assert bpr.RECORDER_SHA256 in shas
+    assert {e['code_commit'] for e in shas[bpr.RECORDER_SHA256]} == {'61376d9b44e21bd48db36df0d11b2a9c8112eb5f',
+                                                                   '30d9005202f5eda741f2d577928a51e8b0a863f6',
+                                                                   '4dd665ddf61a0e9fe8b0be07221cb1b30a39ba10',
+                                                                   '7aed6bccf41173dfff42ba9e0800bcd63e14e8aa'}
     data, _, _ = setup(tmp_path, 3, monkeypatch, m)
     cfg = tmp_path / 'review.json'
-    cfg.write_text('{"reviewed_at": "%s", "reviewed_recorder_sha256": ["%s"]}' % (REVIEWED, SHA))
+    cfg.write_text(json.dumps({"reviews": [{"recorder_sha256": SHA, "code_commit": COMMIT, "reviewed_at": REVIEWED}]}))
     args = ['--data-dir', str(data), '--ledger', str(tmp_path / 'ledger.sqlite'), '--out-dir', str(tmp_path / 'o'),
             '--now', '2026-12-31T00:00:00Z']
     text = Path(m.main(args + ['--review-config', str(cfg)])).read_text()
-    assert 'counted n=3' in section(text, 1) and REVIEWED in text
+    assert 'counted n=3' in section(text, 1)
     text = Path(m.main(args + ['--review-config', str(tmp_path / 'none.json')])).read_text()
-    assert 'counted n=0' in section(text, 1) and 'not given' in text
+    assert 'counted n=0' in section(text, 1) and 'review config unavailable' in text
 
 
 def test_a_named_pick_carried_by_a_pre_t0_earliest_card_never_counts(tmp_path, monkeypatch):
@@ -267,4 +278,110 @@ def test_repeats_are_capped_per_market_so_winner_lines_are_not_crowded_out(tmp_p
 
 def test_launch_agent_logs_into_the_reports_folder():
     p = plistlib.loads((ROOT / 'scripts' / 'launchd' / 'com.nba-predictor.weekly-report.plist').read_bytes())
-    assert p['StandardOutPath'] == p['StandardErrorPath'] == '/Users/andry/Desktop/nba-predictor-sprint1/data/reports/weekly-report.log'
+    assert p['StandardOutPath'] == p['StandardErrorPath'] == '/Users/andry/Desktop/nbanhlnfl/data/reports/weekly-report.log'
+
+
+def test_an_unreviewed_release_commit_is_excluded_with_a_visible_explanation(tmp_path, monkeypatch):
+    """Fail closed and say so: rows of a code commit with no review entry never count, and the page names the commit and the
+    file to append to, instead of showing silent zeros."""
+    m = wr()
+    new_commit = 'abcdef0123456789abcdef0123456789abcdef01'
+    monkeypatch.setenv('NBA_RELEASE_COMMIT', new_commit)
+    data, _, _ = setup(tmp_path, 3, monkeypatch, m)
+    cfg = tmp_path / 'review.json'
+    cfg.write_text(json.dumps({"reviews": [{"recorder_sha256": SHA, "code_commit": '61376d9b44e21bd48db36df0d11b2a9c8112eb5f',
+                                           "reviewed_at": REVIEWED}]}))
+    text = Path(m.main(['--data-dir', str(data), '--ledger', str(tmp_path / 'ledger.sqlite'), '--out-dir', str(tmp_path / 'o'),
+                        '--review-config', str(cfg), '--now', '2026-12-31T00:00:00Z'])).read_text()
+    assert 'counted n=0' in section(text, 1)
+    assert 'code revision abcdef01 not reviewed' in section(text, 1)
+    assert f'append a review entry to {cfg}' in section(text, 1)
+    assert 'NBA: 3 games excluded' in section(text, 1)
+
+
+def test_rows_from_the_deliberately_unreviewed_commit_8d59134_are_excluded_with_the_visible_reason(tmp_path, monkeypatch):
+    m = wr()
+    monkeypatch.setenv('NBA_RELEASE_COMMIT', '8d59134caebdeb7d5fdf821dfec8da059db9c3db')
+    data, _, _ = setup(tmp_path, 3, monkeypatch, m)
+    args = ['--data-dir', str(data), '--ledger', str(tmp_path / 'ledger.sqlite'), '--out-dir', str(tmp_path / 'o'),
+            '--review-config', str(ROOT / 'scripts' / 'weekly_report_review.json'), '--now', '2026-12-31T00:00:00Z']
+    text = Path(m.main(args)).read_text()
+    assert 'counted n=0' in section(text, 1)
+    assert 'code revision 8d59134c not reviewed' in section(text, 1)
+
+
+@pytest.mark.parametrize("content", [None, "{not json"])
+def test_a_missing_or_unreadable_review_config_fails_closed_and_says_so(tmp_path, monkeypatch, content):
+    m = wr()
+    data, _, _ = setup(tmp_path, 3, monkeypatch, m)
+    cfg = tmp_path / 'operator_review.json'
+    if content is not None:
+        cfg.write_text(content)
+    text = Path(m.main(['--data-dir', str(data), '--ledger', str(tmp_path / 'ledger.sqlite'), '--out-dir', str(tmp_path / 'o'),
+                        '--review-config', str(cfg), '--now', '2026-12-31T00:00:00Z'])).read_text()
+    assert 'counted n=0' in section(text, 1)
+    assert f'review config unavailable: {cfg}' in text
+
+
+GOOD = {"recorder_sha256": SHA, "code_commit": COMMIT, "reviewed_at": REVIEWED}
+
+
+def _page_with_entry(tmp_path, monkeypatch, entry):
+    m = wr()
+    data, _, _ = setup(tmp_path, 3, monkeypatch, m)
+    cfg = tmp_path / 'review.json'
+    cfg.write_text(json.dumps({"reviews": [entry]}))
+    return Path(m.main(['--data-dir', str(data), '--ledger', str(tmp_path / 'ledger.sqlite'), '--out-dir', str(tmp_path / 'o'),
+                        '--review-config', str(cfg), '--now', '2026-12-31T00:00:00Z'])).read_text(), cfg
+
+
+def test_a_well_formed_entry_counts(tmp_path, monkeypatch):
+    text, cfg = _page_with_entry(tmp_path, monkeypatch, GOOD)
+    assert 'counted n=3' in section(text, 1) and f'review times per entry in {cfg}' in text
+
+
+@pytest.mark.parametrize("mutate, reason", [
+    (lambda e: e.pop("code_commit"), "code_commit"),
+    (lambda e: e.update(code_commit=""), "code_commit"),
+    (lambda e: e.update(code_commit=None), "code_commit"),                    # null is for the legacy recorder only
+    (lambda e: e.update(code_commit="61376d9b"), "code_commit"),
+    (lambda e: e.update(code_commit="A" * 40), "code_commit"),
+    (lambda e: e.update(reviewed_at="2026-11-18 03:00:00"), "reviewed_at"),
+    (lambda e: e.pop("reviewed_at"), "reviewed_at"),
+    (lambda e: e.update(recorder_sha256="abc"), "recorder_sha256"),
+])
+def test_an_invalid_review_entry_fails_closed_with_a_visible_line_not_a_crash(tmp_path, monkeypatch, mutate, reason):
+    entry = dict(GOOD)
+    mutate(entry)
+    text, _ = _page_with_entry(tmp_path, monkeypatch, entry)
+    assert 'counted n=0' in section(text, 1)
+    assert re.search(rf'invalid review entry #0: .*{reason}', text), text
+
+
+def test_the_command_line_override_needs_the_exact_code_commit(tmp_path, monkeypatch):
+    m = wr()
+    data, _, _ = setup(tmp_path, 3, monkeypatch, m)
+    base = ['--data-dir', str(data), '--ledger', str(tmp_path / 'ledger.sqlite'), '--out-dir', str(tmp_path / 'o'),
+            '--reviewed-at', REVIEWED, '--reviewed-recorder', SHA, '--now', '2026-12-31T00:00:00Z']
+    with pytest.raises(SystemExit):
+        m.main(base)
+    with pytest.raises(SystemExit):
+        m.main(base + ['--reviewed-commit', 'abc'])
+    assert 'counted n=3' in section(Path(m.main(base + ['--reviewed-commit', COMMIT])).read_text(), 1)
+
+
+def test_page_wording_names_games_and_soccer_outside_the_recorder(tmp_path, monkeypatch):
+    text = page(wr(), tmp_path, setup(tmp_path, 3, monkeypatch, wr())[0])
+    assert 'Counted cards need an independent review of their recorder and exact code commit' in text
+    assert 'Soccer cards are sent outside the best-pick recorder, so none is recorded or named' in text
+
+
+@pytest.mark.parametrize("content", ["[]", '"x"', "3", "null"])
+def test_a_review_config_that_is_not_an_object_fails_closed_with_a_visible_line(tmp_path, monkeypatch, content):
+    m = wr()
+    data, _, _ = setup(tmp_path, 3, monkeypatch, m)
+    cfg = tmp_path / 'review.json'
+    cfg.write_text(content)
+    text = Path(m.main(['--data-dir', str(data), '--ledger', str(tmp_path / 'ledger.sqlite'), '--out-dir', str(tmp_path / 'o'),
+                        '--review-config', str(cfg), '--now', '2026-12-31T00:00:00Z'])).read_text()
+    assert 'counted n=0' in section(text, 1) and 'invalid review config: top level is not an object' in text

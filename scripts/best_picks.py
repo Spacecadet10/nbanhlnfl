@@ -4,21 +4,23 @@ Telegram ledger and the sport stores read-only, changes nothing, sends nothing.
 
 Counted card (v4 section 1): the earliest sent card of its game; recorded live by a recorder whose stored prereg_sha256 is
 the v4 file's; sent at or after T0 for a game starting after T0; recorded at or after the recorder's independent review
-(--reviewed-at, the time written in HANDOFF.md) by a reviewed recorder version (--reviewed-recorder, its recorder_sha256;
-rows of any other version are excluded whole). Without --reviewed-at nothing counts.
+(--reviewed-at, the time written in HANDOFF.md) by a reviewed recorder version (--reviewed-recorder, its recorder_sha256)
+running a reviewed code commit (--reviewed-commit, 40 hex; rows of any other version or commit are excluded whole). Without --reviewed-at nothing counts.
 
 No interim looks (v4 section 9): until a sport's first 100 decided named picks are complete, only counts are printed
 (cards recorded, counted, named, decided). Then Tests A and B and the full-rate condition run once, exactly as v4
 section 7. Win counts only: no profit claim follows.
 
 Usage (from backend/, NBA_DATA_DIR set to the data folder):
-  python ../scripts/best_picks.py LEDGER --reviewed-at 2026-11-12T03:00:00Z --reviewed-recorder <sha256> [--now ...]
+  python ../scripts/best_picks.py LEDGER --reviewed-at 2026-11-12T03:00:00Z --reviewed-recorder <sha256> --reviewed-commit <40 hex> [--now ...]
 """
 import argparse
 import json
 import math
+import re
 import sqlite3
 import sys
+from typing import Optional
 from datetime import datetime, timedelta, timezone
 from fractions import Fraction
 from pathlib import Path
@@ -113,9 +115,53 @@ def grade(conn, forecast_id: int, now: datetime) -> tuple:
     return ('win' if real == side else 'loss'), seen_t
 
 
+LEGACY_RECORDER = 'ff2d53ab3985fae70e9ee8214bf43ffe32f7d3c096bd697202f076f8a7c8de3e'   # reviewed before commits were named
+
+
+HEX40, HEX64, STAMP = re.compile(r'[0-9a-f]{40}'), re.compile(r'[0-9a-f]{64}'), re.compile(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ')
+
+
+class ReviewConfigError(ValueError):
+    pass
+
+
+def check_entry(i: int, e) -> dict:
+    """One review entry, strictly: a full recorder sha256, a UTC reviewed_at, and the exact code commit (40 lowercase hex);
+    code_commit may be null only for the legacy recorder reviewed before commits were named."""
+    bad = lambda why: ReviewConfigError(f'invalid review entry #{i}: {why}')            # noqa: E731
+    if not isinstance(e, dict):
+        raise bad('not an object')
+    if not isinstance(e.get('recorder_sha256'), str) or not HEX64.fullmatch(e['recorder_sha256']):
+        raise bad('recorder_sha256 must be 64 lowercase hex characters')
+    if not isinstance(e.get('reviewed_at'), str) or not STAMP.fullmatch(e['reviewed_at']):
+        raise bad('reviewed_at must look like 2026-11-18T03:37:19Z')
+    if 'code_commit' not in e:
+        raise bad('code_commit is required (null only for the legacy recorder)')
+    if e['code_commit'] is None:
+        if e['recorder_sha256'] != LEGACY_RECORDER:
+            raise bad('code_commit is null, which is allowed only for the legacy recorder')
+    elif not isinstance(e['code_commit'], str) or not HEX40.fullmatch(e['code_commit']):
+        raise bad('code_commit must be 40 lowercase hex characters')
+    return {'reviewed_at': e['reviewed_at'], 'code_commit': e['code_commit']}
+
+
+def _review_gap(entries: list, row) -> Optional[str]:
+    """Why no entry covers the row (None when one does). An entry covers any commit only when it is the legacy recorder's
+    (code_commit null); every other entry names the exact commit."""
+    anywhere = lambda e: e.get('code_commit') is None and row['recorder_sha256'] == LEGACY_RECORDER  # noqa: E731
+    same = [e for e in entries if e.get('code_commit') == row['code_commit'] and row['code_commit'] or anywhere(e)]
+    if not same:
+        return 'code revision not reviewed'
+    return None if any(row['recorded_at'] >= e['reviewed_at'] for e in same) else 'recorded before the independent review'
+
+
 # ---- which cards count (v4 section 1) ------------------------------------------------------------------------------------
-def counted_cards(ledger, sport: str, reviewed_at, reviewed: set) -> dict:
-    """Every sent game card of the sport since T0, grouped by game, the earliest one deciding whether the game counts."""
+def counted_cards(ledger, sport: str, reviewed_at, reviewed) -> dict:
+    """Every sent game card of the sport since T0, grouped by game, the earliest one deciding whether the game counts.
+    `reviewed`: {recorder sha256: [{reviewed_at, code_commit}, ...]}, one
+    entry per (recorder, code commit) with its own review time (code_commit None = any commit): a row counts when an entry
+    of its recorder version names its code commit (or any) and was written at or before its recorded_at."""
+    entries = reviewed
     from app import telegram as tg
     rows = {r['delivery_key']: dict(r) for r in ledger.execute('SELECT * FROM best_picks WHERE sport=?', (sport,))} \
         if ledger.execute("SELECT 1 FROM sqlite_master WHERE name='best_picks'").fetchone() else {}
@@ -140,7 +186,7 @@ def counted_cards(ledger, sport: str, reviewed_at, reviewed: set) -> dict:
            'sent_without_row': sum(k not in rows for k, _, _ in sent),
            'sent_without_row_after_review': sum(k not in rows and reviewed_at is not None and at >= reviewed_at
                                                 for k, at, _ in sent),
-           'excluded': {}, 'cards': []}
+           'excluded': {}, 'unreviewed': {}, 'cards': []}
     for gid, cards in games.items():
         at, key = min(cards)
         r = rows.get(key)
@@ -150,11 +196,16 @@ def counted_cards(ledger, sport: str, reviewed_at, reviewed: set) -> dict:
                'preregistration hash differs' if r['prereg_sha256'] != bpr.PREREG_SHA256 else
                'no review time given' if reviewed_at is None else
                'recorded before the independent review' if r['recorded_at'] < reviewed_at else
-               'recorder version not reviewed' if r['recorder_sha256'] not in reviewed else
+               'recorder version not reviewed' if r['recorder_sha256'] not in entries else
+               gap if (gap := _review_gap(entries[r['recorder_sha256']], r)) else
                'sent before T0' if r['recorded_at'] < bpr.T0 else
                'game starts before T0' if not (r['tipoff_at'] and _t(r['tipoff_at']) > _t(bpr.T0)) else None)
         if why:
             out['excluded'][why] = out['excluded'].get(why, 0) + 1
+            if why == 'code revision not reviewed':       # which commits, so the report can ask for a review entry
+                out['unreviewed'].setdefault(why, set()).add(r['code_commit'] or 'unknown')
+            elif why == 'recorder version not reviewed':
+                out['unreviewed'].setdefault(why, set()).add(r['recorder_sha256'] or 'unknown')
         else:
             out['cards'].append(r)
     out['cards'].sort(key=lambda r: (r['recorded_at'], r['delivery_key']))
@@ -265,9 +316,20 @@ def main(argv=None) -> int:
     ap.add_argument('ledger')
     ap.add_argument('--reviewed-at', help="UTC time the recorder's independent review was written in HANDOFF.md")
     ap.add_argument('--reviewed-recorder', action='append', default=[], help='recorder_sha256 of a reviewed recorder')
+    ap.add_argument('--reviewed-commit', help='the exact (40 hex) code commit the review covers; required with the two options above')
     ap.add_argument('--now', help='evaluation time (default: now, UTC)')
     ap.add_argument('--store', action='append', default=[], help='sport=path (default: the data folder\'s store)')
     a = ap.parse_args(argv)
+    entries = {}
+    if a.reviewed_at is not None or a.reviewed_recorder or a.reviewed_commit:
+        if not (a.reviewed_at and a.reviewed_recorder and a.reviewed_commit):
+            ap.error('--reviewed-at, --reviewed-recorder and --reviewed-commit go together')
+        try:
+            for sha in a.reviewed_recorder:
+                entries.setdefault(sha, []).append(check_entry(0, {'recorder_sha256': sha, 'reviewed_at': a.reviewed_at,
+                                                                   'code_commit': a.reviewed_commit}))
+        except ReviewConfigError as exc:
+            ap.error(str(exc))
     now = _t(a.now) if a.now else datetime.now(timezone.utc)
     ledger = sqlite3.connect(f'file:{a.ledger}?mode=ro', uri=True)
     ledger.row_factory = sqlite3.Row
@@ -276,7 +338,7 @@ def main(argv=None) -> int:
     if a.reviewed_at is None:
         print('No independent review time given (--reviewed-at): no card counts yet.')
     for sport in SPORTS + ('nfl',):
-        info = counted_cards(ledger, sport, a.reviewed_at, set(a.reviewed_recorder))
+        info = counted_cards(ledger, sport, a.reviewed_at, entries)
         print(f"\n{sport.upper()}: game cards sent since T0 {info['sent']}; rows {info['rows']} (error rows "
               f"{info['error_rows']}); cards sent without a row {info['sent_without_row']} (after the review "
               f"{info['sent_without_row_after_review']}); rows without a sent card {info['rows_without_sent_card']}.")
