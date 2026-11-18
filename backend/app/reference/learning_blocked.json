@@ -6,7 +6,7 @@
       "Deep members (torch/keras MLPs) are skipped in the trainer environment and unverified; the combiner uses the other members",
       "NHL challengers are fitted but candidate_forecasts (CF) holds 0 rows: a shots data gap, so challengers are not recorded"
     ],
-    "ncaab": ["Learning (adaptive training and recording) is not implemented for NCAAB yet; only the frozen base model forecasts"],
+    "ncaab": ["Adaptive learning is not implemented for NCAAB and the served forecasts stay frozen (frozen decision 2026-11-17). Prospective challengers (weekly refits of the frozen calibration and sigmas, C1-C4) are implemented but not scheduled: no job is installed, so rows exist only after a manual learning_run"],
     "nfl": ["Learning is not implemented for NFL yet; only the frozen base model forecasts"],
     "soccer": ["Learning is not implemented for soccer yet; sealed models are served without retraining"]
   },

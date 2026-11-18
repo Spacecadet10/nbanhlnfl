@@ -89,7 +89,8 @@ def test_blocked_reasons_come_from_the_reference_file(env):
     assert row(m, "soccer", "asian_handicap")["blocked_reason"]
     assert any("deep" in x.lower() for x in row(m, "nba", "winner")["blocked_reason"])
     assert any("CF" in x or "challenger" in x.lower() for x in row(m, "nhl", "winner")["blocked_reason"])
-    assert row(m, "ncaab", "winner")["learning_implemented"] is False and row(m, "ncaab", "winner")["blocked_reason"]
+    assert row(m, "ncaab", "winner")["learning_implemented"] is True and "not scheduled" in " ".join(row(m, "ncaab", "winner")["blocked_reason"])
+    assert row(m, "nfl", "winner")["learning_implemented"] is False and row(m, "nfl", "winner")["blocked_reason"]
     assert ref["sports"]
 
 
@@ -184,3 +185,18 @@ def test_base_model_test_is_separate_from_settled_with_fit(env):
     assert row(m, "ncaab", "winner")["base_tested"]["state"] == "yes"
     assert row(m, "ncaab", "winner")["evaluated"]["state"] == "no"
     assert row(m, "nba", "winner")["base_tested"]["state"] == "unknown"
+
+
+def test_ncaab_challengers_are_implemented_never_scheduled_never_serving_and_trained_only_with_a_cache(env):
+    data, agents = env
+    m = lc.coverage(data, agents)
+    r = row(m, "ncaab", "spread")
+    assert r["learning_implemented"] is True and r["scheduled"]["state"] == "no" and "no job" in r["scheduled"]["detail"]
+    assert r["trained"]["state"] == "no" and r["recording_prospectively"]["state"] == "no" and r["forecasting_with_fits"]["state"] == "no"
+    cache = data / "research" / "challengers" / "ncaab"
+    cache.mkdir(parents=True)
+    (cache / "refit-2026-11-16-abc.json").write_text(json.dumps({"fits": {"all": {"sigmas": {}, "n": 3}}}))
+    m = lc.coverage(data, agents)
+    assert row(m, "ncaab", "spread")["trained"]["state"] == "yes" and row(m, "ncaab", "spread")["scheduled"]["state"] == "no"
+    assert row(m, "ncaab", "spread")["forecasting_with_fits"]["state"] == "no"
+    assert row(m, "nfl", "spread")["trained"]["state"] == "no"

@@ -9,6 +9,7 @@ import argparse
 import json
 import sqlite3
 import sys
+from pathlib import Path
 from typing import Optional
 
 from . import combine, config, learning_challengers as lc, markets
@@ -18,7 +19,25 @@ LABEL = ("PROSPECTIVE, NO CLAIM until the preregistered sample size is reached: 
 SIDE = {"a": 0, "mid": 1, "b": 2}
 
 
+def _served_ncaab(store, row) -> Optional[list]:
+    """NCAAB incumbent: the served near-tipoff forecast of the same game, market and exact line, the latest generated at or
+    before the challenger's cutoff (the winner: the stored near-tipoff win probability)."""
+    if row["market"] == "winner":
+        r = store.execute(
+            "SELECT p.home_win_prob FROM predictions p JOIN near_tipoff_forecasts n ON n.prediction_id = p.prediction_id "
+            "WHERE p.game_id=? AND p.run_type='live' AND n.tipoff_at=? AND p.generated_at<=? "
+            "ORDER BY p.generated_at DESC, p.prediction_id DESC LIMIT 1", (row["game_id"], row["tipoff_at"], row["cutoff_at"])).fetchone()
+        return None if r is None else [r[0], 0.0, 1 - r[0]]
+    r = store.execute(
+        "SELECT p_a, p_mid, p_b FROM market_forecasts WHERE game_id=? AND market=? AND line IS ? AND policy='near_tipoff' "
+        "AND run_type='live' AND tipoff_at=? AND generated_at<=? ORDER BY generated_at DESC, forecast_id DESC LIMIT 1",
+        (row["game_id"], row["market"], row["line"], row["tipoff_at"], row["cutoff_at"])).fetchone()
+    return None if r is None else list(r)
+
+
 def _incumbent(store, row) -> Optional[list]:
+    if row["policy_id"].startswith("ncaab-"):
+        return _served_ncaab(store, row)
     c = store.execute(
         "SELECT members, primary_name FROM research_cohorts WHERE game_id=? AND market=? AND line IS ? AND tipoff_at=? "
         "AND definition NOT LIKE '%:expanded-v1' AND generated_at<=? ORDER BY generated_at DESC, cohort_id DESC LIMIT 1",
@@ -94,9 +113,10 @@ def main(argv: Optional[list] = None) -> int:
     p = argparse.ArgumentParser(prog="python -m app.learning_eval")
     p.add_argument("--sport", choices=lc.SPORTS, required=True)
     p.add_argument("--json", action="store_true")
+    p.add_argument("--store", help="challenger store path (a rehearsal copy); the default is <data dir>/research/challengers.sqlite")
     a = p.parse_args(argv)
     src = config.data_dir() / f"{a.sport}.sqlite"
-    cc = lc.open_ro(lc.store_path())
+    cc = lc.open_ro(Path(a.store) if a.store else lc.store_path())
     if not src.is_file() or cc is None:
         out = {"label": LABEL, "groups": [], "note": "no challenger rows recorded yet" if cc is None else f"no {a.sport} store at {src}"}
     else:

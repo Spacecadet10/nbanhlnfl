@@ -94,6 +94,68 @@ def _learning_row(conn, sport: str, market: str, trainer: dict, defs: dict) -> d
     return out
 
 
+def _ncaab_states(data_dir: Path, market: str, store, challengers: dict) -> dict:
+    """NCAAB challenger states (learning_challengers/ncaab_challengers): implemented, but not scheduled and never serving.
+    `trained` is yes only when a refit cache with fitted values exists in the data directory being read; `recording` and
+    `evaluated` count challenger rows (settled ones need the NCAAB store); the served forecast stays frozen."""
+    no = lambda why: _s("no", why)
+    names = challengers["markets"].get(market)
+    if not names:
+        gone = no("no NCAAB challenger covers this market (C1-C4 cover winner, spread, total, team totals)")
+        return {"trained": gone, "scheduled": no("no job is installed for NCAAB challengers"), "recording_prospectively": gone,
+                "forecasting_with_fits": no("served NCAAB forecasts are frozen"), "evaluated": gone}
+    cache = Path(data_dir) / "research" / "challengers" / "ncaab"
+    fitted = []
+    for f in sorted(cache.glob("refit-*.json")):
+        try:
+            if any("sigmas" in v for v in json.loads(f.read_text())["fits"].values()):
+                fitted.append(f.name)
+        except (OSError, ValueError, KeyError, AttributeError):
+            continue
+    out = {"trained": _s("yes", f"{len(fitted)} weekly refit cache file(s) with fitted values; latest {fitted[-1]}") if fitted else
+           no("no refit cache with fitted values in this data directory (challengers are fitted at record time and cached)"),
+           "scheduled": no("no job is installed for NCAAB challengers: they are run by hand (learning_run)"),
+           "forecasting_with_fits": no("served NCAAB forecasts are frozen; challengers never serve")}
+    cc = learning_challengers_ro(data_dir)
+    if cc is None:
+        out["recording_prospectively"] = no("no challenger store in this data directory")
+        out["evaluated"] = no("no challenger rows to settle")
+        return out
+    try:
+        n = cc.execute("SELECT COUNT(*) FROM challenger_forecasts WHERE policy_id LIKE 'ncaab-%' AND market=?", (market,)).fetchone()[0]
+        ids = [r[0] for r in cc.execute("SELECT DISTINCT game_id FROM challenger_forecasts WHERE policy_id LIKE 'ncaab-%' AND market=?", (market,))]
+    except sqlite3.Error as exc:
+        cc.close()
+        u = _s("unknown", f"unknown: {exc}")
+        out["recording_prospectively"] = out["evaluated"] = u
+        return out
+    cc.close()
+    out["recording_prospectively"] = _s("yes", f"{n} challenger rows recorded for this market (separate store, before tip-off)") if n else \
+        no("no challenger rows recorded for this market")
+    settled = 0
+    if ids and store is not None and learning_ops.has_table(store, "games"):
+        settled = sum(store.execute("SELECT COUNT(*) FROM games WHERE status='final' AND game_id=?", (g,)).fetchone()[0] for g in ids)
+    out["evaluated"] = _s("yes", f"{settled} games with settled challenger rows (a count; no claim until the preregistered n)") if settled else \
+        no("no settled challenger row yet")
+    return out
+
+
+def learning_challengers_ro(data_dir: Path):
+    from . import learning_challengers
+    return learning_challengers.open_ro(Path(data_dir) / "research" / "challengers.sqlite")
+
+
+def _ncaab_challengers() -> dict:
+    """{'markets': {market: [challenger names]}} from the NCAAB policy files."""
+    from . import learning_challengers
+    out: dict = {}
+    for pol in learning_challengers.load_policies("ncaab"):
+        for c in pol.challengers:
+            for m in c.spec.extra["markets"]:
+                out.setdefault(m, []).append(c.spec.name)
+    return {"markets": out}
+
+
 def coverage(data_dir: Optional[Path] = None, folder: Optional[Path] = None) -> dict:
     data_dir = Path(data_dir) if data_dir else config.data_dir()
     folder = Path(folder) if folder else learning_ops.agents_dir()
@@ -103,6 +165,10 @@ def coverage(data_dir: Optional[Path] = None, folder: Optional[Path] = None) -> 
         learning = sport in LEARNING_SPORTS
         trainer = learning_ops.trainer(sport, folder)
         conn, mode = learning_ops.open_ro(data_dir, sport) if learning else (None, "not read: no learning for this sport")
+        ncaab_store = None
+        if sport == "ncaab":
+            ncaab_store, mode = learning_ops.open_ro(data_dir, sport)
+            ch = _ncaab_challengers()
         stores[sport] = mode
         defs = None
         if conn is not None:
@@ -125,18 +191,22 @@ def coverage(data_dir: Optional[Path] = None, folder: Optional[Path] = None) -> 
                             states = _learning_row(conn, sport, market, trainer, defs)
                         except sqlite3.Error as exc:
                             states = {k: _s("unknown", f"unknown: {exc}") for k in ("trained", "scheduled", "recording_prospectively", "forecasting_with_fits", "evaluated")}
+                elif sport == "ncaab":
+                    states = _ncaab_states(data_dir, market, ncaab_store, ch)
                 else:
                     no = _s("no", "learning is not implemented for this sport")
                     states = {"trained": no, "scheduled": no, "recording_prospectively": no, "forecasting_with_fits": no,
                               "evaluated": _s("no", "no fit exists, so no settled forecast carried one")}
                 ev = ref["base_evaluation"].get(key)
                 states["base_tested"] = _s(ev[0], f"base model only: {ev[1]}") if ev else _s("unknown", "base-model test not recorded here")
-                rows.append({"sport": sport, "market": market, "implemented": implemented, "learning_implemented": learning, **states,
+                rows.append({"sport": sport, "market": market, "implemented": implemented, "learning_implemented": learning or sport == "ncaab", **states,
                              "improved_prospectively": _s("not_established", "no preregistered prospective evaluation exists"),
                              "blocked_reason": [*ref["sports"].get(sport, []), *ref["markets"].get(key, [])]})
         finally:
             if conn is not None:
                 conn.close()
+            if ncaab_store is not None:
+                ncaab_store.close()
     return {"rows": rows, "stores": stores, "definitions": definitions, "trainer": {s: learning_ops.trainer(s, folder)["covers_sport"] for s in LEARNING_SPORTS},
             "note": ("Separate states: a market can be trained and scheduled without forecasting with fits. Nothing here claims "
                      "improvement. Blocked reasons are curated facts as of " + ref["source"].split(";")[0]) + "."}

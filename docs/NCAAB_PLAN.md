@@ -260,3 +260,17 @@ line of any kind except the 2026 DraftKings totals.
 Source probe 2026-11-17: 2026-11-17 68 D-I-group events (13 non-D-I team rows, 52 with DraftKings odds, 7 neutral);
 2025-03-20 16 NCAA Tournament games (neutral, season type 3); 2024-01-13 133 games (9 with OT); 2012-03-15 16 games.
 TheRundown sport 5: 39 events, 7 priced (moneyline/spread/total), 204 datapoints; market 94 empty.
+
+## Prospective challengers (increment I5, 2026-11-18)
+
+Serving stays frozen (`models/ncaab_frozen_decision.json`). `backend/app/ncaab_challengers.py` records challengers into the
+separate challenger store (`<NBA_DATA_DIR>/research/challengers.sqlite`, sport `ncaab`); it never writes the NCAAB store.
+Policy `ncaab-challengers-v1` (provenance `manual`): C1 weekly refit of the winner Platt calibration and the margin/total
+sigmas without the spent test seasons; C2 the same fitted on every season (owner decision 2026-11-18: allowed, evidence comes
+only from rows recorded before tip-off); C3 the total priced by the existing `college_eff` joint normal (no new model family);
+C4 team-total sigmas refit. Fits use only results with `result_available_at` at or before Monday 00:00 UTC of the cycle's week
+(walk-forward predictions of the frozen configs) and are cached under `research/challengers/ncaab/` by week and data
+fingerprint. Rows are recorded for the games the served near-tipoff cycle accepts (tip-off within two hours of `now`), at
+the line the served market forecast uses. `python -m app.learning_eval --sport ncaab` scores them at read time against the
+served forecast (log loss, Brier, settle rules of `markets.settle`); no claim until a preregistered n exists. Not scheduled:
+no job is installed; run by hand through `app.learning_run`.

@@ -24,7 +24,7 @@ from .db import utc_now
 
 POLICY_DIR = Path(__file__).parent / "reference" / "learning_policies"
 SOURCES = ("existing_pool", "autoresearch_trial", "manual")
-SPORTS = ("nba", "nhl")
+SPORTS = ("nba", "nhl", "ncaab")
 TRIAL_DECISIONS = ("keep", "discard", "crash", "invalid", "n/a")
 SPEC_FIELDS = {"name", "sport", "family", "head", "features", "role", "why", "refit", "extra"}
 PROVENANCE_FIELDS = ("source", "trial_id", "commit", "trial_decision", "registered_by", "registered_at", "note")
@@ -52,6 +52,9 @@ def _text(v) -> bool:
 
 
 def _spec(raw: dict, sport: str, source: str):
+    if sport == "ncaab":
+        from . import ncaab_challengers
+        return ncaab_challengers.spec(raw, sport)
     if not isinstance(raw, dict) or set(raw) - SPEC_FIELDS or not {"name", "sport", "family", "head", "features", "role", "why"} <= set(raw):
         raise PolicyError(f"spec fields must be within {sorted(SPEC_FIELDS)} and include name, sport, family, head, features, role, why")
     if raw["sport"] != sport:
@@ -187,6 +190,38 @@ def open_ro(path: Path) -> Optional[sqlite3.Connection]:
     return conn
 
 
+def append_rows(path: Path, pol, c, rows: list, *, definition: str, dataset_version: str, now: str, dry_run: bool, out: dict) -> None:
+    """Append one challenger's forecast rows (dicts: game_id, market, line, p, generated_at, tipoff_at) to the store, once per
+    (policy, spec, game, market, line): the first cutoff wins. Dry runs only count. `out` collects created/would_record/errors."""
+    store = open_ro(path) if dry_run else open_store(path)
+    try:
+        if store is not None and not dry_run:
+            store.execute("INSERT OR IGNORE INTO challenger_policies VALUES (?,?,?,?,?)",
+                          (pol.sha, pol.policy_id, pol.sport, json.dumps(pol.content, sort_keys=True), now))
+        for f in rows:
+            key = (pol.sha, c.spec_hash, f["game_id"], f["market"], f["line"])
+            if store is not None and store.execute(
+                    "SELECT 1 FROM challenger_forecasts WHERE policy_sha=? AND spec_hash=? AND game_id=? AND market=? AND line IS ?",
+                    key).fetchone():
+                out["already_recorded"] += 1
+            elif dry_run:
+                out["would_record"] += 1
+            else:
+                try:
+                    store.execute(
+                        "INSERT INTO challenger_forecasts (policy_id, policy_sha, spec_name, spec_json, spec_hash, definition, game_id, "
+                        "market, line, p_a, p_mid, p_b, cutoff_at, tipoff_at, generated_at, dataset_version, model_version, recorded_at) "
+                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (pol.policy_id, pol.sha, c.spec.name, c.spec_json, c.spec_hash, definition, f["game_id"], f["market"], f["line"],
+                         *f["p"], now, f["tipoff_at"], f["generated_at"], dataset_version, f"challenger:{c.spec.name}:{definition}", utc_now()))
+                    out["created"] += 1
+                except sqlite3.Error as exc:
+                    out["errors"][f"{c.spec.name}:{f['game_id']}:{f['market']}"] = f"{type(exc).__name__}: {exc}"
+    finally:
+        if store is not None:
+            store.close()
+
+
 # --- Recorder -------------------------------------------------------------------------------------------------------
 def record(conn, path: Path, *, policies: list, now: Optional[str] = None, lines: Optional[dict] = None, dry_run: bool = False) -> dict:
     """Challenger forecasts for games tipping within two hours of `now`. `conn` is the sport's store, used read-only (the
@@ -256,7 +291,7 @@ def main(argv: Optional[list] = None) -> int:
     r.add_argument("--now", help="fixed cutoff (UTC, for rehearsals and tests); default the clock. Needs --dry-run or --store")
     r.add_argument("--store", help="challenger store path (a rehearsal copy); the default is <data dir>/research/challengers.sqlite")
     a = p.parse_args(argv)
-    if a.now and not a.dry_run and not a.store:
+    if a.now and not a.dry_run and (not a.store or Path(a.store).resolve() == store_path().resolve()):
         print(json.dumps({"status": "refused", "reason": "--now backdates the cutoff: use --dry-run, or an explicit --store that is not the live store"}))
         return 2
     try:
@@ -270,7 +305,12 @@ def main(argv: Optional[list] = None) -> int:
         return 2
     conn = sqlite3.connect(f"{src.resolve().as_uri()}?mode=ro", uri=True)       # the sport store is never written
     conn.row_factory = sqlite3.Row
-    out = record(conn, Path(a.store) if a.store else store_path(), policies=policies, now=a.now, dry_run=a.dry_run)
+    if a.sport == "ncaab":
+        from . import ncaab_challengers
+        recorder = ncaab_challengers.record
+    else:
+        recorder = record
+    out = recorder(conn, Path(a.store) if a.store else store_path(), policies=policies, now=a.now, dry_run=a.dry_run)
     out.pop("skipped", None) if not out["skipped"] else None
     print(json.dumps(out, indent=2, sort_keys=True, default=str))
     return 0 if out["status"] in ("success", "partial") else 1
