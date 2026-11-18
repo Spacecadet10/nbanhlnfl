@@ -17,8 +17,9 @@
   odds) untouched; nbanhlnfl-03 owns the weekly-report recorder review (its failing test predates these releases).
 - Review (nbanhlnfl-03, Opus, read-only) of 3625462: (2) a failure while planning/writing the update could escape into run_once and
   stop every later card of the sport each run → FIXED 6b485aa (delivery 8d59134): planning/preparation is guarded; before any claim
-  it falls back to the previous card rules (tests: falls_back x2, missing probability). (1) OPEN, owner decision: the withdrawal also
-  fires when the original card is 'uncertain'/'sending'; scripts/best_picks.py counts only status='sent' cards, so such a game now
+  it falls back to the previous card rules (tests: falls_back x2, missing probability). (1) RESOLVED (owner: "Fix it first", relayed by nbanhlnfl-03): main 4d06dc6 → delivery
+  7aed6bc withdraws only a 'sent' original; an uncertain/sending original gets the previous replacement card. Was: the withdrawal also
+  fired when the original card was 'uncertain'/'sending'; scripts/best_picks.py counts only status='sent' cards, so such a game now
   has no sent card in the best-pick record (before, the second full card was its earliest sent card). Options: require a 'sent'
   original (uncertain originals get the old second card) or keep the update and accept the recorder effect. 3625462 and 8d59134
   rows are excluded from the weekly report until reviewed.
