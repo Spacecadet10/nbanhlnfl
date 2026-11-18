@@ -683,3 +683,11 @@ def test_a_trials_tmp_dir_is_deleted_after_the_trial_but_its_logs_stay(env):
     tdir = env["root"] / "trials" / rec["trial_id"]
     assert (tdir / "run.log").is_file() and (tdir / "sandbox.sb").is_file()
     assert not (tdir / "tmp").exists()
+
+
+def test_the_search_size_is_in_the_record_the_summary_and_results_tsv_labelled_uncorrected(env):
+    rec = ar.run_trial("nba", env["exp"], env["ws"])
+    assert rec["search"] == {"distinct_train_py": 1, "markets_per_trial": 5, "uncorrected": True}
+    assert "uncorrected" in ar.summary(rec) and "distinct_train_py:   1" in ar.summary(rec)
+    head, row = (env["root"] / "results.tsv").read_text().splitlines()[:2]
+    assert head.split("\t")[-2:] == ["distinct_train_py_uncorrected", "markets_per_trial"] and row.split("\t")[-2:] == ["1", "5"]

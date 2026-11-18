@@ -110,3 +110,15 @@ def test_no_absolute_paths_are_exposed(client, monkeypatch, tmp_path):
                                         "report": str(exp / "agent" / "runs" / "r1" / "report.json")}])
     monkeypatch.setenv("NBA_AUTORESEARCH_DIR", str(exp))
     assert str(tmp_path) not in client.get("/api/research/autoresearch").text
+
+
+def test_the_search_size_is_reported_and_labelled_uncorrected(client, monkeypatch, tmp_path):
+    exp = tmp_path / "exp"
+    monkeypatch.setenv("NBA_AUTORESEARCH_DIR", str(exp))
+    _w(exp / "p" / "nhl" / "protocol.json", {"protocol_id": "p", "sport": "nhl", "registered_at": "2026-10-14T10:00:00Z",
+                                             "start_incumbent": {"reg3": {"member": "a"}, "winner": {"member": "b"}}})
+    _w(exp / "p" / "nhl" / "trials.jsonl", [{"event": "started", "trial_id": "t1", "train_sha256": "aa"},
+                                            {"event": "started", "trial_id": "t2", "train_sha256": "bb"},
+                                            {"event": "started", "trial_id": "t3", "train_sha256": "aa"}])
+    s = client.get("/api/research/autoresearch").json()["sports"]["nhl"]
+    assert s["search"] == {"distinct_train_py": 2, "markets_per_trial": 2, "uncorrected": True}

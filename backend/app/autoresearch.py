@@ -920,13 +920,15 @@ def _tsv(root: Path, rec: dict) -> None:
     """upstream's results.tsv (commit, metric, memory, status, description), with sport and the kept markets' deltas."""
     p = root / "results.tsv"
     if not p.is_file():
-        p.write_text("commit\tsport\tkept_vs_incumbent\tpeak_rss_gb\tstatus\tdescription\n")
+        p.write_text("commit\tsport\tkept_vs_incumbent\tpeak_rss_gb\tstatus\tdescription\t"
+                     "distinct_train_py_uncorrected\tmarkets_per_trial\n")
     kept = [f"{m}:{s['vs_incumbent']['mean']:+.5f}" for m, s in (rec.get("markets") or {}).items() if s.get("decision") == "keep"]
     status = rec["status"] + (f" (cached {rec['cached_from']})" if rec.get("cached_from") else "")
     with p.open("a") as fh:
         fh.write(f"{rec['commit'][:7]}\t{rec['sport']}\t{','.join(kept) or '-'}\t"
                  f"{(rec.get('resources') or {}).get('max_rss_gb', 0.0):.2f}\t{status}\t"
-                 f"{rec.get('description', '').replace(chr(9), ' ')}\n")
+                 f"{rec.get('description', '').replace(chr(9), ' ')}\t"
+                 f"{(rec.get('search') or {}).get('distinct_train_py', '')}\t{(rec.get('search') or {}).get('markets_per_trial', '')}\n")
 
 
 def _finish(root: Path, rec: dict) -> dict:
@@ -1040,8 +1042,10 @@ def run_trial(sport: str, exp_root: Path, workspace: Path, description: str = ""
                        "data": {"snapshot": meta["snapshot"]["sha256"], "cache": meta["cache"]["sha256"],
                                 "dataset_version": meta["dataset_version"]},
                        "cutoff": PROTOCOL["cutoff"], "attempt": len(prior) + 1})
+        n_trials = len({r["train_sha256"] for r in _records(root) if r["event"] == "started"})
         rec = {**base, "event": "finished", "description": description, "train_sha256": state["train_sha256"], "seed": seed,
-               "incumbents": inc_state}
+               "incumbents": inc_state,        # the size of the search so far (validation seasons), never corrected for
+               "search": {"distinct_train_py": n_trials, "markets_per_trial": len(sports.SPORTS[sport].markets), "uncorrected": True}}
         problems = [f"{f} differs from the registered protected file" for f, h in state["protected"].items()
                     if h != meta["protected"][f]]
         extra = [f for f in state["changed"] if f not in (EDITABLE, *PROTECTED_WORKSPACE)]
@@ -1067,7 +1071,6 @@ def run_trial(sport: str, exp_root: Path, workspace: Path, description: str = ""
             markets[market] = score_market(data, market, cand, inc[market], scored) | {"spec": res["markets"].get(market, {}).get("spec")}
             agree[market] = agreement(data, market, cand, scored)
         kept = [m for m, s in markets.items() if s["decision"] == "keep"]
-        n_trials = len({r["train_sha256"] for r in _records(root) if r["event"] == "started"})
         rec |= {"status": "keep" if kept else "discard", "markets": markets, "agreement": agree, "specs": res["specs"],
                 "fits": res["fits"], "predictions": str(packed), "finished_at": _now(),
                 "reason": f"kept in {kept} (vs the incumbent; exploratory)" if kept else
@@ -1088,6 +1091,10 @@ def summary(rec: dict) -> str:
         lines.append(f"market_{m}: {s['decision']} coverage={s['forecast']}/{s['cohort']} "
                      f"delta={d.get('mean', float('nan')):+.5f} ci95={d.get('ci95')} vs={s['incumbent']} "
                      f"(vs primary {p.get('mean', float('nan')):+.5f})")
+    srch = rec.get("search") or {}
+    if srch:
+        lines += [f"distinct_train_py:   {srch['distinct_train_py']} (uncorrected: every kept result is one of this many looks)",
+                  f"markets_per_trial:   {srch['markets_per_trial']} (uncorrected)"]
     res = rec.get("resources") or {}
     lines += [f"wall_seconds:     {res.get('wall_s')}", f"peak_rss_gb:      {res.get('max_rss_gb')}",
               f"reason:           {rec.get('reason')}"]
