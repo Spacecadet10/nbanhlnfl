@@ -1,3 +1,23 @@
+## Pick withdrawn update + unconfirmed deliveries — RELEASED to delivery 3625462 — Claude (lead), Nov 18, 2026 ~03:20Z
+- Owner decision: when a sent pick becomes "No supported pick" after a re-forecast, send AT MOST ONE text update "PROP51 UPDATE ·
+  <SPORT> … Pick withdrawn" (original pick + send time, reason, What changed: original forecast #id/label/line/% → current forecast),
+  replying to the original message when its message_id is known, instead of a second full card (the real cases: SHSU@WYO 01:19Z,
+  UCI@STAN 01:57Z msg 599). Key = 'pick-withdrawn-v1:'+sha(original key) through the normal deliver() claim, so rerun/crash/
+  uncertain never duplicates. No withdrawal when a no-pick card already followed the original. Audit: append-only
+  pick_withdrawals table (ledger). Outcome 'withdrawn' writes no published/best-pick rows. Card keys/identity unchanged.
+  Code: telegram.withdrawal_plan/withdrawal_message/deliver_withdrawal; tests/test_pick_withdrawn.py (15, fake bot).
+- Owner ruling: message-id gaps alone do not confirm delivery. published_picks.load ignores basis uncertain_resolved_message_id_gap
+  (43 rows, 11 cards; rows kept, append-only). The 14 export-confirmed cards stay linked. The 4 newest uncertain deliveries
+  (01:02:05Z DAL@VGK, UCI@STAN, SEA@CBU; 01:19:40Z SHSU@WYO) stay 'uncertain': error "Telegram response not confirmed" (15 s
+  read timeout under load), no message_id, and the only Telegram export is Nov 16. Needs a Telegram Desktop JSON export of Nov 17-18
+  to resolve. Uncertain rows are never resent automatically (deliver(): any non-'retry' row → already_recorded).
+- Release: main 89138f7..077fffe pushed; delivery 4dd665d → 3625462 (api-delivery restarted; no frontend change). Trial on
+  delivery: 310 passed + 2 env-only (pass unset); fake-bot run_once deployed vs new identical, 0 sends. Live after switch: runs ok,
+  pick_withdrawals created (0 rows), no tracebacks. Recorder path (best_pick_record, threshold_overview, lineup, availability,
+  odds) untouched; nbanhlnfl-03 owns the weekly-report recorder review (its failing test predates these releases).
+- PENDING natural observations: first real "Pick withdrawn" update; DNB "App DNB win chance, excluding draws" on a sent card; a real
+  push or void on a sent card's record.
+
 ## Card release follow-up: DNB labels, sent-card links, ops checks — RELEASED to delivery 4dd665d — Claude (lead), Nov 18, 2026 ~02:30Z
 - Released: main fc20f50..c85d034 pushed; delivery 30d9005 → 4dd665ddf61a0e9fe8b0be07221cb1b30a39ba10 (same diff without HANDOFF.md),
   frontend rebuilt, api-delivery + web kickstarted. Changed: backend/app/{soccer_markets,soccer_record,tickets,telegram,telegram_card}.py,
