@@ -634,3 +634,52 @@ def test_the_real_providers_record_objects_are_read_like_dicts(tmp_path):
     for p in nhl['picks']:
         p['percentage_history'] = real_record('nhl', p['market'], p['percentage_history']['side'])
     assert by_id(picture(c, nhl, 'nhl'))[2]['h']['H5a'] == 1
+
+
+# ---- review entries: per recorder version, from a time, for named code commits (weekly-report fix, 2026-11-18) ----------
+SHA_A = 'ff2d53ab3985fae70e9ee8214bf43ffe32f7d3c096bd697202f076f8a7c8de3e'
+SHA_B = '7cc3e6e1befef5206975dd580a278f6fd4184329d8b400e437e94d1d35e01000'
+COMMIT_B = '61376d9b44e21bd48db36df0d11b2a9c8112eb5f'
+ENTRIES = {SHA_A: [{'reviewed_at': '2026-11-12T00:20:00Z', 'code_commits': None}],
+           SHA_B: [{'reviewed_at': '2026-11-18T00:35:08Z', 'code_commits': [COMMIT_B]}]}
+
+
+def one_row(tmp_path, monkeypatch, sha, commit, at):
+    monkeypatch.setattr(bpr, 'RECORDER_SHA256', sha)
+    monkeypatch.setenv('NBA_RELEASE_COMMIT', commit)
+    cards, _ = cards_for(1)
+    path = ledger_with(tmp_path, [(cards[0][0], cards[0][1], at, cards[0][3], 0, 1, .6, .6)])
+    led = sqlite3.connect(path)
+    led.row_factory = sqlite3.Row
+    return led
+
+
+def counted(led):
+    m = rep_mod()
+    info = m.counted_cards(led, 'nba', '2026-11-12T00:20:00Z', ENTRIES)
+    return len(info['cards']), info['excluded']
+
+
+def test_a_row_before_its_recorders_review_is_excluded(tmp_path, monkeypatch):
+    led = one_row(tmp_path, monkeypatch, SHA_B, COMMIT_B, '2026-11-17T23:45:48Z')
+    assert counted(led) == (0, {'recorded before the independent review': 1})
+
+
+def test_a_row_after_its_review_with_the_reviewed_commit_counts(tmp_path, monkeypatch):
+    led = one_row(tmp_path, monkeypatch, SHA_B, COMMIT_B, '2026-11-18T01:00:00Z')
+    assert counted(led) == (1, {})
+
+
+def test_a_row_after_its_review_with_another_commit_is_excluded(tmp_path, monkeypatch):
+    led = one_row(tmp_path, monkeypatch, SHA_B, 'f' * 40, '2026-11-18T01:00:00Z')
+    assert counted(led) == (0, {'code revision not reviewed': 1})
+
+
+def test_the_legacy_entry_counts_any_commit_after_its_time(tmp_path, monkeypatch):
+    led = one_row(tmp_path, monkeypatch, SHA_A, 'f' * 40, '2026-11-16T00:00:00Z')
+    assert counted(led) == (1, {})
+
+
+def test_an_unlisted_recorder_is_not_reviewed(tmp_path, monkeypatch):
+    led = one_row(tmp_path, monkeypatch, '0' * 64, COMMIT_B, '2026-11-18T01:00:00Z')
+    assert counted(led) == (0, {'recorder version not reviewed': 1})

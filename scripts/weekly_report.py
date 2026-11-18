@@ -56,12 +56,20 @@ REVIEW_CONFIG = HERE / 'weekly_report_review.json'
 
 
 def review_defaults(path=REVIEW_CONFIG) -> tuple:
-    """(reviewed_at or None, [recorder sha256, ...]) from the review config; (None, []) when it is absent."""
+    """(earliest reviewed_at or None, {recorder sha256: [{reviewed_at, code_commits}, ...]}) from the review config's
+    "reviews" list (a legacy single reviewed_at + reviewed_recorder_sha256 list is read as entries without code_commits);
+    (None, {}) when the file is absent."""
     p = Path(path)
     if not p.is_file():
-        return None, []
+        return None, {}
     cfg = json.loads(p.read_text())
-    return cfg.get('reviewed_at'), list(cfg.get('reviewed_recorder_sha256') or [])
+    reviews = cfg.get('reviews') or [{'recorder_sha256': sha, 'reviewed_at': cfg.get('reviewed_at')}
+                                     for sha in cfg.get('reviewed_recorder_sha256') or []]
+    out = {}
+    for e in reviews:
+        out.setdefault(e['recorder_sha256'], []).append(
+            {'reviewed_at': e['reviewed_at'], 'code_commits': list(e.get('code_commits') or []) or None})
+    return min((e['reviewed_at'] for v in out.values() for e in v), default=None), out
 
 # H item: (sport, plain meaning of +1, of 0, of -1, the two values compared: better first)
 H_ITEMS = {
@@ -156,7 +164,7 @@ def section_best(states: dict) -> list:
     for sport in SPORTS:
         st, S = states[sport], sport.upper()
         if sport == 'soccer':
-            lines.append('- SOCCER: the card job sends no soccer cards, so nothing is recorded or named (n=0).')
+            lines.append('- SOCCER: the best-pick recorder covers NBA and NHL only, so no soccer pick is recorded or named (n=0).')
             continue
         if st['error']:
             lines.append(f"- {S}: {st['error']}; counts unknown (n=0 shown).")
@@ -335,7 +343,7 @@ def sr_path(data_dir: Path, sport: str) -> Path:
 
 
 # ---- page ---------------------------------------------------------------------------------------------------------------
-def build(data_dir: Path, ledger_path, now: datetime, reviewed_at, reviewed: set) -> str:
+def build(data_dir: Path, ledger_path, now: datetime, reviewed_at, reviewed) -> str:
     ledger = None
     try:
         if ledger_path and Path(ledger_path).is_file():
@@ -401,7 +409,7 @@ def main(argv=None) -> str:
             raise SystemExit('release guard: the weekly report on live data requires the clean release checkout')
     out_dir = check_out_dir(a.out_dir or Path(data_dir) / 'reports')
     now = _t(a.now) if a.now else datetime.now(timezone.utc).replace(microsecond=0)
-    text = build(data_dir, a.ledger, now, a.reviewed_at, set(a.reviewed_recorder))
+    text = build(data_dir, a.ledger, now, a.reviewed_at, a.reviewed_recorder if isinstance(a.reviewed_recorder, dict) else set(a.reviewed_recorder))
     out_dir.mkdir(parents=True, exist_ok=True)
     target = out_dir / f'weekly-{now:%Y-%m-%d}.md'
     tmp = target.with_suffix('.md.tmp')

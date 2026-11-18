@@ -7,7 +7,7 @@
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>NBA_DATA_DIR</key>
-		<string>/Users/andry/Desktop/nba-predictor-sprint1/data</string>
+		<string>/Users/andry/Desktop/nbanhlnfl/data</string>
 		<key>NBA_RELEASE_GUARD</key>
 		<string>1</string>
 		<key>NBA_RELEASE_ROOT</key>
@@ -30,7 +30,7 @@
 		<string>/Users/andry/nba-predictor-delivery/backend/.venv/bin/python</string>
 		<string>/Users/andry/nba-predictor-delivery/scripts/weekly_report.py</string>
 		<string>--ledger</string>
-		<string>/Users/andry/Desktop/nba-predictor-sprint1/.telegram-delivery.sqlite</string>
+		<string>/Users/andry/Desktop/nbanhlnfl/.telegram-delivery.sqlite</string>
 		<string>--review-config</string>
 		<string>/Users/andry/nba-predictor-delivery/scripts/weekly_report_review.json</string>
 	</array>
@@ -46,9 +46,9 @@
 		<integer>0</integer>
 	</dict>
 	<key>StandardErrorPath</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/reports/weekly-report.log</string>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/reports/weekly-report.log</string>
 	<key>StandardOutPath</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/reports/weekly-report.log</string>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/reports/weekly-report.log</string>
 	<key>WorkingDirectory</key>
 	<string>/Users/andry/nba-predictor-delivery/backend</string>
 </dict>

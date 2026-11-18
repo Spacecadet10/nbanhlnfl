@@ -231,7 +231,10 @@ def test_review_time_and_recorder_come_from_the_config_unless_given(tmp_path, mo
     m = wr()
     at, shas = m.review_defaults()
     assert at == '2026-11-12T00:20:00Z'
-    assert shas == ['ff2d53ab3985fae70e9ee8214bf43ffe32f7d3c096bd697202f076f8a7c8de3e'] == [bpr.RECORDER_SHA256]
+    assert 'ff2d53ab3985fae70e9ee8214bf43ffe32f7d3c096bd697202f076f8a7c8de3e' in shas
+    # tripwire: a recorder change without a new review entry fails here
+    assert bpr.RECORDER_SHA256 in shas
+    assert shas[bpr.RECORDER_SHA256][0]['code_commits'] == ['61376d9b44e21bd48db36df0d11b2a9c8112eb5f']
     data, _, _ = setup(tmp_path, 3, monkeypatch, m)
     cfg = tmp_path / 'review.json'
     cfg.write_text('{"reviewed_at": "%s", "reviewed_recorder_sha256": ["%s"]}' % (REVIEWED, SHA))
@@ -267,4 +270,4 @@ def test_repeats_are_capped_per_market_so_winner_lines_are_not_crowded_out(tmp_p
 
 def test_launch_agent_logs_into_the_reports_folder():
     p = plistlib.loads((ROOT / 'scripts' / 'launchd' / 'com.nba-predictor.weekly-report.plist').read_bytes())
-    assert p['StandardOutPath'] == p['StandardErrorPath'] == '/Users/andry/Desktop/nba-predictor-sprint1/data/reports/weekly-report.log'
+    assert p['StandardOutPath'] == p['StandardErrorPath'] == '/Users/andry/Desktop/nbanhlnfl/data/reports/weekly-report.log'
