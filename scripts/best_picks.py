@@ -19,6 +19,7 @@ import json
 import math
 import sqlite3
 import sys
+from typing import Optional
 from datetime import datetime, timedelta, timezone
 from fractions import Fraction
 from pathlib import Path
@@ -113,14 +114,22 @@ def grade(conn, forecast_id: int, now: datetime) -> tuple:
     return ('win' if real == side else 'loss'), seen_t
 
 
+def _review_gap(entries: list, row) -> Optional[str]:
+    """Why no entry covers the row (None when one does)."""
+    same = [e for e in entries if not e.get('code_commit') or e['code_commit'] == row['code_commit']]
+    if not same:
+        return 'code revision not reviewed'
+    return None if any(row['recorded_at'] >= e['reviewed_at'] for e in same) else 'recorded before the independent review'
+
+
 # ---- which cards count (v4 section 1) ------------------------------------------------------------------------------------
 def counted_cards(ledger, sport: str, reviewed_at, reviewed) -> dict:
     """Every sent game card of the sport since T0, grouped by game, the earliest one deciding whether the game counts.
-    `reviewed`: recorder sha256 values (all reviewed at `reviewed_at`), or {sha256: [{reviewed_at, code_commits}, ...]}: a
-    row counts when an entry of its recorder version is at or before its recorded_at and names its code commit (an entry
-    without code_commits covers every commit)."""
+    `reviewed`: recorder sha256 values (all reviewed at `reviewed_at`), or {sha256: [{reviewed_at, code_commit}, ...]}, one
+    entry per (recorder, code commit) with its own review time (code_commit None = any commit): a row counts when an entry
+    of its recorder version names its code commit (or any) and was written at or before its recorded_at."""
     entries = reviewed if isinstance(reviewed, dict) else {
-        sha: [{'reviewed_at': reviewed_at, 'code_commits': None}] for sha in reviewed}
+        sha: [{'reviewed_at': reviewed_at, 'code_commit': None}] for sha in reviewed}
     from app import telegram as tg
     rows = {r['delivery_key']: dict(r) for r in ledger.execute('SELECT * FROM best_picks WHERE sport=?', (sport,))} \
         if ledger.execute("SELECT 1 FROM sqlite_master WHERE name='best_picks'").fetchone() else {}
@@ -156,11 +165,7 @@ def counted_cards(ledger, sport: str, reviewed_at, reviewed) -> dict:
                'no review time given' if reviewed_at is None else
                'recorded before the independent review' if r['recorded_at'] < reviewed_at else
                'recorder version not reviewed' if r['recorder_sha256'] not in entries else
-               'recorded before the independent review'
-               if not [e for e in entries[r['recorder_sha256']] if r['recorded_at'] >= e['reviewed_at']] else
-               'code revision not reviewed'
-               if not [e for e in entries[r['recorder_sha256']] if r['recorded_at'] >= e['reviewed_at']
-                       and (not e.get('code_commits') or r['code_commit'] in e['code_commits'])] else
+               gap if (gap := _review_gap(entries[r['recorder_sha256']], r)) else
                'sent before T0' if r['recorded_at'] < bpr.T0 else
                'game starts before T0' if not (r['tipoff_at'] and _t(r['tipoff_at']) > _t(bpr.T0)) else None)
         if why:

@@ -1,18 +1,26 @@
 {
-  "note": "Best-pick recorder independent reviews (HANDOFF.md), read by scripts/weekly_report.py. A row counts only when an entry exists for its recorder_sha256 (app.best_pick_record.RECORDER_SHA256), it was recorded at or after that entry's reviewed_at, and its code_commit is in the entry's code_commits (an entry without code_commits covers every commit). Forward only: nothing recorded before an entry counts. Every new delivery release (a new code commit) or recorder change needs a new appended entry before its rows count. 023a26a4 (released 23:49Z Nov 11) was defective (every live row an error) and is excluded whole.",
+  "note": "Best-pick recorder independent reviews (HANDOFF.md), read by scripts/weekly_report.py. A row counts only when an entry exists for its recorder_sha256 (app.best_pick_record.RECORDER_SHA256), its code_commit is the entry's code_commit (null = every commit), and it was recorded at or after that entry's reviewed_at (one entry per recorder and code commit, each with its own review time). Forward only: nothing recorded before an entry counts. Every new delivery release (a new code commit) or recorder change needs a new appended entry before its rows count. 023a26a4 (released 23:49Z Nov 11) was defective (every live row an error) and is excluded whole.",
   "reviews": [
     {
       "recorder_sha256": "ff2d53ab3985fae70e9ee8214bf43ffe32f7d3c096bd697202f076f8a7c8de3e",
+      "code_commit": null,
       "reviewed_at": "2026-11-12T00:20:00Z",
       "reviewer": "independent review, HANDOFF.md (ff2d53ab reviewed 2026-11-12T00:16Z)",
       "note": "legacy entry: any commit"
     },
     {
       "recorder_sha256": "7cc3e6e1befef5206975dd580a278f6fd4184329d8b400e437e94d1d35e01000",
+      "code_commit": "61376d9b44e21bd48db36df0d11b2a9c8112eb5f",
       "reviewed_at": "2026-11-18T00:35:08Z",
-      "code_commits": ["61376d9b44e21bd48db36df0d11b2a9c8112eb5f"],
       "reviewer": "two independent Opus reviews",
       "note": "file-neutral vs ff2d53ab (commit e26474f only moved winner_quote coverage); review covers delivery 61376d9b including the NBA injury suffix-name parser change (00db524), accepted as the current protocol going forward"
+    },
+    {
+      "recorder_sha256": "7cc3e6e1befef5206975dd580a278f6fd4184329d8b400e437e94d1d35e01000",
+      "code_commit": "30d9005202f5eda741f2d577928a51e8b0a863f6",
+      "reviewed_at": "2026-11-18T01:03:20Z",
+      "reviewer": "independent Opus review",
+      "note": "row content and timing equivalent to 61376d9b; caveat: new unguarded card-formatting code could rarely change whether a card is sent (not row content)"
     }
   ]
 }

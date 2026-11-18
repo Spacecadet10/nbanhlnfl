@@ -640,8 +640,10 @@ def test_the_real_providers_record_objects_are_read_like_dicts(tmp_path):
 SHA_A = 'ff2d53ab3985fae70e9ee8214bf43ffe32f7d3c096bd697202f076f8a7c8de3e'
 SHA_B = '7cc3e6e1befef5206975dd580a278f6fd4184329d8b400e437e94d1d35e01000'
 COMMIT_B = '61376d9b44e21bd48db36df0d11b2a9c8112eb5f'
-ENTRIES = {SHA_A: [{'reviewed_at': '2026-11-12T00:20:00Z', 'code_commits': None}],
-           SHA_B: [{'reviewed_at': '2026-11-18T00:35:08Z', 'code_commits': [COMMIT_B]}]}
+COMMIT_C = '30d9005202f5eda741f2d577928a51e8b0a863f6'
+ENTRIES = {SHA_A: [{'reviewed_at': '2026-11-12T00:20:00Z', 'code_commit': None}],
+           SHA_B: [{'reviewed_at': '2026-11-18T00:35:08Z', 'code_commit': COMMIT_B},
+                   {'reviewed_at': '2026-11-18T01:03:20Z', 'code_commit': COMMIT_C}]}
 
 
 def one_row(tmp_path, monkeypatch, sha, commit, at):
@@ -683,3 +685,10 @@ def test_the_legacy_entry_counts_any_commit_after_its_time(tmp_path, monkeypatch
 def test_an_unlisted_recorder_is_not_reviewed(tmp_path, monkeypatch):
     led = one_row(tmp_path, monkeypatch, '0' * 64, COMMIT_B, '2026-11-18T01:00:00Z')
     assert counted(led) == (0, {'recorder version not reviewed': 1})
+
+
+def test_two_commits_of_one_recorder_each_count_only_from_their_own_review_time(tmp_path, monkeypatch):
+    assert counted(one_row(tmp_path, monkeypatch, SHA_B, COMMIT_C, '2026-11-18T01:02:09Z')) == (
+        0, {'recorded before the independent review': 1})        # after B's time, but C is reviewed only from 01:03:20Z
+    assert counted(one_row((tmp_path / 'c').mkdir() or tmp_path / 'c', monkeypatch, SHA_B, COMMIT_C, '2026-11-18T01:10:00Z')) == (1, {})
+    assert counted(one_row((tmp_path / 'b').mkdir() or tmp_path / 'b', monkeypatch, SHA_B, COMMIT_B, '2026-11-18T01:10:00Z')) == (1, {})

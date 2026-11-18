@@ -56,7 +56,7 @@ REVIEW_CONFIG = HERE / 'weekly_report_review.json'
 
 
 def review_defaults(path=REVIEW_CONFIG) -> tuple:
-    """(earliest reviewed_at or None, {recorder sha256: [{reviewed_at, code_commits}, ...]}) from the review config's
+    """(earliest reviewed_at or None, {recorder sha256: [{reviewed_at, code_commit}, ...]}) from the review config's
     "reviews" list (a legacy single reviewed_at + reviewed_recorder_sha256 list is read as entries without code_commits);
     (None, {}) when the file is absent."""
     p = Path(path)
@@ -68,7 +68,7 @@ def review_defaults(path=REVIEW_CONFIG) -> tuple:
     out = {}
     for e in reviews:
         out.setdefault(e['recorder_sha256'], []).append(
-            {'reviewed_at': e['reviewed_at'], 'code_commits': list(e.get('code_commits') or []) or None})
+            {'reviewed_at': e['reviewed_at'], 'code_commit': e.get('code_commit') or None})
     return min((e['reviewed_at'] for v in out.values() for e in v), default=None), out
 
 # H item: (sport, plain meaning of +1, of 0, of -1, the two values compared: better first)
