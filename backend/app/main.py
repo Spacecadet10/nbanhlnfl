@@ -1060,3 +1060,23 @@ def research_candidates_game(game_id: str, as_of: Optional[str] = Query(None, pa
     if out is None:
         raise HTTPException(status_code=404, detail=f"Unknown game {game_id}")
     return {**out, "mode": "real"}
+
+
+# --- Learning operations and coverage (docs/ADAPTIVE_SYSTEM.md). Read-only, unhashed; under /api/learning so the web
+# server routes them to the delivery API (the /api/research prefix goes to the live API, whose code is a different release).
+@app.get("/api/learning/ops")
+def learning_ops_status(sport: str = Query("nba", pattern="^(nba|nhl|ncaab|nfl|soccer)$"), mode: str = Depends(api_mode)):
+    """Installed trainer schedule, recording configuration, latest fit and job rows. Never says forecasts use fits."""
+    if mode == "demo":
+        return {"mode": "demo", "sport": sport, "note": "Operational status reads the real stores and installed jobs; none in demo mode."}
+    from . import learning_ops
+    return {**learning_ops.status(sport), "mode": "real"}
+
+
+@app.get("/api/learning/coverage")
+def learning_coverage_matrix(mode: str = Depends(api_mode)):
+    """Sport x market coverage with separate states (implemented, trained, scheduled, recording, forecasting with fits, evaluated)."""
+    if mode == "demo":
+        return {"mode": "demo", "rows": [], "note": "Coverage reads the real stores; none in demo mode."}
+    from . import learning_coverage
+    return {**learning_coverage.coverage(), "mode": "real"}

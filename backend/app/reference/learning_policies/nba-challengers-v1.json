@@ -1,0 +1,54 @@
+{
+  "policy_id": "nba-challengers-v1",
+  "sport": "nba",
+  "version": 1,
+  "description": "Prospective challengers: recorded point-in-time before tip-off in a separate store and scored against the incumbent at read time. Registration is never promotion; nothing here reaches serving, cards, betting or candidate_forecasts. Seeded from the existing candidate pool only (no new models).",
+  "challengers": [
+    {
+      "spec": {
+        "name": "elastic_net:nba_base",
+        "sport": "nba",
+        "family": "elastic_net",
+        "head": "normal",
+        "features": "nba_base",
+        "role": "candidate",
+        "why": "Tests whether L1 sparsity changes anything over ridge on 12 correlated features (expected: no).",
+        "refit": "season",
+        "extra": null
+      },
+      "provenance": {
+        "source": "existing_pool",
+        "trial_id": null,
+        "commit": null,
+        "trial_decision": null,
+        "registered_by": "learning-phase2 seed (Claude Sonnet 5.5); owner review pending",
+        "registered_at": "2026-11-18T12:30:00Z",
+        "note": "Existing pool spec (candidates/registry.py), unchanged; recorded here so a prospective paired comparison against the incumbent accrues in a store separate from candidate_forecasts."
+      },
+      "preregistered_n": null
+    },
+    {
+      "spec": {
+        "name": "extra_trees:nba_base",
+        "sport": "nba",
+        "family": "extra_trees",
+        "head": "binary",
+        "features": "nba_base",
+        "role": "candidate",
+        "why": "Bagged randomised trees: nonlinear interactions with errors less correlated than boosting (gbt_v1).",
+        "refit": "season",
+        "extra": null
+      },
+      "provenance": {
+        "source": "existing_pool",
+        "trial_id": null,
+        "commit": null,
+        "trial_decision": null,
+        "registered_by": "learning-phase2 seed (Claude Sonnet 5.5); owner review pending",
+        "registered_at": "2026-11-18T12:30:00Z",
+        "note": "Existing pool spec (candidates/registry.py), unchanged; recorded here so a prospective paired comparison against the incumbent accrues in a store separate from candidate_forecasts."
+      },
+      "preregistered_n": null
+    }
+  ]
+}

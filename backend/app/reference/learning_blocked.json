@@ -1,0 +1,52 @@
+{
+  "source": "coverage inventory 2026-11-18 (docs/ADAPTIVE_SYSTEM.md); reasons are facts as of that date and are not recomputed",
+  "sports": {
+    "nba": ["Deep members (torch/keras MLPs) are skipped in the trainer environment and unverified; the combiner uses the other members"],
+    "nhl": [
+      "Deep members (torch/keras MLPs) are skipped in the trainer environment and unverified; the combiner uses the other members",
+      "NHL challengers are fitted but candidate_forecasts (CF) holds 0 rows: a shots data gap, so challengers are not recorded"
+    ],
+    "ncaab": ["Adaptive learning (adaptive-v1 is not used) is not implemented for NCAAB and the served forecasts stay frozen (frozen decision 2026-11-17). Prospective challenger learning is implemented (weekly refits of the frozen calibration and sigmas, C1-C4) but not scheduled: no job is installed, so rows exist only after a manual learning_run"],
+    "nfl": ["Adaptive learning is not implemented for NFL and the served forecasts stay frozen (sealed activation). Prospective challengers (winner Elo K and home-advantage variants, points eta variants from the existing grids) are implemented but not scheduled: no job is installed, so rows exist only after a manual learning_run. Evidence is expected to stay insufficient this season (about 17 games a week)"],
+    "soccer": ["Adaptive learning is not implemented for soccer and the sealed models are served without retraining. Prospective spec challengers on the served Poisson goals joint (Dixon-Coles, 180-day decay, league dispersion) are implemented but not scheduled: no job is installed, so rows exist only after a manual learning_run. Priced for 1X2, match goals, team goals and BTTS at the served half and whole lines only (quarter lines are skipped and counted); double chance and draw no bet are derived from the 1X2 rows at read time"]
+  },
+  "markets": {
+    "nba:team_total_home": ["No bookmaker team-total quotes are stored, so team totals cannot be compared with a price"],
+    "nba:team_total_away": ["No bookmaker team-total quotes are stored, so team totals cannot be compared with a price"],
+    "nhl:team_total_home": ["No bookmaker team-total quotes are stored, so team totals cannot be compared with a price"],
+    "nhl:team_total_away": ["No bookmaker team-total quotes are stored, so team totals cannot be compared with a price"],
+    "ncaab:team_total_home": ["No bookmaker team-total quotes are stored"],
+    "ncaab:team_total_away": ["No bookmaker team-total quotes are stored"],
+    "nfl:team_total_home": ["No bookmaker team-total quotes are stored"],
+    "nfl:team_total_away": ["No bookmaker team-total quotes are stored"],
+    "soccer:asian_handicap": ["Asian handicap is research only: not implemented as a forecast market (bookmaker handicap quotes are stored but not compared); blocked on the owner's preregistration answers, so no challenger in this package"],
+    "soccer:double_chance": ["Derived from the 1X2 forecast at read time; not separately trained or tested"],
+    "soccer:draw_no_bet": ["Derived from the 1X2 forecast at read time; not separately trained or tested"],
+    "soccer:btts": ["No bookmaker BTTS price is stored"],
+    "soccer:corners": ["No bookmaker corner prices are stored; no corner challenger (skipped)"],
+    "soccer:corner_handicap": ["No bookmaker corner prices are stored; no corner handicap challenger (skipped)"],
+    "soccer:intl_1x2": ["National-team test verdict has not been read; no international challenger (insufficient evidence)"]
+  },
+  "base_evaluation": {
+    "ncaab:winner": ["yes", "one-time test 2026-11-17 (n=11,516): log loss 0.5273 vs Elo 0.5436"],
+    "ncaab:spread": ["yes", "one-time test 2026-11-17: beat the baseline"],
+    "ncaab:total": ["yes", "one-time test 2026-11-17: beat the baseline"],
+    "ncaab:team_total_home": ["yes", "one-time test 2026-11-17: beat the baseline"],
+    "ncaab:team_total_away": ["yes", "one-time test 2026-11-17: beat the baseline"],
+    "nfl:winner": ["yes", "157 graded at the frozen 0.75 threshold; calibration sample too small"],
+    "nfl:spread": ["no", "reserved test not run"],
+    "nfl:total": ["no", "reserved test not run"],
+    "nfl:team_total_home": ["no", "not tested separately"],
+    "nfl:team_total_away": ["no", "not tested separately"],
+    "soccer:1x2": ["yes", "sealed Elo test reading n=5,959 (model quality only)"],
+    "soccer:goals_ou": ["yes", "sealed Poisson reserved test read once"],
+    "soccer:team_goals": ["yes", "sealed Poisson reserved test read once"],
+    "soccer:btts": ["yes", "sealed Poisson reserved test read once"],
+    "soccer:corners": ["yes", "sealed negative-binomial reserved test read once"],
+    "soccer:corner_handicap": ["yes", "sealed negative-binomial reserved test read once"],
+    "soccer:double_chance": ["no", "validated 2020-22 only; no separate test"],
+    "soccer:draw_no_bet": ["no", "validated 2020-22 only; no separate test"],
+    "soccer:asian_handicap": ["no", "not implemented"],
+    "soccer:intl_1x2": ["no", "test verdict not read"]
+  }
+}

@@ -9,6 +9,7 @@ import { bandNote, gridNote, standardGrid, standardRows } from '../components/Co
 import { AutoresearchCard } from '../components/Autoresearch';
 import { pct, dateTime } from '../format';
 import { Icon } from '../components/ui';
+import { LearningCoverage, OperationsBlock } from '../components/LearningOps';
 
 // The ledger outcome is the API's counter key; show it as a word.
 const OUTCOME: Record<string, string> = { wins: 'Win', losses: 'Loss', pushes: 'Push', pending: 'Pending', void: 'Void', unscorable: 'Unscorable', no_pick: 'No pick' };
@@ -17,6 +18,7 @@ export function DailyLearningPage() {
   return <section><div className="page-head"><h1><Icon name="learning" size={28} /> Daily learning · All 11 markets</h1></div>
     <p>Discover unanimous model groups from 2 members through the eligible roster, with separate thresholds per member. Historical research and frozen prospective decisions are shown separately.</p>
     {(['nba', 'nhl'] as Sport[]).map(s => <SportLearning key={s} sport={s} />)}
+    <LearningCoverage />
     <AutoresearchCard />
   </section>;
 }
@@ -24,11 +26,13 @@ function SportLearning({ sport }: { sport: Sport }) {
   const { state, retry } = useApi(s => api.dailyAgreement(sport, s), [sport]);
   return <section className="card"><h2>{sport.toUpperCase()}</h2><button onClick={retry}>Refresh status</button>
     <AsyncView state={state} retry={retry}>{d => d.mode === 'demo' ? <p>DEMO · {d.note}</p> : <>
-      <p>{d.schedule}</p><p className="small muted">{d.note}</p>
+      <OperationsBlock sport={sport} />
+      <p><span className="small muted">Text fixed with this model definition (not current status; see Operations above): </span>{d.schedule}</p><p className="small muted">{d.note}</p>
       <p>Definition: <code>{d.definition}</code> · Read at {dateTime(d.as_of)} · Daily recording configuration: {d.recording_enabled ? 'enabled (see actual records below)' : 'off'}</p>
       <p>{d.fit ? <>Fit #{d.fit.fit_id} · {d.fit.status} · Published {dateTime(d.fit.finished_at)} · Results through {dateTime(d.fit.training_cutoff)}</> : 'No daily fit published for this code definition.'}</p>
       {d.error && <p role="alert">{d.error}</p>}
-      <div className="table-wrap"><table className="table"><thead><tr><th>Market</th><th>Usable model fits</th><th>Historical rows</th><th>Recorded games</th><th>Frozen rule</th></tr></thead><tbody>{d.markets.map(m => <tr key={m.market}>
+      <p className="small muted scroll-hint">Scroll the table sideways for all columns →</p>
+      <div className="table-wrap scroll-cue"><table className="table daily-markets"><thead><tr><th>Market</th><th>Usable model fits</th><th>Historical rows</th><th>Recorded games</th><th>Frozen rule</th></tr></thead><tbody>{d.markets.map(m => <tr key={m.market}>
         <th><a href={`#daily-${sport}-${m.market}`}>{LABELS[m.market]}</a></th><td>{m.models.filter(x => x.supported && x.fit_id).length}</td><td>{m.history_games}</td><td>{m.prospective.eligible}</td><td>{m.decision?.status ?? 'Awaiting training'}</td>
       </tr>)}</tbody></table></div>
       {d.markets.map(m => <MarketLearning key={m.market} sport={sport} m={m} />)}

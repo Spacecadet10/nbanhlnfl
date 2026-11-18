@@ -6,6 +6,7 @@ import type { CanonicalHistory, CanonicalPerformance, PaperRules, RankedPicks, T
   PerformanceResponse, Policy, ResearchGame, ResearchHistory, ResearchReport, ResearchSlate, Retrospective, RuleReport, CandidateRoster, PoolReport, SelectionStatus, Sport,
   DataFreshness, Health, NflRecord, PolledLeague, SoccerCompetitionId, SoccerMatchDetail, SoccerMatchesResponse, SoccerMeta, SoccerLiveResponse, SoccerLiveRecord,
   SoccerPerformance, SoccerResearchHistory, SoccerResearchMatchDetail, SoccerResearchMatches, SoccerResearchMeta, NflGameDetail, NflGamesResponse, NflMeta, TrainingRun, TrainingStatus, TrackingCheck, TrackingEvidence, TrackingGame, TrackingKind, TrackingReport,
+  LearningCoverage, LearningOps,
 } from './types';
 
 export class ApiError extends Error {
@@ -51,6 +52,8 @@ const confParam = (c?: number | null) => (c == null ? undefined : String(c));
 export const api = {
   dailyEvidence: (sport: Sport, market: MarketId, rule: string, period: string, offset: number, signal?: AbortSignal) => get<DailyEvidence>('/research/daily-agreement/evidence', { sport, market, rule, period, offset: String(offset) }, signal),
   dailyAgreement: (sport: Sport, signal?: AbortSignal) => get<DailyReport>('/research/daily-agreement', { sport }, signal),
+  learningOps: (sport: string, signal?: AbortSignal) => get<LearningOps>('/learning/ops', { sport }, signal),
+  learningCoverage: (signal?: AbortSignal) => get<LearningCoverage>('/learning/coverage', undefined, signal),
   health: (signal?: AbortSignal) => get<Health>('/health', undefined, signal),
   // Cheap freshness check polled while the page is visible (all three leagues; NFL through its data-only store).
   freshness: (league: PolledLeague, signal?: AbortSignal) => get<DataFreshness>('/freshness', { sport: league }, signal),

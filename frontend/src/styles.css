@@ -1418,3 +1418,24 @@ h1,h2,h3,.hero-matchup,.metric-value,.tile-value,.brand { font-family:'Barlow Co
 .soccer-src-book { background: var(--accent-lime); color: #1E1B4B; font-weight: 700; }
 .soccer-src-model { background: var(--surface-raised); color: var(--text); border: 1px dashed var(--border); }
 .soccer-live-prob strong { font-size: 1.25em; }
+
+/* Narrow screens: the shell controls wrap instead of forcing the page wider than the screen (Daily Learning at 390 px). */
+@media (max-width: 640px) {
+  .header-tools { flex-wrap: wrap; gap: 8px; min-width: 0; max-width: 100%; }
+  .sport-toggle { flex: 1 1 auto; min-width: 0; max-width: 100%; }
+  .sport-toggle button { flex: 1 1 0; min-width: 0; padding: 0 6px; font-size: 14px; }
+  .coverage-matrix .table { min-width: 76rem; }
+  .coverage-matrix .table td:last-child { min-width: 22rem; }
+}
+
+/* Learning coverage / operations: inline caveats, readable rows on phones, discoverable sideways scroll */
+.col-note, .cell-detail { display: block; font-size: 12px; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--muted); overflow-wrap: anywhere; }
+.scroll-hint { display: none; }
+.scroll-cue { background: linear-gradient(to right, var(--surface) 30%, transparent), linear-gradient(to left, var(--surface) 30%, transparent) 100% 0,
+  radial-gradient(farthest-side at 0 50%, rgba(0,0,0,.28), transparent), radial-gradient(farthest-side at 100% 50%, rgba(0,0,0,.28), transparent) 100% 0;
+  background-repeat: no-repeat; background-size: 40px 100%, 40px 100%, 14px 100%, 14px 100%; background-attachment: local, local, scroll, scroll; }
+@media (max-width: 640px) {
+  .scroll-hint { display: block; }
+  .ops-block .table { min-width: 36rem; }
+  .daily-markets { min-width: 34rem; }
+}

@@ -1,0 +1,83 @@
+{
+  "policy_id": "soccer-challengers-v1",
+  "sport": "soccer",
+  "version": 1,
+  "description": "Prospective soccer SPEC challengers on the served Poisson goals joint (not refits of the sealed models), recorded point-in-time at the served 06:00 UTC cutoff, at the served lines, in the separate challenger store and scored at read time against the served forecast. Registration is never promotion. Corners skipped; Asian handicap research-only and blocked on the preregistration; international skipped for insufficient evidence.",
+  "challengers": [
+    {
+      "spec": {
+        "name": "soccer_goals_dc",
+        "sport": "soccer",
+        "family": "goals_spec",
+        "head": "goals",
+        "features": "poisson_strengths",
+        "role": "candidate",
+        "refit": "cutoff",
+        "why": "Dixon-Coles low-score correction (ev.dc_joint) on the served Poisson means; one rho fitted by maximum likelihood on the labelled inputs available at each cutoff.",
+        "extra": {
+          "dixon_coles": true
+        }
+      },
+      "provenance": {
+        "source": "manual",
+        "trial_id": null,
+        "commit": null,
+        "trial_decision": null,
+        "registered_by": "learning-phase2 I7 seed (Claude Sonnet 5.5); owner review pending",
+        "registered_at": "2026-11-18T14:00:00Z",
+        "note": "Manual operator seed (docs/SOCCER_MARKETS_PLAN.md goals family): one change from the sealed Poisson goals model that already exists in soccer_markets_eval; priced for 1X2, match/team goals and BTTS at the served lines; double chance and draw no bet derived at read time. Not served."
+      },
+      "preregistered_n": null
+    },
+    {
+      "spec": {
+        "name": "soccer_goals_hl180",
+        "sport": "soccer",
+        "family": "goals_spec",
+        "head": "goals",
+        "features": "poisson_strengths",
+        "role": "candidate",
+        "refit": "cutoff",
+        "why": "Time-decayed fitting weights with half life 180 days (protocol grid value; the served model uses 365), everything else as served.",
+        "extra": {
+          "half_life_days": 180
+        }
+      },
+      "provenance": {
+        "source": "manual",
+        "trial_id": null,
+        "commit": null,
+        "trial_decision": null,
+        "registered_by": "learning-phase2 I7 seed (Claude Sonnet 5.5); owner review pending",
+        "registered_at": "2026-11-18T14:00:00Z",
+        "note": "Manual operator seed (docs/SOCCER_MARKETS_PLAN.md goals family): one change from the sealed Poisson goals model that already exists in soccer_markets_eval; priced for 1X2, match/team goals and BTTS at the served lines; double chance and draw no bet derived at read time. Not served."
+      },
+      "preregistered_n": null
+    },
+    {
+      "spec": {
+        "name": "soccer_goals_nb_league",
+        "sport": "soccer",
+        "family": "goals_spec",
+        "head": "goals",
+        "features": "poisson_strengths",
+        "role": "candidate",
+        "refit": "cutoff",
+        "why": "Negative-binomial goal counts (ev.nb_joint) with one dispersion k per competition fitted on each cutoff's inputs; pooled k for a competition with fewer than 300 labelled inputs.",
+        "extra": {
+          "dispersion": "league"
+        }
+      },
+      "provenance": {
+        "source": "manual",
+        "trial_id": null,
+        "commit": null,
+        "trial_decision": null,
+        "registered_by": "learning-phase2 I7 seed (Claude Sonnet 5.5); owner review pending",
+        "registered_at": "2026-11-18T14:00:00Z",
+        "note": "Manual operator seed (docs/SOCCER_MARKETS_PLAN.md goals family): one change from the sealed Poisson goals model that already exists in soccer_markets_eval; priced for 1X2, match/team goals and BTTS at the served lines; double chance and draw no bet derived at read time. Not served."
+      },
+      "preregistered_n": null
+    }
+  ]
+}
