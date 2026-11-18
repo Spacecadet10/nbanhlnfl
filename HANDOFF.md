@@ -1,7 +1,37 @@
-## Card contract, backend half (history, grading, record_basis) — Agent A, Nov 17, 2026 (worktree branch, NOT deployed, nothing sent)
-- New: `soccer_record.py` (Soccer exact-% record, sportsbook, record_basis), `published_picks.py` (append-only ledger table written after status 'sent'), `record_basis.py`, `scripts/backfill_published_picks.py` (scratch ledger only), rebuilt `scripts/build_telegram_history.py` (Soccer, regrade, exact overlap rule, `excluded`/`summary`). `threshold_overview`: `pushes`, telegram `label`/`model_version_known`, per-sport `period`, sport `coverage`; telegram line is None for a sport with no recovered cards (NCAAB).
-- Delivery keys unchanged. CAUTION for the card renderer: telegram.format_batch builds a Soccer card's `versions` (part of the key) from `[market, forecast_id, generated_at, cutoff_at]` ONLY while a soccer pick has no `percentage_history`. `tickets.soccer_section(now)` therefore stays without contract fields; `soccer_section(now, contract=True)` adds them and the renderer must keep the old `versions` shape for Soccer, or every Soccer card would be resent.
-- Not verified live: nothing ran against `data/` or the real ledger; the backfill and builder ran on scratch copies only.
+## Shared card contract, all five sports — RELEASED to delivery — Claude (lead), Nov 18, 2026 ~00:40Z
+- What: one card contract for NBA/NHL/NFL/NCAAB/Soccer on the web (`frontend/src/components/PickEvidence.tsx`, `cardRecord.ts`) and
+  future Telegram cards (`telegram.market_block`): pick, market, line, app %; sportsbook no-vig % + signed gap (rounded app % − rounded
+  book %) + provider + quote time, or the reason; live exact-% W–L, pushes, settled n (OTHER games; this game on its own line on the web);
+  recovered Telegram history line ("Recovered Telegram cards <from>–<to> … model version not recorded", or "No recovered Telegram history
+  for NCAAB (recording began …)"); `record_basis` (latest pregame forecast used, earlier ones kept, and the card's published pick + its
+  grade when it differs in side/line/displayed %).
+- Soccer: new live exact-% record (`app/soccer_record.py`) for 1X2, double chance, DNB (draw = push), goals/corners; DNB/DC/integer-line
+  comparisons are conditional on no push/draw for BOTH app and book and say so ("app 88.2% vs no-vig 95.0% (both conditional on no draw)").
+  The exact-% bucket stays the stored (unconditional) probability, so a DNB card shows the 1X2 win % as its model %.
+- Published picks: append-only `published_picks` table in the delivery ledger (`app/published_picks.py`), written only after status
+  'sent'. Backfilled into the LIVE ledger (owner request; backup first): 586 rows (NBA 80, NHL 96, NFL 25, NCAAB 205, Soccer 180;
+  9 matched several forecasts → latest, basis backfill_text_match_multiple). Unmatched: 1 NCAAB card ND @ FLA (game moved 21:30→21:51Z,
+  the text-match uses the start time) and 1 non-game delivery. Report: ~/nba-predictor-release-backups/2026-11-18-card-contract/backfill.json.
+- Recovered history (`scripts/build_telegram_history.py`, source ~/Desktop/prop51_telegram_record.json): 973 rows = NBA 380, NHL 456,
+  NFL 80, Soccer 57 (new); excluded 216 only where the live record counts that game+market (NBA 80, NHL 42, NFL 25, Soccer 69); the old
+  "ungraded" 57 and "after live began" 90 are all such overlaps; 0 duplicates, 0 regrade disagreements, 0 unrecoverable.
+  Installed in data/research/telegram_history.json (old file backed up in the folder above).
+- Delivery keys: unchanged (Soccer keeps its legacy key shape when history is attached, test
+  test_soccer_delivery_key_is_the_same_with_or_without_the_contract_history). Fake-bot run_once on a 23:45Z snapshot: baseline and new
+  code give identical outcomes in all five sports, 0 sends.
+- Release: main efd5deb..e9d56f9 pushed; delivery 61376d9 → 30d9005 (same diff without HANDOFF.md; tickets.py keeps delivery's
+  pre-existing difference from main); frontend rebuilt; api-delivery + web kickstarted. Live checkout (8100) not updated.
+- Checks: merged branch focused backend 20 files 507 passed + 2 env-only failures that pass with the credential/ledger env unset;
+  frontend typecheck, 52 unit, build ok; structure guard ok. Full backend suite NOT completed: it stalled at 2% on both the branch and
+  untouched main (machine load ~70 from another session's test groups and live adaptive-train jobs); stopped to protect live jobs.
+- Verified independently (Agent C + lead): 0 mismatches between independent W/L/P and API for NBA 100, NHL 96, NCAAB 235, NFL 60, Soccer
+  231 picks; adjacent tenths distinct (e.g. Soccer DC 69.2 vs 69.3); published picks equal stored forecasts and grades. Running app:
+  NBA PHI@BKN away 50.7% under: live 0–2 (= SQL: 401909985, 401910001 losses), Telegram 2W–1L (= history file), web + Telegram PNG agree.
+  Shots: scratchpad deploy/ (1440 + 390 px, 390 lays out with a pre-existing 2 px overflow); Telegram PNGs deploy/png/.
+- Not observed yet: a live card sent with the new layout; a live published_picks row written at send time; a real push/void.
+- Gaps: NBA tick from the live checkout ran >15 min from 00:30Z under load, so NBA cards were source_not_fresh for that time (not
+  caused by this release; NHL recovered at 00:43Z). Soccer goals/corners record uses the line as stored now (6 forecasts checked).
+  Ticket snapshot digests change because picks carry more keys (effect on ticket review not checked).
 
 ## NCAAB Telegram cards: top 4 by gap at 11 AM ET (owner decision Nov 17) — Claude, Nov 17, 2026 ~23:40Z
 - Was: one card per forecast NCAAB game (~60/night). Now (`app/ncaab_cards.py`, rule `ncaab-top4-gap-v1`): at the first Telegram
