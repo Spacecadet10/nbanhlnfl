@@ -6,6 +6,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -69,7 +70,7 @@ def test_a_held_lock_refuses_and_does_not_queue(tmp_path):
 def test_game_in_window_refuses_and_games_outside_do_not(tmp_path):
     data = tmp_path / "data"
     games_store(data, "nba", 1.0)
-    games_store(data, "nhl", 6.0, -1.0)                       # later than 2.5 h, and one already started
+    games_store(data, "nhl", 6.0, -5.0)                       # later than 2.5 h, and one that started over 4 h ago
     marker = tmp_path / "ran"
     assert go(tmp_path, [PY, "-c", f"open({str(marker)!r},'w')"]) == lr.EXIT_REFUSED and not marker.exists()
     e = events(tmp_path)[0]
@@ -158,3 +159,68 @@ def test_cli_requires_limits_and_a_command(tmp_path):
     r = subprocess.run([PY, "-m", "app.learning_run", "--name", "x", "--max-minutes", "1", "--max-rss-gb", "2", "--",
                         PY, "-c", "import sys; sys.exit(5)"], env=env, capture_output=True, text=True)
     assert r.returncode == 5
+
+
+# ---- review fixes -------------------------------------------------------------------------------------------------------
+def test_a_game_in_progress_defers_but_a_final_or_long_past_one_does_not(tmp_path):
+    data = tmp_path / "data"
+    games_store(data, "nba", -1.0)                                  # tipped off 1 h ago, not final: in progress
+    assert go(tmp_path, [PY, "-c", "pass"]) == lr.EXIT_REFUSED
+    assert "nba0" in events(tmp_path)[-1]["reason"]
+    (data / "nba.sqlite").unlink()
+    games_store(data, "nba", -1.0, status="final")
+    assert go(tmp_path, [PY, "-c", "pass"]) == 0
+    (data / "nba.sqlite").unlink()
+    games_store(data, "nba", -5.0)                                  # past the in-progress horizon
+    assert go(tmp_path, [PY, "-c", "pass"]) == 0
+
+
+def test_guard_exit_codes_avoid_the_shell_126_127_and_the_timeout_124_125_conventions():
+    codes = {lr.EXIT_USAGE, lr.EXIT_REFUSED, lr.EXIT_TIMEOUT, lr.EXIT_MEMORY, lr.EXIT_UNMEASURABLE, lr.EXIT_NOT_STARTED}
+    assert len(codes) == 6 and not codes & {124, 125, 126, 127}
+    assert all(120 <= c <= 123 for c in (lr.EXIT_TIMEOUT, lr.EXIT_MEMORY, lr.EXIT_UNMEASURABLE, lr.EXIT_NOT_STARTED))
+    for c in ("120", "121", "122", "123"):
+        assert c in lr.__doc__
+
+
+def test_wall_deadline_also_uses_the_wall_clock(tmp_path, monkeypatch):
+    real = time.time
+    base = real()
+    calls = {"n": 0}
+
+    def jump():                                          # the machine "slept": wall clock jumps an hour, monotonic does not
+        calls["n"] += 1
+        return base + (3600 if calls["n"] > 3 else 0)
+    monkeypatch.setattr(lr.time, "time", jump)
+    assert go(tmp_path, [PY, "-c", "import time; time.sleep(30)"], max_minutes=5) == lr.EXIT_TIMEOUT
+
+
+def test_the_lock_outlives_a_sigkilled_guard_while_the_child_lives(tmp_path):
+    data = tmp_path / "data"
+    code = (f"import sys; sys.path.insert(0, {str(Path(lr.__file__).parents[1])!r}); from app import learning_run as lr; "
+            f"from pathlib import Path; lr.run_guarded([{PY!r}, '-c', 'import time; time.sleep(30)'], name='k', max_minutes=1, max_rss_gb=4, "
+            f"data_dir=Path({str(data)!r}), poll_s=0.05)")
+    guard = subprocess.Popen([PY, "-c", code], start_new_session=True)
+    try:
+        log = data / "research" / "learning-runs.jsonl"
+        for _ in range(100):
+            if log.exists() and "start" in log.read_text():
+                break
+            time.sleep(0.1)
+        child = json.loads(log.read_text().splitlines()[0])["pid"]
+        os.kill(guard.pid, 9)
+        guard.wait()
+        fd = os.open(data / ".learning-heavy.lock", os.O_RDWR)
+        with pytest.raises(BlockingIOError):
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)      # a surviving child still holds it
+        os.close(fd)
+        os.killpg(child, 9)
+        time.sleep(0.5)
+        fd = os.open(data / ".learning-heavy.lock", os.O_RDWR)
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)          # freed once the child is gone
+        os.close(fd)
+    finally:
+        try:
+            os.killpg(child, 9)
+        except Exception:
+            pass

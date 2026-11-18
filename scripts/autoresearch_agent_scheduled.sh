@@ -3,7 +3,7 @@
 # ~/autoresearch-sports/AGENT_BUDGET.json exists, validates, and the period's recorded spend leaves room for one more run.
 # Fields: approved_by, approved_at (UTC), period (weekly|daily), max_usd_per_run > 0, max_runs_per_period >= 1, model (explicit
 # id), max_trials >= 1, sports (nba/nhl), expires_at (UTC). Period = current UTC day, or ISO week from Monday 00:00 UTC.
-# Spend = cost_usd of finished runs in experiments/agent/runs.jsonl; a run started but not finished counts at max_usd_per_run.
+# Spend = cost_usd of finished runs in experiments/agent/runs.jsonl; a run started but not finished, or finished with a null cost_usd, counts at max_usd_per_run; a negative or non-finite cost_usd refuses.
 # Room = runs started < max_runs_per_period AND spend + max_usd_per_run <= max_usd_per_run * max_runs_per_period.
 set -u
 HOME_AR="${AUTORESEARCH_HOME:-$HOME/autoresearch-sports}"
@@ -11,7 +11,7 @@ BUDGET="$HOME_AR/AGENT_BUDGET.json"
 RUNS="$HOME_AR/experiments/agent/runs.jsonl"
 PREPARE="${AUTORESEARCH_PREPARE:-$HOME_AR/workspace/prepare.py}"
 ARGS=$(python3 - "$BUDGET" "$RUNS" <<'PY'
-import json, re, sys
+import json, math, re, sys
 from datetime import datetime, timedelta, timezone
 budget_path, runs_path = sys.argv[1:3]
 FMT = "%Y-%m-%dT%H:%M:%SZ"
@@ -74,7 +74,13 @@ try:
         if e["event"] == "started":
             started[e["run_id"]] = at
         elif e["event"] == "finished":
-            finished[e["run_id"]] = float(e["cost_usd"])
+            c = e["cost_usd"]
+            if c is None:                    # killed or unreported: counts as a full run
+                finished[e["run_id"]] = per_run
+            elif isinstance(c, bool) or not isinstance(c, (int, float)) or not math.isfinite(c) or c < 0:
+                refuse(f"cost_usd {c!r} of run {e['run_id']} in {runs_path} is negative, non-finite or not a number; failing closed")
+            else:
+                finished[e["run_id"]] = float(c)
 except (OSError, ValueError, KeyError, TypeError) as exc:
     refuse(f"spend log {runs_path} is unreadable ({type(exc).__name__}: {exc}); cannot prove the period has room")
 spent = sum(finished.get(r, per_run) for r in started)
@@ -97,5 +103,5 @@ BACKEND="${LEARNING_BACKEND:-$(cd "$(dirname "$0")/.." && pwd)/backend}"
 cd "$BACKEND" || exit 78
 ARGV=()
 while IFS= read -r line; do ARGV+=("$line"); done <<< "$ARGS"
-exec "${LEARNING_PYTHON:-python3}" -m app.learning_run --name autoresearch-agent --max-minutes 35 --max-rss-gb 6 -- \
+exec "${LEARNING_PYTHON:-python3}" -m app.learning_run --name autoresearch-agent --max-minutes 45 --max-rss-gb 6 -- \
   "${AUTORESEARCH_PYTHON:-python3}" "$PREPARE" "${ARGV[@]}"

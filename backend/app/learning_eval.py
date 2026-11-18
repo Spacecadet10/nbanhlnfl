@@ -41,8 +41,13 @@ def evaluate(store, cc) -> dict:
         for ch in json.loads(pol["content"]).get("challengers", []):
             prereg[(pol["policy_sha"], ch["spec"]["name"])] = ch.get("preregistered_n")
     groups: dict = {}
-    for r in cc.execute("SELECT * FROM challenger_forecasts ORDER BY policy_id, spec_name, market, game_id, forecast_id"):
+    seen: set = set()
+    for r in cc.execute("SELECT * FROM challenger_forecasts ORDER BY policy_id, spec_name, market, game_id, cutoff_at, forecast_id"):
         key = (r["policy_id"], r["policy_sha"], r["spec_name"], r["spec_hash"], r["market"])
+        once = (r["policy_sha"], r["spec_hash"], r["game_id"], r["market"])
+        if once in seen:                 # a moving line records more rows: only the earliest counts, so n is games
+            continue
+        seen.add(once)
         g = groups.setdefault(key, {"n_scored": 0, "n_unsettled": 0, "n_void": 0, "n_unscorable": 0, "n_no_incumbent": 0,
                                     "ll_c": [], "ll_i": [], "br_c": [], "br_i": []})
         game = store.execute("SELECT status, home_score, away_score, tipoff_at FROM games WHERE game_id=?", (r["game_id"],)).fetchone()

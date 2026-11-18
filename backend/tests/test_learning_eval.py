@@ -115,3 +115,14 @@ def test_empty_store_reports_no_rows_with_the_label(env):
     store, cc = env
     out = le.evaluate(store, cc)
     assert out["groups"] == [] and "no claim" in out["label"].lower()
+
+
+def test_a_moving_line_scores_the_earliest_row_once_so_n_counts_games(env):
+    store, cc = env
+    finalise(store, 3, 2)
+    challenger_row(cc, "total", (0.45, 0.10, 0.45), line=5.0, cutoff="2026-10-12T21:30:00Z")
+    challenger_row(cc, "total", (0.30, 0.10, 0.60), line=5.5, cutoff="2026-10-12T22:00:00Z")      # later row, different line
+    cohort(store, "total", [0.4, 0.2, 0.4], line=5.0)
+    cohort(store, "total", [0.4, 0.2, 0.4], line=5.5, key="l55", at="2026-10-12T21:45:00Z")
+    g = group(le.evaluate(store, cc), "total")
+    assert g["n_scored"] == 1 and g["log_loss_challenger"] == pytest.approx(-math.log(0.10))     # the earliest row only

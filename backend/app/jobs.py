@@ -396,6 +396,7 @@ def boxscores(conn: sqlite3.Connection, *, fetch: Callable[[str], bytes] = espn.
     return _finish(conn, run_id, "failed" if failed else "success", attempts, detail)
 
 
+NHL_PBP_RETRY_AFTER = timedelta(minutes=30)
 NHL_PBP_PER_RUN = 60          # bounded per cycle; a backlog is worked off over later cycles
 
 
@@ -409,8 +410,13 @@ def nhl_pbp(conn: sqlite3.Connection, *, fetch: Optional[Callable] = None, limit
         # Newest finals first: oldest-first let a backlog of old games whose play-by-play keeps failing take every slot of
         # the bounded slice, so the current season's recent finals stayed without shots (candidate recorder: stale inputs).
         fetch = fetch or nhl_pbp.fetch
-        todo = sorted(nhl_shots.pending(conn, seasons), key=lambda g: (g["tipoff_at"], g["game_id"]), reverse=True)[:limit]
-        out = {"pending": len(todo), "imported": 0, "incomplete": 0, "errors": {}}
+        # A game whose last import was incomplete less than NHL_PBP_RETRY_AFTER ago is not fetched again yet: each fetch appends
+        # a row, so a game that stays incomplete would otherwise pile up one every cycle.
+        recent = {r[0] for r in conn.execute("SELECT game_id FROM nhl_pbp_imports WHERE complete=0 AND retrieved_at > ?",
+                                             ((datetime.now(timezone.utc) - NHL_PBP_RETRY_AFTER).strftime("%Y-%m-%dT%H:%M:%SZ"),))}
+        pending = nhl_shots.pending(conn, seasons)
+        todo = sorted((g for g in pending if g["game_id"] not in recent), key=lambda g: (g["tipoff_at"], g["game_id"]), reverse=True)[:limit]
+        out = {"pending": len(todo), "imported": 0, "incomplete": 0, "errors": {}, "skipped_recent_incomplete": len(pending) - sum(1 for g in pending if g["game_id"] not in recent)}
         for g in todo:
             try:
                 r = nhl_shots.import_game(conn, g, fetch(g["game_id"]), utc_now())

@@ -2,9 +2,12 @@
 
 One heavy job per machine (non-blocking flock: a second one is refused, never queued), lowered priority, capped BLAS
 threads, a wall-clock limit and a resident-memory cap enforced on the child's whole process group, and no start within a
-window before any game tips off. Every start, end and refusal is appended to <data dir>/research/learning-runs.jsonl.
-Reads game times with read-only queries; writes nothing else. Exit codes: the child's own, or 75 refused, 124 wall-clock kill,
-125 memory kill, 126 memory unreadable (killed: fail closed), 127 command not started, 64 usage."""
+window before any game tips off and while a game is in progress. The lock is inherited by the child, so it stays held while
+any process of the job lives, even if this guard is SIGKILLed. Every start, end and refusal is appended to
+<data dir>/research/learning-runs.jsonl. Reads game times with read-only queries; writes nothing else.
+Exit codes: the child's own, or 64 usage, 75 refused (lock, game window or schedule unreadable), 120 command not started,
+121 wall-clock kill, 122 memory kill, 123 memory unreadable (killed: fail closed). These avoid the shell's 126/127 and
+timeout(1)'s 124/125, so a child's own code is not mistaken for the guard's."""
 import argparse
 import fcntl
 import json
@@ -21,9 +24,10 @@ from typing import Callable, Optional, Sequence
 
 from . import config
 
-EXIT_USAGE, EXIT_REFUSED, EXIT_TIMEOUT, EXIT_MEMORY, EXIT_UNMEASURABLE, EXIT_NOT_STARTED = 64, 75, 124, 125, 126, 127
+EXIT_USAGE, EXIT_REFUSED, EXIT_NOT_STARTED, EXIT_TIMEOUT, EXIT_MEMORY, EXIT_UNMEASURABLE = 64, 75, 120, 121, 122, 123
 FMT = "%Y-%m-%dT%H:%M:%SZ"
 DEFAULT_DEFER_HOURS = 2.5
+IN_PROGRESS_HOURS = 4.0       # a game that tipped off this recently and is not final counts as in progress
 DEFAULT_SPORTS = ("nba", "nhl", "ncaab")
 GAME_TABLES = {"nba": ("games", "tipoff_at"), "nhl": ("games", "tipoff_at"), "ncaab": ("games", "tipoff_at"),
                "nfl": ("games", "tipoff_at"), "soccer": ("soccer_matches", "kickoff_at")}
@@ -50,9 +54,10 @@ def _log(path: Path, **event) -> None:
 
 
 def games_in_window(data_dir: Path, sports: Sequence[str], hours: float, now: datetime) -> list:
-    """(sport, game id, tipoff) of games tipping off in (now, now + hours], from read-only queries. A store that does not
+    """(sport, game id, tipoff) of games tipping off in (now - IN_PROGRESS_HOURS, now + hours] that are not final, postponed
+    or canceled (so also games in progress), from read-only queries. A store that does not
     exist is not a window; a store that exists but cannot be read raises, so the caller refuses (fail closed)."""
-    lo, hi = now.strftime(FMT), (now + timedelta(hours=hours)).strftime(FMT)
+    lo, hi = (now - timedelta(hours=IN_PROGRESS_HOURS)).strftime(FMT), (now + timedelta(hours=hours)).strftime(FMT)
     found = []
     for sport in sports:
         path = Path(data_dir) / f"{sport}.sqlite"
@@ -134,26 +139,26 @@ def run_guarded(argv: Sequence[str], *, name: str, max_minutes: float, max_rss_g
             return EXIT_REFUSED
         if window:
             shown = ", ".join(f"{s} {g} {t}" for s, g, t in window[:5])
-            _log(log, event="refused", reason=f"{len(window)} game(s) tip off within {defer_hours} h: {shown}", **base)
+            _log(log, event="refused", reason=f"{len(window)} game(s) tip off within {defer_hours} h or are in progress: {shown}", **base)
             return EXIT_REFUSED
         env = dict(os.environ)
         for v in THREAD_VARS:
             env.setdefault(v, str(threads))
-        t0 = time.monotonic()
+        t0, w0 = time.monotonic(), time.time()
         try:
-            proc = subprocess.Popen(list(argv), env=env, start_new_session=True,
-                                    preexec_fn=lambda: os.nice(nice))
+            proc = subprocess.Popen(list(argv), env=env, start_new_session=True, pass_fds=(fd,),
+                                    preexec_fn=lambda: os.nice(nice))     # the child inherits the lock
         except OSError as exc:
             _log(log, event="end", rc=EXIT_NOT_STARTED, outcome=f"not started: {exc}", wall_s=0.0, peak_rss_mb=0, **base)
             return EXIT_NOT_STARTED
         _log(log, event="start", pid=proc.pid, nice=nice, max_minutes=max_minutes, max_rss_gb=max_rss_gb,
              defer_hours=defer_hours, **base)
-        return _supervise(proc, log, base, t0, max_minutes * 60, max_rss_gb * 1024 ** 3, poll_s, rss_reader)
+        return _supervise(proc, log, base, t0, w0, max_minutes * 60, max_rss_gb * 1024 ** 3, poll_s, rss_reader)
     finally:
         os.close(fd)
 
 
-def _supervise(proc, log, base, t0, limit_s, cap_bytes, poll_s, rss_reader) -> int:
+def _supervise(proc, log, base, t0, w0, limit_s, cap_bytes, poll_s, rss_reader) -> int:
     peak, rc, outcome = 0, None, "exited"
 
     def stop(signum, _frame):
@@ -163,7 +168,7 @@ def _supervise(proc, log, base, t0, limit_s, cap_bytes, poll_s, rss_reader) -> i
     old = {s: signal.signal(s, stop) for s in (signal.SIGTERM, signal.SIGINT)} if _main_thread() else {}
     try:
         while proc.poll() is None:
-            if time.monotonic() - t0 > limit_s:
+            if max(time.monotonic() - t0, time.time() - w0) > limit_s:      # wall clock too: monotonic stops while the Mac sleeps
                 outcome, rc = "killed: wall-clock limit", EXIT_TIMEOUT
             else:
                 rss = rss_reader(proc.pid)

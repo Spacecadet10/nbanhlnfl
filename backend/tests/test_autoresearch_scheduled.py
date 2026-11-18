@@ -148,6 +148,35 @@ def test_agent_runs_through_learning_run_with_explicit_model_and_limits(home, tm
     assert ev[0]["name"] == "autoresearch-agent" and ev[0]["event"] == "start"
 
 
+@pytest.mark.parametrize("cost", [-1.0, float("nan"), float("inf"), "1.0", True])
+def test_a_negative_or_non_finite_logged_cost_fails_closed(home, tmp_path, cost):
+    put(home, budget())
+    (home / "experiments" / "agent" / "runs.jsonl").write_text(
+        json.dumps({"event": "started", "run_id": "r0", "at": stamp(-timedelta(minutes=5))}) + "\n" +
+        json.dumps({"event": "finished", "run_id": "r0", "at": stamp(-timedelta(minutes=4)), "cost_usd": cost}) + "\n")
+    refused(home, tmp_path, "cost_usd")
+
+
+def test_a_null_cost_counts_at_the_full_per_run_amount(home, tmp_path):
+    put(home, budget(max_runs_per_period=4))               # cap 6.0; 2 x null = 3.0 + 1.6 + a full run 1.5 = 6.1
+    (home / "experiments" / "agent" / "runs.jsonl").write_text("".join(json.dumps(x) + "\n" for x in [
+        {"event": "started", "run_id": "a", "at": stamp(-timedelta(minutes=9))},
+        {"event": "finished", "run_id": "a", "at": stamp(-timedelta(minutes=8)), "cost_usd": None},
+        {"event": "started", "run_id": "b", "at": stamp(-timedelta(minutes=7))},
+        {"event": "finished", "run_id": "b", "at": stamp(-timedelta(minutes=6)), "cost_usd": None},
+        {"event": "started", "run_id": "c", "at": stamp(-timedelta(minutes=5))},
+        {"event": "finished", "run_id": "c", "at": stamp(-timedelta(minutes=4)), "cost_usd": 1.6}]))
+    refused(home, tmp_path, "room")
+
+
+def test_the_guard_wall_limit_leaves_a_margin_over_the_agent_minutes():
+    text = AGENT.read_text()
+    import re
+    agent_min = int(re.search(r'"--max-minutes", "(\d+)"', text).group(1))
+    guard_min = int(re.search(r"--name autoresearch-agent --max-minutes (\d+)", text).group(1))
+    assert guard_min >= agent_min + 15
+
+
 def test_daily_period_counts_only_today(home, tmp_path):
     put(home, budget(period="daily", max_runs_per_period=1))
     spend(home, (stamp(-timedelta(days=2)), 1.0))

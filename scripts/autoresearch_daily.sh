@@ -12,5 +12,5 @@ fi
 PREPARE="${AUTORESEARCH_PREPARE:-$HOME_AR/workspace/prepare.py}"
 BACKEND="${LEARNING_BACKEND:-$(cd "$(dirname "$0")/.." && pwd)/backend}"
 cd "$BACKEND" || exit 78
-exec "${LEARNING_PYTHON:-python3}" -m app.learning_run --name autoresearch-daily --max-minutes 65 --max-rss-gb 6 -- \
+exec "${LEARNING_PYTHON:-python3}" -m app.learning_run --name autoresearch-daily --max-minutes 75 --max-rss-gb 6 -- \
   "${AUTORESEARCH_PYTHON:-python3}" "$PREPARE" daily --sport nba --sport nhl --max-trials 4 --max-minutes 60 --timeout 900

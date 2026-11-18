@@ -33,3 +33,23 @@ def test_pending_and_error_reporting_are_unchanged(nhl_store):
     out = jobs.nhl_pbp(nhl_store, fetch=fetch, limit=3)
     assert out["status"] == "failed" and out["pending"] == 3 and out["imported"] == 0 and len(out["errors"]) == 3
     assert set(out) >= {"status", "pending", "imported", "incomplete", "errors", "seasons"}
+
+
+def test_a_game_whose_last_import_is_incomplete_and_recent_is_not_refetched(nhl_store):
+    newest, _ = newest_pending(nhl_store, 3)
+    ok = fake_fetch(nhl_store)
+    calls = []
+
+    def fetch(game_id):
+        calls.append(game_id)
+        return ok(game_id)
+    jobs.nhl_pbp(nhl_store, fetch=fetch, limit=3)
+    nhl_store.execute("DROP TRIGGER nhl_pbp_imports_no_update")      # fixture only: the table is append-only in service
+    nhl_store.execute("UPDATE nhl_pbp_imports SET complete=0")             # all three came back incomplete just now
+    calls.clear()
+    out = jobs.nhl_pbp(nhl_store, fetch=fetch, limit=3)
+    assert not set(calls) & set(newest) and out["pending"] == 3 and out["skipped_recent_incomplete"] == 3
+    nhl_store.execute("UPDATE nhl_pbp_imports SET retrieved_at='2020-01-01T00:00:00Z'")   # an old incomplete import is retried
+    calls.clear()
+    jobs.nhl_pbp(nhl_store, fetch=fetch, limit=3)
+    assert set(newest) <= set(calls)

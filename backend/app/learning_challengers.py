@@ -25,6 +25,7 @@ from .db import utc_now
 POLICY_DIR = Path(__file__).parent / "reference" / "learning_policies"
 SOURCES = ("existing_pool", "autoresearch_trial", "manual")
 SPORTS = ("nba", "nhl")
+TRIAL_DECISIONS = ("keep", "discard", "crash", "invalid", "n/a")
 SPEC_FIELDS = {"name", "sport", "family", "head", "features", "role", "why", "refit", "extra"}
 PROVENANCE_FIELDS = ("source", "trial_id", "commit", "trial_decision", "registered_by", "registered_at", "note")
 FMT = "%Y-%m-%dT%H:%M:%SZ"
@@ -80,6 +81,8 @@ def _provenance(p: dict, name: str) -> dict:
         datetime.strptime(p["registered_at"], FMT)
     except (TypeError, ValueError):
         raise PolicyError(f"{name}: provenance registered_at must be a UTC timestamp like 2026-11-18T12:00:00Z") from None
+    if p["trial_decision"] is not None and p["trial_decision"] not in TRIAL_DECISIONS:
+        raise PolicyError(f"{name}: trial_decision must be one of {TRIAL_DECISIONS} or null")
     if p["source"] == "autoresearch_trial":
         for k in ("trial_id", "commit", "trial_decision"):
             if not _text(p[k]):
@@ -103,7 +106,10 @@ def load_policy(path: Path) -> Policy:
     items, seen = [], set()
     for i, c in enumerate(d.get("challengers") or []):
         prov = _provenance(c.get("provenance"), f"{path.name} challenger {i}")
-        ch = Challenger(_spec(c.get("spec"), d["sport"], prov["source"]), prov, c.get("preregistered_n"))
+        n = c.get("preregistered_n")
+        if n is not None and (isinstance(n, bool) or not isinstance(n, int) or n < 1):
+            raise PolicyError(f"{path.name} challenger {i}: preregistered_n must be a whole number >= 1 or null")
+        ch = Challenger(_spec(c.get("spec"), d["sport"], prov["source"]), prov, n)
         if ch.spec_hash in seen:
             raise PolicyError(f"{path.name}: duplicate spec {ch.spec.name}")
         seen.add(ch.spec_hash)
@@ -113,8 +119,19 @@ def load_policy(path: Path) -> Policy:
     return Policy(d["policy_id"], d["sport"], hashlib.sha256(raw).hexdigest(), d, items)
 
 
+def check_unique_names(policies: list) -> None:
+    """A spec name identifies a challenger in reports: the same name with a different definition (hash) is refused."""
+    seen: dict = {}
+    for pol in policies:
+        for c in pol.challengers:
+            if seen.setdefault(c.spec.name, c.spec_hash) != c.spec_hash:
+                raise PolicyError(f"spec name {c.spec.name!r} is used by two policies with a different definition (same name, different hash)")
+
+
 def load_policies(sport: str, folder: Optional[Path] = None) -> list:
-    return [load_policy(p) for p in sorted(Path(folder or POLICY_DIR).glob(f"{sport}-challengers-*.json"))]
+    pols = [load_policy(p) for p in sorted(Path(folder or POLICY_DIR).glob(f"{sport}-challengers-*.json"))]
+    check_unique_names(pols)
+    return pols
 
 
 # --- Store ----------------------------------------------------------------------------------------------------------
@@ -127,7 +144,7 @@ CREATE TABLE IF NOT EXISTS challenger_forecasts (
   market TEXT NOT NULL CHECK (market IN ('winner','reg3','spread','total','team_total_home','team_total_away')),
   line REAL, p_a REAL NOT NULL CHECK (p_a BETWEEN 0 AND 1), p_mid REAL NOT NULL CHECK (p_mid BETWEEN 0 AND 1),
   p_b REAL NOT NULL CHECK (p_b BETWEEN 0 AND 1), cutoff_at TEXT NOT NULL, tipoff_at TEXT NOT NULL, generated_at TEXT NOT NULL,
-  dataset_version TEXT NOT NULL, model_version TEXT NOT NULL,
+  dataset_version TEXT NOT NULL, model_version TEXT NOT NULL, recorded_at TEXT,
   CHECK (abs(p_a + p_mid + p_b - 1) < 1e-6), CHECK ((market IN ('winner','reg3')) = (line IS NULL)),
   UNIQUE (policy_sha, spec_hash, game_id, market, cutoff_at));
 CREATE INDEX IF NOT EXISTS challenger_forecasts_game ON challenger_forecasts(game_id, market, spec_hash);
@@ -156,6 +173,8 @@ def open_store(path: Path) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode = WAL")
     conn.executescript(SCHEMA)
+    if "recorded_at" not in {r[1] for r in conn.execute("PRAGMA table_info(challenger_forecasts)")}:
+        conn.execute("ALTER TABLE challenger_forecasts ADD COLUMN recorded_at TEXT")     # stores created before the column
     return conn
 
 
@@ -175,6 +194,11 @@ def record(conn, path: Path, *, policies: list, now: Optional[str] = None, lines
     now = now or utc_now()
     out = {"status": "success", "dry_run": dry_run, "now": now, "created": 0, "would_record": 0, "already_recorded": 0,
            "eligible_games": 0, "skipped": {}, "errors": {}, "policies": [{"policy_id": p.policy_id, "sha": p.sha} for p in policies]}
+    try:
+        check_unique_names(policies)
+    except PolicyError as exc:
+        out["status"], out["errors"]["recorder"] = "failed", str(exc)
+        return out
     specs = list({c.spec.name: c.spec for p in policies for c in p.challengers}.values())
     try:
         res = live.record(conn, now=now, lines=lines, write=False, specs=specs)
@@ -208,10 +232,10 @@ def record(conn, path: Path, *, policies: list, now: Optional[str] = None, lines
                     try:
                         store.execute(
                             "INSERT INTO challenger_forecasts (policy_id, policy_sha, spec_name, spec_json, spec_hash, definition, game_id, "
-                            "market, line, p_a, p_mid, p_b, cutoff_at, tipoff_at, generated_at, dataset_version, model_version) "
-                            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                            "market, line, p_a, p_mid, p_b, cutoff_at, tipoff_at, generated_at, dataset_version, model_version, recorded_at) "
+                            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                             (pol.policy_id, pol.sha, c.spec.name, c.spec_json, c.spec_hash, defn, f["game_id"], f["market"], f["line"],
-                             *f["p"], now, tip[f["game_id"]], f["generated_at"], res.get("dataset_version", ""), f"challenger:{c.spec.name}:{defn}"))
+                             *f["p"], now, tip[f["game_id"]], f["generated_at"], res.get("dataset_version", ""), f"challenger:{c.spec.name}:{defn}", utc_now()))
                         out["created"] += 1
                     except sqlite3.Error as exc:
                         out["errors"][f"{c.spec.name}:{f['game_id']}:{f['market']}"] = f"{type(exc).__name__}: {exc}"
@@ -229,8 +253,12 @@ def main(argv: Optional[list] = None) -> int:
     r = sub.add_parser("record")
     r.add_argument("--sport", choices=SPORTS, required=True)
     r.add_argument("--dry-run", action="store_true")
-    r.add_argument("--now", help="fixed cutoff (UTC, for rehearsals and tests); default the clock")
+    r.add_argument("--now", help="fixed cutoff (UTC, for rehearsals and tests); default the clock. Needs --dry-run or --store")
+    r.add_argument("--store", help="challenger store path (a rehearsal copy); the default is <data dir>/research/challengers.sqlite")
     a = p.parse_args(argv)
+    if a.now and not a.dry_run and not a.store:
+        print(json.dumps({"status": "refused", "reason": "--now backdates the cutoff: use --dry-run, or an explicit --store that is not the live store"}))
+        return 2
     try:
         policies = load_policies(a.sport)
     except PolicyError as exc:
@@ -242,7 +270,7 @@ def main(argv: Optional[list] = None) -> int:
         return 2
     conn = sqlite3.connect(f"{src.resolve().as_uri()}?mode=ro", uri=True)       # the sport store is never written
     conn.row_factory = sqlite3.Row
-    out = record(conn, store_path(), policies=policies, now=a.now, dry_run=a.dry_run)
+    out = record(conn, Path(a.store) if a.store else store_path(), policies=policies, now=a.now, dry_run=a.dry_run)
     out.pop("skipped", None) if not out["skipped"] else None
     print(json.dumps(out, indent=2, sort_keys=True, default=str))
     return 0 if out["status"] in ("success", "partial") else 1

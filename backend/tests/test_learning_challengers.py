@@ -164,3 +164,62 @@ def test_a_failing_spec_is_reported_and_never_blocks_the_others(upcoming, tmp_pa
     monkeypatch.setattr(lc.registry, "available", lambda s: False if s.name.startswith("multinomial") else real(s))
     out = lc.record(upcoming, tmp_path / "c.sqlite", policies=[policy(tmp_path)], now=NOW, lines=LINES)
     assert out["created"] > 0 and "multinomial_l2:nhl_base" in out["skipped"]
+
+
+# ---- review fixes -------------------------------------------------------------------------------------------------------
+def test_rows_carry_the_real_write_time_separate_from_the_cutoff(upcoming, tmp_path):
+    store = tmp_path / "research" / "challengers.sqlite"
+    lc.record(upcoming, store, policies=[policy(tmp_path)], now=NOW, lines=LINES)
+    c = sqlite3.connect(store)
+    at = c.execute("SELECT DISTINCT recorded_at FROM challenger_forecasts").fetchall()
+    assert len(at) == 1 and at[0][0] > NOW and at[0][0][:4] == str(__import__("datetime").datetime.utcnow().year)
+
+
+def test_a_replayed_now_is_refused_for_the_default_store_and_allowed_with_an_explicit_store_or_dry_run(tmp_path, monkeypatch, capsys):
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "nhl.sqlite").write_bytes(b"")
+    monkeypatch.setenv("NBA_DATA_DIR", str(data))
+    assert lc.main(["record", "--sport", "nhl", "--now", NOW]) == 2
+    assert "--store" in capsys.readouterr().out and not (data / "research").exists()
+    monkeypatch.setattr(lc.sqlite3, "connect", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("reached the recorder")))
+    for extra in (["--dry-run"], ["--store", str(tmp_path / "x" / "c.sqlite")]):
+        with pytest.raises(RuntimeError, match="reached the recorder"):
+            lc.main(["record", "--sport", "nhl", "--now", NOW, *extra])
+    with pytest.raises(RuntimeError, match="reached the recorder"):
+        lc.main(["record", "--sport", "nhl"])                     # no replay: the default store is fine
+
+
+def test_the_same_spec_name_with_a_different_definition_is_refused_across_policies(tmp_path):
+    other = {**spec_dict(), "why": "a different why: same name, different hash"}
+    a = policy_file(tmp_path, [ch(spec_dict("poisson_draw:nhl_base"))], pid="nhl-challengers-v8")
+    b = policy_file(tmp_path, [ch(other, source="manual")], pid="nhl-challengers-v9")
+    with pytest.raises(lc.PolicyError, match="same name|different definition"):
+        lc.load_policies("nhl", tmp_path)
+    b.unlink()
+    assert len(lc.load_policies("nhl", tmp_path)) == 1
+    a.unlink()
+    pols = [lc.load_policy(policy_file(tmp_path, [ch(spec_dict("poisson_draw:nhl_base"))], pid="nhl-challengers-v8")),
+            lc.load_policy(policy_file(tmp_path, [ch(other, source="manual")], pid="nhl-challengers-v9"))]
+    out = lc.record(sqlite3.connect(":memory:"), tmp_path / "c.sqlite", policies=pols, now=NOW)
+    assert out["status"] == "failed" and "same name" in out["errors"]["recorder"]
+
+
+@pytest.mark.parametrize("over", [{"trial_decision": "maybe"}, {"trial_decision": "KEEP"}])
+def test_trial_decision_must_be_from_the_fixed_set(tmp_path, over):
+    base = dict(source="autoresearch_trial", trial_id="t:1", commit="abc1234", trial_decision="keep", note="n")
+    base.update(over)
+    with pytest.raises(lc.PolicyError, match="trial_decision"):
+        lc.load_policy(policy_file(tmp_path, [ch(**base)]))
+    for ok in ("keep", "discard", "crash", "invalid", "n/a"):
+        lc.load_policy(policy_file(tmp_path, [ch(**{**base, "trial_decision": ok, "note": "operator note"})]))
+
+
+@pytest.mark.parametrize("n", [0, -3, 2.5, "50", True])
+def test_preregistered_n_is_a_whole_number_of_at_least_one_or_null(tmp_path, n):
+    c = ch()
+    c["preregistered_n"] = n
+    with pytest.raises(lc.PolicyError, match="preregistered_n"):
+        lc.load_policy(policy_file(tmp_path, [c]))
+    c["preregistered_n"] = 40
+    assert lc.load_policy(policy_file(tmp_path, [c])).challengers[0].preregistered_n == 40
