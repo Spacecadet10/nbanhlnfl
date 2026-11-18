@@ -1,3 +1,40 @@
+## Learning expansion: all-sport challengers, coverage page, budget gate, preregistrations — Claude Opus 5.5 (lead, nbanhlnfl-03), Nov 18, 2026 12:00-15:15Z
+Full log: ~/nba-predictor-research-data/learning-plan.md. Claims stay separate: TRAINED / SCHEDULED / RECORDING / FORECASTING WITH FITS / IMPROVED.
+- Code (branch learning-phase2, pushed 1669cf7; later commits local): learning_ops + learning_coverage (GET /api/learning/ops, /coverage; Daily Learning
+  operations block + sport x market matrix, mobile overflow fixed: 390/1440 px no page overflow via CDP emulation — headless Chrome windows can't go
+  below 500 px, so the earlier "clipped at 390" screenshot was partly an artifact); learning_run (heavy lock, nice, caps, game-window deferral, --light);
+  challengers for NBA/NHL (pool specs, stored artifacts only), NCAAB (C1-C4 frozen-parameter refits; C2 incl. test seasons per owner), Soccer (Dixon-Coles,
+  decay, league NB dispersion on the served goals joint), NFL (6 grid variants) into data/research/challengers.sqlite; learning_eval (read-time
+  paired scoring, "no claim"); weekly report NCAAB + Learning + Autoresearch spend sections; jobs.nhl_pbp newest-first (I1; takes effect only at the
+  next main->live release); autoresearch budget gate; preregistered evaluators. Every package: Sonnet writer, test-first, independent Opus review,
+  fixes, lead re-verification; model ids unchanged throughout (NBA 94844709/4b3b8abf/89dc8edd, NHL f862a44d/b921c537/d11d9573); NFL b6074877; soccer
+  sealed ids unchanged. No hashed file edited (one candidates/live.py edit was reverted byte-identical in 1669cf7).
+- Delivery: 4c47d99 -> 2714641 (13:54:31Z, 6 min before the agreed window: my error, reported) -> 325c5d5 (14:11:23Z) -> 8093528 (15:00:06Z).
+  Recorder review entries H (2714641), I (325c5d5), J (8093528): independent Opus EQUIVALENT; 10 entries valid. Each switch: health 200, Telegram tick ok.
+  delivery-release pushed at 325c5d5 (owner-authorized ff); 8093528 not yet pushed.
+- Scheduler text: "no scheduler installed" lives in daily_agreement.py, hashed into the daily definition (adaptive.py:113-116) — not edited; the page shows
+  live operational status from /api/learning/ops and captions the old text as fixed with the model definition.
+- SCHEDULED: adaptive-train (first scheduled run 14:30Z: NHL weekly refit fit 51, NHL daily running at 15:08Z; runs at nice 0 — add Nice 10 to the
+  template after this run). autoresearch-agent (Tue/Fri 12:30 local) + autoresearch-daily (11:00 local) installed 15:01Z under the owner budget:
+  ~/autoresearch-sports/AGENT_BUDGET.json ($5/week, 2 runs, $2.50/run, stop after 4 runs from 2026-11-18T14:14Z for owner assessment, model
+  claude-opus-5-5, gate_sha256 52edbdf3...). Gate refuses 20:45-07:00Z, game windows, trainer running, cost-tracking failure, model mismatch. Accepted residual:
+  running prepare.py agent directly bypasses the gate (pinned app); such a run is still counted. Not yet run.
+- Challenger recorder job NOT installed: owner chose staged activation — thresholds fixed 14:25Z before measuring
+  (~/nba-predictor-research-data/challenger-staging/THRESHOLDS.md); monitor.py (nohup) measures tonight's windows without it, 3 read-only dry runs,
+  installs automatically ~07:05Z only if B1-B6 pass, else writes verdict-night1.json with the blocker; night-2 automatic rollback rule.
+- FORECASTING WITH FITS (NBA/NHL adaptive): still NOT proven — first windows from ~22:00Z (17:00 Toronto).
+- Autoresearch: snapshot r2 identity (goalie cache changed; IDENTITY-...-r2.json), protocols NBA 3573c5874d17 / NHL 4be3de929c7f bind the final hash; old ones
+  VOID. Supervised run (owner $2, one run): model claude-opus-5-5, $0.2765, no improvement. That approval is closed.
+- PREREGISTRATIONS frozen on main (pushed b0c9eaf): NFL line eval (T0 14:25:37Z, sha 5ea6fef1...), soccer AH research (T0 14:25:37Z, sha a3e1fc3b...),
+  NCAAB top-4 policy (owner: Alternative A; T0 14:29:50Z, sha 55b8734a...), clerical status-label addendum (133803d2...). Evaluator clarification addenda
+  (decided from document text only, no outcome read) on learning-phase2 2989bad: ncaab da8d4ff0..., nfl 5961a03c..., soccer a85ad131.... Outcomes viewed
+  before T0 (NCAAB 275, NFL 60 decided picks) are excluded by each T0 rule. Evaluators (synthetic tests only; never run on data) under §10 re-review.
+- Rollback: delivery checkout 4c47d99 (+ npm run build + kickstart api-delivery/web); bootout autoresearch-agent/-daily + rm plists + rm AGENT_BUDGET.json;
+  challenger store and research files are append-only research data with no serving effect.
+- Open: deep members unverified (no bounded deep run yet); NHL challengers depend on shots (I1 needs live release + owner acceptance of nhl_shots change);
+  pre-existing soccer_markets_eval.py digest mismatch vs sealed goals file (served goals markets unaffected: sealed() checks the file sha only);
+  9 Telegram uncertain sends (b5); full backend suite at the branch head not run since 7f76e49 (2928 passed, 8 deep-only + 2 pollution, fixed).
+
 ## Learning activation NBA/NHL: LIVE fits, trainer scheduled, delivery alias, autoresearch milestones 1-2 — Claude Opus 5.5 (lead, nbanhlnfl-03), Nov 18, 2026 04:39-12:30Z
 Durable plan + full status log: ~/nba-predictor-research-data/learning-plan.md. Evidence dirs: ~/nba-predictor-research-data/live-activation-2026-11-18/,
 ~/nba-predictor-research-data/autoresearch-baseline-2026-11-18/. Claims are kept separate: TRAINED / SCHEDULED / FORECASTING WITH FITS / IMPROVED (prospective).
