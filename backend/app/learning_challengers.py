@@ -15,11 +15,11 @@ import json
 import sqlite3
 import sys
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from . import config
+from . import config, release
 from .candidates import features, learners, live, registry
 from .db import utc_now
 
@@ -211,9 +211,39 @@ def store_path(data_dir: Optional[Path] = None) -> Path:
     return Path(data_dir or config.data_dir()) / "research" / "challengers.sqlite"
 
 
+KEEP_BACKUPS = 3
+
+
+def _backup_before_migration(path: Path) -> Optional[Path]:
+    """An existing store that open_store would migrate in place (missing column, old table or trigger) is copied first, with the
+    sqlite backup API, to challengers.pre-migrate-<ts>.sqlite; at most KEEP_BACKUPS of them are kept. None when no migration is due."""
+    if not path.is_file():
+        return None
+    ro = open_ro(path)
+    try:
+        has = {r[0] for r in ro.execute("SELECT name FROM sqlite_master")}
+        if "challenger_forecasts" not in has:
+            return None
+        needs = "recorded_at" not in {r[1] for r in ro.execute("PRAGMA table_info(challenger_forecasts)")} or _needs_migration(ro)
+        if not needs:
+            return None
+        dest = path.with_name(f"{path.stem}.pre-migrate-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')}.sqlite")
+        out = sqlite3.connect(dest)
+        try:
+            ro.backup(out)
+        finally:
+            out.close()
+    finally:
+        ro.close()
+    for old in sorted(path.parent.glob(f"{path.stem}.pre-migrate-*.sqlite"))[:-KEEP_BACKUPS]:
+        old.unlink(missing_ok=True)
+    return dest
+
+
 def open_store(path: Path) -> sqlite3.Connection:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    _backup_before_migration(path)
     conn = sqlite3.connect(path, isolation_level=None)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode = WAL")
@@ -267,6 +297,33 @@ def append_rows(path: Path, pol, c, rows: list, *, definition: str, dataset_vers
 
 
 # --- Recorder -------------------------------------------------------------------------------------------------------
+class NoArtifact(RuntimeError):
+    pass
+
+
+def _no_fit(*_a, **_k):
+    raise NoArtifact("no verified stored artifact for this spec and season")
+
+
+def _record_stored_only(conn, now, lines, specs) -> dict:
+    """live.record(write=False) with fitting disabled: ensure_fit(write=False) reaches `_fit` only when no verified stored artifact
+    exists, so with `_fit` replaced such a spec (deep ones included) is reported 'skipped: no artifact' and never refitted in memory.
+    live.py itself is unchanged."""
+    real = live._fit
+    live._fit = _no_fit
+    try:
+        res = live.record(conn, now=now, lines=lines, write=False, specs=specs)
+    finally:
+        live._fit = real
+    for name, msg in list(res["errors"].items()):
+        if msg.startswith("NoArtifact:"):
+            del res["errors"][name]
+            res["skipped"][name] = {"all": "skipped: no artifact"}
+    if res["status"] == "failed" and not res["errors"]:
+        res["status"] = "partial" if res["skipped"] else "success"
+    return res
+
+
 def record(conn, path: Path, *, policies: list, now: Optional[str] = None, lines: Optional[dict] = None, dry_run: bool = False) -> dict:
     """Challenger forecasts for games tipping within two hours of `now`. `conn` is the sport's store, used read-only (the
     pool recorder runs with write=False). Never raises: failures are reported in `errors`."""
@@ -280,7 +337,7 @@ def record(conn, path: Path, *, policies: list, now: Optional[str] = None, lines
         return out
     specs = list({c.spec.name: c.spec for p in policies for c in p.challengers}.values())
     try:
-        res = live.record(conn, now=now, lines=lines, write=False, specs=specs)
+        res = _record_stored_only(conn, now, lines, specs)
     except Exception as exc:
         out["status"], out["errors"]["recorder"] = "failed", f"{type(exc).__name__}: {exc}"
         return out
@@ -342,6 +399,11 @@ def main(argv: Optional[list] = None) -> int:
     if a.now and not a.dry_run and (not a.store or Path(a.store).resolve() == store_path().resolve()):
         print(json.dumps({"status": "refused", "reason": "--now backdates the cutoff: use --dry-run, or an explicit --store that is not the live store"}))
         return 2
+    if not a.dry_run and release.enabled():       # the same release checks as the other delivery jobs that write data
+        problems = release.check(a.sport)["problems"]
+        if problems:
+            print(json.dumps({"status": "refused", "reason": "release guard: " + "; ".join(problems)}))
+            return 2
     try:
         policies = load_policies(a.sport)
     except PolicyError as exc:

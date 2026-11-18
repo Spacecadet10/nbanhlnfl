@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Prospective challenger recording (research only). Every 15 minutes, per sport (nba nhl ncaab soccer nfl), prices games inside
+     their two-hour pre-tip-off window and appends rows to data/research/challengers.sqlite. It never touches serving, cards or
+     betting, and never writes the sport stores. Runs through app.learning_run in light mode (own lock, no heavy lock, no game-window
+     deferral, 120 s wall, 1.5 GB cap), on the delivery release with the release guard.
+     Ordering prerequisite: the delivery checkout (and its release pin) must already carry app.learning_run with the light mode and
+     scripts/learning_challengers_cycle.sh; installing first makes every run fail. Install (owner decision, outside the forecast windows):
+       cp scripts/launchd/com.nba-predictor.learning-challengers.plist ~/Library/LaunchAgents/
+       launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.nba-predictor.learning-challengers.plist
+     Rollback (the store keeps its rows; delete data/research/challengers.sqlite only to discard them):
+       launchctl bootout gui/$(id -u)/com.nba-predictor.learning-challengers
+       rm ~/Library/LaunchAgents/com.nba-predictor.learning-challengers.plist -->
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>NBA_DATA_DIR</key>
+		<string>/Users/andry/Desktop/nbanhlnfl/data</string>
+		<key>NBA_RELEASE_GUARD</key>
+		<string>1</string>
+		<key>NBA_RELEASE_ROOT</key>
+		<string>/Users/andry/nba-predictor-delivery</string>
+		<key>OMP_NUM_THREADS</key>
+		<string>1</string>
+		<key>PYTHONDONTWRITEBYTECODE</key>
+		<string>1</string>
+		<key>PYTHONUNBUFFERED</key>
+		<string>1</string>
+	</dict>
+	<key>Label</key>
+	<string>com.nba-predictor.learning-challengers</string>
+	<key>Nice</key>
+	<integer>10</integer>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/sh</string>
+		<string>/Users/andry/nba-predictor-delivery/scripts/learning_challengers_cycle.sh</string>
+	</array>
+	<key>StandardErrorPath</key>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/learning-challengers-launchd.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/learning-challengers-launchd.log</string>
+	<key>StartInterval</key>
+	<integer>900</integer>
+	<key>WorkingDirectory</key>
+	<string>/Users/andry/nba-predictor-delivery/backend</string>
+</dict>
+</plist>

@@ -224,3 +224,62 @@ def test_the_lock_outlives_a_sigkilled_guard_while_the_child_lives(tmp_path):
             os.killpg(child, 9)
         except Exception:
             pass
+
+
+# ---- light mode (prospective recorders) -------------------------------------------------------------------------------
+def test_light_runs_inside_a_game_window_and_while_the_heavy_lock_is_held(tmp_path):
+    games_store(tmp_path / "data", "nba", 1.0)                 # tips off in 1 h: a heavy job is refused
+    assert go(tmp_path, [PY, "-c", "pass"]) == lr.EXIT_REFUSED
+    lock = tmp_path / "data" / ".learning-heavy.lock"
+    fd = os.open(lock, os.O_CREAT | os.O_RDWR)
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    try:
+        assert go(tmp_path, [PY, "-c", "pass"], light=True) == 0
+    finally:
+        os.close(fd)
+    assert events(tmp_path)[-1]["event"] == "end"
+
+
+def test_light_does_not_take_the_heavy_lock_and_refuses_only_the_same_name(tmp_path):
+    marker = tmp_path / "heavy_rc"
+    code = (f"import sys; sys.path.insert(0, {str(Path(lr.__file__).parent.parent)!r}); from app import learning_run as lr; "
+            f"rc = lr.run_guarded([sys.executable, '-c', 'pass'], name='h', max_minutes=1, max_rss_gb=4, data_dir={str(tmp_path / 'data')!r}); "
+            f"open({str(marker)!r}, 'w').write(str(rc))")
+    # a light child that, while it lives, runs a heavy job (must be admitted) and a same-name light job (must be refused)
+    inner = f"import subprocess, sys; subprocess.run([sys.executable, '-c', {code!r}])"
+    assert go(tmp_path, [PY, "-c", inner], light=True) == 0
+    assert marker.read_text() == "0"
+    lockp = tmp_path / "data" / ".learning-light-t.lock"
+    lockp.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(lockp, os.O_CREAT | os.O_RDWR)
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    try:
+        assert go(tmp_path, [PY, "-c", "pass"], light=True) == lr.EXIT_REFUSED
+        assert lr.run_guarded([PY, "-c", "pass"], name="other", max_minutes=1, max_rss_gb=4, data_dir=tmp_path / "data", light=True) == 0
+    finally:
+        os.close(fd)
+
+
+def test_light_keeps_the_wall_clock_and_memory_caps(tmp_path):
+    assert go(tmp_path, [PY, "-c", "import time; time.sleep(30)"], light=True, max_minutes=0.01) == lr.EXIT_TIMEOUT
+    assert go(tmp_path, [PY, "-c", "import time; time.sleep(30)"], light=True, rss_reader=lambda pid: 10 * 1024 ** 3) == lr.EXIT_MEMORY
+
+
+def test_cli_light_flag(tmp_path):
+    games_store(tmp_path / "data", "nba", 1.0)
+    env = dict(os.environ, NBA_DATA_DIR=str(tmp_path / "data"), PYTHONDONTWRITEBYTECODE="1")
+    base = [PY, "-m", "app.learning_run", "--name", "x", "--max-minutes", "1", "--max-rss-gb", "2"]
+    cwd = str(Path(lr.__file__).parent.parent)
+    # nba tips off within the default window only if the clock is near it; the fixture is fixed to 2026-11-18, so check the flag parses
+    r = subprocess.run(base + ["--light", "--", PY, "-c", "import sys; sys.exit(5)"], env=env, capture_output=True, text=True, cwd=cwd)
+    assert r.returncode == 5
+
+
+def test_the_run_log_rotates_at_5_mb_keeping_two_rotated_files(tmp_path, monkeypatch):
+    monkeypatch.setattr(lr, "MAX_LOG_BYTES", 200)
+    log = tmp_path / "data" / "research" / "learning-runs.jsonl"
+    for _ in range(6):
+        go(tmp_path, [PY, "-c", "pass"])
+    names = sorted(p.name for p in log.parent.iterdir() if p.name.startswith("learning-runs"))
+    assert names == ["learning-runs.jsonl", "learning-runs.jsonl.1", "learning-runs.jsonl.2"]
+    assert log.stat().st_size < 1000 and all(json.loads(x) for x in log.read_text().splitlines())

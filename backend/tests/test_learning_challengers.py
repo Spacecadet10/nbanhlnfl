@@ -100,7 +100,27 @@ def counts(conn):
             for t in ("candidate_forecasts", "predictions", "market_forecasts", "adaptive_forecasts")}
 
 
-def test_dry_run_reports_and_writes_nothing(upcoming, tmp_path):
+@pytest.fixture
+def seeded(upcoming, tmp_path):
+    """The stored artifacts the live cycle would have written (made on a copy of the store, so the fixture's rows stay untouched)."""
+    from app.candidates import live
+    copy = sqlite3.connect(tmp_path / "copy.sqlite")
+    copy.row_factory = sqlite3.Row
+    upcoming.backup(copy)
+    live.record(copy, now=NOW, lines=LINES, write=True, specs=[registry.BY_NAME[n] for n in ("poisson_draw:nhl_base", "multinomial_l2:nhl_base")])
+    copy.close()
+
+
+def test_a_spec_without_a_stored_artifact_is_skipped_never_refitted(upcoming, tmp_path):
+    from app.candidates import live
+    store = tmp_path / "research" / "challengers.sqlite"
+    out = lc.record(upcoming, store, policies=[policy(tmp_path)], now=NOW, lines=LINES)
+    assert out["created"] == 0 and out["status"] == "partial"
+    assert all("no artifact" in v["all"] for v in out["skipped"].values()) and len(out["skipped"]) == 2
+    assert not live.artifact_dir("nhl").exists()          # nothing fitted or written
+
+
+def test_dry_run_reports_and_writes_nothing(upcoming, seeded, tmp_path):
     store = tmp_path / "research" / "challengers.sqlite"
     before = counts(upcoming)
     out = lc.record(upcoming, store, policies=[policy(tmp_path)], now=NOW, lines=LINES, dry_run=True)
@@ -108,7 +128,7 @@ def test_dry_run_reports_and_writes_nothing(upcoming, tmp_path):
     assert not store.exists() and counts(upcoming) == before
 
 
-def test_record_writes_a_separate_append_only_idempotent_store(upcoming, tmp_path):
+def test_record_writes_a_separate_append_only_idempotent_store(upcoming, seeded, tmp_path):
     store = tmp_path / "research" / "challengers.sqlite"
     pol = policy(tmp_path)
     before = counts(upcoming)
@@ -144,7 +164,7 @@ def test_record_writes_a_separate_append_only_idempotent_store(upcoming, tmp_pat
             c.execute(f"INSERT INTO challenger_forecasts ({','.join(row)}) VALUES ({','.join('?' * len(row))})", list(row.values()))
 
 
-def test_a_changed_policy_is_a_new_policy_sha_with_its_own_rows(upcoming, tmp_path):
+def test_a_changed_policy_is_a_new_policy_sha_with_its_own_rows(upcoming, seeded, tmp_path):
     store = tmp_path / "research" / "challengers.sqlite"
     a = lc.load_policy(policy_file(tmp_path, [ch(spec_dict("poisson_draw:nhl_base"))]))
     b = lc.load_policy(policy_file(tmp_path, [ch(spec_dict("poisson_draw:nhl_base"), note="a different note")]))
@@ -159,7 +179,7 @@ def test_games_outside_the_two_hour_window_are_not_recorded(upcoming, tmp_path):
     assert out["eligible_games"] == 0 and out["created"] == 0
 
 
-def test_a_failing_spec_is_reported_and_never_blocks_the_others(upcoming, tmp_path, monkeypatch):
+def test_a_failing_spec_is_reported_and_never_blocks_the_others(upcoming, seeded, tmp_path, monkeypatch):
     real = lc.registry.available
     monkeypatch.setattr(lc.registry, "available", lambda s: False if s.name.startswith("multinomial") else real(s))
     out = lc.record(upcoming, tmp_path / "c.sqlite", policies=[policy(tmp_path)], now=NOW, lines=LINES)
@@ -167,7 +187,7 @@ def test_a_failing_spec_is_reported_and_never_blocks_the_others(upcoming, tmp_pa
 
 
 # ---- review fixes -------------------------------------------------------------------------------------------------------
-def test_rows_carry_the_real_write_time_separate_from_the_cutoff(upcoming, tmp_path):
+def test_rows_carry_the_real_write_time_separate_from_the_cutoff(upcoming, seeded, tmp_path):
     store = tmp_path / "research" / "challengers.sqlite"
     lc.record(upcoming, store, policies=[policy(tmp_path)], now=NOW, lines=LINES)
     c = sqlite3.connect(store)
@@ -223,3 +243,22 @@ def test_preregistered_n_is_a_whole_number_of_at_least_one_or_null(tmp_path, n):
         lc.load_policy(policy_file(tmp_path, [c]))
     c["preregistered_n"] = 40
     assert lc.load_policy(policy_file(tmp_path, [c])).challengers[0].preregistered_n == 40
+
+
+def test_the_release_guard_refuses_a_recording_run_from_an_unclean_release_and_allows_a_clean_one(tmp_path, monkeypatch, capsys):
+    from app import release
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "nhl.sqlite").write_bytes(b"")
+    monkeypatch.setenv("NBA_DATA_DIR", str(data))
+    monkeypatch.setattr(release, "enabled", lambda: True)
+    monkeypatch.setattr(release, "check", lambda sport: {"problems": ["checkout has uncommitted changes"]})
+    assert lc.main(["record", "--sport", "nhl"]) == 2
+    out = json.loads(capsys.readouterr().out)
+    assert out["status"] == "refused" and "release guard" in out["reason"] and "uncommitted" in out["reason"]
+    monkeypatch.setattr(lc.sqlite3, "connect", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("reached the recorder")))
+    with pytest.raises(RuntimeError, match="reached the recorder"):
+        lc.main(["record", "--sport", "nhl", "--dry-run"])           # a dry run writes nothing: not guarded
+    monkeypatch.setattr(release, "check", lambda sport: {"problems": []})
+    with pytest.raises(RuntimeError, match="reached the recorder"):
+        lc.main(["record", "--sport", "nhl"])

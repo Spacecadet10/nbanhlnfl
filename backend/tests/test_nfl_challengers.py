@@ -112,8 +112,13 @@ def test_a_dry_run_does_not_write_the_nfl_access_log_and_the_latest_served_row_w
     size = log.stat().st_size if log.exists() else 0
     nc.record(c, tmp_path / "ch.sqlite", policies=pols(), now=NOW, dry_run=True)
     assert (log.stat().st_size if log.exists() else 0) == size
+    mine = nc.challenger_access_log_path()
+    assert not mine.exists()
     nc.record(c, tmp_path / "ch.sqlite", policies=pols(), now=NOW)
-    assert log.stat().st_size > size                           # a real run is logged, as the served recorder does
+    assert mine.is_file() and len(mine.read_text().splitlines()) == 1        # a real run is logged, in the challenger log
+    assert (log.stat().st_size if log.exists() else 0) == size               # the official test-access log is not touched
+    nc.record(c, tmp_path / "ch3.sqlite", policies=pols(), now=NOW)
+    assert len(mine.read_text().splitlines()) == 1                           # the same policies and games are not logged again
     # a later served row for the same market with another line is the one that is paired
     c.execute("PRAGMA foreign_keys = OFF")
     c.execute("DROP TRIGGER IF EXISTS game_forecasts_no_update")

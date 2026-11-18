@@ -294,3 +294,21 @@ def test_the_ncaab_incumbent_ignores_research_forecasts(store, tmp_path):
     total = next(x for k, x in g.items() if k[1] == "total")
     assert total["n_scored"] == 1 and row not in (0.01, 0.99)
     assert total["log_loss_incumbent"] < 1.5 and total["brier_incumbent"] < 0.9      # the served forecast, not the 0.01 research row
+
+
+def test_old_refit_files_and_abandoned_temp_files_are_pruned_keeping_this_and_the_previous_week(store, tmp_path):
+    import os, time
+    path = tmp_path / "research" / "challengers.sqlite"
+    cache = path.parent / "challengers" / "ncaab"
+    cache.mkdir(parents=True)
+    for name in ("refit-2026-11-09-aaa.json", "refit-2026-11-02-bbb.json", "refit-2026-10-12-ccc.json"):
+        (cache / name).write_text("{}")
+    old, fresh = cache / "refit-2026-11-16-x.tmp123", cache / "refit-2026-11-16-y.tmp456"
+    old.write_text("x"), fresh.write_text("x")
+    os.utime(old, (time.time() - 7200,) * 2)
+    nc.record(store, path, policies=policies(), now=NOW)
+    names = {f.name for f in cache.iterdir()}
+    assert "refit-2026-11-09-aaa.json" in names                            # previous week kept
+    assert not names & {"refit-2026-11-02-bbb.json", "refit-2026-10-12-ccc.json"}
+    assert any(n.startswith("refit-2026-11-16-") and n.endswith(".json") for n in names)
+    assert "refit-2026-11-16-y.tmp456" in names and "refit-2026-11-16-x.tmp123" not in names
