@@ -1,3 +1,45 @@
+## Learning activation follow-up: trainer run 1, heavy lock, deep run, staged checks — Claude Opus 5.5 (lead, nbanhlnfl-03), Nov 18, 2026 16:15-17:20Z
+Full log: ~/nba-predictor-research-data/learning-plan.md (entries 16:16Z onward). All-sports activation is NOT complete (matrix below).
+- Scheduled trainer run 1 (launchd 14:30Z): exit 0 at 16:15Z. NHL weekly b921c537 refit -> combiner fit 51 (14:47Z); NHL daily d11d9573 -> combiner
+  fit 68 (16:14Z, 17 published, 0 failed; members torch_mlp/keras_mlp skipped: library absent). NBA weekly/daily skipped (fits in force for W47 / Nov 18).
+  Live jobs during it: 0 failed; nba odds max 0 s, injuries 1 s, refresh 1 s; nhl odds/refresh 1 s. No forecast window fell inside 14:30-16:15Z.
+  Evidence: ~/nba-predictor-research-data/live-activation-2026-11-18/scheduled-trainer-1.txt.
+- Trainer template (learning-phase2 435fe32, afb8f1a; test first; installed cmp-identical): plist Nice 10, and the GAP "trainer bypasses the heavy
+  lock" fixed: it now runs through the delivery app.learning_run (machine-wide <data>/.learning-heavy.lock, empty --defer-sports so the schedule is
+  unchanged, 300 min / 8 GB caps, --nice 0 so effective nice stays 10). Verified: the exact command was refused rc 75 while the deep run held the
+  lock. Heavy jobs on the lock: both trainer slots, deep runs, autoresearch-daily, autoresearch-agent (manual wrapper execs the scheduled one).
+  Challenger recorder uses --light (its own lock, by design). First locked trainer run: 20:30Z slot -> scheduled-trainer-2.txt (nohup watcher).
+  Rollback: .pre-lock / .pre-nice plists in live-activation-2026-11-18/ (bootout, copy back, bootstrap).
+- Deep members: bounded run on a COPY (deep venv, PYTHONPATH live backend, heavy lock, nice 15, 90 min / 8 GB): NHL rc 0, 965 s, 3.5 GB, torch fit 83 +
+  keras fit 84 success, combiner 85; NBA rc 0, 935 s, 3.7 GB, torch 69 / keras 70 / torch:normal 71 success, combiner 72. Same definition ids as live.
+  TRAINED on a copy (weekly cadence only); NOT live: the live trainer env has no torch/tf; switching it is a separate owner decision.
+- Paid budget reconciled: the owner selected "$5/week, 2 runs" ($2.50/run) in the 14:14Z question (transcript 14:16:00Z) with conditions;
+  AGENT_BUDGET.json matches. Spent under it: $0. Earlier $2 single-run approval: $0.2765 spent, closed.
+- Challenger staging: added F1 (THRESHOLDS.md addendum written before any night-1 sample): after the automatic install the job's first real cycle
+  must pass (all 5 sports rc 0, <=120 s, <=1.5 GB, launchd exit 0, store quick_check ok, near_tipoff within B1) within 50 min, else rollback;
+  not observed = failure. monitor.py restarted 16:34Z (nohup). Evidence: verdict-night1.json, first-execution.json, events.jsonl.
+- S5 consumption proof (nohup, 21:45Z-03:30Z, s5-proof.jsonl): per definition and per market, verdict consumed / FAILED / "not observed".
+- Full backend suite at learning-phase2 (venv: live): run 1 3066 passed / 12 failed / 36 errors (not reproduced; test_research_agent alone 54 passed);
+  run 2 3107 passed, 8 failed = test_deep_study ModuleNotFoundError torch/keras (deep venv: 10 passed). File: live-activation-2026-11-18/suite-learning2-afb8f1a.txt.
+- Processes: retired 11 stale shells of this session (10 self-matching pgrep waiters, 1 stuck strings|ugrep). Durable (nohup): monitor.py, s5_proof.py,
+  watch-trainer-2.sh. Not ours, kept: caffeinate -s.
+- Open: live release pin note "checkout 43d4b74, pinned d5e9221" on every guarded run (pin not refreshed after the Nov 16 release; note only, no
+  refusal); autoresearch-daily refused at 16:00Z by the game window (free evaluation deferred today).
+
+Coverage matrix (separate claims; "not observed" is not a pass):
+| Sport / scope | Trained | Scheduled | Forecasting with fits | Improved prospectively |
+|---|---|---|---|---|
+| NBA adaptive weekly 4b3b8abf (moneyline/spread/total per definition) | yes (fit 24) | yes, trainer under heavy lock | not observed yet (S5 from 21:45Z) | not evaluated |
+| NBA adaptive daily 89dc8edd | yes (fit 48) | yes | not observed yet | not evaluated |
+| NHL adaptive weekly b921c537 | yes (fits 17, 51) | yes | not observed yet | not evaluated |
+| NHL adaptive daily d11d9573 | yes (fits 34, 68; 68 by the schedule) | yes | not observed yet | not evaluated |
+| NBA/NHL deep members | copy only (fits 69-72, 83-85) | no (live env lacks libraries) | no | no |
+| NBA/NHL/NCAAB/Soccer/NFL challengers | n/a (frozen params / stored artifacts) | no: staged, install only if night-1 + F1 pass | 0 rows recorded (store not created) | no |
+| NCAAB | no live learning | no | no | prereg frozen, evaluator fixture-tested only |
+| Soccer | no live learning (sealed ids) | no | no | prereg frozen, evaluator fixture-tested only |
+| NFL | no live learning | no | no | prereg frozen, evaluator fixture-tested only |
+| Autoresearch NBA/NHL | 1 supervised run, no improvement | agent Tue/Fri 12:30 + daily 11:00 local, budget-gated | n/a (never serves) | no |
+
 ## §10 evaluator review record (preregistrations of 2026-11-18) — lead nbanhlnfl-03, Nov 18, 2026 15:17Z
 - Reviewer: fresh, independent, read-only Claude Opus 5.5 sessions (no outcome, close, quote or result read; synthetic tests only).
 - Reviews: a27e81f (14:57:42Z, defects N1-N8/F1-F5/S1-S3 + ambiguity resolutions → addenda), a9cca25 (15:11:20Z CLEARED with fixes),
