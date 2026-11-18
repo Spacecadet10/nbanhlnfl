@@ -10,6 +10,15 @@ from learning_support import add_fit, add_forecast, combiner_detail, make_store,
 FIT_AT, BEFORE, AFTER = "2026-11-17T10:00:00Z", "2026-11-17T09:00:00Z", "2026-11-17T11:00:00Z"
 
 
+OLD = "0" * 64
+
+
+@pytest.fixture(autouse=True)
+def current_defs(monkeypatch):
+    """The current weekly/daily adaptive definitions are computed on the store; tests state them."""
+    monkeypatch.setattr(lc, "current_definitions", lambda conn: {"weekly": "d" * 64, "daily": "e" * 64}, raising=False)
+
+
 @pytest.fixture
 def env(tmp_path):
     data, agents = tmp_path / "data", tmp_path / "agents"
@@ -99,3 +108,79 @@ def test_endpoint_and_no_write(env, monkeypatch):
     r = TestClient(main.app).get("/api/learning/coverage")
     assert r.status_code == 200 and len(r.json()["rows"]) > 20
     assert (data / "nba.sqlite").read_bytes() == before
+
+
+def _store(tmp_path, fits_and_rows):
+    data, agents = tmp_path / "data", tmp_path / "agents"
+    conn = make_store(data, "nba")
+    fits_and_rows(conn)
+    conn.close()
+    write_agents(agents, odds_env={"NBA_DAILY_AGREEMENT": "1"}, trainer_sports="nba")
+    return data, agents
+
+
+def test_rows_under_a_superseded_definition_are_not_yes(tmp_path):
+    def build(conn):
+        fit = add_fit(conn, "nba", "combiner", "combiner", "success", finished=FIT_AT, definition=OLD, detail=combiner_detail("winner"))
+        add_forecast(conn, "nba", "winner", "forecast", fit, AFTER, definition=OLD)
+    m = lc.coverage(*_store(tmp_path, build))
+    r = row(m, "nba", "winner")
+    assert r["trained"]["state"] == "no"
+    assert r["recording_prospectively"]["state"] == "no"
+    assert r["forecasting_with_fits"]["state"] == "no"
+    assert r["evaluated"]["state"] == "no"
+
+
+def test_current_daily_definition_counts_and_definitions_are_reported(tmp_path):
+    def build(conn):
+        fit = add_fit(conn, "nba", "combiner", "combiner", "success", finished=FIT_AT, definition="e" * 64, schedule="daily",
+                      detail=combiner_detail("winner"))
+        add_forecast(conn, "nba", "winner", "forecast", fit, AFTER, definition="e" * 64)
+    m = lc.coverage(*_store(tmp_path, build))
+    assert row(m, "nba", "winner")["forecasting_with_fits"]["state"] == "yes"
+    assert m["definitions"]["nba"] == {"weekly": "d" * 64, "daily": "e" * 64}
+
+
+def test_forecast_must_carry_a_fit_of_its_own_definition(tmp_path):
+    def build(conn):
+        fit = add_fit(conn, "nba", "combiner", "combiner", "success", finished=FIT_AT, definition="d" * 64, detail=combiner_detail("winner"))
+        add_forecast(conn, "nba", "winner", "forecast", fit, AFTER, definition="e" * 64)      # row definition differs from its fit's
+    assert row(lc.coverage(*_store(tmp_path, build)), "nba", "winner")["forecasting_with_fits"]["state"] == "no"
+
+
+def test_definition_failure_is_unknown_never_yes(tmp_path, monkeypatch):
+    def build(conn):
+        fit = add_fit(conn, "nba", "combiner", "combiner", "success", finished=FIT_AT, detail=combiner_detail("winner"))
+        add_forecast(conn, "nba", "winner", "forecast", fit, AFTER)
+    def boom(conn):
+        raise RuntimeError("no members")
+    monkeypatch.setattr(lc, "current_definitions", boom)
+    m = lc.coverage(*_store(tmp_path, build))
+    r = row(m, "nba", "winner")
+    for k in ("trained", "recording_prospectively", "forecasting_with_fits", "evaluated"):
+        assert r[k]["state"] == "unknown" and "definition unavailable (no members)" in r[k]["detail"]
+    assert "definition unavailable" in str(m["definitions"]["nba"])
+
+
+def test_evaluated_is_unknown_when_games_table_is_missing(tmp_path):
+    def build(conn):
+        fit = add_fit(conn, "nba", "combiner", "combiner", "success", finished=FIT_AT, detail=combiner_detail("winner"))
+        add_forecast(conn, "nba", "winner", "forecast", fit, AFTER)
+        conn.commit()
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("DROP TABLE games")
+    r = row(lc.coverage(*_store(tmp_path, build)), "nba", "winner")
+    assert r["evaluated"]["state"] == "unknown" and "games" in r["evaluated"]["detail"]
+
+
+def test_non_dict_fit_markets_do_not_break_the_row(tmp_path):
+    def build(conn):
+        add_fit(conn, "nba", "combiner", "combiner", "success", finished=FIT_AT, detail={"markets": {"winner": "x"}})
+    assert row(lc.coverage(*_store(tmp_path, build)), "nba", "winner")["trained"]["state"] == "no"
+
+
+def test_base_model_test_is_separate_from_settled_with_fit(env):
+    m = lc.coverage(*env)
+    assert row(m, "ncaab", "winner")["base_tested"]["state"] == "yes"
+    assert row(m, "ncaab", "winner")["evaluated"]["state"] == "no"
+    assert row(m, "nba", "winner")["base_tested"]["state"] == "unknown"

@@ -93,3 +93,18 @@ def test_endpoint(env, monkeypatch):
     r = TestClient(main.app).get("/api/learning/ops", params={"sport": "nba"})
     assert r.status_code == 200 and r.json()["trainer"]["installed"] is True
     assert TestClient(main.app).get("/api/learning/ops", params={"sport": "zzz"}).status_code == 422
+
+
+def test_open_ro_closes_the_connection_when_the_probe_fails(tmp_path, monkeypatch):
+    (tmp_path / "nba.sqlite").write_bytes(b"")
+    closed = []
+
+    class Conn:
+        def execute(self, *a):
+            raise sqlite3.OperationalError("boom")
+
+        def close(self):
+            closed.append(1)
+    monkeypatch.setattr(sqlite3, "connect", lambda *a, **k: Conn())
+    assert learning_ops.open_ro(tmp_path, "nba") == (None, "unreadable")
+    assert len(closed) == 2        # one per mode tried

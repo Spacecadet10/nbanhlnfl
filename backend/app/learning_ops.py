@@ -31,12 +31,15 @@ def open_ro(data_dir: Path, sport: str) -> tuple[Optional[sqlite3.Connection], s
     if not path.is_file():
         return None, "missing"
     for mode in ("mode=ro", "immutable=1"):
+        conn = None
         try:
             conn = sqlite3.connect(f"{path.resolve().as_uri()}?{mode}", uri=True)
             conn.row_factory = sqlite3.Row
             conn.execute("SELECT 1 FROM sqlite_master LIMIT 1")
             return conn, "read-only" if mode == "mode=ro" else "immutable snapshot (WAL not read)"
         except sqlite3.Error:
+            if conn is not None:
+                conn.close()
             continue
     return None, "unreadable"
 
