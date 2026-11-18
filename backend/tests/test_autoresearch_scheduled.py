@@ -391,6 +391,9 @@ def test_daily_template_schedule_and_wrapper():
     assert p["StartCalendarInterval"] == {"Hour": 11, "Minute": 0} and p["Nice"] == 15 and p["ProcessType"] == "Background"
     assert p["ProgramArguments"][-1].endswith("scripts/autoresearch_daily.sh")
     assert p["StandardOutPath"].startswith("/Users/andry/Desktop/nbanhlnfl/data/") and p["RunAtLoad"] is False
+    assert p["ProgramArguments"] == ["/bin/bash", "/Users/andry/nba-predictor-delivery/scripts/autoresearch_daily.sh"]
+    assert p["WorkingDirectory"] == "/Users/andry/nba-predictor-delivery/backend"
+    assert p["EnvironmentVariables"]["LEARNING_PYTHON"] == "/Users/andry/nba-predictor-live/backend/.venv/bin/python"
     text = (ROOT / "scripts" / "launchd" / "com.nba-predictor.autoresearch-daily.plist").read_text()
     assert "never starts an agent" in text and "never spends" in text and "NOT installed" in text
 
