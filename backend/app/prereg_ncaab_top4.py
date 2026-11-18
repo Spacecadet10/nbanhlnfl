@@ -28,7 +28,8 @@ PREREG_FILE = "ncaab-top4-policy-eval-2026-11-18.md"
 PREREG_SHA256 = "55b8734a28eba1f56804810516fbf96ee1f0df6c2b7ce7c4dd1e6baa22bb9f3b"
 REPO_ROOT = pc.REPO_ROOT
 T0 = "2026-11-18T14:29:50Z"              # committer timestamp of b0c9eaf (git log --diff-filter=A on the document)
-RULE = ncaab_cards.RULE
+ADDENDA_SHA256 = {"addendum-2026-11-18-ncaab-evaluator-clarifications.md": "da8d4ff0cb1ef96c16b46d7d74b8e7718d18031240a28112155cb6f23ab7fb2d"}
+RULE = "ncaab-top4-gap-v1"             # literal: a later change of ncaab_cards.RULE is a rule change that ends counting
 STOP_DAYS, STOP_DATE = 60, "2027-03-15"
 P1_REPS = 1000
 WINDOW = (time(11, 0, 0), time(11, 15, 0))
@@ -43,6 +44,7 @@ STATE_KEYS = ("push", "void", "unscorable", "past7", "pending")
 def check_document() -> None:
     """Refuses unless the frozen document's bytes and the frozen sigmas are as registered (section 3)."""
     pc.check_prereg(PREREG_FILE, PREREG_SHA256, REPO_ROOT)
+    pc.check_addenda(ADDENDA_SHA256, REPO_ROOT)
     path = REPO_ROOT / "backend" / "app" / "models" / "ncaab_frozen_decision.json"
     sig = json.loads(path.read_text())["sigmas"]
     if sig["eff_margin"] != SIGMA_SPREAD or sig["points_total"] != SIGMA_TOTAL:
@@ -91,8 +93,21 @@ class Classification:
     stop_reason: Optional[str] = None
 
 
-def classify(rows: list, *, asof: datetime, t0: str = T0, stop_date: str = STOP_DATE, stop_days: int = STOP_DAYS) -> Classification:
-    """Section 1 and 7. Non-qualifying days are counted by reason and never analysed; nothing is imputed or re-run."""
+def integrity_failure(day: dict, store: sqlite3.Connection) -> bool:
+    """Section 10 (addendum 1): any entry evaluated by any section 2 policy whose stored q_sel differs from the re-read
+    p_a_devig of its quote_id (side-adjusted) by more than 1e-6, or whose quote is missing. Reads quote rows only."""
+    for policy in ("P0", "P2", "P3", "P4", "P5", "P6"):
+        for u in choose(policy, day):
+            r = store.execute("SELECT p_a_devig FROM market_quotes WHERE quote_id = ?", (u["quote_id"],)).fetchone()
+            if r is None or abs((r[0] if u["side"] == "a" else 1 - r[0]) - u["q_sel"]) > 1e-6:
+                return True
+    return False
+
+
+def classify(rows: list, *, asof: datetime, t0: str = T0, stop_date: str = STOP_DATE, stop_days: int = STOP_DAYS,
+             store: Optional[sqlite3.Connection] = None) -> Classification:
+    """Section 1 and 7. Non-qualifying days are counted by reason and never analysed; nothing is imputed or re-run. With a
+    `store` the q_sel integrity of each day is decided here, from ledger and quote rows only (no close, no result)."""
     cl = Classification()
     bad = cl.excluded
 
@@ -121,15 +136,21 @@ def classify(rows: list, *, asof: datetime, t0: str = T0, stop_date: str = STOP_
             elif replay_selected(r["candidates"]) != r["selected"]:
                 bump("P0 replay mismatch")
             else:
-                cl.qualifying.append(prepare_day(r))
+                day = prepare_day(r)
+                if store is not None and integrity_failure(day, store):
+                    bump("q_sel integrity failure")
+                else:
+                    cl.qualifying.append(day)
+    cl.counted = cl.qualifying[:stop_days]
     first = _parse(t0).astimezone(ncaab_cards.EASTERN).date()
     last = min(asof.astimezone(ncaab_cards.EASTERN).date() - timedelta(days=1), date.fromisoformat(stop_date))
+    if len(cl.qualifying) >= stop_days:           # days after the last counted day are not counted (addendum / section 7)
+        last = min(last, date.fromisoformat(cl.counted[-1]["et_date"]))
     d = first
     while d <= last:
         if d.isoformat() not in seen:
             bump("no selection row")
         d += timedelta(days=1)
-    cl.counted = cl.qualifying[:stop_days]
     if len(cl.qualifying) > stop_days:
         bad["after 60th qualifying day"] = len(cl.qualifying) - stop_days
     if len(cl.qualifying) >= stop_days:
@@ -329,7 +350,10 @@ def test_mean(num, den) -> dict:
 test_mean.__test__ = False       # a function named test_* is not a pytest test
 
 
-def h3_p(theta0: float, replicate_means) -> float:
+def h3_p(theta0: Optional[float], replicate_means) -> float:
+    """Randomisation p of P0's mean against the P1 replicate means; 1.0 (not testable) without an observed P0 mean."""
+    if theta0 is None:
+        return 1.0
     reps = list(replicate_means)
     return (1 + sum(1 for r in reps if r >= theta0)) / (1 + len(reps))
 
@@ -347,29 +371,35 @@ _SIDE = {"a": "a", "home": "a", "over": "a", "b": "b", "away": "b", "under": "b"
 
 
 def audit(ledger: sqlite3.Connection, days: list) -> dict:
-    """Descriptive counts of P0 games against structured sent-card records (published_picks linked to a 'sent' delivery);
-    never the message text, never a CLV, excess or win figure."""
+    """Descriptive counts of P0 games against structured sent-card records (addendum 6): `published_picks` rows with
+    basis 'live' (compared market, side, line) and `best_picks` rows, each joined to a 'sent' delivery by sport and game_id.
+    A sent delivery linked only by a best_picks row or a non-live published_picks row is "delivered, pick not recorded";
+    no sent record at all is "no structured delivery record" (it cannot tell not delivered from delivered without a record:
+    `deliveries` has no game column and message text is never parsed). Never a CLV, excess or win figure."""
     out = {"p0_games": 0, "delivered_matches_selection": 0, "delivered_differs_from_selection": 0,
-           "no_structured_delivery_record": 0, "unconfirmed_or_backfilled_basis": 0}
+           "delivered_pick_not_recorded": 0, "no_structured_delivery_record": 0}
+
+    def rows(sql: str, game: str) -> list:
+        try:
+            return ledger.execute(sql, (game,)).fetchall()
+        except sqlite3.Error:
+            return []
     for day in days:
         for u in choose("P0", day):
             out["p0_games"] += 1
-            try:
-                rows = ledger.execute("SELECT p.market, p.side, p.line, p.basis FROM published_picks p JOIN deliveries d "
-                                      "ON d.delivery_key = p.delivery_key WHERE p.sport = 'ncaab' AND p.game_id = ? AND d.status = 'sent'",
-                                      (u["game_id"],)).fetchall()
-            except sqlite3.Error:
-                rows = []
-            live = [r for r in rows if r[3] == "live"]
-            if not rows:
-                out["no_structured_delivery_record"] += 1
-            elif not live:
-                out["unconfirmed_or_backfilled_basis"] += 1
-            elif any(r[0] == u["market"] and _SIDE.get(r[1]) == u["side"] and (r[2] == u["line"] or
-                     (r[2] is not None and u["line"] is not None and abs(r[2] - u["line"]) < 1e-9)) for r in live):
-                out["delivered_matches_selection"] += 1
+            pub = rows("SELECT p.market, p.side, p.line, p.basis FROM published_picks p JOIN deliveries d ON d.delivery_key = p.delivery_key "
+                       "WHERE p.sport = 'ncaab' AND p.game_id = ? AND d.status = 'sent'", u["game_id"])
+            best = rows("SELECT b.delivery_key FROM best_picks b JOIN deliveries d ON d.delivery_key = b.delivery_key "
+                        "WHERE b.sport = 'ncaab' AND b.game_id = ? AND d.status = 'sent'", u["game_id"])
+            live = [r for r in pub if r[3] == "live"]
+            if live:
+                same = any(r[0] == u["market"] and _SIDE.get(r[1]) == u["side"] and (r[2] == u["line"] or
+                           (r[2] is not None and u["line"] is not None and abs(r[2] - u["line"]) < 1e-9)) for r in live)
+                out["delivered_matches_selection" if same else "delivered_differs_from_selection"] += 1
+            elif pub or best:
+                out["delivered_pick_not_recorded"] += 1
             else:
-                out["delivered_differs_from_selection"] += 1
+                out["no_structured_delivery_record"] += 1
     return out
 
 
@@ -406,8 +436,9 @@ def analyze(days: list, store: sqlite3.Connection, ledger: Optional[sqlite3.Conn
     h = {"H1": test_mean(*day_arrays([[v["clv"] for v in d] for d in p0])),
          "H2": test_mean(*day_arrays([[v["excess"] for v in d] for d in p0]))}
     clv0, exc0 = h["H1"]["theta"], h["H2"]["theta"]
-    h["H3"] = {"theta": None if clv0 is None else clv0 - float(np.mean(p1_clv)), "p": h3_p(clv0 if clv0 is not None else float("inf"), p1_clv),
-               "excess_version_p_not_in_family": h3_p(exc0 if exc0 is not None else float("inf"), p1_exc)}
+    h["H3"] = {"theta": None if clv0 is None else clv0 - float(np.mean(p1_clv)), "p": h3_p(clv0, p1_clv),
+               "testable": clv0 is not None, "excess_version_p_not_in_family": h3_p(exc0, p1_exc)}
+    h["H1"]["testable"] = clv0 is not None
     h["H4"] = _slope_test([[(v["gap"], v["clv"]) for v in d if v["clv"] is not None] for d in units["P3"]])
     h["H5"] = _slope_test([[(v["gap"], v["excess"]) for v in d if v["excess"] is not None] for d in units["P3"]])
     primary, secondary = pc.holm({k: h[k]["p"] for k in ("H1", "H2")}), pc.holm({k: h[k]["p"] for k in ("H3", "H4", "H5")})
@@ -467,17 +498,15 @@ def _readonly(path) -> sqlite3.Connection:
     return conn
 
 
-def status(cl: Classification, store: sqlite3.Connection) -> dict:
-    """Counts only (section 7): days, candidates, selected, and whether a same-book close exists. No score is read."""
+def status(cl: Classification) -> dict:
+    """Counts only (section 7): days, candidates, selected. No close, no score and no outcome is read."""
     p0 = [u for d in cl.counted for u in choose("P0", d)]
-    closes = [close_for(store, u)["status"] for u in p0]
     return {"prereg_sha256": PREREG_SHA256, "counted_days": len(cl.counted), "qualifying_days": len(cl.qualifying), "planned_days": STOP_DAYS,
             "non_qualifying_days_by_reason": cl.excluded, "priced_candidates": sum(len(d["priced"]) for d in cl.counted),
-            "p0_units": len(p0), "p0_close_available": closes.count("ok"), "p0_close_stale": closes.count("stale"),
-            "p0_close_missing": closes.count("no_close"), "stop_reached": cl.stop_reached, "stop_reason": cl.stop_reason}
+            "p0_units": len(p0), "stop_reached": cl.stop_reached, "stop_reason": cl.stop_reason}
 
 
-def run(ledger_path, data_dir, out, *, now: Optional[datetime] = None, mode: str = "status") -> dict:
+def run(ledger_path, data_dir, out, *, now: Optional[datetime] = None, mode: str = "status", looks_dir=None) -> dict:
     check_document()
     dd = pc.guard_data_dir(data_dir)
     ledger_file = pc.guard_file(ledger_path)
@@ -486,23 +515,28 @@ def run(ledger_path, data_dir, out, *, now: Optional[datetime] = None, mode: str
     store_file = dd / "ncaab.sqlite"
     if not store_file.is_file():
         raise pc.Refused(f"{store_file} not found")
+    if mode not in ("status", "final"):
+        raise ValueError(mode)
     ledger, store = _readonly(ledger_file), _readonly(store_file)
     try:
-        cl = classify(load_rows(ledger), asof=now)
+        def classified() -> Classification:
+            return classify(load_rows(ledger), asof=now, stop_date=STOP_DATE, stop_days=STOP_DAYS, store=store)
         if mode == "status":
-            report = status(cl, store)
+            report = status(classified())
             pc.write_report(outdir, "ncaab-top4-status.json", report)
             return report
-        if mode != "final":
-            raise ValueError(mode)
-        if not cl.stop_reached:
-            raise pc.Refused(f"the stop point is not reached ({len(cl.qualifying)} of {STOP_DAYS} qualifying days, date limit {STOP_DATE}): no interim look")
-        if cl.counted:
-            pending = [u for u in choose("P3", cl.counted[-1]) if settle_unit(store, u, now)["state"] == "pending"]
+
+        def look() -> dict:
+            cl = classified()
+            if not cl.stop_reached:
+                raise pc.Refused(f"the stop point is not reached ({len(cl.qualifying)} of {STOP_DAYS} qualifying days, date limit {STOP_DATE}): no interim look")
+            pending = [u for d in cl.counted for u in choose("P3", d) if settle_unit(store, u, now)["state"] == "pending"]
             if pending:
-                raise pc.Refused(f"{len(pending)} game(s) of the last counted day are neither final nor past 7 days")
-        report = analyze(cl.counted, store, ledger, now=now, excluded=cl.excluded)
-        report["stop_reason"] = cl.stop_reason
+                raise pc.Refused(f"{len(pending)} game(s) of the counted days are neither final nor past 7 days")
+            report = analyze(cl.counted, store, ledger, now=now, excluded=cl.excluded)
+            report["stop_reason"] = cl.stop_reason
+            return report
+        report = pc.look_once(looks_dir, PREREG_SHA256, "final", look, storable=lambda r: True)
         pc.write_report(outdir, "ncaab-top4-report.json", report)
         return report
     finally:

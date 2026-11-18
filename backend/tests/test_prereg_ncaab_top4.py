@@ -51,6 +51,30 @@ def test_constants_match_the_frozen_document_and_decision_file():
     assert pn.T0 == "2026-11-18T14:29:50Z" and pn.RULE == "ncaab-top4-gap-v1"
 
 
+def test_rule_is_the_literal_not_the_live_constant(monkeypatch):
+    import importlib
+    monkeypatch.setattr(ncaab_cards, "RULE", "ncaab-top4-gap-v2")      # a changed live rule must not change what is counted
+    try:
+        reloaded = importlib.reload(pn)
+        assert reloaded.RULE == "ncaab-top4-gap-v1"
+    finally:
+        monkeypatch.undo()
+        importlib.reload(pn)
+
+
+def test_addendum_pin_is_checked(tmp_path, monkeypatch):
+    assert pn.ADDENDA_SHA256 == {"addendum-2026-11-18-ncaab-evaluator-clarifications.md":
+                                 "da8d4ff0cb1ef96c16b46d7d74b8e7718d18031240a28112155cb6f23ab7fb2d"}
+    pn.check_document()
+    d = tmp_path / "docs" / "preregistration"
+    d.mkdir(parents=True)
+    (d / "ncaab-top4-policy-eval-2026-11-18.md").write_bytes((pn.REPO_ROOT / "docs/preregistration/ncaab-top4-policy-eval-2026-11-18.md").read_bytes())
+    (d / "addendum-2026-11-18-ncaab-evaluator-clarifications.md").write_bytes(b"changed")
+    monkeypatch.setattr(pn, "REPO_ROOT", tmp_path)
+    with pytest.raises(pc.Refused, match="addendum"):
+        pn.check_document()
+
+
 def test_wrong_document_bytes_refuse(tmp_path, monkeypatch):
     monkeypatch.setattr(pn, "REPO_ROOT", tmp_path)
     with pytest.raises(pc.Refused):
@@ -384,11 +408,18 @@ def test_final_analysis_refused_before_the_stop_and_status_has_counts_only(tmp_p
         pn.run(ledger_path, tmp_path, out, now=now, mode="final")
     st = pn.run(ledger_path, tmp_path, out, now=now, mode="status")
     assert st["qualifying_days"] == 2 and st["p0_units"] == 4 and st["priced_candidates"] == 4
-    assert st["p0_close_available"] == 4 and st["p0_close_missing"] == 0 and st["stop_reached"] is False
+    assert st["stop_reached"] is False
+    assert not [k for k in st if "close" in k]                           # no close is read before the stop (N3)
     blob = json.dumps(st)
     for banned in ("clv", "excess", "hit_rate", "slope", "mean_", "p_value", "wins"):
         assert banned not in blob.lower().replace("close_", "").replace("p0_close", "")
     assert (out / "ncaab-top4-status.json").is_file()
+
+
+def test_status_never_reads_closes(tmp_path, monkeypatch):
+    store_path, ledger_path = make_world(tmp_path, monkeypatch)
+    monkeypatch.setattr(pn, "close_for", lambda *a, **k: pytest.fail("status mode must not read a close"))
+    pn.run(ledger_path, tmp_path, tmp_path.parent / (tmp_path.name + "-r3"), now=datetime(2026, 11, 25, tzinfo=timezone.utc), mode="status")
 
 
 def test_status_never_reads_scores(tmp_path, monkeypatch):
@@ -433,17 +464,93 @@ def test_analyze_full_pipeline_hand_values(tmp_path, monkeypatch):
     assert rep["policies"]["P1"]["mean_clv_pp_of_replicates"] == pytest.approx(0.0, abs=1e-9)
 
 
-def test_q_sel_integrity_flag_counts_without_excluding(tmp_path, monkeypatch):
-    store_path, ledger_path = make_world(tmp_path, monkeypatch, nday=1)
+def _world_rows(tmp_path, monkeypatch, nday=1):
+    store_path, ledger_path = make_world(tmp_path, monkeypatch, nday=nday)
     ledger = sqlite3.connect(ledger_path)
     ledger.row_factory = sqlite3.Row
     store = sqlite3.connect(store_path)
     store.row_factory = sqlite3.Row
-    rows = pn.load_rows(ledger)
+    return pn.load_rows(ledger), store, ledger
+
+
+def test_q_sel_mismatch_excludes_the_whole_day_at_classification(tmp_path, monkeypatch):
+    rows, store, _ = _world_rows(tmp_path, monkeypatch, nday=2)
     rows[0]["candidates"][0]["markets"][0]["book"] = 0.61               # stored q_sel no longer equals the quote's 0.60
+    monkeypatch.setattr(pn, "settle_unit", lambda *a, **k: pytest.fail("no result may be read while classifying"))
+    monkeypatch.setattr(pn, "close_for", lambda *a, **k: pytest.fail("no close may be read while classifying"))
+    cl = pn.classify(rows, asof=datetime(2026, 11, 25, tzinfo=timezone.utc), store=store)
+    assert [d["et_date"] for d in cl.qualifying] == ["2026-11-19"] and cl.excluded["q_sel integrity failure"] == 1
+
+
+def test_missing_quote_is_an_integrity_failure_and_side_b_is_complemented(tmp_path, monkeypatch):
+    rows, store, _ = _world_rows(tmp_path, monkeypatch, nday=2)
+    rows[0]["candidates"][0]["markets"][0]["quote_id"] = 99999
+    e = rows[1]["candidates"][0]["markets"][0]                          # stored q_sel of a side b entry = 1 - p_a_devig
+    e["side"], e["book"] = "b", 0.40
+    cl = pn.classify(rows, asof=datetime(2026, 11, 25, tzinfo=timezone.utc), store=store)
+    assert cl.qualifying and [d["et_date"] for d in cl.qualifying] == ["2026-11-19"] and cl.excluded["q_sel integrity failure"] == 1
+
+
+def test_only_entries_evaluated_by_a_policy_are_checked(tmp_path, monkeypatch):
+    rows, store, _ = _world_rows(tmp_path, monkeypatch, nday=1)
+    # a lower, never evaluated entry (not the best, not the largest app, not a winner) with a wrong q_sel
+    rows[0]["candidates"][0]["markets"].append(ent("total", "a", 140.5, 0.30, 0.20, 1))
+    cl = pn.classify(rows, asof=datetime(2026, 11, 25, tzinfo=timezone.utc), store=store)
+    assert len(cl.qualifying) == 1 and "q_sel integrity failure" not in cl.excluded
+
+
+def test_analysis_still_counts_every_mismatch(tmp_path, monkeypatch):
+    rows, store, ledger = _world_rows(tmp_path, monkeypatch, nday=1)
+    rows[0]["candidates"][0]["markets"][0]["book"] = 0.61
+    cl = pn.classify(rows, asof=datetime(2026, 11, 25, tzinfo=timezone.utc))                # without a store: no day exclusion
+    rep = pn.analyze(cl.counted, store, ledger, now=datetime(2026, 11, 25, tzinfo=timezone.utc))
+    assert rep["integrity"]["q_sel_mismatch"] >= 1
+
+
+def test_h3_and_h1_not_testable_without_any_p0_clv(tmp_path, monkeypatch):
+    rows, store, ledger = _world_rows(tmp_path, monkeypatch, nday=2)
+    for r in rows:                                    # another sportsbook: there is no same-book close, hence no CLV
+        for c in r["candidates"]:
+            for e in c["markets"]:
+                e["provider"] = "ESPN BET"
     cl = pn.classify(rows, asof=datetime(2026, 11, 25, tzinfo=timezone.utc))
     rep = pn.analyze(cl.counted, store, ledger, now=datetime(2026, 11, 25, tzinfo=timezone.utc))
-    assert rep["integrity"]["q_sel_mismatch"] >= 1 and rep["policies"]["P0"]["n_picks"] == 2
+    assert rep["hypotheses"]["H1"]["theta"] is None and rep["hypotheses"]["H1"]["p"] == 1.0
+    assert rep["hypotheses"]["H3"]["p"] == 1.0 and rep["hypotheses"]["H3"]["testable"] is False
+
+
+def test_pending_game_on_any_counted_day_blocks_the_look(tmp_path, monkeypatch):
+    store_path, ledger_path = make_world(tmp_path, monkeypatch, nday=2)
+    c = sqlite3.connect(store_path)
+    c.execute("UPDATE games SET status = 'scheduled', home_score = NULL, away_score = NULL WHERE game_id = 'ncaab:700'")   # first day, not the last
+    c.commit()
+    c.close()
+    monkeypatch.setattr(pn, "STOP_DAYS", 2)
+    with pytest.raises(pc.Refused, match="neither final nor past 7 days"):
+        pn.run(ledger_path, tmp_path, tmp_path.parent / (tmp_path.name + "-r4"), now=datetime(2026, 11, 21, tzinfo=timezone.utc), mode="final",
+               looks_dir=tmp_path.parent / (tmp_path.name + "-looks"))
+
+
+def test_final_look_is_stored_once_and_returned_verbatim(tmp_path, monkeypatch):
+    store_path, ledger_path = make_world(tmp_path, monkeypatch, nday=2)
+    monkeypatch.setattr(pn, "STOP_DAYS", 2)
+    kw = dict(mode="final", looks_dir=tmp_path.parent / (tmp_path.name + "-looks2"))
+    first = pn.run(ledger_path, tmp_path, tmp_path.parent / (tmp_path.name + "-r5"), now=datetime(2026, 11, 21, tzinfo=timezone.utc), **kw)
+    c = sqlite3.connect(store_path)
+    c.execute("UPDATE games SET home_score = 0 WHERE game_id = 'ncaab:700'")        # a changed result must not change the stored look
+    c.commit()
+    c.close()
+    again = pn.run(ledger_path, tmp_path, tmp_path.parent / (tmp_path.name + "-r6"), now=datetime(2026, 11, 22, tzinfo=timezone.utc), **kw)
+    assert json.dumps(again, sort_keys=True, default=str) == json.dumps(first, sort_keys=True, default=str)
+
+
+def test_no_selection_row_days_after_the_last_counted_day_are_not_counted():
+    c = [pricedcand("g1", TIP, 5.0)]
+    rows = [row("2026-11-18", candidates=c), row("2026-11-20", "2026-11-20T16:00:00Z", candidates=c),
+            row("2026-11-21", "2026-11-21T16:00:00Z", candidates=c)]
+    cl = pn.classify(rows, asof=ASOF, stop_days=2)
+    assert cl.excluded["no selection row"] == 1                         # 2026-11-19 only; nothing after the stop day
+    assert cl.excluded["after 60th qualifying day"] == 1
 
 
 def test_audit_2b_structured_records_only(tmp_path, monkeypatch):
@@ -462,8 +569,62 @@ def test_audit_2b_structured_records_only(tmp_path, monkeypatch):
     cl = pn.classify(pn.load_rows(ledger), asof=datetime(2026, 11, 25, tzinfo=timezone.utc))
     a = pn.audit(ledger, cl.counted)
     assert a == {"p0_games": 2, "delivered_matches_selection": 1, "delivered_differs_from_selection": 0,
-                 "no_structured_delivery_record": 1, "unconfirmed_or_backfilled_basis": 0}
+                 "no_structured_delivery_record": 1, "delivered_pick_not_recorded": 0}
     ledger.execute(ins, ("k1", "ncaab:701", "spread", "b", -3.5, "live"))         # a sent card whose pick differs from the entry
     ledger.commit()
     a = pn.audit(ledger, cl.counted)
     assert a["delivered_differs_from_selection"] == 1 and a["no_structured_delivery_record"] == 0
+
+
+def test_audit_2b_best_picks_and_non_live_rows_are_delivered_but_not_recorded(tmp_path, monkeypatch):
+    from app import best_pick_record, published_picks
+    store_path, ledger_path = make_world(tmp_path, monkeypatch, nday=1)
+    ledger = sqlite3.connect(ledger_path)
+    ledger.row_factory = sqlite3.Row
+    ledger.executescript("CREATE TABLE deliveries (delivery_key TEXT PRIMARY KEY, chat_id TEXT NOT NULL, text TEXT NOT NULL, status TEXT NOT NULL, "
+                         "attempted_at TEXT NOT NULL, next_attempt_at TEXT, message_id INTEGER, error TEXT);" + published_picks.SCHEMA + best_pick_record.SCHEMA)
+    for k in ("k1", "k2"):
+        ledger.execute("INSERT INTO deliveries VALUES (?, 'c', 'x', 'sent', '2026-11-18T20:00:00Z', NULL, 1, NULL)", (k,))
+    ledger.execute("INSERT INTO best_picks (delivery_key, recorded_at, written_at, sport, game_id, status, recorder_version, rule_applies, picture) "
+                   "VALUES ('k1', 't', 't', 'ncaab', 'ncaab:700', 'ok', 'v', 1, '{}')")
+    ledger.execute("INSERT INTO published_picks (delivery_key, sport, game_id, market, forecast_id, side, line, probability, sent_at, basis) "
+                   "VALUES ('k2', 'ncaab', 'ncaab:701', 'winner', '1', 'a', NULL, .6, 't', 'backfill')")
+    ledger.commit()
+    cl = pn.classify(pn.load_rows(ledger), asof=datetime(2026, 11, 25, tzinfo=timezone.utc))
+    a = pn.audit(ledger, cl.counted)
+    assert a == {"p0_games": 2, "delivered_matches_selection": 0, "delivered_differs_from_selection": 0,
+                 "no_structured_delivery_record": 0, "delivered_pick_not_recorded": 2}
+
+
+# ---- H4 / H5 slopes and bootstrap mechanics -------------------------------------------------------------------------------
+def test_slope_test_hand_values_positive_flat_and_negative():
+    import numpy as np
+    days = [[(1.0, 0.01), (2.0, 0.02)], [(3.0, 0.03), (4.0, 0.05)], [(5.0, 0.05), (6.0, 0.07)]]
+    xs = [x for d in days for x, _ in d]
+    ys = [y for d in days for _, y in d]
+    pos = pn._slope_test(days)
+    assert pos["theta"] == pytest.approx(np.polyfit(xs, ys, 1)[0]) and pos["n"] == 6
+    assert pos["p"] == pytest.approx(1 / 10001) and pos["ci95"][0] > 0          # every replicate has x variance and a positive slope
+    neg = pn._slope_test([[(x, -y) for x, y in d] for d in days])
+    assert neg["theta"] < 0 and neg["p"] == 1.0 and neg["ci95"][1] < 0
+    flat = pn._slope_test([[(x, 0.5) for x, _ in d] for d in days])
+    assert flat["theta"] == pytest.approx(0.0, abs=1e-12) and flat["p"] > 0.9    # a zero slope is "<= 0" in every replicate
+    assert pn._slope_test([[(1.0, 0.1)], [(1.0, 0.2)]])["theta"] is None       # no x variance: undefined, p = 1
+    assert pn._slope_test([[(1.0, 0.1)], [(1.0, 0.2)]])["p"] == 1.0
+
+
+def test_mixed_sign_test_mean_p_matches_an_independent_loop():
+    import numpy as np
+    sums, cnts = [0.03, -0.01, 0.02, -0.04], [2, 1, 2, 1]
+    num, den = np.array(sums), np.array(cnts, float)
+    rng = np.random.default_rng(20261118)
+    idx = rng.integers(0, 4, size=(20, 4))
+    expect = 0
+    for rep in idx:
+        n = sum(sums[i] for i in rep)
+        d = sum(cnts[i] for i in rep)
+        expect += (n / d) <= 0
+    p_loop = (1 + expect) / 21
+    from app import prereg_common as pcm
+    th = pcm.boot_ratio(num, den, B=20)
+    assert pcm.p_le_zero(th) == pytest.approx(p_loop) and 1 / 21 < p_loop < 1.0     # a genuinely mixed outcome, not degenerate

@@ -107,3 +107,43 @@ def test_logistic_fit_weighted_and_degenerate():
     a2, b2 = pc.logistic_fit(ps, ys, [0.5] * 10 + [1.0] * 10)
     assert b2 == pytest.approx(1.0, abs=1e-6)
     assert pc.logistic_fit([0.6, 0.6], [1, 0]) == (None, None) and pc.logistic_fit([], []) == (None, None)
+
+
+def test_look_once_is_keyed_to_document_sha_and_key_not_to_a_report_folder(tmp_path):
+    looks = tmp_path / "looks"
+    first = pc.look_once(looks, "a" * 64, "m", lambda: {"status": "look", "v": 1})
+    again = pc.look_once(looks, "a" * 64, "m", lambda: pytest.fail("a stored look is never recomputed"))
+    assert again == first == {"status": "look", "v": 1}
+    other = pc.look_once(looks, "b" * 64, "m", lambda: {"status": "look", "v": 2})      # another document: its own look
+    assert other["v"] == 2
+    counts = pc.look_once(looks, "a" * 64, "n", lambda: {"status": "waiting"})           # counts-only results are not stored
+    assert counts == {"status": "waiting"} and pc.look_once(looks, "a" * 64, "n", lambda: {"status": "look", "v": 3})["v"] == 3
+
+
+def test_look_store_refuses_the_live_data_folder():
+    with pytest.raises(pc.Refused):
+        pc.look_once(pc.LIVE_DATA / "x", "a" * 64, "m", lambda: {"status": "look"})
+
+
+def test_check_addenda_refuses_changed_bytes(tmp_path):
+    d = tmp_path / "docs" / "preregistration"
+    d.mkdir(parents=True)
+    (d / "a.md").write_bytes(b"x")
+    pc.check_addenda({"a.md": hashlib.sha256(b"x").hexdigest()}, tmp_path)
+    with pytest.raises(pc.Refused, match="addendum"):
+        pc.check_addenda({"a.md": "0" * 64}, tmp_path)
+
+
+def test_boot_slope_mixed_sign_matches_an_independent_loop():
+    # four clusters of (x, y) points with a mixed-sign slope; B = 20 draws of default_rng(20261118).integers(0, 4, (20, 4))
+    clusters = [[(1.0, 0.2), (2.0, 0.1)], [(1.0, 0.0), (3.0, 0.4)], [(2.0, 0.5), (4.0, 0.3)], [(1.0, 0.3), (2.0, 0.1)]]
+    st = [(len(c), sum(x for x, _ in c), sum(y for _, y in c), sum(x * y for x, y in c), sum(x * x for x, _ in c)) for c in clusters]
+    th = pc.boot_slope(*[np.array(a, float) for a in zip(*st)], B=20)
+    idx = np.random.default_rng(pc.SEED).integers(0, 4, size=(20, 4))
+    expect = []
+    for rep in idx:
+        pts = [pt for i in rep for pt in clusters[i]]
+        xs, ys = np.array([a for a, _ in pts]), np.array([b for _, b in pts])
+        expect.append(0.0 if xs.var() < 1e-12 else float(np.polyfit(xs, ys, 1)[0]))
+    assert th == pytest.approx(expect, abs=1e-12)
+    assert any(t > 0 for t in th) and any(t < 0 for t in th)

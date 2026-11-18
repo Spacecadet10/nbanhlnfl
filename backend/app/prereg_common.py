@@ -72,6 +72,36 @@ def check_prereg(name: str, sha256: str, root: Path = REPO_ROOT) -> None:
         raise Refused(f"frozen document {name} has sha256 {actual}, expected {sha256}: refusing to run")
 
 
+LOOKS_DIR = Path.home() / "nba-predictor-research-data" / "prereg-looks"
+
+
+def check_addenda(addenda: dict, root: Path = REPO_ROOT) -> None:
+    """Refuses unless every committed addendum file (name -> sha256) is byte-identical to its pin."""
+    for name, sha in addenda.items():
+        try:
+            check_prereg(name, sha, root)
+        except Refused as exc:
+            raise Refused(f"addendum: {exc}") from None
+
+
+def look_once(looks_dir, doc_sha256: str, key: str, compute, storable=lambda r: r.get("status") == "look") -> dict:
+    """One look per (frozen document sha256, key): a stored look is returned verbatim and never recomputed, whatever the
+    report folder (--out) of this run. Only a result `storable` says is the look is stored; counts-only reports rerun."""
+    d = Path(looks_dir if looks_dir is not None else LOOKS_DIR).expanduser().resolve()
+    if _inside(d, LIVE_DATA):
+        raise Refused(f"{d} lies inside the live data folder: looks are stored outside the stores")
+    path = d / f"{doc_sha256}-looks.json"
+    stored = json.loads(path.read_text()) if path.is_file() else {}
+    if key in stored:
+        return stored[key]
+    result = compute()
+    if storable(result):
+        d.mkdir(parents=True, exist_ok=True)
+        stored[key] = json.loads(json.dumps(result, default=str))
+        path.write_text(json.dumps(stored, indent=2, sort_keys=True) + "\n")
+    return result
+
+
 def write_report(out: Path, name: str, report: dict) -> Path:
     path = Path(out) / name
     path.write_text(json.dumps(report, indent=2, sort_keys=True, default=str) + "\n")
