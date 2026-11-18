@@ -457,3 +457,39 @@ def test_learning_scoring_is_per_sport_and_an_error_never_kills_the_report(tmp_p
     s5 = section(page(m, tmp_path, data), 5)
     assert 'nfl-challengers-v1: rows recorded n=1; games n=1; specs n=1; settled and scored n=2' in s5 and 'sample size reached' not in s5
     assert 'scoring unavailable (RuntimeError: boom)' in s5 and 'nfl-' in seen
+
+
+@pytest.fixture(autouse=True)
+def _no_real_autoresearch_home(tmp_path, monkeypatch):
+    monkeypatch.setenv('HOME', str(tmp_path / 'no-home'))
+
+
+def test_autoresearch_spend_subsection_without_a_budget_file_says_unavailable(tmp_path, monkeypatch):
+    m = wr()
+    s5 = section(page(m, tmp_path, setup(tmp_path, 3, monkeypatch, m)[0]), 5)
+    assert 'Autoresearch spend' in s5 and 'autoresearch spend unavailable' in s5
+
+
+def test_autoresearch_spend_subsection_reports_week_total_trials_and_model(tmp_path, monkeypatch):
+    import json
+    from datetime import datetime, timezone
+    m = wr()
+    now = datetime.now(timezone.utc)
+    f = '%Y-%m-%dT%H:%M:%SZ'
+    h = tmp_path / 'hm' / 'autoresearch-sports'
+    d = h / 'experiments' / 'agent'
+    (d / 'runs' / 'r1').mkdir(parents=True)
+    (h / 'AGENT_BUDGET.json').write_text(json.dumps({
+        'approved_by': 'owner', 'approved_at': '2026-11-01T00:00:00Z', 'period': 'weekly', 'period_usd_cap': 5.0, 'max_runs_per_period': 2,
+        'max_usd_per_run': 2.5, 'max_total_runs': 4, 'counting_from': '2026-11-01T00:00:00Z', 'model': 'claude-opus-5-5', 'max_trials': 4,
+        'sports': ['nba'], 'expires_at': '2099-01-01T00:00:00Z', 'gate_sha256': '0' * 64}))
+    at = now.strftime(f)
+    (d / 'runs.jsonl').write_text(json.dumps({'event': 'started', 'run_id': 'r1', 'at': at, 'model': 'claude-opus-5-5'}) + '\n' +
+                                  json.dumps({'event': 'finished', 'run_id': 'r1', 'at': at, 'cost_usd': 1.25, 'trials': 2,
+                                              'outcome': 'no improvement found', 'report': 'agent/runs/r1/report.json'}) + '\n')
+    (d / 'runs' / 'r1' / 'report.json').write_text(json.dumps({'trials': [{'markets': {'ml': {'decision': 'discard'}, 'tot': {'decision': 'keep'}}}]}))
+    (d / 'budget-ledger.jsonl').write_text(json.dumps({'run_id': 'r1', 'model_used': ['claude-opus-5-5']}) + '\n')
+    monkeypatch.setenv('HOME', str(h.parent))
+    s5 = section(page(m, tmp_path, setup(tmp_path, 3, monkeypatch, m)[0]), 5)
+    assert '$1.25 of $5.00 cap; runs 1 of 2; total runs 1 of 4' in s5, s5
+    assert 'trials completed n=2; market decisions keep n=1, discard n=1' in s5 and 'model used claude-opus-5-5' in s5

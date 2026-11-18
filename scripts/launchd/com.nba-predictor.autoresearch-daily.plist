@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Scheduled autoresearch EVALUATION, daily 11:00 local (after the 09:30 trainer): `prepare.py daily sport nba sport nhl max-trials 4
+	     max-minutes 60 timeout 900`. `daily` never starts an agent and never spends money: it only re-scores existing commits.
+	     NOT installed. Opt-in: scripts/autoresearch_daily.sh refuses (exit 78) unless ~/autoresearch-sports/SCHEDULE_DAILY_ENABLED exists.
+	     The wrapper runs the command through app.learning_run (one heavy job per machine, nice, wall-clock and memory caps, no start within
+	     2.5 h of an NBA/NHL/NCAAB tip-off) and writes data/research/learning-runs.jsonl. NBA_DATA_DIR here is only the guard's lock, log and
+	     read-only schedule lookup; prepare.py points the evaluator at its own read-only snapshot. -->
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>LEARNING_PYTHON</key>
+		<string>/Users/andry/nba-predictor-live/backend/.venv/bin/python</string>
+		<key>NBA_DATA_DIR</key>
+		<string>/Users/andry/Desktop/nbanhlnfl/data</string>
+		<key>OMP_NUM_THREADS</key>
+		<string>2</string>
+		<key>PYTHONDONTWRITEBYTECODE</key>
+		<string>1</string>
+	</dict>
+	<key>Label</key>
+	<string>com.nba-predictor.autoresearch-daily</string>
+	<key>LowPriorityIO</key>
+	<true/>
+	<key>Nice</key>
+	<integer>15</integer>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/bash</string>
+		<string>/Users/andry/nba-predictor-delivery/scripts/autoresearch_daily.sh</string>
+	</array>
+	<key>RunAtLoad</key>
+	<false/>
+	<key>StartCalendarInterval</key>
+	<dict>
+		<key>Hour</key>
+		<integer>11</integer>
+		<key>Minute</key>
+		<integer>0</integer>
+	</dict>
+	<key>StandardErrorPath</key>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/research/autoresearch-daily.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/research/autoresearch-daily.log</string>
+	<key>WorkingDirectory</key>
+	<string>/Users/andry/nba-predictor-delivery/backend</string>
+</dict>
+</plist>

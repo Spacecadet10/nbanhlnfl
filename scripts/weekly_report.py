@@ -46,7 +46,7 @@ bp = _load('best_picks_report', 'best_picks.py')
 sr = _load('scorecard_report', 'scorecard_report.py')
 from app import best_pick_record as bpr  # noqa: E402
 from app import config  # noqa: E402
-from app import learning_challengers, learning_coverage, learning_eval  # noqa: E402
+from app import autoresearch_budget, learning_challengers, learning_coverage, learning_eval  # noqa: E402
 
 MIN_N = sr.MIN_N
 SPORTS = ('nba', 'nhl', 'ncaab', 'nfl', 'soccer')
@@ -414,8 +414,25 @@ def section_learning(data_dir: Path, stores: dict) -> list:
                      for key, label in (('trained', 'trained'), ('scheduled', 'scheduled'), ('recording_prospectively', 'recording rows'),
                                         ('forecasting_with_fits', 'forecasting with fits'), ('evaluated', 'with settled forecasts'))]
             lines.append(f"- {sport.upper()}: markets with " + ', '.join(parts) + f"; learning implemented: {'yes' if rows and rows[0]['learning_implemented'] else 'no'}.")
-    lines += _adaptive_fits(stores) + _challenger_counts(data_dir, stores)
+    lines += _adaptive_fits(stores) + _challenger_counts(data_dir, stores) + _autoresearch_spend()
     return lines + ['']
+
+
+def _autoresearch_spend(now=None) -> list:
+    """Autoresearch spend: budget-ledger.jsonl and runs.jsonl against the owner budget. Read-only; counts, no claims."""
+    lines = ['', '### Autoresearch spend', '']
+    try:
+        x = autoresearch_budget.summary(autoresearch_budget.home(), now or datetime.now(timezone.utc))
+    except Exception as exc:                                     # no budget file, or cost tracking unreadable: said, not hidden
+        return lines + [f'- autoresearch spend unavailable: {str(exc)[:160]} (n=unknown).']
+    d = x['decisions']
+    lines += [f"- this week: ${x['week_spend']:.2f} of ${x['period_usd_cap']:.2f} cap; runs {x['week_runs']} of {x['max_runs_per_period']}; "
+              f"total runs {x['total_runs']} of {x['max_total_runs']} (an owner assessment is required after {x['max_total_runs']}).",
+              f"- trials completed n={x['trials']}; market decisions keep n={d['keep']}, discard n={d['discard']}, other n={d['other']}.",
+              f"- model requested {x['model_requested']}; model used {', '.join(x['models']) or 'none recorded'}"
+              + ('; MODEL MISMATCH STOP is set, runs are blocked until the owner reviews.' if x['stop_marker'] else '.')]
+    lines += [f'- run {rid}: {out}.' for rid, out in x['outcomes']] or ['- no run this week.']
+    return lines + ['A run that finds nothing kept is a valid result; nothing here is a promotion.']
 
 
 def _model(version) -> str:
