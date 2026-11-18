@@ -33,6 +33,12 @@ def test_the_trainer_runs_on_the_live_release_with_the_release_guard():
     assert p['WorkingDirectory'] == '/Users/andry/nba-predictor-live/backend'
 
 
+def test_the_trainer_runs_below_the_forecast_jobs_priority():
+    # The first scheduled run (2026-11-18) trained NHL daily for 87 min at nice 0; the forecast/odds jobs must keep priority.
+    p = load('adaptive-train')
+    assert p['Nice'] == 10 and p['ProcessType'] == 'Background'
+
+
 def test_challenger_recorder_template_is_research_only_on_the_delivery_release():
     p = load('learning-challengers')
     env = p['EnvironmentVariables']
