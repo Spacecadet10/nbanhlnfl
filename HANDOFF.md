@@ -1,3 +1,40 @@
+## Card release follow-up: DNB labels, sent-card links, ops checks — RELEASED to delivery 4dd665d — Claude (lead), Nov 18, 2026 ~02:30Z
+- Released: main fc20f50..c85d034 pushed; delivery 30d9005 → 4dd665ddf61a0e9fe8b0be07221cb1b30a39ba10 (same diff without HANDOFF.md),
+  frontend rebuilt, api-delivery + web kickstarted. Changed: backend/app/{soccer_markets,soccer_record,tickets,telegram,telegram_card}.py,
+  frontend sportsbook.ts/PickEvidence.tsx, scripts/backfill_published_picks.py, tests. NOT touched (recorder path for the weekly-report
+  review): best_pick_record.py (sha256 7cc3e6e1…), lineup, availability*, odds.py, threshold_overview.py; telegram.py change is DNB
+  wording only. Session nbanhlnfl-03 was told the SHA for its recorder review.
+- DNB (owner decision): "App DNB win chance, excluding draws: X%" beside "Sportsbook DNB win chance, excluding draws: Y% no-vig", gap =
+  rounded X − rounded Y; the stored % is labelled "Model P% = 90-minute win chance (draw possible); exact-% history is bucketed on this
+  90-minute %". One helper soccer_markets.conditional_on_no_draw; stored forecasts, buckets, grading (draw = push) unchanged.
+- Backfill: matches a card's game by team pair + the forecast's own start (game_forecasts.tipoff_at), so a moved start no longer loses
+  the card (basis backfill_game_id_kickoff_moved; tests/test_backfill_published_picks.py).
+- Live ledger (backup first: ~/nba-predictor-release-backups/2026-11-18-card-contract/telegram-delivery-before-linking.sqlite), 100 rows
+  appended to published_picks, deliveries untouched (the 29 'uncertain' stay uncertain):
+  - ND @ FLA ncaab:401906773 (msg 526, sent 19:31:49Z, forecasts 21-25 for the 21:30Z start): all 5 grade VOID — markets.settle voids
+    any forecast whose tipoff_at differs from the game's (start moved to 21:51Z; no tolerance). Unmoved it would be W W L L W.
+  - The first 25 uncertain deliveries all arrived: sent message_ids have exactly 25 gaps (428…588) in time order; 14 confirmed in the
+    Telegram export (basis uncertain_resolved_export_record, 52 rows), 11 by the gap only (uncertain_resolved_message_id_gap, 43 rows).
+  - 4 newer uncertain rows (01:02:05Z DAL@VGK, UCI@STAN, SEA@CBU; 01:19:40Z SHSU@WYO) are probably ids 594-597 (gap before 598) but
+    are NOT linked yet.
+- Ops: NBA source_not_fresh 00:38-00:58Z = the live checkout's near_tipoff step (run 1305) took 1584 s (normal 35-155 s) under CPU
+  load from another session's adaptive-train/pytest; not the release. All sports fresh since 00:58Z.
+- Observed naturally with the new layout: NHL CGY@SJS msg 593 (6 live published_picks rows = game_forecasts 108-113) and NBA UTAH@LAC
+  msg 598 (5 rows = forecasts 175-179). DNB wording not yet seen on a sent card.
+- Tickets: no defect. Fingerprint = snapshot sha + skill/helper sha + signature(sport, forecast_id) + dispatch key; the release changes
+  helper sha → older approvals refused ("Skill or helper changed; review again"); display fields never enter signatures, stakes or keys
+  (6 scratch tests: scratchpad tix/test_ticket_integrity.py). Snapshot TTL 10 min.
+- Checks: isolated trial on delivery: 419 passed + 2 env-only (pass with ledger/credential env unset); frontend typecheck, 52 unit,
+  build; fake-bot run_once deployed vs new code identical, 0 sends. Full suite (file by file, isolated worktree, 3631 s under load):
+  2670 passed, 4 failed — 3 env-only (pass unset) and test_weekly_report::test_review_time_and_recorder_come_from_the_config_unless_given,
+  PRE-EXISTING (pins recorder ff2d53ab; best_pick_record.py hashes 7cc3e6e1 since before efd5deb). No stall: test_adaptive.py alone
+  takes ~312 s under load; use per-file timeouts ≥ 1200 s.
+- Deployed agreement: Telegram previews vs running API, 64/64 market records equal across NBA/NHL/NFL/NCAAB/Soccer (live W/L/P and
+  recovered Telegram). IDs unchanged: NFL b6074877a7e7ccfe, NBA c5c886b72d8b01bf, NHL d6f4f8d6b4f4fda8.
+- OPEN (owner): a re-forecast that turns a sent card's recommendation into "No supported pick" sends a SECOND card for the game
+  (SHSU@WYO 23:31Z and 01:19Z): card_identity includes the pick text. Pre-existing logic, unchanged by these releases.
+- OPEN: 'uncertain' deliveries recur when a run sends 3+ cards under load; the ledger cannot tell they arrived (no message_id).
+
 ## Shared card contract, all five sports — RELEASED to delivery — Claude (lead), Nov 18, 2026 ~00:40Z
 - What: one card contract for NBA/NHL/NFL/NCAAB/Soccer on the web (`frontend/src/components/PickEvidence.tsx`, `cardRecord.ts`) and
   future Telegram cards (`telegram.market_block`): pick, market, line, app %; sportsbook no-vig % + signed gap (rounded app % − rounded
