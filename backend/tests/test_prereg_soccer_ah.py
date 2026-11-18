@@ -8,6 +8,12 @@ import pytest
 
 from app import db, prereg_common as pc, prereg_soccer_ah as ps, soccer_markets_live
 
+
+@pytest.fixture(autouse=True)
+def _looks_dir_in_tmp(tmp_path, monkeypatch):
+    """No test may write to the real looks folder (~/nba-predictor-research-data/prereg-looks)."""
+    monkeypatch.setattr(pc, "LOOKS_DIR", tmp_path / "default-looks")
+
 RAW = "2026-11-01T00:00:00Z"
 NOW = datetime(2027, 1, 20, tzinfo=timezone.utc)
 # joint[h][a]: P(home win) .45, draw .25, away win .30 (away by 1: .20, away by 2: .10)
@@ -268,7 +274,7 @@ def test_verdict_labels_and_deadline():
     assert r["verdict"] == "DraftKings better than the app" and r["primary"]["ci95"][0] > 0
     flat = [dict(x, p_home=0.5, q_home=0.5) for x in balanced(800)]
     assert ps.look(flat, NOW, B=300)["verdict"] == "not shown"
-    late = datetime(2027, 6, 1, tzinfo=timezone.utc)
+    late = datetime(2027, 6, 2, tzinfo=timezone.utc)
     r = ps.look(balanced(400), late, B=200)
     assert r["status"] == "look" and r["short_of_planned_n"] == "n 400 of 800 (deadline 2027-05-31)" and r["verdict"] in ("app better than DraftKings", "not shown", "DraftKings better than the app")
     r = ps.look(balanced(250), late, B=200)
@@ -345,7 +351,7 @@ def test_before_the_look_only_forecasts_pairs_and_the_stop_count_are_reported(tm
     banned = {"push", "void", "unknown_ending", "pending", "past7", "close_line_moved", "close_no_pair"}
     assert not banned & set(rep["counts"])
     assert rep["counts"]["forecasts"] == 9 and rep["counts"]["paired"] == {"half": 6, "whole": 1, "quarter": 1}
-    assert rep["counts"]["decided_paired"] == 3 and rep["counts"]["no_quote"] == 1
+    assert rep["counts"]["decided_paired"] is None and rep["counts"]["no_quote"] == 1     # outcomes are not read until the stop is reachable
 
 
 def test_matches_without_any_goals_forecast_are_counted(tmp_path):
@@ -387,8 +393,38 @@ def test_single_look_is_keyed_to_the_document_not_to_the_report_folder(tmp_path,
     data = tmp_path / "copy"
     make_store(data).close()
     looks = tmp_path / "looks"
+    monkeypatch.setattr(ps, "STOP_N", 0)                  # the stop counts as reachable, so the (stubbed) look is computed
     monkeypatch.setattr(ps, "look", lambda units, now, B=0: {"status": "look", "n": 800})
     first = ps.run(data, tmp_path / "out1", now=NOW, looks_dir=looks)
     monkeypatch.setattr(ps, "look", lambda *a, **k: pytest.fail("a second look must not be computed"))
     again = ps.run(data, tmp_path / "out2", now=NOW, looks_dir=looks)
     assert again["look"]["status"] == first["look"]["status"] == "look"
+
+
+def test_stop_date_is_the_competition_local_kickoff_date(tmp_path):
+    c = make_store(tmp_path)
+    add_match(c, 1, "2027-05-31T22:00:00Z")          # 23:00 BST on 2027-05-31: counts
+    add_match(c, 2, "2027-05-31T23:30:00Z")          # 00:30 BST on 2027-06-01: after the stop date
+    n = ps.collect(c, now=NOW).counts
+    assert n["after_stop_date"] == 1 and n["forecasts"] == 1
+
+
+def test_deadline_passes_on_the_eastern_date():
+    us = balanced(400)
+    assert ps.look(us, datetime(2027, 6, 1, 3, 30, tzinfo=timezone.utc))["status"].startswith("no look yet")        # 23:30 Eastern on 05-31
+    assert ps.look(us, datetime(2027, 6, 1, 4, 30, tzinfo=timezone.utc), B=50)["status"] == "look"                  # 00:30 Eastern on 06-01
+
+
+def test_pre_look_mode_reads_no_result_and_no_close(tmp_path, monkeypatch):
+    data = tmp_path / "copy"
+    build_world(data).close()
+    seen = []
+    orig = ps.pair_at
+    monkeypatch.setattr(ps, "pair_at", lambda conn, mid, at, kickoff, *a, **k: seen.append((at, kickoff)) or orig(conn, mid, at, kickoff, *a, **k))
+    monkeypatch.setattr(ps, "_state", lambda *a, **k: pytest.fail("results must not be read before the look"))
+    monkeypatch.setattr(ps.sm, "grade_handicap", lambda *a, **k: pytest.fail("results must not be graded before the look"))
+    rep = ps.run(data, tmp_path / "report", now=NOW, looks_dir=tmp_path / "looks")
+    assert rep["look"]["status"].startswith("no look yet") and rep["counts"]["forecasts"] == 9
+    assert seen and all(at < kickoff and at[:10] == kickoff[:10] or at < kickoff for at, kickoff in seen)
+    assert all(at != ps._ts(ps._parse(k) - ps.timedelta(seconds=1)) for at, k in seen)      # never the closing query
+    assert "decided_paired" not in rep["counts"] or rep["counts"]["decided_paired"] is None

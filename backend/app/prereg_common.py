@@ -7,6 +7,8 @@ differ from the sha256 hard-coded in the evaluator.
 import hashlib
 import json
 import math
+import os
+import time
 from pathlib import Path
 from statistics import NormalDist
 
@@ -84,22 +86,36 @@ def check_addenda(addenda: dict, root: Path = REPO_ROOT) -> None:
             raise Refused(f"addendum: {exc}") from None
 
 
-def look_once(looks_dir, doc_sha256: str, key: str, compute, storable=lambda r: r.get("status") == "look") -> dict:
+def look_once(looks_dir, doc_sha256: str, key: str, compute, storable=lambda r: r.get("status") == "look", lock_timeout: float = 30.0) -> dict:
     """One look per (frozen document sha256, key): a stored look is returned verbatim and never recomputed, whatever the
     report folder (--out) of this run. Only a result `storable` says is the look is stored; counts-only reports rerun."""
     d = Path(looks_dir if looks_dir is not None else LOOKS_DIR).expanduser().resolve()
     if _inside(d, LIVE_DATA):
         raise Refused(f"{d} lies inside the live data folder: looks are stored outside the stores")
     path = d / f"{doc_sha256}-looks.json"
-    stored = json.loads(path.read_text()) if path.is_file() else {}
-    if key in stored:
-        return stored[key]
-    result = compute()
-    if storable(result):
-        d.mkdir(parents=True, exist_ok=True)
-        stored[key] = json.loads(json.dumps(result, default=str))
-        path.write_text(json.dumps(stored, indent=2, sort_keys=True) + "\n")
-    return result
+    d.mkdir(parents=True, exist_ok=True)
+    lock, deadline = Path(f"{path}.lock"), time.monotonic() + lock_timeout
+    while True:                                   # O_EXCL lock: a concurrent second writer waits, then refuses
+        try:
+            os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            break
+        except FileExistsError:
+            if time.monotonic() >= deadline:
+                raise Refused(f"look store {path} is locked by another run ({lock}): refusing") from None
+            time.sleep(0.05)
+    try:
+        stored = json.loads(path.read_text()) if path.is_file() else {}
+        if key in stored:
+            return stored[key]
+        result = compute()
+        if storable(result):
+            stored[key] = json.loads(json.dumps(result, default=str))
+            tmp = Path(f"{path}.tmp")
+            tmp.write_text(json.dumps(stored, indent=2, sort_keys=True) + "\n")
+            os.replace(tmp, path)
+        return result
+    finally:
+        os.unlink(lock)
 
 
 def write_report(out: Path, name: str, report: dict) -> Path:

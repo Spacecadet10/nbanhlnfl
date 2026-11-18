@@ -17,6 +17,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 import numpy as np
 
@@ -141,7 +142,8 @@ def _state(m, now: datetime) -> str:
     return "past7" if now >= _parse(m["kickoff_at"]) + PAST else "pending"
 
 
-def collect(conn: sqlite3.Connection, *, now: datetime) -> Collected:
+def collect(conn: sqlite3.Connection, *, now: datetime, outcomes: bool = True) -> Collected:
+    """With `outcomes=False` (before the look) no result and no close is read: forecasts, pairs at t_d and line types only."""
     out, n = Collected(), None
     n = out.counts
     season = conn.execute("SELECT MAX(season) FROM soccer_matches").fetchone()[0]
@@ -151,7 +153,7 @@ def collect(conn: sqlite3.Connection, *, now: datetime) -> Collected:
     q = ",".join("?" * len(COMPETITIONS))
     for m in conn.execute(f"SELECT * FROM soccer_matches WHERE competition_id IN ({q}) AND kickoff_at > ? ORDER BY kickoff_at, match_id",
                           (*COMPETITIONS, T0)).fetchall():
-        if m["kickoff_at"][:10] > STOP_DATE:
+        if ev.local_date(m["kickoff_at"], m["competition_id"]) > STOP_DATE:
             n["after_stop_date"] += 1
             continue
         if not ev.eligible_stage(m["competition_id"], m["season"], m["season_type_id"], m["stage"], main, rules):
@@ -173,6 +175,8 @@ def collect(conn: sqlite3.Connection, *, now: datetime) -> Collected:
             continue
         L = td["line_home"]
         n["paired"][line_type(L)] += 1
+        if not outcomes:
+            continue
         joint = json.loads(f["joint_json"])
         p_home = app_share(handicap_probs(joint, L))
         q_home = odds.devig_two_way(td["american_home"], td["american_away"])[0]
@@ -284,7 +288,7 @@ def look(units: list, now: datetime, B: int = pc.BOOTSTRAP_B) -> dict:
     matches (every earlier match final or past 7 days), or all of them at the deadline (fewer than 300: no verdict)."""
     ordered = sorted(units, key=lambda x: (x["kickoff_at"], x["match_id"]))
     decided = [i for i, x in enumerate(ordered) if x["state"] == "decided"]
-    deadline_passed = now.astimezone(timezone.utc).date().isoformat() > STOP_DATE
+    deadline_passed = now.astimezone(ZoneInfo("America/New_York")).date().isoformat() > STOP_DATE
     if len(decided) >= STOP_N:
         end, chosen = decided[STOP_N - 1], decided[:STOP_N]
     elif deadline_passed:
@@ -348,9 +352,19 @@ def run(data_dir, out, *, now: Optional[datetime] = None, looks_dir=None) -> dic
     conn = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     try:
-        col = collect(conn, now=now)
+        col = collect(conn, now=now, outcomes=False)
+        reachable = sum(col.counts["paired"].values()) >= STOP_N or now.astimezone(ZoneInfo("America/New_York")).date().isoformat() > STOP_DATE
+        if reachable:
+            col = collect(conn, now=now)
     finally:
         conn.close()
+    if not reachable:                      # fewer than 800 paired matches: the stop cannot be reached, so no outcome needs reading
+        counts = {k: col.counts[k] for k in PRE_LOOK_COUNTS if k != "decided_paired"}
+        report = {"prereg_sha256": PREREG_SHA256, "candidate_sha256": CANDIDATE_SHA256, "evaluated_at": _ts(now),
+                  "counts": {**counts, "decided_paired": None},
+                  "look": {"status": f"no look yet (n of {STOP_N})", "n_decided_paired": None, "n_required": STOP_N}}
+        pc.write_report(outdir, "soccer-ah-report.json", report)
+        return report
     def compute() -> dict:
         r = look(col.units, now)
         return {**r, "counts_at_look": col.counts} if r["status"] == "look" else r

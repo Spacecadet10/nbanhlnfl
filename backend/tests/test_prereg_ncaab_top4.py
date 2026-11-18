@@ -9,6 +9,12 @@ import pytest
 from app import ncaab_cards, prereg_common as pc, prereg_ncaab_top4 as pn
 from tests.ncaab_support import add_game, make_store
 
+
+@pytest.fixture(autouse=True)
+def _looks_dir_in_tmp(tmp_path, monkeypatch):
+    """No test may write to the real looks folder (~/nba-predictor-research-data/prereg-looks)."""
+    monkeypatch.setattr(pc, "LOOKS_DIR", tmp_path / "default-looks")
+
 DAY = "2026-11-18"
 TIP = "2026-11-18T23:00:00Z"
 SEL_OK = "2026-11-18T16:00:30Z"           # 11:00:30 Eastern (UTC-5 in November)

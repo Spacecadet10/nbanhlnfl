@@ -1,10 +1,19 @@
 """Shared guards and statistics of the frozen evaluations: hand-computed expected values, synthetic data only."""
 import hashlib
+from pathlib import Path
 
 import numpy as np
 import pytest
 
 from app import prereg_common as pc
+
+REAL_LOOKS = pc.LOOKS_DIR
+
+
+@pytest.fixture(autouse=True)
+def _looks_dir_in_tmp(tmp_path, monkeypatch):
+    """No test may write to the real looks folder (~/nba-predictor-research-data/prereg-looks)."""
+    monkeypatch.setattr(pc, "LOOKS_DIR", tmp_path / "default-looks")
 
 
 def test_wilson_five_of_ten():
@@ -147,3 +156,19 @@ def test_boot_slope_mixed_sign_matches_an_independent_loop():
         expect.append(0.0 if xs.var() < 1e-12 else float(np.polyfit(xs, ys, 1)[0]))
     assert th == pytest.approx(expect, abs=1e-12)
     assert any(t > 0 for t in th) and any(t < 0 for t in th)
+
+
+def test_the_suite_never_creates_the_real_looks_folder():
+    assert REAL_LOOKS == Path.home() / "nba-predictor-research-data" / "prereg-looks"
+    assert pc.LOOKS_DIR != REAL_LOOKS                      # the autouse fixture redirected it
+    assert not REAL_LOOKS.exists()
+
+
+def test_look_write_is_atomic_and_a_held_lock_refuses_a_second_writer(tmp_path):
+    looks = tmp_path / "looks"
+    pc.look_once(looks, "c" * 64, "m", lambda: {"status": "look", "v": 1})
+    assert sorted(f.name for f in looks.iterdir()) == ["c" * 64 + "-looks.json"]          # no temp file, no lock left behind
+    (looks / ("d" * 64 + "-looks.json.lock")).parent.mkdir(exist_ok=True)
+    (looks / ("d" * 64 + "-looks.json.lock")).write_text("held")                          # another writer holds the lock
+    with pytest.raises(pc.Refused, match="lock"):
+        pc.look_once(looks, "d" * 64, "m", lambda: pytest.fail("must not compute while locked"), lock_timeout=0.2)

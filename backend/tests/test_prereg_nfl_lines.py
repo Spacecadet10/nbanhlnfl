@@ -10,6 +10,12 @@ import pytest
 
 from app import db, prereg_common as pc, prereg_nfl_lines as pl
 
+
+@pytest.fixture(autouse=True)
+def _looks_dir_in_tmp(tmp_path, monkeypatch):
+    """No test may write to the real looks folder (~/nba-predictor-research-data/prereg-looks)."""
+    monkeypatch.setattr(pc, "LOOKS_DIR", tmp_path / "default-looks")
+
 RAW = "2026-11-01T00:00:00Z"
 NOW = datetime(2026, 12, 10, tzinfo=timezone.utc)
 
@@ -240,7 +246,7 @@ def test_book_better_and_not_shown():
 
 def test_deadline_closes_a_market_below_600():
     us = calibrated_units(300, weeks=30)
-    r = pl.look_market(us, "spread", datetime(2029, 3, 1, tzinfo=timezone.utc))
+    r = pl.look_market(us, "spread", datetime(2029, 3, 2, tzinfo=timezone.utc))
     assert r["status"] == "insufficient evidence (closed at deadline 2029-02-28)" and "metrics" not in r
 
 
@@ -464,3 +470,44 @@ def test_run_reports_team_total_challengers_only_for_points_challengers(tmp_path
     rep = pl.run(data, tmp_path / "out", now=NOW, looks_dir=tmp_path / "looks")
     assert set(rep["challenger_team_totals"]) == {f"{n}:{m}" for n in ("nfl_points_eta02", "nfl_points_eta10") for m in ("team_total_home", "team_total_away")}
     assert all(v["status"] == "insufficient evidence (n of 600)" for v in rep["challenger_team_totals"].values())
+
+
+def test_team_total_challenger_waits_for_an_earlier_pending_game():
+    pairs = [{"game_id": f"t{i}", "week": f"w{i % 30:02d}", "tipoff_at": f"2027-01-01T{i // 60:02d}:{i % 60:02d}:00Z", "p": 0.7, "p_ch": 0.6, "y": 1, "q_book": None}
+             for i in range(600)]
+    r = pl.look_team_total_challenger(pairs, "nfl_points_eta02", "team_total_home", pending_tips=[pairs[10]["tipoff_at"]])
+    assert r["status"].startswith("waiting") and "delta_c" not in r
+    assert pl.look_team_total_challenger(pairs, "nfl_points_eta02", "team_total_home", pending_tips=["2027-02-01T00:00:00Z"])["status"] == "descriptive"
+
+
+def test_team_total_challenger_look_is_stored_once(tmp_path, monkeypatch):
+    from app import learning_challengers as lc
+    data = tmp_path / "copy"
+    make_store(data).close()
+    (data / "research").mkdir()
+    lc.open_store(data / "research" / "challengers.sqlite").close()
+    monkeypatch.setattr(pl, "look_team_total_challenger", lambda pairs, name, market, pending_tips=(): {"challenger": name, "market": market, "status": "descriptive", "n": 600, "delta_c": 0.1})
+    first = pl.run(data, tmp_path / "o1", now=NOW, looks_dir=tmp_path / "looks")
+    assert first["challenger_team_totals"]["nfl_points_eta02:team_total_home"]["delta_c"] == 0.1
+    monkeypatch.setattr(pl, "look_team_total_challenger", lambda *a, **k: pytest.fail("a second team-total look must not be computed"))
+    again = pl.run(data, tmp_path / "o2", now=NOW, looks_dir=tmp_path / "looks")
+    assert again["challenger_team_totals"] == first["challenger_team_totals"]
+
+
+def test_deadline_closes_on_the_eastern_date():
+    us = calibrated_units(300, weeks=30)
+    still_open = datetime(2029, 3, 1, 4, 30, tzinfo=timezone.utc)       # 23:30 Eastern on 2029-02-28
+    closed = datetime(2029, 3, 1, 5, 30, tzinfo=timezone.utc)           # 00:30 Eastern on 2029-03-01
+    assert pl.look_market(us, "spread", still_open)["status"] == "insufficient evidence (n of 600)"
+    assert pl.look_market(us, "spread", closed)["status"].startswith("insufficient evidence (closed")
+
+
+def test_a_closed_market_is_stored_so_a_later_run_cannot_reach_a_look(tmp_path, monkeypatch):
+    data = tmp_path / "copy"
+    build_world(data).close()
+    late = datetime(2029, 3, 2, tzinfo=timezone.utc)
+    first = pl.run(data, tmp_path / "o1", now=late, looks_dir=tmp_path / "looks")
+    assert first["markets"]["spread"]["status"].startswith("insufficient evidence (closed")
+    monkeypatch.setattr(pl, "look_market", lambda *a, **k: pytest.fail("a closed market is never recomputed"))
+    again = pl.run(data, tmp_path / "o2", now=NOW, looks_dir=tmp_path / "looks")
+    assert again["markets"]["spread"] == first["markets"]["spread"]

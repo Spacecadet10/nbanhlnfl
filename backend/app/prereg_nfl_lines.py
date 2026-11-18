@@ -305,7 +305,7 @@ def look_market(units: list, market: str, now: datetime, store: Optional[sqlite3
     decided = [i for i, u in enumerate(elig) if u["state"] == "decided"]
     key = "n_decided_bookmaker_line" if book else "n_decided_forecasts"
     if len(decided) < N_MIN:
-        closed = now.astimezone(timezone.utc).date().isoformat() > DEADLINE
+        closed = now.astimezone(NY).date().isoformat() > DEADLINE
         return {"market": market, "status": f"insufficient evidence (closed at deadline {DEADLINE})" if closed else INSUFFICIENT,
                 key: len(decided), "n_required": N_MIN, "coverage": _coverage(all_m, book, now, store)}
     last = decided[N_MIN - 1]
@@ -387,12 +387,16 @@ def look_challenger(pairs: list, name: str, market: str, now: datetime, pending_
             "verdict": f"{name} beats the incumbent on {market} (promotion proposal only)" if test["reject"] else "not shown"}
 
 
-def look_team_total_challenger(pairs: list, name: str, market: str) -> dict:
+def look_team_total_challenger(pairs: list, name: str, market: str, pending_tips=()) -> dict:
     """Addendum 6: team-total delta_c of a points challenger (challenger minus incumbent log loss), descriptive at 600 paired
     decided games: no test, no p-value; counts only below 600."""
     if len(pairs) < N_MIN:
         return {"challenger": name, "market": market, "status": INSUFFICIENT, "n_paired_decided": len(pairs), "n_required": N_MIN}
     look = pairs[:N_MIN]
+    last = look[-1].get("tipoff_at")
+    if last and any(t <= last for t in pending_tips):
+        return {"challenger": name, "market": market, "status": "waiting: an earlier game is neither final nor past 7 days",
+                "n_paired_decided": len(pairs), "n_required": N_MIN}
     return {"challenger": name, "market": market, "status": "descriptive", "n": N_MIN,
             "delta_c": sum(pc.log_loss(u["p_ch"], u["y"]) - pc.log_loss(u["p"], u["y"]) for u in look) / N_MIN}
 
@@ -415,7 +419,8 @@ def run(data_dir, out, *, now: Optional[datetime] = None, looks_dir=None) -> dic
     store = _readonly(store_file)
     try:
         col = collect(store, now=now, began=activated_at(dd))
-        markets = {m: pc.look_once(looks_dir, PREREG_SHA256, m, lambda m=m: look_market(col.units, m, now, store)) for m in MARKETS}
+        markets = {m: pc.look_once(looks_dir, PREREG_SHA256, m, lambda m=m: look_market(col.units, m, now, store),
+                                   storable=lambda r: r["status"] == "look" or r["status"].startswith("insufficient evidence (closed")) for m in MARKETS}
         pol = load_policy()
         ch_file = dd / "research" / "challengers.sqlite"
         ch = _readonly(ch_file) if ch_file.is_file() else None
@@ -434,7 +439,10 @@ def run(data_dir, out, *, now: Optional[datetime] = None, looks_dir=None) -> dic
                     team_totals[f"{name}:{market}"] = {"challenger": name, "market": market, "status": INSUFFICIENT, "n_paired_decided": 0, "n_required": N_MIN}
                 else:
                     cu = challenger_units(ch, col.units, pol, name, market)
-                    team_totals[f"{name}:{market}"] = {**look_team_total_challenger(cu["pairs"], name, market), "counts": cu["counts"]}
+                    r = pc.look_once(looks_dir, PREREG_SHA256, f"{name}:{market}:team_total",
+                                     lambda: look_team_total_challenger(cu["pairs"], name, market, cu["pending_tips"]),
+                                     storable=lambda r: r["status"] == "descriptive")
+                    team_totals[f"{name}:{market}"] = {**r, "counts": cu["counts"]}
         if ch is not None:
             ch.close()
         tested = {m: markets[m]["test"]["p"] for m in LINE_MARKETS if "test" in markets[m]}
