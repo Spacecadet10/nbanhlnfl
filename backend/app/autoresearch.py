@@ -716,6 +716,31 @@ def _memory_guard(pgid: int, limit_gb: float, stop: threading.Event, state: dict
             return
 
 
+def _kill_strays(tmp: Path) -> None:
+    """Kills every process whose current directory is the trial's tmp dir: a candidate child that called setsid left the
+    process group the parent kills, but it started in (and is still in) that directory."""
+    prefix = str(tmp.resolve())
+    for _ in range(3):
+        try:
+            out = subprocess.run(["/usr/sbin/lsof", "-a", "-d", "cwd", "-Fpn"], capture_output=True, text=True, timeout=30).stdout
+        except (OSError, subprocess.SubprocessError):
+            return
+        pid, found = None, []
+        for ln in out.splitlines():
+            if ln.startswith("p") and ln[1:].isdigit():
+                pid = int(ln[1:])
+            elif ln.startswith("n") and ln[1:].startswith(prefix) and pid:
+                found.append(pid)
+        if not found:
+            return
+        for p in found:
+            try:
+                os.kill(p, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
+        time.sleep(0.2)
+
+
 def run_candidate(src: str, sport: str, data: dict, scored, timeout_s: float, tdir: Path) -> dict:
     """Runs train.py in the sandbox through the whole walk; returns per-market vectors or a failure status."""
     from .candidates import engine, registry
@@ -777,6 +802,7 @@ def run_candidate(src: str, sport: str, data: dict, scored, timeout_s: float, td
         except (ProcessLookupError, PermissionError):         # macOS: EPERM once the group leader has already exited
             pass
         _, status, ru = os.wait4(proc.pid, 0)
+        _kill_strays(tmp)                                 # a child that left the group (setsid) is not reached by killpg
         os.close(w_req)
         os.close(r_resp)
         log.close()

@@ -455,7 +455,7 @@ def test_timeouts_kill_the_process_group_crashes_are_logged_and_retries_bounded(
     rec = ar.run_trial("nba", env["exp"], env["ws"], timeout_s=5)
     assert rec["status"] == "timeout" and rec["resources"]["timed_out"]
     trial_dir = str(env["root"] / "trials" / rec["trial_id"])
-    assert subprocess.run(["pgrep", "-f", trial_dir], capture_output=True, text=True).stdout.split() == []
+    assert _procs_with_cwd_in(trial_dir) == []                    # no process of the trial survives (cwd is its tmp dir)
     assert ar.run_trial("nba", env["exp"], env["ws"], timeout_s=5)["cached"]       # no silent rerun
     monkeypatch.setitem(ar.BUDGETS, "max_retries", 1)
     assert ar.run_trial("nba", env["exp"], env["ws"], retry=True, timeout_s=5)["status"] == "timeout"
@@ -673,7 +673,7 @@ def test_a_candidate_over_the_memory_limit_is_killed_and_recorded(env, monkeypat
     rec = ar.run_trial("nba", env["exp"], env["ws"], timeout_s=100)
     assert rec["status"] == "killed" and rec["reason"].startswith("killed: memory"), rec
     trial_dir = str(env["root"] / "trials" / rec["trial_id"])
-    assert subprocess.run(["pgrep", "-f", trial_dir], capture_output=True, text=True).stdout.split() == []
+    assert _procs_with_cwd_in(trial_dir) == []                    # no process of the trial survives (cwd is its tmp dir)
     assert rec["resources"]["wall_s"] < 60
     assert "killed" in (env["root"] / "results.tsv").read_text()
 
@@ -701,3 +701,34 @@ def test_the_candidate_cannot_signal_processes_outside_its_sandbox(tmp_path):
                                   "if pid == 0:\n    os._exit(0)\n"
                                   "os.kill(pid, 0) if False else None\nos.waitpid(pid, 0)\nprint('OWN-OK')\n")
     assert "EPERM" in res.stdout and "SIGNALLED" not in res.stdout and "OWN-OK" in res.stdout, res.stdout + res.stderr
+
+
+def _procs_with_cwd_in(folder):
+    """Pids whose current directory is inside `folder` (lsof), the check that does not depend on process group or argv."""
+    out = subprocess.run(["/usr/sbin/lsof", "-a", "-d", "cwd", "-Fpn"], capture_output=True, text=True).stdout
+    pid, found = None, []
+    for ln in out.splitlines():
+        if ln.startswith("p"):
+            pid = int(ln[1:])
+        elif ln.startswith("n") and ln[1:].startswith(str(Path(folder).resolve())):
+            found.append(pid)
+    return found
+
+
+def test_a_child_that_left_the_process_group_is_killed_with_the_trial(tmp_path):
+    tmp = tmp_path / "tmp"
+    tmp.mkdir()
+    prof = tmp_path / "sandbox.sb"
+    prof.write_text(ar._profile(tmp))
+    code = ("import os, time\n"
+            "if os.fork() == 0:\n    os.setsid()\n    time.sleep(300)\n    os._exit(0)\n"
+            "time.sleep(2)\nprint('PARENT-DONE')\n")
+    subprocess.run([ar.SANDBOX, "-f", str(prof), sys.executable, "-I", "-B", "-c", code], stdout=subprocess.DEVNULL,
+                   stderr=subprocess.DEVNULL, env={"PATH": "/usr/bin:/bin", "HOME": str(tmp), "TMPDIR": str(tmp)}, cwd=str(tmp), timeout=60)
+    try:
+        assert _procs_with_cwd_in(tmp), "the setsid child should still be running before the cleanup"
+        ar._kill_strays(tmp)
+        assert _procs_with_cwd_in(tmp) == []
+    finally:
+        for p in _procs_with_cwd_in(tmp):
+            os.kill(p, 9)
