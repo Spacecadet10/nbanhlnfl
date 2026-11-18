@@ -236,7 +236,8 @@ def test_review_time_and_recorder_come_from_the_config_unless_given(tmp_path, mo
     assert bpr.RECORDER_SHA256 in shas
     assert {e['code_commit'] for e in shas[bpr.RECORDER_SHA256]} == {'61376d9b44e21bd48db36df0d11b2a9c8112eb5f',
                                                                    '30d9005202f5eda741f2d577928a51e8b0a863f6',
-                                                                   '4dd665ddf61a0e9fe8b0be07221cb1b30a39ba10'}
+                                                                   '4dd665ddf61a0e9fe8b0be07221cb1b30a39ba10',
+                                                                   '7aed6bccf41173dfff42ba9e0800bcd63e14e8aa'}
     data, _, _ = setup(tmp_path, 3, monkeypatch, m)
     cfg = tmp_path / 'review.json'
     cfg.write_text('{"reviewed_at": "%s", "reviewed_recorder_sha256": ["%s"]}' % (REVIEWED, SHA))
@@ -291,3 +292,14 @@ def test_an_unreviewed_release_commit_is_excluded_with_a_visible_explanation(tmp
     assert 'code revision abcdef01 not reviewed' in section(text, 1)
     assert 'append a review entry to scripts/weekly_report_review.json' in section(text, 1)
     assert 'NBA: 3 cards excluded' in section(text, 1)
+
+
+def test_rows_from_the_deliberately_unreviewed_commit_8d59134_are_excluded_with_the_visible_reason(tmp_path, monkeypatch):
+    m = wr()
+    monkeypatch.setenv('NBA_RELEASE_COMMIT', '8d59134caebdeb7d5fdf821dfec8da059db9c3db')
+    data, _, _ = setup(tmp_path, 3, monkeypatch, m)
+    args = ['--data-dir', str(data), '--ledger', str(tmp_path / 'ledger.sqlite'), '--out-dir', str(tmp_path / 'o'),
+            '--review-config', str(ROOT / 'scripts' / 'weekly_report_review.json'), '--now', '2026-12-31T00:00:00Z']
+    text = Path(m.main(args)).read_text()
+    assert 'counted n=0' in section(text, 1)
+    assert 'code revision 8d59134c not reviewed' in section(text, 1)

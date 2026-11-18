@@ -1,5 +1,5 @@
 {
-  "note": "Best-pick recorder independent reviews (HANDOFF.md), read by scripts/weekly_report.py. A row counts only when an entry exists for its recorder_sha256 (app.best_pick_record.RECORDER_SHA256), its code_commit is the entry's code_commit (null = every commit), and it was recorded at or after that entry's reviewed_at (one entry per recorder and code commit, each with its own review time). Forward only: nothing recorded before an entry counts. Every new delivery release (a new code commit) or recorder change needs a new appended entry before its rows count. 023a26a4 (released 23:49Z Nov 11) was defective (every live row an error) and is excluded whole.",
+  "note": "Best-pick recorder independent reviews (HANDOFF.md), read by scripts/weekly_report.py. A row counts only when an entry exists for its recorder_sha256 (app.best_pick_record.RECORDER_SHA256), its code_commit is the entry's code_commit (null = every commit), and it was recorded at or after that entry's reviewed_at (one entry per recorder and code commit, each with its own review time). Forward only: nothing recorded before an entry counts. Every new delivery release (a new code commit) or recorder change needs a new appended entry before its rows count. 023a26a4 (released 23:49Z Nov 11) was defective (every live row an error) and is excluded whole. A commit listed under not_reviewed has no entry on purpose; its rows stay excluded and the weekly page says so (information only, not read by the report).",
   "reviews": [
     {
       "recorder_sha256": "ff2d53ab3985fae70e9ee8214bf43ffe32f7d3c096bd697202f076f8a7c8de3e",
@@ -28,6 +28,23 @@
       "reviewed_at": "2026-11-18T02:24:32Z",
       "reviewer": "independent Opus static review",
       "note": "equivalent to 30d9005 on the recorder path (all changes gated on draw_no_bet / Soccer-only); delivery switched to it 2026-11-18T02:23:33Z (reflog)"
+    },
+    {
+      "recorder_sha256": "7cc3e6e1befef5206975dd580a278f6fd4184329d8b400e437e94d1d35e01000",
+      "code_commit": "7aed6bccf41173dfff42ba9e0800bcd63e14e8aa",
+      "reviewed_at": "2026-11-18T03:37:19Z",
+      "reviewer": "independent Opus review",
+      "note": "equivalent to 4dd665d apart from the accepted LOW case (a 'sent' original's later no-pick card is replaced by a withdrawal and writes no best_picks row; counted_cards unchanged because the earliest sent card decides). F1 fixed per owner decision (withdrawal only when original status='sent')"
+    }
+  ],
+  "not_reviewed": [
+    {
+      "code_commit": "362546252d1cc216107f145002484f296c24b310",
+      "reason": "independent review NOT-EQUIVALENT: F1 uncertain originals drop games; F2 unguarded exceptions"
+    },
+    {
+      "code_commit": "8d59134caebdeb7d5fdf821dfec8da059db9c3db",
+      "reason": "independent review EQUIVALENT-EXCEPT-F1; owner chose to fix F1 first (fixed in 7aed6bc)"
     }
   ]
 }
