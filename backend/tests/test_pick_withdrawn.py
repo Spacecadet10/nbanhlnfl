@@ -118,15 +118,19 @@ def test_an_uncertain_withdrawal_ack_is_recorded_and_not_retried(tmp_path):
         assert conn.execute('SELECT status FROM pick_withdrawals').fetchone()[0] == 'uncertain'
 
 
-def test_an_original_without_a_message_id_names_its_send_time_instead_of_replying(tmp_path):
+@pytest.mark.parametrize('status', ['uncertain', 'sending'])
+def test_an_unconfirmed_original_keeps_the_previous_behaviour_a_full_card(tmp_path, status):
+    """Owner decision Nov 18 (review F1): a withdrawal only follows an original whose status is 'sent'. For an uncertain or
+    sending original the replacement card goes out as before, so the best-pick record (status='sent' cards) is unchanged."""
     bot = Bot()
     with tg.ledger(tmp_path / 'l.sqlite') as conn:
         sent_original(bot, conn)
-        conn.execute("UPDATE deliveries SET status='uncertain', message_id=NULL")
-        assert send(bot, conn, unsupported(), T1) == 'withdrawn'
-        body = bot.sends[1]
-        assert 'reply_parameters' not in body and 'reply_to_message_id' not in body
-        assert any(l.startswith('Original card sent Nov 02, ') and l.endswith('its message link is unavailable.') for l in body['text'].split('\n'))
+        conn.execute("UPDATE deliveries SET status=?, message_id=NULL", (status,))
+        assert send(bot, conn, unsupported(), T1) == 'sent'
+        assert len(bot.sends) == 2 and 'reply_parameters' not in bot.sends[1]
+        assert conn.execute("SELECT COUNT(*) FROM deliveries WHERE delivery_key LIKE 'pick-withdrawn-v1:%'").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM pick_withdrawals").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM deliveries WHERE text LIKE '%No supported pick%' AND status='sent'").fetchone()[0] == 1
 
 
 def test_an_earlier_no_supported_card_means_no_withdrawal_on_top(tmp_path):

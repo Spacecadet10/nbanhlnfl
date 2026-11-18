@@ -670,7 +670,7 @@ def _forecast_line(name, fid, label, line, pct):
 
 def withdrawal_plan(conn, chat_id, text, now):
     """The earlier supported card this 'No supported pick' card withdraws, or None. Only the LATEST supported card of the game
-    counts, and not when a 'No supported pick' card already reached the chat after it (nothing to withdraw twice)."""
+    counts, only when its status is 'sent', and not when a 'No supported pick' card already reached the chat after it (nothing to withdraw twice)."""
     identity = card_identity(text)
     if not identity or identity[3] != 'No supported pick':
         return None
@@ -681,7 +681,9 @@ def withdrawal_plan(conn, chat_id, text, now):
         other = card_identity(row['text'])
         if other and other[:3] == identity[:3]:
             original = None if other[3] in NO_PICK else row
-    return original
+    # Owner decision Nov 18 (review F1): only a confirmed 'sent' original is withdrawn; an uncertain or sending one keeps the
+    # previous behaviour (the replacement card), so the best-pick record, which counts status='sent' cards, is unchanged.
+    return original if original is not None and original['status'] == 'sent' else None
 
 
 def withdrawal_message(original, text, context):
