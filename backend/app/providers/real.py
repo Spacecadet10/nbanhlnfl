@@ -195,9 +195,12 @@ class RealProvider:
         if c['market'] not in self._percentage_indexes:
             _, cohort, _ = self._canonical_cohort(c['market'])
             self._percentage_indexes[c['market']] = to.percentage_index(cohort, self.now)
+        if not hasattr(self, '_live_since'):
+            self._live_since = to.live_since(self.conn)
         percentage_history = to.percentage_record(self.sport, c['market'], rec, g['game_id'],
                                                  self._percentage_indexes[c['market']], self.now,
-                                                 history_index=self._points_history_index(c['market'], g['season_type']))
+                                                 history_index=self._points_history_index(c['market'], g['season_type']),
+                                                 live_since=self._live_since)
         labels = markets.side_labels(c["market"], rec["line"], self._team(g["home_team_id"]).abbr,
                                      self._team(g["away_team_id"]).abbr)
         idx = {"a": 0, "mid": 1, "b": 2}
@@ -205,7 +208,19 @@ class RealProvider:
         return CanonicalForecast(**{**c, "record": {**rec, "pick_label": labels[idx[rec["side"]]], "opposite_pick_label": opposite},
                                     "percentage_history": percentage_history,
                                     "sportsbook": sportsbook_comparison(self.conn, self.sport, g, c["market"], rec),
+                                    "record_basis": self._record_basis(g, c["market"], rec),
                                     "result_label": None if c["result_side"] is None else labels[idx[c["result_side"]]]})
+
+    def _record_basis(self, g, market: str, rec: dict) -> Optional[dict]:
+        """Which forecast the record counts, the earlier pregame ones and the one the Telegram card published (app/record_basis.py).
+        A problem here never hides the forecast."""
+        try:
+            from .. import published_picks, record_basis
+            if not hasattr(self, '_published'):
+                self._published = published_picks.load(self.sport)
+            return record_basis.build(self.conn, self.sport, g, market, rec, self._published, self.now)
+        except Exception:      # noqa: BLE001  (display only)
+            return None
 
     def _points_history_index(self, market: str, season_type: str) -> Optional[dict]:
         """Recomputed past-season record index of a points market (app/points_history.py) or of the winner
@@ -932,6 +947,9 @@ class RealProvider:
                     "game_id": g["game_id"], "matchup": f"{away} @ {home}", "tipoff": g["tipoff_at"], "status": g["status"],
                     "market": market, "market_title": title, "pick_label": out.record.pick_label,
                     "forecast_id": rec['forecast_id'],
+                    "line": rec["line"], "side": rec["side"], "model_version": rec["model_version"],
+                    "sportsbook": out.sportsbook.model_dump(mode="json") if out.sportsbook else None,
+                    "record_basis": out.record_basis.model_dump(mode="json") if out.record_basis else None,
                     "opposite_pick_label": out.record.opposite_pick_label,
                     "probability": rec["confidence"], "threshold": to.threshold_reached(rec["confidence"], grid),
                     "evidence": to.pick_evidence(rec["confidence"], ladder, grid),

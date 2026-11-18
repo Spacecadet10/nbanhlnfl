@@ -109,6 +109,11 @@ def ledger(path=None):
         conn.executescript(ncaab_cards.SCHEMA)
     except Exception:
         pass
+    try:   # what each sent card published (app/published_picks.py); a problem here never blocks delivery
+        from . import published_picks
+        conn.executescript(published_picks.SCHEMA)
+    except Exception:
+        pass
     try:   # Step F paper recorder's append-only table (app/best_pick_record.py); a problem here never blocks delivery
         from . import best_pick_record
         conn.executescript(best_pick_record.SCHEMA)
@@ -400,6 +405,16 @@ def best_pick_pictures(conn, sport, report, now):
         return None
 
 
+def record_published(conn, sport, key, game_id, report, now):
+    """The picks of a card that was just sent, appended to published_picks (app/published_picks.py). Never raises."""
+    try:
+        from . import published_picks
+        return published_picks.record(conn, sport, key, game_id, report, now)
+    except Exception as exc:
+        print(f'published-picks recorder (card unaffected): {type(exc).__name__}', file=sys.stderr, flush=True)
+        return 0
+
+
 def record_best_pick(conn, sport, key, game_id, pictures, as_of):
     """One append-only best_picks row for a card that was just sent; a missing picture is recorded as an error row.
     Never raises: a card already sent is never affected."""
@@ -514,6 +529,8 @@ def run_once(bot, settings, conn, *, now=None):
                 if sport == 'nfl':
                     from .nfl_live import Views
                     report = Views(source, now.strftime('%Y-%m-%dT%H:%M:%SZ')).ranked_picks(now.astimezone(TORONTO).date())
+                    from . import record_basis      # NFL picks come from the sealed nfl_live.py: contract fields added here
+                    record_basis.decorate_report(source, 'nfl', report)
                 else:
                     report = RealProvider(source, now.strftime('%Y-%m-%dT%H:%M:%SZ')).ranked_picks(now.astimezone(TORONTO).date())
                 if sport == 'ncaab':   # owner decision Nov 17: cards only for the day's top 4 gaps chosen at 11 AM ET (app/ncaab_cards.py)
@@ -549,6 +566,7 @@ def run_once(bot, settings, conn, *, now=None):
                 outcomes[status] += 1
                 if status == 'sent':
                     record_best_pick(conn, sport, key, games_by_key.get(key), pictures, report['as_of'])
+                    record_published(conn, sport, key, games_by_key.get(key), report, now)
             result['sports'][sport] = {'eligible_summaries': len(batches), **dict(outcomes)}
             if sport == 'ncaab':
                 result['sports'][sport]['selection'] = (None if selection is None else
@@ -575,10 +593,13 @@ def run_once(bot, settings, conn, *, now=None):
                     if pick.get('card_market_prob') is None:
                         pick.update(additional_odds.comparison('soccer', pick, report['as_of'],
                                                                side=pick.get('side'), line=pick.get('line')))
-                outcomes = Counter()
-                batches = message_batches(report, settings['TELEGRAM_CHAT_ID'], context_selection=True)
+                outcomes, soccer_games = Counter(), {}
+                batches = message_batches(report, settings['TELEGRAM_CHAT_ID'], games_by_key=soccer_games, context_selection=True)
                 for key, text in batches:
-                    outcomes[deliver_card(bot, conn, settings['TELEGRAM_CHAT_ID'], key, text, report['as_of'])] += 1
+                    status = deliver_card(bot, conn, settings['TELEGRAM_CHAT_ID'], key, text, report['as_of'])
+                    outcomes[status] += 1
+                    if status == 'sent':
+                        record_published(conn, 'soccer', key, soccer_games.get(key), report, now)
                 result['sports']['soccer'] = dict(eligible_summaries=len(batches), **dict(outcomes), refused=section['refused'])
         except Exception as exc:
             result['sports']['soccer'] = {'status': 'failed', 'error_type': type(exc).__name__}
