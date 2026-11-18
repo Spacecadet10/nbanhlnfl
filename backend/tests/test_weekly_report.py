@@ -235,7 +235,8 @@ def test_review_time_and_recorder_come_from_the_config_unless_given(tmp_path, mo
     # tripwire: a recorder change without a new review entry fails here
     assert bpr.RECORDER_SHA256 in shas
     assert {e['code_commit'] for e in shas[bpr.RECORDER_SHA256]} == {'61376d9b44e21bd48db36df0d11b2a9c8112eb5f',
-                                                                   '30d9005202f5eda741f2d577928a51e8b0a863f6'}
+                                                                   '30d9005202f5eda741f2d577928a51e8b0a863f6',
+                                                                   '4dd665ddf61a0e9fe8b0be07221cb1b30a39ba10'}
     data, _, _ = setup(tmp_path, 3, monkeypatch, m)
     cfg = tmp_path / 'review.json'
     cfg.write_text('{"reviewed_at": "%s", "reviewed_recorder_sha256": ["%s"]}' % (REVIEWED, SHA))

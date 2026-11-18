@@ -21,6 +21,13 @@
       "reviewed_at": "2026-11-18T01:03:20Z",
       "reviewer": "independent Opus review",
       "note": "row content and timing equivalent to 61376d9b; caveat: new unguarded card-formatting code could rarely change whether a card is sent (not row content)"
+    },
+    {
+      "recorder_sha256": "7cc3e6e1befef5206975dd580a278f6fd4184329d8b400e437e94d1d35e01000",
+      "code_commit": "4dd665ddf61a0e9fe8b0be07221cb1b30a39ba10",
+      "reviewed_at": "2026-11-18T02:24:32Z",
+      "reviewer": "independent Opus static review",
+      "note": "equivalent to 30d9005 on the recorder path (all changes gated on draw_no_bet / Soccer-only); delivery switched to it 2026-11-18T02:23:33Z (reflog)"
     }
   ]
 }
