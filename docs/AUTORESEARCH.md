@@ -134,7 +134,7 @@ Started by a person, never by the agent; nothing schedules it. One run (`researc
    by the launch and its single retry), no MCP servers, no session persistence, and an explicit environment (`AGENT_ENV`).
    The whole process tree runs under `sandbox-exec` with `agent_profile`. Under `$HOME` it writes nothing except the
    workspace, and reads only the workspace, the app source, the Python install, the run's `python` shim and, each one
-   required and verified with Claude Code 2.1.299: the Claude Code install (`~/.local/bin`, `~/.local/share/claude`), the
+   required and verified with Claude Code 2.1.299 (2026-11-18, 2.1.327: all flags still exist and the binary starts under the profile; the login and API path was not re-run, so run one real agent session before relying on it): the Claude Code install (`~/.local/bin`, `~/.local/share/claude`), the
    login keychain (`~/Library/Keychains`: macOS keeps Claude Code's login there, encrypted; items are released by
    securityd, and the agent's shell has no command to request them) and git's user config (commit identity). The user's
    `~/.claude*` (hooks, MCP commands, other sessions' transcripts) is neither readable nor writable; Claude Code runs
@@ -194,8 +194,8 @@ python3 prepare.py stop --reason "..."                   # kill switch; `stop --
 - It never starts an agent.
 
 ## Limits
-- The sandbox uses macOS `sandbox-exec`, which is deprecated by Apple but functional on this machine (macOS 26.6). The child may still run processes, but they inherit the sandbox.
-- Data, protocol and evaluator are protected by hashes and by the sandbox on the candidate. The agent's own shell (outside the sandbox) can read the snapshot. Protection against a deliberately adversarial agent would need a separate OS user.
+- The sandbox uses macOS `sandbox-exec`, which is deprecated by Apple but functional on this machine (macOS 26.6). The candidate may fork (loky workers), but only this Python can be executed; no launchd job, app launch or Apple event can be started (a program started outside the sandbox would not inherit it).
+- Data, protocol and evaluator are protected by hashes and by the sandbox on the candidate. The agent's own shell runs inside the agent sandbox (`agent_profile`), which denies the snapshot, the frozen dataset and the trial log; the candidate runs in the stricter candidate sandbox. Neither is protection against a deliberately adversarial agent, which would need a separate OS user.
 - Repeated validation search inflates false keeps. The bootstrap is not corrected for the number of trials. Each record states the count, and the holdout and the forward record are the checks.
 - Historical lines are model lines (the primary's), not bookmaker lines. Nothing here measures betting value.
 

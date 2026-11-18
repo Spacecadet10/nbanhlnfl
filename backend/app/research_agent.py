@@ -60,7 +60,7 @@ DENIED_TOOLS = ("Bash(git * --output*)", "Bash(git * --ext-diff*)", "Bash(git * 
 # The agent's environment is built from these names only (plus PATH and the broker socket), never the driver's whole one.
 AGENT_ENV = ("HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "ANTHROPIC_API_KEY",
              "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CONFIG_DIR", "__CF_USER_TEXT_ENCODING")
-# Under $HOME the agent reads only these, each required (verified 2026-10-14 with Claude Code 2.1.299, see AUTORESEARCH.md):
+# Under $HOME the agent reads only these, each required (verified 2026-10-14 with Claude Code 2.1.299; re-checked 2026-11-18 with 2.1.327: every flag below is in `claude --help` and the binary starts under this profile; the login/API path was not re-run, see AUTORESEARCH.md):
 # the Claude Code install; the login keychain, where macOS keeps Claude Code's login (encrypted; items are released by
 # securityd, and the agent's shell has no command to ask for them); git's user config (commit identity). It writes nothing
 # under $HOME: the user's own Claude Code sessions load hooks and MCP commands from ~/.claude*, so those are never
