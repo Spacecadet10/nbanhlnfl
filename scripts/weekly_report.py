@@ -24,6 +24,7 @@ import argparse
 import importlib.util
 import json
 import os
+import re
 import sqlite3
 import sys
 from collections import defaultdict
@@ -55,24 +56,48 @@ MAX_REPEAT_LINES = 5            # per sport and market in section 4; newest lost
 REVIEW_CONFIG = HERE / 'weekly_report_review.json'
 
 
-REVIEW_SOURCE = {'path': str(REVIEW_CONFIG), 'unavailable': None}     # set by main(): the review file in use, shown on the page
+REVIEW_SOURCE = {'path': str(REVIEW_CONFIG), 'unavailable': None, 'invalid': None}    # set by main(); shown on the page
+HEX40, HEX64, STAMP = re.compile(r'[0-9a-f]{40}'), re.compile(r'[0-9a-f]{64}'), re.compile(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ')
+
+
+class ReviewConfigError(ValueError):
+    pass
+
+
+def check_entry(i: int, e) -> dict:
+    """One review entry, strictly: a full recorder sha256, a UTC reviewed_at, and the exact code commit (40 lowercase hex);
+    code_commit may be null only for the legacy recorder reviewed before commits were named."""
+    bad = lambda why: ReviewConfigError(f'invalid review entry #{i}: {why}')            # noqa: E731
+    if not isinstance(e, dict):
+        raise bad('not an object')
+    if not isinstance(e.get('recorder_sha256'), str) or not HEX64.fullmatch(e['recorder_sha256']):
+        raise bad('recorder_sha256 must be 64 lowercase hex characters')
+    if not isinstance(e.get('reviewed_at'), str) or not STAMP.fullmatch(e['reviewed_at']):
+        raise bad('reviewed_at must look like 2026-11-18T03:37:19Z')
+    if 'code_commit' not in e:
+        raise bad('code_commit is required (null only for the legacy recorder)')
+    if e['code_commit'] is None:
+        if e['recorder_sha256'] != bp.LEGACY_RECORDER:
+            raise bad('code_commit is null, which is allowed only for the legacy recorder')
+    elif not isinstance(e['code_commit'], str) or not HEX40.fullmatch(e['code_commit']):
+        raise bad('code_commit must be 40 lowercase hex characters')
+    return {'reviewed_at': e['reviewed_at'], 'code_commit': e['code_commit']}
 
 
 def review_defaults(path=REVIEW_CONFIG) -> tuple:
     """(earliest reviewed_at or None, {recorder sha256: [{reviewed_at, code_commit}, ...]}) from the review config's
-    "reviews" list (a legacy single reviewed_at + reviewed_recorder_sha256 list is read as entries without code_commits);
-    (None, {}) when the file is absent."""
+    "reviews" list; (None, {}) when the file is absent. An invalid entry raises ReviewConfigError."""
     p = Path(path)
     if not p.is_file():
         return None, {}
-    cfg = json.loads(p.read_text())
-    reviews = cfg.get('reviews') or [{'recorder_sha256': sha, 'reviewed_at': cfg.get('reviewed_at')}
-                                     for sha in cfg.get('reviewed_recorder_sha256') or []]
+    reviews = json.loads(p.read_text()).get('reviews')
+    if not isinstance(reviews, list) or not reviews:
+        raise ReviewConfigError('invalid review entry #0: the config has no "reviews" list')
     out = {}
-    for e in reviews:
-        out.setdefault(e['recorder_sha256'], []).append(
-            {'reviewed_at': e['reviewed_at'], 'code_commit': e.get('code_commit') or None})
-    return min((e['reviewed_at'] for v in out.values() for e in v), default=None), out
+    for i, e in enumerate(reviews):
+        out.setdefault(e['recorder_sha256'] if isinstance(e, dict) and isinstance(e.get('recorder_sha256'), str) else '', []).append(
+            check_entry(i, e))
+    return min(e['reviewed_at'] for v in out.values() for e in v), out
 
 # H item: (sport, plain meaning of +1, of 0, of -1, the two values compared: better first)
 H_ITEMS = {
@@ -167,7 +192,7 @@ def section_best(states: dict) -> list:
     for sport in SPORTS:
         st, S = states[sport], sport.upper()
         if sport == 'soccer':
-            lines.append('- SOCCER: the best-pick recorder covers NBA and NHL only, so no soccer pick is recorded or named (n=0).')
+            lines.append('- SOCCER: Soccer cards are sent outside the best-pick recorder, so none is recorded or named (n=0).')
             continue
         if st['error']:
             lines.append(f"- {S}: {st['error']}; counts unknown (n=0 shown).")
@@ -176,11 +201,11 @@ def section_best(states: dict) -> list:
         base = (f"- {S}: game cards sent since T0 n={info['sent']}; recorded n={info['rows']}; counted "
                 f"n={len(info['cards'])}")
         if info['excluded']:
-            lines.append(f"- {S}: {sum(info['excluded'].values())} cards excluded: "
+            lines.append(f"- {S}: {sum(info['excluded'].values())} games excluded: "
                          + ', '.join(f'{k} n={v}' for k, v in sorted(info['excluded'].items())) + '.')
         for why, label in (('code revision not reviewed', 'code revision'), ('recorder version not reviewed', 'recorder version')):
             for ident in sorted(info['unreviewed'].get(why, ())):
-                lines.append(f"- {S}: cards excluded: {label} {ident[:8]} not reviewed — append a review entry to "
+                lines.append(f"- {S}: games excluded: {label} {ident[:8]} not reviewed — append a review entry to "
                              f"{REVIEW_SOURCE['path']}.")
         if sport not in bpr.RULE_MARKETS:
             lines.append(base + '; no pick is named for this sport (v4 section 8), named n=0.')
@@ -382,8 +407,10 @@ def build(data_dir: Path, ledger_path, now: datetime, reviewed_at, reviewed) -> 
             'until that test is complete; the numbers held back are shown.',
             f'- "Too few to tell" whenever a side has fewer than {MIN_N} decided picks (scorecard report threshold). '
             'Patterns from old games are candidates, not facts.',
-            '- Counted cards need the recorder\'s independent review time: '
-            + (f'{reviewed_at}.' if reviewed_at else 'not given, so no card counts yet.')]
+            '- Counted cards need an independent review of their recorder and exact code commit; review times per entry in '
+            f"{REVIEW_SOURCE['path']}."]
+    if REVIEW_SOURCE['invalid']:
+        head.append(f"- {REVIEW_SOURCE['invalid']}: no card counts until the review config is fixed.")
     if REVIEW_SOURCE['unavailable']:
         head.append(f"- review config unavailable: {REVIEW_SOURCE['unavailable']} (missing or unreadable): no card counts until it is fixed.")
     if missing:
@@ -406,20 +433,34 @@ def main(argv=None) -> str:
     ap.add_argument('--out-dir', help='where the page goes (default <data>/reports)')
     ap.add_argument('--reviewed-at', help="UTC time the recorder's independent review was written in HANDOFF.md")
     ap.add_argument('--reviewed-recorder', action='append', default=[], help='recorder_sha256 of a reviewed recorder')
+    ap.add_argument('--reviewed-commit', help='the exact (40 hex) code commit the override covers; required with the two options above')
     ap.add_argument('--review-config', default=str(REVIEW_CONFIG),
                     help='JSON {reviewed_at, reviewed_recorder_sha256: [...]} used when the two options above are not given')
     ap.add_argument('--now', help='report time (default: now, UTC)')
     a = ap.parse_args(argv)
-    REVIEW_SOURCE.update(path=a.review_config, unavailable=None)
+    REVIEW_SOURCE.update(path=a.review_config, unavailable=None, invalid=None)
     if a.reviewed_at is None and not a.reviewed_recorder:
         try:
             if not Path(a.review_config).is_file():
                 raise OSError('missing')
             cfg_at, cfg_sha = review_defaults(a.review_config)
+        except ReviewConfigError as exc:
+            cfg_at, cfg_sha = None, {}               # fail closed: nothing counts, and the page names the entry
+            REVIEW_SOURCE['invalid'] = str(exc)
         except (OSError, ValueError, KeyError, TypeError):
-            cfg_at, cfg_sha = None, {}               # fail closed: no card counts, and the page says why
+            cfg_at, cfg_sha = None, {}
             REVIEW_SOURCE['unavailable'] = a.review_config
         a.reviewed_at, a.reviewed_recorder = cfg_at, cfg_sha
+    else:                                            # the single-pair override still names the exact code commit
+        if not (a.reviewed_at and a.reviewed_recorder and a.reviewed_commit):
+            ap.error('--reviewed-at, --reviewed-recorder and --reviewed-commit go together')
+        shas, a.reviewed_recorder = list(a.reviewed_recorder), {}
+        try:
+            for sha in shas:
+                a.reviewed_recorder.setdefault(sha, []).append(check_entry(0, {'recorder_sha256': sha, 'reviewed_at': a.reviewed_at,
+                                                                               'code_commit': a.reviewed_commit}))
+        except ReviewConfigError as exc:
+            ap.error(str(exc))
     data_dir = Path(a.data_dir) if a.data_dir else config.data_dir()
     if config.protected_data_dir(data_dir):
         from app import release

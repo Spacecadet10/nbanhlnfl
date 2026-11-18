@@ -114,9 +114,14 @@ def grade(conn, forecast_id: int, now: datetime) -> tuple:
     return ('win' if real == side else 'loss'), seen_t
 
 
+LEGACY_RECORDER = 'ff2d53ab3985fae70e9ee8214bf43ffe32f7d3c096bd697202f076f8a7c8de3e'   # reviewed before commits were named
+
+
 def _review_gap(entries: list, row) -> Optional[str]:
-    """Why no entry covers the row (None when one does)."""
-    same = [e for e in entries if not e.get('code_commit') or e['code_commit'] == row['code_commit']]
+    """Why no entry covers the row (None when one does). An entry covers any commit only when it is the legacy recorder's
+    (code_commit null) or built from a plain recorder list (`any_commit`); otherwise the commit must be exactly the row's."""
+    anywhere = lambda e: e.get('code_commit') is None and (e.get('any_commit') or row['recorder_sha256'] == LEGACY_RECORDER)  # noqa: E731
+    same = [e for e in entries if e.get('code_commit') == row['code_commit'] and row['code_commit'] or anywhere(e)]
     if not same:
         return 'code revision not reviewed'
     return None if any(row['recorded_at'] >= e['reviewed_at'] for e in same) else 'recorded before the independent review'
@@ -129,7 +134,7 @@ def counted_cards(ledger, sport: str, reviewed_at, reviewed) -> dict:
     entry per (recorder, code commit) with its own review time (code_commit None = any commit): a row counts when an entry
     of its recorder version names its code commit (or any) and was written at or before its recorded_at."""
     entries = reviewed if isinstance(reviewed, dict) else {
-        sha: [{'reviewed_at': reviewed_at, 'code_commit': None}] for sha in reviewed}
+        sha: [{'reviewed_at': reviewed_at, 'code_commit': None, 'any_commit': True}] for sha in reviewed}
     from app import telegram as tg
     rows = {r['delivery_key']: dict(r) for r in ledger.execute('SELECT * FROM best_picks WHERE sport=?', (sport,))} \
         if ledger.execute("SELECT 1 FROM sqlite_master WHERE name='best_picks'").fetchone() else {}
