@@ -25,6 +25,7 @@ import json
 import math
 import os
 import sqlite3
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -149,7 +150,19 @@ def refit(conn: sqlite3.Connection, now: str, cache_dir: Path, *, write_cache: b
         tmp = path.with_suffix(f".tmp{os.getpid()}")
         tmp.write_text(json.dumps({"cutoff": cutoff, "fingerprint": fingerprint, "fits": fits}, sort_keys=True))
         tmp.replace(path)
+        _prune_cache(path.parent, cutoff)
     return fits, "miss", fingerprint, cutoff
+
+
+def _prune_cache(cache_dir: Path, cutoff: str) -> None:
+    """Keeps this week's and the previous week's refit files (any fingerprint); removes older weeks and abandoned .tmp<pid> files."""
+    keep_from = (datetime.strptime(cutoff[:10], "%Y-%m-%d") - timedelta(days=7)).strftime("%Y-%m-%d")
+    for f in cache_dir.glob("refit-*.json"):
+        if f.name[len("refit-"):len("refit-") + 10] < keep_from:
+            f.unlink(missing_ok=True)
+    for f in cache_dir.glob("refit-*.tmp*"):
+        if time.time() - f.stat().st_mtime > 3600:
+            f.unlink(missing_ok=True)
 
 
 # --- Pricing --------------------------------------------------------------------------------------------------------

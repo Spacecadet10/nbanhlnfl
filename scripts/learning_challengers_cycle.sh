@@ -14,15 +14,7 @@ cd "${LC_BACKEND:-$LIVE/backend}" || exit 1
 export NBA_RELEASE_GUARD=${NBA_RELEASE_GUARD-1} NBA_RELEASE_ROOT=${NBA_RELEASE_ROOT-$LIVE} NBA_DATA_DIR="$DATA" \
   PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
 
-# One backup of an existing challenger store before the first run that could migrate its schema (open_store migrates in place).
-# The live store does not exist before the first non-dry run, which creates it.
-STORE="$DATA/research/challengers.sqlite"
-case " $* " in *" --dry-run "*) ;; *)
-  if [ -f "$STORE" ] && ! ls "$DATA"/research/challengers.pre-cycle-*.sqlite >/dev/null 2>&1; then
-    "$PY" -c 'import sqlite3,sys; s=sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True); d=sqlite3.connect(sys.argv[2]); s.backup(d); d.close()' \
-      "$STORE" "$DATA/research/challengers.pre-cycle-$(date -u +%Y%m%dT%H%M%SZ).sqlite" || { echo '{"status":"failed","reason":"store backup failed"}'; exit 1; }
-  fi ;;
-esac
+# The store is backed up by the recorder itself immediately before a schema migration would run (at most 3 kept).
 
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/lc-cycle.XXXXXX") || exit 1
 trap 'rm -rf "$TMP"' EXIT
@@ -41,11 +33,11 @@ try:
     out = json.loads(text)
 except ValueError:
     out = {}
-keys = ("status", "dry_run", "eligible_games", "created", "would_record", "already_recorded")
+keys = ("status", "eligible_games", "created", "would_record")
 line = {"sport": sport, "rc": rc, "wall_s": wall, **{k: out[k] for k in keys if k in out}}
 if rc and not out:
     line["output"] = text.strip()[-300:]
-print(json.dumps(line, sort_keys=True))
+print(json.dumps(line, sort_keys=True, separators=(",", ":")))
 ' "$s" "$rc" "$(( $(date +%s) - t0 ))" "$TMP/$s.out"
   [ -s "$TMP/$s.err" ] && tail -n 5 "$TMP/$s.err" >&2
 done

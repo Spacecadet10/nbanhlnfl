@@ -55,7 +55,12 @@ def _results_fingerprint(rows) -> str:
     return "r2" + hashlib.sha256(body.encode()).hexdigest()[:14]
 
 
-def ensure_fit(spec, rows: list, season: int, adopted: Optional[list] = None, write: bool = True) -> Optional[dict]:
+class ArtifactMissing(RuntimeError):
+    """`require_stored`: no verified stored artifact for this spec and season (the caller must not fit one)."""
+
+
+def ensure_fit(spec, rows: list, season: int, adopted: Optional[list] = None, write: bool = True,
+               require_stored: bool = False) -> Optional[dict]:
     """The season-start fit for `season` (earlier seasons only), loaded from disk when its training set is unchanged and
     its bytes match their digest. A stored file without a digest (saved before digests existed) is never loaded: it is
     kept as `<name>.legacy-<sha12>` and superseded by a deterministic refit, whose provenance goes to `adopted`.
@@ -75,6 +80,8 @@ def ensure_fit(spec, rows: list, season: int, adopted: Optional[list] = None, wr
     if not write:
         if path.exists() and _sidecar(path).exists():
             return _load_verified(path)
+        if require_stored:               # the challenger recorder: never an in-memory refit, never a deep fit
+            raise ArtifactMissing(path.name)
         if path.exists() and adopted is not None:
             adopted.append({"artifact": path.name, "dry_run": True, "action": "would be superseded by a refit (not done: dry run)"})
         return {**_fit(spec, train, season, defn, fp), "artifact_path": None}
@@ -258,13 +265,13 @@ def _key(*parts) -> str:
 
 
 def record(conn, *, game_ids: Optional[list] = None, now: Optional[str] = None, lines: Optional[dict] = None,
-           write: bool = True, specs: Optional[list] = None) -> dict:
+           write: bool = True, specs: Optional[list] = None, require_artifact: bool = False) -> dict:
     """Two-hour candidate forecasts for eligible games. `lines` maps (game_id, market) -> {"line", "source", "ref"}: the
     exact line the core cohort used (default: read from the latest core cohort at `now`); a line market without one is
     skipped (never a substitute line)."""
     out = {"status": "success", "created": 0, "already_recorded": 0, "skipped": {}, "errors": {}, "forecasts": []}
     try:
-        _record(conn, game_ids, now, lines, write, specs, out)
+        _record(conn, game_ids, now, lines, write, specs, out, require_artifact)
     except Exception as exc:         # never fails the caller's cycle
         out["status"] = "failed"
         out["errors"]["pool"] = f"{type(exc).__name__}: {exc}"
@@ -315,7 +322,7 @@ def core_lines(conn, game_ids, now: str) -> dict:
     return out
 
 
-def _record(conn, game_ids, now, lines, write, specs, out) -> None:
+def _record(conn, game_ids, now, lines, write, specs, out, require_artifact=False) -> None:
     fixed = now is not None
     now = now or utc_now()
     eng = live.engine(conn)
@@ -359,21 +366,25 @@ def _record(conn, game_ids, now, lines, write, specs, out) -> None:
             if not registry.available(spec) and not deep.is_deep(spec):
                 out["skipped"][spec.name] = {"all": f"optional dependency {spec.extra} not installed"}
                 continue
-            _record_spec(conn, eng, spec, history, upcoming, recent, rec, lines, now, fixed, write, dataset, table, out)
+            _record_spec(conn, eng, spec, history, upcoming, recent, rec, lines, now, fixed, write, dataset, table, out,
+                         require_artifact)
+        except ArtifactMissing as exc:             # the challenger recorder never fits: no stored artifact, no forecast
+            out["skipped"][spec.name] = {"all": f"skipped: no artifact ({exc})"}
         except deep.DependencyMissing as exc:      # no stored artifact for this season and no library here: skipped, visible
             out["skipped"][spec.name] = {"all": str(exc)}
         except Exception as exc:
             out["errors"][spec.name] = f"{type(exc).__name__}: {exc}"
 
 
-def _record_spec(conn, eng, spec, history, upcoming, recent, rec, lines, now, fixed, write, dataset, table, out):
+def _record_spec(conn, eng, spec, history, upcoming, recent, rec, lines, now, fixed, write, dataset, table, out,
+                 require_artifact=False):
     mv = model_version(spec)
     by_season: dict = {}
     for gid, (game, row) in upcoming.items():
         by_season.setdefault(game.season, []).append(gid)
     for season, gids in by_season.items():
         adopted: list = []
-        art = ensure_fit(spec, history, season, adopted, write=write)
+        art = ensure_fit(spec, history, season, adopted, write=write, require_stored=require_artifact)
         out.setdefault("artifacts_adopted", []).extend(adopted)      # dry run: reported only
         if write and art is not None:
             for entry in legacy_files(art):  # retried each cycle until recorded (a failed insert never loses provenance)

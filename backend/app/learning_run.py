@@ -48,8 +48,26 @@ def log_path(data_dir: Path) -> Path:
     return Path(data_dir) / "research" / "learning-runs.jsonl"
 
 
+MAX_LOG_BYTES, KEEP_ROTATED = 5 * 1024 ** 2, 2
+
+
+def _rotate(path: Path) -> None:
+    """learning-runs.jsonl over 5 MB becomes .1 (the older .1 becomes .2; .2 is dropped): two rotated files are kept."""
+    try:
+        if path.stat().st_size <= MAX_LOG_BYTES:
+            return
+        for i in range(KEEP_ROTATED, 1, -1):
+            older = path.with_name(f"{path.name}.{i - 1}")
+            if older.exists():
+                older.replace(path.with_name(f"{path.name}.{i}"))
+        path.replace(path.with_name(f"{path.name}.1"))
+    except OSError:
+        pass                                       # never lets log housekeeping stop a job
+
+
 def _log(path: Path, **event) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    _rotate(path)
     line = json.dumps({"at": datetime.now(timezone.utc).strftime(FMT), **event}, sort_keys=True) + "\n"
     fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
     try:

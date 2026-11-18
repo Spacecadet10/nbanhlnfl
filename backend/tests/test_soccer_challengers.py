@@ -196,6 +196,30 @@ def test_an_older_store_is_migrated_keeping_rows_ids_and_append_only_triggers(tm
     assert again.execute("SELECT count(*) FROM challenger_forecasts").fetchone()[0] == 2
 
 
+def test_a_store_that_needs_migration_is_backed_up_just_before_it_and_only_three_backups_are_kept(tmp_path):
+    p = tmp_path / "challengers.sqlite"
+    assert lc._backup_before_migration(p) is None                       # no store yet: nothing to back up
+    for i in range(5):
+        c = sqlite3.connect(p, isolation_level=None)
+        c.executescript(OLD_SCHEMA if i == 0 else "")
+        c.close()
+        if i:
+            p.unlink()
+            c = sqlite3.connect(p, isolation_level=None)
+            c.executescript(OLD_SCHEMA)
+            c.close()
+        before = p.read_bytes()
+        lc.open_store(p).close()
+        p.write_bytes(before)                                            # put the old store back for the next round
+    backups = sorted(tmp_path.glob("challengers.pre-migrate-*.sqlite"))
+    assert len(backups) == 3
+    assert "soccer_1x2" not in sqlite3.connect(backups[-1]).execute("SELECT sql FROM sqlite_master WHERE name='challenger_forecasts'").fetchone()[0]
+    lc.open_store(p).close()                                             # migrated now (backup 4 of the series)
+    n = len(list(tmp_path.glob("challengers.pre-migrate-*.sqlite")))
+    lc.open_store(p).close()                                             # already current: no new backup
+    assert len(list(tmp_path.glob("challengers.pre-migrate-*.sqlite"))) == n
+
+
 # ---- read-time evaluation vs the served incumbent -----------------------------------------------------------------------
 def test_evaluation_pairs_with_the_served_forecast_derives_double_chance_and_claims_nothing(live, tmp_path):
     serve(live)

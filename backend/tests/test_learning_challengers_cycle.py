@@ -60,27 +60,24 @@ def test_a_failing_sport_does_not_stop_the_next_and_the_exit_is_nonzero(env):
     assert "boom nhl" in r.stderr
 
 
-def test_an_existing_store_is_backed_up_once_and_dry_runs_and_missing_stores_are_not(env, tmp_path):
-    research = tmp_path / "data" / "research"
-    run(env)
-    assert not list(research.glob("challengers.pre-cycle-*"))                       # no store yet: nothing to back up
-    import sqlite3
-    c = sqlite3.connect(research / "challengers.sqlite")
-    c.execute("CREATE TABLE t (x)")
-    c.execute("INSERT INTO t VALUES (1)")
-    c.commit()
-    c.close()
-    run(env, "--dry-run")
-    assert not list(research.glob("challengers.pre-cycle-*"))
-    run(env)
-    run(env)
-    backups = list(research.glob("challengers.pre-cycle-*.sqlite"))
-    assert len(backups) == 1
-    assert sqlite3.connect(backups[0]).execute("SELECT x FROM t").fetchall() == [(1,)]
-
-
 def test_extra_arguments_reach_the_recorder_and_sports_can_be_limited(env, tmp_path):
     env["LC_SPORTS"] = "nfl"
     r, lines = run(env, "--dry-run")
     assert [x["sport"] for x in lines] == ["nfl"]
     assert "--dry-run" in (tmp_path / "calls").read_text()
+
+
+def test_the_real_script_and_the_real_guard_against_a_temp_data_dir(tmp_path):
+    """No fake interpreter: the actual learning_run --light and recorder; a store without its tables is a refusal per sport, and
+    every sport still gets one parseable JSON line and a nonzero exit."""
+    import sqlite3
+    data = tmp_path / "data"
+    data.mkdir()
+    sqlite3.connect(data / "nba.sqlite").close()
+    env = dict(os.environ, LC_PY=sys.executable, LC_DATA=str(data), LC_BACKEND=str(ROOT / "backend"), LC_SPORTS="nba nhl",
+               NBA_RELEASE_GUARD="", TMPDIR=str(tmp_path))
+    r, lines = run(env)
+    assert [x["sport"] for x in lines] == ["nba", "nhl"] and r.returncode == 1
+    assert all(x["rc"] != 0 for x in lines)
+    runs = (data / "research" / "learning-runs.jsonl").read_text().splitlines()
+    assert any('"name": "challengers-nba"' in x for x in runs) and not (data / ".learning-heavy.lock").exists()

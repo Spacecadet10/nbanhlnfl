@@ -273,3 +273,13 @@ def test_cli_light_flag(tmp_path):
     # nba tips off within the default window only if the clock is near it; the fixture is fixed to 2026-11-18, so check the flag parses
     r = subprocess.run(base + ["--light", "--", PY, "-c", "import sys; sys.exit(5)"], env=env, capture_output=True, text=True, cwd=cwd)
     assert r.returncode == 5
+
+
+def test_the_run_log_rotates_at_5_mb_keeping_two_rotated_files(tmp_path, monkeypatch):
+    monkeypatch.setattr(lr, "MAX_LOG_BYTES", 200)
+    log = tmp_path / "data" / "research" / "learning-runs.jsonl"
+    for _ in range(6):
+        go(tmp_path, [PY, "-c", "pass"])
+    names = sorted(p.name for p in log.parent.iterdir() if p.name.startswith("learning-runs"))
+    assert names == ["learning-runs.jsonl", "learning-runs.jsonl.1", "learning-runs.jsonl.2"]
+    assert log.stat().st_size < 1000 and all(json.loads(x) for x in log.read_text().splitlines())
