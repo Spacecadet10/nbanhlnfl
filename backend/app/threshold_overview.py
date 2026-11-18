@@ -130,6 +130,7 @@ def history_record(rec: dict, game_id: str, history_index: Optional[dict]) -> Op
 
 
 TELEGRAM_SOURCE = "telegram_cards"   # picks transcribed from the owner's Telegram export (scripts/build_telegram_history.py)
+TELEGRAM_LABEL = "Recovered Telegram cards"
 _telegram_cache: dict = {}
 
 
@@ -140,7 +141,8 @@ def telegram_history_path():
 
 def _telegram_index() -> Optional[dict]:
     """{(sport, market, percentage, side, line_source): {game_id: grade}} from the graded Telegram cards sent before each
-    sport's live ledger began (Nov 15 rebuild), cached by path and file mtime. None when the file is absent or unreadable."""
+    sport's live ledger began (Nov 15 rebuild), cached by path and file mtime, plus each sport's period. None when the file
+    is absent or unreadable."""
     import json
     path = telegram_history_path()
     try:
@@ -151,30 +153,64 @@ def _telegram_index() -> Optional[dict]:
         try:
             body = json.loads(path.read_text())
             idx: dict = {}
+            sports: set = set()
             for r in body['rows']:
                 idx.setdefault((r['sport'], r['market'], r['percentage'], r['side'], r['line_source']), {})[r['game_id']] = r['grade']
-            _telegram_cache.update(key=(str(path), mtime), index=idx, period=body.get('period'))
-        except (OSError, ValueError, KeyError, TypeError):
+                sports.add(r['sport'])
+            periods = {s: v.get('period') for s, v in (body.get('summary') or {}).items() if isinstance(v, dict)}
+            _telegram_cache.update(key=(str(path), mtime), index=idx, period=body.get('period'), sports=sports, periods=periods)
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
             return None
     return _telegram_cache
+
+
+def telegram_period(sport: str) -> Optional[dict]:
+    """The dates of the sport's recovered Telegram cards, or None when the sport has none (NCAAB began Nov 17)."""
+    cache = _telegram_index()
+    if cache is None or sport not in cache['sports']:
+        return None
+    return cache['periods'].get(sport) or cache['period']
 
 
 def telegram_record(sport: str, market: str, rec: dict, game_id: str) -> Optional[dict]:
     """Owner's option A (Nov 16): the same sport, market, exact displayed percentage, side and line source among the graded
     Telegram cards, counted apart from the live record and never added to it, rank or AVOID. The cards do not show the
-    model version, so this line does not match on it. None without the history file."""
+    model version, so this line does not match on it. None without the history file or when the sport has no recovered cards."""
     cache = _telegram_index()
-    if cache is None:
+    if cache is None or sport not in cache['sports']:
         return None
     key = (sport, market, displayed_percentage(rec['confidence']), rec['side'], rec['line_source'])
     grades = Counter(grade for gid, grade in cache['index'].get(key, {}).items() if gid != game_id)
     wins, losses = grades['win'], grades['loss']
-    return {'source': TELEGRAM_SOURCE, 'period': cache['period'], 'line_source': rec['line_source'], 'wins': wins,
+    return {'source': TELEGRAM_SOURCE, 'label': TELEGRAM_LABEL, 'period': cache['periods'].get(sport) or cache['period'],
+            'model_version_known': False, 'line_source': rec['line_source'], 'wins': wins,
             'losses': losses, 'pushes': grades['push'], 'settled': wins + losses, 'small_sample': wins + losses < MIN_LIVE_GRADED}
 
 
+def live_since(conn) -> Optional[str]:
+    """ISO time of the store's first saved forecast (the live record cannot reach back before it). None without a table."""
+    try:
+        return conn.execute("SELECT MIN(generated_at) FROM game_forecasts").fetchone()[0]
+    except Exception:
+        return None
+
+
+def coverage_note(sport: str, live_since_at: Optional[str]) -> dict:
+    """Sport-level history coverage for the card: {live_since, telegram_period, history_note}."""
+    period = telegram_period(sport)
+    since = (live_since_at or '')[:10] or None
+    name = sport.upper() if sport in ("nba", "nhl", "nfl", "ncaab") else sport.capitalize()
+    live = f"Live record since {since}." if since else "No live forecasts saved yet."
+    if period:
+        note = (f"{live} {TELEGRAM_LABEL} {period['from']} to {period['to']} are counted apart; the cards did not show the model "
+                "version, so those records do not match on it.")
+    else:
+        note = f"{live} No recovered Telegram history for {name}" + (f" (recording began {since})." if since else ".")
+    return {'live_since': live_since_at, 'telegram_period': period, 'history_note': note}
+
+
 def percentage_record(sport: str, market: str, rec: dict, game_id: str, index: dict, as_of: str,
-                      history_index: Optional[dict] = None) -> dict:
+                      history_index: Optional[dict] = None, live_since: Optional[str] = None) -> dict:
     """Exact displayed percentage and direction, same model/source and line provenance; exclude this game.
 
     Deliberately no fallback to a range, cumulative threshold, other direction, version, or historical study.
@@ -191,17 +227,18 @@ def percentage_record(sport: str, market: str, rec: dict, game_id: str, index: d
         ranking, rank = [], None
     state = ('no_history' if not settled else 'neutral' if wins == losses else
              'more_right' if wins > losses else 'more_wrong')
-    return {'sport': sport, 'market': market, 'market_title': markets.spec(sport, market).title,
+    return {'sport': sport, 'market': market, 'market_title': rec['market_title'] if sport == 'soccer' else markets.spec(sport, market).title,
             'percentage': displayed_percentage(rec['confidence']), 'side': rec['side'],
-            'direction': markets.SIDE_LABELS[market][('a', 'mid', 'b').index(rec['side'])],
+            'direction': rec['direction'] if sport == 'soccer' else markets.SIDE_LABELS[market][('a', 'mid', 'b').index(rec['side'])],
             'source': rec['source'], 'model_version': rec['model_version'], 'line_source': rec['line_source'],
-            'state': state, 'wins': wins, 'losses': losses, 'settled': settled,
+            'state': state, 'wins': wins, 'losses': losses, 'pushes': grades['push'], 'settled': settled,
             'win_rate': wins / settled if settled else None, 'loss_rate': losses / settled if settled else None,
             'ci95': wilson(wins, settled), 'small_sample': settled < MIN_LIVE_GRADED,
             'rank': rank, 'ranked': len(ranking),
             'excluded': {k: v for k, v in grades.items() if k not in ('win', 'loss')}, 'as_of': as_of,
             'history': history_record(rec, game_id, history_index),
-            'telegram': telegram_record(sport, market, rec, game_id)}
+            'telegram': telegram_record(sport, market, rec, game_id),
+            'coverage': coverage_note(sport, live_since)}
 
 
 def calibration_state(rate: Optional[float], ci: Optional[list], stated: Optional[float], n: int, min_n: int) -> str:

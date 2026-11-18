@@ -7,7 +7,7 @@ import { useCarriedSearch, useCompetition } from '../components/Selection';
 import { AsyncView, Empty } from '../components/States';
 import { COMPETITION_IDS } from '../components/competition';
 import { gameRoute } from '../components/gameRoute';
-import { sportsbookLine } from '../components/sportsbook';
+import { PickEvidence } from '../components/PickEvidence';
 import { daySummary, daySummaryText, emptyCompetition, forecastBanner, forecastKind, forecastStateOf, importHint, liveLoadProblem, matchForecastNote } from '../components/soccerStatus';
 import type { NflCapability } from '../api/types';
 import { TeamLogo } from '../components/TeamLogo';
@@ -279,7 +279,10 @@ function SoccerLiveCard({ f }: { f: SoccerLiveForecast }) {
         {f.result ? <>90-minute result: <strong>{names[f.result]}</strong> ({f.result === f.most_likely ? 'model\u2019s most likely outcome' : 'not the model\u2019s most likely outcome'}). </> : null}
         Forecast {dateTime(f.generated_at)} (for kickoff {dateTime(f.cutoff_at)}); results through {f.inputs_through ? dateTime(f.inputs_through) : '—'}; ESPN data retrieved {dateTime(f.source_retrieved_at)}.
       </p>
-      {f.sportsbook && <p className="small sportsbook-line">{names[f.most_likely]}: {sportsbookLine(f.sportsbook)}</p>}
+      {(f.percentage_history || f.sportsbook || f.record_basis) &&
+        <p><PickEvidence teams={{ home: f.home, away: f.away }} header={{ pick: f.pick_label ?? names[f.most_likely], market: '1X2 (90 minutes)', probability: f.probabilities[f.most_likely] }}
+          history={f.percentage_history} grade={f.result ? (f.result === f.most_likely ? 'win' : 'loss') : 'pending'}
+          sportsbook={f.sportsbook} recordBasis={f.record_basis} startAt={f.kickoff_at} /></p>}
     </article>
   );
 }

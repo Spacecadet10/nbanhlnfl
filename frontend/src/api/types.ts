@@ -58,6 +58,17 @@ export interface SportsbookComparison {
   app_probability: number; book_probability: number | null; gap_pp: number | null;
   provider: string | null; price: string | null; line: number | null; quote_id: number | null; retrieved_at: string | null;
   reason: string | null;
+  /** Short text when both probabilities are conditional, e.g. "conditional on no push" (draw no bet, whole lines). */
+  basis?: string | null;
+}
+
+/** Which forecast a record uses when a game has several, and the one a Telegram card actually sent (backend record_basis). */
+export interface RecordBasis {
+  forecast_id: number; generated_at: string; model_version?: string; side?: string; line?: number | null; probability?: number;
+  pregame_forecasts: number;
+  earlier?: { forecast_id: number; generated_at: string; side?: string; line?: number | null; probability?: number; model_version?: string }[];
+  published?: { forecast_id: number; side?: string; line?: number | null; probability?: number; model_version?: string;
+    sent_at?: string; message_id?: number; grade?: string | null; pick_label?: string | null } | null;
 }
 
 /** The selected game_forecasts row: the one record every page shows and grades for this game and market. */
@@ -74,6 +85,7 @@ export type CanonicalState = 'forecast' | 'missing' | 'upcoming' | 'unvalidated'
 export type CanonicalGrade = 'win' | 'loss' | 'push' | 'pending' | 'void' | 'unscorable' | 'unresolved';
 export interface CanonicalForecast {
   percentage_history?: ForecastPercentageHistory | null;
+  record_basis?: RecordBasis | null;
   sportsbook?: SportsbookComparison | null;
   market: MarketId; state: CanonicalState; reason: string | null; record: CanonicalRecord | null; grade: CanonicalGrade | null;
   result_side?: 'a' | 'mid' | 'b' | null; result_label?: string | null;
@@ -878,6 +890,8 @@ export interface RankedPick {
   forecast_id?: number;
   opposite_pick_label?: string | null;
   percentage_history?: ForecastPercentageHistory | null;
+  sportsbook?: SportsbookComparison | null;
+  record_basis?: RecordBasis | null;
   game_id: string; matchup: string; tipoff: string; status: string; market: MarketId; market_title: string; pick_label: string;
   probability: number; threshold: number | null; evidence: RankedPickEvidence | null; market_prob: number | null;
   grade: string | null; generated_at: string; day_rank: number | null; game_rank: number | null; game_ranked: number;
@@ -897,14 +911,18 @@ export interface ForecastPercentageHistory {
   side: 'a' | 'mid' | 'b'; direction: string;
   source: CanonicalRecord['source']; model_version: string; line_source: CanonicalRecord['line_source'];
   state: 'more_right' | 'more_wrong' | 'neutral' | 'no_history';
-  wins: number; losses: number; settled: number; win_rate: number | null; loss_rate: number | null;
+  wins: number; losses: number; settled: number;
+  /** Live pushes at this exact percentage (not in wins, losses or settled). Absent on an older API. */
+  pushes?: number;
+  /** What history exists for this sport, so the card can say why a source is empty. Absent on an older API. */
+  coverage?: { live_since: string | null; telegram_period: { from: string; to: string } | null; history_note: string } | null; win_rate: number | null; loss_rate: number | null;
   ci95: [number, number] | null; small_sample: boolean; excluded: Record<string, number>; as_of: string;
   /** Recomputed past seasons at the same exact percentage, side, model and line source (spread, total, team totals of
    *  NBA; winner of NBA/NHL, clean seasons only); a separate source, never part of wins/losses above. Absent or null where no history exists. */
   history?: { source: 'history_recomputed'; line_source: CanonicalRecord['line_source']; wins: number; losses: number; settled: number; small_sample?: boolean } | null;
   /** Telegram cards sent before the live ledger began (Nov 2-14 2026) at the same sport, market, exact percentage, side and
    *  line source; the cards do not show the model version. A separate source, never part of wins/losses above. */
-  telegram?: { source: 'telegram_cards'; period?: { from: string; to: string } | null; line_source: CanonicalRecord['line_source'];
+  telegram?: { source: 'telegram_cards'; label?: string; model_version_known?: boolean; period?: { from: string; to: string } | null; line_source: CanonicalRecord['line_source'];
     wins: number; losses: number; pushes?: number; settled: number; small_sample?: boolean } | null;
 }
 
@@ -1022,6 +1040,10 @@ export interface SoccerLiveForecast {
   version?: number;
   /** The picked outcome against the saved DraftKings 1X2 quote as of generated_at (backend app/soccer_book.py). */
   sportsbook?: SportsbookComparison | null;
+  /** The shared card fields (contract): exact-% record for the most likely outcome, and the record basis. */
+  pick_label?: string | null;
+  percentage_history?: ForecastPercentageHistory | null;
+  record_basis?: RecordBasis | null;
 }
 export interface SoccerLiveResponse {
   competition: SoccerCompetitionId; in_scope: boolean; label: string; settlement_rule: string; market: '1x2_regulation';
@@ -1044,6 +1066,9 @@ export interface SoccerMarketSelection {
   expected_return?: number; result: 'win' | 'half_win' | 'push' | 'half_loss' | 'loss' | null;
   /** goals_total only: the app's % against the de-vigged sportsbook % at the same line and side. */
   sportsbook?: SportsbookComparison | null;
+  pick_label?: string | null;
+  percentage_history?: ForecastPercentageHistory | null;
+  record_basis?: RecordBasis | null;
 }
 export interface SoccerMarketForecast {
   forecast_id: number; family: 'goals' | 'corners'; match_id: string; competition: string; kickoff_at: string;

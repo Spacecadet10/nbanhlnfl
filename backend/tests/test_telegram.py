@@ -665,7 +665,7 @@ def test_soccer_job_sends_once_and_respects_competition_refusal(tmp_path,monkeyp
     monkeypatch.setattr(db,'connect_readonly',lambda *a: (_ for _ in ()).throw(FileNotFoundError()))
     (tmp_path/'soccer.sqlite').touch()
     section={'report':soccer_report(), 'refused':{}}
-    monkeypatch.setattr(tickets,'soccer_section',lambda now:section)
+    monkeypatch.setattr(tickets,'soccer_section',lambda now, contract=False:section)
     bot=Bot();now=datetime.fromisoformat(NOW.replace('Z','+00:00'))
     with tg.ledger(tmp_path/'receipts.sqlite') as conn:
         first=tg.run_once(bot,{'TELEGRAM_CHAT_ID':'123'},conn,now=now)

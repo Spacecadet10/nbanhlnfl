@@ -1,6 +1,6 @@
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { CanonicalBlock, CanonicalSummaryLine, GradeText } from '../components/Canonical';
-import { ForecastPercentageRecord } from '../components/ThresholdOverview';
+import { PickEvidence } from '../components/PickEvidence';
 import { pct } from '../format';
 import { api } from '../api/client';
 import type { NflCapability, NflGame, NflMeta } from '../api/types';
@@ -343,7 +343,7 @@ function NflRecords({ page }: { page: 'performance' | 'history' }) {
           <div className="table-wrap"><table className="table"><thead><tr><th>Game</th><th>Recorded pick</th><th>Result</th><th>Exact percentage record</th></tr></thead><tbody>
             {m.rows.map(row => <tr key={row.game_id}><td><Link to={`/games/${encodeURIComponent(row.game_id)}${carried}`}>{dateTime(row.tipoff)} · {row.game_id}</Link></td>
               <td>{row.forecast.record?.pick_label} · {pct(row.forecast.record?.confidence,1)}</td><td><GradeText grade={row.forecast.grade} /></td>
-              <td><ForecastPercentageRecord history={row.forecast.percentage_history} grade={row.forecast.grade} opposite={row.forecast.record?.opposite_pick_label} startAt={row.forecast.record?.start_at} /></td></tr>)}
+              <td><PickEvidence sportsbook={row.forecast.sportsbook} recordBasis={row.forecast.record_basis} history={row.forecast.percentage_history} grade={row.forecast.grade} opposite={row.forecast.record?.opposite_pick_label} startAt={row.forecast.record?.start_at} /></td></tr>)}
           </tbody></table></div>}
       </div>)}
     </>}</AsyncView></section>;

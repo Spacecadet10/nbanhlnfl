@@ -3,7 +3,7 @@ import type { SoccerCompetitionId, SoccerMarketMatch, SoccerMarketSelection, Soc
 import { useApi } from '../api/useApi';
 import { AsyncView, Empty } from '../components/States';
 import { fairText, lineKind, outcomeText, pct1, RESULT_LABEL, returnText, selectionLabel, sourceText } from '../components/soccerMarkets';
-import { sportsbookLine } from '../components/sportsbook';
+import { PickEvidence } from '../components/PickEvidence';
 import { dateTime } from '../format';
 
 // Goal, corner, double-chance and draw-no-bet selections (backend app/soccer_markets_live.py through /api/soccer/markets
@@ -50,7 +50,9 @@ function SelectionRows({ sels, home, away }: { sels: SoccerMarketSelection[]; ho
             {s.source === 'bookmaker' && s.retrieved_at && <div className="muted small">retrieved {dateTime(s.retrieved_at)}</div>}
           </td>
           <td>{s.market_probability != null ? pct1(s.market_probability) : '—'}
-            {s.source === 'bookmaker' && s.sportsbook && <div className="muted small">{sportsbookLine(s.sportsbook)}</div>}</td>
+            {(s.percentage_history || s.sportsbook || s.record_basis) &&
+              <div><PickEvidence teams={{ home, away }} header={{ pick: s.pick_label ?? selectionLabel(s.market, s.side, s.line, home, away), market: s.market_title, line: s.line, probability: s.win_share }}
+                history={s.percentage_history} grade={s.result} sportsbook={s.sportsbook} recordBasis={s.record_basis} /></div>}</td>
           <td>{s.source === 'bookmaker' ? returnText(s.expected_return) : '—'}</td>
           <td>{s.result ? RESULT_LABEL[s.result] : '—'}</td>
         </tr>

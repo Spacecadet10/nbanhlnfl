@@ -5,7 +5,7 @@ A prediction's `run_type` says what kind of forecast it is: 'live' (recorded bef
 (retrospective), or 'demo'.
 """
 from datetime import date, datetime
-from typing import Literal, Optional
+from typing import Literal, Optional, Union
 
 from pydantic import BaseModel, Field, model_serializer
 
@@ -189,6 +189,8 @@ class SportsbookComparison(BaseModel):
     quote_id: Optional[int] = None
     retrieved_at: Optional[datetime] = None
     reason: Optional[str] = Field(default=None, description="Why there is no comparison (every status except exact).")
+    basis: Optional[str] = Field(default=None, description="Short note when both percentages are conditional, e.g. 'conditional "
+                                 "on no push' (integer lines) or 'conditional on no draw' (draw no bet). None otherwise.")
 
 
 class PercentageTelegramSource(BaseModel):
@@ -196,6 +198,8 @@ class PercentageTelegramSource(BaseModel):
     market, exact percentage, side and line source. The cards do not show the model version. A separate source: never
     added to the live record, rank or AVOID (threshold_overview.telegram_record)."""
     source: Literal['telegram_cards']
+    label: str = "Recovered Telegram cards"
+    model_version_known: bool = False
     period: Optional[dict[str, str]] = None
     line_source: Literal['bookmaker', 'model', 'none']
     wins: int
@@ -205,20 +209,58 @@ class PercentageTelegramSource(BaseModel):
     small_sample: bool = False
 
 
+class PercentageCoverage(BaseModel):
+    """What history exists for the sport (card text: threshold_overview.coverage_note)."""
+    live_since: Optional[str] = Field(default=None, description="ISO time of the sport's first saved forecast.")
+    telegram_period: Optional[dict[str, str]] = Field(default=None, description="{from,to} of the recovered Telegram cards; "
+                                                      "None when the sport has none.")
+    history_note: str
+
+
+class RecordBasisForecast(BaseModel):
+    forecast_id: Union[int, str]
+    generated_at: str
+    side: str
+    line: Optional[float] = None
+    probability: float
+    model_version: Optional[str] = None
+
+
+class RecordBasisPublished(RecordBasisForecast):
+    sent_at: Optional[str] = None
+    message_id: Optional[int] = None
+    grade: Optional[str] = None
+
+
+class RecordBasis(BaseModel):
+    """Which forecast the record counts (the latest pregame one) and what else exists for the game and market: earlier
+    pregame forecasts kept for audit, and the forecast the Telegram card actually published."""
+    forecast_id: Union[int, str]
+    generated_at: str
+    model_version: Optional[str] = None
+    side: str
+    line: Optional[float] = None
+    probability: float
+    pregame_forecasts: int
+    earlier: list[RecordBasisForecast] = []
+    published: Optional[RecordBasisPublished] = None
+
+
 class ForecastPercentageRecord(BaseModel):
     """Current observed live record for the exact displayed percentage, excluding the target game."""
-    sport: Literal["nba", "nhl", "nfl", "ncaab"]
-    market: MarketId
+    sport: Literal["nba", "nhl", "nfl", "ncaab", "soccer"]
+    market: str
     market_title: str
     percentage: str
-    side: Literal['a', 'mid', 'b']
+    side: str
     direction: str
-    source: Literal['adaptive', 'primary_recorded', 'primary_direct']
+    source: str
     model_version: str
     line_source: Literal['bookmaker', 'model', 'none']
     state: Literal['more_right', 'more_wrong', 'neutral', 'no_history']
     wins: int
     losses: int
+    pushes: int = 0
     settled: int
     win_rate: Optional[float]
     loss_rate: Optional[float]
@@ -232,7 +274,8 @@ class ForecastPercentageRecord(BaseModel):
     history: Optional[PercentageHistorySource] = Field(default=None, description="Recomputed past seasons (spread, total, team "
                                                        "totals of NBA; winner of NBA and NHL), apart from the live record; None when not available.")
     telegram: Optional[PercentageTelegramSource] = Field(default=None, description="Telegram cards Nov 2-14 2026 at the same "
-                                                         "exact percentage, apart from the live record; None without the history file.")
+                                                         "exact percentage, apart from the live record; None without the history file or when the sport has none.")
+    coverage: Optional[PercentageCoverage] = None
 
 
 class CanonicalForecast(BaseModel):
@@ -254,6 +297,7 @@ class CanonicalForecast(BaseModel):
     recording_began_at: Optional[datetime]
     percentage_history: Optional[ForecastPercentageRecord] = None
     sportsbook: Optional[SportsbookComparison] = None
+    record_basis: Optional[RecordBasis] = None
 
 
 class NearTipoffForecast(BaseModel):

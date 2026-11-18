@@ -146,7 +146,26 @@ def _with_sportsbook(conn: sqlite3.Connection, game: dict) -> dict:
     for c in game.get("forecasts") or []:
         out = sportsbook_comparison(conn, "nfl", g, c["market"], c["record"])
         c["sportsbook"] = None if out is None else out.model_dump()
+    _with_record_basis(conn, game)
     return game
+
+
+def _with_record_basis(conn: sqlite3.Connection, game: dict) -> None:
+    """Card contract (Nov 17): record_basis and the sport's history coverage on each NFL forecast, added here because the
+    sealed nfl_live.py is not edited. Display only; a problem here never hides a forecast."""
+    try:
+        from . import published_picks, record_basis, threshold_overview as to
+        g = conn.execute("SELECT * FROM games WHERE game_id = ?", (game["game_id"],)).fetchone()
+        published, since = published_picks.load("nfl"), to.live_since(conn)
+        as_of = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        for c in game.get("forecasts") or []:
+            if not c.get("record"):
+                continue
+            c["record_basis"] = record_basis.build(conn, "nfl", g, c["market"], c["record"], published, as_of)
+            if isinstance(c.get("percentage_history"), dict):
+                c["percentage_history"]["coverage"] = to.coverage_note("nfl", since)
+    except Exception:      # noqa: BLE001  (display only)
+        return
 
 
 def games_on(conn: sqlite3.Connection, day: date) -> dict:

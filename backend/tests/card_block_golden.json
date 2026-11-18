@@ -1,0 +1,47 @@
+{
+ "nba_plain": {
+  "key": "2baa14d47f7e5bca8e8855bce36c418ea780dd2f47507f69095b4055855a7d61",
+  "identity": [
+   "<b>PROP51 PICKS \u00b7 NBA</b>",
+   "<b>BOS @ ORL</b>",
+   "Starts Nov 02, 04:00 PM EST",
+   "ORL"
+  ]
+ },
+ "nba_full": {
+  "key": "2baa14d47f7e5bca8e8855bce36c418ea780dd2f47507f69095b4055855a7d61",
+  "identity": [
+   "<b>PROP51 PICKS \u00b7 NBA</b>",
+   "<b>BOS @ ORL</b>",
+   "Starts Nov 02, 04:00 PM EST",
+   "ORL"
+  ]
+ },
+ "nhl_full": {
+  "key": "f1f98bf9c9a6b10fcc594a46f2b0189d907b102f4936b73ed1793ef029bb6e21",
+  "identity": [
+   "<b>PROP51 PICKS \u00b7 NHL</b>",
+   "<b>BOS @ ORL</b>",
+   "Starts Nov 02, 04:00 PM EST",
+   "ORL"
+  ]
+ },
+ "ncaab_full": {
+  "key": "2830d40d29fd5a5cab3ed0f1cee8da65562fc1bc4658b4bd163a6f8f57900d68",
+  "identity": [
+   "<b>PROP51 PICKS \u00b7 NCAAB</b>",
+   "<b>BOS @ ORL</b>",
+   "Starts Nov 02, 04:00 PM EST",
+   "ORL"
+  ]
+ },
+ "nfl_full": {
+  "key": "997610e3c5d5353dda3b645bc2a05f6a47eb6d2629ddb572067b1b1d7493e44b",
+  "identity": [
+   "<b>PROP51 PICKS \u00b7 NFL</b>",
+   "<b>BOS @ ORL</b>",
+   "Starts Nov 02, 04:00 PM EST",
+   "ORL"
+  ]
+ }
+}

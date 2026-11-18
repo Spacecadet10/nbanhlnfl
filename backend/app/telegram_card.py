@@ -103,6 +103,19 @@ def fit_record(draw, text, width=RECORD_WIDTH):
     return fit_line(draw, text, _font(17), width), _font(17)
 
 
+def _wrap_rows(draw, text, size, width):
+    """The words of `text` as rows no wider than `width` px at `size` (a single over-long word keeps its own row)."""
+    font, rows, row = _font(size), [], ''
+    for word in text.split():
+        candidate = (row + ' ' + word).strip()
+        if row and draw.textlength(candidate, font=font) > width:
+            rows.append(row)
+            row = word
+        else:
+            row = candidate
+    return rows + ([row] if row else [])
+
+
 def fit_line(draw, text, font, width):
     """The text on one line of `width` px: whole items (split at ' · ' then ', ') are dropped from the end and replaced
     with '…' until it fits; a single item that is still too long is cut with '…'. Never wraps, never overflows."""
@@ -196,7 +209,7 @@ def render_card(message):
     # A full outline replaces the asymmetric stripe from the reference.
     # Owner request Nov 11: one plain "who is playing" line under the pick, only when there is something to say.
     lineup=next((line.removeprefix('Lineup: ') for line in lines[rec+2:markets] if line.startswith('Lineup: ')),None)
-    from .telegram import STRONGEST_PREFIX
+    from .telegram import STRONGEST_PREFIX, BLOCK_EXTRA_PREFIXES
     strongest = next((line for line in lines[rec+2:markets] if line.startswith(STRONGEST_PREFIX)), None)
     pick_size=72 if len(lines[rec+1])<22 else 48
     detail=next((line for line in lines[rec+2:markets] if line and line!='━━━━━━━━━━━━━━' and not line.startswith(('Lineup: ', STRONGEST_PREFIX))),'')
@@ -241,7 +254,11 @@ def render_card(message):
         label_lines = max(1,int(draw.textlength(pick,font=_font(34,True))/470)+1)
         opposite_lines = max(1,int(draw.textlength(opposite,font=_font(24,True))/820)+1) if opposite else 0
         past = next((line for line in group if line.startswith('Past seasons ')), None)
-        height=130+(label_lines-1)*44+(30 if provenance else 0)+(30 if past else 0)+(opposite_lines*32+12 if opposite else 0)
+        # The shared market block's extra lines (sportsbook quote or its reason, recovered Telegram history, record basis):
+        # wrapped at 20 px, never cut, so nothing the text card says is missing from the picture.
+        extras = [line for line in group[2:] if line.startswith(BLOCK_EXTRA_PREFIXES)]
+        extra_rows = [row for line in extras for row in _wrap_rows(draw, line, 20, 800)]
+        height=130+(label_lines-1)*44+(30 if provenance else 0)+(30 if past else 0)+len(extra_rows)*26+(opposite_lines*32+12 if opposite else 0)
         draw.rounded_rectangle((58,y,1022,y+height),radius=25,fill=cream,outline=border,width=2)
         draw.rounded_rectangle((78,y+25,149,y+86),radius=17,fill=pale)
         draw.text((91,y+31),f'{number:02d}',font=_font(31,True,True),fill=primary)
@@ -265,12 +282,18 @@ def render_card(message):
             draw.text((200,end+33),past_text,font=past_font,fill=INK)
         if provenance:
             draw.text((200,end+33+(30 if past else 0)),provenance.capitalize(),font=_font(20),fill=MUTED)
+        extra_y = end+33+(30 if past else 0)+(30 if provenance else 0)
+        for row in extra_rows:
+            draw.text((200,extra_y),row,font=_font(20),fill=MUTED)
+            extra_y += 26
         if opposite:
             wrapped(opposite,200,y+height-opposite_lines*32-8,800,size=24,bold=True,fill=primary)
         y+=height+8
     y += 9
     note = ('90-minute markets. Draw-no-bet draws return the stake. Model selections may lack sportsbook offers.'
             if league == 'SOCCER' else 'Same sport, market, direction, percentage and model.')
+    if not preview:
+        note += ' Counts are other settled games, not this game.'
     if preview and any(line in ('Result: Won','Result: Lost') for line in lines):
         note += ' Records include this game’s result.'
     y = wrapped(note, 58, y, 964, size=24, fill=MUTED)
