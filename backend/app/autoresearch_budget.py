@@ -3,7 +3,8 @@
 `python -m app.autoresearch_budget check` prints the prepare.py argv (one per line) or `refused: ...` (exit 1);
 `python -m app.autoresearch_budget record` appends finished runs to agent/budget-ledger.jsonl and, if a run used a model other
 than the requested one, writes agent/MODEL_MISMATCH_STOP, which the gate then refuses on until the owner deletes it.
-Authority: AGENT_BUDGET.json (owner). Counting: every run in agent/runs.jsonl started at or after counting_from counts, however it
+Authority: AGENT_BUDGET.json (owner). gate_digest = sha256 of the bytes of backend/app/autoresearch_budget.py, scripts/autoresearch_agent_scheduled.sh
+and scripts/autoresearch_agent_manual.sh concatenated in that order (`cat` of the three | shasum -a 256); the shell refuses on mismatch. Counting: every run in agent/runs.jsonl started at or after counting_from counts, however it
 was started. A run's spend is its recorded cost_usd (research_agent._finish sums total_cost_usd of ALL attempts, so the launch
 retry is included), raised to the sum of the result records in its agent-*.jsonl transcripts if that is larger; a missing cost
 counts at max_usd_per_run. Unreadable runs.jsonl or report.json, or a negative/non-finite cost: refuse (cost tracking failed).
@@ -19,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 FMT = "%Y-%m-%dT%H:%M:%SZ"
-NIGHT_START_H, NIGHT_END_H = 21.5, 7.0        # UTC: no paid start from 21:30Z to 07:00Z (live forecast windows)
+NIGHT_START_H, NIGHT_END_H = 20.75, 7.0       # UTC: no paid start from 20:45Z (21:30Z minus the 45 min guard limit) to 07:00Z
 TRAINER_LABEL = "com.nba-predictor.adaptive-train"
 MARKER = "MODEL_MISMATCH_STOP"
 LEDGER = "budget-ledger.jsonl"
@@ -30,12 +31,11 @@ class Refused(Exception):
 
 
 def home() -> Path:
-    return Path(os.environ.get("AUTORESEARCH_HOME") or Path.home() / "autoresearch-sports")
+    return Path.home() / "autoresearch-sports"      # the home prepare.py hardcodes; no override
 
 
 def now_utc() -> datetime:
-    v = os.environ.get("AUTORESEARCH_NOW")      # test hook only
-    return datetime.strptime(v, FMT).replace(tzinfo=timezone.utc) if v else datetime.now(timezone.utc)
+    return datetime.now(timezone.utc)
 
 
 def _utc(value, field):
@@ -68,6 +68,8 @@ def load_budget(path: Path, now: datetime) -> dict:
     b["_counting_from"] = _utc(b.get("counting_from"), "counting_from")
     if b.get("period") != "weekly":
         raise Refused("period must be weekly (ISO week, UTC, Monday 00:00Z)")
+    if not isinstance(b.get("gate_sha256"), str) or not re.fullmatch(r"[0-9a-f]{64}", b["gate_sha256"]):
+        raise Refused("gate_sha256 must be the 64 hex sha256 of the gate (see gate_digest in the module docstring)")
     cap, per_run = _num(b, "period_usd_cap"), _num(b, "max_usd_per_run")
     _num(b, "max_runs_per_period", True), _num(b, "max_total_runs", True), _num(b, "max_trials", True)
     if per_run > cap:
@@ -109,7 +111,8 @@ def transcript_cost(rdir: Path) -> float:
 
 
 def transcript_models(rdir: Path) -> set:
-    """Models the transcripts report: init events and the modelUsage keys of result records."""
+    """Models of the MAIN agent: init events and top-level assistant messages. Helper (sub-agent, parent_tool_use_id set),
+    synthetic and modelUsage entries are ignored, so a helper model cannot false-STOP while a different main model still does."""
     found = set()
     for p in sorted(rdir.glob("agent-*.jsonl")):
         for line in p.read_text(errors="replace").splitlines():
@@ -117,11 +120,25 @@ def transcript_models(rdir: Path) -> set:
                 e = json.loads(line)
             except ValueError:
                 continue
-            if e.get("type") == "system" and e.get("subtype") == "init" and isinstance(e.get("model"), str):
-                found.add(e["model"])
-            if e.get("type") == "result" and isinstance(e.get("modelUsage"), dict):
-                found.update(e["modelUsage"])
+            if e.get("type") == "system" and e.get("subtype") == "init":
+                m = e.get("model")
+            elif e.get("type") == "assistant" and not e.get("parent_tool_use_id"):
+                m = (e.get("message") or {}).get("model")
+            else:
+                continue
+            if isinstance(m, str) and not m.startswith("<"):
+                found.add(m)
     return found
+
+
+def check_models(agent: Path, runs: list, now: datetime) -> None:
+    """Refuse (and write the marker) when any run in `runs` used a main model other than the one it requested."""
+    for r in runs:
+        used = sorted(transcript_models(r["rdir"])) if r["rdir"].is_dir() else []
+        if used and used != [r["model"]]:      # no transcript model (died before init) is not a mismatch
+            msg = f"{now.strftime(FMT)} run {r['run_id']} requested {r['model']!r} but the transcript shows {used}; owner review required\n"
+            (agent / MARKER).write_text(msg)
+            raise Refused(f"{agent / MARKER} written: {msg.strip()}")
 
 
 def read_runs(h: Path, per_run: float) -> list:
@@ -162,9 +179,6 @@ def read_runs(h: Path, per_run: float) -> list:
 
 
 def trainer_running() -> bool:
-    v = os.environ.get("AUTORESEARCH_TRAINER")      # test hook only: "running" | "idle"
-    if v:
-        return v == "running"
     try:
         out = subprocess.run(["launchctl", "print", f"gui/{os.getuid()}/{TRAINER_LABEL}"], capture_output=True, text=True, timeout=20).stdout
         if re.search(r"^\s*state = running", out, re.M):
@@ -175,20 +189,21 @@ def trainer_running() -> bool:
         raise Refused("cannot tell whether the adaptive trainer is running; failing closed")
 
 
-def gate(h: Path, now: datetime) -> dict:
+def gate(h: Path, now: datetime, trainer=None) -> dict:
     b = load_budget(h / "AGENT_BUDGET.json", now)
     agent = h / "experiments" / "agent"
     if (agent / MARKER).exists():
         raise Refused(f"{agent / MARKER} exists: a run used a model other than the requested one; the owner must review and delete it")
     hour = now.hour + now.minute / 60
     if hour >= NIGHT_START_H or hour < NIGHT_END_H:
-        raise Refused("between 21:30Z and 07:00Z live forecast windows: no paid run")
-    if trainer_running():
+        raise Refused("between 20:45Z and 07:00Z (a 45 min run would reach the 21:30Z live forecast windows): no paid run")
+    if (trainer_running if trainer is None else trainer)():
         raise Refused("the adaptive trainer is running; no overlapping heavy job")
     per_run, cap = float(b["max_usd_per_run"]), float(b["period_usd_cap"])
     runs = [r for r in read_runs(h, per_run) if r["at"] >= b["_counting_from"]]
     week = [r for r in runs if r["at"] >= week_start(now)]
     spent = sum(r["cost"] for r in week)
+    check_models(agent, runs, now)
     if len(runs) >= b["max_total_runs"]:
         raise Refused(f"{len(runs)} runs since {b['counting_from']} (max_total_runs {b['max_total_runs']}): four-run assessment required; the owner must assess and issue a new budget")
     if len(week) >= b["max_runs_per_period"]:

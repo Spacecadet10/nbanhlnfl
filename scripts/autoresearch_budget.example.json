@@ -10,5 +10,6 @@
   "model": "claude-opus-5-5",
   "max_trials": 4,
   "sports": ["nba", "nhl"],
+  "gate_sha256": "52edbdf31817ebbc4d4cc4c0c3565cf0d22e19b7b5be11316b7d04ff30668b5f",
   "expires_at": "2026-12-31T00:00:00Z"
 }

@@ -23,7 +23,7 @@ def stamp(delta):
 
 @pytest.fixture
 def home(tmp_path):
-    h = tmp_path / "ar"
+    h = tmp_path / "hm" / "autoresearch-sports"          # the one home the agent wrappers accept: $HOME/autoresearch-sports
     (h / "experiments" / "agent").mkdir(parents=True)
     (h / "workspace").mkdir()
     fake = h / "workspace" / "prepare.py"
@@ -71,10 +71,16 @@ def at(**delta):
     return (TUE + timedelta(**delta)).strftime(FMT)
 
 
+def gate_sha():
+    import hashlib
+    files = [ROOT / "backend/app/autoresearch_budget.py", AGENT, MANUAL]
+    return hashlib.sha256(b"".join(f.read_bytes() for f in files)).hexdigest()
+
+
 def budget(**over):
     b = {"approved_by": "owner", "approved_at": at(days=-3), "period": "weekly", "period_usd_cap": 5.0, "max_runs_per_period": 2,
          "max_usd_per_run": 2.5, "max_total_runs": 4, "counting_from": at(days=-3), "model": MODEL, "max_trials": 3,
-         "sports": ["nba"], "expires_at": at(days=30)}
+         "sports": ["nba"], "expires_at": at(days=30), "gate_sha256": gate_sha()}
     b.update(over)
     return b
 
@@ -105,14 +111,32 @@ def add_run(home, rid, started, cost="absent", finished=True, attempts=(), model
         (rdir / f"agent-{i + 1}.jsonl").write_text("".join(json.dumps(x) + "\n" for x in recs))
 
 
-def gate_run(home, tmp_path, trainer="idle", now=CLOCK, script=AGENT):
-    return run_env(script, home, tmp_path, AUTORESEARCH_NOW=now, AUTORESEARCH_TRAINER=trainer)
+WRAPPER = """#!{py}
+import os, sys
+from datetime import datetime, timezone
+sys.path.insert(0, {backend!r})
+if sys.argv[1:3] == ["-m", "app.autoresearch_budget"]:
+    from app import autoresearch_budget as ab
+    ab.now_utc = lambda: datetime.strptime(os.environ["FAKE_NOW"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    ab.trainer_running = lambda: os.environ["FAKE_TRAINER"] == "running"
+    sys.exit(ab.main(sys.argv[3:]))
+os.execv(sys.executable, [sys.executable] + sys.argv[1:])
+"""
+
+
+def gate_run(home, tmp_path, trainer="idle", now=CLOCK, script=AGENT, **extra):
+    """Production code has no clock or trainer hooks: this test launcher (LEARNING_PYTHON) patches them in-process."""
+    wrapper = tmp_path / "pywrap"
+    wrapper.write_text(WRAPPER.format(py=sys.executable, backend=str(ROOT / "backend")))
+    wrapper.chmod(0o755)
+    return run_env(script, home, tmp_path, FAKE_NOW=now, FAKE_TRAINER=trainer, LEARNING_PYTHON=str(wrapper), **extra)
 
 
 def run_env(script, home, tmp_path, **extra):
-    env = dict(os.environ, AUTORESEARCH_HOME=str(home), AUTORESEARCH_PREPARE=str(home / "workspace" / "prepare.py"),
-               AUTORESEARCH_PYTHON=sys.executable, LEARNING_PYTHON=sys.executable, LEARNING_BACKEND=str(ROOT / "backend"),
-               NBA_DATA_DIR=str(tmp_path / "data"), FAKE_OUT=str(tmp_path / "calls.jsonl"), PYTHONDONTWRITEBYTECODE="1", **extra)
+    env = {k: v for k, v in os.environ.items() if k not in ("AUTORESEARCH_HOME", "AUTORESEARCH_PREPARE")}
+    env.update(HOME=str(home.parent), AUTORESEARCH_PYTHON=sys.executable, LEARNING_PYTHON=sys.executable, LEARNING_BACKEND=str(ROOT / "backend"),
+               NBA_DATA_DIR=str(tmp_path / "data"), FAKE_OUT=str(tmp_path / "calls.jsonl"), PYTHONDONTWRITEBYTECODE="1")
+    env.update(extra)
     r = subprocess.run(["/bin/bash", str(script)], env=env, capture_output=True, text=True, timeout=120)
     calls = tmp_path / "calls.jsonl"
     return r, [json.loads(x) for x in calls.read_text().splitlines()] if calls.exists() else []
@@ -248,27 +272,84 @@ def test_last_week_does_not_count_toward_the_week_but_counts_toward_the_total(ho
     assert r.returncode == 0, r.stdout
 
 
+def test_just_before_the_night_window_runs(home, tmp_path):
+    put(home, budget())
+    r, calls = gate_run(home, tmp_path, now="2026-11-17T20:44:00Z")
+    assert r.returncode == 0 and len(calls) == 1, r.stdout
+
+
 def test_trainer_running_refuses(home, tmp_path):
     put(home, budget())
     refused(home, tmp_path, "adaptive trainer", trainer="running")
 
 
-@pytest.mark.parametrize("now", ["2026-11-17T21:30:00Z", "2026-11-17T23:59:00Z", "2026-11-18T06:59:00Z"])
+@pytest.mark.parametrize("now", ["2026-11-17T20:45:00Z", "2026-11-17T21:30:00Z", "2026-11-17T23:59:00Z", "2026-11-18T06:59:00Z"])
 def test_night_window_refuses(home, tmp_path, now):
     put(home, budget(approved_at="2026-11-10T00:00:00Z", counting_from="2026-11-10T00:00:00Z", expires_at="2026-12-31T00:00:00Z"))
-    refused(home, tmp_path, "21:30Z", now=now)
+    refused(home, tmp_path, "20:45Z", now=now)
 
 
-def test_model_mismatch_writes_the_marker_and_blocks_further_runs(home, tmp_path):
+def test_record_ledgers_a_mismatch_and_writes_the_marker(home):
+    from app import autoresearch_budget as ab
     put(home, budget(max_runs_per_period=3))
     add_run(home, "a", at(hours=-2), 0.2, attempts=(0.2,), models=["claude-haiku-5"])
-    r, _ = gate_run(home, tmp_path)                        # gate passes; the post-run record step notices the mismatch
-    assert r.returncode == 0
+    rows = ab.record(home, TUE)
     ledger = [json.loads(x) for x in (AGENT_DIR(home) / "budget-ledger.jsonl").read_text().splitlines()]
-    assert ledger[0]["run_id"] == "a" and ledger[0]["model_requested"] == MODEL and ledger[0]["model_used"] == ["claude-haiku-5"]
+    assert rows and ledger[0]["run_id"] == "a" and ledger[0]["model_requested"] == MODEL and ledger[0]["model_used"] == ["claude-haiku-5"]
     assert (AGENT_DIR(home) / "MODEL_MISMATCH_STOP").exists()
-    (tmp_path / "calls.jsonl").unlink()
+
+
+def test_a_marker_blocks_further_runs(home, tmp_path):
+    put(home, budget())
+    (AGENT_DIR(home) / "MODEL_MISMATCH_STOP").write_text("x")
     refused(home, tmp_path, "MODEL_MISMATCH_STOP")
+
+
+def transcript(home, rid, *events):
+    rdir = AGENT_DIR(home) / "runs" / rid
+    rdir.mkdir(parents=True, exist_ok=True)
+    (rdir / "agent-1.jsonl").write_text("".join(json.dumps(x) + "\n" for x in events))
+
+
+INIT = {"type": "system", "subtype": "init", "model": MODEL}
+
+
+def test_the_gate_itself_catches_a_mismatch_even_if_record_never_ran(home, tmp_path):
+    put(home, budget(max_runs_per_period=3))
+    add_run(home, "a", at(hours=-2), finished=False)                 # unfinished run: only the transcript says what ran
+    transcript(home, "a", INIT, {"type": "assistant", "message": {"model": "claude-haiku-5"}})
+    refused(home, tmp_path, "claude-haiku-5")
+    assert (AGENT_DIR(home) / "MODEL_MISMATCH_STOP").exists()
+
+
+def test_a_helper_model_does_not_stop_but_a_different_main_model_does(home, tmp_path):
+    put(home, budget(max_runs_per_period=3))
+    add_run(home, "a", at(hours=-2), 0.2)
+    transcript(home, "a", INIT, {"type": "assistant", "message": {"model": MODEL}},
+               {"type": "assistant", "parent_tool_use_id": "t1", "message": {"model": "claude-haiku-5"}},
+               {"type": "result", "total_cost_usd": 0.2, "modelUsage": {MODEL: {}, "claude-haiku-5": {}}})
+    r, _ = gate_run(home, tmp_path)
+    assert r.returncode == 0 and not (AGENT_DIR(home) / "MODEL_MISMATCH_STOP").exists(), r.stdout
+    (tmp_path / "calls.jsonl").unlink()
+    transcript(home, "a", INIT, {"type": "assistant", "message": {"model": "claude-sonnet-5-5"}})
+    refused(home, tmp_path, "claude-sonnet-5-5")
+
+
+def test_gate_sha256_must_match_the_gate_files(home, tmp_path):
+    put(home, budget(gate_sha256="0" * 64))
+    refused(home, tmp_path, "gate_sha256")
+    b = budget()
+    del b["gate_sha256"]
+    put(home, b)
+    refused(home, tmp_path, "gate_sha256")
+    put(home, budget(gate_sha256="xyz"))
+    refused(home, tmp_path, "gate_sha256")
+
+
+def test_a_different_home_or_prepare_than_the_gate_uses_is_refused(home, tmp_path):
+    put(home, budget())
+    refused(home, tmp_path, "AUTORESEARCH_HOME", AUTORESEARCH_HOME=str(tmp_path / "elsewhere"))
+    refused(home, tmp_path, "AUTORESEARCH_PREPARE", AUTORESEARCH_PREPARE=str(tmp_path / "other_prepare.py"))
 
 
 def test_matching_model_is_ledgered_without_a_marker_and_only_once(home, tmp_path):
@@ -292,6 +373,7 @@ def test_example_budget_file_validates():
     from app import autoresearch_budget as ab
     b = ab.load_budget(ROOT / "scripts" / "autoresearch_budget.example.json", datetime(2026, 11, 19, tzinfo=timezone.utc))
     assert (b["period_usd_cap"], b["max_runs_per_period"], b["max_usd_per_run"], b["max_total_runs"]) == (5.0, 2, 2.5, 4)
+    assert b["gate_sha256"] == gate_sha(), "example gate_sha256 is stale: recompute it after changing the gate files"
 
 
 def test_manual_script_delegates_to_the_same_gate_and_never_names_prepare_agent():
@@ -317,5 +399,7 @@ def test_agent_template_is_commented_as_requiring_the_owner_budget():
     path = ROOT / "scripts" / "launchd" / "com.nba-predictor.autoresearch-agent.plist"
     p = plistlib.loads(path.read_bytes())
     assert p["ProgramArguments"][-1].endswith("scripts/autoresearch_agent_scheduled.sh") and p["RunAtLoad"] is False
+    assert all("/nba-predictor-delivery/" in a or a == "/bin/bash" for a in p["ProgramArguments"])
+    assert p["WorkingDirectory"] == "/Users/andry/nba-predictor-delivery/backend"
     assert [(d["Weekday"], d["Hour"], d["Minute"]) for d in p["StartCalendarInterval"]] == [(2, 12, 30), (5, 12, 30)]
     assert "requires owner budget file" in path.read_text() and "NOT installed" in path.read_text()

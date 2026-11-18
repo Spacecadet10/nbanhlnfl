@@ -30,7 +30,7 @@
 	<key>ProgramArguments</key>
 	<array>
 		<string>/bin/bash</string>
-		<string>/Users/andry/nba-predictor-live/scripts/autoresearch_agent_scheduled.sh</string>
+		<string>/Users/andry/nba-predictor-delivery/scripts/autoresearch_agent_scheduled.sh</string>
 	</array>
 	<key>RunAtLoad</key>
 	<false/>
@@ -58,6 +58,6 @@
 	<key>StandardOutPath</key>
 	<string>/Users/andry/Desktop/nbanhlnfl/data/research/autoresearch-agent.log</string>
 	<key>WorkingDirectory</key>
-	<string>/Users/andry/nba-predictor-live/backend</string>
+	<string>/Users/andry/nba-predictor-delivery/backend</string>
 </dict>
 </plist>
