@@ -190,3 +190,29 @@ def test_message_id_gap_rows_are_kept_but_are_not_confirmed_published_picks(tmp_
     assert ('g1', 'spread') in loaded and ('g2', 'spread') not in loaded
     with sqlite3.connect(path) as raw:
         assert raw.execute("SELECT COUNT(*) FROM published_picks WHERE basis='uncertain_resolved_message_id_gap'").fetchone()[0] == 1
+
+
+@pytest.mark.parametrize('broken', ['withdrawal_plan', 'withdrawal_message'])
+def test_a_failure_while_preparing_a_withdrawal_falls_back_to_the_previous_behaviour(tmp_path, monkeypatch, broken):
+    """Review (Nov 18): an exception while planning or writing the update must never escape into run_once (it would stop every
+    later card of the sport, every run). Before anything is claimed, the card goes through the previous rules instead."""
+    bot = Bot()
+    with tg.ledger(tmp_path / 'l.sqlite') as conn:
+        sent_original(bot, conn)
+        def boom(*a, **k):
+            raise TypeError('broken withdrawal input')
+        monkeypatch.setattr(tg, broken, boom)
+        assert send(bot, conn, unsupported(), T1) == 'sent'          # the previous behaviour: the new card itself
+        assert len(bot.sends) == 2 and 'reply_parameters' not in bot.sends[1]
+        assert conn.execute("SELECT COUNT(*) FROM deliveries WHERE delivery_key LIKE 'pick-withdrawn-v1:%'").fetchone()[0] == 0
+
+
+def test_a_missing_probability_in_the_current_pick_never_raises(tmp_path):
+    bot = Bot()
+    with tg.ledger(tmp_path / 'l.sqlite') as conn:
+        sent_original(bot, conn)
+        key, text = card(unsupported())
+        report = unsupported()
+        report['picks'][0]['probability'] = None
+        status = tg.deliver_card(bot, conn, '123', key, text, T1, context={'sport': 'nba', 'game_id': 'g1', 'report': report})
+        assert status in ('withdrawn', 'sent')

@@ -730,13 +730,12 @@ def withdrawal_message(original, text, context):
                                          new_forecast_id=None if new_id is None else str(new_id), reason=_plain(reason))
 
 
-def deliver_withdrawal(bot, conn, chat_id, original, text, now, context):
-    """At most one 'Pick withdrawn' update per original card: the key derives from the original's delivery key, so a rerun,
-    a retry or a crash after the claim hits the existing claim and never sends it twice."""
-    key = 'pick-withdrawn-v1:' + hashlib.sha256(original['delivery_key'].encode()).hexdigest()
-    existing = conn.execute('SELECT status FROM deliveries WHERE delivery_key=?', (key,)).fetchone()
-    if existing and existing['status'] != 'retry':
-        return 'already_recorded'
+def withdrawal_key(original):
+    return 'pick-withdrawn-v1:' + hashlib.sha256(original['delivery_key'].encode()).hexdigest()
+
+
+def prepare_withdrawal(conn, original, text, context):
+    """(message, extra, facts, context) of the one update for `original`. Raises on bad input; nothing is claimed here."""
     context = dict(context or {})
     try:
         from . import published_picks
@@ -746,6 +745,14 @@ def deliver_withdrawal(bot, conn, chat_id, original, text, now, context):
     except Exception:
         context['published'] = {}
     message, extra, facts = withdrawal_message(original, text, context)
+    return message, extra, facts, context
+
+
+def deliver_withdrawal(bot, conn, chat_id, original, text, now, prepared):
+    """At most one 'Pick withdrawn' update per original card: the key derives from the original's delivery key, so a rerun,
+    a retry or a crash after the claim hits the existing claim and never sends it twice."""
+    key = withdrawal_key(original)
+    message, extra, facts, context = prepared
     status = deliver(bot, conn, chat_id, key, message, now, extra=extra)
     if status != 'already_recorded':
         try:    # the audit row never affects sending
@@ -764,9 +771,18 @@ def deliver_card(bot, conn, chat_id, key, text, now, *, context=None):
     key is unchanged, so receipts written by the earlier release count too."""
     identity = card_identity(text)
     if identity and not conn.execute('SELECT 1 FROM deliveries WHERE delivery_key=?', (key,)).fetchone():
-        original = withdrawal_plan(conn, chat_id, text, now)   # owner decision Nov 17: one 'Pick withdrawn' update, not a second card
+        try:    # owner decision Nov 17: one 'Pick withdrawn' update, not a second card
+            original = withdrawal_plan(conn, chat_id, text, now)
+            if original is not None:
+                existing = conn.execute('SELECT status FROM deliveries WHERE delivery_key=?', (withdrawal_key(original),)).fetchone()
+                if existing and existing['status'] != 'retry':
+                    return 'already_recorded'
+                prepared = prepare_withdrawal(conn, original, text, context)
+        except Exception as exc:   # review Nov 18: never stop the sport's run; nothing is claimed yet, so use the previous rules
+            print(f'pick-withdrawal skipped (previous card rules apply): {type(exc).__name__}', file=sys.stderr, flush=True)
+            original = None
         if original is not None:
-            return deliver_withdrawal(bot, conn, chat_id, original, text, now, context)
+            return deliver_withdrawal(bot, conn, chat_id, original, text, now, prepared)
         since = (datetime.fromisoformat(now.replace('Z', '+00:00')) - timedelta(days=2)).strftime('%Y-%m-%dT%H:%M:%SZ')
         for row in conn.execute("SELECT text FROM deliveries WHERE chat_id=? AND attempted_at>=? AND status IN ('sent','uncertain','sending')",
                                 (str(chat_id), since)):
