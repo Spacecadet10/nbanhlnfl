@@ -1207,3 +1207,23 @@ export interface SoccerResearchHistory {
   competition_id: SoccerCompetitionId; season: number | null; model: string | null; total: number; limit: number;
   offset: number; seasons: number[]; label: string; items: { match: SoccerHistMatch; forecast: SoccerForecast }[];
 }
+
+// Learning operations and coverage (GET /api/learning/ops, /api/learning/coverage): read-only operational facts, never a
+// claim that forecasts use fits (that is the coverage matrix's separate forecasting_with_fits state).
+export interface LearningOps {
+  mode: Mode; sport: string; note: string; store?: string;
+  trainer?: { installed: boolean; covers_sport: boolean; label: string; times: string[]; sports: string[]; program_summary?: string; reason: string | null };
+  recording?: { configured: boolean | null; env_var: string; job_label: string; note: string };
+  fits?: { definition: string; period: string | null; combiner: { fit_id: number; status: string; finished_at: string; schedule: string } | null;
+    members: Record<string, number>; skipped_reasons: string[]; failed_reasons: string[] }[];
+  job_runs?: { job: string; status: string; started_at: string; finished_at: string | null; deferred_by: string | null }[];
+  deep_members?: 'unverified' | 'none_skipped' | null; deep_members_note?: string; adaptive_training_job_note?: string;
+}
+export type LearningCoverageState = 'yes' | 'no' | 'unknown' | 'not_established';
+export interface CoverageCell { state: LearningCoverageState; detail: string }
+export interface CoverageRow {
+  sport: string; market: string; learning_implemented: boolean; blocked_reason: string[];
+  implemented: CoverageCell; trained: CoverageCell; scheduled: CoverageCell; recording_prospectively: CoverageCell;
+  forecasting_with_fits: CoverageCell; evaluated: CoverageCell; improved_prospectively: CoverageCell;
+}
+export interface LearningCoverage { mode: Mode; rows: CoverageRow[]; stores?: Record<string, string>; note: string }
