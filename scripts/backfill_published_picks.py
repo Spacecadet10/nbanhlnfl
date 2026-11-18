@@ -74,6 +74,12 @@ def _titles(sport):
     return {markets.spec(sport, m).title: m for m in sports.store(sport).markets}
 
 
+def kickoff_moved(store, game_id, tip):
+    """True when the game's stored start differs from the start the card showed (matched by game_id, not by start)."""
+    row = store.execute('SELECT tipoff_at FROM games WHERE game_id=?', (game_id,)).fetchone()
+    return row is not None and row['tipoff_at'] != tip
+
+
 def reconstruct_point(store, sport, card, attempted_at):
     """[(market, status, forecast row or None, detail)] for one NBA/NHL/NFL/NCAAB card."""
     from app import coverage, markets
@@ -81,7 +87,9 @@ def reconstruct_point(store, sport, card, attempted_at):
     away, _, home = card['matchup'].partition(' @ ')
     tip = to_utc(card['start_local'], attempted_at)
     g = store.execute('SELECT g.game_id, g.tipoff_at FROM games g JOIN teams h ON h.team_id=g.home_team_id JOIN teams a ON '
-                      'a.team_id=g.away_team_id WHERE h.abbr=? AND a.abbr=? AND g.tipoff_at=?', (home, away, tip)).fetchone()
+                      'a.team_id=g.away_team_id WHERE h.abbr=? AND a.abbr=? AND (g.tipoff_at=? OR g.game_id IN (SELECT game_id FROM '
+                      'game_forecasts WHERE tipoff_at=? AND generated_at <= ?)) ORDER BY g.tipoff_at=? DESC, g.game_id LIMIT 1',
+                      (home, away, tip, tip, attempted_at, tip)).fetchone()     # the game's start may have moved since the card
     if g is None:
         return None, [(None, 'unmatched', None, f'no game {card["matchup"]} at {tip}')]
     titles, out = _titles(sport), []
@@ -160,6 +168,7 @@ def run(data_dir, ledger_path, dry_run=False):
         except Exception as exc:
             unmatched.append({'delivery_key': d['delivery_key'], 'reason': f'{type(exc).__name__}: {exc}'})
             continue
+        moved = sport != 'soccer' and gid is not None and kickoff_moved(stores[sport], gid, to_utc(card['start_local'], d['attempted_at']))
         c = counts.setdefault(sport, {'unambiguous': 0, 'multiple': 0, 'unmatched': 0})
         for market, status, hit, detail in results:
             c[status] += 1
@@ -178,6 +187,7 @@ def run(data_dir, ledger_path, dry_run=False):
                 cur = ledger.execute('INSERT OR IGNORE INTO published_picks (delivery_key, sport, game_id, market, forecast_id, side, line, '
                                      'probability, model_version, generated_at, sent_at, message_id, basis) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
                                      (*row, d['attempted_at'], d['message_id'],
+                                      'backfill_game_id_kickoff_moved' if moved else
                                       'backfill_text_match' if status == 'unambiguous' else 'backfill_text_match_multiple'))
                 written += cur.rowcount
     return {'counts': counts, 'written': written, 'unmatched': unmatched, 'dry_run': dry_run}
