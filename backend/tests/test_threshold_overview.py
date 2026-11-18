@@ -285,3 +285,78 @@ def test_no_telegram_history_file_means_no_telegram_line(tmp_path, monkeypatch):
     target = percentage_item('self', 'win')
     r = to.percentage_record('nba', 'total', target[1]['record'], 'self', {}, AFTER)
     assert r['telegram'] is None
+
+
+# --- Nov 17: contract fields (pushes, telegram label/period/model_version_known, sport coverage) ---------------------------
+def test_live_record_reports_pushes_apart_and_keeps_excluded():
+    target = percentage_item('self', 'pending')
+    idx = to.percentage_index([percentage_item('w', 'win'), percentage_item('l', 'loss'), percentage_item('p', 'push'),
+                               percentage_item('p2', 'push'), percentage_item('x', 'pending')], AFTER)
+    r = to.percentage_record('nba', 'spread', target[1]['record'], 'self', idx, AFTER)
+    assert (r['wins'], r['losses'], r['pushes'], r['settled']) == (1, 1, 2, 2)
+    assert r['excluded'] == {'push': 2, 'pending': 1}                     # unchanged, backward compatible
+
+
+def test_57_3_and_57_4_are_different_exact_buckets_in_live_and_telegram(tmp_path, monkeypatch):
+    _telegram_file(tmp_path, monkeypatch, [_tg('t73', 'win', pct='57.3'), _tg('t74', 'loss', pct='57.4')])
+    target = percentage_item('self', 'pending', conf=.5731)
+    idx = to.percentage_index([percentage_item('a', 'win', .5731), percentage_item('b', 'loss', .5739)], AFTER)
+    r = to.percentage_record('nba', 'total', target[1]['record'], 'self', idx, AFTER)
+    assert r['percentage'] == '57.3' and (r['wins'], r['losses']) == (1, 0)
+    assert (r['telegram']['wins'], r['telegram']['losses']) == (1, 0)
+
+
+def test_telegram_record_carries_label_period_and_unknown_model_version(tmp_path, monkeypatch):
+    _telegram_file(tmp_path, monkeypatch, [_tg('w1', 'win')])
+    target = percentage_item('self', 'win')
+    t = to.percentage_record('nba', 'total', target[1]['record'], 'self', {}, AFTER)['telegram']
+    assert t['label'] == 'Recovered Telegram cards' and t['model_version_known'] is False
+    assert t['period'] == {'from': '2026-11-02', 'to': '2026-11-14'}
+
+
+def test_a_sport_with_no_recovered_telegram_rows_has_no_telegram_line_and_says_so_in_coverage(tmp_path, monkeypatch):
+    _telegram_file(tmp_path, monkeypatch, [_tg('w1', 'win')])             # only NBA rows exist
+    target = percentage_item('self', 'win')
+    r = to.percentage_record('ncaab', 'winner', target[1]['record'], 'self', {}, AFTER, live_since='2026-11-17T15:00:54Z')
+    assert r['telegram'] is None
+    assert r['coverage']['live_since'] == '2026-11-17T15:00:54Z' and r['coverage']['telegram_period'] is None
+    assert 'No recovered Telegram history for NCAAB' in r['coverage']['history_note']
+    assert '2026-11-17' in r['coverage']['history_note']                  # recording began <date>
+
+
+def test_coverage_names_the_telegram_period_when_the_sport_has_rows(tmp_path, monkeypatch):
+    _telegram_file(tmp_path, monkeypatch, [_tg('w1', 'win')])
+    target = percentage_item('self', 'win')
+    c = to.percentage_record('nba', 'total', target[1]['record'], 'self', {}, AFTER, live_since='2026-11-15T16:50:42Z')['coverage']
+    assert c['telegram_period'] == {'from': '2026-11-02', 'to': '2026-11-14'} and c['live_since'] == '2026-11-15T16:50:42Z'
+    assert 'Recovered Telegram cards' in c['history_note']
+
+
+def test_per_sport_telegram_period_comes_from_the_file_summary(tmp_path, monkeypatch):
+    import json
+    _telegram_file(tmp_path, monkeypatch, [])
+    to.telegram_history_path().write_text(json.dumps({
+        'period': {'from': '2026-11-03', 'to': '2026-11-14'},
+        'summary': {'soccer': {'period': {'from': '2026-11-14', 'to': '2026-11-14'}}},
+        'rows': [_tg('m', 'win', sport='soccer', market='1x2_regulation', side='home', line_source='none', pct='71.5')]}))
+    rec = dict(percentage_item('self', 'win')[1]['record'], confidence=.7144, side='home', line_source='none')
+    r = to.telegram_record('soccer', '1x2_regulation', rec, 'self')
+    assert r['period'] == {'from': '2026-11-14', 'to': '2026-11-14'} and r['wins'] == 0     # 71.4 != 71.5
+    rec['confidence'] = .7151
+    assert to.telegram_record('soccer', '1x2_regulation', rec, 'self')['wins'] == 1
+
+
+def test_every_ranked_pick_carries_the_card_contract_fields(ready, client, monkeypatch):
+    """Nov 17 contract: line, side, model_version, sportsbook, percentage_history (pushes, coverage) and record_basis."""
+    record_now(ready)
+    ingest_events(ready, [event("g1", T_GAME, "1", "2", "STATUS_FINAL", 110, 100)], "2026-10-22T03:00:00Z")
+    client.now = AFTER
+    picks = client.get("/api/canonical/ranked", params={"date": "2026-10-21"}).json()["picks"]
+    assert picks
+    for p in picks:
+        assert {"line", "side", "model_version", "sportsbook", "record_basis", "forecast_id"} <= set(p)
+        b = p["record_basis"]
+        assert b["forecast_id"] == p["forecast_id"] and b["pregame_forecasts"] >= 1 and b["published"] is None
+        assert b["probability"] == pytest.approx(p["probability"]) and b["side"] == p["side"] and b["model_version"] == p["model_version"]
+        h = p["percentage_history"]
+        assert h["pushes"] == 0 and h["coverage"]["history_note"] and "telegram_period" in h["coverage"]

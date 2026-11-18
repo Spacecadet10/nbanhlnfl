@@ -700,7 +700,7 @@ def assess(plan):
     return {'snapshot_as_of': snap['as_of'], 'tickets': out}
 
 
-def soccer_section(now):
+def soccer_section(now, contract=False):
     """Live soccer picks (app/soccer_live.py): the sealed Elo's 90-minute home/draw/away forecast per match, made at or
     before 06:00 UTC on match day. Each pick is the model's most likely outcome with its exact probability; all three
     probabilities travel with it for review. Competitions refused by the completeness check have no picks and alert."""
@@ -723,27 +723,19 @@ def soccer_section(now):
                 refused[c] = chk['problems']
             elif chk is None and after_cutoff:          # before today's cutoff the run may still come
                 refused[c] = ["no live forecast run for today's matches before the 06:00 UTC cutoff"]
-        names = {'home': None, 'draw': 'Draw', 'away': None}
-        picks = []
-        for f in soccer_live.forecasts(conn, as_of=stamp):
-            out, p = f['most_likely'], f['probabilities']
-            label = (f['home'] + ' win' if out == 'home' else f['away'] + ' win' if out == 'away' else names['draw']) + ' (90 min)'
-            grade = 'pending' if f['result'] is None else ('win' if f['result'] == out else 'loss')
-            quote_at = min(f['generated_at'], f['kickoff_at'])
-            book = implied_lines.match_result_probabilities(soccer_markets_live.quotes(conn, f['match_id'], quote_at))
-            picks.append(dict(forecast_id=f['forecast_id'], game_id=f['match_id'], market='1x2_regulation',
-                              card_market_prob=book[out] if book else None,
-                              market_title='Match result (90 min)', matchup=f"{f['home']} vs {f['away']}", pick_label=label,
-                              outcome=out, probability=p[out], probabilities=p, status=f['status'], grade=grade,
-                              generated_at=f['generated_at'], tipoff=f['kickoff_at'], cutoff_at=f['cutoff_at'],
-                              competition=f['competition'], source_retrieved_at=f['source_retrieved_at'],
-                              settlement_rule=f['settlement_rule']))
+        picks = soccer_1x2_picks(conn, stamp)
         try:
             picks.extend(soccer_market_picks(conn, stamp))
         except Exception as exc:          # a market problem never hides the 1X2 picks; it is reported on the section
             market_error = type(exc).__name__
         else:
             market_error = None
+        if contract:        # the shared card contract (percentage_history, sportsbook, record_basis); a problem never hides a pick
+            try:
+                from app import soccer_record
+                soccer_record.attach(conn, picks, stamp)
+            except Exception as exc:
+                market_error = market_error or 'contract_' + type(exc).__name__
         live = [c for c in (*soccer_live.LAUNCH, *intl_live.LAUNCH) if c not in refused]
         return {**({'markets_error': market_error} if market_error else {}),
                 'freshness': {'source_state': 'fresh' if live else 'stale', 'failing': [] if live else sorted(refused),
@@ -751,6 +743,31 @@ def soccer_section(now):
                 'missing_due_games': [], 'refused': refused}
     finally:
         conn.close()
+
+
+def soccer_1x2_picks(conn, stamp):
+    """The 90-minute 1X2 pick of every live soccer forecast (the model's most likely outcome with its exact probability)."""
+    from app import implied_lines, soccer_live, soccer_markets_live
+    names = {'home': None, 'draw': 'Draw', 'away': None}
+    picks = []
+    for f in soccer_live.forecasts(conn, as_of=stamp):
+        out, p = f['most_likely'], f['probabilities']
+        label = (f['home'] + ' win' if out == 'home' else f['away'] + ' win' if out == 'away' else names['draw']) + ' (90 min)'
+        grade = 'pending' if f['result'] is None else ('win' if f['result'] == out else 'loss')
+        quote_at = min(f['generated_at'], f['kickoff_at'])
+        book = implied_lines.match_result_probabilities(soccer_markets_live.quotes(conn, f['match_id'], quote_at))
+        picks.append(dict(forecast_id=f['forecast_id'], game_id=f['match_id'], market='1x2_regulation',
+                          card_market_prob=book[out] if book else None,
+                          market_title='Match result (90 min)', matchup=f"{f['home']} vs {f['away']}", pick_label=label,
+                          outcome=out, probability=p[out], probabilities=p, status=f['status'], grade=grade,
+                          generated_at=f['generated_at'], tipoff=f['kickoff_at'], cutoff_at=f['cutoff_at'],
+                          competition=f['competition'], source_retrieved_at=f['source_retrieved_at'],
+                          settlement_rule=f['settlement_rule']))
+    return picks
+
+
+def _soccer_model_version(model, candidate_sha256):
+    return f"{model}:{(candidate_sha256 or '')[:12]}"
 
 
 def _half_line(line):
@@ -777,7 +794,7 @@ def _soccer_label(market, side, line, home, away):
     return f"{team[market.rsplit('_', 1)[1]]} {side} {line:g} {what} (90 min)"
 
 
-def soccer_market_picks(conn, stamp):
+def soccer_market_picks(conn, stamp, since=None):
     """Soccer selections beside the 1X2 pick (app/soccer_markets_live.py): per match, double chance (the side without
     the least likely 1X2 outcome) and draw no bet (the more likely team) from the tested 1X2 forecast; and per served goal
     or corner market one selection: the side the model favours at the bookmaker's listed line (match goals, when
@@ -786,8 +803,9 @@ def soccer_market_picks(conn, stamp):
     served (no tested model) give no selection."""
     from app import implied_lines, soccer_markets as sm, soccer_markets_live as sml
     out = []
-    since = (datetime.strptime(stamp, '%Y-%m-%dT%H:%M:%SZ') - timedelta(days=sml.TICKET_WINDOW_DAYS)).strftime('%Y-%m-%dT%H:%M:%SZ')
-    for m in sml.match_markets(conn, since=since, as_of=stamp):
+    if since is None:
+        since = (datetime.strptime(stamp, '%Y-%m-%dT%H:%M:%SZ') - timedelta(days=sml.TICKET_WINDOW_DAYS)).strftime('%Y-%m-%dT%H:%M:%SZ')
+    for m in sml.match_markets(conn, since=since or None, as_of=stamp):
         home, away = m['home'], m['away']
         common = dict(game_id=m['match_id'], matchup=f"{home} vs {away}", tipoff=m['kickoff_at'], competition=m['competition'],
                       skill_proven=False)

@@ -55,5 +55,9 @@ def sportsbook_comparison(conn, sport: str, game, market: str, rec: Optional[dic
         pa, pb = (q["price_a"], q["price_b"]) if side == "a" else (q["price_b"], q["price_a"])
         line = q["line"] if market != "spread" or side == "a" else -q["line"]   # the picked team's own signed line
         fields = {"quote_id": q["quote_id"], "provider": q["provider"], "retrieved_at": q["retrieved_at"]}
+    # The stored confidence of a two-way line market already excludes the push (coverage._confidence) and the book's two-way
+    # de-vig does too: say so when the line can push (integer line), so the card does not show an unexplained gap.
+    pushes = market in ("spread", "total", "team_total_home", "team_total_away") and (rec.get("p") or [0, 0, 0])[1] > 1e-9
     return SportsbookComparison(status="exact", book_probability=book, gap_pp=round(_pct(app_p) - _pct(book), 1), line=line,
-                                price=f"{_american(pa)}/{_american(pb)}", **fields, **base)
+                                price=f"{_american(pa)}/{_american(pb)}", basis="conditional on no push" if pushes else None,
+                                **fields, **base)

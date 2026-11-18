@@ -1,3 +1,8 @@
+## Card contract, backend half (history, grading, record_basis) — Agent A, Nov 17, 2026 (worktree branch, NOT deployed, nothing sent)
+- New: `soccer_record.py` (Soccer exact-% record, sportsbook, record_basis), `published_picks.py` (append-only ledger table written after status 'sent'), `record_basis.py`, `scripts/backfill_published_picks.py` (scratch ledger only), rebuilt `scripts/build_telegram_history.py` (Soccer, regrade, exact overlap rule, `excluded`/`summary`). `threshold_overview`: `pushes`, telegram `label`/`model_version_known`, per-sport `period`, sport `coverage`; telegram line is None for a sport with no recovered cards (NCAAB).
+- Delivery keys unchanged. CAUTION for the card renderer: telegram.format_batch builds a Soccer card's `versions` (part of the key) from `[market, forecast_id, generated_at, cutoff_at]` ONLY while a soccer pick has no `percentage_history`. `tickets.soccer_section(now)` therefore stays without contract fields; `soccer_section(now, contract=True)` adds them and the renderer must keep the old `versions` shape for Soccer, or every Soccer card would be resent.
+- Not verified live: nothing ran against `data/` or the real ledger; the backfill and builder ran on scratch copies only.
+
 ## NCAAB Telegram cards: top 4 by gap at 11 AM ET (owner decision Nov 17) — Claude, Nov 17, 2026 ~23:40Z
 - Was: one card per forecast NCAAB game (~60/night). Now (`app/ncaab_cards.py`, rule `ncaab-top4-gap-v1`): at the first Telegram
   run at/after 11:00 AM ET, every tracked game tipping >= 2 h later that Eastern day is priced by the shipped model as of that moment

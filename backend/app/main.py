@@ -318,6 +318,11 @@ def soccer_live_forecasts(competition: str = COMPETITION, mode: str = Depends(ap
         check = soccer_live.latest_checks(conn).get(competition)
         from . import soccer, soccer_book
         soccer_book.annotate(conn, rows)
+        try:    # card contract (percentage_history, record_basis, ...); a problem never hides a forecast
+            from . import soccer_record
+            soccer_record.attach_to_live(conn, rows, now.strftime("%Y-%m-%dT%H:%M:%SZ"))
+        except Exception:      # noqa: BLE001
+            pass
         refresh = soccer.refresh_state(conn, competition, now)
     from . import intl_live
     in_scope = competition in soccer_live.LAUNCH or competition in intl_live.LAUNCH
@@ -353,7 +358,12 @@ def soccer_markets(competition: str = COMPETITION, mode: str = Depends(api_mode)
     stamp, since = now.strftime("%Y-%m-%dT%H:%M:%SZ"), (now - _td(days=sml.TICKET_WINDOW_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
     with _soccer_store(mode) as conn:
         matches = sml.match_markets(conn, competition=competition, since=since, as_of=stamp)
-        checks = {f: c.get(competition) for f, c in sml.latest_checks(conn).items()}
+        try:    # card contract: `picks` per match (percentage_history, sportsbook, record_basis); never hides a selection
+            from . import soccer_record
+            soccer_record.attach_to_markets(conn, matches, stamp, since)
+        except Exception:      # noqa: BLE001
+            pass
+        checks ={f: c.get(competition) for f, c in sml.latest_checks(conn).items()}
     return {"competition": competition, "as_of": stamp,
             "families": {f: sml.state(f) for f in sml.FAMILIES},
             "derived": {"markets": list(sml.DERIVED), "served": competition in soccer_live.LAUNCH or competition in _intl_launch(),
