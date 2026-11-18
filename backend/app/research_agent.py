@@ -543,6 +543,7 @@ def run_agent(sports_: list, exp_root: Path, workspace: Path, max_trials: int = 
                         "model": model, "sandbox": sandbox, "argv": [x if x != prompt else "<prompt.txt>" for x in argv]})
         terminated = []
         old = signal.signal(signal.SIGTERM, lambda *_: terminated.append(ar._now()))
+        old_int = signal.signal(signal.SIGINT, lambda *_: terminated.append(ar._now()))   # ^C stops the run like SIGTERM
         evaluator = Evaluator(exp_root, workspace, python, ar.APP_DIR.parent, data_dir)
         broker = Broker(sock, evaluator)
         report = {"run_id": run_id, "branch": branch, "base": base, "budget": budget | {"usd_per_attempt": per_attempt},
@@ -558,6 +559,7 @@ def run_agent(sports_: list, exp_root: Path, workspace: Path, max_trials: int = 
                 report |= _finish(exp_root, workspace, rdir, state, sports_, report, t0, terminated)
             finally:
                 signal.signal(signal.SIGTERM, old)
+                signal.signal(signal.SIGINT, old_int)
         return report
 
 

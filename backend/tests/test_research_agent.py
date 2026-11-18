@@ -731,3 +731,25 @@ def test_the_agent_profile_alone_cannot_start_launchd_jobs_or_open_apps(env, tmp
     assert "EXEC-STILL-ALLOWED" in r.stdout, r.stdout + r.stderr
     assert "SUBMIT=0" not in r.stdout and "OPEN=0" not in r.stdout, r.stdout + r.stderr
     assert label not in listed and not (ws / "ran").exists()
+
+
+def test_m1_sigint_stops_the_run_like_sigterm_kills_the_agent_and_cleans_active_json(agent):
+    import signal
+    seen = {}
+
+    def interrupt():
+        for _ in range(300):
+            a = ra.active(agent["exp"])
+            if a and a.get("agent_pid"):
+                seen["pid"] = a["agent_pid"]
+                os.kill(os.getpid(), signal.SIGINT)
+                return
+            time.sleep(0.1)
+    before = signal.getsignal(signal.SIGINT)
+    threading.Thread(target=interrupt, daemon=True).start()
+    rep = agent["go"]([("sleep", 600)])
+    assert seen and rep["minutes"] < 2 and rep["stopped"]
+    time.sleep(0.5)
+    assert subprocess.run(["ps", "-p", str(seen["pid"]), "-o", "pid="], capture_output=True, text=True).stdout.strip() == ""
+    assert ra.active(agent["exp"]) is None
+    assert signal.getsignal(signal.SIGINT) is before
