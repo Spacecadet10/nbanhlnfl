@@ -31,3 +31,14 @@ def test_the_trainer_runs_on_the_live_release_with_the_release_guard():
     command = p['ProgramArguments'][-1]
     assert 'PY=/Users/andry/nba-predictor-live/backend/.venv/bin/python;' in command
     assert p['WorkingDirectory'] == '/Users/andry/nba-predictor-live/backend'
+
+
+def test_challenger_recorder_template_is_research_only_on_the_delivery_release():
+    p = load('learning-challengers')
+    env = p['EnvironmentVariables']
+    assert p['StartInterval'] == 900 and p['Nice'] == 10 and p['ProcessType'] == 'Background'
+    assert env['NBA_RELEASE_GUARD'] == '1' and env['NBA_RELEASE_ROOT'] == '/Users/andry/nba-predictor-delivery'
+    assert p['WorkingDirectory'] == '/Users/andry/nba-predictor-delivery/backend'
+    assert p['ProgramArguments'][-1].endswith('/scripts/learning_challengers_cycle.sh')
+    assert 'RunAtLoad' not in p
+

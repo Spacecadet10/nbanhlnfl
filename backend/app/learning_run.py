@@ -40,6 +40,10 @@ def lock_path(data_dir: Path) -> Path:
     return Path(os.environ.get("LEARNING_HEAVY_LOCK") or Path(data_dir) / ".learning-heavy.lock")
 
 
+def light_lock_path(data_dir: Path, name: str) -> Path:
+    return Path(data_dir) / f".learning-light-{''.join(c if c.isalnum() or c in '-_' else '_' for c in name)}.lock"
+
+
 def log_path(data_dir: Path) -> Path:
     return Path(data_dir) / "research" / "learning-runs.jsonl"
 
@@ -116,7 +120,9 @@ def _kill_group(proc: subprocess.Popen) -> None:
 def run_guarded(argv: Sequence[str], *, name: str, max_minutes: float, max_rss_gb: float,
                 defer_hours: float = DEFAULT_DEFER_HOURS, defer_sports: Sequence[str] = DEFAULT_SPORTS, nice: int = 10,
                 threads: int = 2, data_dir: Optional[Path] = None, poll_s: float = 1.0, now: Optional[datetime] = None,
-                rss_reader: Callable[[int], Optional[int]] = group_rss_bytes) -> int:
+                rss_reader: Callable[[int], Optional[int]] = group_rss_bytes, light: bool = False) -> int:
+    """`light` (prospective recorders that must run inside game windows): no machine-wide heavy lock (a per-name lock only, so
+    one recorder never overlaps itself) and no game-window deferral; the nice, thread, wall-clock and memory limits still apply."""
     data_dir = Path(data_dir or config.data_dir())
     log = log_path(data_dir)
     run_id = uuid.uuid4().hex[:12]
@@ -124,17 +130,17 @@ def run_guarded(argv: Sequence[str], *, name: str, max_minutes: float, max_rss_g
     if not argv or max_minutes <= 0 or max_rss_gb <= 0:
         _log(log, event="refused", reason="usage: a command, --max-minutes > 0 and --max-rss-gb > 0 are required", **base)
         return EXIT_USAGE
-    lp = lock_path(data_dir)
+    lp = light_lock_path(data_dir, name) if light else lock_path(data_dir)
     lp.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(lp, os.O_CREAT | os.O_RDWR, 0o644)
     try:
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
-            _log(log, event="refused", reason=f"another heavy learning job holds the lock {lp}", **base)
+            _log(log, event="refused", reason=f"another {'light' if light else 'heavy'} learning job holds the lock {lp}", **base)
             return EXIT_REFUSED
         try:
-            window = games_in_window(data_dir, defer_sports, defer_hours, now or datetime.now(timezone.utc))
+            window = [] if light else games_in_window(data_dir, defer_sports, defer_hours, now or datetime.now(timezone.utc))
         except Exception as exc:
             _log(log, event="refused", reason=f"game schedule unreadable ({type(exc).__name__}: {exc}); refusing to start", **base)
             return EXIT_REFUSED
@@ -153,7 +159,7 @@ def run_guarded(argv: Sequence[str], *, name: str, max_minutes: float, max_rss_g
             _log(log, event="end", rc=EXIT_NOT_STARTED, outcome=f"not started: {exc}", wall_s=0.0, peak_rss_mb=0, **base)
             return EXIT_NOT_STARTED
         _log(log, event="start", pid=proc.pid, nice=nice, max_minutes=max_minutes, max_rss_gb=max_rss_gb,
-             defer_hours=defer_hours, **base)
+             defer_hours=defer_hours, light=light, **base)
         return _supervise(proc, log, base, t0, w0, max_minutes * 60, max_rss_gb * 1024 ** 3, poll_s, rss_reader)
     finally:
         os.close(fd)
@@ -215,6 +221,7 @@ def main(argv: Optional[list] = None) -> int:
     p.add_argument("--defer-sports", default=",".join(DEFAULT_SPORTS), help="comma list of nba,nhl,ncaab,nfl,soccer")
     p.add_argument("--nice", type=int, default=10)
     p.add_argument("--threads", type=int, default=2)
+    p.add_argument("--light", action="store_true", help="recorder mode: per-name lock instead of the heavy lock, no game-window deferral")
     try:
         a = p.parse_args(argv)
     except SystemExit as e:
@@ -224,7 +231,7 @@ def main(argv: Optional[list] = None) -> int:
         print("usage: a command after -- and known --defer-sports are required", file=sys.stderr)
         return EXIT_USAGE
     return run_guarded(cmd, name=a.name, max_minutes=a.max_minutes, max_rss_gb=a.max_rss_gb, defer_hours=a.defer_hours,
-                       defer_sports=sports, nice=a.nice, threads=a.threads)
+                       defer_sports=sports, nice=a.nice, threads=a.threads, light=a.light)
 
 
 if __name__ == "__main__":
