@@ -683,6 +683,7 @@ def _profile(tmp: Path) -> str:
              # launchd, Launch Services or another app: submitted jobs and opened files would run outside the sandbox.
              "(deny process-exec*)", "(allow process-exec " + " ".join(f"(literal {json.dumps(p)})" for p in sorted(py)) + ")",
              "(deny job-creation)", "(deny lsopen)", "(deny appleevent-send)",
+             "(deny signal)", "(allow signal (target same-sandbox))",      # no signal to the parent or any other process
              "(deny file-write* (subpath \"/\"))",
              f"(allow file-write* (subpath {q(tmp)}) (literal \"/dev/null\") (regex #\"^/private/tmp/__KMP_REGISTERED_LIB_\"))",
              "(deny file-read* " + " ".join(f"(subpath {q(p)})" for p in READ_DENIED) + ")",

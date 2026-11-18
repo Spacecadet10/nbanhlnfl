@@ -691,3 +691,13 @@ def test_the_search_size_is_in_the_record_the_summary_and_results_tsv_labelled_u
     assert "uncorrected" in ar.summary(rec) and "distinct_train_py:   1" in ar.summary(rec)
     head, row = (env["root"] / "results.tsv").read_text().splitlines()[:2]
     assert head.split("\t")[-2:] == ["distinct_train_py_uncorrected", "markets_per_trial"] and row.split("\t")[-2:] == ["1", "5"]
+
+
+def test_the_candidate_cannot_signal_processes_outside_its_sandbox(tmp_path):
+    res, _ = _sandboxed(tmp_path, "import os\n"
+                                  f"try:\n    os.kill({os.getpid()}, 0)\n    print('SIGNALLED')\n"
+                                  "except PermissionError:\n    print('EPERM')\n"
+                                  "pid = os.fork()\n"
+                                  "if pid == 0:\n    os._exit(0)\n"
+                                  "os.kill(pid, 0) if False else None\nos.waitpid(pid, 0)\nprint('OWN-OK')\n")
+    assert "EPERM" in res.stdout and "SIGNALLED" not in res.stdout and "OWN-OK" in res.stdout, res.stdout + res.stderr
