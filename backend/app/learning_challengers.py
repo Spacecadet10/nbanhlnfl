@@ -297,6 +297,33 @@ def append_rows(path: Path, pol, c, rows: list, *, definition: str, dataset_vers
 
 
 # --- Recorder -------------------------------------------------------------------------------------------------------
+class NoArtifact(RuntimeError):
+    pass
+
+
+def _no_fit(*_a, **_k):
+    raise NoArtifact("no verified stored artifact for this spec and season")
+
+
+def _record_stored_only(conn, now, lines, specs) -> dict:
+    """live.record(write=False) with fitting disabled: ensure_fit(write=False) reaches `_fit` only when no verified stored artifact
+    exists, so with `_fit` replaced such a spec (deep ones included) is reported 'skipped: no artifact' and never refitted in memory.
+    live.py itself is unchanged."""
+    real = live._fit
+    live._fit = _no_fit
+    try:
+        res = live.record(conn, now=now, lines=lines, write=False, specs=specs)
+    finally:
+        live._fit = real
+    for name, msg in list(res["errors"].items()):
+        if msg.startswith("NoArtifact:"):
+            del res["errors"][name]
+            res["skipped"][name] = {"all": "skipped: no artifact"}
+    if res["status"] == "failed" and not res["errors"]:
+        res["status"] = "partial" if res["skipped"] else "success"
+    return res
+
+
 def record(conn, path: Path, *, policies: list, now: Optional[str] = None, lines: Optional[dict] = None, dry_run: bool = False) -> dict:
     """Challenger forecasts for games tipping within two hours of `now`. `conn` is the sport's store, used read-only (the
     pool recorder runs with write=False). Never raises: failures are reported in `errors`."""
@@ -310,7 +337,7 @@ def record(conn, path: Path, *, policies: list, now: Optional[str] = None, lines
         return out
     specs = list({c.spec.name: c.spec for p in policies for c in p.challengers}.values())
     try:
-        res = live.record(conn, now=now, lines=lines, write=False, specs=specs, require_artifact=True)
+        res = _record_stored_only(conn, now, lines, specs)
     except Exception as exc:
         out["status"], out["errors"]["recorder"] = "failed", f"{type(exc).__name__}: {exc}"
         return out
