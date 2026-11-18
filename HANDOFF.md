@@ -1,4 +1,4 @@
-## Pick withdrawn update + unconfirmed deliveries — RELEASED to delivery 3625462 — Claude (lead), Nov 18, 2026 ~03:20Z
+## Pick withdrawn update + unconfirmed deliveries — RELEASED to delivery 3625462, guard 8d59134 — Claude (lead), Nov 18, 2026 ~03:20-03:40Z
 - Owner decision: when a sent pick becomes "No supported pick" after a re-forecast, send AT MOST ONE text update "PROP51 UPDATE ·
   <SPORT> … Pick withdrawn" (original pick + send time, reason, What changed: original forecast #id/label/line/% → current forecast),
   replying to the original message when its message_id is known, instead of a second full card (the real cases: SHSU@WYO 01:19Z,
@@ -15,6 +15,13 @@
   delivery: 310 passed + 2 env-only (pass unset); fake-bot run_once deployed vs new identical, 0 sends. Live after switch: runs ok,
   pick_withdrawals created (0 rows), no tracebacks. Recorder path (best_pick_record, threshold_overview, lineup, availability,
   odds) untouched; nbanhlnfl-03 owns the weekly-report recorder review (its failing test predates these releases).
+- Review (nbanhlnfl-03, Opus, read-only) of 3625462: (2) a failure while planning/writing the update could escape into run_once and
+  stop every later card of the sport each run → FIXED 6b485aa (delivery 8d59134): planning/preparation is guarded; before any claim
+  it falls back to the previous card rules (tests: falls_back x2, missing probability). (1) OPEN, owner decision: the withdrawal also
+  fires when the original card is 'uncertain'/'sending'; scripts/best_picks.py counts only status='sent' cards, so such a game now
+  has no sent card in the best-pick record (before, the second full card was its earliest sent card). Options: require a 'sent'
+  original (uncertain originals get the old second card) or keep the update and accept the recorder effect. 3625462 and 8d59134
+  rows are excluded from the weekly report until reviewed.
 - PENDING natural observations: first real "Pick withdrawn" update; DNB "App DNB win chance, excluding draws" on a sent card; a real
   push or void on a sent card's record.
 
