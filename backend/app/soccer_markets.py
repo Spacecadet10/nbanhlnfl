@@ -178,6 +178,12 @@ def probabilities_1x2(p: Sequence[float], market: str, side: str) -> dict:
     return out
 
 
+def conditional_on_no_draw(probs: dict) -> float:
+    """Draw no bet's win chance excluding draws, win / (win + loss) of the stored 1X2-derived probabilities. THE one
+    definition: the sportsbook comparison and every card read it; the stored probability stays the 90-minute win chance."""
+    return probs["win"] / (probs["win"] + probs["loss"])
+
+
 def win_share(probs: dict) -> float:
     """Probability-weighted share of the stake that wins (a half win counts half)."""
     return probs["win"] + probs["half_win"] / 2

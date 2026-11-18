@@ -121,7 +121,7 @@ def sportsbook(conn, pick: dict) -> dict:
             return {'status': 'exact', 'app_probability': app, 'book_probability': book, 'gap_pp': _gap(app, book), **common,
                     'basis': 'derived from 1X2 prices'}
         win, loss = probs.get('win', app), probs.get('loss', 0.0)
-        app_c = win / (win + loss) if win + loss > 0 else app
+        app_c = sm.conditional_on_no_draw({'win': win, 'loss': loss}) if win + loss > 0 else app
         book = d[side] / (d['home'] + d['away'])
         return {'status': 'exact', 'app_probability': app_c, 'book_probability': book, 'gap_pp': _gap(app_c, book), **common,
                 'basis': 'conditional on no draw (derived from 1X2 prices)'}

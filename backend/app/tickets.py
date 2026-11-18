@@ -345,6 +345,16 @@ def quote_check(conn, pick, stamp):
                 line_now=now['line'] if now else None, price_now=price(now), price_at_forecast=price(first), line_moved=moved)
 
 
+DNB_APP = 'App DNB win chance, excluding draws'
+DNB_BOOK = 'Sportsbook DNB win chance, excluding draws'
+DNB_MODEL_NOTE = 'Model {pct}% = 90-minute win chance (draw possible)'
+DNB_BUCKET_NOTE = '; exact-% history is bucketed on this 90-minute %'
+
+
+def is_dnb(pick):
+    return pick.get('market') == 'draw_no_bet'
+
+
 def card_comparison(pick):
     """(sportsbook probability or None, app probability compared, basis note or None) as the card shows them. The contract's
     `sportsbook` object wins when it holds an exact quote, so the pick summary and the market block never read two sources;
@@ -631,6 +641,10 @@ def card_choice(sport, picks):
     qualifier = f' ({basis})' if basis else ''
     numbers = (f"App {displayed_percentage(app_compare)}% / sportsbook {displayed_percentage(book)}% / gap {card_gap_points(chosen):+.1f} points{qualifier}."
                if book is not None else f"App {100*chosen['probability']:.1f}%; sportsbook probability unavailable.")
+    if book is not None and is_dnb(chosen):
+        numbers = (f"{DNB_APP}: {displayed_percentage(app_compare)}% / {DNB_BOOK[0].lower() + DNB_BOOK[1:]}: "
+                   f"{displayed_percentage(book)}% no-vig / gap {card_gap_points(chosen):+.1f} points. "
+                   + DNB_MODEL_NOTE.format(pct=displayed_percentage(chosen['probability'])) + '.')
     reason = numbers+' '+(support[0] if support else 'Highest available likelihood after context checks.')
     if warnings:
         reason += ' Caution: '+'; '.join(warnings)
@@ -830,7 +844,7 @@ def soccer_market_picks(conn, stamp, since=None):
                                       'card_comparison_basis': 'derived from 1X2 prices'}
                     else:
                         comparison = {'card_market_prob': book_1x2[side] / (book_1x2['home'] + book_1x2['away']),
-                                      'card_app_prob': probs['win'] / (probs['win'] + probs['loss']),
+                                      'card_app_prob': sm.conditional_on_no_draw(probs),
                                       'card_comparison_basis': 'draws excluded, derived from 1X2 prices'}
                 price_facts = soccer_price_facts(m.get('prices') or {}, market, side)
                 offer = price_facts.get('book_quote')

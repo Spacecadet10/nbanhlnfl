@@ -5,7 +5,7 @@
 import type { ForecastPercentageHistory, RecordBasis, SportsbookComparison } from '../api/types';
 import { dateTime, pct } from '../format';
 import { liveRecordLine, recordBasisLines, recordLabel, telegramLine, thisGameLine } from './cardRecord';
-import { quoteTime, sportsbookLine } from './sportsbook';
+import { dnbModelNote, quoteTime, sportsbookLine } from './sportsbook';
 
 export interface PickEvidenceProps {
   history: ForecastPercentageHistory | null | undefined;
@@ -26,10 +26,14 @@ export interface PickEvidenceProps {
 export function PickEvidence({ history: h, grade, sportsbook, recordBasis, opposite, startAt, header, bookLabel, teams }: PickEvidenceProps) {
   const book = sportsbook ? sportsbookLine(sportsbook) : null;
   const basis = recordBasisLines(recordBasis, quoteTime, { market: h?.market, teams });
+  const dnbPct = (h?.market as string | undefined) === 'draw_no_bet' ? h?.percentage ?? null
+    : sportsbook?.basis?.startsWith('conditional on no draw') && header ? (header.probability * 100).toFixed(1) : null;
+  const dnbNote = dnbPct != null ? <>{dnbModelNote(dnbPct)}<br /></> : null;
   const headLine = header && <>
     <strong>{header.pick}</strong> · {header.market}{header.line != null && <> · line {header.line > 0 ? '+' : ''}{header.line}</>} · app {pct(header.probability, 1)}<br />
   </>;
   if (!h) return <span className="small percentage-record pick-evidence">{headLine}
+    {dnbNote}
     {book && <>{bookLabel ? `${bookLabel}: ` : ''}{book}<br /></>}
     <span className="warn">Percentage history unavailable</span>
     {basis.map((b) => <span key={b}><br /><span className="muted">{b}</span></span>)}
@@ -41,6 +45,7 @@ export function PickEvidence({ history: h, grade, sportsbook, recordBasis, oppos
   const rate = h.wins + h.losses;
   return <span className="small percentage-record pick-evidence" title={`Same source: ${h.source}; model: ${h.model_version}. Current record, including results learned after older forecasts. The counts are OTHER settled games, as on the Telegram card; this game's own result is shown separately and never added. Lines vary within the same market and line source. Observed counts do not establish a future win rate.`}>
     {headLine}
+    {dnbNote}
     {book && <>{bookLabel ? `${bookLabel}: ` : ''}{book}<br /></>}
     <strong>Observed: {recordLabel(h)}</strong><br />
     {h.sport.toUpperCase()} · {h.market_title} · {h.direction} · {h.percentage}% only

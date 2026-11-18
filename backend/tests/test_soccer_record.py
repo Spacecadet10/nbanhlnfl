@@ -151,3 +151,13 @@ def test_markets_selections_the_page_reads_carry_the_contract_fields_of_their_pi
         for s in hit:
             assert s["percentage_history"]["sport"] == "soccer" and s["record_basis"]["probability"] == p["probability"]
             assert s["pick_label"] == p["pick_label"] and s["sportsbook"]["status"] in ("exact", "no_quote", "unsupported")
+
+
+def test_dnb_conditional_helper_is_the_one_used_and_bucket_key_stays_the_stored_90_minute_percentage(forecast):
+    dnb = pick_of(forecast, "draw_no_bet")
+    probs = dnb["outcome_probabilities"]
+    assert sr.sm.conditional_on_no_draw(probs) == pytest.approx(probs["win"] / (probs["win"] + probs["loss"]))
+    before = sr.percentage_history(forecast, clone(dnb), {}, stamp(), None)
+    sr.sportsbook(forecast, dnb)                       # computing the comparison changes neither the pick nor its bucket
+    assert dnb["probability"] == probs["win"]
+    assert sr.percentage_history(forecast, clone(dnb), {}, stamp(), None)["percentage"] == before["percentage"] == to.displayed_percentage(probs["win"])

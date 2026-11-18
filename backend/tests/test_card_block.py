@@ -110,8 +110,9 @@ def test_soccer_dnb_basis_and_pushes_use_the_same_block():
     p['strong'] = False
     text = text_of(card('soccer', [p]), context_selection=True)
     assert '3W–1L · 4 push (4 settled)' in text
-    assert ('DraftKings -150/+120 · app 57.1% vs no-vig 50.4% (both conditional on no push) · gap +6.7 pts · underpriced · '
-            'quote 02:29 PM EST') in text
+    assert ('DraftKings -150/+120 · App DNB win chance, excluding draws: 57.1% · Sportsbook DNB win chance, excluding draws: '
+            '50.4% no-vig · gap +6.7 pts · underpriced · quote 02:29 PM EST') in text
+    assert ('Model 60.0% = 90-minute win chance (draw possible); exact-% history is bucketed on this 90-minute %') in text
     assert telegram_card.render_card(text).startswith(b'\x89PNG')
 
 
@@ -133,7 +134,9 @@ def test_the_header_and_the_block_agree_on_the_sportsbook_source():
     p['strong'] = False
     text = text_of(card('soccer', [p]), context_selection=True)
     head, block = text.split('Market breakdown')
-    assert 'sportsbook 50.4%' in head and 'sportsbook probability unavailable' not in head and 'no-vig 50.4%' in block
+    assert 'sportsbook 50.4%' not in head and 'sportsbook DNB win chance, excluding draws: 50.4% no-vig' in head
+    assert 'sportsbook probability unavailable' not in head and 'Sportsbook DNB win chance, excluding draws: 50.4% no-vig' in block
+    assert 'App DNB win chance, excluding draws: 57.1%' in head and 'App DNB win chance, excluding draws: 57.1%' in block
 
 
 def test_published_pick_is_written_in_words_for_every_market_shape():
@@ -261,3 +264,37 @@ def test_telegram_history_with_only_pushes_is_not_called_none_settled():
     assert '0W–0L · 2 push (0 settled)' in line and 'none settled' not in line
     none = tg.telegram_history_line('nfl', {'telegram': {**TELEGRAM, 'wins': 0, 'losses': 0, 'pushes': 0, 'settled': 0}})
     assert 'none settled at this exact %' in none
+
+
+def test_dnb_wording_is_explicit_and_the_stored_percentage_keeps_its_original_definition():
+    sb = {**SPORTSBOOK, 'app_probability': 0.882, 'book_probability': 0.95, 'gap_pp': -6.8, 'line': None, 'price': '-150/+120',
+          'basis': 'conditional on no draw (derived from 1X2 prices)'}
+    line = tg.sportsbook_detail_line(sb, dnb=True)
+    assert 'App DNB win chance, excluding draws: 88.2% · Sportsbook DNB win chance, excluding draws: 95.0% no-vig' in line
+    assert 'gap −6.8 pts' in line and 'both conditional' not in line
+    p = history(pick('soccer', market='draw_no_bet', market_title='Draw no bet (90 min)', pick_label='Senegal DNB', sportsbook=sb,
+                     cutoff_at='2026-11-02T20:30:00Z', forecast_id='1x2:1:dnb:home', probability=0.357),
+                market='draw_no_bet', percentage='35.7', line_source='none')
+    p['strong'] = False
+    text = text_of(card('soccer', [p]), context_selection=True)
+    assert 'Model 35.7% = 90-minute win chance (draw possible); exact-% history is bucketed on this 90-minute %' in text
+    assert text.count('App DNB win chance, excluding draws: 88.2%') == 2      # the recommended-pick summary and the block agree
+    assert '(conditional on no draw' not in text and 'draws excluded' not in text
+    # Not DNB: unchanged
+    other = history(pick('soccer', market='double_chance', market_title='Double chance (90 min)', pick_label='Senegal or draw',
+                         sportsbook=SPORTSBOOK, cutoff_at='2026-11-02T20:30:00Z', forecast_id='1x2:1:dc:home_draw', probability=0.6),
+                    market='double_chance', percentage='60.0', line_source='none')
+    other['strong'] = False
+    assert 'DNB' not in text_of(card('soccer', [other]), context_selection=True)
+
+
+def test_the_dnb_model_note_reaches_the_picture_too(monkeypatch):
+    p = history(pick('soccer', market='draw_no_bet', market_title='Draw no bet (90 min)', pick_label='Senegal DNB', sportsbook=SPORTSBOOK,
+                     cutoff_at='2026-11-02T20:30:00Z', forecast_id='1x2:1:dnb:home', probability=0.357),
+                market='draw_no_bet', percentage='35.7', line_source='none')
+    p['strong'] = False
+    seen, real = [], telegram_card._wrap_rows
+    monkeypatch.setattr(telegram_card, '_wrap_rows', lambda d, line, *a, **k: (seen.append(line), real(d, line, *a, **k))[1])
+    telegram_card.render_card(text_of(card('soccer', [p]), context_selection=True))
+    assert any(l.startswith('Model 35.7% = 90-minute win chance (draw possible); exact-% history is bucketed') for l in seen)
+    assert not any(l.startswith('Model 35.7% · ') for l in seen)

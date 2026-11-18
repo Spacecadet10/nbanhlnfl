@@ -256,7 +256,8 @@ def render_card(message):
         past = next((line for line in group if line.startswith('Past seasons ')), None)
         # The shared market block's extra lines (sportsbook quote or its reason, recovered Telegram history, record basis):
         # wrapped at 20 px, never cut, so nothing the text card says is missing from the picture.
-        extras = [line for line in group[2:] if line.startswith(BLOCK_EXTRA_PREFIXES)]
+        extras = [line for line in group[2:] if line.startswith(BLOCK_EXTRA_PREFIXES)
+                  or line.startswith('Model ') and ' = 90-minute win chance' in line]    # draw no bet's Model % definition
         extra_rows = [row for line in extras for row in _wrap_rows(draw, line, 20, 800)]
         height=130+(label_lines-1)*44+(30 if provenance else 0)+(30 if past else 0)+len(extra_rows)*26+(opposite_lines*32+12 if opposite else 0)
         draw.rounded_rectangle((58,y,1022,y+height),radius=25,fill=cream,outline=border,width=2)
