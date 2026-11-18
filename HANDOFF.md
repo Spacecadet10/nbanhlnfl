@@ -1,3 +1,38 @@
+## Learning activation NBA/NHL: LIVE fits, trainer scheduled, delivery alias, autoresearch milestones 1-2 — Claude Opus 5.5 (lead, nbanhlnfl-03), Nov 18, 2026 04:39-12:30Z
+Durable plan + full status log: ~/nba-predictor-research-data/learning-plan.md. Evidence dirs: ~/nba-predictor-research-data/live-activation-2026-11-18/,
+~/nba-predictor-research-data/autoresearch-baseline-2026-11-18/. Claims are kept separate: TRAINED / SCHEDULED / FORECASTING WITH FITS / IMPROVED (prospective).
+- TRAINED (live, 04:39-08:40Z, live checkout 43d4b74 clean, release guard, nice 10, 8 h budget script run-live-training.sh; backup
+  ~/nba-predictor-backups/20261118T043958Z first): adaptive_fits (read from a .backup snapshot of the live stores) — NHL weekly b921c537a765c65c
+  combiner success fit 17 (14 members success, 2 skipped), NHL daily d11d95730c905f88 combiner success fit 34 (14/2), NBA weekly 4b3b8abf49973e4c
+  combiner success fit 24 (20/3), NBA daily 89dc8edda9de58ed combiner success fit 48 (20/3). 0 failed. Skipped = torch_mlp/keras_mlp "torch==2.14.1 /
+  tensorflow==2.21.0 is not installed here" -> deep members UNVERIFIED (bounded deep run not done). Wall: NHL weekly 411 s, daily 2259 s; NBA weekly 1733 s, daily 9957 s.
+- SCHEDULED: com.nba-predictor.adaptive-train installed 08:41Z byte-identical to scripts/launchd template (09:30 + 15:30 local = 14:30Z/20:30Z; live venv,
+  release guard, caffeinate, Background). First scheduled run: NOT YET OBSERVED (see plan file for the 14:30Z result). com.nba-predictor.daily +
+  api-delivery + api (:8100): NBA_DAILY_AGREEMENT=1 (installed = templates; api change is display-only, main.py never imports jobs). Plist backups in the
+  live-activation dir. The odds tick (records adaptive rows) already had the flag.
+- FORECASTING WITH FITS: NOT YET PROVEN. Before the fits every adaptive_forecasts row is 'unavailable' (NBA 58/56 + older ids, NHL 113/113). Proof =
+  rows with generated_at > fit finished_at, status 'forecast', combiner_fit_id = 17/34/24/48, artifact sha matching the fit row. First window ~22:00Z
+  (17:00 Toronto) for NBA 00:00Z / NHL 00:30Z games.
+- IMPROVED: no claim. No prospective evaluation of adaptive forecasts exists yet.
+- Delivery: 4c47d99 = ba8db83 + research-identity alias (3 files byte-identical to main 2f4e314), switched 08:45:58Z (b5 no conflict); delivery ids = live
+  (6/6); 57 candidate tests passed; Telegram 08:46:56Z ok; recorder review entry G (4c47d99, 08:48:27Z, independent Opus: EQUIVALENT) appended to
+  data/reports/weekly_report_review.json (7 valid). Daily Learning desktop shows live fit #48, recording enabled.
+- Scheduler text: daily_agreement.py:179 still says "no scheduler installed"; that file is hashed into the daily definition (adaptive.py:113-116), so editing it
+  changes the live ids. Fix in progress outside hashed code (learning_ops.py + /api/learning/ops, branch learning-phase2); no alias.
+- Mobile: Daily Learning clipped at 390 px (headless Chrome) — fix in progress (learning-phase2).
+- Autoresearch (pinned app ~/autoresearch-sports/app-ca44760, read-only; suite 140 passed): snapshot r2 (IDENTITY-data-snapshot-2026-11-18-r2.json; goalie cache
+  extended once from snapshot raw, 08d3d91a -> c0de38f2; stores + raw unchanged) -> protocols NBA sports-autoresearch-v2-3573c5874d17, NHL ...-4be3de929c7f (both bind
+  c0de38f2). VOID: fa71479ef877 (NBA on original snapshot, no trials), e87c23fce429 (NHL failed). Stop switch proven. Milestone 1 baseline trial NBA: discard. Milestone 2
+  ONE supervised agent run 20261118T085934Z-3f18: model claude-opus-5-5 (CLI default, no --model passed; from stream init/result), 2 trials discard, $0.2765, 2.0 min;
+  C1 grep no hits; C2 KMP none. BUDGET: owner approved $2 for that one run only; spent $0.28; the remainder authorizes nothing. No recurring paid research
+  without a new budget. Future runs must pass --model explicitly.
+- main 55ea022..0b03043 (templates, alias, api template) NOT pushed: `git push origin main` was denied by the Claude Code auto-mode permission classifier
+  ("[Destructive or Unwanted Actions]"); owner decision pending.
+- Rollback: trainer = launchctl bootout gui/$(id -u)/com.nba-predictor.adaptive-train + remove plist; env flags = restore plist backups + bootout/bootstrap; delivery =
+  checkout ba8db83 + restart api-delivery; fits/adaptive rows are append-only with no serving effect (coverage._adaptive_rejected).
+- Open: deep members unverified; NHL challengers CF=0 (shots gap, I1); 9 Telegram uncertain sends (b5); nhl_shots unhashed change needs owner acceptance at next main->live;
+  recorder identity should hash dependencies; check_project.py fails on untracked .omx/; NCAAB/Soccer/NFL learning not implemented (Phase 4 in progress); weekly report lacks NCAAB.
+
 ## Pick withdrawn update + unconfirmed deliveries — RELEASED to delivery 3625462, guard 8d59134 — Claude (lead), Nov 18, 2026 ~03:20-03:40Z
 - Owner decision: when a sent pick becomes "No supported pick" after a re-forecast, send AT MOST ONE text update "PROP51 UPDATE ·
   <SPORT> … Pick withdrawn" (original pick + send time, reason, What changed: original forecast #id/label/line/% → current forecast),
