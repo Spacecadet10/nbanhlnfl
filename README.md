@@ -197,7 +197,10 @@ checkout's venv), so installing packages here never reaches it.
 
 With `NBA_RELEASE_GUARD=1` every scheduled command checks that the code comes from the clean release checkout and that the
 store's schema equals the release's; otherwise it refuses before any request, lock or migration and records a failed job run.
-Every job run records its release commit (`job_runs.detail.release`). The dev servers (:8000 API, :5173 Vite) are unaffected.
+Every job run records its release commit (`job_runs.detail.release`). Install or refresh an agent from its template
+(`scripts/launchd/<label>.plist` reproduces the installed file): `cp scripts/launchd/<label>.plist ~/Library/LaunchAgents/`,
+`plutil -lint ~/Library/LaunchAgents/<label>.plist`, `launchctl bootout gui/$(id -u)/<label>` (if loaded), then
+`launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/<label>.plist`. The dev servers (:8000 API, :5173 Vite) are unaffected.
 
 Move the release only between cycles (no game within 2 h; never mid-evening if an identity-hashed file changed):
 ```sh

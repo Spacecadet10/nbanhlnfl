@@ -9,7 +9,7 @@
 		<key>NBA_API_MODE</key>
 		<string>real</string>
 		<key>NBA_DATA_DIR</key>
-		<string>/Users/andry/Desktop/nba-predictor-sprint1/data</string>
+		<string>/Users/andry/Desktop/nbanhlnfl/data</string>
 	</dict>
 	<key>KeepAlive</key>
 	<true/>
@@ -31,9 +31,9 @@
 	<key>RunAtLoad</key>
 	<true/>
 	<key>StandardErrorPath</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/api-release.log</string>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/api-release.log</string>
 	<key>StandardOutPath</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/api-release.log</string>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/api-release.log</string>
 	<key>ThrottleInterval</key>
 	<integer>10</integer>
 	<key>WorkingDirectory</key>

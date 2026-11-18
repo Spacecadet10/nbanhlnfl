@@ -6,7 +6,7 @@
 # 17:00-23:00 the evening before, and grading keeps each game's EARLIEST board. Grading runs once a day (the 11:00 run, or its late catch-up before 18:00).
 set -u
 LIVE=/Users/andry/nba-predictor-delivery
-ROOT=/Users/andry/Desktop/nba-predictor-sprint1
+ROOT=/Users/andry/Desktop/nbanhlnfl
 PY="$LIVE/backend/.venv/bin/python"
 cd "$LIVE" || exit 1
 export PYTHONPATH="$LIVE/backend" PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=4

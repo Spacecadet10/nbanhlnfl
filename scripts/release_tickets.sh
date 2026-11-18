@@ -5,7 +5,7 @@
 # credentials below exist. Keep these values identical to scripts/launchd/com.nba-predictor.telegram.plist.
 set -eu
 LIVE=/Users/andry/nba-predictor-delivery
-MAIN=/Users/andry/Desktop/nba-predictor-sprint1
+MAIN=/Users/andry/Desktop/nbanhlnfl
 cd "$LIVE/backend"
 exec env NBA_RELEASE_GUARD=1 NBA_RELEASE_ROOT="$LIVE" NBA_DATA_DIR="$MAIN/data" \
   NBA_TELEGRAM_LEDGER="$MAIN/.telegram-delivery.sqlite" NBA_TELEGRAM_CREDENTIALS="$MAIN/.env.telegram" \

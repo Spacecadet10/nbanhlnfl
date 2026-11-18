@@ -18,14 +18,14 @@
 		<string>/Users/andry/nba-predictor-delivery/backend/.venv/bin/python</string>
 		<string>/Users/andry/nba-predictor-delivery/scripts/closing_value.py</string>
 		<string>--root</string>
-		<string>/Users/andry/Desktop/nba-predictor-sprint1</string>
+		<string>/Users/andry/Desktop/nbanhlnfl</string>
 	</array>
 	<key>RunAtLoad</key>
 	<false/>
 	<key>StandardErrorPath</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/closing-value.log</string>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/closing-value.log</string>
 	<key>StandardOutPath</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/closing-value.log</string>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/closing-value.log</string>
 	<key>StartCalendarInterval</key>
 	<array>
 		<dict><key>Hour</key><integer>10</integer><key>Minute</key><integer>45</integer></dict>

@@ -14,9 +14,9 @@
 	<key>RunAtLoad</key>
 	<false/>
 	<key>StandardErrorPath</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/early-board.log</string>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/early-board.log</string>
 	<key>StandardOutPath</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/early-board.log</string>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/early-board.log</string>
 	<key>StartCalendarInterval</key>
 	<array>
 		<dict><key>Hour</key><integer>11</integer><key>Minute</key><integer>0</integer></dict>

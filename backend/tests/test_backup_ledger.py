@@ -45,7 +45,7 @@ def test_a_backup_missing_rows_fails_the_restore_check(tmp_path, monkeypatch):
 def test_schedules_back_up_daily_and_keep_the_mac_awake_on_power():
     import plistlib
     b = plistlib.loads((ROOT / 'scripts/launchd/com.nba-predictor.ledger-snapshot.plist').read_bytes())
-    assert '/Users/andry/Desktop/nba-predictor-sprint1/.telegram-delivery.sqlite' in b['ProgramArguments']
+    assert '/Users/andry/Desktop/nbanhlnfl/.telegram-delivery.sqlite' in b['ProgramArguments']
     assert len(b['StartCalendarInterval']) == 1 and b['RunAtLoad'] is False
     k = plistlib.loads((ROOT / 'scripts/launchd/com.nba-predictor.keep-awake.plist').read_bytes())
     assert k['ProgramArguments'] == ['/usr/bin/caffeinate', '-s'] and k['KeepAlive'] is True and k['RunAtLoad'] is True

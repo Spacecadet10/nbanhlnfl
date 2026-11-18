@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>NBA_DATA_DIR</key>
+		<string>/Users/andry/Desktop/nbanhlnfl/data</string>
+		<key>PYTHONDONTWRITEBYTECODE</key>
+		<string>1</string>
+	</dict>
+	<key>Label</key>
+	<string>com.nba-predictor.additional-odds</string>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/andry/nba-predictor-delivery/backend/.venv/bin/python</string>
+		<string>-m</string>
+		<string>app.additional_odds</string>
+		<string>fetch</string>
+	</array>
+	<key>StandardErrorPath</key>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/additional-odds.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/additional-odds.log</string>
+	<key>StartInterval</key>
+	<integer>900</integer>
+	<key>WorkingDirectory</key>
+	<string>/Users/andry/nba-predictor-delivery/backend</string>
+</dict>
+</plist>

@@ -4,14 +4,14 @@
 <dict>
 	<key>EnvironmentVariables</key>
 	<dict>
+		<key>NBA_DAILY_AGREEMENT</key>
+		<string>1</string>
 		<key>NBA_DATA_DIR</key>
-		<string>/Users/andry/Desktop/nba-predictor-sprint1/data</string>
+		<string>/Users/andry/Desktop/nbanhlnfl/data</string>
 		<key>NBA_RELEASE_GUARD</key>
 		<string>1</string>
 		<key>NBA_RELEASE_ROOT</key>
 		<string>/Users/andry/nba-predictor-live</string>
-		<key>NBA_DAILY_AGREEMENT</key>
-		<string>1</string>
 	</dict>
 	<key>Label</key>
 	<string>com.nba-predictor.odds</string>
@@ -27,9 +27,9 @@
 	<key>RunAtLoad</key>
 	<true/>
 	<key>StandardErrorPath</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/odds-launchd.log</string>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/odds-launchd.log</string>
 	<key>StandardOutPath</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/odds-launchd.log</string>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/odds-launchd.log</string>
 	<key>StartInterval</key>
 	<integer>60</integer>
 	<key>ThrottleInterval</key>
