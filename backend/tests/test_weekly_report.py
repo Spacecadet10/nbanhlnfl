@@ -222,7 +222,7 @@ def test_launch_agent_is_weekly_guarded_and_points_at_the_release_checkout():
     assert p['ProgramArguments'][1] == '/Users/andry/nba-predictor-delivery/scripts/weekly_report.py'
     assert '--ledger' in p['ProgramArguments'] and 'StartInterval' not in p
     args = p['ProgramArguments']
-    assert args[args.index('--review-config') + 1] == '/Users/andry/nba-predictor-delivery/scripts/weekly_report_review.json'
+    assert args[args.index('--review-config') + 1] == '/Users/andry/Desktop/nbanhlnfl/data/reports/weekly_report_review.json'
     raw = (ROOT / 'scripts' / 'launchd' / 'com.nba-predictor.weekly-report.plist').read_text()
     assert '023a26a4' not in raw and '23:52' not in raw                      # the values live in the config only
 
@@ -290,7 +290,7 @@ def test_an_unreviewed_release_commit_is_excluded_with_a_visible_explanation(tmp
                         '--review-config', str(cfg), '--now', '2026-12-31T00:00:00Z'])).read_text()
     assert 'counted n=0' in section(text, 1)
     assert 'code revision abcdef01 not reviewed' in section(text, 1)
-    assert 'append a review entry to scripts/weekly_report_review.json' in section(text, 1)
+    assert f'append a review entry to {cfg}' in section(text, 1)
     assert 'NBA: 3 cards excluded' in section(text, 1)
 
 
@@ -303,3 +303,16 @@ def test_rows_from_the_deliberately_unreviewed_commit_8d59134_are_excluded_with_
     text = Path(m.main(args)).read_text()
     assert 'counted n=0' in section(text, 1)
     assert 'code revision 8d59134c not reviewed' in section(text, 1)
+
+
+@pytest.mark.parametrize("content", [None, "{not json"])
+def test_a_missing_or_unreadable_review_config_fails_closed_and_says_so(tmp_path, monkeypatch, content):
+    m = wr()
+    data, _, _ = setup(tmp_path, 3, monkeypatch, m)
+    cfg = tmp_path / 'operator_review.json'
+    if content is not None:
+        cfg.write_text(content)
+    text = Path(m.main(['--data-dir', str(data), '--ledger', str(tmp_path / 'ledger.sqlite'), '--out-dir', str(tmp_path / 'o'),
+                        '--review-config', str(cfg), '--now', '2026-12-31T00:00:00Z'])).read_text()
+    assert 'counted n=0' in section(text, 1)
+    assert f'review config unavailable: {cfg}' in text

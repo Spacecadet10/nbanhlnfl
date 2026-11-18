@@ -55,6 +55,9 @@ MAX_REPEAT_LINES = 5            # per sport and market in section 4; newest lost
 REVIEW_CONFIG = HERE / 'weekly_report_review.json'
 
 
+REVIEW_SOURCE = {'path': str(REVIEW_CONFIG), 'unavailable': None}     # set by main(): the review file in use, shown on the page
+
+
 def review_defaults(path=REVIEW_CONFIG) -> tuple:
     """(earliest reviewed_at or None, {recorder sha256: [{reviewed_at, code_commit}, ...]}) from the review config's
     "reviews" list (a legacy single reviewed_at + reviewed_recorder_sha256 list is read as entries without code_commits);
@@ -178,7 +181,7 @@ def section_best(states: dict) -> list:
         for why, label in (('code revision not reviewed', 'code revision'), ('recorder version not reviewed', 'recorder version')):
             for ident in sorted(info['unreviewed'].get(why, ())):
                 lines.append(f"- {S}: cards excluded: {label} {ident[:8]} not reviewed — append a review entry to "
-                             f"scripts/weekly_report_review.json.")
+                             f"{REVIEW_SOURCE['path']}.")
         if sport not in bpr.RULE_MARKETS:
             lines.append(base + '; no pick is named for this sport (v4 section 8), named n=0.')
             continue
@@ -381,6 +384,8 @@ def build(data_dir: Path, ledger_path, now: datetime, reviewed_at, reviewed) -> 
             'Patterns from old games are candidates, not facts.',
             '- Counted cards need the recorder\'s independent review time: '
             + (f'{reviewed_at}.' if reviewed_at else 'not given, so no card counts yet.')]
+    if REVIEW_SOURCE['unavailable']:
+        head.append(f"- review config unavailable: {REVIEW_SOURCE['unavailable']} (missing or unreadable): no card counts until it is fixed.")
     if missing:
         head.append(f"- Scorecard file missing for: {', '.join(missing)} (section 4 has nothing for them).")
     if ledger is None:
@@ -405,8 +410,15 @@ def main(argv=None) -> str:
                     help='JSON {reviewed_at, reviewed_recorder_sha256: [...]} used when the two options above are not given')
     ap.add_argument('--now', help='report time (default: now, UTC)')
     a = ap.parse_args(argv)
-    cfg_at, cfg_sha = review_defaults(a.review_config)
+    REVIEW_SOURCE.update(path=a.review_config, unavailable=None)
     if a.reviewed_at is None and not a.reviewed_recorder:
+        try:
+            if not Path(a.review_config).is_file():
+                raise OSError('missing')
+            cfg_at, cfg_sha = review_defaults(a.review_config)
+        except (OSError, ValueError, KeyError, TypeError):
+            cfg_at, cfg_sha = None, {}               # fail closed: no card counts, and the page says why
+            REVIEW_SOURCE['unavailable'] = a.review_config
         a.reviewed_at, a.reviewed_recorder = cfg_at, cfg_sha
     data_dir = Path(a.data_dir) if a.data_dir else config.data_dir()
     if config.protected_data_dir(data_dir):
