@@ -140,6 +140,52 @@ def _ncaab_states(data_dir: Path, market: str, store, challengers: dict) -> dict
     return out
 
 
+SPEC_STORE = {"soccer": ("soccer_matches", "match_id"), "nfl": ("games", "game_id")}
+SPEC_MARKETS = {"soccer": {"1x2": ("soccer_1x2",), "double_chance": ("soccer_1x2",), "draw_no_bet": ("soccer_1x2",),
+                           "goals_ou": ("soccer_goals_total",), "team_goals": ("soccer_goals_home", "soccer_goals_away"),
+                           "btts": ("soccer_btts",)},
+                "nfl": {m: (m,) for m in ("winner", "spread", "total", "team_total_home", "team_total_away")}}
+SPEC_SKIPPED = {"soccer:corners": "corners are skipped: no corner challenger exists",
+                "soccer:corner_handicap": "corner handicap is skipped: no corner challenger exists",
+                "soccer:asian_handicap": "Asian handicap is research only and blocked on the owner's preregistration answers: no challenger",
+                "soccer:intl_1x2": "international is skipped: insufficient evidence"}
+
+
+def _spec_states(sport: str, data_dir: Path, market: str, store) -> dict:
+    """Soccer and NFL challenger states (soccer_challengers / nfl_challengers): implemented, never scheduled, never serving.
+    Challengers are fitted in memory at record time, so nothing trained is stored. Rows are counted in the challenger store;
+    settled ones need the sport store. Counts only, never a verdict."""
+    no = lambda why: _s("no", why)
+    stored = SPEC_MARKETS[sport].get(market)
+    base = {"trained": no("fitted per cutoff in memory at record time; no fit is stored"),
+            "scheduled": no("no job is installed for these challengers: they are run by hand (learning_run)"),
+            "forecasting_with_fits": no(f"served {sport} forecasts are sealed or frozen; challengers never serve")}
+    if not stored:
+        gone = no(SPEC_SKIPPED.get(f"{sport}:{market}", f"no {sport} challenger covers this market"))
+        return {**base, "recording_prospectively": gone, "evaluated": gone}
+    cc = learning_challengers_ro(data_dir)
+    if cc is None:
+        return {**base, "recording_prospectively": no("no challenger store in this data directory"), "evaluated": no("no challenger rows to settle")}
+    marks = ",".join("?" * len(stored))
+    try:
+        n = cc.execute(f"SELECT COUNT(*) FROM challenger_forecasts WHERE policy_id LIKE ? AND market IN ({marks})", (f"{sport}-%", *stored)).fetchone()[0]
+        ids = [r[0] for r in cc.execute(f"SELECT DISTINCT game_id FROM challenger_forecasts WHERE policy_id LIKE ? AND market IN ({marks})", (f"{sport}-%", *stored))]
+    except sqlite3.Error as exc:
+        u = _s("unknown", f"unknown: {exc}")
+        return {**base, "recording_prospectively": u, "evaluated": u}
+    finally:
+        cc.close()
+    base["recording_prospectively"] = _s("yes", f"{n} challenger rows recorded for this market (separate store, before kickoff)") if n else \
+        no("no challenger rows recorded for this market")
+    table, col = SPEC_STORE[sport]
+    settled = 0
+    if ids and store is not None and learning_ops.has_table(store, table):
+        settled = sum(store.execute(f"SELECT COUNT(*) FROM {table} WHERE status='final' AND {col}=?", (g,)).fetchone()[0] for g in ids)
+    base["evaluated"] = _s("yes", f"{settled} games with settled challenger rows (a count; no claim until the preregistered n)") if settled else \
+        no("no settled challenger row yet")
+    return base
+
+
 def learning_challengers_ro(data_dir: Path):
     from . import learning_challengers
     return learning_challengers.open_ro(Path(data_dir) / "research" / "challengers.sqlite")
@@ -166,8 +212,9 @@ def coverage(data_dir: Optional[Path] = None, folder: Optional[Path] = None) -> 
         trainer = learning_ops.trainer(sport, folder)
         conn, mode = learning_ops.open_ro(data_dir, sport) if learning else (None, "not read: no learning for this sport")
         ncaab_store = None
-        if sport == "ncaab":
+        if sport in ("ncaab", "nfl", "soccer"):
             ncaab_store, mode = learning_ops.open_ro(data_dir, sport)
+        if sport == "ncaab":
             ch = _ncaab_challengers()
         stores[sport] = mode
         defs = None
@@ -193,13 +240,15 @@ def coverage(data_dir: Optional[Path] = None, folder: Optional[Path] = None) -> 
                             states = {k: _s("unknown", f"unknown: {exc}") for k in ("trained", "scheduled", "recording_prospectively", "forecasting_with_fits", "evaluated")}
                 elif sport == "ncaab":
                     states = _ncaab_states(data_dir, market, ncaab_store, ch)
+                elif sport in SPEC_MARKETS:
+                    states = _spec_states(sport, data_dir, market, ncaab_store)
                 else:
                     no = _s("no", "learning is not implemented for this sport")
                     states = {"trained": no, "scheduled": no, "recording_prospectively": no, "forecasting_with_fits": no,
                               "evaluated": _s("no", "no fit exists, so no settled forecast carried one")}
                 ev = ref["base_evaluation"].get(key)
                 states["base_tested"] = _s(ev[0], f"base model only: {ev[1]}") if ev else _s("unknown", "base-model test not recorded here")
-                rows.append({"sport": sport, "market": market, "implemented": implemented, "learning_implemented": learning or sport == "ncaab", **states,
+                rows.append({"sport": sport, "market": market, "implemented": implemented, "learning_implemented": learning or sport in ("ncaab", "nfl", "soccer"), **states,
                              "improved_prospectively": _s("not_established", "no preregistered prospective evaluation exists"),
                              "blocked_reason": [*ref["sports"].get(sport, []), *ref["markets"].get(key, [])]})
         finally:

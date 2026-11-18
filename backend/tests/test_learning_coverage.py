@@ -90,7 +90,9 @@ def test_blocked_reasons_come_from_the_reference_file(env):
     assert any("deep" in x.lower() for x in row(m, "nba", "winner")["blocked_reason"])
     assert any("CF" in x or "challenger" in x.lower() for x in row(m, "nhl", "winner")["blocked_reason"])
     assert row(m, "ncaab", "winner")["learning_implemented"] is True and "not scheduled" in " ".join(row(m, "ncaab", "winner")["blocked_reason"])
-    assert row(m, "nfl", "winner")["learning_implemented"] is False and row(m, "nfl", "winner")["blocked_reason"]
+    for sport, market in (("nfl", "winner"), ("soccer", "1x2")):
+        r = row(m, sport, market)
+        assert r["learning_implemented"] is True and "not scheduled" in " ".join(r["blocked_reason"]) and "challenger" in " ".join(r["blocked_reason"]).lower()
     assert ref["sports"]
 
 
@@ -200,3 +202,28 @@ def test_ncaab_challengers_are_implemented_never_scheduled_never_serving_and_tra
     assert row(m, "ncaab", "spread")["trained"]["state"] == "yes" and row(m, "ncaab", "spread")["scheduled"]["state"] == "no"
     assert row(m, "ncaab", "spread")["forecasting_with_fits"]["state"] == "no"
     assert row(m, "nfl", "spread")["trained"]["state"] == "no"
+
+
+def test_soccer_and_nfl_challengers_are_counted_from_the_store_never_scheduled_never_serving(env):
+    data, agents = env
+    m = lc.coverage(data, agents)
+    for sport, market in (("soccer", "goals_ou"), ("soccer", "double_chance"), ("nfl", "spread")):
+        r = row(m, sport, market)
+        assert r["learning_implemented"] is True and r["scheduled"]["state"] == "no" and "no job" in r["scheduled"]["detail"]
+        assert r["recording_prospectively"]["state"] == "no" and r["forecasting_with_fits"]["state"] == "no" and r["evaluated"]["state"] == "no"
+    assert row(m, "soccer", "corners")["recording_prospectively"]["state"] == "no" and "skipped" in row(m, "soccer", "corners")["recording_prospectively"]["detail"]
+    assert row(m, "soccer", "asian_handicap")["recording_prospectively"]["state"] == "no" and "blocked" in row(m, "soccer", "asian_handicap")["recording_prospectively"]["detail"]
+    from app import learning_challengers as ch
+    cc = ch.open_store(data / "research" / "challengers.sqlite")
+    for pid, gid, mk, line in (("soccer-challengers-v1", "g1", "soccer_goals_total", 2.5), ("soccer-challengers-v1", "g1", "soccer_1x2", None),
+                               ("nfl-challengers-v1", "n1", "spread", -3.5)):
+        at = "2026-11-18T18:30:00Z" if pid.startswith("nfl") else "2026-11-18T06:00:00Z"
+        cc.execute("INSERT INTO challenger_forecasts (policy_id, policy_sha, spec_name, spec_json, spec_hash, definition, game_id, market, line, "
+                   "p_a, p_mid, p_b, cutoff_at, tipoff_at, generated_at, dataset_version, model_version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                   (pid, "s", "n", "{}", "h", "d", gid, mk, line, .5, 0, .5, at, "2026-11-18T20:00:00Z", at, "v", "m"))
+    cc.close()
+    m = lc.coverage(data, agents)
+    assert row(m, "soccer", "goals_ou")["recording_prospectively"]["state"] == "yes" and "1 challenger rows" in row(m, "soccer", "goals_ou")["recording_prospectively"]["detail"]
+    assert row(m, "soccer", "double_chance")["recording_prospectively"]["state"] == "yes"       # derived from the 1X2 rows
+    assert row(m, "nfl", "spread")["recording_prospectively"]["state"] == "yes" and row(m, "nfl", "winner")["recording_prospectively"]["state"] == "no"
+    assert row(m, "soccer", "goals_ou")["trained"]["state"] == "no"                              # fitted per cutoff in memory, nothing stored
