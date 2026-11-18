@@ -250,6 +250,7 @@ def test_a_conditional_basis_shows_the_compared_app_percentage_on_the_sportsbook
           'basis': 'conditional on no draw (derived from 1X2 prices)'}
     line = tg.sportsbook_detail_line(sb)
     assert 'app 88.2% vs no-vig 95.0% (both conditional on no draw)' in line and 'gap −6.8 pts' in line
+    assert line.endswith(' · derived from 1X2 prices')
     plain = tg.sportsbook_detail_line(SPORTSBOOK)
     assert 'app ' not in plain and 'no-vig 50.4%' in plain
 

@@ -349,7 +349,7 @@ def sportsbook_detail_line(sb):
     if sb.get('basis') and not basis:
         parts.append(str(sb['basis']))
     elif basis and basis.group(2):
-        parts.append(basis.group(2))
+        parts.append(basis.group(2)[1:-1])
     return 'Sportsbook quote: ' + escape(' · '.join(parts))
 
 
