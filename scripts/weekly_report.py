@@ -46,9 +46,10 @@ bp = _load('best_picks_report', 'best_picks.py')
 sr = _load('scorecard_report', 'scorecard_report.py')
 from app import best_pick_record as bpr  # noqa: E402
 from app import config  # noqa: E402
+from app import learning_challengers, learning_coverage, learning_eval  # noqa: E402
 
 MIN_N = sr.MIN_N
-SPORTS = ('nba', 'nhl', 'nfl', 'soccer')
+SPORTS = ('nba', 'nhl', 'ncaab', 'nfl', 'soccer')
 FMT = '%Y-%m-%dT%H:%M:%SZ'
 MAX_REPEAT_LINES = 5            # per sport and market in section 4; newest lost cards in section 3
 # The recorder's independent review (time written in HANDOFF.md, reviewed recorder sha256): kept in one small file next to
@@ -344,6 +345,77 @@ def section_repeats(data_dir: Path, states: dict, now: datetime) -> list:
     return lines + ['']
 
 
+# ---- learning (read-only: learning_coverage, the challenger store, the adaptive fit tables) -----------------------------------
+def _challenger_counts(data_dir: Path, stores: dict) -> list:
+    path = Path(data_dir) / 'research' / 'challengers.sqlite'
+    cc = learning_challengers.open_ro(path)
+    if cc is None:
+        return ['- Challenger store: no challenger store in this data folder, rows recorded n=0 for every sport.']
+    lines = []
+    try:
+        for sport in learning_challengers.SPORTS:
+            pols = list(cc.execute("SELECT policy_id, COUNT(*) AS n, COUNT(DISTINCT game_id) AS g, COUNT(DISTINCT spec_name) AS s "
+                                   "FROM challenger_forecasts WHERE policy_id LIKE ? GROUP BY policy_id ORDER BY policy_id", (f'{sport}-%',)))
+            scored, claims = {}, set()
+            store = stores.get(sport)
+            if pols and store is not None:
+                try:
+                    out = learning_eval.evaluate(store, cc)
+                    for g in out['groups']:
+                        scored[g['policy_id']] = scored.get(g['policy_id'], 0) + g['n_scored']
+                        claims.add('no claim' if g['claim'].startswith('no claim') else 'sample size reached: preregistered rule applies')
+                except sqlite3.Error as exc:
+                    claims.add(f'scoring unavailable ({type(exc).__name__})')
+            for r in pols:
+                lines.append(f"- {r['policy_id']}: rows recorded n={r['n']}; games n={r['g']}; specs n={r['s']}; settled and scored "
+                             f"n={scored.get(r['policy_id'], 0)} (paired with the served forecast); "
+                             f"{'; '.join(sorted(claims)) or 'no claim: scoring needs the sport store'} until a preregistered sample size is reached.")
+            if not pols:
+                lines.append(f"- {sport.upper()}: rows recorded n=0 (no {sport} challenger policy has recorded yet).")
+    except sqlite3.Error as exc:
+        lines.append(f'- Challenger store not readable ({type(exc).__name__}).')
+    finally:
+        cc.close()
+    return lines
+
+
+def _adaptive_fits(stores: dict) -> list:
+    lines = []
+    for sport in ('nba', 'nhl'):
+        S, store = sport.upper(), stores.get(sport)
+        if store is None:
+            lines.append(f'- {S} adaptive fits: store not readable (n=unknown).')
+            continue
+        try:
+            rows = list(store.execute("SELECT status, COUNT(*), MAX(finished_at) FROM adaptive_fits WHERE kind='combiner' GROUP BY status ORDER BY status"))
+        except sqlite3.Error as exc:
+            lines.append(f'- {S} adaptive fits: not readable ({type(exc).__name__}) (n=unknown).')
+            continue
+        lines.append(f"- {S} adaptive fits (combiner): " + ('; '.join(f'{r[0]} n={r[1]} (latest {r[2] or "none"})' for r in rows) or 'none recorded n=0') + '.')
+    return lines
+
+
+def section_learning(data_dir: Path, stores: dict) -> list:
+    lines = ['## 5. Learning', '',
+             'Read-only counts of what is implemented, recorded and settled. Challengers are recorded before the game and scored '
+             'against the served forecast at read time; registration is not promotion and nothing here claims improvement. No '
+             'profit claim follows from anything here, and no difference between a challenger and the served forecast is shown: '
+             'no claim until a preregistered sample size is reached.', '']
+    try:
+        cov = learning_coverage.coverage(data_dir)
+    except Exception as exc:
+        lines.append(f'- learning coverage unavailable: {type(exc).__name__}: {str(exc)[:120]} (n=unknown).')
+    else:
+        for sport in SPORTS:
+            rows = [r for r in cov['rows'] if r['sport'] == sport]
+            parts = [f"{label} n={sum(r[key]['state'] == 'yes' for r in rows)} of n={len(rows)}"
+                     for key, label in (('trained', 'trained'), ('scheduled', 'scheduled'), ('recording_prospectively', 'recording rows'),
+                                        ('forecasting_with_fits', 'forecasting with fits'), ('evaluated', 'with settled forecasts'))]
+            lines.append(f"- {sport.upper()}: markets with " + ', '.join(parts) + f"; learning implemented: {'yes' if rows and rows[0]['learning_implemented'] else 'no'}.")
+    lines += _adaptive_fits(stores) + _challenger_counts(data_dir, stores)
+    return lines + ['']
+
+
 def _model(version) -> str:
     """Short model label: family plus a 6-character tag of the full version (different versions stay apart)."""
     if not version:
@@ -366,10 +438,10 @@ def build(data_dir: Path, ledger_path, now: datetime, reviewed_at, reviewed) -> 
     except sqlite3.Error:
         ledger = None
     stores = {}
-    for sport in ('nba', 'nhl', 'nfl'):
+    for sport in ('nba', 'nhl', 'ncaab', 'nfl', 'soccer'):
         p = Path(data_dir) / f'{sport}.sqlite'
         stores[sport] = _ro(p) if p.is_file() else None
-    states = {s: test_state(ledger, stores.get(s), s, now, reviewed_at, reviewed) for s in ('nba', 'nhl', 'nfl')}
+    states = {s: test_state(ledger, stores.get(s), s, now, reviewed_at, reviewed) for s in ('nba', 'nhl', 'ncaab', 'nfl')}
     states['soccer'] = {'open': True, 'error': None, 'info': None, 'held': set()}
     closed = [s.upper() for s in ('nba', 'nhl') if not states[s]['open']]
     missing = [s.upper() for s in SPORTS if not sr_path(data_dir, s).is_file()]
@@ -398,7 +470,7 @@ def build(data_dir: Path, ledger_path, now: datetime, reviewed_at, reviewed) -> 
         head.append('- Telegram ledger not readable: test counts unknown; section 4 holds back every NBA/NHL pick of a '
                     'game after T0.')
     body = (section_best(states) + section_hypotheses(states, stores, now) + section_lost(states, stores, now)
-            + section_repeats(data_dir, states, now))
+            + section_repeats(data_dir, states, now) + section_learning(data_dir, stores))
     for c in [ledger, *stores.values()]:
         if c is not None:
             c.close()

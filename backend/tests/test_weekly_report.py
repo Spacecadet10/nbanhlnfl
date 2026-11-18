@@ -385,3 +385,56 @@ def test_a_review_config_that_is_not_an_object_fails_closed_with_a_visible_line(
     text = Path(m.main(['--data-dir', str(data), '--ledger', str(tmp_path / 'ledger.sqlite'), '--out-dir', str(tmp_path / 'o'),
                         '--review-config', str(cfg), '--now', '2026-12-31T00:00:00Z'])).read_text()
     assert 'counted n=0' in section(text, 1) and 'invalid review config: top level is not an object' in text
+
+
+# ---- NCAAB and the Learning section -------------------------------------------------------------------------------------
+def seed_challengers(data, rows):
+    from app import learning_challengers as lch
+    cc = lch.open_store(data / 'research' / 'challengers.sqlite')
+    for pid, gid, mk, line in rows:
+        at = '2026-12-30T21:30:00Z' if pid.startswith(('ncaab', 'nfl')) else '2026-12-30T06:00:00Z'
+        cc.execute("INSERT INTO challenger_forecasts (policy_id, policy_sha, spec_name, spec_json, spec_hash, definition, game_id, market, line, "
+                   "p_a, p_mid, p_b, cutoff_at, tipoff_at, generated_at, dataset_version, model_version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                   (pid, 's' + pid, 'spec_a', '{}', 'h', 'd', gid, mk, line, .5, 0, .5, at, '2026-12-30T23:00:00Z', at, 'v', 'm'))
+    cc.close()
+
+
+def test_ncaab_has_the_same_sections_as_nfl_counts_only(tmp_path, monkeypatch):
+    m = wr()
+    text = page(m, tmp_path, setup(tmp_path, 3, monkeypatch, m)[0])
+    s1, s4 = section(text, 1), section(text, 4)
+    assert re.search(r'- NCAAB: game cards sent since T0 n=\d+; recorded n=\d+; counted n=\d+; no pick is named for this sport', s1), s1
+    assert 'NCAAB' in s4 and 'NCAAB' in text.split('Scorecard file missing for:')[1].split('\n')[0]
+
+
+def test_learning_section_reports_counts_per_policy_without_a_claim(tmp_path, monkeypatch):
+    m = wr()
+    data = setup(tmp_path, 3, monkeypatch, m)[0]
+    seed_challengers(data, [('ncaab-challengers-v1', 'g1', 'winner', None), ('ncaab-challengers-v1', 'g2', 'winner', None),
+                            ('nfl-challengers-v1', 'n1', 'spread', -3.5), ('soccer-challengers-v1', 'm1', 'soccer_btts', None)])
+    text = page(m, tmp_path, data)
+    s5 = section(text, 5)
+    assert 'Learning' in text.split('## 5.')[1].split('\n')[0]
+    assert re.search(r'ncaab-challengers-v1: rows recorded n=2; games n=2', s5), s5
+    assert re.search(r'nfl-challengers-v1: rows recorded n=1; games n=1', s5) and re.search(r'soccer-challengers-v1: rows recorded n=1', s5)
+    assert 'settled and scored n=0' in s5 or 'no settled' in s5
+    assert 'no claim' in s5.lower()
+    for sport in ('NBA', 'NHL', 'NCAAB', 'NFL', 'SOCCER'):
+        assert re.search(rf'- {sport}: markets with .*n=\d+ of n=\d+', s5), (sport, s5)
+    assert 'adaptive fits' in s5.lower()
+    assert not re.search(r'log loss|brier|profit|better than', s5, re.I) or 'no profit' in s5.lower()
+    assert not re.search(r'improv\w+ (?!is |was |claim)', s5.replace('improved_prospectively', '')), s5
+
+
+def test_learning_section_without_a_challenger_store_says_none_recorded(tmp_path, monkeypatch):
+    m = wr()
+    s5 = section(page(m, tmp_path, setup(tmp_path, 3, monkeypatch, m)[0]), 5)
+    assert 'no challenger store' in s5 or 'rows recorded n=0' in s5
+
+
+def test_learning_section_failure_never_breaks_the_report(tmp_path, monkeypatch):
+    m = wr()
+    monkeypatch.setattr(m.learning_coverage, 'coverage', lambda *a, **k: (_ for _ in ()).throw(RuntimeError('boom')))
+    text = page(m, tmp_path, setup(tmp_path, 3, monkeypatch, m)[0])
+    assert 'learning coverage unavailable: RuntimeError' in section(text, 5)
+    assert 'Best picks named on paper' in text
