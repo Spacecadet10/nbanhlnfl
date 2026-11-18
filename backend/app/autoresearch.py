@@ -1351,7 +1351,7 @@ def main(argv=None) -> int:
         s.add_argument("--description", default="")
         s.add_argument("--retry", action="store_true")
         s.add_argument("--timeout", type=int, default=BUDGETS["trial_timeout_s"])
-        s.add_argument("--max-trials", type=int, default=BUDGETS["max_trials"])
+        s.add_argument("--max-trials", type=int, default=None)       # daily falls back to BUDGETS; agent must name it
         s.add_argument("--max-minutes", type=float, default=BUDGETS["max_minutes"])
         s.add_argument("--reuse-reason")
         s.add_argument("--max-usd", type=float)
@@ -1360,6 +1360,10 @@ def main(argv=None) -> int:
         s.add_argument("--clear", action="store_true")
     a = p.parse_args(argv)
     chosen = a.sport or ["nba", "nhl"]
+    if a.cmd == "agent" and not (a.max_trials and a.max_trials > 0 and a.max_usd and a.max_usd > 0):
+        print("REFUSED: an agent run needs an explicit --max-trials > 0 and --max-usd > 0 (no defaults)", file=sys.stderr)
+        return 2
+    a.max_trials = a.max_trials if a.max_trials is not None else BUDGETS["max_trials"]
     try:
         if a.cmd == "prepare":
             for s in chosen:
@@ -1378,7 +1382,7 @@ def main(argv=None) -> int:
             from . import research_agent as ra
             r = ra.run_agent(chosen, a.exp_root, a.workspace, max_trials=min(a.max_trials, ra.AGENT["max_trials"]),
                              max_minutes=min(a.max_minutes, ra.AGENT["max_minutes"]),
-                             max_usd=min(a.max_usd or ra.AGENT["max_usd"], ra.AGENT["max_usd"]), model=a.model)
+                             max_usd=min(a.max_usd, ra.AGENT["max_usd"]), model=a.model)
             print(json.dumps({k: r.get(k) for k in ("run_id", "branch", "stopped", "outcome", "trials", "commits", "cost_usd",
                                                     "minutes", "sweep")}, indent=1, default=str))
         elif a.cmd == "stop":                     # the kill switch must work without a data directory

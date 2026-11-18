@@ -753,3 +753,12 @@ def test_m1_sigint_stops_the_run_like_sigterm_kills_the_agent_and_cleans_active_
     assert subprocess.run(["ps", "-p", str(seen["pid"]), "-o", "pid="], capture_output=True, text=True).stdout.strip() == ""
     assert ra.active(agent["exp"]) is None
     assert signal.getsignal(signal.SIGINT) is before
+
+
+@pytest.mark.parametrize("extra", [[], ["--max-trials", "2"], ["--max-usd", "1"], ["--max-trials", "2", "--max-usd", "0"],
+                                   ["--max-trials", "0", "--max-usd", "1"], ["--max-trials", "2", "--max-usd", "-3"]])
+def test_the_agent_command_needs_an_explicit_positive_trial_and_dollar_budget(agent, monkeypatch, capsys, extra):
+    launched = []
+    monkeypatch.setattr(ra, "run_agent", lambda *a, **k: launched.append(1) or {})
+    rc = ar.main(["agent", "--exp-root", str(agent["exp"]), "--workspace", str(agent["ws"]), "--sport", "nba", *extra])
+    assert rc == 2 and launched == [] and "REFUSED" in capsys.readouterr().err
