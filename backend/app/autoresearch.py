@@ -684,11 +684,13 @@ def _profile(tmp: Path) -> str:
              # launchd, Launch Services or another app: submitted jobs and opened files would run outside the sandbox.
              "(deny process-exec*)", "(allow process-exec " + " ".join(f"(literal {json.dumps(p)})" for p in sorted(py)) + ")",
              "(deny job-creation)", "(deny lsopen)", "(deny appleevent-send)",
-             "(deny ipc-posix-shm*)", "(deny ipc-sysv*)",             # no shared memory to pass data between trials (POSIX semaphores stay: loky)
+             "(deny ipc-posix-shm*)", "(deny ipc-sysv*)",             # no shared memory to pass data between trials
+             # POSIX semaphores only under the names loky ('/loky-<pid>-<rand>'), joblib's start-up probe ('/joblib-<pid>-<rand>') and multiprocessing ('/mp-<rand>') create
+             '(deny ipc-posix-sem*)', '(allow ipc-posix-sem* (ipc-posix-name-regex #"^/((loky|joblib)-[0-9]+|mp)-[A-Za-z0-9_]+$"))',
              '(deny mach-lookup (global-name "com.apple.pasteboard.1") (global-name "com.apple.pbs.fetch_services"))',
              "(deny signal)", "(allow signal (target same-sandbox))",      # no signal to the parent or any other process
              "(deny file-write* (subpath \"/\"))",
-             f"(allow file-write* (subpath {q(tmp)}) (literal \"/dev/null\") (regex #\"^/private/tmp/__KMP_REGISTERED_LIB_\"))",
+             f"(allow file-write* (subpath {q(tmp)}) (literal \"/dev/null\") (regex #\"^/private/tmp/__KMP_REGISTERED_LIB_[0-9]+$\"))",
              "(deny file-read* " + " ".join(f"(subpath {q(p)})" for p in READ_DENIED) + ")",
              "(allow file-read-metadata)",                       # stat only; contents stay denied
              "(allow file-read* " + " ".join(f"(subpath {q(p)})" for p in allowed) + f" (literal {q(APP_DIR.parent)}))"]

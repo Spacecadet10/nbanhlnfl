@@ -842,3 +842,41 @@ def test_the_memory_guard_thread_is_joined_before_the_result_is_read(env):
     import threading
     ar.run_trial("nba", env["exp"], env["ws"])
     assert not [t for t in threading.enumerate() if t.name == "ar-memory-guard"]
+
+
+def test_the_candidate_can_only_create_loky_and_multiprocessing_semaphore_names(tmp_path):
+    """A named semaphore outlives its creator: an arbitrary name would let one trial hand data to the next (count, existence)."""
+    make = ("import _multiprocessing\n"
+            "try:\n    _multiprocessing.SemLock(1, 777, 32767, '/lkX%d', False)\n    print('CREATED')\n"
+            "except OSError as e:\n    print('DENIED', e.errno)\n")
+    for d in "ab":
+        (tmp_path / d).mkdir()
+    name = f"/lkX{os.getpid()}"
+    try:
+        first, _ = _sandboxed(tmp_path / "a", make.replace("/lkX%d", name))
+        assert "CREATED" not in first.stdout and "DENIED" in first.stdout, first.stdout + first.stderr
+        ok, _ = _sandboxed(tmp_path / "b", "import multiprocessing as m\nl = m.Lock()\nl.acquire()\nprint('MPLOCK')\n")
+        assert "MPLOCK" in ok.stdout, ok.stdout + ok.stderr
+        (tmp_path / "c").mkdir()
+        jl, _ = _sandboxed(tmp_path / "c", "import warnings\nwarnings.simplefilter('error')\nimport joblib\nfrom joblib import Parallel, delayed\n"
+                                          "print('JOBLIB', Parallel(n_jobs=2, backend='loky')(delayed(abs)(-i) for i in range(3)))\n")
+        assert "JOBLIB [0, 1, 2]" in jl.stdout, jl.stdout + jl.stderr          # joblib did not fall back to serial mode
+    finally:
+        import _multiprocessing
+        try:
+            _multiprocessing.sem_unlink(name)
+        except OSError:
+            pass
+
+
+def test_the_candidate_can_only_write_numeric_kmp_registration_files(tmp_path):
+    """libomp writes /private/tmp/__KMP_REGISTERED_LIB_<pid>; any other suffix would be a file one trial leaves for the next."""
+    bad = Path(f"/private/tmp/__KMP_REGISTERED_LIB_abc{os.getpid()}")
+    code = ("try:\n    f = open(%r, 'w')\n    f.truncate(123456789)\n    print('CREATED')\n"
+            "except OSError as e:\n    print('DENIED', e.errno)\n") % str(bad)
+    try:
+        res, _ = _sandboxed(tmp_path, code)
+        assert "CREATED" not in res.stdout and "DENIED" in res.stdout, res.stdout + res.stderr
+        assert not bad.exists()
+    finally:
+        bad.unlink(missing_ok=True)
