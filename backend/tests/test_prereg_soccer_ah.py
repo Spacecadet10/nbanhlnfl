@@ -351,7 +351,10 @@ def test_before_the_look_only_forecasts_pairs_and_the_stop_count_are_reported(tm
     banned = {"push", "void", "unknown_ending", "pending", "past7", "close_line_moved", "close_no_pair"}
     assert not banned & set(rep["counts"])
     assert rep["counts"]["forecasts"] == 9 and rep["counts"]["paired"] == {"half": 6, "whole": 1, "quarter": 1}
-    assert rep["counts"]["decided_paired"] is None and rep["counts"]["no_quote"] == 1     # outcomes are not read until the stop is reachable
+    assert rep["counts"]["decided_paired"] == 3 and rep["counts"]["no_quote"] == 1
+    assert set(rep["counts"]) == set(ps.PRE_LOOK_COUNTS) == {"forecasts", "no_goals_forecast", "not_pinned_candidate", "knockout_excluded", "not_regular_season",
+                                                             "forecast_before_t0", "after_stop_date", "no_quote", "unpaired", "paired", "decided_paired"}
+    assert rep["look"] == {"status": "no look yet (n of 800)", "n_decided_paired": 3, "n_required": 800}
 
 
 def test_matches_without_any_goals_forecast_are_counted(tmp_path):
@@ -415,16 +418,14 @@ def test_deadline_passes_on_the_eastern_date():
     assert ps.look(us, datetime(2027, 6, 1, 4, 30, tzinfo=timezone.utc), B=50)["status"] == "look"                  # 00:30 Eastern on 06-01
 
 
-def test_pre_look_mode_reads_no_result_and_no_close(tmp_path, monkeypatch):
+def test_pre_look_mode_reads_results_only_for_the_count_and_no_close(tmp_path, monkeypatch):
     data = tmp_path / "copy"
     build_world(data).close()
     seen = []
     orig = ps.pair_at
     monkeypatch.setattr(ps, "pair_at", lambda conn, mid, at, kickoff, *a, **k: seen.append((at, kickoff)) or orig(conn, mid, at, kickoff, *a, **k))
-    monkeypatch.setattr(ps, "_state", lambda *a, **k: pytest.fail("results must not be read before the look"))
-    monkeypatch.setattr(ps.sm, "grade_handicap", lambda *a, **k: pytest.fail("results must not be graded before the look"))
     rep = ps.run(data, tmp_path / "report", now=NOW, looks_dir=tmp_path / "looks")
     assert rep["look"]["status"].startswith("no look yet") and rep["counts"]["forecasts"] == 9
     assert seen and all(at < kickoff and at[:10] == kickoff[:10] or at < kickoff for at, kickoff in seen)
     assert all(at != ps._ts(ps._parse(k) - ps.timedelta(seconds=1)) for at, k in seen)      # never the closing query
-    assert "decided_paired" not in rep["counts"] or rep["counts"]["decided_paired"] is None
+    assert rep["counts"]["decided_paired"] == 3

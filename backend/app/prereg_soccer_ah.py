@@ -142,8 +142,8 @@ def _state(m, now: datetime) -> str:
     return "past7" if now >= _parse(m["kickoff_at"]) + PAST else "pending"
 
 
-def collect(conn: sqlite3.Connection, *, now: datetime, outcomes: bool = True) -> Collected:
-    """With `outcomes=False` (before the look) no result and no close is read: forecasts, pairs at t_d and line types only."""
+def collect(conn: sqlite3.Connection, *, now: datetime, closes: bool = True) -> Collected:
+    """With `closes=False` (before the look) no close is read; results are read only to count decided paired matches."""
     out, n = Collected(), None
     n = out.counts
     season = conn.execute("SELECT MAX(season) FROM soccer_matches").fetchone()[0]
@@ -175,8 +175,6 @@ def collect(conn: sqlite3.Connection, *, now: datetime, outcomes: bool = True) -
             continue
         L = td["line_home"]
         n["paired"][line_type(L)] += 1
-        if not outcomes:
-            continue
         joint = json.loads(f["joint_json"])
         p_home = app_share(handicap_probs(joint, L))
         q_home = odds.devig_two_way(td["american_home"], td["american_away"])[0]
@@ -197,6 +195,9 @@ def collect(conn: sqlite3.Connection, *, now: datetime, outcomes: bool = True) -
                 u["w"], u["y"], state = w, y, "decided"
         n[{"decided": "decided_paired"}.get(state, state)] += 1
         u["state"] = state
+        if not closes:
+            out.units.append(u)
+            continue
         cl = pair_at(conn, m["match_id"], _ts(_parse(m["kickoff_at"]) - timedelta(seconds=1)), m["kickoff_at"])
         if cl["status"] != "paired":
             n["close_no_pair"] += 1
@@ -352,19 +353,13 @@ def run(data_dir, out, *, now: Optional[datetime] = None, looks_dir=None) -> dic
     conn = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     try:
-        col = collect(conn, now=now, outcomes=False)
-        reachable = sum(col.counts["paired"].values()) >= STOP_N or now.astimezone(ZoneInfo("America/New_York")).date().isoformat() > STOP_DATE
+        col = collect(conn, now=now, closes=False)
+        reachable = col.counts["decided_paired"] >= STOP_N or now.astimezone(ZoneInfo("America/New_York")).date().isoformat() > STOP_DATE
         if reachable:
             col = collect(conn, now=now)
     finally:
         conn.close()
-    if not reachable:                      # fewer than 800 paired matches: the stop cannot be reached, so no outcome needs reading
-        counts = {k: col.counts[k] for k in PRE_LOOK_COUNTS if k != "decided_paired"}
-        report = {"prereg_sha256": PREREG_SHA256, "candidate_sha256": CANDIDATE_SHA256, "evaluated_at": _ts(now),
-                  "counts": {**counts, "decided_paired": None},
-                  "look": {"status": f"no look yet (n of {STOP_N})", "n_decided_paired": None, "n_required": STOP_N}}
-        pc.write_report(outdir, "soccer-ah-report.json", report)
-        return report
+
     def compute() -> dict:
         r = look(col.units, now)
         return {**r, "counts_at_look": col.counts} if r["status"] == "look" else r
