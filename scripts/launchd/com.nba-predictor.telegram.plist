@@ -12,11 +12,11 @@
   <key>WorkingDirectory</key><string>/Users/andry/nba-predictor-delivery/backend</string>
   <key>EnvironmentVariables</key>
   <dict>
-    <key>NBA_DATA_DIR</key><string>/Users/andry/Desktop/nba-predictor-sprint1/data</string>
+    <key>NBA_DATA_DIR</key><string>/Users/andry/Desktop/nbanhlnfl/data</string>
     <key>NBA_RELEASE_GUARD</key><string>1</string>
     <key>NBA_RELEASE_ROOT</key><string>/Users/andry/nba-predictor-delivery</string>
-    <key>NBA_TELEGRAM_LEDGER</key><string>/Users/andry/Desktop/nba-predictor-sprint1/.telegram-delivery.sqlite</string>
-    <key>NBA_TELEGRAM_CREDENTIALS</key><string>/Users/andry/Desktop/nba-predictor-sprint1/.env.telegram</string>
+    <key>NBA_TELEGRAM_LEDGER</key><string>/Users/andry/Desktop/nbanhlnfl/.telegram-delivery.sqlite</string>
+    <key>NBA_TELEGRAM_CREDENTIALS</key><string>/Users/andry/Desktop/nbanhlnfl/.env.telegram</string>
     <key>PYTHONDONTWRITEBYTECODE</key><string>1</string>
     <key>PYTHONUNBUFFERED</key><string>1</string>
     <key>OMP_NUM_THREADS</key><string>1</string>
@@ -24,7 +24,7 @@
   <key>RunAtLoad</key><true/>
   <key>StartInterval</key><integer>60</integer>
   <key>ProcessType</key><string>Background</string>
-  <key>StandardOutPath</key><string>/Users/andry/Desktop/nba-predictor-sprint1/.telegram-delivery.log</string>
-  <key>StandardErrorPath</key><string>/Users/andry/Desktop/nba-predictor-sprint1/.telegram-delivery-error.log</string>
+  <key>StandardOutPath</key><string>/Users/andry/Desktop/nbanhlnfl/.telegram-delivery.log</string>
+  <key>StandardErrorPath</key><string>/Users/andry/Desktop/nbanhlnfl/.telegram-delivery-error.log</string>
 </dict>
 </plist>

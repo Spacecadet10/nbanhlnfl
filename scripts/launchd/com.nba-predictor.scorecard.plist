@@ -5,7 +5,7 @@
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>NBA_DATA_DIR</key>
-		<string>/Users/andry/Desktop/nba-predictor-sprint1/data</string>
+		<string>/Users/andry/Desktop/nbanhlnfl/data</string>
 		<key>NBA_RELEASE_GUARD</key>
 		<string>1</string>
 		<key>NBA_RELEASE_ROOT</key>
@@ -17,12 +17,12 @@
 	</dict>
 	<key>Label</key>
 	<string>com.nba-predictor.scorecard</string>
-	<key>ProcessType</key>
-	<string>Background</string>
 	<key>LowPriorityIO</key>
 	<true/>
 	<key>Nice</key>
 	<integer>10</integer>
+	<key>ProcessType</key>
+	<string>Background</string>
 	<key>ProgramArguments</key>
 	<array>
 		<string>/Users/andry/nba-predictor-delivery/backend/.venv/bin/python</string>
@@ -34,9 +34,9 @@
 	<key>RunAtLoad</key>
 	<false/>
 	<key>StandardErrorPath</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/scorecard.log</string>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/scorecard.log</string>
 	<key>StandardOutPath</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/scorecard.log</string>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/scorecard.log</string>
 	<key>StartInterval</key>
 	<integer>120</integer>
 	<key>WorkingDirectory</key>

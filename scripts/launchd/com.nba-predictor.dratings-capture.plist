@@ -6,7 +6,7 @@
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>NBA_DATA_DIR</key>
-		<string>/Users/andry/Desktop/nba-predictor-sprint1/data</string>
+		<string>/Users/andry/Desktop/nbanhlnfl/data</string>
 		<key>NBA_RELEASE_GUARD</key>
 		<string>1</string>
 		<key>NBA_RELEASE_ROOT</key>
@@ -28,9 +28,9 @@
 	<key>RunAtLoad</key>
 	<false/>
 	<key>StandardErrorPath</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/dratings-capture.log</string>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/dratings-capture.log</string>
 	<key>StandardOutPath</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/dratings-capture.log</string>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/dratings-capture.log</string>
 	<key>StartInterval</key>
 	<integer>120</integer>
 	<key>WorkingDirectory</key>

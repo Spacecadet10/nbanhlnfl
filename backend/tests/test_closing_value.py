@@ -88,7 +88,7 @@ def test_daily_schedule_runs_the_release_copy_against_the_live_root():
     import plistlib
     plist = plistlib.loads((ROOT / 'scripts/launchd/com.nba-predictor.closing-value.plist').read_bytes())
     assert plist['ProgramArguments'][1:] == ['/Users/andry/nba-predictor-delivery/scripts/closing_value.py', '--root',
-                                             '/Users/andry/Desktop/nba-predictor-sprint1']
+                                             '/Users/andry/Desktop/nbanhlnfl']
     assert plist['RunAtLoad'] is False and len(plist['StartCalendarInterval']) == 1
 
 

@@ -4,7 +4,7 @@
 # pins the sealed model was evaluated on, backfills the ESPN 2026-27 season, then runs one live cycle.
 set -eu
 LIVE=/Users/andry/nba-predictor-delivery
-MAIN=/Users/andry/Desktop/nba-predictor-sprint1
+MAIN=/Users/andry/Desktop/nbanhlnfl
 test ! -e "$MAIN/data/soccer.sqlite" || { echo "refused: $MAIN/data/soccer.sqlite already exists"; exit 1; }
 cd "$LIVE/backend"
 py() { env NBA_RELEASE_GUARD=1 NBA_RELEASE_ROOT="$LIVE" NBA_DATA_DIR="$MAIN/data" PYTHONDONTWRITEBYTECODE=1 \

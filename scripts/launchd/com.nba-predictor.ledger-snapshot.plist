@@ -18,7 +18,7 @@
 		<string>/Users/andry/nba-predictor-delivery/backend/.venv/bin/python</string>
 		<string>/Users/andry/nba-predictor-delivery/scripts/backup_ledger.py</string>
 		<string>--ledger</string>
-		<string>/Users/andry/Desktop/nba-predictor-sprint1/.telegram-delivery.sqlite</string>
+		<string>/Users/andry/Desktop/nbanhlnfl/.telegram-delivery.sqlite</string>
 		<string>--dest</string>
 		<string>/Users/andry/nba-predictor-backups/telegram-delivery</string>
 	</array>

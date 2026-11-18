@@ -5,11 +5,11 @@
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>NBA_DATA_DIR</key>
-		<string>/Users/andry/Desktop/nba-predictor-sprint1/data</string>
+		<string>/Users/andry/Desktop/nbanhlnfl/data</string>
 		<key>NBA_RELEASE_GUARD</key>
 		<string>1</string>
 		<key>NBA_RELEASE_ROOT</key>
-		<string>/Users/andry/.codex/worktrees/nfl-live-release/nba-predictor-sprint1</string>
+		<string>/Users/andry/nba-predictor-delivery</string>
 		<key>OMP_NUM_THREADS</key>
 		<string>1</string>
 		<key>PYTHONDONTWRITEBYTECODE</key>
@@ -23,7 +23,7 @@
 	<string>Background</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/Users/andry/Desktop/nba-predictor-sprint1/backend/.venv/bin/python</string>
+		<string>/Users/andry/nba-predictor-delivery/backend/.venv/bin/python</string>
 		<string>-m</string>
 		<string>app.cli</string>
 		<string>nfl</string>
@@ -32,12 +32,12 @@
 	<key>RunAtLoad</key>
 	<true/>
 	<key>StandardErrorPath</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/.nfl-live-error.log</string>
+	<string>/Users/andry/Desktop/nbanhlnfl/.nfl-live-error.log</string>
 	<key>StandardOutPath</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/.nfl-live.log</string>
+	<string>/Users/andry/Desktop/nbanhlnfl/.nfl-live.log</string>
 	<key>StartInterval</key>
 	<integer>60</integer>
 	<key>WorkingDirectory</key>
-	<string>/Users/andry/.codex/worktrees/nfl-live-release/nba-predictor-sprint1/backend</string>
+	<string>/Users/andry/nba-predictor-delivery/backend</string>
 </dict>
 </plist>

@@ -8,7 +8,7 @@
 # Every step refuses from a dirty or development checkout (NBA_RELEASE_GUARD; app/release.py).
 set -u
 LIVE=/Users/andry/nba-predictor-delivery
-MAIN=/Users/andry/Desktop/nba-predictor-sprint1
+MAIN=/Users/andry/Desktop/nbanhlnfl
 cd "$LIVE/backend" || exit 1
 py() { env NBA_RELEASE_GUARD=1 NBA_RELEASE_ROOT="$LIVE" NBA_DATA_DIR="$MAIN/data" PYTHONDONTWRITEBYTECODE=1 \
   OMP_NUM_THREADS=1 "$LIVE/backend/.venv/bin/python" -m app.cli soccer "$@"; }
