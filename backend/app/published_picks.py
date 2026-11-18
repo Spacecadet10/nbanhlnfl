@@ -42,7 +42,28 @@ CREATE TRIGGER IF NOT EXISTS published_picks_no_update BEFORE UPDATE ON publishe
 BEGIN SELECT RAISE(ABORT, 'published_picks is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS published_picks_no_delete BEFORE DELETE ON published_picks
 BEGIN SELECT RAISE(ABORT, 'published_picks is append-only'); END;
+CREATE TABLE IF NOT EXISTS pick_withdrawals (
+  withdrawal_id INTEGER PRIMARY KEY,
+  withdrawal_key TEXT NOT NULL UNIQUE,
+  original_delivery_key TEXT NOT NULL,
+  sport TEXT NOT NULL,
+  game_id TEXT,
+  market TEXT,
+  original_forecast_id TEXT,
+  new_forecast_id TEXT,
+  reason TEXT,
+  created_at TEXT NOT NULL,
+  status TEXT NOT NULL,
+  message_id INTEGER
+);
+CREATE TRIGGER IF NOT EXISTS pick_withdrawals_no_update BEFORE UPDATE ON pick_withdrawals
+BEGIN SELECT RAISE(ABORT, 'pick_withdrawals is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS pick_withdrawals_no_delete BEFORE DELETE ON pick_withdrawals
+BEGIN SELECT RAISE(ABORT, 'pick_withdrawals is append-only'); END;
 '''
+
+# Owner ruling Nov 17: a message-id gap is not proof a card was delivered; those rows are kept but never shown as published.
+UNCONFIRMED_BASIS = 'uncertain_resolved_message_id_gap'
 
 COLUMNS = ('delivery_key', 'sport', 'game_id', 'market', 'forecast_id', 'side', 'line', 'probability', 'model_version',
            'generated_at', 'sent_at', 'message_id', 'basis')
@@ -152,6 +173,15 @@ def record(conn, sport: str, key: str, game_id: str, report: dict, now: datetime
         return 0
 
 
+def record_withdrawal(conn, key, original_key, sport, game_id, facts, status, now, message_id) -> None:
+    """One append-only audit row for a 'Pick withdrawn' update (telegram.deliver_withdrawal), after its send attempt."""
+    ensure(conn)
+    conn.execute('INSERT OR IGNORE INTO pick_withdrawals (withdrawal_key, original_delivery_key, sport, game_id, market, '
+                 'original_forecast_id, new_forecast_id, reason, created_at, status, message_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+                 (key, original_key, sport, game_id, facts['market'], facts['original_forecast_id'], facts['new_forecast_id'],
+                  facts['reason'], now, status, message_id))
+
+
 def load(sport: str, path=None) -> dict:
     """{(game_id, market): the latest published row as a dict} from the delivery ledger, opened read-only. {} when the
     ledger or the table is absent or unreadable."""
@@ -161,7 +191,8 @@ def load(sport: str, path=None) -> dict:
         conn = sqlite3.connect(f'file:{p}?mode=ro', uri=True)
         conn.row_factory = sqlite3.Row
         try:
-            rows = conn.execute('SELECT * FROM published_picks WHERE sport=? ORDER BY published_id', (sport,)).fetchall()
+            rows = conn.execute('SELECT * FROM published_picks WHERE sport=? AND basis<>? ORDER BY published_id',
+                                (sport, UNCONFIRMED_BASIS)).fetchall()
         finally:
             conn.close()
     except Exception:

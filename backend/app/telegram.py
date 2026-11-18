@@ -643,12 +643,130 @@ def price_tag(app_probability, book_probability):
     return 'underpriced' if gap >= Decimal('0.03') else 'overpriced' if gap <= Decimal('-0.03') else 'fair price'
 
 
-def deliver_card(bot, conn, chat_id, key, text, now):
+NO_PICK = ('No supported pick', 'No strong pick')
+WITHDRAWN_NOTE = ('The original card and both forecasts are kept. The earlier pick is graded on its own (published pick); '
+                  'the record uses the latest pregame forecast.')
+
+
+def _plain(line):
+    return re.sub(r'<[^>]+>', '', line)
+
+
+def _blocks(text):
+    """(market title, pick label, model %) of each market block of a card text; the markup stays escaped."""
+    lines, out = text.split('\n'), []
+    for i in range(len(lines) - 2):
+        m = re.match(r'<b>Model ([\d.]+)%</b>', lines[i + 2])
+        if m and lines[i].startswith('<b>') and lines[i].endswith('</b>'):
+            out.append((_plain(lines[i]), _plain(lines[i + 1]).split(' · ')[0], m.group(1)))
+    return out
+
+
+def _forecast_line(name, fid, label, line, pct):
+    parts = [f'#{fid}' if fid is not None else None, label, f'line {line:g}' if isinstance(line, (int, float)) else None,
+             f'{pct}%' if pct else None]
+    return f"{name}: " + ' · '.join(p for p in parts if p)
+
+
+def withdrawal_plan(conn, chat_id, text, now):
+    """The earlier supported card this 'No supported pick' card withdraws, or None. Only the LATEST supported card of the game
+    counts, and not when a 'No supported pick' card already reached the chat after it (nothing to withdraw twice)."""
+    identity = card_identity(text)
+    if not identity or identity[3] != 'No supported pick':
+        return None
+    since = (datetime.fromisoformat(now.replace('Z', '+00:00')) - timedelta(days=2)).strftime('%Y-%m-%dT%H:%M:%SZ')
+    original = None
+    for row in conn.execute("SELECT * FROM deliveries WHERE chat_id=? AND attempted_at>=? AND status IN ('sent','uncertain','sending') "
+                            'ORDER BY attempted_at, rowid', (str(chat_id), since)):
+        other = card_identity(row['text'])
+        if other and other[:3] == identity[:3]:
+            original = None if other[3] in NO_PICK else row
+    return original
+
+
+def withdrawal_message(original, text, context):
+    """(text, extra send fields, audit facts) of the one 'Pick withdrawn' update for `original`."""
+    from .threshold_overview import displayed_percentage
+    old, new = original['text'].split('\n'), text.split('\n')
+    identity = card_identity(original['text'])
+    label = _plain(old[old.index('<b>Recommended pick</b>') + 1])
+    at = new.index('<b>Recommended pick</b>') + 2
+    reason = new[at] if len(new) > at else ''
+    sent = datetime.fromisoformat(original['attempted_at'].replace('Z', '+00:00')).astimezone(TORONTO).strftime('%b %d, %I:%M %p %Z')
+    block = next((b for b in _blocks(original['text']) if b[1] == label), None)
+    title, pct_then = (block[0], block[2]) if block else (None, None)
+    now_block = next((b for b in _blocks(text) if b[0] == title), None) if title else None
+    market = old_id = new_id = old_line = None
+    report, gid = (context or {}).get('report'), (context or {}).get('game_id')
+    picks = [p for p in (report or {}).get('picks', []) if p.get('game_id') == gid and p.get('market_title') == title] if title else []
+    pick = picks[0] if picks else None
+    published = None
+    if pick is not None:
+        market, new_id = pick['market'], pick['forecast_id']
+        published = (context or {}).get('published', {}).get(market)
+    if published:
+        old_id, old_line = published['forecast_id'], published['line']
+        pct_then = displayed_percentage(published['probability'])
+    current = None
+    if title and (pick is not None or now_block):
+        line_now = None
+        if pick is not None:
+            line_now = pick.get('line') if pick.get('line') is not None else (pick.get('quote_check') or {}).get('line_at_forecast')
+        current = _forecast_line('Current forecast', new_id, now_block[1] if now_block else escape(pick['pick_label']), line_now,
+                                 now_block[2] if now_block else displayed_percentage(pick['probability']))
+    lines = [identity[0].replace('PROP51 PICKS', 'PROP51 UPDATE'), identity[1], identity[2], '', '<b>Pick withdrawn</b>',
+             f"Original pick: <b>{label}</b>" + (f" · {title}" if title else '') + (f" · Model {pct_then}%" if pct_then else '') + f' · sent {sent}',
+             'Now: no supported pick' + (f' — {reason}' if reason else '')]
+    if title:
+        lines += ['', f'What changed: {title}', _forecast_line('Original forecast', old_id, label, old_line, pct_then)]
+        if current:
+            lines.append(current)
+    lines += ['', '<i>' + WITHDRAWN_NOTE + '</i>']
+    extra = ({'reply_parameters': {'message_id': original['message_id'], 'allow_sending_without_reply': True}}
+             if original['message_id'] is not None else {})
+    if not extra:
+        lines.insert(4, f'Original card sent {sent}; its message link is unavailable.')
+    return '\n'.join(lines), extra, dict(market=market, original_forecast_id=None if old_id is None else str(old_id),
+                                         new_forecast_id=None if new_id is None else str(new_id), reason=_plain(reason))
+
+
+def deliver_withdrawal(bot, conn, chat_id, original, text, now, context):
+    """At most one 'Pick withdrawn' update per original card: the key derives from the original's delivery key, so a rerun,
+    a retry or a crash after the claim hits the existing claim and never sends it twice."""
+    key = 'pick-withdrawn-v1:' + hashlib.sha256(original['delivery_key'].encode()).hexdigest()
+    existing = conn.execute('SELECT status FROM deliveries WHERE delivery_key=?', (key,)).fetchone()
+    if existing and existing['status'] != 'retry':
+        return 'already_recorded'
+    context = dict(context or {})
+    try:
+        from . import published_picks
+        context['published'] = {r['market']: dict(r) for r in conn.execute(
+            'SELECT * FROM published_picks WHERE delivery_key=? ORDER BY published_id', (original['delivery_key'],))
+            if r['basis'] != published_picks.UNCONFIRMED_BASIS}
+    except Exception:
+        context['published'] = {}
+    message, extra, facts = withdrawal_message(original, text, context)
+    status = deliver(bot, conn, chat_id, key, message, now, extra=extra)
+    if status != 'already_recorded':
+        try:    # the audit row never affects sending
+            from . import published_picks
+            sport = context.get('sport') or card_identity(text)[0].rsplit(' · ', 1)[-1].lower()
+            sent_id = conn.execute('SELECT message_id FROM deliveries WHERE delivery_key=?', (key,)).fetchone()[0]
+            published_picks.record_withdrawal(conn, key, original['delivery_key'], sport, context.get('game_id'), facts, status, now, sent_id)
+        except Exception as exc:
+            print(f'pick-withdrawal audit (update unaffected): {type(exc).__name__}', file=sys.stderr, flush=True)
+    return 'withdrawn' if status == 'sent' else status
+
+
+def deliver_card(bot, conn, chat_id, key, text, now, *, context=None):
     """Owner request Nov 9: one card per game. A card whose game, start and recommended pick already reached the chat (or
     may have: sent, uncertain, sending) is not sent again when only a forecast version or a line changed; the delivery
     key is unchanged, so receipts written by the earlier release count too."""
     identity = card_identity(text)
     if identity and not conn.execute('SELECT 1 FROM deliveries WHERE delivery_key=?', (key,)).fetchone():
+        original = withdrawal_plan(conn, chat_id, text, now)   # owner decision Nov 17: one 'Pick withdrawn' update, not a second card
+        if original is not None:
+            return deliver_withdrawal(bot, conn, chat_id, original, text, now, context)
         since = (datetime.fromisoformat(now.replace('Z', '+00:00')) - timedelta(days=2)).strftime('%Y-%m-%dT%H:%M:%SZ')
         for row in conn.execute("SELECT text FROM deliveries WHERE chat_id=? AND attempted_at>=? AND status IN ('sent','uncertain','sending')",
                                 (str(chat_id), since)):
@@ -660,7 +778,7 @@ def deliver_card(bot, conn, chat_id, key, text, now):
     return deliver(bot, conn, chat_id, key, text, now)
 
 
-def deliver(bot, conn, chat_id, key, text, now, *, photo=None, caption=None, send_text=None):
+def deliver(bot, conn, chat_id, key, text, now, *, photo=None, caption=None, send_text=None, extra=None):
     """Unique claim before send; ambiguous responses/crashes are never automatically sent a second time."""
     if photo is None and '<b>Recommended pick</b>' in text:
         from .telegram_card import render_card
@@ -676,7 +794,8 @@ def deliver(bot, conn, chat_id, key, text, now, *, photo=None, caption=None, sen
     conn.execute('COMMIT')
     try:
         if photo is None:
-            message = bot.call('sendMessage', {'chat_id': str(chat_id), 'text': text if send_text is None else send_text, 'parse_mode': 'HTML'})
+            message = bot.call('sendMessage', {'chat_id': str(chat_id), 'text': text if send_text is None else send_text, 'parse_mode': 'HTML',
+                                               **(extra or {})})
         else:
             if caption is None:
                 league = text.split('PROP51 PICKS · ', 1)[1].split('<', 1)[0]
@@ -756,7 +875,8 @@ def run_once(bot, settings, conn, *, now=None):
             batches = message_batches(report, settings['TELEGRAM_CHAT_ID'], lineup_lines=lineups, games_by_key=games_by_key,
                                       best_pick_pictures=pictures, context_selection=True)
             for key, text in batches:
-                status = deliver_card(bot, conn, settings['TELEGRAM_CHAT_ID'], key, text, report['as_of'])
+                status = deliver_card(bot, conn, settings['TELEGRAM_CHAT_ID'], key, text, report['as_of'],
+                                      context={'sport': sport, 'game_id': games_by_key.get(key), 'report': report})
                 outcomes[status] += 1
                 if status == 'sent':
                     record_best_pick(conn, sport, key, games_by_key.get(key), pictures, report['as_of'])
@@ -790,7 +910,8 @@ def run_once(bot, settings, conn, *, now=None):
                 outcomes, soccer_games = Counter(), {}
                 batches = message_batches(report, settings['TELEGRAM_CHAT_ID'], games_by_key=soccer_games, context_selection=True)
                 for key, text in batches:
-                    status = deliver_card(bot, conn, settings['TELEGRAM_CHAT_ID'], key, text, report['as_of'])
+                    status = deliver_card(bot, conn, settings['TELEGRAM_CHAT_ID'], key, text, report['as_of'],
+                                          context={'sport': 'soccer', 'game_id': soccer_games.get(key), 'report': report})
                     outcomes[status] += 1
                     if status == 'sent':
                         record_published(conn, 'soccer', key, soccer_games.get(key), report, now)
