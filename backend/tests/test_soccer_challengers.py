@@ -101,7 +101,7 @@ def test_records_served_markets_only_once_and_never_writes_served_tables(live, t
     assert {r["spec_name"] for r in rows} == {c.spec.name for c in pols()[0].challengers}
     for r in rows:
         assert abs(r["p_a"] + r["p_mid"] + r["p_b"] - 1) < 1e-6 and r["generated_at"] < r["tipoff_at"]
-        assert r["cutoff_at"] and r["policy_id"] == "soccer-challengers-v1"
+        assert r["cutoff_at"] == f"{TOMORROW.isoformat()}T06:00:00Z" and r["recorded_at"] and r["generated_at"] != r["cutoff_at"] and r["policy_id"] == "soccer-challengers-v1"
         assert (r["line"] is None) == (r["market"] in ("soccer_1x2", "soccer_btts"))
         assert r["line"] is None or (r["line"] * 2) % 1 == 0          # half and whole lines only
     again = run(live, tmp_path)
@@ -217,3 +217,59 @@ def test_evaluation_pairs_with_the_served_forecast_derives_double_chance_and_cla
     assert not [r for r in rows_of(tmp_path / "ch.sqlite") if "double_chance" in r["market"]]
     assert all(x["log_loss_diff"] is not None for x in total)
     assert g
+
+
+def _old_store(p):
+    c = sqlite3.connect(p, isolation_level=None)
+    c.executescript(OLD_SCHEMA)
+    c.close()
+
+
+def test_migration_restores_index_and_triggers_atomically_and_blocks_update_delete_and_late_rows(tmp_path):
+    p = tmp_path / "old.sqlite"
+    _old_store(p)
+    s = lc.open_store(p)
+    names = {r[0] for r in s.execute("SELECT name FROM sqlite_master WHERE tbl_name IN ('challenger_forecasts','challenger_policies')")}
+    assert {"challenger_forecasts_game", "challenger_forecasts_no_update", "challenger_forecasts_no_delete", "challenger_policies_no_update",
+            "challenger_policies_no_delete", "challenger_forecasts_two_hour_window"} <= names
+    ins = ("INSERT INTO challenger_forecasts (policy_id, policy_sha, spec_name, spec_json, spec_hash, definition, game_id, market, line, "
+           "p_a, p_mid, p_b, cutoff_at, tipoff_at, generated_at, dataset_version, model_version) VALUES "
+           "('p','s','n','{}','h','d','g',?,NULL,.5,0,.5,'c',?,?,'v','m')")
+    s.execute(ins, ("soccer_btts", "2026-11-18T20:00:00Z", "2026-11-18T06:00:00Z"))
+    with pytest.raises(sqlite3.DatabaseError, match="kickoff|two hours"):
+        s.execute(ins, ("soccer_btts", "2026-11-18T20:00:00Z", "2026-11-18T20:00:00Z"))          # at kickoff
+    with pytest.raises(sqlite3.DatabaseError, match="kickoff|two hours"):
+        s.execute(ins, ("soccer_btts", "2026-11-18T20:00:00Z", "2026-11-18T21:00:00Z"))          # after kickoff
+    with pytest.raises(sqlite3.DatabaseError, match="append-only"):
+        s.execute("UPDATE challenger_forecasts SET p_a=.4, p_b=.6")
+    with pytest.raises(sqlite3.DatabaseError, match="append-only"):
+        s.execute("DELETE FROM challenger_forecasts")
+
+
+def test_a_second_opener_does_not_repeat_the_rebuild(tmp_path, monkeypatch):
+    p = tmp_path / "old.sqlite"
+    _old_store(p)
+    lc.open_store(p).close()
+    c = sqlite3.connect(p, isolation_level=None)
+    root = lambda: c.execute("SELECT rootpage FROM sqlite_master WHERE name='challenger_forecasts'").fetchone()[0]
+    before = root()
+    real, calls = lc._needs_migration, []
+    monkeypatch.setattr(lc, "_needs_migration", lambda conn: calls.append(1) or (len(calls) == 1 or real(conn)))     # stale first look
+    lc._migrate(c)
+    assert len(calls) == 2 and root() == before                      # re-read under the lock: no rebuild
+
+
+def test_draw_no_bet_is_scored_from_the_1x2_triple_with_draws_void(live, tmp_path):
+    serve(live)
+    run(live, tmp_path)
+    cc = lc.open_ro(tmp_path / "ch.sqlite")
+    ingest_day(live, TOMORROW, [final(90003, TOMORROW, IDS[0], IDS[2], 1, 1), final(90004, TOMORROW, IDS[4], IDS[5], 0, 0)],
+               at=f"{TOMORROW.isoformat()}T23:00:00Z")
+    out = le.evaluate(live, cc)
+    dnb = [x for x in out["groups"] if x["market"] == "soccer_draw_no_bet"]
+    assert dnb and all(x["n_scored"] == 0 and x["n_void"] == 1 for x in dnb)                    # the only 1X2-served match drew
+    ingest_day(live, TOMORROW, [final(90003, TOMORROW, IDS[0], IDS[2], 2, 1)], at=f"{TOMORROW.isoformat()}T23:30:00Z")
+    out = le.evaluate(live, cc)
+    dnb = [x for x in out["groups"] if x["market"] == "soccer_draw_no_bet"]
+    inc = 0.5 / (0.5 + 0.25)                                                                   # served Elo (0.5, 0.25, 0.25), home won
+    assert all(x["n_scored"] == 1 and x["log_loss_incumbent"] == pytest.approx(-__import__("math").log(inc)) for x in dnb)

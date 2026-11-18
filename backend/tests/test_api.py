@@ -7,8 +7,15 @@ from fastapi.testclient import TestClient
 from app import fixtures, metrics
 from app.main import api_mode, app
 
-app.dependency_overrides[api_mode] = lambda: "demo"  # this module tests the demo provider
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True, scope="module")
+def demo_provider():
+    """This module tests the demo provider; the override is removed afterwards so other modules see the real dependency."""
+    app.dependency_overrides[api_mode] = lambda: "demo"
+    yield
+    app.dependency_overrides.pop(api_mode, None)
 
 
 def test_health():

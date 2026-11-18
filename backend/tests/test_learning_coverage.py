@@ -108,6 +108,7 @@ def test_endpoint_and_no_write(env, monkeypatch):
     before = (data / "nba.sqlite").read_bytes()
     monkeypatch.setenv("NBA_DATA_DIR", str(data))
     monkeypatch.setenv("LEARNING_LAUNCHAGENTS_DIR", str(agents))
+    monkeypatch.setattr(main.app, "dependency_overrides", {})
     r = TestClient(main.app).get("/api/learning/coverage")
     assert r.status_code == 200 and len(r.json()["rows"]) > 20
     assert (data / "nba.sqlite").read_bytes() == before
@@ -248,7 +249,7 @@ def test_evaluated_counts_scored_pairs_with_an_incumbent_not_just_final_games(en
     r = row(lc.coverage(data, agents), "ncaab", "winner")
     assert r["evaluated"]["state"] == "no" and "no scored pair" in r["evaluated"]["detail"]       # final, but no served incumbent to pair with
     group = {"policy_id": "ncaab-challengers-v1", "market": "winner", "n_scored": 3, "n_no_incumbent": 0}
-    monkeypatch.setattr(le, "evaluate", lambda store, cc: {"groups": [group, {**group, "market": "spread", "n_scored": 9}]})
+    monkeypatch.setattr(le, "evaluate", lambda store, cc, prefix=None: {"groups": [group, {**group, "market": "spread", "n_scored": 9}]})
     r = row(lc.coverage(data, agents), "ncaab", "winner")
     assert r["evaluated"]["state"] == "yes" and "3 scored pair" in r["evaluated"]["detail"]
 

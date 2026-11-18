@@ -18,6 +18,10 @@ Point in time: the cutoff is the served one (06:00 UTC of the match's local date
 with available_at <= cutoff and an earlier match date. A run is refused, recording nothing, under the served completeness checks
 (soccer_markets_live.check). A match is priced only when the served goals forecast exists, at the lines it serves (the model's
 fair line plus bookmaker total-goals lines); rows go to the challenger store only and the sport store is opened read-only.
+A row's cutoff_at is that 06:00 UTC information time (the run time is generated_at, the write time recorded_at).
+
+The 1X2 row compares the goals-joint 1X2 with the served Elo 1X2: a different model family AND the spec change together, so a
+1X2 difference cannot be attributed to the spec alone (the goals markets compare like with like against the served Poisson).
 
   python -m app.learning_challengers record --sport soccer [--dry-run] [--now T --store PATH]
 """
@@ -279,7 +283,7 @@ def record(conn, path: Path, *, policies: list, now: Optional[str] = None, day: 
                     pa, pm = round(p[0], 9), round(p[1], 9)
                     rows.append({"game_id": t.mid, "market": market, "line": line, "p": (pa, pm, round(1 - pa - pm, 9)),
                                  "generated_at": now, "tipoff_at": kick[t.mid]})
-            lc.append_rows(path, pol, c, rows, definition=definition, dataset_version=digest, now=now, dry_run=dry_run, out=out)
+            lc.append_rows(path, pol, c, rows, definition=definition, dataset_version=digest, now=now, dry_run=dry_run, out=out, cutoff_at=cutoff)
     if out["status"] == "success" and (out["errors"] or out["skipped"] or out["skipped_quarter_lines"]):
         out["status"] = "partial"
     return out

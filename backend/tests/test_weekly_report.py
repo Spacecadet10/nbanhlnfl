@@ -438,3 +438,22 @@ def test_learning_section_failure_never_breaks_the_report(tmp_path, monkeypatch)
     text = page(m, tmp_path, setup(tmp_path, 3, monkeypatch, m)[0])
     assert 'learning coverage unavailable: RuntimeError' in section(text, 5)
     assert 'Best picks named on paper' in text
+
+
+def test_learning_scoring_is_per_sport_and_an_error_never_kills_the_report(tmp_path, monkeypatch):
+    m = wr()
+    data = setup(tmp_path, 3, monkeypatch, m)[0]
+    seed_challengers(data, [('nfl-challengers-v1', 'n1', 'spread', -3.5), ('ncaab-challengers-v1', 'g1', 'winner', None)])
+    sqlite3.connect(data / 'ncaab.sqlite').close()
+    seen = []
+    def fake(store, cc, prefix=None):
+        seen.append(prefix)
+        if prefix == 'nfl-':
+            return {'groups': [{'policy_id': 'ncaab-challengers-v1', 'n_scored': 99, 'claim': 'sample size reached: apply the rule'},
+                               {'policy_id': 'nfl-challengers-v1', 'n_scored': 2, 'claim': 'no claim: x'}]}
+        raise RuntimeError('boom')
+    monkeypatch.setattr(m.learning_eval, 'evaluate', fake)
+    (data / 'nfl.sqlite').write_bytes(b'') if not (data / 'nfl.sqlite').exists() else None
+    s5 = section(page(m, tmp_path, data), 5)
+    assert 'nfl-challengers-v1: rows recorded n=1; games n=1; specs n=1; settled and scored n=2' in s5 and 'sample size reached' not in s5
+    assert 'scoring unavailable (RuntimeError: boom)' in s5 and 'nfl-' in seen

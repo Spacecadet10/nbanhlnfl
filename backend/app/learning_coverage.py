@@ -157,7 +157,7 @@ def _scored_pairs(store, data_dir: Path, prefix: str, markets) -> tuple:
     if cc is None or store is None:
         return 0, None
     try:
-        groups = learning_eval.evaluate(store, cc)["groups"]
+        groups = learning_eval.evaluate(store, cc, prefix)["groups"]
     except (sqlite3.Error, ValueError, KeyError) as exc:
         return 0, f"{type(exc).__name__}: {exc}"
     finally:
@@ -170,7 +170,7 @@ SPEC_MARKETS = {"soccer": {"1x2": ("soccer_1x2",), "double_chance": ("soccer_1x2
                            "goals_ou": ("soccer_goals_total",), "team_goals": ("soccer_goals_home", "soccer_goals_away"),
                            "btts": ("soccer_btts",)},
                 "nfl": {m: (m,) for m in ("winner", "spread", "total", "team_total_home", "team_total_away")}}
-SPEC_EVAL = {"double_chance": ("soccer_double_chance",), "draw_no_bet": ("soccer_1x2",)}     # derived from the 1X2 rows at read time
+SPEC_EVAL = {"double_chance": ("soccer_double_chance",), "draw_no_bet": ("soccer_draw_no_bet",)}     # derived from the 1X2 rows at read time
 SPEC_SKIPPED = {"soccer:corners": "corners are skipped: no corner challenger exists",
                 "soccer:corner_handicap": "corner handicap is skipped: no corner challenger exists",
                 "soccer:asian_handicap": "Asian handicap is research only and blocked on the owner's preregistration answers: no challenger",

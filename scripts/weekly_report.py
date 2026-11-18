@@ -360,20 +360,22 @@ def _challenger_counts(data_dir: Path, stores: dict) -> list:
             store = stores.get(sport)
             if pols and store is not None:
                 try:
-                    out = learning_eval.evaluate(store, cc)
+                    out = learning_eval.evaluate(store, cc, f'{sport}-')
                     for g in out['groups']:
+                        if not g['policy_id'].startswith(f'{sport}-'):      # a claim never leaks across sports
+                            continue
                         scored[g['policy_id']] = scored.get(g['policy_id'], 0) + g['n_scored']
                         claims.add('no claim' if g['claim'].startswith('no claim') else 'sample size reached: preregistered rule applies')
-                except sqlite3.Error as exc:
-                    claims.add(f'scoring unavailable ({type(exc).__name__})')
+                except Exception as exc:                                    # the report never dies on the learning section
+                    claims.add(f'scoring unavailable ({type(exc).__name__}: {str(exc)[:80]})')
             for r in pols:
                 lines.append(f"- {r['policy_id']}: rows recorded n={r['n']}; games n={r['g']}; specs n={r['s']}; settled and scored "
                              f"n={scored.get(r['policy_id'], 0)} (paired with the served forecast); "
                              f"{'; '.join(sorted(claims)) or 'no claim: scoring needs the sport store'} until a preregistered sample size is reached.")
             if not pols:
                 lines.append(f"- {sport.upper()}: rows recorded n=0 (no {sport} challenger policy has recorded yet).")
-    except sqlite3.Error as exc:
-        lines.append(f'- Challenger store not readable ({type(exc).__name__}).')
+    except Exception as exc:
+        lines.append(f'- Challenger store not readable ({type(exc).__name__}: {str(exc)[:80]}).')
     finally:
         cc.close()
     return lines

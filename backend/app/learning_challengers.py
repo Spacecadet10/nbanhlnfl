@@ -155,45 +155,56 @@ CREATE TABLE {name} (
 """.format(name="{name}", markets=", ".join(f"'{m}'" for m in MARKETS), no_line=", ".join(f"'{m}'" for m in NO_LINE))
 COLUMNS = ("forecast_id, policy_id, policy_sha, spec_name, spec_json, spec_hash, definition, game_id, market, line, p_a, p_mid, p_b, "
            "cutoff_at, tipoff_at, generated_at, dataset_version, model_version, recorded_at")
-SCHEMA = (
-    "CREATE TABLE IF NOT EXISTS challenger_policies (\n"
-    "  policy_sha TEXT PRIMARY KEY, policy_id TEXT NOT NULL, sport TEXT NOT NULL, content TEXT NOT NULL, first_seen_at TEXT NOT NULL);\n"
-    + TABLE.replace("CREATE TABLE {name}", "CREATE TABLE IF NOT EXISTS challenger_forecasts") + """
-CREATE INDEX IF NOT EXISTS challenger_forecasts_game ON challenger_forecasts(game_id, market, spec_hash);
-CREATE TRIGGER IF NOT EXISTS challenger_forecasts_no_update BEFORE UPDATE ON challenger_forecasts
-BEGIN SELECT RAISE(ABORT, 'challenger_forecasts are append-only'); END;
-CREATE TRIGGER IF NOT EXISTS challenger_forecasts_no_delete BEFORE DELETE ON challenger_forecasts
-BEGIN SELECT RAISE(ABORT, 'challenger_forecasts are append-only'); END;
-CREATE TRIGGER IF NOT EXISTS challenger_policies_no_update BEFORE UPDATE ON challenger_policies
-BEGIN SELECT RAISE(ABORT, 'challenger_policies are append-only'); END;
-CREATE TRIGGER IF NOT EXISTS challenger_policies_no_delete BEFORE DELETE ON challenger_policies
-BEGIN SELECT RAISE(ABORT, 'challenger_policies are append-only'); END;
-CREATE TRIGGER IF NOT EXISTS challenger_forecasts_two_hour_window BEFORE INSERT ON challenger_forecasts
-WHEN NEW.generated_at >= NEW.tipoff_at
-  OR (substr(NEW.market, 1, 7) <> 'soccer_' AND NEW.generated_at < strftime('%Y-%m-%dT%H:%M:%SZ', NEW.tipoff_at, '-2 hours'))
-BEGIN SELECT RAISE(ABORT, 'challenger forecast must be within two hours before tipoff and strictly before it (soccer: before kickoff)'); END;
-""")
+_POLICIES = ("CREATE TABLE IF NOT EXISTS challenger_policies (\n"
+             "  policy_sha TEXT PRIMARY KEY, policy_id TEXT NOT NULL, sport TEXT NOT NULL, content TEXT NOT NULL, first_seen_at TEXT NOT NULL)")
+_FORECASTS = TABLE.replace("CREATE TABLE {name}", "CREATE TABLE IF NOT EXISTS challenger_forecasts").strip().rstrip(";")
+GUARDS = (      # the index and the append-only / window triggers: created in the same transaction as any table rebuild
+    "CREATE INDEX IF NOT EXISTS challenger_forecasts_game ON challenger_forecasts(game_id, market, spec_hash)",
+    "CREATE TRIGGER IF NOT EXISTS challenger_forecasts_no_update BEFORE UPDATE ON challenger_forecasts\n"
+    "BEGIN SELECT RAISE(ABORT, 'challenger_forecasts are append-only'); END",
+    "CREATE TRIGGER IF NOT EXISTS challenger_forecasts_no_delete BEFORE DELETE ON challenger_forecasts\n"
+    "BEGIN SELECT RAISE(ABORT, 'challenger_forecasts are append-only'); END",
+    "CREATE TRIGGER IF NOT EXISTS challenger_policies_no_update BEFORE UPDATE ON challenger_policies\n"
+    "BEGIN SELECT RAISE(ABORT, 'challenger_policies are append-only'); END",
+    "CREATE TRIGGER IF NOT EXISTS challenger_policies_no_delete BEFORE DELETE ON challenger_policies\n"
+    "BEGIN SELECT RAISE(ABORT, 'challenger_policies are append-only'); END",
+    "CREATE TRIGGER IF NOT EXISTS challenger_forecasts_two_hour_window BEFORE INSERT ON challenger_forecasts\n"
+    "WHEN NEW.generated_at >= NEW.tipoff_at\n"
+    "  OR (substr(NEW.market, 1, 7) <> 'soccer_' AND NEW.generated_at < strftime('%Y-%m-%dT%H:%M:%SZ', NEW.tipoff_at, '-2 hours'))\n"
+    "BEGIN SELECT RAISE(ABORT, 'challenger forecast must be within two hours before tipoff and strictly before it (soccer: before kickoff)'); END",
+)
+SCHEMA = ";\n".join((_POLICIES, _FORECASTS, *GUARDS)) + ";\n"
+
+
+def _needs_migration(conn: sqlite3.Connection) -> bool:
+    sql = conn.execute("SELECT sql FROM sqlite_master WHERE name='challenger_forecasts'").fetchone()[0]
+    trig = conn.execute("SELECT sql FROM sqlite_master WHERE name='challenger_forecasts_two_hour_window'").fetchone()
+    return "soccer_1x2" not in sql or (trig is not None and "soccer_" not in trig[0])
 
 
 def _migrate(conn: sqlite3.Connection) -> None:
     """Stores made before the soccer markets: rebuild challenger_forecasts with the wider market CHECK (rows and ids kept) and
-    replace the window trigger (soccer forecasts are made at the 06:00 UTC cutoff, not within two hours of kickoff)."""
-    sql = conn.execute("SELECT sql FROM sqlite_master WHERE name='challenger_forecasts'").fetchone()[0]
-    if "soccer_1x2" not in sql:
-        conn.execute("BEGIN IMMEDIATE")
-        try:
-            conn.execute(TABLE.format(name="challenger_forecasts_new"))
-            conn.execute(f"INSERT INTO challenger_forecasts_new ({COLUMNS}) SELECT {COLUMNS} FROM challenger_forecasts")
-            conn.execute("DROP TABLE challenger_forecasts")
-            conn.execute("ALTER TABLE challenger_forecasts_new RENAME TO challenger_forecasts")
-            conn.execute("COMMIT")
-        except Exception:
-            conn.execute("ROLLBACK")
-            raise
-    trig = conn.execute("SELECT sql FROM sqlite_master WHERE name='challenger_forecasts_two_hour_window'").fetchone()
-    if trig is not None and "soccer_" not in trig[0]:
-        conn.execute("DROP TRIGGER challenger_forecasts_two_hour_window")
-    conn.executescript(SCHEMA)
+    replace the window trigger (soccer forecasts are made at the 06:00 UTC cutoff, not within two hours of kickoff). The swap,
+    the index and every trigger are one transaction, and the need is re-read after the write lock is taken, so a concurrent
+    opener never repeats the rebuild and no reader sees the table without its append-only triggers."""
+    if not _needs_migration(conn):
+        return
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        if _needs_migration(conn):
+            sql = conn.execute("SELECT sql FROM sqlite_master WHERE name='challenger_forecasts'").fetchone()[0]
+            if "soccer_1x2" not in sql:
+                conn.execute(TABLE.format(name="challenger_forecasts_new"))
+                conn.execute(f"INSERT INTO challenger_forecasts_new ({COLUMNS}) SELECT {COLUMNS} FROM challenger_forecasts")
+                conn.execute("DROP TABLE challenger_forecasts")
+                conn.execute("ALTER TABLE challenger_forecasts_new RENAME TO challenger_forecasts")
+            conn.execute("DROP TRIGGER IF EXISTS challenger_forecasts_two_hour_window")
+            for stmt in GUARDS:
+                conn.execute(stmt)
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
 
 
 def store_path(data_dir: Optional[Path] = None) -> Path:
@@ -222,7 +233,8 @@ def open_ro(path: Path) -> Optional[sqlite3.Connection]:
     return conn
 
 
-def append_rows(path: Path, pol, c, rows: list, *, definition: str, dataset_version: str, now: str, dry_run: bool, out: dict) -> None:
+def append_rows(path: Path, pol, c, rows: list, *, definition: str, dataset_version: str, now: str, dry_run: bool, out: dict,
+                cutoff_at: Optional[str] = None) -> None:
     """Append one challenger's forecast rows (dicts: game_id, market, line, p, generated_at, tipoff_at) to the store, once per
     (policy, spec, game, market, line): the first cutoff wins. Dry runs only count. `out` collects created/would_record/errors."""
     store = open_ro(path) if dry_run else open_store(path)
@@ -245,7 +257,7 @@ def append_rows(path: Path, pol, c, rows: list, *, definition: str, dataset_vers
                         "market, line, p_a, p_mid, p_b, cutoff_at, tipoff_at, generated_at, dataset_version, model_version, recorded_at) "
                         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         (pol.policy_id, pol.sha, c.spec.name, c.spec_json, c.spec_hash, definition, f["game_id"], f["market"], f["line"],
-                         *f["p"], now, f["tipoff_at"], f["generated_at"], dataset_version, f"challenger:{c.spec.name}:{definition}", utc_now()))
+                         *f["p"], cutoff_at or now, f["tipoff_at"], f["generated_at"], dataset_version, f"challenger:{c.spec.name}:{definition}", utc_now()))
                     out["created"] += 1
                 except sqlite3.Error as exc:
                     out["errors"][f"{c.spec.name}:{f['game_id']}:{f['market']}"] = f"{type(exc).__name__}: {exc}"

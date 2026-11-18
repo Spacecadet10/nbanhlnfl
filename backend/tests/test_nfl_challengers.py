@@ -103,3 +103,24 @@ def test_evaluation_scores_against_the_served_row_and_claims_nothing(live_store,
     out = le.evaluate(c, cc)
     assert all(g["n_scored"] == 1 and g["n_no_incumbent"] == 0 for g in out["groups"]), out["groups"]
     assert all("no claim" in g["claim"] and g["log_loss_diff"] is not None for g in out["groups"])
+
+
+def test_a_dry_run_does_not_write_the_nfl_access_log_and_the_latest_served_row_wins(live_store, tmp_path):
+    c = live_store
+    nfl_live.record(c, now=NOW)
+    log = nfl_eval.access_log_path()
+    size = log.stat().st_size if log.exists() else 0
+    nc.record(c, tmp_path / "ch.sqlite", policies=pols(), now=NOW, dry_run=True)
+    assert (log.stat().st_size if log.exists() else 0) == size
+    nc.record(c, tmp_path / "ch.sqlite", policies=pols(), now=NOW)
+    assert log.stat().st_size > size                           # a real run is logged, as the served recorder does
+    # a later served row for the same market with another line is the one that is paired
+    c.execute("PRAGMA foreign_keys = OFF")
+    c.execute("DROP TRIGGER IF EXISTS game_forecasts_no_update")
+    row = c.execute("SELECT * FROM game_forecasts WHERE market='total'").fetchone()
+    cols = [k for k in row.keys() if k != "forecast_id"]
+    vals = {k: row[k] for k in cols}
+    vals.update(idempotency_key="later-row", line=row["line"] + 1, generated_at="2026-11-02T23:00:30Z", source_generated_at="2026-11-02T23:00:30Z")
+    c.execute(f"INSERT INTO game_forecasts ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})", [vals[k] for k in cols])
+    nc.record(c, tmp_path / "ch2.sqlite", policies=pols(), now="2026-11-02T23:01:00Z")
+    assert {r["line"] for r in rows_of(tmp_path / "ch2.sqlite") if r["market"] == "total"} == {row["line"] + 1}

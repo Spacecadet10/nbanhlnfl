@@ -13,6 +13,7 @@ written. At about 17 games a week, evidence this season stays far below any prer
 
   python -m app.learning_challengers record --sport nfl [--dry-run] [--now T --store PATH]
 """
+import tempfile
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Optional
@@ -91,8 +92,9 @@ def record(conn, path: Path, *, policies: list, now: Optional[str] = None, dry_r
         served = {}
         for g in games:
             rows = {r["market"]: r for r in conn.execute(
-                "SELECT market, line FROM game_forecasts WHERE game_id=? AND tipoff_at=? AND status='forecast' AND order_version=?",
-                (g["game_id"], g["tipoff_at"], ORDER_VERSION))}
+                "SELECT market, line FROM game_forecasts WHERE game_id=? AND tipoff_at=? AND status='forecast' AND order_version=? "
+                "AND generated_at<=? ORDER BY generated_at, forecast_id",       # the latest per market wins (dict order)
+                (g["game_id"], g["tipoff_at"], ORDER_VERSION, now))}
             if rows:
                 served[g["game_id"]] = rows
             else:
@@ -100,7 +102,9 @@ def record(conn, path: Path, *, policies: list, now: Optional[str] = None, dry_r
         due = [g for g in games if g["game_id"] in served]
         if not due:
             return out
-        results = nfl_eval.load_rows(conn, through=max(g["season"] for g in due), sealed=s, access_log=nfl_eval.access_log_path(),
+        # a dry run never touches the NFL test-access log: its read is logged to a throw-away file
+        log = Path(tempfile.mkdtemp(prefix="nfl-dry-run-")) / "access.jsonl" if dry_run else nfl_eval.access_log_path()
+        results = nfl_eval.load_rows(conn, through=max(g["season"] for g in due), sealed=s, access_log=log,
                                      purpose="prospective NFL challenger state initialization")
         results = sorted(results, key=lambda r: (r.result_available_at, r.game.tipoff_at, r.game.game_id))
     except Exception as exc:

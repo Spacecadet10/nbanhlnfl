@@ -49,10 +49,10 @@ def _served_soccer(store, row) -> Optional[list]:
     """Soccer incumbent: the served 1X2 (Elo) triple, or the served Poisson goals joint priced at the challenger's own line."""
     if row["market"] == "soccer_1x2":
         r = store.execute("SELECT p_home, p_draw, p_away FROM soccer_live_forecasts WHERE match_id=? AND generated_at<=? "
-                          "ORDER BY version DESC LIMIT 1", (row["game_id"], row["cutoff_at"])).fetchone()
+                          "ORDER BY version DESC LIMIT 1", (row["game_id"], row["generated_at"])).fetchone()
         return None if r is None else list(r)
     r = store.execute("SELECT joint_json FROM soccer_market_forecasts WHERE match_id=? AND family='goals' AND generated_at<=? "
-                      "ORDER BY version DESC LIMIT 1", (row["game_id"], row["cutoff_at"])).fetchone()
+                      "ORDER BY version DESC LIMIT 1", (row["game_id"], row["generated_at"])).fetchone()
     if r is None:
         return None
     joint = json.loads(r[0])
@@ -98,6 +98,18 @@ def _dc(p, k: int) -> tuple:
     return ll, br
 
 
+def _dnb(p, k: int) -> tuple:
+    """(log loss, brier) of the two draw-no-bet selections (home, away) of a 1X2 triple p given no draw (k is 0 or 2), averaged:
+    each side's win probability is its share of the non-draw mass (conditional on no draw)."""
+    ll = br = 0.0
+    for side, i in (("home", 0), ("away", 2)):
+        q = p[i] / (p[0] + p[2])
+        o = 0 if k == i else 2
+        ll += combine.log_loss((q, 0.0, 1 - q), o) / 2
+        br += combine.brier((q, 0.0, 1 - q), o) / 2
+    return ll, br
+
+
 def _incumbent(store, row) -> Optional[list]:
     if row["policy_id"].startswith("ncaab-"):
         return _served_ncaab(store, row)
@@ -121,14 +133,16 @@ def _mean(xs):
     return sum(xs) / len(xs) if xs else None
 
 
-def evaluate(store, cc) -> dict:
+def evaluate(store, cc, prefix: Optional[str] = None) -> dict:
+    """Scores the challenger rows whose policy id starts with `prefix` (default all) against `store`'s served forecasts."""
     prereg = {}
     for pol in cc.execute("SELECT policy_sha, content FROM challenger_policies"):
         for ch in json.loads(pol["content"]).get("challengers", []):
             prereg[(pol["policy_sha"], ch["spec"]["name"])] = ch.get("preregistered_n")
     groups: dict = {}
     seen: set = set()
-    for r in cc.execute("SELECT * FROM challenger_forecasts ORDER BY policy_id, spec_name, market, game_id, cutoff_at, forecast_id"):
+    for r in cc.execute("SELECT * FROM challenger_forecasts WHERE policy_id LIKE ? ESCAPE '\\' "
+                        "ORDER BY policy_id, spec_name, market, game_id, cutoff_at, forecast_id", (f"{prefix or ''}%",)):
         key = (r["policy_id"], r["policy_sha"], r["spec_name"], r["spec_hash"], r["market"])
         once = (r["policy_sha"], r["spec_hash"], r["game_id"], r["market"])
         if once in seen:                 # a moving line records more rows: only the earliest counts, so n is games
@@ -164,13 +178,22 @@ def evaluate(store, cc) -> dict:
         g["ll_i"].append(combine.log_loss(inc, k))
         g["br_c"].append(combine.brier(c, k))
         g["br_i"].append(combine.brier(inc, k))
-        if r["market"] == "soccer_1x2":          # double chance: an exact function of the 1X2 triple, scored here and never stored
-            d = groups.setdefault((r["policy_id"], r["policy_sha"], r["spec_name"], r["spec_hash"], "soccer_double_chance"),
-                                  {"n_scored": 0, "n_unsettled": 0, "n_void": 0, "n_unscorable": 0, "n_no_incumbent": 0,
-                                   "ll_c": [], "ll_i": [], "br_c": [], "br_i": []})
+        if r["market"] == "soccer_1x2":          # double chance and draw no bet: exact functions of the 1X2 triple, scored here, never stored
+            def derived(name):
+                return groups.setdefault((r["policy_id"], r["policy_sha"], r["spec_name"], r["spec_hash"], name),
+                                         {"n_scored": 0, "n_unsettled": 0, "n_void": 0, "n_unscorable": 0, "n_no_incumbent": 0,
+                                          "ll_c": [], "ll_i": [], "br_c": [], "br_i": []})
+            d = derived("soccer_double_chance")
             (lc_, bc_), (li_, bi_) = _dc(c, k), _dc(inc, k)
             d["n_scored"] += 1
             d["ll_c"].append(lc_), d["ll_i"].append(li_), d["br_c"].append(bc_), d["br_i"].append(bi_)
+            n = derived("soccer_draw_no_bet")
+            if k == 1:                                  # a draw pushes: void, excluded
+                n["n_void"] += 1
+            else:
+                (lc_, bc_), (li_, bi_) = _dnb(c, k), _dnb(inc, k)
+                n["n_scored"] += 1
+                n["ll_c"].append(lc_), n["ll_i"].append(li_), n["br_c"].append(bc_), n["br_i"].append(bi_)
     out = []
     for (pid, sha, name, h, market), g in groups.items():
         n, target = g["n_scored"], prereg.get((sha, name))
@@ -199,8 +222,7 @@ def main(argv: Optional[list] = None) -> int:
     else:
         store = sqlite3.connect(f"{src.resolve().as_uri()}?mode=ro", uri=True)
         store.row_factory = sqlite3.Row
-        out = evaluate(store, cc)
-        out["groups"] = [g for g in out["groups"] if g["policy_id"].startswith(f"{a.sport}-")]
+        out = evaluate(store, cc, f"{a.sport}-")
     if a.json:
         print(json.dumps(out, indent=2, sort_keys=True))
         return 0

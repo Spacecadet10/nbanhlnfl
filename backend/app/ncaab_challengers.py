@@ -121,7 +121,8 @@ def fit_code_version() -> str:
     """Digest of everything the cached fit depends on besides the data: this module, the models it walks, the backtest walk,
     the Platt fit, and the thresholds (MIN_FIT_GAMES, the season periods)."""
     h = hashlib.sha256(json.dumps([MIN_FIT_GAMES, {k: list(v) for k, v in sorted(ncaab_app.PERIODS.items())}]).encode())
-    for f in (__file__, college.__file__, backtest.__file__, Path(__file__).with_name("ncaab_eval.py")):
+    for f in (__file__, college.__file__, backtest.__file__, *(Path(__file__).with_name(n) for n in ("ncaab_eval.py", "ncaab.py", "ncaab_app.py")),
+              Path(college.__file__).with_name("base.py")):
         h.update(Path(f).read_bytes())
     return h.hexdigest()[:8]
 

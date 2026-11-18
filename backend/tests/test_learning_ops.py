@@ -90,6 +90,7 @@ def test_endpoint(env, monkeypatch):
     data, agents = env
     monkeypatch.setenv("NBA_DATA_DIR", str(data))
     monkeypatch.setenv("LEARNING_LAUNCHAGENTS_DIR", str(agents))
+    monkeypatch.setattr(main.app, "dependency_overrides", {})
     r = TestClient(main.app).get("/api/learning/ops", params={"sport": "nba"})
     assert r.status_code == 200 and r.json()["trainer"]["installed"] is True
     assert TestClient(main.app).get("/api/learning/ops", params={"sport": "zzz"}).status_code == 422
