@@ -8,6 +8,8 @@
 		<string>http://127.0.0.1:4173,http://localhost:4173</string>
 		<key>NBA_API_MODE</key>
 		<string>real</string>
+		<key>NBA_DAILY_AGREEMENT</key>
+		<string>1</string>
 		<key>NBA_DATA_DIR</key>
 		<string>/Users/andry/Desktop/nbanhlnfl/data</string>
 	</dict>

@@ -18,8 +18,8 @@ def test_every_template_parses_and_names_its_label_without_the_retired_checkout(
         assert 'sprint1' not in p.read_text(), p.name
 
 
-def test_daily_agreement_is_on_for_the_daily_and_api_delivery_jobs():
-    for name in ('daily', 'api-delivery'):
+def test_daily_agreement_is_on_for_the_daily_and_both_api_jobs():
+    for name in ('daily', 'api-delivery', 'api'):
         assert load(name)['EnvironmentVariables']['NBA_DAILY_AGREEMENT'] == '1'
 
 
