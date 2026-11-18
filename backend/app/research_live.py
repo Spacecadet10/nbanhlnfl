@@ -84,6 +84,10 @@ def _load_aliases() -> dict:
 
 
 _ALIASES = _load_aliases()
+try:
+    _ALIAS_SPORT = {k: v.get("sport") for k, v in json.loads(agreement.ALIASES_PATH.read_text()).get("research", {}).items()}
+except FileNotFoundError:
+    _ALIAS_SPORT = {}
 
 
 def definition(conn) -> str:
@@ -101,7 +105,9 @@ def definition(conn) -> str:
     h.update(json.dumps([(m.name, m.config()) for m in lines], sort_keys=True, default=str).encode())
     h.update(pkg_version("scikit-learn").encode())
     digest = h.hexdigest()[:16]
-    return _ALIASES.get(digest, digest)
+    if digest in _ALIASES and _ALIAS_SPORT.get(digest, live.engine(conn).sport) == live.engine(conn).sport:
+        return _ALIASES[digest]       # an entry names the sport it was recorded for; another sport's store keeps its digest
+    return digest
 
 
 def sources(sport: str, market: str) -> list[str]:

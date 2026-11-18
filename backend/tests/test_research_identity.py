@@ -20,3 +20,13 @@ def test_the_research_alias_entries_name_their_reason_and_ids():
     assert set(entries.values()) == {"94844709fc4412a5", "f862a44ddaa1e76f"}
     for new, identity in entries.items():
         assert len(new) == 16 and len(identity) == 16
+
+
+def test_an_alias_recorded_for_another_sport_does_not_apply(sealed, monkeypatch):
+    monkeypatch.setattr(research_live, "_ALIASES", {})
+    digest = research_live.definition(sealed)             # the sealed store is NHL
+    monkeypatch.setattr(research_live, "_ALIASES", {digest: "94844709fc4412a5"})
+    monkeypatch.setattr(research_live, "_ALIAS_SPORT", {digest: "nba"})
+    assert research_live.definition(sealed) == digest
+    monkeypatch.setattr(research_live, "_ALIAS_SPORT", {digest: "nhl"})
+    assert research_live.definition(sealed) == "94844709fc4412a5"
