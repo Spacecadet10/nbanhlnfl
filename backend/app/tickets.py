@@ -744,10 +744,16 @@ def soccer_section(now, contract=False):
             try:
                 from app import soccer_record
                 soccer_record.attach(conn, picks, stamp)
-            except Exception as exc:
-                market_error = market_error or 'contract_' + type(exc).__name__
+            except Exception as exc:     # reported apart: the picks still go out, with the legacy lines and no history
+                contract_error = type(exc).__name__
+                for p in picks:
+                    for k in ('percentage_history', 'record_basis'):
+                        p.pop(k, None)
+            else:
+                contract_error = None
         live = [c for c in (*soccer_live.LAUNCH, *intl_live.LAUNCH) if c not in refused]
         return {**({'markets_error': market_error} if market_error else {}),
+                **({'contract_error': contract_error} if contract and contract_error else {}),
                 'freshness': {'source_state': 'fresh' if live else 'stale', 'failing': [] if live else sorted(refused),
                               'competitions_live': live}, 'report': {'mode': 'real', 'picks': picks},
                 'missing_due_games': [], 'refused': refused}

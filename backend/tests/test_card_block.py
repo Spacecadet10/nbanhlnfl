@@ -195,3 +195,19 @@ def test_ledger_texts_keep_their_identity_when_the_new_lines_are_added():
         new = '\n'.join(lines[:at] + ['Sportsbook quote: x', 'Recovered Telegram cards 11-02 to 11-14: 1W–0L (1 settled) · model version not recorded']
                        + lines[at:])
         assert tg.card_identity(new) == tg.card_identity(old)
+
+
+def test_soccer_delivery_key_is_the_same_with_or_without_the_contract_history():
+    """Soccer cards gain percentage_history (soccer_section contract=True); the key must stay the legacy Soccer shape
+    [market, forecast_id, generated_at, cutoff_at], or every Soccer card already sent would go out again."""
+    base = dict(game_id='s1', forecast_id='1x2:1:draw_no_bet:home', market='draw_no_bet', market_title='Draw no bet (90 min)',
+                matchup='Senegal vs Belarus', pick_label='Senegal DNB', probability=.6, status='scheduled', grade='pending',
+                generated_at='2026-11-02T05:00:00Z', cutoff_at='2026-11-02T06:00:00Z', tipoff='2026-11-02T21:00:00Z',
+                competition='friendly', strong=False, game_rank=None)
+    with_history = dict(base, percentage_history={'sport': 'soccer', 'market': 'draw_no_bet', 'model_version': 'v2', 'source': 'soccer_live',
+                                                  'percentage': '60.0', 'wins': 1, 'losses': 3, 'pushes': 1, 'settled': 4,
+                                                  'small_sample': True, 'line_source': 'none', 'telegram': None})
+    old_key = tg.message_batches(card('soccer', [dict(base)]), '123', context_selection=True)[0][0]
+    new_key, text = tg.message_batches(card('soccer', [with_history]), '123', context_selection=True)[0]
+    assert new_key == old_key
+    assert '1W–3L · 1 push (4 settled)' in text

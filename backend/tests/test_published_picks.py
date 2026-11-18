@@ -101,7 +101,7 @@ def test_soccer_job_records_the_published_pick_after_the_send_only(tmp_path, mon
     (tmp_path / "soccer.sqlite").touch()
     monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path))
     section = {"report": soccer_report(), "refused": {}}
-    monkeypatch.setattr(tickets, "soccer_section", lambda now: section)
+    monkeypatch.setattr(tickets, "soccer_section", lambda now, contract=False: section)
     now = datetime.fromisoformat(NOW.replace("Z", "+00:00"))
     bot = Bot()
     with ledger(tmp_path) as conn:

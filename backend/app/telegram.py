@@ -456,8 +456,10 @@ def market_block(sport, pick, *, preview=False, compact=False):
     if (h['sport'] != sport or h['market'] != pick['market']
             or h['percentage'] != displayed_percentage(pick['probability'])):
         raise DeliveryError('Pick market/probability does not match its history; not sent.')
-    version = [pick['market'], pick['forecast_id'], pick['generated_at'], h['model_version'], h['source'],
-               h['losses'] > h['wins'], pick['strong']]
+    # Soccer keeps its legacy key shape whether or not the contract history is attached (no resend of a sent Soccer card).
+    version = ([pick['market'], pick['forecast_id'], pick['generated_at'], pick['cutoff_at']] if sport == 'soccer' else
+               [pick['market'], pick['forecast_id'], pick['generated_at'], h['model_version'], h['source'],
+                h['losses'] > h['wins'], pick['strong']])
     wins = h['wins'] + int(preview and pick['grade'] == 'win')
     losses = h['losses'] + int(preview and pick['grade'] == 'loss')
     settled = wins + losses
@@ -732,7 +734,7 @@ def run_once(bot, settings, conn, *, now=None):
     from . import tickets
     if config.db_path('soccer').is_file():
         try:
-            section = tickets.soccer_section(now)
+            section = tickets.soccer_section(now, contract=True)   # shared card contract; the key keeps the Soccer shape
             if 'error' in section or section.get('markets_error'):
                 result['sports']['soccer'] = {'status': 'failed', 'reason': section.get('error') or section['markets_error']}
             else:
