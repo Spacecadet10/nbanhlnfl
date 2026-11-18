@@ -1,0 +1,54 @@
+{
+  "policy_id": "nhl-challengers-v1",
+  "sport": "nhl",
+  "version": 1,
+  "description": "Prospective challengers: recorded point-in-time before tip-off in a separate store and scored against the incumbent at read time. Registration is never promotion; nothing here reaches serving, cards, betting or candidate_forecasts. Seeded from the existing candidate pool only (no new models).",
+  "challengers": [
+    {
+      "spec": {
+        "name": "poisson_draw:nhl_base",
+        "sport": "nhl",
+        "family": "poisson_draw",
+        "head": "goals",
+        "features": "nhl_base",
+        "role": "candidate",
+        "why": "Goal-rate GLMs with shot-quality inputs and a fitted draw inflation (joint score); goals_glm lacks xG.",
+        "refit": "season",
+        "extra": null
+      },
+      "provenance": {
+        "source": "existing_pool",
+        "trial_id": null,
+        "commit": null,
+        "trial_decision": null,
+        "registered_by": "learning-phase2 seed (Claude Sonnet 5.5); owner review pending",
+        "registered_at": "2026-11-18T12:30:00Z",
+        "note": "Existing pool spec (candidates/registry.py), unchanged; recorded here so a prospective paired comparison against the incumbent accrues in a store separate from candidate_forecasts."
+      },
+      "preregistered_n": null
+    },
+    {
+      "spec": {
+        "name": "multinomial_l2:nhl_base",
+        "sport": "nhl",
+        "family": "multinomial_l2",
+        "head": "reg3",
+        "features": "nhl_base",
+        "role": "candidate",
+        "why": "Direct regulation home/draw/away classifier; no Poisson assumption for draws.",
+        "refit": "season",
+        "extra": null
+      },
+      "provenance": {
+        "source": "existing_pool",
+        "trial_id": null,
+        "commit": null,
+        "trial_decision": null,
+        "registered_by": "learning-phase2 seed (Claude Sonnet 5.5); owner review pending",
+        "registered_at": "2026-11-18T12:30:00Z",
+        "note": "Existing pool spec (candidates/registry.py), unchanged; recorded here so a prospective paired comparison against the incumbent accrues in a store separate from candidate_forecasts."
+      },
+      "preregistered_n": null
+    }
+  ]
+}
