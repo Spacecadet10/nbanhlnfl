@@ -96,3 +96,14 @@ def test_check_prereg(tmp_path):
         pc.check_prereg("x.md", sha, tmp_path)
     with pytest.raises(pc.Refused):
         pc.check_prereg("missing.md", sha, tmp_path)
+
+
+def test_logistic_fit_weighted_and_degenerate():
+    ps = [0.2] * 10 + [0.8] * 10
+    ys = [1] * 2 + [0] * 8 + [1] * 8 + [0] * 2
+    a, b = pc.logistic_fit(ps, ys)
+    assert a == pytest.approx(0.0, abs=1e-6) and b == pytest.approx(1.0, abs=1e-6)
+    # a weight constant within each group leaves the saturated fit unchanged
+    a2, b2 = pc.logistic_fit(ps, ys, [0.5] * 10 + [1.0] * 10)
+    assert b2 == pytest.approx(1.0, abs=1e-6)
+    assert pc.logistic_fit([0.6, 0.6], [1, 0]) == (None, None) and pc.logistic_fit([], []) == (None, None)

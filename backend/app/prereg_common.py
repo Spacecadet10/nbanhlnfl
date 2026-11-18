@@ -181,3 +181,30 @@ def log_loss(p: float, y) -> float:
 
 def brier(p: float, y) -> float:
     return (p - y) ** 2
+
+
+def logistic_fit(ps, ys, ws=None):
+    """Weighted logistic regression of y on logit(p): (intercept, slope), or (None, None) without variance in logit(p) or when
+    the fit diverges."""
+    x = np.array([logit(clip_p(p)) for p in ps], float)
+    y = np.array(ys, float)
+    w = np.ones(len(x)) if ws is None else np.array(ws, float)
+    if len(x) == 0 or w.sum() <= 0:
+        return None, None
+    xm = float((w * x).sum() / w.sum())
+    if float((w * (x - xm) ** 2).sum()) < 1e-12:
+        return None, None
+    X = np.column_stack([np.ones(len(x)), x])
+    beta = np.zeros(2)
+    for _ in range(100):
+        mu = 1 / (1 + np.exp(-X @ beta))
+        try:
+            step = np.linalg.solve(X.T @ (X * (w * mu * (1 - mu))[:, None]) + 1e-12 * np.eye(2), X.T @ (w * (y - mu)))
+        except np.linalg.LinAlgError:
+            return None, None
+        beta = beta + step
+        if np.max(np.abs(step)) < 1e-10:
+            break
+    if not np.all(np.isfinite(beta)) or np.max(np.abs(beta)) > 50:
+        return None, None
+    return float(beta[0]), float(beta[1])
