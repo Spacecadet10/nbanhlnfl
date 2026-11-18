@@ -74,6 +74,18 @@ def line_models(conn) -> list:
     return [primary, RidgePoints(cfg), GbtPoints(cfg), Cadenced(RidgePoints(cfg), "weekly"), Cadenced(GbtPoints(cfg), "weekly")]
 
 
+def _load_aliases() -> dict:
+    """{computed digest: earlier identity} from reference/identity_aliases.json, key "research" (same file and precedent as
+    agreement.py): a code change that cannot alter a sport's forecasts keeps that sport's identity."""
+    try:
+        return {k: v["identity"] for k, v in json.loads(agreement.ALIASES_PATH.read_text()).get("research", {}).items()}
+    except FileNotFoundError:
+        return {}
+
+
+_ALIASES = _load_aliases()
+
+
 def definition(conn) -> str:
     """Research identity: winner members (agreement digest), line members, combination and selection code, library version."""
     h = hashlib.sha256(agreement.definition_hash(agreement.models(conn)).encode())
@@ -88,7 +100,8 @@ def definition(conn) -> str:
         h.update((root / name).read_bytes())
     h.update(json.dumps([(m.name, m.config()) for m in lines], sort_keys=True, default=str).encode())
     h.update(pkg_version("scikit-learn").encode())
-    return h.hexdigest()[:16]
+    digest = h.hexdigest()[:16]
+    return _ALIASES.get(digest, digest)
 
 
 def sources(sport: str, market: str) -> list[str]:
