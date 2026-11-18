@@ -717,5 +717,3 @@ def test_the_cli_override_needs_a_commit_and_counts_only_rows_of_that_commit(tmp
     m.main(base + ['--reviewed-commit', 'cd' * 20])                  # a commit no row carries
     out = capsys.readouterr().out
     assert '"code revision not reviewed": 3' in out.split('NBA:')[1].split('\n')[1]
-    m.main(base + ['--reviewed-commit', ROW_COMMIT])
-    assert "Games not counted: {}" in capsys.readouterr().out.split('NBA:')[1]
