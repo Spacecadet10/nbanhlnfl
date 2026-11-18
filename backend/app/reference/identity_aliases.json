@@ -6,5 +6,19 @@
    "since": "2026-11-17",
    "reason": "Owner decision Nov 17 2026: the NBA injury (availability) files were removed from NHL's agreement digest and agreement.py gained this alias lookup; neither changes any NHL member's forecasts. NHL keeps its identities (agreement d6f4f8d6b4f4fda8, research f862a44ddaa1e76f, adaptive b921c537a765c65c). Any later change to NHL model files, backtest.py, agreement.py or settings gives a new digest that is not aliased."
   }
+ },
+ "research": {
+  "142777bdd63e230b": {
+   "identity": "94844709fc4412a5",
+   "sport": "nba",
+   "since": "2026-11-17",
+   "reason": "Owner decision Nov 17 2026: the live release (43d4b74) and main differ only by market_live.py NCAAB-only branches, which cannot change an NBA/NHL forecast; main's research digest is aliased to the live identity so adaptive fits and rows trained under the live release stay valid for delivery. Any later change to a hashed research file gives a new digest that is not aliased."
+  },
+  "0aba69f46bfff0bb": {
+   "identity": "f862a44ddaa1e76f",
+   "sport": "nhl",
+   "since": "2026-11-17",
+   "reason": "Owner decision Nov 17 2026: the live release (43d4b74) and main differ only by market_live.py NCAAB-only branches, which cannot change an NBA/NHL forecast; main's research digest is aliased to the live identity so adaptive fits and rows trained under the live release stay valid for delivery. Any later change to a hashed research file gives a new digest that is not aliased."
+  }
  }
 }
