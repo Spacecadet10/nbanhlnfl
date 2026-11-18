@@ -280,7 +280,7 @@ function SoccerLiveCard({ f }: { f: SoccerLiveForecast }) {
         Forecast {dateTime(f.generated_at)} (for kickoff {dateTime(f.cutoff_at)}); results through {f.inputs_through ? dateTime(f.inputs_through) : '—'}; ESPN data retrieved {dateTime(f.source_retrieved_at)}.
       </p>
       {(f.percentage_history || f.sportsbook || f.record_basis) &&
-        <p><PickEvidence header={{ pick: f.pick_label ?? names[f.most_likely], market: '1X2 (90 minutes)', probability: f.probabilities[f.most_likely] }}
+        <p><PickEvidence teams={{ home: f.home, away: f.away }} header={{ pick: f.pick_label ?? names[f.most_likely], market: '1X2 (90 minutes)', probability: f.probabilities[f.most_likely] }}
           history={f.percentage_history} grade={f.result ? (f.result === f.most_likely ? 'win' : 'loss') : 'pending'}
           sportsbook={f.sportsbook} recordBasis={f.record_basis} startAt={f.kickoff_at} /></p>}
     </article>

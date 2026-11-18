@@ -56,10 +56,12 @@ def test_every_sport_shows_the_same_items(sport):
                 pushes=2, telegram=TELEGRAM)
     text = text_of(card(sport, [p]))
     assert '<b>Model 57.1%</b> · 3W–1L · 2 push (4 settled)' in text
-    assert ('Sportsbook quote: DraftKings -110/-110 at -8.5 · no-vig 50.4% · gap +6.7 pts · quote 02:29 PM EST') in text
+    assert ('Sportsbook quote: DraftKings -110/-110 at -8.5 · no-vig 50.4% · gap +6.7 pts · underpriced · quote 02:29 PM EST') in text
     assert 'Recovered Telegram cards 11-02 to 11-14: 3W–2L · 1 push (6 settled) · model version not recorded' in text
     assert 'Record uses the latest pregame forecast (#7, 02:30 PM EST); 2 earlier kept for audit' in text
-    assert 'Telegram card sent forecast #5 (a -9.5 52.0%): win' in text
+    assert 'Telegram card sent forecast #5 (ORL -9.5, 52.0%): won' in text and '(a -9.5' not in text
+    assert text.count('Sportsbook quote:') == 1            # one sportsbook line per market
+    assert 'sportsbook 50.4%' not in text and 'bookmaker line at forecast · sportsbook' not in text
     assert 'Counts are other settled games, not this game.' in text
     assert telegram_card.render_card(text).startswith(b'\x89PNG')
 
@@ -69,7 +71,7 @@ def test_no_quote_says_why_and_never_shows_a_number():
           'reason': 'No sportsbook quote saved at this line'}
     text = text_of(card('nba', [history(pick(sportsbook=sb), telegram=TELEGRAM)]))
     assert 'Sportsbook: No sportsbook quote saved at this line' in text
-    assert 'Sportsbook quote:' not in text and 'sportsbook probability unavailable' in text
+    assert 'Sportsbook quote:' not in text and 'sportsbook probability unavailable' not in text
 
 
 def test_model_line_has_its_own_reason():
@@ -108,7 +110,7 @@ def test_soccer_dnb_basis_and_pushes_use_the_same_block():
     p['strong'] = False
     text = text_of(card('soccer', [p]), context_selection=True)
     assert '3W–1L · 4 push (4 settled)' in text
-    assert 'DraftKings -150/+120 · no-vig 50.4% · gap +6.7 pts · quote 02:29 PM EST · conditional on no push' in text
+    assert 'DraftKings -150/+120 · no-vig 50.4% · gap +6.7 pts · underpriced · quote 02:29 PM EST · conditional on no push' in text
     assert telegram_card.render_card(text).startswith(b'\x89PNG')
 
 
@@ -119,6 +121,28 @@ def test_soccer_without_history_keeps_its_legacy_lines_and_gains_the_quote_detai
              competition='friendly', strong=False, game_rank=None, sportsbook={**SPORTSBOOK, 'basis': 'conditional on no draw'})
     text = text_of(card('soccer', [p]), context_selection=True)
     assert 'Exact-% history unavailable' in text and 'conditional on no draw' in text
+    assert 'sportsbook probability unavailable' not in text      # header and block read the same source
+    assert 'sportsbook 50.4%' in text.split('Market breakdown')[0]
+
+
+def test_the_header_and_the_block_agree_on_the_sportsbook_source():
+    p = history(pick('soccer', market='draw_no_bet', market_title='Draw no bet (90 min)', pick_label='Senegal DNB', sportsbook=SPORTSBOOK,
+                     cutoff_at='2026-11-02T20:30:00Z', forecast_id='1x2:1:dnb:home', probability=0.6),
+                market='draw_no_bet', percentage='60.0', line_source='none')
+    p['strong'] = False
+    text = text_of(card('soccer', [p]), context_selection=True)
+    head, block = text.split('Market breakdown')
+    assert 'sportsbook 50.4%' in head and 'sportsbook probability unavailable' not in head and 'no-vig 50.4%' in block
+
+
+def test_published_pick_is_written_in_words_for_every_market_shape():
+    rb = lambda side, line: {'forecast_id': 7, 'generated_at': '2026-11-02T19:30:00Z', 'pregame_forecasts': 1,
+                             'published': {'forecast_id': 5, 'side': side, 'line': line, 'probability': 0.52, 'grade': 'loss'}}
+    cases = [('total', 'b', 215.5, 'Under 215.5'), ('total', 'a', 215.5, 'Over 215.5'), ('spread', 'b', 9.5, 'BOS +9.5'),
+             ('winner', 'a', None, 'ORL'), ('reg3', 'mid', None, 'Draw'), ('team_total_home', 'a', 109.5, 'ORL over 109.5')]
+    for market, side, line, words in cases:
+        lines = tg.record_basis_lines(rb(side, line), market, 'BOS @ ORL')
+        assert lines == [f'Telegram card sent forecast #5 ({words}, 52.0%): lost'], (market, lines)
 
 
 def test_a_long_card_drops_the_optional_detail_before_it_is_refused():

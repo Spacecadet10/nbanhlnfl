@@ -1,7 +1,19 @@
 // The shared card section's wording (run: npm run test:unit). Same facts as the Telegram card (backend telegram.market_block).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { liveRecordLine, recordBasisLines, recordLabel, telegramLine, thisGameLine } from './cardRecord.ts';
+import { liveRecordLine, publishedPickText, recordBasisLines, recordLabel, telegramLine, thisGameLine } from './cardRecord.ts';
+
+test('a sent pick is written in words for every market shape, never as a side code', () => {
+  const teams = { home: 'ORL', away: 'BOS' };
+  const p = (side, line) => ({ forecast_id: 5, side, line });
+  assert.equal(publishedPickText(p('b', 9.5), 'spread', teams), 'BOS +9.5');
+  assert.equal(publishedPickText(p('a', -9.5), 'spread', teams), 'ORL -9.5');
+  assert.equal(publishedPickText(p('b', 215.5), 'total', teams), 'Under 215.5');
+  assert.equal(publishedPickText(p('a', null), 'winner', teams), 'ORL');
+  assert.equal(publishedPickText(p('mid', null), 'reg3', teams), 'Draw');
+  assert.equal(publishedPickText(p('a', 109.5), 'team_total_home', teams), 'ORL over 109.5');
+  assert.equal(publishedPickText({ ...p('x', null), pick_label: 'Senegal DNB' }, 'draw_no_bet'), 'Senegal DNB');
+});
 import { quoteTime, sportsbookLine } from './sportsbook.ts';
 
 const h = { sport: 'nba', market: 'spread', wins: 3, losses: 1, settled: 4, pushes: 0 };
@@ -49,9 +61,9 @@ test('no Telegram history: per-sport sentence, NCAAB says when recording began, 
 test('record basis: latest of several pregame forecasts, and a card that was sent with another forecast', () => {
   const rb = { forecast_id: 7, generated_at: '2026-11-02T19:30:00Z', pregame_forecasts: 3,
     published: { forecast_id: 5, side: 'a', line: -9.5, probability: 0.52, grade: 'win' } };
-  assert.deepEqual(recordBasisLines(rb, clock), [
+  assert.deepEqual(recordBasisLines(rb, clock, { market: 'spread', teams: { home: 'ORL', away: 'BOS' } }), [
     'Record uses the latest pregame forecast (#7, 2:30 PM); 2 earlier kept for audit',
-    'Telegram card sent forecast #5 (a -9.5 52.0%): win']);
+    'Telegram card sent forecast #5 (ORL -9.5, 52.0%): won']);
   assert.deepEqual(recordBasisLines({ ...rb, pregame_forecasts: 1, published: { forecast_id: 7 } }, clock), []);
   assert.deepEqual(recordBasisLines(null, clock), []);
 });

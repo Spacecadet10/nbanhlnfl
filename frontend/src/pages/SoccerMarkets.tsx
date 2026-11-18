@@ -51,7 +51,7 @@ function SelectionRows({ sels, home, away }: { sels: SoccerMarketSelection[]; ho
           </td>
           <td>{s.market_probability != null ? pct1(s.market_probability) : '—'}
             {(s.percentage_history || s.sportsbook || s.record_basis) &&
-              <div><PickEvidence header={{ pick: s.pick_label ?? selectionLabel(s.market, s.side, s.line, home, away), market: s.market_title, line: s.line, probability: s.win_share }}
+              <div><PickEvidence teams={{ home, away }} header={{ pick: s.pick_label ?? selectionLabel(s.market, s.side, s.line, home, away), market: s.market_title, line: s.line, probability: s.win_share }}
                 history={s.percentage_history} grade={s.result} sportsbook={s.sportsbook} recordBasis={s.record_basis} /></div>}</td>
           <td>{s.source === 'bookmaker' ? returnText(s.expected_return) : '—'}</td>
           <td>{s.result ? RESULT_LABEL[s.result] : '—'}</td>

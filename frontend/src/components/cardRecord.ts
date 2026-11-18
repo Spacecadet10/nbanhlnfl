@@ -49,8 +49,28 @@ export function telegramLine(h: ForecastPercentageHistory): string | null {
   return `No recovered Telegram history for ${sport}${h.sport === 'ncaab' && cov?.live_since ? ` (recording began ${cov.live_since.slice(0, 10)})` : ''}`;
 }
 
+/** Home and away from a ranked pick's "AWAY @ HOME" matchup; undefined when it has another shape. */
+export function teamsOf(matchup: string | null | undefined): { home: string; away: string } | undefined {
+  const m = matchup?.split(' @ ');
+  return m && m.length === 2 ? { away: m[0], home: m[1] } : undefined;
+}
+
+/** The pick of a sent card in words ('ORL -9.5', 'Over 215.5', 'Draw'), never the raw side code; the API's pick_label wins.
+ *  Sides follow markets.SIDE_LABELS: a/b = home/away (winner, spread, three-way) or over/under (totals); mid = draw. */
+export function publishedPickText(p: NonNullable<RecordBasis['published']>, market: string | undefined, teams?: { home: string; away: string }): string {
+  if (p.pick_label) return p.pick_label;
+  const isTotal = market === 'total' || market === 'team_total_home' || market === 'team_total_away';
+  const word = p.side === 'a' ? (isTotal ? 'over' : 'home') : p.side === 'b' ? (isTotal ? 'under' : 'away') : p.side === 'mid' ? 'draw' : (p.side ?? '?');
+  let who = word === 'home' ? (teams?.home ?? 'Home') : word === 'away' ? (teams?.away ?? 'Away') : word.charAt(0).toUpperCase() + word.slice(1);
+  if (isTotal && market !== 'total' && teams) who = `${market === 'team_total_home' ? teams.home : teams.away} ${word}`;
+  if (p.line == null) return who;
+  const signed = !isTotal;
+  return `${who} ${signed && p.line > 0 ? '+' : ''}${p.line}`;
+}
+
 /** The record-basis notes of contract item 4: which forecast counts, and how a card that was sent differs. */
-export function recordBasisLines(rb: RecordBasis | null | undefined, clock: (iso: string) => string | null): string[] {
+export function recordBasisLines(rb: RecordBasis | null | undefined, clock: (iso: string) => string | null,
+  ctx: { market?: string; teams?: { home: string; away: string } } = {}): string[] {
   if (!rb) return [];
   const out: string[] = [];
   if (rb.pregame_forecasts > 1) {
@@ -59,8 +79,8 @@ export function recordBasisLines(rb: RecordBasis | null | undefined, clock: (iso
   }
   const p = rb.published;
   if (p && p.forecast_id !== rb.forecast_id) {
-    const what = [p.side, p.line == null ? null : String(p.line)].filter(Boolean).join(' ');
-    out.push(`Telegram card sent forecast #${p.forecast_id} (${what}${p.probability == null ? '' : ` ${(p.probability * 100).toFixed(1)}%`}): ${p.grade ?? 'not graded'}`);
+    const grade = p.grade === 'win' ? 'won' : p.grade === 'loss' ? 'lost' : (p.grade ?? 'not graded');
+    out.push(`Telegram card sent forecast #${p.forecast_id} (${publishedPickText(p, ctx.market, ctx.teams)}${p.probability == null ? '' : `, ${(p.probability * 100).toFixed(1)}%`}): ${grade}`);
   }
   return out;
 }

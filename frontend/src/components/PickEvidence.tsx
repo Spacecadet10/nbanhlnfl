@@ -16,14 +16,16 @@ export interface PickEvidenceProps {
   startAt?: string;
   /** Pick, market, line and app % as a first line; leave out where the page already prints them next to this section. */
   header?: { pick: string; market: string; line?: number | null; probability: number } | null;
+  /** Home and away names, to put a sent card's pick in words ("ORL -9.5"). */
+  teams?: { home: string; away: string };
   /** The label before the sportsbook line when the pick is one of several outcomes (Soccer 1X2): "Home win". */
   bookLabel?: string;
 }
 
 /** Exact-percentage observations and an explicitly experimental opposite scenario; original forecasts stay unchanged. */
-export function PickEvidence({ history: h, grade, sportsbook, recordBasis, opposite, startAt, header, bookLabel }: PickEvidenceProps) {
+export function PickEvidence({ history: h, grade, sportsbook, recordBasis, opposite, startAt, header, bookLabel, teams }: PickEvidenceProps) {
   const book = sportsbook ? sportsbookLine(sportsbook) : null;
-  const basis = recordBasisLines(recordBasis, quoteTime);
+  const basis = recordBasisLines(recordBasis, quoteTime, { market: h?.market, teams });
   const headLine = header && <>
     <strong>{header.pick}</strong> · {header.market}{header.line != null && <> · line {header.line > 0 ? '+' : ''}{header.line}</>} · app {pct(header.probability, 1)}<br />
   </>;

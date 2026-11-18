@@ -72,7 +72,7 @@ export function CanonicalBlock({ c, home, away, detail = false }: {
         {' · '}<GradeText grade={c.grade} />
         {!winner && c.result_label && <span className="muted"> · result: {c.result_label}</span>}
       </p>
-      <p><PickEvidence sportsbook={c.sportsbook} recordBasis={c.record_basis} history={c.percentage_history} grade={c.grade} opposite={r.opposite_pick_label} startAt={r.start_at} /></p>
+      <p><PickEvidence teams={{ home: home.abbr, away: away.abbr }} sportsbook={c.sportsbook} recordBasis={c.record_basis} history={c.percentage_history} grade={c.grade} opposite={r.opposite_pick_label} startAt={r.start_at} /></p>
       {c.percentage_history?.sport === "nfl" && c.market !== "winner"
         ? <p className="no-skill small">Informational NFL score forecast. This market has no proven skill against the bookmaker’s line and is excluded from recommended picks.</p>
         : <NoSkillNote market={c.market} />}

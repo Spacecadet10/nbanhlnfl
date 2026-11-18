@@ -68,7 +68,7 @@ export interface RecordBasis {
   pregame_forecasts: number;
   earlier?: { forecast_id: number; generated_at: string; side?: string; line?: number | null; probability?: number; model_version?: string }[];
   published?: { forecast_id: number; side?: string; line?: number | null; probability?: number; model_version?: string;
-    sent_at?: string; message_id?: number; grade?: string | null } | null;
+    sent_at?: string; message_id?: number; grade?: string | null; pick_label?: string | null } | null;
 }
 
 /** The selected game_forecasts row: the one record every page shows and grades for this game and market. */

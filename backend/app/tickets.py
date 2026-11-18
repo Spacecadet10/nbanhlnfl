@@ -351,6 +351,18 @@ def quote_check(conn, pick, stamp):
                 line_now=now['line'] if now else None, price_now=price(now), price_at_forecast=price(first), line_moved=moved)
 
 
+def card_comparison(pick):
+    """(sportsbook probability or None, app probability compared, basis note or None) as the card shows them. The contract's
+    `sportsbook` object wins when it holds an exact quote, so the pick summary and the market block never read two sources;
+    otherwise the card's own card_market_prob / market_prob."""
+    sb = pick.get('sportsbook')
+    sb = sb.model_dump(mode='json') if hasattr(sb, 'model_dump') else sb
+    if sb and sb.get('status') == 'exact' and sb.get('book_probability') is not None:
+        return sb['book_probability'], sb.get('app_probability', pick['probability']), sb.get('basis')
+    return (pick.get('card_market_prob', pick.get('market_prob')), pick.get('card_app_prob', pick['probability']),
+            pick.get('card_comparison_basis'))
+
+
 def card_market_prob(conn, pick):
     """A stored quote at the forecast time, for exactly the same game, market, and line."""
     from app import threshold_overview
@@ -625,9 +637,7 @@ def card_choice(sport, picks):
     assessments = [dict(forecast_id=p['forecast_id'], distance=g, support=sp, warnings=w) for _,p,g,sp,w in candidates]
     if warnings and not support:
         return dict(method=CARD_METHOD, pick=None, reason='No supported lean: '+warnings[0], assessments=assessments)
-    book = chosen.get('card_market_prob', chosen.get('market_prob'))
-    app_compare = chosen.get('card_app_prob', chosen['probability'])
-    basis = chosen.get('card_comparison_basis')
+    book, app_compare, basis = card_comparison(chosen)
     if book is not None:
         gap = (Decimal(str(app_compare)) - Decimal(str(book))) * 100
     qualifier = f' ({basis})' if basis else ''

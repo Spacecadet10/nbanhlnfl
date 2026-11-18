@@ -233,7 +233,9 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
     elif strong:
         # Owner request Nov 9: say what the sportsbook's own price implies next to the model, and say so plainly when the
         # price asks for more than the model gives (a likely winner is not a value pick at any price).
-        book = strong[0].get('market_prob')
+        from .tickets import card_comparison
+        sb = _dump(strong[0].get('sportsbook'))
+        book = card_comparison(strong[0])[0] if sb and sb.get('status') == 'exact' else strong[0].get('market_prob')
         detail = escape(strong[0]['market_title']) + ' · Model ' + displayed_percentage(strong[0]['probability']) + '%'
         if book is not None:
             detail = ('App ' + displayed_percentage(strong[0]['probability']) + '% · Sportsbook ' + displayed_percentage(book) + '% · '
@@ -331,7 +333,8 @@ def sportsbook_detail_line(sb):
         gap = round(float(displayed_percentage(sb['app_probability'])) - float(displayed_percentage(sb['book_probability'])), 1)
     source = ' '.join(str(x) for x in (sb.get('provider'), sb.get('price'), f"at {sb['line']:g}" if sb.get('line') is not None else None) if x)
     parts = [source or 'quote', f"no-vig {displayed_percentage(sb['book_probability'])}%",
-             f"gap {'+' if gap > 0 else '−' if gap < 0 else '±'}{abs(gap):.1f} pts"]
+             f"gap {'+' if gap > 0 else '−' if gap < 0 else '±'}{abs(gap):.1f} pts",
+             price_tag(sb['app_probability'], sb['book_probability'])]
     if _hm(sb.get('retrieved_at')):
         parts.append('quote ' + _hm(sb['retrieved_at']))
     if sb.get('basis'):
@@ -362,7 +365,31 @@ def telegram_history_line(sport, h):
     return f"No recovered Telegram history for {sport.upper()}" + (f" (recording began {str(began)[:10]})" if sport == 'ncaab' and began else '')
 
 
-def record_basis_lines(rb):
+def published_pick_text(pub, market, matchup):
+    """The pick a sent card carried in words ('ORL -9.5', 'Over 215.5', 'Draw'), never the raw side code. The API's own
+    pick_label wins; else the side is read through markets.SIDE_LABELS with the teams of 'AWAY @ HOME' (or 'HOME vs AWAY')."""
+    if pub.get('pick_label'):
+        return str(pub['pick_label'])
+    from . import markets
+    side, line = pub.get('side'), pub.get('line')
+    labels = markets.SIDE_LABELS.get(market)
+    word = labels[('a', 'mid', 'b').index(side)] if labels and side in ('a', 'mid', 'b') else (
+        {'a': 'home', 'b': 'away'}.get(side, side))     # Soccer markets outside SIDE_LABELS: a/b = home/away
+    away, home = None, None
+    if matchup and ' @ ' in matchup:
+        away, home = matchup.split(' @ ', 1)
+    elif matchup and ' vs ' in matchup:
+        home, away = matchup.split(' vs ', 1)
+    who = {'home': home, 'away': away}.get(word) or (word.capitalize() if word else '?')
+    if market in ('team_total_home', 'team_total_away') and home and word in ('over', 'under'):
+        who = f"{home if market.endswith('home') else away} {word}"
+    if line is None:
+        return who
+    signed = market in ('spread', 'winner') or market not in ('total', 'team_total_home', 'team_total_away')
+    return f"{who} {line:+g}" if signed else f"{who} {line:g}"
+
+
+def record_basis_lines(rb, market=None, matchup=None):
     """Which forecast the record uses when a game has several, and how a card that was actually sent differs (contract item 4)."""
     from .threshold_overview import displayed_percentage
     rb = _dump(rb)
@@ -375,9 +402,10 @@ def record_basis_lines(rb):
         out.append(f"Record uses the latest pregame forecast (#{rb['forecast_id']}{', ' + at if at else ''}); {n - 1} earlier kept for audit")
     pub = rb.get('published')
     if pub and pub.get('forecast_id') != rb.get('forecast_id'):
-        what = ' '.join(str(x) for x in (pub.get('side'), None if pub.get('line') is None else f"{pub['line']:g}") if x)
-        pct = f" {displayed_percentage(pub['probability'])}%" if pub.get('probability') is not None else ''
-        out.append(f"Telegram card sent forecast #{pub['forecast_id']} ({what}{pct}): {pub.get('grade') or 'not graded'}")
+        what = published_pick_text(pub, market, matchup)
+        pct = f", {displayed_percentage(pub['probability'])}%" if pub.get('probability') is not None else ''
+        grade = {'win': 'won', 'loss': 'lost'}.get(pub.get('grade'), pub.get('grade') or 'not graded')
+        out.append(f"Telegram card sent forecast #{pub['forecast_id']} ({what}{pct}): {grade}")
     return [escape(x) for x in out]
 
 
@@ -388,8 +416,11 @@ def market_block(sport, pick, *, preview=False, compact=False):
     Returns (lines, delivery_version, shows_forecast_time_price) or None for a pick without history (outside Soccer).
     The version list is what the delivery key hashes; nothing here may change it."""
     from .threshold_overview import MIN_LIVE_GRADED, displayed_percentage
+    from .tickets import card_comparison
     h = _dump(pick.get('percentage_history'))
-    book = pick.get('card_market_prob', pick.get('market_prob'))
+    sb = _dump(pick.get('sportsbook'))
+    book, app_compared, comparison_basis = card_comparison(pick)    # the same source the pick summary line reads
+    one_line = bool(sb) and not compact    # the contract's sportsbook object: ONE sportsbook line, no legacy note beside it
     if h is None:
         if sport != 'soccer':
             return None
@@ -404,17 +435,18 @@ def market_block(sport, pick, *, preview=False, compact=False):
         else:
             provenance += '; price unavailable'
         comparison = f"Sportsbook {displayed_percentage(book)}%" if book is not None else "Sportsbook probability unavailable"
-        priced = book is not None and _forecast_time_price(pick)
-        if 'card_app_prob' in pick:
-            comparison = f"App {displayed_percentage(pick['card_app_prob'])}% / " + comparison
-        if pick.get('card_comparison_basis'):
-            comparison += f" ({pick['card_comparison_basis']})"
-        lines = [f"<b>{escape(pick['market_title'])}</b>", f"{escape(pick['pick_label'])} · {escape(comparison)} · {escape(provenance)}",
+        priced = book is not None and (_forecast_time_price(pick) or bool(sb))
+        if app_compared != pick['probability'] or 'card_app_prob' in pick:
+            comparison = f"App {displayed_percentage(app_compared)}% / " + comparison
+        if comparison_basis:
+            comparison += f" ({comparison_basis})"
+        head = provenance if one_line else f"{comparison} · {provenance}"
+        lines = [f"<b>{escape(pick['market_title'])}</b>", f"{escape(pick['pick_label'])} · {escape(head)}",
                  f"<b>Model {displayed_percentage(pick['probability'])}%</b> · Exact-% history unavailable"]
-        detail = None if compact else sportsbook_detail_line(pick.get('sportsbook'))
+        detail = sportsbook_detail_line(sb) if one_line else None
         if detail:
             lines.append(detail)
-        lines += record_basis_lines(pick.get('record_basis'))
+        lines += record_basis_lines(pick.get('record_basis'), pick.get('market'), pick.get('matchup'))
         return lines + [''], version, priced
     if (h['sport'] != sport or h['market'] != pick['market']
             or h['percentage'] != displayed_percentage(pick['probability'])):
@@ -426,7 +458,9 @@ def market_block(sport, pick, *, preview=False, compact=False):
     settled = wins + losses
     source = {'model': ' · <i>model line</i>', 'bookmaker': ' · <i>bookmaker line at forecast</i>', 'none': ''}[h['line_source']]
     priced = False
-    if book is not None:   # on the small grey line under the pick, so the record line keeps its length and never runs off the card
+    if one_line:     # the single sportsbook line below carries the %, the tag and the reason
+        priced = book is not None
+    elif book is not None:   # on the small grey line under the pick, so the record line keeps its length and never runs off the card
         priced = _forecast_time_price(pick)
         basis = pick.get('card_comparison_basis')
         detail = f" ({escape(basis)})" if basis else f" · {price_tag(pick['probability'], book)}"
@@ -451,13 +485,13 @@ def market_block(sport, pick, *, preview=False, compact=False):
         # Review MEDIUM (Nov 11): the live line's own small-sample threshold and wording, so a short history is not read as proof.
         small = ' · Small sample.' if past['settled'] < MIN_LIVE_GRADED else ''
         lines.append(f"{prefix}{past['wins']}W–{past['losses']}L{small}")
-    detail = None if compact else sportsbook_detail_line(pick.get('sportsbook'))
+    detail = sportsbook_detail_line(sb) if one_line else None
     if detail:
         lines.append(detail)
     tline = telegram_history_line(sport, h)
     if tline and not (compact and tline.startswith('No recovered')):
         lines.append(tline)
-    lines += record_basis_lines(pick.get('record_basis'))
+    lines += record_basis_lines(pick.get('record_basis'), pick.get('market'), pick.get('matchup'))
     if preview:
         result = {'win': 'Won', 'loss': 'Lost', 'push': 'Push'}.get(pick['grade'], pick['grade'])
         lines.append('Result: ' + escape(result))
