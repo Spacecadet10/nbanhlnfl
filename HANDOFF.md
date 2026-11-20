@@ -1,3 +1,11 @@
+## Status 2026-11-20 03:00Z — consumption proven; challenger install blocked by baseline; Nov 19 lost to battery sleep — Claude Opus 5.5 (lead)
+- FORECASTING WITH FITS: PROVEN Nov 18 night for NBA weekly/daily (125 rows each, combiners 24/48) and NHL weekly/daily (19 rows each, combiners 51/68),
+  every market (NBA winner/spread/total/team totals; NHL + reg3), 0 bad, 0 unavailable (live-activation-2026-11-18/s5-proof.jsonl).
+- Trainer under heavy lock: Nov 18 20:30Z rc 0 (74 s). Nov 19: killed rc 121 / retry rc 1 because the Mac was on battery and asleep 14:19Z-02:46Z.
+- Challenger job NOT installed: night-1 baseline (without it) failed B2 freshness, B3 Telegram delivery_issue ticks, B4 load p95 7.7 > 7.0
+  (verdict-night1.json). Needs an owner decision (re-run the night on AC power, or revise thresholds) - not re-tried automatically.
+- Owner action: keep the Mac on AC; caffeinate -s does not prevent sleep on battery.
+
 ## Learning activation follow-up: trainer run 1, heavy lock, deep run, staged checks — Claude Opus 5.5 (lead, nbanhlnfl-03), Nov 18, 2026 16:15-17:20Z
 Full log: ~/nba-predictor-research-data/learning-plan.md (entries 16:16Z onward). All-sports activation is NOT complete (matrix below).
 - Scheduled trainer run 1 (launchd 14:30Z): exit 0 at 16:15Z. NHL weekly b921c537 refit -> combiner fit 51 (14:47Z); NHL daily d11d9573 -> combiner
