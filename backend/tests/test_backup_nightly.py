@@ -44,3 +44,35 @@ def test_without_a_mirror_the_run_still_backs_up_but_reports_it_is_not_off_machi
     _store(data)
     out = nb.nightly(data, root, mirror=None, stamp="20261116T043000Z")
     assert out["status"] == "no_mirror" and (root / "stores" / "20261116T043000Z" / "manifest.json").is_file()
+
+
+def test_the_snapshot_also_holds_the_ledger_recovered_history_rules_artifacts_and_config_but_never_a_secret(tmp_path):
+    import sqlite3
+    data, root = tmp_path / "data", tmp_path / "backups"
+    _store(data)
+    ledger_path = tmp_path / ".telegram-delivery.sqlite"
+    c = sqlite3.connect(ledger_path)
+    c.execute("CREATE TABLE deliveries (delivery_key TEXT, text TEXT)")
+    c.execute("INSERT INTO deliveries VALUES ('k', 'card')")
+    c.commit(); c.close()
+    repo, agents = tmp_path / "repo", tmp_path / "agents"
+    files = {repo / "docs" / "telegram_record.json": "{}", repo / "docs" / "preregistration" / "p.md": "rule",
+             data / "research" / "line-state-nba.pkl": "model", data / "reports" / "weekly_report_review.json": "{}",
+             agents / "com.nba-predictor.x.plist": "<plist/>", agents / "com.google.other.plist": "<plist/>",
+             repo / ".env.telegram": "SECRET-TOKEN", data / "research" / ".env.odds": "SECRET-KEY"}
+    for p, text in files.items():
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text)
+    out = nb.nightly(data, root, mirror=None, stamp="20261116T043000Z", ledger=ledger_path, repo_root=repo, launch_agents=agents)
+    folder = root / "stores" / "20261116T043000Z"
+    copy = sqlite3.connect(folder / "ledger.sqlite")
+    assert copy.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    assert copy.execute("SELECT text FROM deliveries").fetchone()[0] == "card"
+    copy.close()
+    assert out["extras"]["ledger"]["sha256"] == backup.sha256(folder / "ledger.sqlite")
+    with tarfile.open(folder / "files.tar.gz") as t:
+        names = set(t.getnames())
+        assert t.extractfile("repo/docs/telegram_record.json").read() == b"{}"
+    assert {"repo/docs/preregistration/p.md", "data/research/line-state-nba.pkl", "data/reports/weekly_report_review.json",
+            "launch_agents/com.nba-predictor.x.plist"} <= names
+    assert not any(".env" in n or "google" in n for n in names)
