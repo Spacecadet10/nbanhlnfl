@@ -656,7 +656,7 @@ def card_choice(sport, picks):
             support.insert(0, summary(gate))
         # Compare warnings first, then the support group, then likelihood. No sum of correlated votes. Note: for the other
         # sports the third key is the SPORTSBOOK probability, i.e. among supported, warning-free picks the market the book
-        # makes the biggest favourite wins (docs/NCAAB_COLOUR_GATE.md). NCAAB gated picks rank by expected value instead.
+        # makes the biggest favourite wins (docs/preregistration/ncaab-colour-gate-2026-11-22.md). NCAAB gated picks rank by expected value instead.
         rank = ((not warnings, gate['ev']) if gate is not None else
                 (not warnings, bool(support), book if book is not None else app, exact_win, app))
         candidates.append((rank, p, gap, support, warnings))

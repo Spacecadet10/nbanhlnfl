@@ -1,4 +1,4 @@
-"""Which NCAAB picks may be sent to Telegram: policy ncaab-colour-gate-v1 (owner brief Nov 21 2026; docs/NCAAB_COLOUR_GATE.md).
+"""Which NCAAB picks may be sent to Telegram: policy ncaab-colour-gate-v1 (owner brief Nov 21 2026; docs/preregistration/ncaab-colour-gate-2026-11-22.md).
 
 Replaces the blanket NCAAB-off switch and the top-4-by-gap rule. A pick qualifies only when ALL hold:
   1. its market is one the gate supports (winner, spread, total) and has not failed validation (VALIDATION_BLOCKED);
