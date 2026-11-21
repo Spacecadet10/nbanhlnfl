@@ -1,3 +1,21 @@
+## NCAAB Telegram cards OFF (owner decision Nov 21, 2026) — branch ncaab-cards-off, committed, NOT released — Claude Opus 5.5
+- Why: The Odds API probe (branch card-colours, HANDOFF there) showed 8 books agree with DraftKings' NCAAB totals within 0.5 pt
+  (spreads 1.5) while the top-4 rule's gaps were 25-36 pts: the gaps are model error. Owner chose "No NCAAB cards" until the
+  NCAAB model is fixed (over: keep 4 neutral cards / all ~60 / leave as is). NCAAB forecasts keep being recorded.
+- Code: config.ncaab_cards_enabled() (env NBA_NCAAB_CARDS, default OFF); telegram.run_once skips NCAAB with status 'off' and a
+  reason, before any read, selection or send (so no ncaab_card_selections row is written either). Turning cards back on =
+  NBA_NCAAB_CARDS=1 in the telegram launchd plist (an approved service change). This ends counting for the frozen top-4
+  preregistration (its section 7: a RULE change ends counting); the Nov 18-21 interim look is already disclosed.
+- Tests: new test_ncaab_cards_are_off_by_default_and_nothing_is_sent_or_selected (red first); the 5 card-path tests now set
+  NBA_NCAAB_CARDS=1. `pytest tests/test_ncaab_app_delivery.py tests/test_ncaab_cards.py tests/test_ncaab_fixes.py
+  tests/test_telegram.py tests/test_pick_withdrawn.py tests/test_published_picks.py tests/test_best_pick_record.py
+  tests/test_card_block.py tests/test_tickets.py -q` -> 359 passed, 1 skipped.
+- Not covered: the ticket snapshot (tickets.py) still lists NCAAB legs; tickets are not sent by any loaded job (only
+  com.nba-predictor.telegram is), so this matters only if someone sends a ticket by hand. No pick-withdrawn updates will go out
+  for NCAAB cards already sent.
+- Next: release to the delivery checkout (owner OK needed) -> kickstart com.nba-predictor.telegram -> confirm the next run shows
+  ncaab {'status': 'off'}.
+
 ## Status 2026-11-20 03:00Z — consumption proven; challenger install blocked by baseline; Nov 19 lost to battery sleep — Claude Opus 5.5 (lead)
 - FORECASTING WITH FITS: PROVEN Nov 18 night for NBA weekly/daily (125 rows each, combiners 24/48) and NHL weekly/daily (19 rows each, combiners 51/68),
   every market (NBA winner/spread/total/team totals; NHL + reg3), 0 bad, 0 unavailable (live-activation-2026-11-18/s5-proof.jsonl).

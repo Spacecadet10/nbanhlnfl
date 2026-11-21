@@ -95,6 +95,7 @@ def test_stale_or_failed_sources_do_not_construct_or_send_picks(tmp_path, monkey
         def execute(self, sql): assert sql == 'BEGIN'
         def close(self): pass
     from app import config
+    monkeypatch.setenv('NBA_NCAAB_CARDS', '1')    # NCAAB cards are off by default since Nov 21; this test covers the card path
     config.db_path('ncaab').touch()      # NCAAB cards need a store (and the sealed decision, which is committed): otherwise 'inactive'
     monkeypatch.setattr(db, 'connect_readonly', Source)
     monkeypatch.setattr(db, 'store_sport', lambda s:s.sport)

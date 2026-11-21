@@ -154,3 +154,10 @@ def nhl_injury_capture_enabled() -> bool:
     research cache the NHL injury member reads. Off unless NHL_INJURY_CAPTURE=1, activated only with an approved service
     configuration change."""
     return os.environ.get("NHL_INJURY_CAPTURE", "0") == "1"
+
+
+def ncaab_cards_enabled() -> bool:
+    """Whether NCAAB Telegram cards are sent. Off unless NBA_NCAAB_CARDS=1 (owner decision Nov 21 2026: no NCAAB cards until
+    the NCAAB model is fixed - eight books agreed with DraftKings within half a point while the top-4 gaps were 25-36 points).
+    NCAAB forecasts keep being recorded; only the cards stop. Turning it back on is an approved service configuration change."""
+    return os.environ.get("NBA_NCAAB_CARDS", "0") == "1"
