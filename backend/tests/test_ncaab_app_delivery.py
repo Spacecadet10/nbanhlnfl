@@ -78,6 +78,7 @@ def test_format_batch_and_dedup_key_follow_the_nba_rules(store):
 
 
 def test_run_once_covers_ncaab_and_only_ever_calls_the_stub_sender(store, tmp_path, monkeypatch):
+    monkeypatch.setenv("NBA_NCAAB_CARDS", "1")                # the card path itself (off by default since Nov 21)
     from ncaab_support import refreshed
     refreshed(store, "2026-11-17T22:29:00Z")                  # the source must be fresh for a card to go out (freshness policy)
     sends = []
@@ -199,3 +200,25 @@ def test_the_cli_routes_telegram_preview_for_ncaab_to_the_same_command_as_the_nb
     monkeypatch.setattr(tg, "command", lambda args: seen.update(sport=args.sport, action=args.telegram_action, date=args.date) or 0)
     assert cli.main(["--sport", "ncaab", "telegram", "preview", "--date", "2026-11-16"]) == 0
     assert seen == {"sport": "ncaab", "action": "preview", "date": "2026-11-16"}
+
+
+def test_ncaab_cards_are_off_by_default_and_nothing_is_sent_or_selected(store, tmp_path, monkeypatch):
+    """Owner decision Nov 21 2026: no NCAAB Telegram cards until the NCAAB model is fixed (8 books agreed with DraftKings
+    within half a point while the top-4 gaps were 25-36 pts). Forecasts keep being recorded; only the cards stop."""
+    from ncaab_support import refreshed
+    refreshed(store, "2026-11-17T22:29:00Z")
+    monkeypatch.delenv("NBA_NCAAB_CARDS", raising=False)
+    sends = []
+
+    class Bot:
+        def call(self, method, body, **kwargs):
+            if method == "getUpdates":
+                return []
+            sends.append((method, body))
+            return {"message_id": len(sends)}
+    with tg.ledger(tmp_path / "receipts.sqlite") as conn:
+        out = tg.run_once(Bot(), {"TELEGRAM_CHAT_ID": "123"}, conn, now=NOW_DT)
+        selections = conn.execute("SELECT COUNT(*) FROM ncaab_card_selections").fetchone()[0]
+    assert out["sports"]["ncaab"]["status"] == "off", out
+    assert "NBA_NCAAB_CARDS" in out["sports"]["ncaab"]["reason"]
+    assert sends == [] and selections == 0

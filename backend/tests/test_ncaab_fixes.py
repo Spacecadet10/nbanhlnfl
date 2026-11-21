@@ -93,7 +93,8 @@ def test_without_a_valid_decision_nothing_is_forecast(real):
     assert out["status"] == "failed" and "decision" in out["error"].lower()
 
 
-def test_cards_need_a_valid_decision_and_a_store(real, tmp_path):
+def test_cards_need_a_valid_decision_and_a_store(real, tmp_path, monkeypatch):
+    monkeypatch.setenv("NBA_NCAAB_CARDS", "1")                # the card path itself (off by default since Nov 21)
     from datetime import datetime, timezone
     from app import telegram as tg
     assert ncaab_app.card_issue() is None                       # the scratch store exists in the data directory

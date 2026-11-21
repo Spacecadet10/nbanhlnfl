@@ -126,7 +126,8 @@ def test_card_choice_recommends_the_selected_market_and_says_the_rule_is_unteste
     assert t.card_choice("ncaab", picks)["pick"]["market"] == "winner"      # without a selection: unchanged behaviour
 
 
-def test_run_once_sends_cards_only_for_selected_games_and_never_twice(store, tmp_path):
+def test_run_once_sends_cards_only_for_selected_games_and_never_twice(store, tmp_path, monkeypatch):
+    monkeypatch.setenv("NBA_NCAAB_CARDS", "1")                # the card path itself (off by default since Nov 21)
     store, _ = store
     sends = []
 

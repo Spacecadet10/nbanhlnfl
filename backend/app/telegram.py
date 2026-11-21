@@ -841,6 +841,10 @@ def run_once(bot, settings, conn, *, now=None):
                 from .nfl_live import activation
                 if not activation():
                     continue
+            if sport == 'ncaab' and not config.ncaab_cards_enabled():   # owner decision Nov 21: off until the model is fixed
+                result['sports'][sport] = {'status': 'off', 'reason': 'NCAAB cards are off (owner decision Nov 21 2026; '
+                                                                     'NBA_NCAAB_CARDS=1 turns them back on)'}
+                continue
             if sport == 'ncaab':     # like NFL's activation: a valid sealed decision and a store, else a visible refusal, never a card
                 from . import ncaab_app
                 reason = ncaab_app.card_issue()
