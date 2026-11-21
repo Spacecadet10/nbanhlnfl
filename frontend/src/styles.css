@@ -1418,3 +1418,9 @@ h1,h2,h3,.hero-matchup,.metric-value,.tile-value,.brand { font-family:'Barlow Co
 .soccer-src-book { background: var(--accent-lime); color: #1E1B4B; font-weight: 700; }
 .soccer-src-model { background: var(--surface-raised); color: var(--text); border: 1px dashed var(--border); }
 .soccer-live-prob strong { font-size: 1.25em; }
+
+/* Card colouring (GET /api/card-thresholds): green at or above the class threshold, red struck through below it. */
+.model-pct-green { color: var(--ok); font-weight: 600; }
+.model-pct-red { color: var(--bad); }
+.model-pct-red s { text-decoration-thickness: 2px; }
+.card-colour-key { color: var(--ok); font-weight: 600; overflow-wrap: anywhere; }

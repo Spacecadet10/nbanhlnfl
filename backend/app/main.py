@@ -638,6 +638,22 @@ def recovered_forecasts(p=Depends(get_provider)):
     return {**recovery.report(p.conn, p.now), "adaptive": recovery.adaptive_report(p.conn, p.now)}
 
 
+@app.get("/api/card-thresholds")
+def card_thresholds():
+    """The stored card-colour thresholds in force today (app/card_threshold.py): routes, T, n, state, set date and legend
+    per class / sport x class cell. Never computes a threshold. {"enabled": false} while NBA_CARD_COLOURS is off."""
+    from . import card_threshold as ct
+    if not config.card_colours_enabled():
+        return ct.payload(None, ct.today(), False)
+    path = config.card_thresholds_path()
+    conn = ct.connect(path, readonly=True) if path.exists() else None
+    try:
+        return ct.payload(conn, ct.today(), True)
+    finally:
+        if conn is not None:
+            conn.close()
+
+
 @app.get("/api/thresholds")
 def thresholds(p=Depends(get_provider)):
     if p.mode != "real":
