@@ -1,3 +1,32 @@
+## Review follow-up (card colouring + Nov 21 analysis) — Claude Opus 5.5, Nov 21, 2026 ~22:00Z — NOT committed
+- Diagnostic per class (script ~/nba-predictor-research-data/card-colours-2026-11-21/diag.py; same maths as card_threshold.fit):
+  | set | priced | window | best T | n | hit_s | be_s | edge | qualifying |
+  | reviewer W (export+store rows, all) | 515 | 515 | 54.8 | 388 | .738 | .721 | +1.7 | 30, lowest 53.7 |
+  |   W export only (Nov 2-16 cards, ESPN closing) | 223 | 223 | 54.8 | 163 | .770 | .676 | +9.4 | 121 |
+  |   W store only | 292 | 292 | 56.3 | 215 | .706 | .744 | -3.8 | 0 |
+  | JOB W (store, trailing 400) | 342 | 342 | 56.9 | 249 | .717 | .745 | -2.8 | 0 -> not established |
+  | reviewer L (export+store, all) | 899 | 899 | 69.3 | 105 | .664 | .644 | +2.0 | 9, lowest 66.0 |
+  |   L store, all picks, no window | 570 | 570 | 65.9 | 112 | .561 | .547 | +1.4 | 6, lowest 65.9 |
+  | JOB L (store, trailing 400) | 570 | 400 | 64.3 | 103 | .504 | .541 | -3.7 | 0 -> not established |
+  | D / R (store) | 0 | - | - | - | - | - | - | unpriced -> not established |
+  Reviewer's numbers reproduce. Not a bug: W qualifies only through the Nov 2-16 Telegram-card rows (closing prices, not stored
+  prices, skewed to recommended picks), which the brief's stored-price rule excludes; L qualifies on all store picks but not on
+  the brief's trailing-400 window (the latest 400 line picks lose to the price). The code's state matches its inputs.
+- Legend: an unseeded class now prints NO line on cards (decide -> legend None; web cardColour -> none); /api/card-thresholds
+  and `card-thresholds show` still report "not established" with the reason wording. Tests updated (backend 126 passed in the
+  card/telegram suites; frontend 58 passed).
+- Test-card phantom-row guard: scripts/grade_telegram_export.py drops TEST PREVIEW cards before matching (`preview: true` or a
+  "TEST PREVIEW" banner text) and lists them in `excluded_preview_cards`. Verified on the export with two injected preview cards:
+  both excluded, no phantom row, output otherwise identical; edited vs HEAD script on the same inputs identical. (build_telegram_
+  history already used per_game_rows = last card sent BEFORE the start, so the Nov 21 IND @ CLE card could not enter there; the
+  gap was all_card_rows.) Transcribers: mark the preview banner as preview: true.
+- 306 vs 278 reconciled: the 28 are 15 DC + 13 DNB WINS whose 1X2-derived price was <= 1.00 (impossible), each scored as a small
+  loss (-0.61u total). Rule now: such an estimate is unpriced (both builders). Corrected all-markets total: 1,488 priced,
+  -44.41u (was 1,516 / -45.02u); Soccer +8.61u (was +8.00u), DNB +3.41u, DC -2.10u. summary.md, per_pct_all.md and
+  ~/Downloads/prediction-performance-2026-11-02_to_11-21.pdf regenerated; the exact-% PDF already used this rule.
+- Still owner actions: `sudo pmset -b sleep 0` then `pmset -g` to confirm; merge/release of card colouring (reviewer: not yet);
+  a fresh NCAAB top-4 preregistration counted from a date after Nov 21, or drop the rule.
+
 ## Card colouring by per-class daily threshold — branch card-colours, NOT committed, NOT released, flag OFF — Claude Opus 5.5, Nov 21, 2026 ~20:00-21:00Z
 - Owner brief (Nov 21): green at/above a market class's daily threshold T, red + struck through below; legend with T, n, state,
   set date. Owner answers: render the Telegram preview locally only (no send); code + tests only (no release, no launchd job).

@@ -42,10 +42,8 @@ test('unpriced markets and model lines get no colour; flag off gets nothing', ()
   assert.equal(cardColour({ enabled: false }, 'nba', 'winner', 0.9).colour, null);
 });
 
-test('a class with no threshold is not coloured and says so', () => {
-  const d = cardColour(table({ W: null }), 'nba', 'winner', 0.7);
-  assert.equal(d.colour, null);
-  assert.equal(d.legend, 'No threshold for this market yet');
+test('a class with no threshold is not coloured and prints no legend', () => {
+  assert.deepEqual(cardColour(table({ W: null }), 'nba', 'winner', 0.7), { colour: null, legend: null, scope: null });
 });
 
 test('the stored lines are refetched after 10 minutes or on a new Toronto day', () => {

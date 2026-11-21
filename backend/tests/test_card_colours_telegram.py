@@ -68,7 +68,7 @@ def test_flag_on_without_any_threshold_colours_nothing(isolated, monkeypatch):
     monkeypatch.setenv('NBA_CARD_COLOURS', '1')
     text = tg.message_batches(card('nba', two_markets()), '123')[0][1]
     assert '🟢' not in text and '🔴' not in text
-    assert 'Colour key · Winner markets: No threshold for this market yet' in text
+    assert 'Colour key' not in text and 'No threshold' not in text          # unseeded: no legend line at all
     assert telegram_card.render_card(text).startswith(b'\x89PNG')
 
 

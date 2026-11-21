@@ -338,16 +338,16 @@ def legend(line: Optional[Line], day: str) -> str:
 
 
 def decide(sport: str, market: str, p, line_source: Optional[str], table: Table) -> dict:
-    """{'colour': 'green'|'red'|None, 'class', 'legend', 'state', 'threshold'} for one pick. No colour (and no legend) when
-    the market has no class or no stored price; no colour with the 'not established' legend when the class has no T."""
+    """{'colour': 'green'|'red'|None, 'class', 'legend', 'state', 'threshold'} for one pick. No colour and no legend when the
+    market has no class or no stored price, or when its class has no threshold yet (the card prints no legend then)."""
     cls = class_of(sport, market)
     if cls is None or (sport, market) in NO_STORED_PRICE or line_source == 'model':
         return {'colour': None, 'class': cls, 'legend': None, 'state': None, 'threshold': None}
     line = table.line_for(sport, cls)
     scope = f'{sport}:{cls}' if f'{sport}:{cls}' in table.lines else cls
     text = legend(line, table.day)
-    if line is None or line.threshold is None:
-        return {'colour': None, 'class': cls, 'scope': scope, 'legend': text, 'state': 'not established', 'threshold': None}
+    if line is None or line.threshold is None:      # unseeded: no colour and no card line at all (the API still says why)
+        return {'colour': None, 'class': cls, 'scope': scope, 'legend': None, 'state': 'not established', 'threshold': None}
     return {'colour': colour_for(tenths(p), line.threshold), 'class': cls, 'scope': scope, 'legend': text, 'state': line.state,
             'threshold': str(line.threshold)}
 

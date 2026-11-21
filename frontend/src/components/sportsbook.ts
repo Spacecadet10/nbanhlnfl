@@ -66,8 +66,8 @@ export function tenthsOf(p: number | string): number | null {
 /** "55.0" -> 550 (the stored threshold, already in tenths). */
 const thresholdTenths = (t: string) => { const m = /^(\d+)\.(\d)$/.exec(t); return m ? Number(m[1]) * 10 + Number(m[2]) : null; };
 
-/** Green at or above the class (or sport x class cell) threshold, red below; no colour when the flag is off, the market has
- *  no class or no stored price, or the class has no threshold (then the legend says so). */
+/** Green at or above the class (or sport x class cell) threshold, red below; no colour and no legend when the flag is off,
+ *  the market has no class or no stored price, or the class has no threshold yet. */
 export function cardColour(table: CardThresholds | null | undefined, sport: string | undefined, market: string | undefined,
   probability: number | string | null | undefined, lineSource?: string | null): CardColourDecision {
   const none: CardColourDecision = { colour: null, legend: null, scope: null };
@@ -79,7 +79,8 @@ export function cardColour(table: CardThresholds | null | undefined, sport: stri
   if (!line) return none;
   const t = line.threshold == null ? null : thresholdTenths(line.threshold);
   const v = typeof probability === 'string' ? (/^\d+\.\d$/.test(probability) ? thresholdTenths(probability) : null) : tenthsOf(probability);
-  if (t == null || v == null) return { colour: null, legend: line.legend, scope: line.scope };
+  if (t == null) return none;                                   // unseeded class: no colour and no legend on the card
+  if (v == null) return { colour: null, legend: line.legend, scope: line.scope };
   return { colour: v >= t ? 'green' : 'red', legend: line.legend, scope: line.scope };
 }
 

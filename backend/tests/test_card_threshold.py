@@ -213,7 +213,8 @@ def test_unseeded_class_is_not_established_and_never_coloured(tmp_path):
     t = ct.current(conn, '2026-11-20')
     assert t.lines['D'].state == 'not established' and t.lines['D'].n == 87
     assert ct.decide('nhl', 'reg3', 0.70, 'none', t)['colour'] is None
-    assert ct.decide('nhl', 'reg3', 0.70, 'none', t)['legend'] == 'No threshold for this market yet'
+    assert ct.decide('nhl', 'reg3', 0.70, 'none', t)['legend'] is None          # no card line for an unseeded class
+    assert ct.legend(t.lines['R'], '2026-11-20') == 'No threshold for this market yet'   # the API / CLI still say why
 
 
 def test_legends_for_every_state():
