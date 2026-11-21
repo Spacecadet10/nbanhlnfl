@@ -1,4 +1,4 @@
-## NCAAB Telegram cards OFF (owner decision Nov 21, 2026) — branch ncaab-cards-off, committed, NOT released — Claude Opus 5.5
+## NCAAB Telegram cards OFF (owner decision Nov 21, 2026) — branch ncaab-cards-off 38e2cb6, RELEASED to delivery 62c3592 — Claude Opus 5.5
 - Why: The Odds API probe (branch card-colours, HANDOFF there) showed 8 books agree with DraftKings' NCAAB totals within 0.5 pt
   (spreads 1.5) while the top-4 rule's gaps were 25-36 pts: the gaps are model error. Owner chose "No NCAAB cards" until the
   NCAAB model is fixed (over: keep 4 neutral cards / all ~60 / leave as is). NCAAB forecasts keep being recorded.
@@ -13,8 +13,28 @@
 - Not covered: the ticket snapshot (tickets.py) still lists NCAAB legs; tickets are not sent by any loaded job (only
   com.nba-predictor.telegram is), so this matters only if someone sends a ticket by hand. No pick-withdrawn updates will go out
   for NCAAB cards already sent.
-- Next: release to the delivery checkout (owner OK needed) -> kickstart com.nba-predictor.telegram -> confirm the next run shows
-  ncaab {'status': 'off'}.
+- RELEASED (owner OK, Nov 21 ~23:33Z): delivery 8093528 -> 62c3592 (38e2cb6 without HANDOFF.md; the only conflict). Delivery
+  tests: `cd ~/nba-predictor-delivery/backend && .venv/bin/python -m pytest tests/test_ncaab_app_delivery.py tests/test_ncaab_cards.py
+  tests/test_ncaab_fixes.py tests/test_telegram.py tests/test_pick_withdrawn.py tests/test_published_picks.py tests/test_card_block.py
+  tests/test_tickets.py -q` -> 321 passed, 1 skipped. No kickstart needed: com.nba-predictor.telegram starts a new process every
+  60 s (`telegram run --once`). First run on the new code: as_of 2026-11-21T23:35:54Z, ncaab {"status": "off", ...}; NBA 4
+  eligible / 2 recorded / 2 sent-for-game, NHL 7 / 7, NFL 0, Soccer 0 - identical to the 23:34:00Z run before the release.
+  Source: tail of /Users/andry/Desktop/nbanhlnfl/.telegram-delivery.log.
+- NCAAB cards stopped at 2026-11-21T23:35Z. Cards sent earlier stand: today's 4 top-4 cards went out 19:31-22:01Z
+  (`sqlite3 "file:.telegram-delivery.sqlite?immutable=1" "select count(distinct game_id), min(sent_at), max(sent_at) from
+  published_picks where sport='ncaab' and sent_at >= '2026-11-21T05:00:00Z'"` -> 4, 19:31:01Z, 22:01:44Z). They are not withdrawn.
+  A gap in NCAAB cards from Nov 22 on is this decision, not a delivery failure.
+- ROLLBACK (turn NCAAB cards back on), either:
+  (a) setting: P=~/Library/LaunchAgents/com.nba-predictor.telegram.plist;
+      /usr/libexec/PlistBuddy -c "Add :EnvironmentVariables:NBA_NCAAB_CARDS string 1" "$P";
+      launchctl bootout gui/$(id -u) "$P"; launchctl bootstrap gui/$(id -u) "$P"   (env changes need the reload)
+  (b) code: cd ~/nba-predictor-delivery && git revert --no-edit 62c3592   (takes effect on the next 60 s run)
+  Then check the next .telegram-delivery.log line shows ncaab with eligible_summaries / selection again.
+- The NCAAB top-4 preregistration is ANSWERED, not abandoned: its premise (a 25-36 pt app-vs-book gap is an edge) was tested
+  against 8 books (The Odds API probe, 52 games) and refuted - DraftKings sat within 0.5 pt of the market. That negative result
+  is why the rule is off.
+- Known inconsistency (accepted for now): the web ticket list and the ticket snapshot still show NCAAB picks as ticketable while
+  cards are off. No job sends tickets automatically, so this is display-only; hide NCAAB from tickets if it causes confusion.
 
 ## Status 2026-11-20 03:00Z — consumption proven; challenger install blocked by baseline; Nov 19 lost to battery sleep — Claude Opus 5.5 (lead)
 - FORECASTING WITH FITS: PROVEN Nov 18 night for NBA weekly/daily (125 rows each, combiners 24/48) and NHL weekly/daily (19 rows each, combiners 51/68),
