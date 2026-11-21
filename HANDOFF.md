@@ -1,3 +1,17 @@
+## Second-price-source checks (read-only, free) — Claude Opus 5.5, Nov 22, 2026 ~00:10Z
+- Bet365 double chance (app/bet365_dc.py; ESPN core odds, top club leagues only: EPL, LaLiga, Bundesliga, Serie A, Ligue 1, UCL,
+  UEL; up to 48 h before kickoff, every 2 h per match; 826 files / 48 matches). Latest pregame DC pick per match (live store,
+  immutable read, as of 2026-11-22T00:00Z): 105 DC picks, 29 in Bet365's leagues (Nov 20: 3, Nov 21: 26); all 29 had a Bet365
+  quote retrieved BEFORE the forecast (usable as a price the pick could see). The other 76 are internationals (CAF qualifiers 24,
+  friendlies 19, Nations League 18, CONCACAF 15): never quoted. Rate: club weekends only, so 150 priced DC picks is weeks away.
+- Card display for DC is mixed: 24 of the 29 show "Bet365 offer, includes margin" (book_quote), 5 + all internationals show the
+  DraftKings 1X2-derived no-vig %. The book_quote shown is the newest at send time - retrieved AFTER the forecast on all 24 - so
+  the card's Bet365 % is not the pre-forecast price. If a Bet365 DC series ever drives class D, it is its own series and the
+  legend must name Bet365.
+- The Odds API (.env.the-odds-api): GET /v4/sports only (costs 0): HTTP 200, x-requests-used 2, x-requests-remaining 498
+  (a 500/month plan). NBA, NCAAB, NHL, NFL, EPL listed but "active": false at 00:10Z. Not checked (each costs credits): whether
+  NHL 3-way regulation is offered; NCAAB totals/spreads book coverage. No odds requested, nothing collected, nothing scheduled.
+
 ## Review round 2: derived-price root cause, W count, card book % — Claude Opus 5.5, Nov 21, 2026 ~23:30Z
 - Root cause of the 28 "<= 1.00" prices: NOT an incomplete 1X2 book (every one had home, draw and away; e.g. 1.19 / 6.0 / 13.0,
   overround 1.084). My scratch analysis derived DC as 1/(1/a+1/b) and DNB as a(d-1)/d from VIGGED decimals, so the whole ~8%
