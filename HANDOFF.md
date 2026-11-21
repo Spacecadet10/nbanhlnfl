@@ -11,6 +11,11 @@
   draftkings 110/170/310 (draw), fanduel, betmgm, betrivers. So DraftKings does quote 3-way regulation - our ESPN feed simply
   does not carry it. Cost: 1 credit per game per call (~13 NHL games a day ≈ 390 credits/month at one snapshot each) - more than
   the 500/month plan leaves room for alongside anything else. Class R stays colourless unless the owner funds that.
+- Re-run the NCAAB figures: `python3 ~/nba-predictor-research-data/odds-probe-2026-11-22/compare_books.py ~/Desktop/nbanhlnfl`
+  (reads the saved API response + data/ncaab.sqlite read-only; prints the four lines above). Credit figures: SPEND.json,
+  copied from the x-requests-* response headers.
+- Odds-probe spend is tracked ONLY in that SPEND.json. It is NOT seen by the autoresearch budget gate (AGENT_BUDGET.json,
+  autoresearch_budget.py), which covers paid Claude runs only; any further Odds API spend needs a fresh owner OK.
 - Card inconsistency to note (not fixed): Soccer DC cards in Bet365's leagues show the NEWEST Bet365 quote at send time, while
   every other sportsbook % on the cards is as of the forecast.
 
@@ -74,7 +79,9 @@
 - Still owner actions: `sudo pmset -b sleep 0` then `pmset -g` to confirm; merge/release of card colouring (reviewer: not yet);
   a fresh NCAAB top-4 preregistration counted from a date after Nov 21, or drop the rule.
 
-## Card colouring by per-class daily threshold — branch card-colours, committed 8081b47 (follow-ups 376a92f, e519237, 1a8b94d) on origin/card-colours · NOT merged to main · NOT released · flag OFF · daily job NOT scheduled — Claude Opus 5.5, Nov 21, 2026 ~20:00-21:00Z
+## Card colouring by per-class daily threshold — STATUS: built, tested, flag off, NO MARKET CURRENTLY QUALIFIES (W loses to the
+## price on stored DK; L loses on the latest 400; D needs ~2 months of club weekends; R unfunded). Keep off main until a fixed
+## NCAAB model, a cheaper reg3 feed or a real second book for W/L changes that. — branch card-colours, committed 8081b47 (follow-ups 376a92f, e519237, 1a8b94d) on origin/card-colours · NOT merged to main · NOT released · flag OFF · daily job NOT scheduled — Claude Opus 5.5, Nov 21, 2026 ~20:00-21:00Z
 - Owner brief (Nov 21): green at/above a market class's daily threshold T, red + struck through below; legend with T, n, state,
   set date. Owner answers: render the Telegram preview locally only (no send); code + tests only (no release, no launchd job).
 - Code: NEW backend/app/card_threshold.py (CLASS_OF routing, Decimal `tenths`/`colour_for`, the brief's `fit` rule, append-only
@@ -95,7 +102,9 @@
   away/handicap. Never coloured (no stored price): model-line picks (team totals, model spreads), Soccer DC and DNB (only derived
   no-vig prices, which the brief forbids), corners, BTTS. R has no quotes and D is unpriced -> never established.
 - EXPECTED COLOURLESS, NOT BUGS (no stored DraftKings price, so the job can never fit them): class R (NHL regulation 3-way:
-  DK is not quoted in our data), class D (Soccer double chance: only derived prices), Soccer draw no bet (class L, but no
+  DraftKings DOES quote it, but only on The Odds API's per-game endpoint at ~390 credits/month of a 500 plan - uncoloured because
+  the price costs more than the feature is worth (reviewer + probe, Nov 21), not because of a bug; re-evaluate on a bigger plan or
+  a rotating subset of games), class D (Soccer double chance: only derived prices), Soccer draw no bet (class L, but no
   stored price), team totals on model lines, Soccer corners (all four), BTTS and goals home/away on model lines. A second
   sportsbook could change R or D only as a separate, owner-approved price series counted from its own start.
 - REAL-DATA RESULT (store copy, cutoff 2026-11-22T05:00Z; inline `NBA_DATA_DIR=<copy> .venv/bin/python` calling
