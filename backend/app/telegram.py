@@ -104,9 +104,10 @@ def ledger(path=None):
           attempted_at TEXT NOT NULL, next_attempt_at TEXT, message_id INTEGER, error TEXT);
         CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     ''')
-    try:   # the NCAAB card selection's append-only table (app/ncaab_cards.py)
-        from . import ncaab_cards
+    try:   # the NCAAB card selection's (app/ncaab_cards.py, retired Nov 21) and the NCAAB gate's append-only tables
+        from . import ncaab_cards, ncaab_gate
         conn.executescript(ncaab_cards.SCHEMA)
+        conn.executescript(ncaab_gate.SCHEMA)
     except Exception:
         pass
     try:   # what each sent card published (app/published_picks.py); a problem here never blocks delivery
@@ -271,6 +272,11 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
         if block is None:
             continue   # absent history must not be manufactured as a zero record
         block_lines, version, priced = block
+        gate = pick.get('ncaab_gate')
+        if gate and not (choice and choice.get('pick') is pick):     # NCAAB gate: every other market is context only
+            from .ncaab_gate import context_line
+            end = len(block_lines) - (1 if block_lines and block_lines[-1] == '' else 0)   # inside the block, before its blank
+            block_lines = block_lines[:end] + [escape(context_line(gate))] + block_lines[end:]
         lines += block_lines
         decisions.append(decision)
         versions.append(version)
@@ -307,7 +313,7 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
 
 # Lines after a market's record line that the card image (telegram_card.render_card) draws under it. One list, both sides.
 BLOCK_EXTRA_PREFIXES = ('Sportsbook quote: ', 'Sportsbook: ', 'Recovered Telegram cards', 'No recovered Telegram history',
-                        'Record uses ', 'Telegram card sent ')
+                        'Record uses ', 'Telegram card sent ', 'Context only · ')
 TELEGRAM_LABEL = 'Recovered Telegram cards'
 
 
@@ -909,9 +915,8 @@ def run_once(bot, settings, conn, *, now=None):
                 from .nfl_live import activation
                 if not activation():
                     continue
-            if sport == 'ncaab' and not config.ncaab_cards_enabled():   # owner decision Nov 21: off until the model is fixed
-                result['sports'][sport] = {'status': 'off', 'reason': 'NCAAB cards are off (owner decision Nov 21 2026; '
-                                                                     'NBA_NCAAB_CARDS=1 turns them back on)'}
+            if sport == 'ncaab' and not config.ncaab_cards_enabled():   # kill switch; by default the gate below decides
+                result['sports'][sport] = {'status': 'off', 'reason': 'NCAAB cards are off (NBA_NCAAB_CARDS=0)'}
                 continue
             if sport == 'ncaab':     # like NFL's activation: a valid sealed decision and a store, else a visible refusal, never a card
                 from . import ncaab_app
@@ -936,10 +941,6 @@ def run_once(bot, settings, conn, *, now=None):
                     record_basis.decorate_report(source, 'nfl', report)
                 else:
                     report = RealProvider(source, now.strftime('%Y-%m-%dT%H:%M:%SZ')).ranked_picks(now.astimezone(TORONTO).date())
-                if sport == 'ncaab':   # owner decision Nov 17: cards only for the day's top 4 gaps chosen at 11 AM ET (app/ncaab_cards.py)
-                    from . import ncaab_cards
-                    selection = ncaab_cards.ensure(conn, source, now)
-                    report['picks'] = ncaab_cards.annotate(report['picks'], selection)
                 lineups = card_lineups(source, sport, report, now)
                 pictures = best_pick_pictures(source, sport, report, now)
                 card_implied_lines(source, sport, report, now)
@@ -957,6 +958,11 @@ def run_once(bot, settings, conn, *, now=None):
                         side = {'a': 'over', 'b': 'under'}.get(model_side)
                         pick.update(additional_odds.comparison(sport, pick, report['as_of'], side=side,
                                                                line=pick['quote_check']['line_at_forecast']))
+                if sport == 'ncaab':   # owner brief Nov 21: only green, priced, positive-EV picks (app/ncaab_gate.py)
+                    from . import ncaab_gate
+                    table = card_colour_table(now)       # the card's own colour decision; flag off = None = nothing qualifies
+                    gate = ncaab_gate.apply(conn, source, report,
+                                            lambda p: card_colour('ncaab', p, table) if table is not None else None, now)
                 tickets.attach_lineups(source, sport, report['picks'], report['as_of'])
                 tickets.attach_facts(source, sport, report['picks'], report['as_of'])
             finally:
@@ -973,8 +979,7 @@ def run_once(bot, settings, conn, *, now=None):
                     record_published(conn, sport, key, games_by_key.get(key), report, now)
             result['sports'][sport] = {'eligible_summaries': len(batches), **dict(outcomes)}
             if sport == 'ncaab':
-                result['sports'][sport]['selection'] = (None if selection is None else
-                                                        {'status': selection['status'], 'selected': len(selection['selected'])})
+                result['sports'][sport].update(status='gated', **gate)
         except Exception as exc:
             # Do not echo arbitrary exception text (URLs/credentials). Other sport can continue.
             result['sports'][sport] = {'status': 'failed', 'error_type': type(exc).__name__}

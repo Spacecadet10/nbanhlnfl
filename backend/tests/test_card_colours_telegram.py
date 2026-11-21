@@ -68,7 +68,9 @@ def test_flag_on_without_any_threshold_colours_nothing(isolated, monkeypatch):
     monkeypatch.setenv('NBA_CARD_COLOURS', '1')
     text = tg.message_batches(card('nba', two_markets()), '123')[0][1]
     assert '🟢' not in text and '🔴' not in text
-    assert 'Colour key' not in text and 'No threshold' not in text          # unseeded: no legend line at all
+    # colour release (Nov 21): the card states the honest status, one line per class shown, and colours nothing
+    assert 'Colour key · Winner markets: No threshold stored yet · not coloured' in text
+    assert 'Colour key · Line markets: No threshold stored yet · not coloured' in text
     assert telegram_card.render_card(text).startswith(b'\x89PNG')
 
 
@@ -116,3 +118,9 @@ def test_recommended_panel_unchanged_with_flag_off(isolated, monkeypatch):
     picks[1].update(strong=False, game_rank=2)
     text = tg.message_batches(card('nba', picks), '123')[0][1]
     assert 'App 62.0% · Sportsbook 55.0%' in text
+
+
+def test_status_key_is_drawn_neutral_and_a_green_line_in_green():
+    # colour release (Nov 21): a 'not coloured' status must not look like a green qualification on the image
+    assert telegram_card.key_fill('Winner markets: No threshold stored yet · not coloured') != telegram_card.GREEN
+    assert telegram_card.key_fill('Winner markets: Green = 55.0% and above · this class has beaten the price') == telegram_card.GREEN

@@ -18,6 +18,11 @@ GREEN = '#16832C'       # card colouring: at or above the class threshold
 RED = '#C51D35'         # below it (struck through)
 
 
+def key_fill(key: str) -> str:
+    """Ink of one colour-key line: green only when it states a green line; a 'not coloured' status is drawn neutral."""
+    return GREEN if 'Green = ' in key else MUTED
+
+
 class Plain(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
@@ -313,7 +318,7 @@ def render_card(message):
             wrapped(opposite,200,y+height-opposite_lines*32-8,800,size=24,bold=True,fill=primary)
         y+=height+8
     for key in (line for line in lines[footer:] if line.startswith(COLOUR_PREFIX)):    # one colour-key line per class
-        y = wrapped(key.removeprefix(COLOUR_PREFIX), 58, y + 6, 964, size=24, bold=True, fill=GREEN)
+        y = wrapped(key.removeprefix(COLOUR_PREFIX), 58, y + 6, 964, size=24, bold=True, fill=key_fill(key))
     y += 9
     note = ('90-minute markets. Draw-no-bet draws return the stake. Model selections may lack sportsbook offers.'
             if league == 'SOCCER' else 'Same sport, market, direction, percentage and model.')

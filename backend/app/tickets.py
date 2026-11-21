@@ -591,6 +591,11 @@ def card_choice(sport, picks):
         if market in OFF_TICKETS and sport != 'soccer':
             blocked.append('Team totals are excluded from selection.')
             continue
+        gate = p.get('ncaab_gate') if sport == 'ncaab' else None
+        if gate is not None and not gate.get('qualifies'):     # app/ncaab_gate.py: only a qualifying pick can be recommended
+            from app.ncaab_gate import POLICY
+            blocked.append(f'No NCAAB pick qualifies under policy {POLICY}.')
+            continue
         sel = p.get('ncaab_selection') if sport == 'ncaab' else None
         if sel and market != sel['market']:     # the card shows the market that put the game in the day's top 4
             continue
@@ -646,8 +651,14 @@ def card_choice(sport, picks):
             team = p['pick_label'].removesuffix(' win')
             if any(x['market'] == 'spread' and ' +' in x['pick_label'] and not x['pick_label'].startswith(team+' ') for x in picks):
                 support.append('Opposing spread pick supports the winner context.')
-        # Compare warnings first, then the support group, then likelihood. No sum of correlated votes.
-        rank = (not warnings, bool(support), book if book is not None else app, exact_win, app)
+        if gate is not None:
+            from app.ncaab_gate import summary
+            support.insert(0, summary(gate))
+        # Compare warnings first, then the support group, then likelihood. No sum of correlated votes. Note: for the other
+        # sports the third key is the SPORTSBOOK probability, i.e. among supported, warning-free picks the market the book
+        # makes the biggest favourite wins (docs/NCAAB_COLOUR_GATE.md). NCAAB gated picks rank by expected value instead.
+        rank = ((not warnings, gate['ev']) if gate is not None else
+                (not warnings, bool(support), book if book is not None else app, exact_win, app))
         candidates.append((rank, p, gap, support, warnings))
     if not candidates:
         return dict(method=CARD_METHOD, pick=None, reason=' '.join(dict.fromkeys(blocked)) or 'No eligible forecast.', assessments=[])

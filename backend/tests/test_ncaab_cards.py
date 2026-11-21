@@ -126,8 +126,10 @@ def test_card_choice_recommends_the_selected_market_and_says_the_rule_is_unteste
     assert t.card_choice("ncaab", picks)["pick"]["market"] == "winner"      # without a selection: unchanged behaviour
 
 
-def test_run_once_sends_cards_only_for_selected_games_and_never_twice(store, tmp_path, monkeypatch):
-    monkeypatch.setenv("NBA_NCAAB_CARDS", "1")                # the card path itself (off by default since Nov 21)
+def test_retired_top4_selection_no_longer_sends_cards(store, tmp_path, monkeypatch):
+    """Colour release (Nov 21): the top-4 rule is retired; a saved selection no longer puts a game on Telegram. Only the
+    gate (tests/test_ncaab_gate.py) can, and with no qualifying threshold nothing goes out."""
+    monkeypatch.delenv("NBA_NCAAB_CARDS", raising=False)
     store, _ = store
     sends = []
 
@@ -149,11 +151,11 @@ def test_run_once_sends_cards_only_for_selected_games_and_never_twice(store, tmp
         first = tg.run_once(Bot(), {"TELEGRAM_CHAT_ID": "123"}, ledger, now=NOW_DT)
         second = tg.run_once(Bot(), {"TELEGRAM_CHAT_ID": "123"}, ledger, now=NOW_DT)
         texts = [r["text"] for r in ledger.execute("SELECT text FROM deliveries WHERE status='sent'")]
+        selections = ledger.execute("SELECT COUNT(*) FROM ncaab_card_selections").fetchone()[0]
     got = first["sports"]["ncaab"]
-    assert got["eligible_summaries"] == 2 and got["sent"] == 2 and got["selection"] == {"status": "ok", "selected": 4}, first
-    assert second["sports"]["ncaab"].get("sent", 0) == 0
-    assert len(texts) == 2 and all("untested rule" in x for x in texts)
-    assert sorted(x.split("\n")[1] for x in texts) == ["<b>KU @ UNC</b>", "<b>UNC @ DUKE</b>"]      # 401 and 404; 405 is not
+    assert got["status"] == "gated" and got["qualifying"] == 0 and got["eligible_summaries"] == 0, first
+    assert second["sports"]["ncaab"].get("sent", 0) == 0 and sends == [] and texts == []
+    assert selections == 1                                   # the saved Nov 17 selection row stands, untouched
 
 
 def test_run_once_sends_no_ncaab_card_before_the_11_am_selection(store, tmp_path):

@@ -157,10 +157,10 @@ def nhl_injury_capture_enabled() -> bool:
 
 
 def ncaab_cards_enabled() -> bool:
-    """Whether NCAAB Telegram cards are sent. Off unless NBA_NCAAB_CARDS=1 (owner decision Nov 21 2026: no NCAAB cards until
-    the NCAAB model is fixed - eight books agreed with DraftKings within half a point while the top-4 gaps were 25-36 points).
-    NCAAB forecasts keep being recorded; only the cards stop. Turning it back on is an approved service configuration change."""
-    return os.environ.get("NBA_NCAAB_CARDS", "0") == "1"
+    """Whether the NCAAB card path runs at all. Since the colour release (owner brief Nov 21 2026) it runs by default and only
+    picks that pass the gate (app/ncaab_gate.py, policy ncaab-colour-gate-v1) are sent; NBA_NCAAB_CARDS=0 is the kill switch
+    that turns every NCAAB card off. NCAAB forecasts are recorded and graded either way."""
+    return os.environ.get("NBA_NCAAB_CARDS", "1") != "0"
 
 
 def card_colours_enabled() -> bool:

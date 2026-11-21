@@ -22,6 +22,11 @@ from typing import Callable, Optional
 from zoneinfo import ZoneInfo
 
 RULE_VERSION = 'card-threshold-v1'
+# What may colour a card (owner brief Nov 21, colour release): only a line that qualifies today. A stale ('not refreshed'),
+# missing, failed or unqualified ('held' because no line beat the price, 'not established') line never colours; a capped
+# line greens only from the line the fit actually qualified. The fitting rule (RULE_VERSION) is unchanged.
+DECIDE_VERSION = 'card-colour-decide-v2'
+NO_STORE_REASON = 'no threshold stored'
 SEED_VERSION = 'seed'
 TORONTO = ZoneInfo('America/Toronto')
 WINDOW = 400                    # trailing priced picks of a class (or of a cell)
@@ -283,10 +288,14 @@ def _line(row, day: str) -> Line:
                 reason=row['reason'])
 
 
+def _missing(day: str) -> dict:
+    return {c: Line(c, None, None, 0, 'not established', day, None, None, reason=NO_STORE_REASON) for c in CLASSES}
+
+
 def current(conn, day: str) -> Table:
     """The stored lines in force on `day`: each scope's newest row on or before the day. A class with no row is 'not
     established'; a row from an earlier day is 'not refreshed' (the job did not run or failed). Never computes T."""
-    lines = {c: Line(c, None, None, 0, 'not established', day, None, None) for c in CLASSES}
+    lines = _missing(day)
     try:
         rows = conn.execute('SELECT t.* FROM card_thresholds t JOIN (SELECT scope, MAX(day) d FROM card_thresholds '
                             'WHERE day <= ? GROUP BY scope) l ON l.scope = t.scope AND l.d = t.day', (day,)).fetchall()
@@ -313,10 +322,33 @@ def _span(a: Optional[str], b: Optional[str]) -> str:
     return f'{_md(a)}-{db.day}' if (da.year, da.month) == (db.year, db.month) else f'{_md(a)}-{_md(b)}'
 
 
+def _no_line(line: Line) -> str:
+    if line.reason == NO_STORE_REASON:
+        return 'No threshold stored yet · not coloured'
+    why = 'no line beat the price' if line.reason == 'no candidate beat the price' else (line.reason or 'not fitted')
+    return f'No qualifying threshold · {why} (n={line.n} priced, checked {_md(line.day)}) · not coloured'
+
+
+def green_from(line: Optional[Line]) -> Optional[Decimal]:
+    """The lowest displayed % that may be green under `line`, or None when the line may not colour at all (see DECIDE_VERSION).
+    The ONE place this is decided: Telegram cards, the web (via /api/card-thresholds) and the NCAAB send gate all read it."""
+    if line is None or line.threshold is None:
+        return None
+    if line.state in ('set', 'seed'):
+        return line.threshold
+    if line.state == 'capped':
+        return line.threshold if line.requested is None else max(line.threshold, line.requested)
+    if line.state == 'held' and line.reason != 'no candidate beat the price':
+        return line.threshold          # too few new picks to refit: the last qualified line stands
+    return None                        # not refreshed, held without a qualifying line today
+
+
 def legend(line: Optional[Line], day: str) -> str:
     """The one-line legend; only 'set' and 'seed' say the class has beaten the price."""
-    if line is None or line.threshold is None:
-        return 'No threshold for this market yet'
+    if line is None:
+        return 'No threshold stored yet · not coloured'
+    if line.threshold is None:
+        return _no_line(line)
     green = f'Green = {line.threshold}% and above'
     if line.state == 'set':
         return f'{green} · this class has beaten the price from here (n={line.n} priced, set {_md(line.day)})'
@@ -325,38 +357,42 @@ def legend(line: Optional[Line], day: str) -> str:
     if line.state == 'held':
         carried = _md(line.carried_from or line.day)
         if line.reason == 'no candidate beat the price':
-            return f'{green} · line carried from {carried}, no line beat the price today (n={line.n} priced)'
+            return (f'No qualifying threshold today · no line beat the price (n={line.n} priced, checked {_md(line.day)})'
+                    ' · not coloured')
         return f'{green} · line carried from {carried}, not re-fitted today (n={line.n} priced)'
     if line.state == 'capped':
         sign = '-' if line.requested is not None and line.requested < line.threshold else '+'
-        return f'{green} · line capped at {sign}1.0 pt today, carried from {_md(line.carried_from or line.day)} (n={line.n} priced)'
+        g = green_from(line)
+        return (f'Green = {g}% and above · line capped at {sign}1.0 pt today, carried from '
+                f'{_md(line.carried_from or line.day)} (n={line.n} priced)')
     if line.state == 'not refreshed':
-        yesterday = (date.fromisoformat(day) - timedelta(days=1)).isoformat()
-        which = "yesterday's line" if line.day == yesterday else 'the last line'
-        return f'Threshold not refreshed today · using {which} (set {_md(line.day)})'
-    return 'No threshold for this market yet'
+        return f'Threshold not refreshed today (last set {_md(line.day)}) · not coloured'
+    return _no_line(line)
 
 
 def decide(sport: str, market: str, p, line_source: Optional[str], table: Table) -> dict:
-    """{'colour': 'green'|'red'|None, 'class', 'legend', 'state', 'threshold'} for one pick. No colour and no legend when the
-    market has no class or no stored price, or when its class has no threshold yet (the card prints no legend then)."""
+    """{'colour': 'green'|'red'|None, 'qualifies', 'class', 'scope', 'legend', 'state', 'threshold', 'green_from'} for one
+    pick. `qualifies` is True only for green. No colour and no legend when the market has no class or no stored price; a
+    class whose line may not colour today (green_from None) gets no colour but keeps its status legend."""
     cls = class_of(sport, market)
     if cls is None or (sport, market) in NO_STORED_PRICE or line_source == 'model':
-        return {'colour': None, 'class': cls, 'legend': None, 'state': None, 'threshold': None}
+        return {'colour': None, 'qualifies': False, 'class': cls, 'legend': None, 'state': None, 'threshold': None,
+                'green_from': None, 'version': DECIDE_VERSION}
     line = table.line_for(sport, cls)
     scope = f'{sport}:{cls}' if f'{sport}:{cls}' in table.lines else cls
-    text = legend(line, table.day)
-    if line is None or line.threshold is None:      # unseeded: no colour and no card line at all (the API still says why)
-        return {'colour': None, 'class': cls, 'scope': scope, 'legend': None, 'state': 'not established', 'threshold': None}
-    return {'colour': colour_for(tenths(p), line.threshold), 'class': cls, 'scope': scope, 'legend': text, 'state': line.state,
-            'threshold': str(line.threshold)}
+    g = green_from(line)
+    colour = None if g is None else colour_for(tenths(p), g)
+    return {'colour': colour, 'qualifies': colour == 'green', 'class': cls, 'scope': scope, 'legend': legend(line, table.day),
+            'state': 'not established' if line is None else line.state,
+            'threshold': None if line is None or line.threshold is None else str(line.threshold),
+            'green_from': None if g is None else str(g), 'version': DECIDE_VERSION}
 
 
 def load_table(path, day: str) -> Table:
     """The lines in force on `day` from the store at `path` (read-only); every class 'not established' without a store."""
     from pathlib import Path
     if not Path(path).exists():
-        return Table({c: Line(c, None, None, 0, 'not established', day, None, None) for c in CLASSES}, day)
+        return Table(_missing(day), day)
     conn = connect(path, readonly=True)
     try:
         return current(conn, day)
@@ -487,11 +523,12 @@ def payload(conn, day: str, enabled: bool) -> dict:
     """GET /api/card-thresholds: the stored lines in force today, with their legends. Never computes T."""
     if not enabled:
         return {'enabled': False}
-    table = current(conn, day) if conn is not None else Table(
-        {c: Line(c, None, None, 0, 'not established', day, None, None) for c in CLASSES}, day)
-    return {'enabled': True, 'date': day, 'routes': routes(), 'no_colour_line_source': 'model',
+    table = current(conn, day) if conn is not None else Table(_missing(day), day)
+    return {'enabled': True, 'date': day, 'routes': routes(), 'no_colour_line_source': 'model', 'decide_version': DECIDE_VERSION,
             'scopes': [{'scope': scope, 'class': ln.cls, 'sport': ln.sport,
                         'threshold': None if ln.threshold is None else str(ln.threshold), 'n': ln.n, 'state': ln.state,
+                        'green_from': None if green_from(ln) is None else str(green_from(ln)),
+                        'qualifies': green_from(ln) is not None,
                         'set_on': ln.day, 'legend': legend(ln, day)} for scope, ln in sorted(table.lines.items())]}
 
 

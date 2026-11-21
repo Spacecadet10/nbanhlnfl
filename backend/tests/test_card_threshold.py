@@ -173,11 +173,13 @@ def test_seed_then_daily_run_and_states(tmp_path):
     assert t.lines['W'].state == 'seed' and t.lines['W'].threshold == D('51.1')
     assert t.lines['L'].state == 'not established'
     assert ct.legend(t.lines['W'], '2026-11-20').startswith('Green = 51.1% and above · seeded from')
-    assert ct.legend(t.lines['L'], '2026-11-20') == 'No threshold for this market yet'
-    # next day, no job ran: not refreshed, yesterday's line
+    assert ct.legend(t.lines['L'], '2026-11-20') == \
+        'No qualifying threshold · fewer than 150 priced picks (n=0 priced, checked Nov 20) · not coloured'
+    # next day, no job ran: not refreshed - shown, never coloured (colour release, Nov 21)
     t2 = ct.current(conn, '2026-11-21')
     assert t2.lines['W'].state == 'not refreshed' and t2.lines['W'].threshold == D('51.1')
-    assert ct.legend(t2.lines['W'], '2026-11-21') == "Threshold not refreshed today · using yesterday's line (set Nov 20)"
+    assert ct.legend(t2.lines['W'], '2026-11-21') == 'Threshold not refreshed today (last set Nov 20) · not coloured'
+    assert ct.decide('nba', 'winner', 0.99, 'none', t2)['colour'] is None
 
 
 def test_failed_job_is_not_refreshed(tmp_path):
@@ -213,8 +215,11 @@ def test_unseeded_class_is_not_established_and_never_coloured(tmp_path):
     t = ct.current(conn, '2026-11-20')
     assert t.lines['D'].state == 'not established' and t.lines['D'].n == 87
     assert ct.decide('nhl', 'reg3', 0.70, 'none', t)['colour'] is None
-    assert ct.decide('nhl', 'reg3', 0.70, 'none', t)['legend'] is None          # no card line for an unseeded class
-    assert ct.legend(t.lines['R'], '2026-11-20') == 'No threshold for this market yet'   # the API / CLI still say why
+    # colour release (Nov 21): the card states the class's status instead of printing nothing
+    assert ct.legend(t.lines['D'], '2026-11-20') == \
+        'No qualifying threshold · fewer than 150 priced picks (n=87 priced, checked Nov 20) · not coloured'
+    assert ct.decide('nhl', 'reg3', 0.70, 'none', t)['legend'] == \
+        'No qualifying threshold · fewer than 150 priced picks (n=0 priced, checked Nov 20) · not coloured'
 
 
 def test_legends_for_every_state():
@@ -227,8 +232,9 @@ def test_legends_for_every_state():
         'Green = 55.0% and above · line carried from Nov 20, not re-fitted today (n=41 priced)'
     assert ct.legend(L('capped', '2026-11-20'), day) == \
         'Green = 55.0% and above · line capped at +1.0 pt today, carried from Nov 20 (n=202 priced)'
-    assert ct.legend(L('not refreshed'), day) == "Threshold not refreshed today · using yesterday's line (set Nov 20)"
-    assert ct.legend(ct.Line('W', None, None, 0, 'not established', day, day, None), day) == 'No threshold for this market yet'
+    assert ct.legend(L('not refreshed'), day) == 'Threshold not refreshed today (last set Nov 20) · not coloured'
+    assert ct.legend(ct.Line('W', None, None, 0, 'not established', day, day, None), day) == \
+        'No qualifying threshold · not fitted (n=0 priced, checked Nov 21) · not coloured'
     # only set and seed claim the class has beaten the price
     for state in ('held', 'capped', 'not refreshed'):
         assert 'beaten' not in ct.legend(L(state, '2026-11-20'), day)
@@ -246,3 +252,71 @@ def test_api_flag_off_and_on(tmp_path, monkeypatch):
     assert body['enabled'] is True and body['routes']['soccer']['double_chance'] is None
     assert {s['scope']: s['state'] for s in body['scopes']} == {c: 'not established' for c in ('D', 'L', 'R', 'W')}
     assert not (tmp_path / 'card_thresholds.sqlite').exists()          # the API never creates or writes the store
+
+
+# --- Owner brief Nov 21 (colour release): a missing, stale, failed or unqualified threshold never makes a pick green -------
+def _line(state, t='55.0', requested=None, reason=None, day='2026-11-22', n=342, carried=None):
+    return ct.Line('W', None, None if t is None else D(t), n, state, day, '2026-11-02', carried,
+                   requested=None if requested is None else D(requested), reason=reason)
+
+
+def _table(line, day='2026-11-22'):
+    lines = {c: ct.Line(c, None, None, 0, 'not established', day, None, None) for c in ct.CLASSES}
+    lines['W'] = line
+    return ct.Table(lines, day)
+
+
+@pytest.mark.parametrize('line', [
+    _line('not refreshed', day='2026-11-21'),                                     # stale: the daily job did not run today
+    _line('held', reason='no candidate beat the price', carried='2026-11-20'),    # today's fit found no qualifying line
+    _line('not established', t=None, reason='no candidate beat the price'),       # never qualified
+])
+def test_stale_or_unqualified_line_never_colours(line):
+    d = ct.decide('nba', 'winner', 0.95, 'none', _table(line))
+    assert d['colour'] is None and d['qualifies'] is False and d['green_from'] is None
+    assert d['legend']                                    # the card still says why it is not coloured
+
+
+def test_missing_store_never_colours_and_says_so(tmp_path):
+    t = ct.load_table(tmp_path / 'absent.sqlite', '2026-11-22')
+    d = ct.decide('nba', 'winner', 0.95, 'none', t)
+    assert d['colour'] is None and d['qualifies'] is False
+    assert d['legend'] == 'No threshold stored yet · not coloured'
+
+
+def test_capped_line_greens_only_from_the_qualified_line():
+    # yesterday 55.0, today the fit qualified only from 58.0, the clamp moved T to 56.0: 56.0-57.9 never qualified
+    t = _table(_line('capped', t='56.0', requested='58.0', carried='2026-11-21'))
+    assert ct.decide('nba', 'winner', 0.5794, 'none', t)['colour'] == 'red'             # 57.9
+    assert ct.decide('nba', 'winner', 0.5795, 'none', t)['qualifies'] is True      # 58.0 after half-up
+    assert ct.decide('nba', 'winner', 0.5795, 'none', t)['green_from'] == '58.0'
+    # a downward cap (requested 52.0 < T 54.0) keeps T: everything at or above T has qualified
+    t2 = _table(_line('capped', t='54.0', requested='52.0', carried='2026-11-21'))
+    assert ct.decide('nba', 'winner', 0.5395, 'none', t2)['colour'] == 'green' and ct.decide('nba', 'winner', 0.5394, 'none', t2)['colour'] == 'red'
+
+
+@pytest.mark.parametrize('state', ['set', 'seed'])
+def test_qualified_line_colours_and_exact_percentages_stay_separate(state):
+    t = _table(_line(state, t='57.4'))
+    assert ct.decide('nba', 'winner', 0.573, 'none', t)['colour'] == 'red'          # 57.3% and 57.4% are different classes
+    assert ct.decide('nba', 'winner', 0.574, 'none', t)['colour'] == 'green'
+    assert ct.decide('nba', 'winner', 0.574, 'none', t)['qualifies'] is True
+
+
+def test_not_established_status_legend_names_n_and_date():
+    line = _line('not established', t=None, reason='no candidate beat the price', day='2026-11-22', n=342)
+    assert ct.legend(line, '2026-11-22') == 'No qualifying threshold · no line beat the price (n=342 priced, checked Nov 22) · not coloured'
+    stale = _line('not refreshed', day='2026-11-20')
+    assert ct.legend(stale, '2026-11-22') == 'Threshold not refreshed today (last set Nov 20) · not coloured'
+    held = _line('held', reason='no candidate beat the price', carried='2026-11-20')
+    assert ct.legend(held, '2026-11-22') == 'No qualifying threshold today · no line beat the price (n=342 priced, checked Nov 22) · not coloured'
+
+
+def test_api_scopes_carry_green_from_and_status(tmp_path, monkeypatch):
+    conn = store(tmp_path)
+    ct.run(conn, '2026-11-22', lambda: {'W': [pick(i, '60.0', i % 2 == 0, price='1.50') for i in range(200)]},
+           generated_at='2026-11-22T14:00:00Z')
+    body = ct.payload(conn, '2026-11-22', True)
+    w = next(s for s in body['scopes'] if s['scope'] == 'W')
+    assert w['state'] == 'not established' and w['green_from'] is None and w['qualifies'] is False
+    assert w['legend'].startswith('No qualifying threshold · no line beat the price (n=200 priced, checked Nov 22)')

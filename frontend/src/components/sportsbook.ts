@@ -66,8 +66,8 @@ export function tenthsOf(p: number | string): number | null {
 /** "55.0" -> 550 (the stored threshold, already in tenths). */
 const thresholdTenths = (t: string) => { const m = /^(\d+)\.(\d)$/.exec(t); return m ? Number(m[1]) * 10 + Number(m[2]) : null; };
 
-/** Green at or above the class (or sport x class cell) threshold, red below; no colour and no legend when the flag is off,
- *  the market has no class or no stored price, or the class has no threshold yet. */
+/** Green at or above the class (or sport x class cell) green_from, red below; no colour and no legend when the flag is off or
+ *  the market has no class or no stored price; no colour but the status legend when the class's line may not colour today. */
 export function cardColour(table: CardThresholds | null | undefined, sport: string | undefined, market: string | undefined,
   probability: number | string | null | undefined, lineSource?: string | null): CardColourDecision {
   const none: CardColourDecision = { colour: null, legend: null, scope: null };
@@ -77,10 +77,12 @@ export function cardColour(table: CardThresholds | null | undefined, sport: stri
   const scopes = table.scopes ?? [];
   const line = scopes.find((s) => s.scope === `${sport}:${cls}`) ?? scopes.find((s) => s.scope === cls);
   if (!line) return none;
-  const t = line.threshold == null ? null : thresholdTenths(line.threshold);
+  // green_from is the backend's one decision (card_threshold.green_from): null when the line may not colour today (missing,
+  // stale, unqualified). Older payloads without the field fall back to the threshold of a 'set'/'seed' line only.
+  const from = line.green_from !== undefined ? line.green_from : (['set', 'seed'].includes(line.state) ? line.threshold : null);
+  const t = from == null ? null : thresholdTenths(from);
   const v = typeof probability === 'string' ? (/^\d+\.\d$/.test(probability) ? thresholdTenths(probability) : null) : tenthsOf(probability);
-  if (t == null) return none;                                   // unseeded class: no colour and no legend on the card
-  if (v == null) return { colour: null, legend: line.legend, scope: line.scope };
+  if (t == null || v == null) return { colour: null, legend: line.legend, scope: line.scope };   // status shown, never coloured
   return { colour: v >= t ? 'green' : 'red', legend: line.legend, scope: line.scope };
 }
 

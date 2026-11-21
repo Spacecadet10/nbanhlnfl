@@ -70,7 +70,7 @@ export function PickEvidence({ history: h, grade, sportsbook, recordBasis, oppos
   const state = useCardThresholds();
   const table = state === 'error' ? null : state;
   const colour = cardColour(table, h?.sport, h?.market, header?.probability ?? h?.percentage, h?.line_source);
-  const key = colour.legend ? <><br /><span className="card-colour-key">{colour.legend}</span></>
+  const key = colour.legend ? <><br /><span className={colour.legend.startsWith('Green = ') ? 'card-colour-key' : 'card-colour-status'}>{colour.legend}</span></>
     : state === 'error' ? <><br /><span className="muted">Colour key unavailable: card thresholds could not be loaded</span></> : null;
   const bookText = sportsbook ? sportsbookLine(sportsbook) : null;
   // The same model % repeated as "App 50.8% · …" in the sportsbook line is coloured the same (never a conditional DNB %).

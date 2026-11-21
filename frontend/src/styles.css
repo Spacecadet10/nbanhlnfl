@@ -1424,3 +1424,4 @@ h1,h2,h3,.hero-matchup,.metric-value,.tile-value,.brand { font-family:'Barlow Co
 .model-pct-red { color: var(--bad); }
 .model-pct-red s { text-decoration-thickness: 2px; }
 .card-colour-key { color: var(--ok); font-weight: 600; overflow-wrap: anywhere; }
+.card-colour-status { color: var(--muted); font-weight: 600; overflow-wrap: anywhere; }
