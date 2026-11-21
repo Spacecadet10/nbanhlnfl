@@ -1,6 +1,6 @@
 // One wording for the app-versus-sportsbook line on every card (NBA, NHL, NFL, soccer). Pure, so it is unit-tested
 // (sportsbook.test.mjs). Never compares against another line: the backend only reports 'exact' for the same market, side and line.
-import type { SportsbookComparison } from '../api/types';
+import type { CardThresholds, SportsbookComparison } from '../api/types';
 
 /** "2:29 PM" in Toronto time, the zone of the Telegram cards; null when absent or unreadable. */
 export function quoteTime(iso: string | null | undefined): string | null {
@@ -46,4 +46,50 @@ export function sportsbookLine(c: SportsbookComparison): string {
     : `App ${one(c.app_probability)}% · Sportsbook ${one(c.book_probability)}% no-vig`;
   const note = cond ? cond[2]?.slice(1, -1) : c.basis;
   return `${head}${src ? ` (${src})` : ''} · ${formatGap(gap)}${at ? ` · quote ${at}` : ''}${note ? ` · ${note}` : ''}`;
+}
+
+// --- Card colouring (backend app/card_threshold.py; GET /api/card-thresholds) -------------------------------------------
+// The backend stores each class's daily threshold and says which class every market is; this twin only compares. Exact
+// decimal maths on the probability's shortest decimal string (the same digits as Python's str(p)): never a float compare.
+export interface CardColourDecision { colour: 'green' | 'red' | null; legend: string | null; scope: string | null }
+
+/** Tenths of a percent as an integer: String(p) rounded half-up to 0.001 (0.5495 -> 550, 0.5494 -> 549); null when the
+ *  number has no plain decimal form (exponent notation) or is outside 0..1. */
+export function tenthsOf(p: number | string): number | null {
+  const m = /^(\d+)(?:\.(\d*))?$/.exec(String(p));
+  if (!m) return null;
+  const frac = (m[2] ?? '').padEnd(4, '0');
+  const milli = Number(m[1]) * 1000 + Number(frac.slice(0, 3)) + (frac[3] >= '5' ? 1 : 0);
+  return milli >= 0 && milli <= 1000 ? milli : null;
+}
+
+/** "55.0" -> 550 (the stored threshold, already in tenths). */
+const thresholdTenths = (t: string) => { const m = /^(\d+)\.(\d)$/.exec(t); return m ? Number(m[1]) * 10 + Number(m[2]) : null; };
+
+/** Green at or above the class (or sport x class cell) threshold, red below; no colour and no legend when the flag is off,
+ *  the market has no class or no stored price, or the class has no threshold yet. */
+export function cardColour(table: CardThresholds | null | undefined, sport: string | undefined, market: string | undefined,
+  probability: number | string | null | undefined, lineSource?: string | null): CardColourDecision {
+  const none: CardColourDecision = { colour: null, legend: null, scope: null };
+  if (!table?.enabled || !sport || !market || probability == null) return none;
+  const cls = table.routes?.[sport]?.[market];
+  if (!cls || lineSource === (table.no_colour_line_source ?? 'model')) return none;
+  const scopes = table.scopes ?? [];
+  const line = scopes.find((s) => s.scope === `${sport}:${cls}`) ?? scopes.find((s) => s.scope === cls);
+  if (!line) return none;
+  const t = line.threshold == null ? null : thresholdTenths(line.threshold);
+  const v = typeof probability === 'string' ? (/^\d+\.\d$/.test(probability) ? thresholdTenths(probability) : null) : tenthsOf(probability);
+  if (t == null) return none;                                   // unseeded class: no colour and no legend on the card
+  if (v == null) return { colour: null, legend: line.legend, scope: line.scope };
+  return { colour: v >= t ? 'green' : 'red', legend: line.legend, scope: line.scope };
+}
+
+/** The Toronto day of `now` (the day a stored threshold colours cards on). */
+export const torontoDay = (now: number) => new Date(now).toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
+
+/** Refetch the stored lines when the cached copy is older than `maxAgeMs` or belongs to another Toronto day (a new day's
+ *  line, or one the daily job wrote after the page loaded). */
+export function cardTableStale(fetchedAt: number, now: number, table: CardThresholds | null | undefined, maxAgeMs = 10 * 60_000): boolean {
+  if (now - fetchedAt > maxAgeMs) return true;
+  return Boolean(table?.enabled && table.date && table.date !== torontoDay(now));
 }

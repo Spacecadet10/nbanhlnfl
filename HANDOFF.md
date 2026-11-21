@@ -36,6 +36,176 @@
 - Known inconsistency (accepted for now): the web ticket list and the ticket snapshot still show NCAAB picks as ticketable while
   cards are off. No job sends tickets automatically, so this is display-only; hide NCAAB from tickets if it causes confusion.
 
+## The Odds API probe (owner-approved, cap 5 credits; spent 3) — Claude Opus 5.5, Nov 21, 2026 ~23:30Z
+- Spend record + raw responses: ~/nba-predictor-research-data/odds-probe-2026-11-22/ (SPEND.json; quota 498 -> 495 of 500).
+  AGENT_BUDGET.json is read-only on disk (owner autoresearch budget) and was left unchanged.
+- NCAAB (52 games in the next 48 h; books betonlineag 52, lowvig 52, betmgm 44, draftkings 32, fanduel 21, bovada 14, betrivers 13,
+  betus 7): on the 32 games with DraftKings and another book, |DK total - median of the others| median 0.0, max 0.5 pt; spreads
+  median 0.0, max 1.5. Our stored DK total equals the API's DK total on 19 of 20 matched games. Today's top-4 games present:
+  Cal Baptist @ LMU total 135.5 at all 8 books; Michigan @ Villanova home +3.5 at DK and the median. => DraftKings is NOT an
+  outlier; the top-4 rule's 25-36 pt gaps are the model disagreeing with the whole market (consistent with the documented
+  early-season NCAAB model error), not a DK line quirk. (ncaab_book_comparison.json)
+- NHL regulation 3-way: NOT on the bulk odds endpoint (422 INVALID_MARKET); IS on the per-event endpoint: CAR @ NYR (Nov 22)
+  draftkings 110/170/310 (draw), fanduel, betmgm, betrivers. So DraftKings does quote 3-way regulation - our ESPN feed simply
+  does not carry it. Cost: 1 credit per game per call (~13 NHL games a day ≈ 390 credits/month at one snapshot each) - more than
+  the 500/month plan leaves room for alongside anything else. Class R stays colourless unless the owner funds that.
+- Re-run the NCAAB figures: `python3 ~/nba-predictor-research-data/odds-probe-2026-11-22/compare_books.py ~/Desktop/nbanhlnfl`
+  (reads the saved API response + data/ncaab.sqlite read-only; prints the four lines above). Credit figures: SPEND.json,
+  copied from the x-requests-* response headers.
+- Odds-probe spend is tracked ONLY in that SPEND.json. It is NOT seen by the autoresearch budget gate (AGENT_BUDGET.json,
+  autoresearch_budget.py), which covers paid Claude runs only; any further Odds API spend needs a fresh owner OK.
+- Card inconsistency to note (not fixed): Soccer DC cards in Bet365's leagues show the NEWEST Bet365 quote at send time, while
+  every other sportsbook % on the cards is as of the forecast.
+
+## Second-price-source checks (read-only, free) — Claude Opus 5.5, Nov 21, 2026 ~23:10Z
+- Bet365 double chance (app/bet365_dc.py; ESPN core odds, top club leagues only: EPL, LaLiga, Bundesliga, Serie A, Ligue 1, UCL,
+  UEL; up to 48 h before kickoff, every 2 h per match; 826 files / 48 matches). Latest pregame DC pick per match (live store,
+  immutable read, as of 2026-11-22T00:00Z): 105 DC picks, 29 in Bet365's leagues (Nov 20: 3, Nov 21: 26); all 29 had a Bet365
+  quote retrieved BEFORE the forecast (usable as a price the pick could see). The other 76 are internationals (CAF qualifiers 24,
+  friendlies 19, Nations League 18, CONCACAF 15): never quoted. Rate: club weekends only, so 150 priced DC picks is weeks away.
+- Card display for DC is mixed: 24 of the 29 show "Bet365 offer, includes margin" (book_quote), 5 + all internationals show the
+  DraftKings 1X2-derived no-vig %. The book_quote shown is the newest at send time - retrieved AFTER the forecast on all 24 - so
+  the card's Bet365 % is not the pre-forecast price. If a Bet365 DC series ever drives class D, it is its own series and the
+  legend must name Bet365.
+- The Odds API: superseded by the probe entry above (the "active": false reading was MY misread of my own print of
+  has_outrights; all four sports were active with the expected keys).
+
+## Review round 2: derived-price root cause, W count, card book % — Claude Opus 5.5, Nov 21, 2026 ~23:30Z
+- Root cause of the 28 "<= 1.00" prices: NOT an incomplete 1X2 book (every one had home, draw and away; e.g. 1.19 / 6.0 / 13.0,
+  overround 1.084). My scratch analysis derived DC as 1/(1/a+1/b) and DNB as a(d-1)/d from VIGGED decimals, so the whole ~8%
+  margin landed on two sides: below 1.00 for heavy favourites, too short elsewhere. Band count of those estimates (Nov 2-21):
+  <=1.00: 28 (28-0, -0.61u); 1.00-1.10: 42 (40-2, +0.20u); >=1.10: 115. Scratch-script defect only: app/card_threshold.py never
+  prices DC/DNB, and the app's card derivation is no-vig.
+- Fix in the analysis: every Soccer DC/DNB pick is now unpriced (record kept, no P/L). Final all-markets figure: 1562-1163-22,
+  1,331 priced, -45.72u, -3.4% per bet (was -45.02u / 1,516, then -44.41u / 1,488). Soccer +7.30u on 121 priced (1X2 +11.96u,
+  goal totals -4.66u). Recommended picks Nov 2-16, priced only (NBA/NHL/NFL): 102-28, +19.75u, +15.2% (the +22.01u included 38
+  Soccer DC picks at the bad estimate). Both PDFs in ~/Downloads and summary.md regenerated; Part 2 of the summary PDF now shows Soccer
+  double chance rows as "unpriced" (record kept, no price/P/L), so table and summary agree (perpct_rec.py, Nov 21 ~23:45Z).
+- W 342 vs store_rows 292: 57 job picks are Nov 15-16 store games (56 settled before Nov 17 05:00Z) that the scratch store_rows
+  (games from Nov 17) never read; 7 scratch rows are not in the job (different canonical/quote selection). All job W prices are
+  stored DK moneyline / direct 1X2 decimal quotes; none derived.
+- Cards: of 174 app DC/DNB picks with a sportsbook %, 10 show > 95% (max 96.4%, e.g. Argentina-Costa Rica DC, app 96.2%); none
+  >= 100%. Sent Telegram cards Nov 2-16: 40 DC/DNB rows with a sportsbook %, 2 above 95% (max 95.4%). Heavy favourites, no-vig,
+  consistent with the app % -> no display defect found.
+
+## Review follow-up (card colouring + Nov 21 analysis) — Claude Opus 5.5, Nov 21, 2026 ~22:00Z — committed 376a92f · not released · flag off
+- Diagnostic per class (script ~/nba-predictor-research-data/card-colours-2026-11-21/diag.py; same maths as card_threshold.fit):
+  | set | priced | window | best T | n | hit_s | be_s | edge | qualifying |
+  | reviewer W (export+store rows, all) | 515 | 515 | 54.8 | 388 | .738 | .721 | +1.7 | 30, lowest 53.7 |
+  |   W export only (Nov 2-16 cards, ESPN closing) | 223 | 223 | 54.8 | 163 | .770 | .676 | +9.4 | 121 |
+  |   W store only | 292 | 292 | 56.3 | 215 | .706 | .744 | -3.8 | 0 |
+  | JOB W (store, trailing 400) | 342 | 342 | 56.9 | 249 | .717 | .745 | -2.8 | 0 -> not established |
+  | reviewer L (export+store, all) | 899 | 899 | 69.3 | 105 | .664 | .644 | +2.0 | 9, lowest 66.0 |
+  |   L store, all picks, no window | 570 | 570 | 65.9 | 112 | .561 | .547 | +1.4 | 6, lowest 65.9 |
+  | JOB L (store, trailing 400) | 570 | 400 | 64.3 | 103 | .504 | .541 | -3.7 | 0 -> not established |
+  | D / R (store) | 0 | - | - | - | - | - | - | unpriced -> not established |
+  Reviewer's numbers reproduce. Not a bug: W qualifies only through the Nov 2-16 Telegram-card rows (closing prices, not stored
+  prices, skewed to recommended picks), which the brief's stored-price rule excludes; L qualifies on all store picks but not on
+  the brief's trailing-400 window (the latest 400 line picks lose to the price). The code's state matches its inputs.
+- Legend: an unseeded class now prints NO line on cards (decide -> legend None; web cardColour -> none); /api/card-thresholds
+  and `card-thresholds show` still report "not established" with the reason wording. Tests updated (backend 126 passed in the
+  card/telegram suites; frontend 58 passed).
+- Test-card phantom-row guard: scripts/grade_telegram_export.py drops TEST PREVIEW cards before matching (`preview: true` or a
+  "TEST PREVIEW" banner text) and lists them in `excluded_preview_cards`. Verified on the export with two injected preview cards:
+  both excluded, no phantom row, output otherwise identical; edited vs HEAD script on the same inputs identical. (build_telegram_
+  history already used per_game_rows = last card sent BEFORE the start, so the Nov 21 IND @ CLE card could not enter there; the
+  gap was all_card_rows.) Transcribers: mark the preview banner as preview: true.
+- 306 vs 278 reconciled: the 28 are 15 DC + 13 DNB WINS whose 1X2-derived price was <= 1.00 (impossible), each scored as a small
+  loss (-0.61u total). Rule now: such an estimate is unpriced (both builders). Corrected all-markets total: 1,488 priced,
+  -44.41u (was 1,516 / -45.02u); Soccer +8.61u (was +8.00u), DNB +3.41u, DC -2.10u. summary.md, per_pct_all.md and
+  ~/Downloads/prediction-performance-2026-11-02_to_11-21.pdf regenerated; the exact-% PDF already used this rule.
+- Still owner actions: `sudo pmset -b sleep 0` then `pmset -g` to confirm; merge/release of card colouring (reviewer: not yet);
+  a fresh NCAAB top-4 preregistration counted from a date after Nov 21, or drop the rule.
+
+## Card colouring by per-class daily threshold — STATUS: built, tested, flag off, NO MARKET CURRENTLY QUALIFIES (W loses to the
+## price on stored DK; L loses on the latest 400; D needs ~2 months of club weekends; R unfunded). Keep off main until a fixed
+## NCAAB model, a cheaper reg3 feed or a real second book for W/L changes that. — branch card-colours, committed 8081b47 (follow-ups 376a92f, e519237, 1a8b94d) on origin/card-colours · NOT merged to main · NOT released · flag OFF · daily job NOT scheduled — Claude Opus 5.5, Nov 21, 2026 ~20:00-21:00Z
+- Owner brief (Nov 21): green at/above a market class's daily threshold T, red + struck through below; legend with T, n, state,
+  set date. Owner answers: render the Telegram preview locally only (no send); code + tests only (no release, no launchd job).
+- Code: NEW backend/app/card_threshold.py (CLASS_OF routing, Decimal `tenths`/`colour_for`, the brief's `fit` rule, append-only
+  `card_thresholds` store at <NBA_DATA_DIR>/card_thresholds.sqlite with no-update/no-delete triggers, `seed` (day 0, no clamp),
+  `run` (writes today once, refuses a past day), `current` (missing today -> "not refreshed"), six legends, `decide`,
+  `priced_picks` (coverage.canonical + paper_trading._quote for NBA/NHL/NFL/NCAAB; stored DK 1X2 / goal-total quotes for Soccer),
+  read-only `backtest`). config: NBA_CARD_COLOURS flag (default off), card_thresholds_path(). API GET /api/card-thresholds.
+  CLI `app.cli card-thresholds {seed,run,show,backtest}` (writes refused in the live folder outside the release env via
+  _write_refusal; seed/run only for today). Telegram: telegram.py market_block marker (green 🟢 / red <s>…</s> 🔴) + one
+  "Colour key · " line per class; telegram_card.py green/red badge, red struck through, keys drawn in green. Web: twin
+  `cardColour`/`tenthsOf` in sportsbook.ts (exact string-decimal maths, routes + T from the API); PickEvidence colours the app %,
+  the exact-% figure and the repeated "App x%" in the sportsbook line, legend in green; `ModelPct` at the adjacent model %s
+  (RankedPicks, Canonical, GamePage, NflPages). Delivery versions/keys unchanged (flag on/off key identical in test + preview).
+- Not edited (checked with git diff): adaptive.py, daily_agreement.py, markets.py (the only app module model files import),
+  coverage.py (sealed), threshold_overview.py / best_pick_record.py (best-pick recorder path), backtest.py, agreement.py.
+- Markets the cards render -> class: W = winner (NBA/NHL/NFL/NCAAB), Soccer 1X2; L = spread, total, home/away team totals (4 US
+  sports), Soccer DNB, goals total/home/away; R = NHL reg3; D = Soccer double chance; none = Soccer BTTS, corners total/home/
+  away/handicap. Never coloured (no stored price): model-line picks (team totals, model spreads), Soccer DC and DNB (only derived
+  no-vig prices, which the brief forbids), corners, BTTS. R has no quotes and D is unpriced -> never established.
+- EXPECTED COLOURLESS, NOT BUGS (no stored DraftKings price, so the job can never fit them): class R (NHL regulation 3-way:
+  DraftKings DOES quote it, but only on The Odds API's per-game endpoint at ~390 credits/month of a 500 plan - uncoloured because
+  the price costs more than the feature is worth (reviewer + probe, Nov 21), not because of a bug; re-evaluate on a bigger plan or
+  a rotating subset of games), class D (Soccer double chance: only derived prices), Soccer draw no bet (class L, but no
+  stored price), team totals on model lines, Soccer corners (all four), BTTS and goals home/away on model lines. A second
+  sportsbook could change R or D only as a separate, owner-approved price series counted from its own start.
+- REAL-DATA RESULT (store copy, cutoff 2026-11-22T05:00Z; inline `NBA_DATA_DIR=<copy> .venv/bin/python` calling
+  `ct.priced_picks(ct.day_start('2026-11-22'))`, `ct.counts(...)`, `ct.fit(picks, None, clamp=False)`): priced settled W 342 (nba 47, nhl 28, nfl 13, ncaab 176, soccer 78), L 570 (nba 94, nhl 56, nfl 12,
+  ncaab 390, soccer 18), R 0, D 0. No candidate 50.0-90.0 beats the shrunk break-even by 0.01 for W or L (also not cell
+  ncaab:L) -> a seed today would leave EVERY class "No threshold for this market yet" and colour nothing.
+- Backtest (`python -m app.cli card-thresholds backtest --date 2026-11-21` on the copy; evidence
+  ~/nba-predictor-research-data/card-colours-2026-11-21/ct_backtest.json; in-sample description, not an improvement claim;
+  stores start Nov 15, so Nov 2-14 cannot enter): W set 53.9 on Nov 18 (n 155), then held; L set 50.0 Nov 18, capped 51.0 Nov 19,
+  then held. Crossed out / P/L all vs green-only: W 32 of 342, -17.86u vs -20.45u; L 35 of 570, -29.47u vs -27.34u.
+- Under-52% band (same copy and cutoff; priced, settled, displayed % < 52.0, query = card_threshold.priced_picks + filter):
+  117 picks 63-54, +3.06u (W 42: 23-19 +1.62u; L 75: 40-35 +1.43u).
+- Report-builder gap (my scratch scripts, not app code): per_pct_all counted 306 soccer priced vs exact_pct 278; the 28 are DC (15)
+  and DNB (13) picks whose 1X2-derived price came out <= 1.00 - per_pct_all kept them, exact_pct dropped them. Both are
+  superseded by the rule above, which treats DC/DNB as unpriced.
+- Checks: backend `pytest tests/test_card_threshold.py tests/test_card_colours_telegram.py tests/test_card_block.py
+  tests/test_telegram.py tests/test_tickets.py tests/test_quote_quality.py tests/test_points_history.py tests/test_pick_withdrawn.py
+  tests/test_api.py tests/test_best_pick_record.py -q` -> 395 passed, 1 skipped. Rule tests were red first (module missing);
+  Telegram tests were written after the code and confirmed failing against the stashed originals (4 failed, 1 passed).
+  Frontend: typecheck ok, test:unit 57 passed (5 new), build ok. `scripts/check_project.py` -> FAIL only on the pre-existing
+  untracked `.omx/` directory (same as before this task). Full backend suite (`.venv/bin/python -m pytest -q`): 8 failed, 2777 passed, 1 skipped (44 min); all 8 failures are tests/test_deep_study.py (torch/keras not installed in the live venv, the known baseline). `check_project.py --ready` stops at the .omx guard (rc 1).
+- Browser (copy, NBA_CARD_COLOURS=1, scratch store holding W 53.9 / L 51.0 'held' rows copied from the backtest's Nov 21 lines -
+  screenshot values, not a live threshold): /games/espn:401909307 at 1440 and a true 390 px viewport via DevTools emulation
+  (headless --window-size has a 500 px minimum): winner 79.6% green ✓, spread 50.8% red struck (3 places identical), total 51.0%
+  green at T, model-line team totals plain, legends green, scrollWidth = viewport (no horizontal overflow). Telegram preview
+  rendered locally from the same game (format_batch preview=True + render_card; NOT sent): tg_preview.png. Files in
+  ~/nba-predictor-research-data/card-colours-2026-11-21/.
+- Recommended-pick panel: its repeated model % now carries the same marker (text "App 79.6% 🟢" / "App <s>54.0%</s> 🔴"; PNG
+  redraws the % in light green / light red, struck when red; tg_panel.png). Tests: 2 more in test_card_colours_telegram.py
+  (red first: 1 failed before the change). Related suites after it: 397 passed, 1 skipped.
+- Not done / unresolved: (2) no automated React render test (node test runner has no TSX); browser check instead (re-shot at 390 px after the
+  hook change); (3)+(4) DONE: the web copy of the lines is refetched after 10 min or on a new Toronto day
+  (sportsbook.cardTableStale, unit-tested), and a failed fetch says "Colour key unavailable: card thresholds could not be loaded"
+  on the card (frontend: typecheck ok, test:unit 58 passed, build ok); (5) daily job not scheduled, nothing released, flag off; (6) "held" because no candidate qualified uses its own wording
+  ("no line beat the price today") since "not re-fitted" would be false.
+- Next (owner decisions): whether to ship a rule that currently colours nothing; if yes, review -> release -> seed on the live
+  store -> schedule `card-thresholds run` daily before the first card -> switch NBA_CARD_COLOURS=1.
+
+## Performance by card %, all sports/markets Nov 2-21 + NCAAB top-4 INTERIM LOOK (owner request) — Claude Opus 5.5, Nov 21, 2026 ~19:00-20:30Z
+- Read-only; scratch copies of nba/nhl/nfl/ncaab/soccer stores + .telegram-delivery.sqlite; no live writes. Files + scripts:
+  ~/nba-predictor-research-data/performance-2026-11-21/ (per_pct_all.md = every sport/market per whole %, per_pct_all.csv, top4.json).
+- Sources: games starting before 2026-11-17T05:00Z = Telegram export cards (docs/telegram_record.json per_game_rows), priced at
+  DraftKings CLOSE from ESPN summary pickcenter (fetched today; DC/DNB derived from 1X2 incl. vig; no price for reg3/team totals);
+  later games = latest pregame game_forecasts per game+market (app.markets.settle) / soccer_record.all_picks, priced at the DK quote
+  in force at forecast time. 1 unit flat; pushes 0.
+- Result (CORRECTED Nov 21 ~23:30Z; see "Review round 2" above): 2,747 graded, all markets 1562-1163-22 (57.3%); 1,331 priced,
+  -45.72u, -3.4% per bet. Recommended picks (Nov 2-16): 140-30 graded; priced (NBA/NHL/NFL) 102-28 (78.5%), +19.75u, +15.2%.
+  On the 126 NBA/NHL/NFL winner picks: app +18.51u vs always the DK favourite +11.41u (no Soccer in that comparison, unchanged).
+  Superseded: 1,516 priced / -45.0u and 138-30 / +22.0u, which priced Soccer double chance and draw no bet with a 1X2-derived
+  estimate that kept the bookmaker margin on two sides (28 of them came out <= 1.00). Soccer DC/DNB are now unpriced.
+- **NCAAB top-4 preregistration (ncaab-top4-policy-eval-2026-11-18, PREREG_SHA256 55b8734a...): INTERIM LOOK TAKEN.** The owner
+  asked explicitly, twice, after being told section 7 forbids it. Computed on counted days 2026-11-18..21: hit rate and P/L of
+  every selected entry (P0) at its selection-time DK quote (16 decided incl. Nov 17: 10-6, +2.94u). Not computed: CLV, excess,
+  P1-P6, slopes. The final report must disclose this look; the confirmatory claim is compromised (owner decision whether to
+  re-preregister counting from a later day).
+- PDF built (owner request): ~/nba-predictor-research-data/performance-2026-11-21/Pick-performance-Nov-2-21-2026.pdf, 60 pp, 6.6 MB,
+  from summary.md + top4.json (20 selections) + per_pct.csv + exact_pct.md (32 sport/market tables) + per_pct_all.md; builder
+  build_report_pdf.py, rendered with Chrome headless --print-to-pdf (weasyprint/LibreOffice absent; Chrome needs a /tmp
+  --user-data-dir and a writable output dir). Layout checked on rendered screenshots of the cover, Part 1, an exact table and the
+  appendix; numbers come from the same files, nothing recomputed.
+- Owner noted the Mac is always open: pmset shows sleep=1 on battery AND AC; Nov 19 09:19 ET 'Idle Sleep' on battery 80%.
+  Suggested `sudo pmset -b sleep 0` (not run; needs owner password).
+
 ## Status 2026-11-20 03:00Z — consumption proven; challenger install blocked by baseline; Nov 19 lost to battery sleep — Claude Opus 5.5 (lead)
 - FORECASTING WITH FITS: PROVEN Nov 18 night for NBA weekly/daily (125 rows each, combiners 24/48) and NHL weekly/daily (19 rows each, combiners 51/68),
   every market (NBA winner/spread/total/team totals; NHL + reg3), 0 bad, 0 unavailable (live-activation-2026-11-18/s5-proof.jsonl).

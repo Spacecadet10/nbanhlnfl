@@ -161,3 +161,14 @@ def ncaab_cards_enabled() -> bool:
     the NCAAB model is fixed - eight books agreed with DraftKings within half a point while the top-4 gaps were 25-36 points).
     NCAAB forecasts keep being recorded; only the cards stop. Turning it back on is an approved service configuration change."""
     return os.environ.get("NBA_NCAAB_CARDS", "0") == "1"
+
+
+def card_colours_enabled() -> bool:
+    """Whether cards colour each market's model % against its class threshold (app/card_threshold.py). Display only.
+    Off unless NBA_CARD_COLOURS=1 (owner brief Nov 21 2026: flag off = today's plain card)."""
+    return os.environ.get("NBA_CARD_COLOURS", "0") == "1"
+
+
+def card_thresholds_path() -> Path:
+    """The append-only store of the daily card thresholds (one row per class, or qualifying sport x class, per day)."""
+    return data_dir() / "card_thresholds.sqlite"

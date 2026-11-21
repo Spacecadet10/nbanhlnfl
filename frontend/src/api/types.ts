@@ -1207,3 +1207,8 @@ export interface SoccerResearchHistory {
   competition_id: SoccerCompetitionId; season: number | null; model: string | null; total: number; limit: number;
   offset: number; seasons: number[]; label: string; items: { match: SoccerHistMatch; forecast: SoccerForecast }[];
 }
+
+/** GET /api/card-thresholds (backend app/card_threshold.py): the stored card-colour lines in force today. The frontend never
+ *  computes a threshold; `routes` says which class each sport's market is (null = never coloured). */
+export interface CardThresholdScope { scope: string; class: string; sport: string | null; threshold: string | null; n: number; state: string; set_on: string; legend: string }
+export interface CardThresholds { enabled: boolean; date?: string; routes?: Record<string, Record<string, string | null>>; no_colour_line_source?: string; scopes?: CardThresholdScope[] }

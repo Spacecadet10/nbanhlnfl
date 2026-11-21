@@ -2,10 +2,53 @@
 // SoccerMarkets). It shows what the Telegram card shows (backend app/telegram.py market_block): the app %, the sportsbook no-vig %
 // with its gap, provider, quote time and basis (or why there is none), the live exact-% record (other settled games, pushes), the
 // recovered Telegram history and the record basis. Fields an older API does not send are left out. Wording: cardRecord.ts.
-import type { ForecastPercentageHistory, RecordBasis, SportsbookComparison } from '../api/types';
+import { useEffect, useState } from 'react';
+import { api } from '../api/client';
+import type { CardThresholds, ForecastPercentageHistory, RecordBasis, SportsbookComparison } from '../api/types';
 import { dateTime, pct } from '../format';
 import { liveRecordLine, recordBasisLines, recordLabel, telegramLine, thisGameLine } from './cardRecord';
-import { dnbModelNote, quoteTime, sportsbookLine } from './sportsbook';
+import { type CardColourDecision, cardColour, cardTableStale, dnbModelNote, quoteTime, sportsbookLine } from './sportsbook';
+
+// Card colouring (GET /api/card-thresholds): one shared copy for every card on the page, refetched when it is older than
+// 10 minutes or from another Toronto day. The thresholds are stored lines, never computed here. A failed fetch is said on
+// the card ('error'), never shown as a plain card that looks like the flag being off.
+type CardTableState = CardThresholds | 'error' | null;
+let cardCache: { at: number; table: Promise<CardTableState> } | null = null;
+function loadCardTable(now: number, current: CardTableState): Promise<CardTableState> {
+  if (!cardCache || cardTableStale(cardCache.at, now, current === 'error' ? null : current) || current === 'error') {
+    cardCache = { at: now, table: api.cardThresholds().then((t): CardTableState => t, (): CardTableState => 'error') };
+  }
+  return cardCache.table;
+}
+export function useCardThresholds(): CardTableState {
+  const [table, setTable] = useState<CardTableState>(null);
+  useEffect(() => {
+    let live = true;
+    let last: CardTableState = null;
+    const refresh = () => loadCardTable(Date.now(), last).then((t) => { last = t; if (live) setTable(t); });
+    refresh();
+    const timer = window.setInterval(refresh, 5 * 60_000);
+    return () => { live = false; window.clearInterval(timer); };
+  }, []);
+  return table;
+}
+
+/** A model % coloured as the card colours it: green (with a check) at or above the class threshold, red and struck through
+ *  below it; plain when the flag is off or the market has no colour. */
+export function ColouredValue({ text, decision }: { text: string; decision: CardColourDecision }) {
+  if (!decision.colour) return <>{text}</>;
+  const where = decision.colour === 'green' ? 'at or above the green line' : 'below the green line';
+  return <span className={`model-pct model-pct-${decision.colour}`} title={decision.legend ?? undefined} aria-label={`${text}, ${where}`}>
+    {decision.colour === 'red' ? <s>{text}</s> : text}{decision.colour === 'green' ? ' ✓' : ''}
+  </span>;
+}
+
+/** The model % next to a card section, coloured identically to the card section itself. */
+export function ModelPct({ probability, history }: { probability: number | null | undefined; history?: ForecastPercentageHistory | null }) {
+  const state = useCardThresholds();
+  const table = state === 'error' ? null : state;
+  return <ColouredValue text={pct(probability, 1)} decision={cardColour(table, history?.sport, history?.market, probability, history?.line_source)} />;
+}
 
 export interface PickEvidenceProps {
   history: ForecastPercentageHistory | null | undefined;
@@ -24,19 +67,29 @@ export interface PickEvidenceProps {
 
 /** Exact-percentage observations and an explicitly experimental opposite scenario; original forecasts stay unchanged. */
 export function PickEvidence({ history: h, grade, sportsbook, recordBasis, opposite, startAt, header, bookLabel, teams }: PickEvidenceProps) {
-  const book = sportsbook ? sportsbookLine(sportsbook) : null;
+  const state = useCardThresholds();
+  const table = state === 'error' ? null : state;
+  const colour = cardColour(table, h?.sport, h?.market, header?.probability ?? h?.percentage, h?.line_source);
+  const key = colour.legend ? <><br /><span className="card-colour-key">{colour.legend}</span></>
+    : state === 'error' ? <><br /><span className="muted">Colour key unavailable: card thresholds could not be loaded</span></> : null;
+  const bookText = sportsbook ? sportsbookLine(sportsbook) : null;
+  // The same model % repeated as "App 50.8% · …" in the sportsbook line is coloured the same (never a conditional DNB %).
+  const shown = header ? pct(header.probability, 1) : h ? `${h.percentage}%` : null;
+  const app = bookText && shown && colour.colour && bookText.startsWith(`App ${shown} · `) ? shown : null;
+  const book = app && bookText ? <>App <ColouredValue text={app} decision={colour} />{bookText.slice(`App ${app}`.length)}</> : bookText;
   const basis = recordBasisLines(recordBasis, quoteTime, { market: h?.market, teams });
   const dnbPct = (h?.market as string | undefined) === 'draw_no_bet' ? h?.percentage ?? null
     : sportsbook?.basis?.startsWith('conditional on no draw') && header ? (header.probability * 100).toFixed(1) : null;
   const dnbNote = dnbPct != null ? <>{dnbModelNote(dnbPct)}<br /></> : null;
   const headLine = header && <>
-    <strong>{header.pick}</strong> · {header.market}{header.line != null && <> · line {header.line > 0 ? '+' : ''}{header.line}</>} · app {pct(header.probability, 1)}<br />
+    <strong>{header.pick}</strong> · {header.market}{header.line != null && <> · line {header.line > 0 ? '+' : ''}{header.line}</>} · app <ColouredValue text={pct(header.probability, 1)} decision={colour} /><br />
   </>;
   if (!h) return <span className="small percentage-record pick-evidence">{headLine}
     {dnbNote}
     {book && <>{bookLabel ? `${bookLabel}: ` : ''}{book}<br /></>}
     <span className="warn">Percentage history unavailable</span>
     {basis.map((b) => <span key={b}><br /><span className="muted">{b}</span></span>)}
+    {key}
   </span>;
   const excluded = Object.values(h.excluded ?? {}).reduce((a, b) => a + b, 0);
   const against = h.losses > h.wins; // Only OTHER games can trigger it, never this game's own loss.
@@ -48,7 +101,7 @@ export function PickEvidence({ history: h, grade, sportsbook, recordBasis, oppos
     {dnbNote}
     {book && <>{bookLabel ? `${bookLabel}: ` : ''}{book}<br /></>}
     <strong>Observed: {recordLabel(h)}</strong><br />
-    {h.sport.toUpperCase()} · {h.market_title} · {h.direction} · {h.percentage}% only
+    {h.sport.toUpperCase()} · {h.market_title} · {h.direction} · <ColouredValue text={`${h.percentage}%`} decision={colour} /> only
     {h.line_source !== 'none' && <> · {h.line_source === 'bookmaker' ? 'bookmaker lines' : 'model lines'}</>}
     <br />{liveRecordLine(h)}
     <br />{thisGameLine(grade)}
@@ -66,5 +119,6 @@ export function PickEvidence({ history: h, grade, sportsbook, recordBasis, oppos
     {tg && <><br />{tg}<span className="muted"> · separate from the live record</span></>}
     {basis.map((b) => <span key={b}><br />{b}</span>)}
     <br /><span className="muted">Live record · same model · as of {dateTime(h.as_of)}</span>
+    {key}
   </span>;
 }
