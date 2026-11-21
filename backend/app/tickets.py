@@ -868,6 +868,7 @@ def soccer_market_picks(conn, stamp, since=None):
                                "s.match_id = f.match_id WHERE f.forecast_id = ?", (d['forecast_id'],)).fetchone()
             book_1x2 = implied_lines.match_result_probabilities(
                 sml.quotes(conn, m['match_id'], min(row['generated_at'], m['kickoff_at'])))
+            forecast_prices = sml.match_prices(conn, m['match_id'], row['generated_at'])
             for market, side in (('double_chance', dc_side), ('draw_no_bet', dnb_side)):
                 probs = sm.probabilities_1x2((p1['home'], p1['draw'], p1['away']), market, side)
                 result = next(x['result'] for x in d['selections'] if x['market'] == market and x['side'] == side)
@@ -880,7 +881,9 @@ def soccer_market_picks(conn, stamp, since=None):
                         comparison = {'card_market_prob': book_1x2[side] / (book_1x2['home'] + book_1x2['away']),
                                       'card_app_prob': sm.conditional_on_no_draw(probs),
                                       'card_comparison_basis': 'draws excluded, derived from 1X2 prices'}
-                price_facts = soccer_price_facts(m.get('prices') or {}, market, side)
+                # Bet365 and the derived DC/DNB price are read as of the forecast (m['prices'] is as of the send), so every
+                # sportsbook figure on the card shares the forecast's information time.
+                price_facts = soccer_price_facts(forecast_prices, market, side)
                 offer = price_facts.get('book_quote')
                 if offer and offer['retrieved_at'] < m['kickoff_at']:
                     comparison = {'card_market_prob': 1 / offer['decimal'],
