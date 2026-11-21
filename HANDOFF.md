@@ -1,4 +1,20 @@
-## Second-price-source checks (read-only, free) — Claude Opus 5.5, Nov 22, 2026 ~00:10Z
+## The Odds API probe (owner-approved, cap 5 credits; spent 3) — Claude Opus 5.5, Nov 21, 2026 ~23:30Z
+- Spend record + raw responses: ~/nba-predictor-research-data/odds-probe-2026-11-22/ (SPEND.json; quota 498 -> 495 of 500).
+  AGENT_BUDGET.json is read-only on disk (owner autoresearch budget) and was left unchanged.
+- NCAAB (52 games in the next 48 h; books betonlineag 52, lowvig 52, betmgm 44, draftkings 32, fanduel 21, bovada 14, betrivers 13,
+  betus 7): on the 32 games with DraftKings and another book, |DK total - median of the others| median 0.0, max 0.5 pt; spreads
+  median 0.0, max 1.5. Our stored DK total equals the API's DK total on 19 of 20 matched games. Today's top-4 games present:
+  Cal Baptist @ LMU total 135.5 at all 8 books; Michigan @ Villanova home +3.5 at DK and the median. => DraftKings is NOT an
+  outlier; the top-4 rule's 25-36 pt gaps are the model disagreeing with the whole market (consistent with the documented
+  early-season NCAAB model error), not a DK line quirk. (ncaab_book_comparison.json)
+- NHL regulation 3-way: NOT on the bulk odds endpoint (422 INVALID_MARKET); IS on the per-event endpoint: CAR @ NYR (Nov 22)
+  draftkings 110/170/310 (draw), fanduel, betmgm, betrivers. So DraftKings does quote 3-way regulation - our ESPN feed simply
+  does not carry it. Cost: 1 credit per game per call (~13 NHL games a day ≈ 390 credits/month at one snapshot each) - more than
+  the 500/month plan leaves room for alongside anything else. Class R stays colourless unless the owner funds that.
+- Card inconsistency to note (not fixed): Soccer DC cards in Bet365's leagues show the NEWEST Bet365 quote at send time, while
+  every other sportsbook % on the cards is as of the forecast.
+
+## Second-price-source checks (read-only, free) — Claude Opus 5.5, Nov 21, 2026 ~23:10Z
 - Bet365 double chance (app/bet365_dc.py; ESPN core odds, top club leagues only: EPL, LaLiga, Bundesliga, Serie A, Ligue 1, UCL,
   UEL; up to 48 h before kickoff, every 2 h per match; 826 files / 48 matches). Latest pregame DC pick per match (live store,
   immutable read, as of 2026-11-22T00:00Z): 105 DC picks, 29 in Bet365's leagues (Nov 20: 3, Nov 21: 26); all 29 had a Bet365
@@ -8,9 +24,8 @@
   DraftKings 1X2-derived no-vig %. The book_quote shown is the newest at send time - retrieved AFTER the forecast on all 24 - so
   the card's Bet365 % is not the pre-forecast price. If a Bet365 DC series ever drives class D, it is its own series and the
   legend must name Bet365.
-- The Odds API (.env.the-odds-api): GET /v4/sports only (costs 0): HTTP 200, x-requests-used 2, x-requests-remaining 498
-  (a 500/month plan). NBA, NCAAB, NHL, NFL, EPL listed but "active": false at 00:10Z. Not checked (each costs credits): whether
-  NHL 3-way regulation is offered; NCAAB totals/spreads book coverage. No odds requested, nothing collected, nothing scheduled.
+- The Odds API: superseded by the probe entry above (the "active": false reading was MY misread of my own print of
+  has_outrights; all four sports were active with the expected keys).
 
 ## Review round 2: derived-price root cause, W count, card book % — Claude Opus 5.5, Nov 21, 2026 ~23:30Z
 - Root cause of the 28 "<= 1.00" prices: NOT an incomplete 1X2 book (every one had home, draw and away; e.g. 1.19 / 6.0 / 13.0,
