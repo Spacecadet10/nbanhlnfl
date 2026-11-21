@@ -7,8 +7,8 @@
 - Fix in the analysis: every Soccer DC/DNB pick is now unpriced (record kept, no P/L). Final all-markets figure: 1562-1163-22,
   1,331 priced, -45.72u, -3.4% per bet (was -45.02u / 1,516, then -44.41u / 1,488). Soccer +7.30u on 121 priced (1X2 +11.96u,
   goal totals -4.66u). Recommended picks Nov 2-16, priced only (NBA/NHL/NFL): 102-28, +19.75u, +15.2% (the +22.01u included 38
-  Soccer DC picks at the bad estimate). Both PDFs in ~/Downloads and summary.md regenerated; Part 2 of the summary PDF still lists
-  Soccer rows at the old estimate, flagged void in the summary.
+  Soccer DC picks at the bad estimate). Both PDFs in ~/Downloads and summary.md regenerated; Part 2 of the summary PDF now shows Soccer
+  double chance rows as "unpriced" (record kept, no price/P/L), so table and summary agree (perpct_rec.py, Nov 21 ~23:45Z).
 - W 342 vs store_rows 292: 57 job picks are Nov 15-16 store games (56 settled before Nov 17 05:00Z) that the scratch store_rows
   (games from Nov 17) never read; 7 scratch rows are not in the job (different canonical/quote selection). All job W prices are
   stored DK moneyline / direct 1X2 decimal quotes; none derived.
@@ -16,7 +16,7 @@
   >= 100%. Sent Telegram cards Nov 2-16: 40 DC/DNB rows with a sportsbook %, 2 above 95% (max 95.4%). Heavy favourites, no-vig,
   consistent with the app % -> no display defect found.
 
-## Review follow-up (card colouring + Nov 21 analysis) — Claude Opus 5.5, Nov 21, 2026 ~22:00Z — NOT committed
+## Review follow-up (card colouring + Nov 21 analysis) — Claude Opus 5.5, Nov 21, 2026 ~22:00Z — committed 376a92f · not released · flag off
 - Diagnostic per class (script ~/nba-predictor-research-data/card-colours-2026-11-21/diag.py; same maths as card_threshold.fit):
   | set | priced | window | best T | n | hit_s | be_s | edge | qualifying |
   | reviewer W (export+store rows, all) | 515 | 515 | 54.8 | 388 | .738 | .721 | +1.7 | 30, lowest 53.7 |
@@ -45,7 +45,7 @@
 - Still owner actions: `sudo pmset -b sleep 0` then `pmset -g` to confirm; merge/release of card colouring (reviewer: not yet);
   a fresh NCAAB top-4 preregistration counted from a date after Nov 21, or drop the rule.
 
-## Card colouring by per-class daily threshold — branch card-colours, NOT committed, NOT released, flag OFF — Claude Opus 5.5, Nov 21, 2026 ~20:00-21:00Z
+## Card colouring by per-class daily threshold — branch card-colours, committed 8081b47 (follow-ups 376a92f, e519237, 1a8b94d) on origin/card-colours · NOT merged to main · NOT released · flag OFF · daily job NOT scheduled — Claude Opus 5.5, Nov 21, 2026 ~20:00-21:00Z
 - Owner brief (Nov 21): green at/above a market class's daily threshold T, red + struck through below; legend with T, n, state,
   set date. Owner answers: render the Telegram preview locally only (no send); code + tests only (no release, no launchd job).
 - Code: NEW backend/app/card_threshold.py (CLASS_OF routing, Decimal `tenths`/`colour_for`, the brief's `fit` rule, append-only
