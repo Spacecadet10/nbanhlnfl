@@ -65,6 +65,10 @@
   sports), Soccer DNB, goals total/home/away; R = NHL reg3; D = Soccer double chance; none = Soccer BTTS, corners total/home/
   away/handicap. Never coloured (no stored price): model-line picks (team totals, model spreads), Soccer DC and DNB (only derived
   no-vig prices, which the brief forbids), corners, BTTS. R has no quotes and D is unpriced -> never established.
+- EXPECTED COLOURLESS, NOT BUGS (no stored DraftKings price, so the job can never fit them): class R (NHL regulation 3-way:
+  DK is not quoted in our data), class D (Soccer double chance: only derived prices), Soccer draw no bet (class L, but no
+  stored price), team totals on model lines, Soccer corners (all four), BTTS and goals home/away on model lines. A second
+  sportsbook could change R or D only as a separate, owner-approved price series counted from its own start.
 - REAL-DATA RESULT (store copy, cutoff 2026-11-22T05:00Z; inline `NBA_DATA_DIR=<copy> .venv/bin/python` calling
   `ct.priced_picks(ct.day_start('2026-11-22'))`, `ct.counts(...)`, `ct.fit(picks, None, clamp=False)`): priced settled W 342 (nba 47, nhl 28, nfl 13, ncaab 176, soccer 78), L 570 (nba 94, nhl 56, nfl 12,
   ncaab 390, soccer 18), R 0, D 0. No candidate 50.0-90.0 beats the shrunk break-even by 0.01 for W or L (also not cell
@@ -108,8 +112,11 @@
   DraftKings CLOSE from ESPN summary pickcenter (fetched today; DC/DNB derived from 1X2 incl. vig; no price for reg3/team totals);
   later games = latest pregame game_forecasts per game+market (app.markets.settle) / soccer_record.all_picks, priced at the DK quote
   in force at forecast time. 1 unit flat; pushes 0.
-- Result (2,747 graded, 1,516 priced): all markets 1562-1163-22 (57.3%), -45.0u, ROI -3.0%. Recommended picks only (Nov 2-16):
-  138-30, +22.0u, +13.1%; DK favourite in the same 126 winner games +11.4u.
+- Result (CORRECTED Nov 21 ~23:30Z; see "Review round 2" above): 2,747 graded, all markets 1562-1163-22 (57.3%); 1,331 priced,
+  -45.72u, -3.4% per bet. Recommended picks (Nov 2-16): 140-30 graded; priced (NBA/NHL/NFL) 102-28 (78.5%), +19.75u, +15.2%.
+  On the 126 NBA/NHL/NFL winner picks: app +18.51u vs always the DK favourite +11.41u (no Soccer in that comparison, unchanged).
+  Superseded: 1,516 priced / -45.0u and 138-30 / +22.0u, which priced Soccer double chance and draw no bet with a 1X2-derived
+  estimate that kept the bookmaker margin on two sides (28 of them came out <= 1.00). Soccer DC/DNB are now unpriced.
 - **NCAAB top-4 preregistration (ncaab-top4-policy-eval-2026-11-18, PREREG_SHA256 55b8734a...): INTERIM LOOK TAKEN.** The owner
   asked explicitly, twice, after being told section 7 forbids it. Computed on counted days 2026-11-18..21: hit rate and P/L of
   every selected entry (P0) at its selection-time DK quote (16 decided incl. Nov 17: 10-6, +2.94u). Not computed: CLV, excess,
