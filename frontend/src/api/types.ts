@@ -922,11 +922,15 @@ export interface ForecastPercentageHistory {
   ci95: [number, number] | null; small_sample: boolean; excluded: Record<string, number>; as_of: string;
   /** Recomputed past seasons at the same exact percentage, side, model and line source (spread, total, team totals of
    *  NBA; winner of NBA/NHL, clean seasons only); a separate source, never part of wins/losses above. Absent or null where no history exists. */
-  history?: { source: 'history_recomputed'; line_source: CanonicalRecord['line_source']; wins: number; losses: number; pushes?: number; voids?: number; settled: number; small_sample?: boolean; colour?: 'green' | 'red' | 'neutral' } | null;
+  history?: { source: 'history_recomputed'; line_source: CanonicalRecord['line_source']; wins: number; losses: number; pushes?: number; voids?: number; settled: number; small_sample?: boolean; colour?: 'green' | 'red' | 'neutral';
+    /** The exact text Telegram prints for this record; null when Telegram hides it. Absent on an older API. */ line?: string | null } | null;
   /** Telegram cards sent before the live ledger began (Nov 2-14 2026) at the same sport, market, exact percentage, side and
    *  line source; the cards do not show the model version. A separate source, never part of wins/losses above. */
   telegram?: { source: 'telegram_cards'; label?: string; model_version_known?: boolean; available?: boolean; period?: { from: string; to: string } | null; line_source: CanonicalRecord['line_source'];
-    wins: number; losses: number; pushes?: number; voids?: number; settled: number; small_sample?: boolean; colour?: 'green' | 'red' | 'neutral' } | null;
+    /** Null when `available` is false (never 0). */
+    wins: number | null; losses: number | null; pushes?: number | null; voids?: number | null; settled: number | null; small_sample?: boolean; colour?: 'green' | 'red' | 'neutral';
+    /** The exact text Telegram prints for this record (unavailable and no-rows cases included). Absent on an older API. */ line?: string;
+    /** Recovered games also in the live record (counted in each, never added). */ overlap_live?: number | null } | null;
 }
 
 /** GET /api/paper-rules: the frozen paper rules of a sport (no money; app/paper_rules.py). */
