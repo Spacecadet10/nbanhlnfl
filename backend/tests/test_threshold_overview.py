@@ -284,7 +284,9 @@ def test_no_telegram_history_file_means_no_telegram_line(tmp_path, monkeypatch):
     monkeypatch.setenv('NBA_DATA_DIR', str(tmp_path))
     target = percentage_item('self', 'win')
     r = to.percentage_record('nba', 'total', target[1]['record'], 'self', {}, AFTER)
-    assert r['telegram'] is None
+    t = r['telegram']                       # never silently absent, never 0-0: an explicit unavailable record
+    assert (t['available'], t['reason'], t['wins'], t['losses'], t['settled'], t['win_rate']) == (False, 'file_missing', None, None, None, None)
+    assert (t['label'], t['model_version_known'], t['colour'], t['period']) == ('Recovered Telegram cards', False, 'neutral', None)
 
 
 # --- Nov 17: contract fields (pushes, telegram label/period/model_version_known, sport coverage) ---------------------------
@@ -318,7 +320,7 @@ def test_a_sport_with_no_recovered_telegram_rows_has_no_telegram_line_and_says_s
     _telegram_file(tmp_path, monkeypatch, [_tg('w1', 'win')])             # only NBA rows exist
     target = percentage_item('self', 'win')
     r = to.percentage_record('ncaab', 'winner', target[1]['record'], 'self', {}, AFTER, live_since='2026-11-17T15:00:54Z')
-    assert r['telegram'] is None
+    assert (r['telegram']['available'], r['telegram']['reason'], r['telegram']['wins']) == (False, 'no_rows_for_sport', None)
     assert r['coverage']['live_since'] == '2026-11-17T15:00:54Z' and r['coverage']['telegram_period'] is None
     assert 'No recovered Telegram history for NCAAB' in r['coverage']['history_note']
     assert '2026-11-17' in r['coverage']['history_note']                  # recording began <date>
@@ -430,3 +432,60 @@ def test_record_line_text_is_shared_by_telegram_and_web():
     assert to.record_line('57.3', 0, 0, 0, 0) == '57.3% · no settled history at this exact %'
     assert to.record_line('57.3', 0, 0, 2, 0) == '57.3% · no settled history at this exact % · 2 pushes'
     assert to.record_line('57.3', 0, 2, 0, 2, voids=1) == '57.3% · this exact % has gone 0–2 (0%) · 1 void · small sample (2 settled)'
+
+
+def _rows_file(tmp_path, monkeypatch, rows, summary=None):
+    import json
+    monkeypatch.setenv('NBA_DATA_DIR', str(tmp_path))
+    path = to.telegram_history_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({'source': 'telegram_cards', 'period': {'from': '2026-11-01', 'to': '2026-11-30'},
+                                'summary': summary or {}, 'rows': rows}))
+
+
+def _dated(gid, grade, day, pct='57.3', **kw):
+    return dict(_tg(gid, grade, pct=pct, **kw), start_date_local=day, start_at=day + 'T23:00:00Z')
+
+
+def test_recovered_record_has_win_rate_colour_voids_actual_dates_and_the_available_flag(tmp_path, monkeypatch):
+    _rows_file(tmp_path, monkeypatch, [_dated('a', 'win', '2026-11-05'), _dated('b', 'win', '2026-11-09'), _dated('c', 'win', '2026-11-12'),
+                                       _dated('d', 'loss', '2026-11-12'), _dated('e', 'push', '2026-11-12'), _dated('f', 'void', '2026-11-13'),
+                                       _dated('x', 'win', '2026-11-16', pct='57.4'), _dated('self', 'win', '2026-11-02')])
+    rec = percentage_item('self', 'pending', conf=.5731)[1]['record']
+    t = to.percentage_record('nba', 'total', rec, 'self', {}, AFTER)['telegram']
+    assert (t['available'], t['wins'], t['losses'], t['pushes'], t['voids'], t['settled']) == (True, 3, 1, 1, 1, 4)
+    assert t['win_rate'] == 0.75 and t['colour'] == 'green' and t['model_version_known'] is False
+    assert t['period'] == {'from': '2026-11-02', 'to': '2026-11-16'}      # the sport's dates present in the file, from its rows
+    assert t['bucket_period'] == {'from': '2026-11-05', 'to': '2026-11-13'}
+
+
+def test_a_bucket_with_no_recovered_rows_is_no_history_not_0_0(tmp_path, monkeypatch):
+    _rows_file(tmp_path, monkeypatch, [_dated('a', 'win', '2026-11-05', pct='60.0')])
+    rec = percentage_item('self', 'pending', conf=.5731)[1]['record']
+    t = to.percentage_record('nba', 'total', rec, 'self', {}, AFTER)['telegram']
+    assert (t['available'], t['no_history'], t['settled'], t['win_rate'], t['colour']) == (True, True, 0, None, 'neutral')
+    assert t['period'] == {'from': '2026-11-05', 'to': '2026-11-05'}
+
+
+def test_an_unreadable_file_is_reported_as_unavailable(tmp_path, monkeypatch):
+    _rows_file(tmp_path, monkeypatch, [])
+    to.telegram_history_path().write_text('{not json')
+    rec = percentage_item('self', 'pending')[1]['record']
+    t = to.percentage_record('nba', 'total', rec, 'self', {}, AFTER)['telegram']
+    assert (t['available'], t['reason'], t['settled']) == (False, 'unreadable', None)
+
+
+def test_a_game_in_both_records_counts_once_in_each_and_is_reported_never_summed(tmp_path, monkeypatch):
+    _rows_file(tmp_path, monkeypatch, [_dated('both', 'win', '2026-11-15'), _dated('old', 'loss', '2026-11-08')])
+    rec = percentage_item('self', 'pending', conf=.5731)[1]['record']
+    idx = to.percentage_index([percentage_item('both', 'win', .5731), percentage_item('livefirst', 'loss', .5731)], AFTER)
+    r = to.percentage_record('nba', 'total', rec, 'self', idx, AFTER)
+    assert (r['wins'], r['losses']) == (1, 1) and (r['telegram']['wins'], r['telegram']['losses']) == (1, 1)
+    assert r['telegram']['overlap_live'] == 1                       # 'both' is in both displayed records, never added: 1-1 and 1-1, not 2-2
+
+
+def test_history_subrecord_also_carries_win_rate_and_available():
+    rec = percentage_item('self', 'pending', conf=.5731)[1]['record']
+    key = ('57.3', 'a', to.HISTORY_SOURCE, 'test-model', 'bookmaker')
+    h = to.percentage_record('nba', 'total', rec, 'self', {}, AFTER, history_index={key: {'a': 'win', 'b': 'loss', 'c': 'win'}})['history']
+    assert h['available'] is True and h['win_rate'] == pytest.approx(2 / 3)

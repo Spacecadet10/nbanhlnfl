@@ -78,7 +78,7 @@ def test_recovered_and_recomputed_lines_have_their_own_colour_and_never_the_head
                  'colour': 'green', 'settled': 4, 'small_sample': True})
     text = tg.message_batches(card('nba', [p]), '123')[0][1]
     assert '<b>Model 57.1%</b> · this exact % has gone 3–2' in text         # headline: live record only, neutral
-    assert 'Recovered Telegram cards 11-02 to 11-14: 0W–2L · 1 void (2 settled) · Small sample. · red record · model version not recorded' in text
+    assert 'Recovered Telegram cards 11-02 to 11-14: this exact % has gone 0–2 (0%) · 1 void · small sample (2 settled) · red record · model version not recorded' in text
     assert 'Past seasons 2024-26, recomputed, model line: 4W–0L · Small sample. · green record' in text
 
 

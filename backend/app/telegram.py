@@ -3,6 +3,7 @@
 No training, ingestion, forecast changes, historical recommendations, or subscribers other than the paired private chat.
 """
 import hashlib
+from decimal import Decimal
 import json
 import os
 import re
@@ -418,25 +419,34 @@ def sportsbook_detail_line(sb, dnb=False):
 
 
 def telegram_history_line(sport, h):
-    """Recovered Telegram history at this exact %, labelled as such (the cards of Nov 2-14 do not show the model version).
-    None only when the API sent neither the sub-record nor coverage (older API): nothing is invented."""
+    """Recovered Telegram history at this exact %, labelled as such (the cards of Nov 2-16 do not show the model version): its
+    own record, win rate, pushes and voids, and the dates present in the file. A file that is missing or unreadable says
+    'recovered history unavailable'; a bucket the file does not hold says 'no recovered history at this exact %'; never 0-0.
+    None only when the API sent neither the sub-record nor coverage (older API)."""
+    from .threshold_overview import MIN_LIVE_GRADED
     tg, cov = _dump(h.get('telegram')), _dump(h.get('coverage'))
-    if tg:
+    if tg and tg.get('available') is False and tg.get('reason') in ('file_missing', 'unreadable'):
+        return f"{escape(tg.get('label') or TELEGRAM_LABEL)}: recovered history unavailable ({str(tg['reason']).replace('_', ' ')})"
+    if tg and tg.get('available') is not False:
         label = tg.get('label') or TELEGRAM_LABEL
         period = tg.get('period')
         span = f" {_md(period['from'])} to {_md(period['to'])}" if period else ''
-        if not tg.get('settled') and not tg.get('pushes'):
-            return f"{escape(label)}{span}: none settled at this exact % · model version not recorded"
-        pushes = f" · {tg['pushes']} push" if tg.get('pushes') else ''
-        voids = f" · {tg['voids']} void" if tg.get('voids') else ''
-        small = ' · Small sample.' if tg.get('small_sample') else ''
-        return (f"{escape(label)}{span}: {tg['wins']}W–{tg['losses']}L{pushes}{voids} ({tg['settled']} settled){small}"
-                f"{_own_colour(tg)} · model version not recorded")
+        pushes, voids, settled = tg.get('pushes') or 0, tg.get('voids') or 0, tg.get('settled') or 0
+        if not settled and not pushes and not voids:
+            return f"{escape(label)}{span}: no recovered history at this exact % · model version not recorded"
+        rate = f" ({int(Decimal(tg['wins'] * 100) / Decimal(settled) + Decimal('0.5'))}%)" if settled else ''
+        body = f"this exact % has gone {tg['wins']}–{tg['losses']}{rate}" if settled else 'no settled result at this exact %'
+        from .threshold_overview import _plural
+        extra = (f" · {_plural(pushes, 'push')}" if pushes else '') + (f" · {_plural(voids, 'void')}" if voids else '')
+        small = f" · small sample ({settled} settled)" if settled and settled < MIN_LIVE_GRADED else ''
+        overlap = tg.get('overlap_live')
+        both = f" · {overlap} game{'' if overlap == 1 else 's'} also in the live record, not added" if overlap else ''
+        return f"{escape(label)}{span}: {body}{extra}{small}{_own_colour(tg)}{both} · model version not recorded"
     if cov is None and 'telegram' not in h:
         return None
     period = (cov or {}).get('telegram_period')
     if period:
-        return f"{TELEGRAM_LABEL} {_md(period['from'])} to {_md(period['to'])}: none at this exact % · model version not recorded"
+        return f"{TELEGRAM_LABEL} {_md(period['from'])} to {_md(period['to'])}: no recovered history at this exact % · model version not recorded"
     began = (cov or {}).get('live_since')
     return f"No recovered Telegram history for {sport.upper()}" + (f" (recording began {str(began)[:10]})" if sport == 'ncaab' and began else '')
 

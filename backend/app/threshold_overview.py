@@ -162,7 +162,8 @@ def history_record(rec: dict, game_id: str, history_index: Optional[dict]) -> Op
     grades = Counter(grade for gid, grade in history_index.get(key, {}).items() if gid != game_id)
     wins, losses = grades['win'], grades['loss']
     return {'source': HISTORY_SOURCE, 'line_source': rec['line_source'], 'wins': wins, 'losses': losses,
-            'pushes': grades['push'], 'voids': _voids(grades), 'colour': bucket_colour(wins, losses),
+            'pushes': grades['push'], 'voids': _voids(grades), 'colour': bucket_colour(wins, losses), 'available': True,
+            'win_rate': wins / (wins + losses) if wins + losses else None,
             'settled': wins + losses, 'small_sample': wins + losses < MIN_LIVE_GRADED}
 
 
@@ -190,12 +191,22 @@ def _telegram_index() -> Optional[dict]:
         try:
             body = json.loads(path.read_text())
             idx: dict = {}
+            when: dict = {}       # {(bucket key, game_id): date} and per-sport dates, from the rows themselves
             sports: set = set()
+            days: dict = {}
             for r in body['rows']:
-                idx.setdefault((r['sport'], r['market'], r['percentage'], r['side'], r['line_source']), {})[r['game_id']] = r['grade']
+                key = (r['sport'], r['market'], r['percentage'], r['side'], r['line_source'])
+                idx.setdefault(key, {})[r['game_id']] = r['grade']
                 sports.add(r['sport'])
+                day = r.get('start_date_local') or (r.get('start_at') or '')[:10] or None
+                if day:
+                    when[(key, r['game_id'])] = day
+                    days.setdefault(r['sport'], set()).add(day)
             periods = {s: v.get('period') for s, v in (body.get('summary') or {}).items() if isinstance(v, dict)}
-            _telegram_cache.update(key=(str(path), mtime), index=idx, period=body.get('period'), sports=sports, periods=periods)
+            for sport, ds in days.items():       # the dates actually present in the rows win over any stored summary
+                periods[sport] = {'from': min(ds), 'to': max(ds)}
+            _telegram_cache.update(key=(str(path), mtime), index=idx, period=body.get('period'), sports=sports, periods=periods, when=when,
+                                   dates={s: sorted(d) for s, d in days.items()})
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             return None
     return _telegram_cache
@@ -209,20 +220,40 @@ def telegram_period(sport: str) -> Optional[dict]:
     return cache['periods'].get(sport) or cache['period']
 
 
-def telegram_record(sport: str, market: str, rec: dict, game_id: str) -> Optional[dict]:
+def _telegram_unavailable(reason: str, rec: dict) -> dict:
+    """An explicit 'no recovered record' (never 0-0): the file is missing or unreadable, or holds no rows for the sport."""
+    return {'source': TELEGRAM_SOURCE, 'label': TELEGRAM_LABEL, 'period': None, 'bucket_period': None, 'dates': [],
+            'model_version_known': False, 'line_source': rec['line_source'], 'available': False, 'reason': reason, 'no_history': None,
+            'wins': None, 'losses': None, 'pushes': None, 'voids': None, 'settled': None, 'win_rate': None, 'colour': 'neutral',
+            'small_sample': True, 'overlap_live': None}
+
+
+def telegram_record(sport: str, market: str, rec: dict, game_id: str, live_games: Optional[dict] = None) -> dict:
     """Owner's option A (Nov 16): the same sport, market, exact displayed percentage, side and line source among the graded
     Telegram cards, counted apart from the live record and never added to it, rank or AVOID. The cards do not show the
-    model version, so this line does not match on it. None without the history file or when the sport has no recovered cards."""
+    model version, so this line does not match on it. Always a dict: `available` False with a `reason` (file_missing,
+    unreadable, no_rows_for_sport) when there is no recovered record to show, and `no_history` True when the file covers the
+    sport but not this exact bucket. `period` = the sport's dates in the file (from its rows), `bucket_period` = this bucket's.
+    `live_games` ({game_id: grade} of the live bucket): `overlap_live` counts recovered games also in the live record (counted
+    once in each, never summed)."""
+    path = telegram_history_path()
     cache = _telegram_index()
-    if cache is None or sport not in cache['sports']:
-        return None
+    if cache is None:
+        return _telegram_unavailable('file_missing' if not path.exists() else 'unreadable', rec)
+    if sport not in cache['sports']:
+        return _telegram_unavailable('no_rows_for_sport', rec)
     key = (sport, market, displayed_percentage(rec['confidence']), rec['side'], rec['line_source'])
-    grades = Counter(grade for gid, grade in cache['index'].get(key, {}).items() if gid != game_id)
+    games = {gid: g for gid, g in cache['index'].get(key, {}).items() if gid != game_id}
+    grades = Counter(games.values())
     wins, losses = grades['win'], grades['loss']
+    days = sorted(d for gid in games if (d := cache['when'].get((key, gid))))
+    live = {gid for gid, g in (live_games or {}).items() if g in ('win', 'loss', 'push') and gid != game_id}
     return {'source': TELEGRAM_SOURCE, 'label': TELEGRAM_LABEL, 'period': cache['periods'].get(sport) or cache['period'],
-            'model_version_known': False, 'line_source': rec['line_source'], 'wins': wins,
-            'losses': losses, 'pushes': grades['push'], 'voids': _voids(grades), 'colour': bucket_colour(wins, losses),
-            'settled': wins + losses, 'small_sample': wins + losses < MIN_LIVE_GRADED}
+            'bucket_period': {'from': days[0], 'to': days[-1]} if days else None, 'dates': cache['dates'].get(sport, []),
+            'model_version_known': False, 'line_source': rec['line_source'], 'available': True, 'reason': None,
+            'no_history': not games, 'wins': wins, 'losses': losses, 'pushes': grades['push'], 'voids': _voids(grades),
+            'colour': bucket_colour(wins, losses), 'settled': wins + losses, 'win_rate': wins / (wins + losses) if wins + losses else None,
+            'small_sample': wins + losses < MIN_LIVE_GRADED, 'overlap_live': len(live & set(games))}
 
 
 def live_since(conn) -> Optional[str]:
@@ -276,7 +307,7 @@ def percentage_record(sport: str, market: str, rec: dict, game_id: str, index: d
             'rank': rank, 'ranked': len(ranking),
             'excluded': {k: v for k, v in grades.items() if k not in ('win', 'loss')}, 'as_of': as_of,
             'history': history_record(rec, game_id, history_index),
-            'telegram': telegram_record(sport, market, rec, game_id),
+            'telegram': telegram_record(sport, market, rec, game_id, index.get(_percentage_key(rec))),
             'coverage': coverage_note(sport, live_since)}
 
 

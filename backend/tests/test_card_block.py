@@ -11,8 +11,8 @@ import pytest
 from app import telegram as tg, telegram_card
 
 NOW = '2026-11-02T20:00:00Z'
-TELEGRAM = {'source': 'telegram_cards', 'label': 'Recovered Telegram cards', 'period': {'from': '2026-11-02', 'to': '2026-11-14'},
-            'model_version_known': False, 'line_source': 'bookmaker', 'wins': 3, 'losses': 2, 'pushes': 1, 'settled': 6}
+TELEGRAM = {'source': 'telegram_cards', 'label': 'Recovered Telegram cards', 'available': True, 'period': {'from': '2026-11-02', 'to': '2026-11-14'},
+            'model_version_known': False, 'line_source': 'bookmaker', 'wins': 3, 'losses': 2, 'pushes': 1, 'settled': 5}
 SPORTSBOOK = {'status': 'exact', 'app_probability': 0.571, 'book_probability': 0.5043, 'gap_pp': 6.7, 'provider': 'DraftKings',
               'price': '-110/-110', 'line': -8.5, 'quote_id': 9, 'retrieved_at': '2026-11-02T19:29:30Z', 'reason': None, 'basis': None}
 COVERAGE = {'live_since': '2026-11-14T00:00:00Z', 'telegram_period': None, 'history_note': 'x'}
@@ -57,7 +57,7 @@ def test_every_sport_shows_the_same_items(sport):
     text = text_of(card(sport, [p]))
     assert '<b>Model 57.1%</b> 🟢 · this exact % has gone 3–1 (75%) · 2 pushes · small sample (4 settled)' in text
     assert ('Sportsbook quote: DraftKings -110/-110 at -8.5 · no-vig 50.4% · gap +6.7 pts · underpriced · quote 02:29 PM EST') in text
-    assert 'Recovered Telegram cards 11-02 to 11-14: 3W–2L · 1 push (6 settled) · model version not recorded' in text
+    assert 'Recovered Telegram cards 11-02 to 11-14: this exact % has gone 3–2 (60%) · 1 push · small sample (5 settled) · model version not recorded' in text
     assert 'Record uses the latest pregame forecast (#7, 02:30 PM EST); 2 earlier kept for audit' in text
     assert 'Telegram card sent forecast #5 (ORL -9.5, 52.0%): won' in text and '(a -9.5' not in text
     assert text.count('Sportsbook quote:') == 1            # one sportsbook line per market
@@ -84,7 +84,7 @@ def test_no_settled_history_and_repeated_percentage_wording():
     tg0 = {**TELEGRAM, 'wins': 0, 'losses': 0, 'pushes': 0, 'settled': 0}
     text = text_of(card('nba', [history(pick(), wins=0, losses=0, settled=0, telegram=tg0)]))
     assert 'no settled history at this exact %' in text and 'No settled matching examples.' in text
-    assert 'none settled at this exact %' in text
+    assert 'no recovered history at this exact %' in text
     rep = text_of(card('nba', [history(pick(), wins=5, losses=5, settled=10, small_sample=False, telegram=TELEGRAM)]))
     assert 'has gone 5–5 (50%) · small sample (10 settled)' in rep
 
@@ -261,9 +261,9 @@ def test_a_conditional_basis_shows_the_compared_app_percentage_on_the_sportsbook
 def test_telegram_history_with_only_pushes_is_not_called_none_settled():
     h = {'telegram': {**TELEGRAM, 'wins': 0, 'losses': 0, 'pushes': 2, 'settled': 0}}
     line = tg.telegram_history_line('nfl', h)
-    assert '0W–0L · 2 push (0 settled)' in line and 'none settled' not in line
+    assert 'no settled result at this exact % · 2 pushes' in line and 'no recovered history' not in line
     none = tg.telegram_history_line('nfl', {'telegram': {**TELEGRAM, 'wins': 0, 'losses': 0, 'pushes': 0, 'settled': 0}})
-    assert 'none settled at this exact %' in none
+    assert 'no recovered history at this exact %' in none
 
 
 def test_dnb_wording_is_explicit_and_the_stored_percentage_keeps_its_original_definition():
@@ -298,3 +298,21 @@ def test_the_dnb_model_note_reaches_the_picture_too(monkeypatch):
     telegram_card.render_card(text_of(card('soccer', [p]), context_selection=True))
     assert any(l.startswith('Model 35.7% = 90-minute win chance (draw possible); exact-% history is bucketed') for l in seen)
     assert not any(l.startswith('Model 35.7% · ') for l in seen)
+
+
+def test_recovered_line_states_unavailable_or_no_history_never_0_0_and_shows_win_rate_dates_overlap():
+    tg_ok = {**TELEGRAM, 'wins': 8, 'losses': 1, 'pushes': 1, 'voids': 2, 'settled': 9, 'overlap_live': 3}
+    text = text_of(card('nba', [history(pick(), telegram=tg_ok)]))
+    assert ('Recovered Telegram cards 11-02 to 11-14: this exact % has gone 8–1 (89%) · 1 push · 2 voids · small sample (9 settled) · '
+            '3 games also in the live record, not added · model version not recorded') in text
+    none = {**TELEGRAM, 'wins': 0, 'losses': 0, 'pushes': 0, 'voids': 0, 'settled': 0, 'no_history': True}
+    t = text_of(card('nba', [history(pick(), telegram=none)]))
+    assert 'Recovered Telegram cards 11-02 to 11-14: no recovered history at this exact % · model version not recorded' in t
+    assert '0W–0L' not in t and '0–0' not in t
+    gone = {'source': 'telegram_cards', 'label': 'Recovered Telegram cards', 'available': False, 'reason': 'file_missing', 'wins': None,
+            'losses': None, 'settled': None, 'period': None}
+    t = text_of(card('nba', [history(pick(), telegram=gone)]))
+    assert 'Recovered Telegram cards: recovered history unavailable (file missing)' in t and '0–0' not in t
+    compact = tg.format_batch(card('nba', [pick()]), '123', 'g1', [history(pick(), telegram=gone)], compact=True)[1]
+    assert 'recovered history unavailable' in compact                # the optional-detail drop never removes the recovered line
+    assert telegram_card.render_card(t).startswith(b'\x89PNG')
