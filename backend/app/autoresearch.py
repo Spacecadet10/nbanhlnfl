@@ -2406,10 +2406,11 @@ def _lk(line) -> str:
 
 
 def forward_record(path: Optional[Path], *, sport: str, protocol_id: str, model: str, role: str, model_version: str,
-                   data_version: str, forecasted_at: str, records: list) -> dict:
+                   data_version: str, forecasted_at: str, records: list, now: Optional[str] = None) -> dict:
     """Appends forecasts made at `forecasted_at` (before the game starts, from inputs at or before it). Rejected records are
     listed with the reason, never stored; an identical forecast (same model version, game, market, line and time) is a no-op."""
     default_at = _iso(forecasted_at)
+    rec_now = _iso(now) if now else default_at           # the recording time: no game that has started, no forecast from later
     conn = forward_connect(path)
     ins, dup, rejected = 0, 0, []
     try:
@@ -2419,8 +2420,10 @@ def forward_record(path: Optional[Path], *, sport: str, protocol_id: str, model:
                 cut, start = _iso(r["forecast_cutoff"]), _iso(r["start_at"])
                 if r.get("outcome") is not None:
                     raise AdapterInvalid("a forward forecast must not carry an outcome")
-                if start <= forecasted_at:
-                    raise AdapterInvalid(f"forecast at {forecasted_at} is not before the start {start}")
+                if start <= forecasted_at or start <= rec_now:
+                    raise AdapterInvalid(f"forecast at {forecasted_at} is not before the start {start} (recorded at {rec_now})")
+                if forecasted_at > rec_now:
+                    raise AdapterInvalid(f"forecast time {forecasted_at} is after the recording time {rec_now}")
                 if cut > forecasted_at:
                     raise AdapterInvalid(f"information cutoff {cut} is after the forecast time {forecasted_at}")
                 p = r["probs"]
@@ -2471,7 +2474,8 @@ def forward_grade(path: Optional[Path], adapter: dict, official, now: Optional[s
         conn.close()
 
 
-def _official_ro(data_dir: Path, sport: str):
+def official_ro(data_dir: Path, sport: str):
+    """The official store, strictly read-only (mode=ro, query_only); None when this sport has no store file."""
     import sqlite3
     p = Path(data_dir) / sports.store(sport).db_file
     if not p.is_file():
@@ -2482,68 +2486,210 @@ def _official_ro(data_dir: Path, sport: str):
     return conn
 
 
-def record(data_dir: Path, now: str, sport: str, candidates: Optional[list] = None, adapters: Optional[dict] = None) -> dict:
-    """Public forward API (the scheduled driver imports this, never the reverse): asks the sport's adapter for the forecasts of
-    games still ahead, for every incumbent and baseline (so each candidate has a paired reference) and for `candidates` (default:
-    every candidate model), and appends them to `<data_dir>/research/forward-candidates.sqlite`. The official store is opened
-    read-only. Returns {"outcome": evaluated | no_candidates | skipped | failed, "recorded", "rejected", "errors", ...}."""
-    res = {"sport": sport, "outcome": "no_candidates", "recorded": 0, "already_recorded": 0, "rejected": 0, "errors": [], "models": []}
-    adapter = (adapters or {}).get(sport) if adapters is not None else get_adapter(sport)
+class CallTimeout(Exception):
+    pass
+
+
+import contextlib  # noqa: E402
+
+
+@contextlib.contextmanager
+def deadline(seconds: float):
+    """SIGALRM time limit for one adapter call (main thread only; elsewhere the caller's wall clock is the limit)."""
+    import threading
+    if not seconds or threading.current_thread() is not threading.main_thread():
+        yield
+        return
+
+    def fire(_s, _f):
+        raise CallTimeout(f"adapter call exceeded {seconds} s")
+    old = signal.signal(signal.SIGALRM, fire)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, old)
+
+
+def sealed_kwargs(produce) -> dict:
+    """The NFL adapter reads the reserved seasons' results as forward state only through the sealed, logged read (nfl_live's
+    activation). It is passed the activation's sealed choice and a RESEARCH-ONLY access log (nfl_challengers.
+    research_access_log_path), never the official NFL test-access log. Without an activation the adapter refuses (reported as
+    that model's error), never bypassed. Only adapters whose `forecast_upcoming` asks for sealed/access_log get them."""
+    import inspect
+    try:
+        names = set(inspect.signature(produce).parameters)
+    except (TypeError, ValueError):
+        return {}
+    if not {"sealed", "access_log"} <= names:
+        return {}
+    from . import nfl_challengers, nfl_live
+    act = nfl_live.activation()
+    return {"sealed": act["sealed"] if act else None, "access_log": nfl_challengers.research_access_log_path()}
+
+
+def registered_candidates(exp_root: Path, sport: str) -> list:
+    """The candidates the research system selected for forward tracking: `forward_candidates` of the sport's newest v3 state.json
+    (real keeps only: a keep at a reference line needs human review and is never in it)."""
+    best = None
+    for p in (Path(exp_root) / "v3").glob(f"*/{sport}/state.json"):
+        try:
+            st = json.loads(p.read_text())
+        except (OSError, ValueError):
+            continue
+        if best is None or st.get("at", "") > best.get("at", ""):
+            best = st
+    return list((best or {}).get("forward_candidates") or [])
+
+
+def record(data_dir: Path, now: str, sport: str, candidates: Optional[list] = None, adapters: Optional[dict] = None,
+           exp_root: Optional[Path] = None, baselines: bool = False, timeout_s: float = 0) -> dict:
+    """Public forward API (the scheduled driver imports this, never the reverse). Asks the sport's adapter for the forecasts of
+    games still ahead, for every incumbent, `candidates` (default: those registered in `exp_root`'s v3 state, else none) and,
+    on request, the baselines; appends them to `<data_dir>/research/forward-candidates.sqlite` with the core's look-ahead checks.
+    The official store is opened read-only. Returns {"outcome": evaluated | no_candidates | refused (no adapter) | skipped
+    (no store) | failed, "inserted", "already_recorded", "rejected", "models" (count), "errors"}."""
+    res = {"outcome": "no_candidates", "inserted": 0, "already_recorded": 0, "rejected": 0, "models": 0, "errors": []}
     conn = None
     try:
+        adapter = (adapters or {}).get(sport) if adapters is not None else get_adapter(sport)
         if adapter is None or not adapter.get("forecast_upcoming"):
-            return res | {"outcome": "skipped", "errors": ["no adapter with forecast_upcoming"]}
+            return res | {"outcome": "refused", "errors": ["no adapter with forecast_upcoming"]}
         adapter = normalise_adapter(adapter)
-        conn = adapter["connect"]() if adapter.get("connect") else _official_ro(data_dir, sport)
+        conn = adapter["connect"]() if adapter.get("connect") else official_ro(data_dir, sport)
         if conn is None and not adapter.get("connect"):
-            return res | {"outcome": "skipped", "errors": ["no official store"]}
-        if not [n for n, m in adapter["models"].items() if m["role"] == "candidate" and (candidates is None or n in candidates)]:
-            return res | {"errors": ["no candidate model to track"]}
+            return res | {"outcome": "skipped", "errors": ["no store"]}
+        picked = set(candidates) if candidates is not None else set(registered_candidates(exp_root, sport) if exp_root else [])
+        wanted = {"incumbent"} | ({"baseline"} if baselines else set())
+        chosen = [(n, m) for n, m in adapter["models"].items() if m.get("role") in wanted or n in picked]
         pid, path = v3_protocol_id(adapter), Path(data_dir) / "research" / FORWARD_FILE
-        names = [n for n, m in adapter["models"].items()
-                 if m["role"] != "candidate" or candidates is None or n in candidates]
-        for name in names:
-            m = adapter["models"][name]
+        res["models"] = len(chosen)
+        seen = 0
+        for name, m in chosen:
             try:
-                recs = list(adapter["forecast_upcoming"](conn, _iso(now), name) or [])
-            except Exception as exc:                         # one model never stops the others
-                res["errors"].append(f"{name}: {type(exc).__name__}: {exc}"[:300])
+                produce = adapter["forecast_upcoming"]
+                with deadline(timeout_s):
+                    recs = list(produce(conn, now, name, **sealed_kwargs(produce)) or [])
+            except Exception as exc:                          # one model never stops the rest
+                res["errors"].append(f"{name}: {type(exc).__name__}: {exc}")
                 continue
+            seen += len(recs)
             out = forward_record(path, sport=sport, protocol_id=pid, model=name, role=m["role"], model_version=m["version"],
-                                 data_version=adapter["data_version"], forecasted_at=now, records=recs)
-            res["recorded"] += out["inserted"]
+                                 data_version=adapter["data_version"], forecasted_at=now, records=recs, now=now)
+            res["inserted"] += out["inserted"]
             res["already_recorded"] += out["already_recorded"]
             res["rejected"] += len(out["rejected"])
-            res["errors"] += [f"{name}: {x['reason']}" for x in out["rejected"][:3]]
-            res["models"].append(name)
-        res["outcome"] = "failed" if res["errors"] and not res["recorded"] and not res["already_recorded"] else \
-            ("evaluated" if res["recorded"] or res["already_recorded"] else "no_candidates")
+            res["errors"] += [f"{name}: rejected {x['game_id']} {x['market']}: {x['reason']}" for x in out["rejected"][:3]]
+        if res["inserted"] or seen:
+            res["outcome"] = "evaluated"
+        elif res["errors"]:
+            res["outcome"] = "failed"
     except Exception as exc:
-        res |= {"outcome": "failed", "errors": res["errors"] + [f"{type(exc).__name__}: {exc}"[:300]]}
+        res |= {"outcome": "failed", "errors": res["errors"] + [f"{type(exc).__name__}: {exc}"]}
     finally:
         if conn is not None and hasattr(conn, "close"):
             conn.close()
     return res
 
 
-def grade(data_dir: Path, now: str, sport: str, adapters: Optional[dict] = None) -> dict:
-    """Public forward API: grades stored forecasts whose game has started, reading the official store read-only through the
-    adapter's `settle`; writes only the forward file. Same outcome vocabulary as `record`."""
-    adapter = (adapters or {}).get(sport) if adapters is not None else get_adapter(sport)
-    if adapter is None or not adapter.get("settle"):
-        return {"sport": sport, "outcome": "skipped", "graded": 0, "errors": ["no adapter with settle"]}
-    adapter = normalise_adapter(adapter)
-    conn = adapter["connect"]() if adapter.get("connect") else _official_ro(data_dir, sport)
-    if conn is None and not adapter.get("connect"):
-        return {"sport": sport, "outcome": "skipped", "graded": 0, "errors": ["no official store"]}
+def forward_settle_row(sport: str, conn, row: dict) -> Optional[str]:
+    """Realised a|b|mid|push|void from the official store (read-only), or None while the result is not final/available.
+    `row` has game_id, market, line and (to void a moved start) start_at."""
+    from . import markets
+    market, line = row["market"], row["line"]
+    if sport == "soccer":
+        return _settle_soccer_row(conn, row)
+    g = conn.execute("SELECT status, home_score, away_score, tipoff_at FROM games WHERE game_id = ?", (row["game_id"],)).fetchone()
+    if g is None:
+        return None
     try:
-        out = forward_grade(Path(data_dir) / "research" / FORWARD_FILE, adapter, conn, now)
+        s = markets.settle(market, line, status=g["status"], home=g["home_score"], away=g["away_score"],
+                           tipoff_at=g["tipoff_at"], forecast_tipoff_at=row.get("start_at"))
+    except KeyError:
+        return None
+    if s in ("pending", "unscorable"):
+        return None
+    if s == "mid" and market not in ("reg3", "result_1x2"):
+        return "push"
+    return s
+
+
+def _settle_soccer_row(conn, row: dict) -> Optional[str]:
+    """90-minute result / goals / corners. A match decided after 90 minutes has no 90-minute score in the store: void."""
+    from . import soccer_challengers as sme
+    m = conn.execute("SELECT status, decided_in, home_score, away_score, kickoff_at FROM soccer_matches WHERE match_id = ?", (row["game_id"],)).fetchone()
+    if m is None:
+        return None
+    if m["status"] in ("postponed", "canceled", "abandoned"):
+        return "void"
+    if m["status"] != "final":
+        return None
+    if (row.get("start_at") and m["kickoff_at"] != row["start_at"]) or m["decided_in"] != "regulation" \
+            or m["home_score"] is None or m["away_score"] is None:
+        return "void"
+    market, h, a = row["market"], m["home_score"], m["away_score"]
+    if market.startswith("corners"):
+        c = conn.execute("SELECT home_corners, away_corners FROM soccer_match_stats WHERE match_id = ? ORDER BY revision DESC LIMIT 1", (row["game_id"],)).fetchone()
+        if c is None:
+            return None                                          # corner counts may still arrive
+        if c[0] == 0 and c[1] == 0:
+            return "void"                                        # a both-zero count is "not delivered" (adapter amendment 2)
+        h, a = c[0], c[1]
+    if market in ("result_1x2", "double_chance_1x", "double_chance_x2", "double_chance_12", "draw_no_bet_home"):
+        label = 0 if h > a else (1 if h == a else 2)
+        recs = sme.one_x_two_records(row["game_id"], 0, row["start_at"] or "", row["start_at"] or "", (1 / 3, 1 / 3, 1 / 3), label)
+        return next(r["outcome"] for r in recs if r["market"] == market)
+    return sme.settle_count(market, row["line"], h, a)
+
+
+def generic_settle(sport: str, data_dir: Path):
+    """settle(conn, records) in the core's shape, from `_settle`; start times come from the stored forecasts."""
+    import sqlite3
+
+    def settle(conn, records):
+        starts = {}
+        f = sqlite3.connect(f"{(Path(data_dir) / 'research' / 'forward-candidates.sqlite').resolve().as_uri()}?mode=ro", uri=True)
+        try:
+            starts = {g: st for g, st in f.execute("SELECT game_id, start_at FROM rf_forecasts WHERE sport = ? ORDER BY forecasted_at", (sport,))}
+        finally:
+            f.close()
+        out = []
+        for r in records:
+            y = forward_settle_row(sport, conn, {**r, "start_at": starts.get(r["game_id"])})
+            if y:
+                out.append({"game_id": r["game_id"], "market": r["market"], "line": r["line"], "outcome": y})
+        return out
+    return settle
+
+
+def grade(data_dir: Path, now: str, sport: str, adapters: Optional[dict] = None, timeout_s: float = 0) -> dict:
+    """Public forward API: grades stored forecasts whose game has started, from the official store read-only: the adapter's own
+    `settle` when it has one, otherwise the generic rules above (works for all five sports). Writes only the forward file.
+    Returns {"outcome": evaluated | no_candidates | refused | skipped | failed, "graded", "waiting", "errors"}."""
+    res = {"outcome": "no_candidates", "graded": 0, "waiting": 0, "errors": []}
+    conn = None
+    try:
+        adapter = (adapters or {}).get(sport) if adapters is not None else get_adapter(sport)
+        if adapter is None:
+            return res | {"outcome": "refused", "errors": ["no adapter"]}
+        adapter = normalise_adapter(adapter)
+        conn = adapter["connect"]() if adapter.get("connect") else official_ro(data_dir, sport)
+        if conn is None and not adapter.get("connect"):
+            return res | {"outcome": "skipped", "errors": ["no store"]}
+        use = {**adapter, "settle": adapter.get("settle") or generic_settle(sport, data_dir)}
+        with deadline(timeout_s):
+            out = forward_grade(Path(data_dir) / "research" / FORWARD_FILE, use, conn, now)
+        res["graded"], res["waiting"] = out.get("graded", 0), out.get("ungraded_started", 0)
+        res["outcome"] = "evaluated" if res["graded"] else "no_candidates"
+        if out.get("status") != "ok":
+            res |= {"outcome": "failed", "errors": [out.get("reason", "grading unavailable")]}
     except Exception as exc:
-        return {"sport": sport, "outcome": "failed", "graded": 0, "errors": [f"{type(exc).__name__}: {exc}"[:300]]}
+        res |= {"outcome": "failed", "errors": [f"{type(exc).__name__}: {exc}"]}
     finally:
-        if hasattr(conn, "close"):
+        if conn is not None and hasattr(conn, "close"):
             conn.close()
-    return {"sport": sport, "outcome": "evaluated" if out["graded"] else "no_candidates", "errors": [], **out}
+    return res
 
 
 def forward_records(path: Optional[Path], sport: str, protocol_id: Optional[str] = None) -> tuple:

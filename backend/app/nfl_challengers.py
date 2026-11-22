@@ -78,6 +78,12 @@ def challenger_access_log_path() -> Path:
     return nfl_eval.access_log_path().with_name("nfl_challenger_access.jsonl")
 
 
+def research_access_log_path() -> Path:
+    """Reserved-season reads by the research adapter's forward state: a log of their own, never the official NFL test-access
+    log (nfl_eval.access_log_path), which must not change."""
+    return nfl_eval.access_log_path().with_name("nfl_research_access.jsonl")
+
+
 def record(conn, path: Path, *, policies: list, now: Optional[str] = None, dry_run: bool = False) -> dict:
     """Challenger rows for scheduled games past their served cutoff (kickoff - 120 min) and before kickoff."""
     now = now or utc_now()

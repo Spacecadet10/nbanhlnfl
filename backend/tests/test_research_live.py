@@ -627,7 +627,7 @@ def test_settle_rules_overtime_whole_line_pushes_nfl_tie_and_moved_start():
                                                              ("m", "2026-11-22T20:00:00Z", "final", 24, 17), ("p", "2026-11-22T19:00:00Z", "postponed", None, None),
                                                              ("s", "2026-11-22T19:00:00Z", "scheduled", None, None)])
     row = lambda gid, market, line=None: {"game_id": gid, "market": market, "line": line, "start_at": "2026-11-22T19:00:00Z"}
-    st = fwd_live._settle
+    st = ar.forward_settle_row
     assert st("nfl", c, row("t", "winner")) == "void"                            # NFL tie voids the winner
     assert st("nfl", c, row("w", "spread", -7.0)) == "push"                        # 24 - 17 - 7 = 0
     assert st("nfl", c, row("w", "total", 41.5)) == "b" and st("nfl", c, row("w", "team_total_home", 24.0)) == "push"
@@ -639,9 +639,9 @@ def test_settle_rules_overtime_whole_line_pushes_nfl_tie_and_moved_start():
 def test_sealed_read_is_passed_only_to_adapters_that_ask_for_it(monkeypatch, tmp_path):
     monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path))
     nfl_like = lambda conn, now, name, *, sealed=None, access_log=None: []          # noqa: E731
-    kw = fwd_live._sealed_kwargs(nfl_like)
-    assert kw["sealed"] is None and str(kw["access_log"]).endswith("research/nfl_eval/nfl_test_access.jsonl")   # no activation: the adapter refuses
-    assert fwd_live._sealed_kwargs(lambda conn, now, name: []) == {}
+    kw = ar.sealed_kwargs(nfl_like)
+    assert kw["sealed"] is None and str(kw["access_log"]).endswith("nfl_research_access.jsonl")   # no activation: the adapter refuses
+    assert ar.sealed_kwargs(lambda conn, now, name: []) == {}
 
 
 def test_cli_prints_one_outcome_line_per_sport_and_runs_light(fdata, monkeypatch, capsys):

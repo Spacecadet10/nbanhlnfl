@@ -750,11 +750,10 @@ def test_public_forward_api_records_references_and_candidates_then_grades_read_o
     a = fixture_adapter({"inc": [], "cand": [], "cand2": []}) | {"forecast_upcoming": upcoming, "settle": lambda c, recs: [
         {"game_id": r["game_id"], "market": r["market"], "line": r["line"], "outcome": "a"} for r in recs]}
     out = ar.record(data, _t(2), "nba", candidates=["cand"], adapters={"nba": a})
-    assert out["outcome"] == "evaluated" and out["recorded"] == 12 and sorted(out["models"]) == ["cand", "inc"]   # cand2 not tracked
+    assert out["outcome"] == "evaluated" and out["inserted"] == 12 and out["models"] == 2          # inc + cand; cand2 not tracked
     assert ar.record(data, _t(2), "nba", ["cand"], {"nba": a})["already_recorded"] == 12
-    none = ar.record(data, _t(2), "nba", candidates=["nobody"], adapters={"nba": a})
-    assert none["outcome"] == "no_candidates"
-    assert ar.record(data, _t(2), "soccer", adapters={})["outcome"] == "skipped"
+    assert ar.record(data, _t(2), "nba", candidates=["nobody"], adapters={"nba": a})["models"] == 1    # incumbent only
+    assert ar.record(data, _t(2), "soccer", adapters={})["outcome"] == "refused"
     assert ar.grade(data, _t(5), "nba", {"nba": a})["outcome"] == "no_candidates"          # games not started yet
     g = ar.grade(data, _t(30), "nba", {"nba": a})
     assert g["outcome"] == "evaluated" and g["graded"] == 6
