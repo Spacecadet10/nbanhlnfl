@@ -167,3 +167,109 @@ def test_ncaab_requests_never_take_the_existing_sports_budget(tmp_path, monkeypa
         sport5.append(sum("/sports/5/" in u for u in urls))
         requests += len(urls)
     assert sport5 == [0, 0, 2, 0, 0, 0, 0] and requests == 44
+
+
+# --- ESPN re-orders home/away on neutral-site games (around tip-off, after the final); the stored orientation stays the one the
+# forecasts were made against, and a repair restores games already flipped (Nov 22 defect: 7 games graded against swapped sides) --------
+NEUTRAL = 1                      # board() event 1: Houston (248, home) v Rutgers (164), neutral site, with DraftKings odds
+S_EARLY, S_FORECAST, S_FLIP, S_FINAL = ("2026-11-17T08:00:00Z", "2026-11-17T17:30:00Z", "2026-11-17T19:05:00Z", "2026-11-17T22:00:00Z")
+
+
+def flipped(payload, event=NEUTRAL):
+    """The same response as ESPN re-orders it: the two sides trade homeAway, and the odds follow the listed home team."""
+    comp = payload["events"][event]["competitions"][0]
+    for c in comp["competitors"]:
+        c["homeAway"] = "away" if c["homeAway"] == "home" else "home"
+    for o in comp.get("odds") or []:
+        for block in ("moneyline", "pointSpread"):
+            if block in o:
+                o[block]["home"], o[block]["away"] = o[block]["away"], o[block]["home"]
+    return payload
+
+
+def by_team(payload, scores, event=NEUTRAL):
+    for c in payload["events"][event]["competitions"][0]["competitors"]:
+        c["score"] = str(scores[c["team"]["id"]])
+    return payload
+
+
+def forecast_at(conn, gid, at):
+    conn.execute("INSERT INTO predictions (idempotency_key, game_id, run_type, model_version, dataset_version, feature_version, "
+                 "cutoff_at, generated_at, home_win_prob) VALUES (?, ?, 'live', 'm', 'd', 'f', ?, ?, 0.8)",
+                 (f"k-{gid}-{at}", gid, "2026-11-17T19:00:00Z", at))
+
+
+def game(conn, gid):
+    r = conn.execute("SELECT home_team_id, away_team_id, home_score, away_score, status FROM games WHERE game_id=?", (gid,)).fetchone()
+    return tuple(r)
+
+
+def test_a_neutral_site_flip_after_the_forecast_keeps_the_forecast_orientation_and_maps_the_score(ncaab_store):
+    ingest(ncaab_store, board("STATUS_SCHEDULED", event=NEUTRAL)[0], S_EARLY)
+    gid = "ncaab:401920511"
+    forecast_at(ncaab_store, gid, S_FORECAST)                              # made with Houston at home
+    ingest(ncaab_store, flipped(board("STATUS_SCHEDULED", event=NEUTRAL)[0]), S_FLIP)
+    final = by_team(flipped(board("STATUS_FINAL", event=NEUTRAL)[0]), {"248": 80, "164": 70})   # Houston 80, Rutgers 70
+    ingest(ncaab_store, final, S_FINAL)
+    assert game(ncaab_store, gid) == ("ncaab:248", "ncaab:164", 80, 70, "final")      # Houston still home, with Houston's own 80
+    revisions = ncaab_store.execute("SELECT home_team_id, home_score, away_score FROM result_revisions WHERE game_id=?",
+                                    (gid,)).fetchall()
+    assert [tuple(r) for r in revisions] == [("ncaab:248", 80, 70)]                  # no second revision for a relabelling
+    ctx = ncaab_store.execute("SELECT home_conference_id, away_conference_id FROM ncaab_game_context WHERE game_id=?", (gid,)).fetchone()
+    assert tuple(ctx) == ("11", "12")                                               # conferences follow the stored sides too
+    again = counts(ncaab_store)
+    ingest(ncaab_store, final, "2026-11-17T22:10:00Z")                               # a replay of the flipped final changes nothing
+    assert game(ncaab_store, gid) == ("ncaab:248", "ncaab:164", 80, 70, "final")
+    assert counts(ncaab_store)["result_revisions"] == again["result_revisions"]
+
+
+def test_a_flip_on_a_game_that_is_not_neutral_is_still_applied(ncaab_store):
+    payload, gid = board("STATUS_SCHEDULED", event=0)                     # Delaware v Wilson, not a neutral site
+    ingest(ncaab_store, payload, S_EARLY)
+    other, _ = board("STATUS_SCHEDULED", event=0)
+    for c in other["events"][0]["competitions"][0]["competitors"]:
+        c["homeAway"] = "away" if c["homeAway"] == "home" else "home"
+    ingest(ncaab_store, other, S_FLIP)
+    assert game(ncaab_store, gid)[0] == "ncaab:111914"
+
+
+def test_quotes_retrieved_after_a_neutral_site_flip_are_stored_for_the_stored_home_team(ncaab_store):
+    ingest(ncaab_store, board("STATUS_SCHEDULED", event=NEUTRAL)[0], S_EARLY)
+    ingest(ncaab_store, flipped(board("STATUS_SCHEDULED", event=NEUTRAL)[0]), S_FLIP)   # ESPN now lists Rutgers at home
+    rows = ncaab_store.execute("SELECT market, price_label, line, price_a, price_b, p_a_devig FROM market_quotes WHERE game_id=? "
+                               "AND retrieved_at=? AND price_label='current' ORDER BY market", ("ncaab:401920511", S_FLIP)).fetchall()
+    q = {r["market"]: r for r in rows}
+    assert q["winner"]["price_a"] == -1800 and q["winner"]["price_b"] == 1000 and q["winner"]["p_a_devig"] > 0.9   # Houston, the stored home
+    assert q["spread"]["line"] == -16.5                                                      # Houston -16.5, not Rutgers +16.5
+
+
+def test_repair_restores_a_game_already_flipped_and_nothing_else(ncaab_store):
+    gid = "ncaab:401920511"
+    ingest(ncaab_store, board("STATUS_SCHEDULED", event=NEUTRAL)[0], S_EARLY)
+    forecast_at(ncaab_store, gid, S_FORECAST)
+    ingest(ncaab_store, flipped(board("STATUS_SCHEDULED", event=NEUTRAL)[0]), S_FLIP)
+    ingest(ncaab_store, by_team(flipped(board("STATUS_FINAL", event=NEUTRAL)[0]), {"248": 80, "164": 70}), S_FINAL)
+    # the state the old code left behind: sides and scores flipped to ESPN's later listing, one revision recording it
+    ncaab_store.execute("UPDATE games SET home_team_id='ncaab:164', away_team_id='ncaab:248', home_score=70, away_score=80 WHERE game_id=?", (gid,))
+    ncaab_store.execute("UPDATE team_game_stats SET is_home = 1 - is_home WHERE game_id=?", (gid,))
+    ncaab_store.execute("UPDATE ncaab_game_context SET home_conference_id='12', away_conference_id='11' WHERE game_id=?", (gid,))
+    ncaab_store.execute("INSERT INTO result_revisions (game_id, revision, home_score, away_score, observed_at, raw_id, basis, home_team_id, "
+                        "away_team_id) SELECT game_id, 2, 70, 80, ?, last_raw_id, 'observed', 'ncaab:164', 'ncaab:248' FROM games "
+                        "WHERE game_id=?", (S_FINAL, gid))
+    other = "ncaab:401923325"
+    before_other = tuple(ncaab_store.execute("SELECT * FROM games WHERE game_id=?", (other,)).fetchone() or ())
+    from app import ingest as ing
+    dry = ing.repair_neutral_orientation(ncaab_store, "ncaab", apply=False)
+    assert [r["game_id"] for r in dry["repairs"]] == [gid] and game(ncaab_store, gid)[0] == "ncaab:164"      # a dry run changes nothing
+    done = ing.repair_neutral_orientation(ncaab_store, "ncaab", apply=True, now="2026-11-18T00:00:00Z")
+    assert [r["game_id"] for r in done["repairs"]] == [gid]
+    assert game(ncaab_store, gid) == ("ncaab:248", "ncaab:164", 80, 70, "final")
+    assert {r["team_id"]: r["is_home"] for r in ncaab_store.execute("SELECT team_id, is_home FROM team_game_stats WHERE game_id=?", (gid,))} \
+        == {"ncaab:248": 1, "ncaab:164": 0} or not ncaab_store.execute("SELECT 1 FROM team_game_stats WHERE game_id=?", (gid,)).fetchone()
+    assert tuple(ncaab_store.execute("SELECT home_conference_id, away_conference_id FROM ncaab_game_context WHERE game_id=?", (gid,)).fetchone()) == ("11", "12")
+    assert tuple(ncaab_store.execute("SELECT * FROM games WHERE game_id=?", (other,)).fetchone() or ()) == before_other
+    last = ncaab_store.execute("SELECT home_team_id, home_score, away_score FROM result_revisions WHERE game_id=? ORDER BY revision DESC",
+                               (gid,)).fetchone()
+    assert tuple(last) == ("ncaab:248", 80, 70)                                      # the correction is a new revision, history kept
+    again = ing.repair_neutral_orientation(ncaab_store, "ncaab", apply=True, now="2026-11-18T00:05:00Z")
+    assert again["repairs"] == []                                                    # idempotent

@@ -5,6 +5,7 @@ Import is a pure function of cached bytes, so `replay` rebuilds the same rows wi
 import json
 import sqlite3
 import time
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Optional
@@ -335,6 +336,27 @@ def replay(conn: sqlite3.Connection, cache_dir: Optional[Path] = None) -> dict:
     return totals
 
 
+def orient_to_stored(conn: sqlite3.Connection, g) -> bool:
+    """ESPN re-orders home and away on neutral-site games, around tip-off and again after the final (Nov 17-22: 25 games), and
+    puts each score, box line, conference and price with the side it now calls home. The sides of a neutral-site game are
+    labels, and every forecast, quote and grade was made against the orientation the store holds, so a strict swap of the
+    two teams of a game stored as neutral is put back into the stored orientation here (in place; True if it swapped).
+    Only a neutral-site game is touched: a swap on any other game is a real correction and is applied as before."""
+    row = conn.execute("SELECT home_team_id, away_team_id, neutral_site FROM games WHERE game_id=?", (g.game_id,)).fetchone()
+    if row is None or not (row["neutral_site"] and g.neutral_site):
+        return False
+    if (row["home_team_id"], row["away_team_id"]) != (g.away.team_id, g.home.team_id):
+        return False
+    g.home, g.away = g.away, g.home
+    g.home_score, g.away_score = g.away_score, g.home_score
+    g.home_stats, g.away_stats = g.away_stats, g.home_stats
+    g.odds = [espn.OddsRow(o.provider, o.price_label, o.away_american, o.home_american, round(1 - o.home_prob_devig, 6))
+              for o in g.odds]
+    if hasattr(g, "home_conference_id"):
+        g.home_conference_id, g.away_conference_id = g.away_conference_id, g.home_conference_id
+    return True
+
+
 def import_raw(conn: sqlite3.Connection, raw_id: int, cache_dir: Optional[Path] = None,
                retrieved_at: Optional[str] = None, parse: Callable[[dict], list] = espn.parse_scoreboard,
                fetch_id: Optional[int] = None) -> dict:
@@ -347,6 +369,7 @@ def import_raw(conn: sqlite3.Connection, raw_id: int, cache_dir: Optional[Path] 
     games = parse(json.loads(raw_cache.load(conn, raw_id, cache_dir)))
     stats = {"raw_id": raw_id, "games_seen": len(games), "games_inserted": 0, "games_updated": 0, "odds_inserted": 0}
     for g in games:
+        orient_to_stored(conn, g)
         for t in (g.home, g.away):
             conn.execute(
                 "INSERT INTO teams (team_id, abbr, name, first_seen_at) VALUES (?, ?, ?, ?) "
@@ -375,6 +398,92 @@ def import_raw(conn: sqlite3.Connection, raw_id: int, cache_dir: Optional[Path] 
                  retrieved_at, raw_id))
             stats["odds_inserted"] += 1
     return stats
+
+
+def _forecast_times(conn: sqlite3.Connection, game_id: str) -> list[str]:
+    """When forecasts were made for the game: every recorded generation time, all forecast tables of the store."""
+    times: set = set()
+    for table, where in (("game_forecasts", "status = 'forecast'"), ("market_forecasts", "run_type = 'live'"),
+                         ("predictions", "run_type = 'live'")):
+        if has_table(conn, table):
+            times.update(r[0] for r in conn.execute(f"SELECT generated_at FROM {table} WHERE game_id=? AND {where}", (game_id,)))
+    return sorted(times)
+
+
+def _home_listed_at(conn: sqlite3.Connection, source: str, prefix: str, event_id: str, at: str,
+                    cache_dir: Optional[Path], memo: dict) -> Optional[str]:
+    """The team ESPN listed at home for the event in the latest scoreboard retrieval at or before `at` (within a day), read
+    from the raw cache; None when no retrieval in that span lists the event."""
+    lo = _fmt(_ts(at) - timedelta(days=1))
+    for f in conn.execute("SELECT f.raw_id FROM raw_fetches f JOIN raw_responses r ON r.raw_id = f.raw_id WHERE r.source=? AND "
+                          "r.request_key LIKE 'dates=%' AND f.retrieved_at <= ? AND f.retrieved_at >= ? "
+                          "ORDER BY f.retrieved_at DESC, f.fetch_id DESC", (source, at, lo)):
+        if f["raw_id"] not in memo:
+            homes = {}
+            try:
+                events = json.loads(raw_cache.load(conn, f["raw_id"], cache_dir)).get("events", [])
+            except (FileNotFoundError, raw_cache.CacheIntegrityError):
+                events = []                     # a cached response that cannot be read is no evidence either way
+            for ev in events:
+                sides = [c for c in ev["competitions"][0]["competitors"] if c.get("homeAway") == "home"]
+                if len(sides) == 1:
+                    homes[str(ev["id"])] = f"{prefix}{sides[0]['team']['id']}"
+            memo[f["raw_id"]] = homes
+        if event_id in memo[f["raw_id"]]:
+            return memo[f["raw_id"]][event_id]
+    return None
+
+
+def repair_neutral_orientation(conn: sqlite3.Connection, sport: str = "ncaab", *, apply: bool = False,
+                               now: Optional[str] = None, cache_dir: Optional[Path] = None) -> dict:
+    """Puts a finished neutral-site game back into the orientation its forecasts were made against, when an earlier version
+    of the import followed ESPN's later home/away listing (see orient_to_stored) and so graded those forecasts against the
+    swapped sides. Idempotent: a game already in its forecast orientation is not listed. Only games that have forecasts, are
+    neutral-site and final, and whose stored sides are the swap of the listing at their forecast time are repaired; a game
+    whose forecasts straddle a flip, or whose listing cannot be found in the raw cache, is reported and left alone.
+    apply=False (the default) writes nothing. A repair swaps the game's sides and scores, the box rows' is_home flags and the
+    stored conference sides, and appends a result revision (the history stays); result_available_at is unchanged because
+    the result itself was knowable then. Returns {'checked', 'repairs': [{game_id, before, after, ...}], 'skipped': [...]}."""
+    if sport != "ncaab":
+        raise ValueError("repair_neutral_orientation is defined for the NCAAB store")
+    from .sources import espn_ncaab
+    now = now or utc_now()
+    memo: dict = {}
+    out = {"checked": 0, "repairs": [], "skipped": []}
+    games = conn.execute("SELECT * FROM games WHERE status='final' AND neutral_site=1 ORDER BY tipoff_at, game_id").fetchall()
+    for g in games:
+        times = _forecast_times(conn, g["game_id"])
+        if not times:
+            continue
+        out["checked"] += 1
+        event_id = g["game_id"].split(":", 1)[1]
+        first, last = (_home_listed_at(conn, espn_ncaab.SOURCE, espn_ncaab.PREFIX, event_id, t, cache_dir, memo)
+                       for t in (times[0], times[-1]))
+        if first is None or last is None or first != last:
+            out["skipped"].append({"game_id": g["game_id"], "reason": "listing at forecast time not found" if None in (first, last)
+                                   else "forecasts straddle a home/away change", "first_forecast": times[0], "last_forecast": times[-1]})
+            continue
+        if last == g["home_team_id"]:
+            continue
+        if last != g["away_team_id"]:
+            out["skipped"].append({"game_id": g["game_id"], "reason": "forecast-time home team is neither stored team", "home": last})
+            continue
+        before = {k: g[k] for k in ("home_team_id", "away_team_id", "home_score", "away_score")}
+        after = {"home_team_id": g["away_team_id"], "away_team_id": g["home_team_id"],
+                 "home_score": g["away_score"], "away_score": g["home_score"]}
+        out["repairs"].append({"game_id": g["game_id"], "tipoff_at": g["tipoff_at"], "forecasts": len(times),
+                               "first_forecast": times[0], "last_forecast": times[-1], "before": before, "after": after})
+        if not apply:
+            continue
+        with transaction(conn):
+            conn.execute("UPDATE games SET home_team_id=:home_team_id, away_team_id=:away_team_id, home_score=:home_score, "
+                         "away_score=:away_score, updated_at=:now WHERE game_id=:gid", {**after, "now": now, "gid": g["game_id"]})
+            conn.execute("UPDATE team_game_stats SET is_home = 1 - is_home WHERE game_id=?", (g["game_id"],))
+            if has_table(conn, "ncaab_game_context"):
+                conn.execute("UPDATE ncaab_game_context SET home_conference_id=away_conference_id, "
+                             "away_conference_id=home_conference_id, updated_at=? WHERE game_id=?", (now, g["game_id"]))
+            _record_result_revision(conn, g["game_id"], g["last_raw_id"], now, g["last_seen_fetch_id"], teams_changed=True)
+    return out
 
 
 def _upsert_team(conn: sqlite3.Connection, t: espn.TeamRow, retrieved_at: str, placeholder: bool = False) -> None:
@@ -649,6 +758,23 @@ def _match_game(conn: sqlite3.Connection, sport: str, q: espn.LineQuote) -> Opti
     return hits[0] if len(hits) == 1 else None
 
 
+def _in_stored_orientation(conn: sqlite3.Connection, sport: str, game_id: str, q: espn.LineQuote) -> espn.LineQuote:
+    """A quote ESPN made for a neutral-site game while it listed the two teams the other way round (see orient_to_stored) is
+    stored for the stored home team: the two prices swap and a spread line changes sign; a total is left alone."""
+    if sport == "nhl":
+        return q
+    row = conn.execute("SELECT g.neutral_site, h.name AS home, a.name AS away FROM games g JOIN teams h ON h.team_id = g.home_team_id "
+                       "JOIN teams a ON a.team_id = g.away_team_id WHERE g.game_id=?", (game_id,)).fetchone()
+    if row is None or not row["neutral_site"]:
+        return q
+    if (_name_key(row["home"]), _name_key(row["away"])) != (_name_key(q.away_name), _name_key(q.home_name)):
+        return q
+    if q.market == "total":          # over / under do not depend on which team is listed first
+        return q
+    line = -q.line if q.market == "spread" and q.line is not None else q.line
+    return replace(q, home_name=q.away_name, away_name=q.home_name, price_a=q.price_b, price_b=q.price_a, line=line)
+
+
 def import_lines_fetch(conn: sqlite3.Connection, fetch_id: int, sport: str, cache_dir: Optional[Path] = None) -> dict:
     """Appends one market_quotes row per price pair in this retrieval (append-only; retries and replays are no-ops).
     Must run inside a transaction. Quotes on games not in this store are counted as unmatched."""
@@ -668,6 +794,7 @@ def import_lines_fetch(conn: sqlite3.Connection, fetch_id: int, sport: str, cach
                         "AND fetch_id=?", key).fetchone():
             stats["already_recorded"] += 1
             continue
+        q = _in_stored_orientation(conn, sport, game_id, q)
         pa, pb = devig_two_way(q.price_a, q.price_b)
         conn.execute("INSERT INTO market_quotes (sport, game_id, provider, market, price_label, line, price_a, price_b, "
                      "p_a_devig, p_b_devig, retrieved_at, fetch_id, raw_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",

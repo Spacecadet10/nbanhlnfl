@@ -264,7 +264,8 @@ def main(argv=None) -> int:
     nc_p = sub.add_parser("ncaab", help="NCAA men's Division I basketball data-only store (app/ncaab.py): migrate, ingest "
                                         "ESPN day scoreboards, teams (the Division I list), boxes (game summaries), backfill, "
                                         "replay or coverage. Ignores --sport; always opens the NCAAB store.")
-    nc_p.add_argument("action", choices=("migrate", "ingest", "teams", "boxes", "backfill", "replay", "coverage"))
+    nc_p.add_argument("action", choices=("migrate", "ingest", "teams", "boxes", "backfill", "replay", "coverage",
+                                        "repair-orientation"))
     nc_p.add_argument("--from", dest="start", help="ingest: first day YYYYMMDD; backfill: first season (ending year)")
     nc_p.add_argument("--to", dest="end", help="ingest: last day YYYYMMDD; backfill: last season (ending year)")
     nc_p.add_argument("--sleep", type=float, default=1.0, help="seconds between requests (default 1)")
@@ -273,6 +274,7 @@ def main(argv=None) -> int:
     nc_p.add_argument("--oldest-first", action="store_true", help="boxes: oldest games first (default newest first)")
     nc_p.add_argument("--with-boxes", action="store_true", help="backfill: fetch the pending game summaries after the days")
     nc_p.add_argument("--no-resume", action="store_true", help="ingest/backfill: fetch days again even if already fetched")
+    nc_p.add_argument("--apply", action="store_true", help="repair-orientation: write the repairs (default: print them, write nothing)")
     ni = sub.add_parser("nhl-player-inputs", help="Cache NHL historical injuries and/or player boxes; no training or store writes")
     ni.add_argument("--from-season", type=int, required=True)
     ni.add_argument("--to-season", type=int, required=True)
@@ -950,6 +952,14 @@ def _ncaab(args, p) -> int:
             p.error(f"{exc}; run `ncaab migrate` and `ncaab backfill` first")
         print(json.dumps(ncaab.coverage(conn), indent=1))
         return 0
+    if args.action == "repair-orientation" and not args.apply:     # dry run: the library opens the store read-only
+        from . import ingest as _ingest
+        try:
+            conn = _open_ro(config.db_path("ncaab"))
+        except Exception as exc:
+            p.error(f"cannot open the NCAAB store read-only: {exc}")
+        print(json.dumps({"status": "dry_run", "apply": False, **_ingest.repair_neutral_orientation(conn, "ncaab")}, indent=1))
+        return 0
     days = ()
     if args.action == "ingest":
         try:
@@ -979,6 +989,10 @@ def _ncaab(args, p) -> int:
         log = lambda m: print(m, flush=True)
         if args.action == "replay":
             print(json.dumps(ncaab.replay(conn)))
+            return 0
+        if args.action == "repair-orientation":        # --apply: the logged before/after of every game changed
+            from . import ingest as _ingest
+            print(json.dumps({"status": "applied", "apply": True, **_ingest.repair_neutral_orientation(conn, "ncaab", apply=True)}, indent=1))
             return 0
         if args.action == "teams":
             print(json.dumps(ncaab.ingest_teams(conn)))
