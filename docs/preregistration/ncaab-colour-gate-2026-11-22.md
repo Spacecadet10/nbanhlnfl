@@ -2,7 +2,7 @@
 
 Written before any card was sent under this policy and before any outcome under it was read. Code: backend/app/ncaab_gate.py
 (POLICY, VALIDATION_BLOCKED, MAX_PRICE_AGE); colour decision: backend/app/card_threshold.py (DECIDE_VERSION
-card-colour-decide-v2, fitting rule card-threshold-v1). A separate policy from ncaab-top4-policy-eval-2026-11-18.
+card-colour-decide-v2, fitting rule card-threshold-v1.1: v1 maths on the printed percentage). A separate policy from ncaab-top4-policy-eval-2026-11-18.
 
 ## Start
 Counting starts at the first Telegram run on the released code (the delivery commit and time are recorded in HANDOFF.md).
@@ -16,7 +16,7 @@ Nothing before that moment counts: not recovered Telegram history, not the top-4
    line held for too few new picks; never with a stale, missing, failed or unqualified line).
 3. Valid pregame forecast; the card's forecast-time sportsbook quote exists (same game, market, line; at or before the forecast,
    before tip-off); the newest quote for the same side from the same provider is on the same line, before tip-off, and at most
-   60 minutes old at the run.
+   20 minutes old at the run (MAX_PRICE_AGE).
 4. Expected value at that offered price > 0: p_win x (decimal - 1) - p_loss, pushes refunded (p_mid from the stored forecast).
 
 ## Ranking and exclusions

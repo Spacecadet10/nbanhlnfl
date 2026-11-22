@@ -21,7 +21,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Callable, Optional
 from zoneinfo import ZoneInfo
 
-RULE_VERSION = 'card-threshold-v1'
+RULE_VERSION = 'card-threshold-v1.1'   # v1.1 (Nov 21, before any production row): fits on the printed % (tenths)
 # What may colour a card (owner brief Nov 21, colour release): only a line that qualifies today. A stale ('not refreshed'),
 # missing, failed or unqualified ('held' because no line beat the price, 'not established') line never colours; a capped
 # line greens only from the line the fit actually qualified. The fitting rule (RULE_VERSION) is unchanged.
