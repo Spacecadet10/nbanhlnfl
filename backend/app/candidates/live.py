@@ -762,6 +762,22 @@ def _fn(adapter, name: str):
     return adapter.get(name) if isinstance(adapter, dict) else getattr(adapter, name, None)
 
 
+def _sealed_kwargs(produce) -> dict:
+    """The NFL adapter reads the reserved seasons' results as forward state only through the sealed, logged read (nfl_live's
+    activation): pass that choice and the access log when `forecast_upcoming` asks for them. Without an activation the call is
+    refused by the adapter (reported as that model's error), never bypassed."""
+    import inspect
+    try:
+        names = set(inspect.signature(produce).parameters)
+    except (TypeError, ValueError):
+        return {}
+    if not {"sealed", "access_log"} <= names:
+        return {}
+    from .. import nfl_eval, nfl_live
+    act = nfl_live.activation()
+    return {"sealed": act["sealed"] if act else None, "access_log": nfl_eval.access_log_path()}
+
+
 def _note(fwd, kind: str, sport: str, outcome: str, detail: str, at: str) -> None:
     fwd.execute("INSERT INTO forward_runs (kind, sport, at, outcome, detail) VALUES (?,?,?,?,?)", (kind, sport, at, outcome, detail[:500]))
     fwd.commit()
@@ -811,7 +827,7 @@ def forward_record(data_dir: Path, *, now: Optional[str] = None, sports=FORWARD_
                 for name in models:
                     try:
                         with _deadline(timeout_s):
-                            rows = list(produce(conn, now, name) or [])
+                            rows = list(produce(conn, now, name, **_sealed_kwargs(produce)) or [])
                     except Exception as exc:                      # one model never stops the rest
                         res["errors"].append(f"{name}: {type(exc).__name__}: {exc}")
                         continue

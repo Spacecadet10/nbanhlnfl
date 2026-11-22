@@ -634,3 +634,16 @@ def test_forward_cli_prints_one_outcome_line_per_sport_and_runs_light(fdata, mon
     rc = lr.main(["--name", "forward-record", "--light", "--max-minutes", "1", "--max-rss-gb", "4", "--", sys.executable, "-c", "pass"])
     fh.close()
     assert rc == 0
+
+
+def test_forward_record_passes_the_sealed_read_only_to_adapters_that_ask_for_it(fdata, monkeypatch):
+    seen = {}
+
+    def nfl_like(conn, now, name, *, sealed=None, access_log=None):
+        seen.update(sealed=sealed, access_log=access_log)
+        return []
+    monkeypatch.setenv("NBA_DATA_DIR", str(fdata))
+    fwd_live.forward_register(fdata, "ncaab", "m1", now=FNOW)
+    fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": {"forecast_upcoming": nfl_like}})
+    assert seen["sealed"] is None and str(seen["access_log"]).endswith("research/nfl_eval/nfl_test_access.jsonl")   # no activation: refused by the adapter
+    assert fwd_live._sealed_kwargs(contract) == {}                                                                  # a plain adapter gets nothing
