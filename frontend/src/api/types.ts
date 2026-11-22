@@ -925,7 +925,7 @@ export interface ForecastPercentageHistory {
   history?: { source: 'history_recomputed'; line_source: CanonicalRecord['line_source']; wins: number; losses: number; pushes?: number; voids?: number; settled: number; small_sample?: boolean; colour?: 'green' | 'red' | 'neutral' } | null;
   /** Telegram cards sent before the live ledger began (Nov 2-14 2026) at the same sport, market, exact percentage, side and
    *  line source; the cards do not show the model version. A separate source, never part of wins/losses above. */
-  telegram?: { source: 'telegram_cards'; label?: string; model_version_known?: boolean; period?: { from: string; to: string } | null; line_source: CanonicalRecord['line_source'];
+  telegram?: { source: 'telegram_cards'; label?: string; model_version_known?: boolean; available?: boolean; period?: { from: string; to: string } | null; line_source: CanonicalRecord['line_source'];
     wins: number; losses: number; pushes?: number; voids?: number; settled: number; small_sample?: boolean; colour?: 'green' | 'red' | 'neutral' } | null;
 }
 

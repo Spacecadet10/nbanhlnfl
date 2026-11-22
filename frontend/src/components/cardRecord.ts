@@ -38,6 +38,31 @@ export function bucketHeadline(percentage: string, r: BucketRecord): string {
   return `${percentage}% · ${r.wins + r.losses === 0 ? t : `this exact % has gone ${t}`}`;
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const md = (d: string) => { const m = /^\d{4}-(\d\d)-(\d\d)/.exec(d); return m ? { mon: MONTHS[Number(m[1]) - 1], day: Number(m[2]) } : null; };
+/** "Nov 2–16" (or "Nov 30–Dec 2"); '' when the period is missing or unreadable. */
+function periodText(p: { from: string; to: string } | null | undefined): string {
+  const a = p && md(p.from), b = p && md(p.to);
+  if (!a || !b) return '';
+  return ` ${a.mon} ${a.day}–${b.mon === a.mon ? '' : `${b.mon} `}${b.day}`;
+}
+
+/** The recovered Telegram record (cards sent before the live ledger; model version unknown) as its own line, with its own colour.
+ *  Unavailable (null, or available false) and empty are said in words, never shown as 0–0, and never fall back to the live record. */
+export function telegramRecoveredLine(percentage: string,
+  t: (BucketRecord & { available?: boolean; period?: { from: string; to: string } | null }) | null | undefined): { text: string; colour: BucketColour } {
+  const base = 'Recovered Telegram cards';
+  const tail = '(model version unknown)';
+  if (!t || t.available === false) return { colour: 'neutral', text: `${base} ${tail} · recovered history unavailable` };
+  const label = `${base}${periodText(t.period)} ${tail}`;
+  if (t.wins + t.losses === 0) {
+    const pushes = t.pushes ? ` · ${t.pushes} ${t.pushes === 1 ? 'push' : 'pushes'}` : '';
+    const voids = t.voids ? ` · ${t.voids} ${t.voids === 1 ? 'void' : 'voids'}` : '';
+    return { colour: 'neutral', text: `${label} · no recovered history at this exact %${pushes}${voids}` };
+  }
+  return { colour: bucketColourOf(t), text: `${label} · ${bucketHeadline(percentage, t)}` };
+}
+
 /** A separate, labelled line for the recovered / recomputed record; never merged into the headline counts. */
 export function bucketSubLine(label: string, r: BucketRecord): string {
   return `${label} · ${bucketText(r)}`;

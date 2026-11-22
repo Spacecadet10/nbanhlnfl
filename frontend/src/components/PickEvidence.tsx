@@ -4,7 +4,7 @@
 // recovered Telegram history and the record basis. Fields an older API does not send are left out. Wording: cardRecord.ts.
 import type { ForecastPercentageHistory, RecordBasis, SportsbookComparison } from '../api/types';
 import { dateTime, pct } from '../format';
-import { bucketColourOf, bucketHeadline, bucketSubLine, recordBasisLines, thisGameLine, type BucketColour } from './cardRecord';
+import { bucketColourOf, bucketHeadline, bucketSubLine, recordBasisLines, telegramRecoveredLine, thisGameLine, type BucketColour } from './cardRecord';
 import { dnbModelNote, quoteTime, sportsbookLine } from './sportsbook';
 
 /** A model % coloured by its own exact-% bucket record (green with a check, red); neutral = plain. Colour only describes the
@@ -84,8 +84,8 @@ export function PickEvidence({ history: h, grade, sportsbook, recordBasis, oppos
     </> : <span className="muted">{h.market === 'reg3' ? 'Three-way market: no single opposite pick.' : 'Opposite side unavailable.'}</span>}</>}
     {hist && <><br /><span className={`bucket-${bucketColourOf(hist)}`}>{bucketSubLine('Recomputed past seasons', hist)}</span>
       <span className="muted"> · separate from the live record</span></>}
-    {tg && <><br /><span className={`bucket-${bucketColourOf(tg)}`}>{bucketSubLine(tg.model_version_known === false || tg.model_version_known === undefined ? 'Recovered Telegram cards (model version unknown)' : 'Recovered Telegram cards', tg)}</span>
-      <span className="muted"> · separate from the live record</span></>}
+    {(() => { const r = telegramRecoveredLine(h.percentage, tg); return <><br /><span className={`bucket-${r.colour}`}>{r.text}</span>
+      <span className="muted"> · separate from the live record</span></>; })()}
     {basis.map((b) => <span key={b}><br />{b}</span>)}
     <br /><span className="muted">Live record · same model · as of {dateTime(h.as_of)}</span>
     {key}
