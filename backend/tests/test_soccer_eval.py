@@ -522,3 +522,18 @@ def test_the_test_run_refuses_a_store_without_reserved_matches(tmp_path, monkeyp
     c = _store(tmp_path, monkeypatch)                     # holds 2021 and 2023 only: 2024 and 2025 have no matches
     with pytest.raises(ev.FrozenMismatch, match="no scored match"):
         ev.check_reserved_present(c)
+
+
+def test_the_research_1x2_frequency_baseline_uses_only_results_available_at_each_cutoff():
+    """Research adapter (soccer_markets_eval._ExpandingFrequency1x2): an expanding, leak-free baseline for any season."""
+    from app import soccer_markets_eval as me
+    ms = [mt("a", "eng.1", 2020, "2020-09-12", "A", "B"), mt("b", "eng.1", 2020, "2020-09-13", "A", "C", label=0),
+          mt("c", "eng.1", 2020, "2020-09-20", "B", "C", label=0)]
+    rs = [rev("a", "2020-09-12", 3, 0), rev("b", "2020-09-13", 1, 0), rev("c", "2020-09-20", 0, 2)]
+    out = {r["mid"]: r["p"] for r in ev.walk(me._ExpandingFrequency1x2(), dataset(ms, rs), seasons=[2020])}
+    assert out["a"] == pytest.approx((1 / 3, 1 / 3, 1 / 3))                 # nothing known yet
+    assert out["b"] == pytest.approx((2 / 4, 1 / 4, 1 / 4))                 # only a's home win
+    assert out["c"] == pytest.approx((3 / 5, 1 / 5, 1 / 5))                 # a and b, not c's own result
+    rs2 = [rs[0], rs[1], rev("c", "2020-09-20", 5, 5)]                       # perturb the last result
+    out2 = {r["mid"]: r["p"] for r in ev.walk(me._ExpandingFrequency1x2(), dataset(ms, rs2), seasons=[2020])}
+    assert out2 == out

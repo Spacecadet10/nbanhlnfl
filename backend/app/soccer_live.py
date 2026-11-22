@@ -92,6 +92,9 @@ def season_rows(conn: sqlite3.Connection, competitions) -> list:
     return [r for r in rows if _in_scope(r)]
 
 
+MAX_LISTED = 5       # matches named one by one per competition and check; the rest are counted
+
+
 def check(conn: sqlite3.Connection, competition: str, now: str, horizon: str, club_map: dict, *,
           target_day: Optional[str] = None) -> dict:
     """Whether `competition`'s current-season inputs are complete for a forecast whose cutoff is `horizon`: data retrieved
@@ -110,7 +113,7 @@ def check(conn: sqlite3.Connection, competition: str, now: str, horizon: str, cl
         d += timedelta(days=1)
     if missing_dates:
         problems.append(f"{len(missing_dates)} season date(s) never fetched (first {missing_dates[0]})")
-    unmapped = set()
+    unmapped, pending, unsettled = set(), [], []
     for r in season_rows(conn, (competition,)):
         for team, name in ((r["home_team_id"], r["home_name"]), (r["away_team_id"], r["away_name"])):
             if team not in club_map["espn"]:
@@ -120,9 +123,18 @@ def check(conn: sqlite3.Connection, competition: str, now: str, horizon: str, cl
         if r["kickoff_at"] >= horizon or r["status"] in ("postponed", "canceled", "abandoned"):
             continue
         if r["status"] != "final":
-            problems.append(f"{r['match_id']} kicked off {r['kickoff_at']} but has no result yet ({r['status']})")
+            if r["kickoff_at"] > now:     # not started: a look-ahead cutoff lies after it, so it only has to be waited for
+                pending.append(r["kickoff_at"])
+            else:
+                unsettled.append(f"{r['match_id']} kicked off {r['kickoff_at']} but has no result yet ({r['status']})")
         elif r["decided_in"] != "regulation":
             problems.append(f"{r['match_id']} final not decided in regulation ({r['decided_in']})")
+    problems += unsettled[:MAX_LISTED]
+    if len(unsettled) > MAX_LISTED:
+        problems.append(f"... and {len(unsettled) - MAX_LISTED} more match(es) kicked off without a result")
+    if pending:
+        problems.append(f"{len(pending)} match(es) still to be played before the cutoff (kickoffs {pending[0]} .. {pending[-1]}); "
+                        "the forecast waits for their results")
     if unmapped:
         problems.append("clubs not in the club map: " + ", ".join(sorted(unmapped)))
     return {"competition": competition, "ok": not problems, "problems": problems, "retrieved_at": last}
@@ -218,7 +230,9 @@ def run(conn: sqlite3.Connection, *, day: Optional[str] = None, write: bool = Tr
         inserted = sum(record(conn, mid, c, p, cutoff_at=cutoff if pregame_targets is None else pregame_targets[mid],
                               pregame=pregame_targets is not None, inputs_digest=digest, inputs_through=through,
                               retrieved_at=checks[c]["retrieved_at"], write=write) for mid, p in rows)
-        problems = checks[c]["problems"] + [x for x in shared if not x.startswith(f"input competition {c}:")]
+        others = {k: len(v["problems"]) for k, v in checks.items() if k != c and v["problems"]}
+        problems = checks[c]["problems"] + ([f"other input competitions not ready: " + ", ".join(
+            f"{k} ({n} problem(s))" for k, n in sorted(others.items()))] if others else [])
         if write and (ok or record_refusal):     # an early attempt that must still wait is not a refusal
             conn.execute("INSERT INTO soccer_live_checks (checked_at, competition_id, match_date, ok, problems_json, forecasts) "
                          "VALUES (?, ?, ?, ?, ?, ?)", (now, c, day, int(ok), json.dumps(problems), inserted))

@@ -145,6 +145,42 @@ def test_no_forecast_after_the_cutoff(live):
     assert sml.run(live, day=YESTERDAY.isoformat())["status"] == "refused"
 
 
+def _look_ahead(live, n=1):
+    """A look-ahead day three days out whose cutoff lies after `n` fixtures that are still in the future (day after
+    tomorrow); returns (target day, that fixtures' day)."""
+    far = TODAY + timedelta(days=2)
+    ingest_day(live, far, [upcoming(90010 + i, far, IDS[i % 4], IDS[4 + i % 4]) for i in range(n)])
+    return TODAY + timedelta(days=3), far
+
+
+def test_a_future_fixture_before_a_look_ahead_cutoff_is_not_described_as_kicked_off(live):
+    """Root cause of the hourly `markets-forecast --day +1..+7 --if-ready` spam: check() listed every scheduled match
+    kicking off before the target day's cutoff as 'kicked off ... but has no result yet', although it had not started."""
+    day, far = _look_ahead(live)
+    rep = sml.run(live, day=day.isoformat(), record_refusal=False)
+    text = " ".join(p for f in rep["families"].values() for c in f["competitions"].values() for p in c["problems"])
+    assert "kicked off" not in text, text
+    assert rep["status"] == "refused" and not forecasts(live)       # it still waits: the labels are not in yet
+    assert "still to be played" in text and far.isoformat() in text
+
+
+def test_a_match_that_really_kicked_off_without_a_result_is_still_reported(live):
+    ingest_day(live, YESTERDAY, [final(90001, YESTERDAY, IDS[0], IDS[1], 2, 1, 7, 3), final(90002, YESTERDAY, IDS[2], IDS[3], 0, 0),
+                                 make_event(90006, f"{YESTERDAY.isoformat()}T15:00Z", SEASON, STYPE, f"{SEASON}-league",
+                                            IDS[6], IDS[7], status="STATUS_SCHEDULED")])
+    rep = sml.run(live, day=TOMORROW.isoformat(), record_refusal=False)
+    problems = rep["families"]["goals"]["competitions"]["eng.1"]["problems"]
+    assert any("soccer:eng.1:90006 kicked off" in p and "no result yet" in p for p in problems), problems
+    assert rep["status"] == "refused"
+
+
+def test_problem_lists_are_summarised_not_repeated_per_competition(live, monkeypatch):
+    day, _ = _look_ahead(live, n=12)
+    rep = sml.run(live, day=day.isoformat(), record_refusal=False)
+    problems = rep["families"]["goals"]["competitions"]["eng.1"]["problems"]
+    assert len(problems) == 1 and int(problems[0].split()[0]) == 14, problems      # 12 here + tomorrow's 2 fixtures
+
+
 def test_selections_separate_bookmaker_offers_from_model_lines(live):
     sml.run(live, day=TOMORROW.isoformat())
     mid = "soccer:eng.1:90003"
@@ -536,3 +572,27 @@ def test_a_new_spelling_of_the_same_sportsbook_is_not_a_withdrawal(live):
     assert [tuple(r) for r in rows] == [("Draft Kings", "home", 1)]           # raw name kept, no withdrawal row
     f = {"match_id": mid, "kickoff_at": ko, "generated_at": t3, "most_likely": "home", "probabilities": {"home": .6, "draw": .2, "away": .2}}
     assert soccer_book.one_x_two(live, f)["price"] == "-125/+260/+280"
+
+
+def test_every_live_soccer_fingerprint_is_unchanged_from_the_deployed_commit_1179494():
+    """Research code lives in soccer_markets_eval.py; the live path pins sealed files by content hash and never hashes
+    source. These bytes and pins must stay exactly as deployed (1179494)."""
+    import hashlib
+    from pathlib import Path
+    from app import intl_live
+    here = Path(sml.__file__).parent
+    pinned = {"soccer_markets_sealed_goals.json": "76be15aac17dd284de0330e6096dbe0d1337b69a66fbddcec021eb13cecb88c4",
+              "soccer_markets_sealed_corners.json": "43704a5bcbb57d843bffb21a21edda399b410182587f81a1da374aea7fa80104",
+              "soccer_markets_reading_goals.json": "370cf46fc7e42984f731c2ccdd56d3849e652631b847b14206fa3c2cf49d66a7",
+              "soccer_markets_reading_corners.json": "93d97ff20a6980ad3a978987213d4683a27f316e3a4f7e7d0805a54c3fac3f32",
+              "soccer_sealed_candidate.json": "1fee79b3783a93d88ad74e6d6dbdc92c0326d9ae5dae1e656ef62d35b0d7b88b",
+              "intl_sealed_candidate.json": "74088f5bb619b5a1e7bb66b58a4a0ae01ccedf1c5793524885af502119796fbf",
+              "soccer_markets_protocol.json": "fa64ec9657a4568138f416923377c6ff00fc4176439c2c7789f907cf430db7de",
+              "soccer_protocol.json": "f37946397ce971a28dd2d1603fad570273e9b7eb50a67583fbe9830ac32f70e9"}
+    for name, sha in pinned.items():
+        assert hashlib.sha256((here / name).read_bytes()).hexdigest() == sha, name
+    assert sml.CANDIDATES == {"goals": "cfe78bf98a8e48215474de26d020fc5a0fdb45830957b38e24e47db88efbd432",
+                              "corners": "f50224ddd00ef8abd3d949180b8324ab934ac4fa65035cb2c0ff49c364d90377"}
+    assert soccer_live.CANDIDATE_SHA256 == "7dbc668c214f33862541156c0630913194e8a3421c0e7c3495f4de296ecd9c47"
+    assert intl_live.CANDIDATE_SHA256 == "10547b47146e579bb6f53e6adf4ac57b1896c0f7723cca564f9be93a49206d79"
+    assert soccer_live.sealed_candidate() and intl_live.sealed_candidate()
