@@ -82,7 +82,7 @@ def test_the_snapshot_also_holds_adaptive_pickles_scorecard_dbs_and_thresholds_d
     import sqlite3
     data, root = tmp_path / "data", tmp_path / "backups"
     _store(data)
-    for rel, text in {"research/adaptive/nba/history-ab.pkl": "pk", "research/adaptive/nba/history-ab.pkl.sha256": "h",
+    for rel, text in {"research/adaptive/nba/history-ab.pkl": "pk", "research/adaptive/nba/history-ab.pkl.sha256": "eb3102a6cb586765d01fad324523ec0bc67b9efd6a2d9589c135adfedf7922cc",
                       "research/adaptive/nhl/combiner/c-1.pkl": "cb", "research/adaptive/nba/train.lock": "",
                       "research/adaptive/nba/history-ab.pkl.lock": "", "research/adaptive/.env.x": "SECRET"}.items():
         p = data / rel
@@ -98,8 +98,10 @@ def test_the_snapshot_also_holds_adaptive_pickles_scorecard_dbs_and_thresholds_d
     folder = root / "stores" / "20261116T043000Z"
     with tarfile.open(folder / "files.tar.gz") as t:
         names = set(t.getnames())
-    assert {"data/research/adaptive/nba/history-ab.pkl", "data/research/adaptive/nba/history-ab.pkl.sha256",
-            "data/research/adaptive/nhl/combiner/c-1.pkl"} <= names
+    assert not any("research/adaptive" in n for n in names)                         # pickles are in the pool, not the tarball
+    assert {"adaptive/nba/history-ab.pkl", "adaptive/nba/history-ab.pkl.sha256", "adaptive/nhl/combiner/c-1.pkl"} == \
+        set(json.loads((folder / "pool-manifest.json").read_text())["files"])
+    assert not any(p.name.endswith(".lock") or ".env" in p.name for p in (root / "pool").rglob("*"))
     assert not any(n.endswith(".lock") or ".env" in n for n in names)
     dbs = out["extras"]["databases"]
     assert set(dbs) == {"scorecard/nhl.sqlite", "card_thresholds.sqlite"}
@@ -261,3 +263,99 @@ def test_a_corrupted_copy_is_reported_as_failed(tmp_path, monkeypatch):
     seen = []
     out = nb.nightly(data, root, mirror=drive, stamp="20261116T043000Z", notify=seen.append)
     assert out["status"] == "mirror_failed" and "journal.tar.gz" in out["mirror_error"] and len(seen) == 1
+
+
+# ---- shared pool for the immutable adaptive pickles; stale partial mirror copy ---------------------------------------------
+import hashlib  # noqa: E402
+
+
+def adaptive(data, files):
+    for rel, blob in files.items():
+        p = data / "research" / "adaptive" / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(blob)
+        (p.parent / (p.name + ".sha256")).write_text(hashlib.sha256(blob).hexdigest() + "\n")
+
+
+def pool_files(base):
+    return {str(p.relative_to(base)) for p in base.rglob("*") if p.is_file()}
+
+
+def test_pickles_go_to_a_shared_pool_once_and_not_into_every_nights_tarball(tmp_path):
+    data, root = tmp_path / "data", tmp_path / "backups"
+    _store(data)
+    adaptive(data, {"nba/history-a.pkl": b"A" * 1000, "nhl/combiner/c-1.pkl": b"C" * 500})
+    one = nb.nightly(data, root, mirror=None, stamp="20261116T043000Z", repo_root=tmp_path / "r", notify=lambda m: None)
+    assert one["pool"]["copied"] == 4 and one["pool"]["conflicts"] == []          # 2 pickles + 2 sidecars
+    two = nb.nightly(data, root, mirror=None, stamp="20261117T043000Z", repo_root=tmp_path / "r", notify=lambda m: None)
+    assert two["pool"]["copied"] == 0 and two["pool"]["present"] == 4
+    adaptive(data, {"nba/history-b.pkl": b"B" * 10})                              # a new pickle: only it is copied
+    three = nb.nightly(data, root, mirror=None, stamp="20261118T043000Z", repo_root=tmp_path / "r", notify=lambda m: None)
+    assert three["pool"]["copied"] == 2
+    assert (root / "pool" / "adaptive" / "nba" / "history-a.pkl").read_bytes() == b"A" * 1000
+    for stamp in ("20261116T043000Z", "20261118T043000Z"):
+        with tarfile.open(root / "stores" / stamp / "files.tar.gz") as t:
+            assert not any("research/adaptive" in n for n in t.getnames())
+    man = json.loads((root / "stores" / "20261118T043000Z" / "pool-manifest.json").read_text())
+    assert man["files"]["adaptive/nba/history-b.pkl"] == hashlib.sha256(b"B" * 10).hexdigest()
+    assert len(man["files"]) == 6
+
+
+def test_a_changed_pickle_under_the_same_name_is_reported_and_never_overwrites_the_pool(tmp_path):
+    data, root, warned = tmp_path / "data", tmp_path / "backups", []
+    _store(data)
+    adaptive(data, {"nba/history-a.pkl": b"A" * 100})
+    nb.nightly(data, root, mirror=None, stamp="20261116T043000Z", repo_root=tmp_path / "r", notify=warned.append)
+    adaptive(data, {"nba/history-a.pkl": b"X" * 100})
+    out = nb.nightly(data, root, mirror=None, stamp="20261117T043000Z", repo_root=tmp_path / "r", notify=warned.append)
+    assert out["pool"]["conflicts"] == ["adaptive/nba/history-a.pkl", "adaptive/nba/history-a.pkl.sha256"]
+    assert (root / "pool" / "adaptive" / "nba" / "history-a.pkl").read_bytes() == b"A" * 100
+    assert any("history-a.pkl" in w for w in warned)
+    man = json.loads((root / "stores" / "20261117T043000Z" / "pool-manifest.json").read_text())
+    assert "adaptive/nba/history-a.pkl" not in man["files"] or man["files"]["adaptive/nba/history-a.pkl"] == hashlib.sha256(b"A" * 100).hexdigest()
+
+
+def test_a_pickle_that_does_not_match_its_sidecar_is_not_pooled(tmp_path):
+    data, root = tmp_path / "data", tmp_path / "backups"
+    _store(data)
+    adaptive(data, {"nba/history-a.pkl": b"A" * 100})
+    (data / "research/adaptive/nba/history-a.pkl.sha256").write_text("0" * 64 + "\n")
+    out = nb.nightly(data, root, mirror=None, stamp="20261116T043000Z", repo_root=tmp_path / "r", notify=lambda m: None)
+    assert out["pool"]["conflicts"] == ["adaptive/nba/history-a.pkl"] and not (root / "pool/adaptive/nba/history-a.pkl").exists()
+
+
+def test_the_mirror_pool_receives_only_new_files_and_a_restore_collects_the_referenced_set_verified(tmp_path):
+    data, root, offsite = tmp_path / "data", tmp_path / "backups", tmp_path / "offsite"
+    _store(data)
+    offsite.mkdir()
+    adaptive(data, {"nba/history-a.pkl": b"A" * 1000})
+    one = nb.nightly(data, root, mirror=offsite, stamp="20261116T043000Z", repo_root=tmp_path / "r", notify=lambda m: None)
+    assert one["status"] == "ok" and one["pool_mirrored"]["copied"] == 2
+    two = nb.nightly(data, root, mirror=offsite, stamp="20261117T043000Z", repo_root=tmp_path / "r", notify=lambda m: None)
+    assert two["pool_mirrored"]["copied"] == 0
+    adaptive(data, {"nba/history-b.pkl": b"B" * 20})
+    three = nb.nightly(data, root, mirror=offsite, stamp="20261118T043000Z", repo_root=tmp_path / "r", notify=lambda m: None)
+    assert three["pool_mirrored"]["copied"] == 2
+    assert pool_files(offsite / "pool") == pool_files(root / "pool")
+    # restore from the off-machine copy: the pool of that night's manifest, hashes verified
+    got = nb.collect_pool(offsite / "20261117T043000Z", offsite / "pool", tmp_path / "restored")
+    assert got == 2 and (tmp_path / "restored/adaptive/nba/history-a.pkl").read_bytes() == b"A" * 1000
+    (offsite / "pool/adaptive/nba/history-a.pkl").write_bytes(b"damaged")
+    import pytest
+    with pytest.raises(backup.BackupError):
+        nb.collect_pool(offsite / "20261117T043000Z", offsite / "pool", tmp_path / "restored2")
+
+
+def test_a_stale_partial_mirror_copy_is_removed_but_completed_and_newer_folders_are_not(tmp_path):
+    data, root, offsite = tmp_path / "data", tmp_path / "backups", tmp_path / "offsite"
+    _store(data)
+    offsite.mkdir()
+    for name in (".20261116T043000Z.partial", ".20261101T000000Z.partial"):          # same stamp, older stamp
+        (offsite / name).mkdir()
+        (offsite / name / "half").write_text("x")
+    (offsite / ".20261201T000000Z.partial").mkdir()                                  # newer than tonight: not ours to judge
+    (offsite / "20261101T000000Z").mkdir()                                           # a completed folder
+    out = nb.nightly(data, root, mirror=offsite, stamp="20261116T043000Z", repo_root=tmp_path / "r", notify=lambda m: None)
+    assert out["status"] == "ok" and (offsite / "20261116T043000Z" / "manifest.json").is_file()
+    assert not (offsite / ".20261116T043000Z.partial").exists() and not (offsite / ".20261101T000000Z.partial").exists()
+    assert (offsite / ".20261201T000000Z.partial").is_dir() and (offsite / "20261101T000000Z").is_dir()

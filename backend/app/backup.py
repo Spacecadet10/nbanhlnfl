@@ -118,9 +118,14 @@ def mirror(backup_dir: Path, mirror_root: Path) -> dict:
     if os.path.lexists(out):
         raise BackupError(f"Mirror destination {out} exists; not overwritten")
     tmp = Path(mirror_root) / f".{src.name}.partial"
-    if os.path.lexists(tmp):
-        raise BackupError(f"{tmp} is left from an interrupted mirror; remove it by hand first")
+    import re
     import shutil
+    # A `.<stamp>.partial` folder is only ever this job's own unfinished copy: one for this stamp or an older one is stale
+    # (an interrupted mirror) and removed so the night can run. A newer stamp's, and every completed folder, stay untouched.
+    for stale in Path(mirror_root).glob(".*.partial"):
+        m = re.fullmatch(r"\.(\d{8}T\d{6}Z)\.partial", stale.name)
+        if m and m.group(1) <= src.name and stale.is_dir() and not stale.is_symlink():
+            shutil.rmtree(stale)
     shutil.copytree(src, tmp)
     for m in stores.values():
         if sha256(tmp / m["file"]) != m["sha256"]:
