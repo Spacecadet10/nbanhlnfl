@@ -4,7 +4,7 @@
 // recovered Telegram history and the record basis. Fields an older API does not send are left out. Wording: cardRecord.ts.
 import type { ForecastPercentageHistory, RecordBasis, SportsbookComparison } from '../api/types';
 import { dateTime, pct } from '../format';
-import { bucketColourOf, bucketHeadline, bucketSubLine, recordBasisLines, telegramRecoveredLine, thisGameLine, type BucketColour } from './cardRecord';
+import { bucketColourOf, bucketHeadline, historyLine, recordBasisLines, telegramRecoveredLine, thisGameLine, type BucketColour } from './cardRecord';
 import { dnbModelNote, quoteTime, sportsbookLine } from './sportsbook';
 
 /** A model % coloured by its own exact-% bucket record (green with a check, red); neutral = plain. Colour only describes the
@@ -66,7 +66,7 @@ export function PickEvidence({ history: h, grade, sportsbook, recordBasis, oppos
   const excluded = Object.values(h.excluded ?? {}).reduce((a, b) => a + b, 0);
   const against = h.losses > h.wins; // Only OTHER games can trigger it, never this game's own loss.
   const pregame = grade === 'pending' && startAt != null && Date.parse(h.as_of) < Date.parse(startAt);
-  const tg = h.telegram, hist = h.history;
+  const hl = historyLine(h.history), tl = telegramRecoveredLine(h.telegram);
   return <span className="small percentage-record pick-evidence" title={`Same source: ${h.source}; model: ${h.model_version}. Current record, including results learned after older forecasts. The counts are OTHER settled games, as on the Telegram card; this game's own result is shown separately and never added. Lines vary within the same market and line source. Observed counts do not establish a future win rate.`}>
     {headLine}
     {dnbNote}
@@ -82,10 +82,8 @@ export function PickEvidence({ history: h, grade, sportsbook, recordBasis, oppos
       <br /><span className="muted">{pregame ? 'Current comparison; not a validated betting rule.' : 'Comparison now; no pregame opposite call was recorded.'}</span>
       <br /><span className="muted">{h.line_source === 'model' ? 'Model line only; no bookmaker offer verified.' : 'Current opposite-side price unverified.'}</span>
     </> : <span className="muted">{h.market === 'reg3' ? 'Three-way market: no single opposite pick.' : 'Opposite side unavailable.'}</span>}</>}
-    {hist && <><br /><span className={`bucket-${bucketColourOf(hist)}`}>{bucketSubLine('Recomputed past seasons', hist)}</span>
-      <span className="muted"> · separate from the live record</span></>}
-    {(() => { const r = telegramRecoveredLine(h.percentage, tg); return <><br /><span className={`bucket-${r.colour}`}>{r.text}</span>
-      <span className="muted"> · separate from the live record</span></>; })()}
+    {hl && <><br /><span className={`bucket-${hl.colour}`}>{hl.text}</span></>}
+    <br /><span className={`bucket-${tl.colour}`}>{tl.text}</span>
     {basis.map((b) => <span key={b}><br />{b}</span>)}
     <br /><span className="muted">Live record · same model · as of {dateTime(h.as_of)}</span>
     {key}

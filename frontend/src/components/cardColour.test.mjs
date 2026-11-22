@@ -1,9 +1,9 @@
 // Bucket-record colouring (run: npm run test:unit). Each exact-% bucket is coloured by its OWN settled record, never by a
 // probability cutoff: green = >=1 win and win rate >= 75%; red = losses > wins; neutral otherwise. Pushes/voids are not in the
-// denominator. Wording matches the Telegram card (backend app/telegram.py).
+// denominator. The headline text mirrors the backend record_line; recovered/recomputed lines are the backend's own `line` strings.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bucketColour, bucketColourOf, bucketHeadline, bucketSubLine, telegramRecoveredLine } from './cardRecord.ts';
+import { bucketColour, bucketColourOf, bucketHeadline, bucketSubLine, historyLine, telegramRecoveredLine } from './cardRecord.ts';
 
 test('the rule on the owner examples', () => {
   for (const [w, l] of [[1, 0], [2, 0], [8, 1], [3, 1], [75, 25]]) assert.equal(bucketColour(w, l), 'green', `${w}-${l}`);
@@ -61,20 +61,38 @@ test('recovered and recomputed records are separate labelled lines with their ow
   assert.equal(bucketColourOf(live), 'neutral');
 });
 
-test('recovered Telegram line: own date range, own colour, pushes and voids, matching the backend wording', () => {
-  const t = { available: true, period: { from: '2026-11-02', to: '2026-11-16' }, wins: 2, losses: 0, pushes: 1, voids: 0, colour: 'green', model_version_known: false };
-  assert.deepEqual(telegramRecoveredLine('57.3', t), { colour: 'green',
-    text: 'Recovered Telegram cards Nov 2–16 (model version unknown) · 57.3% · this exact % has gone 2–0 (100%) · 1 push · small sample (2 settled)' });
-  assert.equal(telegramRecoveredLine('57.3', { ...t, period: { from: '2026-11-30', to: '2026-12-02' }, pushes: 0, voids: 1 }).text,
-    'Recovered Telegram cards Nov 30–Dec 2 (model version unknown) · 57.3% · this exact % has gone 2–0 (100%) · 1 void · small sample (2 settled)');
-  assert.equal(telegramRecoveredLine('57.3', { ...t, wins: 1, losses: 3, colour: undefined }).colour, 'red');
+test('recovered Telegram fallback (older API, no line): Telegram formats, own colour, overlap note, no repeated %', () => {
+  const t = { available: true, period: { from: '2026-11-02', to: '2026-11-16' }, wins: 2, losses: 0, pushes: 1, voids: 0, colour: 'green', overlap_live: 1 };
+  assert.deepEqual(telegramRecoveredLine(t), { colour: 'green',
+    text: 'Recovered Telegram cards 11-02 to 11-16 (model version not recorded) · 2–0 (100%) · 1 push · small sample (2 settled) · green record · 1 game also in the live record, not added' });
+  assert.equal(telegramRecoveredLine({ ...t, overlap_live: 3, colour: 'neutral' }).text,
+    'Recovered Telegram cards 11-02 to 11-16 (model version not recorded) · 2–0 (100%) · 1 push · small sample (2 settled) · 3 games also in the live record, not added');
+  assert.equal(telegramRecoveredLine({ ...t, wins: 1, losses: 3, colour: undefined, overlap_live: 0 }).colour, 'red');
+  assert.match(telegramRecoveredLine({ ...t, wins: 1, losses: 3, colour: undefined, overlap_live: 0 }).text, / · red record$/);
 });
 
-test('recovered Telegram line: unavailable and empty are never shown as 0–0 and never fall back to live', () => {
-  assert.deepEqual(telegramRecoveredLine('57.3', null), { colour: 'neutral', text: 'Recovered Telegram cards (model version unknown) · recovered history unavailable' });
-  assert.equal(telegramRecoveredLine('57.3', undefined).text, 'Recovered Telegram cards (model version unknown) · recovered history unavailable');
-  assert.match(telegramRecoveredLine('57.3', { available: false, wins: 2, losses: 0 }).text, /recovered history unavailable$/);
-  const empty = telegramRecoveredLine('57.3', { available: true, period: { from: '2026-11-02', to: '2026-11-16' }, wins: 0, losses: 0, pushes: 0 });
-  assert.deepEqual(empty, { colour: 'neutral', text: 'Recovered Telegram cards Nov 2–16 (model version unknown) · no recovered history at this exact %' });
+test('recovered fallback: unavailable and empty are never 0–0 and never fall back to the live record; counts may be null', () => {
+  assert.deepEqual(telegramRecoveredLine(null), { colour: 'neutral', text: 'Recovered Telegram cards (model version not recorded) · recovered history unavailable' });
+  assert.match(telegramRecoveredLine({ available: false, wins: null, losses: null, pushes: null, voids: null, settled: null }).text, /recovered history unavailable$/);
+  const empty = telegramRecoveredLine({ available: true, period: { from: '2026-11-02', to: '2026-11-16' }, wins: 0, losses: 0, pushes: 0 });
+  assert.deepEqual(empty, { colour: 'neutral', text: 'Recovered Telegram cards 11-02 to 11-16 (model version not recorded) · no recovered history at this exact %' });
   assert.doesNotMatch(empty.text, /0–0/);
+});
+
+test('backend-provided line strings are rendered verbatim, tinted by the record own colour; null line hides history', () => {
+  const cases = [
+    ['Recovered Telegram cards 11-02 to 11-16 (model version not recorded) · 8–1 (89%) · small sample (9 settled) · green record', 'green'],
+    ['Recovered Telegram cards 11-02 to 11-16 (model version not recorded) · 3–2 (60%) · small sample (5 settled)', 'neutral'],
+    ['Recovered Telegram cards 11-02 to 11-16 (model version not recorded) · 0–2 (0%) · small sample (2 settled) · red record', 'red'],
+    ['Recovered Telegram cards: recovered history unavailable (file missing)', 'neutral'],
+    ['No recovered Telegram history for NCAAB (recording began 2026-11-17)', 'neutral'],
+  ];
+  for (const [line, colour] of cases) {
+    assert.deepEqual(telegramRecoveredLine({ line, colour, available: true, wins: 1, losses: 0 }), { text: line, colour });
+  }
+  assert.deepEqual(historyLine({ line: 'Recomputed past seasons · 4–1 (80%) · small sample (5 settled) · green record', colour: 'green', wins: 4, losses: 1 }),
+    { text: 'Recomputed past seasons · 4–1 (80%) · small sample (5 settled) · green record', colour: 'green' });
+  assert.equal(historyLine({ line: null, wins: 4, losses: 1 }), null);                       // Telegram hides it
+  assert.equal(historyLine(null), null);
+  assert.equal(historyLine({ wins: 1, losses: 3 }).text, 'Recomputed past seasons · 1–3 (25%) · small sample (4 settled) · red record');   // older API
 });

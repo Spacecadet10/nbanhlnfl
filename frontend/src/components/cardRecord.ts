@@ -38,29 +38,40 @@ export function bucketHeadline(percentage: string, r: BucketRecord): string {
   return `${percentage}% · ${r.wins + r.losses === 0 ? t : `this exact % has gone ${t}`}`;
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const md = (d: string) => { const m = /^\d{4}-(\d\d)-(\d\d)/.exec(d); return m ? { mon: MONTHS[Number(m[1]) - 1], day: Number(m[2]) } : null; };
-/** "Nov 2–16" (or "Nov 30–Dec 2"); '' when the period is missing or unreadable. */
-function periodText(p: { from: string; to: string } | null | undefined): string {
-  const a = p && md(p.from), b = p && md(p.to);
-  if (!a || !b) return '';
-  return ` ${a.mon} ${a.day}–${b.mon === a.mon ? '' : `${b.mon} `}${b.day}`;
-}
+/** "11-02 to 11-16", the Telegram card's date range; '' when missing or unreadable. */
+const periodText = (p: { from: string; to: string } | null | undefined) => (p && p.from.length >= 10 && p.to.length >= 10 ? ` ${p.from.slice(5, 10)} to ${p.to.slice(5, 10)}` : '');
+const colourMark = (c: BucketColour) => (c === 'neutral' ? '' : ` · ${c} record`);
 
-/** The recovered Telegram record (cards sent before the live ledger; model version unknown) as its own line, with its own colour.
- *  Unavailable (null, or available false) and empty are said in words, never shown as 0–0, and never fall back to the live record. */
-export function telegramRecoveredLine(percentage: string,
-  t: (BucketRecord & { available?: boolean; period?: { from: string; to: string } | null }) | null | undefined): { text: string; colour: BucketColour } {
+/** A recovered record as the API sends it: `line` is exactly the text Telegram prints (null = Telegram hides it). */
+export type RecoveredRecord = Omit<BucketRecord, 'wins' | 'losses' | 'pushes' | 'voids'> & {
+  wins?: number | null; losses?: number | null; pushes?: number | null; voids?: number | null; line?: string | null; available?: boolean;
+  period?: { from: string; to: string } | null; overlap_live?: number | null };
+
+/** The recovered Telegram record as its own line. The backend `line` is rendered verbatim, tinted by this record's own colour.
+ *  Only an older API without `line` gets the local builder below (Telegram's formats; never 0–0, never the live record). */
+export function telegramRecoveredLine(t: RecoveredRecord | null | undefined): { text: string; colour: BucketColour } {
   const base = 'Recovered Telegram cards';
-  const tail = '(model version unknown)';
-  if (!t || t.available === false) return { colour: 'neutral', text: `${base} ${tail} · recovered history unavailable` };
-  const label = `${base}${periodText(t.period)} ${tail}`;
-  if (t.wins + t.losses === 0) {
+  const none = 'model version not recorded';
+  if (t && typeof t.line === 'string') return { text: t.line, colour: t.available === false ? 'neutral' : bucketColourOf({ wins: t.wins ?? 0, losses: t.losses ?? 0, colour: t.colour }) };
+  if (!t || t.available === false) return { colour: 'neutral', text: `${base} (${none}) · recovered history unavailable` };
+  const label = `${base}${periodText(t.period)} (${none})`;
+  const rec = { ...t, wins: t.wins ?? 0, losses: t.losses ?? 0, pushes: t.pushes ?? 0, voids: t.voids ?? 0 };
+  const n = t.overlap_live ? ` · ${t.overlap_live} ${t.overlap_live === 1 ? 'game' : 'games'} also in the live record, not added` : '';
+  if (rec.wins + rec.losses === 0) {
     const pushes = t.pushes ? ` · ${t.pushes} ${t.pushes === 1 ? 'push' : 'pushes'}` : '';
     const voids = t.voids ? ` · ${t.voids} ${t.voids === 1 ? 'void' : 'voids'}` : '';
-    return { colour: 'neutral', text: `${label} · no recovered history at this exact %${pushes}${voids}` };
+    return { colour: 'neutral', text: `${label} · no recovered history at this exact %${pushes}${voids}${n}` };
   }
-  return { colour: bucketColourOf(t), text: `${label} · ${bucketHeadline(percentage, t)}` };
+  const colour = bucketColourOf(rec);
+  return { colour, text: `${label} · ${bucketText(rec)}${colourMark(colour)}${n}` };
+}
+
+/** The recomputed past-seasons line: the backend `line` verbatim; null when Telegram hides it (`line` null); the local builder
+ *  only when an older API sends no `line`. */
+export function historyLine(h: (BucketRecord & { line?: string | null }) | null | undefined): { text: string; colour: BucketColour } | null {
+  if (!h || h.line === null) return null;
+  const colour = bucketColourOf(h);
+  return { text: typeof h.line === 'string' ? h.line : `${bucketSubLine('Recomputed past seasons', h)}${colourMark(colour)}`, colour };
 }
 
 /** A separate, labelled line for the recovered / recomputed record; never merged into the headline counts. */
