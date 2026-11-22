@@ -2335,7 +2335,8 @@ def forward_grade(path: Optional[Path], adapter: dict, official, now: Optional[s
     PRAGMA query_only is forced on it). Without an adapter `settle`, nothing is graded and that is said."""
     if not adapter.get("settle"):
         return {"graded": 0, "status": "unavailable", "reason": "the adapter has no settle(): grading is not possible yet"}
-    official.execute("PRAGMA query_only = ON")
+    if official is not None:
+        official.execute("PRAGMA query_only = ON")
     now = _iso(now or _now())
     conn = forward_connect(path)
     try:
