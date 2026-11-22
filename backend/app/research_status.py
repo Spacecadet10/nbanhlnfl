@@ -171,7 +171,7 @@ def v3_status(root: Path) -> Optional[dict]:
     if not latest and not last:
         return None
     keep = ("protocol_id", "at", "last_attempt", "last_success_at", "outcome", "reason", "candidates", "evaluated_markets", "blockers",
-            "queue", "next_run", "periods", "periods_note", "unsupported", "kept", "evaluation", "data_version", "models", "markets", "caveats")
+            "queue", "next_run", "periods", "periods_note", "unsupported", "kept", "evaluation", "data_version", "models", "markets", "caveats", "data_validation", "data_cutoff", "forward_candidates")
     sports = {}
     for s, st in sorted(latest.items()):
         sports[s] = {k: st.get(k) for k in keep} | {"candidate_count": len(st.get("candidates") or [])}
@@ -179,4 +179,4 @@ def v3_status(root: Path) -> Optional[dict]:
         sports[s]["markets"] = {m: {"kind": v.get("kind"), "settlement": v.get("settlement"), "line_basis": v.get("line_basis")}
                                 for m, v in (st.get("markets") or {}).items()}
     return {"protocol": "sports-research-v3", "note": V3_NOTE, "sports": sports, "wrapper_state": daily_state(),
-            "last_daily": last and {k: last.get(k) for k in ("started_at", "finished_at", "outcomes", "budget_per_sport")}}
+            "last_daily": last and {k: last.get(k) for k in ("started_at", "finished_at", "outcomes", "budget_per_sport", "combined", "v2")}}

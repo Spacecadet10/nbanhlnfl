@@ -1318,6 +1318,21 @@ def _brier(vec, idx: int) -> float:
     return sum((vec[i] - (1.0 if i == idx else 0.0)) ** 2 for i in range(3))
 
 
+def normalise_adapter(adapter: dict) -> dict:
+    """Adapters may give a period as a list of seasons or as {"seasons": [...], ...extras} (Soccer): the consumer works with
+    lists; the extras (warmup, rules) are kept under `periods_info`."""
+    per, info = {}, {}
+    for k, v in adapter["periods"].items():
+        if isinstance(v, dict):
+            per[k] = list(v.get("seasons", []))
+            info[k] = {x: y for x, y in v.items() if x != "seasons"}
+        elif k == "warmup" or isinstance(v, (list, tuple)):
+            per[k] = list(v)
+        else:
+            raise AdapterInvalid(f"periods.{k} must be a list of seasons or {{'seasons': [...]}}")
+    return {**adapter, "periods": per, "periods_info": info}
+
+
 def validate_adapter(adapter: dict) -> None:
     for k in ("sport", "data_version", "markets", "unsupported", "periods", "models", "walk"):
         if k not in adapter:
@@ -1919,16 +1934,19 @@ def _last_success(exp_root: Path, sport: str) -> Optional[str]:
 
 
 def snapshot_cutoff(sport: str) -> Optional[str]:
-    """`last_final` of this sport from the snapshot's IDENTITY.json (the snapshot holds future scheduled rows): nothing that
-    starts after it is evaluated. None when the data directory has no identity file."""
+    """`last_final` of this sport from the snapshot's IDENTITY.json as app/backup.py writes it
+    (stores.<sport>.coverage.last_final; the snapshot holds future scheduled rows): nothing that starts after it is evaluated.
+    A date-only value covers that whole day. None when the data directory has no identity file or no value for the sport."""
     p = config.data_dir() / "IDENTITY.json"
     try:
         ident = json.loads(p.read_text())
-    except (OSError, json.JSONDecodeError):
+        v = ident["stores"][sport]["coverage"].get("last_final")
+    except (OSError, json.JSONDecodeError, KeyError, TypeError, AttributeError):
         return None
-    node = (ident.get("sports") or ident).get(sport) or {}
-    v = node.get("last_final") if isinstance(node, dict) else None
-    return _iso(v) if v else None
+    if not v:
+        return None
+    v = str(v)
+    return _iso(v + "T23:59:59Z") if len(v) == 10 else _iso(v)
 
 
 def _write_state(root: Path, state: dict) -> None:
@@ -1952,6 +1970,7 @@ def run_sport_v3(sport: str, exp_root: Path, *, max_items: int = BUDGET_V3["max_
         adapter = adapter_fn(sport)
         if adapter is None:
             raise Refused(f"no research adapter for {sport} has been delivered yet")
+        adapter = normalise_adapter(adapter)
         validate_adapter(adapter)
         pid = v3_protocol_id(adapter)
         root = exp_root / "v3" / pid / sport
@@ -2001,9 +2020,10 @@ def _run_queue(status: dict, adapter: dict, root: Path, pid: str, sport: str, t0
     keys = {n: _item_key(pid, n, models[n]["version"]) for n in order}
     conn = adapter["connect"]() if adapter.get("connect") else _snapshot_conn(sport)
     if adapter.get("validate_data"):                          # optional adapter check of the snapshot it is about to read
-        problems = adapter["validate_data"](conn)
+        problems, brief = data_problems(adapter["validate_data"](conn))
+        status["data_validation"] = brief
         if problems:
-            raise Refused(f"adapter data validation failed: {problems if isinstance(problems, str) else list(problems)[:3]}")
+            raise Refused(f"adapter data validation failed: {problems[:3]}")
     ran = dropped = 0
     cutoff = snapshot_cutoff(sport)
     stopped = None
@@ -2086,6 +2106,18 @@ def _run_queue(status: dict, adapter: dict, root: Path, pid: str, sport: str, t0
                    (f"; kept: {', '.join(ev['kept'])}" if ev["kept"] else "; no candidate kept (no improvement found)")}
 
 
+def data_problems(result) -> tuple:
+    """(problems, brief) from an adapter's validate_data result: a list/str of problems, or a report dict whose `issues` are the
+    problems (`ok` false without issues is itself a problem); notes are kept for the status page."""
+    if isinstance(result, dict):
+        issues = [str(x) for x in (result.get("issues") or [])]
+        if result.get("ok") is False and not issues:
+            issues = ["data validation reported ok=false"]
+        return issues, {"ok": not issues, "issues": issues, "notes": [str(x) for x in (result.get("notes") or [])][:10]}
+    problems = [str(result)] if isinstance(result, str) else [str(x) for x in (result or [])]
+    return problems, {"ok": not problems, "issues": problems, "notes": []}
+
+
 def _walk_item(adapter: dict, conn, seasons, model: str, partial: Path, t0: float, max_seconds: float) -> Optional[list]:
     """One model's walk. An adapter whose `walk` takes max_work/resume/state (Soccer) is called in chunks of cutoff dates;
     progress (records and the resume token) is stored in `partial`, so an interrupted item continues, never restarts. Returns
@@ -2159,6 +2191,7 @@ def holdout_v3(sport: str, exp_root: Path, ask: Callable[[str], bool] = _ask_tty
     adapter = (adapter_fn or get_adapter)(sport)
     if adapter is None:
         raise Refused(f"no research adapter for {sport}")
+    adapter = normalise_adapter(adapter)
     validate_adapter(adapter)
     pid = v3_protocol_id(adapter)
     root = exp_root / "v3" / pid / sport
@@ -2186,7 +2219,9 @@ def holdout_v3(sport: str, exp_root: Path, ask: Callable[[str], bool] = _ask_tty
             names = [n for n, m in adapter["models"].items() if m["role"] == "incumbent"] + kept
             conn = adapter["connect"]() if adapter.get("connect") else _snapshot_conn(sport)
             try:
-                by_model = {n: validate_records(adapter, adapter["walk"](conn, seasons, n), seasons) for n in names}
+                import inspect
+                extra = {"allow_holdout": True} if "allow_holdout" in inspect.signature(adapter["walk"]).parameters else {}
+                by_model = {n: validate_records(adapter, adapter["walk"](conn, seasons, n, **extra), seasons) for n in names}
             finally:
                 if hasattr(conn, "close"):
                     conn.close()
@@ -2322,6 +2357,81 @@ def forward_grade(path: Optional[Path], adapter: dict, official, now: Optional[s
         return {"graded": graded, "ungraded_started": len(recs) - graded, "status": "ok"}
     finally:
         conn.close()
+
+
+def _official_ro(data_dir: Path, sport: str):
+    import sqlite3
+    p = Path(data_dir) / sports.store(sport).db_file
+    if not p.is_file():
+        return None
+    conn = sqlite3.connect(f"{p.resolve().as_uri()}?mode=ro", uri=True, timeout=30)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA query_only = ON")
+    return conn
+
+
+def record(data_dir: Path, now: str, sport: str, candidates: Optional[list] = None, adapters: Optional[dict] = None) -> dict:
+    """Public forward API (the scheduled driver imports this, never the reverse): asks the sport's adapter for the forecasts of
+    games still ahead, for every incumbent and baseline (so each candidate has a paired reference) and for `candidates` (default:
+    every candidate model), and appends them to `<data_dir>/research/forward-candidates.sqlite`. The official store is opened
+    read-only. Returns {"outcome": evaluated | no_candidates | skipped | failed, "recorded", "rejected", "errors", ...}."""
+    res = {"sport": sport, "outcome": "no_candidates", "recorded": 0, "already_recorded": 0, "rejected": 0, "errors": [], "models": []}
+    adapter = (adapters or {}).get(sport) if adapters is not None else get_adapter(sport)
+    conn = None
+    try:
+        if adapter is None or not adapter.get("forecast_upcoming"):
+            return res | {"outcome": "skipped", "errors": ["no adapter with forecast_upcoming"]}
+        adapter = normalise_adapter(adapter)
+        conn = adapter["connect"]() if adapter.get("connect") else _official_ro(data_dir, sport)
+        if conn is None and not adapter.get("connect"):
+            return res | {"outcome": "skipped", "errors": ["no official store"]}
+        if not [n for n, m in adapter["models"].items() if m["role"] == "candidate" and (candidates is None or n in candidates)]:
+            return res | {"errors": ["no candidate model to track"]}
+        pid, path = v3_protocol_id(adapter), Path(data_dir) / "research" / FORWARD_FILE
+        names = [n for n, m in adapter["models"].items()
+                 if m["role"] != "candidate" or candidates is None or n in candidates]
+        for name in names:
+            m = adapter["models"][name]
+            try:
+                recs = list(adapter["forecast_upcoming"](conn, _iso(now), name) or [])
+            except Exception as exc:                         # one model never stops the others
+                res["errors"].append(f"{name}: {type(exc).__name__}: {exc}"[:300])
+                continue
+            out = forward_record(path, sport=sport, protocol_id=pid, model=name, role=m["role"], model_version=m["version"],
+                                 data_version=adapter["data_version"], forecasted_at=now, records=recs)
+            res["recorded"] += out["inserted"]
+            res["already_recorded"] += out["already_recorded"]
+            res["rejected"] += len(out["rejected"])
+            res["errors"] += [f"{name}: {x['reason']}" for x in out["rejected"][:3]]
+            res["models"].append(name)
+        res["outcome"] = "failed" if res["errors"] and not res["recorded"] and not res["already_recorded"] else \
+            ("evaluated" if res["recorded"] or res["already_recorded"] else "no_candidates")
+    except Exception as exc:
+        res |= {"outcome": "failed", "errors": res["errors"] + [f"{type(exc).__name__}: {exc}"[:300]]}
+    finally:
+        if conn is not None and hasattr(conn, "close"):
+            conn.close()
+    return res
+
+
+def grade(data_dir: Path, now: str, sport: str, adapters: Optional[dict] = None) -> dict:
+    """Public forward API: grades stored forecasts whose game has started, reading the official store read-only through the
+    adapter's `settle`; writes only the forward file. Same outcome vocabulary as `record`."""
+    adapter = (adapters or {}).get(sport) if adapters is not None else get_adapter(sport)
+    if adapter is None or not adapter.get("settle"):
+        return {"sport": sport, "outcome": "skipped", "graded": 0, "errors": ["no adapter with settle"]}
+    adapter = normalise_adapter(adapter)
+    conn = adapter["connect"]() if adapter.get("connect") else _official_ro(data_dir, sport)
+    if conn is None and not adapter.get("connect"):
+        return {"sport": sport, "outcome": "skipped", "graded": 0, "errors": ["no official store"]}
+    try:
+        out = forward_grade(Path(data_dir) / "research" / FORWARD_FILE, adapter, conn, now)
+    except Exception as exc:
+        return {"sport": sport, "outcome": "failed", "graded": 0, "errors": [f"{type(exc).__name__}: {exc}"[:300]]}
+    finally:
+        if hasattr(conn, "close"):
+            conn.close()
+    return {"sport": sport, "outcome": "evaluated" if out["graded"] else "no_candidates", "errors": [], **out}
 
 
 def forward_records(path: Optional[Path], sport: str, protocol_id: Optional[str] = None) -> tuple:
@@ -2498,6 +2608,64 @@ def main_v3(argv: list) -> int:
     return 0
 
 
+def combine_outcomes(v3: Optional[str], v2: Optional[str]) -> str:
+    """One outcome for a sport that ran both protocols: evaluated if either evaluated; otherwise the most informative
+    non-success (failed, then skipped, then refused); no_candidates when neither had anything to search."""
+    outs = [o for o in (v3, v2) if o]
+    for o in ("evaluated", "failed", "skipped"):
+        if o in outs:
+            return o
+    if outs and all(o == "refused" for o in outs):
+        return "refused"
+    return "no_candidates"
+
+
+def _v2_outcome(r: dict, sport: str) -> tuple:
+    if sport in r.get("refused", {}):
+        return "refused", r["refused"][sport]
+    mine = [t for t in r.get("trials", []) if t["sport"] == sport]
+    if any(t["status"] in ("keep", "discard") for t in mine):
+        return "evaluated", f"{len(mine)} trial(s)"
+    if any(t["status"] in ("crash", "timeout", "invalid", "interrupted") for t in mine):
+        return "failed", "; ".join(str(t.get("reason")) for t in mine if t["status"] != "keep")[:200]
+    return "no_candidates", "no new agent commit to evaluate (protocol v2 queue empty)"
+
+
+def _daily_cli(a) -> int:
+    """`daily --sport <s>`: protocol v3 (all five sports); for nba/nhl, then the v2 workspace queue. One `sport-outcome:`
+    line per sport; the v3 daily report file also carries the v2 result under `v2`."""
+    chosen = a.sport or list(FIVE_SPORTS)
+    r = daily_v3(chosen, a.exp_root, a.max_trials if a.max_trials != BUDGETS["max_trials"] else BUDGET_V3["max_items_per_sport"],
+                 a.max_minutes * 60 if a.max_minutes != BUDGETS["max_minutes"] else BUDGET_V3["max_seconds_per_sport"])
+    v2_sports = [s for s in chosen if s in ("nba", "nhl")]
+    v2, v2_note = {}, None
+    if v2_sports:
+        if a.workspace is None:
+            v2_note = "no --workspace given: the protocol v2 queue was not run"
+        else:
+            try:
+                v2 = daily(v2_sports, a.exp_root, a.workspace, a.max_trials, a.max_minutes, a.timeout)
+            except Refused as exc:
+                v2_note = f"refused: {exc}"
+            except Exception as exc:
+                v2_note = f"failed: {type(exc).__name__}: {exc}"[:300]
+    failed = False
+    r["combined"] = {}
+    for sp in chosen:
+        o3, why3 = r["sports"][sp]["outcome"], r["sports"][sp]["reason"]
+        o2, why2 = (None, None)
+        if sp in v2_sports:
+            o2, why2 = _v2_outcome(v2, sp) if v2 else (("failed" if (v2_note or "").startswith("failed") else "refused"), v2_note)
+        out = combine_outcomes(o3, o2)
+        failed |= out == "failed"
+        r["combined"][sp] = {"outcome": out, "v3": {"outcome": o3, "reason": why3}, "v2": {"outcome": o2, "reason": why2}}
+        print(f"sport-outcome: {sp} {out} v3={o3}" + (f" v2={o2}" if o2 else "") + (f" ({why3 or why2})" if (why3 or why2) else ""))
+    r["v2"] = {k: v2.get(k) for k in ("outcome", "stopped", "trials", "report_file", "refused")} | ({"note": v2_note} if v2_note else {})
+    Path(r["report_file"]).write_text(json.dumps(r, indent=1, default=str))        # the one daily report shows both
+    print(json.dumps({"outcomes": {s: c["outcome"] for s, c in r["combined"].items()}, "report_file": r["report_file"]}))
+    return 1 if failed else 0
+
+
 # --- CLI -------------------------------------------------------------------------------------------------------------
 def main(argv=None) -> int:
     if argv is None:
@@ -2524,14 +2692,8 @@ def main(argv=None) -> int:
     a = p.parse_args(argv)
     chosen = a.sport or ["nba", "nhl"]
     try:
-        if a.cmd == "daily" and a.sport and set(a.sport) - {"nba", "nhl"}:
-            # NFL, NCAAB, Soccer (and any sport named with them) run through protocol v3; one `sport-outcome:` line per sport
-            r = daily_v3(a.sport, a.exp_root, a.max_trials if a.max_trials != BUDGETS["max_trials"] else BUDGET_V3["max_items_per_sport"],
-                         a.max_minutes * 60 if a.max_minutes != BUDGETS["max_minutes"] else BUDGET_V3["max_seconds_per_sport"])
-            for sp, v in r["sports"].items():
-                print(f"sport-outcome: {sp} {v['outcome']} {v['reason'] or ''}".rstrip())
-            print(json.dumps({"outcomes": r["outcomes"], "report_file": r["report_file"]}))
-            return 1 if "failed" in r["outcomes"].values() else 0
+        if a.cmd == "daily":
+            return _daily_cli(a)
         if a.cmd == "prepare":
             for s in chosen:
                 m = prepare(s, a.exp_root, a.workspace)
@@ -2542,13 +2704,6 @@ def main(argv=None) -> int:
                 print(summary(run_trial(s, a.exp_root, a.workspace, a.description, a.retry, a.timeout)), flush=True)
         elif a.cmd == "status":
             print(json.dumps({s: status(a.exp_root, s) for s in chosen}, indent=1))
-        elif a.cmd == "daily":
-            r = daily(chosen, a.exp_root, a.workspace, a.max_trials, a.max_minutes, a.timeout)
-            for sp in chosen:
-                print(f"sport-outcome: {sp} " + ("refused " + r["refused"][sp] if sp in r.get("refused", {}) else
-                      "evaluated" if any(t["sport"] == sp and t["status"] in ("keep", "discard") for t in r["trials"]) else
-                      "no_candidates" if not any(t["sport"] == sp for t in r["trials"]) else "failed"))
-            print(json.dumps({k: r[k] for k in ("outcome", "stopped", "trials", "report_file", "sports")}, indent=1, default=str))
         elif a.cmd == "agent":
             from . import research_agent as ra
             r = ra.run_agent(chosen, a.exp_root, a.workspace, max_trials=min(a.max_trials, ra.AGENT["max_trials"]),

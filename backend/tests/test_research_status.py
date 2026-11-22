@@ -664,12 +664,15 @@ def test_uniform_baseline_for_a_line_market_keeps_the_incumbents_small_push_mass
 
 
 def test_snapshot_cutoff_drops_records_after_last_final_and_the_wrapper_state_is_read(exp, monkeypatch, tmp_path):
-    (tmp_path / "snapshot" / "IDENTITY.json").write_text(json.dumps({"sports": {"nba": {"last_final": _t(300)}}}))
+    (tmp_path / "snapshot" / "IDENTITY.json").write_text(json.dumps({"snapshot_version": "five-sport-snapshot-v1", "stores": {"nba": {"coverage": {
+        "table": "games", "time_column": "tipoff_at", "rows": 9, "first": _t(0), "last": _t(900), "last_final": _t(300),
+        "status": {"final": 5, "scheduled": 4}, "seasons": [2024]}, "rows": {}}, "soccer": {"coverage": {"last_final": "2024-05-19"}}}}))
     s = synthetic(n=400, seed=14, edge=0.8)
     inc = [r | {"start_at": _t(1000, 12), "forecast_cutoff": _t(1000)} if i % 10 == 0 else r for i, r in enumerate(s["inc"])]
     a = fixture_adapter({"inc": inc})
     r = ar.run_sport_v3("nba", exp, adapter_fn=_adapters(nba=a))
     assert ar.snapshot_cutoff("nba") == _t(300) and ar.snapshot_cutoff("nhl") is None
+    assert ar.snapshot_cutoff("soccer") == "2024-05-19T23:59:59Z"          # a date-only last_final covers the whole day
     assert r["data_cutoff"]["last_final"] == _t(300) and r["data_cutoff"]["records_after_cutoff_dropped_now"] > 0
     assert r["evaluation"]["winner"]["n"] == 400 - r["data_cutoff"]["records_after_cutoff_dropped_now"]
     tsv = tmp_path / "daily-state.tsv"
@@ -679,8 +682,83 @@ def test_snapshot_cutoff_drops_records_after_last_final_and_the_wrapper_state_is
                                                  "last_outcome": "refused", "last_success_utc": "", "last_reason": "no adapter"}]
 
 
-def test_cli_daily_for_other_sports_prints_one_sport_outcome_line_each(exp, monkeypatch, capsys):
-    monkeypatch.setattr(ar, "get_adapter", lambda sport: None)
-    rc = ar.main(["daily", "--exp-root", str(exp), "--sport", "soccer", "--sport", "nfl"])
+def test_cli_daily_prints_one_sport_outcome_line_per_sport_and_nba_nhl_also_run_the_v2_queue(exp, monkeypatch, capsys, tmp_path):
+    s = synthetic(n=400, seed=15, edge=0.8)
+    good = fixture_adapter({"inc": s["inc"], "cand": s["cand"]})
+    monkeypatch.setattr(ar, "get_adapter", lambda sport: good if sport == "nba" else None)
+    v2_calls = []
+    monkeypatch.setattr(ar, "daily", lambda sports_, *a: v2_calls.append(sports_) or {
+        "trials": [], "refused": {}, "outcome": "no improvement found", "stopped": "queue empty", "report_file": "x"})
+    rc = ar.main(["daily", "--exp-root", str(exp), "--workspace", str(tmp_path), "--sport", "nba", "--sport", "soccer", "--sport", "nhl"])
     out = capsys.readouterr().out
-    assert rc == 0 and "sport-outcome: soccer refused no research adapter" in out and "sport-outcome: nfl refused" in out
+    assert rc == 0 and v2_calls == [["nba", "nhl"]]
+    assert "sport-outcome: nba evaluated v3=evaluated v2=no_candidates" in out
+    assert "sport-outcome: soccer refused v3=refused" in out and "v2=" not in [l for l in out.splitlines() if "soccer" in l][0]
+    assert "sport-outcome: nhl refused v3=refused v2=no_candidates" not in out          # refused v3 + empty v2 is not "refused"
+    rep = json.loads(next((exp / "reports").glob("daily5-*.json")).read_text())
+    assert rep["combined"]["nba"]["v2"]["outcome"] == "no_candidates" and rep["v2"]["stopped"] == "queue empty"
+    assert ar.combine_outcomes("skipped", "no_candidates") == "skipped" and ar.combine_outcomes("refused", "refused") == "refused"
+    assert ar.combine_outcomes("no_candidates", "evaluated") == "evaluated" and ar.combine_outcomes("failed", "evaluated") == "evaluated"
+
+
+
+def test_soccer_style_periods_are_normalised_and_the_holdout_walk_gets_allow_holdout(exp):
+    a = fixture_adapter({"inc": []}) | {"periods": {"search": {"seasons": [2020], "warmup": [2019]},
+                                                    "validation": {"seasons": [2021]},
+                                                    "holdout": {"seasons": [2022], "locked_prospective": [2026]}}}
+    n = ar.normalise_adapter(a)
+    assert n["periods"] == {"search": [2020], "validation": [2021], "holdout": [2022]} and n["periods_info"]["holdout"]["locked_prospective"] == [2026]
+    ar.validate_adapter(n)
+    with pytest.raises(ar.AdapterInvalid, match="must be a list"):
+        ar.normalise_adapter(a | {"periods": {"search": 5}})
+    s = synthetic(n=800, seed=10, edge=0.9)
+    seen = []
+
+    def walk(conn, seasons, name, allow_holdout=False):
+        seen.append((tuple(seasons), allow_holdout))
+        hold = [r | {"season": 2022} for r in (s["inc"] if name == "inc" else s["cand"])[:60]]
+        return [r for r in (s["inc"] if name == "inc" else s["cand"]) if r["season"] in seasons] + (hold if 2022 in seasons else [])
+    b = fixture_adapter({"inc": [], "cand": []}) | {"walk": walk, "periods": a["periods"]}
+    ar.run_sport_v3("nba", exp, adapter_fn=_adapters(nba=b))
+    assert all(flag is False for _s, flag in seen)
+    ar.holdout_v3("nba", exp, ask=lambda p: True, adapter_fn=_adapters(nba=b))
+    assert seen[-1] == ((2022,), True)
+
+
+def test_validate_data_may_return_a_report_dict_with_issues(exp):
+    assert ar.data_problems({"ok": True, "issues": [], "notes": ["n"], "fixtures": {}}) == ([], {"ok": True, "issues": [], "notes": ["n"]})
+    assert ar.data_problems({"as_of": "x", "matches": 3})[0] == []                  # Soccer's report has no ok/issues keys
+    assert ar.data_problems({"ok": False})[0] == ["data validation reported ok=false"]
+    assert ar.data_problems(["a", "b"])[0] == ["a", "b"] and ar.data_problems(None)[0] == []
+    a = fixture_adapter({"inc": []}, validate_data=lambda c: {"ok": False, "issues": ["2 finals without a score"]})
+    r = ar.run_sport_v3("nba", exp, adapter_fn=_adapters(nba=a))
+    assert r["outcome"] == "refused" and "2 finals without a score" in r["reason"] and r["data_validation"]["ok"] is False
+
+
+def test_public_forward_api_records_references_and_candidates_then_grades_read_only(tmp_path):
+    data = tmp_path / "data"
+    data.mkdir()
+    s = synthetic(n=6, seed=16, edge=0.5)
+    ahead = lambda recs: [dict(r, outcome=None, start_at=_t(10 + i, 12), forecast_cutoff=_t(1)) for i, r in enumerate(recs)]   # noqa: E731
+    seen = []
+
+    def upcoming(conn, now, name):
+        seen.append((name, now))
+        return ahead(s["inc"] if name == "inc" else s["cand"])
+    a = fixture_adapter({"inc": [], "cand": [], "cand2": []}) | {"forecast_upcoming": upcoming, "settle": lambda c, recs: [
+        {"game_id": r["game_id"], "market": r["market"], "line": r["line"], "outcome": "a"} for r in recs]}
+    out = ar.record(data, _t(2), "nba", candidates=["cand"], adapters={"nba": a})
+    assert out["outcome"] == "evaluated" and out["recorded"] == 12 and sorted(out["models"]) == ["cand", "inc"]   # cand2 not tracked
+    assert ar.record(data, _t(2), "nba", ["cand"], {"nba": a})["already_recorded"] == 12
+    none = ar.record(data, _t(2), "nba", candidates=["nobody"], adapters={"nba": a})
+    assert none["outcome"] == "no_candidates"
+    assert ar.record(data, _t(2), "soccer", adapters={})["outcome"] == "skipped"
+    assert ar.grade(data, _t(5), "nba", {"nba": a})["outcome"] == "no_candidates"          # games not started yet
+    g = ar.grade(data, _t(30), "nba", {"nba": a})
+    assert g["outcome"] == "evaluated" and g["graded"] == 6
+    assert (data / "research" / ar.FORWARD_FILE).is_file()
+
+
+def test_the_driver_imports_the_evaluator_never_the_reverse():
+    src = Path(ar.__file__).read_text()
+    assert "candidates.live" not in src and "candidates import live" not in src
