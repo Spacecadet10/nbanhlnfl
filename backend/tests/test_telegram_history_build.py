@@ -64,12 +64,41 @@ def test_displayed_percentage_is_kept_exactly_57_3_is_not_57_4(tmp_path):
     assert bth.build({"per_game_rows": [row(pct=54)]}, tmp_path)["rows"][0]["percentage"] == "54.0"
 
 
-def test_only_a_game_and_market_the_live_record_counts_is_excluded(tmp_path):
+def test_a_game_the_live_record_also_counts_stays_in_the_recovered_record_flagged_and_counted(tmp_path):
+    """Nov 22: the recovered record is shown apart from the live one and never summed with it, so a game both sources hold is
+    counted once in EACH displayed record. It is no longer dropped; it is flagged and reported."""
     make(tmp_path, games=[GAME], forecasts=[("espn:1", "winner", "forecast", "2026-11-01T22:30:00Z", "2026-11-02T00:00:00Z")])
     out = build(tmp_path, [row(), row(key="total", sel="Under 229.5", pct=57.4, line_source="Bookmaker line at forecast")])
-    assert [r["market"] for r in out["rows"]] == ["total"]                  # the live record has the winner, not the total
-    assert [(e["market_key"], e["reason"]) for e in out["excluded"]] == [("winner", "live_record_counts_it")]
-    assert out["summary"]["nba"]["included"] == 1 and out["summary"]["nba"]["excluded_by_reason"] == {"live_record_counts_it": 1}
+    assert {(r["market"], r["also_in_live"]) for r in out["rows"]} == {("winner", True), ("total", False)}
+    assert out["excluded"] == []
+    nba = out["summary"]["nba"]
+    assert nba["included"] == 2 and nba["overlap_with_live"] == 1 and nba["excluded"] == 0
+    assert "never summed" in out["overlap_rule"] and "counted once" in out["overlap_rule"]
+
+
+def test_the_period_and_dates_come_from_the_rows_in_toronto_time_and_every_date_is_reported(tmp_path):
+    games = [("espn:1", "2026-11-03T00:00:00Z", "final", 110, 117), ("espn:2", "2026-11-09T18:00:00Z", "final", 100, 90)]
+    make(tmp_path, games=games)
+    rows = [row(), {**row(gid="espn:2", sel="CLE win"), "sent_at_local": "2026-11-09T11:00:00"},
+            {**row(gid="espn:9", key="total", sel="Over 200.5", line_source="Model line"), "sent_at_local": "2026-11-09T12:00:00"}]           # espn:9 is not in the store
+    out = build(tmp_path, rows)
+    nba = out["summary"]["nba"]
+    assert nba["period"] == {"from": "2026-11-02", "to": "2026-11-09"}          # 00:00Z Nov 3 is 7 PM Nov 2 in Toronto
+    assert nba["dates"] == ["2026-11-02", "2026-11-09"] and out["period"] == nba["period"]
+    day = {d["date"]: d for d in out["by_sport_date"]["nba"]}
+    assert (day["2026-11-02"]["source_rows"], day["2026-11-02"]["imported"]) == (1, 1)
+    assert day["2026-11-09"]["source_rows"] == 2 and day["2026-11-09"]["unmatched"] == 1
+    assert day["2026-11-09"]["excluded_by_reason"] == {"game_not_in_store": 1}
+
+
+def test_earlier_cards_of_a_game_are_reported_as_superseded_never_counted(tmp_path):
+    make(tmp_path, games=[GAME])
+    last = {**row(), "message_id": 2}
+    early = {**row(), "message_id": 1, "percent": 50}
+    record = {"per_game_rows": [last], "all_card_rows": [early, last]}
+    out = bth.build(record, tmp_path)
+    assert len(out["rows"]) == 1 and out["rows"][0]["message_id"] == 2
+    assert out["by_sport_date"]["nba"][0]["superseded_earlier_cards"] == 1
 
 
 def test_a_missing_forecast_row_does_not_exclude_the_game(tmp_path):
@@ -130,11 +159,13 @@ def test_soccer_rows_are_imported_with_app_markets_and_a_dnb_draw_is_a_push(tmp_
     assert out["summary"]["soccer"]["included"] == 3 and out["summary"]["soccer"]["period"] == {"from": "2026-11-14", "to": "2026-11-14"}
 
 
-def test_a_soccer_match_with_a_live_forecast_is_excluded_for_every_market(tmp_path):
+def test_a_soccer_match_with_a_live_forecast_keeps_every_market_flagged(tmp_path):
     make(tmp_path, matches=[("soccer:fifa.friendly:1", "2026-11-16T05:30:00Z", "final", "regulation", 2, 0),
                             ("soccer:fifa.friendly:2", "2026-11-14T05:30:00Z", "final", "regulation", 2, 0)],
          soccer_forecasts=[("soccer:fifa.friendly:1", "2026-11-15T19:00:00Z")])
     out = build(tmp_path, [soccer_row("match result", "Tahiti win (90 min)", 70), soccer_row("double chance", "Tahiti or draw (90 min)", 90),
                            soccer_row("match result", "Tahiti win (90 min)", 70, gid="soccer:fifa.friendly:2")])
-    assert [r["game_id"] for r in out["rows"]] == ["soccer:fifa.friendly:2"]
-    assert {e["reason"] for e in out["excluded"]} == {"live_record_counts_it"} and len(out["excluded"]) == 2
+    assert len(out["rows"]) == 3 and out["excluded"] == []
+    assert {r["game_id"]: r["also_in_live"] for r in out["rows"]} == {"soccer:fifa.friendly:1": True, "soccer:fifa.friendly:2": False}
+    assert out["summary"]["soccer"]["period"] == {"from": "2026-11-14", "to": "2026-11-16"}
+    assert out["summary"]["soccer"]["overlap_with_live"] == 2

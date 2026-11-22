@@ -161,3 +161,25 @@ def test_dnb_conditional_helper_is_the_one_used_and_bucket_key_stays_the_stored_
     sr.sportsbook(forecast, dnb)                       # computing the comparison changes neither the pick nor its bucket
     assert dnb["probability"] == probs["win"]
     assert sr.percentage_history(forecast, clone(dnb), {}, stamp(), None)["percentage"] == before["percentage"] == to.displayed_percentage(probs["win"])
+
+
+def test_soccer_record_carries_the_same_bucket_colour_and_a_push_is_not_a_loss(forecast):
+    settle(forecast, 1, 1)
+    as_of = stamp()
+    dnb = pick_of(forecast, "draw_no_bet", as_of)
+    index = sr.build_index(forecast, as_of)
+    r = sr.percentage_history(forecast, clone(dnb), index, as_of, None)
+    assert (r["colour"], r["colour_rule"], r["voids"], r["pushes"]) == ("neutral", "bucket-record-v1", 0, 1)
+    assert to.bucket_colour(r["wins"], r["losses"]) == r["colour"]
+
+
+def test_soccer_card_labels_every_supported_market_without_inventing_forecasts():
+    from app import telegram as tg
+    pick = {"game_id": "m1", "forecast_id": "1x2:1", "market": "1x2_regulation", "market_title": "Match result (90 min)",
+            "matchup": "Senegal vs Belarus", "tipoff": "2026-11-02T21:00:00Z", "generated_at": "2026-11-02T12:00:00Z",
+            "cutoff_at": "2026-11-02T12:00:00Z", "status": "scheduled", "grade": "pending", "pick_label": "Senegal win",
+            "probability": 0.6, "strong": False, "game_rank": None, "percentage_history": None}
+    text = tg.message_batches({"sport": "soccer", "as_of": "2026-11-02T20:00:00Z", "picks": [pick]}, "123", context_selection=True)[0][1]
+    assert "Odds unavailable" in text                                       # no price for the shown market
+    assert text.count("No forecast for this market") == 10                  # the 10 other supported soccer markets, said so
+    assert "<b>Both teams to score (90 min)</b>\nNo forecast for this market" in text

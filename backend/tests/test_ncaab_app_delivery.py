@@ -96,11 +96,62 @@ def test_run_once_covers_ncaab_and_only_ever_calls_the_stub_sender(store, tmp_pa
         assert ncaab_cards.ensure(conn, store, datetime(2026, 11, 17, 16, 0, tzinfo=timezone.utc))["selected"] == [GAME]
         first = tg.run_once(Bot(), {"TELEGRAM_CHAT_ID": "123"}, conn, now=NOW_DT)
         second = tg.run_once(Bot(), {"TELEGRAM_CHAT_ID": "123"}, conn, now=NOW_DT)
-    assert "ncaab" in first["sports"] and first["sports"]["ncaab"].get("status") == "gated", first
-    sent = first["sports"]["ncaab"].get("sent", 0)
-    assert sent == 0 and first["sports"]["ncaab"]["qualifying"] == 0, first     # no threshold stored: nothing qualifies
+    assert first["sports"]["ncaab"] == {"eligible_summaries": 1, "sent": 1}, first            # no gate: the card goes out
     assert second["sports"]["ncaab"].get("sent", 0) == 0                                 # the same card is never sent twice
-    assert len(sends) >= sent and all(m in ("sendMessage", "sendPhoto") for m, _ in sends)
+    assert len(sends) >= 1 and all(m in ("sendMessage", "sendPhoto") for m, _ in sends)
+    with tg.ledger(tmp_path / "receipts.sqlite") as conn:
+        text = conn.execute("SELECT text FROM deliveries WHERE status='sent'").fetchone()[0]
+    assert "PROP51 PICKS · NCAAB" in text and "<b>Recommended pick</b>" in text
+    assert text.count("Failed validation — not recommended") == 2                        # spread and total: shown, labelled
+    assert "gated" not in text and "Context only" not in text
+
+
+def _labelled_text(store, markets):
+    report = ncaab_report(store)
+    report["picks"] = [p for p in report["picks"] if p["market"] in markets]
+    for p in report["picks"]:
+        p.setdefault("strong", False)
+        p.setdefault("game_rank", None)
+    return tg.message_batches(report, "123", context_selection=True)[0][1]
+
+
+def test_failed_validation_markets_are_shown_labelled_and_never_recommended_whatever_their_colour(store):
+    text = _labelled_text(store, ("spread", "total"))
+    assert text.count("Failed validation — not recommended") == 2
+    assert "<b>Point spread</b>" in text and "<b>Game total points</b>" in text
+    assert "<b>Recommended pick</b>\n<b>No supported pick</b>" in text and "NCAAB spread and total failed validation" in text
+    both = _labelled_text(store, ("winner", "spread", "total"))
+    rec = both.split("<b>Recommended pick</b>\n<b>")[1].split("</b>")[0]
+    assert "win" in rec and "Over" not in rec and "Under" not in rec
+    from app import ncaab_app
+    assert set(ncaab_app.FAILED_VALIDATION) == {"spread", "total"}
+
+
+def test_a_missing_forecast_and_missing_odds_are_labelled_never_invented(store):
+    text = _labelled_text(store, ("winner",))
+    assert text.count("No forecast for this market") == 4 and "<b>Model —</b> · no forecast" in text
+    assert "<b>Point spread</b>\nNo forecast for this market" in text
+    spread = _labelled_text(store, ("spread",))
+    assert "Odds unavailable" in spread                                                 # no spread quote is stored in this fixture
+    pick = {"market": "winner", "quote_check": {"retrieved_at": "2026-11-17T22:00:00Z"}}
+    assert tg.label_lines("ncaab", pick, 0.5, NOW_DT) == ["Odds unavailable · latest stored price is older than 20 minutes (05:00 PM EST)"]
+    assert tg.label_lines("ncaab", pick, 0.5, NOW_DT.replace(minute=15)) == []          # 15 minutes old: current
+    assert tg.label_lines("nba", pick, None, NOW_DT) == []                                # other sports unchanged
+
+
+def test_kill_switch_still_turns_every_ncaab_card_off(store, tmp_path, monkeypatch):
+    monkeypatch.setenv("NBA_NCAAB_CARDS", "0")
+    from ncaab_support import refreshed
+    refreshed(store, "2026-11-17T22:29:00Z")
+
+    class Bot:
+        def call(self, method, body, **kwargs):
+            if method == "getUpdates":
+                return []
+            raise AssertionError("the kill switch must send nothing")
+    with tg.ledger(tmp_path / "receipts.sqlite") as conn:
+        out = tg.run_once(Bot(), {"TELEGRAM_CHAT_ID": "123"}, conn, now=NOW_DT)
+    assert out["sports"]["ncaab"]["status"] == "off"
 
 
 def test_telegram_and_credentials_files_are_never_read_by_the_ncaab_format_path(store, monkeypatch):

@@ -168,6 +168,11 @@ class PercentageHistorySource(BaseModel):
     line_source: Literal['bookmaker', 'model', 'none']
     wins: int
     losses: int
+    pushes: int = 0
+    voids: int = 0
+    colour: Literal['green', 'red', 'neutral'] = 'neutral'    # threshold_overview.bucket_colour on this record's own counts
+    available: bool = True
+    win_rate: Optional[float] = None
     settled: int
     small_sample: bool = False     # settled < threshold_overview.MIN_LIVE_GRADED, as the live record's flag
 
@@ -194,18 +199,28 @@ class SportsbookComparison(BaseModel):
 
 
 class PercentageTelegramSource(BaseModel):
-    """Graded picks from the owner's Telegram cards sent before the live ledger began (Nov 2-14 2026), at the same sport,
+    """Graded picks from the owner's Telegram cards sent before the live ledger began (Nov 2-16 2026), at the same sport,
     market, exact percentage, side and line source. The cards do not show the model version. A separate source: never
-    added to the live record, rank or AVOID (threshold_overview.telegram_record)."""
+    added to the live record, rank or AVOID (threshold_overview.telegram_record). Always present; `available` False (with
+    `reason`) means there is no recovered record to show (counts are then None, never 0)."""
     source: Literal['telegram_cards']
     label: str = "Recovered Telegram cards"
     model_version_known: bool = False
-    period: Optional[dict[str, str]] = None
+    available: bool = True
+    reason: Optional[str] = None
+    no_history: Optional[bool] = None
+    period: Optional[dict[str, str]] = Field(default=None, description="{from,to}: the sport's dates actually present in the file.")
+    bucket_period: Optional[dict[str, str]] = Field(default=None, description="{from,to}: dates of this exact bucket's rows.")
+    dates: list[str] = []
     line_source: Literal['bookmaker', 'model', 'none']
-    wins: int
-    losses: int
-    pushes: int = 0
-    settled: int
+    wins: Optional[int] = None
+    losses: Optional[int] = None
+    pushes: Optional[int] = None
+    voids: Optional[int] = None
+    colour: Literal['green', 'red', 'neutral'] = 'neutral'
+    settled: Optional[int] = None
+    win_rate: Optional[float] = None
+    overlap_live: Optional[int] = Field(default=None, description="Recovered games also in the live record (counted once in each, never summed).")
     small_sample: bool = False
 
 
@@ -258,9 +273,12 @@ class ForecastPercentageRecord(BaseModel):
     model_version: str
     line_source: Literal['bookmaker', 'model', 'none']
     state: Literal['more_right', 'more_wrong', 'neutral', 'no_history']
+    colour: Literal['green', 'red', 'neutral'] = 'neutral'   # threshold_overview.bucket_colour on THIS (live) record only
+    colour_rule: str = 'bucket-record-v1'
     wins: int
     losses: int
     pushes: int = 0
+    voids: int = 0
     settled: int
     win_rate: Optional[float]
     loss_rate: Optional[float]

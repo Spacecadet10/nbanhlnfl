@@ -2369,3 +2369,15 @@ def test_soccer_dc_card_says_no_bet365_quote_when_every_quote_is_after_the_forec
     c = _soccer_dc_fixture(tmp_path, monkeypatch, ['20261121T110000Z'])
     dc = [p for p in t.soccer_market_picks(c, '2026-11-21T11:59:00Z', since='') if p['market'] == 'double_chance'][0]
     assert 'book_quote' not in dc and dc.get('card_comparison_basis') != 'Bet365 offer, includes margin'
+
+
+def test_card_choice_ranking_ignores_the_bucket_colour_and_blocks_failed_ncaab_markets():
+    def p(i, market, prob, colour, wins, losses):
+        return dict(forecast_id=i, market=market, pick_label=f'{market} pick', probability=prob, market_prob=prob - .02, quote_check={},
+                    percentage_history={'colour': colour, 'wins': wins, 'losses': losses, 'side': 'a'})
+    green_high = [p(1, 'winner', .80, 'green', 3, 0), p(2, 'spread', .90, 'green', 5, 0)]
+    red_high = [p(1, 'winner', .80, 'red', 0, 2), p(2, 'spread', .90, 'red', 0, 4)]
+    for picks in (green_high, red_high):                  # same choice whatever the colours: colour is display only
+        assert t.card_choice('ncaab', picks)['pick']['market'] == 'winner'
+    assert t.card_choice('ncaab', green_high[1:])['pick'] is None              # spread failed validation: never recommended
+    assert t.card_choice('nhl', red_high[1:])['pick']['market'] == 'spread'    # the failed-validation block is NCAAB only

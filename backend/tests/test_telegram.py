@@ -47,7 +47,7 @@ def test_summary_is_pregame_only_names_opposite_and_preserves_model_line_warning
     d = report()
     _, text = tg.message_batches(d, '123')[0]
     assert 'No strong pick' in text and 'ORL over 109.5' in text
-    assert '<b>Model 51.8%</b>' in text and '0W–2L (2 settled)' in text
+    assert '<b><s>Model 51.8%</s></b> 🔴 · this exact % has gone 0–2 (0%) · small sample (2 settled)' in text
     assert 'Against model — EXPERIMENTAL: ORL under 109.5' in text
     assert 'no bookmaker offer verified' in text
     for changes in ({'grade':'loss'}, {'status':'final'}, {'tipoff':NOW},
@@ -115,7 +115,7 @@ def test_explicit_preview_keeps_actual_final_result_and_time_without_enabling_li
     key, text = tg.format_batch(d, '123', 'g1', d['picks'], preview=True)
     assert text.startswith('<b>TEST PREVIEW — PAST GAME, NOT A LIVE PICK</b>')
     assert 'Started Nov 02' in text and 'Result: Lost' in text
-    assert '0W–3L (3 settled)' in text and 'Records include this game’s result' in text
+    assert 'this exact % has gone 0–3 (0%) · small sample (3 settled)' in text and 'Records include this game’s result' in text
     assert 'Opposite scenario — retrospective' in text and 'Against model — EXPERIMENTAL' not in text
     assert d['picks'][0]['grade'] == 'loss' and d['picks'][0]['tipoff'] == '2026-11-02T21:00:00Z'
 
@@ -133,7 +133,7 @@ def test_rich_message_escapes_source_text_and_keeps_recommendation_separate_from
     class Tags(HTMLParser):
         def __init__(self): super().__init__(); self.stack = []
         def handle_starttag(self, tag, attrs):
-            assert tag in ('b','i') and not attrs
+            assert tag in ('b','i','s') and not attrs
             self.stack.append(tag)
         def handle_endtag(self, tag): assert self.stack.pop() == tag
     parser = Tags()
@@ -147,7 +147,7 @@ def test_pick_summary_is_delivered_as_a_real_png_card_without_icons(tmp_path):
     d = report()
     before = copy.deepcopy(d)
     key, text = tg.message_batches(d, '123')[0]
-    assert not any(ord(c) >= 0x1F000 or c in '✅❌➖⭐' for c in text)
+    assert not any((ord(c) >= 0x1F000 and c not in '🟢🔴') or c in '✅❌➖⭐' for c in text)   # only the two colour marks
     class PhotoBot:
         def __init__(self): self.calls = 0
         def call(self, method, body, **kwargs):
@@ -390,11 +390,11 @@ def test_card_says_in_plain_words_how_the_app_and_the_sportsbook_compare():
     """Owner request Nov 9 (CLE @ CHA: 'CLE win' was recommended at 55% while the sportsbook had it at 74%; the card never
     said so). Simple words: overpriced / underpriced / fair price."""
     key, text = tg.message_batches(priced_card(), '123')[0]
-    assert 'App 55.2% · Sportsbook 74.0% · OVERPRICED' in text
+    assert 'App 55.2% 🟢 · Sportsbook 74.0% · OVERPRICED' in text           # the bucket's own 3-1 record is green
     assert 'CLE win · <i>sportsbook 74.0% · overpriced</i>' in text
     assert 'CHA +8.5 · <i>bookmaker line at forecast · sportsbook 50.4% · underpriced</i>' in text
     assert 'Over 215.5 · <i>bookmaker line at forecast · sportsbook 51.0% · fair price</i>' in text
-    assert '<b>Model 57.1%</b> · 3W–1L (4 settled)' in text          # the record line is exactly as before
+    assert '<b>Model 57.1%</b> 🟢 · this exact % has gone 3–1 (75%) · small sample (4 settled)' in text
     assert tg.card_identity(text)[3] == 'CLE win'
     assert (tg.price_tag(.60, .57), tg.price_tag(.60, .571), tg.price_tag(.60, .63), tg.price_tag(.60, .629)) == ('underpriced', 'fair price', 'overpriced', 'fair price')
 
@@ -408,12 +408,12 @@ def test_priced_card_renders_and_no_line_is_longer_than_the_card():
     probe = ImageDraw.Draw(Image.new('RGB', (10, 10)))
     assert 200 + probe.textlength('0W–0L (0 settled) · No settled matching examples.', font=telegram_card._font(22)) <= 1000
     assert 200 + probe.textlength('Bookmaker line at forecast · sportsbook 50.4% · underpriced', font=telegram_card._font(20)) <= 1000
-    assert 95 + probe.textlength('App 55.2% · Sportsbook 74.0% · OVERPRICED', font=telegram_card._font(27)) <= 930
+    assert 95 + probe.textlength('App 55.2% 🟢 · Sportsbook 74.0% · OVERPRICED', font=telegram_card._font(27)) <= 930
 
 
 def test_card_without_a_stored_price_is_unchanged():
     text = tg.message_batches(report(), '123')[0][1]            # team total: no sportsbook price is stored
-    assert 'ortsbook' not in text and '<b>Model 51.8%</b> · 0W–2L (2 settled)' in text and 'ORL over 109.5 · <i>model line</i>' in text
+    assert 'ortsbook' not in text and '<b><s>Model 51.8%</s></b> 🔴 · this exact % has gone 0–2 (0%) · small sample (2 settled)' in text and 'ORL over 109.5 · <i>model line</i>' in text
     d = strong_report(); d['picks'][0]['market_prob'] = 0.48
     assert tg.message_batches(d, '123')[0][0] == tg.message_batches(strong_report(), '123')[0][0]   # same delivery key: no resend
 
@@ -442,17 +442,17 @@ def test_exact_percentages_are_ranked_by_record_once_they_have_three_results():
 def test_card_shows_the_rank_of_a_ranked_percentage_and_avoid_for_a_losing_one():
     d = strong_report()
     d['picks'][0]['percentage_history'].update(wins=5, losses=1, settled=6, rank=2, ranked=41)
-    assert '<b>Model 51.8%</b> · 5W–1L (6 settled) · rank 2 of 41\n' in tg.message_batches(d, '123')[0][1]
+    assert '<b>Model 51.8%</b> 🟢 · this exact % has gone 5–1 (83%) · small sample (6 settled) · rank 2 of 41\n' in tg.message_batches(d, '123')[0][1]
     d['picks'][0]['percentage_history'].update(wins=0, losses=3, settled=3, rank=41, ranked=41)
     text = tg.message_batches(d, '123')[0][1]
-    assert '0W–3L (3 settled) · rank 41 of 41 · AVOID' in text
+    assert 'this exact % has gone 0–3 (0%) · small sample (3 settled) · rank 41 of 41 · AVOID' in text
     from PIL import Image, ImageDraw
     from app import telegram_card
     assert telegram_card.render_card(text).startswith(b'\x89PNG')
     probe = ImageDraw.Draw(Image.new('RGB', (10, 10)))
     assert 200 + probe.textlength('10W–13L (23 settled) · rank 141 of 141 · AVOID · Small sample.', font=telegram_card._font(22)) <= 1000
     plain = tg.message_batches(strong_report(), '123')[0][1]            # not ranked: the line is exactly as before
-    assert '<b>Model 51.8%</b> · 3W–1L (4 settled)\n' in plain and ' · rank ' not in plain
+    assert '<b>Model 51.8%</b> 🟢 · this exact % has gone 3–1 (75%) · small sample (4 settled)\n' in plain and ' · rank ' not in plain
 
 
 def test_price_tag_includes_three_point_boundaries_despite_binary_rounding():

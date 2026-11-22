@@ -7,10 +7,15 @@ card's own text: 57.3 is not 57.4), side and line source.
 
 Rules (declared before this run):
 - One row per (sport, game, market); a duplicate in the source is an error, not a silent drop.
-- A row is excluded only when the LIVE record already counts that game and market: NBA/NHL/NFL/NCAAB, a canonical pregame
-  game_forecasts row (status 'forecast', made before the start); Soccer, a soccer_live_forecasts row for the match (it
-  carries the 1X2, double chance and draw-no-bet selections). The old rule (every game after the sport's first forecast) was
-  broader than the live record.
+- OVERLAP RULE (Nov 22, owner brief): the recovered record and the live record are always shown separately and never summed,
+  so a game both sources hold is counted ONCE IN EACH displayed record. Such a row is no longer dropped; it is kept with
+  `also_in_live: true` (NBA/NHL/NFL/NCAAB: a canonical pregame game_forecasts row, status 'forecast' made before the start;
+  Soccer: a soccer_live_forecasts row for the match) and counted in `summary[sport].overlap_with_live`. Before Nov 22 these rows
+  were excluded as "live_record_counts_it" (216 of 1189), which left the recovered record without the games Nov 15-16.
+- Rows are excluded only when they cannot be imported: game_not_in_store, unmapped (market/side/line source), or
+  no_final_result_in_store. Each is listed with its reason; `by_sport_date` reports source rows, imported, excluded by reason,
+  unmatched and superseded earlier cards (all_card_rows cards that are not the one card per game) by sport and local start date.
+- Dates are Toronto local start dates taken from the imported rows (period and `dates`), never assumed.
 - A row the export left ungraded is graded from the store's final score when the store has one; `grade_source` says which.
   A graded row whose store score disagrees is kept as exported and listed under `disagreements`.
 - Soccer rows use the app's soccer sides (home/draw/away; home_draw/draw_away/home_away; home/away) and market ids
@@ -26,6 +31,8 @@ import re
 import sqlite3
 import sys
 from collections import Counter
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'backend'))
@@ -36,6 +43,13 @@ MARKET = {'winner': 'winner', 'spread': 'spread', 'puck line': 'spread', 'total'
 LINE = {'Bookmaker line at forecast': 'bookmaker', 'Model line': 'model'}
 POINT_SPORTS = ('nba', 'nhl', 'nfl')
 LABEL = 'Recovered Telegram cards'
+TORONTO = ZoneInfo('America/Toronto')
+OVERLAP_RULE = ('Recovered and live records are shown apart and never summed: a game both sources hold is counted once in the recovered '
+                'record and once in the live record; the recovered rows keep also_in_live=true and are reported, not dropped.')
+
+
+def sent_date_local(r):
+    return r['sent_at_local'][:10]
 
 
 def norm(x):
@@ -155,7 +169,7 @@ def build(record, data_dir):
 
     def skip(r, sport, reason, detail=None):
         excluded.append({'sport': sport, 'game_id': r['game_id'], 'market_key': r['market_key'], 'selection': r['selection'],
-                         'percent': r['percent'], 'message_id': r['message_id'], 'reason': reason, **({'detail': detail} if detail else {})})
+                         'percent': r['percent'], 'message_id': r['message_id'], 'sent_date': sent_date_local(r), 'reason': reason, **({'detail': detail} if detail else {})})
 
     for r in record['per_game_rows']:
         sport = r['sport'].lower()
@@ -170,8 +184,7 @@ def build(record, data_dir):
             s = soccer_side(market, r['selection'], m['home'], m['away']) if market else None
             if s is None:
                 skip(r, sport, 'unmapped'); continue
-            if r['game_id'] in soccer_live:
-                skip(r, sport, 'live_record_counts_it'); continue
+            also_live = r['game_id'] in soccer_live
             store_grade = grade_soccer_row(market, s, m)
             tip, line_source, g_line = m['kickoff_at'], ('none' if market == '1x2_regulation' else 'model'), None
         else:
@@ -183,8 +196,7 @@ def build(record, data_dir):
                 (v for k, v in LINE.items() if (r['line_source'] or '').startswith(k)), None)
             if market is None or s is None or line_source is None:
                 skip(r, sport, 'unmapped'); continue
-            if (sport, r['game_id'], market) in canon:
-                skip(r, sport, 'live_record_counts_it'); continue
+            also_live = (sport, r['game_id'], market) in canon
             g_line = None if market in ('winner', 'reg3') else selection_line(r['selection'])
             if market == 'spread' and g_line is not None and s == 'b':
                 g_line = -g_line      # the card shows the picked team's line; the app stores the home team's
@@ -200,23 +212,58 @@ def build(record, data_dir):
         else:
             skip(r, sport, 'no_final_result_in_store'); continue
         rows.append({'sport': sport, 'market': market, 'percentage': f"{r['percent']:.1f}", 'side': s, 'line_source': line_source,
-                     'game_id': r['game_id'], 'grade': grade, 'grade_source': source, 'pick': r['selection'],
+                     'game_id': r['game_id'], 'grade': grade, 'grade_source': source, 'also_in_live': also_live, 'pick': r['selection'],
                      'matchup': r['matchup'], 'final_score': r['final_score'], 'message_id': r['message_id'], 'start_at': tip,
                      'sent_at_local': r.get('sent_at_local')})
     keys = [(x['sport'], x['game_id'], x['market']) for x in rows]
     assert len(keys) == len(set(keys)), 'duplicate (sport, game, market) rows'
+    local = lambda x: datetime.fromisoformat(x['start_at'].replace('Z', '+00:00')).astimezone(TORONTO).date().isoformat()
+    for x in rows:
+        x['start_date_local'] = local(x)
+    sent_ids = {(r['sport'].lower(), r['game_id'], r['market_key'], r['message_id']) for r in record['per_game_rows']}
+    superseded = Counter()
+    for r in record.get('all_card_rows', []):
+        if (r['sport'].lower(), r['game_id'], r['market_key'], r['message_id']) not in sent_ids:
+            superseded[(r['sport'].lower(), r['game_id'], sent_date_local(r))] += 1
+    by_day: dict = {}     # key: the local START date of an imported row, else the SENT date of one that could not be imported
+    def cell(sport, day):
+        return by_day.setdefault(sport, {}).setdefault(day, {'date': day, 'source_rows': 0, 'imported': 0, 'overlap_with_live': 0,
+                                                              'excluded': 0, 'excluded_by_reason': Counter(), 'unmatched': 0,
+                                                              'superseded_earlier_cards': 0})
+    start_of = {(x['sport'], x['game_id'], x['market']): x['start_date_local'] for x in rows}
+    for r in record['per_game_rows']:
+        sport = r['sport'].lower()
+        key = (sport, r['game_id'], MARKET.get(r['market_key']))
+        c = cell(sport, start_of.get(key) or sent_date_local(r))
+        c['source_rows'] += 1
+    for x in rows:
+        c = cell(x['sport'], x['start_date_local'])
+        c['imported'] += 1
+        c['overlap_with_live'] += int(x['also_in_live'])
+    for e in excluded:
+        c = cell(e['sport'], e['sent_date'])      # an excluded row has no start date: its sent date
+        c['excluded'] += 1
+        c['excluded_by_reason'][e['reason']] += 1
+        c['unmatched'] += int(e['reason'] in ('game_not_in_store', 'unmapped'))
+    game_day = {(x['sport'], x['game_id']): x['start_date_local'] for x in rows}
+    for (sport, gid, sent), n in superseded.items():
+        cell(sport, game_day.get((sport, gid), sent))['superseded_earlier_cards'] += n
+    by_sport_date = {sp: [dict(v, excluded_by_reason=dict(v['excluded_by_reason'])) for _, v in sorted(d.items())]
+                     for sp, d in by_day.items()}
     summary = {}
     for sport in ('nba', 'nhl', 'nfl', 'soccer'):
         inc = [x for x in rows if x['sport'] == sport]
         exc = [x for x in excluded if x['sport'] == sport]
+        dates = sorted({x['start_date_local'] for x in inc})
         summary[sport] = {'included': len(inc), 'excluded': len(exc), 'excluded_by_reason': dict(Counter(x['reason'] for x in exc)),
+                          'overlap_with_live': sum(1 for x in inc if x['also_in_live']),
                           'grade_source': dict(Counter(x['grade_source'] for x in inc)), 'live_ledger_began': began[sport],
-                          'period': ({'from': min(x['start_at'] for x in inc)[:10], 'to': max(x['start_at'] for x in inc)[:10]}
-                                     if inc else None)}
-    tips = sorted(x['start_at'] for x in rows)
+                          'dates': dates, 'period': {'from': dates[0], 'to': dates[-1]} if dates else None}
+    dates = sorted({x['start_date_local'] for x in rows})
     return {'source': 'telegram_cards', 'label': LABEL, 'built_from': 'docs/telegram_record.json', 'model_version_known': False,
-            'live_ledger_began': began, 'period': {'from': tips[0][:10], 'to': tips[-1][:10]} if tips else None,
-            'summary': summary, 'rows': rows, 'excluded': excluded, 'disagreements': disagreements}
+            'overlap_rule': OVERLAP_RULE, 'live_ledger_began': began,
+            'period': {'from': dates[0], 'to': dates[-1]} if dates else None,
+            'summary': summary, 'by_sport_date': by_sport_date, 'rows': rows, 'excluded': excluded, 'disagreements': disagreements}
 
 
 def main(argv=None):

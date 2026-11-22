@@ -108,27 +108,22 @@ def test_a_failed_selection_is_saved_as_an_error_and_cards_no_game(store, tmp_pa
     assert nc.annotate([{"game_id": "ncaab:401", "market": "winner"}], None) == []
 
 
-def test_card_choice_recommends_the_selected_market_and_says_the_rule_is_untested():
+def test_card_choice_never_recommends_a_failed_validation_market_even_when_it_was_the_selected_one():
     sel = {"rule": nc.RULE, "rank": 2, "of": 4, "selected_at": "2026-11-17T16:00:00Z", "market": "total", "side": "b", "gap": 8.0}
     picks = [dict(forecast_id=i, market=m, pick_label=label, probability=p, market_prob=b, quote_check={},
                   percentage_history=None, ncaab_selection=sel)
              for i, (m, label, p, b) in enumerate((("winner", "DUKE win", 0.8, 0.75), ("total", "Under 141.5", 0.56, 0.5)))]
     choice = t.card_choice("ncaab", picks)
-    assert choice["pick"]["market"] == "total"
-    assert "#2 of today's 4 largest app-vs-sportsbook gaps (+8.0 points then); untested rule" in choice["reason"]
-    assert "11:00 AM ET" in choice["reason"]
-    picks[1]["percentage_history"] = {"side": "a"}                          # the official forecast now leans over: flagged
-    flipped = t.card_choice("ncaab", picks)
-    assert flipped["pick"]["market"] == "total" and "side in this market changed since the selection" in flipped["reason"]
-    picks[1]["percentage_history"] = None
+    assert choice["pick"] is None and "failed validation" in choice["reason"]       # total is blocked; winner was not the selected market
     for p in picks:
         del p["ncaab_selection"]
-    assert t.card_choice("ncaab", picks)["pick"]["market"] == "winner"      # without a selection: unchanged behaviour
+    chosen = t.card_choice("ncaab", picks)
+    assert chosen["pick"]["market"] == "winner"                                     # the validated market, by the existing ranking
 
 
-def test_retired_top4_selection_no_longer_sends_cards(store, tmp_path, monkeypatch):
-    """Colour release (Nov 21): the top-4 rule is retired; a saved selection no longer puts a game on Telegram. Only the
-    gate (tests/test_ncaab_gate.py) can, and with no qualifying threshold nothing goes out."""
+def test_retired_top4_selection_does_not_decide_delivery_any_more(store, tmp_path, monkeypatch):
+    """Colour release (Nov 21) retired the top-4 rule and the Nov 22 brief removed its gate: a saved selection neither puts a
+    game on Telegram nor keeps one off; every game with a due forecast gets its card (colour plays no part)."""
     monkeypatch.delenv("NBA_NCAAB_CARDS", raising=False)
     store, _ = store
     sends = []
@@ -153,9 +148,9 @@ def test_retired_top4_selection_no_longer_sends_cards(store, tmp_path, monkeypat
         texts = [r["text"] for r in ledger.execute("SELECT text FROM deliveries WHERE status='sent'")]
         selections = ledger.execute("SELECT COUNT(*) FROM ncaab_card_selections").fetchone()[0]
     got = first["sports"]["ncaab"]
-    assert got["status"] == "gated" and got["qualifying"] == 0 and got["eligible_summaries"] == 0, first
-    assert second["sports"]["ncaab"].get("sent", 0) == 0 and sends == [] and texts == []
-    assert selections == 1                                   # the saved Nov 17 selection row stands, untouched
+    assert got["sent"] == got["eligible_summaries"] == len(texts) >= 1, first       # 405 was never selected and still has its card
+    assert second["sports"]["ncaab"].get("sent", 0) == 0                            # dedup: a rerun sends nothing
+    assert selections == 1 and sends
 
 
 def test_run_once_sends_no_ncaab_card_before_the_11_am_selection(store, tmp_path):
