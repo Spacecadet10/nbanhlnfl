@@ -1491,6 +1491,9 @@ def baselines_for(ref: list, kind: str) -> dict:
     three = any("mid" in r["probs"] for r in ref)
     classes = (0, 1, 2) if three else (0, 2)
     uni = {0: 1 / len(classes), 1: 1 / len(classes) if three else 0.0, 2: 1 / len(classes)}
+    if kind == "line" and three:        # a line market's push mass is small: equal sides around the incumbent's mean push mass
+        m = sum(r["probs"].get("mid", 0.0) for r in ref) / len(ref)
+        uni = {0: (1 - m) / 2, 1: m, 2: (1 - m) / 2}
     out_u, out_b = [], []
     counts = {c: 0 for c in classes}
     pending, order = [], sorted(ref, key=lambda r: (r["forecast_cutoff"], r["game_id"], r["market"]))
@@ -1682,7 +1685,7 @@ def evaluate_records(adapter: dict, by_model: dict, stages: tuple = ("search", "
             met["returns"] = roi(recs, kind)
             entry["models"][n] = met
         entry["comparisons"] = {}
-        for n in [*([inc] if inc else []), *[c for c in cands if c in mk]]:
+        for n in [*([inc] if inc else []), *[c for c in cands if mk.get(c)]]:
             recs = mk[n]
             cmp_ = {"vs_baselines": {b: pair_compare(recs, brecs, kind) for b, brecs in base.items()}}
             if n != inc:

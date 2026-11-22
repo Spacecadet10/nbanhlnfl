@@ -651,3 +651,13 @@ def test_push_probability_alias_and_chunked_walks_resume_without_rescoring(exp, 
     assert r["outcome"] == "skipped" and calls == [None]
     r = ar.run_sport_v3("nba", exp, adapter_fn=_adapters(nba=ad))
     assert calls == [None, "4", "8"] and r["outcome"] == "no_candidates" and r["evaluation"]["winner"]["n"] == 10
+
+
+def test_uniform_baseline_for_a_line_market_keeps_the_incumbents_small_push_mass_and_uncovered_candidates_are_not_listed():
+    recs = [rec(i, "spread", p=0.45, mid=0.1, outcome="a", line=-3.0) for i in range(60)]
+    u = ar.baselines_for(recs, "line")["baseline:uniform"][0]["probs"]
+    assert u == {"a": pytest.approx(0.45), "mid": pytest.approx(0.1), "b": pytest.approx(0.45)}
+    a = fixture_adapter({"inc": recs, "cand_other": [rec(0, outcome="a")]}, markets={
+        "spread": {"kind": "line", "settlement": "x"}, "winner": {"kind": "binary", "settlement": "y"}})
+    ev = ar.evaluate_records(a, {"inc": recs, "cand_other": [rec(0, outcome="a")]})
+    assert "cand_other" not in ev["markets"]["spread"]["comparisons"]
