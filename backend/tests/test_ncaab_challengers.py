@@ -312,3 +312,36 @@ def test_old_refit_files_and_abandoned_temp_files_are_pruned_keeping_this_and_th
     assert not names & {"refit-2026-11-02-bbb.json", "refit-2026-10-12-ccc.json"}
     assert any(n.startswith("refit-2026-11-16-") and n.endswith(".json") for n in names)
     assert "refit-2026-11-16-y.tmp456" in names and "refit-2026-11-16-x.tmp123" not in names
+
+
+# --- Live fingerprints must not move because of the research adapters ---------------------------------------------------
+# Values are those at 1179494 (the deployed code). Every file these fingerprints hash is untouched by the research work; the
+# research code lives in ncaab_cards.py and nfl_challengers.py, which no live fingerprint hashes.
+DEPLOYED_MIN_FIT_GAMES = 2000
+FINGERPRINTS_1179494 = {"ncaab_challengers.fit_code_version": "24ec6d25", "nfl_live.definition": "b6074877a7e7ccfe",
+                        "best_pick_record.RECORDER_SHA256": "7cc3e6e1befef5206975dd580a278f6fd4184329d8b400e437e94d1d35e01000",
+                        "selector.version": "selector-v1:SELF"}
+
+
+def test_live_fingerprints_equal_their_deployed_values(monkeypatch):
+    from app import best_pick_record, nfl_live, selector
+    monkeypatch.setattr(nc, "MIN_FIT_GAMES", DEPLOYED_MIN_FIT_GAMES)      # the autouse fixture lowers it for the other tests
+    assert nc.fit_code_version() == FINGERPRINTS_1179494["ncaab_challengers.fit_code_version"]
+    assert nfl_live.definition() == FINGERPRINTS_1179494["nfl_live.definition"]
+    assert best_pick_record.RECORDER_SHA256 == FINGERPRINTS_1179494["best_pick_record.RECORDER_SHA256"]
+    assert selector.version().startswith("selector-v1:")      # selector hashes only itself; see the source scan below
+
+
+def test_no_fingerprint_site_reads_the_research_modules():
+    from pathlib import Path
+    app = Path(nc.__file__).parent
+    sites = ["ncaab_challengers.py", "nfl_live.py", "agreement.py", "research_live.py", "adaptive.py", "selective_study.py",
+             "selector.py", "best_pick_record.py", "soccer_eval.py", "soccer_markets_eval.py", "intl_eval.py", "tickets.py",
+             "candidates/registry.py", "candidates/calibrated.py", "candidates/deep.py", "availability_live.py"]
+    for s in sites:
+        text = (app / s).read_text()
+        assert "ncaab_cards" not in text, s
+        assert "nfl_challengers" not in text, s
+    assert "nfl_challengers" not in (app / "ncaab_challengers.py").read_text() and "ncaab_cards" not in (app / "nfl_live.py").read_text()
+    # candidates/_code_digest hashes every app/models/*.py: no research file may sit there
+    assert not [p.name for p in (app / "models").glob("*.py") if "research" in p.name]

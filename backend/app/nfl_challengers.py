@@ -560,7 +560,7 @@ def validate_data(conn: sqlite3.Connection, today: Optional[str] = None) -> dict
 def evaluate_research(conn: sqlite3.Connection, periods=("search", "validation"), models=None) -> dict:
     """Score of every research model per market over the search and validation periods (never 2022-2025) and the paired
     difference against the incumbent. Record scoring is shared with the NCAAB adapter (sport-agnostic)."""
-    from . import ncaab_eval as _rec
+    from . import ncaab_cards as _rec
     models, rp = list(models or MODEL_SPECS), research_periods()
     out: dict = {"periods": {p: list(rp[p]) for p in periods}, "line_source": "reference_model (Elo-margin spread, recent league total, "
                  "team lines from both; shared by every model)", "results": {}, "vs_incumbent": {}}
@@ -581,7 +581,7 @@ def evaluate_research(conn: sqlite3.Connection, periods=("search", "validation")
 def evaluate_forward(conn: sqlite3.Connection, sealed: dict, access_log: Path, models=None) -> dict:
     """The forward season's games with a DraftKings quote at or before the cutoff, at the quote's line vs the no-vig price.
     Needs the sealed, logged read of the reserved seasons (state only)."""
-    from . import ncaab_eval as _rec
+    from . import ncaab_cards as _rec
     seasons = [s for (s,) in conn.execute("SELECT DISTINCT season FROM games WHERE season > ?", (TEST[-1],))]
     out: dict = {"seasons": seasons, "results": {}}
     if not seasons:
@@ -592,3 +592,34 @@ def evaluate_forward(conn: sqlite3.Connection, sealed: dict, access_log: Path, m
         for m, rs in recs.items():
             out["results"].setdefault(market, {})[m] = _rec.quote_benchmark([r for r in rs if r["market"] == market], inc)
     return out
+
+
+def research_main(argv=None) -> int:
+    """`python -m app.nfl_challengers research --out-dir D [--sealed PATH --access-log PATH]`: data validation and the search +
+    validation walks as JSON in D. The forward benchmark runs only when a sealed choice (JSON file) and an access-log path are
+    given; the read of the reserved seasons is then logged there. Never walks 2022-2025; refuses the live data folder."""
+    import argparse
+    import sys
+    from . import config
+    ap = argparse.ArgumentParser(prog="python -m app.nfl_challengers research")
+    ap.add_argument("stage", choices=("research",))
+    ap.add_argument("--out-dir", type=Path, required=True)
+    ap.add_argument("--sealed", type=Path, default=None)
+    ap.add_argument("--access-log", type=Path, default=None)
+    args = ap.parse_args(list(sys.argv[1:] if argv is None else argv))
+    if config.protected_data_dir(config.data_dir()):
+        raise SystemExit(f"Refusing to evaluate against the live data folder {config.data_dir()}; set NBA_DATA_DIR to a copy")
+    conn = sqlite3.connect(f"file:{config.db_path('nfl')}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    bodies = [("validate_data", validate_data(conn)), ("research", evaluate_research(conn))]
+    if args.sealed and args.access_log:
+        bodies.append(("forward", evaluate_forward(conn, json.loads(args.sealed.read_text()), args.access_log)))
+    for name, body in bodies:
+        (args.out_dir / f"nfl_{name}.json").write_text(json.dumps(body, indent=1, default=str))
+    print(json.dumps({"stage": "research", "output_dir": str(args.out_dir)}))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(research_main())
