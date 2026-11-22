@@ -53,14 +53,15 @@ export function sportsbookLine(c: SportsbookComparison): string {
 // decimal maths on the probability's shortest decimal string (the same digits as Python's str(p)): never a float compare.
 export interface CardColourDecision { colour: 'green' | 'red' | null; legend: string | null; scope: string | null }
 
-/** Tenths of a percent as an integer: String(p) rounded half-up to 0.001 (0.5495 -> 550, 0.5494 -> 549); null when the
- *  number has no plain decimal form (exponent notation) or is outside 0..1. */
+/** Tenths of a percent as an integer, from exactly the digits the card prints: (p * 100).toFixed(1), the twin of the
+ *  backend's displayed_percentage (review, Nov 21: deciding on the stored decimal disagreed with the printed % at ties, e.g.
+ *  0.5495 prints 54.9). Strings like "57.3" (already displayed) are read as printed. null when outside 0..1 or unreadable. */
 export function tenthsOf(p: number | string): number | null {
-  const m = /^(\d+)(?:\.(\d*))?$/.exec(String(p));
+  const text = typeof p === 'number' ? (Number.isFinite(p) ? (p * 100).toFixed(1) : '') : String(p);
+  const m = /^(\d+)\.(\d)$/.exec(text);
   if (!m) return null;
-  const frac = (m[2] ?? '').padEnd(4, '0');
-  const milli = Number(m[1]) * 1000 + Number(frac.slice(0, 3)) + (frac[3] >= '5' ? 1 : 0);
-  return milli >= 0 && milli <= 1000 ? milli : null;
+  const t = Number(m[1]) * 10 + Number(m[2]);
+  return t >= 0 && t <= 1000 ? t : null;
 }
 
 /** "55.0" -> 550 (the stored threshold, already in tenths). */
@@ -81,7 +82,7 @@ export function cardColour(table: CardThresholds | null | undefined, sport: stri
   // stale, unqualified). Older payloads without the field fall back to the threshold of a 'set'/'seed' line only.
   const from = line.green_from !== undefined ? line.green_from : (['set', 'seed'].includes(line.state) ? line.threshold : null);
   const t = from == null ? null : thresholdTenths(from);
-  const v = typeof probability === 'string' ? (/^\d+\.\d$/.test(probability) ? thresholdTenths(probability) : null) : tenthsOf(probability);
+  const v = typeof probability === 'string' ? thresholdTenths(probability) : tenthsOf(probability);
   if (t == null || v == null) return { colour: null, legend: line.legend, scope: line.scope };   // status shown, never coloured
   return { colour: v >= t ? 'green' : 'red', legend: line.legend, scope: line.scope };
 }

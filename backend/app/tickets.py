@@ -679,7 +679,9 @@ def card_choice(sport, picks):
     reason = numbers+' '+(support[0] if support else 'Highest available likelihood after context checks.')
     if warnings:
         reason += ' Caution: '+'; '.join(warnings)
-    if (chosen.get('book_quote') or {}).get('decimal') is not None:
+    if chosen.get('ncaab_gate') is not None:
+        pass                    # the gate's summary already states the price and the expected value at it
+    elif (chosen.get('book_quote') or {}).get('decimal') is not None:
         quote = chosen['book_quote']
         reason += f" Stored {quote['provider']} return {quote['decimal']:.2f}x; no proven price edge."
     elif (chosen.get('quote_check') or {}).get('price_now') is None:

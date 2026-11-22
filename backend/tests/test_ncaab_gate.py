@@ -179,3 +179,30 @@ def test_decision_table_is_append_only(tmp_path):
             conn.execute("UPDATE ncaab_gate_decisions SET chosen = 'x'")
         with pytest.raises(sqlite3.DatabaseError):
             conn.execute('DELETE FROM ncaab_gate_decisions')
+
+
+def test_volatile_fields_do_not_create_new_decision_rows(tmp_path):
+    with tg.ledger(tmp_path / 'receipts.sqlite') as conn:
+        v = {'forecast_id': 1, 'market': 'winner', 'qualifies': False, 'reasons': ['x'], 'colour': None, 'price': -110,
+             'ev': -0.01, 'price_retrieved_at': '2026-11-17T22:00:00Z'}
+        ncaab_gate._record(conn, 'g', [v], '2026-11-17T22:00:00Z')
+        ncaab_gate._record(conn, 'g', [dict(v, ev=-0.011, price_retrieved_at='2026-11-17T22:01:00Z')], '2026-11-17T22:01:00Z')
+        assert conn.execute('SELECT COUNT(*) FROM ncaab_gate_decisions').fetchone()[0] == 1
+        ncaab_gate._record(conn, 'g', [dict(v, qualifies=True, reasons=[])], '2026-11-17T22:02:00Z')   # a changed verdict is kept
+        assert conn.execute('SELECT COUNT(*) FROM ncaab_gate_decisions').fetchone()[0] == 2
+
+
+def test_a_pick_that_cannot_be_evaluated_never_fails_the_sport(store, tmp_path, monkeypatch):
+    lines(tmp_path, W='50.0')
+    monkeypatch.setattr(ncaab_gate, 'evaluate', lambda *a, **k: (_ for _ in ()).throw(ValueError('bad timestamp')))
+    out, bot, rows = run(tmp_path)
+    assert out['sports']['ncaab']['status'] == 'gated' and bot.sends == []
+    assert any('evaluation error' in ' '.join(v['reasons']) for r in rows for v in ncaab_gate.json.loads(r['verdicts']))
+
+
+def test_unconfirmed_sends_do_not_count_as_a_sent_card(tmp_path):
+    with tg.ledger(tmp_path / 'receipts.sqlite') as conn:
+        from app import published_picks
+        cols = [r[1] for r in conn.execute('PRAGMA table_info(published_picks)')]
+        assert 'basis' in cols
+        assert ncaab_gate.sent_games(conn) == set()

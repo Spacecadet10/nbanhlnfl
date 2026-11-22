@@ -20,7 +20,7 @@ from typing import Callable, Optional
 
 POLICY = 'ncaab-colour-gate-v1'
 MARKETS = ('winner', 'spread', 'total')
-MAX_PRICE_AGE = timedelta(minutes=60)      # the NCAAB odds tick runs every 60 s; an hour-old price is not today's offer
+MAX_PRICE_AGE = timedelta(minutes=20)      # the NCAAB odds tick runs every 60 s; an older price fails closed
 # Chronological check of the live NCAAB record, Nov 17-21 2026 (HANDOFF, colour release): spread Brier 0.2602 / log loss 0.7154
 # and total 0.2595 / 0.7153 on 218 settled games, worse than a coin flip (0.2500 / 0.6931) and than DraftKings' no-vig price.
 # Lifting a block is a new policy version with its own evidence, never an edit of this table.
@@ -144,11 +144,25 @@ def context_line(v: dict) -> str:
     return 'Context only · not a recommendation: ' + (v['reasons'][0] if v['reasons'] else 'not the recommended pick')
 
 
+VOLATILE = ('ev', 'price_retrieved_at')
+
+
+def sent_games(ledger) -> set:
+    """NCAAB games with a confirmed sent card (published_picks), not counting uncertain sends resolved from a message-id gap."""
+    from .published_picks import UNCONFIRMED_BASIS
+    if not ledger.execute("SELECT 1 FROM sqlite_master WHERE name = 'published_picks'").fetchone():
+        return set()
+    return {r[0] for r in ledger.execute("SELECT DISTINCT game_id FROM published_picks WHERE sport = 'ncaab' "
+                                         "AND (basis IS NULL OR basis <> ?)", (UNCONFIRMED_BASIS,))}
+
+
 def _record(ledger, game_id: str, verdicts: list, now: str) -> None:
     versions = sorted(str(v['forecast_id']) for v in verdicts)
     chosen = max((v for v in verdicts if v['qualifies']), key=lambda v: v['ev'], default=None)
     body = json.dumps(verdicts, sort_keys=True, default=str)
-    digest = hashlib.sha256(json.dumps([POLICY, game_id, versions, body]).encode()).hexdigest()
+    # A row per changed verdict, not per odds tick: the EV and quote time move every minute (review, Nov 21).
+    stable = json.dumps([{k: x for k, x in v.items() if k not in VOLATILE} for v in verdicts], sort_keys=True, default=str)
+    digest = hashlib.sha256(json.dumps([POLICY, game_id, versions, stable]).encode()).hexdigest()
     ledger.execute('INSERT OR IGNORE INTO ncaab_gate_decisions (policy, game_id, decided_at, versions, verdicts, chosen, digest) '
                    'VALUES (?, ?, ?, ?, ?, ?, ?)', (POLICY, game_id, now, json.dumps(versions), body,
                                                      None if chosen is None else str(chosen['forecast_id']), digest))
@@ -159,16 +173,24 @@ def apply(ledger, source, report: dict, colour_of: Callable[[dict], Optional[dic
     games that may be carded. Returns counts for the run log."""
     ledger.executescript(SCHEMA)
     stamp = now.strftime('%Y-%m-%dT%H:%M:%SZ')
-    due = [p for p in report['picks'] if p.get('status') == 'scheduled' and p.get('grade') == 'pending'
-           and now < _parse(p['tipoff']) <= now + timedelta(hours=2)]
+    def is_due(p):      # the same window message_batches cards (telegram.py): tip-off within 2 h, forecast in that window
+        try:
+            start, made = _parse(p['tipoff']), _parse(p['generated_at'])
+        except Exception:
+            return False
+        return (p.get('status') == 'scheduled' and p.get('grade') == 'pending' and now < start <= now + timedelta(hours=2)
+                and start - timedelta(hours=2) <= made <= now)
+    due = [p for p in report['picks'] if is_due(p)]
     by_game: dict = {}
     for p in due:
-        p['ncaab_gate'] = evaluate(source, p, colour_of(p), now)
+        try:
+            p['ncaab_gate'] = evaluate(source, p, colour_of(p), now)
+        except Exception as exc:        # one unreadable pick never fails the sport, and never qualifies
+            p['ncaab_gate'] = {'forecast_id': p.get('forecast_id'), 'market': p.get('market'), 'qualifies': False, 'ev': None,
+                               'reasons': [f'evaluation error: {type(exc).__name__}']}
         by_game.setdefault(p['game_id'], []).append(p['ncaab_gate'])
     for gid, verdicts in by_game.items():
         _record(ledger, gid, verdicts, stamp)
-    sent = {r[0] for r in ledger.execute("SELECT DISTINCT game_id FROM published_picks WHERE sport = 'ncaab'")} \
-        if ledger.execute("SELECT 1 FROM sqlite_master WHERE name = 'published_picks'").fetchone() else set()
-    report['picks'] = keep(due, lambda p: p['ncaab_gate'], sent_games=sent)
+    report['picks'] = keep(due, lambda p: p['ncaab_gate'], sent_games=sent_games(ledger))
     return {'policy': POLICY, 'evaluated_games': len(by_game),
             'qualifying': sum(1 for vs in by_game.values() for v in vs if v['qualifies'])}

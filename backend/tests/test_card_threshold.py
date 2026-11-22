@@ -15,20 +15,21 @@ def pick(i, pct, win, price='1.90', cls='W', sport='nba', settled='2026-11-18T05
 
 
 # --- Decimal maths -------------------------------------------------------------------------------------------------------
-@pytest.mark.parametrize('p,tenths', [(0.5494, '54.9'), (0.5495, '55.0'), (0.5725, '57.3'), (0.5724, '57.2'), (0.9, '90.0')])
-def test_tenths_uses_decimal_of_str_half_up(p, tenths):
+@pytest.mark.parametrize('p,tenths', [(0.5494, '54.9'), (0.5495, '54.9'), (0.5725, '57.3'), (0.5724, '57.2'), (0.9, '90.0')])
+def test_tenths_is_the_displayed_percentage(p, tenths):
     assert ct.tenths(p) == D(tenths)
 
 
-@pytest.mark.parametrize('p,t,colour', [(0.5494, '55.0', 'red'), (0.5495, '55.0', 'green'),
+@pytest.mark.parametrize('p,t,colour', [(0.5494, '55.0', 'red'), (0.5495, '55.0', 'red'), (0.5501, '55.0', 'green'),
                                         (0.5725, '57.3', 'green'), (0.5724, '57.3', 'red')])
 def test_decimal_boundaries(p, t, colour):
     assert ct.colour_for(ct.tenths(p), D(t)) == colour
 
 
-def test_float_maths_would_have_got_0_5495_wrong():
-    assert round(0.5495 * 100, 1) == 54.9          # why the decision path never multiplies a float by 100
-    assert ct.colour_for(ct.tenths(0.5495), D('55.0')) == 'green'
+def test_colour_follows_the_printed_digits_not_the_stored_decimal():
+    # review (Nov 21): the card prints (p * 100).toFixed(1) = 54.9 for 0.5495; deciding on Decimal('0.5495') = 55.0 would
+    # print "54.9%" in green next to "Green = 55.0% and above"
+    assert ct.tenths(0.5495) == D('54.9') and ct.colour_for(ct.tenths(0.5495), D('55.0')) == 'red'
 
 
 # --- Class routing ---------------------------------------------------------------------------------------------------------
@@ -229,7 +230,7 @@ def test_legends_for_every_state():
     assert ct.legend(ct.Line('W', None, D('55.0'), 202, 'seed', '2026-11-21', '2026-11-02', None, seed_to='2026-11-21'), day) == \
         'Green = 55.0% and above · seeded from Nov 2-21 (n=202 priced)'
     assert ct.legend(L('held', '2026-11-20', 41), day) == \
-        'Green = 55.0% and above · line carried from Nov 20, not re-fitted today (n=41 priced)'
+        'Line carried from Nov 20, not re-fitted today (n=41 priced) · not coloured'
     assert ct.legend(L('capped', '2026-11-20'), day) == \
         'Green = 55.0% and above · line capped at +1.0 pt today, carried from Nov 20 (n=202 priced)'
     assert ct.legend(L('not refreshed'), day) == 'Threshold not refreshed today (last set Nov 20) · not coloured'
@@ -292,7 +293,7 @@ def test_capped_line_greens_only_from_the_qualified_line():
     assert ct.decide('nba', 'winner', 0.5795, 'none', t)['green_from'] == '58.0'
     # a downward cap (requested 52.0 < T 54.0) keeps T: everything at or above T has qualified
     t2 = _table(_line('capped', t='54.0', requested='52.0', carried='2026-11-21'))
-    assert ct.decide('nba', 'winner', 0.5395, 'none', t2)['colour'] == 'green' and ct.decide('nba', 'winner', 0.5394, 'none', t2)['colour'] == 'red'
+    assert ct.decide('nba', 'winner', 0.5401, 'none', t2)['colour'] == 'green' and ct.decide('nba', 'winner', 0.5394, 'none', t2)['colour'] == 'red'
 
 
 @pytest.mark.parametrize('state', ['set', 'seed'])
@@ -320,3 +321,29 @@ def test_api_scopes_carry_green_from_and_status(tmp_path, monkeypatch):
     w = next(s for s in body['scopes'] if s['scope'] == 'W')
     assert w['state'] == 'not established' and w['green_from'] is None and w['qualifies'] is False
     assert w['legend'].startswith('No qualifying threshold · no line beat the price (n=200 priced, checked Nov 22)')
+
+
+# --- Review round (Nov 21, independent Opus review) ------------------------------------------------------------------------
+def test_decision_uses_exactly_the_displayed_percentage():
+    from app.threshold_overview import displayed_percentage
+    for i in range(5000, 9001):
+        p = i / 10000
+        assert ct.tenths(p) == D(displayed_percentage(p)), p
+    # the defect class: the card shows 54.9%, so against a 55.0 line it is red, never "54.9% green"
+    t = _table(_line('set', t='55.0'))
+    assert displayed_percentage(0.5495) == '54.9' and ct.decide('nba', 'winner', 0.5495, 'none', t)['colour'] == 'red'
+
+
+@pytest.mark.parametrize('reason', ['no candidate beat the price', 'fewer than 150 priced picks'])
+def test_a_held_line_never_colours(reason):
+    # a held row may carry a T that never qualified (held after a no-candidate day): never green, status shown
+    d = ct.decide('nba', 'winner', 0.95, 'none', _table(_line('held', reason=reason, carried='2026-11-20')))
+    assert d['colour'] is None and d['qualifies'] is False and d['legend'].endswith('not coloured')
+
+
+def test_unreadable_store_never_colours_and_never_raises(tmp_path):
+    bad = tmp_path / 'card_thresholds.sqlite'
+    bad.write_bytes(b'this is not a database' * 100)
+    t = ct.load_table(bad, '2026-11-22')
+    d = ct.decide('nba', 'winner', 0.95, 'none', t)
+    assert d['colour'] is None and d['legend'] == 'Threshold store unreadable · not coloured'

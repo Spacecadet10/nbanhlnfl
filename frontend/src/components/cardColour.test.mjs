@@ -12,16 +12,18 @@ const table = (lines, extra = {}) => ({
     legend: t == null ? 'No threshold for this market yet' : `Green = ${t}% and above` })), ...extra,
 });
 
-test('tenths use the decimal digits, half-up, never float x 100', () => {
+test('tenths are the printed digits: (p * 100).toFixed(1), like the backend displayed_percentage (review, Nov 21)', () => {
   assert.equal(tenthsOf(0.5494), 549);
-  assert.equal(tenthsOf(0.5495), 550);
+  assert.equal(tenthsOf(0.5495), 549);                       // the card prints 54.9%, so it is decided as 54.9
+  for (let i = 5000; i <= 9000; i++) { const p = i / 10000; assert.equal(tenthsOf(p), Math.round(Number((p * 100).toFixed(1)) * 10), String(p)); }
   assert.equal(tenthsOf(0.5725), 573);
   assert.equal(tenthsOf(0.5724), 572);
 });
 
 test('Decimal boundaries at T = 55.0 and T = 57.3', () => {
   assert.equal(cardColour(table({ W: '55.0' }), 'nba', 'winner', 0.5494).colour, 'red');
-  assert.equal(cardColour(table({ W: '55.0' }), 'nba', 'winner', 0.5495).colour, 'green');
+  assert.equal(cardColour(table({ W: '55.0' }), 'nba', 'winner', 0.5495).colour, 'red');     // prints 54.9%
+  assert.equal(cardColour(table({ W: '55.0' }), 'nba', 'winner', 0.5501).colour, 'green');
   assert.equal(cardColour(table({ W: '57.3' }), 'nba', 'winner', 0.5725).colour, 'green');
   assert.equal(cardColour(table({ W: '57.3' }), 'nba', 'winner', 0.5724).colour, 'red');
 });
@@ -69,6 +71,6 @@ test('a stale or unqualified line is not coloured but its status legend is shown
 test('a capped line greens from green_from, not the raw threshold', () => {
   const capped = { scope: 'W', class: 'W', sport: null, threshold: '56.0', green_from: '58.0', qualifies: true, n: 342, state: 'capped',
     set_on: '2026-11-22', legend: 'Green = 58.0% and above' };
-  assert.equal(cardColour(scopeTable(capped), 'nba', 'winner', 0.5794).colour, 'red');
+  assert.equal(cardColour(scopeTable(capped), 'nba', 'winner', 0.5794).colour, 'red');   // 57.9
   assert.equal(cardColour(scopeTable(capped), 'nba', 'winner', 0.5795).colour, 'green');
 });

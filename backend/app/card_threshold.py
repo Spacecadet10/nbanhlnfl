@@ -27,6 +27,7 @@ RULE_VERSION = 'card-threshold-v1'
 # line greens only from the line the fit actually qualified. The fitting rule (RULE_VERSION) is unchanged.
 DECIDE_VERSION = 'card-colour-decide-v2'
 NO_STORE_REASON = 'no threshold stored'
+UNREADABLE_REASON = 'threshold store unreadable'
 SEED_VERSION = 'seed'
 TORONTO = ZoneInfo('America/Toronto')
 WINDOW = 400                    # trailing priced picks of a class (or of a cell)
@@ -81,8 +82,11 @@ BEGIN SELECT RAISE(ABORT, 'card_thresholds is append-only'); END;
 
 # --- Decimal decision ------------------------------------------------------------------------------------------------------
 def tenths(p) -> Decimal:
-    """A stored probability as a percentage in tenths: Decimal(str(p)) rounded half-up to 0.001, times 100 (exact)."""
-    return (Decimal(str(p)).quantize(Decimal('0.001'), rounding=ROUND_HALF_UP) * 100).quantize(Decimal('0.1'))
+    """The percentage the card DISPLAYS, in tenths (threshold_overview.displayed_percentage, the twin of the web's
+    (p * 100).toFixed(1)), so the colour always agrees with the printed number (review, Nov 21: Decimal(str(p)) disagreed
+    with the display on 175 of 4001 four-decimal values, e.g. 0.5735 shows 57.3 but decided as 57.4)."""
+    from .threshold_overview import displayed_percentage
+    return Decimal(displayed_percentage(float(p)))
 
 
 def colour_for(pct: Decimal, threshold: Decimal) -> str:
@@ -288,8 +292,8 @@ def _line(row, day: str) -> Line:
                 reason=row['reason'])
 
 
-def _missing(day: str) -> dict:
-    return {c: Line(c, None, None, 0, 'not established', day, None, None, reason=NO_STORE_REASON) for c in CLASSES}
+def _missing(day: str, reason: str = NO_STORE_REASON) -> dict:
+    return {c: Line(c, None, None, 0, 'not established', day, None, None, reason=reason) for c in CLASSES}
 
 
 def current(conn, day: str) -> Table:
@@ -301,6 +305,8 @@ def current(conn, day: str) -> Table:
                             'WHERE day <= ? GROUP BY scope) l ON l.scope = t.scope AND l.d = t.day', (day,)).fetchall()
     except sqlite3.OperationalError:            # no store yet
         rows = []
+    except sqlite3.DatabaseError:               # corrupt store: nothing colours, the card says why, no sport fails
+        return Table(_missing(day, UNREADABLE_REASON), day)
     newest_class_day = {r['scope']: r['day'] for r in rows if r['sport'] is None}
     for r in rows:
         if r['sport'] is not None and r['day'] != newest_class_day.get(r['class']):
@@ -325,6 +331,8 @@ def _span(a: Optional[str], b: Optional[str]) -> str:
 def _no_line(line: Line) -> str:
     if line.reason == NO_STORE_REASON:
         return 'No threshold stored yet · not coloured'
+    if line.reason == UNREADABLE_REASON:
+        return 'Threshold store unreadable · not coloured'
     why = 'no line beat the price' if line.reason == 'no candidate beat the price' else (line.reason or 'not fitted')
     return f'No qualifying threshold · {why} (n={line.n} priced, checked {_md(line.day)}) · not coloured'
 
@@ -338,9 +346,7 @@ def green_from(line: Optional[Line]) -> Optional[Decimal]:
         return line.threshold
     if line.state == 'capped':
         return line.threshold if line.requested is None else max(line.threshold, line.requested)
-    if line.state == 'held' and line.reason != 'no candidate beat the price':
-        return line.threshold          # too few new picks to refit: the last qualified line stands
-    return None                        # not refreshed, held without a qualifying line today
+    return None    # not refreshed; held (a carried T may never have qualified: review, Nov 21); not established
 
 
 def legend(line: Optional[Line], day: str) -> str:
@@ -359,7 +365,7 @@ def legend(line: Optional[Line], day: str) -> str:
         if line.reason == 'no candidate beat the price':
             return (f'No qualifying threshold today · no line beat the price (n={line.n} priced, checked {_md(line.day)})'
                     ' · not coloured')
-        return f'{green} · line carried from {carried}, not re-fitted today (n={line.n} priced)'
+        return f'Line carried from {carried}, not re-fitted today (n={line.n} priced) · not coloured'
     if line.state == 'capped':
         sign = '-' if line.requested is not None and line.requested < line.threshold else '+'
         g = green_from(line)
@@ -393,7 +399,10 @@ def load_table(path, day: str) -> Table:
     from pathlib import Path
     if not Path(path).exists():
         return Table(_missing(day), day)
-    conn = connect(path, readonly=True)
+    try:
+        conn = connect(path, readonly=True)
+    except sqlite3.DatabaseError:
+        return Table(_missing(day, UNREADABLE_REASON), day)
     try:
         return current(conn, day)
     finally:

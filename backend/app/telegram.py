@@ -284,7 +284,7 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
             priced_at.append(pick['generated_at'])
     if not versions:
         return None
-    lines += [divider] + colour_key_lines(decisions) + ['<i>Records match the sport, market, direction, percentage and model.</i>']
+    lines += [divider] + ([] if compact else colour_key_lines(decisions)) + ['<i>Records match the sport, market, direction, percentage and model.</i>']
     if not preview:   # the web card says the same: the counts are OTHER settled games (the API record excludes the card's game)
         lines.append('<i>Counts are other settled games, not this game.</i>')
 
@@ -730,7 +730,7 @@ def _blocks(text):
     """(market title, pick label, model %) of each market block of a card text; the markup stays escaped."""
     lines, out = text.split('\n'), []
     for i in range(len(lines) - 2):
-        m = re.match(r'<b>Model ([\d.]+)%</b>', lines[i + 2])
+        m = re.match(r'<b>(?:<s>)?Model ([\d.]+)%(?:</s>)?</b>', lines[i + 2])     # plain, green or red (struck) block
         if m and lines[i].startswith('<b>') and lines[i].endswith('</b>'):
             out.append((_plain(lines[i]), _plain(lines[i + 1]).split(' · ')[0], m.group(1)))
     return out

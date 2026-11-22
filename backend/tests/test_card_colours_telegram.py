@@ -124,3 +124,19 @@ def test_status_key_is_drawn_neutral_and_a_green_line_in_green():
     # colour release (Nov 21): a 'not coloured' status must not look like a green qualification on the image
     assert telegram_card.key_fill('Winner markets: No threshold stored yet · not coloured') != telegram_card.GREEN
     assert telegram_card.key_fill('Winner markets: Green = 55.0% and above · this class has beaten the price') == telegram_card.GREEN
+
+
+def test_withdrawal_parser_reads_red_and_green_blocks():
+    # review: the 'Pick withdrawn' update must still find the market title / pick / % when the block is coloured
+    for model in ('<b><s>Model 57.1%</s></b> 🔴 · 0W–0L (0 settled)', '<b>Model 62.0%</b> 🟢 · 1W–0L (1 settled)',
+                  '<b>Model 62.0%</b> · 1W–0L (1 settled)'):
+        text = '\n'.join(['<b>Point spread</b>', 'ORL -3.5 · bookmaker line', model])
+        assert tg._blocks(text) and tg._blocks(text)[0][0] == 'Point spread' and tg._blocks(text)[0][2] in ('57.1', '62.0')
+
+
+def test_compact_card_drops_colour_key_lines(isolated, monkeypatch):
+    seed_lines(isolated, W='55.0', L='60.0')
+    monkeypatch.setenv('NBA_CARD_COLOURS', '1')
+    text = tg.format_batch(card('nba', two_markets()), '123', card('nba', two_markets())['picks'][0]['game_id'],
+                           two_markets(), compact=True)[1]
+    assert 'Colour key' not in text and '🟢' in text            # markers stay; the optional key lines go before any refusal
