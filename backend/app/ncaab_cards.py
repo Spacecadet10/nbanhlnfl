@@ -144,21 +144,3 @@ def ensure(ledger: sqlite3.Connection, source: sqlite3.Connection, now: datetime
                    (sel["et_date"], sel["rule"], sel["selected_at"], sel["status"], sel["error"], sel["model_version"],
                     json.dumps(sel["selected"]), json.dumps(sel["candidates"], sort_keys=True)))
     return _row(ledger, day)
-
-
-def annotate(picks: list, selection: Optional[dict]) -> list:
-    """Only the selected games' picks, each carrying the selection's numbers for its game (read by tickets.card_choice)."""
-    if not selection or selection.get("status") != "ok":
-        return []
-    chosen = {gid: rank for rank, gid in enumerate(selection["selected"], 1)}
-    by_game = {c["game_id"]: c for c in selection["candidates"]}
-    out = []
-    for p in picks:
-        if p["game_id"] in chosen:
-            c = by_game[p["game_id"]]
-            best = next(m for m in c["markets"] if m["market"] == c["best_market"])
-            p["ncaab_selection"] = {"rule": selection["rule"], "rank": chosen[p["game_id"]], "of": len(chosen),
-                                    "selected_at": selection["selected_at"], "market": best["market"], "side": best["side"],
-                                    "gap": best["gap"]}
-            out.append(p)
-    return out

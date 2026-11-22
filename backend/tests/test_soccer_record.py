@@ -178,8 +178,19 @@ def test_soccer_card_labels_every_supported_market_without_inventing_forecasts()
     pick = {"game_id": "m1", "forecast_id": "1x2:1", "market": "1x2_regulation", "market_title": "Match result (90 min)",
             "matchup": "Senegal vs Belarus", "tipoff": "2026-11-02T21:00:00Z", "generated_at": "2026-11-02T12:00:00Z",
             "cutoff_at": "2026-11-02T12:00:00Z", "status": "scheduled", "grade": "pending", "pick_label": "Senegal win",
-            "probability": 0.6, "strong": False, "game_rank": None, "percentage_history": None}
+            "probability": 0.6, "strong": False, "game_rank": None, "percentage_history": None, "competition": "friendly"}
     text = tg.message_batches({"sport": "soccer", "as_of": "2026-11-02T20:00:00Z", "picks": [pick]}, "123", context_selection=True)[0][1]
     assert "Odds unavailable" in text                                       # no price for the shown market
-    assert text.count("No forecast for this market") == 10                  # the 10 other supported soccer markets, said so
-    assert "<b>Both teams to score (90 min)</b>\nNo forecast for this market" in text
+    assert text.count("No forecast for this market") == 2                   # double chance and draw no bet: the competition serves them
+    assert "Not offered for this competition: " in text and "Senegal goals (90 min)" in text and "Belarus corners (90 min)" in text
+    assert "<b>Team goals (90 min)</b>" not in text                         # a market the competition does not serve is not a 'No forecast' block
+    from app import soccer_markets_live as sml
+    real = sml.state
+    sml.state = lambda family: {"family": family, "served": True, "competitions": ["friendly"], "markets": list(sml.FAMILY_MARKETS[family])}
+    try:
+        both = tg.message_batches({"sport": "soccer", "as_of": "2026-11-02T20:00:00Z", "picks": [pick]}, "123", context_selection=True)[0][1]
+    finally:
+        sml.state = real
+    assert "Not offered for this competition" not in both and both.count("No forecast for this market") == 10
+    assert "<b>Senegal goals (90 min)</b>\nNo forecast" in both and "<b>Belarus goals (90 min)</b>\nNo forecast" in both
+    assert "<b>Senegal corners (90 min)</b>" in both and "<b>Belarus corners (90 min)</b>" in both    # home and away tell apart

@@ -176,9 +176,7 @@ def controls(bot, settings, conn):
     return _get(conn, 'enabled', '1') == '1'
 
 
-PAST_SEASONS = '2024-26'      # the only seasons any history counts (points_history.HISTORY_SEASONS, winner_history clean seasons)
-PAST_PREFIX = f'Past seasons {PAST_SEASONS}, recomputed, model line: '
-PAST_PREFIX_NO_LINE = f'Past seasons {PAST_SEASONS}, recomputed: '    # winner (no line): app/winner_history.py
+from .threshold_overview import PAST_PREFIX, PAST_PREFIX_NO_LINE, PAST_SEASONS, TELEGRAM_LABEL, history_line, telegram_line  # noqa: E402,F401
 
 
 def message_batches(report, chat_id, lineup_lines=None, games_by_key=None, *, best_pick_pictures=None, context_selection=False):
@@ -310,7 +308,6 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
 # Lines after a market's record line that the card image (telegram_card.render_card) draws under it. One list, both sides.
 BLOCK_EXTRA_PREFIXES = ('Sportsbook quote: ', 'Sportsbook: ', 'Recovered Telegram cards', 'No recovered Telegram history',
                         'Record uses ', 'Telegram card sent ', 'Failed validation', 'Odds unavailable')
-TELEGRAM_LABEL = 'Recovered Telegram cards'
 
 
 # Card colouring (owner brief Nov 22 2026): a marker after the Model % taken from the exact-% bucket's OWN settled record
@@ -335,20 +332,20 @@ def card_colour(pick, preview=False):
 
 
 def model_label(pct, colour=None):
-    """'<b>Model 55.0%</b>', with the colour marker; red is struck through. No colour: unchanged."""
+    """'<b>Model 55.0%</b>', with the colour marker (green or red); no strike-through: colour never looks like a rejection."""
     if colour and colour.get('colour') == 'green':
         return f'<b>Model {pct}%</b> {GREEN_MARK}'
     if colour and colour.get('colour') == 'red':
-        return f'<b><s>Model {pct}%</s></b> {RED_MARK}'
+        return f'<b>Model {pct}%</b> {RED_MARK}'
     return f'<b>Model {pct}%</b>'
 
 
 def panel_pct(pct, colour=None):
-    """'79.6%' in the recommended-pick line, marked as its market block marks it (red struck through)."""
+    """'79.6%' in the recommended-pick line, marked as its market block marks it."""
     if colour and colour.get('colour') == 'green':
         return f'{pct}% {GREEN_MARK}'
     if colour and colour.get('colour') == 'red':
-        return f'<s>{pct}%</s> {RED_MARK}'
+        return f'{pct}% {RED_MARK}'
     return f'{pct}%'
 
 
@@ -357,13 +354,6 @@ def colour_key_lines(decisions):
     if not any(d and d.get('colour') in ('green', 'red') for d in decisions):
         return []
     return [COLOUR_PREFIX + escape(COLOUR_KEY)]
-
-
-def _own_colour(sub):
-    """' · green record' / ' · red record' for a sub-record (recovered Telegram cards, recomputed past seasons) coloured on its
-    own counts; nothing for neutral. Never changes the card's headline colour."""
-    colour = (sub or {}).get('colour')
-    return f' · {colour} record' if colour in ('green', 'red') else ''
 
 
 def _dump(x):
@@ -419,36 +409,10 @@ def sportsbook_detail_line(sb, dnb=False):
 
 
 def telegram_history_line(sport, h):
-    """Recovered Telegram history at this exact %, labelled as such (the cards of Nov 2-16 do not show the model version): its
-    own record, win rate, pushes and voids, and the dates present in the file. A file that is missing or unreadable says
-    'recovered history unavailable'; a bucket the file does not hold says 'no recovered history at this exact %'; never 0-0.
-    None only when the API sent neither the sub-record nor coverage (older API)."""
-    from .threshold_overview import MIN_LIVE_GRADED
-    tg, cov = _dump(h.get('telegram')), _dump(h.get('coverage'))
-    if tg and tg.get('available') is False and tg.get('reason') in ('file_missing', 'unreadable'):
-        return f"{escape(tg.get('label') or TELEGRAM_LABEL)}: recovered history unavailable ({str(tg['reason']).replace('_', ' ')})"
-    if tg and tg.get('available') is not False:
-        label = tg.get('label') or TELEGRAM_LABEL
-        period = tg.get('period')
-        span = f" {_md(period['from'])} to {_md(period['to'])}" if period else ''
-        pushes, voids, settled = tg.get('pushes') or 0, tg.get('voids') or 0, tg.get('settled') or 0
-        if not settled and not pushes and not voids:
-            return f"{escape(label)}{span}: no recovered history at this exact % · model version not recorded"
-        rate = f" ({int(Decimal(tg['wins'] * 100) / Decimal(settled) + Decimal('0.5'))}%)" if settled else ''
-        body = f"this exact % has gone {tg['wins']}–{tg['losses']}{rate}" if settled else 'no settled result at this exact %'
-        from .threshold_overview import _plural
-        extra = (f" · {_plural(pushes, 'push')}" if pushes else '') + (f" · {_plural(voids, 'void')}" if voids else '')
-        small = f" · small sample ({settled} settled)" if settled and settled < MIN_LIVE_GRADED else ''
-        overlap = tg.get('overlap_live')
-        both = f" · {overlap} game{'' if overlap == 1 else 's'} also in the live record, not added" if overlap else ''
-        return f"{escape(label)}{span}: {body}{extra}{small}{_own_colour(tg)}{both} · model version not recorded"
-    if cov is None and 'telegram' not in h:
-        return None
-    period = (cov or {}).get('telegram_period')
-    if period:
-        return f"{TELEGRAM_LABEL} {_md(period['from'])} to {_md(period['to'])}: no recovered history at this exact % · model version not recorded"
-    began = (cov or {}).get('live_since')
-    return f"No recovered Telegram history for {sport.upper()}" + (f" (recording began {str(began)[:10]})" if sport == 'ncaab' and began else '')
+    """The recovered-Telegram line of a card, built by threshold_overview.telegram_line: the same function (and so the same text)
+    the API puts in percentage_history.telegram.line for the web. None only for an older API with neither record nor coverage."""
+    line = telegram_line(sport, _dump(h.get('telegram')), _dump(h.get('coverage')))
+    return None if line is None else escape(line)
 
 
 def published_pick_text(pub, market, matchup):
@@ -519,9 +483,10 @@ LABELLED_SPORTS = ('ncaab', 'soccer')       # every supported market shows; a mi
 STALE_ODDS = timedelta(minutes=20)         # the NCAAB odds tick runs every 60 s; an older stored price is not shown as current
 
 
-def label_lines(sport, pick, book, now):
+def label_lines(sport, pick, book, now, has_detail=False):
     """Plain labels inside a market block (NCAAB, Soccer): a market that failed validation is shown and can never be the
-    recommended pick; missing or stale odds are said so. Never changes a forecast, a colour or the delivery key."""
+    recommended pick; missing or stale odds are said so. `has_detail`: the block already prints a sportsbook line (a quote, or
+    the reason there is none), so 'Odds unavailable' is not repeated under it. Never changes a forecast, a colour or the key."""
     out = []
     if sport == 'ncaab':
         from .ncaab_app import FAILED_VALIDATION
@@ -529,34 +494,67 @@ def label_lines(sport, pick, book, now):
             out.append('Failed validation — not recommended · ' + escape(FAILED_VALIDATION[pick['market']]))
     if sport in LABELLED_SPORTS:
         got = (pick.get('quote_check') or {}).get('retrieved_at')
-        stale = None
+        stale = False
         if got and now is not None:
             try:
-                if now - datetime.fromisoformat(got.replace('Z', '+00:00')) > STALE_ODDS:
-                    stale = _hm(got)
+                stale = now - datetime.fromisoformat(got.replace('Z', '+00:00')) > STALE_ODDS
             except ValueError:
                 pass
         if book is None:
-            out.append('Odds unavailable')
+            if not has_detail:
+                out.append('Odds unavailable')
         elif stale:
-            out.append(f'Odds unavailable · latest stored price is older than 20 minutes ({stale})')
+            out.append('Current odds unavailable (latest price older than 20 min) — the price above is the one the forecast saw')
     return out
 
 
+def soccer_unserved(picks):
+    """{market: True} for the goal/corner markets the pick's competition does not serve at all (sealed model not served there):
+    soccer_markets_live.state(family) lists the served competitions and markets. Empty on any problem (then 'No forecast' shows)."""
+    try:
+        from . import soccer_markets_live as sml
+        comp = next((p.get('competition') for p in picks if p.get('competition')), None)
+        out = {}
+        for family, markets in sml.FAMILY_MARKETS.items():
+            st = sml.state(family)
+            for m in markets:
+                if not (st['served'] and comp in st['competitions'] and m in st['markets']):
+                    out[m] = True
+        return out
+    except Exception:
+        return {}
+
+
 def missing_market_blocks(sport, picks):
-    """One 'No forecast' block per supported market of the sport that has no forecast on this card (never a made-up one)."""
+    """One 'No forecast' block per supported market of the sport that has no forecast on this card (never a made-up one). Soccer:
+    markets the competition does not serve at all are ONE line ('Not offered for this competition: …'), and the team goal and
+    corner blocks name their team."""
     from . import markets
     have = {p['market'] for p in picks}
+    notoffered = []
     if sport == 'ncaab':
         from . import sports
         titled = [(m, markets.spec('ncaab', m).title) for m in sports.store('ncaab').markets]
     else:
         from .tickets import BET_TYPES, SOCCER_MARKETS
-        titled = [(m, BET_TYPES[m]) for m in BET_TYPES if m in SOCCER_MARKETS]
+        home, away = next((p['matchup'].split(' vs ', 1) for p in picks if ' vs ' in (p.get('matchup') or '')), ('Home team', 'Away team'))
+        names = {'goals_home': f'{home} goals (90 min)', 'goals_away': f'{away} goals (90 min)',
+                 'corners_home': f'{home} corners (90 min)', 'corners_away': f'{away} corners (90 min)'}
+        unserved = soccer_unserved(picks)
+        titled = []
+        for m in BET_TYPES:
+            if m not in SOCCER_MARKETS or m in have:
+                continue
+            if unserved.get(m):
+                notoffered.append(names.get(m, BET_TYPES[m]))
+            else:
+                titled.append((m, names.get(m, BET_TYPES[m])))
     out = []
     for market, title in titled:
         if market not in have:
             out += [f"<b>{escape(title)}</b>", 'No forecast for this market', '<b>Model —</b> · no forecast', '']
+    if notoffered:
+        out += ['Not offered for this competition: ' + escape(', '.join(notoffered)), '']
     return out
 
 
@@ -603,7 +601,7 @@ def market_block(sport, pick, *, preview=False, compact=False, colour=None, now=
         detail = sportsbook_detail_line(sb, is_dnb(pick)) if one_line else None
         if detail:
             lines.append(detail)
-        lines += label_lines(sport, pick, book, now)
+        lines += label_lines(sport, pick, book, now, bool(detail))
         lines += record_basis_lines(pick.get('record_basis'), pick.get('market'), pick.get('matchup'))
         return lines + [''], version, priced
     if (h['sport'] != sport or h['market'] != pick['market']
@@ -640,18 +638,15 @@ def market_block(sport, pick, *, preview=False, compact=False, colour=None, now=
              f"{model_label(escape(h['percentage']), colour)} · {tail}{standing}"]
     # Step 3 (Nov 11): the recomputed past seasons at the same exact percentage, side, model and line source, on a line of
     # its own and named as such, so the live record and its notes are never read as history. Shown only with settled examples.
-    past = h.get('history')
-    if past and past['settled']:
-        prefix = PAST_PREFIX_NO_LINE if past['line_source'] == 'none' else PAST_PREFIX
-        # Review MEDIUM (Nov 11): the live line's own small-sample threshold and wording, so a short history is not read as proof.
-        small = ' · Small sample.' if past['settled'] < MIN_LIVE_GRADED else ''
-        lines.append(f"{prefix}{past['wins']}W–{past['losses']}L{small}{_own_colour(past)}")
+    line = history_line(_dump(h.get('history')))     # the same text the API carries as percentage_history.history.line
+    if line:
+        lines.append(escape(line))
     if is_dnb(pick):    # the stored % and its exact-% history keep their original definition: say which
         lines.append(escape(DNB_MODEL_NOTE.format(pct=h['percentage']) + DNB_BUCKET_NOTE))
     detail = sportsbook_detail_line(sb, is_dnb(pick)) if one_line else None
     if detail:
         lines.append(detail)
-    lines += label_lines(sport, pick, book, now)
+    lines += label_lines(sport, pick, book, now, bool(detail))
     tline = telegram_history_line(sport, h)
     if tline and not (compact and tline.startswith('No recovered')):
         lines.append(tline)
@@ -664,8 +659,6 @@ def market_block(sport, pick, *, preview=False, compact=False, colour=None, now=
         lines.append('<i>Current comparison only; not a validated betting rule. ' +
                      ('Model line; no bookmaker offer verified.' if h['line_source'] == 'model'
                       else 'Current opposite-side price unverified.') + '</i>')
-    if h['small_sample']:
-        lines.append('<i>' + ('Small sample.' if settled else 'No settled matching examples.') + '</i>')
     return lines + [''], version, priced
 
 
@@ -775,7 +768,7 @@ def _blocks(text):
     """(market title, pick label, model %) of each market block of a card text; the markup stays escaped."""
     lines, out = text.split('\n'), []
     for i in range(len(lines) - 2):
-        m = re.match(r'<b>(?:<s>)?Model ([\d.]+)%(?:</s>)?</b>', lines[i + 2])     # plain, green or red (struck) block
+        m = re.match(r'<b>(?:<s>)?Model ([\d.]+)%(?:</s>)?</b>', lines[i + 2])     # plain, green or red block; also reads old red (struck) messages
         if m and lines[i].startswith('<b>') and lines[i].endswith('</b>'):
             out.append((_plain(lines[i]), _plain(lines[i + 1]).split(' · ')[0], m.group(1)))
     return out

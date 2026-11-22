@@ -173,6 +173,8 @@ class PercentageHistorySource(BaseModel):
     colour: Literal['green', 'red', 'neutral'] = 'neutral'    # threshold_overview.bucket_colour on this record's own counts
     available: bool = True
     win_rate: Optional[float] = None
+    line: Optional[str] = Field(default=None, description="Exactly the text Telegram prints for this record (threshold_overview."
+                                "history_line); null when Telegram hides it. The web renders it verbatim.")
     settled: int
     small_sample: bool = False     # settled < threshold_overview.MIN_LIVE_GRADED, as the live record's flag
 
@@ -220,6 +222,8 @@ class PercentageTelegramSource(BaseModel):
     colour: Literal['green', 'red', 'neutral'] = 'neutral'
     settled: Optional[int] = None
     win_rate: Optional[float] = None
+    line: Optional[str] = Field(default=None, description="Exactly the text Telegram prints for this record (threshold_overview."
+                                "telegram_line), incl. dates, colour word, overlap note and the unavailable / no-history wording.")
     overlap_live: Optional[int] = Field(default=None, description="Recovered games also in the live record (counted once in each, never summed).")
     small_sample: bool = False
 

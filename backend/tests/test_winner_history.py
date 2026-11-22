@@ -168,7 +168,7 @@ def test_winner_card_line_is_named_without_model_line_fits_and_keeps_identity():
                                                       "losses": 44, "settled": 105}
     _, text = tg.message_batches(d, "123")[0]
     lines = text.split("\n")
-    record = lines.index("<b>Model 51.8%</b> · 0W–2L (2 settled)")
+    record = lines.index("<b>Model 51.8%</b> 🔴 · this exact % has gone 0–2 (0%) · small sample (2 settled)")
     assert "Past seasons 2024-26, recomputed: 61W–44L" in lines[record:]
     assert "model line: 61W" not in text
     assert tg.message_batches(d, "123")[0][0] == tg.message_batches(plain, "123")[0][0]   # no resend

@@ -132,9 +132,12 @@ def test_a_missing_forecast_and_missing_odds_are_labelled_never_invented(store):
     assert text.count("No forecast for this market") == 4 and "<b>Model —</b> · no forecast" in text
     assert "<b>Point spread</b>\nNo forecast for this market" in text
     spread = _labelled_text(store, ("spread",))
-    assert "Odds unavailable" in spread                                                 # no spread quote is stored in this fixture
+    assert "Sportsbook:" in spread and "Odds unavailable" not in spread                 # the block's own reason line is not repeated
     pick = {"market": "winner", "quote_check": {"retrieved_at": "2026-11-17T22:00:00Z"}}
-    assert tg.label_lines("ncaab", pick, 0.5, NOW_DT) == ["Odds unavailable · latest stored price is older than 20 minutes (05:00 PM EST)"]
+    assert tg.label_lines("ncaab", pick, 0.5, NOW_DT) == [
+        "Current odds unavailable (latest price older than 20 min) — the price above is the one the forecast saw"]
+    assert tg.label_lines("ncaab", {"market": "winner"}, None, NOW_DT) == ["Odds unavailable"]
+    assert tg.label_lines("ncaab", {"market": "winner"}, None, NOW_DT, has_detail=True) == []   # 'No sportsbook quotes are collected' is enough
     assert tg.label_lines("ncaab", pick, 0.5, NOW_DT.replace(minute=15)) == []          # 15 minutes old: current
     assert tg.label_lines("nba", pick, None, NOW_DT) == []                                # other sports unchanged
 
