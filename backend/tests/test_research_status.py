@@ -913,3 +913,30 @@ def test_holdout_for_sealed_sports_is_reported_not_failed_and_autoresearch_home_
     (tmp_path / "new").mkdir()
     (tmp_path / "new" / "daily-state.tsv").write_text("nba\t2026-11-22T10:00:00Z\tevaluated\t2026-11-22T10:00:00Z\t\n")
     assert research_status.daily_state()[0]["sport"] == "nba"
+
+
+def test_get_adapter_reports_a_missing_module_as_none_but_an_import_error_inside_it_as_a_failure(monkeypatch):
+    monkeypatch.setitem(ar.ADAPTER_FUNCTIONS, "nfl", "zz_not_a_module:research_adapter")
+    assert ar.get_adapter("nfl") is None
+    import importlib
+    real = importlib.import_module
+
+    def broken(name, *a, **k):
+        if name.endswith("nfl_challengers"):
+            raise ModuleNotFoundError("No module named 'numpy_broken'", name="numpy_broken")
+        return real(name, *a, **k)
+    monkeypatch.setitem(ar.ADAPTER_FUNCTIONS, "nfl", "nfl_challengers:research_adapter")
+    monkeypatch.setattr(importlib, "import_module", broken)
+    with pytest.raises(ModuleNotFoundError, match="numpy_broken"):
+        ar.get_adapter("nfl")
+
+
+def test_forward_record_refuses_a_game_that_started_before_the_recording_time_and_a_forecast_from_later(tmp_path):
+    kw = dict(sport="nba", protocol_id="p", model="m", role="candidate", model_version="v", data_version="d")
+    path = tmp_path / "f.sqlite"
+    ok = dict(rec(1, outcome=None, days=3), forecast_cutoff=_t(1))
+    out = ar.forward_record(path, forecasted_at=_t(2), records=[ok], now=_t(5), **kw)          # the game started at day 3 + 12 h < now
+    assert out["inserted"] == 0 and "recorded at" in out["rejected"][0]["reason"]
+    late = ar.forward_record(path, forecasted_at=_t(2, 5), records=[ok], now=_t(2), **kw)       # forecast time after the recording time
+    assert late["inserted"] == 0 and "after the recording time" in late["rejected"][0]["reason"]
+    assert ar.forward_record(path, forecasted_at=_t(2), records=[ok], now=_t(2), **kw)["inserted"] == 1
