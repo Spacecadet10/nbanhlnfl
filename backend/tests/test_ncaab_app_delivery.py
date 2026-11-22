@@ -276,3 +276,10 @@ def test_ncaab_kill_switch_sends_nothing_and_selects_nothing(store, tmp_path, mo
     assert out["sports"]["ncaab"]["status"] == "off", out
     assert "NBA_NCAAB_CARDS=0" in out["sports"]["ncaab"]["reason"]
     assert sends == [] and selections == 0
+
+
+def test_every_odds_label_is_drawn_in_the_card_image():
+    """Review Nov 22: each label line label_lines can print starts with a BLOCK_EXTRA_PREFIXES entry, so the PNG draws it."""
+    pick = {"market": "winner", "quote_check": {"retrieved_at": "2026-11-17T22:00:00Z"}}
+    labels = tg.label_lines("ncaab", pick, 0.5, NOW_DT) + tg.label_lines("ncaab", {"market": "winner"}, None, NOW_DT)
+    assert len(labels) == 2 and all(line.startswith(tg.BLOCK_EXTRA_PREFIXES) for line in labels)

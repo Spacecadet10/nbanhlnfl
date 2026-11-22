@@ -307,7 +307,7 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
 
 # Lines after a market's record line that the card image (telegram_card.render_card) draws under it. One list, both sides.
 BLOCK_EXTRA_PREFIXES = ('Sportsbook quote: ', 'Sportsbook: ', 'Recovered Telegram cards', 'No recovered Telegram history',
-                        'Record uses ', 'Telegram card sent ', 'Failed validation', 'Odds unavailable')
+                        'Record uses ', 'Telegram card sent ', 'Failed validation', 'Odds unavailable', 'Current odds unavailable')
 
 
 # Card colouring (owner brief Nov 22 2026): a marker after the Model % taken from the exact-% bucket's OWN settled record

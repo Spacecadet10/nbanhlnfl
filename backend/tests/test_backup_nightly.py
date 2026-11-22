@@ -359,3 +359,16 @@ def test_a_stale_partial_mirror_copy_is_removed_but_completed_and_newer_folders_
     assert out["status"] == "ok" and (offsite / "20261116T043000Z" / "manifest.json").is_file()
     assert not (offsite / ".20261116T043000Z.partial").exists() and not (offsite / ".20261101T000000Z.partial").exists()
     assert (offsite / ".20261201T000000Z.partial").is_dir() and (offsite / "20261101T000000Z").is_dir()
+
+
+def test_a_failed_pool_copy_keeps_the_backup_and_warns_instead_of_crashing(tmp_path, monkeypatch):
+    data, root = tmp_path / "data", tmp_path / "backups"
+    _store(data)
+
+    def broken(*a, **k):
+        raise OSError("disk full")
+    monkeypatch.setattr(nb, "_pool", broken)
+    seen = []
+    out = nb.nightly(data, root, mirror=None, stamp="20261116T043000Z", notify=seen.append)
+    assert "disk full" in out["pool"]["error"] and (root / "stores" / "20261116T043000Z" / "manifest.json").is_file()
+    assert any("model pickles were NOT backed up" in m for m in seen)

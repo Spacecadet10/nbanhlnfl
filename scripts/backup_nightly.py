@@ -295,7 +295,11 @@ def nightly(data_dir: Path, root: Path, *, mirror, stamp=None, ledger=None, repo
     with tarfile.open(tmp, "w:gz") as t:
         t.add(jdir, arcname=".", filter=lambda info: None if info.name.endswith(".journal.lock") else info)
     os.rename(tmp, folder / "journal.tar.gz")
-    pool = _pool(data_dir, Path(root), folder)
+    try:
+        pool = _pool(data_dir, Path(root), folder)
+    except (backup.BackupError, OSError) as exc:          # the stores are backed up already; say so, never crash silently
+        pool = {"error": f"{type(exc).__name__}: {exc}", "conflicts": []}
+        notify(f"WARNING: the adaptive model pickles were NOT backed up tonight ({pool['error']}). Stores: {folder}")
     extras = _extras(folder, data_dir, ledger, repo_root, launch_agents) if (ledger or repo_root or launch_agents) else {}
     out = {"stamp": stamp, "extras": extras, "backup": str(folder), "journal_new_rows": {s: sum(v.values()) for s, v in exported["sports"].items()},
            "journal_verify_ok": checked["ok"], "mirror": None, "pool": pool}
@@ -337,7 +341,7 @@ def main(argv=None) -> None:
     out = nightly(data_dir, args.root, mirror=args.mirror, ledger=args.ledger or data_dir.parent / ".telegram-delivery.sqlite",
                   repo_root=Path(__file__).resolve().parents[1], launch_agents=Path.home() / "Library" / "LaunchAgents", prune_apply=args.prune)
     print(json.dumps({"at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), **out}, sort_keys=True))
-    sys.exit(1 if not out["journal_verify_ok"] else 3 if out["status"] == "mirror_failed" else 2 if out["status"] == "no_mirror" else 0)
+    sys.exit(1 if not out["journal_verify_ok"] or out["pool"].get("error") else 3 if out["status"] == "mirror_failed" else 2 if out["status"] == "no_mirror" else 0)
 
 
 if __name__ == "__main__":
