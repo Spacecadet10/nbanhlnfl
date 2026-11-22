@@ -6,7 +6,7 @@ import { useDataRevision } from '../api/freshness';
 import { pct, tipoffTime } from '../format';
 import { AsyncView } from './States';
 import { NoSkillNote } from './Skill';
-import { PickEvidence } from './PickEvidence';
+import { ModelPct, PickEvidence } from './PickEvidence';
 import { teamsOf } from './cardRecord';
 import { formatGap, gapPoints } from './sportsbook';
 
@@ -49,7 +49,7 @@ function RankTable({ picks, date }: { picks: RankedPick[]; date: string }) {
           <td>{p.matchup}<br /><span className="small muted">{tipoffTime(p.tipoff, date)}{p.game_rank != null && ` · #${p.game_rank} of ${p.game_ranked} in this game`}</span></td>
           <td><strong>{p.pick_label}</strong><br /><span className="small muted">{p.market_title}</span>
             {!p.skill_proven && <><br /><NoSkillNote market={p.market} compact /></>}</td>
-          <td>{pct(p.probability, 1)}<br /><PickEvidence teams={teamsOf(p.matchup)} sportsbook={p.sportsbook} recordBasis={p.record_basis} history={p.percentage_history} grade={p.grade} opposite={p.opposite_pick_label} startAt={p.tipoff} /></td>
+          <td><ModelPct probability={p.probability} history={p.percentage_history} /><br /><PickEvidence teams={teamsOf(p.matchup)} sportsbook={p.sportsbook} recordBasis={p.record_basis} history={p.percentage_history} grade={p.grade} opposite={p.opposite_pick_label} startAt={p.tipoff} /></td>
           <td>{p.threshold == null ? <span className="muted">below grid</span> : <span className="badge badge-threshold">{pct(p.threshold)}+</span>}</td>
           <td><Evidence e={p.evidence} /></td>
           <td><Market p={p} /></td>
@@ -67,7 +67,7 @@ function GamePickList({ picks }: { picks: RankedPick[] }) {
         <li key={p.market} value={p.game_rank ?? undefined} className={p.game_rank == null ? 'muted' : undefined}>
           <strong>{p.game_rank != null ? `#${p.game_rank}` : 'Not ranked'}</strong>{' '}
           {p.pick_label} <span className="small muted">({p.market_title})</span>{' · '}
-          model {pct(p.probability, 1)}{p.threshold != null && <> · <span className="badge badge-threshold">{pct(p.threshold)}+</span></>}
+          model <ModelPct probability={p.probability} history={p.percentage_history} />{p.threshold != null && <> · <span className="badge badge-threshold">{pct(p.threshold)}+</span></>}
           {' · '}{p.evidence ? <>broader ranking history: {band(p.evidence)} picks ({source(p.evidence)}) won {pct(p.evidence.win_rate, 1)} of {p.evidence.settled}</> : 'not enough ranking history'}
           {p.market_prob != null && <> · market {pct(p.market_prob, 1)}</>}
           {' '}<Result grade={p.grade} />
@@ -99,7 +99,7 @@ function Simple({ p, date, game }: { p: RankedPick; date?: string; game?: boolea
     <strong className="simple-pick">{p.pick_label}</strong>
     <span className="small muted">
       {' '}{game && date && <>{p.matchup}, {tipoffTime(p.tipoff, date)} · </>}{p.market_title}
-      {' · '}model {pct(p.probability, 1)}
+      {' · '}model <ModelPct probability={p.probability} history={p.percentage_history} />
     </span>
     {' '}<Result grade={p.grade === 'pending' ? null : p.grade} />
     <br /><PickEvidence teams={teamsOf(p.matchup)} sportsbook={p.sportsbook} recordBasis={p.record_basis} history={p.percentage_history} grade={p.grade} opposite={p.opposite_pick_label} startAt={p.tipoff} />
@@ -204,7 +204,7 @@ export function GameRankedPicks({ sport, date, gameId, compact = false }: { spor
                 <p className="best-label">Best pick in this game</p>
                 <p className="best-pick">{best.pick_label} <Result grade={best.grade === 'pending' ? null : best.grade} /></p>
                 <p className="small muted">{best.market_title}
-                  {' · '}model {pct(best.probability, 1)}
+                  {' · '}model <ModelPct probability={best.probability} history={best.percentage_history} />
                   {best.day_rank != null && <> · #{best.day_rank} of the day</>}<br />
                   <PickEvidence teams={teamsOf(best.matchup)} sportsbook={best.sportsbook} recordBasis={best.record_basis} history={best.percentage_history} grade={best.grade} opposite={best.opposite_pick_label} startAt={best.tipoff} /></p>
                 {rest.length > 0 && <>

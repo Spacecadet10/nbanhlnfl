@@ -2328,3 +2328,44 @@ def test_line_move_prefers_the_picks_own_sportsbook_when_providers_share_the_lat
     t.attach_facts(c, 'nba', picks, FACT_T)
     move = picks[0]['game_facts']['line_move']
     assert move['provider'] == 'DraftKings' and move['current']['line'] == 221.5 and move['move_pct_points'] == pytest.approx(3.0)
+
+
+def _soccer_dc_fixture(tmp_path, monkeypatch, stamps):
+    """A scheduled match with a 1X2 forecast generated 2026-11-21T10:00Z and Bet365 responses saved at `stamps`."""
+    from app import bet365_dc, soccer_markets_live as sml
+    monkeypatch.setenv('NBA_DATA_DIR', str(tmp_path))
+    real = json.loads((Path(__file__).parent / 'fixtures/espn-core-odds-eng1-401879233-trimmed.json').read_text())
+    mid = 'soccer:eng.1:401879233'
+    d = bet365_dc.folder() / bet365_dc._safe(mid)
+    d.mkdir(parents=True)
+    for s in stamps:
+        (d / f"{s}-x.json").write_text(json.dumps({'body': real}))
+    c = sqlite3.connect(':memory:'); c.row_factory = sqlite3.Row
+    c.execute('CREATE TABLE soccer_matches (match_id TEXT, competition_id TEXT, kickoff_at TEXT, status TEXT, '
+              'home_team_id TEXT, away_team_id TEXT)')
+    c.execute("INSERT INTO soccer_matches VALUES (?, 'eng.1', '2026-11-21T12:30:00Z', 'scheduled', 'soccer:382', 'soccer:370')", (mid,))
+    c.execute('CREATE TABLE soccer_live_forecasts (forecast_id INTEGER, match_id TEXT, generated_at TEXT, cutoff_at TEXT)')
+    c.execute("INSERT INTO soccer_live_forecasts VALUES (7, ?, '2026-11-21T10:00:00Z', '2026-11-21T10:00:00Z')", (mid,))
+    m = dict(match_id=mid, competition='eng.1', kickoff_at='2026-11-21T12:30:00Z', home='Man City', away='Fulham', families={},
+             derived=dict(forecast_id=7, probabilities_1x2={'home': .6, 'draw': .25, 'away': .15},
+                          selections=[{'market': 'double_chance', 'side': 'home_draw', 'result': None},
+                                      {'market': 'draw_no_bet', 'side': 'home', 'result': None}]),
+             prices=sml.match_prices(c, mid, '2026-11-21T11:59:00Z'))        # the send-time view: everything retrieved so far
+    monkeypatch.setattr(sml, 'match_markets', lambda *a, **k: [m])
+    monkeypatch.setattr(sml, 'quotes', lambda *a, **k: [])
+    return c
+
+
+def test_soccer_dc_card_bet365_is_the_quote_at_forecast_time_not_the_newer_send_time_quote(tmp_path, monkeypatch):
+    """Nov 21 audit: the card's Bet365 % was the newest quote at send time, retrieved AFTER the forecast; every other
+    sportsbook % on the card is as of the forecast. The card must use the latest quote retrieved at or before generated_at."""
+    c = _soccer_dc_fixture(tmp_path, monkeypatch, ['20261121T090000Z', '20261121T110000Z'])
+    dc = [p for p in t.soccer_market_picks(c, '2026-11-21T11:59:00Z', since='') if p['market'] == 'double_chance'][0]
+    assert dc['book_quote']['retrieved_at'] == '2026-11-21T09:00:00Z'
+    assert dc['card_comparison_basis'] == 'Bet365 offer, includes margin'
+
+
+def test_soccer_dc_card_says_no_bet365_quote_when_every_quote_is_after_the_forecast(tmp_path, monkeypatch):
+    c = _soccer_dc_fixture(tmp_path, monkeypatch, ['20261121T110000Z'])
+    dc = [p for p in t.soccer_market_picks(c, '2026-11-21T11:59:00Z', since='') if p['market'] == 'double_chance'][0]
+    assert 'book_quote' not in dc and dc.get('card_comparison_basis') != 'Bet365 offer, includes margin'

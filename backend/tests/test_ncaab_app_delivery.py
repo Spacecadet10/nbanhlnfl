@@ -78,7 +78,7 @@ def test_format_batch_and_dedup_key_follow_the_nba_rules(store):
 
 
 def test_run_once_covers_ncaab_and_only_ever_calls_the_stub_sender(store, tmp_path, monkeypatch):
-    monkeypatch.setenv("NBA_NCAAB_CARDS", "1")                # the card path itself (off by default since Nov 21)
+    monkeypatch.delenv("NBA_NCAAB_CARDS", raising=False)      # default since the colour release: the gate decides
     from ncaab_support import refreshed
     refreshed(store, "2026-11-17T22:29:00Z")                  # the source must be fresh for a card to go out (freshness policy)
     sends = []
@@ -96,9 +96,9 @@ def test_run_once_covers_ncaab_and_only_ever_calls_the_stub_sender(store, tmp_pa
         assert ncaab_cards.ensure(conn, store, datetime(2026, 11, 17, 16, 0, tzinfo=timezone.utc))["selected"] == [GAME]
         first = tg.run_once(Bot(), {"TELEGRAM_CHAT_ID": "123"}, conn, now=NOW_DT)
         second = tg.run_once(Bot(), {"TELEGRAM_CHAT_ID": "123"}, conn, now=NOW_DT)
-    assert "ncaab" in first["sports"] and first["sports"]["ncaab"].get("status") != "failed", first
+    assert "ncaab" in first["sports"] and first["sports"]["ncaab"].get("status") == "gated", first
     sent = first["sports"]["ncaab"].get("sent", 0)
-    assert sent == 1 and first["sports"]["ncaab"]["eligible_summaries"] == 1, first        # one card for the one selected game (app/ncaab_cards.py)
+    assert sent == 0 and first["sports"]["ncaab"]["qualifying"] == 0, first     # no threshold stored: nothing qualifies
     assert second["sports"]["ncaab"].get("sent", 0) == 0                                 # the same card is never sent twice
     assert len(sends) >= sent and all(m in ("sendMessage", "sendPhoto") for m, _ in sends)
 
@@ -202,12 +202,12 @@ def test_the_cli_routes_telegram_preview_for_ncaab_to_the_same_command_as_the_nb
     assert seen == {"sport": "ncaab", "action": "preview", "date": "2026-11-16"}
 
 
-def test_ncaab_cards_are_off_by_default_and_nothing_is_sent_or_selected(store, tmp_path, monkeypatch):
-    """Owner decision Nov 21 2026: no NCAAB Telegram cards until the NCAAB model is fixed (8 books agreed with DraftKings
-    within half a point while the top-4 gaps were 25-36 pts). Forecasts keep being recorded; only the cards stop."""
+def test_ncaab_kill_switch_sends_nothing_and_selects_nothing(store, tmp_path, monkeypatch):
+    """NBA_NCAAB_CARDS=0 turns every NCAAB card off before any read (the Nov 21 off switch, now a kill switch; by default the
+    colour gate decides). Forecasts keep being recorded; only the cards stop."""
     from ncaab_support import refreshed
     refreshed(store, "2026-11-17T22:29:00Z")
-    monkeypatch.delenv("NBA_NCAAB_CARDS", raising=False)
+    monkeypatch.setenv("NBA_NCAAB_CARDS", "0")
     sends = []
 
     class Bot:
@@ -220,5 +220,5 @@ def test_ncaab_cards_are_off_by_default_and_nothing_is_sent_or_selected(store, t
         out = tg.run_once(Bot(), {"TELEGRAM_CHAT_ID": "123"}, conn, now=NOW_DT)
         selections = conn.execute("SELECT COUNT(*) FROM ncaab_card_selections").fetchone()[0]
     assert out["sports"]["ncaab"]["status"] == "off", out
-    assert "NBA_NCAAB_CARDS" in out["sports"]["ncaab"]["reason"]
+    assert "NBA_NCAAB_CARDS=0" in out["sports"]["ncaab"]["reason"]
     assert sends == [] and selections == 0

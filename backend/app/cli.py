@@ -50,6 +50,42 @@ def _record_lock_busy(sport: str, reason: str):
         return None
 
 
+def _card_thresholds(args) -> int:
+    """seed / run write config.card_thresholds_path() (refused inside a protected live data folder outside the verified
+    release environment, as every other write: _write_refusal); show / backtest only read."""
+    from datetime import datetime, timezone
+    from . import card_threshold as ct, config
+    today = ct.today()
+    day = args.date or today
+    path = config.card_thresholds_path()
+    if args.action in ("seed", "run"):
+        if day != today:
+            print(json.dumps({"status": "refused", "error": f"{args.action} writes only today ({today}); never a past day"}))
+            return 1
+        refusal = _write_refusal("nba", paths=(path,))     # the live folder only in the verified release environment
+        if refusal:
+            print(json.dumps(refusal))
+            return 1
+        conn = ct.connect(path)
+        stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        try:
+            if args.action == "seed":
+                ct.seed(conn, day, ct.priced_picks(ct.day_start(day)), generated_at=stamp)
+            else:
+                ct.run(conn, day, lambda: ct.priced_picks(ct.day_start(day)), generated_at=stamp)
+        except ValueError as exc:
+            print(json.dumps({"status": "refused", "error": str(exc)}))
+            return 1
+        print(json.dumps(ct.payload(conn, day, True), indent=1))
+        return 0
+    if args.action == "show":
+        conn = ct.connect(path, readonly=True) if path.exists() else None
+        print(json.dumps(ct.payload(conn, day, True), indent=1))
+        return 0
+    print(json.dumps(ct.backtest(day, start=args.start), indent=1))
+    return 0
+
+
 def _write_refusal(sport: str, *, migrate: bool = False, info=None, paths=()):
     """None when this command may open `sport`'s store for writing. A store in a protected live data folder
     (config.protected_data_dir: REPO/data, the live stores) is written only in the verified release environment
@@ -200,6 +236,11 @@ def main(argv=None) -> int:
                                                          "record nothing and exit 0 (the scheduled cycle's look-ahead)")
     sc.add_argument("--day", help="live-forecast: match date YYYY-MM-DD (default today, UTC); refused after its 06:00 UTC "
                                   "cutoff or while any earlier match is unsettled")
+    ctp = sub.add_parser("card-thresholds", help="Card colour thresholds (app/card_threshold.py): seed day 0, run today's "
+                                                 "frozen row, show the lines in force, or backtest the rule (read-only)")
+    ctp.add_argument("action", choices=("seed", "run", "show", "backtest"))
+    ctp.add_argument("--date", help="Toronto day YYYY-MM-DD (default today); run/seed only write today")
+    ctp.add_argument("--start", help="backtest: first day (default the first day with a settled priced pick)")
     pp = sub.add_parser("preview-publish", help="Development only: republish read-only copies of the live stores into a "
                                                 "scripts/dev.sh data directory when their data changed (docs/REFRESH_PLAN.md)")
     pp.add_argument("--live", required=True, help="live data directory (read-only)")
@@ -488,6 +529,8 @@ def main(argv=None) -> int:
         return _soccer(args, p)
     if args.cmd == "ncaab":
         return _ncaab(args, p)
+    if args.cmd == "card-thresholds":
+        return _card_thresholds(args)
     if args.cmd == "preview-publish":
         from pathlib import Path as _P
         from . import preview_publish

@@ -1,7 +1,7 @@
 // The canonical forecast: one record per game and market (game_forecasts), shown and graded the same way on Today, Game,
 // History and Performance. Each view names the record (#id) and model version so the pages can be compared.
 import { NoSkillNote } from './Skill';
-import { PickEvidence } from './PickEvidence';
+import { ModelPct, PickEvidence } from './PickEvidence';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import type { CanonicalForecast, CanonicalGrade, CanonicalRecord, CanonicalState, CanonicalSummary, MarketId, Sport, Team } from '../api/types';
@@ -68,7 +68,7 @@ export function CanonicalBlock({ c, home, away, detail = false }: {
       <p className="pick-line small">
         Model estimate: <strong>{winner ? (r.pick === 'home' ? home : away).abbr : r.pick_label}</strong>
         {!winner && r.line_source !== 'none' && <span className="muted"> · {LINE_SOURCE[r.line_source]}</span>}
-        <span className="muted"> · {pct(r.confidence, 1)} model probability · made {Math.round(r.minutes_before_start)} min before the start</span>
+        <span className="muted"> · <ModelPct probability={r.confidence} history={c.percentage_history} /> model probability · made {Math.round(r.minutes_before_start)} min before the start</span>
         {' · '}<GradeText grade={c.grade} />
         {!winner && c.result_label && <span className="muted"> · result: {c.result_label}</span>}
       </p>

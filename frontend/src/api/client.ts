@@ -1,7 +1,7 @@
 // The app's single API client. All screens fetch through here; there is no local fallback data.
 import type { AutoresearchStatus, SoccerMarketsResponse, SoccerMarketsHistory } from './types';
 import type { CandidateGameView } from './types';
-import type { CanonicalHistory, CanonicalPerformance, PaperRules, RankedPicks, ThresholdOverview, CoverageReport, DailyEvidence, DailyReport, AdaptiveGame, CombinationAnalysis, RuleLedger, SubsetSearch, ThresholdExplorer, AdaptiveStatus, HistoricalStart,
+import type { CanonicalHistory, CanonicalPerformance, CardThresholds, PaperRules, RankedPicks, ThresholdOverview, CoverageReport, DailyEvidence, DailyReport, AdaptiveGame, CombinationAnalysis, RuleLedger, SubsetSearch, ThresholdExplorer, AdaptiveStatus, HistoricalStart,
   JointReport, ThresholdReport, AgreementPerformance, GameDetail, GamesResponse, HistoryResponse, MarketHistoryResponse, MarketId, MarketPerformanceResponse, Meta,
   PerformanceResponse, Policy, ResearchGame, ResearchHistory, ResearchReport, ResearchSlate, Retrospective, RuleReport, CandidateRoster, PoolReport, SelectionStatus, Sport,
   DataFreshness, Health, NflRecord, PolledLeague, SoccerCompetitionId, SoccerMatchDetail, SoccerMatchesResponse, SoccerMeta, SoccerLiveResponse, SoccerLiveRecord,
@@ -99,6 +99,7 @@ export const api = {
   canonicalThresholds: (sport: Sport, signal?: AbortSignal) => get<ThresholdOverview>('/canonical/thresholds', { sport }, signal),
   canonicalRanked: (sport: Sport, date: string, signal?: AbortSignal) => get<RankedPicks>('/canonical/ranked', { sport, date }, signal),
   paperRules: (sport: Sport, signal?: AbortSignal) => get<PaperRules>('/paper-rules', { sport }, signal),
+  cardThresholds: (signal?: AbortSignal) => get<CardThresholds>('/card-thresholds', undefined, signal),
   coverage: (sport: Sport, dateFrom: string | undefined, dateTo: string | undefined, signal?: AbortSignal) =>
     get<CoverageReport>('/coverage', { sport, date_from: dateFrom, date_to: dateTo }, signal),
   agreementPerformance: (sport: Sport, signal?: AbortSignal) => get<AgreementPerformance>('/agreement-performance', { sport }, signal),

@@ -1,6 +1,6 @@
 // One wording for the app-versus-sportsbook line on every card (NBA, NHL, NFL, soccer). Pure, so it is unit-tested
 // (sportsbook.test.mjs). Never compares against another line: the backend only reports 'exact' for the same market, side and line.
-import type { SportsbookComparison } from '../api/types';
+import type { CardThresholds, SportsbookComparison } from '../api/types';
 
 /** "2:29 PM" in Toronto time, the zone of the Telegram cards; null when absent or unreadable. */
 export function quoteTime(iso: string | null | undefined): string | null {
@@ -46,4 +46,53 @@ export function sportsbookLine(c: SportsbookComparison): string {
     : `App ${one(c.app_probability)}% · Sportsbook ${one(c.book_probability)}% no-vig`;
   const note = cond ? cond[2]?.slice(1, -1) : c.basis;
   return `${head}${src ? ` (${src})` : ''} · ${formatGap(gap)}${at ? ` · quote ${at}` : ''}${note ? ` · ${note}` : ''}`;
+}
+
+// --- Card colouring (backend app/card_threshold.py; GET /api/card-thresholds) -------------------------------------------
+// The backend stores each class's daily threshold and says which class every market is; this twin only compares. Exact
+// decimal maths on the probability's shortest decimal string (the same digits as Python's str(p)): never a float compare.
+export interface CardColourDecision { colour: 'green' | 'red' | null; legend: string | null; scope: string | null }
+
+/** Tenths of a percent as an integer, from exactly the digits the card prints: (p * 100).toFixed(1), the twin of the
+ *  backend's displayed_percentage (review, Nov 21: deciding on the stored decimal disagreed with the printed % at ties, e.g.
+ *  0.5495 prints 54.9). Strings like "57.3" (already displayed) are read as printed. null when outside 0..1 or unreadable. */
+export function tenthsOf(p: number | string): number | null {
+  const text = typeof p === 'number' ? (Number.isFinite(p) ? (p * 100).toFixed(1) : '') : String(p);
+  const m = /^(\d+)\.(\d)$/.exec(text);
+  if (!m) return null;
+  const t = Number(m[1]) * 10 + Number(m[2]);
+  return t >= 0 && t <= 1000 ? t : null;
+}
+
+/** "55.0" -> 550 (the stored threshold, already in tenths). */
+const thresholdTenths = (t: string) => { const m = /^(\d+)\.(\d)$/.exec(t); return m ? Number(m[1]) * 10 + Number(m[2]) : null; };
+
+/** Green at or above the class (or sport x class cell) green_from, red below; no colour and no legend when the flag is off or
+ *  the market has no class or no stored price; no colour but the status legend when the class's line may not colour today. */
+export function cardColour(table: CardThresholds | null | undefined, sport: string | undefined, market: string | undefined,
+  probability: number | string | null | undefined, lineSource?: string | null): CardColourDecision {
+  const none: CardColourDecision = { colour: null, legend: null, scope: null };
+  if (!table?.enabled || !sport || !market || probability == null) return none;
+  const cls = table.routes?.[sport]?.[market];
+  if (!cls || lineSource === (table.no_colour_line_source ?? 'model')) return none;
+  const scopes = table.scopes ?? [];
+  const line = scopes.find((s) => s.scope === `${sport}:${cls}`) ?? scopes.find((s) => s.scope === cls);
+  if (!line) return none;
+  // green_from is the backend's one decision (card_threshold.green_from): null when the line may not colour today (missing,
+  // stale, unqualified). Older payloads without the field fall back to the threshold of a 'set'/'seed' line only.
+  const from = line.green_from !== undefined ? line.green_from : (['set', 'seed'].includes(line.state) ? line.threshold : null);
+  const t = from == null ? null : thresholdTenths(from);
+  const v = typeof probability === 'string' ? thresholdTenths(probability) : tenthsOf(probability);
+  if (t == null || v == null) return { colour: null, legend: line.legend, scope: line.scope };   // status shown, never coloured
+  return { colour: v >= t ? 'green' : 'red', legend: line.legend, scope: line.scope };
+}
+
+/** The Toronto day of `now` (the day a stored threshold colours cards on). */
+export const torontoDay = (now: number) => new Date(now).toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
+
+/** Refetch the stored lines when the cached copy is older than `maxAgeMs` or belongs to another Toronto day (a new day's
+ *  line, or one the daily job wrote after the page loaded). */
+export function cardTableStale(fetchedAt: number, now: number, table: CardThresholds | null | undefined, maxAgeMs = 10 * 60_000): boolean {
+  if (now - fetchedAt > maxAgeMs) return true;
+  return Boolean(table?.enabled && table.date && table.date !== torontoDay(now));
 }

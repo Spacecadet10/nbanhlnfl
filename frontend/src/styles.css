@@ -1439,3 +1439,10 @@ h1,h2,h3,.hero-matchup,.metric-value,.tile-value,.brand { font-family:'Barlow Co
   .ops-block .table { min-width: 36rem; }
   .daily-markets { min-width: 34rem; }
 }
+
+/* Card colouring (GET /api/card-thresholds): green at or above the class threshold, red struck through below it. */
+.model-pct-green { color: var(--ok); font-weight: 600; }
+.model-pct-red { color: var(--bad); }
+.model-pct-red s { text-decoration-thickness: 2px; }
+.card-colour-key { color: var(--ok); font-weight: 600; overflow-wrap: anywhere; }
+.card-colour-status { color: var(--muted); font-weight: 600; overflow-wrap: anywhere; }

@@ -5,6 +5,17 @@ from datetime import datetime, timedelta
 SP = sys.argv[1]
 SNAP = SP + '/snap'
 cards = json.load(open(SP + '/cards.json'))
+
+
+def is_preview(card):
+    """A TEST PREVIEW card (a past game re-rendered on request, e.g. the Nov 21 2026 colour test of IND @ CLE) is never a live
+    card: it is dropped before matching, so it can never become a phantom row. Transcribe its banner as preview: true."""
+    texts = [card.get(k) for k in ('recommended_pick', 'recommended_detail', 'banner', 'note', 'updated')]
+    return bool(card.get('preview')) or any('TEST PREVIEW' in str(t).upper() for t in texts if t)
+
+
+preview_cards = [c['message_id'] for c in cards if is_preview(c)]
+cards = [c for c in cards if not is_preview(c)]
 MON = {m: i + 1 for i, m in enumerate('Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split())}
 
 
@@ -235,7 +246,7 @@ out = {
     'method': 'One card per game: the last card sent before start. Every market row settled from the final score; '
               'NHL winner includes OT/SO, regulation uses the OT/SO decision; soccer is 90-minute result. '
               'brier = mean (stated% - outcome)^2 on decided rows. Pushes excluded from hit rate.',
-    'cards_total': len(cards), 'games_graded_one_card_each': len(latest), 'unmatched_cards': unmatched,
+    'cards_total': len(cards), 'excluded_preview_cards': preview_cards, 'games_graded_one_card_each': len(latest), 'unmatched_cards': unmatched,
     # summary: exact percentages only, keyed like the app (sport, market, direction, exact %); no ranges
     'summary': report, 'per_game_rows': per_game, 'all_card_rows': rows_out,
 }

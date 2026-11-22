@@ -17,7 +17,7 @@ import { TrackingGameCard } from '../components/Tracking';
 import { CandidateForecasts } from '../components/CandidateForecasts';
 import { CanonicalBlock, canonicalFor, GRADE_LABEL, STATE_LABEL } from '../components/Canonical';
 import { noProvenSkill } from '../components/Skill';
-import { PickEvidence } from '../components/PickEvidence';
+import { ModelPct, PickEvidence } from '../components/PickEvidence';
 import { teamsOf } from '../components/cardRecord';
 import { TeamLogo } from '../components/TeamLogo';
 import { EmptyForecastState, Icon, MetricCard, PageTitle } from '../components/ui';
@@ -193,7 +193,7 @@ function ForecastMetrics({ game: g, picks }: { game: GameDetail; picks: ReturnTy
     <div className="metrics forecast-metrics">
       {best
         ? <MetricCard icon="targetArrow" label="Best Pick" tone="accent" value={best.pick_label}
-            hint={<>{best.market_title} · model {pct(best.probability, 1)}
+            hint={<>{best.market_title} · model <ModelPct probability={best.probability} history={best.percentage_history} />
               {best.grade && best.grade !== 'pending' && <> · {GRADE_LABEL[best.grade as CanonicalGrade]?.split(' (')[0] ?? best.grade}</>}
               <br /><PickEvidence teams={teamsOf(best.matchup)} sportsbook={best.sportsbook} recordBasis={best.record_basis} history={best.percentage_history} grade={best.grade} opposite={best.opposite_pick_label} startAt={best.tipoff} /></>} />
         : <MetricCard icon="targetArrow" label="Best Pick" tone="plain"
@@ -213,7 +213,7 @@ function ForecastMetrics({ game: g, picks }: { game: GameDetail; picks: ReturnTy
           const home = r.home_win_prob, away = 1 - home;
           const pick = r.pick === 'home' ? g.home.abbr : g.away.abbr;
           return <MetricCard key={c.market} icon={icon} label={title} tone="plain"
-            value={<>{pick} <span className="metric-strong">{pct(r.confidence, 1)}</span></>}
+            value={<>{pick} <span className="metric-strong"><ModelPct probability={r.confidence} history={c.percentage_history} /></span></>}
             hint={<>
               <span className="mini-bar" role="img" aria-label={`${g.away.abbr} ${pct(away, 1)}, ${g.home.abbr} ${pct(home, 1)}`}>
                 <span className={away > home ? 'is-fav' : ''} style={{ width: `${away * 100}%` }} /><span className={home >= away ? 'is-fav' : ''} style={{ width: `${home * 100}%` }} />
@@ -224,7 +224,7 @@ function ForecastMetrics({ game: g, picks }: { game: GameDetail; picks: ReturnTy
         }
         const pick = c.market === 'winner' ? (r.pick === 'home' ? g.home.abbr : g.away.abbr) : r.pick_label;
         return <MetricCard key={c.market} icon={icon} label={title} tone="plain" value={pick ?? '—'}
-          hint={<>{pct(r.confidence, 1)} model probability{graded ? ` · ${graded}` : ''}
+          hint={<><ModelPct probability={r.confidence} history={c.percentage_history} /> model probability{graded ? ` · ${graded}` : ''}
             <br /><PickEvidence teams={{ home: g.home.abbr, away: g.away.abbr }} sportsbook={c.sportsbook} recordBasis={c.record_basis} history={c.percentage_history} grade={c.grade} opposite={r.opposite_pick_label} startAt={r.start_at} />
             {noProvenSkill(c.market) && <><br /><span className="skill-chip" title="An observed win rate at this threshold does not establish an advantage against bookmaker prices. This market has no established edge against the bookmaker's line.">Market edge unproven</span></>}</>} />;
       })}

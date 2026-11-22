@@ -14,6 +14,13 @@ MUTED = '#61717B'
 PAPER = '#FFFFFF'
 LINE = '#E2E8EC'
 LIME = '#14B8A6'
+GREEN = '#16832C'       # card colouring: at or above the class threshold
+RED = '#C51D35'         # below it (struck through)
+
+
+def key_fill(key: str) -> str:
+    """Ink of one colour-key line: green only when it states a green line; a 'not coloured' status is drawn neutral."""
+    return GREEN if 'Green = ' in key else MUTED
 
 
 class Plain(HTMLParser):
@@ -209,10 +216,14 @@ def render_card(message):
     # A full outline replaces the asymmetric stripe from the reference.
     # Owner request Nov 11: one plain "who is playing" line under the pick, only when there is something to say.
     lineup=next((line.removeprefix('Lineup: ') for line in lines[rec+2:markets] if line.startswith('Lineup: ')),None)
-    from .telegram import STRONGEST_PREFIX, BLOCK_EXTRA_PREFIXES
+    from .telegram import STRONGEST_PREFIX, BLOCK_EXTRA_PREFIXES, COLOUR_PREFIX, GREEN_MARK, RED_MARK
     strongest = next((line for line in lines[rec+2:markets] if line.startswith(STRONGEST_PREFIX)), None)
     pick_size=72 if len(lines[rec+1])<22 else 48
     detail=next((line for line in lines[rec+2:markets] if line and line!='━━━━━━━━━━━━━━' and not line.startswith(('Lineup: ', STRONGEST_PREFIX))),'')
+    # Card colouring: the recommended pick's model % carries its market block's marker; drawn coloured below, never as an emoji.
+    mark = re.search(rf'(\d+\.\d%) ({GREEN_MARK}|{RED_MARK})', detail)
+    if mark:
+        detail = detail[:mark.start()] + mark.group(1) + detail[mark.end():]
     def rows(text,width,size,bold=False):
         n,row=0,''
         for word in text.split():
@@ -235,7 +246,18 @@ def render_card(message):
     draw.rounded_rectangle((58,y,1022,y+panel_h),radius=27,outline=accent,width=3)
     draw.text((92,y+18),'RECOMMENDED PICK',font=_font(26,True),fill=_mix(accent,'#FFFFFF',.65))
     end=wrapped(lines[rec+1],92,y+59,810,size=pick_size,bold=True,fill='white',display=True)
-    wrapped(detail,95,max(y+155,end+6),835,size=27,fill='#E0E6EC')
+    detail_y=max(y+155,end+6)
+    wrapped(detail,95,detail_y,835,size=27,fill='#E0E6EC')
+    if mark and draw.textlength(detail[:mark.start()+len(mark.group(1))],font=_font(27))<=835:   # the % sits on the first row
+        token, font = mark.group(1), _font(27)
+        x0 = 95 + draw.textlength(detail[:mark.start()], font=font)
+        x1 = x0 + draw.textlength(token, font=font)
+        under = image.getpixel((int(x0) - 2, detail_y + 14))
+        draw.rectangle((x0 - 1, detail_y, x1 + 1, detail_y + 33), fill=under)      # cover the plain digits, then redraw
+        ink = '#86EFAC' if mark.group(2) == GREEN_MARK else '#FDA4AF'              # light tones: readable on the dark panel
+        draw.text((x0, detail_y), token, font=font, fill=ink)
+        if mark.group(2) == RED_MARK:
+            draw.line((x0, detail_y + 18, x1, detail_y + 18), fill=ink, width=3)
     if lineup:
         draw.text((95,y+lineup_top),fit_line(draw,lineup,_font(26,True),860),font=_font(26,True),fill='#FFD27A')
     if strongest:
@@ -272,10 +294,15 @@ def render_card(message):
             draw.rounded_rectangle((711,y+33,835,y+91),radius=16,fill=bg)
             w=draw.textlength(result,font=_font(27,True))
             draw.text((773-w/2,y+45),result,font=_font(27,True),fill=color)
-        draw.rounded_rectangle((847,y+33,1004,y+91),radius=16,fill=_mix(primary,'#FFFFFF',.92))
         prob=probability.removeprefix('Model ')
+        mark = GREEN if prob.endswith(GREEN_MARK) else RED if prob.endswith(RED_MARK) else None
+        prob = prob.removesuffix(GREEN_MARK).removesuffix(RED_MARK).strip()
+        badge_fill, prob_ink = {GREEN: ('#E6F4E4', GREEN), RED: ('#FDE7E8', RED)}.get(mark, (_mix(primary,'#FFFFFF',.92), primary))
+        draw.rounded_rectangle((847,y+33,1004,y+91),radius=16,fill=badge_fill)
         w=draw.textlength(prob,font=_font(34,True))
-        draw.text((925-w/2,y+41),prob,font=_font(34,True),fill=primary)
+        draw.text((925-w/2,y+41),prob,font=_font(34,True),fill=prob_ink)
+        if mark == RED:      # below the class threshold: struck through, still readable
+            draw.line((925-w/2-4,y+62,925+w/2+4,y+62),fill=RED,width=3)
         record_text, record_font = fit_record(draw, record+(' · '+note if note else ''))
         draw.text((200,end+4),record_text,font=record_font,fill=INK)
         if past:      # the recomputed past seasons, on their own line under the live record and its note
@@ -290,6 +317,8 @@ def render_card(message):
         if opposite:
             wrapped(opposite,200,y+height-opposite_lines*32-8,800,size=24,bold=True,fill=primary)
         y+=height+8
+    for key in (line for line in lines[footer:] if line.startswith(COLOUR_PREFIX)):    # one colour-key line per class
+        y = wrapped(key.removeprefix(COLOUR_PREFIX), 58, y + 6, 964, size=24, bold=True, fill=key_fill(key))
     y += 9
     note = ('90-minute markets. Draw-no-bet draws return the stake. Model selections may lack sportsbook offers.'
             if league == 'SOCCER' else 'Same sport, market, direction, percentage and model.')

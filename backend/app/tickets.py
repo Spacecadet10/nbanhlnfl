@@ -571,6 +571,11 @@ def card_choice(sport, picks):
         if market in OFF_TICKETS and sport != 'soccer':
             blocked.append('Team totals are excluded from selection.')
             continue
+        gate = p.get('ncaab_gate') if sport == 'ncaab' else None
+        if gate is not None and not gate.get('qualifies'):     # app/ncaab_gate.py: only a qualifying pick can be recommended
+            from app.ncaab_gate import POLICY
+            blocked.append(f'No NCAAB pick qualifies under policy {POLICY}.')
+            continue
         sel = p.get('ncaab_selection') if sport == 'ncaab' else None
         if sel and market != sel['market']:     # the card shows the market that put the game in the day's top 4
             continue
@@ -626,8 +631,14 @@ def card_choice(sport, picks):
             team = p['pick_label'].removesuffix(' win')
             if any(x['market'] == 'spread' and ' +' in x['pick_label'] and not x['pick_label'].startswith(team+' ') for x in picks):
                 support.append('Opposing spread pick supports the winner context.')
-        # Compare warnings first, then the support group, then likelihood. No sum of correlated votes.
-        rank = (not warnings, bool(support), book if book is not None else app, exact_win, app)
+        if gate is not None:
+            from app.ncaab_gate import summary
+            support.insert(0, summary(gate))
+        # Compare warnings first, then the support group, then likelihood. No sum of correlated votes. Note: for the other
+        # sports the third key is the SPORTSBOOK probability, i.e. among supported, warning-free picks the market the book
+        # makes the biggest favourite wins (docs/preregistration/ncaab-colour-gate-2026-11-22.md). NCAAB gated picks rank by expected value instead.
+        rank = ((not warnings, gate['ev']) if gate is not None else
+                (not warnings, bool(support), book if book is not None else app, exact_win, app))
         candidates.append((rank, p, gap, support, warnings))
     if not candidates:
         return dict(method=CARD_METHOD, pick=None, reason=' '.join(dict.fromkeys(blocked)) or 'No eligible forecast.', assessments=[])
@@ -648,7 +659,9 @@ def card_choice(sport, picks):
     reason = numbers+' '+(support[0] if support else 'Highest available likelihood after context checks.')
     if warnings:
         reason += ' Caution: '+'; '.join(warnings)
-    if (chosen.get('book_quote') or {}).get('decimal') is not None:
+    if chosen.get('ncaab_gate') is not None:
+        pass                    # the gate's summary already states the price and the expected value at it
+    elif (chosen.get('book_quote') or {}).get('decimal') is not None:
         quote = chosen['book_quote']
         reason += f" Stored {quote['provider']} return {quote['decimal']:.2f}x; no proven price edge."
     elif (chosen.get('quote_check') or {}).get('price_now') is None:
@@ -834,6 +847,7 @@ def soccer_market_picks(conn, stamp, since=None):
                                "s.match_id = f.match_id WHERE f.forecast_id = ?", (d['forecast_id'],)).fetchone()
             book_1x2 = implied_lines.match_result_probabilities(
                 sml.quotes(conn, m['match_id'], min(row['generated_at'], m['kickoff_at'])))
+            forecast_prices = sml.match_prices(conn, m['match_id'], row['generated_at'])
             for market, side in (('double_chance', dc_side), ('draw_no_bet', dnb_side)):
                 probs = sm.probabilities_1x2((p1['home'], p1['draw'], p1['away']), market, side)
                 result = next(x['result'] for x in d['selections'] if x['market'] == market and x['side'] == side)
@@ -846,7 +860,9 @@ def soccer_market_picks(conn, stamp, since=None):
                         comparison = {'card_market_prob': book_1x2[side] / (book_1x2['home'] + book_1x2['away']),
                                       'card_app_prob': sm.conditional_on_no_draw(probs),
                                       'card_comparison_basis': 'draws excluded, derived from 1X2 prices'}
-                price_facts = soccer_price_facts(m.get('prices') or {}, market, side)
+                # Bet365 and the derived DC/DNB price are read as of the forecast (m['prices'] is as of the send), so every
+                # sportsbook figure on the card shares the forecast's information time.
+                price_facts = soccer_price_facts(forecast_prices, market, side)
                 offer = price_facts.get('book_quote')
                 if offer and offer['retrieved_at'] < m['kickoff_at']:
                     comparison = {'card_market_prob': 1 / offer['decimal'],
