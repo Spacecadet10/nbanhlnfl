@@ -201,3 +201,63 @@ def test_nightly_reports_the_prune_plan_but_deletes_only_with_the_flag(tmp_path)
     assert out["prune"]["mode"] == "report-only" and "20250101T000000Z" in out["prune"]["would_delete"] and old.is_dir()
     out = nb.nightly(data, root, mirror=None, stamp="20261117T043000Z", prune_apply=True)
     assert out["prune"]["mode"] == "apply" and not old.exists()
+
+
+# Off-machine copy (owner, Nov 22): an external drive protects a backup only when it is connected and the copy succeeds.
+# A missing drive or a failed copy keeps the local backup, returns status mirror_failed with the reason, and raises a
+# warning the owner sees (macOS notification + a WARNING line in the job log); a copy is checked file by file.
+
+def test_a_missing_drive_keeps_the_local_backup_and_raises_a_visible_warning(tmp_path):
+    data, root = tmp_path / "data", tmp_path / "backups"
+    _store(data)
+    seen = []
+    out = nb.nightly(data, root, mirror=tmp_path / "Volumes" / "Backup" / "nba", stamp="20261116T043000Z", notify=seen.append)
+    assert out["status"] == "mirror_failed" and out["mirror"] is None
+    assert "does not exist" in out["mirror_error"]
+    assert (root / "stores" / "20261116T043000Z" / "manifest.json").is_file()
+    assert not (tmp_path / "Volumes").exists()                         # never created on the local disk
+    assert len(seen) == 1 and "NOT copied off this Mac" in seen[0] and out["warning"] == seen[0]
+
+
+def test_no_mirror_configured_also_warns(tmp_path):
+    data, root = tmp_path / "data", tmp_path / "backups"
+    _store(data)
+    seen = []
+    out = nb.nightly(data, root, mirror=None, stamp="20261116T043000Z", notify=seen.append)
+    assert out["status"] == "no_mirror" and len(seen) == 1 and "NOT copied off this Mac" in seen[0]
+
+
+def test_a_successful_copy_matches_every_file_restores_from_the_drive_and_does_not_warn(tmp_path):
+    data, root, drive = tmp_path / "data", tmp_path / "backups", tmp_path / "drive"
+    _store(data)
+    drive.mkdir()
+    seen = []
+    out = nb.nightly(data, root, mirror=drive, stamp="20261116T043000Z", notify=seen.append)
+    assert out["status"] == "ok" and not seen and "warning" not in out
+    src, dst = root / "stores" / "20261116T043000Z", drive / "20261116T043000Z"
+    names = sorted(p.relative_to(src) for p in src.rglob("*") if p.is_file())
+    assert names == sorted(p.relative_to(dst) for p in dst.rglob("*") if p.is_file())
+    assert all(backup.sha256(src / n) == backup.sha256(dst / n) for n in names)
+    assert out["mirror_verified_files"] == len(names)
+    target = tmp_path / "restored"
+    target.mkdir()
+    backup.restore(dst, target, sports=["nba"])
+    conn = db.connect(target / "nba.sqlite")
+    assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    assert conn.execute("SELECT home_win_prob FROM predictions").fetchone()[0] == 0.6
+
+
+def test_a_corrupted_copy_is_reported_as_failed(tmp_path, monkeypatch):
+    data, root, drive = tmp_path / "data", tmp_path / "backups", tmp_path / "drive"
+    _store(data)
+    drive.mkdir()
+    real = nb.backup.mirror
+
+    def bad_mirror(folder, mroot):
+        res = real(folder, mroot)
+        (Path(res["dir"]) / "journal.tar.gz").write_bytes(b"damaged")
+        return res
+    monkeypatch.setattr(nb.backup, "mirror", bad_mirror)
+    seen = []
+    out = nb.nightly(data, root, mirror=drive, stamp="20261116T043000Z", notify=seen.append)
+    assert out["status"] == "mirror_failed" and "journal.tar.gz" in out["mirror_error"] and len(seen) == 1
