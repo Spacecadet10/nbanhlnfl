@@ -1370,3 +1370,77 @@ def validate_data(conn: sqlite3.Connection, now: Optional[str] = None) -> dict:
             "readiness": ready, "bookmaker_quotes_matches_by_market_provider": quotes,
             "search_validation_note": "goals/corners seasons before the first ESPN season in the store are absent unless "
                                       "`soccer history-months` was run into this store"}
+
+
+# --- Reproducible comparison of adapter models (search / validation seasons) ----------------------------------------------
+def _per_game(recs: list[dict]) -> dict:
+    """Per game: mean log loss and Brier over its settled, non-push records, scoring a vs b conditional on no push (the
+    stake-returned share carries no information); a three-way result scores its three probabilities."""
+    acc = defaultdict(lambda: [0.0, 0.0, 0])
+    for r in recs:
+        if r["outcome"] in (None, "push", "void"):
+            continue
+        p = r["probs"]
+        tot = sum(p.get(k, 0.0) for k in ("a", "mid", "b"))
+        q = {k: min(1 - CLIP, max(CLIP, p[k] / tot)) for k in ("a", "mid", "b") if k in p}
+        o = r["outcome"]
+        x = acc[r["game_id"]]
+        x[0] += -math.log(q[o])
+        x[1] += sum((q[k] - (k == o)) ** 2 for k in q)
+        x[2] += 1
+    return {g: (v[0] / v[2], v[1] / v[2]) for g, v in acc.items()}
+
+
+def research_compare(conn: sqlite3.Connection, names: list, seasons, incumbent: str, baselines=(), competitions=None,
+                     bootstrap: bool = True) -> dict:
+    """Walks each model over `seasons` (search/validation only; the holdout stays locked) and compares per game the mean market
+    log loss and Brier: overall, per market line and per competition, each paired against `incumbent` (block bootstrap by ISO
+    week; a negative difference favours the model) and against each baseline. Records with a stored executable bookmaker
+    price are scored against the book's de-vigged probability in `bookmaker` (n 0 when no price was stored)."""
+    walks = {n: adapter_walk(conn, seasons, n, competitions=competitions) for n in dict.fromkeys([incumbent, *baselines, *names])}
+    per = {n: _per_game(r) for n, r in walks.items()}
+    cut = {r["game_id"]: r["forecast_cutoff"] for r in walks[incumbent]}
+    comp = {r["game_id"]: r.get("competition") for r in walks[incumbent]}
+
+    def paired(n, ref, key, games):
+        d = [per[n][g][key] - per[ref][g][key] for g in games]
+        if not d:
+            return {"n": 0}
+        return backtest.block_bootstrap(d, [cut[g] for g in games]) if bootstrap else {"mean": sum(d) / len(d), "games": len(d)}
+    games = sorted(set.intersection(*(set(per[n]) for n in per)) & set(cut))
+    out = {"seasons": list(seasons), "incumbent": incumbent, "games": len(games), "models": {}}
+    for n in per:
+        ll = [per[n][g][0] for g in games]
+        br = [per[n][g][1] for g in games]
+        entry = {"mean_log_loss": sum(ll) / len(ll) if ll else None, "mean_brier": sum(br) / len(br) if br else None}
+        if n != incumbent:
+            entry["log_loss_vs_incumbent"] = paired(n, incumbent, 0, games)
+            entry["brier_vs_incumbent"] = paired(n, incumbent, 1, games)
+        for b in baselines:
+            if b != n:
+                entry[f"log_loss_vs_{b}"] = paired(n, b, 0, games)
+        by_comp = defaultdict(list)
+        for g in games:
+            by_comp[comp.get(g)].append(g)
+        entry["by_competition"] = {c: {"n": len(v), "mean_log_loss": sum(per[n][g][0] for g in v) / len(v),
+                                       **({"log_loss_vs_incumbent": paired(n, incumbent, 0, v)["mean"]} if n != incumbent else {})}
+                                   for c, v in sorted(by_comp.items(), key=lambda kv: str(kv[0]))}
+        by_mk = defaultdict(list)
+        for r in walks[n]:
+            if r["outcome"] in ("a", "b", "mid"):
+                p = r["probs"]
+                tot = sum(p.get(k, 0.0) for k in ("a", "mid", "b"))
+                by_mk[(r["market"], r["line"])].append((p["a"] / tot, r["outcome"] == "a"))
+        entry["by_market"] = {f"{m}@{ln}": {"n": len(v), "brier_a": sum((p - y) ** 2 for p, y in v) / len(v),
+                                            "mean_pred": sum(p for p, _ in v) / len(v), "observed": sum(y for _, y in v) / len(v)}
+                              for (m, ln), v in sorted(by_mk.items(), key=lambda kv: (kv[0][0], kv[0][1] or 0))}
+        priced = [r for r in walks[n] if r["quote"] and r["outcome"] in ("a", "b")]
+        bk = []
+        for r in priced:
+            ia, ib = 1 / r["quote"]["price_a"], 1 / r["quote"]["price_b"]
+            bk.append((r["probs"]["a"] / (r["probs"]["a"] + r["probs"]["b"]), ia / (ia + ib), r["outcome"] == "a"))
+        entry["bookmaker"] = {"n": len(bk)} if not bk else {
+            "n": len(bk), "model_brier": sum((p - y) ** 2 for p, _, y in bk) / len(bk),
+            "book_brier": sum((q - y) ** 2 for _, q, y in bk) / len(bk)}
+        out["models"][n] = entry
+    return out

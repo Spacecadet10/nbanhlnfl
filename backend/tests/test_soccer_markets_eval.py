@@ -454,3 +454,15 @@ def test_validate_data_reports_duplicate_fixtures_missing_corners_and_coverage(s
     assert cov["2015"]["corners_labelled"] < cov["2015"]["finals"]
     assert v["date_range"]["eng.1"]["first"].startswith("2014") and v["fixtures"]["finals_without_score"] == 0
     assert "corners" in v["readiness"]["eng.1"] and "goals" in v["readiness"]["eng.1"]
+
+
+def test_research_compare_pairs_models_on_the_same_games_and_reports_no_prices_when_none_are_stored(store):
+    synthetic_league(store, seasons=range(2012, 2016))
+    r = ev.research_compare(store, ["goals_poisson_hier"], (2015,), "goals_poisson_sealed",
+                            baselines=("goals_frequency", "goals_league_rate"), bootstrap=False)
+    assert r["games"] == 56 and set(r["models"]) == {"goals_poisson_sealed", "goals_frequency", "goals_league_rate", "goals_poisson_hier"}
+    inc, fq = r["models"]["goals_poisson_sealed"], r["models"]["goals_frequency"]
+    assert inc["mean_log_loss"] < fq["mean_log_loss"]                       # team strengths beat the base rate on this synthetic league
+    assert "log_loss_vs_incumbent" not in inc and r["models"]["goals_poisson_hier"]["log_loss_vs_incumbent"]["games"] == r["games"]
+    assert all(m["bookmaker"]["n"] == 0 for m in r["models"].values())
+    assert "goals_total@2.5" in inc["by_market"]
