@@ -489,3 +489,46 @@ def test_history_subrecord_also_carries_win_rate_and_available():
     key = ('57.3', 'a', to.HISTORY_SOURCE, 'test-model', 'bookmaker')
     h = to.percentage_record('nba', 'total', rec, 'self', {}, AFTER, history_index={key: {'a': 'win', 'b': 'loss', 'c': 'win'}})['history']
     assert h['available'] is True and h['win_rate'] == pytest.approx(2 / 3)
+
+
+def test_record_lines_are_one_text_for_telegram_and_the_web(tmp_path, monkeypatch):
+    """percentage_history.telegram.line / history.line are exactly what Telegram prints (threshold_overview.telegram_line /
+    history_line); the web renders them verbatim, so the two cannot drift."""
+    import json
+    from app import telegram as tg
+    def rec_for(wins, losses, pushes=0, voids=0, overlap_game=None):
+        rows = [_dated(f'w{i}', 'win', '2026-11-05') for i in range(wins)] + [_dated(f'l{i}', 'loss', '2026-11-09') for i in range(losses)] + \
+               [_dated(f'p{i}', 'push', '2026-11-09') for i in range(pushes)] + [_dated(f'v{i}', 'void', '2026-11-10') for i in range(voids)]
+        _rows_file(tmp_path, monkeypatch, rows + [_dated('far', 'win', '2026-11-16', pct='60.0'), _dated('early', 'win', '2026-11-05', pct='60.0')])
+        target = percentage_item('self', 'pending', conf=.5731)[1]['record']
+        idx = to.percentage_index([percentage_item('w0', 'win', .5731)] if overlap_game else [], AFTER)
+        return to.percentage_record('nba', 'total', target, 'self', idx, AFTER, live_since='2026-11-15T16:50:42Z')
+    got = rec_for(8, 1, pushes=1, overlap_game=True)['telegram']['line']
+    assert got == ('Recovered Telegram cards 11-05 to 11-16: this exact % has gone 8–1 (89%) · 1 push · small sample (9 settled) · green record · '
+                   '1 game also in the live record, not added · model version not recorded')
+    assert rec_for(3, 2)['telegram']['line'] == ('Recovered Telegram cards 11-05 to 11-16: this exact % has gone 3–2 (60%) · small sample (5 settled) · '
+                                                  'model version not recorded')
+    assert rec_for(0, 2)['telegram']['line'] == ('Recovered Telegram cards 11-05 to 11-16: this exact % has gone 0–2 (0%) · small sample (2 settled) · '
+                                                  'red record · model version not recorded')
+    assert rec_for(0, 0)['telegram']['line'] == 'Recovered Telegram cards 11-05 to 11-16: no recovered history at this exact % · model version not recorded'
+    r = rec_for(0, 2)
+    assert tg.telegram_history_line('nba', {k: r[k] for k in ('telegram', 'coverage')}) == r['telegram']['line']     # Telegram prints the same string
+    to.telegram_history_path().unlink()
+    target = percentage_item('self', 'pending', conf=.5731)[1]['record']
+    assert to.percentage_record('nba', 'total', target, 'self', {}, AFTER)['telegram']['line'] == \
+        'Recovered Telegram cards: recovered history unavailable (file missing)'
+    ncaab = to.percentage_record('ncaab', 'winner', target, 'self', {}, AFTER, live_since='2026-11-17T15:00:54Z')
+    _rows_file(tmp_path, monkeypatch, [_dated('a', 'win', '2026-11-05')])
+    ncaab = to.percentage_record('ncaab', 'winner', target, 'self', {}, AFTER, live_since='2026-11-17T15:00:54Z')
+    assert ncaab['telegram']['line'] == 'No recovered Telegram history for NCAAB (recording began 2026-11-17)'
+
+
+def test_history_line_is_null_when_telegram_hides_it_and_otherwise_the_printed_text():
+    rec = percentage_item('self', 'pending', conf=.5731)[1]['record']
+    key = ('57.3', 'a', to.HISTORY_SOURCE, 'test-model', 'bookmaker')
+    h = to.percentage_record('nba', 'total', rec, 'self', {}, AFTER, history_index={key: {'a': 'win', 'b': 'win'}})['history']
+    assert h['line'] == 'Past seasons 2024-26, recomputed, model line: 2W–0L · Small sample. · green record'
+    none = to.percentage_record('nba', 'total', rec, 'self', {}, AFTER, history_index={})['history']
+    assert none['line'] is None
+    from app.schemas import PercentageHistorySource
+    assert PercentageHistorySource(**h).line == h['line']

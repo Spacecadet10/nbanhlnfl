@@ -82,8 +82,9 @@ def test_history_is_a_separate_record_on_the_same_exact_key(store, tmp_path):
     losses = sum(1 for gr in games.values() if gr == "loss")
     out = to.percentage_record("nba", "total", rec, "live-game", {}, AS_OF, history_index=index)
     assert (out["wins"], out["losses"], out["settled"]) == (0, 0, 0)          # the live record is untouched
-    assert out["history"] == {"source": to.HISTORY_SOURCE, "line_source": "model", "wins": wins, "losses": losses,
-                              "settled": wins + losses, "small_sample": wins + losses < to.MIN_LIVE_GRADED} and wins + losses > 0
+    base = {"source": to.HISTORY_SOURCE, "line_source": "model", "wins": wins, "losses": losses,
+            "settled": wins + losses, "small_sample": wins + losses < to.MIN_LIVE_GRADED}
+    assert {k: out["history"][k] for k in base} == base and wins + losses > 0         # plus colour, voids, win_rate, line (additive)
     bookmaker = to.percentage_record("nba", "total", {**rec, "line_source": "bookmaker"}, "live-game", {}, AS_OF,
                                      history_index=index)
     assert bookmaker["history"]["settled"] == 0                                # a model line never stands in for a bookmaker line
@@ -125,7 +126,7 @@ def test_card_names_past_seasons_on_their_own_line_and_fits():
                                                       "losses": 37, "settled": 78}
     _, text = tg.message_batches(d, "123")[0]
     lines = text.split("\n")
-    record = lines.index("<b>Model 51.8%</b> · 0W–2L (2 settled)")              # the live record line, unchanged
+    record = lines.index("<b>Model 51.8%</b> 🔴 · this exact % has gone 0–2 (0%) · small sample (2 settled)")              # the live record line, unchanged
     assert "Past seasons 2024-26, recomputed, model line: 41W–37L" in lines[record:]
     assert "past seasons" not in lines[record].lower()
     plain = copy.deepcopy(report())

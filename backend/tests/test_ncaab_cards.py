@@ -104,21 +104,16 @@ def test_a_failed_selection_is_saved_as_an_error_and_cards_no_game(store, tmp_pa
     with tg.ledger(tmp_path / "receipts.sqlite") as ledger:
         sel = nc.ensure(ledger, store, SELECT)
     assert sel["status"] == "error" and "model down" in sel["error"] and sel["selected"] == []
-    assert nc.annotate([{"game_id": "ncaab:401", "market": "winner"}], sel) == []
-    assert nc.annotate([{"game_id": "ncaab:401", "market": "winner"}], None) == []
 
 
-def test_card_choice_never_recommends_a_failed_validation_market_even_when_it_was_the_selected_one():
-    sel = {"rule": nc.RULE, "rank": 2, "of": 4, "selected_at": "2026-11-17T16:00:00Z", "market": "total", "side": "b", "gap": 8.0}
-    picks = [dict(forecast_id=i, market=m, pick_label=label, probability=p, market_prob=b, quote_check={},
-                  percentage_history=None, ncaab_selection=sel)
+def test_card_choice_never_recommends_a_failed_validation_market():
+    picks = [dict(forecast_id=i, market=m, pick_label=label, probability=p, market_prob=b, quote_check={}, percentage_history=None)
              for i, (m, label, p, b) in enumerate((("winner", "DUKE win", 0.8, 0.75), ("total", "Under 141.5", 0.56, 0.5)))]
-    choice = t.card_choice("ncaab", picks)
-    assert choice["pick"] is None and "failed validation" in choice["reason"]       # total is blocked; winner was not the selected market
-    for p in picks:
-        del p["ncaab_selection"]
     chosen = t.card_choice("ncaab", picks)
     assert chosen["pick"]["market"] == "winner"                                     # the validated market, by the existing ranking
+    only = t.card_choice("ncaab", picks[1:])
+    assert only["pick"] is None and "failed validation" in only["reason"]
+    assert not hasattr(nc, "annotate")                                              # the retired top-4 selection no longer annotates picks
 
 
 def test_retired_top4_selection_does_not_decide_delivery_any_more(store, tmp_path, monkeypatch):

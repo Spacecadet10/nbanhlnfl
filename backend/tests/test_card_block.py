@@ -83,7 +83,7 @@ def test_model_line_has_its_own_reason():
 def test_no_settled_history_and_repeated_percentage_wording():
     tg0 = {**TELEGRAM, 'wins': 0, 'losses': 0, 'pushes': 0, 'settled': 0}
     text = text_of(card('nba', [history(pick(), wins=0, losses=0, settled=0, telegram=tg0)]))
-    assert 'no settled history at this exact %' in text and 'No settled matching examples.' in text
+    assert 'no settled history at this exact %' in text and 'No settled matching examples.' not in text
     assert 'no recovered history at this exact %' in text
     rep = text_of(card('nba', [history(pick(), wins=5, losses=5, settled=10, small_sample=False, telegram=TELEGRAM)]))
     assert 'has gone 5–5 (50%) · small sample (10 settled)' in rep

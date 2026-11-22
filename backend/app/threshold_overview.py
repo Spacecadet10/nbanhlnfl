@@ -69,7 +69,6 @@ def displayed_percentage(probability: float) -> str:
 
 
 COLOUR_RULE = 'bucket-record-v1'
-GREEN_MIN_PERCENT = (3, 4)    # green needs wins/(wins+losses) >= 3/4, compared in integers
 
 
 def bucket_colour(wins: int, losses: int) -> str:
@@ -98,6 +97,61 @@ def record_line(percentage: str, wins: int, losses: int, pushes: int, settled: i
 COLOUR_LEGEND = ("Colour = this exact % bucket's own settled record at this sport, market, direction and model: green = at least one "
                  "win and 75% or more won; red = more losses than wins; no colour otherwise. Pushes and voids are not counted. "
                  "A historical record, not a profit guarantee.")
+
+
+PAST_SEASONS = '2024-26'      # the only seasons any history counts (points_history.HISTORY_SEASONS, winner_history clean seasons)
+PAST_PREFIX = f'Past seasons {PAST_SEASONS}, recomputed, model line: '
+PAST_PREFIX_NO_LINE = f'Past seasons {PAST_SEASONS}, recomputed: '    # winner (no line): app/winner_history.py
+
+
+def _md(day) -> str:
+    return str(day)[5:10]
+
+
+def _own_colour(sub) -> str:
+    """' · green record' / ' · red record' for a sub-record coloured on its own counts; nothing for neutral."""
+    colour = (sub or {}).get('colour')
+    return f' · {colour} record' if colour in ('green', 'red') else ''
+
+
+def history_line(h: Optional[dict]) -> Optional[str]:
+    """The ONE text of the recomputed past-seasons record (Telegram prints it, the web renders it verbatim). None when there is
+    nothing to show: Telegram hides the line without settled examples."""
+    if not h or not h.get('settled'):
+        return None
+    prefix = PAST_PREFIX_NO_LINE if h['line_source'] == 'none' else PAST_PREFIX
+    small = ' · Small sample.' if h['settled'] < MIN_LIVE_GRADED else ''
+    return f"{prefix}{h['wins']}W–{h['losses']}L{small}{_own_colour(h)}"
+
+
+def telegram_line(sport: str, tg: Optional[dict], cov: Optional[dict]) -> Optional[str]:
+    """The ONE text of the recovered-Telegram record (Telegram prints it, the web renders it verbatim): its own record, win rate,
+    pushes, voids, the dates present in the file, its colour word and the overlap note. A missing or unreadable file says
+    'recovered history unavailable'; a bucket the file does not hold says 'no recovered history at this exact %'; a sport with no
+    rows says so (NCAAB). Never 0-0. None only without a sub-record and without coverage (older API)."""
+    if tg and tg.get('available') is False and tg.get('reason') in ('file_missing', 'unreadable'):
+        return f"{tg.get('label') or TELEGRAM_LABEL}: recovered history unavailable ({str(tg['reason']).replace('_', ' ')})"
+    if tg and tg.get('available') is not False:
+        label = tg.get('label') or TELEGRAM_LABEL
+        period = tg.get('period')
+        span = f" {_md(period['from'])} to {_md(period['to'])}" if period else ''
+        pushes, voids, settled = tg.get('pushes') or 0, tg.get('voids') or 0, tg.get('settled') or 0
+        if not settled and not pushes and not voids:
+            return f"{label}{span}: no recovered history at this exact % · model version not recorded"
+        rate = f" ({int(Decimal(tg['wins'] * 100) / Decimal(settled) + Decimal('0.5'))}%)" if settled else ''
+        body = f"this exact % has gone {tg['wins']}–{tg['losses']}{rate}" if settled else 'no settled result at this exact %'
+        extra = (f" · {_plural(pushes, 'push')}" if pushes else '') + (f" · {_plural(voids, 'void')}" if voids else '')
+        small = f" · small sample ({settled} settled)" if settled and settled < MIN_LIVE_GRADED else ''
+        overlap = tg.get('overlap_live')
+        both = f" · {overlap} game{'' if overlap == 1 else 's'} also in the live record, not added" if overlap else ''
+        return f"{label}{span}: {body}{extra}{small}{_own_colour(tg)}{both} · model version not recorded"
+    if cov is None and tg is None:
+        return None
+    period = (cov or {}).get('telegram_period')
+    if period:
+        return f"{TELEGRAM_LABEL} {_md(period['from'])} to {_md(period['to'])}: no recovered history at this exact % · model version not recorded"
+    began = (cov or {}).get('live_since')
+    return f"No recovered Telegram history for {sport.upper()}" + (f" (recording began {str(began)[:10]})" if sport == 'ncaab' and began else '')
 
 
 def _voids(grades) -> int:
@@ -225,7 +279,7 @@ def _telegram_unavailable(reason: str, rec: dict) -> dict:
     return {'source': TELEGRAM_SOURCE, 'label': TELEGRAM_LABEL, 'period': None, 'bucket_period': None, 'dates': [],
             'model_version_known': False, 'line_source': rec['line_source'], 'available': False, 'reason': reason, 'no_history': None,
             'wins': None, 'losses': None, 'pushes': None, 'voids': None, 'settled': None, 'win_rate': None, 'colour': 'neutral',
-            'small_sample': True, 'overlap_live': None}
+            'small_sample': True, 'overlap_live': None, 'line': None}
 
 
 def telegram_record(sport: str, market: str, rec: dict, game_id: str, live_games: Optional[dict] = None) -> dict:
@@ -294,6 +348,12 @@ def percentage_record(sport: str, market: str, rec: dict, game_id: str, index: d
         rank = next((r['rank'] for r in ranking if r['key'] == _percentage_key(rec)), None)
     except Exception:  # Optional ranking must never suppress the existing forecast or its record.
         ranking, rank = [], None
+    coverage = coverage_note(sport, live_since)
+    tg_rec = telegram_record(sport, market, rec, game_id, index.get(_percentage_key(rec)))
+    tg_rec['line'] = telegram_line(sport, tg_rec, coverage)
+    past = history_record(rec, game_id, history_index)
+    if past is not None:
+        past['line'] = history_line(past)
     state = ('no_history' if not settled else 'neutral' if wins == losses else
              'more_right' if wins > losses else 'more_wrong')
     return {'sport': sport, 'market': market, 'market_title': rec['market_title'] if sport == 'soccer' else markets.spec(sport, market).title,
@@ -306,9 +366,7 @@ def percentage_record(sport: str, market: str, rec: dict, game_id: str, index: d
             'ci95': wilson(wins, settled), 'small_sample': settled < MIN_LIVE_GRADED,
             'rank': rank, 'ranked': len(ranking),
             'excluded': {k: v for k, v in grades.items() if k not in ('win', 'loss')}, 'as_of': as_of,
-            'history': history_record(rec, game_id, history_index),
-            'telegram': telegram_record(sport, market, rec, game_id, index.get(_percentage_key(rec))),
-            'coverage': coverage_note(sport, live_since)}
+            'history': past, 'telegram': tg_rec, 'coverage': coverage}
 
 
 def calibration_state(rate: Optional[float], ci: Optional[list], stated: Optional[float], n: int, min_n: int) -> str:

@@ -47,7 +47,7 @@ def test_summary_is_pregame_only_names_opposite_and_preserves_model_line_warning
     d = report()
     _, text = tg.message_batches(d, '123')[0]
     assert 'No strong pick' in text and 'ORL over 109.5' in text
-    assert '<b><s>Model 51.8%</s></b> 🔴 · this exact % has gone 0–2 (0%) · small sample (2 settled)' in text
+    assert '<b>Model 51.8%</b> 🔴 · this exact % has gone 0–2 (0%) · small sample (2 settled)' in text
     assert 'Against model — EXPERIMENTAL: ORL under 109.5' in text
     assert 'no bookmaker offer verified' in text
     for changes in ({'grade':'loss'}, {'status':'final'}, {'tipoff':NOW},
@@ -413,7 +413,7 @@ def test_priced_card_renders_and_no_line_is_longer_than_the_card():
 
 def test_card_without_a_stored_price_is_unchanged():
     text = tg.message_batches(report(), '123')[0][1]            # team total: no sportsbook price is stored
-    assert 'ortsbook' not in text and '<b><s>Model 51.8%</s></b> 🔴 · this exact % has gone 0–2 (0%) · small sample (2 settled)' in text and 'ORL over 109.5 · <i>model line</i>' in text
+    assert 'ortsbook' not in text and '<b>Model 51.8%</b> 🔴 · this exact % has gone 0–2 (0%) · small sample (2 settled)' in text and 'ORL over 109.5 · <i>model line</i>' in text
     d = strong_report(); d['picks'][0]['market_prob'] = 0.48
     assert tg.message_batches(d, '123')[0][0] == tg.message_batches(strong_report(), '123')[0][0]   # same delivery key: no resend
 

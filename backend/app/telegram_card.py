@@ -15,7 +15,8 @@ PAPER = '#FFFFFF'
 LINE = '#E2E8EC'
 LIME = '#14B8A6'
 GREEN = '#16832C'       # card colouring: at or above the class threshold
-RED = '#C51D35'         # below it (struck through)
+RED = '#C51D35'         # red bucket record (a mark and a red pill; never struck through)
+NEUTRAL_PILL = ('#EEF1F3', INK)   # (fill, ink) of an uncoloured % pill: grey, independent of the team colours
 
 
 class Plain(HTMLParser):
@@ -251,8 +252,6 @@ def render_card(message):
         draw.rectangle((x0 - 1, detail_y, x1 + 1, detail_y + 33), fill=under)      # cover the plain digits, then redraw
         ink = '#86EFAC' if mark.group(2) == GREEN_MARK else '#FDA4AF'              # light tones: readable on the dark panel
         draw.text((x0, detail_y), token, font=font, fill=ink)
-        if mark.group(2) == RED_MARK:
-            draw.line((x0, detail_y + 18, x1, detail_y + 18), fill=ink, width=3)
     if lineup:
         draw.text((95,y+lineup_top),fit_line(draw,lineup,_font(26,True),860),font=_font(26,True),fill='#FFD27A')
     if strongest:
@@ -261,6 +260,8 @@ def render_card(message):
     y+=panel_h+24
     draw.text((64,y),'MARKET BREAKDOWN',font=_font(31,True,True),fill=primary)
     y+=53
+    notes = [g[0] for g in groups if g[0].startswith('Not offered for this competition')]
+    groups = [g for g in groups if not g[0].startswith('Not offered for this competition')]
     for number, group in enumerate(groups, 1):
         model = next(line for line in group if line.startswith('Model '))
         probability, record = model.split(' · ', 1)
@@ -292,12 +293,10 @@ def render_card(message):
         prob=probability.removeprefix('Model ')
         mark = GREEN if prob.endswith(GREEN_MARK) else RED if prob.endswith(RED_MARK) else None
         prob = prob.removesuffix(GREEN_MARK).removesuffix(RED_MARK).strip()
-        badge_fill, prob_ink = {GREEN: ('#E6F4E4', GREEN), RED: ('#FDE7E8', RED)}.get(mark, (_mix(primary,'#FFFFFF',.92), primary))
+        badge_fill, prob_ink = {GREEN: ('#E6F4E4', GREEN), RED: ('#FDE7E8', RED)}.get(mark, NEUTRAL_PILL)    # never the team colour
         draw.rounded_rectangle((847,y+33,1004,y+91),radius=16,fill=badge_fill)
         w=draw.textlength(prob,font=_font(34,True))
         draw.text((925-w/2,y+41),prob,font=_font(34,True),fill=prob_ink)
-        if mark == RED:      # below the class threshold: struck through, still readable
-            draw.line((925-w/2-4,y+62,925+w/2+4,y+62),fill=RED,width=3)
         record_text, record_font = fit_record(draw, record+(' · '+note if note else ''))
         draw.text((200,end+4),record_text,font=record_font,fill=INK)
         if past:      # the recomputed past seasons, on their own line under the live record and its note
@@ -312,6 +311,8 @@ def render_card(message):
         if opposite:
             wrapped(opposite,200,y+height-opposite_lines*32-8,800,size=24,bold=True,fill=primary)
         y+=height+8
+    for text in notes:       # one muted line for the markets the competition does not serve
+        y = wrapped(text, 58, y + 6, 964, size=24, fill=MUTED)
     for key in (line for line in lines[footer:] if line.startswith(COLOUR_PREFIX)):    # one colour-key line per class
         y = wrapped(key.removeprefix(COLOUR_PREFIX), 58, y + 6, 964, size=24, bold=True, fill=MUTED)
     y += 9
