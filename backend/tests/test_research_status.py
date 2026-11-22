@@ -629,3 +629,25 @@ def test_adapter_locations_are_one_mapping_and_an_adapter_data_check_can_refuse(
     a = fixture_adapter({"inc": []}, validate_data=lambda conn: ["snapshot is stale"])
     r = ar.run_sport_v3("nba", exp, adapter_fn=_adapters(nba=a))
     assert r["outcome"] == "refused" and "snapshot is stale" in r["reason"]
+
+
+def test_push_probability_alias_and_chunked_walks_resume_without_rescoring(exp, monkeypatch):
+    a = fixture_adapter({"inc": []}, markets={"total": {"kind": "line", "settlement": "push refunds"}})
+    out = ar.validate_records(a, [rec(0, "total", line=2.0) | {"probs": {"a": 0.45, "push": 0.1, "b": 0.45}, "outcome": "push"}], [2020])
+    assert out[0]["probs"] == {"a": 0.45, "mid": 0.1, "b": 0.45}
+    recs = [rec(i, p=0.6, outcome="a", season=2020, days=i) for i in range(10)]
+    calls, jump, real = [], [0], ar.time.time
+    monkeypatch.setattr(ar.time, "time", lambda: real() + jump[0])
+
+    def walk(conn, seasons, name, max_work=None, resume=None, state=None):
+        calls.append(resume)
+        jump[0] = 10 ** 6 if len(calls) == 1 else 0                  # the first chunk uses up the time budget
+        start = 0 if resume is None else int(resume)
+        chunk = recs[start:start + max_work]
+        state.update(next=str(start + len(chunk)), done=start + len(chunk) >= len(recs), work=len(chunk))
+        return chunk
+    ad = fixture_adapter({"inc": recs}, chunk_work=4) | {"walk": walk}
+    r = ar.run_sport_v3("nba", exp, max_seconds=900, adapter_fn=_adapters(nba=ad))        # one chunk, then out of time
+    assert r["outcome"] == "skipped" and calls == [None]
+    r = ar.run_sport_v3("nba", exp, adapter_fn=_adapters(nba=ad))
+    assert calls == [None, "4", "8"] and r["outcome"] == "no_candidates" and r["evaluation"]["winner"]["n"] == 10

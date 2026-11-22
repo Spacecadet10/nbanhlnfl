@@ -1363,6 +1363,9 @@ def validate_records(adapter: dict, recs: list, seasons) -> list:
         if cut > start:
             raise AdapterInvalid(f"{r['game_id']} {r['market']}: forecast_cutoff {cut} is after the start {start}")
         p, kind = r["probs"], spec["kind"]
+        if "push" in p and kind == "line" and "mid" not in p:        # whole-number lines: push probability is the mid mass
+            p = {("mid" if k == "push" else k): v for k, v in p.items()}
+            r = {**r, "probs": p}
         keys = set(p)
         allowed = {"binary": ({"a", "b"},), "three_way": ({"a", "mid", "b"},), "line": ({"a", "b"}, {"a", "mid", "b"})}[kind]
         if keys not in allowed:
@@ -1859,7 +1862,7 @@ def nba_nhl_adapter(sport: str, candidates: Optional[list] = None) -> dict:
 
 # The one place that names where each sport's adapter lives ("module:function"; the NFL and NCAAB adapters are NOT in the
 # byte-pinned nfl_eval / ncaab_eval). Update here when an adapter agent moves one.
-ADAPTER_FUNCTIONS = {"nfl": "nfl_challengers:research_adapter", "ncaab": "ncaab_eval:research_adapter",
+ADAPTER_FUNCTIONS = {"nfl": "nfl_challengers:research_adapter", "ncaab": "ncaab_cards:research_adapter",
                      "soccer": "soccer_markets_eval:research_adapter"}
 
 
@@ -1997,7 +2000,11 @@ def _run_queue(status: dict, adapter: dict, root: Path, pid: str, sport: str, t0
                 break
             s0 = time.time()
             try:
-                recs = validate_records(adapter, adapter["walk"](conn, seasons, n), seasons)
+                recs = _walk_item(adapter, conn, seasons, n, items / f"{k}.partial.json", t0, max_seconds)
+                if recs is None:                                  # bounded walk not finished: resumes next run
+                    stopped = "time budget reached (partial progress stored)"
+                    break
+                recs = validate_records(adapter, recs, seasons)
             except AdapterInvalid as exc:
                 _jsonl_add(log, {"event": "item_failed", "key": k, "model": n, "at": _now(), "error": str(exc)[:400]})
                 fails[k] = fails.get(k, 0) + 1
@@ -2054,6 +2061,27 @@ def _run_queue(status: dict, adapter: dict, root: Path, pid: str, sport: str, t0
         status |= {"outcome": "evaluated", "reason": (f"{len(scored_c)} of {len(cands)} candidates scored"
                                                       + (f"; {len(pending)} queued" if pending else "")) +
                    (f"; kept: {', '.join(ev['kept'])}" if ev["kept"] else "; no candidate kept (no improvement found)")}
+
+
+def _walk_item(adapter: dict, conn, seasons, model: str, partial: Path, t0: float, max_seconds: float) -> Optional[list]:
+    """One model's walk. An adapter whose `walk` takes max_work/resume/state (Soccer) is called in chunks of cutoff dates;
+    progress (records and the resume token) is stored in `partial`, so an interrupted item continues, never restarts. Returns
+    None while unfinished."""
+    import inspect
+    params = inspect.signature(adapter["walk"]).parameters
+    if not {"max_work", "resume", "state"} <= set(params):
+        return adapter["walk"](conn, seasons, model)
+    saved = json.loads(partial.read_text()) if partial.is_file() else {"records": [], "next": None}
+    while True:
+        state: dict = {}
+        saved["records"] += adapter["walk"](conn, seasons, model, max_work=adapter.get("chunk_work", 40),
+                                            resume=saved["next"], state=state)
+        saved["next"] = state.get("next")
+        if state.get("done", True):
+            return saved["records"]
+        partial.write_text(json.dumps(saved, default=str))
+        if time.time() - t0 >= max_seconds:
+            return None
 
 
 def _brief(ev: dict) -> dict:
