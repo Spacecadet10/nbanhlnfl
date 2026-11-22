@@ -19,12 +19,8 @@ def _american(p: Optional[int]) -> str:
 def _line_quote(conn, market: str, game, rec: dict):
     """(quote row, why not): the quote the forecast used when it is acceptable (coverage.forecast_quote), else the latest
     'current' quote at exactly the forecast's line retrieved at or before the forecast and before the start."""
-    pa, why = coverage.forecast_quote(conn, market, game, rec)
-    if pa is not None:
-        return conn.execute("SELECT * FROM market_quotes WHERE quote_id=?", (rec["market_quote_id"],)).fetchone(), None
-    q = conn.execute("SELECT * FROM market_quotes WHERE game_id=? AND market=? AND line IS ? AND price_label='current' "
-                     "AND retrieved_at <= ? AND retrieved_at < ? ORDER BY retrieved_at DESC, quote_id DESC LIMIT 1",
-                     (game["game_id"], market, rec["line"], rec["generated_at"], game["tipoff_at"])).fetchone()
+    q = odds.forecast_quote(conn, game["game_id"], market, rec["line"], rec["generated_at"], game["tipoff_at"],
+                            recorded_id=rec.get("market_quote_id"), need_mid=market == "reg3")
     return q, (None if q is not None else "no sportsbook quote saved at this line by the forecast time")
 
 

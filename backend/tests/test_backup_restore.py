@@ -368,3 +368,32 @@ def test_a_failed_rollback_deletes_nothing_and_names_the_manual_recovery(tmp_pat
         assert not os.path.lexists(b), (a, b)
         os.rename(a, b)
     assert {k: v for k, v in _files(data).items() if not k.endswith(".restoring")} == originals
+
+
+def test_a_backup_is_mirrored_to_a_second_place_and_each_copy_is_checked_against_the_manifest(tmp_path):
+    data, dest, mirror = tmp_path / "data", tmp_path / "backups", tmp_path / "offsite"
+    _store(data / "nba.sqlite", "nba").close()
+    mirror.mkdir()
+    (tmp_path / "offsite2").mkdir()
+    src = backup.run(data, dest, stamp="20261116T040000Z")["dir"]
+    out = backup.mirror(src, mirror)
+    copy = mirror / "20261116T040000Z"
+    assert out["status"] == "ok" and (copy / "manifest.json").read_text() == (dest / "20261116T040000Z" / "manifest.json").read_text()
+    assert backup.sha256(copy / "nba.sqlite") == json.loads((copy / "manifest.json").read_text())["stores"]["nba"]["sha256"]
+    with pytest.raises(backup.BackupError):          # an existing mirror copy is never overwritten
+        backup.mirror(src, mirror)
+    # A corrupted source file is refused before anything is copied.
+    (dest / "20261116T040000Z" / "nba.sqlite").write_bytes(b"not a store")
+    with pytest.raises(backup.BackupError):
+        backup.mirror(src, tmp_path / "offsite2")
+    assert not (tmp_path / "offsite2" / "20261116T040000Z").exists()
+
+
+def test_a_mirror_folder_that_does_not_exist_is_refused_not_created(tmp_path):
+    # An unplugged disk or a missing cloud folder must fail loudly, not quietly create a "mirror" on the same disk.
+    data, dest = tmp_path / "data", tmp_path / "backups"
+    _store(data / "nba.sqlite", "nba").close()
+    src = backup.run(data, dest, stamp="20261116T040000Z")["dir"]
+    with pytest.raises(backup.BackupError):
+        backup.mirror(src, tmp_path / "Volumes" / "Unplugged")
+    assert not (tmp_path / "Volumes").exists()

@@ -195,3 +195,86 @@ def test_a_player_file_written_before_the_forecast_is_as_of_the_forecast(tmp_pat
     body = b'athlete_id,game_id\n1,1\n'
     _player_file(tmp_path, monkeypatch, body, '2026-11-11T09:00:00Z', [])
     assert lineup._box_written_after(2027, T) is False
+
+
+# ---- 5. one forecast-time quote rule (owner review, Nov 22): card, ticket and scorecard read the same quote -----------------
+FT = '2026-11-20T18:00:00Z'      # forecast time
+TIP = '2026-11-20T23:00:00Z'
+
+
+def mq_store():
+    c = sqlite3.connect(':memory:')
+    c.row_factory = sqlite3.Row
+    c.executescript('''CREATE TABLE market_quotes (quote_id INTEGER PRIMARY KEY, sport TEXT, game_id TEXT, provider TEXT,
+        market TEXT, price_label TEXT, line REAL, price_a INT, price_mid INT, price_b INT, p_a_devig REAL, p_mid_devig REAL,
+        p_b_devig REAL, retrieved_at TEXT);
+      CREATE TABLE game_forecasts (forecast_id INTEGER PRIMARY KEY, game_id TEXT, market TEXT, line REAL, line_source TEXT,
+        market_quote_id INT, generated_at TEXT, tipoff_at TEXT);
+      INSERT INTO game_forecasts VALUES (1,'g','spread',-3.5,'bookmaker',NULL,'2026-11-20T18:00:00Z','2026-11-20T23:00:00Z');''')
+    return c
+
+
+def mq(c, provider, at, line=-3.5, pa=0.55, label='current', market='spread'):
+    return c.execute("INSERT INTO market_quotes (sport, game_id, provider, market, price_label, line, price_a, price_b, "
+                     "p_a_devig, p_b_devig, retrieved_at) VALUES ('nhl','g',?,?,?,?,-110,-110,?,?,?)",
+                     (provider, market, label, line, pa, 1 - pa, at)).lastrowid
+
+
+def all_consumers(c):
+    """(card %, scorecard %, sportsbook-comparison quote id) for forecast 1 side a."""
+    from app import sportsbook, tickets
+    pick = {'forecast_id': 1, 'game_id': 'g', 'market': 'spread', 'percentage_history': {'side': 'a'}}
+    card = tickets.card_market_prob(c, pick)
+    g = {'game_id': 'g', 'tipoff_at': TIP}
+    rec = {'market': 'spread', 'side': 'a', 'line': -3.5, 'line_source': 'bookmaker', 'market_quote_id': None,
+           'generated_at': FT}
+    (state, _), out = sc._book(c, 'nhl', g, rec)
+    line_q, _ = sportsbook._line_quote(c, 'spread', g, rec)
+    return card, out.get('book_devig'), None if line_q is None else line_q['quote_id']
+
+
+def test_same_forecast_gets_the_same_quote_in_card_ticket_scorecard_and_sportsbook():
+    c = mq_store()
+    mq(c, 'DraftKings', '2026-11-20T10:00:00Z', pa=0.50)
+    newest = mq(c, 'DraftKings', '2026-11-20T17:00:00Z', pa=0.58)
+    mq(c, 'DraftKings', '2026-11-20T18:30:00Z', pa=0.70)            # after the forecast: excluded
+    mq(c, 'DraftKings', '2026-11-20T17:30:00Z', pa=0.61, line=-4.5)  # another line: excluded
+    card, scorecard, quote_id = all_consumers(c)
+    assert card == pytest.approx(0.58) and scorecard == pytest.approx(0.58) and quote_id == newest
+
+
+def test_forecast_quote_ties_break_deterministically_whatever_the_insert_order():
+    for order in (('FanDuel', 'DraftKings', 'Zeta'), ('Zeta', 'DraftKings', 'FanDuel'), ('Zeta', 'FanDuel')):
+        c = mq_store()
+        for i, p in enumerate(order):
+            mq(c, p, '2026-11-20T17:00:00Z', pa=0.40 + 0.05 * (p == 'DraftKings') + 0.01 * (p == 'Zeta'))
+        want = 0.45 if 'DraftKings' in order else 0.40            # DraftKings first, else provider key order
+        assert all_consumers(c)[0] == pytest.approx(want), order
+        assert odds.forecast_quote(c, 'g', 'spread', -3.5, FT, TIP)['provider'] == ('DraftKings' if 'DraftKings' in order else 'FanDuel')
+
+
+def test_forecast_quote_tie_prefers_the_quote_recorded_with_the_forecast():
+    c = mq_store()
+    mq(c, 'DraftKings', '2026-11-20T17:00:00Z', pa=0.50)
+    own = mq(c, 'FanDuel', '2026-11-20T17:00:00Z', pa=0.60)
+    assert odds.forecast_quote(c, 'g', 'spread', -3.5, FT, TIP, recorded_id=own)['quote_id'] == own
+    assert odds.forecast_quote(c, 'g', 'spread', -3.5, FT, TIP)['provider'] == 'DraftKings'
+
+
+def test_forecast_quote_none_when_only_after_forecast_after_start_or_other_line():
+    c = mq_store()
+    mq(c, 'DraftKings', '2026-11-20T18:00:01Z')
+    mq(c, 'DraftKings', '2026-11-20T17:00:00Z', line=-2.5)
+    assert odds.forecast_quote(c, 'g', 'spread', -3.5, FT, TIP) is None
+    assert all_consumers(c)[:2] == (None, None)
+    c2 = mq_store()
+    mq(c2, 'DraftKings', '2026-11-20T23:30:00Z')                      # retrieved after the start: never a forecast price
+    assert odds.forecast_quote(c2, 'g', 'spread', -3.5, '2026-11-21T00:00:00Z', TIP) is None
+
+
+def test_send_time_quote_is_a_separate_named_check_and_may_see_a_later_quote():
+    c = mq_store()
+    first = mq(c, 'DraftKings', '2026-11-20T17:00:00Z', pa=0.58)
+    later = mq(c, 'DraftKings', '2026-11-20T20:00:00Z', pa=0.62)
+    assert odds.forecast_quote(c, 'g', 'spread', -3.5, FT, TIP)['quote_id'] == first
+    assert odds.send_time_quote(c, 'g', 'spread', '2026-11-20T21:00:00Z', provider='draft kings')['quote_id'] == later

@@ -1,0 +1,203 @@
+"""Nightly backup (scripts/backup_nightly.py): journal export, a verified store backup with the journal inside it, and a
+mirror to a second place. Synthetic stores under tmp_path only."""
+import importlib.util
+import json
+import tarfile
+from pathlib import Path
+
+from app import backup, db, ledger
+from test_storage import T0, event, payload, run
+
+ROOT = Path(__file__).resolve().parents[2]
+spec = importlib.util.spec_from_file_location('backup_nightly', ROOT / 'scripts' / 'backup_nightly.py')
+nb = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(nb)
+
+
+def _store(data):
+    conn = db.connect(data / "nba.sqlite")
+    db.migrate(conn)
+    run(conn, payload(event()), T0)
+    ledger.record(conn, ledger.Forecast("espn:1001", "live", "m1", "d1", "f1", "2024-01-15T17:00:00Z",
+                                        "2024-01-15T16:59:00Z", 0.6))
+    conn.close()
+
+
+def test_a_nightly_run_backs_up_the_stores_and_journal_and_mirrors_them(tmp_path):
+    data, root, offsite = tmp_path / "data", tmp_path / "backups", tmp_path / "offsite"
+    _store(data)
+    offsite.mkdir()
+    out = nb.nightly(data, root, mirror=offsite, stamp="20261116T043000Z")
+    assert out["status"] == "ok" and out["journal_verify_ok"] is True
+    local = root / "stores" / "20261116T043000Z"
+    for folder in (local, offsite / "20261116T043000Z"):
+        man = json.loads((folder / "manifest.json").read_text())
+        assert backup.sha256(folder / "nba.sqlite") == man["stores"]["nba"]["sha256"]
+        with tarfile.open(folder / "journal.tar.gz") as t:
+            line = json.loads(t.extractfile("./nba/predictions.jsonl").read().decode().splitlines()[0])
+        assert line["row"]["home_win_prob"] == 0.6
+    assert (root / "journal" / "nba" / "predictions.jsonl").is_file()
+
+
+def test_without_a_mirror_the_run_still_backs_up_but_reports_it_is_not_off_machine(tmp_path):
+    data, root = tmp_path / "data", tmp_path / "backups"
+    _store(data)
+    out = nb.nightly(data, root, mirror=None, stamp="20261116T043000Z")
+    assert out["status"] == "no_mirror" and (root / "stores" / "20261116T043000Z" / "manifest.json").is_file()
+
+
+def test_the_snapshot_also_holds_the_ledger_recovered_history_rules_artifacts_and_config_but_never_a_secret(tmp_path):
+    import sqlite3
+    data, root = tmp_path / "data", tmp_path / "backups"
+    _store(data)
+    ledger_path = tmp_path / ".telegram-delivery.sqlite"
+    c = sqlite3.connect(ledger_path)
+    c.execute("CREATE TABLE deliveries (delivery_key TEXT, text TEXT)")
+    c.execute("INSERT INTO deliveries VALUES ('k', 'card')")
+    c.commit(); c.close()
+    repo, agents = tmp_path / "repo", tmp_path / "agents"
+    files = {repo / "docs" / "telegram_record.json": "{}", repo / "docs" / "preregistration" / "p.md": "rule",
+             data / "research" / "line-state-nba.pkl": "model", data / "reports" / "weekly_report_review.json": "{}",
+             agents / "com.nba-predictor.x.plist": "<plist/>", agents / "com.google.other.plist": "<plist/>",
+             repo / ".env.telegram": "SECRET-TOKEN", data / "research" / ".env.odds": "SECRET-KEY"}
+    for p, text in files.items():
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text)
+    out = nb.nightly(data, root, mirror=None, stamp="20261116T043000Z", ledger=ledger_path, repo_root=repo, launch_agents=agents)
+    folder = root / "stores" / "20261116T043000Z"
+    copy = sqlite3.connect(folder / "ledger.sqlite")
+    assert copy.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    assert copy.execute("SELECT text FROM deliveries").fetchone()[0] == "card"
+    copy.close()
+    assert out["extras"]["ledger"]["sha256"] == backup.sha256(folder / "ledger.sqlite")
+    with tarfile.open(folder / "files.tar.gz") as t:
+        names = set(t.getnames())
+        assert t.extractfile("repo/docs/telegram_record.json").read() == b"{}"
+    assert {"repo/docs/preregistration/p.md", "data/research/line-state-nba.pkl", "data/reports/weekly_report_review.json",
+            "launch_agents/com.nba-predictor.x.plist"} <= names
+    assert not any(".env" in n or "google" in n for n in names)
+
+
+def test_the_snapshot_also_holds_adaptive_pickles_scorecard_dbs_and_thresholds_db_but_no_locks_or_secrets(tmp_path):
+    import sqlite3
+    data, root = tmp_path / "data", tmp_path / "backups"
+    _store(data)
+    for rel, text in {"research/adaptive/nba/history-ab.pkl": "pk", "research/adaptive/nba/history-ab.pkl.sha256": "h",
+                      "research/adaptive/nhl/combiner/c-1.pkl": "cb", "research/adaptive/nba/train.lock": "",
+                      "research/adaptive/nba/history-ab.pkl.lock": "", "research/adaptive/.env.x": "SECRET"}.items():
+        p = data / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text)
+    (data / "scorecard").mkdir()
+    for name in ("scorecard/nhl.sqlite", "card_thresholds.sqlite"):
+        c = sqlite3.connect(data / name)
+        c.execute("CREATE TABLE scorecard (k TEXT)")
+        c.executemany("INSERT INTO scorecard VALUES (?)", [("a",), ("b",)])
+        c.commit(); c.close()
+    out = nb.nightly(data, root, mirror=None, stamp="20261116T043000Z", ledger=tmp_path / "none.sqlite", repo_root=tmp_path / "r")
+    folder = root / "stores" / "20261116T043000Z"
+    with tarfile.open(folder / "files.tar.gz") as t:
+        names = set(t.getnames())
+    assert {"data/research/adaptive/nba/history-ab.pkl", "data/research/adaptive/nba/history-ab.pkl.sha256",
+            "data/research/adaptive/nhl/combiner/c-1.pkl"} <= names
+    assert not any(n.endswith(".lock") or ".env" in n for n in names)
+    dbs = out["extras"]["databases"]
+    assert set(dbs) == {"scorecard/nhl.sqlite", "card_thresholds.sqlite"}
+    for rel, info in dbs.items():
+        copy = sqlite3.connect(folder / "databases" / rel)
+        assert copy.execute("PRAGMA integrity_check").fetchone()[0] == "ok" == info["integrity"]
+        assert info["rows"] == {"scorecard": 2} and info["sha256"] == backup.sha256(folder / "databases" / rel)
+        copy.close()
+
+
+# ---- retention: report-only by default, deletes only with apply ------------------------------------------------------------
+from datetime import datetime, timedelta, timezone  # noqa: E402
+
+NOW = datetime(2026, 11, 22, 12, 0, tzinfo=timezone.utc)
+
+
+def fake_backups(root, ages_days, broken=()):
+    """One fake backup folder per age (days before NOW, fractions allowed): a store file plus a manifest holding its sha256."""
+    names = {}
+    for age in ages_days:
+        name = (NOW - timedelta(days=age)).strftime("%Y%m%dT%H%M%SZ")
+        folder = root / name
+        folder.mkdir(parents=True)
+        (folder / "nba.sqlite").write_bytes(f"store-{name}".encode())
+        sha = backup.sha256(folder / "nba.sqlite")
+        (folder / "manifest.json").write_text(json.dumps({"stores": {"nba": {"file": "nba.sqlite", "sha256": sha}}}))
+        if age in broken:
+            (folder / "nba.sqlite").write_bytes(b"damaged")
+        names[age] = name
+    return names
+
+
+def test_prune_keeps_14_days_then_newest_per_iso_week_for_8_weeks_then_newest_per_month_for_12_months(tmp_path):
+    ages = [0.1, 1, 5, 13.4,            # last 14 days: all kept
+            15, 16, 20, 27,             # weeks of Nov 2-8 (ages 14-20) and Oct 26-Nov 1 (21-27): newest per ISO week
+            50, 53,                     # same week, 7 weeks back: newest kept
+            100, 105, 110,              # beyond 8 weeks: newest per month only
+            200, 400]                   # 400 days: older than 12 months
+    names = fake_backups(tmp_path, ages)
+    plan = nb.prune(tmp_path, now=NOW)
+    kept = set(plan["keep"])
+    assert plan["mode"] == "report-only" and plan["deleted"] == [] and all((tmp_path / n).is_dir() for n in names.values())
+    for age in (0.1, 1, 5, 13.4):
+        assert names[age] in kept
+    # ages 15, 16, 20 = Nov 7, 6, 2: one ISO week (Nov 2-8), newest kept; 27 = Oct 26 starts the week before
+    assert names[15] in kept and names[16] not in kept and names[20] not in kept and names[27] in kept
+    # 50 and 53 = Oct 3 and Sep 30: one ISO week, but also two months: newest of each month kept
+    assert names[50] in kept and names[53] in kept
+    # beyond 8 weeks only the newest of each month survives (100/105/110 = Aug 14, Aug 9, Aug 4)
+    assert names[100] in kept and names[105] not in kept and names[110] not in kept
+    assert names[200] in kept                                    # May 6: its month's only (and newest) backup
+    assert names[400] not in kept and names[400] in plan["would_delete"]
+
+
+def test_prune_report_only_deletes_nothing_and_apply_deletes_exactly_the_reported_folders(tmp_path):
+    names = fake_backups(tmp_path, [0.1, 15, 16, 400])
+    report = nb.prune(tmp_path, now=NOW)
+    assert report["would_delete"] and all((tmp_path / n).is_dir() for n in names.values())
+    done = nb.prune(tmp_path, now=NOW, apply=True)
+    assert sorted(done["deleted"]) == sorted(report["would_delete"]) and done["mode"] == "apply"
+    assert {p.name for p in tmp_path.iterdir()} == set(report["keep"])
+
+
+def test_prune_never_deletes_the_newest_or_the_only_copy_in_a_bucket_even_if_it_fails_verification(tmp_path):
+    names = fake_backups(tmp_path, [400, 0.1, 15, 16], broken=(0.1, 16))
+    plan = nb.prune(tmp_path, now=NOW)
+    keep = set(plan["keep"])
+    assert names[0.1] in keep                                   # the newest, though damaged
+    assert names[15] in keep                                    # newest verified of its week
+    assert names[16] in plan["would_delete"]                    # damaged and not the only copy: deletable
+    # a damaged folder alone in its week/month is the only copy: kept
+    only = fake_backups(tmp_path / "b", [0.1, 30], broken=(30,))
+    assert only[30] in nb.prune(tmp_path / "b", now=NOW)["keep"]
+    # and the newest VERIFIED backup is always kept
+    assert names[15] in keep
+
+
+def test_prune_falls_back_to_an_older_verified_backup_when_the_newest_of_a_week_is_damaged(tmp_path):
+    names = fake_backups(tmp_path, [0.1, 15, 16], broken=(15,))  # 15 and 16 days: same ISO week
+    plan = nb.prune(tmp_path, now=NOW)
+    assert names[16] in plan["keep"] and names[15] in plan["would_delete"]
+
+
+def test_prune_ignores_folders_that_are_not_backup_stamps(tmp_path):
+    fake_backups(tmp_path, [0.1])
+    (tmp_path / "notes").mkdir()
+    (tmp_path / ".20261101T000000Z.partial").mkdir()
+    plan = nb.prune(tmp_path, now=NOW, apply=True)
+    assert (tmp_path / "notes").is_dir() and (tmp_path / ".20261101T000000Z.partial").is_dir() and plan["deleted"] == []
+
+
+def test_nightly_reports_the_prune_plan_but_deletes_only_with_the_flag(tmp_path):
+    data, root = tmp_path / "data", tmp_path / "backups"
+    _store(data)
+    old = root / "stores" / "20250101T000000Z"
+    old.mkdir(parents=True)
+    (old / "manifest.json").write_text(json.dumps({"stores": {}}))
+    out = nb.nightly(data, root, mirror=None, stamp="20261116T043000Z")
+    assert out["prune"]["mode"] == "report-only" and "20250101T000000Z" in out["prune"]["would_delete"] and old.is_dir()
+    out = nb.nightly(data, root, mirror=None, stamp="20261117T043000Z", prune_apply=True)
+    assert out["prune"]["mode"] == "apply" and not old.exists()
