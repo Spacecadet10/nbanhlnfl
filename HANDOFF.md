@@ -1,3 +1,41 @@
+## Five-sport research (sports-research-v3) — branch research-5 23df530, RELEASED to delivery (2026-11-22 ~21:28Z) — Claude Opus 5.5 (lead)
+- Built by 4 agents (core evaluator; NCAAB+NFL adapters; Soccer adapter + readiness fix; scheduling/snapshot/forward driver),
+  integrated in research-5; independent Opus review x2 (REQUEST CHANGES -> fixed; round-2 must-fix 131423a and minors 23df530
+  fixed by the lead). No new files; no live-hashed or SEALED file changed (fingerprint tests pin nfl_live.definition
+  b6074877a7e7ccfe, ncaab fit_code_version 24ec6d25, selector-v1:d472eb466923, RECORDER_SHA256; soccer_markets_eval.py byte-identical).
+- Adapters: NBA/NHL built into app/autoresearch.py; NCAAB `ncaab_cards.research_adapter` (research imports lazy: an eager import
+  broke telegram's ncaab_card_selections creation in the full suite); NFL `nfl_challengers.research_adapter`; Soccer
+  `soccer_challengers.research_adapter` (moved out of SEALED soccer_markets_eval.py).
+- Evaluator: Brier/log loss/ECE/score errors, paired week-block bootstrap, MODEL_SELECTION §6 keep rule with a 1e-9 tolerance
+  (dated amendment in MODEL_SELECTION), reference/model-line beats -> needs_human_review (never kept or forward-tracked),
+  no-vig only on non-synthetic quotes <= cutoff at the same line, returns only at executable prices; protocol id includes
+  the snapshot identity; per-sport outcomes evaluated|no_candidates|refused|failed|skipped; bounded resumable queue.
+- Soccer readiness fix: future fixtures were reported "kicked off" (cutoff compared, not now); now one pending line per
+  competition, real unsettled matches still listed (405,570 spam lines in the 58 MB log).
+- Live steps: backup 20261122T212632Z; delivery 1179494 -> 23df530 + npm build + `app.release pin`; api-delivery/web
+  kickstarted; backup runner -> 23df530; snapshot ~/autoresearch-sports/data-snapshot-2026-11-22-5sport (app.backup
+  --snapshot, soccer backfill 1,169 free ESPN requests, 0 failed, --verify ok, read-only); app pin worktree
+  ~/autoresearch-sports/app-23df530; workspace prepare.py pin commit 7a6d35e (BACKEND app-23df530, SNAPSHOT 5sport; old
+  app-ca44760 + data-snapshot-2026-11-18 kept); NEW launchd jobs com.nba-predictor.forward-record (30 min) and forward-grade
+  (60 min) under the light guard; NBA/NHL study cache built once (see below). Daily plist unchanged (06:00 Toronto).
+- Study cache (NBA/NHL v3 needs it; the daily step refuses without it): build with the evaluator directly (the shim adds
+  --workspace, which `v3` rejects): PYTHONPATH=$AR/app-23df530/backend NBA_DATA_DIR=$AR/data-snapshot-2026-11-22-5sport
+  /Users/andry/nba-predictor-deep/backend/.venv/bin/python -m app.autoresearch v3 prepare-cache --exp-root $AR/experiments
+  --sport nba (then nhl), under app.learning_run (heavy lock). Rebuild after every app-pin change.
+- Results on the snapshot (search/validation; holdout untouched): NBA, NHL, NFL, Soccer: no candidate kept; NCAAB: 12
+  reference-line beats need human review (not bookmaker skill; DraftKings sample since Nov 17 still fails spread/total).
+  No historical bookmaker quotes exist for any sport, so no sportsbook comparison or returns.
+- Tests: full backend suite at 535460e: 3,131 passed / 9 failed = 8 test_deep_study (torch/keras absent) + the wrapper test
+  fixed in 131423a; research + delivery sets on 23df530: 371 passed; frontend 62 unit, typecheck, build ok.
+- Observed: forward-record run 21:28Z recorded NCAAB 605 / NFL 90 / Soccer 2,268 rows (NBA/NHL nothing upcoming); the full
+  wrapper at 21:35Z refused all five for real game windows (learning-runs.jsonl reasons); manual guarded runs with the game
+  window relaxed: NFL evaluated (2/2 candidates, none kept), NBA evaluated (v2 queue scored; v3 item budget reached, resumes).
+- OPEN: first scheduled five-sport run is 06:00 Toronto Nov 23 (unverified until it runs); forward grading starts as games
+  finish; NCAAB spread/total still fail validation; NBA/NHL line markets only at model lines; Soccer national-team 1X2
+  research walk not built; `v3` CLI via the shim rejects --workspace (use the direct command above).
+- ROLLBACK: delivery `git checkout --detach 1179494` + npm build + re-pin; workspace `git revert 7a6d35e`; bootout
+  forward-record/forward-grade and move their plists aside; snapshot/forward store/app-23df530 are additive.
+
 ## Bucket-record colouring release — branch bucket-colours afdb239, RELEASED to delivery (2026-11-22 ~17:05Z) — Claude Opus 5.5 (lead)
 - Owner: colour = each exact-% bucket's own settled W/L (green ≥1 win and ≥75%; red losses > wins; else neutral; pushes/voids
   shown apart), no probability cutoff, no NCAAB colour gate, all NCAAB/Soccer recommendations shown, recovered Nov history shown.
