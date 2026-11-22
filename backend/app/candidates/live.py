@@ -658,3 +658,248 @@ def core_members(conn, sport: str, as_of: str) -> list:
 
 def _has(conn, table: str) -> bool:
     return conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone() is not None
+
+
+# --- Forward-test recorder and grader (five sports; light jobs, never in an official store) ----------------------------
+# Registered candidate models are forecast BEFORE their games by each sport's `research_adapter().forecast_upcoming(conn,
+# now, model_name)` and settled AFTER the official result is final by `research_adapter().settle(conn, row)`. The only
+# store written is `<data dir>/research/forward-candidates.sqlite`; the official stores are opened read-only (mode=ro,
+# query_only), so a forecast can never reach a primary read, score, vote or stack. Both jobs run through
+# `python -m app.learning_run --light --name forward-<kind> ...` (per-name lock, no heavy lock, no game-window deferral).
+#   forward_models(sport, model_name, registered_at, active)          the registry; filled by the research driver
+#   forward_forecasts(id, sport, model_name, event_id, market, selection, issued_at, event_at, probability, payload)
+#       one row per (sport, model_name, event_id, market, selection): the FIRST forecast made while the event is still ahead
+#   forward_results(forecast_id, graded_at, outcome, log_loss, brier)  outcome 1/0 (or a settler value) once final
+#   forward_runs(kind, sport, at, outcome, detail)                     per-sport outcome of every run (status page facts)
+# Adapter rows: {"event_id", "market", "selection" (optional), "event_at" (UTC, must be after `now`), "probability" in [0,1]
+# (optional), "info_at" (optional, must not be after `now`), ...}; `settle` returns None until final, then {"outcome": 0|1|float}.
+FORWARD_DB = "forward-candidates.sqlite"
+FORWARD_ADAPTERS = {"nba": "nba_eval", "nhl": "nhl_eval", "ncaab": "ncaab_eval", "nfl": "nfl_challengers", "soccer": "soccer_markets_eval"}
+FORWARD_SPORTS = tuple(FORWARD_ADAPTERS)
+FORWARD_CALL_TIMEOUT_S = 60
+FORWARD_SCHEMA = """
+CREATE TABLE IF NOT EXISTS forward_models (sport TEXT NOT NULL, model_name TEXT NOT NULL, registered_at TEXT NOT NULL,
+  active INTEGER NOT NULL DEFAULT 1, PRIMARY KEY (sport, model_name));
+CREATE TABLE IF NOT EXISTS forward_forecasts (id INTEGER PRIMARY KEY AUTOINCREMENT, sport TEXT NOT NULL, model_name TEXT NOT NULL,
+  event_id TEXT NOT NULL, market TEXT NOT NULL, selection TEXT NOT NULL DEFAULT '', issued_at TEXT NOT NULL, event_at TEXT NOT NULL,
+  probability REAL, payload TEXT NOT NULL, UNIQUE (sport, model_name, event_id, market, selection));
+CREATE TABLE IF NOT EXISTS forward_results (forecast_id INTEGER PRIMARY KEY REFERENCES forward_forecasts(id), graded_at TEXT NOT NULL,
+  outcome REAL NOT NULL, log_loss REAL, brier REAL);
+CREATE TABLE IF NOT EXISTS forward_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, sport TEXT NOT NULL,
+  at TEXT NOT NULL, outcome TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '');
+CREATE TRIGGER IF NOT EXISTS forward_forecasts_no_update BEFORE UPDATE ON forward_forecasts
+  BEGIN SELECT RAISE(ABORT, 'forward forecasts are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS forward_forecasts_no_delete BEFORE DELETE ON forward_forecasts
+  BEGIN SELECT RAISE(ABORT, 'forward forecasts are append-only'); END;
+"""
+
+
+class _Timeout(Exception):
+    pass
+
+
+@contextmanager
+def _deadline(seconds: float):
+    """SIGALRM time limit for one adapter call (main thread only; elsewhere the guard's wall clock is the limit)."""
+    import signal
+    import threading
+    if not seconds or threading.current_thread() is not threading.main_thread():
+        yield
+        return
+
+    def fire(_s, _f):
+        raise _Timeout(f"adapter call exceeded {seconds} s")
+    old = signal.signal(signal.SIGALRM, fire)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, old)
+
+
+def forward_connect(data_dir: Path):
+    import sqlite3
+    path = Path(data_dir) / "research" / FORWARD_DB
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path, timeout=30)
+    conn.executescript(FORWARD_SCHEMA)
+    return conn
+
+
+def _official(data_dir: Path, sport: str):
+    """The official store, strictly read-only; None when this sport has no store."""
+    import sqlite3
+    from .. import sports
+    p = Path(data_dir) / sports.store(sport).db_file
+    if not p.is_file():
+        return None
+    conn = sqlite3.connect(f"{p.resolve().as_uri()}?mode=ro", uri=True, timeout=30)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA query_only = ON")
+    return conn
+
+
+def _adapter(sport: str, adapters: Optional[dict]):
+    if adapters is not None:
+        return adapters.get(sport)
+    import importlib
+    try:
+        mod = importlib.import_module(f"app.{FORWARD_ADAPTERS[sport]}")
+    except ImportError:
+        return None
+    fn = getattr(mod, "research_adapter", None)
+    return fn() if fn else None
+
+
+def _note(fwd, kind: str, sport: str, outcome: str, detail: str, at: str) -> None:
+    fwd.execute("INSERT INTO forward_runs (kind, sport, at, outcome, detail) VALUES (?,?,?,?,?)", (kind, sport, at, outcome, detail[:500]))
+    fwd.commit()
+
+
+def forward_register(data_dir: Path, sport: str, model_name: str, now: Optional[str] = None, active: bool = True) -> None:
+    fwd = forward_connect(data_dir)
+    try:
+        fwd.execute("INSERT INTO forward_models (sport, model_name, registered_at, active) VALUES (?,?,?,?) "
+                    "ON CONFLICT(sport, model_name) DO UPDATE SET active = excluded.active", (sport, model_name, now or utc_now(), int(active)))
+        fwd.commit()
+    finally:
+        fwd.close()
+
+
+def forward_record(data_dir: Path, *, now: Optional[str] = None, sports=FORWARD_SPORTS, adapters: Optional[dict] = None,
+                   timeout_s: float = FORWARD_CALL_TIMEOUT_S) -> dict:
+    """One light pass: per sport and registered active model, ask the adapter for the forecasts of games still ahead and append
+    the first forecast of each (model, event, market, selection). Returns {sport: {"outcome", "recorded", ...}} with outcome in
+    evaluated | no_candidates (no registered model, or nothing ahead) | skipped (no adapter or store) | failed. A failure in one
+    model or sport never stops the others."""
+    now = now or utc_now()
+    fwd = forward_connect(data_dir)
+    out = {}
+    try:
+        for sport in sports:
+            res = out[sport] = {"outcome": "no_candidates", "recorded": 0, "rejected": 0, "errors": []}
+            models = [r[0] for r in fwd.execute("SELECT model_name FROM forward_models WHERE sport=? AND active=1 ORDER BY model_name", (sport,))]
+            if not models:
+                _note(fwd, "record", sport, "no_candidates", "no registered model", now)
+                continue
+            adapter, conn = _adapter(sport, adapters), _official(data_dir, sport)
+            if adapter is None or not hasattr(adapter, "forecast_upcoming") or conn is None:
+                res["outcome"] = "skipped"
+                res["errors"].append("no adapter" if adapter is None or not hasattr(adapter, "forecast_upcoming") else "no store")
+                _note(fwd, "record", sport, "skipped", res["errors"][-1], now)
+                if conn is not None:
+                    conn.close()
+                continue
+            rows = []
+            try:
+                for name in models:
+                    try:
+                        with _deadline(timeout_s):
+                            rows = list(adapter.forecast_upcoming(conn, now, name) or [])
+                    except Exception as exc:                      # one model never stops the rest
+                        res["errors"].append(f"{name}: {type(exc).__name__}: {exc}")
+                        continue
+                    for r in rows:
+                        try:
+                            ev, p = str(r["event_id"]), r.get("probability")
+                            at, info = _parse(r["event_at"]).strftime(FMT), r.get("info_at")
+                            if at <= now or (info and _parse(info).strftime(FMT) > now) or (p is not None and not 0.0 <= float(p) <= 1.0):
+                                res["rejected"] += 1             # not strictly before the event, or uses later information
+                                continue
+                            cur = fwd.execute(
+                                "INSERT OR IGNORE INTO forward_forecasts (sport, model_name, event_id, market, selection, issued_at, event_at,"
+                                " probability, payload) VALUES (?,?,?,?,?,?,?,?,?)",
+                                (sport, name, ev, str(r["market"]), str(r.get("selection") or ""), now, at,
+                                 None if p is None else float(p), json.dumps(r, sort_keys=True, default=str)))
+                            res["recorded"] += cur.rowcount
+                        except (KeyError, ValueError, TypeError) as exc:
+                            res["rejected"] += 1
+                            res["errors"].append(f"{name}: bad row ({type(exc).__name__}: {exc})")
+                    fwd.commit()
+            finally:
+                conn.close()
+            res["outcome"] = "failed" if res["errors"] and not res["recorded"] else ("evaluated" if res["recorded"] or rows else "no_candidates")
+            _note(fwd, "record", sport, res["outcome"], f"recorded={res['recorded']} rejected={res['rejected']} {'; '.join(res['errors'])}", now)
+    finally:
+        fwd.close()
+    return out
+
+
+def forward_grade(data_dir: Path, *, now: Optional[str] = None, sports=FORWARD_SPORTS, adapters: Optional[dict] = None,
+                  timeout_s: float = FORWARD_CALL_TIMEOUT_S) -> dict:
+    """Settles ungraded forward forecasts whose event time has passed, reading the official results read-only through the
+    adapter's `settle(conn, row)` (None = not final yet; a final result is graded exactly once). Same outcome vocabulary as
+    `forward_record` (no_candidates = nothing waiting)."""
+    import math
+    now = now or utc_now()
+    fwd = forward_connect(data_dir)
+    out = {}
+    try:
+        for sport in sports:
+            res = out[sport] = {"outcome": "no_candidates", "graded": 0, "waiting": 0, "errors": []}
+            due = [dict(zip(("id", "model_name", "event_id", "market", "selection", "event_at", "probability", "payload"), r)) for r in fwd.execute(
+                "SELECT f.id, f.model_name, f.event_id, f.market, f.selection, f.event_at, f.probability, f.payload FROM forward_forecasts f "
+                "LEFT JOIN forward_results r ON r.forecast_id = f.id WHERE r.forecast_id IS NULL AND f.sport=? AND f.event_at <= ? "
+                "ORDER BY f.event_at", (sport, now))]
+            if not due:
+                _note(fwd, "grade", sport, "no_candidates", "nothing waiting", now)
+                continue
+            adapter, conn = _adapter(sport, adapters), _official(data_dir, sport)
+            if adapter is None or not hasattr(adapter, "settle") or conn is None:
+                res["outcome"], res["waiting"] = "skipped", len(due)
+                res["errors"].append("no settler" if adapter is None or not hasattr(adapter, "settle") else "no store")
+                _note(fwd, "grade", sport, "skipped", res["errors"][-1], now)
+                if conn is not None:
+                    conn.close()
+                continue
+            try:
+                for row in due:
+                    row["payload"] = json.loads(row["payload"])
+                    try:
+                        with _deadline(timeout_s):
+                            s = adapter.settle(conn, row)
+                    except Exception as exc:
+                        res["errors"].append(f"{row['event_id']}: {type(exc).__name__}: {exc}")
+                        continue
+                    if not s:
+                        res["waiting"] += 1
+                        continue
+                    y, p = float(s["outcome"]), row["probability"]
+                    ll = br = None
+                    if p is not None and y in (0.0, 1.0):
+                        ll = -math.log(max(min(p if y else 1 - p, 1 - 1e-12), 1e-12))
+                        br = (p - y) ** 2
+                    fwd.execute("INSERT OR IGNORE INTO forward_results (forecast_id, graded_at, outcome, log_loss, brier) VALUES (?,?,?,?,?)",
+                                (row["id"], now, y, ll, br))
+                    res["graded"] += 1
+                fwd.commit()
+            finally:
+                conn.close()
+            res["outcome"] = "failed" if res["errors"] and not res["graded"] else "evaluated"
+            _note(fwd, "grade", sport, res["outcome"], f"graded={res['graded']} waiting={res['waiting']} {'; '.join(res['errors'])}", now)
+    finally:
+        fwd.close()
+    return out
+
+
+def forward_main(argv: Optional[list] = None) -> int:
+    """`python -m app.learning_run --light --name forward-record ... -- python -m app.candidates.live record|grade`.
+    One line per sport: `forward-<kind>: sport=<s> outcome=<o> ...`; exit 1 if any sport failed, else 0."""
+    import argparse
+    ap = argparse.ArgumentParser(prog="python -m app.candidates.live")
+    ap.add_argument("kind", choices=("record", "grade"))
+    ap.add_argument("--sport", action="append", choices=FORWARD_SPORTS)
+    ap.add_argument("--call-timeout", type=float, default=FORWARD_CALL_TIMEOUT_S)
+    a = ap.parse_args(argv)
+    fn = forward_record if a.kind == "record" else forward_grade
+    res = fn(config.data_dir(), sports=tuple(a.sport or FORWARD_SPORTS), timeout_s=a.call_timeout)
+    for sport, r in res.items():
+        extra = " ".join(f"{k}={v}" for k, v in r.items() if k not in ("outcome", "errors"))
+        print(f"forward-{a.kind}: sport={sport} outcome={r['outcome']} {extra} {'; '.join(r['errors'])}".rstrip())
+    return 1 if any(r["outcome"] == "failed" for r in res.values()) else 0
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(forward_main())

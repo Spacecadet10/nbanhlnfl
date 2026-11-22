@@ -397,3 +397,101 @@ def test_a_mirror_folder_that_does_not_exist_is_refused_not_created(tmp_path):
     with pytest.raises(backup.BackupError):
         backup.mirror(src, tmp_path / "Volumes" / "Unplugged")
     assert not (tmp_path / "Volumes").exists()
+
+
+# ---- research snapshot (five-sport-snapshot-v1) ----------------------------------------------------------------------------
+def _games_store(path, sport, table, col, rows):
+    c = sqlite3.connect(path)
+    c.execute(f"CREATE TABLE {table} ({'match_id' if table == 'soccer_matches' else 'game_id'} TEXT, {col} TEXT, status TEXT, season INT)")
+    c.executemany(f"INSERT INTO {table} VALUES (?,?,?,?)", rows)
+    c.commit()
+    return c
+
+
+def test_snapshot_is_a_read_only_verified_five_sport_copy_with_coverage_and_a_checkable_identity(tmp_path):
+    data, dest = tmp_path / "data", tmp_path / "snaps"
+    data.mkdir()
+    keep = []
+    for sport, table, col in (("nba", "games", "tipoff_at"), ("nhl", "games", "tipoff_at"), ("ncaab", "games", "tipoff_at"),
+                              ("nfl", "games", "tipoff_at"), ("soccer", "soccer_matches", "kickoff_at")):
+        keep.append(_games_store(data / f"{sport}.sqlite", sport, table, col,
+                                 [("a", "2026-10-01T00:00:00Z", "final", 2027), ("b", "2026-11-30T00:00:00Z", "scheduled", 2027)]))
+    (data / "research" / "candidates").mkdir(parents=True)
+    (data / "research" / "candidates" / "goalies-v1.json.gz").write_bytes(b"goalies")
+    keep[0].execute("INSERT INTO games VALUES ('c', '2026-11-02T00:00:00Z', 'final', 2027)")      # a live writer is not blocked and is captured
+    keep[0].commit()
+    ident = backup.snapshot(data, dest, "snap-1")
+    snap = dest / "snap-1"
+    assert set(ident["stores"]) == {"nba", "nhl", "ncaab", "nfl", "soccer"} and ident["snapshot_version"] == backup.SNAPSHOT_VERSION
+    cov = ident["stores"]["nba"]["coverage"]
+    assert (cov["rows"], cov["first"], cov["last"], cov["last_final"], cov["seasons"]) == (3, "2026-10-01T00:00:00Z", "2026-11-30T00:00:00Z", "2026-11-02T00:00:00Z", [2027])
+    assert ident["stores"]["soccer"]["coverage"]["time_column"] == "kickoff_at" and ident["stores"]["nfl"]["integrity_check"] == "ok"
+    assert ident["files"]["research/candidates/goalies-v1.json.gz"]["bytes"] == 7
+    assert json.loads((dest / "IDENTITY-snap-1.json").read_text()) == json.loads((snap / "IDENTITY.json").read_text())
+    assert backup.verify_snapshot(snap) == {"ok": True, "problems": [], "name": "snap-1", "snapshot_version": backup.SNAPSHOT_VERSION}
+    assert not any(os.access(p, os.W_OK) for p in [snap, *snap.rglob("*")])
+    from app import autoresearch                                # the pinned evaluator accepts the read-only five-sport snapshot as identity
+    os.environ["NBA_DATA_DIR"] = str(snap)
+    try:
+        assert autoresearch.snapshot_identity("ncaab")["sha256"] == ident["files"]["ncaab.sqlite"]["sha256"]
+    finally:
+        del os.environ["NBA_DATA_DIR"]
+    with pytest.raises(backup.BackupError, match="already exists"):
+        backup.snapshot(data, dest, "snap-1")
+    os.chmod(snap, 0o755)
+    os.chmod(snap / "nba.sqlite", 0o644)
+    (snap / "nba.sqlite").write_bytes(b"tampered")
+    res = backup.verify_snapshot(snap)
+    assert not res["ok"] and any("sha256 differs: nba.sqlite" in p for p in res["problems"]) and any(p.startswith("writable") for p in res["problems"])
+
+
+def test_snapshot_refuses_a_missing_store_and_leaves_nothing_behind(tmp_path):
+    data = tmp_path / "data"
+    data.mkdir()
+    _games_store(data / "nba.sqlite", "nba", "games", "tipoff_at", [])
+    with pytest.raises(backup.BackupError, match="no store for nhl"):
+        backup.snapshot(data, tmp_path / "snaps", "s", sports=["nba", "nhl"])
+    assert not (tmp_path / "snaps" / "s").exists()
+
+
+def _soccer_live_store(path):
+    conn = db.connect(path)
+    db.migrate(conn)
+    conn.close()
+
+
+def test_snapshot_soccer_backfill_is_resumable_bounded_counted_and_never_touches_the_live_store(tmp_path):
+    data, dest = tmp_path / "data", tmp_path / "snaps"
+    data.mkdir()
+    _soccer_live_store(data / "soccer.sqlite")
+    live_before = backup.sha256(data / "soccer.sqlite")
+    asked = []
+
+    def fetch(comp, month, timeout=60):
+        asked.append((comp, month))
+        return json.dumps({"leagues": [{"slug": comp}], "events": []}).encode()
+    cfg = {"from": "201008", "to": "201010", "competitions": ["eng.1", "esp.1"], "sleep": 0, "max_requests": 4}
+    first = backup.snapshot(data, dest, "s", sports=["soccer"], soccer_backfill=cfg, soccer_fetch=fetch)
+    assert first["status"] == "partial" and first["requested"] == 4 and first["pending"] == 2 and not (dest / "s").exists()
+    assert (dest / "s.partial").is_dir() and not (dest / "IDENTITY-s.json").exists()
+    ident = backup.snapshot(data, dest, "s", sports=["soccer"], soccer_backfill={**cfg, "max_requests": 4}, soccer_fetch=fetch)
+    assert len(asked) == 6 and len(set(asked)) == 6                    # the resumed run asked only for the missing months
+    assert ident["soccer_backfill"]["requested"] == 6 and ident["soccer_backfill"]["failed"] == [] and ident["soccer_backfill"]["runs"] == 2
+    assert ident["soccer_backfill"]["competitions"] == ["eng.1", "esp.1"] and not (dest / "s.partial").exists()
+    assert backup.sha256(data / "soccer.sqlite") == live_before   # live store file unchanged (a reader may add -wal/-shm)
+    assert not (data / "raw").exists()                                                                 # raw cache went to the stage
+    assert backup.verify_snapshot(dest / "s")["ok"], backup.verify_snapshot(dest / "s")
+    conn = sqlite3.connect(f"file:{dest / 's' / 'soccer.sqlite'}?mode=ro&immutable=1", uri=True)
+    assert conn.execute("SELECT COUNT(*) FROM raw_responses WHERE source LIKE '%month%'").fetchone()[0] == 6
+
+
+def test_snapshot_backfill_failures_keep_the_stage_and_are_not_finalised(tmp_path):
+    data, dest = tmp_path / "data", tmp_path / "snaps"
+    data.mkdir()
+    _soccer_live_store(data / "soccer.sqlite")
+
+    def bad(comp, month, timeout=60):
+        raise OSError("espn down")
+    r = backup.snapshot(data, dest, "s", sports=["soccer"], soccer_fetch=bad,
+                        soccer_backfill={"from": "201008", "to": "201008", "competitions": ["eng.1"], "sleep": 0})
+    assert r["status"] == "partial" and r["failed"] == ["eng.1:201008"] and (dest / "s.partial").is_dir() and not (dest / "s").exists()

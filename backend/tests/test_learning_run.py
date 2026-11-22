@@ -283,3 +283,62 @@ def test_the_run_log_rotates_at_5_mb_keeping_two_rotated_files(tmp_path, monkeyp
     names = sorted(p.name for p in log.parent.iterdir() if p.name.startswith("learning-runs"))
     assert names == ["learning-runs.jsonl", "learning-runs.jsonl.1", "learning-runs.jsonl.2"]
     assert log.stat().st_size < 1000 and all(json.loads(x) for x in log.read_text().splitlines())
+
+
+# ---- per-sport windows and the global forecasting-load guard (five-sport schedule) -----------------------------------
+def soccer_store(data, *offsets):
+    data.mkdir(parents=True, exist_ok=True)
+    c = sqlite3.connect(data / "soccer.sqlite")
+    c.execute("CREATE TABLE soccer_matches (match_id TEXT PRIMARY KEY, kickoff_at TEXT, status TEXT)")
+    for i, h in enumerate(offsets):
+        c.execute("INSERT INTO soccer_matches VALUES (?,?,?)", (f"m{i}", ts(h), "scheduled"))
+    c.commit()
+    c.close()
+
+
+def test_a_short_per_sport_window_and_no_lookback_let_a_soccer_run_start_near_kickoffs(tmp_path):
+    data = tmp_path / "data"
+    soccer_store(data, 1.0, -1.0)                                   # kicks off in 1 h; one began 1 h ago
+    kw = dict(defer_sports=("soccer",), defer_hours=0.75, lookback_hours=0.0)
+    assert go(tmp_path, [PY, "-c", "pass"], **kw) == 0
+    assert go(tmp_path, [PY, "-c", "pass"], defer_sports=("soccer",), defer_hours=2.5) == lr.EXIT_REFUSED   # the old windows refuse
+    (data / "soccer.sqlite").unlink()
+    soccer_store(data, 0.5)
+    assert go(tmp_path, [PY, "-c", "pass"], **kw) == lr.EXIT_REFUSED
+
+
+def test_the_global_guard_refuses_any_sports_imminent_tipoff_but_not_one_in_progress(tmp_path):
+    data = tmp_path / "data"
+    games_store(data, "nba", 0.4)
+    games_store(data, "nfl", -1.0)                                  # in progress: grading only, not a forecasting load
+    kw = dict(defer_sports=("soccer",), defer_hours=0.75, lookback_hours=0.0, global_sports=("nba", "nfl"), global_hours=0.5)
+    assert go(tmp_path, [PY, "-c", "pass"], **kw) == lr.EXIT_REFUSED
+    assert "nba0" in events(tmp_path)[-1]["reason"] and "forecast" in events(tmp_path)[-1]["reason"]
+    (data / "nba.sqlite").unlink()
+    games_store(data, "nba", 0.6)
+    assert go(tmp_path, [PY, "-c", "pass"], **kw) == 0
+
+
+def test_cli_window_flags_and_a_sport_only_run_that_ignores_other_sports(tmp_path, monkeypatch):
+    monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path / "data"))
+    games_store(tmp_path / "data", "nba", 1.0)
+    seen = {}
+    monkeypatch.setattr(lr, "run_guarded", lambda cmd, **kw: seen.update(kw) or 0)
+    argv = ["--name", "x", "--max-minutes", "1", "--max-rss-gb", "1", "--defer-sports", "soccer", "--defer-hours", "0.75",
+            "--lookback-hours", "0", "--global-sports", "nba,soccer", "--global-hours", "0.5", "--", "true"]
+    assert lr.main(argv) == 0
+    assert (seen["defer_sports"], seen["defer_hours"], seen["lookback_hours"], seen["global_sports"], seen["global_hours"]) == \
+        (("soccer",), 0.75, 0.0, ("nba", "soccer"), 0.5)
+    assert lr.main(argv[:-2] + ["--global-sports", "bogus", "--", "true"]) == lr.EXIT_USAGE
+
+
+def test_live_fingerprints_are_unchanged_from_commit_1179494_by_the_ops_work():
+    """The five-sport ops change touches learning_run, backup, candidates/live and the daily script only; none of them is
+    byte-hashed by a live definition. These digests were computed at 1179494; a change here means a hashed file was edited
+    (live forecasts would get a new identity or switch off)."""
+    from app import nfl_live, ncaab_challengers, selector
+    from app.candidates import registry
+    assert nfl_live.definition() == "b6074877a7e7ccfe"
+    assert ncaab_challengers.fit_code_version() == "24ec6d25"
+    assert selector.version() == "selector-v1:d472eb466923"
+    assert [registry.definition(s) for s in list(registry.SPECS)[:2]] == ["f38e254260ec3c2e", "4ad9c718bc18a1de"]

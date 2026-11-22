@@ -288,6 +288,192 @@ def _undo_swap(done: list, where: dict, data_dir: Path, exc: BaseException) -> N
     raise BackupError("\n".join(lines)) from exc
 
 
+# --- Research snapshot (five-sport-snapshot-v1) ---------------------------------------------------------------------------
+# The frozen, read-only data the autoresearch evaluator scores against (docs/AUTORESEARCH.md "Snapshots"). Reads the live
+# stores only (online backup, consistent while jobs write). Layout under `dest`:
+#   <name>/<sport>.sqlite ...        online backup of each store, integrity_check + quick_check ok
+#   <name>/IDENTITY.json             sha256 + bytes per file, per-store schema version, row counts, per-sport coverage
+#   <name>/research/...              allowlisted derived files (default: the NHL goalie parse cache), by content hash
+#   <name>/raw/                      only with include_raw (the raw response cache), identified by a manifest of file names
+#   IDENTITY-<name>.json             copy of IDENTITY.json beside the snapshot (the identity the protocol pins)
+# Then `chmod -R a-w`: autoresearch.snapshot_identity refuses a writable snapshot. `verify_snapshot` re-checks all of it.
+SNAPSHOT_VERSION = "five-sport-snapshot-v1"
+SNAPSHOT_DERIVED = ("research/candidates/goalies-v1.json.gz",)
+
+
+def _coverage(conn, sport: str) -> dict:
+    """Date range and status counts of the sport's games/matches, so a snapshot says what it can and cannot score."""
+    from .learning_run import GAME_TABLES
+    table, col = GAME_TABLES[sport]
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone():
+        return {"table": table, "rows": 0}
+    lo, hi, n = conn.execute(f"SELECT MIN({col}), MAX({col}), COUNT(*) FROM {table}").fetchone()
+    status = dict(conn.execute(f"SELECT status, COUNT(*) FROM {table} GROUP BY status").fetchall())
+    final_hi = conn.execute(f"SELECT MAX({col}) FROM {table} WHERE status='final'").fetchone()[0]
+    out = {"table": table, "time_column": col, "rows": n, "first": lo, "last": hi, "last_final": final_hi, "status": status}
+    cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+    if "season" in cols:
+        out["seasons"] = [r[0] for r in conn.execute(f"SELECT DISTINCT season FROM {table} ORDER BY season")]
+    return out
+
+
+def _raw_manifest(raw: Path) -> str:
+    return hashlib.sha256("\n".join(sorted(str(f.relative_to(raw)) for f in raw.rglob("*") if f.is_file())).encode()).hexdigest()
+
+
+SOCCER_BACKFILL = {"from": "201008", "to": "202407",
+                   "competitions": ["eng.1", "esp.1", "ger.1", "ita.1", "fra.1", "uefa.champions", "uefa.europa"]}
+
+
+def _soccer_backfill(stage: Path, cfg: dict, fetch=None) -> dict:
+    """Free ESPN month scoreboards (`soccer history-months`: one request per competition and month) written ONLY into the
+    snapshot's staged copy of the soccer store (and its raw cache under the stage); never the live store. Resumable: a month
+    already in the stage's raw_responses is skipped, so a rerun asks only for what is missing; `max_requests` bounds one run.
+    Cumulative request and failure counts are kept in `<stage>/.backfill-progress.json`."""
+    from . import config as cfg_mod, db, soccer
+    from .sources import espn
+    fetch = fetch or espn.fetch_soccer_month
+    prog_path = stage / ".backfill-progress.json"
+    prog = json.loads(prog_path.read_text()) if prog_path.exists() else {"requested": 0, "runs": 0, "failed": []}
+    old = os.environ.get("NBA_DATA_DIR")
+    os.environ["NBA_DATA_DIR"] = str(stage)                      # raw cache and every write land in the stage
+    conn = db.connect(stage / _db_file("soccer"))
+    try:
+        done = {r[0] for r in conn.execute("SELECT request_key FROM raw_responses WHERE source = ?", (espn.SOCCER_MONTH_SOURCE,))}
+        todo = [(c, m) for c in cfg["competitions"] for m in soccer.months(cfg["from"], cfg["to"])
+                if espn.soccer_month_request(c, m)[0] not in done]
+        budget = cfg.get("max_requests")
+        batch = todo if budget is None else todo[:budget]
+        failed = []
+        for c, m in batch:
+            res = soccer.ingest_months(conn, [c], m, m, sleep=cfg.get("sleep", 1.0), fetch=fetch, log=lambda _x: None)
+            prog["requested"] += len(res)
+            failed += [f"{r['competition']}:{r['month']}" for r in res if "error" in r]
+        prog.update(runs=prog["runs"] + 1, failed=failed)
+        prog_path.write_text(json.dumps(prog))
+        return {"pending": len(todo) - len(batch) + len(failed), "requested": prog["requested"], "failed": failed, "runs": prog["runs"]}
+    finally:
+        conn.close()
+        if old is None:
+            del os.environ["NBA_DATA_DIR"]
+        else:
+            os.environ["NBA_DATA_DIR"] = old
+
+
+def snapshot(data_dir: Path, dest: Path, name: str, *, sports: Optional[list] = None, derived=SNAPSHOT_DERIVED,
+             include_raw: bool = False, soccer_backfill: Optional[dict] = None, soccer_fetch=None) -> dict:
+    """Builds `dest/<name>` as described above; refuses an existing name, a missing store or a failed integrity check.
+    Built in `dest/<name>.partial` and renamed when complete. `soccer_backfill` (e.g. SOCCER_BACKFILL, optionally with
+    `max_requests` and `sleep`) adds the free ESPN history to the SNAPSHOT copy of the soccer store (the live ESPN rows start in
+    2024, all holdout or prospective). If it does not finish within `max_requests` the stage is kept and
+    {"status": "partial", ...} is returned; calling again with the same arguments resumes (stores already copied are not
+    copied again, months already fetched are not asked for again). The request count goes into IDENTITY.json."""
+    import shutil
+    data_dir, dest = Path(data_dir), Path(dest)
+    out_dir, stage = dest / name, dest / f"{name}.partial"
+    if out_dir.exists() or (dest / f"IDENTITY-{name}.json").exists():
+        raise BackupError(f"snapshot {name} already exists in {dest}; choose a new name")
+    chosen = list(sports or SPORTS)
+    if soccer_backfill and "soccer" not in chosen:
+        raise BackupError("soccer_backfill needs soccer in the snapshot's sports")
+    missing = [s for s in chosen if not (data_dir / _db_file(s)).is_file()]
+    if missing:
+        raise BackupError(f"no store for {', '.join(missing)} in {data_dir}")
+    marker = stage / ".stores-copied"
+    if stage.exists() and not marker.exists():
+        shutil.rmtree(stage)                                      # an interrupted copy is not trusted; start again
+    if not stage.exists():
+        stage.mkdir(parents=True)
+        for sport in chosen:
+            src, target = data_dir / _db_file(sport), stage / _db_file(sport)
+            source, copy = sqlite3.connect(f"file:{src}?mode=ro", uri=True), sqlite3.connect(target)
+            try:
+                source.backup(copy)
+            finally:
+                copy.close()
+                source.close()
+        marker.write_text("")
+    backfill = None
+    if soccer_backfill:
+        backfill = _soccer_backfill(stage, soccer_backfill, soccer_fetch)
+        if backfill["pending"]:
+            return {"status": "partial", "stage": str(stage), **backfill}
+    ident = {"snapshot_version": SNAPSHOT_VERSION, "name": name, "created": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+             "source": f"{data_dir} (online backup)", "files": {}, "stores": {}}
+    if backfill:
+        ident["soccer_backfill"] = {**{k: soccer_backfill[k] for k in ("from", "to", "competitions")}, "requested": backfill["requested"],
+                                    "runs": backfill["runs"], "failed": backfill["failed"],
+                                    "source": "ESPN soccer scoreboard, one request per competition and month; written to the snapshot copy only"}
+    for sport in chosen:
+        target = stage / _db_file(sport)
+        conn = sqlite3.connect(f"file:{target}?mode=ro&immutable=1", uri=True)
+        try:
+            integrity, quick = conn.execute("PRAGMA integrity_check").fetchone()[0], conn.execute("PRAGMA quick_check").fetchone()[0]
+            if integrity != "ok" or quick != "ok":
+                raise BackupError(f"{sport} snapshot failed the integrity check: {integrity} / {quick}")
+            tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            ident["stores"][sport] = {
+                "integrity_check": integrity, "quick_check": quick, "coverage": _coverage(conn, sport),
+                "schema_version": conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] if "schema_migrations" in tables else None,
+                "rows": {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in COUNTED if t in tables}}
+        finally:
+            conn.close()
+        ident["files"][target.name] = {"sha256": sha256(target), "bytes": target.stat().st_size}
+    for rel in derived:
+        src = data_dir / rel
+        if src.is_file():
+            (stage / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src, stage / rel)
+            ident["files"][rel] = {"sha256": sha256(stage / rel), "bytes": (stage / rel).stat().st_size}
+        else:
+            ident.setdefault("derived_absent", []).append(rel)
+    if include_raw and (data_dir / "raw").is_dir():
+        shutil.copytree(data_dir / "raw", stage / "raw", dirs_exist_ok=True)
+    if (stage / "raw").is_dir():                                  # live raw copy and/or the backfill's raw cache
+        ident["raw_manifest"] = _raw_manifest(stage / "raw")
+        ident["raw_files"] = sum(1 for f in (stage / "raw").rglob("*") if f.is_file())
+    for leftover in (marker, stage / ".backfill-progress.json"):
+        if leftover.exists():
+            leftover.unlink()
+    text = json.dumps(ident, indent=1, sort_keys=True)
+    (stage / "IDENTITY.json").write_text(text)
+    (dest / f"IDENTITY-{name}.json").write_text(text)
+    stage.rename(out_dir)
+    for p in sorted(out_dir.rglob("*"), reverse=True):
+        os.chmod(p, 0o444 if p.is_file() else 0o555)
+    os.chmod(out_dir, 0o555)
+    os.chmod(dest / f"IDENTITY-{name}.json", 0o444)
+    return ident
+
+
+def verify_snapshot(snap: Path) -> dict:
+    """Re-hashes every file named by IDENTITY.json, re-runs integrity_check, and checks nothing is writable or extra.
+    Returns {"ok": bool, "problems": [...]}."""
+    snap = Path(snap)
+    problems = []
+    ident = json.loads((snap / "IDENTITY.json").read_text())
+    for rel, m in ident["files"].items():
+        f = snap / rel
+        if not f.is_file():
+            problems.append(f"missing {rel}")
+        elif sha256(f) != m["sha256"]:
+            problems.append(f"sha256 differs: {rel}")
+    for sport in ident["stores"]:
+        f = snap / _db_file(sport)
+        try:
+            if f.is_file() and _describe(f)["integrity"] != "ok":
+                problems.append(f"integrity_check failed: {sport}")
+        except sqlite3.DatabaseError as exc:
+            problems.append(f"integrity_check failed: {sport} ({exc})")
+    if (snap / "raw").is_dir() and _raw_manifest(snap / "raw") != ident.get("raw_manifest"):
+        problems.append("raw manifest differs")
+    problems += [f"writable: {p}" for p in [snap, *snap.rglob("*")] if os.access(p, os.W_OK)]
+    named = set(ident["files"]) | {"IDENTITY.json"}
+    problems += [f"not in IDENTITY: {p.relative_to(snap)}" for p in snap.rglob("*")
+                 if p.is_file() and str(p.relative_to(snap)) not in named and "raw" not in p.relative_to(snap).parts[:1]]
+    return {"ok": not problems, "problems": problems, "name": ident["name"], "snapshot_version": ident["snapshot_version"]}
+
+
 def _db_file(sport: str) -> str:
     return sport_defs.store(sport).db_file
 
@@ -297,7 +483,24 @@ def main(argv: Optional[list] = None) -> None:
     ap.add_argument("--dest", type=Path, help="Directory for a new backup (a timestamped folder is created inside)")
     ap.add_argument("--restore", type=Path, help="A backup folder (with manifest.json) to restore from")
     ap.add_argument("--sport", choices=SPORTS, action="append", help="Default for a backup: every store present; required for a restore")
+    ap.add_argument("--snapshot", type=Path, metavar="DEST", help="Build a read-only research snapshot DEST/<--name> (five-sport-snapshot-v1)")
+    ap.add_argument("--name", help="Snapshot name, e.g. data-snapshot-2026-11-22-5sport")
+    ap.add_argument("--raw", action="store_true", help="Snapshot: also copy the raw response cache")
+    ap.add_argument("--soccer-backfill", action="store_true", help="Snapshot: add the free ESPN soccer history 2010-08..2024-07 (7 competitions) to the snapshot's soccer store only")
+    ap.add_argument("--max-requests", type=int, help="Snapshot backfill: stop after this many ESPN requests in this run (rerun the same command to resume)")
+    ap.add_argument("--verify", type=Path, metavar="SNAPSHOT_DIR", help="Re-check a snapshot against its IDENTITY.json")
     args = ap.parse_args(argv)
+    if args.verify:
+        res = verify_snapshot(args.verify)
+        print(json.dumps(res, indent=2, sort_keys=True))
+        sys.exit(0 if res["ok"] else 1)
+    if args.snapshot:
+        if not args.name:
+            ap.error("--snapshot needs --name")
+        bf = {**SOCCER_BACKFILL, "max_requests": args.max_requests} if args.soccer_backfill else None
+        res = snapshot(config.data_dir(), args.snapshot, args.name, sports=args.sport or list(SPORTS), include_raw=args.raw, soccer_backfill=bf)
+        print(json.dumps(res, indent=2, sort_keys=True))
+        sys.exit(2 if res.get("status") == "partial" else 0)
     if bool(args.dest) == bool(args.restore):
         ap.error("give exactly one of --dest or --restore")
     if args.restore and not args.sport:
