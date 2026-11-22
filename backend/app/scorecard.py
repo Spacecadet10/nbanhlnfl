@@ -128,7 +128,8 @@ def _side_of(market: str, row) -> str:
 
 def _book(conn, sport: str, g, rec: dict) -> tuple:
     """((state, note), quote fields) of the quote the pick could see: winner = latest moneyline retrieved <= T; other
-    markets = the quote the forecast used (coverage.forecast_quote: same game, market and line, retrieved <= T)."""
+    markets = odds.forecast_quote, the ONE forecast-time rule (same game, market and exact line, latest retrieved <= T, before
+    the start, deterministic book tie-break) that the card, ticket and sportsbook comparison use too."""
     from . import coverage, odds
     side, market = rec["side"], rec["market"]
     if market == "winner":
@@ -138,10 +139,14 @@ def _book(conn, sport: str, g, rec: dict) -> tuple:
         p = q["p_home"] if side == "a" else 1 - q["p_home"]
         return _state(True), {"book_provider": q["provider"], "book_retrieved_at": q["retrieved_at"], "book_line": None,
                               "book_price": q["price_home"] if side == "a" else q["price_away"], "book_devig": p}
-    pa, why = coverage.forecast_quote(conn, market, g, rec)
-    if pa is None:
-        return _state(False, why), {}
-    q = conn.execute("SELECT * FROM market_quotes WHERE quote_id=?", (rec["market_quote_id"],)).fetchone()
+    if market != "reg3" and rec["line_source"] != "bookmaker":
+        return _state(False, "model line (no bookmaker line at forecast time)"), {}
+    q = odds.forecast_quote(conn, g["game_id"], market, rec["line"], rec["generated_at"], g["tipoff_at"],
+                            recorded_id=rec.get("market_quote_id"), need_mid=market == "reg3")
+    if q is None:
+        return _state(False, "no regulation three-way bookmaker quotes are collected" if market == "reg3"
+                      else "no sportsbook quote at the forecast's line by the forecast time"), {}
+    pa = (q["p_a_devig"], q["p_mid_devig"], q["p_b_devig"]) if market == "reg3" else q["p_a_devig"]
     price = {"a": q["price_a"], "mid": q["price_mid"], "b": q["price_b"]}[side]
     return _state(True), {"book_provider": q["provider"], "book_retrieved_at": q["retrieved_at"], "book_line": q["line"],
                           "book_price": price, "book_devig": _picked(market, side, pa if market != "reg3" else None,

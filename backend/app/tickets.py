@@ -322,7 +322,8 @@ def source_usable(section, pick=None):
 
 
 def quote_check(conn, pick, stamp):
-    """The forecast's line against the latest stored sportsbook quote (market_quotes 'current', retrieved by `stamp`).
+    """SEND-TIME freshness check (odds.send_time_quote, not the forecast's price): the forecast's line against the latest
+    stored sportsbook quote of the same game and market (market_quotes 'current', retrieved by `stamp`).
     A bookmaker line that moved since the forecast means its probability belongs to a line no longer offered. Prices are
     reported, never judged: value depends on the exact price the user gets. Model-line markets have no stored quote."""
     from app import odds
@@ -333,10 +334,7 @@ def quote_check(conn, pick, stamp):
     price = lambda q: None if q is None else {'a': q['price_a'], 'b': q['price_b'], 'mid': q['price_mid']}.get(side)
     first = conn.execute('SELECT provider, price_a, price_mid, price_b FROM market_quotes WHERE quote_id=?',
                          (row['market_quote_id'],)).fetchone() if row and row['market_quote_id'] else None
-    sql = ("SELECT provider, line, price_a, price_mid, price_b, retrieved_at FROM market_quotes WHERE game_id=? AND market=? "
-           "AND price_label='current' AND retrieved_at<=?" + (' AND ' + odds.same_provider() if first else '') +
-           ' ORDER BY retrieved_at DESC, quote_id DESC LIMIT 1')
-    now = conn.execute(sql, (pick['game_id'], pick['market'], stamp) + ((first['provider'],) if first else ())).fetchone()
+    now = odds.send_time_quote(conn, pick['game_id'], pick['market'], stamp, provider=first['provider'] if first else None)
     line_at = row['line'] if row else None
     moved = bool(row and row['line_source'] == 'bookmaker' and now is not None and now['line'] is not None
                  and line_at is not None and abs(now['line'] - line_at) > 1e-9)
@@ -377,19 +375,16 @@ def card_gap_points(pick):
 
 
 def card_market_prob(conn, pick):
-    """A stored quote at the forecast time, for exactly the same game, market, and line."""
+    """The quote the forecast saw: odds.forecast_quote (the one rule shared with the scorecard and the sportsbook comparison)."""
     from app import threshold_overview
 
     if pick.get('market_prob') is not None:
         return pick['market_prob']
-    row = conn.execute(
-        "SELECT q.p_a_devig, q.p_mid_devig, q.p_b_devig FROM game_forecasts f "
-        "JOIN market_quotes q ON q.game_id = f.game_id AND q.market = f.market AND q.line IS f.line "
-        "WHERE f.forecast_id = ? AND q.price_label = 'current' AND q.retrieved_at <= f.generated_at "
-        "AND q.retrieved_at < f.tipoff_at AND (f.market <> 'reg3' OR q.p_mid_devig IS NOT NULL) "
-        "ORDER BY q.retrieved_at DESC, q.quote_id DESC LIMIT 1",
-        (pick['forecast_id'],),
-    ).fetchone()
+    from app import odds
+    f = conn.execute('SELECT game_id, market, line, market_quote_id, generated_at, tipoff_at FROM game_forecasts WHERE forecast_id = ?',
+                     (pick['forecast_id'],)).fetchone()
+    row = None if f is None else odds.forecast_quote(conn, f['game_id'], f['market'], f['line'], f['generated_at'], f['tipoff_at'],
+                                                     recorded_id=f['market_quote_id'], need_mid=f['market'] == 'reg3')
     if row is None:
         return None
     probabilities = tuple(row[k] for k in ('p_a_devig', 'p_mid_devig', 'p_b_devig')) if pick['market'] == 'reg3' else row['p_a_devig']
