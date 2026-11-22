@@ -10,7 +10,9 @@
 Backups are never overwritten. Nothing is deleted unless `--prune` is given: every run prints the retention plan
 (`prune`, mode report-only: keep every backup of the last 14 days, the newest per ISO week for 8 weeks and the newest per
 month for 12 months; the newest backup, and a backup that is the only copy in its bucket, are always kept, a backup that
-fails its manifest check never displaces a verified one). Without `--mirror` the backup still runs but exits 2: it is not off this machine.
+fails its manifest check never displaces a verified one). Without `--mirror` the backup still runs but exits 2: it is not off this machine. A mirror that cannot be made (drive
+unplugged, copy failed, a copied file differing from the local one) keeps the local backup and exits 3. Both cases post a
+macOS notification and a WARNING line in the job log (owner, Nov 22).
 A journal that disagrees with a store (a lost or changed row) exits 1 after the backup, so the log shows it.
 
     PYTHONPATH=backend NBA_DATA_DIR=<data> backend/.venv/bin/python scripts/backup_nightly.py --root <dir> [--mirror <dir>]
@@ -168,8 +170,32 @@ def prune(stores_dir: Path, *, now=None, apply: bool = False) -> dict:
             "deleted": deleted, "unverified_kept": sorted(n for n in keep if cache.get(n) is False)}
 
 
+OFFSITE_WARNING = "WARNING: tonight's backup was NOT copied off this Mac"
+
+
+def notify_owner(message: str) -> None:
+    """The warning the owner sees: a macOS notification (best effort) and a WARNING line in the job log (stderr)."""
+    print(message, file=sys.stderr, flush=True)
+    try:
+        import subprocess
+        text = message.replace("\\", "\\\\").replace('"', '\\"')
+        subprocess.run(["osascript", "-e", f'display notification "{text}" with title "NBA predictor backup"'],
+                       timeout=20, check=False, capture_output=True)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        pass
+
+
+def _verify_copy(src: Path, dst: Path) -> int:
+    """Every file of the backup folder is present in the copy with the same SHA-256; returns the file count."""
+    names = sorted(p.relative_to(src) for p in src.rglob("*") if p.is_file())
+    for n in names:
+        if not (dst / n).is_file() or backup.sha256(src / n) != backup.sha256(dst / n):
+            raise backup.BackupError(f"The off-machine copy of {n} does not match the local backup ({dst / n})")
+    return len(names)
+
+
 def nightly(data_dir: Path, root: Path, *, mirror, stamp=None, ledger=None, repo_root=None, launch_agents=None,
-            prune_apply: bool = False) -> dict:
+            prune_apply: bool = False, notify=notify_owner) -> dict:
     stamp = stamp or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     jdir = Path(root) / "journal"
     exported = journal.export(data_dir, jdir)
@@ -190,8 +216,18 @@ def nightly(data_dir: Path, root: Path, *, mirror, stamp=None, ledger=None, repo
     out["prune"] = prune(Path(root) / "stores", apply=prune_apply)
     if mirror is None:
         out["status"] = "no_mirror"
+        out["warning"] = f"{OFFSITE_WARNING}: no --mirror drive is configured. Local copy: {folder}"
+        notify(out["warning"])
         return out
-    out["mirror"] = backup.mirror(folder, Path(mirror))["dir"]
+    try:
+        copied = Path(backup.mirror(folder, Path(mirror))["dir"])
+        out["mirror_verified_files"] = _verify_copy(folder, copied)
+    except (backup.BackupError, OSError) as exc:
+        out["status"], out["mirror_error"] = "mirror_failed", f"{type(exc).__name__}: {exc}"
+        out["warning"] = f"{OFFSITE_WARNING} ({mirror}): {exc}. Local copy: {folder}"
+        notify(out["warning"])
+        return out
+    out["mirror"] = str(copied)
     out["status"] = "ok" if checked["ok"] else "journal_mismatch"
     return out
 
@@ -207,7 +243,7 @@ def main(argv=None) -> None:
     out = nightly(data_dir, args.root, mirror=args.mirror, ledger=args.ledger or data_dir.parent / ".telegram-delivery.sqlite",
                   repo_root=Path(__file__).resolve().parents[1], launch_agents=Path.home() / "Library" / "LaunchAgents", prune_apply=args.prune)
     print(json.dumps({"at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), **out}, sort_keys=True))
-    sys.exit(1 if not out["journal_verify_ok"] else 2 if out["status"] == "no_mirror" else 0)
+    sys.exit(1 if not out["journal_verify_ok"] else 3 if out["status"] == "mirror_failed" else 2 if out["status"] == "no_mirror" else 0)
 
 
 if __name__ == "__main__":
