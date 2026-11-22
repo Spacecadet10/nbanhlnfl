@@ -825,10 +825,14 @@ def score_market(data: dict, market: str, cand: dict, incumbent: dict, scored) -
                                out["incumbent_matched"]["accuracy"])
 
 
+TIE_EPS = 1e-9          # the upper bound must be below -TIE_EPS: floating-point noise around 0 is a tie, never a keep
+
+
 def keep_decision(upper: float, ca: Optional[float], ia: Optional[float]) -> dict:
     """The MODEL_SELECTION §6 keep rule (shared by the protocol-v2 trials and the v3 evaluator): the paired log-loss
-    difference's 95% upper bound is below 0 and the matched pick accuracy is not lower."""
-    if upper >= 0:
+    difference's 95% upper bound is below -1e-9 (so identical or numerically identical forecasts are ties, not keeps) and the
+    matched pick accuracy is not lower. The -1e-9 margin is new in v3 and also applies to v2 trials from this version on."""
+    if upper >= -TIE_EPS:
         return {"decision": "reject", "reason": f"log-loss difference upper bound {upper:+.5f} is not below 0"}
     if ca is None or ia is None:        # §6 needs both accuracies; an undefined one is not treated as a pass
         return {"decision": "reject", "reason": f"accuracy comparison undefined (candidate {ca}, incumbent {ia}: "
@@ -1494,7 +1498,7 @@ def pair_compare(cand: list, ref: list, kind: str) -> dict:
                 w += s == i
                 l += s != i
         return w / (w + l) if w + l else None
-    return {"n": len(pairs), "mean": boot["mean"], "ci95": boot["ci95"], "weeks": boot["weeks"],
+    return {"n": len(pairs), "identical": all(abs(d) < 1e-12 for d in diffs), "mean": boot["mean"], "ci95": boot["ci95"], "weeks": boot["weeks"],
             "candidate_accuracy": acc(0), "reference_accuracy": acc(1)}
 
 
@@ -1506,9 +1510,7 @@ def baselines_for(ref: list, kind: str) -> dict:
     three = any("mid" in r["probs"] for r in ref)
     classes = (0, 1, 2) if three else (0, 2)
     uni = {0: 1 / len(classes), 1: 1 / len(classes) if three else 0.0, 2: 1 / len(classes)}
-    if kind == "line" and three:        # a line market's push mass is small: equal sides around the incumbent's mean push mass
-        m = sum(r["probs"].get("mid", 0.0) for r in ref) / len(ref)
-        uni = {0: (1 - m) / 2, 1: m, 2: (1 - m) / 2}
+    push_n = push_sum = 0.0             # a line market's push mass: the mean of the incumbent's EARLIER forecasts only
     out_u, out_b = [], []
     counts = {c: 0 for c in classes}
     pending, order = [], sorted(ref, key=lambda r: (r["forecast_cutoff"], r["game_id"], r["market"]))
@@ -1517,7 +1519,13 @@ def baselines_for(ref: list, kind: str) -> dict:
             counts[heapq.heappop(pending)[2]] += 1
         base = {k: r[k] for k in ("game_id", "season", "start_at", "forecast_cutoff", "market", "line", "outcome") if k in r}
         key = ("a", "mid", "b") if three else ("a", "b")
-        out_u.append({**base, "probs": {k: uni[i] for k, i in zip(("a", "mid", "b"), (0, 1, 2)) if k in key}})
+        u = uni
+        if kind == "line" and three:
+            m = push_sum / push_n if push_n else 0.0
+            u = {0: (1 - m) / 2, 1: m, 2: (1 - m) / 2}
+            push_sum += r["probs"].get("mid", 0.0)
+            push_n += 1
+        out_u.append({**base, "probs": {k: u[i] for k, i in zip(("a", "mid", "b"), (0, 1, 2)) if k in key}})
         tot = sum(counts.values())
         pr = {"a": (counts[0] + 1) / (tot + len(classes)), "b": (counts[2] + 1) / (tot + len(classes))}
         if three:
@@ -1531,7 +1539,7 @@ def baselines_for(ref: list, kind: str) -> dict:
 
 
 # --- Sportsbook no-vig and returns --------------------------------------------------------------------------------------------
-def valid_quote(r: dict) -> Optional[dict]:
+def valid_quote(r: dict, kind: Optional[str] = None) -> Optional[dict]:
     """The record's quote when it may be compared with the forecast: not synthetic, retrieved at or before the information
     cutoff, same line, priced above 1. Decimal prices."""
     q = r.get("quote")
@@ -1543,6 +1551,8 @@ def valid_quote(r: dict) -> Optional[dict]:
         ql, rl = q.get("line"), r.get("line")
         if (ql is None) != (rl is None) or (rl is not None and abs(float(ql) - float(rl)) > 1e-9):
             return None
+        if kind == "three_way" and not q.get("price_mid"):
+            return None                                  # a three-way result needs the draw price too
         prices = [q["price_a"], q["price_b"]] + ([q["price_mid"]] if q.get("price_mid") else [])
         return q if all(isinstance(p, (int, float)) and p > 1 for p in prices) else None
     except (KeyError, TypeError, ValueError):
@@ -1562,7 +1572,7 @@ def book_compare(recs: list, kind: str) -> dict:
     from . import backtest
     rows = []
     for r in recs:
-        q = valid_quote(r)
+        q = valid_quote(r, kind)
         i = _outcome_idx(r, kind)
         if q is None or i is None:
             continue
@@ -1595,7 +1605,7 @@ def roi(recs: list, kind: str) -> dict:
     not_exec = sum(1 for r in recs if r.get("quote") and not r["quote"].get("synthetic") and not r["quote"].get("executable"))
     stake = profit = bets = 0.0
     for r in recs:
-        q = valid_quote(r)
+        q = valid_quote(r, kind)
         if q is None or not q.get("executable") or r.get("outcome") in (None, "void"):
             continue
         v = _vec3(r)
@@ -1649,6 +1659,8 @@ def decide_candidate(cand: list, inc: list, kind: str) -> dict:
     if len(cohort_) < MIN_SCORED:
         return out | {"decision": "reject", "reason": f"only {len(cohort_)} scored games (need {MIN_SCORED})"}
     cmp_ = pair_compare(cand, inc, kind)
+    if cmp_.get("identical"):
+        return out | {"vs_incumbent": cmp_, "decision": "reject", "reason": "identical forecasts to the incumbent (a tie, not an improvement)"}
     return out | {"vs_incumbent": cmp_} | keep_decision(cmp_["ci95"][1], cmp_["candidate_accuracy"], cmp_["reference_accuracy"])
 
 
@@ -1737,12 +1749,11 @@ def evaluate_records(adapter: dict, by_model: dict, stages: tuple = ("search", "
             recs = mk[n]
             cmp_ = {"vs_baselines": {b: pair_compare(recs, brecs, kind) for b, brecs in base.items()}}
             if n != inc:
-                stages = {st: decide_candidate(_stage(recs, per[st]), _stage(mk[inc], per[st]), kind)
-                          for st in stages}
-                kept = all(s["decision"] == "keep" for s in stages.values())
-                cmp_ |= {"vs_incumbent": stages, "decision": "keep" if kept else "reject",
+                by_stage = {st: decide_candidate(_stage(recs, per[st]), _stage(mk[inc], per[st]), kind) for st in stages}
+                kept = all(s["decision"] == "keep" for s in by_stage.values())
+                cmp_ |= {"vs_incumbent": by_stage, "decision": "keep" if kept else "reject",
                          "reason": "kept on search and validation (exploratory, repeated search; not a promotion)" if kept else
-                                   "; ".join(f"{st}: {s['reason']}" for st, s in stages.items() if s["decision"] != "keep")}
+                                   "; ".join(f"{st}: {s['reason']}" for st, s in by_stage.items() if s["decision"] != "keep")}
             entry["comparisons"][n] = cmp_
         out["markets"][market] = entry
     suite = {}
@@ -1932,9 +1943,21 @@ def get_adapter(sport: str) -> Optional[dict]:
     target = ADAPTER_FUNCTIONS[sport]
     mod, _, func = target.partition(":")
     try:
-        fn = getattr(importlib.import_module(f"{__package__ or 'app'}.{mod}"), func)
-    except (ImportError, AttributeError):
+        module = importlib.import_module(f"{__package__ or 'app'}.{mod}")
+    except ModuleNotFoundError as exc:
+        if exc.name and exc.name.endswith(mod):              # the adapter's module itself is absent: not delivered
+            return None
+        raise                                                # a missing dependency inside it is a failure, with its error
+    fn = getattr(module, func, None)
+    if fn is None:
         return None
+    import inspect
+    if "conn" in inspect.signature(fn).parameters:         # Soccer: the data digest needs the store
+        conn = _snapshot_conn(sport)
+        try:
+            return fn(conn)
+        finally:
+            conn.close()
     return fn()
 
 
@@ -1942,9 +1965,40 @@ def get_adapter(sport: str) -> Optional[dict]:
 OUTCOMES = ("evaluated", "no_candidates", "refused", "failed", "skipped")
 
 
-def v3_protocol_id(adapter: dict) -> str:
+_FILE_SHA: dict = {}
+
+
+def _file_sha(p: Path) -> str:
+    st = p.stat()
+    key = (str(p), st.st_mtime_ns, st.st_size)
+    if key not in _FILE_SHA:
+        _FILE_SHA[key] = _sha(p.read_bytes())
+    return _FILE_SHA[key]
+
+
+def data_identity(sport: str) -> str:
+    """Identity of the data a v3 run reads: the sha256 of the sport's store file as IDENTITY.json recorded it (else hashed here)
+    plus the snapshot's `last_final`. A new snapshot is a new identity, hence a new protocol id and a re-score."""
+    p = config.db_path(sport)
+    if not p.is_file():
+        return "no-store"
+    sha = None
+    try:
+        sha = json.loads((config.data_dir() / "IDENTITY.json").read_text())["files"][p.name]["sha256"]
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    return f"{sha or _file_sha(p)}@{snapshot_cutoff(sport)}"
+
+
+def _data_id(adapter: dict, sport: str) -> str:
+    return str(adapter.get("snapshot_identity", "fixture")) if adapter.get("connect") else data_identity(sport)
+
+
+def v3_protocol_id(adapter: dict, data: Optional[str] = None) -> str:
+    """Protocol id of a v3 experiment. `data` is the snapshot identity (the runner and the holdout pass it: a new snapshot is a
+    new experiment); the forward test omits it, because it reads the live store, which changes by design."""
     blob = json.dumps({"protocol": PROTOCOL_V3, "sport": adapter["sport"], "data_version": adapter["data_version"],
-                       "periods": adapter["periods"], "markets": adapter["markets"]}, sort_keys=True, default=str)
+                       "periods": adapter["periods"], "markets": adapter["markets"], "data": data}, sort_keys=True, default=str)
     return f"{PROTOCOL_V3['name']}-{_sha(blob.encode())[:12]}"
 
 
@@ -1968,7 +2022,7 @@ def _last_success(exp_root: Path, sport: str) -> Optional[str]:
     best = None
     for p in (exp_root / "v3").glob(f"*/{sport}/attempts.jsonl"):
         for a in _jsonl_read(p):
-            if a.get("outcome") in ("evaluated", "no_candidates") and (best is None or a["at"] > best):
+            if a.get("outcome") == "evaluated" and (best is None or a["at"] > best):      # no_candidates is not a success
                 best = a["at"]
     return best
 
@@ -1980,7 +2034,10 @@ def snapshot_cutoff(sport: str) -> Optional[str]:
     p = config.data_dir() / "IDENTITY.json"
     try:
         ident = json.loads(p.read_text())
-        v = ident["stores"][sport]["coverage"].get("last_final")
+        try:
+            v = ident["stores"][sport]["coverage"].get("last_final")
+        except (KeyError, TypeError, AttributeError):
+            v = ident["sports"][sport].get("last_final")
     except (OSError, json.JSONDecodeError, KeyError, TypeError, AttributeError):
         return None
     if not v:
@@ -2012,8 +2069,9 @@ def run_sport_v3(sport: str, exp_root: Path, *, max_items: int = BUDGET_V3["max_
             raise Refused(f"no research adapter for {sport} has been delivered yet")
         adapter = normalise_adapter(adapter)
         validate_adapter(adapter)
-        pid = v3_protocol_id(adapter)
+        pid = v3_protocol_id(adapter, _data_id(adapter, sport))
         root = exp_root / "v3" / pid / sport
+        status["data_identity"] = _data_id(adapter, sport)
         status["caveats"] = adapter.get("caveats")
         status |= {"protocol_id": pid, "data_version": adapter["data_version"], "periods": adapter["periods"],
                    "periods_note": adapter.get("periods_note"), "markets": adapter["markets"],
@@ -2029,7 +2087,7 @@ def run_sport_v3(sport: str, exp_root: Path, *, max_items: int = BUDGET_V3["max_
         status |= {"outcome": "failed", "reason": f"{type(exc).__name__}: {exc}"[:500]}
         status["blockers"].append(f"failed: {status['reason']}")
     status["seconds"] = round(time.time() - t0, 1)
-    status["last_success_at"] = at if status["outcome"] in ("evaluated", "no_candidates") else _last_success(exp_root, sport)
+    status["last_success_at"] = at if status["outcome"] == "evaluated" else _last_success(exp_root, sport)
     if status["outcome"] == "failed" and status["reason"] is None:
         status["reason"] = "unknown"
     if root is None:
@@ -2058,6 +2116,10 @@ def _run_queue(status: dict, adapter: dict, root: Path, pid: str, sport: str, t0
         if e["event"] == "item_failed":
             fails[e["key"]] = fails.get(e["key"], 0) + 1
     keys = {n: _item_key(pid, n, models[n]["version"]) for n in order}
+    if not adapter.get("connect"):
+        store = config.db_path(sport)
+        if store.is_file() and os.access(store, os.W_OK):
+            raise Refused(f"the {sport} snapshot is writable ({store}); make it read-only (chmod a-w) so it cannot drift under a run")
     conn = adapter["connect"]() if adapter.get("connect") else _snapshot_conn(sport)
     if adapter.get("validate_data"):                          # optional adapter check of the snapshot it is about to read
         problems, brief = data_problems(adapter["validate_data"](conn))
@@ -2234,7 +2296,7 @@ def holdout_v3(sport: str, exp_root: Path, ask: Callable[[str], bool] = _ask_tty
         raise Refused(f"no research adapter for {sport}")
     adapter = normalise_adapter(adapter)
     validate_adapter(adapter)
-    pid = v3_protocol_id(adapter)
+    pid = v3_protocol_id(adapter, _data_id(adapter, sport))
     root = exp_root / "v3" / pid / sport
     ev_path = root / "evaluation.json"
     if not ev_path.is_file():

@@ -655,8 +655,10 @@ def test_push_probability_alias_and_chunked_walks_resume_without_rescoring(exp, 
 
 def test_uniform_baseline_for_a_line_market_keeps_the_incumbents_small_push_mass_and_uncovered_candidates_are_not_listed():
     recs = [rec(i, "spread", p=0.45, mid=0.1, outcome="a", line=-3.0) for i in range(60)]
-    u = ar.baselines_for(recs, "line")["baseline:uniform"][0]["probs"]
-    assert u == {"a": pytest.approx(0.45), "mid": pytest.approx(0.1), "b": pytest.approx(0.45)}
+    uni = ar.baselines_for(recs, "line")["baseline:uniform"]
+    assert uni[0]["probs"] == {"a": 0.5, "mid": 0.0, "b": 0.5}                 # nothing earlier to learn the push mass from
+    late = [rec(i, "spread", p=0.45, mid=0.1 if i else 0.3, outcome="a", line=-3.0) for i in range(3)]
+    assert ar.baselines_for(late, "line")["baseline:uniform"][1]["probs"]["mid"] == pytest.approx(0.3)   # only record 0 is earlier
     a = fixture_adapter({"inc": recs, "cand_other": [rec(0, outcome="a")]}, markets={
         "spread": {"kind": "line", "settlement": "x"}, "winner": {"kind": "binary", "settlement": "y"}})
     ev = ar.evaluate_records(a, {"inc": recs, "cand_other": [rec(0, outcome="a")]})
@@ -782,3 +784,54 @@ def test_conditional_push_scoring_and_the_game_suite_agree_with_the_soccer_per_g
     assert not any(r["outcome"] == "push" and ar._outcome_idx(r, "line") is not None for r in norm)
     ev = ar.evaluate_records(a, {"inc": norm})
     assert ev["suite"]["inc"]["games"] == 2 and ev["suite"]["inc"]["log_loss"] == pytest.approx(sum(v[0] for v in theirs.values()) / 2, abs=1e-9)
+
+
+def test_noise_level_improvements_and_identical_forecasts_are_not_kept():
+    assert ar.keep_decision(-1.6e-17, 0.6, 0.6)["decision"] == "reject"
+    assert ar.keep_decision(-1e-6, 0.6, 0.6)["decision"] == "keep"
+    s = synthetic(n=200, seed=17, edge=0.5)
+    d = ar.decide_candidate(s["inc"], s["inc"], "binary")
+    assert d["decision"] == "reject" and "identical forecasts" in d["reason"]
+
+
+def test_two_way_markets_refuse_mid_three_way_refuse_push_and_three_way_quotes_need_a_draw_price():
+    a = fixture_adapter({"inc": []}, markets={"w": {"kind": "binary", "settlement": "x"}, "r": {"kind": "three_way", "settlement": "x"}})
+    with pytest.raises(ar.AdapterInvalid, match="do not fit kind"):
+        ar.validate_records(a, [rec(0, "w", mid=0.1)], [2020])
+    with pytest.raises(ar.AdapterInvalid, match="do not fit kind"):
+        ar.validate_records(a, [rec(0, "r") | {"probs": {"a": 0.4, "push": 0.2, "b": 0.4}}], [2020])
+    three = rec(0, "r", mid=0.2, outcome="a", quote=q(2.0, 3.0))
+    assert ar.valid_quote(three, "three_way") is None and ar.valid_quote(three) is not None
+    assert ar.valid_quote(rec(0, "r", mid=0.2, quote=q(2.0, 3.0, mid=3.2)), "three_way") is not None
+
+
+def test_a_new_snapshot_is_a_new_protocol_id_and_rescores(exp, monkeypatch, tmp_path):
+    snap = tmp_path / "snapshot"
+    (snap / "nba.sqlite").write_bytes(b"store one")
+    monkeypatch.setenv("NBA_DATA_DIR", str(snap))
+    s = synthetic(n=300, seed=18, edge=0.8)
+    a = fixture_adapter({"inc": s["inc"], "cand": s["cand"]})
+    a.pop("connect")                                              # the real path: a store file in the data directory
+    a["connect"] = None
+    calls = a["_calls"]["walk"]
+    class Conn:                                                   # the runner opens the snapshot read-only; a stand-in here
+        def close(self): pass
+    monkeypatch.setattr(ar, "_snapshot_conn", lambda sport: Conn())
+    monkeypatch.setattr(ar.os, "access", lambda *x: False)        # the snapshot is read-only
+    r1 = ar.run_sport_v3("nba", exp, adapter_fn=_adapters(nba=a))
+    r1b = ar.run_sport_v3("nba", exp, adapter_fn=_adapters(nba=a))
+    assert r1["protocol_id"] == r1b["protocol_id"] and len(calls) == 2 and r1b["queue"]["ran_now"] == 0
+    (snap / "nba.sqlite").write_bytes(b"store two (a later snapshot)")
+    r2 = ar.run_sport_v3("nba", exp, adapter_fn=_adapters(nba=a))
+    assert r2["protocol_id"] != r1["protocol_id"] and len(calls) == 4 and r2["data_identity"] != r1["data_identity"]
+    (snap / "IDENTITY.json").write_text(json.dumps({"files": {"nba.sqlite": {"sha256": "ab" * 32}}, "sports": {"nba": {"last_final": _t(300)}}}))
+    assert ar.data_identity("nba") == "ab" * 32 + "@" + _t(300) and ar.snapshot_cutoff("nba") == _t(300)
+
+
+def test_a_writable_snapshot_is_refused(exp, monkeypatch, tmp_path):
+    snap = tmp_path / "snapshot"
+    (snap / "nba.sqlite").write_bytes(b"x")
+    monkeypatch.setenv("NBA_DATA_DIR", str(snap))
+    a = fixture_adapter({"inc": []}) | {"connect": None}
+    r = ar.run_sport_v3("nba", exp, adapter_fn=_adapters(nba=a))
+    assert r["outcome"] == "refused" and "writable" in r["reason"]
