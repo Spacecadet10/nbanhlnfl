@@ -874,3 +874,42 @@ def test_the_sealed_soccer_file_is_not_the_home_of_research_code():
     src = (Path(ar.__file__).parent / "soccer_markets_eval.py").read_text()
     assert "research_adapter" not in src and "HIER_RIDGE" not in src
     assert ar.ADAPTER_FUNCTIONS["soccer"] == "soccer_challengers:research_adapter"
+
+
+def test_study_tables_are_cached_on_disk_per_snapshot_and_a_scheduled_step_never_builds_them(exp, monkeypatch, tmp_path):
+    snap = tmp_path / "snapshot"
+    (snap / "nba.sqlite").write_bytes(b"store one")
+    monkeypatch.setenv("NBA_DATA_DIR", str(snap))
+    built = []
+
+    def fake_build(conn, sport, period):
+        built.append((sport, period))
+        return {"tables": {"winner": []}, "members": {"winner": [], "lines": []}, "dataset": "d", "walk": {}, "specs": {}}
+    monkeypatch.setattr(ar, "_study_build", fake_build)
+    monkeypatch.setattr(ar, "_STUDY", {})
+    ar.STUDY_CACHE.update(dir=exp / "v3" / "study-cache", build=False)
+    with pytest.raises(ar.Refused, match="prepare-cache"):
+        ar._study_tables(None, "nba", "validation")
+    ar.STUDY_CACHE["build"] = True
+    ar._study_tables(None, "nba", "validation")
+    ar._STUDY.clear()
+    ar.STUDY_CACHE["build"] = False
+    st = ar._study_tables(None, "nba", "validation")                       # now served from disk
+    assert built == [("nba", "validation")] and st["dataset"] == "d"
+    (snap / "nba.sqlite").write_bytes(b"store two")                        # a new snapshot: a different cache file
+    ar._STUDY.clear()
+    with pytest.raises(ar.Refused, match="not cached"):
+        ar._study_tables(None, "nba", "validation")
+    ar.STUDY_CACHE.update(dir=None, build=True)
+
+
+def test_holdout_for_sealed_sports_is_reported_not_failed_and_autoresearch_home_wins(exp, monkeypatch, tmp_path):
+    r = ar.holdout_v3("nfl", exp)
+    assert r["status"] == "handled_by_sealed_test" and "never reads" in r["note"]
+    assert ar.holdout_v3("ncaab", exp)["status"] == "handled_by_sealed_test"
+    from app import research_status
+    monkeypatch.setenv("NBA_AUTORESEARCH_HOME", str(tmp_path / "old"))
+    monkeypatch.setenv("AUTORESEARCH_HOME", str(tmp_path / "new"))
+    (tmp_path / "new").mkdir()
+    (tmp_path / "new" / "daily-state.tsv").write_text("nba\t2026-11-22T10:00:00Z\tevaluated\t2026-11-22T10:00:00Z\t\n")
+    assert research_status.daily_state()[0]["sport"] == "nba"

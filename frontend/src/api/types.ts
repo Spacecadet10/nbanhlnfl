@@ -842,13 +842,13 @@ export interface AutoresearchRun {
 }
 /** Protocol v3 (five sports): one sport's explicit outcome and state. */
 export type AutoresearchOutcome = 'evaluated' | 'no_candidates' | 'refused' | 'failed' | 'skipped';
-export interface AutoresearchV3Market { status: string; reason?: string; kind?: string; incumbent?: string; n?: number; log_loss?: number | null; ece?: number | null;
+export interface AutoresearchV3Market { status: string; reason?: string; settlement?: string | null; line_basis?: string | null; line_sources?: Record<string, number> | null; reference_line_note?: string | null; by_line_source?: Record<string, { n?: number; log_loss?: number | null; brier?: number | null; accuracy?: number | null }> | null; kind?: string; incumbent?: string; n?: number; log_loss?: number | null; ece?: number | null;
   baselines?: Record<string, number | null>; vs_book?: string | null;
   candidates?: Record<string, { decision: string; reason: string; validation_delta?: number | null; validation_ci95?: [number, number] | null }> }
 export interface AutoresearchV3Sport {
   protocol_id?: string | null; at?: string; outcome: AutoresearchOutcome; reason?: string | null;
   last_attempt?: { at: string; outcome: AutoresearchOutcome; reason?: string | null } | null; last_success_at?: string | null;
-  candidates: string[]; candidate_count: number; evaluated_markets: string[]; blockers: string[]; kept?: string[];
+  candidates: string[]; candidate_count: number; evaluated_markets: string[]; blockers: string[]; kept?: string[]; needs_human_review?: string[];
   queue?: { total: number; done: number; remaining: number; failed: string[]; ran_now: number; next_item: string | null } | null;
   next_run?: string | null; periods?: { search: number[]; validation: number[]; holdout: number[] }; periods_note?: string | null;
   unsupported?: Record<string, string>; evaluation?: Record<string, AutoresearchV3Market>;

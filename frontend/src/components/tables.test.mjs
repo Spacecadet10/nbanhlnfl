@@ -53,3 +53,17 @@ test('every history table sits directly inside a .table-wrap scroll container', 
     .map((t) => t.where);
   assert.deepEqual(bad, [], `history tables without a directly enclosing <div className="table-wrap">: ${bad.join(', ')}`);
 });
+
+
+// Autoresearch v3 panel (Autoresearch.tsx): wording guards read the source like the layout guards above (no DOM here).
+test('Autoresearch v3: no_candidates is never a success, reference-line keeps need review, caveats and line sources are shown', () => {
+  const src = readFileSync(join(import.meta.dirname, 'Autoresearch.tsx'), 'utf8');
+  assert.match(src, /no_candidates: 'No candidates \(nothing was searched\)'/);
+  assert.match(src, /needs_human_review: 'Needs human review \(reference line\)'/);
+  assert.match(src, /Last successful evaluation/);                       // fed by last_success_at, which counts evaluated only
+  assert.match(src, /reference_line_note/);
+  assert.match(src, /by_line_source/);
+  assert.match(src, /s\.caveats/);
+  assert.match(src, /never tracked forward automatically/);
+  assert.doesNotMatch(src, /no_candidates: '(Evaluated|Success)/);
+});

@@ -1790,14 +1790,47 @@ NBA_NHL_NOTES = ("line markets use the primary model's own line (no historical b
                  "sportsbook comparison or returns are possible")
 
 
+STUDY_CACHE = {"dir": None, "build": True}     # set by the runner: the experiment root's cache folder, and whether a miss may build
+
+
+def study_cache_file(sport: str, period: str) -> Optional[Path]:
+    """The on-disk study tables of one snapshot: keyed by the snapshot identity (store sha256 + last_final), the period and the
+    app source hash, so a new snapshot or a code change never reuses them."""
+    d = STUDY_CACHE["dir"]
+    if d is None:
+        return None
+    key = _sha(json.dumps([data_identity(sport), period, app_identity()["files"], sport]).encode())[:20]
+    return Path(d) / f"study-{sport}-{period}-{key}.pkl"
+
+
+def _study_build(conn, sport: str, period: str) -> dict:
+    from .candidates import features, study
+    tables, _first, members, rows, events, recorder, dataset = study.existing_tables(conn, sport, period)
+    walked = features.walk(recorder, rows, events)
+    # NHL starters are known only after the start: stripped from every row, as in protocol v2 (FORBIDDEN_FEATURES)
+    walk = {g: replace(r, x={k: v for k, v in r.x.items() if k not in FORBIDDEN_FEATURES}, meta={}) for g, r in walked.items()}
+    return {"tables": tables, "members": members, "dataset": dataset, "walk": walk, "specs": {}}
+
+
 def _study_tables(conn, sport: str, period: str) -> dict:
     key = (sport, period, str(config.db_path(sport)))
-    if key not in _STUDY:
-        from .candidates import features, study
-        tables, _first, members, rows, events, recorder, dataset = study.existing_tables(conn, sport, period)
-        _STUDY[key] = {"tables": tables, "members": members, "rows": rows, "events": events, "recorder": recorder,
-                       "dataset": dataset, "features": features, "walk": None, "specs": {}}
-    return _STUDY[key]
+    if key in _STUDY:
+        return _STUDY[key]
+    path = study_cache_file(sport, period)
+    if path is not None and path.is_file():
+        st = pickle.loads(path.read_bytes())
+    elif path is not None and not STUDY_CACHE["build"]:
+        raise Refused(f"the {sport} study tables for this snapshot are not cached ({path.name}): build them once outside the "
+                      "scheduled step with `python -m app.autoresearch v3 prepare-cache --sport " + sport + "`")
+    else:
+        st = _study_build(conn, sport, period)
+        if path is not None:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".tmp")
+            tmp.write_bytes(pickle.dumps(st, protocol=4))
+            tmp.replace(path)
+    _STUDY[key] = st
+    return st
 
 
 def _period_for(adapter_periods: dict, seasons) -> str:
@@ -1829,11 +1862,6 @@ def _study_walk(sport: str, adapter_periods: dict):
         spec = next((s for s in registry.for_sport(sport) if s.name == model_name), None)
         if spec is None:
             raise AdapterInvalid(f"{sport}: unknown model {model_name}")
-        if st["walk"] is None:
-            walked = st["features"].walk(st["recorder"], st["rows"], st["events"])
-            # NHL starters are known only after the start: stripped from every row, as in protocol v2 (FORBIDDEN_FEATURES)
-            st["walk"] = {g: replace(r, x={k: v for k, v in r.x.items() if k not in FORBIDDEN_FEATURES}, meta={})
-                          for g, r in walked.items()}
         if model_name not in st["specs"]:
             outs, _fits, _sec = engine.walk(spec, list(st["walk"].values()))
             st["specs"][model_name] = outs
@@ -2060,7 +2088,8 @@ def _write_state(root: Path, state: dict) -> None:
 
 
 def run_sport_v3(sport: str, exp_root: Path, *, max_items: int = BUDGET_V3["max_items_per_sport"],
-                 max_seconds: float = BUDGET_V3["max_seconds_per_sport"], adapter_fn: Callable = None) -> dict:
+                 max_seconds: float = BUDGET_V3["max_seconds_per_sport"], adapter_fn: Callable = None,
+                 build_cache: bool = True) -> dict:
     """One sport's bounded, resumable attempt. Scores each queue item (every incumbent, then every candidate) once on the
     search and validation seasons; an item already stored is never re-scored. Returns the sport's status dict with an explicit
     outcome: evaluated, no_candidates, refused (reason), failed (error) or skipped (budget/time)."""
@@ -2085,6 +2114,8 @@ def run_sport_v3(sport: str, exp_root: Path, *, max_items: int = BUDGET_V3["max_
                    "unsupported": adapter["unsupported"], "models": {n: {k: m.get(k) for k in ("role", "version", "description")}
                                                                   for n, m in adapter["models"].items()}}
         status["blockers"] += [f"{m}: {why}" for m, why in adapter["unsupported"].items()]
+        STUDY_CACHE["dir"] = exp_root / "v3" / "study-cache"
+        STUDY_CACHE["build"] = build_cache
         with Lock(root):
             _run_queue(status, adapter, root, pid, sport, t0, max_items, max_seconds)
     except Refused as exc:
@@ -2155,6 +2186,8 @@ def _run_queue(status: dict, adapter: dict, root: Path, pid: str, sport: str, t0
                     dropped += len(recs) - len(kept_recs)
                     recs = kept_recs
                 recs = validate_records(adapter, recs, seasons)
+            except Refused:
+                raise                                             # e.g. the study cache is missing: not an item failure
             except AdapterInvalid as exc:
                 _jsonl_add(log, {"event": "item_failed", "key": k, "model": n, "at": _now(), "error": str(exc)[:400]})
                 fails[k] = fails.get(k, 0) + 1
@@ -2259,6 +2292,8 @@ def _brief(ev: dict) -> dict:
             continue
         inc = e["models"][e["incumbent"]]
         out[m] = {"status": "evaluated", "kind": e["kind"], "incumbent": e["incumbent"], "n": inc["n"],
+                  "settlement": e.get("settlement"), "line_basis": e.get("line_basis"), "line_sources": e.get("line_sources"),
+                  "reference_line_note": e.get("reference_line_note"), "by_line_source": e.get("by_line_source"),
                   "log_loss": inc["log_loss"], "ece": (inc.get("calibration") or {}).get("ece"),
                   "baselines": {b: e["models"][b]["log_loss"] for b in e["models"] if b.startswith("baseline:")},
                   "vs_book": inc["vs_book"].get("status"),
@@ -2270,7 +2305,8 @@ def _brief(ev: dict) -> dict:
 
 
 def daily_v3(sports_: Optional[list], exp_root: Path, max_items: int = BUDGET_V3["max_items_per_sport"],
-             max_seconds: float = BUDGET_V3["max_seconds_per_sport"], adapter_fn: Callable = None) -> dict:
+             max_seconds: float = BUDGET_V3["max_seconds_per_sport"], adapter_fn: Callable = None,
+             build_cache: bool = True) -> dict:
     """Every requested sport gets its own item and time budget (none can monopolise the run); the start rotates after the
     last sport attempted. Writes reports/daily5-<time>.json with each sport's explicit outcome."""
     sports_ = list(sports_ or FIVE_SPORTS)
@@ -2283,7 +2319,8 @@ def daily_v3(sports_: Optional[list], exp_root: Path, max_items: int = BUDGET_V3
               "max_seconds": max_seconds}, "sports": {}, "research_only": True,
               "agent": "not used (no paid generation path in this runner)"}
     for sport in sports_:
-        report["sports"][sport] = run_sport_v3(sport, exp_root, max_items=max_items, max_seconds=max_seconds, adapter_fn=adapter_fn)
+        report["sports"][sport] = run_sport_v3(sport, exp_root, max_items=max_items, max_seconds=max_seconds, adapter_fn=adapter_fn,
+                                           build_cache=build_cache)
     rot.parent.mkdir(parents=True, exist_ok=True)
     rot.write_text(json.dumps({"last": sports_[0], "at": _now()}))     # next run starts one sport later
     report["outcomes"] = {s: r["outcome"] for s, r in report["sports"].items()}
@@ -2295,9 +2332,54 @@ def daily_v3(sports_: Optional[list], exp_root: Path, max_items: int = BUDGET_V3
     return report
 
 
+def prepare_cache(sports_: list, exp_root: Path) -> dict:
+    """Builds the NBA/NHL study tables of the current snapshot once (about 5 to 25 minutes) and stores them under the experiment
+    root, keyed by snapshot identity and app hash. Run it after a snapshot or a deploy, outside the scheduled step."""
+    guard_paths(exp_root)
+    out = {}
+    STUDY_CACHE["dir"], STUDY_CACHE["build"] = exp_root / "v3" / "study-cache", True
+    for sport in sports_:
+        t0 = time.time()
+        store = config.db_path(sport)
+        if store.is_file() and os.access(store, os.W_OK):
+            raise Refused(f"the {sport} snapshot is writable ({store}); make it read-only first")
+        path = study_cache_file(sport, "validation")
+        hit = path is not None and path.is_file()
+        conn = _snapshot_conn(sport)
+        try:
+            _study_tables(conn, sport, "validation")
+        finally:
+            conn.close()
+        out[sport] = {"file": path.name, "cached_before": hit, "seconds": round(time.time() - t0, 1)}
+    return out
+
+
 # --- Protected holdout (v3): once per protocol and sport, logged first, never by search or daily -------------------------------
+SEALED_TEST_SPORTS = {"nfl": "the NFL sealed one-shot test (nfl_eval.evaluate_test, logged in the official NFL test-access log)",
+                      "ncaab": "the NCAAB sealed one-shot test (ncaab_eval; its official test-access log)"}
+
+
+def sealed_ledger_uses(sport: str) -> list:
+    """Completed one-shot uses of this sport's reserved seasons recorded in the OFFICIAL sealed-test ledgers (read only)."""
+    out = []
+    try:
+        if sport == "soccer":
+            from . import soccer_eval, soccer_markets_eval
+            for path in (soccer_eval.access_log_path(), soccer_markets_eval.access_log_path()):
+                if path.is_file():
+                    for line in path.read_text().splitlines():
+                        if line.strip() and ("reserved test" in line or "test run" in line):
+                            out.append({"ledger": path.name, "entry": json.loads(line)})
+    except (ImportError, OSError, ValueError):
+        pass
+    return out
+
+
 def holdout_v3(sport: str, exp_root: Path, ask: Callable[[str], bool] = _ask_tty, reuse_reason: Optional[str] = None,
                adapter_fn: Callable = None) -> dict:
+    if sport in SEALED_TEST_SPORTS:        # their reserved seasons belong to the sealed test: nothing to read or fail here
+        return {"status": "handled_by_sealed_test", "sport": sport, "note": f"holdout handled by {SEALED_TEST_SPORTS[sport]}; "
+                "protocol v3 never reads these seasons"}
     guard_paths(exp_root)
     adapter = (adapter_fn or get_adapter)(sport)
     if adapter is None:
@@ -2318,7 +2400,7 @@ def holdout_v3(sport: str, exp_root: Path, ask: Callable[[str], bool] = _ask_tty
         if any(h["event"] == "completed" for h in log):
             raise Refused("holdout already used for this protocol and sport")
         earlier = [h for p in sorted((exp_root / "v3").glob(f"*/{sport}/holdout_access.jsonl")) for h in _holdout_log(p.parent)
-                   if h["event"] == "completed"] + _sport_ledger(exp_root, sport)
+                   if h["event"] == "completed"] + _sport_ledger(exp_root, sport) + sealed_ledger_uses(sport)
         if earlier and not reuse_reason:
             raise Refused(f"the {sport} holdout was already used ({len(earlier)} time(s)); reuse needs --reuse-reason (logged; "
                           "the result is then not an independent check)")
@@ -2818,7 +2900,7 @@ def forward_evaluate(path: Optional[Path], adapter: dict, protocol_id: Optional[
 # --- CLI for protocol v3 (python -m app.autoresearch v3 <cmd>) -----------------------------------------------------------------
 def main_v3(argv: list) -> int:
     p = argparse.ArgumentParser(prog="python -m app.autoresearch v3")
-    p.add_argument("cmd", choices=("daily", "holdout", "forward-record", "forward-grade", "forward-eval"))
+    p.add_argument("cmd", choices=("daily", "holdout", "forward-record", "forward-grade", "forward-eval", "prepare-cache"))
     p.add_argument("--exp-root", type=Path, help="experiment root (outside the repository and the live data)")
     p.add_argument("--sport", choices=FIVE_SPORTS, action="append")
     p.add_argument("--model", action="append")
@@ -2833,6 +2915,8 @@ def main_v3(argv: list) -> int:
             r = daily_v3(chosen, a.exp_root, a.max_items, a.max_seconds)
             print(json.dumps({"outcomes": r["outcomes"], "report_file": r["report_file"],
                               "reasons": {s: v["reason"] for s, v in r["sports"].items()}}, indent=1))
+        elif a.cmd == "prepare-cache":
+            print(json.dumps(prepare_cache([c for c in chosen if c in ("nba", "nhl")] or ["nba", "nhl"], a.exp_root)))
         elif a.cmd == "holdout":
             print(json.dumps(holdout_v3(chosen[0], a.exp_root, reuse_reason=a.reuse_reason), indent=1, default=str))
         else:
@@ -2882,10 +2966,12 @@ def _v2_outcome(r: dict, sport: str) -> tuple:
     if sport in r.get("refused", {}):
         return "refused", r["refused"][sport]
     mine = [t for t in r.get("trials", []) if t["sport"] == sport]
-    if any(t["status"] in ("keep", "discard") for t in mine):
-        return "evaluated", f"{len(mine)} trial(s)"
-    if any(t["status"] in ("crash", "timeout", "invalid", "interrupted") for t in mine):
-        return "failed", "; ".join(str(t.get("reason")) for t in mine if t["status"] != "keep")[:200]
+    ok = [t for t in mine if t["status"] in ("keep", "discard")]
+    bad = [t for t in mine if t["status"] in ("crash", "timeout", "invalid", "interrupted")]
+    if ok:
+        return "evaluated", f"{len(ok)} trial(s)" + (f", {len(bad)} failed" if bad else "")
+    if bad:
+        return "failed", "; ".join(str(t.get("reason")) for t in bad)[:200]
     return "no_candidates", "no new agent commit to evaluate (protocol v2 queue empty)"
 
 
@@ -2894,7 +2980,8 @@ def _daily_cli(a) -> int:
     line per sport; the v3 daily report file also carries the v2 result under `v2`."""
     chosen = a.sport or list(FIVE_SPORTS)
     r = daily_v3(chosen, a.exp_root, a.max_trials if a.max_trials != BUDGETS["max_trials"] else BUDGET_V3["max_items_per_sport"],
-                 a.max_minutes * 60 if a.max_minutes != BUDGETS["max_minutes"] else BUDGET_V3["max_seconds_per_sport"])
+                 a.max_minutes * 60 if a.max_minutes != BUDGETS["max_minutes"] else BUDGET_V3["max_seconds_per_sport"],
+                 build_cache=False)                       # the scheduled step never builds NBA/NHL study tables (v3 prepare-cache)
     v2_sports = [s for s in chosen if s in ("nba", "nhl")]
     v2, v2_note = {}, None
     if v2_sports:

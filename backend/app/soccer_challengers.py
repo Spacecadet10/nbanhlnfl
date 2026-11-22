@@ -563,7 +563,7 @@ def _model_table() -> dict:
     }
 
 
-# Candidate constants: chosen on development_tune / development_fit seasons only (docs/evidence/soccer-research-2026-11-22).
+# Candidate constants: chosen on development_tune / development_fit seasons only (the soccer agent's tuning run of 2026-11-22; its evidence folder is not in the repository).
 CANDIDATE_PARAMS = {"goals_lowtau": {"tau": 3.0, "D": 0.05}, "corners_tilt": {"gamma": 0.2}}
 
 
@@ -826,7 +826,7 @@ def forecast_upcoming(conn: sqlite3.Connection, now: str, model_name: str, horiz
             s = sched.get(r["match_id"])
             if s is None:
                 continue
-            recs = one_x_two_records(r["match_id"], s["season"], s["kickoff_at"], r["generated_at"], (r["p_home"], r["p_draw"], r["p_away"]),
+            recs = one_x_two_records(r["match_id"], s["season"], s["kickoff_at"], min(r["generated_at"], now), (r["p_home"], r["p_draw"], r["p_away"]),
                                      None, s["competition_id"])
             book = _stored_1x2(conn, r["match_id"], now, s["kickoff_at"])
             for rec in recs:

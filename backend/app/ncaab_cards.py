@@ -148,7 +148,8 @@ def ensure(ledger: sqlite3.Connection, source: sqlite3.Connection, now: datetime
 
 # --- NCAAB research adapter (all-sports research system) ---------------------------------------------------------------
 # Lives here, not in ncaab_eval.py: ncaab_eval.py is hashed by ncaab_challengers.fit_code_version(), so editing it would change
-# the live challenger fingerprint and definition. This module is hashed by no live fingerprint (tests/test_research_fingerprints.py).
+# the live challenger fingerprint and definition. This module is hashed by no live fingerprint (the fingerprint tests in tests/test_ncaab_challengers.py and
+# tests/test_ncaab_app_regression.py cover the hashed files).
 import functools
 import hashlib
 import math

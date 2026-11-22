@@ -205,8 +205,8 @@ live model; no paid AI path is used (the v3 runner never starts an agent); no Te
 `python -m app.autoresearch v3 daily --exp-root <dir outside repo and live data> [--sport nba ...]` (NBA_DATA_DIR = a snapshot
 copy). Other subcommands: `holdout`, `forward-record`, `forward-grade`, `forward-eval`.
 
-### Adapter contract (producers: NBA/NHL `autoresearch.nba_nhl_adapter`; NCAAB `ncaab_eval`; NFL `nfl_challengers` (nfl_eval is byte-pinned by the live definition); Soccer
-`soccer_markets_eval`; the single location mapping is `autoresearch.ADAPTER_FUNCTIONS`; each exposes `research_adapter()`)
+### Adapter contract (producers: NBA/NHL `autoresearch.nba_nhl_adapter`; NCAAB `ncaab_cards`; NFL `nfl_challengers`; Soccer `soccer_challengers` (nfl_eval, ncaab_eval and soccer_markets_eval
+are byte-pinned/sealed and carry no research code; research imports in `ncaab_cards` are lazy so importing it for the cards stays cheap); the single location mapping is `autoresearch.ADAPTER_FUNCTIONS`; each exposes `research_adapter()`)
 A dict with: `sport`; `data_version` (hash of the snapshot inputs used); `markets` {market: {`kind`: binary|three_way|line,
 `settlement`: text}}; `unsupported` {market: reason}; `periods` {search, validation, holdout: [seasons]} (holdout after the others,
 never read by search or daily runs); `models` {name: {`role`: incumbent|baseline|candidate, `description`, `version`}};
@@ -268,6 +268,26 @@ evaluated markets, blockers (including every `unsupported` market and its reason
   candidates=None)` and `autoresearch.grade(data_dir, now, sport)`; both return `{"outcome": evaluated|no_candidates|skipped|failed, ...}`.
   `record` stores incumbents and baselines too (the pairing reference) and only the named candidates.
 
+### Review changes (round 2)
+- **Snapshot identity.** The protocol id and every item key include the snapshot identity (`data_identity`: the store file's sha256 from
+  IDENTITY.json, else hashed, plus `last_final`); a new snapshot is a new experiment and re-scores. The Soccer adapter is called with a
+  connection so its `data_version` carries its data digest. The forward test omits the data identity (it reads the live store).
+- **Keep rule.** `keep_decision` requires the paired upper bound below **-1e-9** (floating-point noise is a tie) and identical forecasts
+  are a tie. **This changes the recorded MODEL_SELECTION §6 behaviour** for the protocol-v2 trials as well (same function): a v2 keep
+  recorded before this version with an upper bound inside (-1e-9, 0) would no longer be a keep. v2 evidence is not rewritten.
+- **Reference lines.** A line market graded at a `reference_model` line (derived from models' own forecasts, the incumbent's among
+  them: NCAAB, NFL) can beat the incumbent only by artefact. Such a keep is reported as `needs_human_review`, never as `keep`, is
+  listed in `needs_human_review`, shown with its `reference_line_note` / `by_line_source` / caveats, and is never added to
+  `forward_candidates`. A line no compared model owns (Soccer's standard lines, a bookmaker line) keeps the normal rule.
+- **NBA/NHL study tables** are cached on disk per snapshot and app hash (`<exp root>/v3/study-cache`). The scheduled step never builds
+  them: with the cache missing the sport is `refused` ("run `v3 prepare-cache`"); `python -m app.autoresearch v3 prepare-cache
+  --exp-root <dir> --sport nba --sport nhl` builds them once (5 to 25 minutes), after which each item scores in seconds.
+- Smaller: a writable snapshot is refused; `valid_quote` needs the draw price for a three-way market; the uniform baseline's push
+  mass uses only earlier forecasts; `forward_record` rejects a game that started before the recording time and a forecast later than
+  it; `no_candidates` is not a success (`last_success_at` counts `evaluated` only); NFL and NCAAB holdouts report
+  `handled_by_sealed_test`; completed official sealed-test ledgers count as earlier holdout uses; `AUTORESEARCH_HOME` is preferred
+  over `NBA_AUTORESEARCH_HOME`; an `ImportError` inside an adapter module is a failure with its error, not "not delivered".
+
 ### Holdout
 `holdout_v3` reads the holdout seasons once per protocol and sport, only for candidates kept on search and validation (plus the
 incumbents as the bar), after a confirmation typed at a terminal; the access is logged (`pending`, then `completed` or `failed`)
@@ -277,10 +297,10 @@ independent). The result is a report; nothing is promoted.
 ### Forward test (prospective)
 A separate SQLite file, `<data dir>/research/forward-candidates.sqlite`, created by this code: `rf_forecasts` (append-only,
 triggers refuse UPDATE/DELETE; checks: forecast time before the game start, information cutoff at or before the forecast time, no
-outcome), `rf_grades`, `rf_looks` (prefix `rf_`: the Ops forward recorder in `candidates/live.py` keeps its own `forward_*` tables in the same file; these hold the evaluator's full records, model/data versions and looks, and the two must be reconciled: see HANDOFF). Incumbent, baseline and candidate forecasts are recorded by the same rule and graded
+outcome), `rf_grades`, `rf_looks` (prefix `rf_`; the only forward tables: `candidates/live.py` is a thin scheduled driver around `autoresearch.record` and `autoresearch.grade`, plus an `rf_runs` run-history table). Incumbent, baseline and candidate forecasts are recorded by the same rule and graded
 by the same rule (the last forecast made before the start). Grading reads the official store read-only (`PRAGMA query_only`) and
 writes only this file. Records carry model version, data version, forecast time, input cutoff and protocol id. NBA/NHL forward
-forecasts of registry candidates are read from the official `candidate_forecasts` table (written by the existing recorder, read-only here).
+forecasts of registry candidates are read from the official candidate-forecast ledger (written by the existing recorder, read-only here). Grading uses the adapter's own `settle` or, for all five sports, `autoresearch.generic_settle` (the official store read-only; markets.settle rules; Soccer 90-minute score or corner counts). The NFL adapter's forward state is read through the sealed activation with a research-only access log (`nfl_challengers.research_access_log_path`); Soccer holdout reads log to `soccer_challengers.research_access_log_path`: the official test-access logs are never written by research. `record` forecasts incumbents, the sport's registered candidates (`forward_candidates` of the newest v3 state, real keeps only) and, on request, baselines.
 
 ### Promotion criteria (fixed before any forward result exists)
 `autoresearch.PROMOTION`; changing them changes the protocol name. For a candidate and market, `promotion_recommendation` reports
@@ -303,10 +323,9 @@ and shown; none is reported as a successful search.
 
 `IDENTITY.json` of the snapshot: the sport's `last_final` is the evaluation cutoff (records starting after it are dropped and counted in `data_cutoff`). `python -m app.autoresearch daily --sport nfl|ncaab|soccer` runs v3 and prints `sport-outcome: <sport> <outcome> <reason>` per sport; kept candidates are listed in `state.json` as `forward_candidates` for the Ops driver to register with `candidates.live.forward_register` (this module must not import the live-forecast code; a test guards that). The wrapper's `daily-state.tsv` is shown under `v3.wrapper_state`.
 
-### Not done in v3 (see HANDOFF)
+### Not done in v3
 Score MAE/RMSE for NBA/NHL (the study tables hold probabilities only); sportsbook comparison and returns for NBA/NHL line
-markets (no historical bookmaker lines); NFL/Soccer/NCAAB adapters belong to other owners until they deliver `research_adapter()`
-(reported `refused: no research adapter` until then); no scheduler (Ops).
+markets (no historical bookmaker lines) and for every reference-line market; the scheduler lives in `scripts/autoresearch_daily.sh`.
 
 ## Limits
 - The sandbox uses macOS `sandbox-exec`, which is deprecated by Apple but functional on this machine (macOS 26.6). The candidate may fork (loky workers), but only this Python can be executed; no launchd job, app launch or Apple event can be started (a program started outside the sandbox would not inherit it).

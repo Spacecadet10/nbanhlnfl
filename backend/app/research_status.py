@@ -150,7 +150,7 @@ V3_NOTE = ("Protocol v3 evaluates research candidates for NBA, NHL, NFL, Soccer 
 
 def daily_state(path: Optional[Path] = None) -> Optional[list]:
     """The wrapper's per-sport status file (sport, last_attempt_utc, last_outcome, last_success_utc, last_reason), read only."""
-    p = path or Path(os.environ.get("NBA_AUTORESEARCH_HOME") or Path.home() / "autoresearch-sports") / "daily-state.tsv"
+    p = path or Path(os.environ.get("AUTORESEARCH_HOME") or os.environ.get("NBA_AUTORESEARCH_HOME") or Path.home() / "autoresearch-sports") / "daily-state.tsv"
     try:
         lines = p.read_text(errors="replace").splitlines()
     except OSError:
@@ -171,7 +171,7 @@ def v3_status(root: Path) -> Optional[dict]:
     if not latest and not last:
         return None
     keep = ("protocol_id", "at", "last_attempt", "last_success_at", "outcome", "reason", "candidates", "evaluated_markets", "blockers",
-            "queue", "next_run", "periods", "periods_note", "unsupported", "kept", "evaluation", "data_version", "models", "markets", "caveats", "data_validation", "data_cutoff", "forward_candidates")
+            "queue", "next_run", "periods", "periods_note", "unsupported", "kept", "needs_human_review", "evaluation", "data_version", "models", "markets", "caveats", "data_validation", "data_cutoff", "forward_candidates")
     sports = {}
     for s, st in sorted(latest.items()):
         sports[s] = {k: st.get(k) for k in keep} | {"candidate_count": len(st.get("candidates") or [])}
