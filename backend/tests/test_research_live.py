@@ -486,37 +486,56 @@ def test_a_cohort_refused_by_the_database_is_a_skip_not_an_aborted_step(game):
     assert out["cohorts_created"] == 0 and out["skipped"]["winner"][0]["reason"].startswith("game no longer scheduled")
 
 
-# ---- forward-test recorder and grader (app.candidates.live): contract records, official store opened read-only -----------------
+# ---- forward-test driver (app.candidates.live around app.autoresearch's forward store) -----------------------------------------
 import hashlib
 import math
 import time as _time
 
 from app.candidates import live as fwd_live
 
+try:
+    from app import autoresearch as ar
+    HAVE_CORE = hasattr(ar, "forward_record") and hasattr(ar, "get_adapter")
+except ImportError:                                           # pragma: no cover
+    ar, HAVE_CORE = None, False
+needs_core = pytest.mark.skipif(not HAVE_CORE, reason="needs the research-v3 forward store (autoresearch.forward_record)")
+
 FNOW = "2026-11-22T12:00:00Z"
 
 
 def contract(conn, now, model_name):
-    """What the real adapters return: contract records of scheduled games, winner (a/b) and total (a/b/push)."""
+    """What the real adapters return: contract records of scheduled games, winner (a/b) and total (a/b/mid=push)."""
     if model_name == "boom":
         raise RuntimeError("model exploded")
     if model_name == "slow":
         _time.sleep(5)
     out = []
     for r in conn.execute("SELECT game_id, tipoff_at FROM games WHERE status='scheduled' ORDER BY game_id"):
-        base = {"game_id": r["game_id"], "season": 2027, "start_at": r["tipoff_at"], "forecast_cutoff": FNOW, "quote": None}
-        out.append({**base, "market": "winner", "line": None, "probs": {"a": 0.7, "b": 0.3}, "line_source": None})
-        out.append({**base, "market": "total", "line": 150.0, "probs": {"a": 0.5, "b": 0.4, "push": 0.1}, "line_source": "reference_model"})
+        base = {"game_id": r["game_id"], "season": 2027, "start_at": r["tipoff_at"], "forecast_cutoff": FNOW, "quote": None, "outcome": None}
+        out.append({**base, "market": "winner", "line": None, "probs": {"a": 0.7, "b": 0.3}})
+        out.append({**base, "market": "total", "line": 150.0, "probs": {"a": 0.5, "mid": 0.1, "b": 0.4}})
     return out
 
 
-ADAPTER = {"sport": "ncaab", "forecast_upcoming": contract}
+def fixture_adapter(**extra):
+    return {"sport": "ncaab", "data_version": "dv1", "periods": {}, "markets": {}, "forecast_upcoming": contract,
+            "models": {"inc": {"role": "incumbent", "version": "v1"}, "cand": {"role": "candidate", "version": "c1"},
+                       "unselected": {"role": "candidate", "version": "c2"}, "base": {"role": "baseline", "version": "b1"}}, **extra}
+
+
+def select(tmp_path, adapter, names):
+    pid = ar.v3_protocol_id(adapter)
+    d = tmp_path / "exp" / "v3" / pid / adapter["sport"]
+    d.mkdir(parents=True)
+    (d / "state.json").write_text(json.dumps({"forward_candidates": names}))
+    return tmp_path / "exp"
 
 
 @pytest.fixture
-def fdata(tmp_path):
+def fdata(tmp_path, monkeypatch):
     d = tmp_path / "data"
     d.mkdir()
+    monkeypatch.setenv("NBA_DATA_DIR", str(d))
     c = sqlite3.connect(d / "ncaab.sqlite")
     c.execute("CREATE TABLE games (game_id TEXT PRIMARY KEY, tipoff_at TEXT, status TEXT, home_score INT, away_score INT)")
     c.executemany("INSERT INTO games VALUES (?,?,?,?,?)", [
@@ -531,86 +550,82 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def test_forward_record_keeps_the_whole_record_writes_only_the_forward_store_and_only_games_still_ahead(fdata):
-    fwd_live.forward_register(fdata, "ncaab", "m1", now=FNOW)
+def fcount(d, sql="SELECT COUNT(*) FROM rf_forecasts"):
+    return sqlite3.connect(d / "research" / "forward-candidates.sqlite").execute(sql).fetchone()[0]
+
+
+@needs_core
+def test_record_registers_incumbents_and_the_cores_forward_candidates_only_and_writes_only_the_forward_store(fdata, tmp_path):
+    ad = fixture_adapter()
+    exp = select(tmp_path, ad, ["cand"])
     before = digest(fdata / "ncaab.sqlite")
-    res = fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": ADAPTER})
-    assert res["ncaab"]["outcome"] == "evaluated" and res["ncaab"]["recorded"] == 4 and res["ncaab"]["rejected"] == 2   # g2 began at 11:00
-    assert digest(fdata / "ncaab.sqlite") == before                                      # official store untouched
-    assert {p.name for p in fdata.iterdir()} == {"ncaab.sqlite", "research"}
-    assert res["nba"]["outcome"] == "no_candidates" and res["soccer"]["outcome"] == "no_candidates"
-    again = fwd_live.forward_record(fdata, now="2026-11-22T13:00:00Z", adapters={"ncaab": ADAPTER})
-    assert again["ncaab"]["recorded"] == 0                                               # first forecast wins
-    f = fwd_live.forward_connect(fdata)
-    assert f.execute("SELECT COUNT(*), MIN(issued_at) FROM forward_forecasts").fetchone() == (4, FNOW)
-    row = f.execute("SELECT probs, line, line_source, record FROM forward_forecasts WHERE market='total' AND game_id='g1'").fetchone()
-    assert json.loads(row[0]) == {"a": 0.5, "b": 0.4, "push": 0.1} and row[1] == 150.0 and row[2] == "reference_model"
-    assert json.loads(row[3])["forecast_cutoff"] == FNOW
-    with pytest.raises(sqlite3.DatabaseError):
-        f.execute("UPDATE forward_forecasts SET line = 1")
-    with pytest.raises(sqlite3.DatabaseError):
-        f.execute("DELETE FROM forward_forecasts")
+    r = fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": ad}, exp_root=exp, sports=("ncaab", "nfl"))
+    assert r["ncaab"]["outcome"] == "evaluated" and r["ncaab"]["models"] == 2 and r["ncaab"]["inserted"] == 8   # inc + cand; 2 games x 2 markets
+    assert r["ncaab"]["rejected"] == 4 and any("g2" in e for e in r["ncaab"]["errors"])                         # g2 began before now
+    assert r["nfl"]["outcome"] == "refused"                                                                      # no adapter
+    assert digest(fdata / "ncaab.sqlite") == before and {p.name for p in fdata.iterdir()} == {"ncaab.sqlite", "research"}
+    assert fcount(fdata, "SELECT group_concat(DISTINCT model) FROM rf_forecasts") in ("inc,cand", "cand,inc")
+    assert fcount(fdata, "SELECT COUNT(*) FROM rf_forecasts WHERE protocol_id = '%s' AND data_version = 'dv1'" % ar.v3_protocol_id(ad)) == 8
+    again = fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": ad}, exp_root=exp, sports=("ncaab",))
+    assert again["ncaab"]["inserted"] == 0 and again["ncaab"]["already_recorded"] == 8
+    runs = sqlite3.connect(fdata / "research" / "forward-candidates.sqlite").execute("SELECT kind, sport, outcome FROM rf_runs ORDER BY id").fetchall()
+    assert runs[:2] == [("record", "ncaab", "evaluated"), ("record", "nfl", "refused")]
 
 
-def test_forward_record_adapter_cannot_write_the_official_store(fdata):
+@needs_core
+def test_record_with_no_selected_candidates_still_forecasts_incumbents_and_baselines_only_on_request(fdata, tmp_path):
+    ad = fixture_adapter()
+    exp = tmp_path / "exp-empty"                              # no state.json yet
+    r = fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": ad}, exp_root=exp, sports=("ncaab",))
+    assert r["ncaab"]["models"] == 1
+    r = fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": ad}, exp_root=exp, sports=("ncaab",), baselines=True)
+    assert r["ncaab"]["models"] == 2 and r["ncaab"]["inserted"] == 4
+
+
+@needs_core
+def test_record_a_failing_or_slow_model_does_not_stop_the_rest_and_an_adapter_cannot_write_the_official_store(fdata, tmp_path):
+    ad = fixture_adapter()
+    ad["models"].update({"boom": {"role": "candidate", "version": "x"}, "slow": {"role": "candidate", "version": "y"}})
+    exp = select(tmp_path, ad, ["boom", "slow", "cand"])
+    r = fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": ad}, exp_root=exp, sports=("ncaab",), timeout_s=0.5)["ncaab"]
+    assert r["inserted"] == 8 and r["outcome"] == "evaluated"
+    assert any("boom" in e for e in r["errors"]) and any("slow" in e and "exceeded" in e for e in r["errors"])
+
     def writer(conn, now, name):
         conn.execute("UPDATE games SET status='final'")
         return []
-    fwd_live.forward_register(fdata, "ncaab", "w", now=FNOW)
-    res = fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": {"forecast_upcoming": writer}})
-    assert res["ncaab"]["outcome"] == "failed" and "readonly" in res["ncaab"]["errors"][0].lower()
+    w = fixture_adapter(forecast_upcoming=writer)
+    r = fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": w}, exp_root=exp, sports=("ncaab",))["ncaab"]
+    assert r["outcome"] == "failed" and "readonly" in r["errors"][0].lower()
     assert sqlite3.connect(fdata / "ncaab.sqlite").execute("SELECT COUNT(*) FROM games WHERE status='final'").fetchone()[0] == 0
 
 
-def test_forward_record_a_failing_model_and_a_slow_model_do_not_stop_the_rest(fdata):
-    for m in ("boom", "slow", "ok"):
-        fwd_live.forward_register(fdata, "ncaab", m, now=FNOW)
-    r = fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": ADAPTER}, timeout_s=0.5)["ncaab"]
-    assert r["recorded"] == 4 and r["outcome"] == "evaluated"
-    assert any("boom" in e for e in r["errors"]) and any("slow" in e and "exceeded" in e for e in r["errors"])
-
-
-def test_forward_record_missing_adapter_or_nothing_registered_is_reported_not_raised(fdata):
-    fwd_live.forward_register(fdata, "ncaab", "m1", now=FNOW)
-    assert fwd_live.forward_record(fdata, now=FNOW, adapters={})["ncaab"]["outcome"] == "skipped"
-    fwd_live.forward_register(fdata, "ncaab", "m1", now=FNOW, active=False)
-    assert fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": ADAPTER})["ncaab"]["outcome"] == "no_candidates"
-
-
-def test_forward_record_rejects_a_forecast_cutoff_after_now_or_a_start_not_ahead(fdata):
-    def peeker(conn, now, name):
-        return [{**r, "forecast_cutoff": "2026-11-22T12:30:00Z"} for r in contract(conn, now, name)]
-    fwd_live.forward_register(fdata, "ncaab", "m1", now=FNOW)
-    r = fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": {"forecast_upcoming": peeker}})["ncaab"]
-    assert r["recorded"] == 0 and r["rejected"] == 6
-
-
-def test_forward_grade_settles_generically_from_the_games_table_with_full_vector_scores_and_no_double_grading(fdata):
-    fwd_live.forward_register(fdata, "ncaab", "m1", now=FNOW)
-    fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": ADAPTER})
-    early = fwd_live.forward_grade(fdata, now="2026-11-22T20:00:00Z", adapters={"ncaab": ADAPTER})["ncaab"]
+@needs_core
+def test_grade_settles_from_the_official_store_through_the_cores_grading_and_never_twice(fdata, tmp_path):
+    ad = fixture_adapter()
+    exp = select(tmp_path, ad, ["cand"])
+    fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": ad}, exp_root=exp, sports=("ncaab",))
+    early = fwd_live.forward_grade(fdata, now="2026-11-22T20:00:00Z", adapters={"ncaab": ad}, sports=("ncaab",))["ncaab"]
     assert early["graded"] == 0 and early["waiting"] == 2                       # g1 tipped off but is not final
     c = sqlite3.connect(fdata / "ncaab.sqlite")
     c.execute("UPDATE games SET status='final', home_score=80, away_score=70 WHERE game_id='g1'")   # total 150 = the line: a push
     c.commit()
     c.close()
     before = digest(fdata / "ncaab.sqlite")
-    r = fwd_live.forward_grade(fdata, now="2026-11-22T23:00:00Z", adapters={"ncaab": ADAPTER})["ncaab"]
-    assert r["outcome"] == "evaluated" and r["graded"] == 2 and r["waiting"] == 0
-    assert digest(fdata / "ncaab.sqlite") == before
-    f = fwd_live.forward_connect(fdata)
-    rows = {m: v for m, *v in f.execute("SELECT f.market, r.outcome, r.log_loss, r.brier FROM forward_results r JOIN forward_forecasts f ON f.id = r.forecast_id")}
-    assert rows["total"] == ["push", None, None]                              # pushes are not scored
-    assert rows["winner"][0] == "a" and abs(rows["winner"][1] + math.log(0.7)) < 1e-9 and abs(rows["winner"][2] - (0.09 + 0.09)) < 1e-9
-    assert fwd_live.forward_grade(fdata, now="2026-11-23T23:00:00Z", adapters={"ncaab": ADAPTER})["ncaab"]["graded"] == 0
+    r = fwd_live.forward_grade(fdata, now="2026-11-22T23:00:00Z", adapters={"ncaab": ad}, sports=("ncaab",))["ncaab"]
+    assert r["outcome"] == "evaluated" and r["graded"] == 2 and r["waiting"] == 0 and digest(fdata / "ncaab.sqlite") == before
+    f = sqlite3.connect(fdata / "research" / "forward-candidates.sqlite")
+    assert dict(f.execute("SELECT market, outcome FROM rf_grades")) == {"winner": "a", "total": "push"}
+    assert fwd_live.forward_grade(fdata, now="2026-11-23T23:00:00Z", adapters={"ncaab": ad}, sports=("ncaab",))["ncaab"]["graded"] == 0
 
 
-def test_forward_settle_rules_overtime_whole_line_pushes_nfl_tie_and_moved_start(tmp_path):
+def test_settle_rules_overtime_whole_line_pushes_nfl_tie_and_moved_start():
     c = sqlite3.connect(":memory:")
     c.row_factory = sqlite3.Row
     c.execute("CREATE TABLE games (game_id TEXT, tipoff_at TEXT, status TEXT, home_score INT, away_score INT)")
-    c.executemany("INSERT INTO games VALUES (?,?,?,?,?)", [("t", "2026-11-22T19:00:00Z", "final", 20, 20), ("w", "2026-11-22T19:00:00Z", "final", 24, 17), ("m", "2026-11-22T20:00:00Z", "final", 24, 17),
-                                                             ("p", "2026-11-22T19:00:00Z", "postponed", None, None), ("s", "2026-11-22T19:00:00Z", "scheduled", None, None)])
+    c.executemany("INSERT INTO games VALUES (?,?,?,?,?)", [("t", "2026-11-22T19:00:00Z", "final", 20, 20), ("w", "2026-11-22T19:00:00Z", "final", 24, 17),
+                                                             ("m", "2026-11-22T20:00:00Z", "final", 24, 17), ("p", "2026-11-22T19:00:00Z", "postponed", None, None),
+                                                             ("s", "2026-11-22T19:00:00Z", "scheduled", None, None)])
     row = lambda gid, market, line=None: {"game_id": gid, "market": market, "line": line, "start_at": "2026-11-22T19:00:00Z"}
     st = fwd_live._settle
     assert st("nfl", c, row("t", "winner")) == "void"                            # NFL tie voids the winner
@@ -621,29 +636,24 @@ def test_forward_settle_rules_overtime_whole_line_pushes_nfl_tie_and_moved_start
     assert st("nfl", c, row("p", "winner")) == "void" and st("nfl", c, row("s", "winner")) is None and st("nfl", c, row("zz", "winner")) is None
 
 
-def test_forward_cli_prints_one_outcome_line_per_sport_and_runs_light(fdata, monkeypatch, capsys):
-    monkeypatch.setenv("NBA_DATA_DIR", str(fdata))
+def test_sealed_read_is_passed_only_to_adapters_that_ask_for_it(monkeypatch, tmp_path):
+    monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path))
+    nfl_like = lambda conn, now, name, *, sealed=None, access_log=None: []          # noqa: E731
+    kw = fwd_live._sealed_kwargs(nfl_like)
+    assert kw["sealed"] is None and str(kw["access_log"]).endswith("research/nfl_eval/nfl_test_access.jsonl")   # no activation: the adapter refuses
+    assert fwd_live._sealed_kwargs(lambda conn, now, name: []) == {}
+
+
+def test_cli_prints_one_outcome_line_per_sport_and_runs_light(fdata, monkeypatch, capsys):
+    import fcntl
+    import sys
+    from app import learning_run as lr
+    monkeypatch.setattr(fwd_live, "forward_record", lambda d, **kw: {s: {"outcome": "no_candidates", "inserted": 0, "errors": []} for s in kw["sports"]})
     assert fwd_live.forward_main(["record", "--sport", "nfl", "--sport", "soccer"]) == 0
     out = capsys.readouterr().out.splitlines()
     assert out[0].startswith("forward-record: sport=nfl outcome=no_candidates") and out[1].startswith("forward-record: sport=soccer ")
-    from app import learning_run as lr
-    import fcntl
-    import sys
     fh = open(fdata / ".learning-heavy.lock", "w")
     fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
     rc = lr.main(["--name", "forward-record", "--light", "--max-minutes", "1", "--max-rss-gb", "4", "--", sys.executable, "-c", "pass"])
     fh.close()
     assert rc == 0
-
-
-def test_forward_record_passes_the_sealed_read_only_to_adapters_that_ask_for_it(fdata, monkeypatch):
-    seen = {}
-
-    def nfl_like(conn, now, name, *, sealed=None, access_log=None):
-        seen.update(sealed=sealed, access_log=access_log)
-        return []
-    monkeypatch.setenv("NBA_DATA_DIR", str(fdata))
-    fwd_live.forward_register(fdata, "ncaab", "m1", now=FNOW)
-    fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": {"forecast_upcoming": nfl_like}})
-    assert seen["sealed"] is None and str(seen["access_log"]).endswith("research/nfl_eval/nfl_test_access.jsonl")   # no activation: refused by the adapter
-    assert fwd_live._sealed_kwargs(contract) == {}                                                                  # a plain adapter gets nothing

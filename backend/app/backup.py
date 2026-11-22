@@ -419,6 +419,8 @@ def snapshot(data_dir: Path, dest: Path, name: str, *, sports: Optional[list] = 
         finally:
             conn.close()
         ident["files"][target.name] = {"sha256": sha256(target), "bytes": target.stat().st_size}
+        c = ident["stores"][sport]["coverage"]
+        ident.setdefault("sports", {})[sport] = {k: c.get(k) for k in ("first", "last", "last_final", "rows")}   # what autoresearch.snapshot_cutoff reads
     for rel in derived:
         src = data_dir / rel
         if src.is_file():
