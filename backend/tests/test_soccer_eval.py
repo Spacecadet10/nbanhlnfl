@@ -525,8 +525,8 @@ def test_the_test_run_refuses_a_store_without_reserved_matches(tmp_path, monkeyp
 
 
 def test_the_research_1x2_frequency_baseline_uses_only_results_available_at_each_cutoff():
-    """Research adapter (soccer_markets_eval._ExpandingFrequency1x2): an expanding, leak-free baseline for any season."""
-    from app import soccer_markets_eval as me
+    """Research adapter (soccer_challengers._ExpandingFrequency1x2): an expanding, leak-free baseline for any season."""
+    from app import soccer_challengers as me
     ms = [mt("a", "eng.1", 2020, "2020-09-12", "A", "B"), mt("b", "eng.1", 2020, "2020-09-13", "A", "C", label=0),
           mt("c", "eng.1", 2020, "2020-09-20", "B", "C", label=0)]
     rs = [rev("a", "2020-09-12", 3, 0), rev("b", "2020-09-13", 1, 0), rev("c", "2020-09-20", 0, 2)]
