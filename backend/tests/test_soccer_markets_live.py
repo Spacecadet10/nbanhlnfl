@@ -572,3 +572,27 @@ def test_a_new_spelling_of_the_same_sportsbook_is_not_a_withdrawal(live):
     assert [tuple(r) for r in rows] == [("Draft Kings", "home", 1)]           # raw name kept, no withdrawal row
     f = {"match_id": mid, "kickoff_at": ko, "generated_at": t3, "most_likely": "home", "probabilities": {"home": .6, "draw": .2, "away": .2}}
     assert soccer_book.one_x_two(live, f)["price"] == "-125/+260/+280"
+
+
+def test_every_live_soccer_fingerprint_is_unchanged_from_the_deployed_commit_1179494():
+    """Research code lives in soccer_markets_eval.py; the live path pins sealed files by content hash and never hashes
+    source. These bytes and pins must stay exactly as deployed (1179494)."""
+    import hashlib
+    from pathlib import Path
+    from app import intl_live
+    here = Path(sml.__file__).parent
+    pinned = {"soccer_markets_sealed_goals.json": "76be15aac17dd284de0330e6096dbe0d1337b69a66fbddcec021eb13cecb88c4",
+              "soccer_markets_sealed_corners.json": "43704a5bcbb57d843bffb21a21edda399b410182587f81a1da374aea7fa80104",
+              "soccer_markets_reading_goals.json": "370cf46fc7e42984f731c2ccdd56d3849e652631b847b14206fa3c2cf49d66a7",
+              "soccer_markets_reading_corners.json": "93d97ff20a6980ad3a978987213d4683a27f316e3a4f7e7d0805a54c3fac3f32",
+              "soccer_sealed_candidate.json": "1fee79b3783a93d88ad74e6d6dbdc92c0326d9ae5dae1e656ef62d35b0d7b88b",
+              "intl_sealed_candidate.json": "74088f5bb619b5a1e7bb66b58a4a0ae01ccedf1c5793524885af502119796fbf",
+              "soccer_markets_protocol.json": "fa64ec9657a4568138f416923377c6ff00fc4176439c2c7789f907cf430db7de",
+              "soccer_protocol.json": "f37946397ce971a28dd2d1603fad570273e9b7eb50a67583fbe9830ac32f70e9"}
+    for name, sha in pinned.items():
+        assert hashlib.sha256((here / name).read_bytes()).hexdigest() == sha, name
+    assert sml.CANDIDATES == {"goals": "cfe78bf98a8e48215474de26d020fc5a0fdb45830957b38e24e47db88efbd432",
+                              "corners": "f50224ddd00ef8abd3d949180b8324ab934ac4fa65035cb2c0ff49c364d90377"}
+    assert soccer_live.CANDIDATE_SHA256 == "7dbc668c214f33862541156c0630913194e8a3421c0e7c3495f4de296ecd9c47"
+    assert intl_live.CANDIDATE_SHA256 == "10547b47146e579bb6f53e6adf4ac57b1896c0f7723cca564f9be93a49206d79"
+    assert soccer_live.sealed_candidate() and intl_live.sealed_candidate()
