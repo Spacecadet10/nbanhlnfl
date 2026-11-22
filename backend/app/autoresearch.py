@@ -191,6 +191,8 @@ def snapshot_identity(sport: str) -> dict:
 
 def _snapshot_conn(sport: str):
     import sqlite3
+    if not config.db_path(sport).is_file():
+        raise Refused(f"no {sport} store at {config.db_path(sport)}")      # never let sqlite create an empty file
     conn = sqlite3.connect(f"file:{config.db_path(sport)}?immutable=1", uri=True)   # static read-only copy only
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA query_only = ON")
@@ -1651,6 +1653,18 @@ def evaluate_records(adapter: dict, by_model: dict, stages: tuple = ("search", "
             continue
         universe = len({_key(r) for recs in mk.values() for r in recs})
         entry |= {"status": "evaluated", "incumbent": inc, "universe": universe, "models": {}}
+        srcs: dict = {}
+        for r in mk[inc]:
+            srcs[r.get("line_source")] = srcs.get(r.get("line_source"), 0) + 1
+        if kind == "line" and any(k is not None for k in srcs):
+            entry["line_sources"] = {str(k): v for k, v in srcs.items()}
+            if "reference_model" in srcs:       # graded at the model's own reference line: no skill vs a bookmaker is claimed
+                entry["reference_line_note"] = ("records with line_source=reference_model are graded at a reference line, ~50/50 "
+                                                "by construction: reported apart from bookmaker-line results, never as skill "
+                                                "against a bookmaker")
+                entry["by_line_source"] = {str(k): {kk: v for kk, v in model_metrics(
+                    [r for r in mk[inc] if r.get("line_source") == k], kind).items() if kk in ("n", "log_loss", "brier", "accuracy")}
+                    for k in srcs}
         base = baselines_for(mk[inc], kind)
         for n in [*mk, *base]:
             recs = mk.get(n) if n in mk else base[n]
@@ -1760,19 +1774,20 @@ def _study_walk(sport: str, adapter_periods: dict):
 
 def _study_upcoming(sport: str):
     def forecast_upcoming(conn, now, model_name):
-        """Forward forecasts of a registry candidate: its recorded pregame rows in the official store's candidate_forecasts
+        """Forward forecasts of a registry candidate: its recorded pregame rows in the official store's candidate-forecast ledger
         (read-only here; written by the existing candidate recorder, never by research)."""
-        names = {s.name for s in __import__("app.candidates.registry", fromlist=["x"]).for_sport(sport)}
+        from .candidates import registry
+        names = {s.name for s in registry.for_sport(sport)}
         if model_name not in names:
             return []
-        rows = conn.execute("SELECT f.*, g.season FROM candidate_forecasts f JOIN games g USING (game_id) WHERE f.candidate=? "
-                            "AND f.tipoff_at > ? AND f.generated_at < f.tipoff_at ORDER BY f.generated_at", (model_name, now)).fetchall()
+        from . import candidates_view
+        rows = candidates_view.upcoming(conn, model_name, now)
         out = []
         for f in rows:
             kind = NBA_NHL_MARKETS[sport].get(f["market"], ("binary",))[0]
             probs = {"a": f["p_a"], "b": f["p_b"]} if kind == "binary" else {"a": f["p_a"], "mid": f["p_mid"], "b": f["p_b"]}
             out.append({"game_id": f["game_id"], "season": f["season"], "start_at": _iso(f["tipoff_at"]),
-                        "forecast_cutoff": _iso(f["training_cutoff"] or f["generated_at"]), "forecast_at": _iso(f["generated_at"]),
+                        "forecast_cutoff": _iso(f["generated_at"]), "forecast_at": _iso(f["generated_at"]),
                         "market": f["market"], "line": f["line"], "probs": probs, "outcome": None})
         return out
     return forecast_upcoming
@@ -1842,14 +1857,21 @@ def nba_nhl_adapter(sport: str, candidates: Optional[list] = None) -> dict:
             "settle": _study_settle(sport)}
 
 
+# The one place that names where each sport's adapter lives ("module:function"; the NFL and NCAAB adapters are NOT in the
+# byte-pinned nfl_eval / ncaab_eval). Update here when an adapter agent moves one.
+ADAPTER_FUNCTIONS = {"nfl": "nfl_challengers:research_adapter", "ncaab": "ncaab_eval:research_adapter",
+                     "soccer": "soccer_markets_eval:research_adapter"}
+
+
 def get_adapter(sport: str) -> Optional[dict]:
     """The sport's adapter, or None when the adapter agent has not delivered one (reported as `refused`, never skipped)."""
     import importlib
     if sport in ("nba", "nhl"):
         return nba_nhl_adapter(sport)
-    mod = {"ncaab": "ncaab_eval", "nfl": "nfl_eval", "soccer": "soccer_markets_eval"}[sport]
+    target = ADAPTER_FUNCTIONS[sport]
+    mod, _, func = target.partition(":")
     try:
-        fn = getattr(importlib.import_module(f"{__package__ or 'app'}.{mod}"), "research_adapter")
+        fn = getattr(importlib.import_module(f"{__package__ or 'app'}.{mod}"), func)
     except (ImportError, AttributeError):
         return None
     return fn()
@@ -1914,6 +1936,7 @@ def run_sport_v3(sport: str, exp_root: Path, *, max_items: int = BUDGET_V3["max_
         validate_adapter(adapter)
         pid = v3_protocol_id(adapter)
         root = exp_root / "v3" / pid / sport
+        status["caveats"] = adapter.get("caveats")
         status |= {"protocol_id": pid, "data_version": adapter["data_version"], "periods": adapter["periods"],
                    "periods_note": adapter.get("periods_note"), "markets": adapter["markets"],
                    "unsupported": adapter["unsupported"], "models": {n: {k: m.get(k) for k in ("role", "version", "description")}
@@ -1958,6 +1981,10 @@ def _run_queue(status: dict, adapter: dict, root: Path, pid: str, sport: str, t0
             fails[e["key"]] = fails.get(e["key"], 0) + 1
     keys = {n: _item_key(pid, n, models[n]["version"]) for n in order}
     conn = adapter["connect"]() if adapter.get("connect") else _snapshot_conn(sport)
+    if adapter.get("validate_data"):                          # optional adapter check of the snapshot it is about to read
+        problems = adapter["validate_data"](conn)
+        if problems:
+            raise Refused(f"adapter data validation failed: {problems if isinstance(problems, str) else list(problems)[:3]}")
     ran = 0
     stopped = None
     try:
@@ -2067,7 +2094,7 @@ def daily_v3(sports_: Optional[list], exp_root: Path, max_items: int = BUDGET_V3
     rot.write_text(json.dumps({"last": sports_[0], "at": _now()}))     # next run starts one sport later
     report["outcomes"] = {s: r["outcome"] for s, r in report["sports"].items()}
     report["finished_at"] = _now()
-    out = exp_root / "reports" / f"daily5-{report['started_at'].replace(':', '')}.json"
+    out = exp_root / "reports" / f"daily5-{report['started_at'].replace(':', '')}-{os.getpid()}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, indent=1, default=str))
     report["report_file"] = str(out)

@@ -160,7 +160,7 @@ def v3_status(root: Path) -> Optional[dict]:
     if not latest and not last:
         return None
     keep = ("protocol_id", "at", "last_attempt", "last_success_at", "outcome", "reason", "candidates", "evaluated_markets", "blockers",
-            "queue", "next_run", "periods", "periods_note", "unsupported", "kept", "evaluation", "data_version", "models", "markets")
+            "queue", "next_run", "periods", "periods_note", "unsupported", "kept", "evaluation", "data_version", "models", "markets", "caveats")
     sports = {}
     for s, st in sorted(latest.items()):
         sports[s] = {k: st.get(k) for k in keep} | {"candidate_count": len(st.get("candidates") or [])}

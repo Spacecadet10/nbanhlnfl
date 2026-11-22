@@ -1,4 +1,4 @@
-# Sports autoresearch (karpathy/autoresearch adapted to NBA/NHL)
+# Sports autoresearch (karpathy/autoresearch adapted to NBA/NHL; protocol v3 extends research evaluation to all five sports)
 
 Research only. Nothing here writes a store, a forecast table or a live artifact, and nothing approves or promotes a model.
 Status: built and exercised on isolated copies, including real headless-agent runs. **Not activated, not independently
@@ -192,6 +192,103 @@ python3 prepare.py stop --reason "..."                   # kill switch; `stop --
 - Only executed trials count against the budget.
 - It writes `experiments/reports/daily-*.json`. "No improvement found" is a valid outcome.
 - It never starts an agent.
+
+## Protocol `sports-research-v3`: five-sport research evaluation (NBA, NHL, NFL, Soccer, NCAAB)
+
+Protocol v2 above (agent trials on NBA/NHL) is unchanged and keeps its evidence under its own protocol id. v3 is a new
+protocol id (`sports-research-v3-<hash of protocol, sport, data version, periods, markets>`) and a new experiment: no v2 trial,
+cache or holdout use is carried over. It is the consumer of one **adapter** per sport; everything lives in
+`backend/app/autoresearch.py` ("Protocol v3"), `research_status.py` (status), `Autoresearch.tsx` (UI).
+
+Hard limits: research only. Nothing writes an official store, forecast table, record or card; nothing promotes or changes a
+live model; no paid AI path is used (the v3 runner never starts an agent); no Telegram. Run:
+`python -m app.autoresearch v3 daily --exp-root <dir outside repo and live data> [--sport nba ...]` (NBA_DATA_DIR = a snapshot
+copy). Other subcommands: `holdout`, `forward-record`, `forward-grade`, `forward-eval`.
+
+### Adapter contract (producers: NBA/NHL `autoresearch.nba_nhl_adapter`; NCAAB `ncaab_eval`; NFL `nfl_challengers` (nfl_eval is byte-pinned by the live definition); Soccer
+`soccer_markets_eval`; the single location mapping is `autoresearch.ADAPTER_FUNCTIONS`; each exposes `research_adapter()`)
+A dict with: `sport`; `data_version` (hash of the snapshot inputs used); `markets` {market: {`kind`: binary|three_way|line,
+`settlement`: text}}; `unsupported` {market: reason}; `periods` {search, validation, holdout: [seasons]} (holdout after the others,
+never read by search or daily runs); `models` {name: {`role`: incumbent|baseline|candidate, `description`, `version`}};
+`walk(conn, seasons, model_name) -> [record]`; `forecast_upcoming(conn, now, model_name) -> [record without outcome]`.
+Record: `game_id, season, start_at, forecast_cutoff` (ISO, information cutoff, never after `start_at`), `market`, `line` (or None),
+`probs` ({a,b} for binary; {a,mid,b} for three_way; line markets either {a,b} or {a,mid,b} where `mid` is the push probability),
+`outcome` (a|b|mid|push|void|None), optional `point_pred` ({home,away} or a number), `point_actual`, `quote`
+({provider, retrieved_at, price_a, price_b[, price_mid], line, executable, synthetic}; **decimal prices**).
+Optional fields (consumer and adapters; never renamed): `caveats`, `validate_data(conn) -> problems` (non-empty refuses the sport), `periods.warmup`, record `line_source` (`reference_model` | `bookmaker`; reference-line results are reported apart and never as skill against a bookmaker), `model`, `fit_through`, `sd`; also: market `line_basis` (e.g. "model line (no historical bookmaker lines)");
+adapter `connect()` (default: the immutable read-only snapshot connection of `config.db_path(sport)`), `settle(conn, records) ->
+[{game_id, market, line, outcome[, point_actual]}]` (forward grading; without it grading reports "unavailable"), `periods_note`,
+`notes`; record `forecast_at` (when the model actually ran, forward store). The evaluator validates every walk: unknown market,
+season outside the request, `forecast_cutoff` after `start_at`, probabilities not summing to 1, wrong key set for the kind and
+duplicate (game, market, line) raise `AdapterInvalid` (the sport run fails, visibly).
+
+### Evaluation (per sport, market, model)
+n and coverage; Brier (the app's 3-vector convention) and log loss; calibration bins and ECE (10 bins; pooled over all sides
+when a `mid` probability exists, else over side a); score MAE/RMSE/bias where point predictions exist; per-stage (search,
+validation) n/log loss/Brier/accuracy. The incumbent per market is the best existing member (lowest log loss among incumbents with
+the widest coverage), as the v2 bar. Baselines on the incumbent's games: `baseline:uniform` and `baseline:base_rate` (smoothed
+expanding outcome frequency, an outcome usable only 6 h after the game start). Candidates are compared paired (week-block
+bootstrap, matched games) with the incumbent, each baseline and, where valid quotes exist, the sportsbook.
+- Sportsbook no-vig: proportional normalisation of 1/decimal price; only quotes that are not synthetic, retrieved at or before the
+  forecast cutoff, on the same line and priced above 1. A two-way book has no push mass: pushed games are dropped and the model
+  is renormalised over the two sides. No valid quote means "unavailable", never an assumption.
+- Returns: only at executable, non-synthetic, matching quotes: flat 1 unit on the model's pick when probability x price > 1;
+  pushes refund (profit 0, stake counted), voids excluded. Synthetic and non-executable quotes are counted and excluded; no
+  quote means "unavailable".
+- Keep/discard: the MODEL_SELECTION §6 rule (`keep_decision`, shared with v2): paired log-loss difference 95% upper bound < 0 and
+  matched accuracy not lower; every incumbent game forecast; at least 50 scored games; on **both** the search and the validation
+  stage. A keep is exploratory (repeated search), never a promotion. NBA/NHL: search = the first validation seasons, validation =
+  the last (2024); protocol v2 already saw all of them, so they are not pristine (`periods_note`); the holdout seasons were used by
+  earlier studies. NHL candidates with starting-goalie inputs are excluded (known only after the start).
+
+### Runner and status
+`daily_v3` gives each sport its own item and time budget (default 6 items, 900 s; a walk already running is not interrupted)
+and rotates the starting sport each run. Queue per sport: every incumbent, then every candidate; a scored item is stored under
+`v3/<protocol>/<sport>/items/` and is never re-scored (an interrupted sport resumes with the next item); an item that fails is
+retried at most twice and shown as a blocker; an incumbent that fails fails the sport. Explicit outcome per sport:
+`evaluated` (at least one candidate scored), `no_candidates` (the adapter lists none: reference metrics only, not a successful
+search), `refused` (reason: no adapter yet, live data directory, ...), `failed` (error text), `skipped` (budget or time).
+`state.json` per sport and `reports/daily5-<time>.json` carry: last attempt, last successful evaluation, candidate count,
+evaluated markets, blockers (including every `unsupported` market and its reason), queue and next run. `GET
+/api/research/autoresearch` returns them under `v3`; the Autoresearch card shows them.
+
+### Holdout
+`holdout_v3` reads the holdout seasons once per protocol and sport, only for candidates kept on search and validation (plus the
+incumbents as the bar), after a confirmation typed at a terminal; the access is logged (`pending`, then `completed` or `failed`)
+before anything is computed. An earlier use of the sport's holdout under any protocol needs `--reuse-reason` (logged; not
+independent). The result is a report; nothing is promoted.
+
+### Forward test (prospective)
+A separate SQLite file, `<data dir>/research/forward-candidates.sqlite`, created by this code: `forward_forecasts` (append-only,
+triggers refuse UPDATE/DELETE; checks: forecast time before the game start, information cutoff at or before the forecast time, no
+outcome), `forward_grades`, `forward_looks`. Incumbent, baseline and candidate forecasts are recorded by the same rule and graded
+by the same rule (the last forecast made before the start). Grading reads the official store read-only (`PRAGMA query_only`) and
+writes only this file. Records carry model version, data version, forecast time, input cutoff and protocol id. NBA/NHL forward
+forecasts of registry candidates are read from the official `candidate_forecasts` table (written by the existing recorder, read-only here).
+
+### Promotion criteria (fixed before any forward result exists)
+`autoresearch.PROMOTION`; changing them changes the protocol name. For a candidate and market, `promotion_recommendation` reports
+each criterion as passed, failed or not_evaluable and a status of `recommend_for_review`, `not_recommended`,
+`insufficient_evidence` or `no_candidates`. It never promotes (`never_promotes: true`, `manual_decision_required: true`); a person
+decides under MODEL_SELECTION §6.
+1. At least 200 settled forward games per market on which both candidate and incumbent were graded (NFL: 100).
+2. Every incumbent forward game has a candidate forecast.
+3. Paired log loss: week-block bootstrap 95% upper bound of (candidate - incumbent) below 0.
+4. Calibration: candidate ECE <= incumbent ECE + 0.01.
+5. Matched pick accuracy not lower than the incumbent's.
+6. Where at least 100 matched valid non-synthetic quotes exist: the 95% lower bound of (candidate - sportsbook no-vig) log loss
+   <= 0 (not demonstrably worse). Below 100 quotes this is "not evaluable", reported as such, not as passed.
+Every evaluation of the forward store is a look and is logged; only the first look at a market's minimum count is confirmatory,
+all others are labelled exploratory. A candidate version that changes during the forward window starts a new forward record.
+
+### Negative results
+"No candidate kept", "no candidates", failed items and refused sports are recorded (`attempts.jsonl`, `items.jsonl`, `state.json`)
+and shown; none is reported as a successful search.
+
+### Not done in v3 (see HANDOFF)
+Score MAE/RMSE for NBA/NHL (the study tables hold probabilities only); sportsbook comparison and returns for NBA/NHL line
+markets (no historical bookmaker lines); NFL/Soccer/NCAAB adapters belong to other owners until they deliver `research_adapter()`
+(reported `refused: no research adapter` until then); no scheduler (Ops).
 
 ## Limits
 - The sandbox uses macOS `sandbox-exec`, which is deprecated by Apple but functional on this machine (macOS 26.6). The candidate may fork (loky workers), but only this Python can be executed; no launchd job, app launch or Apple event can be started (a program started outside the sandbox would not inherit it).

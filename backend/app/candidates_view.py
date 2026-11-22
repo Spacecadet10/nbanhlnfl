@@ -56,3 +56,9 @@ def game(conn, sport: str, game_id: str, as_of: str) -> Optional[dict]:
             "without_forecast": [{"candidate": s.name, "family": s.family, "neural": neural(s),
                                   "reason": "no pregame forecast recorded for this game"}
                                  for s in registry.for_sport(sport) if s.name not in have]}
+
+
+def upcoming(conn, candidate: str, now: str) -> list:
+    """Recorded pregame forecasts of one candidate for games starting after `now` (read-only; for the research forward test)."""
+    return conn.execute("SELECT f.*, g.season FROM candidate_forecasts f JOIN games g USING (game_id) WHERE f.candidate=? "
+                        "AND f.tipoff_at > ? AND f.generated_at < f.tipoff_at ORDER BY f.generated_at", (candidate, now)).fetchall()

@@ -604,3 +604,28 @@ def test_nhl_adapter_excludes_candidates_that_use_postgame_goalie_inputs():
     names = [n for n, m in ar.nba_nhl_adapter("nhl")["models"].items() if m["role"] == "candidate"]
     assert names and not any("goalie" in n for n in names)
     assert not any("goalie" in n for n in ar.nba_nhl_adapter("nba")["models"])
+
+
+def test_a_missing_store_is_refused_and_never_created(monkeypatch, tmp_path):
+    snap = tmp_path / "snap"
+    snap.mkdir()
+    monkeypatch.setenv("NBA_DATA_DIR", str(snap))
+    a = fixture_adapter({"inc": []})
+    a.pop("connect")
+    r = ar.run_sport_v3("nba", tmp_path / "e", adapter_fn=_adapters(nba=a))
+    assert r["outcome"] == "refused" and "no nba store" in r["reason"] and not list(snap.iterdir())
+
+
+def test_reference_line_results_are_reported_apart_and_never_as_bookmaker_skill():
+    recs = [rec(i, "spread", p=0.5, mid=0.0, outcome="a" if i % 2 else "b", line=-3.0, line_source="reference_model") for i in range(60)]
+    a = fixture_adapter({"inc": recs}, markets={"spread": {"kind": "line", "settlement": "push refunds"}})
+    e = ar.evaluate_records(a, {"inc": recs})["markets"]["spread"]
+    assert e["line_sources"] == {"reference_model": 60} and "never as skill against a bookmaker" in e["reference_line_note"]
+    assert e["by_line_source"]["reference_model"]["n"] == 60
+
+
+def test_adapter_locations_are_one_mapping_and_an_adapter_data_check_can_refuse(exp):
+    assert set(ar.ADAPTER_FUNCTIONS) == {"nfl", "ncaab", "soccer"} and ar.ADAPTER_FUNCTIONS["nfl"].startswith("nfl_challengers:")
+    a = fixture_adapter({"inc": []}, validate_data=lambda conn: ["snapshot is stale"])
+    r = ar.run_sport_v3("nba", exp, adapter_fn=_adapters(nba=a))
+    assert r["outcome"] == "refused" and "snapshot is stale" in r["reason"]
