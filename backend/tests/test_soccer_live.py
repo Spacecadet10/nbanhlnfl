@@ -193,6 +193,21 @@ def test_an_early_look_ahead_waits_silently_and_a_missing_run_alerts_only_after_
     assert "eng.1" in tickets.soccer_section(after)["refused"]                       # it did not: visible and alerted
 
 
+def test_a_future_fixture_before_a_look_ahead_cutoff_is_not_described_as_kicked_off(live, monkeypatch):
+    """The 1X2 look-ahead had the same defect as the market families: every scheduled match before the target day's
+    cutoff was reported as 'kicked off ... but has no result yet', although it had not started."""
+    monkeypatch.setattr(soccer_live, "pregame_enabled", lambda conn: False)
+    far = TODAY + timedelta(days=2)
+    ingest(live, far, *[upcoming(str(50 + i), far, ARS, LIV) for i in range(9)])
+    rep = soccer_live.run(live, day=(TODAY + timedelta(days=3)).isoformat(), record_refusal=False)
+    problems = rep["competitions"]["eng.1"]["problems"]
+    assert rep["status"] == "refused" and not any("kicked off" in p for p in problems), problems
+    assert len(problems) == 1 and "still to be played" in problems[0], problems
+    ingest(live, TODAY, event(eid="8", date=at(YESTERDAY, "12:00"), status="STATUS_SCHEDULED", state="pre", home=ARS, away=MCI))
+    rep = soccer_live.run(live, day=TOMORROW.isoformat(), record_refusal=False)       # genuinely past, never settled
+    assert any("kicked off" in p and "no result yet" in p for p in rep["competitions"]["eng.1"]["problems"])
+
+
 def test_the_api_serves_national_team_competitions(live, monkeypatch):
     from fastapi.testclient import TestClient
     from app import main

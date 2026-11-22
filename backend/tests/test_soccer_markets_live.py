@@ -145,6 +145,42 @@ def test_no_forecast_after_the_cutoff(live):
     assert sml.run(live, day=YESTERDAY.isoformat())["status"] == "refused"
 
 
+def _look_ahead(live, n=1):
+    """A look-ahead day three days out whose cutoff lies after `n` fixtures that are still in the future (day after
+    tomorrow); returns (target day, that fixtures' day)."""
+    far = TODAY + timedelta(days=2)
+    ingest_day(live, far, [upcoming(90010 + i, far, IDS[i % 4], IDS[4 + i % 4]) for i in range(n)])
+    return TODAY + timedelta(days=3), far
+
+
+def test_a_future_fixture_before_a_look_ahead_cutoff_is_not_described_as_kicked_off(live):
+    """Root cause of the hourly `markets-forecast --day +1..+7 --if-ready` spam: check() listed every scheduled match
+    kicking off before the target day's cutoff as 'kicked off ... but has no result yet', although it had not started."""
+    day, far = _look_ahead(live)
+    rep = sml.run(live, day=day.isoformat(), record_refusal=False)
+    text = " ".join(p for f in rep["families"].values() for c in f["competitions"].values() for p in c["problems"])
+    assert "kicked off" not in text, text
+    assert rep["status"] == "refused" and not forecasts(live)       # it still waits: the labels are not in yet
+    assert "still to be played" in text and far.isoformat() in text
+
+
+def test_a_match_that_really_kicked_off_without_a_result_is_still_reported(live):
+    ingest_day(live, YESTERDAY, [final(90001, YESTERDAY, IDS[0], IDS[1], 2, 1, 7, 3), final(90002, YESTERDAY, IDS[2], IDS[3], 0, 0),
+                                 make_event(90006, f"{YESTERDAY.isoformat()}T15:00Z", SEASON, STYPE, f"{SEASON}-league",
+                                            IDS[6], IDS[7], status="STATUS_SCHEDULED")])
+    rep = sml.run(live, day=TOMORROW.isoformat(), record_refusal=False)
+    problems = rep["families"]["goals"]["competitions"]["eng.1"]["problems"]
+    assert any("soccer:eng.1:90006 kicked off" in p and "no result yet" in p for p in problems), problems
+    assert rep["status"] == "refused"
+
+
+def test_problem_lists_are_summarised_not_repeated_per_competition(live, monkeypatch):
+    day, _ = _look_ahead(live, n=12)
+    rep = sml.run(live, day=day.isoformat(), record_refusal=False)
+    problems = rep["families"]["goals"]["competitions"]["eng.1"]["problems"]
+    assert len(problems) == 1 and int(problems[0].split()[0]) == 14, problems      # 12 here + tomorrow's 2 fixtures
+
+
 def test_selections_separate_bookmaker_offers_from_model_lines(live):
     sml.run(live, day=TOMORROW.isoformat())
     mid = "soccer:eng.1:90003"

@@ -124,6 +124,9 @@ def state(family: str) -> dict:
             "disclosed_lines": r.get("R4_disclosed_lines", [])}
 
 
+MAX_LISTED = 5       # matches named one by one per competition and check; the rest are counted
+
+
 # --- Completeness checks -----------------------------------------------------------------------------------------------
 def check(conn: sqlite3.Connection, family: str, competition: str, now: str, cutoff: str, data: ev.Data) -> dict:
     """Inputs of `competition` complete for a forecast at `cutoff`: retrieved within 26 h, every season day before the
@@ -148,6 +151,7 @@ def check(conn: sqlite3.Connection, family: str, competition: str, now: str, cut
         labelled |= {r[0] for r in conn.execute("SELECT DISTINCT s.match_id FROM soccer_match_stats s JOIN soccer_matches m ON "
                                                 "m.match_id = s.match_id WHERE m.competition_id = ? AND m.season = ? AND "
                                                 "s.available_at <= ?", (competition, soccer_live.SEASON, cutoff))}
+    pending, unsettled = [], []
     for r in conn.execute("SELECT match_id, season, season_type_id, stage, kickoff_at, status, decided_in FROM soccer_matches "
                           "WHERE competition_id = ? AND season = ? AND kickoff_at < ? ORDER BY kickoff_at",
                           (competition, soccer_live.SEASON, cutoff)):
@@ -156,15 +160,25 @@ def check(conn: sqlite3.Connection, family: str, competition: str, now: str, cut
         if r["status"] in ("postponed", "canceled", "abandoned"):
             continue
         if r["status"] != "final":
-            problems.append(f"{r['match_id']} kicked off {r['kickoff_at']} but has no result yet ({r['status']})")
+            if r["kickoff_at"] > now:     # not started: a look-ahead day's cutoff lies after it, so it only has to be waited for
+                pending.append(r["kickoff_at"])
+            else:
+                unsettled.append(f"{r['match_id']} kicked off {r['kickoff_at']} but has no result yet ({r['status']})")
         elif r["decided_in"] == "regulation" and r["match_id"] not in labelled:
             what = "corner count" if family == "corners" else "result"
-            problems.append(f"{r['match_id']} has no {what} available by the cutoff")
+            unsettled.append(f"{r['match_id']} has no {what} available by the cutoff")
+    problems += unsettled[:MAX_LISTED]
+    if len(unsettled) > MAX_LISTED:
+        problems.append(f"... and {len(unsettled) - MAX_LISTED} more match(es) kicked off without a usable result")
+    if pending:
+        problems.append(f"{len(pending)} match(es) still to be played before the cutoff (kickoffs {pending[0]} .. {pending[-1]}); "
+                        "the forecast waits for their results")
     prev = sum(1 for o in data.obs if o.competition == competition and o.season == soccer_live.SEASON - 1 and o.h is not None)
     need = MIN_HISTORY_LEAGUE if competition in ev.LEAGUES else 1
     if prev < need:
         problems.append(f"previous season history missing ({prev} labelled matches; run `soccer history-months`)")
-    return {"competition": competition, "ok": not problems, "problems": problems, "retrieved_at": last}
+    return {"competition": competition, "ok": not problems, "problems": problems, "retrieved_at": last,
+            "pending": len(pending), "unsettled": len(unsettled)}
 
 
 # --- Forecast run ------------------------------------------------------------------------------------------------------
@@ -215,7 +229,9 @@ def run_family(conn: sqlite3.Connection, family: str, *, day: str, now: str, wri
         mine = [r for r in rows if r["competition"] == c]
         n = sum(record(conn, family, r, s, cutoff_at=cutoff, inputs_digest=digest, inputs_through=through,
                        retrieved_at=checks[c]["retrieved_at"], write=write) for r in mine)
-        problems = checks[c]["problems"] + [x for x in shared if not x.startswith(f"input competition {c}:")]
+        others = {k: len(v["problems"]) for k, v in checks.items() if k != c and v["problems"]}
+        problems = checks[c]["problems"] + ([f"other input competitions not ready: " + ", ".join(
+            f"{k} ({n} problem(s))" for k, n in sorted(others.items()))] if others else [])
         if write and (not shared or record_refusal):
             conn.execute("INSERT INTO soccer_market_checks (checked_at, family, competition_id, match_date, ok, problems_json, "
                          "forecasts) VALUES (?, ?, ?, ?, ?, ?, ?)", (now, family, c, day, int(not shared), json.dumps(problems), n))
