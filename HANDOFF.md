@@ -1,3 +1,45 @@
+## Colour release + NCAAB colour gate — branch colour-gate a7d3be1, RELEASED to delivery 7d125ca (2026-11-22T01:34:46Z) — Claude Opus 5.5 (lead)
+- Built (test-first): card_threshold DECIDE card-colour-decide-v2 / RULE card-threshold-v1.1: colour decided on the PRINTED %
+  (displayed_percentage / toFixed(1)); only set/seed/capped lines colour (capped from max(T, requested)); stale, missing,
+  unreadable, held or unqualified lines never colour and print a grey status ("No qualifying threshold · no line beat the
+  price (n=317 priced, checked Nov 21) · not coloured"). Web reads green_from from /api/card-thresholds. app/ncaab_gate.py
+  (policy ncaab-colour-gate-v1, docs/preregistration/ncaab-colour-gate-2026-11-22.md) replaces the NCAAB off switch and the
+  top-4 rule: green under the card's own decision + validated market (spread/total BLOCKED: Brier 0.2602/0.2595 vs coin 0.25,
+  n=218, Nov 17-21) + card's forecast-time quote + same-line price <= 20 min old + EV > 0 at that price (pushes refunded);
+  recommended = max EV; others "Context only"; zero qualifiers = zero cards; verdicts append-only in ncaab_gate_decisions.
+  NBA_NCAAB_CARDS=0 is the kill switch. Soccer Bet365/derived DC price as of the forecast (odds-consistency 0ef5d99).
+  Nightly backup adds the Telegram ledger + rule/history/config files (backup-coverage 0636f64). Top-4 status note records
+  the Nov 21 interim look and end of counting (frozen prereg untouched).
+- Review: independent Opus REQUEST CHANGES (display/decision rounding split, held chain, red-block withdrawal parse,
+  length/unreadable-store failure, ledger growth, lows) -> fixed test-first (8ca96c0) -> re-review APPROVE; recorder path
+  EQUIVALENT-EXCEPT (best_pick_record.py byte-identical; residual: flag on + card already at the compact length limit).
+  Entry appended to data/reports/weekly_report_review.json (7d125ca, 05:02:02Z); 62c3592 listed under not_reviewed.
+- Release method: 7d125ca = 62c3592 + this change 3-way applied (deployed-only code kept: learning pages, 390 px CSS).
+  Tests: ship tree, delivery venv: full suite 2996 passed / 9 failed = 8 test_deep_study (torch/keras absent, known) +
+  test_soccer_live two-hour-window (module NOW frozen at import, fails only in long runs; passes alone and as a file on
+  both trees; files untouched). Affected suites 518 passed; frontend unit 64 passed, typecheck + build ok.
+- Live steps: delivery checkout 62c3592 -> 7d125ca + npm run build; NBA_CARD_COLOURS=1 added to telegram + api-delivery
+  plists (bootout/bootstrap); web kickstarted; NEW job com.nba-predictor.card-thresholds (00:20 + 06:00 local,
+  `app.cli card-thresholds run` from delivery under the release guard; first run exit 0: W 317 / L 400 priced, none beat
+  the price; R/D 0); backup runner f859bc0 -> a7d3be1 (37 backup tests pass there; first scheduled run 09:45Z unobserved).
+- Observed: 83 Telegram runs 01:34:55Z-04:59:47Z all ok, 0 sent/failed/uncertain; NCAAB gated every run, 0 qualifying.
+  No NBA/NHL/NFL/Soccer card fell due after the switch, so a SENT coloured card is not observed yet.
+- Backup: pre-release snapshot ~/nba-predictor-backups/stores/20261122T000756Z (journal verify ok, ledger 287 deliveries
+  integrity ok, 105 files, no .env); restored to scratch: 5 stores integrity ok, counts >= earlier copy, sample forecast and
+  graded rows identical. No retention/pruning exists (~0.9 GB/night); no off-machine mirror (exit 2).
+- Evidence: ~/nba-predictor-research-data/colour-release-2026-11-22/ (plists-before, screenshots deployed/demo 390+1440,
+  Telegram PNG/text real/demo/flag-off; demo uses a scratch store W 55.0 / L 60.0 labelled DEMO, never production).
+- ROLLBACK: cd ~/nba-predictor-delivery && git checkout --detach 62c3592 && (cd frontend && npm run build); copy
+  plists-before/*.plist back, bootout/bootstrap telegram + api-delivery, kickstart -k web; bootout + rm
+  com.nba-predictor.card-thresholds.plist. Runner: git -C ~/nba-predictor-backup-runner checkout --detach f859bc0.
+- OPEN: (1) NCAAB neutral-site home/away flip after the final grades 5 games against flipped scores (401916125, 401917538,
+  401918959, 401919826, 401927396; shared ingest.py _upsert_game) - not fixed, needs a data-behaviour decision; (2) NCAAB
+  total model (raw running averages, no prior/shrink) is a model change, not made; (3) quote-selection rules still differ
+  by consumer (card any book <= forecast; quote_check same provider <= send; scorecard pick's provider) - listed, not
+  unified; (4) recommended pick for NBA/NHL/NFL/Soccer may still be red (colour is display-only there); (5) owner: `sudo pmset
+  -b sleep 0`, a --mirror target, a pruning policy, adaptive pickles/scorecard DBs in backups; (6) Odds API: 0 credits spent
+  this task (3 of the approved 5 spent earlier per SPEND.json; remaining quota not verifiable from local headers).
+
 ## NCAAB Telegram cards OFF (owner decision Nov 21, 2026) — branch ncaab-cards-off 38e2cb6, RELEASED to delivery 62c3592 — Claude Opus 5.5
 - Why: The Odds API probe (branch card-colours, HANDOFF there) showed 8 books agree with DraftKings' NCAAB totals within 0.5 pt
   (spreads 1.5) while the top-4 rule's gaps were 25-36 pts: the gaps are model error. Owner chose "No NCAAB cards" until the
