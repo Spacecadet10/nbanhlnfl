@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from app import db, nfl_eval
+from app import db, nfl_challengers, nfl_eval
 from app.models.base import PregameGame, Result
 
 UTC = timezone.utc
@@ -401,3 +401,138 @@ def test_test_run_applies_an_accepted_frozen_calibrator_without_refitting(store,
     sealed = _frozen(store, calibration={"accepted": True, "final": {"a": 2.0, "b": 0.0}})
     w = nfl_eval.run_test(store, sealed, access_log=tmp_path / "l.jsonl", out_dir=tmp_path / "o")["winner"]
     assert w["probabilities"] == "calibrated (frozen)" and w["summary"]["chosen"] != w["summary"]["elo"]
+
+
+# --- Research adapter (all-sports research system) -----------------------------------------------------------------
+@pytest.fixture(autouse=True)
+def _restore_research_state():
+    keep = getattr(nfl_challengers, "MIN_FIT_ROWS", None)
+    yield
+    if keep is not None:
+        nfl_challengers.MIN_FIT_ROWS = keep
+    if hasattr(nfl_challengers, "clear_research_cache"):
+        nfl_challengers.clear_research_cache()
+
+
+def _research_store(store, seasons=(2004, 2005, 2006, 2007), n=96):
+    nfl_challengers.MIN_FIT_ROWS = 150        # synthetic seasons are small; restored by the autouse fixture below
+    for s in seasons:
+        season_games(store, s, n=n, tie_every=11)
+    return store
+
+
+def _quote(conn, game, market, line, at, provider="DraftKings"):
+    fetch = conn.execute("INSERT INTO raw_fetches (raw_id, retrieved_at) VALUES (1, ?)", (at,)).lastrowid
+    conn.execute("INSERT INTO market_quotes (sport, game_id, provider, market, price_label, line, price_a, price_b, p_a_devig, "
+                 "p_b_devig, quote_time, retrieved_at, fetch_id, raw_id) VALUES ('nfl', ?, ?, ?, 'current', ?, -110, -110, 0.5, 0.5, "
+                 "NULL, ?, ?, 1)", (game, provider, market, line, at, fetch))
+    conn.commit()
+
+
+def _settle(market, line, h, a):
+    from app import markets
+    side = markets.settle(market, line, status="final", home=h, away=a)
+    return "push" if side == "mid" else side
+
+
+def test_nfl_adapter_contract(store):
+    a = nfl_challengers.research_adapter()
+    assert a["sport"] == "nfl" and a["data_version"]
+    assert set(a["markets"]) == {"winner", "spread", "total", "team_total_home", "team_total_away"}
+    assert a["markets"]["winner"]["kind"] == "binary" and a["markets"]["total"]["kind"] == "line"
+    assert "tie" in a["markets"]["winner"]["settlement"] and "overtime" in a["markets"]["spread"]["settlement"]
+    assert a["periods"]["search"][0] == 2005 and a["periods"]["validation"] == [2017, 2018, 2019, 2020, 2021]
+    assert a["periods"]["holdout"] == [2022, 2023, 2024, 2025]
+    roles = {n: m["role"] for n, m in a["models"].items()}
+    assert roles["nfl-incumbent"] == "incumbent" and sum(r == "candidate" for r in roles.values()) >= 2
+    assert sum(r == "baseline" for r in roles.values()) >= 2
+    assert callable(a["walk"]) and callable(a["forecast_upcoming"]) and isinstance(a["unsupported"], dict)
+
+
+def test_nfl_walk_settles_ties_pushes_and_marks_the_line_source(store):
+    _research_store(store)
+    g = store.execute("SELECT * FROM games WHERE season = 2006 AND home_score = away_score LIMIT 1").fetchone()
+    _quote(store, g["game_id"], "spread", 0.0, "2006-01-01T00:00:00Z")       # tie: home - away + 0 = 0 -> push
+    _quote(store, g["game_id"], "total", 40.0, "2006-01-01T00:00:00Z")       # 20 + 20 = 40 -> push
+    recs = nfl_challengers.research_walk(store, (2006,), "nfl-incumbent")
+    mine = {r["market"]: r for r in recs if r["game_id"] == g["game_id"]}
+    assert mine["winner"]["outcome"] == "void"
+    assert mine["spread"]["outcome"] == "push" and mine["spread"]["line_source"] == "bookmaker"
+    assert mine["total"]["outcome"] == "push" and mine["total"]["quote"]["provider"] == "DraftKings"
+    assert mine["team_total_home"]["line_source"] == "reference_model" and mine["team_total_home"]["quote"] is None
+    by_id = {r["game_id"]: r for r in store.execute("SELECT * FROM games WHERE season = 2006")}
+    for r in recs:
+        row = by_id[r["game_id"]]
+        assert r["forecast_cutoff"] == nfl_eval.cutoff_for(row["tipoff_at"]) and r["start_at"] == row["tipoff_at"]
+        if r["market"] not in ("winner",) and r["line_source"] == "reference_model":
+            assert r["line"] % 1 == 0.5
+            assert r["outcome"] == _settle(r["market"], r["line"], row["home_score"], row["away_score"])
+
+
+def test_nfl_walk_refuses_holdout_and_unsealed_forward_seasons(store):
+    _research_store(store)
+    for seasons in ((2022,), (2025,), (2021, 2023)):
+        with pytest.raises(nfl_eval.TestSeasonsLocked):
+            nfl_challengers.research_walk(store, seasons, "nfl-incumbent")
+    with pytest.raises(nfl_eval.TestSeasonsLocked):
+        nfl_challengers.research_walk(store, (2026,), "nfl-incumbent")        # forward state needs the sealed, logged read
+    with pytest.raises(ValueError):
+        nfl_challengers.research_walk(store, (2006,), "nope")
+
+
+@pytest.mark.parametrize("name", ["nfl-incumbent", "nfl-baseline-elo", "nfl-baseline-homerate", "nfl-cand-blend-v1",
+                                  "nfl-cand-hetero-v1"])
+def test_nfl_walk_uses_nothing_after_the_forecast_cutoff(store, name):
+    _research_store(store)
+    base = nfl_challengers.research_walk(store, (2006, 2007), name)
+    last = store.execute("SELECT game_id FROM games WHERE season = 2007 ORDER BY tipoff_at DESC LIMIT 1").fetchone()[0]
+    store.execute("UPDATE games SET home_score = home_score + 31 WHERE game_id = ?", (last,))
+    store.commit()
+    nfl_challengers.clear_research_cache()
+    again = nfl_challengers.research_walk(store, (2006, 2007), name)
+    assert len(base) == len(again) and base
+    for a, b in zip(base, again):
+        assert (a["game_id"], a["market"], a["probs"], a["line"], a["point_pred"]) == (b["game_id"], b["market"], b["probs"], b["line"], b["point_pred"])
+
+
+def test_nfl_candidates_fit_only_on_earlier_seasons_and_fall_back(store):
+    _research_store(store)
+    recs = nfl_challengers.research_walk(store, (2004, 2006, 2007), "nfl-cand-blend-v1")
+    inc = {(r["game_id"], r["market"]): r for r in nfl_challengers.research_walk(store, (2004, 2006, 2007), "nfl-incumbent")}
+    through = {r["season"]: r["fit_through"] for r in recs if r["market"] == "spread"}
+    assert through[2004] is None and through[2006] == 2005 and through[2007] == 2006
+    assert all(r["probs"] == inc[(r["game_id"], r["market"])]["probs"] for r in recs if r["season"] == 2004 and r["market"] != "winner")
+
+
+def test_nfl_forecast_upcoming_has_no_outcome_logs_forward_reads_and_ignores_later_results(store, tmp_path):
+    _research_store(store)
+    add(store, "nfl:future", 2007, datetime(2008, 1, 5, 18, tzinfo=UTC), "1", "2", status="scheduled")
+    now = "2008-01-05T15:00:00Z"
+    _quote(store, "nfl:future", "total", 41.5, "2008-01-05T14:00:00Z")
+    _quote(store, "nfl:future", "total", 55.5, "2008-01-05T16:00:00Z")      # after `now`
+    recs = nfl_challengers.research_forecast_upcoming(store, now, "nfl-cand-blend-v1")
+    assert {r["game_id"] for r in recs} == {"nfl:future"} and all(r["outcome"] is None for r in recs)
+    t = [r for r in recs if r["market"] == "total"][0]
+    assert t["line"] == 41.5 and t["line_source"] == "bookmaker" and t["forecast_cutoff"] == now
+    # a 2026 game needs the sealed, logged read of the reserved seasons
+    add(store, "nfl:fwd", 2026, datetime(2026, 12, 5, 18, tzinfo=UTC), "1", "2", status="scheduled")
+    with pytest.raises(nfl_eval.TestSeasonsLocked):
+        nfl_challengers.research_forecast_upcoming(store, "2026-12-05T12:00:00Z", "nfl-incumbent")
+    sealed = nfl_eval.seal_choice({"model": "constant", "config": {}, "calibration": {"accepted": False}})
+    log = tmp_path / "eval" / "nfl_test_access.jsonl"
+    out = nfl_challengers.research_forecast_upcoming(store, "2026-12-05T12:00:00Z", "nfl-incumbent", sealed=sealed, access_log=log)
+    assert {r["game_id"] for r in out} == {"nfl:fwd"}
+    assert len(log.read_text().splitlines()) == 1
+
+
+def test_nfl_validate_data_reports_identity_scores_and_coverage(store):
+    _research_store(store)
+    ok = nfl_challengers.validate_data(store)
+    assert ok["ok"] and ok["fixtures"]["duplicate_game_ids"] == 0 and ok["fixtures"]["duplicate_games"] == 0
+    assert ok["finals"]["missing_scores"] == 0 and ok["finals"]["tied"] > 0
+    assert ok["coverage"]["2006"]["games"] == 96 and ok["coverage"]["2006"]["quotes"]["spread"] == 0
+    assert ok["orientation"]["team_game_stats_rows"] == 0           # nothing to cross-check the stored home/away against
+    add(store, "nfl:dup", 2006, datetime(2006, 9, 10, 17, tzinfo=UTC), "1", "4", 20, 10)
+    add(store, "nfl:dup2", 2006, datetime(2006, 9, 10, 17, tzinfo=UTC), "1", "4", 20, 10)
+    bad = nfl_challengers.validate_data(store)
+    assert not bad["ok"] and bad["fixtures"]["duplicate_games"] >= 1
