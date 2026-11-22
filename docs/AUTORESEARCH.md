@@ -252,6 +252,22 @@ search), `refused` (reason: no adapter yet, live data directory, ...), `failed` 
 evaluated markets, blockers (including every `unsupported` market and its reason), queue and next run. `GET
 /api/research/autoresearch` returns them under `v3`; the Autoresearch card shows them.
 
+### Integration notes (five-sport run)
+- `periods` may be lists or `{"seasons": [...], ...}` (Soccer); `normalise_adapter` converts. `validate_data(conn)` may return a list of
+  problems or a report dict whose `issues` are the problems (`ok: false` alone also refuses); the report's ok/issues/notes show as
+  `data_validation`.
+- `push_scoring: "conditional"` (Soccer): line markets are scored on a and b conditional on no push (probabilities renormalised, pushed
+  games unscored), as the adapter's `research_compare`; default scores the push probability as a third outcome (the NBA/NHL study tables).
+  `evaluate_records` also returns `suite` (per model, mean over games of the per-game mean over markets): on Soccer's validation seasons
+  it equals `soccer_markets_eval.research_compare` exactly (difference 0.0 for log loss and Brier, 6097 games, three models).
+- `IDENTITY.json` (app/backup.py): `stores.<sport>.coverage.last_final` is the cutoff (a date-only value covers that day).
+- `daily --sport <s>` (the CLI the wrapper calls) always runs v3; for nba/nhl it then runs the v2 workspace queue. The line is
+  `sport-outcome: <sport> <combined> v3=<o> [v2=<o>]`; combined = evaluated if either evaluated, else failed, else skipped, else refused
+  when both refused, else no_candidates. The daily5 report carries `combined` and `v2`.
+- Forward API for the scheduled driver (the driver imports this module, never the reverse): `autoresearch.record(data_dir, now, sport,
+  candidates=None)` and `autoresearch.grade(data_dir, now, sport)`; both return `{"outcome": evaluated|no_candidates|skipped|failed, ...}`.
+  `record` stores incumbents and baselines too (the pairing reference) and only the named candidates.
+
 ### Holdout
 `holdout_v3` reads the holdout seasons once per protocol and sport, only for candidates kept on search and validation (plus the
 incumbents as the bar), after a confirmation typed at a terminal; the access is logged (`pending`, then `completed` or `failed`)

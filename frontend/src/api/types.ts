@@ -852,7 +852,7 @@ export interface AutoresearchV3Sport {
   queue?: { total: number; done: number; remaining: number; failed: string[]; ran_now: number; next_item: string | null } | null;
   next_run?: string | null; periods?: { search: number[]; validation: number[]; holdout: number[] }; periods_note?: string | null;
   unsupported?: Record<string, string>; evaluation?: Record<string, AutoresearchV3Market>;
-  data_validation?: { ok: boolean; issues: string[]; notes: string[] } | null; data_cutoff?: { last_final: string | null; records_after_cutoff_dropped_now: number } | null; caveats?: string[] | null; forward_candidates?: string[];
+  data_validation?: { ok: boolean; issues: string[]; notes: string[] } | null; data_cutoff?: { last_final: string | null; records_after_cutoff_dropped_now: number } | null; caveats?: Record<string, string> | string[] | null; forward_candidates?: string[];
   models?: Record<string, { role?: string; version?: string }>; markets?: Record<string, { kind?: string; settlement?: string; line_basis?: string | null }>;
 }
 export interface AutoresearchV3 {
