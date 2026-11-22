@@ -80,6 +80,15 @@ def decision_issue() -> Optional[str]:
     return None if decision() else (_load_decision()[1] or "No valid frozen NCAAB decision")
 
 
+# Markets whose live NCAAB record failed validation (chronological check Nov 17-21 2026, 218 settled games): Brier worse than a
+# coin flip's 0.2500 and than DraftKings' no-vig price. Cards still SHOW them, labelled, and card_choice never recommends them.
+# Lifting a block needs new evidence and a reviewed edit here.
+FAILED_VALIDATION = {
+    "spread": "NCAAB spread: Brier 0.2602 vs coin flip 0.2500 (Nov 17-21)",
+    "total": "NCAAB total: Brier 0.2595 vs coin flip 0.2500 (Nov 17-21)",
+}
+
+
 def card_issue() -> Optional[str]:
     """Why NCAAB Telegram cards must not be produced (the way NFL's activation gate works), or None: a store must exist in
     this data directory and the sealed decision must be valid."""

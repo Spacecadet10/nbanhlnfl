@@ -571,11 +571,11 @@ def card_choice(sport, picks):
         if market in OFF_TICKETS and sport != 'soccer':
             blocked.append('Team totals are excluded from selection.')
             continue
-        gate = p.get('ncaab_gate') if sport == 'ncaab' else None
-        if gate is not None and not gate.get('qualifies'):     # app/ncaab_gate.py: only a qualifying pick can be recommended
-            from app.ncaab_gate import POLICY
-            blocked.append(f'No NCAAB pick qualifies under policy {POLICY}.')
-            continue
+        if sport == 'ncaab':
+            from app.ncaab_app import FAILED_VALIDATION
+            if market in FAILED_VALIDATION:     # shown on the card, labelled; never the recommended pick. Colour plays no part here.
+                blocked.append('NCAAB spread and total failed validation; only validated markets can be recommended.')
+                continue
         sel = p.get('ncaab_selection') if sport == 'ncaab' else None
         if sel and market != sel['market']:     # the card shows the market that put the game in the day's top 4
             continue
@@ -631,14 +631,10 @@ def card_choice(sport, picks):
             team = p['pick_label'].removesuffix(' win')
             if any(x['market'] == 'spread' and ' +' in x['pick_label'] and not x['pick_label'].startswith(team+' ') for x in picks):
                 support.append('Opposing spread pick supports the winner context.')
-        if gate is not None:
-            from app.ncaab_gate import summary
-            support.insert(0, summary(gate))
         # Compare warnings first, then the support group, then likelihood. No sum of correlated votes. Note: for the other
         # sports the third key is the SPORTSBOOK probability, i.e. among supported, warning-free picks the market the book
-        # makes the biggest favourite wins (docs/preregistration/ncaab-colour-gate-2026-11-22.md). NCAAB gated picks rank by expected value instead.
-        rank = ((not warnings, gate['ev']) if gate is not None else
-                (not warnings, bool(support), book if book is not None else app, exact_win, app))
+        # makes the biggest favourite wins. The bucket colour (threshold_overview.bucket_colour) is display only: never a rank key.
+        rank = (not warnings, bool(support), book if book is not None else app, exact_win, app)
         candidates.append((rank, p, gap, support, warnings))
     if not candidates:
         return dict(method=CARD_METHOD, pick=None, reason=' '.join(dict.fromkeys(blocked)) or 'No eligible forecast.', assessments=[])
@@ -659,9 +655,7 @@ def card_choice(sport, picks):
     reason = numbers+' '+(support[0] if support else 'Highest available likelihood after context checks.')
     if warnings:
         reason += ' Caution: '+'; '.join(warnings)
-    if chosen.get('ncaab_gate') is not None:
-        pass                    # the gate's summary already states the price and the expected value at it
-    elif (chosen.get('book_quote') or {}).get('decimal') is not None:
+    if (chosen.get('book_quote') or {}).get('decimal') is not None:
         quote = chosen['book_quote']
         reason += f" Stored {quote['provider']} return {quote['decimal']:.2f}x; no proven price edge."
     elif (chosen.get('quote_check') or {}).get('price_now') is None:

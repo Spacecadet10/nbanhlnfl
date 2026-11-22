@@ -157,18 +157,6 @@ def nhl_injury_capture_enabled() -> bool:
 
 
 def ncaab_cards_enabled() -> bool:
-    """Whether the NCAAB card path runs at all. Since the colour release (owner brief Nov 21 2026) it runs by default and only
-    picks that pass the gate (app/ncaab_gate.py, policy ncaab-colour-gate-v1) are sent; NBA_NCAAB_CARDS=0 is the kill switch
-    that turns every NCAAB card off. NCAAB forecasts are recorded and graded either way."""
+    """Whether the NCAAB card path runs at all. It runs by default and shows every supported market (no gate; colour never hides
+    a pick, owner brief Nov 22 2026); NBA_NCAAB_CARDS=0 is the kill switch that turns every NCAAB card off. NCAAB forecasts are recorded and graded either way."""
     return os.environ.get("NBA_NCAAB_CARDS", "1") != "0"
-
-
-def card_colours_enabled() -> bool:
-    """Whether cards colour each market's model % against its class threshold (app/card_threshold.py). Display only.
-    Off unless NBA_CARD_COLOURS=1 (owner brief Nov 21 2026: flag off = today's plain card)."""
-    return os.environ.get("NBA_CARD_COLOURS", "0") == "1"
-
-
-def card_thresholds_path() -> Path:
-    """The append-only store of the daily card thresholds (one row per class, or qualifying sport x class, per day)."""
-    return data_dir() / "card_thresholds.sqlite"

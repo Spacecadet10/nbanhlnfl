@@ -68,6 +68,42 @@ def displayed_percentage(probability: float) -> str:
     return str(Decimal.from_float(probability * 100).quantize(Decimal('0.1'), rounding=ROUND_HALF_UP))
 
 
+COLOUR_RULE = 'bucket-record-v1'
+GREEN_MIN_PERCENT = (3, 4)    # green needs wins/(wins+losses) >= 3/4, compared in integers
+
+
+def bucket_colour(wins: int, losses: int) -> str:
+    """THE colour of one exact-% bucket, from its own settled record only (owner brief Nov 22; frontend twin: same rule).
+    green: at least one win and win rate >= 75%; red: losses exceed wins; else neutral (also no history). Integers, no floats.
+    Pushes and voids are not passed in. It describes a past record; it is not a probability cutoff and not profitability."""
+    if wins >= 1 and 4 * wins >= 3 * (wins + losses):
+        return 'green'
+    return 'red' if losses > wins else 'neutral'
+
+
+def _plural(n: int, word: str) -> str:
+    return f"{n} {word}" + ('' if n == 1 else 'es' if word.endswith('sh') else 's')
+
+
+def record_line(percentage: str, wins: int, losses: int, pushes: int, settled: int, voids: int = 0) -> str:
+    """The one wording of a bucket's record, shared by Telegram and the web: '57.3% · this exact % has gone 8–1 (89%) · 1 push'."""
+    extra = (f" · {_plural(pushes, 'push')}" if pushes else '') + (f" · {_plural(voids, 'void')}" if voids else '')
+    if not settled:
+        return f"{percentage}% · no settled history at this exact %{extra}"
+    rate = int(Decimal(wins * 100) / Decimal(settled) + Decimal('0.5'))     # half up, whole percent
+    small = f" · small sample ({settled} settled)" if settled < MIN_LIVE_GRADED else ''
+    return f"{percentage}% · this exact % has gone {wins}–{losses} ({rate}%){extra}{small}"
+
+
+COLOUR_LEGEND = ("Colour = this exact % bucket's own settled record at this sport, market, direction and model: green = at least one "
+                 "win and 75% or more won; red = more losses than wins; no colour otherwise. Pushes and voids are not counted. "
+                 "A historical record, not a profit guarantee.")
+
+
+def _voids(grades) -> int:
+    return grades['void'] + grades['cancelled'] + grades['canceled']
+
+
 def _percentage_key(rec: dict) -> tuple:
     return (displayed_percentage(rec['confidence']), rec['side'], rec['source'], rec['model_version'], rec['line_source'])
 
@@ -126,6 +162,7 @@ def history_record(rec: dict, game_id: str, history_index: Optional[dict]) -> Op
     grades = Counter(grade for gid, grade in history_index.get(key, {}).items() if gid != game_id)
     wins, losses = grades['win'], grades['loss']
     return {'source': HISTORY_SOURCE, 'line_source': rec['line_source'], 'wins': wins, 'losses': losses,
+            'pushes': grades['push'], 'voids': _voids(grades), 'colour': bucket_colour(wins, losses),
             'settled': wins + losses, 'small_sample': wins + losses < MIN_LIVE_GRADED}
 
 
@@ -184,7 +221,8 @@ def telegram_record(sport: str, market: str, rec: dict, game_id: str) -> Optiona
     wins, losses = grades['win'], grades['loss']
     return {'source': TELEGRAM_SOURCE, 'label': TELEGRAM_LABEL, 'period': cache['periods'].get(sport) or cache['period'],
             'model_version_known': False, 'line_source': rec['line_source'], 'wins': wins,
-            'losses': losses, 'pushes': grades['push'], 'settled': wins + losses, 'small_sample': wins + losses < MIN_LIVE_GRADED}
+            'losses': losses, 'pushes': grades['push'], 'voids': _voids(grades), 'colour': bucket_colour(wins, losses),
+            'settled': wins + losses, 'small_sample': wins + losses < MIN_LIVE_GRADED}
 
 
 def live_since(conn) -> Optional[str]:
@@ -231,7 +269,8 @@ def percentage_record(sport: str, market: str, rec: dict, game_id: str, index: d
             'percentage': displayed_percentage(rec['confidence']), 'side': rec['side'],
             'direction': rec['direction'] if sport == 'soccer' else markets.SIDE_LABELS[market][('a', 'mid', 'b').index(rec['side'])],
             'source': rec['source'], 'model_version': rec['model_version'], 'line_source': rec['line_source'],
-            'state': state, 'wins': wins, 'losses': losses, 'pushes': grades['push'], 'settled': settled,
+            'state': state, 'colour': bucket_colour(wins, losses), 'colour_rule': COLOUR_RULE,
+            'wins': wins, 'losses': losses, 'pushes': grades['push'], 'voids': _voids(grades), 'settled': settled,
             'win_rate': wins / settled if settled else None, 'loss_rate': losses / settled if settled else None,
             'ci95': wilson(wins, settled), 'small_sample': settled < MIN_LIVE_GRADED,
             'rank': rank, 'ranked': len(ranking),

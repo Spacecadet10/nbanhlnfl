@@ -360,3 +360,73 @@ def test_every_ranked_pick_carries_the_card_contract_fields(ready, client, monke
         assert b["probability"] == pytest.approx(p["probability"]) and b["side"] == p["side"] and b["model_version"] == p["model_version"]
         h = p["percentage_history"]
         assert h["pushes"] == 0 and h["coverage"]["history_note"] and "telegram_period" in h["coverage"]
+
+
+# --- Bucket colouring (owner brief Nov 22): each exact-% bucket is coloured by its OWN W/L record -------------------------
+@pytest.mark.parametrize('w,l,colour', [(1, 0, 'green'), (2, 0, 'green'), (8, 1, 'green'), (3, 1, 'green'), (3, 2, 'neutral'),
+                                        (0, 2, 'red'), (1, 1, 'neutral'), (2, 1, 'neutral'), (0, 0, 'neutral'), (0, 1, 'red'),
+                                        (6, 2, 'green'), (5, 2, 'neutral'), (1, 2, 'red')])
+def test_bucket_colour_rule(w, l, colour):
+    assert to.COLOUR_RULE == 'bucket-record-v1'
+    assert to.bucket_colour(w, l) == colour
+
+
+def _colour_of(grades, conf=.5731, **kw):
+    target = percentage_item('self', 'pending', conf=conf)
+    items = [percentage_item(f'g{i}', g, conf) for i, g in enumerate(grades)]
+    return to.percentage_record('nba', 'total', target[1]['record'], 'self', to.percentage_index(items, AFTER), AFTER, **kw)
+
+
+def test_record_colour_uses_the_live_record_and_excludes_pushes_and_voids_from_the_denominator():
+    r = _colour_of(['win'] * 3 + ['loss'] + ['push'] * 4 + ['void'] * 2)
+    assert (r['wins'], r['losses'], r['pushes'], r['voids'], r['settled']) == (3, 1, 4, 2, 4)
+    assert r['colour'] == 'green' and r['colour_rule'] == 'bucket-record-v1'
+    only_pushes = _colour_of(['push', 'push', 'void'])
+    assert only_pushes['colour'] == 'neutral' and only_pushes['settled'] == 0 and only_pushes['pushes'] == 2
+    assert _colour_of([])['colour'] == 'neutral'
+
+
+def test_a_newly_graded_game_moves_the_bucket_colour():
+    assert _colour_of(['win', 'win', 'loss'])['colour'] == 'neutral'          # 2-1
+    assert _colour_of(['win', 'win', 'loss', 'win'])['colour'] == 'green'     # 3-1
+
+
+def test_same_game_graded_twice_counts_once():
+    target = percentage_item('self', 'pending', conf=.5731)
+    idx = to.percentage_index([percentage_item('a', 'loss', .5731), percentage_item('a', 'win', .5731)], AFTER)
+    r = to.percentage_record('nba', 'total', target[1]['record'], 'self', idx, AFTER)
+    assert (r['wins'], r['losses']) == (1, 0)
+
+
+def test_bucket_colour_keeps_57_3_and_57_4_apart_including_a_binary_float_tie():
+    wins = to.percentage_index([percentage_item('a', 'win', .5731), percentage_item('b', 'loss', .5739)], AFTER)
+    low = percentage_item('self', 'pending', conf=.5731)[1]['record']
+    high = percentage_item('self', 'pending', conf=.5739)[1]['record']
+    assert to.percentage_record('nba', 'total', low, 'self', wins, AFTER)['colour'] == 'green'
+    assert to.percentage_record('nba', 'total', high, 'self', wins, AFTER)['colour'] == 'red'
+    assert to.displayed_percentage(.5735) == '57.4'      # the JS toFixed(1) result of the float 57.35000000000001
+
+
+def test_recovered_telegram_record_is_coloured_on_its_own_and_never_merged(tmp_path, monkeypatch):
+    _telegram_file(tmp_path, monkeypatch, [_tg('t1', 'loss', pct='57.3'), _tg('t2', 'loss', pct='57.3'), _tg('t3', 'void', pct='57.3')])
+    r = _colour_of(['win'], conf=.5731, )
+    r2 = _colour_of(['win', 'win'])
+    t = r['telegram']
+    assert (t['wins'], t['losses'], t['voids'], t['colour'], t['model_version_known'], t['label']) == \
+        (0, 2, 1, 'red', False, 'Recovered Telegram cards')
+    assert r['colour'] == 'green' and r2['wins'] == 2 and r['wins'] == 1      # the headline stays the live record
+
+
+def test_history_subrecord_has_its_own_colour_and_voids():
+    rec = percentage_item('self', 'pending', conf=.5731)[1]['record']
+    key = ('57.3', 'a', to.HISTORY_SOURCE, 'test-model', 'bookmaker')
+    h = to.percentage_record('nba', 'total', rec, 'self', {}, AFTER, history_index={key: {'a': 'win', 'b': 'win', 'c': 'void'}})['history']
+    assert (h['wins'], h['voids'], h['colour']) == (2, 1, 'green')
+
+
+def test_record_line_text_is_shared_by_telegram_and_web():
+    assert to.record_line('57.3', 8, 1, 1, 9) == '57.3% · this exact % has gone 8–1 (89%) · 1 push · small sample (9 settled)'
+    assert to.record_line('57.3', 40, 10, 0, 50) == '57.3% · this exact % has gone 40–10 (80%)'
+    assert to.record_line('57.3', 0, 0, 0, 0) == '57.3% · no settled history at this exact %'
+    assert to.record_line('57.3', 0, 0, 2, 0) == '57.3% · no settled history at this exact % · 2 pushes'
+    assert to.record_line('57.3', 0, 2, 0, 2, voids=1) == '57.3% · this exact % has gone 0–2 (0%) · 1 void · small sample (2 settled)'

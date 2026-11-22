@@ -1,16 +1,13 @@
-"""Card colouring on the Telegram card (text + PNG): flag off = byte-identical card, flag on = marker, struck-through red,
-colour key. The delivery key never moves (no resend). No network, no real bot: nothing is sent."""
+"""Card colouring on the Telegram card (text + PNG): each exact-% bucket is coloured by its OWN settled record
+(threshold_overview.bucket_colour), never by a probability cutoff. Colour never removes a market or a recommendation; the
+delivery key never moves. No network, no real bot: nothing is sent."""
 import io
-import sqlite3
-from decimal import Decimal
 
 import pytest
 from PIL import Image
 
-from app import card_threshold as ct, telegram as tg, telegram_card
+from app import telegram as tg, telegram_card
 from tests.test_card_block import card, pick
-
-DAY = '2026-11-02'
 
 
 @pytest.fixture(autouse=True)
@@ -20,123 +17,113 @@ def isolated(tmp_path, monkeypatch):
     return tmp_path
 
 
-def seed_lines(tmp_path, **lines):
-    """A threshold store holding `lines` ({scope: T}) for DAY, written as the daily job would (state 'set')."""
-    conn = ct.connect(tmp_path / 'card_thresholds.sqlite')
-    with conn:
-        for scope, t in lines.items():
-            cls, sport = (scope.split(':')[1], scope.split(':')[0]) if ':' in scope else (scope, None)
-            conn.execute("INSERT INTO card_thresholds (day, scope, class, sport, threshold, n, window, inputs_hash, rule_version, "
-                         "state, generated_at) VALUES (?, ?, ?, ?, ?, 250, 400, 'h', 'card-threshold-v1', 'set', ?)",
-                         (DAY, scope, cls, sport, t, DAY + 'T15:00:00Z'))
-    conn.close()
+def with_record(p, wins, losses, pushes=0, voids=0):
+    h = p['percentage_history']
+    h.update(wins=wins, losses=losses, settled=wins + losses, pushes=pushes, voids=voids, small_sample=wins + losses < 30)
+    return p
 
 
-def two_markets():
-    winner = pick('nba', forecast_id=2, market='winner', market_title='Winner', pick_label='ORL win', probability=0.62,
-                  percentage_history={'sport': 'nba', 'market': 'winner', 'model_version': 'm', 'source': 'primary_recorded',
-                                      'percentage': '62.0', 'wins': 1, 'losses': 0, 'settled': 1, 'small_sample': True,
-                                      'line_source': 'none'})
-    spread = pick('nba')                                     # 57.1% on a bookmaker line
-    return [winner, spread]
+def text_for(wins, losses, **kw):
+    return tg.message_batches(card('nba', [with_record(pick('nba'), wins, losses, **kw)]), '123')[0][1]
 
 
-def test_flag_off_card_is_byte_identical_and_same_key(isolated, monkeypatch):
-    seed_lines(isolated, W='55.0', L='60.0')
-    monkeypatch.delenv('NBA_CARD_COLOURS', raising=False)
-    off_key, off_text = tg.message_batches(card('nba', two_markets()), '123')[0][:2]
-    assert '🟢' not in off_text and '🔴' not in off_text and 'Colour key' not in off_text and '<s>' not in off_text
-    monkeypatch.setenv('NBA_CARD_COLOURS', '1')
-    on_key, on_text = tg.message_batches(card('nba', two_markets()), '123')[0][:2]
-    assert on_key == off_key                                  # same delivery key: a coloured card never resends
-    assert on_text != off_text
+@pytest.mark.parametrize('wins,losses,mark', [(1, 0, '🟢'), (2, 0, '🟢'), (8, 1, '🟢'), (3, 1, '🟢'), (3, 2, None), (1, 1, None),
+                                              (2, 1, None), (0, 0, None), (0, 2, 'red'), (1, 2, 'red')])
+def test_block_colour_is_the_buckets_own_record(wins, losses, mark):
+    text = text_for(wins, losses)
+    if mark == '🟢':
+        assert '<b>Model 57.1%</b> 🟢 · ' in text and '🔴' not in text.split('Colour key')[0]
+    elif mark == 'red':
+        assert '<b><s>Model 57.1%</s></b> 🔴 · ' in text and '🟢' not in text.split('Colour key')[0]
+    else:
+        assert '<b>Model 57.1%</b> · ' in text and '🟢' not in text and '🔴' not in text.split('Colour key')[0]
 
 
-def test_flag_on_colours_each_market_against_its_own_class(isolated, monkeypatch):
-    seed_lines(isolated, W='55.0', L='60.0')
-    monkeypatch.setenv('NBA_CARD_COLOURS', '1')
-    text = tg.message_batches(card('nba', two_markets()), '123')[0][1]
-    assert '<b>Model 62.0%</b> 🟢' in text                    # winner 62.0 >= W 55.0
-    assert '<b><s>Model 57.1%</s></b> 🔴' in text             # spread 57.1 < L 60.0: struck through, still shown
-    assert 'Colour key · Winner markets: Green = 55.0% and above · this class has beaten the price from here (n=250 priced, set Nov 2)' in text
-    assert 'Colour key · Line markets: Green = 60.0% and above' in text
-    png = telegram_card.render_card(text)                     # the preview renders; nothing is sent
-    assert Image.open(io.BytesIO(png)).size[0] == 1080
+def test_record_line_wording_is_the_shared_one_with_pushes_voids_and_small_sample():
+    text = text_for(8, 1, pushes=1)
+    assert '<b>Model 57.1%</b> 🟢 · this exact % has gone 8–1 (89%) · 1 push · small sample (9 settled)' in text
+    assert '<b>Model 57.1%</b> · no settled history at this exact %' in text_for(0, 0)
+    assert '· 2 voids' in text_for(0, 0, voids=2) and '· 1 void' in text_for(3, 2, voids=1)
+    big = text_for(40, 10)
+    assert 'has gone 40–10 (80%)' in big and 'small sample' not in big.split('Colour key')[0]
 
 
-def test_flag_on_without_any_threshold_colours_nothing(isolated, monkeypatch):
-    monkeypatch.setenv('NBA_CARD_COLOURS', '1')
-    text = tg.message_batches(card('nba', two_markets()), '123')[0][1]
-    assert '🟢' not in text and '🔴' not in text
-    # colour release (Nov 21): the card states the honest status, one line per class shown, and colours nothing
-    assert 'Colour key · Winner markets: No threshold stored yet · not coloured' in text
-    assert 'Colour key · Line markets: No threshold stored yet · not coloured' in text
+def test_colour_is_the_same_at_every_probability_and_never_a_cutoff():
+    low, high = pick('nba', probability=0.521), pick('nba', probability=0.931)
+    low['percentage_history'].update(percentage='52.1')
+    high['percentage_history'].update(percentage='93.1')
+    with_record(low, 2, 0)
+    with_record(high, 0, 2)
+    text = tg.message_batches(card('nba', [low]), '123')[0][1]
+    assert '<b>Model 52.1%</b> 🟢' in text                                 # a 52% bucket that has won is green
+    text = tg.message_batches(card('nba', [high]), '123')[0][1]
+    assert '<b><s>Model 93.1%</s></b> 🔴' in text                          # a 93% bucket that has lost is red
+
+
+def test_legend_says_historical_record_not_profit_guarantee_and_never_claims_profit():
+    text = text_for(2, 0)
+    key = next(line for line in text.split('\n') if line.startswith('Colour key · '))
+    assert 'at least one win' in key and '75%' in key and 'not a profit guarantee' in key
+    assert 'proven' not in text.lower() and 'profitable' not in text.lower()
+    assert 'Colour key' not in tg.message_batches(card('nba', [with_record(pick('nba'), 3, 2)]), '123')[0][1]   # nothing coloured
+
+
+def test_recovered_and_recomputed_lines_have_their_own_colour_and_never_the_headline():
+    p = with_record(pick('nba'), 3, 2)                                      # live 3-2: neutral
+    p['percentage_history'].update(
+        telegram={'source': 'telegram_cards', 'label': 'Recovered Telegram cards', 'period': {'from': '2026-11-02', 'to': '2026-11-14'},
+                  'model_version_known': False, 'line_source': 'bookmaker', 'wins': 0, 'losses': 2, 'pushes': 0, 'voids': 1,
+                  'colour': 'red', 'settled': 2, 'small_sample': True},
+        history={'source': 'history_recomputed', 'line_source': 'bookmaker', 'wins': 4, 'losses': 0, 'pushes': 0, 'voids': 0,
+                 'colour': 'green', 'settled': 4, 'small_sample': True})
+    text = tg.message_batches(card('nba', [p]), '123')[0][1]
+    assert '<b>Model 57.1%</b> · this exact % has gone 3–2' in text         # headline: live record only, neutral
+    assert 'Recovered Telegram cards 11-02 to 11-14: 0W–2L · 1 void (2 settled) · Small sample. · red record · model version not recorded' in text
+    assert 'Past seasons 2024-26, recomputed, model line: 4W–0L · Small sample. · green record' in text
+
+
+def test_colour_never_removes_a_market_or_the_recommendation():
+    losing = with_record(pick('nba'), 0, 3)                                 # red bucket, and the only (strong) pick
+    text = tg.message_batches(card('nba', [losing]), '123')[0][1]
+    assert '<b>Recommended pick</b>\n<b>ORL -8.5</b>' in text and '<b><s>Model 57.1%</s></b> 🔴' in text
+    ctx = tg.message_batches(card('nba', [losing]), '123', context_selection=True)[0][1]
+    assert '<b>Point spread</b>' in ctx
+
+
+def test_delivery_key_ignores_colour_only_changes():
+    a = tg.message_batches(card('nba', [with_record(pick('nba'), 3, 2)]), '123')[0][0]
+    b = tg.message_batches(card('nba', [with_record(pick('nba'), 8, 2)]), '123')[0][0]
+    assert a == b
+
+
+def test_png_draws_green_and_red_badges_from_the_same_marks():
+    for wins, losses, ink in ((2, 0, (0x16, 0x83, 0x2C)), (0, 2, (0xC5, 0x1D, 0x35))):
+        img = Image.open(io.BytesIO(telegram_card.render_card(text_for(wins, losses)))).convert('RGB')
+        colours = {img.getpixel((x, y)) for x in range(0, img.width, 3) for y in range(0, img.height, 3)}
+        assert any(all(abs(a - b) < 12 for a, b in zip(c, ink)) for c in colours)
+    neutral = Image.open(io.BytesIO(telegram_card.render_card(text_for(3, 2)))).convert('RGB')
+    cs = {neutral.getpixel((x, y)) for x in range(0, neutral.width, 3) for y in range(0, neutral.height, 3)}
+    assert not any(all(abs(a - b) < 6 for a, b in zip(c, (0xC5, 0x1D, 0x35))) for c in cs)
+
+
+def test_recommended_panel_repeats_the_same_colour():
+    p = with_record(pick('nba', market_prob=0.55), 2, 0)
+    text = tg.message_batches(card('nba', [p]), '123')[0][1]
+    assert 'App 57.1% 🟢 · Sportsbook 55.0%' in text
+    with_record(p, 0, 2)
+    text = tg.message_batches(card('nba', [p]), '123')[0][1]
+    assert 'App <s>57.1%</s> 🔴 · Sportsbook 55.0%' in text and '<b><s>Model 57.1%</s></b> 🔴' in text
     assert telegram_card.render_card(text).startswith(b'\x89PNG')
-
-
-def test_model_line_unpriced_market_gets_no_colour(isolated, monkeypatch):
-    seed_lines(isolated, W='55.0', L='50.0')
-    monkeypatch.setenv('NBA_CARD_COLOURS', '1')
-    tt = pick('nba', forecast_id=3, market='team_total_home', market_title='Home team points', pick_label='ORL over 110.5',
-              probability=0.51, percentage_history={'sport': 'nba', 'market': 'team_total_home', 'model_version': 'm',
-                                                    'source': 'primary_recorded', 'percentage': '51.0', 'wins': 0, 'losses': 0,
-                                                    'settled': 0, 'small_sample': True, 'line_source': 'model'})
-    text = tg.message_batches(card('nba', [tt]), '123')[0][1]
-    assert '<b>Model 51.0%</b> ·' in text and '🟢' not in text and '🔴' not in text and 'Colour key' not in text
-
-
-def test_the_png_draws_the_red_badge_struck_through(isolated, monkeypatch):
-    seed_lines(isolated, W='55.0', L='60.0')
-    monkeypatch.setenv('NBA_CARD_COLOURS', '1')
-    text = tg.message_batches(card('nba', two_markets()), '123')[0][1]
-    img = Image.open(io.BytesIO(telegram_card.render_card(text))).convert('RGB')
-    colours = {img.getpixel((x, y)) for x in range(0, img.width, 3) for y in range(0, img.height, 3)}
-    near = lambda c, ref: all(abs(a - b) < 12 for a, b in zip(c, ref))
-    assert any(near(c, (0x16, 0x83, 0x2C)) for c in colours)          # green ink
-    assert any(near(c, (0xC5, 0x1D, 0x35)) for c in colours)          # red ink (badge text and strike line)
-
-
-def test_recommended_panel_repeats_the_same_colour(isolated, monkeypatch):
-    seed_lines(isolated, W='55.0', L='60.0')
-    monkeypatch.setenv('NBA_CARD_COLOURS', '1')
-    picks = two_markets()
-    picks[0].update(strong=True, game_rank=1, market_prob=0.55)       # the winner (62.0%, green) is the recommended pick
-    picks[1].update(strong=False, game_rank=2)
-    text = tg.message_batches(card('nba', picks), '123')[0][1]
-    assert 'App 62.0% 🟢 · Sportsbook 55.0%' in text
-    picks[0]['probability'] = 0.54                                     # below W 55.0: red, struck, in both places
-    picks[0]['percentage_history']['percentage'] = '54.0'
-    text = tg.message_batches(card('nba', picks), '123')[0][1]
-    assert 'App <s>54.0%</s> 🔴 · Sportsbook 55.0%' in text and '<b><s>Model 54.0%</s></b> 🔴' in text
-    assert telegram_card.render_card(text).startswith(b'\x89PNG')
-
-
-def test_recommended_panel_unchanged_with_flag_off(isolated, monkeypatch):
-    monkeypatch.delenv('NBA_CARD_COLOURS', raising=False)
-    picks = two_markets()
-    picks[0].update(strong=True, game_rank=1, market_prob=0.55)
-    picks[1].update(strong=False, game_rank=2)
-    text = tg.message_batches(card('nba', picks), '123')[0][1]
-    assert 'App 62.0% · Sportsbook 55.0%' in text
-
-
-def test_status_key_is_drawn_neutral_and_a_green_line_in_green():
-    # colour release (Nov 21): a 'not coloured' status must not look like a green qualification on the image
-    assert telegram_card.key_fill('Winner markets: No threshold stored yet · not coloured') != telegram_card.GREEN
-    assert telegram_card.key_fill('Winner markets: Green = 55.0% and above · this class has beaten the price') == telegram_card.GREEN
 
 
 def test_withdrawal_parser_reads_red_and_green_blocks():
-    # review: the 'Pick withdrawn' update must still find the market title / pick / % when the block is coloured
     for model in ('<b><s>Model 57.1%</s></b> 🔴 · 0W–0L (0 settled)', '<b>Model 62.0%</b> 🟢 · 1W–0L (1 settled)',
                   '<b>Model 62.0%</b> · 1W–0L (1 settled)'):
         text = '\n'.join(['<b>Point spread</b>', 'ORL -3.5 · bookmaker line', model])
         assert tg._blocks(text) and tg._blocks(text)[0][0] == 'Point spread' and tg._blocks(text)[0][2] in ('57.1', '62.0')
 
 
-def test_compact_card_drops_colour_key_lines(isolated, monkeypatch):
-    seed_lines(isolated, W='55.0', L='60.0')
-    monkeypatch.setenv('NBA_CARD_COLOURS', '1')
-    text = tg.format_batch(card('nba', two_markets()), '123', card('nba', two_markets())['picks'][0]['game_id'],
-                           two_markets(), compact=True)[1]
-    assert 'Colour key' not in text and '🟢' in text            # markers stay; the optional key lines go before any refusal
+def test_compact_card_drops_the_legend_but_keeps_the_marks():
+    p = with_record(pick('nba'), 2, 0)
+    text = tg.format_batch(card('nba', [p]), '123', p['game_id'], [p], compact=True)[1]
+    assert 'Colour key' not in text and '🟢' in text

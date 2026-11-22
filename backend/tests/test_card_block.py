@@ -55,7 +55,7 @@ def test_every_sport_shows_the_same_items(sport):
                                    'published': {'forecast_id': 5, 'side': 'a', 'line': -9.5, 'probability': 0.52, 'grade': 'win'}}),
                 pushes=2, telegram=TELEGRAM)
     text = text_of(card(sport, [p]))
-    assert '<b>Model 57.1%</b> · 3W–1L · 2 push (4 settled)' in text
+    assert '<b>Model 57.1%</b> 🟢 · this exact % has gone 3–1 (75%) · 2 pushes · small sample (4 settled)' in text
     assert ('Sportsbook quote: DraftKings -110/-110 at -8.5 · no-vig 50.4% · gap +6.7 pts · underpriced · quote 02:29 PM EST') in text
     assert 'Recovered Telegram cards 11-02 to 11-14: 3W–2L · 1 push (6 settled) · model version not recorded' in text
     assert 'Record uses the latest pregame forecast (#7, 02:30 PM EST); 2 earlier kept for audit' in text
@@ -83,10 +83,10 @@ def test_model_line_has_its_own_reason():
 def test_no_settled_history_and_repeated_percentage_wording():
     tg0 = {**TELEGRAM, 'wins': 0, 'losses': 0, 'pushes': 0, 'settled': 0}
     text = text_of(card('nba', [history(pick(), wins=0, losses=0, settled=0, telegram=tg0)]))
-    assert '0W–0L (0 settled)' in text and 'No settled matching examples.' in text
+    assert 'no settled history at this exact %' in text and 'No settled matching examples.' in text
     assert 'none settled at this exact %' in text
     rep = text_of(card('nba', [history(pick(), wins=5, losses=5, settled=10, small_sample=False, telegram=TELEGRAM)]))
-    assert '5W–5L (10 settled)' in rep
+    assert 'has gone 5–5 (50%) · small sample (10 settled)' in rep
 
 
 def test_ncaab_has_no_recovered_telegram_history_and_says_when_recording_began():
@@ -109,7 +109,7 @@ def test_soccer_dnb_basis_and_pushes_use_the_same_block():
                 market='draw_no_bet', percentage='60.0', pushes=4, telegram={**TELEGRAM, 'line_source': 'none'}, line_source='none')
     p['strong'] = False
     text = text_of(card('soccer', [p]), context_selection=True)
-    assert '3W–1L · 4 push (4 settled)' in text
+    assert '3–1 (75%) · 4 pushes · small sample (4 settled)' in text
     assert ('DraftKings -150/+120 · App DNB win chance, excluding draws: 57.1% · Sportsbook DNB win chance, excluding draws: '
             '50.4% no-vig · gap +6.7 pts · underpriced · quote 02:29 PM EST') in text
     assert ('Model 60.0% = 90-minute win chance (draw possible); exact-% history is bucketed on this 90-minute %') in text
@@ -214,7 +214,7 @@ def test_soccer_delivery_key_is_the_same_with_or_without_the_contract_history():
     old_key = tg.message_batches(card('soccer', [dict(base)]), '123', context_selection=True)[0][0]
     new_key, text = tg.message_batches(card('soccer', [with_history]), '123', context_selection=True)[0]
     assert new_key == old_key
-    assert '1W–3L · 1 push (4 settled)' in text
+    assert '1–3 (25%) · 1 push · small sample (4 settled)' in text
 
 
 # --- verification findings D2-D6 ---------------------------------------------------------------------------------------------

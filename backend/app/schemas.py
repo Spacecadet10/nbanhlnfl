@@ -168,6 +168,9 @@ class PercentageHistorySource(BaseModel):
     line_source: Literal['bookmaker', 'model', 'none']
     wins: int
     losses: int
+    pushes: int = 0
+    voids: int = 0
+    colour: Literal['green', 'red', 'neutral'] = 'neutral'    # threshold_overview.bucket_colour on this record's own counts
     settled: int
     small_sample: bool = False     # settled < threshold_overview.MIN_LIVE_GRADED, as the live record's flag
 
@@ -205,6 +208,8 @@ class PercentageTelegramSource(BaseModel):
     wins: int
     losses: int
     pushes: int = 0
+    voids: int = 0
+    colour: Literal['green', 'red', 'neutral'] = 'neutral'
     settled: int
     small_sample: bool = False
 
@@ -258,9 +263,12 @@ class ForecastPercentageRecord(BaseModel):
     model_version: str
     line_source: Literal['bookmaker', 'model', 'none']
     state: Literal['more_right', 'more_wrong', 'neutral', 'no_history']
+    colour: Literal['green', 'red', 'neutral'] = 'neutral'   # threshold_overview.bucket_colour on THIS (live) record only
+    colour_rule: str = 'bucket-record-v1'
     wins: int
     losses: int
     pushes: int = 0
+    voids: int = 0
     settled: int
     win_rate: Optional[float]
     loss_rate: Optional[float]
