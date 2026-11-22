@@ -79,22 +79,25 @@ def test_a_failed_refused_or_skipped_sport_does_not_stop_the_others_and_is_repor
         "import json, sys, os\nopen(os.environ['FAKE_OUT'], 'a').write(json.dumps(sys.argv[1:]) + '\\n')\n"
         "s = sys.argv[sys.argv.index('--sport') + 1]\n"
         "if s == 'nhl': sys.exit(3)\n"
-        "if s == 'nfl': print('sport-outcome: no_candidates')\n"
-        "if s == 'ncaab': print('{\"trials\": 0}')\n")
+        "if s == 'nfl': print('sport-outcome: nfl no_candidates v3=no_candidates (nothing kept)')\n"
+        "if s == 'ncaab': print('sport-outcome: ncaab evaluated v3=evaluated')\n")
     data = tmp_path / "data"
     data.mkdir()
     import sqlite3
     c = sqlite3.connect(data / "soccer.sqlite")
     c.execute("CREATE TABLE soccer_matches (match_id TEXT PRIMARY KEY, kickoff_at TEXT, status TEXT)")
-    c.execute("INSERT INTO soccer_matches VALUES ('m', ?, 'scheduled')", ((NOW + timedelta(minutes=40)).strftime(FMT),))
+    c.execute("INSERT INTO soccer_matches VALUES ('m', ?, 'scheduled')", ((datetime.now(timezone.utc) + timedelta(minutes=40)).strftime(FMT),))
     c.commit()
     c.close()
     r, calls = run(DAILY, home, tmp_path)
     out = {x.split()[1].split("=")[1]: x.split()[2].split("=")[1] for x in r.stdout.splitlines() if x.startswith("autoresearch-daily: sport=")}
-    assert out == {"nba": "evaluated", "nhl": "failed", "ncaab": "no_candidates", "nfl": "no_candidates", "soccer": "refused"}
+    assert out == {"nba": "evaluated", "nhl": "failed", "ncaab": "evaluated", "nfl": "no_candidates", "soccer": "refused"}
     assert sport_args(calls) == ["nba", "nhl", "ncaab", "nfl"]               # soccer's own 0.75 h window refused it; the others ran
     assert r.returncode == 1 and "failed=1" in r.stdout
     assert state(home)["nhl"][2] == "failed" and state(home)["nhl"][3] == ""   # no success recorded for a failure
+    assert state(home)["nfl"][2] == "no_candidates" and state(home)["nfl"][3] == ""   # no_candidates is not a success
+    assert state(home)["ncaab"][2] == "evaluated" and state(home)["ncaab"][3] == state(home)["ncaab"][1]
+    assert "scored=2 no_candidates=1" in r.stdout
     assert state(home)["soccer"][2] == "refused"
 
 
@@ -493,3 +496,36 @@ def test_agent_template_is_commented_as_requiring_the_owner_budget():
     assert p["WorkingDirectory"] == "/Users/andry/nba-predictor-delivery/backend"
     assert [(d["Weekday"], d["Hour"], d["Minute"]) for d in p["StartCalendarInterval"]] == [(2, 12, 30), (5, 12, 30)]
     assert "requires owner budget file" in path.read_text() and "NOT installed" in path.read_text()
+
+
+def test_the_wrapper_parses_the_real_daily_cli_output_of_app_autoresearch(home, tmp_path):
+    """The child runs the REAL app.autoresearch._daily_cli (only the two protocol runners are stubbed), so the printed
+    `sport-outcome: <sport> <combined> v3=.. [v2=..]` lines are the real format, including nba's v2 part."""
+    on(home)
+    (home / "workspace" / "prepare.py").write_text(f"""
+import argparse, json, os, sys
+from pathlib import Path
+sys.path.insert(0, {str(ROOT / "backend")!r})
+from app import autoresearch as ar
+s = sys.argv[sys.argv.index('--sport') + 1]
+V3 = {{'nba': 'evaluated', 'nhl': 'no_candidates', 'ncaab': 'no_candidates', 'nfl': 'failed', 'soccer': 'refused'}}
+ar.daily_v3 = lambda chosen, root, items, secs: {{'sports': {{c: {{'outcome': V3[c], 'reason': 'why ' + c}} for c in chosen}},
+                                                 'report_file': os.environ['FAKE_REPORT']}}
+ar.daily = lambda *a, **k: {{'trials': [], 'refused': {{}}}}
+ns = argparse.Namespace(sport=[s], exp_root=Path(os.environ['FAKE_REPORT']).parent, workspace=Path('.'), max_trials=ar.BUDGETS['max_trials'],
+                        max_minutes=ar.BUDGETS['max_minutes'], timeout=ar.BUDGETS['trial_timeout_s'])
+sys.exit(ar._daily_cli(ns))
+""")
+    os.environ["FAKE_REPORT"] = str(tmp_path / "report.json")
+    try:
+        r, _ = run(DAILY, home, tmp_path)
+    finally:
+        del os.environ["FAKE_REPORT"]
+    out = {x.split()[1].split("=")[1]: x.split()[2].split("=")[1] for x in r.stdout.splitlines() if x.startswith("autoresearch-daily: sport=")}
+    assert "sport-outcome: nba evaluated v3=evaluated v2=no_candidates" in r.stdout          # the real line, field 3 is the combined outcome
+    assert out == {"nba": "evaluated", "nhl": "no_candidates", "ncaab": "no_candidates", "nfl": "failed", "soccer": "refused"}, r.stdout + r.stderr
+    st = state(home)
+    assert st["nba"][2] == "evaluated" and st["nba"][3] == st["nba"][1]                       # success only for evaluated
+    assert st["nhl"][2] == "no_candidates" and st["nhl"][3] == "" and st["ncaab"][3] == ""
+    assert st["nfl"][2] == "failed" and st["soccer"][2] == "refused" and st["soccer"][3] == ""
+    assert "scored=1 no_candidates=2 refused=1 failed=1" in r.stdout and r.returncode == 1

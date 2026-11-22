@@ -13,7 +13,8 @@
 # next day; sports run in order of their last success (never first), so a refused sport goes first next time.
 # Every sport prints one line `autoresearch-daily: sport=<s> outcome=<o> rc=<n> wall_s=<n> reason=<...>` with outcome one of
 # evaluated | no_candidates | refused | failed | skipped. prepare.py may state its own outcome with a line
-# `sport-outcome: <word>`; otherwise rc 0 is `evaluated` (`no_candidates` when its summary reports "trials": 0).
+# `sport-outcome: <sport> <combined> v3=.. [v2=..]` (its real format; field 3 is used); otherwise rc 0 is `evaluated`.
+# last_success is set ONLY by `evaluated`; `no_candidates` is kept as last_outcome and is not counted as scored.
 # State (read by the status page): $AUTORESEARCH_HOME/daily-state.tsv, one row per sport:
 #   sport <TAB> last_attempt_utc <TAB> last_outcome <TAB> last_success_utc <TAB> last_reason
 # Exit: 0, or 1 if any sport failed, or 75 if every sport was refused.
@@ -40,7 +41,7 @@ field() { awk -F'\t' -v s="$1" -v n="$2" '$1==s {print $n}' "$STATE" 2>/dev/null
 
 ORDER=$(i=0; for s in $SPORTS; do i=$((i + 1)); ls=$(field "$s" 4); echo "${ls:-0} $i $s"; done | sort | awk '{print $3}')
 declare -a ROWS=()
-T0=$(date +%s); NRUN=0; NREF=0; NFAIL=0; N=0
+T0=$(date +%s); NRUN=0; NNC=0; NREF=0; NFAIL=0; N=0
 tmp=$(mktemp); trap 'rm -f "$tmp"' EXIT
 
 for s in $ORDER; do
@@ -57,18 +58,28 @@ for s in $ORDER; do
       "${AUTORESEARCH_PYTHON:-python3}" "$PREPARE" daily --sport "$s" --max-trials "$TRIALS" --max-minutes "$mins" \
       --timeout "$TIMEOUT" >"$tmp" 2>&1
     rc=$?; wall=$(( $(date +%s) - t1 )); cat "$tmp"
-    stated=$(sed -n 's/^sport-outcome: *\([a-z_]*\).*/\1/p' "$tmp" | tail -1)
+    # app.autoresearch prints `sport-outcome: <sport> <combined> v3=<o> [v2=<o>] [(reason)]`; the combined outcome is field 3.
+    stated=$(awk -v s="$s" '$1 == "sport-outcome:" && $2 == s {print $3}' "$tmp" | tail -1)
     case "$rc" in
-      0) if [ -n "$stated" ]; then outcome=$stated
-         elif grep -q '"trials": 0' "$tmp"; then outcome=no_candidates; else outcome=evaluated; fi ;;
-      75) outcome=refused ;;
-      78) outcome=skipped; reason="prepare.py refused to run this sport" ;;
-      121|122|123) outcome=failed; reason="guard killed the run (rc $rc: wall-clock or memory limit)" ;;
-      *) outcome=failed; reason="rc $rc" ;;
+      75|121|122|123) outcome=""; ;;                                  # the guard's own codes win over anything the child printed
+      *) outcome=$stated ;;
     esac
+    case "$outcome" in evaluated|no_candidates|refused|failed|skipped) ;; *) outcome="" ;; esac
+    if [ -z "$outcome" ]; then
+      case "$rc" in
+        0) if grep -q '"trials": 0' "$tmp"; then outcome=no_candidates; else outcome=evaluated; fi ;;
+        75) outcome=refused ;;
+        78) outcome=skipped; reason="prepare.py refused to run this sport" ;;
+        121|122|123) outcome=failed; reason="guard killed the run (rc $rc: wall-clock or memory limit)" ;;
+        *) outcome=failed; reason="rc $rc" ;;
+      esac
+    else
+      reason=$(sed -n "s/^sport-outcome: $s [a-z_]* .*(\(.*\))\$/\1/p" "$tmp" | tail -1)
+    fi
     [ "$outcome" = refused ] && reason="guard refused (lock held, game window or forecasting load; see learning-runs.jsonl)"
   fi
-  case "$outcome" in evaluated|no_candidates) NRUN=$((NRUN + 1)); ok=$at ;; *) ok=$(field "$s" 4) ;; esac
+  # last_success only for `evaluated`; `no_candidates` is recorded as last_outcome and never counts as a success
+  case "$outcome" in evaluated) NRUN=$((NRUN + 1)); ok=$at ;; no_candidates) NNC=$((NNC + 1)); ok=$(field "$s" 4) ;; *) ok=$(field "$s" 4) ;; esac
   [ "$outcome" = refused ] && NREF=$((NREF + 1)); [ "$outcome" = failed ] && NFAIL=$((NFAIL + 1))
   echo "autoresearch-daily: sport=$s outcome=$outcome rc=$rc wall_s=$wall reason=${reason:--}"
   ROWS+=("$s"$'\t'"$at"$'\t'"$outcome"$'\t'"${ok:-}"$'\t'"${reason:--}")
@@ -78,7 +89,7 @@ done
 { k=0; while [ "$k" -lt "${#ROWS[@]}" ]; do echo "${ROWS[$k]}"; k=$((k + 1)); done
   if [ -f "$STATE" ]; then awk -F'\t' -v keep=" $(echo $ORDER) " 'index(keep, " " $1 " ") == 0' "$STATE"; fi
 } > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
-echo "autoresearch-daily: summary sports=$N scored=$NRUN refused=$NREF failed=$NFAIL total_wall_s=$(( $(date +%s) - T0 ))"
+echo "autoresearch-daily: summary sports=$N scored=$NRUN no_candidates=$NNC refused=$NREF failed=$NFAIL total_wall_s=$(( $(date +%s) - T0 ))"
 [ "$NFAIL" -gt 0 ] && exit 1
 [ "$NREF" -eq "$N" ] && exit 75
 exit 0
