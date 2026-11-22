@@ -486,8 +486,9 @@ def test_a_cohort_refused_by_the_database_is_a_skip_not_an_aborted_step(game):
     assert out["cohorts_created"] == 0 and out["skipped"]["winner"][0]["reason"].startswith("game no longer scheduled")
 
 
-# ---- forward-test recorder and grader (app.candidates.live): fixture adapter, official store opened read-only -----------
+# ---- forward-test recorder and grader (app.candidates.live): contract records, official store opened read-only -----------------
 import hashlib
+import math
 import time as _time
 
 from app.candidates import live as fwd_live
@@ -495,23 +496,21 @@ from app.candidates import live as fwd_live
 FNOW = "2026-11-22T12:00:00Z"
 
 
-class FixtureAdapter:
-    """Games live in the official store's `games` table; the model says home wins with the stored probability."""
-    def __init__(self):
-        self.calls = 0
+def contract(conn, now, model_name):
+    """What the real adapters return: contract records of scheduled games, winner (a/b) and total (a/b/push)."""
+    if model_name == "boom":
+        raise RuntimeError("model exploded")
+    if model_name == "slow":
+        _time.sleep(5)
+    out = []
+    for r in conn.execute("SELECT game_id, tipoff_at FROM games WHERE status='scheduled' ORDER BY game_id"):
+        base = {"game_id": r["game_id"], "season": 2027, "start_at": r["tipoff_at"], "forecast_cutoff": FNOW, "quote": None}
+        out.append({**base, "market": "winner", "line": None, "probs": {"a": 0.7, "b": 0.3}, "line_source": None})
+        out.append({**base, "market": "total", "line": 150.0, "probs": {"a": 0.5, "b": 0.4, "push": 0.1}, "line_source": "reference_model"})
+    return out
 
-    def forecast_upcoming(self, conn, now, model_name):
-        self.calls += 1
-        if model_name == "boom":
-            raise RuntimeError("model exploded")
-        if model_name == "slow":
-            _time.sleep(5)
-        return [{"event_id": r["game_id"], "market": "winner", "selection": "home", "event_at": r["tipoff_at"], "probability": 0.7,
-                 "info_at": FNOW} for r in conn.execute("SELECT game_id, tipoff_at FROM games WHERE status='scheduled' ORDER BY game_id")]
 
-    def settle(self, conn, row):
-        g = conn.execute("SELECT home_score, away_score, status FROM games WHERE game_id=?", (row["event_id"],)).fetchone()
-        return {"outcome": 1.0 if g["home_score"] > g["away_score"] else 0.0} if g and g["status"] == "final" else None
+ADAPTER = {"sport": "ncaab", "forecast_upcoming": contract}
 
 
 @pytest.fixture
@@ -532,33 +531,33 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def test_forward_record_writes_only_the_forward_store_and_only_games_still_ahead(fdata):
+def test_forward_record_keeps_the_whole_record_writes_only_the_forward_store_and_only_games_still_ahead(fdata):
     fwd_live.forward_register(fdata, "ncaab", "m1", now=FNOW)
     before = digest(fdata / "ncaab.sqlite")
-    ad = FixtureAdapter()
-    res = fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": ad})
-    assert res["ncaab"]["outcome"] == "evaluated" and res["ncaab"]["recorded"] == 2 and res["ncaab"]["rejected"] == 1   # g2 began at 11:00
+    res = fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": ADAPTER})
+    assert res["ncaab"]["outcome"] == "evaluated" and res["ncaab"]["recorded"] == 4 and res["ncaab"]["rejected"] == 2   # g2 began at 11:00
     assert digest(fdata / "ncaab.sqlite") == before                                      # official store untouched
     assert {p.name for p in fdata.iterdir()} == {"ncaab.sqlite", "research"}
     assert res["nba"]["outcome"] == "no_candidates" and res["soccer"]["outcome"] == "no_candidates"
-    # first forecast wins; a second pass later does not duplicate or overwrite
-    again = fwd_live.forward_record(fdata, now="2026-11-22T13:00:00Z", adapters={"ncaab": ad})
-    assert again["ncaab"]["recorded"] == 0
+    again = fwd_live.forward_record(fdata, now="2026-11-22T13:00:00Z", adapters={"ncaab": ADAPTER})
+    assert again["ncaab"]["recorded"] == 0                                               # first forecast wins
     f = fwd_live.forward_connect(fdata)
-    assert f.execute("SELECT COUNT(*), MIN(issued_at) FROM forward_forecasts").fetchone() == (2, FNOW)
+    assert f.execute("SELECT COUNT(*), MIN(issued_at) FROM forward_forecasts").fetchone() == (4, FNOW)
+    row = f.execute("SELECT probs, line, line_source, record FROM forward_forecasts WHERE market='total' AND game_id='g1'").fetchone()
+    assert json.loads(row[0]) == {"a": 0.5, "b": 0.4, "push": 0.1} and row[1] == 150.0 and row[2] == "reference_model"
+    assert json.loads(row[3])["forecast_cutoff"] == FNOW
     with pytest.raises(sqlite3.DatabaseError):
-        f.execute("UPDATE forward_forecasts SET probability = 0.99")
+        f.execute("UPDATE forward_forecasts SET line = 1")
     with pytest.raises(sqlite3.DatabaseError):
         f.execute("DELETE FROM forward_forecasts")
 
 
 def test_forward_record_adapter_cannot_write_the_official_store(fdata):
-    class Writer(FixtureAdapter):
-        def forecast_upcoming(self, conn, now, model_name):
-            conn.execute("UPDATE games SET status='final'")
-            return []
+    def writer(conn, now, name):
+        conn.execute("UPDATE games SET status='final'")
+        return []
     fwd_live.forward_register(fdata, "ncaab", "w", now=FNOW)
-    res = fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": Writer()})
+    res = fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": {"forecast_upcoming": writer}})
     assert res["ncaab"]["outcome"] == "failed" and "readonly" in res["ncaab"]["errors"][0].lower()
     assert sqlite3.connect(fdata / "ncaab.sqlite").execute("SELECT COUNT(*) FROM games WHERE status='final'").fetchone()[0] == 0
 
@@ -566,9 +565,8 @@ def test_forward_record_adapter_cannot_write_the_official_store(fdata):
 def test_forward_record_a_failing_model_and_a_slow_model_do_not_stop_the_rest(fdata):
     for m in ("boom", "slow", "ok"):
         fwd_live.forward_register(fdata, "ncaab", m, now=FNOW)
-    res = fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": FixtureAdapter()}, timeout_s=0.5)
-    r = res["ncaab"]
-    assert r["recorded"] == 2 and r["outcome"] == "evaluated"
+    r = fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": ADAPTER}, timeout_s=0.5)["ncaab"]
+    assert r["recorded"] == 4 and r["outcome"] == "evaluated"
     assert any("boom" in e for e in r["errors"]) and any("slow" in e and "exceeded" in e for e in r["errors"])
 
 
@@ -576,37 +574,51 @@ def test_forward_record_missing_adapter_or_nothing_registered_is_reported_not_ra
     fwd_live.forward_register(fdata, "ncaab", "m1", now=FNOW)
     assert fwd_live.forward_record(fdata, now=FNOW, adapters={})["ncaab"]["outcome"] == "skipped"
     fwd_live.forward_register(fdata, "ncaab", "m1", now=FNOW, active=False)
-    assert fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": FixtureAdapter()})["ncaab"]["outcome"] == "no_candidates"
+    assert fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": ADAPTER})["ncaab"]["outcome"] == "no_candidates"
 
 
-def test_forward_record_rejects_rows_using_information_after_now(fdata):
-    class Peeker(FixtureAdapter):
-        def forecast_upcoming(self, conn, now, model_name):
-            return [{**r, "info_at": "2026-11-22T12:30:00Z"} for r in super().forecast_upcoming(conn, now, model_name)]
+def test_forward_record_rejects_a_forecast_cutoff_after_now_or_a_start_not_ahead(fdata):
+    def peeker(conn, now, name):
+        return [{**r, "forecast_cutoff": "2026-11-22T12:30:00Z"} for r in contract(conn, now, name)]
     fwd_live.forward_register(fdata, "ncaab", "m1", now=FNOW)
-    r = fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": Peeker()})["ncaab"]
-    assert r["recorded"] == 0 and r["rejected"] == 3
+    r = fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": {"forecast_upcoming": peeker}})["ncaab"]
+    assert r["recorded"] == 0 and r["rejected"] == 6
 
 
-def test_forward_grade_settles_final_games_once_and_reads_results_read_only(fdata):
+def test_forward_grade_settles_generically_from_the_games_table_with_full_vector_scores_and_no_double_grading(fdata):
     fwd_live.forward_register(fdata, "ncaab", "m1", now=FNOW)
-    ad = FixtureAdapter()
-    fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": ad})
-    early = fwd_live.forward_grade(fdata, now="2026-11-22T20:00:00Z", adapters={"ncaab": ad})["ncaab"]
-    assert early["graded"] == 0 and early["waiting"] == 1                      # g1 tipped off but is not final: nothing graded
+    fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": ADAPTER})
+    early = fwd_live.forward_grade(fdata, now="2026-11-22T20:00:00Z", adapters={"ncaab": ADAPTER})["ncaab"]
+    assert early["graded"] == 0 and early["waiting"] == 2                       # g1 tipped off but is not final
     c = sqlite3.connect(fdata / "ncaab.sqlite")
-    c.execute("UPDATE games SET status='final', home_score=80, away_score=70 WHERE game_id='g1'")
+    c.execute("UPDATE games SET status='final', home_score=80, away_score=70 WHERE game_id='g1'")   # total 150 = the line: a push
     c.commit()
     c.close()
     before = digest(fdata / "ncaab.sqlite")
-    r = fwd_live.forward_grade(fdata, now="2026-11-22T23:00:00Z", adapters={"ncaab": ad})["ncaab"]
-    assert r["outcome"] == "evaluated" and r["graded"] == 1 and r["waiting"] == 0
+    r = fwd_live.forward_grade(fdata, now="2026-11-22T23:00:00Z", adapters={"ncaab": ADAPTER})["ncaab"]
+    assert r["outcome"] == "evaluated" and r["graded"] == 2 and r["waiting"] == 0
     assert digest(fdata / "ncaab.sqlite") == before
     f = fwd_live.forward_connect(fdata)
-    out, ll, br = f.execute("SELECT outcome, log_loss, brier FROM forward_results").fetchone()
-    assert out == 1.0 and abs(ll + __import__("math").log(0.7)) < 1e-9 and abs(br - 0.09) < 1e-9
-    assert fwd_live.forward_grade(fdata, now="2026-11-23T23:00:00Z", adapters={"ncaab": ad})["ncaab"]["graded"] == 0   # not graded twice
-    assert f.execute("SELECT sport, kind, outcome FROM forward_runs WHERE kind='grade' ORDER BY id DESC LIMIT 1").fetchone() == ("soccer", "grade", "no_candidates")
+    rows = {m: v for m, *v in f.execute("SELECT f.market, r.outcome, r.log_loss, r.brier FROM forward_results r JOIN forward_forecasts f ON f.id = r.forecast_id")}
+    assert rows["total"] == ["push", None, None]                              # pushes are not scored
+    assert rows["winner"][0] == "a" and abs(rows["winner"][1] + math.log(0.7)) < 1e-9 and abs(rows["winner"][2] - (0.09 + 0.09)) < 1e-9
+    assert fwd_live.forward_grade(fdata, now="2026-11-23T23:00:00Z", adapters={"ncaab": ADAPTER})["ncaab"]["graded"] == 0
+
+
+def test_forward_settle_rules_overtime_whole_line_pushes_nfl_tie_and_moved_start(tmp_path):
+    c = sqlite3.connect(":memory:")
+    c.row_factory = sqlite3.Row
+    c.execute("CREATE TABLE games (game_id TEXT, tipoff_at TEXT, status TEXT, home_score INT, away_score INT)")
+    c.executemany("INSERT INTO games VALUES (?,?,?,?,?)", [("t", "2026-11-22T19:00:00Z", "final", 20, 20), ("w", "2026-11-22T19:00:00Z", "final", 24, 17), ("m", "2026-11-22T20:00:00Z", "final", 24, 17),
+                                                             ("p", "2026-11-22T19:00:00Z", "postponed", None, None), ("s", "2026-11-22T19:00:00Z", "scheduled", None, None)])
+    row = lambda gid, market, line=None: {"game_id": gid, "market": market, "line": line, "start_at": "2026-11-22T19:00:00Z"}
+    st = fwd_live._settle
+    assert st("nfl", c, row("t", "winner")) == "void"                            # NFL tie voids the winner
+    assert st("nfl", c, row("w", "spread", -7.0)) == "push"                        # 24 - 17 - 7 = 0
+    assert st("nfl", c, row("w", "total", 41.5)) == "b" and st("nfl", c, row("w", "team_total_home", 24.0)) == "push"
+    assert st("ncaab", c, row("w", "spread", -3.5)) == "a" and st("ncaab", c, row("w", "winner")) == "a"
+    assert st("nfl", c, row("m", "winner")) == "void"                            # the start moved after the forecast
+    assert st("nfl", c, row("p", "winner")) == "void" and st("nfl", c, row("s", "winner")) is None and st("nfl", c, row("zz", "winner")) is None
 
 
 def test_forward_cli_prints_one_outcome_line_per_sport_and_runs_light(fdata, monkeypatch, capsys):
@@ -615,11 +627,10 @@ def test_forward_cli_prints_one_outcome_line_per_sport_and_runs_light(fdata, mon
     out = capsys.readouterr().out.splitlines()
     assert out[0].startswith("forward-record: sport=nfl outcome=no_candidates") and out[1].startswith("forward-record: sport=soccer ")
     from app import learning_run as lr
-    # the recorder wraps in the light guard: runs inside a game window and while the heavy lock is held
     import fcntl
+    import sys
     fh = open(fdata / ".learning-heavy.lock", "w")
     fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    import sys
     rc = lr.main(["--name", "forward-record", "--light", "--max-minutes", "1", "--max-rss-gb", "4", "--", sys.executable, "-c", "pass"])
     fh.close()
     assert rc == 0
