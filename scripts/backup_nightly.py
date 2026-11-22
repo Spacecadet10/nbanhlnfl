@@ -35,9 +35,10 @@ from app import backup, config, journal  # noqa: E402
 
 # Non-secret files kept beside the stores (patterns are relative to the repo root, the data folder, the LaunchAgents folder).
 # An allowlist, so a credential file (.env*) is never picked up. The adaptive model pickles (hundreds of MB, retrained by
-# the adaptive job, content-addressed, so a run's *.pkl and its .sha256 are immutable) are copied; lock files and
-# the adaptive snapshots (-wal/-shm of a live SQLite copy) are not. SQLite files below are copied with the backup API.
-EXTRA_PATTERNS = (("data", "research/adaptive/**/*.pkl"), ("data", "research/adaptive/**/*.pkl.sha256"),("repo", "docs/telegram_record.json"), ("repo", "docs/preregistration/**/*"),
+# the adaptive job, content-addressed, so a run's *.pkl and its .sha256 are immutable) are NOT in files.tar.gz: they go to
+# the shared pool `<root>/pool/adaptive/` once (see _pool); lock files and the adaptive snapshots are not copied.
+# SQLite files below are copied with the backup API.
+EXTRA_PATTERNS = (("repo", "docs/telegram_record.json"), ("repo", "docs/preregistration/**/*"),
                   ("data", "research/telegram_history.json"), ("data", "research/line-state-*.pkl"),
                   ("data", "research/candidates/**/*"), ("data", "research/learning-runs.jsonl"),
                   ("data", "reports/weekly_report_review.json"), ("launch_agents", "com.nba-predictor.*.plist"))
@@ -170,6 +171,94 @@ def prune(stores_dir: Path, *, now=None, apply: bool = False) -> dict:
             "deleted": deleted, "unverified_kept": sorted(n for n in keep if cache.get(n) is False)}
 
 
+POOL_GLOBS = ("**/*.pkl", "**/*.pkl.sha256")
+
+
+def _file_sha(path: Path) -> str:
+    return backup.sha256(path)
+
+
+def _pool(data_dir: Path, root: Path, folder: Path) -> dict:
+    """Copies each adaptive pickle (and its .sha256 sidecar) to `<root>/pool/adaptive/<relative path>` only if absent, checked
+    against the sidecar (pickles) and a fresh hash of the copy. A file already in the pool is never overwritten: one whose
+    content differs from the source, or a pickle that does not match its own sidecar, is listed in `conflicts`. Writes
+    `pool-manifest.json` in the night's folder: every pool path this night references with its sha256 (a restore's exact set).
+    Pool files are never deleted here."""
+    base, pool = Path(data_dir) / "research" / "adaptive", Path(root) / "pool" / "adaptive"
+    copied = present = nbytes = 0
+    conflicts, files = [], {}
+    sources = sorted({p for g in POOL_GLOBS for p in base.glob(g)}) if base.is_dir() else []
+    for src in sources:
+        if not src.is_file() or src.is_symlink() or ".env" in src.name:
+            continue
+        rel, key = src.relative_to(base), f"adaptive/{src.relative_to(base)}"
+        digest = _file_sha(src)
+        side = src.with_name(src.name + ".sha256")
+        if src.suffix == ".pkl" and side.is_file() and (side.read_text().split() or [""])[0] != digest:
+            conflicts.append(key)                       # the pickle changed after its sidecar was written: not trusted
+            continue
+        dest = pool / rel
+        if dest.exists():
+            if dest.stat().st_size != src.stat().st_size or _file_sha(dest) != digest:
+                conflicts.append(key)
+                continue
+            present += 1
+        else:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            tmp = dest.with_name("." + dest.name + ".partial")
+            shutil.copyfile(src, tmp)
+            if _file_sha(tmp) != digest:
+                tmp.unlink()
+                raise backup.BackupError(f"The pool copy of {key} does not match its source hash; not kept")
+            os.chmod(tmp, 0o600)
+            tmp.rename(dest)
+            copied += 1
+            nbytes += dest.stat().st_size
+        files[key] = digest
+    (folder / "pool-manifest.json").write_text(json.dumps({"pool": "pool", "files": files}, indent=2, sort_keys=True))
+    return {"copied": copied, "present": present, "bytes_copied": nbytes, "referenced": len(files), "conflicts": conflicts}
+
+
+def _mirror_pool(root: Path, mirror: Path) -> dict:
+    """Mirrors `<root>/pool` to `<mirror>/pool` incrementally: only files missing there are copied (temp name, hash-checked,
+    renamed). A file already there with another size or hash is an error, never overwritten."""
+    src, dst = Path(root) / "pool", Path(mirror) / "pool"
+    copied = nbytes = 0
+    for p in sorted(src.rglob("*")) if src.is_dir() else []:
+        if not p.is_file() or p.name.endswith(".partial"):
+            continue
+        target = dst / p.relative_to(src)
+        if target.exists():
+            if target.stat().st_size != p.stat().st_size:
+                raise backup.BackupError(f"{target} differs from the pool file {p}; not overwritten")
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        tmp = target.with_name("." + target.name + ".partial")
+        shutil.copyfile(p, tmp)
+        if _file_sha(tmp) != _file_sha(p):
+            tmp.unlink()
+            raise backup.BackupError(f"The mirrored pool file {target} does not match the local pool")
+        tmp.rename(target)
+        copied += 1
+        nbytes += target.stat().st_size
+    return {"copied": copied, "bytes_copied": nbytes}
+
+
+def collect_pool(backup_folder: Path, pool_root: Path, dest: Path) -> int:
+    """Restore helper: copies every pool file the night's `pool-manifest.json` references from `pool_root` (the local
+    `<root>/pool` or the mirror's `<mirror>/pool`) to `dest/<path>`, each verified against the manifest sha256."""
+    files = json.loads((Path(backup_folder) / "pool-manifest.json").read_text())["files"]
+    for key, digest in files.items():
+        src = Path(pool_root) / key
+        if not src.is_file() or _file_sha(src) != digest:
+            raise backup.BackupError(f"Pool file {key} is missing or does not match the manifest ({src})")
+    for key in files:
+        target = Path(dest) / key
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(Path(pool_root) / key, target)
+    return len(files)
+
+
 OFFSITE_WARNING = "WARNING: tonight's backup was NOT copied off this Mac"
 
 
@@ -206,9 +295,13 @@ def nightly(data_dir: Path, root: Path, *, mirror, stamp=None, ledger=None, repo
     with tarfile.open(tmp, "w:gz") as t:
         t.add(jdir, arcname=".", filter=lambda info: None if info.name.endswith(".journal.lock") else info)
     os.rename(tmp, folder / "journal.tar.gz")
+    pool = _pool(data_dir, Path(root), folder)
     extras = _extras(folder, data_dir, ledger, repo_root, launch_agents) if (ledger or repo_root or launch_agents) else {}
     out = {"stamp": stamp, "extras": extras, "backup": str(folder), "journal_new_rows": {s: sum(v.values()) for s, v in exported["sports"].items()},
-           "journal_verify_ok": checked["ok"], "mirror": None}
+           "journal_verify_ok": checked["ok"], "mirror": None, "pool": pool}
+    if pool["conflicts"]:
+        notify(f"WARNING: adaptive pickle(s) changed under the same name, not overwritten in the backup pool: "
+               f"{', '.join(pool['conflicts'][:5])}")
     if not checked["ok"]:
         out["journal_problems"] = {s: {t: {k: r[k][:20] for k in ("missing", "journal_only", "tampered", "differs") if r[k]}
                                        for t, r in tables.items() if any(r[k] for k in ("missing", "journal_only", "tampered", "differs"))}
@@ -222,6 +315,7 @@ def nightly(data_dir: Path, root: Path, *, mirror, stamp=None, ledger=None, repo
     try:
         copied = Path(backup.mirror(folder, Path(mirror))["dir"])
         out["mirror_verified_files"] = _verify_copy(folder, copied)
+        out["pool_mirrored"] = _mirror_pool(Path(root), Path(mirror))
     except (backup.BackupError, OSError) as exc:
         out["status"], out["mirror_error"] = "mirror_failed", f"{type(exc).__name__}: {exc}"
         out["warning"] = f"{OFFSITE_WARNING} ({mirror}): {exc}. Local copy: {folder}"
