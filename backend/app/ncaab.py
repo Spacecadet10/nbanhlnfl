@@ -84,6 +84,8 @@ def import_scoreboard_fetch(conn: sqlite3.Connection, raw_id: int, fetch_id: Opt
         return _keep_division_one(conn, espn_ncaab.parse_scoreboard(payload))
     stats = ingest.import_raw(conn, raw_id, cache_dir=cache_dir, retrieved_at=retrieved_at, parse=parse, fetch_id=fetch_id)
     games = parse(json.loads(raw_cache.load(conn, raw_id, cache_dir)))
+    for g in games:
+        ingest.orient_to_stored(conn, g)        # the context below follows the stored sides, as the game row does
     stats.update(d1_games=sum(g.both_d1 for g in games), non_d1_games=sum(not g.both_d1 for g in games), context_changed=0)
     for g in games:
         row = conn.execute("SELECT last_seen_at, last_seen_fetch_id FROM games WHERE game_id=?", (g.game_id,)).fetchone()
