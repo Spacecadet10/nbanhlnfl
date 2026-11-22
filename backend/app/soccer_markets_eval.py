@@ -951,9 +951,9 @@ def _model_table() -> dict:
                                 description="per competition empirical home/away goal distributions of the labels available at each cutoff"),
         "goals_league_rate": dict(family="goals", role="baseline", kind="rate_count", version=ADAPTER_VERSION,
                                   description="plain Poisson from each competition's mean home/away goals so far (no team strengths)"),
-        "goals_poisson_lowtau": dict(family="goals", role="candidate", kind="count", cfg=Config(gc.half_life_days, t["goals_lowtau"]["tau"], t["goals_lowtau"]["D"]),
+        "goals_poisson_lowD": dict(family="goals", role="candidate", kind="count", cfg=Config(gc.half_life_days, t["goals_lowtau"]["tau"], t["goals_lowtau"]["D"]),
                                      joint="poisson", version=ADAPTER_VERSION,
-                                     description="sealed goals Poisson with tau/D below the preregistered grid's lower edge (both were on the edge)"),
+                                     description="sealed goals Poisson with tau/D re-tuned below the preregistered grid's lower edge on development_tune (tau 3 stayed best, D 0.05)"),
         "goals_poisson_hier": dict(family="goals", role="candidate", kind="count", cfg=gc, joint="poisson", hier=True, version=ADAPTER_VERSION,
                                    description="sealed goals Poisson whose team ratings shrink toward their league's offset (learned from UEFA "
                                                "cross-league matches) instead of toward 0"),
@@ -973,7 +973,7 @@ def _model_table() -> dict:
 
 
 # Candidate constants: chosen on development_tune / development_fit seasons only (docs/evidence/soccer-research-2026-11-22).
-CANDIDATE_PARAMS = {"goals_lowtau": {"tau": 1.5, "D": 0.05}, "corners_tilt": {"gamma": 0.3}}
+CANDIDATE_PARAMS = {"goals_lowtau": {"tau": 3.0, "D": 0.05}, "corners_tilt": {"gamma": 0.2}}
 
 
 def _joint(m: dict, mh: float, ma: float) -> np.ndarray:
