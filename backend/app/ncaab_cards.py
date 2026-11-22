@@ -149,21 +149,40 @@ def ensure(ledger: sqlite3.Connection, source: sqlite3.Connection, now: datetime
 # --- NCAAB research adapter (all-sports research system) ---------------------------------------------------------------
 # Lives here, not in ncaab_eval.py: ncaab_eval.py is hashed by ncaab_challengers.fit_code_version(), so editing it would change
 # the live challenger fingerprint and definition. This module is hashed by no live fingerprint (tests/test_research_fingerprints.py).
+import functools
 import hashlib
 import math
 from pathlib import Path
 
-import numpy as np
 
-from . import backtest, config, markets, metrics, ncaab_eval as _ev
-from .db import has_table, store_sport, utc_now
-from .models import college
-from .models.base import PregameGame
-from .models.college import CollegeEff, CollegeEffConfig, CollegeElo, CollegeEloConfig, RunningPoints
+def _research_imports() -> None:
+    """The research section's heavy dependencies (numpy, the college models, the backtest walk, ncaab_eval) load on the first
+    research call, not when telegram imports this module for the cards: importing ncaab_cards stays as cheap as before and
+    cannot take part in an import cycle through app.models.college."""
+    if "college" in globals():
+        return
+    import numpy
+    from . import backtest as _bt, config as _cfg, markets as _mk, metrics as _mt, ncaab_eval
+    from .db import has_table as _ht, store_sport as _ss, utc_now as _un
+    from .models import college as _col
+    from .models.base import PregameGame as _pg
+    from .models.college import CollegeEff as _ce, CollegeEffConfig as _cec, CollegeElo as _el, CollegeEloConfig as _elc, \
+        RunningPoints as _rp
+    globals().update(np=numpy, backtest=_bt, config=_cfg, markets=_mk, metrics=_mt, _ev=ncaab_eval, has_table=_ht,
+                     store_sport=_ss, utc_now=_un, college=_col, PregameGame=_pg, CollegeEff=_ce, CollegeEffConfig=_cec,
+                     CollegeElo=_el, CollegeEloConfig=_elc, RunningPoints=_rp)
+
+
+def _research(fn):
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        _research_imports()
+        return fn(*args, **kwargs)
+    return wrapper
 
 # Research only: nothing here writes a store, changes a live model, a forecast, a card or an official record. Candidate names
 # are new model identities ("ncaab-cand-*"); the incumbent is the sealed production decision, reproduced unchanged.
-RESEARCH_MARKETS = ("winner",) + college.LINE_MARKETS
+RESEARCH_MARKETS = ("winner", "spread", "total", "team_total_home", "team_total_away")   # = college.LINE_MARKETS (tested)
 FAR = "9999-12-31T00:00:00Z"
 MIN_FIT_ROWS = 300              # a candidate is fitted for a season only from at least this many earlier games, else it IS the incumbent
 MIN_PHASE_ROWS = 200
@@ -194,16 +213,19 @@ MODEL_SPECS = {
 }
 
 
+@_research
 def research_periods() -> dict:
     p = _ev.PERIODS
     return {"warmup": tuple(p["warmup"]), "search": tuple(p["development"]), "validation": tuple(p["validation"]),
             "holdout": tuple(p["test"])}
 
 
+@_research
 def forward_from() -> int:
     return max(_ev.PERIODS["test"]) + 1
 
 
+@_research
 def research_adapter() -> dict:
     """What the research system consumes (docs/AUTORESEARCH.md): markets with settlement rules, periods, models, `walk` and
     `forecast_upcoming`. The input hash covers the sealed decision, the feature version and every model's spec."""
@@ -289,10 +311,12 @@ class _Bundle:
 _BASE_CACHE: dict = {}
 
 
+@_research
 def clear_research_cache() -> None:
     _BASE_CACHE.clear()
 
 
+@_research
 def _base(conn: sqlite3.Connection, last: int) -> tuple[list, dict]:
     """Chronological per-game features (backtest.run: a result reaches the bundle only once available at the game's cutoff)
     for every eligible game of the warm-up through `last`, plus the sealed decision. Scores ride along for fitting EARLIER
@@ -312,20 +336,24 @@ def _base(conn: sqlite3.Connection, last: int) -> tuple[list, dict]:
     return _BASE_CACHE[key], d
 
 
+@_research
 def _lstsq(X, y):
     return np.linalg.lstsq(X, y, rcond=None)[0]
 
 
+@_research
 def _xrow(market: str, f: dict) -> tuple:
     if market == "spread":
         return (1.0, f["mu_h"] - f["mu_a"], f["elo_margin"])
     return (1.0, f["mu_h"] + f["mu_a"], f["pts_h"] + f["pts_a"])
 
 
+@_research
 def _target(market: str, f: dict) -> float:
     return f["home_score"] - f["away_score"] if market == "spread" else f["home_score"] + f["away_score"]
 
 
+@_research
 def _phase(kind: str, f: dict) -> int:
     n = min(f["n_h"], f["n_a"])
     if kind == "hetero":
@@ -414,6 +442,7 @@ class _FitBook:
         return self.cache[key]
 
 
+@_research
 def _incumbent(f: dict, d: dict) -> dict:
     sig = d["sigmas"]
     means = {"elo_margin": f["elo_margin"], "eff": (f["mu_h"], f["mu_a"]), "points": (f["pts_h"], f["pts_a"])}
@@ -429,6 +458,7 @@ def _incumbent(f: dict, d: dict) -> dict:
     return out
 
 
+@_research
 def _baseline_moments(name: str, f: dict, d: dict) -> dict:
     sig = d["sigmas"]
     if name == "ncaab-baseline-coin":
@@ -446,6 +476,7 @@ def _baseline_moments(name: str, f: dict, d: dict) -> dict:
             "team_total_away": (half - ha / 2, sig["points_away"])}
 
 
+@_research
 def _reference_lines(f: dict) -> dict:
     """The market-free reference line of each line market (shared by every model): the baselines' own half-point lines."""
     return {"spread": college.own_line("spread", f["elo_margin"]), "total": college.own_line("total", f["pts_h"] + f["pts_a"]),
@@ -453,6 +484,7 @@ def _reference_lines(f: dict) -> dict:
             "team_total_away": college.own_line("team_total_away", f["pts_a"])}
 
 
+@_research
 def _moments(name: str, f: dict, d: dict, book: "_FitBook") -> tuple[dict, Optional[int]]:
     if name == "ncaab-incumbent":
         return _incumbent(f, d), None
@@ -464,6 +496,7 @@ def _moments(name: str, f: dict, d: dict, book: "_FitBook") -> tuple[dict, Optio
     return _baseline_moments(name, f, d), None
 
 
+@_research
 def _quotes(conn: sqlite3.Connection) -> dict:
     """(game_id, market) -> [(retrieved_at, quote dict)] of DraftKings 'current' spread/total quotes, oldest first."""
     if not has_table(conn, "market_quotes"):
@@ -478,6 +511,7 @@ def _quotes(conn: sqlite3.Connection) -> dict:
     return out
 
 
+@_research
 def _quote_at(quotes: dict, game_id: str, market: str, at: str) -> Optional[dict]:
     best = None
     for t, q in quotes.get((game_id, market), ()):
@@ -486,6 +520,7 @@ def _quote_at(quotes: dict, game_id: str, market: str, at: str) -> Optional[dict
     return best
 
 
+@_research
 def _records(f: dict, name: str, d: dict, book: "_FitBook", quotes: dict, *, outcome: bool, cutoff: str) -> list[dict]:
     mm, through = _moments(name, f, d, book)
     ref = _reference_lines(f)
@@ -521,11 +556,13 @@ def _records(f: dict, name: str, d: dict, book: "_FitBook", quotes: dict, *, out
     return out
 
 
+@_research
 def _check_model(name: str) -> None:
     if name not in MODEL_SPECS:
         raise _ev.NcaabEvaluationError(f"unknown research model {name!r}")
 
 
+@_research
 def research_walk(conn: sqlite3.Connection, seasons, model_name: str) -> list[dict]:
     """Chronological forecast records of `model_name` for the games of `seasons` (search, validation, warm-up or forward
     seasons; the holdout is refused). Each forecast uses only results available at its cutoff (backtest.run) and, for
@@ -546,6 +583,7 @@ def research_walk(conn: sqlite3.Connection, seasons, model_name: str) -> list[di
     return out
 
 
+@_research
 def research_forecast_upcoming(conn: sqlite3.Connection, now: str, model_name: str) -> list[dict]:
     """Records (no outcome) for every scheduled Division I game starting after `now`, from results available at `now` and
     candidate parameters fitted on seasons up to the last validation season only."""
@@ -571,6 +609,7 @@ def research_forecast_upcoming(conn: sqlite3.Connection, now: str, model_name: s
 
 
 # --- Data validation --------------------------------------------------------------------------------------------------
+@_research
 def validate_data(conn: sqlite3.Connection, today: Optional[str] = None) -> dict:
     """Fixture identity, neutral-site orientation, finals with scores, missing inputs, and per-season coverage by market. Read-only."""
     if store_sport(conn) != "ncaab":
@@ -663,12 +702,14 @@ def validate_data(conn: sqlite3.Connection, today: Optional[str] = None) -> dict
 
 
 # --- Evaluation of research models ------------------------------------------------------------------------------------
+@_research
 def _pairs(records: list[dict]) -> list[tuple]:
     """(p_a given a decisive result, 1 if a won) for records with a non-push, non-void outcome."""
     return [(r["probs"]["a"] / (r["probs"]["a"] + r["probs"]["b"]), r["outcome"] == "a") for r in records
             if r["outcome"] in ("a", "b")]
 
 
+@_research
 def score_records(records: list[dict]) -> dict:
     """n, Brier and log loss (pushes/voids excluded, a/(a+b) renormalised), Gaussian point log score and RMSE where the record has a
     point forecast, and the worst decile gap of predicted vs observed frequency."""
@@ -689,6 +730,7 @@ def score_records(records: list[dict]) -> dict:
     return out
 
 
+@_research
 def compare_records(a: list[dict], b: list[dict]) -> dict:
     """Mean per-game Brier difference a - b on the games both decided (negative favours a), with the shared week-block bootstrap."""
     pb = {r["game_id"]: r for r in b if r["outcome"] in ("a", "b")}
@@ -708,6 +750,7 @@ def compare_records(a: list[dict], b: list[dict]) -> dict:
     return {"games": len(vals), "mean_brier_diff": boot["mean"], "ci95": boot["ci95"]}
 
 
+@_research
 def quote_benchmark(records: list[dict], incumbent: list[dict]) -> dict:
     """Records graded at a DraftKings line with a stored pre-cutoff quote: model Brier vs the no-vig price's Brier on the same games."""
     q = [r for r in records if r["quote"] and r["outcome"] in ("a", "b")]
@@ -724,6 +767,7 @@ def quote_benchmark(records: list[dict], incumbent: list[dict]) -> dict:
     return out
 
 
+@_research
 def evaluate_research(conn: sqlite3.Connection, periods=("search", "validation"), models=None) -> dict:
     """Every research model's score per market over the search and validation periods (never the holdout), the paired difference
     against the incumbent, and, for the forward seasons, DraftKings-quote benchmarks."""
@@ -745,6 +789,7 @@ def evaluate_research(conn: sqlite3.Connection, periods=("search", "validation")
     return out
 
 
+@_research
 def evaluate_forward(conn: sqlite3.Connection, models=None) -> dict:
     """Forward seasons (after the holdout): games with a DraftKings quote retrieved at or before the forecast cutoff, graded at
     the quote's line against the no-vig price. Parameters of candidates stop at the last validation season."""
@@ -762,6 +807,7 @@ def evaluate_forward(conn: sqlite3.Connection, models=None) -> dict:
     return out
 
 
+@_research
 def research_main(argv=None) -> int:
     """`python -m app.ncaab_cards research --out-dir D`: data validation, search + validation walks and the forward quote
     benchmark as JSON files in D. Never the holdout; refuses the live data folder."""

@@ -1751,8 +1751,13 @@ def evaluate_records(adapter: dict, by_model: dict, stages: tuple = ("search", "
             if n != inc:
                 by_stage = {st: decide_candidate(_stage(recs, per[st]), _stage(mk[inc], per[st]), kind) for st in stages}
                 kept = all(s["decision"] == "keep" for s in by_stage.values())
-                cmp_ |= {"vs_incumbent": by_stage, "decision": "keep" if kept else "reject",
-                         "reason": "kept on search and validation (exploratory, repeated search; not a promotion)" if kept else
+                ref_line = kind == "line" and any(r.get("line_source") == "reference_model" for r in mk[inc])
+                decision = ("needs_human_review" if ref_line else "keep") if kept else "reject"
+                cmp_ |= {"vs_incumbent": by_stage, "decision": decision,
+                         "reason": ("beat the incumbent on search and validation, but graded at a REFERENCE line derived from the "
+                                    "models' own forecasts (the incumbent's among them): an artefact risk, so a person must review "
+                                    "it; never auto-tracked forward" if ref_line else
+                                    "kept on search and validation (exploratory, repeated search; not a promotion)") if kept else
                                    "; ".join(f"{st}: {s['reason']}" for st, s in by_stage.items() if s["decision"] != "keep")}
             entry["comparisons"][n] = cmp_
         out["markets"][market] = entry
@@ -1766,6 +1771,8 @@ def evaluate_records(adapter: dict, by_model: dict, stages: tuple = ("search", "
     out["evaluated_markets"] = sorted(m for m, e in out["markets"].items() if e["status"] == "evaluated")
     out["kept"] = sorted(f"{n}:{m}" for m, e in out["markets"].items() for n, c in e.get("comparisons", {}).items()
                          if c.get("decision") == "keep")
+    out["needs_human_review"] = sorted(f"{n}:{m}" for m, e in out["markets"].items() for n, c in e.get("comparisons", {}).items()
+                                       if c.get("decision") == "needs_human_review")
     return out
 
 
@@ -1932,7 +1939,7 @@ def nba_nhl_adapter(sport: str, candidates: Optional[list] = None) -> dict:
 # The one place that names where each sport's adapter lives ("module:function"; the NFL and NCAAB adapters are NOT in the
 # byte-pinned nfl_eval / ncaab_eval). Update here when an adapter agent moves one.
 ADAPTER_FUNCTIONS = {"nfl": "nfl_challengers:research_adapter", "ncaab": "ncaab_cards:research_adapter",
-                     "soccer": "soccer_markets_eval:research_adapter"}
+                     "soccer": "soccer_challengers:research_adapter"}
 
 
 def get_adapter(sport: str) -> Optional[dict]:
@@ -2194,6 +2201,7 @@ def _run_queue(status: dict, adapter: dict, root: Path, pid: str, sport: str, t0
     status["evaluated_markets"] = ev["evaluated_markets"]
     status["evaluation"] = _brief(ev)
     status["kept"] = ev["kept"]
+    status["needs_human_review"] = ev["needs_human_review"]
     status["forward_candidates"] = sorted({k.rsplit(":", 1)[0] for k in ev["kept"]})   # for the Ops driver to register forward
     scored_c = [n for n in cands if keys[n] in done]
     if not cands:

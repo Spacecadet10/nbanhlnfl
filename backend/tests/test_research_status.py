@@ -767,7 +767,7 @@ def test_the_driver_imports_the_evaluator_never_the_reverse():
 
 
 def test_conditional_push_scoring_and_the_game_suite_agree_with_the_soccer_per_game_scores():
-    from app import soccer_markets_eval as sme
+    from app import soccer_challengers as sme
     recs = [rec(0, "goals_total", p=0.4, mid=0.2, outcome="a", line=2.0), rec(0, "goals_total", p=0.45, mid=0.1, outcome="push", line=3.0),
             rec(0, "result_1x2", p=0.5, mid=0.3, outcome="mid") | {"probs": {"a": 0.5, "mid": 0.3, "b": 0.2}},
             rec(1, "btts_yes", p=0.55, outcome="b"), rec(1, "goals_total", p=0.3, mid=0.3, outcome="b", line=2.0)]
@@ -835,3 +835,43 @@ def test_a_writable_snapshot_is_refused(exp, monkeypatch, tmp_path):
     a = fixture_adapter({"inc": []}) | {"connect": None}
     r = ar.run_sport_v3("nba", exp, adapter_fn=_adapters(nba=a))
     assert r["outcome"] == "refused" and "writable" in r["reason"]
+
+
+def test_a_keep_at_a_reference_line_needs_human_review_and_is_never_tracked_forward(exp):
+    s = synthetic(n=800, seed=19, edge=0.9)
+    lines = lambda recs: [dict(r, market="total", line=2.5, line_source="reference_model") for r in recs]   # noqa: E731
+    a = fixture_adapter({"inc": lines(s["inc"]), "cand": lines(s["cand"])}, markets={"total": {"kind": "line", "settlement": "x"}})
+    r = ar.run_sport_v3("nba", exp, adapter_fn=_adapters(nba=a))
+    c = json.loads(next((exp / "v3").glob("*/nba/evaluation.json")).read_text())["markets"]["total"]["comparisons"]["cand"]
+    assert c["decision"] == "needs_human_review" and "REFERENCE line" in c["reason"]
+    assert r["kept"] == [] and r["needs_human_review"] == ["cand:total"] and r["forward_candidates"] == []
+
+
+@pytest.mark.parametrize("module", ["app.ncaab_cards", "app.nfl_challengers", "app.soccer_challengers", "app.autoresearch",
+                                    "app.telegram"])
+def test_each_research_module_imports_first_in_a_fresh_interpreter_without_a_cycle(module):
+    import subprocess
+    import sys
+    code = f"import {module}, sys; print('ok')"
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, cwd=str(Path(__file__).resolve().parents[1]))
+    assert out.returncode == 0 and "ok" in out.stdout, out.stderr[-600:]
+
+
+def test_importing_ncaab_cards_does_not_load_the_research_dependencies():
+    import subprocess
+    import sys
+    code = ("import sys, app.ncaab_cards as c; heavy = [m for m in ('numpy', 'app.models.college', 'app.ncaab_eval', 'app.backtest') "
+            "if m in sys.modules]; print(heavy); c._research_imports(); print('college' in vars(c))")
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, cwd=str(Path(__file__).resolve().parents[1]))
+    assert out.returncode == 0, out.stderr[-600:]
+    lines = out.stdout.strip().splitlines()
+    assert lines[0] == "[]" and lines[1] == "True"
+    from app import ncaab_cards, models
+    from app.models import college
+    assert ncaab_cards.RESEARCH_MARKETS == ("winner",) + college.LINE_MARKETS
+
+
+def test_the_sealed_soccer_file_is_not_the_home_of_research_code():
+    src = (Path(ar.__file__).parent / "soccer_markets_eval.py").read_text()
+    assert "research_adapter" not in src and "HIER_RIDGE" not in src
+    assert ar.ADAPTER_FUNCTIONS["soccer"] == "soccer_challengers:research_adapter"

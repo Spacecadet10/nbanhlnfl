@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from app import backtest, db, soccer, soccer_markets as sm, soccer_markets_eval as ev
+from app import backtest, db, soccer, soccer_challengers as rc, soccer_markets as sm, soccer_markets_eval as ev
 from app.backtest import LeakageError
 
 REAL = Path(__file__).parent / "fixtures" / "soccer_markets_real"
@@ -319,7 +319,7 @@ def test_only_a_retired_candidate_allows_a_second_development_and_never_a_test(s
 
 # --- Research adapter (docs/AUTORESEARCH.md contract) ---------------------------------------------------------------------
 def test_adapter_contract_shape_and_every_forecast_market_is_listed():
-    a = ev.research_adapter()
+    a = rc.research_adapter()
     assert a["sport"] == "soccer" and a["data_version"]
     assert set(a["periods"]) == {"search", "validation", "holdout"}
     assert set(a["periods"]["holdout"]["seasons"]) == {2023, 2024, 2025}
@@ -340,11 +340,11 @@ def test_adapter_contract_shape_and_every_forecast_market_is_listed():
 
 
 def test_settlement_of_lines_pushes_and_draw_no_bet():
-    assert ev.settle_count("goals_total", 2.0, 1, 1) == "push" and ev.settle_count("goals_total", 2.0, 2, 1) == "a"
-    assert ev.settle_count("goals_total", 2.5, 1, 1) == "b" and ev.settle_count("goals_home", 1.5, 2, 0) == "a"
-    assert ev.settle_count("btts_yes", None, 1, 1) == "a" and ev.settle_count("btts_yes", None, 2, 0) == "b"
-    assert ev.settle_count("corners_handicap", -1.0, 6, 5) == "push" and ev.settle_count("corners_handicap", -1.5, 6, 5) == "b"
-    rows = {r["market"]: r for r in ev.one_x_two_records("m1", 2020, "2020-09-01T12:00", "2020-09-01T06:00:00Z", (0.5, 0.3, 0.2), 1)}
+    assert rc.settle_count("goals_total", 2.0, 1, 1) == "push" and rc.settle_count("goals_total", 2.0, 2, 1) == "a"
+    assert rc.settle_count("goals_total", 2.5, 1, 1) == "b" and rc.settle_count("goals_home", 1.5, 2, 0) == "a"
+    assert rc.settle_count("btts_yes", None, 1, 1) == "a" and rc.settle_count("btts_yes", None, 2, 0) == "b"
+    assert rc.settle_count("corners_handicap", -1.0, 6, 5) == "push" and rc.settle_count("corners_handicap", -1.5, 6, 5) == "b"
+    rows = {r["market"]: r for r in rc.one_x_two_records("m1", 2020, "2020-09-01T12:00", "2020-09-01T06:00:00Z", (0.5, 0.3, 0.2), 1)}
     assert rows["result_1x2"]["outcome"] == "mid" and rows["result_1x2"]["probs"] == {"a": 0.5, "mid": 0.3, "b": 0.2}
     assert rows["draw_no_bet_home"]["outcome"] == "push"
     assert rows["draw_no_bet_home"]["probs"]["a"] == pytest.approx(0.5 / 0.7)
@@ -355,17 +355,17 @@ def test_settlement_of_lines_pushes_and_draw_no_bet():
 
 def test_line_probabilities_include_the_push_mass_and_sum_to_one():
     g = ev.poisson_joint(1.4, 1.1, ev.CAP["goals"])
-    pa, pb, pp = ev.line_probs(g, "goals_total", 2.0, ev.CAP["goals"])
+    pa, pb, pp = rc.line_probs(g, "goals_total", 2.0, ev.CAP["goals"])
     assert pa + pb + pp == pytest.approx(1) and pp > 0.2
-    pa, pb, pp = ev.line_probs(g, "goals_total", 2.5, ev.CAP["goals"])
+    pa, pb, pp = rc.line_probs(g, "goals_total", 2.5, ev.CAP["goals"])
     assert pp == 0 and pa + pb == pytest.approx(1)
-    pa, pb, pp = ev.line_probs(g, "btts_yes", None, ev.CAP["goals"])
+    pa, pb, pp = rc.line_probs(g, "btts_yes", None, ev.CAP["goals"])
     assert pp == 0 and pa == pytest.approx((1 - math.exp(-1.4)) * (1 - math.exp(-1.1)), rel=1e-3)
 
 
 def test_the_walk_refuses_the_holdout_and_the_prospective_season(store, tmp_path):
     synthetic_league(store, seasons=range(2012, 2016))
-    a = ev.research_adapter()
+    a = rc.research_adapter()
     for season in (2023, 2025):
         with pytest.raises(ev.TestSeasonsLocked):
             a["walk"](store, (season,), "goals_poisson_sealed")
@@ -376,7 +376,7 @@ def test_the_walk_refuses_the_holdout_and_the_prospective_season(store, tmp_path
 
 def test_walk_records_are_chronological_settled_and_flag_synthetic_quotes(store):
     synthetic_league(store, seasons=range(2012, 2016))
-    recs = ev.research_adapter()["walk"](store, (2014, 2015), "goals_poisson_sealed")
+    recs = rc.research_adapter()["walk"](store, (2014, 2015), "goals_poisson_sealed")
     assert recs and recs == sorted(recs, key=lambda r: (r["start_at"], r["game_id"], r["market"], r["line"] or 0))
     r = next(x for x in recs if x["market"] == "goals_total" and x["line"] == 2.0)
     assert r["probs"]["a"] + r["probs"]["b"] + r["probs"]["push"] == pytest.approx(1)
@@ -387,7 +387,7 @@ def test_walk_records_are_chronological_settled_and_flag_synthetic_quotes(store)
 
 def test_a_perturbed_later_result_never_changes_an_earlier_forecast(store):
     synthetic_league(store, seasons=range(2012, 2016))
-    a = ev.research_adapter()
+    a = rc.research_adapter()
     names = ("goals_poisson_sealed", "goals_frequency", "goals_league_rate")
     before = {n: a["walk"](store, (2014, 2015), n) for n in names}
     last = store.execute("SELECT match_id, local.d FROM (SELECT match_id, substr(kickoff_at,1,10) d FROM soccer_matches "
@@ -403,7 +403,7 @@ def test_a_perturbed_later_result_never_changes_an_earlier_forecast(store):
 
 def test_competition_filter_budget_and_resume_token_reproduce_the_full_walk(store):
     synthetic_league(store, seasons=range(2012, 2016))
-    a = ev.research_adapter()
+    a = rc.research_adapter()
     full = a["walk"](store, (2015,), "goals_poisson_sealed")
     assert a["walk"](store, (2015,), "goals_poisson_sealed", competitions=["uefa.champions"]) == []
     assert a["walk"](store, (2015,), "goals_poisson_sealed", competitions=["eng.1"]) == full
@@ -421,20 +421,20 @@ def test_the_incumbents_walk_equals_the_frozen_model_means(store):
     synthetic_league(store, seasons=range(2012, 2016))
     cfg = ev.Config(365, 3, 0.1)
     d = ev.load(store, "goals", through=2015)
-    direct = {p["mid"]: p for p in ev.walk(d, cfg, (2015,))}
-    recs = ev.research_adapter()["walk"](store, (2015,), "goals_poisson_sealed")
+    direct = {p["mid"]: p for p in rc.walk(d, cfg, (2015,))}
+    recs = rc.research_adapter()["walk"](store, (2015,), "goals_poisson_sealed")
     pred = {r["game_id"]: r["point_pred"] for r in recs if r["market"] == "goals_total"}
     assert set(pred) == set(direct)
     assert all(pred[m] == pytest.approx(direct[m]["mh"] + direct[m]["ma"]) for m in pred)
 
 
 def test_hierarchical_league_prior_is_a_noop_at_zero_strength_and_changes_unseen_team_means():
-    a = ev.research_adapter()
+    a = rc.research_adapter()
     assert {"goals_poisson_hier", "corners_nb_tilt"} <= set(a["models"])
     g0 = ev.nb_joint(5.0, 4.0, 11.0, 25)
-    g1 = ev.nb_tilt_joint(5.0, 4.0, 11.0, 0.0, 25)
+    g1 = rc.nb_tilt_joint(5.0, 4.0, 11.0, 0.0, 25)
     assert np.allclose(g0, g1)
-    g2 = ev.nb_tilt_joint(5.0, 4.0, 11.0, 0.4, 25)
+    g2 = rc.nb_tilt_joint(5.0, 4.0, 11.0, 0.4, 25)
     h = np.arange(26)
     cov = lambda g: float((g * np.outer(h - (g.sum(1) * h).sum(), h - (g.sum(0) * h).sum())).sum())
     assert cov(g0) == pytest.approx(0, abs=1e-6) and cov(g2) < -0.05                   # negative dependence
@@ -446,7 +446,7 @@ def test_validate_data_reports_duplicate_fixtures_missing_corners_and_coverage(s
     soccer.ingest_month(store, "eng.1", "201509", retrieved_at="2026-11-09T20:00:00Z", fetch=lambda *_: payload("eng.1", [
         make_event(990001, "2015-09-05T15:00Z", 2015, 5015, "2015-league", "100", "101", 1, 0),
         make_event(990002, "2015-09-05T15:00Z", 2015, 5015, "2015-league", "100", "101", 1, 0)]))     # same match, two ids
-    v = ev.validate_data(store, now="2026-11-22T12:00:00Z")
+    v = rc.validate_data(store, now="2026-11-22T12:00:00Z")
     dup = v["fixtures"]["duplicate_pairings"]
     assert any(d["competition"] == "eng.1" and {"soccer:eng.1:990001", "soccer:eng.1:990002"} <= set(d["match_ids"]) for d in dup)
     cov = v["coverage"]["eng.1"]
@@ -458,7 +458,7 @@ def test_validate_data_reports_duplicate_fixtures_missing_corners_and_coverage(s
 
 def test_research_compare_pairs_models_on_the_same_games_and_reports_no_prices_when_none_are_stored(store):
     synthetic_league(store, seasons=range(2012, 2016))
-    r = ev.research_compare(store, ["goals_poisson_hier"], (2015,), "goals_poisson_sealed",
+    r = rc.research_compare(store, ["goals_poisson_hier"], (2015,), "goals_poisson_sealed",
                             baselines=("goals_frequency", "goals_league_rate"), bootstrap=False)
     assert r["games"] == 56 and set(r["models"]) == {"goals_poisson_sealed", "goals_frequency", "goals_league_rate", "goals_poisson_hier"}
     inc, fq = r["models"]["goals_poisson_sealed"], r["models"]["goals_frequency"]
