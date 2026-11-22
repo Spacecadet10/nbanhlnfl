@@ -341,7 +341,10 @@ def orient_to_stored(conn: sqlite3.Connection, g) -> bool:
     puts each score, box line, conference and price with the side it now calls home. The sides of a neutral-site game are
     labels, and every forecast, quote and grade was made against the orientation the store holds, so a strict swap of the
     two teams of a game stored as neutral is put back into the stored orientation here (in place; True if it swapped).
-    Only a neutral-site game is touched: a swap on any other game is a real correction and is applied as before."""
+    Only an NCAAB neutral-site game is touched (the defect was shown there only): a swap on any other game or sport is a real
+    correction and is applied as before."""
+    if not g.game_id.startswith("ncaab:"):
+        return False
     row = conn.execute("SELECT home_team_id, away_team_id, neutral_site FROM games WHERE game_id=?", (g.game_id,)).fetchone()
     if row is None or not (row["neutral_site"] and g.neutral_site):
         return False
@@ -761,7 +764,7 @@ def _match_game(conn: sqlite3.Connection, sport: str, q: espn.LineQuote) -> Opti
 def _in_stored_orientation(conn: sqlite3.Connection, sport: str, game_id: str, q: espn.LineQuote) -> espn.LineQuote:
     """A quote ESPN made for a neutral-site game while it listed the two teams the other way round (see orient_to_stored) is
     stored for the stored home team: the two prices swap and a spread line changes sign; a total is left alone."""
-    if sport == "nhl":
+    if sport != "ncaab":
         return q
     row = conn.execute("SELECT g.neutral_site, h.name AS home, a.name AS away FROM games g JOIN teams h ON h.team_id = g.home_team_id "
                        "JOIN teams a ON a.team_id = g.away_team_id WHERE g.game_id=?", (game_id,)).fetchone()

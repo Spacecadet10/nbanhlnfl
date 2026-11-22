@@ -273,3 +273,18 @@ def test_repair_restores_a_game_already_flipped_and_nothing_else(ncaab_store):
     assert tuple(last) == ("ncaab:248", 80, 70)                                      # the correction is a new revision, history kept
     again = ing.repair_neutral_orientation(ncaab_store, "ncaab", apply=True, now="2026-11-18T00:05:00Z")
     assert again["repairs"] == []                                                    # idempotent
+
+
+def test_an_nfl_neutral_site_swap_is_still_applied_as_before(tmp_path, monkeypatch):
+    """The orientation guard is NCAAB's only: a genuine ESPN correction on another sport's neutral-site game is applied."""
+    from app import db, ingest as ing
+    from test_nfl import nfl_event, nfl_payload
+    monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path))
+    conn = db.connect(sport="nfl")
+    db.migrate(conn)
+    a, b = ("16", "MIN", "Minnesota Vikings", "0"), ("20", "NYJ", "New York Jets", "0")
+    kw = dict(eid="neutral1", date="2026-11-08T14:30Z", year=2026, status="STATUS_SCHEDULED", neutral=True)
+    ing.ingest_nfl_month(conn, "202611", fetch=lambda _: nfl_payload(nfl_event(home=a, away=b, **kw)), retrieved_at="2026-11-01T12:00:00Z")
+    ing.ingest_nfl_month(conn, "202611", fetch=lambda _: nfl_payload(nfl_event(home=b, away=a, **kw)), retrieved_at="2026-11-02T12:00:00Z")
+    row = conn.execute("SELECT home_team_id FROM games WHERE game_id LIKE '%neutral1'").fetchone()
+    assert row[0].endswith(":20") or row[0] == "20"
