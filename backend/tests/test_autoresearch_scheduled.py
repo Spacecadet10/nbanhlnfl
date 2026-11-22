@@ -509,7 +509,7 @@ sys.path.insert(0, {str(ROOT / "backend")!r})
 from app import autoresearch as ar
 s = sys.argv[sys.argv.index('--sport') + 1]
 V3 = {{'nba': 'evaluated', 'nhl': 'no_candidates', 'ncaab': 'no_candidates', 'nfl': 'failed', 'soccer': 'refused'}}
-ar.daily_v3 = lambda chosen, root, items, secs: {{'sports': {{c: {{'outcome': V3[c], 'reason': 'why ' + c}} for c in chosen}},
+ar.daily_v3 = lambda chosen, root, items, secs, **kw: {{'sports': {{c: {{'outcome': V3[c], 'reason': 'why ' + c}} for c in chosen}},
                                                  'report_file': os.environ['FAKE_REPORT']}}
 ar.daily = lambda *a, **k: {{'trials': [], 'refused': {{}}}}
 ns = argparse.Namespace(sport=[s], exp_root=Path(os.environ['FAKE_REPORT']).parent, workspace=Path('.'), max_trials=ar.BUDGETS['max_trials'],
