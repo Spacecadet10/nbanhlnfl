@@ -2,23 +2,45 @@
 // (cardRecord.test.mjs). The same facts and wording as the Telegram card (backend app/telegram.py market_block):
 // record counts are OTHER settled games; this game's own result is shown on its own line and never added to them.
 // Every field the older API does not send is simply left out: nothing is invented.
-import type { ForecastPercentageHistory, RecordBasis } from '../api/types';
+import type { RecordBasis } from '../api/types';
 import { selectionLabel, type SoccerMarketKey } from './soccerMarkets.ts';
 
-const md = (day: string) => day.slice(5, 10);
-
-/** "Other settled games: 3 wins · 1 loss · 1 push · 4 settled", or the empty wording of the contract. */
-export function liveRecordLine(h: ForecastPercentageHistory): string {
-  if (h.settled === 0) return 'No settled results at this exact % yet';
-  const pushes = h.pushes ? ` · ${h.pushes} ${h.pushes === 1 ? 'push' : 'pushes'}` : '';
-  return `Other settled games: ${h.wins} ${h.wins === 1 ? 'win' : 'wins'} · ${h.losses} ${h.losses === 1 ? 'loss' : 'losses'}${pushes} · ${h.settled} settled`;
+/** The bucket rule (twin of backend bucket-record-v1): green = at least one win and win rate >= 75% (4w >= 3(w+l), exact integer
+ *  maths); red = losses exceed wins; neutral otherwise, including no settled history. Pushes and voids are not in the denominator. */
+export type BucketColour = 'green' | 'red' | 'neutral';
+export function bucketColour(wins: number, losses: number): BucketColour {
+  if (wins >= 1 && 4 * wins >= 3 * (wins + losses)) return 'green';
+  return losses > wins ? 'red' : 'neutral';
 }
 
-/** Which way the live record leans, from the OTHER games only (so the web and Telegram cards agree). */
-export function recordLabel(h: ForecastPercentageHistory): string {
-  const n = h.wins + h.losses;
-  return n === 0 ? 'No settled matches' : n === 1 ? `First example ${h.wins ? 'won' : 'lost'}`
-    : h.wins === h.losses ? 'Evenly split' : h.wins > h.losses ? 'More often right' : 'More often wrong';
+/** One bucket's record as the API sends it (live, recomputed past seasons or recovered Telegram). */
+export interface BucketRecord { wins: number; losses: number; pushes?: number; voids?: number; small_sample?: boolean; colour?: string }
+
+/** The backend's colour when it sent a valid one (single decision), else the TS rule on the same counts. */
+export function bucketColourOf(r: BucketRecord | null | undefined): BucketColour {
+  if (!r) return 'neutral';
+  return r.colour === 'green' || r.colour === 'red' || r.colour === 'neutral' ? r.colour : bucketColour(r.wins, r.losses);
+}
+
+const SMALL_SAMPLE_BELOW = 30;
+function bucketText(r: BucketRecord): string {
+  const settled = r.wins + r.losses;
+  const pushes = r.pushes ? ` · ${r.pushes} ${r.pushes === 1 ? 'push' : 'pushes'}` : '';
+  const voids = r.voids ? ` · ${r.voids} ${r.voids === 1 ? 'void' : 'voids'}` : '';
+  const small = settled > 0 && (settled < SMALL_SAMPLE_BELOW || r.small_sample) ? ` · small sample (${settled} settled)` : '';
+  const head = settled === 0 ? 'no settled history at this exact %' : `${r.wins}–${r.losses} (${Math.round((100 * r.wins) / settled)}%)`;
+  return `${head}${pushes}${voids}${small}`;
+}
+
+/** Headline, the same text as the Telegram card: "57.3% · this exact % has gone 8–1 (89%) · 1 push · small sample (9 settled)". */
+export function bucketHeadline(percentage: string, r: BucketRecord): string {
+  const t = bucketText(r);
+  return `${percentage}% · ${r.wins + r.losses === 0 ? t : `this exact % has gone ${t}`}`;
+}
+
+/** A separate, labelled line for the recovered / recomputed record; never merged into the headline counts. */
+export function bucketSubLine(label: string, r: BucketRecord): string {
+  return `${label} · ${bucketText(r)}`;
 }
 
 /** This game's own result, kept out of the counts above: it is never part of the record it is compared with. */
@@ -31,23 +53,6 @@ export function thisGameLine(grade: string | null | undefined): string {
     case 'half_loss': return 'This game: half loss (not in the counts above)';
     default: return "This game isn't counted until it is settled";
   }
-}
-
-/** "Recovered Telegram cards 11-02 to 11-14: 3W–2L · 1 push (6 settled) · model version not recorded", or what exists instead.
- *  null when the API sent neither the Telegram sub-record nor coverage (an older API). */
-export function telegramLine(h: ForecastPercentageHistory): string | null {
-  const t = h.telegram, cov = h.coverage;
-  if (t) {
-    const label = t.label ?? 'Recovered Telegram cards';
-    const span = t.period ? ` ${md(t.period.from)} to ${md(t.period.to)}` : '';
-    if (!t.settled && !t.pushes) return `${label}${span}: none settled at this exact % · model version not recorded`;
-    return `${label}${span}: ${t.wins}W–${t.losses}L${t.pushes ? ` · ${t.pushes} push` : ''} (${t.settled} settled)${t.small_sample ? ' · small sample' : ''} · model version not recorded`;
-  }
-  if (cov == null && h.telegram === undefined) return null;
-  const p = cov?.telegram_period;
-  if (p) return `Recovered Telegram cards ${md(p.from)} to ${md(p.to)}: none at this exact % · model version not recorded`;
-  const sport = h.sport.toUpperCase();
-  return `No recovered Telegram history for ${sport}${h.sport === 'ncaab' && cov?.live_since ? ` (recording began ${cov.live_since.slice(0, 10)})` : ''}`;
 }
 
 /** Home and away from a ranked pick's "AWAY @ HOME" matchup; undefined when it has another shape. */

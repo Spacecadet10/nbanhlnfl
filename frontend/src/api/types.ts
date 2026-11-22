@@ -914,16 +914,19 @@ export interface ForecastPercentageHistory {
   wins: number; losses: number; settled: number;
   /** Live pushes at this exact percentage (not in wins, losses or settled). Absent on an older API. */
   pushes?: number;
+  /** Bucket-record colouring (backend 'bucket-record-v1'), from this live record only: green = >=1 win and win rate >= 75%,
+   *  red = losses > wins, neutral otherwise. Pushes and voids are not in the denominator. Absent on an older API (the TS rule then applies). */
+  colour?: 'green' | 'red' | 'neutral'; colour_rule?: string; voids?: number;
   /** What history exists for this sport, so the card can say why a source is empty. Absent on an older API. */
   coverage?: { live_since: string | null; telegram_period: { from: string; to: string } | null; history_note: string } | null; win_rate: number | null; loss_rate: number | null;
   ci95: [number, number] | null; small_sample: boolean; excluded: Record<string, number>; as_of: string;
   /** Recomputed past seasons at the same exact percentage, side, model and line source (spread, total, team totals of
    *  NBA; winner of NBA/NHL, clean seasons only); a separate source, never part of wins/losses above. Absent or null where no history exists. */
-  history?: { source: 'history_recomputed'; line_source: CanonicalRecord['line_source']; wins: number; losses: number; settled: number; small_sample?: boolean } | null;
+  history?: { source: 'history_recomputed'; line_source: CanonicalRecord['line_source']; wins: number; losses: number; pushes?: number; voids?: number; settled: number; small_sample?: boolean; colour?: 'green' | 'red' | 'neutral' } | null;
   /** Telegram cards sent before the live ledger began (Nov 2-14 2026) at the same sport, market, exact percentage, side and
    *  line source; the cards do not show the model version. A separate source, never part of wins/losses above. */
   telegram?: { source: 'telegram_cards'; label?: string; model_version_known?: boolean; period?: { from: string; to: string } | null; line_source: CanonicalRecord['line_source'];
-    wins: number; losses: number; pushes?: number; settled: number; small_sample?: boolean } | null;
+    wins: number; losses: number; pushes?: number; voids?: number; settled: number; small_sample?: boolean; colour?: 'green' | 'red' | 'neutral' } | null;
 }
 
 /** GET /api/paper-rules: the frozen paper rules of a sport (no money; app/paper_rules.py). */
@@ -1227,8 +1230,3 @@ export interface CoverageRow {
   forecasting_with_fits: CoverageCell; evaluated: CoverageCell; improved_prospectively: CoverageCell;
 }
 export interface LearningCoverage { mode: Mode; rows: CoverageRow[]; stores?: Record<string, string>; note: string }
-
-/** GET /api/card-thresholds (backend app/card_threshold.py): the stored card-colour lines in force today. The frontend never
- *  computes a threshold; `routes` says which class each sport's market is (null = never coloured). */
-export interface CardThresholdScope { scope: string; class: string; sport: string | null; threshold: string | null; green_from?: string | null; qualifies?: boolean; n: number; state: string; set_on: string; legend: string }
-export interface CardThresholds { enabled: boolean; date?: string; routes?: Record<string, Record<string, string | null>>; no_colour_line_source?: string; decide_version?: string; scopes?: CardThresholdScope[] }

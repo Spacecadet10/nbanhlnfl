@@ -1,76 +1,62 @@
-// Card colouring twin of backend app/card_threshold.py (run: npm run test:unit). Same Decimal cases as the backend tests.
+// Bucket-record colouring (run: npm run test:unit). Each exact-% bucket is coloured by its OWN settled record, never by a
+// probability cutoff: green = >=1 win and win rate >= 75%; red = losses > wins; neutral otherwise. Pushes/voids are not in the
+// denominator. Wording matches the Telegram card (backend app/telegram.py).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cardColour, cardTableStale, tenthsOf, torontoDay } from './sportsbook.ts';
+import { bucketColour, bucketColourOf, bucketHeadline, bucketSubLine } from './cardRecord.ts';
 
-const table = (lines, extra = {}) => ({
-  enabled: true, date: '2026-11-21', no_colour_line_source: 'model',
-  routes: { nba: { winner: 'W', spread: 'L', team_total_home: 'L' }, nhl: { reg3: 'R', winner: 'W' }, ncaab: { spread: 'L' },
-    soccer: { double_chance: null, draw_no_bet: null, corners_total: null } },
-  scopes: Object.entries(lines).map(([scope, t]) => ({ scope, class: scope.split(':').pop(), sport: scope.includes(':') ? scope.split(':')[0] : null,
-    threshold: t, n: 250, state: t == null ? 'not established' : 'set', set_on: '2026-11-21',
-    legend: t == null ? 'No threshold for this market yet' : `Green = ${t}% and above` })), ...extra,
+test('the rule on the owner examples', () => {
+  for (const [w, l] of [[1, 0], [2, 0], [8, 1], [3, 1], [75, 25]]) assert.equal(bucketColour(w, l), 'green', `${w}-${l}`);
+  for (const [w, l] of [[3, 2], [1, 1], [2, 1], [0, 0], [74, 26], [5, 5]]) assert.equal(bucketColour(w, l), 'neutral', `${w}-${l}`);
+  for (const [w, l] of [[0, 2], [0, 1], [2, 3], [1, 5]]) assert.equal(bucketColour(w, l), 'red', `${w}-${l}`);
 });
 
-test('tenths are the printed digits: (p * 100).toFixed(1), like the backend displayed_percentage (review, Nov 21)', () => {
-  assert.equal(tenthsOf(0.5494), 549);
-  assert.equal(tenthsOf(0.5495), 549);                       // the card prints 54.9%, so it is decided as 54.9
-  for (let i = 5000; i <= 9000; i++) { const p = i / 10000; assert.equal(tenthsOf(p), Math.round(Number((p * 100).toFixed(1)) * 10), String(p)); }
-  assert.equal(tenthsOf(0.5725), 573);
-  assert.equal(tenthsOf(0.5724), 572);
+test('backend colour wins when present and valid; the TS rule agrees on the examples and is the fallback', () => {
+  const ex = [[1, 0, 'green'], [2, 0, 'green'], [8, 1, 'green'], [3, 2, 'neutral'], [0, 2, 'red'], [0, 0, 'neutral']];
+  for (const [wins, losses, colour] of ex) {
+    assert.equal(bucketColourOf({ wins, losses, colour }), colour);
+    assert.equal(bucketColourOf({ wins, losses }), colour);
+  }
+  assert.equal(bucketColourOf({ wins: 3, losses: 2, colour: 'green' }), 'green');   // the backend decision is used as sent
+  assert.equal(bucketColourOf({ wins: 3, losses: 2, colour: 'bogus' }), 'neutral'); // unknown value -> TS rule
+  assert.equal(bucketColourOf(null), 'neutral');
 });
 
-test('Decimal boundaries at T = 55.0 and T = 57.3', () => {
-  assert.equal(cardColour(table({ W: '55.0' }), 'nba', 'winner', 0.5494).colour, 'red');
-  assert.equal(cardColour(table({ W: '55.0' }), 'nba', 'winner', 0.5495).colour, 'red');     // prints 54.9%
-  assert.equal(cardColour(table({ W: '55.0' }), 'nba', 'winner', 0.5501).colour, 'green');
-  assert.equal(cardColour(table({ W: '57.3' }), 'nba', 'winner', 0.5725).colour, 'green');
-  assert.equal(cardColour(table({ W: '57.3' }), 'nba', 'winner', 0.5724).colour, 'red');
+test('pushes and voids are shown but never in the denominator or the colour', () => {
+  const r = { wins: 8, losses: 1, pushes: 1, voids: 0 };
+  assert.equal(bucketHeadline('57.3', r), '57.3% · this exact % has gone 8–1 (89%) · 1 push · small sample (9 settled)');
+  assert.equal(bucketHeadline('57.3', { wins: 8, losses: 1, pushes: 2, voids: 1 }),
+    '57.3% · this exact % has gone 8–1 (89%) · 2 pushes · 1 void · small sample (9 settled)');
+  assert.equal(bucketColour(1, 1), 'neutral');
+  assert.equal(bucketColourOf({ wins: 3, losses: 1, pushes: 50, voids: 50 }), 'green');
 });
 
-test('each class is compared with its own threshold; a cell overrides only its sport', () => {
-  const t = table({ W: '52.0', R: '60.0', L: '55.0', 'ncaab:L': '60.0' });
-  assert.equal(cardColour(t, 'nhl', 'reg3', 0.53).colour, 'red');
-  assert.equal(cardColour(t, 'nba', 'winner', 0.53).colour, 'green');
-  assert.equal(cardColour(t, 'ncaab', 'spread', 0.58, 'bookmaker').colour, 'red');
-  assert.equal(cardColour(t, 'nba', 'spread', 0.58, 'bookmaker').colour, 'green');
+test('small-sample suffix only under 30 settled; the rate rounds like the card', () => {
+  assert.equal(bucketHeadline('60.1', { wins: 24, losses: 6 }), '60.1% · this exact % has gone 24–6 (80%)');
+  assert.equal(bucketHeadline('60.1', { wins: 23, losses: 6 }), '60.1% · this exact % has gone 23–6 (79%) · small sample (29 settled)');
+  assert.equal(bucketHeadline('60.1', { wins: 1, losses: 2, small_sample: true }), '60.1% · this exact % has gone 1–2 (33%) · small sample (3 settled)');
 });
 
-test('unpriced markets and model lines get no colour; flag off gets nothing', () => {
-  const t = table({ W: '55.0', L: '50.0', D: '60.0' });
-  assert.deepEqual(cardColour(t, 'soccer', 'double_chance', 0.9), { colour: null, legend: null, scope: null });
-  assert.equal(cardColour(t, 'soccer', 'corners_total', 0.9).colour, null);
-  assert.equal(cardColour(t, 'nba', 'team_total_home', 0.6, 'model').colour, null);
-  assert.equal(cardColour({ enabled: false }, 'nba', 'winner', 0.9).colour, null);
+test('no settled history says so, and still lists pushes', () => {
+  assert.equal(bucketHeadline('57.3', { wins: 0, losses: 0 }), '57.3% · no settled history at this exact %');
+  assert.equal(bucketHeadline('57.3', { wins: 0, losses: 0, pushes: 1 }), '57.3% · no settled history at this exact % · 1 push');
 });
 
-test('a class with no threshold is not coloured; its status legend is shown (colour release, Nov 21)', () => {
-  assert.deepEqual(cardColour(table({ W: null }), 'nba', 'winner', 0.7), { colour: null, legend: 'No threshold for this market yet', scope: 'W' });
+test('57.3% and 57.4% stay distinct buckets in the printed text', () => {
+  const a = (0.573 * 100).toFixed(1), b = (0.574 * 100).toFixed(1);
+  assert.notEqual(bucketHeadline(a, { wins: 1, losses: 0 }), bucketHeadline(b, { wins: 1, losses: 0 }));
+  assert.match(bucketHeadline(a, { wins: 1, losses: 0 }), /^57\.3% /);
+  assert.match(bucketHeadline(b, { wins: 1, losses: 0 }), /^57\.4% /);
 });
 
-test('the stored lines are refetched after 10 minutes or on a new Toronto day', () => {
-  const at = Date.parse('2026-11-21T20:00:00Z');                     // 3:00 PM in Toronto, Nov 21
-  const t = { enabled: true, date: '2026-11-21' };
-  assert.equal(torontoDay(at), '2026-11-21');
-  assert.equal(cardTableStale(at, at + 60_000, t), false);
-  assert.equal(cardTableStale(at, at + 11 * 60_000, t), true);
-  assert.equal(cardTableStale(at, Date.parse('2026-11-22T05:01:00Z'), { ...t }, 24 * 3600_000), true);   // past Toronto midnight
-  assert.equal(cardTableStale(at, at + 60_000, { enabled: false }), false);
-});
-
-// Colour release (Nov 21): the web reads green_from from the API (the backend's single decision), never the raw threshold.
-const scopeTable = (scope) => ({ enabled: true, date: '2026-11-22', no_colour_line_source: 'model', routes: { nba: { winner: 'W' } }, scopes: [scope] });
-
-test('a stale or unqualified line is not coloured but its status legend is shown', () => {
-  const stale = { scope: 'W', class: 'W', sport: null, threshold: '55.0', green_from: null, qualifies: false, n: 342, state: 'not refreshed',
-    set_on: '2026-11-20', legend: 'Threshold not refreshed today (last set Nov 20) · not coloured' };
-  assert.deepEqual(cardColour(scopeTable(stale), 'nba', 'winner', 0.95),
-    { colour: null, legend: 'Threshold not refreshed today (last set Nov 20) · not coloured', scope: 'W' });
-});
-
-test('a capped line greens from green_from, not the raw threshold', () => {
-  const capped = { scope: 'W', class: 'W', sport: null, threshold: '56.0', green_from: '58.0', qualifies: true, n: 342, state: 'capped',
-    set_on: '2026-11-22', legend: 'Green = 58.0% and above' };
-  assert.equal(cardColour(scopeTable(capped), 'nba', 'winner', 0.5794).colour, 'red');   // 57.9
-  assert.equal(cardColour(scopeTable(capped), 'nba', 'winner', 0.5795).colour, 'green');
+test('recovered and recomputed records are separate labelled lines with their own colour, never in the headline', () => {
+  const tg = { wins: 2, losses: 0, pushes: 0, voids: 0, colour: 'green', label: 'Recovered Telegram cards', model_version_known: false };
+  assert.equal(bucketSubLine('Recovered Telegram cards (model version unknown)', tg),
+    'Recovered Telegram cards (model version unknown) · 2–0 (100%) · small sample (2 settled)');
+  assert.equal(bucketSubLine('Recomputed past seasons', { wins: 0, losses: 0 }), 'Recomputed past seasons · no settled history at this exact %');
+  assert.equal(bucketSubLine('Recomputed past seasons', { wins: 1, losses: 3, pushes: 1 }), 'Recomputed past seasons · 1–3 (25%) · 1 push · small sample (4 settled)');
+  const live = { wins: 0, losses: 0 };
+  assert.equal(bucketHeadline('57.3', live), '57.3% · no settled history at this exact %');   // recovered 2–0 does not leak in
+  assert.equal(bucketColourOf(tg), 'green');
+  assert.equal(bucketColourOf(live), 'neutral');
 });

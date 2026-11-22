@@ -1440,9 +1440,10 @@ h1,h2,h3,.hero-matchup,.metric-value,.tile-value,.brand { font-family:'Barlow Co
   .daily-markets { min-width: 34rem; }
 }
 
-/* Card colouring (GET /api/card-thresholds): green at or above the class threshold, red struck through below it. */
+/* Bucket-record colouring: each exact-% bucket by its own settled record (green >=75% with a win, red losses > wins). Never hides a pick. */
 .model-pct-green { color: var(--ok); font-weight: 600; }
-.model-pct-red { color: var(--bad); }
-.model-pct-red s { text-decoration-thickness: 2px; }
-.card-colour-key { color: var(--ok); font-weight: 600; overflow-wrap: anywhere; }
-.card-colour-status { color: var(--muted); font-weight: 600; overflow-wrap: anywhere; }
+.model-pct-red { color: var(--bad); font-weight: 600; }
+.card-colour-key { color: var(--muted); overflow-wrap: anywhere; }
+.bucket-green { color: var(--ok); font-weight: 600; overflow-wrap: anywhere; }
+.bucket-red { color: var(--bad); font-weight: 600; overflow-wrap: anywhere; }
+.bucket-neutral { overflow-wrap: anywhere; }
